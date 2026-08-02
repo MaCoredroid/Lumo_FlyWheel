@@ -1,5 +1,6 @@
 import ast
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -51,22 +52,298 @@ def test_layer_batch_arm_is_explicit_and_default_off(monkeypatch) -> None:
     assert requested() is True
 
 
+def test_metadata_fusion_arm_is_explicit_and_default_off(monkeypatch) -> None:
+    node = _function("_fr13_fixed32_committer_metadata_fusion_requested")
+    namespace = {"os": os}
+    exec(
+        compile(ast.Module(body=[node], type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    requested = namespace[node.name]
+
+    monkeypatch.delenv(
+        "FR13_FIXED32_COMMITTER_METADATA_FUSION", raising=False
+    )
+    monkeypatch.setattr(os.path, "exists", lambda _path: False)
+    assert requested() is False
+
+    monkeypatch.setenv("FR13_FIXED32_COMMITTER_METADATA_FUSION", "1")
+    assert requested() is True
+    monkeypatch.delenv("FR13_FIXED32_COMMITTER_METADATA_FUSION")
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: path
+        == "/logs/fr13_fixed32_committer_metadata_fusion.arm",
+    )
+    assert requested() is True
+
+
+def test_metadata_fusion_lease_is_exact_and_one_shot() -> None:
+    nodes = [
+        _function("_fr13_fixed32_committer_publish_metadata_lease"),
+        _function("_fr13_fixed32_committer_consume_metadata_lease"),
+    ]
+    namespace = {
+        "_FR13_FIXED32_COMMITTER_METADATA_LEASE": {},
+        "RuntimeError": RuntimeError,
+    }
+    exec(
+        compile(ast.Module(body=nodes, type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    publish = namespace["_fr13_fixed32_committer_publish_metadata_lease"]
+    consume = namespace["_fr13_fixed32_committer_consume_metadata_lease"]
+
+    publish(("stream-1", "batch-4", "ptrs-a"))
+    with pytest.raises(RuntimeError, match="prior lease was not consumed"):
+        publish(("stream-1", "batch-4", "ptrs-a"))
+    with pytest.raises(RuntimeError, match="lease mismatch; refusing fallback"):
+        consume(("stream-2", "batch-4", "ptrs-a"))
+    assert namespace["_FR13_FIXED32_COMMITTER_METADATA_LEASE"] == {
+        "key": ("stream-1", "batch-4", "ptrs-a")
+    }
+    assert consume(("stream-1", "batch-4", "ptrs-a")) is True
+    assert namespace["_FR13_FIXED32_COMMITTER_METADATA_LEASE"] == {}
+
+    publish(("stream-1", "batch-4", "ptrs-a"))
+    assert consume(("stream-1", "batch-4", "ptrs-a")) is True
+    # An absent lease is the only case permitted to use the guarded fallback.
+    assert consume(("stream-1", "batch-4", "ptrs-a")) is False
+
+    namespace["_FR13_FIXED32_COMMITTER_METADATA_LEASE"]["malformed"] = True
+    with pytest.raises(RuntimeError, match="lease mismatch; refusing fallback"):
+        consume(("stream-1", "batch-4", "ptrs-a"))
+    assert namespace["_FR13_FIXED32_COMMITTER_METADATA_LEASE"] == {
+        "malformed": True
+    }
+
+
+def test_metadata_fusion_lease_key_binds_pointer_batch_stream_and_shapes() -> None:
+    key = _text("_fr13_fixed32_committer_metadata_lease_key")
+
+    assert '"fixed32_committer_metadata_fusion_v1"' in key
+    assert "int(batch)" in key
+    assert "int(validation_bank_rows)" in key
+    assert "tuple(stream_key)" in key
+    assert "int(tensor.data_ptr())" in key
+    assert "tensor.stride()" in key
+    assert "str(tensor.dtype)" in key
+    assert "str(tensor.device)" in key
+
+
 def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     launch = _text("_fr13_fixed32_committer_native_layer_batch")
 
-    assert '@triton.jit(do_not_specialize=["N", "T"])' in SOURCE
-    assert "for i_t in range(0, T):" in kernel
+    assert "@triton.jit" in SOURCE
+    assert "for i_t in tl.range(0, T):" in kernel
     assert "b_h *= tl.exp(b_g)" in kernel
     assert "b_v -= tl.sum(b_h * b_k[None, :], 1)" in kernel
     assert "b_v *= b_beta" in kernel
     assert "b_h += b_v[:, None] * b_k[None, :]" in kernel
+    assert "b_o =" not in kernel
+    assert "p_q =" not in kernel
+    assert "p_o =" not in kernel
+    assert "tl.store(p_o" not in kernel
     assert "state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4" in kernel
     assert "_gdn_node_step" not in kernel
-    assert "block_v = min(triton.next_power_of_2(dim_v), 32)" in launch
-    assert "num_warps=4" in launch
+    assert "block_v = triton.next_power_of_2(dim_v)" in launch
+    assert "num_warps=8" in launch
     assert "num_stages=3" in launch
     assert "layers * batch * num_vh" in launch
+
+
+def test_full_value_tile_reuses_one_k_normalization_for_all_value_rows() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launch = _text("_fr13_fixed32_committer_native_layer_batch")
+    loop = kernel[kernel.index("for i_t in tl.range(0, T):") :]
+
+    assert "block_v = triton.next_power_of_2(dim_v)" in launch
+    assert "grid = (1, triton.cdiv(dim_v, block_v)," in launch
+    assert loop.count("b_k = tl.load(p_k") == 1
+    assert loop.count("tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)") == 1
+    assert loop.count("b_v = tl.load(p_v") == 1
+    assert "o_v = i_v * BV + tl.arange(0, BV)" in kernel
+
+
+def test_layer_batch_recurrence_stops_after_root_plus_accepted_drafts() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launch = _text("_fr13_fixed32_committer_native_layer_batch")
+
+    assert "accepted_lens," in kernel
+    assert "cu_seqlens," not in kernel
+    assert "accepted_paths + i_n * PATH_CAP + path_offset" in kernel
+    assert "accepted = tl.load(accepted_lens + i_n).to(tl.int64)" in kernel
+    assert "T = accepted + 1" in kernel
+    assert 'state["accepted_lens"]' in launch
+    assert 'state["cu"]' not in launch
+    assert "PATH_CAP=16" in launch
+
+
+def test_committer_guards_reject_unreachable_padding_lengths() -> None:
+    row_guard = _text("_fr13_fixed32_conv_commit_row_guard_kernel")
+    replay = _text("_fr13_fixed32_committer_replay")
+
+    assert "accepted_len <= MAX_ACCEPTED" in row_guard
+    assert "lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH" in replay
+
+
+def test_layer_batch_consumes_prevalidated_fixed32_scan_bounds() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launch = _text("_fr13_fixed32_committer_native_layer_batch")
+    replay = _text("_fr13_fixed32_committer_replay")
+    preseed = _text("preseed_fixed32_committer_graph")
+
+    assert replay.index("dynamic_ok = (") < replay.index("graph.replay()")
+    assert replay.index("_fr13_fixed32_device_assert(") < replay.index(
+        "graph.replay()"
+    )
+    assert "(lens >= 0).all()" in replay
+    assert "lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH" in replay
+    assert "(paths >= 0) & (paths < 32)" in replay
+    assert "T = accepted + 1" in kernel
+    assert "node = path_node" in kernel
+    assert "tl.minimum(tl.maximum(accepted" not in kernel
+    assert "tl.minimum(tl.maximum(path_node" not in kernel
+    assert "RING_N: tl.constexpr" not in kernel
+    assert "RING_N=32" not in launch
+    assert '"pre_replay_dynamic_bound_guard": True' in preseed
+    assert '"hot_scan_bound_clamps": 0' in preseed
+    assert '"physical_node_domain": 32' in preseed
+    assert '"accepted_steps_max": 12' in preseed
+
+
+def test_metadata_fusion_preserves_guarded_replay_fallback() -> None:
+    replay = _text("_fr13_fixed32_committer_replay")
+    conv = _text("launch_fixed32_conv_commit_to_col0")
+    preseed = _text("preseed_fixed32_committer_graph")
+    resolver = _text("_fr13_fixed32_committer_metadata_fusion_state")
+
+    assert "if state.get(\"metadata_copy_fusion\", False):" in replay
+    assert "_fr13_fixed32_committer_consume_metadata_lease(" in replay
+    assert "if not metadata_fused:" in replay
+    assert 'state["accepted_paths"].copy_(accepted_paths)' in replay
+    assert 'state["accepted_lens"].copy_(accepted_lens)' in replay
+    assert "_fr13_fixed32_validate_running_rows(" in replay
+    assert "_fr13_fixed32_device_assert(" in replay
+    assert "_fr13_fixed32_conv_direct_col0_metadata_kernel[grid](" in conv
+    assert conv.index(
+        "_fr13_fixed32_conv_direct_col0_metadata_kernel[grid]("
+    ) < conv.index("_fr13_fixed32_committer_publish_metadata_lease(")
+    assert '"metadata_copy_fusion": metadata_copy_fusion' in preseed
+    assert '"metadata_copy_launches_per_event": (' in preseed
+    assert '"metadata_copy_elements_per_request": (' in preseed
+    assert '"metadata_guarded_fallback": True' in preseed
+    for allocation in ("torch.empty(", "torch.zeros(", "torch.full("):
+        assert allocation not in resolver
+
+
+def test_metadata_fusion_copy_is_one_uniform_vector_writer() -> None:
+    kernel = _text("_fr13_fixed32_conv_direct_col0_metadata_kernel")
+
+    assert "metadata_writer = (pid_l == 0) & (pid_c == 0)" in kernel
+    assert "if metadata_writer:" in kernel
+    assert "path_cols = tl.arange(0, PATH_COLS)" in kernel
+    assert "tl.static_range(0, PATH_COLS)" not in kernel
+    writer = kernel[kernel.index("if metadata_writer:") :]
+    leaf = writer.index("leaf_pos =")
+    writer = writer[:leaf]
+    assert writer.count("tl.load(") == 1
+    assert writer.count("tl.store(") == 2
+    assert "mask=metadata_writer" not in writer
+
+
+def test_layer_batch_publishes_only_the_final_running_state() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    loop = kernel[kernel.index("for i_t in tl.range(0, T):") :]
+
+    assert "final_state_idx" not in kernel
+    assert "p_ht" not in kernel
+    assert loop.count("tl.store(") == 1
+    assert "tl.store(p_h0, b_h.to(p_h0.dtype.element_ty), mask=mask_h)" in kernel
+
+
+def test_layer_batch_precomputes_event_invariant_gate_coefficients() -> None:
+    precompute_kernel = _text(
+        "_fr13_fixed32_committer_gate_precompute_kernel"
+    )
+    precompute = _text("_fr13_fixed32_committer_gate_precompute")
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    preseed = _text("preseed_fixed32_committer_graph")
+    loop = kernel[kernel.index("for i_t in tl.range(0, T):") :]
+
+    assert "a_scale = -tl.exp(" in precompute_kernel
+    assert "dt_biases + offsets, mask=mask, other=0" in precompute_kernel
+    assert "_FR13_FIXED32_COMMITTER_GATE_COEFFS.get(key)" in precompute
+    assert "_FR13_FIXED32_COMMITTER_GATE_COEFFS[key] = gate_coeffs" in precompute
+    assert "_FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES += 1" in precompute
+    assert "b_a_scale = tl.load(p_gate)" in kernel
+    assert "b_dt_bias = tl.load(p_gate + 1)" in kernel
+    assert "A_logs" not in kernel
+    assert "dt_biases" not in kernel
+    assert "p_gate" not in loop
+    assert "b_g = b_a_scale * softplus_x" in loop
+    assert preseed.index("_fr13_fixed32_committer_gate_precompute(") < preseed.index(
+        "capture_graph(use_layer_batch=False)"
+    )
+
+
+def test_layer_batch_candidate_drops_only_dead_operator_output() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launch = _text("_fr13_fixed32_committer_native_layer_batch")
+    body = _text("_fr13_fixed32_committer_graph_body")
+    preseed = _text("preseed_fixed32_committer_graph")
+
+    assert "q," not in kernel
+    assert "o," not in kernel
+    assert "scale," not in kernel
+    assert 'state["qbuf"]' not in launch
+    assert 'state["obuf"]' not in launch
+    assert '"obuf":' not in preseed
+    assert "q=state[\"qbuf\"]" in body
+    assert "\n            _sg(" in body
+    assert "= _sg(" not in body
+
+
+def test_layer_batch_candidate_loads_live_ring_rows_without_staging() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launch = _text("_fr13_fixed32_committer_native_layer_batch")
+    body = _text("_fr13_fixed32_committer_graph_body")
+    preseed = _text("preseed_fixed32_committer_graph")
+
+    candidate_start = body.index("if use_layer_batch:")
+    candidate = body[candidate_start : body.index("else:", candidate_start)]
+    assert "k_rings" in kernel
+    assert "v_rings" in kernel
+    assert "a_rings" in kernel
+    assert "b_rings" in kernel
+    assert "accepted_paths" in kernel
+    assert "path_node = tl.load(" in kernel
+    assert "node * RING_K_N_STRIDE" in kernel
+    assert "node * RING_V_N_STRIDE" in kernel
+    assert 'state["kbuf"]' not in launch
+    assert 'state["vbuf"]' not in launch
+    assert "k_selected" not in candidate
+    assert "torch.where(" not in candidate
+    assert '"neutralizations": 0' in preseed
+    assert '"ring_gathers": 0' in preseed
+    assert '"direct_ring_loads": True' in preseed
+    assert '"direct_ring_inputs": 4' in preseed
+    assert '"candidate_staging_launches": 0' in preseed
+    assert '"gate_coefficients_hoisted": True' in preseed
+    assert '"event_independent_gate_precompute": True' in preseed
+    assert '"gate_precompute_launches_per_process": int(' in preseed
+    assert '"gate_exp_per_event": 0' in preseed
+    assert '"full_value_tile": True' in preseed
+    assert '"value_tile": 128' in preseed
+    assert '"kernel_warps": 8' in preseed
+    assert '"programs_per_layer_request_value_head": 1' in preseed
+    assert '"duplicate_value_tile_k_loads_per_step": 0' in preseed
+    assert '"state_elements_per_thread_before_compiler_effects": 64' in preseed
+    assert '"metadata_copy_fusion": metadata_copy_fusion' in preseed
+    assert '"metadata_validation_lease": (' in preseed
+    assert '"duplicate_committer_metadata_guard": (' in preseed
 
 
 def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> None:
@@ -80,21 +357,84 @@ def test_graph_keeps_native_reference_and_candidate_as_separate_captures() -> No
     assert "reference_graph = capture_graph(use_layer_batch=False)" in preseed
     assert "graph = capture_graph(use_layer_batch=True)" in preseed
     assert '"layer_batch_byte_gate_passed": not layer_batch' in preseed
+    assert '"layer_batch_byte_gate_coverage_mask": (' in preseed
     assert '"fused_calls": 48' in preseed
     assert '"fused_calls": 1' in preseed
+    assert '"state_only_output_elided": True' in preseed
+    assert '"active_length_recurrence": True' in preseed
+    assert '"final_state_store_once": True' in preseed
 
 
-def test_byte_gate_requires_real_nonzero_path_and_exact_state_bytes() -> None:
+def test_accepted_length_mask_covers_zero_through_eleven() -> None:
+    node = _function("_fr13_fixed32_committer_accepted_length_mask")
+    namespace: dict[str, object] = {
+        "_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH": 11,
+    }
+    exec(
+        compile(ast.Module(body=[node], type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    length_mask = namespace[node.name]
+
+    assert length_mask((0,), batch=1) == 0x0001
+    assert length_mask((11,), batch=1) == 0x0800
+    assert length_mask((0, 7, 11, 7), batch=4) == 0x0881
+    with pytest.raises(RuntimeError, match="qualification input drift"):
+        length_mask((0,), batch=4)
+    with pytest.raises(RuntimeError, match="qualification input drift"):
+        length_mask((12,), batch=1)
+
+
+def test_real_event_arm_requires_private_authenticated_swe_file(tmp_path: Path) -> None:
+    node = _function("_fr13_fixed32_committer_layer_batch_real_event_marker")
+    namespace = {
+        "os": os,
+        "stat": stat,
+        "_FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT": str(
+            tmp_path / "default.arm"
+        ),
+        "_FR13_FIXED32_COMMITTER_TASK_ID_CHARACTERS": frozenset(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+        ),
+    }
+    exec(
+        compile(ast.Module(body=[node], type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    marker = namespace[node.name]
+    path = tmp_path / "qualification.arm"
+
+    assert marker(str(path)) is None
+    path.write_text("swe_verified:astropy__astropy-12907\n", encoding="ascii")
+    path.chmod(0o400)
+    assert marker(str(path)) == "swe_verified:astropy__astropy-12907"
+    path.chmod(0o600)
+    with pytest.raises(RuntimeError, match="private read-only regular file"):
+        marker(str(path))
+
+
+def test_byte_gate_covers_only_authenticated_real_event_depths() -> None:
     gate = _text("_fr13_fixed32_committer_layer_batch_byte_gate")
     replay = _text("_fr13_fixed32_committer_replay")
+    bit_compare = _text("_fr13_fixed32_tensor_bits_equal")
 
-    powered = 'if not bool((state["accepted_lens"] > 0).any().item()):'
+    authenticated = (
+        "if _fr13_fixed32_committer_layer_batch_real_event_marker() is None:"
+    )
+    length_mask = "_fr13_fixed32_committer_accepted_length_mask("
     reference = "reference_graph.replay()"
     candidate = "candidate_graph.replay()"
     compare = "_fr13_fixed32_tensor_bits_equal("
-    assert powered in gate
-    assert gate.index(powered) < gate.index(reference) < gate.index(candidate)
+    assert authenticated in gate
+    assert gate.index(authenticated) < gate.index(length_mask)
+    assert gate.index(length_mask) < gate.index(reference) < gate.index(candidate)
     assert compare in gate
+    assert "torch.equal(" in bit_compare
+    assert bit_compare.count(".view(torch.uint8)") == 2
+    assert 'coverage_mask |= event_mask' in gate
+    assert 'state["layer_batch_byte_gate_coverage_mask"] = coverage_mask' in gate
+    assert "coverage_mask == full_mask" in gate
+    assert gate.rstrip().endswith("return False")
     assert "finally:\n        restore()" in gate
     assert "graph = state[\"reference_graph\"]" in replay
     assert replay.index("_fr13_fixed32_committer_layer_batch_byte_gate(") < replay.index(
@@ -102,33 +442,229 @@ def test_byte_gate_requires_real_nonzero_path_and_exact_state_bytes() -> None:
     )
 
 
+def test_byte_gate_serves_reference_once_then_allows_covered_depth() -> None:
+    nodes = [
+        _function("_fr13_fixed32_committer_accepted_length_mask"),
+        _function("_fr13_fixed32_committer_layer_batch_byte_gate"),
+    ]
+    replay_order: list[str] = []
+
+    class _Rows:
+        def clone(self):
+            return self
+
+    class _Bank:
+        def index_select(self, _dimension, _rows):
+            return _Rows()
+
+        def index_copy_(self, _dimension, _rows, _saved):
+            return None
+
+    class _Graph:
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        def replay(self) -> None:
+            replay_order.append(self.label)
+
+    class _Lens:
+        device = "cuda:0"
+
+        def __init__(self, values: list[int]) -> None:
+            self.values = values
+
+        def tolist(self) -> list[int]:
+            return list(self.values)
+
+    class _Cuda:
+        @staticmethod
+        def synchronize(_device) -> None:
+            return None
+
+    namespace = {
+        "_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH": 11,
+        "_FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK": 0x0FFF,
+        "_fr13_fixed32_committer_layer_batch_real_event_marker": (
+            lambda: "swe_verified:astropy__astropy-12907"
+        ),
+        "_fr13_fixed32_validate_running_rows": (
+            lambda **_kwargs: [object() for _ in range(48)]
+        ),
+        "_fr13_fixed32_tensor_bits_equal": lambda _left, _right: True,
+        "torch": type("_Torch", (), {"cuda": _Cuda}),
+    }
+    exec(
+        compile(ast.Module(body=nodes, type_ignores=[]), str(KERNEL_PATH), "exec"),
+        namespace,
+    )
+    gate = namespace["_fr13_fixed32_committer_layer_batch_byte_gate"]
+    state = {
+        "batch": 1,
+        "bank_rows": 8,
+        "layer_batch": True,
+        "layer_batch_byte_gate_passed": False,
+        "layer_batch_byte_gate_attempts": 0,
+        "layer_batch_byte_gate_coverage_mask": 0,
+        "accepted_lens": _Lens([0]),
+        "reference_graph": _Graph("reference"),
+        "graph": _Graph("candidate"),
+    }
+    banks = [_Bank() for _ in range(48)]
+
+    assert gate(state=state, banks_list=banks, spec_state_indices=object()) is False
+    assert replay_order == ["reference", "candidate"]
+    assert state["layer_batch_byte_gate_coverage_mask"] == 0x0001
+    assert state["layer_batch_byte_gate_attempts"] == 1
+    assert state["layer_batch_byte_gate_passed"] is False
+
+    assert gate(state=state, banks_list=banks, spec_state_indices=object()) is True
+    assert replay_order == ["reference", "candidate"]
+    assert state["layer_batch_byte_gate_attempts"] == 1
+
+    state["layer_batch_byte_gate_coverage_mask"] = 0x07FF
+    state["accepted_lens"].values = [11]
+    assert gate(state=state, banks_list=banks, spec_state_indices=object()) is False
+    assert state["layer_batch_byte_gate_coverage_mask"] == 0x0FFF
+    assert state["layer_batch_byte_gate_passed"] is True
+
+
+def test_counters_expose_per_batch_gate_state_for_timing_boundaries() -> None:
+    counters = _text("fixed32_committer_counters")
+
+    assert '"gate_precompute_launches": int(' in counters
+    assert 'fast_route.get("states_by_batch", {})' in counters
+    assert '"layer_batch_gate_passed_by_batch"' in counters
+    assert '"layer_batch_gate_attempts_by_batch"' in counters
+    assert '"layer_batch_gate_coverage_mask_by_batch"' in counters
+    assert 'state.get("layer_batch_byte_gate_passed", False)' in counters
+    assert 'state.get("layer_batch_byte_gate_attempts", -1)' in counters
+    assert 'state.get("layer_batch_byte_gate_coverage_mask", -1)' in counters
+    assert '"metadata_fusion_published_by_batch"' in counters
+    assert '"metadata_fusion_consumed_by_batch"' in counters
+    assert '"metadata_fusion_fallbacks_by_batch"' in counters
+
+
 def test_layer_programs_have_disjoint_layer_state_and_shared_read_only_paths() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
 
     assert "i_l = i_lnh // layer_span" in kernel
     assert "state_bank = bank_anchor +" in kernel
-    assert "ssi = ssm_state_indices + i_l * SSI_L_STRIDE" in kernel
-    assert "i_l * K_L_STRIDE" in kernel
-    assert "i_l * V_L_STRIDE" in kernel
-    assert "accepted_paths" not in kernel
-    assert "accepted_lens" not in kernel
+    assert "spec_state_indices + i_l * SPEC_L_STRIDE" in kernel
+    assert "i_l * RING_K_L_STRIDE" in kernel
+    assert "i_l * RING_V_L_STRIDE" in kernel
+    assert "accepted_paths" in kernel
+    assert "accepted_lens" in kernel
+
+
+def test_candidate_binds_physical_alias_row_uniqueness_guard() -> None:
+    preseed = _text("preseed_fixed32_committer_graph")
+    guard = _text("_fr13_fixed32_conv_commit_row_guard_kernel")
+    conv_commit = _text("launch_fixed32_conv_commit_to_col0")
+
+    assert '"physical_alias_row_uniqueness_guard": (' in preseed
+    assert '"validate_fixed32_conv_commit_rows"' in preseed
+    assert "if layer == 0:" in guard
+    assert "if request == 0:" in guard
+    assert "aliases_ok" in guard
+    assert "other_rows == running_row" in guard
+    assert "peer_table_ok" in guard
+    assert "destination_unique" in guard
+    assert "selected_row" not in guard
+    assert conv_commit.index("validate_fixed32_conv_commit_rows(") < conv_commit.index(
+        "_fr13_fixed32_conv_direct_col0_kernel[grid]("
+    )
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    assert "disjoint physical ``(alias," in kernel
+    assert "row)`` destinations" in kernel
 
 
 def test_launcher_materializes_worker_visible_arm_only_when_requested() -> None:
     launcher = LAUNCHER_PATH.read_text()
+    server_launcher = (
+        ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh"
+    ).read_text()
 
     assert "FR13_FIXED32_COMMITTER_LAYER_BATCH=${" in launcher
     assert "FR13_FIXED32_COMMITTER_LAYER_BATCH must be exactly 0 or 1" in launcher
     assert 'if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" ]]' in launcher
     assert '"$ARMDIR/logs/fr13_fixed32_committer_layer_batch.arm"' in launcher
     assert "committer layer-batch arm requires a fixed32 kind" in launcher
+    assert "FR13_FIXED32_COMMITTER_METADATA_FUSION=${" in launcher
+    assert (
+        "FR13_FIXED32_COMMITTER_METADATA_FUSION must be exactly 0 or 1"
+        in launcher
+    )
+    assert 'if [[ "$FR13_FIXED32_COMMITTER_METADATA_FUSION" == "1" ]]' in launcher
+    assert '"$ARMDIR/logs/fr13_fixed32_committer_metadata_fusion.arm"' in launcher
+    assert "committer metadata fusion requires layer-batch mode" in launcher
+    assert "FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=${" in launcher
+    assert "CFWD B1 qualification requires exact B1" in launcher
+    assert "CFWD campaign qualification requires exact B4" in launcher
+    assert "--fixed32-committer-layer-batch-real-event-arm" in launcher
+    assert "FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH" in launcher
+    assert (
+        'rm -f -- "$FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH"'
+        in launcher
+    )
+    assert "fr13_fixed32_committer_layer_batch.real_event.arm" in server_launcher
 
 
 def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> None:
     patcher = PATCHER_PATH.read_text()
 
     assert 'layer_batch = committer_contract.get("layer_batch", False)' in patcher
+    assert '"metadata_copy_fusion", False' in patcher
+    assert '"metadata_fusion_published_by_batch"' in patcher
+    assert '"metadata_fusion_consumed_by_batch"' in patcher
+    assert '"metadata_fusion_fallbacks_by_batch"' in patcher
+    assert '"metadata_copy_launches_per_event", -1' in patcher
+    assert '"metadata_copy_elements_per_request", -1' in patcher
+    assert '!= "conv_direct_exact_pointer_batch_stream_one_shot"' in patcher
+    assert '"duplicate_committer_metadata_guard"' in patcher
     assert "expected_fused_calls = 1 if layer_batch is True else 48" in patcher
+    assert 'committer_contract.get("state_only_output_elided") is not True' in patcher
+    assert 'committer_contract.get("active_length_recurrence") is not True' in patcher
+    assert '"pre_replay_dynamic_bound_guard"' in patcher
+    assert 'committer_contract.get("hot_scan_bound_clamps", -1)' in patcher
+    assert 'committer_contract.get("physical_node_domain", -1)' in patcher
+    assert 'committer_contract.get("accepted_steps_max", -1)' in patcher
+    assert 'committer_contract.get("final_state_store_once") is not True' in patcher
+    assert 'committer_contract.get("direct_ring_loads") is not True' in patcher
+    assert 'committer_contract.get("direct_ring_inputs", -1)' in patcher
+    assert 'committer_contract.get("candidate_staging_launches", -1)' in patcher
+    assert 'committer_contract.get("gate_coefficients_hoisted") is not True' in patcher
+    assert '"event_independent_gate_precompute"' in patcher
+    assert '"gate_precompute_launches_per_process", -1' in patcher
+    assert 'committer_contract.get("gate_exp_per_event", -1)' in patcher
+    assert 'committer_contract.get("full_value_tile") is not True' in patcher
+    assert 'committer_contract.get("value_tile", -1)' in patcher
+    assert 'committer_contract.get("kernel_warps", -1)' in patcher
+    assert '"programs_per_layer_request_value_head", -1' in patcher
+    assert '"duplicate_value_tile_k_loads_per_step", -1' in patcher
+    assert '"state_elements_per_thread_before_compiler_effects", -1' in patcher
+    assert '"physical_alias_row_uniqueness_guard"' in patcher
+    assert '!= "validate_fixed32_conv_commit_rows"' in patcher
+    assert '!= "fixed32_triton_alias3_ownerpath_physical32_v3"' in patcher
+    assert 'conv_commit_contract.get("row_guard_kernel_launches", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_programs_per_request", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_physical_rows", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_alias_width", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_compare_capacity", -1)' in patcher
+    assert '"row_guard_path_validation_programs_per_request", -1' in patcher
+    assert '"row_guard_path_vector_loads_per_request", -1' in patcher
+    assert '"row_guard_alias_validation_programs_per_event", -1' in patcher
+    assert '"row_guard_alias_vector_loads_per_event", -1' in patcher
+    assert '"row_guard_selected_row_loads_per_program", -1' in patcher
+    assert 'conv_commit_contract.get("row_guard_peer_topology_proof")' in patcher
+    assert 'conv_commit_contract.get("row_guard_torch_index_transforms", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_async_scalar_reductions", -1)' in patcher
+    assert 'conv_commit_contract.get("row_guard_async_assertions", -1)' in patcher
+    assert '!= "real_swe_all_reachable_accepted_lengths_0_11"' in patcher
+    assert 'committer_contract.get("accepted_length_max", -1)' in patcher
+    assert ") != 0x0FFF" in patcher
+    assert '!= "torch_equal_uint8"' in patcher
+    assert '!= "shadow_then_reference"' in patcher
+    assert "expected_neutralizations = 0 if layer_batch is True else 5" in patcher
     assert '"layers": int(layer_count)' in patcher
     assert "ring_gathers * int(layer_count) * path_cap * batch" in patcher
     assert '"fused_layer_calls": fused_calls' in patcher
@@ -141,12 +677,22 @@ def test_work_census_accepts_only_reference_or_layer_batch_launch_count() -> Non
         "layer-batch-candidate",
     )
     event["committer"]["fused_layer_calls"] = 1
+    event["committer"]["neutralize_ops"] = 0
+    event["committer"]["ring_gather_ops"] = 0
+    event["committer"]["ring_layer_path_rows"] = 0
     validated = census.validate_event(event, source="layer-batch-candidate")
 
     assert validated.normalized_work["committer"]["layers"] == 48
     assert (
         validated.normalized_work["committer"]["fused_layer_calls_per_event"]
         == 1
+    )
+    assert validated.normalized_work["committer"]["ring_gather_ops"] == 0
+    assert (
+        validated.normalized_work["committer"][
+            "ring_layer_path_rows_per_request"
+        ]
+        == 0
     )
 
     event["committer"]["fused_layer_calls"] = 2

@@ -202,7 +202,7 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_CUTLASS_WAVE_PASS_SHA" \
       || "${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT-}" != "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" \
       || "${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE-}" != "$_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE" ]]; then
-    echo ".lumo.local.env must not override B4 GDN production credentials, selectors, or runtime geometry; the same guard covers CUTLASS production" >&2
+    echo ".lumo.local.env must not override draft-head M32, B4 GDN, CUTLASS, or SFWD credentials, selectors, or runtime geometry" >&2
     exit 2
   fi
 fi
@@ -2055,6 +2055,7 @@ PY
     "$LOG_DIR/fr13_fixed32_ingress_secret_identity.json" \
     "$LOG_DIR/fr13_fixed32_runtime_attestation.json" \
     "$LOG_DIR"/fr13_fixed32_boundary_snapshot.*.json \
+    "$LOG_DIR/fr13_fixed32_committer_layer_batch.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_mode.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \

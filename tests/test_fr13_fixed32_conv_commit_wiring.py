@@ -106,7 +106,7 @@ def test_eager_diagnostic_skips_graph_only_commit_census() -> None:
     ) == 2
 
 
-def test_launcher_is_exactly_one_direct_kernel_without_host_sync() -> None:
+def test_launcher_selects_one_direct_kernel_without_host_sync() -> None:
     tree = ast.parse(KERNEL_PATH.read_text())
     launcher = _function(tree, "launch_fixed32_conv_commit_to_col0")
     calls = [
@@ -115,7 +115,11 @@ def test_launcher_is_exactly_one_direct_kernel_without_host_sync() -> None:
     kernel_calls = [
         name
         for name in calls
-        if name == "_fr13_fixed32_conv_direct_col0_kernel"
+        if name
+        in {
+            "_fr13_fixed32_conv_direct_col0_kernel",
+            "_fr13_fixed32_conv_direct_col0_metadata_kernel",
+        }
     ]
     banned_suffixes = (
         ".item",
@@ -127,10 +131,19 @@ def test_launcher_is_exactly_one_direct_kernel_without_host_sync() -> None:
     )
     source = ast.unparse(launcher)
 
-    assert kernel_calls == ["_fr13_fixed32_conv_direct_col0_kernel"]
+    assert kernel_calls == [
+        "_fr13_fixed32_conv_direct_col0_kernel",
+        "_fr13_fixed32_conv_direct_col0_metadata_kernel",
+    ]
     assert calls.index("validate_fixed32_conv_commit_rows") < calls.index(
-        kernel_calls[0]
+        "_fr13_fixed32_conv_direct_col0_kernel"
     )
+    assert calls.index("validate_fixed32_conv_commit_rows") < calls.index(
+        "_fr13_fixed32_conv_direct_col0_metadata_kernel"
+    )
+    assert calls.index(
+        "_fr13_fixed32_conv_direct_col0_metadata_kernel"
+    ) < calls.index("_fr13_fixed32_committer_publish_metadata_lease")
     assert not any(name.endswith(banned_suffixes) for name in calls), calls
     assert not any(isinstance(node, ast.Try) for node in ast.walk(launcher))
     assert "for bank in conv_banks" not in source
@@ -161,8 +174,12 @@ def test_direct_commit_uses_logical_inner_strides_and_pregather_stays_logical() 
     tree = ast.parse(KERNEL_PATH.read_text())
     pregather = _function(tree, "_fr13_conv_col0_pregather_kernel")
     direct = _function(tree, "_fr13_fixed32_conv_direct_col0_kernel")
+    fused = _function(
+        tree, "_fr13_fixed32_conv_direct_col0_metadata_kernel"
+    )
     pregather_source = ast.unparse(pregather)
     direct_source = ast.unparse(direct)
+    fused_source = ast.unparse(fused)
 
     assert "c_idx = offs // CONV_L" in pregather_source
     assert "l_idx = offs % CONV_L" in pregather_source
@@ -171,6 +188,20 @@ def test_direct_commit_uses_logical_inner_strides_and_pregather_stays_logical() 
     assert "state_col * bank_l_stride" in direct_source
     assert "(source_batch + source_row) * source_row_stride" in direct_source
     assert "for state_col in tl.static_range(0, CONV_L)" in direct_source
+    assert "metadata_writer = (pid_l == 0) & (pid_c == 0)" in fused_source
+    assert "if metadata_writer:" in fused_source
+    assert "path_cols = tl.arange(0, PATH_COLS)" in fused_source
+    assert "for path_col in tl.static_range(0, PATH_COLS)" not in fused_source
+    assert "mask=metadata_writer" not in fused_source
+    assert "committer_paths" in fused_source
+    assert "committer_lens" in fused_source
+    for needle in (
+        "offs_c * bank_c_stride",
+        "state_col * bank_l_stride",
+        "(source_batch + source_row) * source_row_stride",
+        "for state_col in tl.static_range(0, CONV_L)",
+    ):
+        assert needle in fused_source
 
 
 def test_direct_kernel_calls_exist_only_in_preseed_and_launcher() -> None:
@@ -190,6 +221,25 @@ def test_direct_kernel_calls_exist_only_in_preseed_and_launcher() -> None:
     assert owners == {
         "preseed_fixed32_conv_col0_pregather": [direct_name],
         "launch_fixed32_conv_commit_to_col0": [direct_name],
+    }
+
+    fused_name = "_fr13_fixed32_conv_direct_col0_metadata_kernel"
+    fused_owners = {
+        function.name: [
+            _called_name(node)
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call) and _called_name(node) == fused_name
+        ]
+        for function in (
+            node for node in tree.body if isinstance(node, ast.FunctionDef)
+        )
+        if any(
+            isinstance(node, ast.Call) and _called_name(node) == fused_name
+            for node in ast.walk(function)
+        )
+    }
+    assert fused_owners == {
+        "launch_fixed32_conv_commit_to_col0": [fused_name]
     }
 
 
@@ -267,6 +317,7 @@ def test_patcher_runtime_identity_tuple_matches_kernel_state_order() -> None:
         "tuple((id(bank) for bank in ssm_banks))",
         "id(offsets)",
         "id(bank_alias_ids_device)",
+        "id(bank_alias_peer_layers_device)",
         "tuple((id(source) for source in sources))",
         "id(ssi_ptrs)",
         "id(ssi_strides)",
@@ -277,6 +328,10 @@ def test_patcher_runtime_identity_tuple_matches_kernel_state_order() -> None:
         "id(source_offsets)",
         "id(direct_state_src)",
         "id(staging)",
+        (
+            "tuple((id(row_guard_flags_by_batch[guard_batch]) for guard_batch "
+            "in range(1, capacity + 1)))"
+        ),
     ]
     data_ptrs = assignments["source_data_ptrs"]
     assert isinstance(data_ptrs, ast.Tuple)
@@ -286,6 +341,7 @@ def test_patcher_runtime_identity_tuple_matches_kernel_state_order() -> None:
         ("tuple((int(bank.untyped_storage().data_ptr()) for bank in ssm_banks))"),
         "int(offsets.data_ptr())",
         "int(bank_alias_ids_device.data_ptr())",
+        "int(bank_alias_peer_layers_device.data_ptr())",
         "tuple((int(source.data_ptr()) for source in sources))",
         "int(ssi_ptrs.data_ptr())",
         "int(ssi_strides.data_ptr())",
@@ -296,6 +352,10 @@ def test_patcher_runtime_identity_tuple_matches_kernel_state_order() -> None:
         "int(source_offsets.data_ptr())",
         "int(direct_state_src.data_ptr())",
         "int(staging.data_ptr())",
+        (
+            "tuple((int(row_guard_flags_by_batch[guard_batch].data_ptr()) for "
+            "guard_batch in range(1, capacity + 1)))"
+        ),
     ]
 
 

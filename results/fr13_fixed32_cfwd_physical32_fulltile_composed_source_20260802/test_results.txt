@@ -1,0 +1,25 @@
+Source commit: 55d53ac5d4ef084e3a5bdd30771fa5a84bde73af
+
+Host-only checks:
+- python3 -m py_compile on kernel, observer patcher, and focused test: pass
+- fixed32 task-arm, task-boundary, and layer-batch suite: 86 passed in 0.39s
+- fixed32 final-full preseed/observer suite: 54 passed in 1.22s
+- git diff --check: pass
+
+Static composition receipt:
+- one BV128 program replaces two BV64 value-tile programs
+- no launch or storage added
+- no serial recurrence dependency added
+- accepted/path/gate/bank/running-row metadata duplication across value tiles removed
+- pre-replay accepted/node device guard retained
+- hot accepted/node clamps remain zero
+- ordered recurrence math source hashes match: d16ad65fe4affb85a85051bf8dc7530c17a34dd85826c05d6bd8adec67b1ce22
+
+Not run:
+- Triton or CUDA code generation
+- SASS/resource inspection
+- Docker or GPU execution
+- real SWE-Verified B1/B4 byte qualification
+- real SWE-Verified B1/B4 timing
+- hardware-floor or one-sided U95 acceptance measurement
+- synthetic probes

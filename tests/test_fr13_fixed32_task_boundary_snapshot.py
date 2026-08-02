@@ -170,6 +170,18 @@ def _snapshot(
                 "all_batches_ready": True,
                 "captures": server_capacity,
                 "fast_route_ready": True,
+                "layer_batch_gate_attempts_by_batch": {
+                    str(batch): 0
+                    for batch in range(1, server_capacity + 1)
+                },
+                "layer_batch_gate_coverage_mask_by_batch": {
+                    str(batch): 0x0FFF
+                    for batch in range(1, server_capacity + 1)
+                },
+                "layer_batch_gate_passed_by_batch": {
+                    str(batch): 1
+                    for batch in range(1, server_capacity + 1)
+                },
                 "maximum_ready_capacity": server_capacity,
                 "nonpure_committer_replays_by_batch": nonpure_by_batch,
                 "nonpure_committer_replays_enqueued": nonpure_replays,
@@ -321,6 +333,21 @@ def test_task_boundary_accepts_in_graph_pregather_counts(
     assert floor_report["committer"][
         "nonpure_committer_replays_enqueued"
     ] == (0 if server_capacity == 1 else 1)
+    assert floor_report["committer"][
+        "layer_batch_gate_passed_by_batch"
+    ] == {
+        str(batch): 1 for batch in range(1, server_capacity + 1)
+    }
+    assert floor_report["committer"][
+        "layer_batch_gate_attempts_by_batch"
+    ] == {
+        str(batch): 0 for batch in range(1, server_capacity + 1)
+    }
+    assert floor_report["committer"][
+        "layer_batch_gate_coverage_mask_by_batch"
+    ] == {
+        str(batch): 0x0FFF for batch in range(1, server_capacity + 1)
+    }
 
 
 @pytest.mark.parametrize(
@@ -478,6 +505,99 @@ def test_task_boundary_rejects_uncontracted_pregather_field(
             base_path=base_path,
             ack=ack,
             server_capacity=1,
+        )
+
+
+def test_both_validators_reject_nonboolean_layer_batch_gate_pass(
+    tmp_path: Path,
+) -> None:
+    payload, ack = _snapshot(server_capacity=4)
+    payload["metrics"]["committer"][
+        "layer_batch_gate_passed_by_batch"
+    ]["4"] = 2
+    _assert_both_validators_reject(
+        tmp_path,
+        payload,
+        ack,
+        server_capacity=4,
+    )
+
+
+def test_both_validators_reject_unqualified_layer_batch_gate(
+    tmp_path: Path,
+) -> None:
+    payload, ack = _snapshot(server_capacity=4)
+    payload["metrics"]["committer"][
+        "layer_batch_gate_passed_by_batch"
+    ]["4"] = 0
+    _assert_both_validators_reject(
+        tmp_path,
+        payload,
+        ack,
+        server_capacity=4,
+    )
+
+
+def test_both_validators_reject_incomplete_layer_batch_length_coverage(
+    tmp_path: Path,
+) -> None:
+    payload, ack = _snapshot(server_capacity=4)
+    payload["metrics"]["committer"][
+        "layer_batch_gate_coverage_mask_by_batch"
+    ]["4"] = 0x0FFE
+    _assert_both_validators_reject(
+        tmp_path,
+        payload,
+        ack,
+        server_capacity=4,
+    )
+
+
+def test_qualification_snapshot_policy_accepts_only_reachable_incomplete_coverage(
+    tmp_path: Path,
+) -> None:
+    payload, ack = _snapshot(server_capacity=1)
+    payload["metrics"]["committer"][
+        "layer_batch_gate_coverage_mask_by_batch"
+    ]["1"] = 0b1011
+    payload["metrics"]["committer"][
+        "layer_batch_gate_passed_by_batch"
+    ]["1"] = 0
+    base_path = _write_snapshot(tmp_path, payload)
+
+    loaded, _, _ = orchestrator._load_fixed32_boundary_snapshot(
+        base_path=base_path,
+        ack=ack,
+        server_capacity=1,
+        allow_incomplete_layer_batch_coverage=True,
+    )
+    assert loaded["metrics"]["committer"][
+        "layer_batch_gate_coverage_mask_by_batch"
+    ] == {"1": 0b1011}
+
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="incomplete before measurement",
+    ):
+        orchestrator._load_fixed32_boundary_snapshot(
+            base_path=base_path,
+            ack=ack,
+            server_capacity=1,
+        )
+
+    payload["metrics"]["committer"][
+        "layer_batch_gate_coverage_mask_by_batch"
+    ]["1"] = 0x1000
+    _write_snapshot(tmp_path, payload)
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="unreachable depths",
+    ):
+        orchestrator._load_fixed32_boundary_snapshot(
+            base_path=base_path,
+            ack=ack,
+            server_capacity=1,
+            allow_incomplete_layer_batch_coverage=True,
         )
 
 
@@ -772,6 +892,24 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
         "all_batches_ready": True,
         "captures": 4,
         "fast_route_ready": True,
+        "layer_batch_gate_attempts_by_batch": {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+        },
+        "layer_batch_gate_coverage_mask_by_batch": {
+            1: 0x0FFF,
+            2: 0x0FFF,
+            3: 0x0FFF,
+            4: 0x0FFF,
+        },
+        "layer_batch_gate_passed_by_batch": {
+            1: 1,
+            2: 1,
+            3: 1,
+            4: 1,
+        },
         "maximum_ready_capacity": 4,
         "preseeded_batches": [1, 2, 3, 4],
         "preseeded_graphs": 4,

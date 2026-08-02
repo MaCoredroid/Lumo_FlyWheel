@@ -1,0 +1,65 @@
+{
+  "schema": "fr13-fixed32-cfwd-paired-ingress-patch-plan-v1",
+  "classification": "source_only_patch_plan",
+  "performance_measurement": false,
+  "timing_eligible": false,
+  "floor_acceptance_eligible": false,
+  "implementation_in_this_commit": false,
+  "stop_reason": "requires_persistent_controller_and_symmetric_multi_process_ingress_rotation",
+  "base_implementation_commit": "269dcc5272f9716b69f29447cb8109f788a27aae",
+  "opt_in_only": true,
+  "default_v1_behavior_unchanged": true,
+  "bound_configuration": {
+    "batch_size": 4,
+    "concurrency": 4,
+    "canonical_task_counts": [4, 16],
+    "campaign_phases": ["qualification", "timing"],
+    "coverage_batches": [1, 2, 3, 4],
+    "accepted_length_full_mask": 4095
+  },
+  "phase_state": {
+    "fresh_engine_ledger_per_phase": true,
+    "fresh_proxy_ledger_per_phase": true,
+    "fresh_counters_per_phase": true,
+    "fresh_active_maps_per_phase": true,
+    "ledger_creation": "O_EXCL_mode_0600",
+    "task_identity": "campaign_phase_plus_task_id",
+    "asymmetric_transition_policy": "poison_and_teardown"
+  },
+  "handoff": {
+    "same_runner_process_required": true,
+    "serialized_credential_allowed": false,
+    "single_use": true,
+    "qualification_terminal_heads_bound": true,
+    "timing_pre_boundary_bound": true
+  },
+  "timing_guards": [
+    "same_server_boot",
+    "same_producer_pid",
+    "later_flush_generation",
+    "same_mode",
+    "same_source_commit",
+    "same_canonical_task_set",
+    "campaign_marker_absent",
+    "full_b1_to_b4_coverage",
+    "unchanged_gate_attempts",
+    "matching_engine_proxy_phase",
+    "fresh_zeroed_timing_counters"
+  ],
+  "publication": {
+    "separate_phase_roots": true,
+    "timing_metrics_only_from_timing_phase": true,
+    "qualification_performance_measurement": false,
+    "raw_task_output_committed": false,
+    "runtime_identifiers_published": false
+  },
+  "source_scope": [
+    "src/lumo_flywheel_serving/inference_proxy.py",
+    "scripts/run_swe_bench_q36_a.py",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "tests/test_fr13_fixed32_ingress_proxy.py",
+    "tests/test_fr13_fixed32_ingress_wiring.py",
+    "tests/test_fr13_fixed32_b4_campaign_provenance.py",
+    "tests/test_fr13_fixed32_committer_layer_batch.py"
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "schema": "fr13.fixed32.cfwd_metadata_uniform_writer_codegen.v1",
+  "status": "offline_codegen_pass",
+  "implementation_commit": "c94943b4887eca8bd1ef1857e69a8d11ce21ac9a",
+  "codegen_input_commit": "2946061c8fe5e01bb10ac70d0f98987d7fdfb359",
+  "performance_evidence": false,
+  "gpu_kernel_executed": false,
+  "real_task_executed": false,
+  "target": {
+    "backend": "cuda",
+    "architecture": "sm_121a",
+    "warp_size": 32,
+    "triton": "3.6.0",
+    "torch": "2.10.0+cu130",
+    "torch_cuda": "13.0",
+    "num_warps": 4,
+    "num_stages": 3
+  },
+  "deployed_constants": {
+    "CONV_C": 10240,
+    "CONV_L": 34,
+    "SOURCE_ROWS": 36,
+    "ELEM_BYTES": 2,
+    "SPEC_COLS": 32,
+    "PATH_COLS": 16,
+    "BLOCK_C": 1024
+  },
+  "specializations": [
+    {
+      "batch": 1,
+      "conv_ctas_per_request": 480,
+      "metadata_writer_ctas_per_request": 1,
+      "nonwriter_ctas_per_request": 479,
+      "registers_per_thread": 56,
+      "stack_bytes_per_thread": 0,
+      "local_bytes_per_thread": 0,
+      "static_shared_bytes_per_cta": 0,
+      "constant0_bytes": 1048,
+      "sass_instructions": 2088,
+      "local_loads": 0,
+      "local_stores": 0,
+      "device_calls": 0,
+      "cubin_sha256": "5365cf9988bf1ef5992599a572cd856087885781abd1a63efca82b9ca805738b",
+      "ptx_sha256": "8e37b10f248c07d61621e6ee974d353f8fdddbad2cc8348dbd5db0b61a49beea"
+    },
+    {
+      "batch": 4,
+      "conv_ctas_per_event": 1920,
+      "metadata_writer_ctas_per_event": 4,
+      "nonwriter_ctas_per_event": 1916,
+      "registers_per_thread": 56,
+      "stack_bytes_per_thread": 0,
+      "local_bytes_per_thread": 0,
+      "static_shared_bytes_per_cta": 0,
+      "constant0_bytes": 1048,
+      "sass_instructions": 2088,
+      "local_loads": 0,
+      "local_stores": 0,
+      "device_calls": 0,
+      "cubin_sha256": "3fa4f2aa32d789ba3959500710362e83e4383aa99baa38dbe6ea8d89c904b301",
+      "ptx_sha256": "dc9692e08a6b1396db49eb1acdb52f67c1bfd8bbf106629294932930e3d5b4d5"
+    }
+  ],
+  "direct_no_metadata_baseline_b1": {
+    "registers_per_thread": 48,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 0,
+    "constant0_bytes": 1024,
+    "sass_instructions": 2064,
+    "local_loads": 0,
+    "local_stores": 0,
+    "device_calls": 0,
+    "cubin_sha256": "dfdc864277435f3116563f188e601b7c977cca78609cb6ff185f0753a88b883a"
+  },
+  "lowering": {
+    "cta_uniform_metadata_branch": true,
+    "branch_inputs": [
+      "SR_CTAID.X",
+      "SR_CTAID.Z"
+    ],
+    "metadata_memory_ops_in_nonwriter_ctas": false,
+    "one_writer_cta_per_request": true,
+    "metadata_columns_per_request": 16,
+    "accepted_length_stores_per_request": 1
+  },
+  "remaining_gates": [
+    "real SWE-Verified byte equality on the standing task set",
+    "B1 and B4 phase timing only after byte equality",
+    "occupancy and full-step impact of the eight-register increase"
+  ]
+}

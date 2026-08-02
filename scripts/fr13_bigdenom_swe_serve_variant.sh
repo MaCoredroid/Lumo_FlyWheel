@@ -41,6 +41,8 @@ FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=${FR13_FIXED32_SFWD_STATE_FUSION_TIMING
 FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
 FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB=${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}
 FR13_FIXED32_COMMITTER_LAYER_BATCH=${FR13_FIXED32_COMMITTER_LAYER_BATCH:-0}
+FR13_FIXED32_COMMITTER_METADATA_FUSION=${FR13_FIXED32_COMMITTER_METADATA_FUSION:-0}
+FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=${FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION:-0}
 case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
@@ -72,12 +74,24 @@ esac
 _fixed32_sfwd_route_count=$((
   10#$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
   + 10#$FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB
+  + 10#$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
   + 10#$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
 ))
 (( _fixed32_sfwd_route_count <= 1 )) \
   || { echo "FAIL: SFWD diagnostics are mutually exclusive"; exit 2; }
+case "$FR13_FIXED32_COMMITTER_METADATA_FUSION" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_COMMITTER_METADATA_FUSION must be exactly 0 or 1"; exit 2 ;;
+esac
+case "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" in
+  0|1) ;;
+  *) echo "FAIL: FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION must be exactly 0 or 1"; exit 2 ;;
+esac
 export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
-  FR13_FIXED32_COMMITTER_LAYER_BATCH FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB \
+  FR13_FIXED32_COMMITTER_LAYER_BATCH \
+  FR13_FIXED32_COMMITTER_METADATA_FUSION \
+  FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION \
+  FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB \
   FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB \
   FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION \
   FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
@@ -144,6 +158,18 @@ if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" ]]; then
     "$ARMDIR/logs/fr13_fixed32_committer_layer_batch.arm" \
     || { echo "FAIL: could not create committer layer-batch arm sidecar"; exit 2; }
 fi
+if [[ "$FR13_FIXED32_COMMITTER_METADATA_FUSION" == "1" ]]; then
+  [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" ]] \
+    || { echo "FAIL: committer metadata fusion requires layer-batch mode"; exit 2; }
+  install -m 600 /dev/null \
+    "$ARMDIR/logs/fr13_fixed32_committer_metadata_fusion.arm" \
+    || { echo "FAIL: could not create committer metadata-fusion arm sidecar"; exit 2; }
+fi
+if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "1" \
+      && "$FR13_FIXED32_COMMITTER_LAYER_BATCH" != "1" ]]; then
+  echo "FAIL: CFWD qualification requires FR13_FIXED32_COMMITTER_LAYER_BATCH=1"
+  exit 2
+fi
 FIXED32_MODE=""
 FIXED32_PRODUCER_PID=""
 FIXED32_REQUEST_PATH="$ARMDIR_ABS/logs/fr13_fixed32_flush_request.json"
@@ -153,6 +179,7 @@ FIXED32_BOUNDARY_SNAPSHOT_PATH="$ARMDIR_ABS/logs/fr13_fixed32_boundary_snapshot"
 FIXED32_TAW_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_taw_native_precompute.real_event.arm"
 FIXED32_BM8_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_dfwd_unified_bm8.real_event.arm"
 FIXED32_CUTLASS_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_cutlass_streamk.real_event.arm"
+FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH="$ARMDIR_ABS/logs/fr13_fixed32_committer_layer_batch.real_event.arm"
 FIXED32_INGRESS_SECRET_FILE=""
 FR13_FIXED32_INGRESS_TASK_IDS=""
 
@@ -1414,6 +1441,8 @@ teardown(){
     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
       bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
   fi
+  # Never let an interrupted qualification arm survive into terminal flush.
+  rm -f -- "$FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH" 2>/dev/null || true
   if [[ -n "$FIXED32_MODE" ]]; then
     if [[ -z "$CONTAINER_RUNTIME_REF" ]]; then
       _promote_fixed32_container_from_cidfile >/dev/null 2>&1 || true
@@ -1644,6 +1673,33 @@ if [[ "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" ]]; then
      && "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" ]] || {
     echo "FAIL: fixed32 SFWD state-fusion byte diagnostic must be exclusive"
+    exit 2
+  }
+fi
+if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "1" ]]; then
+  [[ -n "$FIXED32_MODE" \
+     && "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" ]] || {
+    echo "FAIL: CFWD layer-batch qualification requires fixed32 layer-batch mode"
+    exit 2
+  }
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
+    [[ "$MAX_NUM_SEQS_OVR" == "1" && "$SWE_CONCURRENCY" == "1" ]] || {
+      echo "FAIL: CFWD B1 qualification requires exact B1"
+      exit 2
+    }
+  else
+    [[ "$MAX_NUM_SEQS_OVR" == "4" && "$SWE_CONCURRENCY" == "4" ]] || {
+      echo "FAIL: CFWD campaign qualification requires exact B4"
+      exit 2
+    }
+  fi
+  [[ "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" == "0" \
+     && "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "0" ]] || {
+    echo "FAIL: CFWD layer-batch qualification must be the only kernel diagnostic"
     exit 2
   }
 fi
@@ -2408,6 +2464,12 @@ if [[ -n "$FIXED32_MODE" ]]; then
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" ]]; then
     FIXED32_RUNNER_ARGS+=(
       --fixed32-cutlass-real-event-arm "$FIXED32_CUTLASS_REAL_EVENT_ARM_PATH"
+    )
+  fi
+  if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION" == "1" ]]; then
+    FIXED32_RUNNER_ARGS+=(
+      --fixed32-committer-layer-batch-real-event-arm \
+      "$FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT_ARM_PATH"
     )
   fi
 fi

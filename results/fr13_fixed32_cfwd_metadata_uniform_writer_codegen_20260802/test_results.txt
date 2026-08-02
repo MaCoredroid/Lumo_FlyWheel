@@ -1,0 +1,31 @@
+FR13 fixed32 CFWD metadata uniform-writer codegen
+Date: 2026-08-02 UTC
+Execution class: CPU-only Triton/CUDA code generation and source tests
+GPU kernel launches: 0
+Docker launches: 0
+Real SWE-Verified tasks: 0
+
+PASS  Triton 3.6 ASTSource compile, target GPUTarget(cuda, 121, 32)
+      B=1 deployed specialization: sm_121a cubin and PTX emitted
+      B=4 deployed specialization: sm_121a cubin and PTX emitted
+
+PASS  cuobjdump resource and SASS audit
+      B1/B4 metadata kernel: REG56 STACK0 LOCAL0 SHARED0, 2088 instructions
+      B1 direct baseline: REG48 STACK0 LOCAL0 SHARED0, 2064 instructions
+      B1/B4 metadata kernel: LDL0 STL0 CALL0
+
+PASS  PTX and SASS control-flow audit
+      metadata predicate is derived from CTAID.X and CTAID.Z
+      nonwriter CTAs branch around the metadata load/store block
+      writer block performs one vectorized 16-column copy and one length store
+
+PASS  Focused host regression suites
+      lifecycle, task-boundary, and committer: 91 passed
+      final-preseed and conv-commit wiring: 65 passed
+
+PASS  Artifact validation
+      manifest JSON parse and git diff whitespace checks
+
+PENDING
+      Real-task byte equality, GPU timing, acceptance, and hardware-floor tests
+      were intentionally not run by this offline artifact.

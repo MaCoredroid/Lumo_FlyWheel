@@ -13,6 +13,19 @@ import triton.language as tl
 
 
 _FR13_COMMITTER_NATIVE_ANNOUNCED = False
+_FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT = (
+    "/logs/fr13_fixed32_committer_layer_batch.real_event.arm"
+)
+# Both fixed32 logical modes retain the full depth-11 Tail spine.  The
+# accepted_lens value counts accepted drafts only; the committer adds the root
+# internally, while columns 12..15 are storage padding and are unreachable.
+_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH = 11
+_FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = (
+    1 << (_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH + 1)
+) - 1
+_FR13_FIXED32_COMMITTER_TASK_ID_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+)
 
 
 def _fr13_fixed32_committer_layer_batch_requested() -> bool:
@@ -31,6 +44,89 @@ def _fr13_fixed32_committer_layer_batch_requested() -> bool:
             "/tmp/fr13_fixed32_committer_layer_batch.arm",
         )
     )
+
+
+def _fr13_fixed32_committer_metadata_fusion_requested() -> bool:
+    """Return the boot-time arm for conv-to-committer metadata fusion."""
+    if os.environ.get("FR13_FIXED32_COMMITTER_METADATA_FUSION") == "1":
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_fixed32_committer_metadata_fusion.arm",
+            "/tmp/fr13_fixed32_committer_metadata_fusion.arm",
+        )
+    )
+
+
+def _fr13_fixed32_committer_layer_batch_real_event_marker(
+    path: str = _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT,
+) -> str | None:
+    """Read the active authenticated SWE-Verified qualification arm."""
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise RuntimeError(
+            "FR13 fixed32 committer cannot open its real-event arm"
+        ) from error
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o400
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 committer real-event arm must be a private "
+                "read-only regular file"
+            )
+        with os.fdopen(descriptor, encoding="ascii", closefd=False) as handle:
+            marker = handle.read(257)
+    except (OSError, UnicodeError) as error:
+        raise RuntimeError(
+            "FR13 fixed32 committer cannot read its real-event arm"
+        ) from error
+    finally:
+        os.close(descriptor)
+    if len(marker) > 256:
+        raise RuntimeError(
+            "FR13 fixed32 committer real-event arm exceeds 256 bytes"
+        )
+    marker = marker.strip()
+    prefix = "swe_verified:"
+    task_id = marker[len(prefix):] if marker.startswith(prefix) else ""
+    if not task_id or any(
+        character not in _FR13_FIXED32_COMMITTER_TASK_ID_CHARACTERS
+        for character in task_id
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 committer real-event arm must be "
+            "swe_verified:<task_id>"
+        )
+    return marker
+
+
+def _fr13_fixed32_committer_accepted_length_mask(
+    accepted_lengths, *, batch: int,
+) -> int:
+    """Encode one B-row event's reachable accepted draft lengths."""
+    lengths = tuple(int(value) for value in accepted_lengths)
+    if len(lengths) != batch or any(
+        length < 0
+        or length > _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH
+        for length in lengths
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 committer accepted-length qualification input drift"
+        )
+    mask = 0
+    for length in lengths:
+        mask |= 1 << length
+    return mask
 
 
 def _fr13_committer_native_on() -> bool:
@@ -4325,6 +4421,229 @@ def _fr13_fixed32_conv_direct_col0_kernel(
 
 
 @triton.jit
+def _fr13_fixed32_conv_direct_col0_metadata_kernel(
+    anchor_ptr,
+    bank_off16,
+    source_anchor,
+    source_off16,
+    state_src,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    committer_paths,
+    committer_lens,
+    ssi_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    path_stride_b,
+    path_stride_s,
+    lens_stride_b,
+    committer_path_stride_b,
+    committer_path_stride_s,
+    committer_lens_stride_b,
+    bank_row_stride,
+    bank_c_stride,
+    bank_l_stride,
+    source_row_stride,
+    source_c_stride,
+    CONV_C: tl.constexpr,
+    CONV_L: tl.constexpr,
+    SOURCE_ROWS: tl.constexpr,
+    ELEM_BYTES: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    B: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """Direct col0 commit with one disjoint metadata writer per request."""
+    pid_l = tl.program_id(0)
+    pid_b = tl.program_id(1)
+    pid_c = tl.program_id(2)
+    if pid_b >= B:
+        return
+
+    accepted_len = tl.load(accepted_lens + pid_b * lens_stride_b)
+    metadata_writer = (pid_l == 0) & (pid_c == 0)
+    if metadata_writer:
+        path_cols = tl.arange(0, PATH_COLS)
+        path_values = tl.load(
+            accepted_paths
+            + pid_b * path_stride_b
+            + path_cols * path_stride_s,
+        )
+        tl.store(
+            committer_paths
+            + pid_b * committer_path_stride_b
+            + path_cols * committer_path_stride_s,
+            path_values,
+        )
+        tl.store(
+            committer_lens + pid_b * committer_lens_stride_b,
+            accepted_len,
+        )
+
+    leaf_pos = tl.maximum(accepted_len - 1, 0)
+    leaf_pos = tl.minimum(leaf_pos, PATH_COLS - 1)
+    leaf_node = tl.load(
+        accepted_paths
+        + pid_b * path_stride_b
+        + leaf_pos * path_stride_s
+    )
+    leaf_node = tl.where(accepted_len > 0, leaf_node, 0)
+    leaf_node = tl.maximum(0, tl.minimum(leaf_node, SPEC_COLS - 1))
+
+    spec_layer = (
+        spec_state_indices
+        + pid_l * ssi_stride_l
+        + pid_b * ssi_stride_b
+    )
+    dst_row = tl.load(spec_layer + 0 * ssi_stride_s)
+    bank = anchor_ptr + tl.load(bank_off16 + pid_l) * (16 // ELEM_BYTES)
+    source = (
+        source_anchor
+        + tl.load(source_off16 + pid_l) * (16 // ELEM_BYTES)
+    )
+    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+    c_mask = offs_c < CONV_C
+    source_batch = pid_b.to(tl.int64) * SOURCE_ROWS
+    for state_col in tl.static_range(0, CONV_L):
+        source_row = tl.load(
+            state_src + leaf_node * CONV_L + state_col
+        ).to(tl.int64)
+        values = tl.load(
+            source
+            + (source_batch + source_row) * source_row_stride
+            + offs_c * source_c_stride,
+            mask=c_mask,
+        )
+        tl.store(
+            bank
+            + dst_row.to(tl.int64) * bank_row_stride
+            + offs_c * bank_c_stride
+            + state_col * bank_l_stride,
+            values,
+            mask=c_mask,
+        )
+
+
+@triton.jit
+def _fr13_fixed32_conv_commit_row_guard_kernel(
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    bank_alias_ids,
+    bank_alias_peer_layers,
+    guard_flags,
+    ssi_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    path_stride_b,
+    path_stride_s,
+    lens_stride_b,
+    peer_stride_l,
+    peer_stride_s,
+    BANK_ROWS: tl.constexpr,
+    B: tl.constexpr,
+    LAYERS: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    MAX_ACCEPTED: tl.constexpr,
+    ALIAS_WIDTH: tl.constexpr,
+    ALIAS_CAP: tl.constexpr,
+    PEER_CAP: tl.constexpr,
+):
+    """Validate one fixed physical32 layer/request destination."""
+    pid = tl.program_id(0)
+    layer = pid // B
+    request = pid - layer * B
+    ssi_base = (
+        spec_state_indices
+        + layer * ssi_stride_l
+        + request * ssi_stride_b
+    )
+
+    row_offsets = tl.arange(0, SPEC_COLS)
+    rows = tl.load(ssi_base + row_offsets * ssi_stride_s).to(tl.int64)
+    rows_ok = tl.sum(
+        ((rows > 0) & (rows < BANK_ROWS)).to(tl.int32), axis=0
+    ) == SPEC_COLS
+
+    running_row = tl.load(ssi_base).to(tl.int64)
+    peer_offsets = tl.arange(0, PEER_CAP)
+    peer_slots = peer_offsets // B
+    other_requests = peer_offsets - peer_slots * B
+    peer_entry = peer_slots < ALIAS_WIDTH
+    peer_layers = tl.load(
+        bank_alias_peer_layers
+        + layer * peer_stride_l
+        + peer_slots * peer_stride_s,
+        mask=peer_entry,
+        other=-1,
+    ).to(tl.int64)
+    peer_layer_ok = (peer_layers >= 0) & (peer_layers < LAYERS)
+    peer_table_ok = tl.sum(
+        ((~peer_entry) | peer_layer_ok).to(tl.int32), axis=0
+    ) == PEER_CAP
+    peer_layers_safe = tl.maximum(0, tl.minimum(peer_layers, LAYERS - 1))
+    other_rows = tl.load(
+        spec_state_indices
+        + peer_layers_safe * ssi_stride_l
+        + other_requests * ssi_stride_b,
+        mask=peer_entry & peer_layer_ok,
+        other=-1,
+    ).to(tl.int64)
+    duplicate_destination = (
+        peer_entry
+        & peer_layer_ok
+        & ((peer_layers != layer) | (other_requests != request))
+        & (other_rows == running_row)
+    )
+    destination_unique = tl.sum(
+        duplicate_destination.to(tl.int32), axis=0
+    ) == 0
+
+    contract_ok = rows_ok & peer_table_ok & destination_unique
+    if layer == 0:
+        accepted_len = tl.load(
+            accepted_lens + request * lens_stride_b
+        ).to(tl.int64)
+        path_offsets = tl.arange(0, PATH_COLS)
+        paths = tl.load(
+            accepted_paths
+            + request * path_stride_b
+            + path_offsets * path_stride_s
+        ).to(tl.int64)
+        active_paths = path_offsets < accepted_len
+        paths_ok = tl.sum(
+            (
+                (~active_paths)
+                | ((paths >= 0) & (paths < SPEC_COLS))
+            ).to(tl.int32),
+            axis=0,
+        ) == PATH_COLS
+        lens_ok = (accepted_len >= 0) & (accepted_len <= MAX_ACCEPTED)
+        contract_ok = contract_ok & paths_ok & lens_ok
+        if request == 0:
+            alias_offsets = tl.arange(0, ALIAS_CAP)
+            alias_entries = alias_offsets < LAYERS
+            aliases = tl.load(
+                bank_alias_ids + alias_offsets,
+                mask=alias_entries,
+                other=0,
+            ).to(tl.int64)
+            aliases_ok = tl.sum(
+                (
+                    (~alias_entries)
+                    | ((aliases >= 0) & (aliases < 16))
+                ).to(tl.int32),
+                axis=0,
+            ) == ALIAS_CAP
+            contract_ok = contract_ok & aliases_ok
+
+    tl.store(guard_flags + pid, contract_ok)
+
+
+@triton.jit
 def _fr13_fixed32_sfwd_state_fusion_kernel(
     x,
     conv_state,
@@ -4885,7 +5204,7 @@ def preseed_fixed32_conv_col0_pregather(
         or commit_spec_state_indices.ndim != 3
         or int(commit_spec_state_indices.shape[0]) != 48
         or int(commit_spec_state_indices.shape[1]) < capacity
-        or int(commit_spec_state_indices.shape[2]) < 1
+        or int(commit_spec_state_indices.shape[2]) != 32
         or not commit_spec_state_indices.is_contiguous()
         or not torch.is_tensor(accepted_paths)
         or accepted_paths.device != anchor.device
@@ -4964,6 +5283,15 @@ def preseed_fixed32_conv_col0_pregather(
         dtype=torch.int64,
         device=anchor.device,
     )
+    alias_peer_layers = tuple(
+        tuple(int(peer) for peer in alias_classes[alias_id])
+        for alias_id in alias_ids
+    )
+    alias_peer_layers_device = torch.tensor(
+        alias_peer_layers,
+        dtype=torch.int32,
+        device=anchor.device,
+    )
     ssi_ptrs = torch.tensor(
         [int(source.data_ptr()) for source in ssi_sources],
         dtype=torch.int64,
@@ -4981,6 +5309,14 @@ def preseed_fixed32_conv_col0_pregather(
         dtype=anchor.dtype,
         device=anchor.device,
     )
+    row_guard_flags = {
+        batch: torch.empty(
+            48 * batch,
+            dtype=torch.bool,
+            device=anchor.device,
+        )
+        for batch in batches
+    }
     expected_staging_stride = (capacity * row_elems, row_elems, 1)
     if (
         not staging.is_contiguous()
@@ -5027,6 +5363,8 @@ def preseed_fixed32_conv_col0_pregather(
         "bank_alias_ids": alias_ids,
         "bank_alias_ranks": alias_ranks,
         "bank_alias_ids_device": alias_ids_device,
+        "bank_alias_peer_layers": alias_peer_layers,
+        "bank_alias_peer_layers_device": alias_peer_layers_device,
         "off16": offsets,
         "ssi_sources": ssi_sources,
         "ssi_ptrs": ssi_ptrs,
@@ -5056,6 +5394,7 @@ def preseed_fixed32_conv_col0_pregather(
             json.dumps(state_src_values).encode("ascii")
         ).hexdigest(),
         "staging": staging,
+        "row_guard_flags_by_batch": row_guard_flags,
         "row_elems": row_elems,
         "conv_c": conv_c,
         "conv_l": conv_l,
@@ -5089,6 +5428,7 @@ def preseed_fixed32_conv_col0_pregather(
             tuple(id(bank) for bank in ssm_bank_refs),
             id(offsets),
             id(alias_ids_device),
+            id(alias_peer_layers_device),
             tuple(id(source) for source in ssi_sources),
             id(ssi_ptrs),
             id(ssi_strides),
@@ -5099,6 +5439,7 @@ def preseed_fixed32_conv_col0_pregather(
             id(source_offsets),
             id(direct_state_src),
             id(staging),
+            tuple(id(row_guard_flags[batch]) for batch in batches),
         ),
         "source_data_ptrs": (
             tuple(int(bank.data_ptr()) for bank in bank_refs),
@@ -5109,6 +5450,7 @@ def preseed_fixed32_conv_col0_pregather(
             ),
             int(offsets.data_ptr()),
             int(alias_ids_device.data_ptr()),
+            int(alias_peer_layers_device.data_ptr()),
             tuple(int(source.data_ptr()) for source in ssi_sources),
             int(ssi_ptrs.data_ptr()),
             int(ssi_strides.data_ptr()),
@@ -5119,6 +5461,9 @@ def preseed_fixed32_conv_col0_pregather(
             int(source_offsets.data_ptr()),
             int(direct_state_src.data_ptr()),
             int(staging.data_ptr()),
+            tuple(
+                int(row_guard_flags[batch].data_ptr()) for batch in batches
+            ),
         ),
         "commit_operand_meta": (
             tuple(int(value) for value in commit_spec_state_indices.shape),
@@ -5156,6 +5501,24 @@ def preseed_fixed32_conv_col0_pregather(
             "commit_source_pointer_entries": 48,
             "commit_source_rows_per_batch": source_rows,
             "commit_state_src_shape": (32, conv_l),
+            "commit_row_guard_route": (
+                "fixed32_triton_alias3_ownerpath_physical32_v3"
+            ),
+            "commit_row_guard_kernel_launches_per_event": 1,
+            "commit_row_guard_programs_per_request": 48,
+            "commit_row_guard_physical_rows": 32,
+            "commit_row_guard_path_capacity": 16,
+            "commit_row_guard_alias_width": 3,
+            "commit_row_guard_compare_capacity": 16,
+            "commit_row_guard_path_validation_programs_per_request": 1,
+            "commit_row_guard_path_vector_loads_per_request": 1,
+            "commit_row_guard_alias_validation_programs_per_event": 1,
+            "commit_row_guard_alias_vector_loads_per_event": 1,
+            "commit_row_guard_selected_row_loads_per_program": 0,
+            "commit_row_guard_peer_topology_proof": "preseed_lease_audit",
+            "commit_row_guard_torch_index_transforms": 0,
+            "commit_row_guard_async_scalar_reductions": 1,
+            "commit_row_guard_async_assertions": 1,
             "commit_full_node_writebacks": 0,
             "commit_conv_remaps": 0,
             "commit_bank_overlap_policy": "exact_alias_only_16x3",
@@ -5224,6 +5587,16 @@ def preseed_fixed32_conv_col0_pregather(
     )
     try:
         for batch in batches:
+            validate_fixed32_conv_commit_rows(
+                spec_state_indices=safe_commit_ssi,
+                accepted_paths=safe_paths,
+                accepted_lens=safe_lens,
+                bank_alias_ids=alias_ids_device,
+                bank_alias_peer_layers=alias_peer_layers_device,
+                guard_flags=row_guard_flags[batch],
+                batch=batch,
+                bank_rows=int(anchor.shape[0]),
+            )
             pregather_grid = (48, batch, triton.cdiv(row_elems, block))
             _fr13_conv_col0_pregather_kernel[pregather_grid](
                 anchor,
@@ -5654,6 +6027,7 @@ def launch_fixed32_conv_col0_pregather(
             tuple(id(bank) for bank in state["ssm_banks"]),
             id(state["off16"]),
             id(state["bank_alias_ids_device"]),
+            id(state["bank_alias_peer_layers_device"]),
             tuple(id(source) for source in state["ssi_sources"]),
             id(state["ssi_ptrs"]),
             id(state["ssi_strides"]),
@@ -5664,6 +6038,10 @@ def launch_fixed32_conv_col0_pregather(
             id(state["source_off16"]),
             id(state["state_src"]),
             id(state["staging"]),
+            tuple(
+                id(state["row_guard_flags_by_batch"][batch])
+                for batch in state["preseeded_batches"]
+            ),
         )
         or state.get("source_data_ptrs")
         != (
@@ -5675,6 +6053,7 @@ def launch_fixed32_conv_col0_pregather(
             ),
             int(state["off16"].data_ptr()),
             int(state["bank_alias_ids_device"].data_ptr()),
+            int(state["bank_alias_peer_layers_device"].data_ptr()),
             tuple(int(source.data_ptr()) for source in state["ssi_sources"]),
             int(state["ssi_ptrs"].data_ptr()),
             int(state["ssi_strides"].data_ptr()),
@@ -5688,6 +6067,10 @@ def launch_fixed32_conv_col0_pregather(
             int(state["source_off16"].data_ptr()),
             int(state["state_src"].data_ptr()),
             int(state["staging"].data_ptr()),
+            tuple(
+                int(state["row_guard_flags_by_batch"][batch].data_ptr())
+                for batch in state["preseeded_batches"]
+            ),
         )
         or not state["staging"].is_contiguous()
         or tuple(int(value) for value in state["staging"].shape)
@@ -5824,6 +6207,11 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         or tuple(alias_classes) != state.get("bank_alias_classes")
         or tuple(alias_ids) != state.get("bank_alias_ids")
         or tuple(alias_ranks) != state.get("bank_alias_ranks")
+        or tuple(
+            tuple(int(peer) for peer in alias_classes[alias_id])
+            for alias_id in alias_ids
+        )
+        != state.get("bank_alias_peer_layers")
         or not torch.is_tensor(state.get("bank_alias_ids_device"))
         or state["bank_alias_ids_device"].dtype != torch.int64
         or state["bank_alias_ids_device"].device != anchor.device
@@ -5833,6 +6221,16 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
             int(value) for value in state["bank_alias_ids_device"].tolist()
         )
         != tuple(alias_ids)
+        or not torch.is_tensor(state.get("bank_alias_peer_layers_device"))
+        or state["bank_alias_peer_layers_device"].dtype != torch.int32
+        or state["bank_alias_peer_layers_device"].device != anchor.device
+        or tuple(state["bank_alias_peer_layers_device"].shape) != (48, 3)
+        or not state["bank_alias_peer_layers_device"].is_contiguous()
+        or tuple(
+            tuple(int(peer) for peer in row)
+            for row in state["bank_alias_peer_layers_device"].tolist()
+        )
+        != state.get("bank_alias_peer_layers")
         or any(
             source is not expected
             for source, expected in zip(
@@ -5898,6 +6296,31 @@ def audit_fixed32_conv_commit_lease() -> dict[str, object]:
         "source_staging_reused": True,
         "source_pointer_entries": 48,
         "state_src_shape": (32, int(state["conv_l"])),
+        "row_guard_route": state["contract"]["commit_row_guard_route"],
+        "row_guard_alias_width": state["contract"][
+            "commit_row_guard_alias_width"
+        ],
+        "row_guard_compare_capacity": state["contract"][
+            "commit_row_guard_compare_capacity"
+        ],
+        "row_guard_path_validation_programs_per_request": state["contract"][
+            "commit_row_guard_path_validation_programs_per_request"
+        ],
+        "row_guard_path_vector_loads_per_request": state["contract"][
+            "commit_row_guard_path_vector_loads_per_request"
+        ],
+        "row_guard_alias_validation_programs_per_event": state["contract"][
+            "commit_row_guard_alias_validation_programs_per_event"
+        ],
+        "row_guard_alias_vector_loads_per_event": state["contract"][
+            "commit_row_guard_alias_vector_loads_per_event"
+        ],
+        "row_guard_selected_row_loads_per_program": state["contract"][
+            "commit_row_guard_selected_row_loads_per_program"
+        ],
+        "row_guard_peer_topology_proof": state["contract"][
+            "commit_row_guard_peer_topology_proof"
+        ],
     }
 
 
@@ -5962,47 +6385,118 @@ def launch_fixed32_conv_commit_to_col0(
         raise RuntimeError(
             "FR13_FIXED32_CONV_COMMIT persistent identity/geometry drift"
         )
+    metadata_fusion = _fr13_fixed32_committer_metadata_fusion_state(
+        batch=batch,
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        accepted_lens=accepted_lens,
+    )
+    if metadata_fusion is None:
+        committer_state = None
+        validation_bank_rows = int(state["anchor"].shape[0])
+    else:
+        committer_state, validation_bank_rows = metadata_fusion
     validate_fixed32_conv_commit_rows(
         spec_state_indices=spec_state_indices,
         accepted_paths=accepted_paths,
         accepted_lens=accepted_lens,
         bank_alias_ids=state["bank_alias_ids_device"],
+        bank_alias_peer_layers=state["bank_alias_peer_layers_device"],
+        guard_flags=state["row_guard_flags_by_batch"][batch],
         batch=batch,
-        bank_rows=int(state["anchor"].shape[0]),
+        bank_rows=validation_bank_rows,
     )
     conv_c = int(state["conv_c"])
     block = int(state["block"])
     grid = (48, batch, triton.cdiv(conv_c, block))
-    _fr13_fixed32_conv_direct_col0_kernel[grid](
-        state["anchor"],
-        state["off16"],
-        state["source_anchor"],
-        state["source_off16"],
-        state["state_src"],
-        spec_state_indices,
-        accepted_paths,
-        accepted_lens,
-        spec_state_indices.stride(0),
-        spec_state_indices.stride(1),
-        spec_state_indices.stride(2),
-        accepted_paths.stride(0),
-        accepted_paths.stride(1),
-        accepted_lens.stride(0),
-        int(state["anchor"].stride(0)),
-        int(state["anchor"].stride(1)),
-        int(state["anchor"].stride(2)),
-        int(state["source_anchor"].stride(0)),
-        int(state["source_anchor"].stride(1)),
-        CONV_C=conv_c,
-        CONV_L=int(state["conv_l"]),
-        SOURCE_ROWS=int(state["source_rows_per_batch"]),
-        ELEM_BYTES=int(state["element_bytes"]),
-        SPEC_COLS=int(spec_state_indices.shape[2]),
-        PATH_COLS=int(accepted_paths.shape[1]),
-        B=batch,
-        BLOCK_C=block,
-        num_warps=4,
-    )
+    if committer_state is None:
+        _fr13_fixed32_conv_direct_col0_kernel[grid](
+            state["anchor"],
+            state["off16"],
+            state["source_anchor"],
+            state["source_off16"],
+            state["state_src"],
+            spec_state_indices,
+            accepted_paths,
+            accepted_lens,
+            spec_state_indices.stride(0),
+            spec_state_indices.stride(1),
+            spec_state_indices.stride(2),
+            accepted_paths.stride(0),
+            accepted_paths.stride(1),
+            accepted_lens.stride(0),
+            int(state["anchor"].stride(0)),
+            int(state["anchor"].stride(1)),
+            int(state["anchor"].stride(2)),
+            int(state["source_anchor"].stride(0)),
+            int(state["source_anchor"].stride(1)),
+            CONV_C=conv_c,
+            CONV_L=int(state["conv_l"]),
+            SOURCE_ROWS=int(state["source_rows_per_batch"]),
+            ELEM_BYTES=int(state["element_bytes"]),
+            SPEC_COLS=int(spec_state_indices.shape[2]),
+            PATH_COLS=int(accepted_paths.shape[1]),
+            B=batch,
+            BLOCK_C=block,
+            num_warps=4,
+        )
+    else:
+        destination_paths = committer_state["accepted_paths"]
+        destination_lens = committer_state["accepted_lens"]
+        stream_key = _fr13_fixed32_committer_stream_key(accepted_paths.device)
+        lease_key = _fr13_fixed32_committer_metadata_lease_key(
+            batch=batch,
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            committer_paths=destination_paths,
+            committer_lens=destination_lens,
+            validation_bank_rows=validation_bank_rows,
+            stream_key=stream_key,
+        )
+        if _FR13_FIXED32_COMMITTER_METADATA_LEASE:
+            raise RuntimeError(
+                "FR13 fixed32 metadata-fusion prior lease was not consumed"
+            )
+        _fr13_fixed32_conv_direct_col0_metadata_kernel[grid](
+            state["anchor"],
+            state["off16"],
+            state["source_anchor"],
+            state["source_off16"],
+            state["state_src"],
+            spec_state_indices,
+            accepted_paths,
+            accepted_lens,
+            destination_paths,
+            destination_lens,
+            spec_state_indices.stride(0),
+            spec_state_indices.stride(1),
+            spec_state_indices.stride(2),
+            accepted_paths.stride(0),
+            accepted_paths.stride(1),
+            accepted_lens.stride(0),
+            destination_paths.stride(0),
+            destination_paths.stride(1),
+            destination_lens.stride(0),
+            int(state["anchor"].stride(0)),
+            int(state["anchor"].stride(1)),
+            int(state["anchor"].stride(2)),
+            int(state["source_anchor"].stride(0)),
+            int(state["source_anchor"].stride(1)),
+            CONV_C=conv_c,
+            CONV_L=int(state["conv_l"]),
+            SOURCE_ROWS=int(state["source_rows_per_batch"]),
+            ELEM_BYTES=int(state["element_bytes"]),
+            SPEC_COLS=int(spec_state_indices.shape[2]),
+            PATH_COLS=int(accepted_paths.shape[1]),
+            B=batch,
+            BLOCK_C=block,
+            num_warps=4,
+        )
+        _fr13_fixed32_committer_publish_metadata_lease(lease_key)
+        _FR13_FIXED32_COMMITTER_COUNTERS[
+            "metadata_fusion_published_by_batch"
+        ][batch] += 1
     state["commit_direct_launches"] += 1
     state["commit_direct_launches_by_batch"][batch] += 1
 
@@ -9098,16 +9592,140 @@ def _fr13_native_committer_all_layers_device(
 
 
 _FR13_FIXED32_COMMITTER = {}
+_FR13_FIXED32_COMMITTER_GATE_COEFFS: dict[tuple, torch.Tensor] = {}
+_FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES = 0
 _FR13_FIXED32_COMMITTER_FAST_ROUTE: dict[str, object] = {}
+_FR13_FIXED32_COMMITTER_METADATA_LEASE: dict[str, object] = {}
 _FR13_FIXED32_COMMITTER_CALLBACKS = []
 _FR13_FIXED32_COMMITTER_COUNTERS = {
     "captures": 0,
     "actual_replays_enqueued": 0,
     "actual_replays_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+    "metadata_fusion_published_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+    "metadata_fusion_consumed_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+    "metadata_fusion_fallbacks_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
 }
 _FR13_FIXED32_COMMITTER_ANNOUNCED = False
 _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY = None
 _FR13_FIXED32_COMMITTER_WARMUP: dict[str, object] = {}
+
+
+def _fr13_fixed32_committer_stream_key(device) -> tuple[str, int]:
+    stream = torch.cuda.current_stream(device)
+    return str(device), int(stream.cuda_stream)
+
+
+def _fr13_fixed32_committer_metadata_lease_key(
+    *,
+    batch: int,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    committer_paths: torch.Tensor,
+    committer_lens: torch.Tensor,
+    validation_bank_rows: int,
+    stream_key: tuple[str, int] | None = None,
+) -> tuple:
+    """Bind one conv validation/copy to one exact committer replay."""
+    if stream_key is None:
+        stream_key = _fr13_fixed32_committer_stream_key(accepted_paths.device)
+    tensors = (
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        committer_paths,
+        committer_lens,
+    )
+    return (
+        "fixed32_committer_metadata_fusion_v1",
+        int(batch),
+        int(validation_bank_rows),
+        tuple(stream_key),
+        tuple(int(tensor.data_ptr()) for tensor in tensors),
+        (
+            tuple(int(value) for value in spec_state_indices.shape),
+            (int(batch), 16),
+            (int(batch),),
+            tuple(int(value) for value in committer_paths.shape),
+            tuple(int(value) for value in committer_lens.shape),
+        ),
+        tuple(tuple(int(value) for value in tensor.stride()) for tensor in tensors),
+        tuple(str(tensor.dtype) for tensor in tensors),
+        tuple(str(tensor.device) for tensor in tensors),
+    )
+
+
+def _fr13_fixed32_committer_publish_metadata_lease(key: tuple) -> None:
+    if _FR13_FIXED32_COMMITTER_METADATA_LEASE:
+        raise RuntimeError(
+            "FR13 fixed32 metadata-fusion prior lease was not consumed"
+        )
+    _FR13_FIXED32_COMMITTER_METADATA_LEASE["key"] = key
+
+
+def _fr13_fixed32_committer_consume_metadata_lease(key: tuple) -> bool:
+    if not _FR13_FIXED32_COMMITTER_METADATA_LEASE:
+        return False
+    prior = _FR13_FIXED32_COMMITTER_METADATA_LEASE.get("key")
+    if prior is None or prior != key:
+        raise RuntimeError(
+            "FR13 fixed32 metadata-fusion lease mismatch; refusing fallback"
+        )
+    _FR13_FIXED32_COMMITTER_METADATA_LEASE.clear()
+    return True
+
+
+def _fr13_fixed32_committer_metadata_fusion_state(
+    *,
+    batch: int,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+) -> tuple[dict, int] | None:
+    """Resolve the armed B-specific destinations for the preceding conv launch."""
+    route = _FR13_FIXED32_COMMITTER_FAST_ROUTE.get("state")
+    if not isinstance(route, dict):
+        return None
+    state = route.get("states_by_batch", {}).get(int(batch))
+    if not isinstance(state, dict) or not state.get("metadata_copy_fusion", False):
+        return None
+    destination_paths = state.get("accepted_paths")
+    destination_lens = state.get("accepted_lens")
+    if (
+        route.get("spec_state_indices") is not spec_state_indices
+        or int(route.get("accepted_paths_data_ptr", -1))
+        != int(accepted_paths.data_ptr())
+        or int(route.get("accepted_lens_data_ptr", -1))
+        != int(accepted_lens.data_ptr())
+        or tuple(int(value) for value in accepted_paths.shape)
+        != (int(route.get("capacity", -1)), 16)
+        or tuple(int(value) for value in accepted_lens.shape)
+        != (int(route.get("capacity", -1)),)
+        or accepted_paths.dtype != torch.int32
+        or accepted_lens.dtype != torch.int32
+        or not accepted_paths.is_contiguous()
+        or not accepted_lens.is_contiguous()
+        or not torch.is_tensor(destination_paths)
+        or not torch.is_tensor(destination_lens)
+        or tuple(destination_paths.shape) != (int(batch), 16)
+        or tuple(destination_lens.shape) != (int(batch),)
+        or destination_paths.dtype != torch.int32
+        or destination_lens.dtype != torch.int32
+        or destination_paths.device != accepted_paths.device
+        or destination_lens.device != accepted_lens.device
+        or int(destination_paths.data_ptr()) == int(accepted_paths.data_ptr())
+        or int(destination_lens.data_ptr()) == int(accepted_lens.data_ptr())
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 metadata-fusion persistent operand drift"
+        )
+    validation_bank_rows = min(
+        int(state["bank_rows"]),
+        int(_FR13_FIXED32_CONV_PREGATHER["state"]["anchor"].shape[0]),
+    )
+    if validation_bank_rows <= 0:
+        raise RuntimeError("FR13 fixed32 metadata-fusion has no valid bank rows")
+    return state, validation_bank_rows
 
 
 def _fr13_fixed32_tensor_bits_equal(
@@ -9136,6 +9754,23 @@ def fixed32_committer_counters() -> dict[str, object]:
     maximum_ready_capacity = max(ready_capacities.values(), default=0)
     required_capacity = _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY
     fast_route = _FR13_FIXED32_COMMITTER_FAST_ROUTE.get("state")
+    states_by_batch = (
+        fast_route.get("states_by_batch", {})
+        if isinstance(fast_route, dict)
+        else {}
+    )
+    layer_batch_gate_passed_by_batch = {
+        int(batch): int(bool(state.get("layer_batch_byte_gate_passed", False)))
+        for batch, state in states_by_batch.items()
+    }
+    layer_batch_gate_attempts_by_batch = {
+        int(batch): int(state.get("layer_batch_byte_gate_attempts", -1))
+        for batch, state in states_by_batch.items()
+    }
+    layer_batch_gate_coverage_mask_by_batch = {
+        int(batch): int(state.get("layer_batch_byte_gate_coverage_mask", -1))
+        for batch, state in states_by_batch.items()
+    }
     fast_route_ready = (
         fast_route is not None
         and fast_route["mode"] == _FR13_FIXED32_MODE
@@ -9148,6 +9783,33 @@ def fixed32_committer_counters() -> dict[str, object]:
         ),
         "actual_replays_by_batch": dict(
             _FR13_FIXED32_COMMITTER_COUNTERS["actual_replays_by_batch"]
+        ),
+        "metadata_fusion_published_by_batch": dict(
+            _FR13_FIXED32_COMMITTER_COUNTERS[
+                "metadata_fusion_published_by_batch"
+            ]
+        ),
+        "metadata_fusion_consumed_by_batch": dict(
+            _FR13_FIXED32_COMMITTER_COUNTERS[
+                "metadata_fusion_consumed_by_batch"
+            ]
+        ),
+        "metadata_fusion_fallbacks_by_batch": dict(
+            _FR13_FIXED32_COMMITTER_COUNTERS[
+                "metadata_fusion_fallbacks_by_batch"
+            ]
+        ),
+        "gate_precompute_launches": int(
+            _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES
+        ),
+        "layer_batch_gate_passed_by_batch": (
+            layer_batch_gate_passed_by_batch
+        ),
+        "layer_batch_gate_attempts_by_batch": (
+            layer_batch_gate_attempts_by_batch
+        ),
+        "layer_batch_gate_coverage_mask_by_batch": (
+            layer_batch_gate_coverage_mask_by_batch
         ),
         "preseeded_graphs": len(_FR13_FIXED32_COMMITTER),
         "preseeded_batches": preseeded_batches,
@@ -9644,24 +10306,93 @@ def _fr13_fixed32_committer_fast_state(
     return state, batch
 
 
-@triton.jit(do_not_specialize=["N", "T"])
-def _fr13_fixed32_committer_native_layer_batch_kernel(
+@triton.jit
+def _fr13_fixed32_committer_gate_precompute_kernel(
     A_logs,
-    a,
-    b,
     dt_biases,
-    q,
-    k,
-    v,
-    o,
+    gate_coeffs,
+    N: tl.constexpr,
+    BLOCK: tl.constexpr,
+):
+    offsets = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+    mask = offsets < N
+    a_scale = -tl.exp(
+        tl.load(A_logs + offsets, mask=mask, other=0).to(tl.float32)
+    )
+    dt_bias = tl.load(
+        dt_biases + offsets, mask=mask, other=0
+    ).to(tl.float32)
+    tl.store(gate_coeffs + offsets * 2, a_scale, mask=mask)
+    tl.store(gate_coeffs + offsets * 2 + 1, dt_bias, mask=mask)
+
+
+def _fr13_fixed32_committer_gate_precompute(
+    *, A_logs: torch.Tensor, dt_biases: torch.Tensor
+) -> torch.Tensor:
+    """Materialize event-invariant FP32 gate coefficients once per process."""
+    global _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES
+    if (
+        tuple(A_logs.shape) != tuple(dt_biases.shape)
+        or A_logs.ndim != 2
+        or not A_logs.is_contiguous()
+        or not dt_biases.is_contiguous()
+        or A_logs.device != dt_biases.device
+    ):
+        raise RuntimeError("FR13 fixed32 gate-precompute input contract drift")
+    key = (
+        str(A_logs.device),
+        int(A_logs.data_ptr()),
+        int(dt_biases.data_ptr()),
+        tuple(int(value) for value in A_logs.shape),
+        tuple(int(value) for value in A_logs.stride()),
+        tuple(int(value) for value in dt_biases.stride()),
+        str(A_logs.dtype),
+        str(dt_biases.dtype),
+    )
+    existing = _FR13_FIXED32_COMMITTER_GATE_COEFFS.get(key)
+    if existing is not None:
+        return existing
+    if _FR13_FIXED32_COMMITTER_GATE_COEFFS:
+        raise RuntimeError(
+            "FR13 fixed32 gate-precompute operands changed after preseed"
+        )
+    total = int(A_logs.numel())
+    block = 256
+    gate_coeffs = torch.empty(
+        (*A_logs.shape, 2),
+        dtype=torch.float32,
+        device=A_logs.device,
+    )
+    _fr13_fixed32_committer_gate_precompute_kernel[
+        (triton.cdiv(total, block),)
+    ](
+        A_logs,
+        dt_biases,
+        gate_coeffs,
+        N=total,
+        BLOCK=block,
+        num_warps=4,
+        num_stages=1,
+    )
+    _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES += 1
+    _FR13_FIXED32_COMMITTER_GATE_COEFFS[key] = gate_coeffs
+    return gate_coeffs
+
+
+@triton.jit
+def _fr13_fixed32_committer_native_layer_batch_kernel(
+    a_rings,
+    b_rings,
+    gate_coeffs,
+    k_rings,
+    v_rings,
     bank_anchor,
     bank_off16,
-    cu_seqlens,
-    ssm_state_indices,
-    scale,
-    N: tl.int64,
-    T: tl.int64,
+    accepted_paths,
+    accepted_lens,
+    spec_state_indices,
     B: tl.constexpr,
+    PATH_CAP: tl.constexpr,
     H: tl.constexpr,
     HV: tl.constexpr,
     K: tl.constexpr,
@@ -9670,21 +10401,30 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     BV: tl.constexpr,
     BANK_STRIDE: tl.constexpr,
     GATE_L_STRIDE: tl.constexpr,
-    AB_L_STRIDE: tl.constexpr,
-    K_L_STRIDE: tl.constexpr,
-    V_L_STRIDE: tl.constexpr,
-    O_L_STRIDE: tl.constexpr,
-    SSI_L_STRIDE: tl.constexpr,
-    SSI_SEQ_STRIDE: tl.constexpr,
+    RING_K_L_STRIDE: tl.constexpr,
+    RING_K_B_STRIDE: tl.constexpr,
+    RING_K_N_STRIDE: tl.constexpr,
+    RING_V_L_STRIDE: tl.constexpr,
+    RING_V_B_STRIDE: tl.constexpr,
+    RING_V_N_STRIDE: tl.constexpr,
+    RING_AB_L_STRIDE: tl.constexpr,
+    RING_AB_B_STRIDE: tl.constexpr,
+    RING_AB_N_STRIDE: tl.constexpr,
+    SPEC_L_STRIDE: tl.constexpr,
+    SPEC_B_STRIDE: tl.constexpr,
     BETA: tl.constexpr,
     THRESHOLD: tl.constexpr,
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
 ):
-    """Native fused-sigmoid recurrence with layer added to the program grid.
+    """Native fused-sigmoid state recurrence batched across all layers.
 
-    Each program retains the native kernel's complete ordered token loop.  The
-    extra layer coordinate changes only base addresses; layers share read-only
-    path metadata and write disjoint recurrent-state banks.
+    Each program retains the native kernel's ordered loop through the root and
+    accepted drafts. The fixed suffix is fully neutral, so it is omitted. The
+    caller discards the operator output, so this commit-only realization also
+    omits the independent q projection, output store, and staging buffers. It
+    gathers each live root/path row directly from the fixed32 activation rings.
+    Layers share read-only path metadata and write disjoint physical ``(alias,
+    row)`` destinations.
     """
     i_k = tl.program_id(0)
     i_v = tl.program_id(1)
@@ -9696,12 +10436,11 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     i_hv = i_nh % HV
     i_h = i_hv // (HV // H)
 
-    bos = tl.load(cu_seqlens + i_n).to(tl.int64)
-    eos = tl.load(cu_seqlens + i_n + 1).to(tl.int64)
-    all_tokens = T
-    T = eos - bos
-    if T == 0:
-        return
+    accepted = tl.load(accepted_lens + i_n).to(tl.int64)
+    # Replay enqueues a device assertion for accepted in [0, 11] and every
+    # active node in [0, 31] before this graph. Consume that validated domain
+    # directly so the hot scan does not repeat bounds clamps in every program.
+    T = accepted + 1
 
     o_k = i_k * BK + tl.arange(0, BK)
     o_v = i_v * BV + tl.arange(0, BV)
@@ -9709,25 +10448,15 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     mask_v = o_v < V
     mask_h = mask_v[:, None] & mask_k[None, :]
 
-    p_q = q + (bos * H + i_h) * K + o_k
-    p_k = k + i_l * K_L_STRIDE + (bos * H + i_h) * K + o_k
-    p_v = v + i_l * V_L_STRIDE + (bos * HV + i_hv) * V + o_v
-    p_a_log = A_logs + i_l * GATE_L_STRIDE + i_hv
-    p_a = a + i_l * AB_L_STRIDE + bos * HV + i_hv
-    p_dt_bias = dt_biases + i_l * GATE_L_STRIDE + i_hv
-    p_b = b + i_l * AB_L_STRIDE + bos * HV + i_hv
-    p_o = (
-        o
-        + i_l * O_L_STRIDE
-        + ((i_k * all_tokens + bos) * HV + i_hv) * V
-        + o_v
-    )
-
+    p_gate = gate_coeffs + i_l * GATE_L_STRIDE + i_hv * 2
+    b_a_scale = tl.load(p_gate)
+    b_dt_bias = tl.load(p_gate + 1)
     # Preserve the anchor+offset form used by the byte-gated all-layer replay.
     # A raw pointer-table load loses 16-byte AxisInfo and changes reductions.
     state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4
-    ssi = ssm_state_indices + i_l * SSI_L_STRIDE
-    state_idx = tl.load(ssi + i_n * SSI_SEQ_STRIDE).to(tl.int64)
+    state_idx = tl.load(
+        spec_state_indices + i_l * SPEC_L_STRIDE + i_n * SPEC_B_STRIDE
+    ).to(tl.int64)
     if state_idx <= 0:
         return
     p_h0 = (
@@ -9740,66 +10469,84 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     b_h = tl.zeros([BV, BK], dtype=tl.float32)
     b_h += tl.load(p_h0, mask=mask_h, other=0).to(tl.float32)
 
-    for i_t in range(0, T):
-        b_q = tl.load(p_q, mask=mask_k, other=0).to(tl.float32)
+    for i_t in tl.range(0, T):
+        path_offset = tl.maximum(i_t - 1, 0)
+        path_node = tl.load(
+            accepted_paths + i_n * PATH_CAP + path_offset,
+            mask=i_t > 0,
+            other=0,
+        ).to(tl.int64)
+        node = path_node
+        p_k = (
+            k_rings
+            + i_l * RING_K_L_STRIDE
+            + i_n * RING_K_B_STRIDE
+            + node * RING_K_N_STRIDE
+            + i_h * K
+            + o_k
+        )
+        p_v = (
+            v_rings
+            + i_l * RING_V_L_STRIDE
+            + i_n * RING_V_B_STRIDE
+            + node * RING_V_N_STRIDE
+            + i_hv * V
+            + o_v
+        )
+        p_a = (
+            a_rings
+            + i_l * RING_AB_L_STRIDE
+            + i_n * RING_AB_B_STRIDE
+            + node * RING_AB_N_STRIDE
+            + i_hv
+        )
+        p_b = (
+            b_rings
+            + i_l * RING_AB_L_STRIDE
+            + i_n * RING_AB_B_STRIDE
+            + node * RING_AB_N_STRIDE
+            + i_hv
+        )
         b_k = tl.load(p_k, mask=mask_k, other=0).to(tl.float32)
         b_v = tl.load(p_v, mask=mask_v, other=0).to(tl.float32)
         b_b = tl.load(p_b).to(tl.float32)
 
-        x = tl.load(p_a).to(tl.float32) + tl.load(p_dt_bias).to(tl.float32)
+        x = tl.load(p_a).to(tl.float32) + b_dt_bias
         softplus_x = tl.where(
             BETA * x <= THRESHOLD,
             (1 / BETA) * tl.log(1 + tl.exp(BETA * x)),
             x,
         )
-        b_g = -tl.exp(tl.load(p_a_log).to(tl.float32)) * softplus_x
+        b_g = b_a_scale * softplus_x
         b_beta = tl.sigmoid(b_b.to(tl.float32))
 
         if USE_QK_L2NORM_IN_KERNEL:
-            b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
             b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
-        b_q = b_q * scale
         b_h *= tl.exp(b_g)
         b_v -= tl.sum(b_h * b_k[None, :], 1)
         b_v *= b_beta
         b_h += b_v[:, None] * b_k[None, :]
-        b_o = tl.sum(b_h * b_q[None, :], 1)
-        tl.store(p_o, b_o.to(p_o.dtype.element_ty), mask=mask_v)
 
-        final_state_idx = tl.load(
-            ssi + i_n * SSI_SEQ_STRIDE + i_t
-        ).to(tl.int64)
-        if final_state_idx > 0:
-            p_ht = (
-                state_bank
-                + final_state_idx * BANK_STRIDE
-                + i_hv * V * K
-                + o_v[:, None] * K
-                + o_k[None, :]
-            )
-            tl.store(p_ht, b_h.to(p_ht.dtype.element_ty), mask=mask_h)
-
-        p_q += H * K
-        p_k += H * K
-        p_o += HV * V
-        p_v += HV * V
-        p_b += HV
-        p_a += HV
+    # Fixed32 expands one running-row index across every active path slot.
+    # Intermediate state stores are not observable; publish only the final row.
+    tl.store(p_h0, b_h.to(p_h0.dtype.element_ty), mask=mask_h)
 
 
 def _fr13_fixed32_committer_native_layer_batch(
     *,
     state,
     banks_list,
-    A_logs,
-    dt_biases,
-    output_scale,
+    spec_state_indices,
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+    gate_coeffs,
     use_qk_l2norm_in_kernel,
 ) -> None:
-    """Launch all 48 independent native-realization committer scans once."""
+    """Launch all 48 native-realization scans to disjoint destinations once."""
     layers = 48
     batch = int(state["batch"])
-    total = batch * 16
     num_kh = int(state["num_kh"])
     dim_k = int(state["dim_k"])
     num_vh = int(state["num_vh"])
@@ -9809,32 +10556,33 @@ def _fr13_fixed32_committer_native_layer_batch(
         or dim_k != 128
         or dim_v != 128
         or int(state["bank_off16"].numel()) != layers
-        or tuple(state["obuf"].shape) != (layers, total, num_vh, dim_v)
+        or not torch.is_tensor(gate_coeffs)
+        or tuple(gate_coeffs.shape) != (layers, num_vh, 2)
+        or gate_coeffs.dtype != torch.float32
+        or not gate_coeffs.is_contiguous()
     ):
         raise RuntimeError(
             "FR13 fixed32 committer layer-batch requires the pinned "
             "48-layer K=V=128 geometry"
         )
     block_k = triton.next_power_of_2(dim_k)
-    block_v = min(triton.next_power_of_2(dim_v), 32)
+    # Own the pinned V=128 state in one program so the K vector and its
+    # normalization are shared by every value row for this value head.
+    block_v = triton.next_power_of_2(dim_v)
     grid = (1, triton.cdiv(dim_v, block_v), layers * batch * num_vh)
     _fr13_fixed32_committer_native_layer_batch_kernel[grid](
-        A_logs,
-        state["abuf"],
-        state["bbuf"],
-        dt_biases,
-        state["qbuf"],
-        state["kbuf"],
-        state["vbuf"],
-        state["obuf"],
+        a_rings,
+        b_rings,
+        gate_coeffs,
+        k_rings,
+        v_rings,
         banks_list[0],
         state["bank_off16"],
-        state["cu"],
-        state["ssi"],
-        float(output_scale),
-        N=batch,
-        T=total,
+        state["accepted_paths"],
+        state["accepted_lens"],
+        spec_state_indices,
         B=batch,
+        PATH_CAP=16,
         H=num_kh,
         HV=num_vh,
         K=dim_k,
@@ -9842,17 +10590,22 @@ def _fr13_fixed32_committer_native_layer_batch(
         BK=block_k,
         BV=block_v,
         BANK_STRIDE=int(banks_list[0].stride(0)),
-        GATE_L_STRIDE=int(A_logs.stride(0)),
-        AB_L_STRIDE=int(state["abuf"].stride(0)),
-        K_L_STRIDE=int(state["kbuf"].stride(0)),
-        V_L_STRIDE=int(state["vbuf"].stride(0)),
-        O_L_STRIDE=int(state["obuf"].stride(0)),
-        SSI_L_STRIDE=int(state["ssi"].stride(0)),
-        SSI_SEQ_STRIDE=int(state["ssi"].stride(1)),
+        GATE_L_STRIDE=int(gate_coeffs.stride(0)),
+        RING_K_L_STRIDE=int(k_rings.stride(0)),
+        RING_K_B_STRIDE=int(k_rings.stride(1)),
+        RING_K_N_STRIDE=int(k_rings.stride(2)),
+        RING_V_L_STRIDE=int(v_rings.stride(0)),
+        RING_V_B_STRIDE=int(v_rings.stride(1)),
+        RING_V_N_STRIDE=int(v_rings.stride(2)),
+        RING_AB_L_STRIDE=int(a_rings.stride(0)),
+        RING_AB_B_STRIDE=int(a_rings.stride(1)),
+        RING_AB_N_STRIDE=int(a_rings.stride(2)),
+        SPEC_L_STRIDE=int(spec_state_indices.stride(0)),
+        SPEC_B_STRIDE=int(spec_state_indices.stride(1)),
         BETA=1.0,
         THRESHOLD=20.0,
         USE_QK_L2NORM_IN_KERNEL=bool(use_qk_l2norm_in_kernel),
-        num_warps=4,
+        num_warps=8,
         num_stages=3,
     )
 
@@ -9886,64 +10639,78 @@ def _fr13_fixed32_committer_graph_body(
     num_vh = state["num_vh"]
     dim_v = state["dim_v"]
 
-    # Exactly five full neutralizations per replay.
-    state["abuf"].fill_(-1e4)
-    state["bbuf"].zero_()
-    state["kbuf"].zero_()
-    state["vbuf"].zero_()
-    state["ssi"].fill_(state["scratch"])
-
-    accepted_lens = state["accepted_lens"].to(torch.long)
-    node_mat = state["node_mat"]
-    node_mat[:, 0] = 0
-    node_mat[:, 1:] = (
-        state["accepted_paths"][:, :15].to(torch.long).clamp(min=0)
-    )
-    valid = state["path_offsets"].unsqueeze(0) <= accepted_lens.unsqueeze(1)
-    safe_nodes = torch.where(
-        valid, node_mat, torch.zeros_like(node_mat)
-    ).clamp(0, 31)
-    batch_index = state["batch_offsets"].view(batch, 1)
-
-    # Four full [48,B,16] ring gathers, including neutral slots.
-    k_selected = k_rings[:, batch_index, safe_nodes]
-    v_selected = v_rings[:, batch_index, safe_nodes]
-    a_selected = a_rings[:, batch_index, safe_nodes]
-    b_selected = b_rings[:, batch_index, safe_nodes]
-    mask4 = valid.view(1, batch, path_cap, 1, 1)
-    mask3 = valid.view(1, batch, path_cap, 1)
-    state["kbuf"].view(
-        layers, batch, path_cap, num_kh, dim_k
-    ).copy_(torch.where(mask4, k_selected, torch.zeros_like(k_selected)))
-    state["vbuf"].view(
-        layers, batch, path_cap, num_vh, dim_v
-    ).copy_(torch.where(mask4, v_selected, torch.zeros_like(v_selected)))
-    state["abuf"].view(
-        layers, batch, path_cap, num_vh
-    ).copy_(torch.where(
-        mask3, a_selected, torch.full_like(a_selected, -1e4)
-    ))
-    state["bbuf"].view(
-        layers, batch, path_cap, num_vh
-    ).copy_(torch.where(mask3, b_selected, torch.zeros_like(b_selected)))
-    state["ssi"].copy_(
-        spec_state_indices[:, :batch, 0:1]
-        .to(torch.int32)
-        .expand(layers, batch, path_cap)
-    )
-
     use_layer_batch = (
         state.get("layer_batch", False)
         if layer_batch is None
         else bool(layer_batch)
     )
+    if not use_layer_batch:
+        # Preserve the exact native-reference preprocessing graph.
+        state["abuf"].fill_(-1e4)
+        state["bbuf"].zero_()
+        state["kbuf"].zero_()
+        state["vbuf"].zero_()
+        state["ssi"].fill_(state["scratch"])
+
+        accepted_lens = state["accepted_lens"].to(torch.long)
+        node_mat = state["node_mat"]
+        node_mat[:, 0] = 0
+        node_mat[:, 1:] = (
+            state["accepted_paths"][:, :15].to(torch.long).clamp(min=0)
+        )
+        valid = state["path_offsets"].unsqueeze(0) <= accepted_lens.unsqueeze(1)
+        safe_nodes = torch.where(
+            valid, node_mat, torch.zeros_like(node_mat)
+        ).clamp(0, 31)
+        batch_index = state["batch_offsets"].view(batch, 1)
+
+        # Keep the incumbent full fixed16 staging graph byte-for-byte intact.
+        k_selected = k_rings[:, batch_index, safe_nodes]
+        v_selected = v_rings[:, batch_index, safe_nodes]
+        a_selected = a_rings[:, batch_index, safe_nodes]
+        b_selected = b_rings[:, batch_index, safe_nodes]
+        mask4 = valid.view(1, batch, path_cap, 1, 1)
+        mask3 = valid.view(1, batch, path_cap, 1)
+        k_destination = state["kbuf"].view(
+            layers, batch, path_cap, num_kh, dim_k
+        )
+        v_destination = state["vbuf"].view(
+            layers, batch, path_cap, num_vh, dim_v
+        )
+        a_destination = state["abuf"].view(
+            layers, batch, path_cap, num_vh
+        )
+        b_destination = state["bbuf"].view(
+            layers, batch, path_cap, num_vh
+        )
+        k_destination.copy_(
+            torch.where(mask4, k_selected, torch.zeros_like(k_selected))
+        )
+        v_destination.copy_(
+            torch.where(mask4, v_selected, torch.zeros_like(v_selected))
+        )
+        a_destination.copy_(torch.where(
+            mask3, a_selected, torch.full_like(a_selected, -1e4)
+        ))
+        b_destination.copy_(
+            torch.where(mask3, b_selected, torch.zeros_like(b_selected))
+        )
+        state["ssi"].copy_(
+            spec_state_indices[:, :batch, 0:1]
+            .to(torch.int32)
+            .expand(layers, batch, path_cap)
+        )
+
     if use_layer_batch:
         _fr13_fixed32_committer_native_layer_batch(
             state=state,
             banks_list=banks_list,
-            A_logs=A_logs,
-            dt_biases=dt_biases,
-            output_scale=output_scale,
+            spec_state_indices=spec_state_indices,
+            k_rings=k_rings,
+            v_rings=v_rings,
+            a_rings=a_rings,
+            b_rings=b_rings,
+            gate_coeffs=state["gate_coeffs"],
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
         )
     else:
@@ -9993,10 +10760,12 @@ def validate_fixed32_conv_commit_rows(
     accepted_paths: torch.Tensor,
     accepted_lens: torch.Tensor,
     bank_alias_ids: torch.Tensor,
+    bank_alias_peer_layers: torch.Tensor,
+    guard_flags: torch.Tensor,
     batch: int,
     bank_rows: int,
 ) -> None:
-    """Enqueue row/path guards before fixed32 raw-pointer conv access."""
+    """Enqueue one fixed-grid row/path guard before raw-pointer conv access."""
     if (
         type(batch) is not int
         or not 1 <= batch <= 4
@@ -10024,55 +10793,50 @@ def validate_fixed32_conv_commit_rows(
         or bank_alias_ids.device != spec_state_indices.device
         or tuple(bank_alias_ids.shape) != (48,)
         or not bank_alias_ids.is_contiguous()
+        or not torch.is_tensor(bank_alias_peer_layers)
+        or bank_alias_peer_layers.dtype != torch.int32
+        or bank_alias_peer_layers.device != spec_state_indices.device
+        or tuple(bank_alias_peer_layers.shape) != (48, 3)
+        or not bank_alias_peer_layers.is_contiguous()
+        or not torch.is_tensor(guard_flags)
+        or guard_flags.dtype != torch.bool
+        or guard_flags.device != spec_state_indices.device
+        or tuple(guard_flags.shape) != (48 * batch,)
+        or not guard_flags.is_contiguous()
     ):
         raise RuntimeError(
             "FR13_FIXED32_CONV_COMMIT row-guard geometry/dtype/device drift"
         )
 
-    active_rows = spec_state_indices[:, :batch, :].to(torch.long)
-    running_rows = active_rows[:, :, 0]
-    physical_destinations = (
-        bank_alias_ids.view(48, 1) * bank_rows + running_rows
-    ).reshape(-1)
-    sorted_destinations = torch.sort(physical_destinations).values
-    distinct_destinations = (
-        sorted_destinations[1:] != sorted_destinations[:-1]
-    ).all()
-    lens = accepted_lens[:batch].to(torch.long).view(batch, 1)
-    paths = accepted_paths[:batch].to(torch.long)
-    positions = torch.arange(
-        int(accepted_paths.shape[1]),
-        device=accepted_paths.device,
-        dtype=torch.long,
-    ).view(1, -1)
-    active_paths = positions < lens
-    leaf_pos = (lens.view(-1) - 1).clamp(
-        min=0, max=int(accepted_paths.shape[1]) - 1
-    )
-    leaf_nodes = paths.gather(1, leaf_pos.view(batch, 1)).view(batch)
-    leaf_nodes = torch.where(
-        lens.view(-1) > 0, leaf_nodes, torch.zeros_like(leaf_nodes)
-    ).clamp(min=0, max=int(spec_state_indices.shape[2]) - 1)
-    selected_rows = active_rows.gather(
-        2,
-        leaf_nodes.view(1, batch, 1).expand(
-            int(spec_state_indices.shape[0]), batch, 1
-        ),
-    ).view(int(spec_state_indices.shape[0]), batch)
-    contract_ok = (
-        (active_rows > 0).all()
-        & (active_rows < bank_rows).all()
-        & (bank_alias_ids >= 0).all()
-        & (bank_alias_ids < 16).all()
-        & distinct_destinations
-        & (lens >= 0).all()
-        & (lens <= 15).all()
-        & ((~active_paths) | ((paths >= 0) & (paths < 32))).all()
-        & (selected_rows >= 0).all()
-        & (selected_rows < bank_rows).all()
+    _fr13_fixed32_conv_commit_row_guard_kernel[(48 * batch,)](
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        bank_alias_ids,
+        bank_alias_peer_layers,
+        guard_flags,
+        int(spec_state_indices.stride(0)),
+        int(spec_state_indices.stride(1)),
+        int(spec_state_indices.stride(2)),
+        int(accepted_paths.stride(0)),
+        int(accepted_paths.stride(1)),
+        int(accepted_lens.stride(0)),
+        int(bank_alias_peer_layers.stride(0)),
+        int(bank_alias_peer_layers.stride(1)),
+        BANK_ROWS=bank_rows,
+        B=batch,
+        LAYERS=48,
+        SPEC_COLS=32,
+        PATH_COLS=16,
+        MAX_ACCEPTED=_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH,
+        ALIAS_WIDTH=3,
+        ALIAS_CAP=64,
+        PEER_CAP=16,
+        num_warps=4,
+        num_stages=1,
     )
     _fr13_fixed32_device_assert(
-        contract_ok,
+        guard_flags.all(),
         "FR13_FIXED32_CONV_COMMIT precommit row/path contract violation",
     )
 
@@ -10142,6 +10906,21 @@ def preseed_fixed32_committer_graph(
     total = batch * 16
     scratch = int(banks_list[0].shape[0]) - 1
     layer_batch = _fr13_fixed32_committer_layer_batch_requested()
+    metadata_copy_fusion = (
+        _fr13_fixed32_committer_metadata_fusion_requested()
+    )
+    if metadata_copy_fusion and not layer_batch:
+        raise RuntimeError(
+            "FR13 fixed32 metadata fusion requires committer layer batching"
+        )
+    gate_coeffs = (
+        _fr13_fixed32_committer_gate_precompute(
+            A_logs=A_logs,
+            dt_biases=dt_biases,
+        )
+        if layer_batch
+        else None
+    )
     bank_ptrs, _bank_shape, _bank_stride = build_replay_bank_pointer_table(
         list(banks_list)
     )
@@ -10180,13 +10959,6 @@ def preseed_fixed32_committer_graph(
         "qbuf": torch.zeros(
             1, total, num_kh, dim_k, device=device, dtype=dtype
         ),
-        "obuf": (
-            torch.empty(
-                48, total, num_vh, dim_v, device=device, dtype=dtype
-            )
-            if layer_batch
-            else None
-        ),
         "cu": (
             torch.arange(batch + 1, device=device, dtype=torch.int64) * 16
         ).to(torch.int32),
@@ -10205,9 +10977,16 @@ def preseed_fixed32_committer_graph(
             if layer_batch
             else None
         ),
+        "gate_coeffs": gate_coeffs,
         "layer_batch": layer_batch,
+        "metadata_copy_fusion": metadata_copy_fusion,
         "layer_batch_byte_gate_passed": not layer_batch,
         "layer_batch_byte_gate_attempts": 0,
+        "layer_batch_byte_gate_coverage_mask": (
+            0
+            if layer_batch
+            else _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        ),
         "reference_graph": None,
         "graph": None,
         "preseed_capacity": 0,
@@ -10226,9 +11005,60 @@ def preseed_fixed32_committer_graph(
         state["contract"].update(
             {
                 "fused_calls": 1,
+                "neutralizations": 0,
+                "ring_gathers": 0,
                 "native_reference_fused_calls": 48,
                 "layer_batch": True,
-                "byte_gate": "required_on_first_real_nonzero_accept",
+                "state_only_output_elided": True,
+                "active_length_recurrence": True,
+                "pre_replay_dynamic_bound_guard": True,
+                "hot_scan_bound_clamps": 0,
+                "physical_node_domain": 32,
+                "accepted_steps_max": 12,
+                "final_state_store_once": True,
+                "direct_ring_loads": True,
+                "direct_ring_inputs": 4,
+                "candidate_staging_launches": 0,
+                "gate_coefficients_hoisted": True,
+                "event_independent_gate_precompute": True,
+                "gate_precompute_launches_per_process": int(
+                    _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES
+                ),
+                "gate_exp_per_event": 0,
+                "full_value_tile": True,
+                "value_tile": 128,
+                "kernel_warps": 8,
+                "programs_per_layer_request_value_head": 1,
+                "duplicate_value_tile_k_loads_per_step": 0,
+                "state_elements_per_thread_before_compiler_effects": 64,
+                "metadata_copy_fusion": metadata_copy_fusion,
+                "metadata_copy_launches_per_event": (
+                    0 if metadata_copy_fusion else 2
+                ),
+                "metadata_copy_elements_per_request": (
+                    17 if metadata_copy_fusion else 0
+                ),
+                "metadata_validation_lease": (
+                    "conv_direct_exact_pointer_batch_stream_one_shot"
+                    if metadata_copy_fusion
+                    else "disabled"
+                ),
+                "metadata_guarded_fallback": True,
+                "duplicate_committer_metadata_guard": (
+                    not metadata_copy_fusion
+                ),
+                "physical_alias_row_uniqueness_guard": (
+                    "validate_fixed32_conv_commit_rows"
+                ),
+                "byte_gate": "real_swe_all_reachable_accepted_lengths_0_11",
+                "byte_gate_raw_compare": "torch_equal_uint8",
+                "unseen_length_route": "shadow_then_reference",
+                "accepted_length_max": (
+                    _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH
+                ),
+                "accepted_length_full_mask": (
+                    _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+                ),
             }
         )
 
@@ -10289,7 +11119,9 @@ def preseed_fixed32_committer_graph(
     print(
         "[FR13_FIXED32_COMMIT_DEVICE_FILL] preseeded: "
         f"mode={_FR13_FIXED32_MODE} B={batch} path_cap=16 "
-        f"neutralizations=5 gathers=4 fused_calls={state['contract']['fused_calls']} "
+        f"neutralizations={state['contract']['neutralizations']} "
+        f"gathers={state['contract']['ring_gathers']} "
+        f"fused_calls={state['contract']['fused_calls']} "
         f"layer_batch={int(layer_batch)} replays=1",
         flush=True,
     )
@@ -10299,19 +11131,35 @@ def preseed_fixed32_committer_graph(
 def _fr13_fixed32_committer_layer_batch_byte_gate(
     *, state, banks_list, spec_state_indices,
 ) -> bool:
-    """Gate the candidate against the native graph on one real accepted path.
+    """Qualify accepted depths using authenticated, unmeasured real events.
 
-    Zero-accept boot warmups are intentionally unpowered and keep using the
-    reference graph.  On the first event with an accepted draft, both captured
-    graphs run from identical state and inputs.  Every touched fp32 state byte,
-    including signed zero, must match before the candidate may serve.
+    Each previously unseen accepted length shadows the native and candidate
+    graphs from identical state. Every touched fp32 state byte, including signed
+    zero and NaN payloads, must match. The qualifying event is always served by
+    the native graph; the candidate can serve only depths covered earlier.
     """
     if not state.get("layer_batch", False):
         return True
-    if state.get("layer_batch_byte_gate_passed", False):
+    full_mask = _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+    coverage_mask = int(
+        state.get("layer_batch_byte_gate_coverage_mask", -1)
+    )
+    if not 0 <= coverage_mask <= full_mask:
+        raise RuntimeError(
+            "FR13 fixed32 committer layer-batch coverage mask is invalid"
+        )
+    if coverage_mask == full_mask:
+        state["layer_batch_byte_gate_passed"] = True
         return True
-    if not bool((state["accepted_lens"] > 0).any().item()):
+    if _fr13_fixed32_committer_layer_batch_real_event_marker() is None:
         return False
+    event_mask = _fr13_fixed32_committer_accepted_length_mask(
+        state["accepted_lens"].tolist(),
+        batch=int(state["batch"]),
+    )
+    unseen_mask = event_mask & ~coverage_mask
+    if unseen_mask == 0:
+        return True
     reference_graph = state.get("reference_graph")
     candidate_graph = state.get("graph")
     if reference_graph is None or candidate_graph is None:
@@ -10359,17 +11207,21 @@ def _fr13_fixed32_committer_layer_batch_byte_gate(
                 "FR13 fixed32 committer layer-batch byte gate failed: "
                 f"B={batch} mismatched_layers={mismatched_layers}"
             )
-        state["layer_batch_byte_gate_passed"] = True
+        coverage_mask |= event_mask
+        state["layer_batch_byte_gate_coverage_mask"] = coverage_mask
+        state["layer_batch_byte_gate_passed"] = coverage_mask == full_mask
     finally:
         restore()
         torch.cuda.synchronize(state["accepted_lens"].device)
 
     print(
-        "[FR13_FIXED32_COMMITTER_LAYER_BATCH BYTE-GATE PASS] "
-        f"B={batch} layers=48 state_bytes=exact",
+        "[FR13_FIXED32_COMMITTER_LAYER_BATCH BYTE-GATE COVERAGE] "
+        f"B={batch} new_mask={unseen_mask:#06x} "
+        f"coverage={coverage_mask:#06x} complete={int(coverage_mask == full_mask)} "
+        "layers=48 state_bytes=exact reference_served=1",
         flush=True,
     )
-    return True
+    return False
 
 
 def preseed_fixed32_committer_graphs_all_batches(
@@ -10560,6 +11412,8 @@ def preseed_fixed32_committer_graphs_all_batches(
         "bank_anchor": banks_list[0],
         "bank_tail": banks_list[-1],
         "spec_state_indices": spec_state_indices,
+        "accepted_paths_data_ptr": int(accepted_paths.data_ptr()),
+        "accepted_lens_data_ptr": int(accepted_lens.data_ptr()),
         "k_rings": k_rings,
         "v_rings": v_rings,
         "a_rings": a_rings,
@@ -10621,6 +11475,16 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
             int(value) != 0
             for value in counters["actual_replays_by_batch"].values()
         )
+        or any(
+            int(value) != 0
+            for key in (
+                "metadata_fusion_published_by_batch",
+                "metadata_fusion_consumed_by_batch",
+                "metadata_fusion_fallbacks_by_batch",
+            )
+            for value in counters[key].values()
+        )
+        or bool(_FR13_FIXED32_COMMITTER_METADATA_LEASE)
     ):
         raise RuntimeError(
             "FR13 fixed32 committer boot warm started after a measured replay"
@@ -10737,6 +11601,14 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
     )
     saved_actual = int(counters["actual_replays_enqueued"])
     saved_by_batch = dict(counters["actual_replays_by_batch"])
+    metadata_counter_keys = (
+        "metadata_fusion_published_by_batch",
+        "metadata_fusion_consumed_by_batch",
+        "metadata_fusion_fallbacks_by_batch",
+    )
+    saved_metadata_counters = {
+        key: dict(counters[key]) for key in metadata_counter_keys
+    }
     saved_callbacks = tuple(_FR13_FIXED32_COMMITTER_CALLBACKS)
     global _FR13_FIXED32_COMMITTER_ANNOUNCED
     saved_announced = _FR13_FIXED32_COMMITTER_ANNOUNCED
@@ -10833,6 +11705,10 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
             counters["actual_replays_enqueued"] = saved_actual
             counters["actual_replays_by_batch"].clear()
             counters["actual_replays_by_batch"].update(saved_by_batch)
+            for key in metadata_counter_keys:
+                counters[key].clear()
+                counters[key].update(saved_metadata_counters[key])
+            _FR13_FIXED32_COMMITTER_METADATA_LEASE.clear()
             _FR13_FIXED32_COMMITTER_CALLBACKS[:] = saved_callbacks
             _FR13_FIXED32_COMMITTER_ANNOUNCED = saved_announced
             torch.cuda.synchronize(route["device"])
@@ -10889,6 +11765,11 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
     measured_state_restored = (
         int(counters["actual_replays_enqueued"]) == saved_actual
         and dict(counters["actual_replays_by_batch"]) == saved_by_batch
+        and all(
+            dict(counters[key]) == saved_metadata_counters[key]
+            for key in metadata_counter_keys
+        )
+        and not _FR13_FIXED32_COMMITTER_METADATA_LEASE
         and int(conv_state["commit_gather_launches"])
         == saved_conv_gathers
         and int(conv_state["commit_scatter_launches"])
@@ -11016,26 +11897,51 @@ def _fr13_fixed32_committer_replay(
         burn_node_bank=burn_node_bank,
     )
 
-    state["accepted_paths"].copy_(accepted_paths)
-    state["accepted_lens"].copy_(accepted_lens)
-    _fr13_fixed32_validate_running_rows(
-        spec_state_indices=spec_state_indices,
-        batch=batch,
-        bank_rows=int(state["bank_rows"]),
-    )
-    lens = state["accepted_lens"].to(torch.long).view(batch, 1)
-    positions = torch.arange(16, device=accepted_paths.device).view(1, 16)
-    active = positions < lens
-    paths = state["accepted_paths"].to(torch.long)
-    dynamic_ok = (
-        (lens >= 0).all()
-        & (lens <= 15).all()
-        & ((~active) | ((paths >= 0) & (paths < 32))).all()
-    )
-    _fr13_fixed32_device_assert(
-        dynamic_ok,
-        "FR13_FIXED32_COMMIT_DEVICE_FILL dynamic contract violation",
-    )
+    metadata_fused = False
+    if state.get("metadata_copy_fusion", False):
+        validation_bank_rows = min(
+            int(state["bank_rows"]),
+            int(_FR13_FIXED32_CONV_PREGATHER["state"]["anchor"].shape[0]),
+        )
+        lease_key = _fr13_fixed32_committer_metadata_lease_key(
+            batch=batch,
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            committer_paths=state["accepted_paths"],
+            committer_lens=state["accepted_lens"],
+            validation_bank_rows=validation_bank_rows,
+        )
+        metadata_fused = _fr13_fixed32_committer_consume_metadata_lease(
+            lease_key
+        )
+        counter_key = (
+            "metadata_fusion_consumed_by_batch"
+            if metadata_fused
+            else "metadata_fusion_fallbacks_by_batch"
+        )
+        _FR13_FIXED32_COMMITTER_COUNTERS[counter_key][batch] += 1
+    if not metadata_fused:
+        state["accepted_paths"].copy_(accepted_paths)
+        state["accepted_lens"].copy_(accepted_lens)
+        _fr13_fixed32_validate_running_rows(
+            spec_state_indices=spec_state_indices,
+            batch=batch,
+            bank_rows=int(state["bank_rows"]),
+        )
+        lens = state["accepted_lens"].to(torch.long).view(batch, 1)
+        positions = torch.arange(16, device=accepted_paths.device).view(1, 16)
+        active = positions < lens
+        paths = state["accepted_paths"].to(torch.long)
+        dynamic_ok = (
+            (lens >= 0).all()
+            & (lens <= _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH).all()
+            & ((~active) | ((paths >= 0) & (paths < 32))).all()
+        )
+        _fr13_fixed32_device_assert(
+            dynamic_ok,
+            "FR13_FIXED32_COMMIT_DEVICE_FILL dynamic contract violation",
+        )
     graph = state["graph"]
     if state.get("layer_batch", False):
         gate_passed = _fr13_fixed32_committer_layer_batch_byte_gate(
@@ -11044,9 +11950,8 @@ def _fr13_fixed32_committer_replay(
             spec_state_indices=spec_state_indices,
         )
         if not gate_passed:
-            # Boot warmups carry zero accepted drafts and cannot power a
-            # recurrence A/B.  Keep serving the incumbent graph until a real
-            # nonzero accepted path is available.
+            # Boot/probe traffic cannot power qualification. A real event that
+            # introduces a depth also stays on the incumbent after its shadow.
             graph = state["reference_graph"]
     graph.replay()
 

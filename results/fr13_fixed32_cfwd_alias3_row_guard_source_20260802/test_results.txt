@@ -1,0 +1,25 @@
+Source commit: 029427c02720d2759145d1405945baa87a02092b
+
+Host-only checks:
+- AST parse of changed kernel, observer, census, schema consumer, and tests: pass
+- Focused alias3 row-guard, conv-row-guard, conv-wiring, committer, and pregather suite: 64 passed in 2.38s
+- Fixed32 work-census v11 self-test: PASS; 171 tamper tests passed
+- git diff --check: pass
+
+Static equivalence coverage:
+- noncontiguous three-layer alias peer tables
+- B1 and B4 valid fixtures
+- null and out-of-range SSI rows
+- invalid and peer-inconsistent alias ids
+- accepted lengths below zero and above 11
+- invalid active path nodes
+- duplicate physical destinations within an alias class
+- ignored inactive path padding
+
+Not run:
+- Triton/CUDA compilation or code generation
+- SASS/resource inspection
+- Docker or GPU execution
+- synthetic performance probes
+- real SWE-Verified byte qualification or timing
+- hardware-floor or one-sided U95 acceptance measurement

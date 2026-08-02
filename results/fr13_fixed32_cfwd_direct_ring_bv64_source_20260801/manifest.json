@@ -1,0 +1,48 @@
+{
+  "branch": "agent/fixed32-cfwd-layerbatch-b4-route-080c",
+  "candidate": {
+    "default_on": false,
+    "kernel_warps": 8,
+    "new_programs_per_layer_request_value_head": 2,
+    "old_kernel_warps": 4,
+    "old_programs_per_layer_request_value_head": 4,
+    "value_tile": 64
+  },
+  "geometry": {
+    "dim_k": 128,
+    "dim_v": 128,
+    "layers": 48,
+    "value_heads": 48
+  },
+  "qualification": {
+    "gpu_compile_resource_gate": "pending",
+    "real_swe_verified_byte_coverage": "pending",
+    "real_swe_verified_timing": "pending",
+    "timing_eligible": false
+  },
+  "schema": "fr13.fixed32.cfwd_direct_ring_bv64_source.v1",
+  "static_work_model": {
+    "b1": {
+      "new_programs_per_event": 4608,
+      "old_programs_per_event": 9216,
+      "total_warps": 36864
+    },
+    "b4": {
+      "new_programs_per_event": 18432,
+      "old_programs_per_event": 36864,
+      "total_warps": 147456
+    },
+    "classification": "logical_work_not_latency_or_dram_measurement",
+    "hydra27_mean_root_inclusive_steps": 5.753885,
+    "logical_k_vector_load_mib_avoided_at_mean": {
+      "b1": 6.473121,
+      "b4": 25.892482
+    },
+    "logical_k_vector_load_mib_avoided_at_max12": {
+      "b1": 13.5,
+      "b4": 54.0
+    }
+  },
+  "status": "source_static_only_gpu_and_real_swe_gates_pending",
+  "tip_commit": "29154d1831ef4f66286fe6a28697745d68fb7f43"
+}

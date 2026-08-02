@@ -1,0 +1,42 @@
+{
+  "fixed_ownership": {
+    "alias_validation_programs_per_event": 1,
+    "alias_vector_capacity": 64,
+    "path_validation_programs_per_request": 1,
+    "path_vector_capacity": 16,
+    "peer_topology_proof": "preseed_lease_audit"
+  },
+  "fixed_work": {
+    "alias_local_compare_capacity_per_program": 16,
+    "grid_programs": "48 * batch_size",
+    "physical_rows_per_program": 32,
+    "selected_row_loads_per_program": 0
+  },
+  "new_event_launches": 0,
+  "reduction_from_alias3": {
+    "accepted_length_loads": {
+      "after": "batch_size",
+      "before": "48 * batch_size",
+      "factor": 48
+    },
+    "alias_validation_programs": {
+      "after": 1,
+      "before": "48 * batch_size"
+    },
+    "path_vector_loads": {
+      "after": "batch_size",
+      "before": "48 * batch_size",
+      "factor": 48
+    },
+    "selected_path_loads": {
+      "after": 0,
+      "before": "48 * batch_size"
+    },
+    "selected_row_loads": {
+      "after": 0,
+      "before": "48 * batch_size"
+    }
+  },
+  "schema": "fr13.fixed32.cfwd_ownerpath_row_guard.static_contract.v1",
+  "semantic_result_tree_changed": false
+}

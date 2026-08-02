@@ -1,0 +1,64 @@
+{
+  "acceptance_evidence": false,
+  "branch": "agent/fixed32-cfwd-physical32-metadata-20260802",
+  "candidate_serving_permitted": false,
+  "codegen": {
+    "calls": null,
+    "local_bytes": null,
+    "registers": null,
+    "shared_bytes": null,
+    "spills": null,
+    "stack_bytes": null,
+    "status": "pending_b4_live_arm_teardown"
+  },
+  "composition": {
+    "accepted_steps_max": 12,
+    "added_launches": 0,
+    "added_recurrence_dependencies": 0,
+    "added_storage_bytes": 0,
+    "duplicate_value_tile_metadata_loads": 0,
+    "full_value_tile": true,
+    "hot_scan_bound_clamps": 0,
+    "origin_full_value_commit": "0f56038fa7cf7d628ba8593444e638a4b8dfad17",
+    "physical_node_domain": 32,
+    "pre_replay_dynamic_bound_guard": true,
+    "state_elements_per_thread_before_compiler_effects": 64,
+    "value_tile": 128
+  },
+  "critical_path_change": 0,
+  "gpu_or_docker_run_performed": false,
+  "launch_count_change": 0,
+  "ordered_recurrence_math_sha256": {
+    "after": "d16ad65fe4affb85a85051bf8dc7530c17a34dd85826c05d6bd8adec67b1ce22",
+    "before": "d16ad65fe4affb85a85051bf8dc7530c17a34dd85826c05d6bd8adec67b1ce22",
+    "equal": true
+  },
+  "programs_per_event": {
+    "b1_after": 2304,
+    "b1_before": 4608,
+    "b4_after": 9216,
+    "b4_before": 18432
+  },
+  "qualification": {
+    "b1_real_swe_byte_gate": "not_run",
+    "b4_exact16_real_swe_byte_gate": "not_run",
+    "b4_exact4_real_swe_byte_gate": "not_run"
+  },
+  "schema": "fr13.fixed32.cfwd_physical32_fulltile_composed.source.v1",
+  "source_commit": "55d53ac5d4ef084e3a5bdd30771fa5a84bde73af",
+  "source_parent": "cbf7df58c46fba344897c27afe0ddb4f97e51710",
+  "source_sha256": {
+    "kernel": "148e2c73c982b0fdb8a81a6527ec9fd701ba63a3f8f4a1e8317444f0a1c0a067",
+    "observer_patcher": "045e17bd50396557ac38312ef62437d9b6f55ff3523af1f4dca0d729085d2b13",
+    "static_test": "2c5eacbfa3698db2c556798221a93a42c3aa3d29936d5d9e33f42531630a3ddd"
+  },
+  "status": "SOURCE_STATIC_ONLY_CODEGEN_BYTE_TIMING_PENDING",
+  "synthetic_probe_executed": false,
+  "tests": {
+    "focused_cfwd_lifecycle_committer": "86_passed",
+    "python_compile": "pass",
+    "preseed_observer": "54_passed"
+  },
+  "timing_evidence": false,
+  "u95_floor_acceptance_evidence": false
+}

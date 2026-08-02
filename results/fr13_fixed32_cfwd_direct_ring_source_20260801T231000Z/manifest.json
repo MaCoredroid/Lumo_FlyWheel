@@ -1,0 +1,61 @@
+{
+  "schema": "fr13.fixed32.cfwd_direct_ring_source.v1",
+  "status": "source_static_only_live_gpu_and_real_swe_gates_pending",
+  "base_commit": "080c417ed627e155c98e715327e0fdeb48d542ab",
+  "tip_commit": "790c6df21e4abe618d96b2dc83b97a1daf6501c7",
+  "branch": "agent/fixed32-cfwd-layerbatch-b4-route-080c",
+  "candidate": {
+    "default_on": false,
+    "logical_layers": 48,
+    "physical_recurrence_launches": 1,
+    "state_only_output_elided": true,
+    "active_length_recurrence": true,
+    "final_state_stores_per_program": 1,
+    "direct_ring_loads": true,
+    "direct_ring_inputs": 4,
+    "candidate_staging_launches": 0,
+    "candidate_staging_rows": 0,
+    "gate_coefficients_hoisted": true
+  },
+  "fixed_contract": {
+    "physical_rows": 32,
+    "physical_drafts": 31,
+    "path_storage_columns": 16,
+    "accepted_length_min": 0,
+    "accepted_length_max": 11,
+    "accepted_length_full_mask_hex": "0x0fff",
+    "recurrence_steps": "accepted_length_plus_root",
+    "supported_batches": [1, 2, 3, 4]
+  },
+  "static_work_model": {
+    "classification": "logical_work_not_latency_or_dram_measurement",
+    "candidate_staging_bytes_avoided": {
+      "b1_mib_per_event": 24.28125,
+      "b4_mib_per_event": 97.125
+    },
+    "hydra27_reference_acceptance": 4.753885,
+    "hydra27_mean_recurrence_steps": 5.753885,
+    "hydra27_recurrence_iteration_reduction_fraction": 0.6403821875,
+    "fixed16_final_store_bytes_avoided": {
+      "b1_gib_per_event": 2.109375,
+      "b4_gib_per_event": 8.4375
+    }
+  },
+  "qualification": {
+    "b1_process_local_real_task_lifecycle": "implemented",
+    "b1_same_process_timing_handoff": "pending",
+    "b4_exact4_16_campaign_lifecycle": "pending",
+    "gpu_compile_resource_gate": "pending",
+    "real_swe_verified_byte_coverage": "pending",
+    "real_swe_verified_timing": "pending",
+    "performance_claim": null,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "durable_production_pass": false
+  },
+  "hardware_floor": {
+    "mandatory_weight_read_bytes": 32666638208,
+    "optimistic_ms_per_step": 119.658015414,
+    "one_sided_1_15x_cap_ms_per_step": 137.606717726
+  }
+}

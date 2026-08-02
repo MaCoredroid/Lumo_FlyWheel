@@ -19,7 +19,7 @@ CANDIDATE = "fixed32_sfwd_channel_serial_r32_b1c128w2_bxc256w4_u32x2_frontier5_l
 SOURCE_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.source_manifest.v1"
 HOST_READINESS_SCHEMA = "fr13.fixed32.sfwd_prior_reuse.host_readiness.v1"
 REFERENCE_GDN_SOURCE_SHA256 = (
-    "7944ad60e41193e145c39cd72537ac0ed3e14ff2b05069da255cd85c08c862ae"
+    "f70b73659fa18645a58b16d63b523cd4e22d1f5422bc05cc2a03dd8be2b551f4"
 )
 SUBSET_RELATIVE = "config/fr13_fixed32/subset_b1_diagnostic_one.json"
 SUBSET_SHA256 = "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb"

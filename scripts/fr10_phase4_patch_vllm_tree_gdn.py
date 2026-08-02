@@ -2289,6 +2289,10 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
     bank_alias_ids = state.get("bank_alias_ids")
     bank_alias_ranks = state.get("bank_alias_ranks")
     bank_alias_ids_device = state.get("bank_alias_ids_device")
+    bank_alias_peer_layers = state.get("bank_alias_peer_layers")
+    bank_alias_peer_layers_device = state.get(
+        "bank_alias_peer_layers_device"
+    )
     sources = state.get("ssi_sources")
     ssi_ptrs = state.get("ssi_ptrs")
     ssi_strides = state.get("ssi_strides")
@@ -2302,6 +2306,7 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
     conv_c = state.get("conv_c")
     conv_l = state.get("conv_l")
     staging = state.get("staging")
+    row_guard_flags_by_batch = state.get("row_guard_flags_by_batch")
     row_elems = state.get("row_elems")
     block = state.get("block")
     contract = state.get("contract")
@@ -2338,6 +2343,53 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or contract.get("commit_route") != "fixed32_direct_source_col0"
         or int(contract.get("commit_launches_per_event", -1)) != 1
         or int(contract.get("commit_direct_launches_per_event", -1)) != 1
+        or contract.get("commit_row_guard_route")
+        != "fixed32_triton_alias3_ownerpath_physical32_v3"
+        or int(contract.get("commit_row_guard_kernel_launches_per_event", -1))
+        != 1
+        or int(contract.get("commit_row_guard_programs_per_request", -1)) != 48
+        or int(contract.get("commit_row_guard_physical_rows", -1)) != 32
+        or int(contract.get("commit_row_guard_path_capacity", -1)) != 16
+        or int(contract.get("commit_row_guard_alias_width", -1)) != 3
+        or int(contract.get("commit_row_guard_compare_capacity", -1)) != 16
+        or int(
+            contract.get(
+                "commit_row_guard_path_validation_programs_per_request", -1
+            )
+        )
+        != 1
+        or int(
+            contract.get(
+                "commit_row_guard_path_vector_loads_per_request", -1
+            )
+        )
+        != 1
+        or int(
+            contract.get(
+                "commit_row_guard_alias_validation_programs_per_event", -1
+            )
+        )
+        != 1
+        or int(
+            contract.get(
+                "commit_row_guard_alias_vector_loads_per_event", -1
+            )
+        )
+        != 1
+        or int(
+            contract.get(
+                "commit_row_guard_selected_row_loads_per_program", -1
+            )
+        )
+        != 0
+        or contract.get("commit_row_guard_peer_topology_proof")
+        != "preseed_lease_audit"
+        or int(contract.get("commit_row_guard_torch_index_transforms", -1)) != 0
+        or int(
+            contract.get("commit_row_guard_async_scalar_reductions", -1)
+        )
+        != 1
+        or int(contract.get("commit_row_guard_async_assertions", -1)) != 1
         or int(contract.get("commit_full_node_writebacks", -1)) != 0
         or int(contract.get("commit_conv_remaps", -1)) != 0
         or type(row_elems) is not int
@@ -2358,10 +2410,20 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or len(bank_alias_ids) != 48
         or not isinstance(bank_alias_ranks, tuple)
         or len(bank_alias_ranks) != 48
+        or bank_alias_peer_layers
+        != tuple(
+            tuple(int(peer) for peer in bank_alias_classes[alias_id])
+            for alias_id in bank_alias_ids
+        )
         or not torch.is_tensor(bank_alias_ids_device)
         or tuple(int(value) for value in bank_alias_ids_device.shape) != (48,)
         or str(bank_alias_ids_device.dtype) != "torch.int64"
         or not bank_alias_ids_device.is_contiguous()
+        or not torch.is_tensor(bank_alias_peer_layers_device)
+        or tuple(int(value) for value in bank_alias_peer_layers_device.shape)
+        != (48, 3)
+        or str(bank_alias_peer_layers_device.dtype) != "torch.int32"
+        or not bank_alias_peer_layers_device.is_contiguous()
         or not torch.is_tensor(staging)
         or not isinstance(sources, tuple)
         or len(sources) != 48
@@ -2407,7 +2469,7 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or commit_spec_state_indices.ndim != 3
         or int(commit_spec_state_indices.shape[0]) != 48
         or int(commit_spec_state_indices.shape[1]) < capacity
-        or int(commit_spec_state_indices.shape[2]) < 1
+        or int(commit_spec_state_indices.shape[2]) != 32
         or not commit_spec_state_indices.is_contiguous()
         or not torch.is_tensor(accepted_paths)
         or accepted_paths.device != staging.device
@@ -2422,6 +2484,21 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or accepted_lens.ndim != 1
         or int(accepted_lens.shape[0]) < capacity
         or not accepted_lens.is_contiguous()
+        or not isinstance(row_guard_flags_by_batch, dict)
+        or tuple(sorted(row_guard_flags_by_batch))
+        != tuple(range(1, capacity + 1))
+        or any(
+            not torch.is_tensor(row_guard_flags_by_batch[guard_batch])
+            or row_guard_flags_by_batch[guard_batch].device != staging.device
+            or str(row_guard_flags_by_batch[guard_batch].dtype) != "torch.bool"
+            or tuple(
+                int(value)
+                for value in row_guard_flags_by_batch[guard_batch].shape
+            )
+            != (48 * guard_batch,)
+            or not row_guard_flags_by_batch[guard_batch].is_contiguous()
+            for guard_batch in range(1, capacity + 1)
+        )
         or type(source_rows) is not int
         or source_rows != 36
         or type(conv_c) is not int
@@ -2456,6 +2533,7 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or not direct_state_src.is_contiguous()
         or offsets.device != staging.device
         or bank_alias_ids_device.device != staging.device
+        or bank_alias_peer_layers_device.device != staging.device
         or ssi_ptrs.device != staging.device
         or ssi_strides.device != staging.device
         or int(banks[0].shape[1]) * int(banks[0].shape[2]) != row_elems
@@ -2466,6 +2544,7 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         tuple(id(bank) for bank in ssm_banks),
         id(offsets),
         id(bank_alias_ids_device),
+        id(bank_alias_peer_layers_device),
         tuple(id(source) for source in sources),
         id(ssi_ptrs),
         id(ssi_strides),
@@ -2476,6 +2555,10 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         id(source_offsets),
         id(direct_state_src),
         id(staging),
+        tuple(
+            id(row_guard_flags_by_batch[guard_batch])
+            for guard_batch in range(1, capacity + 1)
+        ),
     )
     source_data_ptrs = (
         tuple(int(bank.data_ptr()) for bank in banks),
@@ -2485,6 +2568,7 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         ),
         int(offsets.data_ptr()),
         int(bank_alias_ids_device.data_ptr()),
+        int(bank_alias_peer_layers_device.data_ptr()),
         tuple(int(source.data_ptr()) for source in sources),
         int(ssi_ptrs.data_ptr()),
         int(ssi_strides.data_ptr()),
@@ -2495,6 +2579,10 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         int(source_offsets.data_ptr()),
         int(direct_state_src.data_ptr()),
         int(staging.data_ptr()),
+        tuple(
+            int(row_guard_flags_by_batch[guard_batch].data_ptr())
+            for guard_batch in range(1, capacity + 1)
+        ),
     )
     if (
         state.get("source_identity") != source_identity
@@ -2610,6 +2698,19 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
             int(value) for value in bank_alias_ids_device.stride()
         ],
         "bank_alias_ids_dtype": str(bank_alias_ids_device.dtype),
+        "bank_alias_peer_layers": [
+            [int(peer) for peer in peers]
+            for peers in bank_alias_peer_layers
+        ],
+        "bank_alias_peer_layers_shape": [
+            int(value) for value in bank_alias_peer_layers_device.shape
+        ],
+        "bank_alias_peer_layers_stride": [
+            int(value) for value in bank_alias_peer_layers_device.stride()
+        ],
+        "bank_alias_peer_layers_dtype": str(
+            bank_alias_peer_layers_device.dtype
+        ),
         "commit_bank_overlap_policy": contract[
             "commit_bank_overlap_policy"
         ],
@@ -2622,6 +2723,67 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
             "commit_bank_destination_guard"
         ],
         "commit_null_row_rejected": contract["commit_null_row_rejected"],
+        "commit_row_guard_route": contract["commit_row_guard_route"],
+        "commit_row_guard_kernel_launches_per_event": contract[
+            "commit_row_guard_kernel_launches_per_event"
+        ],
+        "commit_row_guard_programs_per_request": contract[
+            "commit_row_guard_programs_per_request"
+        ],
+        "commit_row_guard_physical_rows": contract[
+            "commit_row_guard_physical_rows"
+        ],
+        "commit_row_guard_path_capacity": contract[
+            "commit_row_guard_path_capacity"
+        ],
+        "commit_row_guard_alias_width": contract[
+            "commit_row_guard_alias_width"
+        ],
+        "commit_row_guard_compare_capacity": contract[
+            "commit_row_guard_compare_capacity"
+        ],
+        "commit_row_guard_path_validation_programs_per_request": contract[
+            "commit_row_guard_path_validation_programs_per_request"
+        ],
+        "commit_row_guard_path_vector_loads_per_request": contract[
+            "commit_row_guard_path_vector_loads_per_request"
+        ],
+        "commit_row_guard_alias_validation_programs_per_event": contract[
+            "commit_row_guard_alias_validation_programs_per_event"
+        ],
+        "commit_row_guard_alias_vector_loads_per_event": contract[
+            "commit_row_guard_alias_vector_loads_per_event"
+        ],
+        "commit_row_guard_selected_row_loads_per_program": contract[
+            "commit_row_guard_selected_row_loads_per_program"
+        ],
+        "commit_row_guard_peer_topology_proof": contract[
+            "commit_row_guard_peer_topology_proof"
+        ],
+        "commit_row_guard_torch_index_transforms": contract[
+            "commit_row_guard_torch_index_transforms"
+        ],
+        "commit_row_guard_async_scalar_reductions": contract[
+            "commit_row_guard_async_scalar_reductions"
+        ],
+        "commit_row_guard_async_assertions": contract[
+            "commit_row_guard_async_assertions"
+        ],
+        "row_guard_flag_shapes": {
+            str(guard_batch): [
+                int(value)
+                for value in row_guard_flags_by_batch[guard_batch].shape
+            ]
+            for guard_batch in range(1, capacity + 1)
+        },
+        "row_guard_flag_strides": {
+            str(guard_batch): [
+                int(value)
+                for value in row_guard_flags_by_batch[guard_batch].stride()
+            ]
+            for guard_batch in range(1, capacity + 1)
+        },
+        "row_guard_flag_dtype": "torch.bool",
         "ssi_pointer_entries": 48,
         "ssi_groups": 3,
         "ssi_source_shapes": [
@@ -4839,6 +5001,27 @@ def _fr13_fixed32_observed_commit(
             )
         )
     layer_batch = committer_contract.get("layer_batch", False)
+    metadata_copy_fusion = committer_contract.get(
+        "metadata_copy_fusion", False
+    )
+    metadata_published_delta = _fr13_fixed32_batch_counter_delta(
+        committer_after,
+        committer_before,
+        "metadata_fusion_published_by_batch",
+        batch,
+    )
+    metadata_consumed_delta = _fr13_fixed32_batch_counter_delta(
+        committer_after,
+        committer_before,
+        "metadata_fusion_consumed_by_batch",
+        batch,
+    )
+    metadata_fallback_delta = _fr13_fixed32_batch_counter_delta(
+        committer_after,
+        committer_before,
+        "metadata_fusion_fallbacks_by_batch",
+        batch,
+    )
     normalized_committer = {
         "batch": int(committer_contract.get("batch", -1)),
         "path_cap": int(committer_contract.get("path_cap", -1)),
@@ -4855,12 +5038,49 @@ def _fr13_fixed32_observed_commit(
         ),
     }
     expected_fused_calls = 1 if layer_batch is True else 48
+    expected_neutralizations = 0 if layer_batch is True else 5
+    expected_ring_gathers = 0 if layer_batch is True else 4
     committer_fallback = int(
         type(layer_batch) is not bool
+        or type(metadata_copy_fusion) is not bool
+        or (
+            metadata_copy_fusion is True
+            and (
+                layer_batch is not True
+                or metadata_published_delta != 1
+                or metadata_consumed_delta != 1
+                or metadata_fallback_delta != 0
+                or int(
+                    committer_contract.get(
+                        "metadata_copy_launches_per_event", -1
+                    )
+                ) != 0
+                or int(
+                    committer_contract.get(
+                        "metadata_copy_elements_per_request", -1
+                    )
+                ) != 17
+                or committer_contract.get("metadata_validation_lease")
+                != "conv_direct_exact_pointer_batch_stream_one_shot"
+                or committer_contract.get("metadata_guarded_fallback")
+                is not True
+                or committer_contract.get(
+                    "duplicate_committer_metadata_guard"
+                ) is not False
+            )
+        )
+        or (
+            metadata_copy_fusion is False
+            and (
+                metadata_published_delta != 0
+                or metadata_consumed_delta != 0
+                or metadata_fallback_delta != 0
+            )
+        )
         or normalized_committer["batch"] != batch
         or normalized_committer["path_cap"] != 16
-        or normalized_committer["neutralizations"] != 5
-        or normalized_committer["ring_gathers"] != 4
+        or normalized_committer["neutralizations"] != expected_neutralizations
+        or normalized_committer["ring_gathers"] != expected_ring_gathers
         or normalized_committer["fused_calls"] != expected_fused_calls
         or normalized_committer["graph_replays_per_event"] != 1
         or normalized_committer["preseed_capacity"] < batch
@@ -4869,8 +5089,62 @@ def _fr13_fixed32_observed_commit(
             and (
                 int(committer_contract.get("native_reference_fused_calls", -1))
                 != 48
+                or committer_contract.get("state_only_output_elided") is not True
+                or committer_contract.get("active_length_recurrence") is not True
+                or committer_contract.get(
+                    "pre_replay_dynamic_bound_guard"
+                ) is not True
+                or int(
+                    committer_contract.get("hot_scan_bound_clamps", -1)
+                ) != 0
+                or int(committer_contract.get("physical_node_domain", -1)) != 32
+                or int(committer_contract.get("accepted_steps_max", -1)) != 12
+                or committer_contract.get("final_state_store_once") is not True
+                or committer_contract.get("direct_ring_loads") is not True
+                or int(committer_contract.get("direct_ring_inputs", -1)) != 4
+                or int(committer_contract.get("candidate_staging_launches", -1))
+                != 0
+                or committer_contract.get("gate_coefficients_hoisted") is not True
+                or committer_contract.get(
+                    "event_independent_gate_precompute"
+                ) is not True
+                or int(
+                    committer_contract.get(
+                        "gate_precompute_launches_per_process", -1
+                    )
+                ) != 1
+                or int(committer_contract.get("gate_exp_per_event", -1)) != 0
+                or committer_contract.get("full_value_tile") is not True
+                or int(committer_contract.get("value_tile", -1)) != 128
+                or int(committer_contract.get("kernel_warps", -1)) != 8
+                or int(
+                    committer_contract.get(
+                        "programs_per_layer_request_value_head", -1
+                    )
+                ) != 1
+                or int(
+                    committer_contract.get(
+                        "duplicate_value_tile_k_loads_per_step", -1
+                    )
+                ) != 0
+                or int(
+                    committer_contract.get(
+                        "state_elements_per_thread_before_compiler_effects", -1
+                    )
+                ) != 64
+                or committer_contract.get(
+                    "physical_alias_row_uniqueness_guard"
+                ) != "validate_fixed32_conv_commit_rows"
                 or committer_contract.get("byte_gate")
-                != "required_on_first_real_nonzero_accept"
+                != "real_swe_all_reachable_accepted_lengths_0_11"
+                or committer_contract.get("byte_gate_raw_compare")
+                != "torch_equal_uint8"
+                or committer_contract.get("unseen_length_route")
+                != "shadow_then_reference"
+                or int(committer_contract.get("accepted_length_max", -1)) != 11
+                or int(
+                    committer_contract.get("accepted_length_full_mask", -1)
+                ) != 0x0FFF
             )
         )
     )
@@ -4952,6 +5226,54 @@ def _fr13_fixed32_observed_commit(
         or conv_commit_contract.get("staging_reused") is not False
         or conv_commit_contract.get("source_staging_reused") is not True
         or int(conv_commit_contract.get("source_pointer_entries", -1)) != 48
+        or conv_commit_contract.get("row_guard_route")
+        != "fixed32_triton_alias3_ownerpath_physical32_v3"
+        or int(conv_commit_contract.get("row_guard_kernel_launches", -1)) != 1
+        or int(conv_commit_contract.get("row_guard_programs_per_request", -1))
+        != 48
+        or int(conv_commit_contract.get("row_guard_physical_rows", -1)) != 32
+        or int(conv_commit_contract.get("row_guard_path_capacity", -1)) != 16
+        or int(conv_commit_contract.get("row_guard_alias_width", -1)) != 3
+        or int(conv_commit_contract.get("row_guard_compare_capacity", -1)) != 16
+        or int(
+            conv_commit_contract.get(
+                "row_guard_path_validation_programs_per_request", -1
+            )
+        )
+        != 1
+        or int(
+            conv_commit_contract.get(
+                "row_guard_path_vector_loads_per_request", -1
+            )
+        )
+        != 1
+        or int(
+            conv_commit_contract.get(
+                "row_guard_alias_validation_programs_per_event", -1
+            )
+        )
+        != 1
+        or int(
+            conv_commit_contract.get(
+                "row_guard_alias_vector_loads_per_event", -1
+            )
+        )
+        != 1
+        or int(
+            conv_commit_contract.get(
+                "row_guard_selected_row_loads_per_program", -1
+            )
+        )
+        != 0
+        or conv_commit_contract.get("row_guard_peer_topology_proof")
+        != "preseed_lease_audit"
+        or int(conv_commit_contract.get("row_guard_torch_index_transforms", -1))
+        != 0
+        or int(
+            conv_commit_contract.get("row_guard_async_scalar_reductions", -1)
+        )
+        != 1
+        or int(conv_commit_contract.get("row_guard_async_assertions", -1)) != 1
         or int(conv_commit_contract.get("full_node_writebacks", -1)) != 0
         or int(conv_commit_contract.get("conv_remaps", -1)) != 0
         or conv_commit_contract.get("commit_bank_overlap_policy")
@@ -5076,6 +5398,58 @@ def _fr13_fixed32_observed_commit(
         "committed_rows": conv_rows,
         "source_staging_reused": True,
         "source_pointer_entries": 48,
+        "row_guard_route": conv_commit_contract["row_guard_route"],
+        "row_guard_kernel_launches": conv_commit_contract[
+            "row_guard_kernel_launches"
+        ],
+        "row_guard_programs": (
+            conv_commit_contract["row_guard_programs_per_request"] * batch
+        ),
+        "row_guard_physical_rows": conv_commit_contract[
+            "row_guard_physical_rows"
+        ],
+        "row_guard_path_capacity": conv_commit_contract[
+            "row_guard_path_capacity"
+        ],
+        "row_guard_alias_width": conv_commit_contract[
+            "row_guard_alias_width"
+        ],
+        "row_guard_compare_capacity": conv_commit_contract[
+            "row_guard_compare_capacity"
+        ],
+        "row_guard_path_validation_programs": (
+            conv_commit_contract[
+                "row_guard_path_validation_programs_per_request"
+            ]
+            * batch
+        ),
+        "row_guard_path_vector_loads": (
+            conv_commit_contract["row_guard_path_vector_loads_per_request"]
+            * batch
+        ),
+        "row_guard_alias_validation_programs": conv_commit_contract[
+            "row_guard_alias_validation_programs_per_event"
+        ],
+        "row_guard_alias_vector_loads": conv_commit_contract[
+            "row_guard_alias_vector_loads_per_event"
+        ],
+        "row_guard_selected_row_loads": (
+            conv_commit_contract["row_guard_selected_row_loads_per_program"]
+            * conv_commit_contract["row_guard_programs_per_request"]
+            * batch
+        ),
+        "row_guard_peer_topology_proof": conv_commit_contract[
+            "row_guard_peer_topology_proof"
+        ],
+        "row_guard_torch_index_transforms": conv_commit_contract[
+            "row_guard_torch_index_transforms"
+        ],
+        "row_guard_async_scalar_reductions": conv_commit_contract[
+            "row_guard_async_scalar_reductions"
+        ],
+        "row_guard_async_assertions": conv_commit_contract[
+            "row_guard_async_assertions"
+        ],
         "full_node_writebacks": 0,
         "conv_remaps": 0,
         "host_syncs": 0,
@@ -5695,7 +6069,7 @@ def _fr13_fixed32_observed_build_record(
         )
     valid_mask = int(taw_payload["valid_mask"])
     record = {
-        "schema": "fr13-fixed32-work-census-v9",
+        "schema": "fr13-fixed32-work-census-v12",
         "event_id": (
             str(identity[0]) + ":" + str(pid) + ":" + str(index)
         ),
@@ -15301,6 +15675,64 @@ def _fr13_fixed32_device_commit_route(
         "source_pointer_entries": _fixed_pregather_route.get(
             "contract", {}
         ).get("commit_source_pointer_entries"),
+        "row_guard_route": _fixed_pregather_route.get("contract", {}).get(
+            "commit_row_guard_route"
+        ),
+        "row_guard_kernel_launches": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_kernel_launches_per_event"),
+        "row_guard_programs_per_request": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_programs_per_request"),
+        "row_guard_physical_rows": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_physical_rows"),
+        "row_guard_path_capacity": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_path_capacity"),
+        "row_guard_alias_width": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_alias_width"),
+        "row_guard_compare_capacity": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_compare_capacity"),
+        "row_guard_path_validation_programs_per_request": (
+            _fixed_pregather_route.get("contract", {}).get(
+                "commit_row_guard_path_validation_programs_per_request"
+            )
+        ),
+        "row_guard_path_vector_loads_per_request": (
+            _fixed_pregather_route.get("contract", {}).get(
+                "commit_row_guard_path_vector_loads_per_request"
+            )
+        ),
+        "row_guard_alias_validation_programs_per_event": (
+            _fixed_pregather_route.get("contract", {}).get(
+                "commit_row_guard_alias_validation_programs_per_event"
+            )
+        ),
+        "row_guard_alias_vector_loads_per_event": (
+            _fixed_pregather_route.get("contract", {}).get(
+                "commit_row_guard_alias_vector_loads_per_event"
+            )
+        ),
+        "row_guard_selected_row_loads_per_program": (
+            _fixed_pregather_route.get("contract", {}).get(
+                "commit_row_guard_selected_row_loads_per_program"
+            )
+        ),
+        "row_guard_peer_topology_proof": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_peer_topology_proof"),
+        "row_guard_torch_index_transforms": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_torch_index_transforms"),
+        "row_guard_async_scalar_reductions": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_async_scalar_reductions"),
+        "row_guard_async_assertions": _fixed_pregather_route.get(
+            "contract", {}
+        ).get("commit_row_guard_async_assertions"),
         "full_node_writebacks": _fixed_pregather_route.get(
             "contract", {}
         ).get("commit_full_node_writebacks"),
@@ -33114,6 +33546,24 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 "staging_reused": False,
                 "source_staging_reused": True,
                 "source_pointer_entries": 48,
+                "row_guard_route": (
+                    "fixed32_triton_alias3_ownerpath_physical32_v3"
+                ),
+                "row_guard_kernel_launches": 1,
+                "row_guard_programs_per_request": 48,
+                "row_guard_physical_rows": 32,
+                "row_guard_path_capacity": 16,
+                "row_guard_alias_width": 3,
+                "row_guard_compare_capacity": 16,
+                "row_guard_path_validation_programs_per_request": 1,
+                "row_guard_path_vector_loads_per_request": 1,
+                "row_guard_alias_validation_programs_per_event": 1,
+                "row_guard_alias_vector_loads_per_event": 1,
+                "row_guard_selected_row_loads_per_program": 0,
+                "row_guard_peer_topology_proof": "preseed_lease_audit",
+                "row_guard_torch_index_transforms": 0,
+                "row_guard_async_scalar_reductions": 1,
+                "row_guard_async_assertions": 1,
                 "full_node_writebacks": 0,
                 "conv_remaps": 0,
                 "commit_bank_overlap_policy": "exact_alias_only_16x3",

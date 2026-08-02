@@ -127,6 +127,13 @@ _FIXED32_QWEN_CAMPAIGN_METRICS_POST_FILENAME = (
 )
 _FIXED32_PENDING_RUNNER_METADATA_FILENAME = "runner_metadata.pending.json"
 _FIXED32_CAMPAIGN_RUNTIME_ARGS_KEY = "_fixed32_campaign_runtime_args"
+_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = 0x0FFF
+_FIXED32_CFWD_QUALIFICATION_CLASSIFICATION = (
+    "cfwd_layer_batch_real_swe_qualification"
+)
+_FIXED32_CFWD_B4_QUALIFICATION_CLASSIFICATION = (
+    "cfwd_layer_batch_real_swe_b4_qualification"
+)
 _FIXED32_AGENT_PLACEMENT_SCHEMA = "fr13-fixed32-agent-placement-v1"
 _FIXED32_AGENT_HOST_ALIAS = "alienware"
 _FIXED32_MEASURED_HOST_IDENTITY = {
@@ -2755,6 +2762,9 @@ _FIXED32_BM8_REAL_TASK_ARM_NAME = "fr13_dfwd_unified_bm8.real_event.arm"
 _FIXED32_CUTLASS_REAL_TASK_ARM_NAME = (
     "fr13_fixed32_cutlass_streamk.real_event.arm"
 )
+_FIXED32_COMMITTER_LAYER_BATCH_REAL_TASK_ARM_NAME = (
+    "fr13_fixed32_committer_layer_batch.real_event.arm"
+)
 _FIXED32_TAW_REAL_TASK_MARKER_PREFIX = "swe_verified:"
 _FIXED32_TAW_REAL_TASK_ID_CHARACTERS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
@@ -3218,6 +3228,57 @@ class _Fixed32CutlassRealTaskArm(_Fixed32TawRealTaskArm):
     artifact_name = "fixed32_cutlass_streamk_real_task_arm.json"
     label = "CUTLASS Stream-K"
     schema = "fr13-fixed32-cutlass-streamk-real-task-arm-v1"
+
+
+class _Fixed32CommitterLayerBatchRealTaskArm(_Fixed32TawRealTaskArm):
+    """Bind one CFWD layer-batch qualification to one pinned SWE task."""
+
+    arm_name = _FIXED32_COMMITTER_LAYER_BATCH_REAL_TASK_ARM_NAME
+    artifact_name = "fixed32_committer_layer_batch_real_task_arm.json"
+    label = "CFWD layer-batch"
+    schema = "fr13-fixed32-committer-layer-batch-real-task-arm-v1"
+
+    def as_dict(self) -> dict[str, Any]:
+        payload = super().as_dict()
+        payload.update(
+            {
+                "run_classification": _FIXED32_CFWD_QUALIFICATION_CLASSIFICATION,
+                "performance_measurement": False,
+                "timing_eligible": False,
+                "process_local_qualification_only": True,
+                "durable_production_pass": False,
+                "timing_requires_same_server_process": True,
+                "same_process_timing_handoff_implemented": False,
+            }
+        )
+        return payload
+
+
+class _Fixed32CommitterLayerBatchCampaignArm(_Fixed32TawCampaignArm):
+    """Bind CFWD qualification to one canonical exact4/16 B4 campaign."""
+
+    arm_name = _FIXED32_COMMITTER_LAYER_BATCH_REAL_TASK_ARM_NAME
+    artifact_name = "fixed32_committer_layer_batch_campaign_arm.json"
+    label = "CFWD layer-batch campaign"
+    schema = "fr13-fixed32-committer-layer-batch-campaign-arm-v1"
+
+    def as_dict(self) -> dict[str, Any]:
+        payload = super().as_dict()
+        payload.update(
+            {
+                "run_classification": (
+                    _FIXED32_CFWD_B4_QUALIFICATION_CLASSIFICATION
+                ),
+                "performance_measurement": False,
+                "timing_eligible": False,
+                "process_local_qualification_only": True,
+                "durable_production_pass": False,
+                "timing_requires_same_server_process": True,
+                "same_process_timing_handoff_contract_implemented": True,
+                "same_process_timing_execution_implemented": False,
+            }
+        )
+        return payload
 
 
 _FIXED32_TOKEN_USAGE_FIELDS = frozenset(
@@ -4283,7 +4344,12 @@ def _load_fixed32_boundary_snapshot(
     base_path: Path,
     ack: Any,
     server_capacity: int,
+    allow_incomplete_layer_batch_coverage: bool = False,
 ) -> tuple[dict[str, Any], Path, str]:
+    if type(allow_incomplete_layer_batch_coverage) is not bool:
+        raise Fixed32BoundaryError(
+            "generation boundary snapshot coverage policy must be boolean"
+        )
     ack_counters = _validate_fixed32_ack(
         ack,
         label="generation boundary snapshot ack",
@@ -4611,6 +4677,9 @@ def _load_fixed32_boundary_snapshot(
                 "captures",
                 "fast_route_ready",
                 "maximum_ready_capacity",
+                "layer_batch_gate_attempts_by_batch",
+                "layer_batch_gate_coverage_mask_by_batch",
+                "layer_batch_gate_passed_by_batch",
                 "nonpure_dispatch",
                 "nonpure_committer_replays_by_batch",
                 "nonpure_committer_replays_enqueued",
@@ -4666,6 +4735,55 @@ def _load_fixed32_boundary_snapshot(
         expected_keys=batch_keys,
         label=f"{path}:committer.actual_replays_by_batch",
     )
+    layer_batch_gate_passed_by_batch = _fixed32_nonnegative_int_map(
+        committer["layer_batch_gate_passed_by_batch"],
+        expected_keys=ready_capacity_keys,
+        label=f"{path}:committer.layer_batch_gate_passed_by_batch",
+    )
+    _fixed32_nonnegative_int_map(
+        committer["layer_batch_gate_attempts_by_batch"],
+        expected_keys=ready_capacity_keys,
+        label=f"{path}:committer.layer_batch_gate_attempts_by_batch",
+    )
+    layer_batch_gate_coverage_mask_by_batch = _fixed32_nonnegative_int_map(
+        committer["layer_batch_gate_coverage_mask_by_batch"],
+        expected_keys=ready_capacity_keys,
+        label=f"{path}:committer.layer_batch_gate_coverage_mask_by_batch",
+    )
+    if any(value not in (0, 1) for value in layer_batch_gate_passed_by_batch.values()):
+        raise Fixed32BoundaryError(
+            f"{path}: committer layer-batch gate pass state is not boolean"
+        )
+    expected_full_coverage = {
+        key: _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        for key in ready_capacity_keys
+    }
+    if any(
+        value > _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        for value in layer_batch_gate_coverage_mask_by_batch.values()
+    ):
+        raise Fixed32BoundaryError(
+            f"{path}: committer layer-batch accepted-length coverage contains "
+            "unreachable depths"
+        )
+    if (
+        not allow_incomplete_layer_batch_coverage
+        and layer_batch_gate_coverage_mask_by_batch != expected_full_coverage
+    ):
+        raise Fixed32BoundaryError(
+            f"{path}: committer layer-batch accepted-length coverage is "
+            "incomplete before measurement"
+        )
+    if layer_batch_gate_passed_by_batch != {
+        key: int(
+            layer_batch_gate_coverage_mask_by_batch[key]
+            == _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        )
+        for key in ready_capacity_keys
+    }:
+        raise Fixed32BoundaryError(
+            f"{path}: committer layer-batch gate pass/coverage state diverged"
+        )
     nonpure_replays_by_batch = _fixed32_nonnegative_int_map(
         committer["nonpure_committer_replays_by_batch"],
         expected_keys=batch_keys,
@@ -4853,6 +4971,9 @@ def _fixed32_metrics_snapshot(
 class _Fixed32TaskBracket:
     """One task's strict flush-before-metrics evidence bracket."""
 
+    allow_incomplete_layer_batch_coverage = False
+    finish_arm_before_post_snapshot = False
+
     def __init__(
         self,
         *,
@@ -4873,6 +4994,10 @@ class _Fixed32TaskBracket:
         self.post_ack = None
         self.pre_snapshot_ref = None
         self.post_snapshot_ref = None
+        self.pre_layer_batch_gate_attempts_by_batch = None
+        self.pre_layer_batch_gate_coverage_mask_by_batch = None
+        self.post_layer_batch_gate_attempts_by_batch = None
+        self.post_layer_batch_gate_coverage_mask_by_batch = None
         self.post_attempted = False
         self.artifact_path = task_dir / "fixed32_task_boundary.json"
         self.taw_arm_artifact_path = task_dir / (
@@ -4888,6 +5013,41 @@ class _Fixed32TaskBracket:
     @property
     def complete(self) -> bool:
         return self.post_ack is not None
+
+    def _load_boundary_snapshot(self, ack: Any) -> tuple[dict[str, Any], Path, str]:
+        return _load_fixed32_boundary_snapshot(
+            base_path=self.boundary_snapshot_base,
+            ack=ack,
+            server_capacity=self.server_capacity,
+            allow_incomplete_layer_batch_coverage=(
+                self.allow_incomplete_layer_batch_coverage
+            ),
+        )
+
+    def _validate_layer_batch_gate_transition(
+        self,
+        *,
+        post_attempts: dict[str, int],
+        post_coverage: dict[str, int],
+    ) -> None:
+        if post_attempts != self.pre_layer_batch_gate_attempts_by_batch:
+            raise Fixed32BoundaryError(
+                "fixed32 task interval attempted a committer layer-batch byte gate"
+            )
+        if post_coverage != self.pre_layer_batch_gate_coverage_mask_by_batch:
+            raise Fixed32BoundaryError(
+                "fixed32 task interval changed committer layer-batch "
+                "accepted-length coverage"
+            )
+
+    def _artifact_classification(self) -> dict[str, Any]:
+        return {}
+
+    def _finish_real_task_arm(self) -> None:
+        if self.taw_real_task_arm is None:
+            return
+        self.taw_real_task_arm.finish()
+        self._write_taw_arm_artifact()
 
     def _write_artifact(self) -> None:
         pre = self.pre_ack.as_dict() if self.pre_ack is not None else None
@@ -4913,6 +5073,7 @@ class _Fixed32TaskBracket:
             "post_runtime_snapshot": self.post_snapshot_ref,
             "forward_step_interval": interval,
         }
+        payload.update(self._artifact_classification())
         temporary = self.artifact_path.with_suffix(".json.tmp")
         temporary.write_text(
             json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
@@ -4942,12 +5103,18 @@ class _Fixed32TaskBracket:
         try:
             ack = self.client.snapshot()
             _validate_fixed32_ack(ack, label="pre")
-            snapshot, snapshot_path, snapshot_sha = (
-                _load_fixed32_boundary_snapshot(
-                    base_path=self.boundary_snapshot_base,
-                    ack=ack,
-                    server_capacity=self.server_capacity,
-                )
+            snapshot, snapshot_path, snapshot_sha = self._load_boundary_snapshot(
+                ack
+            )
+            gate_attempts = dict(
+                snapshot["metrics"]["committer"][
+                    "layer_batch_gate_attempts_by_batch"
+                ]
+            )
+            gate_coverage = dict(
+                snapshot["metrics"]["committer"][
+                    "layer_batch_gate_coverage_mask_by_batch"
+                ]
             )
             metrics = _fixed32_metrics_snapshot(
                 metrics_url=DEFAULT_METRICS_URL,
@@ -4964,6 +5131,8 @@ class _Fixed32TaskBracket:
             "path": str(snapshot_path),
             "sha256": snapshot_sha,
         }
+        self.pre_layer_batch_gate_attempts_by_batch = gate_attempts
+        self.pre_layer_batch_gate_coverage_mask_by_batch = gate_coverage
         try:
             metrics_path.write_text(metrics, encoding="utf-8")
             if self.taw_real_task_arm is not None:
@@ -4977,12 +5146,13 @@ class _Fixed32TaskBracket:
                 and self.taw_real_task_arm.active
             ):
                 try:
-                    self.taw_real_task_arm.finish()
-                    self._write_taw_arm_artifact()
+                    self._finish_real_task_arm()
                 except Exception as error:  # noqa: BLE001
                     cleanup_error = error
             self.pre_ack = None
             self.pre_snapshot_ref = None
+            self.pre_layer_batch_gate_attempts_by_batch = None
+            self.pre_layer_batch_gate_coverage_mask_by_batch = None
             detail = f"{type(exc).__name__}: {exc}"
             if cleanup_error is not None:
                 detail += (
@@ -5001,42 +5171,67 @@ class _Fixed32TaskBracket:
                 return json.loads(self.artifact_path.read_text(encoding="utf-8"))
             raise Fixed32BoundaryError("fixed32 post bracket already failed")
         self.post_attempted = True
-        snapshot_error = None
-        try:
-            ack = self.client.snapshot()
-            counters = _validate_fixed32_ack(ack, label="post")
-            pre_counters = self.pre_ack.counters
-            start = pre_counters["pure_decode_forward_steps"]
-            end = counters["pure_decode_forward_steps"]
-            event_delta = (
-                counters["complete_work_census_events"]
-                - pre_counters["complete_work_census_events"]
-            )
-            if end <= start:
-                raise Fixed32BoundaryError("fixed32 real task produced no pure-decode step")
-            if event_delta != end - start:
-                raise Fixed32BoundaryError(
-                    "fixed32 task interval has incomplete census events: "
-                    f"steps={end - start} events={event_delta}"
-                )
-            snapshot, snapshot_path, snapshot_sha = (
-                _load_fixed32_boundary_snapshot(
-                    base_path=self.boundary_snapshot_base,
-                    ack=ack,
-                    server_capacity=self.server_capacity,
-                )
-            )
-            metrics = _fixed32_metrics_snapshot(
-                metrics_url=DEFAULT_METRICS_URL,
-                snapshot=snapshot,
-            )
-        except Exception as exc:
-            snapshot_error = exc
         arm_error = None
-        if self.taw_real_task_arm is not None:
+        if (
+            self.finish_arm_before_post_snapshot
+            and self.taw_real_task_arm is not None
+        ):
             try:
-                self.taw_real_task_arm.finish()
-                self._write_taw_arm_artifact()
+                self._finish_real_task_arm()
+            except Exception as exc:  # noqa: BLE001
+                arm_error = exc
+        snapshot_error = None
+        if arm_error is None:
+            try:
+                ack = self.client.snapshot()
+                counters = _validate_fixed32_ack(ack, label="post")
+                pre_counters = self.pre_ack.counters
+                start = pre_counters["pure_decode_forward_steps"]
+                end = counters["pure_decode_forward_steps"]
+                event_delta = (
+                    counters["complete_work_census_events"]
+                    - pre_counters["complete_work_census_events"]
+                )
+                if end <= start:
+                    raise Fixed32BoundaryError(
+                        "fixed32 real task produced no pure-decode step"
+                    )
+                if event_delta != end - start:
+                    raise Fixed32BoundaryError(
+                        "fixed32 task interval has incomplete census events: "
+                        f"steps={end - start} events={event_delta}"
+                    )
+                snapshot, snapshot_path, snapshot_sha = (
+                    self._load_boundary_snapshot(ack)
+                )
+                post_gate_attempts = dict(
+                    snapshot["metrics"]["committer"][
+                        "layer_batch_gate_attempts_by_batch"
+                    ]
+                )
+                post_gate_coverage = dict(
+                    snapshot["metrics"]["committer"][
+                        "layer_batch_gate_coverage_mask_by_batch"
+                    ]
+                )
+                self._validate_layer_batch_gate_transition(
+                    post_attempts=post_gate_attempts,
+                    post_coverage=post_gate_coverage,
+                )
+                self.post_layer_batch_gate_attempts_by_batch = post_gate_attempts
+                self.post_layer_batch_gate_coverage_mask_by_batch = post_gate_coverage
+                metrics = _fixed32_metrics_snapshot(
+                    metrics_url=DEFAULT_METRICS_URL,
+                    snapshot=snapshot,
+                )
+            except Exception as exc:
+                snapshot_error = exc
+        if (
+            not self.finish_arm_before_post_snapshot
+            and self.taw_real_task_arm is not None
+        ):
+            try:
+                self._finish_real_task_arm()
             except Exception as exc:  # noqa: BLE001
                 arm_error = exc
         if snapshot_error is not None or arm_error is not None:
@@ -5077,6 +5272,719 @@ class _Fixed32TaskBracket:
                 f"{type(exc).__name__}: {exc}"
             ) from exc
         return json.loads(self.artifact_path.read_text(encoding="utf-8"))
+
+
+class _Fixed32CfwdQualificationTaskBracket(_Fixed32TaskBracket):
+    """Collect non-timing CFWD byte coverage from one authenticated B1 task."""
+
+    allow_incomplete_layer_batch_coverage = True
+    finish_arm_before_post_snapshot = True
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if self.server_capacity != 1:
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD qualification is B1/sequential only"
+            )
+        if not isinstance(
+            self.taw_real_task_arm,
+            _Fixed32CommitterLayerBatchRealTaskArm,
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD qualification requires its dedicated real-task arm"
+            )
+
+    def _validate_layer_batch_gate_transition(
+        self,
+        *,
+        post_attempts: dict[str, int],
+        post_coverage: dict[str, int],
+    ) -> None:
+        pre_attempts = self.pre_layer_batch_gate_attempts_by_batch
+        pre_coverage = self.pre_layer_batch_gate_coverage_mask_by_batch
+        if (
+            not isinstance(pre_attempts, dict)
+            or not isinstance(pre_coverage, dict)
+            or set(post_attempts) != set(pre_attempts)
+            or set(post_coverage) != set(pre_coverage)
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD qualification gate maps changed shape"
+            )
+        for batch in sorted(pre_coverage):
+            attempt_delta = post_attempts[batch] - pre_attempts[batch]
+            new_mask = post_coverage[batch] & ~pre_coverage[batch]
+            if (
+                attempt_delta < 0
+                or post_coverage[batch] & pre_coverage[batch]
+                != pre_coverage[batch]
+                or attempt_delta != new_mask.bit_count()
+            ):
+                raise Fixed32BoundaryError(
+                    "fixed32 CFWD qualification coverage did not advance "
+                    "monotonically"
+                )
+
+    @staticmethod
+    def _covered_lengths(mask: int) -> list[int]:
+        return [
+            length
+            for length in range(
+                _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK.bit_length()
+            )
+            if mask & (1 << length)
+        ]
+
+    def _artifact_classification(self) -> dict[str, Any]:
+        pre_attempts = self.pre_layer_batch_gate_attempts_by_batch
+        pre_coverage = self.pre_layer_batch_gate_coverage_mask_by_batch
+        post_attempts = self.post_layer_batch_gate_attempts_by_batch
+        post_coverage = self.post_layer_batch_gate_coverage_mask_by_batch
+        coverage = None
+        if isinstance(pre_attempts, dict) and isinstance(pre_coverage, dict):
+            coverage = {
+                "accepted_length_full_mask": (
+                    _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+                ),
+                "pre_attempts_by_batch": dict(pre_attempts),
+                "pre_coverage_mask_by_batch": dict(pre_coverage),
+                "post_attempts_by_batch": None,
+                "post_coverage_mask_by_batch": None,
+                "attempt_delta_by_batch": None,
+                "new_coverage_mask_by_batch": None,
+                "newly_covered_lengths_by_batch": None,
+                "remaining_coverage_mask_by_batch": None,
+                "coverage_complete": False,
+                "shadow_reference_replays": None,
+                "shadow_candidate_replays": None,
+                "new_depth_reference_served_replays": None,
+                "new_depth_served_route": "native_reference",
+                "formal_work_census_eligible": False,
+            }
+            if isinstance(post_attempts, dict) and isinstance(post_coverage, dict):
+                attempt_delta = {
+                    batch: post_attempts[batch] - pre_attempts[batch]
+                    for batch in pre_attempts
+                }
+                new_coverage = {
+                    batch: post_coverage[batch] & ~pre_coverage[batch]
+                    for batch in pre_coverage
+                }
+                remaining = {
+                    batch: (
+                        _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+                        & ~post_coverage[batch]
+                    )
+                    for batch in post_coverage
+                }
+                shadow_replays = sum(attempt_delta.values())
+                coverage.update(
+                    {
+                        "post_attempts_by_batch": dict(post_attempts),
+                        "post_coverage_mask_by_batch": dict(post_coverage),
+                        "attempt_delta_by_batch": attempt_delta,
+                        "new_coverage_mask_by_batch": new_coverage,
+                        "newly_covered_lengths_by_batch": {
+                            batch: self._covered_lengths(mask)
+                            for batch, mask in new_coverage.items()
+                        },
+                        "remaining_coverage_mask_by_batch": remaining,
+                        "coverage_complete": not any(remaining.values()),
+                        "shadow_reference_replays": shadow_replays,
+                        "shadow_candidate_replays": shadow_replays,
+                        "new_depth_reference_served_replays": shadow_replays,
+                    }
+                )
+        return {
+            "run_classification": _FIXED32_CFWD_QUALIFICATION_CLASSIFICATION,
+            "acceptance_valid": False,
+            "performance_measurement": False,
+            "timing_eligible": False,
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+            "process_local_qualification_only": True,
+            "durable_production_pass": False,
+            "timing_requires_same_server_process": True,
+            "same_process_timing_handoff_implemented": False,
+            "qualification_coverage": coverage,
+        }
+
+
+def _fixed32_cfwd_b4_qualification_transition(
+    *,
+    pre_attempts: dict[str, int],
+    pre_coverage: dict[str, int],
+    post_attempts: dict[str, int],
+    post_coverage: dict[str, int],
+) -> dict[str, dict[str, int]]:
+    """Validate global B1..B4 coverage without assigning it to one task."""
+    expected = {str(batch) for batch in range(1, 5)}
+    maps = (pre_attempts, pre_coverage, post_attempts, post_coverage)
+    if any(
+        not isinstance(mapping, dict)
+        or set(mapping) != expected
+        or any(type(value) is not int or value < 0 for value in mapping.values())
+        for mapping in maps
+    ):
+        raise Fixed32BoundaryError(
+            "fixed32 CFWD B4 qualification gate maps changed shape"
+        )
+    attempt_delta: dict[str, int] = {}
+    new_coverage: dict[str, int] = {}
+    for batch in sorted(expected, key=int):
+        delta = post_attempts[batch] - pre_attempts[batch]
+        new_mask = post_coverage[batch] & ~pre_coverage[batch]
+        new_bits = new_mask.bit_count()
+        batch_size = int(batch)
+        if (
+            delta < 0
+            or post_coverage[batch] > _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+            or post_coverage[batch] & pre_coverage[batch]
+            != pre_coverage[batch]
+            or (delta == 0) != (new_bits == 0)
+            or delta > new_bits
+            or new_bits > batch_size * delta
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 qualification coverage did not advance "
+                "monotonically"
+            )
+        attempt_delta[batch] = delta
+        new_coverage[batch] = new_mask
+    return {
+        "attempt_delta_by_batch": attempt_delta,
+        "new_coverage_mask_by_batch": new_coverage,
+    }
+
+
+class _Fixed32CfwdB4QualificationMemberTaskBracket(_Fixed32TaskBracket):
+    """Bracket one member while qualification ownership remains campaign-wide."""
+
+    allow_incomplete_layer_batch_coverage = True
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if self.server_capacity != 4:
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 qualification member requires capacity 4"
+            )
+        if self.taw_real_task_arm is not None:
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 qualification forbids per-task arms"
+            )
+
+    def _validate_layer_batch_gate_transition(
+        self,
+        *,
+        post_attempts: dict[str, int],
+        post_coverage: dict[str, int],
+    ) -> None:
+        pre_attempts = self.pre_layer_batch_gate_attempts_by_batch
+        pre_coverage = self.pre_layer_batch_gate_coverage_mask_by_batch
+        if not isinstance(pre_attempts, dict) or not isinstance(pre_coverage, dict):
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 member lacks pre-campaign gate state"
+            )
+        _fixed32_cfwd_b4_qualification_transition(
+            pre_attempts=pre_attempts,
+            pre_coverage=pre_coverage,
+            post_attempts=post_attempts,
+            post_coverage=post_coverage,
+        )
+
+    def _artifact_classification(self) -> dict[str, Any]:
+        return {
+            "run_classification": (
+                _FIXED32_CFWD_B4_QUALIFICATION_CLASSIFICATION + "_member"
+            ),
+            "acceptance_valid": False,
+            "performance_measurement": False,
+            "timing_eligible": False,
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+            "qualification_scope": "canonical_exact4_or_16_campaign",
+            "per_task_qualification_claim": False,
+            "process_local_qualification_only": True,
+            "durable_production_pass": False,
+        }
+
+
+class _Fixed32CfwdSameServerTimingHandoff:
+    """An in-memory-only proof required immediately before CFWD timing."""
+
+    schema = "fr13-fixed32-cfwd-same-server-timing-handoff-v1"
+
+    def __init__(
+        self,
+        *,
+        client: Any,
+        campaign_arm: _Fixed32CommitterLayerBatchCampaignArm,
+        qualification_post_ack: Any,
+        post_attempts: dict[str, int],
+        post_coverage: dict[str, int],
+        boundary_snapshot_base: Path,
+        server_capacity: int,
+    ) -> None:
+        full = {
+            str(batch): _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+            for batch in range(1, 5)
+        }
+        if campaign_arm.state != "ended" or campaign_arm.path.exists():
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD timing handoff requires a removed campaign arm"
+            )
+        if post_coverage != full:
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD timing handoff requires complete B1..B4 coverage"
+            )
+        if (
+            qualification_post_ack.mode != client.mode
+            or qualification_post_ack.producer_pid != client.producer_pid
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD timing handoff server binding is inconsistent"
+            )
+        self._mode = client.mode
+        self._producer_pid = client.producer_pid
+        self._container = client.container
+        self._campaign_arm = campaign_arm
+        self._post_attempts = dict(post_attempts)
+        self._post_coverage = dict(post_coverage)
+        self._boundary_snapshot_base = boundary_snapshot_base
+        self._server_capacity = server_capacity
+        self.qualification_post_generation = qualification_post_ack.generation
+        self.server_process_identity_sha256 = hashlib.sha256(
+            json.dumps(
+                [self._container, self._mode, self._producer_pid],
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("ascii")
+        ).hexdigest()
+        self.state = "qualification_complete_process_local"
+        self.timing_pre_generation: int | None = None
+
+    def validate_timing_pre(
+        self,
+        *,
+        client: Any,
+    ) -> dict[str, Any]:
+        if self.state != "qualification_complete_process_local":
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD timing handoff can be consumed only once"
+            )
+        if (
+            client.container != self._container
+            or client.mode != self._mode
+            or client.producer_pid != self._producer_pid
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD timing handoff did not retain the same server process"
+            )
+        if self._campaign_arm.state != "ended" or self._campaign_arm.path.exists():
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD timing handoff campaign arm became live"
+            )
+        ack = client.snapshot()
+        snapshot, _, _ = _load_fixed32_boundary_snapshot(
+            base_path=self._boundary_snapshot_base,
+            ack=ack,
+            server_capacity=self._server_capacity,
+        )
+        if (
+            ack.mode != self._mode
+            or ack.producer_pid != self._producer_pid
+            or ack.generation <= self.qualification_post_generation
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD timing handoff did not retain the same server process"
+            )
+        committer = snapshot.get("metrics", {}).get("committer", {})
+        attempts = committer.get("layer_batch_gate_attempts_by_batch")
+        coverage = committer.get("layer_batch_gate_coverage_mask_by_batch")
+        if attempts != self._post_attempts or coverage != self._post_coverage:
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD timing handoff gate state changed after qualification"
+            )
+        self.state = "timing_prevalidated_process_local"
+        self.timing_pre_generation = ack.generation
+        return self.as_dict()
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "schema": self.schema,
+            "run_classification": (
+                _FIXED32_CFWD_B4_QUALIFICATION_CLASSIFICATION
+            ),
+            "state": self.state,
+            "server_process_identity_sha256": (
+                self.server_process_identity_sha256
+            ),
+            "qualification_post_generation": self.qualification_post_generation,
+            "timing_pre_generation": self.timing_pre_generation,
+            "campaign_marker_sha256": self._campaign_arm.marker_sha256,
+            "subset_sha256": self._campaign_arm.subset_sha256,
+            "task_count": self._campaign_arm.task_count,
+            "batch_size": 4,
+            "concurrency": 4,
+            "accepted_length_full_mask": (
+                _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+            ),
+            "coverage_mask_by_batch": dict(self._post_coverage),
+            "performance_measurement": False,
+            "timing_eligible": False,
+            "timing_window_authorized": (
+                self.state == "timing_prevalidated_process_local"
+            ),
+            "process_local_qualification_only": True,
+            "durable_production_pass": False,
+            "same_process_timing_handoff_contract_implemented": True,
+            "same_process_timing_execution_implemented": False,
+            "artifact_is_replayable_credential": False,
+            "next_required_lifecycle": (
+                "paired_authenticated_ingress_phases_before_timing"
+            ),
+        }
+
+
+class _Fixed32CfwdB4QualificationCampaignBracket:
+    """Own the one arm and the global flush bracket for exact4/16 B4."""
+
+    schema = "fr13-fixed32-cfwd-b4-qualification-campaign-v1"
+
+    def __init__(
+        self,
+        *,
+        client: Any,
+        boundary_snapshot_base: Path,
+        server_capacity: int,
+        campaign_arm: _Fixed32CommitterLayerBatchCampaignArm,
+        artifact_path: Path,
+        arm_artifact_path: Path,
+        metrics_pre_path: Path,
+        metrics_post_path: Path,
+    ) -> None:
+        if server_capacity != 4 or campaign_arm.concurrency != 4:
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 campaign qualification requires exact B4"
+            )
+        if campaign_arm.task_count not in (4, 16):
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 campaign qualification requires exact4/16"
+            )
+        self.client = client
+        self.boundary_snapshot_base = boundary_snapshot_base
+        self.server_capacity = server_capacity
+        self.campaign_arm = campaign_arm
+        self.artifact_path = artifact_path
+        self.arm_artifact_path = arm_artifact_path
+        self.metrics_pre_path = metrics_pre_path
+        self.metrics_post_path = metrics_post_path
+        self.state = "planned"
+        self.pre_ack = None
+        self.post_ack = None
+        self.pre_snapshot_ref: dict[str, Any] | None = None
+        self.post_snapshot_ref: dict[str, Any] | None = None
+        self.pre_attempts: dict[str, int] | None = None
+        self.pre_coverage: dict[str, int] | None = None
+        self.post_attempts: dict[str, int] | None = None
+        self.post_coverage: dict[str, int] | None = None
+        self.transition: dict[str, dict[str, int]] | None = None
+        self.action_succeeded = False
+        self.handoff: _Fixed32CfwdSameServerTimingHandoff | None = None
+
+    @staticmethod
+    def _snapshot_gate_maps(
+        snapshot: dict[str, Any],
+    ) -> tuple[dict[str, int], dict[str, int]]:
+        committer = snapshot["metrics"]["committer"]
+        return (
+            dict(committer["layer_batch_gate_attempts_by_batch"]),
+            dict(committer["layer_batch_gate_coverage_mask_by_batch"]),
+        )
+
+    @staticmethod
+    def _snapshot_ref(ack: Any, path: Path, sha256: str) -> dict[str, Any]:
+        return {
+            "schema": _FIXED32_BOUNDARY_SNAPSHOT_SCHEMA,
+            "generation": ack.generation,
+            "path": str(path),
+            "sha256": sha256,
+        }
+
+    @staticmethod
+    def _write_json(path: Path, payload: dict[str, Any]) -> None:
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+            encoding="ascii",
+        )
+        os.replace(temporary, path)
+
+    def _write_arm_artifact(self) -> None:
+        self._write_json(self.arm_artifact_path, self.campaign_arm.as_dict())
+
+    def _coverage_artifact(self) -> dict[str, Any] | None:
+        if self.pre_attempts is None or self.pre_coverage is None:
+            return None
+        payload: dict[str, Any] = {
+            "accepted_length_full_mask": (
+                _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+            ),
+            "pre_attempts_by_batch": dict(self.pre_attempts),
+            "pre_coverage_mask_by_batch": dict(self.pre_coverage),
+            "post_attempts_by_batch": None,
+            "post_coverage_mask_by_batch": None,
+            "attempt_delta_by_batch": None,
+            "new_coverage_mask_by_batch": None,
+            "remaining_coverage_mask_by_batch": None,
+            "newly_covered_lengths_by_batch": None,
+            "coverage_complete": False,
+        }
+        if (
+            self.post_attempts is not None
+            and self.post_coverage is not None
+            and self.transition is not None
+        ):
+            remaining = {
+                batch: (
+                    _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK & ~mask
+                )
+                for batch, mask in self.post_coverage.items()
+            }
+            new_coverage = self.transition["new_coverage_mask_by_batch"]
+            payload.update(
+                {
+                    "post_attempts_by_batch": dict(self.post_attempts),
+                    "post_coverage_mask_by_batch": dict(self.post_coverage),
+                    "attempt_delta_by_batch": dict(
+                        self.transition["attempt_delta_by_batch"]
+                    ),
+                    "new_coverage_mask_by_batch": dict(new_coverage),
+                    "remaining_coverage_mask_by_batch": remaining,
+                    "newly_covered_lengths_by_batch": {
+                        batch: _Fixed32CfwdQualificationTaskBracket._covered_lengths(
+                            mask
+                        )
+                        for batch, mask in new_coverage.items()
+                    },
+                    "coverage_complete": not any(remaining.values()),
+                }
+            )
+        return payload
+
+    def as_dict(self) -> dict[str, Any]:
+        interval = None
+        if self.pre_ack is not None and self.post_ack is not None:
+            interval = {
+                "start_forward_step": self.pre_ack.counters[
+                    "pure_decode_forward_steps"
+                ],
+                "end_forward_step": self.post_ack.counters[
+                    "pure_decode_forward_steps"
+                ],
+                "expected_complete_events": (
+                    self.post_ack.counters["complete_work_census_events"]
+                    - self.pre_ack.counters["complete_work_census_events"]
+                ),
+            }
+        return {
+            "schema": self.schema,
+            "run_classification": (
+                _FIXED32_CFWD_B4_QUALIFICATION_CLASSIFICATION
+            ),
+            "state": self.state,
+            "mode": self.client.mode,
+            "task_count": self.campaign_arm.task_count,
+            "task_ids": list(self.campaign_arm.task_ids),
+            "subset_sha256": self.campaign_arm.subset_sha256,
+            "batch_size": 4,
+            "concurrency": 4,
+            "pre": self.pre_ack.as_dict() if self.pre_ack is not None else None,
+            "post": self.post_ack.as_dict() if self.post_ack is not None else None,
+            "pre_runtime_snapshot": self.pre_snapshot_ref,
+            "post_runtime_snapshot": self.post_snapshot_ref,
+            "forward_step_interval": interval,
+            "campaign_arm": self.campaign_arm.as_dict(),
+            "qualification_coverage": self._coverage_artifact(),
+            "action_succeeded": self.action_succeeded,
+            "acceptance_valid": False,
+            "performance_measurement": False,
+            "timing_eligible": False,
+            "gate_eligible": False,
+            "floor_acceptance_eligible": False,
+            "process_local_qualification_only": True,
+            "durable_production_pass": False,
+            "same_process_timing_handoff_contract_implemented": True,
+            "same_process_timing_execution_implemented": False,
+            "timing_handoff": (
+                self.handoff.as_dict() if self.handoff is not None else None
+            ),
+        }
+
+    def _write_artifact(self) -> None:
+        self._write_json(self.artifact_path, self.as_dict())
+
+    def pre(self) -> None:
+        if self.state != "planned":
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 campaign pre bracket was invoked twice"
+            )
+        try:
+            ack = self.client.snapshot()
+            snapshot, snapshot_path, snapshot_sha = _load_fixed32_boundary_snapshot(
+                base_path=self.boundary_snapshot_base,
+                ack=ack,
+                server_capacity=self.server_capacity,
+                allow_incomplete_layer_batch_coverage=True,
+            )
+            attempts, coverage = self._snapshot_gate_maps(snapshot)
+            metrics = _fixed32_metrics_snapshot(
+                metrics_url=DEFAULT_METRICS_URL,
+                snapshot=snapshot,
+            )
+            self.metrics_pre_path.write_text(metrics, encoding="utf-8")
+            self.pre_ack = ack
+            self.pre_snapshot_ref = self._snapshot_ref(
+                ack, snapshot_path, snapshot_sha
+            )
+            self.pre_attempts = attempts
+            self.pre_coverage = coverage
+            self.campaign_arm.start()
+            self.state = "active"
+            self._write_arm_artifact()
+            self._write_artifact()
+        except Exception as error:
+            cleanup_error = None
+            if self.campaign_arm.active:
+                try:
+                    self.campaign_arm.finish()
+                    self._write_arm_artifact()
+                except Exception as cleanup:  # noqa: BLE001
+                    cleanup_error = cleanup
+            self.state = "pre_failed"
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            detail = f"{type(error).__name__}: {error}"
+            if cleanup_error is not None:
+                detail += (
+                    "; arm cleanup failed: "
+                    f"{type(cleanup_error).__name__}: {cleanup_error}"
+                )
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 campaign pre bracket failed: " + detail
+            ) from error
+
+    def post(self, *, action_succeeded: bool) -> dict[str, Any]:
+        if self.state != "active" or self.pre_ack is None:
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 campaign post bracket has no active pre bracket"
+            )
+        self.action_succeeded = action_succeeded
+        try:
+            self.campaign_arm.finish()
+            self._write_arm_artifact()
+        except Exception as error:
+            self.state = "teardown_failed"
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 campaign arm teardown failed: "
+                f"{type(error).__name__}: {error}"
+            ) from error
+        try:
+            ack = self.client.snapshot()
+            counters = _validate_fixed32_ack(ack, label="CFWD B4 campaign post")
+            start = self.pre_ack.counters["pure_decode_forward_steps"]
+            end = counters["pure_decode_forward_steps"]
+            event_delta = (
+                counters["complete_work_census_events"]
+                - self.pre_ack.counters["complete_work_census_events"]
+            )
+            if end <= start or event_delta != end - start:
+                raise Fixed32BoundaryError(
+                    "fixed32 CFWD B4 campaign interval lacks complete decode events"
+                )
+            snapshot, snapshot_path, snapshot_sha = _load_fixed32_boundary_snapshot(
+                base_path=self.boundary_snapshot_base,
+                ack=ack,
+                server_capacity=self.server_capacity,
+                allow_incomplete_layer_batch_coverage=True,
+            )
+            attempts, coverage = self._snapshot_gate_maps(snapshot)
+            if self.pre_attempts is None or self.pre_coverage is None:
+                raise Fixed32BoundaryError(
+                    "fixed32 CFWD B4 campaign lost its pre gate state"
+                )
+            transition = _fixed32_cfwd_b4_qualification_transition(
+                pre_attempts=self.pre_attempts,
+                pre_coverage=self.pre_coverage,
+                post_attempts=attempts,
+                post_coverage=coverage,
+            )
+            metrics = _fixed32_metrics_snapshot(
+                metrics_url=DEFAULT_METRICS_URL,
+                snapshot=snapshot,
+            )
+            self.metrics_post_path.write_text(metrics, encoding="utf-8")
+            self.post_ack = ack
+            self.post_snapshot_ref = self._snapshot_ref(
+                ack, snapshot_path, snapshot_sha
+            )
+            self.post_attempts = attempts
+            self.post_coverage = coverage
+            self.transition = transition
+            complete = all(
+                mask == _FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+                for mask in coverage.values()
+            )
+            if action_succeeded and complete:
+                self.handoff = _Fixed32CfwdSameServerTimingHandoff(
+                    client=self.client,
+                    campaign_arm=self.campaign_arm,
+                    qualification_post_ack=ack,
+                    post_attempts=attempts,
+                    post_coverage=coverage,
+                    boundary_snapshot_base=self.boundary_snapshot_base,
+                    server_capacity=self.server_capacity,
+                )
+                self.state = "qualified_process_local"
+            elif action_succeeded:
+                self.state = "coverage_incomplete"
+            else:
+                self.state = "action_failed"
+            self._write_artifact()
+        except Exception as error:
+            self.state = "post_failed"
+            try:
+                self._write_artifact()
+            except Exception:
+                pass
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 campaign post bracket failed: "
+                f"{type(error).__name__}: {error}"
+            ) from error
+        return self.as_dict()
+
+    def run(self, action: Any) -> Any:
+        self.pre()
+        try:
+            result = action()
+        except BaseException as action_error:
+            try:
+                self.post(action_succeeded=False)
+            except BaseException as cleanup_error:
+                raise Fixed32BoundaryError(
+                    "fixed32 CFWD B4 campaign action and teardown both failed: "
+                    f"action={type(action_error).__name__}: {action_error}; "
+                    f"teardown={type(cleanup_error).__name__}: {cleanup_error}"
+                ) from cleanup_error
+            raise
+        self.post(action_succeeded=True)
+        return result
 
 
 class _Fixed32EagerKernelDiagnosticTaskBracket(_Fixed32TaskBracket):
@@ -7020,6 +7928,7 @@ def _process_one(
     skip_existing: bool,
     fixed32_bracket: _Fixed32TaskBracket | None = None,
     fixed32_b1_diagnostic: bool = False,
+    fixed32_cfwd_qualification: bool = False,
 ) -> dict[str, Any]:
     # Use absolute paths everywhere so docker volume mounts and git
     # worktree add (which resolves relative to -C cache) both work.
@@ -7070,7 +7979,27 @@ def _process_one(
                 separators=(",", ":"),
             ).encode("utf-8")
         ).hexdigest()
-        if fixed32_b1_diagnostic:
+        if fixed32_cfwd_qualification:
+            cfwd_classification = (
+                _FIXED32_CFWD_B4_QUALIFICATION_CLASSIFICATION + "_member"
+                if fixed32_campaign_scope
+                else _FIXED32_CFWD_QUALIFICATION_CLASSIFICATION
+            )
+            summary["fixed32_run_classification"] = {
+                "run_classification": cfwd_classification,
+                "performance_measurement": False,
+                "timing_eligible": False,
+                "gate_eligible": False,
+                "floor_acceptance_eligible": False,
+                "process_local_qualification_only": True,
+                "durable_production_pass": False,
+                "timing_requires_same_server_process": True,
+                "same_process_timing_handoff_contract_implemented": (
+                    fixed32_campaign_scope
+                ),
+                "same_process_timing_execution_implemented": False,
+            }
+        elif fixed32_b1_diagnostic:
             summary["fixed32_run_classification"] = {
                 "run_classification": "b1_diagnostic",
                 "gate_eligible": False,
@@ -7970,6 +8899,15 @@ def main(argv: list[str] | None = None) -> int:
             "/logs real-event marker path. B1 diagnostic only."
         ),
     )
+    parser.add_argument(
+        "--fixed32-committer-layer-batch-real-event-arm",
+        type=Path,
+        help=(
+            "Host path mounted at the CFWD layer-batch qualification kernel's "
+            "exact /logs real-event marker path. B1 task or canonical exact4/16 "
+            "B4 campaign qualification only."
+        ),
+    )
     args = parser.parse_args(argv)
 
     fixed32_values = (
@@ -7989,6 +8927,15 @@ def main(argv: list[str] | None = None) -> int:
     fixed32_b1_diagnostic = diagnostic_text == "1"
     if fixed32_b1_diagnostic and not fixed32_enabled:
         parser.error("FR13_FIXED32_B1_DIAGNOSTIC=1 requires fixed32 runtime binding")
+    cfwd_qualification_text = os.environ.get(
+        "FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION",
+        "0",
+    )
+    if cfwd_qualification_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION must be exactly 0 or 1"
+        )
+    fixed32_cfwd_qualification = cfwd_qualification_text == "1"
     taw_diagnostic_text = os.environ.get(
         "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE",
         "0",
@@ -8150,6 +9097,44 @@ def main(argv: list[str] | None = None) -> int:
         and os.environ.get("ENFORCE_EAGER", "0") != "1"
     ):
         parser.error("fixed32 eager kernel diagnostic requires ENFORCE_EAGER=1")
+    if fixed32_cfwd_qualification:
+        if not fixed32_enabled:
+            parser.error(
+                "fixed32 CFWD layer-batch qualification requires fixed32 runtime"
+            )
+        if os.environ.get("FR13_FIXED32_COMMITTER_LAYER_BATCH", "0") != "1":
+            parser.error(
+                "fixed32 CFWD layer-batch qualification requires "
+                "FR13_FIXED32_COMMITTER_LAYER_BATCH=1"
+            )
+        if args.fixed32_committer_layer_batch_real_event_arm is None:
+            parser.error(
+                "FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=1 requires "
+                "--fixed32-committer-layer-batch-real-event-arm"
+            )
+        if (
+            args.fixed32_flush_request is not None
+            and args.fixed32_committer_layer_batch_real_event_arm.parent
+            != args.fixed32_flush_request.parent
+        ):
+            parser.error(
+                "--fixed32-committer-layer-batch-real-event-arm must share "
+                "the mounted fixed32 logs directory"
+            )
+        if (
+            fixed32_taw_diagnostic
+            or fixed32_bm8_diagnostic
+            or fixed32_eager_kernel_diagnostic
+        ):
+            parser.error(
+                "fixed32 CFWD layer-batch qualification must be the only "
+                "real-task kernel diagnostic"
+            )
+    elif args.fixed32_committer_layer_batch_real_event_arm is not None:
+        parser.error(
+            "--fixed32-committer-layer-batch-real-event-arm requires "
+            "FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=1"
+        )
     if fixed32_cutlass_diagnostic:
         if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
             parser.error(
@@ -8224,6 +9209,16 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(
                 "fixed32 requires concurrency to equal the serving batch (exactly B1 or B4)"
             )
+        if fixed32_cfwd_qualification:
+            if fixed32_b1_diagnostic:
+                if serving_batch != 1 or args.concurrency != 1:
+                    parser.error(
+                        "fixed32 CFWD B1 qualification requires exact B1"
+                    )
+            elif serving_batch != 4 or args.concurrency != 4:
+                parser.error(
+                    "fixed32 CFWD campaign qualification requires exact B4"
+                )
         if (
             fixed32_taw_diagnostic
             and not fixed32_b1_diagnostic
@@ -8359,22 +9354,67 @@ def main(argv: list[str] | None = None) -> int:
         taw_campaign_arm_artifact_path = (
             dataset_out / taw_campaign_arm.artifact_name
         )
+    cfwd_campaign_bracket: (
+        _Fixed32CfwdB4QualificationCampaignBracket | None
+    ) = None
+    cfwd_campaign_arm_artifact_path: Path | None = None
+    if fixed32_cfwd_qualification and not fixed32_b1_diagnostic:
+        if (
+            args.fixed32_committer_layer_batch_real_event_arm is None
+            or fixed32_subset is None
+            or fixed32_client is None
+            or args.fixed32_boundary_snapshot is None
+        ):
+            raise Fixed32BoundaryError(
+                "fixed32 CFWD B4 campaign arm lacks its validated binding"
+            )
+        cfwd_campaign_arm = _Fixed32CommitterLayerBatchCampaignArm(
+            path=args.fixed32_committer_layer_batch_real_event_arm,
+            subset_binding=fixed32_subset,
+            concurrency=args.concurrency,
+        )
+        cfwd_campaign_arm_artifact_path = (
+            dataset_out / cfwd_campaign_arm.artifact_name
+        )
+        cfwd_campaign_bracket = _Fixed32CfwdB4QualificationCampaignBracket(
+            client=fixed32_client,
+            boundary_snapshot_base=args.fixed32_boundary_snapshot,
+            server_capacity=serving_batch,
+            campaign_arm=cfwd_campaign_arm,
+            artifact_path=(
+                dataset_out / "fixed32_cfwd_b4_qualification_campaign.json"
+            ),
+            arm_artifact_path=cfwd_campaign_arm_artifact_path,
+            metrics_pre_path=(
+                dataset_out / "fixed32_cfwd_b4_qualification_metrics_pre.txt"
+            ),
+            metrics_post_path=(
+                dataset_out / "fixed32_cfwd_b4_qualification_metrics_post.txt"
+            ),
+        )
 
     def _job(iid: str) -> dict[str, Any]:
         t0 = time.time()
         print(f"[{_iso_now()}] -> {iid}", flush=True)
         taw_real_task_arm = None
         arm_path = (
-            (
-                args.fixed32_taw_real_event_arm
-                if taw_campaign_arm is None
-                else None
+            args.fixed32_committer_layer_batch_real_event_arm
+            if (
+                args.fixed32_committer_layer_batch_real_event_arm is not None
+                and fixed32_b1_diagnostic
             )
-            if args.fixed32_taw_real_event_arm is not None
             else (
-                args.fixed32_bm8_real_event_arm
-                if args.fixed32_bm8_real_event_arm is not None
-                else args.fixed32_cutlass_real_event_arm
+                (
+                    args.fixed32_taw_real_event_arm
+                    if taw_campaign_arm is None
+                    else None
+                )
+                if args.fixed32_taw_real_event_arm is not None
+                else (
+                    args.fixed32_bm8_real_event_arm
+                    if args.fixed32_bm8_real_event_arm is not None
+                    else args.fixed32_cutlass_real_event_arm
+                )
             )
         )
         if arm_path is not None:
@@ -8388,7 +9428,9 @@ def main(argv: list[str] | None = None) -> int:
                     "fixed32 kernel real-task arm differs from the pinned "
                     "single-task SWE-Verified binding"
                 )
-            if args.fixed32_taw_real_event_arm is not None:
+            if args.fixed32_committer_layer_batch_real_event_arm is not None:
+                arm_type = _Fixed32CommitterLayerBatchRealTaskArm
+            elif args.fixed32_taw_real_event_arm is not None:
                 arm_type = _Fixed32TawRealTaskArm
             elif args.fixed32_bm8_real_event_arm is not None:
                 arm_type = _Fixed32Bm8RealTaskArm
@@ -8398,11 +9440,16 @@ def main(argv: list[str] | None = None) -> int:
                 path=arm_path,
                 instance_id=iid,
             )
-        fixed32_bracket_type = (
-            _Fixed32EagerKernelDiagnosticTaskBracket
-            if fixed32_eager_kernel_diagnostic
-            else _Fixed32TaskBracket
-        )
+        if fixed32_cfwd_qualification:
+            fixed32_bracket_type = (
+                _Fixed32CfwdQualificationTaskBracket
+                if fixed32_b1_diagnostic
+                else _Fixed32CfwdB4QualificationMemberTaskBracket
+            )
+        elif fixed32_eager_kernel_diagnostic:
+            fixed32_bracket_type = _Fixed32EagerKernelDiagnosticTaskBracket
+        else:
+            fixed32_bracket_type = _Fixed32TaskBracket
         fixed32_bracket = (
             fixed32_bracket_type(
                 client=fixed32_client,
@@ -8431,6 +9478,7 @@ def main(argv: list[str] | None = None) -> int:
                     skip_existing=args.skip_existing,
                     fixed32_bracket=fixed32_bracket,
                     fixed32_b1_diagnostic=fixed32_b1_diagnostic,
+                    fixed32_cfwd_qualification=fixed32_cfwd_qualification,
                 )
             except Fixed32BoundaryError:
                 raise
@@ -8501,11 +9549,14 @@ def main(argv: list[str] | None = None) -> int:
                 for res in ex.map(_job, instance_ids):
                     summaries.append(res)
 
-    _run_with_fixed32_taw_campaign_arm(
-        arm=taw_campaign_arm,
-        artifact_path=taw_campaign_arm_artifact_path,
-        action=_run_jobs,
-    )
+    if cfwd_campaign_bracket is not None:
+        cfwd_campaign_bracket.run(_run_jobs)
+    else:
+        _run_with_fixed32_taw_campaign_arm(
+            arm=taw_campaign_arm,
+            artifact_path=taw_campaign_arm_artifact_path,
+            action=_run_jobs,
+        )
 
     if fixed32_enabled and serving_batch == 4:
         assert campaign_metrics_pre_path is not None
@@ -8519,12 +9570,16 @@ def main(argv: list[str] | None = None) -> int:
             campaign_metrics_pre_path=campaign_metrics_pre_path,
             campaign_metrics_post_path=campaign_metrics_post_path,
         )
-        _autocommit_fixed32_campaign_artifacts(
-            dataset_out=dataset_out,
-            per_task_root=per_task_root,
-            instance_ids=instance_ids,
-            taw_campaign_arm_artifact_path=taw_campaign_arm_artifact_path,
-        )
+        # Qualification contains task traces and is not itself a publishable
+        # timing unit. Its reduced artifact must be produced explicitly after
+        # review; never let the generic campaign autocommitter sweep raw output.
+        if cfwd_campaign_bracket is None:
+            _autocommit_fixed32_campaign_artifacts(
+                dataset_out=dataset_out,
+                per_task_root=per_task_root,
+                instance_ids=instance_ids,
+                taw_campaign_arm_artifact_path=taw_campaign_arm_artifact_path,
+            )
 
     ended_at = _iso_now()
     summary = _aggregate(
@@ -8535,7 +9590,61 @@ def main(argv: list[str] | None = None) -> int:
         ended_at=ended_at,
         model_name=args.model_name,
     )
-    if fixed32_b1_diagnostic:
+    if fixed32_cfwd_qualification:
+        if cfwd_campaign_bracket is not None:
+            campaign_payload = cfwd_campaign_bracket.as_dict()
+            qualification = campaign_payload.get("qualification_coverage")
+            coverage_complete = bool(
+                isinstance(qualification, dict)
+                and qualification.get("coverage_complete")
+            )
+            summary["fixed32_run_classification"] = {
+                "run_classification": (
+                    _FIXED32_CFWD_B4_QUALIFICATION_CLASSIFICATION
+                ),
+                "performance_measurement": False,
+                "timing_eligible": False,
+                "gate_eligible": False,
+                "floor_acceptance_eligible": False,
+                "process_local_qualification_only": True,
+                "durable_production_pass": False,
+                "timing_requires_same_server_process": True,
+                "same_process_timing_handoff_contract_implemented": True,
+                "same_process_timing_execution_implemented": False,
+                "coverage_complete": coverage_complete,
+                "campaign_qualification": campaign_payload,
+            }
+        else:
+            completed = []
+            for task in summaries:
+                boundary = task.get("fixed32_task_boundary")
+                qualification = (
+                    boundary.get("qualification_coverage")
+                    if isinstance(boundary, dict)
+                    else None
+                )
+                if isinstance(qualification, dict):
+                    completed.append(
+                        bool(qualification.get("coverage_complete"))
+                    )
+            summary["fixed32_run_classification"] = {
+                "run_classification": _FIXED32_CFWD_QUALIFICATION_CLASSIFICATION,
+                "performance_measurement": False,
+                "timing_eligible": False,
+                "gate_eligible": False,
+                "floor_acceptance_eligible": False,
+                "process_local_qualification_only": True,
+                "durable_production_pass": False,
+                "timing_requires_same_server_process": True,
+                "same_process_timing_handoff_contract_implemented": False,
+                "same_process_timing_execution_implemented": False,
+                "coverage_complete": bool(completed) and all(completed),
+            }
+        (dataset_out / "campaign_summary.json").write_text(
+            json.dumps(summary, indent=2),
+            encoding="utf-8",
+        )
+    elif fixed32_b1_diagnostic:
         summary["fixed32_run_classification"] = {
             "run_classification": "b1_diagnostic",
             "gate_eligible": False,

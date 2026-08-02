@@ -1,0 +1,44 @@
+{
+  "schema": "fr13.fixed32.cfwd_metadata_uniform_writer.source.v1",
+  "status": "source_static_only_codegen_byte_timing_pending",
+  "branch": "agent/fixed32-cfwd-metadata-uniform-writer-20260802",
+  "source_commit": "c94943b4887eca8bd1ef1857e69a8d11ce21ac9a",
+  "source_parent": "1fb253c23b64323453731f25cfd1bfff83265f22",
+  "metadata_fusion_implementation_commit": "bbfe2bfa6d30c1e3dfe48e6e00f68f793d28dd93",
+  "source_sha256": {
+    "kernel": "35a68f6535e7d6bbff79673f3ef09ac14c0f63cad3f6d7bb2b642f259bbaa59c",
+    "test_committer": "f5e83131a863c02f103665097372546f0ef01c3f0c4701da3b8608ca3017cdec",
+    "test_conv_wiring": "086bae40f65b986c0d51c49c52c47d24e594734b718598b9c39a47360d904d94"
+  },
+  "optimization": {
+    "writer_programs_per_request": 1,
+    "writer_predicate": "pid_l_zero_and_pid_c_zero",
+    "old_path_copy_form": "sixteen_scalar_load_store_pairs_masked_in_every_program",
+    "new_path_copy_form": "one_uniform_branch_one_vector_load_one_vector_store",
+    "new_length_copy_form": "one_scalar_store_inside_uniform_writer_branch",
+    "nonwriter_metadata_loads_inside_branch": 0,
+    "nonwriter_metadata_stores_inside_branch": 0,
+    "added_launches_per_event": 0,
+    "added_storage_bytes": 0,
+    "physical_rows_root_inclusive": 32,
+    "recurrence_changed": false,
+    "lease_changed": false,
+    "guarded_fallback_changed": false
+  },
+  "tests": {
+    "task_lifecycle_committer": "91_passed",
+    "final_full_preseed_and_conv_wiring": "65_passed",
+    "py_compile": "pass",
+    "ruff": "pass",
+    "diff_check": "pass"
+  },
+  "not_run": [
+    "Triton compile or code generation",
+    "GPU or Docker execution",
+    "real SWE-Verified byte qualification",
+    "real SWE-Verified timing",
+    "hardware-floor acceptance"
+  ],
+  "performance_evidence": false,
+  "acceptance_evidence": false
+}

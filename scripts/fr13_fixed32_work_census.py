@@ -95,11 +95,11 @@ from fr13_fixed32_topology import (
     WALK_CAP,
 )
 
-SCHEMA = "fr13-fixed32-work-census-v9"
-TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v9"
-REPORT_SCHEMA = "fr13-fixed32-work-census-report-v9"
-ARM_REPORT_SCHEMA = "fr13-fixed32-work-census-arm-report-v9"
-SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v9"
+SCHEMA = "fr13-fixed32-work-census-v12"
+TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v12"
+REPORT_SCHEMA = "fr13-fixed32-work-census-report-v12"
+ARM_REPORT_SCHEMA = "fr13-fixed32-work-census-arm-report-v12"
+SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v12"
 
 TAIL_MODE = "tail6_fixed32"
 HYDRA_MODE = "hydra27_fixed32"
@@ -219,6 +219,16 @@ REQUEST_KEY_PACK_ROUTE = "device_rowmap"
 KV_REMAP_ROUTE = "syncfree_target16_postsample_drafter1_postforward"
 CONV_COMMIT_ROUTE = "fixed32_direct_source_col0"
 CONV_COMMIT_SOURCE_ROWS = PHYSICAL_ROWS + GDN_CONV_KERNEL_SIZE
+CONV_ROW_GUARD_ROUTE = "fixed32_triton_alias3_ownerpath_physical32_v3"
+CONV_ROW_GUARD_PROGRAMS_PER_REQUEST = CONV_COMMIT_LAYERS
+CONV_ROW_GUARD_ALIAS_WIDTH = 3
+CONV_ROW_GUARD_COMPARE_CAPACITY = 16
+CONV_ROW_GUARD_PATH_PROGRAMS_PER_REQUEST = 1
+CONV_ROW_GUARD_PATH_VECTOR_LOADS_PER_REQUEST = 1
+CONV_ROW_GUARD_ALIAS_PROGRAMS_PER_EVENT = 1
+CONV_ROW_GUARD_ALIAS_VECTOR_LOADS_PER_EVENT = 1
+CONV_ROW_GUARD_SELECTED_ROW_LOADS_PER_PROGRAM = 0
+CONV_ROW_GUARD_PEER_TOPOLOGY_PROOF = "preseed_lease_audit"
 CONV_PREGATHER_ROUTE = "in_graph_preconsume"
 COMMITTER_ROUTE = "fixed16_device_fill_graph"
 if TREE_ATTENTION_LAYERS + GDN_LAYERS != MODEL_LAYERS:
@@ -489,6 +499,22 @@ CONV_COMMIT_KEYS = frozenset(
         "committed_rows",
         "source_staging_reused",
         "source_pointer_entries",
+        "row_guard_route",
+        "row_guard_kernel_launches",
+        "row_guard_programs",
+        "row_guard_physical_rows",
+        "row_guard_path_capacity",
+        "row_guard_alias_width",
+        "row_guard_compare_capacity",
+        "row_guard_path_validation_programs",
+        "row_guard_path_vector_loads",
+        "row_guard_alias_validation_programs",
+        "row_guard_alias_vector_loads",
+        "row_guard_selected_row_loads",
+        "row_guard_peer_topology_proof",
+        "row_guard_torch_index_transforms",
+        "row_guard_async_scalar_reductions",
+        "row_guard_async_assertions",
         "full_node_writebacks",
         "conv_remaps",
         "host_syncs",
@@ -651,6 +677,7 @@ FIXED_WORK_SCOPE = {
         "taw.indexed_addresses_cache_atomic_contention_and_cycles",
         "tree_attn.kv_sequence_lengths_block_addresses_cache_and_cycles",
         "committer.accepted_path_gather_addresses_cache_and_cycles",
+        "committer.direct_ring_rows_root_plus_accepted_depth",
         "kv_remap.accepted_path_src_dst_addresses_cache_and_cycles",
     ],
 }
@@ -1787,6 +1814,38 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "committed_rows": conv_rows,
             "source_staging_reused": True,
             "source_pointer_entries": 48,
+            "row_guard_route": CONV_ROW_GUARD_ROUTE,
+            "row_guard_kernel_launches": 1,
+            "row_guard_programs": (
+                CONV_ROW_GUARD_PROGRAMS_PER_REQUEST * batch_size
+            ),
+            "row_guard_physical_rows": PHYSICAL_ROWS,
+            "row_guard_path_capacity": ACCEPTED_PATH_CAPACITY,
+            "row_guard_alias_width": CONV_ROW_GUARD_ALIAS_WIDTH,
+            "row_guard_compare_capacity": CONV_ROW_GUARD_COMPARE_CAPACITY,
+            "row_guard_path_validation_programs": (
+                CONV_ROW_GUARD_PATH_PROGRAMS_PER_REQUEST * batch_size
+            ),
+            "row_guard_path_vector_loads": (
+                CONV_ROW_GUARD_PATH_VECTOR_LOADS_PER_REQUEST * batch_size
+            ),
+            "row_guard_alias_validation_programs": (
+                CONV_ROW_GUARD_ALIAS_PROGRAMS_PER_EVENT
+            ),
+            "row_guard_alias_vector_loads": (
+                CONV_ROW_GUARD_ALIAS_VECTOR_LOADS_PER_EVENT
+            ),
+            "row_guard_selected_row_loads": (
+                CONV_ROW_GUARD_SELECTED_ROW_LOADS_PER_PROGRAM
+                * CONV_ROW_GUARD_PROGRAMS_PER_REQUEST
+                * batch_size
+            ),
+            "row_guard_peer_topology_proof": (
+                CONV_ROW_GUARD_PEER_TOPOLOGY_PROOF
+            ),
+            "row_guard_torch_index_transforms": 0,
+            "row_guard_async_scalar_reductions": 1,
+            "row_guard_async_assertions": 1,
             "full_node_writebacks": 0,
             "conv_remaps": 0,
             "host_syncs": 0,
@@ -1852,6 +1911,17 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             f"{source}.committer.fused_layer_calls: expected 1 or "
             f"{GDN_LAYERS}, got {committer_fused_calls}"
         )
+    expected_committer_neutralizations = (
+        0 if committer_fused_calls == 1 else COMMITTER_NEUTRALIZE_OPS
+    )
+    expected_committer_ring_gathers = (
+        0 if committer_fused_calls == 1 else COMMITTER_RING_GATHER_OPS
+    )
+    expected_committer_ring_rows = (
+        0
+        if committer_fused_calls == 1
+        else COMMITTER_RING_LAYER_PATH_ROWS_PER_REQUEST * batch_size
+    )
     committer = _fixed_section(
         committer_raw,
         keys=COMMITTER_KEYS,
@@ -1861,11 +1931,9 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "requests": batch_size,
             "path_capacity": COMMITTER_PATH_CAPACITY,
             "layout_slots": COMMITTER_PATH_CAPACITY * batch_size,
-            "ring_gather_ops": COMMITTER_RING_GATHER_OPS,
-            "ring_layer_path_rows": (
-                COMMITTER_RING_LAYER_PATH_ROWS_PER_REQUEST * batch_size
-            ),
-            "neutralize_ops": COMMITTER_NEUTRALIZE_OPS,
+            "ring_gather_ops": expected_committer_ring_gathers,
+            "ring_layer_path_rows": expected_committer_ring_rows,
+            "neutralize_ops": expected_committer_neutralizations,
             "fused_layer_calls": committer_fused_calls,
             "graph_replays": 1,
             "graph_captures": 0,
@@ -2173,6 +2241,55 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             ),
             "source_staging_reused": conv_commit["source_staging_reused"],
             "source_pointer_entries": conv_commit["source_pointer_entries"],
+            "row_guard_route": conv_commit["row_guard_route"],
+            "row_guard_kernel_launches_per_event": conv_commit[
+                "row_guard_kernel_launches"
+            ],
+            "row_guard_programs_per_request": (
+                int(conv_commit["row_guard_programs"]) // batch_size
+            ),
+            "row_guard_physical_rows": conv_commit[
+                "row_guard_physical_rows"
+            ],
+            "row_guard_path_capacity": conv_commit[
+                "row_guard_path_capacity"
+            ],
+            "row_guard_alias_width": conv_commit[
+                "row_guard_alias_width"
+            ],
+            "row_guard_compare_capacity": conv_commit[
+                "row_guard_compare_capacity"
+            ],
+            "row_guard_path_validation_programs_per_request": (
+                int(conv_commit["row_guard_path_validation_programs"])
+                // batch_size
+            ),
+            "row_guard_path_vector_loads_per_request": (
+                int(conv_commit["row_guard_path_vector_loads"])
+                // batch_size
+            ),
+            "row_guard_alias_validation_programs_per_event": conv_commit[
+                "row_guard_alias_validation_programs"
+            ],
+            "row_guard_alias_vector_loads_per_event": conv_commit[
+                "row_guard_alias_vector_loads"
+            ],
+            "row_guard_selected_row_loads_per_program": (
+                int(conv_commit["row_guard_selected_row_loads"])
+                // int(conv_commit["row_guard_programs"])
+            ),
+            "row_guard_peer_topology_proof": conv_commit[
+                "row_guard_peer_topology_proof"
+            ],
+            "row_guard_torch_index_transforms": conv_commit[
+                "row_guard_torch_index_transforms"
+            ],
+            "row_guard_async_scalar_reductions_per_event": conv_commit[
+                "row_guard_async_scalar_reductions"
+            ],
+            "row_guard_async_assertions_per_event": conv_commit[
+                "row_guard_async_assertions"
+            ],
             "full_node_writebacks": conv_commit["full_node_writebacks"],
             "conv_remaps": conv_commit["conv_remaps"],
             "host_syncs": conv_commit["host_syncs"],
@@ -3444,6 +3561,38 @@ def reference_event(
             "committed_rows": CONV_COMMIT_LAYERS * batch_size,
             "source_staging_reused": True,
             "source_pointer_entries": 48,
+            "row_guard_route": CONV_ROW_GUARD_ROUTE,
+            "row_guard_kernel_launches": 1,
+            "row_guard_programs": (
+                CONV_ROW_GUARD_PROGRAMS_PER_REQUEST * batch_size
+            ),
+            "row_guard_physical_rows": PHYSICAL_ROWS,
+            "row_guard_path_capacity": ACCEPTED_PATH_CAPACITY,
+            "row_guard_alias_width": CONV_ROW_GUARD_ALIAS_WIDTH,
+            "row_guard_compare_capacity": CONV_ROW_GUARD_COMPARE_CAPACITY,
+            "row_guard_path_validation_programs": (
+                CONV_ROW_GUARD_PATH_PROGRAMS_PER_REQUEST * batch_size
+            ),
+            "row_guard_path_vector_loads": (
+                CONV_ROW_GUARD_PATH_VECTOR_LOADS_PER_REQUEST * batch_size
+            ),
+            "row_guard_alias_validation_programs": (
+                CONV_ROW_GUARD_ALIAS_PROGRAMS_PER_EVENT
+            ),
+            "row_guard_alias_vector_loads": (
+                CONV_ROW_GUARD_ALIAS_VECTOR_LOADS_PER_EVENT
+            ),
+            "row_guard_selected_row_loads": (
+                CONV_ROW_GUARD_SELECTED_ROW_LOADS_PER_PROGRAM
+                * CONV_ROW_GUARD_PROGRAMS_PER_REQUEST
+                * batch_size
+            ),
+            "row_guard_peer_topology_proof": (
+                CONV_ROW_GUARD_PEER_TOPOLOGY_PROOF
+            ),
+            "row_guard_torch_index_transforms": 0,
+            "row_guard_async_scalar_reductions": 1,
+            "row_guard_async_assertions": 1,
             "full_node_writebacks": 0,
             "conv_remaps": 0,
             "host_syncs": 0,
@@ -4311,6 +4460,56 @@ def run_self_test() -> dict[str, Any]:
         "conv-commit-source-staging",
         ("conv_commit", "source_staging_reused"),
         False,
+    )
+    event_tamper(
+        "conv-commit-row-guard-programs",
+        ("conv_commit", "row_guard_programs"),
+        47,
+    )
+    event_tamper(
+        "conv-commit-row-guard-index-transform",
+        ("conv_commit", "row_guard_torch_index_transforms"),
+        1,
+    )
+    event_tamper(
+        "conv-commit-row-guard-alias-width",
+        ("conv_commit", "row_guard_alias_width"),
+        16,
+    )
+    event_tamper(
+        "conv-commit-row-guard-compare-capacity",
+        ("conv_commit", "row_guard_compare_capacity"),
+        32,
+    )
+    event_tamper(
+        "conv-commit-row-guard-path-programs",
+        ("conv_commit", "row_guard_path_validation_programs"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-row-guard-path-loads",
+        ("conv_commit", "row_guard_path_vector_loads"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-row-guard-alias-programs",
+        ("conv_commit", "row_guard_alias_validation_programs"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-row-guard-alias-loads",
+        ("conv_commit", "row_guard_alias_vector_loads"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-row-guard-selected-row-loads",
+        ("conv_commit", "row_guard_selected_row_loads"),
+        48,
+    )
+    event_tamper(
+        "conv-commit-row-guard-peer-proof",
+        ("conv_commit", "row_guard_peer_topology_proof"),
+        "event_alias_reload",
     )
     event_tamper(
         "conv-commit-full-writeback",

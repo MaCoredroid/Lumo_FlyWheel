@@ -1,0 +1,28 @@
+Source commit: 8ece7de91e3ab054275448653c9d3b72ba5e7d6c
+
+Host-only checks:
+- AST parse of changed kernel, observer, census, schema consumer, and tests: pass
+- Focused physical32 row-guard, conv-row-guard, conv-wiring, committer, and pregather suite: 64 passed in 2.94s
+- Fixed32 work-census v10 self-test: PASS; 170 tamper tests passed
+- git diff --check: pass
+
+Static equivalence coverage:
+- B1 and B4 valid fixtures
+- null and out-of-range SSI rows
+- invalid alias ids
+- accepted lengths below zero and above 11
+- invalid active path nodes
+- duplicate physical destinations
+- ignored inactive path padding
+
+Known unrelated baseline checks:
+- The draft-head production suite retained two pre-existing failures: one stale launcher-string assertion and one stale unified-patcher source hash receipt. They are not used as evidence for this candidate.
+- The observer patcher full self-test retained its pre-existing conv-runtime fixture drift and is not used as evidence for this candidate.
+
+Not run:
+- Triton/CUDA compilation or code generation
+- SASS/resource inspection
+- Docker or GPU execution
+- synthetic performance probes
+- real SWE-Verified byte qualification or timing
+- hardware-floor or one-sided U95 acceptance measurement

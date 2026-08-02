@@ -1,0 +1,27 @@
+Focused source tests:
+
+  149 passed in 2.22s
+
+Files:
+
+  tests/test_fr13_fixed32_committer_layer_batch.py
+  tests/test_fr13_fixed32_gdn_schedule.py
+  tests/test_fr13_fixed32_final_full_preseed.py
+  tests/test_fr13_fixed32_conv_commit_wiring.py
+  tests/test_fr13_fixed32_taw_exact_commit_kernel.py
+  tests/test_fr13_fixed32_task_boundary_snapshot.py
+  tests/test_fr13_fixed32_floor_propagation.py
+  tests/test_fr13_fixed32_b4_campaign_provenance.py
+  tests/test_fr13_fixed32_taw_real_task_arm.py
+
+Additional checks:
+
+  Python compile: pass
+  Ruff before final boundary hardening: pass
+  Ruff final shell: unavailable
+  git diff --check: pass
+
+Baseline note:
+
+  tests/test_fr10_phase4_sampled_committer_wiring.py has 12 passes and three
+  failures at both base 080c417ed and this candidate source.

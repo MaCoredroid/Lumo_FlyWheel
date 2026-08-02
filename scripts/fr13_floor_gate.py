@@ -95,6 +95,9 @@ class GateError(RuntimeError):
     """An input artifact failed a fail-closed gate."""
 
 
+FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = 0x0FFF
+
+
 CANONICAL_TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
@@ -1322,6 +1325,9 @@ def validate_runtime_boundary_snapshot(
             "all_batches_ready",
             "captures",
             "fast_route_ready",
+            "layer_batch_gate_attempts_by_batch",
+            "layer_batch_gate_coverage_mask_by_batch",
+            "layer_batch_gate_passed_by_batch",
             "maximum_ready_capacity",
             "nonpure_committer_replays_by_batch",
             "nonpure_committer_replays_enqueued",
@@ -1381,6 +1387,47 @@ def validate_runtime_boundary_snapshot(
         expected_keys=batch_keys,
         label=f"{path}:committer.actual_replays_by_batch",
     )
+    layer_batch_gate_passed_by_batch = strict_nonnegative_int_map(
+        committer["layer_batch_gate_passed_by_batch"],
+        expected_keys=set(expected_ready_capacities),
+        label=f"{path}:committer.layer_batch_gate_passed_by_batch",
+    )
+    layer_batch_gate_attempts_by_batch = strict_nonnegative_int_map(
+        committer["layer_batch_gate_attempts_by_batch"],
+        expected_keys=set(expected_ready_capacities),
+        label=f"{path}:committer.layer_batch_gate_attempts_by_batch",
+    )
+    layer_batch_gate_coverage_mask_by_batch = strict_nonnegative_int_map(
+        committer["layer_batch_gate_coverage_mask_by_batch"],
+        expected_keys=set(expected_ready_capacities),
+        label=f"{path}:committer.layer_batch_gate_coverage_mask_by_batch",
+    )
+    if any(
+        value not in (0, 1)
+        for value in layer_batch_gate_passed_by_batch.values()
+    ):
+        raise GateError(
+            f"{path}: committer layer-batch gate pass state is not boolean"
+        )
+    expected_full_coverage = {
+        key: FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        for key in expected_ready_capacities
+    }
+    if layer_batch_gate_coverage_mask_by_batch != expected_full_coverage:
+        raise GateError(
+            f"{path}: committer layer-batch accepted-length coverage is "
+            "incomplete before measurement"
+        )
+    if layer_batch_gate_passed_by_batch != {
+        key: int(
+            layer_batch_gate_coverage_mask_by_batch[key]
+            == FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK
+        )
+        for key in expected_ready_capacities
+    }:
+        raise GateError(
+            f"{path}: committer layer-batch gate pass/coverage state diverged"
+        )
     nonpure_by_batch = strict_nonnegative_int_map(
         committer["nonpure_committer_replays_by_batch"],
         expected_keys=batch_keys,
@@ -1527,6 +1574,15 @@ def validate_runtime_boundary_snapshot(
         "events_sha256": expected_events_hash,
         "boot_warm": dict(boot_warm),
         "committer": {
+            "layer_batch_gate_attempts_by_batch": (
+                layer_batch_gate_attempts_by_batch
+            ),
+            "layer_batch_gate_coverage_mask_by_batch": (
+                layer_batch_gate_coverage_mask_by_batch
+            ),
+            "layer_batch_gate_passed_by_batch": (
+                layer_batch_gate_passed_by_batch
+            ),
             "actual_replays_enqueued": committer[
                 "actual_replays_enqueued"
             ],
@@ -5066,6 +5122,31 @@ def validate_flush_chain(
             runtime_by_generation[ack["generation"]] = runtime_reports[
                 snapshot
             ]
+
+        if (
+            runtime_reports["pre"]["committer"][
+                "layer_batch_gate_attempts_by_batch"
+            ]
+            != runtime_reports["post"]["committer"][
+                "layer_batch_gate_attempts_by_batch"
+            ]
+        ):
+            raise GateError(
+                f"{boundary_path}: measured task interval attempted a committer "
+                "layer-batch byte gate"
+            )
+        if (
+            runtime_reports["pre"]["committer"][
+                "layer_batch_gate_coverage_mask_by_batch"
+            ]
+            != runtime_reports["post"]["committer"][
+                "layer_batch_gate_coverage_mask_by_batch"
+            ]
+        ):
+            raise GateError(
+                f"{boundary_path}: measured task interval changed committer "
+                "layer-batch accepted-length coverage"
+            )
 
         metadata_path = task_dir / "runner_metadata.json"
         metadata = exact_json(metadata_path, label=str(metadata_path))

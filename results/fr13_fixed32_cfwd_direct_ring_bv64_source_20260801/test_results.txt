@@ -1,0 +1,14 @@
+Fixed32 CFWD direct-ring BV64 source verification (2026-08-01 UTC)
+
+CUDA_VISIBLE_DEVICES='' /home/mark/lumoFlyWheel-b4-compactionfix-rerun/.venv/bin/python -m pytest -q \
+  tests/test_fr13_fixed32_taw_real_task_arm.py \
+  tests/test_fr13_fixed32_task_boundary_snapshot.py \
+  tests/test_fr13_fixed32_committer_layer_batch.py
+
+84 passed in 0.45s
+
+python -m py_compile changed Python files: pass
+git diff --check: pass
+
+No GPU compile, real-event byte qualification, or performance measurement is
+represented here.

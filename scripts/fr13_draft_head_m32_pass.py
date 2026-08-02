@@ -745,8 +745,8 @@ def validate_chat_traffic_audit(
         or census["request_step_memberships"] != expected_events
         or census["per_task_request_step_memberships"]
         != {EXPECTED_INSTANCE: expected_events}
-        or census["event_schema"] != "fr13-fixed32-work-census-v9"
-        or census["terminal_schema"] != "fr13-fixed32-work-census-terminal-v9"
+        or census["event_schema"] != "fr13-fixed32-work-census-v12"
+        or census["terminal_schema"] != "fr13-fixed32-work-census-terminal-v12"
         or task_auth["completed_logical_model_requests"] != trace_requests
         or task["dataset_record_sha256"] != EXPECTED_DATASET_RECORD_SHA256
         or task_auth["aborted_logical_requests"] != 0

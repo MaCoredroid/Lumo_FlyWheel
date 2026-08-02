@@ -1,0 +1,26 @@
+Source commit: bbfe2bfa6d30c1e3dfe48e6e00f68f793d28dd93
+
+Host-only checks on the final source commit:
+- task-arm + task-boundary + committer layer-batch suite: 90 passed
+- final FULL preseed/observer suite: 54 passed
+- conv commit wiring suite: 11 passed
+- Python AST parse of changed Python files: pass
+- bash -n on the serving launcher: pass
+- git diff --check: pass
+
+Static hash checks:
+- default direct-conv kernel equals parent source:
+  c98ee7605839e27a02fc2532ba2a3f1df0016ab21d29e55679335155b31bed66
+- armed and default conv-state bodies match:
+  de4c2592e5de56ab5b19f6b7f367d7bbad124e1fe022ee610ad287bbcdc76b96
+- established ordered recurrence hash remains unchanged:
+  d16ad65fe4affb85a85051bf8dc7530c17a34dd85826c05d6bd8adec67b1ce22
+
+Not run:
+- Triton or CUDA compile/code generation
+- SASS/resource inspection
+- Docker or GPU execution
+- real SWE-Verified B1/B4 byte qualification
+- real SWE-Verified B1/B4 timing
+- hardware-floor or one-sided U95 acceptance measurement
+- synthetic probes
