@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 
-CANDIDATE = "fixed32_cfwd_native_keygroup_triton_scalar_cuda_v4"
+CANDIDATE = "fixed32_cfwd_native_keygroup_suffix_zero_cuda_v5"
 SELECTOR_ENV = "FR13_FIXED32_CFWD_NATIVE_KEYGROUP_PRECOMPUTE_CUDA"
 SELECTOR_VALUE = "diagnostic"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
@@ -18,7 +18,7 @@ OPERATOR = "_C::fr13_fixed32_cfwd_native_fullvalue"
 BINARY_BINDING_SCHEMA = "fr13.fixed32.cfwd_native_keygroup_binary.v1"
 CUDA_SOURCE_PATH = "native/fr13_fixed32_cfwd_native_fullvalue.cu"
 CUDA_SOURCE_SHA256 = (
-    "5699ab062624bd2f6368143c48068bfccf1f9c3b5629e243d92616b94359bc54"
+    "aaafab67be3754825109879b14033a892a87c4ae0b32da9d8d5106f903a2b0f9"
 )
 PATCHER_SOURCE_PATH = "scripts/fr13_patch_vllm_cfwd_native_fullvalue_cuda.py"
 PATCHER_SOURCE_SHA256 = (
@@ -306,6 +306,7 @@ def resource_contract(batch_size: int) -> dict[str, object]:
         "state_hbm_traffic_removed": False,
         "gate_coefficients_precomputed": True,
         "final_bank_store_dtype": "float32",
+        "fixed16_inactive_suffix_collapse": "finite_state_fadd_positive_zero",
         "compile_gate": {
             "architecture": "sm_121a",
             "registers_per_thread_at_most": 64,

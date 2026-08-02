@@ -283,7 +283,11 @@ void fixed32_cfwd_native_fullvalue_kernel(
         const int state_inner_offset =
             (store_value_head * kDimV + value_index) * kDimK + key_index;
         const int64_t state_offset = store_state_row_offset + state_inner_offset;
-        store_state_bank[state_offset] = state[value_lane][key_quad];
+        // The fixed-16 reference always runs at least four zero-K suffix steps.
+        // For finite state, their net state effect is this signed-zero
+        // normalization at the final FMA boundary.
+        store_state_bank[state_offset] =
+            __fadd_rn(state[value_lane][key_quad], 0.0f);
       }
     }
   }

@@ -19,6 +19,7 @@ EXPECTED_RESOURCES = {
     "local_bytes": 0,
 }
 EXPECTED_SASS_COUNTS = {
+    "FADD": 257,
     "MUFU.EX2": 0,
     "MUFU.RSQ": 3,
     "MUFU.RCP": 1,
@@ -27,6 +28,7 @@ EXPECTED_SASS_COUNTS = {
     "SHFL.DOWN": 0,
     "FFMA": 70,
 }
+EXPECTED_SIGNED_ZERO_FADD_RZ = 64
 
 
 def _opcode_count(sass: str, opcode: str) -> int:
@@ -81,12 +83,21 @@ def check_codegen(resource_report: str, sass: str) -> dict[str, object]:
         raise RuntimeError(
             f"native key-group precompute CFWD SASS shape drift: {sass_counts}"
         )
+    signed_zero_fadd_rz_count = len(
+        re.findall(r"\bFADD\s+R\d+,\s+RZ,\s+R\d+\b", sass)
+    )
+    if signed_zero_fadd_rz_count != EXPECTED_SIGNED_ZERO_FADD_RZ:
+        raise RuntimeError(
+            "native key-group precompute CFWD signed-zero normalization "
+            f"drift: {signed_zero_fadd_rz_count}"
+        )
 
     return {
         "architecture": "sm_121a",
         "resources": resources,
         "forbidden_sass_counts": forbidden_counts,
         "sass_counts": sass_counts,
+        "signed_zero_fadd_rz_count": signed_zero_fadd_rz_count,
         "contract_pass": True,
     }
 

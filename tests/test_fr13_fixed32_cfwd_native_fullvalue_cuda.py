@@ -137,6 +137,9 @@ def test_resource_contract_maps_each_key_group_to_one_cta(batch: int) -> None:
     assert contract["persistent_shared_state_elements"] == 0
     assert contract["state_hbm_traffic_removed"] is False
     assert contract["final_bank_store_dtype"] == "float32"
+    assert contract["fixed16_inactive_suffix_collapse"] == (
+        "finite_state_fadd_positive_zero"
+    )
     assert contract["compile_gate"] == {
         "architecture": "sm_121a",
         "registers_per_thread_at_most": 64,
@@ -442,7 +445,9 @@ def test_cuda_source_preserves_ordered_active_recurrence_and_fp32_store() -> Non
         "state[value_lane][3]"
     )
     assert "float* bank_anchor" in source
-    assert "state_bank[state_offset] = state[value_lane][key_quad];" in source
+    assert "store_state_bank[state_offset] =\n            __fadd_rn(" in source
+    assert "state[value_lane][key_quad], 0.0f);" in source
+    assert "fixed-16 reference always runs at least four zero-K suffix" in source
     assert "__float2bfloat16" not in source
     assert "requires FP32 state banks" in source
     assert source.count("load_state_bank[state_offset] + 0.0f;") == 1
@@ -515,11 +520,16 @@ Resource usage:
  Function mangled_{checker.KERNEL_MARKER}_symbol:
   REG:64 STACK:0 SHARED:7592 LOCAL:0 CONSTANT[0]:1084
 """
-    sass = "\n".join(
-        opcode
-        for opcode, count in checker.EXPECTED_SASS_COUNTS.items()
-        for _ in range(count)
-    )
+    sass_lines = []
+    for opcode, count in checker.EXPECTED_SASS_COUNTS.items():
+        if opcode == "FADD":
+            sass_lines.extend(
+                "FADD R1, RZ, R2"
+                for _ in range(checker.EXPECTED_SIGNED_ZERO_FADD_RZ)
+            )
+            count -= checker.EXPECTED_SIGNED_ZERO_FADD_RZ
+        sass_lines.extend(opcode for _ in range(count))
+    sass = "\n".join(sass_lines)
     return resource_report, sass
 
 
@@ -534,6 +544,7 @@ def test_codegen_checker_accepts_pinned_sm121_precompute_contract() -> None:
         "STL": 0,
         "CALL": 0,
     }
+    assert receipt["signed_zero_fadd_rz_count"] == 64
 
 
 @pytest.mark.parametrize("forbidden", ["LDL.64", "STL.64", "CALL"])
@@ -551,6 +562,11 @@ def test_codegen_checker_rejects_resource_or_math_drift() -> None:
         checker.check_codegen(resource_report.replace("REG:64", "REG:63"), sass)
     with pytest.raises(RuntimeError, match="SASS shape drift"):
         checker.check_codegen(resource_report, f"{sass}\nMUFU.EX2")
+    with pytest.raises(RuntimeError, match="signed-zero normalization drift"):
+        checker.check_codegen(
+            resource_report,
+            sass.replace("FADD R1, RZ, R2", "FADD R1, R3, R2", 1),
+        )
 
 
 def test_codegen_checker_cli_binds_source_object_command_and_toolchain() -> None:
