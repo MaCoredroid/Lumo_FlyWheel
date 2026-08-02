@@ -479,6 +479,9 @@ def test_channel_serial_keeps_global_rows_coalesced_and_ordered() -> None:
     assert "bank_row * CONV_STRIDE_ROW + offs_c" in fragment
     assert "prior_base + C" in fragment
     assert "prior_base + 2 * C" in fragment
+    assert "weight_pair_01" in fragment
+    assert "weight_pair_23" in fragment
+    assert "tl.pointer_type(tl.uint64)" not in fragment
     assert "tl.arange(0, BLOCK_C)" in fragment
     assert "tl.arange(0, BLOCK_C)[:, None]" not in fragment
     assert "tl.arange(0, N)" not in fragment

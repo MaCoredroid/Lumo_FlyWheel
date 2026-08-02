@@ -741,15 +741,16 @@ def _fr13_fixed32_sfwd_channel_serial_kernel(
     prior_2 = tl.load(prior_base + 2 * C)
 
     weight_channels = conv_weights + offs_c * WIDTH
-    weight_quad = tl.load(weight_channels.to(tl.pointer_type(tl.uint64)))
-    weight_0 = weight_quad.to(tl.uint16).to(tl.bfloat16, bitcast=True)
-    weight_1 = (weight_quad >> 16).to(tl.uint16).to(
+    weight_pair_01 = tl.load(weight_channels.to(tl.pointer_type(tl.uint32)))
+    weight_pair_23 = tl.load(
+        (weight_channels + 2).to(tl.pointer_type(tl.uint32))
+    )
+    weight_0 = weight_pair_01.to(tl.uint16).to(tl.bfloat16, bitcast=True)
+    weight_1 = (weight_pair_01 >> 16).to(tl.uint16).to(
         tl.bfloat16, bitcast=True
     )
-    weight_2 = (weight_quad >> 32).to(tl.uint16).to(
-        tl.bfloat16, bitcast=True
-    )
-    weight_3 = (weight_quad >> 48).to(tl.uint16).to(
+    weight_2 = weight_pair_23.to(tl.uint16).to(tl.bfloat16, bitcast=True)
+    weight_3 = (weight_pair_23 >> 16).to(tl.uint16).to(
         tl.bfloat16, bitcast=True
     )
 

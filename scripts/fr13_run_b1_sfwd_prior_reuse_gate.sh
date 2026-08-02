@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One real SWE-Verified K64/root1 B1 byte gate for the register-local
-# channel-serial C64/W2 candidate.
+# channel-serial C128/W4 two-pair candidate.
 # The candidate is shadow-only and the incumbent tensors remain served.
 set -euo pipefail
 
@@ -130,8 +130,8 @@ printf '%s\n' \
   'production_enabled=false' \
   'physical_rows_per_request=32' \
   'conv_rows_per_program=32' \
-  'conv_block_c=64' \
-  'conv_num_warps=2' \
+  'conv_block_c=128' \
+  'conv_num_warps=4' \
   'topology_host_validation=exact_parent_each_launch' \
   'source_descriptor_device_validation=false' \
   'source_descriptor_launcher_argument=false' \

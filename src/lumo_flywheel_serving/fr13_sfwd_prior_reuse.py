@@ -28,10 +28,10 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
 )
 
 
-CANDIDATE = "fixed32_sfwd_channel_serial_r32_c64_w2_v1"
+CANDIDATE = "fixed32_sfwd_channel_serial_r32_c128_w4_u32x2_v1"
 ROWS_PER_PROGRAM = 32
-BLOCK_C = 64
-NUM_WARPS = 2
+BLOCK_C = 128
+NUM_WARPS = 4
 CONV_STATE_LEN = 34
 ENABLED_PATH = "/logs/fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
 REAL_EVENT_PATH = "/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
@@ -58,7 +58,7 @@ def fixed32_sfwd_prior_reuse_contract(
     conv_width: int,
     conv_state_len: int,
 ) -> dict[str, object]:
-    """Validate the closed rowgroup32/C64 prior-reuse geometry."""
+    """Validate the closed rowgroup32/C128 prior-reuse geometry."""
     batch = int(batch_size)
     rows = int(tree_rows)
     width = int(conv_width)
@@ -488,7 +488,7 @@ def launch_fixed32_sfwd_prior_reuse(
     batch_size: int,
     tree_rows: int,
 ) -> dict[str, object]:
-    """Launch the default-off rowgroup32/C64 prior-reuse candidate."""
+    """Launch the default-off rowgroup32/C128 prior-reuse candidate."""
     if _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES:
         raise RuntimeError("FR13 SFWD prior-reuse requires an exact fixed32 mode")
     _validate_fixed32_tree_parent(tree_parent)
