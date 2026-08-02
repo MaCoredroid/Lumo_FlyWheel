@@ -45,6 +45,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "divisor_static_stocktile_byte_ab",
         "identity_stage2_static",
         "identity_stage2_static_byte_ab",
+        "identity_stage2_pingpong_b1",
+        "identity_stage2_pingpong_b1_byte_ab",
         "persistent_b4_m128",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static",
@@ -73,6 +75,11 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.IDENTITY_STAGE2_CANDIDATE_SHA256,
         module.IDENTITY_STAGE2_CANDIDATE_SIZE,
         "identity_stage2_static",
+    )
+    assert module.candidate_identity("identity_stage2_pingpong_b1_byte_ab") == (
+        module.IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SHA256,
+        module.IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SIZE,
+        "identity_stage2_pingpong_b1",
     )
     assert module.B4_M128_CANDIDATE_SHA256 == (
         "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
@@ -255,6 +262,13 @@ def test_wide256_diagnostic_install_uses_its_own_pinned_identity(
             "identity_stage2_static_byte_ab",
             "identity_stage2_static",
             "identity_stage2_static",
+        ),
+        (
+            "IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SIZE",
+            "IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SHA256",
+            "identity_stage2_pingpong_b1_byte_ab",
+            "identity_stage2_pingpong_b1",
+            "identity_stage2_pingpong_b1",
         ),
     ),
 )

@@ -30,6 +30,10 @@ IDENTITY_STAGE2_CANDIDATE_SHA256 = (
     "fda710872a88d29b8c5d04f463f4e1f3149f919c494437fb49f5fb9620bb0c92"
 )
 IDENTITY_STAGE2_CANDIDATE_SIZE = 114_909_032
+IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SHA256 = (
+    "bab51a0f346fe3230e351004732a0cc41f1bd6c0732b238e3ae592f07f47e208"
+)
+IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SIZE = 115_315_576
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -58,6 +62,12 @@ DIVISOR_STATIC_B1_SELECTORS = frozenset(
 IDENTITY_STAGE2_SELECTORS = frozenset(
     {"identity_stage2_static", "identity_stage2_static_byte_ab"}
 )
+IDENTITY_STAGE2_PINGPONG_B1_SELECTORS = frozenset(
+    {
+        "identity_stage2_pingpong_b1",
+        "identity_stage2_pingpong_b1_byte_ab",
+    }
+)
 B4_M128_SELECTORS = frozenset({"persistent_b4_m128", "persistent_b4_m128_byte_ab"})
 STATIC_B4_M128_SELECTORS = frozenset(
     {"persistent_b4_m128_static", "persistent_b4_m128_static_byte_ab"}
@@ -68,6 +78,7 @@ CANDIDATE_SELECTORS = (
     | STATIC_PERSISTENT_B1_SELECTORS
     | DIVISOR_STATIC_B1_SELECTORS
     | IDENTITY_STAGE2_SELECTORS
+    | IDENTITY_STAGE2_PINGPONG_B1_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
 )
@@ -78,6 +89,7 @@ INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "static_persistent_stocktile",
     "divisor_static_stocktile",
     "identity_stage2_static",
+    "identity_stage2_pingpong_b1",
     "persistent_b4_m128_static",
 }
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
@@ -116,6 +128,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             IDENTITY_STAGE2_CANDIDATE_SHA256,
             IDENTITY_STAGE2_CANDIDATE_SIZE,
             "identity_stage2_static",
+        )
+    if selector in IDENTITY_STAGE2_PINGPONG_B1_SELECTORS:
+        return (
+            IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SHA256,
+            IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SIZE,
+            "identity_stage2_pingpong_b1",
         )
     if selector in B4_M128_SELECTORS:
         return B4_M128_CANDIDATE_SHA256, B4_M128_CANDIDATE_SIZE, "persistent_b4_m128"
@@ -388,6 +406,7 @@ def install_candidate(
             "static_persistent_stocktile",
             "divisor_static_stocktile",
             "identity_stage2_static",
+            "identity_stage2_pingpong_b1",
         }:
             raise ValueError(
                 "static B1 production remains unavailable until the K64/root "
