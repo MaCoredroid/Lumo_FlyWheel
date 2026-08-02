@@ -1491,6 +1491,107 @@ def _patch_fixed32_query_tile32_static_kv_strides(
     return True
 
 
+def _patch_fixed32_query_tile32_fused_initial_kv_page(
+    path: Path,
+    *,
+    fixed32_query_tile32: bool = False,
+) -> bool:
+    if not fixed32_query_tile32:
+        return False
+    text = path.read_text()
+    function_signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+    )
+    function_start = text.index(function_signature)
+    function_end = text.index(
+        "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout",
+        function_start,
+    )
+    function = text[function_start:function_end]
+    marker = (
+        "// FR13_FA2_QROW32_FUSED_INITIAL_KV_PAGE: reuse the gated K/V page address."
+    )
+    if marker in function:
+        required = (
+            "StaticPagedKVStrides<Kernel_traits>::page",
+            "StaticPagedKVStrides<Kernel_traits>::row",
+            "const int64_t initial_kv_page_offset",
+            "tKgK.data() = gK.data() + initial_kv_page_offset;",
+            "tVgV.data() = gV.data() + initial_kv_page_offset;",
+        )
+        if function.count(marker) != 1 or any(item not in function for item in required):
+            raise RuntimeError("qrow32 fused initial K/V page specialization drifted")
+        return False
+
+    prerequisite = (
+        "// FR13_FA2_QROW32_STATIC_KV_STRIDES: canonical contiguous page layout."
+    )
+    if function.count(prerequisite) != 1:
+        raise RuntimeError(
+            "qrow32 fused initial K/V page requires the static KV stride specialization"
+        )
+
+    initial_page = r'''    if constexpr (kStaticPagedKV) {
+        auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
+        tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.k_batch_stride, params.k_row_stride, final_block_size);
+        tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.v_batch_stride, params.v_row_stride, final_block_size);
+    } else if (block_table != nullptr) {
+        auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
+        tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.k_batch_stride, params.k_row_stride, final_block_size);
+        tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.v_batch_stride, params.v_row_stride, final_block_size);
+    }
+'''
+    fused_initial_page = r'''    if constexpr (kStaticQueryBatch) {
+        // FR13_FA2_QROW32_FUSED_INITIAL_KV_PAGE: reuse the gated K/V page address.
+        constexpr int kStaticPageBlockSize =
+            StaticPagedKVBlockSize<Kernel_traits>::value;
+        constexpr int kStaticKVPageStride = static_cast<int>(
+            StaticPagedKVStrides<Kernel_traits>::page);
+        constexpr int kStaticKVRowStride = static_cast<int>(
+            StaticPagedKVStrides<Kernel_traits>::row);
+        static_assert(kStaticPageBlockSize == 1024);
+        static_assert(kStaticKVPageStride == 1024 * 4 * 256);
+        static_assert(kStaticKVRowStride == 4 * 256);
+        auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
+        const int64_t initial_kv_page_offset =
+            flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(
+                tidx, n_block_max - 1, kStaticPageBlockSize, block_table,
+                kStaticKVPageStride, kStaticKVRowStride, final_block_size);
+        tKgK.data() = gK.data() + initial_kv_page_offset;
+        tVgV.data() = gV.data() + initial_kv_page_offset;
+    } else if constexpr (kStaticPagedKV) {
+        auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
+        tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.k_batch_stride, params.k_row_stride, final_block_size);
+        tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.v_batch_stride, params.v_row_stride, final_block_size);
+    } else if (block_table != nullptr) {
+        auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
+        tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.k_batch_stride, params.k_row_stride, final_block_size);
+        tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.v_batch_stride, params.v_row_stride, final_block_size);
+    }
+'''
+    if function.count(initial_page) != 1:
+        raise RuntimeError(
+            "split-KV initial K/V page anchor drifted: expected one, found "
+            f"{function.count(initial_page)}"
+        )
+    function = function.replace(initial_page, fused_initial_page, 1)
+    text = text[:function_start] + function + text[function_end:]
+    path.write_text(text)
+    return True
+
+
 def _patch_fixed32_query_translation_unit(
     path: Path,
     *,
@@ -1831,6 +1932,13 @@ def patch_fa2_source(
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_static_kv_strides(
+            files["flash_fwd_kernel.h"],
+            fixed32_query_tile32=fixed32_query_tile32,
+        )
+        or flash_fwd_kernel_changed
+    )
+    flash_fwd_kernel_changed = (
+        _patch_fixed32_query_tile32_fused_initial_kv_page(
             files["flash_fwd_kernel.h"],
             fixed32_query_tile32=fixed32_query_tile32,
         )

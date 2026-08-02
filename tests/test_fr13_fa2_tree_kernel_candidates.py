@@ -329,7 +329,11 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "params.tree_bias_row_stride == 32" in api_gate
     assert "params.tree_bias_col_stride == 1" in api_gate
     assert "params.k_batch_stride == 1024 * 4 * 256" in api_gate
+    assert "params.k_row_stride == 4 * 256" in api_gate
+    assert "params.k_head_stride == 256" in api_gate
     assert "params.v_batch_stride == 1024 * 4 * 256" in api_gate
+    assert "params.v_row_stride == 4 * 256" in api_gate
+    assert "params.v_head_stride == 256" in api_gate
     assert "params.cu_seqlens_q != nullptr" in api_gate
     assert "params.cu_seqlens_k != nullptr" in api_gate
     assert "params.seqused_k != nullptr" in api_gate
@@ -1001,6 +1005,167 @@ def test_qrow32_static_paged_metadata_keeps_only_dynamic_sequence_length(
             assert static_row == original_nonnull_row
     for kv_head in range(4):
         assert kv_head * 256 == kv_head * (4 * 256 // 4)
+
+
+def test_qrow32_fuses_only_the_identical_initial_kv_page_address(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    kernel = tmp_path / "flash_fwd_kernel.h"
+    signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+        "(const Params &params) {\n"
+    )
+    initial_page = """    if constexpr (kStaticPagedKV) {
+        auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
+        tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.k_batch_stride, params.k_row_stride, final_block_size);
+        tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.v_batch_stride, params.v_row_stride, final_block_size);
+    } else if (block_table != nullptr) {
+        auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
+        tKgK.data() = gK.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.k_batch_stride, params.k_row_stride, final_block_size);
+        tVgV.data() = gV.data() + flash::resolve_thread_kv_page_slice_offset<Kernel_traits>(tidx, n_block_max - 1, params.page_block_size,
+            block_table, params.v_batch_stride, params.v_row_stride, final_block_size);
+    }
+"""
+    prerequisite = (
+        "    // FR13_FA2_QROW32_STATIC_KV_STRIDES: canonical contiguous page layout.\n"
+    )
+    body = (
+        "    constexpr bool kStaticQueryBatch = true;\n"
+        "    constexpr bool kStaticPagedKV = true;\n"
+        + prerequisite
+        + initial_page
+        + "    dynamic_k_length_sentinel(binfo.actual_seqlen_k);\n"
+        + "    mask_order_sentinel();\n"
+        + "    qk_pv_order_sentinel();\n"
+        + "}\n"
+    )
+    stock = (
+        signature
+        + body
+        + "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        + "template<typename Kernel_traits, bool Is_dropout\n"
+        + "struct UnrelatedForwardKernel;\n"
+    )
+    kernel.write_text(stock)
+
+    assert not module._patch_fixed32_query_tile32_fused_initial_kv_page(kernel)
+    assert kernel.read_text() == stock
+    assert module._patch_fixed32_query_tile32_fused_initial_kv_page(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    candidate = kernel.read_text()
+    marker = "FR13_FA2_QROW32_FUSED_INITIAL_KV_PAGE"
+    assert candidate.count(marker) == 1
+    static_branch = candidate.split(
+        "    if constexpr (kStaticQueryBatch) {", 1
+    )[1].split("    } else if constexpr (kStaticPagedKV) {", 1)[0]
+    qrow16_fallback = candidate.split(
+        "    } else if constexpr (kStaticPagedKV) {", 1
+    )[1].split("    } else if (block_table != nullptr) {", 1)[0]
+    generic_fallback = candidate.split(
+        "    } else if (block_table != nullptr) {", 1
+    )[1]
+    resolver = "resolve_thread_kv_page_slice_offset<Kernel_traits>"
+    assert static_branch.count(resolver) == 1
+    assert qrow16_fallback.count(resolver) == 2
+    assert generic_fallback.count(resolver) == 2
+    assert "params.k_batch_stride" not in static_branch
+    assert "params.v_batch_stride" not in static_branch
+    assert "params.k_row_stride" not in static_branch
+    assert "params.v_row_stride" not in static_branch
+    assert "StaticPagedKVStrides<Kernel_traits>::page" in static_branch
+    assert "StaticPagedKVStrides<Kernel_traits>::row" in static_branch
+    assert "tKgK.data() = gK.data() + initial_kv_page_offset;" in static_branch
+    assert "tVgV.data() = gV.data() + initial_kv_page_offset;" in static_branch
+    for sentinel in (
+        "dynamic_k_length_sentinel(binfo.actual_seqlen_k)",
+        "mask_order_sentinel()",
+        "qk_pv_order_sentinel()",
+    ):
+        assert candidate.count(sentinel) == stock.count(sentinel) == 1
+    assert not module._patch_fixed32_query_tile32_fused_initial_kv_page(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    assert kernel.read_text() == candidate
+
+    missing_prerequisite = tmp_path / "missing_static_strides.h"
+    missing_prerequisite.write_text(stock.replace(prerequisite, "", 1))
+    try:
+        module._patch_fixed32_query_tile32_fused_initial_kv_page(
+            missing_prerequisite,
+            fixed32_query_tile32=True,
+        )
+    except RuntimeError as error:
+        assert "requires the static KV stride specialization" in str(error)
+    else:
+        raise AssertionError("initial K/V page fusion accepted dynamic strides")
+
+    # Exhaust all qrow32 threads and K blocks across four nonidentity physical
+    # pages. Partial sizes cover every clamp boundary used by the final tile.
+    block_table = (7, 3, 11, 5)
+    k_page_stride = 1024 * 4 * 256
+    k_row_stride = 4 * 256
+    v_page_stride = 1024 * 4 * 256
+    v_row_stride = 4 * 256
+
+    def resolve_offset(
+        tidx: int,
+        n_block: int,
+        partial_size: int,
+        page_stride: int,
+        row_stride: int,
+    ) -> int:
+        col_offset = tidx % 8 * 8
+        block_row_offset = tidx // 8 * 8
+        final_row_offset = max(partial_size - 1, 0)
+        final_thread_row_offset = ((final_row_offset + 7) // 8) * 8
+        block_row_offset = min(block_row_offset, final_thread_row_offset)
+        page_offset = ((n_block & 15) << 6) + block_row_offset
+        virtual_page_idx = n_block >> 4
+        return (
+            block_table[virtual_page_idx] * page_stride
+            + page_offset * row_stride
+            + col_offset
+        )
+
+    for n_block in range(64):
+        for tidx in range(64):
+            for partial_size in range(1, 65):
+                fused_offset = resolve_offset(
+                    tidx,
+                    n_block,
+                    partial_size,
+                    k_page_stride,
+                    k_row_stride,
+                )
+                old_k_offset = resolve_offset(
+                    tidx,
+                    n_block,
+                    partial_size,
+                    k_page_stride,
+                    k_row_stride,
+                )
+                old_v_offset = resolve_offset(
+                    tidx,
+                    n_block,
+                    partial_size,
+                    v_page_stride,
+                    v_row_stride,
+                )
+                assert old_k_offset == old_v_offset == fused_offset
+                for kv_head in range(4):
+                    assert kv_head * 256 + old_k_offset == (
+                        kv_head * 256 + fused_offset
+                    )
 
 
 def test_qrow16_static_paged_path_folds_only_the_private_trait(
