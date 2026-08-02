@@ -1,0 +1,74 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_static_persistent_k64_root_reduced_verification.v1",
+  "verified_at_utc": "2026-08-02T05:58:51Z",
+  "status": "PASS",
+  "checks": {
+    "live_result_sha256_matches": true,
+    "issued_sidecar_sha256_matches": true,
+    "candidate_sha256_matches": true,
+    "live_result_validator_exit_code": 0,
+    "issued_sidecar_validator_exit_code": 0,
+    "comparison_records": 320,
+    "invocations_contiguous_zero_through_319": true,
+    "invocations_unique": true,
+    "all_records_byte_equal": true,
+    "mismatch_count_sum": 0,
+    "non_equal_record_count": 0,
+    "all_records_fixed_rows_32": true,
+    "all_records_real_task_bound": true,
+    "all_five_projection_shapes_observed": true,
+    "comparison_record_schema_unique": true
+  },
+  "per_shape_record_counts": [
+    {"n": 5120, "k": 6144, "records": 80},
+    {"n": 5120, "k": 17408, "records": 80},
+    {"n": 14336, "k": 5120, "records": 20},
+    {"n": 16384, "k": 5120, "records": 60},
+    {"n": 34816, "k": 5120, "records": 80}
+  ],
+  "authentication": {
+    "canonical_task_count": 1,
+    "proxy_accepted_logical_requests": 9,
+    "proxy_completed_logical_requests": 9,
+    "proxy_failed_attempts": 0,
+    "proxy_aborted_logical_requests": 0,
+    "proxy_active_requests_at_finalize": 0,
+    "engine_accepted_requests": 9,
+    "engine_completed_requests": 9,
+    "real_task_arm_state": "ended"
+  },
+  "task_lifecycle": {
+    "swe_orchestrator_exit_code": 0,
+    "task_verdict": "resolved",
+    "task_timed_out": false,
+    "serve_exit_code": 0,
+    "offload_proxy_stop_recorded": true,
+    "offload_proxy_stop_helper_propagates_remote_failures": false,
+    "independent_remote_proxy_listener_count": 0,
+    "independent_remote_proxy_process_count": 0,
+    "stale_remote_proxy_state_file_present": true,
+    "run_container_attested_and_removed": true,
+    "arm_end_recorded": true,
+    "runtime_manifest_launch_end_byte_equal": true,
+    "external_manifest_launch_end_byte_equal": true,
+    "post_run_named_container_count": 0,
+    "post_run_tagged_local_runtime_process_count": 0
+  },
+  "scope": {
+    "diagnostic_only": true,
+    "acceptance_valid": false,
+    "timing_claim": false,
+    "production_run": false,
+    "production_enabled": false,
+    "candidate_served": false
+  },
+  "package_policy": {
+    "raw_comparator_records_included": false,
+    "logs_included": false,
+    "prompts_or_model_outputs_included": false,
+    "task_patches_included": false,
+    "environment_payloads_included": false,
+    "secrets_included": false,
+    "process_or_container_ids_included": false
+  }
+}
