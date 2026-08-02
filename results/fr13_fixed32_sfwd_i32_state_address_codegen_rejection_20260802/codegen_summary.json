@@ -1,0 +1,59 @@
+{
+  "schema": "fr13.fixed32.sfwd_i32_state_address.codegen_rejection.v1",
+  "status": "OFFLINE_CODEGEN_REJECTED_RESOURCE_REGRESSION",
+  "source_commit": "a370d51fabb23f9efae00c6f83594df4a864a62b",
+  "parent_commit": "bdbb7f9ece38508634ad4808e7d3cf404435c134",
+  "compile_contract": {
+    "batches": [1, 4],
+    "rows_per_program": 32,
+    "block_c": 64,
+    "num_warps": 16,
+    "target": "sm_121a"
+  },
+  "parent": {
+    "registers": 54,
+    "static_sass_instructions": 382,
+    "encoded_sass_instructions": 400,
+    "ldg": 19,
+    "stg": 12,
+    "lds": 6,
+    "sts": 6,
+    "bar": 3,
+    "launch_shared_bytes": 4096
+  },
+  "candidate": {
+    "registers": 58,
+    "static_sass_instructions": 387,
+    "encoded_sass_instructions": 408,
+    "ldg": 19,
+    "stg": 12,
+    "lds": 6,
+    "sts": 6,
+    "bar": 3,
+    "launch_shared_bytes": 4096,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "ldl": 0,
+    "stl": 0,
+    "calls": 0
+  },
+  "candidate_minus_parent": {
+    "registers": 4,
+    "static_sass_instructions": 5,
+    "encoded_sass_instructions": 8,
+    "ldg": 0,
+    "stg": 0,
+    "lds": 0,
+    "sts": 0,
+    "bar": 0
+  },
+  "verification": {
+    "focused_tests": "22 passed",
+    "b1_b4_binary_identity": true,
+    "fresh_cache_binary_identity": true,
+    "gpu_or_docker_used": false,
+    "runtime_candidate_bound": false,
+    "performance_measured": false,
+    "floor_acceptance_eligible": false
+  }
+}
