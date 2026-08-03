@@ -1,40 +1,43 @@
-# Fixed32 ordered GDN real-task byte-gate route
+# Fixed32 ordered GDN real-task gate runners
 
-Verdict: **SOURCE_READY_REAL_TASK_UNQUALIFIED**.
+Verdict: **SOURCE_READY_REAL_TASK_RUNNERS_UNQUALIFIED**.
 
-This artifact records the default-off, fail-closed qualification route for
-`fixed32_gdn_single_launch_tree_v2`. The route is selected only with
-`FR13_FIXED32_GDN_PATH_BV_CANDIDATE=single_launch` and requires physical32,
-BV8, K64/root1, FULL CUDA graphs, metrics/ring/flags, and either the exact B1
-or exact B4 serving shape. Both Tail23 (`tail6_fixed32`) and Hydra27
-(`hydra27_fixed32`) are accepted as distinct mode-bound qualifications.
+This supersedes the earlier route-only source record. The default-off
+`fixed32_gdn_single_launch_tree_v2` diagnostic now has three fixed-scope real
+SWE-Verified entrypoints:
 
-The route reuses authenticated fixed32 ingress. Canonical B1 admits only
-`astropy__astropy-12907`; B4 admits only the canonical exact4 task set. The
-candidate comparison runs after the first measured FULL-graph replay. It runs
-the incumbent two-launch GDN and the ordered single-launch candidate from the
-same persistent state, compares output plus K/V/A/B rings, flags, and counter
-bytes, restores output and all persistent state, and serves the incumbent.
-B2/B3 graph shapes are deliberately skipped and cannot satisfy the gate.
+- Hydra27 B1 on the pinned one-task diagnostic.
+- Tail23 B4 on the canonical exact4 task set.
+- Hydra27 B4 on the canonical exact4 task set.
+
+Each process bakes exactly one expected batch. Captures are keyed by batch,
+FULL-graph identity, and graph signature; a B1 replay cannot consume or inherit
+a B4 capture or PASS. The live result binds mode, logical topology, batch,
+physical32, BV8, K64/root1, authenticated trigger task, graph signature, source,
+reference service, byte equality, and restored state.
+
+The reducer does not trust the live result alone. It requires clean task
+completion and terminal SWE verdicts, reconstructs the finalized authenticated
+traffic audit from raw per-task evidence, replays the exact Qwen compaction
+algebra and per-task/campaign proof bindings, validates finalized proxy and
+engine ingress, validates the complete graph/work census, and requires byte-for-
+byte stable runtime and external manifests from launch through end. Credentials
+are distinct for `hydra27:b1`, `tail23:b4`, and `hydra27:b4`.
 
 ## Production boundary
 
-The emitted live result is source-, mode-, batch-, topology-, physical32-,
-BV8-, K64/root1-, candidate-, and authenticated-task-bound. It records
-`production_eligible=false`. The production resolver accepts only prior
-numeric BV credentials and rejects `single_launch`; the launcher also removes
-the legacy direct-arm sidecar and does not forward its environment selector.
-Production and timing remain unavailable until real B1 and both Tail23 and
-Hydra27 exact4 credentials exist and are independently bound by a later
-production credential.
+Every live result and credential records `performance_measurement=false` and
+`acceptance_valid=false`. The production resolver still rejects
+`single_launch`. Production and timing remain unavailable until all three real
+GPU gates pass and a later production credential binds those disjoint results.
 
 ## Validation
 
-- GDN, ingress, graph-gate, schedule, exact-I/O, and BV8 compatibility suite:
-  `152 passed, 1 skipped` (the skip requires CUDA/Triton).
-- Full-preseed and SFWD compatibility suite: `83 passed`.
+- Combined GDN, runner/reducer, ingress, draft-head, timing-contract, and final
+  FULL-preseed compatibility suite: `275 passed, 1 skipped` (the skip requires
+  CUDA/Triton).
 - `bash -n`, `py_compile`, and `git diff --check`: pass.
 
-No GPU kernel, SWE-Verified task, synthetic probe, timing arm, TPS measurement,
-hardware-floor measurement, or production authorization ran for this artifact.
-
+No GPU kernel, SWE-Verified task, probe, timing arm, TPS measurement,
+hardware-floor measurement, or production authorization ran for this source
+artifact.

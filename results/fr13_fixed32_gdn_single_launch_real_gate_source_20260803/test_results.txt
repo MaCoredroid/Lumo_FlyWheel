@@ -1,17 +1,13 @@
-FR13 fixed32 ordered GDN real-task gate source validation
+FR13 fixed32 ordered GDN real-task runners and reducer validation
 
-PASS  152 passed, 1 skipped
-      GDN single-launch, path-BV, graph-gate, wide-BV, exact-I/O,
-      schedule, authenticated ingress, and BV8 production compatibility.
-      The skip is the existing CUDA/Triton-only exact-I/O test.
+PASS  275 passed, 1 skipped
+      GDN single-launch, path-BV, graph-gate, wide-BV, campaign reducer,
+      authenticated ingress/wiring, draft-head compatibility, timing contract,
+      and final FULL-preseed coverage. The skip is CUDA/Triton-only.
 
-PASS  83 passed
-      Fixed32 final FULL preseed and SFWD compatibility.
-
-PASS  bash -n scripts/fr13_launch_forked_fa2_tree_server.sh
-PASS  py_compile for changed Python source and tests
+PASS  bash -n for the server launcher, common runner, and three entrypoints
+PASS  py_compile for kernel, patcher, and campaign reducer
 PASS  git diff --check
 
-No GPU execution, real task, probe, byte result, timing result, or floor result
-was produced. This is a source qualification-route artifact only.
-
+No GPU execution, real task, probe, byte result, timing result, TPS result, or
+floor result was produced. This is a source-runner artifact only.
