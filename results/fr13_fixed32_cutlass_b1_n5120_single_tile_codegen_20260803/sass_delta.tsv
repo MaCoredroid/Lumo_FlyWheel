@@ -1,0 +1,6 @@
+dtype	kernel	encoded_instructions	nop_instructions	operational_instructions	branches	registers	stack_bytes	local_bytes	ldl	stl	call
+fp16	existing_onen_cooperative	568	28	540	29	168	0	0	0	0	0
+fp16	n5120_single_tile_cooperative	520	27	493	26	168	0	0	0	0	0
+bf16	existing_onen_cooperative	568	28	540	29	168	0	0	0	0	0
+bf16	n5120_single_tile_cooperative	520	27	493	26	168	0	0	0	0	0
+
