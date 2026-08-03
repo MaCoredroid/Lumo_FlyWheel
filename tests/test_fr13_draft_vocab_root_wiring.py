@@ -80,18 +80,15 @@ def test_subset_setup_precedes_and_remaps_every_root_selection() -> None:
     assert (
         "_fr10_logits, _fr10_root_map = _fr13_dvk_logits(" in snippet
     )
-    assert (
-        "draft_token_ids = _fr13_dvk_real_ids(\n"
-        "                    draft_token_ids, _fr10_root_map"
-    ) in snippet
+    root_prefix = snippet[: snippet.index("if _fr10_consumes_root_leaf:")]
+    assert root_prefix.count("draft_token_ids = _fr13_dvk_real_ids(") == 1
+    assert "draft_token_ids, _fr10_root_map" in root_prefix
     assert (
         "_fr10_root_topk = _fr13_dvk_real_ids(\n"
         "                        _fr10_root_topk, _fr10_root_map"
     ) in snippet
-    assert (
-        "_fr10_wide_topk[0] = _fr13_dvk_real_ids(\n"
-        "                        _fr10_wide_topk[0], _fr10_root_map"
-    ) in snippet
+    assert snippet.count("_fr10_wide_topk[0] = _fr13_dvk_real_ids(") == 1
+    assert "_fr10_wide_topk[0], _fr10_root_map" in snippet
     assert "[FR13_DRAFT_VOCAB_ROOT] engaged " in snippet
 
 
@@ -104,10 +101,8 @@ def test_every_loop_selection_uses_the_map_from_its_logits_call() -> None:
     assert snippet.count("_fr10_step_map = None") == 2
     assert "draft_token_ids, _fr10_step_map" in snippet
     assert snippet.count("_fr10_step_top2, _fr10_step_map") == 2
-    assert (
-        "_fr13_dg_wt = _fr13_dvk_real_ids(\n"
-        "                            _fr13_dg_wt, _fr10_step_map"
-    ) in snippet
+    assert snippet.count("_fr13_dg_wt = _fr13_dvk_real_ids(") == 1
+    assert "_fr13_dg_wt, _fr10_step_map" in snippet
     assert "\n            _fr13_dvk_map = (" not in snippet
     assert "if _fr13_dvk_map is not None:" not in snippet
 
