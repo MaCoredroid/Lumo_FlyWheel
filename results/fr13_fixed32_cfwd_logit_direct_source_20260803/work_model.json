@@ -1,7 +1,7 @@
 {
   "schema": "fr13.fixed32.cfwd_logit_direct.source_work_model.v1",
   "status": "source_only_default_off",
-  "source_commit": "48cfe5364c5e0b1910d3b49a2f3d8018dd21d0dd",
+  "source_commit": "20eb33a6508ccf2996b73d59e55da65fae48a06f",
   "candidate": "fixed32_cfwd_logit_direct_decisions_v1",
   "qualification": {
     "draft_vocab_k": 65536,

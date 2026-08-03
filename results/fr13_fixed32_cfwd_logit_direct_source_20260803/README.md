@@ -3,7 +3,7 @@
 Status: `SOURCE_ONLY`, `DEFAULT_OFF`, and not wired into the served arm.
 
 This artifact binds the fixed32 CFWD logit-direct decision candidate to source
-commit `48cfe5364c5e0b1910d3b49a2f3d8018dd21d0dd`. The specialization is limited
+commit `20eb33a6508ccf2996b73d59e55da65fae48a06f`. The specialization is limited
 to K64/root1, physical32, Tail23 (`tail6_fixed32`) or Hydra27
 (`hydra27_fixed32`), B1 or B4, verifier vocabulary 248,320, fanout three, and
 walk cap 12. It is bound only to the exact Tail23 mask `0x7a9ce7ff` and Hydra27
