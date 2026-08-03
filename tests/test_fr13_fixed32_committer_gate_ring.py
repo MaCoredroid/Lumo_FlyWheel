@@ -58,8 +58,8 @@ def test_gate_ring_arm_is_explicit_and_default_off(monkeypatch) -> None:
 def test_fixed32_producer_exports_existing_raw_gate_math_once() -> None:
     helper = _text("_tree_gdn_fixed32_single_launch_node")
     kernel = _text("_tree_gdn_kernel_fixed32_single_launch")
-    start = helper.index("        if GATE_EXPORT:")
-    end = helper.index("    b_k_inv_norm = 1.0", start)
+    start = helper.index("    if GATE_EXPORT:")
+    end = helper.index("    new_state, out_i = _gdn_node_step(", start)
     candidate = helper[start:end]
 
     assert "x = b_raw_a + b_dt_bias" in candidate

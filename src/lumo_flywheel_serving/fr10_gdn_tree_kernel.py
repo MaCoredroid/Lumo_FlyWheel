@@ -10230,28 +10230,6 @@ def _tree_gdn_fixed32_single_launch_node(
                 b_raw_b_in,
                 mask=n_ok & (pid_v == 0),
             )
-        if GATE_EXPORT:
-            x = b_raw_a + b_dt_bias
-            softplus_x = tl.where(
-                x <= 20.0,
-                tl.log(1.0 + tl.exp(x)),
-                x,
-            )
-            b_g = -tl.exp(b_a_log) * softplus_x
-            b_b = tl.sigmoid(b_raw_b.to(tl.float32))
-            gate_offset = (
-                (global_node * NUM_VH + pid_vh) * 2
-            )
-            tl.store(
-                ring_gate + gate_offset,
-                b_g,
-                mask=n_ok & (pid_v == 0),
-            )
-            tl.store(
-                ring_gate + gate_offset + 1,
-                b_b,
-                mask=n_ok & (pid_v == 0),
-            )
     b_k_inv_norm = 1.0
     if K_NORM_EXPORT:
         b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
@@ -10261,6 +10239,26 @@ def _tree_gdn_fixed32_single_launch_node(
             ring_k_norm + global_node * NUM_KH + pid_kh,
             b_k_inv_norm,
             mask=n_ok & (pid_v == 0) & (pid_vh % head_group == 0),
+        )
+    if GATE_EXPORT:
+        x = b_raw_a + b_dt_bias
+        softplus_x = tl.where(
+            x <= 20.0,
+            tl.log(1.0 + tl.exp(x)),
+            x,
+        )
+        b_g = -tl.exp(b_a_log) * softplus_x
+        b_b = tl.sigmoid(b_raw_b.to(tl.float32))
+        gate_offset = (global_node * NUM_VH + pid_vh) * 2
+        tl.store(
+            ring_gate + gate_offset,
+            b_g,
+            mask=n_ok & (pid_v == 0),
+        )
+        tl.store(
+            ring_gate + gate_offset + 1,
+            b_b,
+            mask=n_ok & (pid_v == 0),
         )
     new_state, out_i = _gdn_node_step(
         state_i,
