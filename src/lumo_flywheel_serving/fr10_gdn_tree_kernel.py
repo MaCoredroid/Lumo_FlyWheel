@@ -15377,6 +15377,8 @@ def launch_tree_gdn_prepared(
         _num_warps = int(_geom.get("num_warps", _num_warps))
         if "num_stages" in _geom:
             _extra_launch_kwargs["num_stages"] = int(_geom["num_stages"])
+    if _gate_export:
+        _extra_launch_kwargs["maxnreg"] = 80
     # FR13_SCAN_ALIGN body seams (d: l2norm div-by-sqrt, e: beta bf16
     # round-trip, K1: per-node carried-state bf16 round-trip = the depth-growth
     # store-boundary seam). MODE=body turns on all three (full (2)-oracle
@@ -16444,6 +16446,8 @@ def launch_tree_gdn_prepared_fixed32_batch(
         num_warps = int(geom.get("num_warps", num_warps))
         if "num_stages" in geom:
             extra_launch_kwargs["num_stages"] = int(geom["num_stages"])
+    if gate_export:
+        extra_launch_kwargs["maxnreg"] = 80
     configured_wide_bv = None
     if selector in ("diagnostic", "graph_capture"):
         configured_wide_bv = _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE
