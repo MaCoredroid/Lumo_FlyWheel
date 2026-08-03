@@ -311,7 +311,9 @@ def test_deployed_format_contract_and_production_are_fail_closed() -> None:
     assert 'type(_fr13_dh_sh.quant_method).__name__\n                        != "UnquantizedEmbeddingMethod"' in snippet
     assert "tuple(_fr13_dh_w.shape) != (65536, 5120)" in snippet
     assert "tuple(_fr13_dh_w.stride()) != (5120, 1)" in snippet
-    assert "tuple(_h.shape) != (1, 5120)" in snippet
+    assert "_fr13_dh_batch not in (1, 2, 3, 4)" in snippet
+    assert "tuple(_h.shape) != (_fr13_dh_batch, 5120)" in snippet
+    assert '"batch_size": 1' in snippet
     assert "tuple(_h.stride()) != (5120, 1)" in snippet
     assert "torch.mm(_fr13_dh_in, _sh.weight.t(), out=_fr13_dh_out)" in snippet
     assert "FR13_DRAFT_HEAD_M32_INTERNAL_PRODUCTION_ATTESTED" in snippet
