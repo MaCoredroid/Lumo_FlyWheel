@@ -971,6 +971,8 @@ def test_b4_hybrid_n5120_uses_exact_x_axis_single_tile_scheduler() -> None:
         "// Fixed32 B1 swap-AB", scheduler_start
     )
     scheduler = patched[scheduler_start:scheduler_end]
+    assert ": public StaticPersistentTileScheduler100" in scheduler
+    assert "Fr13DivisorBalancedStaticTileScheduler100" not in scheduler
     assert "static constexpr uint32_t kProblemTiles = 40;" in scheduler
     assert "return {0, static_cast<int32_t>(blockIdx.x), 0, true};" in scheduler
     assert "linear_idx >= kProblemTiles" in scheduler
