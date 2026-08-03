@@ -8,6 +8,7 @@
 #include <cuda_fp8.h>
 #include <cuda_runtime.h>
 
+#include <array>
 #include <cstdint>
 #include <limits>
 
@@ -140,13 +141,18 @@ fr13_dfwd_k64_fp8_partial_top3_kernel(
   for (int index = thread; index < batch * kHidden; index += kThreads) {
     shared_activation[index] = activation_q[index];
   }
-  for (int index = thread; index < batch * kGroups; index += kThreads) {
-    const int batch_index = index / kGroups;
-    const int group = index - batch_index * kGroups;
+  if (thread < kGroups) {
+    const float tile_weight_scale =
+        weight_scale[partial * kGroups + thread];
     // Activation scales are [B,40] column-major with stride (1,B).
-    shared_scale[index] =
-        activation_scale[group * batch + batch_index] *
-        weight_scale[partial * kGroups + group];
+#pragma unroll
+    for (int batch_index = 0; batch_index < kMaxBatch; ++batch_index) {
+      if (batch_index < batch) {
+        shared_scale[batch_index * kGroups + thread] =
+            activation_scale[thread * batch + batch_index] *
+            tile_weight_scale;
+      }
+    }
   }
   __syncthreads();
 
@@ -283,6 +289,46 @@ fr13_dfwd_k64_fp8_finish_top3_kernel(
   }
 }
 
+struct NamedTensor {
+  const char* name;
+  const at::Tensor* tensor;
+};
+
+struct TensorByteRange {
+  uintptr_t begin;
+  uintptr_t end;
+};
+
+TensorByteRange fr13_dense_byte_range(const NamedTensor& named) {
+  TORCH_CHECK(named.tensor->is_non_overlapping_and_dense(),
+              "FR13 DFWD FP8 restrict tensor must be dense: ", named.name);
+  const uintptr_t begin =
+      reinterpret_cast<uintptr_t>(named.tensor->data_ptr());
+  const uintptr_t bytes = static_cast<uintptr_t>(named.tensor->numel()) *
+                          static_cast<uintptr_t>(named.tensor->element_size());
+  TORCH_CHECK(bytes > 0 &&
+                  begin <= std::numeric_limits<uintptr_t>::max() - bytes,
+              "FR13 DFWD FP8 restrict tensor byte range is invalid: ",
+              named.name);
+  return TensorByteRange{begin, begin + bytes};
+}
+
+void fr13_check_no_storage_overlap(
+    const std::array<NamedTensor, 10>& tensors) {
+  std::array<TensorByteRange, 10> ranges{};
+  for (size_t index = 0; index < tensors.size(); ++index) {
+    ranges[index] = fr13_dense_byte_range(tensors[index]);
+  }
+  for (size_t lhs = 0; lhs < tensors.size(); ++lhs) {
+    for (size_t rhs = lhs + 1; rhs < tensors.size(); ++rhs) {
+      TORCH_CHECK(ranges[lhs].end <= ranges[rhs].begin ||
+                      ranges[rhs].end <= ranges[lhs].begin,
+                  "FR13 DFWD FP8 restrict tensor storage overlaps: ",
+                  tensors[lhs].name, " and ", tensors[rhs].name);
+    }
+  }
+}
+
 void fr13_dfwd_k64_fp8_mapped_top3_out(
     at::Tensor spine_output,
     at::Tensor top3_ids,
@@ -366,6 +412,20 @@ void fr13_dfwd_k64_fp8_mapped_top3_out(
                   partial_indices.strides() ==
                       at::IntArrayRef({kPartials * kTopK, kTopK, 1}),
               "FR13 DFWD FP8 workspace must be contiguous [B,512,3]");
+
+  const std::array<NamedTensor, 10> restrict_tensors{{
+      {"spine_output", &spine_output},
+      {"top3_ids", &top3_ids},
+      {"top3_scores", &top3_scores},
+      {"partial_values", &partial_values},
+      {"partial_indices", &partial_indices},
+      {"activation_q", &activation_q},
+      {"qweight", &qweight},
+      {"activation_scale", &activation_scale},
+      {"weight_scale", &weight_scale},
+      {"id_map", &id_map},
+  }};
+  fr13_check_no_storage_overlap(restrict_tensors);
 
   const c10::cuda::CUDAGuard device_guard(activation_q.device());
   const cudaDeviceProp* properties = at::cuda::getCurrentDeviceProperties();

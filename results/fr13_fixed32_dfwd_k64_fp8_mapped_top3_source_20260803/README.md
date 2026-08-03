@@ -28,8 +28,8 @@ only after subset order is final, so arbitrary map order cannot change ties.
 
 - Stage 1: 512 blocks x 256 threads, one 128-vocabulary-row block per FP8
   weight-scale row.
-- Stage 1 B4: each qweight byte is loaded once and reused across all four
-  activation rows. There is no batch grid dimension.
+- Stage 1 B4: each qweight byte and each tile's 40 weight scales are loaded once
+  and reused across all four activation rows. There is no batch grid dimension.
 - Workspace: BF16 values plus int32 subset IDs, `[B,512,3]` each.
 - Stage 2: B blocks x 256 threads, one exact rowwise mapped top3 reduction.
 - Full BF16 `[B,65536]` logits are never written.
@@ -40,8 +40,12 @@ build. The resulting object was not retained.
 
 | Kernel | Registers/thread | Static shared bytes | Stack/local bytes |
 | --- | ---: | ---: | ---: |
-| partial FP8 head + top3 | 51 | 26,240 | 0 |
+| partial FP8 head + top3 | 50 | 26,240 | 0 |
 | final mapped top3 | 28 | 1,216 | 0 |
+
+The wrapper computes exact byte ranges for all ten dense tensors and rejects
+every pairwise overlap before launch. This fail-closed check enforces the
+storage-disjoint contract required by every `__restrict__` kernel argument.
 
 ## Closed physical32 model
 
@@ -53,6 +57,7 @@ them by four.
 | --- | ---: | ---: |
 | MACs/head | 335,544,320 | 1,342,177,280 |
 | FP8 qweight bytes/head | 335,544,320 | 335,544,320 |
+| FP32 weight-scale bytes/head | 81,920 | 81,920 |
 | removed full-logit write+read/head | 262,144 | 1,048,576 |
 | partial workspace write+read/head | 18,432 | 73,728 |
 | net intermediate bytes removed/event | 1,218,560 | 4,874,240 |

@@ -30,7 +30,8 @@ PARTIALS = VOCAB // GROUP
 TOPK = 3
 CALLS_PER_PHYSICAL32_EVENT = 5
 FP8_WEIGHT_BYTES = VOCAB * HIDDEN
-FP32_WEIGHT_SCALE_BYTES = (VOCAB // GROUP) * GROUPS * 4
+FP32_WEIGHT_SCALE_ELEMENTS = (VOCAB // GROUP) * GROUPS
+FP32_WEIGHT_SCALE_BYTES = FP32_WEIGHT_SCALE_ELEMENTS * 4
 
 
 def sha256_file(path: Path) -> str:
@@ -91,6 +92,8 @@ def physical32_work_model(batch: int) -> dict[str, int]:
             FP8_WEIGHT_BYTES * CALLS_PER_PHYSICAL32_EVENT
         ),
         "fp32_weight_scale_bytes_per_head": FP32_WEIGHT_SCALE_BYTES,
+        "fp32_weight_scale_elements_per_head": FP32_WEIGHT_SCALE_ELEMENTS,
+        "fp32_weight_scale_batch_multiplier": 1,
         "activation_q_requested_bytes_per_head": (
             activation_q_requests_per_head
         ),
@@ -220,7 +223,11 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
             ),
             "mapping": "map only after subset top3 order is final",
             "b4_weight_reuse": (
-                "each qweight byte is loaded once and reused across four rows"
+                "each qweight byte and tile weight scale is loaded once and "
+                "reused across four rows"
+            ),
+            "restrict_overlap_guard": (
+                "all ten dense tensor byte ranges must be pairwise disjoint"
             ),
             "full_logits_materialized": False,
         },

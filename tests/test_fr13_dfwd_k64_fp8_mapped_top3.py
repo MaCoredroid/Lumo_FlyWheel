@@ -66,14 +66,43 @@ def test_stage1_reuses_each_weight_load_across_b4_rows() -> None:
 
     assert "shared_activation[kMaxBatch * kHidden]" in source
     assert "shared_scale[kMaxBatch * kGroups]" in source
-    assert "weight_scale[partial * kGroups + group]" in source
-    assert "activation_scale[group * batch + batch_index]" in source
+    assert "if (thread < kGroups)" in source
+    assert source.count("weight_scale[partial * kGroups + thread]") == 1
+    assert "const float tile_weight_scale" in source
+    assert "activation_scale[thread * batch + batch_index]" in source
+    assert "tile_weight_scale;" in source
     assert "const float weight_value = static_cast<float>(" in source
     assert "for (int batch_index = 0; batch_index < kMaxBatch;" in source
     assert "activation_value," in source
     assert "weight_value * shared_scale" in source
     assert "blockIdx.y" not in source
     assert "batch == 1 || batch == 4" in source
+
+
+def test_wrapper_fails_closed_on_any_restrict_storage_overlap() -> None:
+    source = CUDA.read_text(encoding="ascii")
+
+    assert "struct TensorByteRange" in source
+    assert "fr13_dense_byte_range" in source
+    assert "is_non_overlapping_and_dense()" in source
+    assert "std::array<NamedTensor, 10> restrict_tensors" in source
+    assert "fr13_check_no_storage_overlap(restrict_tensors);" in source
+    assert "ranges[lhs].end <= ranges[rhs].begin" in source
+    assert "ranges[rhs].end <= ranges[lhs].begin" in source
+    assert '"FR13 DFWD FP8 restrict tensor storage overlaps: "' in source
+    for name in (
+        "spine_output",
+        "top3_ids",
+        "top3_scores",
+        "partial_values",
+        "partial_indices",
+        "activation_q",
+        "qweight",
+        "activation_scale",
+        "weight_scale",
+        "id_map",
+    ):
+        assert f'{{"{name}", &' in source
 
 
 def test_selection_rounds_to_bf16_then_maps_after_exact_subset_order() -> None:
@@ -122,6 +151,8 @@ def test_physical32_b1_b4_work_model_is_closed() -> None:
         assert model["kernel_launches_per_head"] == 2
         assert model["qweight_bytes_per_head"] == 335_544_320
         assert model["fp32_weight_scale_bytes_per_head"] == 81_920
+        assert model["fp32_weight_scale_elements_per_head"] == 20_480
+        assert model["fp32_weight_scale_batch_multiplier"] == 1
         assert model["macs_per_head"] == batch * 65_536 * 5_120
         assert (
             model["removed_full_bf16_logit_write_plus_read_per_head"]
@@ -137,6 +168,10 @@ def test_physical32_b1_b4_work_model_is_closed() -> None:
         )
 
     assert b1["qweight_bytes_per_head"] == b4["qweight_bytes_per_head"]
+    assert b1["candidate_requested_bytes_per_head"] == 338_348_094
+    assert b1["candidate_requested_bytes_per_event"] == 1_691_740_470
+    assert b4["candidate_requested_bytes_per_head"] == 346_513_656
+    assert b4["candidate_requested_bytes_per_event"] == 1_732_568_280
     try:
         builder.physical32_work_model(2)
     except ValueError:
@@ -158,6 +193,7 @@ def test_builder_is_pinned_default_off_and_makes_no_live_claim() -> None:
     assert '"production_default_enabled": False' in source
     assert '"runtime_integration_present": False' in source
     assert '"full_logits_materialized": False' in source
+    assert '"restrict_overlap_guard": (' in source
 
 
 def test_fixed32_wide_path_has_no_other_logit_consumer() -> None:
