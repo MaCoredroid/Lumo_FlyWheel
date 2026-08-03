@@ -91,6 +91,7 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
     x,
     conv_state,
     spec_state_indices,
+    sticky_guard_ok,
     conv_weights,
     bias,
     a,
@@ -106,6 +107,7 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
     source_stage,
     conv_tap,
     CONV_STRIDE_ROW: tl.constexpr,
+    BANK_ROWS: tl.constexpr,
     B: tl.constexpr,
     N: tl.constexpr,
     C: tl.constexpr,
@@ -118,6 +120,7 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
     V: tl.constexpr,
     HAS_BIAS: tl.constexpr,
     STORE_CONV_TAP: tl.constexpr,
+    CAPTURE_GUARD: tl.constexpr,
     X_STRIDE_ROW: tl.constexpr,
     BLOCK_C: tl.constexpr,
     GATE_BLOCK: tl.constexpr,
@@ -246,6 +249,22 @@ def _producer_body() -> str:
         )
     if "out_batch" in joined or "tl.store(out" in joined:
         raise RuntimeError("full conv intermediate store survived generation")
+    unsafe_bank_load = """    bank_row = tl.load(spec_state_indices + pid_b * N).to(tl.int64)
+    prior_base = conv_state + bank_row * CONV_STRIDE_ROW + offs_c
+"""
+    guarded_bank_load = """    bank_row_raw = tl.load(spec_state_indices + pid_b * N).to(tl.int64)
+    bank_row_ok = (bank_row_raw >= 0) & (bank_row_raw < BANK_ROWS)
+    bank_row = tl.maximum(0, tl.minimum(bank_row_raw, BANK_ROWS - 1))
+    if CAPTURE_GUARD:
+        # Valid replays perform no store. The first invalid replay makes the
+        # committer's existing async assertion fail permanently, while the
+        # clamped row prevents an out-of-bounds read before that assertion.
+        tl.atomic_xchg(sticky_guard_ok, 0, mask=~bank_row_ok)
+    prior_base = conv_state + bank_row * CONV_STRIDE_ROW + offs_c
+"""
+    if joined.count(unsafe_bank_load) != 1:
+        raise RuntimeError("frontier-5 bank-row load drifted")
+    joined = joined.replace(unsafe_bank_load, guarded_bank_load, 1)
     return "\n".join(
         "    " + line if line else "" for line in joined.splitlines()
     ) + "\n"
