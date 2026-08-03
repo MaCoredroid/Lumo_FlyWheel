@@ -19,4 +19,3 @@ Pinned patcher SHA256:
 
 This proves semantic feasibility only for the exact guarded physical32 K64
 path. It is not a general replacement for other topologies or vocabulary sizes.
-

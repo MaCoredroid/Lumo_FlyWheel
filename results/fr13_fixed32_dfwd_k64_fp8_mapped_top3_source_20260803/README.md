@@ -63,4 +63,3 @@ about 0.0045 ms/event before launch effects. Therefore this candidate cannot by
 itself close the current 95.17 ms acceptance gap. Its value is removing a known
 materialize/rescan edge without increasing B4 weight traffic; it still requires
 a pinned build, exact B1/B4 kernel gate, and real-task measurement.
-
