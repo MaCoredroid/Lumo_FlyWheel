@@ -102,12 +102,13 @@ def test_decay_preseed_is_cumulative_fail_closed_and_byte_gated() -> None:
         "not k_norm_reuse",
         "not layer_batch",
         "not direct_metadata",
-        "not _FR13_FIXED32_GDN_SINGLE_LAUNCH",
         "scan_align_on()",
         "not use_qk_l2norm_in_kernel",
         "gate_rings is None",
     ):
         assert requirement in preseed
+    assert "_FR13_FIXED32_GDN_SINGLE_LAUNCH" in preseed
+    assert "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None" in preseed
     assert '"decay_reuse": decay_reuse' in preseed
     assert '"raw_ab_ring_store_elision": False' in preseed
     assert '"raw_ab_ring_stores_per_physical_value_head": 2' in preseed

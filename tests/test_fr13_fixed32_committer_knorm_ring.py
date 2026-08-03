@@ -85,13 +85,14 @@ def test_b1_and_b4_exports_are_physical32_single_launch_only() -> None:
     b4 = _text("launch_tree_gdn_prepared_fixed32_batch")
 
     assert "tuple(ring_k_norm.shape) != (n_pad, num_kh)" in b1
-    assert "not _FR13_FIXED32_GDN_SINGLE_LAUNCH" in b1
+    assert "_FR13_FIXED32_GDN_SINGLE_LAUNCH" in b1
+    assert "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None" in b1
     assert "_k_norm_export and _scan_align" in b1
     assert "K_NORM_EXPORT=_k_norm_export" in b1
 
     assert "tuple(ring_k_norm.shape) != (rows, num_kh)" in b4
     assert 'batch != 4' in b4
-    assert 'selector != "single_launch"' in b4
+    assert 'selector not in ("single_launch", "gqa_group3")' in b4
     assert "K_NORM_EXPORT=k_norm_export" in b4
 
 
@@ -138,12 +139,13 @@ def test_preseed_is_fail_closed_and_keeps_real_event_byte_gate() -> None:
     for requirement in (
         "not layer_batch",
         "not direct_metadata",
-        "not _FR13_FIXED32_GDN_SINGLE_LAUNCH",
         "scan_align_on()",
         "not use_qk_l2norm_in_kernel",
         "k_norm_rings is None",
     ):
         assert requirement in preseed
+    assert "_FR13_FIXED32_GDN_SINGLE_LAUNCH" in preseed
+    assert "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None" in preseed
     assert '"k_norm_reuse": k_norm_reuse' in preseed
     assert '"producer_extra_k_norm_reductions": 0' in preseed
     assert '"k_norm_reductions_per_value_head_step"' in preseed

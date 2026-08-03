@@ -117,12 +117,13 @@ def test_gate_preseed_is_fail_closed_and_retains_real_byte_gate() -> None:
         "not k_norm_reuse",
         "not layer_batch",
         "not direct_metadata",
-        "not _FR13_FIXED32_GDN_SINGLE_LAUNCH",
         "scan_align_on()",
         "not use_qk_l2norm_in_kernel",
         "gate_rings is None",
     ):
         assert requirement in preseed
+    assert "_FR13_FIXED32_GDN_SINGLE_LAUNCH" in preseed
+    assert "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None" in preseed
     assert '"gate_reuse": gate_reuse' in preseed
     assert '"producer_extra_gate_nonlinear_evaluations": 0' in preseed
     assert '"gate_scalar_loads_per_value_head_step"' in preseed
