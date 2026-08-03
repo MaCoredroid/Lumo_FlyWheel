@@ -135,7 +135,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 17
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 18
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
@@ -743,6 +743,70 @@ def test_b1_onen_selector_is_default_off_shape_isolated_and_exact_math() -> None
         in patched
     )
     assert patched.count("return fixed32_cutlass_wave_variant::stock;") >= 1
+
+
+def test_b1_n5120_single_tile_scheduler_removes_persistent_advance() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+    scheduler_start = patched.index("class Fr13B1N5120SingleTileScheduler100")
+    scheduler_end = patched.index(
+        "template <class TileShape, class ClusterShape,\n"
+        "          uint32_t SchedulerPipelineStageCount>\n"
+        "struct TileSchedulerSelector<\n"
+        "    vllm::fr13_fixed32_m128_divisor_static_scheduler",
+        scheduler_start,
+    )
+    scheduler = patched[scheduler_start:scheduler_end]
+
+    assert "static constexpr uint32_t kProblemTiles = 40;" in scheduler
+    assert "static_cast<int32_t>(blockIdx.y), 0, 0, true" in scheduler
+    assert "return true;" in scheduler
+    assert "WorkTileInfo::invalid_work_tile(), true" in scheduler
+    assert "problem_tiles_" not in scheduler
+    assert "params.blocks_per_problem_" not in scheduler
+    assert "gridDim" not in scheduler
+    assert "advance_to_next_work" not in scheduler
+    assert "total_grid_size" not in scheduler
+    assert "fr13_fixed32_b1_n5120_single_tile_scheduler" in patched
+    assert "using Scheduler = Fr13B1N5120SingleTileScheduler100;" in patched
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_n5120_single_identity_stage2"
+    )
+    config_end = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_onen_static_identity_pingpong_stage2",
+        config_start,
+    )
+    config = patched[config_start:config_end]
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in config
+    assert "using TileShape = Shape<_128, _32, _128>;" in config
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in config
+    assert "fr13_fixed32_b1_n5120_single_tile_scheduler" in config
+    assert "cutlass::gemm::collective::StageCount<2>" in config
+    assert "StreamK" not in config
+
+    assert 'value == "identity_onen_n5120_single_b1"' in patched
+    assert 'value == "identity_onen_n5120_single_b1_byte_ab"' in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_identity_onen_n5120_single_b1_byte_ab.jsonl"'
+        in patched
+    )
+    assert (
+        "fr13.fixed32.cutlass_identity_onen_n5120_single_b1_byte_ab.v1"
+        in patched
+    )
+    runner_start = patched.index("auto run_identity_onen_n5120_single_b1")
+    runner_end = patched.index("auto run_identity_stockshape_b4", runner_start)
+    runner = patched[runner_start:runner_end]
+    assert "if (N == 5120)" in runner
+    assert "b1_n5120_single_identity_stage2" in runner
+    assert "return run_identity_onen_b1(destination);" in runner
+    assert (
+        "fixed32_cutlass_wave_variant::\n"
+        "                          identity_onen_n5120_single_b1) {\n"
+        "    return run_identity_onen_n5120_single_b1(out);"
+        in patched
+    )
 
 
 def test_b4_identity_twom_keeps_complete_tile_math() -> None:
