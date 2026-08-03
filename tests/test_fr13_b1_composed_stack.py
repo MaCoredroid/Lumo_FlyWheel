@@ -562,8 +562,10 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
     assert result["production_evidence"]["sfwd_engaged_layer_count"] == 48
 
 
-def test_forked_launcher_forwards_cudagraph_mode_into_container() -> None:
+def test_forked_launcher_forwards_patch_contract_into_container() -> None:
     launcher = (ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh").read_text(
         encoding="utf-8"
     )
     assert '-e CUDAGRAPH_MODE="$CUDAGRAPH_MODE"' in launcher
+    assert '-e MAX_NUM_SEQS="$MAX_NUM_SEQS"' in launcher
+    assert '-e SWE_CONCURRENCY="${SWE_CONCURRENCY:-}"' in launcher
