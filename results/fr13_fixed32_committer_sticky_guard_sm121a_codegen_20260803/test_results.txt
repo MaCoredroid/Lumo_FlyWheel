@@ -1,0 +1,7 @@
+PASS: 55 focused sticky/direct-metadata/physical32/row-guard/layer-batch tests
+PASS: 3 sanitized codegen-artifact integrity tests
+PASS: 8 paired fresh-cache SM121a builds verified byte-identical
+PASS: zero stack/local/LDL/STL/CALL/shared/BAR for B1 and B4 candidate
+PASS: candidate ATOMG is behind a predicated valid-path EXIT for B1 and B4
+GPU execution: none
+Real SWE-Verified execution: none
