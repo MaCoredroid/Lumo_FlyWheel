@@ -796,6 +796,10 @@ _FR13_FIXED32_GDN_SINGLE_LAUNCH_SIDECARS = (
     "/logs/fr13_fixed32_gdn_single_launch_tree.arm",
     "/tmp/fr13_fixed32_gdn_single_launch_tree.arm",
 )
+_FR13_FIXED32_GDN_PRESCALED_PATH_BASE_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_prescaled_path_base.arm",
+    "/tmp/fr13_fixed32_gdn_prescaled_path_base.arm",
+)
 _FR13_FIXED32_GDN_PATH_BV_REAL_EVENT = (
     "/logs/fr13_fixed32_gdn_path_bv.real_event.arm"
 )
@@ -978,6 +982,66 @@ def _fr13_resolve_fixed32_gdn_single_launch(
             "K64/root1 drafter contract"
         )
     return True
+
+
+def _fr13_resolve_fixed32_gdn_prescaled_path_base(
+    single_launch_available: bool,
+    *,
+    environ=None,
+    sidecars=None,
+) -> bool:
+    """Resolve the default-off pre-scaled descriptor specialization."""
+    env = os.environ if environ is None else environ
+    paths = (
+        _FR13_FIXED32_GDN_PRESCALED_PATH_BASE_SIDECARS
+        if sidecars is None
+        else tuple(sidecars)
+    )
+    sources: list[tuple[str, str]] = []
+    raw_env = env.get("FR13_FIXED32_GDN_PRESCALED_PATH_BASE")
+    if raw_env is not None and str(raw_env).strip():
+        sources.append(
+            (
+                "env:FR13_FIXED32_GDN_PRESCALED_PATH_BASE",
+                str(raw_env).strip(),
+            )
+        )
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(16)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PRESCALED_PATH_BASE cannot read sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(value) >= 16:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_PRESCALED_PATH_BASE sidecar exceeds "
+                f"15 bytes: {path}"
+            )
+        sources.append((f"sidecar:{path}", value.strip()))
+    if not sources:
+        return False
+    invalid = [
+        (source, value)
+        for source, value in sources
+        if value not in ("0", "1")
+    ]
+    if invalid or len({value for _source, value in sources}) != 1:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PRESCALED_PATH_BASE must be exactly 0 or 1 "
+            f"from agreeing sources: {sources!r}"
+        )
+    enabled = sources[0][1] == "1"
+    if enabled and not single_launch_available:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PRESCALED_PATH_BASE requires the exact "
+            "K64/root1 ordered single-launch route"
+        )
+    return enabled
 
 
 def _fr13_resolve_fixed32_gdn_path_bv_candidate(
@@ -1514,6 +1578,15 @@ _FR13_FIXED32_GDN_SINGLE_LAUNCH = (
     _fr13_resolve_fixed32_gdn_single_launch(
         _FR13_FIXED32_MODE,
         geom_override=_read_tree_gdn_geom_override(),
+    )
+)
+_FR13_FIXED32_GDN_PRESCALED_PATH_BASE = (
+    _fr13_resolve_fixed32_gdn_prescaled_path_base(
+        bool(
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+            == _FR13_FIXED32_GDN_SINGLE_LAUNCH_GATE_VALUE
+        )
     )
 )
 if (
@@ -4645,6 +4718,79 @@ def _fr13_fixed32_gdn_single_launch_contract(
     return contract
 
 
+def _fr13_fixed32_gdn_prescaled_path_descriptor(
+    levels,
+    single_contract: dict[str, object],
+) -> dict[str, object]:
+    """Derive the exact path bases while preserving the loaded loop lengths."""
+    branch_level = tuple(levels[1])
+    max_path_len = max(len(path) for path, _parent in branch_level)
+    max_group_paths = int(single_contract["max_group_paths"])
+    if len(branch_level) != 11 or max_path_len != 7 or max_group_paths != 3:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PRESCALED_PATH_BASE descriptor extent drift"
+        )
+    path_bases = []
+    for indices in single_contract["branch_path_indices"]:
+        row = [int(index) * max_path_len for index in indices]
+        row.extend([0] * (max_group_paths - len(row)))
+        path_bases.append(tuple(row))
+    path_base_lengths = [0] * (len(branch_level) * max_path_len)
+    for path_index, (path, _parent) in enumerate(branch_level):
+        path_base_lengths[path_index * max_path_len] = len(path)
+    descriptor = {
+        "schema": "fr13.fixed32.gdn_prescaled_path_base.v1",
+        "max_path_len": max_path_len,
+        "path_bases": tuple(path_bases),
+        "path_base_lengths": tuple(path_base_lengths),
+    }
+    if descriptor["path_bases"] != (
+        (7, 14, 0),
+        (21, 28, 0),
+        (35, 42, 0),
+        (49, 56, 0),
+        (0, 63, 70),
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PRESCALED_PATH_BASE derived bases drift"
+        )
+    return descriptor
+
+
+def _fr13_fixed32_gdn_single_launch_path_args(
+    single_launch: dict[str, object],
+    branch_lengths,
+    branch_max_len: int,
+):
+    """Select validated incumbent or pre-scaled device descriptors."""
+    if not _FR13_FIXED32_GDN_PRESCALED_PATH_BASE:
+        return branch_lengths, single_launch["path_indices"], False
+    contract = single_launch.get("prescaled_contract")
+    path_bases = single_launch.get("prescaled_path_bases")
+    path_base_lengths = single_launch.get("prescaled_path_base_lengths")
+    if (
+        not isinstance(contract, dict)
+        or contract.get("schema")
+        != "fr13.fixed32.gdn_prescaled_path_base.v1"
+        or contract.get("max_path_len") != int(branch_max_len)
+        or not isinstance(path_bases, torch.Tensor)
+        or not isinstance(path_base_lengths, torch.Tensor)
+        or tuple(path_bases.shape) != (5, 3)
+        or tuple(path_base_lengths.shape) != (77,)
+        or path_bases.dtype != torch.int32
+        or path_base_lengths.dtype != torch.int32
+        or not path_bases.is_contiguous()
+        or not path_base_lengths.is_contiguous()
+        or path_bases.device != branch_lengths.device
+        or path_base_lengths.device != branch_lengths.device
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_PRESCALED_PATH_BASE descriptor drift; "
+            "no fallback is permitted"
+        )
+    return path_base_lengths, path_bases, True
+
+
 def _subtree_decompose(parent) -> list:
     """Heavy-path decomposition -> list of LEVELS; each level is a list of
     (path_nodes, parent_node) with parent_node = -1 for the root path.
@@ -4847,11 +4993,27 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
                 group_path_indices[group_index, : len(indices)] = torch.tensor(
                     indices, dtype=torch.int32
                 )
+            prescaled_descriptor = (
+                _fr13_fixed32_gdn_prescaled_path_descriptor(
+                    levels, single_contract
+                )
+            )
             fixed32_single_launch = {
                 "contract": single_contract,
                 "path_indices": group_path_indices.to(device),
                 "path_counts": torch.tensor(
                     single_contract["group_sizes"],
+                    dtype=torch.int32,
+                    device=device,
+                ),
+                "prescaled_contract": prescaled_descriptor,
+                "prescaled_path_bases": torch.tensor(
+                    prescaled_descriptor["path_bases"],
+                    dtype=torch.int32,
+                    device=device,
+                ),
+                "prescaled_path_base_lengths": torch.tensor(
+                    prescaled_descriptor["path_base_lengths"],
                     dtype=torch.int32,
                     device=device,
                 ),
@@ -9955,6 +10117,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
     MAX_PATH_LEN: tl.constexpr,
     MAX_GROUP_PATHS: tl.constexpr,
     NUM_GROUPS: tl.constexpr,
+    PRESCALED_PATH_BASE: tl.constexpr = False,
     RING_EXPORT: tl.constexpr = False,
     FLAGS_EXPORT: tl.constexpr = False,
     FLAGS_ROWS: tl.constexpr = 0,
@@ -10051,15 +10214,20 @@ def _tree_gdn_kernel_fixed32_single_launch(
                 mask=member_ok,
                 other=0,
             )
+            if PRESCALED_PATH_BASE:
+                path_base = path_index
+            else:
+                path_base = path_index * MAX_PATH_LEN
             path_len = tl.load(
-                branch_lengths + path_index,
+                branch_lengths
+                + (path_base if PRESCALED_PATH_BASE else path_index),
                 mask=member_ok,
                 other=0,
             )
             branch_state = root_state
             for path_offset in tl.range(0, path_len):
                 branch_node = tl.load(
-                    branch_nodes + path_index * MAX_PATH_LEN + path_offset
+                    branch_nodes + path_base + path_offset
                 )
                 branch_state = _tree_gdn_fixed32_single_launch_node(
                     branch_state,
@@ -14660,6 +14828,15 @@ def launch_tree_gdn_prepared(
                 _branch_lengths,
             ) = st["levels"][1]
             _single_contract = _single_launch["contract"]
+            (
+                _branch_lengths_arg,
+                _path_indices_arg,
+                _prescaled_path_base,
+            ) = _fr13_fixed32_gdn_single_launch_path_args(
+                _single_launch,
+                _branch_lengths,
+                _branch_max_len,
+            )
             _tree_gdn_kernel_fixed32_single_launch[
                 (num_vh, triton.cdiv(dim_v, _path_block_v), 1)
             ](
@@ -14678,8 +14855,8 @@ def launch_tree_gdn_prepared(
                 _counter_arg,
                 _root_nodes,
                 _branch_nodes,
-                _branch_lengths,
-                _single_launch["path_indices"],
+                _branch_lengths_arg,
+                _path_indices_arg,
                 _single_launch["path_counts"],
                 _out,
                 ring_k,
@@ -14713,6 +14890,7 @@ def launch_tree_gdn_prepared(
                     _single_contract["max_group_paths"]
                 ),
                 NUM_GROUPS=int(_single_contract["groups"]),
+                PRESCALED_PATH_BASE=_prescaled_path_base,
                 RING_EXPORT=_ring_export,
                 FLAGS_EXPORT=_flags_export,
                 FLAGS_ROWS=_flags_rows,
@@ -14728,6 +14906,7 @@ def launch_tree_gdn_prepared(
                 "physical_recurrence_critical_path": 32,
                 "state_export_writes": 0,
                 "state_parent_reads": 0,
+                "prescaled_path_base": bool(_prescaled_path_base),
                 "logical_launches": 2,
                 "logical_programs": 12,
                 "logical_padded_slots": 82,
@@ -15593,6 +15772,15 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 branch_lengths,
             ) = subtree_state["levels"][1]
             single_contract = single_launch["contract"]
+            (
+                branch_lengths_arg,
+                path_indices_arg,
+                prescaled_path_base,
+            ) = _fr13_fixed32_gdn_single_launch_path_args(
+                single_launch,
+                branch_lengths,
+                branch_max_len,
+            )
             _tree_gdn_kernel_fixed32_single_launch[
                 (num_vh, triton.cdiv(dim_v, _block_v), batch)
             ](
@@ -15611,8 +15799,8 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 invocation_counter,
                 root_nodes,
                 branch_nodes,
-                branch_lengths,
-                single_launch["path_indices"],
+                branch_lengths_arg,
+                path_indices_arg,
                 single_launch["path_counts"],
                 out,
                 ring_k,
@@ -15646,6 +15834,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     single_contract["max_group_paths"]
                 ),
                 NUM_GROUPS=int(single_contract["groups"]),
+                PRESCALED_PATH_BASE=prescaled_path_base,
                 RING_EXPORT=ring_export,
                 FLAGS_EXPORT=flags_export,
                 FLAGS_ROWS=flags_rows,
@@ -15661,6 +15850,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 "physical_recurrence_critical_path": 32,
                 "state_export_writes": 0,
                 "state_parent_reads": 0,
+                "prescaled_path_base": bool(prescaled_path_base),
                 "logical_launches": 2 * batch,
                 "logical_programs": 12 * batch,
                 "logical_padded_slots": 82 * batch,
