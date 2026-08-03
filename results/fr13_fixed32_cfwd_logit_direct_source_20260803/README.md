@@ -3,9 +3,9 @@
 Status: `SOURCE_ONLY`, `DEFAULT_OFF`, and not wired into the served arm.
 
 This artifact binds the fixed32 CFWD logit-direct decision candidate to source
-commit `ad3063da4344434aeed7d1bf49ead5c07a405765`. The specialization is limited
+commit `a4406489ee681a65cb564b09ce1109ecd49867f3`. The specialization is limited
 to K64/root1, physical32, Tail23 (`tail6_fixed32`) or Hydra27
-(`hydra27_fixed32`), B1 or B4, vocabulary 151,936, fanout three, and walk cap
+(`hydra27_fixed32`), B1 or B4, verifier vocabulary 248,320, fanout three, and walk cap
 12. Fixed physical work is unchanged for any logical tree with at most 32
 nodes.
 
@@ -20,8 +20,8 @@ selection in a second Triton launch site.
 
 | Batch | Incumbent full-vocab writes | Active block-stat writes | Writes removed | Persistent block-stat workspace |
 | --- | ---: | ---: | ---: | ---: |
-| B1 | 116,686,848 B | 142,560 B | 116,544,288 B (111.15 MiB) | 245,760 B |
-| B4 | 466,747,392 B | 570,240 B | 466,177,152 B (444.58 MiB) | 983,040 B |
+| B1 | 190,709,760 B | 14,640 B | 190,695,120 B (181.86 MiB) | 15,360 B |
+| B4 | 762,839,040 B | 58,560 B | 762,780,480 B (727.44 MiB) | 61,440 B |
 
 The incumbent probability producer has four source-level full-vocabulary
 tensor operations: two indexed gathers and two softmaxes. The candidate has
@@ -35,7 +35,7 @@ one launch.
 ## Host verification
 
 The source, artifact-integrity, incumbent TAW, exact committer, and GDN
-committer contract suite passed with `118 passed, 1 skipped` after excluding
+committer contract suite passed with `119 passed, 1 skipped` after excluding
 one unrelated pre-existing B1 runner-string assertion. That baseline test
 expects an obsolete inline full-vocabulary conditional; the current runner
 uses a workload-profile case instead. No harness file was changed.
@@ -46,15 +46,20 @@ probability algebra, duplicate sibling tokens, strict inverse-CDF boundaries,
 zero-residual fallback, source/accept/residual uniform ordering, source-only
 isolation, and AST-exact launch arity.
 
-No Docker, GPU compile, real SWE-Verified task, product byte A/B, Nsight trace,
-or timing run was performed. This artifact does not claim a speedup or update
-the latest valid B1 Hydra result of 232.78 ms/step.
+Both kernels compiled offline for SM121a with the pinned CUDA 13.0, Triton 3.6,
+and PyTorch 2.10 toolchain. The block-stat and direct-decision kernels use 76
+and 80 registers per thread respectively, with zero stack, local memory,
+spills, or calls. The code-object hashes and exact B1/B4 grids are recorded in
+`codegen_summary.json`.
+
+No Docker, GPU execution, real SWE-Verified product A/B, Nsight trace, or
+timing run was performed. This artifact does not claim a speedup or update the
+latest valid B1 Hydra result of 232.78 ms/step.
 
 ## Required runtime gates
 
-1. Compile both kernels for exact B1 and B4 SM121a specializations. Reject on
-   spills, local memory, stack growth, or stage-two scan resource use that
-   invalidates occupancy. Record deterministic code-object hashes.
+1. Offline SM121a codegen: `PASS`. Live occupancy and graph-capture behavior
+   remain part of the product gate.
 2. Wire this exact source behind a default-off, no-fallback selector and
    allocate the fixed workspace before graph capture. The reference path must
    remain served until all product gates pass.
