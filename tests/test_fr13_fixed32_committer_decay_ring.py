@@ -114,6 +114,10 @@ def test_decay_preseed_is_cumulative_fail_closed_and_byte_gated() -> None:
     assert '"committer_decay_exponentials_per_value_head_step"' in preseed
     assert "_fr13_fixed32_committer_layer_batch_byte_gate(" in replay
     assert "decay_reuse=decay_reuse" in graph_body
+    assert "a_selected = a_rings[:, batch_index, safe_nodes]" in graph_body
+    assert "b_selected = b_rings[:, batch_index, safe_nodes]" in graph_body
+    assert "a_destination.copy_" in graph_body
+    assert "b_destination.copy_" in graph_body
 
 
 def test_decay_operation_census_is_physical32_for_b1_and_b4() -> None:
