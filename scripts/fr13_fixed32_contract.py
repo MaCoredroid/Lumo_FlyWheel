@@ -2304,18 +2304,14 @@ def validate_fixed32_qwen_campaign_metrics(
         )
         failed_compactions = expected_completed - base_completed
         normal_requests = base_completed - successful_compactions
+        # A failed compaction may be absent from the task trace. Its task-auth
+        # gap is admitted here only if the campaign algebra below proves it.
         if (
             type(base_completed) is not int
             or type(successful_compactions) is not int
             or successful_compactions < 0
             or normal_requests <= 0
             or failed_compactions < 0
-            or (
-                failed_compactions > 0
-                and successful_compactions <= 0
-                and base.get("synthetic_compaction_failure_terminal")
-                is not True
-            )
         ):
             raise ContractError(
                 "fixed32 qwen campaign trace/task-auth counts do not reconcile"
