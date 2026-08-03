@@ -49,8 +49,8 @@ case "$TIMING_CANDIDATE" in
     CANDIDATE_ARM_LABEL=cutlass_identity_onen_n5120_single_b1
     ;;
   identity_onen_n5120_fullgrid_b1)
-    STREAMK_SHA256=1024adda7fe4d314f31779206b5b6a7691ef1eee6c7c15ce5c837cced99a3584
-    STREAMK_BYTES=118836392
+    STREAMK_SHA256=5f09ff76c06b21aef81ab99911a09d623d83187052b8eb36920209bc10c9726c
+    STREAMK_BYTES=119108864
     FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_live_gate.v1
     K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_k64_root_live_gate.v1
     CANDIDATE_ARM_LABEL=cutlass_identity_onen_n5120_fullgrid_b1

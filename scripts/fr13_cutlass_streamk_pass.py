@@ -66,7 +66,7 @@ SOURCE_CONTRACTS = {
     },
     "identity_onen_n5120_fullgrid_b1": {
         "patch_source_sha256": (
-            "d626d60ddcba89207444da662e391659fe3444c5301e9e32e1a5f9f85ef6ce29"
+            "d1672387601f37671079a022210f4f7edbc7311cb157ab75b18696f71fd924ab"
         ),
         "patched_dispatch_sha256": (
             "194d4b5f529dfb690eeb6d864919ae7f9b859097568a513b3f3cf78051a93499"
