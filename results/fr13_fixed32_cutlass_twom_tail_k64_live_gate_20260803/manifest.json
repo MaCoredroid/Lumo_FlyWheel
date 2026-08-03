@@ -1,0 +1,74 @@
+{
+  "schema": "fr13.fixed32.cutlass_twom_tail_k64_live_gate_receipt.v1",
+  "status": "QUALIFIED_BYTE_EXACT",
+  "created_at_utc": "2026-08-03T02:33:15Z",
+  "source_commit": "30f8437d2b13d1af6ca14ae8eac68ca5b49fb27b",
+  "workload": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "task_set": "canonical_exact4",
+    "task_count": 4,
+    "batch_size": 4,
+    "concurrency": 4,
+    "terminal_resolved": 2,
+    "terminal_failed": 2
+  },
+  "configuration": {
+    "topology": "tail6_fixed32",
+    "logical_topology": "Tail23",
+    "active_drafts": 23,
+    "physical_drafts": 31,
+    "physical_rows_root_inclusive": 32,
+    "valid_mask": "0x7a9ce7ff",
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": true,
+    "candidate_selector": "identity_twom_b4",
+    "diagnostic_selector": "identity_twom_b4_byte_ab"
+  },
+  "candidate": {
+    "sha256": "c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29",
+    "bytes": 117488608,
+    "patch_source_sha256": "841b5dfc0741aa5051037e3eda005e5a65f7a425b76235a61e8a0779bd31a155"
+  },
+  "comparison": {
+    "calls": 320,
+    "physical_m_values": [128],
+    "projection_shape_count": 5,
+    "mismatching_calls": 0,
+    "differing_bytes": 0,
+    "all_five_projection_shapes_observed": true,
+    "served_result": "stock"
+  },
+  "credentials": {
+    "live_status": "pass",
+    "live_schema": "fr13.fixed32.cutlass_identity_twom_b4_k64_root_live_gate.v1",
+    "live_result_sha256": "87e1b6273d7ba4bd9b693593c8ae8ac254b2cb2ee22cb49ce43b06c18198ce6f",
+    "production_status": "QUALIFIED",
+    "production_schema": "fr13.fixed32.cutlass_b4.identity_twom.k64_root.production_pass.v1",
+    "production_pass_sha256": "25d431f61edc6ffaaaca26c5099e60cef7f02e470cecdb7fc4b14d05da0ad9d6"
+  },
+  "closure": {
+    "runtime_launch_sha256": "d1a727e867e52e6e556a1719376a66b6fa8aa7f6f17bd45202978e19b3be7409",
+    "runtime_end_sha256": "d1a727e867e52e6e556a1719376a66b6fa8aa7f6f17bd45202978e19b3be7409",
+    "external_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_end_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f"
+  },
+  "threshold_context": {
+    "mandatory_weight_floor_ms": 119.658015414,
+    "one_sided_u95_cap_ms": 137.6067177261
+  },
+  "claims": {
+    "real_swe_verified": true,
+    "byte_correctness": true,
+    "timing_eligible": false,
+    "tps_available": false,
+    "floor_acceptance_eligible": false,
+    "hydra_qualification_pending": true
+  },
+  "privacy": {
+    "raw_task_data_absent": true,
+    "raw_model_data_absent": true,
+    "raw_logs_absent": true,
+    "environment_absent": true,
+    "process_and_container_identifiers_absent": true
+  }
+}
