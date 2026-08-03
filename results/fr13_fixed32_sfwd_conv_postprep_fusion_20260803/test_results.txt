@@ -1,13 +1,13 @@
 Focused host-only suite:
 
 python3 -m pytest -q tests/test_fr13_fixed32_sfwd_conv_postprep_fusion.py
-.............                                                            [100%]
-13 passed in 0.57s
+...............                                                          [100%]
+15 passed in 0.59s
 
 Related host-only suites:
 
 The new focused suite plus the existing descriptorless/prior-reuse suites
-produced 41 passes and one pre-existing base-revision failure. The unrelated
+produced 43 passes and one pre-existing base-revision failure. The unrelated
 failure is a stale hard-coded SHA-256 expectation for
 src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py: the test expects f0e808...
 while c49c8eb53 contains 4c6d15.... This branch does not modify that file.

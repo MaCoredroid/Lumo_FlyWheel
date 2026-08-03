@@ -17,8 +17,8 @@ python3 -m pytest -q \
 The CPU suite binds the exact physical32/K64 contract, generated frontier-5
 arithmetic, BF16 product and activation boundaries, ordered FP32 adds,
 adversarial rounding/cancellation and softplus inputs, distinct recurrence
-storages, optional tap, fail-closed layouts/storage bounds, source-only
-launcher, and exact B1/B4 byte/launch ledger.
+storages, optional tap, fail-closed layouts/state-bank values/storage bounds,
+source-only launcher, and exact B1/B4 byte/launch ledger.
 
 Offline Triton 3.6 compilation targeted `GPUTarget("cuda", 121, 32)` for B1,
 B4, B1+tap, and B4+tap. `cuobjdump --dump-resource-usage` reported 56 registers,
