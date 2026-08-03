@@ -19,11 +19,16 @@ The credential issuer now fails closed unless all of the following agree:
 - byte-identical canonical runtime manifests at launch and end, the arm's
   runtime Git head, and `git show` bytes for every host script, Python package
   source, and verdict tool in the executed manifest closure;
+- a repo-first live issuer import, with the imported `inference_proxy` path and
+  bytes required to equal the `git show`-bound source in that exact arm;
 - the finalized v12 work census, terminal census, final flush, and immutable
   boundary snapshot, with exact zero-based event/forward indices;
-- the pristine ready ack, every task's pre/post runtime snapshot, an exact
-  task-generation and nonce chain, the final request/current ack, and no stale
-  boundary-snapshot generations;
+- the pristine ready ack, every task's pre/post runtime snapshot and Prometheus
+  scrape, an exact task-generation and nonce chain, the final request/current
+  ack, and no stale boundary-snapshot generations or symlinked task artifacts;
+- full canonical runtime-snapshot replay against the census prefix at every
+  task boundary and final flush, with nondecreasing ACK and committer counters,
+  invariant boot-warm evidence, and unchanged per-task layer-gate state;
 - comparator events joined one-to-one to real work by event, forward, process,
   batch, and request identity;
 - successful proxy and engine ingress ledgers joined one-to-one to the same
@@ -44,10 +49,11 @@ and logs are not included in this source checkpoint.
 
 ## Verification
 
-- 63 credential, graph comparator, boundary-snapshot, topology, work-census,
+- 70 credential, graph comparator, boundary-snapshot, topology, work-census,
   and codegen-artifact tests passed.
 - 73 Qwen campaign/provenance and ingress tests passed.
-- 22 adjacent committer/profiler tests passed; one CUDA-only test skipped.
+- 22 adjacent committer/profiler tests passed; one CUDA-only test skipped. In
+  total, 165 tests passed.
 - Python compilation, shell syntax, and `git diff --check` passed.
 - The monolithic floor-gate self-test was attempted but is not counted: its
   pre-existing runtime-closure cardinality pin expects 62 files/25 Python
