@@ -26,6 +26,22 @@ _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = (
 _FR13_FIXED32_COMMITTER_TASK_ID_CHARACTERS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
 )
+_FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_ARMS = (
+    "/logs/fr13_fixed32_conv_commit_zero_tail.arm",
+)
+
+
+def _fr13_fixed32_conv_commit_zero_tail_requested() -> bool:
+    """Resolve the default-off fixed32 conv zero-tail specialization."""
+    raw = os.environ.get("FR13_FIXED32_CONV_COMMIT_ZERO_TAIL", "0")
+    if raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL must be exactly 0 or 1"
+        )
+    return raw == "1" or any(
+        os.path.exists(path)
+        for path in _FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_ARMS
+    )
 
 
 def _fr13_fixed32_committer_layer_batch_requested() -> bool:
@@ -4675,6 +4691,8 @@ def _fr13_fixed32_conv_direct_col0_kernel(
     PATH_COLS: tl.constexpr,
     B: tl.constexpr,
     BLOCK_C: tl.constexpr,
+    ZERO_TAIL: tl.constexpr,
+    LIVE_STATE_COLS: tl.constexpr,
 ):
     """Publish the accepted source-stage leaf directly to the running row."""
     pid_l = tl.program_id(0)
@@ -4709,15 +4727,18 @@ def _fr13_fixed32_conv_direct_col0_kernel(
     c_mask = offs_c < CONV_C
     source_batch = pid_b.to(tl.int64) * SOURCE_ROWS
     for state_col in tl.static_range(0, CONV_L):
-        source_row = tl.load(
-            state_src + leaf_node * CONV_L + state_col
-        ).to(tl.int64)
-        values = tl.load(
-            source
-            + (source_batch + source_row) * source_row_stride
-            + offs_c * source_c_stride,
-            mask=c_mask,
-        )
+        if ZERO_TAIL and state_col >= LIVE_STATE_COLS:
+            values = tl.zeros((BLOCK_C,), dtype=tl.bfloat16)
+        else:
+            source_row = tl.load(
+                state_src + leaf_node * CONV_L + state_col
+            ).to(tl.int64)
+            values = tl.load(
+                source
+                + (source_batch + source_row) * source_row_stride
+                + offs_c * source_c_stride,
+                mask=c_mask,
+            )
         tl.store(
             bank
             + dst_row.to(tl.int64) * bank_row_stride
@@ -4762,6 +4783,8 @@ def _fr13_fixed32_conv_direct_col0_metadata_kernel(
     PATH_COLS: tl.constexpr,
     B: tl.constexpr,
     BLOCK_C: tl.constexpr,
+    ZERO_TAIL: tl.constexpr,
+    LIVE_STATE_COLS: tl.constexpr,
 ):
     """Direct col0 commit with one disjoint metadata writer per request."""
     pid_l = tl.program_id(0)
@@ -4815,15 +4838,18 @@ def _fr13_fixed32_conv_direct_col0_metadata_kernel(
     c_mask = offs_c < CONV_C
     source_batch = pid_b.to(tl.int64) * SOURCE_ROWS
     for state_col in tl.static_range(0, CONV_L):
-        source_row = tl.load(
-            state_src + leaf_node * CONV_L + state_col
-        ).to(tl.int64)
-        values = tl.load(
-            source
-            + (source_batch + source_row) * source_row_stride
-            + offs_c * source_c_stride,
-            mask=c_mask,
-        )
+        if ZERO_TAIL and state_col >= LIVE_STATE_COLS:
+            values = tl.zeros((BLOCK_C,), dtype=tl.bfloat16)
+        else:
+            source_row = tl.load(
+                state_src + leaf_node * CONV_L + state_col
+            ).to(tl.int64)
+            values = tl.load(
+                source
+                + (source_batch + source_row) * source_row_stride
+                + offs_c * source_c_stride,
+                mask=c_mask,
+            )
         tl.store(
             bank
             + dst_row.to(tl.int64) * bank_row_stride
@@ -5509,6 +5535,30 @@ def preseed_fixed32_conv_col0_pregather(
         raise ValueError(
             "FR13_FIXED32_CONV_DIRECT state-src range does not match source rows"
         )
+    zero_tail = _fr13_fixed32_conv_commit_zero_tail_requested()
+    live_state_cols = 3
+    if zero_tail:
+        state_src_rows = tuple(
+            state_src_values[row * conv_l : (row + 1) * conv_l]
+            for row in range(32)
+        )
+        if (
+            _FR13_FIXED32_MODE not in _FR13_FIXED32_MODES
+            or anchor.dtype != torch.bfloat16
+            or conv_c != 10240
+            or conv_l != 34
+            or source_rows != 36
+            or len(state_src_rows) != 32
+            or any(
+                value != source_rows - 1
+                for row in state_src_rows
+                for value in row[live_state_cols:]
+            )
+        ):
+            raise RuntimeError(
+                "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL exact physical32 "
+                "BF16 C10240/L34/source36 contract drifted"
+            )
     if (
         not torch.is_tensor(commit_spec_state_indices)
         or commit_spec_state_indices.device != anchor.device
@@ -5568,6 +5618,7 @@ def preseed_fixed32_conv_col0_pregather(
             )
             or existing.get("source_rows_per_batch") != source_rows
             or existing.get("state_src_values") != state_src_values
+            or existing.get("commit_zero_tail") is not zero_tail
         ):
             raise RuntimeError(
                 "FR13_FIXED32_CONV_PREGATHER was already preseeded with "
@@ -5702,6 +5753,8 @@ def preseed_fixed32_conv_col0_pregather(
         "source_rows_per_batch": source_rows,
         "state_src": direct_state_src,
         "state_src_values": state_src_values,
+        "commit_zero_tail": zero_tail,
+        "commit_live_state_cols": live_state_cols,
         "state_src_digest": hashlib.sha256(
             json.dumps(state_src_values).encode("ascii")
         ).hexdigest(),
@@ -5813,6 +5866,11 @@ def preseed_fixed32_conv_col0_pregather(
             "commit_source_pointer_entries": 48,
             "commit_source_rows_per_batch": source_rows,
             "commit_state_src_shape": (32, conv_l),
+            "commit_zero_tail": zero_tail,
+            "commit_source_columns_loaded_per_row": (
+                live_state_cols if zero_tail else conv_l
+            ),
+            "commit_destination_columns_stored_per_row": conv_l,
             "commit_row_guard_route": (
                 "fixed32_triton_alias3_ownerpath_warp32_physical32_v4"
             ),
@@ -5956,6 +6014,8 @@ def preseed_fixed32_conv_col0_pregather(
                 PATH_COLS=int(safe_paths.shape[1]),
                 B=batch,
                 BLOCK_C=block,
+                ZERO_TAIL=zero_tail,
+                LIVE_STATE_COLS=live_state_cols,
                 num_warps=4,
             )
     finally:
@@ -6750,6 +6810,8 @@ def launch_fixed32_conv_commit_to_col0(
             PATH_COLS=int(accepted_paths.shape[1]),
             B=batch,
             BLOCK_C=block,
+            ZERO_TAIL=bool(state["commit_zero_tail"]),
+            LIVE_STATE_COLS=int(state["commit_live_state_cols"]),
             num_warps=4,
         )
     else:
@@ -6803,6 +6865,8 @@ def launch_fixed32_conv_commit_to_col0(
             PATH_COLS=int(accepted_paths.shape[1]),
             B=batch,
             BLOCK_C=block,
+            ZERO_TAIL=bool(state["commit_zero_tail"]),
+            LIVE_STATE_COLS=int(state["commit_live_state_cols"]),
             num_warps=4,
         )
         _fr13_fixed32_committer_publish_metadata_lease(lease_key)
