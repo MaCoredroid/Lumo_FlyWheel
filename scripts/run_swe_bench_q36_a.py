@@ -9059,6 +9059,8 @@ def main(argv: list[str] | None = None) -> int:
         "identity_stockshape_stage2_b4_byte_ab",
         "identity_twom_b4",
         "identity_twom_b4_byte_ab",
+        "identity_hybrid_n5120_b4",
+        "identity_hybrid_n5120_b4_byte_ab",
         "identity_divisor_b4",
         "identity_divisor_b4_byte_ab",
         "persistent_b4_m128",
@@ -9081,6 +9083,7 @@ def main(argv: list[str] | None = None) -> int:
         "identity_stockshape_b4_byte_ab",
         "identity_stockshape_stage2_b4_byte_ab",
         "identity_twom_b4_byte_ab",
+        "identity_hybrid_n5120_b4_byte_ab",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static_byte_ab",
     }

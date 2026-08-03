@@ -50,6 +50,10 @@ IDENTITY_TWOM_B4_CANDIDATE_SHA256 = (
     "c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29"
 )
 IDENTITY_TWOM_B4_CANDIDATE_SIZE = 117_488_608
+IDENTITY_HYBRID_N5120_B4_CANDIDATE_SHA256 = (
+    "63c7b80bf11daf01aa040cf91d57ef1c90ed1406a6185368684a7486aeebf1a4"
+)
+IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE = 118_243_776
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -97,6 +101,9 @@ IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS = frozenset(
     }
 )
 IDENTITY_TWOM_B4_SELECTORS = frozenset({"identity_twom_b4", "identity_twom_b4_byte_ab"})
+IDENTITY_HYBRID_N5120_B4_SELECTORS = frozenset(
+    {"identity_hybrid_n5120_b4", "identity_hybrid_n5120_b4_byte_ab"}
+)
 IDENTITY_DIVISOR_B4_SELECTORS = frozenset(
     {"identity_divisor_b4", "identity_divisor_b4_byte_ab"}
 )
@@ -115,6 +122,7 @@ CANDIDATE_SELECTORS = (
     | IDENTITY_STOCKSHAPE_B4_SELECTORS
     | IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS
     | IDENTITY_TWOM_B4_SELECTORS
+    | IDENTITY_HYBRID_N5120_B4_SELECTORS
     | IDENTITY_DIVISOR_B4_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
@@ -126,6 +134,7 @@ PRODUCTION_SELECTORS = frozenset(
         "persistent_b4_m128",
         "identity_stockshape_stage2_b4",
         "identity_twom_b4",
+        "identity_hybrid_n5120_b4",
         "identity_onen_b1",
     }
 )
@@ -205,6 +214,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             IDENTITY_TWOM_B4_CANDIDATE_SIZE,
             "identity_twom_b4",
         )
+    if selector in IDENTITY_HYBRID_N5120_B4_SELECTORS:
+        return (
+            IDENTITY_HYBRID_N5120_B4_CANDIDATE_SHA256,
+            IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE,
+            "identity_hybrid_n5120_b4",
+        )
     if selector in IDENTITY_DIVISOR_B4_SELECTORS:
         return (
             IDENTITY_B4_CANDIDATE_SHA256,
@@ -225,9 +240,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
 def _verify_qualification_profile(
     selector: str, qualification_profile: str | None
 ) -> None:
-    if selector in IDENTITY_ONEN_B1_SELECTORS and qualification_profile != "k64_root":
+    if (
+        selector in IDENTITY_ONEN_B1_SELECTORS | IDENTITY_HYBRID_N5120_B4_SELECTORS
+        and qualification_profile != "k64_root"
+    ):
         raise ValueError(
-            "identity_onen_b1 binary verification requires a k64_root "
+            f"{candidate_identity(selector)[2]} binary verification requires a k64_root "
             "qualification"
         )
     if qualification_profile not in {None, "full_vocab", "k64_root"}:
@@ -262,7 +280,7 @@ def verify_candidate(
         "symlink": False,
         "candidate_family": candidate_family,
     }
-    if selector in IDENTITY_ONEN_B1_SELECTORS:
+    if selector in IDENTITY_ONEN_B1_SELECTORS | IDENTITY_HYBRID_N5120_B4_SELECTORS:
         result["qualification_profile"] = qualification_profile
     if selector in STATIC_B4_M128_SELECTORS:
         if resource_credential is None or expected_resource_credential_sha256 is None:
@@ -469,6 +487,7 @@ def _verify_production_qualification(
         "persistent_b4_m128",
         "identity_stockshape_stage2_b4",
         "identity_twom_b4",
+        "identity_hybrid_n5120_b4",
         "identity_onen_b1",
     }:
         raise ValueError(f"unsupported production candidate selector: {selector!r}")
@@ -481,7 +500,11 @@ def _verify_production_qualification(
     else:
         import fr13_cutlass_streamk_pass as qualification
 
-    if selector in {"identity_stockshape_stage2_b4", "identity_twom_b4"}:
+    if selector in {
+        "identity_stockshape_stage2_b4",
+        "identity_twom_b4",
+        "identity_hybrid_n5120_b4",
+    }:
         return qualification.verify_dual_sidecar(
             sidecar,
             expected_sidecar_sha256,
@@ -582,7 +605,11 @@ def install_candidate(
             ],
             "one_sided_u95_cap_ms": qualification_record["one_sided_u95_cap_ms"],
         }
-        if selector in {"identity_stockshape_stage2_b4", "identity_twom_b4"}:
+        if selector in {
+            "identity_stockshape_stage2_b4",
+            "identity_twom_b4",
+            "identity_hybrid_n5120_b4",
+        }:
             for key in (
                 "qualification_profile",
                 "qualification_topologies",
@@ -612,7 +639,12 @@ def install_candidate(
             if key in qualification_record:
                 qualification[key] = qualification_record[key]
         if (
-            selector not in {"identity_stockshape_stage2_b4", "identity_twom_b4"}
+            selector
+            not in {
+                "identity_stockshape_stage2_b4",
+                "identity_twom_b4",
+                "identity_hybrid_n5120_b4",
+            }
             and qualification_record.get("qualification_profile") == "k64_root"
         ):
             for key in (
@@ -671,7 +703,7 @@ def install_candidate(
         "production_enabled": production_enabled,
         "candidate_family": source_identity["candidate_family"],
     }
-    if selector in IDENTITY_ONEN_B1_SELECTORS:
+    if selector in IDENTITY_ONEN_B1_SELECTORS | IDENTITY_HYBRID_N5120_B4_SELECTORS:
         payload["qualification_profile"] = qualification_profile
     if qualification is not None:
         payload["qualification"] = qualification

@@ -69,6 +69,19 @@ case "$CANDIDATE_SELECTOR" in
     ONLY_ARM_DELTA=${ONLY_ARM_DELTA_META#*=}
     DUAL_CANDIDATE=1
     ;;
+  identity_hybrid_n5120_b4)
+    [[ "$QUALIFICATION_PROFILE" == "k64_root" ]] || {
+      echo "hybrid N5120 production timing requires CUTLASS_B4_QUALIFICATION_PROFILE=k64_root" >&2
+      exit 2
+    }
+    CANDIDATE_SHA256=63c7b80bf11daf01aa040cf91d57ef1c90ed1406a6185368684a7486aeebf1a4
+    CANDIDATE_BYTES=118243776
+    QUALIFIED_PATCH_SOURCE_SHA256=17bcaffc9b982ca436fb0794ac7c3d17cef7d5ed06d9786b478ea21acd2e4f34
+    CANDIDATE_ARM_SLUG=identity_hybrid_n5120
+    ONLY_ARM_DELTA_META=only_arm_delta=CUTLASS_stock_to_identity_hybrid_n5120_b4
+    ONLY_ARM_DELTA=${ONLY_ARM_DELTA_META#*=}
+    DUAL_CANDIDATE=1
+    ;;
   *)
     echo "CUTLASS_B4_CANDIDATE_SELECTOR is unsupported for B4 timing" >&2
     exit 2
@@ -100,6 +113,9 @@ case "$QUALIFICATION_PROFILE" in
     elif [[ "$CANDIDATE_SELECTOR" == "identity_twom_b4" ]]; then
       SUMMARY_SCHEMA=fr13.fixed32.cutlass_identity_twom_b4.k64_root.dual_topology.full_wall_timing_pair.v1
       BINDING_SCHEMA=fr13.fixed32.cutlass_b4.identity_twom.k64_root.dual_topology.production_binding.v1
+    elif [[ "$CANDIDATE_SELECTOR" == "identity_hybrid_n5120_b4" ]]; then
+      SUMMARY_SCHEMA=fr13.fixed32.cutlass_identity_hybrid_n5120_b4.k64_root.dual_topology.full_wall_timing_pair.v1
+      BINDING_SCHEMA=fr13.fixed32.cutlass_b4.identity_hybrid_n5120.k64_root.dual_topology.production_binding.v1
     else
       SUMMARY_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128.k64_root.full_wall_timing_pair.v1
       BINDING_SCHEMA=fr13.fixed32.cutlass_b4.k64_root.production_binding.v1
@@ -453,6 +469,10 @@ run_arm() {
   local twom_tail23_pass_sha=""
   local twom_hydra27_pass_json=""
   local twom_hydra27_pass_sha=""
+  local hybrid_tail23_pass_json=""
+  local hybrid_tail23_pass_sha=""
+  local hybrid_hydra27_pass_json=""
+  local hybrid_hydra27_pass_sha=""
   local qualification_source_commit=""
   if [[ "$production" == "1" ]]; then
     selector=$CANDIDATE_SELECTOR
@@ -463,11 +483,16 @@ run_arm() {
         tail23_pass_sha=$CUTLASS_B4_TAIL23_PASS_SHA256
         hydra27_pass_json=$CUTLASS_B4_HYDRA27_PASS_JSON
         hydra27_pass_sha=$CUTLASS_B4_HYDRA27_PASS_SHA256
-      else
+      elif [[ "$CANDIDATE_SELECTOR" == "identity_twom_b4" ]]; then
         twom_tail23_pass_json=$CUTLASS_B4_TAIL23_PASS_JSON
         twom_tail23_pass_sha=$CUTLASS_B4_TAIL23_PASS_SHA256
         twom_hydra27_pass_json=$CUTLASS_B4_HYDRA27_PASS_JSON
         twom_hydra27_pass_sha=$CUTLASS_B4_HYDRA27_PASS_SHA256
+      else
+        hybrid_tail23_pass_json=$CUTLASS_B4_TAIL23_PASS_JSON
+        hybrid_tail23_pass_sha=$CUTLASS_B4_TAIL23_PASS_SHA256
+        hybrid_hydra27_pass_json=$CUTLASS_B4_HYDRA27_PASS_JSON
+        hybrid_hydra27_pass_sha=$CUTLASS_B4_HYDRA27_PASS_SHA256
       fi
     else
       pass_json=$CUTLASS_B4_PASS_JSON
@@ -505,6 +530,10 @@ run_arm() {
       FR13_FIXED32_CUTLASS_TWOM_TAIL23_LIVE_PASS_SHA256="$twom_tail23_pass_sha" \
       FR13_FIXED32_CUTLASS_TWOM_HYDRA27_LIVE_PASS_JSON="$twom_hydra27_pass_json" \
       FR13_FIXED32_CUTLASS_TWOM_HYDRA27_LIVE_PASS_SHA256="$twom_hydra27_pass_sha" \
+      FR13_FIXED32_CUTLASS_HYBRID_N5120_TAIL23_LIVE_PASS_JSON="$hybrid_tail23_pass_json" \
+      FR13_FIXED32_CUTLASS_HYBRID_N5120_TAIL23_LIVE_PASS_SHA256="$hybrid_tail23_pass_sha" \
+      FR13_FIXED32_CUTLASS_HYBRID_N5120_HYDRA27_LIVE_PASS_JSON="$hybrid_hydra27_pass_json" \
+      FR13_FIXED32_CUTLASS_HYBRID_N5120_HYDRA27_LIVE_PASS_SHA256="$hybrid_hydra27_pass_sha" \
       FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT="${qualification_source_commit:-}" \
       FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE" \
       FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
@@ -783,7 +812,11 @@ if (
     )
 ):
     raise SystemExit("candidate lacks the selected CUTLASS production binding")
-if candidate_selector in {"identity_stockshape_stage2_b4", "identity_twom_b4"}:
+if candidate_selector in {
+    "identity_stockshape_stage2_b4",
+    "identity_twom_b4",
+    "identity_hybrid_n5120_b4",
+}:
     expected_live_results = {
         "tail6_fixed32": tail23_live_sha256,
         "hydra27_fixed32": hydra27_live_sha256,
@@ -824,7 +857,11 @@ if not math.isclose(stock_floor, candidate_floor, rel_tol=0.0, abs_tol=1e-9):
 
 stock_phases = phase_breakdown(stock, "stock")
 candidate_phases = phase_breakdown(candidate, "candidate")
-if candidate_selector in {"identity_stockshape_stage2_b4", "identity_twom_b4"}:
+if candidate_selector in {
+    "identity_stockshape_stage2_b4",
+    "identity_twom_b4",
+    "identity_hybrid_n5120_b4",
+}:
     candidate_live_binding = {
         "live_result_sha256_by_topology": {
             "tail6_fixed32": tail23_live_sha256,

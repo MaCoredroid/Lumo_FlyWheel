@@ -77,6 +77,26 @@ IDENTITY_TWOM_DUAL_K64_ROOT_SIDECAR_SCHEMA = (
 IDENTITY_TWOM_DUAL_K64_ROOT_BINDING_SCHEMA = (
     "fr13.fixed32.cutlass_b4.identity_twom.k64_root.dual_topology.production_binding.v1"
 )
+IDENTITY_HYBRID_N5120_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_hybrid_n5120_b4_live_gate.v1"
+)
+IDENTITY_HYBRID_N5120_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_hybrid_n5120_b4_k64_root_live_gate.v1"
+)
+IDENTITY_HYBRID_N5120_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_hybrid_n5120.production_pass.v1"
+)
+IDENTITY_HYBRID_N5120_K64_ROOT_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_hybrid_n5120.k64_root.production_pass.v1"
+)
+IDENTITY_HYBRID_N5120_DUAL_K64_ROOT_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_hybrid_n5120.k64_root."
+    "dual_topology.production_pass.v1"
+)
+IDENTITY_HYBRID_N5120_DUAL_K64_ROOT_BINDING_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_hybrid_n5120.k64_root."
+    "dual_topology.production_binding.v1"
+)
 IDENTITY_DIVISOR_LIVE_SCHEMA = "fr13.fixed32.cutlass_identity_divisor_b4_live_gate.v1"
 IDENTITY_DIVISOR_K64_ROOT_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_identity_divisor_b4_k64_root_live_gate.v1"
@@ -117,6 +137,12 @@ IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256 = (
 IDENTITY_STOCKSHAPE_STAGE2_PATCHED_DISPATCH_SHA256 = (
     "9880496498d47cec37f2b6f143e16236d0af4a3606ee770a8b93de6a179fc88d"
 )
+IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256 = (
+    "17bcaffc9b982ca436fb0794ac7c3d17cef7d5ed06d9786b478ea21acd2e4f34"
+)
+IDENTITY_HYBRID_N5120_PATCHED_DISPATCH_SHA256 = (
+    "e556cb3d6b64bdb18b364551c331353acd0797cd1e148362241ac150e8c6a001"
+)
 EXPECTED_TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
@@ -138,20 +164,31 @@ MAX_COMPARISONS = 320
 QUALIFIED_FIXED32_MODES = ("tail6_fixed32", "hydra27_fixed32")
 STAGE2_DUAL_PRODUCTION_SELECTOR = "identity_stockshape_stage2_b4"
 TWOM_DUAL_PRODUCTION_SELECTOR = "identity_twom_b4"
+HYBRID_N5120_DUAL_PRODUCTION_SELECTOR = "identity_hybrid_n5120_b4"
 DUAL_PRODUCTION_SELECTORS = frozenset(
-    {STAGE2_DUAL_PRODUCTION_SELECTOR, TWOM_DUAL_PRODUCTION_SELECTOR}
+    {
+        STAGE2_DUAL_PRODUCTION_SELECTOR,
+        TWOM_DUAL_PRODUCTION_SELECTOR,
+        HYBRID_N5120_DUAL_PRODUCTION_SELECTOR,
+    }
 )
 DUAL_SIDECAR_SCHEMAS = {
     STAGE2_DUAL_PRODUCTION_SELECTOR: (
         IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_SIDECAR_SCHEMA
     ),
     TWOM_DUAL_PRODUCTION_SELECTOR: IDENTITY_TWOM_DUAL_K64_ROOT_SIDECAR_SCHEMA,
+    HYBRID_N5120_DUAL_PRODUCTION_SELECTOR: (
+        IDENTITY_HYBRID_N5120_DUAL_K64_ROOT_SIDECAR_SCHEMA
+    ),
 }
 DUAL_BINDING_SCHEMAS = {
     STAGE2_DUAL_PRODUCTION_SELECTOR: (
         IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_BINDING_SCHEMA
     ),
     TWOM_DUAL_PRODUCTION_SELECTOR: IDENTITY_TWOM_DUAL_K64_ROOT_BINDING_SCHEMA,
+    HYBRID_N5120_DUAL_PRODUCTION_SELECTOR: (
+        IDENTITY_HYBRID_N5120_DUAL_K64_ROOT_BINDING_SCHEMA
+    ),
 }
 EXPECTED_PROJECTION_NK = (
     (5120, 6144),
@@ -245,6 +282,30 @@ CANDIDATE_CONTRACTS = {
         "production_authorized": False,
         "requires_resource_credential": False,
     },
+    "identity_hybrid_n5120_b4": {
+        "diagnostic_selector": "identity_hybrid_n5120_b4_byte_ab",
+        "live_schemas": {
+            "full_vocab": IDENTITY_HYBRID_N5120_LIVE_SCHEMA,
+            "k64_root": IDENTITY_HYBRID_N5120_K64_ROOT_LIVE_SCHEMA,
+        },
+        "sidecar_schemas": {
+            "full_vocab": IDENTITY_HYBRID_N5120_SIDECAR_SCHEMA,
+            "k64_root": IDENTITY_HYBRID_N5120_K64_ROOT_SIDECAR_SCHEMA,
+        },
+        "binding_schemas": {
+            "full_vocab": (
+                "fr13.fixed32.cutlass_b4.identity_hybrid_n5120."
+                "production_binding.v1"
+            ),
+            "k64_root": (
+                "fr13.fixed32.cutlass_b4.identity_hybrid_n5120.k64_root."
+                "production_binding.v1"
+            ),
+        },
+        "production_authorized": False,
+        "requires_resource_credential": False,
+        "required_qualification_profile": "k64_root",
+    },
     "persistent_b4_m128": {
         "diagnostic_selector": "persistent_b4_m128_byte_ab",
         "live_schemas": {
@@ -335,6 +396,18 @@ def _contract_profile_value(
     return value
 
 
+def _require_contract_profile(
+    candidate_selector: str,
+    candidate_contract: dict[str, object],
+    qualification_profile: str,
+) -> None:
+    required = candidate_contract.get("required_qualification_profile")
+    if required is not None and qualification_profile != required:
+        raise QualificationError(
+            f"{candidate_selector} requires qualification profile {required}"
+        )
+
+
 def _candidate_source_hashes(candidate_selector: str) -> tuple[str, str]:
     if candidate_selector == "identity_divisor_b4":
         return (
@@ -353,6 +426,11 @@ def _candidate_source_hashes(candidate_selector: str) -> tuple[str, str]:
         return (
             IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256,
             IDENTITY_STOCKSHAPE_STAGE2_PATCHED_DISPATCH_SHA256,
+        )
+    if candidate_selector == "identity_hybrid_n5120_b4":
+        return (
+            IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256,
+            IDENTITY_HYBRID_N5120_PATCHED_DISPATCH_SHA256,
         )
     if candidate_selector == "persistent_b4_m128":
         return PATCH_SOURCE_SHA256, PATCHED_DISPATCH_SHA256
@@ -527,6 +605,9 @@ def validate_live_result(
             f"unsupported CUTLASS B4 fixed32 mode: {fixed32_mode!r}"
         )
     candidate_contract = _candidate_contract(candidate_selector)
+    _require_contract_profile(
+        candidate_selector, candidate_contract, qualification_profile
+    )
     profile = _qualification_profile(qualification_profile)
     diagnostic_selector = candidate_contract["diagnostic_selector"]
     expected_live_sha256 = _require_sha256(
@@ -542,6 +623,7 @@ def validate_live_result(
     candidate = binary.verify_candidate(
         candidate_so,
         diagnostic_selector,
+        qualification_profile=qualification_profile,
         resource_credential=resource_credential,
         expected_resource_credential_sha256=(expected_resource_credential_sha256),
     )
@@ -911,6 +993,7 @@ def verify_sidecar(
             "CUTLASS B4 production sidecar qualification-profile mismatch"
         )
     profile = _qualification_profile(sidecar_profile)
+    _require_contract_profile(sidecar_selector, candidate_contract, sidecar_profile)
     if candidate_selector is not None and sidecar_selector != candidate_selector:
         raise QualificationError("CUTLASS B4 production sidecar selector mismatch")
     diagnostic_selector = candidate_contract["diagnostic_selector"]
@@ -925,6 +1008,7 @@ def verify_sidecar(
     candidate = binary.verify_candidate(
         candidate_so,
         diagnostic_selector,
+        qualification_profile=sidecar_profile,
         resource_credential=resource_credential,
         expected_resource_credential_sha256=(expected_resource_credential_sha256),
     )
@@ -1038,7 +1122,9 @@ def verify_dual_sidecar(
             "CUTLASS B4 dual sidecar SHA-256 mismatch: "
             f"{actual_sha256} != {expected_sidecar_sha256}"
         )
-    candidate = binary.verify_candidate(candidate_so, diagnostic_selector)
+    candidate = binary.verify_candidate(
+        candidate_so, diagnostic_selector, qualification_profile="k64_root"
+    )
     patch_source_sha256, patched_dispatch_sha256 = _candidate_source_hashes(
         candidate_selector
     )
