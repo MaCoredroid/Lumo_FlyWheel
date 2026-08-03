@@ -310,6 +310,37 @@ def test_patcher_runtime_identity_tuple_matches_kernel_state_order() -> None:
     assert set(assignments) == {"source_identity", "source_data_ptrs"}
     assert all(isinstance(value, ast.Tuple) for value in assignments.values())
 
+    kernel = _function(
+        ast.parse(KERNEL_PATH.read_text()),
+        "preseed_fixed32_conv_col0_pregather",
+    )
+    state_dicts = [
+        node.value
+        for node in ast.walk(kernel)
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "state"
+            for target in node.targets
+        )
+        and isinstance(node.value, ast.Dict)
+    ]
+    assert len(state_dicts) == 1
+    kernel_state = {
+        key.value: value
+        for key, value in zip(
+            state_dicts[0].keys, state_dicts[0].values, strict=True
+        )
+        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+    }
+    assert isinstance(kernel_state["source_identity"], ast.Tuple)
+    assert isinstance(kernel_state["source_data_ptrs"], ast.Tuple)
+    assert len(assignments["source_identity"].elts) == len(
+        kernel_state["source_identity"].elts
+    )
+    assert len(assignments["source_data_ptrs"].elts) == len(
+        kernel_state["source_data_ptrs"].elts
+    )
+
     identity = assignments["source_identity"]
     assert isinstance(identity, ast.Tuple)
     assert [ast.unparse(value) for value in identity.elts] == [
@@ -327,6 +358,9 @@ def test_patcher_runtime_identity_tuple_matches_kernel_state_order() -> None:
         "tuple((id(source) for source in direct_sources))",
         "id(source_offsets)",
         "id(direct_state_src)",
+        "id(zero_tail_count_enable)",
+        "id(zero_tail_compared_events)",
+        "id(zero_tail_differing_bytes)",
         "id(staging)",
         (
             "tuple((id(row_guard_flags_by_batch[guard_batch]) for guard_batch "
@@ -351,6 +385,9 @@ def test_patcher_runtime_identity_tuple_matches_kernel_state_order() -> None:
         "tuple((int(source.data_ptr()) for source in direct_sources))",
         "int(source_offsets.data_ptr())",
         "int(direct_state_src.data_ptr())",
+        "int(zero_tail_count_enable.data_ptr())",
+        "int(zero_tail_compared_events.data_ptr())",
+        "int(zero_tail_differing_bytes.data_ptr())",
         "int(staging.data_ptr())",
         (
             "tuple((int(row_guard_flags_by_batch[guard_batch].data_ptr()) for "

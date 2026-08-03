@@ -2322,6 +2322,13 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
     direct_sources = state.get("source_stagings")
     source_offsets = state.get("source_off16")
     direct_state_src = state.get("state_src")
+    zero_tail_count_enable = state.get("treeconv_zero_tail_count_enable")
+    zero_tail_compared_events = state.get(
+        "treeconv_zero_tail_compared_events"
+    )
+    zero_tail_differing_bytes = state.get(
+        "treeconv_zero_tail_differing_bytes"
+    )
     source_rows = state.get("source_rows_per_batch")
     conv_c = state.get("conv_c")
     conv_l = state.get("conv_l")
@@ -2551,6 +2558,17 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or tuple(int(value) for value in direct_state_src.shape)
         != (32 * int(conv_l),)
         or not direct_state_src.is_contiguous()
+        or any(
+            not torch.is_tensor(counter)
+            or counter.device != staging.device
+            or str(counter.dtype) != "torch.int64"
+            or tuple(int(value) for value in counter.shape) != ()
+            for counter in (
+                zero_tail_count_enable,
+                zero_tail_compared_events,
+                zero_tail_differing_bytes,
+            )
+        )
         or offsets.device != staging.device
         or bank_alias_ids_device.device != staging.device
         or bank_alias_peer_layers_device.device != staging.device
@@ -2574,6 +2592,9 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         tuple(id(source) for source in direct_sources),
         id(source_offsets),
         id(direct_state_src),
+        id(zero_tail_count_enable),
+        id(zero_tail_compared_events),
+        id(zero_tail_differing_bytes),
         id(staging),
         tuple(
             id(row_guard_flags_by_batch[guard_batch])
@@ -2598,6 +2619,9 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         tuple(int(source.data_ptr()) for source in direct_sources),
         int(source_offsets.data_ptr()),
         int(direct_state_src.data_ptr()),
+        int(zero_tail_count_enable.data_ptr()),
+        int(zero_tail_compared_events.data_ptr()),
+        int(zero_tail_differing_bytes.data_ptr()),
         int(staging.data_ptr()),
         tuple(
             int(row_guard_flags_by_batch[guard_batch].data_ptr())
