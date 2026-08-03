@@ -1,0 +1,113 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_twom_1d_host_build.v1",
+  "created_at_utc": "2026-08-03T02:26:19Z",
+  "status": "host_compile_link_import_audit_pass_default_off",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/fixed32-b4-twom-1d-20260803",
+    "source_commit": "61263d0cf6edf202c3a91f44b4393b89f5927ccb",
+    "patch_source_sha256": "5aaf36a3987e4e2eb6568fc1240c76dbd8a2c64785774054d76353eb9c249e47",
+    "patched_dispatch_sha256": "a01f2d03f1b7e5d2f0a25870cd392b6aa97935d559bb65835f7ba35f605a2a52",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2"
+  },
+  "candidate": {
+    "selector": "identity_twom_b4",
+    "diagnostic_selector": "identity_twom_b4_byte_ab",
+    "default_enabled": false,
+    "production_authorized": false,
+    "physical_rows": 128,
+    "tile_mnk": [64, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_stage_count": 2,
+    "scheduler_grid": "x_only",
+    "initial_work": "blockIdx.x",
+    "next_work_stride": "gridDim.x",
+    "tile_map": "{linear_index_and_1, linear_index_shift_1, 0}",
+    "source_delta": "remove_unused_y_z_grid_flattening_only"
+  },
+  "host_build": {
+    "result": "pass",
+    "target": "_C_stable_libtorch",
+    "host_elf": "ELF64 AArch64 shared object",
+    "cuda_release": "13.0",
+    "cuda_version": "13.0.88",
+    "cxx_version": "13.3.0",
+    "cmake_version": "3.28.3",
+    "ninja_version": "1.13.0.git.kitware.jobserver-pipe-1",
+    "candidate_object_gencode": "arch=compute_121a,code=sm_121a",
+    "compile_result": "pass",
+    "link_result": "pass",
+    "python_import_result": "pass",
+    "gpu_runtime_used": false,
+    "docker_used": false
+  },
+  "outputs": {
+    "candidate_binary": {
+      "published": false,
+      "sha256": "d6df2cff828cda26ea823617c64e230c4f04bb8866efe4d9e3d6daf2a7e98462",
+      "bytes": 117488736
+    },
+    "candidate_object": {
+      "published": false,
+      "sha256": "0ba8ab866962a3caf6ec7104d3c07ed63c0c2626362886261902d4a8daf41d89",
+      "bytes": 21250800
+    },
+    "sm121a_cubin": {
+      "published": false,
+      "sha256": "8b69647f66b7feff109008198a7f91d546d5dbcc6cc3f0f645a37f17f579c718",
+      "bytes": 2172800,
+      "inventory_count": 1
+    }
+  },
+  "resource_audit": {
+    "result": "pass",
+    "candidate_kernel_records": 2,
+    "candidate_dtypes": ["fp16", "bf16"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "detected_spills": false
+  },
+  "sass_audit_per_dtype": {
+    "result": "pass",
+    "candidate_instructions": 1032,
+    "predecessor_instructions": 1040,
+    "instruction_delta": -8,
+    "instruction_delta_percent": -0.7692,
+    "branches": 39,
+    "calls": 0,
+    "local_loads": 0,
+    "local_stores": 0,
+    "qmma": 128,
+    "ffma": 128,
+    "ldsm": 48,
+    "stsm": 16,
+    "tensor_math_counts_equal_to_predecessor": true,
+    "performance_inference_allowed": false
+  },
+  "source_checks": {
+    "focused_tests": "55 passed",
+    "pycompile": "pass",
+    "git_diff_check": "pass",
+    "pinned_source_apply": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "GPU correctness",
+    "synthetic or probe performance",
+    "real SWE-Verified task campaign",
+    "B4 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gates": [
+    "Tail23 canonical exact4 raw-byte comparison",
+    "Hydra27 canonical exact4 raw-byte comparison",
+    "paired real-task B4 full-step timing after both byte gates pass"
+  ]
+}
