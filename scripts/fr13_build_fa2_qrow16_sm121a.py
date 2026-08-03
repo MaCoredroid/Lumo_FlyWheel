@@ -65,6 +65,9 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     output = _new_output(args.output_object, "output object")
     manifest = _new_output(args.manifest, "manifest")
     source = fa2_src / QROW16_SOURCE
+    expected_registers = int(args.expected_registers)
+    if not 1 <= expected_registers <= 255:
+        raise BuildError("expected registers must be in [1, 255]")
     if not source.is_file():
         raise BuildError(f"qrow16 source is missing: {source}")
     if "__global__ __maxnreg__(216)" not in source.read_text():
@@ -115,7 +118,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     compiled = _run(command)
     compiler_output = compiled.stdout + compiled.stderr
     required = (
-        f"Used {EXPECTED_REGISTERS} registers",
+        f"Used {expected_registers} registers",
         "0 bytes stack frame",
         "0 bytes spill stores",
         "0 bytes spill loads",
@@ -132,7 +135,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
     if resource_match is None:
         raise BuildError("cuobjdump did not report the qrow16 resource tuple")
     registers, stack, shared, local = map(int, resource_match.groups())
-    if (registers, stack, local) != (EXPECTED_REGISTERS, 0, 0):
+    if (registers, stack, local) != (expected_registers, 0, 0):
         raise BuildError("qrow16 RU3 object resource contract drifted")
 
     payload: dict[str, object] = {
@@ -143,6 +146,7 @@ def build(args: argparse.Namespace) -> dict[str, object]:
         "output_object_size": output.stat().st_size,
         "target": "sm_121a",
         "register_usage_level": REGISTER_USAGE_LEVEL,
+        "expected_registers": expected_registers,
         "registers": registers,
         "stack_bytes": stack,
         "local_bytes": local,
@@ -165,6 +169,12 @@ def main() -> int:
     parser.add_argument("--python-include", type=Path, required=True)
     parser.add_argument("--output-object", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument(
+        "--expected-registers",
+        type=int,
+        default=EXPECTED_REGISTERS,
+        help="exact spill-free ptxas register tuple required for admission",
+    )
     parser.add_argument("--cuda-root", type=Path, default=Path("/usr/local/cuda"))
     parser.add_argument("--nvcc", type=Path, default=Path("/usr/local/cuda/bin/nvcc"))
     parser.add_argument(

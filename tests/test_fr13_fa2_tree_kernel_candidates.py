@@ -231,6 +231,86 @@ def test_fixed32_query_tile16_preserves_warp_local_row_mapping(tmp_path: Path) -
         assert candidate_warp_row == stock_warp_row
 
 
+def test_qrow16_static_kv_strides_are_separate_exact_and_fail_closed(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    translation_unit = tmp_path / "flash_fwd_split_hdim256_bf16_sm80.cu"
+    stock = "\n".join(
+        (
+            '#include "namespace_config.h"',
+            '#include "flash_fwd_launch_template.h"',
+            "namespace FLASH_NAMESPACE {",
+            module.STOCK_FIXED32_QUERY_INSTANTIATION,
+            "} // namespace FLASH_NAMESPACE",
+        )
+    )
+    translation_unit.write_text(stock)
+
+    assert module._patch_fixed32_query_translation_unit(
+        translation_unit,
+        fixed32_query_tile16=True,
+        fixed32_query_tile16_static_strides=True,
+    )
+    qrow_translation_unit = translation_unit.with_name(
+        "flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu"
+    )
+    candidate = qrow_translation_unit.read_text()
+    assert candidate == module.FIXED32_QUERY_TILE16_STATIC_STRIDES_TRANSLATION_UNIT
+    assert candidate != module.FIXED32_QUERY_TILE16_TRANSLATION_UNIT
+    assert candidate.count(
+        "StaticPagedKVStrides<Fr13Fixed32Qrow16KernelTraits>"
+    ) == 1
+    assert "static constexpr int64_t page = 1024 * 4 * 256" in candidate
+    assert "static constexpr int64_t row = 4 * 256" in candidate
+    assert "static constexpr int64_t head = 256" in candidate
+    assert not module._patch_fixed32_query_translation_unit(
+        translation_unit,
+        fixed32_query_tile16=True,
+        fixed32_query_tile16_static_strides=True,
+    )
+
+    api = module.FIXED32_QUERY_TILE16_STATIC_STRIDES_API_DISPATCH
+    for tensor in ("k", "v"):
+        assert f"params.{tensor}_batch_stride == 1024 * 4 * 256" in api
+        assert f"params.{tensor}_row_stride == 4 * 256" in api
+        assert f"params.{tensor}_head_stride == 256" in api
+    assert "params.k_batch_stride ==" not in module.FIXED32_QUERY_TILE16_API_DISPATCH
+    assert "params.v_batch_stride ==" not in module.FIXED32_QUERY_TILE16_API_DISPATCH
+
+    block_table = (7, 3, 11, 5)
+    for n_block in range(64):
+        for tidx in range(32):
+            col_offset = tidx % 8 * 8
+            block_row_offset = tidx // 8 * 16
+            page_offset = ((n_block & 15) << 6) + block_row_offset
+            virtual_page_idx = n_block >> 4
+            dynamic = (
+                block_table[virtual_page_idx] * (1024 * 4 * 256)
+                + page_offset * (4 * 256)
+                + col_offset
+            )
+            static = (
+                block_table[virtual_page_idx] * (1024 * 4 * 256)
+                + page_offset * (4 * 256)
+                + col_offset
+            )
+            assert static == dynamic
+
+    other = tmp_path / "other" / "flash_fwd_split_hdim256_bf16_sm80.cu"
+    other.parent.mkdir()
+    other.write_text(stock)
+    try:
+        module._patch_fixed32_query_translation_unit(
+            other,
+            fixed32_query_tile16_static_strides=True,
+        )
+    except ValueError as error:
+        assert "require the qrow16 private kernel" in str(error)
+    else:
+        raise AssertionError("qrow16 static strides accepted without qrow16")
+
+
 def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     tmp_path: Path,
 ) -> None:
@@ -1421,20 +1501,76 @@ def test_qrow16_static_paged_path_folds_only_the_private_trait(
     )
 
 
+def test_qrow16_static_kv_head_stride_folds_only_in_opt_in_trait(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    kernel = tmp_path / "flash_fwd_kernel.h"
+    signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+        "(const Params &params) {\n"
+    )
+    base_offsets = module.FIXED32_QUERY_STATIC_PAGED_PATH_REPLACEMENTS[1][1]
+    suffix = (
+        "}\n\n"
+        "////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout\n"
+    )
+    stock = signature + base_offsets + suffix
+    kernel.write_text(stock)
+
+    assert not module._patch_fixed32_query_tile16_static_kv_head_stride(kernel)
+    assert kernel.read_text() == stock
+    assert module._patch_fixed32_query_tile16_static_kv_head_stride(
+        kernel,
+        fixed32_query_tile16_static_strides=True,
+    )
+    candidate = kernel.read_text()
+    assert candidate.count("FR13_FA2_QROW16_STATIC_KV_HEAD_STRIDE") == 1
+    assert "StaticPagedKVStrides<Kernel_traits>::head" in candidate
+    assert (
+        "static_assert(kStaticKVHeadStride == 0 || "
+        "kStaticKVHeadStride == 256);"
+    ) in candidate
+    assert candidate.count("kStaticKVHeadStride != 0") == 2
+    assert candidate.count("* kStaticKVHeadStride") == 2
+    assert "* params.k_head_stride" in candidate
+    assert "* params.v_head_stride" in candidate
+    assert not module._patch_fixed32_query_tile16_static_kv_head_stride(
+        kernel,
+        fixed32_query_tile16_static_strides=True,
+    )
+    assert kernel.read_text() == candidate
+
+    for query_head in range(24):
+        kv_head = query_head // 6
+        assert kv_head * 256 == (query_head // 6) * 256
+
+
 def test_source_build_candidates_are_independent_and_default_off() -> None:
     text = Path("scripts/fr13_patch_fa2_tree_bias.py").read_text()
 
     assert 'parser.add_argument(\n        "--tree-bias-tile-earlyout",' in text
     assert 'parser.add_argument(\n        "--fixed32-query-tile16",' in text
+    assert (
+        'parser.add_argument(\n        "--fixed32-query-tile16-static-strides",'
+        in text
+    )
     assert 'parser.add_argument(\n        "--fixed32-query-tile32",' in text
     assert 'parser.add_argument(\n        "--fixed32-query-tile16-live-ab",' in text
     assert 'parser.add_argument(\n        "--fixed32-query-tile32-live-ab",' in text
     assert "tree_bias_tile_earlyout: bool = False" in text
     assert "fixed32_query_tile16: bool = False" in text
+    assert "fixed32_query_tile16_static_strides: bool = False" in text
     assert "fixed32_query_tile32: bool = False" in text
     assert "There is no qrow32 production selector" in text
     assert "fixed32_query_tile32_production" not in text
     assert "--fixed32-query-tile32 requires --tree-bias-tile-earlyout" in text
+    assert "--fixed32-query-tile16-static-strides requires " in text
+    assert "fixed32 qrow16 static strides require --fixed32-query-tile16" in text
     assert "fixed32 qrow32 requires --tree-bias-tile-earlyout" in text
     assert "tree_splitkv" not in text
     assert "tree-splitkv" not in text
@@ -1494,6 +1630,16 @@ def test_qrow32_source_patch_requires_exact_safe_tile_earlyout(tmp_path: Path) -
         assert "requires --tree-bias-tile-earlyout" in str(error)
     else:
         raise AssertionError("qrow32 source patch accepted the one-flag build")
+
+    try:
+        module.patch_fa2_source(
+            tmp_path,
+            fixed32_query_tile16_static_strides=True,
+        )
+    except ValueError as error:
+        assert "require --fixed32-query-tile16" in str(error)
+    else:
+        raise AssertionError("qrow16 static strides accepted the one-flag build")
 
 
 def test_qrow16_capture_checker_is_compile_preflight_only() -> None:
@@ -1587,6 +1733,8 @@ def test_qrow16_fatbin_graft_and_so_finalize_are_fail_closed() -> None:
     assert "CUDA_VISIBLE_DEVICES must be explicitly empty" in builder
     assert "REGISTER_USAGE_LEVEL = 3" in builder
     assert "EXPECTED_REGISTERS = 216" in builder
+    assert '"--expected-registers"' in builder
+    assert "default=EXPECTED_REGISTERS" in builder
     assert "qrow16 source is missing the RU3-paired 216-register cap" in builder
     assert "0 bytes spill stores" in builder
     assert "0 bytes spill loads" in builder
