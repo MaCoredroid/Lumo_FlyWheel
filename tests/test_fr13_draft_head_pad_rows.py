@@ -69,8 +69,11 @@ def test_static_buffers_and_gemm_use_only_selected_rows() -> None:
     assert "torch.mm(_fr13_dh_in, _sh.weight.t(), out=_fr13_dh_out)" in snippet
     assert "return _fr13_dh_out[:_fr13_dh_batch]" in snippet
     assert "self._fr13_dh_pad_seen_eager = False" in snippet
+    assert "self._fr13_dh_pad_seen_capture_batches = set()" in snippet
     assert "direct padded draft head reached capture before" in snippet
     assert 'f"source_rows={_fr13_dh_batch} eager_launch=1"' in snippet
+    assert '"[FR13_DRAFT_HEAD_PAD] captured "' in snippet
+    assert "self._fr13_dh_pad_seen_capture_batches.add(" in snippet
     helper_start = snippet.index("def _fr13_dh_pad_logits")
     helper_end = snippet.index("def _fr13_dvk_logits", helper_start)
     assert "torch.empty" not in snippet[helper_start:helper_end]
