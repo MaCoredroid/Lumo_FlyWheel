@@ -21,6 +21,12 @@ cd "$REPO"
 : "${GATE_QROW16_SIDECAR_JSON:?set GATE_QROW16_SIDECAR_JSON to the gate Qrow16 sidecar}"
 : "${GATE_QROW16_CAPTURE_JSON:?set GATE_QROW16_CAPTURE_JSON to the gate Qrow16 capture}"
 
+FR13_DRAFT_HEAD_FP8_STATIC_IO=${FR13_DRAFT_HEAD_FP8_STATIC_IO:-0}
+case "$FR13_DRAFT_HEAD_FP8_STATIC_IO" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_FP8_STATIC_IO must be 0 or 1" >&2; exit 2 ;;
+esac
+
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
@@ -39,7 +45,13 @@ RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | cut -d' ' -f1)
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 RUNROOT_REL=${RUNROOT_ABS#"$REPO"/}
 STOCK_ARM="hydra27_fixed32_k64_root_head_bf16_${TAG}"
-CANDIDATE_ARM="hydra27_fixed32_k64_root_head_fp8_${TAG}"
+if [[ "$FR13_DRAFT_HEAD_FP8_STATIC_IO" == "1" ]]; then
+  CANDIDATE_ARM="hydra27_fixed32_k64_root_head_fp8_static_io_${TAG}"
+  ONLY_ARM_DELTA=FR13_DRAFT_HEAD_FP8_0_to_1_and_STATIC_IO_0_to_1
+else
+  CANDIDATE_ARM="hydra27_fixed32_k64_root_head_fp8_${TAG}"
+  ONLY_ARM_DELTA=FR13_DRAFT_HEAD_FP8_0_to_1
+fi
 PROMOTION_CREDENTIAL="$RUNROOT_ABS/gate_promotion_credential.json"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
@@ -98,13 +110,15 @@ mkdir -p "$RUNROOT_ABS"
   --candidate-source "$CANDIDATE_SOURCE" \
   --expected-source-sha256 "$CANDIDATE_SOURCE_SHA256" \
   --expected-source-commit "$SOURCE_COMMIT" \
+  --expected-static-io "$FR13_DRAFT_HEAD_FP8_STATIC_IO" \
   --repo "$PWD" \
   --gate-result "$GATE_RESULT_JSON" \
   --expected-gate-sha256 "$GATE_RESULT_SHA256" \
   --out "$PROMOTION_CREDENTIAL"
 PROMOTION_CREDENTIAL_SHA256=$(sha256sum "$PROMOTION_CREDENTIAL" | cut -d' ' -f1)
 
-printf 'classification=real_swe_verified_exact4_b1_draft_head_fp8_timing_pair\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nproduction_default_enabled=0\nonly_arm_delta=FR13_DRAFT_HEAD_FP8_0_to_1\nbatch_size=1\nconcurrency=1\nphysical_rows=32\ndraft_vocab_root=1\ndraft_vocab_k=65536\nqrow16_production=1\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\ncandidate_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\ndraft_vocab_blocks_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_live_pass_sha256=%s\ngate_result_sha256=%s\npromotion_credential_sha256=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b1_draft_head_fp8_timing_pair\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nproduction_default_enabled=0\nonly_arm_delta=%s\ndraft_head_fp8_static_io=%s\nbatch_size=1\nconcurrency=1\nphysical_rows=32\ndraft_vocab_root=1\ndraft_vocab_k=65536\nqrow16_production=1\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\ncandidate_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\ndraft_vocab_blocks_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_live_pass_sha256=%s\ngate_result_sha256=%s\npromotion_credential_sha256=%s\nstarted=%s\n' \
+  "$ONLY_ARM_DELTA" "$FR13_DRAFT_HEAD_FP8_STATIC_IO" \
   "$$" "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$SOURCE_COMMIT" "$CANDIDATE_SOURCE_SHA256" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$DRAFT_VOCAB_BLOCKS_SHA256" "$QROW16_FA2_SHA256" \
@@ -152,15 +166,17 @@ trap runner_exit EXIT
 run_arm() {
   local arm=$1
   local fp8=$2
-  local expected_bytes expected_floor fp8_arm
+  local expected_bytes expected_floor fp8_arm static_io
   if [[ "$fp8" == "1" ]]; then
     expected_bytes=30989326208
     expected_floor=113.514015414
     fp8_arm=$arm
+    static_io=$FR13_DRAFT_HEAD_FP8_STATIC_IO
   else
     expected_bytes=32666638208
     expected_floor=119.658015414
     fp8_arm=
+    static_io=0
   fi
   echo "===== $arm: real exact4 B1 FP8=$fp8 ====="
   (
@@ -169,6 +185,7 @@ run_arm() {
     export FR13_DRAFT_VOCAB_K=65536
     export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
     export FR13_DRAFT_HEAD_FP8="$fp8"
+    export FR13_DRAFT_HEAD_FP8_STATIC_IO="$static_io"
     export FR13_NEEDS_ALLOW=
     export FR13_FLOOR_ORDER=HT
     source scripts/fr13_canonical_env.sh
@@ -195,6 +212,7 @@ run_arm() {
         FR13_DRAFT_HEAD_M32_PRODUCTION=0 \
         FR13_DRAFT_HEAD_M32_TIMING_ARM=0 \
         FR13_DRAFT_HEAD_FP8="$fp8" \
+        FR13_DRAFT_HEAD_FP8_STATIC_IO="$static_io" \
         FR13_DRAFT_HEAD_FP8_ARM="$fp8_arm" \
         FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON=/logs/fr13_draft_head_fp8.engagement.json \
         FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
@@ -237,6 +255,7 @@ run_arm() {
     local qrow16_sidecar="$RUNROOT_ABS/$arm/logs/fr13_fa2_qrow16_production_pass.json"
     local qrow16_capture="$RUNROOT_ABS/$arm/logs/fr13_fa2_qrow16_production_capture.json"
     [[ -f "$container_env" && ! -L "$container_env" \
+       && "$(grep -Fxc "FR13_DRAFT_HEAD_FP8_STATIC_IO=$static_io" "$container_env")" -eq 1 \
        && "$(grep -Fxc 'FR13_FA2_QROW16_LIVE_PAGED_AB=0' "$container_env")" -eq 1 \
        && "$(grep -Fxc 'FR13_FA2_QROW16_PRODUCTION=1' "$container_env")" -eq 1 \
        && "$(grep -Fxc "FR13_FA2_QROW16_SO_SHA256=$QROW16_FA2_SHA256" "$container_env")" -eq 1 \
@@ -284,6 +303,7 @@ finalize_manifests
   --promotion-credential "$PROMOTION_CREDENTIAL" \
   --expected-source-commit "$SOURCE_COMMIT" \
   --expected-source-sha256 "$CANDIDATE_SOURCE_SHA256" \
+  --expected-static-io "$FR13_DRAFT_HEAD_FP8_STATIC_IO" \
   --stock-arm "$STOCK_ARM" \
   --candidate-arm "$CANDIDATE_ARM" \
   --stock-qrow16-sidecar "$STOCK_QROW16_SIDECAR" \

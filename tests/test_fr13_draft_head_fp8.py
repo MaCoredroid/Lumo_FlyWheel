@@ -48,16 +48,22 @@ def test_candidate_is_default_off_strict_and_orthogonal_to_cutlass_wave() -> Non
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
     assert '"FR13_DRAFT_HEAD_FP8", "0"' in snippet
+    assert '"FR13_DRAFT_HEAD_FP8_STATIC_IO", "0"' in snippet
     assert '"FR13_DRAFT_HEAD_FP8_ARM", ""' in snippet
     assert '_fr13_dh_fp8_raw not in ("0", "1")' in snippet
     assert "FR13_DRAFT_HEAD_FP8=1 requires a canonical" in snippet
     assert "FR13_DRAFT_HEAD_FP8=0 forbids FR13_DRAFT_HEAD_FP8_ARM" in snippet
+    assert "FR13_DRAFT_HEAD_FP8_STATIC_IO=1 requires" in snippet
     assert "_fr13_dh_fp8," in snippet
     assert "not _fr13_is_fixed32" in snippet
     assert "not _fr13_dvk_root" in snippet
     assert "not _fr13_single_logits" in snippet
     assert "_fr13_dvk_configured != 65536" in snippet
     assert "FR13_DRAFT_HEAD_FP8=${FR13_DRAFT_HEAD_FP8:-0}" in launcher
+    assert (
+        "FR13_DRAFT_HEAD_FP8_STATIC_IO="
+        "${FR13_DRAFT_HEAD_FP8_STATIC_IO:-0}" in launcher
+    )
     assert 'case "$FR13_DRAFT_HEAD_FP8" in' in launcher
     assert "FR13_FIXED32_CUTLASS_WAVE" not in snippet[
         snippet.index("_fr13_dh_fp8_raw") : snippet.index(
@@ -118,6 +124,38 @@ def test_fp8_output_directly_serves_all_draft_logits_without_bf16_shadow() -> No
     assert "if _fr13_dh_fp8_on:" in dispatch
     assert "_logits = _fr13_dh_fp8_logits(_h)" in dispatch
     assert "BF16 fallback is forbidden" in dispatch
+
+
+def test_static_io_reuses_exact_b1_b4_raw_op_outputs() -> None:
+    snippet = _eagle_snippet()
+    prepare = snippet[
+        snippet.index("def _fr13_dvk_prepare") : snippet.index(
+            "def _fr13_dh_pad_logits"
+        )
+    ]
+    helper = snippet[
+        snippet.index("def _fr13_dh_fp8_logits") : snippet.index(
+            "def _fr13_dvk_logits"
+        )
+    ]
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+
+    assert "self._fr13_dh_fp8_static_aq = (None,) + tuple(" in prepare
+    assert "self._fr13_dh_fp8_static_as = (None,) + tuple(" in prepare
+    assert "self._fr13_dh_fp8_static_out = (None,) + tuple(" in prepare
+    assert "for _fr13_dh_b in range(1, 5)" in prepare
+    assert '!= (1, _fr13_dh_b)' in prepare
+    assert '!= (65536, 1)' in prepare
+    assert "torch.ops._C.per_token_group_fp8_quant(" in helper
+    assert "torch.ops._C.cutlass_scaled_mm(" in helper
+    assert "self._fr13_dh_fp8_weight_t" in helper
+    assert "self._fr13_dh_fp8_weight_scale_t" in helper
+    assert "static_preallocated_raw_out_ops" in snippet
+    assert 'case "$FR13_DRAFT_HEAD_FP8_STATIC_IO" in' in launcher
+    assert (
+        '-e FR13_DRAFT_HEAD_FP8_STATIC_IO="'
+        '$FR13_DRAFT_HEAD_FP8_STATIC_IO" \\' in launcher
+    )
 
 
 def test_root_plus_four_capture_engagement_has_no_synchronize() -> None:
@@ -265,7 +303,10 @@ def test_deploy_speed_reducer_binds_fp8_to_exact_k64_root_ledger() -> None:
     assert "113.514015414" in measure
     assert 'os.environ.get("FR13_DRAFT_HEAD_FP8", "0")' in measure
     assert '_draft_head_fp8_raw not in {"0", "1"}' in measure
+    assert '_draft_head_fp8_static_io_raw not in {"0", "1"}' in measure
     assert '"draft_head_fp8": bool(_draft_vocab_config[2])' in measure
+    assert '"draft_head_fp8_static_io": (' in measure
+    assert "if bool(_draft_vocab_config[2])" in measure
     assert "(0, 0, 1):" not in measure
     assert "(65_536, 0, 1):" not in measure
 
@@ -333,6 +374,23 @@ def test_real_b1_gate_validates_direct_engagement_and_acceptance() -> None:
         source_commit=source_commit,
         expected_arm=engagement["arm"],
     )
+    static_engagement = json.loads(json.dumps(engagement))
+    static_engagement["candidate"] = gate.STATIC_IO_CANDIDATE
+    gate._validate_engagement(
+        static_engagement,
+        source_sha=source_sha,
+        source_commit=source_commit,
+        expected_arm=engagement["arm"],
+        expected_static_io=True,
+    )
+    with pytest.raises(ValueError, match="engagement contract drifted"):
+        gate._validate_engagement(
+            static_engagement,
+            source_sha=source_sha,
+            source_commit=source_commit,
+            expected_arm=engagement["arm"],
+            expected_static_io=False,
+        )
     broken = json.loads(json.dumps(engagement))
     broken["candidate"]["bf16_shadow_calls"] = 1
     try:
@@ -372,6 +430,7 @@ def test_real_b1_gate_validates_direct_engagement_and_acceptance() -> None:
         "draft_vocab_k": 65_536,
         "draft_vocab_root": 1,
         "draft_head_fp8": True,
+        "draft_head_fp8_static_io": False,
         "floor_is_full_step_hardware_floor": False,
         "floor_reference_scope": (
             "fixed32_mandatory_weight_read_or_row_compute_lower_bound"
@@ -400,6 +459,17 @@ def test_real_b1_gate_validates_direct_engagement_and_acceptance() -> None:
         "accepted_drafts_per_event": 3.7,
         "committed_tokens_per_event": 4.7,
     }
+    static_acceptance = json.loads(json.dumps(acceptance))
+    static_acceptance["draft_head_fp8_static_io"] = True
+    gate._validate_acceptance(
+        static_acceptance, expected_static_io=True
+    )
+    with pytest.raises(
+        ValueError, match="acceptance telemetry provenance drifted"
+    ):
+        gate._validate_acceptance(
+            static_acceptance, expected_static_io=False
+        )
     broken_acceptance = json.loads(json.dumps(acceptance))
     broken_acceptance.pop("draft_head_fp8")
     try:
@@ -414,6 +484,11 @@ def test_real_b1_runner_uses_canonical_task_and_only_gates_not_tunes() -> None:
     runner = RUNNER.read_text(encoding="utf-8")
 
     assert "FR13_GATE_DRAFT_HEAD_FP8=${FR13_GATE_DRAFT_HEAD_FP8:-0}" in runner
+    assert (
+        "FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO="
+        "${FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO:-0}" in runner
+    )
+    assert "FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=1 requires" in runner
     assert "FR13_GATE_DRAFT_HEAD_FP8 must be the only enabled kernel candidate" in runner
     assert "FR13_B1_WORKLOAD_PROFILE" in runner
     assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in runner
@@ -421,6 +496,10 @@ def test_real_b1_runner_uses_canonical_task_and_only_gates_not_tunes() -> None:
     assert "FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON=/logs/fr13_draft_head_fp8.engagement.json" in runner
     assert "DRAFT_HEAD_FP8_ARM=$ARM" in runner
     assert 'FR13_DRAFT_HEAD_FP8_ARM="$DRAFT_HEAD_FP8_ARM"' in runner
+    assert (
+        'FR13_DRAFT_HEAD_FP8_STATIC_IO="'
+        '$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO"' in runner
+    )
     assert "scripts/fr13_measure.py deploy-speed" in runner
     assert "--expected-tok-per-draft 31" in runner
     assert "scripts/fr13_draft_head_fp8_gate.py" in runner
@@ -441,6 +520,10 @@ def test_real_b1_runner_uses_canonical_task_and_only_gates_not_tunes() -> None:
     assert '--qrow16-sidecar "$DRAFT_HEAD_FP8_QROW16_SIDECAR"' in runner
     assert '--qrow16-capture "$DRAFT_HEAD_FP8_QROW16_CAPTURE"' in runner
     assert '--qrow16-so "$FORKED_FA2_SO"' in runner
+    assert (
+        '--expected-static-io "'
+        '$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO"' in runner
+    )
 
 
 def test_gate_validator_can_rebuild_a_promotion_credential() -> None:
@@ -468,6 +551,9 @@ def test_timing_runner_is_real_exact4_and_uses_distinct_arm_floors() -> None:
     assert 'run_arm "$STOCK_ARM" 0' in runner
     assert 'run_arm "$CANDIDATE_ARM" 1' in runner
     assert 'FR13_DRAFT_HEAD_FP8_ARM="$fp8_arm"' in runner
+    assert "FR13_DRAFT_HEAD_FP8_STATIC_IO=${FR13_DRAFT_HEAD_FP8_STATIC_IO:-0}" in runner
+    assert 'FR13_DRAFT_HEAD_FP8_STATIC_IO="$static_io"' in runner
+    assert '--expected-static-io "$FR13_DRAFT_HEAD_FP8_STATIC_IO"' in runner
     assert "scripts/fr13_bigdenom_swe_serve_variant.sh" in runner
     assert "scripts/fr13_measure.py deploy-speed" in runner
     assert "--gate-result \"$GATE_RESULT_JSON\"" in runner
@@ -497,6 +583,9 @@ def test_timing_runner_is_real_exact4_and_uses_distinct_arm_floors() -> None:
     assert '"wall_residual_ms"' in reducer
     assert "T_CRITICAL_ONE_SIDED_95_DF3" in reducer
     assert '"formal_floor_acceptance_eligible": False' in reducer
+    assert 'parser.add_argument(\n        "--expected-static-io"' in reducer
+    assert '"static_io": expected_static_io' in reducer
+    assert "static_preallocated_raw_out_ops" not in reducer
     assert "Formal Tail23/Hydra27 acceptance remains separate" in reducer
     assert "validate_qrow16_production" in reducer
     assert '"qrow16_production"' in reducer

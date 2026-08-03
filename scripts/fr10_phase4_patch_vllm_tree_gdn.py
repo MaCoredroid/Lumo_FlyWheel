@@ -23026,6 +23026,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_fp8_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_FP8", "0"
             )
+            _fr13_dh_fp8_static_io_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_FP8_STATIC_IO", "0"
+            )
             _fr13_dh_fp8_arm = os.environ.get(
                 "FR13_DRAFT_HEAD_FP8_ARM", ""
             )
@@ -23050,11 +23053,23 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_FP8 must be exactly 0 or 1"
                 )
+            if _fr13_dh_fp8_static_io_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_FP8_STATIC_IO must be exactly 0 or 1"
+                )
             _fr13_dh_rows = int(_fr13_dh_rows_raw)
             _fr13_dh_ab = _fr13_dh_ab_raw == "1"
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
             _fr13_dh_fp8 = _fr13_dh_fp8_raw == "1"
+            _fr13_dh_fp8_static_io = (
+                _fr13_dh_fp8_static_io_raw == "1"
+            )
+            if _fr13_dh_fp8_static_io and not _fr13_dh_fp8:
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_FP8_STATIC_IO=1 requires "
+                    "FR13_DRAFT_HEAD_FP8=1"
+                )
             if _fr13_dh_fp8:
                 if (
                     not _fr13_dh_fp8_arm
@@ -23291,6 +23306,83 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             "FR13 draft-head FP8 weight quantization drifted "
                             "from qweight[65536,5120]/scale[512,40]"
                         )
+                    if _fr13_dh_fp8_static_io:
+                        from vllm.model_executor.layers.quantization.utils.quant_utils import (
+                            get_fp8_min_max as _fr13_dh_fp8_min_max,
+                        )
+
+                        (
+                            self._fr13_dh_fp8_min,
+                            self._fr13_dh_fp8_max,
+                        ) = _fr13_dh_fp8_min_max()
+                        self._fr13_dh_fp8_weight_t = (
+                            _fr13_dh_fp8_qw.t()
+                        )
+                        self._fr13_dh_fp8_weight_scale_t = (
+                            _fr13_dh_fp8_ws.t()
+                        )
+                        self._fr13_dh_fp8_static_aq = (None,) + tuple(
+                            torch.empty(
+                                (_fr13_dh_b, 5120),
+                                dtype=torch.float8_e4m3fn,
+                                device=_fr13_dh_fp8_qw.device,
+                            )
+                            for _fr13_dh_b in range(1, 5)
+                        )
+                        self._fr13_dh_fp8_static_as = (None,) + tuple(
+                            torch.empty(
+                                (40, _fr13_dh_b),
+                                dtype=torch.float32,
+                                device=_fr13_dh_fp8_qw.device,
+                            ).permute(1, 0)
+                            for _fr13_dh_b in range(1, 5)
+                        )
+                        self._fr13_dh_fp8_static_out = (None,) + tuple(
+                            torch.empty(
+                                (_fr13_dh_b, 65536),
+                                dtype=torch.bfloat16,
+                                device=_fr13_dh_fp8_qw.device,
+                            )
+                            for _fr13_dh_b in range(1, 5)
+                        )
+                        if (
+                            tuple(self._fr13_dh_fp8_weight_t.shape)
+                            != (5120, 65536)
+                            or tuple(self._fr13_dh_fp8_weight_t.stride())
+                            != (1, 5120)
+                            or tuple(
+                                self._fr13_dh_fp8_weight_scale_t.shape
+                            )
+                            != (40, 512)
+                            or tuple(
+                                self._fr13_dh_fp8_weight_scale_t.stride()
+                            )
+                            != (1, 40)
+                            or any(
+                                tuple(
+                                    self._fr13_dh_fp8_static_aq[
+                                        _fr13_dh_b
+                                    ].stride()
+                                )
+                                != (5120, 1)
+                                or tuple(
+                                    self._fr13_dh_fp8_static_as[
+                                        _fr13_dh_b
+                                    ].stride()
+                                )
+                                != (1, _fr13_dh_b)
+                                or tuple(
+                                    self._fr13_dh_fp8_static_out[
+                                        _fr13_dh_b
+                                    ].stride()
+                                )
+                                != (65536, 1)
+                                for _fr13_dh_b in range(1, 5)
+                            )
+                        ):
+                            raise RuntimeError(
+                                "FR13 draft-head FP8 static I/O layout drifted"
+                            )
                     self._fr13_dh_fp8_ready = True
                     print(
                         "[FR13_DRAFT_HEAD_FP8] static weight ready "
@@ -23302,6 +23394,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "calls_per_event=5 mandatory_event_bytes=1678131200",
                         flush=True,
                     )
+                    if _fr13_dh_fp8_static_io:
+                        print(
+                            "[FR13_DRAFT_HEAD_FP8_STATIC_IO] ready "
+                            "batches=1,2,3,4 raw_out_ops=1 "
+                            "workspace_reused_across_root_and_loop=1",
+                            flush=True,
+                        )
                 if (
                     (
                         _fr13_dh_rows
@@ -23638,6 +23737,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "output_dtype": "torch.bfloat16",
                         "proposal_logits_source": "fp8_output_direct",
                         "bf16_shadow_calls": 0,
+                        "activation_io": (
+                            "static_preallocated_raw_out_ops"
+                            if _fr13_dh_fp8_static_io
+                            else "wrapper_allocated"
+                        ),
                     },
                     "traffic": {
                         "bf16_weight_bytes_per_call_removed": 671088640,
@@ -24123,17 +24227,37 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "FR13 draft-head FP8 left exact B1-B4 BF16 "
                         "hidden[B,5120] contract"
                     )
-                from vllm.model_executor.layers.quantization.utils.fp8_utils import (
-                    per_token_group_quant_fp8 as _fr13_dh_fp8_quant_act,
-                )
-                _fr13_dh_fp8_aq, _fr13_dh_fp8_as = (
-                    _fr13_dh_fp8_quant_act(
+                if _fr13_dh_fp8_static_io:
+                    _fr13_dh_fp8_aq = self._fr13_dh_fp8_static_aq[
+                        _fr13_dh_fp8_batch
+                    ]
+                    _fr13_dh_fp8_as = self._fr13_dh_fp8_static_as[
+                        _fr13_dh_fp8_batch
+                    ]
+                    torch.ops._C.per_token_group_fp8_quant(
                         _h,
+                        _fr13_dh_fp8_aq,
+                        _fr13_dh_fp8_as,
                         128,
-                        column_major_scales=True,
-                        use_ue8m0=False,
+                        1e-10,
+                        self._fr13_dh_fp8_min,
+                        self._fr13_dh_fp8_max,
+                        False,
+                        True,
+                        False,
                     )
-                )
+                else:
+                    from vllm.model_executor.layers.quantization.utils.fp8_utils import (
+                        per_token_group_quant_fp8 as _fr13_dh_fp8_quant_act,
+                    )
+                    _fr13_dh_fp8_aq, _fr13_dh_fp8_as = (
+                        _fr13_dh_fp8_quant_act(
+                            _h,
+                            128,
+                            column_major_scales=True,
+                            use_ue8m0=False,
+                        )
+                    )
                 if (
                     tuple(_fr13_dh_fp8_aq.shape)
                     != (_fr13_dh_fp8_batch, 5120)
@@ -24148,17 +24272,30 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     raise RuntimeError(
                         "FR13 draft-head FP8 activation quantization drifted"
                     )
-                from vllm.model_executor.kernels.linear.scaled_mm.cutlass import (
-                    cutlass_scaled_mm as _fr13_dh_fp8_scaled_mm,
-                )
-                _fr13_dh_fp8_out = _fr13_dh_fp8_scaled_mm(
-                    _fr13_dh_fp8_aq,
-                    _fr13_dh_fp8_qw,
-                    _fr13_dh_fp8_as,
-                    _fr13_dh_fp8_ws,
-                    [128, 128],
-                    torch.bfloat16,
-                )
+                if _fr13_dh_fp8_static_io:
+                    _fr13_dh_fp8_out = self._fr13_dh_fp8_static_out[
+                        _fr13_dh_fp8_batch
+                    ]
+                    torch.ops._C.cutlass_scaled_mm(
+                        _fr13_dh_fp8_out,
+                        _fr13_dh_fp8_aq,
+                        self._fr13_dh_fp8_weight_t,
+                        _fr13_dh_fp8_as,
+                        self._fr13_dh_fp8_weight_scale_t,
+                        None,
+                    )
+                else:
+                    from vllm.model_executor.kernels.linear.scaled_mm.cutlass import (
+                        cutlass_scaled_mm as _fr13_dh_fp8_scaled_mm,
+                    )
+                    _fr13_dh_fp8_out = _fr13_dh_fp8_scaled_mm(
+                        _fr13_dh_fp8_aq,
+                        _fr13_dh_fp8_qw,
+                        _fr13_dh_fp8_as,
+                        _fr13_dh_fp8_ws,
+                        [128, 128],
+                        torch.bfloat16,
+                    )
                 if (
                     tuple(_fr13_dh_fp8_out.shape)
                     != (_fr13_dh_fp8_batch, 65536)

@@ -1656,6 +1656,21 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     _draft_head_fp8_raw = os.environ.get("FR13_DRAFT_HEAD_FP8", "0")
     if _draft_head_fp8_raw not in {"0", "1"}:
         raise RuntimeError("FR13_DRAFT_HEAD_FP8 must be exactly 0 or 1")
+    _draft_head_fp8_static_io_raw = os.environ.get(
+        "FR13_DRAFT_HEAD_FP8_STATIC_IO", "0"
+    )
+    if _draft_head_fp8_static_io_raw not in {"0", "1"}:
+        raise RuntimeError(
+            "FR13_DRAFT_HEAD_FP8_STATIC_IO must be exactly 0 or 1"
+        )
+    if (
+        _draft_head_fp8_static_io_raw == "1"
+        and _draft_head_fp8_raw != "1"
+    ):
+        raise RuntimeError(
+            "FR13_DRAFT_HEAD_FP8_STATIC_IO=1 requires "
+            "FR13_DRAFT_HEAD_FP8=1"
+        )
     _draft_vocab_config = (
         int(os.environ.get("FR13_DRAFT_VOCAB_K", "65536")),
         int(os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0")),
@@ -1914,6 +1929,15 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "draft_vocab_k": _draft_vocab_config[0],
         "draft_vocab_root": _draft_vocab_config[1],
         "draft_head_fp8": bool(_draft_vocab_config[2]),
+        **(
+            {
+                "draft_head_fp8_static_io": (
+                    _draft_head_fp8_static_io_raw == "1"
+                )
+            }
+            if bool(_draft_vocab_config[2])
+            else {}
+        ),
         "weight_floor_bandwidth_bytes_per_s": BANDWIDTH_BYTES_PER_S,
         "compute_floor_ms": _compute_floor_ms,
         "rows_per_step": _rows_per_step,

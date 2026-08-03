@@ -45,7 +45,7 @@ GEOMETRY = {
     "weight_block": [128, 128],
     "activation_group": 128,
 }
-CANDIDATE = {
+_CANDIDATE_COMMON = {
     "operation": "vllm_cutlass_block_fp8_scaled_mm",
     "device": "sm121",
     "weight_dtype_bytes": 1,
@@ -56,6 +56,21 @@ CANDIDATE = {
     "proposal_logits_source": "fp8_output_direct",
     "bf16_shadow_calls": 0,
 }
+
+
+def candidate_contract(static_io: bool) -> dict[str, Any]:
+    return {
+        **_CANDIDATE_COMMON,
+        "activation_io": (
+            "static_preallocated_raw_out_ops"
+            if static_io
+            else "wrapper_allocated"
+        ),
+    }
+
+
+CANDIDATE = candidate_contract(False)
+STATIC_IO_CANDIDATE = candidate_contract(True)
 TRAFFIC = {
     "bf16_weight_bytes_per_call_removed": 671_088_640,
     "fp8_weight_bytes_per_call": 335_544_320,
@@ -182,6 +197,7 @@ def _validate_engagement(
     source_sha: str,
     source_commit: str,
     expected_arm: str,
+    expected_static_io: bool = False,
 ) -> None:
     if set(payload) != ENGAGEMENT_KEYS:
         raise ValueError("FP8 engagement key set drifted")
@@ -193,7 +209,8 @@ def _validate_engagement(
         or payload.get("candidate_source_sha256") != source_sha
         or payload.get("served_batch_size") != 1
         or payload.get("geometry") != GEOMETRY
-        or payload.get("candidate") != CANDIDATE
+        or payload.get("candidate")
+        != candidate_contract(expected_static_io)
         or payload.get("traffic") != TRAFFIC
         or payload.get("selected_root_calls") != 1
         or payload.get("captured_loop_calls") != 4
@@ -214,6 +231,8 @@ def _validate_engagement(
 
 def _validate_acceptance(
     payload: dict[str, Any],
+    *,
+    expected_static_io: bool = False,
 ) -> dict[str, float | int | str]:
     engagement = payload.get("engagement")
     per_task = payload.get("per_task")
@@ -229,6 +248,7 @@ def _validate_acceptance(
         or payload.get("draft_vocab_k") != 65_536
         or payload.get("draft_vocab_root") != 1
         or payload.get("draft_head_fp8") is not True
+        or payload.get("draft_head_fp8_static_io") is not expected_static_io
         or payload.get("floor_is_full_step_hardware_floor") is not False
         or payload.get("floor_reference_scope")
         != "fixed32_mandatory_weight_read_or_row_compute_lower_bound"
@@ -362,6 +382,9 @@ def main() -> int:
     parser.add_argument("--expected-source-sha256", required=True)
     parser.add_argument("--expected-source-commit", required=True)
     parser.add_argument("--repo", type=Path, required=True)
+    parser.add_argument(
+        "--expected-static-io", choices=("0", "1"), default="0"
+    )
     parser.add_argument("--gate-result", type=Path)
     parser.add_argument("--expected-gate-sha256")
     parser.add_argument("--out", type=Path, required=True)
@@ -381,12 +404,16 @@ def main() -> int:
     acceptance, acceptance_raw = _load(args.acceptance, "acceptance telemetry")
     final_flush, final_flush_raw = _load(args.final_flush, "final flush")
     boundary, boundary_raw = _load(args.boundary_snapshot, "boundary snapshot")
-    acceptance_summary = _validate_acceptance(acceptance)
+    acceptance_summary = _validate_acceptance(
+        acceptance,
+        expected_static_io=args.expected_static_io == "1",
+    )
     _validate_engagement(
         engagement,
         source_sha=source_sha,
         source_commit=source_commit,
         expected_arm=str(acceptance_summary["arm"]),
+        expected_static_io=args.expected_static_io == "1",
     )
 
     ack = final_flush.get("ack")
@@ -439,6 +466,7 @@ def main() -> int:
         "arm": acceptance_summary["arm"],
         "source_commit": source_commit,
         "candidate_source_sha256": source_sha,
+        "static_io": args.expected_static_io == "1",
         "engagement_sha256": _sha256(engagement_raw),
         "acceptance_telemetry_sha256": _sha256(acceptance_raw),
         "final_flush_sha256": _sha256(final_flush_raw),
@@ -451,6 +479,7 @@ def main() -> int:
             "proposal_logits_source": "fp8_output_direct",
             "bf16_shadow_calls": 0,
             "steady_state_synchronizations": 0,
+            "activation_io": engagement["candidate"]["activation_io"],
         },
         "acceptance_telemetry": acceptance_summary,
         "terminal": terminal,
@@ -486,6 +515,7 @@ def main() -> int:
             "formal_floor_acceptance_eligible": False,
             "source_commit": source_commit,
             "candidate_source_sha256": source_sha,
+            "static_io": gate_result["static_io"],
             "qualification_arm": gate_result["arm"],
             "gate_result_sha256": expected_gate_sha,
             "gate_evidence_sha256": {
