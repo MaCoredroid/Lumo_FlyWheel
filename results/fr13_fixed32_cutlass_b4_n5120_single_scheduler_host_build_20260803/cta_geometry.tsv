@@ -1,0 +1,6 @@
+n	k	route	tile_m	tile_n	logical_tiles	launch_grid_x	launch_grid_y	tiles_per_cta
+34816	5120	twom_pingpong	64	128	544	34	1	16
+5120	17408	cooperative_n5120_single	128	128	40	40	1	1
+5120	6144	cooperative_n5120_single	128	128	40	40	1	1
+16384	5120	twom_pingpong	64	128	256	32	1	8
+14336	5120	twom_pingpong	64	128	224	32	1	7

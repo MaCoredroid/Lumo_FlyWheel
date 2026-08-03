@@ -1,0 +1,121 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_n5120_single_scheduler_host_build.v1",
+  "created_at_utc": "2026-08-03T08:35:06Z",
+  "status": "host_compile_link_import_audit_pass_default_off",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/fixed32-b4-hybrid-schedule-next-20260803",
+    "base_commit": "3d947d2ac6c1c140371e39dc2650a30fcb44f010",
+    "source_commit": "dc1c4f603e19e9fbf3676b2875d4c02df9996979",
+    "patch_source_sha256": "777f8e8a90681201504b074e85a8dc6e3e3840aa07e0f21d02c215f0a8298c11",
+    "patch_source_bytes": 96850,
+    "patched_dispatch_sha256": "76309f67d5547517e285a23cf4a2d9138d711aa6b73e7cf675f69bf500946fce",
+    "patched_dispatch_bytes": 97487,
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2"
+  },
+  "candidate": {
+    "selector": "identity_hybrid_n5120_b4",
+    "diagnostic_selector": "identity_hybrid_n5120_b4_byte_ab",
+    "intended_profile": "k64_root",
+    "default_enabled": false,
+    "production_authorized": false,
+    "physical_rows": 128,
+    "qualified_projection_nk": [
+      [5120, 6144],
+      [5120, 17408],
+      [14336, 5120],
+      [16384, 5120],
+      [34816, 5120]
+    ],
+    "n5120_route": {
+      "tile_mnk": [128, 128, 128],
+      "cluster_mnk": [1, 1, 1],
+      "mainloop_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+      "mainloop_stage_count": 2,
+      "tile_scheduler": "fr13_fixed32_b4_n5120_single_tile_scheduler",
+      "logical_grid": [1, 40, 1],
+      "launch_grid_at_sm_count_48": [40, 1, 1],
+      "tiles_per_cta": 1
+    },
+    "other_projection_route": {
+      "tile_mnk": [64, 128, 128],
+      "cluster_mnk": [1, 1, 1],
+      "mainloop_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+      "mainloop_stage_count": 2,
+      "tile_scheduler": "fr13_fixed32_b4_twom_static_scheduler"
+    },
+    "epilogue": "accumulator_identity_round_to_nearest",
+    "diagnostic_serves": "stock",
+    "admitted_production_dispatch": "direct_candidate_only",
+    "non_admitted_dispatch": "stock"
+  },
+  "host_build": {
+    "result": "pass",
+    "target": "sm_121a",
+    "cuda_compiler_version": "13.0.88",
+    "host_compiler_version": "13.3.0",
+    "object_sha256": "43d17de1710ce25cfca30bd4ad94b5e0f9a505b460771ddc976ee80f899d4f96",
+    "object_bytes": 24019856,
+    "cubin_sha256": "e8b6c6b1cf0623476e1850dba38bcc5b4e269b1ccff66aaaf630fee077bf9822",
+    "cubin_bytes": 2493488,
+    "binary_sha256": "78b64e69adcb0a3e43a03d65c68658892535e0cd780742e39c0d77b42d5396e8",
+    "binary_bytes": 119110672,
+    "linked_elf": "ELF64 AArch64 shared object",
+    "python_import_result": "pass",
+    "cuda_visible_devices": "empty",
+    "gpu_runtime_used": false,
+    "docker_used": false,
+    "outputs_published": false
+  },
+  "resource_gate": {
+    "result": "pass",
+    "kernel_records": 2,
+    "dtypes": ["fp16", "bf16"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "local_load_instructions": 0,
+    "local_store_instructions": 0,
+    "call_instructions": 0
+  },
+  "sass_per_dtype": {
+    "incumbent_general_scheduler": {
+      "instructions": 1352,
+      "branches": 40,
+      "qmma": 128,
+      "ffma": 128,
+      "ldsm": 48,
+      "stsm": 16
+    },
+    "candidate_single_tile_scheduler": {
+      "instructions": 1008,
+      "branches": 33,
+      "qmma": 128,
+      "ffma": 128,
+      "ldsm": 48,
+      "stsm": 16
+    },
+    "instruction_delta": -344,
+    "instruction_delta_percent": -25.4438,
+    "branch_delta": -7
+  },
+  "default_off_codegen_identity": {
+    "result": "pass",
+    "fp16_incumbent_block_sha256": "331d5c77987da0de2c04daec3ce050f36dec79617f7fc9b016b59a2ac88660c2",
+    "bf16_incumbent_block_sha256": "49a74fed945dc9e0278d0144592d077626280ebde76739ba54f901bb85ded3bc",
+    "comparison": "prior_hybrid_object_equals_candidate_object"
+  },
+  "qualification": {
+    "retained_for_real_byte_gate": true,
+    "real_swe_verified_exact4_tail23_byte_gate": "pending",
+    "real_swe_verified_exact4_hydra27_byte_gate": "pending",
+    "real_swe_verified_exact4_full_wall_timing": "blocked_on_dual_byte_pass",
+    "hardware_floor_acceptance": "unchanged"
+  }
+}

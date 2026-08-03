@@ -1,0 +1,5 @@
+route	dtype	sass_slots	ldl	stl	call	branches	qmma	ffma	ldsm	stsm	block_sha256
+incumbent_general	fp16	1352	0	0	0	40	128	128	48	16	331d5c77987da0de2c04daec3ce050f36dec79617f7fc9b016b59a2ac88660c2
+candidate_single_tile	fp16	1008	0	0	0	33	128	128	48	16	7221e1dfe236085a9c71e030170aa752dae6e88165ba27abf07b7fea2c3b87d2
+incumbent_general	bf16	1352	0	0	0	40	128	128	48	16	49a74fed945dc9e0278d0144592d077626280ebde76739ba54f901bb85ded3bc
+candidate_single_tile	bf16	1008	0	0	0	33	128	128	48	16	64a171e14170dfe6117a6e4a26eb86fb737e266c90dbeefeeef6f7214bb4179a
