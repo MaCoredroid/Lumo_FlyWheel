@@ -30,6 +30,11 @@ import fr13_runtime_manifest as runtime_manifest  # noqa: E402
 SCHEMA = "fr13.fixed32.gdn_single_launch.real_task_credential.v3"
 LIVE_SCHEMA = "fr13.fixed32.gdn_single_launch.live_observation.v2"
 CANDIDATE = "fixed32_gdn_single_launch_tree_v2"
+GQA_GROUP3_CANDIDATE = "fixed32_gdn_single_launch_gqa_group3_v1"
+CANDIDATES = {
+    "single_launch": CANDIDATE,
+    "gqa_group3": GQA_GROUP3_CANDIDATE,
+}
 REFERENCE = "fixed32_gdn_two_launch_reference_v1"
 DATASET = "princeton-nlp/SWE-bench_Verified"
 B1_TASK_IDS = ("astropy__astropy-12907",)
@@ -64,6 +69,7 @@ ENTRYPOINT = {
 }
 COMMON_RUNNER = "scripts/fr13_run_gdn_single_launch_live_gate.sh"
 KERNEL_SOURCE = "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
+GQA_GROUP3_SOURCE = "src/lumo_flywheel_serving/fr13_gdn_gqa_group3.py"
 PATCHER_SOURCE = "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
 SERVER_LAUNCHER = "scripts/fr13_launch_forked_fa2_tree_server.sh"
 BLOCK_MAP = "scripts/fr13_dvk_subset_blocks.json"
@@ -76,6 +82,8 @@ VALIDATOR_SOURCES = (
 )
 TEST_SOURCES = (
     "tests/test_fr13_fixed32_gdn_path_bv_live_gate.py",
+    "tests/test_fr13_fixed32_gdn_gqa_group3.py",
+    "tests/test_fr13_fixed32_gdn_gqa_group3_production.py",
     "tests/test_fr13_fixed32_gdn_single_launch_real_gate.py",
     "tests/test_fr13_gdn_single_launch_campaign_gate.py",
 )
@@ -580,15 +588,19 @@ def _validate_live_pass(
     mode: str,
     batch: int,
     expected_tasks: list[str],
-    kernel_sha256: str,
+    candidate_id: str = CANDIDATE,
+    candidate_source_sha256: str | None = None,
+    kernel_sha256: str | None = None,
     graph_signature: str,
     census_events: list[dict[str, Any]],
     request_task_map: dict[str, str],
 ) -> dict[str, Any]:
     contract = MODE[mode]
-    diagnostic_identity = (
-        f"fixed32_gdn_single_launch_tree_v2:{contract['slug']}:b{batch}"
-    )
+    if candidate_source_sha256 is None:
+        candidate_source_sha256 = kernel_sha256
+    if candidate_source_sha256 is None:
+        raise GateError("ordered GDN candidate source hash is missing")
+    diagnostic_identity = f"{candidate_id}:{contract['slug']}:b{batch}"
     comparator_events = [
         event["gdn_comparator"]
         for event in census_events
@@ -605,6 +617,11 @@ def _validate_live_pass(
             raise GateError(f"GDN comparator event {index} is malformed")
         if comparator.get("structural_graph_signature") != graph_signature:
             raise GateError("GDN comparator structural scope differs from census")
+        if (
+            comparator.get("candidate") != candidate_id
+            or comparator.get("reference") != REFERENCE
+        ):
+            raise GateError("GDN comparator candidate/reference identity drifted")
         event_id = str(comparator.get("census_event_id", ""))
         request_tuple = tuple(comparator.get("request_id_sha256s", ()))
         if (
@@ -652,8 +669,8 @@ def _validate_live_pass(
     expected = {
         "schema": LIVE_SCHEMA,
         "status": "observed_pending_authenticated_coverage_join",
-        "candidate": CANDIDATE,
-        "source_sha256": kernel_sha256,
+        "candidate": candidate_id,
+        "source_sha256": candidate_source_sha256,
         "mode": mode,
         "batch_size": batch,
         "expected_batch": batch,
@@ -712,6 +729,7 @@ def _validate_live_pass(
 def reduce(args: argparse.Namespace) -> dict[str, Any]:
     mode = args.mode
     batch = args.batch
+    candidate_id = CANDIDATES[args.candidate]
     if (mode, batch) not in ENTRYPOINT:
         raise GateError("unsupported mode/batch credential scope")
     if re.fullmatch(r"[0-9a-f]{40}", args.source_commit) is None:
@@ -765,12 +783,16 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         raise GateError(
             "runtime manifest is not the canonical current Git-bound profile"
         )
+    candidate_sources = (
+        (GQA_GROUP3_SOURCE,) if args.candidate == "gqa_group3" else ()
+    )
     manifest_closure_paths = (
         entrypoint,
         COMMON_RUNNER,
         "scripts/fr13_gdn_single_launch_gate.py",
         *VALIDATOR_SOURCES,
         KERNEL_SOURCE,
+        *candidate_sources,
         PATCHER_SOURCE,
         SERVER_LAUNCHER,
         BLOCK_MAP,
@@ -845,12 +867,22 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         args.live_pass, "GDN single-launch live observation"
     )
     kernel_sha256 = required_closure[KERNEL_SOURCE]
+    if args.candidate == "gqa_group3":
+        candidate_source_sha256 = _sha256(
+            b"fr10_gdn_tree_kernel.py\0"
+            + (REPO / KERNEL_SOURCE).read_bytes()
+            + b"\0fr13_gdn_gqa_group3.py\0"
+            + (REPO / GQA_GROUP3_SOURCE).read_bytes()
+        )
+    else:
+        candidate_source_sha256 = kernel_sha256
     comparator_coverage = _validate_live_pass(
         live,
         mode=mode,
         batch=batch,
         expected_tasks=expected_tasks,
-        kernel_sha256=kernel_sha256,
+        candidate_id=candidate_id,
+        candidate_source_sha256=candidate_source_sha256,
         graph_signature=graph_signature,
         census_events=[
             dict(record)
@@ -881,7 +913,7 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         "task_ids": expected_tasks,
         "comparator_coverage": comparator_coverage,
         "subset_sha256": subset["sha256"],
-        "candidate": CANDIDATE,
+        "candidate": candidate_id,
         "reference": REFERENCE,
         "physical_rows": 32,
         "draft_vocab_k": 65536,
@@ -920,6 +952,12 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
             path: required_closure[path] for path in TEST_SOURCES
         },
         "kernel_source_sha256": kernel_sha256,
+        "candidate_source_sha256": candidate_source_sha256,
+        "gqa_group3_source_sha256": (
+            required_closure[GQA_GROUP3_SOURCE]
+            if args.candidate == "gqa_group3"
+            else None
+        ),
         "runtime_manifest_source_commit": args.source_commit,
         "runtime_manifest_canonical_sha256": runtime_digest,
         "runtime_manifest_sha256": _sha256(runtime_end_raw),
@@ -943,6 +981,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--subset", type=Path, required=True)
     parser.add_argument("--mode", choices=tuple(MODE), required=True)
     parser.add_argument("--batch", type=int, choices=(1, 4), required=True)
+    parser.add_argument(
+        "--candidate", choices=tuple(CANDIDATES), default="single_launch"
+    )
     parser.add_argument("--live-pass", type=Path, required=True)
     parser.add_argument("--runtime-launch", type=Path, required=True)
     parser.add_argument("--runtime-end", type=Path, required=True)

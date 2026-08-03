@@ -272,6 +272,12 @@ TOP_LEVEL_KEYS = frozenset(
     }
 )
 GDN_COMPARATOR_SCHEMA = "fr13.fixed32.gdn_single_launch.comparator_event.v1"
+GDN_COMPARATOR_CANDIDATES = frozenset(
+    (
+        "fixed32_gdn_single_launch_tree_v2",
+        "fixed32_gdn_single_launch_gqa_group3_v1",
+    )
+)
 GDN_COMPARATOR_KEYS = frozenset(
     {
         "schema",
@@ -1243,14 +1249,17 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             forward_graph_structural_signature(batch_size),
             f"{comparator_label}.structural_graph_signature",
         )
-        for field, expected in (
-            ("reference", "fixed32_gdn_two_launch_reference_v1"),
-            ("candidate", "fixed32_gdn_single_launch_tree_v2"),
-        ):
-            _expect(
-                _string(comparator[field], f"{comparator_label}.{field}"),
-                expected,
-                f"{comparator_label}.{field}",
+        _expect(
+            _string(comparator["reference"], f"{comparator_label}.reference"),
+            "fixed32_gdn_two_launch_reference_v1",
+            f"{comparator_label}.reference",
+        )
+        comparator_candidate = _string(
+            comparator["candidate"], f"{comparator_label}.candidate"
+        )
+        if comparator_candidate not in GDN_COMPARATOR_CANDIDATES:
+            raise CensusError(
+                f"{comparator_label}.candidate: unsupported ordered GDN identity"
             )
         for field, expected in (
             ("reference_physical_launches_per_request_layer", 2),

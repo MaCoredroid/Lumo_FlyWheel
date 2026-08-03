@@ -103,6 +103,7 @@ FIXED32_PYTHON_PACKAGE_SOURCE = (
     "src/lumo_flywheel_serving/fr10_equivalence_gate.py",
     "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
     "src/lumo_flywheel_serving/fr10_tree_rejection_sampler.py",
+    "src/lumo_flywheel_serving/fr13_gdn_gqa_group3.py",
     "src/lumo_flywheel_serving/fr13_ex2_silu.py",
     "src/lumo_flywheel_serving/fr13_fa2_spine_reorder.py",
     "src/lumo_flywheel_serving/fr13_replay_conv_remap.py",
@@ -159,7 +160,7 @@ PROFILES = {
         verdict_tools=FIXED32_VERDICT_TOOLS,
         package_dir="src/lumo_flywheel_serving",
         package_name="lumo_flywheel_serving",
-        package_file_count=26,
+        package_file_count=27,
     ),
 }
 
