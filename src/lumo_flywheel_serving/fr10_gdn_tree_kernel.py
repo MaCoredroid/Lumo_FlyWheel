@@ -16049,7 +16049,7 @@ def launch_tree_gdn_prepared(
                     decay_export=_decay_export,
                     flags_export=_flags_export,
                     flags_rows=_flags_rows,
-                    maxnreg=(80 if _gate_export else None),
+                    maxnreg=(128 if _gate_export else None),
                 )
                 _ordered_candidate_id = (
                     _FR13_FIXED32_GDN_GQA_GROUP3_CANDIDATE_ID
@@ -17142,7 +17142,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     decay_export=decay_export,
                     flags_export=flags_export,
                     flags_rows=flags_rows,
-                    maxnreg=(80 if gate_export else None),
+                    maxnreg=(128 if gate_export else None),
                 )
                 ordered_candidate_id = (
                     _FR13_FIXED32_GDN_GQA_GROUP3_CANDIDATE_ID

@@ -358,6 +358,8 @@ def test_production_dispatch_replaces_full_graph_launch_only_for_credential_batc
     assert "_fr13_fixed32_gdn_gqa_group3_production_for_batch(4)" in selector
     assert 'selector == "gqa_group3"' in b4
     assert 'elif selector == "gqa_group3":\n        _launch_batched' in b4
+    assert "maxnreg=(128 if _gate_export else None)" in b1
+    assert "maxnreg=(128 if gate_export else None)" in b4
     assert "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None" in preseed
     assert "torch.empty" not in launch_source
     assert "torch.zeros" not in launch_source
