@@ -296,6 +296,13 @@ def test_k64_root_accepts_divisor_static_stocktile_profile(
             "IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE",
             "IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256",
         ),
+        (
+            "identity_wide256_fullgrid_b1",
+            "identity_wide256_fullgrid_b1_byte_ab",
+            "IDENTITY_WIDE256_FULLGRID_B1_K64_ROOT_LIVE_SCHEMA",
+            "IDENTITY_FULLTILE_CANDIDATE_SIZE",
+            "IDENTITY_FULLTILE_CANDIDATE_SHA256",
+        ),
     ),
 )
 def test_k64_root_accepts_source_bound_onen_profile(
@@ -385,6 +392,7 @@ def test_k64_root_accepts_source_bound_onen_profile(
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
         "identity_onen_n5120_fullgrid_b1",
+        "identity_wide256_fullgrid_b1",
     ),
 )
 def test_source_bound_onen_sidecar_rejects_full_vocab_profile(
@@ -440,11 +448,21 @@ def test_n5120_fullgrid_source_contract_matches_integrated_patcher() -> None:
     contract = module._source_contract("identity_onen_n5120_fullgrid_b1")
 
     assert contract["patch_source_sha256"] == (
-        "b9dba4077f63425dd4c245d9de33a8b2413e223f44a7fb0f6b4abe6e003d24a0"
+        "623582b257a13f7551c81aaf8e87f7542ddb4d6564636f5e177ec0807126a341"
     )
     assert contract["patched_dispatch_sha256"] == (
-        "ef221b938c0780d8212e6355f53a8aad6c4b907fbe0e368cb73bda995b80699d"
+        "710da7d3a8e24c83f9f095222d5297d96f610c6310f3a8537ed1b925a25ece56"
     )
+    assert module.sha256_file(REPO / module.PATCH_SOURCE) == contract[
+        "patch_source_sha256"
+    ]
+
+
+def test_wide256_fullgrid_source_contract_matches_integrated_patcher() -> None:
+    module = _load("fr13_cutlass_streamk_wide256_fullgrid_source_contract_test")
+    contract = module._source_contract("identity_wide256_fullgrid_b1")
+
+    assert contract == module._source_contract("identity_onen_n5120_fullgrid_b1")
     assert module.sha256_file(REPO / module.PATCH_SOURCE) == contract[
         "patch_source_sha256"
     ]

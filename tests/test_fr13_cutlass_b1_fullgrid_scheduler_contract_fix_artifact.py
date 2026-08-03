@@ -39,26 +39,26 @@ def test_contract_fix_artifact_is_default_off_and_non_accepting() -> None:
     assert manifest["liveness_failure"]["valid_timing"] is False
 
 
-def test_contract_fix_artifact_binds_source_and_binary_selectors() -> None:
+def test_contract_fix_artifact_is_stale_after_combined_fulltile_binary() -> None:
     manifest = json.loads((ARTIFACT / "manifest.json").read_text())
     source = manifest["source"]
     candidate = manifest["candidate"]
 
     patch_path = ROOT / "scripts/fr13_patch_cutlass_fixed32_wave.py"
-    assert hashlib.sha256(patch_path.read_bytes()).hexdigest() == source[
+    assert hashlib.sha256(patch_path.read_bytes()).hexdigest() != source[
         "patch_source_sha256"
     ]
 
     streamk = _load(ROOT / "scripts/fr13_cutlass_streamk_pass.py")
     binary = _load(ROOT / "scripts/fr13_cutlass_wave_binary.py")
     selector = candidate["selector"]
-    assert streamk.SOURCE_CONTRACTS[selector]["patch_source_sha256"] == source[
+    assert streamk.SOURCE_CONTRACTS[selector]["patch_source_sha256"] != source[
         "patch_source_sha256"
     ]
-    assert binary.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256 == (
+    assert binary.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256 != (
         candidate["sha256"]
     )
-    assert binary.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE == candidate[
+    assert binary.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE != candidate[
         "bytes"
     ]
 

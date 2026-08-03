@@ -42,6 +42,9 @@ IDENTITY_ONEN_N5120_SINGLE_B1_K64_ROOT_LIVE_SCHEMA = (
 IDENTITY_ONEN_N5120_FULLGRID_B1_K64_ROOT_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_k64_root_live_gate.v1"
 )
+IDENTITY_WIDE256_FULLGRID_B1_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_wide256_fullgrid_b1_k64_root_live_gate.v1"
+)
 K64_ROOT_SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.k64_root.production_pass.v1"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
@@ -66,10 +69,18 @@ SOURCE_CONTRACTS = {
     },
     "identity_onen_n5120_fullgrid_b1": {
         "patch_source_sha256": (
-            "b9dba4077f63425dd4c245d9de33a8b2413e223f44a7fb0f6b4abe6e003d24a0"
+            "623582b257a13f7551c81aaf8e87f7542ddb4d6564636f5e177ec0807126a341"
         ),
         "patched_dispatch_sha256": (
-            "ef221b938c0780d8212e6355f53a8aad6c4b907fbe0e368cb73bda995b80699d"
+            "710da7d3a8e24c83f9f095222d5297d96f610c6310f3a8537ed1b925a25ece56"
+        ),
+    },
+    "identity_wide256_fullgrid_b1": {
+        "patch_source_sha256": (
+            "623582b257a13f7551c81aaf8e87f7542ddb4d6564636f5e177ec0807126a341"
+        ),
+        "patched_dispatch_sha256": (
+            "710da7d3a8e24c83f9f095222d5297d96f610c6310f3a8537ed1b925a25ece56"
         ),
     },
 }
@@ -80,6 +91,11 @@ SOURCE_BINDING_PATHS = (
     "scripts/fr13_cutlass_streamk_pass.py",
     "scripts/fr13_cutlass_wave_binary.py",
     "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "scripts/fr13_run_b1_kernel_live_gate.sh",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "scripts/run_swe_bench_q36_a.py",
+    "scripts/fr13_fixed32_contract.py",
 )
 WIDE256_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1"
 DEFAULT_DIAGNOSTIC_TASK_PROFILE = "astropy12907"
@@ -177,6 +193,17 @@ CANDIDATE_CONTRACTS = {
             IDENTITY_ONEN_N5120_FULLGRID_B1_K64_ROOT_LIVE_SCHEMA
         ),
         "diagnostic_selector": "identity_onen_n5120_fullgrid_b1_byte_ab",
+        "required_qualification_profile": "k64_root",
+        "source_binding": "required",
+    },
+    "identity_wide256_fullgrid_b1": {
+        "live_schema": (
+            "fr13.fixed32.cutlass_identity_wide256_fullgrid_b1_live_gate.v1"
+        ),
+        "k64_root_live_schema": (
+            IDENTITY_WIDE256_FULLGRID_B1_K64_ROOT_LIVE_SCHEMA
+        ),
+        "diagnostic_selector": "identity_wide256_fullgrid_b1_byte_ab",
         "required_qualification_profile": "k64_root",
         "source_binding": "required",
     },
@@ -296,6 +323,7 @@ def _qualification_profile(
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
         "identity_onen_n5120_fullgrid_b1",
+        "identity_wide256_fullgrid_b1",
     }:
         raise QualificationError(
             "B1 k64_root qualification is restricted to wide256 or "
@@ -618,6 +646,7 @@ def validate_live_result(
         "streamk_force_wide256",
         "static_persistent_stocktile",
         "divisor_static_stocktile",
+        "identity_wide256_fullgrid_b1",
     }:
         expected_fields["candidate_family"] = candidate["candidate_family"]
     if qualification_profile == "k64_root":

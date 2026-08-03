@@ -620,6 +620,8 @@ if [[ ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_b1" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_single_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_fullgrid_b1" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_fullgrid_b1_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_hybrid_n5120_b4" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_hybrid_n5120_b4_byte_ab" ) \
       && ( "$_fr13_cutlass_qualification_profile_explicit" != "1" \
@@ -1056,7 +1058,7 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   }
 fi
 case "$FR13_FIXED32_CUTLASS_WAVE" in
-  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|static_persistent_stocktile|static_persistent_stocktile_byte_ab|divisor_static_stocktile|divisor_static_stocktile_byte_ab|identity_stage2_static|identity_stage2_static_byte_ab|identity_stage2_pingpong_b1|identity_stage2_pingpong_b1_byte_ab|identity_onen_b1|identity_onen_b1_byte_ab|identity_onen_n5120_single_b1|identity_onen_n5120_single_b1_byte_ab|identity_onen_n5120_fullgrid_b1|identity_onen_n5120_fullgrid_b1_byte_ab|identity_stockshape_b4|identity_stockshape_b4_byte_ab|identity_stockshape_stage2_b4|identity_stockshape_stage2_b4_byte_ab|identity_twom_b4|identity_twom_b4_byte_ab|identity_hybrid_n5120_b4|identity_hybrid_n5120_b4_byte_ab|identity_divisor_b4|identity_divisor_b4_byte_ab|persistent_b4_m128|persistent_b4_m128_byte_ab|persistent_b4_m128_static|persistent_b4_m128_static_byte_ab) ;;
+  stock|streamk_coop128|streamk_coop128_byte_ab|streamk_force_wide256|streamk_force_wide256_byte_ab|static_persistent_stocktile|static_persistent_stocktile_byte_ab|divisor_static_stocktile|divisor_static_stocktile_byte_ab|identity_stage2_static|identity_stage2_static_byte_ab|identity_stage2_pingpong_b1|identity_stage2_pingpong_b1_byte_ab|identity_onen_b1|identity_onen_b1_byte_ab|identity_onen_n5120_single_b1|identity_onen_n5120_single_b1_byte_ab|identity_onen_n5120_fullgrid_b1|identity_onen_n5120_fullgrid_b1_byte_ab|identity_wide256_fullgrid_b1|identity_wide256_fullgrid_b1_byte_ab|identity_stockshape_b4|identity_stockshape_b4_byte_ab|identity_stockshape_stage2_b4|identity_stockshape_stage2_b4_byte_ab|identity_twom_b4|identity_twom_b4_byte_ab|identity_hybrid_n5120_b4|identity_hybrid_n5120_b4_byte_ab|identity_divisor_b4|identity_divisor_b4_byte_ab|persistent_b4_m128|persistent_b4_m128_byte_ab|persistent_b4_m128_static|persistent_b4_m128_static_byte_ab) ;;
   *)
     echo "FR13_FIXED32_CUTLASS_WAVE has an unsupported selector" >&2
     exit 2
@@ -1282,7 +1284,9 @@ else
            || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_single_b1" \
            || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_single_b1_byte_ab" \
            || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_fullgrid_b1" \
-           || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_fullgrid_b1_byte_ab" ]] || {
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_fullgrid_b1_byte_ab" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1" \
+           || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1_byte_ab" ]] || {
           echo "CUTLASS k64_root B1 qualification requires a pinned B1 projection candidate" >&2
           exit 2
         }
@@ -1349,6 +1353,7 @@ else
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_single_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_fullgrid_b1_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
@@ -1395,6 +1400,8 @@ else
                  && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_onen_n5120_single_b1_byte_ab.jsonl" ) \
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_fullgrid_b1_byte_ab" \
                  && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_onen_n5120_fullgrid_b1_byte_ab.jsonl" ) \
+            || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1_byte_ab" \
+                 && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_wide256_fullgrid_b1_byte_ab.jsonl" ) \
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
                  && "$FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL" == "/logs/fr13_fixed32_cutlass_identity_stockshape_b4_byte_ab.jsonl" ) \
             || ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \
@@ -2478,6 +2485,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_single_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_fullgrid_b1_byte_ab" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4_byte_ab" \

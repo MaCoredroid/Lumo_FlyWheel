@@ -139,9 +139,9 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "identity_onen_n5120_fullgrid_b1",
     )
     assert module.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256 == (
-        "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc"
+        "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da"
     )
-    assert module.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE == 119_471_552
+    assert module.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE == 119_979_144
     assert "identity_onen_n5120_fullgrid_b1" in module.PRODUCTION_SELECTORS
     assert (
         "identity_onen_n5120_fullgrid_b1_byte_ab"

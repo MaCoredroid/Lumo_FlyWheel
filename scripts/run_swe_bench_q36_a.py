@@ -9085,6 +9085,8 @@ def main(argv: list[str] | None = None) -> int:
         "identity_onen_n5120_single_b1_byte_ab",
         "identity_onen_n5120_fullgrid_b1",
         "identity_onen_n5120_fullgrid_b1_byte_ab",
+        "identity_wide256_fullgrid_b1",
+        "identity_wide256_fullgrid_b1_byte_ab",
         "identity_stockshape_b4",
         "identity_stockshape_b4_byte_ab",
         "identity_stockshape_stage2_b4",
@@ -9111,6 +9113,7 @@ def main(argv: list[str] | None = None) -> int:
         "identity_onen_b1_byte_ab",
         "identity_onen_n5120_single_b1_byte_ab",
         "identity_onen_n5120_fullgrid_b1_byte_ab",
+        "identity_wide256_fullgrid_b1_byte_ab",
     }
     fixed32_cutlass_b4_diagnostic = cutlass_wave in {
         "identity_divisor_b4_byte_ab",

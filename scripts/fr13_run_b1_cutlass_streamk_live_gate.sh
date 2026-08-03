@@ -85,6 +85,14 @@ case "$GATE_CANDIDATE" in
     CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_identity_onen_n5120_fullgrid_b1_byte_ab.jsonl
     K64_ROOT_RESULT_NAME=cutlass_identity_onen_n5120_fullgrid_b1_k64_root_byte_gate.json
     ;;
+  identity_wide256_fullgrid_b1)
+    DIAGNOSTIC_SELECTOR=identity_wide256_fullgrid_b1_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_identity_wide256_fullgrid_b1_byte_ab.v1
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_wide256_fullgrid_b1_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_wide256_fullgrid_b1_k64_root_live_gate.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_identity_wide256_fullgrid_b1_byte_ab.jsonl
+    K64_ROOT_RESULT_NAME=cutlass_identity_wide256_fullgrid_b1_k64_root_byte_gate.json
+    ;;
   *)
     echo "unsupported Stream-K gate candidate: $GATE_CANDIDATE" >&2
     exit 2
@@ -114,7 +122,8 @@ fi
 QUALIFICATION_PROFILE=${FR13_STREAMK_QUALIFICATION_PROFILE:-full_vocab}
 if [[ ( "$GATE_CANDIDATE" == "identity_onen_b1" \
         || "$GATE_CANDIDATE" == "identity_onen_n5120_single_b1" \
-        || "$GATE_CANDIDATE" == "identity_onen_n5120_fullgrid_b1" ) \
+        || "$GATE_CANDIDATE" == "identity_onen_n5120_fullgrid_b1" \
+        || "$GATE_CANDIDATE" == "identity_wide256_fullgrid_b1" ) \
       && ( "$QUALIFICATION_PROFILE_EXPLICIT" != "1" \
            || "$QUALIFICATION_PROFILE" != "k64_root" ) ]]; then
   if [[ "$GATE_CANDIDATE" == "identity_onen_b1" ]]; then
@@ -149,7 +158,8 @@ case "$QUALIFICATION_PROFILE" in
        || "$GATE_CANDIDATE" == "identity_stage2_pingpong_b1" \
        || "$GATE_CANDIDATE" == "identity_onen_b1" \
        || "$GATE_CANDIDATE" == "identity_onen_n5120_single_b1" \
-       || "$GATE_CANDIDATE" == "identity_onen_n5120_fullgrid_b1" ]] || {
+       || "$GATE_CANDIDATE" == "identity_onen_n5120_fullgrid_b1" \
+       || "$GATE_CANDIDATE" == "identity_wide256_fullgrid_b1" ]] || {
       echo "B1 k64_root qualification requires a pinned B1 projection candidate" >&2
       exit 2
     }
@@ -173,7 +183,8 @@ esac
 
 if [[ "$GATE_CANDIDATE" == "identity_onen_b1" \
       || "$GATE_CANDIDATE" == "identity_onen_n5120_single_b1" \
-      || "$GATE_CANDIDATE" == "identity_onen_n5120_fullgrid_b1" ]]; then
+      || "$GATE_CANDIDATE" == "identity_onen_n5120_fullgrid_b1" \
+      || "$GATE_CANDIDATE" == "identity_wide256_fullgrid_b1" ]]; then
   .venv/bin/python scripts/fr13_cutlass_streamk_pass.py source-binding \
     --source-commit "$SOURCE_COMMIT" \
     --patch-source "$PATCH_SOURCE" \
