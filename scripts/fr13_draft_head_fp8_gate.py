@@ -246,6 +246,8 @@ def main() -> int:
     parser.add_argument("--expected-source-sha256", required=True)
     parser.add_argument("--expected-source-commit", required=True)
     parser.add_argument("--repo", type=Path, required=True)
+    parser.add_argument("--gate-result", type=Path)
+    parser.add_argument("--expected-gate-sha256")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
@@ -336,6 +338,45 @@ def main() -> int:
         },
         "mandatory_floor": TRAFFIC,
     }
+    if args.gate_result is not None:
+        expected_gate_sha = _require_sha(
+            args.expected_gate_sha256, "expected gate result"
+        )
+        gate_result, gate_result_raw = _load(
+            args.gate_result, "FP8 real-B1 gate result"
+        )
+        if _sha256(gate_result_raw) != expected_gate_sha:
+            raise ValueError("FP8 real-B1 gate result SHA-256 mismatch")
+        if gate_result != result:
+            raise ValueError(
+                "FP8 real-B1 gate result does not match rebuilt raw evidence"
+            )
+        result = {
+            "schema": "fr13.fixed32.draft_head_fp8_promotion_credential.v1",
+            "status": "PASS",
+            "qualification_scope": "exact4_real_swe_verified_timing_only",
+            "performance_tuning_eligible": True,
+            "formal_floor_acceptance_eligible": False,
+            "source_commit": source_commit,
+            "candidate_source_sha256": source_sha,
+            "gate_result_sha256": expected_gate_sha,
+            "gate_evidence_sha256": {
+                "engagement": _sha256(engagement_raw),
+                "acceptance_telemetry": _sha256(acceptance_raw),
+                "final_flush": _sha256(final_flush_raw),
+                "boundary_snapshot": _sha256(boundary_raw),
+                "chat_traffic_audit": _file_sha256(
+                    args.chat_traffic_audit
+                ),
+            },
+            "engagement": gate_result["engagement"],
+            "mandatory_floor": TRAFFIC,
+        }
+    elif args.expected_gate_sha256 is not None:
+        raise ValueError(
+            "--expected-gate-sha256 requires --gate-result"
+        )
+
     encoded = json.dumps(result, indent=2, sort_keys=True) + "\n"
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(encoded, encoding="ascii")
