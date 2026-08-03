@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -69,8 +71,9 @@ def test_selector_rejects_every_noncanonical_value(
         patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
 
 
-def test_patch_contract_rejects_non_k64_and_accepts_full_graph_runtime(
+def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runtime(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     patcher = _load_patcher("fr13_sfwd_conv_postprep_contract")
     monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
@@ -158,7 +161,136 @@ def test_patch_contract_rejects_non_k64_and_accepts_full_graph_runtime(
     ):
         monkeypatch.setenv(name, "1")
     monkeypatch.setenv("FR13_FIXED32_TAW_WALK_CAP", "12")
+    source_commit = "1" * 40
+    manifest = tmp_path / "source_manifest.json"
+    source_paths = (
+        "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+        "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py",
+        "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py",
+        "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py",
+    )
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1",
+                "candidate": "fixed32_sfwd_conv_postprep_frontier5_direct_v1",
+                "source_commit": source_commit,
+                "files": {
+                    relative: {
+                        "bytes": len((ROOT / relative).read_bytes()),
+                        "sha256": hashlib.sha256(
+                            (ROOT / relative).read_bytes()
+                        ).hexdigest(),
+                    }
+                    for relative in source_paths
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    manifest_sha256 = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    live_pass = tmp_path / "live_pass.json"
+    live_payload = {
+        "schema": "fr13.fixed32.sfwd_conv_postprep.live_pass.v1",
+        "status": "byte_pass_source_only",
+        "candidate": "fixed32_sfwd_conv_postprep_frontier5_direct_v1",
+        "source_commit": source_commit,
+        "source_manifest_sha256": manifest_sha256,
+        "fixed32_mode": "hydra27_fixed32",
+        "batch_size": 1,
+        "task_count": 1,
+        "physical_rows_per_request": 32,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65536,
+        "real_task_authenticated": True,
+        "reference_always_served": True,
+        "candidate_returned": False,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_eligible": False,
+        "comparisons": 320,
+        "mismatches": 0,
+        "differing_bytes": 0,
+        "errors": 0,
+    }
+    live_pass.write_text(
+        json.dumps(live_payload, sort_keys=True) + "\n", encoding="ascii"
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON", str(live_pass)
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256",
+        hashlib.sha256(live_pass.read_bytes()).hexdigest(),
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH", str(manifest)
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256",
+        manifest_sha256,
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT", source_commit
+    )
     patcher._fr13_fixed32_validate_patch_env()
+
+    manifest_payload = json.loads(manifest.read_text(encoding="ascii"))
+    manifest_payload["files"][source_paths[-1]]["sha256"] = "0" * 64
+    manifest.write_text(
+        json.dumps(manifest_payload, sort_keys=True) + "\n", encoding="ascii"
+    )
+    manifest_sha256 = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    live_payload["source_manifest_sha256"] = manifest_sha256
+    live_pass.write_text(
+        json.dumps(live_payload, sort_keys=True) + "\n", encoding="ascii"
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256",
+        manifest_sha256,
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256",
+        hashlib.sha256(live_pass.read_bytes()).hexdigest(),
+    )
+    with pytest.raises(RuntimeError, match="not bound to the runtime candidate"):
+        patcher._fr13_fixed32_validate_patch_env()
+
+
+def test_patch_contract_rejects_naked_serving_selector(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(SELECTOR, "1")
+    monkeypatch.setenv("MAX_NUM_SEQS", "1")
+    patcher = _load_patcher("fr13_sfwd_conv_postprep_naked_selector")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(
+        patcher, "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION", "1"
+    )
+    monkeypatch.setattr(patcher, "_fr13_fixed32_eager_boot_warm_contract", lambda: None)
+    exact = {
+        "MAX_NUM_SEQS": "1",
+        "SWE_CONCURRENCY": "1",
+        "ENFORCE_EAGER": "0",
+        "CUDAGRAPH_MODE": "FULL_AND_PIECEWISE",
+        "FR13_DRAFT_VOCAB_ROOT": "1",
+        "FR13_DRAFT_VOCAB_K": "65536",
+        "FR13_FIXED32_CONV_SOURCE_BATCH": "0",
+        "FR13_RING_EXPORT": "1",
+        "FR13_FLAGS_INKERNEL": "1",
+        "FR13_TREE_RUNROW_INIT": "1",
+        "FR13_TREE_CONV_FUSED": "1",
+        "FR13_CONV_WB_BATCHED": "1",
+        "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB": "0",
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "0",
+        "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB": "0",
+    }
+    for name, value in exact.items():
+        monkeypatch.setenv(name, value)
+    with pytest.raises(RuntimeError, match="source-bound PASS/manifest"):
+        patcher._fr13_fixed32_validate_patch_env()
 
 
 def test_generated_route_serves_all_direct_outputs_and_has_no_fallback() -> None:
@@ -174,6 +306,9 @@ def test_generated_route_serves_all_direct_outputs_and_has_no_fallback() -> None
     assert "capture lacks preseeded " in generated
     assert "output bindings" in generated
     assert "_fr13_fixed32_preseed_sfwd_conv_postprep_capture" in generated
+    assert "_fr13_fixed32_require_sfwd_conv_postprep_pass()" in PATCHER.read_text(
+        encoding="utf-8"
+    )
     assert "conv_tap=None" in generated
     assert "(1, _fr13_conv_postprep_rows, 16, 128)" in generated
     assert "(1, _fr13_conv_postprep_rows, 48, 128)" in generated

@@ -591,6 +591,19 @@ def test_generator_is_deterministic_and_kernel_has_no_conv_intermediate() -> Non
     assert "out_batch" not in kernel_source
     assert kernel_source.count("_fr13_store_fixed32_conv_outputs(") == 32
     assert kernel_source.count("tl.load(x_batch") == 32
+    assert (
+        "bank_row_ok = (bank_row_raw >= 0) & (bank_row_raw < BANK_ROWS)"
+        in kernel_source
+    )
+    assert (
+        "tl.maximum(0, tl.minimum(bank_row_raw, BANK_ROWS - 1))"
+        in kernel_source
+    )
+    assert (
+        "tl.atomic_xchg(sticky_guard_ok, 0, mask=~bank_row_ok)"
+        in kernel_source
+    )
+    assert "prior_base = conv_state + bank_row_raw" not in kernel_source
     assert kernel_source.count(".to(tl.bfloat16).to(tl.float32)") == 128
     assert "tl.sum" not in kernel_source
     assert "tl.dot" not in kernel_source
@@ -627,6 +640,9 @@ def test_launcher_requires_opaque_capture_binding_and_has_one_launch() -> None:
     assert "capture_binding is None and capturing" in launcher_source
     assert "_validate_capture_binding(" in launcher_source
     assert "state_indices_prevalidated=capture_binding is not None" in launcher_source
+    assert 'capture_binding.committer_state["sticky_guard_ok"]' in launcher_source
+    assert "BANK_ROWS=int(conv_state.size(0))" in launcher_source
+    assert "CAPTURE_GUARD=capture_binding is not None" in launcher_source
     assert "grid = (int(batch_size), channel_tasks + ROWS)" in launcher_source
     assert launcher_source.count(
         "_fr13_fixed32_sfwd_conv_postprep_fusion_kernel[grid]("

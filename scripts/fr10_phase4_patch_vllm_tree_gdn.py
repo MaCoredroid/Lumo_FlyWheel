@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import os
 import re
+import stat
 from pathlib import Path
 
 
@@ -6706,6 +6709,171 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     return None
 
 
+def _fr13_fixed32_require_sfwd_conv_postprep_pass() -> dict[str, object]:
+    """Bind the served candidate to one frozen real-task byte PASS."""
+    candidate = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
+    live_path = Path(
+        os.environ.get(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON", ""
+        )
+    )
+    live_sha256 = os.environ.get(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256", ""
+    )
+    manifest_path = Path(
+        os.environ.get(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH", ""
+        )
+    )
+    manifest_sha256 = os.environ.get(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256", ""
+    )
+    source_commit = os.environ.get(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT", ""
+    )
+    if (
+        not live_path.is_absolute()
+        or not manifest_path.is_absolute()
+        or re.fullmatch(r"[0-9a-f]{64}", live_sha256) is None
+        or re.fullmatch(r"[0-9a-f]{64}", manifest_sha256) is None
+        or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep serving requires absolute source-bound "
+            "PASS/manifest paths and exact lowercase identities"
+        )
+    for path, label in (
+        (live_path, "live PASS"),
+        (manifest_path, "source manifest"),
+    ):
+        try:
+            info = path.lstat()
+        except FileNotFoundError as error:
+            raise RuntimeError(
+                f"FR13 SFWD conv/post-prep {label} is missing"
+            ) from error
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(info.st_mode)
+            or info.st_nlink != 1
+        ):
+            raise RuntimeError(
+                f"FR13 SFWD conv/post-prep {label} must be one regular "
+                "non-symlink file"
+            )
+    live_raw = live_path.read_bytes()
+    manifest_raw = manifest_path.read_bytes()
+    if not live_raw or len(live_raw) > 131072:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep live PASS is empty or exceeds 128 KiB"
+        )
+    if not manifest_raw or len(manifest_raw) > 1048576:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest is empty or exceeds 1 MiB"
+        )
+    if hashlib.sha256(live_raw).hexdigest() != live_sha256:
+        raise RuntimeError("FR13 SFWD conv/post-prep live PASS SHA-256 drifted")
+    if hashlib.sha256(manifest_raw).hexdigest() != manifest_sha256:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest SHA-256 drifted"
+        )
+    try:
+        payload = json.loads(live_raw.decode("ascii"))
+        manifest = json.loads(manifest_raw.decode("ascii"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep PASS and manifest must be ASCII JSON"
+        ) from error
+    if not isinstance(manifest, dict):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest must contain one object"
+        )
+    files = manifest.get("files")
+    source_root = Path(__file__).resolve().parent.parent
+    source_paths = (
+        "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+        "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py",
+        "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py",
+        "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py",
+    )
+    source_drift: dict[str, object] = {}
+    if manifest.get("schema") != (
+        "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1"
+    ):
+        source_drift["schema"] = manifest.get("schema")
+    if manifest.get("candidate") != candidate:
+        source_drift["candidate"] = manifest.get("candidate")
+    if manifest.get("source_commit") != source_commit:
+        source_drift["source_commit"] = manifest.get("source_commit")
+    if not isinstance(files, dict):
+        source_drift["files"] = type(files).__name__
+        files = {}
+    for relative in source_paths:
+        entry = files.get(relative)
+        path = source_root / relative
+        try:
+            raw = path.read_bytes()
+        except OSError as error:
+            raise RuntimeError(
+                "FR13 SFWD conv/post-prep candidate source is unreadable: "
+                f"{relative}: {error}"
+            ) from error
+        actual = {
+            "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+        if entry != actual:
+            source_drift[relative] = (entry, actual)
+    if source_drift:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest is not bound to the "
+            "runtime candidate: " + repr(source_drift)
+        )
+    batch = int(os.environ.get("MAX_NUM_SEQS", "0"))
+    required = {
+        "schema": "fr13.fixed32.sfwd_conv_postprep.live_pass.v1",
+        "status": "byte_pass_source_only",
+        "candidate": candidate,
+        "source_commit": source_commit,
+        "source_manifest_sha256": manifest_sha256,
+        "fixed32_mode": _FR13_FIXED32_MODE,
+        "batch_size": batch,
+        "task_count": 1 if batch == 1 else 4,
+        "physical_rows_per_request": 32,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65536,
+        "real_task_authenticated": True,
+        "reference_always_served": True,
+        "candidate_returned": False,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_eligible": False,
+        "mismatches": 0,
+        "differing_bytes": 0,
+        "errors": 0,
+    }
+    if not isinstance(payload, dict):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep live PASS must contain one object"
+        )
+    drift = {
+        name: (payload.get(name), expected)
+        for name, expected in required.items()
+        if payload.get(name) != expected
+    }
+    comparisons = payload.get("comparisons")
+    if (
+        drift
+        or type(comparisons) is not int
+        or comparisons <= 0
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep live PASS contract drifted: "
+            + repr(drift)
+        )
+    return dict(payload)
+
+
 def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     """Validate the fixed-work campaign before emitting any runtime source."""
     mode = _FR13_FIXED32_MODE
@@ -6862,6 +7030,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
                 "physical32 B1-or-B4 K64/root1 in eager or FULL graph mode: "
                 + repr(drift)
             )
+        _fr13_fixed32_require_sfwd_conv_postprep_pass()
     if (
         batch_gdn_byte_diagnostic == "1"
         and graph_batch_gdn_byte_diagnostic == "1"

@@ -110,7 +110,10 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
         "default_off": True,
         "production_eligible": False,
         "full_graph_qualified": True,
-        "capture_ssi_guard": "persistent_pregather_selfcheck_and_sticky_guard",
+        "capture_ssi_guard": (
+            "persistent_pregather_selfcheck_plus_in_kernel_bounds_clamp_"
+            "and_sticky_xchg"
+        ),
         "capture_host_syncs_per_layer": 0,
         "fixed32_mode": fixed32_mode,
         "qualification_profile": QUALIFICATION_PROFILE,
@@ -847,6 +850,8 @@ def fixed32_sfwd_conv_postprep_layout_contract(
     if conv_state.ndim != 3:
         failures.append("conv_state_ndim")
     else:
+        if int(conv_state.shape[0]) <= 0:
+            failures.append("conv_state_bank_rows")
         if tuple(int(value) for value in conv_state.shape[1:]) != (
             CHANNELS,
             CONV_STATE_LEN,
@@ -1039,10 +1044,16 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
     grid = (int(batch_size), channel_tasks + ROWS)
     bias_arg = bias if bias is not None else x
     conv_tap_arg = conv_tap if conv_tap is not None else query
+    sticky_guard_arg = (
+        capture_binding.committer_state["sticky_guard_ok"]
+        if capture_binding is not None
+        else spec_state_indices
+    )
     _fr13_fixed32_sfwd_conv_postprep_fusion_kernel[grid](
         x,
         conv_state,
         spec_state_indices,
+        sticky_guard_arg,
         conv_weights,
         bias_arg,
         a,
@@ -1058,6 +1069,7 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
         source_stage,
         conv_tap_arg,
         CONV_STRIDE_ROW=int(conv_state.stride(0)),
+        BANK_ROWS=int(conv_state.size(0)),
         B=int(batch_size),
         N=ROWS,
         C=CHANNELS,
@@ -1070,6 +1082,7 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
         V=HEAD_V_DIM,
         HAS_BIAS=bias is not None,
         STORE_CONV_TAP=conv_tap is not None,
+        CAPTURE_GUARD=capture_binding is not None,
         X_STRIDE_ROW=X_ROW_STRIDE,
         BLOCK_C=block_c,
         GATE_BLOCK=GATE_BLOCK,

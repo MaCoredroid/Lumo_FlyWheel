@@ -55,6 +55,7 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
     x,
     conv_state,
     spec_state_indices,
+    sticky_guard_ok,
     conv_weights,
     bias,
     a,
@@ -70,6 +71,7 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
     source_stage,
     conv_tap,
     CONV_STRIDE_ROW: tl.constexpr,
+    BANK_ROWS: tl.constexpr,
     B: tl.constexpr,
     N: tl.constexpr,
     C: tl.constexpr,
@@ -82,6 +84,7 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
     V: tl.constexpr,
     HAS_BIAS: tl.constexpr,
     STORE_CONV_TAP: tl.constexpr,
+    CAPTURE_GUARD: tl.constexpr,
     X_STRIDE_ROW: tl.constexpr,
     BLOCK_C: tl.constexpr,
     GATE_BLOCK: tl.constexpr,
@@ -99,7 +102,14 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
         x_batch = x + pid_b * N * X_STRIDE_ROW
         stage_batch = source_stage + pid_b * SOURCE_ROWS * C
 
-        bank_row = tl.load(spec_state_indices + pid_b * N).to(tl.int64)
+        bank_row_raw = tl.load(spec_state_indices + pid_b * N).to(tl.int64)
+        bank_row_ok = (bank_row_raw >= 0) & (bank_row_raw < BANK_ROWS)
+        bank_row = tl.maximum(0, tl.minimum(bank_row_raw, BANK_ROWS - 1))
+        if CAPTURE_GUARD:
+            # Valid replays perform no store. The first invalid replay makes the
+            # committer's existing async assertion fail permanently, while the
+            # clamped row prevents an out-of-bounds read before that assertion.
+            tl.atomic_xchg(sticky_guard_ok, 0, mask=~bank_row_ok)
         prior_base = conv_state + bank_row * CONV_STRIDE_ROW + offs_c
         prior_0 = tl.load(prior_base)
         prior_1 = tl.load(prior_base + C)
