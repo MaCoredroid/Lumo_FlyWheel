@@ -170,6 +170,7 @@ def _snapshot(
                 "all_batches_ready": True,
                 "captures": server_capacity,
                 "fast_route_ready": True,
+                "gate_precompute_launches": 0,
                 "layer_batch_gate_attempts_by_batch": {
                     str(batch): 0
                     for batch in range(1, server_capacity + 1)
@@ -183,6 +184,9 @@ def _snapshot(
                     for batch in range(1, server_capacity + 1)
                 },
                 "maximum_ready_capacity": server_capacity,
+                "metadata_fusion_consumed_by_batch": dict(zero_by_batch),
+                "metadata_fusion_fallbacks_by_batch": dict(zero_by_batch),
+                "metadata_fusion_published_by_batch": dict(zero_by_batch),
                 "nonpure_committer_replays_by_batch": nonpure_by_batch,
                 "nonpure_committer_replays_enqueued": nonpure_replays,
                 "nonpure_dispatch": nonpure_dispatch,
@@ -655,6 +659,14 @@ def test_both_validators_reject_nonpure_reconciliation_tampers(
         pregather["graph_replay_stages"] += 1
         pregather["graph_replay_stages_by_batch"]["2"] += 1
 
+    def metadata_fusion_is_partial(payload: dict[str, object]) -> None:
+        payload["metrics"]["committer"][
+            "metadata_fusion_published_by_batch"
+        ]["2"] += 1
+
+    def gate_precompute_is_boolean(payload: dict[str, object]) -> None:
+        payload["metrics"]["committer"]["gate_precompute_launches"] = True
+
     mutations = (
         raw_scalar,
         raw_bucket,
@@ -665,6 +677,8 @@ def test_both_validators_reject_nonpure_reconciliation_tampers(
         nonpure_exceeds_guard,
         impossible_capacity_bucket,
         pregather_counts_nonpure,
+        metadata_fusion_is_partial,
+        gate_precompute_is_boolean,
     )
     for index, mutate in enumerate(mutations):
         payload, ack = _snapshot(server_capacity=4)
@@ -892,6 +906,7 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
         "all_batches_ready": True,
         "captures": 4,
         "fast_route_ready": True,
+        "gate_precompute_launches": 0,
         "layer_batch_gate_attempts_by_batch": {
             1: 0,
             2: 0,
@@ -911,6 +926,24 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
             4: 1,
         },
         "maximum_ready_capacity": 4,
+        "metadata_fusion_consumed_by_batch": {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+        },
+        "metadata_fusion_fallbacks_by_batch": {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+        },
+        "metadata_fusion_published_by_batch": {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+        },
         "preseeded_batches": [1, 2, 3, 4],
         "preseeded_graphs": 4,
         "ready_capacities": {1: 4, 2: 4, 3: 4, 4: 4},
