@@ -14,7 +14,7 @@ def test_work_model_is_source_only_and_exactly_bound() -> None:
 
     assert model["status"] == "source_only_default_off"
     assert model["source_commit"] == (
-        "fadd12d33ca5962baadf42ac2cc77b9179758b26"
+        "efc7024701dce5d8b87ce3f80f5ecfa56ee74789"
     )
     assert model["qualification"] == {
         "draft_vocab_k": 65_536,

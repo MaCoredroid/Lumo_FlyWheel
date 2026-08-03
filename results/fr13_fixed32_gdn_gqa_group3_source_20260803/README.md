@@ -3,7 +3,7 @@
 Status: `SOURCE_ONLY`, `DEFAULT_OFF`, and not wired into the served arm.
 
 This artifact binds the fixed32 GDN GQA-group3 candidate to source commit
-`fadd12d33ca5962baadf42ac2cc77b9179758b26`.  The candidate is restricted to
+`efc7024701dce5d8b87ce3f80f5ecfa56ee74789`.  The candidate is restricted to
 K64/root1, physical32, Tail23 (`tail6_fixed32`) or Hydra27
 (`hydra27_fixed32`), B1 or B4, and the exact Qwen3.6-27B GDN geometry:
 16 key heads, 48 value heads, Dk=Dv=128, BV8, and 48 GDN layers.
@@ -29,7 +29,7 @@ removed.  Fixed physical work is unchanged for any logical tree with at most
 ## Host verification
 
 The candidate, artifact-integrity, and incumbent contract suite passed with
-`46 passed, 1 skipped`.  It covers exact B1/B4 work accounting, geometry rejection,
+`47 passed, 1 skipped`.  It covers exact B1/B4 work accounting, geometry rejection,
 single-writer value-tile coverage, grouped-versus-independent recurrence
 equivalence on CPU, source-only isolation, ordered single-launch structure,
 fixed32 exact I/O, and K-norm/gate/decay committer contracts.
