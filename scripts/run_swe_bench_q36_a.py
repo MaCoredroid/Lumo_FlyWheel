@@ -9184,7 +9184,10 @@ def main(argv: list[str] | None = None) -> int:
         or sfwd_state_fusion_eager_diagnostic == "1"
         or sfwd_state_fusion_timing_text == "1"
         or sfwd_prior_reuse_text == "1"
-        or sfwd_conv_postprep_text == "1"
+        or (
+            sfwd_conv_postprep_text == "1"
+            and os.environ.get("ENFORCE_EAGER", "0") == "1"
+        )
     )
     if (
         fixed32_eager_kernel_diagnostic

@@ -1249,6 +1249,55 @@ def _fr13_fixed32_warm_final_full_postprocess(vocab_size):
     return dict(evidence)
 
 
+def _fr13_fixed32_preseed_sfwd_conv_postprep_capture():
+    """Bind graph outputs to the exact pregather/sticky preseed leases."""
+    if not globals().get("_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH", False):
+        return None
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep output preseed ran during capture"
+        )
+    import lumo_flywheel_serving.fr10_gdn_tree_kernel as _fr13_f32_kernel
+    from lumo_flywheel_serving.fr13_sfwd_conv_postprep_fusion import (
+        preseed_fixed32_sfwd_conv_postprep_capture_bindings as _fr13_sfwd_preseed,
+    )
+
+    pregather_state = getattr(
+        _fr13_f32_kernel, "_FR13_FIXED32_CONV_PREGATHER", {}
+    ).get("state")
+    committer_route = getattr(
+        _fr13_f32_kernel, "_FR13_FIXED32_COMMITTER_FAST_ROUTE", {}
+    ).get("state")
+    stacks = globals().get("_FR13_EAGER_PACK_STACKS")
+    layers = globals().get("_FR13_REPLAY_LAYERS")
+    if (
+        not isinstance(pregather_state, dict)
+        or not isinstance(committer_route, dict)
+        or not isinstance(stacks, dict)
+        or not isinstance(layers, dict)
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep graph preseed registries are missing"
+        )
+    order = tuple(str(value) for value in stacks.get("layer_order", ()))
+    if (
+        len(order) != 48
+        or len(set(order)) != 48
+        or any(name not in layers for name in order)
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep graph preseed layer order drifted"
+        )
+    evidence = _fr13_sfwd_preseed(
+        layer_order=order,
+        layer_objects=tuple(layers[name] for name in order),
+        pregather_state=pregather_state,
+        committer_route=committer_route,
+    )
+    globals()["_FR13_FIXED32_SFWD_CONV_POSTPREP_PRESEED"] = evidence
+    return dict(evidence)
+
+
 def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
     """Fail before CUDA capture unless the eager producer published its lease."""
     def _same_tensor_view(left, right):
@@ -1287,6 +1336,27 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
     boot_warm = globals().get("_FR13_FIXED32_BOOT_WARM_EVIDENCE")
     if not isinstance(boot_warm, dict):
         boot_warm = {}
+    if globals().get("_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH", False):
+        sfwd_preseed = globals().get(
+            "_FR13_FIXED32_SFWD_CONV_POSTPREP_PRESEED"
+        )
+        sfwd_expected = {
+            "ready": True,
+            "schema": "fr13.fixed32.sfwd_conv_postprep.capture_cache.v1",
+            "capacity": capacity,
+            "layers": 48,
+            "batches": tuple(range(1, capacity + 1)),
+            "base_output_tensors": 48 * 6,
+            "bound_output_views": 48 * capacity * 6,
+            "capture_host_syncs_per_layer": 0,
+            "ssi_value_proof": "persistent_pregather_boot_selfcheck",
+            "runtime_guard": "persistent_sticky_committer_scalar",
+        }
+        if sfwd_preseed != sfwd_expected:
+            raise RuntimeError(
+                "FR13 SFWD conv/post-prep graph output preseed is incomplete: "
+                + repr((sfwd_preseed, sfwd_expected))
+            )
     warm_vocab = int(boot_warm.get("vocab_size", 0))
     pregather_state = getattr(
         _fr13_f32_kernel, "_FR13_FIXED32_CONV_PREGATHER", {}
@@ -6353,6 +6423,9 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION must be exactly 0 or 1"
         )
     sfwd_conv_postprep = sfwd_conv_postprep_raw == "1"
+    sfwd_conv_postprep_graph = bool(
+        sfwd_conv_postprep and os.environ.get("ENFORCE_EAGER", "0") == "0"
+    )
     sfwd_prior_manifest_sha256 = os.environ.get(
         "FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256", ""
     ).strip()
@@ -6451,6 +6524,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{sfwd_prior_reuse!r}\n"
         "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION = "
         f"{sfwd_conv_postprep!r}\n"
+        "_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH = "
+        f"{sfwd_conv_postprep_graph!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH = "
         f"{'/logs/fr13_fixed32_sfwd_prior_reuse.source_manifest.json'!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256 = "
@@ -6617,7 +6692,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             1,
             "FR13_FIXED32_EAGER_SFWD_PRIOR_REUSE_B1_BOOT_WARM",
         )
-    if sfwd_conv_postprep == "1":
+    if sfwd_conv_postprep == "1" and os.environ.get("ENFORCE_EAGER") == "1":
         batch_text = os.environ.get("MAX_NUM_SEQS", "")
         if batch_text not in ("1", "4"):
             raise RuntimeError(
@@ -6745,7 +6820,6 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         )
     if sfwd_conv_postprep == "1":
         exact_runtime = {
-            "ENFORCE_EAGER": "1",
             "FR13_DRAFT_VOCAB_ROOT": "1",
             "FR13_DRAFT_VOCAB_K": "65536",
             "FR13_FIXED32_CONV_SOURCE_BATCH": "0",
@@ -6763,6 +6837,13 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             for name, expected in exact_runtime.items()
             if os.environ.get(name, "") != expected
         }
+        enforce_eager = os.environ.get("ENFORCE_EAGER", "")
+        graph_runtime = bool(
+            enforce_eager == "0"
+            and os.environ.get("CUDAGRAPH_MODE", "")
+            == "FULL_AND_PIECEWISE"
+        )
+        eager_runtime = enforce_eager == "1"
         if (
             mode not in _FR13_FIXED32_MODES
             or os.environ.get("MAX_NUM_SEQS", "") not in ("1", "4")
@@ -6773,11 +6854,13 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             or sfwd_b4_byte_diagnostic != "0"
             or sfwd_production != "0"
             or sfwd_prior_reuse != "0"
+            or not (eager_runtime or graph_runtime)
             or drift
         ):
             raise RuntimeError(
                 "FR13 fixed32 SFWD conv/post-prep fusion requires exclusive "
-                "eager physical32 B1-or-B4 K64/root1: " + repr(drift)
+                "physical32 B1-or-B4 K64/root1 in eager or FULL graph mode: "
+                + repr(drift)
             )
     if (
         batch_gdn_byte_diagnostic == "1"
@@ -10785,7 +10868,7 @@ def _fr13_conv_subop_mab(
                         )
                         if (
                             not _FR13_FIXED32_MODE
-                            or _fr13_conv_postprep_b not in (1, 4)
+                            or not 1 <= _fr13_conv_postprep_b <= 4
                             or not _FR13_CONV_WB_BATCHED
                             or not _FR13_TREE_CONV_FUSED
                             or _FR13_FIXED32_CONV_SOURCE_BATCH
@@ -10828,7 +10911,88 @@ def _fr13_conv_subop_mab(
                             "_fr13_fixed32_sfwd_conv_postprep_outputs",
                             None,
                         )
-                        if _fr13_conv_postprep_cache is None:
+                        _fr13_conv_postprep_capturing = bool(
+                            torch.cuda.is_available()
+                            and torch.cuda.is_current_stream_capturing()
+                        )
+                        _fr13_conv_postprep_graph_cache = bool(
+                            isinstance(_fr13_conv_postprep_cache, dict)
+                            and _fr13_conv_postprep_cache.get("schema")
+                            == "fr13.fixed32.sfwd_conv_postprep.capture_cache.v1"
+                        )
+                        _fr13_conv_postprep_binding = None
+                        _fr13_conv_postprep_ssi = spec_state_indices_tensor
+                        _fr13_conv_postprep_conv_state = conv_state
+                        _fr13_conv_postprep_source_stage = _fr13_wbb_stage
+                        if _fr13_conv_postprep_graph_cache:
+                            _fr13_conv_postprep_entry = (
+                                _fr13_conv_postprep_cache.get("by_batch", {})
+                            ).get(_fr13_conv_postprep_b)
+                            if not isinstance(_fr13_conv_postprep_entry, dict):
+                                raise RuntimeError(
+                                    "FR13 SFWD conv/post-prep graph output cache "
+                                    "does not cover the capture batch"
+                                )
+                            _fr13_conv_postprep_query = (
+                                _fr13_conv_postprep_entry["query"]
+                            )
+                            _fr13_conv_postprep_key = (
+                                _fr13_conv_postprep_entry["key_tensor"]
+                            )
+                            _fr13_conv_postprep_value_spec = (
+                                _fr13_conv_postprep_entry["value_spec"]
+                            )
+                            _fr13_conv_postprep_value_tree = (
+                                _fr13_conv_postprep_entry["value_tree"]
+                            )
+                            _fr13_conv_postprep_g = (
+                                _fr13_conv_postprep_entry["g"]
+                            )
+                            _fr13_conv_postprep_beta = (
+                                _fr13_conv_postprep_entry["beta"]
+                            )
+                            _fr13_conv_postprep_ssi = (
+                                _fr13_conv_postprep_entry["spec_state_indices"]
+                            )
+                            _fr13_conv_postprep_conv_state = (
+                                _fr13_conv_postprep_entry["conv_state"]
+                            )
+                            _fr13_conv_postprep_source_stage = (
+                                _fr13_conv_postprep_entry["source_stage"]
+                            )
+                            _fr13_conv_postprep_binding = (
+                                _fr13_conv_postprep_entry["capture_binding"]
+                            )
+                            if (
+                                _fr13_wbb_stage
+                                is not _fr13_conv_postprep_source_stage
+                                or int(conv_state.data_ptr())
+                                != int(_fr13_conv_postprep_conv_state.data_ptr())
+                                or tuple(int(value) for value in conv_state.shape)
+                                != tuple(
+                                    int(value)
+                                    for value in _fr13_conv_postprep_conv_state.shape
+                                )
+                                or tuple(int(value) for value in conv_state.stride())
+                                != tuple(
+                                    int(value)
+                                    for value in _fr13_conv_postprep_conv_state.stride()
+                                )
+                                or int(conv_state.storage_offset())
+                                != int(
+                                    _fr13_conv_postprep_conv_state.storage_offset()
+                                )
+                            ):
+                                raise RuntimeError(
+                                    "FR13 SFWD conv/post-prep graph input lease "
+                                    "object/data_ptr drifted"
+                                )
+                        elif _fr13_conv_postprep_capturing:
+                            raise RuntimeError(
+                                "FR13 SFWD conv/post-prep capture lacks preseeded "
+                                "output bindings"
+                            )
+                        elif _fr13_conv_postprep_cache is None:
                             _fr13_conv_postprep_query = torch.empty(
                                 (1, _fr13_conv_postprep_rows, 16, 128),
                                 dtype=mixed_qkv_spec.dtype,
@@ -10896,10 +11060,8 @@ def _fr13_conv_subop_mab(
                             )
                         launch_fixed32_sfwd_conv_postprep_fusion(
                             x=mixed_qkv_spec,
-                            conv_state=conv_state,
-                            spec_state_indices=spec_state_indices_tensor[
-                                :_fr13_conv_postprep_b, :32
-                            ],
+                            conv_state=_fr13_conv_postprep_conv_state,
+                            spec_state_indices=_fr13_conv_postprep_ssi,
                             conv_weights=conv_weights,
                             bias=self.conv1d.bias,
                             a=a,
@@ -10912,9 +11074,7 @@ def _fr13_conv_subop_mab(
                             value_tree=_fr13_conv_postprep_value_tree,
                             g=_fr13_conv_postprep_g,
                             beta=_fr13_conv_postprep_beta,
-                            source_stage=_fr13_wbb_stage[
-                                : _fr13_conv_postprep_b * _fr13_wbb_srows
-                            ],
+                            source_stage=_fr13_conv_postprep_source_stage,
                             conv_tap=None,
                             batch_size=_fr13_conv_postprep_b,
                             fixed32_mode=_FR13_FIXED32_MODE,
@@ -10922,8 +11082,8 @@ def _fr13_conv_subop_mab(
                             qualification_profile="k64_root",
                             draft_vocab_k=65536,
                             draft_vocab_root=1,
-                            physical32_guarded=True,
                             source_only_qualification=True,
+                            capture_binding=_fr13_conv_postprep_binding,
                         )
                     elif _fr13_sfwd_production is not None:
                         if (
@@ -19685,6 +19845,8 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         "_fr13_fixed32_warm_final_full_postprocess(\n"
         "                int(self.input_batch.vocab_size),\n"
         "            )\n"
+        "            _fr13_f32_preseed_gdn."
+        "_fr13_fixed32_preseed_sfwd_conv_postprep_capture()\n"
         "            _fr13_cfwd_timer()\n"
         "            _fr13_dfwd_timer()\n"
         "            _fr13_f32_preseed_gdn."

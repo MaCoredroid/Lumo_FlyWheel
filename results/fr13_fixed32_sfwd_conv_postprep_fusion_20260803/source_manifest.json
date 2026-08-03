@@ -2,17 +2,41 @@
   "base_commit": "c49c8eb5370e4d4035aceffaa8476aea31f921f5",
   "candidate": "fixed32_sfwd_conv_postprep_frontier5_direct_v1",
   "files": {
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": {
+      "bytes": 1769557,
+      "sha256": "dc48ba2ffc508a7362a1fd1c543a93863815d6aa3f8067568e3e583e7ef91246"
+    },
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": {
+      "bytes": 251767,
+      "sha256": "59d9d06dc4bdc3d370f8d8c824c122ee1b596f4c9e8946b78adf820ab04723d5"
+    },
+    "scripts/fr13_bigdenom_swe_serve_variant.sh": {
+      "bytes": 136531,
+      "sha256": "1ed5728b628818f05d31da0a8bfee34875e03523727b2bade6bab763fde8a3e9"
+    },
     "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py": {
       "bytes": 7370,
       "sha256": "c489999cde03283b55a776a407b6b54f5741b83cd11d32efa48c7c83a9ccce7c"
     },
+    "scripts/run_swe_bench_q36_a.py": {
+      "bytes": 385455,
+      "sha256": "d8f8f1d84d4116c0da2246fc9777c6a23f18bb362d0c3c0c8c223f409b51ee54"
+    },
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py": {
-      "bytes": 21605,
-      "sha256": "4ea3310fa312cd1bd99b2adc08624bd998ae55a611eace9475de05dd529c5c4d"
+      "bytes": 39761,
+      "sha256": "bcda4bbc0cf7a796cab9cbf9a789cfbde1a0a503353ed087c0047cf4456e5b2c"
     },
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py": {
       "bytes": 35295,
       "sha256": "e15b78a1db747d0e9deaed0b31aae4373b2af6e631b5b28ad7822423fdc9f94b"
+    },
+    "tests/test_fr13_fixed32_sfwd_conv_postprep_fusion.py": {
+      "bytes": 25972,
+      "sha256": "2742bbbd2c25ee27f97b145fcbce3e0a891b0690ce3a4d24081a6600d1fa6f33"
+    },
+    "tests/test_fr13_fixed32_sfwd_conv_postprep_wiring.py": {
+      "bytes": 7946,
+      "sha256": "20d2edff47566c27f1f0c5653b1965d467943292e6302e4f1fe98bf14ac377d7"
     }
   },
   "schema": "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1"

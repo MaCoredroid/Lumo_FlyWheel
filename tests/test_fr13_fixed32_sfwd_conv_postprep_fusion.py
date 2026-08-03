@@ -366,6 +366,8 @@ def test_contract_is_exact_physical32_k64_and_one_launch_per_layer() -> None:
         assert contract["source_only"] is True
         assert contract["default_off"] is True
         assert contract["production_eligible"] is False
+        assert contract["full_graph_qualified"] is True
+        assert contract["capture_host_syncs_per_layer"] == 0
         assert contract["physical_rows_per_request"] == 32
         assert contract["launches_per_layer"] == 1
         assert contract["launches_for_all_layers"] == 48
@@ -510,6 +512,17 @@ def test_layout_contract_rejects_out_of_range_state_bank_indices(
         candidate.fixed32_sfwd_conv_postprep_layout_contract(**operands)
 
 
+def test_layout_contract_uses_prevalidated_ssi_without_host_scalar_read() -> None:
+    operands = _valid_layout_operands()
+    operands["spec_state_indices"][0, -1] = -1
+    layout = candidate.fixed32_sfwd_conv_postprep_layout_contract(
+        **operands,
+        state_indices_prevalidated=True,
+    )
+    assert layout["state_index_bounds"] is None
+    assert layout["state_indices_prevalidated"] is True
+
+
 @pytest.mark.parametrize(
     ("name", "mutate", "failure"),
     (
@@ -598,7 +611,7 @@ def test_generator_is_deterministic_and_kernel_has_no_conv_intermediate() -> Non
     assert "tl.store(value_tree + value_offset" in store_source
 
 
-def test_launcher_is_source_only_one_launch_and_patcher_is_untouched() -> None:
+def test_launcher_requires_opaque_capture_binding_and_has_one_launch() -> None:
     source = MODULE_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
     launcher = next(
@@ -610,14 +623,20 @@ def test_launcher_is_source_only_one_launch_and_patcher_is_untouched() -> None:
     launcher_source = ast.get_source_segment(source, launcher)
     assert launcher_source is not None
     assert "source_only_qualification is not True" in launcher_source
-    assert "physical32_guarded is not True" in launcher_source
-    assert "is_current_stream_capturing" in launcher_source
+    assert "physical32_guarded" not in launcher_source
+    assert "capture_binding is None and capturing" in launcher_source
+    assert "_validate_capture_binding(" in launcher_source
+    assert "state_indices_prevalidated=capture_binding is not None" in launcher_source
     assert "grid = (int(batch_size), channel_tasks + ROWS)" in launcher_source
     assert launcher_source.count(
         "_fr13_fixed32_sfwd_conv_postprep_fusion_kernel[grid]("
     ) == 1
     assert "num_warps=num_warps" in launcher_source
-    assert candidate.CANDIDATE not in PATCHER_PATH.read_text(encoding="utf-8")
+    patcher_source = PATCHER_PATH.read_text(encoding="utf-8")
+    assert "preseed_fixed32_sfwd_conv_postprep_capture_bindings" in patcher_source
+    assert "capture_binding=_fr13_conv_postprep_binding" in patcher_source
+    assert "if any(existing_graph_caches):" in source
+    assert "partially preseeded" in source
 
 
 def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
@@ -686,6 +705,6 @@ def test_sanitized_artifact_binds_sources_ledgers_and_resource_gate() -> None:
         assert profile["local_bytes"] == 0
         assert profile["shared_bytes"] == 0
     readme = (ARTIFACT / "README.md").read_text(encoding="utf-8")
-    assert "source-only candidate complete" in readme
-    assert "not runtime-qualified or served" in readme
+    assert "default-off eager and FULL-capture wiring complete" in readme
+    assert "not GPU measured" in readme
     assert "No device API" in (ARTIFACT / "verification.md").read_text()

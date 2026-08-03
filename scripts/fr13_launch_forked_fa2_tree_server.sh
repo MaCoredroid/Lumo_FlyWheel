@@ -2240,7 +2240,8 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
         || "$_fr13_fixed32_sfwd_state_fusion_timing" == "1" \
         || "$_fr13_fixed32_sfwd_state_fusion_production" == "1" \
         || "$_fr13_fixed32_sfwd_prior_reuse" == "1" \
-        || "$_fr13_fixed32_sfwd_conv_postprep" == "1" ]]; then
+        || ( "$_fr13_fixed32_sfwd_conv_postprep" == "1" \
+             && "${ENFORCE_EAGER:-0}" == "1" ) ]]; then
     _fixed32_expected_eager=1
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
@@ -3086,11 +3087,18 @@ if (( _fr13_sfwd_route_count > 1 )); then
   exit 2
 fi
 if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
+  _fr13_sfwd_conv_postprep_execution=invalid
+  if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then
+    _fr13_sfwd_conv_postprep_execution=eager
+  elif [[ "${ENFORCE_EAGER:-0}" == "0" \
+          && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" ]]; then
+    _fr13_sfwd_conv_postprep_execution=full_graph
+  fi
   if [[ ( "${FR13_FIXED32_MODE:-}" != "tail6_fixed32" \
           && "${FR13_FIXED32_MODE:-}" != "hydra27_fixed32" ) \
         || ( "$MAX_NUM_SEQS" != "1" && "$MAX_NUM_SEQS" != "4" ) \
         || "${SWE_CONCURRENCY:-}" != "$MAX_NUM_SEQS" \
-        || "${ENFORCE_EAGER:-0}" != "1" \
+        || "$_fr13_sfwd_conv_postprep_execution" == "invalid" \
         || "${FR13_DRAFT_VOCAB_ROOT:-0}" != "1" \
         || "${FR13_DRAFT_VOCAB_K:-65536}" != "65536" \
         || "${FR13_DRAFT_VOCAB_BLOCKS:-}" != "/workspace/scripts/fr13_dvk_subset_blocks.json" \
@@ -3100,7 +3108,7 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         || "${FR13_TREE_CONV_FUSED:-1}" != "1" \
         || "${FR13_CONV_WB_BATCHED:-0}" != "1" \
         || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "0" ]]; then
-    echo "SFWD conv/post-prep fusion requires exact K64/root1 eager fixed32 B1 or B4" >&2
+    echo "SFWD conv/post-prep fusion requires exact K64/root1 eager or FULL-graph fixed32 B1/B4" >&2
     exit 2
   fi
 elif [[ "$_fr13_sfwd_prior_reuse" == "1" ]]; then

@@ -1,16 +1,15 @@
-Focused host-only suite:
+Focused and related host-only suites:
 
-python3 -m pytest -q tests/test_fr13_fixed32_sfwd_conv_postprep_fusion.py
-...............                                                          [100%]
-15 passed in 0.59s
+python3 -m pytest -q \
+  tests/test_fr13_fixed32_sfwd_conv_postprep_wiring.py \
+  tests/test_fr13_fixed32_sfwd_conv_postprep_fusion.py \
+  tests/test_fr13_fixed32_conv_source_batch.py \
+  tests/test_fr13_fixed32_sfwd_state_fusion.py
+................................................                         [100%]
+48 passed in 1.53s
 
-Related host-only suites:
-
-The new focused suite plus the existing descriptorless/prior-reuse suites
-produced 43 passes and one pre-existing base-revision failure. The unrelated
-failure is a stale hard-coded SHA-256 expectation for
-src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py: the test expects f0e808...
-while c49c8eb53 contains 4c6d15.... This branch does not modify that file.
-
-No Docker, GPU, runtime, service, task, request, timing, or acceptance run was
-performed.
+Generated GDN and GPU-runner patches also compiled against pristine vLLM
+sources (`generated_gdn_bytes=610983`, `generated_runner_bytes=309576`).
+Python compilation, `bash -n`, `git diff --check`, and artifact checksum
+verification also passed. No Docker, GPU, service, task, request, timing, or
+acceptance run was performed.
