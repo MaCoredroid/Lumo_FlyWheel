@@ -47,14 +47,20 @@ FR13_GATE_TAW_NATIVE=${FR13_GATE_TAW_NATIVE:-1}
 FR13_GATE_DRAFT_HEAD_PAD=${FR13_GATE_DRAFT_HEAD_PAD:-0}
 FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}
 FR13_GATE_DRAFT_HEAD_FP8=${FR13_GATE_DRAFT_HEAD_FP8:-0}
+FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=${FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO:-0}
 FR13_GATE_DFWD_TOP3=${FR13_GATE_DFWD_TOP3:-0}
 FR13_GATE_BM8=${FR13_GATE_BM8:-0}
-for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DFWD_TOP3 FR13_GATE_BM8; do
+for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO FR13_GATE_DFWD_TOP3 FR13_GATE_BM8; do
   case "${!gate}" in
     0|1) ;;
     *) echo "$gate must be 0 or 1" >&2; exit 2 ;;
   esac
 done
+if [[ "$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO" == "1" \
+      && "$FR13_GATE_DRAFT_HEAD_FP8" != "1" ]]; then
+  echo "FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=1 requires FR13_GATE_DRAFT_HEAD_FP8=1" >&2
+  exit 2
+fi
 FR13_GATE_GDN_BV=${FR13_GATE_GDN_BV:-64}
 case "$FR13_GATE_GDN_BV" in
   0) FR13_GATE_GDN_BV_CANDIDATE= ;;
@@ -276,6 +282,7 @@ export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"
 export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"
 export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
 export FR13_DRAFT_HEAD_FP8="$FR13_GATE_DRAFT_HEAD_FP8"
+export FR13_DRAFT_HEAD_FP8_STATIC_IO="$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO"
 export FR13_NEEDS_ALLOW="$NEEDS_ALLOW"
 export FR13_FLOOR_ORDER=TH
 
@@ -302,9 +309,10 @@ elif [[ "${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}" == "1" ]]; then
 fi
 
 mkdir -p "$RUNROOT"
-printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_fp8_gate=%s\ndfwd_top3_gate=%s\ndfwd_top3_sha256=%s\nb1_diagnostic_task_profile=%s\nb1_diagnostic_task_id=%s\nb1_diagnostic_subset=%s\nb1_diagnostic_subset_sha256=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
+printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_fp8_gate=%s\ndraft_head_fp8_static_io=%s\ndfwd_top3_gate=%s\ndfwd_top3_sha256=%s\nb1_diagnostic_task_profile=%s\nb1_diagnostic_task_id=%s\nb1_diagnostic_subset=%s\nb1_diagnostic_subset_sha256=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$SOURCE_COMMIT" "$FA2_SHA" "$FR13_GATE_BM8" \
   "$FR13_GATE_DRAFT_HEAD_M32" "$FR13_GATE_DRAFT_HEAD_FP8" \
+  "$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO" \
   "$FR13_GATE_DFWD_TOP3" "$FR13_GATE_DFWD_TOP3_SHA256" \
   "$B1_DIAGNOSTIC_TASK_PROFILE" "$B1_DIAGNOSTIC_TASK_ID" "$SUBSET" \
   "$B1_DIAGNOSTIC_SUBSET_SHA256" "$B1_WORKLOAD_PROFILE" \
@@ -342,6 +350,7 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_DRAFT_HEAD_M32_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \
   FR13_DRAFT_HEAD_M32_LIVE_JSON=/logs/fr13_draft_head_m32.live.json \
   FR13_DRAFT_HEAD_FP8="$FR13_GATE_DRAFT_HEAD_FP8" \
+  FR13_DRAFT_HEAD_FP8_STATIC_IO="$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO" \
   FR13_DRAFT_HEAD_FP8_ARM="$DRAFT_HEAD_FP8_ARM" \
   FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON=/logs/fr13_draft_head_fp8.engagement.json \
   FR13_DFWD_K64_TOP3="$FR13_GATE_DFWD_TOP3" \
@@ -452,6 +461,7 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
     --candidate-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
     --expected-source-sha256 "$DRAFT_HEAD_FP8_SOURCE_SHA" \
     --expected-source-commit "$SOURCE_COMMIT" \
+    --expected-static-io "$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO" \
     --repo "$PWD" \
     --out "$RUNROOT/$ARM/draft_head_fp8_real_b1_gate.json"
 fi

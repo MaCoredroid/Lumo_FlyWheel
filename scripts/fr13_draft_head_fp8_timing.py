@@ -18,6 +18,7 @@ try:
         GRAPH_SIGNATURE,
         QROW16_SO_SHA256,
         _validate_engagement,
+        candidate_contract,
         validate_qrow16_production,
     )
 except ImportError:
@@ -25,6 +26,7 @@ except ImportError:
         GRAPH_SIGNATURE,
         QROW16_SO_SHA256,
         _validate_engagement,
+        candidate_contract,
         validate_qrow16_production,
     )
 
@@ -163,6 +165,7 @@ def _validate_arm(
     expected_arm: str,
     task_ids: list[str],
     fp8: bool,
+    static_io: bool,
 ) -> dict[str, Any]:
     floor = FLOORS[fp8]
     engagement = payload.get("engagement")
@@ -180,6 +183,14 @@ def _validate_arm(
         or payload.get("draft_vocab_k") != 65_536
         or payload.get("draft_vocab_root") != 1
         or payload.get("draft_head_fp8") is not fp8
+        or (
+            fp8
+            and payload.get("draft_head_fp8_static_io") is not static_io
+        )
+        or (
+            not fp8
+            and payload.get("draft_head_fp8_static_io", False) is not False
+        )
         or payload.get("floor_is_full_step_hardware_floor") is not False
         or payload.get("floor_reference_scope")
         != "fixed32_mandatory_weight_read_or_row_compute_lower_bound"
@@ -438,6 +449,9 @@ def main() -> int:
     parser.add_argument("--promotion-credential", type=Path, required=True)
     parser.add_argument("--expected-source-commit", required=True)
     parser.add_argument("--expected-source-sha256", required=True)
+    parser.add_argument(
+        "--expected-static-io", choices=("0", "1"), default="0"
+    )
     parser.add_argument("--stock-arm", required=True)
     parser.add_argument("--candidate-arm", required=True)
     parser.add_argument("--stock-qrow16-sidecar", type=Path, required=True)
@@ -448,6 +462,7 @@ def main() -> int:
     parser.add_argument("--qrow16-fa2-sha256", required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    expected_static_io = args.expected_static_io == "1"
 
     _regular(args.subset, "canonical exact4 subset")
     subset_raw = args.subset.read_bytes()
@@ -477,6 +492,7 @@ def main() -> int:
         or promotion.get("source_commit") != args.expected_source_commit
         or promotion.get("candidate_source_sha256")
         != args.expected_source_sha256
+        or promotion.get("static_io") is not expected_static_io
         or promotion.get("engagement")
         != {
             "selected_root_calls": 1,
@@ -485,6 +501,9 @@ def main() -> int:
             "proposal_logits_source": "fp8_output_direct",
             "bf16_shadow_calls": 0,
             "steady_state_synchronizations": 0,
+            "activation_io": candidate_contract(expected_static_io)[
+                "activation_io"
+            ],
         }
     ):
         raise ValueError("FP8 promotion credential drifted")
@@ -493,6 +512,7 @@ def main() -> int:
         source_sha=args.expected_source_sha256,
         source_commit=args.expected_source_commit,
         expected_arm=args.candidate_arm,
+        expected_static_io=expected_static_io,
     )
     if engagement.get("drafter_graph_signature") != GRAPH_SIGNATURE:
         raise ValueError("candidate graph signature drifted")
@@ -538,6 +558,7 @@ def main() -> int:
         expected_arm=args.stock_arm,
         task_ids=task_ids,
         fp8=False,
+        static_io=False,
     )
     candidate_summary = _validate_arm(
         candidate,
@@ -546,6 +567,7 @@ def main() -> int:
         expected_arm=args.candidate_arm,
         task_ids=task_ids,
         fp8=True,
+        static_io=expected_static_io,
     )
     stock_components = stock_summary["gpu_components_ms_per_step"]
     candidate_components = candidate_summary["gpu_components_ms_per_step"]
@@ -556,7 +578,12 @@ def main() -> int:
         "timing_eligible": True,
         "formal_floor_acceptance_eligible": False,
         "production_default_enabled": False,
-        "only_arm_delta": "FR13_DRAFT_HEAD_FP8_0_to_1",
+        "only_arm_delta": (
+            "FR13_DRAFT_HEAD_FP8_0_to_1_and_STATIC_IO_0_to_1"
+            if expected_static_io
+            else "FR13_DRAFT_HEAD_FP8_0_to_1"
+        ),
+        "static_io": expected_static_io,
         "batch_size": 1,
         "concurrency": 1,
         "task_instance_ids": task_ids,
