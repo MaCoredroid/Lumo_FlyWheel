@@ -125,9 +125,11 @@ def test_final_flush_emits_only_zero_mismatch_real_task_record(
     module = _load_device_module()
     marker = tmp_path / "real.arm"
     marker.write_text("swe_verified:astropy__astropy-12907\n", encoding="ascii")
+    marker.chmod(0o444)
     output = tmp_path / "live.json"
     monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "1")
     monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_PATH", str(marker))
+    monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_UID", str(marker.stat().st_uid))
     monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_LIVE_JSON", str(output))
     monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT", "a" * 40)
     module._FR13_CFWD_LOGIT_DIRECT_GRAPHS[41] = {

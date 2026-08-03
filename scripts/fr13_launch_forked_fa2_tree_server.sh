@@ -87,6 +87,9 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_TAW_NATIVE_PRECOMPUTE
   FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION
   FR13_CFWD_LOGIT_DIRECT_BYTE_AB
+  FR13_CFWD_LOGIT_DIRECT_PRODUCTION
+  FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON
+  FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256
   FR13_FA2_QROW16_LIVE_PAGED_AB
   FR13_FA2_QROW16_PRODUCTION
   FR13_FA2_QROW32_LIVE_PAGED_AB
@@ -175,6 +178,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE]}" == "set:byte_ab" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_CFWD_LOGIT_DIRECT_BYTE_AB]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_CFWD_LOGIT_DIRECT_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO]}" == set:* ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
@@ -197,6 +201,7 @@ fi
    || "${FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION:-0}" == "1" \
    || "${FR13_CFWD_LOGIT_DIRECT_BYTE_AB:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:-0}" == "1" \
+   || "${FR13_CFWD_LOGIT_DIRECT_PRODUCTION:-0}" == "1" \
    || "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" != "0" \
    || -n "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO:-}" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
@@ -504,7 +509,13 @@ FR13_CFWD_LOGIT_DIRECT_SOURCE=/workspace/scripts/fr13_cfwd_logit_direct_decision
 FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256=d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d
 FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT=$(git rev-parse HEAD)
 FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_PATH=/logs/fr13_cfwd_logit_direct.real_event.arm
+FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_UID=
 FR13_CFWD_LOGIT_DIRECT_LIVE_JSON=/logs/fr13_cfwd_logit_direct.live.json
+FR13_CFWD_LOGIT_DIRECT_PRODUCTION=${FR13_CFWD_LOGIT_DIRECT_PRODUCTION:-0}
+FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON=${FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON:-}
+FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256=${FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256:-}
+FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_PATH=/logs/fr13_cfwd_logit_direct.production_pass.json
+FR13_CFWD_LOGIT_DIRECT_PRODUCTION_ENGAGEMENT_JSON=/logs/fr13_cfwd_logit_direct.production_engagement.json
 FR13_FA2_QROW16_LIVE_PAGED_AB=${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}
 FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID=${FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID:-}
 FR13_FA2_QROW16_LIVE_PAGED_AB_JSON=${FR13_FA2_QROW16_LIVE_PAGED_AB_JSON:-/logs/fr13_fa2_qrow16_live_paged_ab.json}
@@ -660,17 +671,43 @@ case "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" in
   0|1) ;;
   *) echo "FR13_CFWD_LOGIT_DIRECT_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_CFWD_LOGIT_DIRECT_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" == "1" \
+      && "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" == "1" ]]; then
+  echo "FR13 CFWD logit-direct diagnostic and production are mutually exclusive" >&2
+  exit 2
+fi
 if [[ "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" == "1" ]]; then
-  [[ ( "$FR13_FIXED32_MODE" == "tail6_fixed32" \
-       || "$FR13_FIXED32_MODE" == "hydra27_fixed32" ) \
-     && ( "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" ) \
-     && "$SWE_CONCURRENCY" == "$MAX_NUM_SEQS" \
+  [[ "$FR13_FIXED32_MODE" == "hydra27_fixed32" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "$SWE_CONCURRENCY" == "1" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
      && "${ENFORCE_EAGER:-0}" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" \
      && "$(sha256sum scripts/fr13_cfwd_logit_direct_decision_kernel.py | awk '{print $1}')" \
         == "$FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256" ]] || {
-    echo "FR13 CFWD logit-direct A/B requires B1/B4 fixed32 FULL graphs and native all-parent production" >&2
+    echo "FR13 CFWD logit-direct A/B requires the canonical real SWE Hydra27 B1 FULL graph and native all-parent production" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" == "1" ]]; then
+  [[ "$FR13_FIXED32_MODE" == "hydra27_fixed32" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "$SWE_CONCURRENCY" == "1" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+     && "${ENFORCE_EAGER:-0}" == "0" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" \
+     && -f "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON" \
+     && ! -L "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON" \
+     && "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON" | awk '{print $1}')" \
+        == "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256" ]] || {
+    echo "FR13 CFWD logit-direct production requires source-bound Hydra27 B1 FULL timing credentials" >&2
     exit 2
   }
 fi
@@ -1548,6 +1585,28 @@ if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" \
       && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
   echo "FR13 DFWD unified BM8 live A/B and production are mutually exclusive" >&2
   exit 2
+fi
+rm -f \
+  "$LOG_DIR/fr13_cfwd_logit_direct.real_event.arm" \
+  "$LOG_DIR/fr13_cfwd_logit_direct.production_pass.json" \
+  "$LOG_DIR/fr13_cfwd_logit_direct.production_engagement.json" \
+  "$LOG_DIR/fr13_cfwd_logit_direct.live.json" \
+  2>/dev/null || true
+if [[ "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" == "1" ]]; then
+  _fr13_cfwd_marker_tmp="$LOG_DIR/.fr13_cfwd_logit_direct.real_event.arm.$$"
+  printf '%s\n' 'swe_verified:astropy__astropy-12907' \
+    > "$_fr13_cfwd_marker_tmp"
+  chmod 444 "$_fr13_cfwd_marker_tmp"
+  mv -- "$_fr13_cfwd_marker_tmp" \
+    "$LOG_DIR/fr13_cfwd_logit_direct.real_event.arm"
+  FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_UID=$(stat -c '%u' \
+    "$LOG_DIR/fr13_cfwd_logit_direct.real_event.arm")
+  unset _fr13_cfwd_marker_tmp
+fi
+if [[ "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" == "1" ]]; then
+  cp -- "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON" \
+    "$LOG_DIR/fr13_cfwd_logit_direct.production_pass.json"
+  chmod 444 "$LOG_DIR/fr13_cfwd_logit_direct.production_pass.json"
 fi
 if [[ "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "1" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" \
@@ -4183,7 +4242,12 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256="$FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256" \
   -e FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT="$FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT" \
   -e FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_PATH="$FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_PATH" \
+  -e FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_UID="$FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_UID" \
   -e FR13_CFWD_LOGIT_DIRECT_LIVE_JSON="$FR13_CFWD_LOGIT_DIRECT_LIVE_JSON" \
+  -e FR13_CFWD_LOGIT_DIRECT_PRODUCTION="$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" \
+  -e FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_PATH="$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_PATH" \
+  -e FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256="$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256" \
+  -e FR13_CFWD_LOGIT_DIRECT_PRODUCTION_ENGAGEMENT_JSON="$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_ENGAGEMENT_JSON" \
   -e FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_FA2_QROW16_LIVE_PAGED_AB" \
   -e FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID="$FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID" \
   -e FR13_FA2_QROW16_LIVE_PAGED_AB_JSON="$FR13_FA2_QROW16_LIVE_PAGED_AB_JSON" \

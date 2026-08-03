@@ -1345,6 +1345,8 @@ _FR13_CFWD_LOGIT_DIRECT_GRAPHS: dict[int, dict[str, Any]] = {}
 _FR13_CFWD_LOGIT_DIRECT_CAPTURE: dict[str, Any] | None = None
 _FR13_CFWD_LOGIT_DIRECT_WARM: dict[tuple[Any, ...], dict[str, Any]] = {}
 _FR13_CFWD_LOGIT_DIRECT_REPLAY_ACTIVE: dict[tuple[str, int], bool] = {}
+_FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS: dict[str, Any] | None = None
+_FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256: str | None = None
 _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
     "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
@@ -5118,6 +5120,181 @@ def _fr13_cfwd_logit_direct_requested() -> bool:
     return raw == "1"
 
 
+def _fr13_cfwd_logit_direct_production_pass(
+    *,
+    expected_mode: str,
+    expected_batch: int,
+) -> dict[str, Any]:
+    """Validate the source-bound one-task byte credential used for timing."""
+    global _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS
+    global _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256
+    path = Path(
+        os.environ.get(
+            "FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_PATH",
+            "/logs/fr13_cfwd_logit_direct.production_pass.json",
+        )
+    )
+    expected_sha = os.environ.get(
+        "FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256", ""
+    ).strip()
+    hex_chars = frozenset("0123456789abcdef")
+    if (
+        len(expected_sha) != 64
+        or any(character not in hex_chars for character in expected_sha)
+        or not path.is_file()
+        or path.is_symlink()
+    ):
+        raise RuntimeError(
+            "FR13 CFWD logit-direct production requires a regular pinned credential"
+        )
+    raw = path.read_bytes()
+    observed_sha = hashlib.sha256(raw).hexdigest()
+    if observed_sha != expected_sha:
+        raise RuntimeError("FR13 CFWD logit-direct production credential SHA drift")
+    if _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS is None:
+        try:
+            payload = json.loads(raw.decode("ascii"))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise RuntimeError(
+                "FR13 CFWD logit-direct production credential is unreadable"
+            ) from error
+        _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS = payload
+        _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256 = observed_sha
+    payload = _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS
+    source_commit = os.environ.get(
+        "FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT", ""
+    ).strip()
+    expected_keys = {
+        "schema",
+        "status",
+        "candidate",
+        "candidate_schema",
+        "candidate_source_sha256",
+        "integration_source_commit",
+        "mode",
+        "qualified_batch",
+        "task_count",
+        "task_ids",
+        "task_marker",
+        "reference_always_served",
+        "decision_mismatches",
+        "walk_mismatches",
+        "candidate_invalid",
+        "complete_work_census_events",
+        "live_result_sha256",
+        "final_flush_sha256",
+        "boundary_snapshot_sha256",
+        "traffic_audit_sha256",
+        "subset_sha256",
+        "timing_eligible",
+        "floor_acceptance_eligible",
+    }
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != expected_keys
+        or payload.get("schema")
+        != "fr13.fixed32.cfwd_logit_direct.production_credential.v1"
+        or payload.get("status") != "production_timing_ready"
+        or payload.get("candidate") != _FR13_CFWD_LOGIT_DIRECT_CANDIDATE
+        or payload.get("candidate_schema") != _FR13_CFWD_LOGIT_DIRECT_SCHEMA
+        or payload.get("candidate_source_sha256")
+        != _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256
+        or payload.get("integration_source_commit") != source_commit
+        or payload.get("mode") != expected_mode
+        or payload.get("qualified_batch") != int(expected_batch)
+        or payload.get("task_count") != 1
+        or not isinstance(payload.get("task_ids"), list)
+        or len(payload["task_ids"]) != 1
+        or payload.get("task_marker") != "swe_verified:" + payload["task_ids"][0]
+        or payload.get("reference_always_served") is not True
+        or payload.get("decision_mismatches") != [0, 0, 0, 0, 0]
+        or payload.get("walk_mismatches") != [0, 0, 0, 0, 0]
+        or payload.get("candidate_invalid") != 0
+        or type(payload.get("complete_work_census_events")) is not int
+        or payload["complete_work_census_events"] < 1
+        or payload.get("timing_eligible") is not False
+        or payload.get("floor_acceptance_eligible") is not False
+        or any(
+            not isinstance(payload.get(name), str)
+            or len(payload[name]) != 64
+            or any(character not in hex_chars for character in payload[name])
+            for name in (
+                "live_result_sha256",
+                "final_flush_sha256",
+                "boundary_snapshot_sha256",
+                "traffic_audit_sha256",
+                "subset_sha256",
+            )
+        )
+        or _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256 != observed_sha
+    ):
+        raise RuntimeError(
+            "FR13 CFWD logit-direct production credential is invalid or stale"
+        )
+    engagement_path = Path(
+        os.environ.get(
+            "FR13_CFWD_LOGIT_DIRECT_PRODUCTION_ENGAGEMENT_JSON",
+            "/logs/fr13_cfwd_logit_direct.production_engagement.json",
+        )
+    )
+    if not engagement_path.exists():
+        engagement = {
+            "schema": "fr13.fixed32.cfwd_logit_direct.production_engagement.v1",
+            "status": "engaged",
+            "candidate": _FR13_CFWD_LOGIT_DIRECT_CANDIDATE,
+            "mode": expected_mode,
+            "batch_size": int(expected_batch),
+            "source_commit": source_commit,
+            "candidate_source_sha256": _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256,
+            "production_pass_sha256": observed_sha,
+            "served_return": "logit-direct candidate products",
+            "producer_pid": os.getpid(),
+        }
+        engagement_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = engagement_path.with_name(
+            engagement_path.name + ".tmp." + str(os.getpid())
+        )
+        with open(temporary, "w", encoding="ascii") as handle:
+            handle.write(
+                json.dumps(
+                    engagement,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, engagement_path)
+    return payload
+
+
+def _fr13_cfwd_logit_direct_selector(
+    *,
+    mode: str,
+    batch_size: int,
+) -> str:
+    diagnostic = _fr13_cfwd_logit_direct_requested()
+    raw = os.environ.get("FR13_CFWD_LOGIT_DIRECT_PRODUCTION", "0").strip()
+    if raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_CFWD_LOGIT_DIRECT_PRODUCTION must be exactly 0 or 1"
+        )
+    production = raw == "1"
+    if diagnostic and production:
+        raise RuntimeError(
+            "FR13 CFWD logit-direct diagnostic and production are mutually exclusive"
+        )
+    if production:
+        _fr13_cfwd_logit_direct_production_pass(
+            expected_mode=mode,
+            expected_batch=int(batch_size),
+        )
+        return "production"
+    return "diagnostic" if diagnostic else "reference"
+
+
 def _fr13_cfwd_logit_direct_load():
     """Load the pinned source-only candidate without changing its source hash."""
     global _FR13_CFWD_LOGIT_DIRECT_MODULE
@@ -5253,7 +5430,12 @@ def fr13_fixed32_cfwd_logit_direct_capture_begin(
 ) -> None:
     """Allocate graph-owned writable state before the CUDA capture begins."""
     global _FR13_CFWD_LOGIT_DIRECT_CAPTURE
-    if not _fr13_cfwd_logit_direct_requested() or int(batch_size) not in (1, 4):
+    if int(batch_size) not in (1, 4):
+        return
+    selector = _fr13_cfwd_logit_direct_selector(
+        mode=mode, batch_size=int(batch_size)
+    )
+    if selector == "reference":
         return
     if _FR13_CFWD_LOGIT_DIRECT_CAPTURE is not None:
         raise RuntimeError("FR13 CFWD logit-direct captures overlapped")
@@ -5274,7 +5456,12 @@ def fr13_fixed32_cfwd_logit_direct_capture_end(
 ) -> None:
     """Seal the one candidate launch site captured for this full graph."""
     global _FR13_CFWD_LOGIT_DIRECT_CAPTURE
-    if not _fr13_cfwd_logit_direct_requested() or int(batch_size) not in (1, 4):
+    if int(batch_size) not in (1, 4):
+        return
+    selector = _fr13_cfwd_logit_direct_selector(
+        mode=mode, batch_size=int(batch_size)
+    )
+    if selector == "reference":
         return
     state = _FR13_CFWD_LOGIT_DIRECT_CAPTURE
     if (
@@ -5392,6 +5579,209 @@ def _fr13_cfwd_logit_direct_compare(
     )
 
 
+def _fr13_cfwd_logit_direct_tensor_call_census() -> dict[str, Any]:
+    return {
+        "walk_levels": 1,
+        "full_vocab_row_gathers": 0,
+        "full_vocab_fp32_casts": 0,
+        "full_vocab_softmax_calls": 0,
+        "full_vocab_normalizations": 0,
+        "full_vocab_cdf_calls": 0,
+        "source_cdf_calls": 0,
+        "qmix_zero_fills": 0,
+        "qmix_scatter_add_calls": 0,
+        "residual_subtract_calls": 0,
+        "residual_clamp_calls": 0,
+        "residual_where_calls": 0,
+        "output_scatter_calls": 0,
+        "path_scatter_calls": 0,
+        "exact_commit_launches": 1,
+        "exact_commit_programs_per_request": 1,
+        "floating_sampling_reimplementation": False,
+    }
+
+
+def _fr13_cfwd_logit_direct_publish_work(
+    topology,
+    *,
+    mode: str,
+    valid_mask: int,
+    batch_size: int,
+    layout_contract: dict[str, Any],
+) -> None:
+    """Publish truthful direct-producer work through the fixed32 census owner."""
+    target_rows = 17
+    self_rows = 13
+    taw = {
+        "route": "fixed32_cfwd_logit_direct_production_candidate_return",
+        "preseeded_batches": list(_FR13_FIXED32_BATCHES),
+        "topology_cache_hit": True,
+        "cache_misses": 0,
+        "table_shape": [
+            batch_size,
+            int(topology.PHYSICAL_ROWS),
+            int(topology.SAMPLER_MAX_FANOUT),
+        ],
+        "buffer_capacity": int(topology.OUTPUT_PUBLISH_CAPACITY),
+        "loop_iterations": int(topology.WALK_CAP),
+        "uniform_slots": int(topology.TAW_UNIFORM_SLOTS) * batch_size,
+        "child_lanes": (
+            target_rows * int(topology.SAMPLER_MAX_FANOUT) * batch_size
+        ),
+        "target_rows": target_rows * batch_size,
+        "self_rows": self_rows * batch_size,
+        "self_cdf_rows": self_rows * batch_size,
+        "source_cdf_rows": target_rows * batch_size,
+        "residual_cdf_rows": target_rows * batch_size,
+        "qmix_rows": target_rows * batch_size,
+        "residual_rows": target_rows * batch_size,
+        "row_scatter_slots": int(topology.TAW_ROW_SCATTER_SLOTS) * batch_size,
+        "path_scatter_slots": int(topology.TAW_PATH_SCATTER_SLOTS) * batch_size,
+        "exact_commit_launches": 1,
+        "exact_commit_programs": batch_size,
+        "floating_sampling_reimplementation": False,
+        "source_contract_schema": _FR13_CFWD_LOGIT_DIRECT_SCHEMA,
+        "source_contract_sha256": _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256,
+        "tensor_call_census": _fr13_cfwd_logit_direct_tensor_call_census(),
+    }
+    overlap = set(taw).intersection(layout_contract)
+    if overlap:
+        raise RuntimeError(
+            "FR13 CFWD logit-direct work payload keys overlap: "
+            + repr(sorted(overlap))
+        )
+    taw.update(layout_contract)
+    payload = {
+        "mode": mode,
+        "valid_mask": int(valid_mask),
+        "batch_size": int(batch_size),
+        "taw": taw,
+    }
+    global _FR13_FIXED32_TAW_LAST_WORK
+    _FR13_FIXED32_TAW_LAST_WORK = payload
+    callback = _FR13_FIXED32_TAW_WORK_CALLBACK
+    if callback is None:
+        if os.environ.get("FR13_FIXED32_WORK_CENSUS") == "1":
+            raise RuntimeError(
+                "FR13 CFWD logit-direct work census is armed without a callback"
+            )
+        return
+    callback(payload)
+
+
+def _fr13_cfwd_logit_direct_production_commit(
+    num_draft_tokens,
+    draft_token_ids,
+    tree_parent_indices,
+    target_logits,
+    tree_self_logits,
+    bonus_token_ids,
+    max_spec_len: int,
+    *,
+    generators,
+    uniforms,
+    all_greedy: bool,
+    mode: str,
+):
+    """Serve the credentialed logit-direct producer without incumbent float work."""
+    if torch is None:
+        raise RuntimeError("FR13 CFWD logit-direct production requires torch")
+    topology, valid_mask = _fr13_fixed32_runtime_contract(mode)
+    if all_greedy or target_logits is None or tree_self_logits is None:
+        raise RuntimeError("FR13 CFWD logit-direct production requires sampled logits")
+    if not isinstance(num_draft_tokens, torch.Tensor):
+        raise RuntimeError("FR13 CFWD logit-direct draft counts must be a tensor")
+    batch = int(num_draft_tokens.shape[0])
+    if _fr13_cfwd_logit_direct_selector(mode=mode, batch_size=batch) != "production":
+        raise RuntimeError("FR13 CFWD logit-direct production selector drift")
+    if _fr13_fixed32_taw_native_selector(batch_size=batch) != "production":
+        raise RuntimeError(
+            "FR13 CFWD logit-direct production requires native all-parent baseline"
+        )
+    key = fr13_fixed32_taw_cache_key(
+        mode, valid_mask, batch, target_logits.device
+    )
+    entry = _FR13_FIXED32_TAW_CACHE.get(key)
+    if entry is None:
+        raise RuntimeError("FR13 CFWD logit-direct production cache miss")
+    drafts, bonus_flat = _fr13_fixed32_validate_inputs(
+        topology,
+        entry,
+        num_draft_tokens,
+        draft_token_ids,
+        tree_parent_indices,
+        target_logits,
+        tree_self_logits,
+        bonus_token_ids,
+        max_spec_len,
+    )
+    fixed_uniforms, rng_route = _fr13_fixed32_fill_uniforms(
+        entry, generators=generators, uniforms=uniforms
+    )
+    layout_contract = _fr13_fixed32_layout_contract(
+        topology,
+        entry,
+        num_draft_tokens,
+        draft_token_ids,
+        tree_parent_indices,
+        target_logits,
+        tree_self_logits,
+        bonus_token_ids,
+        fixed_uniforms,
+        rng_route=rng_route,
+    )
+    state = _FR13_CFWD_LOGIT_DIRECT_CAPTURE
+    if state is None:
+        state = _FR13_CFWD_LOGIT_DIRECT_WARM.get(key)
+        if state is None:
+            raise RuntimeError(
+                "FR13 CFWD logit-direct production workspace was not warmed"
+            )
+    elif (
+        state.get("mode") != mode
+        or state.get("batch_size") != batch
+        or state.get("device") != target_logits.device
+        or state.get("bound_calls") != 0
+    ):
+        raise RuntimeError("FR13 CFWD logit-direct production capture drift")
+    if _FR13_CFWD_LOGIT_DIRECT_CAPTURE is not None:
+        state["bound_calls"] = 1
+    candidate = _fr13_cfwd_logit_direct_load()
+    decisions = candidate.launch_logit_direct_fixed32(
+        self_logits=tree_self_logits,
+        target_logits=target_logits,
+        self_source_indices=entry["native_self_source_indices"],
+        target_source_indices=entry["native_target_source_indices"],
+        drafts=drafts,
+        child_table=entry["child_table"],
+        child_counts=entry["child_counts"],
+        self_uniform_levels=entry["all_parent_self_uniform_levels"],
+        target_parent_slots=entry["all_parent_target_parent_slots"],
+        target_uniform_levels=entry["all_parent_target_uniform_levels"],
+        uniforms=fixed_uniforms,
+        workspace=state["workspace"],
+        batch_size=batch,
+        mode=mode,
+        metadata_binding=state["metadata_binding"],
+    )
+    _fr13_fixed32_device_assert(
+        state["workspace"]["invalid"] == 0,
+        "FR13 CFWD logit-direct production domain guard failed",
+    )
+    products = _fr13_cfwd_logit_direct_walk_cuda(
+        topology, state["walk_entry"], bonus_flat, decisions
+    )
+    _fr13_cfwd_logit_direct_publish_work(
+        topology,
+        mode=mode,
+        valid_mask=valid_mask,
+        batch_size=batch,
+        layout_contract=layout_contract,
+    )
+    _fr13_fixed32_announce(topology)
+    return products
+
+
 def fr13_fixed32_cfwd_logit_direct_commit(
     num_draft_tokens,
     draft_token_ids,
@@ -5406,8 +5796,13 @@ def fr13_fixed32_cfwd_logit_direct_commit(
     all_greedy: bool = False,
     mode: str | None = None,
 ):
-    """Shadow logit-direct decisions and always return the served reference."""
-    if not _fr13_cfwd_logit_direct_requested():
+    """Dispatch default reference, diagnostic shadow, or credentialed direct."""
+    resolved_mode = mode or os.environ.get("FR13_FIXED32_MODE", "")
+    batch = int(num_draft_tokens.shape[0])
+    selector = _fr13_cfwd_logit_direct_selector(
+        mode=resolved_mode, batch_size=batch
+    )
+    if selector == "reference":
         return fr13_fixed32_taw_commit(
             num_draft_tokens,
             draft_token_ids,
@@ -5419,10 +5814,22 @@ def fr13_fixed32_cfwd_logit_direct_commit(
             generators=generators,
             uniforms=uniforms,
             all_greedy=all_greedy,
-            mode=mode,
+            mode=resolved_mode,
         )
-    resolved_mode = mode or os.environ.get("FR13_FIXED32_MODE", "")
-    batch = int(num_draft_tokens.shape[0])
+    if selector == "production":
+        return _fr13_cfwd_logit_direct_production_commit(
+            num_draft_tokens,
+            draft_token_ids,
+            tree_parent_indices,
+            target_logits,
+            tree_self_logits,
+            bonus_token_ids,
+            max_spec_len,
+            generators=generators,
+            uniforms=uniforms,
+            all_greedy=all_greedy,
+            mode=resolved_mode,
+        )
     if batch not in (1, 4):
         return fr13_fixed32_taw_commit(
             num_draft_tokens,
@@ -5545,9 +5952,12 @@ def fr13_fixed32_cfwd_logit_direct_warm_execute(
     vocab_size: int,
 ) -> dict[str, Any]:
     """Compile every candidate launch outside capture without serving output."""
-    if not _fr13_cfwd_logit_direct_requested():
-        return {"ready": False, "requested": False, "batches": ()}
     capacity = int(max_batch_size)
+    selector = _fr13_cfwd_logit_direct_selector(
+        mode=mode, batch_size=capacity
+    )
+    if selector == "reference":
+        return {"ready": False, "requested": False, "batches": ()}
     vocab = int(vocab_size)
     if capacity not in (1, 4) or vocab != 248_320:
         raise RuntimeError(
@@ -5621,6 +6031,7 @@ def fr13_fixed32_cfwd_logit_direct_warm_execute(
     return {
         "ready": True,
         "requested": True,
+        "selector": selector,
         "classification": "unmeasured_boot",
         "batches": batches,
         "candidate": _FR13_CFWD_LOGIT_DIRECT_CANDIDATE,
@@ -5635,10 +6046,10 @@ def fr13_fixed32_cfwd_logit_direct_live_prepare_replay(
     enabled: bool,
 ) -> None:
     """Bracket exactly the measured full-graph replay on its CUDA stream."""
-    requested = _fr13_cfwd_logit_direct_requested()
     batch = int(batch_size)
-    if not requested:
-        if _FR13_CFWD_LOGIT_DIRECT_GRAPHS:
+    selector = _fr13_cfwd_logit_direct_selector(mode=mode, batch_size=batch)
+    if selector != "diagnostic":
+        if selector == "reference" and _FR13_CFWD_LOGIT_DIRECT_GRAPHS:
             raise RuntimeError("FR13 CFWD logit-direct graph state leaked while off")
         return
     if type(enabled) is not bool:
@@ -5668,7 +6079,16 @@ def _fr13_cfwd_logit_direct_real_marker() -> tuple[str, str]:
     if not path.is_file() or path.is_symlink():
         raise RuntimeError("FR13 CFWD logit-direct real-task marker is missing")
     stat = path.stat()
-    if stat.st_nlink != 1 or stat.st_size > 256:
+    expected_uid = os.environ.get(
+        "FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_UID", ""
+    ).strip()
+    if (
+        stat.st_nlink != 1
+        or stat.st_size > 256
+        or not expected_uid.isdigit()
+        or stat.st_uid != int(expected_uid)
+        or stat.st_mode & 0o777 != 0o444
+    ):
         raise RuntimeError("FR13 CFWD logit-direct real-task marker is unsafe")
     rows = path.read_text(encoding="ascii").splitlines()
     if len(rows) != 1 or not rows[0].startswith("swe_verified:"):
@@ -5687,15 +6107,31 @@ def fr13_fixed32_cfwd_logit_direct_live_finalize(
     flush_binding,
 ) -> None:
     """Authenticate and persist the graph-resident comparison at final flush."""
-    if not _fr13_cfwd_logit_direct_requested():
+    event_rows = list(events) if isinstance(events, (list, tuple)) else []
+    event_mode = (
+        event_rows[0].get("mode")
+        if event_rows and isinstance(event_rows[0], dict)
+        else os.environ.get("FR13_FIXED32_MODE", "")
+    )
+    event_batch = (
+        int(event_rows[0].get("batch_size", -1))
+        if event_rows and isinstance(event_rows[0], dict)
+        else -1
+    )
+    selector = _fr13_cfwd_logit_direct_selector(
+        mode=event_mode, batch_size=event_batch
+    )
+    if selector != "diagnostic":
         if (
-            _FR13_CFWD_LOGIT_DIRECT_GRAPHS
-            or _FR13_CFWD_LOGIT_DIRECT_WARM
-            or _FR13_CFWD_LOGIT_DIRECT_CAPTURE is not None
+            selector == "reference"
+            and (
+                _FR13_CFWD_LOGIT_DIRECT_GRAPHS
+                or _FR13_CFWD_LOGIT_DIRECT_WARM
+                or _FR13_CFWD_LOGIT_DIRECT_CAPTURE is not None
+            )
         ):
             raise RuntimeError("FR13 CFWD logit-direct state leaked while off")
         return
-    event_rows = list(events) if isinstance(events, (list, tuple)) else []
     binding = flush_binding if isinstance(flush_binding, dict) else {}
     hex_chars = frozenset("0123456789abcdef")
     expected_binding = {

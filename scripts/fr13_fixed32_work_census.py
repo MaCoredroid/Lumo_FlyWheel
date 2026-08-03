@@ -142,6 +142,9 @@ TAW_NATIVE_PRECOMPUTE_ROUTE = (
 TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE = (
     "fixed32_native_precompute_production_candidate_return"
 )
+TAW_CFWD_LOGIT_DIRECT_PRODUCTION_ROUTE = (
+    "fixed32_cfwd_logit_direct_production_candidate_return"
+)
 TAW_EXACT_COMMIT_LAUNCHES = WALK_CAP
 TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST = WALK_CAP
 TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST = 13
@@ -149,6 +152,12 @@ TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST = 17
 TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 TAW_SOURCE_CONTRACT_SHA256 = (
     "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
+)
+TAW_CFWD_LOGIT_DIRECT_SOURCE_SCHEMA = (
+    "fr13.fixed32.cfwd_logit_direct_decisions.v1"
+)
+TAW_CFWD_LOGIT_DIRECT_SOURCE_SHA256 = (
+    "d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d"
 )
 TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,
@@ -200,6 +209,23 @@ TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS = {
     "residual_subtract_calls": 17,
     "residual_clamp_calls": 17,
     "residual_where_calls": 34,
+    "exact_commit_launches": 1,
+    "exact_commit_programs_per_request": 1,
+}
+TAW_CFWD_LOGIT_DIRECT_PRODUCTION_TENSOR_CALL_CENSUS = {
+    **TAW_TENSOR_CALL_CENSUS,
+    "walk_levels": 1,
+    "full_vocab_row_gathers": 0,
+    "full_vocab_fp32_casts": 0,
+    "full_vocab_softmax_calls": 0,
+    "full_vocab_normalizations": 0,
+    "full_vocab_cdf_calls": 0,
+    "source_cdf_calls": 0,
+    "qmix_zero_fills": 0,
+    "qmix_scatter_add_calls": 0,
+    "residual_subtract_calls": 0,
+    "residual_clamp_calls": 0,
+    "residual_where_calls": 0,
     "exact_commit_launches": 1,
     "exact_commit_programs_per_request": 1,
 }
@@ -1623,6 +1649,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         TAW_ROUTE,
         TAW_NATIVE_PRECOMPUTE_ROUTE,
         TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+        TAW_CFWD_LOGIT_DIRECT_PRODUCTION_ROUTE,
     ):
         raise CensusError(
             f"{source}.taw.route: expected a pinned fixed32 TAW route, "
@@ -1640,7 +1667,10 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         expected_exact_commit_programs = (
             TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST + 1
         )
-    elif taw_route == TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE:
+    elif taw_route in (
+        TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE,
+        TAW_CFWD_LOGIT_DIRECT_PRODUCTION_ROUTE,
+    ):
         expected_target_rows = TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST
         expected_self_rows = TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST
         expected_product_write_multiplier = 1
@@ -1742,14 +1772,24 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         taw["source_contract_sha256"],
         f"{source}.taw.source_contract_sha256",
     )
+    expected_source_schema = (
+        TAW_CFWD_LOGIT_DIRECT_SOURCE_SCHEMA
+        if taw_route == TAW_CFWD_LOGIT_DIRECT_PRODUCTION_ROUTE
+        else TAW_SOURCE_CONTRACT_SCHEMA
+    )
+    expected_source_sha256 = (
+        TAW_CFWD_LOGIT_DIRECT_SOURCE_SHA256
+        if taw_route == TAW_CFWD_LOGIT_DIRECT_PRODUCTION_ROUTE
+        else TAW_SOURCE_CONTRACT_SHA256
+    )
     _expect(
         taw_source_schema,
-        TAW_SOURCE_CONTRACT_SCHEMA,
+        expected_source_schema,
         f"{source}.taw.source_contract_schema",
     )
     _expect(
         taw_source_sha256,
-        TAW_SOURCE_CONTRACT_SHA256,
+        expected_source_sha256,
         f"{source}.taw.source_contract_sha256",
     )
     raw_tensor_calls = _mapping(
@@ -1775,6 +1815,10 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     elif taw_route == TAW_NATIVE_PRECOMPUTE_PRODUCTION_ROUTE:
         expected_tensor_calls = (
             TAW_NATIVE_PRECOMPUTE_PRODUCTION_TENSOR_CALL_CENSUS
+        )
+    elif taw_route == TAW_CFWD_LOGIT_DIRECT_PRODUCTION_ROUTE:
+        expected_tensor_calls = (
+            TAW_CFWD_LOGIT_DIRECT_PRODUCTION_TENSOR_CALL_CENSUS
         )
     else:
         expected_tensor_calls = TAW_TENSOR_CALL_CENSUS
