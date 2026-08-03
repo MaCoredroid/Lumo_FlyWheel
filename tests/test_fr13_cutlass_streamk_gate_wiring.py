@@ -338,13 +338,51 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "fr13_fixed32_cutlass_streamk.real_event.arm" in serve
 
 
-def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
+@pytest.mark.parametrize("qualification_profile", (None, "full_vocab"))
+def test_onen_b1_timing_rejects_non_k64_profile_before_gpu(
+    tmp_path: Path, qualification_profile: str | None
+) -> None:
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("FR13_")
+    }
+    environment.update(
+        {
+            "CUTLASS_STREAMK_SO": os.fspath(tmp_path / "candidate.so"),
+            "QROW16_FA2_SO": os.fspath(tmp_path / "qrow16.so"),
+            "STREAMK_PASS_JSON": os.fspath(tmp_path / "pass.json"),
+            "STREAMK_PASS_SHA256": "0" * 64,
+            "FR13_STREAMK_TIMING_CANDIDATE": "identity_onen_b1",
+            "RUNROOT": os.fspath(tmp_path / "runroot"),
+            "TAG": "non-k64-timing-rejection",
+        }
+    )
+    if qualification_profile is not None:
+        environment["FR13_STREAMK_TIMING_PROFILE"] = qualification_profile
+
+    result = subprocess.run(
+        ["bash", os.fspath(TIMING)],
+        cwd=REPO,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert (
+        "identity_onen_b1 timing requires explicit k64_root qualification"
+        in result.stderr
+    )
+    assert not (tmp_path / "runroot").exists()
+
+
+def test_exact4_timing_is_real_full_wall_profile_bound() -> None:
     timing = TIMING.read_text(encoding="utf-8")
 
     assert "subset_b4_four.json" in timing
-    assert (
-        "real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing_candidate" in timing
-    )
+    assert "real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing" in timing
+    assert 'RUN_CLASSIFICATION="${RUN_CLASSIFICATION_BASE}_candidate"' in timing
     assert 'STOCK_ARM="hydra27_fixed32_qrow16_cutlass_stock_${TAG}"' in timing
     assert (
         'CANDIDATE_ARM="hydra27_fixed32_qrow16_${CANDIDATE_ARM_LABEL}_${TAG}"'
@@ -360,11 +398,15 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     assert timing.index('run_arm "$STOCK_ARM" 0') < timing.index(
         'run_arm "$CANDIDATE_ARM" 1'
     )
-    assert "FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0" in timing
-    assert "FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'" in timing
-    assert "FULL_VOCAB_WEIGHT_BYTES=42025179008" in timing
-    assert "FULL_VOCAB_FLOOR_MS=153.9383846446886" in timing
-    assert "FULL_VOCAB_CAP_MS=177.0291423413919" in timing
+    assert 'FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"' in timing
+    assert 'FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"' in timing
+    assert 'FR13_NEEDS_ALLOW="$NEEDS_ALLOW"' in timing
+    assert "MANDATORY_WEIGHT_BYTES=42025179008" in timing
+    assert "MANDATORY_WEIGHT_FLOOR_MS=153.9383846446886" in timing
+    assert "ONE_SIDED_U95_CAP_MS=177.0291423413919" in timing
+    assert "MANDATORY_WEIGHT_BYTES=32666638208" in timing
+    assert "MANDATORY_WEIGHT_FLOOR_MS=119.658015414" in timing
+    assert "ONE_SIDED_U95_CAP_MS=137.6067177261" in timing
     assert (
         "STREAMK_SHA256="
         "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d" in timing
@@ -374,6 +416,12 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
         "503277a2dca6784502b709007adfe45f42d0f1a1851107e7b913e1e85a00de5a"
         in timing
     )
+    assert (
+        "STREAMK_SHA256="
+        "17af1975b1e26cd3d4c3e614bfcab8aa1b0dc031ea5107004b0cc25890fc2b15"
+        in timing
+    )
+    assert "STREAMK_BYTES=118166088" in timing
     assert (
         "QROW16_FA2_SHA256="
         "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86" in timing
@@ -395,7 +443,14 @@ def test_exact4_timing_is_real_full_wall_full_vocab_and_source_bound() -> None:
     assert '--candidate-qrow16-capture "$CANDIDATE_QROW16_CAPTURE"' in timing
     assert '--expected-source-commit "$SOURCE_COMMIT"' in timing
     assert "comparator_gate_timing_eligible=0" in timing
-    assert "TIMING_CANDIDATE=${FR13_STREAMK_TIMING_CANDIDATE:-streamk_coop128}" in timing
+    assert (
+        "TIMING_CANDIDATE=${FR13_STREAMK_TIMING_CANDIDATE:-streamk_coop128}"
+        in timing
+    )
+    assert "TIMING_PROFILE=${FR13_STREAMK_TIMING_PROFILE:-full_vocab}" in timing
+    assert "identity_onen_b1 timing requires explicit k64_root qualification" in timing
+    assert '--qualification-profile "$TIMING_PROFILE"' in timing
+    assert '--draft-vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST"' in timing
     assert "TIMING_TASK_SET=${FR13_STREAMK_TIMING_TASK_SET:-exact4}" in timing
     assert "subset_b1_diagnostic_one.json" in timing
     assert "FR13_FIXED32_B1_DIAGNOSTIC=\"$B1_DIAGNOSTIC\"" in timing

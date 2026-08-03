@@ -22,20 +22,40 @@ case "$TIMING_CANDIDATE" in
   streamk_coop128)
     STREAMK_SHA256=f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d
     STREAMK_BYTES=111417328
-    STREAMK_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_live_gate.v3
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_live_gate.v3
+    K64_ROOT_LIVE_SCHEMA=
     CANDIDATE_ARM_LABEL=cutlass_streamk
     ;;
   streamk_force_wide256)
     STREAMK_SHA256=503277a2dca6784502b709007adfe45f42d0f1a1851107e7b913e1e85a00de5a
     STREAMK_BYTES=113079680
-    STREAMK_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_streamk_wide256_k64_root_live_gate.v1
     CANDIDATE_ARM_LABEL=cutlass_streamk_force_wide256
+    ;;
+  identity_onen_b1)
+    STREAMK_SHA256=17af1975b1e26cd3d4c3e614bfcab8aa1b0dc031ea5107004b0cc25890fc2b15
+    STREAMK_BYTES=118166088
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_b1_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_b1_k64_root_live_gate.v1
+    CANDIDATE_ARM_LABEL=cutlass_identity_onen_b1
     ;;
   *)
     echo "unsupported Stream-K timing candidate: $TIMING_CANDIDATE" >&2
     exit 2
     ;;
 esac
+TIMING_PROFILE_EXPLICIT=0
+if [[ -v FR13_STREAMK_TIMING_PROFILE ]]; then
+  TIMING_PROFILE_EXPLICIT=1
+fi
+TIMING_PROFILE=${FR13_STREAMK_TIMING_PROFILE:-full_vocab}
+if [[ "$TIMING_CANDIDATE" == "identity_onen_b1" \
+      && ( "$TIMING_PROFILE_EXPLICIT" != "1" \
+           || "$TIMING_PROFILE" != "k64_root" ) ]]; then
+  echo "identity_onen_b1 timing requires explicit k64_root qualification" >&2
+  exit 2
+fi
 case "$TIMING_TASK_SET" in
   exact4)
     SUBSET=config/fr13_fixed32/subset_b4_four.json
@@ -43,7 +63,7 @@ case "$TIMING_TASK_SET" in
     TASK_COUNT=4
     B1_DIAGNOSTIC=0
     TIMING_ELIGIBLE=1
-    RUN_CLASSIFICATION=real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing_candidate
+    RUN_CLASSIFICATION_BASE=real_swe_verified_exact4_b1_hydra27_qrow16_streamk_timing
     ;;
   one)
     SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
@@ -51,20 +71,53 @@ case "$TIMING_TASK_SET" in
     TASK_COUNT=1
     B1_DIAGNOSTIC=1
     TIMING_ELIGIBLE=0
-    RUN_CLASSIFICATION=one_real_swe_verified_b1_hydra27_qrow16_streamk_timing_diagnostic_candidate
+    RUN_CLASSIFICATION_BASE=one_real_swe_verified_b1_hydra27_qrow16_streamk_timing_diagnostic
     ;;
   *)
     echo "FR13_STREAMK_TIMING_TASK_SET must be exact4 or one" >&2
     exit 2
     ;;
 esac
+DRAFT_VOCAB_BLOCKS_HOST=scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
+DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
+case "$TIMING_PROFILE" in
+  full_vocab)
+    [[ -n "$FULL_VOCAB_LIVE_SCHEMA" ]] \
+      || { echo "$TIMING_CANDIDATE does not support full_vocab timing" >&2; exit 2; }
+    STREAMK_LIVE_SCHEMA=$FULL_VOCAB_LIVE_SCHEMA
+    DRAFT_VOCAB_ROOT=0
+    DRAFT_VOCAB_K=0
+    NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0
+    MANDATORY_WEIGHT_BYTES=42025179008
+    MANDATORY_WEIGHT_FLOOR_MS=153.9383846446886
+    ONE_SIDED_U95_CAP_MS=177.0291423413919
+    ;;
+  k64_root)
+    [[ -n "$K64_ROOT_LIVE_SCHEMA" ]] \
+      || { echo "$TIMING_CANDIDATE does not support k64_root timing" >&2; exit 2; }
+    STREAMK_LIVE_SCHEMA=$K64_ROOT_LIVE_SCHEMA
+    DRAFT_VOCAB_ROOT=1
+    DRAFT_VOCAB_K=65536
+    NEEDS_ALLOW=
+    MANDATORY_WEIGHT_BYTES=32666638208
+    MANDATORY_WEIGHT_FLOOR_MS=119.658015414
+    ONE_SIDED_U95_CAP_MS=137.6067177261
+    ;;
+  *)
+    echo "FR13_STREAMK_TIMING_PROFILE must be full_vocab or k64_root" >&2
+    exit 2
+    ;;
+esac
+if [[ "$TIMING_PROFILE" == "full_vocab" ]]; then
+  RUN_CLASSIFICATION="${RUN_CLASSIFICATION_BASE}_candidate"
+else
+  RUN_CLASSIFICATION="${RUN_CLASSIFICATION_BASE}_${TIMING_PROFILE}_candidate"
+fi
 QROW16_FA2_SHA256=1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86
 QROW16_FA2_BYTES=299507792
 QROW16_LIVE_PASS_JSON="$REPO/results/fr13_fixed32_qrow16_num_splits0_live_pass_20260731T173608Z/fr13_fa2_qrow16_live_paged_ab.json"
 QROW16_LIVE_PASS_SHA256=36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77
-FULL_VOCAB_WEIGHT_BYTES=42025179008
-FULL_VOCAB_FLOOR_MS=153.9383846446886
-FULL_VOCAB_CAP_MS=177.0291423413919
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 SOURCE_COMMIT=$(git rev-parse HEAD)
@@ -100,6 +153,12 @@ unset _fr13_streamk_file
   || { echo "CUTLASS_STREAMK_SO is not the pinned current candidate" >&2; exit 2; }
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical timing subset SHA-256 drift" >&2; exit 2; }
+if [[ "$TIMING_PROFILE" == "k64_root" ]]; then
+  [[ -f "$DRAFT_VOCAB_BLOCKS_HOST" \
+     && ! -L "$DRAFT_VOCAB_BLOCKS_HOST" \
+     && "$(sha256sum "$DRAFT_VOCAB_BLOCKS_HOST" | awk '{print $1}')" == "$DRAFT_VOCAB_BLOCKS_SHA256" ]] \
+    || { echo "pinned root-64K draft-vocabulary block map drifted" >&2; exit 2; }
+fi
 [[ "$STREAMK_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] \
   || { echo "STREAMK_PASS_SHA256 must be lowercase SHA-256" >&2; exit 2; }
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
@@ -121,20 +180,21 @@ PY
 export BSIZE=1
 export CONC=1
 export WALL=0
-export FR13_DRAFT_VOCAB_ROOT=0
-export FR13_DRAFT_VOCAB_K=0
-export FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0'
+export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"
+export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"
+export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
+export FR13_NEEDS_ALLOW="$NEEDS_ALLOW"
 export FR13_FLOOR_ORDER=TH
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
-[[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
-   && "$FR13_DRAFT_VOCAB_K" == "0" \
-   && "$FR13_NEEDS_ALLOW" == "FR13_DRAFT_VOCAB_K=0" \
-   && "$FR13_MANDATORY_WEIGHT_BYTES" == "$FULL_VOCAB_WEIGHT_BYTES" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "$FULL_VOCAB_FLOOR_MS" ]] \
-  || { echo "full-vocabulary B1 timing contract drifted" >&2; exit 2; }
+[[ "$FR13_DRAFT_VOCAB_ROOT" == "$DRAFT_VOCAB_ROOT" \
+   && "$FR13_DRAFT_VOCAB_K" == "$DRAFT_VOCAB_K" \
+   && "$FR13_NEEDS_ALLOW" == "$NEEDS_ALLOW" \
+   && "$FR13_MANDATORY_WEIGHT_BYTES" == "$MANDATORY_WEIGHT_BYTES" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "$MANDATORY_WEIGHT_FLOOR_MS" ]] \
+  || { echo "$TIMING_PROFILE B1 timing contract drifted" >&2; exit 2; }
 
 # Validate the authenticated real-task comparator credential, including exact
 # source identity, before the first Docker query. The comparator contributes no
@@ -146,6 +206,8 @@ unset -f run_variant
   --patch-source "$PATCH_SOURCE" \
   --expected-source-commit "$SOURCE_COMMIT" \
   --candidate-selector "$TIMING_CANDIDATE" \
+  --qualification-profile "$TIMING_PROFILE" \
+  --draft-vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST" \
   >/dev/null
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before timing" >&2; exit 2; }
@@ -157,10 +219,11 @@ mkdir -p "$RUNROOT_ABS"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=%s\ntask_set=%s\ntask_count=%s\ntiming_eligible=%s\ncomparator_gate_timing_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\ntopology=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\ncommon_fa2_selector=qrow16_production\nonly_arm_delta=CUTLASS_stock_to_%s\ncandidate_selector=%s\ncandidate_live_pass_schema=%s\nphysical_rows=32\ndraft_vocab_root=0\ndraft_vocab_k=0\nfr13_needs_allow=FR13_DRAFT_VOCAB_K=0\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_fa2_bytes=%s\nqrow16_live_pass_sha256=%s\nstreamk_sha256=%s\nstreamk_bytes=%s\nstreamk_pass_sha256=%s\nstarted=%s\n' \
+printf 'classification=%s\ntask_set=%s\ntask_count=%s\ntiming_eligible=%s\ncomparator_gate_timing_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\ntopology=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\ncommon_fa2_selector=qrow16_production\nonly_arm_delta=CUTLASS_stock_to_%s\ncandidate_selector=%s\ncandidate_live_pass_schema=%s\nqualification_profile=%s\nphysical_rows=32\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_fa2_bytes=%s\nqrow16_live_pass_sha256=%s\nstreamk_sha256=%s\nstreamk_bytes=%s\nstreamk_pass_sha256=%s\nstarted=%s\n' \
   "$RUN_CLASSIFICATION" "$TIMING_TASK_SET" "$TASK_COUNT" "$TIMING_ELIGIBLE" \
   "$TIMING_CANDIDATE" "$TIMING_CANDIDATE" "$STREAMK_LIVE_SCHEMA" \
-  "$FULL_VOCAB_WEIGHT_BYTES" "$FULL_VOCAB_FLOOR_MS" "$FULL_VOCAB_CAP_MS" \
+  "$TIMING_PROFILE" "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
+  "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" "$ONE_SIDED_U95_CAP_MS" \
   "$$" "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$SOURCE_COMMIT" "$RUNNER_SHA256" "$SUBSET_SHA256" \
   "$QROW16_FA2_SHA256" "$QROW16_FA2_BYTES" "$QROW16_LIVE_PASS_SHA256" \
@@ -222,10 +285,12 @@ run_arm() {
   if env \
       OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
       FR13_FIXED32_B1_DIAGNOSTIC="$B1_DIAGNOSTIC" \
-      FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0 \
-      FR13_NEEDS_ALLOW='FR13_DRAFT_VOCAB_K=0' \
-      FR13_MANDATORY_WEIGHT_BYTES="$FULL_VOCAB_WEIGHT_BYTES" \
-      FR13_WEIGHT_FLOOR_MS="$FULL_VOCAB_FLOOR_MS" \
+      FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT" \
+      FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K" \
+      FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER" \
+      FR13_NEEDS_ALLOW="$NEEDS_ALLOW" \
+      FR13_MANDATORY_WEIGHT_BYTES="$MANDATORY_WEIGHT_BYTES" \
+      FR13_WEIGHT_FLOOR_MS="$MANDATORY_WEIGHT_FLOOR_MS" \
       FR10_METRICS=0 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
       FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \
       FR13_SFWD_GPU_TIMER_JSON="/workspace/output/fr13_sfwd_sidecar/${arm}.json" \
@@ -234,6 +299,7 @@ run_arm() {
       FR13_FIXED32_CUTLASS_WAVE="$selector" \
       FR13_FIXED32_CUTLASS_WAVE_SO="$candidate_so" \
       FR13_FIXED32_CUTLASS_WAVE_PRODUCTION="$production" \
+      FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$TIMING_PROFILE" \
       FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON="$pass_json" \
       FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256="$pass_sha" \
       FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
@@ -277,12 +343,12 @@ run_arm() {
   [[ -f "$container_env" && ! -L "$container_env" ]] \
     || { echo "$arm lacks a regular container environment artifact" >&2; return 4; }
   [[ "$(grep -Fxc 'FR13_FIXED32_MODE=hydra27_fixed32' "$container_env")" -eq 1 \
-     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_ROOT=0' "$container_env")" -eq 1 \
-     && "$(grep -Fxc 'FR13_DRAFT_VOCAB_K=0' "$container_env")" -eq 1 \
+     && "$(grep -Fxc "FR13_DRAFT_VOCAB_ROOT=$DRAFT_VOCAB_ROOT" "$container_env")" -eq 1 \
+     && "$(grep -Fxc "FR13_DRAFT_VOCAB_K=$DRAFT_VOCAB_K" "$container_env")" -eq 1 \
      && "$(grep -Fxc 'FR13_FA2_QROW16_LIVE_PAGED_AB=0' "$container_env")" -eq 1 \
      && "$(grep -Fxc 'FR13_FA2_QROW16_PRODUCTION=1' "$container_env")" -eq 1 \
      && "$(grep -Fxc "FR13_FA2_QROW16_SO_SHA256=$QROW16_FA2_SHA256" "$container_env")" -eq 1 ]] \
-    || { echo "$arm did not run Hydra27/full-vocabulary/Qrow16 production" >&2; return 4; }
+    || { echo "$arm did not run Hydra27/$TIMING_PROFILE/Qrow16 production" >&2; return 4; }
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" \
     --out-root "$RUNROOT_ABS/$arm/swe_out" \
@@ -337,10 +403,14 @@ CANDIDATE_SIDECAR_SHA256=$(sha256sum "$CANDIDATE_SIDECAR" | awk '{print $1}')
   --candidate-so "$CUTLASS_STREAMK_SO" \
   --patch-source "$PATCH_SOURCE" \
   --candidate-selector "$TIMING_CANDIDATE" \
+  --qualification-profile "$TIMING_PROFILE" \
+  --draft-vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST" \
   >/dev/null
 "$PYTHON_BIN" scripts/fr13_cutlass_streamk_pass.py attestation \
   --attestation "$CANDIDATE_ATTESTATION" \
   --expected-sidecar-sha256 "$CANDIDATE_SIDECAR_SHA256" \
+  --qualification-profile "$TIMING_PROFILE" \
+  --draft-vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST" \
   > "$RUNROOT_ABS/$CANDIDATE_ARM/streamk_production_binding.json"
 
 finalize_manifests
@@ -360,6 +430,7 @@ finalize_manifests
   --candidate-so "$CUTLASS_STREAMK_SO" \
   --source-commit "$SOURCE_COMMIT" \
   --candidate-selector "$TIMING_CANDIDATE" \
+  --qualification-profile "$TIMING_PROFILE" \
   --task-set "$TIMING_TASK_SET" \
   --out "$RUNROOT_ABS/timing_summary.json"
 
