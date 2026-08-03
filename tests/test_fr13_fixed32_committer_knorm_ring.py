@@ -95,6 +95,20 @@ def test_b1_and_b4_exports_are_physical32_single_launch_only() -> None:
     assert "K_NORM_EXPORT=k_norm_export" in b4
 
 
+def test_replay_ring_allocator_resolves_controls_from_kernel_module() -> None:
+    assert "fr10_gdn_tree_kernel as _fr13_gdn_kernel" in PATCHER
+    assert (
+        "_fr13_gdn_kernel._fr13_fixed32_committer_knorm_ring_requested()"
+        in PATCHER
+    )
+    assert (
+        "_fr13_gdn_kernel._fr13_fixed32_committer_gate_ring_requested()"
+        in PATCHER
+    )
+    assert "_fr13_gdn_mod._fr13_fixed32_committer_knorm_ring_requested()" not in PATCHER
+    assert "_fr13_gdn_mod._fr13_fixed32_committer_gate_ring_requested()" not in PATCHER
+
+
 def test_committer_replaces_reduction_with_one_scalar_load() -> None:
     kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
     launcher = _text("_fr13_fixed32_committer_native_layer_batch")
