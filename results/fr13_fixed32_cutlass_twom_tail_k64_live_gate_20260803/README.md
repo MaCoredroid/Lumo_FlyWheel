@@ -11,6 +11,11 @@ failed. The kernel comparator exercised all five audited target projection
 shapes for 320 calls at physical M=128. Every BF16 output byte matched stock:
 zero mismatching comparisons and zero differing bytes.
 
+The stock-served real trajectory recorded 6,724 speculative events, with
+4.744497 accepted drafts and 5.751338 committed tokens per event. This is
+exact4 topology/trajectory telemetry, not a candidate-caused acceptance delta
+or a timing result.
+
 The launch and end runtime manifests were identical, as were the launch and
 end external manifests. The source was pinned at `30f8437d2`; the candidate
 binary was 117,488,608 bytes with SHA-256
