@@ -43,6 +43,33 @@ def _eagle_snippet() -> str:
     raise AssertionError("draft-head FP8 replacement snippet not found")
 
 
+def _observed_runtime_namespace(
+    *function_names: str, namespace: dict[str, object]
+) -> dict[str, object]:
+    from scripts import fr10_phase4_patch_vllm_tree_gdn as patcher
+
+    tree = ast.parse(patcher._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE)
+    functions = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in function_names
+    }
+    assert set(functions) == set(function_names)
+    exec(
+        compile(
+            ast.Module(
+                body=[functions[name] for name in function_names],
+                type_ignores=[],
+            ),
+            "<fr13-observed-runtime-functions>",
+            "exec",
+        ),
+        namespace,
+    )
+    return namespace
+
+
 def test_candidate_is_default_off_strict_and_orthogonal_to_cutlass_wave() -> None:
     snippet = _eagle_snippet()
     launcher = LAUNCHER.read_text(encoding="utf-8")
@@ -170,12 +197,11 @@ def test_root_plus_four_capture_engagement_has_no_synchronize() -> None:
     assert "_fr13_dh_fp8_selected_capture_calls > 4" in engagement
     assert "self._fr13_dh_fp8_selected_root_calls != 1" in engagement
     assert "_fr13_fixed32_drafter_fp8_head_selection" in engagement
-    assert '"mtp_forward_calls", -1' in engagement
-    assert '"draft_head_fp8_calls", -1' in engagement
-    assert "_fr13_dh_fp8_expected_capture_calls != 4" in engagement
-    assert "observed_local=" in engagement
-    assert "observed_lifecycle=" in engagement
-    assert "expected_from_mtp=" in engagement
+    assert (
+        "_fr13_fixed32_drafter_fp8_head_replay_attestation" in engagement
+    )
+    assert "self._fr13_dh_fp8_selected_capture_calls," in engagement
+    assert "_fr13_dh_fp8_graph_attestations" not in snippet
     assert '"selected_root_calls": 1' in engagement
     assert '"captured_loop_calls": (' in engagement
     assert '"fallback_calls": 0' in engagement
@@ -186,26 +212,9 @@ def test_root_plus_four_capture_engagement_has_no_synchronize() -> None:
 
 
 def test_fp8_head_capture_classifier_uses_fixed32_mtp_lifecycle() -> None:
-    from scripts import fr10_phase4_patch_vllm_tree_gdn as patcher
-
-    tree = ast.parse(patcher._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE)
-    function = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef)
-        and node.name
-        == "_fr13_fixed32_drafter_fp8_head_selection"
-    )
-    namespace: dict[str, object] = {
-        "_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT": None
-    }
-    exec(
-        compile(
-            ast.Module(body=[function], type_ignores=[]),
-            "<fr13-fp8-head-capture-classifier>",
-            "exec",
-        ),
-        namespace,
+    namespace = _observed_runtime_namespace(
+        "_fr13_fixed32_drafter_fp8_head_selection",
+        namespace={"_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT": None},
     )
     classify = namespace[
         "_fr13_fixed32_drafter_fp8_head_selection"
@@ -229,6 +238,113 @@ def test_fp8_head_capture_classifier_uses_fixed32_mtp_lifecycle() -> None:
         classify(4)
     with pytest.raises(RuntimeError, match="left capture lifecycle"):
         classify(1)
+
+
+def _fp8_capture_runtime(
+    *, batch: int = 1, fp8_calls: int = 4, fp8_rows: int | None = None
+) -> tuple[dict[str, object], int]:
+    graph_id = 73
+    if fp8_rows is None:
+        fp8_rows = fp8_calls * batch
+    context = {
+        "graph_id": graph_id,
+        "batch_size": batch,
+        "capturing": True,
+        "mtp_forward_calls": 4,
+        "mtp_forward_rows": 4 * batch,
+        "draft_head_fp8_calls": fp8_calls,
+        "draft_head_fp8_rows": fp8_rows,
+        "tree_attn_calls": 4,
+        "tree_attn_rows": 4 * batch,
+        "tree_attn_layer": 27,
+        "tree_attn_bias_shape": (1, 1),
+    }
+    namespace = _observed_runtime_namespace(
+        "_fr13_fixed32_drafter_graph_capture_end",
+        "_fr13_fixed32_drafter_fp8_head_replay_attestation",
+        namespace={
+            "_FR13_FIXED32_MODE": "FULL",
+            "_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT": context,
+            "_FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS": {},
+            "_FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH": {},
+            "_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE": {},
+            "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT": {
+                "measured": False
+            },
+            "_FR13_FIXED32_DRAFTER_TREE_LAYER": 27,
+            "_fr13_dfwd_unified_bm8_production_end": (
+                lambda *_args: None
+            ),
+        },
+    )
+    return namespace, graph_id
+
+
+def test_fp8_capture_attestation_survives_model_instance_handoff() -> None:
+    namespace, graph_id = _fp8_capture_runtime(batch=1)
+    signature = namespace["_fr13_fixed32_drafter_graph_capture_end"](
+        graph_id, 1
+    )
+    lifecycle = namespace["_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE"][graph_id]
+    attestation = lifecycle["draft_head_fp8_capture_attestation"]
+
+    assert attestation == {
+        "schema": "fr13-fixed32-drafter-fp8-head-capture-v1",
+        "graph_id": graph_id,
+        "graph_signature": signature,
+        "batch_size": 1,
+        "captured_loop_calls": 4,
+        "captured_loop_rows": 4,
+        "capture_origin": "unmeasured",
+    }
+    verify = namespace[
+        "_fr13_fixed32_drafter_fp8_head_replay_attestation"
+    ]
+    with pytest.raises(RuntimeError, match="replay attestation drifted"):
+        verify(graph_id, signature, 1, True, 0)
+
+    lifecycle["unmeasured_replays"] = 1
+    assert verify(graph_id, signature, 1, False, 4) == attestation
+    lifecycle["measured_replays"] = 1
+    assert verify(graph_id, signature, 1, True, 0) == attestation
+
+
+def test_fp8_replay_attestation_rejects_missing_capture_and_partial_local() -> None:
+    namespace, graph_id = _fp8_capture_runtime(batch=1, fp8_calls=0)
+    signature = namespace["_fr13_fixed32_drafter_graph_capture_end"](
+        graph_id, 1
+    )
+    lifecycle = namespace["_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE"][graph_id]
+    lifecycle["unmeasured_replays"] = 1
+    verify = namespace[
+        "_fr13_fixed32_drafter_fp8_head_replay_attestation"
+    ]
+
+    assert lifecycle["draft_head_fp8_capture_attestation"] is None
+    with pytest.raises(RuntimeError, match="replay attestation drifted"):
+        verify(graph_id, signature, 1, False, 0)
+
+    namespace, graph_id = _fp8_capture_runtime(batch=1)
+    signature = namespace["_fr13_fixed32_drafter_graph_capture_end"](
+        graph_id, 1
+    )
+    namespace["_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE"][graph_id][
+        "unmeasured_replays"
+    ] = 1
+    verify = namespace[
+        "_fr13_fixed32_drafter_fp8_head_replay_attestation"
+    ]
+    with pytest.raises(RuntimeError, match="observed_local=2"):
+        verify(graph_id, signature, 1, False, 2)
+
+
+def test_fp8_capture_end_rejects_partial_graph_evidence() -> None:
+    namespace, graph_id = _fp8_capture_runtime(
+        batch=2, fp8_calls=3, fp8_rows=6
+    )
+
+    with pytest.raises(RuntimeError, match="FP8 head capture work drift"):
+        namespace["_fr13_fixed32_drafter_graph_capture_end"](graph_id, 2)
 
 
 def test_exact_fp8_traffic_floor_and_cap_math() -> None:

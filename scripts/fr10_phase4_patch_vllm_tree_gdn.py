@@ -4807,6 +4807,17 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
             "FR13 fixed32 drafter graph capture work drift: "
             + repr((identity, batch, context))
         )
+    fp8_head_calls = int(context.get("draft_head_fp8_calls", -1))
+    fp8_head_rows = int(context.get("draft_head_fp8_rows", -1))
+    fp8_head_captured = fp8_head_calls != 0 or fp8_head_rows != 0
+    if fp8_head_captured and (
+        fp8_head_calls != int(context["mtp_forward_calls"])
+        or fp8_head_rows != int(context["mtp_forward_rows"])
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 drafter FP8 head capture work drift: "
+            + repr((identity, batch, fp8_head_calls, fp8_head_rows))
+        )
     payload = {
         "schema": "fr13-fixed32-drafter-graph-manifest-v2",
         "batch_size": batch,
@@ -4833,6 +4844,20 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
         raise RuntimeError(
             "FR13 fixed32 drafter proposal disappeared at capture end"
         )
+    capture_origin = (
+        "measured" if proposal["measured"] else "unmeasured"
+    )
+    fp8_head_attestation = None
+    if fp8_head_captured:
+        fp8_head_attestation = {
+            "schema": "fr13-fixed32-drafter-fp8-head-capture-v1",
+            "graph_id": identity,
+            "graph_signature": signature,
+            "batch_size": batch,
+            "captured_loop_calls": fp8_head_calls,
+            "captured_loop_rows": fp8_head_rows,
+            "capture_origin": capture_origin,
+        }
     _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE[identity] = {
         "batch_size": batch,
         "graph_signature": signature,
@@ -4845,9 +4870,8 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
         "draft_head_fp8_rows": int(
             context.get("draft_head_fp8_rows", -1)
         ),
-        "capture_origin": (
-            "measured" if proposal["measured"] else "unmeasured"
-        ),
+        "draft_head_fp8_capture_attestation": fp8_head_attestation,
+        "capture_origin": capture_origin,
         "measured_replays": 0,
         "unmeasured_replays": 0,
     }
@@ -4856,6 +4880,83 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
     proposal["captured_graph_id"] = identity
     proposal["captured_graph_signature"] = signature
     return signature
+
+
+def _fr13_fixed32_drafter_fp8_head_replay_attestation(
+    graph_id,
+    graph_signature,
+    batch_size,
+    measured,
+    observed_capture_calls,
+):
+    identity = int(graph_id)
+    signature = str(graph_signature)
+    batch = int(batch_size)
+    observed = int(observed_capture_calls)
+    lifecycle = _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE.get(identity)
+    observed_lifecycle = (
+        int(lifecycle.get("draft_head_fp8_calls", -1))
+        if isinstance(lifecycle, dict)
+        else -1
+    )
+    expected_from_mtp = (
+        int(lifecycle.get("mtp_forward_calls", -1))
+        if isinstance(lifecycle, dict)
+        else -1
+    )
+    replay_key = "measured_replays" if measured else "unmeasured_replays"
+    attestation = (
+        lifecycle.get("draft_head_fp8_capture_attestation")
+        if isinstance(lifecycle, dict)
+        else None
+    )
+    expected_attestation_keys = {
+        "schema",
+        "graph_id",
+        "graph_signature",
+        "batch_size",
+        "captured_loop_calls",
+        "captured_loop_rows",
+        "capture_origin",
+    }
+    # Capture and replay can run through different Eagle instances. Local
+    # capture evidence is therefore either exact or zero; the graph-scoped
+    # lifecycle attestation remains mandatory in both cases.
+    if (
+        type(measured) is not bool
+        or identity <= 0
+        or batch not in (1, 2, 3, 4)
+        or not isinstance(lifecycle, dict)
+        or int(lifecycle.get("captures", -1)) != 1
+        or int(lifecycle.get("batch_size", -1)) != batch
+        or lifecycle.get("graph_signature") != signature
+        or lifecycle.get("capture_origin") not in ("measured", "unmeasured")
+        or expected_from_mtp != 4
+        or int(lifecycle.get("mtp_forward_rows", -1)) != 4 * batch
+        or observed_lifecycle != 4
+        or int(lifecycle.get("draft_head_fp8_rows", -1)) != 4 * batch
+        or int(lifecycle.get(replay_key, -1)) < 1
+        or not isinstance(attestation, dict)
+        or set(attestation) != expected_attestation_keys
+        or attestation.get("schema")
+        != "fr13-fixed32-drafter-fp8-head-capture-v1"
+        or int(attestation.get("graph_id", -1)) != identity
+        or attestation.get("graph_signature") != signature
+        or int(attestation.get("batch_size", -1)) != batch
+        or int(attestation.get("captured_loop_calls", -1)) != 4
+        or int(attestation.get("captured_loop_rows", -1)) != 4 * batch
+        or attestation.get("capture_origin")
+        != lifecycle.get("capture_origin")
+        or observed not in (0, 4)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 drafter FP8 replay attestation drifted: "
+            f"observed_local={observed} "
+            f"observed_lifecycle={observed_lifecycle} "
+            f"expected_from_mtp={expected_from_mtp} "
+            f"graph_id={identity}"
+        )
+    return dict(attestation)
 
 
 def _fr13_fixed32_drafter_graph_replay(
@@ -23441,7 +23542,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             self._fr13_dh_fp8_selected_root_calls = 0
             self._fr13_dh_fp8_selected_capture_calls = 0
             self._fr13_dh_fp8_fallback_calls = 0
-            self._fr13_dh_fp8_graph_attestations = {}
 
             def _fr13_dvk_prepare():
                 if (
@@ -24362,72 +24462,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     raise RuntimeError(
                         "FR13 draft-head FP8 replay engagement drifted"
                     )
-                _fr13_dh_fp8_attestation = (
-                    self._fr13_dh_fp8_graph_attestations.get(
-                        int(_graph_id)
-                    )
+                _fr13_dh_fp8_attestation = getattr(
+                    _fr13_dh_fp8_replay_gdn,
+                    "_fr13_fixed32_drafter_fp8_head_replay_attestation",
+                )(
+                    int(_graph_id),
+                    _fr13_dh_fp8_signature,
+                    int(_batch_size),
+                    bool(_fr13_dh_fp8_measured),
+                    self._fr13_dh_fp8_selected_capture_calls,
                 )
-                _fr13_dh_fp8_expected_capture_calls = int(
-                    _fr13_dh_fp8_lifecycle.get(
-                        "mtp_forward_calls", -1
-                    )
-                )
-                _fr13_dh_fp8_lifecycle_capture_calls = int(
-                    _fr13_dh_fp8_lifecycle.get(
-                        "draft_head_fp8_calls", -1
-                    )
-                )
-                _fr13_dh_fp8_observed_capture_calls = int(
-                    self._fr13_dh_fp8_selected_capture_calls
-                )
-                if _fr13_dh_fp8_attestation is None:
-                    if (
-                        _fr13_dh_fp8_expected_capture_calls != 4
-                        or _fr13_dh_fp8_lifecycle_capture_calls
-                        != _fr13_dh_fp8_expected_capture_calls
-                        or _fr13_dh_fp8_observed_capture_calls
-                        != _fr13_dh_fp8_lifecycle_capture_calls
-                    ):
-                        raise RuntimeError(
-                            "FR13 draft-head FP8 graph capture head count "
-                            "drifted: observed_local="
-                            f"{_fr13_dh_fp8_observed_capture_calls} "
-                            "observed_lifecycle="
-                            f"{_fr13_dh_fp8_lifecycle_capture_calls} "
-                            "expected_from_mtp="
-                            f"{_fr13_dh_fp8_expected_capture_calls} "
-                            f"graph_id={int(_graph_id)}"
-                        )
-                    _fr13_dh_fp8_attestation = {
-                        "graph_id": int(_graph_id),
-                        "graph_signature": _fr13_dh_fp8_signature,
-                        "batch_size": int(_batch_size),
-                        "captured_loop_calls": (
-                            _fr13_dh_fp8_expected_capture_calls
-                        ),
-                        "capture_origin": _fr13_dh_fp8_lifecycle[
-                            "capture_origin"
-                        ],
-                    }
-                    self._fr13_dh_fp8_graph_attestations[
-                        int(_graph_id)
-                    ] = _fr13_dh_fp8_attestation
-                elif (
-                    self._fr13_dh_fp8_selected_capture_calls != 0
-                    or _fr13_dh_fp8_attestation.get("graph_signature")
-                    != _fr13_dh_fp8_signature
-                    or _fr13_dh_fp8_attestation.get("batch_size")
-                    != int(_batch_size)
-                    or _fr13_dh_fp8_attestation.get(
-                        "captured_loop_calls"
-                    )
-                    != _fr13_dh_fp8_expected_capture_calls
-                    or _fr13_dh_fp8_attestation.get("capture_origin")
-                    != _fr13_dh_fp8_lifecycle.get("capture_origin")
-                ):
-                    raise RuntimeError(
-                        "FR13 draft-head FP8 replay left its attested graph"
-                    )
                 self._fr13_dh_fp8_selected_root_calls = 0
                 self._fr13_dh_fp8_selected_capture_calls = 0
                 if not _fr13_dh_fp8_measured:
