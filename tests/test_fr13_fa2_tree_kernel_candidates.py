@@ -454,6 +454,53 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
         assert candidate_warp_row == stock_warp_row
 
 
+def test_fixed32_query_tile32_b1_is_a_distinct_24_cta_candidate(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    translation_unit = tmp_path / "flash_fwd_split_hdim256_bf16_sm80.cu"
+    stock = "\n".join(
+        (
+            '#include "namespace_config.h"',
+            '#include "flash_fwd_launch_template.h"',
+            "namespace FLASH_NAMESPACE {",
+            module.STOCK_FIXED32_QUERY_INSTANTIATION,
+            "} // namespace FLASH_NAMESPACE",
+        )
+    )
+    translation_unit.write_text(stock)
+
+    assert not module._patch_fixed32_query_tile32_b1_translation_unit(
+        translation_unit
+    )
+    assert module._patch_fixed32_query_tile32_b1_translation_unit(
+        translation_unit,
+        fixed32_query_tile32_b1=True,
+    )
+    candidate_path = translation_unit.with_name(
+        "flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu"
+    )
+    candidate = candidate_path.read_text()
+    assert translation_unit.read_text() == stock
+    assert candidate == module.FIXED32_QUERY_TILE32_B1_TRANSLATION_UNIT
+    assert candidate != module.FIXED32_QUERY_TILE32_TRANSLATION_UNIT
+    assert "Fr13Fixed32Qrow32B1KernelTraits" in candidate
+    assert "256, 32, 64, 2, false, false" in candidate
+    assert "static constexpr int sequences = 1" in candidate
+    assert "StaticLayout::query_heads_per_kv" in candidate
+    assert "StaticLayout::sequences" in candidate
+    assert "StaticLayout::kv_heads" in candidate
+    assert "TreeKernelTraits::kNThreads == 64" in candidate
+    assert "__global__ __maxnreg__(254)" in candidate
+    assert "false,  // Split" in candidate
+    assert "24 CTAs/layer" in candidate
+    assert "flash_fwd_splitkv_combine_kernel" not in candidate
+    assert not module._patch_fixed32_query_tile32_b1_translation_unit(
+        translation_unit,
+        fixed32_query_tile32_b1=True,
+    )
+
+
 def test_qrow16_private_kernel_preserves_exact_flags() -> None:
     module = _module()
     translation_unit = module.FIXED32_QUERY_TILE16_TRANSLATION_UNIT
@@ -1568,15 +1615,18 @@ def test_source_build_candidates_are_independent_and_default_off() -> None:
         in text
     )
     assert 'parser.add_argument(\n        "--fixed32-query-tile32",' in text
+    assert 'parser.add_argument(\n        "--fixed32-query-tile32-b1",' in text
     assert 'parser.add_argument(\n        "--fixed32-query-tile16-live-ab",' in text
     assert 'parser.add_argument(\n        "--fixed32-query-tile32-live-ab",' in text
     assert "tree_bias_tile_earlyout: bool = False" in text
     assert "fixed32_query_tile16: bool = False" in text
     assert "fixed32_query_tile16_static_strides: bool = False" in text
     assert "fixed32_query_tile32: bool = False" in text
+    assert "fixed32_query_tile32_b1: bool = False" in text
     assert "There is no qrow32 production selector" in text
     assert "fixed32_query_tile32_production" not in text
     assert "--fixed32-query-tile32 requires --tree-bias-tile-earlyout" in text
+    assert "--fixed32-query-tile32-b1 requires --tree-bias-tile-earlyout" in text
     assert "--fixed32-query-tile16-static-strides requires " in text
     assert "fixed32 qrow16 static strides require --fixed32-query-tile16" in text
     assert "fixed32 qrow32 requires --tree-bias-tile-earlyout" in text
@@ -1630,6 +1680,37 @@ def test_qrow32_api_gate_composes_with_qrow16_and_is_idempotent() -> None:
     assert text.count("fr13_run_mha_fwd_fixed32_qrow32") == 2
 
 
+def test_qrow32_b1_api_gate_is_exact_and_idempotent() -> None:
+    module = _module()
+    text, changed = module._install_hidden_api_gate(
+        module.STOCK_RUN_MHA_FWD,
+        declaration=module.FIXED32_QUERY_TILE32_B1_API_DECLARATION,
+        gate=module.FIXED32_QUERY_TILE32_B1_API_GATE,
+        label="test qrow32 B1",
+    )
+    assert changed
+    assert text.count("fr13_run_mha_fwd_fixed32_qrow32_b1") == 2
+    assert "params.b == 1" in text
+    assert "params.total_q == 32" in text
+    assert "params.h == 24" in text
+    assert "params.h_k == 4" in text
+    assert "params.page_block_size == 1024" in text
+    assert "params.num_splits == 0" in text
+    assert "&& force_split_kernel" in text
+    assert module.STOCK_RUN_MHA_FWD[
+        module.STOCK_RUN_MHA_FWD.index("    FP16_SWITCH") : -1
+    ] in text
+
+    text_again, changed = module._install_hidden_api_gate(
+        text,
+        declaration=module.FIXED32_QUERY_TILE32_B1_API_DECLARATION,
+        gate=module.FIXED32_QUERY_TILE32_B1_API_GATE,
+        label="test qrow32 B1",
+    )
+    assert not changed
+    assert text_again == text
+
+
 def test_qrow32_source_patch_requires_exact_safe_tile_earlyout(tmp_path: Path) -> None:
     module = _module()
     try:
@@ -1638,6 +1719,25 @@ def test_qrow32_source_patch_requires_exact_safe_tile_earlyout(tmp_path: Path) -
         assert "requires --tree-bias-tile-earlyout" in str(error)
     else:
         raise AssertionError("qrow32 source patch accepted the one-flag build")
+
+    try:
+        module.patch_fa2_source(tmp_path, fixed32_query_tile32_b1=True)
+    except ValueError as error:
+        assert "requires --tree-bias-tile-earlyout" in str(error)
+    else:
+        raise AssertionError("qrow32 B1 source patch accepted the one-flag build")
+
+    try:
+        module.patch_fa2_source(
+            tmp_path,
+            tree_bias_tile_earlyout=True,
+            fixed32_query_tile32=True,
+            fixed32_query_tile32_b1=True,
+        )
+    except ValueError as error:
+        assert "mutually exclusive" in str(error)
+    else:
+        raise AssertionError("B1 and B4 qrow32 source patches composed")
 
     try:
         module.patch_fa2_source(
