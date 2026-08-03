@@ -1,0 +1,81 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_twom_stage3_rejection.v1",
+  "created_at_utc": "2026-08-03T04:09:22Z",
+  "status": "REJECT_STACK_SPILL_AND_CODE_EXPANSION",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/fixed32-b4-twom-stage3-20260803",
+    "base_commit": "30f8437d2b13d1af6ca14ae8eac68ca5b49fb27b",
+    "restored_patch_source_sha256": "841b5dfc0741aa5051037e3eda005e5a65f7a425b76235a61e8a0779bd31a155",
+    "restored_patch_source_bytes": 74380,
+    "experimental_generated_dispatch_sha256": "85dd0594d58218acfceb0fd3aeb4fd73316c7b67ad9ed098da742082c478bd76",
+    "experimental_generated_dispatch_bytes": 75017,
+    "candidate_source_retained": false
+  },
+  "pinned_inputs": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "target": "sm_121a",
+    "cuda_compiler": "13.0.88"
+  },
+  "candidate": {
+    "physical_rows": 128,
+    "tile_mnk": [64, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+    "mainloop_stage_count": 3,
+    "epilogue": "accumulator_identity_round_to_nearest",
+    "tile_scheduler": "fr13_fixed32_b4_twom_static_scheduler",
+    "default_enabled": false,
+    "compiled_dtypes": ["fp16", "bf16"],
+    "object_sha256": "1aad07d66f5f6d57c1faa60e036649ecfb1e128b761b11a2984e16324967ecc2",
+    "object_bytes": 21346008,
+    "cubin_sha256": "e82f105648a16cdff74c292d66c501d66945601807399eb233c63620e8196ca8",
+    "cubin_bytes": 2174856
+  },
+  "resource_verdict": {
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 8,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "ptxas_spill_store_bytes_per_thread": 4,
+    "ptxas_spill_load_bytes_per_thread": 12,
+    "sass_slots_per_dtype": 1064,
+    "local_load_instructions_per_dtype": 3,
+    "local_store_instructions_per_dtype": 1,
+    "branch_instructions_per_dtype": 43,
+    "qmma_instructions_per_dtype": 128,
+    "ffma_instructions_per_dtype": 128,
+    "verdict": "reject"
+  },
+  "retained_stage2_comparator": {
+    "object_sha256": "a41009b247e63878095b6edeb18e9bdf4b0ffd996e9724b5c96494992843abc9",
+    "cubin_sha256": "ab61f9e8ee156f1ce9455d87d6b429673040dd7d1e6d5d28b67bcf0ebdb1d31e",
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "sass_slots_per_dtype": 1040,
+    "local_load_instructions_per_dtype": 0,
+    "local_store_instructions_per_dtype": 0,
+    "branch_instructions_per_dtype": 39,
+    "qmma_instructions_per_dtype": 128,
+    "ffma_instructions_per_dtype": 128
+  },
+  "source_checks": {
+    "focused_tests": "55 passed",
+    "python_compile": "pass",
+    "post_revert_diff_check": "pass"
+  },
+  "not_run": [
+    "extension link or import",
+    "GPU kernel runtime",
+    "real SWE-Verified byte equality",
+    "full-step timing",
+    "hardware-floor acceptance"
+  ]
+}

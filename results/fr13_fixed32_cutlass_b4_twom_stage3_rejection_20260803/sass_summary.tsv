@@ -1,0 +1,5 @@
+variant	dtype	sass_slots	ldl	stl	branches	calls	qmma	ffma	ldsm	stsm
+stage2_retained	fp16	1040	0	0	39	0	128	128	48	16
+stage2_retained	bf16	1040	0	0	39	0	128	128	48	16
+stage3_candidate	fp16	1064	3	1	43	0	128	128	48	16
+stage3_candidate	bf16	1064	3	1	43	0	128	128	48	16
