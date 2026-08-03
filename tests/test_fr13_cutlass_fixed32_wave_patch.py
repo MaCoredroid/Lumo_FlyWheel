@@ -135,12 +135,12 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 18
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 19
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
         )
-        == 7
+        == 8
     )
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -805,6 +805,62 @@ def test_b1_n5120_single_tile_scheduler_removes_persistent_advance() -> None:
         "fixed32_cutlass_wave_variant::\n"
         "                          identity_onen_n5120_single_b1) {\n"
         "    return run_identity_onen_n5120_single_b1(out);"
+        in patched
+    )
+
+
+def test_b1_n5120_fullgrid_keeps_40_cta_narrow_and_48_cta_wide_policy() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    scheduler_start = patched.index(
+        "class Fr13B1OneNFullGridStaticTileScheduler100"
+    )
+    scheduler_end = patched.index(
+        "template <class TileShape, class ClusterShape,\n"
+        "          uint32_t SchedulerPipelineStageCount>\n"
+        "struct TileSchedulerSelector<\n"
+        "    vllm::fr13_fixed32_m128_divisor_static_scheduler",
+        scheduler_start,
+    )
+    scheduler = patched[scheduler_start:scheduler_end]
+    assert "public Fr13B1OneNStaticTileScheduler100" in scheduler
+    assert "using GridBase = StaticPersistentTileScheduler100;" in scheduler
+    assert "using Arguments = typename GridBase::Arguments;" in scheduler
+    assert "Arguments arguments = Arguments{}" in scheduler
+    assert "return GridBase::get_grid_shape(" in scheduler
+    assert scheduler.count("return GridBase::get_grid_shape(") == 2
+    assert "Fr13DivisorBalancedStaticTileScheduler100::get_grid_shape" not in scheduler
+    assert "fr13_fixed32_b1_onen_fullgrid_static_scheduler" in patched
+    assert "using Scheduler = Fr13B1OneNFullGridStaticTileScheduler100;" in patched
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_onen_fullgrid_identity_pingpong_stage2"
+    )
+    config_end = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_m128_static_identity_stage2",
+        config_start,
+    )
+    config = patched[config_start:config_end]
+    assert "KernelTmaWarpSpecializedBlockwisePingpongSm120" in config
+    assert "using TileShape = Shape<_128, _32, _128>;" in config
+    assert "fr13_fixed32_b1_onen_fullgrid_static_scheduler" in config
+    assert "cutlass::gemm::collective::StageCount<2>" in config
+
+    runner_start = patched.index("auto run_identity_onen_n5120_fullgrid_b1")
+    runner_end = patched.index("auto run_identity_stockshape_b4", runner_start)
+    runner = patched[runner_start:runner_end]
+    assert "if (N == 5120)" in runner
+    assert "b1_n5120_single_identity_stage2" in runner
+    assert "b1_onen_fullgrid_identity_pingpong_stage2" in runner
+    assert 'value == "identity_onen_n5120_fullgrid_b1"' in patched
+    assert 'value == "identity_onen_n5120_fullgrid_b1_byte_ab"' in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_identity_onen_n5120_fullgrid_b1_byte_ab.jsonl"'
+        in patched
+    )
+    assert (
+        "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_byte_ab.v1"
         in patched
     )
 

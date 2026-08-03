@@ -74,6 +74,7 @@ struct fr13_fixed32_m128_static_scheduler {};
 struct fr13_fixed32_m128_divisor_static_scheduler {};
 struct fr13_fixed32_b1_onen_static_scheduler {};
 struct fr13_fixed32_b1_n5120_single_tile_scheduler {};
+struct fr13_fixed32_b1_onen_fullgrid_static_scheduler {};
 struct fr13_fixed32_b4_twom_static_scheduler {};
 struct fr13_fixed32_wide256_recompute_scheduler {};
 }  // namespace vllm
@@ -613,6 +614,43 @@ class Fr13B1N5120SingleTileScheduler100
   }
 };
 
+// The three wider B1 projections have enough complete output tiles to keep all
+// 48 SMs resident. Reuse the audited one-N coordinate mapping, but bypass the
+// divisor-balanced 28--34 CTA host policy so CUTLASS retains its full static
+// persistent grid. N=5120 remains on the separate exact 40-CTA specialization.
+class Fr13B1OneNFullGridStaticTileScheduler100
+    : public Fr13B1OneNStaticTileScheduler100 {
+  using Base = Fr13B1OneNStaticTileScheduler100;
+  using GridBase = StaticPersistentTileScheduler100;
+
+ public:
+  using Base::Base;
+  using Params = typename Base::Params;
+  using Arguments = typename GridBase::Arguments;
+
+  template <class ProblemShapeMNKL, class BlockShape, class ClusterShape>
+  CUTLASS_HOST_DEVICE static dim3 get_grid_shape(
+      Params const& params, ProblemShapeMNKL problem_shape_mnkl,
+      BlockShape block_shape_mnk, ClusterShape cluster_shape_mnk,
+      KernelHardwareInfo hw_info, Arguments arguments = Arguments{},
+      bool truncate_by_problem_size = true) {
+    return GridBase::get_grid_shape(
+        params, problem_shape_mnkl, block_shape_mnk, cluster_shape_mnk,
+        hw_info, arguments, truncate_by_problem_size);
+  }
+
+  template <class ProblemShapeMNKL, class TileShape, class AtomThrShape,
+            class ClusterShape>
+  CUTLASS_HOST_DEVICE static dim3 get_grid_shape(
+      Params const& params, ProblemShapeMNKL problem_shape_mnkl,
+      TileShape tile_shape_mnk, AtomThrShape atom_thr_shape_mnk,
+      ClusterShape cluster_shape_mnk, KernelHardwareInfo hw_info) {
+    return GridBase::get_grid_shape(
+        params, problem_shape_mnkl, tile_shape_mnk, atom_thr_shape_mnk,
+        cluster_shape_mnk, hw_info);
+  }
+};
+
 template <class TileShape, class ClusterShape,
           uint32_t SchedulerPipelineStageCount>
 struct TileSchedulerSelector<
@@ -635,6 +673,14 @@ struct TileSchedulerSelector<
     vllm::fr13_fixed32_b1_n5120_single_tile_scheduler, arch::Sm120,
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
   using Scheduler = Fr13B1N5120SingleTileScheduler100;
+};
+
+template <class TileShape, class ClusterShape,
+          uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
+    vllm::fr13_fixed32_b1_onen_fullgrid_static_scheduler, arch::Sm120,
+    TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  using Scheduler = Fr13B1OneNFullGridStaticTileScheduler100;
 };
 
 template <class TileShape, class ClusterShape,
@@ -1049,6 +1095,23 @@ struct sm120_blockwise_fp8_config_b1_onen_static_identity_pingpong_stage2 {
       cutlass::gemm::collective::StageCount<2>>;
 };
 
+// Preserve the exact wide-projection math and one-N device mapping, but use
+// CUTLASS's full 48-CTA static grid instead of the divisor-balanced host grid.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b1_onen_fullgrid_identity_pingpong_stage2 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true,
+      fr13_fixed32_b1_onen_fullgrid_static_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
 template <typename OutType>
 struct sm120_blockwise_fp8_config_b4_m128_static_identity_stage2 {
   using KernelSchedule =
@@ -1164,6 +1227,8 @@ enum class fixed32_cutlass_wave_variant {
   identity_onen_b1_byte_ab,
   identity_onen_n5120_single_b1,
   identity_onen_n5120_single_b1_byte_ab,
+  identity_onen_n5120_fullgrid_b1,
+  identity_onen_n5120_fullgrid_b1_byte_ab,
   identity_stockshape_b4,
   identity_stockshape_b4_byte_ab,
   identity_stockshape_stage2_b4,
@@ -1248,6 +1313,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "identity_onen_n5120_single_b1_byte_ab") {
       return fixed32_cutlass_wave_variant::identity_onen_n5120_single_b1_byte_ab;
+    }
+    if (value == "identity_onen_n5120_fullgrid_b1") {
+      return fixed32_cutlass_wave_variant::identity_onen_n5120_fullgrid_b1;
+    }
+    if (value == "identity_onen_n5120_fullgrid_b1_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_onen_n5120_fullgrid_b1_byte_ab;
     }
     if (value == "identity_stockshape_b4") {
       return fixed32_cutlass_wave_variant::identity_stockshape_b4;
@@ -1501,6 +1572,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
                            identity_onen_n5120_single_b1_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
+  if (!fixed32_cutlass_b1_onen_projection(M, N, K) &&
+      (wave_variant == fixed32_cutlass_wave_variant::
+                           identity_onen_n5120_fullgrid_b1 ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           identity_onen_n5120_fullgrid_b1_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
   if (!fixed32_cutlass_b4_hybrid_n5120_projection(M, N, K) &&
       (wave_variant ==
            fixed32_cutlass_wave_variant::identity_hybrid_n5120_b4 ||
@@ -1638,6 +1716,22 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     return run_identity_onen_b1(destination);
   };
 
+  auto run_identity_onen_n5120_fullgrid_b1 =
+      [&](torch::stable::Tensor& destination) {
+    if (N == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b1_n5120_single_identity_stage2<
+              OutType>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b1_onen_fullgrid_identity_pingpong_stage2<
+            OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
   auto run_identity_stockshape_b4 =
       [&](torch::stable::Tensor& destination) {
     using Gemm = typename
@@ -1736,6 +1830,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool identity_onen_n5120_single_b1_byte_ab =
       wave_variant == fixed32_cutlass_wave_variant::
                           identity_onen_n5120_single_b1_byte_ab;
+  const bool identity_onen_n5120_fullgrid_b1_byte_ab =
+      wave_variant == fixed32_cutlass_wave_variant::
+                          identity_onen_n5120_fullgrid_b1_byte_ab;
   const bool identity_stockshape_b4_byte_ab =
       wave_variant == fixed32_cutlass_wave_variant::
                           identity_stockshape_b4_byte_ab;
@@ -1759,11 +1856,15 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       divisor_static_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab ||
       identity_stage2_static_byte_ab || identity_stage2_pingpong_b1_byte_ab ||
       identity_onen_b1_byte_ab || identity_onen_n5120_single_b1_byte_ab ||
+      identity_onen_n5120_fullgrid_b1_byte_ab ||
       identity_stockshape_b4_byte_ab ||
       identity_stockshape_stage2_b4_byte_ab || identity_divisor_b4_byte_ab ||
       identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab ||
       identity_hybrid_n5120_b4_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
+      if (identity_onen_n5120_fullgrid_b1_byte_ab) {
+        return run_identity_onen_n5120_fullgrid_b1(destination);
+      }
       if (identity_onen_n5120_single_b1_byte_ab) {
         return run_identity_onen_n5120_single_b1(destination);
       }
@@ -1884,7 +1985,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        identity_onen_n5120_single_b1_byte_ab
+        identity_onen_n5120_fullgrid_b1_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_onen_n5120_fullgrid_b1_byte_ab.jsonl"
+        : identity_onen_n5120_single_b1_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_onen_n5120_single_b1_byte_ab.jsonl"
         : identity_onen_b1_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_onen_b1_byte_ab.jsonl"
@@ -1922,7 +2025,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (identity_onen_n5120_single_b1_byte_ab
+          << (identity_onen_n5120_fullgrid_b1_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_byte_ab.v1"
+              : identity_onen_n5120_single_b1_byte_ab
                   ? "fr13.fixed32.cutlass_identity_onen_n5120_single_b1_byte_ab.v1"
               : identity_onen_b1_byte_ab
                   ? "fr13.fixed32.cutlass_identity_onen_b1_byte_ab.v1"
@@ -2022,6 +2127,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (wave_variant == fixed32_cutlass_wave_variant::
                           identity_onen_n5120_single_b1) {
     return run_identity_onen_n5120_single_b1(out);
+  }
+
+  if (wave_variant == fixed32_cutlass_wave_variant::
+                          identity_onen_n5120_fullgrid_b1) {
+    return run_identity_onen_n5120_fullgrid_b1(out);
   }
 
   if (wave_variant ==
