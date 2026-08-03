@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
 import torch
 
 
@@ -33,7 +34,7 @@ def _eagle_snippet() -> str:
     raise AssertionError("draft-head padded-row replacement snippet not found")
 
 
-def test_candidate_is_default_off_strict_and_b1_root64_only() -> None:
+def test_candidate_is_default_off_strict_and_b1_b4_root64_only() -> None:
     snippet = _eagle_snippet()
 
     assert '"FR13_DRAFT_HEAD_PAD_ROWS", "0"' in snippet
@@ -45,7 +46,8 @@ def test_candidate_is_default_off_strict_and_b1_root64_only() -> None:
     assert "not _fr13_dvk_root" in snippet
     assert "not _fr13_single_logits" in snippet
     assert "_fr13_dvk_configured != 65536" in snippet
-    assert "tuple(_h.shape) != (1, 5120)" in snippet
+    assert "_fr13_dh_batch not in (1, 2, 3, 4)" in snippet
+    assert "tuple(_h.shape) != (_fr13_dh_batch, 5120)" in snippet
 
 
 def test_static_buffers_and_gemm_use_only_selected_rows() -> None:
@@ -61,8 +63,17 @@ def test_static_buffers_and_gemm_use_only_selected_rows() -> None:
     assert "(_fr13_dh_r, 5120)" in snippet
     assert "(_fr13_dh_r, 65536)" in snippet
     assert "_fr13_dh_in.copy_(_h.expand_as(_fr13_dh_in))" in snippet
+    assert "self._fr13_dh_pad_row_indices" in snippet
+    assert "torch.index_select(" in snippet
+    assert "out=_fr13_dh_in" in snippet
     assert "torch.mm(_fr13_dh_in, _sh.weight.t(), out=_fr13_dh_out)" in snippet
-    assert "return _fr13_dh_out[:1]" in snippet
+    assert "return _fr13_dh_out[:_fr13_dh_batch]" in snippet
+    assert "self._fr13_dh_pad_seen_eager = False" in snippet
+    assert "self._fr13_dh_pad_seen_capture_batches = set()" in snippet
+    assert "direct padded draft head reached capture before" in snippet
+    assert 'f"source_rows={_fr13_dh_batch} eager_launch=1"' in snippet
+    assert '"[FR13_DRAFT_HEAD_PAD] captured "' in snippet
+    assert "self._fr13_dh_pad_seen_capture_batches.add(" in snippet
     helper_start = snippet.index("def _fr13_dh_pad_logits")
     helper_end = snippet.index("def _fr13_dvk_logits", helper_start)
     assert "torch.empty" not in snippet[helper_start:helper_end]
@@ -100,6 +111,24 @@ def test_replicated_row_mm_out_exposes_real_row_for_every_candidate() -> None:
         assert torch.equal(static_output[:1], reference)
 
 
+@pytest.mark.parametrize("batch", (2, 3, 4))
+def test_batched_row_map_preserves_each_real_prefix_row(batch: int) -> None:
+    torch.manual_seed(batch)
+    rows = 32
+    hidden = torch.randn(batch, 16, dtype=torch.bfloat16)
+    weight = torch.randn(64, 16, dtype=torch.bfloat16)
+    reference = torch.nn.functional.linear(hidden, weight)
+    row_index = torch.tensor(tuple(index % batch for index in range(rows)))
+    static_input = torch.empty(rows, 16, dtype=torch.bfloat16)
+    static_output = torch.empty(rows, 64, dtype=torch.bfloat16)
+
+    torch.index_select(hidden, 0, row_index, out=static_input)
+    torch.mm(static_input, weight.t(), out=static_output)
+
+    assert torch.equal(static_input[:batch], hidden)
+    assert torch.equal(static_output[:batch], reference)
+
+
 def test_launcher_passes_only_strict_candidate_modes() -> None:
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
@@ -111,7 +140,15 @@ def test_launcher_passes_only_strict_candidate_modes() -> None:
     assert 'case "$FR13_DRAFT_HEAD_PAD_ROWS" in' in launcher
     assert "0|32|64|128" in launcher
     assert 'case "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" in' in launcher
-    assert "FR13 draft-head padding requires fixed32 B1 root64" in launcher
+    assert (
+        "FR13 draft-head padding requires fixed32 B1 or direct M32 B4 root64"
+        in launcher
+    )
+    assert '( "$MAX_NUM_SEQS" == "4" \\' in launcher
+    assert '&& "$FR13_DRAFT_HEAD_PAD_ROWS" == "32" \\' in launcher
+    assert '&& "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \\' in launcher
+    assert '&& "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \\' in launcher
+    assert '&& "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" ) ) \\' in launcher
     assert (
         '-e FR13_DRAFT_HEAD_PAD_ROWS="$FR13_DRAFT_HEAD_PAD_ROWS" \\'
         in launcher

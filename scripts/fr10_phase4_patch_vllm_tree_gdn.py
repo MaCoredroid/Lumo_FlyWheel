@@ -22100,6 +22100,20 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         (3,), dtype=torch.int64, device=_fr13_dh_w.device
                     )
                     self._fr13_dh_ab_root_checks = 0
+                    self._fr13_dh_pad_seen_eager = False
+                    self._fr13_dh_pad_seen_capture_batches = set()
+                    self._fr13_dh_pad_row_indices = {
+                        (_fr13_dh_r, _fr13_dh_b): torch.tensor(
+                            tuple(
+                                _fr13_dh_i % _fr13_dh_b
+                                for _fr13_dh_i in range(_fr13_dh_r)
+                            ),
+                            dtype=torch.long,
+                            device=_fr13_dh_w.device,
+                        )
+                        for _fr13_dh_r in _fr13_dh_active_rows
+                        for _fr13_dh_b in (2, 3, 4)
+                    }
                     if _fr13_dh_m32_live:
                         self._fr13_dh_m32_live_count_enable = torch.zeros(
                             (), dtype=torch.int64, device=_fr13_dh_w.device
@@ -22130,22 +22144,67 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 return _fr13_dvk_configured, _fr13_dvk_full
 
             def _fr13_dh_pad_logits(_sh, _h, _rows):
+                _fr13_dh_batch = int(_h.shape[0]) if _h.ndim == 2 else 0
                 if (
                     not getattr(self, "_fr13_dh_pad_ready", False)
                     or _rows not in (32, 64, 128)
-                    or tuple(_h.shape) != (1, 5120)
+                    or _fr13_dh_batch not in (1, 2, 3, 4)
+                    or tuple(_h.shape) != (_fr13_dh_batch, 5120)
                     or tuple(_h.stride()) != (5120, 1)
                     or _h.dtype != torch.bfloat16
                     or _h.device != _sh.weight.device
                 ):
                     raise RuntimeError(
-                        "FR13 draft-head M32 engaged outside exact B1 BF16 "
-                        "hidden[1,5120] stride[5120,1] contract"
+                        "FR13 draft-head padding engaged outside exact B1-B4 "
+                        "BF16 hidden[B,5120] stride[5120,1] contract"
+                    )
+                _fr13_dh_capturing = torch.cuda.is_current_stream_capturing()
+                if (
+                    _fr13_dh_rows
+                    and not self._fr13_dh_pad_seen_eager
+                    and _fr13_dh_capturing
+                ):
+                    raise RuntimeError(
+                        "FR13 direct padded draft head reached capture before "
+                        "one eager GEMM launch"
                     )
                 _fr13_dh_in = self._fr13_dh_pad_inputs[_rows]
                 _fr13_dh_out = self._fr13_dh_pad_outputs[_rows]
-                _fr13_dh_in.copy_(_h.expand_as(_fr13_dh_in))
+                if _fr13_dh_batch == 1:
+                    _fr13_dh_in.copy_(_h.expand_as(_fr13_dh_in))
+                else:
+                    torch.index_select(
+                        _h,
+                        0,
+                        self._fr13_dh_pad_row_indices[
+                            (_rows, _fr13_dh_batch)
+                        ],
+                        out=_fr13_dh_in,
+                    )
                 torch.mm(_fr13_dh_in, _sh.weight.t(), out=_fr13_dh_out)
+                if _fr13_dh_rows and not self._fr13_dh_pad_seen_eager:
+                    print(
+                        "[FR13_DRAFT_HEAD_PAD] engaged "
+                        f"candidate_rows={_rows} "
+                        f"source_rows={_fr13_dh_batch} eager_launch=1",
+                        flush=True,
+                    )
+                    self._fr13_dh_pad_seen_eager = True
+                if (
+                    _fr13_dh_rows
+                    and _fr13_dh_capturing
+                    and _fr13_dh_batch
+                    not in self._fr13_dh_pad_seen_capture_batches
+                ):
+                    print(
+                        "[FR13_DRAFT_HEAD_PAD] captured "
+                        f"candidate_rows={_rows} "
+                        f"source_rows={_fr13_dh_batch}",
+                        flush=True,
+                    )
+                    self._fr13_dh_pad_seen_capture_batches.add(
+                        _fr13_dh_batch
+                    )
                 if (
                     tuple(_fr13_dh_in.stride()) != (5120, 1)
                     or tuple(_sh.weight.t().stride()) != (1, 5120)
@@ -22154,7 +22213,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     raise RuntimeError(
                         "FR13 draft-head M32 operand strides drifted"
                     )
-                return _fr13_dh_out[:1]
+                return _fr13_dh_out[:_fr13_dh_batch]
 
             def _fr13_dh_m32_contract():
                 return {
