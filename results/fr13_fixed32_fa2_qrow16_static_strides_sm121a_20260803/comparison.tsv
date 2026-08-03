@@ -1,0 +1,3 @@
+variant	registers	stack_bytes	local_bytes	spill_store_bytes	spill_load_bytes	static_shared_bytes	dynamic_shared_bytes	sass_text_slots	object_bytes	verdict
+qrow16_ru3_r216_incumbent	216	0	0	0	0	1024	73728	5064	162000	CONTROL
+qrow16_ru3_r216_static_kv_strides	212	0	0	0	0	1024	73728	5000	160512	PASS_HOST_CODEGEN_BYTE_GATE_PENDING

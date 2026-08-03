@@ -1,0 +1,15 @@
+classification: host-only paired compiler/disassembler gate
+FA2 commit: 29210221863736a08f71a866459e368ad1ac4a95
+toolchain: CUDA 13.0.88
+target: sm_121a
+register usage level: 3
+source max-register cap: 216
+CUDA visibility: explicitly empty
+candidate required tuple: REG 212, STACK 0, LOCAL 0, spill stores 0, spill loads 0
+candidate result: PASS
+candidate repeated SASS identity: PASS
+stock HD256 BF16 split-forward TU compile from patched header: PASS
+GPU workload launched: no
+performance measurement: no
+real SWE-Verified byte gate: pending
+full-step timing: forbidden until byte parity passes
