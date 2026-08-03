@@ -30,6 +30,10 @@ def test_launcher_is_digest_pinned_diagnostic_only_and_worker_visible() -> None:
     )
     assert "scripts/fr13_cutlass_wave_binary.py install" in launcher
     assert (
+        '--qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"'
+        in launcher
+    )
+    assert (
         "/usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so"
         in launcher
     )
@@ -124,6 +128,95 @@ def test_launcher_cross_kernel_preflight_runs_before_sidecar_and_docker(
     assert not docker_sentinel.exists()
 
 
+@pytest.mark.parametrize("qualification_profile", (None, "full_vocab"))
+def test_onen_b1_launcher_rejects_non_k64_profile_before_docker(
+    tmp_path: Path, qualification_profile: str | None
+) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    docker_sentinel = tmp_path / "docker.called"
+    fake_docker = fake_bin / "docker"
+    fake_docker.write_text(
+        '#!/usr/bin/env bash\nprintf "called\\n" > "$DOCKER_SENTINEL"\n',
+        encoding="ascii",
+    )
+    fake_docker.chmod(0o755)
+    log_dir = tmp_path / "logs"
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("FR13_")
+    }
+    environment.update(
+        {
+            "DOCKER_SENTINEL": os.fspath(docker_sentinel),
+            "FR13_FIXED32_CUTLASS_WAVE": "identity_onen_b1",
+            "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION": "1",
+            "FR13_FIXED32_CUTLASS_WAVE_SO": "",
+            "LOG_DIR": os.fspath(log_dir),
+            "PATH": os.pathsep.join((os.fspath(fake_bin), environment["PATH"])),
+            "REPO": os.fspath(REPO),
+        }
+    )
+    if qualification_profile is not None:
+        environment["FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"] = (
+            qualification_profile
+        )
+
+    result = subprocess.run(
+        ["bash", os.fspath(LAUNCHER)],
+        cwd=REPO,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert (
+        "identity_onen_b1 launcher requires explicit k64_root qualification"
+        in result.stderr
+    )
+    assert not log_dir.exists()
+    assert not docker_sentinel.exists()
+
+
+@pytest.mark.parametrize("qualification_profile", (None, "full_vocab"))
+def test_onen_b1_runner_rejects_non_k64_profile_before_gpu(
+    tmp_path: Path, qualification_profile: str | None
+) -> None:
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("FR13_")
+    }
+    environment.update(
+        {
+            "CUTLASS_STREAMK_SO": os.fspath(tmp_path / "candidate.so"),
+            "FORKED_FA2_SO": os.fspath(tmp_path / "fa2.so"),
+            "FR13_STREAMK_GATE_CANDIDATE": "identity_onen_b1",
+            "RUNROOT": os.fspath(tmp_path / "runroot"),
+            "TAG": "non-k64-rejection",
+        }
+    )
+    if qualification_profile is not None:
+        environment["FR13_STREAMK_QUALIFICATION_PROFILE"] = qualification_profile
+
+    result = subprocess.run(
+        ["bash", os.fspath(GATE)],
+        cwd=REPO,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert (
+        "identity_onen_b1 diagnostic requires explicit k64_root qualification"
+        in result.stderr
+    )
+    assert not (tmp_path / "runroot").exists()
+
+
 def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> None:
     gate = GATE.read_text(encoding="utf-8")
     kernel_gate = B1_KERNEL_GATE.read_text(encoding="utf-8")
@@ -187,6 +280,7 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert 'MAX_COMPARISONS=320' in gate
     assert '"comparison_call_limit": expected_max_comparisons' in gate
     assert '"qualification_profile": expected_profile' in gate
+    assert '--qualification-profile "$QUALIFICATION_PROFILE"' in gate
     assert "pinned root-64K draft-vocabulary block map drifted" in gate
     assert '"comparator_timing_eligible": False' in gate
     assert '"patch_source_sha256": patch_source_sha256' in gate
@@ -199,10 +293,15 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "identity_stage2_static_byte_ab" in gate
     assert "identity_stage2_pingpong_b1" in gate
     assert "identity_stage2_pingpong_b1_byte_ab" in gate
+    assert "identity_onen_b1" in gate
+    assert "identity_onen_b1_byte_ab" in gate
     assert "fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_divisor_static_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_identity_stage2_static_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_identity_stage2_pingpong_b1_byte_ab.v1" in gate
+    assert "fr13.fixed32.cutlass_identity_onen_b1_byte_ab.v1" in gate
+    assert "fr13.fixed32.cutlass_identity_onen_b1_k64_root_live_gate.v1" in gate
+    assert "cutlass_identity_onen_b1_k64_root_byte_gate.json" in gate
     assert (
         "fr13.fixed32.cutlass_static_persistent_k64_root_live_gate.v1" in gate
     )

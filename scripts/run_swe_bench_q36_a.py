@@ -9017,6 +9017,8 @@ def main(argv: list[str] | None = None) -> int:
         "identity_stage2_static_byte_ab",
         "identity_stage2_pingpong_b1",
         "identity_stage2_pingpong_b1_byte_ab",
+        "identity_onen_b1",
+        "identity_onen_b1_byte_ab",
         "identity_stockshape_b4",
         "identity_stockshape_b4_byte_ab",
         "identity_stockshape_stage2_b4",
@@ -9038,6 +9040,7 @@ def main(argv: list[str] | None = None) -> int:
         "divisor_static_stocktile_byte_ab",
         "identity_stage2_static_byte_ab",
         "identity_stage2_pingpong_b1_byte_ab",
+        "identity_onen_b1_byte_ab",
     }
     fixed32_cutlass_b4_diagnostic = cutlass_wave in {
         "identity_divisor_b4_byte_ab",

@@ -1,0 +1,197 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_onen_static_host_build.v1",
+  "created_at_utc": "2026-08-03T02:07:45Z",
+  "integrity_refreshed_at_utc": "2026-08-03T02:43:09Z",
+  "status": "host_compile_link_import_audit_pass_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/fixed32-b1-onetile-static-scheduler-20260803",
+    "patch_source_sha256": "4132cd07388e0af0a3bc15c328eed74d08734e0bd6517b4d7418b72788b7e436",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "vllm_cmake_sha256": "b12cd47f5761442551d6e1966e8a37ad94175382c1b014d2b65f67b74fbb6e3b",
+    "patched_dispatch_sha256": "f93500dc1ec4d19b93c13a8fec3a31e2fead23161ecb1c6839972697f6df25a4",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2"
+  },
+  "candidate": {
+    "selector": "identity_onen_b1",
+    "diagnostic_selector": "identity_onen_b1_byte_ab",
+    "default_enabled": false,
+    "production_requires_k64_root_sidecar": true,
+    "physical_rows": 32,
+    "tile_mnk_after_swap_ab": [128, 32, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_stage_count": 2,
+    "incumbent_tile_scheduler": "Fr13DivisorBalancedStaticTileScheduler100",
+    "candidate_tile_scheduler": "Fr13B1OneNStaticTileScheduler100",
+    "scheduler_state": "current WorkTileInfo.M_idx",
+    "next_work": "M_idx + gridDim.y",
+    "tile_map": "{M_idx, 0, 0}",
+    "source_delta": "scheduler_only_with_exact_incumbent_schedule_routing"
+  },
+  "shape_gate": [
+    {
+      "mnk": [32, 34816, 5120],
+      "logical_tiles": 272,
+      "launch_grid": [1, 34, 1],
+      "tiles_per_cta": 8,
+      "schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120"
+    },
+    {
+      "mnk": [32, 5120, 17408],
+      "logical_tiles": 40,
+      "launch_grid": [1, 40, 1],
+      "tiles_per_cta": 1,
+      "schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120"
+    },
+    {
+      "mnk": [32, 5120, 6144],
+      "logical_tiles": 40,
+      "launch_grid": [1, 40, 1],
+      "tiles_per_cta": 1,
+      "schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120"
+    },
+    {
+      "mnk": [32, 16384, 5120],
+      "logical_tiles": 128,
+      "launch_grid": [1, 32, 1],
+      "tiles_per_cta": 4,
+      "schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120"
+    },
+    {
+      "mnk": [32, 14336, 5120],
+      "logical_tiles": 112,
+      "launch_grid": [1, 28, 1],
+      "tiles_per_cta": 4,
+      "schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120"
+    }
+  ],
+  "host_build": {
+    "result": "pass",
+    "target": "_C_stable_libtorch",
+    "build_type": "RelWithDebInfo",
+    "host_elf": "ELF64 AArch64 shared object",
+    "cuda_compiler": "/usr/local/cuda/bin/nvcc",
+    "cuda_release": "13.0",
+    "cuda_version": "13.0.88",
+    "cuda_build": "cuda_13.0.r13.0/compiler.36424714_0",
+    "cxx_version": "13.3.0",
+    "cmake_version": "3.28.3",
+    "ninja_version": "1.13.0.git.kitware.jobserver-pipe-1",
+    "candidate_object_gencode": "arch=compute_121a,code=sm_121a",
+    "compile_result": "pass",
+    "link_result": "pass",
+    "python_import_result": "pass",
+    "gpu_runtime_used": false,
+    "docker_used": false
+  },
+  "outputs": {
+    "candidate_binary": {
+      "published": false,
+      "sha256": "17af1975b1e26cd3d4c3e614bfcab8aa1b0dc031ea5107004b0cc25890fc2b15",
+      "bytes": 118166088
+    },
+    "candidate_object": {
+      "published": false,
+      "sha256": "73fda07b5221de734de0882e4bfb0c4b2f77231b6ba1847e5a49282392933c80",
+      "bytes": 22485064
+    },
+    "sm121a_cubin": {
+      "published": false,
+      "sha256": "650fe2a926ffdf6f8e5b6290d63a3aa7487e13e8c2114db3302edc280461ab99",
+      "bytes": 2294240,
+      "inventory_count": 1
+    }
+  },
+  "resource_audit": {
+    "result": "pass",
+    "object_resource_records": 40,
+    "candidate_kernel_records": 4,
+    "candidate_dtypes": ["fp16", "bf16"],
+    "candidate_schedules": ["pingpong", "cooperative"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "detected_spills": false
+  },
+  "sass_audit": {
+    "result": "pass",
+    "counts_equal_across_fp16_and_bf16": true,
+    "pingpong": {
+      "candidate_instructions": 744,
+      "generic_instructions": 968,
+      "instruction_delta": -224,
+      "candidate_branches": 41,
+      "generic_branches": 39,
+      "branch_delta": 2,
+      "candidate_ldl": 0,
+      "candidate_stl": 0,
+      "candidate_call": 0
+    },
+    "cooperative": {
+      "candidate_instructions": 568,
+      "generic_instructions": 864,
+      "instruction_delta": -296,
+      "candidate_branches": 29,
+      "generic_branches": 33,
+      "branch_delta": -4,
+      "candidate_ldl": 0,
+      "candidate_stl": 0,
+      "candidate_call": 0
+    },
+    "performance_inference_allowed": false
+  },
+  "qualification_integrity": {
+    "result": "pass",
+    "required_profile": "k64_root",
+    "profile_must_be_explicit": true,
+    "runner_rejects_default_or_full_vocab_before_gpu": true,
+    "launcher_rejects_default_or_full_vocab_before_docker": true,
+    "sidecar_and_direct_install_profile_hard_pin": true,
+    "source_binding_schema": "fr13.fixed32.cutlass_streamk.source_binding.v1",
+    "runtime_head_must_equal_source_commit": true,
+    "tracked_worktree_must_be_clean": true,
+    "committed_bytes_loaded_with_git_show": true,
+    "identity_bound_across_live_sidecar_attestation": true,
+    "source_files": {
+      "scripts/fr13_patch_cutlass_fixed32_wave.py": "4132cd07388e0af0a3bc15c328eed74d08734e0bd6517b4d7418b72788b7e436",
+      "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh": "746b121ea80d7ba213c089c2a3120639a151929f7d3d875bac8c6cd8eef0bc76",
+      "scripts/fr13_cutlass_streamk_pass.py": "17e9d0240e770bd759d57ed1387dde67d1d864df783a531430ac15640ba3f840",
+      "scripts/fr13_cutlass_wave_binary.py": "3f5b52f17a519fb4531c302d5fbff5939e917c5917c966e9f83afe72700ea7f0",
+      "scripts/fr13_launch_forked_fa2_tree_server.sh": "359fd3f4814b2f00e7c0eb03bdbf636b31c69bbbb8f0ed6bf7b5692cb9659e8c"
+    },
+    "adversarial_coverage": [
+      "forged 40-hex commit",
+      "changed tracked worktree",
+      "full-vocab sidecar",
+      "default-profile runner and launcher",
+      "full-vocab runner and launcher",
+      "direct binary verifier omitted or full-vocab profile",
+      "direct-install verifier profile downgrade"
+    ]
+  },
+  "source_checks": {
+    "review_hardening_tests": "51 passed",
+    "all_fr13_cutlass_tests": "136 passed",
+    "source_binding_clean_tip": "pass",
+    "bash_syntax": "pass",
+    "pycompile": "pass",
+    "pinned_source_apply": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "GPU correctness",
+    "Docker",
+    "synthetic or probe performance",
+    "real SWE-Verified task campaign",
+    "B1 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gates": [
+    "authenticated real SWE-Verified K64/root B1 raw-byte comparison",
+    "standing-rule real-task B1 full-step timing after the byte gate passes"
+  ]
+}

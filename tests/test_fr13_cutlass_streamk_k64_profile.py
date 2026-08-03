@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -87,6 +88,51 @@ def _k64_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     live_path.write_text(json.dumps(live, sort_keys=True) + "\n", encoding="ascii")
     live_sha256 = hashlib.sha256(live_path.read_bytes()).hexdigest()
     return module, candidate, patch_source, live_path, live_sha256
+
+
+def _source_binding_repo(
+    tmp_path: Path, module, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, str, Path]:
+    repo = tmp_path / "source-repo"
+    repo.mkdir()
+    for index, relative in enumerate(module.SOURCE_BINDING_PATHS):
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(f"source binding file {index}: {relative}\n".encode("ascii"))
+    patch_source = repo / module.PATCH_SOURCE
+    monkeypatch.setattr(
+        module,
+        "PATCH_SOURCE_SHA256",
+        hashlib.sha256(patch_source.read_bytes()).hexdigest(),
+    )
+    subprocess.run(
+        ["git", "init", "-q", "-b", "main"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(["git", "add", "--", "."], cwd=repo, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=FR13 test",
+            "-c",
+            "user.email=fr13-test@example.invalid",
+            "commit",
+            "-qm",
+            "source binding fixture",
+        ],
+        cwd=repo,
+        check=True,
+    )
+    source_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return repo, source_commit, patch_source
 
 
 def test_k64_root_live_pass_issues_and_verifies_distinct_sidecar(
@@ -218,6 +264,128 @@ def test_k64_root_accepts_divisor_static_stocktile_profile(
     assert issued["diagnostic_selector"] == "divisor_static_stocktile_byte_ab"
     assert issued["qualification_profile"] == "k64_root"
     assert issued["qualified_comparison_call_limit"] == 320
+
+
+def test_k64_root_accepts_onen_b1_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, _, live, _ = _k64_fixture(tmp_path, monkeypatch)
+    _, source_commit, patch_source = _source_binding_repo(
+        tmp_path, module, monkeypatch
+    )
+    candidate_sha256 = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        module.binary,
+        "IDENTITY_ONEN_B1_CANDIDATE_SIZE",
+        len(candidate.read_bytes()),
+    )
+    monkeypatch.setattr(
+        module.binary,
+        "IDENTITY_ONEN_B1_CANDIDATE_SHA256",
+        candidate_sha256,
+    )
+    payload = json.loads(live.read_text(encoding="ascii"))
+    payload.update(
+        {
+            "schema": module.IDENTITY_ONEN_B1_K64_ROOT_LIVE_SCHEMA,
+            "candidate": "identity_onen_b1",
+            "candidate_family": "identity_onen_b1",
+            "diagnostic_selector": "identity_onen_b1_byte_ab",
+            "patch_source_sha256": module.PATCH_SOURCE_SHA256,
+            "source_commit": source_commit,
+            "source_identity": module.validate_source_commit_binding(
+                source_commit, patch_source
+            ),
+        }
+    )
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    live_sha256 = hashlib.sha256(live.read_bytes()).hexdigest()
+    sidecar = tmp_path / "onen-b1-sidecar.json"
+
+    issued = module.issue_sidecar(
+        live,
+        live_sha256,
+        candidate,
+        sidecar,
+        patch_source,
+        candidate_selector="identity_onen_b1",
+        qualification_profile="k64_root",
+        draft_vocab_blocks=BLOCK_MAP,
+    )
+    sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    verified = module.verify_sidecar(
+        sidecar,
+        sidecar_sha256,
+        candidate,
+        patch_source,
+        candidate_selector="identity_onen_b1",
+        qualification_profile="k64_root",
+        draft_vocab_blocks=BLOCK_MAP,
+    )
+
+    assert verified == issued
+    assert issued["candidate_selector"] == "identity_onen_b1"
+    assert issued["diagnostic_selector"] == "identity_onen_b1_byte_ab"
+    assert issued["qualification_profile"] == "k64_root"
+    assert issued["qualified_comparison_call_limit"] == 320
+    assert issued["qualification_source_identity"]["source_commit"] == source_commit
+
+
+def test_onen_b1_sidecar_rejects_full_vocab_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, _, _ = _k64_fixture(tmp_path, monkeypatch)
+    sidecar = tmp_path / "full-vocab-sidecar.json"
+    sidecar.write_text(
+        json.dumps(
+            {
+                "schema": module.SIDECAR_SCHEMA,
+                "candidate_selector": "identity_onen_b1",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="ascii",
+    )
+
+    with pytest.raises(
+        module.QualificationError,
+        match="identity_onen_b1 qualification requires the k64_root profile",
+    ):
+        module.verify_sidecar(
+            sidecar,
+            hashlib.sha256(sidecar.read_bytes()).hexdigest(),
+            candidate,
+            patch_source,
+            candidate_selector="identity_onen_b1",
+            qualification_profile="full_vocab",
+        )
+
+
+def test_source_binding_rejects_forged_40hex_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _load("fr13_cutlass_streamk_forged_commit_test")
+    _, _, patch_source = _source_binding_repo(tmp_path, module, monkeypatch)
+
+    with pytest.raises(module.QualificationError, match="commit resolution failed"):
+        module.validate_source_commit_binding("f" * 40, patch_source)
+
+
+def test_source_binding_rejects_changed_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _load("fr13_cutlass_streamk_dirty_tree_test")
+    repo, source_commit, patch_source = _source_binding_repo(
+        tmp_path, module, monkeypatch
+    )
+    launcher = repo / "scripts/fr13_launch_forked_fa2_tree_server.sh"
+    launcher.write_bytes(launcher.read_bytes() + b"dirty change\n")
+
+    with pytest.raises(
+        module.QualificationError, match="dirty tracked working tree"
+    ):
+        module.validate_source_commit_binding(source_commit, patch_source)
 
 
 def test_k64_root_rejects_non_wide_candidate_and_block_map_drift(
