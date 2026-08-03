@@ -10220,6 +10220,11 @@ def _tree_gdn_fixed32_single_launch_node(
         b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
         b_k_inv_norm = tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
         b_k = b_k * b_k_inv_norm
+        tl.store(
+            ring_k_norm + global_node * NUM_KH + pid_kh,
+            b_k_inv_norm,
+            mask=n_ok & (pid_v == 0) & (pid_vh % head_group == 0),
+        )
     new_state, out_i = _gdn_node_step(
         state_i,
         b_q,
@@ -10238,12 +10243,6 @@ def _tree_gdn_fixed32_single_launch_node(
         RAW_GATING=RAW_GATING,
         SCAN_ALIGN=SCAN_ALIGN and not K_NORM_EXPORT,
     )
-    if K_NORM_EXPORT:
-        tl.store(
-            ring_k_norm + global_node * NUM_KH + pid_kh,
-            b_k_inv_norm,
-            mask=n_ok & (pid_v == 0) & (pid_vh % head_group == 0),
-        )
     tl.store(
         out + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
         out_i,
@@ -10277,8 +10276,8 @@ def _tree_gdn_kernel_fixed32_single_launch(
     ring_v,
     ring_a,
     ring_b,
-    ring_k_norm,
     flags_ptr,
+    ring_k_norm,
     N_ACTUAL: tl.constexpr,
     NUM_KH: tl.constexpr,
     NUM_VH: tl.constexpr,
@@ -12734,13 +12733,13 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     b_rings,
     gate_coeffs,
     k_rings,
-    k_norm_rings,
     v_rings,
     bank_anchor,
     bank_off16,
     accepted_paths,
     accepted_lens,
     spec_state_indices,
+    k_norm_rings,
     B: tl.constexpr,
     PATH_CAP: tl.constexpr,
     H: tl.constexpr,
@@ -12965,13 +12964,13 @@ def _fr13_fixed32_committer_native_layer_batch(
         b_rings,
         gate_coeffs,
         k_rings,
-        k_norm_rings if k_norm_reuse else k_rings,
         v_rings,
         banks_list[0],
         state["bank_off16"],
         accepted_paths,
         accepted_lens,
         spec_state_indices,
+        k_norm_rings if k_norm_reuse else k_rings,
         B=batch,
         PATH_CAP=16,
         H=num_kh,
@@ -15360,8 +15359,8 @@ def launch_tree_gdn_prepared(
                 ring_v,
                 ring_a,
                 ring_b,
-                ring_k_norm,
                 _flags_arg,
+                ring_k_norm,
                 N_ACTUAL=n_actual,
                 NUM_KH=num_kh,
                 NUM_VH=num_vh,
@@ -16328,8 +16327,8 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 ring_v,
                 ring_a,
                 ring_b,
-                ring_k_norm,
                 flags_arg,
+                ring_k_norm,
                 N_ACTUAL=n_actual,
                 NUM_KH=num_kh,
                 NUM_VH=num_vh,
