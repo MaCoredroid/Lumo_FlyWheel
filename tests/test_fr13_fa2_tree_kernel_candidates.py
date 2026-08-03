@@ -495,6 +495,24 @@ def test_fixed32_query_tile32_b1_is_a_distinct_24_cta_candidate(
     assert "false,  // Split" in candidate
     assert "24 CTAs/layer" in candidate
     assert "flash_fwd_splitkv_combine_kernel" not in candidate
+    split2_path = translation_unit.with_name(
+        "flash_fwd_fr13_qrow32_b1_split2_hdim256_bf16_sm80.cu"
+    )
+    split2 = split2_path.read_text()
+    assert split2 == module.FIXED32_QUERY_TILE32_B1_SPLIT2_TRANSLATION_UNIT
+    assert split2 != candidate
+    assert "Fr13Fixed32Qrow32B1Split2KernelTraits" in split2
+    assert "Fr13Fixed32Qrow32B1Split2CombineTraits" in split2
+    assert "true,   // Split: blockIdx.y partitions K blocks exactly twice" in split2
+    assert "kContextSplits = 2" in split2
+    assert "48 CTAs" in split2
+    assert "params.num_splits == kContextSplits" in split2
+    assert "params.oaccum_ptr != nullptr" in split2
+    assert "params.softmax_lseaccum_ptr != nullptr" in split2
+    assert "CombineTraits::kNThreads == 128" in split2
+    assert "flash_fwd_splitkv_combine_kernel<" in split2
+    assert "kCombineBlockM = 4" in split2
+    assert "kLogMaxSplits = 1" in split2
     assert not module._patch_fixed32_query_tile32_b1_translation_unit(
         translation_unit,
         fixed32_query_tile32_b1=True,
@@ -968,8 +986,11 @@ inline __device__ void compute_attn_splitkv(const Params &params) {
     assert "FR13_FA2_QROW32_STATIC_BATCH_GRID" in candidate
     assert "if constexpr (kStaticQueryBatch)" in candidate
     assert "const int m_block = 0" in candidate
+    assert "const int bidb = Split ? 0 : blockIdx.y" in candidate
     assert "blockIdx.z * kStaticQueryHeadsPerKV" in candidate
     assert "+ blockIdx.x" in candidate
+    assert "const int n_split_idx = Split ? blockIdx.y : 0" in candidate
+    assert "const int num_n_splits = Split ? gridDim.y : 1" in candidate
     assert "const int bidb = Split ? blockIdx.z / params.h : blockIdx.y;" in candidate
     assert "const int bidh = Split ? blockIdx.z - bidb * params.h : blockIdx.z;" in candidate
     for sentinel in (
@@ -998,6 +1019,19 @@ inline __device__ void compute_attn_splitkv(const Params &params) {
     assert mapped == {
         (batch, query_head)
         for batch in range(4)
+        for query_head in range(24)
+    }
+
+    split_mapped = set()
+    for kv_head in range(4):
+        for split in range(2):
+            for query_head_lane in range(6):
+                query_head = kv_head * 6 + query_head_lane
+                split_mapped.add((split, query_head))
+    assert len(split_mapped) == 48
+    assert split_mapped == {
+        (split, query_head)
+        for split in range(2)
         for query_head in range(24)
     }
 
@@ -1067,7 +1101,10 @@ def test_qrow32_static_paged_metadata_keeps_only_dynamic_sequence_length(
     assert "FR13_FA2_QROW32_STATIC_PAGED_METADATA" in candidate
     assert "StaticPagedQueryBlockInfo<Kernel_traits>" in candidate
     assert "static_assert(!kStaticQueryBatch || kStaticPagedKV);" in candidate
-    assert "static_assert(!kStaticQueryBatch || !Split);" in candidate
+    assert (
+        "static_assert(!kStaticQueryBatch || !Split || kStaticSequences == 1);"
+        in candidate
+    )
     assert "static_assert(!kStaticQueryBatch || !Append_KV);" in candidate
     assert "if constexpr (kStaticQueryBatch)" in candidate
     assert "block_table = params.block_table" in candidate
@@ -1706,6 +1743,37 @@ def test_qrow32_b1_api_gate_is_exact_and_idempotent() -> None:
         declaration=module.FIXED32_QUERY_TILE32_B1_API_DECLARATION,
         gate=module.FIXED32_QUERY_TILE32_B1_API_GATE,
         label="test qrow32 B1",
+    )
+    assert not changed
+    assert text_again == text
+
+
+def test_qrow32_b1_split2_api_gate_requires_stock_scratch() -> None:
+    module = _module()
+    text, changed = module._install_hidden_api_gate(
+        module.STOCK_RUN_MHA_FWD,
+        declaration=module.FIXED32_QUERY_TILE32_B1_SPLIT2_API_DECLARATION,
+        gate=module.FIXED32_QUERY_TILE32_B1_SPLIT2_API_GATE,
+        label="test qrow32 B1 split2",
+    )
+    assert changed
+    assert text.count("fr13_run_mha_fwd_fixed32_qrow32_b1_split2") == 2
+    assert "params.b == 1" in text
+    assert "params.total_q == 32" in text
+    assert "params.page_block_size == 1024" in text
+    assert "params.oaccum_ptr != nullptr" in text
+    assert "params.softmax_lseaccum_ptr != nullptr" in text
+    assert "params.num_splits == 2" in text
+    assert "&& force_split_kernel" in text
+    assert module.STOCK_RUN_MHA_FWD[
+        module.STOCK_RUN_MHA_FWD.index("    FP16_SWITCH") : -1
+    ] in text
+
+    text_again, changed = module._install_hidden_api_gate(
+        text,
+        declaration=module.FIXED32_QUERY_TILE32_B1_SPLIT2_API_DECLARATION,
+        gate=module.FIXED32_QUERY_TILE32_B1_SPLIT2_API_GATE,
+        label="test qrow32 B1 split2",
     )
     assert not changed
     assert text_again == text
