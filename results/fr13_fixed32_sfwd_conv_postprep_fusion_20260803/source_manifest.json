@@ -1,7 +1,7 @@
 {
   "base_commit": "c49c8eb5370e4d4035aceffaa8476aea31f921f5",
   "candidate": "fixed32_sfwd_conv_postprep_frontier5_direct_v1",
-  "source_commit": "bd225f7f80f9911d19a731cef109028767ac82d3",
+  "source_commit": "7f46f69a76ac1b0a7429ec0928b641bbeee2efb2",
   "files": {
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py": {
       "bytes": 1775852,
@@ -20,8 +20,8 @@
       "sha256": "dd71311df12dd3c0c0ac7a032668b4b3da613231297e41f96684797d1eadd19e"
     },
     "scripts/run_swe_bench_q36_a.py": {
-      "bytes": 385455,
-      "sha256": "d8f8f1d84d4116c0da2246fc9777c6a23f18bb362d0c3c0c8c223f409b51ee54"
+      "bytes": 386444,
+      "sha256": "f159fdaff7425b3417dfc838eb25f1cb5d40dca480ed55d8fac0caba01bfc160"
     },
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py": {
       "bytes": 40202,
@@ -33,7 +33,7 @@
     },
     "tests/test_fr13_fixed32_sfwd_conv_postprep_fusion.py": {
       "bytes": 27092,
-      "sha256": "ba00d23ea8866e89b3ccfa407209e13e20e2e7b7b18bbbee64daa9952c5c0d4f"
+      "sha256": "7055f39fa346cb46e0429ebb8a9d73703f36ec5c2c5f72109eb67db3c8a62cb3"
     },
     "tests/test_fr13_fixed32_sfwd_conv_postprep_wiring.py": {
       "bytes": 13114,

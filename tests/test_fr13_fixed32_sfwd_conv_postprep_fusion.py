@@ -697,7 +697,7 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
 def test_sanitized_artifact_binds_sources_ledgers_and_resource_gate() -> None:
     manifest = json.loads((ARTIFACT / "source_manifest.json").read_text())
     assert manifest["base_commit"] == "c49c8eb5370e4d4035aceffaa8476aea31f921f5"
-    assert manifest["source_commit"] == "bd225f7f80f9911d19a731cef109028767ac82d3"
+    assert manifest["source_commit"] == "7f46f69a76ac1b0a7429ec0928b641bbeee2efb2"
     for relative, expected in manifest["files"].items():
         path = ROOT / relative
         raw = path.read_bytes()

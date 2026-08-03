@@ -4,7 +4,7 @@ Status: **default-off eager and FULL-capture wiring complete; served arm blocked
 pending a real-task byte-gate credential; not GPU measured**.
 
 Base revision: `c49c8eb5370e4d4035aceffaa8476aea31f921f5`.
-Guarded source revision: `bd225f7f80f9911d19a731cef109028767ac82d3`.
+Integrated guarded source revision: `7f46f69a76ac1b0a7429ec0928b641bbeee2efb2`.
 
 This candidate fuses exactly one fixed32 layer's frontier-5 tree-conv producer
 with its immediate post-conv preparation. It directly writes distinct
