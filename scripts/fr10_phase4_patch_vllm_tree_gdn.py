@@ -6322,6 +6322,8 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         "identity_stockshape_b4_byte_ab",
         "identity_stockshape_stage2_b4",
         "identity_stockshape_stage2_b4_byte_ab",
+        "identity_twom_b4",
+        "identity_twom_b4_byte_ab",
         "identity_divisor_b4",
         "identity_divisor_b4_byte_ab",
         "persistent_b4_m128",
@@ -6340,6 +6342,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             "identity_stockshape_b4, identity_stockshape_b4_byte_ab, "
             "identity_stockshape_stage2_b4, "
             "identity_stockshape_stage2_b4_byte_ab, "
+            "identity_twom_b4, identity_twom_b4_byte_ab, "
             "identity_divisor_b4, identity_divisor_b4_byte_ab, "
             "persistent_b4_m128_byte_ab, persistent_b4_m128_static, or "
             "persistent_b4_m128_static_byte_ab"
@@ -6368,6 +6371,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         "identity_divisor_b4_byte_ab",
         "identity_stockshape_b4_byte_ab",
         "identity_stockshape_stage2_b4_byte_ab",
+        "identity_twom_b4_byte_ab",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static_byte_ab",
     )
@@ -6514,6 +6518,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
                 "identity_stage2_pingpong_b1_byte_ab",
                 "identity_stockshape_b4_byte_ab",
                 "identity_stockshape_stage2_b4_byte_ab",
+                "identity_twom_b4_byte_ab",
                 "identity_divisor_b4_byte_ab",
                 "persistent_b4_m128_byte_ab",
                 "persistent_b4_m128_static_byte_ab",
@@ -6596,6 +6601,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         "identity_divisor_b4_byte_ab",
         "identity_stockshape_b4_byte_ab",
         "identity_stockshape_stage2_b4_byte_ab",
+        "identity_twom_b4_byte_ab",
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static_byte_ab",
     ):

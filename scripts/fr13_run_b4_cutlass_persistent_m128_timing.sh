@@ -33,7 +33,7 @@ PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
 DRAFT_VOCAB_BLOCKS_HOST=scripts/fr13_dvk_subset_blocks.json
 DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
 DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
-DUAL_STAGE2=0
+DUAL_CANDIDATE=0
 case "$CANDIDATE_SELECTOR" in
   persistent_b4_m128)
     CANDIDATE_SHA256=895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f
@@ -54,7 +54,20 @@ case "$CANDIDATE_SELECTOR" in
     CANDIDATE_ARM_SLUG=identity_stockshape_stage2
     ONLY_ARM_DELTA_META=only_arm_delta=CUTLASS_stock_to_identity_stockshape_stage2_b4
     ONLY_ARM_DELTA=${ONLY_ARM_DELTA_META#*=}
-    DUAL_STAGE2=1
+    DUAL_CANDIDATE=1
+    ;;
+  identity_twom_b4)
+    [[ "$QUALIFICATION_PROFILE" == "k64_root" ]] || {
+      echo "two-M production timing requires CUTLASS_B4_QUALIFICATION_PROFILE=k64_root" >&2
+      exit 2
+    }
+    CANDIDATE_SHA256=c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29
+    CANDIDATE_BYTES=117488608
+    QUALIFIED_PATCH_SOURCE_SHA256=841b5dfc0741aa5051037e3eda005e5a65f7a425b76235a61e8a0779bd31a155
+    CANDIDATE_ARM_SLUG=identity_twom
+    ONLY_ARM_DELTA_META=only_arm_delta=CUTLASS_stock_to_identity_twom_b4
+    ONLY_ARM_DELTA=${ONLY_ARM_DELTA_META#*=}
+    DUAL_CANDIDATE=1
     ;;
   *)
     echo "CUTLASS_B4_CANDIDATE_SELECTOR is unsupported for B4 timing" >&2
@@ -81,9 +94,12 @@ case "$QUALIFICATION_PROFILE" in
     QUALIFICATION_SOURCE_COMMIT=$CUTLASS_B4_QUALIFICATION_SOURCE_COMMIT
     LAUNCH_CLASSIFICATION=real_swe_verified_exact4_b4_k64_root_timing_candidate
     RUN_CLASSIFICATION=real_swe_verified_exact4_b4_k64_root_timing
-    if (( DUAL_STAGE2 == 1 )); then
+    if [[ "$CANDIDATE_SELECTOR" == "identity_stockshape_stage2_b4" ]]; then
       SUMMARY_SCHEMA=fr13.fixed32.cutlass_identity_stockshape_stage2_b4.k64_root.dual_topology.full_wall_timing_pair.v1
       BINDING_SCHEMA=fr13.fixed32.cutlass_b4.identity_stockshape_stage2.k64_root.dual_topology.production_binding.v1
+    elif [[ "$CANDIDATE_SELECTOR" == "identity_twom_b4" ]]; then
+      SUMMARY_SCHEMA=fr13.fixed32.cutlass_identity_twom_b4.k64_root.dual_topology.full_wall_timing_pair.v1
+      BINDING_SCHEMA=fr13.fixed32.cutlass_b4.identity_twom.k64_root.dual_topology.production_binding.v1
     else
       SUMMARY_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128.k64_root.full_wall_timing_pair.v1
       BINDING_SCHEMA=fr13.fixed32.cutlass_b4.k64_root.production_binding.v1
@@ -141,14 +157,14 @@ for input in "$STOCK_FA2_SO" "$CUTLASS_B4_SO"; do
   [[ "$input" == /* && -f "$input" && ! -L "$input" ]] \
     || { echo "timing input must be an absolute regular non-symlink file: $input" >&2; exit 2; }
 done
-if (( DUAL_STAGE2 == 1 )); then
+if (( DUAL_CANDIDATE == 1 )); then
   [[ -z "$CUTLASS_B4_PASS_JSON" && -z "$CUTLASS_B4_PASS_SHA256" ]] || {
-    echo "Stage2 timing forbids the single-topology CUTLASS PASS input" >&2
+    echo "dual-topology timing forbids the single-topology CUTLASS PASS input" >&2
     exit 2
   }
   for input in "$CUTLASS_B4_TAIL23_PASS_JSON" "$CUTLASS_B4_HYDRA27_PASS_JSON"; do
     [[ "$input" == /* && -f "$input" && ! -L "$input" ]] \
-      || { echo "Stage2 timing requires absolute regular Tail23 and Hydra27 PASS files" >&2; exit 2; }
+      || { echo "dual-topology timing requires absolute regular Tail23 and Hydra27 PASS files" >&2; exit 2; }
   done
 else
   [[ -z "$CUTLASS_B4_TAIL23_PASS_JSON" \
@@ -298,12 +314,12 @@ if [[ "$QUALIFICATION_PROFILE" == "k64_root" ]]; then
      && "$(sha256sum "$DRAFT_VOCAB_BLOCKS_HOST" | awk '{print $1}')" == "$DRAFT_VOCAB_BLOCKS_SHA256" ]] \
     || { echo "pinned root-64K draft-vocabulary block map drifted" >&2; exit 2; }
 fi
-if (( DUAL_STAGE2 == 1 )); then
+if (( DUAL_CANDIDATE == 1 )); then
   [[ "$CUTLASS_B4_TAIL23_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
      && "$CUTLASS_B4_HYDRA27_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
      && "$(sha256sum "$CUTLASS_B4_TAIL23_PASS_JSON" | awk '{print $1}')" == "$CUTLASS_B4_TAIL23_PASS_SHA256" \
      && "$(sha256sum "$CUTLASS_B4_HYDRA27_PASS_JSON" | awk '{print $1}')" == "$CUTLASS_B4_HYDRA27_PASS_SHA256" ]] \
-    || { echo "CUTLASS Stage2 dual live PASS identity mismatch" >&2; exit 2; }
+    || { echo "CUTLASS dual-topology live PASS identity mismatch" >&2; exit 2; }
 else
   [[ "$CUTLASS_B4_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
      && "$(sha256sum "$CUTLASS_B4_PASS_JSON" | awk '{print $1}')" == "$CUTLASS_B4_PASS_SHA256" ]] \
@@ -312,7 +328,7 @@ fi
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
 
-if (( DUAL_STAGE2 == 1 )); then
+if (( DUAL_CANDIDATE == 1 )); then
   LIVE_PASS_BINDING_JSON=$("$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py dual-validate \
     --tail23-live-result "$CUTLASS_B4_TAIL23_PASS_JSON" \
     --expected-tail23-live-sha256 "$CUTLASS_B4_TAIL23_PASS_SHA256" \
@@ -320,6 +336,7 @@ if (( DUAL_STAGE2 == 1 )); then
     --expected-hydra27-live-sha256 "$CUTLASS_B4_HYDRA27_PASS_SHA256" \
     --candidate-so "$CUTLASS_B4_SO" --patch-source "$PATCH_SOURCE" \
     --expected-source-commit "$QUALIFICATION_SOURCE_COMMIT" \
+    --candidate-selector "$CANDIDATE_SELECTOR" \
     --draft-vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST")
 else
   LIVE_PASS_BINDING_JSON=$("$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py validate \
@@ -432,15 +449,26 @@ run_arm() {
   local tail23_pass_sha=""
   local hydra27_pass_json=""
   local hydra27_pass_sha=""
+  local twom_tail23_pass_json=""
+  local twom_tail23_pass_sha=""
+  local twom_hydra27_pass_json=""
+  local twom_hydra27_pass_sha=""
   local qualification_source_commit=""
   if [[ "$production" == "1" ]]; then
     selector=$CANDIDATE_SELECTOR
     candidate_so=$CUTLASS_B4_SO
-    if (( DUAL_STAGE2 == 1 )); then
-      tail23_pass_json=$CUTLASS_B4_TAIL23_PASS_JSON
-      tail23_pass_sha=$CUTLASS_B4_TAIL23_PASS_SHA256
-      hydra27_pass_json=$CUTLASS_B4_HYDRA27_PASS_JSON
-      hydra27_pass_sha=$CUTLASS_B4_HYDRA27_PASS_SHA256
+    if (( DUAL_CANDIDATE == 1 )); then
+      if [[ "$CANDIDATE_SELECTOR" == "identity_stockshape_stage2_b4" ]]; then
+        tail23_pass_json=$CUTLASS_B4_TAIL23_PASS_JSON
+        tail23_pass_sha=$CUTLASS_B4_TAIL23_PASS_SHA256
+        hydra27_pass_json=$CUTLASS_B4_HYDRA27_PASS_JSON
+        hydra27_pass_sha=$CUTLASS_B4_HYDRA27_PASS_SHA256
+      else
+        twom_tail23_pass_json=$CUTLASS_B4_TAIL23_PASS_JSON
+        twom_tail23_pass_sha=$CUTLASS_B4_TAIL23_PASS_SHA256
+        twom_hydra27_pass_json=$CUTLASS_B4_HYDRA27_PASS_JSON
+        twom_hydra27_pass_sha=$CUTLASS_B4_HYDRA27_PASS_SHA256
+      fi
     else
       pass_json=$CUTLASS_B4_PASS_JSON
       pass_sha=$CUTLASS_B4_PASS_SHA256
@@ -473,6 +501,10 @@ run_arm() {
       FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256="$tail23_pass_sha" \
       FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON="$hydra27_pass_json" \
       FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256="$hydra27_pass_sha" \
+      FR13_FIXED32_CUTLASS_TWOM_TAIL23_LIVE_PASS_JSON="$twom_tail23_pass_json" \
+      FR13_FIXED32_CUTLASS_TWOM_TAIL23_LIVE_PASS_SHA256="$twom_tail23_pass_sha" \
+      FR13_FIXED32_CUTLASS_TWOM_HYDRA27_LIVE_PASS_JSON="$twom_hydra27_pass_json" \
+      FR13_FIXED32_CUTLASS_TWOM_HYDRA27_LIVE_PASS_SHA256="$twom_hydra27_pass_sha" \
       FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT="${qualification_source_commit:-}" \
       FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE" \
       FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
@@ -587,11 +619,12 @@ CANDIDATE_SELECTOR_PATH="$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_cutlass_w
    && "$(<"$CANDIDATE_SELECTOR_PATH")" == "$CANDIDATE_SELECTOR" ]] \
   || { echo "candidate arm lacks selected CUTLASS identity artifacts" >&2; exit 4; }
 CANDIDATE_SIDECAR_SHA256=$(sha256sum "$CANDIDATE_SIDECAR" | awk '{print $1}')
-if (( DUAL_STAGE2 == 1 )); then
+if (( DUAL_CANDIDATE == 1 )); then
   "$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py dual-verify \
     --sidecar "$CANDIDATE_SIDECAR" \
     --expected-sidecar-sha256 "$CANDIDATE_SIDECAR_SHA256" \
     --candidate-so "$CUTLASS_B4_SO" --patch-source "$PATCH_SOURCE" \
+    --candidate-selector "$CANDIDATE_SELECTOR" \
     --draft-vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST" >/dev/null
 else
   "$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py verify \
@@ -750,7 +783,7 @@ if (
     )
 ):
     raise SystemExit("candidate lacks the selected CUTLASS production binding")
-if candidate_selector == "identity_stockshape_stage2_b4":
+if candidate_selector in {"identity_stockshape_stage2_b4", "identity_twom_b4"}:
     expected_live_results = {
         "tail6_fixed32": tail23_live_sha256,
         "hydra27_fixed32": hydra27_live_sha256,
@@ -791,7 +824,7 @@ if not math.isclose(stock_floor, candidate_floor, rel_tol=0.0, abs_tol=1e-9):
 
 stock_phases = phase_breakdown(stock, "stock")
 candidate_phases = phase_breakdown(candidate, "candidate")
-if candidate_selector == "identity_stockshape_stage2_b4":
+if candidate_selector in {"identity_stockshape_stage2_b4", "identity_twom_b4"}:
     candidate_live_binding = {
         "live_result_sha256_by_topology": {
             "tail6_fixed32": tail23_live_sha256,

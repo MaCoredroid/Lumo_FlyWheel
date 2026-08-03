@@ -115,6 +115,7 @@ if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_divisor_b4_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_b4_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_stage2_b4_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_twom_b4_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_static_byte_ab" ]]; then
   _fixed32_eager_kernel_diagnostic=1
@@ -1649,6 +1650,7 @@ if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
 elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_divisor_b4_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_b4_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_stage2_b4_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_twom_b4_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "persistent_b4_m128_static_byte_ab" ]]; then
   [[ -n "$FIXED32_MODE" \
@@ -1926,6 +1928,8 @@ if cutlass_wave not in {
     "identity_stockshape_b4",
     "identity_stockshape_stage2_b4_byte_ab",
     "identity_stockshape_stage2_b4",
+    "identity_twom_b4_byte_ab",
+    "identity_twom_b4",
     "identity_divisor_b4_byte_ab",
     "identity_divisor_b4",
     "persistent_b4_m128_byte_ab",
@@ -1945,6 +1949,7 @@ try:
                 "identity_divisor_b4_byte_ab",
                 "identity_stockshape_b4_byte_ab",
                 "identity_stockshape_stage2_b4_byte_ab",
+                "identity_twom_b4_byte_ab",
                 "persistent_b4_m128_byte_ab",
                 "persistent_b4_m128_static_byte_ab",
             }
