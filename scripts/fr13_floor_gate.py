@@ -1325,10 +1325,14 @@ def validate_runtime_boundary_snapshot(
             "all_batches_ready",
             "captures",
             "fast_route_ready",
+            "gate_precompute_launches",
             "layer_batch_gate_attempts_by_batch",
             "layer_batch_gate_coverage_mask_by_batch",
             "layer_batch_gate_passed_by_batch",
             "maximum_ready_capacity",
+            "metadata_fusion_consumed_by_batch",
+            "metadata_fusion_fallbacks_by_batch",
+            "metadata_fusion_published_by_batch",
             "nonpure_committer_replays_by_batch",
             "nonpure_committer_replays_enqueued",
             "nonpure_dispatch",
@@ -1360,6 +1364,7 @@ def validate_runtime_boundary_snapshot(
     for key in (
         "actual_replays_enqueued",
         "captures",
+        "gate_precompute_launches",
         "maximum_ready_capacity",
         "nonpure_committer_replays_enqueued",
         "preseeded_graphs",
@@ -1387,6 +1392,35 @@ def validate_runtime_boundary_snapshot(
         expected_keys=batch_keys,
         label=f"{path}:committer.actual_replays_by_batch",
     )
+    metadata_fusion_by_kind = {
+        key: strict_nonnegative_int_map(
+            committer[key],
+            expected_keys=batch_keys,
+            label=f"{path}:committer.{key}",
+        )
+        for key in (
+            "metadata_fusion_published_by_batch",
+            "metadata_fusion_consumed_by_batch",
+            "metadata_fusion_fallbacks_by_batch",
+        )
+    }
+    metadata_fusion_active = any(
+        value
+        for counters in metadata_fusion_by_kind.values()
+        for value in counters.values()
+    )
+    if metadata_fusion_active and (
+        metadata_fusion_by_kind["metadata_fusion_published_by_batch"]
+        != committer_by_batch
+        or metadata_fusion_by_kind["metadata_fusion_consumed_by_batch"]
+        != committer_by_batch
+        or any(
+            metadata_fusion_by_kind["metadata_fusion_fallbacks_by_batch"].values()
+        )
+    ):
+        raise GateError(
+            f"{path}: committer metadata fusion counters do not reconcile"
+        )
     layer_batch_gate_passed_by_batch = strict_nonnegative_int_map(
         committer["layer_batch_gate_passed_by_batch"],
         expected_keys=set(expected_ready_capacities),
