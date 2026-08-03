@@ -795,6 +795,27 @@ def test_engine_middleware_rejects_inexact_batch_gdn_arm_configuration(
         )
 
 
+def test_engine_middleware_accepts_single_launch_b1_gdn_arm(
+    tmp_path: Path,
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "fr13_fixed32_batch_gdn_graph_byte_ab.enabled").write_bytes(b"1\n")
+    marker = logs / "fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
+
+    middleware = Fixed32EngineIngressMiddleware(
+        object(),
+        secret_file=secret_path,
+        canonical_task_ids=("astropy__astropy-12907",),
+        ledger_path=tmp_path / "engine-b1.jsonl",
+        batch_gdn_real_event_arm=marker,
+    )
+
+    assert middleware.ingress.batch_gdn_real_event_arm == marker
+
+
 def test_engine_middleware_rejects_both_batch_gdn_gate_sidecars(
     tmp_path: Path,
 ) -> None:

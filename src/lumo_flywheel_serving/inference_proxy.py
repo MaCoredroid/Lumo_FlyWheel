@@ -1517,9 +1517,13 @@ class Fixed32EngineIngress:
     ) -> Path | None:
         if raw_path is None or not os.fspath(raw_path):
             return None
-        if self.task_ids != _FIXED32_BATCH_GDN_EXACT4_TASK_IDS:
+        if self.task_ids not in (
+            _FIXED32_BATCH_GDN_EXACT4_TASK_IDS,
+            _FIXED32_SFWD_B1_TASK_IDS,
+        ):
             raise Fixed32IngressError(
-                "fixed32 batched GDN real-event arm requires canonical exact4 tasks"
+                "fixed32 batched GDN real-event arm requires canonical "
+                "exact4 tasks or the canonical B1 task"
             )
         path = Path(raw_path)
         if not path.is_absolute() or path.name != _FIXED32_BATCH_GDN_REAL_EVENT_ARM_NAME:

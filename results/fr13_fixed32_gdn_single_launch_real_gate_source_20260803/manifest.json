@@ -1,0 +1,119 @@
+{
+  "schema": "fr13.fixed32.gdn_single_launch.real_task_gate_source.v5",
+  "status": "SOURCE_READY_REAL_TASK_RUNNERS_UNQUALIFIED",
+  "created_at_utc": "2026-08-03T01:50:28Z",
+  "updated_at_utc": "2026-08-03T03:07:23Z",
+  "integration_commit": "b5ee1d20120ac95e886c5def1149cacff89553b6",
+  "source_commit": "b5ee1d20120ac95e886c5def1149cacff89553b6",
+  "merged_origin_main": "30f8437d2b13d1af6ca14ae8eac68ca5b49fb27b",
+  "candidate": "fixed32_gdn_single_launch_tree_v2",
+  "qualification_selector": "FR13_FIXED32_GDN_PATH_BV_CANDIDATE=single_launch",
+  "qualification_contract": {
+    "credential_scopes": [
+      "hydra27:b1",
+      "tail23:b4",
+      "hydra27:b4"
+    ],
+    "physical_rows_per_request": 32,
+    "geometry": "BV=8",
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "expected_batches": [
+      1,
+      4
+    ],
+    "ignored_batches": [
+      2,
+      3
+    ],
+    "b1_task_ids": [
+      "astropy__astropy-12907"
+    ],
+    "b4_task_set": "canonical exact4 SWE-Verified",
+    "candidate_physical_launches_per_request_layer": 1,
+    "reference_physical_launches_per_request_layer": 2,
+    "layer_records_per_qualified_graph": 48,
+    "reference_served": true,
+    "state_restored": true,
+    "capture_key": [
+      "batch_size",
+      "graph_id",
+      "graph_signature"
+    ],
+    "capture_graph_id_runtime_internal_only": true,
+    "durable_graph_id_asserted": false,
+    "durable_structural_graph_signature": true,
+    "capture_closures_retained": true,
+    "successful_state_transition": "armed-running-armed",
+    "distinct_request_tuples_accumulated": true,
+    "candidate_served": false,
+    "comparator_embedded_in_census_event": true,
+    "comparator_sealed_by_terminal_events_sha256": true,
+    "cross_batch_capture_consumption_rejected": true,
+    "global_pass_cross_batch_inheritance_rejected": true,
+    "default_off": true,
+    "production_eligible": false
+  },
+  "entrypoints": {
+    "hydra27:b1": "scripts/fr13_run_b1_gdn_single_launch_live_gate.sh",
+    "tail23:b4": "scripts/fr13_run_b4_tail23_gdn_single_launch_live_gate.sh",
+    "hydra27:b4": "scripts/fr13_run_b4_hydra27_gdn_single_launch_live_gate.sh"
+  },
+  "reducer": {
+    "path": "scripts/fr13_gdn_single_launch_gate.py",
+    "task_completion_verified": true,
+    "finalized_ingress_rebuilt": true,
+    "qwen_compaction_algebra_replayed": true,
+    "qwen_per_task_binding_verified": true,
+    "runtime_launch_end_stable": true,
+    "runtime_manifest_regenerated": true,
+    "runtime_manifest_git_source_identity_verified": true,
+    "source_commit_required_to_equal_head": true,
+    "arm_git_head_exact_source_commit": true,
+    "arm_git_head_singly_linked_regular": true,
+    "arm_git_head_descriptor_and_path_identity_stable": true,
+    "arm_git_head_digest_credentialed": true,
+    "source_closure_verified_with_git_show": true,
+    "affected_test_source_count": 3,
+    "external_launch_end_stable": true,
+    "graph_work_census_verified": true,
+    "structural_graph_signature_joined_to_census": true,
+    "comparator_requests_joined_to_validated_proxy_engine_ledgers": true,
+    "b1_comparator_task_union": "exact one canonical task",
+    "b4_comparator_task_union": "exact canonical exact4",
+    "live_observation_exactly_matches_census_comparators": true,
+    "dataset_records_derived_from_pinned_parquet": true,
+    "runner_metadata_dataset_digest_trusted": false,
+    "batch_specific_pass_verified": true
+  },
+  "compared_byte_surfaces": [
+    "output",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "counter"
+  ],
+  "restore_only_surfaces": [
+    "export"
+  ],
+  "validation": {
+    "combined_regressions": "292 passed, 1 skipped",
+    "focused_adversarial_and_graph_regressions": "59 passed",
+    "work_census_self_test": "PASS, 177 tamper tests",
+    "bash_n": "pass",
+    "py_compile": "pass",
+    "git_diff_check": "pass"
+  },
+  "excluded": {
+    "gpu_execution": true,
+    "real_swe_verified_task": true,
+    "probe": true,
+    "byte_pass_observed": true,
+    "timing": true,
+    "tps_measurement": true,
+    "hardware_floor_acceptance": true,
+    "production_authorization": true
+  }
+}
