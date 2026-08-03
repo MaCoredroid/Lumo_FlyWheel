@@ -1,0 +1,8 @@
+source revision: 0e2f3b940ee7076e7818da4e048206a978236f04
+focused host tests: 113 passed in 4.00s
+census self-test: PASS, 177 tamper tests
+SM121a builds: 8 verified across two fresh caches
+fresh-cache summaries: identical
+resource regressions: 0
+GPU/runtime/real-task work launched: no
+runtime byte gate status: required before serving
