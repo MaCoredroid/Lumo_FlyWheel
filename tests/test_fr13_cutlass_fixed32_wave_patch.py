@@ -114,6 +114,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "identity_stockshape_stage2_b4_byte_ab"' in patched
     assert 'value == "identity_divisor_b4"' in patched
     assert 'value == "identity_divisor_b4_byte_ab"' in patched
+    assert 'value == "identity_hybrid_n5120_b4"' in patched
+    assert 'value == "identity_hybrid_n5120_b4_byte_ab"' in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -768,6 +770,73 @@ def test_b4_identity_twom_keeps_complete_tile_math() -> None:
         in patched
     )
     assert "if (N > 65536 &&" in patched
+
+
+def test_b4_hybrid_n5120_routes_only_exact_projections() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    predicate_start = patched.index(
+        "static inline bool fixed32_cutlass_b4_hybrid_n5120_projection"
+    )
+    predicate_end = patched.index("template <typename Gemm>", predicate_start)
+    predicate = patched[predicate_start:predicate_end]
+    assert "m == 128" in predicate
+    assert "fixed32_cutlass_real_projection(m, n, k)" in predicate
+
+    guard_start = patched.index(
+        "if (!fixed32_cutlass_b4_hybrid_n5120_projection(M, N, K)"
+    )
+    guard_end = patched.index(
+        "wave_variant = fixed32_cutlass_wave_variant::stock;", guard_start
+    )
+    guard = patched[guard_start:guard_end]
+    assert "identity_hybrid_n5120_b4" in guard
+    assert "identity_hybrid_n5120_b4_byte_ab" in guard
+
+    runner_start = patched.index("auto run_identity_hybrid_n5120_b4")
+    runner_end = patched.index("auto run_stock", runner_start)
+    runner = patched[runner_start:runner_end]
+    assert "if (N == 5120)" in runner
+    assert "sm120_blockwise_fp8_config_b4_m128_static_identity_stage2" in runner
+    assert "return run_identity_twom_b4(destination);" in runner
+    assert "run_stock" not in runner
+
+    # The two N=5120 projections halve complete scheduler tile assignments.
+    # The other three retain the already-qualified two-M assignment count.
+    projection_n = (34816, 5120, 5120, 16384, 14336)
+    twom_tiles = tuple(2 * n // 128 for n in projection_n)
+    hybrid_tiles = tuple(
+        n // 128 if n == 5120 else 2 * n // 128 for n in projection_n
+    )
+    assert twom_tiles == (544, 80, 80, 256, 224)
+    assert hybrid_tiles == (544, 40, 40, 256, 224)
+
+    assert 'value == "identity_hybrid_n5120_b4"' in patched
+    assert 'value == "identity_hybrid_n5120_b4_byte_ab"' in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_identity_hybrid_n5120_b4_byte_ab.jsonl"'
+        in patched
+    )
+    assert (
+        "fr13.fixed32.cutlass_identity_hybrid_n5120_b4_byte_ab.v1" in patched
+    )
+    assert (
+        "fixed32_cutlass_wave_variant::identity_hybrid_n5120_b4) {\n"
+        "    return run_identity_hybrid_n5120_b4(out);"
+        in patched
+    )
+
+    diagnostic_start = patched.index(
+        "const bool identity_hybrid_n5120_b4_byte_ab"
+    )
+    diagnostic_end = patched.index(
+        "fixed32_cutlass_wave_variant::stream_k_cooperative_128)",
+        diagnostic_start,
+    )
+    diagnostic = patched[diagnostic_start:diagnostic_end]
+    assert "run_stock(out);\n    run_candidate(candidate);" in diagnostic
+    assert "\n    return;\n  }\n\n  if (wave_variant ==" in diagnostic
 
 
 def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:

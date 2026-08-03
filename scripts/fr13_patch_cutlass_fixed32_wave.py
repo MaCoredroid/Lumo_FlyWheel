@@ -1081,6 +1081,8 @@ enum class fixed32_cutlass_wave_variant {
   identity_divisor_stage2_b4_byte_ab,
   identity_twom_b4,
   identity_twom_b4_byte_ab,
+  identity_hybrid_n5120_b4,
+  identity_hybrid_n5120_b4_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -1178,6 +1180,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     if (value == "identity_twom_b4_byte_ab") {
       return fixed32_cutlass_wave_variant::identity_twom_b4_byte_ab;
     }
+    if (value == "identity_hybrid_n5120_b4") {
+      return fixed32_cutlass_wave_variant::identity_hybrid_n5120_b4;
+    }
+    if (value == "identity_hybrid_n5120_b4_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_hybrid_n5120_b4_byte_ab;
+    }
     return fixed32_cutlass_wave_variant::stock;
   }();
   return selection;
@@ -1249,6 +1257,11 @@ static inline bool fixed32_cutlass_b1_onen_projection(int m, int n, int k) {
        (n == 5120 && k == 6144) ||
        (n == 16384 && k == 5120) ||
        (n == 14336 && k == 5120));
+}
+
+static inline bool fixed32_cutlass_b4_hybrid_n5120_projection(
+    int m, int n, int k) {
+  return m == 128 && fixed32_cutlass_real_projection(m, n, k);
 }
 
 template <typename Gemm>
@@ -1380,6 +1393,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       (wave_variant == fixed32_cutlass_wave_variant::identity_onen_b1 ||
        wave_variant ==
            fixed32_cutlass_wave_variant::identity_onen_b1_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
+  if (!fixed32_cutlass_b4_hybrid_n5120_projection(M, N, K) &&
+      (wave_variant ==
+           fixed32_cutlass_wave_variant::identity_hybrid_n5120_b4 ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           identity_hybrid_n5120_b4_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
   if (M != 128 &&
@@ -1542,6 +1562,18 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
+  auto run_identity_hybrid_n5120_b4 =
+      [&](torch::stable::Tensor& destination) {
+    if (N == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b4_m128_static_identity_stage2<
+              OutType>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    return run_identity_twom_b4(destination);
+  };
+
   auto run_stock = [&](torch::stable::Tensor& destination) {
     bool swap_ab = (M <= 64) || (M % 4 != 0);
     if (!swap_ab) {
@@ -1597,6 +1629,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
                           identity_divisor_stage2_b4_byte_ab;
   const bool identity_twom_b4_byte_ab =
       wave_variant == fixed32_cutlass_wave_variant::identity_twom_b4_byte_ab;
+  const bool identity_hybrid_n5120_b4_byte_ab =
+      wave_variant == fixed32_cutlass_wave_variant::
+                          identity_hybrid_n5120_b4_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
       wide256_byte_ab || static_persistent_byte_ab ||
@@ -1605,10 +1640,14 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       identity_onen_b1_byte_ab ||
       identity_stockshape_b4_byte_ab ||
       identity_stockshape_stage2_b4_byte_ab || identity_divisor_b4_byte_ab ||
-      identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab) {
+      identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab ||
+      identity_hybrid_n5120_b4_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
       if (identity_onen_b1_byte_ab) {
         return run_identity_onen_b1(destination);
+      }
+      if (identity_hybrid_n5120_b4_byte_ab) {
+        return run_identity_hybrid_n5120_b4(destination);
       }
       if (identity_twom_b4_byte_ab) {
         return run_identity_twom_b4(destination);
@@ -1656,7 +1695,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
          identity_stockshape_b4_byte_ab ||
          identity_stockshape_stage2_b4_byte_ab ||
          identity_divisor_b4_byte_ab ||
-         identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab)
+         identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab ||
+         identity_hybrid_n5120_b4_byte_ab)
             ? fixed32_cutlass_b4_real_task_marker()
             : fixed32_cutlass_real_task_marker();
     if (task_marker.empty()) {
@@ -1674,7 +1714,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
          identity_stockshape_b4_byte_ab ||
          identity_stockshape_stage2_b4_byte_ab ||
          identity_divisor_b4_byte_ab ||
-         identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab)
+         identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab ||
+         identity_hybrid_n5120_b4_byte_ab)
             ? b4_m128_byte_ab_limit
             : byte_ab_limit;
     int64_t invocation = next_invocation.fetch_add(1);
@@ -1721,6 +1762,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     const char* log_path =
         identity_onen_b1_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_onen_b1_byte_ab.jsonl"
+        : identity_hybrid_n5120_b4_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_hybrid_n5120_b4_byte_ab.jsonl"
         : identity_twom_b4_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_twom_b4_byte_ab.jsonl"
         : identity_divisor_stage2_b4_byte_ab
@@ -1755,6 +1798,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       log << "{\\\"schema\\\":\\\""
           << (identity_onen_b1_byte_ab
                   ? "fr13.fixed32.cutlass_identity_onen_b1_byte_ab.v1"
+              : identity_hybrid_n5120_b4_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_hybrid_n5120_b4_byte_ab.v1"
               : identity_twom_b4_byte_ab
                   ? "fr13.fixed32.cutlass_identity_twom_b4_byte_ab.v1"
               : identity_divisor_stage2_b4_byte_ab
@@ -1868,6 +1913,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
 
   if (wave_variant == fixed32_cutlass_wave_variant::identity_twom_b4) {
     return run_identity_twom_b4(out);
+  }
+
+  if (wave_variant ==
+      fixed32_cutlass_wave_variant::identity_hybrid_n5120_b4) {
+    return run_identity_hybrid_n5120_b4(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.
