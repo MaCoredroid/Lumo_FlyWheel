@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "src"))
 
 import fr13_fixed32_contract as contract  # noqa: E402
+import fr13_floor_gate as floor_gate  # noqa: E402
 import fr13_fixed32_work_census as work_census  # noqa: E402
 import fr13_runtime_manifest as runtime_manifest  # noqa: E402
 import fr13_treeconv_zero_tail_credential as credential  # noqa: E402
@@ -171,7 +172,9 @@ def _write_ledger(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_bytes(b"".join(_canonical(row) + b"\n" for row in rows))
 
 
-def _runtime_repo(tmp_path: Path, *, batch: int) -> tuple[Path, str, Path]:
+def _runtime_repo(
+    tmp_path: Path, *, batch: int
+) -> tuple[Path, str, Path, Path, Path]:
     repo = tmp_path / "repo"
     spec = runtime_manifest.PROFILES["fixed32"]
     paths = {
@@ -205,15 +208,15 @@ def _runtime_repo(tmp_path: Path, *, batch: int) -> tuple[Path, str, Path]:
     commit = subprocess.check_output(
         ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
     ).strip()
-    manifest_path = tmp_path / "runtime_manifest.json"
-    _write_json(
-        manifest_path,
-        runtime_manifest.build_manifest(
-            repo, profile="fixed32", sequence=credential.SEQUENCE
-        ),
+    manifest = runtime_manifest.build_manifest(
+        repo, profile="fixed32", sequence=credential.SEQUENCE
     )
+    launch_manifest_path = tmp_path / "runtime_manifest.at_launch.json"
+    end_manifest_path = tmp_path / "runtime_manifest.at_end.json"
+    _write_json(launch_manifest_path, manifest)
+    _write_json(end_manifest_path, manifest)
     subset = repo / credential.CANONICAL_SUBSETS[batch]["path"]
-    return repo, commit, subset
+    return repo, commit, subset, launch_manifest_path, end_manifest_path
 
 
 def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
@@ -404,8 +407,8 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
     work_path.write_bytes(_canonical(event) + b"\n" + _canonical(terminal) + b"\n")
 
     producer_pid = event["producer_pid"]
-    generation = 2
-    nonce = "1" * 64
+    generation = 2 * len(tasks) + 1
+    nonce = f"{generation:064x}"
     counters = {
         "pure_decode_forward_steps": 1,
         "complete_work_census_events": 1,
@@ -415,6 +418,25 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
         "dfwd_pending": 0,
         "cfwd_pending": 0,
     }
+    ready_ack = {
+        "schema": credential.FLUSH_ACK_SCHEMA,
+        "mode": mode,
+        "producer_pid": producer_pid,
+        "generation": 0,
+        "nonce": credential.FLUSH_READY_NONCE,
+        "action": "ready",
+        "status": "ok",
+        "counters": {
+            "pure_decode_forward_steps": 0,
+            "complete_work_census_events": 0,
+            "work_census_first_forward_step": None,
+            "work_census_last_forward_step": None,
+            "sfwd_pending": 0,
+            "dfwd_pending": 0,
+            "cfwd_pending": 0,
+        },
+    }
+    _write_json(run / "fixed32_ready_ack.json", ready_ack)
     boundary_base = logs / "fr13_fixed32_boundary_snapshot"
     boundary_path = Path(str(boundary_base) + f".{generation}.json")
     _write_json(
@@ -438,20 +460,35 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
         canonical=True,
     )
     flush_path = run / "fixed32_final_flush.json"
+    final_ack = {
+        "schema": credential.FLUSH_ACK_SCHEMA,
+        "mode": mode,
+        "producer_pid": producer_pid,
+        "generation": generation,
+        "nonce": nonce,
+        "action": "final",
+        "status": "ok",
+        "counters": counters,
+    }
     _write_json(
         flush_path,
         {
             "schema": credential.FLUSH_RESULT_SCHEMA,
-            "ack": {
-                "schema": credential.FLUSH_ACK_SCHEMA,
-                "mode": mode,
-                "producer_pid": producer_pid,
-                "generation": generation,
-                "nonce": nonce,
-                "action": "final",
-                "status": "ok",
-                "counters": counters,
-            },
+            "ack": final_ack,
+        },
+        canonical=True,
+    )
+    _write_json(logs / "fr13_fixed32_flush_ack.json", final_ack, canonical=True)
+    _write_json(
+        logs / "fr13_fixed32_flush_request.json",
+        {
+            "schema": credential.FLUSH_REQUEST_SCHEMA,
+            "mode": mode,
+            "producer_pid": producer_pid,
+            "prev_generation": generation - 1,
+            "generation": generation,
+            "nonce": nonce,
+            "action": "final",
         },
         canonical=True,
     )
@@ -535,14 +572,55 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
             "nonce": f"{2 * index + 1:064x}",
             "action": "snapshot",
             "status": "ok",
-            "counters": {"pure_decode_forward_steps": 0},
+            "counters": {
+                "pure_decode_forward_steps": 0,
+                "complete_work_census_events": 0,
+                "work_census_first_forward_step": None,
+                "work_census_last_forward_step": None,
+                "sfwd_pending": 0,
+                "dfwd_pending": 0,
+                "cfwd_pending": 0,
+            },
         }
         post_ack = {
             **pre_ack,
             "generation": 2 * index + 2,
             "nonce": f"{2 * index + 2:064x}",
-            "counters": {"pure_decode_forward_steps": 1},
+            "counters": {
+                "pure_decode_forward_steps": 1,
+                "complete_work_census_events": 1,
+                "work_census_first_forward_step": 0,
+                "work_census_last_forward_step": 0,
+                "sfwd_pending": 0,
+                "dfwd_pending": 0,
+                "cfwd_pending": 0,
+            },
         }
+        snapshot_refs: dict[str, dict[str, object]] = {}
+        for label, ack in (("pre", pre_ack), ("post", post_ack)):
+            snapshot_path = Path(
+                str(boundary_base) + f".{ack['generation']}.json"
+            )
+            _write_json(
+                snapshot_path,
+                {
+                    "schema": credential.BOUNDARY_SCHEMA,
+                    "mode": mode,
+                    "producer_pid": producer_pid,
+                    "generation": ack["generation"],
+                    "nonce": ack["nonce"],
+                    "action": "snapshot",
+                    "counters": ack["counters"],
+                    "metrics": {},
+                },
+                canonical=True,
+            )
+            snapshot_refs[label] = {
+                "schema": credential.BOUNDARY_SCHEMA,
+                "generation": ack["generation"],
+                "path": str(snapshot_path),
+                "sha256": hashlib.sha256(snapshot_path.read_bytes()).hexdigest(),
+            }
         boundary = {
             "schema": credential.TASK_BOUNDARY_SCHEMA,
             "instance_id": task,
@@ -550,8 +628,8 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
             "producer_pid": producer_pid,
             "pre": pre_ack,
             "post": post_ack,
-            "pre_runtime_snapshot": None,
-            "post_runtime_snapshot": None,
+            "pre_runtime_snapshot": snapshot_refs["pre"],
+            "post_runtime_snapshot": snapshot_refs["post"],
             "forward_step_interval": {
                 "start_forward_step": 0,
                 "end_forward_step": 1,
@@ -702,7 +780,26 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
             ],
         },
     )
-    repo, source_commit, subset_path = _runtime_repo(tmp_path, batch=batch)
+    (
+        repo,
+        source_commit,
+        subset_path,
+        launch_manifest_path,
+        end_manifest_path,
+    ) = _runtime_repo(tmp_path, batch=batch)
+    git_head_path = run / "git_head.txt"
+    git_head_path.write_text(source_commit + "\n", encoding="ascii")
+    _write_json(
+        run / "fixed32_chat_traffic_audit.json",
+        {
+            "complete_stream": {
+                "pure_decode_forward_steps": 1,
+                "complete_work_census_events": 1,
+                "merged_forward_step_intervals": [[0, 1]],
+            }
+        },
+        canonical=True,
+    )
     container_env = run / "container_env.txt"
     container_env.write_text(
         "\n".join(
@@ -724,7 +821,9 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
         "work_census_path": work_path,
         "final_flush_path": flush_path,
         "boundary_snapshot_base": boundary_base,
-        "runtime_manifest_path": tmp_path / "runtime_manifest.json",
+        "runtime_manifest_launch_path": launch_manifest_path,
+        "runtime_manifest_end_path": end_manifest_path,
+        "runtime_git_head_path": git_head_path,
         "source_path": repo / credential.SOURCE_RELATIVE,
         "repo_path": repo,
         "container_env_path": container_env,
@@ -736,9 +835,29 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
     }
 
 
+def _issue_with_audit_stub(
+    monkeypatch: pytest.MonkeyPatch, inputs: dict[str, Any]
+) -> dict[str, Any]:
+    arm_dir = Path(inputs["task_root"]).parents[2]
+    audit_path = arm_dir / "fixed32_chat_traffic_audit.json"
+    audit = json.loads(audit_path.read_bytes())
+    raw = audit_path.read_bytes()
+
+    def validate(**kwargs: Any) -> tuple[dict[str, Any], bytes]:
+        assert kwargs["arm_dir"] == arm_dir
+        return audit, raw
+
+    monkeypatch.setattr(credential, "_validate_real_task_audit", validate)
+    return credential.issue_credential(**inputs)
+
+
 @pytest.mark.parametrize("batch", (1, 4))
-def test_credential_replays_real_graph_evidence(tmp_path: Path, batch: int) -> None:
-    payload = credential.issue_credential(**_make_fixture(tmp_path, batch=batch))
+def test_credential_replays_real_graph_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, batch: int
+) -> None:
+    payload = _issue_with_audit_stub(
+        monkeypatch, _make_fixture(tmp_path, batch=batch)
+    )
     assert payload["status"] == "PASS"
     assert payload["work_census_terminal_present"] is True
     assert payload["all_engine_requests_joined_to_comparator"] is True
@@ -757,20 +876,22 @@ def test_credential_rejects_truncated_work_terminal(tmp_path: Path) -> None:
         credential.issue_credential(**inputs)
 
 
-def test_credential_rejects_comparator_request_tamper(tmp_path: Path) -> None:
+def test_credential_rejects_comparator_request_tamper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     inputs = _make_fixture(tmp_path, batch=1)
     comparator = Path(inputs["comparator_path"])
     rows = [json.loads(line) for line in comparator.read_text().splitlines()]
     rows[0]["request_id_sha256s"] = ["f" * 64]
     comparator.write_bytes(b"".join(_canonical(row) + b"\n" for row in rows))
     with pytest.raises(credential.CredentialError, match="comparator/work join"):
-        credential.issue_credential(**inputs)
+        _issue_with_audit_stub(monkeypatch, inputs)
 
 
 def test_credential_rejects_fake_two_key_manifest(tmp_path: Path) -> None:
     inputs = _make_fixture(tmp_path, batch=1)
     _write_json(
-        Path(inputs["runtime_manifest_path"]),
+        Path(inputs["runtime_manifest_end_path"]),
         {"schema": "fr13-runtime-manifest-v1", "closures": {}},
     )
     with pytest.raises(credential.CredentialError, match="full canonical"):
@@ -783,28 +904,31 @@ def test_credential_rejects_source_commit_tamper_with_fresh_manifest(
     inputs = _make_fixture(tmp_path, batch=1)
     source = Path(inputs["source_path"])
     source.write_text("# modified after source commit\n", encoding="ascii")
-    _write_json(
-        Path(inputs["runtime_manifest_path"]),
-        runtime_manifest.build_manifest(
-            Path(inputs["repo_path"]),
-            profile="fixed32",
-            sequence=credential.SEQUENCE,
-        ),
+    manifest = runtime_manifest.build_manifest(
+        Path(inputs["repo_path"]),
+        profile="fixed32",
+        sequence=credential.SEQUENCE,
     )
+    _write_json(Path(inputs["runtime_manifest_launch_path"]), manifest)
+    _write_json(Path(inputs["runtime_manifest_end_path"]), manifest)
     with pytest.raises(credential.CredentialError, match="source-commit binding"):
         credential.issue_credential(**inputs)
 
 
-def test_credential_rejects_qwen_metric_artifact_tamper(tmp_path: Path) -> None:
+def test_credential_rejects_qwen_metric_artifact_tamper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     inputs = _make_fixture(tmp_path, batch=4)
     proof = Path(inputs["qwen_campaign_path"])
     post = proof.parent / "fixed32_qwen_campaign_metrics_post.txt"
     post.write_bytes(post.read_bytes() + b"# tampered\n")
     with pytest.raises(credential.CredentialError, match="campaign replay failed"):
-        credential.issue_credential(**inputs)
+        _issue_with_audit_stub(monkeypatch, inputs)
 
 
-def test_credential_rejects_task_auth_provenance_tamper(tmp_path: Path) -> None:
+def test_credential_rejects_task_auth_provenance_tamper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     inputs = _make_fixture(tmp_path, batch=1)
     task = credential.CANONICAL_SUBSETS[1]["task_ids"][0]
     metadata_path = Path(inputs["task_root"]) / task / "runner_metadata.json"
@@ -812,6 +936,255 @@ def test_credential_rejects_task_auth_provenance_tamper(tmp_path: Path) -> None:
     metadata["fixed32_real_task_provenance"]["completed_attempts"] = 2
     _write_json(metadata_path, metadata)
     with pytest.raises(credential.CredentialError, match="task-auth counters"):
+        _issue_with_audit_stub(monkeypatch, inputs)
+
+
+def test_credential_rejects_uncommitted_executed_source_with_fresh_manifests(
+    tmp_path: Path,
+) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    repo = Path(inputs["repo_path"])
+    source = repo / "src/lumo_flywheel_serving/model_server.py"
+    source.write_bytes(source.read_bytes() + b"\n# uncommitted runtime change\n")
+    manifest = runtime_manifest.build_manifest(
+        repo, profile="fixed32", sequence=credential.SEQUENCE
+    )
+    _write_json(Path(inputs["runtime_manifest_launch_path"]), manifest)
+    _write_json(Path(inputs["runtime_manifest_end_path"]), manifest)
+    with pytest.raises(
+        credential.CredentialError,
+        match=r"source-commit binding differs for .*model_server.py",
+    ):
+        credential.issue_credential(**inputs)
+
+
+def test_credential_rejects_runtime_git_head_tamper(tmp_path: Path) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    Path(inputs["runtime_git_head_path"]).write_text(
+        "f" * 40 + "\n", encoding="ascii"
+    )
+    with pytest.raises(credential.CredentialError, match="Git head differs"):
+        credential.issue_credential(**inputs)
+
+
+def test_credential_rejects_synthetic_real_task_evidence(tmp_path: Path) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    with pytest.raises(credential.CredentialError, match="real-task chat audit"):
+        credential.issue_credential(**inputs)
+
+
+def test_real_task_audit_rebuilds_from_independent_pinned_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    arm_dir = tmp_path / "arm"
+    repo = tmp_path / "repo"
+    subset_path = repo / "subset.json"
+    arm_dir.mkdir()
+    subset_path.parent.mkdir()
+    subset_path.write_text("{}\n", encoding="ascii")
+    subset = {"task_ids": ["task"], "sha256": "a" * 64}
+    digests = {"task": "b" * 64}
+    expected = {
+        "complete_stream": {
+            "pure_decode_forward_steps": 1,
+            "complete_work_census_events": 1,
+            "merged_forward_step_intervals": [[0, 1]],
+        }
+    }
+    _write_json(
+        arm_dir / "fixed32_chat_traffic_audit.json", expected, canonical=True
+    )
+    calls: dict[str, Any] = {}
+
+    def validate(path: Path, *, b1_diagnostic: bool) -> dict[str, Any]:
+        calls["subset"] = (path, b1_diagnostic)
+        return subset
+
+    def pinned(repo_text: str) -> dict[str, str]:
+        calls["repo"] = repo_text
+        return digests
+
+    def build(
+        path: Path,
+        *,
+        mode: str,
+        subset: dict[str, Any],
+        dataset_record_digests: dict[str, str],
+        concurrency: int,
+    ) -> dict[str, Any]:
+        calls["build"] = (
+            path,
+            mode,
+            subset,
+            dataset_record_digests,
+            concurrency,
+        )
+        return expected
+
+    monkeypatch.setattr(floor_gate, "validate_fixed32_run_subset", validate)
+    monkeypatch.setattr(floor_gate, "pinned_dataset_record_digests", pinned)
+    monkeypatch.setattr(floor_gate, "build_fixed32_chat_traffic_audit", build)
+    replay, raw = credential._validate_real_task_audit(
+        arm_dir=arm_dir,
+        repo=repo,
+        subset_path=subset_path,
+        mode="tail6_fixed32",
+        batch_size=1,
+    )
+    assert replay == expected
+    assert raw == _canonical(expected) + b"\n"
+    assert calls == {
+        "subset": (subset_path, True),
+        "repo": str(repo),
+        "build": (arm_dir, "tail6_fixed32", subset, digests, 1),
+    }
+
+
+def test_credential_rejects_shifted_work_stream(tmp_path: Path) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    work = Path(inputs["work_census_path"])
+    event = json.loads(work.read_text().splitlines()[0])
+    event["forward_step_index"] = 7
+    event["drafter_runtime"]["forward_step_index"] = 7
+    terminal = work_census.reference_terminal_summary(
+        [event], fixture_synthetic_runtime_proof=True
+    )
+    work.write_bytes(_canonical(event) + b"\n" + _canonical(terminal) + b"\n")
+    with pytest.raises(credential.CredentialError, match="exact contiguous stream"):
+        credential.issue_credential(**inputs)
+
+
+def test_credential_rejects_task_interval_past_terminal_stream(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    task = credential.CANONICAL_SUBSETS[1]["task_ids"][0]
+    task_dir = Path(inputs["task_root"]) / task
+    boundary_path = task_dir / "fixed32_task_boundary.json"
+    boundary = json.loads(boundary_path.read_bytes())
+    boundary["post"]["counters"].update(
+        {
+            "pure_decode_forward_steps": 2,
+            "complete_work_census_events": 2,
+            "work_census_last_forward_step": 1,
+        }
+    )
+    boundary["forward_step_interval"] = {
+        "start_forward_step": 0,
+        "end_forward_step": 2,
+        "expected_complete_events": 2,
+    }
+    snapshot_path = Path(boundary["post_runtime_snapshot"]["path"])
+    snapshot = json.loads(snapshot_path.read_bytes())
+    snapshot["counters"] = boundary["post"]["counters"]
+    _write_json(snapshot_path, snapshot, canonical=True)
+    boundary["post_runtime_snapshot"]["sha256"] = hashlib.sha256(
+        snapshot_path.read_bytes()
+    ).hexdigest()
+    _write_json(boundary_path, boundary)
+    metadata_path = task_dir / "runner_metadata.json"
+    metadata = json.loads(metadata_path.read_bytes())
+    metadata["fixed32_task_boundary"] = boundary
+    _write_json(metadata_path, metadata)
+    with pytest.raises(credential.CredentialError, match="exactly cover"):
+        _issue_with_audit_stub(monkeypatch, inputs)
+
+
+def test_credential_rejects_final_flush_generation_gap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    flush_path = Path(inputs["final_flush_path"])
+    flush = json.loads(flush_path.read_bytes())
+    old_generation = flush["ack"]["generation"]
+    generation = old_generation + 1
+    nonce = f"{generation:064x}"
+    flush["ack"].update({"generation": generation, "nonce": nonce})
+    _write_json(flush_path, flush, canonical=True)
+    _write_json(
+        Path(inputs["boundary_snapshot_base"]).parent
+        / "fr13_fixed32_flush_ack.json",
+        flush["ack"],
+        canonical=True,
+    )
+    request_path = (
+        Path(inputs["boundary_snapshot_base"]).parent
+        / "fr13_fixed32_flush_request.json"
+    )
+    request = json.loads(request_path.read_bytes())
+    request.update(
+        {
+            "prev_generation": generation - 1,
+            "generation": generation,
+            "nonce": nonce,
+        }
+    )
+    _write_json(request_path, request, canonical=True)
+
+    old_snapshot = Path(
+        str(inputs["boundary_snapshot_base"]) + f".{old_generation}.json"
+    )
+    snapshot = json.loads(old_snapshot.read_bytes())
+    snapshot.update({"generation": generation, "nonce": nonce})
+    snapshot_path = Path(
+        str(inputs["boundary_snapshot_base"]) + f".{generation}.json"
+    )
+    _write_json(snapshot_path, snapshot, canonical=True)
+
+    comparator_path = Path(inputs["comparator_path"])
+    comparator = [
+        json.loads(line) for line in comparator_path.read_text().splitlines()
+    ]
+    comparator[-1].update(
+        {
+            "flush_generation": generation,
+            "flush_nonce": nonce,
+            "boundary_snapshot_sha256": hashlib.sha256(
+                snapshot_path.read_bytes()
+            ).hexdigest(),
+        }
+    )
+    comparator_path.write_bytes(
+        b"".join(_canonical(row) + b"\n" for row in comparator)
+    )
+    with pytest.raises(credential.CredentialError, match="generation chain"):
+        _issue_with_audit_stub(monkeypatch, inputs)
+
+
+def test_credential_rejects_stale_boundary_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    base = Path(inputs["boundary_snapshot_base"])
+    final = Path(str(base) + ".3.json")
+    Path(str(base) + ".99.json").write_bytes(final.read_bytes())
+    with pytest.raises(credential.CredentialError, match="generation set"):
+        _issue_with_audit_stub(monkeypatch, inputs)
+
+
+def test_credential_rejects_current_flush_ack_tamper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    ack_path = (
+        Path(inputs["boundary_snapshot_base"]).parent
+        / "fr13_fixed32_flush_ack.json"
+    )
+    ack = json.loads(ack_path.read_bytes())
+    ack["nonce"] = "f" * 64
+    _write_json(ack_path, ack, canonical=True)
+    with pytest.raises(credential.CredentialError, match="current flush ack"):
+        _issue_with_audit_stub(monkeypatch, inputs)
+
+
+def test_credential_rejects_duplicate_container_env_key(tmp_path: Path) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    env_path = Path(inputs["container_env_path"])
+    env_path.write_text(
+        env_path.read_text(encoding="ascii") + "FR13_FIXED32_MODE=tail6_fixed32\n",
+        encoding="ascii",
+    )
+    with pytest.raises(credential.CredentialError, match="duplicated"):
         credential.issue_credential(**inputs)
 
 

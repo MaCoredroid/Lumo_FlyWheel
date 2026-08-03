@@ -21,6 +21,8 @@ BOUNDARY_SCHEMA = "fr13-fixed32-boundary-snapshot-v4"
 TASK_BOUNDARY_SCHEMA = "fr13-fixed32-task-boundary-v1"
 FLUSH_RESULT_SCHEMA = "fr13-fixed32-flush-client-result-v1"
 FLUSH_ACK_SCHEMA = "fr13-fixed32-flush-ack-v1"
+FLUSH_REQUEST_SCHEMA = "fr13-fixed32-flush-request-v1"
+FLUSH_READY_NONCE = "0" * 64
 QWEN_SCHEMA = "fr13-fixed32-qwen-campaign-provenance-v1"
 SEQUENCE = "scripts/fr13_fixed32_floor_timers_seq.sh"
 SOURCE_RELATIVE = "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
@@ -70,6 +72,61 @@ COMMIT_BOUND_PATHS = {
     "scripts/fr13_dvk_subset_blocks.json",
     "scripts/run_swe_bench_q36_a.py",
     SEQUENCE,
+}
+COMMIT_BOUND_MANIFEST_SECTIONS = {
+    "host_script_source",
+    "python_package_source",
+    "verdict_tools",
+}
+TASK_BOUNDARY_KEYS = {
+    "schema",
+    "instance_id",
+    "mode",
+    "producer_pid",
+    "pre",
+    "post",
+    "pre_runtime_snapshot",
+    "post_runtime_snapshot",
+    "forward_step_interval",
+}
+TASK_SNAPSHOT_REF_KEYS = {"schema", "generation", "path", "sha256"}
+FLUSH_ACK_KEYS = {
+    "schema",
+    "mode",
+    "producer_pid",
+    "generation",
+    "nonce",
+    "action",
+    "status",
+    "counters",
+}
+FLUSH_COUNTER_KEYS = {
+    "pure_decode_forward_steps",
+    "complete_work_census_events",
+    "work_census_first_forward_step",
+    "work_census_last_forward_step",
+    "sfwd_pending",
+    "dfwd_pending",
+    "cfwd_pending",
+}
+BOUNDARY_SNAPSHOT_KEYS = {
+    "schema",
+    "mode",
+    "producer_pid",
+    "generation",
+    "nonce",
+    "action",
+    "counters",
+    "metrics",
+}
+FLUSH_REQUEST_KEYS = {
+    "schema",
+    "mode",
+    "producer_pid",
+    "prev_generation",
+    "generation",
+    "nonce",
+    "action",
 }
 
 
@@ -222,6 +279,8 @@ def _validate_runtime_manifest(
 
     required = set(COMMIT_BOUND_PATHS)
     required.add(CANONICAL_SUBSETS[batch_size]["path"])
+    for section in COMMIT_BOUND_MANIFEST_SECTIONS:
+        required.update(record["path"] for record in closures[section])
     committed_digests: dict[str, str] = {}
     for relative in sorted(required):
         record = records.get(relative)
@@ -239,6 +298,98 @@ def _validate_runtime_manifest(
             )
         committed_digests[relative] = _sha(live_raw)
     return runtime, raw, committed_digests
+
+
+def _validate_runtime_closure(
+    *,
+    launch_path: Path,
+    end_path: Path,
+    git_head_path: Path,
+    repo: Path,
+    arm_dir: Path,
+    source_commit: str,
+    batch_size: int,
+) -> tuple[dict[str, Any], bytes, bytes, dict[str, str]]:
+    expected_launch = arm_dir.parent / "runtime_manifest.at_launch.json"
+    expected_end = arm_dir.parent / "runtime_manifest.at_end.json"
+    expected_head = arm_dir / "git_head.txt"
+    if (
+        launch_path.resolve(strict=True) != expected_launch.resolve(strict=True)
+        or end_path.resolve(strict=True) != expected_end.resolve(strict=True)
+        or git_head_path.resolve(strict=True) != expected_head.resolve(strict=True)
+    ):
+        raise CredentialError("runtime closure paths are not canonical for the arm")
+    runtime, end_raw, committed = _validate_runtime_manifest(
+        end_path,
+        repo=repo,
+        source_commit=source_commit,
+        batch_size=batch_size,
+    )
+    launch_raw = _raw(launch_path, "launch runtime manifest")
+    if launch_raw != end_raw:
+        raise CredentialError("launch/end runtime manifests differ")
+    head_raw = _raw(git_head_path, "runtime Git head")
+    if head_raw != (source_commit + "\n").encode("ascii"):
+        raise CredentialError("runtime Git head differs from source commit")
+    return runtime, launch_raw, end_raw, committed
+
+
+def _canonical_arm_dir(task_root: Path) -> Path:
+    resolved = task_root.resolve(strict=True)
+    if len(resolved.parents) < 3:
+        raise CredentialError("task root is outside a canonical arm")
+    arm_dir = resolved.parents[2]
+    if resolved != arm_dir / "swe_out" / "verified" / "per_task":
+        raise CredentialError("task root is not canonical for a fixed32 arm")
+    return arm_dir
+
+
+def _require_arm_path(path: Path, expected: Path, label: str) -> None:
+    try:
+        actual = path.resolve(strict=True)
+        wanted = expected.resolve(strict=True)
+    except OSError as error:
+        raise CredentialError(f"{label} is unavailable") from error
+    if actual != wanted:
+        raise CredentialError(f"{label} path is not canonical for the arm")
+
+
+def _validate_real_task_audit(
+    *,
+    arm_dir: Path,
+    repo: Path,
+    subset_path: Path,
+    mode: str,
+    batch_size: int,
+) -> tuple[dict[str, Any], bytes]:
+    audit_path = arm_dir / "fixed32_chat_traffic_audit.json"
+    try:
+        from fr13_floor_gate import (
+            GateError,
+            build_fixed32_chat_traffic_audit,
+            pinned_dataset_record_digests,
+            validate_fixed32_run_subset,
+        )
+    except ImportError as error:
+        raise CredentialError("real-task chat audit validator is unavailable") from error
+    try:
+        subset = validate_fixed32_run_subset(
+            subset_path,
+            b1_diagnostic=batch_size == 1,
+        )
+        expected = build_fixed32_chat_traffic_audit(
+            arm_dir,
+            mode=mode,
+            subset=subset,
+            dataset_record_digests=pinned_dataset_record_digests(str(repo)),
+            concurrency=batch_size,
+        )
+    except (GateError, KeyError, OSError) as error:
+        raise CredentialError(f"real-task chat audit is invalid: {error}") from error
+    persisted, raw = _json(audit_path, "real-task chat audit")
+    if persisted != expected or raw != _canonical(expected) + b"\n":
+        raise CredentialError("persisted real-task chat audit differs from replay")
+    return expected, raw
 
 
 def _topology_descriptor(mode: str) -> dict[str, Any]:
@@ -318,6 +469,17 @@ def _validate_work_census(
         or report.get("producer_pid") != terminal.get("producer_pid")
     ):
         raise CredentialError("fixed32 work census terminal/count binding differs")
+    if any(
+        event.get("event_index") != index
+        or event.get("forward_step_index") != index
+        for index, event in enumerate(events)
+    ) or (
+        terminal.get("first_event_index") != 0
+        or terminal.get("last_event_index") != len(events) - 1
+        or terminal.get("first_forward_step_index") != 0
+        or terminal.get("last_forward_step_index") != len(events) - 1
+    ):
+        raise CredentialError("fixed32 work census is not the exact contiguous stream")
     return events, terminal, report, raw
 
 
@@ -426,20 +588,16 @@ def _validate_flush(
     mode: str,
     work_terminal: dict[str, Any],
     comparator_terminal: dict[str, Any],
-) -> tuple[dict[str, Any], bytes, Path, bytes]:
+) -> tuple[dict[str, Any], bytes, Path, bytes, Path, bytes, Path, bytes]:
     result, result_raw = _json(result_path, "final flush result")
     if set(result) != {"schema", "ack"} or result.get("schema") != FLUSH_RESULT_SCHEMA:
         raise CredentialError("final flush result schema differs")
     ack = result.get("ack")
-    ack_keys = {
-        "schema", "mode", "producer_pid", "generation", "nonce", "action",
-        "status", "counters",
-    }
     counters = ack.get("counters") if isinstance(ack, dict) else None
     event_count = work_terminal["event_count"]
     if (
         not isinstance(ack, dict)
-        or set(ack) != ack_keys
+        or set(ack) != FLUSH_ACK_KEYS
         or ack.get("schema") != FLUSH_ACK_SCHEMA
         or ack.get("mode") != mode
         or ack.get("producer_pid") != work_terminal["producer_pid"]
@@ -448,12 +606,13 @@ def _validate_flush(
         or ack.get("action") != "final"
         or ack.get("status") != "ok"
         or not isinstance(counters, dict)
+        or set(counters) != FLUSH_COUNTER_KEYS
         or counters.get("pure_decode_forward_steps") != event_count
         or counters.get("complete_work_census_events") != event_count
-        or counters.get("work_census_first_forward_step")
-        != work_terminal["first_forward_step_index"]
-        or counters.get("work_census_last_forward_step")
-        != work_terminal["last_forward_step_index"]
+        or counters.get("work_census_first_forward_step") != 0
+        or counters.get("work_census_last_forward_step") != event_count - 1
+        or work_terminal.get("first_forward_step_index") != 0
+        or work_terminal.get("last_forward_step_index") != event_count - 1
         or any(counters.get(key) != 0 for key in ("sfwd_pending", "dfwd_pending", "cfwd_pending"))
     ):
         raise CredentialError("final flush ack does not close the complete work census")
@@ -466,7 +625,8 @@ def _validate_flush(
         else None
     )
     if (
-        boundary.get("schema") != BOUNDARY_SCHEMA
+        set(boundary) != BOUNDARY_SNAPSHOT_KEYS
+        or boundary.get("schema") != BOUNDARY_SCHEMA
         or boundary.get("mode") != mode
         or boundary.get("producer_pid") != ack["producer_pid"]
         or boundary.get("generation") != generation
@@ -481,7 +641,33 @@ def _validate_flush(
         != comparator_terminal["boundary_snapshot_sha256"]
     ):
         raise CredentialError("final boundary snapshot identity differs")
-    return result, result_raw, boundary_path, boundary_raw
+    current_ack_path = boundary_base.parent / "fr13_fixed32_flush_ack.json"
+    current_ack, current_ack_raw = _json(current_ack_path, "current flush ack")
+    request_path = boundary_base.parent / "fr13_fixed32_flush_request.json"
+    request, request_raw = _json(request_path, "final flush request")
+    if current_ack != ack:
+        raise CredentialError("current flush ack differs from final result")
+    if (
+        set(request) != FLUSH_REQUEST_KEYS
+        or request.get("schema") != FLUSH_REQUEST_SCHEMA
+        or request.get("mode") != mode
+        or request.get("producer_pid") != ack["producer_pid"]
+        or request.get("prev_generation") != generation - 1
+        or request.get("generation") != generation
+        or request.get("nonce") != ack["nonce"]
+        or request.get("action") != "final"
+    ):
+        raise CredentialError("final flush request/ack binding differs")
+    return (
+        result,
+        result_raw,
+        boundary_path,
+        boundary_raw,
+        request_path,
+        request_raw,
+        current_ack_path,
+        current_ack_raw,
+    )
 
 
 def _trace(path: Path) -> tuple[list[dict[str, Any]], bytes]:
@@ -496,6 +682,81 @@ def _trace(path: Path) -> tuple[list[dict[str, Any]], bytes]:
     return events, raw
 
 
+def _validate_task_snapshot(
+    reference: object,
+    ack: dict[str, Any],
+    *,
+    boundary_base: Path,
+    mode: str,
+    producer_pid: int,
+    label: str,
+) -> None:
+    generation = ack.get("generation")
+    if not isinstance(reference, dict) or set(reference) != TASK_SNAPSHOT_REF_KEYS:
+        raise CredentialError(f"{label} snapshot reference is malformed")
+    path = Path(str(boundary_base) + f".{generation}.json")
+    snapshot, raw = _json(path, f"{label} boundary snapshot")
+    if (
+        set(snapshot) != BOUNDARY_SNAPSHOT_KEYS
+        or reference
+        != {
+            "schema": BOUNDARY_SCHEMA,
+            "generation": generation,
+            "path": str(path),
+            "sha256": _sha(raw),
+        }
+        or snapshot.get("schema") != BOUNDARY_SCHEMA
+        or snapshot.get("mode") != mode
+        or snapshot.get("producer_pid") != producer_pid
+        or snapshot.get("generation") != generation
+        or snapshot.get("nonce") != ack.get("nonce")
+        or snapshot.get("action") != "snapshot"
+        or snapshot.get("counters") != ack.get("counters")
+    ):
+        raise CredentialError(f"{label} boundary snapshot identity differs")
+
+
+def _validate_ready_ack(
+    path: Path, *, mode: str, producer_pid: int
+) -> tuple[dict[str, Any], bytes]:
+    ready, raw = _json(path, "generation-zero ready ack")
+    counters = ready.get("counters") if isinstance(ready, dict) else None
+    if (
+        set(ready) != FLUSH_ACK_KEYS
+        or ready.get("schema") != FLUSH_ACK_SCHEMA
+        or ready.get("mode") != mode
+        or ready.get("producer_pid") != producer_pid
+        or ready.get("generation") != 0
+        or ready.get("nonce") != FLUSH_READY_NONCE
+        or ready.get("action") != "ready"
+        or ready.get("status") != "ok"
+        or not isinstance(counters, dict)
+        or set(counters) != FLUSH_COUNTER_KEYS
+        or counters
+        != {
+            "pure_decode_forward_steps": 0,
+            "complete_work_census_events": 0,
+            "work_census_first_forward_step": None,
+            "work_census_last_forward_step": None,
+            "sfwd_pending": 0,
+            "dfwd_pending": 0,
+            "cfwd_pending": 0,
+        }
+    ):
+        raise CredentialError("generation-zero ready ack is not pristine")
+    return ready, raw
+
+
+def _merge_intervals(intervals: list[tuple[int, int]]) -> list[list[int]]:
+    merged: list[list[int]] = []
+    for start, end in sorted(intervals):
+        if not merged or start > merged[-1][1]:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    return merged
+
+
 def _validate_qwen_and_tasks(
     *,
     task_root: Path,
@@ -506,6 +767,7 @@ def _validate_qwen_and_tasks(
     proxy_rows: list[dict[str, Any]],
     successful_engine_ids: dict[str, str],
     qwen_campaign_path: Path | None,
+    boundary_snapshot_base: Path,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any] | None]:
     from fr13_fixed32_contract import (
         ContractError,
@@ -555,6 +817,7 @@ def _validate_qwen_and_tasks(
         if (
             metadata.get("instance_id") != task_id
             or metadata.get("fixed32_task_boundary") != boundary
+            or set(boundary) != TASK_BOUNDARY_KEYS
             or boundary.get("schema") != TASK_BOUNDARY_SCHEMA
             or boundary.get("instance_id") != task_id
             or boundary.get("mode") != mode
@@ -565,9 +828,16 @@ def _validate_qwen_and_tasks(
                 endpoint.get("schema") != FLUSH_ACK_SCHEMA
                 or endpoint.get("mode") != mode
                 or endpoint.get("producer_pid") != producer_pid
+                or set(endpoint) != FLUSH_ACK_KEYS
                 or endpoint.get("action") != "snapshot"
                 or endpoint.get("status") != "ok"
                 or not isinstance(endpoint.get("counters"), dict)
+                or set(endpoint["counters"]) != FLUSH_COUNTER_KEYS
+                or any(
+                    type(endpoint["counters"].get(key)) is not int
+                    or endpoint["counters"][key] != 0
+                    for key in ("sfwd_pending", "dfwd_pending", "cfwd_pending")
+                )
                 for endpoint in (pre, post)
             )
             or not isinstance(interval, dict)
@@ -583,6 +853,28 @@ def _validate_qwen_and_tasks(
             != interval["start_forward_step"]
             or post["counters"].get("pure_decode_forward_steps")
             != interval["end_forward_step"]
+            or pre["counters"].get("complete_work_census_events")
+            != interval["start_forward_step"]
+            or post["counters"].get("complete_work_census_events")
+            != interval["end_forward_step"]
+            or pre["counters"].get("work_census_first_forward_step")
+            != (0 if interval["start_forward_step"] else None)
+            or pre["counters"].get("work_census_last_forward_step")
+            != (
+                interval["start_forward_step"] - 1
+                if interval["start_forward_step"]
+                else None
+            )
+            or post["counters"].get("work_census_first_forward_step") != 0
+            or post["counters"].get("work_census_last_forward_step")
+            != interval["end_forward_step"] - 1
+            or type(pre.get("generation")) is not int
+            or type(post.get("generation")) is not int
+            or pre["generation"] < 1
+            or post["generation"] <= pre["generation"]
+            or HEX64.fullmatch(str(pre.get("nonce"))) is None
+            or HEX64.fullmatch(str(post.get("nonce"))) is None
+            or pre["nonce"] == post["nonce"]
             or not isinstance(provenance, dict)
             or provenance.get("schema") != "fr13-fixed32-real-task-provenance-v3"
             or provenance.get("instance_id") != task_id
@@ -594,6 +886,22 @@ def _validate_qwen_and_tasks(
             or agent.get("network_drop") is not False
         ):
             raise CredentialError(f"real-task provenance/boundary differs for {task_id}")
+        _validate_task_snapshot(
+            boundary["pre_runtime_snapshot"],
+            pre,
+            boundary_base=boundary_snapshot_base,
+            mode=mode,
+            producer_pid=producer_pid,
+            label=f"pre-task {task_id}",
+        )
+        _validate_task_snapshot(
+            boundary["post_runtime_snapshot"],
+            post,
+            boundary_base=boundary_snapshot_base,
+            mode=mode,
+            producer_pid=producer_pid,
+            label=f"post-task {task_id}",
+        )
 
         task_proxy = [row for row in proxy_rows if row.get("task_key_id") == task_key]
         expected_evidence = {
@@ -724,6 +1032,10 @@ def _validate_qwen_and_tasks(
             "successful_engine_ids": task_engine_ids,
             "trace_completed_logical_model_requests": completed,
             "trace_sha256": _sha(trace_raw),
+            "pre_generation": pre["generation"],
+            "post_generation": post["generation"],
+            "pre_nonce": pre["nonce"],
+            "post_nonce": post["nonce"],
         }
     return task_bindings, campaign_identity
 
@@ -828,7 +1140,9 @@ def issue_credential(
     work_census_path: Path,
     final_flush_path: Path,
     boundary_snapshot_base: Path,
-    runtime_manifest_path: Path,
+    runtime_manifest_launch_path: Path,
+    runtime_manifest_end_path: Path,
+    runtime_git_head_path: Path,
     source_path: Path,
     repo_path: Path,
     container_env_path: Path,
@@ -845,6 +1159,51 @@ def issue_credential(
     repo = repo_path.resolve(strict=True)
     if source_path.resolve(strict=True) != repo / SOURCE_RELATIVE:
         raise CredentialError("tree-conv source path is not canonical")
+    arm_dir = _canonical_arm_dir(task_root)
+    _require_arm_path(health_path, arm_dir / "health.json", "campaign health")
+    _require_arm_path(
+        proxy_ledger_path,
+        arm_dir / "logs" / "fr13_fixed32_proxy_ingress.jsonl",
+        "proxy ledger",
+    )
+    _require_arm_path(
+        engine_ledger_path,
+        arm_dir / "logs" / "fr13_fixed32_engine_ingress.jsonl",
+        "engine ledger",
+    )
+    _require_arm_path(
+        work_census_path,
+        arm_dir / "logs" / "fr13_fixed32_work_census.jsonl",
+        "work census",
+    )
+    _require_arm_path(
+        comparator_path,
+        arm_dir / "logs" / "fr13_fixed32_treeconv_zero_tail.byte_ab.jsonl",
+        "tree-conv comparator",
+    )
+    _require_arm_path(
+        final_flush_path,
+        arm_dir / "fixed32_final_flush.json",
+        "final flush",
+    )
+    _require_arm_path(
+        container_env_path,
+        arm_dir / "container_env.txt",
+        "container environment",
+    )
+    if boundary_snapshot_base.resolve() != (
+        arm_dir / "logs" / "fr13_fixed32_boundary_snapshot"
+    ).resolve():
+        raise CredentialError("boundary snapshot base is not canonical for the arm")
+    expected_qwen = (
+        arm_dir / "swe_out" / "verified" / "fixed32_qwen_campaign_provenance.json"
+    )
+    if batch_size == 4:
+        if qwen_campaign_path is None:
+            raise CredentialError("B4 credential requires a Qwen campaign proof")
+        _require_arm_path(qwen_campaign_path, expected_qwen, "Qwen campaign proof")
+    elif qwen_campaign_path is not None:
+        raise CredentialError("B1 credential forbids a campaign proof")
 
     subset, subset_raw = _json(subset_path, "task subset")
     canonical_subset = CANONICAL_SUBSETS[batch_size]
@@ -875,9 +1234,12 @@ def issue_credential(
     ):
         raise CredentialError("campaign health does not close the exact real task set")
 
-    runtime, runtime_raw, committed = _validate_runtime_manifest(
-        runtime_manifest_path,
+    runtime, runtime_launch_raw, runtime_end_raw, committed = _validate_runtime_closure(
+        launch_path=runtime_manifest_launch_path,
+        end_path=runtime_manifest_end_path,
+        git_head_path=runtime_git_head_path,
         repo=repo,
+        arm_dir=arm_dir,
         source_commit=source_commit,
         batch_size=batch_size,
     )
@@ -886,13 +1248,41 @@ def issue_credential(
         env_lines = container_env_raw.decode("utf-8", errors="strict").splitlines()
     except UnicodeDecodeError as error:
         raise CredentialError("container environment is not strict UTF-8") from error
+    env: dict[str, str] = {}
+    for index, line in enumerate(env_lines, start=1):
+        if not line or "=" not in line:
+            raise CredentialError(
+                f"container environment entry {index} is malformed"
+            )
+        key, value = line.split("=", 1)
+        if not key or key in env:
+            raise CredentialError(
+                f"container environment key {key!r} is empty or duplicated"
+            )
+        env[key] = value
     required_env = {**REQUIRED_CONTAINER_ENV, "FR13_FIXED32_MODE": mode}
-    if any(env_lines.count(f"{key}={value}") != 1 for key, value in required_env.items()):
+    if any(env.get(key) != value for key, value in required_env.items()):
         raise CredentialError("container environment does not bind graph physical32 K64/root1")
 
     events, work_terminal, work_report, work_raw = _validate_work_census(
         work_census_path, mode=mode, batch_size=batch_size
     )
+    real_task_audit, real_task_audit_raw = _validate_real_task_audit(
+        arm_dir=arm_dir,
+        repo=repo,
+        subset_path=subset_path,
+        mode=mode,
+        batch_size=batch_size,
+    )
+    complete_stream = real_task_audit.get("complete_stream")
+    if (
+        not isinstance(complete_stream, dict)
+        or complete_stream.get("pure_decode_forward_steps") != len(events)
+        or complete_stream.get("complete_work_census_events") != len(events)
+        or complete_stream.get("merged_forward_step_intervals")
+        != [[0, len(events)]]
+    ):
+        raise CredentialError("real-task audit does not close the exact work stream")
     descriptor = _topology_descriptor(mode)
     records, comparator_terminal, comparator_raw = _validate_comparator(
         comparator_path,
@@ -900,7 +1290,22 @@ def issue_credential(
         work_terminal=work_terminal,
         descriptor=descriptor,
     )
-    _result, flush_raw, boundary_path, boundary_raw = _validate_flush(
+    ready_path = arm_dir / "fixed32_ready_ack.json"
+    _ready, ready_raw = _validate_ready_ack(
+        ready_path,
+        mode=mode,
+        producer_pid=work_terminal["producer_pid"],
+    )
+    (
+        _result,
+        flush_raw,
+        boundary_path,
+        boundary_raw,
+        flush_request_path,
+        flush_request_raw,
+        current_ack_path,
+        current_ack_raw,
+    ) = _validate_flush(
         final_flush_path,
         boundary_snapshot_base,
         mode=mode,
@@ -919,7 +1324,44 @@ def issue_credential(
         proxy_rows=proxy_rows,
         successful_engine_ids=successful,
         qwen_campaign_path=qwen_campaign_path,
+        boundary_snapshot_base=boundary_snapshot_base,
     )
+
+    intervals = [
+        (binding["start"], binding["end"])
+        for binding in task_bindings.values()
+    ]
+    if _merge_intervals(intervals) != [[0, len(events)]]:
+        raise CredentialError("task boundaries do not exactly cover the work stream")
+    endpoint_generations = sorted(
+        generation
+        for binding in task_bindings.values()
+        for generation in (binding["pre_generation"], binding["post_generation"])
+    )
+    final_generation = comparator_terminal["flush_generation"]
+    endpoint_nonces = [
+        nonce
+        for binding in task_bindings.values()
+        for nonce in (binding["pre_nonce"], binding["post_nonce"])
+    ]
+    if (
+        endpoint_generations != list(range(1, final_generation))
+        or len(endpoint_nonces) != len(set(endpoint_nonces))
+        or comparator_terminal["flush_nonce"] in endpoint_nonces
+        or FLUSH_READY_NONCE in endpoint_nonces
+    ):
+        raise CredentialError("task/final flush generation chain is not exact")
+    expected_snapshots = {
+        Path(str(boundary_snapshot_base) + f".{generation}.json")
+        for generation in [*endpoint_generations, final_generation]
+    }
+    actual_snapshots = set(
+        boundary_snapshot_base.parent.glob(
+            boundary_snapshot_base.name + ".*.json"
+        )
+    )
+    if actual_snapshots != expected_snapshots:
+        raise CredentialError("boundary snapshot generation set is not exact")
 
     memberships = {engine_id: 0 for engine_id in successful}
     task_memberships = {task_id: 0 for task_id in task_ids}
@@ -964,16 +1406,32 @@ def issue_credential(
         "source_commit": source_commit,
         "committed_runtime_sources": committed,
         "container_env_sha256": _sha(container_env_raw),
-        "runtime_manifest": _identity(runtime_manifest_path, runtime_raw),
+        "runtime_manifest_at_launch": _identity(
+            runtime_manifest_launch_path, runtime_launch_raw
+        ),
+        "runtime_manifest_at_end": _identity(
+            runtime_manifest_end_path, runtime_end_raw
+        ),
+        "runtime_git_head": _identity(
+            runtime_git_head_path,
+            (source_commit + "\n").encode("ascii"),
+        ),
         "runtime_manifest_overall_canonical_sha256": runtime[
             "overall_canonical_sha256"
         ],
         "health": _identity(health_path, health_raw),
+        "real_task_chat_audit": _identity(
+            arm_dir / "fixed32_chat_traffic_audit.json",
+            real_task_audit_raw,
+        ),
         "work_census": _identity(work_census_path, work_raw),
         "work_census_event_count": len(events),
         "work_census_terminal_present": True,
         "work_census_report": work_report,
+        "ready_ack": _identity(ready_path, ready_raw),
         "final_flush": _identity(final_flush_path, flush_raw),
+        "final_flush_request": _identity(flush_request_path, flush_request_raw),
+        "current_flush_ack": _identity(current_ack_path, current_ack_raw),
         "final_boundary_snapshot": _identity(boundary_path, boundary_raw),
         "ingress": ingress,
         "authenticated_engine_requests": len(successful),
@@ -997,7 +1455,9 @@ def main() -> int:
     parser.add_argument("--work-census", type=Path, required=True)
     parser.add_argument("--final-flush", type=Path, required=True)
     parser.add_argument("--boundary-snapshot-base", type=Path, required=True)
-    parser.add_argument("--runtime-manifest", type=Path, required=True)
+    parser.add_argument("--runtime-manifest-launch", type=Path, required=True)
+    parser.add_argument("--runtime-manifest-end", type=Path, required=True)
+    parser.add_argument("--runtime-git-head", type=Path, required=True)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--repo", type=Path, default=Path("."))
     parser.add_argument("--container-env", type=Path, required=True)
@@ -1017,7 +1477,9 @@ def main() -> int:
         work_census_path=args.work_census,
         final_flush_path=args.final_flush,
         boundary_snapshot_base=args.boundary_snapshot_base,
-        runtime_manifest_path=args.runtime_manifest,
+        runtime_manifest_launch_path=args.runtime_manifest_launch,
+        runtime_manifest_end_path=args.runtime_manifest_end,
+        runtime_git_head_path=args.runtime_git_head,
         source_path=args.source,
         repo_path=args.repo,
         container_env_path=args.container_env,

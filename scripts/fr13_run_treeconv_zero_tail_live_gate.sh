@@ -129,7 +129,9 @@ fi
   --work-census "$ARMDIR/logs/fr13_fixed32_work_census.jsonl" \
   --final-flush "$ARMDIR/fixed32_final_flush.json" \
   --boundary-snapshot-base "$ARMDIR/logs/fr13_fixed32_boundary_snapshot" \
-  --runtime-manifest "$RUNROOT_ABS/runtime_manifest.at_end.json" \
+  --runtime-manifest-launch "$RUNROOT_ABS/runtime_manifest.at_launch.json" \
+  --runtime-manifest-end "$RUNROOT_ABS/runtime_manifest.at_end.json" \
+  --runtime-git-head "$ARMDIR/git_head.txt" \
   --source "$SOURCE" --source-commit "$SOURCE_COMMIT" \
   --repo "$PWD" --container-env "$ARMDIR/container_env.txt" \
   --task-root "$ARMDIR/swe_out/verified/per_task" \
