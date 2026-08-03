@@ -81,7 +81,8 @@ def test_contract_has_exact_fixed32_work_ledger(
     )
     assert contract["physical_rows"] == 32
     assert contract["physical_drafts"] == 31
-    assert contract["fixed_work_for_any_logical_tree_lte"] == 32
+    assert contract["fixed_work_for_exact_bound_topology"] is True
+    assert contract["logical_topology"] in {"Tail23", "Hydra27"}
     assert contract["vocab_size"] == 248_320
     assert contract["vocab_blocks"] == 61
     assert contract["incumbent_probability_producer_tensor_ops"] == 4
@@ -132,6 +133,81 @@ def test_workspace_is_persistent_physical32_for_b1_and_b4() -> None:
         assert spec["self_token"] == ((batch_size, 13), torch.long)
         assert spec["source"] == ((batch_size, 17), torch.long)
         assert spec["accepted"] == ((batch_size, 17), torch.bool)
+        assert spec["invalid"] == ((1,), torch.int32)
+
+
+def _valid_metadata(batch_size: int, mode: str) -> dict[str, torch.Tensor]:
+    self_sources = [
+        request * 31 + node
+        for request in range(batch_size)
+        for node in kernel.SELF_SOURCE_NODES
+    ]
+    target_sources = [
+        request * 31 + node
+        for request in range(batch_size)
+        for node in kernel.TARGET_SOURCE_NODES
+    ]
+    table = [[-1] * 3 for _ in range(32)]
+    counts = [0] * 32
+    for parent_slot, children in kernel.MODE_CHILDREN[mode].items():
+        counts[parent_slot] = len(children)
+        table[parent_slot][: len(children)] = children
+    return {
+        "self_source_indices": torch.tensor(self_sources),
+        "target_source_indices": torch.tensor(target_sources),
+        "child_table": torch.tensor([table for _ in range(batch_size)]),
+        "child_counts": torch.tensor([counts for _ in range(batch_size)]),
+        "self_uniform_levels": torch.tensor(kernel.SELF_UNIFORM_LEVELS),
+        "target_parent_slots": torch.tensor(kernel.TARGET_PARENT_SLOTS),
+        "target_uniform_levels": torch.tensor(kernel.TARGET_UNIFORM_LEVELS),
+    }
+
+
+@pytest.mark.parametrize("mode", sorted(kernel.FIXED32_MODES))
+@pytest.mark.parametrize("batch_size", (1, 4))
+def test_metadata_binding_is_exact_and_pointer_version_bound(
+    mode: str, batch_size: int
+) -> None:
+    metadata = _valid_metadata(batch_size, mode)
+    binding = kernel.prepare_metadata_binding(
+        **metadata,
+        batch_size=batch_size,
+        mode=mode,
+    )
+    operands = kernel._metadata_operands(**metadata)
+    kernel._validate_metadata_binding(
+        binding,
+        operands=operands,
+        batch_size=batch_size,
+        mode=mode,
+    )
+
+    metadata["target_parent_slots"].add_(0)
+    with pytest.raises(ValueError, match="metadata binding drift"):
+        kernel._validate_metadata_binding(
+            binding,
+            operands=kernel._metadata_operands(**metadata),
+            batch_size=batch_size,
+            mode=mode,
+        )
+
+
+def test_metadata_binding_rejects_wrong_topology_contents() -> None:
+    metadata = _valid_metadata(1, "hydra27_fixed32")
+    metadata["child_table"][0, 7, 0] = -1
+    with pytest.raises(ValueError, match="exact metadata drift: child_table"):
+        kernel.prepare_metadata_binding(
+            **metadata,
+            batch_size=1,
+            mode="hydra27_fixed32",
+        )
+
+
+def test_workspace_alias_check_uses_exact_contiguous_byte_intervals() -> None:
+    storage = torch.empty(16, dtype=torch.float32)
+    kernel._reject_workspace_aliases((storage[:8],), {"output": storage[8:]})
+    with pytest.raises(ValueError, match="writable storage alias"):
+        kernel._reject_workspace_aliases((storage[:8],), {"output": storage[7:]})
 
 
 @pytest.mark.parametrize("rows", (1, 17, 68))
@@ -270,6 +346,18 @@ def test_source_has_two_arity_exact_kernel_launches_and_no_dense_ops() -> None:
     assert "torch.zeros_like" not in launch_source
     assert "scatter_add" not in launch_source
     assert launch_source.count("_kernel[") == 2
+    assert launch_source.count("num_stages=3") == 2
+
+
+def test_kernel_uses_scan_terminal_masses_and_sticky_domain_guards() -> None:
+    source = KERNEL_PATH.read_text(encoding="ascii")
+    assert source.count("tl.atomic_max(invalid_out, 1") == 2
+    assert "child_packing_valid" in source
+    assert "kid_token_valid" in source
+    assert "source_cdf" in source
+    assert "block_cdf" in source
+    assert "local_total" in source
+    assert "local_total / tl.maximum(selected_block_mass" in source
 
 
 def test_candidate_is_source_only_and_default_off() -> None:
