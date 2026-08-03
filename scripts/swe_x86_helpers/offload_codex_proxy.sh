@@ -39,10 +39,21 @@ SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 \
 CMD=${1:?usage: offload_codex_proxy.sh <sync|start|fetch|stop> ...}
 shift
 FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
+B1_DIAGNOSTIC_TASK_PROFILE=${FR13_B1_DIAGNOSTIC_TASK_PROFILE:-astropy12907}
 case "$FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
 esac
+case "$B1_DIAGNOSTIC_TASK_PROFILE" in
+  astropy12907) FIXED32_DIAGNOSTIC_TASK_ID=astropy__astropy-12907 ;;
+  astropy13236) FIXED32_DIAGNOSTIC_TASK_ID=astropy__astropy-13236 ;;
+  *) echo "FAIL: FR13_B1_DIAGNOSTIC_TASK_PROFILE is unsupported"; exit 2 ;;
+esac
+if [[ "$FIXED32_B1_DIAGNOSTIC" != "1" \
+      && "$B1_DIAGNOSTIC_TASK_PROFILE" != "astropy12907" ]]; then
+  echo "FAIL: alternate B1 task profile requires diagnostic mode"
+  exit 2
+fi
 
 case "$CMD" in
   sync)
@@ -137,7 +148,7 @@ PY
       (( $? == 0 )) \
         || { echo "FAIL: fixed32 offload secret JSON contract is invalid"; exit 5; }
       if [[ "$FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
-        [[ "$FIXED32_TASK_IDS" == "astropy__astropy-12907" ]] \
+        [[ "$FIXED32_TASK_IDS" == "$FIXED32_DIAGNOSTIC_TASK_ID" ]] \
           || { echo "FAIL: fixed32 B1 diagnostic offload task ID is not pinned"; exit 5; }
       else
         [[ "$FIXED32_TASK_IDS" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+){3}$ \
@@ -323,7 +334,7 @@ PY
     [[ -n "$FIXED32_TASK_IDS" ]] \
       || { echo "FAIL: fixed32 proxy control requires canonical task IDs"; exit 5; }
     if [[ "$FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
-      [[ "$FIXED32_TASK_IDS" == "astropy__astropy-12907" ]] \
+      [[ "$FIXED32_TASK_IDS" == "$FIXED32_DIAGNOSTIC_TASK_ID" ]] \
         || { echo "FAIL: fixed32 B1 diagnostic proxy-control task ID is not pinned"; exit 5; }
     else
       [[ "$FIXED32_TASK_IDS" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+){3}$ \
@@ -333,7 +344,7 @@ PY
     [[ "$PROXY_PORT" =~ ^[0-9]+$ ]] \
       || { echo "FAIL: fixed32 proxy control port is malformed"; exit 5; }
     ssh "${SSH_OPTS[@]}" "$HOST" \
-      "$REMOTE_VENV - $PROXY_PORT $ACTION $REMOTE_FIXED32_SECRET $FIXED32_TASK_IDS $FIXED32_B1_DIAGNOSTIC" <<'PY'
+      "$REMOTE_VENV - $PROXY_PORT $ACTION $REMOTE_FIXED32_SECRET $FIXED32_TASK_IDS $FIXED32_B1_DIAGNOSTIC $B1_DIAGNOSTIC_TASK_PROFILE" <<'PY'
 import hashlib
 import json
 import os
@@ -362,9 +373,16 @@ action = sys.argv[2]
 secret_path = os.path.expanduser(sys.argv[3])
 task_ids = sys.argv[4].split(",")
 diagnostic_text = sys.argv[5]
+diagnostic_profile = sys.argv[6]
 if diagnostic_text not in {"0", "1"}:
     raise SystemExit("remote fixed32 B1 diagnostic selector is invalid")
 diagnostic = diagnostic_text == "1"
+diagnostic_task_ids = {
+    "astropy12907": ["astropy__astropy-12907"],
+    "astropy13236": ["astropy__astropy-13236"],
+}
+if diagnostic_profile not in diagnostic_task_ids:
+    raise SystemExit("remote fixed32 B1 diagnostic task profile is invalid")
 info = os.lstat(secret_path)
 if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600:
     raise SystemExit("remote fixed32 secret changed before proxy control")
@@ -383,7 +401,8 @@ if (
 if (
     len(task_ids) not in ((1,) if diagnostic else (4, 16))
     or len(set(task_ids)) != len(task_ids)
-    or (diagnostic and task_ids != ["astropy__astropy-12907"])
+    or (diagnostic and task_ids != diagnostic_task_ids[diagnostic_profile])
+    or (not diagnostic and diagnostic_profile != "astropy12907")
 ):
     raise SystemExit("remote fixed32 task set does not match its run class")
 canonical_task_set_sha256 = hashlib.sha256(

@@ -2079,6 +2079,7 @@ if [[ ! -f "$FORKED_FA2_SO" ]]; then
 fi
 if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
+  FR13_B1_DIAGNOSTIC_TASK_PROFILE=${FR13_B1_DIAGNOSTIC_TASK_PROFILE:-astropy12907}
   _fr13_fixed32_sfwd_state_fusion_diagnostic=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
   _fr13_fixed32_sfwd_state_fusion_timing=${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB:-0}
   _fr13_fixed32_sfwd_state_fusion_production=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
@@ -2090,6 +2091,17 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     0|1) ;;
     *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
   esac
+  case "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" in
+    astropy12907) _fr13_b1_diagnostic_task_id=astropy__astropy-12907 ;;
+    astropy13236) _fr13_b1_diagnostic_task_id=astropy__astropy-13236 ;;
+    *) echo "FR13_B1_DIAGNOSTIC_TASK_PROFILE is unsupported" >&2; exit 2 ;;
+  esac
+  if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" != "1" \
+        && "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" != "astropy12907" ]]; then
+    echo "alternate B1 task profile requires diagnostic mode" >&2
+    exit 2
+  fi
+  export FR13_B1_DIAGNOSTIC_TASK_PROFILE
   case "$_fr13_fixed32_sfwd_state_fusion_diagnostic" in
     0|1) ;;
     *) echo "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
@@ -2646,7 +2658,7 @@ PY
   IFS=',' read -r -a _fixed32_task_ids <<< "$FR13_FIXED32_INGRESS_TASK_IDS"
   if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
     [[ ${#_fixed32_task_ids[@]} == 1 \
-       && "${_fixed32_task_ids[0]}" == "astropy__astropy-12907" ]] \
+       && "${_fixed32_task_ids[0]}" == "$_fr13_b1_diagnostic_task_id" ]] \
       || { echo "fixed32 B1 diagnostic ingress task ID is not pinned" >&2; exit 2; }
   else
     [[ ${#_fixed32_task_ids[@]} == 4 || ${#_fixed32_task_ids[@]} == 16 ]] \
@@ -2659,7 +2671,7 @@ PY
   [[ "$(printf '%s\n' "${_fixed32_task_ids[@]}" | sort -u | wc -l)" \
      == "${#_fixed32_task_ids[@]}" ]] \
     || { echo "fixed32 ingress task IDs must be unique" >&2; exit 2; }
-  unset _fixed32_task_id _fixed32_task_ids
+  unset _fixed32_task_id _fixed32_task_ids _fr13_b1_diagnostic_task_id
   [[ "${FR13_FIXED32_ENGINE_PID_FILE:-/logs/fr13_fixed32_engine_pid}" == \
      "/logs/fr13_fixed32_engine_pid" ]] \
     || { echo "fixed32 EngineCore PID path override is forbidden" >&2; exit 2; }

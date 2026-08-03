@@ -90,6 +90,23 @@ case "$GATE_CANDIDATE" in
     exit 2
     ;;
 esac
+B1_DIAGNOSTIC_TASK_PROFILE=${FR13_B1_DIAGNOSTIC_TASK_PROFILE:-astropy12907}
+case "$B1_DIAGNOSTIC_TASK_PROFILE" in
+  astropy12907) TASK_ID=astropy__astropy-12907 ;;
+  astropy13236)
+    TASK_ID=astropy__astropy-13236
+    [[ "$GATE_CANDIDATE" == "identity_onen_n5120_single_b1" \
+       || "$GATE_CANDIDATE" == "identity_onen_n5120_fullgrid_b1" ]] || {
+      echo "astropy13236 diagnostic profile is pinned to an N5120 candidate" >&2
+      exit 2
+    }
+    ;;
+  *)
+    echo "FR13_B1_DIAGNOSTIC_TASK_PROFILE must be astropy12907 or astropy13236" >&2
+    exit 2
+    ;;
+esac
+export FR13_B1_DIAGNOSTIC_TASK_PROFILE="$B1_DIAGNOSTIC_TASK_PROFILE"
 QUALIFICATION_PROFILE_EXPLICIT=0
 if [[ -v FR13_STREAMK_QUALIFICATION_PROFILE ]]; then
   QUALIFICATION_PROFILE_EXPLICIT=1
@@ -185,6 +202,9 @@ export FR13_GATE_QROW16=0
 export FR13_GATE_TAW_NATIVE=0
 export FR13_GATE_DRAFT_HEAD_PAD=0
 export FR13_GATE_DRAFT_HEAD_M32=0
+export FR13_GATE_DRAFT_HEAD_FP8=0
+export FR13_GATE_DFWD_TOP3=0
+unset FR13_GATE_DFWD_TOP3_SO
 export FR13_GATE_BM8=0
 export FR13_GATE_GDN_BV=0
 export FR13_DFWD_UNIFIED_BM8_LIVE_AB=0
@@ -206,7 +226,6 @@ bash scripts/fr13_run_b1_kernel_live_gate.sh
 
 ARM="hydra27_fixed32${ARM_PROFILE_SUFFIX}_${TAG}"
 ARMDIR="$RUNROOT/$ARM"
-TASK_ID=astropy__astropy-12907
 CUTLASS_ARM_ARTIFACT="$ARMDIR/swe_out/verified/per_task/$TASK_ID/fixed32_cutlass_streamk_real_task_arm.json"
 .venv/bin/python - \
   "$ARMDIR$CONTAINER_JSONL" \
@@ -219,7 +238,8 @@ CUTLASS_ARM_ARTIFACT="$ARMDIR/swe_out/verified/per_task/$TASK_ID/fixed32_cutlass
   "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
   "$DRAFT_VOCAB_BLOCKS_CONTAINER" "$DRAFT_VOCAB_BLOCKS_SHA256" \
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
-  "$ONE_SIDED_U95_CAP_MS" "$MAX_COMPARISONS" <<'PY'
+  "$ONE_SIDED_U95_CAP_MS" "$MAX_COMPARISONS" \
+  "$TASK_ID" "$B1_DIAGNOSTIC_TASK_PROFILE" <<'PY'
 import hashlib
 import json
 import sys
@@ -247,6 +267,8 @@ expected_mandatory_weight_bytes = int(sys.argv[18])
 expected_mandatory_weight_floor_ms = float(sys.argv[19])
 expected_one_sided_u95_cap_ms = float(sys.argv[20])
 expected_max_comparisons = int(sys.argv[21])
+expected_task_id = sys.argv[22]
+expected_task_profile = sys.argv[23]
 expected_candidate_sha256, expected_candidate_size, expected_candidate_family = (
     binary.candidate_identity(expected_diagnostic_selector)
 )
@@ -254,7 +276,6 @@ lines = jsonl_path.read_text(encoding="utf-8").splitlines()
 if not lines:
     raise SystemExit("CUTLASS Stream-K byte gate was vacuous")
 records = [json.loads(line) for line in lines]
-expected_task_id = "astropy__astropy-12907"
 expected_task_marker = f"swe_verified:{expected_task_id}"
 expected_shapes = {
     (34816, 5120),
@@ -336,6 +357,7 @@ for key, expected in expected_arm.items():
     if arm_record.get(key) != expected:
         errors.append(f"CUTLASS real-task arm {key} mismatch")
 expected_environment = (
+    f"FR13_B1_DIAGNOSTIC_TASK_PROFILE={expected_task_profile}",
     f"FR13_DRAFT_VOCAB_ROOT={expected_draft_vocab_root}",
     f"FR13_DRAFT_VOCAB_K={expected_draft_vocab_k}",
     f"FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE={expected_profile}",
@@ -348,6 +370,7 @@ for expected_env in expected_environment:
     if container_env_lines.count(expected_env) != 1:
         errors.append(f"qualification environment mismatch: {expected_env}")
 environment_prefixes = (
+    "FR13_B1_DIAGNOSTIC_TASK_PROFILE=",
     "FR13_DRAFT_VOCAB_ROOT=",
     "FR13_DRAFT_VOCAB_K=",
     "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=",
@@ -390,10 +413,13 @@ payload = {
     "status": "pass" if not errors else "fail",
     "run_classification": expected_run_classification,
     "acceptance_valid": False,
+    "timing_eligible": False,
+    "floor_acceptance_eligible": False,
     "task_set": "one real SWE-Verified B1 diagnostic task",
     "task_count": 1,
     "task_ids": [expected_task_id],
     "task_marker": expected_task_marker,
+    "diagnostic_task_profile": expected_task_profile,
     "real_task_arm_sha256": hashlib.sha256(arm_raw).hexdigest(),
     "container_env_sha256": hashlib.sha256(container_env_raw).hexdigest(),
     "draft_vocab_root": expected_draft_vocab_root,

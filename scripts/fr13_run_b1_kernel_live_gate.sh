@@ -14,6 +14,25 @@ cd "$REPO"
 [[ "$FORKED_FA2_SO" == /* ]] \
   || { echo "FORKED_FA2_SO must be an absolute path" >&2; exit 2; }
 
+B1_DIAGNOSTIC_TASK_PROFILE=${FR13_B1_DIAGNOSTIC_TASK_PROFILE:-astropy12907}
+case "$B1_DIAGNOSTIC_TASK_PROFILE" in
+  astropy12907)
+    B1_DIAGNOSTIC_TASK_ID=astropy__astropy-12907
+    B1_DIAGNOSTIC_SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
+    B1_DIAGNOSTIC_SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
+    ;;
+  astropy13236)
+    B1_DIAGNOSTIC_TASK_ID=astropy__astropy-13236
+    B1_DIAGNOSTIC_SUBSET=config/fr13_fixed32/subset_b1_diagnostic_astropy13236.json
+    B1_DIAGNOSTIC_SUBSET_SHA256=f02687afcad677dab1960d0a4650786bd586e8493c2553a5010f66a0294c5c09
+    ;;
+  *)
+    echo "FR13_B1_DIAGNOSTIC_TASK_PROFILE must be astropy12907 or astropy13236" >&2
+    exit 2
+    ;;
+esac
+export FR13_B1_DIAGNOSTIC_TASK_PROFILE="$B1_DIAGNOSTIC_TASK_PROFILE"
+
 FR13_GATE_QROW16=${FR13_GATE_QROW16:-0}
 case "$FR13_GATE_QROW16" in
   0|1) ;;
@@ -97,6 +116,20 @@ else
     echo "FR13_GATE_DFWD_TOP3=0 forbids a candidate binary" >&2
     exit 2
   }
+fi
+if [[ "$B1_DIAGNOSTIC_TASK_PROFILE" == "astropy13236" \
+      && ( ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "identity_onen_n5120_single_b1_byte_ab" \
+             && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "identity_onen_n5120_fullgrid_b1_byte_ab" ) \
+           || "$FR13_GATE_QROW16" != "0" \
+           || "$FR13_GATE_TAW_NATIVE" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
+           || "$FR13_GATE_DFWD_TOP3" != "0" \
+           || "$FR13_GATE_BM8" != "0" \
+           || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
+  echo "astropy13236 B1 diagnostic profile is isolated to the N5120 CUTLASS byte gate" >&2
+  exit 2
 fi
 
 B1_WORKLOAD_PROFILE=${FR13_B1_WORKLOAD_PROFILE:-full_vocab}
@@ -186,7 +219,7 @@ case "$B1_WORKLOAD_PROFILE" in
 esac
 
 ARM="hydra27_fixed32${PROFILE_SUFFIX}_${TAG}"
-SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
+SUBSET=$B1_DIAGNOSTIC_SUBSET
 FA2_SHA=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
 SOURCE_COMMIT=$(git rev-parse HEAD)
 
@@ -194,6 +227,9 @@ SOURCE_COMMIT=$(git rev-parse HEAD)
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]]
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]]
+[[ -f "$SUBSET" && ! -L "$SUBSET" \
+   && "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$B1_DIAGNOSTIC_SUBSET_SHA256" ]] \
+  || { echo "pinned B1 diagnostic subset identity drifted" >&2; exit 2; }
 if [[ "$B1_WORKLOAD_PROFILE" == "k64_root" ]]; then
   [[ -f "$DRAFT_VOCAB_BLOCKS_HOST" \
      && ! -L "$DRAFT_VOCAB_BLOCKS_HOST" \
@@ -234,10 +270,12 @@ elif [[ "${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}" == "1" ]]; then
 fi
 
 mkdir -p "$RUNROOT"
-printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_fp8_gate=%s\ndfwd_top3_gate=%s\ndfwd_top3_sha256=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
+printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_fp8_gate=%s\ndfwd_top3_gate=%s\ndfwd_top3_sha256=%s\nb1_diagnostic_task_profile=%s\nb1_diagnostic_task_id=%s\nb1_diagnostic_subset=%s\nb1_diagnostic_subset_sha256=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$SOURCE_COMMIT" "$FA2_SHA" "$FR13_GATE_BM8" \
   "$FR13_GATE_DRAFT_HEAD_M32" "$FR13_GATE_DRAFT_HEAD_FP8" \
-  "$FR13_GATE_DFWD_TOP3" "$FR13_GATE_DFWD_TOP3_SHA256" "$B1_WORKLOAD_PROFILE" \
+  "$FR13_GATE_DFWD_TOP3" "$FR13_GATE_DFWD_TOP3_SHA256" \
+  "$B1_DIAGNOSTIC_TASK_PROFILE" "$B1_DIAGNOSTIC_TASK_ID" "$SUBSET" \
+  "$B1_DIAGNOSTIC_SUBSET_SHA256" "$B1_WORKLOAD_PROFILE" \
   "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" "$NEEDS_ALLOW" \
   "$DRAFT_VOCAB_BLOCKS_CONTAINER" "$DRAFT_VOCAB_BLOCKS_SHA256" \
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
@@ -266,7 +304,7 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_DRAFT_HEAD_PAD_ROWS=0 \
   FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB="$FR13_GATE_DRAFT_HEAD_PAD" \
   FR13_DRAFT_HEAD_M32_LIVE_AB="$FR13_GATE_DRAFT_HEAD_M32" \
-  FR13_DRAFT_HEAD_M32_INSTANCE_ID=astropy__astropy-12907 \
+  FR13_DRAFT_HEAD_M32_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \
   FR13_DRAFT_HEAD_M32_LIVE_JSON=/logs/fr13_draft_head_m32.live.json \
   FR13_DRAFT_HEAD_FP8="$FR13_GATE_DRAFT_HEAD_FP8" \
   FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON=/logs/fr13_draft_head_fp8.engagement.json \
@@ -277,9 +315,9 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FORKED_FA2_SO="$FORKED_FA2_SO" \
   FR13_FA2_QROW16_SO_SHA256="$FA2_SHA" \
   FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_GATE_QROW16" \
-  FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID=astropy__astropy-12907 \
+  FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \
   FR13_DFWD_UNIFIED_BM8_LIVE_AB="$FR13_GATE_BM8" \
-  FR13_DFWD_UNIFIED_BM8_INSTANCE_ID=astropy__astropy-12907 \
+  FR13_DFWD_UNIFIED_BM8_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \
   FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH=/logs/fr13_dfwd_unified_bm8.real_event.arm \
   FR13_DFWD_UNIFIED_BM8_IDENTITY_JSON=/logs/fr13_dfwd_unified_bm8.identity.json \
   FR13_DFWD_UNIFIED_BM8_LIVE_JSON=/logs/fr13_dfwd_unified_bm8.live.json \
@@ -303,7 +341,7 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_BM8" == "1" ]]; then
     --live-result "$RUNROOT/$ARM/logs/fr13_dfwd_unified_bm8.live.json" \
     --identity "$RUNROOT/$ARM/logs/fr13_dfwd_unified_bm8.identity.json" \
     --expected-source-commit "$SOURCE_COMMIT" \
-    --expected-instance-id astropy__astropy-12907
+    --expected-instance-id "$B1_DIAGNOSTIC_TASK_ID"
 fi
 if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]]; then
   DRAFT_HEAD_LIVE="$RUNROOT/$ARM/logs/fr13_draft_head_m32.live.json"
