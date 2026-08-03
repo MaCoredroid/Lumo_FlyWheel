@@ -75,11 +75,17 @@ KERNEL_SOURCE_RELATIVE_PATH = (
 )
 SOURCE_FILES = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "scripts/fr13_b1_composed_stack_gate.py",
     "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/fr13_cutlass_streamk_pass.py",
+    "scripts/fr13_cutlass_wave_binary.py",
     "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py",
     "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh",
     "scripts/fr13_run_b1_kernel_live_gate.sh",
     "scripts/fr13_run_b1_sfwd_conv_postprep_gate.sh",
+    "scripts/fr13_run_b1_target_sfwd_conv_postprep_live_gate.sh",
     "scripts/fr13_sfwd_conv_postprep_gate.py",
     "scripts/run_swe_bench_q36_a.py",
     SOURCE_RELATIVE_PATH,

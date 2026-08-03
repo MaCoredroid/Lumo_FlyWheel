@@ -1,0 +1,45 @@
+{
+  "binary": {
+    "bytes": 159288,
+    "mode": "0555",
+    "path": "/artifact/fr13_dfwd_k64_mapped_top3_sm121a.abi3.so",
+    "sha256": "c0ed75cafdd926eceafcf28671869d54f37addb51bfef5a37c0b07c34f5420ff"
+  },
+  "byte_equality_claim": false,
+  "cuda_arch": "12.1a",
+  "cuda_release": "13.0",
+  "kernel_contract": {
+    "block": [256, 1, 1],
+    "candidate_reduction_launches_per_head": 1,
+    "graph_outputs": "direct persistent spine/top3 writes",
+    "grid": [1, 1, 1],
+    "heads_per_fixed32_event": 5,
+    "id_map": "int64[65536] contiguous",
+    "input": "BF16[1,65536] contiguous",
+    "input_logit_bytes_per_launch": 131072,
+    "launches_per_head": 1,
+    "mapping": "top3 subset indices mapped inside the same kernel",
+    "minimum_reduction_launches_eliminated_per_event": 45,
+    "minimum_redundant_argmax_logit_bytes_eliminated_per_event": 655360,
+    "outputs": ["int64[1] spine", "int64[1,3] mapped top3"],
+    "selection": "top3 descending, NaN first, lower index tie-break",
+    "stock_reduction_launches_per_head": {
+      "argmax": 1,
+      "topk_block_digit_counts": 2,
+      "topk_digit_cumsum": 2,
+      "topk_gather": 1,
+      "topk_scan_by_key": 2,
+      "topk_within_k_counts": 2
+    }
+  },
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "real_task_correctness": false,
+  "schema": "fr13.fixed32.dfwd_k64_mapped_top3_sm121a_build.v1",
+  "source": {
+    "path": "csrc/fr13_dfwd_k64_top3.cu",
+    "sha256": "38ea96d955355bf172f534174aa2d91e6db23170144b1c84c9474016a6c05e72"
+  },
+  "status": "BUILT_UNQUALIFIED",
+  "torch_version": "2.11.0+cu130"
+}

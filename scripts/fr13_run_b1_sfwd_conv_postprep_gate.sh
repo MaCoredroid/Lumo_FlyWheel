@@ -132,6 +132,7 @@ bash scripts/fr13_run_b1_kernel_live_gate.sh
 finalize_manifest
 
 .venv/bin/python scripts/fr13_sfwd_conv_postprep_gate.py validate \
+  --repo "$REPO" \
   --arm-dir "$ARMDIR" \
   --source-commit "$SOURCE_COMMIT" \
   --task-id "$TASK_ID" \

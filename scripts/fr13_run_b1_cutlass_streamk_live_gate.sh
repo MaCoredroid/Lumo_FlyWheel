@@ -11,6 +11,11 @@ cd "$REPO"
 : "${CUTLASS_STREAMK_SO:?set CUTLASS_STREAMK_SO to the pinned Stream-K shared object}"
 PATCH_SOURCE=scripts/fr13_patch_cutlass_fixed32_wave.py
 SOURCE_COMMIT=$(git rev-parse HEAD)
+COMBINED_SFWD_GATE=${FR13_STREAMK_SFWD_COMBINED_GATE:-0}
+case "$COMBINED_SFWD_GATE" in
+  0|1) ;;
+  *) echo "FR13_STREAMK_SFWD_COMBINED_GATE must be exactly 0 or 1" >&2; exit 2 ;;
+esac
 GATE_CANDIDATE=${FR13_STREAMK_GATE_CANDIDATE:-streamk_coop128}
 case "$GATE_CANDIDATE" in
   streamk_coop128)
@@ -192,7 +197,18 @@ if [[ "$GATE_CANDIDATE" == "identity_onen_b1" \
     >/dev/null
 fi
 
-if [[ -e "$RUNROOT" || -L "$RUNROOT" ]]; then
+if [[ "$COMBINED_SFWD_GATE" == "1" ]]; then
+  [[ "$GATE_CANDIDATE:$QUALIFICATION_PROFILE:$B1_DIAGNOSTIC_TASK_PROFILE" \
+      == "identity_wide256_fullgrid_b1:k64_root:astropy12907" \
+     && "${FR13_GATE_SFWD_CONV_POSTPREP:-0}" == "1" \
+     && -d "$RUNROOT" \
+     && ! -L "$RUNROOT" \
+     && -f "$RUNROOT/sfwd_conv_postprep_source_manifest.at_launch.json" \
+     && -f "$RUNROOT/sfwd_conv_postprep_host_readiness.json" ]] || {
+    echo "combined target/SFWD gate requires its exact preflight directory and selector" >&2
+    exit 2
+  }
+elif [[ -e "$RUNROOT" || -L "$RUNROOT" ]]; then
   echo "CUTLASS Stream-K gate requires a fresh RUNROOT: $RUNROOT" >&2
   exit 2
 fi
