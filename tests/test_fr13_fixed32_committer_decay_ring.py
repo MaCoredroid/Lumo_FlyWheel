@@ -87,7 +87,7 @@ def test_committer_uses_exported_decay_without_an_exponential() -> None:
     assert decay_update.count("tl.exp(") == 1
     assert "DECAY_REUSE=bool(decay_reuse)" in launcher
     assert "decay_reuse and not gate_reuse" in launcher
-    assert '{"maxnreg": 167} if decay_reuse else {}' in launcher
+    assert '{"maxnreg": 169} if decay_reuse else {}' in launcher
 
 
 def test_decay_preseed_is_cumulative_fail_closed_and_byte_gated() -> None:

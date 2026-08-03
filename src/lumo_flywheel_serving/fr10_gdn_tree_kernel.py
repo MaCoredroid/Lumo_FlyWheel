@@ -13131,7 +13131,7 @@ def _fr13_fixed32_committer_native_layer_batch(
         if state.get("direct_metadata", False)
         else state["accepted_lens"]
     )
-    extra_launch_kwargs = {"maxnreg": 167} if decay_reuse else {}
+    extra_launch_kwargs = {"maxnreg": 169} if decay_reuse else {}
     _fr13_fixed32_committer_native_layer_batch_kernel[grid](
         a_rings,
         b_rings,
