@@ -1,0 +1,25 @@
+PASS offline primary SM121a compile: pre-change/selector-off/candidate x direct/metadata x B1/B4
+PASS offline isolated fresh-cache rebuild: pre-change/selector-off/candidate x direct/metadata x B1/B4
+PASS independent nvdisasm/cuobjdump verification: 13 primary + 13 rebuild cubins
+PASS primary/rebuild report identity
+PASS selector-off machine-code identity: SASS/resource x direct/metadata x B1/B4
+PASS target/resource gate: exact sm_121a; registers <=255; stack/local/LDL/STL/calls all zero
+PASS traffic gate: source columns 34 -> 3; all 34 destination columns retained
+PASS launch gate: B1 480 CTAs/event; B4 1,920 CTAs/event
+PASS fixed32 route gate: generic batched writeback guarded out; full-node writebacks zero
+PASS focused pytest: 69 passed in 1.84s
+PASS bash syntax: serving variant and container launcher
+PASS Python compilation: audit, verifier, and artifact test
+PASS JSON parse and git diff whitespace checks
+
+Focused pytest command:
+python3 -m pytest -q \
+  tests/test_fr13_fixed32_treeconv_zero_tail_codegen_artifact.py \
+  tests/test_fr13_fixed32_conv_commit_zero_tail.py \
+  tests/test_fr13_fixed32_conv_commit_wiring.py \
+  tests/test_fr13_fixed32_conv_pregather_geometry.py \
+  tests/test_fr13_fixed32_committer_layer_batch.py \
+  tests/test_fr13_fixed32_conv_source_batch.py
+
+No GPU kernel, service, real task, synthetic task, request, timing, or
+acceptance run was launched by this audit.
