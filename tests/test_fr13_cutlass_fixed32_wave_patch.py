@@ -809,7 +809,7 @@ def test_b1_n5120_single_tile_scheduler_removes_persistent_advance() -> None:
     )
 
 
-def test_b1_n5120_fullgrid_keeps_40_cta_narrow_and_48_cta_wide_policy() -> None:
+def test_b1_n5120_fullgrid_keeps_initialized_static_scheduler_contract() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
@@ -824,13 +824,14 @@ def test_b1_n5120_fullgrid_keeps_40_cta_narrow_and_48_cta_wide_policy() -> None:
         scheduler_start,
     )
     scheduler = patched[scheduler_start:scheduler_end]
-    assert "public Fr13B1OneNStaticTileScheduler100" in scheduler
-    assert "using GridBase = StaticPersistentTileScheduler100;" in scheduler
-    assert "using Arguments = typename GridBase::Arguments;" in scheduler
-    assert "Arguments arguments = Arguments{}" in scheduler
-    assert "return GridBase::get_grid_shape(" in scheduler
-    assert scheduler.count("return GridBase::get_grid_shape(") == 2
-    assert "Fr13DivisorBalancedStaticTileScheduler100::get_grid_shape" not in scheduler
+    assert "public StaticPersistentTileScheduler100" in scheduler
+    assert "using Base = StaticPersistentTileScheduler100;" in scheduler
+    assert "using Base::Base;" in scheduler
+    assert "public Fr13B1OneNStaticTileScheduler100" not in scheduler
+    assert "get_current_work" not in scheduler
+    assert "advance_to_next_work" not in scheduler
+    assert "fetch_next_work" not in scheduler
+    assert "get_grid_shape" not in scheduler
     assert "fr13_fixed32_b1_onen_fullgrid_static_scheduler" in patched
     assert "using Scheduler = Fr13B1OneNFullGridStaticTileScheduler100;" in patched
 

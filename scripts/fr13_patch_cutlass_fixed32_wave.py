@@ -615,40 +615,16 @@ class Fr13B1N5120SingleTileScheduler100
 };
 
 // The three wider B1 projections have enough complete output tiles to keep all
-// 48 SMs resident. Reuse the audited one-N coordinate mapping, but bypass the
-// divisor-balanced 28--34 CTA host policy so CUTLASS retains its full static
-// persistent grid. N=5120 remains on the separate exact 40-CTA specialization.
+// 48 SMs resident. Keep CUTLASS's complete static-persistent device contract as
+// well as its full host grid: the SM120 ping-pong kernel advances scheduler
+// state directly and therefore requires the base cursor and grid size to be
+// initialized. N=5120 remains on the separate exact 40-CTA specialization.
 class Fr13B1OneNFullGridStaticTileScheduler100
-    : public Fr13B1OneNStaticTileScheduler100 {
-  using Base = Fr13B1OneNStaticTileScheduler100;
-  using GridBase = StaticPersistentTileScheduler100;
+    : public StaticPersistentTileScheduler100 {
+  using Base = StaticPersistentTileScheduler100;
 
  public:
   using Base::Base;
-  using Params = typename Base::Params;
-  using Arguments = typename GridBase::Arguments;
-
-  template <class ProblemShapeMNKL, class BlockShape, class ClusterShape>
-  CUTLASS_HOST_DEVICE static dim3 get_grid_shape(
-      Params const& params, ProblemShapeMNKL problem_shape_mnkl,
-      BlockShape block_shape_mnk, ClusterShape cluster_shape_mnk,
-      KernelHardwareInfo hw_info, Arguments arguments = Arguments{},
-      bool truncate_by_problem_size = true) {
-    return GridBase::get_grid_shape(
-        params, problem_shape_mnkl, block_shape_mnk, cluster_shape_mnk,
-        hw_info, arguments, truncate_by_problem_size);
-  }
-
-  template <class ProblemShapeMNKL, class TileShape, class AtomThrShape,
-            class ClusterShape>
-  CUTLASS_HOST_DEVICE static dim3 get_grid_shape(
-      Params const& params, ProblemShapeMNKL problem_shape_mnkl,
-      TileShape tile_shape_mnk, AtomThrShape atom_thr_shape_mnk,
-      ClusterShape cluster_shape_mnk, KernelHardwareInfo hw_info) {
-    return GridBase::get_grid_shape(
-        params, problem_shape_mnkl, tile_shape_mnk, atom_thr_shape_mnk,
-        cluster_shape_mnk, hw_info);
-  }
 };
 
 template <class TileShape, class ClusterShape,
