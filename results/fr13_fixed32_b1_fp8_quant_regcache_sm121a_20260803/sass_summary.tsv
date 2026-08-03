@@ -1,0 +1,3 @@
+variant	encoded_instructions	non_nop_instructions	bar	lds	sts	call	stock_identity_sha256
+stock_bf16_colmajor_nonue8m0	2120	2109	1	12	40	56	9a8fa63738b53f4433e3308327e19bda7d1a99c5a29443be171876b07ade96a0
+fixed32_b1_regcache_r32k5120	408	398	0	0	0	9	not_applicable
