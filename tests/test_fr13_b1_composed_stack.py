@@ -560,3 +560,10 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
     assert result["full_step_tps"] == {"wall": 40.0, "gpu_components": 45.0}
     assert result["acceptance"]["descriptive_screen_pass"] is True
     assert result["production_evidence"]["sfwd_engaged_layer_count"] == 48
+
+
+def test_forked_launcher_forwards_cudagraph_mode_into_container() -> None:
+    launcher = (ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh").read_text(
+        encoding="utf-8"
+    )
+    assert '-e CUDAGRAPH_MODE="$CUDAGRAPH_MODE"' in launcher
