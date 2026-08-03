@@ -1,0 +1,90 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_n5120_fullgrid_k64_root_byte_pass_reduced_artifact.v1",
+  "status": "PASS",
+  "branch": "codex/fixed32-b1-fullgrid-byte-pass-20260803",
+  "source_commit": "c49c8eb5370e4d4035aceffaa8476aea31f921f5",
+  "gate": {
+    "path": "cutlass_identity_onen_n5120_fullgrid_b1_k64_root_byte_gate.json",
+    "sha256": "9e50e63635cb57a126dbe5621ae8ffde5c156bf59186ea0a5a73de0afa1e8083",
+    "schema": "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_k64_root_live_gate.v1",
+    "status": "pass"
+  },
+  "validation": {
+    "status": "pass",
+    "validator": "scripts/fr13_cutlass_streamk_pass.py validate",
+    "candidate_selector": "identity_onen_n5120_fullgrid_b1",
+    "qualification_profile": "k64_root",
+    "diagnostic_task_profile": "astropy13236",
+    "expected_source_commit": "c49c8eb5370e4d4035aceffaa8476aea31f921f5"
+  },
+  "task": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "instance_id": "astropy__astropy-13236",
+    "count": 1,
+    "outcome": "resolved"
+  },
+  "candidate": {
+    "family": "identity_onen_n5120_fullgrid_b1",
+    "selector": "identity_onen_n5120_fullgrid_b1",
+    "diagnostic_selector": "identity_onen_n5120_fullgrid_b1_byte_ab",
+    "sha256": "1024adda7fe4d314f31779206b5b6a7691ef1eee6c7c15ce5c837cced99a3584",
+    "bytes": 118836392,
+    "default_enabled": false,
+    "production_enabled_during_run": false
+  },
+  "comparison": {
+    "calls": 320,
+    "call_limit": 320,
+    "shapes": [
+      {
+        "m": 32,
+        "n": 5120,
+        "k": 6144
+      },
+      {
+        "m": 32,
+        "n": 5120,
+        "k": 17408
+      },
+      {
+        "m": 32,
+        "n": 14336,
+        "k": 5120
+      },
+      {
+        "m": 32,
+        "n": 16384,
+        "k": 5120
+      },
+      {
+        "m": 32,
+        "n": 34816,
+        "k": 5120
+      }
+    ],
+    "mismatching_comparisons": 0,
+    "differing_bytes": 0,
+    "served_result": "stock"
+  },
+  "claims": {
+    "real_task_resolved": true,
+    "byte_correctness": true,
+    "acceptance_valid": false,
+    "acceptance_claim": false,
+    "timing_eligible": false,
+    "timing_claim": false,
+    "performance_claim": false,
+    "hardware_floor_evidence": false,
+    "candidate_served": false
+  },
+  "privacy": {
+    "raw_prompts_absent": true,
+    "raw_responses_absent": true,
+    "raw_patches_absent": true,
+    "raw_logs_absent": true,
+    "raw_environment_absent": true,
+    "raw_task_output_absent": true,
+    "process_identifiers_absent": true,
+    "container_identities_absent": true
+  }
+}
