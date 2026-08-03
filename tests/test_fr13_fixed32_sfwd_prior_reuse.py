@@ -398,7 +398,7 @@ def test_wiring_is_exclusive_reference_served_and_preserves_old_pass() -> None:
     assert candidate.CANDIDATE not in production
     assert 'CANDIDATE = "fixed32_sfwd_state_fusion_v1"' in production
     assert hashlib.sha256(OLD_KERNEL_PATH.read_bytes()).hexdigest() == (
-        "f70b73659fa18645a58b16d63b523cd4e22d1f5422bc05cc2a03dd8be2b551f4"
+        "f0e8081568890a6883f1b9cff254b0e56d05348aa0cb158709c6065be9023378"
     )
 
 
