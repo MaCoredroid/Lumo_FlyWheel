@@ -1,0 +1,22 @@
+PASS pinned source application
+PASS isolated CUDA 13.0 SM121a object compilation
+PASS linked AArch64 extension construction
+PASS linked extension import
+PASS routed FP16 resource extraction
+PASS routed BF16 resource extraction
+PASS all routed kernels STACK0 and LOCAL0
+PASS routed SASS contains zero LDL, STL, or CALL
+PASS linked callers query and propagate the runtime SM count
+PASS exact M=128 and five-(N,K) source gate
+PASS N=5120 logical work tiles: 80 to 40 per exact shape
+PASS five-shape logical work tiles: 1184 to 1104
+PASS byte diagnostic executes candidate but serves stock output
+PASS admitted production dispatch contains no stock fallback
+PASS focused patch tests: 37 passed
+PASS Python compile check
+PASS git diff whitespace check
+NOT RUN GPU execution
+NOT RUN synthetic or probe workload
+NOT RUN real SWE-Verified byte equality
+NOT RUN B4 full-step timing
+NOT RUN hardware-floor acceptance

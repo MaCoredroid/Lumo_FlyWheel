@@ -1,0 +1,6 @@
+n	k	route	tile_m	tile_n	logical_tiles	launch_ctas_at_sm_count_48	tiles_per_cta	logical_tile_delta_from_twom
+34816	5120	twom_pingpong	64	128	544	34	16	0
+5120	17408	cooperative_m128	128	128	40	40	1	-40
+5120	6144	cooperative_m128	128	128	40	40	1	-40
+16384	5120	twom_pingpong	64	128	256	32	8	0
+14336	5120	twom_pingpong	64	128	224	32	7	0

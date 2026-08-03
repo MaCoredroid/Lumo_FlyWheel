@@ -1,0 +1,5 @@
+route	dtype	registers	stack_bytes	local_bytes	shared_bytes	constant0_bytes	verdict
+twom_pingpong	fp16	168	0	0	1024	2688	retain
+twom_pingpong	bf16	168	0	0	1024	2688	retain
+cooperative_m128	fp16	168	0	0	1024	2688	retain
+cooperative_m128	bf16	168	0	0	1024	2688	retain

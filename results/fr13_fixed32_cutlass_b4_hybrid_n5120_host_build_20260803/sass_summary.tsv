@@ -1,0 +1,5 @@
+route	dtype	sass_slots	ldl	stl	call	branches	qmma	ffma	ldsm	stsm
+twom_pingpong	fp16	1032	0	0	0	39	128	128	48	16
+twom_pingpong	bf16	1032	0	0	0	39	128	128	48	16
+cooperative_m128	fp16	1352	0	0	0	40	128	128	48	16
+cooperative_m128	bf16	1352	0	0	0	40	128	128	48	16

@@ -1,0 +1,142 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_hybrid_n5120_host_build.v1",
+  "created_at_utc": "2026-08-03T04:28:21Z",
+  "status": "host_compile_link_import_audit_pass_default_off",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/fixed32-b4-hybrid-n5120-20260803",
+    "base_commit": "c481bb812a81e62e4874416baf614b294c1c01a7",
+    "source_commit": "f4c2c70561d589e16d877188adf6981be99d3766",
+    "patch_source_sha256": "17bcaffc9b982ca436fb0794ac7c3d17cef7d5ed06d9786b478ea21acd2e4f34",
+    "patch_source_bytes": 83352,
+    "patched_dispatch_sha256": "e556cb3d6b64bdb18b364551c331353acd0797cd1e148362241ac150e8c6a001",
+    "patched_dispatch_bytes": 83989,
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2"
+  },
+  "candidate": {
+    "selector": "identity_hybrid_n5120_b4",
+    "diagnostic_selector": "identity_hybrid_n5120_b4_byte_ab",
+    "intended_profile": "k64_root",
+    "default_enabled": false,
+    "production_authorized": false,
+    "physical_rows": 128,
+    "qualified_projection_nk": [
+      [5120, 6144],
+      [5120, 17408],
+      [14336, 5120],
+      [16384, 5120],
+      [34816, 5120]
+    ],
+    "n5120_route": {
+      "tile_mnk": [128, 128, 128],
+      "cluster_mnk": [1, 1, 1],
+      "mainloop_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+      "mainloop_stage_count": 2,
+      "tile_scheduler": "fr13_fixed32_m128_static_scheduler"
+    },
+    "other_projection_route": {
+      "tile_mnk": [64, 128, 128],
+      "cluster_mnk": [1, 1, 1],
+      "mainloop_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+      "mainloop_stage_count": 2,
+      "tile_scheduler": "fr13_fixed32_b4_twom_static_scheduler"
+    },
+    "epilogue": "accumulator_identity_round_to_nearest",
+    "diagnostic_serves": "stock",
+    "admitted_production_dispatch": "direct_candidate_only",
+    "non_admitted_dispatch": "stock"
+  },
+  "host_build": {
+    "result": "pass",
+    "target": "sm_121a",
+    "cuda_compiler_version": "13.0.88",
+    "host_compiler_version": "13.3.0",
+    "object_sha256": "fca39cd6fa4ff2952731410478a3d103d06f5ca39b6cb6cee1ae9291b6bffdb7",
+    "object_bytes": 22507176,
+    "cubin_sha256": "874f291f56dd6cbe87c9187e97364d0daea857ec78c396d0eed9543f7b133fcc",
+    "cubin_bytes": 2293856,
+    "binary_sha256": "63c7b80bf11daf01aa040cf91d57ef1c90ed1406a6185368684a7486aeebf1a4",
+    "binary_bytes": 118243776,
+    "linked_elf": "ELF64 AArch64 shared object",
+    "python_import_result": "pass",
+    "gpu_runtime_used": false,
+    "docker_used": false,
+    "outputs_published": false
+  },
+  "resource_gate": {
+    "result": "pass",
+    "kernel_records": 4,
+    "dtypes": ["fp16", "bf16"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "local_load_instructions": 0,
+    "local_store_instructions": 0,
+    "call_instructions": 0
+  },
+  "sass_per_dtype": {
+    "twom_pingpong": {
+      "instructions": 1032,
+      "branches": 39,
+      "qmma": 128,
+      "ffma": 128,
+      "ldsm": 48,
+      "stsm": 16
+    },
+    "cooperative_m128": {
+      "instructions": 1352,
+      "branches": 40,
+      "qmma": 128,
+      "ffma": 128,
+      "ldsm": 48,
+      "stsm": 16
+    }
+  },
+  "cta_geometry_at_sm_count_48": {
+    "twom_baseline_logical_tiles_across_five_shapes": 1184,
+    "hybrid_logical_tiles_across_five_shapes": 1104,
+    "logical_tile_delta": -80,
+    "logical_tile_delta_percent": -6.7568,
+    "n5120_logical_tiles_per_shape_before": 80,
+    "n5120_logical_tiles_per_shape_after": 40,
+    "n5120_launch_ctas_before": 40,
+    "n5120_launch_ctas_after": 40,
+    "n5120_tiles_per_cta_before": 2,
+    "n5120_tiles_per_cta_after": 1,
+    "arithmetic_work_changed": false
+  },
+  "linked_caller_audit": {
+    "result": "pass",
+    "caller_records": 4,
+    "cuda_get_device_calls_per_caller": 1,
+    "cuda_device_get_attribute_calls_per_caller": 1,
+    "queried_attribute": "cudaDevAttrMultiProcessorCount",
+    "sm_count_parameter_stores_per_caller": 1,
+    "scheduler_get_grid_calls_per_caller": 1
+  },
+  "source_checks": {
+    "focused_tests": "37 passed",
+    "python_compile": "pass",
+    "git_diff_check": "pass",
+    "pinned_source_apply": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "synthetic or probe workload",
+    "real SWE-Verified byte equality",
+    "B4 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gates": [
+    "K64 root1 profile-bound selector integration",
+    "Tail23 canonical exact4 raw-byte comparison",
+    "Hydra27 canonical exact4 raw-byte comparison",
+    "paired real-task B4 full-step timing after both byte gates pass"
+  ]
+}

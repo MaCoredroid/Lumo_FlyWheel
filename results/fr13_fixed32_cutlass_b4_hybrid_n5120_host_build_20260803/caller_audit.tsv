@@ -1,0 +1,5 @@
+route	dtype	cuda_get_device_calls	multiprocessor_attribute_calls	sm_count_param_stores	scheduler_get_grid_calls	verdict
+twom_pingpong	fp16	1	1	1	1	pass
+twom_pingpong	bf16	1	1	1	1	pass
+cooperative_m128	fp16	1	1	1	1	pass
+cooperative_m128	bf16	1	1	1	1	pass
