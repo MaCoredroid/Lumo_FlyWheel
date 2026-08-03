@@ -82,12 +82,12 @@ def test_committer_uses_exported_decay_without_an_exponential() -> None:
     end = kernel.index("        b_v -=", start)
     decay_update = kernel[start:end]
 
-    assert "b_h *= b_g_or_decay" in decay_update
+    assert "b_h *= tl.load(p_live_gate)" in decay_update
     assert "b_h *= tl.exp(b_g_or_decay)" in decay_update
     assert decay_update.count("tl.exp(") == 1
+    assert kernel.index("b_beta = tl.load(p_live_gate + 1)", start) > end
     assert "DECAY_REUSE=bool(decay_reuse)" in launcher
     assert "decay_reuse and not gate_reuse" in launcher
-    assert '{"maxnreg": 169} if decay_reuse else {}' in launcher
 
 
 def test_decay_preseed_is_cumulative_fail_closed_and_byte_gated() -> None:

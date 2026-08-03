@@ -13002,8 +13002,9 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
                 + node * RING_GATE_N_STRIDE
                 + i_hv * 2
             )
-            b_g_or_decay = tl.load(p_live_gate)
-            b_beta = tl.load(p_live_gate + 1)
+            if not DECAY_REUSE:
+                b_g_or_decay = tl.load(p_live_gate)
+                b_beta = tl.load(p_live_gate + 1)
         else:
             b_b = tl.load(p_b).to(tl.float32)
             x = tl.load(p_a).to(tl.float32) + b_dt_bias
@@ -13026,10 +13027,12 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
         elif USE_QK_L2NORM_IN_KERNEL:
             b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
         if DECAY_REUSE:
-            b_h *= b_g_or_decay
+            b_h *= tl.load(p_live_gate)
         else:
             b_h *= tl.exp(b_g_or_decay)
         b_v -= tl.sum(b_h * b_k[None, :], 1)
+        if DECAY_REUSE:
+            b_beta = tl.load(p_live_gate + 1)
         b_v *= b_beta
         b_h += b_v[:, None] * b_k[None, :]
 
@@ -13131,7 +13134,6 @@ def _fr13_fixed32_committer_native_layer_batch(
         if state.get("direct_metadata", False)
         else state["accepted_lens"]
     )
-    extra_launch_kwargs = {"maxnreg": 169} if decay_reuse else {}
     _fr13_fixed32_committer_native_layer_batch_kernel[grid](
         a_rings,
         b_rings,
@@ -13192,7 +13194,6 @@ def _fr13_fixed32_committer_native_layer_batch(
         DECAY_REUSE=bool(decay_reuse),
         num_warps=8,
         num_stages=3,
-        **extra_launch_kwargs,
     )
 
 
