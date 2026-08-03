@@ -135,7 +135,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 19
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 20
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
@@ -919,7 +919,10 @@ def test_b4_hybrid_n5120_routes_only_exact_projections() -> None:
     runner_end = patched.index("auto run_stock", runner_start)
     runner = patched[runner_start:runner_end]
     assert "if (N == 5120)" in runner
-    assert "sm120_blockwise_fp8_config_b4_m128_static_identity_stage2" in runner
+    assert (
+        "sm120_blockwise_fp8_config_b4_m128_n5120_single_identity_stage2"
+        in runner
+    )
     assert "return run_identity_twom_b4(destination);" in runner
     assert "run_stock" not in runner
 
@@ -958,6 +961,47 @@ def test_b4_hybrid_n5120_routes_only_exact_projections() -> None:
     diagnostic = patched[diagnostic_start:diagnostic_end]
     assert "run_stock(out);\n    run_candidate(candidate);" in diagnostic
     assert "\n    return;\n  }\n\n  if (wave_variant ==" in diagnostic
+
+
+def test_b4_hybrid_n5120_uses_exact_x_axis_single_tile_scheduler() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    scheduler_start = patched.index("class Fr13B4N5120SingleTileScheduler100")
+    scheduler_end = patched.index(
+        "// Fixed32 B1 swap-AB", scheduler_start
+    )
+    scheduler = patched[scheduler_start:scheduler_end]
+    assert "static constexpr uint32_t kProblemTiles = 40;" in scheduler
+    assert "return {0, static_cast<int32_t>(blockIdx.x), 0, true};" in scheduler
+    assert "linear_idx >= kProblemTiles" in scheduler
+    assert "return {0, static_cast<int32_t>(linear_idx), 0, true};" in scheduler
+    assert "bool is_last_tile(WorkTileInfo&, uint32_t = 1) const" in scheduler
+    assert "return true;" in scheduler
+    assert "WorkTileInfo::invalid_work_tile()" in scheduler
+    assert "blockIdx.y" not in scheduler
+    assert "gridDim" not in scheduler
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_m128_n5120_single_identity_stage2"
+    )
+    config_end = patched.index(
+        "// Isolate the identity epilogue on B4", config_start
+    )
+    config = patched[config_start:config_end]
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in config
+    assert "using TileShape = Shape<_128, _128, _128>;" in config
+    assert "using ClusterShape = Shape<_1, _1, _1>;" in config
+    assert "fr13_fixed32_b4_n5120_single_tile_scheduler" in config
+    assert "cutlass::gemm::collective::StageCount<2>" in config
+
+    generic_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_m128_static_identity_stage2"
+    )
+    generic_end = patched.index("template <typename OutType>", generic_start)
+    generic = patched[generic_start:generic_end]
+    assert "fr13_fixed32_m128_static_scheduler" in generic
+    assert "fr13_fixed32_b4_n5120_single_tile_scheduler" not in generic
 
 
 def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
