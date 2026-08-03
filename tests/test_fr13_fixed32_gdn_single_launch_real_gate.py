@@ -577,15 +577,16 @@ def test_route_is_stock_serving_and_production_cannot_accept_gate_value() -> Non
 
     assert 'return "single_launch_gate" if batch == 4 else None' in kernel
     assert '_launch_reference(collect_export=False)\n        return out, None' in kernel
-    assert '_single_launch_override=True' in kernel
+    assert "_single_launch_override=not gqa_group3_gate" in kernel
+    assert "_gqa_group3_override=gqa_group3_gate" in kernel
     assert '"reference_served": True' in kernel
     assert '"state_restored": True' in kernel
     assert '"fixed32_gdn_single_launch_tree_v2"' in kernel
-    assert 'candidate_raw == "single_launch"' in patcher
-    assert 'candidate == "single_launch"' in patcher
+    assert 'candidate_raw in ("single_launch", "gqa_group3")' in patcher
+    assert 'candidate in ("single_launch", "gqa_group3")' in patcher
     assert '"FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8"' in patcher
     assert '|| "$_fr13_gdn_path_bv_candidate" == "single_launch"' in launcher
-    assert "single-launch GDN live gate requires exact K64/root1" in launcher
+    assert "ordered GDN live gate requires exact K64/root1" in launcher
     assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH" in launcher
     assert "one baked expected batch" in launcher
     assert launcher.count("fr13_fixed32_gdn_single_launch_tree.arm") == 2

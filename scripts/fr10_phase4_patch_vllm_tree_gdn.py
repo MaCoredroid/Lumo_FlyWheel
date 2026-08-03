@@ -3630,7 +3630,8 @@ def _fr13_fixed32_capture_begin(
     if (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
         and (
-            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE != "single_launch"
+            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+            not in ("single_launch", "gqa_group3")
             or batch == _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
         )
     ):
@@ -3820,7 +3821,8 @@ def _fr13_fixed32_capture_end(
     if (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
         and (
-            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE != "single_launch"
+            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+            not in ("single_launch", "gqa_group3")
             or int(work["batch_size"])
             == _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
         )
@@ -4057,7 +4059,8 @@ def _fr13_fixed32_observed_graph_replay(
     if (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
         and (
-            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE != "single_launch"
+            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+            not in ("single_launch", "gqa_group3")
             or int(event["batch_size"])
             == _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
         )
@@ -6448,17 +6451,18 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         "64",
         "128",
         "single_launch",
+        "gqa_group3",
     ):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
-            "16, 32, 64, 128, or single_launch"
+            "16, 32, 64, 128, single_launch, or gqa_group3"
         )
     candidate = (
         candidate_raw
-        if candidate_raw == "single_launch"
+        if candidate_raw in ("single_launch", "gqa_group3")
         else (int(candidate_raw) if candidate_raw else None)
     )
-    if candidate == "single_launch":
+    if candidate in ("single_launch", "gqa_group3"):
         if expected_batch_raw not in ("1", "4"):
             raise RuntimeError(
                 "FR13 GDN single-launch patch requires exactly one expected "
@@ -6892,7 +6896,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
     sfwd_conv_postprep = _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
     _fr13_fixed32_eager_boot_warm_contract()
-    if candidate == "single_launch":
+    if candidate in ("single_launch", "gqa_group3"):
         if expected_batch_raw not in ("1", "4"):
             raise RuntimeError(
                 "FR13 GDN single-launch patch requires exactly one expected "

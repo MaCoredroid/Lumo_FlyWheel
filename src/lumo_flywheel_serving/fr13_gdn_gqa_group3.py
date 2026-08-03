@@ -1,8 +1,8 @@
 """Fixed32 GDN single-launch candidate grouped by shared key head.
 
-This module is deliberately not wired into serving.  It contains the next
-kernel candidate and its closed physical-work contract so SM121a resource,
-byte, and real-task gates can qualify it without changing the served arm.
+The runtime imports this module only for the default-off ``gqa_group3`` live
+gate.  The incumbent remains served while the authenticated post-replay
+comparator qualifies this kernel on the captured graph's persistent operands.
 """
 
 from __future__ import annotations
@@ -730,6 +730,7 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
     decay_export: bool,
     flags_export: bool,
     flags_rows: int,
+    maxnreg: int | None = None,
 ) -> dict[str, object]:
     """Launch the unserved candidate after explicit caller-side qualification."""
     contract = fixed32_gdn_gqa_group3_contract(batch_size, mode=mode)
@@ -773,8 +774,13 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         raise ValueError("GQA-group3 v geometry drift")
     if decay_export and not gate_export:
         raise ValueError("GQA-group3 decay export requires gate export")
+    if maxnreg is not None and int(maxnreg) != 80:
+        raise ValueError("GQA-group3 maxnreg must be unset or exactly 80")
 
     grid = (NUM_K_HEADS, DIM_V // BLOCK_V, int(batch_size))
+    launch_options = {"num_warps": 8}
+    if maxnreg is not None:
+        launch_options["maxnreg"] = int(maxnreg)
     _fr13_fixed32_gdn_gqa_group3_single_launch_kernel[grid](
         q,
         k,
@@ -831,6 +837,6 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         DECAY_EXPORT=bool(decay_export),
         FLAGS_EXPORT=bool(flags_export),
         FLAGS_ROWS=int(flags_rows),
-        num_warps=8,
+        **launch_options,
     )
     return contract
