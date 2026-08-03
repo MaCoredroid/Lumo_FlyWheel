@@ -64,8 +64,8 @@ def _dense_probability_reference(logits, kid_tokens, kid_mask, uniforms):
 @pytest.mark.parametrize(
     ("batch_size", "incumbent_bytes", "candidate_bytes", "removed_bytes"),
     (
-        (1, 116_686_848, 142_560, 116_544_288),
-        (4, 466_747_392, 570_240, 466_177_152),
+        (1, 190_709_760, 232_800, 190_476_960),
+        (4, 762_839_040, 931_200, 761_907_840),
     ),
 )
 def test_contract_has_exact_fixed32_work_ledger(
@@ -82,8 +82,8 @@ def test_contract_has_exact_fixed32_work_ledger(
     assert contract["physical_rows"] == 32
     assert contract["physical_drafts"] == 31
     assert contract["fixed_work_for_any_logical_tree_lte"] == 32
-    assert contract["vocab_size"] == 151_936
-    assert contract["vocab_blocks"] == 594
+    assert contract["vocab_size"] == 248_320
+    assert contract["vocab_blocks"] == 970
     assert contract["incumbent_probability_producer_tensor_ops"] == 4
     assert contract["candidate_triton_launch_sites"] == 2
     assert contract["producer_dispatch_sites_removed_static"] == 2
@@ -109,7 +109,7 @@ def test_contract_has_exact_fixed32_work_ledger(
         {
             "batch_size": 1,
             "mode": "hydra27_fixed32",
-            "vocab_size": 151_935,
+            "vocab_size": 248_319,
         },
     ),
 )
