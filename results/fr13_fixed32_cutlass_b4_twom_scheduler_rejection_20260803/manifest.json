@@ -1,0 +1,120 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_twom_scheduler_rejection.v1",
+  "created_at_utc": "2026-08-03T03:53:12Z",
+  "status": "REJECT_STACK_OR_NO_CODEGEN_GAIN",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/fixed32-b4-twom-direct-mn-20260803",
+    "base_artifact_commit": "baec1251139e50eeab6dc717ccb83d1d7860dbd2",
+    "base_code_commit": "61263d0cf6edf202c3a91f44b4393b89f5927ccb",
+    "base_patch_source_sha256": "5aaf36a3987e4e2eb6568fc1240c76dbd8a2c64785774054d76353eb9c249e47",
+    "experiment_commits": {
+      "separate_mn_state": "e1638d97c",
+      "stateless_work_tile": "4df2c18d8",
+      "one_word_n_state": "92e8a65f4"
+    },
+    "candidate_source_retained": false,
+    "restored_tree_commit": "d1c1f7f12805f9d93aabcf79059b99e3c4262b12"
+  },
+  "pinned_inputs": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2",
+    "target": "sm_121a",
+    "cuda_compiler": "13.0.88"
+  },
+  "kernel_contract": {
+    "selector": "identity_twom_b4",
+    "default_enabled": false,
+    "production_authorized": false,
+    "fixed32_profile": "k64_root",
+    "physical_rows": 128,
+    "tile_mnk": [64, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+    "mainloop_stage_count": 2,
+    "compiled_dtypes": ["fp16", "bf16"],
+    "exact_n_tiles": [272, 40, 40, 128, 112],
+    "exact_grid_ctas": [34, 40, 40, 32, 32]
+  },
+  "baseline": {
+    "name": "twom_1d",
+    "generated_dispatch_sha256": "a01f2d03f1b7e5d2f0a25870cd392b6aa97935d559bb65835f7ba35f605a2a52",
+    "generated_dispatch_bytes": 75059,
+    "object_sha256": "0ba8ab866962a3caf6ec7104d3c07ed63c0c2626362886261902d4a8daf41d89",
+    "object_bytes": 21250800,
+    "cubin_sha256": "8b69647f66b7feff109008198a7f91d546d5dbcc6cc3f0f645a37f17f579c718",
+    "cubin_bytes": 2172800,
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "sass_slots_per_dtype": 1032
+  },
+  "experiments": [
+    {
+      "name": "separate_mn_state",
+      "patch_source_sha256": "86044bb954c40a1b4afdce3500f5f01df8ecc143b90e5f6b147b2beb65bc7202",
+      "generated_dispatch_sha256": "2d1a340dbd60f04da79ceecb84e6c274d2575e58ee9f57be66fb170cb0d96765",
+      "generated_dispatch_bytes": 74959,
+      "object_sha256": "37a49466473be75100e8ebf8818f7d0d189f42437ad20f6bf93133fe91ee1101",
+      "object_bytes": 21251152,
+      "cubin_sha256": "89a5ae7ec82256ae2a993fddc2bbd4c6e9c1596ede89fff309540ee1af3bf009",
+      "cubin_bytes": 2174888,
+      "registers_per_thread": 168,
+      "stack_bytes_per_thread": 8,
+      "local_loads_per_dtype": 3,
+      "local_stores_per_dtype": 1,
+      "sass_slots_per_dtype": 1040,
+      "verdict": "reject_stack_and_instruction_regression"
+    },
+    {
+      "name": "stateless_work_tile",
+      "patch_source_sha256": "890cbe4cac4e10cecf650de5c1f827f7630dba5cdc29eb7bd638812fe48a3073",
+      "generated_dispatch_sha256": "3ed768e8d8c8d8f15c62ae48f8f2050b076b2195b02a014dfd442ae280b12f4a",
+      "generated_dispatch_bytes": 74854,
+      "object_sha256": "1a9bba0714d7814b557997f7159cd8c894c022c757e957309a29b14171200895",
+      "object_bytes": 21250672,
+      "cubin_sha256": "133aa41fe6c4069883226a9d174cd13898550f42d723800b65103421ef83df50",
+      "cubin_bytes": 2181984,
+      "registers_per_thread": 168,
+      "stack_bytes_per_thread": 8,
+      "local_loads_per_dtype": 3,
+      "local_stores_per_dtype": 1,
+      "sass_slots_per_dtype": 1192,
+      "verdict": "reject_stack_and_instruction_regression"
+    },
+    {
+      "name": "one_word_n_state",
+      "patch_source_sha256": "afde81d20c1652b4188087bdbd2d1e412a0d6cc6d6fdc7c793096d36fcffa0d3",
+      "generated_dispatch_sha256": "a8a5fb3b989b743760a61d4d637468380c6f027e29e8d416ad2087c09f177220",
+      "generated_dispatch_bytes": 74983,
+      "object_sha256": "7a3f006fc48e6ef9c2d93f43e086c79b76ccef20833f44a13b1c2773b1bc1159",
+      "object_bytes": 21250616,
+      "cubin_sha256": "4525f6c5cf5693dad4f948140b9692adcd540b65abdc6443353f5ccb33d1d30a",
+      "cubin_bytes": 2172672,
+      "registers_per_thread": 168,
+      "stack_bytes_per_thread": 0,
+      "local_loads_per_dtype": 0,
+      "local_stores_per_dtype": 0,
+      "sass_slots_per_dtype": 1032,
+      "verdict": "reject_no_codegen_gain"
+    }
+  ],
+  "source_checks": {
+    "focused_tests": "55 passed",
+    "ruff": "pass",
+    "pycompile": "pass",
+    "git_diff_check": "pass",
+    "pinned_source_apply": "pass",
+    "final_source_restored": true
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "synthetic or probe performance",
+    "real SWE-Verified byte equality",
+    "full-step timing",
+    "hardware-floor acceptance"
+  ]
+}

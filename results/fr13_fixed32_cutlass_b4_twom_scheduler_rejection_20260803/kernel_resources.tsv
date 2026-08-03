@@ -1,0 +1,9 @@
+variant	dtype	registers_per_thread	stack_bytes_per_thread	local_bytes_per_thread	static_shared_bytes_per_cta	constant0_bytes	ldl	stl	call	verdict
+twom_1d_baseline	fp16	168	0	0	1024	2688	0	0	0	retain
+twom_1d_baseline	bf16	168	0	0	1024	2688	0	0	0	retain
+separate_mn_state	fp16	168	8	0	1024	2688	3	1	0	reject
+separate_mn_state	bf16	168	8	0	1024	2688	3	1	0	reject
+stateless_work_tile	fp16	168	8	0	1024	2688	3	1	0	reject
+stateless_work_tile	bf16	168	8	0	1024	2688	3	1	0	reject
+one_word_n_state	fp16	168	0	0	1024	2688	0	0	0	reject_no_gain
+one_word_n_state	bf16	168	0	0	1024	2688	0	0	0	reject_no_gain

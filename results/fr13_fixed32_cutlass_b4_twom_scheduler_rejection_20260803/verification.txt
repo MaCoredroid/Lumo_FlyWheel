@@ -1,0 +1,15 @@
+PASS pinned vLLM source fe9c3d6c5f66 and CUTLASS da5e086dab31
+PASS all three candidates compiled for real sm_121a FP16 and BF16 kernels
+PASS fixed32 K64/root1 B4 tile, cluster, stage, and default-off route preserved
+PASS exact projection grids are X-only and even: 34, 40, 40, 32, 32 CTAs
+PASS focused source suite: 55 passed
+PASS Ruff, Python bytecode compilation, and git diff whitespace checks
+REJECT separate M/N state: STACK 8, LDL 3, STL 1, +8 SASS slots per dtype
+REJECT stateless WorkTileInfo: STACK 8, LDL 3, STL 1, +160 SASS slots per dtype
+REJECT one-word N state: no stack regression but no slot/register/tensor-math reduction
+PASS experiment code reverted; reviewed one-dimensional scheduler source restored
+NOT RUN GPU kernel runtime
+NOT RUN synthetic or probe performance
+NOT RUN real SWE-Verified byte equality
+NOT RUN full-step timing
+NOT CLAIMED performance or hardware-floor acceptance
