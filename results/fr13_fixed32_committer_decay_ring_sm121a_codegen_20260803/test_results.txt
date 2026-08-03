@@ -1,0 +1,16 @@
+Focused source and routing suite:
+
+119 passed in 3.10s
+
+Command:
+
+/home/mark/.local/bin/pytest -q \
+  tests/test_fr13_fixed32_committer_decay_ring.py \
+  tests/test_fr13_fixed32_committer_gate_ring.py \
+  tests/test_fr13_fixed32_committer_knorm_ring.py \
+  tests/test_fr13_fixed32_committer_layer_batch.py \
+  tests/test_fr13_fixed32_committer_direct_metadata.py \
+  tests/test_fr13_fixed32_committer_sticky_guard.py \
+  tests/test_fr13_fixed32_gdn_single_launch_ordered.py \
+  tests/test_fr13_fixed32_gdn_batch_launch.py \
+  tests/test_fr13_fixed32_final_full_preseed.py
