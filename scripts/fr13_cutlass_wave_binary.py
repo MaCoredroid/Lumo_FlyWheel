@@ -62,6 +62,10 @@ IDENTITY_HYBRID_N5120_B4_CANDIDATE_SHA256 = (
     "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc"
 )
 IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE = 119_471_552
+IDENTITY_FULLTILE_CANDIDATE_SHA256 = (
+    "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da"
+)
+IDENTITY_FULLTILE_CANDIDATE_SIZE = 119_979_144
 MTP_M1M4_DIRECT_CANDIDATE_SHA256 = (
     "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc"
 )
@@ -128,6 +132,15 @@ IDENTITY_TWOM_B4_SELECTORS = frozenset({"identity_twom_b4", "identity_twom_b4_by
 IDENTITY_HYBRID_N5120_B4_SELECTORS = frozenset(
     {"identity_hybrid_n5120_b4", "identity_hybrid_n5120_b4_byte_ab"}
 )
+IDENTITY_WIDE256_FULLGRID_B1_SELECTORS = frozenset(
+    {
+        "identity_wide256_fullgrid_b1",
+        "identity_wide256_fullgrid_b1_byte_ab",
+    }
+)
+IDENTITY_FULLM_B4_SELECTORS = frozenset(
+    {"identity_fullm_b4", "identity_fullm_b4_byte_ab"}
+)
 MTP_M1M4_DIRECT_SELECTORS = frozenset({"mtp_m1m4_direct_byte_ab"})
 IDENTITY_DIVISOR_B4_SELECTORS = frozenset(
     {"identity_divisor_b4", "identity_divisor_b4_byte_ab"}
@@ -150,6 +163,8 @@ CANDIDATE_SELECTORS = (
     | IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS
     | IDENTITY_TWOM_B4_SELECTORS
     | IDENTITY_HYBRID_N5120_B4_SELECTORS
+    | IDENTITY_WIDE256_FULLGRID_B1_SELECTORS
+    | IDENTITY_FULLM_B4_SELECTORS
     | MTP_M1M4_DIRECT_SELECTORS
     | IDENTITY_DIVISOR_B4_SELECTORS
     | B4_M128_SELECTORS
@@ -176,6 +191,8 @@ INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "identity_stockshape_b4",
     "identity_divisor_b4",
     "persistent_b4_m128_static",
+    "identity_wide256_fullgrid_b1",
+    "identity_fullm_b4",
 }
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
 CONTAINER_DESTINATION = Path(
@@ -262,6 +279,18 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE,
             "identity_hybrid_n5120_b4",
         )
+    if selector in IDENTITY_WIDE256_FULLGRID_B1_SELECTORS:
+        return (
+            IDENTITY_FULLTILE_CANDIDATE_SHA256,
+            IDENTITY_FULLTILE_CANDIDATE_SIZE,
+            "identity_wide256_fullgrid_b1",
+        )
+    if selector in IDENTITY_FULLM_B4_SELECTORS:
+        return (
+            IDENTITY_FULLTILE_CANDIDATE_SHA256,
+            IDENTITY_FULLTILE_CANDIDATE_SIZE,
+            "identity_fullm_b4",
+        )
     if selector in MTP_M1M4_DIRECT_SELECTORS:
         return (
             MTP_M1M4_DIRECT_CANDIDATE_SHA256,
@@ -295,6 +324,8 @@ def _verify_qualification_profile(
             | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
             | IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS
             | IDENTITY_HYBRID_N5120_B4_SELECTORS
+            | IDENTITY_WIDE256_FULLGRID_B1_SELECTORS
+            | IDENTITY_FULLM_B4_SELECTORS
             | MTP_M1M4_DIRECT_SELECTORS
         )
         and qualification_profile != "k64_root"
@@ -340,6 +371,8 @@ def verify_candidate(
         | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
         | IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS
         | IDENTITY_HYBRID_N5120_B4_SELECTORS
+        | IDENTITY_WIDE256_FULLGRID_B1_SELECTORS
+        | IDENTITY_FULLM_B4_SELECTORS
         | MTP_M1M4_DIRECT_SELECTORS
     ):
         result["qualification_profile"] = qualification_profile
@@ -643,6 +676,14 @@ def install_candidate(
         raise ValueError(f"unsupported candidate selector: {selector!r}")
     if selector not in INSTALLABLE_SELECTORS:
         if selector in {
+            "identity_wide256_fullgrid_b1",
+            "identity_fullm_b4",
+        }:
+            raise ValueError(
+                "full-tile production remains unavailable until the required "
+                "K64/root real-task raw-byte gates pass"
+            )
+        if selector in {
             "static_persistent_stocktile",
             "divisor_static_stocktile",
             "identity_stage2_static",
@@ -814,6 +855,8 @@ def install_candidate(
         | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
         | IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS
         | IDENTITY_HYBRID_N5120_B4_SELECTORS
+        | IDENTITY_WIDE256_FULLGRID_B1_SELECTORS
+        | IDENTITY_FULLM_B4_SELECTORS
     ):
         payload["qualification_profile"] = qualification_profile
     if qualification is not None:

@@ -1,0 +1,11 @@
+physical_batch	n	k	calls_per_16shape_cycle	calls_per_target_step	incumbent_tile_m	candidate_tile_m	incumbent_tiles_per_call	candidate_tiles_per_call	tile_delta_per_target_step	panel_kind	incumbent_replayed_panel_bytes_per_call	candidate_replayed_panel_bytes_per_call	panel_request_delta_bytes_per_target_step
+B1	5120	6144	4	64	128	128	40	40	0	activation	7864320	7864320	0
+B1	5120	17408	4	64	128	128	40	40	0	activation	22282240	22282240	0
+B1	14336	5120	1	16	128	256	112	56	896	activation	18350080	9175040	146800640
+B1	16384	5120	3	48	128	256	128	64	3072	activation	20971520	10485760	503316480
+B1	34816	5120	4	64	128	256	272	136	8704	activation	44564480	22282240	1426063360
+B4	5120	6144	4	64	128	128	40	40	0	second_m_tile_weight	0	0	0
+B4	5120	17408	4	64	128	128	40	40	0	second_m_tile_weight	0	0	0
+B4	14336	5120	1	16	64	128	224	112	1792	second_m_tile_weight	73400320	0	1174405120
+B4	16384	5120	3	48	64	128	256	128	6144	second_m_tile_weight	83886080	0	4026531840
+B4	34816	5120	4	64	64	128	544	272	17408	second_m_tile_weight	178257920	0	11408506880

@@ -63,6 +63,10 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "identity_twom_b4_byte_ab",
         "identity_hybrid_n5120_b4",
         "identity_hybrid_n5120_b4_byte_ab",
+        "identity_wide256_fullgrid_b1",
+        "identity_wide256_fullgrid_b1_byte_ab",
+        "identity_fullm_b4",
+        "identity_fullm_b4_byte_ab",
         "mtp_m1m4_direct_byte_ab",
         "identity_divisor_b4",
         "identity_divisor_b4_byte_ab",
@@ -186,6 +190,30 @@ def test_pinned_binary_identity_and_selectors() -> None:
     assert module.IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE == 119_471_552
     assert "identity_hybrid_n5120_b4" in module.PRODUCTION_SELECTORS
     assert "identity_hybrid_n5120_b4_byte_ab" not in module.PRODUCTION_SELECTORS
+    assert module.IDENTITY_FULLTILE_CANDIDATE_SHA256 == (
+        "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da"
+    )
+    assert module.IDENTITY_FULLTILE_CANDIDATE_SIZE == 119_979_144
+    assert module.candidate_identity(
+        "identity_wide256_fullgrid_b1_byte_ab"
+    ) == (
+        module.IDENTITY_FULLTILE_CANDIDATE_SHA256,
+        module.IDENTITY_FULLTILE_CANDIDATE_SIZE,
+        "identity_wide256_fullgrid_b1",
+    )
+    assert module.candidate_identity("identity_fullm_b4_byte_ab") == (
+        module.IDENTITY_FULLTILE_CANDIDATE_SHA256,
+        module.IDENTITY_FULLTILE_CANDIDATE_SIZE,
+        "identity_fullm_b4",
+    )
+    assert "identity_wide256_fullgrid_b1" not in module.PRODUCTION_SELECTORS
+    assert "identity_fullm_b4" not in module.PRODUCTION_SELECTORS
+    assert "identity_wide256_fullgrid_b1" not in module.INSTALLABLE_SELECTORS
+    assert "identity_fullm_b4" not in module.INSTALLABLE_SELECTORS
+    assert (
+        "identity_wide256_fullgrid_b1_byte_ab" in module.INSTALLABLE_SELECTORS
+    )
+    assert "identity_fullm_b4_byte_ab" in module.INSTALLABLE_SELECTORS
     assert module.candidate_identity("mtp_m1m4_direct_byte_ab") == (
         module.MTP_M1M4_DIRECT_CANDIDATE_SHA256,
         module.MTP_M1M4_DIRECT_CANDIDATE_SIZE,
@@ -435,6 +463,97 @@ def test_onen_n5120_single_diagnostic_installs_but_direct_requires_sidecar(
             qualification_profile="k64_root",
         )
     assert destination.read_bytes() == b"stock-extension\n"
+
+
+@pytest.mark.parametrize(
+    ("diagnostic_selector", "direct_selector", "family"),
+    (
+        (
+            "identity_wide256_fullgrid_b1_byte_ab",
+            "identity_wide256_fullgrid_b1",
+            "identity_wide256_fullgrid_b1",
+        ),
+        (
+            "identity_fullm_b4_byte_ab",
+            "identity_fullm_b4",
+            "identity_fullm_b4",
+        ),
+    ),
+)
+def test_fulltile_diagnostic_installs_but_direct_stays_blocked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    diagnostic_selector: str,
+    direct_selector: str,
+    family: str,
+) -> None:
+    module = _module()
+    payload = f"{family}-candidate-extension\n".encode("ascii")
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(module, "IDENTITY_FULLTILE_CANDIDATE_SIZE", len(payload))
+    monkeypatch.setattr(module, "IDENTITY_FULLTILE_CANDIDATE_SHA256", digest)
+    source = tmp_path / "fulltile.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    record = module.install_candidate(
+        source,
+        destination,
+        attestation,
+        diagnostic_selector,
+        qualification_profile="k64_root",
+    )
+
+    assert destination.read_bytes() == payload
+    assert record["production_enabled"] is False
+    assert record["candidate_family"] == family
+    assert record["qualification_profile"] == "k64_root"
+
+    destination.chmod(0o644)
+    destination.write_bytes(b"stock-extension\n")
+    with pytest.raises(ValueError, match="real-task raw-byte gates"):
+        module.install_candidate(
+            source,
+            destination,
+            attestation,
+            direct_selector,
+            qualification_profile="k64_root",
+        )
+    assert destination.read_bytes() == b"stock-extension\n"
+
+
+@pytest.mark.parametrize(
+    "selector",
+    (
+        "identity_wide256_fullgrid_b1",
+        "identity_wide256_fullgrid_b1_byte_ab",
+        "identity_fullm_b4",
+        "identity_fullm_b4_byte_ab",
+    ),
+)
+def test_fulltile_binary_verification_requires_k64_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    selector: str,
+) -> None:
+    module = _module()
+    payload = b"fulltile-candidate-extension\n"
+    monkeypatch.setattr(module, "IDENTITY_FULLTILE_CANDIDATE_SIZE", len(payload))
+    monkeypatch.setattr(
+        module,
+        "IDENTITY_FULLTILE_CANDIDATE_SHA256",
+        hashlib.sha256(payload).hexdigest(),
+    )
+    candidate = tmp_path / "candidate.so"
+    candidate.write_bytes(payload)
+
+    with pytest.raises(
+        ValueError,
+        match="binary verification requires a k64_root qualification",
+    ):
+        module.verify_candidate(candidate, selector)
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,161 @@
+{
+  "schema": "fr13.fixed32.cutlass_fulltile_source_sm121a.v1",
+  "created_at_utc": "2026-08-03T14:38:27Z",
+  "status": "host_compile_link_import_resource_pass_default_off_live_gates_pending",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "production_available": false,
+  "production_default_enabled": false,
+  "source": {
+    "branch": "codex/fixed32-sfwd-target-gemm-next-20260803",
+    "development_base_commit": "564a1b09aa2d907beec3c44dae354bf046d85233",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2",
+    "patch_source_sha256": "623582b257a13f7551c81aaf8e87f7542ddb4d6564636f5e177ec0807126a341",
+    "patch_source_bytes": 104990,
+    "patched_dispatch_sha256": "710da7d3a8e24c83f9f095222d5297d96f610c6310f3a8537ed1b925a25ece56",
+    "patched_dispatch_bytes": 105627
+  },
+  "candidate": {
+    "binary_sha256": "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da",
+    "binary_bytes": 119979144,
+    "binary_mode": "0555",
+    "binary_published": false,
+    "publication_reason": "binary exceeds GitHub single-file limit",
+    "host_build_path": "/home/mark/fr13_sfwd_fulltile_build/bin/_C_stable_libtorch.identity_fulltile_fixed32.abi3.so",
+    "required_qualification_profile": "k64_root",
+    "selectors": [
+      {
+        "direct": "identity_wide256_fullgrid_b1",
+        "diagnostic": "identity_wide256_fullgrid_b1_byte_ab",
+        "physical_rows": 32,
+        "direct_installable": false
+      },
+      {
+        "direct": "identity_fullm_b4",
+        "diagnostic": "identity_fullm_b4_byte_ab",
+        "physical_rows": 128,
+        "direct_installable": false
+      }
+    ],
+    "admitted_projection_nk": [
+      [5120, 6144],
+      [5120, 17408],
+      [14336, 5120],
+      [16384, 5120],
+      [34816, 5120]
+    ],
+    "out_of_contract_fallback": "stock",
+    "launches_per_target_step_incumbent": 256,
+    "launches_per_target_step_candidate": 256,
+    "arithmetic_changed": false,
+    "reduction_order_changed": false,
+    "split_k_workspace": false
+  },
+  "traffic_model": {
+    "model_kind": "requested_panel_bytes_optimistic_ceiling_not_hbm_measurement",
+    "target_step_histogram_repetitions": 16,
+    "bandwidth_bytes_per_second": 273000000000,
+    "b1": {
+      "incumbent_tiles": 30464,
+      "candidate_tiles": 17792,
+      "tile_delta": -12672,
+      "tile_reduction_percent": 41.596639,
+      "incumbent_activation_panel_request_bytes": 6081740800,
+      "candidate_activation_panel_request_bytes": 4005560320,
+      "activation_panel_request_delta_bytes": -2076180480,
+      "activation_panel_request_reduction_percent": 34.137931,
+      "optimistic_273gbps_ceiling_ms_per_step": 7.605057
+    },
+    "b4": {
+      "incumbent_tiles": 55808,
+      "candidate_tiles": 30464,
+      "tile_delta": -25344,
+      "tile_reduction_percent": 45.412844,
+      "second_m_tile_weight_panel_request_delta_bytes": -16609443840,
+      "optimistic_273gbps_ceiling_ms_per_step": 60.840454
+    }
+  },
+  "host_build": {
+    "result": "pass",
+    "target": "_C_stable_libtorch",
+    "architecture": "sm_121a",
+    "gencode": "arch=compute_121a,code=sm_121a",
+    "cuda_release": "13.0",
+    "nvcc_version": "13.0.88",
+    "cmake_version": "3.28.3",
+    "ninja_version": "1.13.0.git.kitware.jobserver-pipe-1",
+    "translation_unit_object_sha256": "e9007f1a5aceb67e581157162760fade9c21fa3c88b9a586d5410d1b4625eaf0",
+    "translation_unit_object_bytes": 25507528,
+    "full_shared_library_link": "pass",
+    "cpu_import_cuda_visible_devices_empty": "pass",
+    "gpu_runtime_used": false,
+    "docker_used": false
+  },
+  "device_codegen": {
+    "result": "pass",
+    "incumbent_resource_records": 341,
+    "candidate_resource_records": 343,
+    "added_candidate_records": 2,
+    "removed_or_changed_incumbent_records": 0,
+    "new_kernel_dtypes": ["fp16", "bf16"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "detected_local_load_store_or_call": false,
+    "b4_n5120_and_fullm_kernels_reused_from_incumbent_binary": true
+  },
+  "elf": {
+    "class": "ELF64",
+    "machine": "AArch64",
+    "type": "DYN",
+    "python_init_symbol": "PyInit__C_stable_libtorch",
+    "cubin_inventory_matches_incumbent": true,
+    "dynamic_dependencies_match_incumbent": true,
+    "runpath_matches_incumbent": true,
+    "candidate_defined_dynamic_symbols": 1327,
+    "incumbent_defined_dynamic_symbols": 1325,
+    "candidate_undefined_dynamic_symbols": 183,
+    "incumbent_undefined_dynamic_symbols": 183,
+    "undefined_dynamic_symbol_set_matches_incumbent": true,
+    "binary_size_delta_bytes": 507592,
+    "binary_size_delta_percent": 0.424864
+  },
+  "verification": {
+    "patch_tests": "42 passed",
+    "binary_admission_tests": "39 passed",
+    "qrow32_sfwd_cfwd_overlap_tests": "58 passed",
+    "python_byte_compile": "pass",
+    "git_diff_check": "pass",
+    "pinned_source_apply": "pass",
+    "sm121a_complete_target_compile": "pass",
+    "full_shared_library_link": "pass",
+    "cpu_import": "pass",
+    "binary_identity_cli_b1": "pass",
+    "binary_identity_cli_b4": "pass",
+    "resource_and_sass_audit": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "GPU correctness",
+    "Docker",
+    "synthetic or probe workload",
+    "real SWE-Verified task execution",
+    "raw-byte comparison",
+    "B1 full-step timing",
+    "B4 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gates": [
+    "add both diagnostic selectors to the real-task launcher and source-binding allowlists while preserving Qrow32, SFWD, and CFWD guards",
+    "authenticated real SWE-Verified B1 K64/root1 raw-byte comparison",
+    "authenticated canonical exact-four Tail23 B4 K64/root1 raw-byte comparison",
+    "authenticated canonical exact-four Hydra27 B4 K64/root1 raw-byte comparison",
+    "clean exact-four or exact-16 full-step and component timing only after byte equality",
+    "one-sided U95 hardware-floor acceptance"
+  ]
+}

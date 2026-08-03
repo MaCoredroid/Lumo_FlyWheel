@@ -135,7 +135,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 21
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 22
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
@@ -743,6 +743,129 @@ def test_b1_onen_selector_is_default_off_shape_isolated_and_exact_math() -> None
         in patched
     )
     assert patched.count("return fixed32_cutlass_wave_variant::stock;") >= 1
+
+
+def test_fulltile_candidates_reduce_fixed32_panel_and_tile_replays() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    b1_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_wide256_fullgrid_identity_stage2"
+    )
+    b1_end = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_m128_static_identity_stage2",
+        b1_start,
+    )
+    b1 = patched[b1_start:b1_end]
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in b1
+    assert "using TileShape = Shape<_256, _32, _128>;" in b1
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in b1
+    assert "fr13_fixed32_b1_onen_fullgrid_static_scheduler" in b1
+    assert "cutlass::gemm::collective::StageCount<2>" in b1
+    assert "StreamK" not in b1
+
+    # The comparison census repeats this exact 16-call shape histogram. Keep
+    # N=5120 on 128-row tiles; double only the three widths that still expose
+    # at least 56 complete tiles and therefore a full 48-CTA B1 grid.
+    calls = {
+        (5120, 6144): 4,
+        (5120, 17408): 4,
+        (14336, 5120): 1,
+        (16384, 5120): 3,
+        (34816, 5120): 4,
+    }
+    assert sum(calls.values()) * 16 == 256
+    incumbent_tiles = 0
+    candidate_tiles = 0
+    incumbent_activation_panel_bytes = 0
+    candidate_activation_panel_bytes = 0
+    for (n, k), count in calls.items():
+        incumbent_shape_tiles = n // 128
+        candidate_shape_tiles = n // (128 if n == 5120 else 256)
+        incumbent_tiles += incumbent_shape_tiles * count
+        candidate_tiles += candidate_shape_tiles * count
+        incumbent_activation_panel_bytes += incumbent_shape_tiles * 32 * k * count
+        candidate_activation_panel_bytes += candidate_shape_tiles * 32 * k * count
+    assert incumbent_tiles == 1904
+    assert candidate_tiles == 1112
+    assert incumbent_tiles - candidate_tiles == 792
+    assert incumbent_activation_panel_bytes == 380_108_800
+    assert candidate_activation_panel_bytes == 250_347_520
+    assert incumbent_activation_panel_bytes - candidate_activation_panel_bytes == (
+        129_761_280
+    )
+    assert (incumbent_activation_panel_bytes - candidate_activation_panel_bytes) * (
+        16
+    ) == 2_076_180_480
+
+    # Current B4 hybrid uses two 64-row tiles on the three wide shapes. The
+    # full-M route uses one 128-row tile throughout and retains the existing
+    # one-tile N=5120 geometry.
+    hybrid_b4_tiles = sum(
+        (n // 128 if n == 5120 else 2 * n // 128) * count
+        for (n, _), count in calls.items()
+    )
+    fullm_b4_tiles = sum((n // 128) * count for (n, _), count in calls.items())
+    assert hybrid_b4_tiles == 3488
+    assert fullm_b4_tiles == 1904
+    assert hybrid_b4_tiles - fullm_b4_tiles == 1584
+    wide_weight_panel_replay_bytes = sum(
+        n * k * count for (n, k), count in calls.items() if n != 5120
+    )
+    assert wide_weight_panel_replay_bytes == 1_038_090_240
+    assert wide_weight_panel_replay_bytes * 16 == 16_609_443_840
+
+    assert 'value == "identity_wide256_fullgrid_b1"' in patched
+    assert 'value == "identity_wide256_fullgrid_b1_byte_ab"' in patched
+    assert 'value == "identity_fullm_b4"' in patched
+    assert 'value == "identity_fullm_b4_byte_ab"' in patched
+    b1_guard_start = patched.index(
+        "if (!fixed32_cutlass_b1_onen_projection(M, N, K) &&"
+    )
+    b1_guard_end = patched.index(
+        "if (!fixed32_cutlass_b4_hybrid_n5120_projection(M, N, K) &&",
+        b1_guard_start,
+    )
+    b1_guard = patched[b1_guard_start:b1_guard_end]
+    assert "identity_wide256_fullgrid_b1 ||" in b1_guard
+    assert "identity_wide256_fullgrid_b1_byte_ab" in b1_guard
+
+    first_b4_guard = patched.index(
+        "if (!fixed32_cutlass_b4_hybrid_n5120_projection(M, N, K) &&"
+    )
+    fullm_guard_start = patched.index(
+        "if (!fixed32_cutlass_b4_hybrid_n5120_projection(M, N, K) &&",
+        first_b4_guard + 1,
+    )
+    fullm_guard_end = patched.index("if (M != 128 &&", fullm_guard_start)
+    fullm_guard = patched[fullm_guard_start:fullm_guard_end]
+    assert "identity_fullm_b4 ||" in fullm_guard
+    assert "identity_fullm_b4_byte_ab" in fullm_guard
+    assert "run_identity_wide256_fullgrid_b1(destination)" in patched
+    assert "run_identity_fullm_b4(destination)" in patched
+    fullm_runner_start = patched.index(
+        "auto run_identity_fullm_b4 = [&](torch::stable::Tensor& destination)"
+    )
+    fullm_runner_end = patched.index("auto run_stock =", fullm_runner_start)
+    fullm_runner = patched[fullm_runner_start:fullm_runner_end]
+    assert "if (N == 5120)" in fullm_runner
+    assert "sm120_blockwise_fp8_config_b4_m128_n5120_single_identity_stage2" in (
+        fullm_runner
+    )
+    assert "sm120_blockwise_fp8_config_b4_m128_static_identity_stage2" in (
+        fullm_runner
+    )
+    assert (
+        '"/logs/fr13_fixed32_cutlass_identity_wide256_fullgrid_b1_byte_ab.jsonl"'
+        in patched
+    )
+    assert (
+        '"/logs/fr13_fixed32_cutlass_identity_fullm_b4_byte_ab.jsonl"'
+        in patched
+    )
+    assert "fr13.fixed32.cutlass_identity_wide256_fullgrid_b1_byte_ab.v1" in patched
+    assert "fr13.fixed32.cutlass_identity_fullm_b4_byte_ab.v1" in patched
+    assert "return run_stock(out);" in patched
 
 
 def test_mtp_m1m4_direct_is_diagnostic_only_exact_stock_math() -> None:

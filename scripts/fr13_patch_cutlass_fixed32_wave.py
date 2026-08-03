@@ -1200,6 +1200,26 @@ struct sm120_blockwise_fp8_config_b1_onen_fullgrid_identity_pingpong_stage2 {
       cutlass::gemm::collective::StageCount<2>>;
 };
 
+// The three wide B1 projections have at least 56 complete 256-row output
+// tiles, so a full 48-CTA grid remains available after doubling scheduler M.
+// This halves activation-panel replays and complete-tile scheduler work while
+// retaining one ordered full-K reduction. The two N=5120 projections stay on
+// their 128-row/40-CTA specialization to avoid under-filling the device.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b1_wide256_fullgrid_identity_stage2 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_256, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true,
+      fr13_fixed32_b1_onen_fullgrid_static_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
 template <typename OutType>
 struct sm120_blockwise_fp8_config_b4_m128_static_identity_stage2 {
   using KernelSchedule =
@@ -1349,6 +1369,8 @@ enum class fixed32_cutlass_wave_variant {
   identity_onen_n5120_single_b1_byte_ab,
   identity_onen_n5120_fullgrid_b1,
   identity_onen_n5120_fullgrid_b1_byte_ab,
+  identity_wide256_fullgrid_b1,
+  identity_wide256_fullgrid_b1_byte_ab,
   identity_stockshape_b4,
   identity_stockshape_b4_byte_ab,
   identity_stockshape_stage2_b4,
@@ -1361,6 +1383,8 @@ enum class fixed32_cutlass_wave_variant {
   identity_twom_b4_byte_ab,
   identity_hybrid_n5120_b4,
   identity_hybrid_n5120_b4_byte_ab,
+  identity_fullm_b4,
+  identity_fullm_b4_byte_ab,
   mtp_m1m4_direct_byte_ab,
 };
 
@@ -1441,6 +1465,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     if (value == "identity_onen_n5120_fullgrid_b1_byte_ab") {
       return fixed32_cutlass_wave_variant::identity_onen_n5120_fullgrid_b1_byte_ab;
     }
+    if (value == "identity_wide256_fullgrid_b1") {
+      return fixed32_cutlass_wave_variant::identity_wide256_fullgrid_b1;
+    }
+    if (value == "identity_wide256_fullgrid_b1_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_wide256_fullgrid_b1_byte_ab;
+    }
     if (value == "identity_stockshape_b4") {
       return fixed32_cutlass_wave_variant::identity_stockshape_b4;
     }
@@ -1476,6 +1506,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "identity_hybrid_n5120_b4_byte_ab") {
       return fixed32_cutlass_wave_variant::identity_hybrid_n5120_b4_byte_ab;
+    }
+    if (value == "identity_fullm_b4") {
+      return fixed32_cutlass_wave_variant::identity_fullm_b4;
+    }
+    if (value == "identity_fullm_b4_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_fullm_b4_byte_ab;
     }
     if (value == "mtp_m1m4_direct_byte_ab") {
       return fixed32_cutlass_wave_variant::mtp_m1m4_direct_byte_ab;
@@ -1721,11 +1757,24 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
                            identity_onen_n5120_fullgrid_b1_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
+  if (!fixed32_cutlass_b1_onen_projection(M, N, K) &&
+      (wave_variant == fixed32_cutlass_wave_variant::
+                           identity_wide256_fullgrid_b1 ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           identity_wide256_fullgrid_b1_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
   if (!fixed32_cutlass_b4_hybrid_n5120_projection(M, N, K) &&
       (wave_variant ==
            fixed32_cutlass_wave_variant::identity_hybrid_n5120_b4 ||
        wave_variant == fixed32_cutlass_wave_variant::
                            identity_hybrid_n5120_b4_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
+  if (!fixed32_cutlass_b4_hybrid_n5120_projection(M, N, K) &&
+      (wave_variant == fixed32_cutlass_wave_variant::identity_fullm_b4 ||
+       wave_variant ==
+           fixed32_cutlass_wave_variant::identity_fullm_b4_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
   if (M != 128 &&
@@ -1885,6 +1934,22 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
+  auto run_identity_wide256_fullgrid_b1 =
+      [&](torch::stable::Tensor& destination) {
+    if (N == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b1_n5120_single_identity_stage2<
+              OutType>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b1_wide256_fullgrid_identity_stage2<
+            OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
   auto run_identity_stockshape_b4 =
       [&](torch::stable::Tensor& destination) {
     using Gemm = typename
@@ -1939,6 +2004,21 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     return run_identity_twom_b4(destination);
   };
 
+  auto run_identity_fullm_b4 = [&](torch::stable::Tensor& destination) {
+    if (N == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b4_m128_n5120_single_identity_stage2<
+              OutType>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    using Gemm = typename
+        sm120_blockwise_fp8_config_b4_m128_static_identity_stage2<
+            OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
   auto run_stock = [&](torch::stable::Tensor& destination) {
     bool swap_ab = (M <= 64) || (M % 4 != 0);
     if (!swap_ab) {
@@ -1986,6 +2066,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool identity_onen_n5120_fullgrid_b1_byte_ab =
       wave_variant == fixed32_cutlass_wave_variant::
                           identity_onen_n5120_fullgrid_b1_byte_ab;
+  const bool identity_wide256_fullgrid_b1_byte_ab =
+      wave_variant == fixed32_cutlass_wave_variant::
+                          identity_wide256_fullgrid_b1_byte_ab;
   const bool identity_stockshape_b4_byte_ab =
       wave_variant == fixed32_cutlass_wave_variant::
                           identity_stockshape_b4_byte_ab;
@@ -2003,6 +2086,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool identity_hybrid_n5120_b4_byte_ab =
       wave_variant == fixed32_cutlass_wave_variant::
                           identity_hybrid_n5120_b4_byte_ab;
+  const bool identity_fullm_b4_byte_ab =
+      wave_variant ==
+      fixed32_cutlass_wave_variant::identity_fullm_b4_byte_ab;
   const bool mtp_m1m4_direct_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::mtp_m1m4_direct_byte_ab;
@@ -2013,16 +2099,21 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       identity_stage2_static_byte_ab || identity_stage2_pingpong_b1_byte_ab ||
       identity_onen_b1_byte_ab || identity_onen_n5120_single_b1_byte_ab ||
       identity_onen_n5120_fullgrid_b1_byte_ab ||
+      identity_wide256_fullgrid_b1_byte_ab ||
       identity_stockshape_b4_byte_ab ||
       identity_stockshape_stage2_b4_byte_ab || identity_divisor_b4_byte_ab ||
       identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab ||
-      identity_hybrid_n5120_b4_byte_ab || mtp_m1m4_direct_byte_ab) {
+      identity_hybrid_n5120_b4_byte_ab || identity_fullm_b4_byte_ab ||
+      mtp_m1m4_direct_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
       if (mtp_m1m4_direct_byte_ab) {
         return run_mtp_m1m4_direct(destination);
       }
       if (identity_onen_n5120_fullgrid_b1_byte_ab) {
         return run_identity_onen_n5120_fullgrid_b1(destination);
+      }
+      if (identity_wide256_fullgrid_b1_byte_ab) {
+        return run_identity_wide256_fullgrid_b1(destination);
       }
       if (identity_onen_n5120_single_b1_byte_ab) {
         return run_identity_onen_n5120_single_b1(destination);
@@ -2032,6 +2123,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
       if (identity_hybrid_n5120_b4_byte_ab) {
         return run_identity_hybrid_n5120_b4(destination);
+      }
+      if (identity_fullm_b4_byte_ab) {
+        return run_identity_fullm_b4(destination);
       }
       if (identity_twom_b4_byte_ab) {
         return run_identity_twom_b4(destination);
@@ -2080,7 +2174,7 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
          identity_stockshape_stage2_b4_byte_ab ||
          identity_divisor_b4_byte_ab ||
          identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab ||
-         identity_hybrid_n5120_b4_byte_ab ||
+         identity_hybrid_n5120_b4_byte_ab || identity_fullm_b4_byte_ab ||
          (mtp_m1m4_direct_byte_ab && M == 4))
             ? fixed32_cutlass_b4_real_task_marker()
             : fixed32_cutlass_real_task_marker();
@@ -2103,7 +2197,7 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
          identity_stockshape_stage2_b4_byte_ab ||
          identity_divisor_b4_byte_ab ||
          identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab ||
-         identity_hybrid_n5120_b4_byte_ab)
+         identity_hybrid_n5120_b4_byte_ab || identity_fullm_b4_byte_ab)
             ? b4_m128_byte_ab_limit
             : byte_ab_limit;
     int64_t invocation = next_invocation.fetch_add(1);
@@ -2150,6 +2244,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     const char* log_path =
         mtp_m1m4_direct_byte_ab
             ? "/logs/fr13_fixed32_cutlass_mtp_m1m4_direct_byte_ab.jsonl"
+        : identity_wide256_fullgrid_b1_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_wide256_fullgrid_b1_byte_ab.jsonl"
         : identity_onen_n5120_fullgrid_b1_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_onen_n5120_fullgrid_b1_byte_ab.jsonl"
         : identity_onen_n5120_single_b1_byte_ab
@@ -2158,6 +2254,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
             ? "/logs/fr13_fixed32_cutlass_identity_onen_b1_byte_ab.jsonl"
         : identity_hybrid_n5120_b4_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_hybrid_n5120_b4_byte_ab.jsonl"
+        : identity_fullm_b4_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_fullm_b4_byte_ab.jsonl"
         : identity_twom_b4_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_twom_b4_byte_ab.jsonl"
         : identity_divisor_stage2_b4_byte_ab
@@ -2192,6 +2290,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       log << "{\\\"schema\\\":\\\""
           << (mtp_m1m4_direct_byte_ab
                   ? "fr13.fixed32.cutlass_mtp_m1m4_direct_byte_ab.v1"
+              : identity_wide256_fullgrid_b1_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_wide256_fullgrid_b1_byte_ab.v1"
               : identity_onen_n5120_fullgrid_b1_byte_ab
                   ? "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_byte_ab.v1"
               : identity_onen_n5120_single_b1_byte_ab
@@ -2200,6 +2300,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
                   ? "fr13.fixed32.cutlass_identity_onen_b1_byte_ab.v1"
               : identity_hybrid_n5120_b4_byte_ab
                   ? "fr13.fixed32.cutlass_identity_hybrid_n5120_b4_byte_ab.v1"
+              : identity_fullm_b4_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_fullm_b4_byte_ab.v1"
               : identity_twom_b4_byte_ab
                   ? "fr13.fixed32.cutlass_identity_twom_b4_byte_ab.v1"
               : identity_divisor_stage2_b4_byte_ab
@@ -2301,6 +2403,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
     return run_identity_onen_n5120_fullgrid_b1(out);
   }
 
+  if (wave_variant == fixed32_cutlass_wave_variant::
+                          identity_wide256_fullgrid_b1) {
+    return run_identity_wide256_fullgrid_b1(out);
+  }
+
   if (wave_variant ==
       fixed32_cutlass_wave_variant::identity_stockshape_b4) {
     return run_identity_stockshape_b4(out);
@@ -2328,6 +2435,10 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   if (wave_variant ==
       fixed32_cutlass_wave_variant::identity_hybrid_n5120_b4) {
     return run_identity_hybrid_n5120_b4(out);
+  }
+
+  if (wave_variant == fixed32_cutlass_wave_variant::identity_fullm_b4) {
+    return run_identity_fullm_b4(out);
   }
 
   // Unset/unknown selectors retain the stock kernel and numeric result.

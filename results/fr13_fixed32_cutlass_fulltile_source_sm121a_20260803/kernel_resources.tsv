@@ -1,0 +1,7 @@
+selector	dtype	tile_m	tile_n	tile_k	registers	stack_bytes	local_bytes	static_shared_bytes	constant0_bytes	encoded_instructions	nop_instructions	branches	ldl	stl	call	codegen_status
+identity_wide256_fullgrid_b1	fp16	256	32	128	168	0	0	1024	2688	1080	12	35	0	0	0	new_record
+identity_wide256_fullgrid_b1	bf16	256	32	128	168	0	0	1024	2688	1080	12	35	0	0	0	new_record
+identity_fullm_b4_n5120	fp16	128	128	128	168	0	0	1024	2688	1008	15	33	0	0	0	reused_existing_record
+identity_fullm_b4_n5120	bf16	128	128	128	168	0	0	1024	2688	1008	15	33	0	0	0	reused_existing_record
+identity_fullm_b4	fp16	128	128	128	168	0	0	1024	2688	1352	12	40	0	0	0	reused_existing_record
+identity_fullm_b4	bf16	128	128	128	168	0	0	1024	2688	1352	12	40	0	0	0	reused_existing_record
