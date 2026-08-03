@@ -67,7 +67,10 @@ def test_fixed32_producer_exports_the_existing_rsqrt_once() -> None:
     ]
     assert "tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)" in candidate
     assert "b_k = b_k * b_k_inv_norm" in candidate
-    assert "tl.store(" not in candidate
+    assert "tl.store(" in candidate
+    assert candidate.index("tl.store(") > candidate.index(
+        "b_k = b_k * b_k_inv_norm"
+    )
     assert "USE_QK_L2NORM_IN_KERNEL and not K_NORM_EXPORT" in helper
     assert "SCN_ALIGN" not in helper
     assert "SCAN_ALIGN=SCAN_ALIGN and not K_NORM_EXPORT" in helper
