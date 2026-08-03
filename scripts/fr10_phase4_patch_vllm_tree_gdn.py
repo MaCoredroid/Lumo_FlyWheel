@@ -4640,6 +4640,8 @@ def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
         "capturing": True,
         "mtp_forward_calls": 0,
         "mtp_forward_rows": 0,
+        "draft_head_fp8_calls": 0,
+        "draft_head_fp8_rows": 0,
         "tree_attn_calls": 0,
         "tree_attn_rows": 0,
         "tree_attn_layer": None,
@@ -4681,6 +4683,35 @@ def _fr13_fixed32_drafter_mtp_forward(batch_size, capturing):
     proposal["mtp_execution_basis"] = "eager_direct"
     proposal["mtp_forward_calls"] += 1
     proposal["mtp_forward_rows"] += batch
+
+
+def _fr13_fixed32_drafter_fp8_head_selection(batch_size):
+    """Classify an FP8 head call from the authenticated graph scope."""
+    batch = int(batch_size)
+    context = _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
+    if context is None:
+        return False
+    if not isinstance(context, dict):
+        raise RuntimeError(
+            "FR13 fixed32 drafter FP8 head has invalid capture context"
+        )
+    head_calls = int(context.get("draft_head_fp8_calls", -1))
+    head_rows = int(context.get("draft_head_fp8_rows", -1))
+    if (
+        batch != int(context.get("batch_size", -1))
+        or context.get("capturing") is not True
+        or head_calls < 0
+        or head_rows < 0
+        or int(context.get("mtp_forward_calls", -1)) != head_calls + 1
+        or int(context.get("mtp_forward_rows", -1)) != head_rows + batch
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 drafter FP8 head left capture lifecycle: "
+            + repr((batch, context))
+        )
+    context["draft_head_fp8_calls"] = head_calls + 1
+    context["draft_head_fp8_rows"] = head_rows + batch
+    return True
 
 
 def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
@@ -4737,6 +4768,14 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
         "batch_size": batch,
         "graph_signature": signature,
         "captures": 1,
+        "mtp_forward_calls": int(context["mtp_forward_calls"]),
+        "mtp_forward_rows": int(context["mtp_forward_rows"]),
+        "draft_head_fp8_calls": int(
+            context.get("draft_head_fp8_calls", -1)
+        ),
+        "draft_head_fp8_rows": int(
+            context.get("draft_head_fp8_rows", -1)
+        ),
         "capture_origin": (
             "measured" if proposal["measured"] else "unmeasured"
         ),
@@ -23798,7 +23837,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 )
                 self._fr13_dh_m32_engagement_written = True
 
-            def _fr13_dh_fp8_note_selection(_capturing, _batch_size):
+            def _fr13_dh_fp8_note_selection(_batch_size):
                 if getattr(
                     self, "_fr13_dh_fp8_engagement_written", False
                 ):
@@ -23807,6 +23846,15 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     raise RuntimeError(
                         "FR13 draft-head FP8 selection left B1-B4"
                     )
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dh_fp8_selection_gdn,
+                )
+
+                _fr13_dh_fp8_classify = getattr(
+                    _fr13_dh_fp8_selection_gdn,
+                    "_fr13_fixed32_drafter_fp8_head_selection",
+                )
+                _capturing = _fr13_dh_fp8_classify(_batch_size)
                 if _capturing:
                     self._fr13_dh_fp8_selected_capture_calls += 1
                 else:
@@ -23882,16 +23930,44 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         int(_graph_id)
                     )
                 )
+                _fr13_dh_fp8_expected_capture_calls = int(
+                    _fr13_dh_fp8_lifecycle.get(
+                        "mtp_forward_calls", -1
+                    )
+                )
+                _fr13_dh_fp8_lifecycle_capture_calls = int(
+                    _fr13_dh_fp8_lifecycle.get(
+                        "draft_head_fp8_calls", -1
+                    )
+                )
+                _fr13_dh_fp8_observed_capture_calls = int(
+                    self._fr13_dh_fp8_selected_capture_calls
+                )
                 if _fr13_dh_fp8_attestation is None:
-                    if self._fr13_dh_fp8_selected_capture_calls != 4:
+                    if (
+                        _fr13_dh_fp8_expected_capture_calls != 4
+                        or _fr13_dh_fp8_lifecycle_capture_calls
+                        != _fr13_dh_fp8_expected_capture_calls
+                        or _fr13_dh_fp8_observed_capture_calls
+                        != _fr13_dh_fp8_lifecycle_capture_calls
+                    ):
                         raise RuntimeError(
-                            "FR13 draft-head FP8 graph capture did not "
-                            "select four loop heads"
+                            "FR13 draft-head FP8 graph capture head count "
+                            "drifted: observed_local="
+                            f"{_fr13_dh_fp8_observed_capture_calls} "
+                            "observed_lifecycle="
+                            f"{_fr13_dh_fp8_lifecycle_capture_calls} "
+                            "expected_from_mtp="
+                            f"{_fr13_dh_fp8_expected_capture_calls} "
+                            f"graph_id={int(_graph_id)}"
                         )
                     _fr13_dh_fp8_attestation = {
                         "graph_id": int(_graph_id),
                         "graph_signature": _fr13_dh_fp8_signature,
                         "batch_size": int(_batch_size),
+                        "captured_loop_calls": (
+                            _fr13_dh_fp8_expected_capture_calls
+                        ),
                         "capture_origin": _fr13_dh_fp8_lifecycle[
                             "capture_origin"
                         ],
@@ -23905,6 +23981,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     != _fr13_dh_fp8_signature
                     or _fr13_dh_fp8_attestation.get("batch_size")
                     != int(_batch_size)
+                    or _fr13_dh_fp8_attestation.get(
+                        "captured_loop_calls"
+                    )
+                    != _fr13_dh_fp8_expected_capture_calls
                     or _fr13_dh_fp8_attestation.get("capture_origin")
                     != _fr13_dh_fp8_lifecycle.get("capture_origin")
                 ):
@@ -23947,7 +24027,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         ],
                         "traffic": _fr13_dh_fp8_contract_value["traffic"],
                         "selected_root_calls": 1,
-                        "captured_loop_calls": 4,
+                        "captured_loop_calls": (
+                            _fr13_dh_fp8_attestation[
+                                "captured_loop_calls"
+                            ]
+                        ),
                         "fallback_calls": 0,
                         "drafter_graph_id": int(_graph_id),
                         "drafter_graph_signature": (
@@ -24036,12 +24120,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     raise RuntimeError(
                         "FR13 draft-head FP8 CUTLASS output drifted"
                     )
-                _fr13_dh_fp8_capturing = (
-                    torch.cuda.is_current_stream_capturing()
-                )
-                _fr13_dh_fp8_note_selection(
-                    _fr13_dh_fp8_capturing, _fr13_dh_fp8_batch
-                )
+                _fr13_dh_fp8_note_selection(_fr13_dh_fp8_batch)
                 if not getattr(self, "_fr13_dh_fp8_engaged", False):
                     self._fr13_dh_fp8_engaged = True
                     print(
