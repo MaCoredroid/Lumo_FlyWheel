@@ -103,7 +103,7 @@ def test_committer_replaces_reduction_with_one_scalar_load() -> None:
     fallback_start = kernel.index(
         "        elif USE_QK_L2NORM_IN_KERNEL:", candidate_start
     )
-    update_start = kernel.index("        b_h *= tl.exp(b_g)", fallback_start)
+    update_start = kernel.index("        if DECAY_REUSE:", fallback_start)
     candidate = kernel[candidate_start:fallback_start]
     fallback = kernel[fallback_start:update_start]
 
