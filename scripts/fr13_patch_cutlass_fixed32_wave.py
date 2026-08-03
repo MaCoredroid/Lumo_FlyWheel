@@ -76,6 +76,7 @@ struct fr13_fixed32_b1_onen_static_scheduler {};
 struct fr13_fixed32_b1_n5120_single_tile_scheduler {};
 struct fr13_fixed32_b1_onen_fullgrid_static_scheduler {};
 struct fr13_fixed32_b4_twom_static_scheduler {};
+struct fr13_fixed32_b4_n5120_single_tile_scheduler {};
 struct fr13_fixed32_wide256_recompute_scheduler {};
 }  // namespace vllm
 
@@ -461,6 +462,72 @@ class Fr13B4TwoMStaticTileScheduler100
   }
 };
 
+// The two admitted B4 N=5120 projections contain exactly forty scheduler-N
+// tiles and launch a (40, 1, 1) grid. Each CTA therefore owns one complete
+// output tile. Encode that invariant directly so the cooperative M128 kernel
+// does not retain the general persistent scheduler's tile-count state or
+// next-work arithmetic.
+class Fr13B4N5120SingleTileScheduler100
+    : public Fr13DivisorBalancedStaticTileScheduler100 {
+  using Base = Fr13DivisorBalancedStaticTileScheduler100;
+  static constexpr uint32_t kProblemTiles = 40;
+
+ public:
+  using Params = typename Base::Params;
+  using WorkTileInfo = typename Base::WorkTileInfo;
+  using CLCResponse = typename Base::CLCResponse;
+
+  CUTLASS_DEVICE explicit Fr13B4N5120SingleTileScheduler100(
+      Params const&) : Base() {}
+
+  CUTLASS_DEVICE explicit Fr13B4N5120SingleTileScheduler100(
+      CLCResponse*, Params const&, dim3) : Base() {}
+
+  template <class ClusterShape>
+  CUTLASS_DEVICE WorkTileInfo initial_work_tile_info(ClusterShape) const {
+    return get_current_work();
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work() const {
+    return {0, static_cast<int32_t>(blockIdx.x), 0, true};
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work_for_linear_idx(
+      uint32_t linear_idx) const {
+    if (linear_idx >= kProblemTiles) {
+      return WorkTileInfo::invalid_work_tile();
+    }
+    return {0, static_cast<int32_t>(linear_idx), 0, true};
+  }
+
+  CUTLASS_DEVICE static auto work_tile_to_cta_coord(
+      WorkTileInfo work_tile_info) {
+    return cute::make_coord(
+        cute::Int<0>{}, work_tile_info.N_idx,
+        cute::Underscore{}, cute::Int<0>{});
+  }
+
+  CUTLASS_DEVICE static auto work_tile_to_cta_coord(
+      WorkTileInfo work_tile_info, dim3) {
+    return work_tile_to_cta_coord(work_tile_info);
+  }
+
+  CUTLASS_DEVICE bool is_last_tile(WorkTileInfo&, uint32_t = 1) const {
+    return true;
+  }
+
+  CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {
+    return cute::make_tuple(WorkTileInfo::invalid_work_tile(), true);
+  }
+
+  template <class TileSchedulerPipeline, class TileSchedulerPipelineState>
+  CUTLASS_DEVICE auto fetch_next_work(
+      WorkTileInfo work_tile_info, TileSchedulerPipeline&,
+      TileSchedulerPipelineState) {
+    return fetch_next_work(work_tile_info);
+  }
+};
+
 // Fixed32 B1 swap-AB has exactly one scheduler-N tile, one batch plane,
 // cluster (1,1,1), and complete output tiles. Map the persistent linear work
 // index directly to scheduler M and remove the generic batch/cluster/raster
@@ -689,6 +756,14 @@ struct TileSchedulerSelector<
     vllm::fr13_fixed32_b4_twom_static_scheduler, arch::Sm120,
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
   using Scheduler = Fr13B4TwoMStaticTileScheduler100;
+};
+
+template <class TileShape, class ClusterShape,
+          uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
+    vllm::fr13_fixed32_b4_n5120_single_tile_scheduler, arch::Sm120,
+    TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  using Scheduler = Fr13B4N5120SingleTileScheduler100;
 };
 }  // namespace cutlass::gemm::kernel::detail
 
@@ -1124,6 +1199,21 @@ struct sm120_blockwise_fp8_config_b4_m128_static_identity_stage2 {
       OutType, 1, 128, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, false,
       fr13_fixed32_m128_static_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b4_m128_n5120_single_identity_stage2 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _128, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 1, 128, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, false,
+      fr13_fixed32_b4_n5120_single_tile_scheduler,
       cutlass::gemm::collective::StageCount<2>>;
 };
 
@@ -1778,7 +1868,7 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       [&](torch::stable::Tensor& destination) {
     if (N == 5120) {
       using Gemm = typename
-          sm120_blockwise_fp8_config_b4_m128_static_identity_stage2<
+          sm120_blockwise_fp8_config_b4_m128_n5120_single_identity_stage2<
               OutType>::Gemm;
       return cutlass_gemm_caller_blockwise<Gemm>(
           destination, a, b, a_scales, b_scales);
