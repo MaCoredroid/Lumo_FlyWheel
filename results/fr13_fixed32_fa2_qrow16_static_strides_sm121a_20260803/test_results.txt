@@ -1,0 +1,8 @@
+pytest -q tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_qrow16_production_sidecar.py tests/test_fr13_k64_qrow16_sfwd_stack.py
+30 passed in 2.71s
+
+python3 -m py_compile scripts/fr13_patch_fa2_tree_bias.py scripts/fr13_build_fa2_qrow16_sm121a.py tests/test_fr13_fa2_tree_kernel_candidates.py
+PASS
+
+git diff --check
+PASS
