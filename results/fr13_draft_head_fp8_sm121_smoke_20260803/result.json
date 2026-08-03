@@ -109,9 +109,7 @@
     1
   ],
   "device_name": "NVIDIA GB10",
-  "host": "deab669fd22e",
   "lossless_acceptance_claimed": false,
-  "pid": 1,
   "production_default_enabled": false,
   "qweight": {
     "contiguous": true,
@@ -128,7 +126,7 @@
   },
   "repeats": 8,
   "schema": "fr13.draft_head_fp8_sm121_smoke.v1",
-  "script_sha256": "0619412c9a179cbf499caf0c85326a23991ced65a8772f0fbbdc942e2734983b",
+  "script_sha256": "68af218f3ffc5c13789e73a32bf4f30410eed3182a3d2aec5cbc188b8374b048",
   "seed": 20260803,
   "status": "PASS",
   "torch_version": "2.11.0+cu130",

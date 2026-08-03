@@ -479,6 +479,7 @@ def main() -> int:
         engagement,
         source_sha=args.expected_source_sha256,
         source_commit=args.expected_source_commit,
+        expected_arm=args.candidate_arm,
     )
     if engagement.get("drafter_graph_signature") != GRAPH_SIGNATURE:
         raise ValueError("candidate graph signature drifted")

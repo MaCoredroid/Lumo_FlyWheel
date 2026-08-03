@@ -130,13 +130,15 @@ trap runner_exit EXIT
 run_arm() {
   local arm=$1
   local fp8=$2
-  local expected_bytes expected_floor
+  local expected_bytes expected_floor fp8_arm
   if [[ "$fp8" == "1" ]]; then
     expected_bytes=30989326208
     expected_floor=113.514015414
+    fp8_arm=$arm
   else
     expected_bytes=32666638208
     expected_floor=119.658015414
+    fp8_arm=
   fi
   echo "===== $arm: real exact4 B1 FP8=$fp8 ====="
   (
@@ -171,6 +173,7 @@ run_arm() {
         FR13_DRAFT_HEAD_M32_PRODUCTION=0 \
         FR13_DRAFT_HEAD_M32_TIMING_ARM=0 \
         FR13_DRAFT_HEAD_FP8="$fp8" \
+        FR13_DRAFT_HEAD_FP8_ARM="$fp8_arm" \
         FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON=/logs/fr13_draft_head_fp8.engagement.json \
         FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
         FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
