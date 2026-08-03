@@ -50,8 +50,10 @@ KERNELS = {
             "target_source_indices": "*i64",
             "block_maxima": "*fp32",
             "block_sums": "*fp32",
+            "invalid_out": "*i32",
             "vocab_size": "i32",
             "self_total_rows": "i32",
+            "source_rows": "i32",
         },
         "constexprs": {
             "BLOCK_V": BLOCK_V,
@@ -82,9 +84,11 @@ KERNELS = {
             "selected_token_out": "*i64",
             "rejected_token_out": "*i64",
             "accepted_out": "*i1",
+            "invalid_out": "*i32",
             "vocab_size": "i32",
             "number_of_blocks": "i32",
             "self_total_rows": "i32",
+            "source_rows": "i32",
         },
         "constexprs": {
             "SELF_ROWS": 13,

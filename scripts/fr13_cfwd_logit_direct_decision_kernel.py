@@ -12,7 +12,7 @@ serving; SM121a resource and real SWE-Verified gates must qualify it first.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NamedTuple
 
 try:
     import torch
@@ -41,6 +41,48 @@ BLOCK_V = 4096
 MAX_VOCAB = 262_144
 MAX_BLOCKS = MAX_VOCAB // BLOCK_V
 FP32_BYTES = 4
+SELF_SOURCE_NODES = (4, 5, 6, 7, 9, 10, 12, 14, 15, 19, 20, 21, 30)
+TARGET_SOURCE_NODES = (0, 3, 6, 7, 8, 11, 12, 13, 16, 18, 21, 23, 25, 27, 28, 29, 30)
+SELF_UNIFORM_LEVELS = (2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 11)
+TARGET_PARENT_SLOTS = (0, 1, 2, 3, 4, 7, 8, 9, 12, 14, 17, 19, 24, 26, 28, 29, 30)
+TARGET_UNIFORM_LEVELS = (0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 6, 7, 8, 9, 10)
+COMMON_CHILDREN = {
+    0: (0, 1, 2),
+    1: (3, 4, 5),
+    2: (6,),
+    3: (7,),
+    4: (8, 9, 10),
+    9: (13, 14, 15),
+    14: (18, 19, 20),
+    19: (23,),
+    24: (25,),
+    26: (27,),
+    28: (28,),
+    29: (29,),
+    30: (30,),
+}
+MODE_CHILDREN = {
+    "tail6_fixed32": COMMON_CHILDREN,
+    "hydra27_fixed32": {
+        **COMMON_CHILDREN,
+        7: (11,),
+        8: (12,),
+        12: (16,),
+        17: (21,),
+    },
+}
+MODE_TOPOLOGY = {
+    "tail6_fixed32": ("Tail23", 23, 0x7A9CE7FF),
+    "hydra27_fixed32": ("Hydra27", 27, 0x7ABDFFFF),
+}
+
+
+class Fixed32CfwdMetadataBinding(NamedTuple):
+    """One-time, exact-value attestation for immutable graph metadata."""
+
+    mode: str
+    batch_size: int
+    identities: tuple[tuple[str, int, int], ...]
 
 
 def fixed32_cfwd_logit_direct_contract(
@@ -58,6 +100,7 @@ def fixed32_cfwd_logit_direct_contract(
         raise ValueError("logit-direct CFWD qualification is B1 or B4 only")
     if mode not in FIXED32_MODES:
         raise ValueError("logit-direct CFWD requires an exact fixed32 mode")
+    logical_topology, logical_drafts, valid_mask = MODE_TOPOLOGY[mode]
     if rows != PHYSICAL_ROWS or vocab != VOCAB_SIZE:
         raise ValueError(
             "logit-direct CFWD physical32/vocab geometry drift: "
@@ -85,8 +128,10 @@ def fixed32_cfwd_logit_direct_contract(
         "mode": mode,
         "batch_size": batch,
         "physical_rows": rows,
-        "logical_tree_limit": rows,
-        "fixed_work_for_any_logical_tree_lte": rows,
+        "logical_topology": logical_topology,
+        "logical_drafts": logical_drafts,
+        "valid_mask": valid_mask,
+        "fixed_work_for_exact_bound_topology": True,
         "physical_drafts": PHYSICAL_DRAFTS,
         "self_rows_per_request": SELF_ROWS,
         "target_rows_per_request": TARGET_ROWS,
@@ -182,8 +227,10 @@ if triton is not None:
         target_source_indices,
         block_maxima,
         block_sums,
+        invalid_out,
         vocab_size,
         self_total_rows,
+        source_rows,
         BLOCK_V: tl.constexpr,
         MAX_BLOCKS: tl.constexpr,
     ):
@@ -193,16 +240,24 @@ if triton is not None:
         is_self = row < self_total_rows
         self_row = tl.minimum(row, self_total_rows - 1)
         target_row = tl.maximum(row - self_total_rows, 0)
-        source_self = tl.load(
+        source_self_raw = tl.load(
             self_source_indices + self_row,
             mask=is_self,
             other=0,
         ).to(tl.int64)
-        source_target = tl.load(
+        source_target_raw = tl.load(
             target_source_indices + target_row,
             mask=~is_self,
             other=0,
         ).to(tl.int64)
+        source_self_valid = (source_self_raw >= 0) & (source_self_raw < source_rows)
+        source_target_valid = (source_target_raw >= 0) & (
+            source_target_raw < source_rows
+        )
+        source_valid = tl.where(is_self, source_self_valid, source_target_valid)
+        tl.atomic_max(invalid_out, 1, mask=~source_valid)
+        source_self = tl.maximum(0, tl.minimum(source_self_raw, source_rows - 1))
+        source_target = tl.maximum(0, tl.minimum(source_target_raw, source_rows - 1))
         offsets = block * BLOCK_V + tl.arange(0, BLOCK_V)
         valid = offsets < vocab_size
         self_values = tl.load(
@@ -245,9 +300,11 @@ if triton is not None:
         selected_token_out,
         rejected_token_out,
         accepted_out,
+        invalid_out,
         vocab_size,
         number_of_blocks,
         self_total_rows,
+        source_rows,
         SELF_ROWS: tl.constexpr,
         TARGET_ROWS: tl.constexpr,
         PHYSICAL_DRAFTS: tl.constexpr,
@@ -283,41 +340,68 @@ if triton is not None:
         row_max = tl.max(maxima, axis=0)
         raw_block_mass = sums * tl.exp(maxima - row_max)
         raw_block_mass = tl.where(valid_blocks, raw_block_mass, 0.0)
-        total = tl.sum(raw_block_mass, axis=0)
+        raw_block_cdf = tl.cumsum(raw_block_mass, axis=0)
+        total = tl.sum(
+            tl.where(block_offsets == MAX_BLOCKS - 1, raw_block_cdf, 0.0),
+            axis=0,
+        )
 
-        source_self = tl.load(
+        source_self_raw = tl.load(
             self_source_indices + self_row,
             mask=is_self,
             other=0,
         ).to(tl.int64)
-        source_target = tl.load(
+        source_target_raw = tl.load(
             target_source_indices + target_row,
             mask=~is_self,
             other=0,
         ).to(tl.int64)
-        self_level = tl.load(
+        source_self_valid = (source_self_raw >= 0) & (source_self_raw < source_rows)
+        source_target_valid = (source_target_raw >= 0) & (
+            source_target_raw < source_rows
+        )
+        source_valid = tl.where(is_self, source_self_valid, source_target_valid)
+        source_self = tl.maximum(0, tl.minimum(source_self_raw, source_rows - 1))
+        source_target = tl.maximum(0, tl.minimum(source_target_raw, source_rows - 1))
+        self_level_raw = tl.load(
             self_uniform_levels + self_local,
             mask=is_self,
             other=0,
         ).to(tl.int64)
-        target_level = tl.load(
+        target_level_raw = tl.load(
             target_uniform_levels + target_local,
             mask=~is_self,
             other=0,
         ).to(tl.int64)
-        level = tl.where(is_self, self_level, target_level)
+        self_level_valid = (self_level_raw >= 0) & (self_level_raw < WALK_CAP)
+        target_level_valid = (target_level_raw >= 0) & (
+            target_level_raw < WALK_CAP
+        )
+        level_valid = tl.where(is_self, self_level_valid, target_level_valid)
+        level_raw = tl.where(is_self, self_level_raw, target_level_raw)
+        level = tl.maximum(0, tl.minimum(level_raw, WALK_CAP - 1))
         uniform_base = (request * WALK_CAP + level) * 3
 
-        parent_slot = tl.load(
+        parent_slot_raw = tl.load(
             target_parent_slots + target_local,
             mask=~is_self,
             other=0,
         ).to(tl.int64)
+        parent_valid = is_self | (
+            (parent_slot_raw >= 0) & (parent_slot_raw < PHYSICAL_ROWS)
+        )
+        parent_slot = tl.maximum(
+            0,
+            tl.minimum(parent_slot_raw, PHYSICAL_ROWS - 1),
+        )
         child_count = tl.load(
             child_counts + request * PHYSICAL_ROWS + parent_slot,
-            mask=~is_self,
+            mask=(~is_self) & parent_valid,
             other=0,
         ).to(tl.int64)
+        child_count_valid = is_self | (
+            (child_count >= 0) & (child_count <= FANOUT)
+        )
         child_lanes = tl.arange(0, 4)
         child_lane_mask = child_lanes < FANOUT
         child_nodes = tl.load(
@@ -325,29 +409,72 @@ if triton is not None:
             + request * PHYSICAL_ROWS * FANOUT
             + parent_slot * FANOUT
             + child_lanes,
-            mask=(~is_self) & child_lane_mask,
+            mask=(~is_self) & parent_valid & child_lane_mask,
             other=-1,
         ).to(tl.int64)
         target_child_lane = (~is_self) & child_lane_mask
-        valid_child = target_child_lane & (child_nodes >= 0)
+        expected_child = target_child_lane & (child_lanes < child_count)
+        child_node_valid = (child_nodes >= 0) & (child_nodes < PHYSICAL_DRAFTS)
+        child_packing_valid = (
+            tl.sum(
+                (
+                    target_child_lane
+                    & (expected_child != child_node_valid)
+                ).to(tl.int32),
+                axis=0,
+            )
+            == 0
+        )
+        valid_child_node = expected_child & child_node_valid
         safe_nodes = tl.maximum(0, tl.minimum(child_nodes, PHYSICAL_DRAFTS - 1))
         kid_tokens = tl.load(
             drafts + request * PHYSICAL_DRAFTS + safe_nodes,
-            mask=target_child_lane,
+            mask=valid_child_node,
             other=0,
         ).to(tl.int64)
+        kid_token_valid = (kid_tokens >= 0) & (kid_tokens < vocab_size)
+        valid_child = valid_child_node & kid_token_valid
         safe_tokens = tl.maximum(0, tl.minimum(kid_tokens, vocab_size - 1))
+        source_uniform = tl.load(uniforms + uniform_base)
+        accept_uniform = tl.load(uniforms + uniform_base + 1)
+        token_uniform = tl.load(uniforms + uniform_base + 2)
+        uniforms_valid = (
+            (source_uniform >= 0.0)
+            & (source_uniform < 1.0)
+            & (accept_uniform >= 0.0)
+            & (accept_uniform < 1.0)
+            & (token_uniform >= 0.0)
+            & (token_uniform < 1.0)
+        )
+        metadata_valid = (
+            source_valid
+            & level_valid
+            & parent_valid
+            & child_count_valid
+            & child_packing_valid
+            & (
+                tl.sum(
+                    (valid_child_node & ~kid_token_valid).to(tl.int32),
+                    axis=0,
+                )
+                == 0
+            )
+            & uniforms_valid
+        )
+        tl.atomic_max(invalid_out, 1, mask=~metadata_valid)
         kid_logits = tl.load(
             target_logits + source_target * vocab_size + safe_tokens,
             mask=valid_child,
             other=-float("inf"),
         ).to(tl.float32)
         kid_raw = tl.where(valid_child, tl.exp(kid_logits - row_max), 0.0)
-        overlap_mass = tl.sum(kid_raw, axis=0)
-        q_weights = kid_raw / tl.maximum(overlap_mass, 1.0e-30)
-
-        source_threshold = tl.load(uniforms + uniform_base) * overlap_mass
         source_cdf = tl.cumsum(kid_raw, axis=0)
+        overlap_mass = tl.sum(
+            tl.where(child_lanes == FANOUT - 1, source_cdf, 0.0),
+            axis=0,
+        )
+        q_weights = kid_raw / tl.maximum(overlap_mass, 1.0e-30)
+        source_threshold = source_uniform * overlap_mass
         sampled_source = tl.sum(
             ((source_cdf <= source_threshold) & child_lane_mask).to(tl.int32),
             axis=0,
@@ -374,7 +501,7 @@ if triton is not None:
             (~is_self)
             & (child_count > 0)
             & (overlap_mass > 0.0)
-            & (tl.load(uniforms + uniform_base + 1) < accept_probability)
+            & (accept_uniform < accept_probability)
         )
 
         same_tokens = kid_tokens[:, None] == kid_tokens[None, :]
@@ -411,18 +538,29 @@ if triton is not None:
             raw_block_mass - correction_by_block,
             0.0,
         )
-        residual_total = tl.sum(residual_block_mass, axis=0)
+        residual_block_cdf = tl.cumsum(residual_block_mass, axis=0)
+        residual_total = tl.sum(
+            tl.where(
+                block_offsets == MAX_BLOCKS - 1,
+                residual_block_cdf,
+                0.0,
+            ),
+            axis=0,
+        )
         use_raw = is_self | (residual_total <= 0.0)
         sampling_block_mass = tl.where(
             use_raw,
             raw_block_mass,
             residual_block_mass,
         )
-        sampling_total = tl.sum(sampling_block_mass, axis=0)
-        token_threshold = (
-            tl.load(uniforms + uniform_base + 2) * sampling_total
-        )
         block_cdf = tl.cumsum(sampling_block_mass, axis=0)
+        sampling_total = tl.sum(
+            tl.where(block_offsets == MAX_BLOCKS - 1, block_cdf, 0.0),
+            axis=0,
+        )
+        token_threshold = (
+            token_uniform * sampling_total
+        )
         selected_block = tl.sum(
             ((block_cdf <= token_threshold) & valid_blocks).to(tl.int32),
             axis=0,
@@ -430,7 +568,16 @@ if triton is not None:
         selected_block = tl.minimum(selected_block, number_of_blocks - 1)
         prior_mass = tl.sum(
             tl.where(
-                block_offsets < selected_block,
+                (selected_block > 0)
+                & (block_offsets == selected_block - 1),
+                block_cdf,
+                0.0,
+            ),
+            axis=0,
+        )
+        selected_block_mass = tl.sum(
+            tl.where(
+                block_offsets == selected_block,
                 sampling_block_mass,
                 0.0,
             ),
@@ -467,7 +614,13 @@ if triton is not None:
         local_residual = tl.maximum(local_raw - total * local_q_mix, 0.0)
         local_weights = tl.where(use_raw, local_raw, local_residual)
         local_cdf = tl.cumsum(local_weights, axis=0)
-        local_threshold = token_threshold - prior_mass
+        local_total = tl.sum(
+            tl.where(local_offsets == BLOCK_V - 1, local_cdf, 0.0),
+            axis=0,
+        )
+        local_threshold = (token_threshold - prior_mass) * (
+            local_total / tl.maximum(selected_block_mass, 1.0e-30)
+        )
         selected_local = tl.sum(
             ((local_cdf <= local_threshold) & valid_tokens).to(tl.int32),
             axis=0,
@@ -494,6 +647,124 @@ if triton is not None:
         tl.store(accepted_out + target_row, accepted, mask=~is_self)
 
 
+def _metadata_operands(
+    *,
+    self_source_indices,
+    target_source_indices,
+    child_table,
+    child_counts,
+    self_uniform_levels,
+    target_parent_slots,
+    target_uniform_levels,
+) -> tuple[tuple[str, Any], ...]:
+    return (
+        ("self_source_indices", self_source_indices),
+        ("target_source_indices", target_source_indices),
+        ("child_table", child_table),
+        ("child_counts", child_counts),
+        ("self_uniform_levels", self_uniform_levels),
+        ("target_parent_slots", target_parent_slots),
+        ("target_uniform_levels", target_uniform_levels),
+    )
+
+
+def prepare_metadata_binding(
+    *,
+    self_source_indices,
+    target_source_indices,
+    child_table,
+    child_counts,
+    self_uniform_levels,
+    target_parent_slots,
+    target_uniform_levels,
+    batch_size: int,
+    mode: str,
+) -> Fixed32CfwdMetadataBinding:
+    """Synchronously attest immutable metadata once, before graph capture."""
+    if torch is None:
+        raise RuntimeError("logit-direct CFWD metadata binding requires torch")
+    fixed32_cfwd_logit_direct_contract(batch_size, mode=mode)
+    batch = int(batch_size)
+    operands = _metadata_operands(
+        self_source_indices=self_source_indices,
+        target_source_indices=target_source_indices,
+        child_table=child_table,
+        child_counts=child_counts,
+        self_uniform_levels=self_uniform_levels,
+        target_parent_slots=target_parent_slots,
+        target_uniform_levels=target_uniform_levels,
+    )
+    if any(not isinstance(value, torch.Tensor) for _name, value in operands):
+        raise TypeError("logit-direct CFWD metadata must be tensors")
+    device = operands[0][1].device
+    if any(value.device != device for _name, value in operands):
+        raise ValueError("logit-direct CFWD metadata must share one device")
+    if any(value.dtype != torch.long for _name, value in operands):
+        raise ValueError("logit-direct CFWD metadata must be int64")
+    if any(not value.is_contiguous() for _name, value in operands):
+        raise ValueError("logit-direct CFWD metadata must be contiguous")
+
+    self_sources = [
+        request * PHYSICAL_DRAFTS + node
+        for request in range(batch)
+        for node in SELF_SOURCE_NODES
+    ]
+    target_sources = [
+        request * PHYSICAL_DRAFTS + node
+        for request in range(batch)
+        for node in TARGET_SOURCE_NODES
+    ]
+    table = [[-1] * FANOUT for _ in range(PHYSICAL_ROWS)]
+    counts = [0] * PHYSICAL_ROWS
+    for parent_slot, children in MODE_CHILDREN[mode].items():
+        counts[parent_slot] = len(children)
+        table[parent_slot][: len(children)] = children
+    expected_cpu = {
+        "self_source_indices": self_sources,
+        "target_source_indices": target_sources,
+        "child_table": [table for _ in range(batch)],
+        "child_counts": [counts for _ in range(batch)],
+        "self_uniform_levels": list(SELF_UNIFORM_LEVELS),
+        "target_parent_slots": list(TARGET_PARENT_SLOTS),
+        "target_uniform_levels": list(TARGET_UNIFORM_LEVELS),
+    }
+    for name, value in operands:
+        expected = torch.tensor(expected_cpu[name], dtype=torch.long, device=device)
+        if tuple(value.shape) != tuple(expected.shape) or not torch.equal(
+            value, expected
+        ):
+            raise ValueError(f"logit-direct CFWD exact metadata drift: {name}")
+    return Fixed32CfwdMetadataBinding(
+        mode=mode,
+        batch_size=batch,
+        identities=tuple(
+            (name, int(value.data_ptr()), int(value._version))
+            for name, value in operands
+        ),
+    )
+
+
+def _validate_metadata_binding(
+    binding: Fixed32CfwdMetadataBinding,
+    *,
+    operands: tuple[tuple[str, Any], ...],
+    batch_size: int,
+    mode: str,
+) -> None:
+    if not isinstance(binding, Fixed32CfwdMetadataBinding):
+        raise TypeError("logit-direct CFWD requires an exact metadata binding")
+    observed = tuple(
+        (name, int(value.data_ptr()), int(value._version))
+        for name, value in operands
+    )
+    if (
+        binding.mode != mode
+        or binding.batch_size != int(batch_size)
+        or binding.identities != observed
+    ):
+        raise ValueError("logit-direct CFWD metadata binding drift")
+
+
 def workspace_spec(batch_size: int) -> dict[str, tuple[tuple[int, ...], Any]]:
     """Return the fixed persistent workspace for a B1/B4 specialization."""
     if torch is None:
@@ -510,15 +781,48 @@ def workspace_spec(batch_size: int) -> dict[str, tuple[tuple[int, ...], Any]]:
         "selected_token": ((batch, TARGET_ROWS), torch.long),
         "rejected_token": ((batch, TARGET_ROWS), torch.long),
         "accepted": ((batch, TARGET_ROWS), torch.bool),
+        "invalid": ((1,), torch.int32),
     }
 
 
 def allocate_workspace(*, device, batch_size: int) -> dict[str, Any]:
     """Allocate candidate buffers before capture; never called at import."""
-    return {
+    workspace = {
         name: torch.empty(shape, dtype=dtype, device=device)
         for name, (shape, dtype) in workspace_spec(batch_size).items()
     }
+    workspace["invalid"].zero_()
+    return workspace
+
+
+def _reject_workspace_aliases(
+    operands: tuple[Any, ...], workspace: dict[str, Any]
+) -> None:
+    """Reject any overlap involving buffers written by the two-stage candidate."""
+    readable = [(f"operand[{index}]", value) for index, value in enumerate(operands)]
+    writable = list(workspace.items())
+    intervals: list[tuple[str, Any, int, int, bool]] = []
+    for name, value in readable:
+        start = int(value.data_ptr())
+        stop = start + int(value.numel()) * int(value.element_size())
+        intervals.append((name, value.device, start, stop, False))
+    for name, value in writable:
+        start = int(value.data_ptr())
+        stop = start + int(value.numel()) * int(value.element_size())
+        intervals.append((name, value.device, start, stop, True))
+    for left_index, (left_name, left_device, left_start, left_stop, left_write) in enumerate(
+        intervals
+    ):
+        for right_name, right_device, right_start, right_stop, right_write in intervals[
+            left_index + 1 :
+        ]:
+            if not (left_write or right_write) or left_device != right_device:
+                continue
+            if left_start < right_stop and right_start < left_stop:
+                raise ValueError(
+                    "logit-direct CFWD writable storage alias: "
+                    f"{left_name} overlaps {right_name}"
+                )
 
 
 def launch_logit_direct_fixed32(
@@ -537,6 +841,7 @@ def launch_logit_direct_fixed32(
     workspace: dict[str, Any],
     batch_size: int,
     mode: str,
+    metadata_binding: Fixed32CfwdMetadataBinding,
 ) -> tuple[Any, Any, Any, Any, Any]:
     """Launch the unserved two-stage candidate after exact qualification."""
     if triton is None or tl is None or torch is None:
@@ -600,7 +905,24 @@ def launch_logit_direct_fixed32(
         or tuple(uniforms.shape) != (batch, WALK_CAP, 3)
     ):
         raise ValueError("logit-direct CFWD exact tensor geometry drift")
+    metadata_operands = _metadata_operands(
+        self_source_indices=self_source_indices,
+        target_source_indices=target_source_indices,
+        child_table=child_table,
+        child_counts=child_counts,
+        self_uniform_levels=self_uniform_levels,
+        target_parent_slots=target_parent_slots,
+        target_uniform_levels=target_uniform_levels,
+    )
+    _validate_metadata_binding(
+        metadata_binding,
+        operands=metadata_operands,
+        batch_size=batch,
+        mode=mode,
+    )
     expected_workspace = workspace_spec(batch)
+    if not isinstance(workspace, dict) or set(workspace) != set(expected_workspace):
+        raise ValueError("logit-direct CFWD workspace key drift")
     for name, (shape, dtype) in expected_workspace.items():
         value = workspace.get(name)
         if (
@@ -611,6 +933,7 @@ def launch_logit_direct_fixed32(
             or not value.is_contiguous()
         ):
             raise ValueError(f"logit-direct CFWD workspace drift: {name}")
+    _reject_workspace_aliases(tensors, workspace)
 
     all_rows = batch * (SELF_ROWS + TARGET_ROWS)
     self_total_rows = batch * SELF_ROWS
@@ -622,11 +945,14 @@ def launch_logit_direct_fixed32(
         target_source_indices,
         workspace["block_maxima"],
         workspace["block_sums"],
+        workspace["invalid"],
         VOCAB_SIZE,
         self_total_rows,
+        flat_rows,
         BLOCK_V=BLOCK_V,
         MAX_BLOCKS=MAX_BLOCKS,
         num_warps=4,
+        num_stages=3,
     )
     _fr13_cfwd_logit_direct_decision_kernel[(all_rows,)](
         self_logits,
@@ -647,9 +973,11 @@ def launch_logit_direct_fixed32(
         workspace["selected_token"],
         workspace["rejected_token"],
         workspace["accepted"],
+        workspace["invalid"],
         VOCAB_SIZE,
         number_of_blocks,
         self_total_rows,
+        flat_rows,
         SELF_ROWS=SELF_ROWS,
         TARGET_ROWS=TARGET_ROWS,
         PHYSICAL_DRAFTS=PHYSICAL_DRAFTS,
@@ -659,6 +987,7 @@ def launch_logit_direct_fixed32(
         BLOCK_V=BLOCK_V,
         MAX_BLOCKS=MAX_BLOCKS,
         num_warps=8,
+        num_stages=3,
     )
     return (
         workspace["self_token"],
