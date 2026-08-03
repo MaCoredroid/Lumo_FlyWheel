@@ -1,0 +1,48 @@
+{
+  "schema": "fr13.fixed32.draft_head_fp8_qrow16_b1_gate_closeout.v1",
+  "status": "FAILED_PRETASK_ENGINE_GUARD",
+  "source_commit": "711c08551de2e5eabf9788ad44002e5b0a2564db",
+  "topology": "hydra27_fixed32",
+  "physical_rows": 32,
+  "batch_size": 1,
+  "concurrency": 1,
+  "draft_vocab_root": 1,
+  "draft_vocab_k": 65536,
+  "diagnostic_task_id": "astropy__astropy-12907",
+  "candidate": "draft_head_block_fp8",
+  "qrow16_production": true,
+  "qrow16_fa2_sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+  "qrow16_fa2_bytes": 299507792,
+  "candidate_source_sha256": "65753185cefac09bd0b2ba64b4b21d1e39d0fbb06409d468f4a3319d28f6c15e",
+  "gate_runner_sha256": "c07e2736564aa3eaf78b7cf533cad98eac5f08f929df1090174114f80d30efc3",
+  "gate_validator_sha256": "77cd9a1159f7ef3008f832104170138a9f8b84978e04c1291a3c64838347383e",
+  "engagement": {
+    "qrow16_bound": true,
+    "fp8_static_weight_ready": true,
+    "fp8_b1_head_called": true,
+    "drafter_graph_capture_reported": true
+  },
+  "failure": {
+    "driver_exit_code": 15,
+    "stage": "first_canonical_request_before_speculative_work",
+    "error": "FR13 draft-head FP8 graph capture did not select four loop heads",
+    "completed_swe_verified_tasks": 0,
+    "forward_events": 0
+  },
+  "measurement": {
+    "timing_valid": false,
+    "acceptance_valid": false,
+    "floor_ratio_valid": false
+  },
+  "candidate_byte_ledger": {
+    "mandatory_weight_bytes": 30989326208,
+    "weight_read_floor_ms_per_event": 113.514015414,
+    "nominal_1_15x_cap_ms_per_event": 130.541117726,
+    "includes_nonweight_costs": false
+  },
+  "final_hygiene": {
+    "docker_container_count": 0,
+    "gpu_compute_process_count": 0
+  },
+  "raw_data_published": false
+}
