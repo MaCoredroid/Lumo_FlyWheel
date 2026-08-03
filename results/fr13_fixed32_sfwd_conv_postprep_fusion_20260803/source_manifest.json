@@ -7,8 +7,8 @@
       "sha256": "c489999cde03283b55a776a407b6b54f5741b83cd11d32efa48c7c83a9ccce7c"
     },
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py": {
-      "bytes": 20832,
-      "sha256": "0fcafb886a450f9288b9a0fae1e0b740180094a9a1d5c695dbd73ef336a15d6d"
+      "bytes": 21605,
+      "sha256": "4ea3310fa312cd1bd99b2adc08624bd998ae55a611eace9475de05dd529c5c4d"
     },
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py": {
       "bytes": 35295,

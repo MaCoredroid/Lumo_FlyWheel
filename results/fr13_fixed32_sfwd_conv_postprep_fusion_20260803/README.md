@@ -24,14 +24,17 @@ their existing order. Cross-layer fusion is explicitly forbidden.
 - independent storage for query, key, value-spec, and value-tree outputs
 - exact fused-post-prep softplus threshold and FP32 g/beta algebra
 - unchanged `prior[0:3] ++ x[0:32] ++ zero` commit-source stage
-- fail-closed shape, dtype, stride, storage-bound, and output-alias checks
+- fail-closed shape, dtype, stride, state-bank value, storage-bound, and
+  output-alias checks
 
 ## Static result
 
 The no-tap B1 path removes 2,228,224 logical global bytes per layer and
-106,954,752 bytes across 48 layers. It changes 2 launches/layer to 1, removing
-48 launches across the model. B4 byte counts are exactly four times B1; launch
-counts remain one candidate launch per layer.
+106,954,752 bytes across 48 layers. It replaces the incumbent conv launch,
+three `rearrange_mixed_qkv` contiguous-copy launches, and post-prep launch with
+one launch per layer: 5 to 1, removing 192 launches across the model. B4 byte
+counts are exactly four times B1; launch counts remain one candidate launch per
+layer.
 
 Host-only SM121a compilation with `CUDA_VISIBLE_DEVICES` explicitly empty
 produced 56 registers/thread and zero stack, local, and shared bytes for B1,

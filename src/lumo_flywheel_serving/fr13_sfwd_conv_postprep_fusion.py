@@ -235,11 +235,11 @@ def fixed32_sfwd_conv_postprep_static_ledger(
             "logical_traffic_removed": logical_traffic_removed * layer_count,
         },
         "launches": {
-            "incumbent_per_layer": 2,
+            "incumbent_per_layer": 5,
             "candidate_per_layer": 1,
-            "incumbent_all_layers": 2 * layer_count,
+            "incumbent_all_layers": 5 * layer_count,
             "candidate_all_layers": layer_count,
-            "removed_all_layers": layer_count,
+            "removed_all_layers": 4 * layer_count,
         },
         "excludes": (
             "input_weight_reads",
@@ -404,6 +404,25 @@ def fixed32_sfwd_conv_postprep_layout_contract(
             failures.append("conv_state_stride")
         if conv_state.dtype != torch.bfloat16:
             failures.append("conv_state_dtype")
+    state_index_bounds: tuple[int, int] | None = None
+    if (
+        tuple(int(value) for value in spec_state_indices.shape)
+        == (batch, ROWS)
+        and spec_state_indices.dtype == torch.int32
+        and spec_state_indices.device == device
+        and conv_state.ndim == 3
+        and int(conv_state.size(0)) > 0
+    ):
+        index_min_tensor, index_max_tensor = torch.aminmax(spec_state_indices)
+        state_index_bounds = (
+            int(index_min_tensor.item()),
+            int(index_max_tensor.item()),
+        )
+        if (
+            state_index_bounds[0] < 0
+            or state_index_bounds[1] >= int(conv_state.size(0))
+        ):
+            failures.append("spec_state_indices_values")
     if bias is not None and (
         tuple(int(value) for value in bias.shape) != (CHANNELS,)
         or tuple(int(value) for value in bias.stride()) != (1,)
@@ -464,6 +483,7 @@ def fixed32_sfwd_conv_postprep_layout_contract(
         "batch_size": batch,
         "device": str(device),
         "conv_state_stride_row": int(conv_state.stride(0)),
+        "state_index_bounds": state_index_bounds,
         "conv_tap": conv_tap is not None,
         "writable_storages": len(writable_storage),
         "input_aliases_allowed": True,

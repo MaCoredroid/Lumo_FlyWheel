@@ -17,9 +17,9 @@
     "launches": {
       "candidate_all_layers": 48,
       "candidate_per_layer": 1,
-      "incumbent_all_layers": 96,
-      "incumbent_per_layer": 2,
-      "removed_all_layers": 48
+      "incumbent_all_layers": 240,
+      "incumbent_per_layer": 5,
+      "removed_all_layers": 192
     },
     "layers": 48,
     "per_layer_bytes": {
@@ -57,9 +57,9 @@
     "launches": {
       "candidate_all_layers": 48,
       "candidate_per_layer": 1,
-      "incumbent_all_layers": 96,
-      "incumbent_per_layer": 2,
-      "removed_all_layers": 48
+      "incumbent_all_layers": 240,
+      "incumbent_per_layer": 5,
+      "removed_all_layers": 192
     },
     "layers": 48,
     "per_layer_bytes": {

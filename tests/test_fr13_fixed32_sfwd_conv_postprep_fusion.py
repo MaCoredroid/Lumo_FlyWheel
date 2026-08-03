@@ -474,6 +474,7 @@ def test_layout_contract_accepts_exact_surfaces_and_rejects_alias_drift() -> Non
     operands = _valid_layout_operands(conv_tap=True)
     layout = candidate.fixed32_sfwd_conv_postprep_layout_contract(**operands)
     assert layout["conv_state_stride_row"] == 2097152
+    assert layout["state_index_bounds"] == (0, 0)
     assert layout["conv_tap"] is True
     assert layout["writable_storages"] == 8
     assert layout["input_aliases_allowed"] is True
@@ -497,6 +498,16 @@ def test_layout_contract_accepts_exact_surfaces_and_rejects_alias_drift() -> Non
     shared_inputs = dict(operands)
     shared_inputs["b"] = shared_inputs["a"]
     candidate.fixed32_sfwd_conv_postprep_layout_contract(**shared_inputs)
+
+
+@pytest.mark.parametrize("invalid_index", (-1, 2))
+def test_layout_contract_rejects_out_of_range_state_bank_indices(
+    invalid_index: int,
+) -> None:
+    operands = _valid_layout_operands()
+    operands["spec_state_indices"][0, -1] = invalid_index
+    with pytest.raises(ValueError, match="spec_state_indices_values"):
+        candidate.fixed32_sfwd_conv_postprep_layout_contract(**operands)
 
 
 @pytest.mark.parametrize(
@@ -631,11 +642,11 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
         "logical_traffic_removed": 106954752,
     }
     assert b1["launches"] == {
-        "incumbent_per_layer": 2,
+        "incumbent_per_layer": 5,
         "candidate_per_layer": 1,
-        "incumbent_all_layers": 96,
+        "incumbent_all_layers": 240,
         "candidate_all_layers": 48,
-        "removed_all_layers": 48,
+        "removed_all_layers": 192,
     }
     assert "timing" in b1["excludes"]
     b4 = candidate.fixed32_sfwd_conv_postprep_static_ledger(4)
