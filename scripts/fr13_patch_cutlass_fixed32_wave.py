@@ -379,25 +379,29 @@ class Fr13DivisorBalancedStaticTileScheduler100
 // Fixed32 B4 with a 64-row tile always has exactly two M tiles, one batch
 // plane, cluster (1,1,1), and complete output tiles. Every admitted real
 // projection has at least 40 N tiles, so CUTLASS rasterizes AlongM and returns
-// an X-only grid. Map that persistent index directly and remove the generic
-// grid flattening plus batch/cluster/raster divmods from every tile assignment.
+// an even X-only grid. Split the launch index once, then advance only the N
+// tile. This keeps each CTA's M tile invariant and removes repeated parity and
+// shift work from the persistent loop.
 class Fr13B4TwoMStaticTileScheduler100
     : public Fr13DivisorBalancedStaticTileScheduler100 {
   using Base = Fr13DivisorBalancedStaticTileScheduler100;
-  uint32_t current_work_linear_idx_ = 0;
+  uint32_t current_m_idx_ = 0;
+  uint32_t current_n_idx_ = 0;
 
-  CUTLASS_DEVICE void initialize_linear_work() {
+  CUTLASS_DEVICE void initialize_work() {
 #if defined(__CUDA_ARCH__)
-    current_work_linear_idx_ = blockIdx.x;
+    current_m_idx_ = blockIdx.x & 1;
+    current_n_idx_ = blockIdx.x >> 1;
 #endif
   }
 
-  CUTLASS_DEVICE static uint32_t total_grid_size() {
-    return gridDim.x;
+  CUTLASS_DEVICE static uint32_t n_grid_stride() {
+    return gridDim.x >> 1;
   }
 
-  CUTLASS_DEVICE uint32_t problem_tiles() const {
-    return static_cast<uint32_t>(this->scheduler_params.blocks_per_problem_);
+  CUTLASS_DEVICE uint32_t problem_n_tiles() const {
+    return static_cast<uint32_t>(
+        this->scheduler_params.blocks_per_problem_) >> 1;
   }
 
  public:
@@ -407,13 +411,13 @@ class Fr13B4TwoMStaticTileScheduler100
 
   CUTLASS_DEVICE explicit Fr13B4TwoMStaticTileScheduler100(
       Params const& params) : Base(params) {
-    initialize_linear_work();
+    initialize_work();
   }
 
   CUTLASS_DEVICE explicit Fr13B4TwoMStaticTileScheduler100(
       CLCResponse* response, Params const& params, dim3 block_id_in_cluster)
       : Base(response, params, block_id_in_cluster) {
-    initialize_linear_work();
+    initialize_work();
   }
 
   template <class ClusterShape>
@@ -423,26 +427,21 @@ class Fr13B4TwoMStaticTileScheduler100
   }
 
   CUTLASS_DEVICE WorkTileInfo get_current_work() const {
-    return get_current_work_for_linear_idx(current_work_linear_idx_);
-  }
-
-  CUTLASS_DEVICE WorkTileInfo get_current_work_for_linear_idx(
-      uint32_t linear_idx) const {
-    if (linear_idx >= problem_tiles()) {
+    if (current_n_idx_ >= problem_n_tiles()) {
       return WorkTileInfo::invalid_work_tile();
     }
-    return {static_cast<int32_t>(linear_idx & 1),
-            static_cast<int32_t>(linear_idx >> 1), 0, true};
+    return {static_cast<int32_t>(current_m_idx_),
+            static_cast<int32_t>(current_n_idx_), 0, true};
   }
 
   CUTLASS_DEVICE void advance_to_next_work(uint32_t advance_count = 1) {
-    current_work_linear_idx_ += total_grid_size() * advance_count;
+    current_n_idx_ += n_grid_stride() * advance_count;
   }
 
   CUTLASS_DEVICE bool is_last_tile(
       WorkTileInfo&, uint32_t advance_count = 1) const {
-    return current_work_linear_idx_ +
-        total_grid_size() * advance_count >= problem_tiles();
+    return current_n_idx_ +
+        n_grid_stride() * advance_count >= problem_n_tiles();
   }
 
   CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {

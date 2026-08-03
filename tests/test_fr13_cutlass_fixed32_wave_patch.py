@@ -565,24 +565,27 @@ def test_b4_twom_scheduler_removes_generic_per_tile_divmods() -> None:
     )
     scheduler = patched[scheduler_start:scheduler_end]
 
-    assert "linear_idx & 1" in scheduler
-    assert "linear_idx >> 1" in scheduler
+    assert "current_m_idx_ = blockIdx.x & 1;" in scheduler
+    assert "current_n_idx_ = blockIdx.x >> 1;" in scheduler
     assert "L_idx" not in scheduler
     assert "divmod_batch_" not in scheduler
     assert "divmod_cluster_shape" not in scheduler
     assert "divmod_cluster_blk_major_" not in scheduler
     assert "raster_order_" not in scheduler
-    assert "uint32_t current_work_linear_idx_" in scheduler
+    assert "uint32_t current_work_linear_idx_" not in scheduler
+    assert "uint32_t current_m_idx_" in scheduler
+    assert "uint32_t current_n_idx_" in scheduler
     assert "uint32_t total_grid_size_" not in scheduler
     assert "uint32_t problem_tiles_" not in scheduler
-    assert "current_work_linear_idx_ = blockIdx.x;" in scheduler
-    assert "return gridDim.x;" in scheduler
+    assert "return gridDim.x >> 1;" in scheduler
     assert "blockIdx.y" not in scheduler
     assert "blockIdx.z" not in scheduler
     assert "gridDim.y" not in scheduler
     assert "gridDim.z" not in scheduler
     assert "this->scheduler_params.blocks_per_problem_" in scheduler
-    assert "total_grid_size() * advance_count" in scheduler
+    assert "n_grid_stride() * advance_count" in scheduler
+    assert "current_n_idx_ >= problem_n_tiles()" in scheduler
+    assert "linear_idx" not in scheduler
     assert "uint64_t" not in scheduler
     assert "fr13_fixed32_b4_twom_static_scheduler" in patched
     assert "using Scheduler = Fr13B4TwoMStaticTileScheduler100;" in patched
@@ -591,6 +594,17 @@ def test_b4_twom_scheduler_removes_generic_per_tile_divmods() -> None:
     # pinned CUTLASS heuristic therefore rasterizes AlongM into an X-only grid.
     projection_n = (34816, 5120, 5120, 16384, 14336)
     assert all(n // 128 >= 40 for n in projection_n)
+    logical_tiles = tuple(2 * (n // 128) for n in projection_n)
+    grid_ctas = tuple(
+        next(
+            candidate
+            for candidate in range(min(48, tiles), 27, -1)
+            if tiles % candidate == 0
+        )
+        for tiles in logical_tiles
+    )
+    assert grid_ctas == (34, 40, 40, 32, 32)
+    assert all(ctas % 2 == 0 for ctas in grid_ctas)
 
 
 def test_b4_identity_twom_keeps_complete_tile_math() -> None:
