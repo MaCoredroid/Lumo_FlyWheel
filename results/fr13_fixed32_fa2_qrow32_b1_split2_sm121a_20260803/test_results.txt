@@ -1,0 +1,13 @@
+python3 -m py_compile scripts/fr13_patch_fa2_tree_bias.py
+PASS
+
+pytest -q tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_fa2_qrow32_gate.py tests/test_fr13_fa2_qrow32_static_gate.py tests/test_fr13_fa2_no_bias_pristine_compare.py tests/test_fr13_fixed32_fa2_identity.py
+46 passed, 1 skipped in 3.42s
+
+git diff --check
+PASS
+
+CUDA 13.0 SM121a host compile
+qrow32 no-split: REG246 STACK0 LOCAL0 SPILLS0
+qrow32 split2 main: REG250 STACK0 LOCAL0 SPILLS0
+existing FA2 combine: REG44 STACK0 LOCAL0 SPILLS0
