@@ -1,0 +1,5 @@
+route	dtype	registers	stack_bytes	local_bytes	shared_bytes	constant0_bytes	ldl	stl	call	verdict
+incumbent_general	fp16	168	0	0	1024	2688	0	0	0	identity
+incumbent_general	bf16	168	0	0	1024	2688	0	0	0	identity
+candidate_single_tile	fp16	168	0	0	1024	2688	0	0	0	pass
+candidate_single_tile	bf16	168	0	0	1024	2688	0	0	0	pass

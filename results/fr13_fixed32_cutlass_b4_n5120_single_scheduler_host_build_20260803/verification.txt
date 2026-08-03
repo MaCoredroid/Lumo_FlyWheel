@@ -1,0 +1,18 @@
+PASS pinned vLLM fe9c3d6c and CUTLASS da5e086 source application
+PASS full translation-unit CUDA 13.0 SM121a compile
+PASS linked ELF64 AArch64 extension
+PASS Python extension import with CUDA_VISIBLE_DEVICES empty
+PASS FP16 resources: 168 registers, stack 0, local 0
+PASS BF16 resources: 168 registers, stack 0, local 0
+PASS FP16/BF16 SASS: LDL 0, STL 0, CALL 0
+PASS tensor math parity: QMMA 128 and FFMA 128 per dtype
+PASS data movement parity: LDSM 48 and STSM 16 per dtype
+PASS candidate SASS reduction: 1352 to 1008 slots per dtype
+PASS candidate branch reduction: 40 to 33 per dtype
+PASS incumbent FP16/BF16 function blocks match prior hybrid build byte-for-byte
+PASS focused CUTLASS host suite: 178 passed
+PASS Python byte compilation and git diff check
+NOT RUN Docker or GPU kernel execution
+NOT RUN synthetic or probe workload
+NOT RUN real SWE-Verified exact4 byte qualification
+NOT RUN full-wall timing or hardware-floor acceptance
