@@ -1,0 +1,3 @@
+dtype	kernel	registers	stack_bytes	local_bytes	static_shared_bytes	constant0_bytes	ldl	stl	call
+fp16	wide_fullgrid_pingpong	168	0	0	1024	2688	0	0	0
+bf16	wide_fullgrid_pingpong	168	0	0	1024	2688	0	0	0
