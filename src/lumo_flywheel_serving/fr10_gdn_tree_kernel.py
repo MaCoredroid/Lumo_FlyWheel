@@ -12883,12 +12883,9 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     mask_v = o_v < V
     mask_h = mask_v[:, None] & mask_k[None, :]
 
-    b_a_scale = 0.0
-    b_dt_bias = 0.0
-    if not GATE_REUSE:
-        p_gate = gate_coeffs + i_l * GATE_L_STRIDE + i_hv * 2
-        b_a_scale = tl.load(p_gate)
-        b_dt_bias = tl.load(p_gate + 1)
+    p_gate = gate_coeffs + i_l * GATE_L_STRIDE + i_hv * 2
+    b_a_scale = tl.load(p_gate)
+    b_dt_bias = tl.load(p_gate + 1)
     # Preserve the anchor+offset form used by the byte-gated all-layer replay.
     # A raw pointer-table load loses 16-byte AxisInfo and changes reductions.
     state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4
@@ -12931,6 +12928,20 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
             + i_hv * V
             + o_v
         )
+        p_a = (
+            a_rings
+            + i_l * RING_AB_L_STRIDE
+            + i_n * RING_AB_B_STRIDE
+            + node * RING_AB_N_STRIDE
+            + i_hv
+        )
+        p_b = (
+            b_rings
+            + i_l * RING_AB_L_STRIDE
+            + i_n * RING_AB_B_STRIDE
+            + node * RING_AB_N_STRIDE
+            + i_hv
+        )
         b_k = tl.load(p_k, mask=mask_k, other=0).to(tl.float32)
         b_v = tl.load(p_v, mask=mask_v, other=0).to(tl.float32)
         if GATE_REUSE:
@@ -12944,20 +12955,6 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
             b_g = tl.load(p_live_gate)
             b_beta = tl.load(p_live_gate + 1)
         else:
-            p_a = (
-                a_rings
-                + i_l * RING_AB_L_STRIDE
-                + i_n * RING_AB_B_STRIDE
-                + node * RING_AB_N_STRIDE
-                + i_hv
-            )
-            p_b = (
-                b_rings
-                + i_l * RING_AB_L_STRIDE
-                + i_n * RING_AB_B_STRIDE
-                + node * RING_AB_N_STRIDE
-                + i_hv
-            )
             b_b = tl.load(p_b).to(tl.float32)
             x = tl.load(p_a).to(tl.float32) + b_dt_bias
             softplus_x = tl.where(
