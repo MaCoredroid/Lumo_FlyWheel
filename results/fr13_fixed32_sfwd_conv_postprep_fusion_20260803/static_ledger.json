@@ -1,0 +1,83 @@
+{
+  "b1": {
+    "all_layer_bytes": {
+      "conv_intermediate_reads_removed": 62914560,
+      "conv_intermediate_write_removed": 31457280,
+      "dead_normalized_qk_write_removed": 12582912,
+      "logical_traffic_removed": 106954752
+    },
+    "batch_size": 1,
+    "candidate": "fixed32_sfwd_conv_postprep_frontier5_direct_v1",
+    "excludes": [
+      "input_weight_reads",
+      "cache_effects",
+      "compiler_effects",
+      "timing"
+    ],
+    "launches": {
+      "candidate_all_layers": 48,
+      "candidate_per_layer": 1,
+      "incumbent_all_layers": 96,
+      "incumbent_per_layer": 2,
+      "removed_all_layers": 48
+    },
+    "layers": 48,
+    "per_layer_bytes": {
+      "direct_g_beta_write": 12288,
+      "direct_recurrence_qkv_write": 655360,
+      "direct_value_tree_write": 393216,
+      "incumbent_conv_intermediate_write": 655360,
+      "incumbent_dead_normalized_qk_write": 262144,
+      "incumbent_fused_postprep_read": 655360,
+      "incumbent_rearrange_read": 655360,
+      "logical_traffic_removed": 2228224,
+      "mandatory_direct_writes": 1798144,
+      "optional_conv_tap_write": 0,
+      "unchanged_commit_source_stage_write": 737280
+    },
+    "rows_per_layer": 32,
+    "schema": "fr13.fixed32.sfwd_conv_postprep.static_ledger.v1",
+    "store_conv_tap": false
+  },
+  "b4": {
+    "all_layer_bytes": {
+      "conv_intermediate_reads_removed": 251658240,
+      "conv_intermediate_write_removed": 125829120,
+      "dead_normalized_qk_write_removed": 50331648,
+      "logical_traffic_removed": 427819008
+    },
+    "batch_size": 4,
+    "candidate": "fixed32_sfwd_conv_postprep_frontier5_direct_v1",
+    "excludes": [
+      "input_weight_reads",
+      "cache_effects",
+      "compiler_effects",
+      "timing"
+    ],
+    "launches": {
+      "candidate_all_layers": 48,
+      "candidate_per_layer": 1,
+      "incumbent_all_layers": 96,
+      "incumbent_per_layer": 2,
+      "removed_all_layers": 48
+    },
+    "layers": 48,
+    "per_layer_bytes": {
+      "direct_g_beta_write": 49152,
+      "direct_recurrence_qkv_write": 2621440,
+      "direct_value_tree_write": 1572864,
+      "incumbent_conv_intermediate_write": 2621440,
+      "incumbent_dead_normalized_qk_write": 1048576,
+      "incumbent_fused_postprep_read": 2621440,
+      "incumbent_rearrange_read": 2621440,
+      "logical_traffic_removed": 8912896,
+      "mandatory_direct_writes": 7192576,
+      "optional_conv_tap_write": 0,
+      "unchanged_commit_source_stage_write": 2949120
+    },
+    "rows_per_layer": 128,
+    "schema": "fr13.fixed32.sfwd_conv_postprep.static_ledger.v1",
+    "store_conv_tap": false
+  },
+  "schema": "fr13.fixed32.sfwd_conv_postprep.static_ledgers.v1"
+}

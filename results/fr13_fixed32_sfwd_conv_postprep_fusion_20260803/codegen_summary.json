@@ -1,0 +1,91 @@
+{
+  "candidate": "fixed32_sfwd_conv_postprep_frontier5_direct_v1",
+  "compile_contract": {
+    "channels": 10240,
+    "conv_state_len": 34,
+    "conv_stride_row": 2097152,
+    "conv_width": 4,
+    "gate_block": 64,
+    "head_k_dim": 128,
+    "head_v_dim": 128,
+    "num_k_heads": 16,
+    "num_v_heads": 48,
+    "physical_rows_per_request": 32,
+    "source_rows": 36,
+    "target": "sm_121a",
+    "x_stride_row": 16384
+  },
+  "offline_only": true,
+  "profiles": {
+    "b1": {
+      "block_c": 128,
+      "compile_hash": "4bad95d053c93b050edc9089f2c89fe371c939b77928da822104cd1678d62985",
+      "ctas_per_launch": 112,
+      "ctas_per_request": 112,
+      "cubin_bytes": 183360,
+      "cubin_sha256": "6b0918fdcbf2fc300b216417732c284fa503317ecac0e37564537b359a5c92d8",
+      "local_bytes": 0,
+      "num_warps": 2,
+      "registers_per_thread": 56,
+      "shared_bytes": 0,
+      "stack_bytes": 0,
+      "store_conv_tap": false
+    },
+    "b1_tap": {
+      "block_c": 128,
+      "compile_hash": "21a54a82ec1d056288789c400793a43617ccc776d2c929bf1954f80dce665c80",
+      "ctas_per_launch": 112,
+      "ctas_per_request": 112,
+      "cubin_bytes": 201320,
+      "cubin_sha256": "8b138af7183dcdba7633c3d0d1e03e5101b1391110ee3362643466422503d5c7",
+      "local_bytes": 0,
+      "num_warps": 2,
+      "registers_per_thread": 56,
+      "shared_bytes": 0,
+      "stack_bytes": 0,
+      "store_conv_tap": true
+    },
+    "b4": {
+      "block_c": 256,
+      "compile_hash": "64c2e2cabf9b8cfb8793578f21caad2f57c7784ea0638056db27e4a860ba3297",
+      "ctas_per_launch": 288,
+      "ctas_per_request": 72,
+      "cubin_bytes": 183520,
+      "cubin_sha256": "f2bc9918a3ca6dcf0a20c71128fc58698e3dfac8d0d954d6094fe14837727d6c",
+      "local_bytes": 0,
+      "num_warps": 4,
+      "registers_per_thread": 56,
+      "shared_bytes": 0,
+      "stack_bytes": 0,
+      "store_conv_tap": false
+    },
+    "b4_tap": {
+      "block_c": 256,
+      "compile_hash": "1ea33e75881597568553ed3cd7ce8f08ee33bf9516af985f0439e9e13512535c",
+      "ctas_per_launch": 288,
+      "ctas_per_request": 72,
+      "cubin_bytes": 201488,
+      "cubin_sha256": "592f9b57cbc1ac9e11f0eaf0d1ea5da35825b35b88b24b22a672fd02817b6c00",
+      "local_bytes": 0,
+      "num_warps": 4,
+      "registers_per_thread": 56,
+      "shared_bytes": 0,
+      "stack_bytes": 0,
+      "store_conv_tap": true
+    }
+  },
+  "resource_gate": {
+    "max_registers_per_thread": 64,
+    "require_local_bytes": 0,
+    "require_shared_bytes": 0,
+    "require_stack_bytes": 0
+  },
+  "schema": "fr13.fixed32.sfwd_conv_postprep.sm121a_codegen.v1",
+  "timing_claim": false,
+  "toolchain": {
+    "backend_producer": "ptxas-blackwell",
+    "backend_version": "Cuda compilation tools, release 12.9, V12.9.86",
+    "target": "sm_121a",
+    "triton": "3.6.0"
+  }
+}
