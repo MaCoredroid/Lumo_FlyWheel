@@ -27,8 +27,8 @@ import fr13_floor_gate as floor_gate  # noqa: E402
 import fr13_runtime_manifest as runtime_manifest  # noqa: E402
 
 
-SCHEMA = "fr13.fixed32.gdn_single_launch.real_task_credential.v2"
-LIVE_SCHEMA = "fr13.fixed32.gdn_single_launch.live_pass.v1"
+SCHEMA = "fr13.fixed32.gdn_single_launch.real_task_credential.v3"
+LIVE_SCHEMA = "fr13.fixed32.gdn_single_launch.live_observation.v2"
 CANDIDATE = "fixed32_gdn_single_launch_tree_v2"
 REFERENCE = "fixed32_gdn_two_launch_reference_v1"
 DATASET = "princeton-nlp/SWE-bench_Verified"
@@ -388,29 +388,188 @@ def _rebuild_traffic_audit(
     return actual, raw
 
 
+def _authenticated_request_task_map(
+    arm: Path, expected_tasks: list[str]
+) -> dict[str, str]:
+    canonical_keys = {
+        floor_gate.fixed32_task_key_id(task_id) for task_id in expected_tasks
+    }
+    task_by_key = {
+        floor_gate.fixed32_task_key_id(task_id): task_id
+        for task_id in expected_tasks
+    }
+    ledgers: dict[str, list[dict[str, Any]]] = {}
+    for role in ("proxy", "engine"):
+        path = arm / "logs" / f"fr13_fixed32_{role}_ingress.jsonl"
+        try:
+            rows, _identity = floor_gate.load_fixed32_ingress_ledger(
+                path,
+                role=role,
+                canonical_task_keys=canonical_keys,
+                canonical_task_set_sha256=(
+                    floor_gate.fixed32_canonical_task_set_sha256(expected_tasks)
+                ),
+            )
+        except floor_gate.GateError as error:
+            raise GateError(
+                f"cannot reload authenticated {role} request ledger: {error}"
+            ) from error
+        ledgers[role] = rows
+    proxy_successes = {
+        row["wire_id_sha256"]: row
+        for row in ledgers["proxy"]
+        if row["event"] == "attempt_result" and row["status_code"] == 200
+    }
+    engine_accepts = {
+        row["wire_id_sha256"]: row
+        for row in ledgers["engine"]
+        if row["event"] == "request_accepted"
+    }
+    engine_completes = {
+        row["wire_id_sha256"]: row
+        for row in ledgers["engine"]
+        if row["event"] == "request_complete"
+    }
+    if (
+        len(proxy_successes)
+        != sum(
+            row["event"] == "attempt_result" and row["status_code"] == 200
+            for row in ledgers["proxy"]
+        )
+        or set(proxy_successes) - set(engine_accepts)
+        or set(proxy_successes) - set(engine_completes)
+    ):
+        raise GateError("authenticated successful request ledger is not one-to-one")
+    request_task_map: dict[str, str] = {}
+    for wire_id, proxy in proxy_successes.items():
+        accepted = engine_accepts[wire_id]
+        completed = engine_completes[wire_id]
+        identity = (
+            proxy["task_key_id"],
+            proxy["engine_request_id_sha256"],
+            proxy["evidence_sha256"],
+        )
+        if (
+            proxy["outcome"] != "response"
+            or completed["outcome"] != "completed"
+            or identity
+            != (
+                accepted["task_key_id"],
+                accepted["engine_request_id_sha256"],
+                accepted["evidence_sha256"],
+            )
+            or identity
+            != (
+                completed["task_key_id"],
+                completed["engine_request_id_sha256"],
+                completed["evidence_sha256"],
+            )
+        ):
+            raise GateError(
+                "authenticated proxy/engine request identity parity failed"
+            )
+        task_id = task_by_key.get(str(identity[0]))
+        request_digest = _require_sha256(
+            identity[1], "authenticated engine request digest"
+        )
+        if task_id is None or request_digest in request_task_map:
+            raise GateError(
+                "authenticated request-to-task mapping is not one-to-one"
+            )
+        request_task_map[request_digest] = task_id
+    if not request_task_map:
+        raise GateError("authenticated request-to-task mapping is empty")
+    return request_task_map
+
+
 def _validate_live_pass(
     payload: dict[str, Any],
     *,
     mode: str,
     batch: int,
-    task_markers: frozenset[str],
+    expected_tasks: list[str],
     kernel_sha256: str,
     graph_signature: str,
-) -> None:
+    census_events: list[dict[str, Any]],
+    request_task_map: dict[str, str],
+) -> dict[str, Any]:
     contract = MODE[mode]
     diagnostic_identity = (
         f"fixed32_gdn_single_launch_tree_v2:{contract['slug']}:b{batch}"
     )
+    comparator_events = [
+        event["gdn_comparator"]
+        for event in census_events
+        if "gdn_comparator" in event
+    ]
+    if not comparator_events:
+        raise GateError("work census contains no GDN comparator event")
+    event_ids: set[str] = set()
+    request_tuples: set[tuple[str, ...]] = set()
+    covered_tasks: set[str] = set()
+    per_task_request_digests = {task_id: set() for task_id in expected_tasks}
+    for index, comparator in enumerate(comparator_events):
+        if not isinstance(comparator, dict):
+            raise GateError(f"GDN comparator event {index} is malformed")
+        if comparator.get("structural_graph_signature") != graph_signature:
+            raise GateError("GDN comparator structural scope differs from census")
+        event_id = str(comparator.get("census_event_id", ""))
+        request_tuple = tuple(comparator.get("request_id_sha256s", ()))
+        if (
+            not event_id
+            or event_id in event_ids
+            or len(request_tuple) != batch
+            or request_tuple in request_tuples
+        ):
+            raise GateError("GDN comparator event/request tuple is duplicated")
+        event_ids.add(event_id)
+        request_tuples.add(request_tuple)
+        event_tasks: set[str] = set()
+        for request_digest in request_tuple:
+            task_id = request_task_map.get(request_digest)
+            if task_id is None:
+                raise GateError(
+                    "GDN comparator request has no authenticated ledger task"
+                )
+            event_tasks.add(task_id)
+            covered_tasks.add(task_id)
+            per_task_request_digests[task_id].add(request_digest)
+        marker_task = str(comparator.get("observed_task_marker", "")).removeprefix(
+            "swe_verified:"
+        )
+        if marker_task not in event_tasks:
+            raise GateError(
+                "GDN comparator event marker was relabeled from its requests"
+            )
+    if covered_tasks != set(expected_tasks):
+        raise GateError(
+            "GDN comparator authenticated task union is not the exact scope"
+        )
+    capture_manifest_sha256s = {
+        comparator["runtime_capture_manifest_sha256"]
+        for comparator in comparator_events
+    }
+    if len(capture_manifest_sha256s) != 1:
+        raise GateError("GDN comparator events do not share one capture manifest")
+    canonical_events = json.dumps(
+        comparator_events,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
     expected = {
         "schema": LIVE_SCHEMA,
-        "status": "pass",
+        "status": "observed_pending_authenticated_coverage_join",
         "candidate": CANDIDATE,
         "source_sha256": kernel_sha256,
         "mode": mode,
         "batch_size": batch,
         "expected_batch": batch,
         "covered_batches": [batch],
-        "records": 48,
+        "records_per_comparator_event": 48,
+        "comparator_event_count": len(comparator_events),
+        "comparator_events_sha256": _sha256(canonical_events),
+        "comparator_events": comparator_events,
         "physical_rows": 32,
         "reference_bv": 8,
         "candidate_bv": 8,
@@ -425,10 +584,8 @@ def _validate_live_pass(
             "flags",
             "counter",
         ],
-        "raw_byte_equal": True,
         "reference_served": True,
-        "state_restored": True,
-        "real_task_authenticated": True,
+        "candidate_served": False,
         "production_eligible": False,
         "performance_measurement": False,
         "acceptance_valid": False,
@@ -437,19 +594,27 @@ def _validate_live_pass(
         "valid_mask": contract["valid_mask"],
         "draft_vocab_k": 65536,
         "draft_vocab_root": 1,
-        "gate_mode": "post_first_measured_full_graph_replay",
+        "gate_mode": "post_measured_replay_distinct_request_tuple",
+        "coverage_authority": "authenticated_proxy_engine_request_join",
         "diagnostic_identity": diagnostic_identity,
-        "graph_signature": graph_signature,
     }
-    if set(payload) != set(expected) | {"task_marker"}:
+    if set(payload) != set(expected):
         raise GateError("batch-specific GDN live PASS record shape drifted")
     for key, value in expected.items():
         if payload.get(key) != value:
             raise GateError(f"batch-specific GDN live PASS field drifted: {key}")
-    if payload.get("task_marker") not in task_markers:
-        raise GateError(
-            "batch-specific GDN live PASS trigger is not a canonical task"
-        )
+    return {
+        "comparator_event_count": len(comparator_events),
+        "comparator_events_sha256": expected["comparator_events_sha256"],
+        "runtime_capture_manifest_sha256s": sorted(
+            capture_manifest_sha256s
+        ),
+        "authenticated_task_ids": list(expected_tasks),
+        "per_task_request_id_sha256s": {
+            task_id: sorted(per_task_request_digests[task_id])
+            for task_id in expected_tasks
+        },
+    }
 
 
 def reduce(args: argparse.Namespace) -> dict[str, Any]:
@@ -556,12 +721,16 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
     )
     if audit.get("complete_stream", {}).get("complete_work_census_events", 0) <= 0:
         raise GateError("authenticated campaign has no complete work-census events")
+    request_task_map = _authenticated_request_task_map(arm, expected_tasks)
 
     census_path = arm / "logs" / "fr13_fixed32_work_census.jsonl"
     census_raw = _regular(census_path, "fixed32 work census")
     try:
+        located_census = work_census.load_jsonl_bytes(
+            census_raw, source=str(census_path)
+        )
         work_report = work_census.validate_arm(
-            work_census.load_jsonl_bytes(census_raw, source=str(census_path)),
+            located_census,
             expected_mode=mode,
             expected_route=TAW_ROUTE,
             required_batches=(batch,),
@@ -579,18 +748,23 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         forward_row.get("graph_signature"), "FULL graph signature"
     )
 
-    live, live_raw = _load_json(args.live_pass, "GDN single-launch live PASS")
-    task_markers = frozenset(
-        f"swe_verified:{task_id}" for task_id in expected_tasks
+    live, live_raw = _load_json(
+        args.live_pass, "GDN single-launch live observation"
     )
     kernel_sha256 = required_closure[KERNEL_SOURCE]
-    _validate_live_pass(
+    comparator_coverage = _validate_live_pass(
         live,
         mode=mode,
         batch=batch,
-        task_markers=task_markers,
+        expected_tasks=expected_tasks,
         kernel_sha256=kernel_sha256,
         graph_signature=graph_signature,
+        census_events=[
+            dict(record)
+            for record, _source in located_census[:-1]
+            if isinstance(record, dict)
+        ],
+        request_task_map=request_task_map,
     )
 
     contract = MODE[mode]
@@ -612,7 +786,7 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         "batch_size": batch,
         "concurrency": concurrency,
         "task_ids": expected_tasks,
-        "trigger_task_marker": live["task_marker"],
+        "comparator_coverage": comparator_coverage,
         "subset_sha256": subset["sha256"],
         "candidate": CANDIDATE,
         "reference": REFERENCE,

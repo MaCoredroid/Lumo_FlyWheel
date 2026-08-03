@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -28,6 +29,8 @@ def _namespace(*function_names: str) -> dict[str, object]:
         "_FR13_FIXED32_GDN_BV_SURFACES",
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES",
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_STATE_SURFACES",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_COMPARATOR_EVENTS",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_REQUEST_TUPLES",
     }
     assignments = [
         node
@@ -144,6 +147,175 @@ def test_single_launch_comparator_rejects_candidate_identity_tamper() -> None:
     with pytest.raises(RuntimeError, match="launch identity drift"):
         namespace["_fr13_fixed32_gdn_single_launch_compare_records"]((record,))
     assert state == served
+
+
+def test_later_record_restoration_failure_fails_closed() -> None:
+    namespace, first_state, first_served, _calls, first = _record()
+    state_names = namespace[
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_STATE_SURFACES"
+    ]
+    later_state = {
+        name: f"served-later:{name}".encode("ascii") for name in state_names
+    }
+    later_restores = 0
+
+    def snapshot():
+        return dict(later_state)
+
+    def restore(value):
+        nonlocal later_restores
+        later_restores += 1
+        if later_restores == 1:
+            later_state.clear()
+            later_state.update(value)
+
+    def run(candidate: str):
+        for name in state_names:
+            later_state[name] = f"equal:{name}".encode("ascii")
+        return {
+            "candidate": (
+                "fixed32_gdn_two_launch_reference_v1"
+                if candidate == "reference"
+                else "fixed32_gdn_single_launch_tree_v2"
+            ),
+            "physical_launches": 2 if candidate == "reference" else 1,
+            "output": b"equal-output",
+        }
+
+    later = {
+        "snapshot": snapshot,
+        "restore": restore,
+        "run": run,
+        "byte_equal": lambda left, right: left == right,
+        "surface_names": state_names,
+    }
+    with pytest.raises(RuntimeError, match="failed to restore.*record 1"):
+        namespace["_fr13_fixed32_gdn_single_launch_compare_records"](
+            (first, later)
+        )
+    assert first_state == first_served
+
+
+def test_single_launch_gate_retains_capture_and_accumulates_distinct_tuples() -> None:
+    namespace = _namespace("fixed32_gdn_bv_live_gate_on_replay")
+    signature = "a" * 64
+    records = tuple(object() for _ in range(48))
+    namespace.update(
+        {
+            "torch": SimpleNamespace(
+                cuda=SimpleNamespace(
+                    is_available=lambda: False,
+                    is_current_stream_capturing=lambda: False,
+                )
+            ),
+            "_FR13_FIXED32_MODE": "hydra27_fixed32",
+            "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE": "single_launch",
+            "_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH": 4,
+            "_FR13_FIXED32_GDN_BV_CAPTURES": {
+                (4, 404, signature): {
+                    "batch_size": 4,
+                    "graph_id": 404,
+                    "graph_signature": signature,
+                    "records": records,
+                }
+            },
+            "_FR13_FIXED32_GDN_BV_LIVE_STATE": {
+                "status": "armed",
+                "candidate_bv": "single_launch",
+                "expected_batch": 4,
+                "graph_id": None,
+                "batch_size": None,
+                "records": 0,
+                "comparator_event_count": 0,
+            },
+            "_FR13_FIXED32_GDN_SINGLE_LAUNCH_COMPARATOR_EVENTS": [],
+            "_FR13_FIXED32_GDN_SINGLE_LAUNCH_REQUEST_TUPLES": set(),
+        }
+    )
+    comparisons: list[int] = []
+    emissions: list[list[dict[str, object]]] = []
+
+    def compare(actual_records):
+        comparisons.append(len(actual_records))
+        return {
+            "records": len(actual_records),
+            "candidate": "fixed32_gdn_single_launch_tree_v2",
+            "reference_bv": 8,
+            "candidate_bv": 8,
+            "reference_physical_launches": 2,
+            "candidate_physical_launches": 1,
+        }
+
+    namespace["_fr13_fixed32_gdn_single_launch_compare_records"] = compare
+    namespace["_fr13_fixed32_gdn_bv_real_event_marker"] = (
+        lambda: "swe_verified:astropy__astropy-12907"
+    )
+    namespace["_fr13_fixed32_gdn_single_launch_observation_emit"] = (
+        lambda **kwargs: emissions.append(list(kwargs["comparator_events"]))
+    )
+    gate = namespace["fixed32_gdn_bv_live_gate_on_replay"]
+    first_tuple = tuple(f"{index:064x}" for index in range(1, 5))
+    second_tuple = tuple(f"{index:064x}" for index in range(5, 9))
+
+    first = gate(404, signature, "b" * 64, 4, 48, 0, 0, first_tuple)
+    duplicate = gate(404, signature, "b" * 64, 4, 48, 1, 1, first_tuple)
+    second = gate(404, signature, "b" * 64, 4, 48, 2, 2, second_tuple)
+
+    assert comparisons == [48, 48]
+    assert first["status"] == second["status"] == "armed"
+    assert first["comparison_status"] == "compared_distinct_request_tuple"
+    assert duplicate["comparison_status"] == "already_compared_request_tuple"
+    assert second["comparator_event_count"] == 2
+    assert len(emissions) == 2 and len(emissions[-1]) == 2
+    assert (4, 404, signature) in namespace["_FR13_FIXED32_GDN_BV_CAPTURES"]
+    assert namespace["_FR13_FIXED32_GDN_BV_LIVE_STATE"]["status"] == "armed"
+
+
+def test_failed_later_compare_does_not_publish_or_consume_capture() -> None:
+    namespace = _namespace("fixed32_gdn_bv_live_gate_on_replay")
+    signature = "a" * 64
+    capture_key = (4, 404, signature)
+    namespace.update(
+        {
+            "torch": SimpleNamespace(
+                cuda=SimpleNamespace(
+                    is_available=lambda: False,
+                    is_current_stream_capturing=lambda: False,
+                )
+            ),
+            "_FR13_FIXED32_MODE": "hydra27_fixed32",
+            "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE": "single_launch",
+            "_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH": 4,
+            "_FR13_FIXED32_GDN_BV_CAPTURES": {
+                capture_key: {
+                    "batch_size": 4,
+                    "graph_id": 404,
+                    "graph_signature": signature,
+                    "records": tuple(object() for _ in range(48)),
+                }
+            },
+            "_FR13_FIXED32_GDN_BV_LIVE_STATE": {"status": "armed"},
+            "_FR13_FIXED32_GDN_SINGLE_LAUNCH_COMPARATOR_EVENTS": [],
+            "_FR13_FIXED32_GDN_SINGLE_LAUNCH_REQUEST_TUPLES": set(),
+        }
+    )
+    namespace["_fr13_fixed32_gdn_single_launch_compare_records"] = (
+        lambda _records: (_ for _ in ()).throw(RuntimeError("later restore failed"))
+    )
+    namespace["_fr13_fixed32_gdn_bv_real_event_marker"] = (
+        lambda: "swe_verified:astropy__astropy-12907"
+    )
+    namespace["_fr13_fixed32_gdn_single_launch_observation_emit"] = (
+        lambda **_kwargs: pytest.fail("failed comparison must not emit")
+    )
+    requests = tuple(f"{index:064x}" for index in range(1, 5))
+    with pytest.raises(RuntimeError, match="later restore failed"):
+        namespace["fixed32_gdn_bv_live_gate_on_replay"](
+            404, signature, "b" * 64, 4, 48, 0, 0, requests
+        )
+    assert namespace["_FR13_FIXED32_GDN_BV_LIVE_STATE"]["status"] == "failed"
+    assert namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_COMPARATOR_EVENTS"] == []
+    assert capture_key in namespace["_FR13_FIXED32_GDN_BV_CAPTURES"]
 
 
 @pytest.mark.parametrize("mode", ("tail6_fixed32", "hydra27_fixed32"))

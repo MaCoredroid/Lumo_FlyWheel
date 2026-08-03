@@ -725,6 +725,7 @@ def _fr13_fixed32_observed_new_state(
         "request_key_pack": None,
         "drafter": None,
         "drafter_runtime": None,
+        "gdn_comparator": None,
     }
 
 
@@ -3962,12 +3963,41 @@ def _fr13_fixed32_observed_graph_replay(
             census_graph_signature,
             int(event["batch_size"]),
             int(gdn["scan_calls"]),
+            len(globals().get("_FR13_FIXED32_CENSUS_EVENTS", ())),
+            int(event["forward_step_index"]),
+            tuple(
+                __import__("hashlib").sha256(
+                    str(request_id).encode("utf-8")
+                ).hexdigest()
+                for request_id in event["request_ids"]
+            ),
         )
-        if gate_report.get("status") != "passed":
-            raise RuntimeError(
-                "FR13 fixed32 GDN BV live gate did not pass on the first "
-                "measured full-graph replay: " + repr(gate_report)
+        comparison_status = gate_report.get("comparison_status")
+        comparator = gate_report.get("comparator")
+        if (
+            gate_report.get("status") != "armed"
+            or comparison_status
+            not in {
+                "compared_distinct_request_tuple",
+                "already_compared_request_tuple",
+            }
+            or (
+                comparison_status == "compared_distinct_request_tuple"
+                and not isinstance(comparator, dict)
             )
+            or (
+                comparison_status == "already_compared_request_tuple"
+                and comparator is not None
+            )
+            or event.get("gdn_comparator") is not None
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN comparator did not return to its armed "
+                "state: " + repr(gate_report)
+            )
+        event["gdn_comparator"] = (
+            dict(comparator) if isinstance(comparator, dict) else None
+        )
     production_bv = getattr(
         tree_kernel, "_FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", None
     )
@@ -5800,6 +5830,11 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
         "request_key_pack": dict(event["request_key_pack"]),
         "drafter": None,
         "drafter_runtime": None,
+        "gdn_comparator": (
+            dict(event["gdn_comparator"])
+            if isinstance(event.get("gdn_comparator"), dict)
+            else None
+        ),
     }
     _FR13_FIXED32_OBSERVED_CURRENT = None
     return observed
@@ -6103,11 +6138,10 @@ def _fr13_fixed32_observed_build_record(
             + repr(failures)
         )
     valid_mask = int(taw_payload["valid_mask"])
+    event_id = str(identity[0]) + ":" + str(pid) + ":" + str(index)
     record = {
         "schema": "fr13-fixed32-work-census-v12",
-        "event_id": (
-            str(identity[0]) + ":" + str(pid) + ":" + str(index)
-        ),
+        "event_id": event_id,
         "event_index": index,
         "forward_step_index": identity[2],
         "producer_pid": pid,
@@ -6160,6 +6194,21 @@ def _fr13_fixed32_observed_build_record(
         )
     evidence["event_index"] = int(record["event_index"])
     evidence["event_complete"] = True
+    comparator = observed.get("gdn_comparator")
+    if comparator is not None:
+        if (
+            not isinstance(comparator, dict)
+            or comparator.get("runtime_capture_manifest_sha256")
+            != provenance.get("graph_signature")
+            or comparator.get("census_event_id") != event_id
+            or comparator.get("census_event_index") != index
+            or comparator.get("census_forward_step_index") != identity[2]
+            or comparator.get("request_id_sha256s") != request_id_sha256s
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN comparator did not bind completed event"
+            )
+        record["gdn_comparator"] = dict(comparator)
     drafter_evidence = (
         _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE[-1]
         if _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE

@@ -271,6 +271,41 @@ TOP_LEVEL_KEYS = frozenset(
         "failures",
     }
 )
+GDN_COMPARATOR_SCHEMA = "fr13.fixed32.gdn_single_launch.comparator_event.v1"
+GDN_COMPARATOR_KEYS = frozenset(
+    {
+        "schema",
+        "mode",
+        "batch_size",
+        "runtime_capture_manifest_sha256",
+        "structural_graph_signature",
+        "reference",
+        "candidate",
+        "reference_physical_launches_per_request_layer",
+        "candidate_physical_launches_per_request_layer",
+        "records",
+        "compared_byte_surfaces",
+        "raw_byte_equal",
+        "state_restored",
+        "reference_served",
+        "candidate_served",
+        "comparison_order",
+        "census_event_id",
+        "census_event_index",
+        "census_forward_step_index",
+        "request_id_sha256s",
+        "observed_task_marker",
+    }
+)
+GDN_COMPARATOR_SURFACES = (
+    "output",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "counter",
+)
 BATCH_PURITY_KEYS = frozenset(
     {
         "batch_rows",
@@ -974,7 +1009,10 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     """Validate one event and return its arm-independent work signature."""
 
     event = _mapping(raw, source)
-    _exact_keys(event, TOP_LEVEL_KEYS, source)
+    expected_event_keys = TOP_LEVEL_KEYS | (
+        {"gdn_comparator"} if "gdn_comparator" in event else set()
+    )
+    _exact_keys(event, frozenset(expected_event_keys), source)
 
     _expect(_string(event["schema"], f"{source}.schema"), SCHEMA, f"{source}.schema")
     event_id = _string(event["event_id"], f"{source}.event_id")
@@ -1166,6 +1204,134 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         raise CensusError(
             f"{runtime_label}.request_id_sha256s: duplicate request digest"
         )
+    if "gdn_comparator" in event:
+        comparator_label = f"{source}.gdn_comparator"
+        comparator = _mapping(event["gdn_comparator"], comparator_label)
+        _exact_keys(comparator, GDN_COMPARATOR_KEYS, comparator_label)
+        _expect(
+            _string(comparator["schema"], f"{comparator_label}.schema"),
+            GDN_COMPARATOR_SCHEMA,
+            f"{comparator_label}.schema",
+        )
+        _expect(
+            _string(comparator["mode"], f"{comparator_label}.mode"),
+            mode,
+            f"{comparator_label}.mode",
+        )
+        _expect(
+            _integer(
+                comparator["batch_size"],
+                f"{comparator_label}.batch_size",
+                minimum=1,
+            ),
+            batch_size,
+            f"{comparator_label}.batch_size",
+        )
+        _sha256(
+            comparator["runtime_capture_manifest_sha256"],
+            f"{comparator_label}.runtime_capture_manifest_sha256",
+        )
+        _expect(
+            _sha256(
+                comparator["structural_graph_signature"],
+                f"{comparator_label}.structural_graph_signature",
+            ),
+            forward_graph_structural_signature(batch_size),
+            f"{comparator_label}.structural_graph_signature",
+        )
+        for field, expected in (
+            ("reference", "fixed32_gdn_two_launch_reference_v1"),
+            ("candidate", "fixed32_gdn_single_launch_tree_v2"),
+        ):
+            _expect(
+                _string(comparator[field], f"{comparator_label}.{field}"),
+                expected,
+                f"{comparator_label}.{field}",
+            )
+        for field, expected in (
+            ("reference_physical_launches_per_request_layer", 2),
+            ("candidate_physical_launches_per_request_layer", 1),
+            ("records", 48),
+        ):
+            _expect(
+                _integer(comparator[field], f"{comparator_label}.{field}"),
+                expected,
+                f"{comparator_label}.{field}",
+            )
+        _expect(
+            _string_tuple(
+                comparator["compared_byte_surfaces"],
+                f"{comparator_label}.compared_byte_surfaces",
+                length=len(GDN_COMPARATOR_SURFACES),
+            ),
+            GDN_COMPARATOR_SURFACES,
+            f"{comparator_label}.compared_byte_surfaces",
+        )
+        for field, expected in (
+            ("raw_byte_equal", True),
+            ("state_restored", True),
+            ("reference_served", True),
+            ("candidate_served", False),
+        ):
+            if comparator[field] is not expected:
+                raise CensusError(
+                    f"{comparator_label}.{field}: expected literal {expected!r}"
+                )
+        _expect(
+            _string_tuple(
+                comparator["comparison_order"],
+                f"{comparator_label}.comparison_order",
+                length=4,
+            ),
+            (
+                "reference",
+                "restore_baseline",
+                "candidate",
+                "restore_baseline_in_finally",
+            ),
+            f"{comparator_label}.comparison_order",
+        )
+        _expect(
+            _string(
+                comparator["census_event_id"],
+                f"{comparator_label}.census_event_id",
+            ),
+            event_id,
+            f"{comparator_label}.census_event_id",
+        )
+        _expect(
+            _integer(
+                comparator["census_event_index"],
+                f"{comparator_label}.census_event_index",
+            ),
+            event_index,
+            f"{comparator_label}.census_event_index",
+        )
+        _expect(
+            _integer(
+                comparator["census_forward_step_index"],
+                f"{comparator_label}.census_forward_step_index",
+            ),
+            forward_step_index,
+            f"{comparator_label}.census_forward_step_index",
+        )
+        _expect(
+            _string_tuple(
+                comparator["request_id_sha256s"],
+                f"{comparator_label}.request_id_sha256s",
+                length=batch_size,
+            ),
+            normalized_request_id_sha256s,
+            f"{comparator_label}.request_id_sha256s",
+        )
+        marker = _string(
+            comparator["observed_task_marker"],
+            f"{comparator_label}.observed_task_marker",
+        )
+        if re.fullmatch(r"swe_verified:[A-Za-z0-9._/-]+", marker) is None:
+            raise CensusError(
+                f"{comparator_label}.observed_task_marker: invalid marker"
+            )
     for field in ("proposal_begins", "proposal_ends", "graph_replays"):
         _expect(
             _integer(drafter_runtime[field], f"{runtime_label}.{field}"),

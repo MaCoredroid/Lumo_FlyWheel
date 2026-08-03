@@ -1046,6 +1046,87 @@ def _fr13_fixed32_gdn_bv_live_pass_emit(
     os.replace(temporary, path)
 
 
+def _fr13_fixed32_gdn_single_launch_observation_emit(
+    *,
+    batch_size: int,
+    comparator_events: list[dict[str, object]],
+) -> None:
+    """Publish the exact ordered comparator events awaiting ledger join."""
+    path = os.environ.get(
+        "FR13_FIXED32_GDN_PATH_BV_LIVE_JSON",
+        _FR13_FIXED32_GDN_PATH_BV_LIVE_PASS,
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    topology = {
+        "tail6_fixed32": ("Tail23", 23, 0x7A9CE7FF),
+        "hydra27_fixed32": ("Hydra27", 27, 0x7ABDFFFF),
+    }.get(_FR13_FIXED32_MODE)
+    batch = int(batch_size)
+    if (
+        topology is None
+        or batch != _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
+        or not comparator_events
+        or any(not isinstance(event, dict) for event in comparator_events)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch observation scope drift"
+        )
+    canonical_events = json.dumps(
+        comparator_events,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    payload = {
+        "schema": "fr13.fixed32.gdn_single_launch.live_observation.v2",
+        "status": "observed_pending_authenticated_coverage_join",
+        "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+        "source_sha256": _fr13_fixed32_gdn_path_bv_source_sha256(),
+        "mode": _FR13_FIXED32_MODE,
+        "batch_size": batch,
+        "expected_batch": batch,
+        "covered_batches": [batch],
+        "records_per_comparator_event": 48,
+        "comparator_event_count": len(comparator_events),
+        "comparator_events_sha256": hashlib.sha256(
+            canonical_events
+        ).hexdigest(),
+        "comparator_events": comparator_events,
+        "physical_rows": 32,
+        "reference_bv": 8,
+        "candidate_bv": 8,
+        "reference_physical_launches_per_request_layer": 2,
+        "candidate_physical_launches_per_request_layer": 1,
+        "compared_byte_surfaces": list(
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES
+        ),
+        "reference_served": True,
+        "candidate_served": False,
+        "production_eligible": False,
+        "performance_measurement": False,
+        "acceptance_valid": False,
+        "logical_topology": topology[0],
+        "logical_drafts": topology[1],
+        "valid_mask": topology[2],
+        "draft_vocab_k": 65536,
+        "draft_vocab_root": 1,
+        "gate_mode": "post_measured_replay_distinct_request_tuple",
+        "coverage_authority": "authenticated_proxy_engine_request_join",
+        "diagnostic_identity": (
+            _fr13_fixed32_gdn_single_launch_diagnostic_identity(
+                _FR13_FIXED32_MODE, batch
+            )
+        ),
+    }
+    temporary = f"{path}.tmp.{os.getpid()}"
+    with open(temporary, "w", encoding="ascii") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+
+
 _FR13_FIXED32_GDN_PATH_BV_CANDIDATE = (
     _fr13_resolve_fixed32_gdn_path_bv_candidate(
         _FR13_FIXED32_MODE,
@@ -1092,6 +1173,10 @@ if _FR13_FIXED32_GDN_SINGLE_LAUNCH and (
     )
 _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
 _FR13_FIXED32_GDN_BV_CAPTURES: dict[tuple[int, int, str], dict] = {}
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_COMPARATOR_EVENTS: list[
+    dict[str, object]
+] = []
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_REQUEST_TUPLES: set[tuple[str, ...]] = set()
 _FR13_FIXED32_GDN_BV_LIVE_STATE = {
     "status": (
         "armed"
@@ -1111,6 +1196,7 @@ _FR13_FIXED32_GDN_BV_LIVE_STATE = {
     "graph_id": None,
     "batch_size": None,
     "records": 0,
+    "comparator_event_count": 0,
 }
 
 
@@ -1413,8 +1499,11 @@ def fixed32_gdn_bv_live_gate_on_replay(
     census_graph_signature: str,
     batch_size: int,
     expected_records: int,
+    event_index: int | None = None,
+    forward_step_index: int | None = None,
+    request_id_sha256s: tuple[str, ...] | None = None,
 ) -> dict[str, object]:
-    """Execute the gate once, immediately after the first measured replay."""
+    """Compare one distinct authenticated request tuple without serving it."""
     state = _FR13_FIXED32_GDN_BV_LIVE_STATE
     if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is None:
         return dict(state)
@@ -1432,7 +1521,10 @@ def fixed32_gdn_bv_live_gate_on_replay(
             "status": "not_expected_batch",
             "observed_batch": batch,
         }
-    if state["status"] == "passed":
+    single_launch = (
+        _FR13_FIXED32_GDN_PATH_BV_CANDIDATE == "single_launch"
+    )
+    if not single_launch and state["status"] == "passed":
         return dict(state)
     if state["status"] != "armed":
         raise RuntimeError(
@@ -1469,19 +1561,130 @@ def fixed32_gdn_bv_live_gate_on_replay(
             + repr((identity, batch, expected, capture))
         )
     task_marker = _fr13_fixed32_gdn_bv_real_event_marker()
+    request_tuple: tuple[str, ...] = ()
+    containing_event_index = -1
+    containing_forward_step = -1
+    if single_launch:
+        containing_event_index = (
+            int(event_index) if event_index is not None else -1
+        )
+        containing_forward_step = (
+            int(forward_step_index)
+            if forward_step_index is not None
+            else -1
+        )
+        request_tuple = (
+            tuple(request_id_sha256s)
+            if isinstance(request_id_sha256s, tuple)
+            else ()
+        )
+        if (
+            containing_event_index < 0
+            or containing_forward_step < 0
+            or len(request_tuple) != batch
+            or len(set(request_tuple)) != batch
+            or any(
+                len(value) != 64
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in value
+                )
+                for value in request_tuple
+            )
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch event/request binding drift"
+            )
+        if request_tuple in _FR13_FIXED32_GDN_SINGLE_LAUNCH_REQUEST_TUPLES:
+            return {
+                **state,
+                "status": "armed",
+                "comparison_status": "already_compared_request_tuple",
+                "comparator": None,
+            }
     state["status"] = "running"
     try:
-        if (
-            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE == "single_launch"
-        ):
+        if single_launch:
             result = _fr13_fixed32_gdn_single_launch_compare_records(records)
         else:
             result = _fr13_fixed32_gdn_bv_compare_records(
                 records, _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
             )
+        if single_launch:
+            comparator = {
+                "schema": "fr13.fixed32.gdn_single_launch.comparator_event.v1",
+                "mode": _FR13_FIXED32_MODE,
+                "batch_size": batch,
+                "runtime_capture_manifest_sha256": signature,
+                "structural_graph_signature": census_signature,
+                "reference": "fixed32_gdn_two_launch_reference_v1",
+                "candidate": _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
+                "reference_physical_launches_per_request_layer": int(
+                    result["reference_physical_launches"]
+                ),
+                "candidate_physical_launches_per_request_layer": int(
+                    result["candidate_physical_launches"]
+                ),
+                "records": int(result["records"]),
+                "compared_byte_surfaces": list(
+                    _FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES
+                ),
+                "raw_byte_equal": True,
+                "state_restored": True,
+                "reference_served": True,
+                "candidate_served": False,
+                "comparison_order": [
+                    "reference",
+                    "restore_baseline",
+                    "candidate",
+                    "restore_baseline_in_finally",
+                ],
+                "census_event_id": (
+                    f"{_FR13_FIXED32_MODE}:{os.getpid()}:"
+                    f"{containing_event_index}"
+                ),
+                "census_event_index": containing_event_index,
+                "census_forward_step_index": containing_forward_step,
+                "request_id_sha256s": list(request_tuple),
+                "observed_task_marker": task_marker,
+            }
+            proposed_events = [
+                *_FR13_FIXED32_GDN_SINGLE_LAUNCH_COMPARATOR_EVENTS,
+                comparator,
+            ]
+            _fr13_fixed32_gdn_single_launch_observation_emit(
+                batch_size=batch,
+                comparator_events=proposed_events,
+            )
     except Exception:
         state["status"] = "failed"
         raise
+    if single_launch:
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_COMPARATOR_EVENTS.append(comparator)
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_REQUEST_TUPLES.add(request_tuple)
+        state.update(
+            status="armed",
+            graph_id=identity,
+            graph_signature=signature,
+            batch_size=batch,
+            records=int(result["records"]),
+            comparator_event_count=len(
+                _FR13_FIXED32_GDN_SINGLE_LAUNCH_COMPARATOR_EVENTS
+            ),
+        )
+        print(
+            "[FR13_FIXED32_GDN_SINGLE_LAUNCH COMPARATOR] "
+            f"graph_id={identity} batch={batch} records={result['records']} "
+            f"event={containing_event_index} requests={len(request_tuple)} "
+            "reference_launches=2 candidate_launches=1 "
+            "served=reference restored=1",
+            flush=True,
+        )
+        return {
+            **state,
+            "comparison_status": "compared_distinct_request_tuple",
+            "comparator": dict(comparator),
+        }
     state.update(
         status="passed",
         graph_id=identity,

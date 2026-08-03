@@ -112,24 +112,81 @@ def _runtime_payload(
     return payload
 
 
-def _live_payload(*, mode: str, batch: int) -> dict[str, object]:
+def _comparator_event(
+    *,
+    mode: str,
+    batch: int,
+    event_index: int,
+    request_digests: list[str],
+    marker_task: str,
+    graph_signature: str = "b" * 64,
+    capture_signature: str = "c" * 64,
+) -> dict[str, object]:
+    return {
+        "schema": "fr13.fixed32.gdn_single_launch.comparator_event.v1",
+        "mode": mode,
+        "batch_size": batch,
+        "runtime_capture_manifest_sha256": capture_signature,
+        "structural_graph_signature": graph_signature,
+        "reference": "fixed32_gdn_two_launch_reference_v1",
+        "candidate": "fixed32_gdn_single_launch_tree_v2",
+        "reference_physical_launches_per_request_layer": 2,
+        "candidate_physical_launches_per_request_layer": 1,
+        "records": 48,
+        "compared_byte_surfaces": [
+            "output",
+            "ring_k",
+            "ring_v",
+            "ring_a",
+            "ring_b",
+            "flags",
+            "counter",
+        ],
+        "raw_byte_equal": True,
+        "state_restored": True,
+        "reference_served": True,
+        "candidate_served": False,
+        "comparison_order": [
+            "reference",
+            "restore_baseline",
+            "candidate",
+            "restore_baseline_in_finally",
+        ],
+        "census_event_id": f"{mode}:4242:{event_index}",
+        "census_event_index": event_index,
+        "census_forward_step_index": event_index,
+        "request_id_sha256s": request_digests,
+        "observed_task_marker": f"swe_verified:{marker_task}",
+    }
+
+
+def _live_payload(
+    *, mode: str, batch: int, comparator_events: list[dict[str, object]]
+) -> dict[str, object]:
     contract = {
         "tail6_fixed32": ("Tail23", "tail23", 23, 0x7A9CE7FF),
         "hydra27_fixed32": ("Hydra27", "hydra27", 27, 0x7ABDFFFF),
     }[mode]
     topology, slug, drafts, mask = contract
+    canonical_events = json.dumps(
+        comparator_events,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
     return {
-        "schema": "fr13.fixed32.gdn_single_launch.live_pass.v1",
-        "status": "pass",
+        "schema": "fr13.fixed32.gdn_single_launch.live_observation.v2",
+        "status": "observed_pending_authenticated_coverage_join",
         "candidate": "fixed32_gdn_single_launch_tree_v2",
         "source_sha256": "a" * 64,
-        "task_marker": "swe_verified:marker",
         "mode": mode,
-        "graph_signature": "b" * 64,
         "batch_size": batch,
         "expected_batch": batch,
         "covered_batches": [batch],
-        "records": 48,
+        "records_per_comparator_event": 48,
+        "comparator_event_count": len(comparator_events),
+        "comparator_events_sha256": hashlib.sha256(canonical_events).hexdigest(),
+        "comparator_events": comparator_events,
         "physical_rows": 32,
         "reference_bv": 8,
         "candidate_bv": 8,
@@ -144,10 +201,8 @@ def _live_payload(*, mode: str, batch: int) -> dict[str, object]:
             "flags",
             "counter",
         ],
-        "raw_byte_equal": True,
         "reference_served": True,
-        "state_restored": True,
-        "real_task_authenticated": True,
+        "candidate_served": False,
         "production_eligible": False,
         "performance_measurement": False,
         "acceptance_valid": False,
@@ -156,11 +211,66 @@ def _live_payload(*, mode: str, batch: int) -> dict[str, object]:
         "valid_mask": mask,
         "draft_vocab_k": 65536,
         "draft_vocab_root": 1,
-        "gate_mode": "post_first_measured_full_graph_replay",
+        "gate_mode": "post_measured_replay_distinct_request_tuple",
+        "coverage_authority": "authenticated_proxy_engine_request_join",
         "diagnostic_identity": (
             f"fixed32_gdn_single_launch_tree_v2:{slug}:b{batch}"
         ),
     }
+
+
+def _coverage_fixture(
+    reducer, *, mode: str, batch: int
+) -> tuple[
+    dict[str, object],
+    list[dict[str, object]],
+    dict[str, str],
+    list[str],
+]:
+    tasks = list(
+        reducer.B1_TASK_IDS if batch == 1 else reducer.EXACT4_TASK_IDS
+    )
+    digests = [hashlib.sha256(task.encode("ascii")).hexdigest() for task in tasks]
+    comparator = _comparator_event(
+        mode=mode,
+        batch=batch,
+        event_index=0,
+        request_digests=digests,
+        marker_task=tasks[0],
+    )
+    payload = _live_payload(
+        mode=mode,
+        batch=batch,
+        comparator_events=[comparator],
+    )
+    return (
+        payload,
+        [{"gdn_comparator": comparator}],
+        dict(zip(digests, tasks, strict=True)),
+        tasks,
+    )
+
+
+def _validate_fixture(
+    reducer,
+    payload: dict[str, object],
+    census_events: list[dict[str, object]],
+    request_task_map: dict[str, str],
+    tasks: list[str],
+    *,
+    mode: str,
+    batch: int,
+):
+    return reducer._validate_live_pass(
+        payload,
+        mode=mode,
+        batch=batch,
+        expected_tasks=tasks,
+        kernel_sha256="a" * 64,
+        graph_signature="b" * 64,
+        census_events=census_events,
+        request_task_map=request_task_map,
+    )
 
 
 def test_three_entrypoints_bake_disjoint_mode_batch_scopes() -> None:
@@ -188,85 +298,250 @@ def test_three_entrypoints_bake_disjoint_mode_batch_scopes() -> None:
         ("covered_batches", [1]),
         ("diagnostic_identity", "fixed32_gdn_single_launch_tree_v2:tail23:b4"),
         ("logical_topology", "Tail23"),
-        ("graph_signature", "c" * 64),
         ("reference_served", False),
     ),
 )
-def test_live_pass_rejects_batch_topology_graph_and_served_state_tamper(
+def test_live_observation_rejects_scope_and_served_state_tamper(
     field: str, value: object
 ) -> None:
     reducer = _load_reducer()
-    payload = _live_payload(mode="hydra27_fixed32", batch=4)
+    payload, events, request_map, tasks = _coverage_fixture(
+        reducer, mode="hydra27_fixed32", batch=4
+    )
     payload[field] = value
     with pytest.raises(reducer.GateError, match="live PASS field drifted"):
-        reducer._validate_live_pass(
+        _validate_fixture(
+            reducer,
             payload,
+            events,
+            request_map,
+            tasks,
             mode="hydra27_fixed32",
             batch=4,
-            task_markers=frozenset({"swe_verified:marker"}),
-            kernel_sha256="a" * 64,
-            graph_signature="b" * 64,
         )
 
 
-def test_live_pass_accepts_only_its_exact_scope() -> None:
+@pytest.mark.parametrize(
+    ("mode", "batch"),
+    (("hydra27_fixed32", 1), ("tail6_fixed32", 4), ("hydra27_fixed32", 4)),
+)
+def test_live_observation_accepts_exact_authenticated_scope(
+    mode: str, batch: int
+) -> None:
     reducer = _load_reducer()
-    payload = _live_payload(mode="tail6_fixed32", batch=4)
-    reducer._validate_live_pass(
+    payload, events, request_map, tasks = _coverage_fixture(
+        reducer, mode=mode, batch=batch
+    )
+    report = _validate_fixture(
+        reducer,
         payload,
-        mode="tail6_fixed32",
-        batch=4,
-        task_markers=frozenset({"swe_verified:marker"}),
-        kernel_sha256="a" * 64,
-        graph_signature="b" * 64,
+        events,
+        request_map,
+        tasks,
+        mode=mode,
+        batch=batch,
+    )
+    assert report["authenticated_task_ids"] == tasks
+    assert report["comparator_event_count"] == 1
+
+
+def test_stale_same_source_observation_and_truncation_are_rejected() -> None:
+    reducer = _load_reducer()
+    payload, events, request_map, tasks = _coverage_fixture(
+        reducer, mode="hydra27_fixed32", batch=4
+    )
+    stale = dict(events[0]["gdn_comparator"])
+    stale["census_event_id"] = "hydra27_fixed32:4242:9"
+    stale["census_event_index"] = 9
+    stale["census_forward_step_index"] = 9
+    stale_payload = _live_payload(
+        mode="hydra27_fixed32", batch=4, comparator_events=[stale]
     )
     with pytest.raises(reducer.GateError, match="live PASS field drifted"):
-        reducer._validate_live_pass(
-            payload,
+        _validate_fixture(
+            reducer,
+            stale_payload,
+            events,
+            request_map,
+            tasks,
             mode="hydra27_fixed32",
             batch=4,
-            task_markers=frozenset({"swe_verified:marker"}),
-            kernel_sha256="a" * 64,
-            graph_signature="b" * 64,
         )
 
-    payload["graph_id"] = 404
-    with pytest.raises(reducer.GateError, match="record shape drifted"):
-        reducer._validate_live_pass(
-            payload,
-            mode="tail6_fixed32",
-            batch=4,
-            task_markers=frozenset({"swe_verified:marker"}),
-            kernel_sha256="a" * 64,
-            graph_signature="b" * 64,
-        )
-
-
-def test_b4_live_pass_accepts_only_one_of_the_exact4_trigger_tasks() -> None:
-    reducer = _load_reducer()
-    payload = _live_payload(mode="hydra27_fixed32", batch=4)
-    allowed = frozenset(
-        f"swe_verified:{task_id}" for task_id in reducer.EXACT4_TASK_IDS
-    )
-    payload["task_marker"] = next(iter(allowed))
-    reducer._validate_live_pass(
-        payload,
+    second = dict(events[0]["gdn_comparator"])
+    second["census_event_id"] = "hydra27_fixed32:4242:1"
+    second["census_event_index"] = 1
+    second["census_forward_step_index"] = 1
+    second["request_id_sha256s"] = ["d" * 64, *second["request_id_sha256s"][1:]]
+    expanded_events = [events[0], {"gdn_comparator": second}]
+    truncated = _live_payload(
         mode="hydra27_fixed32",
         batch=4,
-        task_markers=allowed,
-        kernel_sha256="a" * 64,
-        graph_signature="b" * 64,
+        comparator_events=[events[0]["gdn_comparator"]],
     )
-    payload["task_marker"] = "swe_verified:not-in-exact4"
-    with pytest.raises(reducer.GateError, match="not a canonical task"):
-        reducer._validate_live_pass(
-            payload,
+    with pytest.raises(reducer.GateError, match="live PASS field drifted"):
+        _validate_fixture(
+            reducer,
+            truncated,
+            expanded_events,
+            request_map | {"d" * 64: tasks[0]},
+            tasks,
             mode="hydra27_fixed32",
             batch=4,
-            task_markers=allowed,
-            kernel_sha256="a" * 64,
-            graph_signature="b" * 64,
         )
+
+
+def test_missing_and_duplicate_exact4_comparator_coverage_are_rejected() -> None:
+    reducer = _load_reducer()
+    payload, events, request_map, tasks = _coverage_fixture(
+        reducer, mode="hydra27_fixed32", batch=4
+    )
+    missing_map = dict(request_map)
+    missing_digest = next(
+        digest for digest, task in request_map.items() if task == tasks[-1]
+    )
+    missing_map[missing_digest] = tasks[0]
+    with pytest.raises(reducer.GateError, match="task union is not the exact"):
+        _validate_fixture(
+            reducer,
+            payload,
+            events,
+            missing_map,
+            tasks,
+            mode="hydra27_fixed32",
+            batch=4,
+        )
+
+    duplicate = dict(events[0]["gdn_comparator"])
+    duplicate["census_event_id"] = "hydra27_fixed32:4242:1"
+    duplicate["census_event_index"] = 1
+    duplicate["census_forward_step_index"] = 1
+    duplicated_events = [events[0], {"gdn_comparator": duplicate}]
+    duplicated_payload = _live_payload(
+        mode="hydra27_fixed32",
+        batch=4,
+        comparator_events=[events[0]["gdn_comparator"], duplicate],
+    )
+    with pytest.raises(reducer.GateError, match="tuple is duplicated"):
+        _validate_fixture(
+            reducer,
+            duplicated_payload,
+            duplicated_events,
+            request_map,
+            tasks,
+            mode="hydra27_fixed32",
+            batch=4,
+        )
+
+
+def test_request_task_relabel_and_scope_swap_are_rejected() -> None:
+    reducer = _load_reducer()
+    payload, events, request_map, tasks = _coverage_fixture(
+        reducer, mode="hydra27_fixed32", batch=4
+    )
+    relabeled = dict(events[0]["gdn_comparator"])
+    relabeled["observed_task_marker"] = "swe_verified:not_the_request_task"
+    relabeled_payload = _live_payload(
+        mode="hydra27_fixed32", batch=4, comparator_events=[relabeled]
+    )
+    with pytest.raises(reducer.GateError, match="marker was relabeled"):
+        _validate_fixture(
+            reducer,
+            relabeled_payload,
+            [{"gdn_comparator": relabeled}],
+            request_map,
+            tasks,
+            mode="hydra27_fixed32",
+            batch=4,
+        )
+
+    with pytest.raises(reducer.GateError, match="live PASS field drifted"):
+        _validate_fixture(
+            reducer,
+            payload,
+            events,
+            request_map,
+            tasks,
+            mode="tail6_fixed32",
+            batch=4,
+        )
+
+
+def test_work_census_seals_comparator_event_index_and_request_digests() -> None:
+    reducer = _load_reducer()
+    census = reducer.work_census
+    mode = "tail6_fixed32"
+    event = census.reference_event(
+        mode,
+        4,
+        f"{mode}:4242:0",
+        event_index=0,
+        forward_step_index=0,
+    )
+    request_digests = list(event["drafter_runtime"]["request_id_sha256s"])
+    event["gdn_comparator"] = _comparator_event(
+        mode=mode,
+        batch=4,
+        event_index=0,
+        request_digests=request_digests,
+        marker_task="astropy__astropy-12907",
+        graph_signature=census.forward_graph_structural_signature(4),
+    )
+    census.validate_event(event, source="sealed-event")
+
+    swapped = json.loads(json.dumps(event))
+    swapped["gdn_comparator"]["census_event_index"] = 1
+    with pytest.raises(census.CensusError, match="census_event_index"):
+        census.validate_event(swapped, source="index-swap")
+
+    relabeled = json.loads(json.dumps(event))
+    relabeled["gdn_comparator"]["request_id_sha256s"][0] = "f" * 64
+    with pytest.raises(census.CensusError, match="request_id_sha256s"):
+        census.validate_event(relabeled, source="request-relabel")
+
+
+def test_authenticated_request_map_requires_proxy_engine_identity_parity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reducer = _load_reducer()
+    task_id = reducer.B1_TASK_IDS[0]
+    task_key = reducer.floor_gate.fixed32_task_key_id(task_id)
+    request_digest = "a" * 64
+    evidence_digest = "b" * 64
+    proxy = [
+        {
+            "event": "attempt_result",
+            "status_code": 200,
+            "outcome": "response",
+            "wire_id_sha256": "c" * 64,
+            "task_key_id": task_key,
+            "engine_request_id_sha256": request_digest,
+            "evidence_sha256": evidence_digest,
+        }
+    ]
+    engine = [
+        {
+            "event": event,
+            "outcome": "completed" if event == "request_complete" else None,
+            "wire_id_sha256": "c" * 64,
+            "task_key_id": task_key,
+            "engine_request_id_sha256": request_digest,
+            "evidence_sha256": evidence_digest,
+        }
+        for event in ("request_accepted", "request_complete")
+    ]
+
+    def load(_path, *, role, **_kwargs):
+        return (proxy if role == "proxy" else engine), {"role": role}
+
+    monkeypatch.setattr(reducer.floor_gate, "load_fixed32_ingress_ledger", load)
+    assert reducer._authenticated_request_task_map(
+        tmp_path, [task_id]
+    ) == {request_digest: task_id}
+
+    engine[-1] = dict(engine[-1], task_key_id="0" * 64)
+    with pytest.raises(reducer.GateError, match="identity parity failed"):
+        reducer._authenticated_request_task_map(tmp_path, [task_id])
 
 
 def test_runtime_manifest_rejects_source_closure_tamper(tmp_path: Path) -> None:
