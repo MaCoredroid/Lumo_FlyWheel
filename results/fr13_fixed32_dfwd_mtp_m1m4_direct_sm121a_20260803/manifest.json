@@ -1,0 +1,95 @@
+{
+  "schema": "fr13.fixed32.dfwd_mtp_m1m4_direct_sm121a.v1",
+  "created_at_utc": "2026-08-03T11:58:21Z",
+  "status": "host_compile_link_import_audit_pass_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "gpu_runtime_used": false,
+  "docker_used": false,
+  "source": {
+    "branch": "codex/fixed32-dfwd-next-kernel-20260803",
+    "source_commit": "0fe3c4cc1292f020cfcd7f16e296a527ec623b64",
+    "kernel_commit": "964194d7cd45112caa0eb1850d8f0a6ca5306f83",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "patch_source_sha256": "b9dba4077f63425dd4c245d9de33a8b2413e223f44a7fb0f6b4abe6e003d24a0",
+    "binary_verifier_sha256": "bf248fff4a46e2cbe479af1673c84c1e98ab45174dcbb2c199e9df402be02c4a",
+    "patched_dispatch_sha256": "ef221b938c0780d8212e6355f53a8aad6c4b907fbe0e368cb73bda995b80699d"
+  },
+  "candidate": {
+    "diagnostic_selector": "mtp_m1m4_direct_byte_ab",
+    "production_selector": null,
+    "default_enabled": false,
+    "qualification_profile": "k64_root",
+    "admitted_m": [1, 4],
+    "admitted_nk": [
+      [34816, 5120],
+      [5120, 17408],
+      [5120, 6144],
+      [16384, 5120],
+      [14336, 5120]
+    ],
+    "tile_mnk_after_swap_ab": [128, 32, 128],
+    "cluster_mnk": [1, 1, 1],
+    "schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "mainloop": "exact stock CollectiveMainloop",
+    "epilogue": "exact stock CollectiveEpilogue",
+    "candidate_scheduler": "Fr13B1OneNStaticTileScheduler100",
+    "tile_map": "{linear_idx, 0, 0}",
+    "served_output": "stock",
+    "unarmed_behavior": "stock_only",
+    "unknown_or_wrong_shape_behavior": "stock_only"
+  },
+  "host_build": {
+    "result": "pass",
+    "target": "_C_stable_libtorch",
+    "build_type": "RelWithDebInfo",
+    "gencode": "arch=compute_121a,code=sm_121a",
+    "nvcc": "13.0.88",
+    "cxx": "13.3.0",
+    "cmake": "3.28.3",
+    "ninja": "1.13.0.git.kitware.jobserver-pipe-1",
+    "compile_result": "pass",
+    "link_result": "pass",
+    "python_load_library_result": "pass"
+  },
+  "outputs": {
+    "candidate_object": {
+      "published": false,
+      "bytes": 24537704,
+      "sha256": "f1e57530fb5eb171a9297e5710d42331b0e8970676497796c912c77822a311e5"
+    },
+    "candidate_binary": {
+      "published": false,
+      "bytes": 119471552,
+      "sha256": "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc"
+    },
+    "sm121a_cubin": {
+      "published": false,
+      "bytes": 2556544,
+      "sha256": "333cf52a0a856b6c137584547d86ad97f5f0ba10e75106f27839dc1f1c4c80d0",
+      "inventory_count": 1
+    }
+  },
+  "source_checks": {
+    "focused_tests": "78 passed",
+    "pycompile": "pass",
+    "patch_pinned_source": "pass",
+    "git_diff_check": "pass"
+  },
+  "required_next_gates": [
+    "real SWE-Verified K64/root exact4 or exact16 B1 byte comparison",
+    "real SWE-Verified K64/root exact4 or exact16 B4 byte comparison",
+    "source-bound production selector only after both byte gates pass",
+    "clean exact4 B1 and B4 full-step timing after production rebuild"
+  ],
+  "not_run": [
+    "GPU kernel runtime",
+    "GPU correctness",
+    "Docker",
+    "synthetic or probe performance",
+    "real SWE-Verified task",
+    "B1 or B4 timing",
+    "hardware-floor acceptance"
+  ]
+}
