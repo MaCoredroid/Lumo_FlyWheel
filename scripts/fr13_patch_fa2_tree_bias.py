@@ -33,6 +33,10 @@ for exact B1, where its 24 two-warp CTAs replace 48 one-warp qrow16 CTAs and
 share one ordered K/V scan across each head's two query warps. It is likewise
 gate-only and default-off; the 24-CTA grid is intentionally explicit because
 it may underfill a 48-SM GPU even though it preserves 48 resident warps.
+The same build emits a separately tagged split-K=2 alternative. Its 48 main
+CTAs partition, rather than duplicate, each head's K-block interval and then
+use FA2's existing four-warp combine kernel; split scratch must already have
+been allocated by the stock ``num_splits=2`` API setup.
 Both fixed32 query routes fix the paged-KV block size at 1024, allowing only
 their dedicated translation units to resolve pages directly from 64-row
 K-block coordinates. There is no qrow32 production selector.
@@ -210,6 +214,7 @@ STOCK_FIXED32_QUERY_INSTANTIATION = r'''template void run_mha_fwd_splitkv_dispat
 
 FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL = 0x46523133
 FIXED32_QUERY_TILE32_B1_BATCH_STRIDE_SENTINEL = 0x46523134
+FIXED32_QUERY_TILE32_B1_SPLIT2_BATCH_STRIDE_SENTINEL = 0x46523135
 
 
 # Unlike B1, B4 dereferences the tree-bias batch stride. Keep this sentinel
@@ -817,6 +822,130 @@ void fr13_run_mha_fwd_fixed32_qrow32_b1(
 '''
 
 
+FIXED32_QUERY_TILE32_B1_SPLIT2_TRANSLATION_UNIT = r'''// FR13 fixed32 B1 qrow32 split2 gate candidate.
+#include "namespace_config.h"
+#include "flash_fwd_launch_template.h"
+
+namespace FLASH_NAMESPACE {
+
+using Fr13Fixed32Qrow32B1Split2KernelTraits = Flash_fwd_kernel_traits<
+    256, 32, 64, 2, false, false, cutlass::bfloat16_t>;
+using Fr13Fixed32Qrow32B1Split2CombineTraits = Flash_fwd_kernel_traits<
+    256, 64, 64, 4, false, false, cutlass::bfloat16_t>;
+
+template <>
+struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32B1Split2KernelTraits> {
+    static constexpr int value = 1024;
+    static constexpr int log2 = 10;
+    static constexpr int block_n_log2 = 6;
+};
+
+template <>
+struct StaticPagedKVStrides<Fr13Fixed32Qrow32B1Split2KernelTraits> {
+    static constexpr int64_t page = 1024 * 4 * 256;
+    static constexpr int64_t row = 4 * 256;
+    static constexpr int64_t head = 256;
+};
+
+template <>
+struct StaticQueryRows<Fr13Fixed32Qrow32B1Split2KernelTraits> {
+    static constexpr int value = 32;
+};
+
+template <>
+struct StaticQueryBatchLayout<Fr13Fixed32Qrow32B1Split2KernelTraits> {
+    static constexpr int sequences = 1;
+    static constexpr int query_heads = 24;
+    static constexpr int kv_heads = 4;
+    static constexpr int query_heads_per_kv = 6;
+};
+
+__global__ __maxnreg__(254)
+void fr13_flash_fwd_fixed32_qrow32_b1_split2_kernel(
+        KERNEL_PARAM_MODIFIER const Flash_fwd_params params) {
+#if defined(ARCH_SUPPORTS_FLASH)
+    FLASH_NAMESPACE::compute_attn_splitkv<
+        Fr13Fixed32Qrow32B1Split2KernelTraits,
+        false,  // Is_causal
+        false,  // Is_local
+        false,  // Has_alibi
+        false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
+        true,   // Is_even_K: d == kHeadDim == 256
+        false,  // Is_softcap
+        true,   // Split: blockIdx.y partitions K blocks exactly twice
+        false   // Append_KV
+    >(params);
+#else
+    FLASH_UNSUPPORTED_ARCH
+#endif
+}
+
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow32_b1_split2(
+        Flash_fwd_params &params, cudaStream_t stream) {
+    // Two disjoint context partitions per head: B1 * H24 * split2 = 48 CTAs.
+    constexpr static int kTreeBlockM = 32;
+    constexpr static int kTreeBlockN = 64;
+    constexpr static int kTreeWarps = 2;
+    constexpr static int kContextSplits = 2;
+    static_assert(kTreeBlockM == 16 * kTreeWarps);
+    using TreeKernelTraits = Fr13Fixed32Qrow32B1Split2KernelTraits;
+    static_assert(TreeKernelTraits::kBlockM == kTreeBlockM);
+    static_assert(TreeKernelTraits::kBlockN == kTreeBlockN);
+    static_assert(TreeKernelTraits::kNWarps == kTreeWarps);
+    static_assert(TreeKernelTraits::kNThreads == 64);
+    static_assert(TreeKernelTraits::kGmemThreadsPerRow == 8);
+    static_assert(TreeKernelTraits::kGmemRowsPerThread == 8);
+    static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
+    constexpr size_t smem_size = TreeKernelTraits::kSmemSize;
+    static_assert(smem_size == 80 * 1024);
+    using StaticLayout = StaticQueryBatchLayout<TreeKernelTraits>;
+    static_assert(StaticLayout::sequences == 1);
+    static_assert(StaticLayout::query_heads == 24);
+    static_assert(StaticLayout::kv_heads == 4);
+    static_assert(StaticLayout::query_heads_per_kv == 6);
+    static_assert(
+        StaticLayout::query_heads
+        == StaticLayout::kv_heads * StaticLayout::query_heads_per_kv);
+    TORCH_CHECK(
+        params.num_splits == kContextSplits
+        && params.oaccum_ptr != nullptr
+        && params.softmax_lseaccum_ptr != nullptr,
+        "FR13 B1 qrow32 split2 scratch contract drifted");
+    dim3 grid(
+        StaticLayout::query_heads_per_kv,
+        kContextSplits,
+        StaticLayout::kv_heads);
+    auto kernel = &fr13_flash_fwd_fixed32_qrow32_b1_split2_kernel;
+    if (smem_size >= 48 * 1024) {
+        C10_CUDA_CHECK(cudaFuncSetAttribute(
+            kernel,
+            cudaFuncAttributeMaxDynamicSharedMemorySize,
+            smem_size));
+    }
+    kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>(params);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+    // Reuse FA2's exact combine implementation with its required four-warp
+    // traits. The main attention kernel remains the two-warp BM32 trait.
+    using CombineTraits = Fr13Fixed32Qrow32B1Split2CombineTraits;
+    static_assert(CombineTraits::kNThreads == 128);
+    constexpr int kCombineBlockM = 4;
+    constexpr int kLogMaxSplits = 1;
+    constexpr bool kEvenK = true;
+    dim3 combine_grid(
+        (StaticLayout::sequences * StaticLayout::query_heads * 32
+         + kCombineBlockM - 1) / kCombineBlockM);
+    flash_fwd_splitkv_combine_kernel<
+        CombineTraits, kCombineBlockM, kLogMaxSplits, kEvenK>
+        <<<combine_grid, CombineTraits::kNThreads, 0, stream>>>(params);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+} // namespace FLASH_NAMESPACE
+'''
+
+
 RUN_MHA_FWD_SIGNATURE = (
     "void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, "
     "bool force_split_kernel=false) {\n"
@@ -951,6 +1080,72 @@ FIXED32_QUERY_TILE32_B1_API_GATE = r'''    if (params.tree_bias_batch_stride == 
             && force_split_kernel,
             "FR13 qrow32 B1 gate reached non-canonical geometry");
         fr13_run_mha_fwd_fixed32_qrow32_b1(params, stream);
+        return;
+    }
+'''
+
+
+FIXED32_QUERY_TILE32_B1_SPLIT2_API_DECLARATION = rf'''constexpr int64_t kFr13Qrow32B1Split2BatchStrideSentinel =
+    {FIXED32_QUERY_TILE32_B1_SPLIT2_BATCH_STRIDE_SENTINEL};
+
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow32_b1_split2(
+    Flash_fwd_params &params, cudaStream_t stream);
+
+'''
+
+
+FIXED32_QUERY_TILE32_B1_SPLIT2_API_GATE = r'''    if (params.tree_bias_batch_stride == kFr13Qrow32B1Split2BatchStrideSentinel) {
+        TORCH_CHECK(
+            params.tree_bias_ptr != nullptr
+            && params.is_bf16
+            && !params.is_causal
+            && params.b == 1
+            && params.total_q == 32
+            && params.d == 256
+            && params.d_rounded == 256
+            && params.h == 24
+            && params.h_k == 4
+            && params.h_h_k_ratio == 6
+            && params.seqlen_q == 32
+            && params.seqlen_q_rounded == 128
+            && params.q_head_stride == 256
+            && params.k_batch_stride == 1024 * 4 * 256
+            && params.k_row_stride == 4 * 256
+            && params.k_head_stride == 256
+            && params.v_batch_stride == 1024 * 4 * 256
+            && params.v_row_stride == 4 * 256
+            && params.v_head_stride == 256
+            && params.o_head_stride == 256
+            && params.tree_bias_rows == 32
+            && params.tree_bias_cols == 32
+            && params.tree_bias_row_stride == 32
+            && params.tree_bias_col_stride == 1
+            && params.tree_bias_q_offset == 0
+            && params.tree_bias_k_offset == 0
+            && params.cu_seqlens_q != nullptr
+            && params.seqused_k != nullptr
+            && !params.seqlenq_ngroups_swapped
+            && params.leftpad_k == nullptr
+            && params.cache_batch_idx == nullptr
+            && params.block_table != nullptr
+            && params.block_table_batch_stride > 0
+            && params.page_block_size == 1024
+            && params.window_size_left < 0
+            && params.window_size_right < 0
+            && params.alibi_slopes_ptr == nullptr
+            && params.knew_ptr == nullptr
+            && params.vnew_ptr == nullptr
+            && params.p_ptr == nullptr
+            && params.softmax_lse_ptr != nullptr
+            && params.oaccum_ptr != nullptr
+            && params.softmax_lseaccum_ptr != nullptr
+            && params.p_dropout == 1.0f
+            && params.softcap == 0.0f
+            && params.num_splits == 2
+            && force_split_kernel,
+            "FR13 qrow32 B1 split2 gate reached non-canonical geometry");
+        fr13_run_mha_fwd_fixed32_qrow32_b1_split2(params, stream);
         return;
     }
 '''
@@ -1599,7 +1794,7 @@ inline __device__ void compute_attn_splitkv(const Params &params) {
     constexpr int kStaticQueryHeadsPerKV =
         StaticQueryBatchLayout<Kernel_traits>::query_heads_per_kv;
     constexpr bool kStaticQueryBatch = kStaticSequences != 0;
-    static_assert(!kStaticQueryBatch || !Split);
+    static_assert(!kStaticQueryBatch || !Split || kStaticSequences == 1);
     static_assert(
         !kStaticQueryBatch || kStaticSequences == 1 || kStaticSequences == 4);
     static_assert(!kStaticQueryBatch || kStaticQueryHeads == 24);
@@ -1610,9 +1805,11 @@ inline __device__ void compute_attn_splitkv(const Params &params) {
         || kStaticQueryHeads == kStaticKVHeads * kStaticQueryHeadsPerKV);
     if constexpr (kStaticQueryBatch) {
         const int m_block = 0;
-        const int bidb = blockIdx.y;
+        const int bidb = Split ? 0 : blockIdx.y;
         const int bidh = blockIdx.z * kStaticQueryHeadsPerKV + blockIdx.x;
-        FLASH_NAMESPACE::compute_attn_1rowblock_splitkv<Kernel_traits, Is_causal, Is_local, Has_alibi, Is_even_MN, Is_even_K, Is_softcap, Split, Append_KV>(params, bidb, bidh, m_block, 0, 1);
+        const int n_split_idx = Split ? blockIdx.y : 0;
+        const int num_n_splits = Split ? gridDim.y : 1;
+        FLASH_NAMESPACE::compute_attn_1rowblock_splitkv<Kernel_traits, Is_causal, Is_local, Has_alibi, Is_even_MN, Is_even_K, Is_softcap, Split, Append_KV>(params, bidb, bidh, m_block, n_split_idx, num_n_splits);
     } else {
         const int m_block = blockIdx.x;
         // The block index for the batch.
@@ -1675,7 +1872,7 @@ def _patch_fixed32_query_tile32_static_paged_metadata(
     )
     static_binfo = r'''    // FR13_FA2_QROW32_STATIC_PAGED_METADATA: direct exact4 sequence metadata.
     static_assert(!kStaticQueryBatch || kStaticPagedKV);
-    static_assert(!kStaticQueryBatch || !Split);
+    static_assert(!kStaticQueryBatch || !Split || kStaticSequences == 1);
     static_assert(!kStaticQueryBatch || !Append_KV);
     using QueryBlockInfo = std::conditional_t<
         kStaticQueryBatch,
@@ -2085,13 +2282,31 @@ def _patch_fixed32_query_tile32_b1_translation_unit(
         raise RuntimeError("stock fixed32 FA2 explicit instantiation drifted")
     if "FR13_FA2_FIXED32_QUERY_TILE32" in stock_text:
         raise RuntimeError("qrow32 B1 must not share the stock instantiation TU")
-    qrow_path = path.with_name("flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu")
-    if qrow_path.exists():
-        if qrow_path.read_text() != FIXED32_QUERY_TILE32_B1_TRANSLATION_UNIT:
-            raise RuntimeError("existing qrow32 B1 translation unit drifted")
-        return False
-    qrow_path.write_text(FIXED32_QUERY_TILE32_B1_TRANSLATION_UNIT)
-    return True
+    candidates = (
+        (
+            path.with_name(
+                "flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu"
+            ),
+            FIXED32_QUERY_TILE32_B1_TRANSLATION_UNIT,
+            "qrow32 B1 no-split",
+        ),
+        (
+            path.with_name(
+                "flash_fwd_fr13_qrow32_b1_split2_hdim256_bf16_sm80.cu"
+            ),
+            FIXED32_QUERY_TILE32_B1_SPLIT2_TRANSLATION_UNIT,
+            "qrow32 B1 split2",
+        ),
+    )
+    changed = False
+    for qrow_path, expected, label in candidates:
+        if qrow_path.exists():
+            if qrow_path.read_text() != expected:
+                raise RuntimeError(f"existing {label} translation unit drifted")
+        else:
+            qrow_path.write_text(expected)
+            changed = True
+    return changed
 
 
 def _patch_flash_api_cpp(
@@ -2285,6 +2500,13 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
             label="fixed32 FA2 query tile32 B1 hidden API dispatch",
         )
         changed = changed or did
+        text, did = _install_hidden_api_gate(
+            text,
+            declaration=FIXED32_QUERY_TILE32_B1_SPLIT2_API_DECLARATION,
+            gate=FIXED32_QUERY_TILE32_B1_SPLIT2_API_GATE,
+            label="fixed32 FA2 query tile32 B1 split2 hidden API dispatch",
+        )
+        changed = changed or did
     if changed:
         path.write_text(text)
     return changed
@@ -2444,6 +2666,12 @@ def patch_fa2_source(
         )
         or flash_fwd_kernel_changed
     )
+    b1_translation_units_changed = (
+        _patch_fixed32_query_tile32_b1_translation_unit(
+            files["flash_fwd_split_hdim256_bf16_sm80.cu"],
+            fixed32_query_tile32_b1=fixed32_query_tile32_b1,
+        )
+    )
     return {
         "flash.h": _patch_flash_h(files["flash.h"]),
         "flash_fwd_kernel.h": flash_fwd_kernel_changed,
@@ -2463,9 +2691,11 @@ def patch_fa2_source(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
             fixed32_query_tile32=fixed32_query_tile32,
         ),
-        "flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu": _patch_fixed32_query_tile32_b1_translation_unit(
-            files["flash_fwd_split_hdim256_bf16_sm80.cu"],
-            fixed32_query_tile32_b1=fixed32_query_tile32_b1,
+        "flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu": (
+            b1_translation_units_changed
+        ),
+        "flash_fwd_fr13_qrow32_b1_split2_hdim256_bf16_sm80.cu": (
+            b1_translation_units_changed
         ),
         "flash_api.cpp": _patch_flash_api_cpp(
             files["flash_api.cpp"],
