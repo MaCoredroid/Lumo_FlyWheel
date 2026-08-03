@@ -475,6 +475,19 @@ def _fr13_fixed32_committer_gate_ring_requested() -> bool:
     )
 
 
+def _fr13_fixed32_committer_decay_ring_requested() -> bool:
+    """Return the boot-time arm for producer-reused decay multipliers."""
+    if os.environ.get("FR13_FIXED32_COMMITTER_DECAY_RING") == "1":
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_fixed32_committer_decay_ring.arm",
+            "/tmp/fr13_fixed32_committer_decay_ring.arm",
+        )
+    )
+
+
 def _fr13_fixed32_committer_layer_batch_real_event_marker(
     path: str = _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT,
 ) -> str | None:
@@ -9299,6 +9312,26 @@ def _gdn_node_step(
 
 
 @triton.jit
+def _gdn_node_step_precomputed_decay(
+    state_i,
+    b_q,
+    b_k,
+    b_v,
+    b_beta,
+    b_decay,
+    OUTPUT_SCALE: tl.constexpr,
+):
+    """Run the exact raw-rsqrt recurrence from producer-owned scalars."""
+    b_q = b_q * OUTPUT_SCALE
+    state_i *= b_decay
+    b_v -= tl.sum(state_i * b_k[None, :], axis=1)
+    b_v *= b_beta
+    state_i += b_v[:, None] * b_k[None, :]
+    out_i = tl.sum(state_i * b_q[None, :], axis=1)
+    return state_i, out_i
+
+
+@triton.jit
 def _tree_gdn_kernel(
     q,
     k,
@@ -10160,6 +10193,7 @@ def _tree_gdn_fixed32_single_launch_node(
     RING_EXPORT: tl.constexpr,
     K_NORM_EXPORT: tl.constexpr,
     GATE_EXPORT: tl.constexpr,
+    DECAY_EXPORT: tl.constexpr,
 ):
     """Run one unchanged GDN recurrence and its single-writer stores."""
     n_ok = (node >= 0) & (node < N_ACTUAL)
@@ -10219,7 +10253,7 @@ def _tree_gdn_fixed32_single_launch_node(
             other=0.0,
         )
         b_raw_a = b_raw_a_in.to(tl.float32)
-        if RING_EXPORT:
+        if RING_EXPORT and not DECAY_EXPORT:
             tl.store(
                 ring_a + global_node * NUM_VH + pid_vh,
                 b_raw_a_in,
@@ -10249,10 +10283,11 @@ def _tree_gdn_fixed32_single_launch_node(
         )
         b_g = -tl.exp(b_a_log) * softplus_x
         b_b = tl.sigmoid(b_raw_b.to(tl.float32))
+        b_decay = tl.exp(b_g)
         gate_offset = (global_node * NUM_VH + pid_vh) * 2
         tl.store(
             ring_gate + gate_offset,
-            b_g,
+            b_decay if DECAY_EXPORT else b_g,
             mask=n_ok & (pid_v == 0),
         )
         tl.store(
@@ -10260,24 +10295,35 @@ def _tree_gdn_fixed32_single_launch_node(
             b_b,
             mask=n_ok & (pid_v == 0),
         )
-    new_state, out_i = _gdn_node_step(
-        state_i,
-        b_q,
-        b_k,
-        b_v,
-        b_b,
-        b_g,
-        b_raw_a,
-        b_raw_b,
-        b_a_log,
-        b_dt_bias,
-        OUTPUT_SCALE=OUTPUT_SCALE,
-        USE_QK_L2NORM_IN_KERNEL=(
-            USE_QK_L2NORM_IN_KERNEL and not K_NORM_EXPORT
-        ),
-        RAW_GATING=RAW_GATING and not GATE_EXPORT,
-        SCAN_ALIGN=SCAN_ALIGN and not K_NORM_EXPORT and not GATE_EXPORT,
-    )
+    if DECAY_EXPORT:
+        new_state, out_i = _gdn_node_step_precomputed_decay(
+            state_i,
+            b_q,
+            b_k,
+            b_v,
+            b_b,
+            b_decay,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+        )
+    else:
+        new_state, out_i = _gdn_node_step(
+            state_i,
+            b_q,
+            b_k,
+            b_v,
+            b_b,
+            b_g,
+            b_raw_a,
+            b_raw_b,
+            b_a_log,
+            b_dt_bias,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            USE_QK_L2NORM_IN_KERNEL=(
+                USE_QK_L2NORM_IN_KERNEL and not K_NORM_EXPORT
+            ),
+            RAW_GATING=RAW_GATING and not GATE_EXPORT,
+            SCAN_ALIGN=SCAN_ALIGN and not K_NORM_EXPORT and not GATE_EXPORT,
+        )
     tl.store(
         out + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
         out_i,
@@ -10340,6 +10386,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
     RING_EXPORT: tl.constexpr = False,
     K_NORM_EXPORT: tl.constexpr = False,
     GATE_EXPORT: tl.constexpr = False,
+    DECAY_EXPORT: tl.constexpr = False,
     FLAGS_EXPORT: tl.constexpr = False,
     FLAGS_ROWS: tl.constexpr = 0,
 ):
@@ -10428,6 +10475,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
             RING_EXPORT=RING_EXPORT,
             K_NORM_EXPORT=K_NORM_EXPORT,
             GATE_EXPORT=GATE_EXPORT,
+            DECAY_EXPORT=DECAY_EXPORT,
         )
         group_path_count = tl.load(group_path_counts + root_index)
         for member in tl.static_range(0, MAX_GROUP_PATHS):
@@ -10492,6 +10540,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
                     RING_EXPORT=RING_EXPORT,
                     K_NORM_EXPORT=K_NORM_EXPORT,
                     GATE_EXPORT=GATE_EXPORT,
+                    DECAY_EXPORT=DECAY_EXPORT,
                 )
     if FLAGS_EXPORT:
         flag_writer = (pid_vh == 0) & (pid_v == 0) & (pid_batch == 0)
@@ -12850,6 +12899,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
     K_NORM_REUSE: tl.constexpr,
     GATE_REUSE: tl.constexpr,
+    DECAY_REUSE: tl.constexpr,
 ):
     """Native fused-sigmoid state recurrence batched across all layers.
 
@@ -12952,7 +13002,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
                 + node * RING_GATE_N_STRIDE
                 + i_hv * 2
             )
-            b_g = tl.load(p_live_gate)
+            b_g_or_decay = tl.load(p_live_gate)
             b_beta = tl.load(p_live_gate + 1)
         else:
             b_b = tl.load(p_b).to(tl.float32)
@@ -12962,7 +13012,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
                 (1 / BETA) * tl.log(1 + tl.exp(BETA * x)),
                 x,
             )
-            b_g = b_a_scale * softplus_x
+            b_g_or_decay = b_a_scale * softplus_x
             b_beta = tl.sigmoid(b_b.to(tl.float32))
 
         if K_NORM_REUSE:
@@ -12975,7 +13025,10 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
             )
         elif USE_QK_L2NORM_IN_KERNEL:
             b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
-        b_h *= tl.exp(b_g)
+        if DECAY_REUSE:
+            b_h *= b_g_or_decay
+        else:
+            b_h *= tl.exp(b_g_or_decay)
         b_v -= tl.sum(b_h * b_k[None, :], 1)
         b_v *= b_beta
         b_h += b_v[:, None] * b_k[None, :]
@@ -13000,6 +13053,7 @@ def _fr13_fixed32_committer_native_layer_batch(
     use_qk_l2norm_in_kernel,
     k_norm_reuse,
     gate_reuse,
+    decay_reuse,
 ) -> None:
     """Launch all 48 native-realization scans to disjoint destinations once."""
     layers = 48
@@ -13056,6 +13110,7 @@ def _fr13_fixed32_committer_native_layer_batch(
                 or not gate_rings.is_contiguous()
             )
         )
+        or (decay_reuse and not gate_reuse)
     ):
         raise RuntimeError(
             "FR13 fixed32 committer layer-batch requires the pinned "
@@ -13133,6 +13188,7 @@ def _fr13_fixed32_committer_native_layer_batch(
         USE_QK_L2NORM_IN_KERNEL=bool(use_qk_l2norm_in_kernel),
         K_NORM_REUSE=bool(k_norm_reuse),
         GATE_REUSE=bool(gate_reuse),
+        DECAY_REUSE=bool(decay_reuse),
         num_warps=8,
         num_stages=3,
     )
@@ -13155,6 +13211,7 @@ def _fr13_fixed32_committer_graph_body(
     use_qk_l2norm_in_kernel,
     k_norm_reuse,
     gate_reuse,
+    decay_reuse,
     layer_batch=None,
 ) -> None:
     """Record the fixed committer graph body with an optional one-call scan."""
@@ -13258,6 +13315,7 @@ def _fr13_fixed32_committer_graph_body(
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
             k_norm_reuse=k_norm_reuse,
             gate_reuse=gate_reuse,
+            decay_reuse=decay_reuse,
         )
     else:
         for layer in range(layers):
@@ -13551,6 +13609,7 @@ def preseed_fixed32_committer_graph(
     sticky_guard = _fr13_fixed32_committer_sticky_guard_requested()
     k_norm_reuse = _fr13_fixed32_committer_knorm_ring_requested()
     gate_reuse = _fr13_fixed32_committer_gate_ring_requested()
+    decay_reuse = _fr13_fixed32_committer_decay_ring_requested()
     if metadata_copy_fusion and not layer_batch:
         raise RuntimeError(
             "FR13 fixed32 metadata fusion requires committer layer batching"
@@ -13592,6 +13651,21 @@ def preseed_fixed32_committer_graph(
         raise RuntimeError(
             "FR13 fixed32 gate reuse requires K-norm reuse, layer batching, "
             "direct metadata, raw rsqrt gating, and its persistent ring"
+        )
+    if decay_reuse and (
+        not gate_reuse
+        or not k_norm_reuse
+        or not layer_batch
+        or not direct_metadata
+        or not _FR13_FIXED32_GDN_SINGLE_LAUNCH
+        or scan_align_on()
+        or not use_qk_l2norm_in_kernel
+        or gate_rings is None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 decay reuse requires gate/K-norm reuse, layer "
+            "batching, direct metadata, raw rsqrt gating, and the persistent "
+            "gate ring"
         )
     gate_coeffs = (
         _fr13_fixed32_committer_gate_precompute(
@@ -13671,6 +13745,7 @@ def preseed_fixed32_committer_graph(
         "sticky_guard": sticky_guard,
         "k_norm_reuse": k_norm_reuse,
         "gate_reuse": gate_reuse,
+        "decay_reuse": decay_reuse,
         "sticky_guard_ok": sticky_guard_ok,
         "sticky_guard_ok_data_ptr": (
             int(sticky_guard_ok.data_ptr()) if sticky_guard_ok is not None else None
@@ -13725,8 +13800,11 @@ def preseed_fixed32_committer_graph(
                 ),
                 "gate_exp_per_event": 0,
                 "gate_reuse": gate_reuse,
+                "decay_reuse": decay_reuse,
                 "gate_source": (
-                    "fixed32_sfwd_existing_raw_gate_math"
+                    "fixed32_sfwd_existing_decay_multiplier"
+                    if decay_reuse
+                    else "fixed32_sfwd_existing_raw_gate_math"
                     if gate_reuse
                     else "committer_raw_gate_math"
                 ),
@@ -13737,6 +13815,13 @@ def preseed_fixed32_committer_graph(
                     2 if gate_reuse else 0
                 ),
                 "producer_extra_gate_nonlinear_evaluations": 0,
+                "committer_decay_exponentials_per_value_head_step": (
+                    0 if decay_reuse else 1
+                ),
+                "raw_ab_ring_stores_per_physical_value_head": (
+                    0 if decay_reuse else 2
+                ),
+                "raw_ab_ring_store_elision": decay_reuse,
                 "full_value_tile": True,
                 "value_tile": 128,
                 "kernel_warps": 8,
@@ -13835,6 +13920,7 @@ def preseed_fixed32_committer_graph(
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
             k_norm_reuse=k_norm_reuse,
             gate_reuse=gate_reuse,
+            decay_reuse=decay_reuse,
             layer_batch=use_layer_batch,
         )
 
@@ -15360,6 +15446,11 @@ def launch_tree_gdn_prepared(
             )
     else:
         ring_gate = strict_mask
+    _decay_export = _fr13_fixed32_committer_decay_ring_requested()
+    if _decay_export and not _gate_export:
+        raise RuntimeError(
+            "FR13 fixed32 decay export requires the armed gate-ring route"
+        )
     # Resolve launch geometry. The deployed/served path uses BLOCK_V=BV and
     # num_warps=8 with the Triton default num_stages (unset). The TEST-ONLY
     # override (FR13_TREE_GDN_GEOM_OVERRIDE) lets the BV/warps A/B arms run; it
@@ -15592,6 +15683,7 @@ def launch_tree_gdn_prepared(
                 RING_EXPORT=_ring_export,
                 K_NORM_EXPORT=_k_norm_export,
                 GATE_EXPORT=_gate_export,
+                DECAY_EXPORT=_decay_export,
                 FLAGS_EXPORT=_flags_export,
                 FLAGS_ROWS=_flags_rows,
                 num_warps=_num_warps,
@@ -16387,6 +16479,11 @@ def launch_tree_gdn_prepared_fixed32_batch(
             )
     else:
         ring_gate = strict_mask
+    decay_export = _fr13_fixed32_committer_decay_ring_requested()
+    if decay_export and not gate_export:
+        raise RuntimeError(
+            "FR13 fixed32 B4 decay export requires the armed gate-ring route"
+        )
 
     subtree_state = subtree_get(
         n_actual, num_vh, dim_v, dim_k, q.device
@@ -16582,6 +16679,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 RING_EXPORT=ring_export,
                 K_NORM_EXPORT=k_norm_export,
                 GATE_EXPORT=gate_export,
+                DECAY_EXPORT=decay_export,
                 FLAGS_EXPORT=flags_export,
                 FLAGS_ROWS=flags_rows,
                 num_warps=num_warps,

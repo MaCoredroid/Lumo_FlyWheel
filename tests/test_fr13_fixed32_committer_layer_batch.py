@@ -138,7 +138,7 @@ def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
 
     assert "@triton.jit" in SOURCE
     assert "for i_t in tl.range(0, T):" in kernel
-    assert "b_h *= tl.exp(b_g)" in kernel
+    assert "b_h *= tl.exp(b_g_or_decay)" in kernel
     assert "b_v -= tl.sum(b_h * b_k[None, :], 1)" in kernel
     assert "b_v *= b_beta" in kernel
     assert "b_h += b_v[:, None] * b_k[None, :]" in kernel
@@ -283,7 +283,7 @@ def test_layer_batch_precomputes_event_invariant_gate_coefficients() -> None:
     assert "A_logs" not in kernel
     assert "dt_biases" not in kernel
     assert "p_gate" not in loop
-    assert "b_g = b_a_scale * softplus_x" in loop
+    assert "b_g_or_decay = b_a_scale * softplus_x" in loop
     assert preseed.index("_fr13_fixed32_committer_gate_precompute(") < preseed.index(
         "capture_graph(use_layer_batch=False)"
     )
