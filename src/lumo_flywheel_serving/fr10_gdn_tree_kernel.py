@@ -423,6 +423,19 @@ def _fr13_fixed32_committer_metadata_fusion_requested() -> bool:
     )
 
 
+def _fr13_fixed32_committer_direct_metadata_requested() -> bool:
+    """Return the boot-time arm for direct persistent committer metadata."""
+    if os.environ.get("FR13_FIXED32_COMMITTER_DIRECT_METADATA") == "1":
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_fixed32_committer_direct_metadata.arm",
+            "/tmp/fr13_fixed32_committer_direct_metadata.arm",
+        )
+    )
+
+
 def _fr13_fixed32_committer_layer_batch_real_event_marker(
     path: str = _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT,
 ) -> str | None:
@@ -7809,11 +7822,23 @@ def launch_fixed32_conv_commit_to_col0(
         accepted_paths=accepted_paths,
         accepted_lens=accepted_lens,
     )
-    if metadata_fusion is None:
+    direct_metadata = _fr13_fixed32_committer_direct_metadata_state(
+        batch=batch,
+        spec_state_indices=spec_state_indices,
+        accepted_paths=accepted_paths,
+        accepted_lens=accepted_lens,
+    )
+    if metadata_fusion is not None and direct_metadata is not None:
+        raise RuntimeError(
+            "FR13 fixed32 committer metadata routes are not exclusive"
+        )
+    if metadata_fusion is None and direct_metadata is None:
         committer_state = None
         validation_bank_rows = int(state["anchor"].shape[0])
     else:
-        committer_state, validation_bank_rows = metadata_fusion
+        committer_state, validation_bank_rows = (
+            metadata_fusion if metadata_fusion is not None else direct_metadata
+        )
     validate_fixed32_conv_commit_rows(
         spec_state_indices=spec_state_indices,
         accepted_paths=accepted_paths,
@@ -7904,6 +7929,29 @@ def launch_fixed32_conv_commit_to_col0(
             num_warps=4,
         )
         _launch_direct(zero_tail=False)
+    elif direct_metadata is not None:
+        graph_paths = committer_state["direct_accepted_paths"]
+        graph_lens = committer_state["direct_accepted_lens"]
+        stream_key = _fr13_fixed32_committer_stream_key(accepted_paths.device)
+        lease_key = _fr13_fixed32_committer_metadata_lease_key(
+            batch=batch,
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            committer_paths=graph_paths,
+            committer_lens=graph_lens,
+            validation_bank_rows=validation_bank_rows,
+            stream_key=stream_key,
+        )
+        if _FR13_FIXED32_COMMITTER_METADATA_LEASE:
+            raise RuntimeError(
+                "FR13 fixed32 direct-metadata prior lease was not consumed"
+            )
+        _launch_direct(zero_tail=bool(state["commit_zero_tail"]))
+        _fr13_fixed32_committer_publish_direct_metadata_lease(lease_key)
+        _FR13_FIXED32_COMMITTER_COUNTERS[
+            "direct_metadata_published_by_batch"
+        ][batch] += 1
     elif committer_state is None:
         _launch_direct(zero_tail=bool(state["commit_zero_tail"]))
     else:
@@ -11396,6 +11444,8 @@ _FR13_FIXED32_COMMITTER_COUNTERS = {
     "metadata_fusion_published_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
     "metadata_fusion_consumed_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
     "metadata_fusion_fallbacks_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+    "direct_metadata_published_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
+    "direct_metadata_consumed_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
 }
 _FR13_FIXED32_COMMITTER_ANNOUNCED = False
 _FR13_FIXED32_COMMITTER_REQUIRED_CAPACITY = None
@@ -11467,6 +11517,16 @@ def _fr13_fixed32_committer_consume_metadata_lease(key: tuple) -> bool:
     return True
 
 
+def _fr13_fixed32_committer_publish_direct_metadata_lease(key: tuple) -> None:
+    """Publish validation ownership for the direct-input graph route."""
+    _fr13_fixed32_committer_publish_metadata_lease(key)
+
+
+def _fr13_fixed32_committer_consume_direct_metadata_lease(key: tuple) -> bool:
+    """Consume validation ownership for the direct-input graph route."""
+    return _fr13_fixed32_committer_consume_metadata_lease(key)
+
+
 def _fr13_fixed32_committer_metadata_fusion_state(
     *,
     batch: int,
@@ -11517,6 +11577,59 @@ def _fr13_fixed32_committer_metadata_fusion_state(
     )
     if validation_bank_rows <= 0:
         raise RuntimeError("FR13 fixed32 metadata-fusion has no valid bank rows")
+    return state, validation_bank_rows
+
+
+def _fr13_fixed32_committer_direct_metadata_state(
+    *,
+    batch: int,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+) -> tuple[dict, int] | None:
+    """Resolve a graph captured directly against persistent TAW metadata."""
+    route = _FR13_FIXED32_COMMITTER_FAST_ROUTE.get("state")
+    if not isinstance(route, dict):
+        return None
+    state = route.get("states_by_batch", {}).get(int(batch))
+    if not isinstance(state, dict) or not state.get("direct_metadata", False):
+        return None
+    graph_paths = state.get("direct_accepted_paths")
+    graph_lens = state.get("direct_accepted_lens")
+    if (
+        route.get("spec_state_indices") is not spec_state_indices
+        or int(route.get("accepted_paths_data_ptr", -1))
+        != int(accepted_paths.data_ptr())
+        or int(route.get("accepted_lens_data_ptr", -1))
+        != int(accepted_lens.data_ptr())
+        or tuple(int(value) for value in accepted_paths.shape)
+        != (int(route.get("capacity", -1)), 16)
+        or tuple(int(value) for value in accepted_lens.shape)
+        != (int(route.get("capacity", -1)),)
+        or accepted_paths.dtype != torch.int32
+        or accepted_lens.dtype != torch.int32
+        or not accepted_paths.is_contiguous()
+        or not accepted_lens.is_contiguous()
+        or not torch.is_tensor(graph_paths)
+        or not torch.is_tensor(graph_lens)
+        or tuple(graph_paths.shape) != (int(batch), 16)
+        or tuple(graph_lens.shape) != (int(batch),)
+        or graph_paths.dtype != torch.int32
+        or graph_lens.dtype != torch.int32
+        or graph_paths.device != accepted_paths.device
+        or graph_lens.device != accepted_lens.device
+        or int(graph_paths.data_ptr()) != int(accepted_paths.data_ptr())
+        or int(graph_lens.data_ptr()) != int(accepted_lens.data_ptr())
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 direct-metadata persistent operand drift"
+        )
+    validation_bank_rows = min(
+        int(state["bank_rows"]),
+        int(_FR13_FIXED32_CONV_PREGATHER["state"]["anchor"].shape[0]),
+    )
+    if validation_bank_rows <= 0:
+        raise RuntimeError("FR13 fixed32 direct-metadata has no valid bank rows")
     return state, validation_bank_rows
 
 
@@ -11589,6 +11702,16 @@ def fixed32_committer_counters() -> dict[str, object]:
         "metadata_fusion_fallbacks_by_batch": dict(
             _FR13_FIXED32_COMMITTER_COUNTERS[
                 "metadata_fusion_fallbacks_by_batch"
+            ]
+        ),
+        "direct_metadata_published_by_batch": dict(
+            _FR13_FIXED32_COMMITTER_COUNTERS[
+                "direct_metadata_published_by_batch"
+            ]
+        ),
+        "direct_metadata_consumed_by_batch": dict(
+            _FR13_FIXED32_COMMITTER_COUNTERS[
+                "direct_metadata_consumed_by_batch"
             ]
         ),
         "gate_precompute_launches": int(
@@ -12090,6 +12213,15 @@ def _fr13_fixed32_committer_fast_state(
         or accepted_lens.device != route["device"]
         or accepted_paths.dtype != state["accepted_paths"].dtype
         or accepted_lens.dtype != state["accepted_lens"].dtype
+        or (
+            state.get("direct_metadata", False)
+            and (
+                int(accepted_paths.data_ptr())
+                != int(state["direct_accepted_paths"].data_ptr())
+                or int(accepted_lens.data_ptr())
+                != int(state["direct_accepted_lens"].data_ptr())
+            )
+        )
     ):
         raise ValueError(
             "FR13_FIXED32_COMMIT_DEVICE_FILL dynamic accepted-input "
@@ -12362,6 +12494,16 @@ def _fr13_fixed32_committer_native_layer_batch(
     # normalization are shared by every value row for this value head.
     block_v = triton.next_power_of_2(dim_v)
     grid = (1, triton.cdiv(dim_v, block_v), layers * batch * num_vh)
+    accepted_paths = (
+        state["direct_accepted_paths"]
+        if state.get("direct_metadata", False)
+        else state["accepted_paths"]
+    )
+    accepted_lens = (
+        state["direct_accepted_lens"]
+        if state.get("direct_metadata", False)
+        else state["accepted_lens"]
+    )
     _fr13_fixed32_committer_native_layer_batch_kernel[grid](
         a_rings,
         b_rings,
@@ -12370,8 +12512,8 @@ def _fr13_fixed32_committer_native_layer_batch(
         v_rings,
         banks_list[0],
         state["bank_off16"],
-        state["accepted_paths"],
-        state["accepted_lens"],
+        accepted_paths,
+        accepted_lens,
         spec_state_indices,
         B=batch,
         PATH_CAP=16,
@@ -12436,6 +12578,16 @@ def _fr13_fixed32_committer_graph_body(
         if layer_batch is None
         else bool(layer_batch)
     )
+    graph_accepted_paths = (
+        state["direct_accepted_paths"]
+        if state.get("direct_metadata", False)
+        else state["accepted_paths"]
+    )
+    graph_accepted_lens = (
+        state["direct_accepted_lens"]
+        if state.get("direct_metadata", False)
+        else state["accepted_lens"]
+    )
     if not use_layer_batch:
         # Preserve the exact native-reference preprocessing graph.
         state["abuf"].fill_(-1e4)
@@ -12444,11 +12596,11 @@ def _fr13_fixed32_committer_graph_body(
         state["vbuf"].zero_()
         state["ssi"].fill_(state["scratch"])
 
-        accepted_lens = state["accepted_lens"].to(torch.long)
+        accepted_lens = graph_accepted_lens.to(torch.long)
         node_mat = state["node_mat"]
         node_mat[:, 0] = 0
         node_mat[:, 1:] = (
-            state["accepted_paths"][:, :15].to(torch.long).clamp(min=0)
+            graph_accepted_paths[:, :15].to(torch.long).clamp(min=0)
         )
         valid = state["path_offsets"].unsqueeze(0) <= accepted_lens.unsqueeze(1)
         safe_nodes = torch.where(
@@ -12700,9 +12852,19 @@ def preseed_fixed32_committer_graph(
     metadata_copy_fusion = (
         _fr13_fixed32_committer_metadata_fusion_requested()
     )
+    direct_metadata = _fr13_fixed32_committer_direct_metadata_requested()
     if metadata_copy_fusion and not layer_batch:
         raise RuntimeError(
             "FR13 fixed32 metadata fusion requires committer layer batching"
+        )
+    if direct_metadata and not layer_batch:
+        raise RuntimeError(
+            "FR13 fixed32 direct metadata requires committer layer batching"
+        )
+    if direct_metadata and metadata_copy_fusion:
+        raise RuntimeError(
+            "FR13 fixed32 direct metadata and metadata-copy fusion are "
+            "mutually exclusive"
         )
     gate_coeffs = (
         _fr13_fixed32_committer_gate_precompute(
@@ -12771,6 +12933,9 @@ def preseed_fixed32_committer_graph(
         "gate_coeffs": gate_coeffs,
         "layer_batch": layer_batch,
         "metadata_copy_fusion": metadata_copy_fusion,
+        "direct_metadata": direct_metadata,
+        "direct_accepted_paths": accepted_paths if direct_metadata else None,
+        "direct_accepted_lens": accepted_lens if direct_metadata else None,
         "layer_batch_byte_gate_passed": not layer_batch,
         "layer_batch_byte_gate_attempts": 0,
         "layer_batch_byte_gate_coverage_mask": (
@@ -12823,20 +12988,32 @@ def preseed_fixed32_committer_graph(
                 "duplicate_value_tile_k_loads_per_step": 0,
                 "state_elements_per_thread_before_compiler_effects": 64,
                 "metadata_copy_fusion": metadata_copy_fusion,
+                "direct_metadata": direct_metadata,
                 "metadata_copy_launches_per_event": (
-                    0 if metadata_copy_fusion else 2
+                    0 if metadata_copy_fusion or direct_metadata else 2
                 ),
                 "metadata_copy_elements_per_request": (
                     17 if metadata_copy_fusion else 0
                 ),
+                "metadata_roundtrip_elements_per_request": (
+                    0 if direct_metadata else 17
+                ),
+                "metadata_source": (
+                    "persistent_taw_publish_buffers"
+                    if direct_metadata
+                    else "committer_graph_staging_buffers"
+                ),
                 "metadata_validation_lease": (
                     "conv_direct_exact_pointer_batch_stream_one_shot"
-                    if metadata_copy_fusion
+                    if metadata_copy_fusion or direct_metadata
                     else "disabled"
                 ),
                 "metadata_guarded_fallback": True,
+                "direct_metadata_missing_lease": (
+                    "fail_closed" if direct_metadata else "not_applicable"
+                ),
                 "duplicate_committer_metadata_guard": (
-                    not metadata_copy_fusion
+                    not (metadata_copy_fusion or direct_metadata)
                 ),
                 "physical_alias_row_uniqueness_guard": (
                     "validate_fixed32_conv_commit_rows"
@@ -13272,6 +13449,8 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
                 "metadata_fusion_published_by_batch",
                 "metadata_fusion_consumed_by_batch",
                 "metadata_fusion_fallbacks_by_batch",
+                "direct_metadata_published_by_batch",
+                "direct_metadata_consumed_by_batch",
             )
             for value in counters[key].values()
         )
@@ -13396,6 +13575,8 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
         "metadata_fusion_published_by_batch",
         "metadata_fusion_consumed_by_batch",
         "metadata_fusion_fallbacks_by_batch",
+        "direct_metadata_published_by_batch",
+        "direct_metadata_consumed_by_batch",
     )
     saved_metadata_counters = {
         key: dict(counters[key]) for key in metadata_counter_keys
@@ -13689,7 +13870,30 @@ def _fr13_fixed32_committer_replay(
     )
 
     metadata_fused = False
-    if state.get("metadata_copy_fusion", False):
+    if state.get("direct_metadata", False):
+        validation_bank_rows = min(
+            int(state["bank_rows"]),
+            int(_FR13_FIXED32_CONV_PREGATHER["state"]["anchor"].shape[0]),
+        )
+        lease_key = _fr13_fixed32_committer_metadata_lease_key(
+            batch=batch,
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            committer_paths=state["direct_accepted_paths"],
+            committer_lens=state["direct_accepted_lens"],
+            validation_bank_rows=validation_bank_rows,
+        )
+        if not _fr13_fixed32_committer_consume_direct_metadata_lease(lease_key):
+            raise RuntimeError(
+                "FR13 fixed32 direct metadata requires the preceding guarded "
+                "conv lease"
+            )
+        metadata_fused = True
+        _FR13_FIXED32_COMMITTER_COUNTERS[
+            "direct_metadata_consumed_by_batch"
+        ][batch] += 1
+    elif state.get("metadata_copy_fusion", False):
         validation_bank_rows = min(
             int(state["bank_rows"]),
             int(_FR13_FIXED32_CONV_PREGATHER["state"]["anchor"].shape[0]),
