@@ -449,6 +449,19 @@ def _fr13_fixed32_committer_sticky_guard_requested() -> bool:
     )
 
 
+def _fr13_fixed32_committer_knorm_ring_requested() -> bool:
+    """Return the boot-time arm for producer-reused K normalization."""
+    if os.environ.get("FR13_FIXED32_COMMITTER_KNORM_RING") == "1":
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_fixed32_committer_knorm_ring.arm",
+            "/tmp/fr13_fixed32_committer_knorm_ring.arm",
+        )
+    )
+
+
 def _fr13_fixed32_committer_layer_batch_real_event_marker(
     path: str = _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT,
 ) -> str | None:
@@ -10112,6 +10125,7 @@ def _tree_gdn_fixed32_single_launch_node(
     ring_v,
     ring_a,
     ring_b,
+    ring_k_norm,
     pid_batch,
     pid_vh,
     pid_v,
@@ -10130,6 +10144,7 @@ def _tree_gdn_fixed32_single_launch_node(
     RAW_GATING: tl.constexpr,
     SCAN_ALIGN: tl.constexpr,
     RING_EXPORT: tl.constexpr,
+    K_NORM_EXPORT: tl.constexpr,
 ):
     """Run one unchanged GDN recurrence and its single-writer stores."""
     n_ok = (node >= 0) & (node < N_ACTUAL)
@@ -10200,6 +10215,11 @@ def _tree_gdn_fixed32_single_launch_node(
                 b_raw_b_in,
                 mask=n_ok & (pid_v == 0),
             )
+    b_k_inv_norm = 1.0
+    if K_NORM_EXPORT:
+        b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
+        b_k_inv_norm = tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
+        b_k = b_k * b_k_inv_norm
     new_state, out_i = _gdn_node_step(
         state_i,
         b_q,
@@ -10212,10 +10232,18 @@ def _tree_gdn_fixed32_single_launch_node(
         b_a_log,
         b_dt_bias,
         OUTPUT_SCALE=OUTPUT_SCALE,
-        USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+        USE_QK_L2NORM_IN_KERNEL=(
+            USE_QK_L2NORM_IN_KERNEL and not K_NORM_EXPORT
+        ),
         RAW_GATING=RAW_GATING,
-        SCAN_ALIGN=SCAN_ALIGN,
+        SCAN_ALIGN=SCAN_ALIGN and not K_NORM_EXPORT,
     )
+    if K_NORM_EXPORT:
+        tl.store(
+            ring_k_norm + global_node * NUM_KH + pid_kh,
+            b_k_inv_norm,
+            mask=n_ok & (pid_v == 0) & (pid_vh % head_group == 0),
+        )
     tl.store(
         out + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
         out_i,
@@ -10249,6 +10277,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
     ring_v,
     ring_a,
     ring_b,
+    ring_k_norm,
     flags_ptr,
     N_ACTUAL: tl.constexpr,
     NUM_KH: tl.constexpr,
@@ -10274,6 +10303,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
     NUM_GROUPS: tl.constexpr,
     PRESCALED_PATH_BASE: tl.constexpr = False,
     RING_EXPORT: tl.constexpr = False,
+    K_NORM_EXPORT: tl.constexpr = False,
     FLAGS_EXPORT: tl.constexpr = False,
     FLAGS_ROWS: tl.constexpr = 0,
 ):
@@ -10340,6 +10370,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
             ring_v,
             ring_a,
             ring_b,
+            ring_k_norm,
             pid_batch,
             pid_vh,
             pid_v,
@@ -10358,6 +10389,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
             RAW_GATING=RAW_GATING,
             SCAN_ALIGN=SCAN_ALIGN,
             RING_EXPORT=RING_EXPORT,
+            K_NORM_EXPORT=K_NORM_EXPORT,
         )
         group_path_count = tl.load(group_path_counts + root_index)
         for member in tl.static_range(0, MAX_GROUP_PATHS):
@@ -10400,6 +10432,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
                     ring_v,
                     ring_a,
                     ring_b,
+                    ring_k_norm,
                     pid_batch,
                     pid_vh,
                     pid_v,
@@ -10418,6 +10451,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
                     RAW_GATING=RAW_GATING,
                     SCAN_ALIGN=SCAN_ALIGN,
                     RING_EXPORT=RING_EXPORT,
+                    K_NORM_EXPORT=K_NORM_EXPORT,
                 )
     if FLAGS_EXPORT:
         flag_writer = (pid_vh == 0) & (pid_v == 0) & (pid_batch == 0)
@@ -12184,6 +12218,7 @@ def _fr13_fixed32_committer_signature(
     banks_list,
     spec_state_indices,
     k_rings,
+    k_norm_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -12201,12 +12236,18 @@ def _fr13_fixed32_committer_signature(
         tuple(int(bank.data_ptr()) for bank in banks_list),
         int(spec_state_indices.data_ptr()),
         int(k_rings.data_ptr()),
+        int(k_norm_rings.data_ptr()) if k_norm_rings is not None else 0,
         int(v_rings.data_ptr()),
         int(a_rings.data_ptr()),
         int(b_rings.data_ptr()),
         int(A_logs.data_ptr()),
         int(dt_biases.data_ptr()),
         tuple(int(value) for value in k_rings.shape),
+        (
+            tuple(int(value) for value in k_norm_rings.shape)
+            if k_norm_rings is not None
+            else None
+        ),
         tuple(int(value) for value in v_rings.shape),
         tuple(int(value) for value in a_rings.shape),
         tuple(int(value) for value in b_rings.shape),
@@ -12219,6 +12260,7 @@ def _fr13_fixed32_committer_signature(
             for bank in banks_list
         ),
         str(k_rings.dtype),
+        str(k_norm_rings.dtype) if k_norm_rings is not None else None,
         str(v_rings.dtype),
         str(a_rings.dtype),
         str(b_rings.dtype),
@@ -12234,6 +12276,7 @@ def _fr13_fixed32_committer_identity_key(
     banks_list,
     spec_state_indices,
     k_rings,
+    k_norm_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -12251,6 +12294,7 @@ def _fr13_fixed32_committer_identity_key(
         id(banks_list[-1]),
         id(spec_state_indices),
         id(k_rings),
+        id(k_norm_rings),
         id(v_rings),
         id(a_rings),
         id(b_rings),
@@ -12268,6 +12312,7 @@ def _validate_fixed32_committer_contract(
     accepted_paths,
     accepted_lens,
     k_rings,
+    k_norm_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -12390,6 +12435,25 @@ def _validate_fixed32_committer_contract(
             "FR13_FIXED32_COMMIT_DEVICE_FILL requires ring prefix "
             f"(48,>={batch},32), got {tuple(k_rings.shape[:3])}"
         )
+    k_norm_reuse = _fr13_fixed32_committer_knorm_ring_requested()
+    if k_norm_reuse:
+        if (
+            not torch.is_tensor(k_norm_rings)
+            or k_norm_rings.device != device
+            or tuple(k_norm_rings.shape)
+            != (48, ring_batch, 32, num_kh)
+            or k_norm_rings.dtype != torch.float32
+            or not k_norm_rings.is_contiguous()
+        ):
+            raise ValueError(
+                "FR13 fixed32 committer K-norm ring must be contiguous "
+                "FP32 (48,B,32,KH) on the activation-ring device"
+            )
+    elif k_norm_rings is not None:
+        raise RuntimeError(
+            "FR13 fixed32 committer received a K-norm ring while its arm "
+            "is disabled"
+        )
     if spec_state_indices.ndim != 3 or (
         int(spec_state_indices.shape[0]) != 48
         or int(spec_state_indices.shape[1]) < batch
@@ -12469,6 +12533,7 @@ def _fr13_fixed32_committer_fast_state(
     accepted_paths,
     accepted_lens,
     k_rings,
+    k_norm_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -12523,6 +12588,7 @@ def _fr13_fixed32_committer_fast_state(
         banks_list=banks_list,
         spec_state_indices=spec_state_indices,
         k_rings=k_rings,
+        k_norm_rings=k_norm_rings,
         v_rings=v_rings,
         a_rings=a_rings,
         b_rings=b_rings,
@@ -12668,6 +12734,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     b_rings,
     gate_coeffs,
     k_rings,
+    k_norm_rings,
     v_rings,
     bank_anchor,
     bank_off16,
@@ -12687,6 +12754,9 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     RING_K_L_STRIDE: tl.constexpr,
     RING_K_B_STRIDE: tl.constexpr,
     RING_K_N_STRIDE: tl.constexpr,
+    RING_KN_L_STRIDE: tl.constexpr,
+    RING_KN_B_STRIDE: tl.constexpr,
+    RING_KN_N_STRIDE: tl.constexpr,
     RING_V_L_STRIDE: tl.constexpr,
     RING_V_B_STRIDE: tl.constexpr,
     RING_V_N_STRIDE: tl.constexpr,
@@ -12698,6 +12768,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     BETA: tl.constexpr,
     THRESHOLD: tl.constexpr,
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    K_NORM_REUSE: tl.constexpr,
 ):
     """Native fused-sigmoid state recurrence batched across all layers.
 
@@ -12803,7 +12874,15 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
         b_g = b_a_scale * softplus_x
         b_beta = tl.sigmoid(b_b.to(tl.float32))
 
-        if USE_QK_L2NORM_IN_KERNEL:
+        if K_NORM_REUSE:
+            b_k *= tl.load(
+                k_norm_rings
+                + i_l * RING_KN_L_STRIDE
+                + i_n * RING_KN_B_STRIDE
+                + node * RING_KN_N_STRIDE
+                + i_h
+            )
+        elif USE_QK_L2NORM_IN_KERNEL:
             b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
         b_h *= tl.exp(b_g)
         b_v -= tl.sum(b_h * b_k[None, :], 1)
@@ -12821,11 +12900,13 @@ def _fr13_fixed32_committer_native_layer_batch(
     banks_list,
     spec_state_indices,
     k_rings,
+    k_norm_rings,
     v_rings,
     a_rings,
     b_rings,
     gate_coeffs,
     use_qk_l2norm_in_kernel,
+    k_norm_reuse,
 ) -> None:
     """Launch all 48 native-realization scans to disjoint destinations once."""
     layers = 48
@@ -12843,6 +12924,22 @@ def _fr13_fixed32_committer_native_layer_batch(
         or tuple(gate_coeffs.shape) != (layers, num_vh, 2)
         or gate_coeffs.dtype != torch.float32
         or not gate_coeffs.is_contiguous()
+        or (
+            k_norm_reuse
+            and (
+                not torch.is_tensor(k_norm_rings)
+                or tuple(k_norm_rings.shape)
+                != (
+                    layers,
+                    int(k_rings.shape[1]),
+                    int(k_rings.shape[2]),
+                    num_kh,
+                )
+                or k_norm_rings.dtype != torch.float32
+                or k_norm_rings.device != k_rings.device
+                or not k_norm_rings.is_contiguous()
+            )
+        )
     ):
         raise RuntimeError(
             "FR13 fixed32 committer layer-batch requires the pinned "
@@ -12868,6 +12965,7 @@ def _fr13_fixed32_committer_native_layer_batch(
         b_rings,
         gate_coeffs,
         k_rings,
+        k_norm_rings if k_norm_reuse else k_rings,
         v_rings,
         banks_list[0],
         state["bank_off16"],
@@ -12887,6 +12985,15 @@ def _fr13_fixed32_committer_native_layer_batch(
         RING_K_L_STRIDE=int(k_rings.stride(0)),
         RING_K_B_STRIDE=int(k_rings.stride(1)),
         RING_K_N_STRIDE=int(k_rings.stride(2)),
+        RING_KN_L_STRIDE=(
+            int(k_norm_rings.stride(0)) if k_norm_reuse else 0
+        ),
+        RING_KN_B_STRIDE=(
+            int(k_norm_rings.stride(1)) if k_norm_reuse else 0
+        ),
+        RING_KN_N_STRIDE=(
+            int(k_norm_rings.stride(2)) if k_norm_reuse else 0
+        ),
         RING_V_L_STRIDE=int(v_rings.stride(0)),
         RING_V_B_STRIDE=int(v_rings.stride(1)),
         RING_V_N_STRIDE=int(v_rings.stride(2)),
@@ -12898,6 +13005,7 @@ def _fr13_fixed32_committer_native_layer_batch(
         BETA=1.0,
         THRESHOLD=20.0,
         USE_QK_L2NORM_IN_KERNEL=bool(use_qk_l2norm_in_kernel),
+        K_NORM_REUSE=bool(k_norm_reuse),
         num_warps=8,
         num_stages=3,
     )
@@ -12909,6 +13017,7 @@ def _fr13_fixed32_committer_graph_body(
     banks_list,
     spec_state_indices,
     k_rings,
+    k_norm_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -12916,6 +13025,7 @@ def _fr13_fixed32_committer_graph_body(
     dt_biases,
     output_scale,
     use_qk_l2norm_in_kernel,
+    k_norm_reuse,
     layer_batch=None,
 ) -> None:
     """Record the fixed committer graph body with an optional one-call scan."""
@@ -13010,11 +13120,13 @@ def _fr13_fixed32_committer_graph_body(
             banks_list=banks_list,
             spec_state_indices=spec_state_indices,
             k_rings=k_rings,
+            k_norm_rings=k_norm_rings,
             v_rings=v_rings,
             a_rings=a_rings,
             b_rings=b_rings,
             gate_coeffs=state["gate_coeffs"],
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            k_norm_reuse=k_norm_reuse,
         )
     else:
         for layer in range(layers):
@@ -13237,6 +13349,7 @@ def preseed_fixed32_committer_graph(
     accepted_paths,
     accepted_lens,
     k_rings,
+    k_norm_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -13257,6 +13370,7 @@ def preseed_fixed32_committer_graph(
         accepted_paths=accepted_paths,
         accepted_lens=accepted_lens,
         k_rings=k_rings,
+        k_norm_rings=k_norm_rings,
         v_rings=v_rings,
         a_rings=a_rings,
         b_rings=b_rings,
@@ -13273,6 +13387,7 @@ def preseed_fixed32_committer_graph(
         banks_list=banks_list,
         spec_state_indices=spec_state_indices,
         k_rings=k_rings,
+        k_norm_rings=k_norm_rings,
         v_rings=v_rings,
         a_rings=a_rings,
         b_rings=b_rings,
@@ -13300,6 +13415,7 @@ def preseed_fixed32_committer_graph(
     )
     direct_metadata = _fr13_fixed32_committer_direct_metadata_requested()
     sticky_guard = _fr13_fixed32_committer_sticky_guard_requested()
+    k_norm_reuse = _fr13_fixed32_committer_knorm_ring_requested()
     if metadata_copy_fusion and not layer_batch:
         raise RuntimeError(
             "FR13 fixed32 metadata fusion requires committer layer batching"
@@ -13316,6 +13432,18 @@ def preseed_fixed32_committer_graph(
     if sticky_guard and not direct_metadata:
         raise RuntimeError(
             "FR13 fixed32 sticky guard requires direct persistent metadata"
+        )
+    if k_norm_reuse and (
+        not layer_batch
+        or not direct_metadata
+        or not _FR13_FIXED32_GDN_SINGLE_LAUNCH
+        or scan_align_on()
+        or not use_qk_l2norm_in_kernel
+        or k_norm_rings is None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 K-norm reuse requires layer batching, direct "
+            "metadata, in-kernel L2 normalization, and its persistent ring"
         )
     gate_coeffs = (
         _fr13_fixed32_committer_gate_precompute(
@@ -13393,6 +13521,7 @@ def preseed_fixed32_committer_graph(
         "direct_accepted_paths": accepted_paths if direct_metadata else None,
         "direct_accepted_lens": accepted_lens if direct_metadata else None,
         "sticky_guard": sticky_guard,
+        "k_norm_reuse": k_norm_reuse,
         "sticky_guard_ok": sticky_guard_ok,
         "sticky_guard_ok_data_ptr": (
             int(sticky_guard_ok.data_ptr()) if sticky_guard_ok is not None else None
@@ -13435,6 +13564,7 @@ def preseed_fixed32_committer_graph(
                 "final_state_store_once": True,
                 "direct_ring_loads": True,
                 "direct_ring_inputs": 4,
+                "direct_scalar_ring_inputs": 1 if k_norm_reuse else 0,
                 "candidate_staging_launches": 0,
                 "gate_coefficients_hoisted": True,
                 "event_independent_gate_precompute": True,
@@ -13451,6 +13581,19 @@ def preseed_fixed32_committer_graph(
                 "metadata_copy_fusion": metadata_copy_fusion,
                 "direct_metadata": direct_metadata,
                 "sticky_guard": sticky_guard,
+                "k_norm_reuse": k_norm_reuse,
+                "k_norm_source": (
+                    "fixed32_sfwd_existing_rsqrt"
+                    if k_norm_reuse
+                    else "committer_reduction"
+                ),
+                "k_norm_reductions_per_value_head_step": (
+                    0 if k_norm_reuse else 1
+                ),
+                "k_norm_scalar_loads_per_value_head_step": (
+                    1 if k_norm_reuse else 0
+                ),
+                "producer_extra_k_norm_reductions": 0,
                 "sticky_guard_route": (
                     "fixed32_ownerpath_warp32_sticky_scalar_v5"
                     if sticky_guard
@@ -13516,6 +13659,7 @@ def preseed_fixed32_committer_graph(
             banks_list=banks_list,
             spec_state_indices=spec_state_indices,
             k_rings=k_rings,
+            k_norm_rings=k_norm_rings,
             v_rings=v_rings,
             a_rings=a_rings,
             b_rings=b_rings,
@@ -13523,6 +13667,7 @@ def preseed_fixed32_committer_graph(
             dt_biases=dt_biases,
             output_scale=output_scale,
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            k_norm_reuse=k_norm_reuse,
             layer_batch=use_layer_batch,
         )
 
@@ -13679,6 +13824,7 @@ def preseed_fixed32_committer_graphs_all_batches(
     accepted_paths,
     accepted_lens,
     k_rings,
+    k_norm_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -13790,6 +13936,7 @@ def preseed_fixed32_committer_graphs_all_batches(
                 accepted_paths=accepted_paths[:batch],
                 accepted_lens=accepted_lens[:batch],
                 k_rings=k_rings,
+                k_norm_rings=k_norm_rings,
                 v_rings=v_rings,
                 a_rings=a_rings,
                 b_rings=b_rings,
@@ -13807,6 +13954,7 @@ def preseed_fixed32_committer_graphs_all_batches(
                 banks_list=banks_list,
                 spec_state_indices=spec_state_indices,
                 k_rings=k_rings,
+                k_norm_rings=k_norm_rings,
                 v_rings=v_rings,
                 a_rings=a_rings,
                 b_rings=b_rings,
@@ -13835,6 +13983,7 @@ def preseed_fixed32_committer_graphs_all_batches(
         banks_list=banks_list,
         spec_state_indices=spec_state_indices,
         k_rings=k_rings,
+        k_norm_rings=k_norm_rings,
         v_rings=v_rings,
         a_rings=a_rings,
         b_rings=b_rings,
@@ -13863,6 +14012,7 @@ def preseed_fixed32_committer_graphs_all_batches(
         "accepted_paths_data_ptr": int(accepted_paths.data_ptr()),
         "accepted_lens_data_ptr": int(accepted_lens.data_ptr()),
         "k_rings": k_rings,
+        "k_norm_rings": k_norm_rings,
         "v_rings": v_rings,
         "a_rings": a_rings,
         "b_rings": b_rings,
@@ -14095,6 +14245,7 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
                 accepted_paths=accepted_paths[:batch],
                 accepted_lens=accepted_lens[:batch],
                 k_rings=route["k_rings"],
+                k_norm_rings=route["k_norm_rings"],
                 v_rings=route["v_rings"],
                 a_rings=route["a_rings"],
                 b_rings=route["b_rings"],
@@ -14314,6 +14465,7 @@ def _fr13_fixed32_committer_replay(
     accepted_paths,
     accepted_lens,
     k_rings,
+    k_norm_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -14337,6 +14489,7 @@ def _fr13_fixed32_committer_replay(
         accepted_paths=accepted_paths,
         accepted_lens=accepted_lens,
         k_rings=k_rings,
+        k_norm_rings=k_norm_rings,
         v_rings=v_rings,
         a_rings=a_rings,
         b_rings=b_rings,
@@ -14480,6 +14633,7 @@ def launch_tree_gdn_replay_all_layers(
     runrow_init: bool = False,
     burn_node_bank: bool = False,
     banks_list=None,
+    k_norm_rings: torch.Tensor | None = None,
 ) -> None:
     """Launch the FR13_EAGER_PACK batched all-layer accepted-path replay.
 
@@ -14509,6 +14663,7 @@ def launch_tree_gdn_replay_all_layers(
             accepted_paths=accepted_paths,
             accepted_lens=accepted_lens,
             k_rings=k_rings,
+            k_norm_rings=k_norm_rings,
             v_rings=v_rings,
             a_rings=a_rings,
             b_rings=b_rings,
@@ -14834,6 +14989,7 @@ def launch_tree_gdn_prepared(
     ring_v: torch.Tensor | None = None,
     ring_a: torch.Tensor | None = None,
     ring_b: torch.Tensor | None = None,
+    ring_k_norm: torch.Tensor | None = None,
     staging_flags: torch.Tensor | None = None,
     staging_rows: int = 0,
 ) -> tuple[torch.Tensor, torch.Tensor | None]:
@@ -14988,6 +15144,25 @@ def launch_tree_gdn_prepared(
     else:
         # dummy pointers; RING_EXPORT=False makes every ring store dead code
         ring_k = ring_v = ring_a = ring_b = strict_mask
+    _k_norm_export = ring_k_norm is not None
+    if _k_norm_export:
+        if (
+            not _ring_export
+            or not _fr13_fixed32_committer_knorm_ring_requested()
+            or not _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            or not use_qk_l2norm_in_kernel
+            or ring_k_norm.dtype != torch.float32
+            or ring_k_norm.device != k.device
+            or ring_k_norm.ndim != 2
+            or tuple(ring_k_norm.shape) != (n_pad, num_kh)
+            or not ring_k_norm.is_contiguous()
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 K-norm export requires the armed B1 "
+                "single-launch physical32 ring contract"
+            )
+    else:
+        ring_k_norm = strict_mask
     # Resolve launch geometry. The deployed/served path uses BLOCK_V=BV and
     # num_warps=8 with the Triton default num_stages (unset). The TEST-ONLY
     # override (FR13_TREE_GDN_GEOM_OVERRIDE) lets the BV/warps A/B arms run; it
@@ -15010,6 +15185,11 @@ def launch_tree_gdn_prepared(
     # byte-identical to the locked path. The diagnostic geom-override above is
     # INDEPENDENT of this (it predates the unified flag and stays value-neutral).
     _scan_align = scan_align_on()
+    if _k_norm_export and _scan_align:
+        raise RuntimeError(
+            "FR13 fixed32 K-norm export requires the incumbent rsqrt "
+            "normalization path"
+        )
     # FR13_NPAD_INVARIANT: pin the scan loop bound + offs_n lane count + h_cache
     # row span to the fixed N_FIXED for ALL tree sizes so the reduction FMA order
     # is canonical regardless of how many leaves co-reside (bug-class #10
@@ -15180,6 +15360,7 @@ def launch_tree_gdn_prepared(
                 ring_v,
                 ring_a,
                 ring_b,
+                ring_k_norm,
                 _flags_arg,
                 N_ACTUAL=n_actual,
                 NUM_KH=num_kh,
@@ -15209,6 +15390,7 @@ def launch_tree_gdn_prepared(
                 NUM_GROUPS=int(_single_contract["groups"]),
                 PRESCALED_PATH_BASE=_prescaled_path_base,
                 RING_EXPORT=_ring_export,
+                K_NORM_EXPORT=_k_norm_export,
                 FLAGS_EXPORT=_flags_export,
                 FLAGS_ROWS=_flags_rows,
                 num_warps=_num_warps,
@@ -15803,6 +15985,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
     ring_v: torch.Tensor | None = None,
     ring_a: torch.Tensor | None = None,
     ring_b: torch.Tensor | None = None,
+    ring_k_norm: torch.Tensor | None = None,
     staging_flags: torch.Tensor | None = None,
     staging_rows: int = 0,
 ) -> tuple[torch.Tensor, None]:
@@ -15964,6 +16147,27 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 )
     else:
         ring_k = ring_v = ring_a = ring_b = strict_mask
+    k_norm_export = ring_k_norm is not None
+    if k_norm_export:
+        if (
+            not ring_export
+            or not _fr13_fixed32_committer_knorm_ring_requested()
+            or batch != 4
+            or selector != "single_launch"
+            or not use_qk_l2norm_in_kernel
+            or scan_align_on()
+            or ring_k_norm.dtype != torch.float32
+            or ring_k_norm.device != k.device
+            or ring_k_norm.ndim != 2
+            or tuple(ring_k_norm.shape) != (rows, num_kh)
+            or not ring_k_norm.is_contiguous()
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 K-norm export requires the armed B4 "
+                "single-launch physical32 ring contract"
+            )
+    else:
+        ring_k_norm = strict_mask
 
     subtree_state = subtree_get(
         n_actual, num_vh, dim_v, dim_k, q.device
@@ -16124,6 +16328,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 ring_v,
                 ring_a,
                 ring_b,
+                ring_k_norm,
                 flags_arg,
                 N_ACTUAL=n_actual,
                 NUM_KH=num_kh,
@@ -16153,6 +16358,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 NUM_GROUPS=int(single_contract["groups"]),
                 PRESCALED_PATH_BASE=prescaled_path_base,
                 RING_EXPORT=ring_export,
+                K_NORM_EXPORT=k_norm_export,
                 FLAGS_EXPORT=flags_export,
                 FLAGS_ROWS=flags_rows,
                 num_warps=num_warps,
