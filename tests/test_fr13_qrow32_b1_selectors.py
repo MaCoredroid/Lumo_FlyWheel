@@ -104,6 +104,7 @@ def test_launcher_requires_real_k64_gate_and_arm_bound_exact4() -> None:
     assert "FR13 qrow32 B1 live gate requires the canonical K64/root1 real task" in text
     assert "fr13_qrow32_b1_pass_sidecar.py issue" in text
     assert "fr13_qrow32_b1_pass_sidecar.py verify" in text
+    assert 'if [[ -n "\\${FR13_FA2_QROW32_B1_PRODUCTION_ARM}" ]]; then' in text
     assert "FR13_FA2_QROW32_B1_INTERNAL_ATTESTED=1" in text
     assert "--fixed32-query-tile32-b1-live-ab" in text
     assert "--fixed32-query-tile32-b1-production" in text

@@ -4097,13 +4097,13 @@ if [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
     --expected-candidate-sha256 "$FR13_FA2_QROW16_SO_SHA256"
   export FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED=1
 fi
-if [[ -n "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" ]]; then
+if [[ -n "\${FR13_FA2_QROW32_B1_PRODUCTION_ARM}" ]]; then
   python3 /workspace/scripts/fr13_qrow32_b1_pass_sidecar.py verify \
-    --sidecar "$FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR" \
-    --expected-sidecar-sha256 "$FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256" \
+    --sidecar "\$FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR" \
+    --expected-sidecar-sha256 "\$FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256" \
     --candidate-so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so \
-    --expected-candidate-sha256 "$FR13_FA2_QROW32_B1_SO_SHA256" \
-    --arm "$FR13_FA2_QROW32_B1_PRODUCTION_ARM"
+    --expected-candidate-sha256 "\$FR13_FA2_QROW32_B1_SO_SHA256" \
+    --arm "\$FR13_FA2_QROW32_B1_PRODUCTION_ARM"
   export FR13_FA2_QROW32_B1_INTERNAL_ATTESTED=1
 fi
 if [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" ]]; then
