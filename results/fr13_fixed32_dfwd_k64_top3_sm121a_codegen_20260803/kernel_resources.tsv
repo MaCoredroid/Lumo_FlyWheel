@@ -1,0 +1,2 @@
+arch	kernel	registers_per_thread	stack_bytes	shared_bytes	local_bytes	constant0_bytes
+sm_121a	fr13_dfwd_k64_mapped_top3_kernel	30	0	1216	0	928

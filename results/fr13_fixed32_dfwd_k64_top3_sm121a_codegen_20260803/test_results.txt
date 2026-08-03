@@ -1,0 +1,8 @@
+PASS: python3 -m pytest -q tests/test_fr13_dfwd_k64_top3.py tests/test_fr13_drafter_single_logits_wiring.py tests/test_fr13_draft_vocab_root_wiring.py tests/test_fr13_draft_head_fp8.py tests/test_fr13_draft_head_pad_rows.py tests/test_fr13_b1_gate_bundle.py tests/test_fr13_cutlass_streamk_gate_wiring.py
+69 passed in 2.25s
+
+PASS: python3 -m py_compile scripts/fr10_phase4_patch_vllm_tree_gdn.py scripts/fr13_build_dfwd_k64_top3.py
+PASS: bash -n scripts/fr13_launch_forked_fa2_tree_server.sh scripts/fr13_run_b1_kernel_live_gate.sh scripts/fr13_run_b1_dfwd_k64_top3.sh
+PASS: git diff --check
+
+No GPU, service, request, task, timing, acceptance, or byte-equivalence test was run.

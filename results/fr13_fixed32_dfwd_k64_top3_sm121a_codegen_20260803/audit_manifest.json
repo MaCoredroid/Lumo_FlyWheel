@@ -1,0 +1,35 @@
+{
+  "artifact_schema": "fr13.fixed32.dfwd_k64_top3_sm121a_codegen.v1",
+  "candidate_binary": {
+    "bytes": 159288,
+    "checked_in": false,
+    "sha256": "55229a9db7364fc8c0811fe34d3eaf06bc577626a3455fcc25a0fb9990aa480b"
+  },
+  "candidate_execution": {
+    "acceptance_measured": false,
+    "byte_equality_measured": false,
+    "gpu_executed": false,
+    "real_swe_verified_executed": false,
+    "timing_measured": false
+  },
+  "codegen": {
+    "arch": "sm_121a",
+    "cubin_count": 1,
+    "instruction_lines": 2672,
+    "local_bytes": 0,
+    "registers_per_thread": 30,
+    "shared_bytes": 1216,
+    "stack_bytes": 0
+  },
+  "historical_profiler_input": {
+    "acceptance_valid": false,
+    "attribution_only": true,
+    "candidate_present": false,
+    "dfwd_range_instances": 881,
+    "path": "results/fr13_fixed32_b1_nsys_20260731T013952Z_curated/nsys_attribution.json",
+    "real_swe_verified": true,
+    "report_sha256": "466734531838879104dedfd7041271379e115c84b5cca7061d4480b6b4209e2f"
+  },
+  "source_commit": "fef06f1eb2ab17d99849bd28d99b4cfc37649e66",
+  "status": "BUILT_UNQUALIFIED"
+}

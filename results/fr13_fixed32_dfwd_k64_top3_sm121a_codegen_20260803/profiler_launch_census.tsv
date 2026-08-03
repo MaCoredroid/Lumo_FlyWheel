@@ -1,0 +1,10 @@
+operation	instances	events	launches_per_event	launches_per_head
+argmax	4405	881	5	1
+topk_block_digit_counts	8810	881	10	2
+topk_digit_cumsum	8810	881	10	2
+topk_scan_by_key	8810	881	10	2
+topk_within_k_counts	8810	881	10	2
+topk_gather	4405	881	5	1
+stock_reduction_total	44050	881	50	10
+candidate_structural_total	4405	881	5	1
+structural_delta	-39645	881	-45	-9

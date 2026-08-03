@@ -70,6 +70,9 @@ _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_M32_TIMING_ARM
   FR13_DRAFT_HEAD_FP8
   FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON
+  FR13_DFWD_K64_TOP3
+  FR13_DFWD_K64_TOP3_SO
+  FR13_DFWD_K64_TOP3_SHA256
   FR13_DRAFT_HEAD_PAD_ROWS
   FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB
   FR13_DRAFT_VOCAB_ROOT
@@ -143,6 +146,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_FP8]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DFWD_K64_TOP3]}" == "set:1" \
    || "$_FR13_CALLER_SFWD_B4" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_LIVE_PAGED_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:no_split" \
@@ -165,6 +169,7 @@ fi
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_FP8:-0}" == "1" \
+   || "${FR13_DFWD_K64_TOP3:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" \
    || "${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" == "1" \
    || -n "${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}" \
@@ -327,7 +332,6 @@ unset \
   _FR13_CALLER_CUTLASS_HYBRID_HYDRA_PASS_SHA \
   _FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE \
   _FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE \
-  _FR13_CALLER_M32_GUARD \
   _FR13_M32_GUARD_ACTIVE \
   _FR13_M32_GUARD_NAMES \
   _fr13_guard_after \
@@ -444,6 +448,9 @@ FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON=${FR13_DRAFT_HEAD_M32_PRODUCTION_
 FR13_DRAFT_HEAD_M32_TIMING_ARM=${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}
 FR13_DRAFT_HEAD_FP8=${FR13_DRAFT_HEAD_FP8:-0}
 FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON=${FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON:-/logs/fr13_draft_head_fp8.engagement.json}
+FR13_DFWD_K64_TOP3=${FR13_DFWD_K64_TOP3:-0}
+FR13_DFWD_K64_TOP3_SO=${FR13_DFWD_K64_TOP3_SO:-}
+FR13_DFWD_K64_TOP3_SHA256=${FR13_DFWD_K64_TOP3_SHA256:-}
 FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256=$(
   sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1
 )
@@ -628,6 +635,7 @@ if [[ "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR]}" ==
   echo "FR13 qrow32 B1 production sidecar credentials are launcher-private" >&2
   exit 2
 fi
+unset _FR13_CALLER_M32_GUARD
 if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" \
       && "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then
   echo "FR13 qrow16 live A/B and production are mutually exclusive" >&2
@@ -678,6 +686,49 @@ case "$FR13_DRAFT_HEAD_FP8" in
   0|1) ;;
   *) echo "FR13_DRAFT_HEAD_FP8 must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_DFWD_K64_TOP3" in
+  0|1) ;;
+  *) echo "FR13_DFWD_K64_TOP3 must be 0 or 1" >&2; exit 2 ;;
+esac
+FR13_DFWD_K64_TOP3_DOCKER_ARGS=()
+if [[ "$FR13_DFWD_K64_TOP3" == "0" ]]; then
+  [[ -z "$FR13_DFWD_K64_TOP3_SO" \
+     && -z "$FR13_DFWD_K64_TOP3_SHA256" ]] || {
+    echo "FR13_DFWD_K64_TOP3=0 forbids candidate binary credentials" >&2
+    exit 2
+  }
+else
+  [[ "$MAX_NUM_SEQS" == "1" \
+     && ( "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" \
+          || "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ) \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+     && "${FR13_DRAFT_VOCAB_BLOCKS:-/workspace/scripts/fr13_dvk_subset_blocks.json}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+     && "${ENFORCE_EAGER:-0}" == "0" \
+     && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" ]] || {
+    echo "FR13 DFWD K64 top3 requires fixed32 B1 K64/root1 FULL graph geometry" >&2
+    exit 2
+  }
+  [[ "$(sha256sum scripts/fr13_dvk_subset_blocks.json | awk '{print $1}')" \
+        == "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" ]] || {
+    echo "FR13 DFWD K64 top3 draft-vocabulary block identity mismatch" >&2
+    exit 2
+  }
+  [[ "$FR13_DFWD_K64_TOP3_SO" == /* \
+     && "$FR13_DFWD_K64_TOP3_SO" != *:* \
+     && -f "$FR13_DFWD_K64_TOP3_SO" \
+     && ! -L "$FR13_DFWD_K64_TOP3_SO" \
+     && "$FR13_DFWD_K64_TOP3_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$FR13_DFWD_K64_TOP3_SO" | awk '{print $1}')" \
+        == "$FR13_DFWD_K64_TOP3_SHA256" ]] || {
+    echo "FR13 DFWD K64 top3 candidate binary identity mismatch" >&2
+    exit 2
+  }
+  FR13_DFWD_K64_TOP3_SO=$(realpath "$FR13_DFWD_K64_TOP3_SO")
+  FR13_DFWD_K64_TOP3_DOCKER_ARGS=(
+    -v "$FR13_DFWD_K64_TOP3_SO:/tmp/fr13_dfwd_k64_top3.abi3.so:ro"
+  )
+fi
 if [[ -n "${FR13_DRAFT_HEAD_M32_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
   echo "FR13 draft-head M32 internal attestation is launcher-private" >&2
   exit 2
@@ -3494,7 +3545,8 @@ while IFS= read -r _v; do
      || "$_v" == "FR13_FIXED32_CUTLASS_HYBRID_N5120_HYDRA27_LIVE_PASS_SHA256" \
      || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" \
      || "$_v" == "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH" \
-     || "$_v" == "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH" ]] && continue
+     || "$_v" == "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH" \
+     || "$_v" == "FR13_DFWD_K64_TOP3_SO" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
     continue
@@ -3522,6 +3574,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
   "${FR13_FP8_QUANT_REGCACHE_DOCKER_ARGS[@]}" \
   "${FR13_CUTLASS_WAVE_DOCKER_ARGS[@]}" \
+  "${FR13_DFWD_K64_TOP3_DOCKER_ARGS[@]}" \
   -v "${FR13_COMPILE_CACHE_DIR:-$HOME/.cache/fr13_vllm_container_cache}:/root/.cache" \
   "${NSYS_DOCKER_ARGS[@]}" \
   "${FR13_FIXED32_DOCKER_ARGS[@]}" \

@@ -1,0 +1,13 @@
+metric	count
+instruction_lines	2672
+LDG	4
+STG	4
+LDS	3
+STS	3
+SHFL	60
+BAR	1
+BRA	322
+NOP	14
+LDL	0
+STL	0
+CALL	0

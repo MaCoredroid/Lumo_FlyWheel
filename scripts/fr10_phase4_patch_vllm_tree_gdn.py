@@ -22077,6 +22077,31 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "FR13_DRAFT_VOCAB_ROOT=1 requires "
                     "FR13_DRAFT_VOCAB_K>=128"
                 )
+            _fr13_dfwd_top3_raw = os.environ.get(
+                "FR13_DFWD_K64_TOP3", "0"
+            )
+            if _fr13_dfwd_top3_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DFWD_K64_TOP3 must be exactly 0 or 1"
+                )
+            _fr13_dfwd_top3 = _fr13_dfwd_top3_raw == "1"
+            if _fr13_dfwd_top3 and (
+                not _fr13_is_fixed32
+                or not _fr13_dvk_root
+                or not _fr13_single_logits
+                or _fr13_dvk_configured != 65536
+                or not _fr10_is_wide
+                or int(batch_size) != 1
+                or tuple(
+                    int(_fr10_wide_width.get(_fr13_top3_depth, 0))
+                    for _fr13_top3_depth in range(5)
+                )
+                != (3, 3, 3, 3, 3)
+            ):
+                raise RuntimeError(
+                    "FR13 DFWD K64 top3 requires B1 exact fixed32, root1, "
+                    "K64 single logits, and width3 at all five head depths"
+                )
             _fr13_dh_rows_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_PAD_ROWS", "0"
             )
@@ -22445,6 +22470,118 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         flush=True,
                     )
                 return _fr13_dvk_configured, _fr13_dvk_full
+
+            def _fr13_dfwd_top3_prepare():
+                if not _fr13_dfwd_top3:
+                    return
+                if getattr(self, "_fr13_dfwd_top3_ready", False):
+                    return
+                import hashlib as _fr13_top3_hashlib
+                import pathlib as _fr13_top3_pathlib
+
+                _fr13_top3_so = _fr13_top3_pathlib.Path(
+                    "/tmp/fr13_dfwd_k64_top3.abi3.so"
+                )
+                _fr13_top3_expected = os.environ.get(
+                    "FR13_DFWD_K64_TOP3_SHA256", ""
+                )
+                if (
+                    len(_fr13_top3_expected) != 64
+                    or any(
+                        _fr13_top3_char not in "0123456789abcdef"
+                        for _fr13_top3_char in _fr13_top3_expected
+                    )
+                    or not _fr13_top3_so.is_file()
+                    or _fr13_top3_so.is_symlink()
+                ):
+                    raise RuntimeError(
+                        "FR13 DFWD K64 top3 binary identity is missing"
+                    )
+                _fr13_top3_digest = _fr13_top3_hashlib.sha256()
+                with _fr13_top3_so.open("rb") as _fr13_top3_handle:
+                    for _fr13_top3_chunk in iter(
+                        lambda: _fr13_top3_handle.read(1024 * 1024), b""
+                    ):
+                        _fr13_top3_digest.update(_fr13_top3_chunk)
+                if _fr13_top3_digest.hexdigest() != _fr13_top3_expected:
+                    raise RuntimeError(
+                        "FR13 DFWD K64 top3 binary identity mismatch"
+                    )
+                _fr13_top3_map = getattr(self, "_fr13_dvk_map_t", None)
+                if (
+                    not torch.is_tensor(_fr13_top3_map)
+                    or tuple(_fr13_top3_map.shape) != (65536,)
+                    or tuple(_fr13_top3_map.stride()) != (1,)
+                    or _fr13_top3_map.dtype != torch.int64
+                    or not _fr13_top3_map.is_contiguous()
+                ):
+                    raise RuntimeError(
+                        "FR13 DFWD K64 top3 requires the pinned gather ID map"
+                    )
+                torch.ops.load_library(str(_fr13_top3_so))
+                self._fr13_dfwd_top3_op = (
+                    torch.ops.fr13_dfwd_top3.mapped_top3_out
+                )
+                self._fr13_dfwd_top3_root_spine = torch.empty(
+                    (1,), dtype=torch.int64, device=_fr13_top3_map.device
+                )
+                self._fr13_dfwd_top3_root_wide = torch.empty(
+                    (1, 3), dtype=torch.int64, device=_fr13_top3_map.device
+                )
+                self._fr13_dfwd_top3_root_calls = 0
+                self._fr13_dfwd_top3_capture_calls = 0
+                self._fr13_dfwd_top3_ready = True
+                print(
+                    "[FR13_DFWD_K64_TOP3] ready B1 K64 mapped width3 "
+                    "launches_per_head=1 graph_direct_outputs=1",
+                    flush=True,
+                )
+
+            def _fr13_dfwd_top3_select(
+                _logits, _id_map, _spine_output, _top3_output, _site
+            ):
+                if not getattr(self, "_fr13_dfwd_top3_ready", False):
+                    raise RuntimeError(
+                        "FR13 DFWD K64 top3 selected before static preparation"
+                    )
+                _fr13_top3_capturing = torch.cuda.is_current_stream_capturing()
+                if (
+                    tuple(_logits.shape) != (1, 65536)
+                    or tuple(_logits.stride()) != (65536, 1)
+                    or _logits.dtype != torch.bfloat16
+                    or tuple(_id_map.shape) != (65536,)
+                    or tuple(_id_map.stride()) != (1,)
+                    or _id_map.dtype != torch.int64
+                    or tuple(_spine_output.shape) != (1,)
+                    or tuple(_spine_output.stride()) != (1,)
+                    or _spine_output.dtype != torch.int64
+                    or tuple(_top3_output.shape) != (1, 3)
+                    or tuple(_top3_output.stride()) != (3, 1)
+                    or _top3_output.dtype != torch.int64
+                    or _logits.device != _id_map.device
+                    or _spine_output.device != _logits.device
+                    or _top3_output.device != _logits.device
+                    or (_site == "root" and _fr13_top3_capturing)
+                    or (_site == "loop" and not _fr13_top3_capturing)
+                ):
+                    raise RuntimeError(
+                        "FR13 DFWD K64 top3 runtime geometry/lifecycle drifted"
+                    )
+                self._fr13_dfwd_top3_op(
+                    _spine_output, _top3_output, _logits, _id_map
+                )
+                if _site == "root":
+                    self._fr13_dfwd_top3_root_calls += 1
+                else:
+                    self._fr13_dfwd_top3_capture_calls += 1
+                if not getattr(self, "_fr13_dfwd_top3_engaged", False):
+                    self._fr13_dfwd_top3_engaged = True
+                    print(
+                        "[FR13_DFWD_K64_TOP3] engaged "
+                        "stock_argmax_topk_map_copy=0",
+                        flush=True,
+                    )
+                return _spine_output, _top3_output
 
             def _fr13_dh_pad_logits(_sh, _h, _rows):
                 _fr13_dh_batch = int(_h.shape[0]) if _h.ndim == 2 else 0
@@ -23241,6 +23378,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             else:
                 _fr13_dvk = 0
                 _fr13_full_vocab_size = None
+            _fr13_dfwd_top3_prepare()
 
             # FR13_RESHAPE_DEPTH3: cat3w consumes the root runner-up as its
             # (1,) root-sibling leaf. cat9/chain5/chain3 never consume the
@@ -23265,6 +23403,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # is consumed; otherwise keep k=2 (byte-identical to legacy).
             _fr10_root_topk_k = 3 if _fr10_consumes_root_leaf2 else 2
             _fr10_root_map = None
+            _fr13_root_top3 = None
             if _fr13_single_logits:
                 # Root top-2 is verified unused for cat9/chain5/chain3 (no
                 # tree node consumes the root runner-up: every choice starts
@@ -23297,10 +23436,21 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         sample_hidden_states
                     )
                 _FR13_DFWD_SPLIT.end('lmhead', _fr13_ds_lm)
-                draft_token_ids = _fr10_logits.argmax(dim=-1)
-                draft_token_ids = _fr13_dvk_real_ids(
-                    draft_token_ids, _fr10_root_map
-                )
+                if _fr13_dfwd_top3:
+                    draft_token_ids, _fr13_root_top3 = (
+                        _fr13_dfwd_top3_select(
+                            _fr10_logits,
+                            _fr10_root_map,
+                            self._fr13_dfwd_top3_root_spine,
+                            self._fr13_dfwd_top3_root_wide,
+                            "root",
+                        )
+                    )
+                else:
+                    draft_token_ids = _fr10_logits.argmax(dim=-1)
+                    draft_token_ids = _fr13_dvk_real_ids(
+                        draft_token_ids, _fr10_root_map
+                    )
                 if _fr10_consumes_root_leaf:
                     _fr10_root_topk = torch.topk(
                         _fr10_logits, _fr10_root_topk_k, dim=-1
@@ -23355,15 +23505,22 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             if _fr10_is_wide:
                 _fr10_w_root = _fr10_wide_width.get(0, 1)
                 if _fr10_w_root > 1:
-                    _fr10_wide_topk[0] = torch.topk(
-                        _fr10_logits,
-                        min(_fr10_w_root + _fr13_dedup_slack,
-                            int(_fr10_logits.shape[-1])),
-                        dim=-1,
-                    ).indices
-                    _fr10_wide_topk[0] = _fr13_dvk_real_ids(
-                        _fr10_wide_topk[0], _fr10_root_map
-                    )
+                    if _fr13_dfwd_top3:
+                        if _fr10_w_root != 3 or _fr13_root_top3 is None:
+                            raise RuntimeError(
+                                "FR13 DFWD K64 root top3 width drifted"
+                            )
+                        _fr10_wide_topk[0] = _fr13_root_top3
+                    else:
+                        _fr10_wide_topk[0] = torch.topk(
+                            _fr10_logits,
+                            min(_fr10_w_root + _fr13_dedup_slack,
+                                int(_fr10_logits.shape[-1])),
+                            dim=-1,
+                        ).indices
+                        _fr10_wide_topk[0] = _fr13_dvk_real_ids(
+                            _fr10_wide_topk[0], _fr10_root_map
+                        )
 
             # FR13_MERGED_DRAFTER_SEAM DELETED 2026-07-27 (cleanup+bake,
             # FR13_CLEANUP_BAKE_PLAN.md): the head-merge decide_and_fill path
@@ -23678,6 +23835,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         last_hidden_states, hidden_states = ret_hidden_states
 
                 hidden_states = hidden_states[:batch_size]
+                _fr13_step_top3 = None
                 if _fr13_single_logits:
                     # Single lm-head read: spine token = argmax of the SAME
                     # logits tensor _greedy_sample would have recomputed.
@@ -23694,17 +23852,32 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             last_hidden_states[:batch_size]
                         )
                         _fr10_step_map = None
-                    draft_token_ids = _fr10_step_logits.argmax(dim=-1)
-                    draft_token_ids = _fr13_dvk_real_ids(
-                        draft_token_ids, _fr10_step_map
-                    )
+                    if _fr13_dfwd_top3:
+                        if not _fr13_dg_cap:
+                            raise RuntimeError(
+                                "FR13 DFWD K64 loop top3 requires graph capture"
+                            )
+                        draft_token_ids, _fr13_step_top3 = (
+                            _fr13_dfwd_top3_select(
+                                _fr10_step_logits,
+                                _fr10_step_map,
+                                _dg["spine"][token_index],
+                                _dg["wide"][token_index, :, :3],
+                                "loop",
+                            )
+                        )
+                    else:
+                        draft_token_ids = _fr10_step_logits.argmax(dim=-1)
+                        draft_token_ids = _fr13_dvk_real_ids(
+                            draft_token_ids, _fr10_step_map
+                        )
                     if _fr13_selfcheck:
                         _fr13_sc_check(
                             "loop",
                             draft_token_ids,
                             self._greedy_sample(last_hidden_states[:batch_size]),
                         )
-                    if _fr13_dg_cap:
+                    if _fr13_dg_cap and not _fr13_dfwd_top3:
                         # FR13_DRAFTER_GRAPH: route through the static out
                         # buffer so replay reproduces the token chain.
                         _dg["spine"][token_index].copy_(draft_token_ids)
@@ -23785,23 +23958,30 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 if _fr10_is_wide:
                     _fr10_w_p = _fr10_wide_width.get(token_index + 1, 1)
                     if _fr10_w_p > 1:
-                        # FR13_DEDUP_SIBLINGS: +slack spare ranks (see root capture)
-                        _fr13_dg_wt = torch.topk(
-                            _fr10_step_logits,
-                            min(_fr10_w_p + _fr13_dedup_slack,
-                                int(_fr10_step_logits.shape[-1])),
-                            dim=-1,
-                        ).indices
-                        _fr13_dg_wt = _fr13_dvk_real_ids(
-                            _fr13_dg_wt, _fr10_step_map
-                        )
-                        if _fr13_dg_cap:
-                            _dg["wide"][
-                                token_index, :, : _fr13_dg_wt.shape[1]
-                            ].copy_(_fr13_dg_wt)
-                            _fr13_dg_wt = _dg["wide"][
-                                token_index, :, : _fr13_dg_wt.shape[1]
-                            ]
+                        if _fr13_dfwd_top3:
+                            if _fr10_w_p != 3 or _fr13_step_top3 is None:
+                                raise RuntimeError(
+                                    "FR13 DFWD K64 loop top3 width drifted"
+                                )
+                            _fr13_dg_wt = _fr13_step_top3
+                        else:
+                            # FR13_DEDUP_SIBLINGS: +slack spare ranks (see root capture)
+                            _fr13_dg_wt = torch.topk(
+                                _fr10_step_logits,
+                                min(_fr10_w_p + _fr13_dedup_slack,
+                                    int(_fr10_step_logits.shape[-1])),
+                                dim=-1,
+                            ).indices
+                            _fr13_dg_wt = _fr13_dvk_real_ids(
+                                _fr13_dg_wt, _fr10_step_map
+                            )
+                            if _fr13_dg_cap:
+                                _dg["wide"][
+                                    token_index, :, : _fr13_dg_wt.shape[1]
+                                ].copy_(_fr13_dg_wt)
+                                _fr13_dg_wt = _dg["wide"][
+                                    token_index, :, : _fr13_dg_wt.shape[1]
+                                ]
                         _fr10_wide_topk[token_index + 1] = _fr13_dg_wt
 
             if _fr13_dg_cap:
@@ -23843,6 +24023,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 _dg["graph"] = _fr13_dg_g
                 _fr13_dg_all[_fr13_dg_key] = _dg
+                if _fr13_dfwd_top3:
+                    if (
+                        self._fr13_dfwd_top3_capture_calls != 4
+                        or self._fr13_dfwd_top3_root_calls < 1
+                    ):
+                        raise RuntimeError(
+                            "FR13 DFWD K64 top3 graph capture count drifted"
+                        )
+                    print(
+                        "[FR13_DFWD_K64_TOP3] graph captured_calls=4 "
+                        "root_calls_at_least=1",
+                        flush=True,
+                    )
                 if _fr13_is_fixed32:
                     try:
                         _fr13_f32_dg_gdn._fr13_dfwd_unified_bm8_production_replay_installed(

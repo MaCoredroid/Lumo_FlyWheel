@@ -23,8 +23,9 @@ FR13_GATE_TAW_NATIVE=${FR13_GATE_TAW_NATIVE:-1}
 FR13_GATE_DRAFT_HEAD_PAD=${FR13_GATE_DRAFT_HEAD_PAD:-0}
 FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}
 FR13_GATE_DRAFT_HEAD_FP8=${FR13_GATE_DRAFT_HEAD_FP8:-0}
+FR13_GATE_DFWD_TOP3=${FR13_GATE_DFWD_TOP3:-0}
 FR13_GATE_BM8=${FR13_GATE_BM8:-0}
-for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_BM8; do
+for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DFWD_TOP3 FR13_GATE_BM8; do
   case "${!gate}" in
     0|1) ;;
     *) echo "$gate must be 0 or 1" >&2; exit 2 ;;
@@ -42,6 +43,7 @@ if [[ "$FR13_GATE_BM8" == "1" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
+           || "$FR13_GATE_DFWD_TOP3" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
   echo "FR13_GATE_BM8 must be the only enabled kernel candidate" >&2
   exit 2
@@ -51,6 +53,7 @@ if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" \
            || "$FR13_GATE_TAW_NATIVE" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
+           || "$FR13_GATE_DFWD_TOP3" != "0" \
            || "$FR13_GATE_BM8" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
   echo "FR13_GATE_DRAFT_HEAD_M32 must be the only enabled kernel candidate" >&2
@@ -61,10 +64,39 @@ if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" \
            || "$FR13_GATE_TAW_NATIVE" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
+           || "$FR13_GATE_DFWD_TOP3" != "0" \
            || "$FR13_GATE_BM8" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
   echo "FR13_GATE_DRAFT_HEAD_FP8 must be the only enabled kernel candidate" >&2
   exit 2
+fi
+if [[ "$FR13_GATE_DFWD_TOP3" == "1" \
+      && ( "$FR13_GATE_QROW16" != "0" \
+           || "$FR13_GATE_TAW_NATIVE" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
+           || "$FR13_GATE_BM8" != "0" \
+           || "$FR13_GATE_GDN_BV" != "0" \
+           || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ) ]]; then
+  echo "FR13_GATE_DFWD_TOP3 must be the only enabled kernel candidate" >&2
+  exit 2
+fi
+FR13_GATE_DFWD_TOP3_SO=${FR13_GATE_DFWD_TOP3_SO:-}
+FR13_GATE_DFWD_TOP3_SHA256=
+if [[ "$FR13_GATE_DFWD_TOP3" == "1" ]]; then
+  [[ "$FR13_GATE_DFWD_TOP3_SO" == /* \
+     && -f "$FR13_GATE_DFWD_TOP3_SO" \
+     && ! -L "$FR13_GATE_DFWD_TOP3_SO" ]] || {
+    echo "FR13_GATE_DFWD_TOP3_SO must be an absolute regular non-symlink file" >&2
+    exit 2
+  }
+  FR13_GATE_DFWD_TOP3_SHA256=$(sha256sum "$FR13_GATE_DFWD_TOP3_SO" | awk '{print $1}')
+else
+  [[ -z "$FR13_GATE_DFWD_TOP3_SO" ]] || {
+    echo "FR13_GATE_DFWD_TOP3=0 forbids a candidate binary" >&2
+    exit 2
+  }
 fi
 
 B1_WORKLOAD_PROFILE=${FR13_B1_WORKLOAD_PROFILE:-full_vocab}
@@ -95,6 +127,7 @@ case "$B1_WORKLOAD_PROFILE" in
        && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
+       && "$FR13_GATE_DFWD_TOP3" == "0" \
        && "$FR13_GATE_BM8" == "0" \
        && "$FR13_GATE_GDN_BV" == "0" ]]; then
       :
@@ -104,6 +137,17 @@ case "$B1_WORKLOAD_PROFILE" in
             && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_FP8" == "1" \
+            && "$FR13_GATE_DFWD_TOP3" == "0" \
+            && "$FR13_GATE_BM8" == "0" \
+            && "$FR13_GATE_GDN_BV" == "0" ]]; then
+      :
+    elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+            && "$FR13_GATE_QROW16" == "0" \
+            && "$FR13_GATE_TAW_NATIVE" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
+            && "$FR13_GATE_DFWD_TOP3" == "1" \
             && "$FR13_GATE_BM8" == "0" \
             && "$FR13_GATE_GDN_BV" == "0" ]]; then
       :
@@ -190,9 +234,10 @@ elif [[ "${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}" == "1" ]]; then
 fi
 
 mkdir -p "$RUNROOT"
-printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_fp8_gate=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
+printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_fp8_gate=%s\ndfwd_top3_gate=%s\ndfwd_top3_sha256=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$SOURCE_COMMIT" "$FA2_SHA" "$FR13_GATE_BM8" \
-  "$FR13_GATE_DRAFT_HEAD_M32" "$FR13_GATE_DRAFT_HEAD_FP8" "$B1_WORKLOAD_PROFILE" \
+  "$FR13_GATE_DRAFT_HEAD_M32" "$FR13_GATE_DRAFT_HEAD_FP8" \
+  "$FR13_GATE_DFWD_TOP3" "$FR13_GATE_DFWD_TOP3_SHA256" "$B1_WORKLOAD_PROFILE" \
   "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" "$NEEDS_ALLOW" \
   "$DRAFT_VOCAB_BLOCKS_CONTAINER" "$DRAFT_VOCAB_BLOCKS_SHA256" \
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
@@ -225,6 +270,9 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_DRAFT_HEAD_M32_LIVE_JSON=/logs/fr13_draft_head_m32.live.json \
   FR13_DRAFT_HEAD_FP8="$FR13_GATE_DRAFT_HEAD_FP8" \
   FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON=/logs/fr13_draft_head_fp8.engagement.json \
+  FR13_DFWD_K64_TOP3="$FR13_GATE_DFWD_TOP3" \
+  FR13_DFWD_K64_TOP3_SO="$FR13_GATE_DFWD_TOP3_SO" \
+  FR13_DFWD_K64_TOP3_SHA256="$FR13_GATE_DFWD_TOP3_SHA256" \
   FR13_FIXED32_GDN_PATH_BV_CANDIDATE="$FR13_GATE_GDN_BV_CANDIDATE" \
   FORKED_FA2_SO="$FORKED_FA2_SO" \
   FR13_FA2_QROW16_SO_SHA256="$FA2_SHA" \
@@ -324,6 +372,28 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
     --expected-source-commit "$SOURCE_COMMIT" \
     --repo "$PWD" \
     --out "$RUNROOT/$ARM/draft_head_fp8_real_b1_gate.json"
+fi
+if [[ "$serve_rc" == "0" && "$FR13_GATE_DFWD_TOP3" == "1" ]]; then
+  DFWD_TOP3_RUNTIME_LOG="$RUNROOT/$ARM/docker_after_tasks.log"
+  [[ -f "$DFWD_TOP3_RUNTIME_LOG" && ! -L "$DFWD_TOP3_RUNTIME_LOG" ]] || {
+    echo "FR13 DFWD K64 top3 runtime log is missing" >&2
+    exit 2
+  }
+  grep -F "[FR13_DFWD_K64_TOP3] ready B1 K64 mapped width3" \
+    "$DFWD_TOP3_RUNTIME_LOG" >/dev/null || {
+      echo "FR13 DFWD K64 top3 readiness marker is missing" >&2
+      exit 2
+    }
+  grep -F "[FR13_DFWD_K64_TOP3] engaged stock_argmax_topk_map_copy=0" \
+    "$DFWD_TOP3_RUNTIME_LOG" >/dev/null || {
+      echo "FR13 DFWD K64 top3 engagement marker is missing" >&2
+      exit 2
+    }
+  grep -F "[FR13_DFWD_K64_TOP3] graph captured_calls=4" \
+    "$DFWD_TOP3_RUNTIME_LOG" >/dev/null || {
+      echo "FR13 DFWD K64 top3 graph marker is missing" >&2
+      exit 2
+    }
 fi
 
 exit "$serve_rc"
