@@ -2344,7 +2344,7 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
         or int(contract.get("commit_launches_per_event", -1)) != 1
         or int(contract.get("commit_direct_launches_per_event", -1)) != 1
         or contract.get("commit_row_guard_route")
-        != "fixed32_triton_alias3_ownerpath_physical32_v3"
+        != "fixed32_triton_alias3_ownerpath_warp32_physical32_v4"
         or int(contract.get("commit_row_guard_kernel_launches_per_event", -1))
         != 1
         or int(contract.get("commit_row_guard_programs_per_request", -1)) != 48
@@ -2375,7 +2375,7 @@ def _fr13_fixed32_conv_runtime_contract(state, batch_size):
                 "commit_row_guard_alias_vector_loads_per_event", -1
             )
         )
-        != 1
+        != 2
         or int(
             contract.get(
                 "commit_row_guard_selected_row_loads_per_program", -1
@@ -5227,7 +5227,7 @@ def _fr13_fixed32_observed_commit(
         or conv_commit_contract.get("source_staging_reused") is not True
         or int(conv_commit_contract.get("source_pointer_entries", -1)) != 48
         or conv_commit_contract.get("row_guard_route")
-        != "fixed32_triton_alias3_ownerpath_physical32_v3"
+        != "fixed32_triton_alias3_ownerpath_warp32_physical32_v4"
         or int(conv_commit_contract.get("row_guard_kernel_launches", -1)) != 1
         or int(conv_commit_contract.get("row_guard_programs_per_request", -1))
         != 48
@@ -5258,7 +5258,7 @@ def _fr13_fixed32_observed_commit(
                 "row_guard_alias_vector_loads_per_event", -1
             )
         )
-        != 1
+        != 2
         or int(
             conv_commit_contract.get(
                 "row_guard_selected_row_loads_per_program", -1
@@ -33555,7 +33555,7 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 "source_staging_reused": True,
                 "source_pointer_entries": 48,
                 "row_guard_route": (
-                    "fixed32_triton_alias3_ownerpath_physical32_v3"
+                    "fixed32_triton_alias3_ownerpath_warp32_physical32_v4"
                 ),
                 "row_guard_kernel_launches": 1,
                 "row_guard_programs_per_request": 48,
@@ -33566,7 +33566,7 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 "row_guard_path_validation_programs_per_request": 1,
                 "row_guard_path_vector_loads_per_request": 1,
                 "row_guard_alias_validation_programs_per_event": 1,
-                "row_guard_alias_vector_loads_per_event": 1,
+                "row_guard_alias_vector_loads_per_event": 2,
                 "row_guard_selected_row_loads_per_program": 0,
                 "row_guard_peer_topology_proof": "preseed_lease_audit",
                 "row_guard_torch_index_transforms": 0,

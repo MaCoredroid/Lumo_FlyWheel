@@ -565,7 +565,8 @@ def test_candidate_binds_physical_alias_row_uniqueness_guard() -> None:
     assert '"validate_fixed32_conv_commit_rows"' in preseed
     assert "if layer == 0:" in guard
     assert "if request == 0:" in guard
-    assert "aliases_ok" in guard
+    assert "aliases_lo_ok" in guard
+    assert "aliases_hi_ok" in guard
     assert "other_rows == running_row" in guard
     assert "peer_table_ok" in guard
     assert "destination_unique" in guard
@@ -644,7 +645,10 @@ def test_observer_preserves_logical_layers_and_candidate_physical_calls() -> Non
     assert '"state_elements_per_thread_before_compiler_effects", -1' in patcher
     assert '"physical_alias_row_uniqueness_guard"' in patcher
     assert '!= "validate_fixed32_conv_commit_rows"' in patcher
-    assert '!= "fixed32_triton_alias3_ownerpath_physical32_v3"' in patcher
+    assert (
+        '!= "fixed32_triton_alias3_ownerpath_warp32_physical32_v4"'
+        in patcher
+    )
     assert 'conv_commit_contract.get("row_guard_kernel_launches", -1)' in patcher
     assert 'conv_commit_contract.get("row_guard_programs_per_request", -1)' in patcher
     assert 'conv_commit_contract.get("row_guard_physical_rows", -1)' in patcher

@@ -1,0 +1,301 @@
+{
+  "compile_contract": {
+    "alias_width": 3,
+    "bank_rows_fixture": 257,
+    "batches": [
+      1,
+      4
+    ],
+    "jit_specialization": "mock_tensor_exact_shape_stride_and_alignment",
+    "layers": 48,
+    "num_stages": 1,
+    "num_warps": 4,
+    "path_capacity": 16,
+    "peer_capacity": 16,
+    "physical_rows": 32,
+    "target": "sm_121a"
+  },
+  "kernel": "_fr13_fixed32_conv_commit_row_guard_kernel",
+  "revisions": {
+    "candidate": "47e411fb17c0e7f330399ef5698a06ef460c7401",
+    "incumbent": "6deadde546ad9ee5fee845fabe016383c33f280c",
+    "superseded_v3": "392c16929b40d527f5097eb198479f3370fae9f8"
+  },
+  "schema": "fr13.fixed32.cfwd_ownerpath_warp32.sm121a.offline_codegen.v1",
+  "source_path": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+  "variants": {
+    "candidate": {
+      "builds": {
+        "b1": {
+          "backend_producer": {
+            "target": "sm_121a",
+            "tool_name": "ptxas-blackwell",
+            "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+            "toolkit_version": "12.9"
+          },
+          "bar": 0,
+          "batch": 1,
+          "calls": 0,
+          "compile_hash": "9e4e60172536b90df33c639340c07ec4d81c2d5bfb1fb7632ae6a3eda7c296b9",
+          "cubin_bytes": 18784,
+          "cubin_sha256": "d400d01d34a136f1159439ffa11516539df590db016b2bde9f178bc46ca295c4",
+          "elf_shared_bytes": 0,
+          "encoded_sass_instructions": 144,
+          "launch_shared_bytes": 0,
+          "ldg": 8,
+          "ldl": 0,
+          "lds": 0,
+          "local_bytes": 0,
+          "logical_work": {
+            "accepted_length_values": 1,
+            "alias_id_values": 48,
+            "alias_validation_programs": 1,
+            "alias_vector_load_instructions": 2,
+            "kernel_launches_per_event": 1,
+            "path_values": 16,
+            "physical_ssi_row_values": 1536,
+            "programs_per_event": 48,
+            "selected_path_and_row_values": 0,
+            "source_visible_values_before_compiler_cache_effects": 1937
+          },
+          "ptx_sha256": "474bc18de8c80ff44ba92e1f6b7d23111d0f88d384fe9c0c9e55dc562ca156f3",
+          "registers": 18,
+          "revision": "47e411fb17c0e7f330399ef5698a06ef460c7401",
+          "sass_sha256": "de85308da8771e0f70a585eeb7de0f62d94e606039494ed0a046f886caf72d35",
+          "source_function_sha256": "b3900d675baf7e5a5a2995cd7eeb337c62e25be9424f0d483e50f6c292820081",
+          "stack_bytes": 0,
+          "static_sass_instructions": 129,
+          "stg": 1,
+          "stl": 0,
+          "sts": 0
+        },
+        "b4": {
+          "backend_producer": {
+            "target": "sm_121a",
+            "tool_name": "ptxas-blackwell",
+            "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+            "toolkit_version": "12.9"
+          },
+          "bar": 0,
+          "batch": 4,
+          "calls": 0,
+          "compile_hash": "c2ebf0a50285994c7bcd1e0f8a3ee46dd13d1b13853a8ceda0188b63ecff1e7f",
+          "cubin_bytes": 19936,
+          "cubin_sha256": "964810d5f695fc4b044baf5c850f75aba261ea85eb13d84084d285c735c35501",
+          "elf_shared_bytes": 0,
+          "encoded_sass_instructions": 168,
+          "launch_shared_bytes": 0,
+          "ldg": 8,
+          "ldl": 0,
+          "lds": 0,
+          "local_bytes": 0,
+          "logical_work": {
+            "accepted_length_values": 4,
+            "alias_id_values": 48,
+            "alias_validation_programs": 1,
+            "alias_vector_load_instructions": 2,
+            "kernel_launches_per_event": 1,
+            "path_values": 64,
+            "physical_ssi_row_values": 6144,
+            "programs_per_event": 192,
+            "selected_path_and_row_values": 0,
+            "source_visible_values_before_compiler_cache_effects": 11060
+          },
+          "ptx_sha256": "869d688834362ac9ffd9b724975d70bab79393628d50ccc8974898d32f3bcadb",
+          "registers": 16,
+          "revision": "47e411fb17c0e7f330399ef5698a06ef460c7401",
+          "sass_sha256": "23c4295078771102aa97fda76b178212caa2e044f5d1fa76de4531e3599b4520",
+          "source_function_sha256": "b3900d675baf7e5a5a2995cd7eeb337c62e25be9424f0d483e50f6c292820081",
+          "stack_bytes": 0,
+          "static_sass_instructions": 149,
+          "stg": 1,
+          "stl": 0,
+          "sts": 0
+        }
+      },
+      "source_sha256": "3713894b94eb2a7a0b3c69754fb552ade225b9f51e69f632b59773cb139c981e"
+    },
+    "incumbent": {
+      "builds": {
+        "b1": {
+          "backend_producer": {
+            "target": "sm_121a",
+            "tool_name": "ptxas-blackwell",
+            "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+            "toolkit_version": "12.9"
+          },
+          "bar": 0,
+          "batch": 1,
+          "calls": 0,
+          "compile_hash": "a3a5bf21f4634c79b293922987ea6f6fd94c9a58f9e68b74f598c01a0732ac36",
+          "cubin_bytes": 18784,
+          "cubin_sha256": "c9e95b498e294d6a391fef150961e4731ca835783f32e27742116422638e95c5",
+          "elf_shared_bytes": 0,
+          "encoded_sass_instructions": 144,
+          "launch_shared_bytes": 0,
+          "ldg": 10,
+          "ldl": 0,
+          "lds": 0,
+          "local_bytes": 0,
+          "logical_work": {
+            "accepted_length_values": 48,
+            "alias_id_values": 192,
+            "alias_validation_programs": 48,
+            "alias_vector_load_instructions": 48,
+            "kernel_launches_per_event": 1,
+            "path_values": 768,
+            "physical_ssi_row_values": 1536,
+            "programs_per_event": 48,
+            "selected_path_and_row_values": 96,
+            "source_visible_values_before_compiler_cache_effects": 2976
+          },
+          "ptx_sha256": "cc18e7c43e98ee488bb513d8a6722552e65931521e71b206607c95a463d9b31f",
+          "registers": 26,
+          "revision": "6deadde546ad9ee5fee845fabe016383c33f280c",
+          "sass_sha256": "f53a2480c45d6733d6d30fef2cdca12e77ccaf212a3911662666967fe9b94b65",
+          "source_function_sha256": "1bf248440f86338c0bf07d9fd79184ea4a3312f179f493af30fcce28e98d71b2",
+          "stack_bytes": 0,
+          "static_sass_instructions": 132,
+          "stg": 1,
+          "stl": 0,
+          "sts": 0
+        },
+        "b4": {
+          "backend_producer": {
+            "target": "sm_121a",
+            "tool_name": "ptxas-blackwell",
+            "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+            "toolkit_version": "12.9"
+          },
+          "bar": 0,
+          "batch": 4,
+          "calls": 0,
+          "compile_hash": "e8700ca2c40a22ecac6b78ebf5f2cc74ba447238fa586896ed1d0a001e6971cb",
+          "cubin_bytes": 20152,
+          "cubin_sha256": "e5814a84b9f2ee43eb53346dee4d1e312e9d511a8d5eb7aec7aeff0b6e2858d7",
+          "elf_shared_bytes": 0,
+          "encoded_sass_instructions": 176,
+          "launch_shared_bytes": 0,
+          "ldg": 10,
+          "ldl": 0,
+          "lds": 0,
+          "local_bytes": 0,
+          "logical_work": {
+            "accepted_length_values": 192,
+            "alias_id_values": 2496,
+            "alias_validation_programs": 192,
+            "alias_vector_load_instructions": 192,
+            "kernel_launches_per_event": 1,
+            "path_values": 3072,
+            "physical_ssi_row_values": 6144,
+            "programs_per_event": 192,
+            "selected_path_and_row_values": 384,
+            "source_visible_values_before_compiler_cache_effects": 17088
+          },
+          "ptx_sha256": "2748911fa72ad0c738a4561fc7439d0f85e95ff3941a7a916da2417c10457c60",
+          "registers": 26,
+          "revision": "6deadde546ad9ee5fee845fabe016383c33f280c",
+          "sass_sha256": "666eff6faca1b328131b0d6308cabcc4e22c1a63523ab9999e173c64574ef60f",
+          "source_function_sha256": "1bf248440f86338c0bf07d9fd79184ea4a3312f179f493af30fcce28e98d71b2",
+          "stack_bytes": 0,
+          "static_sass_instructions": 159,
+          "stg": 1,
+          "stl": 0,
+          "sts": 0
+        }
+      },
+      "source_sha256": "83ab7c495a9f712298ab3bf9b9c5d1acdf156b569dc307ca507fbd62ecc0fea3"
+    },
+    "superseded_v3": {
+      "builds": {
+        "b1": {
+          "backend_producer": {
+            "target": "sm_121a",
+            "tool_name": "ptxas-blackwell",
+            "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+            "toolkit_version": "12.9"
+          },
+          "bar": 2,
+          "batch": 1,
+          "calls": 0,
+          "compile_hash": "0f05139ed375c0bdc3748aa62b8d56ffe0878e9b5415495cc1176dc8cc51d933",
+          "cubin_bytes": 19672,
+          "cubin_sha256": "22c4c6f6be9a252d102324cf0cef30e9ecd457f42b0f995882b147a7102162f3",
+          "elf_shared_bytes": 1024,
+          "encoded_sass_instructions": 152,
+          "launch_shared_bytes": 8,
+          "ldg": 7,
+          "ldl": 0,
+          "lds": 2,
+          "local_bytes": 0,
+          "logical_work": {
+            "accepted_length_values": 1,
+            "alias_id_values": 48,
+            "alias_validation_programs": 1,
+            "alias_vector_load_instructions": 1,
+            "kernel_launches_per_event": 1,
+            "path_values": 16,
+            "physical_ssi_row_values": 1536,
+            "programs_per_event": 48,
+            "selected_path_and_row_values": 0,
+            "source_visible_values_before_compiler_cache_effects": 1937
+          },
+          "ptx_sha256": "d462f6c11216afc1510bd038f32f55888bbda24e67c5900457903e04f38df89d",
+          "registers": 18,
+          "revision": "392c16929b40d527f5097eb198479f3370fae9f8",
+          "sass_sha256": "d5c04d3296a64452743f31ded02976336636e5462becbc46c8ecc2c2b4fb3345",
+          "source_function_sha256": "9d8509ac710ff886b6af865a6f9de9538dfcea1f17971d580ce80b1ab6d1f8c3",
+          "stack_bytes": 0,
+          "static_sass_instructions": 134,
+          "stg": 1,
+          "stl": 0,
+          "sts": 2
+        },
+        "b4": {
+          "backend_producer": {
+            "target": "sm_121a",
+            "tool_name": "ptxas-blackwell",
+            "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+            "toolkit_version": "12.9"
+          },
+          "bar": 2,
+          "batch": 4,
+          "calls": 0,
+          "compile_hash": "fb5333c89ea711905f29fbfb5790a5b8f2f988a864c3554914a924ca9640b353",
+          "cubin_bytes": 21240,
+          "cubin_sha256": "d1f0a05bad4d8fce0d970c92ad5a62c4a7ba79db8c0cb0f27d03554649eb078c",
+          "elf_shared_bytes": 1024,
+          "encoded_sass_instructions": 184,
+          "launch_shared_bytes": 8,
+          "ldg": 7,
+          "ldl": 0,
+          "lds": 2,
+          "local_bytes": 0,
+          "logical_work": {
+            "accepted_length_values": 4,
+            "alias_id_values": 48,
+            "alias_validation_programs": 1,
+            "alias_vector_load_instructions": 1,
+            "kernel_launches_per_event": 1,
+            "path_values": 64,
+            "physical_ssi_row_values": 6144,
+            "programs_per_event": 192,
+            "selected_path_and_row_values": 0,
+            "source_visible_values_before_compiler_cache_effects": 11060
+          },
+          "ptx_sha256": "2435edd75e0753af64550bde2762ca37ebf4162c84e828c72917477c6ccfbd85",
+          "registers": 17,
+          "revision": "392c16929b40d527f5097eb198479f3370fae9f8",
+          "sass_sha256": "90a70d6939689f149b5162dfc9e5a7992dfa92c2708261c003314173c9e3a718",
+          "source_function_sha256": "9d8509ac710ff886b6af865a6f9de9538dfcea1f17971d580ce80b1ab6d1f8c3",
+          "stack_bytes": 0,
+          "static_sass_instructions": 162,
+          "stg": 1,
+          "stl": 0,
+          "sts": 2
+        }
+      },
+      "source_sha256": "fb5590a0cd2bc001a5df3036e2020fdc3169a110d68c0776b64028f766b6c635"
+    }
+  }
+}

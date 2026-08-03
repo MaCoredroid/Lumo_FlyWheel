@@ -207,7 +207,10 @@ def test_guard_kernel_owns_fixed_physical32_and_path16_domains() -> None:
     assert "duplicate_destination" in kernel
     assert "if layer == 0:" in kernel
     assert "if request == 0:" in kernel
-    assert "alias_offsets = tl.arange(0, ALIAS_CAP)" in kernel
+    assert "alias_offsets = tl.arange(0, 32)" in kernel
+    assert "aliases_lo_ok" in kernel
+    assert "aliases_hi_ok" in kernel
+    assert "alias_hi_entries = alias_offsets < (LAYERS - 32)" in kernel
     assert "selected_row" not in kernel
     assert "leaf_node" not in kernel
     assert "leaf_pos" not in kernel
@@ -217,7 +220,7 @@ def test_guard_kernel_owns_fixed_physical32_and_path16_domains() -> None:
     assert "PATH_COLS=16" in launcher
     assert "LAYERS=48" in launcher
     assert "ALIAS_WIDTH=3" in launcher
-    assert "ALIAS_CAP=64" in launcher
+    assert "ALIAS_CAP=64" not in launcher
     assert "PEER_CAP=16" in launcher
     assert "[(48 * batch,)]" in launcher
 
@@ -247,7 +250,7 @@ def test_guard_workspace_is_preseeded_warmed_and_source_bound() -> None:
     assert "48 * batch" in preseed
     assert "validate_fixed32_conv_commit_rows(" in preseed
     assert (
-        '"fixed32_triton_alias3_ownerpath_physical32_v3"'
+        '"fixed32_triton_alias3_ownerpath_warp32_physical32_v4"'
         in preseed
     )
     assert '"commit_row_guard_kernel_launches_per_event": 1' in preseed
@@ -256,7 +259,7 @@ def test_guard_workspace_is_preseeded_warmed_and_source_bound() -> None:
     assert '"commit_row_guard_path_validation_programs_per_request": 1' in preseed
     assert '"commit_row_guard_path_vector_loads_per_request": 1' in preseed
     assert '"commit_row_guard_alias_validation_programs_per_event": 1' in preseed
-    assert '"commit_row_guard_alias_vector_loads_per_event": 1' in preseed
+    assert '"commit_row_guard_alias_vector_loads_per_event": 2' in preseed
     assert '"commit_row_guard_selected_row_loads_per_program": 0' in preseed
     assert '"commit_row_guard_peer_topology_proof": "preseed_lease_audit"' in preseed
     assert '"commit_row_guard_torch_index_transforms": 0' in preseed
@@ -298,7 +301,7 @@ def test_work_census_binds_fixed_row_guard_work(batch: int) -> None:
     assert census.SCHEMA == "fr13-fixed32-work-census-v12"
     assert (
         commit["row_guard_route"]
-        == "fixed32_triton_alias3_ownerpath_physical32_v3"
+        == "fixed32_triton_alias3_ownerpath_warp32_physical32_v4"
     )
     assert commit["row_guard_kernel_launches"] == 1
     assert commit["row_guard_programs"] == 48 * batch
@@ -309,7 +312,7 @@ def test_work_census_binds_fixed_row_guard_work(batch: int) -> None:
     assert commit["row_guard_path_validation_programs"] == batch
     assert commit["row_guard_path_vector_loads"] == batch
     assert commit["row_guard_alias_validation_programs"] == 1
-    assert commit["row_guard_alias_vector_loads"] == 1
+    assert commit["row_guard_alias_vector_loads"] == 2
     assert commit["row_guard_selected_row_loads"] == 0
     assert commit["row_guard_peer_topology_proof"] == "preseed_lease_audit"
     assert commit["row_guard_torch_index_transforms"] == 0
@@ -326,6 +329,6 @@ def test_work_census_binds_fixed_row_guard_work(batch: int) -> None:
     assert normalized["row_guard_path_validation_programs_per_request"] == 1
     assert normalized["row_guard_path_vector_loads_per_request"] == 1
     assert normalized["row_guard_alias_validation_programs_per_event"] == 1
-    assert normalized["row_guard_alias_vector_loads_per_event"] == 1
+    assert normalized["row_guard_alias_vector_loads_per_event"] == 2
     assert normalized["row_guard_selected_row_loads_per_program"] == 0
     assert normalized["row_guard_peer_topology_proof"] == "preseed_lease_audit"
