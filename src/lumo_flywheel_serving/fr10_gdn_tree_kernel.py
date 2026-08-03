@@ -9860,49 +9860,6 @@ def _tree_gdn_fixed32_single_launch_node(
 
 
 @triton.jit
-def _fr13_fixed32_gdn_static_branch_length(root_index, member):
-    """Decode the exact fixed32 terminal-path length without HBM reads."""
-    return tl.where(
-        root_index == 0,
-        5 + 2 * member,
-        tl.where((root_index == 4) & (member == 0), 7, 1),
-    )
-
-
-@triton.jit
-def _fr13_fixed32_gdn_static_branch_node(
-    root_index, member, path_offset
-):
-    """Decode one exact fixed32 terminal-path node without HBM reads."""
-    single_node = 5 * root_index + member - (root_index == 4)
-    path0_node = tl.where(
-        path_offset == 0,
-        19,
-        tl.where(
-            path_offset == 1,
-            24,
-            24 + 2 * (path_offset - 1) - tl.maximum(path_offset - 3, 0),
-        ),
-    )
-    path1_node = 2 + 5 * path_offset
-    path2_prefix = tl.minimum(path_offset, 4)
-    path2_node = 3 + 5 * path2_prefix + 2 * (path_offset - path2_prefix)
-    return tl.where(
-        (root_index == 4) & (member == 0),
-        path0_node,
-        tl.where(
-            (root_index == 0) & (member == 0),
-            path1_node,
-            tl.where(
-                (root_index == 0) & (member == 1),
-                path2_node,
-                single_node,
-            ),
-        ),
-    )
-
-
-@triton.jit
 def _tree_gdn_kernel_fixed32_single_launch(
     q,
     k,
@@ -9950,7 +9907,6 @@ def _tree_gdn_kernel_fixed32_single_launch(
     MAX_PATH_LEN: tl.constexpr,
     MAX_GROUP_PATHS: tl.constexpr,
     NUM_GROUPS: tl.constexpr,
-    STATIC_DESCRIPTORS: tl.constexpr = False,
     RING_EXPORT: tl.constexpr = False,
     FLAGS_EXPORT: tl.constexpr = False,
     FLAGS_ROWS: tl.constexpr = 0,
@@ -10001,10 +9957,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
     # inner fixed-cardinality member loop stays static to preserve its clean
     # zero-stack SM121 codegen.
     for root_index in tl.range(0, ROOT_STEPS):
-        if STATIC_DESCRIPTORS:
-            root_node = tl.minimum(root_index * root_index, 14)
-        else:
-            root_node = tl.load(root_nodes + root_index)
+        root_node = tl.load(root_nodes + root_index)
         root_state = _tree_gdn_fixed32_single_launch_node(
             root_state,
             q,
@@ -10040,45 +9993,26 @@ def _tree_gdn_kernel_fixed32_single_launch(
             SCAN_ALIGN=SCAN_ALIGN,
             RING_EXPORT=RING_EXPORT,
         )
-        if STATIC_DESCRIPTORS:
-            group_path_count = 2 + (root_index == 4)
-        else:
-            group_path_count = tl.load(group_path_counts + root_index)
+        group_path_count = tl.load(group_path_counts + root_index)
         for member in tl.static_range(0, MAX_GROUP_PATHS):
             member_ok = member < group_path_count
-            if STATIC_DESCRIPTORS:
-                path_len = tl.where(
-                    member_ok,
-                    _fr13_fixed32_gdn_static_branch_length(
-                        root_index, member
-                    ),
-                    0,
-                )
-            else:
-                path_index = tl.load(
-                    group_path_indices
-                    + root_index * MAX_GROUP_PATHS
-                    + member,
-                    mask=member_ok,
-                    other=0,
-                )
-                path_len = tl.load(
-                    branch_lengths + path_index,
-                    mask=member_ok,
-                    other=0,
-                )
+            path_index = tl.load(
+                group_path_indices
+                + root_index * MAX_GROUP_PATHS
+                + member,
+                mask=member_ok,
+                other=0,
+            )
+            path_len = tl.load(
+                branch_lengths + path_index,
+                mask=member_ok,
+                other=0,
+            )
             branch_state = root_state
             for path_offset in tl.range(0, path_len):
-                if STATIC_DESCRIPTORS:
-                    branch_node = _fr13_fixed32_gdn_static_branch_node(
-                        root_index, member, path_offset
-                    )
-                else:
-                    branch_node = tl.load(
-                        branch_nodes
-                        + path_index * MAX_PATH_LEN
-                        + path_offset
-                    )
+                branch_node = tl.load(
+                    branch_nodes + path_index * MAX_PATH_LEN + path_offset
+                )
                 branch_state = _tree_gdn_fixed32_single_launch_node(
                     branch_state,
                     q,
@@ -14575,7 +14509,6 @@ def launch_tree_gdn_prepared(
                     _single_contract["max_group_paths"]
                 ),
                 NUM_GROUPS=int(_single_contract["groups"]),
-                STATIC_DESCRIPTORS=False,
                 RING_EXPORT=_ring_export,
                 FLAGS_EXPORT=_flags_export,
                 FLAGS_ROWS=_flags_rows,
@@ -15509,7 +15442,6 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     single_contract["max_group_paths"]
                 ),
                 NUM_GROUPS=int(single_contract["groups"]),
-                STATIC_DESCRIPTORS=False,
                 RING_EXPORT=ring_export,
                 FLAGS_EXPORT=flags_export,
                 FLAGS_ROWS=flags_rows,
