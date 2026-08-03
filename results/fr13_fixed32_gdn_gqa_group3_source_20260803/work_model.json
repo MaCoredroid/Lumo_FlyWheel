@@ -1,7 +1,7 @@
 {
   "schema": "fr13.fixed32.gdn_gqa_group3.source_work_model.v1",
   "status": "source_only_default_off",
-  "source_commit": "fadd12d33ca5962baadf42ac2cc77b9179758b26",
+  "source_commit": "efc7024701dce5d8b87ce3f80f5ecfa56ee74789",
   "candidate": "fixed32_gdn_single_launch_gqa_group3_v1",
   "qualification": {
     "draft_vocab_k": 65536,
