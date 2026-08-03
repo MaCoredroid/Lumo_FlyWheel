@@ -1,0 +1,11 @@
+python3 -m py_compile scripts/fr13_patch_fa2_tree_bias.py
+PASS
+
+pytest -q tests/test_fr13_fa2_tree_kernel_candidates.py
+24 passed in 3.01s
+
+pytest -q tests/test_fr13_fa2_qrow32_gate.py tests/test_fr13_fa2_qrow32_static_gate.py tests/test_fr13_fa2_no_bias_pristine_compare.py tests/test_fr13_fixed32_fa2_identity.py
+21 passed, 1 skipped in 0.96s
+
+git diff --check
+PASS
