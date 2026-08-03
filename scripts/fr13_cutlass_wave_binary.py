@@ -178,6 +178,7 @@ PRODUCTION_SELECTORS = frozenset(
         "identity_stockshape_stage2_b4",
         "identity_twom_b4",
         "identity_hybrid_n5120_b4",
+        "identity_fullm_b4",
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
         "identity_onen_n5120_fullgrid_b1",
@@ -192,7 +193,6 @@ INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "identity_stockshape_b4",
     "identity_divisor_b4",
     "persistent_b4_m128_static",
-    "identity_fullm_b4",
 }
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
 CONTAINER_DESTINATION = Path(
@@ -583,6 +583,7 @@ def _verify_production_qualification(
         "identity_stockshape_stage2_b4",
         "identity_twom_b4",
         "identity_hybrid_n5120_b4",
+        "identity_fullm_b4",
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
         "identity_onen_n5120_fullgrid_b1",
@@ -594,6 +595,7 @@ def _verify_production_qualification(
         "identity_stockshape_stage2_b4",
         "identity_twom_b4",
         "identity_hybrid_n5120_b4",
+        "identity_fullm_b4",
     }:
         import fr13_cutlass_b4_pass as qualification
     else:
@@ -603,6 +605,7 @@ def _verify_production_qualification(
         "identity_stockshape_stage2_b4",
         "identity_twom_b4",
         "identity_hybrid_n5120_b4",
+        "identity_fullm_b4",
     }:
         return qualification.verify_dual_sidecar(
             sidecar,
@@ -744,6 +747,7 @@ def install_candidate(
             "identity_stockshape_stage2_b4",
             "identity_twom_b4",
             "identity_hybrid_n5120_b4",
+            "identity_fullm_b4",
         }:
             for key in (
                 "qualification_profile",
@@ -785,6 +789,7 @@ def install_candidate(
                 "identity_stockshape_stage2_b4",
                 "identity_twom_b4",
                 "identity_hybrid_n5120_b4",
+                "identity_fullm_b4",
             }
             and qualification_record.get("qualification_profile") == "k64_root"
         ):

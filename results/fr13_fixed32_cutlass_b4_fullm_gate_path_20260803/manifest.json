@@ -1,0 +1,50 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4.identity_fullm.gate_path.v1",
+  "created_at_utc": "2026-08-03T15:19:56Z",
+  "status": "host_ready_real_swe_dual_live_gates_pending",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "production_available_without_credential": false,
+  "production_default_enabled": false,
+  "candidate": {
+    "selector": "identity_fullm_b4",
+    "diagnostic_selector": "identity_fullm_b4_byte_ab",
+    "binary_sha256": "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da",
+    "binary_bytes": 119979144,
+    "patch_source_sha256": "623582b257a13f7551c81aaf8e87f7542ddb4d6564636f5e177ec0807126a341",
+    "patched_dispatch_sha256": "710da7d3a8e24c83f9f095222d5297d96f610c6310f3a8537ed1b925a25ece56"
+  },
+  "qualification": {
+    "profile": "k64_root",
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "batch_size": 4,
+    "concurrency": 4,
+    "physical_rows": 128,
+    "topologies": ["tail6_fixed32", "hydra27_fixed32"],
+    "logical_topologies": ["Tail23", "Hydra27"],
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "credential_present": false,
+    "same_clean_source_commit_required": true
+  },
+  "verification": {
+    "focused_b4_and_binary_tests": "136 passed",
+    "shell_syntax": "pass",
+    "python_byte_compile": "pass",
+    "gpu_runtime_used": false
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "real SWE-Verified byte comparison",
+    "Tail23 live gate",
+    "Hydra27 live gate",
+    "B4 full-step timing",
+    "hardware-floor acceptance"
+  ]
+}

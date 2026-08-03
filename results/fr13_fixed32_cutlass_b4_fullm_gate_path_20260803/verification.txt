@@ -1,0 +1,10 @@
+Host verification only
+
+- bash -n: live gate, timing harness, launcher, server wrapper: pass
+- python byte compile: qualification, binary installer, patcher, SWE runner: pass
+- focused B4/binary/launcher tests: 136 passed
+- production selector: credential-gated and default off
+- live Tail23 PASS: absent
+- live Hydra27 PASS: absent
+- GPU timing: not run
+- hardware-floor acceptance: not claimed

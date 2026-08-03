@@ -207,9 +207,9 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "identity_fullm_b4",
     )
     assert "identity_wide256_fullgrid_b1" in module.PRODUCTION_SELECTORS
-    assert "identity_fullm_b4" not in module.PRODUCTION_SELECTORS
+    assert "identity_fullm_b4" in module.PRODUCTION_SELECTORS
     assert "identity_wide256_fullgrid_b1" in module.INSTALLABLE_SELECTORS
-    assert "identity_fullm_b4" not in module.INSTALLABLE_SELECTORS
+    assert "identity_fullm_b4" in module.INSTALLABLE_SELECTORS
     assert (
         "identity_wide256_fullgrid_b1_byte_ab" in module.INSTALLABLE_SELECTORS
     )
@@ -478,7 +478,7 @@ def test_onen_n5120_single_diagnostic_installs_but_direct_requires_sidecar(
             "identity_fullm_b4_byte_ab",
             "identity_fullm_b4",
             "identity_fullm_b4",
-            "real-task raw-byte gates",
+            "requires a pinned production sidecar",
         ),
     ),
 )

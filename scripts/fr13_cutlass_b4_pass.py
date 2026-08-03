@@ -98,6 +98,24 @@ IDENTITY_HYBRID_N5120_DUAL_K64_ROOT_BINDING_SCHEMA = (
     "fr13.fixed32.cutlass_b4.identity_hybrid_n5120.k64_root."
     "dual_topology.production_binding.v1"
 )
+IDENTITY_FULLM_LIVE_SCHEMA = "fr13.fixed32.cutlass_identity_fullm_b4_live_gate.v1"
+IDENTITY_FULLM_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_fullm_b4_k64_root_live_gate.v1"
+)
+IDENTITY_FULLM_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_fullm.production_pass.v1"
+)
+IDENTITY_FULLM_K64_ROOT_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_fullm.k64_root.production_pass.v1"
+)
+IDENTITY_FULLM_DUAL_K64_ROOT_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_fullm.k64_root."
+    "dual_topology.production_pass.v1"
+)
+IDENTITY_FULLM_DUAL_K64_ROOT_BINDING_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_fullm.k64_root."
+    "dual_topology.production_binding.v1"
+)
 IDENTITY_DIVISOR_LIVE_SCHEMA = "fr13.fixed32.cutlass_identity_divisor_b4_live_gate.v1"
 IDENTITY_DIVISOR_K64_ROOT_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_identity_divisor_b4_k64_root_live_gate.v1"
@@ -143,6 +161,12 @@ IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256 = (
 )
 IDENTITY_HYBRID_N5120_PATCHED_DISPATCH_SHA256 = (
     "ef221b938c0780d8212e6355f53a8aad6c4b907fbe0e368cb73bda995b80699d"
+)
+IDENTITY_FULLM_PATCH_SOURCE_SHA256 = (
+    "623582b257a13f7551c81aaf8e87f7542ddb4d6564636f5e177ec0807126a341"
+)
+IDENTITY_FULLM_PATCHED_DISPATCH_SHA256 = (
+    "710da7d3a8e24c83f9f095222d5297d96f610c6310f3a8537ed1b925a25ece56"
 )
 EXPECTED_TASK_IDS = (
     "astropy__astropy-12907",
@@ -191,8 +215,12 @@ FIXED32_TOPOLOGY_CONTRACTS = {
 STAGE2_DUAL_PRODUCTION_SELECTOR = "identity_stockshape_stage2_b4"
 TWOM_DUAL_PRODUCTION_SELECTOR = "identity_twom_b4"
 HYBRID_N5120_DUAL_PRODUCTION_SELECTOR = "identity_hybrid_n5120_b4"
+FULLM_DUAL_PRODUCTION_SELECTOR = "identity_fullm_b4"
 SOURCE_BINDING_SCHEMA = (
     "fr13.fixed32.cutlass_b4.identity_hybrid_n5120.source_binding.v1"
+)
+IDENTITY_FULLM_SOURCE_BINDING_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_fullm.source_binding.v1"
 )
 SOURCE_BINDING_PATHS = (
     "scripts/fr13_patch_cutlass_fixed32_wave.py",
@@ -202,7 +230,9 @@ SOURCE_BINDING_PATHS = (
     "scripts/fr13_cutlass_wave_binary.py",
     "scripts/fr13_launch_forked_fa2_tree_server.sh",
     "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
     "scripts/run_swe_bench_q36_a.py",
+    "scripts/fr13_fixed32_contract.py",
     "src/lumo_flywheel_serving/inference_proxy.py",
     "config/fr13_fixed32/subset_b4_four.json",
     "scripts/fr13_dvk_subset_blocks.json",
@@ -212,6 +242,7 @@ DUAL_PRODUCTION_SELECTORS = frozenset(
         STAGE2_DUAL_PRODUCTION_SELECTOR,
         TWOM_DUAL_PRODUCTION_SELECTOR,
         HYBRID_N5120_DUAL_PRODUCTION_SELECTOR,
+        FULLM_DUAL_PRODUCTION_SELECTOR,
     }
 )
 DUAL_SIDECAR_SCHEMAS = {
@@ -222,6 +253,7 @@ DUAL_SIDECAR_SCHEMAS = {
     HYBRID_N5120_DUAL_PRODUCTION_SELECTOR: (
         IDENTITY_HYBRID_N5120_DUAL_K64_ROOT_SIDECAR_SCHEMA
     ),
+    FULLM_DUAL_PRODUCTION_SELECTOR: IDENTITY_FULLM_DUAL_K64_ROOT_SIDECAR_SCHEMA,
 }
 DUAL_BINDING_SCHEMAS = {
     STAGE2_DUAL_PRODUCTION_SELECTOR: (
@@ -231,6 +263,7 @@ DUAL_BINDING_SCHEMAS = {
     HYBRID_N5120_DUAL_PRODUCTION_SELECTOR: (
         IDENTITY_HYBRID_N5120_DUAL_K64_ROOT_BINDING_SCHEMA
     ),
+    FULLM_DUAL_PRODUCTION_SELECTOR: IDENTITY_FULLM_DUAL_K64_ROOT_BINDING_SCHEMA,
 }
 EXPECTED_PROJECTION_NK = (
     (5120, 6144),
@@ -341,6 +374,30 @@ CANDIDATE_CONTRACTS = {
             ),
             "k64_root": (
                 "fr13.fixed32.cutlass_b4.identity_hybrid_n5120.k64_root."
+                "production_binding.v1"
+            ),
+        },
+        "production_authorized": True,
+        "requires_resource_credential": False,
+        "required_qualification_profile": "k64_root",
+        "source_binding": "required",
+    },
+    "identity_fullm_b4": {
+        "diagnostic_selector": "identity_fullm_b4_byte_ab",
+        "live_schemas": {
+            "full_vocab": IDENTITY_FULLM_LIVE_SCHEMA,
+            "k64_root": IDENTITY_FULLM_K64_ROOT_LIVE_SCHEMA,
+        },
+        "sidecar_schemas": {
+            "full_vocab": IDENTITY_FULLM_SIDECAR_SCHEMA,
+            "k64_root": IDENTITY_FULLM_K64_ROOT_SIDECAR_SCHEMA,
+        },
+        "binding_schemas": {
+            "full_vocab": (
+                "fr13.fixed32.cutlass_b4.identity_fullm.production_binding.v1"
+            ),
+            "k64_root": (
+                "fr13.fixed32.cutlass_b4.identity_fullm.k64_root."
                 "production_binding.v1"
             ),
         },
@@ -475,12 +532,27 @@ def _candidate_source_hashes(candidate_selector: str) -> tuple[str, str]:
             IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256,
             IDENTITY_HYBRID_N5120_PATCHED_DISPATCH_SHA256,
         )
+    if candidate_selector == "identity_fullm_b4":
+        return (
+            IDENTITY_FULLM_PATCH_SOURCE_SHA256,
+            IDENTITY_FULLM_PATCHED_DISPATCH_SHA256,
+        )
     if candidate_selector == "persistent_b4_m128":
         return PATCH_SOURCE_SHA256, PATCHED_DISPATCH_SHA256
     if candidate_selector == "persistent_b4_m128_static":
         return STATIC_PATCH_SOURCE_SHA256, STATIC_PATCHED_DISPATCH_SHA256
     raise QualificationError(
         f"CUTLASS B4 candidate selector mismatch: {candidate_selector!r}"
+    )
+
+
+def _source_binding_schema(candidate_selector: str) -> str:
+    if candidate_selector == HYBRID_N5120_DUAL_PRODUCTION_SELECTOR:
+        return SOURCE_BINDING_SCHEMA
+    if candidate_selector == FULLM_DUAL_PRODUCTION_SELECTOR:
+        return IDENTITY_FULLM_SOURCE_BINDING_SCHEMA
+    raise QualificationError(
+        f"{candidate_selector} does not define a source-binding schema"
     )
 
 
@@ -748,7 +820,7 @@ def validate_source_commit_binding(
             "source-binding committed patch source does not match the pinned digest"
         )
     return {
-        "schema": SOURCE_BINDING_SCHEMA,
+        "schema": _source_binding_schema(candidate_selector),
         "source_commit": source_commit,
         "files": files,
     }
@@ -2040,7 +2112,10 @@ def main() -> int:
     source_parser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
     source_parser.add_argument(
         "--candidate-selector",
-        choices=(HYBRID_N5120_DUAL_PRODUCTION_SELECTOR,),
+        choices=(
+            HYBRID_N5120_DUAL_PRODUCTION_SELECTOR,
+            FULLM_DUAL_PRODUCTION_SELECTOR,
+        ),
         default=HYBRID_N5120_DUAL_PRODUCTION_SELECTOR,
     )
     attestation_parser = subparsers.add_parser("attestation")

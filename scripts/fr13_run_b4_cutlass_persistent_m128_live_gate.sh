@@ -88,6 +88,22 @@ case "$CANDIDATE_SELECTOR" in
       exit 2
     }
     ;;
+  identity_fullm_b4)
+    DIAGNOSTIC_SELECTOR=identity_fullm_b4_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_identity_fullm_b4_byte_ab.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_identity_fullm_b4_byte_ab.jsonl
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_fullm_b4_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_fullm_b4_k64_root_live_gate.v1
+    CANDIDATE_ARM_NAME=identity_fullm
+    [[ -z "$RESOURCE_CREDENTIAL" && -z "$RESOURCE_CREDENTIAL_SHA256" ]] || {
+      echo "full-M identity gate forbids a static resource credential" >&2
+      exit 2
+    }
+    [[ "$QUALIFICATION_PROFILE" == "k64_root" ]] || {
+      echo "full-M identity gate requires k64_root" >&2
+      exit 2
+    }
+    ;;
   persistent_b4_m128)
     DIAGNOSTIC_SELECTOR=persistent_b4_m128_byte_ab
     RECORD_SCHEMA=fr13.fixed32.cutlass_persistent_b4_m128_byte_ab.v1
@@ -245,7 +261,8 @@ unset -f run_variant
 mkdir -p "$RUNROOT_ABS"
 SOURCE_IDENTITY_PATH=
 SOURCE_IDENTITY_SHA256=
-if [[ "$CANDIDATE_SELECTOR" == "identity_hybrid_n5120_b4" ]]; then
+if [[ "$CANDIDATE_SELECTOR" == "identity_hybrid_n5120_b4" \
+      || "$CANDIDATE_SELECTOR" == "identity_fullm_b4" ]]; then
   SOURCE_IDENTITY_PATH="$RUNROOT_ABS/cutlass_b4_source_identity.at_launch.json"
   "$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py source-binding \
     --source-commit "$SOURCE_COMMIT" --patch-source "$PATCH_SOURCE" \
