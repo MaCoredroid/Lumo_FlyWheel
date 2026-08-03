@@ -22,6 +22,7 @@ bash -n \
 python3 -m pytest -q \
   tests/test_fr13_fixed32_sfwd_conv_postprep_wiring.py \
   tests/test_fr13_fixed32_sfwd_conv_postprep_fusion.py \
+  tests/test_fr13_fixed32_conv_commit_wiring.py \
   tests/test_fr13_fixed32_conv_source_batch.py \
   tests/test_fr13_fixed32_sfwd_state_fusion.py
 ```
@@ -34,16 +35,25 @@ default-off launcher, and exact B1/B4 byte/launch ledger.
 
 The subsequent runtime-wiring suite also verifies default-off selection,
 eager/FULL execution gating, final-FULL output preseed, exact capture binding,
-absence of the eager SSI scalar read from the bound launch path, and that the
-real-task wrapper classifies the candidate as eager only under
-`ENFORCE_EAGER=1`. All 48 focused and related tests passed. Generated
+absence of the eager SSI scalar read from the bound launch path, replay-time
+bank-row clamping before address formation, propagation into the persistent
+sticky-committer assertion, and that the real-task wrapper classifies the
+candidate as eager only under `ENFORCE_EAGER=1`. It also rejects a naked
+selector and a raw-SHA-valid manifest whose candidate source entry is wrong.
+All 61 focused and related tests passed. Generated
 `gdn_linear_attn.py` and `gpu_model_runner.py` patches were applied to pristine
 vLLM sources and compiled as Python source.
 
 Offline Triton 3.6 compilation targeted `GPUTarget("cuda", 121, 32)` for B1,
-B4, B1+tap, and B4+tap. `cuobjdump --dump-resource-usage` reported 56 registers,
-zero stack, zero local, and zero shared bytes for all four profiles. Cubins,
-PTX, SASS, raw logs, and compiler caches were deleted/not checked in.
+B4, B1+tap, and B4+tap with the capture guard enabled and a 257-row bank
+fixture. `cuobjdump --dump-resource-usage` reported 64 registers for no-tap
+B1/B4, 56 for B1/B4 with the diagnostic tap, and zero stack, local, and shared
+bytes for all four profiles. Cubins, PTX, SASS, raw logs, and compiler caches
+were deleted/not checked in.
+
+No byte-gate schema issuer or timing wrapper for this candidate exists in the
+checkpoint. Existing launchers do not forward the new PASS/manifest credential,
+so the source-bound selector cannot become a served or timed arm yet.
 
 No device API, Docker, service, task, request, response, timing, or acceptance
 path was used. Runtime qualification here means host-verified capture wiring,
