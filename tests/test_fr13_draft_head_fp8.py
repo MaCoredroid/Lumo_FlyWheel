@@ -131,13 +131,66 @@ def test_root_plus_four_capture_engagement_has_no_synchronize() -> None:
     assert "_fr13_dh_fp8_selected_root_calls > 1" in engagement
     assert "_fr13_dh_fp8_selected_capture_calls > 4" in engagement
     assert "self._fr13_dh_fp8_selected_root_calls != 1" in engagement
-    assert "self._fr13_dh_fp8_selected_capture_calls != 4" in engagement
+    assert "_fr13_fixed32_drafter_fp8_head_selection" in engagement
+    assert '"mtp_forward_calls", -1' in engagement
+    assert '"draft_head_fp8_calls", -1' in engagement
+    assert "_fr13_dh_fp8_expected_capture_calls != 4" in engagement
+    assert "observed_local=" in engagement
+    assert "observed_lifecycle=" in engagement
+    assert "expected_from_mtp=" in engagement
     assert '"selected_root_calls": 1' in engagement
-    assert '"captured_loop_calls": 4' in engagement
+    assert '"captured_loop_calls": (' in engagement
     assert '"fallback_calls": 0' in engagement
     assert '"steady_state_synchronizations": 0' in engagement
     assert "torch.cuda.synchronize" not in engagement
+    assert "torch.cuda.is_current_stream_capturing" not in engagement
     assert snippet.count("_fr13_dh_fp8_note_replay(") == 3
+
+
+def test_fp8_head_capture_classifier_uses_fixed32_mtp_lifecycle() -> None:
+    from scripts import fr10_phase4_patch_vllm_tree_gdn as patcher
+
+    tree = ast.parse(patcher._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE)
+    function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name
+        == "_fr13_fixed32_drafter_fp8_head_selection"
+    )
+    namespace: dict[str, object] = {
+        "_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT": None
+    }
+    exec(
+        compile(
+            ast.Module(body=[function], type_ignores=[]),
+            "<fr13-fp8-head-capture-classifier>",
+            "exec",
+        ),
+        namespace,
+    )
+    classify = namespace[
+        "_fr13_fixed32_drafter_fp8_head_selection"
+    ]
+    assert classify(1) is False
+
+    context = {
+        "batch_size": 4,
+        "capturing": True,
+        "mtp_forward_calls": 1,
+        "mtp_forward_rows": 4,
+        "draft_head_fp8_calls": 0,
+        "draft_head_fp8_rows": 0,
+    }
+    namespace["_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT"] = context
+    assert classify(4) is True
+    assert context["draft_head_fp8_calls"] == 1
+    assert context["draft_head_fp8_rows"] == 4
+
+    with pytest.raises(RuntimeError, match="left capture lifecycle"):
+        classify(4)
+    with pytest.raises(RuntimeError, match="left capture lifecycle"):
+        classify(1)
 
 
 def test_exact_fp8_traffic_floor_and_cap_math() -> None:
