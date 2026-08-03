@@ -1,0 +1,57 @@
+{
+  "schema": "fr13.fixed32.cfwd_logit_direct.source_work_model.v1",
+  "status": "source_only_default_off",
+  "source_commit": "ad3063da4344434aeed7d1bf49ead5c07a405765",
+  "candidate": "fixed32_cfwd_logit_direct_decisions_v1",
+  "qualification": {
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows": 32,
+    "logical_tree_limit": 32,
+    "modes": [
+      "tail6_fixed32",
+      "hydra27_fixed32"
+    ],
+    "batches": [
+      1,
+      4
+    ],
+    "vocab_size": 151936,
+    "fanout": 3,
+    "walk_cap": 12
+  },
+  "pipeline": {
+    "self_rows_per_request": 13,
+    "target_rows_per_request": 17,
+    "incumbent_full_vocab_fp32_rows_per_request": 192,
+    "incumbent_probability_producer_tensor_ops": 4,
+    "candidate_triton_launch_sites": 2,
+    "producer_dispatch_sites_removed_static": 2,
+    "additional_dense_decision_launches_removed": "unscored",
+    "physical_kernel_launches_removed": "pending_gpu_trace",
+    "integer_commit_launches_before": 1,
+    "integer_commit_launches_after": 1
+  },
+  "physical_work": {
+    "b1": {
+      "incumbent_full_vocab_materialized_bytes": 116686848,
+      "candidate_active_block_stat_bytes": 142560,
+      "candidate_block_stat_workspace_bytes": 245760,
+      "full_vocab_materialized_bytes_removed": 116544288
+    },
+    "b4": {
+      "incumbent_full_vocab_materialized_bytes": 466747392,
+      "candidate_active_block_stat_bytes": 570240,
+      "candidate_block_stat_workspace_bytes": 983040,
+      "full_vocab_materialized_bytes_removed": 466177152
+    }
+  },
+  "unchanged_work": {
+    "reachable_rows_per_request": 30,
+    "physical_drafts_per_request": 31,
+    "physical_rows_per_request": 32,
+    "integer_walk": "unchanged",
+    "reference_served_until_runtime_gates_pass": true
+  },
+  "claim_scope": "static_source_work_only_no_runtime_speed_claim"
+}
