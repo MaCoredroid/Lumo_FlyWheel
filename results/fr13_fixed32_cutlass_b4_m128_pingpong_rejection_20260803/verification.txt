@@ -1,0 +1,14 @@
+PASS pinned source application
+PASS isolated SM121a object compilation
+PASS candidate FP16 resource extraction
+PASS candidate BF16 resource extraction
+PASS candidate cubin extraction and identity
+PASS retained-kernel comparison extraction
+PASS patch tests: 34 passed after rejected source was removed
+PASS git diff whitespace check
+REJECT candidate stack: 512 bytes per thread for both dtypes
+REJECT candidate SASS local traffic: 241 LDL and 236 STL per dtype
+NOT RUN 128x256x128 ping-pong because 128x128x128 already spills
+NOT RUN GPU execution
+NOT RUN real SWE-Verified workload
+NOT RUN timing or hardware-floor acceptance

@@ -1,0 +1,7 @@
+variant	dtype	registers	stack_bytes	local_bytes	shared_bytes	constant0_bytes	verdict
+pingpong_m128	fp16	168	512	0	1024	2688	reject
+pingpong_m128	bf16	168	512	0	1024	2688	reject
+cooperative_m128	fp16	168	0	0	1024	2688	retain
+cooperative_m128	bf16	168	0	0	1024	2688	retain
+pingpong_twom	fp16	168	0	0	1024	2688	retain
+pingpong_twom	bf16	168	0	0	1024	2688	retain
