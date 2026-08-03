@@ -1,0 +1,19 @@
+{
+  "base_commit": "c49c8eb5370e4d4035aceffaa8476aea31f921f5",
+  "candidate": "fixed32_sfwd_conv_postprep_frontier5_direct_v1",
+  "files": {
+    "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py": {
+      "bytes": 7370,
+      "sha256": "c489999cde03283b55a776a407b6b54f5741b83cd11d32efa48c7c83a9ccce7c"
+    },
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py": {
+      "bytes": 20832,
+      "sha256": "0fcafb886a450f9288b9a0fae1e0b740180094a9a1d5c695dbd73ef336a15d6d"
+    },
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py": {
+      "bytes": 35295,
+      "sha256": "e15b78a1db747d0e9deaed0b31aae4373b2af6e631b5b28ad7822423fdc9f94b"
+    }
+  },
+  "schema": "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1"
+}
