@@ -107,6 +107,16 @@ case "$B1_WORKLOAD_PROFILE" in
             && "$FR13_GATE_BM8" == "0" \
             && "$FR13_GATE_GDN_BV" == "0" ]]; then
       :
+    elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+            && "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" == "byte_ab" \
+            && "$FR13_GATE_QROW16" == "0" \
+            && "$FR13_GATE_TAW_NATIVE" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
+            && "$FR13_GATE_BM8" == "0" \
+            && "$FR13_GATE_GDN_BV" == "0" ]]; then
+      :
     else
       echo "B1 k64_root requires an isolated admitted candidate" >&2
       exit 2
@@ -172,6 +182,8 @@ if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_b1_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_fullgrid_b1_byte_ab" ]]; then
+  export ENFORCE_EAGER=1
+elif [[ "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" == "byte_ab" ]]; then
   export ENFORCE_EAGER=1
 elif [[ "${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}" == "1" ]]; then
   export ENFORCE_EAGER=1

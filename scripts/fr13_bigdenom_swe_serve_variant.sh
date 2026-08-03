@@ -109,12 +109,18 @@ export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
   FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB \
   FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB \
   FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION \
-  FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
+  FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB \
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE \
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO \
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256 \
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON \
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256
 _fixed32_eager_kernel_diagnostic=0
 if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
       || "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
       || "$FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB" == "1" \
       || "$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" == "1" \
+      || "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" == "byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
@@ -2523,7 +2529,8 @@ if [[ -n "$FIXED32_MODE" ]]; then
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_b1_byte_ab" \
-        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" ]]; then
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" \
+        || "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" == "byte_ab" ]]; then
     FIXED32_RUNNER_ARGS+=(
       --fixed32-cutlass-real-event-arm "$FIXED32_CUTLASS_REAL_EVENT_ARM_PATH"
     )

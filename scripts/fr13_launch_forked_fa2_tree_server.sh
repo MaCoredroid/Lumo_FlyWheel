@@ -111,6 +111,11 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_CUTLASS_WAVE_SO
   FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL
   FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256
   FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
   FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
   FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON
@@ -144,7 +149,10 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:split2" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:no_split" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:split2" \
-   || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION]}" == "set:1" ]] \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE]}" == "set:byte_ab" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO]}" == set:* ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 _FR13_LOCAL_ENV_SOURCED=0
 if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
@@ -161,7 +169,9 @@ fi
    || "${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" == "1" \
    || -n "${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}" \
    || -n "${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}" \
-   || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" == "1" ]] \
+   || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" == "1" \
+   || "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" != "0" \
+   || -n "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO:-}" ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
   for _fr13_guard_name in "${_FR13_M32_GUARD_NAMES[@]}"; do
@@ -522,6 +532,12 @@ if [[ -v FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE ]]; then
   _fr13_cutlass_qualification_profile_explicit=1
 fi
 FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE:-full_vocab}
+FR13_FIXED32_B1_FP8_QUANT_REGCACHE=${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}
+FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO=${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO:-}
+FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256=${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256:-}
+FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON=${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON:-}
+FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256=${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256:-}
+FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SOURCE_COMMIT=$(git rev-parse HEAD)
 if [[ ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_b1" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_b1_byte_ab" \
         || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_n5120_single_b1" \
@@ -866,6 +882,84 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE" != "stock" \
       && ( "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" != "0" \
            || "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" != "0" ) ]]; then
   echo "nonstock CUTLASS wave requires both BM8 selectors to be 0" >&2
+  exit 2
+fi
+case "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" in
+  0|byte_ab|1) ;;
+  *) echo "FR13_FIXED32_B1_FP8_QUANT_REGCACHE must be 0, byte_ab, or 1" >&2; exit 2 ;;
+esac
+FR13_FP8_QUANT_REGCACHE_DOCKER_ARGS=()
+if [[ -n "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" ]]; then
+  [[ "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" == /* \
+     && "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" != *:* \
+     && -f "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" \
+     && ! -L "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" \
+     && "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" | awk '{print $1}')" == "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256" ]] || {
+    echo "FP8 quant regcache requires a pinned absolute candidate binary" >&2
+    exit 2
+  }
+  [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-}" == "65536" \
+     && "$FR13_FIXED32_CUTLASS_WAVE" == "stock" \
+     && -z "$FR13_FIXED32_CUTLASS_WAVE_SO" ]] || {
+    echo "FP8 quant regcache binary requires isolated Hydra27 physical32 K64/root1 B1" >&2
+    exit 2
+  }
+  .venv/bin/python scripts/fr13_fp8_quant_regcache_runtime.py verify-binary \
+    "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" \
+    --expected-sha256 "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256" \
+    >/dev/null
+  FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO=$(
+    realpath "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO"
+  )
+  FR13_FP8_QUANT_REGCACHE_DOCKER_ARGS=(
+    -v "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO:/tmp/fr13_fp8_quant_regcache.abi3.so:ro"
+  )
+  if [[ "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" == "byte_ab" ]]; then
+    [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" \
+       && "${ENFORCE_EAGER:-0}" == "1" \
+       && -z "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON" \
+       && -z "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256" ]] || {
+      echo "FP8 quant byte A/B requires eager real-B1 diagnostic mode and no PASS" >&2
+      exit 2
+    }
+  elif [[ "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" == "1" ]]; then
+    [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "0" \
+       && "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON" == /* \
+       && -f "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON" \
+       && ! -L "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON" \
+       && "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+      echo "FP8 quant production requires a pinned real-B1 PASS sidecar" >&2
+      exit 2
+    }
+    .venv/bin/python scripts/fr13_fp8_quant_regcache_pass.py verify \
+      --sidecar "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON" \
+      --expected-sidecar-sha256 "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256" \
+      --candidate-so "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" \
+      --expected-candidate-sha256 "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256" \
+      --patch-source scripts/fr13_patch_fp8_quant_fixed32.py \
+      >/dev/null
+    FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON=$(
+      realpath "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON"
+    )
+    FR13_FP8_QUANT_REGCACHE_DOCKER_ARGS+=(
+      -v "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON:/tmp/fr13_fp8_quant_regcache.pass.json:ro"
+    )
+  else
+    [[ -z "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON" \
+       && -z "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256" ]] || {
+      echo "FP8 quant stock-control binary forbids a production PASS" >&2
+      exit 2
+    }
+  fi
+elif [[ "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" != "0" \
+        || -n "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256" \
+        || -n "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON" \
+        || -n "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256" ]]; then
+  echo "FP8 quant regcache selector or credentials have no candidate binary" >&2
   exit 2
 fi
 FR13_CUTLASS_WAVE_DOCKER_ARGS=()
@@ -3380,6 +3474,8 @@ FR13_ENV_FORWARD_ARGS=()
 while IFS= read -r _v; do
   [[ "$_v" == "FR13_FIXED32_INGRESS_SECRET_FILE" \
      || "$_v" == "FR13_FIXED32_MIDDLEWARE_FLAGS" \
+     || "$_v" == "FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" \
+     || "$_v" == "FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_SO" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" \
@@ -3424,6 +3520,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
+  "${FR13_FP8_QUANT_REGCACHE_DOCKER_ARGS[@]}" \
   "${FR13_CUTLASS_WAVE_DOCKER_ARGS[@]}" \
   -v "${FR13_COMPILE_CACHE_DIR:-$HOME/.cache/fr13_vllm_container_cache}:/root/.cache" \
   "${NSYS_DOCKER_ARGS[@]}" \
@@ -3638,6 +3735,11 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_CUTLASS_WAVE_PRODUCTION="$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" \
   -e FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR="$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR" \
   -e FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256" \
+  -e FR13_FIXED32_B1_FP8_QUANT_REGCACHE="$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" \
+  -e FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256="$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256" \
+  -e FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON="${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_JSON:+/tmp/fr13_fp8_quant_regcache.pass.json}" \
+  -e FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256="$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256" \
+  -e FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SOURCE_COMMIT="$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SOURCE_COMMIT" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
@@ -3864,6 +3966,29 @@ temporary.write_text(
 )
 temporary.replace(identity_path)
 PY
+fi
+if [[ -n "\${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256:-}" ]]; then
+  if [[ "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" == "1" ]]; then
+    python3 /workspace/scripts/fr13_fp8_quant_regcache_runtime.py install \
+      --source /tmp/fr13_fp8_quant_regcache.abi3.so \
+      --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
+      --attestation /logs/fr13_fixed32_b1_fp8_quant_regcache.binary.json \
+      --selector "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" \
+      --expected-sha256 "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256" \
+      --patch-source /workspace/scripts/fr13_patch_fp8_quant_fixed32.py \
+      --source-commit "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SOURCE_COMMIT" \
+      --production-sidecar /tmp/fr13_fp8_quant_regcache.pass.json \
+      --expected-production-sidecar-sha256 "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256"
+  else
+    python3 /workspace/scripts/fr13_fp8_quant_regcache_runtime.py install \
+      --source /tmp/fr13_fp8_quant_regcache.abi3.so \
+      --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
+      --attestation /logs/fr13_fixed32_b1_fp8_quant_regcache.binary.json \
+      --selector "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" \
+      --expected-sha256 "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256" \
+      --patch-source /workspace/scripts/fr13_patch_fp8_quant_fixed32.py \
+      --source-commit "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SOURCE_COMMIT"
+  fi
 fi
 if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
   if [[ "\${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "1" ]]; then

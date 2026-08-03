@@ -27,6 +27,8 @@ def _fixture(module) -> str:
 
 #define LAUNCH_KERNEL(T, DST_DTYPE)                                        \\
   do {{}} while (0)
+#undef LAUNCH_KERNEL
+}}
 """
 
 
@@ -45,6 +47,7 @@ def test_candidate_is_default_off_and_exactly_shape_gated() -> None:
     patched, changed = module.patch_text(_fixture(module))
     assert changed
     assert 'std::getenv("FR13_FIXED32_B1_FP8_QUANT_REGCACHE")' in patched
+    assert 'std::strcmp(value, "byte_ab") == 0' in patched
     assert 'std::strcmp(value, "1") == 0' in patched
     assert "input.scalar_type() == torch::headeronly::ScalarType::BFloat16" in patched
     assert "dst_type == torch::headeronly::ScalarType::Float8_e4m3fn" in patched
@@ -58,9 +61,26 @@ def test_candidate_is_default_off_and_exactly_shape_gated() -> None:
     assert "output_s.size(0) == 32 && output_s.size(1) == 40" in patched
     assert "output_s.stride(0) == 1 && scale_stride == 32" in patched
     assert "return;" in patched
-    assert patched.index("if (fr13_regcache_shape)") < patched.index(
+    assert patched.index("if (fr13_regcache_shape &&") < patched.index(
         "#define LAUNCH_KERNEL"
     )
+
+
+def test_byte_ab_is_real_task_armed_complete_and_stock_serving() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_fixture(module))
+    assert '"/logs/fr13_fixed32_cutlass_streamk.real_event.arm"' in patched
+    assert "fr13.fixed32.b1_fp8_quant_regcache.byte_ab.v1" in patched
+    assert "torch::stable::empty_like(output_q)" in patched
+    assert "torch::stable::empty_like(output_s)" in patched
+    assert "cudaStreamSynchronize(stream)" in patched
+    assert r'\"output_byte_equal\"' in patched
+    assert r'\"scale_byte_equal\"' in patched
+    assert r'\"stock_served\":true' in patched
+    assert r'\"comparison_sampled\":false' in patched
+    assert "invocation / 128" in patched
+    assert "invocation % 128" in patched
+    assert "byte_ab_limit" not in patched
 
 
 def test_candidate_preserves_stock_halfwarp_arithmetic_order() -> None:
