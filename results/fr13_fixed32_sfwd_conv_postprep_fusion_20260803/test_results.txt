@@ -3,13 +3,19 @@ Focused and related host-only suites:
 python3 -m pytest -q \
   tests/test_fr13_fixed32_sfwd_conv_postprep_wiring.py \
   tests/test_fr13_fixed32_sfwd_conv_postprep_fusion.py \
+  tests/test_fr13_fixed32_conv_commit_wiring.py \
   tests/test_fr13_fixed32_conv_source_batch.py \
   tests/test_fr13_fixed32_sfwd_state_fusion.py
-................................................                         [100%]
-48 passed in 1.53s
+.............................................................            [100%]
+61 passed in 3.28s
 
 Generated GDN and GPU-runner patches also compiled against pristine vLLM
 sources (`generated_gdn_bytes=610983`, `generated_runner_bytes=309576`).
 Python compilation, `bash -n`, `git diff --check`, and artifact checksum
-verification also passed. No Docker, GPU, service, task, request, timing, or
-acceptance run was performed.
+verification also passed. Guarded no-tap B1/B4 offline profiles use 64
+registers/thread; tap profiles use 56; all report zero stack/local/shared.
+Source commit: bd225f7f80f9911d19a731cef109028767ac82d3.
+
+No Docker, GPU, service, task, request, timing, or acceptance run was performed.
+The candidate has no byte-gate issuer or timing wrapper, and existing launchers
+do not forward its required source-bound credential.

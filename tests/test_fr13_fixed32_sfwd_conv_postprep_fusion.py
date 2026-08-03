@@ -697,6 +697,7 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
 def test_sanitized_artifact_binds_sources_ledgers_and_resource_gate() -> None:
     manifest = json.loads((ARTIFACT / "source_manifest.json").read_text())
     assert manifest["base_commit"] == "c49c8eb5370e4d4035aceffaa8476aea31f921f5"
+    assert manifest["source_commit"] == "bd225f7f80f9911d19a731cef109028767ac82d3"
     for relative, expected in manifest["files"].items():
         path = ROOT / relative
         raw = path.read_bytes()
@@ -713,10 +714,16 @@ def test_sanitized_artifact_binds_sources_ledgers_and_resource_gate() -> None:
     codegen = json.loads((ARTIFACT / "codegen_summary.json").read_text())
     assert codegen["offline_only"] is True
     assert codegen["timing_claim"] is False
+    assert codegen["compile_contract"]["capture_guard"] is True
+    assert codegen["compile_contract"]["bank_rows_fixture"] == 257
     assert codegen["resource_gate"]["max_registers_per_thread"] == 64
     assert set(codegen["profiles"]) == {"b1", "b4", "b1_tap", "b4_tap"}
+    assert codegen["profiles"]["b1"]["registers_per_thread"] == 64
+    assert codegen["profiles"]["b4"]["registers_per_thread"] == 64
+    assert codegen["profiles"]["b1_tap"]["registers_per_thread"] == 56
+    assert codegen["profiles"]["b4_tap"]["registers_per_thread"] == 56
     for profile in codegen["profiles"].values():
-        assert profile["registers_per_thread"] == 56
+        assert profile["registers_per_thread"] <= 64
         assert profile["stack_bytes"] == 0
         assert profile["local_bytes"] == 0
         assert profile["shared_bytes"] == 0
