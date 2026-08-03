@@ -1,0 +1,14 @@
+focused_patch_tests: PASS (7 passed)
+python_byte_compile: PASS
+git_diff_check: PASS
+pinned_vllm_source_apply: PASS
+baseline_sm121a_compile: PASS
+candidate_sm121a_compile: PASS
+candidate_resource_gate: PASS (REG=26 STACK=0 LOCAL=0)
+candidate_shared_opcode_gate: PASS (BAR=0 LDS=0 STS=0)
+candidate_spill_gate: PASS (LDL=0 STL=0)
+untouched_stock_sass_identity: PASS
+gpu_runtime: NOT RUN
+synthetic_or_probe_timing: NOT RUN
+real_swe_verified_byte_gate: NOT RUN
+real_swe_verified_timing: NOT RUN
