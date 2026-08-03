@@ -7605,6 +7605,15 @@ def _patch_gdn_attn() -> bool:
             "                        if _fr13_gdn_mod._fr13_fixed32_committer_knorm_ring_requested()\n"
             "                        else None\n"
             "                    )\n"
+            "                    _fr13_ep_ring_gate = (\n"
+            "                        torch.zeros(\n"
+            "                            (_fr13_ep_count, _fr13_ring_bs, n_pad, _fr13_ep_vh, 2),\n"
+            "                            dtype=torch.float32,\n"
+            "                            device=device,\n"
+            "                        )\n"
+            "                        if _fr13_gdn_mod._fr13_fixed32_committer_gate_ring_requested()\n"
+            "                        else None\n"
+            "                    )\n"
             "                    _fr13_ep_prev_lens = torch.zeros(\n"
             "                        (_fr13_ep_count, _fr13_ring_bs),\n"
             "                        dtype=torch.int32,\n"
@@ -7637,6 +7646,11 @@ def _patch_gdn_attn() -> bool:
             "                            if _fr13_ep_ring_k_norm is not None\n"
             "                            else None\n"
             "                        )\n"
+            "                        _fr13_layer._fr13_replay_ring_gate = (\n"
+            "                            _fr13_ep_ring_gate[_fr13_row]\n"
+            "                            if _fr13_ep_ring_gate is not None\n"
+            "                            else None\n"
+            "                        )\n"
             "                        _fr13_layer._fr13_replay_prev_lens = _fr13_ep_prev_lens[_fr13_row]\n"
             "                        _fr13_layer._fr13_replay_spec_idx = _fr13_ep_spec_idx[_fr13_row]\n"
             "                        _fr13_layer._fr13_replay_flags = _fr13_ep_flags[_fr13_row]\n"
@@ -7659,6 +7673,7 @@ def _patch_gdn_attn() -> bool:
             "                        \"ring_a\": _fr13_ep_ring_a,\n"
             "                        \"ring_b\": _fr13_ep_ring_b,\n"
             "                        \"ring_k_norm\": _fr13_ep_ring_k_norm,\n"
+            "                        \"ring_gate\": _fr13_ep_ring_gate,\n"
             "                        \"prev_lens\": _fr13_ep_prev_lens,\n"
             "                        \"spec_idx\": _fr13_ep_spec_idx,\n"
             "                        \"ssi_col0\": _fr13_ep_spec_idx[:, :, 0],\n"
@@ -7704,6 +7719,8 @@ def _patch_gdn_attn() -> bool:
             "                            dtype=_fr13_dtype,\n"
             "                            device=device,\n"
             "                        )\n"
+            "                        _fr13_layer._fr13_replay_ring_k_norm = None\n"
+            "                        _fr13_layer._fr13_replay_ring_gate = None\n"
             "                        _fr13_layer._fr13_replay_prev_lens = torch.zeros(\n"
             "                            (_fr13_ring_bs,),\n"
             "                            dtype=torch.int32,\n"
@@ -12565,6 +12582,9 @@ def _fr13_conv_subop_mab(
                                             k_norm_rings=_fr13_f32_stacks[
                                                 "ring_k_norm"
                                             ],
+                                            gate_rings=_fr13_f32_stacks[
+                                                "ring_gate"
+                                            ],
                                             v_rings=_fr13_f32_stacks["ring_v"],
                                             a_rings=_fr13_f32_stacks["ring_a"],
                                             b_rings=_fr13_f32_stacks["ring_b"],
@@ -12745,6 +12765,18 @@ def _fr13_conv_subop_mab(
                                     is not None
                                     else None
                                 ),
+                                ring_gate=(
+                                    self._fr13_replay_ring_gate[
+                                        :_fr13_gdn_batch, :tree_n
+                                    ].flatten(0, 1)
+                                    if getattr(
+                                        self,
+                                        "_fr13_replay_ring_gate",
+                                        None,
+                                    )
+                                    is not None
+                                    else None
+                                ),
                                 ring_v=(
                                     self._fr13_replay_ring_v[
                                         :_fr13_gdn_batch, :tree_n
@@ -12830,6 +12862,16 @@ def _fr13_conv_subop_mab(
                                 if getattr(
                                     self,
                                     "_fr13_replay_ring_k_norm",
+                                    None,
+                                )
+                                is not None
+                                else None
+                            ),
+                            ring_gate=(
+                                self._fr13_replay_ring_gate[fr10_b]
+                                if getattr(
+                                    self,
+                                    "_fr13_replay_ring_gate",
                                     None,
                                 )
                                 is not None
@@ -15830,6 +15872,7 @@ def _fr13_fixed32_device_commit_route(
         accepted_lens=spec_lens[:batch],
         k_rings=stacks["ring_k"],
         k_norm_rings=stacks["ring_k_norm"],
+        gate_rings=stacks["ring_gate"],
         v_rings=stacks["ring_v"],
         a_rings=stacks["ring_a"],
         b_rings=stacks["ring_b"],

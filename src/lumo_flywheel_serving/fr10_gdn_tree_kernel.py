@@ -462,6 +462,19 @@ def _fr13_fixed32_committer_knorm_ring_requested() -> bool:
     )
 
 
+def _fr13_fixed32_committer_gate_ring_requested() -> bool:
+    """Return the boot-time arm for producer-reused recurrence gates."""
+    if os.environ.get("FR13_FIXED32_COMMITTER_GATE_RING") == "1":
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_fixed32_committer_gate_ring.arm",
+            "/tmp/fr13_fixed32_committer_gate_ring.arm",
+        )
+    )
+
+
 def _fr13_fixed32_committer_layer_batch_real_event_marker(
     path: str = _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT,
 ) -> str | None:
@@ -10126,6 +10139,7 @@ def _tree_gdn_fixed32_single_launch_node(
     ring_a,
     ring_b,
     ring_k_norm,
+    ring_gate,
     pid_batch,
     pid_vh,
     pid_v,
@@ -10145,6 +10159,7 @@ def _tree_gdn_fixed32_single_launch_node(
     SCAN_ALIGN: tl.constexpr,
     RING_EXPORT: tl.constexpr,
     K_NORM_EXPORT: tl.constexpr,
+    GATE_EXPORT: tl.constexpr,
 ):
     """Run one unchanged GDN recurrence and its single-writer stores."""
     n_ok = (node >= 0) & (node < N_ACTUAL)
@@ -10215,6 +10230,28 @@ def _tree_gdn_fixed32_single_launch_node(
                 b_raw_b_in,
                 mask=n_ok & (pid_v == 0),
             )
+        if GATE_EXPORT:
+            x = b_raw_a + b_dt_bias
+            softplus_x = tl.where(
+                x <= 20.0,
+                tl.log(1.0 + tl.exp(x)),
+                x,
+            )
+            b_g = -tl.exp(b_a_log) * softplus_x
+            b_b = tl.sigmoid(b_raw_b.to(tl.float32))
+            gate_offset = (
+                (global_node * NUM_VH + pid_vh) * 2
+            )
+            tl.store(
+                ring_gate + gate_offset,
+                b_g,
+                mask=n_ok & (pid_v == 0),
+            )
+            tl.store(
+                ring_gate + gate_offset + 1,
+                b_b,
+                mask=n_ok & (pid_v == 0),
+            )
     b_k_inv_norm = 1.0
     if K_NORM_EXPORT:
         b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
@@ -10240,8 +10277,8 @@ def _tree_gdn_fixed32_single_launch_node(
         USE_QK_L2NORM_IN_KERNEL=(
             USE_QK_L2NORM_IN_KERNEL and not K_NORM_EXPORT
         ),
-        RAW_GATING=RAW_GATING,
-        SCAN_ALIGN=SCAN_ALIGN and not K_NORM_EXPORT,
+        RAW_GATING=RAW_GATING and not GATE_EXPORT,
+        SCAN_ALIGN=SCAN_ALIGN and not K_NORM_EXPORT and not GATE_EXPORT,
     )
     tl.store(
         out + (global_node * NUM_VH + pid_vh) * DIM_V + offs_v,
@@ -10278,6 +10315,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
     ring_b,
     flags_ptr,
     ring_k_norm,
+    ring_gate,
     N_ACTUAL: tl.constexpr,
     NUM_KH: tl.constexpr,
     NUM_VH: tl.constexpr,
@@ -10303,6 +10341,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
     PRESCALED_PATH_BASE: tl.constexpr = False,
     RING_EXPORT: tl.constexpr = False,
     K_NORM_EXPORT: tl.constexpr = False,
+    GATE_EXPORT: tl.constexpr = False,
     FLAGS_EXPORT: tl.constexpr = False,
     FLAGS_ROWS: tl.constexpr = 0,
 ):
@@ -10370,6 +10409,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
             ring_a,
             ring_b,
             ring_k_norm,
+            ring_gate,
             pid_batch,
             pid_vh,
             pid_v,
@@ -10389,6 +10429,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
             SCAN_ALIGN=SCAN_ALIGN,
             RING_EXPORT=RING_EXPORT,
             K_NORM_EXPORT=K_NORM_EXPORT,
+            GATE_EXPORT=GATE_EXPORT,
         )
         group_path_count = tl.load(group_path_counts + root_index)
         for member in tl.static_range(0, MAX_GROUP_PATHS):
@@ -10432,6 +10473,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
                     ring_a,
                     ring_b,
                     ring_k_norm,
+                    ring_gate,
                     pid_batch,
                     pid_vh,
                     pid_v,
@@ -10451,6 +10493,7 @@ def _tree_gdn_kernel_fixed32_single_launch(
                     SCAN_ALIGN=SCAN_ALIGN,
                     RING_EXPORT=RING_EXPORT,
                     K_NORM_EXPORT=K_NORM_EXPORT,
+                    GATE_EXPORT=GATE_EXPORT,
                 )
     if FLAGS_EXPORT:
         flag_writer = (pid_vh == 0) & (pid_v == 0) & (pid_batch == 0)
@@ -12218,6 +12261,7 @@ def _fr13_fixed32_committer_signature(
     spec_state_indices,
     k_rings,
     k_norm_rings,
+    gate_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -12236,6 +12280,7 @@ def _fr13_fixed32_committer_signature(
         int(spec_state_indices.data_ptr()),
         int(k_rings.data_ptr()),
         int(k_norm_rings.data_ptr()) if k_norm_rings is not None else 0,
+        int(gate_rings.data_ptr()) if gate_rings is not None else 0,
         int(v_rings.data_ptr()),
         int(a_rings.data_ptr()),
         int(b_rings.data_ptr()),
@@ -12245,6 +12290,11 @@ def _fr13_fixed32_committer_signature(
         (
             tuple(int(value) for value in k_norm_rings.shape)
             if k_norm_rings is not None
+            else None
+        ),
+        (
+            tuple(int(value) for value in gate_rings.shape)
+            if gate_rings is not None
             else None
         ),
         tuple(int(value) for value in v_rings.shape),
@@ -12260,6 +12310,7 @@ def _fr13_fixed32_committer_signature(
         ),
         str(k_rings.dtype),
         str(k_norm_rings.dtype) if k_norm_rings is not None else None,
+        str(gate_rings.dtype) if gate_rings is not None else None,
         str(v_rings.dtype),
         str(a_rings.dtype),
         str(b_rings.dtype),
@@ -12276,6 +12327,7 @@ def _fr13_fixed32_committer_identity_key(
     spec_state_indices,
     k_rings,
     k_norm_rings,
+    gate_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -12294,6 +12346,7 @@ def _fr13_fixed32_committer_identity_key(
         id(spec_state_indices),
         id(k_rings),
         id(k_norm_rings),
+        id(gate_rings),
         id(v_rings),
         id(a_rings),
         id(b_rings),
@@ -12312,6 +12365,7 @@ def _validate_fixed32_committer_contract(
     accepted_lens,
     k_rings,
     k_norm_rings,
+    gate_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -12453,6 +12507,11 @@ def _validate_fixed32_committer_contract(
             "FR13 fixed32 committer received a K-norm ring while its arm "
             "is disabled"
         )
+    gate_reuse = _fr13_fixed32_committer_gate_ring_requested()
+    if gate_reuse and not k_norm_reuse:
+        raise RuntimeError(
+            "FR13 fixed32 committer gate reuse requires K-norm reuse"
+        )
     if spec_state_indices.ndim != 3 or (
         int(spec_state_indices.shape[0]) != 48
         or int(spec_state_indices.shape[1]) < batch
@@ -12466,6 +12525,7 @@ def _validate_fixed32_committer_contract(
     dim_v = int(v_rings.shape[-1]) if v_rings.ndim == 5 else -1
     expected_v = (48, ring_batch, 32, num_vh, dim_v)
     expected_ab = (48, ring_batch, 32, num_vh)
+    expected_gate = (48, ring_batch, 32, num_vh, 2)
     if tuple(v_rings.shape) != expected_v:
         raise ValueError(
             f"FR13_FIXED32_COMMIT_DEVICE_FILL v shape must be {expected_v}, "
@@ -12475,6 +12535,23 @@ def _validate_fixed32_committer_contract(
         raise ValueError(
             "FR13_FIXED32_COMMIT_DEVICE_FILL a/b shapes must be "
             f"{expected_ab}, got {tuple(a_rings.shape)}/{tuple(b_rings.shape)}"
+        )
+    if gate_reuse:
+        if (
+            not torch.is_tensor(gate_rings)
+            or gate_rings.device != device
+            or tuple(gate_rings.shape) != expected_gate
+            or gate_rings.dtype != torch.float32
+            or not gate_rings.is_contiguous()
+        ):
+            raise ValueError(
+                "FR13 fixed32 committer gate ring must be contiguous FP32 "
+                f"{expected_gate} on the activation-ring device"
+            )
+    elif gate_rings is not None:
+        raise RuntimeError(
+            "FR13 fixed32 committer received a gate ring while its arm is "
+            "disabled"
         )
     _bank_rows, bank_vh, bank_dim_v, bank_dim_k = bank_shape
     if (
@@ -12533,6 +12610,7 @@ def _fr13_fixed32_committer_fast_state(
     accepted_lens,
     k_rings,
     k_norm_rings,
+    gate_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -12588,6 +12666,7 @@ def _fr13_fixed32_committer_fast_state(
         spec_state_indices=spec_state_indices,
         k_rings=k_rings,
         k_norm_rings=k_norm_rings,
+        gate_rings=gate_rings,
         v_rings=v_rings,
         a_rings=a_rings,
         b_rings=b_rings,
@@ -12740,6 +12819,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     accepted_lens,
     spec_state_indices,
     k_norm_rings,
+    gate_rings,
     B: tl.constexpr,
     PATH_CAP: tl.constexpr,
     H: tl.constexpr,
@@ -12756,6 +12836,9 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     RING_KN_L_STRIDE: tl.constexpr,
     RING_KN_B_STRIDE: tl.constexpr,
     RING_KN_N_STRIDE: tl.constexpr,
+    RING_GATE_L_STRIDE: tl.constexpr,
+    RING_GATE_B_STRIDE: tl.constexpr,
+    RING_GATE_N_STRIDE: tl.constexpr,
     RING_V_L_STRIDE: tl.constexpr,
     RING_V_B_STRIDE: tl.constexpr,
     RING_V_N_STRIDE: tl.constexpr,
@@ -12768,6 +12851,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     THRESHOLD: tl.constexpr,
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
     K_NORM_REUSE: tl.constexpr,
+    GATE_REUSE: tl.constexpr,
 ):
     """Native fused-sigmoid state recurrence batched across all layers.
 
@@ -12801,9 +12885,12 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     mask_v = o_v < V
     mask_h = mask_v[:, None] & mask_k[None, :]
 
-    p_gate = gate_coeffs + i_l * GATE_L_STRIDE + i_hv * 2
-    b_a_scale = tl.load(p_gate)
-    b_dt_bias = tl.load(p_gate + 1)
+    b_a_scale = 0.0
+    b_dt_bias = 0.0
+    if not GATE_REUSE:
+        p_gate = gate_coeffs + i_l * GATE_L_STRIDE + i_hv * 2
+        b_a_scale = tl.load(p_gate)
+        b_dt_bias = tl.load(p_gate + 1)
     # Preserve the anchor+offset form used by the byte-gated all-layer replay.
     # A raw pointer-table load loses 16-byte AxisInfo and changes reductions.
     state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4
@@ -12846,32 +12933,42 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
             + i_hv * V
             + o_v
         )
-        p_a = (
-            a_rings
-            + i_l * RING_AB_L_STRIDE
-            + i_n * RING_AB_B_STRIDE
-            + node * RING_AB_N_STRIDE
-            + i_hv
-        )
-        p_b = (
-            b_rings
-            + i_l * RING_AB_L_STRIDE
-            + i_n * RING_AB_B_STRIDE
-            + node * RING_AB_N_STRIDE
-            + i_hv
-        )
         b_k = tl.load(p_k, mask=mask_k, other=0).to(tl.float32)
         b_v = tl.load(p_v, mask=mask_v, other=0).to(tl.float32)
-        b_b = tl.load(p_b).to(tl.float32)
-
-        x = tl.load(p_a).to(tl.float32) + b_dt_bias
-        softplus_x = tl.where(
-            BETA * x <= THRESHOLD,
-            (1 / BETA) * tl.log(1 + tl.exp(BETA * x)),
-            x,
-        )
-        b_g = b_a_scale * softplus_x
-        b_beta = tl.sigmoid(b_b.to(tl.float32))
+        if GATE_REUSE:
+            p_live_gate = (
+                gate_rings
+                + i_l * RING_GATE_L_STRIDE
+                + i_n * RING_GATE_B_STRIDE
+                + node * RING_GATE_N_STRIDE
+                + i_hv * 2
+            )
+            b_g = tl.load(p_live_gate)
+            b_beta = tl.load(p_live_gate + 1)
+        else:
+            p_a = (
+                a_rings
+                + i_l * RING_AB_L_STRIDE
+                + i_n * RING_AB_B_STRIDE
+                + node * RING_AB_N_STRIDE
+                + i_hv
+            )
+            p_b = (
+                b_rings
+                + i_l * RING_AB_L_STRIDE
+                + i_n * RING_AB_B_STRIDE
+                + node * RING_AB_N_STRIDE
+                + i_hv
+            )
+            b_b = tl.load(p_b).to(tl.float32)
+            x = tl.load(p_a).to(tl.float32) + b_dt_bias
+            softplus_x = tl.where(
+                BETA * x <= THRESHOLD,
+                (1 / BETA) * tl.log(1 + tl.exp(BETA * x)),
+                x,
+            )
+            b_g = b_a_scale * softplus_x
+            b_beta = tl.sigmoid(b_b.to(tl.float32))
 
         if K_NORM_REUSE:
             b_k *= tl.load(
@@ -12900,12 +12997,14 @@ def _fr13_fixed32_committer_native_layer_batch(
     spec_state_indices,
     k_rings,
     k_norm_rings,
+    gate_rings,
     v_rings,
     a_rings,
     b_rings,
     gate_coeffs,
     use_qk_l2norm_in_kernel,
     k_norm_reuse,
+    gate_reuse,
 ) -> None:
     """Launch all 48 native-realization scans to disjoint destinations once."""
     layers = 48
@@ -12919,10 +13018,15 @@ def _fr13_fixed32_committer_native_layer_batch(
         or dim_k != 128
         or dim_v != 128
         or int(state["bank_off16"].numel()) != layers
-        or not torch.is_tensor(gate_coeffs)
-        or tuple(gate_coeffs.shape) != (layers, num_vh, 2)
-        or gate_coeffs.dtype != torch.float32
-        or not gate_coeffs.is_contiguous()
+        or (
+            not gate_reuse
+            and (
+                not torch.is_tensor(gate_coeffs)
+                or tuple(gate_coeffs.shape) != (layers, num_vh, 2)
+                or gate_coeffs.dtype != torch.float32
+                or not gate_coeffs.is_contiguous()
+            )
+        )
         or (
             k_norm_reuse
             and (
@@ -12937,6 +13041,24 @@ def _fr13_fixed32_committer_native_layer_batch(
                 or k_norm_rings.dtype != torch.float32
                 or k_norm_rings.device != k_rings.device
                 or not k_norm_rings.is_contiguous()
+            )
+        )
+        or (
+            gate_reuse
+            and (
+                not k_norm_reuse
+                or not torch.is_tensor(gate_rings)
+                or tuple(gate_rings.shape)
+                != (
+                    layers,
+                    int(k_rings.shape[1]),
+                    int(k_rings.shape[2]),
+                    num_vh,
+                    2,
+                )
+                or gate_rings.dtype != torch.float32
+                or gate_rings.device != k_rings.device
+                or not gate_rings.is_contiguous()
             )
         )
     ):
@@ -12962,7 +13084,7 @@ def _fr13_fixed32_committer_native_layer_batch(
     _fr13_fixed32_committer_native_layer_batch_kernel[grid](
         a_rings,
         b_rings,
-        gate_coeffs,
+        gate_coeffs if not gate_reuse else k_rings,
         k_rings,
         v_rings,
         banks_list[0],
@@ -12971,6 +13093,7 @@ def _fr13_fixed32_committer_native_layer_batch(
         accepted_lens,
         spec_state_indices,
         k_norm_rings if k_norm_reuse else k_rings,
+        gate_rings if gate_reuse else k_rings,
         B=batch,
         PATH_CAP=16,
         H=num_kh,
@@ -12993,6 +13116,15 @@ def _fr13_fixed32_committer_native_layer_batch(
         RING_KN_N_STRIDE=(
             int(k_norm_rings.stride(2)) if k_norm_reuse else 0
         ),
+        RING_GATE_L_STRIDE=(
+            int(gate_rings.stride(0)) if gate_reuse else 0
+        ),
+        RING_GATE_B_STRIDE=(
+            int(gate_rings.stride(1)) if gate_reuse else 0
+        ),
+        RING_GATE_N_STRIDE=(
+            int(gate_rings.stride(2)) if gate_reuse else 0
+        ),
         RING_V_L_STRIDE=int(v_rings.stride(0)),
         RING_V_B_STRIDE=int(v_rings.stride(1)),
         RING_V_N_STRIDE=int(v_rings.stride(2)),
@@ -13005,6 +13137,7 @@ def _fr13_fixed32_committer_native_layer_batch(
         THRESHOLD=20.0,
         USE_QK_L2NORM_IN_KERNEL=bool(use_qk_l2norm_in_kernel),
         K_NORM_REUSE=bool(k_norm_reuse),
+        GATE_REUSE=bool(gate_reuse),
         num_warps=8,
         num_stages=3,
     )
@@ -13017,6 +13150,7 @@ def _fr13_fixed32_committer_graph_body(
     spec_state_indices,
     k_rings,
     k_norm_rings,
+    gate_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -13025,6 +13159,7 @@ def _fr13_fixed32_committer_graph_body(
     output_scale,
     use_qk_l2norm_in_kernel,
     k_norm_reuse,
+    gate_reuse,
     layer_batch=None,
 ) -> None:
     """Record the fixed committer graph body with an optional one-call scan."""
@@ -13120,12 +13255,14 @@ def _fr13_fixed32_committer_graph_body(
             spec_state_indices=spec_state_indices,
             k_rings=k_rings,
             k_norm_rings=k_norm_rings,
+            gate_rings=gate_rings,
             v_rings=v_rings,
             a_rings=a_rings,
             b_rings=b_rings,
             gate_coeffs=state["gate_coeffs"],
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
             k_norm_reuse=k_norm_reuse,
+            gate_reuse=gate_reuse,
         )
     else:
         for layer in range(layers):
@@ -13349,6 +13486,7 @@ def preseed_fixed32_committer_graph(
     accepted_lens,
     k_rings,
     k_norm_rings,
+    gate_rings=None,
     v_rings,
     a_rings,
     b_rings,
@@ -13370,6 +13508,7 @@ def preseed_fixed32_committer_graph(
         accepted_lens=accepted_lens,
         k_rings=k_rings,
         k_norm_rings=k_norm_rings,
+        gate_rings=gate_rings,
         v_rings=v_rings,
         a_rings=a_rings,
         b_rings=b_rings,
@@ -13387,6 +13526,7 @@ def preseed_fixed32_committer_graph(
         spec_state_indices=spec_state_indices,
         k_rings=k_rings,
         k_norm_rings=k_norm_rings,
+        gate_rings=gate_rings,
         v_rings=v_rings,
         a_rings=a_rings,
         b_rings=b_rings,
@@ -13415,6 +13555,7 @@ def preseed_fixed32_committer_graph(
     direct_metadata = _fr13_fixed32_committer_direct_metadata_requested()
     sticky_guard = _fr13_fixed32_committer_sticky_guard_requested()
     k_norm_reuse = _fr13_fixed32_committer_knorm_ring_requested()
+    gate_reuse = _fr13_fixed32_committer_gate_ring_requested()
     if metadata_copy_fusion and not layer_batch:
         raise RuntimeError(
             "FR13 fixed32 metadata fusion requires committer layer batching"
@@ -13444,12 +13585,25 @@ def preseed_fixed32_committer_graph(
             "FR13 fixed32 K-norm reuse requires layer batching, direct "
             "metadata, in-kernel L2 normalization, and its persistent ring"
         )
+    if gate_reuse and (
+        not k_norm_reuse
+        or not layer_batch
+        or not direct_metadata
+        or not _FR13_FIXED32_GDN_SINGLE_LAUNCH
+        or scan_align_on()
+        or not use_qk_l2norm_in_kernel
+        or gate_rings is None
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 gate reuse requires K-norm reuse, layer batching, "
+            "direct metadata, raw rsqrt gating, and its persistent ring"
+        )
     gate_coeffs = (
         _fr13_fixed32_committer_gate_precompute(
             A_logs=A_logs,
             dt_biases=dt_biases,
         )
-        if layer_batch
+        if layer_batch and not gate_reuse
         else None
     )
     bank_ptrs, _bank_shape, _bank_stride = build_replay_bank_pointer_table(
@@ -13521,6 +13675,7 @@ def preseed_fixed32_committer_graph(
         "direct_accepted_lens": accepted_lens if direct_metadata else None,
         "sticky_guard": sticky_guard,
         "k_norm_reuse": k_norm_reuse,
+        "gate_reuse": gate_reuse,
         "sticky_guard_ok": sticky_guard_ok,
         "sticky_guard_ok_data_ptr": (
             int(sticky_guard_ok.data_ptr()) if sticky_guard_ok is not None else None
@@ -13564,13 +13719,29 @@ def preseed_fixed32_committer_graph(
                 "direct_ring_loads": True,
                 "direct_ring_inputs": 4,
                 "direct_scalar_ring_inputs": 1 if k_norm_reuse else 0,
+                "direct_gate_ring_inputs": 1 if gate_reuse else 0,
                 "candidate_staging_launches": 0,
                 "gate_coefficients_hoisted": True,
+                "committer_gate_coefficients_elided": gate_reuse,
                 "event_independent_gate_precompute": True,
+                "committer_gate_precompute_elided": gate_reuse,
                 "gate_precompute_launches_per_process": int(
                     _FR13_FIXED32_COMMITTER_GATE_PRECOMPUTE_LAUNCHES
                 ),
                 "gate_exp_per_event": 0,
+                "gate_reuse": gate_reuse,
+                "gate_source": (
+                    "fixed32_sfwd_existing_raw_gate_math"
+                    if gate_reuse
+                    else "committer_raw_gate_math"
+                ),
+                "gate_nonlinear_evaluations_per_value_head_step": (
+                    0 if gate_reuse else 3
+                ),
+                "gate_scalar_loads_per_value_head_step": (
+                    2 if gate_reuse else 0
+                ),
+                "producer_extra_gate_nonlinear_evaluations": 0,
                 "full_value_tile": True,
                 "value_tile": 128,
                 "kernel_warps": 8,
@@ -13659,6 +13830,7 @@ def preseed_fixed32_committer_graph(
             spec_state_indices=spec_state_indices,
             k_rings=k_rings,
             k_norm_rings=k_norm_rings,
+            gate_rings=gate_rings,
             v_rings=v_rings,
             a_rings=a_rings,
             b_rings=b_rings,
@@ -13667,6 +13839,7 @@ def preseed_fixed32_committer_graph(
             output_scale=output_scale,
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
             k_norm_reuse=k_norm_reuse,
+            gate_reuse=gate_reuse,
             layer_batch=use_layer_batch,
         )
 
@@ -13824,6 +13997,7 @@ def preseed_fixed32_committer_graphs_all_batches(
     accepted_lens,
     k_rings,
     k_norm_rings,
+    gate_rings=None,
     v_rings,
     a_rings,
     b_rings,
@@ -13936,6 +14110,7 @@ def preseed_fixed32_committer_graphs_all_batches(
                 accepted_lens=accepted_lens[:batch],
                 k_rings=k_rings,
                 k_norm_rings=k_norm_rings,
+                gate_rings=gate_rings,
                 v_rings=v_rings,
                 a_rings=a_rings,
                 b_rings=b_rings,
@@ -13954,6 +14129,7 @@ def preseed_fixed32_committer_graphs_all_batches(
                 spec_state_indices=spec_state_indices,
                 k_rings=k_rings,
                 k_norm_rings=k_norm_rings,
+                gate_rings=gate_rings,
                 v_rings=v_rings,
                 a_rings=a_rings,
                 b_rings=b_rings,
@@ -13983,6 +14159,7 @@ def preseed_fixed32_committer_graphs_all_batches(
         spec_state_indices=spec_state_indices,
         k_rings=k_rings,
         k_norm_rings=k_norm_rings,
+        gate_rings=gate_rings,
         v_rings=v_rings,
         a_rings=a_rings,
         b_rings=b_rings,
@@ -14012,6 +14189,7 @@ def preseed_fixed32_committer_graphs_all_batches(
         "accepted_lens_data_ptr": int(accepted_lens.data_ptr()),
         "k_rings": k_rings,
         "k_norm_rings": k_norm_rings,
+        "gate_rings": gate_rings,
         "v_rings": v_rings,
         "a_rings": a_rings,
         "b_rings": b_rings,
@@ -14245,6 +14423,7 @@ def warm_fixed32_committer_graphs_all_batches() -> dict[str, object]:
                 accepted_lens=accepted_lens[:batch],
                 k_rings=route["k_rings"],
                 k_norm_rings=route["k_norm_rings"],
+                gate_rings=route["gate_rings"],
                 v_rings=route["v_rings"],
                 a_rings=route["a_rings"],
                 b_rings=route["b_rings"],
@@ -14465,6 +14644,7 @@ def _fr13_fixed32_committer_replay(
     accepted_lens,
     k_rings,
     k_norm_rings,
+    gate_rings,
     v_rings,
     a_rings,
     b_rings,
@@ -14489,6 +14669,7 @@ def _fr13_fixed32_committer_replay(
         accepted_lens=accepted_lens,
         k_rings=k_rings,
         k_norm_rings=k_norm_rings,
+        gate_rings=gate_rings,
         v_rings=v_rings,
         a_rings=a_rings,
         b_rings=b_rings,
@@ -14633,6 +14814,7 @@ def launch_tree_gdn_replay_all_layers(
     burn_node_bank: bool = False,
     banks_list=None,
     k_norm_rings: torch.Tensor | None = None,
+    gate_rings: torch.Tensor | None = None,
 ) -> None:
     """Launch the FR13_EAGER_PACK batched all-layer accepted-path replay.
 
@@ -14663,6 +14845,7 @@ def launch_tree_gdn_replay_all_layers(
             accepted_lens=accepted_lens,
             k_rings=k_rings,
             k_norm_rings=k_norm_rings,
+            gate_rings=gate_rings,
             v_rings=v_rings,
             a_rings=a_rings,
             b_rings=b_rings,
@@ -14989,6 +15172,7 @@ def launch_tree_gdn_prepared(
     ring_a: torch.Tensor | None = None,
     ring_b: torch.Tensor | None = None,
     ring_k_norm: torch.Tensor | None = None,
+    ring_gate: torch.Tensor | None = None,
     staging_flags: torch.Tensor | None = None,
     staging_rows: int = 0,
 ) -> tuple[torch.Tensor, torch.Tensor | None]:
@@ -15162,6 +15346,25 @@ def launch_tree_gdn_prepared(
             )
     else:
         ring_k_norm = strict_mask
+    _gate_export = ring_gate is not None
+    if _gate_export:
+        if (
+            not _k_norm_export
+            or not _fr13_fixed32_committer_gate_ring_requested()
+            or not raw_gating
+            or scan_align_on()
+            or ring_gate.dtype != torch.float32
+            or ring_gate.device != k.device
+            or ring_gate.ndim != 3
+            or tuple(ring_gate.shape) != (n_pad, num_vh, 2)
+            or not ring_gate.is_contiguous()
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 gate export requires the armed B1 "
+                "single-launch physical32 K-norm ring contract"
+            )
+    else:
+        ring_gate = strict_mask
     # Resolve launch geometry. The deployed/served path uses BLOCK_V=BV and
     # num_warps=8 with the Triton default num_stages (unset). The TEST-ONLY
     # override (FR13_TREE_GDN_GEOM_OVERRIDE) lets the BV/warps A/B arms run; it
@@ -15361,6 +15564,7 @@ def launch_tree_gdn_prepared(
                 ring_b,
                 _flags_arg,
                 ring_k_norm,
+                ring_gate,
                 N_ACTUAL=n_actual,
                 NUM_KH=num_kh,
                 NUM_VH=num_vh,
@@ -15390,6 +15594,7 @@ def launch_tree_gdn_prepared(
                 PRESCALED_PATH_BASE=_prescaled_path_base,
                 RING_EXPORT=_ring_export,
                 K_NORM_EXPORT=_k_norm_export,
+                GATE_EXPORT=_gate_export,
                 FLAGS_EXPORT=_flags_export,
                 FLAGS_ROWS=_flags_rows,
                 num_warps=_num_warps,
@@ -15985,6 +16190,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
     ring_a: torch.Tensor | None = None,
     ring_b: torch.Tensor | None = None,
     ring_k_norm: torch.Tensor | None = None,
+    ring_gate: torch.Tensor | None = None,
     staging_flags: torch.Tensor | None = None,
     staging_rows: int = 0,
 ) -> tuple[torch.Tensor, None]:
@@ -16167,6 +16373,23 @@ def launch_tree_gdn_prepared_fixed32_batch(
             )
     else:
         ring_k_norm = strict_mask
+    gate_export = ring_gate is not None
+    if gate_export:
+        if (
+            not k_norm_export
+            or not _fr13_fixed32_committer_gate_ring_requested()
+            or ring_gate.dtype != torch.float32
+            or ring_gate.device != k.device
+            or ring_gate.ndim != 3
+            or tuple(ring_gate.shape) != (rows, num_vh, 2)
+            or not ring_gate.is_contiguous()
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 gate export requires the armed B4 "
+                "single-launch physical32 K-norm ring contract"
+            )
+    else:
+        ring_gate = strict_mask
 
     subtree_state = subtree_get(
         n_actual, num_vh, dim_v, dim_k, q.device
@@ -16329,6 +16552,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 ring_b,
                 flags_arg,
                 ring_k_norm,
+                ring_gate,
                 N_ACTUAL=n_actual,
                 NUM_KH=num_kh,
                 NUM_VH=num_vh,
@@ -16358,6 +16582,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 PRESCALED_PATH_BASE=prescaled_path_base,
                 RING_EXPORT=ring_export,
                 K_NORM_EXPORT=k_norm_export,
+                GATE_EXPORT=gate_export,
                 FLAGS_EXPORT=flags_export,
                 FLAGS_ROWS=flags_rows,
                 num_warps=num_warps,
