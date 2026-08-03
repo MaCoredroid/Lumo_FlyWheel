@@ -27,6 +27,21 @@ if [[ "$FR13_GDN_GATE_BATCH" == "4" ]]; then
 fi
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
+FR13_GDN_GATE_CANDIDATE=${FR13_GDN_GATE_CANDIDATE:-single_launch}
+case "$FR13_GDN_GATE_CANDIDATE" in
+  single_launch)
+    GATE_CANDIDATE_SLUG=single_launch
+    GATE_CANDIDATE_ID=fixed32_gdn_single_launch_tree_v2
+    ;;
+  gqa_group3)
+    GATE_CANDIDATE_SLUG=gqa_group3
+    GATE_CANDIDATE_ID=fixed32_gdn_single_launch_gqa_group3_v1
+    ;;
+  *)
+    echo "FR13_GDN_GATE_CANDIDATE must be single_launch or gqa_group3" >&2
+    exit 2
+    ;;
+esac
 
 case "$FR13_GDN_GATE_MODE:$FR13_GDN_GATE_BATCH:$FR13_GDN_GATE_ENTRYPOINT" in
   hydra27_fixed32:1:scripts/fr13_run_b1_gdn_single_launch_live_gate.sh)
@@ -54,7 +69,7 @@ case "$FR13_GDN_GATE_MODE:$FR13_GDN_GATE_BATCH:$FR13_GDN_GATE_ENTRYPOINT" in
 esac
 
 BATCH=$FR13_GDN_GATE_BATCH
-ARM="${FR13_GDN_GATE_MODE}_${LOGICAL_SLUG}_gdn_single_launch_b${BATCH}_${TAG}"
+ARM="${FR13_GDN_GATE_MODE}_${LOGICAL_SLUG}_gdn_${GATE_CANDIDATE_SLUG}_b${BATCH}_${TAG}"
 ARMDIR="$RUNROOT_ABS/$ARM"
 ENTRYPOINT_PATH="$REPO/$FR13_GDN_GATE_ENTRYPOINT"
 
@@ -106,7 +121,8 @@ unset -f run_variant
   || { echo "fixed K64/root1 floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_gdn_single_launch_graph_byte_diagnostic\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nreference_always_served=1\nmode=%s\nlogical_topology=%s\nexpected_batch=%s\ntask_count=%s\nconcurrency=%s\ndraft_vocab_k=65536\ndraft_vocab_root=1\nphysical_rows=32\nreference_launches_per_request_layer=2\ncandidate_launches_per_request_layer=1\nsubset_sha256=%s\nsource_commit=%s\nentrypoint=%s\nentrypoint_sha256=%s\ncommon_runner_sha256=%s\nreducer_sha256=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_gdn_ordered_graph_byte_diagnostic\ncandidate_selector=%s\ncandidate=%s\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nreference_always_served=1\nmode=%s\nlogical_topology=%s\nexpected_batch=%s\ntask_count=%s\nconcurrency=%s\ndraft_vocab_k=65536\ndraft_vocab_root=1\nphysical_rows=32\nreference_launches_per_request_layer=2\ncandidate_launches_per_request_layer=1\nsubset_sha256=%s\nsource_commit=%s\nentrypoint=%s\nentrypoint_sha256=%s\ncommon_runner_sha256=%s\nreducer_sha256=%s\nstarted=%s\n' \
+  "$FR13_GDN_GATE_CANDIDATE" "$GATE_CANDIDATE_ID" \
   "$FR13_GDN_GATE_MODE" "$LOGICAL_SLUG" "$BATCH" "$BATCH" "$BATCH" \
   "$SUBSET_SHA256" "$SOURCE_COMMIT" "$FR13_GDN_GATE_ENTRYPOINT" \
   "$ENTRYPOINT_SHA256" "$COMMON_RUNNER_SHA256" "$REDUCER_SHA256" \
@@ -134,7 +150,7 @@ if env \
     FR13_DEVICE_MULTIDRAFT=1 \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
-    FR13_FIXED32_GDN_PATH_BV_CANDIDATE=single_launch \
+    FR13_FIXED32_GDN_PATH_BV_CANDIDATE="$FR13_GDN_GATE_CANDIDATE" \
     FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH="$BATCH" \
     FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
     FR13_FIXED32_BATCH_GDN_BYTE_AB=0 \
@@ -186,12 +202,13 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   || { echo "GDN runner/reducer source changed during execution" >&2; exit 14; }
 (( serve_rc == 0 )) || exit "$serve_rc"
 
-CREDENTIAL="$ARMDIR/${LOGICAL_SLUG}_gdn_single_launch_b${BATCH}_credential.json"
+CREDENTIAL="$ARMDIR/${LOGICAL_SLUG}_gdn_${GATE_CANDIDATE_SLUG}_b${BATCH}_credential.json"
 "$PYTHON_BIN" "$REDUCER" \
   --arm "$ARMDIR" \
   --subset "$SUBSET" \
   --mode "$FR13_GDN_GATE_MODE" \
   --batch "$BATCH" \
+  --candidate "$FR13_GDN_GATE_CANDIDATE" \
   --live-pass "$ARMDIR/logs/fr13_fixed32_gdn_path_bv.live_pass.json" \
   --runtime-launch "$RUNROOT_ABS/runtime_manifest.at_launch.json" \
   --runtime-end "$RUNROOT_ABS/runtime_manifest.at_end.json" \

@@ -14,6 +14,9 @@ _FR13_CALLER_BATCH_GDN_GATE_VERDICT_SHA="${FR13_FIXED32_BATCH_GDN_GRAPH_GATE_VER
 _FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST="${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON+set}:${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON-}"
 _FR13_CALLER_BATCH_GDN_GATE_RUNNER="${FR13_FIXED32_BATCH_GDN_GATE_RUNNER+set}:${FR13_FIXED32_BATCH_GDN_GATE_RUNNER-}"
 _FR13_CALLER_BATCH_GDN_BV8_TIMING="${FR13_FIXED32_BATCH_GDN_BV8_TIMING+set}:${FR13_FIXED32_BATCH_GDN_BV8_TIMING-}"
+_FR13_CALLER_GDN_GQA_GROUP3_PRODUCTION="${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION+set}:${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION-}"
+_FR13_CALLER_GDN_GQA_GROUP3_BATCH="${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH+set}:${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH-}"
+_FR13_CALLER_GDN_GQA_GROUP3_PASS="${FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON+set}:${FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON-}"
 _FR13_CALLER_SFWD_FUSION_PRODUCTION="${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION+set}:${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION-}"
 _FR13_CALLER_SFWD_FUSION_TIMING="${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB+set}:${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB-}"
 _FR13_CALLER_SFWD_FUSION_PASS_JSON="${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON+set}:${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON-}"
@@ -201,6 +204,9 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "$_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST" == set:* \
       || "$_FR13_CALLER_BATCH_GDN_GATE_RUNNER" == set:* \
       || "$_FR13_CALLER_BATCH_GDN_BV8_TIMING" == set:* \
+      || "$_FR13_CALLER_GDN_GQA_GROUP3_PRODUCTION" == set:* \
+      || "$_FR13_CALLER_GDN_GQA_GROUP3_BATCH" == set:* \
+      || "$_FR13_CALLER_GDN_GQA_GROUP3_PASS" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_SO" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_RESOURCE" == set:* \
@@ -239,6 +245,9 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON+set}:${FR13_FIXED32_BATCH_GDN_RUNTIME_MANIFEST_JSON-}" != "$_FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST" \
       || "${FR13_FIXED32_BATCH_GDN_GATE_RUNNER+set}:${FR13_FIXED32_BATCH_GDN_GATE_RUNNER-}" != "$_FR13_CALLER_BATCH_GDN_GATE_RUNNER" \
       || "${FR13_FIXED32_BATCH_GDN_BV8_TIMING+set}:${FR13_FIXED32_BATCH_GDN_BV8_TIMING-}" != "$_FR13_CALLER_BATCH_GDN_BV8_TIMING" \
+      || "${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION+set}:${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION-}" != "$_FR13_CALLER_GDN_GQA_GROUP3_PRODUCTION" \
+      || "${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH+set}:${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH-}" != "$_FR13_CALLER_GDN_GQA_GROUP3_BATCH" \
+      || "${FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON+set}:${FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON-}" != "$_FR13_CALLER_GDN_GQA_GROUP3_PASS" \
       || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION+set}:${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION-}" != "$_FR13_CALLER_SFWD_FUSION_PRODUCTION" \
       || "${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB+set}:${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB-}" != "$_FR13_CALLER_SFWD_FUSION_TIMING" \
       || "${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON+set}:${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON-}" != "$_FR13_CALLER_SFWD_FUSION_PASS_JSON" \
@@ -295,6 +304,9 @@ unset \
   _FR13_CALLER_BATCH_GDN_RUNTIME_MANIFEST \
   _FR13_CALLER_BATCH_GDN_GATE_RUNNER \
   _FR13_CALLER_BATCH_GDN_BV8_TIMING \
+  _FR13_CALLER_GDN_GQA_GROUP3_PRODUCTION \
+  _FR13_CALLER_GDN_GQA_GROUP3_BATCH \
+  _FR13_CALLER_GDN_GQA_GROUP3_PASS \
   _FR13_CALLER_SFWD_FUSION_PRODUCTION \
   _FR13_CALLER_SFWD_FUSION_TIMING \
   _FR13_CALLER_SFWD_FUSION_PASS_JSON \
@@ -1658,6 +1670,16 @@ _fr13_gdn_path_bv_candidate=${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}
 _fr13_gdn_single_launch_expected_batch=${FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH:-}
 _fr13_gdn_path_bv_production=${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}
 _fr13_gdn_path_bv_pass_json=${FR13_FIXED32_GDN_PATH_BV_PASS_JSON:-}
+_fr13_gdn_gqa_group3_production=${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION:-0}
+_fr13_gdn_gqa_group3_production_batch=${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH:-}
+_fr13_gdn_gqa_group3_pass_json=${FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON:-}
+case "$_fr13_gdn_gqa_group3_production" in
+  0|1) ;;
+  *)
+    echo "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION must be exactly 0 or 1" >&2
+    exit 2
+    ;;
+esac
 if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
     echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires FR13_FIXED32_MODE" >&2
@@ -1729,6 +1751,45 @@ fi
 if [[ -n "$_fr13_gdn_path_bv_candidate" \
       && -n "$_fr13_gdn_path_bv_production" ]]; then
   echo "FR13 fixed32 GDN path-BV diagnostic and production selectors are mutually exclusive" >&2
+  exit 2
+fi
+if [[ "$_fr13_gdn_gqa_group3_production" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && ( "$_fr13_gdn_gqa_group3_production_batch" == "1" \
+          || "$_fr13_gdn_gqa_group3_production_batch" == "4" ) \
+     && "$MAX_NUM_SEQS" == "$_fr13_gdn_gqa_group3_production_batch" \
+     && "${SWE_CONCURRENCY:-}" == "$MAX_NUM_SEQS" \
+     && "${FR13_DRAFT_VOCAB_K:-}" == "65536" \
+     && "${FR13_DRAFT_VOCAB_ROOT:-}" == "1" \
+     && "${FR13_TREE_GDN_GEOM_OVERRIDE:-}" == "BV=8" \
+     && "${FR13_SCAN_ALIGN:-0}" == "0" \
+     && "${FR13_NPAD_INVARIANT:-0}" == "0" \
+     && "$FR10_METRICS" == "1" \
+     && "${FR13_RING_EXPORT:-1}" == "1" \
+     && "${FR13_FLAGS_INKERNEL:-1}" == "1" \
+     && "${ENFORCE_EAGER:-0}" == "0" \
+     && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+     && "${FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE:-0}" == "0" \
+     && -z "$_fr13_gdn_single_launch_expected_batch" \
+     && -z "$_fr13_gdn_path_bv_candidate" \
+     && -z "$_fr13_gdn_path_bv_production" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" ]] || {
+    echo "FR13 GDN GQA-group3 production requires exact credentialed B1/B4 K64/root1 physical32 FULL-graph pins" >&2
+    exit 2
+  }
+  [[ -f "$_fr13_gdn_gqa_group3_pass_json" \
+     && ! -L "$_fr13_gdn_gqa_group3_pass_json" ]] || {
+    echo "FR13 GDN GQA-group3 production requires a regular live PASS JSON" >&2
+    exit 2
+  }
+elif [[ -n "$_fr13_gdn_gqa_group3_production_batch" \
+        || -n "$_fr13_gdn_gqa_group3_pass_json" ]]; then
+  echo "FR13 GDN GQA-group3 production batch/PASS is set without its arm" >&2
   exit 2
 fi
 if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
@@ -2214,6 +2275,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
         || "$_fr13_fixed32_batch_gdn_bv8_timing" == "1" \
         || "$_fr13_gdn_path_bv_candidate" == "single_launch" \
         || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+        || "$_fr13_gdn_gqa_group3_production" == "1" \
         || ( "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "1" \
              && "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" == "8" ) ]]; then
     # This is a real exact4 byte diagnostic, never an acceptance/timing arm.
@@ -2761,6 +2823,9 @@ PY
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production.arm" \
+    "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production_batch.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production_credential.json" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
@@ -2786,6 +2851,17 @@ PY
     printf '%s\n' "$_fr13_gdn_path_bv_production" \
       > "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag"
     chmod 400 "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag"
+  elif [[ "$_fr13_gdn_gqa_group3_production" == "1" ]]; then
+    cp -- "$_fr13_gdn_gqa_group3_pass_json" \
+      "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production_credential.json"
+    printf '1\n' \
+      > "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production.arm"
+    printf '%s\n' "$_fr13_gdn_gqa_group3_production_batch" \
+      > "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production_batch.flag"
+    chmod 400 \
+      "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production.arm" \
+      "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production_batch.flag" \
+      "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production_credential.json"
   fi
   printf '%s\n' \
     "mode=$FR13_FIXED32_MODE" \
@@ -2804,6 +2880,9 @@ else
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
+    "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production.arm" \
+    "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production_batch.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production_credential.json" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_batch_gdn_bv_production.flag" \
@@ -3589,6 +3668,7 @@ while IFS= read -r _v; do
      || "$_v" == "FR13_FIXED32_CUTLASS_HYBRID_N5120_TAIL23_LIVE_PASS_SHA256" \
      || "$_v" == "FR13_FIXED32_CUTLASS_HYBRID_N5120_HYDRA27_LIVE_PASS_JSON" \
      || "$_v" == "FR13_FIXED32_CUTLASS_HYBRID_N5120_HYDRA27_LIVE_PASS_SHA256" \
+     || "$_v" == "FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON" \
      || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" \
      || "$_v" == "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH" \
      || "$_v" == "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH" \
@@ -3725,6 +3805,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH="${FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH:-}" \
   -e FR13_FIXED32_GDN_PATH_BV_PRODUCTION="${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" \
   -e FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_gdn_path_bv.production_pass.json \
+  -e FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION="${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION:-0}" \
+  -e FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH="${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH:-}" \
+  -e FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_gdn_gqa_group3.production_credential.json \
   -e FR13_FIXED32_GDN_PATH_BV_LIVE_JSON=/logs/fr13_fixed32_gdn_path_bv.live_pass.json \
   -e FR13_FIXED32_BATCH_GDN_BV_CANDIDATE="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
   -e FR13_FIXED32_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \

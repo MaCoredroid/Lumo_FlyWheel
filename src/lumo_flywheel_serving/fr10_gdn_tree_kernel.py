@@ -848,6 +848,17 @@ _FR13_FIXED32_GDN_SINGLE_LAUNCH_SIDECARS = (
     "/logs/fr13_fixed32_gdn_single_launch_tree.arm",
     "/tmp/fr13_fixed32_gdn_single_launch_tree.arm",
 )
+_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_gqa_group3.production.arm",
+    "/tmp/fr13_fixed32_gdn_gqa_group3.production.arm",
+)
+_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_gqa_group3.production_batch.flag",
+    "/tmp/fr13_fixed32_gdn_gqa_group3.production_batch.flag",
+)
+_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS = (
+    "/logs/fr13_fixed32_gdn_gqa_group3.production_credential.json"
+)
 _FR13_FIXED32_GDN_PRESCALED_PATH_BASE_SIDECARS = (
     "/logs/fr13_fixed32_gdn_prescaled_path_base.arm",
     "/tmp/fr13_fixed32_gdn_prescaled_path_base.arm",
@@ -1007,12 +1018,18 @@ def _fr13_resolve_fixed32_gdn_single_launch(
         sources.append((f"sidecar:{path}", value.strip()))
     if not sources:
         return False
+    source_values = {value for _source, value in sources}
+    if source_values == {"0"} and all(
+        source == "env:FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE"
+        for source, _value in sources
+    ):
+        return False
     invalid = [
         (source, value)
         for source, value in sources
         if value != "1"
     ]
-    if invalid or len({value for _source, value in sources}) != 1:
+    if invalid or len(source_values) != 1:
         raise RuntimeError(
             "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE must be exactly 1 from "
             f"agreeing sources: {sources!r}"
@@ -1190,20 +1207,29 @@ def _fr13_resolve_fixed32_gdn_path_bv_candidate(
     return int(value)
 
 
-def _fr13_fixed32_gdn_path_bv_source_sha256() -> str:
+def _fr13_fixed32_gdn_gqa_group3_source_sha256() -> str:
     try:
         payload = Path(__file__).resolve().read_bytes()
-        if globals().get("_FR13_FIXED32_GDN_PATH_BV_CANDIDATE") == "gqa_group3":
-            candidate_path = Path(__file__).with_name(
-                "fr13_gdn_gqa_group3.py"
-            )
-            candidate_payload = candidate_path.read_bytes()
-            payload = (
-                b"fr10_gdn_tree_kernel.py\0"
-                + payload
-                + b"\0fr13_gdn_gqa_group3.py\0"
-                + candidate_payload
-            )
+        candidate_path = Path(__file__).with_name("fr13_gdn_gqa_group3.py")
+        candidate_payload = candidate_path.read_bytes()
+    except OSError as error:
+        raise RuntimeError(
+            f"FR13 fixed32 GDN GQA-group3 cannot hash its source: {error}"
+        ) from error
+    payload = (
+        b"fr10_gdn_tree_kernel.py\0"
+        + payload
+        + b"\0fr13_gdn_gqa_group3.py\0"
+        + candidate_payload
+    )
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _fr13_fixed32_gdn_path_bv_source_sha256() -> str:
+    if globals().get("_FR13_FIXED32_GDN_PATH_BV_CANDIDATE") == "gqa_group3":
+        return _fr13_fixed32_gdn_gqa_group3_source_sha256()
+    try:
+        payload = Path(__file__).resolve().read_bytes()
     except OSError as error:
         raise RuntimeError(
             f"FR13 fixed32 GDN BV cannot hash its source: {error}"
@@ -1289,6 +1315,168 @@ def _fr13_fixed32_gdn_single_launch_diagnostic_identity(
             "FR13 GDN ordered diagnostic identity is not candidate/topology/batch bound"
         )
     return f"{identity}:{topology}:b{batch}"
+
+
+def _fr13_resolve_fixed32_gdn_gqa_group3_production(
+    fixed32_mode: str | None,
+    *,
+    environ=None,
+    arm_sidecars=None,
+    batch_sidecars=None,
+    geom_override=None,
+    pass_path: str | None = None,
+) -> dict[str, object] | None:
+    """Resolve a source-bound grouped-GQA arm after its real-task byte gate."""
+    env = os.environ if environ is None else environ
+    arm_paths = (
+        _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_SIDECARS
+        if arm_sidecars is None
+        else tuple(arm_sidecars)
+    )
+    batch_paths = (
+        _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH_SIDECARS
+        if batch_sidecars is None
+        else tuple(batch_sidecars)
+    )
+    arm_sources: list[tuple[str, str]] = []
+    raw_arm = env.get("FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION")
+    if raw_arm is not None and str(raw_arm).strip():
+        arm_sources.append(
+            (
+                "env:FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION",
+                str(raw_arm).strip(),
+            )
+        )
+    for path in arm_paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(4)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13 GDN GQA-group3 production cannot read arm sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(value) >= 4:
+            raise RuntimeError(
+                "FR13 GDN GQA-group3 production arm sidecar exceeds 3 bytes"
+            )
+        arm_sources.append((f"sidecar:{path}", value.strip()))
+    if not arm_sources:
+        return None
+    arm_values = {value for _source, value in arm_sources}
+    if arm_values == {"0"} and all(
+        source == "env:FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION"
+        for source, _value in arm_sources
+    ):
+        return None
+    if arm_values != {"1"}:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION must be exactly 1 from "
+            "agreeing sources"
+        )
+
+    batch_sources: list[tuple[str, str]] = []
+    raw_batch = env.get("FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH")
+    if raw_batch is not None and str(raw_batch).strip():
+        batch_sources.append(
+            (
+                "env:FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH",
+                str(raw_batch).strip(),
+            )
+        )
+    for path in batch_paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(4)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13 GDN GQA-group3 production cannot read batch sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(value) >= 4:
+            raise RuntimeError(
+                "FR13 GDN GQA-group3 production batch sidecar exceeds 3 bytes"
+            )
+        batch_sources.append((f"sidecar:{path}", value.strip()))
+    batch_values = {value for _source, value in batch_sources}
+    if not batch_sources or len(batch_values) != 1 or batch_values.difference(
+        {"1", "4"}
+    ):
+        raise RuntimeError(
+            "FR13 GDN GQA-group3 production requires one exact batch, 1 or 4"
+        )
+    batch = int(batch_values.pop())
+    if (
+        fixed32_mode not in _FR13_FIXED32_MODES
+        or geom_override != {"BV": 8}
+        or str(env.get("FR13_DRAFT_VOCAB_ROOT", "")).strip() != "1"
+        or str(env.get("FR13_DRAFT_VOCAB_K", "")).strip() != "65536"
+    ):
+        raise RuntimeError(
+            "FR13 GDN GQA-group3 production requires exact fixed32 physical32 "
+            "BV8 K64/root1"
+        )
+    resolved_pass = pass_path or env.get(
+        "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS_PATH",
+        _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS,
+    )
+    if os.path.islink(resolved_pass) or not os.path.isfile(resolved_pass):
+        raise RuntimeError(
+            "FR13 GDN GQA-group3 production requires a regular live-gate "
+            f"credential: {resolved_pass}"
+        )
+    try:
+        with open(resolved_pass, encoding="ascii") as handle:
+            credential = json.load(handle)
+        kernel_sha256 = hashlib.sha256(
+            Path(__file__).resolve().read_bytes()
+        ).hexdigest()
+        candidate_sha256 = hashlib.sha256(
+            Path(__file__).with_name("fr13_gdn_gqa_group3.py").read_bytes()
+        ).hexdigest()
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            f"FR13 GDN GQA-group3 production credential is unreadable: {error}"
+        ) from error
+    source_commit = credential.get("source_commit") if isinstance(
+        credential, dict
+    ) else None
+    if (
+        not isinstance(credential, dict)
+        or credential.get("schema")
+        != "fr13.fixed32.gdn_single_launch.real_task_credential.v3"
+        or credential.get("status") != "PASS"
+        or credential.get("candidate")
+        != "fixed32_gdn_single_launch_gqa_group3_v1"
+        or credential.get("reference")
+        != "fixed32_gdn_two_launch_reference_v1"
+        or credential.get("mode") != fixed32_mode
+        or credential.get("batch_size") != batch
+        or credential.get("expected_batch") != batch
+        or credential.get("physical_rows") != 32
+        or credential.get("draft_vocab_k") != 65536
+        or credential.get("draft_vocab_root") != 1
+        or credential.get("raw_byte_equal") is not True
+        or credential.get("reference_served") is not True
+        or credential.get("state_restored") is not True
+        or credential.get("production_enabled") is not False
+        or credential.get("kernel_source_sha256") != kernel_sha256
+        or credential.get("gqa_group3_source_sha256") != candidate_sha256
+        or credential.get("candidate_source_sha256")
+        != _fr13_fixed32_gdn_gqa_group3_source_sha256()
+        or not isinstance(source_commit, str)
+        or len(source_commit) != 40
+        or any(character not in "0123456789abcdef" for character in source_commit)
+    ):
+        raise RuntimeError(
+            "FR13 GDN GQA-group3 production credential is invalid, stale, or "
+            "belongs to another source/mode/batch"
+        )
+    return credential
 
 
 def _fr13_resolve_fixed32_gdn_path_bv_production(
@@ -1650,6 +1838,30 @@ _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH = (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     )
 )
+_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION = (
+    _fr13_resolve_fixed32_gdn_gqa_group3_production(
+        _FR13_FIXED32_MODE,
+        geom_override=_read_tree_gdn_geom_override(),
+    )
+)
+
+
+def _fr13_fixed32_gdn_gqa_group3_production_for_batch(
+    batch_size: int,
+) -> bool:
+    """Return the exact credentialed batch; never widen B1/B4 authority."""
+    credential = _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION
+    if credential is None:
+        return False
+    batch = int(batch_size)
+    credential_batch = credential.get("batch_size")
+    if type(credential_batch) is not int or credential_batch not in (1, 4):
+        raise RuntimeError(
+            "FR13 GDN GQA-group3 production credential batch drifted"
+        )
+    return credential_batch == batch
+
+
 _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS = (
     _fr13_resolve_fixed32_gdn_path_bv_production(
         _FR13_FIXED32_MODE,
@@ -1671,6 +1883,7 @@ _FR13_FIXED32_GDN_PRESCALED_PATH_BASE = (
     _fr13_resolve_fixed32_gdn_prescaled_path_base(
         bool(
             _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
             or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
             in ("single_launch", "gqa_group3")
         )
@@ -1678,7 +1891,10 @@ _FR13_FIXED32_GDN_PRESCALED_PATH_BASE = (
 )
 if (
     _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
-    and _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+    and (
+        _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+        or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
+    )
 ):
     raise RuntimeError(
         "FR13 fixed32 GDN path-BV diagnostic and production selectors are "
@@ -1691,6 +1907,14 @@ if _FR13_FIXED32_GDN_SINGLE_LAUNCH and (
     raise RuntimeError(
         "FR13 fixed32 GDN single-launch and path-BV selectors are mutually "
         "exclusive"
+    )
+if _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None and (
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH
+    or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 GDN GQA-group3 production cannot inherit another GDN "
+        "production selector"
     )
 _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
 _FR13_FIXED32_GDN_BV_CAPTURES: dict[tuple[int, int, str], dict] = {}
@@ -2255,7 +2479,10 @@ if _FR13_SUBTREE_SELFCHECK_REQUESTED and not _FR13_SUBTREE_ROUTE_REQUESTED:
         "FR13_SUBTREE_PARALLEL_SELFCHECK is armed while the path route "
         "is disabled"
     )
-if _FR13_FIXED32_GDN_SINGLE_LAUNCH and _FR13_SUBTREE_SELFCHECK_REQUESTED:
+if (
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH
+    or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
+) and _FR13_SUBTREE_SELFCHECK_REQUESTED:
     raise RuntimeError(
         "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE cannot inherit the legacy "
         "subtree selfcheck"
@@ -2342,6 +2569,7 @@ _FR13_FIXED32_GDN_GQA_GROUP3_LAUNCH = None
 if (
     _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     == _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE
+    or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
 ):
     from lumo_flywheel_serving.fr13_gdn_gqa_group3 import (
         CANDIDATE as _fr13_fixed32_gdn_gqa_group3_candidate_id,
@@ -2771,7 +2999,10 @@ if (
         "FR13 fixed32 B1 path-BV and B2-B4 batched wide-BV selectors are "
         "mutually exclusive"
     )
-if _FR13_FIXED32_GDN_SINGLE_LAUNCH and (
+if (
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH
+    or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
+) and (
     _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
     or _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION is not None
 ):
@@ -3185,6 +3416,32 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
         # B1 is captured by launch_tree_gdn_prepared. B4 uses this folded
         # stock-serving capture route; B2/B3 remain outside qualification.
         return "single_launch_gate" if batch == 4 else None
+    if _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None:
+        for env_name in (
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB",
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB",
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION",
+            "FR13_FIXED32_BATCH_GDN_BV_CANDIDATE",
+            "FR13_FIXED32_BATCH_GDN_BV_PRODUCTION",
+        ):
+            if os.environ.get(env_name, "").strip() not in ("", "0"):
+                raise RuntimeError(
+                    f"{env_name} cannot authorize GDN GQA-group3 production"
+                )
+        diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
+        graph_diagnostic = _fr13_fixed32_batch_gdn_graph_byte_ab_control()
+        production = _fr13_fixed32_batch_gdn_production_control()
+        if diagnostic or graph_diagnostic or production is not None:
+            raise RuntimeError(
+                "FR13 GDN GQA-group3 production cannot inherit a batched "
+                "GDN diagnostic or production credential"
+            )
+        return (
+            "gqa_group3"
+            if batch == 4
+            and _fr13_fixed32_gdn_gqa_group3_production_for_batch(4)
+            else None
+        )
     if _FR13_FIXED32_GDN_SINGLE_LAUNCH:
         for env_name in (
             "FR13_FIXED32_BATCH_GDN_BYTE_AB",
@@ -5106,6 +5363,7 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
             )
         if (
             _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
             or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
             in ("single_launch", "gqa_group3")
         ):
@@ -13714,7 +13972,10 @@ def preseed_fixed32_committer_graph(
     if k_norm_reuse and (
         not layer_batch
         or not direct_metadata
-        or not _FR13_FIXED32_GDN_SINGLE_LAUNCH
+        or not (
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
+        )
         or scan_align_on()
         or not use_qk_l2norm_in_kernel
         or k_norm_rings is None
@@ -13727,7 +13988,10 @@ def preseed_fixed32_committer_graph(
         not k_norm_reuse
         or not layer_batch
         or not direct_metadata
-        or not _FR13_FIXED32_GDN_SINGLE_LAUNCH
+        or not (
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
+        )
         or scan_align_on()
         or not use_qk_l2norm_in_kernel
         or gate_rings is None
@@ -13741,7 +14005,10 @@ def preseed_fixed32_committer_graph(
         or not k_norm_reuse
         or not layer_batch
         or not direct_metadata
-        or not _FR13_FIXED32_GDN_SINGLE_LAUNCH
+        or not (
+            _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
+        )
         or scan_align_on()
         or not use_qk_l2norm_in_kernel
         or gate_rings is None
@@ -15495,7 +15762,10 @@ def launch_tree_gdn_prepared(
         if (
             not _ring_export
             or not _fr13_fixed32_committer_knorm_ring_requested()
-            or not _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            or not (
+                _FR13_FIXED32_GDN_SINGLE_LAUNCH
+                or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
+            )
             or not use_qk_l2norm_in_kernel
             or ring_k_norm.dtype != torch.float32
             or ring_k_norm.device != k.device
@@ -15662,7 +15932,7 @@ def launch_tree_gdn_prepared(
             else bool(_single_launch_override)
         )
         _gqa_group3_enabled = (
-            False
+            _fr13_fixed32_gdn_gqa_group3_production_for_batch(1)
             if _gqa_group3_override is None
             else bool(_gqa_group3_override)
         )
@@ -16623,7 +16893,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             not ring_export
             or not _fr13_fixed32_committer_knorm_ring_requested()
             or batch != 4
-            or selector != "single_launch"
+            or selector not in ("single_launch", "gqa_group3")
             or not use_qk_l2norm_in_kernel
             or scan_align_on()
             or ring_k_norm.dtype != torch.float32
@@ -16680,9 +16950,10 @@ def launch_tree_gdn_prepared_fixed32_batch(
             "FR13_FIXED32_BATCH_GDN: exact two-level armed preseed contract "
             "missing or legacy subtree selfcheck is still armed"
         )
-    if selector in ("single_launch", "single_launch_gate") and (
+    if selector in ("single_launch", "single_launch_gate", "gqa_group3") and (
         not (
             _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            or _fr13_fixed32_gdn_gqa_group3_production_for_batch(4)
             or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
             in ("single_launch", "gqa_group3")
         )
@@ -16736,7 +17007,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             "FR13 fixed32 batched wide-BV requires the served/reference route "
             "pinned exactly to BV=8"
         )
-    if selector in ("single_launch", "single_launch_gate") and (
+    if selector in ("single_launch", "single_launch_gate", "gqa_group3") and (
         candidate_block_v != 8 or geom != {"BV": 8}
     ):
         raise RuntimeError(
@@ -16774,7 +17045,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             else bool(_single_launch_override)
         )
         _gqa_group3_enabled = (
-            False
+            selector == "gqa_group3"
             if _gqa_group3_override is None
             else bool(_gqa_group3_override)
         )
@@ -17423,6 +17694,8 @@ def launch_tree_gdn_prepared_fixed32_batch(
             return out, None
     elif selector == "single_launch":
         _launch_batched(candidate_block_v)
+    elif selector == "gqa_group3":
+        _launch_batched(candidate_block_v)
     elif selector == "production":
         if _FR13_FIXED32_BATCH_GDN_BV_PRODUCTION == 8:
             if (
@@ -17457,7 +17730,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
         route_detail = (
             f"launches=1 path_grids=({batch},) export_rows=0 "
             "ordered_root_loop=1"
-            if selector == "single_launch"
+            if selector in ("single_launch", "gqa_group3")
             else (
                 f"launches=2 path_grids=({batch},{11 * batch}) "
                 f"export_rows={needed_export_rows}"

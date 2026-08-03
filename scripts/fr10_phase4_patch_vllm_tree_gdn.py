@@ -159,6 +159,12 @@ _FR13_FIXED32_GDN_PATH_BV_CANDIDATE = os.environ.get(
 _FR13_FIXED32_GDN_PATH_BV_PRODUCTION = os.environ.get(
     "FR13_FIXED32_GDN_PATH_BV_PRODUCTION", ""
 ).strip()
+_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION = os.environ.get(
+    "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION", "0"
+).strip()
+_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH = os.environ.get(
+    "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH", ""
+).strip()
 _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = (
     os.environ.get("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "0").strip() == "1"
 )
@@ -428,6 +434,14 @@ try:
     _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
 except NameError:
     _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH = None
+try:
+    _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION
+except NameError:
+    _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION = False
+try:
+    _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH
+except NameError:
+    _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH = None
 try:
     _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE
 except NameError:
@@ -2204,6 +2218,32 @@ def _fr13_fixed32_observed_gdn(
         )
     if not isinstance(runtime_state, dict):
         raise RuntimeError("FR13 fixed32 GDN runtime state is missing")
+    if (
+        _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION
+        and batch == _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH
+    ):
+        executed_gdn = runtime_state.get("executed_gdn")
+        expected_grid = (batch,)
+        if (
+            not isinstance(executed_gdn, dict)
+            or executed_gdn.get("route")
+            != "fixed32_single_launch_gqa_group3"
+            or executed_gdn.get("candidate")
+            != "fixed32_gdn_single_launch_gqa_group3_v1"
+            or int(executed_gdn.get("physical_launches", -1)) != 1
+            or int(executed_gdn.get("physical_programs", -1)) != batch
+            or tuple(executed_gdn.get("physical_grid_z", ())) != expected_grid
+            or int(
+                executed_gdn.get("physical_recurrence_critical_path", -1)
+            )
+            != 32
+            or int(executed_gdn.get("state_export_writes", -1)) != 0
+            or int(executed_gdn.get("state_parent_reads", -1)) != 0
+        ):
+            raise RuntimeError(
+                "FR13 GDN GQA-group3 production did not replace the captured "
+                "incumbent launch: " + repr(executed_gdn)
+            )
     contract = runtime_state.get("fixed32_contract")
     if not isinstance(contract, dict):
         raise RuntimeError("FR13 fixed32 GDN schedule contract is missing")
@@ -6321,6 +6361,12 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     resolved_mode = _FR13_FIXED32_MODE if mode is None else mode
     candidate_raw = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     production_raw = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+    gqa_group3_production_raw = str(
+        _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION
+    ).strip()
+    gqa_group3_production_batch_raw = str(
+        _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH
+    ).strip()
     expected_batch_raw = os.environ.get(
         "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH", ""
     ).strip()
@@ -6331,6 +6377,25 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"
         )
     graph_batch_gdn_diagnostic = graph_batch_gdn_diagnostic_raw == "1"
+    if gqa_group3_production_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION must be exactly 0 or 1"
+        )
+    gqa_group3_production = gqa_group3_production_raw == "1"
+    if gqa_group3_production:
+        if gqa_group3_production_batch_raw not in ("1", "4"):
+            raise RuntimeError(
+                "FR13 GDN GQA-group3 production patch requires exact batch 1 or 4"
+            )
+        gqa_group3_production_batch = int(
+            gqa_group3_production_batch_raw
+        )
+    else:
+        if gqa_group3_production_batch_raw:
+            raise RuntimeError(
+                "FR13 GDN GQA-group3 production batch is set without its arm"
+            )
+        gqa_group3_production_batch = None
     eager_kernel_diagnostic = (
         _fr13_fixed32_eager_boot_warm_contract() is not None
         and _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION != "1"
@@ -6390,10 +6455,16 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "16, 32, 64, or 128"
         )
     production = int(production_raw) if production_raw else None
-    if candidate is not None and production is not None:
+    if sum(
+        (
+            candidate is not None,
+            production is not None,
+            gqa_group3_production,
+        )
+    ) > 1:
         raise RuntimeError(
-            "FR13 fixed32 GDN path-BV diagnostic and production selectors "
-            "are mutually exclusive"
+            "FR13 fixed32 GDN diagnostic and production selectors are "
+            "mutually exclusive"
         )
     if candidate is not None and not resolved_mode:
         raise RuntimeError(
@@ -6402,6 +6473,10 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     if production is not None and not resolved_mode:
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_PRODUCTION requires fixed32 mode"
+        )
+    if gqa_group3_production and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION requires fixed32 mode"
         )
     if taw_native_diagnostic and not resolved_mode:
         raise RuntimeError(
@@ -6428,6 +6503,10 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{production!r}\n"
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH = "
         f"{expected_batch!r}\n"
+        "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION = "
+        f"{gqa_group3_production!r}\n"
+        "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH = "
+        f"{gqa_group3_production_batch!r}\n"
         "_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = "
         f"{taw_native_diagnostic!r}\n"
         "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
@@ -6602,6 +6681,12 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     mode = _FR13_FIXED32_MODE
     candidate = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     production = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+    gqa_group3_production = str(
+        _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION
+    ).strip()
+    gqa_group3_production_batch = str(
+        _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH
+    ).strip()
     expected_batch_raw = os.environ.get(
         "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH", ""
     ).strip()
@@ -6614,6 +6699,64 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_production = _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
     _fr13_fixed32_eager_boot_warm_contract()
+    if gqa_group3_production not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION must be exactly 0 or 1"
+        )
+    if gqa_group3_production == "1":
+        exact_gqa_group3 = {
+            "FR13_DRAFT_VOCAB_ROOT": "1",
+            "FR13_DRAFT_VOCAB_K": "65536",
+            "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
+            "FR13_SCAN_ALIGN": "0",
+            "FR13_NPAD_INVARIANT": "0",
+            "FR10_METRICS": "1",
+            "FR13_RING_EXPORT": "1",
+            "FR13_FLAGS_INKERNEL": "1",
+            "ENFORCE_EAGER": "0",
+            "CUDAGRAPH_MODE": "FULL_AND_PIECEWISE",
+            "FR13_FIXED32_B1_DIAGNOSTIC": "0",
+            "FR13_FIXED32_BATCH_GDN_BYTE_AB": "0",
+            "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB": "0",
+            "FR13_FIXED32_BATCH_GDN_PRODUCTION": "0",
+        }
+        gqa_group3_drift = {
+            name: (os.environ.get(name, ""), expected)
+            for name, expected in exact_gqa_group3.items()
+            if os.environ.get(name, "") != expected
+        }
+        max_num_seqs = os.environ.get("MAX_NUM_SEQS", "")
+        if (
+            mode not in _FR13_FIXED32_MODES
+            or gqa_group3_production_batch not in ("1", "4")
+            or max_num_seqs != gqa_group3_production_batch
+            or os.environ.get("SWE_CONCURRENCY", "") != max_num_seqs
+            or bool(candidate)
+            or bool(production)
+            or bool(
+                os.environ.get("FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH", "")
+            )
+            or os.environ.get(
+                "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE", "0"
+            )
+            != "0"
+            or bool(
+                os.environ.get("FR13_FIXED32_BATCH_GDN_BV_CANDIDATE", "")
+            )
+            or bool(
+                os.environ.get("FR13_FIXED32_BATCH_GDN_BV_PRODUCTION", "")
+            )
+            or gqa_group3_drift
+        ):
+            raise RuntimeError(
+                "FR13 GDN GQA-group3 production requires exact credentialed "
+                "B1-or-B4 K64/root1 physical32 FULL-graph contract: "
+                + repr(gqa_group3_drift)
+            )
+    elif gqa_group3_production_batch:
+        raise RuntimeError(
+            "FR13 GDN GQA-group3 production batch is set without its arm"
+        )
     if candidate in ("single_launch", "gqa_group3"):
         if expected_batch_raw not in ("1", "4"):
             raise RuntimeError(
@@ -6894,10 +7037,17 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
                 "drift: " + repr(drift)
             )
     if candidate:
-        if candidate not in ("16", "32", "64", "128"):
+        if candidate not in (
+            "16",
+            "32",
+            "64",
+            "128",
+            "single_launch",
+            "gqa_group3",
+        ):
             raise RuntimeError(
                 "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
-                "16, 32, 64, or 128"
+                "16, 32, 64, 128, single_launch, or gqa_group3"
             )
         if not mode:
             raise RuntimeError(
