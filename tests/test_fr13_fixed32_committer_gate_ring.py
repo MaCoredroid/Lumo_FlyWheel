@@ -66,7 +66,7 @@ def test_fixed32_producer_exports_existing_raw_gate_math_once() -> None:
     assert "tl.log(1.0 + tl.exp(x))" in candidate
     assert "b_g = -tl.exp(b_a_log) * softplus_x" in candidate
     assert "b_b = tl.sigmoid(b_raw_b.to(tl.float32))" in candidate
-    assert candidate.count("tl.store(") == 2
+    assert candidate.count("ring_gate +") == 2
     assert "mask=n_ok & (pid_v == 0)" in candidate
     assert "RAW_GATING=RAW_GATING and not GATE_EXPORT" in helper
     assert kernel.count("GATE_EXPORT=GATE_EXPORT") == 2
@@ -87,6 +87,8 @@ def test_b1_and_b4_gate_exports_require_cumulative_exact_route() -> None:
         assert "GATE_EXPORT=" in source
     assert "not raw_gating" in b1
     assert "scan_align_on()" in b1
+    assert '_extra_launch_kwargs["maxnreg"] = 80' in b1
+    assert 'extra_launch_kwargs["maxnreg"] = 80' in b4
 
 
 def test_committer_gate_candidate_is_two_scalar_loads_without_raw_math() -> None:
