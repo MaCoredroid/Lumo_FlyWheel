@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,30 @@ WORK_TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v12"
 QWEN_SCHEMA = "fr13-fixed32-qwen-campaign-provenance-v1"
 MODES = {"tail6_fixed32": "Tail23", "hydra27_fixed32": "Hydra27"}
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+SOURCE_RELATIVE = "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
+CANONICAL_SUBSETS = {
+    1: {
+        "sha256": "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb",
+        "task_ids": ("astropy__astropy-12907",),
+    },
+    4: {
+        "sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+        "task_ids": (
+            "astropy__astropy-12907",
+            "astropy__astropy-13033",
+            "astropy__astropy-13236",
+            "astropy__astropy-13398",
+        ),
+    },
+}
+REQUIRED_CONTAINER_ENV = {
+    "FR13_DRAFT_VOCAB_ROOT": "1",
+    "FR13_DRAFT_VOCAB_K": "65536",
+    "FR13_DRAFT_VOCAB_BLOCKS": "/workspace/scripts/fr13_dvk_subset_blocks.json",
+    "FR13_FIXED32_PHYSICAL_DRAFTS": "31",
+    "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL": "0",
+    "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB": "1",
+}
 
 
 class CredentialError(RuntimeError):
@@ -65,6 +90,117 @@ def _jsonl(path: Path, label: str) -> tuple[list[dict[str, Any]], bytes]:
     return rows, raw
 
 
+def _artifact_identity(path: Path, raw: bytes) -> dict[str, Any]:
+    return {"path": str(path.resolve()), "sha256": _sha(raw), "bytes": len(raw)}
+
+
+def _validate_artifact_identity(
+    identity: object, path: Path, raw: bytes, label: str
+) -> None:
+    if identity != _artifact_identity(path, raw):
+        raise CredentialError(f"{label} identity mismatch")
+
+
+def _committed_source_bytes(repo: Path, source_commit: str) -> bytes:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "show", f"{source_commit}:{SOURCE_RELATIVE}"],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise CredentialError("source commit cannot provide the tree-conv source") from error
+    if not result.stdout:
+        raise CredentialError("source commit tree-conv source is empty")
+    return result.stdout
+
+
+def _validate_qwen_campaign(
+    proof_path: Path, task_ids: list[str]
+) -> tuple[dict[str, Any], bytes]:
+    proof, proof_raw = _json(proof_path, "Qwen campaign proof")
+    canonical = (
+        json.dumps(proof, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        + "\n"
+    ).encode("ascii")
+    if proof_raw != canonical:
+        raise CredentialError("Qwen campaign proof is not canonical JSON")
+    if set(proof) != {
+        "schema", "metric_scope", "concurrency", "task_ids", "selection",
+        "metrics_pre", "metrics_post", "tasks", "metric_evidence_sha256",
+        "metric_evidence",
+    }:
+        raise CredentialError("Qwen campaign proof keys mismatch")
+    if (
+        proof.get("schema") != QWEN_SCHEMA
+        or proof.get("metric_scope") != "concurrent_campaign_union"
+        or proof.get("concurrency") != 4
+        or proof.get("task_ids") != task_ids
+        or proof.get("selection")
+        != {
+            "basis": "runner_owned_campaign_endpoint_metrics",
+            "task_boundary_schema": "fr13-fixed32-eager-kernel-diagnostic-task-bracket-v1",
+            "task_stream_coverage": None,
+        }
+        or HEX64.fullmatch(str(proof.get("metric_evidence_sha256"))) is None
+        or not isinstance(proof.get("metric_evidence"), dict)
+    ):
+        raise CredentialError("Qwen campaign union contract mismatch")
+
+    dataset_dir = proof_path.resolve().parent
+    for key, filename in (
+        ("metrics_pre", "fixed32_qwen_campaign_metrics_pre.txt"),
+        ("metrics_post", "fixed32_qwen_campaign_metrics_post.txt"),
+    ):
+        artifact = dataset_dir / filename
+        _validate_artifact_identity(
+            proof.get(key), artifact, _raw(artifact, f"Qwen {key}"), f"Qwen {key}"
+        )
+
+    from lumo_flywheel_serving.inference_proxy import fixed32_task_key_id
+
+    tasks = proof.get("tasks")
+    if not isinstance(tasks, list) or len(tasks) != len(task_ids):
+        raise CredentialError("Qwen campaign task proof count mismatch")
+    proof_identity = _artifact_identity(proof_path, proof_raw)
+    for index, task_id in enumerate(task_ids):
+        task = tasks[index]
+        if (
+            not isinstance(task, dict)
+            or set(task) != {
+                "instance_id", "task_key_id",
+                "expected_completed_logical_model_requests", "trace",
+            }
+            or task.get("instance_id") != task_id
+            or task.get("task_key_id") != fixed32_task_key_id(task_id)
+            or type(task.get("expected_completed_logical_model_requests")) is not int
+            or task["expected_completed_logical_model_requests"] <= 0
+        ):
+            raise CredentialError("Qwen campaign ordered task contract mismatch")
+        task_dir = dataset_dir / "per_task" / task_id
+        trace = task_dir / "qwen_trace.jsonl"
+        _validate_artifact_identity(
+            task.get("trace"), trace, _raw(trace, f"Qwen trace {task_id}"),
+            f"Qwen trace {task_id}",
+        )
+        metadata, _ = _json(task_dir / "runner_metadata.json", f"runner metadata {task_id}")
+        provenance = metadata.get("fixed32_real_task_provenance")
+        if (
+            metadata.get("instance_id") != task_id
+            or metadata.get("fixed32_qwen_campaign_proof") != proof_identity
+            or not isinstance(provenance, dict)
+            or provenance.get("schema") != "fr13-fixed32-real-task-provenance-v3"
+            or provenance.get("instance_id") != task_id
+            or provenance.get("qwen_metric_scope") != "campaign"
+            or provenance.get("qwen_campaign_metric_proof") != proof_identity
+            or provenance.get("qwen_campaign_metric_evidence_sha256")
+            != proof["metric_evidence_sha256"]
+        ):
+            raise CredentialError("Qwen per-task provenance binding mismatch")
+    return proof, proof_raw
+
+
 def issue_credential(
     *,
     comparator_path: Path,
@@ -75,6 +211,8 @@ def issue_credential(
     eager_terminal_path: Path,
     runtime_manifest_path: Path,
     source_path: Path,
+    repo_path: Path,
+    container_env_path: Path,
     source_commit: str,
     mode: str,
     batch_size: int,
@@ -87,15 +225,14 @@ def issue_credential(
 
     subset, subset_raw = _json(subset_path, "task subset")
     task_ids = subset.get("instance_ids")
+    canonical_subset = CANONICAL_SUBSETS[batch_size]
     if (
         subset.get("dataset_name") != "princeton-nlp/SWE-bench_Verified"
         or subset.get("split") != "test"
-        or not isinstance(task_ids, list)
-        or len(task_ids) != batch_size
-        or any(not isinstance(task, str) or not task for task in task_ids)
-        or len(set(task_ids)) != batch_size
+        or task_ids != list(canonical_subset["task_ids"])
+        or _sha(subset_raw) != canonical_subset["sha256"]
     ):
-        raise CredentialError("task subset is not exact SWE-Verified B1/B4")
+        raise CredentialError("task subset is not the pinned SWE-Verified B1/B4 subset")
 
     health, health_raw = _json(health_path, "campaign health")
     health_tasks = health.get("tasks")
@@ -153,13 +290,35 @@ def issue_credential(
     work_rows, work_raw = _jsonl(work_census_path, "fixed32 work census")
     terminal_present = work_rows[-1].get("schema") == WORK_TERMINAL_SCHEMA
     work_events = work_rows[:-1] if terminal_present else work_rows
+    from fr13_fixed32_work_census import (
+        CensusError,
+        normalized_work_sha256,
+        validate_event,
+    )
+
+    try:
+        validated = [
+            validate_event(row, source=f"fixed32 work census:{index + 1}")
+            for index, row in enumerate(work_events)
+        ]
+    except CensusError as error:
+        raise CredentialError(f"fixed32 work census exact-count mismatch: {error}") from error
+    signatures = {
+        normalized_work_sha256(event.normalized_work) for event in validated
+    }
     if (
-        not work_events
-        or any(row.get("schema") != WORK_SCHEMA for row in work_events)
-        or mode not in {row.get("mode") for row in work_events}
-        or batch_size not in {row.get("batch_size") for row in work_events}
+        not validated
+        or any(event.mode != mode for event in validated)
+        or batch_size not in {event.batch_size for event in validated}
+        or [event.event_index for event in validated] != list(range(len(validated)))
+        or any(
+            right.forward_step_index <= left.forward_step_index
+            for left, right in zip(validated, validated[1:])
+        )
+        or len({event.producer_pid for event in validated}) != 1
+        or len(signatures) != 1
     ):
-        raise CredentialError("fixed32 work census is incomplete or mismatched")
+        raise CredentialError("fixed32 work census sequence or physical work mismatch")
     eager_terminal, eager_terminal_raw = _json(
         eager_terminal_path, "eager diagnostic terminal"
     )
@@ -193,7 +352,13 @@ def issue_credential(
     ):
         raise CredentialError("engine ingress ledger is not task-set bound")
 
+    repo = repo_path.resolve()
+    expected_source_path = repo / SOURCE_RELATIVE
+    if source_path.resolve() != expected_source_path:
+        raise CredentialError("tree-conv source is not the repository source path")
     source_raw = _raw(source_path, "tree-conv source")
+    if source_raw != _committed_source_bytes(repo, source_commit):
+        raise CredentialError("source commit does not bind live tree-conv source bytes")
     source_sha256 = _sha(source_raw)
     runtime, runtime_raw = _json(runtime_manifest_path, "runtime manifest")
     closures = runtime.get("closures")
@@ -206,8 +371,7 @@ def issue_credential(
         row
         for row in package_sources or []
         if isinstance(row, dict)
-        and row.get("path")
-        == "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
+        and row.get("path") == SOURCE_RELATIVE
     ]
     if (
         runtime.get("schema") != "fr13-runtime-manifest-v1"
@@ -216,14 +380,24 @@ def issue_credential(
         or source_rows[0].get("size") != len(source_raw)
     ):
         raise CredentialError("runtime manifest does not bind tree-conv source")
+    container_env_raw = _raw(container_env_path, "container environment")
+    try:
+        container_env_lines = container_env_raw.decode("utf-8").splitlines()
+    except UnicodeDecodeError as error:
+        raise CredentialError("container environment is not UTF-8") from error
+    required_env = {**REQUIRED_CONTAINER_ENV, "FR13_FIXED32_MODE": mode}
+    if any(
+        container_env_lines.count(f"{key}={value}") != 1
+        for key, value in required_env.items()
+    ):
+        raise CredentialError("container environment does not bind physical32 K64/root1 gate")
+
     qwen_identity = None
     if batch_size == 4:
         if qwen_campaign_path is None:
             raise CredentialError("B4 credential requires campaign compaction proof")
-        qwen, qwen_raw = _json(qwen_campaign_path, "Qwen campaign proof")
-        if qwen.get("schema") != QWEN_SCHEMA:
-            raise CredentialError("Qwen campaign proof schema mismatch")
-        qwen_identity = {"sha256": _sha(qwen_raw), "bytes": len(qwen_raw)}
+        _, qwen_raw = _validate_qwen_campaign(qwen_campaign_path, task_ids)
+        qwen_identity = _artifact_identity(qwen_campaign_path, qwen_raw)
     elif qwen_campaign_path is not None:
         raise CredentialError("B1 credential forbids a campaign compaction proof")
 
@@ -253,6 +427,7 @@ def issue_credential(
         "task_subset_sha256": _sha(subset_raw),
         "source_commit": source_commit,
         "source_file_sha256": source_sha256,
+        "container_env_sha256": _sha(container_env_raw),
         "state_src_sha256": state_src_sha256,
         "runtime_manifest_sha256": _sha(runtime_raw),
         "work_census_sha256": _sha(work_raw),
@@ -280,6 +455,8 @@ def main() -> int:
     parser.add_argument("--eager-terminal", type=Path, required=True)
     parser.add_argument("--runtime-manifest", type=Path, required=True)
     parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--repo", type=Path, default=Path("."))
+    parser.add_argument("--container-env", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--mode", choices=sorted(MODES), required=True)
     parser.add_argument("--batch-size", type=int, choices=(1, 4), required=True)
@@ -295,6 +472,8 @@ def main() -> int:
         eager_terminal_path=args.eager_terminal,
         runtime_manifest_path=args.runtime_manifest,
         source_path=args.source,
+        repo_path=args.repo,
+        container_env_path=args.container_env,
         source_commit=args.source_commit,
         mode=args.mode,
         batch_size=args.batch_size,

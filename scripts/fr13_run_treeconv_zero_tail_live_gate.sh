@@ -129,5 +129,6 @@ fi
   --eager-terminal "$ARMDIR/fixed32_final_flush_skipped.json" \
   --runtime-manifest "$RUNROOT_ABS/runtime_manifest.at_end.json" \
   --source "$SOURCE" --source-commit "$SOURCE_COMMIT" \
+  --repo "$PWD" --container-env "$ARMDIR/container_env.txt" \
   --mode "$MODE" --batch-size "$BATCH" "${QWEN_ARGS[@]}" \
   --output "$ARMDIR/treeconv_zero_tail.credential.json"
