@@ -1,0 +1,128 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_register_recovery_sm121a.v1",
+  "status": "PASS_HOST_CODEGEN_REGISTER_REJECTION_RESOLVED_BYTE_GATES_PENDING",
+  "source": {
+    "branch": "codex/fixed32-fa2-qrow32-carried-r254-20260803",
+    "code_commit": "9fc17c8b5c785d29f59ca9b6df39ffe840a0c600",
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95"
+  },
+  "classification": {
+    "host_only": true,
+    "compiler_used": true,
+    "disassembler_used": true,
+    "cuda_cache_disabled_for_fresh_candidate": true,
+    "gpu_used": false,
+    "container_used": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "performance_measurement": false,
+    "byte_parity_claim": false,
+    "hardware_floor_claim": false,
+    "production_eligible": false,
+    "timing_eligible": false,
+    "default_off": true
+  },
+  "toolchain": {
+    "host_arch": "aarch64",
+    "target_arch": "sm_121a",
+    "nvcc": "13.0.88",
+    "optimization": "O3",
+    "use_fast_math": true,
+    "cxx_standard": 17
+  },
+  "paired_incumbent": {
+    "description": "generic templated carried-page entry",
+    "header_sha256": "c2c0a57bb64ebbdfb5db199991d50243e17645965d31d7a403b779221dbbf1fd",
+    "translation_unit_sha256": "d46e381313b90492cfb57d9bd97047bcd04561c2ad3df97afaddf03f53215d51",
+    "object_sha256": "92b8cfb25a9054c5175c175a5ec27f6182a32ea907ef6a51fa2d499fc372d12c",
+    "sass_sha256": "d32cca940cb305dcc8d6e2b656400bffa57e55715fb9a279dc5b8e212ff13dea",
+    "historical_sass_byte_identical": true,
+    "registers": 255,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "spill_store_bytes": 0,
+    "spill_load_bytes": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 81920,
+    "sass_slots_through_terminal_branch": 4082,
+    "sass_ldl": 0,
+    "sass_stl": 0,
+    "sass_call": 0,
+    "sass_ldg": 68,
+    "sass_lea": 202
+  },
+  "fresh_candidate": {
+    "description": "private exact entry with source maxnreg 254",
+    "header_sha256": "c2c0a57bb64ebbdfb5db199991d50243e17645965d31d7a403b779221dbbf1fd",
+    "translation_unit_sha256": "84ddf5f22bc770d10aae8a56295fc5f540459ab8122e91f73857c3227c988018",
+    "object_sha256": "cabac07d45798e09fd64a3d9f90be82ef5fe16174180eb5ee38259ee06707799",
+    "sass_sha256": "a814ccdb99b9a63b915ac762c5cc02dc536a98f0d9c1484a5853daaa74024cc5",
+    "fresh_regeneration_sass_byte_identical": true,
+    "single_sm121a_cubin": true,
+    "source_maxnreg": 254,
+    "registers": 252,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "spill_store_bytes": 0,
+    "spill_load_bytes": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 81920,
+    "sass_slots_through_terminal_branch": 3984,
+    "sass_ldl": 0,
+    "sass_stl": 0,
+    "sass_call": 0,
+    "sass_ldg": 68,
+    "sass_lea": 195
+  },
+  "mandatory_sass_counts": {
+    "hmma_bf16": 512,
+    "ffma": 132,
+    "fmul": 264,
+    "ldgsts": 176,
+    "ldsm": 288,
+    "stg": 38,
+    "unchanged_between_paired_arms": true
+  },
+  "candidate_minus_incumbent": {
+    "registers": -3,
+    "sass_slots_through_terminal_branch": -98,
+    "sass_slot_percent": -2.400784,
+    "sass_ldg": 0,
+    "sass_lea": -7,
+    "mandatory_math_or_pipeline_count_changed": false
+  },
+  "ru3_sensitivity": {
+    "selected_for_runtime": false,
+    "registers": 246,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "spill_store_bytes": 0,
+    "spill_load_bytes": 0,
+    "sass_slots_through_terminal_branch": 3972,
+    "sass_ldg": 68,
+    "sass_lea": 192,
+    "sass_sha256": "9a6c16aa8f158fe52450157b0d7af0435705166e7b91067a0413c0cd0de9ae86"
+  },
+  "selector_evidence": {
+    "generated_build_flag_fixed32_query_tile32": true,
+    "generated_live_selector_enabled": false,
+    "qrow32_production_selector_present": false,
+    "ordinary_translation_unit_unchanged": true,
+    "private_diagnostic_sentinel_required": true,
+    "geometry_mismatch_fails_closed": true
+  },
+  "verification": {
+    "focused_tests_passed": 33,
+    "focused_tests_failed": 0,
+    "python_byte_compile": "pass",
+    "static_resource_parser": "pass",
+    "static_sass_parser": "pass",
+    "fresh_source_diff_check": "pass",
+    "repository_diff_check": "pass",
+    "ruff": "unavailable_on_host"
+  },
+  "required_next_gate": [
+    "canonical real SWE-Verified exact4 B4 Tail23 raw-byte gate",
+    "canonical real SWE-Verified exact4 B4 Hydra27 raw-byte gate"
+  ]
+}
