@@ -73,6 +73,7 @@ namespace vllm {
 struct fr13_fixed32_m128_static_scheduler {};
 struct fr13_fixed32_m128_divisor_static_scheduler {};
 struct fr13_fixed32_b1_onen_static_scheduler {};
+struct fr13_fixed32_b1_n5120_single_tile_scheduler {};
 struct fr13_fixed32_b4_twom_static_scheduler {};
 struct fr13_fixed32_wide256_recompute_scheduler {};
 }  // namespace vllm
@@ -547,6 +548,71 @@ class Fr13B1OneNStaticTileScheduler100
   }
 };
 
+// The two admitted B1 N=5120 projections contain exactly forty scheduler-M
+// tiles and launch a (1, 40, 1) grid. Each CTA therefore owns one complete
+// output tile. Encode that invariant directly so the kernel does not retain
+// the general persistent scheduler's tile-count state or next-work arithmetic.
+class Fr13B1N5120SingleTileScheduler100
+    : public Fr13DivisorBalancedStaticTileScheduler100 {
+  using Base = Fr13DivisorBalancedStaticTileScheduler100;
+  static constexpr uint32_t kProblemTiles = 40;
+
+ public:
+  using Params = typename Base::Params;
+  using WorkTileInfo = typename Base::WorkTileInfo;
+  using CLCResponse = typename Base::CLCResponse;
+
+  CUTLASS_DEVICE explicit Fr13B1N5120SingleTileScheduler100(
+      Params const&) : Base() {}
+
+  CUTLASS_DEVICE explicit Fr13B1N5120SingleTileScheduler100(
+      CLCResponse*, Params const&, dim3) : Base() {}
+
+  template <class ClusterShape>
+  CUTLASS_DEVICE WorkTileInfo initial_work_tile_info(ClusterShape) const {
+    return get_current_work();
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work() const {
+    return {static_cast<int32_t>(blockIdx.y), 0, 0, true};
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work_for_linear_idx(
+      uint32_t linear_idx) const {
+    if (linear_idx >= kProblemTiles) {
+      return WorkTileInfo::invalid_work_tile();
+    }
+    return {static_cast<int32_t>(linear_idx), 0, 0, true};
+  }
+
+  CUTLASS_DEVICE static auto work_tile_to_cta_coord(
+      WorkTileInfo work_tile_info) {
+    return cute::make_coord(
+        work_tile_info.M_idx, cute::Int<0>{},
+        cute::Underscore{}, cute::Int<0>{});
+  }
+
+  CUTLASS_DEVICE static auto work_tile_to_cta_coord(
+      WorkTileInfo work_tile_info, dim3) {
+    return work_tile_to_cta_coord(work_tile_info);
+  }
+
+  CUTLASS_DEVICE bool is_last_tile(WorkTileInfo&, uint32_t = 1) const {
+    return true;
+  }
+
+  CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {
+    return cute::make_tuple(WorkTileInfo::invalid_work_tile(), true);
+  }
+
+  template <class TileSchedulerPipeline, class TileSchedulerPipelineState>
+  CUTLASS_DEVICE auto fetch_next_work(
+      WorkTileInfo work_tile_info, TileSchedulerPipeline&,
+      TileSchedulerPipelineState) {
+    return fetch_next_work(work_tile_info);
+  }
+};
+
 template <class TileShape, class ClusterShape,
           uint32_t SchedulerPipelineStageCount>
 struct TileSchedulerSelector<
@@ -561,6 +627,14 @@ struct TileSchedulerSelector<
     vllm::fr13_fixed32_b1_onen_static_scheduler, arch::Sm120,
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
   using Scheduler = Fr13B1OneNStaticTileScheduler100;
+};
+
+template <class TileShape, class ClusterShape,
+          uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
+    vllm::fr13_fixed32_b1_n5120_single_tile_scheduler, arch::Sm120,
+    TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  using Scheduler = Fr13B1N5120SingleTileScheduler100;
 };
 
 template <class TileShape, class ClusterShape,
@@ -941,6 +1015,23 @@ struct sm120_blockwise_fp8_config_b1_onen_static_identity_stage2 {
       cutlass::gemm::collective::StageCount<2>>;
 };
 
+// Keep the exact N=5120 cooperative collective and full-K accumulation order,
+// changing only the scheduler to the one-output-tile-per-CTA specialization.
+template <typename OutType>
+struct sm120_blockwise_fp8_config_b1_n5120_single_identity_stage2 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true,
+      fr13_fixed32_b1_n5120_single_tile_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
 // Preserve the audited B1 two-stage identity ping-pong collective used by the
 // three wider projections and replace only its generic coordinate decode.
 template <typename OutType>
@@ -1071,6 +1162,8 @@ enum class fixed32_cutlass_wave_variant {
   identity_stage2_pingpong_b1_byte_ab,
   identity_onen_b1,
   identity_onen_b1_byte_ab,
+  identity_onen_n5120_single_b1,
+  identity_onen_n5120_single_b1_byte_ab,
   identity_stockshape_b4,
   identity_stockshape_b4_byte_ab,
   identity_stockshape_stage2_b4,
@@ -1149,6 +1242,12 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     }
     if (value == "identity_onen_b1_byte_ab") {
       return fixed32_cutlass_wave_variant::identity_onen_b1_byte_ab;
+    }
+    if (value == "identity_onen_n5120_single_b1") {
+      return fixed32_cutlass_wave_variant::identity_onen_n5120_single_b1;
+    }
+    if (value == "identity_onen_n5120_single_b1_byte_ab") {
+      return fixed32_cutlass_wave_variant::identity_onen_n5120_single_b1_byte_ab;
     }
     if (value == "identity_stockshape_b4") {
       return fixed32_cutlass_wave_variant::identity_stockshape_b4;
@@ -1395,6 +1494,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
            fixed32_cutlass_wave_variant::identity_onen_b1_byte_ab)) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
+  if (!fixed32_cutlass_b1_onen_projection(M, N, K) &&
+      (wave_variant == fixed32_cutlass_wave_variant::
+                           identity_onen_n5120_single_b1 ||
+       wave_variant == fixed32_cutlass_wave_variant::
+                           identity_onen_n5120_single_b1_byte_ab)) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
   if (!fixed32_cutlass_b4_hybrid_n5120_projection(M, N, K) &&
       (wave_variant ==
            fixed32_cutlass_wave_variant::identity_hybrid_n5120_b4 ||
@@ -1520,6 +1626,18 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
         destination, a, b, a_scales, b_scales);
   };
 
+  auto run_identity_onen_n5120_single_b1 =
+      [&](torch::stable::Tensor& destination) {
+    if (N == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b1_n5120_single_identity_stage2<
+              OutType>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    return run_identity_onen_b1(destination);
+  };
+
   auto run_identity_stockshape_b4 =
       [&](torch::stable::Tensor& destination) {
     using Gemm = typename
@@ -1615,6 +1733,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
                           identity_stage2_pingpong_b1_byte_ab;
   const bool identity_onen_b1_byte_ab =
       wave_variant == fixed32_cutlass_wave_variant::identity_onen_b1_byte_ab;
+  const bool identity_onen_n5120_single_b1_byte_ab =
+      wave_variant == fixed32_cutlass_wave_variant::
+                          identity_onen_n5120_single_b1_byte_ab;
   const bool identity_stockshape_b4_byte_ab =
       wave_variant == fixed32_cutlass_wave_variant::
                           identity_stockshape_b4_byte_ab;
@@ -1637,12 +1758,15 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       wide256_byte_ab || static_persistent_byte_ab ||
       divisor_static_byte_ab || b4_m128_byte_ab || b4_m128_static_byte_ab ||
       identity_stage2_static_byte_ab || identity_stage2_pingpong_b1_byte_ab ||
-      identity_onen_b1_byte_ab ||
+      identity_onen_b1_byte_ab || identity_onen_n5120_single_b1_byte_ab ||
       identity_stockshape_b4_byte_ab ||
       identity_stockshape_stage2_b4_byte_ab || identity_divisor_b4_byte_ab ||
       identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab ||
       identity_hybrid_n5120_b4_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
+      if (identity_onen_n5120_single_b1_byte_ab) {
+        return run_identity_onen_n5120_single_b1(destination);
+      }
       if (identity_onen_b1_byte_ab) {
         return run_identity_onen_b1(destination);
       }
@@ -1760,7 +1884,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        identity_onen_b1_byte_ab
+        identity_onen_n5120_single_b1_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_identity_onen_n5120_single_b1_byte_ab.jsonl"
+        : identity_onen_b1_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_onen_b1_byte_ab.jsonl"
         : identity_hybrid_n5120_b4_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_hybrid_n5120_b4_byte_ab.jsonl"
@@ -1796,7 +1922,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (identity_onen_b1_byte_ab
+          << (identity_onen_n5120_single_b1_byte_ab
+                  ? "fr13.fixed32.cutlass_identity_onen_n5120_single_b1_byte_ab.v1"
+              : identity_onen_b1_byte_ab
                   ? "fr13.fixed32.cutlass_identity_onen_b1_byte_ab.v1"
               : identity_hybrid_n5120_b4_byte_ab
                   ? "fr13.fixed32.cutlass_identity_hybrid_n5120_b4_byte_ab.v1"
@@ -1889,6 +2017,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
 
   if (wave_variant == fixed32_cutlass_wave_variant::identity_onen_b1) {
     return run_identity_onen_b1(out);
+  }
+
+  if (wave_variant == fixed32_cutlass_wave_variant::
+                          identity_onen_n5120_single_b1) {
+    return run_identity_onen_n5120_single_b1(out);
   }
 
   if (wave_variant ==
