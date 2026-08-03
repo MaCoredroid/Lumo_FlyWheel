@@ -3462,9 +3462,17 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
 
 FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS = r'''# FR13_FA2_QROW32_B1_SELECTORS
 _FR13_FA2_QROW32_B1_ARMS = {
-    "no_split": {"sentinel": 1179791668, "num_splits": 0},
     "split2": {"sentinel": 1179791669, "num_splits": 2},
 }
+_FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL = 1179791667
+_FR13_FA2_QROW32_B1_CANDIDATE_SHA256 = (
+    "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467"
+)
+_FR13_FA2_QROW32_B1_CANDIDATE_SIZE = 300140712
+_FR13_FA2_QROW32_B1_FA2_HEAD = "29210221863736a08f71a866459e368ad1ac4a95"
+_FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256 = (
+    "c10888e721335ff99f93dabdfea7d8a524fbd7e21e8aee3f425f50af06bf5d84"
+)
 _FR13_FA2_QROW32_B1_TARGET_LAYERS = tuple(
     f"language_model.model.layers.{index}.self_attn.attn"
     for index in range(3, 64, 4)
@@ -3492,10 +3500,8 @@ def _fr13_fa2_qrow32_b1_arm(env_name):
     arm = os.environ.get(env_name, "")
     if not arm:
         return None
-    if arm not in _FR13_FA2_QROW32_B1_ARMS:
-        raise RuntimeError(
-            f"{env_name} must be empty, no_split, or split2; got {arm!r}"
-        )
+    if arm != "split2":
+        raise RuntimeError(f"{env_name} must be empty or split2; got {arm!r}")
     return arm
 
 
@@ -3511,6 +3517,29 @@ def _fr13_fa2_qrow32_b1_require_k64():
     k = int(os.environ.get("FR13_DRAFT_VOCAB_K", "0"))
     if root != 1 or k != 65536:
         raise RuntimeError("FR13 qrow32 B1 selectors require K64 ROOT=1")
+
+
+def _fr13_fa2_qrow32_b1_require_identity():
+    candidate_digest = _fr13_fa2_qrow32_b1_digest(
+        "FR13_FA2_QROW32_B1_SO_SHA256", "candidate SO"
+    )
+    source_commit = _fr13_fa2_qrow32_b1_digest(
+        "FR13_FA2_QROW32_B1_SOURCE_COMMIT", "source commit", length=40
+    )
+    patch_source = _fr13_fa2_qrow32_b1_digest(
+        "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256", "patch source"
+    )
+    if (
+        candidate_digest != _FR13_FA2_QROW32_B1_CANDIDATE_SHA256
+        or int(os.environ.get("FR13_FA2_QROW32_B1_SO_SIZE", "0"))
+        != _FR13_FA2_QROW32_B1_CANDIDATE_SIZE
+        or os.environ.get("FR13_FA2_QROW32_B1_FA2_HEAD", "")
+        != _FR13_FA2_QROW32_B1_FA2_HEAD
+        or os.environ.get("FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256", "")
+        != _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256
+    ):
+        raise RuntimeError("FR13 qrow32 split2 pinned identity drifted")
+    return candidate_digest, source_commit, patch_source
 
 
 def _fr13_fa2_qrow32_b1_require_exact4():
@@ -3594,6 +3623,21 @@ def _fr13_fa2_qrow32_b1_candidate_tree_bias(tree_bias, arm):
     return tagged
 
 
+def _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias):
+    base = tree_bias[0] if tree_bias.ndim == 3 else tree_bias
+    if (
+        base.dtype != torch.float32
+        or tuple(base.shape) != (32, 32)
+        or tuple(base.stride()) != (32, 1)
+    ):
+        raise RuntimeError("FR13 qrow32 B1 Qrow16 reference geometry drifted")
+    return torch.as_strided(
+        base,
+        size=(1, 32, 32),
+        stride=(_FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL, 32, 1),
+    )
+
+
 def _fr13_fa2_qrow32_b1_live_register(
     *, layer, flash_fn, query, key_cache, value_cache, cu_seqlens_q,
     max_seqlen_q, seqused_k, max_seqlen_k, softmax_scale, causal,
@@ -3601,23 +3645,9 @@ def _fr13_fa2_qrow32_b1_live_register(
 ):
     arm = _fr13_fa2_qrow32_b1_arm("FR13_FA2_QROW32_B1_LIVE_AB_ARM")
     if arm is None:
-        return
-    if not (torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()):
-        return
-    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn
-
-    context = getattr(_fr13_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
-    if not isinstance(context, dict):
-        return
-    descriptor = context.get("descriptor")
-    if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 1:
-        return
-    graph_id = int(context.get("graph_id", 0))
-    if graph_id <= 0:
-        raise RuntimeError("FR13 qrow32 B1 live gate graph identity drifted")
-    layer_name = str(getattr(layer, "layer_name", ""))
-    if layer_name not in _FR13_FA2_QROW32_B1_TARGET_LAYERS:
-        raise RuntimeError("FR13 qrow32 B1 live gate reached a non-target layer")
+        return tree_bias
+    _fr13_fa2_qrow32_b1_require_k64()
+    _fr13_fa2_qrow32_b1_require_identity()
     if not _fr13_fa2_qrow32_b1_exact_geometry(
         query=query, key_cache=key_cache, value_cache=value_cache,
         cu_seqlens_q=cu_seqlens_q, max_seqlen_q=max_seqlen_q,
@@ -3626,6 +3656,23 @@ def _fr13_fa2_qrow32_b1_live_register(
         num_splits=num_splits, tree_bias=tree_bias,
     ):
         raise RuntimeError("FR13 qrow32 B1 live gate geometry drifted")
+    reference_tree_bias = _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias)
+    if not (torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()):
+        return reference_tree_bias
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn
+
+    context = getattr(_fr13_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
+    if not isinstance(context, dict):
+        return reference_tree_bias
+    descriptor = context.get("descriptor")
+    if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 1:
+        return reference_tree_bias
+    graph_id = int(context.get("graph_id", 0))
+    if graph_id <= 0:
+        raise RuntimeError("FR13 qrow32 B1 live gate graph identity drifted")
+    layer_name = str(getattr(layer, "layer_name", ""))
+    if layer_name not in _FR13_FA2_QROW32_B1_TARGET_LAYERS:
+        raise RuntimeError("FR13 qrow32 B1 live gate reached a non-target layer")
     graph = _FR13_FA2_QROW32_B1_LIVE_GRAPHS.setdefault(graph_id, {})
     if layer_name in graph:
         raise RuntimeError("FR13 qrow32 B1 live target layer captured twice")
@@ -3639,13 +3686,17 @@ def _fr13_fa2_qrow32_b1_live_register(
         "block_table": block_table, "softcap": float(softcap),
         "num_splits": int(num_splits), "tree_bias": tree_bias,
     }
+    return reference_tree_bias
 
 
 def _fr13_fa2_qrow32_b1_live_call(bundle, out, *, arm=None):
-    tree_bias = bundle["tree_bias"]
-    num_splits = bundle["num_splits"]
-    if arm is not None:
-        tree_bias = _fr13_fa2_qrow32_b1_candidate_tree_bias(tree_bias, arm)
+    if arm is None:
+        tree_bias = _fr13_fa2_qrow32_b1_reference_tree_bias(bundle["tree_bias"])
+        num_splits = bundle["num_splits"]
+    else:
+        tree_bias = _fr13_fa2_qrow32_b1_candidate_tree_bias(
+            bundle["tree_bias"], arm
+        )
         num_splits = _FR13_FA2_QROW32_B1_ARMS[arm]["num_splits"]
     return bundle["flash_fn"](
         q=bundle["query"], k=bundle["key_cache"], v=bundle["value_cache"],
@@ -3664,20 +3715,20 @@ def _fr13_fa2_qrow32_b1_raw_bytes(tensor):
     return tensor.detach().contiguous().view(torch.uint8).cpu().numpy().tobytes()
 
 
-def _fr13_fa2_qrow32_b1_byte_summary(stock, candidate):
+def _fr13_fa2_qrow32_b1_byte_summary(reference, candidate):
     import hashlib as _hashlib
 
-    if stock.dtype != candidate.dtype or tuple(stock.shape) != tuple(candidate.shape):
+    if reference.dtype != candidate.dtype or tuple(reference.shape) != tuple(candidate.shape):
         raise RuntimeError("FR13 qrow32 B1 comparison contract drifted")
-    stock_raw = _fr13_fa2_qrow32_b1_raw_bytes(stock)
+    reference_raw = _fr13_fa2_qrow32_b1_raw_bytes(reference)
     candidate_raw = _fr13_fa2_qrow32_b1_raw_bytes(candidate)
-    mismatches = abs(len(stock_raw) - len(candidate_raw)) + sum(
-        left != right for left, right in zip(stock_raw, candidate_raw)
+    mismatches = abs(len(reference_raw) - len(candidate_raw)) + sum(
+        left != right for left, right in zip(reference_raw, candidate_raw)
     )
     return {
-        "dtype": str(stock.dtype), "shape": list(stock.shape),
-        "bytes": len(stock_raw), "raw_byte_mismatches": mismatches,
-        "stock_sha256": _hashlib.sha256(stock_raw).hexdigest(),
+        "dtype": str(reference.dtype), "shape": list(reference.shape),
+        "bytes": len(reference_raw), "raw_byte_mismatches": mismatches,
+        "reference_sha256": _hashlib.sha256(reference_raw).hexdigest(),
         "candidate_sha256": _hashlib.sha256(candidate_raw).hexdigest(),
     }
 
@@ -3720,11 +3771,8 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
     ):
         raise RuntimeError("FR13 qrow32 B1 live topology drifted")
     _fr13_fa2_qrow32_b1_require_k64()
-    candidate_digest = _fr13_fa2_qrow32_b1_digest(
-        "FR13_FA2_QROW32_B1_SO_SHA256", "candidate SO"
-    )
-    source_commit = _fr13_fa2_qrow32_b1_digest(
-        "FR13_FA2_QROW32_B1_SOURCE_COMMIT", "source commit", length=40
+    candidate_digest, source_commit, patch_source_digest = (
+        _fr13_fa2_qrow32_b1_require_identity()
     )
     graph = _FR13_FA2_QROW32_B1_LIVE_GRAPHS.get(int(graph_id))
     if not isinstance(graph, dict) or set(graph) != set(
@@ -3749,29 +3797,34 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
             shared_seq_len = seq_lens[0]
         elif shared_seq_len != seq_lens[0]:
             raise RuntimeError("FR13 qrow32 B1 live K length differs across layers")
-        stock_out, stock_lse = _fr13_fa2_qrow32_b1_live_call(
+        reference_out, reference_lse = _fr13_fa2_qrow32_b1_live_call(
             bundle, torch.empty_like(bundle["query"])
         )
         candidate_out, candidate_lse = _fr13_fa2_qrow32_b1_live_call(
             bundle, torch.empty_like(bundle["query"]), arm=arm
         )
         pending.append(
-            (layer_name, stock_out, stock_lse, candidate_out, candidate_lse)
+            (
+                layer_name, reference_out, reference_lse,
+                candidate_out, candidate_lse,
+            )
         )
     torch.cuda.synchronize()
     layers = []
     output_mismatches = 0
     lse_mismatches = 0
-    for layer_name, stock_out, stock_lse, candidate_out, candidate_lse in pending:
-        output = _fr13_fa2_qrow32_b1_byte_summary(stock_out, candidate_out)
-        lse = _fr13_fa2_qrow32_b1_byte_summary(stock_lse, candidate_lse)
+    for (
+        layer_name, reference_out, reference_lse, candidate_out, candidate_lse,
+    ) in pending:
+        output = _fr13_fa2_qrow32_b1_byte_summary(reference_out, candidate_out)
+        lse = _fr13_fa2_qrow32_b1_byte_summary(reference_lse, candidate_lse)
         output_mismatches += int(output["raw_byte_mismatches"])
         lse_mismatches += int(lse["raw_byte_mismatches"])
         layers.append({"layer_name": layer_name, "output": output, "lse": lse})
     passed = output_mismatches == 0 and lse_mismatches == 0
     config = _FR13_FA2_QROW32_B1_ARMS[arm]
     record = {
-        "schema": "fr13.fixed32.fa2_qrow32_b1_live_paged_ab.v1",
+        "schema": "fr13.fixed32.fa2_qrow32_b1_live_paged_ab.v2",
         "status": "PASS" if passed else "FAIL", "suite": "SWE-Verified",
         "instance_id": _FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS[0],
         "concurrency": 1, "batch_size": 1, "physical_rows": 32,
@@ -3780,9 +3833,19 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "candidate_num_splits": config["num_splits"],
         "split_scratch_allocation": (
             "stock FA2 set_params_splitkv via num_splits=2"
-            if arm == "split2" else "not applicable"
         ),
-        "candidate_so_sha256": candidate_digest, "source_commit": source_commit,
+        "reference_selector_sentinel": (
+            _FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL
+        ),
+        "reference_dispatch": "qrow16 incumbent exact geometry; no fallback",
+        "candidate_so_size": _FR13_FA2_QROW32_B1_CANDIDATE_SIZE,
+        "candidate_so_sha256": candidate_digest,
+        "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
+        "fa2_source_closure_sha256": (
+            _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256
+        ),
+        "source_commit": source_commit,
+        "patch_source_sha256": patch_source_digest,
         "runtime_mode": "FULL", "graph_id": int(graph_id),
         "layer_count": len(layers), "target_layers": list(
             _FR13_FA2_QROW32_B1_TARGET_LAYERS
@@ -3790,8 +3853,8 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "seq_len": shared_seq_len, "layers": layers,
         "output_raw_byte_mismatches": output_mismatches,
         "lse_raw_byte_mismatches": lse_mismatches,
-        "candidate_dispatch": f"qrow32 B1 {arm} exact-geometry require",
-        "served_return": "stock captured graph output unchanged",
+        "candidate_dispatch": "qrow32 B1 split2 exact geometry; no fallback",
+        "served_return": "qrow16 captured graph output unchanged",
         "fallback_allowed": False, "performance_measurement": False,
     }
     _fr13_fa2_qrow32_b1_write(
@@ -3817,8 +3880,8 @@ def _fr13_fa2_qrow32_b1_production_begin(
         raise RuntimeError("FR13 qrow32 B1 production has no launcher attestation")
     _fr13_fa2_qrow32_b1_require_k64()
     task_ids = _fr13_fa2_qrow32_b1_require_exact4()
-    candidate_digest = _fr13_fa2_qrow32_b1_digest(
-        "FR13_FA2_QROW32_B1_SO_SHA256", "candidate SO"
+    candidate_digest, source_commit, patch_source_digest = (
+        _fr13_fa2_qrow32_b1_require_identity()
     )
     pass_digest = _fr13_fa2_qrow32_b1_digest(
         "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256", "pass sidecar"
@@ -3859,6 +3922,8 @@ def _fr13_fa2_qrow32_b1_production_begin(
         "layer_name": layer_name, "capturing": capturing,
         "graph_id": int(context.get("graph_id", 0)) if capturing else 0,
         "candidate_so_sha256": candidate_digest,
+        "source_commit": source_commit,
+        "patch_source_sha256": patch_source_digest,
         "pass_sidecar_sha256": pass_digest, "task_ids": list(task_ids),
     }
 
@@ -3914,18 +3979,26 @@ def _fr13_fa2_qrow32_b1_production_record(
 ):
     config = _FR13_FA2_QROW32_B1_ARMS[arm]
     return {
-        "schema": "fr13.fixed32.fa2_qrow32_b1_production_engagement.v1",
+        "schema": "fr13.fixed32.fa2_qrow32_b1_production_engagement.v2",
         "status": "ENGAGED", "runtime_mode": runtime_mode,
         "batch_size": 1, "physical_rows": 32, "arm": arm,
         "selector_sentinel": config["sentinel"],
         "num_splits": config["num_splits"],
         "split_scratch_allocation": (
             "stock FA2 set_params_splitkv via num_splits=2"
-            if arm == "split2" else "not applicable"
         ),
         "graph_id": graph_id, "graph_signature": graph_signature,
         "layers": layers, "layer_count": len(layers), "calls_observed": calls,
         "candidate_so_sha256": os.environ["FR13_FA2_QROW32_B1_SO_SHA256"],
+        "candidate_so_size": _FR13_FA2_QROW32_B1_CANDIDATE_SIZE,
+        "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
+        "fa2_source_closure_sha256": (
+            _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256
+        ),
+        "source_commit": os.environ["FR13_FA2_QROW32_B1_SOURCE_COMMIT"],
+        "patch_source_sha256": os.environ[
+            "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256"
+        ],
         "pass_sidecar_sha256": os.environ[
             "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256"
         ],
@@ -4731,7 +4804,7 @@ def _fr13_sr_causal_flag():
             "                    flash_attn_varlen_func(\n"
         )
         live_call_replacement = """                if not _fr13_reordered:
-                    _fr13_fa2_qrow32_b1_live_register(
+                    tree_bias = _fr13_fa2_qrow32_b1_live_register(
                         layer=layer,
                         flash_fn=flash_attn_varlen_func,
                         query=query[:num_decode_tokens],
@@ -5319,12 +5392,12 @@ def main() -> int:
     parser.add_argument(
         "--fixed32-query-tile32-b1-live-ab",
         action="store_true",
-        help="install the all-layer real-B1 no-split/split2 byte gate",
+        help="install the all-layer real-B1 split2-vs-Qrow16 byte gate",
     )
     parser.add_argument(
         "--fixed32-query-tile32-b1-production",
         action="store_true",
-        help="install the attested B1 no-split/split2 production selector",
+        help="install the attested B1 split2 production selector",
     )
     parser.add_argument(
         "--fixed32-query-tile16-production",

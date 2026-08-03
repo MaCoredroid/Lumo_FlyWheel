@@ -95,6 +95,10 @@ QROW16_DIVFREE_FA2_SHA256 = (
     "106e54d1c82ec7ce7576cbb44bb4aa2342b2985bb58e97aeeca5503275bee3e2"
 )
 QROW16_DIVFREE_FA2_SIZE = 299_491_544
+QROW32_B1_SPLIT2_FA2_SHA256 = (
+    "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467"
+)
+QROW32_B1_SPLIT2_FA2_SIZE = 300_140_712
 CONTAINER_FA2_SOURCE = Path("/tmp/fr13_fork_fa2.so")
 CONTAINER_FA2_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so"
@@ -2828,6 +2832,8 @@ def _expected_runtime_fa2_identity(
     env = os.environ if env is None else env
     live = env.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0")
     production = env.get("FR13_FA2_QROW16_PRODUCTION", "0")
+    qrow32_b1_live = env.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
+    qrow32_b1_production = env.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
     for name, value in (
         ("FR13_FA2_QROW16_LIVE_PAGED_AB", live),
         ("FR13_FA2_QROW16_PRODUCTION", production),
@@ -2836,6 +2842,27 @@ def _expected_runtime_fa2_identity(
             raise ContractError(f"{name} must be exactly 0 or 1")
     if live == "1" and production == "1":
         raise ContractError("qrow16 live and production selectors are mutually exclusive")
+    for name, value in (
+        ("FR13_FA2_QROW32_B1_LIVE_AB_ARM", qrow32_b1_live),
+        ("FR13_FA2_QROW32_B1_PRODUCTION_ARM", qrow32_b1_production),
+    ):
+        if value not in {"", "split2"}:
+            raise ContractError(f"{name} must be empty or split2")
+    if qrow32_b1_live and qrow32_b1_production:
+        raise ContractError(
+            "qrow32 split2 live and production selectors are mutually exclusive"
+        )
+    if (qrow32_b1_live or qrow32_b1_production) and (
+        live == "1" or production == "1"
+    ):
+        raise ContractError("qrow16 and qrow32 split2 selectors are mutually exclusive")
+    if qrow32_b1_live or qrow32_b1_production:
+        declared_sha256 = env.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
+        if declared_sha256 != QROW32_B1_SPLIT2_FA2_SHA256:
+            raise ContractError(
+                "qrow32 split2 runtime FA2 declaration is not the qualified candidate"
+            )
+        return QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256
     if live == "1":
         declared_sha256 = env.get("FR13_FA2_QROW16_SO_SHA256", "")
         if declared_sha256 != QROW16_DIVFREE_FA2_SHA256:
@@ -2947,6 +2974,7 @@ def validate_runtime_attestation(payload: object) -> dict[str, Any]:
         (FA2_SIZE, FA2_SHA256),
         (QROW16_FA2_SIZE, QROW16_FA2_SHA256),
         (QROW16_DIVFREE_FA2_SIZE, QROW16_DIVFREE_FA2_SHA256),
+        (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256),
     }
     for key, record, expected_path in (
         ("source", source, str(CONTAINER_FA2_SOURCE)),

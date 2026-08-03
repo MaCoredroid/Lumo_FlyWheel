@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ REPO = Path(__file__).resolve().parents[1]
 PATCHER = REPO / "scripts/fr13_patch_fa2_tree_bias.py"
 SIDECAR = REPO / "scripts/fr13_qrow32_b1_pass_sidecar.py"
 LAUNCHER = REPO / "scripts/fr13_launch_forked_fa2_tree_server.sh"
+LIVE_GATE = REPO / "scripts/fr13_run_b1_k64_qrow32_split2_live_gate.sh"
 TIMING_RUNNER = REPO / "scripts/fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh"
 
 
@@ -30,20 +32,14 @@ def _comparison(seed: str, dtype: str, shape: list[int]) -> dict[str, object]:
         "shape": shape,
         "bytes": 4096,
         "raw_byte_mismatches": 0,
-        "stock_sha256": digest,
+        "reference_sha256": digest,
         "candidate_sha256": digest,
     }
 
 
-def _live_payload(candidate_sha256: str, arm: str) -> dict[str, object]:
-    config = {
-        "no_split": (1179791668, 0, "not applicable"),
-        "split2": (
-            1179791669,
-            2,
-            "stock FA2 set_params_splitkv via num_splits=2",
-        ),
-    }[arm]
+def _live_payload(
+    module, candidate_sha256: str, source_commit: str, patch_sha256: str
+) -> dict[str, object]:
     layers = []
     for index in range(3, 64, 4):
         name = f"language_model.model.layers.{index}.self_attn.attn"
@@ -55,10 +51,10 @@ def _live_payload(candidate_sha256: str, arm: str) -> dict[str, object]:
             }
         )
     return {
-        "schema": "fr13.fixed32.fa2_qrow32_b1_live_paged_ab.v1",
+        "schema": module.LIVE_SCHEMA,
         "status": "PASS",
         "suite": "SWE-Verified",
-        "instance_id": "astropy__astropy-12907",
+        "instance_id": module.EXACT4_TASK_IDS[0],
         "concurrency": 1,
         "batch_size": 1,
         "physical_rows": 32,
@@ -66,75 +62,109 @@ def _live_payload(candidate_sha256: str, arm: str) -> dict[str, object]:
         "draft_vocab_k": 65536,
         "runtime_mode": "FULL",
         "candidate_so_sha256": candidate_sha256,
-        "arm": arm,
-        "selector_sentinel": config[0],
-        "candidate_num_splits": config[1],
-        "split_scratch_allocation": config[2],
+        "candidate_so_size": module.CANDIDATE_SIZE,
+        "arm": "split2",
+        "selector_sentinel": 1179791669,
+        "candidate_num_splits": 2,
+        "split_scratch_allocation": "stock FA2 set_params_splitkv via num_splits=2",
+        "reference_selector_sentinel": 1179791667,
+        "reference_dispatch": "qrow16 incumbent exact geometry; no fallback",
+        "candidate_dispatch": "qrow32 B1 split2 exact geometry; no fallback",
+        "fa2_head": module.FA2_HEAD,
+        "fa2_source_closure_sha256": module.SOURCE_CLOSURE_SHA256,
+        "source_commit": source_commit,
+        "patch_source_sha256": patch_sha256,
         "layer_count": 16,
         "layers": layers,
         "output_raw_byte_mismatches": 0,
         "lse_raw_byte_mismatches": 0,
         "fallback_allowed": False,
-        "served_return": "stock captured graph output unchanged",
+        "served_return": "qrow16 captured graph output unchanged",
         "performance_measurement": False,
     }
 
 
-def test_selectors_are_independent_default_off_and_split2_uses_stock_api() -> None:
+def test_selectors_are_split2_only_default_off_and_qrow16_served() -> None:
     text = PATCHER.read_text()
     helpers = text.split("FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS", 1)[1]
     production = helpers.split("def _fr13_fa2_qrow32_b1_production_begin", 1)[1]
 
-    assert '"no_split": {"sentinel": 1179791668, "num_splits": 0}' in helpers
     assert '"split2": {"sentinel": 1179791669, "num_splits": 2}' in helpers
+    assert '"no_split": {"sentinel": 1179791668' not in helpers
     assert 'os.environ.get(env_name, "")' in helpers
-    assert '"--fixed32-query-tile32-b1-live-ab"' in text
-    assert '"--fixed32-query-tile32-b1-production"' in text
-    assert 'num_splits=(\n                                _fr13_qrow32_b1_selection["num_splits"]' in text
-    assert "stock FA2 set_params_splitkv via num_splits=2" in helpers
+    assert 'tree_bias = _fr13_fa2_qrow32_b1_live_register(' in text
+    assert "_FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL = 1179791667" in helpers
+    assert '"reference_sha256"' in helpers
+    assert '"served_return": "qrow16 captured graph output unchanged"' in helpers
     assert "torch.cuda.synchronize()" not in production
     assert '"candidate_served": True, "fallback_allowed": False' in helpers
     assert "FR13 qrow32 B1 production silently fell back" in helpers
 
 
-def test_launcher_requires_real_k64_gate_and_arm_bound_exact4() -> None:
+def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:
     text = LAUNCHER.read_text()
 
-    assert "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, no_split, or split2" in text
+    assert "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty or split2" in text
+    assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or split2" in text
     assert "FR13 qrow32 B1 live gate requires the canonical K64/root1 real task" in text
-    assert "fr13_qrow32_b1_pass_sidecar.py issue" in text
-    assert "fr13_qrow32_b1_pass_sidecar.py verify" in text
-    assert 'if [[ -n "\\${FR13_FA2_QROW32_B1_PRODUCTION_ARM}" ]]; then' in text
+    assert '"${FR13_FIXED32_MODE:-}" == "hydra27_fixed32"' in text
+    assert '"${ENFORCE_EAGER:-0}" == "0"' in text
+    assert '"${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE"' in text
+    assert "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467" in text
+    assert "c10888e721335ff99f93dabdfea7d8a524fbd7e21e8aee3f425f50af06bf5d84" in text
+    assert "--patch-source scripts/fr13_patch_fa2_tree_bias.py" in text
+    assert "--patch-source /workspace/scripts/fr13_patch_fa2_tree_bias.py" in text
     assert "FR13_FA2_QROW32_B1_INTERNAL_ATTESTED=1" in text
-    assert "--fixed32-query-tile32-b1-live-ab" in text
-    assert "--fixed32-query-tile32-b1-production" in text
     assert "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398" in text
-    assert "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5" in text
 
 
-def test_timing_runner_requires_arm_bound_real_exact4_engagement() -> None:
+def test_live_gate_is_authenticated_one_task_non_timing_qrow16_served() -> None:
+    text = LIVE_GATE.read_text()
+
+    assert "FR13_RUN_QROW32_SPLIT2_LIVE_GATE" in text
+    assert "subset_b1_diagnostic_one.json" in text
+    assert "fixed32_chat_traffic_audit.json" in text
+    assert "all(value is True for value in checks.values())" not in text
+    assert "any(value is not True for value in checks.values())" in text
+    assert '"served_return": "qrow16 captured graph output unchanged"' in text
+    assert "FR13_SFWD_GPU_TIMER=0" in text
+    assert "ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in text
+    assert "fr13_qrow32_b1_pass_sidecar.py validate-source" in text
+
+
+def test_timing_runner_is_pass_gated_exact4_graph_only() -> None:
     text = TIMING_RUNNER.read_text()
 
-    assert ': "${QROW32_B1_ARM:?set QROW32_B1_ARM to no_split or split2}"' in text
+    assert "FR13_RUN_QROW32_SPLIT2_TIMING" in text
+    assert ': "${QROW32_B1_PASS:?set QROW32_B1_PASS' in text
+    assert "fr13_qrow32_b1_pass_sidecar.py validate-source" in text
     assert "fr13_qrow32_b1_pass_sidecar.py verify" in text
-    assert 'qrow.get("candidate_served") is not True' in text
-    assert 'qrow.get("fallback_allowed") is not False' in text
-    assert 'qrow.get("arm") != candidate_arm' in text
-    assert 'qrow.get("num_splits") != (0 if candidate_arm == "no_split" else 2)' in text
-    assert '"qrow32_b1_arm": candidate_arm' in text
-    assert '"qrow32_b1_num_splits": 0 if candidate_arm == "no_split" else 2' in text
+    assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2" in text
+    assert "ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in text
+    assert "fr13_qrow32_split2_timing.py" in text
+    assert "exact16_rule=only_after_exact4_u95_clears_cap" in text
+    assert "subset_b4_four.json" in text
+    assert "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0" in text
 
 
-@pytest.mark.parametrize("arm", ["no_split", "split2"])
-def test_sidecar_is_arm_bound(tmp_path: Path, arm: str) -> None:
-    module = _module(SIDECAR, f"qrow32_sidecar_{arm}")
+def test_sidecar_is_binary_source_and_split2_bound(tmp_path: Path) -> None:
+    module = _module(SIDECAR, "qrow32_sidecar")
     candidate = tmp_path / "candidate.so"
-    candidate.write_bytes((arm + "-candidate").encode("ascii"))
-    candidate_sha256 = module.sha256_file(candidate)
+    candidate.write_bytes(b"split2-candidate")
+    module.CANDIDATE_SIZE = candidate.stat().st_size
+    module.CANDIDATE_SHA256 = module.sha256_file(candidate)
+    source_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
+    patch_sha256 = module.sha256_file(PATCHER)
     live = tmp_path / "live.json"
     live.write_text(
         json.dumps(
-            _live_payload(candidate_sha256, arm),
+            _live_payload(module, module.CANDIDATE_SHA256, source_commit, patch_sha256),
             ensure_ascii=True,
             indent=2,
             sort_keys=True,
@@ -142,34 +172,35 @@ def test_sidecar_is_arm_bound(tmp_path: Path, arm: str) -> None:
         + "\n",
         encoding="ascii",
     )
-    live_sha256 = module.sha256_file(live)
     sidecar = tmp_path / "pass.json"
-
     issued = module.issue_sidecar(
         live_result=live,
-        expected_live_sha256=live_sha256,
+        expected_live_sha256=module.sha256_file(live),
         candidate_so=candidate,
-        expected_candidate_sha256=candidate_sha256,
-        arm=arm,
+        expected_candidate_sha256=module.CANDIDATE_SHA256,
+        arm="split2",
+        patch_source=PATCHER,
+        expected_source_commit=source_commit,
         out=sidecar,
     )
-    sidecar_sha256 = module.sha256_file(sidecar)
     verified = module.verify_sidecar(
         sidecar_path=sidecar,
-        expected_sidecar_sha256=sidecar_sha256,
+        expected_sidecar_sha256=module.sha256_file(sidecar),
         candidate_so=candidate,
-        expected_candidate_sha256=candidate_sha256,
-        arm=arm,
+        expected_candidate_sha256=module.CANDIDATE_SHA256,
+        arm="split2",
+        patch_source=PATCHER,
+        expected_source_commit=source_commit,
     )
-    assert issued["arm"] == arm
-    assert verified["arm"] == arm
+    assert issued["arm"] == "split2"
+    assert verified["source_commit"] == source_commit
+    assert verified["patch_source_sha256"] == patch_sha256
 
-    wrong_arm = "split2" if arm == "no_split" else "no_split"
-    with pytest.raises(ValueError, match="contract drifted"):
-        module.verify_sidecar(
-            sidecar_path=sidecar,
-            expected_sidecar_sha256=sidecar_sha256,
-            candidate_so=candidate,
-            expected_candidate_sha256=candidate_sha256,
-            arm=wrong_arm,
+    with pytest.raises(ValueError, match="must be split2"):
+        module.validate_live_result(
+            _live_payload(
+                module, module.CANDIDATE_SHA256, source_commit, patch_sha256
+            ),
+            candidate_sha256=module.CANDIDATE_SHA256,
+            arm="no_split",
         )

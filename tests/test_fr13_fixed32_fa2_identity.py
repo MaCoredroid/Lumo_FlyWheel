@@ -21,6 +21,10 @@ QROW16_DIVFREE_EXPECTED_SHA256 = (
     "106e54d1c82ec7ce7576cbb44bb4aa2342b2985bb58e97aeeca5503275bee3e2"
 )
 QROW16_DIVFREE_EXPECTED_SIZE = 299_491_544
+QROW32_SPLIT2_EXPECTED_SHA256 = (
+    "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467"
+)
+QROW32_SPLIT2_EXPECTED_SIZE = 300_140_712
 QROW16_REJECTED_SHA256 = (
     "35ba18c9bab4b37362aa3b26441e8a58edfcd3d0a75692fda90fc131a0b3307c"
 )
@@ -35,6 +39,43 @@ def test_suffix_only_fa2_identity_is_pinned() -> None:
     assert contract.QROW16_FA2_SIZE == QROW16_EXPECTED_SIZE
     assert contract.QROW16_DIVFREE_FA2_SHA256 == QROW16_DIVFREE_EXPECTED_SHA256
     assert contract.QROW16_DIVFREE_FA2_SIZE == QROW16_DIVFREE_EXPECTED_SIZE
+    assert contract.QROW32_B1_SPLIT2_FA2_SHA256 == QROW32_SPLIT2_EXPECTED_SHA256
+    assert contract.QROW32_B1_SPLIT2_FA2_SIZE == QROW32_SPLIT2_EXPECTED_SIZE
+
+
+@pytest.mark.parametrize(
+    "selector",
+    ["FR13_FA2_QROW32_B1_LIVE_AB_ARM", "FR13_FA2_QROW32_B1_PRODUCTION_ARM"],
+)
+def test_runtime_identity_selects_only_pinned_qrow32_split2(selector: str) -> None:
+    env = {
+        "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
+        "FR13_FA2_QROW16_PRODUCTION": "0",
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+        "FR13_FA2_QROW32_B1_SO_SHA256": QROW32_SPLIT2_EXPECTED_SHA256,
+    }
+    env[selector] = "split2"
+    assert contract._expected_runtime_fa2_identity(env) == (
+        QROW32_SPLIT2_EXPECTED_SIZE,
+        QROW32_SPLIT2_EXPECTED_SHA256,
+    )
+
+
+def test_runtime_identity_rejects_unqualified_qrow32_arm_or_binary() -> None:
+    env = {
+        "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
+        "FR13_FA2_QROW16_PRODUCTION": "0",
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "no_split",
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+        "FR13_FA2_QROW32_B1_SO_SHA256": QROW32_SPLIT2_EXPECTED_SHA256,
+    }
+    with pytest.raises(contract.ContractError, match="empty or split2"):
+        contract._expected_runtime_fa2_identity(env)
+    env["FR13_FA2_QROW32_B1_LIVE_AB_ARM"] = "split2"
+    env["FR13_FA2_QROW32_B1_SO_SHA256"] = "0" * 64
+    with pytest.raises(contract.ContractError, match="not the qualified candidate"):
+        contract._expected_runtime_fa2_identity(env)
 
 
 @pytest.mark.skipif(not FA2_PATH.is_file(), reason="ignored FA2 binary is not staged")
