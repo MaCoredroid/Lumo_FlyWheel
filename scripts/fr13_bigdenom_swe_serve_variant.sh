@@ -122,6 +122,7 @@ if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_b1_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_divisor_b4_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_b4_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_stage2_b4_byte_ab" \
@@ -589,6 +590,7 @@ if diagnostic:
         "schema": "fr13-fixed32-b1-diagnostic-v1",
         "run_classification": "b1_diagnostic",
         "gate_eligible": False,
+        "timing_eligible": False,
         "floor_acceptance_eligible": False,
         "max_num_seqs": max_num_seqs,
         "swe_concurrency": concurrency,
@@ -1647,7 +1649,8 @@ if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" \
-      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_b1_byte_ab" ]]; then
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_b1_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" ]]; then
   [[ -n "$FIXED32_MODE" && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]] \
     || {
       echo "FAIL: fixed32 CUTLASS Stream-K real-task arm is B1 diagnostic only"
@@ -1962,6 +1965,8 @@ if cutlass_wave not in {
     "identity_stage2_pingpong_b1",
     "identity_onen_b1_byte_ab",
     "identity_onen_b1",
+    "identity_onen_n5120_single_b1_byte_ab",
+    "identity_onen_n5120_single_b1",
     "identity_stockshape_b4_byte_ab",
     "identity_stockshape_b4",
     "identity_stockshape_stage2_b4_byte_ab",
@@ -2007,6 +2012,7 @@ try:
                 "identity_stage2_static_byte_ab",
                 "identity_stage2_pingpong_b1_byte_ab",
                 "identity_onen_b1_byte_ab",
+                "identity_onen_n5120_single_b1_byte_ab",
             )
         ),
     )
@@ -2515,7 +2521,8 @@ if [[ -n "$FIXED32_MODE" ]]; then
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" \
-        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_b1_byte_ab" ]]; then
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_b1_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" ]]; then
     FIXED32_RUNNER_ARGS+=(
       --fixed32-cutlass-real-event-arm "$FIXED32_CUTLASS_REAL_EVENT_ARM_PATH"
     )

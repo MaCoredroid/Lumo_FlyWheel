@@ -36,6 +36,9 @@ IDENTITY_STAGE2_PINGPONG_B1_K64_ROOT_LIVE_SCHEMA = (
 IDENTITY_ONEN_B1_K64_ROOT_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_identity_onen_b1_k64_root_live_gate.v1"
 )
+IDENTITY_ONEN_N5120_SINGLE_B1_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_onen_n5120_single_b1_k64_root_live_gate.v1"
+)
 K64_ROOT_SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.k64_root.production_pass.v1"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
@@ -49,6 +52,16 @@ VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
     "f93500dc1ec4d19b93c13a8fec3a31e2fead23161ecb1c6839972697f6df25a4"
 )
+SOURCE_CONTRACTS = {
+    "identity_onen_n5120_single_b1": {
+        "patch_source_sha256": (
+            "eadff808ef7db8de342d8c51e046cda9cc78bc4e308d1c1d08d5b33f7af1d2b0"
+        ),
+        "patched_dispatch_sha256": (
+            "5e856f587480d2d04d9127b25e12d40ef82b8d07a2301389ab757523ce206d2d"
+        ),
+    },
+}
 SOURCE_BINDING_SCHEMA = "fr13.fixed32.cutlass_streamk.source_binding.v1"
 SOURCE_BINDING_PATHS = (
     "scripts/fr13_patch_cutlass_fixed32_wave.py",
@@ -111,6 +124,17 @@ CANDIDATE_CONTRACTS = {
         "required_qualification_profile": "k64_root",
         "source_binding": "required",
     },
+    "identity_onen_n5120_single_b1": {
+        "live_schema": (
+            "fr13.fixed32.cutlass_identity_onen_n5120_single_b1_live_gate.v1"
+        ),
+        "k64_root_live_schema": (
+            IDENTITY_ONEN_N5120_SINGLE_B1_K64_ROOT_LIVE_SCHEMA
+        ),
+        "diagnostic_selector": "identity_onen_n5120_single_b1_byte_ab",
+        "required_qualification_profile": "k64_root",
+        "source_binding": "required",
+    },
 }
 QUALIFICATION_PROFILES: dict[str, dict[str, object]] = {
     "full_vocab": {
@@ -144,13 +168,23 @@ QUALIFICATION_PROFILES: dict[str, dict[str, object]] = {
 }
 
 
-def _candidate_contract(candidate_selector: str) -> dict[str, str]:
+def _candidate_contract(candidate_selector: str) -> dict[str, object]:
     try:
         return CANDIDATE_CONTRACTS[candidate_selector]
     except KeyError as error:
         raise QualificationError(
             f"Stream-K candidate selector mismatch: {candidate_selector!r}"
         ) from error
+
+
+def _source_contract(candidate_selector: str) -> dict[str, str]:
+    try:
+        return SOURCE_CONTRACTS[candidate_selector]
+    except KeyError:
+        return {
+            "patch_source_sha256": PATCH_SOURCE_SHA256,
+            "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
+        }
 
 
 def _qualification_profile(
@@ -176,6 +210,7 @@ def _qualification_profile(
         "identity_stage2_static",
         "identity_stage2_pingpong_b1",
         "identity_onen_b1",
+        "identity_onen_n5120_single_b1",
     }:
         raise QualificationError(
             "B1 k64_root qualification is restricted to wide256 or "
@@ -266,12 +301,15 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _validate_patch_source(path: Path) -> dict[str, object]:
+def _validate_patch_source(
+    path: Path, candidate_selector: str
+) -> dict[str, object]:
     info = _regular_file(path, "Stream-K patch source")
     digest = sha256_file(path)
-    if digest != PATCH_SOURCE_SHA256:
+    expected = _source_contract(candidate_selector)["patch_source_sha256"]
+    if digest != expected:
         raise QualificationError(
-            f"Stream-K patch source SHA-256 mismatch: {digest} != {PATCH_SOURCE_SHA256}"
+            f"Stream-K patch source SHA-256 mismatch: {digest} != {expected}"
         )
     return {
         "path": str(path.resolve(strict=True)),
@@ -341,7 +379,9 @@ def _require_clean_tracked_tree(repo_root: Path) -> None:
 
 
 def validate_source_commit_binding(
-    source_commit: str, patch_source: Path = PATCH_SOURCE
+    source_commit: str,
+    patch_source: Path = PATCH_SOURCE,
+    candidate_selector: str = "identity_onen_b1",
 ) -> dict[str, object]:
     if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
         raise QualificationError("source-binding commit is invalid")
@@ -404,7 +444,10 @@ def validate_source_commit_binding(
         }
     patch_identity = files[os.fspath(PATCH_SOURCE)]
     assert isinstance(patch_identity, dict)
-    if patch_identity.get("sha256") != PATCH_SOURCE_SHA256:
+    expected_patch_sha256 = _source_contract(candidate_selector)[
+        "patch_source_sha256"
+    ]
+    if patch_identity.get("sha256") != expected_patch_sha256:
         raise QualificationError(
             "source-binding committed patch source does not match the pinned digest"
         )
@@ -443,7 +486,8 @@ def validate_live_result(
         diagnostic_selector,
         qualification_profile=qualification_profile,
     )
-    patch = _validate_patch_source(patch_source)
+    source_contract = _source_contract(candidate_selector)
+    patch = _validate_patch_source(patch_source, candidate_selector)
     block_map = (
         _validate_draft_vocab_blocks(draft_vocab_blocks)
         if profile["requires_block_map"]
@@ -476,9 +520,9 @@ def validate_live_result(
         "differing_bytes": 0,
         "candidate_sha256": candidate["sha256"],
         "candidate_bytes": candidate["bytes"],
-        "patch_source_sha256": PATCH_SOURCE_SHA256,
+        "patch_source_sha256": source_contract["patch_source_sha256"],
         "vllm_base_commit": VLLM_BASE_COMMIT,
-        "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
+        "patched_dispatch_sha256": source_contract["patched_dispatch_sha256"],
         "errors": [],
     }
     if candidate_selector in {
@@ -528,7 +572,9 @@ def validate_live_result(
             )
     source_identity: dict[str, object] | None = None
     if candidate_contract.get("source_binding") == "required":
-        source_identity = validate_source_commit_binding(source_commit, patch_source)
+        source_identity = validate_source_commit_binding(
+            source_commit, patch_source, candidate_selector
+        )
         if payload.get("source_identity") != source_identity:
             raise QualificationError(
                 "Stream-K live PASS source-identity binding mismatch"
@@ -554,7 +600,7 @@ def validate_live_result(
         "binary_attestation_sha256": attestation_sha256,
         "patch_source_sha256": patch["sha256"],
         "vllm_base_commit": VLLM_BASE_COMMIT,
-        "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
+        "patched_dispatch_sha256": source_contract["patched_dispatch_sha256"],
         "qualification_source_commit": source_commit,
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
         "qualification_task_marker": EXPECTED_TASK_MARKER,
@@ -654,7 +700,8 @@ def verify_sidecar(
         diagnostic_selector,
         qualification_profile=sidecar_profile,
     )
-    patch = _validate_patch_source(patch_source)
+    source_contract = _source_contract(sidecar_selector)
+    patch = _validate_patch_source(patch_source, sidecar_selector)
     block_map = (
         _validate_draft_vocab_blocks(draft_vocab_blocks)
         if profile["requires_block_map"]
@@ -670,7 +717,7 @@ def verify_sidecar(
         "candidate_bytes": candidate["bytes"],
         "patch_source_sha256": patch["sha256"],
         "vllm_base_commit": VLLM_BASE_COMMIT,
-        "patched_dispatch_sha256": PATCHED_DISPATCH_SHA256,
+        "patched_dispatch_sha256": source_contract["patched_dispatch_sha256"],
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
         "qualification_task_marker": EXPECTED_TASK_MARKER,
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
@@ -719,7 +766,9 @@ def verify_sidecar(
     ):
         raise QualificationError("sidecar qualification source commit is invalid")
     if candidate_contract.get("source_binding") == "required":
-        source_identity = validate_source_commit_binding(source_commit, patch_source)
+        source_identity = validate_source_commit_binding(
+            source_commit, patch_source, sidecar_selector
+        )
         if payload.get("qualification_source_identity") != source_identity:
             raise QualificationError(
                 "Stream-K production sidecar source-identity binding mismatch"
@@ -742,6 +791,7 @@ def validate_production_attestation(
     if not isinstance(candidate_selector, str):
         raise QualificationError("Stream-K binary attestation selector is invalid")
     candidate_contract = _candidate_contract(candidate_selector)
+    source_contract = _source_contract(candidate_selector)
     candidate_sha256, candidate_bytes, candidate_family = binary.candidate_identity(
         candidate_selector
     )
@@ -801,7 +851,9 @@ def validate_production_attestation(
         raise QualificationError("Stream-K attestation sidecar binding mismatch")
     if qualification.get("candidate_sha256") != candidate_sha256:
         raise QualificationError("Stream-K attestation candidate binding mismatch")
-    if qualification.get("patch_source_sha256") != PATCH_SOURCE_SHA256:
+    if qualification.get("patch_source_sha256") != source_contract[
+        "patch_source_sha256"
+    ]:
         raise QualificationError("Stream-K attestation patch-source binding mismatch")
     for key, expected in (
         ("qualification_task_marker", EXPECTED_TASK_MARKER),
@@ -857,7 +909,7 @@ def validate_production_attestation(
     source_identity: dict[str, object] | None = None
     if candidate_contract.get("source_binding") == "required":
         source_identity = validate_source_commit_binding(
-            qualification_source_commit, patch_source
+            qualification_source_commit, patch_source, candidate_selector
         )
         if qualification.get("qualification_source_identity") != source_identity:
             raise QualificationError(
@@ -875,7 +927,7 @@ def validate_production_attestation(
         "candidate_family": candidate_family,
         "candidate_sha256": candidate_sha256,
         "candidate_bytes": candidate_bytes,
-        "patch_source_sha256": PATCH_SOURCE_SHA256,
+        "patch_source_sha256": source_contract["patch_source_sha256"],
         "production_sidecar_sha256": expected_sidecar_sha256,
         "live_result_sha256": qualification["live_result_sha256"],
         "binary_attestation_sha256": hashlib.sha256(raw).hexdigest(),
@@ -948,6 +1000,9 @@ def main() -> int:
     source_parser = subparsers.add_parser("source-binding")
     source_parser.add_argument("--source-commit", required=True)
     source_parser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
+    source_parser.add_argument(
+        "--candidate-selector", default="identity_onen_b1"
+    )
     attestation_parser = subparsers.add_parser("attestation")
     attestation_parser.add_argument("--attestation", type=Path, required=True)
     attestation_parser.add_argument("--expected-sidecar-sha256", required=True)
@@ -1001,6 +1056,7 @@ def main() -> int:
         payload = validate_source_commit_binding(
             args.source_commit,
             args.patch_source,
+            args.candidate_selector,
         )
     else:
         payload = validate_production_attestation(

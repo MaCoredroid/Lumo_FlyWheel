@@ -69,6 +69,14 @@ case "$GATE_CANDIDATE" in
     CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_identity_onen_b1_byte_ab.jsonl
     K64_ROOT_RESULT_NAME=cutlass_identity_onen_b1_k64_root_byte_gate.json
     ;;
+  identity_onen_n5120_single_b1)
+    DIAGNOSTIC_SELECTOR=identity_onen_n5120_single_b1_byte_ab
+    RECORD_SCHEMA=fr13.fixed32.cutlass_identity_onen_n5120_single_b1_byte_ab.v1
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_n5120_single_b1_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_n5120_single_b1_k64_root_live_gate.v1
+    CONTAINER_JSONL=/logs/fr13_fixed32_cutlass_identity_onen_n5120_single_b1_byte_ab.jsonl
+    K64_ROOT_RESULT_NAME=cutlass_identity_onen_n5120_single_b1_k64_root_byte_gate.json
+    ;;
   *)
     echo "unsupported Stream-K gate candidate: $GATE_CANDIDATE" >&2
     exit 2
@@ -79,10 +87,15 @@ if [[ -v FR13_STREAMK_QUALIFICATION_PROFILE ]]; then
   QUALIFICATION_PROFILE_EXPLICIT=1
 fi
 QUALIFICATION_PROFILE=${FR13_STREAMK_QUALIFICATION_PROFILE:-full_vocab}
-if [[ "$GATE_CANDIDATE" == "identity_onen_b1" \
+if [[ ( "$GATE_CANDIDATE" == "identity_onen_b1" \
+        || "$GATE_CANDIDATE" == "identity_onen_n5120_single_b1" ) \
       && ( "$QUALIFICATION_PROFILE_EXPLICIT" != "1" \
            || "$QUALIFICATION_PROFILE" != "k64_root" ) ]]; then
-  echo "identity_onen_b1 diagnostic requires explicit k64_root qualification" >&2
+  if [[ "$GATE_CANDIDATE" == "identity_onen_b1" ]]; then
+    echo "identity_onen_b1 diagnostic requires explicit k64_root qualification" >&2
+  else
+    echo "$GATE_CANDIDATE diagnostic requires explicit k64_root qualification" >&2
+  fi
   exit 2
 fi
 DRAFT_VOCAB_BLOCKS_HOST=scripts/fr13_dvk_subset_blocks.json
@@ -108,7 +121,8 @@ case "$QUALIFICATION_PROFILE" in
        || "$GATE_CANDIDATE" == "divisor_static_stocktile" \
        || "$GATE_CANDIDATE" == "identity_stage2_static" \
        || "$GATE_CANDIDATE" == "identity_stage2_pingpong_b1" \
-       || "$GATE_CANDIDATE" == "identity_onen_b1" ]] || {
+       || "$GATE_CANDIDATE" == "identity_onen_b1" \
+       || "$GATE_CANDIDATE" == "identity_onen_n5120_single_b1" ]] || {
       echo "B1 k64_root qualification requires a pinned B1 projection candidate" >&2
       exit 2
     }
@@ -130,10 +144,12 @@ case "$QUALIFICATION_PROFILE" in
     ;;
 esac
 
-if [[ "$GATE_CANDIDATE" == "identity_onen_b1" ]]; then
+if [[ "$GATE_CANDIDATE" == "identity_onen_b1" \
+      || "$GATE_CANDIDATE" == "identity_onen_n5120_single_b1" ]]; then
   .venv/bin/python scripts/fr13_cutlass_streamk_pass.py source-binding \
     --source-commit "$SOURCE_COMMIT" \
     --patch-source "$PATCH_SOURCE" \
+    --candidate-selector "$GATE_CANDIDATE" \
     >/dev/null
 fi
 
@@ -348,13 +364,14 @@ for label, identity, expected_path in (
         errors.append(f"installed binary {label} size mismatch")
     if identity.get("candidate_family") != expected_candidate_family:
         errors.append(f"installed binary {label} candidate-family mismatch")
+source_contract = qualification._source_contract(expected_candidate)
 patch_source_sha256 = hashlib.sha256(patch_source.read_bytes()).hexdigest()
-if patch_source_sha256 != qualification.PATCH_SOURCE_SHA256:
+if patch_source_sha256 != source_contract["patch_source_sha256"]:
     errors.append("Stream-K patch source SHA-256 mismatch")
 source_identity = None
-if expected_candidate == "identity_onen_b1":
+if qualification.CANDIDATE_CONTRACTS[expected_candidate].get("source_binding") == "required":
     source_identity = qualification.validate_source_commit_binding(
-        source_commit, patch_source
+        source_commit, patch_source, expected_candidate
     )
 
 payload = {
@@ -393,7 +410,7 @@ payload = {
     "candidate_bytes": expected_candidate_size,
     "patch_source_sha256": patch_source_sha256,
     "vllm_base_commit": qualification.VLLM_BASE_COMMIT,
-    "patched_dispatch_sha256": qualification.PATCHED_DISPATCH_SHA256,
+    "patched_dispatch_sha256": source_contract["patched_dispatch_sha256"],
     "source_commit": source_commit,
     "binary_attestation_sha256": hashlib.sha256(binary_path.read_bytes()).hexdigest(),
     "errors": errors,

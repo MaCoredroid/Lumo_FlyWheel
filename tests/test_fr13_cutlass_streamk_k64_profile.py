@@ -266,35 +266,76 @@ def test_k64_root_accepts_divisor_static_stocktile_profile(
     assert issued["qualified_comparison_call_limit"] == 320
 
 
-def test_k64_root_accepts_onen_b1_profile(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    (
+        "candidate_selector",
+        "diagnostic_selector",
+        "live_schema",
+        "size_attr",
+        "sha_attr",
+    ),
+    (
+        (
+            "identity_onen_b1",
+            "identity_onen_b1_byte_ab",
+            "IDENTITY_ONEN_B1_K64_ROOT_LIVE_SCHEMA",
+            "IDENTITY_ONEN_B1_CANDIDATE_SIZE",
+            "IDENTITY_ONEN_B1_CANDIDATE_SHA256",
+        ),
+        (
+            "identity_onen_n5120_single_b1",
+            "identity_onen_n5120_single_b1_byte_ab",
+            "IDENTITY_ONEN_N5120_SINGLE_B1_K64_ROOT_LIVE_SCHEMA",
+            "IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SIZE",
+            "IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SHA256",
+        ),
+    ),
+)
+def test_k64_root_accepts_source_bound_onen_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_selector: str,
+    diagnostic_selector: str,
+    live_schema: str,
+    size_attr: str,
+    sha_attr: str,
 ) -> None:
     module, candidate, _, live, _ = _k64_fixture(tmp_path, monkeypatch)
     _, source_commit, patch_source = _source_binding_repo(
         tmp_path, module, monkeypatch
     )
+    if candidate_selector in module.SOURCE_CONTRACTS:
+        contract = dict(module.SOURCE_CONTRACTS[candidate_selector])
+        contract["patch_source_sha256"] = hashlib.sha256(
+            patch_source.read_bytes()
+        ).hexdigest()
+        monkeypatch.setitem(module.SOURCE_CONTRACTS, candidate_selector, contract)
+    source_contract = module._source_contract(candidate_selector)
     candidate_sha256 = hashlib.sha256(candidate.read_bytes()).hexdigest()
     monkeypatch.setattr(
         module.binary,
-        "IDENTITY_ONEN_B1_CANDIDATE_SIZE",
+        size_attr,
         len(candidate.read_bytes()),
     )
     monkeypatch.setattr(
         module.binary,
-        "IDENTITY_ONEN_B1_CANDIDATE_SHA256",
+        sha_attr,
         candidate_sha256,
     )
     payload = json.loads(live.read_text(encoding="ascii"))
     payload.update(
         {
-            "schema": module.IDENTITY_ONEN_B1_K64_ROOT_LIVE_SCHEMA,
-            "candidate": "identity_onen_b1",
-            "candidate_family": "identity_onen_b1",
-            "diagnostic_selector": "identity_onen_b1_byte_ab",
-            "patch_source_sha256": module.PATCH_SOURCE_SHA256,
+            "schema": getattr(module, live_schema),
+            "candidate": candidate_selector,
+            "candidate_family": candidate_selector,
+            "diagnostic_selector": diagnostic_selector,
+            "patch_source_sha256": source_contract["patch_source_sha256"],
+            "patched_dispatch_sha256": source_contract[
+                "patched_dispatch_sha256"
+            ],
             "source_commit": source_commit,
             "source_identity": module.validate_source_commit_binding(
-                source_commit, patch_source
+                source_commit, patch_source, candidate_selector
             ),
         }
     )
@@ -308,7 +349,7 @@ def test_k64_root_accepts_onen_b1_profile(
         candidate,
         sidecar,
         patch_source,
-        candidate_selector="identity_onen_b1",
+        candidate_selector=candidate_selector,
         qualification_profile="k64_root",
         draft_vocab_blocks=BLOCK_MAP,
     )
@@ -318,21 +359,27 @@ def test_k64_root_accepts_onen_b1_profile(
         sidecar_sha256,
         candidate,
         patch_source,
-        candidate_selector="identity_onen_b1",
+        candidate_selector=candidate_selector,
         qualification_profile="k64_root",
         draft_vocab_blocks=BLOCK_MAP,
     )
 
     assert verified == issued
-    assert issued["candidate_selector"] == "identity_onen_b1"
-    assert issued["diagnostic_selector"] == "identity_onen_b1_byte_ab"
+    assert issued["candidate_selector"] == candidate_selector
+    assert issued["diagnostic_selector"] == diagnostic_selector
     assert issued["qualification_profile"] == "k64_root"
     assert issued["qualified_comparison_call_limit"] == 320
     assert issued["qualification_source_identity"]["source_commit"] == source_commit
 
 
-def test_onen_b1_sidecar_rejects_full_vocab_profile(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "candidate_selector",
+    ("identity_onen_b1", "identity_onen_n5120_single_b1"),
+)
+def test_source_bound_onen_sidecar_rejects_full_vocab_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_selector: str,
 ) -> None:
     module, candidate, patch_source, _, _ = _k64_fixture(tmp_path, monkeypatch)
     sidecar = tmp_path / "full-vocab-sidecar.json"
@@ -340,7 +387,7 @@ def test_onen_b1_sidecar_rejects_full_vocab_profile(
         json.dumps(
             {
                 "schema": module.SIDECAR_SCHEMA,
-                "candidate_selector": "identity_onen_b1",
+                "candidate_selector": candidate_selector,
             },
             sort_keys=True,
         )
@@ -350,16 +397,28 @@ def test_onen_b1_sidecar_rejects_full_vocab_profile(
 
     with pytest.raises(
         module.QualificationError,
-        match="identity_onen_b1 qualification requires the k64_root profile",
+        match=rf"{candidate_selector} qualification requires the k64_root profile",
     ):
         module.verify_sidecar(
             sidecar,
             hashlib.sha256(sidecar.read_bytes()).hexdigest(),
             candidate,
             patch_source,
-            candidate_selector="identity_onen_b1",
+            candidate_selector=candidate_selector,
             qualification_profile="full_vocab",
         )
+
+
+def test_n5120_single_source_contract_matches_current_patch() -> None:
+    module = _load("fr13_cutlass_streamk_n5120_source_contract_test")
+    contract = module._source_contract("identity_onen_n5120_single_b1")
+
+    assert module.sha256_file(REPO / module.PATCH_SOURCE) == contract[
+        "patch_source_sha256"
+    ]
+    assert contract["patched_dispatch_sha256"] == (
+        "5e856f587480d2d04d9127b25e12d40ef82b8d07a2301389ab757523ce206d2d"
+    )
 
 
 def test_source_binding_rejects_forged_40hex_commit(
