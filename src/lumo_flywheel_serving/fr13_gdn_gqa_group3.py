@@ -128,11 +128,9 @@ def _fr13_fixed32_gdn_gqa_group3_value_head_node(
     b_a_log,
     b_dt_bias,
     out,
-    ring_k,
     ring_v,
     ring_a,
     ring_b,
-    ring_k_norm,
     ring_gate,
     pid_batch,
     pid_vh,
@@ -184,7 +182,7 @@ def _fr13_fixed32_gdn_gqa_group3_value_head_node(
                 ring_a + head_offset,
                 b_raw_a_in,
                 mask=n_ok & (pid_v == 0),
-                )
+            )
             tl.store(
                 ring_b + head_offset,
                 b_raw_b_in,
