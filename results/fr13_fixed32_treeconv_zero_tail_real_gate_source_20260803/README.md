@@ -37,7 +37,6 @@ included here.
 
 - 18 focused tree-conv gate and credential tests passed after merging current
   `main`, including independent tamper tests for every binding above.
-- 84 adjacent fixed32 ingress, campaign provenance, committer, and CUDA
-  contract tests passed; one CUDA runtime module was skipped in the occupied
-  shared-GPU environment.
+- 31 adjacent fixed32 and merged M32 host wiring tests passed. No GPU or CUDA
+  runtime test was invoked in this provenance-hardening pass.
 - Python compilation, shell syntax, and `git diff --check` passed.

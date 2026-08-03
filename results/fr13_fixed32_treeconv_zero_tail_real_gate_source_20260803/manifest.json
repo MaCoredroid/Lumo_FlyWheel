@@ -1,7 +1,7 @@
 {
   "schema": "fr13.fixed32.treeconv_zero_tail.real_gate_source.v1",
   "status": "ready_for_real_swe_verified_qualification",
-  "base_commit": "082373d768f1ebe61973312a1afc755073593d1f",
+  "base_commit": "f375d73109d277b6fab9d30142c611e75c4f7fc4",
   "candidate": "physical32_treeconv_zero_tail_v1",
   "qualification_profile": "k64_root",
   "draft_vocab_root": 1,
@@ -28,8 +28,8 @@
   },
   "verification": {
     "focused_tests_passed": 18,
-    "adjacent_tests_passed": 84,
-    "cuda_runtime_modules_skipped": 1,
+    "adjacent_tests_passed": 31,
+    "cuda_runtime_modules_skipped": 0,
     "python_compile": "pass",
     "shell_syntax": "pass",
     "diff_check": "pass"
