@@ -28,6 +28,11 @@ one 32-row, two-warp CTA per batch/head. It has the same 96-CTA layer grid and
 complete ordered K loop as stock BM64 while avoiding the 32 query rows outside
 each physical32 batch slot. Its private selector is gate-only and default-off;
 it can be tagged only by the canonical retained-live exact4 byte diagnostic.
+The independent ``--fixed32-query-tile32-b1`` build uses the same BM32 traits
+for exact B1, where its 24 two-warp CTAs replace 48 one-warp qrow16 CTAs and
+share one ordered K/V scan across each head's two query warps. It is likewise
+gate-only and default-off; the 24-CTA grid is intentionally explicit because
+it may underfill a 48-SM GPU even though it preserves 48 resident warps.
 Both fixed32 query routes fix the paged-KV block size at 1024, allowing only
 their dedicated translation units to resolve pages directly from 64-row
 K-block coordinates. There is no qrow32 production selector.
@@ -91,7 +96,9 @@ struct StaticPagedQueryBlockInfo {
         , seqlen_k_cache(0)
         , actual_seqlen_k(params.seqused_k[bidb]) {
         static_assert(StaticQueryRows<Kernel_traits>::value == 32);
-        static_assert(StaticQueryBatchLayout<Kernel_traits>::sequences == 4);
+        static_assert(
+            StaticQueryBatchLayout<Kernel_traits>::sequences == 1
+            || StaticQueryBatchLayout<Kernel_traits>::sequences == 4);
     }
 
     const int actual_seqlen_q;
@@ -202,6 +209,7 @@ STOCK_FIXED32_QUERY_INSTANTIATION = r'''template void run_mha_fwd_splitkv_dispat
 
 
 FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL = 0x46523133
+FIXED32_QUERY_TILE32_B1_BATCH_STRIDE_SENTINEL = 0x46523134
 
 
 # Unlike B1, B4 dereferences the tree-bias batch stride. Keep this sentinel
@@ -707,6 +715,108 @@ void fr13_run_mha_fwd_fixed32_qrow32(
 '''
 
 
+FIXED32_QUERY_TILE32_B1_TRANSLATION_UNIT = r'''// FR13 fixed32 B1 qrow32 gate candidate.
+#include "namespace_config.h"
+#include "flash_fwd_launch_template.h"
+
+namespace FLASH_NAMESPACE {
+
+using Fr13Fixed32Qrow32B1KernelTraits = Flash_fwd_kernel_traits<
+    256, 32, 64, 2, false, false, cutlass::bfloat16_t>;
+
+template <>
+struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32B1KernelTraits> {
+    static constexpr int value = 1024;
+    static constexpr int log2 = 10;
+    static constexpr int block_n_log2 = 6;
+};
+
+template <>
+struct StaticPagedKVStrides<Fr13Fixed32Qrow32B1KernelTraits> {
+    static constexpr int64_t page = 1024 * 4 * 256;
+    static constexpr int64_t row = 4 * 256;
+    static constexpr int64_t head = 256;
+};
+
+template <>
+struct StaticQueryRows<Fr13Fixed32Qrow32B1KernelTraits> {
+    static constexpr int value = 32;
+};
+
+template <>
+struct StaticQueryBatchLayout<Fr13Fixed32Qrow32B1KernelTraits> {
+    static constexpr int sequences = 1;
+    static constexpr int query_heads = 24;
+    static constexpr int kv_heads = 4;
+    static constexpr int query_heads_per_kv = 6;
+};
+
+__global__ __maxnreg__(254)
+void fr13_flash_fwd_fixed32_qrow32_b1_kernel(
+        KERNEL_PARAM_MODIFIER const Flash_fwd_params params) {
+#if defined(ARCH_SUPPORTS_FLASH)
+    FLASH_NAMESPACE::compute_attn_splitkv<
+        Fr13Fixed32Qrow32B1KernelTraits,
+        false,  // Is_causal
+        false,  // Is_local
+        false,  // Has_alibi
+        false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
+        true,   // Is_even_K: d == kHeadDim == 256
+        false,  // Is_softcap
+        false,  // Split
+        false   // Append_KV
+    >(params);
+#else
+    FLASH_UNSUPPORTED_ARCH
+#endif
+}
+
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow32_b1(
+        Flash_fwd_params &params, cudaStream_t stream) {
+    // One physical32 query CTA per head: B1 * H24 = 24 CTAs/layer.
+    // Both query warps share one complete ordered K/V scan; this is not split-K.
+    constexpr static int kTreeBlockM = 32;
+    constexpr static int kTreeBlockN = 64;
+    constexpr static int kTreeWarps = 2;
+    static_assert(kTreeBlockM == 16 * kTreeWarps);
+    using TreeKernelTraits = Fr13Fixed32Qrow32B1KernelTraits;
+    static_assert(TreeKernelTraits::kBlockM == kTreeBlockM);
+    static_assert(TreeKernelTraits::kBlockN == kTreeBlockN);
+    static_assert(TreeKernelTraits::kNWarps == kTreeWarps);
+    static_assert(TreeKernelTraits::kNThreads == 64);
+    static_assert(TreeKernelTraits::kGmemThreadsPerRow == 8);
+    static_assert(TreeKernelTraits::kGmemRowsPerThread == 8);
+    static_assert(1024 % TreeKernelTraits::kGmemRowsPerThread == 0);
+    constexpr size_t smem_size = TreeKernelTraits::kSmemSize;
+    static_assert(smem_size == 80 * 1024);
+    using StaticLayout = StaticQueryBatchLayout<TreeKernelTraits>;
+    static_assert(StaticLayout::sequences == 1);
+    static_assert(StaticLayout::query_heads == 24);
+    static_assert(StaticLayout::kv_heads == 4);
+    static_assert(StaticLayout::query_heads_per_kv == 6);
+    static_assert(
+        StaticLayout::query_heads
+        == StaticLayout::kv_heads * StaticLayout::query_heads_per_kv);
+    dim3 grid(
+        StaticLayout::query_heads_per_kv,
+        StaticLayout::sequences,
+        StaticLayout::kv_heads);
+    auto kernel = &fr13_flash_fwd_fixed32_qrow32_b1_kernel;
+    if (smem_size >= 48 * 1024) {
+        C10_CUDA_CHECK(cudaFuncSetAttribute(
+            kernel,
+            cudaFuncAttributeMaxDynamicSharedMemorySize,
+            smem_size));
+    }
+    kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>(params);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+} // namespace FLASH_NAMESPACE
+'''
+
+
 RUN_MHA_FWD_SIGNATURE = (
     "void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, "
     "bool force_split_kernel=false) {\n"
@@ -777,6 +887,70 @@ FIXED32_QUERY_TILE32_API_GATE = r'''    if (params.tree_bias_batch_stride == kFr
             && force_split_kernel,
             "FR13 qrow32 gate dispatch reached non-canonical B4 geometry");
         fr13_run_mha_fwd_fixed32_qrow32(params, stream);
+        return;
+    }
+'''
+
+
+FIXED32_QUERY_TILE32_B1_API_DECLARATION = rf'''constexpr int64_t kFr13Qrow32B1BatchStrideSentinel =
+    {FIXED32_QUERY_TILE32_B1_BATCH_STRIDE_SENTINEL};
+
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow32_b1(
+    Flash_fwd_params &params, cudaStream_t stream);
+
+'''
+
+
+FIXED32_QUERY_TILE32_B1_API_GATE = r'''    if (params.tree_bias_batch_stride == kFr13Qrow32B1BatchStrideSentinel) {
+        TORCH_CHECK(
+            params.tree_bias_ptr != nullptr
+            && params.is_bf16
+            && !params.is_causal
+            && params.b == 1
+            && params.total_q == 32
+            && params.d == 256
+            && params.d_rounded == 256
+            && params.h == 24
+            && params.h_k == 4
+            && params.h_h_k_ratio == 6
+            && params.seqlen_q == 32
+            && params.seqlen_q_rounded == 128
+            && params.q_head_stride == 256
+            && params.k_batch_stride == 1024 * 4 * 256
+            && params.k_row_stride == 4 * 256
+            && params.k_head_stride == 256
+            && params.v_batch_stride == 1024 * 4 * 256
+            && params.v_row_stride == 4 * 256
+            && params.v_head_stride == 256
+            && params.o_head_stride == 256
+            && params.tree_bias_rows == 32
+            && params.tree_bias_cols == 32
+            && params.tree_bias_row_stride == 32
+            && params.tree_bias_col_stride == 1
+            && params.tree_bias_q_offset == 0
+            && params.tree_bias_k_offset == 0
+            && params.cu_seqlens_q != nullptr
+            && params.seqused_k != nullptr
+            && !params.seqlenq_ngroups_swapped
+            && params.leftpad_k == nullptr
+            && params.cache_batch_idx == nullptr
+            && params.block_table != nullptr
+            && params.block_table_batch_stride > 0
+            && params.page_block_size == 1024
+            && params.window_size_left < 0
+            && params.window_size_right < 0
+            && params.alibi_slopes_ptr == nullptr
+            && params.knew_ptr == nullptr
+            && params.vnew_ptr == nullptr
+            && params.p_ptr == nullptr
+            && params.softmax_lse_ptr != nullptr
+            && params.p_dropout == 1.0f
+            && params.softcap == 0.0f
+            && params.num_splits == 0
+            && force_split_kernel,
+            "FR13 qrow32 B1 gate reached non-canonical geometry");
+        fr13_run_mha_fwd_fixed32_qrow32_b1(params, stream);
         return;
     }
 '''
@@ -1378,7 +1552,8 @@ def _patch_fixed32_query_tile32_static_batch_layout(
     constexpr int kStaticQueryHeadsPerKV =
         StaticQueryBatchLayout<Kernel_traits>::query_heads_per_kv;
     constexpr bool kStaticQueryBatch = kStaticSequences != 0;
-    static_assert(!kStaticQueryBatch || kStaticSequences == 4);
+    static_assert(
+        !kStaticQueryBatch || kStaticSequences == 1 || kStaticSequences == 4);
     static_assert(!kStaticQueryBatch || kStaticQueryHeads == 24);
     static_assert(!kStaticQueryBatch || kStaticKVHeads == 4);
     static_assert(!kStaticQueryBatch || kStaticQueryHeadsPerKV == 6);
@@ -1425,7 +1600,8 @@ inline __device__ void compute_attn_splitkv(const Params &params) {
         StaticQueryBatchLayout<Kernel_traits>::query_heads_per_kv;
     constexpr bool kStaticQueryBatch = kStaticSequences != 0;
     static_assert(!kStaticQueryBatch || !Split);
-    static_assert(!kStaticQueryBatch || kStaticSequences == 4);
+    static_assert(
+        !kStaticQueryBatch || kStaticSequences == 1 || kStaticSequences == 4);
     static_assert(!kStaticQueryBatch || kStaticQueryHeads == 24);
     static_assert(!kStaticQueryBatch || kStaticKVHeads == 4);
     static_assert(!kStaticQueryBatch || kStaticQueryHeadsPerKV == 6);
@@ -1897,12 +2073,34 @@ def _patch_fixed32_query_tile32_translation_unit(
     return True
 
 
+def _patch_fixed32_query_tile32_b1_translation_unit(
+    path: Path,
+    *,
+    fixed32_query_tile32_b1: bool = False,
+) -> bool:
+    if not fixed32_query_tile32_b1:
+        return False
+    stock_text = path.read_text()
+    if STOCK_FIXED32_QUERY_INSTANTIATION not in stock_text:
+        raise RuntimeError("stock fixed32 FA2 explicit instantiation drifted")
+    if "FR13_FA2_FIXED32_QUERY_TILE32" in stock_text:
+        raise RuntimeError("qrow32 B1 must not share the stock instantiation TU")
+    qrow_path = path.with_name("flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu")
+    if qrow_path.exists():
+        if qrow_path.read_text() != FIXED32_QUERY_TILE32_B1_TRANSLATION_UNIT:
+            raise RuntimeError("existing qrow32 B1 translation unit drifted")
+        return False
+    qrow_path.write_text(FIXED32_QUERY_TILE32_B1_TRANSLATION_UNIT)
+    return True
+
+
 def _patch_flash_api_cpp(
     path: Path,
     *,
     fixed32_query_tile16: bool = False,
     fixed32_query_tile16_static_strides: bool = False,
     fixed32_query_tile32: bool = False,
+    fixed32_query_tile32_b1: bool = False,
 ) -> bool:
     text = path.read_text()
     changed = False
@@ -2079,6 +2277,14 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
             label="fixed32 FA2 query tile32 gate-only API dispatch",
         )
         changed = changed or did
+    if fixed32_query_tile32_b1:
+        text, did = _install_hidden_api_gate(
+            text,
+            declaration=FIXED32_QUERY_TILE32_B1_API_DECLARATION,
+            gate=FIXED32_QUERY_TILE32_B1_API_GATE,
+            label="fixed32 FA2 query tile32 B1 hidden API dispatch",
+        )
+        changed = changed or did
     if changed:
         path.write_text(text)
     return changed
@@ -2149,12 +2355,16 @@ def patch_fa2_source(
     fixed32_query_tile16: bool = False,
     fixed32_query_tile16_static_strides: bool = False,
     fixed32_query_tile32: bool = False,
+    fixed32_query_tile32_b1: bool = False,
 ) -> dict[str, bool]:
     if fixed32_query_tile16_static_strides and not fixed32_query_tile16:
         raise ValueError(
             "fixed32 qrow16 static strides require --fixed32-query-tile16"
         )
-    if fixed32_query_tile32 and not tree_bias_tile_earlyout:
+    if fixed32_query_tile32 and fixed32_query_tile32_b1:
+        raise ValueError("fixed32 qrow32 B1 and B4 builds are mutually exclusive")
+    fixed32_query_tile32_any = fixed32_query_tile32 or fixed32_query_tile32_b1
+    if fixed32_query_tile32_any and not tree_bias_tile_earlyout:
         raise ValueError(
             "fixed32 qrow32 requires --tree-bias-tile-earlyout in the same "
             "source patch invocation"
@@ -2179,7 +2389,7 @@ def patch_fa2_source(
         _patch_fixed32_query_static_paged_path(
             files["flash_fwd_kernel.h"],
             fixed32_query_tile16=fixed32_query_tile16,
-            fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_query_tile32=fixed32_query_tile32_any,
         )
         or flash_fwd_kernel_changed
     )
@@ -2195,42 +2405,42 @@ def patch_fa2_source(
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_static_query(
             files["flash_fwd_kernel.h"],
-            fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_query_tile32=fixed32_query_tile32_any,
         )
         or flash_fwd_kernel_changed
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_static_batch_layout(
             files["flash_fwd_kernel.h"],
-            fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_query_tile32=fixed32_query_tile32_any,
         )
         or flash_fwd_kernel_changed
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_static_paged_metadata(
             files["flash_fwd_kernel.h"],
-            fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_query_tile32=fixed32_query_tile32_any,
         )
         or flash_fwd_kernel_changed
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_static_kv_strides(
             files["flash_fwd_kernel.h"],
-            fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_query_tile32=fixed32_query_tile32_any,
         )
         or flash_fwd_kernel_changed
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_fused_initial_kv_page(
             files["flash_fwd_kernel.h"],
-            fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_query_tile32=fixed32_query_tile32_any,
         )
         or flash_fwd_kernel_changed
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_tile32_carry_kv_page_address(
             files["flash_fwd_kernel.h"],
-            fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_query_tile32=fixed32_query_tile32_any,
         )
         or flash_fwd_kernel_changed
     )
@@ -2240,7 +2450,7 @@ def patch_fa2_source(
         "utils.h": _patch_fixed32_query_static_page(
             files["utils.h"],
             fixed32_query_tile16=fixed32_query_tile16,
-            fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_query_tile32=fixed32_query_tile32_any,
         ),
         "flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu": _patch_fixed32_query_translation_unit(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
@@ -2253,6 +2463,10 @@ def patch_fa2_source(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
             fixed32_query_tile32=fixed32_query_tile32,
         ),
+        "flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu": _patch_fixed32_query_tile32_b1_translation_unit(
+            files["flash_fwd_split_hdim256_bf16_sm80.cu"],
+            fixed32_query_tile32_b1=fixed32_query_tile32_b1,
+        ),
         "flash_api.cpp": _patch_flash_api_cpp(
             files["flash_api.cpp"],
             fixed32_query_tile16=fixed32_query_tile16,
@@ -2260,6 +2474,7 @@ def patch_fa2_source(
                 fixed32_query_tile16_static_strides
             ),
             fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_query_tile32_b1=fixed32_query_tile32_b1,
         ),
         "flash_api_torch_lib.cpp": _patch_torch_lib(files["flash_api_torch_lib.cpp"]),
     }
@@ -4157,6 +4372,11 @@ def main() -> int:
         help="build the gate-only fixed32 B4 FA2 32-row query-tile candidate",
     )
     parser.add_argument(
+        "--fixed32-query-tile32-b1",
+        action="store_true",
+        help="build the gate-only fixed32 B1 FA2 32-row query-tile candidate",
+    )
+    parser.add_argument(
         "--fixed32-query-tile16-live-ab",
         action="store_true",
         help="install the one-shot live paged B1 stock/qrow16 byte gate",
@@ -4197,6 +4417,13 @@ def main() -> int:
             "--fixed32-query-tile32 requires --tree-bias-tile-earlyout in "
             "the same source-build invocation"
         )
+    if args.fixed32_query_tile32_b1 and not args.tree_bias_tile_earlyout:
+        parser.error(
+            "--fixed32-query-tile32-b1 requires --tree-bias-tile-earlyout in "
+            "the same source-build invocation"
+        )
+    if args.fixed32_query_tile32 and args.fixed32_query_tile32_b1:
+        parser.error("B1 and B4 qrow32 source candidates are mutually exclusive")
     if (
         args.fixed32_query_tile16_static_strides
         and not args.fixed32_query_tile16
@@ -4222,6 +4449,7 @@ def main() -> int:
             args.fixed32_query_tile16_static_strides
         ),
         "fixed32_query_tile32": args.fixed32_query_tile32,
+        "fixed32_query_tile32_b1": args.fixed32_query_tile32_b1,
         "fixed32_query_tile16_live_ab": args.fixed32_query_tile16_live_ab,
         "fixed32_query_tile32_live_ab": args.fixed32_query_tile32_live_ab,
         "fixed32_query_tile16_production": args.fixed32_query_tile16_production,
@@ -4238,6 +4466,7 @@ def main() -> int:
                 args.fixed32_query_tile16_static_strides
             ),
             fixed32_query_tile32=args.fixed32_query_tile32,
+            fixed32_query_tile32_b1=args.fixed32_query_tile32_b1,
         )
     if not args.skip_python:
         payload["python"] = patch_installed_vllm(
