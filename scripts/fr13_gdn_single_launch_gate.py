@@ -70,6 +70,9 @@ ENTRYPOINT = {
 COMMON_RUNNER = "scripts/fr13_run_gdn_single_launch_live_gate.sh"
 KERNEL_SOURCE = "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
 GQA_GROUP3_SOURCE = "src/lumo_flywheel_serving/fr13_gdn_gqa_group3.py"
+GQA_GROUP3_PRODUCTION_VALIDATOR = (
+    "scripts/fr13_gdn_gqa_group3_production_credential.py"
+)
 PATCHER_SOURCE = "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
 SERVER_LAUNCHER = "scripts/fr13_launch_forked_fa2_tree_server.sh"
 BLOCK_MAP = "scripts/fr13_dvk_subset_blocks.json"
@@ -790,6 +793,7 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         entrypoint,
         COMMON_RUNNER,
         "scripts/fr13_gdn_single_launch_gate.py",
+        GQA_GROUP3_PRODUCTION_VALIDATOR,
         *VALIDATOR_SOURCES,
         KERNEL_SOURCE,
         *candidate_sources,
@@ -903,6 +907,8 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
             if batch == 1
             else "real_swe_verified_exact4_b4_graph_byte_diagnostic"
         ),
+        "runtime_profile": "fixed32",
+        "runtime_sequence": "scripts/fr13_fixed32_floor_timers_seq.sh",
         "mode": mode,
         "logical_topology": contract["topology"],
         "logical_drafts": contract["logical_drafts"],

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,9 @@ CANDIDATE = ROOT / "src/lumo_flywheel_serving/fr13_gdn_gqa_group3.py"
 PATCHER = ROOT / "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER = ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh"
 MANIFEST = ROOT / "scripts/fr13_runtime_manifest.py"
+HOST_CREDENTIAL = (
+    ROOT / "scripts/fr13_gdn_gqa_group3_production_credential.py"
+)
 
 
 def _kernel_function_source(name: str) -> str:
@@ -86,27 +90,186 @@ def _combined_source_sha256() -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _host_credential_module():
+    spec = importlib.util.spec_from_file_location(
+        "fr13_gdn_gqa_group3_production_credential_test",
+        HOST_CREDENTIAL,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _credential(mode: str = "hydra27_fixed32", batch: int = 1) -> dict[str, object]:
+    is_hydra = mode == "hydra27_fixed32"
     return {
         "schema": "fr13.fixed32.gdn_single_launch.real_task_credential.v3",
         "status": "PASS",
+        "credential_scope": f"{'hydra27' if is_hydra else 'tail23'}:b{batch}",
+        "run_classification": (
+            "one_real_swe_verified_b1_graph_byte_diagnostic"
+            if batch == 1
+            else "real_swe_verified_exact4_b4_graph_byte_diagnostic"
+        ),
+        "runtime_profile": "fixed32",
+        "runtime_sequence": "scripts/fr13_fixed32_floor_timers_seq.sh",
         "candidate": "fixed32_gdn_single_launch_gqa_group3_v1",
         "reference": "fixed32_gdn_two_launch_reference_v1",
         "mode": mode,
+        "logical_topology": "Hydra27" if is_hydra else "Tail23",
+        "logical_drafts": 27 if is_hydra else 23,
+        "valid_mask": 0x7ABDFFFF if is_hydra else 0x7A9CE7FF,
         "batch_size": batch,
         "expected_batch": batch,
+        "concurrency": batch,
+        "task_ids": (
+            ["astropy__astropy-12907"]
+            if batch == 1
+            else [
+                "astropy__astropy-12907",
+                "astropy__astropy-13033",
+                "astropy__astropy-13236",
+                "astropy__astropy-13398",
+            ]
+        ),
         "physical_rows": 32,
         "draft_vocab_k": 65536,
         "draft_vocab_root": 1,
+        "draft_vocab_blocks_sha256": (
+            "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+        ),
+        "reference_physical_launches_per_request_layer": 2,
+        "candidate_physical_launches_per_request_layer": 1,
         "raw_byte_equal": True,
         "reference_served": True,
         "state_restored": True,
+        "task_completion_verified": True,
+        "finalized_ingress_verified": True,
+        "runtime_launch_end_stable": True,
+        "external_launch_end_stable": True,
+        "graph_work_census_verified": True,
+        "batch_specific_pass_verified": True,
         "production_enabled": False,
+        "performance_measurement": False,
+        "acceptance_valid": False,
+        "floor_acceptance_eligible": False,
+        "arm_git_head_source_commit_match": True,
+        "source_commit_git_show_verified": True,
+        "source_closure_sha256": "1" * 64,
         "kernel_source_sha256": hashlib.sha256(KERNEL.read_bytes()).hexdigest(),
         "gqa_group3_source_sha256": hashlib.sha256(CANDIDATE.read_bytes()).hexdigest(),
         "candidate_source_sha256": _combined_source_sha256(),
         "source_commit": "a" * 40,
+        "runtime_manifest_source_commit": "a" * 40,
+        "runtime_manifest_canonical_sha256": "2" * 64,
+        "runtime_manifest_sha256": "3" * 64,
+        "entrypoint_sha256": "4" * 64,
+        "common_runner_sha256": "5" * 64,
+        "reducer_sha256": "6" * 64,
     }
+
+
+def test_host_credential_is_exact_head_candidate_profile_mode_batch_bound(
+    tmp_path: Path,
+) -> None:
+    module = _host_credential_module()
+    path = tmp_path / "credential.json"
+    valid = _credential()
+    path.write_text(json.dumps(valid, sort_keys=True) + "\n", encoding="ascii")
+    result = module.validate_credential(
+        path,
+        source_commit="a" * 40,
+        profile="fixed32",
+        mode="hydra27_fixed32",
+        batch=1,
+    )
+    assert result["source_commit"] == "a" * 40
+
+    mutations = {
+        "source_commit": "b" * 40,
+        "runtime_manifest_source_commit": "b" * 40,
+        "candidate": "fixed32_gdn_single_launch_tree_v2",
+        "runtime_profile": "other",
+        "mode": "tail6_fixed32",
+        "batch_size": 4,
+    }
+    for key, value in mutations.items():
+        stale = dict(valid)
+        stale[key] = value
+        path.write_text(
+            json.dumps(stale, sort_keys=True) + "\n", encoding="ascii"
+        )
+        with pytest.raises(module.CredentialError, match=key):
+            module.validate_credential(
+                path,
+                source_commit="a" * 40,
+                profile="fixed32",
+                mode="hydra27_fixed32",
+                batch=1,
+            )
+
+
+@pytest.mark.parametrize(
+    ("mode", "batch"),
+    (
+        ("hydra27_fixed32", 1),
+        ("tail6_fixed32", 4),
+        ("hydra27_fixed32", 4),
+    ),
+)
+def test_host_credential_accepts_only_supported_b1_b4_profiles(
+    tmp_path: Path, mode: str, batch: int
+) -> None:
+    module = _host_credential_module()
+    path = tmp_path / "credential.json"
+    path.write_text(
+        json.dumps(_credential(mode, batch), sort_keys=True) + "\n",
+        encoding="ascii",
+    )
+    result = module.validate_credential(
+        path,
+        source_commit="a" * 40,
+        profile="fixed32",
+        mode=mode,
+        batch=batch,
+    )
+    assert (result["mode"], result["batch_size"]) == (mode, batch)
+
+
+def test_host_credential_rejects_unsupported_profile_pair_and_duplicate_json(
+    tmp_path: Path,
+) -> None:
+    module = _host_credential_module()
+    path = tmp_path / "credential.json"
+    path.write_text(
+        json.dumps(_credential(), sort_keys=True) + "\n", encoding="ascii"
+    )
+    with pytest.raises(module.CredentialError, match="runtime profile"):
+        module.validate_credential(
+            path,
+            source_commit="a" * 40,
+            profile="other",
+            mode="hydra27_fixed32",
+            batch=1,
+        )
+    with pytest.raises(module.CredentialError, match="mode/batch"):
+        module.validate_credential(
+            path,
+            source_commit="a" * 40,
+            profile="fixed32",
+            mode="tail6_fixed32",
+            batch=1,
+        )
+    path.write_text('{"schema":"x","schema":"y"}\n', encoding="ascii")
+    with pytest.raises(module.CredentialError, match="duplicate JSON key"):
+        module.validate_credential(
+            path,
+            source_commit="a" * 40,
+            profile="fixed32",
+            mode="hydra27_fixed32",
+            batch=1,
+        )
 
 
 def test_production_resolver_is_default_off_and_exact_source_batch_bound(
@@ -257,4 +420,8 @@ def test_patcher_launcher_and_manifest_bind_production_credential() -> None:
     assert "fr13_fixed32_gdn_gqa_group3.production_batch.flag" in launcher
     assert "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS_PATH=" in launcher
     assert "FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON" in launcher
+    assert "git rev-parse --verify 'HEAD^{commit}'" in launcher
+    assert launcher.count("fr13_gdn_gqa_group3_production_credential.py") == 2
+    assert launcher.count('--source-commit "$_fr13_gdn_gqa_group3_source_commit"') == 2
+    assert "scripts/fr13_gdn_gqa_group3_production_credential.py" in manifest
     assert "src/lumo_flywheel_serving/fr13_gdn_gqa_group3.py" in manifest
