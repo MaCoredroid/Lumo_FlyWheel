@@ -436,6 +436,19 @@ def _fr13_fixed32_committer_direct_metadata_requested() -> bool:
     )
 
 
+def _fr13_fixed32_committer_sticky_guard_requested() -> bool:
+    """Return the boot-time arm for the reduction-free committer guard."""
+    if os.environ.get("FR13_FIXED32_COMMITTER_STICKY_GUARD") == "1":
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_fixed32_committer_sticky_guard.arm",
+            "/tmp/fr13_fixed32_committer_sticky_guard.arm",
+        )
+    )
+
+
 def _fr13_fixed32_committer_layer_batch_real_event_marker(
     path: str = _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT,
 ) -> str | None:
@@ -6164,6 +6177,129 @@ def _fr13_fixed32_conv_commit_row_guard_kernel(
 
 
 @triton.jit
+def _fr13_fixed32_conv_commit_sticky_guard_kernel(
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    bank_alias_ids,
+    bank_alias_peer_layers,
+    sticky_ok,
+    ssi_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    path_stride_b,
+    path_stride_s,
+    lens_stride_b,
+    peer_stride_l,
+    peer_stride_s,
+    BANK_ROWS: tl.constexpr,
+    B: tl.constexpr,
+    LAYERS: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    MAX_ACCEPTED: tl.constexpr,
+    ALIAS_WIDTH: tl.constexpr,
+    PEER_CAP: tl.constexpr,
+):
+    """Validate physical32 and make the first failure permanently visible."""
+    pid = tl.program_id(0)
+    layer = pid // B
+    request = pid - layer * B
+    ssi_base = (
+        spec_state_indices
+        + layer * ssi_stride_l
+        + request * ssi_stride_b
+    )
+
+    row_offsets = tl.arange(0, SPEC_COLS)
+    rows = tl.load(ssi_base + row_offsets * ssi_stride_s).to(tl.int64)
+    rows_ok = tl.sum(
+        ((rows > 0) & (rows < BANK_ROWS)).to(tl.int32), axis=0
+    ) == SPEC_COLS
+
+    running_row = tl.load(ssi_base).to(tl.int64)
+    peer_offsets = tl.arange(0, PEER_CAP)
+    peer_slots = peer_offsets // B
+    other_requests = peer_offsets - peer_slots * B
+    peer_entry = peer_slots < ALIAS_WIDTH
+    peer_layers = tl.load(
+        bank_alias_peer_layers
+        + layer * peer_stride_l
+        + peer_slots * peer_stride_s,
+        mask=peer_entry,
+        other=-1,
+    ).to(tl.int64)
+    peer_layer_ok = (peer_layers >= 0) & (peer_layers < LAYERS)
+    peer_table_ok = tl.sum(
+        ((~peer_entry) | peer_layer_ok).to(tl.int32), axis=0
+    ) == PEER_CAP
+    peer_layers_safe = tl.maximum(0, tl.minimum(peer_layers, LAYERS - 1))
+    other_rows = tl.load(
+        spec_state_indices
+        + peer_layers_safe * ssi_stride_l
+        + other_requests * ssi_stride_b,
+        mask=peer_entry & peer_layer_ok,
+        other=-1,
+    ).to(tl.int64)
+    duplicate_destination = (
+        peer_entry
+        & peer_layer_ok
+        & ((peer_layers != layer) | (other_requests != request))
+        & (other_rows == running_row)
+    )
+    destination_unique = tl.sum(
+        duplicate_destination.to(tl.int32), axis=0
+    ) == 0
+
+    contract_ok = rows_ok & peer_table_ok & destination_unique
+    if layer == 0:
+        accepted_len = tl.load(
+            accepted_lens + request * lens_stride_b
+        ).to(tl.int64)
+        path_offsets = tl.arange(0, PATH_COLS)
+        paths = tl.load(
+            accepted_paths
+            + request * path_stride_b
+            + path_offsets * path_stride_s
+        ).to(tl.int64)
+        active_paths = path_offsets < accepted_len
+        paths_ok = tl.sum(
+            (
+                (~active_paths)
+                | ((paths >= 0) & (paths < SPEC_COLS))
+            ).to(tl.int32),
+            axis=0,
+        ) == PATH_COLS
+        lens_ok = (accepted_len >= 0) & (accepted_len <= MAX_ACCEPTED)
+        contract_ok = contract_ok & paths_ok & lens_ok
+        if request == 0:
+            alias_offsets = tl.arange(0, 32)
+            aliases_lo = tl.load(bank_alias_ids + alias_offsets).to(tl.int64)
+            aliases_lo_ok = tl.sum(
+                ((aliases_lo >= 0) & (aliases_lo < 16)).to(tl.int32),
+                axis=0,
+            ) == 32
+            alias_hi_entries = alias_offsets < (LAYERS - 32)
+            aliases_hi = tl.load(
+                bank_alias_ids + 32 + alias_offsets,
+                mask=alias_hi_entries,
+                other=0,
+            ).to(tl.int64)
+            aliases_hi_ok = tl.sum(
+                (
+                    (~alias_hi_entries)
+                    | ((aliases_hi >= 0) & (aliases_hi < 16))
+                ).to(tl.int32),
+                axis=0,
+            ) == 32
+            contract_ok = contract_ok & aliases_lo_ok & aliases_hi_ok
+
+    # The scalar starts at one and is never reset. A failed async assertion is
+    # therefore fail-closed even if its exception is caught by an outer layer.
+    tl.atomic_xchg(sticky_ok, 0, mask=~contract_ok)
+
+
+@triton.jit
 def _fr13_fixed32_sfwd_state_fusion_kernel(
     x,
     conv_state,
@@ -8001,16 +8137,32 @@ def launch_fixed32_conv_commit_to_col0(
         committer_state, validation_bank_rows = (
             metadata_fusion if metadata_fusion is not None else direct_metadata
         )
-    validate_fixed32_conv_commit_rows(
-        spec_state_indices=spec_state_indices,
-        accepted_paths=accepted_paths,
-        accepted_lens=accepted_lens,
-        bank_alias_ids=state["bank_alias_ids_device"],
-        bank_alias_peer_layers=state["bank_alias_peer_layers_device"],
-        guard_flags=state["row_guard_flags_by_batch"][batch],
-        batch=batch,
-        bank_rows=validation_bank_rows,
+    sticky_guard = bool(
+        direct_metadata is not None
+        and committer_state.get("sticky_guard", False)
     )
+    if sticky_guard:
+        validate_fixed32_conv_commit_rows_sticky(
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            bank_alias_ids=state["bank_alias_ids_device"],
+            bank_alias_peer_layers=state["bank_alias_peer_layers_device"],
+            sticky_ok=committer_state["sticky_guard_ok"],
+            batch=batch,
+            bank_rows=validation_bank_rows,
+        )
+    else:
+        validate_fixed32_conv_commit_rows(
+            spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths,
+            accepted_lens=accepted_lens,
+            bank_alias_ids=state["bank_alias_ids_device"],
+            bank_alias_peer_layers=state["bank_alias_peer_layers_device"],
+            guard_flags=state["row_guard_flags_by_batch"][batch],
+            batch=batch,
+            bank_rows=validation_bank_rows,
+        )
     conv_c = int(state["conv_c"])
     block = int(state["block"])
     grid = (48, batch, triton.cdiv(conv_c, block))
@@ -8103,6 +8255,9 @@ def launch_fixed32_conv_commit_to_col0(
             committer_paths=graph_paths,
             committer_lens=graph_lens,
             validation_bank_rows=validation_bank_rows,
+            validation_guard=(
+                committer_state["sticky_guard_ok"] if sticky_guard else None
+            ),
             stream_key=stream_key,
         )
         if _FR13_FIXED32_COMMITTER_METADATA_LEASE:
@@ -11634,6 +11789,7 @@ def _fr13_fixed32_committer_metadata_lease_key(
     committer_paths: torch.Tensor,
     committer_lens: torch.Tensor,
     validation_bank_rows: int,
+    validation_guard: torch.Tensor | None = None,
     stream_key: tuple[str, int] | None = None,
 ) -> tuple:
     """Bind one conv validation/copy to one exact committer replay."""
@@ -11646,7 +11802,7 @@ def _fr13_fixed32_committer_metadata_lease_key(
         committer_paths,
         committer_lens,
     )
-    return (
+    key = (
         "fixed32_committer_metadata_fusion_v1",
         int(batch),
         int(validation_bank_rows),
@@ -11662,6 +11818,18 @@ def _fr13_fixed32_committer_metadata_lease_key(
         tuple(tuple(int(value) for value in tensor.stride()) for tensor in tensors),
         tuple(str(tensor.dtype) for tensor in tensors),
         tuple(str(tensor.device) for tensor in tensors),
+    )
+    if validation_guard is None:
+        return key
+    return key + (
+        (
+            "sticky_guard_v1",
+            int(validation_guard.data_ptr()),
+            tuple(int(value) for value in validation_guard.shape),
+            tuple(int(value) for value in validation_guard.stride()),
+            str(validation_guard.dtype),
+            str(validation_guard.device),
+        ),
     )
 
 
@@ -11764,6 +11932,16 @@ def _fr13_fixed32_committer_direct_metadata_state(
         return None
     graph_paths = state.get("direct_accepted_paths")
     graph_lens = state.get("direct_accepted_lens")
+    sticky_ok = state.get("sticky_guard_ok")
+    sticky_guard_invalid = state.get("sticky_guard", False) and (
+        not torch.is_tensor(sticky_ok)
+        or sticky_ok.dtype != torch.int32
+        or tuple(sticky_ok.shape) != ()
+        or not sticky_ok.is_contiguous()
+        or sticky_ok.device != accepted_paths.device
+        or int(sticky_ok.data_ptr())
+        != int(state.get("sticky_guard_ok_data_ptr", -1))
+    )
     if (
         route.get("spec_state_indices") is not spec_state_indices
         or int(route.get("accepted_paths_data_ptr", -1))
@@ -11788,6 +11966,7 @@ def _fr13_fixed32_committer_direct_metadata_state(
         or graph_lens.device != accepted_lens.device
         or int(graph_paths.data_ptr()) != int(accepted_paths.data_ptr())
         or int(graph_lens.data_ptr()) != int(accepted_lens.data_ptr())
+        or sticky_guard_invalid
     ):
         raise RuntimeError(
             "FR13 fixed32 direct-metadata persistent operand drift"
@@ -12390,6 +12569,18 @@ def _fr13_fixed32_committer_fast_state(
                 != int(state["direct_accepted_lens"].data_ptr())
             )
         )
+        or (
+            state.get("sticky_guard", False)
+            and (
+                not torch.is_tensor(state.get("sticky_guard_ok"))
+                or state["sticky_guard_ok"].dtype != torch.int32
+                or tuple(state["sticky_guard_ok"].shape) != ()
+                or not state["sticky_guard_ok"].is_contiguous()
+                or state["sticky_guard_ok"].device != route["device"]
+                or int(state["sticky_guard_ok"].data_ptr())
+                != int(state.get("sticky_guard_ok_data_ptr", -1))
+            )
+        )
     ):
         raise ValueError(
             "FR13_FIXED32_COMMIT_DEVICE_FILL dynamic accepted-input "
@@ -12952,6 +13143,93 @@ def validate_fixed32_conv_commit_rows(
     )
 
 
+def validate_fixed32_conv_commit_rows_sticky(
+    *,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    bank_alias_ids: torch.Tensor,
+    bank_alias_peer_layers: torch.Tensor,
+    sticky_ok: torch.Tensor,
+    batch: int,
+    bank_rows: int,
+) -> None:
+    """Enqueue the fixed-grid guard without a per-event scalar reduction."""
+    if (
+        type(batch) is not int
+        or not 1 <= batch <= 4
+        or type(bank_rows) is not int
+        or bank_rows <= 0
+        or not torch.is_tensor(spec_state_indices)
+        or spec_state_indices.dtype != torch.int32
+        or spec_state_indices.ndim != 3
+        or int(spec_state_indices.shape[0]) != 48
+        or int(spec_state_indices.shape[1]) < batch
+        or int(spec_state_indices.shape[2]) != 32
+        or not torch.is_tensor(accepted_paths)
+        or accepted_paths.dtype != torch.int32
+        or accepted_paths.ndim != 2
+        or int(accepted_paths.shape[0]) < batch
+        or int(accepted_paths.shape[1]) != 16
+        or not torch.is_tensor(accepted_lens)
+        or accepted_lens.dtype != torch.int32
+        or accepted_lens.ndim != 1
+        or int(accepted_lens.shape[0]) < batch
+        or accepted_paths.device != spec_state_indices.device
+        or accepted_lens.device != spec_state_indices.device
+        or not torch.is_tensor(bank_alias_ids)
+        or bank_alias_ids.dtype != torch.int64
+        or bank_alias_ids.device != spec_state_indices.device
+        or tuple(bank_alias_ids.shape) != (48,)
+        or not bank_alias_ids.is_contiguous()
+        or not torch.is_tensor(bank_alias_peer_layers)
+        or bank_alias_peer_layers.dtype != torch.int32
+        or bank_alias_peer_layers.device != spec_state_indices.device
+        or tuple(bank_alias_peer_layers.shape) != (48, 3)
+        or not bank_alias_peer_layers.is_contiguous()
+        or not torch.is_tensor(sticky_ok)
+        or sticky_ok.dtype != torch.int32
+        or sticky_ok.device != spec_state_indices.device
+        or tuple(sticky_ok.shape) != ()
+        or not sticky_ok.is_contiguous()
+    ):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_COMMIT sticky row-guard "
+            "geometry/dtype/device drift"
+        )
+
+    _fr13_fixed32_conv_commit_sticky_guard_kernel[(48 * batch,)](
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        bank_alias_ids,
+        bank_alias_peer_layers,
+        sticky_ok,
+        int(spec_state_indices.stride(0)),
+        int(spec_state_indices.stride(1)),
+        int(spec_state_indices.stride(2)),
+        int(accepted_paths.stride(0)),
+        int(accepted_paths.stride(1)),
+        int(accepted_lens.stride(0)),
+        int(bank_alias_peer_layers.stride(0)),
+        int(bank_alias_peer_layers.stride(1)),
+        BANK_ROWS=bank_rows,
+        B=batch,
+        LAYERS=48,
+        SPEC_COLS=32,
+        PATH_COLS=16,
+        MAX_ACCEPTED=_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH,
+        ALIAS_WIDTH=3,
+        PEER_CAP=16,
+        num_warps=4,
+        num_stages=1,
+    )
+    _fr13_fixed32_device_assert(
+        sticky_ok,
+        "FR13_FIXED32_CONV_COMMIT precommit row/path contract violation",
+    )
+
+
 def preseed_fixed32_committer_graph(
     *,
     banks_list,
@@ -13021,6 +13299,7 @@ def preseed_fixed32_committer_graph(
         _fr13_fixed32_committer_metadata_fusion_requested()
     )
     direct_metadata = _fr13_fixed32_committer_direct_metadata_requested()
+    sticky_guard = _fr13_fixed32_committer_sticky_guard_requested()
     if metadata_copy_fusion and not layer_batch:
         raise RuntimeError(
             "FR13 fixed32 metadata fusion requires committer layer batching"
@@ -13034,6 +13313,10 @@ def preseed_fixed32_committer_graph(
             "FR13 fixed32 direct metadata and metadata-copy fusion are "
             "mutually exclusive"
         )
+    if sticky_guard and not direct_metadata:
+        raise RuntimeError(
+            "FR13 fixed32 sticky guard requires direct persistent metadata"
+        )
     gate_coeffs = (
         _fr13_fixed32_committer_gate_precompute(
             A_logs=A_logs,
@@ -13046,6 +13329,11 @@ def preseed_fixed32_committer_graph(
         list(banks_list)
     )
     anchor_ptr = bank_ptrs[0]
+    sticky_guard_ok = (
+        torch.ones((), dtype=torch.int32, device=device)
+        if sticky_guard
+        else None
+    )
     state = {
         "batch": batch,
         "bank_rows": int(banks_list[0].shape[0]),
@@ -13104,6 +13392,11 @@ def preseed_fixed32_committer_graph(
         "direct_metadata": direct_metadata,
         "direct_accepted_paths": accepted_paths if direct_metadata else None,
         "direct_accepted_lens": accepted_lens if direct_metadata else None,
+        "sticky_guard": sticky_guard,
+        "sticky_guard_ok": sticky_guard_ok,
+        "sticky_guard_ok_data_ptr": (
+            int(sticky_guard_ok.data_ptr()) if sticky_guard_ok is not None else None
+        ),
         "layer_batch_byte_gate_passed": not layer_batch,
         "layer_batch_byte_gate_attempts": 0,
         "layer_batch_byte_gate_coverage_mask": (
@@ -13157,6 +13450,25 @@ def preseed_fixed32_committer_graph(
                 "state_elements_per_thread_before_compiler_effects": 64,
                 "metadata_copy_fusion": metadata_copy_fusion,
                 "direct_metadata": direct_metadata,
+                "sticky_guard": sticky_guard,
+                "sticky_guard_route": (
+                    "fixed32_ownerpath_warp32_sticky_scalar_v5"
+                    if sticky_guard
+                    else "stock_bool_vector_v4"
+                ),
+                "sticky_guard_kernel_launches_per_event": (
+                    1 if sticky_guard else 0
+                ),
+                "sticky_guard_scalar_reduction_launches_per_event": 0,
+                "sticky_guard_valid_event_global_stores": 0,
+                "sticky_guard_failure_atomic": (
+                    "atomic_xchg_zero" if sticky_guard else "not_applicable"
+                ),
+                "sticky_guard_failure_state": (
+                    "process_lifetime_fail_closed"
+                    if sticky_guard
+                    else "not_applicable"
+                ),
                 "metadata_copy_launches_per_event": (
                     0 if metadata_copy_fusion or direct_metadata else 2
                 ),
@@ -14051,6 +14363,11 @@ def _fr13_fixed32_committer_replay(
             committer_paths=state["direct_accepted_paths"],
             committer_lens=state["direct_accepted_lens"],
             validation_bank_rows=validation_bank_rows,
+            validation_guard=(
+                state["sticky_guard_ok"]
+                if state.get("sticky_guard", False)
+                else None
+            ),
         )
         if not _fr13_fixed32_committer_consume_direct_metadata_lease(lease_key):
             raise RuntimeError(
