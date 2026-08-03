@@ -1,17 +1,24 @@
 {
   "schema": "fr13.fixed32.cfwd_logit_direct.source_work_model.v1",
   "status": "source_only_default_off",
-  "source_commit": "a4406489ee681a65cb564b09ce1109ecd49867f3",
+  "source_commit": "48cfe5364c5e0b1910d3b49a2f3d8018dd21d0dd",
   "candidate": "fixed32_cfwd_logit_direct_decisions_v1",
   "qualification": {
     "draft_vocab_k": 65536,
     "draft_vocab_root": 1,
     "physical_rows": 32,
-    "logical_tree_limit": 32,
     "modes": [
       "tail6_fixed32",
       "hydra27_fixed32"
     ],
+    "logical_topologies": [
+      "Tail23",
+      "Hydra27"
+    ],
+    "valid_masks": {
+      "tail6_fixed32": "0x7a9ce7ff",
+      "hydra27_fixed32": "0x7abdffff"
+    },
     "batches": [
       1,
       4
@@ -50,6 +57,8 @@
     "reachable_rows_per_request": 30,
     "physical_drafts_per_request": 31,
     "physical_rows_per_request": 32,
+    "immutable_metadata_exact_value_bound_before_capture": true,
+    "sticky_device_domain_guard": true,
     "integer_walk": "unchanged",
     "reference_served_until_runtime_gates_pass": true
   },
@@ -60,5 +69,5 @@
     "active_vocab_blocks": 61,
     "summary": "codegen_summary.json"
   },
-  "claim_scope": "static_source_work_only_no_runtime_speed_claim"
+  "claim_scope": "exact_topology_static_source_work_only_no_runtime_speed_claim"
 }

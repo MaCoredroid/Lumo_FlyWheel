@@ -14,14 +14,18 @@ def test_work_model_is_source_only_and_exactly_bound() -> None:
 
     assert model["status"] == "source_only_default_off"
     assert model["source_commit"] == (
-        "a4406489ee681a65cb564b09ce1109ecd49867f3"
+        "48cfe5364c5e0b1910d3b49a2f3d8018dd21d0dd"
     )
     assert model["qualification"] == {
         "draft_vocab_k": 65_536,
         "draft_vocab_root": 1,
         "physical_rows": 32,
-        "logical_tree_limit": 32,
         "modes": ["tail6_fixed32", "hydra27_fixed32"],
+        "logical_topologies": ["Tail23", "Hydra27"],
+        "valid_masks": {
+            "tail6_fixed32": "0x7a9ce7ff",
+            "hydra27_fixed32": "0x7abdffff",
+        },
         "batches": [1, 4],
         "vocab_size": 248_320,
         "fanout": 3,
@@ -45,8 +49,12 @@ def test_work_model_is_source_only_and_exactly_bound() -> None:
         "candidate_block_stat_workspace_bytes": 61_440,
         "full_vocab_materialized_bytes_removed": 762_780_480,
     }
+    assert model["unchanged_work"][
+        "immutable_metadata_exact_value_bound_before_capture"
+    ] is True
+    assert model["unchanged_work"]["sticky_device_domain_guard"] is True
     assert model["claim_scope"] == (
-        "static_source_work_only_no_runtime_speed_claim"
+        "exact_topology_static_source_work_only_no_runtime_speed_claim"
     )
     assert model["offline_codegen"] == {
         "status": "pass",
@@ -76,14 +84,14 @@ def test_codegen_summary_is_bound_and_spill_free() -> None:
     assert summary["max_blocks"] == 64
     assert summary["active_vocab_blocks"] == 61
     assert summary["source_sha256"] == (
-        "2003bb878f61ba09e10d08335ce98387a95aabfb0b0a2d03f03100217afcec05"
+        "d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d"
     )
     assert [(item["kernel"], item["ctas_b1"], item["ctas_b4"]) for item in summary["kernels"]] == [
         ("block_stats", 1_830, 7_320),
         ("direct_decision", 30, 120),
     ]
     assert [item["registers_per_thread"] for item in summary["kernels"]] == [
-        76,
+        80,
         80,
     ]
     for kernel in summary["kernels"]:
