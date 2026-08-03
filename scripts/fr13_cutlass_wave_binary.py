@@ -181,6 +181,7 @@ PRODUCTION_SELECTORS = frozenset(
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
         "identity_onen_n5120_fullgrid_b1",
+        "identity_wide256_fullgrid_b1",
     }
 )
 INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
@@ -191,7 +192,6 @@ INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
     "identity_stockshape_b4",
     "identity_divisor_b4",
     "persistent_b4_m128_static",
-    "identity_wide256_fullgrid_b1",
     "identity_fullm_b4",
 }
 CONTAINER_SOURCE = Path("/tmp/fr13_cutlass_wave.abi3.so")
@@ -586,6 +586,7 @@ def _verify_production_qualification(
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
         "identity_onen_n5120_fullgrid_b1",
+        "identity_wide256_fullgrid_b1",
     }:
         raise ValueError(f"unsupported production candidate selector: {selector!r}")
     if selector in {
@@ -618,6 +619,7 @@ def _verify_production_qualification(
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
         "identity_onen_n5120_fullgrid_b1",
+        "identity_wide256_fullgrid_b1",
     }:
         kwargs["qualification_profile"] = "k64_root"
     if selector not in {
@@ -648,6 +650,7 @@ def _verify_production_qualification(
             "identity_onen_b1",
             "identity_onen_n5120_single_b1",
             "identity_onen_n5120_fullgrid_b1",
+            "identity_wide256_fullgrid_b1",
         }
         and verified.get("qualification_profile") != "k64_root"
     ):

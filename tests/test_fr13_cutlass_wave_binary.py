@@ -206,9 +206,9 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.IDENTITY_FULLTILE_CANDIDATE_SIZE,
         "identity_fullm_b4",
     )
-    assert "identity_wide256_fullgrid_b1" not in module.PRODUCTION_SELECTORS
+    assert "identity_wide256_fullgrid_b1" in module.PRODUCTION_SELECTORS
     assert "identity_fullm_b4" not in module.PRODUCTION_SELECTORS
-    assert "identity_wide256_fullgrid_b1" not in module.INSTALLABLE_SELECTORS
+    assert "identity_wide256_fullgrid_b1" in module.INSTALLABLE_SELECTORS
     assert "identity_fullm_b4" not in module.INSTALLABLE_SELECTORS
     assert (
         "identity_wide256_fullgrid_b1_byte_ab" in module.INSTALLABLE_SELECTORS
@@ -466,17 +466,19 @@ def test_onen_n5120_single_diagnostic_installs_but_direct_requires_sidecar(
 
 
 @pytest.mark.parametrize(
-    ("diagnostic_selector", "direct_selector", "family"),
+    ("diagnostic_selector", "direct_selector", "family", "direct_error"),
     (
         (
             "identity_wide256_fullgrid_b1_byte_ab",
             "identity_wide256_fullgrid_b1",
             "identity_wide256_fullgrid_b1",
+            "requires a pinned production sidecar",
         ),
         (
             "identity_fullm_b4_byte_ab",
             "identity_fullm_b4",
             "identity_fullm_b4",
+            "real-task raw-byte gates",
         ),
     ),
 )
@@ -486,6 +488,7 @@ def test_fulltile_diagnostic_installs_but_direct_stays_blocked(
     diagnostic_selector: str,
     direct_selector: str,
     family: str,
+    direct_error: str,
 ) -> None:
     module = _module()
     payload = f"{family}-candidate-extension\n".encode("ascii")
@@ -513,7 +516,7 @@ def test_fulltile_diagnostic_installs_but_direct_stays_blocked(
 
     destination.chmod(0o644)
     destination.write_bytes(b"stock-extension\n")
-    with pytest.raises(ValueError, match="real-task raw-byte gates"):
+    with pytest.raises(ValueError, match=direct_error):
         module.install_candidate(
             source,
             destination,
