@@ -1,0 +1,9 @@
+profile	kernel	batch	registers_per_thread	register_bytes_per_cta	stack_bytes_per_thread	local_bytes_per_thread	ldl	stl	calls	launch_shared_bytes_per_cta	elf_shared_bytes_per_cta	grid	static_sass_instructions	ldg	stg
+base	incumbent	b1	80	81920	0	0	0	0	0	16	1024	48x16x1	1148	47	22
+base	incumbent	b4	80	81920	0	0	0	0	0	16	1024	48x16x4	1148	47	22
+base	gqa_group3	b1	120	122880	0	0	0	0	0	16	1024	16x16x1	2174	85	54
+base	gqa_group3	b4	120	122880	0	0	0	0	0	16	1024	16x16x4	2174	85	54
+committer_stack	incumbent	b1	80	81920	0	0	0	0	0	16	1024	48x16x1	1220	47	34
+committer_stack	incumbent	b4	80	81920	0	0	0	0	0	16	1024	48x16x4	1220	47	34
+committer_stack	gqa_group3	b1	126	129024	0	0	0	0	0	16	1024	16x16x1	2280	85	82
+committer_stack	gqa_group3	b4	126	129024	0	0	0	0	0	16	1024	16x16x4	2280	85	82

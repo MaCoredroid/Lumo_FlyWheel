@@ -1,0 +1,27 @@
+{
+  "builds_verified": 8,
+  "candidate_base_register_bytes_per_cta": 122880,
+  "candidate_base_registers_per_thread": {
+    "b1": 120,
+    "b4": 120
+  },
+  "candidate_committer_stack_register_bytes_per_cta": 129024,
+  "candidate_committer_stack_registers_per_thread": {
+    "b1": 126,
+    "b4": 126
+  },
+  "candidate_grid_reduction": "3x",
+  "candidate_ldl_stl_calls": 0,
+  "candidate_stack_local_bytes_per_thread": 0,
+  "fresh_cache_byte_identity": true,
+  "gpu_execution": false,
+  "incumbent_register_bytes_per_cta": 81920,
+  "incumbent_registers_per_thread": {
+    "b1": 80,
+    "b4": 80
+  },
+  "resource_gate": "PASS",
+  "revision": "936dd110c01d34f8c1c5c64676dde5739d0d2fa3",
+  "schema": "fr13.fixed32.gdn_gqa_group3.sm121a.verify.v1",
+  "status": "PASS"
+}
