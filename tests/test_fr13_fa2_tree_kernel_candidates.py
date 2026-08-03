@@ -369,6 +369,10 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "Gate-only entry point" in candidate
     assert "ordinary and production paths cannot tag" in candidate
     assert "using Fr13Fixed32Qrow32KernelTraits" in candidate
+    assert "__global__ __maxnreg__(254)" in candidate
+    assert "void fr13_flash_fwd_fixed32_qrow32_kernel(" in candidate
+    assert "auto kernel = &fr13_flash_fwd_fixed32_qrow32_kernel" in candidate
+    assert "auto kernel = &flash_fwd_splitkv_kernel<" not in candidate
     assert "StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits>" in candidate
     assert "StaticPagedKVStrides<Fr13Fixed32Qrow32KernelTraits>" in candidate
     static_page_log2 = 10
@@ -484,7 +488,7 @@ def test_qrow16_private_kernel_preserves_exact_flags() -> None:
     ]
 
 
-def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
+def test_qrow32_traits_precede_the_exact_private_kernel() -> None:
     module = _module()
     translation_unit = module.FIXED32_QUERY_TILE32_TRANSLATION_UNIT
 
@@ -503,11 +507,14 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
     batch_specialization_at = translation_unit.index(
         "struct StaticQueryBatchLayout<Fr13Fixed32Qrow32KernelTraits>"
     )
+    kernel_at = translation_unit.index(
+        "void fr13_flash_fwd_fixed32_qrow32_kernel("
+    )
     launcher_at = translation_unit.index(
         "void fr13_run_mha_fwd_fixed32_qrow32("
     )
     instantiation_at = translation_unit.index(
-        "auto kernel = &flash_fwd_splitkv_kernel<"
+        "FLASH_NAMESPACE::compute_attn_splitkv<"
     )
     assert (
         include_at
@@ -517,8 +524,9 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
         < stride_specialization_at
         < query_specialization_at
         < batch_specialization_at
-        < launcher_at
+        < kernel_at
         < instantiation_at
+        < launcher_at
     )
 
     # The included launch header exposes these primaries through utils.h and
@@ -558,8 +566,8 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
     assert "run_flash_splitkv_fwd" not in translation_unit
 
     kernel_match = re.search(
-        r"auto kernel = &flash_fwd_splitkv_kernel<(?P<arguments>.*?)\n"
-        r"    >;",
+        r"FLASH_NAMESPACE::compute_attn_splitkv<(?P<arguments>.*?)\n"
+        r"    >\(params\);",
         translation_unit,
         flags=re.DOTALL,
     )
@@ -567,7 +575,7 @@ def test_qrow32_traits_precede_the_exact_splitkv_instantiation() -> None:
     uncommented = re.sub(r"//[^\n]*", "", kernel_match.group("arguments"))
     arguments = [argument.strip() for argument in uncommented.split(",")]
     assert arguments == [
-        "TreeKernelTraits",
+        "Fr13Fixed32Qrow32KernelTraits",
         "false",  # Is_causal
         "false",  # Is_local
         "false",  # Has_alibi

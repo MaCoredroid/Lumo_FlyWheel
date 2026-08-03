@@ -22,13 +22,12 @@ from fr13_patch_fa2_tree_bias import (  # noqa: E402
 
 TARGET_ARCH = "sm_121a"
 TARGET_KERNEL = (
-    "_ZN5flash24flash_fwd_splitkv_kernelI23Flash_fwd_kernel_traits"
-    "ILi256ELi32ELi64ELi2ELb0ELb0EN7cutlass10bfloat16_tE"
-    "19Flash_kernel_traitsILi256ELi32ELi64ELi2ES3_EELb0ELb0ELb0ELb0ELb1"
-    "ELb0ELb0ELb0EEEvNS_16Flash_fwd_paramsE"
+    "_ZN5flash36fr13_flash_fwd_fixed32_qrow32_kernel"
+    "ENS_16Flash_fwd_paramsE"
 )
 QROW_LAUNCHER_MANGLED_FRAGMENT = "fr13_run_mha_fwd_fixed32_qrow32"
 EXPECTED_STATIC_SHARED_BYTES = 1024
+MAX_REGISTERS = 254
 
 
 class GateError(RuntimeError):
@@ -107,8 +106,8 @@ def _parse_resources(text: str) -> dict[str, int]:
         "static_shared_bytes": int(match.group(3)),
         "static_local_bytes": int(match.group(4)),
     }
-    if not 1 <= resources["registers"] <= 255:
-        raise GateError("target register count is outside the SM121a limit")
+    if not 1 <= resources["registers"] <= MAX_REGISTERS:
+        raise GateError("target register count exceeds the admitted ceiling")
     if resources["stack_bytes"] != 0:
         raise GateError("target kernel has a nonzero stack frame")
     if resources["static_local_bytes"] != 0:
@@ -166,8 +165,8 @@ def _verify_sass(text: str) -> dict[str, int]:
         opcode.lower(): _sass_opcode_count(text, opcode)
         for opcode in ("LDL", "STL", "CALL")
     }
-    if counts["ldl"] != 0 or counts["stl"] != 0:
-        raise GateError("target SASS contains local-memory load/store instructions")
+    if any(counts.values()):
+        raise GateError("target SASS contains local-memory or call instructions")
     return counts
 
 
