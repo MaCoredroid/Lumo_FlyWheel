@@ -1343,6 +1343,8 @@ def validate_runtime_boundary_snapshot(
             "layer_batch_gate_attempts_by_batch",
             "layer_batch_gate_coverage_mask_by_batch",
             "layer_batch_gate_passed_by_batch",
+            "direct_metadata_consumed_by_batch",
+            "direct_metadata_published_by_batch",
             "maximum_ready_capacity",
             "metadata_fusion_consumed_by_batch",
             "metadata_fusion_fallbacks_by_batch",
@@ -1434,6 +1436,32 @@ def validate_runtime_boundary_snapshot(
     ):
         raise GateError(
             f"{path}: committer metadata fusion counters do not reconcile"
+        )
+    direct_metadata_by_kind = {
+        key: strict_nonnegative_int_map(
+            committer[key],
+            expected_keys=batch_keys,
+            label=f"{path}:committer.{key}",
+        )
+        for key in (
+            "direct_metadata_published_by_batch",
+            "direct_metadata_consumed_by_batch",
+        )
+    }
+    direct_metadata_active = any(
+        value
+        for counters in direct_metadata_by_kind.values()
+        for value in counters.values()
+    )
+    if direct_metadata_active and (
+        metadata_fusion_active
+        or direct_metadata_by_kind["direct_metadata_published_by_batch"]
+        != committer_by_batch
+        or direct_metadata_by_kind["direct_metadata_consumed_by_batch"]
+        != committer_by_batch
+    ):
+        raise GateError(
+            f"{path}: committer direct metadata counters do not reconcile"
         )
     layer_batch_gate_passed_by_batch = strict_nonnegative_int_map(
         committer["layer_batch_gate_passed_by_batch"],

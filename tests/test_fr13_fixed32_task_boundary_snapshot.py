@@ -184,6 +184,8 @@ def _snapshot(
                     for batch in range(1, server_capacity + 1)
                 },
                 "maximum_ready_capacity": server_capacity,
+                "direct_metadata_consumed_by_batch": dict(zero_by_batch),
+                "direct_metadata_published_by_batch": dict(zero_by_batch),
                 "metadata_fusion_consumed_by_batch": dict(zero_by_batch),
                 "metadata_fusion_fallbacks_by_batch": dict(zero_by_batch),
                 "metadata_fusion_published_by_batch": dict(zero_by_batch),
@@ -664,6 +666,11 @@ def test_both_validators_reject_nonpure_reconciliation_tampers(
             "metadata_fusion_published_by_batch"
         ]["2"] += 1
 
+    def direct_metadata_is_partial(payload: dict[str, object]) -> None:
+        payload["metrics"]["committer"][
+            "direct_metadata_published_by_batch"
+        ]["2"] += 1
+
     def gate_precompute_is_boolean(payload: dict[str, object]) -> None:
         payload["metrics"]["committer"]["gate_precompute_launches"] = True
 
@@ -678,6 +685,7 @@ def test_both_validators_reject_nonpure_reconciliation_tampers(
         impossible_capacity_bucket,
         pregather_counts_nonpure,
         metadata_fusion_is_partial,
+        direct_metadata_is_partial,
         gate_precompute_is_boolean,
     )
     for index, mutate in enumerate(mutations):
@@ -926,6 +934,18 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
             4: 1,
         },
         "maximum_ready_capacity": 4,
+        "direct_metadata_consumed_by_batch": {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+        },
+        "direct_metadata_published_by_batch": {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+        },
         "metadata_fusion_consumed_by_batch": {
             1: 0,
             2: 0,
