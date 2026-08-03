@@ -508,6 +508,22 @@ def test_exact4_timing_is_real_full_wall_profile_bound() -> None:
         in timing
     )
     assert "TIMING_PROFILE=${FR13_STREAMK_TIMING_PROFILE:-full_vocab}" in timing
+    assert (
+        "TIMING_DIAGNOSTIC_TASK_PROFILE="
+        "${FR13_STREAMK_TIMING_DIAGNOSTIC_TASK_PROFILE:-astropy12907}"
+        in timing
+    )
+    assert (
+        timing.count(
+            '--diagnostic-task-profile "$TIMING_DIAGNOSTIC_TASK_PROFILE"'
+        )
+        == 4
+    )
+    assert (
+        'FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE="'
+        '$TIMING_DIAGNOSTIC_TASK_PROFILE"'
+        in timing
+    )
     assert "identity_onen_b1 timing requires explicit k64_root qualification" in timing
     assert '--qualification-profile "$TIMING_PROFILE"' in timing
     assert '--draft-vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST"' in timing

@@ -510,6 +510,7 @@ def test_onen_b1_production_uses_k64_streamk_qualification(
     assert observed["kwargs"] == {
         "candidate_selector": "identity_onen_b1",
         "qualification_profile": "k64_root",
+        "diagnostic_task_profile": "astropy12907",
     }
 
 

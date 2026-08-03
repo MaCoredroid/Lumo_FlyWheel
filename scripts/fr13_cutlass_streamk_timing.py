@@ -203,6 +203,7 @@ def _validate_container_env(
     cutlass_selector: str,
     cutlass_production: int,
     qualification_profile: str,
+    diagnostic_task_profile: str,
     profile: dict[str, object],
 ) -> str:
     _regular(path, label)
@@ -250,6 +251,23 @@ def _validate_container_env(
         matches = [line for line in lines if line.startswith(prefix)]
         if len(matches) != 1:
             raise TimingError(f"{label} has ambiguous {prefix[:-1]}")
+    diagnostic_prefix = "FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE="
+    diagnostic_matches = [
+        line for line in lines if line.startswith(diagnostic_prefix)
+    ]
+    expected_diagnostic = f"{diagnostic_prefix}{diagnostic_task_profile}"
+    if diagnostic_matches == [expected_diagnostic]:
+        pass
+    elif (
+        not diagnostic_matches
+        and diagnostic_task_profile
+        == qualification.DEFAULT_DIAGNOSTIC_TASK_PROFILE
+    ):
+        pass
+    else:
+        raise TimingError(
+            f"{label} lacks exact timing pin {expected_diagnostic}"
+        )
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -339,6 +357,7 @@ def reduce_pair(
     *,
     candidate_selector: str = "streamk_coop128",
     qualification_profile: str = "full_vocab",
+    diagnostic_task_profile: str = qualification.DEFAULT_DIAGNOSTIC_TASK_PROFILE,
     task_set: str = "exact4",
 ) -> dict[str, Any]:
     try:
@@ -352,6 +371,9 @@ def reduce_pair(
     try:
         profile = qualification._qualification_profile(
             candidate_selector, qualification_profile
+        )
+        diagnostic_profile = qualification._diagnostic_task_profile(
+            candidate_selector, diagnostic_task_profile
         )
     except qualification.QualificationError as error:
         raise TimingError(str(error)) from error
@@ -382,6 +404,7 @@ def reduce_pair(
         cutlass_selector="stock",
         cutlass_production=0,
         qualification_profile=qualification_profile,
+        diagnostic_task_profile=diagnostic_task_profile,
         profile=profile,
     )
     candidate_env_sha256 = _validate_container_env(
@@ -390,6 +413,7 @@ def reduce_pair(
         cutlass_selector=candidate_selector,
         cutlass_production=1,
         qualification_profile=qualification_profile,
+        diagnostic_task_profile=diagnostic_task_profile,
         profile=profile,
     )
     _regular(qrow16_so, "Qrow16 candidate SO")
@@ -434,7 +458,7 @@ def reduce_pair(
         "candidate_bytes": candidate_bytes,
         "patch_source_sha256": source_contract["patch_source_sha256"],
         "qualification_source_commit": source_commit,
-        "qualification_task_marker": qualification.EXPECTED_TASK_MARKER,
+        "qualification_task_marker": diagnostic_profile["task_marker"],
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
         "qualified_draft_vocab_k": profile["draft_vocab_k"],
         "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
@@ -476,6 +500,22 @@ def reduce_pair(
                 f"production binding {key} mismatch: "
                 f"{binding.get(key)!r} != {expected!r}"
             )
+    for key, expected in (
+        ("qualification_task_profile", diagnostic_task_profile),
+        ("qualification_task_ids", list(diagnostic_profile["task_ids"])),
+    ):
+        actual = binding.get(key)
+        if actual == expected:
+            continue
+        if (
+            actual is None
+            and diagnostic_task_profile
+            == qualification.DEFAULT_DIAGNOSTIC_TASK_PROFILE
+        ):
+            continue
+        raise TimingError(
+            f"production binding {key} mismatch: {actual!r} != {expected!r}"
+        )
     for key in (
         "production_sidecar_sha256",
         "live_result_sha256",
@@ -531,6 +571,7 @@ def reduce_pair(
         "source_commit": source_commit,
         "decision_metric": "measured_tps_fullstep_wall",
         "qualification_profile": qualification_profile,
+        "qualification_task_profile": diagnostic_task_profile,
         "draft_vocab_root": profile["draft_vocab_root"],
         "draft_vocab_k": profile["draft_vocab_k"],
         "common_kernel_stack": {
@@ -619,6 +660,11 @@ def main() -> int:
         default="full_vocab",
     )
     parser.add_argument(
+        "--diagnostic-task-profile",
+        choices=tuple(qualification.DIAGNOSTIC_TASK_PROFILES),
+        default=qualification.DEFAULT_DIAGNOSTIC_TASK_PROFILE,
+    )
+    parser.add_argument(
         "--task-set", choices=tuple(TASK_SET_CONTRACTS), default="exact4"
     )
     parser.add_argument("--out", type=Path, required=True)
@@ -639,6 +685,7 @@ def main() -> int:
         args.source_commit,
         candidate_selector=args.candidate_selector,
         qualification_profile=args.qualification_profile,
+        diagnostic_task_profile=args.diagnostic_task_profile,
         task_set=args.task_set,
     )
     _write(args.out, payload)

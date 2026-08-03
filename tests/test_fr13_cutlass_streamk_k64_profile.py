@@ -561,3 +561,132 @@ def test_k64_root_attestation_preserves_profile_binding(
     assert result["schema"].endswith("k64_root.production_binding.v1")
     assert result["qualification_profile"] == "k64_root"
     assert result["qualified_comparison_call_limit"] == 320
+
+
+def _astropy13236_fullgrid_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    module, candidate, patch_source, live, _ = _k64_fixture(tmp_path, monkeypatch)
+    candidate_sha256 = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        module.binary,
+        "IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE",
+        len(candidate.read_bytes()),
+    )
+    monkeypatch.setattr(
+        module.binary,
+        "IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256",
+        candidate_sha256,
+    )
+    contract = dict(module.SOURCE_CONTRACTS["identity_onen_n5120_fullgrid_b1"])
+    contract["patch_source_sha256"] = hashlib.sha256(
+        patch_source.read_bytes()
+    ).hexdigest()
+    monkeypatch.setitem(
+        module.SOURCE_CONTRACTS,
+        "identity_onen_n5120_fullgrid_b1",
+        contract,
+    )
+    source_identity = {"source_commit": "c" * 40}
+    monkeypatch.setattr(
+        module,
+        "validate_source_commit_binding",
+        lambda *_args, **_kwargs: source_identity,
+    )
+    payload = json.loads(live.read_text(encoding="ascii"))
+    payload.update(
+        {
+            "schema": module.IDENTITY_ONEN_N5120_FULLGRID_B1_K64_ROOT_LIVE_SCHEMA,
+            "candidate": "identity_onen_n5120_fullgrid_b1",
+            "diagnostic_selector": "identity_onen_n5120_fullgrid_b1_byte_ab",
+            "task_ids": ["astropy__astropy-13236"],
+            "task_marker": "swe_verified:astropy__astropy-13236",
+            "diagnostic_task_profile": "astropy13236",
+            "patch_source_sha256": contract["patch_source_sha256"],
+            "patched_dispatch_sha256": contract["patched_dispatch_sha256"],
+            "source_identity": source_identity,
+        }
+    )
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    return module, candidate, patch_source, live
+
+
+def test_astropy13236_fullgrid_live_pass_issues_and_verifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, live = _astropy13236_fullgrid_fixture(
+        tmp_path, monkeypatch
+    )
+    sidecar = tmp_path / "astropy13236-sidecar.json"
+    issued = module.issue_sidecar(
+        live,
+        hashlib.sha256(live.read_bytes()).hexdigest(),
+        candidate,
+        sidecar,
+        patch_source,
+        candidate_selector="identity_onen_n5120_fullgrid_b1",
+        qualification_profile="k64_root",
+        draft_vocab_blocks=BLOCK_MAP,
+        diagnostic_task_profile="astropy13236",
+    )
+    verified = module.verify_sidecar(
+        sidecar,
+        hashlib.sha256(sidecar.read_bytes()).hexdigest(),
+        candidate,
+        patch_source,
+        candidate_selector="identity_onen_n5120_fullgrid_b1",
+        qualification_profile="k64_root",
+        draft_vocab_blocks=BLOCK_MAP,
+        diagnostic_task_profile="astropy13236",
+    )
+
+    assert verified == issued
+    assert issued["qualification_task_profile"] == "astropy13236"
+    assert issued["qualification_task_ids"] == ["astropy__astropy-13236"]
+    assert issued["qualification_task_marker"].endswith("astropy-13236")
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "match"),
+    (
+        ("diagnostic_task_profile", "astropy12907", "diagnostic_task_profile"),
+        ("task_ids", ["astropy__astropy-12907"], "task_ids"),
+        (
+            "task_marker",
+            "swe_verified:astropy__astropy-12907",
+            "task_marker",
+        ),
+    ),
+)
+def test_astropy13236_fullgrid_rejects_wrong_profile_task_or_marker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    key: str,
+    value: object,
+    match: str,
+) -> None:
+    module, candidate, patch_source, live = _astropy13236_fullgrid_fixture(
+        tmp_path, monkeypatch
+    )
+    payload = json.loads(live.read_text(encoding="ascii"))
+    payload[key] = value
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+
+    with pytest.raises(module.QualificationError, match=match):
+        module.validate_live_result(
+            live,
+            hashlib.sha256(live.read_bytes()).hexdigest(),
+            candidate,
+            patch_source,
+            candidate_selector="identity_onen_n5120_fullgrid_b1",
+            qualification_profile="k64_root",
+            draft_vocab_blocks=BLOCK_MAP,
+            diagnostic_task_profile="astropy13236",
+        )
+
+
+def test_astropy13236_profile_rejects_non_n5120_candidate() -> None:
+    module = _load("fr13_cutlass_streamk_task_profile_restriction")
+
+    with pytest.raises(module.QualificationError, match="is not allowed"):
+        module._diagnostic_task_profile("streamk_force_wide256", "astropy13236")

@@ -224,6 +224,13 @@ def test_production_attestation_requires_exact_selector_and_sidecar_binding(
 
     result = module.validate_production_attestation(attestation, sidecar_sha256)
     assert result["status"] == "BOUND"
+    payload["qualification"]["qualification_task_ids"] = [
+        "astropy__astropy-13236"
+    ]
+    attestation.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    with pytest.raises(module.QualificationError, match="qualification_task_ids"):
+        module.validate_production_attestation(attestation, sidecar_sha256)
+    payload["qualification"].pop("qualification_task_ids")
     payload["selector"] = "stock"
     attestation.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
     with pytest.raises(module.QualificationError, match="selector mismatch"):
@@ -281,13 +288,28 @@ def _measure(
 
 
 @pytest.mark.parametrize(
-    ("candidate_selector", "task_set", "qualification_profile"),
     (
-        ("streamk_coop128", "exact4", "full_vocab"),
-        ("streamk_force_wide256", "one", "full_vocab"),
-        ("identity_onen_b1", "exact4", "k64_root"),
-        ("identity_onen_n5120_single_b1", "exact4", "k64_root"),
-        ("identity_onen_n5120_fullgrid_b1", "exact4", "k64_root"),
+        "candidate_selector",
+        "task_set",
+        "qualification_profile",
+        "diagnostic_task_profile",
+    ),
+    (
+        ("streamk_coop128", "exact4", "full_vocab", "astropy12907"),
+        ("streamk_force_wide256", "one", "full_vocab", "astropy12907"),
+        ("identity_onen_b1", "exact4", "k64_root", "astropy12907"),
+        (
+            "identity_onen_n5120_single_b1",
+            "exact4",
+            "k64_root",
+            "astropy12907",
+        ),
+        (
+            "identity_onen_n5120_fullgrid_b1",
+            "exact4",
+            "k64_root",
+            "astropy13236",
+        ),
     ),
 )
 def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
@@ -296,9 +318,13 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
     candidate_selector: str,
     task_set: str,
     qualification_profile: str,
+    diagnostic_task_profile: str,
 ) -> None:
     module = _load("fr13_cutlass_streamk_timing_test", "fr13_cutlass_streamk_timing.py")
     profile = module.qualification.QUALIFICATION_PROFILES[qualification_profile]
+    diagnostic_profile = module.qualification.DIAGNOSTIC_TASK_PROFILES[
+        diagnostic_task_profile
+    ]
     candidate_bytes = b"candidate\n"
     candidate_sha256 = hashlib.sha256(candidate_bytes).hexdigest()
     candidate_so = tmp_path / "candidate.so"
@@ -429,6 +455,10 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
                             "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="
                             f"{qualification_profile}"
                         ),
+                        (
+                            "FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE="
+                            f"{diagnostic_task_profile}"
+                        ),
                         *(
                             (
                                 "FR13_DRAFT_VOCAB_BLOCKS="
@@ -492,7 +522,9 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
         "real_task_arm_sha256": "d" * 64,
         "container_env_sha256": "9" * 64,
         "qualification_source_commit": source_commit,
-        "qualification_task_marker": module.qualification.EXPECTED_TASK_MARKER,
+        "qualification_task_profile": diagnostic_task_profile,
+        "qualification_task_ids": list(diagnostic_profile["task_ids"]),
+        "qualification_task_marker": diagnostic_profile["task_marker"],
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
         "qualified_draft_vocab_k": profile["draft_vocab_k"],
         "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
@@ -535,6 +567,7 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
         source_commit,
         candidate_selector=candidate_selector,
         qualification_profile=qualification_profile,
+        diagnostic_task_profile=diagnostic_task_profile,
         task_set=task_set,
     )
 
@@ -551,6 +584,7 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
     )
     assert result["task_count"] == len(task_ids)
     assert result["qualification_profile"] == qualification_profile
+    assert result["qualification_task_profile"] == diagnostic_task_profile
     assert result["draft_vocab_k"] == profile["draft_vocab_k"]
     assert result["mandatory_weight_bytes"] == profile["mandatory_weight_bytes"]
     assert result["mandatory_weight_floor_ms"] == profile["mandatory_weight_floor_ms"]
@@ -584,6 +618,7 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
             source_commit,
             candidate_selector=candidate_selector,
             qualification_profile=qualification_profile,
+            diagnostic_task_profile=diagnostic_task_profile,
             task_set=task_set,
         )
     qrow16_capture(candidate_qrow16_capture)
@@ -608,5 +643,6 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
             source_commit,
             candidate_selector=candidate_selector,
             qualification_profile=qualification_profile,
+            diagnostic_task_profile=diagnostic_task_profile,
             task_set=task_set,
         )

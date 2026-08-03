@@ -527,6 +527,7 @@ def _verify_production_qualification(
     patch_source: Path,
     selector: str,
     fixed32_mode: str,
+    diagnostic_task_profile: str = "astropy12907",
 ) -> dict[str, object]:
     if selector not in {
         "streamk_coop128",
@@ -571,6 +572,13 @@ def _verify_production_qualification(
         "identity_onen_n5120_fullgrid_b1",
     }:
         kwargs["qualification_profile"] = "k64_root"
+    if selector not in {
+        "persistent_b4_m128",
+        "identity_stockshape_stage2_b4",
+        "identity_twom_b4",
+        "identity_hybrid_n5120_b4",
+    }:
+        kwargs["diagnostic_task_profile"] = diagnostic_task_profile
     verified = qualification.verify_sidecar(
         sidecar,
         expected_sidecar_sha256,
@@ -607,6 +615,7 @@ def install_candidate(
     fixed32_mode: str = "hydra27_fixed32",
     resource_credential: Path | None = None,
     expected_resource_credential_sha256: str | None = None,
+    diagnostic_task_profile: str = "astropy12907",
 ) -> dict[str, object]:
     if selector not in CANDIDATE_SELECTORS:
         raise ValueError(f"unsupported candidate selector: {selector!r}")
@@ -646,6 +655,7 @@ def install_candidate(
             patch_source,
             selector,
             fixed32_mode,
+            diagnostic_task_profile,
         )
         qualification = {
             "sidecar_sha256": expected_production_sidecar_sha256,
@@ -690,6 +700,12 @@ def install_candidate(
                 "container_env_sha256",
             ):
                 qualification[key] = qualification_record[key]
+            for key in (
+                "qualification_task_profile",
+                "qualification_task_ids",
+            ):
+                if key in qualification_record:
+                    qualification[key] = qualification_record[key]
         for key in (
             "qualified_eager_builder_capacity",
             "qualified_topology",
@@ -799,6 +815,11 @@ def main() -> int:
     install_parser.add_argument("--resource-credential", type=Path)
     install_parser.add_argument("--expected-resource-credential-sha256")
     install_parser.add_argument(
+        "--diagnostic-task-profile",
+        choices=("astropy12907", "astropy13236"),
+        default="astropy12907",
+    )
+    install_parser.add_argument(
         "--fixed32-mode",
         choices=("tail6_fixed32", "hydra27_fixed32"),
         default="hydra27_fixed32",
@@ -835,6 +856,7 @@ def main() -> int:
             expected_resource_credential_sha256=(
                 args.expected_resource_credential_sha256
             ),
+            diagnostic_task_profile=args.diagnostic_task_profile,
         )
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
     return 0

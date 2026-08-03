@@ -18,6 +18,7 @@ cd "$REPO"
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 TIMING_CANDIDATE=${FR13_STREAMK_TIMING_CANDIDATE:-streamk_coop128}
 TIMING_TASK_SET=${FR13_STREAMK_TIMING_TASK_SET:-exact4}
+TIMING_DIAGNOSTIC_TASK_PROFILE=${FR13_STREAMK_TIMING_DIAGNOSTIC_TASK_PROFILE:-astropy12907}
 case "$TIMING_CANDIDATE" in
   streamk_coop128)
     STREAMK_SHA256=f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d
@@ -56,6 +57,20 @@ case "$TIMING_CANDIDATE" in
     ;;
   *)
     echo "unsupported Stream-K timing candidate: $TIMING_CANDIDATE" >&2
+    exit 2
+    ;;
+esac
+case "$TIMING_DIAGNOSTIC_TASK_PROFILE" in
+  astropy12907) ;;
+  astropy13236)
+    [[ "$TIMING_CANDIDATE" == "identity_onen_n5120_single_b1" \
+       || "$TIMING_CANDIDATE" == "identity_onen_n5120_fullgrid_b1" ]] || {
+      echo "astropy13236 diagnostic task profile requires an N5120 B1 candidate" >&2
+      exit 2
+    }
+    ;;
+  *)
+    echo "FR13_STREAMK_TIMING_DIAGNOSTIC_TASK_PROFILE must be astropy12907 or astropy13236" >&2
     exit 2
     ;;
 esac
@@ -227,6 +242,7 @@ unset -f run_variant
   --expected-source-commit "$SOURCE_COMMIT" \
   --candidate-selector "$TIMING_CANDIDATE" \
   --qualification-profile "$TIMING_PROFILE" \
+  --diagnostic-task-profile "$TIMING_DIAGNOSTIC_TASK_PROFILE" \
   --draft-vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST" \
   >/dev/null
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
@@ -239,10 +255,11 @@ mkdir -p "$RUNROOT_ABS"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=%s\ntask_set=%s\ntask_count=%s\ntiming_eligible=%s\ncomparator_gate_timing_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\ntopology=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\ncommon_fa2_selector=qrow16_production\nonly_arm_delta=CUTLASS_stock_to_%s\ncandidate_selector=%s\ncandidate_live_pass_schema=%s\nqualification_profile=%s\nphysical_rows=32\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_fa2_bytes=%s\nqrow16_live_pass_sha256=%s\nstreamk_sha256=%s\nstreamk_bytes=%s\nstreamk_pass_sha256=%s\nstarted=%s\n' \
+printf 'classification=%s\ntask_set=%s\ntask_count=%s\ntiming_eligible=%s\ncomparator_gate_timing_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\ntopology=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\ncommon_fa2_selector=qrow16_production\nonly_arm_delta=CUTLASS_stock_to_%s\ncandidate_selector=%s\ncandidate_live_pass_schema=%s\nqualification_profile=%s\nqualification_task_profile=%s\nphysical_rows=32\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_fa2_bytes=%s\nqrow16_live_pass_sha256=%s\nstreamk_sha256=%s\nstreamk_bytes=%s\nstreamk_pass_sha256=%s\nstarted=%s\n' \
   "$RUN_CLASSIFICATION" "$TIMING_TASK_SET" "$TASK_COUNT" "$TIMING_ELIGIBLE" \
   "$TIMING_CANDIDATE" "$TIMING_CANDIDATE" "$STREAMK_LIVE_SCHEMA" \
-  "$TIMING_PROFILE" "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
+  "$TIMING_PROFILE" "$TIMING_DIAGNOSTIC_TASK_PROFILE" \
+  "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" "$ONE_SIDED_U95_CAP_MS" \
   "$$" "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$SOURCE_COMMIT" "$RUNNER_SHA256" "$SUBSET_SHA256" \
@@ -320,6 +337,7 @@ run_arm() {
       FR13_FIXED32_CUTLASS_WAVE_SO="$candidate_so" \
       FR13_FIXED32_CUTLASS_WAVE_PRODUCTION="$production" \
       FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$TIMING_PROFILE" \
+      FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE="$TIMING_DIAGNOSTIC_TASK_PROFILE" \
       FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON="$pass_json" \
       FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256="$pass_sha" \
       FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
@@ -424,12 +442,14 @@ CANDIDATE_SIDECAR_SHA256=$(sha256sum "$CANDIDATE_SIDECAR" | awk '{print $1}')
   --patch-source "$PATCH_SOURCE" \
   --candidate-selector "$TIMING_CANDIDATE" \
   --qualification-profile "$TIMING_PROFILE" \
+  --diagnostic-task-profile "$TIMING_DIAGNOSTIC_TASK_PROFILE" \
   --draft-vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST" \
   >/dev/null
 "$PYTHON_BIN" scripts/fr13_cutlass_streamk_pass.py attestation \
   --attestation "$CANDIDATE_ATTESTATION" \
   --expected-sidecar-sha256 "$CANDIDATE_SIDECAR_SHA256" \
   --qualification-profile "$TIMING_PROFILE" \
+  --diagnostic-task-profile "$TIMING_DIAGNOSTIC_TASK_PROFILE" \
   --draft-vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST" \
   > "$RUNROOT_ABS/$CANDIDATE_ARM/streamk_production_binding.json"
 
@@ -451,6 +471,7 @@ finalize_manifests
   --source-commit "$SOURCE_COMMIT" \
   --candidate-selector "$TIMING_CANDIDATE" \
   --qualification-profile "$TIMING_PROFILE" \
+  --diagnostic-task-profile "$TIMING_DIAGNOSTIC_TASK_PROFILE" \
   --task-set "$TIMING_TASK_SET" \
   --out "$RUNROOT_ABS/timing_summary.json"
 

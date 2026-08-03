@@ -82,8 +82,31 @@ SOURCE_BINDING_PATHS = (
     "scripts/fr13_launch_forked_fa2_tree_server.sh",
 )
 WIDE256_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1"
-EXPECTED_TASK_IDS = ("astropy__astropy-12907",)
-EXPECTED_TASK_MARKER = f"swe_verified:{EXPECTED_TASK_IDS[0]}"
+DEFAULT_DIAGNOSTIC_TASK_PROFILE = "astropy12907"
+DIAGNOSTIC_TASK_PROFILES = {
+    DEFAULT_DIAGNOSTIC_TASK_PROFILE: {
+        "task_ids": ("astropy__astropy-12907",),
+        "task_marker": "swe_verified:astropy__astropy-12907",
+        "candidate_selectors": None,
+    },
+    "astropy13236": {
+        "task_ids": ("astropy__astropy-13236",),
+        "task_marker": "swe_verified:astropy__astropy-13236",
+        "candidate_selectors": frozenset(
+            {
+                "identity_onen_n5120_single_b1",
+                "identity_onen_n5120_fullgrid_b1",
+            }
+        ),
+    },
+}
+# Backward-compatible aliases for the original/default credential contract.
+EXPECTED_TASK_IDS = DIAGNOSTIC_TASK_PROFILES[DEFAULT_DIAGNOSTIC_TASK_PROFILE][
+    "task_ids"
+]
+EXPECTED_TASK_MARKER = DIAGNOSTIC_TASK_PROFILES[DEFAULT_DIAGNOSTIC_TASK_PROFILE][
+    "task_marker"
+]
 EXPECTED_DRAFT_VOCAB_ROOT = 0
 EXPECTED_DRAFT_VOCAB_K = 0
 MAX_COMPARISONS = 320
@@ -158,6 +181,45 @@ CANDIDATE_CONTRACTS = {
         "source_binding": "required",
     },
 }
+
+
+def _diagnostic_task_profile(
+    candidate_selector: str, diagnostic_task_profile: str
+) -> dict[str, object]:
+    try:
+        profile = DIAGNOSTIC_TASK_PROFILES[diagnostic_task_profile]
+    except KeyError as error:
+        raise QualificationError(
+            f"unsupported diagnostic task profile: {diagnostic_task_profile!r}"
+        ) from error
+    allowed = profile["candidate_selectors"]
+    if allowed is not None and candidate_selector not in allowed:
+        raise QualificationError(
+            f"diagnostic task profile {diagnostic_task_profile!r} is not allowed "
+            f"for {candidate_selector!r}"
+        )
+    return profile
+
+
+def _validate_task_profile_binding(
+    payload: dict[str, Any],
+    key: str,
+    diagnostic_task_profile: str,
+    label: str,
+) -> None:
+    actual = payload.get(key)
+    if actual == diagnostic_task_profile:
+        return
+    if (
+        actual is None
+        and diagnostic_task_profile == DEFAULT_DIAGNOSTIC_TASK_PROFILE
+    ):
+        return
+    raise QualificationError(
+        f"{label} {key} mismatch: {actual!r} != {diagnostic_task_profile!r}"
+    )
+
+
 QUALIFICATION_PROFILES: dict[str, dict[str, object]] = {
     "full_vocab": {
         "live_schema": None,
@@ -490,9 +552,13 @@ def validate_live_result(
     candidate_selector: str = "streamk_coop128",
     qualification_profile: str = "full_vocab",
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    diagnostic_task_profile: str = DEFAULT_DIAGNOSTIC_TASK_PROFILE,
 ) -> dict[str, Any]:
     candidate_contract = _candidate_contract(candidate_selector)
     profile = _qualification_profile(candidate_selector, qualification_profile)
+    task_profile = _diagnostic_task_profile(
+        candidate_selector, diagnostic_task_profile
+    )
     diagnostic_selector = candidate_contract["diagnostic_selector"]
     expected_live_sha256 = _require_sha256(
         expected_live_sha256, "expected live-result SHA-256"
@@ -522,8 +588,8 @@ def validate_live_result(
         "run_classification": profile["run_classification"],
         "acceptance_valid": False,
         "task_count": 1,
-        "task_ids": list(EXPECTED_TASK_IDS),
-        "task_marker": EXPECTED_TASK_MARKER,
+        "task_ids": list(task_profile["task_ids"]),
+        "task_marker": task_profile["task_marker"],
         "draft_vocab_root": profile["draft_vocab_root"],
         "draft_vocab_k": profile["draft_vocab_k"],
         "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
@@ -564,6 +630,12 @@ def validate_live_result(
                 "comparison_call_limit": MAX_COMPARISONS,
             }
         )
+    _validate_task_profile_binding(
+        payload,
+        "diagnostic_task_profile",
+        diagnostic_task_profile,
+        "Stream-K live PASS",
+    )
     for key, expected in expected_fields.items():
         if payload.get(key) != expected:
             raise QualificationError(
@@ -625,8 +697,9 @@ def validate_live_result(
         "vllm_base_commit": VLLM_BASE_COMMIT,
         "patched_dispatch_sha256": source_contract["patched_dispatch_sha256"],
         "qualification_source_commit": source_commit,
-        "qualification_task_ids": list(EXPECTED_TASK_IDS),
-        "qualification_task_marker": EXPECTED_TASK_MARKER,
+        "qualification_task_profile": diagnostic_task_profile,
+        "qualification_task_ids": list(task_profile["task_ids"]),
+        "qualification_task_marker": task_profile["task_marker"],
         "real_task_arm_sha256": real_task_arm_sha256,
         "container_env_sha256": container_env_sha256,
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
@@ -664,6 +737,7 @@ def issue_sidecar(
     candidate_selector: str = "streamk_coop128",
     qualification_profile: str = "full_vocab",
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    diagnostic_task_profile: str = DEFAULT_DIAGNOSTIC_TASK_PROFILE,
 ) -> dict[str, Any]:
     payload = validate_live_result(
         live_result,
@@ -674,6 +748,7 @@ def issue_sidecar(
         candidate_selector,
         qualification_profile,
         draft_vocab_blocks,
+        diagnostic_task_profile,
     )
     _write_json(output, payload)
     return payload
@@ -688,6 +763,7 @@ def verify_sidecar(
     candidate_selector: str | None = None,
     qualification_profile: str | None = None,
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    diagnostic_task_profile: str = DEFAULT_DIAGNOSTIC_TASK_PROFILE,
 ) -> dict[str, Any]:
     expected_sidecar_sha256 = _require_sha256(
         expected_sidecar_sha256, "expected production-sidecar SHA-256"
@@ -711,6 +787,9 @@ def verify_sidecar(
             "Stream-K production sidecar qualification-profile mismatch"
         )
     profile = _qualification_profile(sidecar_selector, sidecar_profile)
+    task_profile = _diagnostic_task_profile(
+        sidecar_selector, diagnostic_task_profile
+    )
     diagnostic_selector = candidate_contract["diagnostic_selector"]
     actual_sha256 = hashlib.sha256(raw).hexdigest()
     if actual_sha256 != expected_sidecar_sha256:
@@ -741,8 +820,8 @@ def verify_sidecar(
         "patch_source_sha256": patch["sha256"],
         "vllm_base_commit": VLLM_BASE_COMMIT,
         "patched_dispatch_sha256": source_contract["patched_dispatch_sha256"],
-        "qualification_task_ids": list(EXPECTED_TASK_IDS),
-        "qualification_task_marker": EXPECTED_TASK_MARKER,
+        "qualification_task_ids": list(task_profile["task_ids"]),
+        "qualification_task_marker": task_profile["task_marker"],
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
         "qualified_draft_vocab_k": profile["draft_vocab_k"],
         "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
@@ -763,6 +842,12 @@ def verify_sidecar(
                 "qualified_comparison_call_limit": MAX_COMPARISONS,
             }
         )
+    _validate_task_profile_binding(
+        payload,
+        "qualification_task_profile",
+        diagnostic_task_profile,
+        "Stream-K production sidecar",
+    )
     for key, expected in required.items():
         if payload.get(key) != expected:
             raise QualificationError(
@@ -805,6 +890,7 @@ def validate_production_attestation(
     qualification_profile: str | None = None,
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
     patch_source: Path = PATCH_SOURCE,
+    diagnostic_task_profile: str = DEFAULT_DIAGNOSTIC_TASK_PROFILE,
 ) -> dict[str, Any]:
     expected_sidecar_sha256 = _require_sha256(
         expected_sidecar_sha256, "expected production-sidecar SHA-256"
@@ -814,6 +900,9 @@ def validate_production_attestation(
     if not isinstance(candidate_selector, str):
         raise QualificationError("Stream-K binary attestation selector is invalid")
     candidate_contract = _candidate_contract(candidate_selector)
+    task_profile = _diagnostic_task_profile(
+        candidate_selector, diagnostic_task_profile
+    )
     source_contract = _source_contract(candidate_selector)
     candidate_sha256, candidate_bytes, candidate_family = binary.candidate_identity(
         candidate_selector
@@ -855,6 +944,23 @@ def validate_production_attestation(
     qualification = payload.get("qualification")
     if not isinstance(qualification, dict):
         raise QualificationError("Stream-K binary attestation lacks qualification")
+    _validate_task_profile_binding(
+        qualification,
+        "qualification_task_profile",
+        diagnostic_task_profile,
+        "Stream-K attestation qualification",
+    )
+    qualification_task_ids = qualification.get("qualification_task_ids")
+    if not (
+        qualification_task_ids == list(task_profile["task_ids"])
+        or (
+            qualification_task_ids is None
+            and diagnostic_task_profile == DEFAULT_DIAGNOSTIC_TASK_PROFILE
+        )
+    ):
+        raise QualificationError(
+            "Stream-K attestation qualification_task_ids binding mismatch"
+        )
     attested_profile = qualification.get("qualification_profile", "full_vocab")
     if not isinstance(attested_profile, str):
         raise QualificationError(
@@ -879,7 +985,7 @@ def validate_production_attestation(
     ]:
         raise QualificationError("Stream-K attestation patch-source binding mismatch")
     for key, expected in (
-        ("qualification_task_marker", EXPECTED_TASK_MARKER),
+        ("qualification_task_marker", task_profile["task_marker"]),
         ("qualified_draft_vocab_root", profile["draft_vocab_root"]),
         ("qualified_draft_vocab_k", profile["draft_vocab_k"]),
         ("mandatory_weight_bytes", profile["mandatory_weight_bytes"]),
@@ -955,7 +1061,9 @@ def validate_production_attestation(
         "live_result_sha256": qualification["live_result_sha256"],
         "binary_attestation_sha256": hashlib.sha256(raw).hexdigest(),
         "qualification_source_commit": qualification_source_commit,
-        "qualification_task_marker": EXPECTED_TASK_MARKER,
+        "qualification_task_profile": diagnostic_task_profile,
+        "qualification_task_ids": list(task_profile["task_ids"]),
+        "qualification_task_marker": task_profile["task_marker"],
         "real_task_arm_sha256": real_task_arm_sha256,
         "container_env_sha256": container_env_sha256,
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
@@ -1004,6 +1112,11 @@ def main() -> int:
             type=Path,
             default=DRAFT_VOCAB_BLOCKS_SOURCE,
         )
+        subparser.add_argument(
+            "--diagnostic-task-profile",
+            choices=tuple(DIAGNOSTIC_TASK_PROFILES),
+            default=DEFAULT_DIAGNOSTIC_TASK_PROFILE,
+        )
         if command == "issue":
             subparser.add_argument("--out", type=Path, required=True)
     verify_parser = subparsers.add_parser("verify")
@@ -1019,6 +1132,11 @@ def main() -> int:
         "--draft-vocab-blocks",
         type=Path,
         default=DRAFT_VOCAB_BLOCKS_SOURCE,
+    )
+    verify_parser.add_argument(
+        "--diagnostic-task-profile",
+        choices=tuple(DIAGNOSTIC_TASK_PROFILES),
+        default=DEFAULT_DIAGNOSTIC_TASK_PROFILE,
     )
     source_parser = subparsers.add_parser("source-binding")
     source_parser.add_argument("--source-commit", required=True)
@@ -1040,6 +1158,11 @@ def main() -> int:
     attestation_parser.add_argument(
         "--patch-source", type=Path, default=PATCH_SOURCE
     )
+    attestation_parser.add_argument(
+        "--diagnostic-task-profile",
+        choices=tuple(DIAGNOSTIC_TASK_PROFILES),
+        default=DEFAULT_DIAGNOSTIC_TASK_PROFILE,
+    )
     args = parser.parse_args()
 
     if args.command == "validate":
@@ -1052,6 +1175,7 @@ def main() -> int:
             args.candidate_selector,
             args.qualification_profile,
             args.draft_vocab_blocks,
+            args.diagnostic_task_profile,
         )
     elif args.command == "issue":
         payload = issue_sidecar(
@@ -1064,6 +1188,7 @@ def main() -> int:
             args.candidate_selector,
             args.qualification_profile,
             args.draft_vocab_blocks,
+            args.diagnostic_task_profile,
         )
     elif args.command == "verify":
         payload = verify_sidecar(
@@ -1074,6 +1199,7 @@ def main() -> int:
             candidate_selector=args.candidate_selector,
             qualification_profile=args.qualification_profile,
             draft_vocab_blocks=args.draft_vocab_blocks,
+            diagnostic_task_profile=args.diagnostic_task_profile,
         )
     elif args.command == "source-binding":
         payload = validate_source_commit_binding(
@@ -1088,6 +1214,7 @@ def main() -> int:
             args.qualification_profile,
             args.draft_vocab_blocks,
             args.patch_source,
+            args.diagnostic_task_profile,
         )
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
     return 0
