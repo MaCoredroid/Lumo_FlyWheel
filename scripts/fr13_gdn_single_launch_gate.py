@@ -75,6 +75,7 @@ VALIDATOR_SOURCES = (
     "scripts/fr13_runtime_manifest.py",
 )
 TEST_SOURCES = (
+    "tests/test_fr13_fixed32_gdn_path_bv_live_gate.py",
     "tests/test_fr13_fixed32_gdn_single_launch_real_gate.py",
     "tests/test_fr13_gdn_single_launch_campaign_gate.py",
 )
