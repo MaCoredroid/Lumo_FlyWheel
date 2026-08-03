@@ -34,6 +34,7 @@ DRAFT_VOCAB_BLOCKS_HOST=scripts/fr13_dvk_subset_blocks.json
 DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
 DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
 DUAL_CANDIDATE=0
+SOURCE_BOUND_CANDIDATE=0
 case "$CANDIDATE_SELECTOR" in
   persistent_b4_m128)
     CANDIDATE_SHA256=895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f
@@ -74,13 +75,14 @@ case "$CANDIDATE_SELECTOR" in
       echo "hybrid N5120 production timing requires CUTLASS_B4_QUALIFICATION_PROFILE=k64_root" >&2
       exit 2
     }
-    CANDIDATE_SHA256=63c7b80bf11daf01aa040cf91d57ef1c90ed1406a6185368684a7486aeebf1a4
-    CANDIDATE_BYTES=118243776
-    QUALIFIED_PATCH_SOURCE_SHA256=17bcaffc9b982ca436fb0794ac7c3d17cef7d5ed06d9786b478ea21acd2e4f34
+    CANDIDATE_SHA256=65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc
+    CANDIDATE_BYTES=119471552
+    QUALIFIED_PATCH_SOURCE_SHA256=b9dba4077f63425dd4c245d9de33a8b2413e223f44a7fb0f6b4abe6e003d24a0
     CANDIDATE_ARM_SLUG=identity_hybrid_n5120
     ONLY_ARM_DELTA_META=only_arm_delta=CUTLASS_stock_to_identity_hybrid_n5120_b4
     ONLY_ARM_DELTA=${ONLY_ARM_DELTA_META#*=}
     DUAL_CANDIDATE=1
+    SOURCE_BOUND_CANDIDATE=1
     ;;
   *)
     echo "CUTLASS_B4_CANDIDATE_SELECTOR is unsupported for B4 timing" >&2
@@ -321,8 +323,13 @@ QUALIFICATION_PATCH_SOURCE_SHA256=$(
 [[ "$CURRENT_PATCH_SOURCE_SHA256" == "$QUALIFIED_PATCH_SOURCE_SHA256" \
    && "$QUALIFICATION_PATCH_SOURCE_SHA256" == "$QUALIFIED_PATCH_SOURCE_SHA256" ]] \
   || { echo "qualified CUTLASS patch source changed after the live gate" >&2; exit 2; }
-git merge-base --is-ancestor "$QUALIFICATION_SOURCE_COMMIT" "$TIMING_HARNESS_COMMIT" \
-  || { echo "timing harness does not descend from the qualification source" >&2; exit 2; }
+if (( SOURCE_BOUND_CANDIDATE == 1 )); then
+  [[ "$QUALIFICATION_SOURCE_COMMIT" == "$TIMING_HARNESS_COMMIT" ]] \
+    || { echo "source-bound timing requires the qualification commit to equal HEAD" >&2; exit 2; }
+else
+  git merge-base --is-ancestor "$QUALIFICATION_SOURCE_COMMIT" "$TIMING_HARNESS_COMMIT" \
+    || { echo "timing harness does not descend from the qualification source" >&2; exit 2; }
+fi
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical exact4 subset SHA-256 drift" >&2; exit 2; }
 if [[ "$QUALIFICATION_PROFILE" == "k64_root" ]]; then
@@ -669,6 +676,7 @@ fi
   --expected-sidecar-sha256 "$CANDIDATE_SIDECAR_SHA256" \
   --qualification-profile "$QUALIFICATION_PROFILE" \
   --fixed32-mode "$FIXED32_MODE" \
+  --patch-source "$PATCH_SOURCE" \
   > "$RUNROOT_ABS/$CANDIDATE_ARM/cutlass_b4_production_binding.json"
 
 finalize_manifests
@@ -693,7 +701,9 @@ finalize_manifests
   "$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_work_census.jsonl" \
   "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_work_census.jsonl" \
   "$CANDIDATE_SELECTOR" "$CUTLASS_B4_TAIL23_PASS_SHA256" \
-  "$CUTLASS_B4_HYDRA27_PASS_SHA256" <<'PY'
+  "$CUTLASS_B4_HYDRA27_PASS_SHA256" \
+  "$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_engine_ingress.jsonl" \
+  "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_engine_ingress.jsonl" <<'PY'
 import hashlib
 import json
 import math
@@ -701,8 +711,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "scripts")
+sys.path.insert(0, "src")
 from fr13_b4_timing_math import phase_breakdown, positive
 import fr13_fixed32_work_census as work_census
+from lumo_flywheel_serving.inference_proxy import (
+    fixed32_canonical_task_set_sha256,
+    fixed32_task_key_id,
+    verify_fixed32_ingress_ledger,
+)
 
 subset_path, stock_path, candidate_path, binding_path, out_path = map(Path, sys.argv[1:6])
 sidecar_sha256, live_sha256, candidate_sha256, fa2_sha256 = sys.argv[6:10]
@@ -723,10 +739,56 @@ all_parent_verdict_sha256 = sys.argv[31]
 stock_work_path, candidate_work_path = map(Path, sys.argv[32:34])
 stock_census_path, candidate_census_path = map(Path, sys.argv[34:36])
 candidate_selector, tail23_live_sha256, hydra27_live_sha256 = sys.argv[36:39]
+stock_ingress_path, candidate_ingress_path = map(Path, sys.argv[39:41])
 task_ids = sorted(json.loads(subset_path.read_text(encoding="ascii"))["instance_ids"])
 stock = json.loads(stock_path.read_text(encoding="utf-8"))
 candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
 binding = json.loads(binding_path.read_text(encoding="ascii"))
+expected_task_keys = sorted(fixed32_task_key_id(task_id) for task_id in task_ids)
+expected_task_set_sha256 = fixed32_canonical_task_set_sha256(tuple(task_ids))
+
+
+def validate_ingress(path, label):
+    if not path.is_file() or path.is_symlink():
+        raise SystemExit(f"{label} engine ingress ledger is not a regular file")
+    verification = verify_fixed32_ingress_ledger(
+        path, expected_role="engine", require_finalized=True
+    )
+    raw = path.read_bytes()
+    rows = [json.loads(line) for line in raw.decode("ascii").splitlines()]
+    accepted = sorted(
+        {
+            row.get("task_key_id")
+            for row in rows
+            if row.get("event") == "request_accepted"
+        }
+    )
+    completed = sorted(
+        {
+            row.get("task_key_id")
+            for row in rows
+            if row.get("event") == "request_complete"
+            and row.get("outcome") == "completed"
+        }
+    )
+    if accepted != expected_task_keys or completed != expected_task_keys:
+        raise SystemExit(f"{label} engine ingress is not canonical exact4")
+    if not any(
+        row.get("event") == "campaign_begin"
+        and row.get("evidence_sha256") == expected_task_set_sha256
+        for row in rows
+    ):
+        raise SystemExit(f"{label} engine ingress lacks the exact4 campaign binding")
+    return {
+        "ledger_sha256": hashlib.sha256(raw).hexdigest(),
+        "chain_head_sha256": verification["chain_head_sha256"],
+        "accepted_task_key_ids": accepted,
+        "completed_task_key_ids": completed,
+    }
+
+
+stock_ingress = validate_ingress(stock_ingress_path, "stock")
+candidate_ingress = validate_ingress(candidate_ingress_path, "candidate")
 
 def load_work_report(report_path, census_path, label):
     for kind, path in (("report", report_path), ("census", census_path)):
@@ -748,17 +810,39 @@ def load_work_report(report_path, census_path, label):
     )
     return report, hashlib.sha256(report_raw).hexdigest()
 
-stock_work, stock_work_sha256 = load_work_report(
-    stock_work_path, stock_census_path, "stock"
-)
-candidate_work, candidate_work_sha256 = load_work_report(
-    candidate_work_path, candidate_census_path, "candidate"
-)
-if (
-    stock_work["normalized_work_signature_sha256"]
-    != candidate_work["normalized_work_signature_sha256"]
-):
-    raise SystemExit("stock/candidate physical-work signatures differ")
+work_census_summary = None
+if all_parent_production:
+    stock_work, stock_work_sha256 = load_work_report(
+        stock_work_path, stock_census_path, "stock"
+    )
+    candidate_work, candidate_work_sha256 = load_work_report(
+        candidate_work_path, candidate_census_path, "candidate"
+    )
+    if (
+        stock_work["normalized_work_signature_sha256"]
+        != candidate_work["normalized_work_signature_sha256"]
+    ):
+        raise SystemExit("stock/candidate physical-work signatures differ")
+    work_census_summary = {
+        "stock_reference": {
+            "report_sha256": stock_work_sha256,
+            "census_sha256": stock_work["census_sha256"],
+            "event_count": stock_work["event_count"],
+            "event_counts_by_batch": stock_work["event_counts_by_batch"],
+            "normalized_work_signature_sha256": stock_work[
+                "normalized_work_signature_sha256"
+            ],
+        },
+        "candidate": {
+            "report_sha256": candidate_work_sha256,
+            "census_sha256": candidate_work["census_sha256"],
+            "event_count": candidate_work["event_count"],
+            "event_counts_by_batch": candidate_work["event_counts_by_batch"],
+            "normalized_work_signature_sha256": candidate_work[
+                "normalized_work_signature_sha256"
+            ],
+        },
+    }
 
 def validate(record, label):
     if (
@@ -829,8 +913,26 @@ if candidate_selector in {
         or binding.get("qualified_topology") is not None
     ):
         raise SystemExit(
-            "Stage2 candidate lacks independent Tail23 and Hydra27 production binding"
+            "dual candidate lacks independent Tail23 and Hydra27 production binding"
         )
+    if candidate_selector == "identity_hybrid_n5120_b4":
+        source_identity = binding.get("qualification_source_identity")
+        if (
+            qualification_source_commit != timing_harness_commit
+            or not isinstance(source_identity, dict)
+            or source_identity.get("source_commit") != timing_harness_commit
+            or binding.get("authenticated_task_count") != 4
+            or binding.get("authenticated_task_ids") != task_ids
+            or binding.get("authenticated_task_set_sha256")
+            != expected_task_set_sha256
+            or binding.get("engine_ingress_accepted_task_key_ids")
+            != expected_task_keys
+            or binding.get("engine_ingress_completed_task_key_ids")
+            != expected_task_keys
+        ):
+            raise SystemExit(
+                "hybrid N5120 binding is not source-bound canonical exact4"
+            )
 else:
     if (
         binding.get("live_result_sha256") != live_sha256
@@ -892,25 +994,13 @@ summary = {
     "common_committer_selector": (
         "fixed32_all_parent_commit_v2" if all_parent_production else "reference"
     ),
-    "work_census": {
-        "stock_reference": {
-            "report_sha256": stock_work_sha256,
-            "census_sha256": stock_work["census_sha256"],
-            "event_count": stock_work["event_count"],
-            "event_counts_by_batch": stock_work["event_counts_by_batch"],
-            "normalized_work_signature_sha256": stock_work[
-                "normalized_work_signature_sha256"
-            ],
-        },
-        "candidate": {
-            "report_sha256": candidate_work_sha256,
-            "census_sha256": candidate_work["census_sha256"],
-            "event_count": candidate_work["event_count"],
-            "event_counts_by_batch": candidate_work["event_counts_by_batch"],
-            "normalized_work_signature_sha256": candidate_work[
-                "normalized_work_signature_sha256"
-            ],
-        },
+    "work_census": work_census_summary,
+    "authenticated_task_count": 4,
+    "authenticated_task_ids": task_ids,
+    "authenticated_task_set_sha256": expected_task_set_sha256,
+    "authenticated_task_provenance": {
+        "stock_reference": stock_ingress,
+        "candidate": candidate_ingress,
     },
     "task_ids": task_ids,
     "decision_metric": "measured_tps_fullstep_wall",
@@ -924,6 +1014,9 @@ summary = {
     "timing_harness_commit": timing_harness_commit,
     "qualified_patch_source_sha256": patch_source_sha256,
     "live_pass_binding_sha256": live_binding_sha256,
+    "qualification_source_identity": binding.get(
+        "qualification_source_identity"
+    ),
     "stock_reference": {
         "selector": "stock",
         "fa2_sha256": fa2_sha256,

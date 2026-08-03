@@ -1,0 +1,122 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_hybrid_n5120.production_path.v1",
+  "created_at_utc": "2026-08-03T13:58:45Z",
+  "status": "host_ready_live_qualification_required",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "production_available": false,
+  "production_default_enabled": false,
+  "development_base_commit": "27512325e17e52af2b95603dbce22b526208c394",
+  "candidate": {
+    "selector": "identity_hybrid_n5120_b4",
+    "diagnostic_selector": "identity_hybrid_n5120_b4_byte_ab",
+    "family": "identity_hybrid_n5120_b4",
+    "qualification_profile": "k64_root",
+    "binary_sha256": "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc",
+    "binary_bytes": 119471552,
+    "binary_published": false,
+    "patch_source_sha256": "b9dba4077f63425dd4c245d9de33a8b2413e223f44a7fb0f6b4abe6e003d24a0",
+    "patch_source_bytes": 100143,
+    "patched_dispatch_sha256": "ef221b938c0780d8212e6355f53a8aad6c4b907fbe0e368cb73bda995b80699d",
+    "patched_dispatch_bytes": 100780,
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "integrated_build_provenance": "results/fr13_fixed32_dfwd_mtp_m1m4_direct_sm121a_20260803/manifest.json"
+  },
+  "source_binding": {
+    "schema": "fr13.fixed32.cutlass_b4.identity_hybrid_n5120.source_binding.v1",
+    "exact_head_required": true,
+    "clean_tracked_tree_required": true,
+    "working_bytes_must_equal_commit": true,
+    "paths": [
+      "scripts/fr13_patch_cutlass_fixed32_wave.py",
+      "scripts/fr13_run_b4_cutlass_persistent_m128_live_gate.sh",
+      "scripts/fr13_run_b4_cutlass_persistent_m128_timing.sh",
+      "scripts/fr13_cutlass_b4_pass.py",
+      "scripts/fr13_cutlass_wave_binary.py",
+      "scripts/fr13_launch_forked_fa2_tree_server.sh",
+      "scripts/fr13_bigdenom_swe_serve_variant.sh",
+      "scripts/run_swe_bench_q36_a.py",
+      "src/lumo_flywheel_serving/inference_proxy.py",
+      "config/fr13_fixed32/subset_b4_four.json",
+      "scripts/fr13_dvk_subset_blocks.json"
+    ]
+  },
+  "live_gate_contract": {
+    "task_set": "canonical_four_distinct_swe_verified",
+    "task_count": 4,
+    "task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "batch_size": 4,
+    "concurrency": 4,
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+    "physical_rows_per_request": 32,
+    "projection_rows": 128,
+    "topologies": [
+      "tail6_fixed32",
+      "hydra27_fixed32"
+    ],
+    "projection_nk": [
+      [5120, 6144],
+      [5120, 17408],
+      [14336, 5120],
+      [16384, 5120],
+      [34816, 5120]
+    ],
+    "comparison_call_limit": 320,
+    "candidate_executed": true,
+    "stock_executed": true,
+    "served_result": "stock",
+    "required_differing_bytes": 0,
+    "requires_finalized_per_task_engine_ingress": true,
+    "tail23_status": "not_run",
+    "hydra27_status": "not_run"
+  },
+  "production_contract": {
+    "requires_dual_topology_pass": true,
+    "requires_source_identity": true,
+    "requires_candidate_binary_identity": true,
+    "serves_candidate_without_comparator": true,
+    "unqualified_behavior": "fail_closed",
+    "default_behavior": "stock"
+  },
+  "timing_contract": {
+    "minimum_task_set": "canonical_exact4",
+    "batch_size": 4,
+    "concurrency": 4,
+    "candidate_comparator_enabled": false,
+    "formal_floor_acceptance_eligible": false,
+    "status": "not_run"
+  },
+  "host_verification": {
+    "target": "sm_121a",
+    "compile_result": "pass_reused_integrated_build",
+    "link_result": "pass",
+    "elf": "ELF64 AArch64 shared object",
+    "python_load_library_result": "pass",
+    "pinned_source_apply_result": "pass",
+    "generated_dispatch_identity_result": "pass",
+    "resource_gate_result": "pass",
+    "object_sha256": "f1e57530fb5eb171a9297e5710d42331b0e8970676497796c912c77822a311e5",
+    "object_bytes": 24537704,
+    "sm121a_cubin_sha256": "333cf52a0a856b6c137584547d86ad97f5f0ba10e75106f27839dc1f1c4c80d0",
+    "sm121a_cubin_bytes": 2556544,
+    "gpu_runtime_used": false,
+    "docker_used": false
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "synthetic or probe workload",
+    "Tail23 real SWE-Verified byte gate",
+    "Hydra27 real SWE-Verified byte gate",
+    "exact4 paired full-wall timing",
+    "formal statistical hardware-floor acceptance"
+  ]
+}

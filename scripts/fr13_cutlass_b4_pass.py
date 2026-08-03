@@ -9,6 +9,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -138,10 +139,10 @@ IDENTITY_STOCKSHAPE_STAGE2_PATCHED_DISPATCH_SHA256 = (
     "9880496498d47cec37f2b6f143e16236d0af4a3606ee770a8b93de6a179fc88d"
 )
 IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256 = (
-    "17bcaffc9b982ca436fb0794ac7c3d17cef7d5ed06d9786b478ea21acd2e4f34"
+    "b9dba4077f63425dd4c245d9de33a8b2413e223f44a7fb0f6b4abe6e003d24a0"
 )
 IDENTITY_HYBRID_N5120_PATCHED_DISPATCH_SHA256 = (
-    "e556cb3d6b64bdb18b364551c331353acd0797cd1e148362241ac150e8c6a001"
+    "ef221b938c0780d8212e6355f53a8aad6c4b907fbe0e368cb73bda995b80699d"
 )
 EXPECTED_TASK_IDS = (
     "astropy__astropy-12907",
@@ -151,6 +152,19 @@ EXPECTED_TASK_IDS = (
 )
 EXPECTED_TASK_MARKERS = frozenset(
     f"swe_verified:{task_id}" for task_id in EXPECTED_TASK_IDS
+)
+EXPECTED_TASK_SET_SHA256 = hashlib.sha256(
+    json.dumps(
+        sorted(EXPECTED_TASK_IDS), ensure_ascii=True, separators=(",", ":")
+    ).encode("utf-8")
+).hexdigest()
+EXPECTED_TASK_KEY_IDS = tuple(
+    sorted(
+        hashlib.sha256(
+            b"fr13-fixed32-task-key-id-v1\0" + task_id.encode("utf-8")
+        ).hexdigest()
+        for task_id in EXPECTED_TASK_IDS
+    )
 )
 EXPECTED_DRAFT_VOCAB_ROOT = 0
 EXPECTED_DRAFT_VOCAB_K = 0
@@ -162,9 +176,37 @@ K64_ROOT_MANDATORY_WEIGHT_FLOOR_MS = floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS
 K64_ROOT_SLO_CAP_MS = 137.6067177261
 MAX_COMPARISONS = 320
 QUALIFIED_FIXED32_MODES = ("tail6_fixed32", "hydra27_fixed32")
+FIXED32_TOPOLOGY_CONTRACTS = {
+    "tail6_fixed32": {
+        "logical_topology": "Tail23",
+        "active_drafts": 23,
+        "valid_mask": "0x7a9ce7ff",
+    },
+    "hydra27_fixed32": {
+        "logical_topology": "Hydra27",
+        "active_drafts": 27,
+        "valid_mask": "0x7abdffff",
+    },
+}
 STAGE2_DUAL_PRODUCTION_SELECTOR = "identity_stockshape_stage2_b4"
 TWOM_DUAL_PRODUCTION_SELECTOR = "identity_twom_b4"
 HYBRID_N5120_DUAL_PRODUCTION_SELECTOR = "identity_hybrid_n5120_b4"
+SOURCE_BINDING_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_hybrid_n5120.source_binding.v1"
+)
+SOURCE_BINDING_PATHS = (
+    "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "scripts/fr13_run_b4_cutlass_persistent_m128_live_gate.sh",
+    "scripts/fr13_run_b4_cutlass_persistent_m128_timing.sh",
+    "scripts/fr13_cutlass_b4_pass.py",
+    "scripts/fr13_cutlass_wave_binary.py",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/run_swe_bench_q36_a.py",
+    "src/lumo_flywheel_serving/inference_proxy.py",
+    "config/fr13_fixed32/subset_b4_four.json",
+    "scripts/fr13_dvk_subset_blocks.json",
+)
 DUAL_PRODUCTION_SELECTORS = frozenset(
     {
         STAGE2_DUAL_PRODUCTION_SELECTOR,
@@ -302,9 +344,10 @@ CANDIDATE_CONTRACTS = {
                 "production_binding.v1"
             ),
         },
-        "production_authorized": False,
+        "production_authorized": True,
         "requires_resource_credential": False,
         "required_qualification_profile": "k64_root",
+        "source_binding": "required",
     },
     "persistent_b4_m128": {
         "diagnostic_selector": "persistent_b4_m128_byte_ab",
@@ -587,6 +630,130 @@ def _validate_draft_vocab_blocks(path: Path) -> dict[str, object]:
     }
 
 
+def _git_output(repo_root: Path, *arguments: str, label: str) -> bytes:
+    try:
+        process = subprocess.run(
+            ["git", "-C", os.fspath(repo_root), *arguments],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError as error:
+        raise QualificationError("git is unavailable for source binding") from error
+    if process.returncode != 0:
+        detail = process.stderr.decode("utf-8", errors="replace").strip()
+        raise QualificationError(f"{label} failed: {detail or process.returncode}")
+    return process.stdout
+
+
+def _require_clean_tracked_tree(repo_root: Path) -> None:
+    for cached in (False, True):
+        arguments = ["diff"]
+        if cached:
+            arguments.append("--cached")
+        arguments.extend(("--quiet", "--"))
+        process = subprocess.run(
+            ["git", "-C", os.fspath(repo_root), *arguments],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        if process.returncode == 1:
+            raise QualificationError(
+                "source-binding repository has a dirty tracked working tree"
+            )
+        if process.returncode != 0:
+            detail = process.stderr.decode("utf-8", errors="replace").strip()
+            raise QualificationError(
+                f"source-binding worktree check failed: {detail or process.returncode}"
+            )
+
+
+def validate_source_commit_binding(
+    source_commit: str,
+    patch_source: Path = PATCH_SOURCE,
+    candidate_selector: str = HYBRID_N5120_DUAL_PRODUCTION_SELECTOR,
+) -> dict[str, object]:
+    """Bind the hybrid B4 credential to one clean, committed source tree."""
+
+    candidate_contract = _candidate_contract(candidate_selector)
+    if candidate_contract.get("source_binding") != "required":
+        raise QualificationError(
+            f"{candidate_selector} does not define a source-binding contract"
+        )
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise QualificationError("source-binding commit is invalid")
+    _regular_file(patch_source, "CUTLASS wave patch source")
+    patch_source = patch_source.resolve(strict=True)
+    repo_raw = _git_output(
+        patch_source.parent,
+        "rev-parse",
+        "--show-toplevel",
+        label="source-binding repository discovery",
+    )
+    try:
+        repo_root = Path(repo_raw.decode("utf-8").strip()).resolve(strict=True)
+    except (UnicodeDecodeError, FileNotFoundError) as error:
+        raise QualificationError("source-binding repository root is invalid") from error
+    expected_patch_source = (repo_root / PATCH_SOURCE).resolve(strict=True)
+    if patch_source != expected_patch_source:
+        raise QualificationError(
+            "source-binding patch source is not the canonical repository path"
+        )
+    resolved_commit = _git_output(
+        repo_root,
+        "rev-parse",
+        "--verify",
+        f"{source_commit}^{{commit}}",
+        label="source-binding commit resolution",
+    ).decode("ascii").strip()
+    if resolved_commit != source_commit:
+        raise QualificationError("source-binding commit does not resolve exactly")
+    head_commit = _git_output(
+        repo_root,
+        "rev-parse",
+        "HEAD",
+        label="source-binding HEAD resolution",
+    ).decode("ascii").strip()
+    if head_commit != source_commit:
+        raise QualificationError(
+            f"source-binding runtime commit mismatch: {head_commit} != {source_commit}"
+        )
+    _require_clean_tracked_tree(repo_root)
+
+    files: dict[str, object] = {}
+    for relative in SOURCE_BINDING_PATHS:
+        working_path = repo_root / relative
+        info = _regular_file(working_path, f"source-binding file {relative}")
+        committed = _git_output(
+            repo_root,
+            "show",
+            f"{source_commit}:{relative}",
+            label=f"source-binding git show for {relative}",
+        )
+        working = working_path.read_bytes()
+        if working != committed:
+            raise QualificationError(
+                f"source-binding working bytes differ from commit for {relative}"
+            )
+        files[relative] = {
+            "bytes": info.st_size,
+            "sha256": hashlib.sha256(committed).hexdigest(),
+        }
+    patch_identity = files[os.fspath(PATCH_SOURCE)]
+    assert isinstance(patch_identity, dict)
+    expected_patch_sha256, _ = _candidate_source_hashes(candidate_selector)
+    if patch_identity.get("sha256") != expected_patch_sha256:
+        raise QualificationError(
+            "source-binding committed patch source does not match the pinned digest"
+        )
+    return {
+        "schema": SOURCE_BINDING_SCHEMA,
+        "source_commit": source_commit,
+        "files": files,
+    }
+
+
 def validate_live_result(
     live_result: Path,
     expected_live_sha256: str,
@@ -683,6 +850,26 @@ def validate_live_result(
                 "draft_vocab_blocks_sha256": block_map["sha256"],
             }
         )
+    if candidate_contract.get("source_binding") == "required":
+        topology = FIXED32_TOPOLOGY_CONTRACTS[fixed32_mode]
+        expected_fields.update(
+            {
+                "logical_topology": topology["logical_topology"],
+                "active_drafts": topology["active_drafts"],
+                "valid_mask": topology["valid_mask"],
+                "physical_drafts": 31,
+                "physical_rows_root_inclusive": 32,
+                "authenticated_task_count": len(EXPECTED_TASK_IDS),
+                "authenticated_task_ids": list(EXPECTED_TASK_IDS),
+                "authenticated_task_set_sha256": EXPECTED_TASK_SET_SHA256,
+                "engine_ingress_accepted_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+                "engine_ingress_completed_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+            }
+        )
     expected_fields["candidate_family"] = candidate["candidate_family"]
     for key, expected in expected_fields.items():
         if payload.get(key) != expected:
@@ -715,6 +902,15 @@ def validate_live_result(
             raise QualificationError(
                 "CUTLASS B4 live PASS source commit is stale: "
                 f"{source_commit} != {expected_source_commit}"
+            )
+    source_identity: dict[str, object] | None = None
+    if candidate_contract.get("source_binding") == "required":
+        source_identity = validate_source_commit_binding(
+            source_commit, patch_source, candidate_selector
+        )
+        if payload.get("source_identity") != source_identity:
+            raise QualificationError(
+                "CUTLASS B4 live PASS source-identity binding mismatch"
             )
     attestation_sha256 = _require_sha256(
         payload.get("binary_attestation_sha256"), "binary attestation SHA-256"
@@ -769,6 +965,22 @@ def validate_live_result(
                 "qualified_draft_vocab_blocks_sha256": block_map["sha256"],
             }
         )
+    if candidate_contract.get("source_binding") == "required":
+        result.update(
+            {
+                "authenticated_task_count": len(EXPECTED_TASK_IDS),
+                "authenticated_task_ids": list(EXPECTED_TASK_IDS),
+                "authenticated_task_set_sha256": EXPECTED_TASK_SET_SHA256,
+                "engine_ingress_accepted_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+                "engine_ingress_completed_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+            }
+        )
+        assert source_identity is not None
+        result["qualification_source_identity"] = source_identity
     return result
 
 
@@ -820,6 +1032,7 @@ def validate_dual_live_results(
         raise QualificationError(
             f"unsupported dual-topology CUTLASS B4 selector: {candidate_selector!r}"
         )
+    candidate_contract = _candidate_contract(candidate_selector)
 
     qualifications = {
         "tail6_fixed32": validate_live_result(
@@ -872,6 +1085,15 @@ def validate_dual_live_results(
         "served_result_during_qualification",
         "production_default_enabled",
     )
+    if candidate_contract.get("source_binding") == "required":
+        common_fields += (
+            "qualification_source_identity",
+            "authenticated_task_count",
+            "authenticated_task_ids",
+            "authenticated_task_set_sha256",
+            "engine_ingress_accepted_task_key_ids",
+            "engine_ingress_completed_task_key_ids",
+        )
     for field in common_fields:
         if tail.get(field) != hydra.get(field):
             raise QualificationError(
@@ -890,8 +1112,22 @@ def validate_dual_live_results(
             "real_task_arm_sha256": record["real_task_arm_sha256"],
             "container_env_sha256": record["container_env_sha256"],
         }
+        if candidate_contract.get("source_binding") == "required":
+            topology_qualifications[mode].update(
+                {
+                    "authenticated_task_set_sha256": record[
+                        "authenticated_task_set_sha256"
+                    ],
+                    "engine_ingress_accepted_task_key_ids": record[
+                        "engine_ingress_accepted_task_key_ids"
+                    ],
+                    "engine_ingress_completed_task_key_ids": record[
+                        "engine_ingress_completed_task_key_ids"
+                    ],
+                }
+            )
 
-    return {
+    result = {
         "schema": DUAL_SIDECAR_SCHEMAS[candidate_selector],
         "status": "QUALIFIED",
         "candidate_selector": tail["candidate_selector"],
@@ -923,6 +1159,26 @@ def validate_dual_live_results(
         "served_result_during_qualification": "stock",
         "production_default_enabled": False,
     }
+    if candidate_contract.get("source_binding") == "required":
+        result.update(
+            {
+                "qualification_source_identity": tail[
+                    "qualification_source_identity"
+                ],
+                "authenticated_task_count": tail["authenticated_task_count"],
+                "authenticated_task_ids": tail["authenticated_task_ids"],
+                "authenticated_task_set_sha256": tail[
+                    "authenticated_task_set_sha256"
+                ],
+                "engine_ingress_accepted_task_key_ids": tail[
+                    "engine_ingress_accepted_task_key_ids"
+                ],
+                "engine_ingress_completed_task_key_ids": tail[
+                    "engine_ingress_completed_task_key_ids"
+                ],
+            }
+        )
+    return result
 
 
 def issue_dual_sidecar(
@@ -1059,6 +1315,20 @@ def verify_sidecar(
                 "qualified_draft_vocab_blocks_sha256": block_map["sha256"],
             }
         )
+    if candidate_contract.get("source_binding") == "required":
+        required.update(
+            {
+                "authenticated_task_count": len(EXPECTED_TASK_IDS),
+                "authenticated_task_ids": list(EXPECTED_TASK_IDS),
+                "authenticated_task_set_sha256": EXPECTED_TASK_SET_SHA256,
+                "engine_ingress_accepted_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+                "engine_ingress_completed_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+            }
+        )
     for key, expected in required.items():
         if payload.get(key) != expected:
             raise QualificationError(
@@ -1092,6 +1362,14 @@ def verify_sidecar(
         or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
     ):
         raise QualificationError("sidecar qualification source commit is invalid")
+    if candidate_contract.get("source_binding") == "required":
+        source_identity = validate_source_commit_binding(
+            source_commit, patch_source, sidecar_selector
+        )
+        if payload.get("qualification_source_identity") != source_identity:
+            raise QualificationError(
+                "CUTLASS B4 production sidecar source-identity binding mismatch"
+            )
     return payload
 
 
@@ -1159,6 +1437,20 @@ def verify_dual_sidecar(
         "served_result_during_qualification": "stock",
         "production_default_enabled": False,
     }
+    if candidate_contract.get("source_binding") == "required":
+        required.update(
+            {
+                "authenticated_task_count": len(EXPECTED_TASK_IDS),
+                "authenticated_task_ids": list(EXPECTED_TASK_IDS),
+                "authenticated_task_set_sha256": EXPECTED_TASK_SET_SHA256,
+                "engine_ingress_accepted_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+                "engine_ingress_completed_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+            }
+        )
     for key, expected in required.items():
         if payload.get(key) != expected:
             raise QualificationError(
@@ -1173,6 +1465,15 @@ def verify_dual_sidecar(
         raise QualificationError(
             f"{candidate_selector} dual sidecar source commit is invalid"
         )
+    source_identity: dict[str, object] | None = None
+    if candidate_contract.get("source_binding") == "required":
+        source_identity = validate_source_commit_binding(
+            source_commit, patch_source, candidate_selector
+        )
+        if payload.get("qualification_source_identity") != source_identity:
+            raise QualificationError(
+                f"{candidate_selector} dual sidecar source-identity binding mismatch"
+            )
     topology_records = payload.get("topology_qualifications")
     if not isinstance(topology_records, dict) or set(topology_records) != set(
         QUALIFIED_FIXED32_MODES
@@ -1201,6 +1502,22 @@ def verify_dual_sidecar(
             "container_env_sha256",
         ):
             _require_sha256(record.get(key), f"{mode} {key}")
+        if candidate_contract.get("source_binding") == "required":
+            for key, expected in (
+                ("authenticated_task_set_sha256", EXPECTED_TASK_SET_SHA256),
+                (
+                    "engine_ingress_accepted_task_key_ids",
+                    list(EXPECTED_TASK_KEY_IDS),
+                ),
+                (
+                    "engine_ingress_completed_task_key_ids",
+                    list(EXPECTED_TASK_KEY_IDS),
+                ),
+            ):
+                if record.get(key) != expected:
+                    raise QualificationError(
+                        f"{candidate_selector} dual sidecar {mode} {key} mismatch"
+                    )
     return payload
 
 
@@ -1210,6 +1527,7 @@ def _validate_dual_production_attestation(
     expected_sidecar_sha256: str,
     draft_vocab_blocks: Path,
     candidate_selector: str,
+    patch_source: Path,
 ) -> dict[str, Any]:
     if candidate_selector not in DUAL_PRODUCTION_SELECTORS:
         raise QualificationError(
@@ -1281,6 +1599,20 @@ def _validate_dual_production_attestation(
         "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
         "one_sided_u95_cap_ms": profile["one_sided_u95_cap_ms"],
     }
+    if candidate_contract.get("source_binding") == "required":
+        required_qualification.update(
+            {
+                "authenticated_task_count": len(EXPECTED_TASK_IDS),
+                "authenticated_task_ids": list(EXPECTED_TASK_IDS),
+                "authenticated_task_set_sha256": EXPECTED_TASK_SET_SHA256,
+                "engine_ingress_accepted_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+                "engine_ingress_completed_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+            }
+        )
     for key, expected in required_qualification.items():
         if qualification.get(key) != expected:
             raise QualificationError(
@@ -1294,6 +1626,16 @@ def _validate_dual_production_attestation(
         raise QualificationError(
             f"CUTLASS B4 {candidate_selector} attestation source commit is invalid"
         )
+    source_identity: dict[str, object] | None = None
+    if candidate_contract.get("source_binding") == "required":
+        source_identity = validate_source_commit_binding(
+            source_commit, patch_source, candidate_selector
+        )
+        if qualification.get("qualification_source_identity") != source_identity:
+            raise QualificationError(
+                f"CUTLASS B4 {candidate_selector} attestation source-identity "
+                "binding mismatch"
+            )
     topology_records = qualification.get("topology_qualifications")
     if not isinstance(topology_records, dict) or set(topology_records) != set(
         QUALIFIED_FIXED32_MODES
@@ -1328,7 +1670,24 @@ def _validate_dual_production_attestation(
             ("container_env_sha256", container_env_sha256_by_topology),
         ):
             destination[mode] = _require_sha256(record.get(key), f"{mode} {key}")
-    return {
+        if candidate_contract.get("source_binding") == "required":
+            for key, expected in (
+                ("authenticated_task_set_sha256", EXPECTED_TASK_SET_SHA256),
+                (
+                    "engine_ingress_accepted_task_key_ids",
+                    list(EXPECTED_TASK_KEY_IDS),
+                ),
+                (
+                    "engine_ingress_completed_task_key_ids",
+                    list(EXPECTED_TASK_KEY_IDS),
+                ),
+            ):
+                if record.get(key) != expected:
+                    raise QualificationError(
+                        f"CUTLASS B4 {candidate_selector} attestation {mode} "
+                        f"{key} binding mismatch"
+                    )
+    result = {
         "schema": DUAL_BINDING_SCHEMAS[candidate_selector],
         "status": "BOUND",
         "selector": candidate_selector,
@@ -1364,6 +1723,23 @@ def _validate_dual_production_attestation(
         "installed_mode": "0555",
         "production_default_enabled": False,
     }
+    if candidate_contract.get("source_binding") == "required":
+        assert source_identity is not None
+        result.update(
+            {
+                "qualification_source_identity": source_identity,
+                "authenticated_task_count": len(EXPECTED_TASK_IDS),
+                "authenticated_task_ids": list(EXPECTED_TASK_IDS),
+                "authenticated_task_set_sha256": EXPECTED_TASK_SET_SHA256,
+                "engine_ingress_accepted_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+                "engine_ingress_completed_task_key_ids": list(
+                    EXPECTED_TASK_KEY_IDS
+                ),
+            }
+        )
+    return result
 
 
 def validate_production_attestation(
@@ -1372,6 +1748,7 @@ def validate_production_attestation(
     qualification_profile: str | None = None,
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
     fixed32_mode: str = "hydra27_fixed32",
+    patch_source: Path = PATCH_SOURCE,
 ) -> dict[str, Any]:
     if fixed32_mode not in QUALIFIED_FIXED32_MODES:
         raise QualificationError(
@@ -1395,6 +1772,7 @@ def validate_production_attestation(
             expected_sidecar_sha256,
             draft_vocab_blocks,
             candidate_selector,
+            patch_source,
         )
     candidate_contract = _candidate_contract(candidate_selector)
     if candidate_contract["production_authorized"] is not True:
@@ -1657,6 +2035,14 @@ def main() -> int:
         type=Path,
         default=DRAFT_VOCAB_BLOCKS_SOURCE,
     )
+    source_parser = subparsers.add_parser("source-binding")
+    source_parser.add_argument("--source-commit", required=True)
+    source_parser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
+    source_parser.add_argument(
+        "--candidate-selector",
+        choices=(HYBRID_N5120_DUAL_PRODUCTION_SELECTOR,),
+        default=HYBRID_N5120_DUAL_PRODUCTION_SELECTOR,
+    )
     attestation_parser = subparsers.add_parser("attestation")
     attestation_parser.add_argument("--attestation", type=Path, required=True)
     attestation_parser.add_argument("--expected-sidecar-sha256", required=True)
@@ -1672,6 +2058,9 @@ def main() -> int:
         "--fixed32-mode",
         choices=QUALIFIED_FIXED32_MODES,
         default="hydra27_fixed32",
+    )
+    attestation_parser.add_argument(
+        "--patch-source", type=Path, default=PATCH_SOURCE
     )
     args = parser.parse_args()
 
@@ -1753,6 +2142,12 @@ def main() -> int:
             args.draft_vocab_blocks,
             args.candidate_selector,
         )
+    elif args.command == "source-binding":
+        payload = validate_source_commit_binding(
+            args.source_commit,
+            args.patch_source,
+            args.candidate_selector,
+        )
     else:
         payload = validate_production_attestation(
             args.attestation,
@@ -1760,6 +2155,7 @@ def main() -> int:
             args.qualification_profile,
             args.draft_vocab_blocks,
             args.fixed32_mode,
+            args.patch_source,
         )
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
     return 0

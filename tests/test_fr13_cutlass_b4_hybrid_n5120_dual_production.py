@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -15,6 +16,11 @@ SCRIPTS = REPO / "scripts"
 BLOCK_MAP = SCRIPTS / "fr13_dvk_subset_blocks.json"
 SELECTOR = "identity_hybrid_n5120_b4"
 DIAGNOSTIC_SELECTOR = "identity_hybrid_n5120_b4_byte_ab"
+ARTIFACT = (
+    REPO
+    / "results"
+    / "fr13_fixed32_cutlass_b4_hybrid_n5120_production_path_20260803"
+)
 
 
 def _load(name: str, filename: str):
@@ -50,10 +56,26 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         module, "IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256", patch_sha256
     )
+    source_identity = {
+        "schema": module.SOURCE_BINDING_SCHEMA,
+        "source_commit": "c" * 40,
+        "files": {
+            str(module.PATCH_SOURCE): {
+                "bytes": len(patch_bytes),
+                "sha256": patch_sha256,
+            }
+        },
+    }
+    monkeypatch.setattr(
+        module,
+        "validate_source_commit_binding",
+        lambda source_commit, patch_source, candidate_selector: source_identity,
+    )
 
     live_paths: dict[str, Path] = {}
     live_hashes: dict[str, str] = {}
     for index, mode in enumerate(module.QUALIFIED_FIXED32_MODES):
+        topology = module.FIXED32_TOPOLOGY_CONTRACTS[mode]
         payload = {
             "schema": module.IDENTITY_HYBRID_N5120_K64_ROOT_LIVE_SCHEMA,
             "status": "pass",
@@ -63,7 +85,21 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             "acceptance_valid": False,
             "task_count": 4,
             "task_ids": list(module.EXPECTED_TASK_IDS),
+            "authenticated_task_count": 4,
+            "authenticated_task_ids": list(module.EXPECTED_TASK_IDS),
+            "authenticated_task_set_sha256": module.EXPECTED_TASK_SET_SHA256,
+            "engine_ingress_accepted_task_key_ids": list(
+                module.EXPECTED_TASK_KEY_IDS
+            ),
+            "engine_ingress_completed_task_key_ids": list(
+                module.EXPECTED_TASK_KEY_IDS
+            ),
             "topology": mode,
+            "logical_topology": topology["logical_topology"],
+            "active_drafts": topology["active_drafts"],
+            "valid_mask": topology["valid_mask"],
+            "physical_drafts": 31,
+            "physical_rows_root_inclusive": 32,
             "task_marker": f"swe_verified:{module.EXPECTED_TASK_IDS[index]}",
             "draft_vocab_root": 1,
             "draft_vocab_k": 65_536,
@@ -96,6 +132,7 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                 module.IDENTITY_HYBRID_N5120_PATCHED_DISPATCH_SHA256
             ),
             "source_commit": "c" * 40,
+            "source_identity": source_identity,
             "binary_attestation_sha256": f"{index + 1}" * 64,
             "real_task_arm_sha256": f"{index + 3}" * 64,
             "container_env_sha256": f"{index + 5}" * 64,
@@ -177,6 +214,72 @@ def test_hybrid_dual_sidecar_binds_tail23_and_hydra27(
         mode: record["live_result_sha256"]
         for mode, record in issued["topology_qualifications"].items()
     } == hashes
+    assert issued["qualification_source_identity"]["source_commit"] == "c" * 40
+    assert issued["authenticated_task_ids"] == list(module.EXPECTED_TASK_IDS)
+    for record in issued["topology_qualifications"].values():
+        assert record["engine_ingress_accepted_task_key_ids"] == list(
+            module.EXPECTED_TASK_KEY_IDS
+        )
+        assert record["engine_ingress_completed_task_key_ids"] == list(
+            module.EXPECTED_TASK_KEY_IDS
+        )
+
+
+def test_hybrid_installed_attestation_preserves_exact_head_and_exact4(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, paths, hashes = _fixture(tmp_path, monkeypatch)
+    sidecar = tmp_path / "hybrid-dual-sidecar.json"
+    issued = module.issue_dual_sidecar(
+        paths["tail6_fixed32"],
+        hashes["tail6_fixed32"],
+        paths["hydra27_fixed32"],
+        hashes["hydra27_fixed32"],
+        candidate,
+        sidecar,
+        patch_source,
+        expected_source_commit="c" * 40,
+        draft_vocab_blocks=BLOCK_MAP,
+        candidate_selector=SELECTOR,
+    )
+    sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    destination = tmp_path / "installed.so"
+    destination.write_bytes(b"stock\n")
+    (tmp_path / "fr13_dvk_subset_blocks.json").write_bytes(BLOCK_MAP.read_bytes())
+    attestation = tmp_path / "attestation.json"
+    monkeypatch.setitem(sys.modules, "fr13_cutlass_b4_pass", module)
+    monkeypatch.setattr(module.binary, "CONTAINER_SOURCE", candidate)
+    monkeypatch.setattr(module.binary, "CONTAINER_DESTINATION", destination)
+
+    module.binary.install_candidate(
+        candidate,
+        destination,
+        attestation,
+        SELECTOR,
+        qualification_profile="k64_root",
+        production_sidecar=sidecar,
+        expected_production_sidecar_sha256=sidecar_sha256,
+        patch_source=patch_source,
+        fixed32_mode="hydra27_fixed32",
+    )
+    binding = module.validate_production_attestation(
+        attestation,
+        sidecar_sha256,
+        qualification_profile="k64_root",
+        draft_vocab_blocks=BLOCK_MAP,
+        fixed32_mode="hydra27_fixed32",
+        patch_source=patch_source,
+    )
+
+    assert binding["qualification_source_identity"] == issued[
+        "qualification_source_identity"
+    ]
+    assert binding["authenticated_task_set_sha256"] == (
+        module.EXPECTED_TASK_SET_SHA256
+    )
+    assert binding["qualification_topologies"] == list(
+        module.QUALIFIED_FIXED32_MODES
+    )
 
 
 def test_hybrid_production_install_is_fail_closed_and_preserves_dual_binding(
@@ -229,6 +332,16 @@ def test_hybrid_production_install_is_fail_closed_and_preserves_dual_binding(
         "qualification_profile": "k64_root",
         "qualification_topologies": ["tail6_fixed32", "hydra27_fixed32"],
         "qualification_task_ids": ["task-a", "task-b", "task-c", "task-d"],
+        "qualification_source_identity": {
+            "schema": "source-binding-v1",
+            "source_commit": "b" * 40,
+            "files": {},
+        },
+        "authenticated_task_count": 4,
+        "authenticated_task_ids": ["task-a", "task-b", "task-c", "task-d"],
+        "authenticated_task_set_sha256": "e" * 64,
+        "engine_ingress_accepted_task_key_ids": ["f" * 64],
+        "engine_ingress_completed_task_key_ids": ["f" * 64],
         "topology_qualifications": topology_records,
         "qualified_draft_vocab_root": 1,
         "qualified_draft_vocab_k": 65_536,
@@ -261,6 +374,9 @@ def test_hybrid_production_install_is_fail_closed_and_preserves_dual_binding(
     assert record["production_enabled"] is True
     assert record["qualification_profile"] == "k64_root"
     assert record["qualification"]["topology_qualifications"] == topology_records
+    assert record["qualification"]["qualification_source_identity"] == qualification[
+        "qualification_source_identity"
+    ]
 
 
 def test_hybrid_production_verification_uses_b4_dual_credential_module(
@@ -317,6 +433,69 @@ def test_hybrid_full_vocab_is_rejected_before_live_validation(
         )
 
 
+def test_hybrid_live_pass_rejects_incomplete_authenticated_exact4(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, paths, _hashes = _fixture(tmp_path, monkeypatch)
+    live_path = paths["tail6_fixed32"]
+    payload = json.loads(live_path.read_text(encoding="ascii"))
+    payload["authenticated_task_ids"] = payload["authenticated_task_ids"][:1]
+    live_path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+
+    with pytest.raises(module.QualificationError, match="authenticated_task_ids"):
+        module.validate_live_result(
+            live_path,
+            hashlib.sha256(live_path.read_bytes()).hexdigest(),
+            candidate,
+            patch_source,
+            expected_source_commit="c" * 40,
+            candidate_selector=SELECTOR,
+            qualification_profile="k64_root",
+            draft_vocab_blocks=BLOCK_MAP,
+            fixed32_mode="tail6_fixed32",
+        )
+
+
+def test_hybrid_source_binding_requires_clean_exact_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _load("fr13_hybrid_n5120_source_binding", "fr13_cutlass_b4_pass.py")
+    repo = tmp_path / "repo"
+    originals: dict[str, bytes] = {}
+    for relative in module.SOURCE_BINDING_PATHS:
+        path = repo / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        originals[relative] = f"{relative}\n".encode("ascii")
+        path.write_bytes(originals[relative])
+    patch_source = repo / module.PATCH_SOURCE
+    monkeypatch.setattr(
+        module,
+        "IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256",
+        hashlib.sha256(patch_source.read_bytes()).hexdigest(),
+    )
+    subprocess.run(["git", "init", "-q", repo], check=True)
+    subprocess.run(["git", "-C", repo, "config", "user.email", "test@example.com"], check=True)
+    subprocess.run(["git", "-C", repo, "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "-C", repo, "add", "."], check=True)
+    subprocess.run(["git", "-C", repo, "commit", "-qm", "source"], check=True)
+    commit = subprocess.check_output(
+        ["git", "-C", repo, "rev-parse", "HEAD"], text=True
+    ).strip()
+
+    identity = module.validate_source_commit_binding(commit, patch_source, SELECTOR)
+    assert identity["source_commit"] == commit
+    assert set(identity["files"]) == set(module.SOURCE_BINDING_PATHS)
+
+    tracked = repo / module.SOURCE_BINDING_PATHS[1]
+    tracked.write_bytes(b"dirty\n")
+    with pytest.raises(module.QualificationError, match="dirty tracked working tree"):
+        module.validate_source_commit_binding(commit, patch_source, SELECTOR)
+    tracked.write_bytes(originals[module.SOURCE_BINDING_PATHS[1]])
+    subprocess.run(["git", "-C", repo, "commit", "--allow-empty", "-qm", "new head"], check=True)
+    with pytest.raises(module.QualificationError, match="runtime commit mismatch"):
+        module.validate_source_commit_binding(commit, patch_source, SELECTOR)
+
+
 def test_hybrid_launcher_wiring_is_selector_specific() -> None:
     launcher = (SCRIPTS / "fr13_launch_forked_fa2_tree_server.sh").read_text(
         encoding="utf-8"
@@ -346,3 +525,53 @@ def test_hybrid_launcher_wiring_is_selector_specific() -> None:
     )
     assert "fr13_cutlass_b4_pass.py dual-validate" in timing
     assert "fr13_cutlass_b4_pass.py dual-verify" in timing
+    assert "source-binding" in live_gate
+    assert "engine_ingress_accepted_task_key_ids" in live_gate
+    assert "engine_ingress_completed_task_key_ids" in live_gate
+    assert 'QUALIFICATION_SOURCE_COMMIT" == "$TIMING_HARNESS_COMMIT' in timing
+    assert "work_census_summary = None" in timing
+    assert "if all_parent_production:" in timing
+
+
+def test_hybrid_production_path_artifact_is_sanitized_and_pinned() -> None:
+    binary = _load("fr13_hybrid_n5120_artifact_binary", "fr13_cutlass_wave_binary.py")
+    qualification = _load(
+        "fr13_hybrid_n5120_artifact_pass", "fr13_cutlass_b4_pass.py"
+    )
+    manifest = json.loads((ARTIFACT / "manifest.json").read_text(encoding="ascii"))
+    resource = json.loads(
+        (ARTIFACT / "resource_gate.json").read_text(encoding="ascii")
+    )
+
+    assert manifest["status"] == "host_ready_live_qualification_required"
+    assert manifest["acceptance_valid"] is False
+    assert manifest["production_available"] is False
+    assert manifest["production_default_enabled"] is False
+    assert manifest["candidate"]["binary_sha256"] == (
+        binary.IDENTITY_HYBRID_N5120_B4_CANDIDATE_SHA256
+    )
+    assert manifest["candidate"]["binary_bytes"] == (
+        binary.IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE
+    )
+    assert manifest["candidate"]["patch_source_sha256"] == (
+        qualification.IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256
+    )
+    assert manifest["candidate"]["patched_dispatch_sha256"] == (
+        qualification.IDENTITY_HYBRID_N5120_PATCHED_DISPATCH_SHA256
+    )
+    assert manifest["live_gate_contract"]["task_ids"] == list(
+        qualification.EXPECTED_TASK_IDS
+    )
+    assert manifest["live_gate_contract"]["topologies"] == list(
+        qualification.QUALIFIED_FIXED32_MODES
+    )
+    assert len(resource["kernel_records"]) == 4
+    assert all(record["stack_bytes_per_thread"] == 0 for record in resource["kernel_records"])
+    assert all(record["local_bytes_per_thread"] == 0 for record in resource["kernel_records"])
+
+    sums = {}
+    for line in (ARTIFACT / "SHA256SUMS").read_text(encoding="ascii").splitlines():
+        digest, name = line.split("  ", 1)
+        sums[name] = digest
+    for name in ("README.md", "manifest.json", "resource_gate.json"):
+        assert hashlib.sha256((ARTIFACT / name).read_bytes()).hexdigest() == sums[name]

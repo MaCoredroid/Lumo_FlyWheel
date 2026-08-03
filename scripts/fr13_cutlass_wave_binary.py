@@ -59,9 +59,9 @@ IDENTITY_TWOM_B4_CANDIDATE_SHA256 = (
 )
 IDENTITY_TWOM_B4_CANDIDATE_SIZE = 117_488_608
 IDENTITY_HYBRID_N5120_B4_CANDIDATE_SHA256 = (
-    "63c7b80bf11daf01aa040cf91d57ef1c90ed1406a6185368684a7486aeebf1a4"
+    "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc"
 )
-IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE = 118_243_776
+IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE = 119_471_552
 MTP_M1M4_DIRECT_CANDIDATE_SHA256 = (
     "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc"
 )
@@ -575,6 +575,7 @@ def _verify_production_qualification(
             expected_sidecar_sha256,
             candidate,
             patch_source,
+            draft_vocab_blocks=patch_source.parent / "fr13_dvk_subset_blocks.json",
             candidate_selector=selector,
         )
     kwargs: dict[str, object] = {}
@@ -755,6 +756,15 @@ def install_candidate(
             qualification["qualification_source_identity"] = qualification_record[
                 "qualification_source_identity"
             ]
+        for key in (
+            "authenticated_task_count",
+            "authenticated_task_ids",
+            "authenticated_task_set_sha256",
+            "engine_ingress_accepted_task_key_ids",
+            "engine_ingress_completed_task_key_ids",
+        ):
+            if key in qualification_record:
+                qualification[key] = qualification_record[key]
     elif (
         production_sidecar is not None or expected_production_sidecar_sha256 is not None
     ):

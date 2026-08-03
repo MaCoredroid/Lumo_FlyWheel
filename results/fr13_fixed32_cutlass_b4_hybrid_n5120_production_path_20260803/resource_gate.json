@@ -1,0 +1,46 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_hybrid_n5120.resource_gate.v1",
+  "status": "pass",
+  "binary_sha256": "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc",
+  "target": "sm_121a",
+  "kernel_records": [
+    {
+      "dtype": "fp16",
+      "scheduler": "fr13_fixed32_b4_n5120_single_tile_scheduler",
+      "registers_per_thread": 168,
+      "stack_bytes_per_thread": 0,
+      "local_bytes_per_thread": 0,
+      "static_shared_bytes_per_cta": 1024,
+      "constant0_bytes": 2688
+    },
+    {
+      "dtype": "bf16",
+      "scheduler": "fr13_fixed32_b4_n5120_single_tile_scheduler",
+      "registers_per_thread": 168,
+      "stack_bytes_per_thread": 0,
+      "local_bytes_per_thread": 0,
+      "static_shared_bytes_per_cta": 1024,
+      "constant0_bytes": 2688
+    },
+    {
+      "dtype": "fp16",
+      "scheduler": "fr13_fixed32_b4_twom_static_scheduler",
+      "registers_per_thread": 168,
+      "stack_bytes_per_thread": 0,
+      "local_bytes_per_thread": 0,
+      "static_shared_bytes_per_cta": 1024,
+      "constant0_bytes": 2688
+    },
+    {
+      "dtype": "bf16",
+      "scheduler": "fr13_fixed32_b4_twom_static_scheduler",
+      "registers_per_thread": 168,
+      "stack_bytes_per_thread": 0,
+      "local_bytes_per_thread": 0,
+      "static_shared_bytes_per_cta": 1024,
+      "constant0_bytes": 2688
+    }
+  ],
+  "sass_or_resource_log_published": false,
+  "gpu_runtime_used": false
+}

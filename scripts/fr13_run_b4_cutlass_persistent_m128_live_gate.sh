@@ -243,7 +243,17 @@ unset -f run_variant
   || { echo "canonical B4 qualification floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ntopology=%s\nlogical_topology=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ncomparison_call_limit=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=%s\ndiagnostic_selector=%s\nresource_credential_sha256=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+SOURCE_IDENTITY_PATH=
+SOURCE_IDENTITY_SHA256=
+if [[ "$CANDIDATE_SELECTOR" == "identity_hybrid_n5120_b4" ]]; then
+  SOURCE_IDENTITY_PATH="$RUNROOT_ABS/cutlass_b4_source_identity.at_launch.json"
+  "$PYTHON_BIN" scripts/fr13_cutlass_b4_pass.py source-binding \
+    --source-commit "$SOURCE_COMMIT" --patch-source "$PATCH_SOURCE" \
+    --candidate-selector "$CANDIDATE_SELECTOR" > "$SOURCE_IDENTITY_PATH"
+  chmod 0444 "$SOURCE_IDENTITY_PATH"
+  SOURCE_IDENTITY_SHA256=$(sha256sum "$SOURCE_IDENTITY_PATH" | awk '{print $1}')
+fi
+printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=0\nfloor_acceptance_eligible=0\nreference_always_served=1\ntopology=%s\nlogical_topology=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nbatch_size=4\nconcurrency=4\nfixed_rows=128\neager_builder_capacity=128\ncomparison_call_limit=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nstock_fa2_bytes=%s\ncandidate_selector=%s\ndiagnostic_selector=%s\nresource_credential_sha256=%s\nsource_identity_sha256=%s\nenforce_eager=1\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$RUN_CLASSIFICATION" "$QUALIFICATION_PROFILE" \
   "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" "$ACTIVE_DRAFTS" "$VALID_MASK" \
   "$COMPARISON_CALL_LIMIT" "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" \
@@ -253,7 +263,8 @@ printf 'classification=%s\nqualification_profile=%s\ntiming_eligible=0\nfloor_ac
   "$RUNROOT_ABS" "$ARM" "$SOURCE_COMMIT" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$STOCK_FA2_SHA256" "$STOCK_FA2_BYTES" \
   "$CANDIDATE_SELECTOR" "$DIAGNOSTIC_SELECTOR" \
-  "$RESOURCE_CREDENTIAL_SHA256" "$B4_KV_CACHE_MEMORY_BYTES" \
+  "$RESOURCE_CREDENTIAL_SHA256" "$SOURCE_IDENTITY_SHA256" \
+  "$B4_KV_CACHE_MEMORY_BYTES" \
   "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/launcher_meta.txt"
 
 "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
@@ -338,7 +349,8 @@ sudo -n -- "$PYTHON_BIN" - \
   "$STOCK_FA2_SHA256" \
   "$COMPARISON_CALL_LIMIT" "$QUALIFICATION_PROFILE" \
   "$DRAFT_VOCAB_BLOCKS_SHA256" "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" \
-  "$ACTIVE_DRAFTS" "$VALID_MASK" "$RESOURCE_CREDENTIAL_SHA256" <<'PY'
+  "$ACTIVE_DRAFTS" "$VALID_MASK" "$RESOURCE_CREDENTIAL_SHA256" \
+  "$SOURCE_IDENTITY_PATH" "$SOURCE_IDENTITY_SHA256" <<'PY'
 import hashlib
 import json
 import os
@@ -376,6 +388,8 @@ logical_topology = sys.argv[17]
 active_drafts = int(sys.argv[18])
 valid_mask = int(sys.argv[19], 0)
 resource_credential_sha256 = sys.argv[20]
+source_identity_path_text = sys.argv[21]
+source_identity_sha256 = sys.argv[22]
 if fixed32_mode not in qualification.QUALIFIED_FIXED32_MODES:
     raise SystemExit("CUTLASS B4 fixed32 topology is unsupported")
 if comparison_call_limit != qualification.MAX_COMPARISONS:
@@ -403,6 +417,9 @@ ledger_path = logs / "fr13_fixed32_engine_ingress.jsonl"
 container_env_path = arm / "container_env.txt"
 expected_tasks = list(qualification.EXPECTED_TASK_IDS)
 expected_task_set = set(expected_tasks)
+expected_task_keys = {
+    fixed32_task_key_id(task_id) for task_id in expected_tasks
+}
 expected_shapes = set(qualification.EXPECTED_PROJECTION_NK)
 expected_sha256, expected_size, expected_family = binary.candidate_identity(
     diagnostic_selector
@@ -542,6 +559,21 @@ if not any(
     for row in ledger_rows
 ):
     errors.append("engine ledger is not bound to canonical exact4")
+accepted_task_keys = {
+    row.get("task_key_id")
+    for row in ledger_rows
+    if row.get("event") == "request_accepted"
+}
+completed_task_keys = {
+    row.get("task_key_id")
+    for row in ledger_rows
+    if row.get("event") == "request_complete"
+    and row.get("outcome") == "completed"
+}
+if accepted_task_keys != expected_task_keys:
+    errors.append("engine ledger did not accept all and only canonical exact4 tasks")
+if completed_task_keys != expected_task_keys:
+    errors.append("engine ledger did not complete all and only canonical exact4 tasks")
 marker_task_key = fixed32_task_key_id(task_marker[len(prefix):])
 if not any(
     row.get("event") == "request_accepted"
@@ -559,6 +591,34 @@ if (
     or health.get("swe_orchestrator_rc") != 0
 ):
     errors.append("diagnostic did not complete canonical exact4")
+
+source_identity = None
+if candidate_contract.get("source_binding") == "required":
+    source_identity_path = Path(source_identity_path_text)
+    if (
+        not source_identity_path.is_absolute()
+        or not source_identity_path.is_file()
+        or source_identity_path.is_symlink()
+        or not source_identity_sha256
+    ):
+        errors.append("hybrid N5120 source identity is unavailable")
+    else:
+        source_identity_raw = source_identity_path.read_bytes()
+        if hashlib.sha256(source_identity_raw).hexdigest() != source_identity_sha256:
+            errors.append("hybrid N5120 source identity changed during diagnostic")
+        try:
+            source_identity = json.loads(source_identity_raw.decode("ascii"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            errors.append("hybrid N5120 source identity is invalid")
+        if not isinstance(source_identity, dict):
+            errors.append("hybrid N5120 source identity is not an object")
+        elif (
+            source_identity.get("schema") != qualification.SOURCE_BINDING_SCHEMA
+            or source_identity.get("source_commit") != source_commit
+        ):
+            errors.append("hybrid N5120 source identity is stale")
+elif source_identity_path_text or source_identity_sha256:
+    errors.append("non-source-bound candidate received a source identity")
 
 container_env_raw = container_env_path.read_bytes()
 container_env_lines = container_env_raw.decode("ascii").splitlines()
@@ -625,6 +685,17 @@ payload = {
     "errors": errors,
 }
 payload.update(resource_binding)
+if candidate_contract.get("source_binding") == "required":
+    payload.update(
+        {
+            "authenticated_task_count": len(expected_tasks),
+            "authenticated_task_ids": expected_tasks,
+            "authenticated_task_set_sha256": expected_set_sha256,
+            "engine_ingress_accepted_task_key_ids": sorted(accepted_task_keys),
+            "engine_ingress_completed_task_key_ids": sorted(completed_task_keys),
+            "source_identity": source_identity,
+        }
+    )
 if qualification_profile == "k64_root":
     expected_blocks_env = (
         "FR13_DRAFT_VOCAB_BLOCKS="
