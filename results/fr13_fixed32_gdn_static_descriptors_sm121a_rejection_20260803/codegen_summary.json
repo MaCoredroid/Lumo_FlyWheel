@@ -1,0 +1,61 @@
+{
+  "candidate": "fixed32_gdn_single_launch_static_descriptors_v1",
+  "candidate_commit": "9d13f1ef8",
+  "candidate_default_off": true,
+  "candidate_source_sha256": "34b60f5143796ca82e4a468310d21fe8152eb808ca0f817c4ea8dd98ef03da16",
+  "compile_context": {
+    "block_v": 8,
+    "cuda_compiler": "13.0.88",
+    "dim_k": 128,
+    "dim_v": 128,
+    "draft_vocab_k": 65536,
+    "fixed_physical_rows": 32,
+    "num_k_heads_tp4": 4,
+    "num_v_heads_tp4": 12,
+    "num_warps": 8,
+    "root_reduction": 1,
+    "scan_align": true,
+    "target": "sm_121a",
+    "triton": "3.6.0"
+  },
+  "incumbent": {
+    "cubin_bytes": 136840,
+    "cubin_sha256": "bfeb75f98ee761d2090ee875729c6f0b3f4681641761c80f7b55ec15bce548cd",
+    "ldg_sites": 62,
+    "local_bytes": 0,
+    "ptx_bytes": 222988,
+    "ptx_sha256": "a78a636b96692bb26349758c5eaa7c4f972bcc2fc2a3ebbcce29a8b3b28a6b3a",
+    "registers_per_thread": 99,
+    "sass_instructions": 3552,
+    "sass_sha256": "2401ad8d246b1c7f969a4e45e851c8db6a2207b518598c48ef9f6cb8eee003e5",
+    "shared_bytes": 1024,
+    "stack_bytes": 0
+  },
+  "candidate_codegen": {
+    "cubin_bytes": 130320,
+    "cubin_sha256": "fbb43a804fa27b348887f7365e9d3f2be7f2bf35fdd4c503f769c58ba75b90ef",
+    "ldg_sites": 47,
+    "local_bytes": 0,
+    "ptx_bytes": 216919,
+    "ptx_sha256": "ed2f00a83267cd5281668da9f787598ffbeb37d61c704de5cab5d66b92fa7e5c",
+    "registers_per_thread": 112,
+    "sass_instructions": 3296,
+    "sass_sha256": "cb40b3df0ea54f4d8990536e9c55094dd1a349d664b03e0dc83c2a840f03b76a",
+    "shared_bytes": 1024,
+    "stack_bytes": 0
+  },
+  "comparison": {
+    "cubin_bytes_delta": -6520,
+    "ldg_sites_delta": -15,
+    "registers_per_thread_delta": 13,
+    "sass_instructions_delta": -256,
+    "selector_off_sass_identity": true
+  },
+  "incumbent_source_sha256": "d9b6a4a856a24343aff93f945127aee0b70f0ff477d0a016efdad24aa8249727",
+  "offline_only": true,
+  "revert_commit": "2500e5ed1",
+  "schema": "fr13.fixed32.gdn_static_descriptors.sm121a_rejection.v1",
+  "status": "rejected_resource_regression",
+  "timing_claim": false,
+  "verified": true
+}
