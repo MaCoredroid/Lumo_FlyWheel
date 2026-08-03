@@ -1,0 +1,19 @@
+python3 -m py_compile scripts/fr13_patch_fa2_tree_bias.py scripts/fr13_qrow32_b1_pass_sidecar.py tests/test_fr13_qrow32_b1_selectors.py
+PASS
+
+bash -n scripts/fr13_launch_forked_fa2_tree_server.sh scripts/fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh
+PASS
+
+pytest -q tests/test_fr13_qrow32_b1_selectors.py tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_fa2_qrow32_gate.py tests/test_fr13_fa2_qrow32_static_gate.py tests/test_fr13_fixed32_fa2_identity.py tests/test_fr13_qrow16_production_sidecar.py
+53 passed, 1 skipped in 2.83s
+
+git diff --check
+PASS
+
+Offline binary audit:
+- defined dynamic symbol diff: 0 lines
+- undefined dynamic symbol diff: 0 lines
+- DT_NEEDED and RUNPATH diff: 0 lines
+- qrow32 B1 launchers: LOCAL
+- candidate-only architecture dynamic symbols: 0
+- added device images: 2 x sm_121a

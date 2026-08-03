@@ -1,0 +1,136 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_b1_selectors_pinned_sm121a.v1",
+  "status": "OFFLINE_BINARY_PASS_PENDING_REAL_TASK_QUALIFICATION",
+  "source": {
+    "branch": "codex/fixed32-fa2-qrow32-b1-20260803",
+    "code_commit": "14250c6872d65a67550e272ce756ddb482fd405e",
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "flash_api_sha256": "8ee357feda9721787eed93c1a1f91f573f833e2104cdb80cc11f610ba1621ec9",
+    "kernel_header_sha256": "0a8ddf26363b01b35bd613e88713a253266945c010bfa99d1856701cb7522867",
+    "no_split_translation_unit_sha256": "7a6a28dd269dc72dd18d8269f5cfcc437532317504a2e5d471b41611046467bc",
+    "split2_translation_unit_sha256": "0dc2cac4247ec25e5262260dc518d5753059361215e3d23d87c94dc6863ab40e"
+  },
+  "classification": {
+    "offline_build": true,
+    "compiler_used": true,
+    "linker_used": true,
+    "disassembler_used": true,
+    "gpu_used": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "performance_measurement": false,
+    "byte_parity_claim": false,
+    "hardware_floor_claim": false,
+    "default_off": true
+  },
+  "toolchain": {
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+    "network": "none",
+    "nvidia_visible_devices": "void",
+    "dev_nvidia0_present": false,
+    "target": "sm_121a",
+    "nvcc": "13.0.88",
+    "optimization": "O3",
+    "use_fast_math": true
+  },
+  "objects": {
+    "flash_api": {
+      "sha256": "7ba587fdabb7cb951f4c670808dc76f4ef8b6ee264078f10a1cc8d3b211cf76e",
+      "bytes": 6071384
+    },
+    "no_split": {
+      "sha256": "7fa2c1eccd2a69e3401fd77e6eb6c2185f78f231a1184b63bba2cdefbfa911fa",
+      "bytes": 732032
+    },
+    "split2": {
+      "sha256": "8919da0c8def09e8af512b746cadedb36f6068d88ebcfbe3132261e646d3dca5",
+      "bytes": 782144
+    }
+  },
+  "linked_binary": {
+    "filename": "_vllm_fa2_qrow32_b1_sm121a.abi3.so",
+    "sha256": "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467",
+    "bytes": 300140712,
+    "committed_to_git": false,
+    "reason": "binary exceeds source-artifact scope; identity is hash pinned"
+  },
+  "reference_binary": {
+    "sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+    "bytes": 299507792
+  },
+  "abi_audit": {
+    "defined_dynamic_symbol_diff_lines": 0,
+    "undefined_dynamic_symbol_diff_lines": 0,
+    "needed_and_runpath_diff_lines": 0,
+    "candidate_only_arch_public_dynamic_symbols": 0,
+    "no_split_launcher_binding": "LOCAL",
+    "split2_launcher_binding": "LOCAL",
+    "added_device_images": 2,
+    "added_device_target": "sm_121a"
+  },
+  "arms": {
+    "no_split": {
+      "selector_sentinel": 1179791668,
+      "num_splits": 0,
+      "main_ctas_per_layer": 24,
+      "main_threads_per_cta": 64,
+      "main_registers": 252,
+      "stack_bytes": 0,
+      "local_bytes": 0,
+      "dynamic_shared_bytes": 81920
+    },
+    "split2": {
+      "selector_sentinel": 1179791669,
+      "num_splits": 2,
+      "main_ctas_per_layer": 48,
+      "main_threads_per_cta": 64,
+      "main_registers": 254,
+      "combine_ctas_per_layer": 192,
+      "combine_threads_per_cta": 128,
+      "combine_registers": 44,
+      "stack_bytes": 0,
+      "local_bytes": 0,
+      "dynamic_shared_bytes": 81920,
+      "scratch_allocation": "stock FA2 set_params_splitkv"
+    }
+  },
+  "runtime_gate": {
+    "physical_rows": 32,
+    "batch_size": 1,
+    "query_heads": 24,
+    "kv_heads": 4,
+    "head_dim": 256,
+    "paged_kv_block_size": 1024,
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "live_task": "astropy__astropy-12907",
+    "timing_task_ids": [
+      "astropy__astropy-12907",
+      "astropy__astropy-13033",
+      "astropy__astropy-13236",
+      "astropy__astropy-13398"
+    ],
+    "timing_subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "target_layer_count": 16,
+    "live_comparison": "raw bytes for BF16 output and FP32 LSE",
+    "production_fallback_allowed": false,
+    "production_steady_state_synchronize_calls": 0
+  },
+  "verification": {
+    "focused_tests_passed": 53,
+    "focused_tests_skipped": 1,
+    "python_byte_compile": "PASS",
+    "shell_syntax": "PASS",
+    "git_diff_check": "PASS",
+    "offline_link": "PASS",
+    "offline_abi_audit": "PASS"
+  },
+  "admission": {
+    "offline_binary": "PASS",
+    "no_split_real_task_byte_gate": "PENDING",
+    "split2_real_task_byte_gate": "PENDING",
+    "real_exact4_full_step_timing": "PENDING",
+    "production_speed_selection": "PENDING"
+  }
+}
