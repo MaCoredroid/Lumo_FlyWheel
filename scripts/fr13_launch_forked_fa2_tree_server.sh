@@ -1188,10 +1188,29 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
   [[ "$_fr13_gdn_path_bv_candidate" == "16" \
      || "$_fr13_gdn_path_bv_candidate" == "32" \
      || "$_fr13_gdn_path_bv_candidate" == "64" \
-     || "$_fr13_gdn_path_bv_candidate" == "128" ]] || {
-    echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be exactly 16, 32, 64, or 128" >&2
+     || "$_fr13_gdn_path_bv_candidate" == "128" \
+     || "$_fr13_gdn_path_bv_candidate" == "single_launch" ]] || {
+    echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be exactly 16, 32, 64, 128, or single_launch" >&2
     exit 2
   }
+  if [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" \
+        && ( "${FR13_DRAFT_VOCAB_K:-}" != "65536" \
+             || "${FR13_DRAFT_VOCAB_ROOT:-}" != "1" ) ]]; then
+    echo "FR13 single-launch GDN live gate requires exact K64/root1" >&2
+    exit 2
+  fi
+  if [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" \
+        && ( "$FR10_METRICS" != "1" \
+             || "${FR13_RING_EXPORT:-1}" != "1" \
+             || "${FR13_FLAGS_INKERNEL:-1}" != "1" \
+             || "${ENFORCE_EAGER:-0}" != "0" \
+             || "${CUDAGRAPH_MODE:-}" != "FULL_AND_PIECEWISE" \
+             || ! ( "$MAX_NUM_SEQS" == "1" \
+                     || "$MAX_NUM_SEQS" == "4" ) \
+             || "${SWE_CONCURRENCY:-}" != "$MAX_NUM_SEQS" ) ]]; then
+    echo "FR13 single-launch GDN live gate requires exact B1/B4 FULL-graph metrics/ring/flags contract" >&2
+    exit 2
+  fi
 fi
 if [[ -n "$_fr13_gdn_path_bv_production" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
@@ -2156,6 +2175,7 @@ PY
     "$LOG_DIR"/fr13_fixed32_boundary_snapshot.*.json \
     "$LOG_DIR/fr13_fixed32_committer_layer_batch.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_mode.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_single_launch_tree.arm" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
@@ -2191,6 +2211,7 @@ PY
 else
   rm -f \
     "$LOG_DIR/fr13_fixed32_mode.flag" \
+    "$LOG_DIR/fr13_fixed32_gdn_single_launch_tree.arm" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
@@ -2386,7 +2407,11 @@ if [[ "$_fr13_batch_gdn_graph_byte_ab" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_fixed32_batch_gdn_graph_byte_ab.enabled" 2>/dev/null || true
 fi
-if (( _fr13_batch_gdn_diagnostic_count == 1 )); then
+if (( _fr13_batch_gdn_diagnostic_count == 1 )) \
+    || [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" ]]; then
+  if [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" ]]; then
+    echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_graph_byte_ab.enabled"
+  fi
   if [[ -n "$_fr13_batch_gdn_bv_candidate" ]]; then
     printf '%s\n' "$_fr13_batch_gdn_bv_candidate" \
       > "$LOG_DIR/fr13_fixed32_batch_gdn_bv_candidate.flag"

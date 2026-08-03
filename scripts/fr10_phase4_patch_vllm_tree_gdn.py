@@ -3510,7 +3510,13 @@ def _fr13_fixed32_capture_begin(
             _FR13_FIXED32_MODE, batch, -1, "capture_manifest"
         ),
     }
-    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
+    if (
+        _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+        and (
+            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE != "single_launch"
+            or batch in (1, 4)
+        )
+    ):
         tree_kernel = __import__(
             "lumo_flywheel_serving.fr10_gdn_tree_kernel",
             fromlist=(
@@ -3694,7 +3700,13 @@ def _fr13_fixed32_capture_end(
     signature = __import__("hashlib").sha256(
         canonical.encode("ascii")
     ).hexdigest()
-    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
+    if (
+        _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+        and (
+            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE != "single_launch"
+            or int(work["batch_size"]) in (1, 4)
+        )
+    ):
         tree_kernel = __import__(
             "lumo_flywheel_serving.fr10_gdn_tree_kernel",
             fromlist=(
@@ -3915,7 +3927,13 @@ def _fr13_fixed32_observed_graph_replay(
                 "FR13 fixed32 B4 graph GDN byte gate did not pass on the "
                 "authenticated full-graph replay: " + repr(gate_report)
             )
-    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None:
+    if (
+        _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+        and (
+            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE != "single_launch"
+            or int(event["batch_size"]) in (1, 4)
+        )
+    ):
         if getattr(
             tree_kernel, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", None
         ) != _FR13_FIXED32_GDN_PATH_BV_CANDIDATE:
@@ -6229,12 +6247,22 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         raise RuntimeError(
             "FR13 SFWD prior-reuse patch requires source-manifest credentials"
         )
-    if candidate_raw and candidate_raw not in ("16", "32", "64", "128"):
+    if candidate_raw and candidate_raw not in (
+        "16",
+        "32",
+        "64",
+        "128",
+        "single_launch",
+    ):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
-            "16, 32, 64, or 128"
+            "16, 32, 64, 128, or single_launch"
         )
-    candidate = int(candidate_raw) if candidate_raw else None
+    candidate = (
+        candidate_raw
+        if candidate_raw == "single_launch"
+        else (int(candidate_raw) if candidate_raw else None)
+    )
     if production_raw and production_raw not in ("16", "32", "64", "128"):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_PRODUCTION must be one of "
@@ -6438,6 +6466,35 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_production = _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
     _fr13_fixed32_eager_boot_warm_contract()
+    if candidate == "single_launch":
+        exact_single_launch = {
+            "FR13_DRAFT_VOCAB_ROOT": "1",
+            "FR13_DRAFT_VOCAB_K": "65536",
+            "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
+            "FR10_METRICS": "1",
+            "FR13_RING_EXPORT": "1",
+            "FR13_FLAGS_INKERNEL": "1",
+            "ENFORCE_EAGER": "0",
+            "CUDAGRAPH_MODE": "FULL_AND_PIECEWISE",
+        }
+        single_launch_drift = {
+            name: (os.environ.get(name, ""), expected)
+            for name, expected in exact_single_launch.items()
+            if os.environ.get(name, "") != expected
+        }
+        max_num_seqs = os.environ.get("MAX_NUM_SEQS", "")
+        if (
+            mode not in _FR13_FIXED32_MODES
+            or max_num_seqs not in ("1", "4")
+            or os.environ.get("SWE_CONCURRENCY", "") != max_num_seqs
+            or bool(production)
+            or single_launch_drift
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 GDN single-launch gate requires exact "
+                "stock-serving B1/B4 K64/root1 FULL-graph contract: "
+                + repr(single_launch_drift)
+            )
     if sfwd_production not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION must be exactly 0 or 1"
