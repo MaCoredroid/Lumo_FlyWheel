@@ -16,11 +16,10 @@ from typing import Any
 
 import fr13_cutlass_streamk_pass as qualification
 import fr13_cutlass_wave_binary as binary
-import fr13_hardware_floor_ledger as floor
 import fr13_qrow16_pass_sidecar as qrow
 
 
-SCHEMA = "fr13.fixed32.cutlass_streamk.b1_full_wall_timing_pair.v4"
+SCHEMA = "fr13.fixed32.cutlass_streamk.b1_full_wall_timing_pair.v5"
 MEASURE_SCHEMA = "fr13.measure.deploy_speed.v1"
 EXPECTED_SUBSET_SHA256 = (
     "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
@@ -57,12 +56,15 @@ TASK_SET_CONTRACTS = {
         ),
     },
 }
-EXPECTED_ENV = (
-    "FR13_DRAFT_VOCAB_ROOT=0",
-    "FR13_DRAFT_VOCAB_K=0",
+COMMON_EXPECTED_ENV = (
     "FR13_FA2_QROW16_PRODUCTION=1",
     "FR13_FA2_QROW16_SO_SHA256="
     "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+)
+EXPECTED_ENV = (
+    "FR13_DRAFT_VOCAB_ROOT=0",
+    "FR13_DRAFT_VOCAB_K=0",
+    *COMMON_EXPECTED_ENV,
 )
 QROW16_SHA256 = "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
 QROW16_BYTES = 299_507_792
@@ -137,7 +139,10 @@ def _close(actual: float, expected: float, label: str) -> None:
 
 
 def _validate_measure(
-    record: dict[str, Any], label: str, task_ids: tuple[str, ...]
+    record: dict[str, Any],
+    label: str,
+    task_ids: tuple[str, ...],
+    profile: dict[str, object],
 ) -> dict[str, float]:
     required = {
         "schema": MEASURE_SCHEMA,
@@ -145,9 +150,9 @@ def _validate_measure(
         "instrument": "OFF",
         "batch_size": 1,
         "n_tasks": len(task_ids),
-        "draft_vocab_k": 0,
-        "draft_vocab_root": 0,
-        "mandatory_weight_bytes": floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+        "draft_vocab_k": profile["draft_vocab_k"],
+        "draft_vocab_root": profile["draft_vocab_root"],
+        "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
         "floor_is_full_step_hardware_floor": False,
     }
     for key, expected in required.items():
@@ -175,12 +180,12 @@ def _validate_measure(
         numeric[key] = _positive(record, key, label)
     _close(
         numeric["weight_floor_ms"],
-        floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
-        f"{label} full-vocabulary weight floor",
+        float(profile["mandatory_weight_floor_ms"]),
+        f"{label} mandatory-weight floor",
     )
     _close(
         numeric["floor_ms"],
-        floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
+        float(profile["mandatory_weight_floor_ms"]),
         f"{label} active floor",
     )
     _close(
@@ -197,6 +202,8 @@ def _validate_container_env(
     *,
     cutlass_selector: str,
     cutlass_production: int,
+    qualification_profile: str,
+    profile: dict[str, object],
 ) -> str:
     _regular(path, label)
     raw = path.read_bytes()
@@ -205,16 +212,28 @@ def _validate_container_env(
     except UnicodeDecodeError as error:
         raise TimingError(f"{label} is not ASCII") from error
     expected_lines = (
-        *EXPECTED_ENV,
+        f"FR13_DRAFT_VOCAB_ROOT={profile['draft_vocab_root']}",
+        f"FR13_DRAFT_VOCAB_K={profile['draft_vocab_k']}",
+        *COMMON_EXPECTED_ENV,
         "FR13_FIXED32_MODE=hydra27_fixed32",
         "FR13_FA2_QROW16_LIVE_PAGED_AB=0",
         f"FR13_FIXED32_CUTLASS_WAVE={cutlass_selector}",
         f"FR13_FIXED32_CUTLASS_WAVE_PRODUCTION={cutlass_production}",
+        (
+            "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="
+            f"{qualification_profile}"
+        ),
     )
+    if profile["requires_block_map"]:
+        expected_lines = (
+            *expected_lines,
+            "FR13_DRAFT_VOCAB_BLOCKS="
+            f"{qualification.DRAFT_VOCAB_BLOCKS_CONTAINER_PATH}",
+        )
     for expected in expected_lines:
         if lines.count(expected) != 1:
             raise TimingError(f"{label} lacks exact timing pin {expected}")
-    for prefix in (
+    environment_prefixes = (
         "FR13_DRAFT_VOCAB_ROOT=",
         "FR13_DRAFT_VOCAB_K=",
         "FR13_FA2_QROW16_PRODUCTION=",
@@ -223,7 +242,11 @@ def _validate_container_env(
         "FR13_FIXED32_MODE=",
         "FR13_FIXED32_CUTLASS_WAVE=",
         "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=",
-    ):
+        "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=",
+    )
+    if profile["requires_block_map"]:
+        environment_prefixes += ("FR13_DRAFT_VOCAB_BLOCKS=",)
+    for prefix in environment_prefixes:
         matches = [line for line in lines if line.startswith(prefix)]
         if len(matches) != 1:
             raise TimingError(f"{label} has ambiguous {prefix[:-1]}")
@@ -315,6 +338,7 @@ def reduce_pair(
     source_commit: str,
     *,
     candidate_selector: str = "streamk_coop128",
+    qualification_profile: str = "full_vocab",
     task_set: str = "exact4",
 ) -> dict[str, Any]:
     try:
@@ -325,6 +349,12 @@ def reduce_pair(
         raise TimingError(
             f"unsupported Stream-K timing candidate: {candidate_selector!r}"
         )
+    try:
+        profile = qualification._qualification_profile(
+            candidate_selector, qualification_profile
+        )
+    except qualification.QualificationError as error:
+        raise TimingError(str(error)) from error
     task_ids = tuple(task_contract["task_ids"])
     candidate_sha256, candidate_bytes, candidate_family = binary.candidate_identity(
         candidate_selector
@@ -343,19 +373,23 @@ def reduce_pair(
     stock, _ = _load(stock_measure, "stock full-wall measurement")
     candidate, _ = _load(candidate_measure, "candidate full-wall measurement")
     binding, binding_raw = _load(production_binding, "production binding")
-    stock_values = _validate_measure(stock, "stock", task_ids)
-    candidate_values = _validate_measure(candidate, "candidate", task_ids)
+    stock_values = _validate_measure(stock, "stock", task_ids, profile)
+    candidate_values = _validate_measure(candidate, "candidate", task_ids, profile)
     stock_env_sha256 = _validate_container_env(
         stock_container_env,
         "stock container environment",
         cutlass_selector="stock",
         cutlass_production=0,
+        qualification_profile=qualification_profile,
+        profile=profile,
     )
     candidate_env_sha256 = _validate_container_env(
         candidate_container_env,
         "candidate container environment",
         cutlass_selector=candidate_selector,
         cutlass_production=1,
+        qualification_profile=qualification_profile,
+        profile=profile,
     )
     _regular(qrow16_so, "Qrow16 candidate SO")
     qrow16_info = qrow16_so.lstat()
@@ -390,7 +424,7 @@ def reduce_pair(
         if stock_qrow16[key] != candidate_qrow16[key]:
             raise TimingError(f"Qrow16 {key} differs across timing arms")
     expected_binding = {
-        "schema": "fr13.fixed32.cutlass_streamk.production_binding.v1",
+        "schema": profile["binding_schema"],
         "status": "BOUND",
         "selector": candidate_selector,
         "diagnostic_selector": diagnostic_selector,
@@ -400,13 +434,35 @@ def reduce_pair(
         "patch_source_sha256": qualification.PATCH_SOURCE_SHA256,
         "qualification_source_commit": source_commit,
         "qualification_task_marker": qualification.EXPECTED_TASK_MARKER,
-        "qualified_draft_vocab_root": 0,
-        "qualified_draft_vocab_k": 0,
-        "mandatory_weight_bytes": floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
-        "mandatory_weight_floor_ms": floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
-        "one_sided_u95_cap_ms": floor.FULL_VOCAB_SLO_CAP_MS,
+        "qualified_draft_vocab_root": profile["draft_vocab_root"],
+        "qualified_draft_vocab_k": profile["draft_vocab_k"],
+        "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
+        "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
+        "one_sided_u95_cap_ms": profile["one_sided_u95_cap_ms"],
         "production_default_enabled": False,
     }
+    if qualification_profile == "k64_root":
+        expected_binding.update(
+            {
+                "qualification_profile": qualification_profile,
+                "qualified_draft_vocab_blocks": (
+                    qualification.DRAFT_VOCAB_BLOCKS_CONTAINER_PATH
+                ),
+                "qualified_draft_vocab_blocks_sha256": (
+                    qualification.DRAFT_VOCAB_BLOCKS_SHA256
+                ),
+                "qualified_comparison_call_limit": qualification.MAX_COMPARISONS,
+            }
+        )
+    if qualification.CANDIDATE_CONTRACTS[candidate_selector].get(
+        "source_binding"
+    ) == "required":
+        try:
+            expected_binding["qualification_source_identity"] = (
+                qualification.validate_source_commit_binding(source_commit)
+            )
+        except qualification.QualificationError as error:
+            raise TimingError(str(error)) from error
     for key, expected in expected_binding.items():
         if binding.get(key) != expected:
             raise TimingError(
@@ -423,7 +479,11 @@ def reduce_pair(
         value = binding.get(key)
         if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
             raise TimingError(f"production binding {key} is not SHA-256")
-    actual_candidate = binary.verify_candidate(candidate_so, candidate_selector)
+    actual_candidate = binary.verify_candidate(
+        candidate_so,
+        candidate_selector,
+        qualification_profile=qualification_profile,
+    )
     if actual_candidate["sha256"] != binding["candidate_sha256"]:
         raise TimingError("production binding and candidate binary disagree")
 
@@ -463,8 +523,9 @@ def reduce_pair(
         "task_ids": sorted(task_ids),
         "source_commit": source_commit,
         "decision_metric": "measured_tps_fullstep_wall",
-        "draft_vocab_root": 0,
-        "draft_vocab_k": 0,
+        "qualification_profile": qualification_profile,
+        "draft_vocab_root": profile["draft_vocab_root"],
+        "draft_vocab_k": profile["draft_vocab_k"],
         "common_kernel_stack": {
             "fa2_selector": "qrow16 production",
             "stock_arm": stock_qrow16,
@@ -485,9 +546,9 @@ def reduce_pair(
             "production_sidecar_sha256": binding["production_sidecar_sha256"],
             "real_task_arm_sha256": binding["real_task_arm_sha256"],
         },
-        "mandatory_weight_bytes": floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
-        "mandatory_weight_floor_ms": floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
-        "one_sided_u95_cap_ms": floor.FULL_VOCAB_SLO_CAP_MS,
+        "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
+        "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
+        "one_sided_u95_cap_ms": profile["one_sided_u95_cap_ms"],
         "mandatory_weight_floor_is_complete_step_floor": False,
         "candidate_to_stock_full_wall_tps_ratio": candidate_tps / stock_tps,
         "stock_to_candidate_step_wall_ratio": stock_wall / candidate_wall,
@@ -546,6 +607,11 @@ def main() -> int:
         default="streamk_coop128",
     )
     parser.add_argument(
+        "--qualification-profile",
+        choices=tuple(qualification.QUALIFICATION_PROFILES),
+        default="full_vocab",
+    )
+    parser.add_argument(
         "--task-set", choices=tuple(TASK_SET_CONTRACTS), default="exact4"
     )
     parser.add_argument("--out", type=Path, required=True)
@@ -565,6 +631,7 @@ def main() -> int:
         args.candidate_so,
         args.source_commit,
         candidate_selector=args.candidate_selector,
+        qualification_profile=args.qualification_profile,
         task_set=args.task_set,
     )
     _write(args.out, payload)

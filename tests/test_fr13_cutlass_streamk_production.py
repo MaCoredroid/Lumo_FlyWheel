@@ -247,10 +247,13 @@ def test_live_pass_rejects_stale_source_commit(
         )
 
 
-def _measure(module, task_ids=None) -> dict[str, object]:
+def _measure(
+    module, task_ids=None, qualification_profile="full_vocab"
+) -> dict[str, object]:
     if task_ids is None:
         task_ids = module.EXPECTED_TASK_IDS
-    floor_ms = module.floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS
+    profile = module.qualification.QUALIFICATION_PROFILES[qualification_profile]
+    floor_ms = profile["mandatory_weight_floor_ms"]
     return {
         "schema": module.MEASURE_SCHEMA,
         "regime": "deployment",
@@ -258,9 +261,9 @@ def _measure(module, task_ids=None) -> dict[str, object]:
         "batch_size": 1,
         "n_tasks": len(task_ids),
         "task_instance_ids": list(task_ids),
-        "draft_vocab_k": 0,
-        "draft_vocab_root": 0,
-        "mandatory_weight_bytes": module.floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
+        "draft_vocab_k": profile["draft_vocab_k"],
+        "draft_vocab_root": profile["draft_vocab_root"],
+        "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
         "floor_is_full_step_hardware_floor": False,
         "measured_tps_fullstep_wall": 25.0,
         "step_wall_ms": 230.0,
@@ -278,19 +281,22 @@ def _measure(module, task_ids=None) -> dict[str, object]:
 
 
 @pytest.mark.parametrize(
-    ("candidate_selector", "task_set"),
+    ("candidate_selector", "task_set", "qualification_profile"),
     (
-        ("streamk_coop128", "exact4"),
-        ("streamk_force_wide256", "one"),
+        ("streamk_coop128", "exact4", "full_vocab"),
+        ("streamk_force_wide256", "one", "full_vocab"),
+        ("identity_onen_b1", "exact4", "k64_root"),
     ),
 )
-def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
+def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     candidate_selector: str,
     task_set: str,
+    qualification_profile: str,
 ) -> None:
     module = _load("fr13_cutlass_streamk_timing_test", "fr13_cutlass_streamk_timing.py")
+    profile = module.qualification.QUALIFICATION_PROFILES[qualification_profile]
     candidate_bytes = b"candidate\n"
     candidate_sha256 = hashlib.sha256(candidate_bytes).hexdigest()
     candidate_so = tmp_path / "candidate.so"
@@ -299,7 +305,7 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
         monkeypatch.setattr(module.binary, "CANDIDATE_SIZE", len(candidate_bytes))
         monkeypatch.setattr(module.binary, "CANDIDATE_SHA256", candidate_sha256)
         diagnostic_selector = "streamk_coop128_byte_ab"
-    else:
+    elif candidate_selector == "streamk_force_wide256":
         monkeypatch.setattr(
             module.binary, "WIDE256_CANDIDATE_SIZE", len(candidate_bytes)
         )
@@ -307,6 +313,19 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
             module.binary, "WIDE256_CANDIDATE_SHA256", candidate_sha256
         )
         diagnostic_selector = "streamk_force_wide256_byte_ab"
+    else:
+        monkeypatch.setattr(
+            module.binary, "IDENTITY_ONEN_B1_CANDIDATE_SIZE", len(candidate_bytes)
+        )
+        monkeypatch.setattr(
+            module.binary, "IDENTITY_ONEN_B1_CANDIDATE_SHA256", candidate_sha256
+        )
+        diagnostic_selector = "identity_onen_b1_byte_ab"
+        monkeypatch.setattr(
+            module.qualification,
+            "validate_source_commit_binding",
+            lambda source_commit: {"source_commit": source_commit},
+        )
     monkeypatch.setattr(module.qualification, "PATCH_SOURCE_SHA256", "e" * 64)
     qrow16_bytes = b"qrow16 candidate\n"
     qrow16_sha256 = hashlib.sha256(qrow16_bytes).hexdigest()
@@ -334,13 +353,17 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
     stock = tmp_path / "stock.json"
     candidate = tmp_path / "candidate.json"
     stock.write_text(
-        json.dumps(_measure(module, task_ids)) + "\n", encoding="ascii"
+        json.dumps(_measure(module, task_ids, qualification_profile)) + "\n",
+        encoding="ascii",
     )
-    candidate_payload = _measure(module, task_ids)
+    candidate_payload = _measure(module, task_ids, qualification_profile)
     candidate_payload["step_wall_ms"] = 220.0
     candidate_payload["measured_tps_fullstep_wall"] = 26.0
     candidate_payload["floor_ratio"] = (
-        220.0 / module.floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS
+        220.0
+        / module.qualification.QUALIFICATION_PROFILES[qualification_profile][
+            "mandatory_weight_floor_ms"
+        ]
     )
     candidate.write_text(json.dumps(candidate_payload) + "\n", encoding="ascii")
     stock_env = tmp_path / "stock.env"
@@ -352,12 +375,32 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
         path.write_text(
             "\n".join(
                 (
-                    *module.EXPECTED_ENV,
-                    "FR13_FIXED32_MODE=hydra27_fixed32",
-                    "FR13_FA2_QROW16_LIVE_PAGED_AB=0",
-                    f"FR13_FIXED32_CUTLASS_WAVE={selector}",
-                    f"FR13_FIXED32_CUTLASS_WAVE_PRODUCTION={production}",
-                )
+                        (
+                            "FR13_DRAFT_VOCAB_ROOT="
+                            f"{profile['draft_vocab_root']}"
+                        ),
+                        (
+                            "FR13_DRAFT_VOCAB_K="
+                            f"{profile['draft_vocab_k']}"
+                        ),
+                        *module.COMMON_EXPECTED_ENV,
+                        "FR13_FIXED32_MODE=hydra27_fixed32",
+                        "FR13_FA2_QROW16_LIVE_PAGED_AB=0",
+                        f"FR13_FIXED32_CUTLASS_WAVE={selector}",
+                        f"FR13_FIXED32_CUTLASS_WAVE_PRODUCTION={production}",
+                        (
+                            "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="
+                            f"{qualification_profile}"
+                        ),
+                        *(
+                            (
+                                "FR13_DRAFT_VOCAB_BLOCKS="
+                                + module.qualification.DRAFT_VOCAB_BLOCKS_CONTAINER_PATH,
+                            )
+                            if qualification_profile == "k64_root"
+                            else ()
+                        ),
+                    )
             )
             + "\n",
             encoding="ascii",
@@ -397,39 +440,45 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
     qrow16_capture(candidate_qrow16_capture)
     source_commit = "c" * 40
     binding = tmp_path / "binding.json"
-    binding.write_text(
-        json.dumps(
+    binding_payload = {
+        "schema": profile["binding_schema"],
+        "status": "BOUND",
+        "selector": candidate_selector,
+        "diagnostic_selector": diagnostic_selector,
+        "candidate_family": candidate_selector,
+        "candidate_sha256": candidate_sha256,
+        "candidate_bytes": len(candidate_bytes),
+        "patch_source_sha256": "e" * 64,
+        "production_sidecar_sha256": "f" * 64,
+        "live_result_sha256": "a" * 64,
+        "binary_attestation_sha256": "b" * 64,
+        "real_task_arm_sha256": "d" * 64,
+        "container_env_sha256": "9" * 64,
+        "qualification_source_commit": source_commit,
+        "qualification_task_marker": module.qualification.EXPECTED_TASK_MARKER,
+        "qualified_draft_vocab_root": profile["draft_vocab_root"],
+        "qualified_draft_vocab_k": profile["draft_vocab_k"],
+        "mandatory_weight_bytes": profile["mandatory_weight_bytes"],
+        "mandatory_weight_floor_ms": profile["mandatory_weight_floor_ms"],
+        "one_sided_u95_cap_ms": profile["one_sided_u95_cap_ms"],
+        "production_default_enabled": False,
+    }
+    if qualification_profile == "k64_root":
+        binding_payload.update(
             {
-                "schema": "fr13.fixed32.cutlass_streamk.production_binding.v1",
-                "status": "BOUND",
-                "selector": candidate_selector,
-                "diagnostic_selector": diagnostic_selector,
-                "candidate_family": candidate_selector,
-                "candidate_sha256": candidate_sha256,
-                "candidate_bytes": len(candidate_bytes),
-                "patch_source_sha256": "e" * 64,
-                "production_sidecar_sha256": "f" * 64,
-                "live_result_sha256": "a" * 64,
-                "binary_attestation_sha256": "b" * 64,
-                "real_task_arm_sha256": "d" * 64,
-                "container_env_sha256": "9" * 64,
-                "qualification_source_commit": source_commit,
-                "qualification_task_marker": (
-                    module.qualification.EXPECTED_TASK_MARKER
+                "qualification_profile": qualification_profile,
+                "qualified_draft_vocab_blocks": (
+                    module.qualification.DRAFT_VOCAB_BLOCKS_CONTAINER_PATH
                 ),
-                "qualified_draft_vocab_root": 0,
-                "qualified_draft_vocab_k": 0,
-                "mandatory_weight_bytes": (
-                    module.floor.FULL_VOCAB_MANDATORY_WEIGHT_BYTES
+                "qualified_draft_vocab_blocks_sha256": (
+                    module.qualification.DRAFT_VOCAB_BLOCKS_SHA256
                 ),
-                "mandatory_weight_floor_ms": (
-                    module.floor.FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS
-                ),
-                "one_sided_u95_cap_ms": module.floor.FULL_VOCAB_SLO_CAP_MS,
-                "production_default_enabled": False,
+                "qualified_comparison_call_limit": module.qualification.MAX_COMPARISONS,
+                "qualification_source_identity": {"source_commit": source_commit},
             }
         )
-        + "\n",
+    binding.write_text(
+        json.dumps(binding_payload) + "\n",
         encoding="ascii",
     )
 
@@ -448,6 +497,7 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
         candidate_so,
         source_commit,
         candidate_selector=candidate_selector,
+        qualification_profile=qualification_profile,
         task_set=task_set,
     )
 
@@ -463,10 +513,11 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
         == qrow16_sha256
     )
     assert result["task_count"] == len(task_ids)
-    assert result["draft_vocab_k"] == 0
-    assert result["mandatory_weight_bytes"] == 42_025_179_008
-    assert result["mandatory_weight_floor_ms"] == 153.9383846446886
-    assert result["one_sided_u95_cap_ms"] == 177.0291423413919
+    assert result["qualification_profile"] == qualification_profile
+    assert result["draft_vocab_k"] == profile["draft_vocab_k"]
+    assert result["mandatory_weight_bytes"] == profile["mandatory_weight_bytes"]
+    assert result["mandatory_weight_floor_ms"] == profile["mandatory_weight_floor_ms"]
+    assert result["one_sided_u95_cap_ms"] == profile["one_sided_u95_cap_ms"]
     assert result["comparator_gate_timing_eligible"] is False
     assert result["timing_eligible"] is (task_set == "exact4")
     assert result["floor_acceptance_eligible"] is False
@@ -495,6 +546,7 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
             candidate_so,
             source_commit,
             candidate_selector=candidate_selector,
+            qualification_profile=qualification_profile,
             task_set=task_set,
         )
     qrow16_capture(candidate_qrow16_capture)
@@ -518,5 +570,6 @@ def test_timing_reducer_requires_pinned_task_set_full_vocab_and_current_binding(
             candidate_so,
             source_commit,
             candidate_selector=candidate_selector,
+            qualification_profile=qualification_profile,
             task_set=task_set,
         )
