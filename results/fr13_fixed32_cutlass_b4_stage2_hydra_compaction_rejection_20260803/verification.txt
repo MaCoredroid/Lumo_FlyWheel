@@ -1,0 +1,8 @@
+summary.json: jq parse PASS
+byte comparator: 320 records, invocations 0..319, zero mismatching records
+candidate binary: c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29
+campaign: four real tasks completed; provenance finalization rejected
+request algebra: 128*32768 + 2*20000 = 4234304 PASS
+engine completions: stop=130, non-stop=0
+qualification/timing/hardware-floor claim: NONE
+raw task/request/response/patch/log/credential data published: NO

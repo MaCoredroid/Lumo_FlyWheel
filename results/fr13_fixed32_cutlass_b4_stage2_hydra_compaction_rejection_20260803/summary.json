@@ -1,0 +1,88 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4.stage2.hydra27.compaction_provenance_rejection.v1",
+  "status": "rejected_campaign_provenance",
+  "acceptance_valid": false,
+  "timing_eligible": false,
+  "floor_acceptance_eligible": false,
+  "production_qualified": false,
+  "workload": {
+    "dataset_class": "real_swe_verified_exact4",
+    "task_count": 4,
+    "batch_size": 4,
+    "logical_topology": "Hydra27",
+    "physical_drafts_per_request": 31,
+    "physical_rows_root_inclusive_per_request": 32,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1
+  },
+  "candidate": {
+    "source_commit": "3295f4d38045486244b8cea1b1f647edc5617cc0",
+    "family": "identity_stockshape_stage2_b4",
+    "diagnostic_selector": "identity_stockshape_stage2_b4_byte_ab",
+    "binary_sha256": "c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29",
+    "binary_bytes": 117488608,
+    "production_enabled": false
+  },
+  "byte_comparator": {
+    "record_count": 320,
+    "invocation_min": 0,
+    "invocation_max": 319,
+    "mismatching_records": 0,
+    "differing_bytes": 0,
+    "all_byte_equal": true,
+    "projection_shapes_mnk": [
+      [128, 5120, 6144],
+      [128, 5120, 17408],
+      [128, 14336, 5120],
+      [128, 16384, 5120],
+      [128, 34816, 5120]
+    ]
+  },
+  "campaign_completion": {
+    "task_agents_completed": 4,
+    "task_agent_exit_zero": 4,
+    "task_evaluators_completed": 4,
+    "max_agent_elapsed_seconds": 2359.006,
+    "authenticated_completed_model_requests": 130,
+    "trace_reconstructed_model_requests": 128,
+    "hidden_compaction_requests": 2
+  },
+  "global_request_algebra": {
+    "normal_request_max_tokens": 32768,
+    "normal_request_count": 128,
+    "compaction_request_max_tokens": 20000,
+    "compaction_request_count": 2,
+    "max_tokens_histogram_count": 130,
+    "max_tokens_histogram_sum": 4234304,
+    "request_success_stop": 130,
+    "request_success_non_stop": 0,
+    "prompt_tokens": 4950769,
+    "generation_tokens": 38318,
+    "visible_prompt_tokens": 4457180,
+    "visible_generation_tokens": 29162,
+    "hidden_prompt_tokens": 493589,
+    "hidden_generation_tokens": 9156,
+    "algebra_reconciles": true
+  },
+  "rejection": {
+    "stage": "qwen_campaign_provenance_finalization",
+    "error_class": "Fixed32BoundaryError",
+    "reason": "trace_task_auth_counts_do_not_reconcile_before_global_compaction_algebra",
+    "runner_exit_code": 1,
+    "pass_file_issued": false
+  },
+  "private_evidence_sha256": {
+    "byte_comparator_jsonl": "b0524f4d3a836e4fa187f099b9c443b47fe56aa7d739e3a327f1e190d32fc1d1",
+    "campaign_metrics_pre": "e669cc3fbd5c33e053089350dc619eafbc370f0710583ca5b3bf76e35672fce2",
+    "campaign_metrics_post": "1b3a05878354b3e9004a0631c90537e72cf1f72129f1174658850838a2bfcabf",
+    "proxy_ingress_finalize": "bff8fc954334be4846267effe7520ffd9915f4bb705d0fac88d4aa2f6e1db43f",
+    "engine_ingress_finalize": "72c4a3c56d55c293e95379c872d2d0443c9c66a23691ebea20a9d41b698f049d"
+  },
+  "publication": {
+    "reduced_summary_only": true,
+    "raw_task_data_published": false,
+    "raw_prompt_response_patch_published": false,
+    "raw_logs_metrics_traces_published": false,
+    "credentials_environment_identities_published": false
+  }
+}

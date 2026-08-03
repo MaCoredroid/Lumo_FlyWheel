@@ -123,6 +123,112 @@ def _qwen_trace(instance_id: str) -> list[dict[str, Any]]:
     ]
 
 
+def _qwen_trace_with_request_count(
+    instance_id: str,
+    completed: int,
+    *,
+    hidden_input_tokens: int = 0,
+    hidden_output_tokens: int = 0,
+) -> list[dict[str, Any]]:
+    session_id = contract.fixed32_trace_session_id(instance_id)
+    events: list[dict[str, Any]] = [
+        {
+            "type": "system",
+            "subtype": "init",
+            "qwen_code_version": "0.19.4",
+            "uuid": f"system-{instance_id}",
+            "session_id": session_id,
+            "parent_tool_use_id": None,
+        }
+    ]
+    for ordinal in range(completed - 1):
+        assistant_id = f"assistant-{ordinal}-{instance_id}"
+        tool_id = f"tool-{ordinal}-{instance_id}"
+        events.extend(
+            [
+                {
+                    "type": "assistant",
+                    "uuid": assistant_id,
+                    "session_id": session_id,
+                    "parent_tool_use_id": None,
+                    "message": {
+                        "id": assistant_id,
+                        "type": "message",
+                        "role": "assistant",
+                        "model": "qwen3.6-27b",
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": tool_id,
+                                "name": "read_file",
+                                "input": {},
+                            }
+                        ],
+                        "stop_reason": "tool_use",
+                        "usage": {"input_tokens": 32, "output_tokens": 8},
+                    },
+                },
+                {
+                    "type": "user",
+                    "uuid": f"tool-result-{ordinal}-{instance_id}",
+                    "session_id": session_id,
+                    "parent_tool_use_id": None,
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tool_id,
+                                "content": "done",
+                                "is_error": False,
+                            }
+                        ],
+                    },
+                },
+            ]
+        )
+    final_id = f"final-{instance_id}"
+    events.append(
+        {
+            "type": "assistant",
+            "uuid": final_id,
+            "session_id": session_id,
+            "parent_tool_use_id": None,
+            "message": {
+                "id": final_id,
+                "type": "message",
+                "role": "assistant",
+                "model": "qwen3.6-27b",
+                "content": [{"type": "text", "text": "complete"}],
+                "stop_reason": None,
+                "usage": {"input_tokens": 32, "output_tokens": 8},
+            },
+        }
+    )
+    input_tokens = completed * 32 + hidden_input_tokens
+    output_tokens = completed * 8 + hidden_output_tokens
+    events.append(
+        {
+            "type": "result",
+            "subtype": "success",
+            "uuid": f"result-{instance_id}",
+            "session_id": session_id,
+            "is_error": False,
+            "duration_ms": 100,
+            "duration_api_ms": 90,
+            "num_turns": completed,
+            "result": "complete",
+            "usage": {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": input_tokens + output_tokens,
+            },
+            "permission_denials": [],
+        }
+    )
+    return events
+
+
 def _metrics(
     completed: int,
     *,
@@ -174,6 +280,61 @@ def _metrics(
             f"vllm:request_params_max_tokens_bucket{{{labels}}} {value}"
         )
     return ("\n".join(lines) + "\n").encode("ascii")
+
+
+def _real_count_shape_campaign(
+    *,
+    compactions: int = 2,
+    max_tokens_sum_delta: int = 0,
+    hidden_input_tokens: int = 20,
+    hidden_output_tokens: int = 2,
+) -> tuple[list[dict[str, Any]], bytes]:
+    trace_counts = (8, 28, 41, 51)
+    task_auth_counts = (8, 28, 41, 53)
+    tasks = []
+    for index, (instance_id, trace_count, task_auth_count) in enumerate(
+        zip(TASK_IDS, trace_counts, task_auth_counts, strict=True)
+    ):
+        is_last = index == len(TASK_IDS) - 1
+        tasks.append(
+            {
+                "instance_id": instance_id,
+                "expected_session_id": contract.fixed32_trace_session_id(
+                    instance_id
+                ),
+                "expected_completed_logical_model_requests": task_auth_count,
+                "events": _qwen_trace_with_request_count(
+                    instance_id,
+                    trace_count,
+                    hidden_input_tokens=(
+                        hidden_input_tokens if is_last else 0
+                    ),
+                    hidden_output_tokens=(
+                        hidden_output_tokens if is_last else 0
+                    ),
+                ),
+            }
+        )
+    normal_requests = sum(trace_counts)
+    metrics_post = _metrics(
+        sum(task_auth_counts),
+        compactions=compactions,
+        normal_requests=sum(task_auth_counts) - compactions,
+        prompt_tokens=normal_requests * 32 + hidden_input_tokens,
+        generation_tokens=normal_requests * 8 + hidden_output_tokens,
+    )
+    if max_tokens_sum_delta:
+        marker = b"vllm:request_params_max_tokens_sum"
+        lines = metrics_post.splitlines()
+        for index, line in enumerate(lines):
+            if line.startswith(marker):
+                prefix, value = line.rsplit(b" ", 1)
+                lines[index] = prefix + b" " + str(
+                    int(value) + max_tokens_sum_delta
+                ).encode("ascii")
+                break
+        metrics_post = b"\n".join(lines) + b"\n"
+    return tasks, metrics_post
 
 
 def _task_auth(task_key_id: str, completed: int) -> dict[str, Any]:
@@ -375,6 +536,63 @@ def _provenance_for_replay(
             "qwen_compaction_metric_evidence"
         ],
     }
+
+
+def test_b4_campaign_failed_only_compactions_use_global_algebra() -> None:
+    tasks, metrics_post = _real_count_shape_campaign()
+
+    reconciliation = contract.validate_fixed32_qwen_campaign_metrics(
+        tasks,
+        metrics_pre=_metrics(0),
+        metrics_post=metrics_post,
+    )
+
+    evidence = reconciliation["metric_evidence"]
+    assert evidence["completed_engine_requests"] == 130
+    assert evidence["normal_requests"] == 128
+    assert evidence["successful_compaction_requests"] == 0
+    assert evidence["failed_compaction_requests"] == 2
+    assert evidence["total_compaction_requests"] == 2
+    last = reconciliation["tasks"][TASK_IDS[-1]]
+    assert last["completed_logical_model_requests"] == 53
+    assert last["hidden_successful_compaction_model_requests"] == 0
+    assert last["hidden_failed_compaction_model_requests"] == 2
+    assert last["synthetic_compaction_failure_terminal"] is False
+
+
+@pytest.mark.parametrize(
+    ("tamper", "message"),
+    (
+        ("compaction_bucket", "32768/20000"),
+        ("max_tokens_sum", "32768/20000"),
+        ("task_auth_count", "completion metrics"),
+        ("hidden_input", "hidden compaction token usage"),
+        ("hidden_output", "hidden compaction token usage"),
+    ),
+)
+def test_b4_campaign_failed_only_compaction_tamper_fails_closed(
+    tamper: str,
+    message: str,
+) -> None:
+    kwargs: dict[str, int] = {}
+    if tamper == "compaction_bucket":
+        kwargs["compactions"] = 1
+    elif tamper == "max_tokens_sum":
+        kwargs["max_tokens_sum_delta"] = 1
+    elif tamper == "hidden_input":
+        kwargs["hidden_input_tokens"] = 0
+    elif tamper == "hidden_output":
+        kwargs["hidden_output_tokens"] = 0
+    tasks, metrics_post = _real_count_shape_campaign(**kwargs)
+    if tamper == "task_auth_count":
+        tasks[-1]["expected_completed_logical_model_requests"] = 52
+
+    with pytest.raises(contract.ContractError, match=message):
+        contract.validate_fixed32_qwen_campaign_metrics(
+            tasks,
+            metrics_pre=_metrics(0),
+            metrics_post=metrics_post,
+        )
 
 
 def test_b4_campaign_union_finalizes_only_after_global_proof(
