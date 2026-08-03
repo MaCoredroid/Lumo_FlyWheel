@@ -18,7 +18,7 @@
     },
     "draft_head_m32": {
       "candidate_source": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
-      "candidate_source_sha256": "43aee82ea24a8d63e70088c1fbe66210c94c91a82ca01fee648abf361019f34a",
+      "candidate_source_sha256": "e1bc3afa636f40c656920733cd9f2715ecdd6c8875726ee23fc701051e137050",
       "default": "off",
       "gate": "real SWE-Verified B1 full-logit byte equality plus terminal census and authenticated traffic evidence",
       "historical_artifact_source_sha256": "0ecd359c7ffb211f0212db3a83baabfff327c07286fd808ea99ac68d536798e2",
