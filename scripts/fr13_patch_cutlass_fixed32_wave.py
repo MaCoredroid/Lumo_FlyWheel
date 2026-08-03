@@ -377,9 +377,10 @@ class Fr13DivisorBalancedStaticTileScheduler100
 };
 
 // Fixed32 B4 with a 64-row tile always has exactly two M tiles, one batch
-// plane, cluster (1,1,1), and complete output tiles. Map the persistent linear
-// work index directly and remove the generic batch/cluster/raster divmods from
-// every tile assignment.
+// plane, cluster (1,1,1), and complete output tiles. Every admitted real
+// projection has at least 40 N tiles, so CUTLASS rasterizes AlongM and returns
+// an X-only grid. Map that persistent index directly and remove the generic
+// grid flattening plus batch/cluster/raster divmods from every tile assignment.
 class Fr13B4TwoMStaticTileScheduler100
     : public Fr13DivisorBalancedStaticTileScheduler100 {
   using Base = Fr13DivisorBalancedStaticTileScheduler100;
@@ -387,13 +388,12 @@ class Fr13B4TwoMStaticTileScheduler100
 
   CUTLASS_DEVICE void initialize_linear_work() {
 #if defined(__CUDA_ARCH__)
-    current_work_linear_idx_ = blockIdx.x + gridDim.x *
-        (blockIdx.y + gridDim.y * blockIdx.z);
+    current_work_linear_idx_ = blockIdx.x;
 #endif
   }
 
   CUTLASS_DEVICE static uint32_t total_grid_size() {
-    return gridDim.x * gridDim.y * gridDim.z;
+    return gridDim.x;
   }
 
   CUTLASS_DEVICE uint32_t problem_tiles() const {
