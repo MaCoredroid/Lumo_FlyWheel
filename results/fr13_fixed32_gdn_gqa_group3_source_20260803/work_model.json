@@ -1,0 +1,59 @@
+{
+  "schema": "fr13.fixed32.gdn_gqa_group3.source_work_model.v1",
+  "status": "source_only_default_off",
+  "source_commit": "fadd12d33ca5962baadf42ac2cc77b9179758b26",
+  "candidate": "fixed32_gdn_single_launch_gqa_group3_v1",
+  "qualification": {
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "physical_rows": 32,
+    "logical_tree_limit": 32,
+    "modes": [
+      "tail6_fixed32",
+      "hydra27_fixed32"
+    ],
+    "batches": [
+      1,
+      4
+    ]
+  },
+  "geometry": {
+    "gdn_layers": 48,
+    "num_key_heads": 16,
+    "num_value_heads": 48,
+    "value_heads_per_key_head": 3,
+    "dim_key": 128,
+    "dim_value": 128,
+    "block_value": 8,
+    "qk_element_bytes": 2
+  },
+  "physical_work": {
+    "b1": {
+      "reference_ctas_per_layer": 768,
+      "candidate_ctas_per_layer": 256,
+      "ctas_removed_per_layer": 512,
+      "ctas_removed_per_event": 24576,
+      "qk_bytes_removed_per_event": 402653184,
+      "qk_norm_reductions_removed_per_event": 1572864,
+      "qk_norm_lane_terms_removed_per_event": 201326592
+    },
+    "b4": {
+      "reference_ctas_per_layer": 3072,
+      "candidate_ctas_per_layer": 1024,
+      "ctas_removed_per_layer": 2048,
+      "ctas_removed_per_event": 98304,
+      "qk_bytes_removed_per_event": 1610612736,
+      "qk_norm_reductions_removed_per_event": 6291456,
+      "qk_norm_lane_terms_removed_per_event": 805306368
+    }
+  },
+  "unchanged_work": {
+    "physical_launches_per_layer": 1,
+    "state_export_writes": 0,
+    "state_parent_reads": 0,
+    "ordered_node_updates_per_request_layer": 32,
+    "state_and_value_recurrences": "unchanged",
+    "output_and_committer_exports": "unchanged"
+  },
+  "claim_scope": "static_source_work_only_no_runtime_speed_claim"
+}

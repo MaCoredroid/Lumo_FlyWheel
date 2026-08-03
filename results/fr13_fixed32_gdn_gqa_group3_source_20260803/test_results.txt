@@ -1,0 +1,9 @@
+source_commit=fadd12d33ca5962baadf42ac2cc77b9179758b26
+command=python3 -m pytest -q tests/test_fr13_fixed32_gdn_gqa_group3.py tests/test_fr13_fixed32_gdn_gqa_group3_artifact.py tests/test_fr13_fixed32_gdn_single_launch_ordered.py tests/test_fr13_fixed32_gdn_prescaled_path_base.py tests/test_fr13_fixed32_gdn_exact_io.py tests/test_fr13_fixed32_committer_knorm_ring.py tests/test_fr13_fixed32_committer_gate_ring.py tests/test_fr13_fixed32_committer_decay_ring.py
+result=46 passed, 1 skipped in 2.26s
+python_compile=PASS
+git_diff_check=PASS
+triton_frontend=NOT_RUN_host_module_unavailable
+gpu_compile=NOT_RUN_no_gpu
+real_swe_verified_byte_ab=NOT_RUN
+real_four_task_timing=NOT_RUN
