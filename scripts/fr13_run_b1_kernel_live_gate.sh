@@ -77,8 +77,9 @@ if [[ "$FR13_GATE_SFWD_CONV_POSTPREP" == "1" \
            || "$FR13_GATE_DFWD_TOP3" != "0" \
            || "$FR13_GATE_BM8" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" \
-           || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ) ]]; then
-  echo "FR13_GATE_SFWD_CONV_POSTPREP must be the only kernel candidate" >&2
+           || ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
+                && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "identity_wide256_fullgrid_b1_byte_ab" ) ) ]]; then
+  echo "FR13_GATE_SFWD_CONV_POSTPREP permits only the admitted target full-grid byte comparator" >&2
   exit 2
 fi
 if [[ "$FR13_GATE_BM8" == "1" \

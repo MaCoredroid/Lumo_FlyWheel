@@ -297,7 +297,7 @@ def test_entrypoints_bake_disjoint_mode_batch_candidate_scopes() -> None:
     assert 'MAX_NUM_SEQS_OVR="$BATCH" SWE_CONCURRENCY="$BATCH"' in common
     assert 'if [[ "$FR13_GDN_GATE_BATCH" == "4" ]]; then' in common
     assert 'KV_CACHE_MEMORY_BYTES="$KV_CACHE_MEMORY_BYTES"' in common
-    assert common.count('--source-commit "$SOURCE_COMMIT"') == 3
+    assert common.count('--source-commit "$SOURCE_COMMIT"') == 5
     assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in common
     assert "config/fr13_fixed32/subset_b4_four.json" in common
     assert "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=0" in common

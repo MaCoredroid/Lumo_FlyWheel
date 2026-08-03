@@ -46,11 +46,17 @@ BYTE_SURFACES = (
 )
 SOURCE_FILES = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "scripts/fr13_b1_composed_stack_gate.py",
     "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/fr13_cutlass_streamk_pass.py",
+    "scripts/fr13_cutlass_wave_binary.py",
     "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py",
     "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh",
     "scripts/fr13_run_b1_kernel_live_gate.sh",
     "scripts/fr13_run_b1_sfwd_conv_postprep_gate.sh",
+    "scripts/fr13_run_b1_target_sfwd_conv_postprep_live_gate.sh",
     "scripts/fr13_sfwd_conv_postprep_gate.py",
     "scripts/run_swe_bench_q36_a.py",
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py",
@@ -432,6 +438,9 @@ def _validate_qrow_evidence(logs: Path) -> tuple[bytes, bytes]:
 
 
 def validate_gate(args: argparse.Namespace) -> None:
+    repo = Path(args.repo).resolve()
+    if not repo.is_dir():
+        raise GateError(f"repository root is not a directory: {repo}")
     arm = Path(args.arm_dir).resolve()
     root = arm.parent
     logs = arm / "logs"
@@ -614,6 +623,32 @@ def validate_gate(args: argparse.Namespace) -> None:
 
     container_env_raw = _regular(arm / "container_env.txt")
     container_env = container_env_raw.decode("ascii").splitlines()
+    target_selector = "FR13_FIXED32_CUTLASS_WAVE=identity_wide256_fullgrid_b1_byte_ab"
+    target_live_sha256: str | None = None
+    if target_selector in container_env:
+        if not args.target_live_pass or not args.target_candidate_so:
+            raise GateError("combined SFWD credential is missing its target-GEMM PASS")
+        target_path = Path(args.target_live_pass).resolve()
+        target_raw = _regular(target_path)
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import fr13_cutlass_streamk_pass as cutlass_pass
+
+        try:
+            cutlass_pass.validate_live_result(
+                target_path,
+                _sha256(target_raw),
+                Path(args.target_candidate_so).resolve(),
+                repo / "scripts/fr13_patch_cutlass_fixed32_wave.py",
+                expected_source_commit=source_commit,
+                candidate_selector="identity_wide256_fullgrid_b1",
+                qualification_profile="k64_root",
+                diagnostic_task_profile="astropy12907",
+            )
+        except (OSError, ValueError, cutlass_pass.QualificationError) as error:
+            raise GateError("combined target-GEMM PASS drifted") from error
+        target_live_sha256 = _sha256(target_raw)
+    elif args.target_live_pass or args.target_candidate_so:
+        raise GateError("target-GEMM evidence was supplied to an isolated SFWD gate")
     expected_env = (
         "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=0",
         "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=1",
@@ -683,6 +718,10 @@ def validate_gate(args: argparse.Namespace) -> None:
             "docker_log_sha256": _sha256(docker_raw),
             "qrow16_sidecar_sha256": _sha256(qrow_sidecar),
             "qrow16_capture_sha256": _sha256(qrow_capture),
+            "combined_target_selector": (
+                "identity_wide256_fullgrid_b1" if target_live_sha256 else None
+            ),
+            "combined_target_live_pass_sha256": target_live_sha256,
         },
     )
 
@@ -711,11 +750,14 @@ def parser() -> argparse.ArgumentParser:
     pass_parser.add_argument("--source-commit", required=True)
     pass_parser.set_defaults(function=validate_pass)
     validate = commands.add_parser("validate")
+    validate.add_argument("--repo", required=True)
     validate.add_argument("--arm-dir", required=True)
     validate.add_argument("--source-commit", required=True)
     validate.add_argument("--task-id", required=True)
     validate.add_argument("--manifest-launch", required=True)
     validate.add_argument("--manifest-end", required=True)
+    validate.add_argument("--target-live-pass")
+    validate.add_argument("--target-candidate-so")
     validate.add_argument("--output", required=True)
     validate.set_defaults(function=validate_gate)
     return result

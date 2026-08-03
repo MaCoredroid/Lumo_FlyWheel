@@ -191,11 +191,17 @@ _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB = os.environ.get(
 ).strip()
 _FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "scripts/fr13_b1_composed_stack_gate.py",
     "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/fr13_cutlass_streamk_pass.py",
+    "scripts/fr13_cutlass_wave_binary.py",
     "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py",
     "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh",
     "scripts/fr13_run_b1_kernel_live_gate.sh",
     "scripts/fr13_run_b1_sfwd_conv_postprep_gate.sh",
+    "scripts/fr13_run_b1_target_sfwd_conv_postprep_live_gate.sh",
     "scripts/fr13_sfwd_conv_postprep_gate.py",
     "scripts/run_swe_bench_q36_a.py",
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py",
@@ -6857,7 +6863,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static_byte_ab",
     )
-    if sum(
+    eager_diagnostic_count = sum(
         (
             batch_gdn_byte_diagnostic == "1",
             streamk_byte_diagnostic,
@@ -6868,10 +6874,21 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             sfwd_conv_postprep == "1",
             sfwd_conv_postprep_byte == "1",
         )
-    ) > 1:
+    )
+    combined_target_sfwd_byte_gate = bool(
+        cutlass_wave == "identity_wide256_fullgrid_b1_byte_ab"
+        and sfwd_conv_postprep_byte == "1"
+        and eager_diagnostic_count == 2
+        and _FR13_FIXED32_MODE == "hydra27_fixed32"
+        and os.environ.get("MAX_NUM_SEQS", "") == "1"
+        and os.environ.get("SWE_CONCURRENCY", "") == "1"
+        and os.environ.get("FR13_FIXED32_B1_DIAGNOSTIC", "") == "1"
+        and os.environ.get("ENFORCE_EAGER", "") == "1"
+    )
+    if eager_diagnostic_count > 1 and not combined_target_sfwd_byte_gate:
         raise RuntimeError(
-            "FR13 fixed32 eager byte diagnostics are "
-            "mutually exclusive"
+            "FR13 fixed32 eager byte diagnostics permit only the admitted "
+            "target full-grid plus SFWD conv/post-prep tuple"
         )
     if batch_gdn_byte_diagnostic == "1":
         return (
@@ -7430,16 +7447,21 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB": "0",
             "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "0",
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB": "0",
-            "FR13_FA2_QROW16_PRODUCTION": "1",
-            "FR13_FA2_QROW16_SO_SHA256": (
-                "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
-            ),
-            "FR13_FA2_QROW16_LIVE_PASS_SHA256": (
-                "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
-            ),
         }
         if sfwd_conv_postprep_byte == "1":
             exact_runtime["FR13_FIXED32_B1_DIAGNOSTIC"] = "1"
+            exact_runtime.update(
+                {
+                    "FR13_FA2_QROW16_PRODUCTION": "1",
+                    "FR13_FA2_QROW16_SO_SHA256": (
+                        "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+                    ),
+                    "FR13_FA2_QROW16_LIVE_PASS_SHA256": (
+                        "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+                    ),
+                    "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+                }
+            )
         else:
             exact_runtime["FR13_FIXED32_B1_DIAGNOSTIC"] = "0"
         drift = {
@@ -7455,6 +7477,27 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             == "FULL_AND_PIECEWISE"
         )
         eager_runtime = enforce_eager == "1"
+        qrow16_production = (
+            os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0") == "0"
+            and os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") == "1"
+            and os.environ.get("FR13_FA2_QROW16_SO_SHA256", "")
+            == "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+            and os.environ.get("FR13_FA2_QROW16_LIVE_PASS_SHA256", "")
+            == "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+            and os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "") == ""
+            and os.environ.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "") == ""
+        )
+        qrow32_production = (
+            sfwd_conv_postprep == "1"
+            and os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0") == "0"
+            and os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") == "0"
+            and os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "") == ""
+            and os.environ.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
+            == "split2"
+            and os.environ.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
+            == "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467"
+            and os.environ.get("FR13_FA2_QROW32_B1_SO_SIZE", "") == "300140712"
+        )
         if (
             mode not in _FR13_FIXED32_MODES
             or os.environ.get("MAX_NUM_SEQS", "") != "1"
@@ -7466,11 +7509,13 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             or sfwd_production != "0"
             or sfwd_prior_reuse != "0"
             or not (eager_runtime or graph_runtime)
+            or (qrow16_production + qrow32_production) != 1
             or drift
         ):
             raise RuntimeError(
                 "FR13 fixed32 SFWD conv/post-prep fusion requires exclusive "
-                "physical32 B1 K64/root1 in eager or FULL graph mode: "
+                "physical32 B1 K64/root1 with one credentialed Qrow arm in "
+                "eager or FULL graph mode: "
                 + repr(drift)
             )
         if sfwd_conv_postprep == "1":
@@ -11731,6 +11776,21 @@ def _fr13_conv_subop_mab(
                             source_only_qualification=True,
                             capture_binding=_fr13_conv_postprep_binding,
                         )
+                        if (
+                            _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+                            and not getattr(
+                                self,
+                                "_fr13_sfwd_conv_postprep_production_engaged",
+                                False,
+                            )
+                        ):
+                            print(
+                                "[FR13_SFWD_CONV_POSTPREP] production engaged "
+                                f"layer={self.prefix} B={_fr13_conv_postprep_b} "
+                                f"rows={_fr13_conv_postprep_rows}",
+                                flush=True,
+                            )
+                            self._fr13_sfwd_conv_postprep_production_engaged = True
                     elif _fr13_sfwd_production is not None:
                         if (
                             not _FR13_FIXED32_MODE
