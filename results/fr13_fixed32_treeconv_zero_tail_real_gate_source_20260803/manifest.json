@@ -1,38 +1,56 @@
 {
-  "schema": "fr13.fixed32.treeconv_zero_tail.real_gate_source.v1",
-  "status": "ready_for_real_swe_verified_qualification",
-  "base_commit": "f375d73109d277b6fab9d30142c611e75c4f7fc4",
-  "candidate": "physical32_treeconv_zero_tail_v1",
+  "schema": "fr13.fixed32.treeconv_zero_tail.real_gate_source.v2",
+  "status": "graph_implementation_checkpoint_live_unrun",
+  "implementation_commit": "e6328a233d65e99843261b516cedc2ff17a21a7f",
+  "merged_main_commit": "30f8437d2b13d1af6ca14ae8eac68ca5b49fb27b",
+  "source_checkpoint_commit": "c2ba789993a7d7dd06b4ecfa2121a7e34e8dad48",
+  "candidate": "physical32_treeconv_zero_tail_graph_v2",
   "qualification_profile": "k64_root",
   "draft_vocab_root": 1,
   "draft_vocab_k": 65536,
   "physical_drafts": 31,
   "physical_rows_root_inclusive": 32,
-  "logical_topologies": [
-    "Tail23",
-    "Hydra27"
-  ],
+  "logical_topologies": {
+    "Tail23": {
+      "active_mask": "0x7A9CE7FF"
+    },
+    "Hydra27": {
+      "active_mask": "0x7ABDFFFF"
+    }
+  },
+  "shared_physical_parent_width": 4,
+  "shared_physical_parent_layers": 34,
+  "shared_physical_parent_source": 36,
   "batches": [
     1,
     4
   ],
+  "execution_mode": "FULL_AND_PIECEWISE_cuda_graph",
   "reference_always_served": true,
   "production_default_enabled": false,
   "timing_eligible": false,
   "acceptance_valid": false,
-  "comparison_call_limit": 320,
+  "live_campaign_run": false,
   "source_bindings": {
-    "kernel_sha256": "a31e55b7f84b93734a17dffff146fd9246502fa4b53cc14b97f63dd242136dd7",
-    "credential_issuer_sha256": "e7c977feffefdb2748ba796c322a82d27d248e23fa542c74893926ba16399127",
-    "campaign_runner_sha256": "ad38a59278507e844af67f74b349380930ef1a2d579c2826461d42ee33a5ee32"
+    "kernel_sha256": "a7fb0b126de7c3c8195c1481ae977eb663213881e3f7b51077481f500e9cc791",
+    "credential_issuer_sha256": "1e7e9dbeb4548ea6191351677572c11ee19757021ef577e8baee072d58a26e42",
+    "campaign_runner_sha256": "99055a989f46fdadac8482a8f9826164500233315afdf7fef050f7cbb92e5b20",
+    "vllm_patcher_sha256": "5d821bad26e56d16e815fbef8d74fa9112e0ebf3c5e2823039f480a7ebf8f36e",
+    "variant_sha256": "529345957d1ec2a27cc65c3bde96b3e4400fdb74e0854849c2a43e74d91f583a",
+    "launcher_sha256": "8a481d9a1660b6264498f4c01fdb898113f5fd2a6c098bf5f7b57e6ad3ac5954",
+    "swe_runner_sha256": "8c4520d637dda4f5a79616ab9001fd7c49a8df51f7b8da7f7fe949d6a12117dc",
+    "runtime_manifest_sha256": "761f0f877e629390d62c5ff75b2bb395334402bdc7471e77838864d02dfcb5b5"
   },
   "verification": {
-    "focused_tests_passed": 18,
-    "adjacent_tests_passed": 31,
-    "cuda_runtime_modules_skipped": 0,
+    "graph_credential_wiring_tests_passed": 127,
+    "qwen_ingress_tests_passed": 32,
+    "merged_cutlass_timing_tests_passed": 22,
+    "total_tests_passed": 181,
     "python_compile": "pass",
     "shell_syntax": "pass",
-    "diff_check": "pass"
+    "diff_check": "pass",
+    "gpu_runtime": "not_run_no_gpu",
+    "graph_comparator_triton_codegen": "not_compiled_locally_no_triton_cuda_toolchain"
   },
   "privacy": {
     "raw_task_data_included": false,
