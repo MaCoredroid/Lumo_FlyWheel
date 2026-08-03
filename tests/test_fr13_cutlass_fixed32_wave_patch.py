@@ -135,7 +135,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 20
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 21
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
@@ -725,7 +725,7 @@ def test_b1_onen_selector_is_default_off_shape_isolated_and_exact_math() -> None
         (16384, 5120),
         (14336, 5120),
     ):
-        assert patched.count(f"n == {n} && k == {k}") == 2
+        assert patched.count(f"n == {n} && k == {k}") == 3
 
     assert 'value == "identity_onen_b1"' in patched
     assert 'value == "identity_onen_b1_byte_ab"' in patched
@@ -743,6 +743,60 @@ def test_b1_onen_selector_is_default_off_shape_isolated_and_exact_math() -> None
         in patched
     )
     assert patched.count("return fixed32_cutlass_wave_variant::stock;") >= 1
+
+
+def test_mtp_m1m4_direct_is_diagnostic_only_exact_stock_math() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    wrapper_start = patched.index(
+        "struct cutlass_3x_gemm_fp8_blockwise_mtp_m1m4_direct"
+    )
+    wrapper_end = patched.index(
+        "struct cutlass_3x_gemm_fp8_blockwise_m128_divisor_static",
+        wrapper_start,
+    )
+    wrapper = patched[wrapper_start:wrapper_end]
+    assert "typename Base::CollectiveMainloop" in wrapper
+    assert "typename Base::CollectiveEpilogue" in wrapper
+    assert "fr13_fixed32_mtp_m1m4_direct_scheduler" in wrapper
+    assert "Identity" not in wrapper
+    assert "StageCount<" not in wrapper
+
+    selector_start = patched.index(
+        "vllm::fr13_fixed32_mtp_m1m4_direct_scheduler"
+    )
+    selector_end = patched.index("};", selector_start)
+    selector = patched[selector_start:selector_end]
+    assert "using Scheduler = Fr13B1OneNStaticTileScheduler100;" in selector
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_swapab_mtp_m1m4_direct"
+    )
+    config_end = patched.index(
+        "enum class fixed32_cutlass_wave_variant", config_start
+    )
+    config = patched[config_start:config_end]
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in config
+    assert "using TileShape = Shape<_128, _32, _128>;" in config
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in config
+    assert "EpilogueSchedule, KernelSchedule, true" in config
+
+    assert 'value == "mtp_m1m4_direct_byte_ab"' in patched
+    assert 'value == "mtp_m1m4_direct"' not in patched
+    assert "mtp_rows = m == 1 || m == 4" in patched
+    assert "fixed32_cutlass_mtp_m1m4_projection(M, N, K)" in patched
+    assert "mtp_m1m4_direct_selection" in patched
+    assert "run_mtp_m1m4_direct(destination)" in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_mtp_m1m4_direct_byte_ab.jsonl"'
+        in patched
+    )
+    assert "fr13.fixed32.cutlass_mtp_m1m4_direct_byte_ab.v1" in patched
+    assert "(mtp_m1m4_direct_byte_ab && M == 4)" in patched
+    assert "constexpr int64_t mtp_m1m4_byte_ab_limit = 320" in patched
+    assert "run_stock(out);\n    run_candidate(candidate);" in patched
+    assert "return run_stock(out);" in patched
 
 
 def test_b1_n5120_single_tile_scheduler_removes_persistent_advance() -> None:
