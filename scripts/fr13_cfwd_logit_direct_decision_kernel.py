@@ -37,7 +37,7 @@ TARGET_ROWS = 17
 FANOUT = 3
 WALK_CAP = 12
 VOCAB_SIZE = 248_320
-BLOCK_V = 256
+BLOCK_V = 4096
 MAX_VOCAB = 262_144
 MAX_BLOCKS = MAX_VOCAB // BLOCK_V
 FP32_BYTES = 4
@@ -502,7 +502,6 @@ def workspace_spec(batch_size: int) -> dict[str, tuple[tuple[int, ...], Any]]:
     if batch not in (1, 4):
         raise ValueError("logit-direct CFWD workspace is B1 or B4 only")
     all_rows = batch * (SELF_ROWS + TARGET_ROWS)
-    target_rows = batch * TARGET_ROWS
     return {
         "block_maxima": ((all_rows, MAX_BLOCKS), torch.float32),
         "block_sums": ((all_rows, MAX_BLOCKS), torch.float32),
