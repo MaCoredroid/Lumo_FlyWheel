@@ -1,0 +1,97 @@
+{
+  "acceptance_valid": false,
+  "batch_size": 1,
+  "binary_attestation_sha256": "986c9152cccef8fde19e3403af83de8871179c8966f9accf0c0c64510b2bf3d7",
+  "candidate": "identity_onen_n5120_fullgrid_b1",
+  "candidate_bytes": 119471552,
+  "candidate_family": "identity_onen_n5120_fullgrid_b1",
+  "candidate_sha256": "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc",
+  "comparator_timing_eligible": false,
+  "comparison_call_limit": 320,
+  "comparisons": 320,
+  "concurrency": 1,
+  "container_env_sha256": "8db32940f766238a74dbed804829b106f68b20ba3544e31f92d5bbfab1b6bd52",
+  "diagnostic_selector": "identity_onen_n5120_fullgrid_b1_byte_ab",
+  "diagnostic_task_profile": "astropy13236",
+  "differing_bytes": 0,
+  "draft_vocab_blocks": "/workspace/scripts/fr13_dvk_subset_blocks.json",
+  "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "errors": [],
+  "fixed_rows": 32,
+  "floor_acceptance_eligible": false,
+  "mandatory_weight_bytes": 32666638208,
+  "mandatory_weight_floor_ms": 119.658015414,
+  "mismatching_comparisons": 0,
+  "observed_m_values": [
+    32
+  ],
+  "observed_projection_nk": [
+    [
+      5120,
+      6144
+    ],
+    [
+      5120,
+      17408
+    ],
+    [
+      14336,
+      5120
+    ],
+    [
+      16384,
+      5120
+    ],
+    [
+      34816,
+      5120
+    ]
+  ],
+  "one_sided_u95_cap_ms": 137.6067177261,
+  "patch_source_sha256": "b9dba4077f63425dd4c245d9de33a8b2413e223f44a7fb0f6b4abe6e003d24a0",
+  "patched_dispatch_sha256": "ef221b938c0780d8212e6355f53a8aad6c4b907fbe0e368cb73bda995b80699d",
+  "production_enabled": false,
+  "qualification_profile": "k64_root",
+  "real_task_arm_sha256": "8b65634440a482b7d8027b21c70b139929c6c83ad4c4ae69da360f5c9ba6a1c3",
+  "run_classification": "one_real_swe_verified_b1_k64_root_byte_diagnostic",
+  "schema": "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_k64_root_live_gate.v1",
+  "served_result": "stock",
+  "source_commit": "711c08551de2e5eabf9788ad44002e5b0a2564db",
+  "source_identity": {
+    "files": {
+      "scripts/fr13_cutlass_streamk_pass.py": {
+        "bytes": 48116,
+        "sha256": "8e53c0c462bb59ea9caff2e3b00b1d99173f6f118feff46a8027e7d71b40b6f3"
+      },
+      "scripts/fr13_cutlass_wave_binary.py": {
+        "bytes": 33626,
+        "sha256": "c0abb3207da19d5bda5be5a67a4661448c20046109b665d9e0f04a5d136538ee"
+      },
+      "scripts/fr13_launch_forked_fa2_tree_server.sh": {
+        "bytes": 258510,
+        "sha256": "1ff853a728963a8bae3a891d570747ee832b403cf5dc20941611c81bcb524ec9"
+      },
+      "scripts/fr13_patch_cutlass_fixed32_wave.py": {
+        "bytes": 100143,
+        "sha256": "b9dba4077f63425dd4c245d9de33a8b2413e223f44a7fb0f6b4abe6e003d24a0"
+      },
+      "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh": {
+        "bytes": 21730,
+        "sha256": "a16f4900c67c7fc6c5a5b475692a178ca60b2c15622f365e8a1658f8baf9ab67"
+      }
+    },
+    "schema": "fr13.fixed32.cutlass_streamk.source_binding.v1",
+    "source_commit": "711c08551de2e5eabf9788ad44002e5b0a2564db"
+  },
+  "status": "pass",
+  "task_count": 1,
+  "task_ids": [
+    "astropy__astropy-13236"
+  ],
+  "task_marker": "swe_verified:astropy__astropy-13236",
+  "task_set": "one real SWE-Verified B1 diagnostic task",
+  "timing_eligible": false,
+  "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+}

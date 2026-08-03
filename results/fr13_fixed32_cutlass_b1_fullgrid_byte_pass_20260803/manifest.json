@@ -1,0 +1,63 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_fullgrid_byte_pass_reduced.v1",
+  "status": "PASS",
+  "source_commit": "711c08551de2e5eabf9788ad44002e5b0a2564db",
+  "run": {
+    "tag": "fr13_b1_n5120_fullgrid_711c_retry_20260803T131147Z",
+    "classification": "one_real_swe_verified_b1_k64_root_byte_diagnostic",
+    "batch_size": 1,
+    "concurrency": 1,
+    "fixed_rows": 32,
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536
+  },
+  "task": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "instance_id": "astropy__astropy-13236",
+    "authenticated_task_marker": "swe_verified:astropy__astropy-13236",
+    "verdict": "failed",
+    "terminal": true,
+    "kernel_gate_criterion": false
+  },
+  "candidate": {
+    "selector": "identity_onen_n5120_fullgrid_b1",
+    "diagnostic_selector": "identity_onen_n5120_fullgrid_b1_byte_ab",
+    "sha256": "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc",
+    "bytes": 119471552,
+    "binary_attestation_sha256": "986c9152cccef8fde19e3403af83de8871179c8966f9accf0c0c64510b2bf3d7"
+  },
+  "comparison": {
+    "record_count": 320,
+    "byte_equal_records": 320,
+    "mismatching_comparisons": 0,
+    "differing_bytes": 0,
+    "observed_m_values": [32],
+    "projection_nk": [
+      [5120, 6144],
+      [5120, 17408],
+      [14336, 5120],
+      [16384, 5120],
+      [34816, 5120]
+    ],
+    "served_result": "stock",
+    "production_enabled": false
+  },
+  "credential": {
+    "path": "byte_gate.json",
+    "sha256": "a70a5e801c16674a3f598aaca9febe80527ec51093e0f3680ce973ed84bd54f9",
+    "status": "pass"
+  },
+  "lifecycle": {
+    "driver_exit_code": 0,
+    "run_container_absent_after_completion": true,
+    "gpu_compute_processes_after_completion": 0,
+    "exact4_campaign_released": true
+  },
+  "classification": {
+    "acceptance_valid": false,
+    "timing_evidence": false,
+    "comparator_timing_eligible": false,
+    "hardware_floor_evidence": false,
+    "candidate_served": false
+  }
+}
