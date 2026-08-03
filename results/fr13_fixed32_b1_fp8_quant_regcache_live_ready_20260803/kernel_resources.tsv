@@ -1,0 +1,2 @@
+kernel	registers	stack_bytes	local_bytes	static_shared_metadata_bytes	dynamic_shared_launch_bytes	bar	lds	sts
+fr13_fixed32_b1_fp8_quant_regcache_r32k5120	26	0	0	1024	0	0	0	0

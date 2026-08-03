@@ -1,0 +1,14 @@
+combined_focused_pytest=PASS (100 passed in 1.97s)
+bash_syntax=PASS
+python_byte_compile=PASS
+git_diff_check=PASS
+runtime_binary_validator=PASS
+full_extension_cpu_smoke_load=PASS
+registered_op_per_token_group_fp8_quant=PASS
+registered_op_cutlass_scaled_mm=PASS
+cuda_visible_during_smoke_load=false
+gpu_used=false
+real_swe_verified_task_run=false
+raw_byte_gate_run=false
+timing_run=false
+hardware_floor_claim=false

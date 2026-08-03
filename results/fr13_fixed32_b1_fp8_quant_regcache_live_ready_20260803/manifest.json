@@ -1,0 +1,61 @@
+{
+  "schema": "fr13.fixed32.b1.fp8_quant_regcache.live_ready.v1",
+  "status": "READY_FOR_REAL_B1_BYTE_GATE",
+  "source_commit": "49d8e38af34cfddfa0dc05663e34c73dd3591f54",
+  "merged_main_commit": "a548a38e80a11b09fdbec2adb6367390e08eff9f",
+  "build_control_commit": "c16cf3bea5d9ed2d8f29da52a204e2247839f42c",
+  "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+  "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+  "container_image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+  "container_network": "none",
+  "gpu_mounted": false,
+  "candidate_binary": {
+    "path": "/home/mark/fr13_fp8_quant_regcache_live_build_20260803/runtime-v2/_C_stable_libtorch.fp8_quant_regcache.sm121a.abi3.so",
+    "sha256": "847599fc7e3250cd56963592d4786d5f32fe5a391da107b4a791198a7d59c110",
+    "bytes": 110685496,
+    "mode": "0555",
+    "links": 1,
+    "committed": false,
+    "cpu_smoke_load": "PASS",
+    "cuda_visible_during_smoke_load": false,
+    "registered_ops": [
+      "per_token_group_fp8_quant",
+      "cutlass_scaled_mm"
+    ]
+  },
+  "patched_vllm_source_sha256": "d655c46ab6ba497f83a62d1498ca3affb7344b163a3044754f404009ba00ae16",
+  "runtime_scope": {
+    "mode": "hydra27_fixed32",
+    "physical_rows": 32,
+    "batch_size": 1,
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "cutlass": "stock",
+    "input": "BF16[32,5120]",
+    "group_size": 128,
+    "output": "FP8_E4M3[32,5120]",
+    "scale": "FP32[32,40] column-major stride[1,32]"
+  },
+  "candidate_kernel": {
+    "registers": 26,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "static_shared_metadata_bytes": 1024,
+    "dynamic_shared_launch_bytes": 0,
+    "barrier_instructions": 0,
+    "shared_load_instructions": 0,
+    "shared_store_instructions": 0
+  },
+  "validation": {
+    "focused_tests_passed": 100,
+    "focused_tests_failed": 0,
+    "bash_syntax": "PASS",
+    "python_compile": "PASS",
+    "git_diff_check": "PASS",
+    "real_swe_verified_tasks": 0,
+    "raw_byte_pass": null,
+    "timing_samples": 0,
+    "hardware_floor_claim": null
+  },
+  "next_gate": "one real astropy__astropy-12907 K64/root1 B1 all-byte diagnostic"
+}
