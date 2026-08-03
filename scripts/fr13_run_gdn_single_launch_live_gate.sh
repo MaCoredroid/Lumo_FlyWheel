@@ -43,20 +43,26 @@ case "$FR13_GDN_GATE_CANDIDATE" in
     ;;
 esac
 
-case "$FR13_GDN_GATE_MODE:$FR13_GDN_GATE_BATCH:$FR13_GDN_GATE_ENTRYPOINT" in
-  hydra27_fixed32:1:scripts/fr13_run_b1_gdn_single_launch_live_gate.sh)
+case "$FR13_GDN_GATE_MODE:$FR13_GDN_GATE_BATCH:$FR13_GDN_GATE_ENTRYPOINT:$FR13_GDN_GATE_CANDIDATE" in
+  hydra27_fixed32:1:scripts/fr13_run_b1_gdn_single_launch_live_gate.sh:single_launch)
     LOGICAL_SLUG=hydra27
     SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
     SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
     B1_DIAGNOSTIC=1
     ;;
-  tail6_fixed32:4:scripts/fr13_run_b4_tail23_gdn_single_launch_live_gate.sh)
+  hydra27_fixed32:1:scripts/fr13_run_b1_gdn_gqa_group3_live_gate.sh:gqa_group3)
+    LOGICAL_SLUG=hydra27
+    SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
+    SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
+    B1_DIAGNOSTIC=1
+    ;;
+  tail6_fixed32:4:scripts/fr13_run_b4_tail23_gdn_single_launch_live_gate.sh:single_launch|tail6_fixed32:4:scripts/fr13_run_b4_tail23_gdn_single_launch_live_gate.sh:gqa_group3)
     LOGICAL_SLUG=tail23
     SUBSET=config/fr13_fixed32/subset_b4_four.json
     SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
     B1_DIAGNOSTIC=0
     ;;
-  hydra27_fixed32:4:scripts/fr13_run_b4_hydra27_gdn_single_launch_live_gate.sh)
+  hydra27_fixed32:4:scripts/fr13_run_b4_hydra27_gdn_single_launch_live_gate.sh:single_launch|hydra27_fixed32:4:scripts/fr13_run_b4_hydra27_gdn_single_launch_live_gate.sh:gqa_group3)
     LOGICAL_SLUG=hydra27
     SUBSET=config/fr13_fixed32/subset_b4_four.json
     SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
@@ -153,6 +159,9 @@ if env \
     FR13_FIXED32_GDN_PATH_BV_CANDIDATE="$FR13_GDN_GATE_CANDIDATE" \
     FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH="$BATCH" \
     FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
+    FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=0 \
+    FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH= \
+    FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON= \
     FR13_FIXED32_BATCH_GDN_BYTE_AB=0 \
     FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0 \
     FR13_FIXED32_BATCH_GDN_BV_CANDIDATE= \

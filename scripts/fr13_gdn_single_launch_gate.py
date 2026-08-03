@@ -59,11 +59,22 @@ MODE = {
     },
 }
 ENTRYPOINT = {
-    ("hydra27_fixed32", 1): "scripts/fr13_run_b1_gdn_single_launch_live_gate.sh",
-    ("tail6_fixed32", 4): (
+    ("hydra27_fixed32", 1, "single_launch"): (
+        "scripts/fr13_run_b1_gdn_single_launch_live_gate.sh"
+    ),
+    ("hydra27_fixed32", 1, "gqa_group3"): (
+        "scripts/fr13_run_b1_gdn_gqa_group3_live_gate.sh"
+    ),
+    ("tail6_fixed32", 4, "single_launch"): (
         "scripts/fr13_run_b4_tail23_gdn_single_launch_live_gate.sh"
     ),
-    ("hydra27_fixed32", 4): (
+    ("tail6_fixed32", 4, "gqa_group3"): (
+        "scripts/fr13_run_b4_tail23_gdn_single_launch_live_gate.sh"
+    ),
+    ("hydra27_fixed32", 4, "single_launch"): (
+        "scripts/fr13_run_b4_hydra27_gdn_single_launch_live_gate.sh"
+    ),
+    ("hydra27_fixed32", 4, "gqa_group3"): (
         "scripts/fr13_run_b4_hydra27_gdn_single_launch_live_gate.sh"
     ),
 }
@@ -733,7 +744,8 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
     mode = args.mode
     batch = args.batch
     candidate_id = CANDIDATES[args.candidate]
-    if (mode, batch) not in ENTRYPOINT:
+    scope = (mode, batch, args.candidate)
+    if scope not in ENTRYPOINT:
         raise GateError("unsupported mode/batch credential scope")
     if re.fullmatch(r"[0-9a-f]{40}", args.source_commit) is None:
         raise GateError("source commit is not a full lowercase Git object ID")
@@ -772,7 +784,7 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
     except fixed32_contract.ContractError as error:
         raise GateError(f"external manifest is invalid: {error}") from error
 
-    entrypoint = ENTRYPOINT[(mode, batch)]
+    entrypoint = ENTRYPOINT[scope]
     try:
         regenerated_runtime = runtime_manifest.build_manifest(
             REPO,

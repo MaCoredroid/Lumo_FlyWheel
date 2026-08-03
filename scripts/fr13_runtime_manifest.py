@@ -72,6 +72,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_run_b1_cutlass_streamk_timing.sh",
     "scripts/fr13_run_b1_kernel_live_gate.sh",
     "scripts/fr13_run_b1_draft_head_fp8_timing.sh",
+    "scripts/fr13_run_b1_gdn_gqa_group3_live_gate.sh",
     "scripts/fr13_run_b1_gdn_single_launch_live_gate.sh",
     "scripts/fr13_run_b4_cutlass_persistent_m128_live_gate.sh",
     "scripts/fr13_run_b4_cutlass_persistent_m128_timing.sh",
