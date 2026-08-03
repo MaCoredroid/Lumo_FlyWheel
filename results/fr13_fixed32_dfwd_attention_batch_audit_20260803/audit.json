@@ -1,0 +1,453 @@
+{
+  "created_at_utc": "2026-08-03T09:34:45Z",
+  "exact_contract": {
+    "batch_size": 1,
+    "block_m": 8,
+    "block_q": 1,
+    "causal": true,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "full_window": true,
+    "kernel": "kernel_unified_attention_2d",
+    "logical_drafts": 27,
+    "max_query_length": 1,
+    "mode": "hydra27_fixed32",
+    "page_rows": 1024,
+    "physical_rows": 32,
+    "post_root_sites": 4,
+    "sites": [
+      {
+        "block_table_batch_rows": 1,
+        "block_table_last_stride": 1,
+        "block_table_rank": 2,
+        "block_table_storage": "mtp_block_table",
+        "cu_seqlens_q_shape": [
+          2
+        ],
+        "cu_seqlens_q_values": [
+          0,
+          1
+        ],
+        "key_cache_storage": "mtp_paged_key_cache",
+        "kv_dtype": "bfloat16",
+        "kv_inner_shape": [
+          1024,
+          4,
+          256
+        ],
+        "kv_inner_strides": [
+          1024,
+          256,
+          1
+        ],
+        "level": 0,
+        "metadata_dtype": "int32",
+        "out_dtype": "bfloat16",
+        "out_shape": [
+          1,
+          24,
+          256
+        ],
+        "out_storage": "mtp_attention_out_workspace",
+        "out_strides": [
+          6144,
+          256,
+          1
+        ],
+        "q_dtype": "bfloat16",
+        "q_shape": [
+          1,
+          24,
+          256
+        ],
+        "q_storage": "mtp_attention_q_workspace",
+        "q_strides": [
+          6144,
+          256,
+          1
+        ],
+        "sequence_lengths_storage": "mtp_sequence_lengths",
+        "sequence_updates_before_site": 0,
+        "seqused_k_shape": [
+          1
+        ],
+        "value_cache_storage": "mtp_paged_value_cache"
+      },
+      {
+        "block_table_batch_rows": 1,
+        "block_table_last_stride": 1,
+        "block_table_rank": 2,
+        "block_table_storage": "mtp_block_table",
+        "cu_seqlens_q_shape": [
+          2
+        ],
+        "cu_seqlens_q_values": [
+          0,
+          1
+        ],
+        "key_cache_storage": "mtp_paged_key_cache",
+        "kv_dtype": "bfloat16",
+        "kv_inner_shape": [
+          1024,
+          4,
+          256
+        ],
+        "kv_inner_strides": [
+          1024,
+          256,
+          1
+        ],
+        "level": 1,
+        "metadata_dtype": "int32",
+        "out_dtype": "bfloat16",
+        "out_shape": [
+          1,
+          24,
+          256
+        ],
+        "out_storage": "mtp_attention_out_workspace",
+        "out_strides": [
+          6144,
+          256,
+          1
+        ],
+        "q_dtype": "bfloat16",
+        "q_shape": [
+          1,
+          24,
+          256
+        ],
+        "q_storage": "mtp_attention_q_workspace",
+        "q_strides": [
+          6144,
+          256,
+          1
+        ],
+        "sequence_lengths_storage": "mtp_sequence_lengths",
+        "sequence_updates_before_site": 1,
+        "seqused_k_shape": [
+          1
+        ],
+        "value_cache_storage": "mtp_paged_value_cache"
+      },
+      {
+        "block_table_batch_rows": 1,
+        "block_table_last_stride": 1,
+        "block_table_rank": 2,
+        "block_table_storage": "mtp_block_table",
+        "cu_seqlens_q_shape": [
+          2
+        ],
+        "cu_seqlens_q_values": [
+          0,
+          1
+        ],
+        "key_cache_storage": "mtp_paged_key_cache",
+        "kv_dtype": "bfloat16",
+        "kv_inner_shape": [
+          1024,
+          4,
+          256
+        ],
+        "kv_inner_strides": [
+          1024,
+          256,
+          1
+        ],
+        "level": 2,
+        "metadata_dtype": "int32",
+        "out_dtype": "bfloat16",
+        "out_shape": [
+          1,
+          24,
+          256
+        ],
+        "out_storage": "mtp_attention_out_workspace",
+        "out_strides": [
+          6144,
+          256,
+          1
+        ],
+        "q_dtype": "bfloat16",
+        "q_shape": [
+          1,
+          24,
+          256
+        ],
+        "q_storage": "mtp_attention_q_workspace",
+        "q_strides": [
+          6144,
+          256,
+          1
+        ],
+        "sequence_lengths_storage": "mtp_sequence_lengths",
+        "sequence_updates_before_site": 2,
+        "seqused_k_shape": [
+          1
+        ],
+        "value_cache_storage": "mtp_paged_value_cache"
+      },
+      {
+        "block_table_batch_rows": 1,
+        "block_table_last_stride": 1,
+        "block_table_rank": 2,
+        "block_table_storage": "mtp_block_table",
+        "cu_seqlens_q_shape": [
+          2
+        ],
+        "cu_seqlens_q_values": [
+          0,
+          1
+        ],
+        "key_cache_storage": "mtp_paged_key_cache",
+        "kv_dtype": "bfloat16",
+        "kv_inner_shape": [
+          1024,
+          4,
+          256
+        ],
+        "kv_inner_strides": [
+          1024,
+          256,
+          1
+        ],
+        "level": 3,
+        "metadata_dtype": "int32",
+        "out_dtype": "bfloat16",
+        "out_shape": [
+          1,
+          24,
+          256
+        ],
+        "out_storage": "mtp_attention_out_workspace",
+        "out_strides": [
+          6144,
+          256,
+          1
+        ],
+        "q_dtype": "bfloat16",
+        "q_shape": [
+          1,
+          24,
+          256
+        ],
+        "q_storage": "mtp_attention_q_workspace",
+        "q_strides": [
+          6144,
+          256,
+          1
+        ],
+        "sequence_lengths_storage": "mtp_sequence_lengths",
+        "sequence_updates_before_site": 3,
+        "seqused_k_shape": [
+          1
+        ],
+        "value_cache_storage": "mtp_paged_value_cache"
+      }
+    ],
+    "tile_rows": 32,
+    "valid_mask": 2059272191
+  },
+  "fusion_verdict": {
+    "alias_guard": {
+      "deferred_batching_requires_query_and_length_snapshots": true,
+      "output_workspace_reused_across_sites": true,
+      "paged_kv_suffix_mutated_between_sites": true,
+      "query_workspace_reused_across_sites": true,
+      "sequence_lengths_mutated_in_place": true
+    },
+    "blocked_edges": [
+      {
+        "blocking_path": [
+          "attention_0.output",
+          "model_0.post_attention_hidden",
+          "lm_head_0.logits",
+          "top3_0.spine_rank0",
+          "model_1.input_ids",
+          "attention_1.query"
+        ],
+        "from_attention_site": 0,
+        "second_blocking_path": [
+          "attention_0.output",
+          "model_0.returned_hidden_state",
+          "model_1.hidden_state_input",
+          "attention_1.query"
+        ],
+        "state_transition": {
+          "kv_suffix_write_before_next_attention": true,
+          "sequence_length_update": "in_place_increment_or_rollover"
+        },
+        "to_attention_site": 1
+      },
+      {
+        "blocking_path": [
+          "attention_1.output",
+          "model_1.post_attention_hidden",
+          "lm_head_1.logits",
+          "top3_1.spine_rank0",
+          "model_2.input_ids",
+          "attention_2.query"
+        ],
+        "from_attention_site": 1,
+        "second_blocking_path": [
+          "attention_1.output",
+          "model_1.returned_hidden_state",
+          "model_2.hidden_state_input",
+          "attention_2.query"
+        ],
+        "state_transition": {
+          "kv_suffix_write_before_next_attention": true,
+          "sequence_length_update": "in_place_increment_or_rollover"
+        },
+        "to_attention_site": 2
+      },
+      {
+        "blocking_path": [
+          "attention_2.output",
+          "model_2.post_attention_hidden",
+          "lm_head_2.logits",
+          "top3_2.spine_rank0",
+          "model_3.input_ids",
+          "attention_3.query"
+        ],
+        "from_attention_site": 2,
+        "second_blocking_path": [
+          "attention_2.output",
+          "model_2.returned_hidden_state",
+          "model_3.hidden_state_input",
+          "attention_3.query"
+        ],
+        "state_transition": {
+          "kv_suffix_write_before_next_attention": true,
+          "sequence_length_update": "in_place_increment_or_rollover"
+        },
+        "to_attention_site": 3
+      }
+    ],
+    "classification": "recurrent_nonconsecutive_attention_sites",
+    "current_attention_launches_per_event": 4,
+    "eligible": false,
+    "launches_removed": 0,
+    "minimum_lossless_attention_launches_per_event": 4,
+    "reason": "Attention i must finish before post-attention model work, K64 top3, and metadata/KV transition can produce the query for attention i+1. The intervening graph nodes cannot execute behind one same-stream attention kernel.",
+    "scope": "attention-only launch batching across four post-root MTP forwards",
+    "wide_branch_note": "Hydra27 runner-up branches are packing-only, but rank-0 spine token and returned hidden state remain recurrent."
+  },
+  "implementation": {
+    "default_behavior_changed": false,
+    "launcher_changed": false,
+    "production_credentials_changed": false,
+    "runtime_kernel_changed": false,
+    "stop_reason": "No lossless attention-only fusion or defensible shared-KV/index traffic reduction remains after the recurrent barriers."
+  },
+  "next_safe_reduction_review": {
+    "algebraically_safe_under_exact_contract": true,
+    "candidate": "scalar paged-block lookup for each aligned 32-row tile",
+    "logical_index_byte_saving_fraction_of_full_tile_kv_payload": 0.0037841796875,
+    "physical_hbm_saving_proven": false,
+    "reason_not_integrated": "All 32 current lane addresses select the same cached block-table entry. Host inspection cannot prove a physical transaction or runtime win, and the optimistic logical saving is below 0.4%."
+  },
+  "sanitization": {
+    "absolute_host_paths": false,
+    "environment_dump": false,
+    "request_payloads": false,
+    "runtime_logs": false
+  },
+  "schema": "fr13.fixed32.dfwd_attention_batch_audit.v1",
+  "scope": {
+    "base_commit": "c49c8eb5370e4d4035aceffaa8476aea31f921f5",
+    "batch_size": 1,
+    "docker_used": false,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "gpu_used": false,
+    "logical_drafts": 27,
+    "main_worktree_touched": false,
+    "physical_rows": 32,
+    "runtime_used": false,
+    "synthetic_timing_used": false,
+    "topology": "hydra27_fixed32",
+    "valid_mask": "0x7abdffff"
+  },
+  "source_evidence": {
+    "base_patcher_sha256": "494b6d4c1475204a7bc5148ac386d8455ecca575a2d0b643a74967c9e68a4046",
+    "curated_nsys_attribution_sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+    "old_attribution_is_current_speed_claim": false,
+    "old_attribution_only_unified_attention_ms_per_event": 6.967564,
+    "pristine_unified_attention_sha256": "0d74baf7862c0feaef7a5da2f2cf35b761ff7e35c1cc23affbb41679eb2c3903",
+    "repository_sources": {
+      "scripts/fr10_phase4_patch_vllm_tree_gdn.py": {
+        "sha256": "494b6d4c1475204a7bc5148ac386d8455ecca575a2d0b643a74967c9e68a4046"
+      },
+      "scripts/fr13_dfwd_attention_batch_audit.py": {
+        "sha256": "d11d02e69e0485c03ace22197ee6e5957e4215a50507a81bfc8cf59cea465e3b"
+      },
+      "scripts/fr13_fixed32_topology.py": {
+        "sha256": "146bdeace494f79cf15ef4fe54ee6c71d38cf086b5f2acfbf5149b46d102e311"
+      }
+    },
+    "topology_ancestry_sha256": "90873d81e83ce1644ee4701e043b7e9d26e83b7a7ca752d538a0e6eed1946dad",
+    "topology_parent_sha256": "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd",
+    "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+  },
+  "static_ledger": {
+    "accounting_scope": {
+      "page_index_bytes": "source-level logical block-table loads",
+      "payload_bytes": "mandatory Q, output, K, and V tensor traffic",
+      "physical_hbm_or_compiler_metadata_transactions_included": false,
+      "work": "QK and PV dot-product FLOPs"
+    },
+    "bytes": {
+      "kv_payload_per_sequence_row": 4096,
+      "kv_payload_reads_per_event": "4096*(4*S+6)",
+      "output_writes_per_event": 49152,
+      "q_reads_per_event": 49152,
+      "scalar_page_index_loads_per_full_tile": 16,
+      "scalar_page_index_logical_saving_per_full_tile": 496,
+      "scalar_page_index_saving_vs_kv_payload_fraction": 0.0037841796875,
+      "vector_page_index_loads_per_full_tile": 512
+    },
+    "index_preparation": {
+      "block_table_stable_across_sites": true,
+      "direct_scalar_lookup_needs_expanded_map": false,
+      "expanded_map_consumer_scalar_bytes": "16*T",
+      "expanded_map_entries_per_source_page": 32,
+      "expanded_tile_map_write_bytes": "4*ceil((S+3)/32)",
+      "once_per_event_expanded_tile_map_can_be_exact": true,
+      "page_rows": 1024,
+      "physical_byte_saving_proven_host_only": false,
+      "source_page_table_unique_bytes": "4*ceil((S+3)/1024)",
+      "tile_rows": 32,
+      "tiles_per_page": 32
+    },
+    "launches": {
+      "ctas_per_event": 16,
+      "ctas_per_launch": 4,
+      "kernel_unified_attention_2d": 4,
+      "lossless_attention_only_fused_launches": null
+    },
+    "same_width_common_prefix_stage": {
+      "original_common_prefix_reads": "4*4096*S",
+      "staged_common_prefix_traffic": "6*4096*S",
+      "standalone_preparation_launch_delta": 1,
+      "traffic_delta_bytes": "+8192*S",
+      "verdict": "strictly_more_traffic"
+    },
+    "sequence_length_precondition": "S>0 and S+3<=max_model_len",
+    "sequence_lengths": [
+      "S",
+      "S+1",
+      "S+2",
+      "S+3"
+    ],
+    "sum_sequence_rows": "4*S+6",
+    "work": {
+      "bm8_physical_qk_pv_flops_per_full_tile_across_four_kv_heads": 1048576,
+      "live_head_qk_pv_flops_per_full_tile_across_four_kv_heads": 786432,
+      "physical_to_live_head_work_ratio": 1.3333333333333333,
+      "tile_count_per_event": "ceil(S/32)+ceil((S+1)/32)+ceil((S+2)/32)+ceil((S+3)/32)",
+      "tile_rows": 32
+    }
+  },
+  "status": "STOP_RECURRENCE_BLOCKS_ATTENTION_ONLY_FUSION"
+}
