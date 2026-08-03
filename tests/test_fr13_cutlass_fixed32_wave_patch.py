@@ -565,8 +565,8 @@ def test_b4_twom_scheduler_removes_generic_per_tile_divmods() -> None:
     )
     scheduler = patched[scheduler_start:scheduler_end]
 
-    assert "linear_idx & 1" in scheduler
-    assert "linear_idx >> 1" in scheduler
+    assert "blockIdx.x & 1" in scheduler
+    assert "current_n_idx_ = blockIdx.x >> 1;" in scheduler
     assert "L_idx" not in scheduler
     assert "divmod_batch_" not in scheduler
     assert "divmod_cluster_shape" not in scheduler
@@ -574,7 +574,7 @@ def test_b4_twom_scheduler_removes_generic_per_tile_divmods() -> None:
     assert "raster_order_" not in scheduler
     assert "uint32_t current_work_linear_idx_" not in scheduler
     assert "uint32_t current_m_idx_" not in scheduler
-    assert "uint32_t current_n_idx_" not in scheduler
+    assert "uint32_t current_n_idx_" in scheduler
     assert "uint32_t total_grid_size_" not in scheduler
     assert "uint32_t problem_tiles_" not in scheduler
     assert "return gridDim.x >> 1;" in scheduler
@@ -584,10 +584,8 @@ def test_b4_twom_scheduler_removes_generic_per_tile_divmods() -> None:
     assert "gridDim.z" not in scheduler
     assert "this->scheduler_params.blocks_per_problem_" in scheduler
     assert "n_grid_stride() * advance_count" in scheduler
-    assert "work_tile_info.N_idx" in scheduler
-    assert "work_tile_info.M_idx" in scheduler
-    assert "next_n_idx >= problem_n_tiles()" in scheduler
-    assert "advance_to_next_work" not in scheduler
+    assert "current_n_idx_ >= problem_n_tiles()" in scheduler
+    assert "advance_to_next_work" in scheduler
     assert "uint64_t" not in scheduler
     assert "fr13_fixed32_b4_twom_static_scheduler" in patched
     assert "using Scheduler = Fr13B4TwoMStaticTileScheduler100;" in patched
