@@ -1,0 +1,18 @@
+PASS branch base is c49c8eb5370e4d4035aceffaa8476aea31f921f5
+PASS imported B4 scheduler source commits 8c144f6ea and dc1c4f603
+PASS exact N5120 route uses cooperative 128x128x128 StageCount2 kernel
+PASS exact N5120 scheduler maps 40 X-axis CTAs with one complete tile per CTA
+PASS other admitted B4 shapes retain 64x128x128 two-M ping-pong scheduling
+PASS no B1 implementation line changed from c49 in the patch source diff
+PASS repaired B1 source contract remains d626d60ddcba89207444da662e391659fe3444c5301e9e32e1a5f9f85ef6ce29
+PASS B1 pass module, binary verifier, live gate, and timing runner match c49 blobs
+PASS B4 pass module, binary verifier, live gate, and timing runner match c49 blobs
+PASS upstream reduced audit SHA256SUMS verification
+PASS focused host-only suite: 148 passed
+PASS Python byte compilation
+PASS shell syntax for B4 live-gate and timing runners
+PASS integration manifest JSON parse
+PASS git diff whitespace check
+NOT RUN c49-specific SM121a compile, link, CPU import, resource, SASS, or ABI audit
+NOT RUN binary re-pin because upstream binary binds patch SHA 777f8e8a, not d1672387
+NOT RUN Docker, GPU kernel, synthetic workload, real SWE-Verified byte gate, or timing

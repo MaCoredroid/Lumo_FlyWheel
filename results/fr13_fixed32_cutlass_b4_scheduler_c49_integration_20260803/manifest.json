@@ -1,0 +1,36 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_scheduler_c49_integration.v1",
+  "created_at_utc": "2026-08-03T09:54:42Z",
+  "status": "source_integration_pass_host_rebuild_pending_default_off",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "production_repin_complete": false,
+  "base_commit": "c49c8eb5370e4d4035aceffaa8476aea31f921f5",
+  "audited_b4_head": "18021f333e641b98656713ca652075e87c12bc57",
+  "integrated_patch_source_commit": "e090014c4790980c2716cc69029c502fd8434b26",
+  "integrated_patch_source_sha256": "d1672387601f37671079a022210f4f7edbc7311cb157ab75b18696f71fd924ab",
+  "upstream_audit_patch_source_sha256": "777f8e8a90681201504b074e85a8dc6e3e3840aa07e0f21d02c215f0a8298c11",
+  "repaired_b1_source_contract_sha256": "d626d60ddcba89207444da662e391659fe3444c5301e9e32e1a5f9f85ef6ce29",
+  "source_scope": {
+    "n5120": "cooperative_128x128x128_stage2_exact_40_cta_x_axis",
+    "other_shapes": "existing_64x128x128_stage2_two_m_pingpong",
+    "b1_scheduler_selector": "preserved_from_c49"
+  },
+  "upstream_host_audit": {
+    "result": "supporting_evidence_only",
+    "source_commit": "dc1c4f603e19e9fbf3676b2875d4c02df9996979",
+    "binary_sha256": "78b64e69adcb0a3e43a03d65c68658892535e0cd780742e39c0d77b42d5396e8",
+    "reusable_as_c49_candidate": false
+  },
+  "deferred_gates": [
+    "c49_source_host_compile_link_cpu_import",
+    "resource_sass_abi_and_b1_identity_audit",
+    "candidate_source_dispatch_binary_repin",
+    "tail23_k64_root_exact4_stock_serving_byte_gate",
+    "hydra27_k64_root_exact4_stock_serving_byte_gate",
+    "dual_topology_sidecar_issue_and_verify",
+    "dual_topology_stock_candidate_full_wall_timing"
+  ],
+  "gpu_runtime_used": false,
+  "docker_used": false
+}
