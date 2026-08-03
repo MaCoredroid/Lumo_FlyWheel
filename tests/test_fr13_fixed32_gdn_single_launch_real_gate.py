@@ -259,7 +259,7 @@ def test_nonmatching_b1_replay_cannot_consume_b4_capture_state() -> None:
     }
 
     report = namespace["fixed32_gdn_bv_live_gate_on_replay"](
-        101, "f" * 64, 1, 48
+        101, "f" * 64, "a" * 64, 1, 48
     )
     assert report["status"] == "not_expected_batch"
     assert report["observed_batch"] == 1
@@ -287,7 +287,7 @@ def test_nonmatching_b1_cannot_inherit_global_b4_pass_state() -> None:
     }
 
     report = namespace["fixed32_gdn_bv_live_gate_on_replay"](
-        101, "f" * 64, 1, 48
+        101, "f" * 64, "a" * 64, 1, 48
     )
     assert report["status"] == "not_expected_batch"
     assert report["observed_batch"] == 1
@@ -367,7 +367,6 @@ def test_live_pass_is_source_mode_batch_and_reference_bound(
     namespace["_fr13_fixed32_gdn_bv_live_pass_emit"](
         task_marker="swe_verified:astropy__astropy-12907",
         batch_size=batch,
-        graph_id=100 + batch,
         graph_signature="d" * 64,
         result={
             "records": 48,
@@ -387,7 +386,7 @@ def test_live_pass_is_source_mode_batch_and_reference_bound(
     assert payload["covered_batches"] == [batch]
     assert payload["expected_batch"] == batch
     assert payload["diagnostic_identity"].endswith(f":b{batch}")
-    assert payload["graph_id"] == 100 + batch
+    assert "graph_id" not in payload
     assert payload["graph_signature"] == "d" * 64
     assert payload["physical_rows"] == 32
     assert payload["draft_vocab_k"] == 65536

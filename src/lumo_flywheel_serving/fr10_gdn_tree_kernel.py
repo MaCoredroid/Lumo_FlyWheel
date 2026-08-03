@@ -951,7 +951,6 @@ def _fr13_fixed32_gdn_bv_live_pass_emit(
     *,
     task_marker: str,
     batch_size: int,
-    graph_id: int,
     graph_signature: str,
     result: dict[str, object],
 ) -> None:
@@ -994,7 +993,6 @@ def _fr13_fixed32_gdn_bv_live_pass_emit(
         "source_sha256": _fr13_fixed32_gdn_path_bv_source_sha256(),
         "task_marker": task_marker,
         "mode": _FR13_FIXED32_MODE,
-        "graph_id": int(graph_id),
         "graph_signature": graph_signature,
         "batch_size": int(batch_size),
         "covered_batches": (
@@ -1412,6 +1410,7 @@ def _fr13_fixed32_gdn_single_launch_compare_records(
 def fixed32_gdn_bv_live_gate_on_replay(
     graph_id: int,
     graph_signature: str,
+    census_graph_signature: str,
     batch_size: int,
     expected_records: int,
 ) -> dict[str, object]:
@@ -1422,6 +1421,7 @@ def fixed32_gdn_bv_live_gate_on_replay(
     identity = int(graph_id)
     batch = int(batch_size)
     signature = str(graph_signature)
+    census_signature = str(census_graph_signature)
     expected = int(expected_records)
     if (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE == "single_launch"
@@ -1450,6 +1450,11 @@ def fixed32_gdn_bv_live_gate_on_replay(
         or int(capture.get("batch_size", -1)) != batch
         or int(capture.get("graph_id", -1)) != identity
         or capture.get("graph_signature") != signature
+        or len(census_signature) != 64
+        or any(
+            character not in "0123456789abcdef"
+            for character in census_signature
+        )
         or expected
         != (
             48
@@ -1487,8 +1492,7 @@ def fixed32_gdn_bv_live_gate_on_replay(
     _fr13_fixed32_gdn_bv_live_pass_emit(
         task_marker=task_marker,
         batch_size=batch,
-        graph_id=identity,
-        graph_signature=signature,
+        graph_signature=census_signature,
         result=result,
     )
     del _FR13_FIXED32_GDN_BV_CAPTURES[key]

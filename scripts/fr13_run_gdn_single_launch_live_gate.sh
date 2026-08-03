@@ -114,6 +114,7 @@ printf 'classification=real_swe_verified_gdn_single_launch_graph_byte_diagnostic
 
 "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 --sequence "$SEQUENCE" \
+  --source-commit "$SOURCE_COMMIT" \
   --output "$RUNROOT_ABS/runtime_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
@@ -169,6 +170,7 @@ printf 'serve_rc=%s ended=%s\n' "$serve_rc" "$(date -u +%FT%TZ)" \
   >> "$RUNROOT_ABS/launcher_meta.txt"
 "$PYTHON_BIN" scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 --sequence "$SEQUENCE" \
+  --source-commit "$SOURCE_COMMIT" \
   --output "$RUNROOT_ABS/runtime_manifest.at_end.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_end.json"

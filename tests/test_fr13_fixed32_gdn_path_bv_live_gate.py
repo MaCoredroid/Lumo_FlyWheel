@@ -187,6 +187,7 @@ def test_live_gate_executes_only_on_first_measured_graph_replay() -> None:
     calls: list[tuple[int, int]] = []
     records = tuple(object() for _ in range(48))
     graph_signature = "a" * 64
+    census_graph_signature = "b" * 64
     namespace.update(
         {
             "torch": SimpleNamespace(
@@ -232,16 +233,15 @@ def test_live_gate_executes_only_on_first_measured_graph_replay() -> None:
     )
     gate = namespace["fixed32_gdn_bv_live_gate_on_replay"]
 
-    first = gate(101, graph_signature, 1, 48)
-    second = gate(101, graph_signature, 1, 48)
+    first = gate(101, graph_signature, census_graph_signature, 1, 48)
+    second = gate(101, graph_signature, census_graph_signature, 1, 48)
 
     assert calls == [(48, 64)]
     assert emitted == [
         {
             "task_marker": "swe_verified:django__django-12345",
             "batch_size": 1,
-            "graph_id": 101,
-            "graph_signature": graph_signature,
+            "graph_signature": census_graph_signature,
             "result": {
                 "records": 48,
                 "reference_bv": 8,

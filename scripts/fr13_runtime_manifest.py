@@ -8,7 +8,9 @@ import ast
 import hashlib
 import json
 import os
+import re
 import stat
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -157,6 +159,7 @@ PROFILES = {
 }
 
 SCHEMA = "fr13-runtime-manifest-v1"
+SOURCE_IDENTITY_SCHEMA = "fr13-runtime-source-identity-v1"
 CANONICAL_FORMAT = "utf8-json-sort-keys-compact-v1"
 READ_CHUNK_BYTES = 1024 * 1024
 OPEN_BASE_FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
@@ -409,11 +412,66 @@ def _canonical_bytes(payload: object) -> bytes:
     ).encode("utf-8")
 
 
+def _resolve_source_commit(repo: Path, source_commit: str | None) -> str | None:
+    if source_commit is None:
+        return None
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise ManifestError("--source-commit must be a full lowercase Git commit")
+    commands = (
+        (
+            "claimed",
+            [
+                "git",
+                "-C",
+                str(repo),
+                "rev-parse",
+                "--verify",
+                f"{source_commit}^{{commit}}",
+            ],
+        ),
+        (
+            "HEAD",
+            ["git", "-C", str(repo), "rev-parse", "--verify", "HEAD^{commit}"],
+        ),
+    )
+    resolved: dict[str, str] = {}
+    for label, command in commands:
+        result = subprocess.run(
+            command,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        value = result.stdout.strip()
+        if result.returncode != 0 or re.fullmatch(r"[0-9a-f]{40}", value) is None:
+            raise ManifestError(f"cannot resolve {label} Git commit")
+        resolved[label] = value
+    if resolved["claimed"] != source_commit or resolved["HEAD"] != source_commit:
+        raise ManifestError("--source-commit does not identify the current HEAD")
+    return source_commit
+
+
+def _git_source_bytes(repo: Path, source_commit: str, path: str) -> bytes:
+    result = subprocess.run(
+        ["git", "-C", str(repo), "show", f"{source_commit}:{path}"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise ManifestError(
+            f"source commit {source_commit} does not contain {path}"
+        )
+    return result.stdout
+
+
 def build_manifest(
     repo: Path,
     *,
     profile: str,
     sequence: str,
+    source_commit: str | None = None,
     spec_override: ProfileSpec | None = None,
 ) -> dict[str, object]:
     repo = repo.expanduser().resolve(strict=True)
@@ -424,6 +482,7 @@ def build_manifest(
     except KeyError as error:
         raise ManifestError(f"unsupported profile: {profile}") from error
     _validate_profile_spec(spec)
+    resolved_source_commit = _resolve_source_commit(repo, source_commit)
 
     sequence = _normalize_repo_relative(sequence, label="--sequence")
     sequence_path = PurePosixPath(sequence)
@@ -463,6 +522,30 @@ def build_manifest(
                 package_sources[relative_path] = source
         closures[section] = records
 
+    source_records = sorted(
+        (
+            record
+            for section in (
+                "host_script_source",
+                "python_package_source",
+                "verdict_tools",
+            )
+            for record in closures[section]
+        ),
+        key=lambda record: str(record["path"]),
+    )
+    if resolved_source_commit is not None:
+        for record in source_records:
+            path = str(record["path"])
+            committed = _git_source_bytes(repo, resolved_source_commit, path)
+            if (
+                record["sha256"] != hashlib.sha256(committed).hexdigest()
+                or record["size"] != len(committed)
+            ):
+                raise ManifestError(
+                    f"current source differs from {resolved_source_commit}:{path}"
+                )
+
     _validate_package_import_closure(spec, package_sources)
     for relative_path in sorted(spec.required_absence):
         _require_absent(repo, relative_path)
@@ -487,6 +570,15 @@ def build_manifest(
             "total_size": total_size,
         },
     }
+    if resolved_source_commit is not None:
+        payload["source_identity"] = {
+            "schema": SOURCE_IDENTITY_SCHEMA,
+            "git_commit": resolved_source_commit,
+            "source_file_count": len(source_records),
+            "source_closure_sha256": hashlib.sha256(
+                _canonical_bytes(source_records)
+            ).hexdigest(),
+        }
     return {
         **payload,
         "overall_canonical_sha256": hashlib.sha256(
@@ -703,6 +795,10 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output", help="output JSON path, or - for stdout")
     parser.add_argument(
+        "--source-commit",
+        help="full Git commit required to equal the repository HEAD",
+    )
+    parser.add_argument(
         "--self-test",
         action="store_true",
         help="run isolated deterministic/fail-closed fixture tests",
@@ -718,6 +814,7 @@ def main(argv: list[str] | None = None) -> int:
             args.profile is not None
             or args.sequence is not None
             or args.output is not None
+            or args.source_commit is not None
         ):
             parser.error("--self-test cannot be combined with manifest output options")
         self_test()
@@ -740,6 +837,7 @@ def main(argv: list[str] | None = None) -> int:
             repo,
             profile=args.profile,
             sequence=args.sequence,
+            source_commit=args.source_commit,
         )
         _write_output(
             args.output,

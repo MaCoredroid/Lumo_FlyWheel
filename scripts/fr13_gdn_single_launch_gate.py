@@ -9,8 +9,9 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 
@@ -23,6 +24,7 @@ for path in (SCRIPT_DIR, REPO / "src"):
 import fr13_fixed32_contract as fixed32_contract  # noqa: E402
 import fr13_fixed32_work_census as work_census  # noqa: E402
 import fr13_floor_gate as floor_gate  # noqa: E402
+import fr13_runtime_manifest as runtime_manifest  # noqa: E402
 
 
 SCHEMA = "fr13.fixed32.gdn_single_launch.real_task_credential.v2"
@@ -65,12 +67,28 @@ KERNEL_SOURCE = "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
 PATCHER_SOURCE = "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
 SERVER_LAUNCHER = "scripts/fr13_launch_forked_fa2_tree_server.sh"
 BLOCK_MAP = "scripts/fr13_dvk_subset_blocks.json"
+INGRESS_SOURCE = "src/lumo_flywheel_serving/inference_proxy.py"
 VALIDATOR_SOURCES = (
     "scripts/fr13_fixed32_contract.py",
     "scripts/fr13_fixed32_work_census.py",
     "scripts/fr13_floor_gate.py",
     "scripts/fr13_runtime_manifest.py",
 )
+TEST_SOURCES = (
+    "tests/test_fr13_fixed32_gdn_single_launch_real_gate.py",
+    "tests/test_fr13_gdn_single_launch_campaign_gate.py",
+)
+RUNTIME_SOURCE_SECTIONS = frozenset(
+    {"host_script_source", "python_package_source", "verdict_tools"}
+)
+RUNTIME_CLOSURE_SECTIONS = RUNTIME_SOURCE_SECTIONS | {
+    "runtime_data_and_config"
+}
+RUNTIME_SOURCE_IDENTITY_SCHEMA = "fr13-runtime-source-identity-v1"
+SUBSET_PATH = {
+    1: "config/fr13_fixed32/subset_b1_diagnostic_one.json",
+    4: "config/fr13_fixed32/subset_b4_four.json",
+}
 BLOCK_MAP_SHA256 = (
     "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
 )
@@ -156,8 +174,99 @@ def _require_sha256(value: Any, label: str) -> str:
     return value
 
 
+def _canonical_repo_path(value: Any, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or "\\" in value
+        or "\x00" in value
+    ):
+        raise GateError(f"{label} is not a canonical repo-relative path")
+    path = PurePosixPath(value)
+    if (
+        path.is_absolute()
+        or str(path) != value
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
+        raise GateError(f"{label} is not a canonical repo-relative path")
+    return value
+
+
+def _runtime_manifest_records(
+    payload: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], frozenset[str]]:
+    closures = payload.get("closures")
+    if not isinstance(closures, dict) or set(closures) != RUNTIME_CLOSURE_SECTIONS:
+        raise GateError("runtime manifest closure sections drifted")
+    records_by_path: dict[str, dict[str, Any]] = {}
+    source_paths: set[str] = set()
+    for section in sorted(RUNTIME_CLOSURE_SECTIONS):
+        records = closures.get(section)
+        if not isinstance(records, list):
+            raise GateError(f"runtime manifest {section} closure is not an array")
+        for index, record in enumerate(records):
+            label = f"runtime manifest {section}[{index}]"
+            if not isinstance(record, dict) or set(record) != {
+                "path",
+                "sha256",
+                "size",
+            }:
+                raise GateError(f"{label} record shape drifted")
+            path = _canonical_repo_path(record.get("path"), f"{label}.path")
+            _require_sha256(record.get("sha256"), f"{label}.sha256")
+            size = record.get("size")
+            if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+                raise GateError(f"{label}.size is invalid")
+            if path in records_by_path:
+                raise GateError(f"runtime manifest repeats source path {path}")
+            records_by_path[path] = record
+            if section in RUNTIME_SOURCE_SECTIONS:
+                source_paths.add(path)
+    return records_by_path, frozenset(source_paths)
+
+
+def _git_object_bytes(repo: Path, source_commit: str, path: str) -> bytes:
+    result = subprocess.run(
+        ["git", "-C", str(repo), "show", f"{source_commit}:{path}"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise GateError(
+            f"claimed source commit does not contain {path}: {detail}"
+        )
+    return result.stdout
+
+
+def _git_bound_closure(
+    repo: Path, source_commit: str, paths: set[str] | frozenset[str]
+) -> dict[str, str]:
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise GateError("source commit is not a full lowercase Git object ID")
+    normalized = {
+        _canonical_repo_path(path, "source closure path") for path in paths
+    }
+    closure: dict[str, str] = {}
+    for path in sorted(normalized):
+        current = _regular(repo / path, f"current source closure {path}")
+        committed = _git_object_bytes(repo, source_commit, path)
+        if current != committed:
+            raise GateError(
+                f"current source closure differs from {source_commit}:{path}"
+            )
+        closure[path] = _sha256(committed)
+    return closure
+
+
 def _validate_runtime_manifest(
-    payload: dict[str, Any], *, required_closure: dict[str, str]
+    payload: dict[str, Any],
+    *,
+    repo: Path,
+    source_commit: str,
+    git_closure: dict[str, str],
+    required_paths: tuple[str, ...],
 ) -> str:
     unsigned = {
         key: value
@@ -180,24 +289,53 @@ def _validate_runtime_manifest(
         or payload.get("overall_canonical_sha256") != digest
     ):
         raise GateError("runtime manifest identity or canonical digest drifted")
-    closures = payload.get("closures")
-    if not isinstance(closures, dict):
-        raise GateError("runtime manifest closures are missing")
-    records = [
-        record
-        for group in closures.values()
-        if isinstance(group, list)
-        for record in group
-        if isinstance(record, dict)
-    ]
-    by_path = {
-        record.get("path"): record
-        for record in records
-        if isinstance(record.get("path"), str)
-    }
-    for path, expected in required_closure.items():
-        if by_path.get(path, {}).get("sha256") != expected:
+    by_path, source_paths = _runtime_manifest_records(payload)
+    source_records = [by_path[path] for path in sorted(source_paths)]
+    if payload.get("source_identity") != {
+        "schema": RUNTIME_SOURCE_IDENTITY_SCHEMA,
+        "git_commit": source_commit,
+        "source_file_count": len(source_records),
+        "source_closure_sha256": _sha256(
+            json.dumps(
+                source_records,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ),
+    }:
+        raise GateError("runtime manifest Git/source identity drifted")
+    for path in required_paths:
+        expected = git_closure.get(path)
+        record = by_path.get(path)
+        if expected is None or not isinstance(record, dict):
             raise GateError(f"runtime manifest does not bind {path}")
+        if (
+            record.get("sha256") != expected
+            or record.get("size") != len(_regular(repo / path, path))
+        ):
+            raise GateError(f"runtime manifest does not bind {path}")
+    for path in source_paths:
+        expected = git_closure.get(path)
+        record = by_path[path]
+        if (
+            expected is None
+            or record.get("sha256") != expected
+            or record.get("size") != len(_regular(repo / path, path))
+        ):
+            raise GateError(
+                f"runtime source closure is not bound to {source_commit}:{path}"
+            )
+    summary = payload.get("summary")
+    if (
+        not isinstance(summary, dict)
+        or summary.get("file_count") != len(by_path)
+        or summary.get("python_package_file_count")
+        != len(payload["closures"]["python_package_source"])
+        or summary.get("total_size")
+        != sum(int(record["size"]) for record in by_path.values())
+    ):
+        raise GateError("runtime manifest summary does not reconcile")
     return digest
 
 
@@ -221,21 +359,16 @@ def _rebuild_traffic_audit(
     concurrency: int,
 ) -> tuple[dict[str, Any], bytes]:
     task_ids = list(subset["task_ids"])
-    task_dirs = floor_gate.task_directories(
-        arm,
-        len(task_ids),
-        expected_task_ids=task_ids,
-    )
-    dataset_hashes: dict[str, str] = {}
-    for task_dir in task_dirs:
-        metadata = floor_gate.exact_json(
-            task_dir / "runner_metadata.json",
-            label=f"{task_dir}:runner metadata",
-        )
-        digest = metadata.get("fixed32_dataset_record_sha256")
-        dataset_hashes[task_dir.name] = _require_sha256(
-            digest, f"{task_dir.name} dataset record"
-        )
+    try:
+        pinned = floor_gate.pinned_dataset_record_digests(str(REPO))
+    except floor_gate.GateError as error:
+        raise GateError(f"cannot derive pinned dataset records: {error}") from error
+    missing = [task_id for task_id in task_ids if task_id not in pinned]
+    if missing:
+        raise GateError(f"pinned dataset records omit canonical tasks: {missing}")
+    dataset_hashes = {task_id: pinned[task_id] for task_id in task_ids}
+    if set(dataset_hashes) != set(task_ids) or len(dataset_hashes) != len(task_ids):
+        raise GateError("pinned dataset record binding is not the exact task set")
     expected = floor_gate.build_fixed32_chat_traffic_audit(
         arm,
         mode=mode,
@@ -307,6 +440,8 @@ def _validate_live_pass(
         "diagnostic_identity": diagnostic_identity,
         "graph_signature": graph_signature,
     }
+    if set(payload) != set(expected) | {"task_marker"}:
+        raise GateError("batch-specific GDN live PASS record shape drifted")
     for key, value in expected.items():
         if payload.get(key) != value:
             raise GateError(f"batch-specific GDN live PASS field drifted: {key}")
@@ -314,9 +449,6 @@ def _validate_live_pass(
         raise GateError(
             "batch-specific GDN live PASS trigger is not a canonical task"
         )
-    graph_id = payload.get("graph_id")
-    if isinstance(graph_id, bool) or not isinstance(graph_id, int) or graph_id <= 0:
-        raise GateError("batch-specific GDN live PASS graph_id is invalid")
 
 
 def reduce(args: argparse.Namespace) -> dict[str, Any]:
@@ -324,9 +456,14 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
     batch = args.batch
     if (mode, batch) not in ENTRYPOINT:
         raise GateError("unsupported mode/batch credential scope")
+    if re.fullmatch(r"[0-9a-f]{40}", args.source_commit) is None:
+        raise GateError("source commit is not a full lowercase Git object ID")
     expected_tasks = list(B1_TASK_IDS if batch == 1 else EXACT4_TASK_IDS)
+    subset_path = (REPO / SUBSET_PATH[batch]).resolve(strict=True)
+    if args.subset.resolve(strict=True) != subset_path:
+        raise GateError("subset path is not the canonical batch-specific source")
     subset = floor_gate.validate_fixed32_run_subset(
-        args.subset,
+        subset_path,
         b1_diagnostic=batch == 1,
     )
     if subset["task_ids"] != expected_tasks:
@@ -356,7 +493,20 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         raise GateError(f"external manifest is invalid: {error}") from error
 
     entrypoint = ENTRYPOINT[(mode, batch)]
-    closure_paths = (
+    try:
+        regenerated_runtime = runtime_manifest.build_manifest(
+            REPO,
+            profile="fixed32",
+            sequence="scripts/fr13_fixed32_floor_timers_seq.sh",
+            source_commit=args.source_commit,
+        )
+    except runtime_manifest.ManifestError as error:
+        raise GateError(f"cannot regenerate runtime manifest: {error}") from error
+    if runtime_end != regenerated_runtime:
+        raise GateError(
+            "runtime manifest is not the canonical current Git-bound profile"
+        )
+    manifest_closure_paths = (
         entrypoint,
         COMMON_RUNNER,
         "scripts/fr13_gdn_single_launch_gate.py",
@@ -365,16 +515,34 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         PATCHER_SOURCE,
         SERVER_LAUNCHER,
         BLOCK_MAP,
+        INGRESS_SOURCE,
+        SUBSET_PATH[batch],
     )
-    required_closure = {
-        path: _sha256(_regular(REPO / path, f"source closure {path}"))
-        for path in closure_paths
-    }
+    _records_by_path, runtime_source_paths = _runtime_manifest_records(runtime_end)
+    git_paths = set(manifest_closure_paths) | set(TEST_SOURCES) | set(
+        runtime_source_paths
+    )
+    required_closure = _git_bound_closure(
+        REPO,
+        args.source_commit,
+        git_paths,
+    )
     if required_closure[BLOCK_MAP] != BLOCK_MAP_SHA256:
         raise GateError("K64 block map identity drifted")
     runtime_digest = _validate_runtime_manifest(
         runtime_end,
-        required_closure=required_closure,
+        repo=REPO,
+        source_commit=args.source_commit,
+        git_closure=required_closure,
+        required_paths=manifest_closure_paths,
+    )
+    source_closure_sha256 = _sha256(
+        _canonical(
+            {
+                "source_commit": args.source_commit,
+                "files": required_closure,
+            }
+        )
     )
 
     health, health_raw = _load_json(arm / "health.json", "health record")
@@ -456,7 +624,6 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         "reference_served": True,
         "state_restored": True,
         "raw_byte_equal": True,
-        "graph_id": live["graph_id"],
         "graph_signature": graph_signature,
         "work_census_event_count": work_report["event_count"],
         "work_census_sha256": _sha256(census_raw),
@@ -476,7 +643,14 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         "acceptance_valid": False,
         "floor_acceptance_eligible": False,
         "source_commit": args.source_commit,
+        "source_commit_git_show_verified": True,
+        "source_closure_file_count": len(required_closure),
+        "source_closure_sha256": source_closure_sha256,
+        "test_source_sha256": {
+            path: required_closure[path] for path in TEST_SOURCES
+        },
         "kernel_source_sha256": kernel_sha256,
+        "runtime_manifest_source_commit": args.source_commit,
         "runtime_manifest_canonical_sha256": runtime_digest,
         "runtime_manifest_sha256": _sha256(runtime_end_raw),
         "external_manifest_sha256": _sha256(external_end_raw),
@@ -489,8 +663,6 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         "health_sha256": _sha256(health_raw),
         "authenticated_traffic_audit_sha256": _sha256(audit_raw),
     }
-    if re.fullmatch(r"[0-9a-f]{40}", args.source_commit) is None:
-        raise GateError("source commit is not a full lowercase Git object ID")
     _atomic_write(args.output, _canonical(credential))
     return credential
 

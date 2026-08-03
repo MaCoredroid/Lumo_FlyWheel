@@ -3907,6 +3907,14 @@ def _fr13_fixed32_observed_graph_replay(
         )
     tree = manifest["tree_attn"]
     gdn = manifest["gdn"]
+    runtime_sys = __import__("sys")
+    if "/workspace/scripts" not in runtime_sys.path:
+        runtime_sys.path.insert(0, "/workspace/scripts")
+    from fr13_fixed32_work_census import forward_graph_structural_signature
+
+    census_graph_signature = forward_graph_structural_signature(
+        int(event["batch_size"])
+    )
     if (
         _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
         and int(event["batch_size"]) == 4
@@ -3951,6 +3959,7 @@ def _fr13_fixed32_observed_graph_replay(
         gate_report = tree_kernel.fixed32_gdn_bv_live_gate_on_replay(
             identity,
             expected_signature,
+            census_graph_signature,
             int(event["batch_size"]),
             int(gdn["scan_calls"]),
         )
