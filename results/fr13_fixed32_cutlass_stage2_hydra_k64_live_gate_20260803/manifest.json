@@ -1,0 +1,66 @@
+{
+  "schema": "fr13.fixed32.cutlass_stage2_hydra_k64_live_gate_receipt.v1",
+  "status": "QUALIFIED_BYTE_EXACT",
+  "created_at_utc": "2026-08-03T01:40:00Z",
+  "source_commit": "4db00ec4cd5d268745f0b48850c6e14b6730561a",
+  "runner_repair_commit": "c506dcc34",
+  "workload": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "task_set": "canonical_exact4",
+    "task_count": 4,
+    "batch_size": 4,
+    "concurrency": 4,
+    "terminal_resolved": 2,
+    "terminal_failed": 2
+  },
+  "configuration": {
+    "topology": "hydra27_fixed32",
+    "logical_topology": "Hydra27",
+    "physical_drafts": 31,
+    "physical_rows_root_inclusive": 32,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": true,
+    "candidate_selector": "identity_stockshape_stage2_b4",
+    "diagnostic_selector": "identity_stockshape_stage2_b4_byte_ab"
+  },
+  "candidate": {
+    "sha256": "c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29",
+    "bytes": 117488608,
+    "patch_source_sha256": "841b5dfc0741aa5051037e3eda005e5a65f7a425b76235a61e8a0779bd31a155"
+  },
+  "comparison": {
+    "calls": 320,
+    "mismatching_calls": 0,
+    "differing_bytes": 0,
+    "all_five_projection_shapes_observed": true,
+    "served_result": "stock"
+  },
+  "credentials": {
+    "live_status": "pass",
+    "live_result_sha256": "e31986d450697f36c44d14139bcee2d6c61272dbd1d2ef9a5c415fc7251e5045",
+    "production_status": "QUALIFIED",
+    "production_schema": "fr13.fixed32.cutlass_b4.identity_stockshape_stage2.k64_root.production_pass.v1",
+    "production_pass_sha256": "7d0450aba7eabe690ac4215ab063c53717e6adc13f29a2cce36465fbab38a339"
+  },
+  "closure": {
+    "runtime_launch_sha256": "0582c756f693c84f9119a081bb806031e46bde23727d91c2f545b8d7fc04e0bc",
+    "runtime_end_sha256": "0582c756f693c84f9119a081bb806031e46bde23727d91c2f545b8d7fc04e0bc",
+    "external_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_end_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "closeout_reducer_privilege_repair": true
+  },
+  "claims": {
+    "real_swe_verified": true,
+    "byte_correctness": true,
+    "timing_eligible": false,
+    "tps_available": false,
+    "floor_acceptance_eligible": false
+  },
+  "privacy": {
+    "raw_task_data_absent": true,
+    "raw_model_data_absent": true,
+    "raw_logs_absent": true,
+    "environment_absent": true,
+    "process_and_container_identifiers_absent": true
+  }
+}

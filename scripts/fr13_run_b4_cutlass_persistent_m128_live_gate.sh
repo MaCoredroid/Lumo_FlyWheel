@@ -309,7 +309,10 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   || { echo "B4 CUTLASS gate runner changed during execution" >&2; exit 14; }
 (( serve_rc == 0 )) || exit "$serve_rc"
 
-"$PYTHON_BIN" - \
+# The immutable real-event marker is created by the root-owned serving
+# container with mode 0400. Keep that ownership boundary intact and run only
+# the closed-over credential reducer with read privilege after teardown.
+sudo -n -- "$PYTHON_BIN" - \
   "$ARMDIR" "$ARMDIR$CONTAINER_JSONL" \
   "$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json" \
   "$ARMDIR/$LIVE_RESULT_NAME" "$PATCH_SOURCE" \

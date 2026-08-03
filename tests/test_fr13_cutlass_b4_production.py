@@ -250,6 +250,7 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert "subset_b4_four.json" in gate
     assert "persistent_b4_m128_byte_ab" in gate
     assert "fixed32_cutlass_b4_byte_ab.real_event.arm" in gate
+    assert 'sudo -n -- "$PYTHON_BIN" - \\' in gate
     assert '"task_count": 4' in gate
     assert '"fixed_rows": 128' in gate
     assert '"eager_builder_capacity": 128' in gate
