@@ -25,6 +25,11 @@ ordered full-K accumulation are unchanged.
 The linked FP16 and BF16 callers for both routed kernels each query
 `cudaDevAttrMultiProcessorCount`, store the result in scheduler parameters,
 and call the corresponding scheduler `get_grid_shape` implementation.
+The pinned CUTLASS exact-specialization trace independently confirms the full
+dataflow: each specialization reads `Arguments::hw_info`, queries the device
+when `sm_count <= 0`, builds a populated local `KernelHardwareInfo`, stores it
+in both scheduler and GEMM Params, then forwards `Params::hw_info` to
+`TileScheduler::get_grid_shape`. See `scheduler_hw_info_dataflow.tsv`.
 
 The byte diagnostic remains stock-serving. Production dispatch directly calls
 one of the two candidate kernels for an admitted exact shape; non-admitted

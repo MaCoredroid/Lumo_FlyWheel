@@ -120,6 +120,19 @@
     "sm_count_parameter_stores_per_caller": 1,
     "scheduler_get_grid_calls_per_caller": 1
   },
+  "scheduler_hw_info_dataflow": {
+    "result": "pass",
+    "dependency_file_contains_exact_specializations": true,
+    "twom_pingpong_header": "sm90_gemm_tma_warpspecialized_pingpong.hpp",
+    "twom_pingpong_header_sha256": "41f0cc048be7a70c6dbd72afb5509b71991b54bd4e01dfa40702a1e2dffc3781",
+    "cooperative_m128_header": "sm120_gemm_tma_warpspecialized_cooperative_asymmetric_dma.hpp",
+    "cooperative_m128_header_sha256": "070c8677403d76e2697600d597378ba509d308ec9cce83ee091852f700aa15c7",
+    "args_hw_info_fallback_query": true,
+    "local_hw_info_to_scheduler_params": true,
+    "local_hw_info_to_gemm_params": true,
+    "gemm_params_hw_info_to_grid_shape": true,
+    "explicit_caller_hw_info_required": false
+  },
   "source_checks": {
     "focused_tests": "37 passed",
     "python_compile": "pass",
