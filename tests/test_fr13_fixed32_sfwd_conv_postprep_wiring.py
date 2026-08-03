@@ -69,7 +69,7 @@ def test_selector_rejects_every_noncanonical_value(
         patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
 
 
-def test_patch_contract_rejects_non_k64_or_graph_runtime(
+def test_patch_contract_rejects_non_k64_and_accepts_full_graph_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     patcher = _load_patcher("fr13_sfwd_conv_postprep_contract")
@@ -113,25 +113,67 @@ def test_patch_contract_rejects_non_k64_or_graph_runtime(
     }
     for name, value in exact.items():
         monkeypatch.setenv(name, value)
-    with pytest.raises(RuntimeError, match="eager physical32 B1-or-B4 K64/root1"):
+    expected_mask, expected_active = patcher._FR13_FIXED32_MODES[
+        "hydra27_fixed32"
+    ]
+    monkeypatch.setenv("FR13_FIXED32_VALID_MASK", hex(expected_mask))
+    monkeypatch.setenv("FR13_FIXED32_ACTIVE_NODES", str(expected_active))
+    with pytest.raises(RuntimeError, match="eager or FULL graph mode"):
         patcher._fr13_fixed32_validate_patch_env()
 
     monkeypatch.setenv("FR13_DRAFT_VOCAB_K", "65536")
     monkeypatch.setenv("ENFORCE_EAGER", "0")
-    with pytest.raises(RuntimeError, match="eager physical32 B1-or-B4 K64/root1"):
+    monkeypatch.setenv("CUDAGRAPH_MODE", "PIECEWISE")
+    with pytest.raises(RuntimeError, match="eager or FULL graph mode"):
         patcher._fr13_fixed32_validate_patch_env()
+
+    monkeypatch.setenv("CUDAGRAPH_MODE", "FULL_AND_PIECEWISE")
+    for name in (
+        "FR13_FIXED32_WORK_CENSUS",
+        "FR13_FIXED32_DEVICE_PUBLISH",
+        "FR13_FIXED32_ACCEPT_PACK",
+        "FR13_FIXED32_REQKEY_DEVICE",
+        "FR13_FIXED32_KV_REMAP16",
+        "FR13_FIXED32_COMMIT_DEVICE_FILL",
+        "FR13_DEVICE_MULTIDRAFT",
+        "FR13_DRAFTER_GRAPH",
+        "FR13_DRAFTER_SINGLE_LOGITS",
+        "FR13_DM_DEPTHSYNC",
+        "FR13_TAW",
+        "FR13_PARENT_GATHER",
+        "FR13_SUBTREE_PARALLEL",
+        "FR13_EAGER_PACK",
+        "FR13_COMMIT_BATCH_OUTPUT",
+        "FR13_COMMITTER_NATIVE",
+        "FR13_COMMITTER_BATCHED",
+        "FR13_COMMITTER_GRAPH",
+        "FR13_REPLAY_ROUTE",
+        "FR13_ATTN_KV_REMAP",
+        "FR13_SLOT_REORDER",
+        "FR13_KV_REMAP_SYNCFREE",
+        "FR13_CONV_WB_FUSED",
+        "FR13_CONV_PREGATHER",
+        "FR13_CONV_COMMITTED_PATH",
+        "FR13_APC_COMMIT_TO_RUNNING_ROW",
+    ):
+        monkeypatch.setenv(name, "1")
+    monkeypatch.setenv("FR13_FIXED32_TAW_WALK_CAP", "12")
+    patcher._fr13_fixed32_validate_patch_env()
 
 
 def test_generated_route_serves_all_direct_outputs_and_has_no_fallback() -> None:
     generated = _generated_literals()
     assert "launch_fixed32_sfwd_conv_postprep_fusion(" in generated
-    assert "_fr13_conv_postprep_b not in (1, 4)" in generated
+    assert "not 1 <= _fr13_conv_postprep_b <= 4" in generated
     assert "int(_fr10_tree_n) != 32" in generated
     assert "qualification_profile=\"k64_root\"" in generated
     assert "draft_vocab_k=65536" in generated
     assert "draft_vocab_root=1" in generated
-    assert "physical32_guarded=True" in generated
     assert "source_only_qualification=True" in generated
+    assert "capture_binding=_fr13_conv_postprep_binding" in generated
+    assert "capture lacks preseeded " in generated
+    assert "output bindings" in generated
+    assert "_fr13_fixed32_preseed_sfwd_conv_postprep_capture" in generated
     assert "conv_tap=None" in generated
     assert "(1, _fr13_conv_postprep_rows, 16, 128)" in generated
     assert "(1, _fr13_conv_postprep_rows, 48, 128)" in generated
@@ -151,6 +193,10 @@ def test_launcher_and_real_task_runner_forward_the_selector() -> None:
     assert f"{SELECTOR}=${{{SELECTOR}:-0}}" in launcher
     assert f'-e {SELECTOR}="${SELECTOR}"' in launcher
     assert f"{SELECTOR}=${{{SELECTOR}:-0}}" in variant
+    assert (
+        f'|| ( "${SELECTOR}" == "1" \\\n'
+        '           && "${ENFORCE_EAGER:-0}" == "1" )'
+    ) in variant
     assert SELECTOR in runner
     for source in (launcher, variant):
         assert f"{SELECTOR} must be exactly 0 or 1" in source

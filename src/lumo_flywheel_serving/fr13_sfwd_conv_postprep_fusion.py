@@ -1,8 +1,8 @@
-"""Source-only fixed32 tree-conv/post-conv-prep fusion candidate.
+"""Default-off fixed32 tree-conv/post-conv-prep fusion candidate.
 
-This module is intentionally not wired into the served patcher.  Its launcher
-exists for a later authenticated byte gate and refuses graph capture or an
-implicit production call.
+The eager launcher keeps a direct SSI value check.  CUDA graph capture is only
+accepted through an opaque binding created from the persistent physical32
+pregather and sticky-committer preseed leases.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
 
 
 CANDIDATE = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
+CAPTURE_CACHE_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.capture_cache.v1"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
 QUALIFICATION_PROFILE = "k64_root"
 DRAFT_VOCAB_K = 65536
@@ -108,6 +109,9 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
         "source_only": True,
         "default_off": True,
         "production_eligible": False,
+        "full_graph_qualified": True,
+        "capture_ssi_guard": "persistent_pregather_selfcheck_and_sticky_guard",
+        "capture_host_syncs_per_layer": 0,
         "fixed32_mode": fixed32_mode,
         "qualification_profile": QUALIFICATION_PROFILE,
         "draft_vocab_k": DRAFT_VOCAB_K,
@@ -266,6 +270,442 @@ def _storage_bound_failure(tensor: torch.Tensor) -> bool:
     return last < 0 or last >= capacity
 
 
+def _tensor_binding_signature(tensor: torch.Tensor) -> tuple[object, ...]:
+    return (
+        id(tensor),
+        int(tensor.data_ptr()),
+        int(tensor.untyped_storage().data_ptr()),
+        int(tensor.storage_offset()),
+        tuple(int(value) for value in tensor.shape),
+        tuple(int(value) for value in tensor.stride()),
+        tensor.dtype,
+        tensor.device,
+    )
+
+
+_CAPTURE_BINDING_AUTH = object()
+
+
+class _Fixed32SfwdConvPostprepCaptureBinding:
+    __slots__ = (
+        "auth",
+        "batch_size",
+        "capacity",
+        "layer_index",
+        "layer_name",
+        "operands",
+        "signatures",
+        "pregather_state",
+        "committer_route",
+        "committer_state",
+    )
+
+    def __init__(
+        self,
+        *,
+        batch_size: int,
+        capacity: int,
+        layer_index: int,
+        layer_name: str,
+        operands: tuple[torch.Tensor, ...],
+        pregather_state: dict,
+        committer_route: dict,
+        committer_state: dict,
+    ) -> None:
+        self.auth = _CAPTURE_BINDING_AUTH
+        self.batch_size = int(batch_size)
+        self.capacity = int(capacity)
+        self.layer_index = int(layer_index)
+        self.layer_name = str(layer_name)
+        self.operands = operands
+        self.signatures = tuple(_tensor_binding_signature(value) for value in operands)
+        self.pregather_state = pregather_state
+        self.committer_route = committer_route
+        self.committer_state = committer_state
+
+
+def _capture_preseed_contract(
+    *,
+    layer_order: tuple[str, ...],
+    pregather_state: dict,
+    committer_route: dict,
+) -> tuple[
+    int,
+    tuple[torch.Tensor, ...],
+    tuple[torch.Tensor, ...],
+    tuple[torch.Tensor, ...],
+]:
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "fixed32 conv/post-prep capture binding preseed ran during capture"
+        )
+    capacity = int(pregather_state.get("max_batch_size", 0))
+    batches = tuple(range(1, capacity + 1))
+    ssi_sources = tuple(pregather_state.get("ssi_sources", ()))
+    conv_banks = tuple(pregather_state.get("banks", ()))
+    source_stages = tuple(pregather_state.get("source_stagings", ()))
+    pregather_contract = pregather_state.get("contract", {})
+    states_by_batch = committer_route.get("states_by_batch", {})
+    if (
+        capacity not in (1, 2, 3, 4)
+        or len(layer_order) != LAYERS
+        or len(set(layer_order)) != LAYERS
+        or tuple(pregather_state.get("layer_order", ())) != layer_order
+        or tuple(pregather_state.get("preseeded_batches", ())) != batches
+        or set(pregather_state.get("live_selfchecked_batches", ())) != set(batches)
+        or len(ssi_sources) != LAYERS
+        or len(conv_banks) != LAYERS
+        or len(source_stages) != LAYERS
+        or pregather_contract.get("commit_route") != "fixed32_direct_source_col0"
+        or pregather_contract.get("commit_row_guard_route")
+        != "fixed32_triton_alias3_ownerpath_warp32_physical32_v4"
+        or int(pregather_contract.get("commit_row_guard_physical_rows", -1))
+        != ROWS
+        or committer_route.get("mode") != pregather_state.get("mode")
+        or int(committer_route.get("capacity", 0)) != capacity
+        or committer_route.get("spec_state_indices")
+        is not pregather_state.get("commit_spec_state_indices")
+        or tuple(sorted(states_by_batch)) != batches
+    ):
+        raise RuntimeError(
+            "fixed32 conv/post-prep capture binding persistent preseed drifted"
+        )
+    for batch in batches:
+        state = states_by_batch[batch]
+        sticky_ok = state.get("sticky_guard_ok")
+        if (
+            state.get("direct_metadata") is not True
+            or state.get("sticky_guard") is not True
+            or state.get("contract", {}).get("sticky_guard_route")
+            != "fixed32_ownerpath_warp32_sticky_scalar_v5"
+            or not torch.is_tensor(sticky_ok)
+            or sticky_ok.dtype != torch.int32
+            or tuple(sticky_ok.shape) != ()
+            or not sticky_ok.is_contiguous()
+            or int(sticky_ok.data_ptr())
+            != int(state.get("sticky_guard_ok_data_ptr", -1))
+        ):
+            raise RuntimeError(
+                "fixed32 conv/post-prep capture binding requires the persistent "
+                f"sticky guard for B={batch}"
+            )
+    return capacity, ssi_sources, conv_banks, source_stages
+
+
+def preseed_fixed32_sfwd_conv_postprep_capture_bindings(
+    *,
+    layer_order: object,
+    layer_objects: object,
+    pregather_state: object,
+    committer_route: object,
+) -> dict[str, object]:
+    """Allocate every capture output and bind it to persistent fixed32 leases."""
+    if not isinstance(layer_order, (list, tuple)):
+        raise TypeError("fixed32 conv/post-prep layer order must be a sequence")
+    order = tuple(str(value) for value in layer_order)
+    if not isinstance(layer_objects, (list, tuple)) or len(layer_objects) != LAYERS:
+        raise TypeError("fixed32 conv/post-prep requires 48 ordered layer objects")
+    if not isinstance(pregather_state, dict) or not isinstance(committer_route, dict):
+        raise TypeError("fixed32 conv/post-prep persistent states must be dicts")
+    capacity, ssi_sources, conv_banks, source_stages = _capture_preseed_contract(
+        layer_order=order,
+        pregather_state=pregather_state,
+        committer_route=committer_route,
+    )
+    states_by_batch = committer_route["states_by_batch"]
+    expected_batches = tuple(range(1, capacity + 1))
+    existing_caches = tuple(
+        getattr(layer, "_fr13_fixed32_sfwd_conv_postprep_outputs", None)
+        for layer in layer_objects
+    )
+    existing_graph_caches = tuple(
+        isinstance(cache, dict)
+        and cache.get("schema") == CAPTURE_CACHE_SCHEMA
+        for cache in existing_caches
+    )
+    if any(existing_graph_caches):
+        if not all(existing_graph_caches):
+            raise RuntimeError(
+                "fixed32 conv/post-prep graph output caches are partially preseeded"
+            )
+        for layer_index, (layer_name, cache) in enumerate(
+            zip(order, existing_caches, strict=True)
+        ):
+            by_batch = cache.get("by_batch")
+            if (
+                str(getattr(layer_objects[layer_index], "prefix", ""))
+                != layer_name
+                or int(cache.get("capacity", 0)) != capacity
+                or cache.get("pregather_state") is not pregather_state
+                or cache.get("committer_route") is not committer_route
+                or not isinstance(cache.get("base"), dict)
+                or set(cache["base"]) != {
+                    "query",
+                    "key_tensor",
+                    "value_spec",
+                    "value_tree",
+                    "g",
+                    "beta",
+                }
+                or not isinstance(by_batch, dict)
+                or tuple(sorted(by_batch)) != expected_batches
+            ):
+                raise RuntimeError(
+                    "fixed32 conv/post-prep graph output cache lease drifted: "
+                    f"layer={layer_name!r} index={layer_index}"
+                )
+            for batch in expected_batches:
+                entry = by_batch[batch]
+                if not isinstance(entry, dict):
+                    raise RuntimeError(
+                        "fixed32 conv/post-prep graph output entry is malformed"
+                    )
+                _validate_capture_binding(
+                    entry.get("capture_binding"),
+                    batch_size=batch,
+                    spec_state_indices=entry.get("spec_state_indices"),
+                    conv_state=entry.get("conv_state"),
+                    query=entry.get("query"),
+                    key=entry.get("key_tensor"),
+                    value_spec=entry.get("value_spec"),
+                    value_tree=entry.get("value_tree"),
+                    g=entry.get("g"),
+                    beta=entry.get("beta"),
+                    source_stage=entry.get("source_stage"),
+                )
+        return {
+            "ready": True,
+            "schema": CAPTURE_CACHE_SCHEMA,
+            "capacity": capacity,
+            "layers": LAYERS,
+            "batches": expected_batches,
+            "base_output_tensors": LAYERS * 6,
+            "bound_output_views": LAYERS * capacity * 6,
+            "capture_host_syncs_per_layer": 0,
+            "ssi_value_proof": "persistent_pregather_boot_selfcheck",
+            "runtime_guard": "persistent_sticky_committer_scalar",
+        }
+    pending: list[tuple[object, dict[str, object]]] = []
+    output_tensors = 0
+    output_views = 0
+    for layer_index, (layer_name, layer) in enumerate(
+        zip(order, layer_objects, strict=True)
+    ):
+        source_stage = source_stages[layer_index]
+        spec_state_indices = ssi_sources[layer_index]
+        conv_state = conv_banks[layer_index]
+        if (
+            str(getattr(layer, "prefix", "")) != layer_name
+            or not torch.is_tensor(source_stage)
+            or source_stage.device.type != "cuda"
+            or source_stage.dtype != torch.bfloat16
+            or source_stage.ndim != 2
+            or int(source_stage.shape[0]) < capacity * SOURCE_ROWS
+            or int(source_stage.shape[1]) != CHANNELS
+            or tuple(int(value) for value in source_stage.stride())
+            != (CHANNELS, 1)
+            or not torch.is_tensor(spec_state_indices)
+            or spec_state_indices.dtype != torch.int32
+            or spec_state_indices.device != source_stage.device
+            or tuple(int(value) for value in spec_state_indices.shape)
+            != (capacity, ROWS)
+            or tuple(int(value) for value in spec_state_indices.stride())
+            != (ROWS, 1)
+            or not torch.is_tensor(conv_state)
+            or conv_state.device != source_stage.device
+            or conv_state.dtype != torch.bfloat16
+        ):
+            raise RuntimeError(
+                "fixed32 conv/post-prep capture preseed layer geometry drifted: "
+                f"layer={layer_name!r} index={layer_index}"
+            )
+        capacity_rows = capacity * ROWS
+        base = {
+            "query": torch.empty(
+                (1, capacity_rows, NUM_K_HEADS, HEAD_K_DIM),
+                dtype=torch.bfloat16,
+                device=source_stage.device,
+            ),
+            "key_tensor": torch.empty(
+                (1, capacity_rows, NUM_K_HEADS, HEAD_K_DIM),
+                dtype=torch.bfloat16,
+                device=source_stage.device,
+            ),
+            "value_spec": torch.empty(
+                (1, capacity_rows, NUM_V_HEADS, HEAD_V_DIM),
+                dtype=torch.bfloat16,
+                device=source_stage.device,
+            ),
+            "value_tree": torch.empty(
+                (capacity_rows, NUM_V_HEADS, HEAD_V_DIM),
+                dtype=torch.bfloat16,
+                device=source_stage.device,
+            ),
+            "g": torch.empty(
+                (capacity_rows, NUM_V_HEADS),
+                dtype=torch.float32,
+                device=source_stage.device,
+            ),
+            "beta": torch.empty(
+                (capacity_rows, NUM_V_HEADS),
+                dtype=torch.float32,
+                device=source_stage.device,
+            ),
+        }
+        output_tensors += len(base)
+        by_batch: dict[int, dict[str, object]] = {}
+        for batch in range(1, capacity + 1):
+            rows = batch * ROWS
+            query = base["query"].as_strided(
+                (1, rows, NUM_K_HEADS, HEAD_K_DIM),
+                (rows * Q_DIM, Q_DIM, HEAD_K_DIM, 1),
+            )
+            key = base["key_tensor"].as_strided(
+                (1, rows, NUM_K_HEADS, HEAD_K_DIM),
+                (rows * Q_DIM, Q_DIM, HEAD_K_DIM, 1),
+            )
+            value_spec = base["value_spec"].as_strided(
+                (1, rows, NUM_V_HEADS, HEAD_V_DIM),
+                (rows * V_DIM, V_DIM, HEAD_V_DIM, 1),
+            )
+            value_tree = base["value_tree"][:rows]
+            g = base["g"][:rows]
+            beta = base["beta"][:rows]
+            operands = (
+                spec_state_indices,
+                conv_state,
+                query,
+                key,
+                value_spec,
+                value_tree,
+                g,
+                beta,
+                source_stage,
+                states_by_batch[batch]["sticky_guard_ok"],
+            )
+            binding = _Fixed32SfwdConvPostprepCaptureBinding(
+                batch_size=batch,
+                capacity=capacity,
+                layer_index=layer_index,
+                layer_name=layer_name,
+                operands=operands,
+                pregather_state=pregather_state,
+                committer_route=committer_route,
+                committer_state=states_by_batch[batch],
+            )
+            by_batch[batch] = {
+                "query": query,
+                "key_tensor": key,
+                "value_spec": value_spec,
+                "value_tree": value_tree,
+                "g": g,
+                "beta": beta,
+                "source_stage": source_stage,
+                "spec_state_indices": spec_state_indices,
+                "conv_state": conv_state,
+                "capture_binding": binding,
+            }
+            output_views += 6
+        pending.append(
+            (
+                layer,
+                {
+                    "schema": CAPTURE_CACHE_SCHEMA,
+                    "capacity": capacity,
+                    "base": base,
+                    "by_batch": by_batch,
+                    "pregather_state": pregather_state,
+                    "committer_route": committer_route,
+                },
+            )
+        )
+    for layer, cache in pending:
+        layer._fr13_fixed32_sfwd_conv_postprep_outputs = cache
+    return {
+        "ready": True,
+        "schema": CAPTURE_CACHE_SCHEMA,
+        "capacity": capacity,
+        "layers": len(pending),
+        "batches": expected_batches,
+        "base_output_tensors": output_tensors,
+        "bound_output_views": output_views,
+        "capture_host_syncs_per_layer": 0,
+        "ssi_value_proof": "persistent_pregather_boot_selfcheck",
+        "runtime_guard": "persistent_sticky_committer_scalar",
+    }
+
+
+def _validate_capture_binding(
+    binding: object,
+    *,
+    batch_size: int,
+    spec_state_indices: torch.Tensor,
+    conv_state: torch.Tensor,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value_spec: torch.Tensor,
+    value_tree: torch.Tensor,
+    g: torch.Tensor,
+    beta: torch.Tensor,
+    source_stage: torch.Tensor,
+) -> None:
+    if (
+        type(binding) is not _Fixed32SfwdConvPostprepCaptureBinding
+        or binding.auth is not _CAPTURE_BINDING_AUTH
+        or binding.batch_size != int(batch_size)
+    ):
+        raise RuntimeError("fixed32 conv/post-prep capture binding is invalid")
+    operands = (
+        spec_state_indices,
+        conv_state,
+        query,
+        key,
+        value_spec,
+        value_tree,
+        g,
+        beta,
+        source_stage,
+        binding.committer_state.get("sticky_guard_ok"),
+    )
+    if any(
+        current is not bound
+        for current, bound in zip(operands, binding.operands, strict=True)
+    ) or tuple(_tensor_binding_signature(value) for value in operands) != (
+        binding.signatures
+    ):
+        raise RuntimeError(
+            "fixed32 conv/post-prep capture operand object/data_ptr drifted"
+        )
+    pregather_state = binding.pregather_state
+    committer_route = binding.committer_route
+    committer_state = binding.committer_state
+    from lumo_flywheel_serving import fr10_gdn_tree_kernel as fixed32_kernel
+
+    current_pregather = getattr(
+        fixed32_kernel, "_FR13_FIXED32_CONV_PREGATHER", {}
+    ).get("state")
+    current_committer = getattr(
+        fixed32_kernel, "_FR13_FIXED32_COMMITTER_FAST_ROUTE", {}
+    ).get("state")
+    layer_index = binding.layer_index
+    if (
+        current_pregather is not pregather_state
+        or current_committer is not committer_route
+        or pregather_state["ssi_sources"][layer_index] is not spec_state_indices
+        or pregather_state["banks"][layer_index] is not conv_state
+        or pregather_state["source_stagings"][layer_index] is not source_stage
+        or committer_route["states_by_batch"].get(binding.batch_size)
+        is not committer_state
+        or committer_state.get("direct_metadata") is not True
+        or committer_state.get("sticky_guard") is not True
+        or int(committer_state["sticky_guard_ok"].data_ptr())
+        != int(committer_state.get("sticky_guard_ok_data_ptr", -1))
+    ):
+        raise RuntimeError(
+            "fixed32 conv/post-prep persistent capture lease changed"
+        )
+
+
 def fixed32_sfwd_conv_postprep_layout_contract(
     *,
     batch_size: int,
@@ -287,6 +727,7 @@ def fixed32_sfwd_conv_postprep_layout_contract(
     source_stage: torch.Tensor,
     conv_tap: torch.Tensor | None,
     expected_device_type: str = "cuda",
+    state_indices_prevalidated: bool = False,
 ) -> dict[str, object]:
     """Fail closed over every tensor layout, storage bound, and output alias."""
     batch = int(batch_size)
@@ -330,7 +771,6 @@ def fixed32_sfwd_conv_postprep_layout_contract(
 
     exact_specs: Mapping[str, tuple[tuple[int, ...], tuple[int, ...], torch.dtype]] = {
         "x": ((required_rows, CHANNELS), (X_ROW_STRIDE, 1), torch.bfloat16),
-        "spec_state_indices": ((batch, ROWS), (ROWS, 1), torch.int32),
         "conv_weights": ((CHANNELS, CONV_WIDTH), (CONV_WIDTH, 1), torch.bfloat16),
         "a": ((required_rows, NUM_V_HEADS), (NUM_V_HEADS, 1), torch.bfloat16),
         "b": ((required_rows, NUM_V_HEADS), (NUM_V_HEADS, 1), torch.bfloat16),
@@ -366,11 +806,6 @@ def fixed32_sfwd_conv_postprep_layout_contract(
             (NUM_V_HEADS, 1),
             torch.float32,
         ),
-        "source_stage": (
-            (required_source_rows, CHANNELS),
-            (CHANNELS, 1),
-            torch.bfloat16,
-        ),
     }
     if conv_tap is not None:
         exact_specs = dict(exact_specs)
@@ -387,6 +822,27 @@ def fixed32_sfwd_conv_postprep_layout_contract(
             failures.append(f"{name}_stride")
         if tensor.dtype != dtype:
             failures.append(f"{name}_dtype")
+
+    if (
+        spec_state_indices.ndim != 2
+        or int(spec_state_indices.shape[0]) < batch
+        or int(spec_state_indices.shape[1]) != ROWS
+    ):
+        failures.append("spec_state_indices_shape")
+    if tuple(int(value) for value in spec_state_indices.stride()) != (ROWS, 1):
+        failures.append("spec_state_indices_stride")
+    if spec_state_indices.dtype != torch.int32:
+        failures.append("spec_state_indices_dtype")
+    if (
+        source_stage.ndim != 2
+        or int(source_stage.shape[0]) < required_source_rows
+        or int(source_stage.shape[1]) != CHANNELS
+    ):
+        failures.append("source_stage_shape")
+    if tuple(int(value) for value in source_stage.stride()) != (CHANNELS, 1):
+        failures.append("source_stage_stride")
+    if source_stage.dtype != torch.bfloat16:
+        failures.append("source_stage_dtype")
 
     if conv_state.ndim != 3:
         failures.append("conv_state_ndim")
@@ -406,14 +862,18 @@ def fixed32_sfwd_conv_postprep_layout_contract(
             failures.append("conv_state_dtype")
     state_index_bounds: tuple[int, int] | None = None
     if (
-        tuple(int(value) for value in spec_state_indices.shape)
-        == (batch, ROWS)
+        not state_indices_prevalidated
+        and spec_state_indices.ndim == 2
+        and int(spec_state_indices.shape[0]) >= batch
+        and int(spec_state_indices.shape[1]) == ROWS
         and spec_state_indices.dtype == torch.int32
         and spec_state_indices.device == device
         and conv_state.ndim == 3
         and int(conv_state.size(0)) > 0
     ):
-        index_min_tensor, index_max_tensor = torch.aminmax(spec_state_indices)
+        index_min_tensor, index_max_tensor = torch.aminmax(
+            spec_state_indices[:batch, :ROWS]
+        )
         state_index_bounds = (
             int(index_min_tensor.item()),
             int(index_max_tensor.item()),
@@ -484,6 +944,7 @@ def fixed32_sfwd_conv_postprep_layout_contract(
         "device": str(device),
         "conv_state_stride_row": int(conv_state.stride(0)),
         "state_index_bounds": state_index_bounds,
+        "state_indices_prevalidated": bool(state_indices_prevalidated),
         "conv_tap": conv_tap is not None,
         "writable_storages": len(writable_storage),
         "input_aliases_allowed": True,
@@ -516,27 +977,18 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
     qualification_profile: str,
     draft_vocab_k: int,
     draft_vocab_root: int,
-    physical32_guarded: bool,
     source_only_qualification: bool = False,
+    capture_binding: object | None = None,
 ) -> dict[str, object]:
-    """Launch one unqualified per-layer candidate kernel.
-
-    A future runtime selector must replace the two explicit qualification
-    booleans with an authenticated pass/guard binding.  This source revision
-    refuses capture and cannot become serving-active by environment variable.
-    """
+    """Launch one default-off per-layer candidate kernel."""
     if source_only_qualification is not True:
         raise RuntimeError(
             "fixed32 conv/post-prep fusion is source-only and default-off"
         )
-    if physical32_guarded is not True:
+    capturing = torch.cuda.is_current_stream_capturing()
+    if capture_binding is None and capturing:
         raise RuntimeError(
-            "fixed32 conv/post-prep fusion requires the upstream physical32 "
-            "sticky guard"
-        )
-    if torch.cuda.is_current_stream_capturing():
-        raise RuntimeError(
-            "fixed32 conv/post-prep fusion is not graph-qualified"
+            "fixed32 conv/post-prep fusion capture requires a persistent binding"
         )
     contract = fixed32_sfwd_conv_postprep_fusion_contract(
         batch_size,
@@ -546,6 +998,20 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
         draft_vocab_k=draft_vocab_k,
         draft_vocab_root=draft_vocab_root,
     )
+    if capture_binding is not None:
+        _validate_capture_binding(
+            capture_binding,
+            batch_size=batch_size,
+            spec_state_indices=spec_state_indices,
+            conv_state=conv_state,
+            query=query,
+            key=key,
+            value_spec=value_spec,
+            value_tree=value_tree,
+            g=g,
+            beta=beta,
+            source_stage=source_stage,
+        )
     layout = fixed32_sfwd_conv_postprep_layout_contract(
         batch_size=batch_size,
         x=x,
@@ -565,6 +1031,7 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
         beta=beta,
         source_stage=source_stage,
         conv_tap=conv_tap,
+        state_indices_prevalidated=capture_binding is not None,
     )
     block_c = int(contract["block_c"])
     num_warps = int(contract["num_warps"])
@@ -609,4 +1076,9 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
         SOFTPLUS_THRESHOLD=SOFTPLUS_THRESHOLD,
         num_warps=num_warps,
     )
-    return {**contract, "layout": layout, "conv_tap": conv_tap is not None}
+    return {
+        **contract,
+        "layout": layout,
+        "conv_tap": conv_tap is not None,
+        "capture_bound": capture_binding is not None,
+    }

@@ -1,6 +1,6 @@
 # Fixed32 SFWD conv/post-prep fusion
 
-Status: **source-only candidate complete; not runtime-qualified or served**.
+Status: **default-off eager and FULL-capture wiring complete; not GPU measured**.
 
 Base revision: `c49c8eb5370e4d4035aceffaa8476aea31f921f5`.
 
@@ -26,6 +26,10 @@ their existing order. Cross-layer fusion is explicitly forbidden.
 - unchanged `prior[0:3] ++ x[0:32] ++ zero` commit-source stage
 - fail-closed shape, dtype, stride, state-bank value, storage-bound, and
   output-alias checks
+- eager SSI values checked directly; FULL capture instead requires the exact
+  persistent pregather self-check lease and sticky-committer scalar
+- capacity-sized output banks allocated before capture, with exact persistent
+  object/data-pointer bindings for every B1-B4 view
 
 ## Static result
 
@@ -42,10 +46,16 @@ B4, B1+tap, and B4+tap. No binaries or compiler caches are checked in.
 
 ## Scope
 
-There is no patcher import, runtime selector, byte-gate harness, graph capture,
-Docker run, GPU run, service, request, task, response, timing, or acceptance
-claim in this branch. A later served route requires a dedicated fail-closed
-selector and authenticated real SWE byte A/B qualification.
+The patcher and real-task launcher expose a fail-closed selector that remains
+off by default. Eager mode retains the direct SSI range check. FULL capture is
+accepted only after final-FULL preseed binds all 48 layer outputs, the exact
+builder-owned SSI objects, conv-bank views, source stages, pregather lease, and
+sticky-committer state. The capture launch path has no `.item()`, CPU copy, or
+device synchronization.
 
-The package contains only source hashes, deterministic static ledgers, reduced
-offline codegen metadata, and host test output.
+No Docker, GPU, service, real SWE task, response, timing, or acceptance run was
+performed for this wiring checkpoint. The static byte and launch ledger is not
+a speed claim; real B1 and B4 measurement remains required.
+
+The package contains source hashes, deterministic static ledgers, reduced
+offline codegen metadata, and host/generated-patch verification output.

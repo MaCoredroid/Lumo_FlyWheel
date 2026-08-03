@@ -139,7 +139,8 @@ if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
       || "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "1" \
       || "$FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB" == "1" \
       || "$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" == "1" \
-      || "$FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION" == "1" \
+      || ( "$FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION" == "1" \
+           && "${ENFORCE_EAGER:-0}" == "1" ) \
       || "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" == "byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
