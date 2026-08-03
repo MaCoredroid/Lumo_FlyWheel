@@ -129,8 +129,14 @@ def test_launcher_cross_kernel_preflight_runs_before_sidecar_and_docker(
 
 
 @pytest.mark.parametrize("qualification_profile", (None, "full_vocab"))
+@pytest.mark.parametrize(
+    "candidate_selector",
+    ("identity_onen_b1", "identity_onen_n5120_single_b1"),
+)
 def test_onen_b1_launcher_rejects_non_k64_profile_before_docker(
-    tmp_path: Path, qualification_profile: str | None
+    tmp_path: Path,
+    qualification_profile: str | None,
+    candidate_selector: str,
 ) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -148,7 +154,7 @@ def test_onen_b1_launcher_rejects_non_k64_profile_before_docker(
     environment.update(
         {
             "DOCKER_SENTINEL": os.fspath(docker_sentinel),
-            "FR13_FIXED32_CUTLASS_WAVE": "identity_onen_b1",
+            "FR13_FIXED32_CUTLASS_WAVE": candidate_selector,
             "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION": "1",
             "FR13_FIXED32_CUTLASS_WAVE_SO": "",
             "LOG_DIR": os.fspath(log_dir),
@@ -173,7 +179,7 @@ def test_onen_b1_launcher_rejects_non_k64_profile_before_docker(
 
     assert result.returncode == 2
     assert (
-        "identity_onen_b1 launcher requires explicit k64_root qualification"
+        f"{candidate_selector} launcher requires explicit k64_root qualification"
         in result.stderr
     )
     assert not log_dir.exists()
@@ -181,8 +187,14 @@ def test_onen_b1_launcher_rejects_non_k64_profile_before_docker(
 
 
 @pytest.mark.parametrize("qualification_profile", (None, "full_vocab"))
+@pytest.mark.parametrize(
+    "candidate_selector",
+    ("identity_onen_b1", "identity_onen_n5120_single_b1"),
+)
 def test_onen_b1_runner_rejects_non_k64_profile_before_gpu(
-    tmp_path: Path, qualification_profile: str | None
+    tmp_path: Path,
+    qualification_profile: str | None,
+    candidate_selector: str,
 ) -> None:
     environment = {
         key: value for key, value in os.environ.items() if not key.startswith("FR13_")
@@ -191,7 +203,7 @@ def test_onen_b1_runner_rejects_non_k64_profile_before_gpu(
         {
             "CUTLASS_STREAMK_SO": os.fspath(tmp_path / "candidate.so"),
             "FORKED_FA2_SO": os.fspath(tmp_path / "fa2.so"),
-            "FR13_STREAMK_GATE_CANDIDATE": "identity_onen_b1",
+            "FR13_STREAMK_GATE_CANDIDATE": candidate_selector,
             "RUNROOT": os.fspath(tmp_path / "runroot"),
             "TAG": "non-k64-rejection",
         }
@@ -211,7 +223,7 @@ def test_onen_b1_runner_rejects_non_k64_profile_before_gpu(
 
     assert result.returncode == 2
     assert (
-        "identity_onen_b1 diagnostic requires explicit k64_root qualification"
+        f"{candidate_selector} diagnostic requires explicit k64_root qualification"
         in result.stderr
     )
     assert not (tmp_path / "runroot").exists()
@@ -295,6 +307,8 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "identity_stage2_pingpong_b1_byte_ab" in gate
     assert "identity_onen_b1" in gate
     assert "identity_onen_b1_byte_ab" in gate
+    assert "identity_onen_n5120_single_b1" in gate
+    assert "identity_onen_n5120_single_b1_byte_ab" in gate
     assert "fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_divisor_static_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_identity_stage2_static_byte_ab.v1" in gate
@@ -302,6 +316,15 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "fr13.fixed32.cutlass_identity_onen_b1_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_identity_onen_b1_k64_root_live_gate.v1" in gate
     assert "cutlass_identity_onen_b1_k64_root_byte_gate.json" in gate
+    assert (
+        "fr13.fixed32.cutlass_identity_onen_n5120_single_b1_byte_ab.v1"
+        in gate
+    )
+    assert (
+        "fr13.fixed32.cutlass_identity_onen_n5120_single_b1_k64_root_live_gate.v1"
+        in gate
+    )
+    assert "cutlass_identity_onen_n5120_single_b1_k64_root_byte_gate.json" in gate
     assert (
         "fr13.fixed32.cutlass_static_persistent_k64_root_live_gate.v1" in gate
     )
@@ -339,8 +362,14 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
 
 
 @pytest.mark.parametrize("qualification_profile", (None, "full_vocab"))
+@pytest.mark.parametrize(
+    "candidate_selector",
+    ("identity_onen_b1", "identity_onen_n5120_single_b1"),
+)
 def test_onen_b1_timing_rejects_non_k64_profile_before_gpu(
-    tmp_path: Path, qualification_profile: str | None
+    tmp_path: Path,
+    qualification_profile: str | None,
+    candidate_selector: str,
 ) -> None:
     environment = {
         key: value for key, value in os.environ.items() if not key.startswith("FR13_")
@@ -351,7 +380,7 @@ def test_onen_b1_timing_rejects_non_k64_profile_before_gpu(
             "QROW16_FA2_SO": os.fspath(tmp_path / "qrow16.so"),
             "STREAMK_PASS_JSON": os.fspath(tmp_path / "pass.json"),
             "STREAMK_PASS_SHA256": "0" * 64,
-            "FR13_STREAMK_TIMING_CANDIDATE": "identity_onen_b1",
+            "FR13_STREAMK_TIMING_CANDIDATE": candidate_selector,
             "RUNROOT": os.fspath(tmp_path / "runroot"),
             "TAG": "non-k64-timing-rejection",
         }
@@ -371,7 +400,7 @@ def test_onen_b1_timing_rejects_non_k64_profile_before_gpu(
 
     assert result.returncode == 2
     assert (
-        "identity_onen_b1 timing requires explicit k64_root qualification"
+        f"{candidate_selector} timing requires explicit k64_root qualification"
         in result.stderr
     )
     assert not (tmp_path / "runroot").exists()
@@ -422,6 +451,12 @@ def test_exact4_timing_is_real_full_wall_profile_bound() -> None:
         in timing
     )
     assert "STREAMK_BYTES=118166088" in timing
+    assert (
+        "STREAMK_SHA256="
+        "876a3d6a0c972926131b1e447ffba80e345979f2d6de3bfa7bf083e862469367"
+        in timing
+    )
+    assert "STREAMK_BYTES=118468696" in timing
     assert (
         "QROW16_FA2_SHA256="
         "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86" in timing

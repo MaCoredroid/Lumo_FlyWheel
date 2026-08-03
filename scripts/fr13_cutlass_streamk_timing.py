@@ -362,6 +362,7 @@ def reduce_pair(
     diagnostic_selector = qualification.CANDIDATE_CONTRACTS[candidate_selector][
         "diagnostic_selector"
     ]
+    source_contract = qualification._source_contract(candidate_selector)
     if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
         raise TimingError("timing source commit is invalid")
     _regular(subset, "timing subset")
@@ -431,7 +432,7 @@ def reduce_pair(
         "candidate_family": candidate_family,
         "candidate_sha256": candidate_sha256,
         "candidate_bytes": candidate_bytes,
-        "patch_source_sha256": qualification.PATCH_SOURCE_SHA256,
+        "patch_source_sha256": source_contract["patch_source_sha256"],
         "qualification_source_commit": source_commit,
         "qualification_task_marker": qualification.EXPECTED_TASK_MARKER,
         "qualified_draft_vocab_root": profile["draft_vocab_root"],
@@ -458,9 +459,15 @@ def reduce_pair(
         "source_binding"
     ) == "required":
         try:
-            expected_binding["qualification_source_identity"] = (
-                qualification.validate_source_commit_binding(source_commit)
-            )
+            if candidate_selector == "identity_onen_b1":
+                source_identity = qualification.validate_source_commit_binding(
+                    source_commit
+                )
+            else:
+                source_identity = qualification.validate_source_commit_binding(
+                    source_commit, candidate_selector=candidate_selector
+                )
+            expected_binding["qualification_source_identity"] = source_identity
         except qualification.QualificationError as error:
             raise TimingError(str(error)) from error
     for key, expected in expected_binding.items():
@@ -540,7 +547,7 @@ def reduce_pair(
             "diagnostic_selector": diagnostic_selector,
             "candidate_sha256": candidate_sha256,
             "candidate_bytes": candidate_bytes,
-            "patch_source_sha256": qualification.PATCH_SOURCE_SHA256,
+            "patch_source_sha256": source_contract["patch_source_sha256"],
             "production_binding_sha256": hashlib.sha256(binding_raw).hexdigest(),
             "live_result_sha256": binding["live_result_sha256"],
             "production_sidecar_sha256": binding["production_sidecar_sha256"],

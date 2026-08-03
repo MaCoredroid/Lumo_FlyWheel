@@ -38,6 +38,10 @@ IDENTITY_ONEN_B1_CANDIDATE_SHA256 = (
     "17af1975b1e26cd3d4c3e614bfcab8aa1b0dc031ea5107004b0cc25890fc2b15"
 )
 IDENTITY_ONEN_B1_CANDIDATE_SIZE = 118_166_088
+IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SHA256 = (
+    "876a3d6a0c972926131b1e447ffba80e345979f2d6de3bfa7bf083e862469367"
+)
+IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SIZE = 118_468_696
 IDENTITY_B4_CANDIDATE_SHA256 = (
     "d7771d5a95a34d6072a796d520e8f2fa500aeccc900d57e1477941b966ea77a9"
 )
@@ -91,6 +95,12 @@ IDENTITY_STAGE2_PINGPONG_B1_SELECTORS = frozenset(
 IDENTITY_ONEN_B1_SELECTORS = frozenset(
     {"identity_onen_b1", "identity_onen_b1_byte_ab"}
 )
+IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS = frozenset(
+    {
+        "identity_onen_n5120_single_b1",
+        "identity_onen_n5120_single_b1_byte_ab",
+    }
+)
 IDENTITY_STOCKSHAPE_B4_SELECTORS = frozenset(
     {"identity_stockshape_b4", "identity_stockshape_b4_byte_ab"}
 )
@@ -119,6 +129,7 @@ CANDIDATE_SELECTORS = (
     | IDENTITY_STAGE2_SELECTORS
     | IDENTITY_STAGE2_PINGPONG_B1_SELECTORS
     | IDENTITY_ONEN_B1_SELECTORS
+    | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
     | IDENTITY_STOCKSHAPE_B4_SELECTORS
     | IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS
     | IDENTITY_TWOM_B4_SELECTORS
@@ -136,6 +147,7 @@ PRODUCTION_SELECTORS = frozenset(
         "identity_twom_b4",
         "identity_hybrid_n5120_b4",
         "identity_onen_b1",
+        "identity_onen_n5120_single_b1",
     }
 )
 INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
@@ -196,6 +208,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             IDENTITY_ONEN_B1_CANDIDATE_SIZE,
             "identity_onen_b1",
         )
+    if selector in IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS:
+        return (
+            IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SHA256,
+            IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SIZE,
+            "identity_onen_n5120_single_b1",
+        )
     if selector in IDENTITY_STOCKSHAPE_B4_SELECTORS:
         return (
             IDENTITY_B4_CANDIDATE_SHA256,
@@ -241,7 +259,12 @@ def _verify_qualification_profile(
     selector: str, qualification_profile: str | None
 ) -> None:
     if (
-        selector in IDENTITY_ONEN_B1_SELECTORS | IDENTITY_HYBRID_N5120_B4_SELECTORS
+        selector
+        in (
+            IDENTITY_ONEN_B1_SELECTORS
+            | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
+            | IDENTITY_HYBRID_N5120_B4_SELECTORS
+        )
         and qualification_profile != "k64_root"
     ):
         raise ValueError(
@@ -280,7 +303,11 @@ def verify_candidate(
         "symlink": False,
         "candidate_family": candidate_family,
     }
-    if selector in IDENTITY_ONEN_B1_SELECTORS | IDENTITY_HYBRID_N5120_B4_SELECTORS:
+    if selector in (
+        IDENTITY_ONEN_B1_SELECTORS
+        | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
+        | IDENTITY_HYBRID_N5120_B4_SELECTORS
+    ):
         result["qualification_profile"] = qualification_profile
     if selector in STATIC_B4_M128_SELECTORS:
         if resource_credential is None or expected_resource_credential_sha256 is None:
@@ -489,6 +516,7 @@ def _verify_production_qualification(
         "identity_twom_b4",
         "identity_hybrid_n5120_b4",
         "identity_onen_b1",
+        "identity_onen_n5120_single_b1",
     }:
         raise ValueError(f"unsupported production candidate selector: {selector!r}")
     if selector in {
@@ -516,7 +544,10 @@ def _verify_production_qualification(
     kwargs: dict[str, object] = {}
     if selector == "persistent_b4_m128":
         kwargs["fixed32_mode"] = fixed32_mode
-    elif selector == "identity_onen_b1":
+    elif selector in {
+        "identity_onen_b1",
+        "identity_onen_n5120_single_b1",
+    }:
         kwargs["qualification_profile"] = "k64_root"
     verified = qualification.verify_sidecar(
         sidecar,
@@ -527,11 +558,12 @@ def _verify_production_qualification(
         **kwargs,
     )
     if (
-        selector == "identity_onen_b1"
+        selector
+        in {"identity_onen_b1", "identity_onen_n5120_single_b1"}
         and verified.get("qualification_profile") != "k64_root"
     ):
         raise ValueError(
-            "identity_onen_b1 production requires a k64_root qualification"
+            f"{selector} production requires a k64_root qualification"
         )
     return verified
 
@@ -704,7 +736,11 @@ def install_candidate(
         "production_enabled": production_enabled,
         "candidate_family": source_identity["candidate_family"],
     }
-    if selector in IDENTITY_ONEN_B1_SELECTORS | IDENTITY_HYBRID_N5120_B4_SELECTORS:
+    if selector in (
+        IDENTITY_ONEN_B1_SELECTORS
+        | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
+        | IDENTITY_HYBRID_N5120_B4_SELECTORS
+    ):
         payload["qualification_profile"] = qualification_profile
     if qualification is not None:
         payload["qualification"] = qualification

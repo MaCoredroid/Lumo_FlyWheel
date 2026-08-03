@@ -286,6 +286,7 @@ def _measure(
         ("streamk_coop128", "exact4", "full_vocab"),
         ("streamk_force_wide256", "one", "full_vocab"),
         ("identity_onen_b1", "exact4", "k64_root"),
+        ("identity_onen_n5120_single_b1", "exact4", "k64_root"),
     ),
 )
 def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
@@ -313,7 +314,7 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
             module.binary, "WIDE256_CANDIDATE_SHA256", candidate_sha256
         )
         diagnostic_selector = "streamk_force_wide256_byte_ab"
-    else:
+    elif candidate_selector == "identity_onen_b1":
         monkeypatch.setattr(
             module.binary, "IDENTITY_ONEN_B1_CANDIDATE_SIZE", len(candidate_bytes)
         )
@@ -321,12 +322,35 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
             module.binary, "IDENTITY_ONEN_B1_CANDIDATE_SHA256", candidate_sha256
         )
         diagnostic_selector = "identity_onen_b1_byte_ab"
+    else:
+        monkeypatch.setattr(
+            module.binary,
+            "IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SIZE",
+            len(candidate_bytes),
+        )
+        monkeypatch.setattr(
+            module.binary,
+            "IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SHA256",
+            candidate_sha256,
+        )
+        diagnostic_selector = "identity_onen_n5120_single_b1_byte_ab"
+
+    if qualification_profile == "k64_root":
         monkeypatch.setattr(
             module.qualification,
             "validate_source_commit_binding",
-            lambda source_commit: {"source_commit": source_commit},
+            lambda source_commit, *_args, **_kwargs: {
+                "source_commit": source_commit
+            },
         )
-    monkeypatch.setattr(module.qualification, "PATCH_SOURCE_SHA256", "e" * 64)
+    monkeypatch.setattr(
+        module.qualification,
+        "_source_contract",
+        lambda _candidate_selector: {
+            "patch_source_sha256": "e" * 64,
+            "patched_dispatch_sha256": "f" * 64,
+        },
+    )
     qrow16_bytes = b"qrow16 candidate\n"
     qrow16_sha256 = hashlib.sha256(qrow16_bytes).hexdigest()
     qrow16_so = tmp_path / "qrow16.so"

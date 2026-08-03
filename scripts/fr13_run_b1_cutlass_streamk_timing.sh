@@ -40,6 +40,13 @@ case "$TIMING_CANDIDATE" in
     K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_b1_k64_root_live_gate.v1
     CANDIDATE_ARM_LABEL=cutlass_identity_onen_b1
     ;;
+  identity_onen_n5120_single_b1)
+    STREAMK_SHA256=876a3d6a0c972926131b1e447ffba80e345979f2d6de3bfa7bf083e862469367
+    STREAMK_BYTES=118468696
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_n5120_single_b1_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_n5120_single_b1_k64_root_live_gate.v1
+    CANDIDATE_ARM_LABEL=cutlass_identity_onen_n5120_single_b1
+    ;;
   *)
     echo "unsupported Stream-K timing candidate: $TIMING_CANDIDATE" >&2
     exit 2
@@ -50,10 +57,15 @@ if [[ -v FR13_STREAMK_TIMING_PROFILE ]]; then
   TIMING_PROFILE_EXPLICIT=1
 fi
 TIMING_PROFILE=${FR13_STREAMK_TIMING_PROFILE:-full_vocab}
-if [[ "$TIMING_CANDIDATE" == "identity_onen_b1" \
+if [[ ( "$TIMING_CANDIDATE" == "identity_onen_b1" \
+        || "$TIMING_CANDIDATE" == "identity_onen_n5120_single_b1" ) \
       && ( "$TIMING_PROFILE_EXPLICIT" != "1" \
            || "$TIMING_PROFILE" != "k64_root" ) ]]; then
-  echo "identity_onen_b1 timing requires explicit k64_root qualification" >&2
+  if [[ "$TIMING_CANDIDATE" == "identity_onen_b1" ]]; then
+    echo "identity_onen_b1 timing requires explicit k64_root qualification" >&2
+  else
+    echo "$TIMING_CANDIDATE timing requires explicit k64_root qualification" >&2
+  fi
   exit 2
 fi
 case "$TIMING_TASK_SET" in
