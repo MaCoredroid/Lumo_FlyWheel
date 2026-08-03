@@ -1660,8 +1660,10 @@ def test_source_build_candidates_are_independent_and_default_off() -> None:
     assert "fixed32_query_tile16_static_strides: bool = False" in text
     assert "fixed32_query_tile32: bool = False" in text
     assert "fixed32_query_tile32_b1: bool = False" in text
-    assert "There is no qrow32 production selector" in text
     assert "fixed32_query_tile32_production" not in text
+    assert "fixed32_query_tile32_b1_production: bool = False" in text
+    assert '"--fixed32-query-tile32-b1-live-ab"' in text
+    assert '"--fixed32-query-tile32-b1-production"' in text
     assert "--fixed32-query-tile32 requires --tree-bias-tile-earlyout" in text
     assert "--fixed32-query-tile32-b1 requires --tree-bias-tile-earlyout" in text
     assert "--fixed32-query-tile16-static-strides requires " in text
@@ -1727,13 +1729,14 @@ def test_qrow32_b1_api_gate_is_exact_and_idempotent() -> None:
     )
     assert changed
     assert text.count("fr13_run_mha_fwd_fixed32_qrow32_b1") == 2
-    assert "params.b == 1" in text
-    assert "params.total_q == 32" in text
-    assert "params.h == 24" in text
-    assert "params.h_k == 4" in text
-    assert "params.page_block_size == 1024" in text
-    assert "params.num_splits == 0" in text
-    assert "&& force_split_kernel" in text
+    assert "hidden launcher revalidates every canonical field" in text
+    candidate = module.FIXED32_QUERY_TILE32_B1_TRANSLATION_UNIT
+    assert "params.b == 1" in candidate
+    assert "params.total_q == 32" in candidate
+    assert "params.h == 24" in candidate
+    assert "params.h_k == 4" in candidate
+    assert "params.page_block_size == 1024" in candidate
+    assert "params.num_splits == 0" in candidate
     assert module.STOCK_RUN_MHA_FWD[
         module.STOCK_RUN_MHA_FWD.index("    FP16_SWITCH") : -1
     ] in text
@@ -1758,13 +1761,14 @@ def test_qrow32_b1_split2_api_gate_requires_stock_scratch() -> None:
     )
     assert changed
     assert text.count("fr13_run_mha_fwd_fixed32_qrow32_b1_split2") == 2
-    assert "params.b == 1" in text
-    assert "params.total_q == 32" in text
-    assert "params.page_block_size == 1024" in text
-    assert "params.oaccum_ptr != nullptr" in text
-    assert "params.softmax_lseaccum_ptr != nullptr" in text
-    assert "params.num_splits == 2" in text
-    assert "&& force_split_kernel" in text
+    assert "hidden launcher revalidates geometry and stock split scratch" in text
+    candidate = module.FIXED32_QUERY_TILE32_B1_SPLIT2_TRANSLATION_UNIT
+    assert "params.b == 1" in candidate
+    assert "params.total_q == 32" in candidate
+    assert "params.page_block_size == 1024" in candidate
+    assert "params.oaccum_ptr != nullptr" in candidate
+    assert "params.softmax_lseaccum_ptr != nullptr" in candidate
+    assert "params.num_splits == kContextSplits" in candidate
     assert module.STOCK_RUN_MHA_FWD[
         module.STOCK_RUN_MHA_FWD.index("    FP16_SWITCH") : -1
     ] in text
