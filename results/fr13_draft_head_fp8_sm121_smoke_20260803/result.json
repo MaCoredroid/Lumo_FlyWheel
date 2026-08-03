@@ -1,0 +1,173 @@
+{
+  "batches": {
+    "1": {
+      "activation_q": {
+        "contiguous": true,
+        "dtype": "torch.float8_e4m3fn",
+        "element_size": 1,
+        "shape": [
+          1,
+          5120
+        ],
+        "stride": [
+          5120,
+          1
+        ]
+      },
+      "activation_scale": {
+        "contiguous": true,
+        "dtype": "torch.float32",
+        "element_size": 4,
+        "shape": [
+          1,
+          40
+        ],
+        "stride": [
+          1,
+          1
+        ]
+      },
+      "argmax_equal_informational": false,
+      "bf16_five_call_ms": 13.94521951675415,
+      "bf16_gemm_ms_per_call": 2.78904390335083,
+      "fp8_bf16_output_cosine_informational": 0.999324381351471,
+      "fp8_five_call_ms": 7.5980401039123535,
+      "fp8_gemm_ms_per_call": 1.5260159969329834,
+      "fp8_quant_plus_gemm_ms_per_call": 1.5196080207824707,
+      "fp8_vs_bf16_speedup": 1.8353706121626723,
+      "mandatory_weight_bandwidth_gbps": 219.93625274869208,
+      "output": {
+        "contiguous": true,
+        "dtype": "torch.bfloat16",
+        "element_size": 2,
+        "shape": [
+          1,
+          65536
+        ],
+        "stride": [
+          65536,
+          1
+        ]
+      }
+    },
+    "4": {
+      "activation_q": {
+        "contiguous": true,
+        "dtype": "torch.float8_e4m3fn",
+        "element_size": 1,
+        "shape": [
+          4,
+          5120
+        ],
+        "stride": [
+          5120,
+          1
+        ]
+      },
+      "activation_scale": {
+        "contiguous": false,
+        "dtype": "torch.float32",
+        "element_size": 4,
+        "shape": [
+          4,
+          40
+        ],
+        "stride": [
+          1,
+          4
+        ]
+      },
+      "argmax_equal_informational": true,
+      "bf16_five_call_ms": 14.553560018539429,
+      "bf16_gemm_ms_per_call": 2.9107120037078857,
+      "fp8_bf16_output_cosine_informational": 0.9993160963058472,
+      "fp8_five_call_ms": 7.605900168418884,
+      "fp8_gemm_ms_per_call": 1.5210599899291992,
+      "fp8_quant_plus_gemm_ms_per_call": 1.5211800336837769,
+      "fp8_vs_bf16_speedup": 1.913456618714051,
+      "mandatory_weight_bandwidth_gbps": 220.65286196609668,
+      "output": {
+        "contiguous": true,
+        "dtype": "torch.bfloat16",
+        "element_size": 2,
+        "shape": [
+          4,
+          65536
+        ],
+        "stride": [
+          65536,
+          1
+        ]
+      }
+    }
+  },
+  "classification": "kernel_smoke_not_acceptance",
+  "cuda_version": "13.0",
+  "cutlass_block_fp8_supported": true,
+  "device_capability": [
+    12,
+    1
+  ],
+  "device_name": "NVIDIA GB10",
+  "host": "deab669fd22e",
+  "lossless_acceptance_claimed": false,
+  "pid": 1,
+  "production_default_enabled": false,
+  "qweight": {
+    "contiguous": true,
+    "dtype": "torch.float8_e4m3fn",
+    "element_size": 1,
+    "shape": [
+      65536,
+      5120
+    ],
+    "stride": [
+      5120,
+      1
+    ]
+  },
+  "repeats": 8,
+  "schema": "fr13.draft_head_fp8_sm121_smoke.v1",
+  "script_sha256": "0619412c9a179cbf499caf0c85326a23991ced65a8772f0fbbdc942e2734983b",
+  "seed": 20260803,
+  "status": "PASS",
+  "torch_version": "2.11.0+cu130",
+  "traffic": {
+    "bf16_weight_bytes_per_call_removed": 671088640,
+    "calls_per_event": 5,
+    "candidate_full_step_mandatory_bytes": 30989326208,
+    "candidate_weight_floor_ms": 113.514015414,
+    "fp32_weight_scale_bytes_per_call": 81920,
+    "fp8_weight_bytes_per_call": 335544320,
+    "mandatory_bytes_per_call": 335626240,
+    "mandatory_bytes_per_event": 1678131200,
+    "one_sided_u95_cap_ms": 130.541117726
+  },
+  "weight": {
+    "contiguous": true,
+    "dtype": "torch.bfloat16",
+    "element_size": 2,
+    "shape": [
+      65536,
+      5120
+    ],
+    "stride": [
+      5120,
+      1
+    ]
+  },
+  "weight_quantization_ms_one_time": 3956.92358200904,
+  "weight_scale": {
+    "contiguous": true,
+    "dtype": "torch.float32",
+    "element_size": 4,
+    "shape": [
+      512,
+      40
+    ],
+    "stride": [
+      40,
+      1
+    ]
+  }
+}

@@ -22,8 +22,9 @@ esac
 FR13_GATE_TAW_NATIVE=${FR13_GATE_TAW_NATIVE:-1}
 FR13_GATE_DRAFT_HEAD_PAD=${FR13_GATE_DRAFT_HEAD_PAD:-0}
 FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}
+FR13_GATE_DRAFT_HEAD_FP8=${FR13_GATE_DRAFT_HEAD_FP8:-0}
 FR13_GATE_BM8=${FR13_GATE_BM8:-0}
-for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_BM8; do
+for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_BM8; do
   case "${!gate}" in
     0|1) ;;
     *) echo "$gate must be 0 or 1" >&2; exit 2 ;;
@@ -40,6 +41,7 @@ if [[ "$FR13_GATE_BM8" == "1" \
            || "$FR13_GATE_TAW_NATIVE" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
   echo "FR13_GATE_BM8 must be the only enabled kernel candidate" >&2
   exit 2
@@ -48,9 +50,20 @@ if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" \
       && ( "$FR13_GATE_QROW16" != "0" \
            || "$FR13_GATE_TAW_NATIVE" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
            || "$FR13_GATE_BM8" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
   echo "FR13_GATE_DRAFT_HEAD_M32 must be the only enabled kernel candidate" >&2
+  exit 2
+fi
+if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" \
+      && ( "$FR13_GATE_QROW16" != "0" \
+           || "$FR13_GATE_TAW_NATIVE" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
+           || "$FR13_GATE_BM8" != "0" \
+           || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
+  echo "FR13_GATE_DRAFT_HEAD_FP8 must be the only enabled kernel candidate" >&2
   exit 2
 fi
 
@@ -69,7 +82,7 @@ case "$B1_WORKLOAD_PROFILE" in
     PROFILE_SUFFIX=
     ;;
   k64_root)
-    [[ ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
+    if [[ ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_force_wide256_byte_ab" \
          || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "static_persistent_stocktile_byte_ab" \
          || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "divisor_static_stocktile_byte_ab" \
          || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
@@ -80,17 +93,35 @@ case "$B1_WORKLOAD_PROFILE" in
        && "$FR13_GATE_TAW_NATIVE" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
+       && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
        && "$FR13_GATE_BM8" == "0" \
-       && "$FR13_GATE_GDN_BV" == "0" ]] || {
-      echo "B1 k64_root is restricted to the isolated wide256 byte gate" >&2
+       && "$FR13_GATE_GDN_BV" == "0" ]]; then
+      :
+    elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+            && "$FR13_GATE_QROW16" == "0" \
+            && "$FR13_GATE_TAW_NATIVE" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_FP8" == "1" \
+            && "$FR13_GATE_BM8" == "0" \
+            && "$FR13_GATE_GDN_BV" == "0" ]]; then
+      :
+    else
+      echo "B1 k64_root requires an isolated admitted candidate" >&2
       exit 2
-    }
+    fi
     DRAFT_VOCAB_ROOT=1
     DRAFT_VOCAB_K=65536
     NEEDS_ALLOW=
-    MANDATORY_WEIGHT_BYTES=32666638208
-    MANDATORY_WEIGHT_FLOOR_MS=119.658015414
-    ONE_SIDED_U95_CAP_MS=137.6067177261
+    if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
+      MANDATORY_WEIGHT_BYTES=30989326208
+      MANDATORY_WEIGHT_FLOOR_MS=113.514015414
+      ONE_SIDED_U95_CAP_MS=130.541117726
+    else
+      MANDATORY_WEIGHT_BYTES=32666638208
+      MANDATORY_WEIGHT_FLOOR_MS=119.658015414
+      ONE_SIDED_U95_CAP_MS=137.6067177261
+    fi
     PROFILE_SUFFIX=_k64_root
     ;;
   *)
@@ -121,6 +152,7 @@ export WALL=0
 export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"
 export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"
 export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
+export FR13_DRAFT_HEAD_FP8="$FR13_GATE_DRAFT_HEAD_FP8"
 export FR13_NEEDS_ALLOW="$NEEDS_ALLOW"
 export FR13_FLOOR_ORDER=TH
 
@@ -144,9 +176,9 @@ elif [[ "${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}" == "1" ]]; then
 fi
 
 mkdir -p "$RUNROOT"
-printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
+printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_fp8_gate=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$SOURCE_COMMIT" "$FA2_SHA" "$FR13_GATE_BM8" \
-  "$FR13_GATE_DRAFT_HEAD_M32" "$B1_WORKLOAD_PROFILE" \
+  "$FR13_GATE_DRAFT_HEAD_M32" "$FR13_GATE_DRAFT_HEAD_FP8" "$B1_WORKLOAD_PROFILE" \
   "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" "$NEEDS_ALLOW" \
   "$DRAFT_VOCAB_BLOCKS_CONTAINER" "$DRAFT_VOCAB_BLOCKS_SHA256" \
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
@@ -177,6 +209,8 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_DRAFT_HEAD_M32_LIVE_AB="$FR13_GATE_DRAFT_HEAD_M32" \
   FR13_DRAFT_HEAD_M32_INSTANCE_ID=astropy__astropy-12907 \
   FR13_DRAFT_HEAD_M32_LIVE_JSON=/logs/fr13_draft_head_m32.live.json \
+  FR13_DRAFT_HEAD_FP8="$FR13_GATE_DRAFT_HEAD_FP8" \
+  FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON=/logs/fr13_draft_head_fp8.engagement.json \
   FR13_FIXED32_GDN_PATH_BV_CANDIDATE="$FR13_GATE_GDN_BV_CANDIDATE" \
   FORKED_FA2_SO="$FORKED_FA2_SO" \
   FR13_FA2_QROW16_SO_SHA256="$FA2_SHA" \
@@ -235,6 +269,47 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]]; then
     --candidate-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
     --expected-candidate-source-sha256 "$DRAFT_HEAD_SOURCE_SHA" \
     > "$RUNROOT/$ARM/draft_head_m32_live_validation.json"
+fi
+if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
+  DRAFT_HEAD_FP8_ENGAGEMENT="$RUNROOT/$ARM/logs/fr13_draft_head_fp8.engagement.json"
+  DRAFT_HEAD_FP8_FINAL_FLUSH="$RUNROOT/$ARM/fixed32_final_flush.json"
+  DRAFT_HEAD_FP8_TRAFFIC_AUDIT="$RUNROOT/$ARM/fixed32_chat_traffic_audit.json"
+  for evidence in \
+    "$DRAFT_HEAD_FP8_ENGAGEMENT" \
+    "$DRAFT_HEAD_FP8_FINAL_FLUSH" \
+    "$DRAFT_HEAD_FP8_TRAFFIC_AUDIT"; do
+    [[ -f "$evidence" && ! -L "$evidence" ]] \
+      || { echo "draft-head FP8 evidence is missing: $evidence" >&2; exit 4; }
+  done
+  DRAFT_HEAD_FP8_FLUSH_GENERATION=$(
+    .venv/bin/python -c \
+      'import json,sys; print(json.load(open(sys.argv[1]))["ack"]["generation"])' \
+      "$DRAFT_HEAD_FP8_FINAL_FLUSH"
+  )
+  DRAFT_HEAD_FP8_BOUNDARY="$RUNROOT/$ARM/logs/fr13_fixed32_boundary_snapshot.${DRAFT_HEAD_FP8_FLUSH_GENERATION}.json"
+  [[ -f "$DRAFT_HEAD_FP8_BOUNDARY" && ! -L "$DRAFT_HEAD_FP8_BOUNDARY" ]] \
+    || { echo "draft-head FP8 final boundary evidence is missing" >&2; exit 4; }
+  DRAFT_HEAD_FP8_ACCEPTANCE="$RUNROOT/$ARM/draft_head_fp8_acceptance.json"
+  .venv/bin/python scripts/fr13_measure.py deploy-speed \
+    --arm "$ARM" \
+    --out-root "$RUNROOT/$ARM/swe_out" \
+    --expected-tok-per-draft 31 \
+    --batch-size 1 \
+    --out "$DRAFT_HEAD_FP8_ACCEPTANCE"
+  DRAFT_HEAD_FP8_SOURCE_SHA=$(
+    sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1
+  )
+  .venv/bin/python scripts/fr13_draft_head_fp8_gate.py \
+    --engagement "$DRAFT_HEAD_FP8_ENGAGEMENT" \
+    --acceptance "$DRAFT_HEAD_FP8_ACCEPTANCE" \
+    --final-flush "$DRAFT_HEAD_FP8_FINAL_FLUSH" \
+    --boundary-snapshot "$DRAFT_HEAD_FP8_BOUNDARY" \
+    --chat-traffic-audit "$DRAFT_HEAD_FP8_TRAFFIC_AUDIT" \
+    --candidate-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+    --expected-source-sha256 "$DRAFT_HEAD_FP8_SOURCE_SHA" \
+    --expected-source-commit "$SOURCE_COMMIT" \
+    --repo "$PWD" \
+    --out "$RUNROOT/$ARM/draft_head_fp8_real_b1_gate.json"
 fi
 
 exit "$serve_rc"

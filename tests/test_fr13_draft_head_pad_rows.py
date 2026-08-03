@@ -145,10 +145,11 @@ def test_launcher_passes_only_strict_candidate_modes() -> None:
         in launcher
     )
     assert '( "$MAX_NUM_SEQS" == "4" \\' in launcher
-    assert '&& "$FR13_DRAFT_HEAD_PAD_ROWS" == "32" \\' in launcher
+    assert '( ( "$FR13_DRAFT_HEAD_PAD_ROWS" == "32" \\' in launcher
     assert '&& "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \\' in launcher
     assert '&& "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \\' in launcher
-    assert '&& "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" ) ) \\' in launcher
+    assert '&& "$FR13_DRAFT_HEAD_FP8" == "0" ) \\' in launcher
+    assert '|| ( "$FR13_DRAFT_HEAD_FP8" == "1" \\' in launcher
     assert (
         '-e FR13_DRAFT_HEAD_PAD_ROWS="$FR13_DRAFT_HEAD_PAD_ROWS" \\'
         in launcher
