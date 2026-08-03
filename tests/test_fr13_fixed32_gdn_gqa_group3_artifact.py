@@ -14,8 +14,23 @@ def test_work_model_is_source_only_and_exactly_bound() -> None:
 
     assert model["status"] == "source_only_default_off"
     assert model["source_commit"] == (
-        "efc7024701dce5d8b87ce3f80f5ecfa56ee74789"
+        "fafd7a80f4e6080e83b5c024f975bd5399e569b7"
     )
+    guard = model["guard_scope"]
+    assert guard["validation_phase"] == "before_triton_dispatch"
+    assert guard["served_runtime_wired"] is False
+    assert guard["tensor_metadata"] == [
+        "device",
+        "dtype",
+        "shape",
+        "contiguity",
+        "canonical_stride",
+    ]
+    assert guard["pointer_domains"] == [
+        "h0_index_addresses_and_bank_ids",
+        "raw_and_prescaled_fixed32_descriptors",
+        "active_output_ring_counter_and_flag_storage",
+    ]
     assert model["qualification"] == {
         "draft_vocab_k": 65_536,
         "draft_vocab_root": 1,

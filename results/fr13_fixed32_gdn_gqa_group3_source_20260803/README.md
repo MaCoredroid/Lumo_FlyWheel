@@ -3,10 +3,24 @@
 Status: `SOURCE_ONLY`, `DEFAULT_OFF`, and not wired into the served arm.
 
 This artifact binds the fixed32 GDN GQA-group3 candidate to source commit
-`efc7024701dce5d8b87ce3f80f5ecfa56ee74789`.  The candidate is restricted to
+`fafd7a80f4e6080e83b5c024f975bd5399e569b7`.  The candidate is restricted to
 K64/root1, physical32, Tail23 (`tail6_fixed32`) or Hydra27
 (`hydra27_fixed32`), B1 or B4, and the exact Qwen3.6-27B GDN geometry:
 16 key heads, 48 value heads, Dk=Dv=128, BV8, and 48 GDN layers.
+
+## Pre-runtime guard closure
+
+The source launch now fails before Triton dispatch unless every operand is a
+tensor on one CUDA device and every active input, output, ring, counter, and
+flag has its exact dtype, shape, canonical contiguous stride, and capacity.
+The guard bounds every accepted-count and H0-index address, validates every
+selected H0 bank ID, pins both raw and pre-scaled fixed32 descriptors to the
+canonical schedule, enforces export dependencies, and rejects overlapping
+writable storage. CPU-backed negative launch tests prove malformed bindings do
+not reach the fake kernel dispatch.
+
+This is guard-only source work. It does not wire the candidate into the served
+runtime, change the fixed32 recurrence, or qualify any GPU/runtime gate.
 
 ## Static work removal
 
@@ -29,9 +43,10 @@ removed.  Fixed physical work is unchanged for any logical tree with at most
 ## Host verification
 
 The candidate, artifact-integrity, and incumbent contract suite passed with
-`47 passed, 1 skipped`.  It covers exact B1/B4 work accounting, geometry rejection,
-single-writer value-tile coverage, grouped-versus-independent recurrence
-equivalence on CPU, source-only isolation, ordered single-launch structure,
+`66 passed, 1 skipped`. It covers exact B1/B4 work accounting, geometry
+rejection, single-writer value-tile coverage, grouped-versus-independent
+recurrence equivalence on CPU, source-only isolation, ordered single-launch
+structure, raw and pre-scaled descriptor validation, pointer-domain rejection,
 fixed32 exact I/O, and K-norm/gate/decay committer contracts.
 
 Triton and a GPU were unavailable in this host environment.  No container,

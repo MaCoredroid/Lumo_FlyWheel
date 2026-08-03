@@ -3,11 +3,25 @@
 Status: `SOURCE_ONLY`, `DEFAULT_OFF`, and not wired into the served arm.
 
 This artifact binds the fixed32 CFWD logit-direct decision candidate to source
-commit `ad3063da4344434aeed7d1bf49ead5c07a405765`. The specialization is limited
+commit `fafd7a80f4e6080e83b5c024f975bd5399e569b7`. The specialization is limited
 to K64/root1, physical32, Tail23 (`tail6_fixed32`) or Hydra27
 (`hydra27_fixed32`), B1 or B4, vocabulary 151,936, fanout three, and walk cap
 12. Fixed physical work is unchanged for any logical tree with at most 32
 nodes.
+
+## Pre-runtime guard closure
+
+The source launch now fails before either Triton dispatch unless every operand
+and persistent workspace tensor is on one CUDA device with its exact dtype,
+shape, canonical contiguous stride, and disjoint writable storage. The guard
+bounds all source rows, parent slots, uniform levels, child nodes, and draft
+token IDs; requires child tables to be a packed active prefix followed by -1;
+and requires every uniform to be finite in the half-open range [0, 1).
+CPU-backed negative launch tests prove malformed bindings reach neither fake
+kernel dispatch.
+
+This is guard-only source work. It does not wire the candidate into the served
+runtime, alter decision algebra, or qualify any GPU/runtime gate.
 
 ## Structural work removal
 
@@ -35,7 +49,7 @@ one launch.
 ## Host verification
 
 The source, artifact-integrity, incumbent TAW, exact committer, and GDN
-committer contract suite passed with `118 passed, 1 skipped` after excluding
+committer contract suite passed with `133 passed, 1 skipped` after excluding
 one unrelated pre-existing B1 runner-string assertion. That baseline test
 expects an obsolete inline full-vocabulary conditional; the current runner
 uses a workload-profile case instead. No harness file was changed.

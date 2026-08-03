@@ -1,8 +1,25 @@
 {
   "schema": "fr13.fixed32.gdn_gqa_group3.source_work_model.v1",
   "status": "source_only_default_off",
-  "source_commit": "efc7024701dce5d8b87ce3f80f5ecfa56ee74789",
+  "source_commit": "fafd7a80f4e6080e83b5c024f975bd5399e569b7",
   "candidate": "fixed32_gdn_single_launch_gqa_group3_v1",
+  "guard_scope": {
+    "validation_phase": "before_triton_dispatch",
+    "tensor_metadata": [
+      "device",
+      "dtype",
+      "shape",
+      "contiguity",
+      "canonical_stride"
+    ],
+    "pointer_domains": [
+      "h0_index_addresses_and_bank_ids",
+      "raw_and_prescaled_fixed32_descriptors",
+      "active_output_ring_counter_and_flag_storage"
+    ],
+    "writable_storage_must_be_disjoint": true,
+    "served_runtime_wired": false
+  },
   "qualification": {
     "draft_vocab_k": 65536,
     "draft_vocab_root": 1,
