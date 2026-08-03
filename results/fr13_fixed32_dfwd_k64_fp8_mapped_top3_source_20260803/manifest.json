@@ -1,0 +1,24 @@
+{
+  "base_commit": "a4b32a0df8128cd3fef99146253a8ff46134f507",
+  "builder": {
+    "path": "scripts/fr13_build_dfwd_k64_fp8_mapped_top3.py",
+    "sha256": "1921e4647c5ce0ef88955f4330d9004c51a18e6d08cd350e818521e1462f85fa"
+  },
+  "byte_equality_claim": false,
+  "gpu_execution": false,
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "real_task_correctness": false,
+  "runtime_integration_present": false,
+  "schema": "fr13.fixed32.dfwd_k64_fp8_mapped_top3_source.v1",
+  "source": {
+    "path": "csrc/fr13_dfwd_k64_fp8_mapped_top3.cu",
+    "sha256": "828fca7aff71c1a0aefd4c1054b6e7cd437d1b0f3582e5ef988dff0fb696cda0"
+  },
+  "status": "SOURCE_READY_UNBUILT",
+  "tests": {
+    "focused_passed": 36,
+    "path": "tests/test_fr13_dfwd_k64_fp8_mapped_top3.py",
+    "sha256": "23982748d60d7e01bc50e2c1353e909fd04e4dc374353f9267c7185cd53b3a17"
+  }
+}
