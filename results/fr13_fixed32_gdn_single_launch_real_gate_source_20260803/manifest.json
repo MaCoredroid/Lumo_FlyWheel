@@ -1,9 +1,10 @@
 {
-  "schema": "fr13.fixed32.gdn_single_launch.real_task_gate_source.v2",
+  "schema": "fr13.fixed32.gdn_single_launch.real_task_gate_source.v3",
   "status": "SOURCE_READY_REAL_TASK_RUNNERS_UNQUALIFIED",
   "created_at_utc": "2026-08-03T01:50:28Z",
-  "integration_commit": "532eb2ba8600178c55778037b9372bd5c21f2b0b",
-  "source_commit": "42de2fa60435be626e8d668fd3f247b62cf3273b",
+  "updated_at_utc": "2026-08-03T02:18:41Z",
+  "integration_commit": "63c04b0a3ab293c2769dff65b83a06680fd3c687",
+  "source_commit": "63c04b0a3ab293c2769dff65b83a06680fd3c687",
   "merged_origin_main": "30f8437d2b13d1af6ca14ae8eac68ca5b49fb27b",
   "candidate": "fixed32_gdn_single_launch_tree_v2",
   "qualification_selector": "FR13_FIXED32_GDN_PATH_BV_CANDIDATE=single_launch",
@@ -39,6 +40,9 @@
       "graph_id",
       "graph_signature"
     ],
+    "capture_graph_id_runtime_internal_only": true,
+    "durable_graph_id_asserted": false,
+    "durable_structural_graph_signature": true,
     "cross_batch_capture_consumption_rejected": true,
     "global_pass_cross_batch_inheritance_rejected": true,
     "default_off": true,
@@ -56,8 +60,16 @@
     "qwen_compaction_algebra_replayed": true,
     "qwen_per_task_binding_verified": true,
     "runtime_launch_end_stable": true,
+    "runtime_manifest_regenerated": true,
+    "runtime_manifest_git_source_identity_verified": true,
+    "source_commit_required_to_equal_head": true,
+    "source_closure_verified_with_git_show": true,
+    "affected_test_source_count": 3,
     "external_launch_end_stable": true,
     "graph_work_census_verified": true,
+    "structural_graph_signature_joined_to_census": true,
+    "dataset_records_derived_from_pinned_parquet": true,
+    "runner_metadata_dataset_digest_trusted": false,
     "batch_specific_pass_verified": true
   },
   "compared_byte_surfaces": [
@@ -73,7 +85,8 @@
     "export"
   ],
   "validation": {
-    "combined_regressions": "275 passed, 1 skipped",
+    "combined_regressions": "278 passed, 1 skipped",
+    "focused_adversarial_and_graph_regressions": "45 passed",
     "bash_n": "pass",
     "py_compile": "pass",
     "git_diff_check": "pass"
