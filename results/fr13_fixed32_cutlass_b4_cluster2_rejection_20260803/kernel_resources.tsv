@@ -1,0 +1,5 @@
+variant	dtype	registers	stack_bytes	local_bytes	shared_bytes	constant0_bytes	verdict
+cluster2_multicast	fp16	168	128	0	1024	2560	reject
+cluster2_multicast	bf16	168	128	0	1024	2560	reject
+pingpong_twom	fp16	168	0	0	1024	2688	retain
+pingpong_twom	bf16	168	0	0	1024	2688	retain

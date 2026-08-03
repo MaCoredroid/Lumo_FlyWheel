@@ -1,0 +1,5 @@
+variant	dtype	sass_slots	constant_loads	qmma	ffma	fmul	ldsm	stsm	sync	call	branch	ldl	stl
+cluster2_multicast	fp16	2064	75	128	128	8	48	16	115	2	97	69	79
+cluster2_multicast	bf16	2064	75	128	128	8	48	16	115	2	97	69	79
+pingpong_twom	fp16	1040	26	128	128	8	48	16	56	0	39	0	0
+pingpong_twom	bf16	1040	26	128	128	8	48	16	56	0	39	0	0
