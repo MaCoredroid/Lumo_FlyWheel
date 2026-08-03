@@ -14,6 +14,8 @@ CANDIDATE = (
 SERVED_KERNEL = (
     ROOT / "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
 )
+PATCHER = ROOT / "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
+LAUNCHER = ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh"
 
 
 def _tree_and_source() -> tuple[ast.Module, str]:
@@ -247,16 +249,23 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert kernel.count("_fr13_fixed32_gdn_gqa_group3_node(") == 2
     assert "if H0_IS_BANK:" in kernel
     assert "grid = (NUM_K_HEADS, DIM_V // BLOCK_V, int(batch_size))" in launch
-    assert "num_warps=8" in launch
+    assert 'launch_options = {"num_warps": 8}' in launch
+    assert 'launch_options["maxnreg"] = int(maxnreg)' in launch
 
 
-def test_candidate_is_source_only_and_cannot_change_the_served_arm() -> None:
+def test_candidate_is_default_off_and_gate_wired_without_serving() -> None:
     served = SERVED_KERNEL.read_text(encoding="utf-8")
+    patcher = PATCHER.read_text(encoding="utf-8")
+    launcher = LAUNCHER.read_text(encoding="utf-8")
     _tree, source = _tree_and_source()
 
-    assert "deliberately not wired into serving" in source
-    assert "fixed32_gdn_single_launch_gqa_group3_v1" not in served
-    assert "fr13_gdn_gqa_group3" not in served
+    assert "default-off ``gqa_group3`` live" in source
+    assert '== _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE' in served
+    assert "_FR13_FIXED32_GDN_GQA_GROUP3_LAUNCH = None" in served
+    assert "launch_fixed32_gdn_gqa_group3_source_candidate" in served
+    assert '"gqa_group3"' in patcher
+    assert '"gqa_group3"' in launcher
+    assert '"candidate_served": False' in served
 
 
 def test_value_head_helper_calls_exactly_match_the_ast_signature() -> None:
