@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -47,6 +49,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "identity_stage2_static_byte_ab",
         "identity_stage2_pingpong_b1",
         "identity_stage2_pingpong_b1_byte_ab",
+        "identity_onen_b1",
+        "identity_onen_b1_byte_ab",
         "identity_stockshape_b4",
         "identity_stockshape_b4_byte_ab",
         "identity_stockshape_stage2_b4",
@@ -89,6 +93,17 @@ def test_pinned_binary_identity_and_selectors() -> None:
         module.IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SIZE,
         "identity_stage2_pingpong_b1",
     )
+    assert module.candidate_identity("identity_onen_b1_byte_ab") == (
+        module.IDENTITY_ONEN_B1_CANDIDATE_SHA256,
+        module.IDENTITY_ONEN_B1_CANDIDATE_SIZE,
+        "identity_onen_b1",
+    )
+    assert module.IDENTITY_ONEN_B1_CANDIDATE_SHA256 == (
+        "17af1975b1e26cd3d4c3e614bfcab8aa1b0dc031ea5107004b0cc25890fc2b15"
+    )
+    assert module.IDENTITY_ONEN_B1_CANDIDATE_SIZE == 118_166_088
+    assert "identity_onen_b1" in module.PRODUCTION_SELECTORS
+    assert "identity_onen_b1_byte_ab" not in module.PRODUCTION_SELECTORS
     assert module.IDENTITY_B4_CANDIDATE_SHA256 == (
         "d7771d5a95a34d6072a796d520e8f2fa500aeccc900d57e1477941b966ea77a9"
     )
@@ -274,6 +289,79 @@ def test_wide256_diagnostic_install_uses_its_own_pinned_identity(
     assert record["production_enabled"] is False
     assert record["candidate_family"] == "streamk_force_wide256"
     assert record["source"]["sha256"] == digest
+
+
+def test_onen_b1_diagnostic_installs_but_direct_requires_sidecar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    payload = b"onen-b1-candidate-extension\n"
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(module, "IDENTITY_ONEN_B1_CANDIDATE_SIZE", len(payload))
+    monkeypatch.setattr(module, "IDENTITY_ONEN_B1_CANDIDATE_SHA256", digest)
+    source = tmp_path / "onen-b1.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    record = module.install_candidate(
+        source,
+        destination,
+        attestation,
+        "identity_onen_b1_byte_ab",
+    )
+
+    assert destination.read_bytes() == payload
+    assert record["production_enabled"] is False
+    assert record["candidate_family"] == "identity_onen_b1"
+
+    destination.chmod(0o644)
+    destination.write_bytes(b"stock-extension\n")
+    with pytest.raises(ValueError, match="requires a pinned production sidecar"):
+        module.install_candidate(
+            source,
+            destination,
+            attestation,
+            "identity_onen_b1",
+        )
+    assert destination.read_bytes() == b"stock-extension\n"
+
+
+def test_onen_b1_production_uses_k64_streamk_qualification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    observed: dict[str, object] = {}
+
+    def verify_sidecar(*args, **kwargs):
+        observed["args"] = args
+        observed["kwargs"] = kwargs
+        return {"status": "QUALIFIED"}
+
+    qualification = types.SimpleNamespace(verify_sidecar=verify_sidecar)
+    monkeypatch.setitem(sys.modules, "fr13_cutlass_streamk_pass", qualification)
+    sidecar = tmp_path / "sidecar.json"
+    candidate = tmp_path / "candidate.so"
+    patch_source = tmp_path / "patch.py"
+
+    result = module._verify_production_qualification(
+        sidecar,
+        "a" * 64,
+        candidate,
+        patch_source,
+        "identity_onen_b1",
+        "hydra27_fixed32",
+    )
+
+    assert result == {"status": "QUALIFIED"}
+    assert observed["args"] == (
+        sidecar,
+        "a" * 64,
+        candidate,
+        patch_source,
+    )
+    assert observed["kwargs"] == {"candidate_selector": "identity_onen_b1"}
 
 
 @pytest.mark.parametrize(

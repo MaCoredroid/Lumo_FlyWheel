@@ -199,10 +199,15 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "identity_stage2_static_byte_ab" in gate
     assert "identity_stage2_pingpong_b1" in gate
     assert "identity_stage2_pingpong_b1_byte_ab" in gate
+    assert "identity_onen_b1" in gate
+    assert "identity_onen_b1_byte_ab" in gate
     assert "fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_divisor_static_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_identity_stage2_static_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_identity_stage2_pingpong_b1_byte_ab.v1" in gate
+    assert "fr13.fixed32.cutlass_identity_onen_b1_byte_ab.v1" in gate
+    assert "fr13.fixed32.cutlass_identity_onen_b1_k64_root_live_gate.v1" in gate
+    assert "cutlass_identity_onen_b1_k64_root_byte_gate.json" in gate
     assert (
         "fr13.fixed32.cutlass_static_persistent_k64_root_live_gate.v1" in gate
     )

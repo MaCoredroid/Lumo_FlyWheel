@@ -34,6 +34,10 @@ IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SHA256 = (
     "bab51a0f346fe3230e351004732a0cc41f1bd6c0732b238e3ae592f07f47e208"
 )
 IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SIZE = 115_315_576
+IDENTITY_ONEN_B1_CANDIDATE_SHA256 = (
+    "17af1975b1e26cd3d4c3e614bfcab8aa1b0dc031ea5107004b0cc25890fc2b15"
+)
+IDENTITY_ONEN_B1_CANDIDATE_SIZE = 118_166_088
 IDENTITY_B4_CANDIDATE_SHA256 = (
     "d7771d5a95a34d6072a796d520e8f2fa500aeccc900d57e1477941b966ea77a9"
 )
@@ -80,6 +84,9 @@ IDENTITY_STAGE2_PINGPONG_B1_SELECTORS = frozenset(
         "identity_stage2_pingpong_b1_byte_ab",
     }
 )
+IDENTITY_ONEN_B1_SELECTORS = frozenset(
+    {"identity_onen_b1", "identity_onen_b1_byte_ab"}
+)
 IDENTITY_STOCKSHAPE_B4_SELECTORS = frozenset(
     {"identity_stockshape_b4", "identity_stockshape_b4_byte_ab"}
 )
@@ -104,6 +111,7 @@ CANDIDATE_SELECTORS = (
     | DIVISOR_STATIC_B1_SELECTORS
     | IDENTITY_STAGE2_SELECTORS
     | IDENTITY_STAGE2_PINGPONG_B1_SELECTORS
+    | IDENTITY_ONEN_B1_SELECTORS
     | IDENTITY_STOCKSHAPE_B4_SELECTORS
     | IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS
     | IDENTITY_TWOM_B4_SELECTORS
@@ -118,6 +126,7 @@ PRODUCTION_SELECTORS = frozenset(
         "persistent_b4_m128",
         "identity_stockshape_stage2_b4",
         "identity_twom_b4",
+        "identity_onen_b1",
     }
 )
 INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
@@ -171,6 +180,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SHA256,
             IDENTITY_STAGE2_PINGPONG_B1_CANDIDATE_SIZE,
             "identity_stage2_pingpong_b1",
+        )
+    if selector in IDENTITY_ONEN_B1_SELECTORS:
+        return (
+            IDENTITY_ONEN_B1_CANDIDATE_SHA256,
+            IDENTITY_ONEN_B1_CANDIDATE_SIZE,
+            "identity_onen_b1",
         )
     if selector in IDENTITY_STOCKSHAPE_B4_SELECTORS:
         return (
@@ -436,6 +451,7 @@ def _verify_production_qualification(
         "persistent_b4_m128",
         "identity_stockshape_stage2_b4",
         "identity_twom_b4",
+        "identity_onen_b1",
     }:
         raise ValueError(f"unsupported production candidate selector: {selector!r}")
     if selector in {

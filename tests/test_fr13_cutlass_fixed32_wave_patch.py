@@ -106,6 +106,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "identity_stage2_static_byte_ab"' in patched
     assert 'value == "identity_stage2_pingpong_b1"' in patched
     assert 'value == "identity_stage2_pingpong_b1_byte_ab"' in patched
+    assert 'value == "identity_onen_b1"' in patched
+    assert 'value == "identity_onen_b1_byte_ab"' in patched
     assert 'value == "identity_stockshape_b4"' in patched
     assert 'value == "identity_stockshape_b4_byte_ab"' in patched
     assert 'value == "identity_stockshape_stage2_b4"' in patched
@@ -131,12 +133,12 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 15
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 17
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
         )
-        == 6
+        == 7
     )
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -557,11 +559,7 @@ def test_b4_twom_scheduler_removes_generic_per_tile_divmods() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
     scheduler_start = patched.index("class Fr13B4TwoMStaticTileScheduler100")
     scheduler_end = patched.index(
-        "template <class TileShape, class ClusterShape,\n"
-        "          uint32_t SchedulerPipelineStageCount>\n"
-        "struct TileSchedulerSelector<\n"
-        "    vllm::fr13_fixed32_m128_divisor_static_scheduler",
-        scheduler_start,
+        "class Fr13B1OneNStaticTileScheduler100", scheduler_start
     )
     scheduler = patched[scheduler_start:scheduler_end]
 
@@ -581,6 +579,158 @@ def test_b4_twom_scheduler_removes_generic_per_tile_divmods() -> None:
     assert "uint64_t" not in scheduler
     assert "fr13_fixed32_b4_twom_static_scheduler" in patched
     assert "using Scheduler = Fr13B4TwoMStaticTileScheduler100;" in patched
+
+
+def test_b1_onen_scheduler_maps_every_audited_tile_without_divmods() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+    scheduler_start = patched.index("class Fr13B1OneNStaticTileScheduler100")
+    scheduler_end = patched.index(
+        "template <class TileShape, class ClusterShape,\n"
+        "          uint32_t SchedulerPipelineStageCount>\n"
+        "struct TileSchedulerSelector<\n"
+        "    vllm::fr13_fixed32_m128_divisor_static_scheduler",
+        scheduler_start,
+    )
+    scheduler = patched[scheduler_start:scheduler_end]
+
+    assert "return {static_cast<int32_t>(linear_idx), 0, 0, true};" in scheduler
+    assert "work_tile_info.M_idx, cute::Int<0>{}" in scheduler
+    assert "cute::Underscore{}, cute::Int<0>{}" in scheduler
+    assert "L_idx" not in scheduler
+    assert "divmod_batch_" not in scheduler
+    assert "divmod_cluster_shape" not in scheduler
+    assert "divmod_cluster_blk_major_" not in scheduler
+    assert "raster_order_" not in scheduler
+    assert "get_current_work_for_linear_idx(blockIdx.y)" in scheduler
+    assert "return gridDim.y;" in scheduler
+    assert "blockIdx.x" not in scheduler
+    assert "gridDim.x" not in scheduler
+    assert "uint32_t current_work_linear_idx_" not in scheduler
+    assert "uint32_t problem_tiles_" in scheduler
+    assert "packed_work_state_" not in scheduler
+    assert "params.blocks_per_problem_" in scheduler
+    assert "this->scheduler_params" not in scheduler
+    assert "work_tile_info.M_idx" in scheduler
+    assert "fr13_fixed32_b1_onen_static_scheduler" in patched
+    assert "using Scheduler = Fr13B1OneNStaticTileScheduler100;" in patched
+
+    projection_tiles = {
+        (34816, 5120): 272,
+        (5120, 17408): 40,
+        (5120, 6144): 40,
+        (16384, 5120): 128,
+        (14336, 5120): 112,
+    }
+    expected_grid_ctas = {
+        (34816, 5120): 34,
+        (5120, 17408): 40,
+        (5120, 6144): 40,
+        (16384, 5120): 32,
+        (14336, 5120): 28,
+    }
+    for shape, tile_count in projection_tiles.items():
+        grid_ctas = next(
+            candidate
+            for candidate in range(min(48, tile_count), 27, -1)
+            if tile_count % candidate == 0
+        )
+        assert grid_ctas == expected_grid_ctas[shape]
+        problem_tiles_m, problem_tiles_n = tile_count, 1
+        raster_order = (
+            "AlongM" if problem_tiles_n > problem_tiles_m else "AlongN"
+        )
+        launch_grid = (1, grid_ctas, 1) if raster_order == "AlongN" else (
+            grid_ctas,
+            1,
+            1,
+        )
+        assert raster_order == "AlongN"
+        assert launch_grid == (1, grid_ctas, 1)
+        assigned = [
+            (linear_idx, 0, 0)
+            for cta in range(grid_ctas)
+            for linear_idx in range(cta, tile_count, grid_ctas)
+        ]
+        assert len(assigned) == tile_count
+        assert sorted(assigned) == [(tile, 0, 0) for tile in range(tile_count)]
+        for cta in range(grid_ctas):
+            work_tile_m = cta
+            observed = []
+            while work_tile_m < tile_count:
+                observed.append(work_tile_m)
+                work_tile_m += grid_ctas
+            assert observed == list(range(cta, tile_count, grid_ctas))
+
+
+def test_b1_onen_selector_is_default_off_shape_isolated_and_exact_math() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+    cooperative_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_onen_static_identity_stage2"
+    )
+    cooperative_end = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_onen_static_identity_pingpong_stage2",
+        cooperative_start,
+    )
+    cooperative = patched[cooperative_start:cooperative_end]
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b1_onen_static_identity_pingpong_stage2"
+    )
+    config_end = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_m128_static_identity_stage2",
+        config_start,
+    )
+    config = patched[config_start:config_end]
+
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in cooperative
+    assert "using TileShape = Shape<_128, _32, _128>;" in cooperative
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in cooperative
+    assert "fr13_fixed32_b1_onen_static_scheduler" in cooperative
+    assert "cutlass::gemm::collective::StageCount<2>" in cooperative
+    assert "KernelTmaWarpSpecializedBlockwisePingpongSm120" in config
+    assert "using TileShape = Shape<_128, _32, _128>;" in config
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in config
+    assert "EpilogueSchedule, KernelSchedule, true," in config
+    assert "fr13_fixed32_b1_onen_static_scheduler" in config
+    assert "cutlass::gemm::collective::StageCount<2>" in config
+    assert "StreamK" not in config
+
+    guard_start = patched.index(
+        "if (!fixed32_cutlass_b1_onen_projection(M, N, K)"
+    )
+    guard_end = patched.index(
+        "wave_variant = fixed32_cutlass_wave_variant::stock;", guard_start
+    )
+    guard = patched[guard_start:guard_end]
+    assert "identity_onen_b1" in guard
+    assert "identity_onen_b1_byte_ab" in guard
+    assert "return m == 32" in patched
+    for n, k in (
+        (34816, 5120),
+        (5120, 17408),
+        (5120, 6144),
+        (16384, 5120),
+        (14336, 5120),
+    ):
+        assert patched.count(f"n == {n} && k == {k}") == 2
+
+    assert 'value == "identity_onen_b1"' in patched
+    assert 'value == "identity_onen_b1_byte_ab"' in patched
+    assert '"/logs/fr13_fixed32_cutlass_identity_onen_b1_byte_ab.jsonl"' in patched
+    assert "fr13.fixed32.cutlass_identity_onen_b1_byte_ab.v1" in patched
+    runner_start = patched.index("auto run_identity_onen_b1")
+    runner_end = patched.index("auto run_identity_stockshape_b4", runner_start)
+    runner = patched[runner_start:runner_end]
+    assert "if (N == 5120)" in runner
+    assert "b1_onen_static_identity_stage2" in runner
+    assert "b1_onen_static_identity_pingpong_stage2" in runner
+    assert (
+        "fixed32_cutlass_wave_variant::identity_onen_b1) {\n"
+        "    return run_identity_onen_b1(out);"
+        in patched
+    )
+    assert patched.count("return fixed32_cutlass_wave_variant::stock;") >= 1
 
 
 def test_b4_identity_twom_keeps_complete_tile_math() -> None:

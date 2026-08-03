@@ -220,6 +220,51 @@ def test_k64_root_accepts_divisor_static_stocktile_profile(
     assert issued["qualified_comparison_call_limit"] == 320
 
 
+def test_k64_root_accepts_onen_b1_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, live, _ = _k64_fixture(tmp_path, monkeypatch)
+    candidate_sha256 = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        module.binary,
+        "IDENTITY_ONEN_B1_CANDIDATE_SIZE",
+        len(candidate.read_bytes()),
+    )
+    monkeypatch.setattr(
+        module.binary,
+        "IDENTITY_ONEN_B1_CANDIDATE_SHA256",
+        candidate_sha256,
+    )
+    payload = json.loads(live.read_text(encoding="ascii"))
+    payload.update(
+        {
+            "schema": module.IDENTITY_ONEN_B1_K64_ROOT_LIVE_SCHEMA,
+            "candidate": "identity_onen_b1",
+            "candidate_family": "identity_onen_b1",
+            "diagnostic_selector": "identity_onen_b1_byte_ab",
+        }
+    )
+    live.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    live_sha256 = hashlib.sha256(live.read_bytes()).hexdigest()
+    sidecar = tmp_path / "onen-b1-sidecar.json"
+
+    issued = module.issue_sidecar(
+        live,
+        live_sha256,
+        candidate,
+        sidecar,
+        patch_source,
+        candidate_selector="identity_onen_b1",
+        qualification_profile="k64_root",
+        draft_vocab_blocks=BLOCK_MAP,
+    )
+
+    assert issued["candidate_selector"] == "identity_onen_b1"
+    assert issued["diagnostic_selector"] == "identity_onen_b1_byte_ab"
+    assert issued["qualification_profile"] == "k64_root"
+    assert issued["qualified_comparison_call_limit"] == 320
+
+
 def test_k64_root_rejects_non_wide_candidate_and_block_map_drift(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
