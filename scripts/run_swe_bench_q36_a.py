@@ -9276,6 +9276,9 @@ def main(argv: list[str] | None = None) -> int:
             fixed32_subset = validate_fixed32_run_subset(
                 args.subset,
                 b1_diagnostic=fixed32_b1_diagnostic,
+                b1_diagnostic_profile=os.environ.get(
+                    "FR13_B1_DIAGNOSTIC_TASK_PROFILE", "astropy12907"
+                ),
             )
         except FloorGateError as error:
             parser.error(f"fixed32 run subset validation failed: {error}")

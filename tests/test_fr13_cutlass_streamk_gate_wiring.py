@@ -247,6 +247,8 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
         "FR13_GATE_TAW_NATIVE=0",
         "FR13_GATE_DRAFT_HEAD_PAD=0",
         "FR13_GATE_DRAFT_HEAD_M32=0",
+        "FR13_GATE_DRAFT_HEAD_FP8=0",
+        "FR13_GATE_DFWD_TOP3=0",
         "FR13_GATE_BM8=0",
         "FR13_GATE_GDN_BV=0",
         "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0",

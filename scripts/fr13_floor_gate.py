@@ -136,11 +136,25 @@ EVIDENCE_SETS = {
         "task_ids": CANONICAL_TASK_IDS,
     },
 }
-B1_DIAGNOSTIC_SUBSET = {
-    "relative_path": "config/fr13_fixed32/subset_b1_diagnostic_one.json",
-    "sha256": "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb",
-    "task_ids": CANONICAL_TASK_IDS[:1],
+B1_DIAGNOSTIC_PROFILES = {
+    "astropy12907": {
+        "relative_path": "config/fr13_fixed32/subset_b1_diagnostic_one.json",
+        "sha256": (
+            "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb"
+        ),
+        "task_ids": (CANONICAL_TASK_IDS[0],),
+    },
+    "astropy13236": {
+        "relative_path": (
+            "config/fr13_fixed32/subset_b1_diagnostic_astropy13236.json"
+        ),
+        "sha256": (
+            "f02687afcad677dab1960d0a4650786bd586e8493c2553a5010f66a0294c5c09"
+        ),
+        "task_ids": (CANONICAL_TASK_IDS[2],),
+    },
 }
+B1_DIAGNOSTIC_SUBSET = B1_DIAGNOSTIC_PROFILES["astropy12907"]
 
 METRICS = {
     "fwd_s": "vllm:fr13_decode_forward_gpu_seconds_total",
@@ -1677,14 +1691,28 @@ def validate_fixed32_run_subset(
     path: Path,
     *,
     b1_diagnostic: bool,
+    b1_diagnostic_profile: str = "astropy12907",
 ) -> dict[str, Any]:
     """Validate either a formal exact4/16 subset or the pinned B1 diagnostic."""
     if type(b1_diagnostic) is not bool:
         raise GateError("fixed32 B1 diagnostic selector must be boolean")
+    if not isinstance(b1_diagnostic_profile, str):
+        raise GateError("fixed32 B1 diagnostic task profile must be a string")
+    try:
+        diagnostic_expected = B1_DIAGNOSTIC_PROFILES[b1_diagnostic_profile]
+    except KeyError as error:
+        raise GateError(
+            "fixed32 B1 diagnostic task profile is unsupported: "
+            f"{b1_diagnostic_profile!r}"
+        ) from error
     if not b1_diagnostic:
+        if b1_diagnostic_profile != "astropy12907":
+            raise GateError(
+                "alternate fixed32 B1 task profile requires diagnostic mode"
+            )
         return validate_canonical_subset(path)
 
-    expected = B1_DIAGNOSTIC_SUBSET
+    expected = diagnostic_expected
     actual_hash = sha256_file(path)
     if actual_hash != expected["sha256"]:
         raise GateError(
@@ -1707,6 +1735,7 @@ def validate_fixed32_run_subset(
         "path": str(path),
         "sha256": actual_hash,
         "task_ids": list(expected["task_ids"]),
+        "diagnostic_profile": b1_diagnostic_profile,
         "run_classification": "b1_diagnostic",
         "gate_eligible": False,
         "floor_acceptance_eligible": False,

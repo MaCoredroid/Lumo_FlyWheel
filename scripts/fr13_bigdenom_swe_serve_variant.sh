@@ -35,6 +35,7 @@ ARM=${1:?usage: fr13_bigdenom_swe_serve_variant.sh <arm> [KIND=tail6] [subset.js
 KIND=${2:-tail6}
 SUBSET=${3:?subset json}
 FR13_FIXED32_B1_DIAGNOSTIC=${FR13_FIXED32_B1_DIAGNOSTIC:-0}
+FR13_B1_DIAGNOSTIC_TASK_PROFILE=${FR13_B1_DIAGNOSTIC_TASK_PROFILE:-astropy12907}
 FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
 FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}
 FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=${FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB:-0}
@@ -49,6 +50,16 @@ case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
 esac
+case "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" in
+  astropy12907) _fr13_b1_diagnostic_task_id=astropy__astropy-12907 ;;
+  astropy13236) _fr13_b1_diagnostic_task_id=astropy__astropy-13236 ;;
+  *) echo "FAIL: FR13_B1_DIAGNOSTIC_TASK_PROFILE is unsupported"; exit 2 ;;
+esac
+if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" != "1" \
+      && "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" != "astropy12907" ]]; then
+  echo "FAIL: alternate B1 task profile requires diagnostic mode"
+  exit 2
+fi
 case "$FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB must be exactly 0 or 1"; exit 2 ;;
@@ -100,7 +111,8 @@ esac
 [[ "$FR13_FIXED32_CONV_COMMIT_ZERO_TAIL" == "0" \
    || "$FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB" == "0" ]] \
   || { echo "FAIL: zero-tail production and byte A/B are exclusive"; exit 2; }
-export FR13_FIXED32_B1_DIAGNOSTIC FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
+export FR13_FIXED32_B1_DIAGNOSTIC FR13_B1_DIAGNOSTIC_TASK_PROFILE \
+  FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB \
   FR13_FIXED32_COMMITTER_LAYER_BATCH \
   FR13_FIXED32_COMMITTER_METADATA_FUSION \
   FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION \
@@ -567,7 +579,8 @@ if [[ -n "$FIXED32_MODE" ]]; then
       "$FR13_FIXED32_B1_DIAGNOSTIC" \
       "$ARMDIR" \
       "$MAX_NUM_SEQS_OVR" \
-      "$SWE_CONCURRENCY" <<'PY'
+      "$SWE_CONCURRENCY" \
+      "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -581,9 +594,11 @@ diagnostic = sys.argv[2] == "1"
 arm_dir = Path(sys.argv[3]).resolve()
 max_num_seqs = int(sys.argv[4])
 concurrency = int(sys.argv[5])
+diagnostic_profile = sys.argv[6]
 binding = validate_fixed32_run_subset(
     subset_path,
     b1_diagnostic=diagnostic,
+    b1_diagnostic_profile=diagnostic_profile,
 )
 if diagnostic:
     output_path = arm_dir / "fixed32_b1_diagnostic.json"
@@ -598,6 +613,7 @@ if diagnostic:
         "subset_path": str(subset_path),
         "subset_sha256": binding["sha256"],
         "task_ids": binding["task_ids"],
+        "diagnostic_profile": diagnostic_profile,
     }
     temporary = output_path.with_name(output_path.name + ".tmp")
     temporary.write_text(
@@ -613,7 +629,8 @@ PY
   (( $? == 0 && ${#_fixed32_subset_binding[@]} == 2 )) \
     || { echo "FAIL: fixed32 canonical task-set binding"; exit 2; }
   if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
-    [[ "${_fixed32_subset_binding[0]}" == "1" ]] \
+    [[ "${_fixed32_subset_binding[0]}" == "1" \
+       && "${_fixed32_subset_binding[1]}" == "$_fr13_b1_diagnostic_task_id" ]] \
       || { echo "FAIL: fixed32 B1 diagnostic task count is invalid"; exit 2; }
   else
     [[ "${_fixed32_subset_binding[0]}" == "4" \
@@ -645,7 +662,8 @@ fixed32_engine_ingress_control(){
     "$PORT" \
     "$action" \
     "$output_path" \
-    "$FR13_FIXED32_B1_DIAGNOSTIC" <<'PY'
+    "$FR13_FIXED32_B1_DIAGNOSTIC" \
+    "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" <<'PY'
 import hashlib
 import json
 import os
@@ -677,9 +695,16 @@ port = int(sys.argv[3])
 action = sys.argv[4]
 output_path = Path(sys.argv[5])
 diagnostic_text = sys.argv[6]
+diagnostic_profile = sys.argv[7]
 if diagnostic_text not in {"0", "1"}:
     raise SystemExit("fixed32 B1 diagnostic selector is invalid")
 diagnostic = diagnostic_text == "1"
+diagnostic_task_ids = {
+    "astropy12907": ["astropy__astropy-12907"],
+    "astropy13236": ["astropy__astropy-13236"],
+}
+if diagnostic_profile not in diagnostic_task_ids:
+    raise SystemExit("fixed32 B1 diagnostic task profile is invalid")
 secret_info = os.lstat(secret_path)
 if (
     not stat.S_ISREG(secret_info.st_mode)
@@ -706,7 +731,8 @@ if (
 if (
     len(task_ids) not in ((1,) if diagnostic else (4, 16))
     or len(set(task_ids)) != len(task_ids)
-    or (diagnostic and task_ids != ["astropy__astropy-12907"])
+    or (diagnostic and task_ids != diagnostic_task_ids[diagnostic_profile])
+    or (not diagnostic and diagnostic_profile != "astropy12907")
     or any(
         re.fullmatch(r"[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+", task_id) is None
         for task_id in task_ids
@@ -844,7 +870,8 @@ write_fixed32_chat_traffic_audit(){
     "$FIXED32_MODE" \
     "$ARMDIR/fixed32_chat_traffic_audit.json" \
     "$FR13_FIXED32_B1_DIAGNOSTIC" \
-    "$SWE_CONCURRENCY" <<'PY'
+    "$SWE_CONCURRENCY" \
+    "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -864,6 +891,7 @@ mode = sys.argv[3]
 output_path = Path(sys.argv[4]).resolve()
 diagnostic_text = sys.argv[5]
 concurrency_text = sys.argv[6]
+diagnostic_profile = sys.argv[7]
 if diagnostic_text not in {"0", "1"}:
     raise SystemExit("fixed32 B1 diagnostic selector is invalid")
 if concurrency_text not in {"1", "4"}:
@@ -871,6 +899,7 @@ if concurrency_text not in {"1", "4"}:
 subset = validate_fixed32_run_subset(
     subset_path,
     b1_diagnostic=diagnostic_text == "1",
+    b1_diagnostic_profile=diagnostic_profile,
 )
 task_ids = subset["task_ids"]
 audit = build_fixed32_chat_traffic_audit(
@@ -1214,7 +1243,8 @@ _fixed32_snapshot_engine_ingress_ledger() {
   fi
   if ! .venv/bin/python - \
       "$snapshot_tmp" "$destination" "$SUBSET" "$ARMDIR_ABS" \
-      "$expected_owner" "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" <<'PY'
+      "$expected_owner" "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" \
+      "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" <<'PY'
 import hashlib
 import os
 import stat
@@ -1239,6 +1269,7 @@ subset_path = Path(sys.argv[3]).resolve()
 arm_dir = Path(sys.argv[4]).resolve()
 expected_owner = int(sys.argv[5])
 diagnostic_text = sys.argv[6]
+diagnostic_profile = sys.argv[7]
 if diagnostic_text not in {"0", "1"}:
     raise SystemExit("fixed32 B1 diagnostic selector is invalid")
 if destination.parent != arm_dir / "logs":
@@ -1313,6 +1344,7 @@ def validate_ledger_bytes(raw, label):
 subset = validate_fixed32_run_subset(
     subset_path,
     b1_diagnostic=diagnostic_text == "1",
+    b1_diagnostic_profile=diagnostic_profile,
 )
 task_ids = subset["task_ids"]
 canonical_task_keys = {fixed32_task_key_id(task_id) for task_id in task_ids}
@@ -1651,7 +1683,8 @@ if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "streamk_coop128_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_b1_byte_ab" \
-      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" ]]; then
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_fullgrid_b1_byte_ab" ]]; then
   [[ -n "$FIXED32_MODE" && "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]] \
     || {
       echo "FAIL: fixed32 CUTLASS Stream-K real-task arm is B1 diagnostic only"
@@ -1968,6 +2001,8 @@ if cutlass_wave not in {
     "identity_onen_b1",
     "identity_onen_n5120_single_b1_byte_ab",
     "identity_onen_n5120_single_b1",
+    "identity_onen_n5120_fullgrid_b1_byte_ab",
+    "identity_onen_n5120_fullgrid_b1",
     "identity_stockshape_b4_byte_ab",
     "identity_stockshape_b4",
     "identity_stockshape_stage2_b4_byte_ab",
@@ -2014,6 +2049,7 @@ try:
                 "identity_stage2_pingpong_b1_byte_ab",
                 "identity_onen_b1_byte_ab",
                 "identity_onen_n5120_single_b1_byte_ab",
+                "identity_onen_n5120_fullgrid_b1_byte_ab",
             )
         ),
     )
@@ -2523,7 +2559,8 @@ if [[ -n "$FIXED32_MODE" ]]; then
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_static_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_b1_byte_ab" \
-        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" ]]; then
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" \
+        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_fullgrid_b1_byte_ab" ]]; then
     FIXED32_RUNNER_ARGS+=(
       --fixed32-cutlass-real-event-arm "$FIXED32_CUTLASS_REAL_EVENT_ARM_PATH"
     )
