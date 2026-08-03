@@ -61,6 +61,22 @@ IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_BINDING_SCHEMA = (
     "fr13.fixed32.cutlass_b4.identity_stockshape_stage2.k64_root."
     "dual_topology.production_binding.v1"
 )
+IDENTITY_TWOM_LIVE_SCHEMA = "fr13.fixed32.cutlass_identity_twom_b4_live_gate.v1"
+IDENTITY_TWOM_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_twom_b4_k64_root_live_gate.v1"
+)
+IDENTITY_TWOM_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_twom.production_pass.v1"
+)
+IDENTITY_TWOM_K64_ROOT_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_twom.k64_root.production_pass.v1"
+)
+IDENTITY_TWOM_DUAL_K64_ROOT_SIDECAR_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_twom.k64_root.dual_topology.production_pass.v1"
+)
+IDENTITY_TWOM_DUAL_K64_ROOT_BINDING_SCHEMA = (
+    "fr13.fixed32.cutlass_b4.identity_twom.k64_root.dual_topology.production_binding.v1"
+)
 IDENTITY_DIVISOR_LIVE_SCHEMA = "fr13.fixed32.cutlass_identity_divisor_b4_live_gate.v1"
 IDENTITY_DIVISOR_K64_ROOT_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_identity_divisor_b4_k64_root_live_gate.v1"
@@ -121,6 +137,22 @@ K64_ROOT_SLO_CAP_MS = 137.6067177261
 MAX_COMPARISONS = 320
 QUALIFIED_FIXED32_MODES = ("tail6_fixed32", "hydra27_fixed32")
 STAGE2_DUAL_PRODUCTION_SELECTOR = "identity_stockshape_stage2_b4"
+TWOM_DUAL_PRODUCTION_SELECTOR = "identity_twom_b4"
+DUAL_PRODUCTION_SELECTORS = frozenset(
+    {STAGE2_DUAL_PRODUCTION_SELECTOR, TWOM_DUAL_PRODUCTION_SELECTOR}
+)
+DUAL_SIDECAR_SCHEMAS = {
+    STAGE2_DUAL_PRODUCTION_SELECTOR: (
+        IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_SIDECAR_SCHEMA
+    ),
+    TWOM_DUAL_PRODUCTION_SELECTOR: IDENTITY_TWOM_DUAL_K64_ROOT_SIDECAR_SCHEMA,
+}
+DUAL_BINDING_SCHEMAS = {
+    STAGE2_DUAL_PRODUCTION_SELECTOR: (
+        IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_BINDING_SCHEMA
+    ),
+    TWOM_DUAL_PRODUCTION_SELECTOR: IDENTITY_TWOM_DUAL_K64_ROOT_BINDING_SCHEMA,
+}
 EXPECTED_PROJECTION_NK = (
     (5120, 6144),
     (5120, 17408),
@@ -187,6 +219,27 @@ CANDIDATE_CONTRACTS = {
             ),
             "k64_root": (
                 "fr13.fixed32.cutlass_b4.identity_stockshape_stage2.k64_root.production_binding.v1"
+            ),
+        },
+        "production_authorized": False,
+        "requires_resource_credential": False,
+    },
+    "identity_twom_b4": {
+        "diagnostic_selector": "identity_twom_b4_byte_ab",
+        "live_schemas": {
+            "full_vocab": IDENTITY_TWOM_LIVE_SCHEMA,
+            "k64_root": IDENTITY_TWOM_K64_ROOT_LIVE_SCHEMA,
+        },
+        "sidecar_schemas": {
+            "full_vocab": IDENTITY_TWOM_SIDECAR_SCHEMA,
+            "k64_root": IDENTITY_TWOM_K64_ROOT_SIDECAR_SCHEMA,
+        },
+        "binding_schemas": {
+            "full_vocab": (
+                "fr13.fixed32.cutlass_b4.identity_twom.production_binding.v1"
+            ),
+            "k64_root": (
+                "fr13.fixed32.cutlass_b4.identity_twom.k64_root.production_binding.v1"
             ),
         },
         "production_authorized": False,
@@ -293,7 +346,10 @@ def _candidate_source_hashes(candidate_selector: str) -> tuple[str, str]:
             IDENTITY_STOCKSHAPE_PATCH_SOURCE_SHA256,
             IDENTITY_STOCKSHAPE_PATCHED_DISPATCH_SHA256,
         )
-    if candidate_selector == "identity_stockshape_stage2_b4":
+    if candidate_selector in {
+        "identity_stockshape_stage2_b4",
+        "identity_twom_b4",
+    }:
         return (
             IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256,
             IDENTITY_STOCKSHAPE_STAGE2_PATCHED_DISPATCH_SHA256,
@@ -674,8 +730,14 @@ def validate_dual_live_results(
     patch_source: Path = PATCH_SOURCE,
     expected_source_commit: str | None = None,
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    candidate_selector: str = STAGE2_DUAL_PRODUCTION_SELECTOR,
 ) -> dict[str, Any]:
-    """Validate both canonical K64 exact4 topologies for Stage2 production."""
+    """Validate both canonical K64 exact4 topologies for one production route."""
+
+    if candidate_selector not in DUAL_PRODUCTION_SELECTORS:
+        raise QualificationError(
+            f"unsupported dual-topology CUTLASS B4 selector: {candidate_selector!r}"
+        )
 
     qualifications = {
         "tail6_fixed32": validate_live_result(
@@ -684,7 +746,7 @@ def validate_dual_live_results(
             candidate_so,
             patch_source,
             expected_source_commit,
-            STAGE2_DUAL_PRODUCTION_SELECTOR,
+            candidate_selector,
             "k64_root",
             draft_vocab_blocks,
             "tail6_fixed32",
@@ -695,7 +757,7 @@ def validate_dual_live_results(
             candidate_so,
             patch_source,
             expected_source_commit,
-            STAGE2_DUAL_PRODUCTION_SELECTOR,
+            candidate_selector,
             "k64_root",
             draft_vocab_blocks,
             "hydra27_fixed32",
@@ -731,7 +793,8 @@ def validate_dual_live_results(
     for field in common_fields:
         if tail.get(field) != hydra.get(field):
             raise QualificationError(
-                f"Stage2 dual-topology qualification {field} differs between arms"
+                f"{candidate_selector} dual-topology qualification {field} "
+                "differs between arms"
             )
 
     topology_qualifications: dict[str, dict[str, object]] = {}
@@ -747,7 +810,7 @@ def validate_dual_live_results(
         }
 
     return {
-        "schema": IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_SIDECAR_SCHEMA,
+        "schema": DUAL_SIDECAR_SCHEMAS[candidate_selector],
         "status": "QUALIFIED",
         "candidate_selector": tail["candidate_selector"],
         "diagnostic_selector": tail["diagnostic_selector"],
@@ -790,6 +853,7 @@ def issue_dual_sidecar(
     patch_source: Path = PATCH_SOURCE,
     expected_source_commit: str | None = None,
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    candidate_selector: str = STAGE2_DUAL_PRODUCTION_SELECTOR,
 ) -> dict[str, Any]:
     payload = validate_dual_live_results(
         tail23_live_result,
@@ -800,6 +864,7 @@ def issue_dual_sidecar(
         patch_source,
         expected_source_commit,
         draft_vocab_blocks,
+        candidate_selector,
     )
     _write_json(output, payload)
     return payload
@@ -952,34 +1017,40 @@ def verify_dual_sidecar(
     candidate_so: Path,
     patch_source: Path = PATCH_SOURCE,
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    candidate_selector: str = STAGE2_DUAL_PRODUCTION_SELECTOR,
 ) -> dict[str, Any]:
-    """Verify the only production credential accepted by the Stage2 selector."""
+    """Verify a selector-specific dual-topology production credential."""
+
+    if candidate_selector not in DUAL_PRODUCTION_SELECTORS:
+        raise QualificationError(
+            f"unsupported dual-topology CUTLASS B4 selector: {candidate_selector!r}"
+        )
+    candidate_contract = _candidate_contract(candidate_selector)
+    diagnostic_selector = candidate_contract["diagnostic_selector"]
 
     expected_sidecar_sha256 = _require_sha256(
         expected_sidecar_sha256, "expected dual production-sidecar SHA-256"
     )
-    payload, raw = _read_json(sidecar, "CUTLASS B4 Stage2 dual production sidecar")
+    payload, raw = _read_json(sidecar, "CUTLASS B4 dual production sidecar")
     actual_sha256 = hashlib.sha256(raw).hexdigest()
     if actual_sha256 != expected_sidecar_sha256:
         raise QualificationError(
-            "CUTLASS B4 Stage2 dual sidecar SHA-256 mismatch: "
+            "CUTLASS B4 dual sidecar SHA-256 mismatch: "
             f"{actual_sha256} != {expected_sidecar_sha256}"
         )
-    candidate = binary.verify_candidate(
-        candidate_so, "identity_stockshape_stage2_b4_byte_ab"
-    )
+    candidate = binary.verify_candidate(candidate_so, diagnostic_selector)
     patch_source_sha256, patched_dispatch_sha256 = _candidate_source_hashes(
-        STAGE2_DUAL_PRODUCTION_SELECTOR
+        candidate_selector
     )
     patch = _validate_patch_source(patch_source, patch_source_sha256)
     block_map = _validate_draft_vocab_blocks(draft_vocab_blocks)
     profile = _qualification_profile("k64_root")
     required: dict[str, object] = {
-        "schema": IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_SIDECAR_SCHEMA,
+        "schema": DUAL_SIDECAR_SCHEMAS[candidate_selector],
         "status": "QUALIFIED",
-        "candidate_selector": STAGE2_DUAL_PRODUCTION_SELECTOR,
-        "diagnostic_selector": "identity_stockshape_stage2_b4_byte_ab",
-        "candidate_family": "identity_stockshape_stage2_b4",
+        "candidate_selector": candidate_selector,
+        "diagnostic_selector": diagnostic_selector,
+        "candidate_family": candidate["candidate_family"],
         "candidate_sha256": candidate["sha256"],
         "candidate_bytes": candidate["bytes"],
         "patch_source_sha256": patch["sha256"],
@@ -1005,7 +1076,7 @@ def verify_dual_sidecar(
     for key, expected in required.items():
         if payload.get(key) != expected:
             raise QualificationError(
-                f"CUTLASS B4 Stage2 dual sidecar {key} mismatch: "
+                f"CUTLASS B4 {candidate_selector} dual sidecar {key} mismatch: "
                 f"{payload.get(key)!r} != {expected!r}"
             )
     source_commit = payload.get("qualification_source_commit")
@@ -1014,25 +1085,28 @@ def verify_dual_sidecar(
         or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
     ):
         raise QualificationError(
-            "Stage2 dual sidecar qualification source commit is invalid"
+            f"{candidate_selector} dual sidecar source commit is invalid"
         )
     topology_records = payload.get("topology_qualifications")
     if not isinstance(topology_records, dict) or set(topology_records) != set(
         QUALIFIED_FIXED32_MODES
     ):
         raise QualificationError(
-            "Stage2 dual sidecar lacks exactly Tail23 and Hydra27 qualifications"
+            f"{candidate_selector} dual sidecar lacks exactly Tail23 and Hydra27 "
+            "qualifications"
         )
     for mode in QUALIFIED_FIXED32_MODES:
         record = topology_records.get(mode)
         if not isinstance(record, dict) or record.get("topology") != mode:
             raise QualificationError(
-                f"Stage2 dual sidecar topology record is invalid for {mode}"
+                f"{candidate_selector} dual sidecar topology record is invalid "
+                f"for {mode}"
             )
         marker = record.get("qualification_task_marker")
         if not isinstance(marker, str) or marker not in EXPECTED_TASK_MARKERS:
             raise QualificationError(
-                f"Stage2 dual sidecar task marker is not canonical for {mode}"
+                f"{candidate_selector} dual sidecar task marker is not canonical "
+                f"for {mode}"
             )
         for key in (
             "live_result_sha256",
@@ -1044,32 +1118,44 @@ def verify_dual_sidecar(
     return payload
 
 
-def _validate_stage2_dual_production_attestation(
+def _validate_dual_production_attestation(
     payload: dict[str, Any],
     raw: bytes,
     expected_sidecar_sha256: str,
     draft_vocab_blocks: Path,
+    candidate_selector: str,
 ) -> dict[str, Any]:
+    if candidate_selector not in DUAL_PRODUCTION_SELECTORS:
+        raise QualificationError(
+            f"unsupported dual-topology CUTLASS B4 selector: {candidate_selector!r}"
+        )
     candidate_sha256, candidate_bytes, candidate_family = binary.candidate_identity(
-        STAGE2_DUAL_PRODUCTION_SELECTOR
+        candidate_selector
     )
+    candidate_contract = _candidate_contract(candidate_selector)
+    diagnostic_selector = candidate_contract["diagnostic_selector"]
+    patch_source_sha256, _ = _candidate_source_hashes(candidate_selector)
     required = {
         "schema": ATTESTATION_SCHEMA,
-        "selector": STAGE2_DUAL_PRODUCTION_SELECTOR,
+        "selector": candidate_selector,
         "installed_mode": "0555",
         "production_enabled": True,
         "candidate_family": candidate_family,
     }
     for key, expected in required.items():
         if payload.get(key) != expected:
-            raise QualificationError(f"CUTLASS B4 Stage2 attestation {key} mismatch")
+            raise QualificationError(
+                f"CUTLASS B4 {candidate_selector} attestation {key} mismatch"
+            )
     for label, expected_path in (
         ("source", binary.CONTAINER_SOURCE),
         ("destination", binary.CONTAINER_DESTINATION),
     ):
         identity = payload.get(label)
         if not isinstance(identity, dict):
-            raise QualificationError(f"CUTLASS B4 Stage2 attestation lacks {label}")
+            raise QualificationError(
+                f"CUTLASS B4 {candidate_selector} attestation lacks {label}"
+            )
         expected_identity = {
             "path": str(expected_path),
             "bytes": candidate_bytes,
@@ -1080,19 +1166,20 @@ def _validate_stage2_dual_production_attestation(
         for key, expected in expected_identity.items():
             if identity.get(key) != expected:
                 raise QualificationError(
-                    f"CUTLASS B4 Stage2 attestation {label}.{key} mismatch"
+                    f"CUTLASS B4 {candidate_selector} attestation "
+                    f"{label}.{key} mismatch"
                 )
     qualification = payload.get("qualification")
     if not isinstance(qualification, dict):
         raise QualificationError(
-            "CUTLASS B4 Stage2 attestation lacks dual qualification"
+            f"CUTLASS B4 {candidate_selector} attestation lacks dual qualification"
         )
     block_map = _validate_draft_vocab_blocks(draft_vocab_blocks)
     profile = _qualification_profile("k64_root")
     required_qualification: dict[str, object] = {
         "sidecar_sha256": expected_sidecar_sha256,
         "candidate_sha256": candidate_sha256,
-        "patch_source_sha256": IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256,
+        "patch_source_sha256": patch_source_sha256,
         "qualification_profile": "k64_root",
         "qualification_topologies": list(QUALIFIED_FIXED32_MODES),
         "qualification_task_ids": list(EXPECTED_TASK_IDS),
@@ -1111,7 +1198,7 @@ def _validate_stage2_dual_production_attestation(
     for key, expected in required_qualification.items():
         if qualification.get(key) != expected:
             raise QualificationError(
-                f"CUTLASS B4 Stage2 attestation {key} binding mismatch"
+                f"CUTLASS B4 {candidate_selector} attestation {key} binding mismatch"
             )
     source_commit = qualification.get("qualification_source_commit")
     if (
@@ -1119,14 +1206,15 @@ def _validate_stage2_dual_production_attestation(
         or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
     ):
         raise QualificationError(
-            "CUTLASS B4 Stage2 attestation source commit is invalid"
+            f"CUTLASS B4 {candidate_selector} attestation source commit is invalid"
         )
     topology_records = qualification.get("topology_qualifications")
     if not isinstance(topology_records, dict) or set(topology_records) != set(
         QUALIFIED_FIXED32_MODES
     ):
         raise QualificationError(
-            "CUTLASS B4 Stage2 attestation lacks both topology qualifications"
+            f"CUTLASS B4 {candidate_selector} attestation lacks both topology "
+            "qualifications"
         )
     live_result_sha256_by_topology: dict[str, str] = {}
     task_markers_by_topology: dict[str, str] = {}
@@ -1137,12 +1225,14 @@ def _validate_stage2_dual_production_attestation(
         record = topology_records.get(mode)
         if not isinstance(record, dict) or record.get("topology") != mode:
             raise QualificationError(
-                f"CUTLASS B4 Stage2 attestation record is invalid for {mode}"
+                f"CUTLASS B4 {candidate_selector} attestation record is invalid "
+                f"for {mode}"
             )
         marker = record.get("qualification_task_marker")
         if not isinstance(marker, str) or marker not in EXPECTED_TASK_MARKERS:
             raise QualificationError(
-                f"CUTLASS B4 Stage2 attestation marker is invalid for {mode}"
+                f"CUTLASS B4 {candidate_selector} attestation marker is invalid "
+                f"for {mode}"
             )
         task_markers_by_topology[mode] = marker
         for key, destination in (
@@ -1153,14 +1243,14 @@ def _validate_stage2_dual_production_attestation(
         ):
             destination[mode] = _require_sha256(record.get(key), f"{mode} {key}")
     return {
-        "schema": IDENTITY_STOCKSHAPE_STAGE2_DUAL_K64_ROOT_BINDING_SCHEMA,
+        "schema": DUAL_BINDING_SCHEMAS[candidate_selector],
         "status": "BOUND",
-        "selector": STAGE2_DUAL_PRODUCTION_SELECTOR,
-        "diagnostic_selector": "identity_stockshape_stage2_b4_byte_ab",
+        "selector": candidate_selector,
+        "diagnostic_selector": diagnostic_selector,
         "candidate_family": candidate_family,
         "candidate_sha256": candidate_sha256,
         "candidate_bytes": candidate_bytes,
-        "patch_source_sha256": IDENTITY_STOCKSHAPE_STAGE2_PATCH_SOURCE_SHA256,
+        "patch_source_sha256": patch_source_sha256,
         "production_sidecar_sha256": expected_sidecar_sha256,
         "binary_install_attestation_sha256": hashlib.sha256(raw).hexdigest(),
         "qualification_source_commit": source_commit,
@@ -1208,16 +1298,17 @@ def validate_production_attestation(
     candidate_selector = payload.get("selector")
     if not isinstance(candidate_selector, str):
         raise QualificationError("CUTLASS B4 binary attestation selector is invalid")
-    if candidate_selector == STAGE2_DUAL_PRODUCTION_SELECTOR:
+    if candidate_selector in DUAL_PRODUCTION_SELECTORS:
         if qualification_profile not in (None, "k64_root"):
             raise QualificationError(
-                "Stage2 dual production is qualified only for k64_root"
+                f"{candidate_selector} dual production is qualified only for k64_root"
             )
-        return _validate_stage2_dual_production_attestation(
+        return _validate_dual_production_attestation(
             payload,
             raw,
             expected_sidecar_sha256,
             draft_vocab_blocks,
+            candidate_selector,
         )
     candidate_contract = _candidate_contract(candidate_selector)
     if candidate_contract["production_authorized"] is not True:
@@ -1433,6 +1524,11 @@ def main() -> int:
         subparser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
         subparser.add_argument("--expected-source-commit")
         subparser.add_argument(
+            "--candidate-selector",
+            choices=tuple(sorted(DUAL_PRODUCTION_SELECTORS)),
+            default=STAGE2_DUAL_PRODUCTION_SELECTOR,
+        )
+        subparser.add_argument(
             "--draft-vocab-blocks",
             type=Path,
             default=DRAFT_VOCAB_BLOCKS_SOURCE,
@@ -1465,6 +1561,11 @@ def main() -> int:
     dual_verify_parser.add_argument("--expected-sidecar-sha256", required=True)
     dual_verify_parser.add_argument("--candidate-so", type=Path, required=True)
     dual_verify_parser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
+    dual_verify_parser.add_argument(
+        "--candidate-selector",
+        choices=tuple(sorted(DUAL_PRODUCTION_SELECTORS)),
+        default=STAGE2_DUAL_PRODUCTION_SELECTOR,
+    )
     dual_verify_parser.add_argument(
         "--draft-vocab-blocks",
         type=Path,
@@ -1527,6 +1628,7 @@ def main() -> int:
             args.patch_source,
             args.expected_source_commit,
             args.draft_vocab_blocks,
+            args.candidate_selector,
         )
     elif args.command == "dual-issue":
         payload = issue_dual_sidecar(
@@ -1539,6 +1641,7 @@ def main() -> int:
             args.patch_source,
             args.expected_source_commit,
             args.draft_vocab_blocks,
+            args.candidate_selector,
         )
     elif args.command == "verify":
         payload = verify_sidecar(
@@ -1562,6 +1665,7 @@ def main() -> int:
             args.candidate_so,
             args.patch_source,
             args.draft_vocab_blocks,
+            args.candidate_selector,
         )
     else:
         payload = validate_production_attestation(
