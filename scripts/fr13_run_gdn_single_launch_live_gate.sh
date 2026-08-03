@@ -21,6 +21,18 @@ BLOCK_MAP=scripts/fr13_dvk_subset_blocks.json
 BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 STOCK_FA2_BYTES=299183936
+QROW32_B1_FA2_SHA256=5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467
+QROW32_B1_FA2_BYTES=300140712
+QROW32_B1_FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
+QROW32_B1_SOURCE_CLOSURE_SHA256=c10888e721335ff99f93dabdfea7d8a524fbd7e21e8aee3f425f50af06bf5d84
+DFWD_K64_TOP3_SHA256=c0ed75cafdd926eceafcf28671869d54f37addb51bfef5a37c0b07c34f5420ff
+DFWD_K64_TOP3_BYTES=159288
+DFWD_K64_TOP3_SOURCE_SHA256=38ea96d955355bf172f534174aa2d91e6db23170144b1c84c9474016a6c05e72
+COMBINED_GRAPH_GATE=${FR13_GDN_QROW32_DFWD_TOP3_COMBINED_GATE:-0}
+case "$COMBINED_GRAPH_GATE" in
+  0|1) ;;
+  *) echo "FR13_GDN_QROW32_DFWD_TOP3_COMBINED_GATE must be exactly 0 or 1" >&2; exit 2 ;;
+esac
 KV_CACHE_MEMORY_BYTES=
 if [[ "$FR13_GDN_GATE_BATCH" == "4" ]]; then
   KV_CACHE_MEMORY_BYTES=42949672960
@@ -74,6 +86,17 @@ case "$FR13_GDN_GATE_MODE:$FR13_GDN_GATE_BATCH:$FR13_GDN_GATE_ENTRYPOINT:$FR13_G
     ;;
 esac
 
+if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
+  [[ "$FR13_GDN_GATE_MODE:$FR13_GDN_GATE_BATCH:$FR13_GDN_GATE_ENTRYPOINT:$FR13_GDN_GATE_CANDIDATE" \
+      == "hydra27_fixed32:1:scripts/fr13_run_b1_gdn_gqa_group3_live_gate.sh:gqa_group3" ]] || {
+    echo "combined graph gate is restricted to the canonical Hydra27 B1 GQA3 entrypoint" >&2
+    exit 2
+  }
+  : "${QROW32_B1_FA2_SOURCE:?combined graph gate requires QROW32_B1_FA2_SOURCE}"
+  : "${FR13_GATE_DFWD_TOP3_SO:?combined graph gate requires FR13_GATE_DFWD_TOP3_SO}"
+  : "${FR13_GATE_DFWD_TOP3_BUILD_ATTESTATION:?combined graph gate requires FR13_GATE_DFWD_TOP3_BUILD_ATTESTATION}"
+fi
+
 BATCH=$FR13_GDN_GATE_BATCH
 ARM="${FR13_GDN_GATE_MODE}_${LOGICAL_SLUG}_gdn_${GATE_CANDIDATE_SLUG}_b${BATCH}_${TAG}"
 ARMDIR="$RUNROOT_ABS/$ARM"
@@ -89,9 +112,29 @@ ENTRYPOINT_PATH="$REPO/$FR13_GDN_GATE_ENTRYPOINT"
   || { echo "Python environment is unavailable: $PYTHON_BIN" >&2; exit 2; }
 [[ "$FORKED_FA2_SO" == /* && -f "$FORKED_FA2_SO" && ! -L "$FORKED_FA2_SO" ]] \
   || { echo "FORKED_FA2_SO must be an absolute regular non-symlink file" >&2; exit 2; }
-[[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$STOCK_FA2_BYTES" \
-   && "$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" ]] \
-  || { echo "FORKED_FA2_SO is not the exact-safe stock reference" >&2; exit 2; }
+if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
+  [[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$QROW32_B1_FA2_BYTES" \
+     && "$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')" == "$QROW32_B1_FA2_SHA256" ]] \
+    || { echo "FORKED_FA2_SO is not the pinned Qrow32 split2 binary" >&2; exit 2; }
+  [[ "$QROW32_B1_FA2_SOURCE" == /* \
+     && -d "$QROW32_B1_FA2_SOURCE" \
+     && ! -L "$QROW32_B1_FA2_SOURCE" ]] \
+    || { echo "QROW32_B1_FA2_SOURCE must be an absolute non-symlink directory" >&2; exit 2; }
+  [[ "$FR13_GATE_DFWD_TOP3_SO" == /* \
+     && -f "$FR13_GATE_DFWD_TOP3_SO" \
+     && ! -L "$FR13_GATE_DFWD_TOP3_SO" \
+     && "$(stat -c '%s' "$FR13_GATE_DFWD_TOP3_SO")" == "$DFWD_K64_TOP3_BYTES" \
+     && "$(sha256sum "$FR13_GATE_DFWD_TOP3_SO" | awk '{print $1}')" == "$DFWD_K64_TOP3_SHA256" ]] \
+    || { echo "DFWD K64 top3 binary identity drifted" >&2; exit 2; }
+  [[ "$FR13_GATE_DFWD_TOP3_BUILD_ATTESTATION" == /* \
+     && -f "$FR13_GATE_DFWD_TOP3_BUILD_ATTESTATION" \
+     && ! -L "$FR13_GATE_DFWD_TOP3_BUILD_ATTESTATION" ]] \
+    || { echo "DFWD K64 top3 build attestation must be an absolute regular file" >&2; exit 2; }
+else
+  [[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$STOCK_FA2_BYTES" \
+     && "$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" ]] \
+    || { echo "FORKED_FA2_SO is not the exact-safe stock reference" >&2; exit 2; }
+fi
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical real-task subset identity drifted" >&2; exit 2; }
 [[ "$(sha256sum "$BLOCK_MAP" | awk '{print $1}')" == "$BLOCK_MAP_SHA256" ]] \
@@ -100,6 +143,17 @@ ENTRYPOINT_PATH="$REPO/$FR13_GDN_GATE_ENTRYPOINT"
   || { echo "ordered-GDN entrypoint is missing" >&2; exit 2; }
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
+if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
+  [[ "$(git rev-parse '@{upstream}')" == "$SOURCE_COMMIT" ]] \
+    || { echo "combined graph gate source commit must be pushed to its upstream" >&2; exit 2; }
+  "$PYTHON_BIN" scripts/fr13_qrow32_b1_pass_sidecar.py validate-source \
+    --source-root "$QROW32_B1_FA2_SOURCE" >/dev/null
+  "$PYTHON_BIN" scripts/fr13_b1_composed_stack_gate.py validate-dfwd-build \
+    --candidate-so "$FR13_GATE_DFWD_TOP3_SO" \
+    --build-attestation "$FR13_GATE_DFWD_TOP3_BUILD_ATTESTATION" \
+    --repo "$REPO" \
+    --source-commit "$SOURCE_COMMIT" >/dev/null
+fi
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before the gate" >&2; exit 2; }
 
@@ -127,9 +181,11 @@ unset -f run_variant
   || { echo "fixed K64/root1 floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_gdn_ordered_graph_byte_diagnostic\ncandidate_selector=%s\ncandidate=%s\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nreference_always_served=1\nmode=%s\nlogical_topology=%s\nexpected_batch=%s\ntask_count=%s\nconcurrency=%s\ndraft_vocab_k=65536\ndraft_vocab_root=1\nphysical_rows=32\nreference_launches_per_request_layer=2\ncandidate_launches_per_request_layer=1\nsubset_sha256=%s\nsource_commit=%s\nentrypoint=%s\nentrypoint_sha256=%s\ncommon_runner_sha256=%s\nreducer_sha256=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_gdn_ordered_graph_byte_diagnostic\ncandidate_selector=%s\ncandidate=%s\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nreference_always_served=1\nmode=%s\nlogical_topology=%s\nexpected_batch=%s\ntask_count=%s\nconcurrency=%s\ndraft_vocab_k=65536\ndraft_vocab_root=1\nphysical_rows=32\nreference_launches_per_request_layer=2\ncandidate_launches_per_request_layer=1\ncombined_qrow32_gqa3_dfwd_top3=%s\nqrow32_so_sha256=%s\ndfwd_top3_so_sha256=%s\ndfwd_top3_source_sha256=%s\nsubset_sha256=%s\nsource_commit=%s\nentrypoint=%s\nentrypoint_sha256=%s\ncommon_runner_sha256=%s\nreducer_sha256=%s\nstarted=%s\n' \
   "$FR13_GDN_GATE_CANDIDATE" "$GATE_CANDIDATE_ID" \
   "$FR13_GDN_GATE_MODE" "$LOGICAL_SLUG" "$BATCH" "$BATCH" "$BATCH" \
+  "$COMBINED_GRAPH_GATE" "$QROW32_B1_FA2_SHA256" \
+  "$DFWD_K64_TOP3_SHA256" "$DFWD_K64_TOP3_SOURCE_SHA256" \
   "$SUBSET_SHA256" "$SOURCE_COMMIT" "$FR13_GDN_GATE_ENTRYPOINT" \
   "$ENTRYPOINT_SHA256" "$COMMON_RUNNER_SHA256" "$REDUCER_SHA256" \
   "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/launcher_meta.txt"
@@ -140,6 +196,27 @@ printf 'classification=real_swe_verified_gdn_ordered_graph_byte_diagnostic\ncand
   --output "$RUNROOT_ABS/runtime_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
+
+QROW32_LIVE_ARM=
+QROW32_LIVE_INSTANCE=
+QROW32_SO_SHA_ENV=
+QROW32_SO_BYTES_ENV=
+QROW32_FA2_HEAD_ENV=
+QROW32_SOURCE_CLOSURE_ENV=
+QROW32_SOURCE_COMMIT_ENV=
+QROW32_PATCH_SOURCE_SHA_ENV=
+DFWD_TOP3_SHA_ENV=
+if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
+  QROW32_LIVE_ARM=split2
+  QROW32_LIVE_INSTANCE=astropy__astropy-12907
+  QROW32_SO_SHA_ENV=$QROW32_B1_FA2_SHA256
+  QROW32_SO_BYTES_ENV=$QROW32_B1_FA2_BYTES
+  QROW32_FA2_HEAD_ENV=$QROW32_B1_FA2_HEAD
+  QROW32_SOURCE_CLOSURE_ENV=$QROW32_B1_SOURCE_CLOSURE_SHA256
+  QROW32_SOURCE_COMMIT_ENV=$SOURCE_COMMIT
+  QROW32_PATCH_SOURCE_SHA_ENV=$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | awk '{print $1}')
+  DFWD_TOP3_SHA_ENV=$DFWD_K64_TOP3_SHA256
+fi
 
 if env \
     RUNROOT="$RUNROOT_ABS" \
@@ -172,6 +249,9 @@ if env \
     FR13_FIXED32_CUTLASS_WAVE=stock \
     FR13_FIXED32_CUTLASS_WAVE_SO= \
     FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=0 \
+    FR13_DFWD_K64_TOP3="$COMBINED_GRAPH_GATE" \
+    FR13_DFWD_K64_TOP3_SO="${FR13_GATE_DFWD_TOP3_SO:-}" \
+    FR13_DFWD_K64_TOP3_SHA256="$DFWD_TOP3_SHA_ENV" \
     FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 \
     FR13_DFWD_UNIFIED_BM8_PRODUCTION=0 \
     FR13_DRAFT_HEAD_PAD_ROWS=0 \
@@ -181,6 +261,16 @@ if env \
     FR13_FA2_QROW16_LIVE_PAGED_AB=0 \
     FR13_FA2_QROW16_PRODUCTION=0 \
     FR13_FA2_QROW32_LIVE_PAGED_AB=0 \
+    FR13_FA2_QROW32_B1_LIVE_AB_ARM="$QROW32_LIVE_ARM" \
+    FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID="$QROW32_LIVE_INSTANCE" \
+    FR13_FA2_QROW32_B1_LIVE_AB_JSON=/logs/fr13_fa2_qrow32_b1_split2_live_paged_ab.json \
+    FR13_FA2_QROW32_B1_PRODUCTION_ARM= \
+    FR13_FA2_QROW32_B1_SO_SHA256="$QROW32_SO_SHA_ENV" \
+    FR13_FA2_QROW32_B1_SO_SIZE="$QROW32_SO_BYTES_ENV" \
+    FR13_FA2_QROW32_B1_FA2_HEAD="$QROW32_FA2_HEAD_ENV" \
+    FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256="$QROW32_SOURCE_CLOSURE_ENV" \
+    FR13_FA2_QROW32_B1_SOURCE_COMMIT="$QROW32_SOURCE_COMMIT_ENV" \
+    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256="$QROW32_PATCH_SOURCE_SHA_ENV" \
     FR13_FIXED32_ATTRIBUTION_ONLY=0 \
     FORKED_FA2_SO="$FORKED_FA2_SO" \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh \
@@ -226,3 +316,21 @@ CREDENTIAL="$ARMDIR/${LOGICAL_SLUG}_gdn_${GATE_CANDIDATE_SLUG}_b${BATCH}_credent
   --source-commit "$SOURCE_COMMIT" \
   --output "$CREDENTIAL" \
   > "$ARMDIR/gdn_single_launch_reduction.json"
+
+if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
+  "$PYTHON_BIN" scripts/fr13_b1_composed_stack_gate.py issue-graph-gate \
+    --repo "$REPO" \
+    --source-commit "$SOURCE_COMMIT" \
+    --arm "$ARMDIR" \
+    --qrow-live "$ARMDIR/logs/fr13_fa2_qrow32_b1_split2_live_paged_ab.json" \
+    --qrow-candidate-so "$FORKED_FA2_SO" \
+    --candidate-so "$FR13_GATE_DFWD_TOP3_SO" \
+    --build-attestation "$FR13_GATE_DFWD_TOP3_BUILD_ATTESTATION" \
+    --gdn-credential "$CREDENTIAL" \
+    --runtime-launch "$RUNROOT_ABS/runtime_manifest.at_launch.json" \
+    --runtime-end "$RUNROOT_ABS/runtime_manifest.at_end.json" \
+    --external-launch "$RUNROOT_ABS/external_manifest.at_launch.json" \
+    --external-end "$RUNROOT_ABS/external_manifest.at_end.json" \
+    --qrow-output "$ARMDIR/qrow32_split2_live_verification.json" \
+    --dfwd-output "$ARMDIR/dfwd_k64_top3_credential.json"
+fi

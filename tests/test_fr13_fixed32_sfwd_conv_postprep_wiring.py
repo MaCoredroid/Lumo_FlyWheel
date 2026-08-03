@@ -14,12 +14,15 @@ PATCHER = ROOT / "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER = ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh"
 VARIANT = ROOT / "scripts/fr13_bigdenom_swe_serve_variant.sh"
 RUNNER = ROOT / "scripts/run_swe_bench_q36_a.py"
+GATE = ROOT / "scripts/fr13_sfwd_conv_postprep_gate.py"
+MODULE = ROOT / "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py"
 SELECTOR = "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"
 BYTE_SELECTOR = "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB"
 QROW16_SHA256 = "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
 QROW16_PASS_SHA256 = (
     "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
 )
+QROW32_SHA256 = "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467"
 BLOCKS_SHA256 = "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
 
 
@@ -43,6 +46,21 @@ def _generated_literals() -> str:
         ):
             values.append(node.value.value)
     return "\n".join(values)
+
+
+def _literal_tuple(path: Path, name: str) -> tuple[str, ...]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == name
+        ):
+            value = ast.literal_eval(node.value)
+            assert isinstance(value, tuple)
+            return value
+    raise AssertionError(f"{path} lacks {name}")
 
 
 def test_selector_is_default_off_and_baked_only_when_explicit(
@@ -273,6 +291,20 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
     )
     patcher._fr13_fixed32_validate_patch_env()
 
+    monkeypatch.setenv("FR13_FA2_QROW16_PRODUCTION", "0")
+    monkeypatch.setenv("FR13_FA2_QROW16_SO_SHA256", "")
+    monkeypatch.setenv("FR13_FA2_QROW16_LIVE_PASS_SHA256", "")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "split2")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SHA256", QROW32_SHA256)
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SIZE", "300140712")
+    patcher._fr13_fixed32_validate_patch_env()
+
+    monkeypatch.setenv("FR13_FA2_QROW16_PRODUCTION", "1")
+    with pytest.raises(RuntimeError, match="one credentialed Qrow arm"):
+        patcher._fr13_fixed32_validate_patch_env()
+    monkeypatch.setenv("FR13_FA2_QROW16_PRODUCTION", "0")
+
     manifest.chmod(0o600)
     manifest_payload = json.loads(manifest.read_text(encoding="ascii"))
     manifest_payload["files"][source_paths[-1]]["sha256"] = "0" * 64
@@ -366,6 +398,37 @@ def test_generated_route_serves_all_direct_outputs_and_has_no_fallback() -> None
     assert "g_tree = _fr13_conv_postprep_g" in generated
     assert "beta_tree = _fr13_conv_postprep_beta" in generated
     assert "_fr13_conv_postprep_candidate\n                        or (" in generated
+    assert "[FR13_SFWD_CONV_POSTPREP] production engaged " in generated
+
+
+def test_source_closure_is_identical_in_host_patcher_and_runtime() -> None:
+    gate_files = _literal_tuple(GATE, "SOURCE_FILES")
+    patcher_files = _literal_tuple(
+        PATCHER, "_FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS"
+    )
+    module_tree = ast.parse(MODULE.read_text(encoding="utf-8"))
+    module_assignment = next(
+        node
+        for node in module_tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "SOURCE_FILES"
+    )
+    names = {
+        "SOURCE_RELATIVE_PATH": (
+            "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py"
+        ),
+        "KERNEL_SOURCE_RELATIVE_PATH": (
+            "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py"
+        ),
+    }
+    module_files = tuple(
+        item.value if isinstance(item, ast.Constant) else names[item.id]
+        for item in module_assignment.value.elts
+    )
+    assert gate_files == patcher_files == module_files
+    assert len(gate_files) == 17
 
 
 def test_launcher_and_real_task_runner_forward_the_selector() -> None:
@@ -386,3 +449,6 @@ def test_launcher_and_real_task_runner_forward_the_selector() -> None:
     for source in (launcher, variant):
         assert f"{SELECTOR} must be exactly 0 or 1" in source
         assert source.count(SELECTOR) >= 7
+    assert "_fr13_sfwd_qrow32_production=1" in launcher
+    assert "identity_onen_n5120_fullgrid_b1|identity_wide256_fullgrid_b1" in launcher
+    assert "one credentialed Qrow arm" in launcher

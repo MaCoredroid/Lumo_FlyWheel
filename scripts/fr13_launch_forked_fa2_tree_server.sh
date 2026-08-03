@@ -1009,8 +1009,12 @@ if [[ -n "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]]; then
      && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
      && "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "0" \
-     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
-    echo "FR13 qrow32 B1 live gate requires the canonical K64/root1 real task and no other candidate" >&2
+     && ( -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+          || ( "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" == "gqa_group3" \
+               && "${FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH:-}" == "1" \
+               && "${FR13_DFWD_K64_TOP3:-0}" == "1" \
+               && "$FR10_METRICS" == "1" ) ) ]] || {
+    echo "FR13 qrow32 B1 live gate requires the canonical K64/root1 real task and only the admitted GQA3/top3 graph tuple" >&2
     exit 2
   }
 fi
@@ -3363,6 +3367,40 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
           && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" ]]; then
     _fr13_sfwd_conv_postprep_execution=full_graph
   fi
+  _fr13_sfwd_qrow16_production=0
+  if [[ "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" == "0" \
+        && "${FR13_FA2_QROW16_PRODUCTION:-0}" == "1" \
+        && "${FR13_FA2_QROW16_SO_SHA256:-}" == "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86" \
+        && "${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}" == "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77" \
+        && -z "${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}" \
+        && -z "${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}" ]]; then
+    _fr13_sfwd_qrow16_production=1
+  fi
+  _fr13_sfwd_qrow32_production=0
+  if [[ "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" == "0" \
+        && "${FR13_FA2_QROW16_PRODUCTION:-0}" == "0" \
+        && -z "${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}" \
+        && "${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}" == "split2" \
+        && "${FR13_FA2_QROW32_B1_SO_SHA256:-}" == "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467" \
+        && "${FR13_FA2_QROW32_B1_SO_SIZE:-}" == "300140712" ]]; then
+    _fr13_sfwd_qrow32_production=1
+  fi
+  _fr13_sfwd_cutlass_production=0
+  case "${FR13_FIXED32_CUTLASS_WAVE:-stock}" in
+    stock)
+      [[ "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "0" ]] \
+        || { echo "SFWD conv/post-prep stock CUTLASS cannot carry production authority" >&2; exit 2; }
+      ;;
+    identity_onen_n5120_fullgrid_b1|identity_wide256_fullgrid_b1)
+      [[ "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "1" ]] \
+        || { echo "SFWD conv/post-prep target-GEMM selector requires production authority" >&2; exit 2; }
+      _fr13_sfwd_cutlass_production=1
+      ;;
+    *)
+      echo "SFWD conv/post-prep permits only stock or a credentialed B1 full-grid target GEMM" >&2
+      exit 2
+      ;;
+  esac
   if [[ ( "${FR13_FIXED32_MODE:-}" != "tail6_fixed32" \
           && "${FR13_FIXED32_MODE:-}" != "hydra27_fixed32" ) \
         || "$MAX_NUM_SEQS" != "1" \
@@ -3378,11 +3416,8 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         || "${FR13_TREE_CONV_FUSED:-1}" != "1" \
         || "${FR13_CONV_WB_BATCHED:-0}" != "1" \
         || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "0" \
-        || "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" != "0" \
-        || "${FR13_FA2_QROW16_PRODUCTION:-0}" != "1" \
-        || "${FR13_FA2_QROW16_SO_SHA256:-}" != "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86" \
-        || "${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}" != "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77" ]]; then
-    echo "SFWD conv/post-prep production requires exact K64/root1 B1 with pinned Qrow16" >&2
+        || $((10#$_fr13_sfwd_qrow16_production + 10#$_fr13_sfwd_qrow32_production)) != 1 ]]; then
+    echo "SFWD conv/post-prep production requires exact K64/root1 B1 with one credentialed Qrow arm" >&2
     exit 2
   fi
   if [[ "$_fr13_batch_gdn_diagnostic_count" != "0" \
@@ -3391,14 +3426,13 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         || -n "$_fr13_batch_gdn_bv_production" \
         || -n "$_fr13_gdn_path_bv_candidate" \
         || -n "$_fr13_gdn_path_bv_production" \
-        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
         || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
         || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
-    echo "SFWD conv/post-prep production permits only pinned Qrow16" >&2
+    echo "SFWD conv/post-prep production inherited an incompatible diagnostic or production arm" >&2
     exit 2
   fi
   [[ "$FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH" == /workspace/* \
@@ -3441,6 +3475,8 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
   FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON=/logs/fr13_fixed32_sfwd_conv_postprep.production_pass.json
   FR13_FIXED32_SFWD_CONV_POSTPREP_REAL_EVENT_PATH=
   FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=
+  unset _fr13_sfwd_qrow16_production _fr13_sfwd_qrow32_production
+  unset _fr13_sfwd_cutlass_production
   rm -f \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep_byte_ab.enabled" \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl" \
@@ -3473,14 +3509,15 @@ elif [[ "$_fr13_sfwd_conv_postprep_byte" == "1" ]]; then
         || -n "$_fr13_batch_gdn_bv_production" \
         || -n "$_fr13_gdn_path_bv_candidate" \
         || -n "$_fr13_gdn_path_bv_production" \
-        || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
+        || ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
+             && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "identity_wide256_fullgrid_b1_byte_ab" ) \
         || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
         || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
-    echo "SFWD conv/post-prep byte gate permits only pinned Qrow16" >&2
+    echo "SFWD conv/post-prep byte gate permits only pinned Qrow16 and the admitted target full-grid comparator" >&2
     exit 2
   fi
   [[ -z "$FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON" \

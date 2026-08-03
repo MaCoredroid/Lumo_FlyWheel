@@ -20,12 +20,37 @@ case "${FR13_RUN_QROW32_SPLIT2_TIMING:-0}" in
     ;;
 esac
 
+COMPOSED_STACK=${FR13_B1_COMPOSED_STACK_TIMING:-0}
+case "$COMPOSED_STACK" in
+  0|1) ;;
+  *) echo "FR13_B1_COMPOSED_STACK_TIMING must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+
 : "${RUNROOT:?set RUNROOT to a new path under output/}"
 : "${TAG:?set TAG to a unique run tag}"
 : "${QROW32_B1_FA2_SO:?set QROW32_B1_FA2_SO to the pinned combined binary}"
 : "${QROW32_B1_FA2_SOURCE:?set QROW32_B1_FA2_SOURCE to the pinned FA2 source closure}"
 : "${QROW32_B1_PASS:?set QROW32_B1_PASS to the qrow32 split2 real-task live PASS}"
 : "${QROW32_B1_PASS_SHA256:?set QROW32_B1_PASS_SHA256 to its raw SHA-256}"
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  : "${QROW32_B1_COMPOSED_CREDENTIAL:?set the Gate-A Qrow32 composed credential}"
+  : "${QROW32_B1_COMPOSED_CREDENTIAL_SHA256:?set its raw SHA-256}"
+  : "${GQA3_PASS:?set the Gate-A GQA3 production credential}"
+  : "${GQA3_PASS_SHA256:?set its raw SHA-256}"
+  : "${DFWD_TOP3_SO:?set the pinned DFWD K64 top3 binary}"
+  : "${DFWD_TOP3_CREDENTIAL:?set the Gate-A DFWD top3 credential}"
+  : "${DFWD_TOP3_CREDENTIAL_SHA256:?set its raw SHA-256}"
+  : "${DFWD_TOP3_BUILD_ATTESTATION:?set the pinned DFWD build attestation}"
+  : "${CUTLASS_TARGET_SO:?set the pinned wide256 full-grid target binary}"
+  : "${CUTLASS_TARGET_PASS:?set the Gate-B target live PASS}"
+  : "${CUTLASS_TARGET_PASS_SHA256:?set its raw SHA-256}"
+  : "${SFWD_CONV_POSTPREP_PASS:?set the Gate-B SFWD production PASS}"
+  : "${SFWD_CONV_POSTPREP_PASS_SHA256:?set its raw SHA-256}"
+  : "${SFWD_CONV_POSTPREP_SOURCE_MANIFEST:?set the Gate-B SFWD source manifest}"
+  : "${SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256:?set its raw SHA-256}"
+  : "${TARGET_SFWD_COMBINED_SUMMARY:?set the Gate-B combined target/SFWD summary}"
+  : "${TARGET_SFWD_COMBINED_SUMMARY_SHA256:?set its raw SHA-256}"
+fi
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
@@ -35,6 +60,11 @@ BLOCK_MAP_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
 BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
 CANDIDATE_SHA256=5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467
 CANDIDATE_BYTES=300140712
+TARGET_SHA256=85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da
+TARGET_BYTES=119979144
+TARGET_SELECTOR=identity_wide256_fullgrid_b1
+DFWD_TOP3_SHA256=c0ed75cafdd926eceafcf28671869d54f37addb51bfef5a37c0b07c34f5420ff
+DFWD_TOP3_BYTES=159288
 FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
 SOURCE_CLOSURE_SHA256=c10888e721335ff99f93dabdfea7d8a524fbd7e21e8aee3f425f50af06bf5d84
 BASELINE=$REPO/results/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/hydra_valid/deploy_speed_qrow16_prod_exact4_b1_20260731T182827Z.json
@@ -48,7 +78,11 @@ PATCH_SOURCE_SHA256=$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | awk '{prin
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 RUNROOT_REL=${RUNROOT_ABS#"$REPO/"}
-ARM="hydra27_fixed32_k64_qrow32_split2_exact4_${TAG}"
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  ARM="hydra27_fixed32_k64_composed_qrow32_gqa3_dfwd3_target_sfwd_exact4_${TAG}"
+else
+  ARM="hydra27_fixed32_k64_qrow32_split2_exact4_${TAG}"
+fi
 ARMDIR="$RUNROOT_ABS/$ARM"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
@@ -64,6 +98,25 @@ for required in "$QROW32_B1_FA2_SO" "$QROW32_B1_PASS" "$BASELINE"; do
     || { echo "required input must be an absolute regular file: $required" >&2; exit 2; }
 done
 unset required
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  for required in \
+      "$QROW32_B1_COMPOSED_CREDENTIAL" "$GQA3_PASS" \
+      "$DFWD_TOP3_SO" "$DFWD_TOP3_CREDENTIAL" \
+      "$DFWD_TOP3_BUILD_ATTESTATION" "$CUTLASS_TARGET_SO" \
+      "$CUTLASS_TARGET_PASS" "$SFWD_CONV_POSTPREP_PASS" \
+      "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST" \
+      "$TARGET_SFWD_COMBINED_SUMMARY"; do
+    [[ "$required" == /* && -f "$required" && ! -L "$required" ]] \
+      || { echo "composed input must be an absolute regular file: $required" >&2; exit 2; }
+  done
+  unset required
+  SFWD_PASS_ABS=$(realpath "$SFWD_CONV_POSTPREP_PASS")
+  SFWD_MANIFEST_ABS=$(realpath "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST")
+  [[ "$SFWD_PASS_ABS" == "$REPO/"* && "$SFWD_MANIFEST_ABS" == "$REPO/"* ]] \
+    || { echo "SFWD PASS and source manifest must resolve inside the repository" >&2; exit 2; }
+  SFWD_PASS_CONTAINER="/workspace/${SFWD_PASS_ABS#"$REPO/"}"
+  SFWD_MANIFEST_CONTAINER="/workspace/${SFWD_MANIFEST_ABS#"$REPO/"}"
+fi
 [[ "$QROW32_B1_FA2_SOURCE" == /* \
    && -d "$QROW32_B1_FA2_SOURCE" \
    && ! -L "$QROW32_B1_FA2_SOURCE" ]] \
@@ -75,8 +128,28 @@ unset required
    && "$(sha256sum "$BLOCK_MAP" | awk '{print $1}')" == "$BLOCK_MAP_SHA256" \
    && "$(sha256sum "$BASELINE" | awk '{print $1}')" == "$BASELINE_SHA256" ]] \
   || { echo "qrow32 exact4 timing prerequisite identity drifted" >&2; exit 2; }
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  [[ "$(stat -c '%s' "$DFWD_TOP3_SO")" == "$DFWD_TOP3_BYTES" \
+     && "$(sha256sum "$DFWD_TOP3_SO" | awk '{print $1}')" == "$DFWD_TOP3_SHA256" \
+     && "$(stat -c '%s' "$CUTLASS_TARGET_SO")" == "$TARGET_BYTES" \
+     && "$(sha256sum "$CUTLASS_TARGET_SO" | awk '{print $1}')" == "$TARGET_SHA256" \
+     && "$(sha256sum "$QROW32_B1_COMPOSED_CREDENTIAL" | awk '{print $1}')" == "$QROW32_B1_COMPOSED_CREDENTIAL_SHA256" \
+     && "$(sha256sum "$GQA3_PASS" | awk '{print $1}')" == "$GQA3_PASS_SHA256" \
+     && "$(sha256sum "$DFWD_TOP3_CREDENTIAL" | awk '{print $1}')" == "$DFWD_TOP3_CREDENTIAL_SHA256" \
+     && "$(sha256sum "$CUTLASS_TARGET_PASS" | awk '{print $1}')" == "$CUTLASS_TARGET_PASS_SHA256" \
+     && "$(sha256sum "$SFWD_PASS_ABS" | awk '{print $1}')" == "$SFWD_CONV_POSTPREP_PASS_SHA256" \
+     && "$(sha256sum "$SFWD_MANIFEST_ABS" | awk '{print $1}')" == "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" ]] \
+    || { echo "composed B1 credential or binary identity drifted" >&2; exit 2; }
+  [[ "$(sha256sum "$TARGET_SFWD_COMBINED_SUMMARY" | awk '{print $1}')" \
+       == "$TARGET_SFWD_COMBINED_SUMMARY_SHA256" ]] \
+    || { echo "combined target/SFWD summary identity drifted" >&2; exit 2; }
+fi
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  [[ "$(git rev-parse '@{upstream}')" == "$SOURCE_COMMIT" ]] \
+    || { echo "composed timing source commit must be pushed to upstream" >&2; exit 2; }
+fi
 
 "$PYTHON_BIN" scripts/fr13_qrow32_b1_pass_sidecar.py validate-source \
   --source-root "$QROW32_B1_FA2_SOURCE" >/dev/null
@@ -102,6 +175,55 @@ qrow.validate_patch_source(
     expected_source_commit=sys.argv[3],
 )
 PY
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  "$PYTHON_BIN" scripts/fr13_b1_composed_stack_gate.py validate-graph-credentials \
+    --repo "$REPO" \
+    --source-commit "$SOURCE_COMMIT" \
+    --qrow-live "$QROW32_B1_PASS" \
+    --qrow-live-sha256 "$QROW32_B1_PASS_SHA256" \
+    --qrow-credential "$QROW32_B1_COMPOSED_CREDENTIAL" \
+    --qrow-credential-sha256 "$QROW32_B1_COMPOSED_CREDENTIAL_SHA256" \
+    --gdn-credential "$GQA3_PASS" \
+    --gdn-credential-sha256 "$GQA3_PASS_SHA256" \
+    --dfwd-credential "$DFWD_TOP3_CREDENTIAL" \
+    --dfwd-credential-sha256 "$DFWD_TOP3_CREDENTIAL_SHA256" \
+    --candidate-so "$DFWD_TOP3_SO" \
+    --build-attestation "$DFWD_TOP3_BUILD_ATTESTATION" >/dev/null
+  "$PYTHON_BIN" scripts/fr13_b1_composed_stack_gate.py validate-eager-credentials \
+    --repo "$REPO" \
+    --source-commit "$SOURCE_COMMIT" \
+    --combined-summary "$TARGET_SFWD_COMBINED_SUMMARY" \
+    --combined-summary-sha256 "$TARGET_SFWD_COMBINED_SUMMARY_SHA256" \
+    --target-live "$CUTLASS_TARGET_PASS" \
+    --target-live-sha256 "$CUTLASS_TARGET_PASS_SHA256" \
+    --sfwd-pass "$SFWD_PASS_ABS" \
+    --sfwd-pass-sha256 "$SFWD_CONV_POSTPREP_PASS_SHA256" \
+    --source-manifest "$SFWD_MANIFEST_ABS" \
+    --source-manifest-sha256 "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" >/dev/null
+  "$PYTHON_BIN" scripts/fr13_gdn_gqa_group3_production_credential.py \
+    --credential "$GQA3_PASS" \
+    --source-commit "$SOURCE_COMMIT" \
+    --profile fixed32 \
+    --mode hydra27_fixed32 \
+    --batch 1
+  "$PYTHON_BIN" scripts/fr13_cutlass_streamk_pass.py validate \
+    --live-result "$CUTLASS_TARGET_PASS" \
+    --expected-live-sha256 "$CUTLASS_TARGET_PASS_SHA256" \
+    --candidate-so "$CUTLASS_TARGET_SO" \
+    --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
+    --expected-source-commit "$SOURCE_COMMIT" \
+    --candidate-selector "$TARGET_SELECTOR" \
+    --qualification-profile k64_root \
+    --diagnostic-task-profile astropy12907 \
+    --draft-vocab-blocks "$BLOCK_MAP" >/dev/null
+  "$PYTHON_BIN" scripts/fr13_sfwd_conv_postprep_gate.py validate-pass \
+    --repo "$REPO" \
+    --live-pass "$SFWD_PASS_ABS" \
+    --expected-live-pass-sha256 "$SFWD_CONV_POSTPREP_PASS_SHA256" \
+    --source-manifest "$SFWD_MANIFEST_ABS" \
+    --expected-source-manifest-sha256 "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" \
+    --source-commit "$SOURCE_COMMIT"
+fi
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before timing" >&2; exit 2; }
 
@@ -129,13 +251,27 @@ mkdir -p "$RUNROOT_ABS/sidecars"
   --output "$RUNROOT_ABS/runtime_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
-printf 'classification=real_swe_verified_exact4_qrow32_split2\ntask_count=4\nbatch_size=1\nconcurrency=1\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\ntopology=hydra27_fixed32\nphysical_rows=32\nlogical_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_root=1\ndraft_vocab_k=65536\nqrow32_split2_production=1\nruntime=FULL_graph_exact_geometry\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nexact16_rule=only_after_exact4_u95_clears_cap\narm=%s\nsource=%s\npatch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\npass_sha256=%s\nqrow16_historical_baseline_sha256=%s\nstarted=%s\n' \
-  "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
+CLASSIFICATION=real_swe_verified_exact4_qrow32_split2
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  CLASSIFICATION=real_swe_verified_exact4_b1_composed_kernel_stack
+fi
+printf 'classification=%s\ntask_count=4\nbatch_size=1\nconcurrency=1\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\ntopology=hydra27_fixed32\nphysical_rows=32\nlogical_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_root=1\ndraft_vocab_k=65536\nqrow32_split2_production=1\nruntime=FULL_graph_exact_geometry\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nexact16_rule=only_after_exact4_u95_clears_cap\narm=%s\nsource=%s\npatch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\npass_sha256=%s\nqrow16_historical_baseline_sha256=%s\nstarted=%s\n' \
+  "$CLASSIFICATION" "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
   "$ONE_SIDED_U95_CAP_MS" "$ARM" "$SOURCE_COMMIT" \
   "$PATCH_SOURCE_SHA256" "$RUNNER_SHA256" "$SUBSET_SHA256" \
   "$CANDIDATE_SHA256" "$CANDIDATE_BYTES" "$FA2_HEAD" \
   "$SOURCE_CLOSURE_SHA256" "$QROW32_B1_PASS_SHA256" "$BASELINE_SHA256" \
   "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/launcher_meta.txt"
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  printf 'composed_stack=1\ngqa3_production=1\ndfwd_k64_top3=1\ntarget_selector=%s\nsfwd_conv_postprep_production=1\nqrow_composed_credential_sha256=%s\ngqa3_pass_sha256=%s\ndfwd_top3_credential_sha256=%s\ndfwd_top3_so_sha256=%s\ntarget_so_sha256=%s\ntarget_pass_sha256=%s\nsfwd_pass_sha256=%s\nsfwd_source_manifest_sha256=%s\ntarget_sfwd_combined_summary_sha256=%s\n' \
+    "$TARGET_SELECTOR" "$QROW32_B1_COMPOSED_CREDENTIAL_SHA256" \
+    "$GQA3_PASS_SHA256" "$DFWD_TOP3_CREDENTIAL_SHA256" \
+    "$DFWD_TOP3_SHA256" "$TARGET_SHA256" "$CUTLASS_TARGET_PASS_SHA256" \
+    "$SFWD_CONV_POSTPREP_PASS_SHA256" \
+    "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" \
+    "$TARGET_SFWD_COMBINED_SUMMARY_SHA256" \
+    >> "$RUNROOT_ABS/launcher_meta.txt"
+fi
 
 MANIFEST_FINALIZED=0
 finalize_manifests() {
@@ -165,6 +301,67 @@ runner_exit() {
 }
 trap runner_exit EXIT
 
+STACK_ENV=(
+  FR10_METRICS=0
+  FR13_RING_EXPORT=1
+  FR13_FLAGS_INKERNEL=1
+  FR13_SCAN_ALIGN=0
+  FR13_NPAD_INVARIANT=0
+  FR13_TREE_GDN_GEOM_OVERRIDE=
+  FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=0
+  FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH=
+  FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON=
+  FR13_DFWD_K64_TOP3=0
+  FR13_DFWD_K64_TOP3_SO=
+  FR13_DFWD_K64_TOP3_SHA256=
+  FR13_FIXED32_CUTLASS_WAVE=stock
+  FR13_FIXED32_CUTLASS_WAVE_SO=
+  FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=0
+  FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=k64_root
+  FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE=astropy12907
+  FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON=
+  FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256=
+  FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=0
+  FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=0
+  FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON=
+  FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256=
+  FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH=
+  FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256=
+  FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT=
+  FR13_CONV_WB_BATCHED=0
+)
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  STACK_ENV=(
+    FR10_METRICS=1
+    FR13_RING_EXPORT=1
+    FR13_FLAGS_INKERNEL=1
+    FR13_SCAN_ALIGN=0
+    FR13_NPAD_INVARIANT=0
+    FR13_TREE_GDN_GEOM_OVERRIDE=BV=8
+    FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=1
+    FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH=1
+    FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON="$GQA3_PASS"
+    FR13_DFWD_K64_TOP3=1
+    FR13_DFWD_K64_TOP3_SO="$DFWD_TOP3_SO"
+    FR13_DFWD_K64_TOP3_SHA256="$DFWD_TOP3_SHA256"
+    FR13_FIXED32_CUTLASS_WAVE="$TARGET_SELECTOR"
+    FR13_FIXED32_CUTLASS_WAVE_SO="$CUTLASS_TARGET_SO"
+    FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=1
+    FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=k64_root
+    FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE=astropy12907
+    FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON="$CUTLASS_TARGET_PASS"
+    FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256="$CUTLASS_TARGET_PASS_SHA256"
+    FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=1
+    FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=0
+    FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON="$SFWD_PASS_CONTAINER"
+    FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256="$SFWD_CONV_POSTPREP_PASS_SHA256"
+    FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH="$SFWD_MANIFEST_CONTAINER"
+    FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256="$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256"
+    FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT="$SOURCE_COMMIT"
+    FR13_CONV_WB_BATCHED=1
+  )
+fi
+
 if env \
     OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
     FR13_FIXED32_B1_DIAGNOSTIC=0 \
@@ -172,15 +369,16 @@ if env \
     FR13_DRAFT_VOCAB_BLOCKS="$BLOCK_MAP_CONTAINER" \
     FR13_MANDATORY_WEIGHT_BYTES="$MANDATORY_WEIGHT_BYTES" \
     FR13_WEIGHT_FLOOR_MS="$MANDATORY_WEIGHT_FLOOR_MS" \
-    FR10_METRICS=0 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
-    FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=0 FR13_CFWD_GPU_TIMER=0 \
+    ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
+    FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER="$COMPOSED_STACK" FR13_CFWD_GPU_TIMER="$COMPOSED_STACK" \
     FR13_SFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${ARM}.json" \
+    FR13_DFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${ARM}_dfwd.json" \
+    FR13_CFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${ARM}_cfwd.json" \
     FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=0 \
     FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0 \
-    FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=0 \
-    FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=0 \
     FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0 FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0 \
     FR13_FIXED32_CONV_SOURCE_BATCH=0 \
+    FR13_TREE_CONV_FUSED=1 \
     FR13_FA2_QROW16_LIVE_PAGED_AB=0 FR13_FA2_QROW16_PRODUCTION=0 \
     FR13_FA2_QROW32_LIVE_PAGED_AB=0 \
     FR13_FA2_QROW32_B1_LIVE_AB_ARM= \
@@ -200,7 +398,6 @@ if env \
     FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 FR13_DFWD_UNIFIED_BM8_PRODUCTION=0 \
     FR13_DRAFT_HEAD_PAD_ROWS=0 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0 \
     FR13_DRAFT_HEAD_M32_LIVE_AB=0 FR13_DRAFT_HEAD_M32_PRODUCTION=0 \
-    FR13_FIXED32_CUTLASS_WAVE=stock FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=0 \
     FR13_FIXED32_BATCH_GDN_BYTE_AB=0 \
     FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0 \
     FR13_FIXED32_BATCH_GDN_BV_CANDIDATE= \
@@ -209,6 +406,7 @@ if env \
     FR13_FIXED32_GDN_PATH_BV_CANDIDATE= \
     FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
     FR13_FIXED32_ATTRIBUTION_ONLY=0 \
+    "${STACK_ENV[@]}" \
     FORKED_FA2_SO="$QROW32_B1_FA2_SO" RUNROOT="$RUNROOT_ABS" \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh \
       "$ARM" hydra27_fixed32 "$SUBSET" \
@@ -232,7 +430,6 @@ for expected in \
   'CUDAGRAPH_MODE=FULL_AND_PIECEWISE' \
   'FR13_FA2_QROW32_B1_LIVE_AB_ARM=' \
   'FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2' \
-  'FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=0' \
   'FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0' \
   'FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0' \
   "FR13_FA2_QROW32_B1_SO_SHA256=$CANDIDATE_SHA256" \
@@ -245,6 +442,41 @@ for expected in \
     || { echo "container lacks exact qrow32 timing pin: $expected" >&2; exit 4; }
 done
 unset expected
+if [[ "$COMPOSED_STACK" == "0" ]]; then
+  [[ "$(grep -Fxc 'FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=0' "$CONTAINER_ENV")" -eq 1 ]] \
+    || { echo "container lacks disabled SFWD conv/post-prep pin" >&2; exit 4; }
+else
+  for expected in \
+    'FR10_METRICS=1' \
+    'FR13_RING_EXPORT=1' \
+    'FR13_FLAGS_INKERNEL=1' \
+    'FR13_SCAN_ALIGN=0' \
+    'FR13_NPAD_INVARIANT=0' \
+    'FR13_TREE_GDN_GEOM_OVERRIDE=BV=8' \
+    'FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=1' \
+    'FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH=1' \
+    'FR13_DFWD_K64_TOP3=1' \
+    "FR13_DFWD_K64_TOP3_SHA256=$DFWD_TOP3_SHA256" \
+    "FR13_FIXED32_CUTLASS_WAVE=$TARGET_SELECTOR" \
+    'FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=1' \
+    'FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=k64_root' \
+    'FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE=astropy12907' \
+    'FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=1' \
+    'FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=0' \
+    'FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON=/logs/fr13_fixed32_sfwd_conv_postprep.production_pass.json' \
+    'FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH=/logs/fr13_fixed32_sfwd_conv_postprep.source_manifest.json' \
+    "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT=$SOURCE_COMMIT" \
+    'FR13_CONV_WB_BATCHED=1' \
+    'FR13_TREE_CONV_FUSED=1' \
+    'FR13_FIXED32_CONV_SOURCE_BATCH=0' \
+    'FR13_SFWD_GPU_TIMER=1' \
+    'FR13_DFWD_GPU_TIMER=1' \
+    'FR13_CFWD_GPU_TIMER=1'; do
+    [[ "$(grep -Fxc "$expected" "$CONTAINER_ENV")" -eq 1 ]] \
+      || { echo "container lacks exact composed-stack pin: $expected" >&2; exit 4; }
+  done
+  unset expected
+fi
 
 MEASURE="$ARMDIR/deploy_speed_fullwall.json"
 "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
@@ -272,25 +504,101 @@ SIDECAR_SHA256=$(sha256sum "$SIDECAR" | awk '{print $1}')
   --arm split2 \
   --patch-source scripts/fr13_patch_fa2_tree_bias.py \
   --expected-source-commit "$SOURCE_COMMIT" >/dev/null
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  GQA3_PRODUCTION_CREDENTIAL="$ARMDIR/logs/fr13_fixed32_gdn_gqa_group3.production_credential.json"
+  GQA3_PRODUCTION_ARM="$ARMDIR/logs/fr13_fixed32_gdn_gqa_group3.production.arm"
+  GQA3_PRODUCTION_BATCH="$ARMDIR/logs/fr13_fixed32_gdn_gqa_group3.production_batch.flag"
+  TARGET_PRODUCTION_SIDECAR="$ARMDIR/logs/fr13_fixed32_cutlass_streamk.production_pass.json"
+  TARGET_BINARY_RECORD="$ARMDIR/logs/fr13_fixed32_cutlass_streamk_binary.json"
+  TARGET_SELECTOR_RECORD="$ARMDIR/logs/fr13_fixed32_cutlass_wave.selector"
+  SFWD_PRODUCTION_PASS="$ARMDIR/logs/fr13_fixed32_sfwd_conv_postprep.production_pass.json"
+  SFWD_PRODUCTION_MANIFEST="$ARMDIR/logs/fr13_fixed32_sfwd_conv_postprep.source_manifest.json"
+  DOCKER_LOG="$ARMDIR/docker_after_tasks.log"
+  for artifact in \
+      "$GQA3_PRODUCTION_CREDENTIAL" "$GQA3_PRODUCTION_ARM" \
+      "$GQA3_PRODUCTION_BATCH" "$TARGET_PRODUCTION_SIDECAR" \
+      "$TARGET_BINARY_RECORD" "$TARGET_SELECTOR_RECORD" \
+      "$SFWD_PRODUCTION_PASS" "$SFWD_PRODUCTION_MANIFEST" "$DOCKER_LOG"; do
+    [[ -f "$artifact" && ! -L "$artifact" ]] \
+      || { echo "composed production evidence is missing or unsafe: $artifact" >&2; exit 4; }
+  done
+  unset artifact
+  [[ "$(sha256sum "$GQA3_PRODUCTION_CREDENTIAL" | awk '{print $1}')" == "$GQA3_PASS_SHA256" \
+     && "$(cat "$GQA3_PRODUCTION_ARM")" == "1" \
+     && "$(cat "$GQA3_PRODUCTION_BATCH")" == "1" \
+     && "$(cat "$TARGET_SELECTOR_RECORD")" == "$TARGET_SELECTOR" \
+     && "$(sha256sum "$SFWD_PRODUCTION_PASS" | awk '{print $1}')" == "$SFWD_CONV_POSTPREP_PASS_SHA256" \
+     && "$(sha256sum "$SFWD_PRODUCTION_MANIFEST" | awk '{print $1}')" == "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" ]] \
+    || { echo "composed production sidecar identity drifted" >&2; exit 4; }
+  TARGET_PRODUCTION_SIDECAR_SHA256=$(sha256sum "$TARGET_PRODUCTION_SIDECAR" | awk '{print $1}')
+  "$PYTHON_BIN" scripts/fr13_cutlass_streamk_pass.py verify \
+    --sidecar "$TARGET_PRODUCTION_SIDECAR" \
+    --expected-sidecar-sha256 "$TARGET_PRODUCTION_SIDECAR_SHA256" \
+    --candidate-so "$CUTLASS_TARGET_SO" \
+    --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
+    --candidate-selector "$TARGET_SELECTOR" \
+    --qualification-profile k64_root \
+    --diagnostic-task-profile astropy12907 \
+    --draft-vocab-blocks "$BLOCK_MAP" >/dev/null
+  for marker in \
+    '[FR13_DFWD_K64_TOP3] ready B1 K64 mapped width3' \
+    '[FR13_DFWD_K64_TOP3] engaged stock_argmax_topk_map_copy=0' \
+    '[FR13_DFWD_K64_TOP3] graph captured_calls=4'; do
+    grep -Fq "$marker" "$DOCKER_LOG" \
+      || { echo "DFWD top3 production marker is missing: $marker" >&2; exit 4; }
+  done
+  unset marker
+  [[ "$(grep -Fc '[FR13_SFWD_CONV_POSTPREP] production engaged layer=' "$DOCKER_LOG")" -eq 48 ]] \
+    || { echo "SFWD conv/post-prep production did not engage exactly 48 layers" >&2; exit 4; }
+fi
 finalize_manifests
 
-"$PYTHON_BIN" scripts/fr13_qrow32_split2_timing.py \
-  --subset "$SUBSET" \
-  --measure "$MEASURE" \
-  --baseline "$BASELINE" \
-  --engagement "$ENGAGEMENT" \
-  --health "$HEALTH" \
-  --traffic-audit "$TRAFFIC_AUDIT" \
-  --source-commit "$SOURCE_COMMIT" \
-  --patch-source-sha256 "$PATCH_SOURCE_SHA256" \
-  --pass-sha256 "$QROW32_B1_PASS_SHA256" \
-  --pass-sidecar-sha256 "$SIDECAR_SHA256" \
-  --runner-sha256 "$RUNNER_SHA256" \
-  --block-map-sha256 "$BLOCK_MAP_SHA256" \
-  --floor-ms "$MANDATORY_WEIGHT_FLOOR_MS" \
-  --cap-ms "$ONE_SIDED_U95_CAP_MS" \
-  --arm "$ARM" \
+TIMING_REDUCER=scripts/fr13_qrow32_split2_timing.py
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  TIMING_REDUCER=scripts/fr13_b1_composed_stack_timing.py
+fi
+REDUCER_ARGS=(
+  --subset "$SUBSET"
+  --measure "$MEASURE"
+  --baseline "$BASELINE"
+  --engagement "$ENGAGEMENT"
+  --health "$HEALTH"
+  --traffic-audit "$TRAFFIC_AUDIT"
+  --source-commit "$SOURCE_COMMIT"
+  --patch-source-sha256 "$PATCH_SOURCE_SHA256"
+  --pass-sha256 "$QROW32_B1_PASS_SHA256"
+  --pass-sidecar-sha256 "$SIDECAR_SHA256"
+  --runner-sha256 "$RUNNER_SHA256"
+  --block-map-sha256 "$BLOCK_MAP_SHA256"
+  --floor-ms "$MANDATORY_WEIGHT_FLOOR_MS"
+  --cap-ms "$ONE_SIDED_U95_CAP_MS"
+  --arm "$ARM"
   --out "$RUNROOT_ABS/timing_summary.json"
+)
+if [[ "$COMPOSED_STACK" == "1" ]]; then
+  REDUCER_ARGS+=(
+    --container-env "$CONTAINER_ENV"
+    --docker-log "$DOCKER_LOG"
+    --gqa3-production-credential "$GQA3_PRODUCTION_CREDENTIAL"
+    --gqa3-production-arm "$GQA3_PRODUCTION_ARM"
+    --gqa3-production-batch "$GQA3_PRODUCTION_BATCH"
+    --gqa3-pass-sha256 "$GQA3_PASS_SHA256"
+    --target-production-sidecar "$TARGET_PRODUCTION_SIDECAR"
+    --target-production-sidecar-sha256 "$TARGET_PRODUCTION_SIDECAR_SHA256"
+    --target-binary-record "$TARGET_BINARY_RECORD"
+    --sfwd-production-pass "$SFWD_PRODUCTION_PASS"
+    --sfwd-pass-sha256 "$SFWD_CONV_POSTPREP_PASS_SHA256"
+    --sfwd-production-manifest "$SFWD_PRODUCTION_MANIFEST"
+    --sfwd-manifest-sha256 "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256"
+    --qrow-composed-credential "$QROW32_B1_COMPOSED_CREDENTIAL"
+    --qrow-composed-credential-sha256 "$QROW32_B1_COMPOSED_CREDENTIAL_SHA256"
+    --dfwd-credential "$DFWD_TOP3_CREDENTIAL"
+    --dfwd-credential-sha256 "$DFWD_TOP3_CREDENTIAL_SHA256"
+    --target-sfwd-combined-summary "$TARGET_SFWD_COMBINED_SUMMARY"
+    --target-sfwd-combined-summary-sha256 "$TARGET_SFWD_COMBINED_SUMMARY_SHA256"
+  )
+fi
+"$PYTHON_BIN" "$TIMING_REDUCER" "${REDUCER_ARGS[@]}"
 printf 'summary=%s ended=%s\n' \
   "$RUNROOT_ABS/timing_summary.json" "$(date -u +%FT%TZ)" \
   >> "$RUNROOT_ABS/launcher_meta.txt"
