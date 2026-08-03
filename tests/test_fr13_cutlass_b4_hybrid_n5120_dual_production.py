@@ -111,6 +111,35 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return module, candidate, patch_source, live_paths, live_hashes
 
 
+def test_hybrid_current_source_and_timing_pins_match_candidate_contract() -> None:
+    qualification = _load(
+        "fr13_hybrid_n5120_source_contract_test", "fr13_cutlass_b4_pass.py"
+    )
+    binary = _load(
+        "fr13_hybrid_n5120_binary_contract_test", "fr13_cutlass_wave_binary.py"
+    )
+    patch_source = SCRIPTS / "fr13_patch_cutlass_fixed32_wave.py"
+    timing = (SCRIPTS / "fr13_run_b4_cutlass_persistent_m128_timing.sh").read_text(
+        encoding="ascii"
+    )
+
+    patch_sha256 = hashlib.sha256(patch_source.read_bytes()).hexdigest()
+    assert patch_sha256 == qualification.IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256
+    assert (
+        f"CANDIDATE_SHA256={binary.IDENTITY_HYBRID_N5120_B4_CANDIDATE_SHA256}"
+        in timing
+    )
+    assert (
+        f"CANDIDATE_BYTES={binary.IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE}"
+        in timing
+    )
+    assert (
+        "QUALIFIED_PATCH_SOURCE_SHA256="
+        f"{qualification.IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256}"
+        in timing
+    )
+
+
 def test_hybrid_binary_requires_explicit_k64(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
