@@ -1,0 +1,51 @@
+{
+  "schema": "fr13.fixed32.cutlass_fullgrid_combined_rebind.v1",
+  "created_at_utc": "2026-08-03T12:44:00Z",
+  "status": "source_bound_gate_required",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "production_default_enabled": false,
+  "source": {
+    "implementation_commit": "9b0be32d2a77e7f132002a53b7918b2e2112ecbd",
+    "integration_head_before_artifact": "de3a11d1b554e258f45b58fee9100ca98fbaabab",
+    "patch_source_sha256": "b9dba4077f63425dd4c245d9de33a8b2413e223f44a7fb0f6b4abe6e003d24a0",
+    "patched_dispatch_sha256": "ef221b938c0780d8212e6355f53a8aad6c4b907fbe0e368cb73bda995b80699d"
+  },
+  "candidate": {
+    "selector": "identity_onen_n5120_fullgrid_b1",
+    "diagnostic_selector": "identity_onen_n5120_fullgrid_b1_byte_ab",
+    "qualification_profile": "k64_root",
+    "binary_sha256": "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc",
+    "binary_bytes": 119471552,
+    "binary_published": false,
+    "contains_fullgrid_scheduler": true,
+    "contains_n5120_single_tile_scheduler": true,
+    "contains_mtp_m1m4_direct_scheduler": true
+  },
+  "discarded_attempt": {
+    "classification": "pre_task_candidate_boot_failure",
+    "stock_tasks_complete": 4,
+    "candidate_tasks_started": 0,
+    "candidate_timing_samples": 0,
+    "paired_result_produced": false,
+    "root_cause": "relative_k64_block_map_resolved_from_image_workdir",
+    "raw_logs_published": false
+  },
+  "verification": {
+    "combined_binary_fullgrid_selector_verify": "pass",
+    "focused_tests": "126 passed",
+    "ruff": "pass",
+    "shell_syntax": "pass",
+    "git_diff_check": "pass"
+  },
+  "required_next_gates": [
+    "one real SWE-Verified B1 K64/root1 raw-byte gate on final frozen source",
+    "real SWE-Verified exact4 B1 timing after byte PASS"
+  ],
+  "not_run": [
+    "candidate real SWE-Verified task",
+    "candidate B1 timing",
+    "B4 timing",
+    "hardware-floor acceptance"
+  ]
+}

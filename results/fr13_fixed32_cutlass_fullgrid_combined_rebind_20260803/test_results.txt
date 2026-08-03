@@ -1,0 +1,7 @@
+PYTHONPATH=. pytest -q tests/test_fr13_draft_head_fp8.py tests/test_fr13_cutlass_wave_binary.py tests/test_fr13_cutlass_streamk_k64_profile.py tests/test_fr13_fixed32_gdn_gqa_group3.py tests/test_fr13_fixed32_gdn_gqa_group3_artifact.py tests/test_fr13_fixed32_gdn_gqa_group3_codegen_artifact.py tests/test_fr13_fixed32_gdn_gqa_group3_production.py tests/test_fr13_gdn_single_launch_campaign_gate.py
+126 passed
+
+ruff selected Python sources and tests: pass
+bash -n selected launchers: pass
+git diff --check: pass
+combined binary fullgrid selector verification: pass
