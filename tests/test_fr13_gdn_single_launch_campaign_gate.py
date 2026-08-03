@@ -17,14 +17,22 @@ ENTRYPOINTS = {
     "scripts/fr13_run_b1_gdn_single_launch_live_gate.sh": (
         "hydra27_fixed32",
         "1",
+        None,
+    ),
+    "scripts/fr13_run_b1_gdn_gqa_group3_live_gate.sh": (
+        "hydra27_fixed32",
+        "1",
+        "gqa_group3",
     ),
     "scripts/fr13_run_b4_tail23_gdn_single_launch_live_gate.sh": (
         "tail6_fixed32",
         "4",
+        None,
     ),
     "scripts/fr13_run_b4_hydra27_gdn_single_launch_live_gate.sh": (
         "hydra27_fixed32",
         "4",
+        None,
     ),
 }
 
@@ -274,13 +282,15 @@ def _validate_fixture(
     )
 
 
-def test_three_entrypoints_bake_disjoint_mode_batch_scopes() -> None:
-    assert len(ENTRYPOINTS) == 3
-    for relative, (mode, batch) in ENTRYPOINTS.items():
+def test_entrypoints_bake_disjoint_mode_batch_candidate_scopes() -> None:
+    assert len(ENTRYPOINTS) == 4
+    for relative, (mode, batch, candidate) in ENTRYPOINTS.items():
         text = (ROOT / relative).read_text(encoding="ascii")
         assert f"export FR13_GDN_GATE_MODE={mode}" in text
         assert f"export FR13_GDN_GATE_BATCH={batch}" in text
         assert f"export FR13_GDN_GATE_ENTRYPOINT={relative}" in text
+        if candidate is not None:
+            assert f"export FR13_GDN_GATE_CANDIDATE={candidate}" in text
         assert "fr13_run_gdn_single_launch_live_gate.sh" in text
     common = COMMON.read_text(encoding="ascii")
     assert 'FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH="$BATCH"' in common
@@ -290,6 +300,86 @@ def test_three_entrypoints_bake_disjoint_mode_batch_scopes() -> None:
     assert common.count('--source-commit "$SOURCE_COMMIT"') == 3
     assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in common
     assert "config/fr13_fixed32/subset_b4_four.json" in common
+    assert "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=0" in common
+    assert "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH=" in common
+    assert "FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON=" in common
+
+
+def test_b1_gqa_group3_entrypoint_cannot_be_reused_for_another_candidate(
+    tmp_path: Path,
+) -> None:
+    result = subprocess.run(
+        ["bash", os.fspath(COMMON)],
+        cwd=ROOT,
+        env={
+            **os.environ,
+            "RUNROOT": os.fspath(tmp_path / "unused"),
+            "TAG": "candidate-scope-test",
+            "FORKED_FA2_SO": "/dev/null",
+            "FR13_GDN_GATE_MODE": "hydra27_fixed32",
+            "FR13_GDN_GATE_BATCH": "1",
+            "FR13_GDN_GATE_CANDIDATE": "single_launch",
+            "FR13_GDN_GATE_ENTRYPOINT": (
+                "scripts/fr13_run_b1_gdn_gqa_group3_live_gate.sh"
+            ),
+        },
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "wrapper mode/batch/entrypoint identity is invalid" in result.stderr
+
+
+def test_gqa_group3_b1_live_pass_is_candidate_source_bound() -> None:
+    reducer = _load_reducer()
+    payload, events, request_map, tasks = _coverage_fixture(
+        reducer, mode="hydra27_fixed32", batch=1
+    )
+    candidate_id = reducer.GQA_GROUP3_CANDIDATE
+    source_sha256 = "e" * 64
+    comparator = events[0]["gdn_comparator"]
+    comparator["candidate"] = candidate_id
+    comparator_events = [comparator]
+    payload["candidate"] = candidate_id
+    payload["source_sha256"] = source_sha256
+    payload["diagnostic_identity"] = f"{candidate_id}:hydra27:b1"
+    payload["comparator_events_sha256"] = hashlib.sha256(
+        json.dumps(
+            comparator_events,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    ).hexdigest()
+
+    report = reducer._validate_live_pass(
+        payload,
+        mode="hydra27_fixed32",
+        batch=1,
+        expected_tasks=tasks,
+        candidate_id=candidate_id,
+        candidate_source_sha256=source_sha256,
+        graph_signature="b" * 64,
+        census_events=events,
+        request_task_map=request_map,
+    )
+    assert report["authenticated_task_ids"] == tasks
+
+    payload["source_sha256"] = "f" * 64
+    with pytest.raises(reducer.GateError, match="source_sha256"):
+        reducer._validate_live_pass(
+            payload,
+            mode="hydra27_fixed32",
+            batch=1,
+            expected_tasks=tasks,
+            candidate_id=candidate_id,
+            candidate_source_sha256=source_sha256,
+            graph_signature="b" * 64,
+            census_events=events,
+            request_task_map=request_map,
+        )
 
 
 @pytest.mark.parametrize(
