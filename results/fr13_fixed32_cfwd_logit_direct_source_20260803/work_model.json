@@ -1,7 +1,7 @@
 {
   "schema": "fr13.fixed32.cfwd_logit_direct.source_work_model.v1",
   "status": "source_only_default_off",
-  "source_commit": "ad3063da4344434aeed7d1bf49ead5c07a405765",
+  "source_commit": "a4406489ee681a65cb564b09ce1109ecd49867f3",
   "candidate": "fixed32_cfwd_logit_direct_decisions_v1",
   "qualification": {
     "draft_vocab_k": 65536,
@@ -16,7 +16,7 @@
       1,
       4
     ],
-    "vocab_size": 151936,
+    "vocab_size": 248320,
     "fanout": 3,
     "walk_cap": 12
   },
@@ -34,16 +34,16 @@
   },
   "physical_work": {
     "b1": {
-      "incumbent_full_vocab_materialized_bytes": 116686848,
-      "candidate_active_block_stat_bytes": 142560,
-      "candidate_block_stat_workspace_bytes": 245760,
-      "full_vocab_materialized_bytes_removed": 116544288
+      "incumbent_full_vocab_materialized_bytes": 190709760,
+      "candidate_active_block_stat_bytes": 14640,
+      "candidate_block_stat_workspace_bytes": 15360,
+      "full_vocab_materialized_bytes_removed": 190695120
     },
     "b4": {
-      "incumbent_full_vocab_materialized_bytes": 466747392,
-      "candidate_active_block_stat_bytes": 570240,
-      "candidate_block_stat_workspace_bytes": 983040,
-      "full_vocab_materialized_bytes_removed": 466177152
+      "incumbent_full_vocab_materialized_bytes": 762839040,
+      "candidate_active_block_stat_bytes": 58560,
+      "candidate_block_stat_workspace_bytes": 61440,
+      "full_vocab_materialized_bytes_removed": 762780480
     }
   },
   "unchanged_work": {
@@ -52,6 +52,13 @@
     "physical_rows_per_request": 32,
     "integer_walk": "unchanged",
     "reference_served_until_runtime_gates_pass": true
+  },
+  "offline_codegen": {
+    "status": "pass",
+    "architecture": "sm_121a",
+    "block_v": 4096,
+    "active_vocab_blocks": 61,
+    "summary": "codegen_summary.json"
   },
   "claim_scope": "static_source_work_only_no_runtime_speed_claim"
 }
