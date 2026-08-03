@@ -51,6 +51,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "identity_stockshape_b4_byte_ab",
         "identity_stockshape_stage2_b4",
         "identity_stockshape_stage2_b4_byte_ab",
+        "identity_twom_b4",
+        "identity_twom_b4_byte_ab",
         "identity_divisor_b4",
         "identity_divisor_b4_byte_ab",
         "persistent_b4_m128",
@@ -110,6 +112,15 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29"
     )
     assert module.IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SIZE == 117_488_608
+    assert module.candidate_identity("identity_twom_b4_byte_ab") == (
+        module.IDENTITY_TWOM_B4_CANDIDATE_SHA256,
+        module.IDENTITY_TWOM_B4_CANDIDATE_SIZE,
+        "identity_twom_b4",
+    )
+    assert module.IDENTITY_TWOM_B4_CANDIDATE_SHA256 == (
+        "c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29"
+    )
+    assert module.IDENTITY_TWOM_B4_CANDIDATE_SIZE == 117_488_608
     assert module.B4_M128_CANDIDATE_SHA256 == (
         "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
     )
@@ -359,6 +370,11 @@ def test_static_b1_diagnostic_installs_but_production_stays_blocked(
             "identity_stockshape_stage2_b4",
             "identity_stockshape_stage2_b4",
         ),
+        (
+            "identity_twom_b4_byte_ab",
+            "identity_twom_b4",
+            "identity_twom_b4",
+        ),
     ),
 )
 def test_identity_b4_diagnostic_installs_but_production_stays_blocked(
@@ -378,6 +394,9 @@ def test_identity_b4_diagnostic_installs_but_production_stays_blocked(
         monkeypatch.setattr(
             module, "IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SHA256", digest
         )
+    elif family == "identity_twom_b4":
+        monkeypatch.setattr(module, "IDENTITY_TWOM_B4_CANDIDATE_SIZE", len(payload))
+        monkeypatch.setattr(module, "IDENTITY_TWOM_B4_CANDIDATE_SHA256", digest)
     else:
         monkeypatch.setattr(module, "IDENTITY_B4_CANDIDATE_SIZE", len(payload))
         monkeypatch.setattr(module, "IDENTITY_B4_CANDIDATE_SHA256", digest)
@@ -402,7 +421,7 @@ def test_identity_b4_diagnostic_installs_but_production_stays_blocked(
     destination.write_bytes(b"stock-extension\n")
     expected_error = (
         "requires a pinned production sidecar"
-        if family == "identity_stockshape_stage2_b4"
+        if family in {"identity_stockshape_stage2_b4", "identity_twom_b4"}
         else "Tail23 and Hydra27 raw-byte gates"
     )
     with pytest.raises(ValueError, match=expected_error):

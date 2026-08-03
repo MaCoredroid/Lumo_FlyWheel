@@ -42,6 +42,10 @@ IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SHA256 = (
     "c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29"
 )
 IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SIZE = 117_488_608
+IDENTITY_TWOM_B4_CANDIDATE_SHA256 = (
+    "c5da32258e678494cd2b6b34da0b2aa96e70096b215db0938ed1e0750aa43d29"
+)
+IDENTITY_TWOM_B4_CANDIDATE_SIZE = 117_488_608
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -85,6 +89,7 @@ IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS = frozenset(
         "identity_stockshape_stage2_b4_byte_ab",
     }
 )
+IDENTITY_TWOM_B4_SELECTORS = frozenset({"identity_twom_b4", "identity_twom_b4_byte_ab"})
 IDENTITY_DIVISOR_B4_SELECTORS = frozenset(
     {"identity_divisor_b4", "identity_divisor_b4_byte_ab"}
 )
@@ -101,6 +106,7 @@ CANDIDATE_SELECTORS = (
     | IDENTITY_STAGE2_PINGPONG_B1_SELECTORS
     | IDENTITY_STOCKSHAPE_B4_SELECTORS
     | IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS
+    | IDENTITY_TWOM_B4_SELECTORS
     | IDENTITY_DIVISOR_B4_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
@@ -111,6 +117,7 @@ PRODUCTION_SELECTORS = frozenset(
         "streamk_force_wide256",
         "persistent_b4_m128",
         "identity_stockshape_stage2_b4",
+        "identity_twom_b4",
     }
 )
 INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
@@ -176,6 +183,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SHA256,
             IDENTITY_STOCKSHAPE_STAGE2_B4_CANDIDATE_SIZE,
             "identity_stockshape_stage2_b4",
+        )
+    if selector in IDENTITY_TWOM_B4_SELECTORS:
+        return (
+            IDENTITY_TWOM_B4_CANDIDATE_SHA256,
+            IDENTITY_TWOM_B4_CANDIDATE_SIZE,
+            "identity_twom_b4",
         )
     if selector in IDENTITY_DIVISOR_B4_SELECTORS:
         return (
@@ -422,19 +435,25 @@ def _verify_production_qualification(
         "streamk_force_wide256",
         "persistent_b4_m128",
         "identity_stockshape_stage2_b4",
+        "identity_twom_b4",
     }:
         raise ValueError(f"unsupported production candidate selector: {selector!r}")
-    if selector in {"persistent_b4_m128", "identity_stockshape_stage2_b4"}:
+    if selector in {
+        "persistent_b4_m128",
+        "identity_stockshape_stage2_b4",
+        "identity_twom_b4",
+    }:
         import fr13_cutlass_b4_pass as qualification
     else:
         import fr13_cutlass_streamk_pass as qualification
 
-    if selector == "identity_stockshape_stage2_b4":
+    if selector in {"identity_stockshape_stage2_b4", "identity_twom_b4"}:
         return qualification.verify_dual_sidecar(
             sidecar,
             expected_sidecar_sha256,
             candidate,
             patch_source,
+            candidate_selector=selector,
         )
     kwargs = {"fixed32_mode": fixed32_mode} if selector == "persistent_b4_m128" else {}
     return qualification.verify_sidecar(
@@ -515,7 +534,7 @@ def install_candidate(
             ],
             "one_sided_u95_cap_ms": qualification_record["one_sided_u95_cap_ms"],
         }
-        if selector == "identity_stockshape_stage2_b4":
+        if selector in {"identity_stockshape_stage2_b4", "identity_twom_b4"}:
             for key in (
                 "qualification_profile",
                 "qualification_topologies",
@@ -545,7 +564,7 @@ def install_candidate(
             if key in qualification_record:
                 qualification[key] = qualification_record[key]
         if (
-            selector != "identity_stockshape_stage2_b4"
+            selector not in {"identity_stockshape_stage2_b4", "identity_twom_b4"}
             and qualification_record.get("qualification_profile") == "k64_root"
         ):
             for key in (
