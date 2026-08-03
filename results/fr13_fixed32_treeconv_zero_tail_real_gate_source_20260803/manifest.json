@@ -1,0 +1,45 @@
+{
+  "schema": "fr13.fixed32.treeconv_zero_tail.real_gate_source.v1",
+  "status": "ready_for_real_swe_verified_qualification",
+  "base_commit": "4db00ec4cd5d268745f0b48850c6e14b6730561a",
+  "candidate": "physical32_treeconv_zero_tail_v1",
+  "qualification_profile": "k64_root",
+  "draft_vocab_root": 1,
+  "draft_vocab_k": 65536,
+  "physical_drafts": 31,
+  "physical_rows_root_inclusive": 32,
+  "logical_topologies": [
+    "Tail23",
+    "Hydra27"
+  ],
+  "batches": [
+    1,
+    4
+  ],
+  "reference_always_served": true,
+  "production_default_enabled": false,
+  "timing_eligible": false,
+  "acceptance_valid": false,
+  "comparison_call_limit": 320,
+  "source_bindings": {
+    "kernel_sha256": "a31e55b7f84b93734a17dffff146fd9246502fa4b53cc14b97f63dd242136dd7",
+    "credential_issuer_sha256": "3370e50ee7534f6a0855bb768e67cd5ac80fb219daae5ba6af5510155fe1024e",
+    "campaign_runner_sha256": "3ef534eb20c992f23b96a325ee6669db1d7a003a465a955eea2917e1e542ed5d"
+  },
+  "verification": {
+    "focused_tests_passed": 12,
+    "adjacent_tests_passed": 84,
+    "cuda_runtime_modules_skipped": 1,
+    "python_compile": "pass",
+    "shell_syntax": "pass",
+    "diff_check": "pass"
+  },
+  "privacy": {
+    "raw_task_data_included": false,
+    "raw_prompts_or_responses_included": false,
+    "raw_patches_included": false,
+    "secrets_included": false,
+    "process_or_container_identity_included": false,
+    "raw_logs_included": false
+  }
+}

@@ -1353,6 +1353,18 @@ PY
       exit 2
       ;;
   esac
+  case "${FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB:-0}" in
+    0|1) ;;
+    *)
+      echo "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB must be exactly 0 or 1" >&2
+      exit 2
+      ;;
+  esac
+  [[ "${FR13_FIXED32_CONV_COMMIT_ZERO_TAIL:-0}" == "0" \
+     || "${FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB:-0}" == "0" ]] || {
+    echo "zero-tail production and byte A/B are exclusive" >&2
+    exit 2
+  }
   if [[ "${FR13_FIXED32_CONV_COMMIT_ZERO_TAIL:-0}" == "1" ]]; then
     install -m 600 /dev/null \
       "$LOG_DIR/fr13_fixed32_conv_commit_zero_tail.arm"
@@ -3127,6 +3139,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_CONV_WB_BATCHED="${FR13_CONV_WB_BATCHED:-0}" \
   -e FR13_FIXED32_CONV_SOURCE_BATCH="${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" \
   -e FR13_FIXED32_CONV_COMMIT_ZERO_TAIL="${FR13_FIXED32_CONV_COMMIT_ZERO_TAIL:-0}" \
+  -e FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB="${FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB:-0}" \
+  -e FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_LIMIT="${FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_LIMIT:-320}" \
+  -e FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_PATH="${FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_PATH:-/logs/fr13_fixed32_treeconv_zero_tail.byte_ab.jsonl}" \
   -e FR13_SPEC_BLOCKS_CAP="${FR13_SPEC_BLOCKS_CAP:-0}" \
   -e FR13_SUBTREE_PARALLEL="${FR13_SUBTREE_PARALLEL:-1}" \
   -e FR13_SUBTREE_PARALLEL_SELFCHECK="${FR13_SUBTREE_PARALLEL_SELFCHECK:-0}" \

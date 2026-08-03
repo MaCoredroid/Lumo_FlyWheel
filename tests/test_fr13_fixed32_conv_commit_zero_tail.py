@@ -21,6 +21,8 @@ from lumo_flywheel_serving.fr13_tree_conv_fused import (  # noqa: E402
 KERNEL_PATH = ROOT / "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
 VARIANT_PATH = ROOT / "scripts/fr13_bigdenom_swe_serve_variant.sh"
 LAUNCHER_PATH = ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh"
+RUNNER_PATH = ROOT / "scripts/fr13_run_treeconv_zero_tail_live_gate.sh"
+SWE_RUNNER_PATH = ROOT / "scripts/run_swe_bench_q36_a.py"
 
 
 def _function(tree: ast.Module, name: str) -> ast.FunctionDef:
@@ -120,3 +122,32 @@ def test_selector_is_forwarded_and_materialized_worker_visible() -> None:
         '-e FR13_FIXED32_CONV_COMMIT_ZERO_TAIL="${'
         'FR13_FIXED32_CONV_COMMIT_ZERO_TAIL:-0}"'
     ) in launcher
+    assert "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB" in variant
+    assert (
+        '-e FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB="${'
+        'FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB:-0}"'
+    ) in launcher
+
+
+def test_real_task_gate_is_default_off_stock_serving_and_bounded() -> None:
+    kernel = KERNEL_PATH.read_text()
+    variant = VARIANT_PATH.read_text()
+    runner = RUNNER_PATH.read_text()
+    swe_runner = SWE_RUNNER_PATH.read_text()
+
+    assert '"FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB", "0"' in kernel
+    assert "_launch_direct(zero_tail=True)" in kernel
+    assert "_launch_direct(zero_tail=False)" in kernel
+    assert '"reference_restored_and_served": True' in kernel
+    assert '"timing_eligible": False' in kernel
+    assert "comparison_limit <= 320" in kernel
+    assert "tree-conv zero-tail byte diagnostic must be the only" in variant
+    assert "treeconv_zero_tail_eager_diagnostic" in swe_runner
+    assert "config/fr13_fixed32/subset_b4_four.json" in runner
+    assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in runner
+    assert "AGENT_WALL_S=5400" in runner
+    assert "FR13_DRAFT_VOCAB_K=65536" in runner
+    assert "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL=0" in runner
+    assert "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB=1" in runner
+    assert "PROBE_ONLY" not in runner
+    assert "ACCEPT_SPEED_PROBE" not in runner

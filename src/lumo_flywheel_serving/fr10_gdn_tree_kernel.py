@@ -44,6 +44,34 @@ def _fr13_fixed32_conv_commit_zero_tail_requested() -> bool:
     )
 
 
+def _fr13_fixed32_conv_commit_zero_tail_byte_ab_requested() -> bool:
+    """Resolve the eager stock-serving zero-tail byte diagnostic."""
+    raw = os.environ.get(
+        "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB", "0"
+    )
+    if raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB must be exactly 0 or 1"
+        )
+    return raw == "1"
+
+
+def _fr13_fixed32_conv_commit_zero_tail_emit(
+    record: dict[str, object],
+) -> None:
+    path = os.environ.get(
+        "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_PATH",
+        "/logs/fr13_fixed32_treeconv_zero_tail.byte_ab.jsonl",
+    )
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    payload = dict(record)
+    payload["schema"] = "fr13.fixed32.treeconv_zero_tail.byte_ab.v1"
+    with open(path, "a", encoding="ascii") as handle:
+        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
 def _fr13_fixed32_committer_layer_batch_requested() -> bool:
     """Return the boot-time arm for the experimental one-launch committer.
 
@@ -5536,8 +5564,15 @@ def preseed_fixed32_conv_col0_pregather(
             "FR13_FIXED32_CONV_DIRECT state-src range does not match source rows"
         )
     zero_tail = _fr13_fixed32_conv_commit_zero_tail_requested()
+    zero_tail_byte_ab = (
+        _fr13_fixed32_conv_commit_zero_tail_byte_ab_requested()
+    )
+    if zero_tail and zero_tail_byte_ab:
+        raise RuntimeError(
+            "FR13 fixed32 conv zero-tail production and byte A/B are exclusive"
+        )
     live_state_cols = 3
-    if zero_tail:
+    if zero_tail or zero_tail_byte_ab:
         state_src_rows = tuple(
             state_src_values[row * conv_l : (row + 1) * conv_l]
             for row in range(32)
@@ -5619,6 +5654,7 @@ def preseed_fixed32_conv_col0_pregather(
             or existing.get("source_rows_per_batch") != source_rows
             or existing.get("state_src_values") != state_src_values
             or existing.get("commit_zero_tail") is not zero_tail
+            or existing.get("commit_zero_tail_byte_ab") is not zero_tail_byte_ab
         ):
             raise RuntimeError(
                 "FR13_FIXED32_CONV_PREGATHER was already preseeded with "
@@ -5754,6 +5790,7 @@ def preseed_fixed32_conv_col0_pregather(
         "state_src": direct_state_src,
         "state_src_values": state_src_values,
         "commit_zero_tail": zero_tail,
+        "commit_zero_tail_byte_ab": zero_tail_byte_ab,
         "commit_live_state_cols": live_state_cols,
         "state_src_digest": hashlib.sha256(
             json.dumps(state_src_values).encode("ascii")
@@ -5787,6 +5824,8 @@ def preseed_fixed32_conv_col0_pregather(
         "commit_direct_launches_by_batch": {
             batch: 0 for batch in batches
         },
+        "commit_zero_tail_byte_ab_invocations": 0,
+        "commit_zero_tail_byte_ab_passes": 0,
         "live_selfchecked_batches": set(),
         "source_identity": (
             tuple(id(bank) for bank in bank_refs),
@@ -5867,6 +5906,7 @@ def preseed_fixed32_conv_col0_pregather(
             "commit_source_rows_per_batch": source_rows,
             "commit_state_src_shape": (32, conv_l),
             "commit_zero_tail": zero_tail,
+            "commit_zero_tail_byte_ab": zero_tail_byte_ab,
             "commit_source_columns_loaded_per_row": (
                 live_state_cols if zero_tail else conv_l
             ),
@@ -6781,7 +6821,17 @@ def launch_fixed32_conv_commit_to_col0(
     conv_c = int(state["conv_c"])
     block = int(state["block"])
     grid = (48, batch, triton.cdiv(conv_c, block))
-    if committer_state is None:
+    zero_tail_byte_ab = bool(state.get("commit_zero_tail_byte_ab", False))
+    if zero_tail_byte_ab and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 fixed32 conv zero-tail byte A/B is eager-only"
+        )
+    if zero_tail_byte_ab and committer_state is not None:
+        raise RuntimeError(
+            "FR13 fixed32 conv zero-tail byte A/B requires the stock metadata route"
+        )
+
+    def _launch_direct(*, zero_tail: bool) -> None:
         _fr13_fixed32_conv_direct_col0_kernel[grid](
             state["anchor"],
             state["off16"],
@@ -6810,10 +6860,85 @@ def launch_fixed32_conv_commit_to_col0(
             PATH_COLS=int(accepted_paths.shape[1]),
             B=batch,
             BLOCK_C=block,
-            ZERO_TAIL=bool(state["commit_zero_tail"]),
+            ZERO_TAIL=zero_tail,
             LIVE_STATE_COLS=int(state["commit_live_state_cols"]),
             num_warps=4,
         )
+
+    if zero_tail_byte_ab:
+        limit_text = os.environ.get(
+            "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_LIMIT", "320"
+        )
+        try:
+            comparison_limit = int(limit_text)
+        except ValueError as error:
+            raise RuntimeError(
+                "FR13 fixed32 conv zero-tail byte A/B limit must be an integer"
+            ) from error
+        if not 1 <= comparison_limit <= 320:
+            raise RuntimeError(
+                "FR13 fixed32 conv zero-tail byte A/B limit must be in [1, 320]"
+            )
+        invocation = int(state["commit_zero_tail_byte_ab_invocations"])
+        if invocation < comparison_limit:
+            _launch_direct(zero_tail=True)
+            destination_rows = spec_state_indices[:, :batch, 0].to(torch.long)
+            candidate_rows = tuple(
+                bank.index_select(0, destination_rows[layer]).clone()
+                for layer, bank in enumerate(conv_banks)
+            )
+            _launch_direct(zero_tail=False)
+            differing_bytes = 0
+            first_mismatch_layer = None
+            compared_bytes = 0
+            for layer, (bank, candidate) in enumerate(
+                zip(conv_banks, candidate_rows, strict=True)
+            ):
+                reference = bank.index_select(0, destination_rows[layer])
+                reference_bytes = reference.contiguous().view(torch.uint8)
+                candidate_bytes = candidate.contiguous().view(torch.uint8)
+                compared_bytes += int(reference_bytes.numel())
+                difference = reference_bytes != candidate_bytes
+                layer_differing = int(difference.sum().item())
+                differing_bytes += layer_differing
+                if layer_differing and first_mismatch_layer is None:
+                    first_mismatch_layer = layer
+            record = {
+                "invocation": invocation,
+                "mode": state["mode"],
+                "batch": batch,
+                "physical_drafts": 31,
+                "physical_rows_root_inclusive": 32,
+                "conv_layers": 48,
+                "conv_channels": conv_c,
+                "conv_state_length": int(state["conv_l"]),
+                "source_rows_per_request": int(
+                    state["source_rows_per_batch"]
+                ),
+                "live_state_columns": int(state["commit_live_state_cols"]),
+                "state_src_sha256": state["state_src_digest"],
+                "compared_bytes": compared_bytes,
+                "differing_bytes": differing_bytes,
+                "first_mismatch_layer": first_mismatch_layer,
+                "byte_equal": differing_bytes == 0,
+                "candidate_zero_tail": True,
+                "reference_zero_tail": False,
+                "reference_restored_and_served": True,
+                "timing_eligible": False,
+            }
+            _fr13_fixed32_conv_commit_zero_tail_emit(record)
+            state["commit_zero_tail_byte_ab_invocations"] = invocation + 1
+            if differing_bytes:
+                raise RuntimeError(
+                    "FR13 fixed32 conv zero-tail byte A/B mismatch after "
+                    f"reference restore: layer={first_mismatch_layer} "
+                    f"differing_bytes={differing_bytes}"
+                )
+            state["commit_zero_tail_byte_ab_passes"] += 1
+        else:
+            _launch_direct(zero_tail=False)
+    elif committer_state is None:
+        _launch_direct(zero_tail=bool(state["commit_zero_tail"]))
     else:
         destination_paths = committer_state["accepted_paths"]
         destination_lens = committer_state["accepted_lens"]
