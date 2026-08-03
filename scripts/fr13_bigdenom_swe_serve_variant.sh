@@ -123,6 +123,7 @@ if [[ "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "1" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stage2_pingpong_b1_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_b1_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" \
+      || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_fullgrid_b1_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_divisor_b4_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_b4_byte_ab" \
       || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_stockshape_stage2_b4_byte_ab" \

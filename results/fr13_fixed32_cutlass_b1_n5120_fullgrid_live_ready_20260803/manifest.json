@@ -1,0 +1,121 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_n5120_fullgrid_live_ready.v1",
+  "created_at_utc": "2026-08-03T06:46:12Z",
+  "status": "host_link_import_pass_default_off_gpu_qualification_pending",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/fixed32-b1-wide-fixed-iters-20260803",
+    "source_commit": "679f519b4a8c9cd51fe8406d44e8513637d29bcd",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2",
+    "patch_source_sha256": "2697a8631bcf7b546c2ca964975d2817203391ef9dfcbb8dd3c4d4d707aa0959",
+    "patched_dispatch_sha256": "194d4b5f529dfb690eeb6d864919ae7f9b859097568a513b3f3cf78051a93499"
+  },
+  "candidate": {
+    "selector": "identity_onen_n5120_fullgrid_b1",
+    "diagnostic_selector": "identity_onen_n5120_fullgrid_b1_byte_ab",
+    "sha256": "43c78546de316ec14126ded2c8d42ee6807e77dfe9935cad2cf2db017fc74501",
+    "bytes": 118837576,
+    "published": false,
+    "publication_reason": "binary exceeds GitHub single-file limit",
+    "host_build_path": "/home/mark/fr13_cutlass_b1_fullgrid_compile_20260803/_C_stable_libtorch.identity_onen_n5120_fullgrid_b1.abi3.so",
+    "default_enabled": false,
+    "required_qualification_profile": "k64_root",
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "fixed_rows": 32,
+    "n5120_policy": "exact_40_cta_single_tile",
+    "wide_policy": "full_static_persistent_grid",
+    "b1_sm_count": 48,
+    "wide_admitted_projection_mnk": [
+      [32, 34816, 5120],
+      [32, 16384, 5120],
+      [32, 14336, 5120]
+    ],
+    "n5120_admitted_projection_mnk": [
+      [32, 5120, 17408],
+      [32, 5120, 6144]
+    ],
+    "out_of_contract_fallback": "stock"
+  },
+  "build": {
+    "result": "pass",
+    "architecture": "sm_121a",
+    "gencode": "arch=compute_121a,code=sm_121a",
+    "cuda_release": "13.0",
+    "nvcc_version": "13.0.88",
+    "cuobjdump_version": "13.0.85",
+    "complete_translation_unit": true,
+    "translation_unit_object_sha256": "a06447a9b990498959693b689d5880a4d5d891494fd12d0c33bc1aed4a80f555",
+    "translation_unit_object_bytes": 23542640,
+    "resource_records": 44,
+    "full_shared_library_link": "pass",
+    "cpu_import_cuda_visible_devices_empty": "pass",
+    "gpu_runtime_used": false
+  },
+  "elf": {
+    "class": "ELF64",
+    "machine": "AArch64",
+    "type": "DYN",
+    "python_init_symbol": "PyInit__C_stable_libtorch",
+    "dynamic_dependencies_match_incumbent": true,
+    "undefined_dynamic_symbol_set_matches_incumbent": true,
+    "incumbent_undefined_dynamic_symbol_count": 183,
+    "candidate_undefined_dynamic_symbol_count": 183
+  },
+  "device_codegen": {
+    "result": "pass",
+    "candidate_kernel_records": 2,
+    "dtypes": ["fp16", "bf16"],
+    "encoded_instructions_per_kernel": 744,
+    "nop_instructions_per_kernel": 37,
+    "operational_instructions_per_kernel": 707,
+    "branches_per_kernel": 45,
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "ldl": 0,
+    "stl": 0,
+    "call": 0,
+    "detected_spills": false,
+    "incumbent_onen_pingpong_sass_byte_identical": true
+  },
+  "admission": {
+    "source_binding": "selector_specific_required",
+    "binary_sha_and_size_fail_closed": true,
+    "byte_gate": "one_real_swe_verified_b1_k64_root_stock_serving_exact_bytes",
+    "timing_default_task_set": "real_swe_verified_exact4",
+    "production_default_enabled": false
+  },
+  "verification": {
+    "focused_tests": "122 passed",
+    "python_byte_compile": "pass",
+    "shell_syntax": "pass",
+    "git_diff_check": "pass",
+    "source_binding_cli": "pass",
+    "binary_identity_cli": "pass",
+    "sm121a_full_translation_unit_compile": "pass",
+    "full_shared_library_link": "pass",
+    "cpu_import": "pass",
+    "elf_and_dynamic_symbol_audit": "pass",
+    "resource_and_sass_audit": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "GPU correctness",
+    "Docker",
+    "synthetic or probe performance",
+    "real SWE-Verified task execution",
+    "raw-byte comparison",
+    "B1 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gates": [
+    "authenticated one-task real SWE-Verified K64/root1 raw-byte comparison",
+    "standing-rule exact-four real SWE-Verified full-step timing after byte pass"
+  ]
+}

@@ -47,6 +47,13 @@ case "$TIMING_CANDIDATE" in
     K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_n5120_single_b1_k64_root_live_gate.v1
     CANDIDATE_ARM_LABEL=cutlass_identity_onen_n5120_single_b1
     ;;
+  identity_onen_n5120_fullgrid_b1)
+    STREAMK_SHA256=43c78546de316ec14126ded2c8d42ee6807e77dfe9935cad2cf2db017fc74501
+    STREAMK_BYTES=118837576
+    FULL_VOCAB_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_live_gate.v1
+    K64_ROOT_LIVE_SCHEMA=fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_k64_root_live_gate.v1
+    CANDIDATE_ARM_LABEL=cutlass_identity_onen_n5120_fullgrid_b1
+    ;;
   *)
     echo "unsupported Stream-K timing candidate: $TIMING_CANDIDATE" >&2
     exit 2
@@ -58,7 +65,8 @@ if [[ -v FR13_STREAMK_TIMING_PROFILE ]]; then
 fi
 TIMING_PROFILE=${FR13_STREAMK_TIMING_PROFILE:-full_vocab}
 if [[ ( "$TIMING_CANDIDATE" == "identity_onen_b1" \
-        || "$TIMING_CANDIDATE" == "identity_onen_n5120_single_b1" ) \
+        || "$TIMING_CANDIDATE" == "identity_onen_n5120_single_b1" \
+        || "$TIMING_CANDIDATE" == "identity_onen_n5120_fullgrid_b1" ) \
       && ( "$TIMING_PROFILE_EXPLICIT" != "1" \
            || "$TIMING_PROFILE" != "k64_root" ) ]]; then
   if [[ "$TIMING_CANDIDATE" == "identity_onen_b1" ]]; then

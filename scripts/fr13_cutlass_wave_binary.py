@@ -42,6 +42,10 @@ IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SHA256 = (
     "876a3d6a0c972926131b1e447ffba80e345979f2d6de3bfa7bf083e862469367"
 )
 IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SIZE = 118_468_696
+IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256 = (
+    "43c78546de316ec14126ded2c8d42ee6807e77dfe9935cad2cf2db017fc74501"
+)
+IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE = 118_837_576
 IDENTITY_B4_CANDIDATE_SHA256 = (
     "d7771d5a95a34d6072a796d520e8f2fa500aeccc900d57e1477941b966ea77a9"
 )
@@ -101,6 +105,12 @@ IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS = frozenset(
         "identity_onen_n5120_single_b1_byte_ab",
     }
 )
+IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS = frozenset(
+    {
+        "identity_onen_n5120_fullgrid_b1",
+        "identity_onen_n5120_fullgrid_b1_byte_ab",
+    }
+)
 IDENTITY_STOCKSHAPE_B4_SELECTORS = frozenset(
     {"identity_stockshape_b4", "identity_stockshape_b4_byte_ab"}
 )
@@ -130,6 +140,7 @@ CANDIDATE_SELECTORS = (
     | IDENTITY_STAGE2_PINGPONG_B1_SELECTORS
     | IDENTITY_ONEN_B1_SELECTORS
     | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
+    | IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS
     | IDENTITY_STOCKSHAPE_B4_SELECTORS
     | IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS
     | IDENTITY_TWOM_B4_SELECTORS
@@ -148,6 +159,7 @@ PRODUCTION_SELECTORS = frozenset(
         "identity_hybrid_n5120_b4",
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
+        "identity_onen_n5120_fullgrid_b1",
     }
 )
 INSTALLABLE_SELECTORS = CANDIDATE_SELECTORS - {
@@ -214,6 +226,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SIZE,
             "identity_onen_n5120_single_b1",
         )
+    if selector in IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS:
+        return (
+            IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256,
+            IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE,
+            "identity_onen_n5120_fullgrid_b1",
+        )
     if selector in IDENTITY_STOCKSHAPE_B4_SELECTORS:
         return (
             IDENTITY_B4_CANDIDATE_SHA256,
@@ -263,6 +281,7 @@ def _verify_qualification_profile(
         in (
             IDENTITY_ONEN_B1_SELECTORS
             | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
+            | IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS
             | IDENTITY_HYBRID_N5120_B4_SELECTORS
         )
         and qualification_profile != "k64_root"
@@ -306,6 +325,7 @@ def verify_candidate(
     if selector in (
         IDENTITY_ONEN_B1_SELECTORS
         | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
+        | IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS
         | IDENTITY_HYBRID_N5120_B4_SELECTORS
     ):
         result["qualification_profile"] = qualification_profile
@@ -517,6 +537,7 @@ def _verify_production_qualification(
         "identity_hybrid_n5120_b4",
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
+        "identity_onen_n5120_fullgrid_b1",
     }:
         raise ValueError(f"unsupported production candidate selector: {selector!r}")
     if selector in {
@@ -547,6 +568,7 @@ def _verify_production_qualification(
     elif selector in {
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
+        "identity_onen_n5120_fullgrid_b1",
     }:
         kwargs["qualification_profile"] = "k64_root"
     verified = qualification.verify_sidecar(
@@ -559,7 +581,11 @@ def _verify_production_qualification(
     )
     if (
         selector
-        in {"identity_onen_b1", "identity_onen_n5120_single_b1"}
+        in {
+            "identity_onen_b1",
+            "identity_onen_n5120_single_b1",
+            "identity_onen_n5120_fullgrid_b1",
+        }
         and verified.get("qualification_profile") != "k64_root"
     ):
         raise ValueError(
@@ -739,6 +765,7 @@ def install_candidate(
     if selector in (
         IDENTITY_ONEN_B1_SELECTORS
         | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
+        | IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS
         | IDENTITY_HYBRID_N5120_B4_SELECTORS
     ):
         payload["qualification_profile"] = qualification_profile

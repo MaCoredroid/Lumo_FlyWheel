@@ -1,0 +1,18 @@
+focused_cutlass_and_admission_tests: 122 passed
+python_byte_compile: pass
+shell_syntax: pass
+git_diff_check: pass
+sm121a_complete_translation_unit_compile: pass
+full_shared_library_link: pass
+cpu_import_cuda_visible_devices_empty: pass
+elf_and_dynamic_symbol_audit: pass
+candidate_binary_identity_cli: pass
+committed_source_binding_cli: pass
+resource_and_sass_audit: pass
+incumbent_wide_device_sass_identity: pass
+gpu_kernel_launch: not run
+synthetic_or_probe_timing: not run
+real_swe_verified_task: not run
+raw_byte_gate: not run
+full_step_timing: not run
+hardware_floor_acceptance: not run

@@ -131,7 +131,11 @@ def test_launcher_cross_kernel_preflight_runs_before_sidecar_and_docker(
 @pytest.mark.parametrize("qualification_profile", (None, "full_vocab"))
 @pytest.mark.parametrize(
     "candidate_selector",
-    ("identity_onen_b1", "identity_onen_n5120_single_b1"),
+    (
+        "identity_onen_b1",
+        "identity_onen_n5120_single_b1",
+        "identity_onen_n5120_fullgrid_b1",
+    ),
 )
 def test_onen_b1_launcher_rejects_non_k64_profile_before_docker(
     tmp_path: Path,
@@ -189,7 +193,11 @@ def test_onen_b1_launcher_rejects_non_k64_profile_before_docker(
 @pytest.mark.parametrize("qualification_profile", (None, "full_vocab"))
 @pytest.mark.parametrize(
     "candidate_selector",
-    ("identity_onen_b1", "identity_onen_n5120_single_b1"),
+    (
+        "identity_onen_b1",
+        "identity_onen_n5120_single_b1",
+        "identity_onen_n5120_fullgrid_b1",
+    ),
 )
 def test_onen_b1_runner_rejects_non_k64_profile_before_gpu(
     tmp_path: Path,
@@ -309,6 +317,8 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert "identity_onen_b1_byte_ab" in gate
     assert "identity_onen_n5120_single_b1" in gate
     assert "identity_onen_n5120_single_b1_byte_ab" in gate
+    assert "identity_onen_n5120_fullgrid_b1" in gate
+    assert "identity_onen_n5120_fullgrid_b1_byte_ab" in gate
     assert "fr13.fixed32.cutlass_static_persistent_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_divisor_static_byte_ab.v1" in gate
     assert "fr13.fixed32.cutlass_identity_stage2_static_byte_ab.v1" in gate
@@ -325,6 +335,15 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
         in gate
     )
     assert "cutlass_identity_onen_n5120_single_b1_k64_root_byte_gate.json" in gate
+    assert (
+        "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_byte_ab.v1"
+        in gate
+    )
+    assert (
+        "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_k64_root_live_gate.v1"
+        in gate
+    )
+    assert "cutlass_identity_onen_n5120_fullgrid_b1_k64_root_byte_gate.json" in gate
     assert (
         "fr13.fixed32.cutlass_static_persistent_k64_root_live_gate.v1" in gate
     )
@@ -364,7 +383,11 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
 @pytest.mark.parametrize("qualification_profile", (None, "full_vocab"))
 @pytest.mark.parametrize(
     "candidate_selector",
-    ("identity_onen_b1", "identity_onen_n5120_single_b1"),
+    (
+        "identity_onen_b1",
+        "identity_onen_n5120_single_b1",
+        "identity_onen_n5120_fullgrid_b1",
+    ),
 )
 def test_onen_b1_timing_rejects_non_k64_profile_before_gpu(
     tmp_path: Path,
