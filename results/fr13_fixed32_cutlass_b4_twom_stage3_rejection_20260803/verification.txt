@@ -1,0 +1,17 @@
+PASS pinned source application
+PASS isolated SM121a object compilation
+PASS candidate FP16 resource extraction
+PASS candidate BF16 resource extraction
+PASS candidate cubin extraction and identity
+PASS retained Stage2 comparison extraction
+PASS post-revert focused tests: 55 passed
+PASS post-revert Python compile
+PASS post-revert git diff check
+REJECT candidate stack: 8 bytes per thread for both dtypes
+REJECT candidate ptxas spill traffic: 4 store bytes and 12 load bytes per thread
+REJECT candidate SASS local traffic: 3 LDL and 1 STL per dtype
+REJECT candidate code expansion: 1064 versus 1040 slots per dtype
+NOT RUN extension link or import because the offline gate rejected the candidate
+NOT RUN GPU execution
+NOT RUN real SWE-Verified workload
+NOT RUN timing or hardware-floor acceptance

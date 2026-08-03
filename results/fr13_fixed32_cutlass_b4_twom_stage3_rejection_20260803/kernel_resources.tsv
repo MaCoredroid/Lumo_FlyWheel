@@ -1,0 +1,5 @@
+variant	dtype	registers	stack_bytes	local_bytes	static_shared_bytes	constant0_bytes	verdict
+stage2_retained	fp16	168	0	0	1024	2688	retain
+stage2_retained	bf16	168	0	0	1024	2688	retain
+stage3_candidate	fp16	168	8	0	1024	2688	reject
+stage3_candidate	bf16	168	8	0	1024	2688	reject
