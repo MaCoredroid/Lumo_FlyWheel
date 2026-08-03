@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -23,6 +24,7 @@ def _namespace(*function_names: str) -> dict[str, object]:
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_GATE_VALUE",
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID",
         "_FR13_FIXED32_GDN_PATH_BV_LIVE_PASS",
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH_SIDECARS",
         "_FR13_FIXED32_GDN_BV_SURFACES",
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_SURFACES",
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_STATE_SURFACES",
@@ -176,21 +178,26 @@ def test_gate_resolver_is_exact_physical32_bv8_k64_root1(mode: str) -> None:
         resolve(None, environ=exact, sidecars=(), geom_override={"BV": 8})
 
 
-def test_b1_b4_capture_counts_are_closed_over_real_graph_records() -> None:
+def test_capture_is_keyed_and_closed_over_one_baked_expected_batch() -> None:
     namespace = _namespace("fixed32_gdn_bv_live_capture_end")
     end = namespace["fixed32_gdn_bv_live_capture_end"]
     namespace["_FR13_FIXED32_GDN_PATH_BV_CANDIDATE"] = "single_launch"
+    namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH"] = 4
     namespace["_FR13_FIXED32_GDN_BV_CAPTURES"] = {}
 
-    for graph_id, batch in ((101, 1), (404, 4)):
-        records = [object() for _ in range(48)]
-        namespace["_FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT"] = {
-            "graph_id": graph_id,
-            "batch_size": batch,
-            "records": records,
-        }
-        end(graph_id, batch, 48)
-        assert len(namespace["_FR13_FIXED32_GDN_BV_CAPTURES"][graph_id]["records"]) == 48
+    signature = "a" * 64
+    records = [object() for _ in range(48)]
+    namespace["_FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT"] = {
+        "graph_id": 404,
+        "batch_size": 4,
+        "records": records,
+    }
+    end(404, signature, 4, 48)
+    assert len(
+        namespace["_FR13_FIXED32_GDN_BV_CAPTURES"][(4, 404, signature)][
+            "records"
+        ]
+    ) == 48
 
     namespace["_FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT"] = {
         "graph_id": 405,
@@ -198,7 +205,119 @@ def test_b1_b4_capture_counts_are_closed_over_real_graph_records() -> None:
         "records": [object() for _ in range(192)],
     }
     with pytest.raises(RuntimeError, match="capture end drift"):
-        end(405, 4, 192)
+        end(405, "b" * 64, 4, 192)
+
+
+def test_expected_batch_is_mandatory_exact_and_source_consistent() -> None:
+    namespace = _namespace(
+        "_fr13_resolve_fixed32_gdn_single_launch_expected_batch"
+    )
+    resolve = namespace[
+        "_fr13_resolve_fixed32_gdn_single_launch_expected_batch"
+    ]
+    assert resolve(
+        "single_launch",
+        environ={"FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH": "4"},
+        sidecars=(),
+    ) == 4
+    with pytest.raises(RuntimeError, match="exactly one expected batch"):
+        resolve("single_launch", environ={}, sidecars=())
+    with pytest.raises(RuntimeError, match="exactly one expected batch"):
+        resolve(
+            "single_launch",
+            environ={"FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH": "2"},
+            sidecars=(),
+        )
+    with pytest.raises(RuntimeError, match="without the single-launch candidate"):
+        resolve(
+            None,
+            environ={"FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH": "1"},
+            sidecars=(),
+        )
+
+
+def test_nonmatching_b1_replay_cannot_consume_b4_capture_state() -> None:
+    namespace = _namespace("fixed32_gdn_bv_live_gate_on_replay")
+    signature = "e" * 64
+    capture = {
+        "batch_size": 4,
+        "graph_id": 404,
+        "graph_signature": signature,
+        "records": tuple(object() for _ in range(48)),
+    }
+    namespace["_FR13_FIXED32_GDN_PATH_BV_CANDIDATE"] = "single_launch"
+    namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH"] = 4
+    namespace["_FR13_FIXED32_GDN_BV_CAPTURES"] = {(4, 404, signature): capture}
+    namespace["_FR13_FIXED32_GDN_BV_LIVE_STATE"] = {
+        "status": "armed",
+        "candidate_bv": "single_launch",
+        "expected_batch": 4,
+        "diagnostic_identity": "fixed32_gdn_single_launch_tree_v2:hydra27:b4",
+        "graph_id": None,
+        "batch_size": None,
+        "records": 0,
+    }
+
+    report = namespace["fixed32_gdn_bv_live_gate_on_replay"](
+        101, "f" * 64, 1, 48
+    )
+    assert report["status"] == "not_expected_batch"
+    assert report["observed_batch"] == 1
+    assert namespace["_FR13_FIXED32_GDN_BV_CAPTURES"] == {
+        (4, 404, signature): capture
+    }
+    assert namespace["_FR13_FIXED32_GDN_BV_LIVE_STATE"]["status"] == "armed"
+
+
+def test_nonmatching_b1_cannot_inherit_global_b4_pass_state() -> None:
+    namespace = _namespace("fixed32_gdn_bv_live_gate_on_replay")
+    namespace["_FR13_FIXED32_GDN_PATH_BV_CANDIDATE"] = "single_launch"
+    namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH"] = 4
+    namespace["_FR13_FIXED32_GDN_BV_CAPTURES"] = {}
+    namespace["_FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT"] = None
+    namespace["_FR13_FIXED32_GDN_BV_LIVE_STATE"] = {
+        "status": "passed",
+        "candidate_bv": "single_launch",
+        "expected_batch": 4,
+        "diagnostic_identity": "fixed32_gdn_single_launch_tree_v2:hydra27:b4",
+        "graph_id": 404,
+        "graph_signature": "e" * 64,
+        "batch_size": 4,
+        "records": 48,
+    }
+
+    report = namespace["fixed32_gdn_bv_live_gate_on_replay"](
+        101, "f" * 64, 1, 48
+    )
+    assert report["status"] == "not_expected_batch"
+    assert report["observed_batch"] == 1
+    assert report["batch_size"] == 4
+    assert namespace["_FR13_FIXED32_GDN_BV_LIVE_STATE"]["status"] == "passed"
+
+
+def test_patch_validation_requires_baked_expected_batch_before_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "fr13_gdn_single_launch_patcher", PATCHER
+    )
+    assert spec is not None and spec.loader is not None
+    patcher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(patcher)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(
+        patcher, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", "single_launch"
+    )
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_GDN_PATH_BV_PRODUCTION", "")
+    monkeypatch.setattr(
+        patcher, "_fr13_fixed32_eager_boot_warm_contract", lambda: None
+    )
+    monkeypatch.delenv(
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH", raising=False
+    )
+
+    with pytest.raises(RuntimeError, match="exactly one expected batch"):
+        patcher._fr13_fixed32_validate_patch_env()
 
 
 def test_single_launch_gate_ignores_unqualified_b2_b3_graph_shapes() -> None:
@@ -208,13 +327,16 @@ def test_single_launch_gate_ignores_unqualified_b2_b3_graph_shapes() -> None:
     )
     namespace["_FR13_FIXED32_MODE"] = "hydra27_fixed32"
     namespace["_FR13_FIXED32_GDN_PATH_BV_CANDIDATE"] = "single_launch"
+    namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH"] = 4
     namespace["_FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT"] = None
     namespace["_FR13_FIXED32_GDN_BV_CAPTURES"] = {}
 
     for batch in (2, 3):
         namespace["fixed32_gdn_bv_live_capture_begin"](100 + batch, batch)
         assert namespace["_FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT"] is None
-        namespace["fixed32_gdn_bv_live_capture_end"](100 + batch, batch, 48)
+        namespace["fixed32_gdn_bv_live_capture_end"](
+            100 + batch, "c" * 64, batch, 48
+        )
     assert namespace["_FR13_FIXED32_GDN_BV_CAPTURES"] == {}
 
 
@@ -232,8 +354,12 @@ def test_live_pass_is_source_mode_batch_and_reference_bound(
     batch: int,
     topology: str,
 ) -> None:
-    namespace = _namespace("_fr13_fixed32_gdn_bv_live_pass_emit")
+    namespace = _namespace(
+        "_fr13_fixed32_gdn_bv_live_pass_emit",
+        "_fr13_fixed32_gdn_single_launch_diagnostic_identity",
+    )
     namespace["_FR13_FIXED32_MODE"] = mode
+    namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH"] = batch
     namespace["_fr13_fixed32_gdn_path_bv_source_sha256"] = lambda: "a" * 64
     output = tmp_path / "single-launch-pass.json"
     monkeypatch.setenv("FR13_FIXED32_GDN_PATH_BV_LIVE_JSON", os.fspath(output))
@@ -241,6 +367,8 @@ def test_live_pass_is_source_mode_batch_and_reference_bound(
     namespace["_fr13_fixed32_gdn_bv_live_pass_emit"](
         task_marker="swe_verified:astropy__astropy-12907",
         batch_size=batch,
+        graph_id=100 + batch,
+        graph_signature="d" * 64,
         result={
             "records": 48,
             "candidate": "fixed32_gdn_single_launch_tree_v2",
@@ -257,12 +385,18 @@ def test_live_pass_is_source_mode_batch_and_reference_bound(
     assert payload["mode"] == mode
     assert payload["logical_topology"] == topology
     assert payload["covered_batches"] == [batch]
+    assert payload["expected_batch"] == batch
+    assert payload["diagnostic_identity"].endswith(f":b{batch}")
+    assert payload["graph_id"] == 100 + batch
+    assert payload["graph_signature"] == "d" * 64
     assert payload["physical_rows"] == 32
     assert payload["draft_vocab_k"] == 65536
     assert payload["draft_vocab_root"] == 1
     assert payload["reference_served"] is True
     assert payload["state_restored"] is True
     assert payload["production_eligible"] is False
+    assert payload["performance_measurement"] is False
+    assert payload["acceptance_valid"] is False
 
 
 def test_route_is_stock_serving_and_production_cannot_accept_gate_value() -> None:
@@ -281,6 +415,8 @@ def test_route_is_stock_serving_and_production_cannot_accept_gate_value() -> Non
     assert '"FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8"' in patcher
     assert '|| "$_fr13_gdn_path_bv_candidate" == "single_launch"' in launcher
     assert "single-launch GDN live gate requires exact K64/root1" in launcher
+    assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH" in launcher
+    assert "one baked expected batch" in launcher
     assert launcher.count("fr13_fixed32_gdn_single_launch_tree.arm") == 2
     assert "-e FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE=" not in launcher
 

@@ -186,6 +186,7 @@ def test_live_gate_executes_only_on_first_measured_graph_replay() -> None:
     namespace = _kernel_gate_namespace()
     calls: list[tuple[int, int]] = []
     records = tuple(object() for _ in range(48))
+    graph_signature = "a" * 64
     namespace.update(
         {
             "torch": SimpleNamespace(
@@ -196,7 +197,12 @@ def test_live_gate_executes_only_on_first_measured_graph_replay() -> None:
             ),
             "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE": 64,
             "_FR13_FIXED32_GDN_BV_CAPTURES": {
-                101: {"batch_size": 1, "records": records}
+                (1, 101, graph_signature): {
+                    "batch_size": 1,
+                    "graph_id": 101,
+                    "graph_signature": graph_signature,
+                    "records": records,
+                }
             },
             "_FR13_FIXED32_GDN_BV_LIVE_STATE": {
                 "status": "armed",
@@ -226,14 +232,16 @@ def test_live_gate_executes_only_on_first_measured_graph_replay() -> None:
     )
     gate = namespace["fixed32_gdn_bv_live_gate_on_replay"]
 
-    first = gate(101, 1, 48)
-    second = gate(101, 1, 48)
+    first = gate(101, graph_signature, 1, 48)
+    second = gate(101, graph_signature, 1, 48)
 
     assert calls == [(48, 64)]
     assert emitted == [
         {
             "task_marker": "swe_verified:django__django-12345",
             "batch_size": 1,
+            "graph_id": 101,
+            "graph_signature": graph_signature,
             "result": {
                 "records": 48,
                 "reference_bv": 8,
@@ -245,6 +253,7 @@ def test_live_gate_executes_only_on_first_measured_graph_replay() -> None:
         "status": "passed",
         "candidate_bv": 64,
         "graph_id": 101,
+        "graph_signature": graph_signature,
         "batch_size": 1,
         "records": 48,
     }

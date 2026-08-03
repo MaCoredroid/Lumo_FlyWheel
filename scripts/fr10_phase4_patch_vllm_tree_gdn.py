@@ -425,6 +425,10 @@ try:
 except NameError:
     _FR13_FIXED32_GDN_PATH_BV_PRODUCTION = None
 try:
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
+except NameError:
+    _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH = None
+try:
     _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE
 except NameError:
     _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = False
@@ -3514,7 +3518,7 @@ def _fr13_fixed32_capture_begin(
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
         and (
             _FR13_FIXED32_GDN_PATH_BV_CANDIDATE != "single_launch"
-            or batch in (1, 4)
+            or batch == _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
         )
     ):
         tree_kernel = __import__(
@@ -3704,7 +3708,8 @@ def _fr13_fixed32_capture_end(
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
         and (
             _FR13_FIXED32_GDN_PATH_BV_CANDIDATE != "single_launch"
-            or int(work["batch_size"]) in (1, 4)
+            or int(work["batch_size"])
+            == _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
         )
     ):
         tree_kernel = __import__(
@@ -3723,6 +3728,7 @@ def _fr13_fixed32_capture_end(
             )
         tree_kernel.fixed32_gdn_bv_live_capture_end(
             identity,
+            signature,
             int(work["batch_size"]),
             int(work["gdn_scan_calls"]),
         )
@@ -3931,7 +3937,8 @@ def _fr13_fixed32_observed_graph_replay(
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
         and (
             _FR13_FIXED32_GDN_PATH_BV_CANDIDATE != "single_launch"
-            or int(event["batch_size"]) in (1, 4)
+            or int(event["batch_size"])
+            == _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
         )
     ):
         if getattr(
@@ -3943,6 +3950,7 @@ def _fr13_fixed32_observed_graph_replay(
             )
         gate_report = tree_kernel.fixed32_gdn_bv_live_gate_on_replay(
             identity,
+            expected_signature,
             int(event["batch_size"]),
             int(gdn["scan_calls"]),
         )
@@ -6217,6 +6225,9 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
     resolved_mode = _FR13_FIXED32_MODE if mode is None else mode
     candidate_raw = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     production_raw = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+    expected_batch_raw = os.environ.get(
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH", ""
+    ).strip()
     taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
     graph_batch_gdn_diagnostic_raw = _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB
     if graph_batch_gdn_diagnostic_raw not in ("0", "1"):
@@ -6263,6 +6274,19 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         if candidate_raw == "single_launch"
         else (int(candidate_raw) if candidate_raw else None)
     )
+    if candidate == "single_launch":
+        if expected_batch_raw not in ("1", "4"):
+            raise RuntimeError(
+                "FR13 GDN single-launch patch requires exactly one expected "
+                "batch, 1 or 4"
+            )
+        expected_batch = int(expected_batch_raw)
+    else:
+        if expected_batch_raw:
+            raise RuntimeError(
+                "FR13 GDN single-launch expected batch is set without its candidate"
+            )
+        expected_batch = None
     if production_raw and production_raw not in ("16", "32", "64", "128"):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_PRODUCTION must be one of "
@@ -6305,6 +6329,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{candidate!r}\n"
         "_FR13_FIXED32_GDN_PATH_BV_PRODUCTION = "
         f"{production!r}\n"
+        "_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH = "
+        f"{expected_batch!r}\n"
         "_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE = "
         f"{taw_native_diagnostic!r}\n"
         "_FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB = "
@@ -6461,6 +6487,9 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     mode = _FR13_FIXED32_MODE
     candidate = _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     production = _FR13_FIXED32_GDN_PATH_BV_PRODUCTION
+    expected_batch_raw = os.environ.get(
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH", ""
+    ).strip()
     taw_native_diagnostic = bool(_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE)
     batch_gdn_byte_diagnostic = _FR13_FIXED32_BATCH_GDN_BYTE_AB
     graph_batch_gdn_byte_diagnostic = (
@@ -6471,6 +6500,11 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
     _fr13_fixed32_eager_boot_warm_contract()
     if candidate == "single_launch":
+        if expected_batch_raw not in ("1", "4"):
+            raise RuntimeError(
+                "FR13 GDN single-launch patch requires exactly one expected "
+                "batch, 1 or 4"
+            )
         exact_single_launch = {
             "FR13_DRAFT_VOCAB_ROOT": "1",
             "FR13_DRAFT_VOCAB_K": "65536",
@@ -6489,14 +6523,14 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         max_num_seqs = os.environ.get("MAX_NUM_SEQS", "")
         if (
             mode not in _FR13_FIXED32_MODES
-            or max_num_seqs not in ("1", "4")
+            or max_num_seqs != expected_batch_raw
             or os.environ.get("SWE_CONCURRENCY", "") != max_num_seqs
             or bool(production)
             or single_launch_drift
         ):
             raise RuntimeError(
                 "FR13 fixed32 GDN single-launch gate requires exact "
-                "stock-serving B1/B4 K64/root1 FULL-graph contract: "
+                "stock-serving expected-B1-or-B4 K64/root1 FULL-graph contract: "
                 + repr(single_launch_drift)
             )
     if sfwd_production not in ("0", "1"):

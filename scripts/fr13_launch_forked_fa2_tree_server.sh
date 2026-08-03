@@ -81,6 +81,7 @@ _FR13_M32_GUARD_NAMES=(
   FR13_DFWD_UNIFIED_BM8_LIVE_AB
   FR13_DFWD_UNIFIED_BM8_PRODUCTION
   FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+  FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
   FR13_FIXED32_GDN_PATH_BV_PRODUCTION
   FR13_FIXED32_BATCH_GDN_PRODUCTION
   FR13_FIXED32_BATCH_GDN_BV_PRODUCTION
@@ -1255,6 +1256,7 @@ PY
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
 
 _fr13_gdn_path_bv_candidate=${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}
+_fr13_gdn_single_launch_expected_batch=${FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH:-}
 _fr13_gdn_path_bv_production=${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}
 _fr13_gdn_path_bv_pass_json=${FR13_FIXED32_GDN_PATH_BV_PASS_JSON:-}
 if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
@@ -1277,6 +1279,14 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
     exit 2
   fi
   if [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" \
+        && ( ! ( "$_fr13_gdn_single_launch_expected_batch" == "1" \
+                 || "$_fr13_gdn_single_launch_expected_batch" == "4" ) \
+             || "$MAX_NUM_SEQS" != "$_fr13_gdn_single_launch_expected_batch" \
+             || "${SWE_CONCURRENCY:-}" != "$_fr13_gdn_single_launch_expected_batch" ) ]]; then
+    echo "FR13 single-launch GDN gate requires one baked expected batch matching process capacity and concurrency" >&2
+    exit 2
+  fi
+  if [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" \
         && ( "$FR10_METRICS" != "1" \
              || "${FR13_RING_EXPORT:-1}" != "1" \
              || "${FR13_FLAGS_INKERNEL:-1}" != "1" \
@@ -1288,6 +1298,11 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
     echo "FR13 single-launch GDN live gate requires exact B1/B4 FULL-graph metrics/ring/flags contract" >&2
     exit 2
   fi
+fi
+if [[ "$_fr13_gdn_path_bv_candidate" != "single_launch" \
+      && -n "$_fr13_gdn_single_launch_expected_batch" ]]; then
+  echo "FR13 GDN single-launch expected batch is set without its candidate" >&2
+  exit 2
 fi
 if [[ -n "$_fr13_gdn_path_bv_production" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
@@ -1769,6 +1784,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   if [[ "$_fr13_fixed32_batch_gdn_diagnostic" == "1" \
         || "$_fr13_fixed32_batch_gdn_graph_diagnostic" == "1" \
         || "$_fr13_fixed32_batch_gdn_bv8_timing" == "1" \
+        || "$_fr13_gdn_path_bv_candidate" == "single_launch" \
         || ( "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "1" \
              && "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" == "8" ) ]]; then
     # This is a real exact4 byte diagnostic, never an acceptance/timing arm.
@@ -2269,6 +2285,7 @@ PY
     "$LOG_DIR/fr13_fixed32_committer_layer_batch.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_mode.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_single_launch_tree.arm" \
+    "$LOG_DIR/fr13_fixed32_gdn_single_launch_expected_batch.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
@@ -2284,6 +2301,11 @@ PY
     printf '%s\n' "$_fr13_gdn_path_bv_candidate" \
       > "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
     chmod 400 "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
+    if [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" ]]; then
+      printf '%s\n' "$_fr13_gdn_single_launch_expected_batch" \
+        > "$LOG_DIR/fr13_fixed32_gdn_single_launch_expected_batch.flag"
+      chmod 400 "$LOG_DIR/fr13_fixed32_gdn_single_launch_expected_batch.flag"
+    fi
     rm -f "$LOG_DIR/fr13_fixed32_gdn_path_bv.live_pass.json"
   elif [[ -n "$_fr13_gdn_path_bv_production" ]]; then
     cp -- "$_fr13_gdn_path_bv_pass_json" \
@@ -2305,6 +2327,7 @@ else
   rm -f \
     "$LOG_DIR/fr13_fixed32_mode.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_single_launch_tree.arm" \
+    "$LOG_DIR/fr13_fixed32_gdn_single_launch_expected_batch.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv_production.flag" \
     "$LOG_DIR/fr13_fixed32_gdn_path_bv.production_pass.json" \
@@ -3214,6 +3237,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_NPAD_INVARIANT="${FR13_NPAD_INVARIANT:-0}" \
   -e FR13_TREE_GDN_GEOM_OVERRIDE="${FR13_TREE_GDN_GEOM_OVERRIDE:-}" \
   -e FR13_FIXED32_GDN_PATH_BV_CANDIDATE="${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+  -e FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH="${FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH:-}" \
   -e FR13_FIXED32_GDN_PATH_BV_PRODUCTION="${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" \
   -e FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_gdn_path_bv.production_pass.json \
   -e FR13_FIXED32_GDN_PATH_BV_LIVE_JSON=/logs/fr13_fixed32_gdn_path_bv.live_pass.json \
