@@ -4,8 +4,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
-import platform
 import time
 from pathlib import Path
 
@@ -194,8 +192,6 @@ def main() -> int:
         "production_default_enabled": False,
         "lossless_acceptance_claimed": False,
         "script_sha256": hashlib.sha256(source).hexdigest(),
-        "pid": os.getpid(),
-        "host": platform.node(),
         "torch_version": torch.__version__,
         "cuda_version": torch.version.cuda,
         "device_name": torch.cuda.get_device_name(),

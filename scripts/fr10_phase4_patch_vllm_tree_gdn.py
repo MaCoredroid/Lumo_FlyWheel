@@ -22939,6 +22939,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_fp8_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_FP8", "0"
             )
+            _fr13_dh_fp8_arm = os.environ.get(
+                "FR13_DRAFT_HEAD_FP8_ARM", ""
+            )
             if _fr13_dh_rows_raw not in ("0", "32", "64", "128"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_PAD_ROWS must be exactly one of "
@@ -22965,6 +22968,26 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
             _fr13_dh_fp8 = _fr13_dh_fp8_raw == "1"
+            if _fr13_dh_fp8:
+                if (
+                    not _fr13_dh_fp8_arm
+                    or len(_fr13_dh_fp8_arm) > 200
+                    or any(
+                        _fr13_dh_arm_char not in (
+                            "abcdefghijklmnopqrstuvwxyz"
+                            "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+                        )
+                        for _fr13_dh_arm_char in _fr13_dh_fp8_arm
+                    )
+                ):
+                    raise RuntimeError(
+                        "FR13_DRAFT_HEAD_FP8=1 requires a canonical "
+                        "FR13_DRAFT_HEAD_FP8_ARM"
+                    )
+            elif _fr13_dh_fp8_arm:
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_FP8=0 forbids FR13_DRAFT_HEAD_FP8_ARM"
+                )
             _fr13_dh_modes = sum(
                 int(value)
                 for value in (
@@ -23743,6 +23766,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             "draft_head_m32_production_engagement.v1"
                         ),
                         "status": "ENGAGED",
+                        "arm": _fr13_dh_fp8_arm,
                         "source_commit": os.environ.get(
                             "FR13_DRAFT_HEAD_M32_SOURCE_COMMIT", ""
                         ),

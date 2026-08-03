@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -15,6 +16,8 @@ MEASURE = REPO / "scripts" / "fr13_measure.py"
 TIMING_RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_fp8_timing.sh"
 TIMING_REDUCER = REPO / "scripts" / "fr13_draft_head_fp8_timing.py"
 RUNTIME_MANIFEST = REPO / "scripts" / "fr13_runtime_manifest.py"
+SMOKE_SOURCE = REPO / "scripts" / "fr13_draft_head_fp8_sm121_smoke.py"
+SMOKE_ARTIFACT = REPO / "results" / "fr13_draft_head_fp8_sm121_smoke_20260803"
 
 
 def _eagle_snippet() -> str:
@@ -43,7 +46,10 @@ def test_candidate_is_default_off_strict_and_orthogonal_to_cutlass_wave() -> Non
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
     assert '"FR13_DRAFT_HEAD_FP8", "0"' in snippet
+    assert '"FR13_DRAFT_HEAD_FP8_ARM", ""' in snippet
     assert '_fr13_dh_fp8_raw not in ("0", "1")' in snippet
+    assert "FR13_DRAFT_HEAD_FP8=1 requires a canonical" in snippet
+    assert "FR13_DRAFT_HEAD_FP8=0 forbids FR13_DRAFT_HEAD_FP8_ARM" in snippet
     assert "_fr13_dh_fp8," in snippet
     assert "not _fr13_is_fixed32" in snippet
     assert "not _fr13_dvk_root" in snippet
@@ -217,6 +223,28 @@ def test_drafter_replacement_snippet_compiles() -> None:
     )
 
 
+def test_sm121_smoke_artifact_is_sanitized_and_stays_non_timing() -> None:
+    payload = json.loads(
+        (SMOKE_ARTIFACT / "result.json").read_text(encoding="ascii")
+    )
+
+    assert "host" not in payload
+    assert "pid" not in payload
+    assert payload["classification"] == "kernel_smoke_not_acceptance"
+    assert payload["lossless_acceptance_claimed"] is False
+    assert payload["production_default_enabled"] is False
+    assert payload["script_sha256"] == hashlib.sha256(
+        SMOKE_SOURCE.read_bytes()
+    ).hexdigest()
+    subprocess.run(
+        ["sha256sum", "-c", "SHA256SUMS"],
+        cwd=SMOKE_ARTIFACT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_real_b1_gate_validates_direct_engagement_and_acceptance() -> None:
     from scripts import fr13_draft_head_fp8_gate as gate
 
@@ -225,6 +253,7 @@ def test_real_b1_gate_validates_direct_engagement_and_acceptance() -> None:
     engagement = {
         "schema": gate.SCHEMA,
         "status": "ENGAGED",
+        "arm": "hydra27_fixed32_k64_root_fp8_gate",
         "source_commit": source_commit,
         "candidate_source_sha256": source_sha,
         "served_batch_size": 1,
@@ -244,18 +273,35 @@ def test_real_b1_gate_validates_direct_engagement_and_acceptance() -> None:
         "steady_state_synchronizations": 0,
     }
     gate._validate_engagement(
-        engagement, source_sha=source_sha, source_commit=source_commit
+        engagement,
+        source_sha=source_sha,
+        source_commit=source_commit,
+        expected_arm=engagement["arm"],
     )
     broken = json.loads(json.dumps(engagement))
     broken["candidate"]["bf16_shadow_calls"] = 1
     try:
         gate._validate_engagement(
-            broken, source_sha=source_sha, source_commit=source_commit
+            broken,
+            source_sha=source_sha,
+            source_commit=source_commit,
+            expected_arm=engagement["arm"],
         )
     except ValueError as error:
         assert "engagement contract drifted" in str(error)
     else:
         raise AssertionError("BF16 shadow engagement did not fail closed")
+    try:
+        gate._validate_engagement(
+            engagement,
+            source_sha=source_sha,
+            source_commit=source_commit,
+            expected_arm="different_arm",
+        )
+    except ValueError as error:
+        assert "engagement contract drifted" in str(error)
+    else:
+        raise AssertionError("cross-arm engagement did not fail closed")
 
     events = 10.0
     accepted = 37.0
@@ -267,6 +313,14 @@ def test_real_b1_gate_validates_direct_engagement_and_acceptance() -> None:
         "batch_size": 1,
         "n_tasks": 1,
         "task_instance_ids": [gate.INSTANCE],
+        "arm": engagement["arm"],
+        "draft_vocab_k": 65_536,
+        "draft_vocab_root": 1,
+        "draft_head_fp8": True,
+        "floor_is_full_step_hardware_floor": False,
+        "floor_reference_scope": (
+            "fixed32_mandatory_weight_read_or_row_compute_lower_bound"
+        ),
         "engagement": {
             "tok_per_draft": 31.0,
             "expected_tok_per_draft": 31.0,
@@ -285,11 +339,20 @@ def test_real_b1_gate_validates_direct_engagement_and_acceptance() -> None:
     }
     summary = gate._validate_acceptance(acceptance)
     assert summary == {
+        "arm": engagement["arm"],
         "events": 10,
         "accepted_drafts": 37,
         "accepted_drafts_per_event": 3.7,
         "committed_tokens_per_event": 4.7,
     }
+    broken_acceptance = json.loads(json.dumps(acceptance))
+    broken_acceptance.pop("draft_head_fp8")
+    try:
+        gate._validate_acceptance(broken_acceptance)
+    except ValueError as error:
+        assert "acceptance telemetry provenance drifted" in str(error)
+    else:
+        raise AssertionError("unbound FP8 acceptance did not fail closed")
 
 
 def test_real_b1_runner_uses_canonical_task_and_only_gates_not_tunes() -> None:
@@ -301,6 +364,8 @@ def test_real_b1_runner_uses_canonical_task_and_only_gates_not_tunes() -> None:
     assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in runner
     assert "astropy__astropy-12907" in runner
     assert "FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON=/logs/fr13_draft_head_fp8.engagement.json" in runner
+    assert "DRAFT_HEAD_FP8_ARM=$ARM" in runner
+    assert 'FR13_DRAFT_HEAD_FP8_ARM="$DRAFT_HEAD_FP8_ARM"' in runner
     assert "scripts/fr13_measure.py deploy-speed" in runner
     assert "--expected-tok-per-draft 31" in runner
     assert "scripts/fr13_draft_head_fp8_gate.py" in runner
@@ -331,6 +396,7 @@ def test_timing_runner_is_real_exact4_and_uses_distinct_arm_floors() -> None:
     assert "MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1" in runner
     assert 'run_arm "$STOCK_ARM" 0' in runner
     assert 'run_arm "$CANDIDATE_ARM" 1' in runner
+    assert 'FR13_DRAFT_HEAD_FP8_ARM="$fp8_arm"' in runner
     assert "scripts/fr13_bigdenom_swe_serve_variant.sh" in runner
     assert "scripts/fr13_measure.py deploy-speed" in runner
     assert "--gate-result \"$GATE_RESULT_JSON\"" in runner

@@ -69,6 +69,7 @@ TRAFFIC = {
 ENGAGEMENT_KEYS = {
     "schema",
     "status",
+    "arm",
     "source_commit",
     "candidate_source_sha256",
     "served_batch_size",
@@ -141,6 +142,21 @@ def _require_commit(value: Any, label: str) -> str:
     return value
 
 
+def _require_arm(value: Any, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 200
+        or any(
+            char
+            not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+            for char in value
+        )
+    ):
+        raise ValueError(f"{label} is not a canonical arm name")
+    return value
+
+
 def _positive(value: Any, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{label} is not numeric")
@@ -151,13 +167,18 @@ def _positive(value: Any, label: str) -> float:
 
 
 def _validate_engagement(
-    payload: dict[str, Any], *, source_sha: str, source_commit: str
+    payload: dict[str, Any],
+    *,
+    source_sha: str,
+    source_commit: str,
+    expected_arm: str,
 ) -> None:
     if set(payload) != ENGAGEMENT_KEYS:
         raise ValueError("FP8 engagement key set drifted")
     if (
         payload.get("schema") != SCHEMA
         or payload.get("status") != "ENGAGED"
+        or payload.get("arm") != expected_arm
         or payload.get("source_commit") != source_commit
         or payload.get("candidate_source_sha256") != source_sha
         or payload.get("served_batch_size") != 1
@@ -181,7 +202,9 @@ def _validate_engagement(
         raise ValueError("FP8 engagement contract drifted")
 
 
-def _validate_acceptance(payload: dict[str, Any]) -> dict[str, float | int]:
+def _validate_acceptance(
+    payload: dict[str, Any],
+) -> dict[str, float | int | str]:
     engagement = payload.get("engagement")
     per_task = payload.get("per_task")
     raw = payload.get("raw_counter_delta_aggregate")
@@ -193,6 +216,12 @@ def _validate_acceptance(payload: dict[str, Any]) -> dict[str, float | int]:
         or payload.get("batch_size") != 1
         or payload.get("n_tasks") != 1
         or payload.get("task_instance_ids") != [INSTANCE]
+        or payload.get("draft_vocab_k") != 65_536
+        or payload.get("draft_vocab_root") != 1
+        or payload.get("draft_head_fp8") is not True
+        or payload.get("floor_is_full_step_hardware_floor") is not False
+        or payload.get("floor_reference_scope")
+        != "fixed32_mandatory_weight_read_or_row_compute_lower_bound"
         or not isinstance(engagement, dict)
         or engagement.get("tok_per_draft") != 31.0
         or engagement.get("expected_tok_per_draft") != 31.0
@@ -205,6 +234,7 @@ def _validate_acceptance(payload: dict[str, Any]) -> dict[str, float | int]:
         or payload.get("weight_floor_ms") != 113.514015414
     ):
         raise ValueError("FP8 acceptance telemetry provenance drifted")
+    arm = _require_arm(payload.get("arm"), "FP8 acceptance arm")
     events = _positive(
         raw.get("vllm:spec_decode_num_drafts_total"), "draft events"
     )
@@ -228,6 +258,7 @@ def _validate_acceptance(payload: dict[str, Any]) -> dict[str, float | int]:
     ):
         raise ValueError("FP8 acceptance accounting drifted")
     return {
+        "arm": arm,
         "events": int(events),
         "accepted_drafts": int(accepted),
         "accepted_drafts_per_event": accept_per_event,
@@ -265,10 +296,13 @@ def main() -> int:
     acceptance, acceptance_raw = _load(args.acceptance, "acceptance telemetry")
     final_flush, final_flush_raw = _load(args.final_flush, "final flush")
     boundary, boundary_raw = _load(args.boundary_snapshot, "boundary snapshot")
-    _validate_engagement(
-        engagement, source_sha=source_sha, source_commit=source_commit
-    )
     acceptance_summary = _validate_acceptance(acceptance)
+    _validate_engagement(
+        engagement,
+        source_sha=source_sha,
+        source_commit=source_commit,
+        expected_arm=str(acceptance_summary["arm"]),
+    )
 
     ack = final_flush.get("ack")
     metrics = boundary.get("metrics")
@@ -311,6 +345,7 @@ def main() -> int:
         "production_default_enabled": False,
         "suite": "SWE-Verified",
         "instance_id": INSTANCE,
+        "arm": acceptance_summary["arm"],
         "source_commit": source_commit,
         "candidate_source_sha256": source_sha,
         "engagement_sha256": _sha256(engagement_raw),
@@ -359,6 +394,7 @@ def main() -> int:
             "formal_floor_acceptance_eligible": False,
             "source_commit": source_commit,
             "candidate_source_sha256": source_sha,
+            "qualification_arm": gate_result["arm"],
             "gate_result_sha256": expected_gate_sha,
             "gate_evidence_sha256": {
                 "engagement": _sha256(engagement_raw),
