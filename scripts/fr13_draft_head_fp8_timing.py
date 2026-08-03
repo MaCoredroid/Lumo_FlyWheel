@@ -16,12 +16,16 @@ from typing import Any
 try:
     from .fr13_draft_head_fp8_gate import (
         GRAPH_SIGNATURE,
+        QROW16_SO_SHA256,
         _validate_engagement,
+        validate_qrow16_production,
     )
 except ImportError:
     from fr13_draft_head_fp8_gate import (
         GRAPH_SIGNATURE,
+        QROW16_SO_SHA256,
         _validate_engagement,
+        validate_qrow16_production,
     )
 
 
@@ -87,6 +91,10 @@ def _load(path: Path, label: str) -> tuple[dict[str, Any], bytes]:
 
 def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
+
+
+def _file_sha256(path: Path) -> str:
+    return _sha256(path.read_bytes())
 
 
 def _finite(record: dict[str, Any], key: str, label: str) -> float:
@@ -432,7 +440,12 @@ def main() -> int:
     parser.add_argument("--expected-source-sha256", required=True)
     parser.add_argument("--stock-arm", required=True)
     parser.add_argument("--candidate-arm", required=True)
-    parser.add_argument("--stock-fa2-sha256", required=True)
+    parser.add_argument("--stock-qrow16-sidecar", type=Path, required=True)
+    parser.add_argument("--candidate-qrow16-sidecar", type=Path, required=True)
+    parser.add_argument("--stock-qrow16-capture", type=Path, required=True)
+    parser.add_argument("--candidate-qrow16-capture", type=Path, required=True)
+    parser.add_argument("--qrow16-so", type=Path, required=True)
+    parser.add_argument("--qrow16-fa2-sha256", required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
@@ -457,7 +470,7 @@ def main() -> int:
     )
     if (
         promotion.get("schema")
-        != "fr13.fixed32.draft_head_fp8_promotion_credential.v1"
+        != "fr13.fixed32.draft_head_fp8_promotion_credential.v2"
         or promotion.get("status") != "PASS"
         or promotion.get("performance_tuning_eligible") is not True
         or promotion.get("formal_floor_acceptance_eligible") is not False
@@ -483,6 +496,40 @@ def main() -> int:
     )
     if engagement.get("drafter_graph_signature") != GRAPH_SIGNATURE:
         raise ValueError("candidate graph signature drifted")
+    if args.qrow16_fa2_sha256 != QROW16_SO_SHA256:
+        raise ValueError("Qrow16 timing binary SHA-256 drifted")
+    stock_qrow16 = validate_qrow16_production(
+        sidecar_path=args.stock_qrow16_sidecar,
+        capture_path=args.stock_qrow16_capture,
+        candidate_so=args.qrow16_so,
+        label="stock",
+    )
+    candidate_qrow16 = validate_qrow16_production(
+        sidecar_path=args.candidate_qrow16_sidecar,
+        capture_path=args.candidate_qrow16_capture,
+        candidate_so=args.qrow16_so,
+        label="candidate",
+    )
+    promotion_qrow16 = promotion.get("qrow16_production")
+    shared_qrow16_keys = (
+        "candidate_so_sha256",
+        "candidate_so_bytes",
+        "live_pass_sha256",
+        "production_sidecar_sha256",
+        "graph_signature",
+        "layer_count",
+        "dispatch",
+    )
+    if not isinstance(promotion_qrow16, dict):
+        raise ValueError("FP8 promotion credential lacks Qrow16 production")
+    for key in shared_qrow16_keys:
+        values = (
+            promotion_qrow16.get(key),
+            stock_qrow16.get(key),
+            candidate_qrow16.get(key),
+        )
+        if values != (values[0], values[0], values[0]):
+            raise ValueError(f"Qrow16 {key} differs across gate/timing arms")
 
     stock_summary = _validate_arm(
         stock,
@@ -503,7 +550,7 @@ def main() -> int:
     stock_components = stock_summary["gpu_components_ms_per_step"]
     candidate_components = candidate_summary["gpu_components_ms_per_step"]
     result = {
-        "schema": "fr13.fixed32.draft_head_fp8_exact4_b1_timing.v1",
+        "schema": "fr13.fixed32.draft_head_fp8_exact4_b1_timing.v2",
         "status": "COMPLETE",
         "classification": "real_swe_verified_exact4_b1_timing_pair",
         "timing_eligible": True,
@@ -521,7 +568,25 @@ def main() -> int:
             "candidate_deploy_speed": _sha256(candidate_raw),
             "candidate_engagement": _sha256(engagement_raw),
             "promotion_credential": _sha256(promotion_raw),
-            "stock_fa2": args.stock_fa2_sha256,
+            "qrow16_fa2": args.qrow16_fa2_sha256,
+            "stock_qrow16_sidecar": _file_sha256(
+                args.stock_qrow16_sidecar
+            ),
+            "candidate_qrow16_sidecar": _file_sha256(
+                args.candidate_qrow16_sidecar
+            ),
+            "stock_qrow16_capture": _file_sha256(
+                args.stock_qrow16_capture
+            ),
+            "candidate_qrow16_capture": _file_sha256(
+                args.candidate_qrow16_capture
+            ),
+        },
+        "qrow16_production": {
+            "selector": "FR13_FA2_QROW16_PRODUCTION=1",
+            "gate": promotion_qrow16,
+            "stock": stock_qrow16,
+            "candidate": candidate_qrow16,
         },
         "stock": stock_summary,
         "candidate": candidate_summary,

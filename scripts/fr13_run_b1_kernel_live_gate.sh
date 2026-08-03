@@ -9,6 +9,11 @@ cd "$REPO"
 : "${TAG:?set TAG to a unique run tag}"
 : "${FORKED_FA2_SO:?set FORKED_FA2_SO to the exact FA2 shared object}"
 
+QROW16_FA2_SHA256=1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86
+QROW16_FA2_BYTES=299507792
+QROW16_LIVE_PASS=$REPO/results/fr13_fixed32_qrow16_num_splits0_live_pass_20260731T173608Z/fr13_fa2_qrow16_live_paged_ab.json
+QROW16_LIVE_PASS_SHA256=36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77
+
 [[ -f "$FORKED_FA2_SO" && ! -L "$FORKED_FA2_SO" ]] \
   || { echo "FORKED_FA2_SO must be a regular non-symlink file" >&2; exit 2; }
 [[ "$FORKED_FA2_SO" == /* ]] \
@@ -223,8 +228,31 @@ SUBSET=$B1_DIAGNOSTIC_SUBSET
 FA2_SHA=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
 SOURCE_COMMIT=$(git rev-parse HEAD)
 DRAFT_HEAD_FP8_ARM=
+QROW16_PRODUCTION=0
+QROW16_PRODUCTION_LIVE_PASS=
+QROW16_PRODUCTION_LIVE_PASS_SHA256=
 if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
   DRAFT_HEAD_FP8_ARM=$ARM
+  [[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$QROW16_FA2_BYTES" \
+     && "$FA2_SHA" == "$QROW16_FA2_SHA256" \
+     && -f "$QROW16_LIVE_PASS" && ! -L "$QROW16_LIVE_PASS" \
+     && "$(sha256sum "$QROW16_LIVE_PASS" | awk '{print $1}')" \
+        == "$QROW16_LIVE_PASS_SHA256" ]] || {
+    echo "FP8 gate requires the pinned Qrow16 production binary and live PASS" >&2
+    exit 2
+  }
+  .venv/bin/python - "$QROW16_LIVE_PASS" "$QROW16_FA2_SHA256" <<'PY'
+import sys
+from pathlib import Path
+
+from scripts import fr13_qrow16_pass_sidecar as qrow16
+
+payload, _ = qrow16.load_json(Path(sys.argv[1]))
+qrow16.validate_live_result(payload, candidate_sha256=sys.argv[2])
+PY
+  QROW16_PRODUCTION=1
+  QROW16_PRODUCTION_LIVE_PASS=$QROW16_LIVE_PASS
+  QROW16_PRODUCTION_LIVE_PASS_SHA256=$QROW16_LIVE_PASS_SHA256
 fi
 
 [[ "$FA2_SHA" =~ ^[0-9a-f]{64}$ ]]
@@ -285,6 +313,9 @@ printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
   "$ONE_SIDED_U95_CAP_MS" "$(date -u +%FT%TZ)" \
   > "$RUNROOT/launcher_meta.txt"
+printf 'qrow16_production=%s\nqrow16_fa2_sha256=%s\nqrow16_live_pass_sha256=%s\n' \
+  "$QROW16_PRODUCTION" "$FA2_SHA" \
+  "$QROW16_PRODUCTION_LIVE_PASS_SHA256" >> "$RUNROOT/launcher_meta.txt"
 
 .venv/bin/python scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 \
@@ -321,6 +352,9 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_FA2_QROW16_SO_SHA256="$FA2_SHA" \
   FR13_FA2_QROW16_LIVE_PAGED_AB="$FR13_GATE_QROW16" \
   FR13_FA2_QROW16_LIVE_PAGED_AB_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \
+  FR13_FA2_QROW16_PRODUCTION="$QROW16_PRODUCTION" \
+  FR13_FA2_QROW16_LIVE_PASS_JSON="$QROW16_PRODUCTION_LIVE_PASS" \
+  FR13_FA2_QROW16_LIVE_PASS_SHA256="$QROW16_PRODUCTION_LIVE_PASS_SHA256" \
   FR13_DFWD_UNIFIED_BM8_LIVE_AB="$FR13_GATE_BM8" \
   FR13_DFWD_UNIFIED_BM8_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \
   FR13_DFWD_UNIFIED_BM8_REAL_EVENT_PATH=/logs/fr13_dfwd_unified_bm8.real_event.arm \
@@ -395,6 +429,8 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
   [[ -f "$DRAFT_HEAD_FP8_BOUNDARY" && ! -L "$DRAFT_HEAD_FP8_BOUNDARY" ]] \
     || { echo "draft-head FP8 final boundary evidence is missing" >&2; exit 4; }
   DRAFT_HEAD_FP8_ACCEPTANCE="$RUNROOT/$ARM/draft_head_fp8_acceptance.json"
+  DRAFT_HEAD_FP8_QROW16_SIDECAR="$RUNROOT/$ARM/logs/fr13_fa2_qrow16_production_pass.json"
+  DRAFT_HEAD_FP8_QROW16_CAPTURE="$RUNROOT/$ARM/logs/fr13_fa2_qrow16_production_capture.json"
   .venv/bin/python scripts/fr13_measure.py deploy-speed \
     --arm "$ARM" \
     --out-root "$RUNROOT/$ARM/swe_out" \
@@ -410,6 +446,9 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
     --final-flush "$DRAFT_HEAD_FP8_FINAL_FLUSH" \
     --boundary-snapshot "$DRAFT_HEAD_FP8_BOUNDARY" \
     --chat-traffic-audit "$DRAFT_HEAD_FP8_TRAFFIC_AUDIT" \
+    --qrow16-sidecar "$DRAFT_HEAD_FP8_QROW16_SIDECAR" \
+    --qrow16-capture "$DRAFT_HEAD_FP8_QROW16_CAPTURE" \
+    --qrow16-so "$FORKED_FA2_SO" \
     --candidate-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
     --expected-source-sha256 "$DRAFT_HEAD_FP8_SOURCE_SHA" \
     --expected-source-commit "$SOURCE_COMMIT" \
