@@ -22044,6 +22044,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                     self._fr13_dh_ab_root_checks = 0
                     self._fr13_dh_pad_seen_eager = False
+                    self._fr13_dh_pad_seen_capture_batches = set()
                     self._fr13_dh_pad_row_indices = {
                         (_fr13_dh_r, _fr13_dh_b): torch.tensor(
                             tuple(
@@ -22132,6 +22133,21 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         flush=True,
                     )
                     self._fr13_dh_pad_seen_eager = True
+                if (
+                    _fr13_dh_rows
+                    and _fr13_dh_capturing
+                    and _fr13_dh_batch
+                    not in self._fr13_dh_pad_seen_capture_batches
+                ):
+                    print(
+                        "[FR13_DRAFT_HEAD_PAD] captured "
+                        f"candidate_rows={_rows} "
+                        f"source_rows={_fr13_dh_batch}",
+                        flush=True,
+                    )
+                    self._fr13_dh_pad_seen_capture_batches.add(
+                        _fr13_dh_batch
+                    )
                 if (
                     tuple(_fr13_dh_in.stride()) != (5120, 1)
                     or tuple(_sh.weight.t().stride()) != (1, 5120)
