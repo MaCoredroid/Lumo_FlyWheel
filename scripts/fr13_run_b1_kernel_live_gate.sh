@@ -49,7 +49,8 @@ FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}
 FR13_GATE_DRAFT_HEAD_FP8=${FR13_GATE_DRAFT_HEAD_FP8:-0}
 FR13_GATE_DFWD_TOP3=${FR13_GATE_DFWD_TOP3:-0}
 FR13_GATE_BM8=${FR13_GATE_BM8:-0}
-for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DFWD_TOP3 FR13_GATE_BM8; do
+FR13_GATE_SFWD_CONV_POSTPREP=${FR13_GATE_SFWD_CONV_POSTPREP:-0}
+for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DFWD_TOP3 FR13_GATE_BM8 FR13_GATE_SFWD_CONV_POSTPREP; do
   case "${!gate}" in
     0|1) ;;
     *) echo "$gate must be 0 or 1" >&2; exit 2 ;;
@@ -61,6 +62,19 @@ case "$FR13_GATE_GDN_BV" in
   16|32|64|128) FR13_GATE_GDN_BV_CANDIDATE=$FR13_GATE_GDN_BV ;;
   *) echo "FR13_GATE_GDN_BV must be 0, 16, 32, 64, or 128" >&2; exit 2 ;;
 esac
+if [[ "$FR13_GATE_SFWD_CONV_POSTPREP" == "1" \
+      && ( "$FR13_GATE_QROW16" != "0" \
+           || "$FR13_GATE_TAW_NATIVE" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
+           || "$FR13_GATE_DFWD_TOP3" != "0" \
+           || "$FR13_GATE_BM8" != "0" \
+           || "$FR13_GATE_GDN_BV" != "0" \
+           || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ) ]]; then
+  echo "FR13_GATE_SFWD_CONV_POSTPREP must be the only kernel candidate" >&2
+  exit 2
+fi
 if [[ "$FR13_GATE_BM8" == "1" \
       && ( "$FR13_GATE_QROW16" != "0" \
            || "$FR13_GATE_TAW_NATIVE" != "0" \
@@ -199,6 +213,17 @@ case "$B1_WORKLOAD_PROFILE" in
             && "$FR13_GATE_BM8" == "0" \
             && "$FR13_GATE_GDN_BV" == "0" ]]; then
       :
+    elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+            && "$FR13_GATE_SFWD_CONV_POSTPREP" == "1" \
+            && "$FR13_GATE_QROW16" == "0" \
+            && "$FR13_GATE_TAW_NATIVE" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
+            && "$FR13_GATE_DFWD_TOP3" == "0" \
+            && "$FR13_GATE_BM8" == "0" \
+            && "$FR13_GATE_GDN_BV" == "0" ]]; then
+      :
     else
       echo "B1 k64_root requires an isolated admitted candidate" >&2
       exit 2
@@ -231,14 +256,17 @@ DRAFT_HEAD_FP8_ARM=
 QROW16_PRODUCTION=0
 QROW16_PRODUCTION_LIVE_PASS=
 QROW16_PRODUCTION_LIVE_PASS_SHA256=
-if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
-  DRAFT_HEAD_FP8_ARM=$ARM
+if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" \
+      || "$FR13_GATE_SFWD_CONV_POSTPREP" == "1" ]]; then
+  if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
+    DRAFT_HEAD_FP8_ARM=$ARM
+  fi
   [[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$QROW16_FA2_BYTES" \
      && "$FA2_SHA" == "$QROW16_FA2_SHA256" \
      && -f "$QROW16_LIVE_PASS" && ! -L "$QROW16_LIVE_PASS" \
      && "$(sha256sum "$QROW16_LIVE_PASS" | awk '{print $1}')" \
         == "$QROW16_LIVE_PASS_SHA256" ]] || {
-    echo "FP8 gate requires the pinned Qrow16 production binary and live PASS" >&2
+    echo "selected gate requires the pinned Qrow16 production binary and live PASS" >&2
     exit 2
   }
   .venv/bin/python - "$QROW16_LIVE_PASS" "$QROW16_FA2_SHA256" <<'PY'
@@ -299,13 +327,16 @@ elif [[ "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" == "byte_ab" ]]; then
   export ENFORCE_EAGER=1
 elif [[ "${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}" == "1" ]]; then
   export ENFORCE_EAGER=1
+elif [[ "${FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:-0}" == "1" ]]; then
+  export ENFORCE_EAGER=1
 fi
 
 mkdir -p "$RUNROOT"
-printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_fp8_gate=%s\ndfwd_top3_gate=%s\ndfwd_top3_sha256=%s\nb1_diagnostic_task_profile=%s\nb1_diagnostic_task_id=%s\nb1_diagnostic_subset=%s\nb1_diagnostic_subset_sha256=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
+printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=%s\ndraft_head_m32_gate=%s\ndraft_head_fp8_gate=%s\ndfwd_top3_gate=%s\ndfwd_top3_sha256=%s\nsfwd_conv_postprep_gate=%s\nb1_diagnostic_task_profile=%s\nb1_diagnostic_task_id=%s\nb1_diagnostic_subset=%s\nb1_diagnostic_subset_sha256=%s\nworkload_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nfr13_needs_allow=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nstarted=%s\n' \
   "$$" "$RUNROOT" "$ARM" "$SOURCE_COMMIT" "$FA2_SHA" "$FR13_GATE_BM8" \
   "$FR13_GATE_DRAFT_HEAD_M32" "$FR13_GATE_DRAFT_HEAD_FP8" \
   "$FR13_GATE_DFWD_TOP3" "$FR13_GATE_DFWD_TOP3_SHA256" \
+  "$FR13_GATE_SFWD_CONV_POSTPREP" \
   "$B1_DIAGNOSTIC_TASK_PROFILE" "$B1_DIAGNOSTIC_TASK_ID" "$SUBSET" \
   "$B1_DIAGNOSTIC_SUBSET_SHA256" "$B1_WORKLOAD_PROFILE" \
   "$DRAFT_VOCAB_ROOT" "$DRAFT_VOCAB_K" "$NEEDS_ALLOW" \

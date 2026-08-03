@@ -7,7 +7,13 @@ pregather and sticky-committer preseed leases.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+import re
+import stat
 from collections.abc import Mapping
+from pathlib import Path
 
 import torch
 import triton
@@ -48,6 +54,522 @@ GATE_BLOCK = 64
 SOFTPLUS_THRESHOLD = 20.0
 BF16_BYTES = 2
 FP32_BYTES = 4
+BYTE_GATE_ENABLED_PATH = (
+    "/logs/fr13_fixed32_sfwd_conv_postprep_byte_ab.enabled"
+)
+BYTE_GATE_REAL_EVENT_PATH = (
+    "/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm"
+)
+BYTE_GATE_RECORDS_PATH = (
+    "/logs/fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl"
+)
+BYTE_GATE_PASS_PATH = (
+    "/logs/fr13_fixed32_sfwd_conv_postprep.live_pass.json"
+)
+SOURCE_MANIFEST_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1"
+SOURCE_RELATIVE_PATH = (
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py"
+)
+KERNEL_SOURCE_RELATIVE_PATH = (
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py"
+)
+SOURCE_FILES = (
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "scripts/fr13_run_b1_kernel_live_gate.sh",
+    "scripts/fr13_run_b1_sfwd_conv_postprep_gate.sh",
+    "scripts/fr13_sfwd_conv_postprep_gate.py",
+    "scripts/run_swe_bench_q36_a.py",
+    SOURCE_RELATIVE_PATH,
+    KERNEL_SOURCE_RELATIVE_PATH,
+    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py",
+)
+BYTE_SURFACES = (
+    "query_spec",
+    "key_spec",
+    "value_spec",
+    "value_tree",
+    "g",
+    "beta",
+    "commit_source_stage",
+)
+TASK_MARKER = "swe_verified:astropy__astropy-12907"
+QROW16_FA2_SHA256 = (
+    "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+)
+QROW16_LIVE_PASS_SHA256 = (
+    "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+)
+_BYTE_GATE_STATE: dict[str, object] = {
+    "task_marker": None,
+    "source_binding": None,
+    "passed": {},
+    "attempts": {},
+    "failed": False,
+}
+
+
+def _read_single_link_regular(path: Path, *, label: str, limit: int) -> bytes:
+    try:
+        info = path.lstat()
+    except FileNotFoundError as error:
+        raise RuntimeError(f"FR13 SFWD conv/post-prep {label} is missing") from error
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(info.st_mode)
+        or info.st_nlink != 1
+        or info.st_size <= 0
+        or info.st_size > limit
+    ):
+        raise RuntimeError(
+            f"FR13 SFWD conv/post-prep {label} must be one bounded regular file"
+        )
+    return path.read_bytes()
+
+
+def _real_event_marker(path: Path) -> str:
+    raw = _read_single_link_regular(path, label="real-event marker", limit=256)
+    if stat.S_IMODE(path.lstat().st_mode) != 0o444:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep real-event marker mode must be 0444"
+        )
+    try:
+        marker = raw.decode("ascii").strip()
+    except UnicodeDecodeError as error:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep real-event marker must be ASCII"
+        ) from error
+    prefix = "swe_verified:"
+    task_id = marker[len(prefix) :] if marker.startswith(prefix) else ""
+    if marker != TASK_MARKER or not task_id or any(
+        character
+        not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-/"
+        for character in task_id
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep requires the canonical authenticated task"
+        )
+    return marker
+
+
+def fixed32_sfwd_conv_postprep_gate_control(
+    *,
+    fixed32_mode: str | None,
+    environ: Mapping[str, str] | None = None,
+    enabled_path: str | None = None,
+    event_path: str | None = None,
+) -> tuple[bool, str | None]:
+    """Resolve the default-off, eager, one-real-task shadow gate."""
+    env = os.environ if environ is None else environ
+    raw = str(env.get("FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB", "0"))
+    if raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB must be exactly 0 or 1"
+        )
+    enabled = Path(
+        enabled_path
+        or env.get(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_ENABLED_PATH",
+            BYTE_GATE_ENABLED_PATH,
+        )
+    )
+    event = Path(
+        event_path
+        or env.get(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_REAL_EVENT_PATH",
+            BYTE_GATE_REAL_EVENT_PATH,
+        )
+    )
+    if raw == "0":
+        return False, None
+    enabled_raw = _read_single_link_regular(
+        enabled, label="byte-gate arm", limit=16
+    )
+    if (
+        enabled_raw != b"1\n"
+        or stat.S_IMODE(enabled.lstat().st_mode) != 0o400
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep byte-gate arm is not exact"
+        )
+    if not event.exists():
+        return True, None
+    if fixed32_mode not in FIXED32_MODES:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep byte gate requires an exact fixed32 mode"
+        )
+    return True, _real_event_marker(event)
+
+
+def _source_binding(
+    *,
+    manifest_path: str,
+    expected_manifest_sha256: str,
+    expected_source_commit: str,
+) -> dict[str, str]:
+    if (
+        not manifest_path
+        or re.fullmatch(r"[0-9a-f]{64}", expected_manifest_sha256) is None
+        or re.fullmatch(r"[0-9a-f]{40}", expected_source_commit) is None
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep requires complete source credentials"
+        )
+    raw = _read_single_link_regular(
+        Path(manifest_path), label="source manifest", limit=1048576
+    )
+    if stat.S_IMODE(Path(manifest_path).lstat().st_mode) != 0o400:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest mode must be 0400"
+        )
+    observed_sha256 = hashlib.sha256(raw).hexdigest()
+    if observed_sha256 != expected_manifest_sha256:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source-manifest SHA-256 drifted"
+        )
+    try:
+        payload = json.loads(raw.decode("ascii"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest must be ASCII JSON"
+        ) from error
+    files = payload.get("files") if isinstance(payload, dict) else None
+    source_path = Path(__file__).resolve()
+    source_root = source_path.parents[2]
+    source_sha256 = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    kernel_sha256 = hashlib.sha256(
+        (source_root / KERNEL_SOURCE_RELATIVE_PATH).read_bytes()
+    ).hexdigest()
+    source_entry = files.get(SOURCE_RELATIVE_PATH) if isinstance(files, dict) else None
+    kernel_entry = (
+        files.get(KERNEL_SOURCE_RELATIVE_PATH) if isinstance(files, dict) else None
+    )
+    source_drift = {}
+    if isinstance(files, dict):
+        if tuple(sorted(files)) != tuple(sorted(SOURCE_FILES)):
+            source_drift["files"] = tuple(sorted(files))
+        for relative in SOURCE_FILES:
+            path = source_root / relative
+            try:
+                source_raw = path.read_bytes()
+            except OSError as error:
+                raise RuntimeError(
+                    "FR13 SFWD conv/post-prep source closure is unreadable: "
+                    f"{relative}"
+                ) from error
+            actual = {
+                "bytes": len(source_raw),
+                "sha256": hashlib.sha256(source_raw).hexdigest(),
+            }
+            if files.get(relative) != actual:
+                source_drift[relative] = (files.get(relative), actual)
+    if (
+        payload.get("schema") != SOURCE_MANIFEST_SCHEMA
+        or payload.get("candidate") != CANDIDATE
+        or payload.get("source_commit") != expected_source_commit
+        or not isinstance(source_entry, dict)
+        or source_entry.get("sha256") != source_sha256
+        or not isinstance(kernel_entry, dict)
+        or kernel_entry.get("sha256") != kernel_sha256
+        or source_drift
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest is not runtime-bound"
+        )
+    return {
+        "source_commit": expected_source_commit,
+        "source_manifest_sha256": observed_sha256,
+        "candidate_source_sha256": source_sha256,
+        "candidate_kernel_source_sha256": kernel_sha256,
+    }
+
+
+def _byte_diff(
+    name: str, reference: torch.Tensor, candidate: torch.Tensor
+) -> dict[str, object]:
+    if reference.shape != candidate.shape or reference.dtype != candidate.dtype:
+        return {
+            "name": name,
+            "byte_equal": False,
+            "shape_or_dtype_mismatch": True,
+            "reference_shape": tuple(int(value) for value in reference.shape),
+            "candidate_shape": tuple(int(value) for value in candidate.shape),
+            "reference_dtype": str(reference.dtype),
+            "candidate_dtype": str(candidate.dtype),
+            "differing_bytes": None,
+            "first_nonzero_byte": None,
+        }
+    reference_bytes = reference.contiguous().reshape(-1).view(torch.uint8)
+    candidate_bytes = candidate.contiguous().reshape(-1).view(torch.uint8)
+    difference = reference_bytes != candidate_bytes
+    differing_bytes = int(difference.sum().item())
+    first_nonzero = (
+        None
+        if differing_bytes == 0
+        else int(torch.nonzero(difference, as_tuple=False)[0, 0].item())
+    )
+    return {
+        "name": name,
+        "byte_equal": differing_bytes == 0,
+        "shape_or_dtype_mismatch": False,
+        "shape": tuple(int(value) for value in reference.shape),
+        "dtype": str(reference.dtype),
+        "bytes": int(reference_bytes.numel()),
+        "differing_bytes": differing_bytes,
+        "first_nonzero_byte": first_nonzero,
+        "reference_byte": (
+            None if first_nonzero is None else int(reference_bytes[first_nonzero].item())
+        ),
+        "candidate_byte": (
+            None if first_nonzero is None else int(candidate_bytes[first_nonzero].item())
+        ),
+    }
+
+
+def _emit_byte_record(record: dict[str, object]) -> None:
+    path = Path(
+        os.environ.get(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB_PATH",
+            BYTE_GATE_RECORDS_PATH,
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = dict(record)
+    payload["schema"] = "fr13.fixed32.sfwd_conv_postprep.byte_ab.v1"
+    with path.open("a", encoding="ascii") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n")
+
+
+def _invalidate_live_pass() -> None:
+    path = Path(
+        os.environ.get(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_PASS_PATH", BYTE_GATE_PASS_PATH
+        )
+    )
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
+def _emit_live_pass(
+    *,
+    fixed32_mode: str,
+    task_marker: str,
+    layers: dict[int, str],
+    source_binding: dict[str, str],
+) -> None:
+    if len(layers) != LAYERS or len(set(layers.values())) != LAYERS:
+        return
+    draft_vocab_blocks = Path(os.environ.get("FR13_DRAFT_VOCAB_BLOCKS", ""))
+    try:
+        blocks_sha256 = hashlib.sha256(draft_vocab_blocks.read_bytes()).hexdigest()
+    except OSError as error:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep K64 block map is unreadable"
+        ) from error
+    qrow_sha256 = os.environ.get("FR13_FA2_QROW16_SO_SHA256", "")
+    qrow_pass_sha256 = os.environ.get("FR13_FA2_QROW16_LIVE_PASS_SHA256", "")
+    if (
+        os.environ.get("FR13_DRAFT_VOCAB_ROOT") != "1"
+        or os.environ.get("FR13_DRAFT_VOCAB_K") != "65536"
+        or blocks_sha256
+        != "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+        or os.environ.get("FR13_FA2_QROW16_PRODUCTION") != "1"
+        or qrow_sha256 != QROW16_FA2_SHA256
+        or qrow_pass_sha256 != QROW16_LIVE_PASS_SHA256
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep PASS requires K64/root1 with pinned Qrow16"
+        )
+    path = Path(
+        os.environ.get(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_PASS_PATH", BYTE_GATE_PASS_PATH
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema": "fr13.fixed32.sfwd_conv_postprep.live_pass.v1",
+        "status": "byte_pass_source_only",
+        "candidate": CANDIDATE,
+        **source_binding,
+        "fixed32_mode": fixed32_mode,
+        "task_marker": task_marker,
+        "batch_size": 1,
+        "task_count": 1,
+        "layer_count": LAYERS,
+        "layers": [
+            {
+                "layer_key": f"0x{key:x}",
+                "layer_prefix_sha256": layers[key],
+            }
+            for key in sorted(layers)
+        ],
+        "physical_rows_per_request": ROWS,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65536,
+        "draft_vocab_blocks_sha256": blocks_sha256,
+        "qrow16_production": True,
+        "qrow16_fa2_sha256": qrow_sha256,
+        "qrow16_live_pass_sha256": qrow_pass_sha256,
+        "compared_byte_surfaces": list(BYTE_SURFACES),
+        "real_task_authenticated": True,
+        "reference_always_served": True,
+        "candidate_returned": False,
+        "reference_decision": "serve_incumbent",
+        "candidate_decision": "shadow_only",
+        "decision_exact": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_eligible": False,
+        "comparisons": LAYERS * len(BYTE_SURFACES),
+        "mismatches": 0,
+        "differing_bytes": 0,
+        "errors": 0,
+    }
+    temporary = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+    with temporary.open("w", encoding="ascii") as handle:
+        json.dump(payload, handle, ensure_ascii=True, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
+
+
+def fixed32_sfwd_conv_postprep_byte_gate(
+    *,
+    fixed32_mode: str,
+    task_marker: str,
+    layer_prefix: str,
+    layer_key: int,
+    batch_size: int,
+    reference_query: torch.Tensor,
+    candidate_query: torch.Tensor,
+    reference_key: torch.Tensor,
+    candidate_key: torch.Tensor,
+    reference_value_spec: torch.Tensor,
+    candidate_value_spec: torch.Tensor,
+    reference_value_tree: torch.Tensor,
+    candidate_value_tree: torch.Tensor,
+    reference_g: torch.Tensor,
+    candidate_g: torch.Tensor,
+    reference_beta: torch.Tensor,
+    candidate_beta: torch.Tensor,
+    reference_source_stage: torch.Tensor,
+    candidate_source_stage: torch.Tensor,
+    source_manifest_path: str,
+    expected_source_manifest_sha256: str,
+    expected_source_commit: str,
+) -> dict[str, object]:
+    """Compare the complete consumer boundary while serving only the reference."""
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError("FR13 SFWD conv/post-prep byte gate is eager-only")
+    if fixed32_mode not in FIXED32_MODES or int(batch_size) != 1:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep byte gate requires fixed32 B1"
+        )
+    if task_marker != TASK_MARKER:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep byte gate requires the canonical real task"
+        )
+    if not isinstance(layer_prefix, str) or not layer_prefix:
+        raise RuntimeError("FR13 SFWD conv/post-prep requires a layer prefix")
+    state = _BYTE_GATE_STATE
+    if state["task_marker"] is None:
+        state["task_marker"] = task_marker
+        _invalidate_live_pass()
+    elif state["task_marker"] != task_marker:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep cannot combine authenticated tasks"
+        )
+    if state["source_binding"] is None:
+        state["source_binding"] = _source_binding(
+            manifest_path=source_manifest_path,
+            expected_manifest_sha256=expected_source_manifest_sha256,
+            expected_source_commit=expected_source_commit,
+        )
+    source_binding = dict(state["source_binding"])
+    key = int(layer_key)
+    prefix_sha256 = hashlib.sha256(layer_prefix.encode("utf-8")).hexdigest()
+    passed_layers = state["passed"]
+    attempts = state["attempts"]
+    if key not in passed_layers and len(passed_layers) >= LAYERS:
+        _invalidate_live_pass()
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep observed more than 48 layer identities"
+        )
+    previous_prefix = passed_layers.get(key)
+    if previous_prefix is not None and previous_prefix != prefix_sha256:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep layer key was reused by another prefix"
+        )
+    attempt = int(attempts.get(key, 0)) + 1
+    attempts[key] = attempt
+    comparisons = [
+        _byte_diff("query_spec", reference_query, candidate_query),
+        _byte_diff("key_spec", reference_key, candidate_key),
+        _byte_diff("value_spec", reference_value_spec, candidate_value_spec),
+        _byte_diff("value_tree", reference_value_tree, candidate_value_tree),
+        _byte_diff("g", reference_g, candidate_g),
+        _byte_diff("beta", reference_beta, candidate_beta),
+        _byte_diff(
+            "commit_source_stage",
+            reference_source_stage,
+            candidate_source_stage,
+        ),
+    ]
+    first_nonzero = next(
+        (item for item in comparisons if item["byte_equal"] is not True), None
+    )
+    passed = first_nonzero is None
+    differing_bytes = sum(
+        int(item["differing_bytes"] or 0) for item in comparisons
+    )
+    record = {
+        "status": "pass" if passed else "mismatch_reference_served",
+        "candidate": CANDIDATE,
+        **source_binding,
+        "fixed32_mode": fixed32_mode,
+        "task_marker": task_marker,
+        "batch_size": 1,
+        "layer_key": f"0x{key:x}",
+        "layer_prefix_sha256": prefix_sha256,
+        "attempt": attempt,
+        "physical_rows_per_request": ROWS,
+        "compared_byte_surfaces": list(BYTE_SURFACES),
+        "comparisons": comparisons,
+        "mismatches": 0 if passed else 1,
+        "differing_bytes": differing_bytes,
+        "first_nonzero": first_nonzero,
+        "zero_diff": passed,
+        "real_task_authenticated": True,
+        "reference_always_served": True,
+        "candidate_returned": False,
+        "reference_decision": "serve_incumbent",
+        "candidate_decision": "shadow_only",
+        "decision_exact": True,
+        "qrow16_production": True,
+        "qrow16_fa2_sha256": QROW16_FA2_SHA256,
+        "qrow16_live_pass_sha256": QROW16_LIVE_PASS_SHA256,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_eligible": False,
+    }
+    _emit_byte_record(record)
+    if not passed:
+        state["failed"] = True
+    if passed and state["failed"] is not True:
+        passed_layers[key] = prefix_sha256
+        _emit_live_pass(
+            fixed32_mode=fixed32_mode,
+            task_marker=task_marker,
+            layers=dict(passed_layers),
+            source_binding=source_binding,
+        )
+    else:
+        passed_layers.pop(key, None)
+        _invalidate_live_pass()
+    return record
 
 
 def _exact_host_parent(tree_parent: object) -> tuple[int, ...]:

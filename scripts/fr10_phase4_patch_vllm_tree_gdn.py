@@ -186,6 +186,22 @@ _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION = os.environ.get(
 _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION = os.environ.get(
     "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION", "0"
 ).strip()
+_FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB = os.environ.get(
+    "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB", "0"
+).strip()
+_FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS = (
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "scripts/fr13_run_b1_kernel_live_gate.sh",
+    "scripts/fr13_run_b1_sfwd_conv_postprep_gate.sh",
+    "scripts/fr13_sfwd_conv_postprep_gate.py",
+    "scripts/run_swe_bench_q36_a.py",
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py",
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py",
+    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py",
+)
 _FR13_FIXED32_CUTLASS_WAVE = os.environ.get(
     "FR13_FIXED32_CUTLASS_WAVE", "stock"
 ).strip()
@@ -202,8 +218,13 @@ _FR13_FIXED32_SFWD_PRIOR_REUSE_IMPORT = (
 )
 _FR13_FIXED32_SFWD_CONV_POSTPREP_IMPORT = (
     "from lumo_flywheel_serving.fr13_sfwd_conv_postprep_fusion import "
+    "fixed32_sfwd_conv_postprep_byte_gate, "
+    "fixed32_sfwd_conv_postprep_gate_control, "
     "launch_fixed32_sfwd_conv_postprep_fusion\n"
-    if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION == "1"
+    if (
+        _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION == "1"
+        or _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB == "1"
+    )
     else ""
 )
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
@@ -6494,6 +6515,16 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION must be exactly 0 or 1"
         )
     sfwd_conv_postprep = sfwd_conv_postprep_raw == "1"
+    sfwd_conv_postprep_byte_raw = _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
+    if sfwd_conv_postprep_byte_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB must be exactly 0 or 1"
+        )
+    sfwd_conv_postprep_byte = sfwd_conv_postprep_byte_raw == "1"
+    if sfwd_conv_postprep and sfwd_conv_postprep_byte:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep production and byte gate are exclusive"
+        )
     sfwd_conv_postprep_graph = bool(
         sfwd_conv_postprep and os.environ.get("ENFORCE_EAGER", "0") == "0"
     )
@@ -6577,9 +6608,9 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB requires fixed32 mode"
         )
-    if sfwd_conv_postprep and not resolved_mode:
+    if (sfwd_conv_postprep or sfwd_conv_postprep_byte) and not resolved_mode:
         raise RuntimeError(
-            "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION requires fixed32 mode"
+            "FR13 SFWD conv/post-prep selectors require fixed32 mode"
         )
     if not resolved_mode:
         valid_mask = 0
@@ -6610,6 +6641,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{sfwd_prior_reuse!r}\n"
         "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION = "
         f"{sfwd_conv_postprep!r}\n"
+        "_FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB = "
+        f"{sfwd_conv_postprep_byte!r}\n"
         "_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH = "
         f"{sfwd_conv_postprep_graph!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH = "
@@ -6629,6 +6662,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     sfwd_production = _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
     sfwd_conv_postprep = _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+    sfwd_conv_postprep_byte = _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
     cutlass_wave = _FR13_FIXED32_CUTLASS_WAVE
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
@@ -6707,6 +6741,10 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION must be exactly 0 or 1"
         )
+    if sfwd_conv_postprep_byte not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB must be exactly 0 or 1"
+        )
     streamk_byte_diagnostic = cutlass_wave in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
@@ -6736,6 +6774,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             sfwd_production == "1",
             sfwd_prior_reuse == "1",
             sfwd_conv_postprep == "1",
+            sfwd_conv_postprep_byte == "1",
         )
     ) > 1:
         raise RuntimeError(
@@ -6789,7 +6828,101 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             int(batch_text),
             "FR13_FIXED32_EAGER_SFWD_CONV_POSTPREP_BOOT_WARM",
         )
+    if sfwd_conv_postprep_byte == "1":
+        return (
+            "SFWD conv/post-prep B1 byte diagnostic",
+            1,
+            "FR13_FIXED32_EAGER_SFWD_CONV_POSTPREP_BOOT_WARM",
+        )
     return None
+
+
+def _fr13_fixed32_require_sfwd_conv_postprep_source_manifest() -> dict[str, str]:
+    """Bind either selector to the exact candidate source closure."""
+    candidate = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
+    manifest_path = Path(
+        os.environ.get(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH", ""
+        )
+    )
+    manifest_sha256 = os.environ.get(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256", ""
+    )
+    source_commit = os.environ.get(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT", ""
+    )
+    if (
+        not manifest_path.is_absolute()
+        or re.fullmatch(r"[0-9a-f]{64}", manifest_sha256) is None
+        or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep requires an absolute source-bound manifest"
+        )
+    try:
+        info = manifest_path.lstat()
+    except FileNotFoundError as error:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest is missing"
+        ) from error
+    if (
+        manifest_path.is_symlink()
+        or not stat.S_ISREG(info.st_mode)
+        or info.st_nlink != 1
+        or stat.S_IMODE(info.st_mode) != 0o400
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest must be one 0400 regular file"
+        )
+    raw = manifest_path.read_bytes()
+    if not raw or len(raw) > 1048576:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest is empty or exceeds 1 MiB"
+        )
+    if hashlib.sha256(raw).hexdigest() != manifest_sha256:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest SHA-256 drifted"
+        )
+    try:
+        payload = json.loads(raw.decode("ascii"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest must be ASCII JSON"
+        ) from error
+    files = payload.get("files") if isinstance(payload, dict) else None
+    source_root = Path(__file__).resolve().parent.parent
+    source_paths = _FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS
+    drift: dict[str, object] = {}
+    if payload.get("schema") != (
+        "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1"
+    ):
+        drift["schema"] = payload.get("schema")
+    if payload.get("candidate") != candidate:
+        drift["candidate"] = payload.get("candidate")
+    if payload.get("source_commit") != source_commit:
+        drift["source_commit"] = payload.get("source_commit")
+    if not isinstance(files, dict):
+        drift["files"] = type(files).__name__
+        files = {}
+    elif tuple(sorted(files)) != tuple(sorted(source_paths)):
+        drift["files"] = tuple(sorted(files))
+    for relative in source_paths:
+        raw_source = (source_root / relative).read_bytes()
+        actual = {
+            "bytes": len(raw_source),
+            "sha256": hashlib.sha256(raw_source).hexdigest(),
+        }
+        if files.get(relative) != actual:
+            drift[relative] = (files.get(relative), actual)
+    if drift:
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep source manifest is not bound to the "
+            "runtime candidate: " + repr(drift)
+        )
+    return {
+        "source_commit": source_commit,
+        "source_manifest_sha256": manifest_sha256,
+    }
 
 
 def _fr13_fixed32_require_sfwd_conv_postprep_pass() -> dict[str, object]:
@@ -6839,9 +6972,10 @@ def _fr13_fixed32_require_sfwd_conv_postprep_pass() -> dict[str, object]:
             path.is_symlink()
             or not stat.S_ISREG(info.st_mode)
             or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o400
         ):
             raise RuntimeError(
-                f"FR13 SFWD conv/post-prep {label} must be one regular "
+                f"FR13 SFWD conv/post-prep {label} must be one 0400 regular "
                 "non-symlink file"
             )
     live_raw = live_path.read_bytes()
@@ -6873,12 +7007,7 @@ def _fr13_fixed32_require_sfwd_conv_postprep_pass() -> dict[str, object]:
         )
     files = manifest.get("files")
     source_root = Path(__file__).resolve().parent.parent
-    source_paths = (
-        "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
-        "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py",
-        "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py",
-        "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py",
-    )
+    source_paths = _FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS
     source_drift: dict[str, object] = {}
     if manifest.get("schema") != (
         "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1"
@@ -6891,6 +7020,8 @@ def _fr13_fixed32_require_sfwd_conv_postprep_pass() -> dict[str, object]:
     if not isinstance(files, dict):
         source_drift["files"] = type(files).__name__
         files = {}
+    elif tuple(sorted(files)) != tuple(sorted(source_paths)):
+        source_drift["files"] = tuple(sorted(files))
     for relative in source_paths:
         entry = files.get(relative)
         path = source_root / relative
@@ -6921,16 +7052,32 @@ def _fr13_fixed32_require_sfwd_conv_postprep_pass() -> dict[str, object]:
         "source_manifest_sha256": manifest_sha256,
         "fixed32_mode": _FR13_FIXED32_MODE,
         "batch_size": batch,
-        "task_count": 1 if batch == 1 else 4,
+        "task_count": 1,
+        "task_marker": "swe_verified:astropy__astropy-12907",
+        "layer_count": 48,
         "physical_rows_per_request": 32,
         "draft_vocab_root": 1,
         "draft_vocab_k": 65536,
+        "draft_vocab_blocks_sha256": (
+            "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+        ),
+        "qrow16_production": True,
+        "qrow16_fa2_sha256": (
+            "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+        ),
+        "qrow16_live_pass_sha256": (
+            "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+        ),
         "real_task_authenticated": True,
         "reference_always_served": True,
         "candidate_returned": False,
+        "reference_decision": "serve_incumbent",
+        "candidate_decision": "shadow_only",
+        "decision_exact": True,
         "timing_eligible": False,
         "floor_acceptance_eligible": False,
         "production_eligible": False,
+        "comparisons": 336,
         "mismatches": 0,
         "differing_bytes": 0,
         "errors": 0,
@@ -6944,11 +7091,47 @@ def _fr13_fixed32_require_sfwd_conv_postprep_pass() -> dict[str, object]:
         for name, expected in required.items()
         if payload.get(name) != expected
     }
-    comparisons = payload.get("comparisons")
+    layers = payload.get("layers")
+    expected_surfaces = [
+        "query_spec",
+        "key_spec",
+        "value_spec",
+        "value_tree",
+        "g",
+        "beta",
+        "commit_source_stage",
+    ]
     if (
         drift
-        or type(comparisons) is not int
-        or comparisons <= 0
+        or payload.get("compared_byte_surfaces") != expected_surfaces
+        or not isinstance(layers, list)
+        or len(layers) != 48
+        or len(
+            {
+                entry.get("layer_key")
+                for entry in layers
+                if isinstance(entry, dict)
+            }
+        )
+        != 48
+        or len(
+            {
+                (entry.get("layer_key"), entry.get("layer_prefix_sha256"))
+                for entry in layers
+                if isinstance(entry, dict)
+            }
+        )
+        != 48
+        or any(
+            not isinstance(entry, dict)
+            or re.fullmatch(r"0x[0-9a-f]+", str(entry.get("layer_key", "")))
+            is None
+            or re.fullmatch(
+                r"[0-9a-f]{64}", str(entry.get("layer_prefix_sha256", ""))
+            )
+            is None
+            for entry in layers
+        )
     ):
         raise RuntimeError(
             "FR13 SFWD conv/post-prep live PASS contract drifted: "
@@ -6980,6 +7163,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_production = _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
     sfwd_conv_postprep = _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+    sfwd_conv_postprep_byte = _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
     _fr13_fixed32_eager_boot_warm_contract()
     if gqa_group3_production not in ("0", "1"):
         raise RuntimeError(
@@ -7133,7 +7317,15 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION must be exactly 0 or 1"
         )
-    if sfwd_conv_postprep == "1":
+    if sfwd_conv_postprep_byte not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd_conv_postprep == "1" and sfwd_conv_postprep_byte == "1":
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep production and byte gate are exclusive"
+        )
+    if sfwd_conv_postprep == "1" or sfwd_conv_postprep_byte == "1":
         exact_runtime = {
             "FR13_DRAFT_VOCAB_ROOT": "1",
             "FR13_DRAFT_VOCAB_K": "65536",
@@ -7146,7 +7338,18 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB": "0",
             "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "0",
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB": "0",
+            "FR13_FA2_QROW16_PRODUCTION": "1",
+            "FR13_FA2_QROW16_SO_SHA256": (
+                "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+            ),
+            "FR13_FA2_QROW16_LIVE_PASS_SHA256": (
+                "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+            ),
         }
+        if sfwd_conv_postprep_byte == "1":
+            exact_runtime["FR13_FIXED32_B1_DIAGNOSTIC"] = "1"
+        else:
+            exact_runtime["FR13_FIXED32_B1_DIAGNOSTIC"] = "0"
         drift = {
             name: (os.environ.get(name, ""), expected)
             for name, expected in exact_runtime.items()
@@ -7154,14 +7357,15 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         }
         enforce_eager = os.environ.get("ENFORCE_EAGER", "")
         graph_runtime = bool(
-            enforce_eager == "0"
+            sfwd_conv_postprep == "1"
+            and enforce_eager == "0"
             and os.environ.get("CUDAGRAPH_MODE", "")
             == "FULL_AND_PIECEWISE"
         )
         eager_runtime = enforce_eager == "1"
         if (
             mode not in _FR13_FIXED32_MODES
-            or os.environ.get("MAX_NUM_SEQS", "") not in ("1", "4")
+            or os.environ.get("MAX_NUM_SEQS", "") != "1"
             or os.environ.get("SWE_CONCURRENCY", "")
             != os.environ.get("MAX_NUM_SEQS", "")
             or bool(candidate)
@@ -7174,10 +7378,13 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         ):
             raise RuntimeError(
                 "FR13 fixed32 SFWD conv/post-prep fusion requires exclusive "
-                "physical32 B1-or-B4 K64/root1 in eager or FULL graph mode: "
+                "physical32 B1 K64/root1 in eager or FULL graph mode: "
                 + repr(drift)
             )
-        _fr13_fixed32_require_sfwd_conv_postprep_pass()
+        if sfwd_conv_postprep == "1":
+            _fr13_fixed32_require_sfwd_conv_postprep_pass()
+        else:
+            _fr13_fixed32_require_sfwd_conv_postprep_source_manifest()
     if (
         batch_gdn_byte_diagnostic == "1"
         and graph_batch_gdn_byte_diagnostic == "1"
@@ -10042,15 +10249,21 @@ def _fr13_conv_subop_mab(
             _fr13_conv_postprep_active = bool(
                 _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
             )
+            _fr13_conv_postprep_candidate = _fr13_conv_postprep_active
+            _fr13_conv_postprep_gate_enabled = False
+            _fr13_conv_postprep_task_marker = None
             _fr13_conv_postprep_query = None
             _fr13_conv_postprep_key = None
             _fr13_conv_postprep_value_spec = None
             _fr13_conv_postprep_value_tree = None
             _fr13_conv_postprep_g = None
             _fr13_conv_postprep_beta = None
-            if _fr13_conv_postprep_active and not use_fr10_tree_conv:
+            if (
+                _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+                or _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
+            ) and not use_fr10_tree_conv:
                 raise RuntimeError(
-                    "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION requires the "
+                    "FR13 SFWD conv/post-prep selector requires the "
                     "physical32 tree-conv route"
                 )
             _fr10_tree_conv_expected = (
@@ -11185,7 +11398,17 @@ def _fr13_conv_subop_mab(
                                 _fr13_sfwd_task_markers,
                             ) = fixed32_sfwd_state_fusion_gate_control()
                             _fr13_sfwd_candidate_kind = "rowgroup8"
-                    if _fr13_conv_postprep_active:
+                    if _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:
+                        (
+                            _fr13_conv_postprep_gate_enabled,
+                            _fr13_conv_postprep_task_marker,
+                        ) = fixed32_sfwd_conv_postprep_gate_control(
+                            fixed32_mode=_FR13_FIXED32_MODE,
+                        )
+                        _fr13_conv_postprep_candidate = bool(
+                            _fr13_conv_postprep_task_marker is not None
+                        )
+                    if _fr13_conv_postprep_candidate:
                         _fr13_conv_postprep_b = int(
                             attn_metadata.num_spec_decodes
                         )
@@ -11247,6 +11470,12 @@ def _fr13_conv_subop_mab(
                         _fr13_conv_postprep_ssi = spec_state_indices_tensor
                         _fr13_conv_postprep_conv_state = conv_state
                         _fr13_conv_postprep_source_stage = _fr13_wbb_stage
+                        if _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:
+                            _fr13_conv_postprep_source_stage = torch.empty_like(
+                                _fr13_wbb_stage[
+                                    : _fr13_conv_postprep_b * _fr13_wbb_srows
+                                ]
+                            )
                         if _fr13_conv_postprep_graph_cache:
                             _fr13_conv_postprep_entry = (
                                 _fr13_conv_postprep_cache.get("by_batch", {})
@@ -12292,7 +12521,7 @@ def _fr13_conv_subop_mab(
                         mixed_qkv_spec = _fr10_tree_conv_out
                 except Exception as _fr10_tree_conv_exc:
                     if (
-                        _fr13_conv_postprep_active
+                        _fr13_conv_postprep_candidate
                         or (
                             _fr10_tree_conv_expected
                             and os.environ.get(
@@ -12562,6 +12791,55 @@ def _fr13_conv_subop_mab(
                         apply_l2norm=True,
                         output_g_exp=False,
                     )
+                    if (
+                        _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
+                        and _fr13_conv_postprep_candidate
+                    ):
+                        _fr13_conv_postprep_record = (
+                            fixed32_sfwd_conv_postprep_byte_gate(
+                                fixed32_mode=_FR13_FIXED32_MODE,
+                                task_marker=_fr13_conv_postprep_task_marker,
+                                layer_prefix=str(self.prefix),
+                                layer_key=int(conv_weights.data_ptr()),
+                                batch_size=int(attn_metadata.num_spec_decodes),
+                                reference_query=query_spec,
+                                candidate_query=_fr13_conv_postprep_query,
+                                reference_key=key_spec,
+                                candidate_key=_fr13_conv_postprep_key,
+                                reference_value_spec=value_spec,
+                                candidate_value_spec=_fr13_conv_postprep_value_spec,
+                                reference_value_tree=value_tree,
+                                candidate_value_tree=_fr13_conv_postprep_value_tree,
+                                reference_g=g_tree,
+                                candidate_g=_fr13_conv_postprep_g,
+                                reference_beta=beta_tree,
+                                candidate_beta=_fr13_conv_postprep_beta,
+                                reference_source_stage=_fr13_wbb_stage[
+                                    : int(attn_metadata.num_spec_decodes)
+                                    * _fr13_wbb_srows
+                                ],
+                                candidate_source_stage=(
+                                    _fr13_conv_postprep_source_stage
+                                ),
+                                source_manifest_path=os.environ.get(
+                                    "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH",
+                                    "",
+                                ),
+                                expected_source_manifest_sha256=os.environ.get(
+                                    "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256",
+                                    "",
+                                ),
+                                expected_source_commit=os.environ.get(
+                                    "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT",
+                                    "",
+                                ),
+                            )
+                        )
+                        if not bool(_fr13_conv_postprep_record["zero_diff"]):
+                            logger.warning_once(
+                                "FR13 SFWD conv/post-prep candidate mismatched; "
+                                "incumbent tensors remain served"
+                            )
                 tree_n = int(attn_metadata.fr10_tree_parent.numel())
                 tree_n_pad = int(attn_metadata.fr10_tree_visible_mask.size(0))
                 _fr12_native_spine_oracle_enabled = (

@@ -15,6 +15,12 @@ LAUNCHER = ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh"
 VARIANT = ROOT / "scripts/fr13_bigdenom_swe_serve_variant.sh"
 RUNNER = ROOT / "scripts/run_swe_bench_q36_a.py"
 SELECTOR = "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"
+BYTE_SELECTOR = "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB"
+QROW16_SHA256 = "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+QROW16_PASS_SHA256 = (
+    "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+)
+BLOCKS_SHA256 = "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
 
 
 def _load_patcher(name: str):
@@ -43,6 +49,7 @@ def test_selector_is_default_off_and_baked_only_when_explicit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv(SELECTOR, raising=False)
+    monkeypatch.delenv(BYTE_SELECTOR, raising=False)
     patcher = _load_patcher("fr13_sfwd_conv_postprep_default_off")
     assert patcher._FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION == "0"
     assert patcher._FR13_FIXED32_SFWD_CONV_POSTPREP_IMPORT == ""
@@ -81,6 +88,9 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
         patcher, "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION", "1"
     )
     monkeypatch.setattr(
+        patcher, "_FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB", "0"
+    )
+    monkeypatch.setattr(
         patcher, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", ""
     )
     monkeypatch.setattr(
@@ -113,6 +123,10 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
         "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB": "0",
         "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "0",
         "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB": "0",
+        "FR13_FA2_QROW16_PRODUCTION": "1",
+        "FR13_FA2_QROW16_SO_SHA256": QROW16_SHA256,
+        "FR13_FA2_QROW16_LIVE_PASS_SHA256": QROW16_PASS_SHA256,
+        "FR13_FIXED32_B1_DIAGNOSTIC": "0",
     }
     for name, value in exact.items():
         monkeypatch.setenv(name, value)
@@ -163,12 +177,7 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
     monkeypatch.setenv("FR13_FIXED32_TAW_WALK_CAP", "12")
     source_commit = "1" * 40
     manifest = tmp_path / "source_manifest.json"
-    source_paths = (
-        "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
-        "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py",
-        "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py",
-        "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py",
-    )
+    source_paths = patcher._FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS
     manifest.write_text(
         json.dumps(
             {
@@ -191,6 +200,7 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
         encoding="ascii",
     )
     manifest_sha256 = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    manifest.chmod(0o400)
     live_pass = tmp_path / "live_pass.json"
     live_payload = {
         "schema": "fr13.fixed32.sfwd_conv_postprep.live_pass.v1",
@@ -201,16 +211,41 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
         "fixed32_mode": "hydra27_fixed32",
         "batch_size": 1,
         "task_count": 1,
+        "task_marker": "swe_verified:astropy__astropy-12907",
+        "layer_count": 48,
         "physical_rows_per_request": 32,
         "draft_vocab_root": 1,
         "draft_vocab_k": 65536,
+        "draft_vocab_blocks_sha256": BLOCKS_SHA256,
+        "qrow16_production": True,
+        "qrow16_fa2_sha256": QROW16_SHA256,
+        "qrow16_live_pass_sha256": QROW16_PASS_SHA256,
+        "compared_byte_surfaces": [
+            "query_spec",
+            "key_spec",
+            "value_spec",
+            "value_tree",
+            "g",
+            "beta",
+            "commit_source_stage",
+        ],
+        "layers": [
+            {
+                "layer_key": f"0x{index + 1:x}",
+                "layer_prefix_sha256": f"{index + 1:064x}",
+            }
+            for index in range(48)
+        ],
         "real_task_authenticated": True,
         "reference_always_served": True,
         "candidate_returned": False,
+        "reference_decision": "serve_incumbent",
+        "candidate_decision": "shadow_only",
+        "decision_exact": True,
         "timing_eligible": False,
         "floor_acceptance_eligible": False,
         "production_eligible": False,
-        "comparisons": 320,
+        "comparisons": 336,
         "mismatches": 0,
         "differing_bytes": 0,
         "errors": 0,
@@ -218,6 +253,7 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
     live_pass.write_text(
         json.dumps(live_payload, sort_keys=True) + "\n", encoding="ascii"
     )
+    live_pass.chmod(0o400)
     monkeypatch.setenv(
         "FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON", str(live_pass)
     )
@@ -237,16 +273,20 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
     )
     patcher._fr13_fixed32_validate_patch_env()
 
+    manifest.chmod(0o600)
     manifest_payload = json.loads(manifest.read_text(encoding="ascii"))
     manifest_payload["files"][source_paths[-1]]["sha256"] = "0" * 64
     manifest.write_text(
         json.dumps(manifest_payload, sort_keys=True) + "\n", encoding="ascii"
     )
+    manifest.chmod(0o400)
     manifest_sha256 = hashlib.sha256(manifest.read_bytes()).hexdigest()
     live_payload["source_manifest_sha256"] = manifest_sha256
+    live_pass.chmod(0o600)
     live_pass.write_text(
         json.dumps(live_payload, sort_keys=True) + "\n", encoding="ascii"
     )
+    live_pass.chmod(0o400)
     monkeypatch.setenv(
         "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256",
         manifest_sha256,
@@ -269,6 +309,9 @@ def test_patch_contract_rejects_naked_serving_selector(
     monkeypatch.setattr(
         patcher, "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION", "1"
     )
+    monkeypatch.setattr(
+        patcher, "_FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB", "0"
+    )
     monkeypatch.setattr(patcher, "_fr13_fixed32_eager_boot_warm_contract", lambda: None)
     exact = {
         "MAX_NUM_SEQS": "1",
@@ -286,6 +329,10 @@ def test_patch_contract_rejects_naked_serving_selector(
         "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB": "0",
         "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "0",
         "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB": "0",
+        "FR13_FA2_QROW16_PRODUCTION": "1",
+        "FR13_FA2_QROW16_SO_SHA256": QROW16_SHA256,
+        "FR13_FA2_QROW16_LIVE_PASS_SHA256": QROW16_PASS_SHA256,
+        "FR13_FIXED32_B1_DIAGNOSTIC": "0",
     }
     for name, value in exact.items():
         monkeypatch.setenv(name, value)
@@ -318,7 +365,7 @@ def test_generated_route_serves_all_direct_outputs_and_has_no_fallback() -> None
     assert "value_tree = _fr13_conv_postprep_value_tree" in generated
     assert "g_tree = _fr13_conv_postprep_g" in generated
     assert "beta_tree = _fr13_conv_postprep_beta" in generated
-    assert "_fr13_conv_postprep_active\n                        or (" in generated
+    assert "_fr13_conv_postprep_candidate\n                        or (" in generated
 
 
 def test_launcher_and_real_task_runner_forward_the_selector() -> None:
@@ -327,12 +374,15 @@ def test_launcher_and_real_task_runner_forward_the_selector() -> None:
     runner = RUNNER.read_text(encoding="utf-8")
     assert f"{SELECTOR}=${{{SELECTOR}:-0}}" in launcher
     assert f'-e {SELECTOR}="${SELECTOR}"' in launcher
+    assert f'-e {BYTE_SELECTOR}="${BYTE_SELECTOR}"' in launcher
     assert f"{SELECTOR}=${{{SELECTOR}:-0}}" in variant
+    assert f"{BYTE_SELECTOR}=${{{BYTE_SELECTOR}:-0}}" in variant
     assert (
         f'|| ( "${SELECTOR}" == "1" \\\n'
         '           && "${ENFORCE_EAGER:-0}" == "1" )'
     ) in variant
     assert SELECTOR in runner
+    assert BYTE_SELECTOR in runner
     for source in (launcher, variant):
         assert f"{SELECTOR} must be exactly 0 or 1" in source
         assert source.count(SELECTOR) >= 7

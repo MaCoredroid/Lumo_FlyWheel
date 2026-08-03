@@ -4,6 +4,7 @@ import ast
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -57,6 +58,33 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (  # noqa
 
 def _bytes(tensor: torch.Tensor) -> torch.Tensor:
     return tensor.contiguous().view(torch.uint8)
+
+
+def _byte_gate_source_manifest(tmp_path: Path, commit: str) -> tuple[Path, str]:
+    manifest = tmp_path / "source_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": candidate.SOURCE_MANIFEST_SCHEMA,
+                "candidate": candidate.CANDIDATE,
+                "source_commit": commit,
+                "files": {
+                    relative: {
+                        "bytes": len((ROOT / relative).read_bytes()),
+                        "sha256": hashlib.sha256(
+                            (ROOT / relative).read_bytes()
+                        ).hexdigest(),
+                    }
+                    for relative in candidate.SOURCE_FILES
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    manifest.chmod(0o400)
+    return manifest, hashlib.sha256(manifest.read_bytes()).hexdigest()
 
 
 def _gate_incumbent(
@@ -694,13 +722,161 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
     assert tap["all_layer_bytes"]["conv_intermediate_write_removed"] == 0
 
 
+def test_byte_gate_requires_exact_arm_and_authenticated_task(
+    tmp_path: Path,
+) -> None:
+    enabled = tmp_path / "enabled"
+    event = tmp_path / "event"
+    environ = {"FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB": "1"}
+
+    with pytest.raises(RuntimeError, match="byte-gate arm is missing"):
+        candidate.fixed32_sfwd_conv_postprep_gate_control(
+            fixed32_mode="hydra27_fixed32",
+            environ=environ,
+            enabled_path=str(enabled),
+            event_path=str(event),
+        )
+
+    enabled.write_bytes(b"1\n")
+    enabled.chmod(0o400)
+    assert candidate.fixed32_sfwd_conv_postprep_gate_control(
+        fixed32_mode="hydra27_fixed32",
+        environ=environ,
+        enabled_path=str(enabled),
+        event_path=str(event),
+    ) == (True, None)
+
+    event.write_text(candidate.TASK_MARKER + "\n", encoding="ascii")
+    event.chmod(0o444)
+    assert candidate.fixed32_sfwd_conv_postprep_gate_control(
+        fixed32_mode="hydra27_fixed32",
+        environ=environ,
+        enabled_path=str(enabled),
+        event_path=str(event),
+    ) == (True, candidate.TASK_MARKER)
+
+    event.chmod(0o644)
+    with pytest.raises(RuntimeError, match="marker mode must be 0444"):
+        candidate.fixed32_sfwd_conv_postprep_gate_control(
+            fixed32_mode="hydra27_fixed32",
+            environ=environ,
+            enabled_path=str(enabled),
+            event_path=str(event),
+        )
+
+
+def test_byte_gate_emits_48_layer_pass_and_mismatch_is_sticky(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    commit = "1" * 40
+    manifest, manifest_sha256 = _byte_gate_source_manifest(tmp_path, commit)
+    records = tmp_path / "records.jsonl"
+    live_pass = tmp_path / "live_pass.json"
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB_PATH", str(records)
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_PASS_PATH", str(live_pass)
+    )
+    monkeypatch.setenv(
+        "FR13_DRAFT_VOCAB_BLOCKS",
+        str(ROOT / "scripts" / "fr13_dvk_subset_blocks.json"),
+    )
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_ROOT", "1")
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_K", "65536")
+    monkeypatch.setenv("FR13_FA2_QROW16_PRODUCTION", "1")
+    monkeypatch.setenv("FR13_FA2_QROW16_SO_SHA256", candidate.QROW16_FA2_SHA256)
+    monkeypatch.setenv(
+        "FR13_FA2_QROW16_LIVE_PASS_SHA256",
+        candidate.QROW16_LIVE_PASS_SHA256,
+    )
+    reference = torch.tensor([1.0, -2.0], dtype=torch.bfloat16)
+
+    def compare(layer_key: int, candidate_query: torch.Tensor) -> dict[str, object]:
+        return candidate.fixed32_sfwd_conv_postprep_byte_gate(
+            fixed32_mode="hydra27_fixed32",
+            task_marker=candidate.TASK_MARKER,
+            layer_prefix=f"model.layers.{layer_key}",
+            layer_key=layer_key,
+            batch_size=1,
+            reference_query=reference,
+            candidate_query=candidate_query,
+            reference_key=reference,
+            candidate_key=reference.clone(),
+            reference_value_spec=reference,
+            candidate_value_spec=reference.clone(),
+            reference_value_tree=reference,
+            candidate_value_tree=reference.clone(),
+            reference_g=reference,
+            candidate_g=reference.clone(),
+            reference_beta=reference,
+            candidate_beta=reference.clone(),
+            reference_source_stage=reference,
+            candidate_source_stage=reference.clone(),
+            source_manifest_path=str(manifest),
+            expected_source_manifest_sha256=manifest_sha256,
+            expected_source_commit=commit,
+        )
+
+    candidate._BYTE_GATE_STATE.update(
+        task_marker=None,
+        source_binding=None,
+        passed={},
+        attempts={},
+        failed=False,
+    )
+    for layer_key in range(1, 49):
+        record = compare(layer_key, reference.clone())
+        assert record["zero_diff"] is True
+
+    payload = json.loads(live_pass.read_text(encoding="ascii"))
+    assert payload["layer_count"] == 48
+    assert payload["comparisons"] == 48 * len(candidate.BYTE_SURFACES)
+    assert payload["compared_byte_surfaces"] == list(candidate.BYTE_SURFACES)
+    assert payload["reference_decision"] == "serve_incumbent"
+    assert payload["candidate_decision"] == "shadow_only"
+    assert len(records.read_text(encoding="ascii").splitlines()) == 48
+
+    candidate._BYTE_GATE_STATE.update(
+        task_marker=None,
+        source_binding=None,
+        passed={},
+        attempts={},
+        failed=False,
+    )
+    live_pass.unlink()
+    mismatch = reference.clone()
+    mismatch[0] = 3.0
+    assert compare(1, mismatch)["zero_diff"] is False
+    for layer_key in range(1, 49):
+        assert compare(layer_key, reference.clone())["zero_diff"] is True
+    assert not live_pass.exists()
+
+
 def test_sanitized_artifact_binds_sources_ledgers_and_resource_gate() -> None:
     manifest = json.loads((ARTIFACT / "source_manifest.json").read_text())
     assert manifest["base_commit"] == "c49c8eb5370e4d4035aceffaa8476aea31f921f5"
     assert manifest["source_commit"] == "7f46f69a76ac1b0a7429ec0928b641bbeee2efb2"
     for relative, expected in manifest["files"].items():
-        path = ROOT / relative
-        raw = path.read_bytes()
+        # The artifact's self-test entry was captured by its follow-up commit.
+        snapshot_commit = (
+            "711c08551de2e5eabf9788ad44002e5b0a2564db"
+            if relative == "tests/test_fr13_fixed32_sfwd_conv_postprep_fusion.py"
+            else manifest["source_commit"]
+        )
+        raw = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "show",
+                f"{snapshot_commit}:{relative}",
+            ],
+            check=True,
+            capture_output=True,
+        ).stdout
         assert len(raw) == expected["bytes"]
         assert hashlib.sha256(raw).hexdigest() == expected["sha256"]
 
