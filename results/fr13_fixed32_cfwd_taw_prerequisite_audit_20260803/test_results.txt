@@ -1,0 +1,20 @@
+python3 -m pytest -q tests/test_fr13_fixed32_cfwd_logit_direct_runners.py
+7 passed
+
+python3 -m pytest -q tests/test_fr13_k64_physical32_fullstack_route.py
+11 passed
+
+Rebased integration suite:
+python3 -m pytest -q tests/test_fr13_fixed32_cfwd_logit_direct_runners.py tests/test_fr13_k64_physical32_fullstack_route.py tests/test_fr13_cutlass_b4_hybrid_n5120_dual_production.py tests/test_fr13_sfwd_state_fusion_b4_production.py
+47 passed
+
+bash -n scripts/fr13_run_b1_cfwd_logit_direct_live_gate.sh
+PASS
+
+bash -n scripts/fr13_run_b1_cfwd_logit_direct_timing.sh
+PASS
+
+git diff --check
+PASS
+
+No Docker container or GPU workload was launched.

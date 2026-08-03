@@ -1,0 +1,27 @@
+{
+  "artifact_search": {
+    "legacy_hydra_b1_artifact": "/home/mark/shared/lumoFlyWheel-taw-current-artifact/results/fr13_fixed32_taw_current_b1_live_pass_20260731T164000Z/live_pass.json",
+    "legacy_source_contract_schema": "fr13-fixed32-taw-exact-commit-v3",
+    "legacy_source_contract_sha256": "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da",
+    "matching_current_bundle_count": 0,
+    "searched_likely_results_roots": 124
+  },
+  "audited_base_commit": "53562909bcf158c4417ee4215998eadd3cfb6442",
+  "current_source": {
+    "candidate": "fixed32_all_parent_commit_v2",
+    "file": "scripts/fr13_device_multidraft_kernel.py",
+    "file_sha256": "bcc21de45b814d9a7c9724f81c53c7e4b1c1412f66546af2fb176937898c2eea",
+    "mode": "hydra27_fixed32",
+    "required_production_batches": [
+      1,
+      4
+    ],
+    "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
+    "source_contract_sha256": "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
+  },
+  "gpu_or_docker_launched": false,
+  "next_gate": "fresh Hydra27 source-v7 B1 real SWE-Verified gate",
+  "production_bundle_available": false,
+  "schema": "fr13.fixed32.cfwd_taw_prerequisite_audit.v1",
+  "status": "blocked_on_real_taw_qualification"
+}

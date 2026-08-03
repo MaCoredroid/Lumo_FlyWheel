@@ -10,7 +10,17 @@ cd "$REPO"
 : "${RUNROOT:?set RUNROOT to a new path under output/}"
 : "${TAG:?set TAG to a unique run tag}"
 : "${STOCK_FA2_SO:?set STOCK_FA2_SO to the exact-safe stock FA2 binary}"
-: "${TAW_PASS_JSON:?set TAW_PASS_JSON to the native all-parent production PASS}"
+: "${TAW_B1_CREDENTIAL:?set it to the source-bound Hydra27 B1 credential}"
+: "${TAW_B1_CREDENTIAL_SHA256:?set its raw SHA-256}"
+: "${TAW_B1_LIVE_BUNDLE:?set it to the credentialed Hydra27 B1 replay}"
+: "${TAW_B1_LIVE_BUNDLE_SHA256:?set its raw SHA-256}"
+: "${TAW_REVIEWED_B4_PASS:?set it to the reviewed Hydra27 exact4 B4 bundle}"
+: "${TAW_REVIEWED_B4_PASS_SHA256:?set its raw SHA-256}"
+: "${TAW_REVIEWED_B4_VERDICT:?set it to the reviewed Hydra27 exact4 verdict}"
+: "${TAW_REVIEWED_B4_VERDICT_SHA256:?set its raw SHA-256}"
+: "${TAW_MERGE_BINDING:?set it to the Hydra27 B1/B4 merge binding}"
+: "${TAW_MERGE_BINDING_SHA256:?set its raw SHA-256}"
+: "${TAW_PASS_JSON:?set it to the merged Hydra27 production bundle}"
 : "${TAW_PASS_SHA256:?set TAW_PASS_SHA256 to its raw SHA-256}"
 : "${CFWD_PASS_JSON:?set CFWD_PASS_JSON to the one-task CFWD production credential}"
 : "${CFWD_PASS_SHA256:?set CFWD_PASS_SHA256 to its raw SHA-256}"
@@ -24,6 +34,7 @@ STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19
 STOCK_FA2_BYTES=299183936
 CANDIDATE_SOURCE=scripts/fr13_cfwd_logit_direct_decision_kernel.py
 CANDIDATE_SOURCE_SHA256=d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d
+TAW_SOURCE=scripts/fr13_device_multidraft_kernel.py
 GATE=scripts/fr13_cfwd_logit_direct_gate.py
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 WEIGHT_FLOOR_MS=119.658015414
@@ -44,14 +55,27 @@ CANDIDATE_ARM="hydra27_fixed32_cfwd_logit_direct_${TAG}"
   || { echo "RUNROOT must be new: $RUNROOT_ABS" >&2; exit 2; }
 [[ -x "$PYTHON_BIN" ]] \
   || { echo "Python environment is unavailable: $PYTHON_BIN" >&2; exit 2; }
-for required in "$STOCK_FA2_SO" "$TAW_PASS_JSON" "$CFWD_PASS_JSON"; do
+for required in \
+  "$STOCK_FA2_SO" "$TAW_B1_CREDENTIAL" "$TAW_B1_LIVE_BUNDLE" \
+  "$TAW_REVIEWED_B4_PASS" "$TAW_REVIEWED_B4_VERDICT" \
+  "$TAW_MERGE_BINDING" "$TAW_PASS_JSON" "$CFWD_PASS_JSON"; do
   [[ "$required" == /* && -f "$required" && ! -L "$required" ]] \
     || { echo "input must be an absolute regular non-symlink file: $required" >&2; exit 2; }
 done
 unset required
 [[ "$TAW_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
-   && "$(sha256sum "$TAW_PASS_JSON" | awk '{print $1}')" == "$TAW_PASS_SHA256" ]] \
-  || { echo "native all-parent PASS SHA-256 mismatch" >&2; exit 2; }
+   && "$(sha256sum "$TAW_PASS_JSON" | awk '{print $1}')" == "$TAW_PASS_SHA256" \
+   && "$TAW_B1_CREDENTIAL_SHA256" =~ ^[0-9a-f]{64}$ \
+   && "$(sha256sum "$TAW_B1_CREDENTIAL" | awk '{print $1}')" == "$TAW_B1_CREDENTIAL_SHA256" \
+   && "$TAW_B1_LIVE_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ \
+   && "$(sha256sum "$TAW_B1_LIVE_BUNDLE" | awk '{print $1}')" == "$TAW_B1_LIVE_BUNDLE_SHA256" \
+   && "$TAW_REVIEWED_B4_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+   && "$(sha256sum "$TAW_REVIEWED_B4_PASS" | awk '{print $1}')" == "$TAW_REVIEWED_B4_PASS_SHA256" \
+   && "$TAW_REVIEWED_B4_VERDICT_SHA256" =~ ^[0-9a-f]{64}$ \
+   && "$(sha256sum "$TAW_REVIEWED_B4_VERDICT" | awk '{print $1}')" == "$TAW_REVIEWED_B4_VERDICT_SHA256" \
+   && "$TAW_MERGE_BINDING_SHA256" =~ ^[0-9a-f]{64}$ \
+   && "$(sha256sum "$TAW_MERGE_BINDING" | awk '{print $1}')" == "$TAW_MERGE_BINDING_SHA256" ]] \
+  || { echo "TAW credential or production bundle identity mismatch" >&2; exit 2; }
 [[ "$CFWD_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
    && "$(sha256sum "$CFWD_PASS_JSON" | awk '{print $1}')" == "$CFWD_PASS_SHA256" ]] \
   || { echo "CFWD production credential SHA-256 mismatch" >&2; exit 2; }
@@ -73,6 +97,16 @@ unset required
   --expected-sha256 "$CFWD_PASS_SHA256" \
   --source-commit "$SOURCE_COMMIT" \
   --timing-subset "$SUBSET" \
+  >/dev/null
+"$PYTHON_BIN" scripts/fr13_taw_b1_credential.py validate-production \
+  --mode hydra27_fixed32 \
+  --source "$TAW_SOURCE" \
+  --credential "$TAW_B1_CREDENTIAL" \
+  --b1-live-bundle "$TAW_B1_LIVE_BUNDLE" \
+  --b4-production-pass "$TAW_REVIEWED_B4_PASS" \
+  --b4-gate-verdict "$TAW_REVIEWED_B4_VERDICT" \
+  --merge-binding "$TAW_MERGE_BINDING" \
+  --production-pass "$TAW_PASS_JSON" \
   >/dev/null
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before timing" >&2; exit 2; }
@@ -110,6 +144,11 @@ printf '%s\n' \
   "subset_sha256=$SUBSET_SHA256" \
   "block_map_sha256=$BLOCK_MAP_SHA256" \
   "stock_fa2_sha256=$STOCK_FA2_SHA256" \
+  "taw_b1_credential_sha256=$TAW_B1_CREDENTIAL_SHA256" \
+  "taw_b1_live_bundle_sha256=$TAW_B1_LIVE_BUNDLE_SHA256" \
+  "taw_reviewed_b4_pass_sha256=$TAW_REVIEWED_B4_PASS_SHA256" \
+  "taw_reviewed_b4_verdict_sha256=$TAW_REVIEWED_B4_VERDICT_SHA256" \
+  "taw_merge_binding_sha256=$TAW_MERGE_BINDING_SHA256" \
   "taw_pass_sha256=$TAW_PASS_SHA256" \
   "cfwd_pass_sha256=$CFWD_PASS_SHA256" \
   "candidate_source_sha256=$CANDIDATE_SOURCE_SHA256" \
@@ -145,6 +184,11 @@ finalize_manifests() {
   [[ "$(sha256sum "$RUNNER_PATH" | awk '{print $1}')" == "$RUNNER_SHA256" \
      && "$(sha256sum "$GATE" | awk '{print $1}')" == "$GATE_SHA256" \
      && "$(sha256sum "$CANDIDATE_SOURCE" | awk '{print $1}')" == "$CANDIDATE_SOURCE_SHA256" \
+     && "$(sha256sum "$TAW_B1_CREDENTIAL" | awk '{print $1}')" == "$TAW_B1_CREDENTIAL_SHA256" \
+     && "$(sha256sum "$TAW_B1_LIVE_BUNDLE" | awk '{print $1}')" == "$TAW_B1_LIVE_BUNDLE_SHA256" \
+     && "$(sha256sum "$TAW_REVIEWED_B4_PASS" | awk '{print $1}')" == "$TAW_REVIEWED_B4_PASS_SHA256" \
+     && "$(sha256sum "$TAW_REVIEWED_B4_VERDICT" | awk '{print $1}')" == "$TAW_REVIEWED_B4_VERDICT_SHA256" \
+     && "$(sha256sum "$TAW_MERGE_BINDING" | awk '{print $1}')" == "$TAW_MERGE_BINDING_SHA256" \
      && "$(sha256sum "$TAW_PASS_JSON" | awk '{print $1}')" == "$TAW_PASS_SHA256" \
      && "$(sha256sum "$CFWD_PASS_JSON" | awk '{print $1}')" == "$CFWD_PASS_SHA256" ]] \
     || { echo "CFWD timing source or credential changed during execution" >&2; return 14; }

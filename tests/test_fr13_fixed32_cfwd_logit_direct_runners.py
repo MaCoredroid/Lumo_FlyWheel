@@ -240,6 +240,18 @@ def test_live_runner_is_canonical_real_swe_byte_gate() -> None:
     assert "FR13_DRAFT_VOCAB_K=65536 FR13_DRAFT_VOCAB_ROOT=1" in text
     assert "FR13_CFWD_LOGIT_DIRECT_BYTE_AB=1" in text
     assert "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0" in text
+    assert "fr13_taw_b1_credential.py validate-production" in text
+    assert text.index("fr13_taw_b1_credential.py validate-production") < text.index(
+        "docker ps -aq"
+    )
+    for prerequisite in (
+        "TAW_B1_CREDENTIAL",
+        "TAW_B1_LIVE_BUNDLE",
+        "TAW_REVIEWED_B4_PASS",
+        "TAW_REVIEWED_B4_VERDICT",
+        "TAW_MERGE_BINDING",
+    ):
+        assert prerequisite in text
     assert "--traffic-audit \"$TRAFFIC_AUDIT\"" in text
     assert "--boundary-snapshot \"$BOUNDARY\"" in text
     assert "PROBE_ONLY" not in text and "CAPTURE_ONLY" not in text
@@ -252,6 +264,18 @@ def test_timing_runner_is_exact4_stock_then_credentialed_candidate() -> None:
     assert "config/fr13_fixed32/subset_b4_four.json" in text
     assert "--timing-subset \"$SUBSET\"" in text
     assert text.index('"$GATE" validate') < text.index("docker ps -aq")
+    assert "fr13_taw_b1_credential.py validate-production" in text
+    assert text.index("fr13_taw_b1_credential.py validate-production") < text.index(
+        "docker ps -aq"
+    )
+    for prerequisite in (
+        "TAW_B1_CREDENTIAL",
+        "TAW_B1_LIVE_BUNDLE",
+        "TAW_REVIEWED_B4_PASS",
+        "TAW_REVIEWED_B4_VERDICT",
+        "TAW_MERGE_BINDING",
+    ):
+        assert prerequisite in text
     assert 'run_arm "$STOCK_ARM" 0' in text
     assert 'run_arm "$CANDIDATE_ARM" 1' in text
     assert "--expected-tok-per-draft 31" in text
