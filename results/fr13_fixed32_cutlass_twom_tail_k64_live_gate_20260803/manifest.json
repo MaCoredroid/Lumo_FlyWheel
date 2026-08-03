@@ -38,6 +38,16 @@
     "all_five_projection_shapes_observed": true,
     "served_result": "stock"
   },
+  "acceptance_observation": {
+    "served_result": "stock",
+    "draft_events": 6724,
+    "draft_tokens": 208444,
+    "accepted_draft_tokens": 31902,
+    "generation_tokens": 38672,
+    "accepted_drafts_per_event": 4.744497323022011,
+    "committed_tokens_per_event": 5.751338488994646,
+    "candidate_causal_delta_claimed": false
+  },
   "credentials": {
     "live_status": "pass",
     "live_schema": "fr13.fixed32.cutlass_identity_twom_b4_k64_root_live_gate.v1",
