@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -499,6 +500,12 @@ def test_work_census_seals_comparator_event_index_and_request_digests() -> None:
     with pytest.raises(census.CensusError, match="request_id_sha256s"):
         census.validate_event(relabeled, source="request-relabel")
 
+    event_relabel = json.loads(json.dumps(event))
+    event_relabel["event_id"] = "hydra27_fixed32:9999:0"
+    event_relabel["gdn_comparator"]["census_event_id"] = event_relabel["event_id"]
+    with pytest.raises(census.CensusError, match="event_id"):
+        census.validate_event(event_relabel, source="event-relabel")
+
 
 def test_authenticated_request_map_requires_proxy_engine_identity_parity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -542,6 +549,69 @@ def test_authenticated_request_map_requires_proxy_engine_identity_parity(
     engine[-1] = dict(engine[-1], task_key_id="0" * 64)
     with pytest.raises(reducer.GateError, match="identity parity failed"):
         reducer._authenticated_request_task_map(tmp_path, [task_id])
+
+
+def test_arm_git_head_is_exact_source_commit_and_digest(tmp_path: Path) -> None:
+    reducer = _load_reducer()
+    commit = "a" * 40
+    path = tmp_path / "git_head.txt"
+    path.write_bytes(f"{commit}\n".encode("ascii"))
+    assert reducer._validate_arm_git_head(tmp_path, commit) == {
+        "path": "git_head.txt",
+        "sha256": hashlib.sha256(f"{commit}\n".encode("ascii")).hexdigest(),
+        "bytes": 41,
+        "source_commit": commit,
+    }
+
+
+@pytest.mark.parametrize(
+    "raw",
+    (b"a" * 40, b"a" * 40 + b"\n\n", b"b" * 40 + b"\n", b"not-a-commit\n"),
+)
+def test_arm_git_head_rejects_malformed_or_mismatched_bytes(
+    tmp_path: Path, raw: bytes
+) -> None:
+    reducer = _load_reducer()
+    (tmp_path / "git_head.txt").write_bytes(raw)
+    with pytest.raises(reducer.GateError, match="exact source commit"):
+        reducer._validate_arm_git_head(tmp_path, "a" * 40)
+
+
+def test_arm_git_head_rejects_links_and_path_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reducer = _load_reducer()
+    commit = "a" * 40
+    expected = f"{commit}\n".encode("ascii")
+    target = tmp_path / "target"
+    target.write_bytes(expected)
+    arm = tmp_path / "arm"
+    arm.mkdir()
+    (arm / "git_head.txt").symlink_to(target)
+    with pytest.raises(reducer.GateError, match="securely open"):
+        reducer._validate_arm_git_head(arm, commit)
+
+    (arm / "git_head.txt").unlink()
+    os.link(target, arm / "git_head.txt")
+    with pytest.raises(reducer.GateError, match="singly-linked"):
+        reducer._validate_arm_git_head(arm, commit)
+
+    (arm / "git_head.txt").unlink()
+    original = arm / "git_head.txt"
+    replacement = tmp_path / "replacement"
+    original.write_bytes(expected)
+    replacement.write_bytes(expected)
+    calls = 0
+
+    def swapped_open(_base: Path, _relative: str, _label: str) -> int:
+        nonlocal calls
+        calls += 1
+        selected = original if calls == 1 else replacement
+        return os.open(selected, os.O_RDONLY)
+
+    monkeypatch.setattr(reducer, "_open_no_symlinks", swapped_open)
+    with pytest.raises(reducer.GateError, match="changed while being read"):
+        reducer._validate_arm_git_head(arm, commit)
 
 
 def test_runtime_manifest_rejects_source_closure_tamper(tmp_path: Path) -> None:
@@ -687,6 +757,8 @@ def test_reducer_rebuilds_qwen_ingress_and_graph_evidence() -> None:
     assert "floor_gate.pinned_dataset_record_digests(str(REPO))" in source
     assert "git" in source and "show" in source
     assert "runtime_manifest.build_manifest(" in source
+    assert '_validate_arm_git_head(arm, args.source_commit)' in source
+    assert '"arm_git_head": arm_git_head' in source
     assert "work_census.validate_arm(" in source
     assert "fixed32_contract.validate_external_manifest(" in source
     assert 'runtime_launch_raw != runtime_end_raw' in source

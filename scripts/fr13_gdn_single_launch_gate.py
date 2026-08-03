@@ -95,6 +95,10 @@ BLOCK_MAP_SHA256 = (
 )
 TAW_ROUTE = work_census.TAW_ROUTE
 HEX = frozenset("0123456789abcdef")
+OPEN_BASE_FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+OPEN_DIRECTORY_FLAGS = OPEN_BASE_FLAGS | getattr(os, "O_DIRECTORY", 0)
+OPEN_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+READ_CHUNK_BYTES = 1024 * 1024
 
 
 class GateError(RuntimeError):
@@ -117,6 +121,94 @@ def _regular(path: Path, label: str) -> bytes:
     ):
         raise GateError(f"{label} must be a singly-linked regular file: {path}")
     return path.read_bytes()
+
+
+def _open_no_symlinks(base: Path, relative_path: str, label: str) -> int:
+    canonical = _canonical_repo_path(relative_path, label)
+    parts = PurePosixPath(canonical).parts
+    try:
+        directory_fd = os.open(base, OPEN_DIRECTORY_FLAGS)
+    except OSError as error:
+        raise GateError(f"cannot open {label} parent: {error}") from error
+    try:
+        for part in parts[:-1]:
+            next_fd = os.open(
+                part,
+                OPEN_DIRECTORY_FLAGS | OPEN_NOFOLLOW,
+                dir_fd=directory_fd,
+            )
+            os.close(directory_fd)
+            directory_fd = next_fd
+        return os.open(
+            parts[-1],
+            OPEN_BASE_FLAGS | OPEN_NOFOLLOW,
+            dir_fd=directory_fd,
+        )
+    except OSError as error:
+        raise GateError(f"cannot securely open {label}: {error}") from error
+    finally:
+        os.close(directory_fd)
+
+
+def _file_identity(info: os.stat_result) -> tuple[int, ...]:
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_mode,
+        info.st_nlink,
+        info.st_size,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
+    )
+
+
+def _secure_regular_relative(
+    base: Path, relative_path: str, label: str
+) -> bytes:
+    file_fd = _open_no_symlinks(base, relative_path, label)
+    captured = bytearray()
+    try:
+        before = os.fstat(file_fd)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            raise GateError(f"{label} must be a singly-linked regular file")
+        while True:
+            chunk = os.read(file_fd, READ_CHUNK_BYTES)
+            if not chunk:
+                break
+            captured.extend(chunk)
+        after = os.fstat(file_fd)
+    finally:
+        os.close(file_fd)
+    if (
+        _file_identity(before) != _file_identity(after)
+        or len(captured) != before.st_size
+    ):
+        raise GateError(f"{label} changed while being read")
+    check_fd = _open_no_symlinks(base, relative_path, label)
+    try:
+        current = os.fstat(check_fd)
+        if not stat.S_ISREG(current.st_mode) or current.st_nlink != 1:
+            raise GateError(f"{label} must remain a singly-linked regular file")
+    finally:
+        os.close(check_fd)
+    if _file_identity(before) != _file_identity(current):
+        raise GateError(f"{label} changed while being read")
+    return bytes(captured)
+
+
+def _validate_arm_git_head(arm: Path, source_commit: str) -> dict[str, Any]:
+    raw = _secure_regular_relative(arm, "git_head.txt", "arm git_head.txt")
+    expected = f"{source_commit}\n".encode("ascii")
+    if raw != expected:
+        raise GateError(
+            "arm git_head.txt does not contain the exact source commit"
+        )
+    return {
+        "path": "git_head.txt",
+        "sha256": _sha256(raw),
+        "bytes": len(raw),
+        "source_commit": source_commit,
+    }
 
 
 def _load_json(path: Path, label: str) -> tuple[dict[str, Any], bytes]:
@@ -636,6 +728,7 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         raise GateError("subset is not the exact expected task set")
     concurrency = batch
     arm = args.arm.resolve(strict=True)
+    arm_git_head = _validate_arm_git_head(arm, args.source_commit)
 
     runtime_launch, runtime_launch_raw = _load_json(
         args.runtime_launch, "runtime launch manifest"
@@ -818,6 +911,8 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         "acceptance_valid": False,
         "floor_acceptance_eligible": False,
         "source_commit": args.source_commit,
+        "arm_git_head": arm_git_head,
+        "arm_git_head_source_commit_match": True,
         "source_commit_git_show_verified": True,
         "source_closure_file_count": len(required_closure),
         "source_closure_sha256": source_closure_sha256,

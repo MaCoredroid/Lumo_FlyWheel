@@ -1206,6 +1206,10 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         )
     if "gdn_comparator" in event:
         comparator_label = f"{source}.gdn_comparator"
+        expected_comparator_event_id = (
+            f"{mode}:{producer_pid}:{event_index}"
+        )
+        _expect(event_id, expected_comparator_event_id, f"{source}.event_id")
         comparator = _mapping(event["gdn_comparator"], comparator_label)
         _exact_keys(comparator, GDN_COMPARATOR_KEYS, comparator_label)
         _expect(
