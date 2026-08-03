@@ -257,3 +257,43 @@ def test_candidate_is_source_only_and_cannot_change_the_served_arm() -> None:
     assert "deliberately not wired into serving" in source
     assert "fixed32_gdn_single_launch_gqa_group3_v1" not in served
     assert "fr13_gdn_gqa_group3" not in served
+
+
+def test_value_head_helper_calls_exactly_match_the_ast_signature() -> None:
+    tree, _source = _tree_and_source()
+    helper_name = "_fr13_fixed32_gdn_gqa_group3_value_head_node"
+    helper = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == helper_name
+    )
+    group = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_gdn_gqa_group3_node"
+    )
+    signature = [argument.arg for argument in helper.args.args]
+    calls = [
+        node
+        for node in ast.walk(group)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == helper_name
+    ]
+
+    assert "ring_k" not in signature
+    assert "ring_k_norm" not in signature
+    assert len(calls) == 3
+    for sibling, call in enumerate(calls):
+        assert len(call.args) + len(call.keywords) == len(signature)
+        assert [keyword.arg for keyword in call.keywords] == signature[
+            len(call.args) :
+        ]
+        actual_positionals = [ast.unparse(argument) for argument in call.args]
+        expected_positionals = signature[: len(call.args)]
+        expected_positionals[0] = f"state_{sibling}"
+        expected_positionals[8] = f"b_a_log_{sibling}"
+        expected_positionals[9] = f"b_dt_bias_{sibling}"
+        expected_positionals[16] = f"pid_vh_{sibling}"
+        assert actual_positionals == expected_positionals
