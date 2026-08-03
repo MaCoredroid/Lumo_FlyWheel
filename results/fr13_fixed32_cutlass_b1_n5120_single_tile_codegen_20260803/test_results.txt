@@ -1,0 +1,14 @@
+focused_patch_tests: 38 passed
+python_byte_compile: pass
+git_diff_check: pass
+pinned_baseline_source_apply: pass
+pinned_candidate_source_apply: pass
+paired_fresh_source_fresh_cache_sm121a_compile: pass
+resource_and_sass_audit: pass
+existing_onen_four_kernel_sass_identity: pass
+ruff: not available in host environment
+gpu_kernel_launch: not run
+real_swe_verified_task: not run
+raw_byte_gate: not run
+timing: not run
+hardware_floor_acceptance: not run

@@ -1,0 +1,136 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_n5120_single_tile_codegen.v1",
+  "created_at_utc": "2026-08-03T05:24:38Z",
+  "status": "sm121a_codegen_pass_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/fixed32-b1-onen-n5120-stage2-20260803",
+    "baseline_commit": "a66585be4863cda2062cdb35681c6088edfd326d",
+    "code_commit": "4d39e5b8cd75118f9936d3859a07fa1e99bc1d27",
+    "patch_source_sha256": "eadff808ef7db8de342d8c51e046cda9cc78bc4e308d1c1d08d5b33f7af1d2b0",
+    "test_source_sha256": "bbf5eae5f4a55c94dca2abdc52e29dd8a7cfd42bc4a11464e0cdde281ff4e6eb",
+    "baseline_patched_dispatch_sha256": "e556cb3d6b64bdb18b364551c331353acd0797cd1e148362241ac150e8c6a001",
+    "candidate_patched_dispatch_sha256": "5e856f587480d2d04d9127b25e12d40ef82b8d07a2301389ab757523ce206d2d",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2"
+  },
+  "candidate": {
+    "selector": "identity_onen_n5120_single_b1",
+    "diagnostic_selector": "identity_onen_n5120_single_b1_byte_ab",
+    "default_enabled": false,
+    "physical_rows": 32,
+    "tile_mnk_after_swap_ab": [128, 32, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_stage_count": 2,
+    "schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "baseline_scheduler": "Fr13B1OneNStaticTileScheduler100",
+    "candidate_scheduler": "Fr13B1N5120SingleTileScheduler100",
+    "initial_work": "{blockIdx.y,0,0}",
+    "next_work": "invalid",
+    "is_last_tile": true,
+    "source_delta": "scheduler_only"
+  },
+  "shape_gate": {
+    "all_admitted_mnk": [
+      [32, 34816, 5120],
+      [32, 5120, 17408],
+      [32, 5120, 6144],
+      [32, 16384, 5120],
+      [32, 14336, 5120]
+    ],
+    "specialized_mnk": [
+      [32, 5120, 17408],
+      [32, 5120, 6144]
+    ],
+    "specialized_logical_tiles": 40,
+    "specialized_launch_grid": [1, 40, 1],
+    "specialized_tiles_per_cta": 1,
+    "wider_shapes_use_existing_onen_pingpong": true,
+    "out_of_contract_fallback": "stock"
+  },
+  "paired_compile": {
+    "result": "pass",
+    "architecture": "sm_121a",
+    "gencode": "arch=compute_121a,code=sm_121a",
+    "cuda_release": "13.0",
+    "nvcc_version": "13.0.88",
+    "cuobjdump_version": "13.0.85",
+    "complete_translation_unit": true,
+    "independent_detached_source_trees": true,
+    "distinct_initially_empty_cuda_cache_paths": true,
+    "same_compile_command_except_source_object_and_cache": true,
+    "gpu_runtime_used": false,
+    "baseline_object": {
+      "published": false,
+      "sha256": "73ecf175240e6fec925b869aeb78e2dc50401e84d38e8633be43692869692a78",
+      "bytes": 22506776,
+      "resource_records": 40
+    },
+    "candidate_object": {
+      "published": false,
+      "sha256": "771b16e71824aa16bd7e385cebe336ed8b61c556afe39ec4084909805892747d",
+      "bytes": 23022184,
+      "resource_records": 42
+    }
+  },
+  "resource_audit": {
+    "result": "pass",
+    "candidate_kernel_records": 2,
+    "candidate_dtypes": ["fp16", "bf16"],
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "ldl": 0,
+    "stl": 0,
+    "call": 0,
+    "detected_spills": false
+  },
+  "sass_audit": {
+    "result": "pass",
+    "counts_equal_across_fp16_and_bf16": true,
+    "baseline_encoded_instructions": 568,
+    "candidate_encoded_instructions": 520,
+    "encoded_instruction_delta": -48,
+    "encoded_instruction_reduction_fraction": 0.0845070423,
+    "baseline_operational_instructions": 540,
+    "candidate_operational_instructions": 493,
+    "operational_instruction_delta": -47,
+    "baseline_branches": 29,
+    "candidate_branches": 26,
+    "branch_delta": -3,
+    "existing_onen_fp16_pingpong_byte_identical": true,
+    "existing_onen_fp16_cooperative_byte_identical": true,
+    "existing_onen_bf16_pingpong_byte_identical": true,
+    "existing_onen_bf16_cooperative_byte_identical": true,
+    "performance_inference_allowed": false
+  },
+  "verification": {
+    "focused_tests": "38 passed",
+    "python_byte_compile": "pass",
+    "git_diff_check": "pass",
+    "pinned_baseline_source_apply": "pass",
+    "pinned_candidate_source_apply": "pass",
+    "paired_sm121a_compile": "pass",
+    "resource_and_sass_audit": "pass",
+    "ruff": "not available in host environment"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "GPU correctness",
+    "Docker",
+    "synthetic or probe performance",
+    "real SWE-Verified task campaign",
+    "raw-byte comparison",
+    "B1 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gates": [
+    "authenticated real SWE-Verified K64/root B1 raw-byte comparison",
+    "standing-rule real-task B1 full-step timing after byte equality passes"
+  ]
+}
+
