@@ -1,7 +1,7 @@
 {
   "schema": "fr13.fixed32.treeconv_zero_tail.real_gate_source.v1",
   "status": "ready_for_real_swe_verified_qualification",
-  "base_commit": "4db00ec4cd5d268745f0b48850c6e14b6730561a",
+  "base_commit": "082373d768f1ebe61973312a1afc755073593d1f",
   "candidate": "physical32_treeconv_zero_tail_v1",
   "qualification_profile": "k64_root",
   "draft_vocab_root": 1,
@@ -23,11 +23,11 @@
   "comparison_call_limit": 320,
   "source_bindings": {
     "kernel_sha256": "a31e55b7f84b93734a17dffff146fd9246502fa4b53cc14b97f63dd242136dd7",
-    "credential_issuer_sha256": "3370e50ee7534f6a0855bb768e67cd5ac80fb219daae5ba6af5510155fe1024e",
-    "campaign_runner_sha256": "3ef534eb20c992f23b96a325ee6669db1d7a003a465a955eea2917e1e542ed5d"
+    "credential_issuer_sha256": "e7c977feffefdb2748ba796c322a82d27d248e23fa542c74893926ba16399127",
+    "campaign_runner_sha256": "ad38a59278507e844af67f74b349380930ef1a2d579c2826461d42ee33a5ee32"
   },
   "verification": {
-    "focused_tests_passed": 12,
+    "focused_tests_passed": 18,
     "adjacent_tests_passed": 84,
     "cuda_runtime_modules_skipped": 1,
     "python_compile": "pass",

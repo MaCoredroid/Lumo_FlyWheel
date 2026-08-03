@@ -17,12 +17,16 @@ The credential issuer requires:
 
 - a non-vacuous, contiguous comparison stream capped at 320 events;
 - exact physical32 C10240/L34/source36 geometry and one target-B event;
-- a completed real SWE-Verified B1 or canonical exact4 task set;
+- the byte-exact pinned real SWE-Verified B1 or ordered canonical exact4 subset;
 - a finalized authenticated engine ingress ledger;
-- the fixed32 work-census event stream and explicit eager-terminal no-flush
-  record (a graph-census terminal claim is rejected);
-- source commit, source-file, runtime-manifest, and state-descriptor hashes;
-- the existing Qwen campaign compaction proof for exact4 B4.
+- every fixed32 work-census event to pass the v12 exact physical-work validator,
+  plus contiguous indices, one producer, and the eager-terminal no-flush record;
+- a live container environment pinned to physical32, K64/root1, and diagnostic
+  candidate mode;
+- the live source bytes to equal `git show <commit>:<kernel>`, with the same
+  bytes bound by the runtime manifest;
+- for exact4 B4, the Qwen concurrent-campaign union proof, endpoint metrics,
+  ordered task traces, and each task's runner metadata/provenance identity.
 
 B1 output remains diagnostic-only. B4 output is a correctness credential only;
 neither output is timing or floor-acceptance evidence. Raw tasks, prompts,
@@ -31,7 +35,8 @@ included here.
 
 ## Verification
 
-- 12 focused tree-conv gate and credential tests passed.
+- 18 focused tree-conv gate and credential tests passed after merging current
+  `main`, including independent tamper tests for every binding above.
 - 84 adjacent fixed32 ingress, campaign provenance, committer, and CUDA
   contract tests passed; one CUDA runtime module was skipped in the occupied
   shared-GPU environment.
