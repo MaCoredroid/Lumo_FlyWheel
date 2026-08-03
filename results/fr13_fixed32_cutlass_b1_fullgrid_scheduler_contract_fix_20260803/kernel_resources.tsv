@@ -1,0 +1,5 @@
+dtype	kernel	registers	stack_bytes	local_bytes	static_shared_bytes	constant0_bytes	ldl	stl	call	detected_spills	matches_rejected_object
+fp16	wide_fullgrid_pingpong	168	0	0	1024	2688	0	0	0	false	true
+bf16	wide_fullgrid_pingpong	168	0	0	1024	2688	0	0	0	false	true
+fp16	n5120_single_cooperative	168	0	0	1024	2688	0	0	0	false	true
+bf16	n5120_single_cooperative	168	0	0	1024	2688	0	0	0	false	true

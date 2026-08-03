@@ -1,0 +1,5 @@
+dtype	kernel	repaired_encoded	repaired_nop	repaired_operational	repaired_bra_brx	previous_encoded	previous_nop	previous_operational	previous_bra_brx	matches_previous_instruction_words	matches_initialized_static_swap_ab_stage2_pingpong	contract_assessment
+fp16	wide_fullgrid_pingpong	968	31	937	39	744	37	707	41	false	true	repaired
+bf16	wide_fullgrid_pingpong	968	31	937	39	744	37	707	41	false	true	repaired
+fp16	n5120_single_cooperative	520	27	493	26	520	27	493	26	true	not_applicable	unchanged_valid
+bf16	n5120_single_cooperative	520	27	493	26	520	27	493	26	true	not_applicable	unchanged_valid
