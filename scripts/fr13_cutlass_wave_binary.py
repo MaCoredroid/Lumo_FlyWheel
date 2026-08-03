@@ -62,6 +62,10 @@ IDENTITY_HYBRID_N5120_B4_CANDIDATE_SHA256 = (
     "63c7b80bf11daf01aa040cf91d57ef1c90ed1406a6185368684a7486aeebf1a4"
 )
 IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE = 118_243_776
+MTP_M1M4_DIRECT_CANDIDATE_SHA256 = (
+    "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc"
+)
+MTP_M1M4_DIRECT_CANDIDATE_SIZE = 119_471_552
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -124,6 +128,7 @@ IDENTITY_TWOM_B4_SELECTORS = frozenset({"identity_twom_b4", "identity_twom_b4_by
 IDENTITY_HYBRID_N5120_B4_SELECTORS = frozenset(
     {"identity_hybrid_n5120_b4", "identity_hybrid_n5120_b4_byte_ab"}
 )
+MTP_M1M4_DIRECT_SELECTORS = frozenset({"mtp_m1m4_direct_byte_ab"})
 IDENTITY_DIVISOR_B4_SELECTORS = frozenset(
     {"identity_divisor_b4", "identity_divisor_b4_byte_ab"}
 )
@@ -145,6 +150,7 @@ CANDIDATE_SELECTORS = (
     | IDENTITY_STOCKSHAPE_STAGE2_B4_SELECTORS
     | IDENTITY_TWOM_B4_SELECTORS
     | IDENTITY_HYBRID_N5120_B4_SELECTORS
+    | MTP_M1M4_DIRECT_SELECTORS
     | IDENTITY_DIVISOR_B4_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
@@ -256,6 +262,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             IDENTITY_HYBRID_N5120_B4_CANDIDATE_SIZE,
             "identity_hybrid_n5120_b4",
         )
+    if selector in MTP_M1M4_DIRECT_SELECTORS:
+        return (
+            MTP_M1M4_DIRECT_CANDIDATE_SHA256,
+            MTP_M1M4_DIRECT_CANDIDATE_SIZE,
+            "mtp_m1m4_direct",
+        )
     if selector in IDENTITY_DIVISOR_B4_SELECTORS:
         return (
             IDENTITY_B4_CANDIDATE_SHA256,
@@ -283,6 +295,7 @@ def _verify_qualification_profile(
             | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
             | IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS
             | IDENTITY_HYBRID_N5120_B4_SELECTORS
+            | MTP_M1M4_DIRECT_SELECTORS
         )
         and qualification_profile != "k64_root"
     ):
@@ -327,6 +340,7 @@ def verify_candidate(
         | IDENTITY_ONEN_N5120_SINGLE_B1_SELECTORS
         | IDENTITY_ONEN_N5120_FULLGRID_B1_SELECTORS
         | IDENTITY_HYBRID_N5120_B4_SELECTORS
+        | MTP_M1M4_DIRECT_SELECTORS
     ):
         result["qualification_profile"] = qualification_profile
     if selector in STATIC_B4_M128_SELECTORS:
