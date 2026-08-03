@@ -1,0 +1,9 @@
+variant	dtype	slots	delta_slots	bra	bra_uniform	ldcu_all	isetp	uisetp	shift_right	uniform_shift_right	lop3	uniform_lop3	qmma	ffma	ldsm	stsm
+twom_1d_baseline	fp16	1032	0	29	10	21	14	17	3	8	32	11	128	128	48	16
+twom_1d_baseline	bf16	1032	0	29	10	21	14	17	3	8	32	11	128	128	48	16
+separate_mn_state	fp16	1040	8	34	7	18	22	10	7	6	37	6	128	128	48	16
+separate_mn_state	bf16	1040	8	34	7	18	22	10	7	6	37	6	128	128	48	16
+stateless_work_tile	fp16	1192	160	34	8	50	22	16	7	23	38	10	128	128	48	16
+stateless_work_tile	bf16	1192	160	34	8	50	22	16	7	23	38	10	128	128	48	16
+one_word_n_state	fp16	1032	0	31	8	19	16	15	4	8	32	12	128	128	48	16
+one_word_n_state	bf16	1032	0	31	8	19	16	15	4	8	32	12	128	128	48	16
