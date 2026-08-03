@@ -1,0 +1,5 @@
+component	ctas	warps_per_cta	registers	stack_bytes	local_bytes	spill_store_bytes	spill_load_bytes	static_shared_bytes	dynamic_shared_bytes
+qrow16_static_baseline	48	1	212	0	0	0	0	1024	81920
+qrow32_b1_no_split	24	2	246	0	0	0	0	1024	81920
+qrow32_b1_split2_main	48	2	250	0	0	0	0	1024	81920
+fa2_existing_split2_combine	192	4	44	0	0	0	0	1072	0

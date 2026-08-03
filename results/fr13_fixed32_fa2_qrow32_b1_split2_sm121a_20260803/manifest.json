@@ -1,0 +1,99 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_b1_split2_sm121a.v1",
+  "status": "HOST_CODEGEN_PASS_ADMIT_REAL_SWE_VERIFIED_AB",
+  "source": {
+    "branch": "codex/fixed32-fa2-qrow32-b1-20260803",
+    "commit": "c6372c69528acb7cb73bf81513d0a5587d73f307",
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "header_sha256": "0a8ddf26363b01b35bd613e88713a253266945c010bfa99d1856701cb7522867",
+    "no_split_translation_unit_sha256": "c2dc70ebd67c87f55e46d3ca603d8d1951eed1339f1738c10f624b251cb46f91",
+    "split2_translation_unit_sha256": "47aaeb257881a2a30bab89d7a67a22bb255f0ac78db53db86de7c37f68a6696d"
+  },
+  "classification": {
+    "host_only": true,
+    "compiler_used": true,
+    "disassembler_used": true,
+    "gpu_used": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "performance_measurement": false,
+    "byte_parity_claim": false,
+    "production_eligible": false,
+    "default_off": true
+  },
+  "toolchain": {
+    "target": "sm_121a",
+    "nvcc": "13.0.88",
+    "optimization": "O3",
+    "use_fast_math": true,
+    "register_usage_level": 3
+  },
+  "no_split_control": {
+    "object_sha256": "57cc8bbc1235f7dc079be7cea04758bd9fbc125ed59b1f1d010ea787b04e1e14",
+    "object_bytes": 134000,
+    "sass_sha256": "1008ef1f2cb44dd2020ecad47a7f9e667703970bdb2d06d3e868e86b2323d41f",
+    "sass_unchanged_from_pre_split_header": true,
+    "ctas": 24,
+    "warps_per_cta": 2,
+    "registers": 246,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "spills": 0,
+    "sass_instructions": 3984
+  },
+  "split2_main": {
+    "object_sha256": "ae48e7cc3f8cc36eb6c8d84745614a8a9df750ccbae4c80d67415bd7c7513ea4",
+    "object_bytes_including_combine": 163024,
+    "combined_sass_sha256": "ce1e15e8ba792fc946397b7c62abb13934199d15b62f0b375e37f9dc9d57d6f6",
+    "ctas": 48,
+    "warps_per_cta": 2,
+    "register_cap": 254,
+    "registers": 250,
+    "register_headroom": 4,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "spills": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 81920,
+    "sass_instructions": 3656,
+    "sass_ldgsts": 176
+  },
+  "existing_fa2_combine": {
+    "implementation": "flash_fwd_splitkv_combine_kernel",
+    "ctas": 192,
+    "warps_per_cta": 4,
+    "registers": 44,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "spills": 0,
+    "static_shared_bytes": 1072,
+    "sass_instructions": 1096,
+    "sass_ldg": 11,
+    "sass_stg": 4,
+    "sass_call": 7
+  },
+  "kv_partition": {
+    "splits": 2,
+    "overlap_blocks": 0,
+    "aggregate_scan_multiplier_vs_no_split": 1,
+    "qrow16_kv_bytes_formula": "49152 * N",
+    "qrow32_split2_kv_bytes_formula": "24576 * N",
+    "split2_extra_bytes_vs_no_split": 3551232,
+    "n5120_qrow32_kv_bytes": 125829120,
+    "n5120_extra_percent_of_qrow32_kv": 2.822266
+  },
+  "verification": {
+    "focused_and_adjacent_tests_passed": 46,
+    "tests_skipped": 1,
+    "python_byte_compile": "pass",
+    "git_diff_check": "pass",
+    "no_split_sass_stability": "byte-identical"
+  },
+  "admission": {
+    "offline_codegen": "PASS",
+    "verdict": "ADMIT_TO_REAL_SWE_VERIFIED_AB",
+    "real_task_byte_gate": "PENDING",
+    "real_task_full_step_timing": "PENDING",
+    "production": "NOT_AUTHORIZED"
+  }
+}
