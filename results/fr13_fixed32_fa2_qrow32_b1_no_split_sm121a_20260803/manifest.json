@@ -1,0 +1,93 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_b1_no_split_sm121a.v1",
+  "status": "HOST_CODEGEN_PASS_PENDING_REAL_TASK_QUALIFICATION",
+  "source": {
+    "branch": "codex/fixed32-fa2-qrow32-b1-20260803",
+    "commit": "5af6beb98c83d329cc8fdd375b42b281bb6abb7b",
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95"
+  },
+  "classification": {
+    "host_only": true,
+    "compiler_used": true,
+    "disassembler_used": true,
+    "gpu_used": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "performance_measurement": false,
+    "byte_parity_claim": false,
+    "production_eligible": false,
+    "default_off": true
+  },
+  "toolchain": {
+    "target": "sm_121a",
+    "nvcc": "13.0.88",
+    "optimization": "O3",
+    "use_fast_math": true,
+    "register_usage_level": 3
+  },
+  "qrow16_static_baseline": {
+    "translation_unit_sha256": "92a05f9296e4f677d424ed785aa86e3b3831ceea86b16700e63702d125df75b3",
+    "header_sha256": "34730c56942e7301f16d1c055eee84f29246b1b05e291b98fbc2ac671ea9b410",
+    "object_sha256": "f3095d26a5e7329ca88a558e7afad46bacfc2a7b23b8c42f92b355ab36c73589",
+    "object_bytes": 160496,
+    "sass_sha256": "1ed3d6bfc235e0577f290ebf4ed86b6501a8ca9c7d65b24b137e20ec276c22da",
+    "ctas_per_layer": 48,
+    "warps_per_cta": 1,
+    "registers": 212,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "spill_store_bytes": 0,
+    "spill_load_bytes": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 81920,
+    "sass_instructions": 5000,
+    "sass_ldgsts": 336
+  },
+  "qrow32_b1_no_split": {
+    "translation_unit_sha256": "c2dc70ebd67c87f55e46d3ca603d8d1951eed1339f1738c10f624b251cb46f91",
+    "header_sha256": "5bea9da2337b374602de4723b4102f979b02c306cfa3cc5cc28b0e78b3e0155d",
+    "object_sha256": "6834fbfac48a19f5b137fdcc52b8f3212e8fda05c10430945b820726067997f5",
+    "object_bytes": 133984,
+    "sass_sha256": "1008ef1f2cb44dd2020ecad47a7f9e667703970bdb2d06d3e868e86b2323d41f",
+    "ctas_per_layer": 24,
+    "warps_per_cta": 2,
+    "register_cap": 254,
+    "registers": 246,
+    "register_headroom": 8,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "spill_store_bytes": 0,
+    "spill_load_bytes": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 81920,
+    "sass_instructions": 3984,
+    "sass_ldgsts": 176
+  },
+  "event_warp_site_proxy": {
+    "definition": "static opcode sites times CTAs per layer times warps per CTA",
+    "warp_instances_each": 48,
+    "qrow16_total": 240000,
+    "qrow32_total": 191232,
+    "total_delta": -48768,
+    "total_delta_percent": -20.32,
+    "qrow16_ldgsts": 16128,
+    "qrow32_ldgsts": 8448,
+    "ldgsts_delta": -7680,
+    "ldgsts_delta_percent": -47.619048,
+    "dynamic_instruction_claim": false
+  },
+  "verification": {
+    "focused_tests_passed": 24,
+    "adjacent_tests_passed": 21,
+    "adjacent_tests_skipped": 1,
+    "python_byte_compile": "pass",
+    "git_diff_check": "pass"
+  },
+  "admission": {
+    "offline_codegen": "PASS",
+    "real_task_byte_gate": "PENDING",
+    "real_task_full_step_timing": "PENDING",
+    "cta_underfill_risk": "24 main CTAs on 48 SMs",
+    "next_candidate": "qrow32 B1 split-K=2 using existing FA2 combine"
+  }
+}
