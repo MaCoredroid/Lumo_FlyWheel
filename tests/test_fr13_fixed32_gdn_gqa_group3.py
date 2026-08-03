@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 from pathlib import Path
+import sys
+import types
 
 import pytest
 import torch
@@ -297,3 +300,275 @@ def test_value_head_helper_calls_exactly_match_the_ast_signature() -> None:
         expected_positionals[9] = f"b_dt_bias_{sibling}"
         expected_positionals[16] = f"pid_vh_{sibling}"
         assert actual_positionals == expected_positionals
+
+
+class _FakeGdnKernelLaunch:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __getitem__(self, _grid):
+        def launch(*_args, **_kwargs) -> None:
+            self.calls += 1
+
+        return launch
+
+
+def _load_gdn_candidate(monkeypatch: pytest.MonkeyPatch):
+    fake_triton = types.ModuleType("triton")
+    fake_language = types.ModuleType("triton.language")
+    fake_triton.jit = lambda function: function
+    fake_triton.language = fake_language
+    monkeypatch.setitem(sys.modules, "triton", fake_triton)
+    monkeypatch.setitem(sys.modules, "triton.language", fake_language)
+    spec = importlib.util.spec_from_file_location(
+        "fr13_gdn_gqa_group3_launch_test", CANDIDATE
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _qualified_gdn_launch_args(module) -> dict[str, object]:
+    batch = 1
+    rows = batch * module.PHYSICAL_ROWS
+    h0 = torch.empty(
+        (2, module.NUM_V_HEADS, module.DIM_V, module.DIM_K),
+        dtype=torch.float32,
+    )
+    return {
+        "q": torch.empty(
+            (rows, module.NUM_K_HEADS, module.DIM_K),
+            dtype=torch.bfloat16,
+        ),
+        "k": torch.empty(
+            (rows, module.NUM_K_HEADS, module.DIM_K),
+            dtype=torch.bfloat16,
+        ),
+        "v": torch.empty(
+            (rows, module.NUM_V_HEADS, module.DIM_V),
+            dtype=torch.bfloat16,
+        ),
+        "g": torch.empty((rows, module.NUM_V_HEADS), dtype=torch.float32),
+        "beta": torch.empty(
+            (rows, module.NUM_V_HEADS), dtype=torch.float32
+        ),
+        "raw_a": torch.empty(
+            (rows, module.NUM_V_HEADS), dtype=torch.bfloat16
+        ),
+        "raw_b": torch.empty(
+            (rows, module.NUM_V_HEADS), dtype=torch.bfloat16
+        ),
+        "A_log": torch.empty((module.NUM_V_HEADS,), dtype=torch.float32),
+        "dt_bias": torch.empty(
+            (module.NUM_V_HEADS,), dtype=torch.float32
+        ),
+        "h0": h0,
+        "h0_indices": torch.tensor([[0, 1]], dtype=torch.int64),
+        "h0_num_accepted_tokens": torch.tensor([1], dtype=torch.int32),
+        "invocation_counter": torch.zeros((), dtype=torch.int32),
+        "root_nodes": torch.tensor(
+            [module._ROOT_NODES], dtype=torch.int32
+        ),
+        "branch_nodes": torch.tensor(
+            module._BRANCH_NODES, dtype=torch.int32
+        ),
+        "branch_lengths": torch.tensor(
+            module._BRANCH_LENGTHS, dtype=torch.int32
+        ),
+        "group_path_indices": torch.tensor(
+            module._GROUP_PATH_INDICES, dtype=torch.int32
+        ),
+        "group_path_counts": torch.tensor(
+            module._GROUP_PATH_COUNTS, dtype=torch.int32
+        ),
+        "out": torch.empty(
+            (rows, module.NUM_V_HEADS, module.DIM_V),
+            dtype=torch.bfloat16,
+        ),
+        "ring_k": torch.empty(
+            (rows, module.NUM_K_HEADS, module.DIM_K),
+            dtype=torch.bfloat16,
+        ),
+        "ring_v": torch.empty(
+            (rows, module.NUM_V_HEADS, module.DIM_V),
+            dtype=torch.bfloat16,
+        ),
+        "ring_a": torch.empty(
+            (rows, module.NUM_V_HEADS), dtype=torch.bfloat16
+        ),
+        "ring_b": torch.empty(
+            (rows, module.NUM_V_HEADS), dtype=torch.bfloat16
+        ),
+        "flags": torch.zeros((2,), dtype=torch.int32),
+        "ring_k_norm": torch.empty(
+            (rows, module.NUM_K_HEADS), dtype=torch.float32
+        ),
+        "ring_gate": torch.empty(
+            (rows, module.NUM_V_HEADS, 2), dtype=torch.float32
+        ),
+        "batch_size": batch,
+        "mode": "tail6_fixed32",
+        "output_scale": module.DIM_K**-0.5,
+        "h0_is_bank": True,
+        "h0_index_row": 0,
+        "h0_index_batch_stride": 2,
+        "h0_batch_index": 0,
+        "h0_accepted_batch_stride": 1,
+        "h0_bank_stride": int(h0.stride(0)),
+        "h0_use_accepted_column": True,
+        "use_qk_l2norm_in_kernel": True,
+        "raw_gating": True,
+        "count_invocation": True,
+        "scan_align": False,
+        "root_steps": module._ROOT_STEPS,
+        "max_path_len": module._MAX_PATH_LEN,
+        "max_group_paths": module._MAX_GROUP_PATHS,
+        "prescaled_path_base": False,
+        "ring_export": True,
+        "k_norm_export": True,
+        "gate_export": True,
+        "decay_export": True,
+        "flags_export": True,
+        "flags_rows": batch,
+    }
+
+
+def _arm_gdn_cpu_as_cuda(
+    module, monkeypatch: pytest.MonkeyPatch
+) -> _FakeGdnKernelLaunch:
+    launch = _FakeGdnKernelLaunch()
+    monkeypatch.setattr(
+        torch.Tensor,
+        "device",
+        property(lambda _self: torch.device("cuda:0")),
+    )
+    monkeypatch.setattr(
+        module,
+        "_fr13_fixed32_gdn_gqa_group3_single_launch_kernel",
+        launch,
+    )
+    return launch
+
+
+@pytest.mark.parametrize("prescaled_path_base", (False, True))
+def test_launch_guard_accepts_only_the_exact_qualified_gdn_binding(
+    monkeypatch: pytest.MonkeyPatch,
+    prescaled_path_base: bool,
+) -> None:
+    module = _load_gdn_candidate(monkeypatch)
+    args = _qualified_gdn_launch_args(module)
+    if prescaled_path_base:
+        args["prescaled_path_base"] = True
+        args["branch_lengths"] = torch.tensor(
+            module._PRESCALED_BRANCH_LENGTHS, dtype=torch.int32
+        )
+        args["group_path_indices"] = torch.tensor(
+            module._PRESCALED_GROUP_PATH_BASES, dtype=torch.int32
+        )
+    launch = _arm_gdn_cpu_as_cuda(module, monkeypatch)
+
+    result = module.launch_fixed32_gdn_gqa_group3_source_candidate(**args)
+
+    assert result["candidate_default_off"] is True
+    assert launch.calls == 1
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "dtype",
+        "shape",
+        "stride",
+        "root_descriptor",
+        "branch_descriptor",
+        "schedule_extent",
+        "bank_index",
+        "bank_column",
+        "bank_stride",
+        "ring_shape",
+        "counter_shape",
+        "flags_rows",
+        "write_overlap",
+        "export_dependency",
+        "ring_raw_dependency",
+    ),
+)
+def test_launch_guard_fails_closed_before_gdn_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+) -> None:
+    module = _load_gdn_candidate(monkeypatch)
+    args = _qualified_gdn_launch_args(module)
+    rows = module.PHYSICAL_ROWS
+    if case == "dtype":
+        args["k"] = args["k"].to(torch.float32)
+    elif case == "shape":
+        args["out"] = args["out"][:, :, :-1].contiguous()
+    elif case == "stride":
+        args["q"] = torch.empty(
+            (rows, module.NUM_K_HEADS, 2 * module.DIM_K),
+            dtype=torch.bfloat16,
+        )[..., ::2]
+    elif case == "root_descriptor":
+        args["root_nodes"][0, 0] = 1
+    elif case == "branch_descriptor":
+        args["branch_lengths"][0] = module._MAX_PATH_LEN + 1
+    elif case == "schedule_extent":
+        args["root_steps"] = module._ROOT_STEPS - 1
+    elif case == "bank_index":
+        args["h0_indices"][0, 0] = int(args["h0"].shape[0])
+    elif case == "bank_column":
+        args["h0_num_accepted_tokens"][0] = 3
+    elif case == "bank_stride":
+        args["h0_bank_stride"] = int(args["h0_bank_stride"]) + 1
+    elif case == "ring_shape":
+        args["ring_gate"] = args["ring_gate"][:, :-1].contiguous()
+    elif case == "counter_shape":
+        args["invocation_counter"] = torch.zeros((1,), dtype=torch.int32)
+    elif case == "flags_rows":
+        args["flags_rows"] = 2
+    elif case == "write_overlap":
+        args["ring_v"] = args["out"]
+    elif case == "export_dependency":
+        args["k_norm_export"] = False
+    elif case == "ring_raw_dependency":
+        args["raw_gating"] = False
+    else:  # pragma: no cover - parameter list is closed above
+        raise AssertionError(case)
+    launch = _arm_gdn_cpu_as_cuda(module, monkeypatch)
+
+    with pytest.raises((TypeError, ValueError)):
+        module.launch_fixed32_gdn_gqa_group3_source_candidate(**args)
+
+    assert launch.calls == 0
+
+
+def test_launch_guard_rejects_cpu_and_cross_device_gdn_operands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_gdn_candidate(monkeypatch)
+    args = _qualified_gdn_launch_args(module)
+    launch = _FakeGdnKernelLaunch()
+    monkeypatch.setattr(
+        module,
+        "_fr13_fixed32_gdn_gqa_group3_single_launch_kernel",
+        launch,
+    )
+    with pytest.raises(ValueError, match="requires CUDA"):
+        module.launch_fixed32_gdn_gqa_group3_source_candidate(**args)
+
+    mismatched = args["ring_gate"]
+    monkeypatch.setattr(
+        torch.Tensor,
+        "device",
+        property(
+            lambda self: torch.device(
+                "cuda:1" if self is mismatched else "cuda:0"
+            )
+        ),
+    )
+    with pytest.raises(ValueError, match="share one device"):
+        module.launch_fixed32_gdn_gqa_group3_source_candidate(**args)
+
+    assert launch.calls == 0

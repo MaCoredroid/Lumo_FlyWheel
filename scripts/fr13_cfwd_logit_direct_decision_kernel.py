@@ -12,6 +12,7 @@ serving; SM121a resource and real SWE-Verified gates must qualify it first.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 try:
@@ -494,6 +495,208 @@ if triton is not None:
         tl.store(accepted_out + target_row, accepted, mask=~is_self)
 
 
+def _canonical_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
+    strides = []
+    stride = 1
+    for size in reversed(shape):
+        strides.append(stride)
+        stride *= int(size)
+    return tuple(reversed(strides))
+
+
+def _require_exact_tensor(
+    name: str,
+    tensor,
+    *,
+    device,
+    dtype,
+    shape: tuple[int, ...],
+) -> None:
+    observed_shape = tuple(int(size) for size in tensor.shape)
+    expected_strides = _canonical_contiguous_strides(shape)
+    observed_strides = tuple(int(stride) for stride in tensor.stride())
+    if tensor.device != device:
+        raise ValueError(f"logit-direct CFWD {name} must share one device")
+    if tensor.dtype != dtype:
+        raise ValueError(
+            f"logit-direct CFWD {name} dtype drift: {tensor.dtype} != {dtype}"
+        )
+    if observed_shape != shape:
+        raise ValueError(
+            f"logit-direct CFWD {name} shape drift: "
+            f"{observed_shape!r} != {shape!r}"
+        )
+    if not tensor.is_contiguous() or observed_strides != expected_strides:
+        raise ValueError(
+            f"logit-direct CFWD {name} must have canonical contiguous strides "
+            f"{expected_strides!r}, got {observed_strides!r}"
+        )
+
+
+def _integer_values(tensor) -> tuple[int, ...]:
+    return tuple(
+        int(value)
+        for value in tensor.detach()
+        .reshape(-1)
+        .to(device="cpu", dtype=torch.int64)
+        .tolist()
+    )
+
+
+def _float_values(tensor) -> tuple[float, ...]:
+    return tuple(
+        float(value)
+        for value in tensor.detach()
+        .reshape(-1)
+        .to(device="cpu", dtype=torch.float64)
+        .tolist()
+    )
+
+
+def _tensor_interval(tensor) -> tuple[int, int]:
+    start = int(tensor.data_ptr())
+    return start, start + int(tensor.numel()) * int(tensor.element_size())
+
+
+def _require_workspace_disjoint(
+    operands: dict[str, Any], workspace: dict[str, Any]
+) -> None:
+    prior = list(operands.items())
+    for name, tensor in workspace.items():
+        start, end = _tensor_interval(tensor)
+        for other_name, other_tensor in prior:
+            other_start, other_end = _tensor_interval(other_tensor)
+            if start < other_end and other_start < end:
+                raise ValueError(
+                    "logit-direct CFWD writable workspace storage overlap: "
+                    f"{name}/{other_name}"
+                )
+        prior.append((name, tensor))
+
+
+def _validate_logit_direct_launch(
+    operands: dict[str, Any],
+    workspace: dict[str, Any],
+    *,
+    batch_size: int,
+) -> None:
+    expected_operand_names = {
+        "self_logits",
+        "target_logits",
+        "self_source_indices",
+        "target_source_indices",
+        "drafts",
+        "child_table",
+        "child_counts",
+        "self_uniform_levels",
+        "target_parent_slots",
+        "target_uniform_levels",
+        "uniforms",
+    }
+    if set(operands) != expected_operand_names:
+        raise ValueError("logit-direct CFWD operand binding drift")
+    if any(not isinstance(value, torch.Tensor) for value in operands.values()):
+        raise TypeError("logit-direct CFWD operands must be tensors")
+    if type(workspace) is not dict:
+        raise TypeError("logit-direct CFWD workspace must be an exact dict")
+    if type(batch_size) is not int or batch_size not in (1, 4):
+        raise ValueError("logit-direct CFWD launch batch_size must be 1 or 4")
+
+    self_logits = operands["self_logits"]
+    if not self_logits.is_cuda:
+        raise ValueError("logit-direct CFWD operands must be CUDA tensors")
+    device = self_logits.device
+    if any(not value.is_cuda for value in operands.values()):
+        raise ValueError("logit-direct CFWD operands must be CUDA tensors")
+    if any(value.device != device for value in operands.values()):
+        raise ValueError("logit-direct CFWD operands must share one device")
+
+    flat_rows = batch_size * PHYSICAL_DRAFTS
+    exact_operands = (
+        ("self_logits", torch.float32, (flat_rows, VOCAB_SIZE)),
+        ("target_logits", torch.float32, (flat_rows, VOCAB_SIZE)),
+        ("self_source_indices", torch.int64, (batch_size * SELF_ROWS,)),
+        ("target_source_indices", torch.int64, (batch_size * TARGET_ROWS,)),
+        ("drafts", torch.int64, (batch_size, PHYSICAL_DRAFTS)),
+        (
+            "child_table",
+            torch.int64,
+            (batch_size, PHYSICAL_ROWS, FANOUT),
+        ),
+        ("child_counts", torch.int64, (batch_size, PHYSICAL_ROWS)),
+        ("self_uniform_levels", torch.int64, (SELF_ROWS,)),
+        ("target_parent_slots", torch.int64, (TARGET_ROWS,)),
+        ("target_uniform_levels", torch.int64, (TARGET_ROWS,)),
+        ("uniforms", torch.float32, (batch_size, WALK_CAP, 3)),
+    )
+    for name, dtype, shape in exact_operands:
+        _require_exact_tensor(
+            name,
+            operands[name],
+            device=device,
+            dtype=dtype,
+            shape=shape,
+        )
+
+    expected_workspace = workspace_spec(batch_size)
+    if set(workspace) != set(expected_workspace):
+        raise ValueError("logit-direct CFWD workspace key drift")
+    for name, (shape, dtype) in expected_workspace.items():
+        value = workspace[name]
+        if not isinstance(value, torch.Tensor) or not value.is_cuda:
+            raise ValueError(f"logit-direct CFWD workspace drift: {name}")
+        _require_exact_tensor(
+            f"workspace.{name}",
+            value,
+            device=device,
+            dtype=dtype,
+            shape=shape,
+        )
+
+    for name in ("self_source_indices", "target_source_indices"):
+        values = _integer_values(operands[name])
+        if any(value < 0 or value >= flat_rows for value in values):
+            raise ValueError(
+                f"logit-direct CFWD {name} source-row domain drift"
+            )
+    for name in ("self_uniform_levels", "target_uniform_levels"):
+        values = _integer_values(operands[name])
+        if any(value < 0 or value >= WALK_CAP for value in values):
+            raise ValueError(
+                f"logit-direct CFWD {name} uniform-level domain drift"
+            )
+
+    parent_slots = _integer_values(operands["target_parent_slots"])
+    if any(slot < 0 or slot >= PHYSICAL_ROWS for slot in parent_slots):
+        raise ValueError("logit-direct CFWD target parent-slot domain drift")
+    draft_tokens = _integer_values(operands["drafts"])
+    if any(token < 0 or token >= VOCAB_SIZE for token in draft_tokens):
+        raise ValueError("logit-direct CFWD draft token-ID domain drift")
+
+    child_counts = _integer_values(operands["child_counts"])
+    child_nodes = _integer_values(operands["child_table"])
+    for slot, child_count in enumerate(child_counts):
+        if child_count < 0 or child_count > FANOUT:
+            raise ValueError("logit-direct CFWD child-count domain drift")
+        start = slot * FANOUT
+        row = child_nodes[start : start + FANOUT]
+        if any(node < 0 or node >= PHYSICAL_DRAFTS for node in row[:child_count]):
+            raise ValueError("logit-direct CFWD active child-node domain drift")
+        if any(node != -1 for node in row[child_count:]):
+            raise ValueError(
+                "logit-direct CFWD child table/count packing drift"
+            )
+
+    uniform_values = _float_values(operands["uniforms"])
+    if any(
+        not math.isfinite(value) or value < 0.0 or value >= 1.0
+        for value in uniform_values
+    ):
+        raise ValueError("logit-direct CFWD uniforms must be finite in [0, 1)")
+
+    _require_workspace_disjoint(operands, workspace)
+
+
 def workspace_spec(batch_size: int) -> dict[str, tuple[tuple[int, ...], Any]]:
     """Return the fixed persistent workspace for a B1/B4 specialization."""
     if torch is None:
@@ -544,74 +747,24 @@ def launch_logit_direct_fixed32(
         raise RuntimeError("logit-direct CFWD requires Triton and torch")
     contract = fixed32_cfwd_logit_direct_contract(batch_size, mode=mode)
     batch = int(batch_size)
-    tensors = (
-        self_logits,
-        target_logits,
-        self_source_indices,
-        target_source_indices,
-        drafts,
-        child_table,
-        child_counts,
-        self_uniform_levels,
-        target_parent_slots,
-        target_uniform_levels,
-        uniforms,
+    operands = {
+        "self_logits": self_logits,
+        "target_logits": target_logits,
+        "self_source_indices": self_source_indices,
+        "target_source_indices": target_source_indices,
+        "drafts": drafts,
+        "child_table": child_table,
+        "child_counts": child_counts,
+        "self_uniform_levels": self_uniform_levels,
+        "target_parent_slots": target_parent_slots,
+        "target_uniform_levels": target_uniform_levels,
+        "uniforms": uniforms,
+    }
+    _validate_logit_direct_launch(
+        operands,
+        workspace,
+        batch_size=batch_size,
     )
-    if any(not isinstance(value, torch.Tensor) for value in tensors):
-        raise TypeError("logit-direct CFWD operands must be tensors")
-    if any(not value.is_cuda for value in tensors):
-        raise ValueError("logit-direct CFWD operands must be CUDA tensors")
-    if any(value.device != self_logits.device for value in tensors):
-        raise ValueError("logit-direct CFWD operands must share one device")
-    expected_dtypes = (
-        torch.float32,
-        torch.float32,
-        torch.long,
-        torch.long,
-        torch.long,
-        torch.long,
-        torch.long,
-        torch.long,
-        torch.long,
-        torch.long,
-        torch.float32,
-    )
-    if any(
-        value.dtype != dtype
-        for value, dtype in zip(tensors, expected_dtypes, strict=True)
-    ):
-        raise ValueError("logit-direct CFWD exact tensor dtype drift")
-    if any(not value.is_contiguous() for value in tensors):
-        raise ValueError("logit-direct CFWD operands must be contiguous")
-    flat_rows = batch * PHYSICAL_DRAFTS
-    if (
-        self_logits.ndim != 2
-        or target_logits.ndim != 2
-        or int(self_logits.shape[0]) != flat_rows
-        or int(self_logits.shape[1]) != VOCAB_SIZE
-        or tuple(target_logits.shape) != tuple(self_logits.shape)
-        or tuple(self_source_indices.shape) != (batch * SELF_ROWS,)
-        or tuple(target_source_indices.shape) != (batch * TARGET_ROWS,)
-        or tuple(drafts.shape) != (batch, PHYSICAL_DRAFTS)
-        or tuple(child_table.shape) != (batch, PHYSICAL_ROWS, FANOUT)
-        or tuple(child_counts.shape) != (batch, PHYSICAL_ROWS)
-        or tuple(self_uniform_levels.shape) != (SELF_ROWS,)
-        or tuple(target_parent_slots.shape) != (TARGET_ROWS,)
-        or tuple(target_uniform_levels.shape) != (TARGET_ROWS,)
-        or tuple(uniforms.shape) != (batch, WALK_CAP, 3)
-    ):
-        raise ValueError("logit-direct CFWD exact tensor geometry drift")
-    expected_workspace = workspace_spec(batch)
-    for name, (shape, dtype) in expected_workspace.items():
-        value = workspace.get(name)
-        if (
-            not isinstance(value, torch.Tensor)
-            or tuple(value.shape) != shape
-            or value.dtype != dtype
-            or value.device != self_logits.device
-            or not value.is_contiguous()
-        ):
-            raise ValueError(f"logit-direct CFWD workspace drift: {name}")
 
     all_rows = batch * (SELF_ROWS + TARGET_ROWS)
     self_total_rows = batch * SELF_ROWS

@@ -279,3 +279,188 @@ def test_candidate_is_source_only_and_default_off() -> None:
     assert kernel.fixed32_cfwd_logit_direct_contract(
         1, mode="tail6_fixed32"
     )["candidate_default_off"] is True
+
+
+class _FakeKernelLaunch:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def __getitem__(self, _grid):
+        def launch(*_args, **_kwargs) -> None:
+            self.calls += 1
+
+        return launch
+
+
+def _qualified_cfwd_launch_args() -> dict[str, object]:
+    batch = 1
+    flat_rows = batch * kernel.PHYSICAL_DRAFTS
+    child_counts = torch.zeros(
+        (batch, kernel.PHYSICAL_ROWS), dtype=torch.int64
+    )
+    child_table = torch.full(
+        (batch, kernel.PHYSICAL_ROWS, kernel.FANOUT),
+        -1,
+        dtype=torch.int64,
+    )
+    return {
+        "self_logits": torch.empty(
+            (flat_rows, kernel.VOCAB_SIZE), dtype=torch.float32
+        ),
+        "target_logits": torch.empty(
+            (flat_rows, kernel.VOCAB_SIZE), dtype=torch.float32
+        ),
+        "self_source_indices": torch.arange(
+            kernel.SELF_ROWS, dtype=torch.int64
+        ),
+        "target_source_indices": torch.arange(
+            kernel.TARGET_ROWS, dtype=torch.int64
+        ),
+        "drafts": torch.zeros(
+            (batch, kernel.PHYSICAL_DRAFTS), dtype=torch.int64
+        ),
+        "child_table": child_table,
+        "child_counts": child_counts,
+        "self_uniform_levels": torch.zeros(
+            (kernel.SELF_ROWS,), dtype=torch.int64
+        ),
+        "target_parent_slots": torch.zeros(
+            (kernel.TARGET_ROWS,), dtype=torch.int64
+        ),
+        "target_uniform_levels": torch.zeros(
+            (kernel.TARGET_ROWS,), dtype=torch.int64
+        ),
+        "uniforms": torch.full(
+            (batch, kernel.WALK_CAP, 3), 0.5, dtype=torch.float32
+        ),
+        "workspace": kernel.allocate_workspace(device="cpu", batch_size=batch),
+        "batch_size": batch,
+        "mode": "tail6_fixed32",
+    }
+
+
+def _arm_cpu_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[_FakeKernelLaunch, _FakeKernelLaunch]:
+    stats = _FakeKernelLaunch()
+    decisions = _FakeKernelLaunch()
+    monkeypatch.setattr(torch.Tensor, "is_cuda", property(lambda _self: True))
+    monkeypatch.setattr(kernel, "triton", object())
+    monkeypatch.setattr(kernel, "tl", object())
+    monkeypatch.setattr(
+        kernel, "_fr13_cfwd_logit_block_stats_kernel", stats, raising=False
+    )
+    monkeypatch.setattr(
+        kernel,
+        "_fr13_cfwd_logit_direct_decision_kernel",
+        decisions,
+        raising=False,
+    )
+    return stats, decisions
+
+
+def test_launch_preflight_accepts_the_exact_qualified_binding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = _qualified_cfwd_launch_args()
+    stats, decisions = _arm_cpu_launch(monkeypatch)
+
+    result = kernel.launch_logit_direct_fixed32(**args)
+
+    assert len(result) == 5
+    assert stats.calls == 1
+    assert decisions.calls == 1
+
+
+@pytest.mark.parametrize(
+    "case",
+    (
+        "dtype",
+        "shape",
+        "stride",
+        "source_row",
+        "parent_slot",
+        "uniform_level",
+        "child_count",
+        "child_packing",
+        "draft_token",
+        "uniform_range",
+        "workspace_stride",
+        "workspace_alias",
+        "workspace_keys",
+    ),
+)
+def test_launch_preflight_fails_closed_on_pointer_domain_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+) -> None:
+    args = _qualified_cfwd_launch_args()
+    workspace = args["workspace"]
+    assert isinstance(workspace, dict)
+    if case == "dtype":
+        args["target_parent_slots"] = args["target_parent_slots"].to(torch.int32)
+    elif case == "shape":
+        args["self_source_indices"] = args["self_source_indices"][:-1]
+    elif case == "stride":
+        args["uniforms"] = torch.empty(
+            (1, kernel.WALK_CAP, 6), dtype=torch.float32
+        )[..., ::2]
+    elif case == "source_row":
+        args["self_source_indices"][0] = kernel.PHYSICAL_DRAFTS
+    elif case == "parent_slot":
+        args["target_parent_slots"][0] = kernel.PHYSICAL_ROWS
+    elif case == "uniform_level":
+        args["target_uniform_levels"][0] = kernel.WALK_CAP
+    elif case == "child_count":
+        args["child_counts"][0, 0] = kernel.FANOUT + 1
+    elif case == "child_packing":
+        args["child_table"][0, 0, 0] = 0
+    elif case == "draft_token":
+        args["drafts"][0, 0] = kernel.VOCAB_SIZE
+    elif case == "uniform_range":
+        args["uniforms"][0, 0, 0] = float("nan")
+    elif case == "workspace_stride":
+        workspace["block_maxima"] = torch.empty(
+            (kernel.SELF_ROWS + kernel.TARGET_ROWS, 2 * kernel.MAX_BLOCKS),
+            dtype=torch.float32,
+        )[:, ::2]
+    elif case == "workspace_alias":
+        workspace["self_token"] = (
+            args["drafts"]
+            .reshape(-1)[: kernel.SELF_ROWS]
+            .reshape(1, -1)
+        )
+    elif case == "workspace_keys":
+        workspace["unexpected"] = workspace["accepted"]
+    else:  # pragma: no cover - parameter list is closed above
+        raise AssertionError(case)
+    stats, decisions = _arm_cpu_launch(monkeypatch)
+
+    with pytest.raises((TypeError, ValueError)):
+        kernel.launch_logit_direct_fixed32(**args)
+
+    assert stats.calls == 0
+    assert decisions.calls == 0
+
+
+def test_launch_preflight_rejects_cross_device_operands_before_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = _qualified_cfwd_launch_args()
+    mismatched = args["drafts"]
+    stats, decisions = _arm_cpu_launch(monkeypatch)
+    monkeypatch.setattr(
+        torch.Tensor,
+        "device",
+        property(
+            lambda self: torch.device(
+                "cuda:1" if self is mismatched else "cuda:0"
+            )
+        ),
+    )
+
+    with pytest.raises(ValueError, match="share one device"):
+        kernel.launch_logit_direct_fixed32(**args)
+
+    assert stats.calls == 0
+    assert decisions.calls == 0
