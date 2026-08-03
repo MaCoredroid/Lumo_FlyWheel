@@ -9156,6 +9156,14 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1"
         )
+    sfwd_conv_postprep_text = os.environ.get(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION",
+        "0",
+    )
+    if sfwd_conv_postprep_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION must be exactly 0 or 1"
+        )
     if (
         sum(
             value == "1"
@@ -9163,6 +9171,7 @@ def main(argv: list[str] | None = None) -> int:
                 sfwd_state_fusion_eager_diagnostic,
                 sfwd_state_fusion_timing_text,
                 sfwd_prior_reuse_text,
+                sfwd_conv_postprep_text,
             )
         )
         > 1
@@ -9175,6 +9184,7 @@ def main(argv: list[str] | None = None) -> int:
         or sfwd_state_fusion_eager_diagnostic == "1"
         or sfwd_state_fusion_timing_text == "1"
         or sfwd_prior_reuse_text == "1"
+        or sfwd_conv_postprep_text == "1"
     )
     if (
         fixed32_eager_kernel_diagnostic

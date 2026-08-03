@@ -323,14 +323,16 @@ def test_kernel_and_wiring_preserve_order_and_reference_serving() -> None:
     assert "fixed32_sfwd_state_fusion_byte_gate(" in patcher
     assert "task_markers=_fr13_sfwd_task_markers" in patcher
     assert "int(attn_metadata.num_spec_decodes) == 4" in patcher
-    assert patcher.count("int(conv_state.size(2)) != 34") == 2
+    assert patcher.count("int(conv_state.size(2)) != 34") == 3
+    assert "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION" in patcher
     assert "int(conv_state.size(2)) != 12" not in patcher
     assert "No candidate bytes become model inputs in this arm." in patcher
     assert "mixed_qkv_spec = _fr10_tree_conv_out" in patcher
     assert "mixed_qkv_spec = _fr13_sfwd_candidate_out" not in patcher
     assert "fixed32_sfwd_state_fusion_production_control()" in patcher
     assert "fixed32_sfwd_state_fusion_production_engagement(" in patcher
-    assert "0\n                        if _fr13_sfwd_production is not None" in patcher
+    assert "_fr13_sfwd_production is not None" in patcher
+    assert "or _fr13_conv_postprep_active" in patcher
 
     tree = ast.parse(patcher)
     fragment = next(

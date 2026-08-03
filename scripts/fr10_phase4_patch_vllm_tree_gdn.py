@@ -174,6 +174,9 @@ _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB = os.environ.get(
 _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION = os.environ.get(
     "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
 ).strip()
+_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION = os.environ.get(
+    "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION", "0"
+).strip()
 _FR13_FIXED32_CUTLASS_WAVE = os.environ.get(
     "FR13_FIXED32_CUTLASS_WAVE", "stock"
 ).strip()
@@ -186,6 +189,12 @@ _FR13_FIXED32_SFWD_PRIOR_REUSE_IMPORT = (
     "fixed32_sfwd_prior_reuse_gate_control, "
     "launch_fixed32_sfwd_prior_reuse\n"
     if _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB == "1"
+    else ""
+)
+_FR13_FIXED32_SFWD_CONV_POSTPREP_IMPORT = (
+    "from lumo_flywheel_serving.fr13_sfwd_conv_postprep_fusion import "
+    "launch_fixed32_sfwd_conv_postprep_fusion\n"
+    if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION == "1"
     else ""
 )
 _FR13_FIXED32_TREE_SOURCE = repr(list(_FR13_FIXED32_CHOICES))
@@ -6338,6 +6347,12 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1"
         )
     sfwd_prior_reuse = sfwd_prior_reuse_raw == "1"
+    sfwd_conv_postprep_raw = _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+    if sfwd_conv_postprep_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION must be exactly 0 or 1"
+        )
+    sfwd_conv_postprep = sfwd_conv_postprep_raw == "1"
     sfwd_prior_manifest_sha256 = os.environ.get(
         "FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256", ""
     ).strip()
@@ -6407,6 +6422,10 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB requires fixed32 mode"
         )
+    if sfwd_conv_postprep and not resolved_mode:
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION requires fixed32 mode"
+        )
     if not resolved_mode:
         valid_mask = 0
     elif resolved_mode in _FR13_FIXED32_MODES:
@@ -6430,6 +6449,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{graph_batch_gdn_diagnostic!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB = "
         f"{sfwd_prior_reuse!r}\n"
+        "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION = "
+        f"{sfwd_conv_postprep!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH = "
         f"{'/logs/fr13_fixed32_sfwd_prior_reuse.source_manifest.json'!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_SHA256 = "
@@ -6446,6 +6467,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     sfwd_b4_byte_diagnostic = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
     sfwd_production = _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
+    sfwd_conv_postprep = _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
     cutlass_wave = _FR13_FIXED32_CUTLASS_WAVE
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
@@ -6520,6 +6542,10 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1"
         )
+    if sfwd_conv_postprep not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION must be exactly 0 or 1"
+        )
     streamk_byte_diagnostic = cutlass_wave in (
         "streamk_coop128_byte_ab",
         "streamk_force_wide256_byte_ab",
@@ -6548,6 +6574,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             sfwd_b4_byte_diagnostic == "1",
             sfwd_production == "1",
             sfwd_prior_reuse == "1",
+            sfwd_conv_postprep == "1",
         )
     ) > 1:
         raise RuntimeError(
@@ -6590,6 +6617,17 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             1,
             "FR13_FIXED32_EAGER_SFWD_PRIOR_REUSE_B1_BOOT_WARM",
         )
+    if sfwd_conv_postprep == "1":
+        batch_text = os.environ.get("MAX_NUM_SEQS", "")
+        if batch_text not in ("1", "4"):
+            raise RuntimeError(
+                "FR13 SFWD conv/post-prep eager warm requires B1 or B4"
+            )
+        return (
+            "SFWD conv/post-prep fusion candidate",
+            int(batch_text),
+            "FR13_FIXED32_EAGER_SFWD_CONV_POSTPREP_BOOT_WARM",
+        )
     return None
 
 
@@ -6609,6 +6647,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_b4_byte_diagnostic = _FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB
     sfwd_production = _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
+    sfwd_conv_postprep = _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
     _fr13_fixed32_eager_boot_warm_contract()
     if candidate == "single_launch":
         if expected_batch_raw not in ("1", "4"):
@@ -6700,6 +6739,46 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB must be exactly 0 or 1"
         )
+    if sfwd_conv_postprep not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION must be exactly 0 or 1"
+        )
+    if sfwd_conv_postprep == "1":
+        exact_runtime = {
+            "ENFORCE_EAGER": "1",
+            "FR13_DRAFT_VOCAB_ROOT": "1",
+            "FR13_DRAFT_VOCAB_K": "65536",
+            "FR13_FIXED32_CONV_SOURCE_BATCH": "0",
+            "FR13_RING_EXPORT": "1",
+            "FR13_FLAGS_INKERNEL": "1",
+            "FR13_TREE_RUNROW_INIT": "1",
+            "FR13_TREE_CONV_FUSED": "1",
+            "FR13_CONV_WB_BATCHED": "1",
+            "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB": "0",
+            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "0",
+            "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB": "0",
+        }
+        drift = {
+            name: (os.environ.get(name, ""), expected)
+            for name, expected in exact_runtime.items()
+            if os.environ.get(name, "") != expected
+        }
+        if (
+            mode not in _FR13_FIXED32_MODES
+            or os.environ.get("MAX_NUM_SEQS", "") not in ("1", "4")
+            or os.environ.get("SWE_CONCURRENCY", "")
+            != os.environ.get("MAX_NUM_SEQS", "")
+            or bool(candidate)
+            or bool(production)
+            or sfwd_b4_byte_diagnostic != "0"
+            or sfwd_production != "0"
+            or sfwd_prior_reuse != "0"
+            or drift
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 SFWD conv/post-prep fusion requires exclusive "
+                "eager physical32 B1-or-B4 K64/root1: " + repr(drift)
+            )
     if (
         batch_gdn_byte_diagnostic == "1"
         and graph_batch_gdn_byte_diagnostic == "1"
@@ -8068,6 +8147,7 @@ def _patch_gdn_linear() -> bool:
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import fixed32_batch_gdn_selector, fixed32_sfwd_state_fusion_byte_gate, fixed32_sfwd_state_fusion_gate_control, gather_committed_path_conv_prior, launch_fixed32_sfwd_state_fusion, launch_tree_gdn_prepared, launch_tree_gdn_prepared_fixed32_batch, launch_tree_state_linear_remap, subtree_get\n"
             f"{_FR13_FIXED32_SFWD_PRIOR_REUSE_IMPORT}"
+            f"{_FR13_FIXED32_SFWD_CONV_POSTPREP_IMPORT}"
             "from lumo_flywheel_serving.fr13_sfwd_state_fusion_production import fixed32_sfwd_state_fusion_production_control, fixed32_sfwd_state_fusion_production_engagement\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
@@ -9553,6 +9633,20 @@ def _fr13_conv_subop_mab(
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
                 and attn_metadata.num_spec_decodes > 0
             )
+            _fr13_conv_postprep_active = bool(
+                _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+            )
+            _fr13_conv_postprep_query = None
+            _fr13_conv_postprep_key = None
+            _fr13_conv_postprep_value_spec = None
+            _fr13_conv_postprep_value_tree = None
+            _fr13_conv_postprep_g = None
+            _fr13_conv_postprep_beta = None
+            if _fr13_conv_postprep_active and not use_fr10_tree_conv:
+                raise RuntimeError(
+                    "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION requires the "
+                    "physical32 tree-conv route"
+                )
             _fr10_tree_conv_expected = (
                 _fr10_active_decode_mode == "tree_mtp"
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
@@ -9738,8 +9832,11 @@ def _fr13_conv_subop_mab(
                                 ) from _fr10_len_exc
                     if (
                         _fr13_conv_committed_path
-                        and _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
-                        is not None
+                        and (
+                            _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
+                            is not None
+                            or _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+                        )
                     ):
                         # The qualified fused producer reads accepted col-0
                         # directly and publishes the commit-source stage.
@@ -10321,7 +10418,10 @@ def _fr13_conv_subop_mab(
                             + ":"
                             + str(_fr10_seed_conv_exc)
                         ) from _fr10_seed_conv_exc
-                if _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is not None:
+                if (
+                    _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is not None
+                    or _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+                ):
                     _fr10_prior_read_mode = "sfwd_state_fusion_direct_col0"
                     _fr10_conv_read_cols = None
                     _fr10_prior_conv_bank_rows = None
@@ -10553,7 +10653,11 @@ def _fr13_conv_subop_mab(
                         if _fr11_x.ndim == 2:
                             _fr11_w_f = _fr11_w_f.unsqueeze(0)
                         return _fr11_x.to(torch.float32) * _fr11_w_f
-                    _fr10_tree_conv_out = torch.empty_like(mixed_qkv_spec)
+                    _fr10_tree_conv_out = (
+                        None
+                        if _fr13_conv_postprep_active
+                        else torch.empty_like(mixed_qkv_spec)
+                    )
                     _fr10_conv_diag = getattr(
                         attn_metadata, "fr10_tree_conv_diag", None
                     )
@@ -10561,7 +10665,10 @@ def _fr13_conv_subop_mab(
                         os.environ.get("FR10_METRICS", "0") == "1"
                         and _fr10_conv_diag is not None
                     )
-                    if _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is None:
+                    if (
+                        _FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION is None
+                        and not _fr13_conv_postprep_active
+                    ):
                         assert _fr10_prior_conv_state_bank is not None
                     _fr12_native_spine_oracle_enabled = (
                         os.environ.get("FR12_NATIVE_SPINE_ORACLE", "0") == "1"
@@ -10672,7 +10779,153 @@ def _fr13_conv_subop_mab(
                                 _fr13_sfwd_task_markers,
                             ) = fixed32_sfwd_state_fusion_gate_control()
                             _fr13_sfwd_candidate_kind = "rowgroup8"
-                    if _fr13_sfwd_production is not None:
+                    if _fr13_conv_postprep_active:
+                        _fr13_conv_postprep_b = int(
+                            attn_metadata.num_spec_decodes
+                        )
+                        if (
+                            not _FR13_FIXED32_MODE
+                            or _fr13_conv_postprep_b not in (1, 4)
+                            or not _FR13_CONV_WB_BATCHED
+                            or not _FR13_TREE_CONV_FUSED
+                            or _FR13_FIXED32_CONV_SOURCE_BATCH
+                            or os.environ.get("FR13_RING_EXPORT", "1") != "1"
+                            or not _FR13_FLAGS_INKERNEL
+                            or os.environ.get("FR13_TREE_RUNROW_INIT", "1")
+                            != "1"
+                            or self.activation not in (True, "silu", "swish")
+                            or _fr12_native_spine_conv_out is not None
+                            or _fr12_subkernel_capture_enabled
+                            or _fr13_gdn_subop_mab_on
+                            or _fr13_sfwd_gate_enabled
+                            or _fr13_sfwd_production is not None
+                            or int(_fr10_tree_n) != 32
+                            or int(conv_state.size(2)) != 34
+                            or int(_fr10_width) != 4
+                        ):
+                            raise RuntimeError(
+                                "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION "
+                                "dependency/geometry contract drifted"
+                            )
+                        _fr13_wbb_srows = 36
+                        _fr13_wbb_stage = conv_wb_staging_get(
+                            str(self.prefix),
+                            _fr13_conv_postprep_b * _fr13_wbb_srows,
+                            int(mixed_qkv_spec.size(1)),
+                            mixed_qkv_spec.dtype,
+                            mixed_qkv_spec.device,
+                        )
+                        _fr13_conv_postprep_rows = (
+                            _fr13_conv_postprep_b * 32
+                        )
+                        _fr13_conv_postprep_cache_key = (
+                            _fr13_conv_postprep_b,
+                            str(mixed_qkv_spec.dtype),
+                            str(mixed_qkv_spec.device),
+                        )
+                        _fr13_conv_postprep_cache = getattr(
+                            self,
+                            "_fr13_fixed32_sfwd_conv_postprep_outputs",
+                            None,
+                        )
+                        if _fr13_conv_postprep_cache is None:
+                            _fr13_conv_postprep_query = torch.empty(
+                                (1, _fr13_conv_postprep_rows, 16, 128),
+                                dtype=mixed_qkv_spec.dtype,
+                                device=mixed_qkv_spec.device,
+                            )
+                            _fr13_conv_postprep_key = torch.empty_like(
+                                _fr13_conv_postprep_query
+                            )
+                            _fr13_conv_postprep_value_spec = torch.empty(
+                                (1, _fr13_conv_postprep_rows, 48, 128),
+                                dtype=mixed_qkv_spec.dtype,
+                                device=mixed_qkv_spec.device,
+                            )
+                            _fr13_conv_postprep_value_tree = torch.empty(
+                                (_fr13_conv_postprep_rows, 48, 128),
+                                dtype=mixed_qkv_spec.dtype,
+                                device=mixed_qkv_spec.device,
+                            )
+                            _fr13_conv_postprep_g = torch.empty(
+                                (_fr13_conv_postprep_rows, 48),
+                                dtype=torch.float32,
+                                device=mixed_qkv_spec.device,
+                            )
+                            _fr13_conv_postprep_beta = torch.empty_like(
+                                _fr13_conv_postprep_g
+                            )
+                            _fr13_conv_postprep_cache = {
+                                "key": _fr13_conv_postprep_cache_key,
+                                "query": _fr13_conv_postprep_query,
+                                "key_tensor": _fr13_conv_postprep_key,
+                                "value_spec": _fr13_conv_postprep_value_spec,
+                                "value_tree": _fr13_conv_postprep_value_tree,
+                                "g": _fr13_conv_postprep_g,
+                                "beta": _fr13_conv_postprep_beta,
+                            }
+                            self._fr13_fixed32_sfwd_conv_postprep_outputs = (
+                                _fr13_conv_postprep_cache
+                            )
+                        else:
+                            if (
+                                _fr13_conv_postprep_cache.get("key")
+                                != _fr13_conv_postprep_cache_key
+                            ):
+                                raise RuntimeError(
+                                    "FR13 SFWD conv/post-prep persistent output "
+                                    "geometry changed after initialization"
+                                )
+                            _fr13_conv_postprep_query = (
+                                _fr13_conv_postprep_cache["query"]
+                            )
+                            _fr13_conv_postprep_key = (
+                                _fr13_conv_postprep_cache["key_tensor"]
+                            )
+                            _fr13_conv_postprep_value_spec = (
+                                _fr13_conv_postprep_cache["value_spec"]
+                            )
+                            _fr13_conv_postprep_value_tree = (
+                                _fr13_conv_postprep_cache["value_tree"]
+                            )
+                            _fr13_conv_postprep_g = (
+                                _fr13_conv_postprep_cache["g"]
+                            )
+                            _fr13_conv_postprep_beta = (
+                                _fr13_conv_postprep_cache["beta"]
+                            )
+                        launch_fixed32_sfwd_conv_postprep_fusion(
+                            x=mixed_qkv_spec,
+                            conv_state=conv_state,
+                            spec_state_indices=spec_state_indices_tensor[
+                                :_fr13_conv_postprep_b, :32
+                            ],
+                            conv_weights=conv_weights,
+                            bias=self.conv1d.bias,
+                            a=a,
+                            b=b,
+                            A_log=self.A_log,
+                            dt_bias=self.dt_bias,
+                            query=_fr13_conv_postprep_query,
+                            key=_fr13_conv_postprep_key,
+                            value_spec=_fr13_conv_postprep_value_spec,
+                            value_tree=_fr13_conv_postprep_value_tree,
+                            g=_fr13_conv_postprep_g,
+                            beta=_fr13_conv_postprep_beta,
+                            source_stage=_fr13_wbb_stage[
+                                : _fr13_conv_postprep_b * _fr13_wbb_srows
+                            ],
+                            conv_tap=None,
+                            batch_size=_fr13_conv_postprep_b,
+                            fixed32_mode=_FR13_FIXED32_MODE,
+                            tree_parent=_fr10_parent,
+                            qualification_profile="k64_root",
+                            draft_vocab_k=65536,
+                            draft_vocab_root=1,
+                            physical32_guarded=True,
+                            source_only_qualification=True,
+                        )
+                    elif _fr13_sfwd_production is not None:
                         if (
                             not _FR13_FIXED32_MODE
                             or not _FR13_CONV_WB_BATCHED
@@ -10815,7 +11068,10 @@ def _fr13_conv_subop_mab(
                             )
                     for _fr10_b in range(
                         0
-                        if _fr13_sfwd_production is not None
+                        if (
+                            _fr13_sfwd_production is not None
+                            or _fr13_conv_postprep_active
+                        )
                         else attn_metadata.num_spec_decodes
                     ):
                         _fr10_start = _fr10_b * _fr10_tree_n
@@ -11549,11 +11805,18 @@ def _fr13_conv_subop_mab(
                             batch=_fr13_wbb_b,
                             src_rows_per_b=_fr13_wbb_srows,
                         )
-                    mixed_qkv_spec = _fr10_tree_conv_out
+                    if not _fr13_conv_postprep_active:
+                        mixed_qkv_spec = _fr10_tree_conv_out
                 except Exception as _fr10_tree_conv_exc:
                     if (
-                        _fr10_tree_conv_expected
-                        and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
+                        _fr13_conv_postprep_active
+                        or (
+                            _fr10_tree_conv_expected
+                            and os.environ.get(
+                                "FR10_ALLOW_LINEAR_FALLBACK", "0"
+                            )
+                            != "1"
+                        )
                     ):
                         raise RuntimeError(
                             "FR10 tree causal-conv disengaged: "
@@ -11634,6 +11897,37 @@ def _fr13_conv_subop_mab(
     if conv_needle not in text:
         raise RuntimeError("FR10 GDN causal conv spec branch needle not found")
     text = text.replace(conv_needle, conv_replacement, 1)
+
+    rearrange_needle = (
+        "        query_spec, key_spec, value_spec = "
+        "self.rearrange_mixed_qkv(mixed_qkv_spec)\n"
+    )
+    rearrange_replacement = '''        if (
+            _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+            and spec_sequence_masks is not None
+        ):
+            if any(
+                tensor is None
+                for tensor in (
+                    _fr13_conv_postprep_query,
+                    _fr13_conv_postprep_key,
+                    _fr13_conv_postprep_value_spec,
+                )
+            ):
+                raise RuntimeError(
+                    "FR13 SFWD conv/post-prep recurrence outputs were not produced"
+                )
+            query_spec = _fr13_conv_postprep_query
+            key_spec = _fr13_conv_postprep_key
+            value_spec = _fr13_conv_postprep_value_spec
+        else:
+            query_spec, key_spec, value_spec = self.rearrange_mixed_qkv(
+                mixed_qkv_spec
+            )
+'''
+    if rearrange_needle not in text:
+        raise RuntimeError("FR13 SFWD conv/post-prep rearrange needle not found")
+    text = text.replace(rearrange_needle, rearrange_replacement, 1)
 
     needle = '''        if spec_sequence_masks is not None:
             core_attn_out_spec, last_recurrent_state = (
@@ -11757,18 +12051,34 @@ def _fr13_conv_subop_mab(
                     )
                     self._fr13_gdn_subop_mab_pre_conv = None
                     self._fr13_gdn_subop_mab_conv_state = None
-                _, _, value_tree, g_tree, beta_tree = fused_post_conv_prep(
-                    conv_output=mixed_qkv_spec,
-                    a=a,
-                    b=b,
-                    A_log=self.A_log,
-                    dt_bias=self.dt_bias,
-                    num_k_heads=self.num_k_heads // self.tp_size,
-                    head_k_dim=self.head_k_dim,
-                    head_v_dim=self.head_v_dim,
-                    apply_l2norm=True,
-                    output_g_exp=False,
-                )
+                if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION:
+                    if any(
+                        tensor is None
+                        for tensor in (
+                            _fr13_conv_postprep_value_tree,
+                            _fr13_conv_postprep_g,
+                            _fr13_conv_postprep_beta,
+                        )
+                    ):
+                        raise RuntimeError(
+                            "FR13 SFWD conv/post-prep scan inputs were not produced"
+                        )
+                    value_tree = _fr13_conv_postprep_value_tree
+                    g_tree = _fr13_conv_postprep_g
+                    beta_tree = _fr13_conv_postprep_beta
+                else:
+                    _, _, value_tree, g_tree, beta_tree = fused_post_conv_prep(
+                        conv_output=mixed_qkv_spec,
+                        a=a,
+                        b=b,
+                        A_log=self.A_log,
+                        dt_bias=self.dt_bias,
+                        num_k_heads=self.num_k_heads // self.tp_size,
+                        head_k_dim=self.head_k_dim,
+                        head_v_dim=self.head_v_dim,
+                        apply_l2norm=True,
+                        output_g_exp=False,
+                    )
                 tree_n = int(attn_metadata.fr10_tree_parent.numel())
                 tree_n_pad = int(attn_metadata.fr10_tree_visible_mask.size(0))
                 _fr12_native_spine_oracle_enabled = (
