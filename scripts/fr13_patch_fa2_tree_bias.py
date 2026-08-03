@@ -18,6 +18,11 @@ a hidden launcher in one dedicated production translation unit; the stock
 explicit instantiation, shared launcher, and every unrelated CUDA object
 remain untouched.
 
+The composable ``--fixed32-query-tile16-static-strides`` specialization fixes
+the canonical contiguous K/V page, row, and head strides only in that private
+translation unit. The hidden dispatch verifies all six strides before entry;
+the stock path and the qualified qrow16 source retain their runtime strides.
+
 The ``--fixed32-query-tile32`` build adds the corresponding B4 specialization:
 one 32-row, two-warp CTA per batch/head. It has the same 96-CTA layer grid and
 complete ordered K loop as stock BM64 while avoiding the 32 query rows outside
@@ -563,6 +568,35 @@ void fr13_run_mha_fwd_fixed32_qrow16(
 '''
 
 
+FIXED32_QUERY_TILE16_STATIC_STRIDES_TRAIT = r'''
+template <>
+struct StaticPagedKVStrides<Fr13Fixed32Qrow16KernelTraits> {
+    static constexpr int64_t page = 1024 * 4 * 256;
+    static constexpr int64_t row = 4 * 256;
+    static constexpr int64_t head = 256;
+};
+'''
+
+
+_FIXED32_QUERY_TILE16_STATIC_STRIDES_ANCHOR = r'''template <>
+struct StaticPagedKVBlockSize<Fr13Fixed32Qrow16KernelTraits> {
+    static constexpr int value = 1024;
+    static constexpr int log2 = 10;
+    static constexpr int block_n_log2 = 6;
+};
+'''
+
+
+FIXED32_QUERY_TILE16_STATIC_STRIDES_TRANSLATION_UNIT = (
+    FIXED32_QUERY_TILE16_TRANSLATION_UNIT.replace(
+        _FIXED32_QUERY_TILE16_STATIC_STRIDES_ANCHOR,
+        _FIXED32_QUERY_TILE16_STATIC_STRIDES_ANCHOR
+        + FIXED32_QUERY_TILE16_STATIC_STRIDES_TRAIT,
+        1,
+    )
+)
+
+
 FIXED32_QUERY_TILE32_TRANSLATION_UNIT = r'''// FR13 fixed32 B4 qrow32 gate candidate.
 #include "namespace_config.h"
 #include "flash_fwd_launch_template.h"
@@ -790,6 +824,26 @@ void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split
     }});
 }}
 '''
+
+
+_FIXED32_QUERY_TILE16_STATIC_STRIDES_API_ANCHOR = r'''            && params.page_block_size == 1024
+'''
+
+
+FIXED32_QUERY_TILE16_STATIC_STRIDES_API_DISPATCH = (
+    FIXED32_QUERY_TILE16_API_DISPATCH.replace(
+        _FIXED32_QUERY_TILE16_STATIC_STRIDES_API_ANCHOR,
+        r'''            && params.k_batch_stride == 1024 * 4 * 256
+            && params.k_row_stride == 4 * 256
+            && params.k_head_stride == 256
+            && params.v_batch_stride == 1024 * 4 * 256
+            && params.v_row_stride == 4 * 256
+            && params.v_head_stride == 256
+'''
+        + _FIXED32_QUERY_TILE16_STATIC_STRIDES_API_ANCHOR,
+        1,
+    )
+)
 
 
 STOCK_RUN_MHA_FWD = r'''void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split_kernel=false) {
@@ -1048,6 +1102,75 @@ def _patch_fixed32_query_static_paged_path(
                 f"found {function.count(old)}"
             )
         function = function.replace(old, new)
+    text = text[:function_start] + function + text[function_end:]
+    path.write_text(text)
+    return True
+
+
+def _patch_fixed32_query_tile16_static_kv_head_stride(
+    path: Path,
+    *,
+    fixed32_query_tile16_static_strides: bool = False,
+) -> bool:
+    if not fixed32_query_tile16_static_strides:
+        return False
+    text = path.read_text()
+    function_signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+    )
+    function_start = text.index(function_signature)
+    function_end = text.index(
+        "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout",
+        function_start,
+    )
+    function = text[function_start:function_end]
+    marker = "// FR13_FA2_QROW16_STATIC_KV_HEAD_STRIDE"
+    if marker in function:
+        required = (
+            "StaticPagedKVStrides<Kernel_traits>::head",
+            "static_assert(kStaticKVHeadStride == 0 || kStaticKVHeadStride == 256);",
+            "kStaticKVHeadStride != 0",
+            "* kStaticKVHeadStride",
+        )
+        if function.count(marker) != 1 or any(
+            item not in function for item in required
+        ):
+            raise RuntimeError("qrow16 static KV head stride drifted")
+        return False
+
+    dynamic_base = r'''    const index_t row_offset_k = kStaticPagedKV || block_table != nullptr
+        ? (bidh / params.h_h_k_ratio) * params.k_head_stride
+        : binfo.k_offset(params.k_batch_stride, params.k_row_stride, bidb_cache)
+          + (n_block_max - 1) * kBlockN * params.k_row_stride + (bidh / params.h_h_k_ratio) * params.k_head_stride;
+    const index_t row_offset_v = kStaticPagedKV || block_table != nullptr
+        ? (bidh / params.h_h_k_ratio) * params.v_head_stride
+        : binfo.k_offset(params.v_batch_stride, params.v_row_stride, bidb_cache)
+          + (n_block_max - 1) * kBlockN * params.v_row_stride + (bidh / params.h_h_k_ratio) * params.v_head_stride;
+'''
+    static_base = r'''    // FR13_FA2_QROW16_STATIC_KV_HEAD_STRIDE
+    constexpr int64_t kStaticKVHeadStride =
+        StaticPagedKVStrides<Kernel_traits>::head;
+    static_assert(kStaticKVHeadStride == 0 || kStaticKVHeadStride == 256);
+    const index_t row_offset_k = kStaticKVHeadStride != 0
+        ? (bidh / params.h_h_k_ratio) * kStaticKVHeadStride
+        : kStaticPagedKV || block_table != nullptr
+            ? (bidh / params.h_h_k_ratio) * params.k_head_stride
+            : binfo.k_offset(params.k_batch_stride, params.k_row_stride, bidb_cache)
+              + (n_block_max - 1) * kBlockN * params.k_row_stride + (bidh / params.h_h_k_ratio) * params.k_head_stride;
+    const index_t row_offset_v = kStaticKVHeadStride != 0
+        ? (bidh / params.h_h_k_ratio) * kStaticKVHeadStride
+        : kStaticPagedKV || block_table != nullptr
+            ? (bidh / params.h_h_k_ratio) * params.v_head_stride
+            : binfo.k_offset(params.v_batch_stride, params.v_row_stride, bidb_cache)
+              + (n_block_max - 1) * kBlockN * params.v_row_stride + (bidh / params.h_h_k_ratio) * params.v_head_stride;
+'''
+    if function.count(dynamic_base) != 1:
+        raise RuntimeError("qrow16 static KV head-stride anchor drifted")
+    function = function.replace(dynamic_base, static_base, 1)
     text = text[:function_start] + function + text[function_end:]
     path.write_text(text)
     return True
@@ -1715,20 +1838,28 @@ def _patch_fixed32_query_translation_unit(
     path: Path,
     *,
     fixed32_query_tile16: bool = False,
+    fixed32_query_tile16_static_strides: bool = False,
 ) -> bool:
-    if not fixed32_query_tile16:
+    if not (fixed32_query_tile16 or fixed32_query_tile16_static_strides):
         return False
+    if fixed32_query_tile16_static_strides and not fixed32_query_tile16:
+        raise ValueError("qrow16 static strides require the qrow16 private kernel")
     stock_text = path.read_text()
     if STOCK_FIXED32_QUERY_INSTANTIATION not in stock_text:
         raise RuntimeError("stock fixed32 FA2 explicit instantiation drifted")
     if "FR13_FA2_FIXED32_QUERY_TILE16" in stock_text:
         raise RuntimeError("qrow16 must not share the stock instantiation TU")
     qrow_path = path.with_name("flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu")
+    expected = (
+        FIXED32_QUERY_TILE16_STATIC_STRIDES_TRANSLATION_UNIT
+        if fixed32_query_tile16_static_strides
+        else FIXED32_QUERY_TILE16_TRANSLATION_UNIT
+    )
     if qrow_path.exists():
-        if qrow_path.read_text() != FIXED32_QUERY_TILE16_TRANSLATION_UNIT:
+        if qrow_path.read_text() != expected:
             raise RuntimeError("existing qrow16 translation unit drifted")
         return False
-    qrow_path.write_text(FIXED32_QUERY_TILE16_TRANSLATION_UNIT)
+    qrow_path.write_text(expected)
     return True
 
 
@@ -1757,6 +1888,7 @@ def _patch_flash_api_cpp(
     path: Path,
     *,
     fixed32_query_tile16: bool = False,
+    fixed32_query_tile16_static_strides: bool = False,
     fixed32_query_tile32: bool = False,
 ) -> bool:
     text = path.read_text()
@@ -1908,14 +2040,19 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
     changed = changed or did
     if fixed32_query_tile16:
         signature = RUN_MHA_FWD_SIGNATURE
-        signature_at = FIXED32_QUERY_TILE16_API_DISPATCH.index(signature)
-        stock_body_at = FIXED32_QUERY_TILE16_API_DISPATCH.index(
+        qrow16_dispatch = (
+            FIXED32_QUERY_TILE16_STATIC_STRIDES_API_DISPATCH
+            if fixed32_query_tile16_static_strides
+            else FIXED32_QUERY_TILE16_API_DISPATCH
+        )
+        signature_at = qrow16_dispatch.index(signature)
+        stock_body_at = qrow16_dispatch.index(
             "    FP16_SWITCH", signature_at
         )
         text, did = _install_hidden_api_gate(
             text,
-            declaration=FIXED32_QUERY_TILE16_API_DISPATCH[:signature_at],
-            gate=FIXED32_QUERY_TILE16_API_DISPATCH[
+            declaration=qrow16_dispatch[:signature_at],
+            gate=qrow16_dispatch[
                 signature_at + len(signature) : stock_body_at
             ],
             label="fixed32 FA2 query tile16 hidden API dispatch",
@@ -1997,8 +2134,13 @@ def patch_fa2_source(
     *,
     tree_bias_tile_earlyout: bool = False,
     fixed32_query_tile16: bool = False,
+    fixed32_query_tile16_static_strides: bool = False,
     fixed32_query_tile32: bool = False,
 ) -> dict[str, bool]:
+    if fixed32_query_tile16_static_strides and not fixed32_query_tile16:
+        raise ValueError(
+            "fixed32 qrow16 static strides require --fixed32-query-tile16"
+        )
     if fixed32_query_tile32 and not tree_bias_tile_earlyout:
         raise ValueError(
             "fixed32 qrow32 requires --tree-bias-tile-earlyout in the same "
@@ -2025,6 +2167,15 @@ def patch_fa2_source(
             files["flash_fwd_kernel.h"],
             fixed32_query_tile16=fixed32_query_tile16,
             fixed32_query_tile32=fixed32_query_tile32,
+        )
+        or flash_fwd_kernel_changed
+    )
+    flash_fwd_kernel_changed = (
+        _patch_fixed32_query_tile16_static_kv_head_stride(
+            files["flash_fwd_kernel.h"],
+            fixed32_query_tile16_static_strides=(
+                fixed32_query_tile16_static_strides
+            ),
         )
         or flash_fwd_kernel_changed
     )
@@ -2081,6 +2232,9 @@ def patch_fa2_source(
         "flash_fwd_fr13_qrow16_hdim256_bf16_sm80.cu": _patch_fixed32_query_translation_unit(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
             fixed32_query_tile16=fixed32_query_tile16,
+            fixed32_query_tile16_static_strides=(
+                fixed32_query_tile16_static_strides
+            ),
         ),
         "flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu": _patch_fixed32_query_tile32_translation_unit(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
@@ -2089,6 +2243,9 @@ def patch_fa2_source(
         "flash_api.cpp": _patch_flash_api_cpp(
             files["flash_api.cpp"],
             fixed32_query_tile16=fixed32_query_tile16,
+            fixed32_query_tile16_static_strides=(
+                fixed32_query_tile16_static_strides
+            ),
             fixed32_query_tile32=fixed32_query_tile32,
         ),
         "flash_api_torch_lib.cpp": _patch_torch_lib(files["flash_api_torch_lib.cpp"]),
@@ -3977,6 +4134,11 @@ def main() -> int:
         help="build the fixed32 B1 tree-only FA2 16-row query-tile candidate",
     )
     parser.add_argument(
+        "--fixed32-query-tile16-static-strides",
+        action="store_true",
+        help="fix canonical K/V strides in the private qrow16 candidate",
+    )
+    parser.add_argument(
         "--fixed32-query-tile32",
         action="store_true",
         help="build the gate-only fixed32 B4 FA2 32-row query-tile candidate",
@@ -4023,6 +4185,14 @@ def main() -> int:
             "the same source-build invocation"
         )
     if (
+        args.fixed32_query_tile16_static_strides
+        and not args.fixed32_query_tile16
+    ):
+        parser.error(
+            "--fixed32-query-tile16-static-strides requires "
+            "--fixed32-query-tile16"
+        )
+    if (
         args.fixed32_query_tile32_live_ab
         and not args.skip_source
         and not args.fixed32_query_tile32
@@ -4035,6 +4205,9 @@ def main() -> int:
     payload: dict[str, object] = {
         "tree_bias_tile_earlyout": args.tree_bias_tile_earlyout,
         "fixed32_query_tile16": args.fixed32_query_tile16,
+        "fixed32_query_tile16_static_strides": (
+            args.fixed32_query_tile16_static_strides
+        ),
         "fixed32_query_tile32": args.fixed32_query_tile32,
         "fixed32_query_tile16_live_ab": args.fixed32_query_tile16_live_ab,
         "fixed32_query_tile32_live_ab": args.fixed32_query_tile32_live_ab,
@@ -4048,6 +4221,9 @@ def main() -> int:
             fa2_src,
             tree_bias_tile_earlyout=args.tree_bias_tile_earlyout,
             fixed32_query_tile16=args.fixed32_query_tile16,
+            fixed32_query_tile16_static_strides=(
+                args.fixed32_query_tile16_static_strides
+            ),
             fixed32_query_tile32=args.fixed32_query_tile32,
         )
     if not args.skip_python:
