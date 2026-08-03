@@ -1184,6 +1184,18 @@ def _fr13_fixed32_warm_final_full_postprocess(vocab_size):
             max_batch_size=capacity,
             vocab_size=vocab,
         )
+        cfwd_direct = taw_module.fr13_fixed32_cfwd_logit_direct_warm_execute(
+            device,
+            mode=_FR13_FIXED32_MODE,
+            valid_mask=int(_FR13_FIXED32_VALID_MASK),
+            max_batch_size=capacity,
+            vocab_size=vocab,
+        )
+        if cfwd_direct.get("requested") is True and (
+            cfwd_direct.get("ready") is not True
+            or cfwd_direct.get("classification") != "unmeasured_boot"
+        ):
+            raise RuntimeError("FR13 CFWD logit-direct boot warm did not complete")
         tail, committer = _fr13_fixed32_warm_device_postprocess_tail(
             taw_module,
             device,
@@ -2085,6 +2097,14 @@ def _fr13_fixed32_observed_begin(
         fixed32_conv_zero_tail_live_prepare_replay,
     )
     fixed32_conv_zero_tail_live_prepare_replay(
+        mode=mode, batch_size=batch, enabled=True
+    )
+    taw_module = __import__("sys").modules.get(
+        "_fr13_device_multidraft_kernel"
+    )
+    if taw_module is None:
+        raise RuntimeError("FR13 fixed32 observed begin is missing the TAW module")
+    taw_module.fr13_fixed32_cfwd_logit_direct_live_prepare_replay(
         mode=mode, batch_size=batch, enabled=True
     )
 
@@ -3667,6 +3687,14 @@ def _fr13_fixed32_capture_begin(
             _FR13_FIXED32_MODE, batch, -1, "capture_manifest"
         ),
     }
+    taw_module = __import__("sys").modules.get(
+        "_fr13_device_multidraft_kernel"
+    )
+    if taw_module is None:
+        raise RuntimeError("FR13 fixed32 capture begin is missing the TAW module")
+    taw_module.fr13_fixed32_cfwd_logit_direct_capture_begin(
+        identity, mode=_FR13_FIXED32_MODE, batch_size=batch
+    )
     if (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
         and (
@@ -3931,6 +3959,16 @@ def _fr13_fixed32_capture_end(
             signature,
             int(work["gdn_scan_calls"]),
         )
+    taw_module = __import__("sys").modules.get(
+        "_fr13_device_multidraft_kernel"
+    )
+    if taw_module is None:
+        raise RuntimeError("FR13 fixed32 capture end is missing the TAW module")
+    taw_module.fr13_fixed32_cfwd_logit_direct_capture_end(
+        identity,
+        mode=_FR13_FIXED32_MODE,
+        batch_size=int(work["batch_size"]),
+    )
     _FR13_FIXED32_CAPTURE_MANIFESTS[identity] = (signature, canonical)
     _FR13_FIXED32_CAPTURE_CONTEXT = None
     return signature
@@ -4278,6 +4316,16 @@ def _fr13_fixed32_observed_graph_replay(
         }
     )
     tree_kernel.fixed32_conv_zero_tail_live_prepare_replay(
+        mode=event["mode"],
+        batch_size=int(event["batch_size"]),
+        enabled=False,
+    )
+    taw_module = __import__("sys").modules.get(
+        "_fr13_device_multidraft_kernel"
+    )
+    if taw_module is None:
+        raise RuntimeError("FR13 fixed32 replay end is missing the TAW module")
+    taw_module.fr13_fixed32_cfwd_logit_direct_live_prepare_replay(
         mode=event["mode"],
         batch_size=int(event["batch_size"]),
         enabled=False,
@@ -17106,7 +17154,7 @@ def _lumo_tree_canonical_multidraft_sample(
             )
         )
         _fr13_f32_output = _fr13_fixed32_device_commit_route(
-            _fr13_f32_dm.fr13_fixed32_taw_commit(
+            _fr13_f32_dm.fr13_fixed32_cfwd_logit_direct_commit(
                 _fr13_f32_counts,
                 draft_token_ids,
                 tree_parent_indices,
@@ -33706,6 +33754,16 @@ def _fr13_f32_flush_one(request):
                     fixed32_conv_zero_tail_live_finalize,
                 )
                 fixed32_conv_zero_tail_live_finalize(
+                    events, flush_binding
+                )
+                taw_module = __import__("sys").modules.get(
+                    "_fr13_device_multidraft_kernel"
+                )
+                if taw_module is None:
+                    raise RuntimeError(
+                        "FR13 fixed32 final flush is missing the TAW module"
+                    )
+                taw_module.fr13_fixed32_cfwd_logit_direct_live_finalize(
                     events, flush_binding
                 )
             # Counters/snapshot describe the closed interval ending here. Break

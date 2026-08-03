@@ -360,10 +360,12 @@ def test_kernel_uses_scan_terminal_masses_and_sticky_domain_guards() -> None:
     assert "local_total / tl.maximum(selected_block_mass" in source
 
 
-def test_candidate_is_source_only_and_default_off() -> None:
+def test_candidate_is_default_off_and_wired_only_through_shadow_wrapper() -> None:
     served_source = SERVED_PATH.read_text(encoding="utf-8")
-    assert kernel.CANDIDATE not in served_source
-    assert KERNEL_PATH.name not in served_source
+    assert kernel.CANDIDATE in served_source
+    assert KERNEL_PATH.name in served_source
+    assert 'os.environ.get("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "0")' in served_source
+    assert "return reference" in served_source
     assert kernel.fixed32_cfwd_logit_direct_contract(
         1, mode="tail6_fixed32"
     )["candidate_default_off"] is True
