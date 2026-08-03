@@ -99,6 +99,8 @@ def _source_binding_repo(
         path = repo / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(f"source binding file {index}: {relative}\n".encode("ascii"))
+    block_map = repo / module.DRAFT_VOCAB_BLOCKS_SOURCE
+    block_map.write_bytes(BLOCK_MAP.read_bytes())
     patch_source = repo / module.PATCH_SOURCE
     monkeypatch.setattr(
         module,
@@ -315,7 +317,7 @@ def test_k64_root_accepts_source_bound_onen_profile(
     sha_attr: str,
 ) -> None:
     module, candidate, _, live, _ = _k64_fixture(tmp_path, monkeypatch)
-    _, source_commit, patch_source = _source_binding_repo(
+    repo, source_commit, patch_source = _source_binding_repo(
         tmp_path, module, monkeypatch
     )
     if candidate_selector in module.SOURCE_CONTRACTS:
@@ -368,6 +370,13 @@ def test_k64_root_accepts_source_bound_onen_profile(
         draft_vocab_blocks=BLOCK_MAP,
     )
     sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        module,
+        "_git_output",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            module._GitUnavailableError("git is unavailable for source binding")
+        ),
+    )
     verified = module.verify_sidecar(
         sidecar,
         sidecar_sha256,
@@ -377,6 +386,31 @@ def test_k64_root_accepts_source_bound_onen_profile(
         qualification_profile="k64_root",
         draft_vocab_blocks=BLOCK_MAP,
     )
+    binding = None
+    if candidate_selector in module.binary.INSTALLABLE_SELECTORS:
+        destination = tmp_path / "installed.so"
+        destination.write_bytes(b"stock\n")
+        attestation = tmp_path / "attestation.json"
+        monkeypatch.setitem(sys.modules, "fr13_cutlass_streamk_pass", module)
+        monkeypatch.setattr(module.binary, "CONTAINER_SOURCE", candidate)
+        monkeypatch.setattr(module.binary, "CONTAINER_DESTINATION", destination)
+        module.binary.install_candidate(
+            candidate,
+            destination,
+            attestation,
+            candidate_selector,
+            qualification_profile="k64_root",
+            production_sidecar=sidecar,
+            expected_production_sidecar_sha256=sidecar_sha256,
+            patch_source=patch_source,
+        )
+        binding = module.validate_production_attestation(
+            attestation,
+            sidecar_sha256,
+            qualification_profile="k64_root",
+            draft_vocab_blocks=repo / module.DRAFT_VOCAB_BLOCKS_SOURCE,
+            patch_source=patch_source,
+        )
 
     assert verified == issued
     assert issued["candidate_selector"] == candidate_selector
@@ -384,6 +418,87 @@ def test_k64_root_accepts_source_bound_onen_profile(
     assert issued["qualification_profile"] == "k64_root"
     assert issued["qualified_comparison_call_limit"] == 320
     assert issued["qualification_source_identity"]["source_commit"] == source_commit
+    if binding is not None:
+        assert binding["qualification_source_identity"] == issued[
+            "qualification_source_identity"
+        ]
+
+
+@pytest.mark.parametrize(
+    ("failure", "match"),
+    (
+        ("tampered", "SHA-256 mismatch"),
+        ("missing", "does not exist"),
+        ("symlink", "not a regular non-symlink file"),
+        ("wrong_commit", "identity commit mismatch"),
+    ),
+)
+def test_no_git_runtime_source_binding_rejects_mounted_source_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    match: str,
+) -> None:
+    module = _load(f"fr13_cutlass_streamk_no_git_{failure}_test")
+    repo, source_commit, patch_source = _source_binding_repo(
+        tmp_path, module, monkeypatch
+    )
+    candidate_selector = "identity_onen_n5120_fullgrid_b1"
+    contract = dict(module.SOURCE_CONTRACTS[candidate_selector])
+    contract["patch_source_sha256"] = hashlib.sha256(
+        patch_source.read_bytes()
+    ).hexdigest()
+    monkeypatch.setitem(module.SOURCE_CONTRACTS, candidate_selector, contract)
+    source_identity = module.validate_source_commit_binding(
+        source_commit, patch_source, candidate_selector
+    )
+    target = repo / module.SOURCE_BINDING_PATHS[-1]
+    if failure == "tampered":
+        original = target.read_bytes()
+        target.write_bytes(bytes((original[0] ^ 1,)) + original[1:])
+    elif failure == "missing":
+        target.unlink()
+    elif failure == "symlink":
+        target.unlink()
+        target.symlink_to(patch_source)
+    else:
+        source_commit = "d" * 40
+    monkeypatch.setattr(
+        module,
+        "_git_output",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            module._GitUnavailableError("git is unavailable for source binding")
+        ),
+    )
+
+    with pytest.raises(module.QualificationError, match=match):
+        module._validate_runtime_source_commit_binding(
+            source_commit,
+            source_identity,
+            patch_source,
+            candidate_selector,
+        )
+
+
+def test_strict_source_binding_still_requires_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _load("fr13_cutlass_streamk_strict_no_git_test")
+    _, source_commit, patch_source = _source_binding_repo(
+        tmp_path, module, monkeypatch
+    )
+    monkeypatch.setattr(
+        module,
+        "_git_output",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            module._GitUnavailableError("git is unavailable for source binding")
+        ),
+    )
+
+    with pytest.raises(
+        module.QualificationError, match="git is unavailable for source binding"
+    ):
+        module.validate_source_commit_binding(source_commit, patch_source)
 
 
 @pytest.mark.parametrize(

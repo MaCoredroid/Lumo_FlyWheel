@@ -488,6 +488,10 @@ class QualificationError(ValueError):
     """The CUTLASS B4 qualification chain is incomplete or inconsistent."""
 
 
+class _GitUnavailableError(QualificationError):
+    """Git cannot be executed in the runtime verification environment."""
+
+
 def _qualification_profile(name: str) -> dict[str, object]:
     try:
         return QUALIFICATION_PROFILES[name]
@@ -639,7 +643,7 @@ def _git_output(repo_root: Path, *arguments: str, label: str) -> bytes:
             stderr=subprocess.PIPE,
         )
     except FileNotFoundError as error:
-        raise QualificationError("git is unavailable for source binding") from error
+        raise _GitUnavailableError("git is unavailable for source binding") from error
     if process.returncode != 0:
         detail = process.stderr.decode("utf-8", errors="replace").strip()
         raise QualificationError(f"{label} failed: {detail or process.returncode}")
@@ -752,6 +756,96 @@ def validate_source_commit_binding(
         "source_commit": source_commit,
         "files": files,
     }
+
+
+def _validate_mounted_source_identity(
+    source_commit: str,
+    source_identity: object,
+    patch_source: Path,
+    candidate_selector: str,
+) -> dict[str, object]:
+    candidate_contract = _candidate_contract(candidate_selector)
+    if candidate_contract.get("source_binding") != "required":
+        raise QualificationError(
+            f"{candidate_selector} does not define a source-binding contract"
+        )
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise QualificationError("source-binding commit is invalid")
+    if not isinstance(source_identity, dict) or set(source_identity) != {
+        "schema",
+        "source_commit",
+        "files",
+    }:
+        raise QualificationError("mounted source identity has an invalid structure")
+    if source_identity.get("schema") != SOURCE_BINDING_SCHEMA:
+        raise QualificationError("mounted source identity schema mismatch")
+    if source_identity.get("source_commit") != source_commit:
+        raise QualificationError("mounted source identity commit mismatch")
+    files = source_identity.get("files")
+    if not isinstance(files, dict) or set(files) != set(SOURCE_BINDING_PATHS):
+        raise QualificationError("mounted source identity file manifest mismatch")
+
+    _regular_file(patch_source, "CUTLASS wave patch source")
+    resolved_patch_source = patch_source.resolve(strict=True)
+    repo_root = resolved_patch_source.parents[len(PATCH_SOURCE.parts) - 1]
+    if repo_root / PATCH_SOURCE != resolved_patch_source:
+        raise QualificationError(
+            "mounted patch source is not the canonical source-binding path"
+        )
+
+    for relative in SOURCE_BINDING_PATHS:
+        record = files.get(relative)
+        if not isinstance(record, dict) or set(record) != {"bytes", "sha256"}:
+            raise QualificationError(
+                f"mounted source identity record is invalid for {relative}"
+            )
+        expected_bytes = record.get("bytes")
+        expected_sha256 = record.get("sha256")
+        if (
+            not isinstance(expected_bytes, int)
+            or isinstance(expected_bytes, bool)
+            or expected_bytes < 0
+            or not isinstance(expected_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+        ):
+            raise QualificationError(
+                f"mounted source identity record is invalid for {relative}"
+            )
+        working_path = repo_root / relative
+        info = _regular_file(working_path, f"mounted source-binding file {relative}")
+        if info.st_size != expected_bytes:
+            raise QualificationError(
+                f"mounted source-binding file size mismatch for {relative}"
+            )
+        if sha256_file(working_path) != expected_sha256:
+            raise QualificationError(
+                f"mounted source-binding file SHA-256 mismatch for {relative}"
+            )
+
+    patch_record = files[os.fspath(PATCH_SOURCE)]
+    assert isinstance(patch_record, dict)
+    expected_patch_sha256, _ = _candidate_source_hashes(candidate_selector)
+    if patch_record.get("sha256") != expected_patch_sha256:
+        raise QualificationError(
+            "mounted source-binding patch source does not match the pinned digest"
+        )
+    return source_identity
+
+
+def _validate_runtime_source_commit_binding(
+    source_commit: str,
+    source_identity: object,
+    patch_source: Path,
+    candidate_selector: str,
+) -> dict[str, object]:
+    try:
+        return validate_source_commit_binding(
+            source_commit, patch_source, candidate_selector
+        )
+    except _GitUnavailableError:
+        return _validate_mounted_source_identity(
+            source_commit, source_identity, patch_source, candidate_selector
+        )
 
 
 def validate_live_result(
@@ -1363,8 +1457,11 @@ def verify_sidecar(
     ):
         raise QualificationError("sidecar qualification source commit is invalid")
     if candidate_contract.get("source_binding") == "required":
-        source_identity = validate_source_commit_binding(
-            source_commit, patch_source, sidecar_selector
+        source_identity = _validate_runtime_source_commit_binding(
+            source_commit,
+            payload.get("qualification_source_identity"),
+            patch_source,
+            sidecar_selector,
         )
         if payload.get("qualification_source_identity") != source_identity:
             raise QualificationError(
@@ -1467,8 +1564,11 @@ def verify_dual_sidecar(
         )
     source_identity: dict[str, object] | None = None
     if candidate_contract.get("source_binding") == "required":
-        source_identity = validate_source_commit_binding(
-            source_commit, patch_source, candidate_selector
+        source_identity = _validate_runtime_source_commit_binding(
+            source_commit,
+            payload.get("qualification_source_identity"),
+            patch_source,
+            candidate_selector,
         )
         if payload.get("qualification_source_identity") != source_identity:
             raise QualificationError(
@@ -1628,8 +1728,11 @@ def _validate_dual_production_attestation(
         )
     source_identity: dict[str, object] | None = None
     if candidate_contract.get("source_binding") == "required":
-        source_identity = validate_source_commit_binding(
-            source_commit, patch_source, candidate_selector
+        source_identity = _validate_runtime_source_commit_binding(
+            source_commit,
+            qualification.get("qualification_source_identity"),
+            patch_source,
+            candidate_selector,
         )
         if qualification.get("qualification_source_identity") != source_identity:
             raise QualificationError(

@@ -49,9 +49,23 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         candidate_sha256,
     )
 
-    patch_bytes = b"hybrid N5120 patch source\n"
-    patch_source = tmp_path / "patch.py"
-    patch_source.write_bytes(patch_bytes)
+    source_root = tmp_path / "mounted-source"
+    source_files: dict[str, dict[str, object]] = {}
+    for index, relative in enumerate(module.SOURCE_BINDING_PATHS):
+        path = source_root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        contents = (
+            BLOCK_MAP.read_bytes()
+            if relative == str(module.DRAFT_VOCAB_BLOCKS_SOURCE)
+            else f"hybrid source file {index}: {relative}\n".encode("ascii")
+        )
+        path.write_bytes(contents)
+        source_files[relative] = {
+            "bytes": len(contents),
+            "sha256": hashlib.sha256(contents).hexdigest(),
+        }
+    patch_source = source_root / module.PATCH_SOURCE
+    patch_bytes = patch_source.read_bytes()
     patch_sha256 = hashlib.sha256(patch_bytes).hexdigest()
     monkeypatch.setattr(
         module, "IDENTITY_HYBRID_N5120_PATCH_SOURCE_SHA256", patch_sha256
@@ -59,12 +73,7 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     source_identity = {
         "schema": module.SOURCE_BINDING_SCHEMA,
         "source_commit": "c" * 40,
-        "files": {
-            str(module.PATCH_SOURCE): {
-                "bytes": len(patch_bytes),
-                "sha256": patch_sha256,
-            }
-        },
+        "files": source_files,
     }
     monkeypatch.setattr(
         module,
@@ -196,6 +205,13 @@ def test_hybrid_dual_sidecar_binds_tail23_and_hydra27(
         candidate_selector=SELECTOR,
     )
     sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        module,
+        "validate_source_commit_binding",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            module._GitUnavailableError("git is unavailable for source binding")
+        ),
+    )
     verified = module.verify_dual_sidecar(
         sidecar,
         sidecar_sha256,
@@ -225,6 +241,94 @@ def test_hybrid_dual_sidecar_binds_tail23_and_hydra27(
         )
 
 
+def test_hybrid_single_sidecar_verifies_without_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, candidate, patch_source, paths, hashes = _fixture(tmp_path, monkeypatch)
+    sidecar = tmp_path / "hybrid-single-sidecar.json"
+    issued = module.issue_sidecar(
+        paths["hydra27_fixed32"],
+        hashes["hydra27_fixed32"],
+        candidate,
+        sidecar,
+        patch_source,
+        expected_source_commit="c" * 40,
+        candidate_selector=SELECTOR,
+        qualification_profile="k64_root",
+        draft_vocab_blocks=BLOCK_MAP,
+        fixed32_mode="hydra27_fixed32",
+    )
+    sidecar_sha256 = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        module,
+        "validate_source_commit_binding",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            module._GitUnavailableError("git is unavailable for source binding")
+        ),
+    )
+
+    verified = module.verify_sidecar(
+        sidecar,
+        sidecar_sha256,
+        candidate,
+        patch_source,
+        candidate_selector=SELECTOR,
+        qualification_profile="k64_root",
+        draft_vocab_blocks=BLOCK_MAP,
+        fixed32_mode="hydra27_fixed32",
+    )
+
+    assert verified == issued
+
+
+@pytest.mark.parametrize(
+    ("failure", "match"),
+    (
+        ("tampered", "SHA-256 mismatch"),
+        ("missing", "does not exist"),
+        ("symlink", "not a regular non-symlink file"),
+        ("wrong_commit", "identity commit mismatch"),
+    ),
+)
+def test_hybrid_no_git_runtime_binding_rejects_mounted_source_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    match: str,
+) -> None:
+    module, _, patch_source, _, _ = _fixture(tmp_path, monkeypatch)
+    source_identity = module.validate_source_commit_binding(
+        "c" * 40, patch_source, SELECTOR
+    )
+    target = patch_source.parents[1] / module.SOURCE_BINDING_PATHS[-2]
+    source_commit = "c" * 40
+    if failure == "tampered":
+        original = target.read_bytes()
+        target.write_bytes(bytes((original[0] ^ 1,)) + original[1:])
+    elif failure == "missing":
+        target.unlink()
+    elif failure == "symlink":
+        target.unlink()
+        target.symlink_to(patch_source)
+    else:
+        source_commit = "d" * 40
+    monkeypatch.setattr(
+        module,
+        "validate_source_commit_binding",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            module._GitUnavailableError("git is unavailable for source binding")
+        ),
+    )
+
+    with pytest.raises(module.QualificationError, match=match):
+        module._validate_runtime_source_commit_binding(
+            source_commit,
+            source_identity,
+            patch_source,
+            SELECTOR,
+        )
+
+
 def test_hybrid_installed_attestation_preserves_exact_head_and_exact4(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -250,6 +354,13 @@ def test_hybrid_installed_attestation_preserves_exact_head_and_exact4(
     monkeypatch.setitem(sys.modules, "fr13_cutlass_b4_pass", module)
     monkeypatch.setattr(module.binary, "CONTAINER_SOURCE", candidate)
     monkeypatch.setattr(module.binary, "CONTAINER_DESTINATION", destination)
+    monkeypatch.setattr(
+        module,
+        "validate_source_commit_binding",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            module._GitUnavailableError("git is unavailable for source binding")
+        ),
+    )
 
     module.binary.install_candidate(
         candidate,
