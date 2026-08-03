@@ -1,0 +1,25 @@
+full_translation_unit_sm121a_compile: pass
+full_shared_library_link: pass
+compile_log_bytes: 0
+link_log_bytes: 0
+cpu_import_with_cuda_visible_devices_empty: pass
+elf64_aarch64_shared_object: pass
+python_init_symbol: pass
+dynamic_dependency_set_vs_incumbent: identical
+undefined_dynamic_symbol_set_vs_incumbent: identical
+candidate_resource_records: 2
+candidate_fp16_resources: REG=168 STACK=0 LOCAL=0 SHARED=1024
+candidate_bf16_resources: REG=168 STACK=0 LOCAL=0 SHARED=1024
+candidate_fp16_sass: encoded=520 nop=27 operational=493 branches=26 ldl=0 stl=0 call=0
+candidate_bf16_sass: encoded=520 nop=27 operational=493 branches=26 ldl=0 stl=0 call=0
+source_binding_commit_85c6eb1e8f4ee58df79382a5dd86dc1172edb40c: pass
+python_byte_compile: pass
+shell_syntax: pass
+git_diff_check: pass
+adjacent_tests: 197 passed
+gpu_kernel_launch: not run
+docker: not run
+real_swe_verified_task: not run
+raw_byte_gate: not run
+full_step_timing: not run
+hardware_floor_acceptance: not run
