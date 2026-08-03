@@ -10253,7 +10253,7 @@ def _tree_gdn_fixed32_single_launch_node(
             other=0.0,
         )
         b_raw_a = b_raw_a_in.to(tl.float32)
-        if RING_EXPORT and not DECAY_EXPORT:
+        if RING_EXPORT:
             tl.store(
                 ring_a + global_node * NUM_VH + pid_vh,
                 b_raw_a_in,
@@ -13825,10 +13825,8 @@ def preseed_fixed32_committer_graph(
                 "committer_decay_exponentials_per_value_head_step": (
                     0 if decay_reuse else 1
                 ),
-                "raw_ab_ring_stores_per_physical_value_head": (
-                    0 if decay_reuse else 2
-                ),
-                "raw_ab_ring_store_elision": decay_reuse,
+                "raw_ab_ring_stores_per_physical_value_head": 2,
+                "raw_ab_ring_store_elision": False,
                 "full_value_tile": True,
                 "value_tile": 128,
                 "kernel_warps": 8,

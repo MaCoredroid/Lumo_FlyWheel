@@ -49,14 +49,15 @@ def test_decay_ring_arm_is_explicit_and_default_off(monkeypatch) -> None:
     assert requested() is True
 
 
-def test_producer_reuses_its_exact_decay_and_elides_dead_raw_gate_stores() -> None:
+def test_producer_reuses_exact_decay_and_preserves_reference_gate_inputs() -> None:
     node = _text("_tree_gdn_fixed32_single_launch_node")
     helper = _text("_gdn_node_step_precomputed_decay")
     kernel = _text("_tree_gdn_kernel_fixed32_single_launch")
 
     assert node.count("b_decay = tl.exp(b_g)") == 1
     assert "b_decay if DECAY_EXPORT else b_g" in node
-    assert "if RING_EXPORT and not DECAY_EXPORT:" in node
+    assert "if RING_EXPORT:" in node
+    assert "RING_EXPORT and not DECAY_EXPORT" not in node
     assert "if DECAY_EXPORT:" in node
     assert "b_decay," in node
     assert "state_i *= b_decay" in helper
@@ -108,7 +109,8 @@ def test_decay_preseed_is_cumulative_fail_closed_and_byte_gated() -> None:
     ):
         assert requirement in preseed
     assert '"decay_reuse": decay_reuse' in preseed
-    assert '"raw_ab_ring_store_elision": decay_reuse' in preseed
+    assert '"raw_ab_ring_store_elision": False' in preseed
+    assert '"raw_ab_ring_stores_per_physical_value_head": 2' in preseed
     assert '"committer_decay_exponentials_per_value_head_step"' in preseed
     assert "_fr13_fixed32_committer_layer_batch_byte_gate(" in replay
     assert "decay_reuse=decay_reuse" in graph_body
@@ -116,19 +118,7 @@ def test_decay_preseed_is_cumulative_fail_closed_and_byte_gated() -> None:
 
 def test_decay_operation_census_is_physical32_for_b1_and_b4() -> None:
     layers = 48
-    physical_nodes = 32
     value_heads = 48
-    raw_gate_values = 2
-    bf16_bytes = 2
-
-    assert (
-        layers * 1 * physical_nodes * value_heads * raw_gate_values * bf16_bytes
-        == 294_912
-    )
-    assert (
-        layers * 4 * physical_nodes * value_heads * raw_gate_values * bf16_bytes
-        == 1_179_648
-    )
     for batch in (1, 4):
         for accepted_drafts in (0, 4, 11):
             live_steps = accepted_drafts + 1
