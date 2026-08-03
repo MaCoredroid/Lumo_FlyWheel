@@ -1,0 +1,26 @@
+FR13 fixed32 committer owner-path warp32 SM121a codegen
+Date: 2026-08-03 UTC
+Execution class: CPU-only Triton/CUDA code generation and host tests
+GPU kernel launches: 0
+Docker launches: 0
+Real SWE-Verified tasks: 0
+
+PASS offline primary SM121a compile: incumbent/v3/v4 x B1/B4
+PASS isolated fresh-cache rebuild: incumbent/v3/v4 x B1/B4
+PASS independent nvdisasm/cuobjdump verification: 12 cubins
+PASS primary/rebuild byte identity: cubin/PTX/SASS/resource/ELF
+PASS all variants: stack/local/LDL/STL/calls are zero
+PASS v4 B1: REG18 SHARED0 BAR0 LDS0 STS0, 144 encoded SASS
+PASS v4 B4: REG16 SHARED0 BAR0 LDS0 STS0, 168 encoded SASS
+PASS v3 defect reproduced: SHARED8 launch/1024 ELF, BAR2 LDS2 STS2
+PASS retained incumbent: REG26, LDG10, STG1 at B1 and B4
+PASS focused source regression: 62 passed in 4.60s
+PASS codegen artifact contract: 4 passed; combined focused total 66
+PASS work-census self-test: 177 tamper tests
+
+Two broader historical-artifact checks were not counted in the focused result:
+one artifact is outside this sparse checkout, and one intentionally compares
+the current patcher hash to an immutable older publication. Neither is a
+runtime/source regression from this change.
+
+PENDING real SWE-Verified byte equality and B1/B4 full-step timing.
