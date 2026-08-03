@@ -774,8 +774,8 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         raise ValueError("GQA-group3 v geometry drift")
     if decay_export and not gate_export:
         raise ValueError("GQA-group3 decay export requires gate export")
-    if maxnreg is not None and int(maxnreg) != 80:
-        raise ValueError("GQA-group3 maxnreg must be unset or exactly 80")
+    if maxnreg is not None and int(maxnreg) != 128:
+        raise ValueError("GQA-group3 maxnreg must be unset or exactly 128")
 
     grid = (NUM_K_HEADS, DIM_V // BLOCK_V, int(batch_size))
     launch_options = {"num_warps": 8}

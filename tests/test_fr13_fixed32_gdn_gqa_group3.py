@@ -250,6 +250,7 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert "if H0_IS_BANK:" in kernel
     assert "grid = (NUM_K_HEADS, DIM_V // BLOCK_V, int(batch_size))" in launch
     assert 'launch_options = {"num_warps": 8}' in launch
+    assert 'int(maxnreg) != 128' in launch
     assert 'launch_options["maxnreg"] = int(maxnreg)' in launch
 
 
