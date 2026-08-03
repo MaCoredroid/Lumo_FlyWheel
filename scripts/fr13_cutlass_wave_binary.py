@@ -43,9 +43,9 @@ IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SHA256 = (
 )
 IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SIZE = 118_468_696
 IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256 = (
-    "5f09ff76c06b21aef81ab99911a09d623d83187052b8eb36920209bc10c9726c"
+    "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc"
 )
-IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE = 119_108_864
+IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE = 119_471_552
 IDENTITY_B4_CANDIDATE_SHA256 = (
     "d7771d5a95a34d6072a796d520e8f2fa500aeccc900d57e1477941b966ea77a9"
 )
@@ -593,6 +593,13 @@ def _verify_production_qualification(
         "identity_hybrid_n5120_b4",
     }:
         kwargs["diagnostic_task_profile"] = diagnostic_task_profile
+        # The container image starts in /vllm-workspace while the qualified
+        # repository is mounted at /workspace.  Resolve the K64 map beside the
+        # already-bound patch source so production verification is independent
+        # of the process working directory.
+        kwargs["draft_vocab_blocks"] = patch_source.parent / (
+            "fr13_dvk_subset_blocks.json"
+        )
     verified = qualification.verify_sidecar(
         sidecar,
         expected_sidecar_sha256,
