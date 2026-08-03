@@ -49,9 +49,7 @@ def _fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         STATIC_RESOURCE_CREDENTIAL.read_text(encoding="ascii")
     )
     credential_payload["outputs"]["candidate_binary"]["sha256"] = candidate_sha256
-    credential_payload["outputs"]["candidate_binary"]["bytes"] = len(
-        candidate_bytes
-    )
+    credential_payload["outputs"]["candidate_binary"]["bytes"] = len(candidate_bytes)
     credential_raw = (
         json.dumps(credential_payload, ensure_ascii=True, sort_keys=True) + "\n"
     ).encode("ascii")
@@ -249,9 +247,9 @@ def test_static_m128_production_and_timing_remain_unauthorized(
     with pytest.raises(module.QualificationError, match="Tail23 and Hydra27"):
         module.validate_production_attestation(attestation, "a" * 64)
 
-    timing = (
-        SCRIPTS / "fr13_run_b4_cutlass_persistent_m128_timing.sh"
-    ).read_text(encoding="utf-8")
+    timing = (SCRIPTS / "fr13_run_b4_cutlass_persistent_m128_timing.sh").read_text(
+        encoding="utf-8"
+    )
     assert "persistent_b4_m128_static" not in timing
 
 
@@ -305,9 +303,10 @@ def test_identity_stockshape_selector_is_exact_b4_diagnostic_only() -> None:
     }
     for source in sources.values():
         assert "identity_stockshape_b4_byte_ab" in source
-    assert "identity_stockshape_b4)" in sources[
-        "fr13_run_b4_cutlass_persistent_m128_live_gate.sh"
-    ]
+    assert (
+        "identity_stockshape_b4)"
+        in sources["fr13_run_b4_cutlass_persistent_m128_live_gate.sh"]
+    )
     assert (
         "stock-shape identity production remains unavailable"
         in sources["fr13_launch_forked_fa2_tree_server.sh"]
@@ -323,22 +322,20 @@ def test_identity_stockshape_selector_is_exact_b4_diagnostic_only() -> None:
     }
     for source in sources.values():
         assert "identity_divisor_b4_byte_ab" in source
-    assert "identity_divisor_b4)" in sources[
-        "fr13_run_b4_cutlass_persistent_m128_live_gate.sh"
-    ]
+    assert (
+        "identity_divisor_b4)"
+        in sources["fr13_run_b4_cutlass_persistent_m128_live_gate.sh"]
+    )
     assert (
         "divisor identity production remains unavailable"
         in sources["fr13_launch_forked_fa2_tree_server.sh"]
     )
 
 
-def test_identity_stockshape_stage2_selector_is_exact_b4_diagnostic_only() -> None:
+def test_identity_stockshape_stage2_single_arm_is_diagnostic_only() -> None:
     module = _load()
     contract = module.CANDIDATE_CONTRACTS["identity_stockshape_stage2_b4"]
-    assert (
-        contract["diagnostic_selector"]
-        == "identity_stockshape_stage2_b4_byte_ab"
-    )
+    assert contract["diagnostic_selector"] == "identity_stockshape_stage2_b4_byte_ab"
     assert contract["production_authorized"] is False
     assert contract["requires_resource_credential"] is False
     assert contract["live_schemas"] == {
@@ -368,10 +365,11 @@ def test_identity_stockshape_stage2_selector_is_exact_b4_diagnostic_only() -> No
     }
     for source in sources.values():
         assert "identity_stockshape_stage2_b4_byte_ab" in source
-    assert "identity_stockshape_stage2_b4)" in sources[
-        "fr13_run_b4_cutlass_persistent_m128_live_gate.sh"
-    ]
     assert (
-        "stock-shape Stage2 identity production remains unavailable"
-        in sources["fr13_launch_forked_fa2_tree_server.sh"]
+        "identity_stockshape_stage2_b4)"
+        in sources["fr13_run_b4_cutlass_persistent_m128_live_gate.sh"]
     )
+    launcher = sources["fr13_launch_forked_fa2_tree_server.sh"]
+    assert "fr13_cutlass_b4_pass.py dual-validate" in launcher
+    assert "fr13_cutlass_b4_pass.py dual-issue" in launcher
+    assert "CUTLASS Stage2 Tail23/Hydra27 PASS identity mismatch" in launcher

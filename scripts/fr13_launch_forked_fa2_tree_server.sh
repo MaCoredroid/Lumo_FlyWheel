@@ -41,6 +41,10 @@ _FR13_CALLER_CUTLASS_WAVE_RESOURCE_SHA="${FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CRE
 _FR13_CALLER_CUTLASS_WAVE_PRODUCTION="${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION+set}:${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION-}"
 _FR13_CALLER_CUTLASS_WAVE_PASS_JSON="${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON-}"
 _FR13_CALLER_CUTLASS_WAVE_PASS_SHA="${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256-}"
+_FR13_CALLER_CUTLASS_STAGE2_TAIL_PASS_JSON="${FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON-}"
+_FR13_CALLER_CUTLASS_STAGE2_TAIL_PASS_SHA="${FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256-}"
+_FR13_CALLER_CUTLASS_STAGE2_HYDRA_PASS_JSON="${FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON-}"
+_FR13_CALLER_CUTLASS_STAGE2_HYDRA_PASS_SHA="${FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256-}"
 _FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE="${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT-}"
 _FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE="${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE-}"
 _FR13_CALLER_SFWD_B4="${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB+set}:${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB-}"
@@ -154,6 +158,10 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_RESOURCE_SHA" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_PRODUCTION" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_PASS_JSON" == set:* \
+      || "$_FR13_CALLER_CUTLASS_STAGE2_TAIL_PASS_JSON" == set:* \
+      || "$_FR13_CALLER_CUTLASS_STAGE2_TAIL_PASS_SHA" == set:* \
+      || "$_FR13_CALLER_CUTLASS_STAGE2_HYDRA_PASS_JSON" == set:* \
+      || "$_FR13_CALLER_CUTLASS_STAGE2_HYDRA_PASS_SHA" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" == set:* \
       || "$_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE" == set:* \
       || "$_FR13_CALLER_SFWD_FUSION_PRODUCTION" == set:* \
@@ -200,6 +208,10 @@ if [[ "$_FR13_CALLER_BATCH_GDN_PRODUCTION" == set:* \
       || "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION+set}:${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION-}" != "$_FR13_CALLER_CUTLASS_WAVE_PRODUCTION" \
       || "${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON-}" != "$_FR13_CALLER_CUTLASS_WAVE_PASS_JSON" \
       || "${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_CUTLASS_WAVE_PASS_SHA" \
+      || "${FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON-}" != "$_FR13_CALLER_CUTLASS_STAGE2_TAIL_PASS_JSON" \
+      || "${FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_CUTLASS_STAGE2_TAIL_PASS_SHA" \
+      || "${FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON+set}:${FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON-}" != "$_FR13_CALLER_CUTLASS_STAGE2_HYDRA_PASS_JSON" \
+      || "${FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256+set}:${FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256-}" != "$_FR13_CALLER_CUTLASS_STAGE2_HYDRA_PASS_SHA" \
       || "${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT-}" != "$_FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE" \
       || "${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE+set}:${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE-}" != "$_FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE" ]]; then
     echo ".lumo.local.env must not override draft-head M32, B4 GDN, CUTLASS, or SFWD credentials, selectors, or runtime geometry" >&2
@@ -243,6 +255,10 @@ unset \
   _FR13_CALLER_CUTLASS_WAVE_PRODUCTION \
   _FR13_CALLER_CUTLASS_WAVE_PASS_JSON \
   _FR13_CALLER_CUTLASS_WAVE_PASS_SHA \
+  _FR13_CALLER_CUTLASS_STAGE2_TAIL_PASS_JSON \
+  _FR13_CALLER_CUTLASS_STAGE2_TAIL_PASS_SHA \
+  _FR13_CALLER_CUTLASS_STAGE2_HYDRA_PASS_JSON \
+  _FR13_CALLER_CUTLASS_STAGE2_HYDRA_PASS_SHA \
   _FR13_CALLER_CUTLASS_WAVE_QUAL_SOURCE \
   _FR13_CALLER_CUTLASS_WAVE_QUAL_PROFILE \
   _FR13_CALLER_M32_GUARD \
@@ -415,6 +431,10 @@ FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSONL=${FR13_FIXED32_CUTLASS_WAVE_BYTE_AB_JSON
 FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}
 FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON=${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON:-}
 FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256=${FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256:-}
+FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON=${FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON:-}
+FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256=${FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256:-}
+FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON=${FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON:-}
+FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256=${FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256:-}
 FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT=${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT:-}
 FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE:-full_vocab}
 case "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" in
@@ -667,6 +687,10 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "stock" ]]; then
      && "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "0" \
      && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
      && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
+     && -z "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON" \
+     && -z "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256" \
+     && -z "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON" \
+     && -z "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256" \
      && -z "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" ]] || {
     echo "stock CUTLASS wave selector forbids candidate binary and production credentials" >&2
     exit 2
@@ -691,10 +715,6 @@ else
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_b4" ]]; then
     echo "CUTLASS B4 stock-shape identity production remains unavailable until Tail23 and Hydra27 raw-byte PASS" >&2
-    exit 2
-  fi
-  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4" ]]; then
-    echo "CUTLASS B4 stock-shape Stage2 identity production remains unavailable until Tail23 and Hydra27 raw-byte PASS" >&2
     exit 2
   fi
   if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_divisor_b4" ]]; then
@@ -826,6 +846,10 @@ else
                  && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" ) ) \
        && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
        && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
+       && -z "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON" \
+       && -z "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256" \
+       && -z "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON" \
+       && -z "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256" \
        && -z "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" \
        && "${ENFORCE_EAGER:-0}" == "1" \
        && ( ( "$FR13_FIXED32_CUTLASS_WAVE" == "streamk_coop128_byte_ab" \
@@ -854,10 +878,55 @@ else
       exit 2
     }
   else
+    if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4" ]]; then
+      [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" \
+         && "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" == "k64_root" \
+         && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
+         && -z "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
+         && "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+        echo "CUTLASS Stage2 production requires k64_root and a pinned qualification source commit" >&2
+        exit 2
+      }
+      for _fr13_stage2_pass in \
+        "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON" \
+        "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON"; do
+        [[ "$_fr13_stage2_pass" == /* \
+           && -f "$_fr13_stage2_pass" \
+           && ! -L "$_fr13_stage2_pass" ]] || {
+          echo "CUTLASS Stage2 production requires regular absolute Tail23 and Hydra27 PASS files" >&2
+          exit 2
+        }
+      done
+      [[ "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+         && "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+         && "$(sha256sum "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON" | awk '{print $1}')" == "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256" \
+         && "$(sha256sum "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON" | awk '{print $1}')" == "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256" ]] || {
+        echo "CUTLASS Stage2 Tail23/Hydra27 PASS identity mismatch" >&2
+        exit 2
+      }
+      _fr13_cutlass_streamk_source_commit=$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT
+      _fr13_cutlass_stage2_source_commit=$_fr13_cutlass_streamk_source_commit
+      .venv/bin/python scripts/fr13_cutlass_b4_pass.py dual-validate \
+        --tail23-live-result "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON" \
+        --expected-tail23-live-sha256 "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256" \
+        --hydra27-live-result "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON" \
+        --expected-hydra27-live-sha256 "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256" \
+        --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+        --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
+        --expected-source-commit "$_fr13_cutlass_stage2_source_commit" \
+        --draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json \
+        >/dev/null
+      unset _fr13_stage2_pass
+      unset _fr13_cutlass_stage2_source_commit
+    else
     [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" \
        && -f "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
        && ! -L "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
-       && "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+       && "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+       && -z "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON" \
+       && -z "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256" \
+       && -z "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON" \
+       && -z "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256" ]] || {
       if [[ "$_fr13_cutlass_b4" == "1" ]]; then
         echo "CUTLASS persistent M128 production requires fixed32 B4 and a pinned live PASS" >&2
       else
@@ -905,6 +974,7 @@ else
       >/dev/null
     unset _fr13_cutlass_pass_script
     unset _fr13_cutlass_pass_profile_args
+    fi
   fi
   unset _fr13_cutlass_b4
   unset _fr13_cutlass_resource_args
@@ -1796,32 +1866,48 @@ else
 fi
 if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
   _fr13_cutlass_streamk_production_sidecar_host="$LOG_DIR/fr13_fixed32_cutlass_streamk.production_pass.json"
-  _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
-  _fr13_cutlass_pass_profile_args=()
-  if [[ "$FR13_FIXED32_CUTLASS_WAVE" != "persistent_b4_m128" ]]; then
-    _fr13_cutlass_pass_profile_args=(
-      --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
-      --draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json
-    )
+  if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_stockshape_stage2_b4" ]]; then
+    _fr13_cutlass_stage2_source_commit=$_fr13_cutlass_streamk_source_commit
+    .venv/bin/python scripts/fr13_cutlass_b4_pass.py dual-issue \
+      --tail23-live-result "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON" \
+      --expected-tail23-live-sha256 "$FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256" \
+      --hydra27-live-result "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON" \
+      --expected-hydra27-live-sha256 "$FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256" \
+      --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+      --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
+      --expected-source-commit "$_fr13_cutlass_stage2_source_commit" \
+      --draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json \
+      --out "$_fr13_cutlass_streamk_production_sidecar_host" \
+      >/dev/null
+    unset _fr13_cutlass_stage2_source_commit
   else
+    _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
+    _fr13_cutlass_pass_profile_args=()
+    if [[ "$FR13_FIXED32_CUTLASS_WAVE" == "persistent_b4_m128" ]]; then
       _fr13_cutlass_pass_script=scripts/fr13_cutlass_b4_pass.py
       _fr13_cutlass_pass_profile_args=(
         --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
         --fixed32-mode "$FR13_FIXED32_MODE"
       )
+    else
+      _fr13_cutlass_pass_profile_args=(
+        --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
+        --draft-vocab-blocks scripts/fr13_dvk_subset_blocks.json
+      )
+    fi
+    # B1 executes scripts/fr13_cutlass_streamk_pass.py issue; legacy B4 M128
+    # executes the corresponding B4 issuer selected above.
+    .venv/bin/python "$_fr13_cutlass_pass_script" issue \
+      --live-result "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
+      --expected-live-sha256 "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
+      --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
+      --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
+      --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
+      --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
+      "${_fr13_cutlass_pass_profile_args[@]}" \
+      --out "$_fr13_cutlass_streamk_production_sidecar_host" \
+      >/dev/null
   fi
-  # B1 executes scripts/fr13_cutlass_streamk_pass.py issue; B4 executes the
-  # corresponding persistent-M128 issuer selected above.
-  .venv/bin/python "$_fr13_cutlass_pass_script" issue \
-    --live-result "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
-    --expected-live-sha256 "$FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256" \
-    --candidate-so "$FR13_FIXED32_CUTLASS_WAVE_SO" \
-    --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
-    --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
-    --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
-    "${_fr13_cutlass_pass_profile_args[@]}" \
-    --out "$_fr13_cutlass_streamk_production_sidecar_host" \
-    >/dev/null
   chmod 0400 "$_fr13_cutlass_streamk_production_sidecar_host"
   FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR=/logs/fr13_fixed32_cutlass_streamk.production_pass.json
   FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256=$(
@@ -2858,6 +2944,10 @@ while IFS= read -r _v; do
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256" \
      || "$_v" == "FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_JSON" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_STAGE2_TAIL23_LIVE_PASS_SHA256" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_JSON" \
+     || "$_v" == "FR13_FIXED32_CUTLASS_STAGE2_HYDRA27_LIVE_PASS_SHA256" \
      || "$_v" == "FR13_FIXED32_BATCH_GDN_BYTE_AB_REAL_EVENT_PATH" \
      || "$_v" == "FR13_FIXED32_CUTLASS_B4_BYTE_AB_REAL_EVENT_PATH" \
      || "$_v" == "FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH" ]] && continue
