@@ -74,7 +74,17 @@ case "$GATE_CANDIDATE" in
     exit 2
     ;;
 esac
+QUALIFICATION_PROFILE_EXPLICIT=0
+if [[ -v FR13_STREAMK_QUALIFICATION_PROFILE ]]; then
+  QUALIFICATION_PROFILE_EXPLICIT=1
+fi
 QUALIFICATION_PROFILE=${FR13_STREAMK_QUALIFICATION_PROFILE:-full_vocab}
+if [[ "$GATE_CANDIDATE" == "identity_onen_b1" \
+      && ( "$QUALIFICATION_PROFILE_EXPLICIT" != "1" \
+           || "$QUALIFICATION_PROFILE" != "k64_root" ) ]]; then
+  echo "identity_onen_b1 diagnostic requires explicit k64_root qualification" >&2
+  exit 2
+fi
 DRAFT_VOCAB_BLOCKS_HOST=scripts/fr13_dvk_subset_blocks.json
 DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
 DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
@@ -120,13 +130,23 @@ case "$QUALIFICATION_PROFILE" in
     ;;
 esac
 
+if [[ "$GATE_CANDIDATE" == "identity_onen_b1" ]]; then
+  .venv/bin/python scripts/fr13_cutlass_streamk_pass.py source-binding \
+    --source-commit "$SOURCE_COMMIT" \
+    --patch-source "$PATCH_SOURCE" \
+    >/dev/null
+fi
+
 if [[ -e "$RUNROOT" || -L "$RUNROOT" ]]; then
   echo "CUTLASS Stream-K gate requires a fresh RUNROOT: $RUNROOT" >&2
   exit 2
 fi
 
 .venv/bin/python scripts/fr13_cutlass_wave_binary.py verify \
-  "$CUTLASS_STREAMK_SO" --selector "$DIAGNOSTIC_SELECTOR" >/dev/null
+  "$CUTLASS_STREAMK_SO" \
+  --selector "$DIAGNOSTIC_SELECTOR" \
+  --qualification-profile "$QUALIFICATION_PROFILE" \
+  >/dev/null
 if [[ "$QUALIFICATION_PROFILE" == "k64_root" ]]; then
   [[ -f "$DRAFT_VOCAB_BLOCKS_HOST" \
      && ! -L "$DRAFT_VOCAB_BLOCKS_HOST" \
@@ -331,6 +351,11 @@ for label, identity, expected_path in (
 patch_source_sha256 = hashlib.sha256(patch_source.read_bytes()).hexdigest()
 if patch_source_sha256 != qualification.PATCH_SOURCE_SHA256:
     errors.append("Stream-K patch source SHA-256 mismatch")
+source_identity = None
+if expected_candidate == "identity_onen_b1":
+    source_identity = qualification.validate_source_commit_binding(
+        source_commit, patch_source
+    )
 
 payload = {
     "schema": expected_live_schema,
@@ -373,6 +398,8 @@ payload = {
     "binary_attestation_sha256": hashlib.sha256(binary_path.read_bytes()).hexdigest(),
     "errors": errors,
 }
+if source_identity is not None:
+    payload["source_identity"] = source_identity
 if expected_profile == "k64_root":
     payload.update(
         {

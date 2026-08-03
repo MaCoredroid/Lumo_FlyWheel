@@ -9,6 +9,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,14 @@ DRAFT_VOCAB_BLOCKS_SHA256 = (
 VLLM_BASE_COMMIT = "fe9c3d6c5f66c873d196800384ed6880687b9e52"
 PATCHED_DISPATCH_SHA256 = (
     "f93500dc1ec4d19b93c13a8fec3a31e2fead23161ecb1c6839972697f6df25a4"
+)
+SOURCE_BINDING_SCHEMA = "fr13.fixed32.cutlass_streamk.source_binding.v1"
+SOURCE_BINDING_PATHS = (
+    "scripts/fr13_patch_cutlass_fixed32_wave.py",
+    "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh",
+    "scripts/fr13_cutlass_streamk_pass.py",
+    "scripts/fr13_cutlass_wave_binary.py",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh",
 )
 WIDE256_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1"
 EXPECTED_TASK_IDS = ("astropy__astropy-12907",)
@@ -99,6 +108,8 @@ CANDIDATE_CONTRACTS = {
         "live_schema": "fr13.fixed32.cutlass_identity_onen_b1_live_gate.v1",
         "k64_root_live_schema": IDENTITY_ONEN_B1_K64_ROOT_LIVE_SCHEMA,
         "diagnostic_selector": "identity_onen_b1_byte_ab",
+        "required_qualification_profile": "k64_root",
+        "source_binding": "required",
     },
 }
 QUALIFICATION_PROFILES: dict[str, dict[str, object]] = {
@@ -145,6 +156,13 @@ def _candidate_contract(candidate_selector: str) -> dict[str, str]:
 def _qualification_profile(
     candidate_selector: str, name: str
 ) -> dict[str, object]:
+    contract = _candidate_contract(candidate_selector)
+    required_profile = contract.get("required_qualification_profile")
+    if required_profile is not None and name != required_profile:
+        raise QualificationError(
+            f"{candidate_selector} qualification requires the "
+            f"{required_profile} profile"
+        )
     try:
         profile = QUALIFICATION_PROFILES[name]
     except KeyError as error:
@@ -165,11 +183,9 @@ def _qualification_profile(
         )
     result = dict(profile)
     if name == "full_vocab":
-        result["live_schema"] = _candidate_contract(candidate_selector)["live_schema"]
+        result["live_schema"] = contract["live_schema"]
     else:
-        result["live_schema"] = _candidate_contract(candidate_selector)[
-            "k64_root_live_schema"
-        ]
+        result["live_schema"] = contract["k64_root_live_schema"]
     return result
 
 
@@ -284,6 +300,121 @@ def _validate_draft_vocab_blocks(path: Path) -> dict[str, object]:
     }
 
 
+def _git_output(repo_root: Path, *arguments: str, label: str) -> bytes:
+    try:
+        process = subprocess.run(
+            ["git", "-C", os.fspath(repo_root), *arguments],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError as error:
+        raise QualificationError("git is unavailable for source binding") from error
+    if process.returncode != 0:
+        detail = process.stderr.decode("utf-8", errors="replace").strip()
+        raise QualificationError(f"{label} failed: {detail or process.returncode}")
+    return process.stdout
+
+
+def _require_clean_tracked_tree(repo_root: Path) -> None:
+    for cached in (False, True):
+        arguments = ["diff"]
+        if cached:
+            arguments.append("--cached")
+        arguments.extend(("--quiet", "--"))
+        process = subprocess.run(
+            ["git", "-C", os.fspath(repo_root), *arguments],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        if process.returncode == 1:
+            raise QualificationError(
+                "source-binding repository has a dirty tracked working tree"
+            )
+        if process.returncode != 0:
+            detail = process.stderr.decode("utf-8", errors="replace").strip()
+            raise QualificationError(
+                f"source-binding worktree check failed: "
+                f"{detail or process.returncode}"
+            )
+
+
+def validate_source_commit_binding(
+    source_commit: str, patch_source: Path = PATCH_SOURCE
+) -> dict[str, object]:
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise QualificationError("source-binding commit is invalid")
+    _regular_file(patch_source, "Stream-K patch source")
+    patch_source = patch_source.resolve(strict=True)
+    repo_raw = _git_output(
+        patch_source.parent,
+        "rev-parse",
+        "--show-toplevel",
+        label="source-binding repository discovery",
+    )
+    try:
+        repo_root = Path(repo_raw.decode("utf-8").strip()).resolve(strict=True)
+    except (UnicodeDecodeError, FileNotFoundError) as error:
+        raise QualificationError("source-binding repository root is invalid") from error
+    expected_patch_source = (repo_root / PATCH_SOURCE).resolve(strict=True)
+    if patch_source != expected_patch_source:
+        raise QualificationError(
+            "source-binding patch source is not the canonical repository path"
+        )
+    resolved_commit = _git_output(
+        repo_root,
+        "rev-parse",
+        "--verify",
+        f"{source_commit}^{{commit}}",
+        label="source-binding commit resolution",
+    ).decode("ascii").strip()
+    if resolved_commit != source_commit:
+        raise QualificationError("source-binding commit does not resolve exactly")
+    head_commit = _git_output(
+        repo_root,
+        "rev-parse",
+        "HEAD",
+        label="source-binding HEAD resolution",
+    ).decode("ascii").strip()
+    if head_commit != source_commit:
+        raise QualificationError(
+            f"source-binding runtime commit mismatch: {head_commit} != {source_commit}"
+        )
+    _require_clean_tracked_tree(repo_root)
+
+    files: dict[str, object] = {}
+    for relative in SOURCE_BINDING_PATHS:
+        working_path = repo_root / relative
+        info = _regular_file(working_path, f"source-binding file {relative}")
+        committed = _git_output(
+            repo_root,
+            "show",
+            f"{source_commit}:{relative}",
+            label=f"source-binding git show for {relative}",
+        )
+        working = working_path.read_bytes()
+        if working != committed:
+            raise QualificationError(
+                f"source-binding working bytes differ from commit for {relative}"
+            )
+        files[relative] = {
+            "bytes": info.st_size,
+            "sha256": hashlib.sha256(committed).hexdigest(),
+        }
+    patch_identity = files[os.fspath(PATCH_SOURCE)]
+    assert isinstance(patch_identity, dict)
+    if patch_identity.get("sha256") != PATCH_SOURCE_SHA256:
+        raise QualificationError(
+            "source-binding committed patch source does not match the pinned digest"
+        )
+    return {
+        "schema": SOURCE_BINDING_SCHEMA,
+        "source_commit": source_commit,
+        "files": files,
+    }
+
+
 def validate_live_result(
     live_result: Path,
     expected_live_sha256: str,
@@ -307,7 +438,11 @@ def validate_live_result(
             f"Stream-K live PASS SHA-256 mismatch: {live_sha256} != {expected_live_sha256}"
         )
 
-    candidate = binary.verify_candidate(candidate_so, diagnostic_selector)
+    candidate = binary.verify_candidate(
+        candidate_so,
+        diagnostic_selector,
+        qualification_profile=qualification_profile,
+    )
     patch = _validate_patch_source(patch_source)
     block_map = (
         _validate_draft_vocab_blocks(draft_vocab_blocks)
@@ -391,6 +526,13 @@ def validate_live_result(
                 "Stream-K live PASS source commit is stale: "
                 f"{source_commit} != {expected_source_commit}"
             )
+    source_identity: dict[str, object] | None = None
+    if candidate_contract.get("source_binding") == "required":
+        source_identity = validate_source_commit_binding(source_commit, patch_source)
+        if payload.get("source_identity") != source_identity:
+            raise QualificationError(
+                "Stream-K live PASS source-identity binding mismatch"
+            )
     attestation_sha256 = _require_sha256(
         payload.get("binary_attestation_sha256"), "binary attestation SHA-256"
     )
@@ -438,6 +580,8 @@ def validate_live_result(
                 "qualified_comparison_call_limit": MAX_COMPARISONS,
             }
         )
+    if source_identity is not None:
+        result["qualification_source_identity"] = source_identity
     return result
 
 
@@ -505,7 +649,11 @@ def verify_sidecar(
             "Stream-K production sidecar SHA-256 mismatch: "
             f"{actual_sha256} != {expected_sidecar_sha256}"
         )
-    candidate = binary.verify_candidate(candidate_so, diagnostic_selector)
+    candidate = binary.verify_candidate(
+        candidate_so,
+        diagnostic_selector,
+        qualification_profile=sidecar_profile,
+    )
     patch = _validate_patch_source(patch_source)
     block_map = (
         _validate_draft_vocab_blocks(draft_vocab_blocks)
@@ -570,6 +718,12 @@ def verify_sidecar(
         or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
     ):
         raise QualificationError("sidecar qualification source commit is invalid")
+    if candidate_contract.get("source_binding") == "required":
+        source_identity = validate_source_commit_binding(source_commit, patch_source)
+        if payload.get("qualification_source_identity") != source_identity:
+            raise QualificationError(
+                "Stream-K production sidecar source-identity binding mismatch"
+            )
     return payload
 
 
@@ -578,6 +732,7 @@ def validate_production_attestation(
     expected_sidecar_sha256: str,
     qualification_profile: str | None = None,
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
+    patch_source: Path = PATCH_SOURCE,
 ) -> dict[str, Any]:
     expected_sidecar_sha256 = _require_sha256(
         expected_sidecar_sha256, "expected production-sidecar SHA-256"
@@ -596,6 +751,9 @@ def validate_production_attestation(
         "installed_mode": "0555",
         "production_enabled": True,
     }
+    required_profile = candidate_contract.get("required_qualification_profile")
+    if required_profile is not None:
+        required["qualification_profile"] = required_profile
     for key, expected in required.items():
         if payload.get(key) != expected:
             raise QualificationError(
@@ -696,6 +854,15 @@ def validate_production_attestation(
         raise QualificationError(
             "Stream-K attestation qualification source commit is invalid"
         )
+    source_identity: dict[str, object] | None = None
+    if candidate_contract.get("source_binding") == "required":
+        source_identity = validate_source_commit_binding(
+            qualification_source_commit, patch_source
+        )
+        if qualification.get("qualification_source_identity") != source_identity:
+            raise QualificationError(
+                "Stream-K attestation source-identity binding mismatch"
+            )
     _require_sha256(
         qualification.get("live_result_sha256"),
         "attestation live-result SHA-256",
@@ -734,6 +901,8 @@ def validate_production_attestation(
                 "qualified_comparison_call_limit": MAX_COMPARISONS,
             }
         )
+    if source_identity is not None:
+        result["qualification_source_identity"] = source_identity
     return result
 
 
@@ -776,6 +945,9 @@ def main() -> int:
         type=Path,
         default=DRAFT_VOCAB_BLOCKS_SOURCE,
     )
+    source_parser = subparsers.add_parser("source-binding")
+    source_parser.add_argument("--source-commit", required=True)
+    source_parser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
     attestation_parser = subparsers.add_parser("attestation")
     attestation_parser.add_argument("--attestation", type=Path, required=True)
     attestation_parser.add_argument("--expected-sidecar-sha256", required=True)
@@ -786,6 +958,9 @@ def main() -> int:
         "--draft-vocab-blocks",
         type=Path,
         default=DRAFT_VOCAB_BLOCKS_SOURCE,
+    )
+    attestation_parser.add_argument(
+        "--patch-source", type=Path, default=PATCH_SOURCE
     )
     args = parser.parse_args()
 
@@ -822,12 +997,18 @@ def main() -> int:
             qualification_profile=args.qualification_profile,
             draft_vocab_blocks=args.draft_vocab_blocks,
         )
+    elif args.command == "source-binding":
+        payload = validate_source_commit_binding(
+            args.source_commit,
+            args.patch_source,
+        )
     else:
         payload = validate_production_attestation(
             args.attestation,
             args.expected_sidecar_sha256,
             args.qualification_profile,
             args.draft_vocab_blocks,
+            args.patch_source,
         )
     print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
     return 0

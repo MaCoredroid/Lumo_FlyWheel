@@ -1,6 +1,7 @@
 {
   "schema": "fr13.fixed32.cutlass_b1_onen_static_host_build.v1",
   "created_at_utc": "2026-08-03T02:07:45Z",
+  "integrity_refreshed_at_utc": "2026-08-03T02:43:09Z",
   "status": "host_compile_link_import_audit_pass_default_off",
   "acceptance_valid": false,
   "performance_claim": false,
@@ -143,9 +144,39 @@
     },
     "performance_inference_allowed": false
   },
+  "qualification_integrity": {
+    "result": "pass",
+    "required_profile": "k64_root",
+    "profile_must_be_explicit": true,
+    "runner_rejects_default_or_full_vocab_before_gpu": true,
+    "launcher_rejects_default_or_full_vocab_before_docker": true,
+    "sidecar_and_direct_install_profile_hard_pin": true,
+    "source_binding_schema": "fr13.fixed32.cutlass_streamk.source_binding.v1",
+    "runtime_head_must_equal_source_commit": true,
+    "tracked_worktree_must_be_clean": true,
+    "committed_bytes_loaded_with_git_show": true,
+    "identity_bound_across_live_sidecar_attestation": true,
+    "source_files": {
+      "scripts/fr13_patch_cutlass_fixed32_wave.py": "4132cd07388e0af0a3bc15c328eed74d08734e0bd6517b4d7418b72788b7e436",
+      "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh": "746b121ea80d7ba213c089c2a3120639a151929f7d3d875bac8c6cd8eef0bc76",
+      "scripts/fr13_cutlass_streamk_pass.py": "17e9d0240e770bd759d57ed1387dde67d1d864df783a531430ac15640ba3f840",
+      "scripts/fr13_cutlass_wave_binary.py": "3f5b52f17a519fb4531c302d5fbff5939e917c5917c966e9f83afe72700ea7f0",
+      "scripts/fr13_launch_forked_fa2_tree_server.sh": "359fd3f4814b2f00e7c0eb03bdbf636b31c69bbbb8f0ed6bf7b5692cb9659e8c"
+    },
+    "adversarial_coverage": [
+      "forged 40-hex commit",
+      "changed tracked worktree",
+      "full-vocab sidecar",
+      "default-profile runner and launcher",
+      "full-vocab runner and launcher",
+      "direct binary verifier omitted or full-vocab profile",
+      "direct-install verifier profile downgrade"
+    ]
+  },
   "source_checks": {
-    "focused_tests": "74 passed",
-    "all_fr13_cutlass_tests": "123 passed",
+    "review_hardening_tests": "51 passed",
+    "all_fr13_cutlass_tests": "136 passed",
+    "source_binding_clean_tip": "pass",
     "bash_syntax": "pass",
     "pycompile": "pass",
     "pinned_source_apply": "pass"

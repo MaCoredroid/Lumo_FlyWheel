@@ -456,7 +456,18 @@ FR13_FIXED32_CUTLASS_TWOM_TAIL23_LIVE_PASS_SHA256=${FR13_FIXED32_CUTLASS_TWOM_TA
 FR13_FIXED32_CUTLASS_TWOM_HYDRA27_LIVE_PASS_JSON=${FR13_FIXED32_CUTLASS_TWOM_HYDRA27_LIVE_PASS_JSON:-}
 FR13_FIXED32_CUTLASS_TWOM_HYDRA27_LIVE_PASS_SHA256=${FR13_FIXED32_CUTLASS_TWOM_HYDRA27_LIVE_PASS_SHA256:-}
 FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT=${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT:-}
+_fr13_cutlass_qualification_profile_explicit=0
+if [[ -v FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE ]]; then
+  _fr13_cutlass_qualification_profile_explicit=1
+fi
 FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=${FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE:-full_vocab}
+if [[ ( "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_b1" \
+        || "$FR13_FIXED32_CUTLASS_WAVE" == "identity_onen_b1_byte_ab" ) \
+      && ( "$_fr13_cutlass_qualification_profile_explicit" != "1" \
+           || "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" != "k64_root" ) ]]; then
+  echo "identity_onen_b1 launcher requires explicit k64_root qualification" >&2
+  exit 2
+fi
 case "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" in
   full_vocab) ;;
   k64_root)
@@ -848,6 +859,7 @@ else
   .venv/bin/python scripts/fr13_cutlass_wave_binary.py verify \
     "$FR13_FIXED32_CUTLASS_WAVE_SO" \
     --selector "$FR13_FIXED32_CUTLASS_WAVE" \
+    --qualification-profile "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" \
     "${_fr13_cutlass_resource_args[@]}" >/dev/null
   FR13_FIXED32_CUTLASS_WAVE_SO=$(realpath "$FR13_FIXED32_CUTLASS_WAVE_SO")
   FR13_CUTLASS_WAVE_DOCKER_ARGS=(
@@ -3522,6 +3534,7 @@ if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
       --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
       --attestation /logs/fr13_fixed32_cutlass_streamk_binary.json \
       --selector "\$FR13_FIXED32_CUTLASS_WAVE" \
+      --qualification-profile "\$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" \
       --production-pass-sidecar "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR" \
       --expected-production-pass-sha256 "\$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256" \
       --fixed32-mode "\$FR13_FIXED32_MODE" \
@@ -3532,6 +3545,7 @@ if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
       --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
       --attestation /logs/fr13_fixed32_cutlass_streamk_binary.json \
       --selector "\$FR13_FIXED32_CUTLASS_WAVE" \
+      --qualification-profile "\$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" \
       --resource-credential /tmp/fr13_cutlass_wave_resource_credential.json \
       --expected-resource-credential-sha256 "\$FR13_FIXED32_CUTLASS_WAVE_RESOURCE_CREDENTIAL_SHA256"
   else
@@ -3539,7 +3553,8 @@ if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
       --source /tmp/fr13_cutlass_wave.abi3.so \
       --destination /usr/local/lib/python3.12/dist-packages/vllm/_C_stable_libtorch.abi3.so \
       --attestation /logs/fr13_fixed32_cutlass_streamk_binary.json \
-      --selector "\$FR13_FIXED32_CUTLASS_WAVE"
+      --selector "\$FR13_FIXED32_CUTLASS_WAVE" \
+      --qualification-profile "\$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE"
   fi
 fi
 cp /tmp/fr13_fork_fa2.so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so

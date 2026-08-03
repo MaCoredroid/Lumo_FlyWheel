@@ -310,11 +310,15 @@ def test_onen_b1_diagnostic_installs_but_direct_requires_sidecar(
         destination,
         attestation,
         "identity_onen_b1_byte_ab",
+        qualification_profile="k64_root",
     )
 
     assert destination.read_bytes() == payload
     assert record["production_enabled"] is False
     assert record["candidate_family"] == "identity_onen_b1"
+    assert record["qualification_profile"] == "k64_root"
+    assert record["source"]["qualification_profile"] == "k64_root"
+    assert record["destination"]["qualification_profile"] == "k64_root"
 
     destination.chmod(0o644)
     destination.write_bytes(b"stock-extension\n")
@@ -324,8 +328,46 @@ def test_onen_b1_diagnostic_installs_but_direct_requires_sidecar(
             destination,
             attestation,
             "identity_onen_b1",
+            qualification_profile="k64_root",
         )
     assert destination.read_bytes() == b"stock-extension\n"
+
+
+@pytest.mark.parametrize(
+    ("selector", "qualification_profile"),
+    (
+        ("identity_onen_b1", None),
+        ("identity_onen_b1", "full_vocab"),
+        ("identity_onen_b1_byte_ab", None),
+        ("identity_onen_b1_byte_ab", "full_vocab"),
+    ),
+)
+def test_onen_b1_binary_verification_rejects_non_k64_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    selector: str,
+    qualification_profile: str | None,
+) -> None:
+    module = _module()
+    payload = b"onen-b1-candidate-extension\n"
+    monkeypatch.setattr(module, "IDENTITY_ONEN_B1_CANDIDATE_SIZE", len(payload))
+    monkeypatch.setattr(
+        module,
+        "IDENTITY_ONEN_B1_CANDIDATE_SHA256",
+        hashlib.sha256(payload).hexdigest(),
+    )
+    candidate = tmp_path / "candidate.so"
+    candidate.write_bytes(payload)
+
+    with pytest.raises(
+        ValueError,
+        match="binary verification requires a k64_root qualification",
+    ):
+        module.verify_candidate(
+            candidate,
+            selector,
+            qualification_profile=qualification_profile,
+        )
 
 
 def test_onen_b1_production_uses_k64_streamk_qualification(
@@ -337,7 +379,7 @@ def test_onen_b1_production_uses_k64_streamk_qualification(
     def verify_sidecar(*args, **kwargs):
         observed["args"] = args
         observed["kwargs"] = kwargs
-        return {"status": "QUALIFIED"}
+        return {"status": "QUALIFIED", "qualification_profile": "k64_root"}
 
     qualification = types.SimpleNamespace(verify_sidecar=verify_sidecar)
     monkeypatch.setitem(sys.modules, "fr13_cutlass_streamk_pass", qualification)
@@ -354,14 +396,101 @@ def test_onen_b1_production_uses_k64_streamk_qualification(
         "hydra27_fixed32",
     )
 
-    assert result == {"status": "QUALIFIED"}
+    assert result == {
+        "status": "QUALIFIED",
+        "qualification_profile": "k64_root",
+    }
     assert observed["args"] == (
         sidecar,
         "a" * 64,
         candidate,
         patch_source,
     )
-    assert observed["kwargs"] == {"candidate_selector": "identity_onen_b1"}
+    assert observed["kwargs"] == {
+        "candidate_selector": "identity_onen_b1",
+        "qualification_profile": "k64_root",
+    }
+
+
+def test_onen_b1_production_rejects_verifier_profile_downgrade(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    qualification = types.SimpleNamespace(
+        verify_sidecar=lambda *_args, **_kwargs: {
+            "status": "QUALIFIED",
+            "qualification_profile": "full_vocab",
+        }
+    )
+    monkeypatch.setitem(sys.modules, "fr13_cutlass_streamk_pass", qualification)
+
+    with pytest.raises(ValueError, match="requires a k64_root qualification"):
+        module._verify_production_qualification(
+            tmp_path / "sidecar.json",
+            "a" * 64,
+            tmp_path / "candidate.so",
+            tmp_path / "patch.py",
+            "identity_onen_b1",
+            "hydra27_fixed32",
+        )
+
+
+def test_onen_b1_direct_install_binds_k64_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _module()
+    payload = b"onen-b1-production-candidate\n"
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(module, "IDENTITY_ONEN_B1_CANDIDATE_SIZE", len(payload))
+    monkeypatch.setattr(module, "IDENTITY_ONEN_B1_CANDIDATE_SHA256", digest)
+    qualification = {
+        "live_result_sha256": "a" * 64,
+        "candidate_sha256": digest,
+        "patch_source_sha256": "b" * 64,
+        "qualification_source_commit": "c" * 40,
+        "qualification_task_marker": "swe_verified:astropy__astropy-12907",
+        "real_task_arm_sha256": "d" * 64,
+        "container_env_sha256": "e" * 64,
+        "qualified_draft_vocab_root": 1,
+        "qualified_draft_vocab_k": 65_536,
+        "mandatory_weight_bytes": 32_666_638_208,
+        "mandatory_weight_floor_ms": 119.658015414,
+        "one_sided_u95_cap_ms": 137.6067177261,
+        "qualification_profile": "k64_root",
+        "qualified_draft_vocab_blocks": (
+            "/workspace/scripts/fr13_dvk_subset_blocks.json"
+        ),
+        "qualified_draft_vocab_blocks_sha256": "f" * 64,
+        "qualified_comparison_call_limit": 320,
+        "qualified_fixed_rows": 32,
+        "qualified_projection_nk": [[34816, 5120]],
+    }
+    monkeypatch.setattr(
+        module,
+        "_verify_production_qualification",
+        lambda *_args: qualification,
+    )
+    source = tmp_path / "candidate.so"
+    destination = tmp_path / "installed.so"
+    attestation = tmp_path / "attestation.json"
+    source.write_bytes(payload)
+    destination.write_bytes(b"stock-extension\n")
+
+    record = module.install_candidate(
+        source,
+        destination,
+        attestation,
+        "identity_onen_b1",
+        qualification_profile="k64_root",
+        production_sidecar=tmp_path / "sidecar.json",
+        expected_production_sidecar_sha256="1" * 64,
+    )
+
+    assert record["production_enabled"] is True
+    assert record["qualification_profile"] == "k64_root"
+    assert record["source"]["qualification_profile"] == "k64_root"
+    assert record["destination"]["qualification_profile"] == "k64_root"
+    assert record["qualification"]["qualification_profile"] == "k64_root"
 
 
 @pytest.mark.parametrize(

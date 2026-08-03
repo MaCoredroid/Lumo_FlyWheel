@@ -222,13 +222,29 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
     raise ValueError(f"unsupported candidate selector: {selector!r}")
 
 
+def _verify_qualification_profile(
+    selector: str, qualification_profile: str | None
+) -> None:
+    if selector in IDENTITY_ONEN_B1_SELECTORS and qualification_profile != "k64_root":
+        raise ValueError(
+            "identity_onen_b1 binary verification requires a k64_root "
+            "qualification"
+        )
+    if qualification_profile not in {None, "full_vocab", "k64_root"}:
+        raise ValueError(
+            f"unsupported CUTLASS qualification profile: {qualification_profile!r}"
+        )
+
+
 def verify_candidate(
     path: Path,
     selector: str = "streamk_coop128",
     *,
+    qualification_profile: str | None = None,
     resource_credential: Path | None = None,
     expected_resource_credential_sha256: str | None = None,
 ) -> dict[str, object]:
+    _verify_qualification_profile(selector, qualification_profile)
     expected_sha256, expected_size, candidate_family = candidate_identity(selector)
     info = path.lstat()
     if path.is_symlink() or not stat.S_ISREG(info.st_mode):
@@ -246,6 +262,8 @@ def verify_candidate(
         "symlink": False,
         "candidate_family": candidate_family,
     }
+    if selector in IDENTITY_ONEN_B1_SELECTORS:
+        result["qualification_profile"] = qualification_profile
     if selector in STATIC_B4_M128_SELECTORS:
         if resource_credential is None or expected_resource_credential_sha256 is None:
             raise ValueError(
@@ -471,8 +489,12 @@ def _verify_production_qualification(
             patch_source,
             candidate_selector=selector,
         )
-    kwargs = {"fixed32_mode": fixed32_mode} if selector == "persistent_b4_m128" else {}
-    return qualification.verify_sidecar(
+    kwargs: dict[str, object] = {}
+    if selector == "persistent_b4_m128":
+        kwargs["fixed32_mode"] = fixed32_mode
+    elif selector == "identity_onen_b1":
+        kwargs["qualification_profile"] = "k64_root"
+    verified = qualification.verify_sidecar(
         sidecar,
         expected_sidecar_sha256,
         candidate,
@@ -480,6 +502,14 @@ def _verify_production_qualification(
         candidate_selector=selector,
         **kwargs,
     )
+    if (
+        selector == "identity_onen_b1"
+        and verified.get("qualification_profile") != "k64_root"
+    ):
+        raise ValueError(
+            "identity_onen_b1 production requires a k64_root qualification"
+        )
+    return verified
 
 
 def install_candidate(
@@ -488,6 +518,7 @@ def install_candidate(
     attestation: Path,
     selector: str,
     *,
+    qualification_profile: str | None = None,
     production_sidecar: Path | None = None,
     expected_production_sidecar_sha256: str | None = None,
     patch_source: Path = Path("scripts/fr13_patch_cutlass_fixed32_wave.py"),
@@ -515,6 +546,7 @@ def install_candidate(
     source_identity = verify_candidate(
         source,
         selector,
+        qualification_profile=qualification_profile,
         resource_credential=resource_credential,
         expected_resource_credential_sha256=expected_resource_credential_sha256,
     )
@@ -591,6 +623,10 @@ def install_candidate(
                 "qualified_projection_nk",
             ):
                 qualification[key] = qualification_record[key]
+        if "qualification_source_identity" in qualification_record:
+            qualification["qualification_source_identity"] = qualification_record[
+                "qualification_source_identity"
+            ]
     elif (
         production_sidecar is not None or expected_production_sidecar_sha256 is not None
     ):
@@ -619,6 +655,7 @@ def install_candidate(
     installed_identity = verify_candidate(
         destination,
         selector,
+        qualification_profile=qualification_profile,
         resource_credential=resource_credential,
         expected_resource_credential_sha256=expected_resource_credential_sha256,
     )
@@ -634,6 +671,8 @@ def install_candidate(
         "production_enabled": production_enabled,
         "candidate_family": source_identity["candidate_family"],
     }
+    if selector in IDENTITY_ONEN_B1_SELECTORS:
+        payload["qualification_profile"] = qualification_profile
     if qualification is not None:
         payload["qualification"] = qualification
     _write_json(attestation, payload)
@@ -646,6 +685,9 @@ def main() -> int:
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("candidate", type=Path)
     verify_parser.add_argument("--selector", default="streamk_coop128")
+    verify_parser.add_argument(
+        "--qualification-profile", choices=("full_vocab", "k64_root")
+    )
     verify_parser.add_argument("--resource-credential", type=Path)
     verify_parser.add_argument("--expected-resource-credential-sha256")
     install_parser = subparsers.add_parser("install")
@@ -653,6 +695,9 @@ def main() -> int:
     install_parser.add_argument("--destination", type=Path, required=True)
     install_parser.add_argument("--attestation", type=Path, required=True)
     install_parser.add_argument("--selector", required=True)
+    install_parser.add_argument(
+        "--qualification-profile", choices=("full_vocab", "k64_root")
+    )
     install_parser.add_argument("--production-pass-sidecar", type=Path)
     install_parser.add_argument("--expected-production-pass-sha256")
     install_parser.add_argument("--resource-credential", type=Path)
@@ -673,6 +718,7 @@ def main() -> int:
         payload = verify_candidate(
             args.candidate,
             args.selector,
+            qualification_profile=args.qualification_profile,
             resource_credential=args.resource_credential,
             expected_resource_credential_sha256=(
                 args.expected_resource_credential_sha256
@@ -684,6 +730,7 @@ def main() -> int:
             args.destination,
             args.attestation,
             args.selector,
+            qualification_profile=args.qualification_profile,
             production_sidecar=args.production_pass_sidecar,
             expected_production_sidecar_sha256=(args.expected_production_pass_sha256),
             patch_source=args.patch_source,

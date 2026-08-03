@@ -17,6 +17,15 @@ two-stage scheduler, ping-pong falls from 968 to 744 SASS instructions and
 cooperative falls from 864 to 568. Exact counts and pinned identities are in
 `build_manifest.json`.
 
+The qualification path is hard-pinned to the explicit `k64_root` profile.
+The diagnostic runner and production launcher reject an omitted profile or
+`full_vocab` before GPU or Docker work, and sidecar/direct-install verification
+enforces the same contract centrally. The source commit must equal runtime
+`HEAD`, the tracked worktree must be clean, and `git show <commit>:<path>` bytes
+for the patcher, runner, credential, binary registry, and launcher must equal
+the runtime files. That source identity is carried through the live result,
+sidecar, and production attestation.
+
 No GPU kernel, synthetic probe, SWE-Verified task, timing campaign, or
 hardware-floor acceptance run was performed. The byte A/B selector remains
 diagnostic and stock-serving; the direct selector requires a bound K64/root
