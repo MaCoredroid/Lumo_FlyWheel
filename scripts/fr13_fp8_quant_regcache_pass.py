@@ -354,6 +354,7 @@ def qualify(
         or binary.get("production_enabled") is not False
         or binary.get("candidate_sha256") != expected_candidate_sha256
         or binary.get("candidate_bytes") != candidate["bytes"]
+        or binary.get("smoke_load_passed") is not True
         or binary.get("source_commit") != source_commit
         or binary.get("patch_source_sha256") != _digest(patch_raw)
         or binary.get("vllm_commit") != VLLM_COMMIT

@@ -86,6 +86,7 @@ def test_runtime_binary_is_pinned_and_default_off_install_is_distinct(
     assert payload["selector"] == "0"
     assert payload["production_enabled"] is False
     assert payload["diagnostic_enabled"] is False
+    assert payload["smoke_load_passed"] is False
     assert payload["production_sidecar_sha256"] is None
     assert destination.read_bytes() == candidate.read_bytes()
     assert oct(destination.stat().st_mode & 0o777) == "0o555"
@@ -177,6 +178,7 @@ def test_launch_route_installs_the_same_binary_for_control_and_candidate() -> No
     assert "0|byte_ab|1" in launcher
     assert "/tmp/fr13_fp8_quant_regcache.abi3.so" in launcher
     assert "fr13_fp8_quant_regcache_runtime.py install" in launcher
+    assert launcher.count("--smoke-load") == 2
     assert "fr13_fp8_quant_regcache_pass.py verify" in launcher
     assert "requires isolated Hydra27 physical32 K64/root1 B1" in launcher
     assert "FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" in bigdenom
@@ -197,3 +199,14 @@ def test_launch_route_installs_the_same_binary_for_control_and_candidate() -> No
     assert "fr13_fp8_quant_regcache_pass.py qualify" in gate
     assert "FP8_QUANT_PASS" not in gate
     assert "spec_speed_probe" not in gate + timing
+
+    builder = Path("scripts/fr13_build_fp8_quant_regcache_sm121a.sh").read_text()
+    assert "VLLM_SOURCE_COMMIT" in builder
+    assert "fe9c3d6c5f66c873d196800384ed6880687b9e52" in builder
+    assert "d655c46ab6ba497f83a62d1498ca3affb7344b163a3044754f404009ba00ae16" in builder
+    assert "arch=compute_121a,code=sm_121a" in builder
+    assert "BASE_OBJECT_ROOT" in builder
+    assert "CUTLASS_SOURCE_COMMIT" in builder
+    assert "PINNED_BASE_OBJECTS" in builder
+    assert builder.count(" -c ") == 2
+    assert "--gpus" not in builder

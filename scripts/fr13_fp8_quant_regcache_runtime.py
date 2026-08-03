@@ -125,6 +125,7 @@ def install_binary(
     source_commit: str,
     production_sidecar: Path | None = None,
     expected_production_sidecar_sha256: str | None = None,
+    smoke_load: bool = False,
 ) -> dict[str, Any]:
     if selector not in SELECTORS:
         raise ValueError("FP8 quant selector must be 0, byte_ab, or 1")
@@ -137,13 +138,15 @@ def install_binary(
             raise ValueError("production selector requires a pinned PASS sidecar")
         from fr13_fp8_quant_regcache_pass import verify_sidecar
 
-        verify_sidecar(
+        sidecar = verify_sidecar(
             sidecar_path=production_sidecar,
             expected_sidecar_sha256=expected_production_sidecar_sha256,
             candidate_so=source,
             expected_candidate_sha256=expected_sha256,
             patch_source=patch_source,
         )
+        if sidecar["qualified_source_commit"] != source_commit:
+            raise ValueError("production PASS source commit mismatch")
         production_sidecar_sha256 = expected_production_sidecar_sha256
     elif production_sidecar is not None or expected_production_sidecar_sha256 is not None:
         raise ValueError("non-production selector forbids a PASS sidecar")
@@ -160,6 +163,13 @@ def install_binary(
     destination_identity = validate_binary(destination, expected_sha256)
     if destination_identity["bytes"] != source_identity["bytes"]:
         raise ValueError("installed candidate size changed")
+    if smoke_load:
+        import torch
+
+        torch.ops.load_library(str(destination))
+        for op_name in ("per_token_group_fp8_quant", "cutlass_scaled_mm"):
+            if not hasattr(torch.ops._C, op_name):
+                raise ValueError(f"installed candidate did not register {op_name}")
 
     payload = {
         "schema": BINARY_SCHEMA,
@@ -175,6 +185,7 @@ def install_binary(
         "source": source_identity,
         "destination": destination_identity,
         "installed_mode": "0555",
+        "smoke_load_passed": smoke_load,
         "production_sidecar_sha256": production_sidecar_sha256,
     }
     _write_new(attestation, payload)
@@ -199,6 +210,7 @@ def main() -> int:
     install.add_argument("--source-commit", required=True)
     install.add_argument("--production-sidecar", type=Path)
     install.add_argument("--expected-production-sidecar-sha256")
+    install.add_argument("--smoke-load", action="store_true")
     args = parser.parse_args()
 
     if args.command == "verify-binary":
@@ -216,6 +228,7 @@ def main() -> int:
             expected_production_sidecar_sha256=(
                 args.expected_production_sidecar_sha256
             ),
+            smoke_load=args.smoke_load,
         )
     print(json.dumps(result, ensure_ascii=True, sort_keys=True))
     return 0

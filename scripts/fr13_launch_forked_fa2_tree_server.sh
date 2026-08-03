@@ -4031,7 +4031,8 @@ if [[ -n "\${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256:-}" ]]; then
       --patch-source /workspace/scripts/fr13_patch_fp8_quant_fixed32.py \
       --source-commit "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SOURCE_COMMIT" \
       --production-sidecar /tmp/fr13_fp8_quant_regcache.pass.json \
-      --expected-production-sidecar-sha256 "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256"
+      --expected-production-sidecar-sha256 "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_PASS_SHA256" \
+      --smoke-load
   else
     python3 /workspace/scripts/fr13_fp8_quant_regcache_runtime.py install \
       --source /tmp/fr13_fp8_quant_regcache.abi3.so \
@@ -4040,7 +4041,8 @@ if [[ -n "\${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256:-}" ]]; then
       --selector "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" \
       --expected-sha256 "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO_SHA256" \
       --patch-source /workspace/scripts/fr13_patch_fp8_quant_fixed32.py \
-      --source-commit "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SOURCE_COMMIT"
+      --source-commit "\$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SOURCE_COMMIT" \
+      --smoke-load
   fi
 fi
 if [[ "\${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
