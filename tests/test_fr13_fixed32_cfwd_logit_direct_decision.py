@@ -64,8 +64,8 @@ def _dense_probability_reference(logits, kid_tokens, kid_mask, uniforms):
 @pytest.mark.parametrize(
     ("batch_size", "incumbent_bytes", "candidate_bytes", "removed_bytes"),
     (
-        (1, 190_709_760, 232_800, 190_476_960),
-        (4, 762_839_040, 931_200, 761_907_840),
+        (1, 190_709_760, 14_640, 190_695_120),
+        (4, 762_839_040, 58_560, 762_780_480),
     ),
 )
 def test_contract_has_exact_fixed32_work_ledger(
@@ -83,7 +83,7 @@ def test_contract_has_exact_fixed32_work_ledger(
     assert contract["physical_drafts"] == 31
     assert contract["fixed_work_for_any_logical_tree_lte"] == 32
     assert contract["vocab_size"] == 248_320
-    assert contract["vocab_blocks"] == 970
+    assert contract["vocab_blocks"] == 61
     assert contract["incumbent_probability_producer_tensor_ops"] == 4
     assert contract["candidate_triton_launch_sites"] == 2
     assert contract["producer_dispatch_sites_removed_static"] == 2
@@ -92,7 +92,7 @@ def test_contract_has_exact_fixed32_work_ledger(
     assert contract["candidate_block_stat_materialized_bytes"] == candidate_bytes
     assert contract["full_vocab_materialized_bytes_removed"] == removed_bytes
     assert contract["candidate_block_stat_workspace_bytes"] == (
-        batch_size * 245_760
+        batch_size * 15_360
     )
 
 
@@ -122,11 +122,11 @@ def test_workspace_is_persistent_physical32_for_b1_and_b4() -> None:
     for batch_size in (1, 4):
         spec = kernel.workspace_spec(batch_size)
         assert spec["block_maxima"] == (
-            (batch_size * 30, 1024),
+            (batch_size * 30, 64),
             torch.float32,
         )
         assert spec["block_sums"] == (
-            (batch_size * 30, 1024),
+            (batch_size * 30, 64),
             torch.float32,
         )
         assert spec["self_token"] == ((batch_size, 13), torch.long)
