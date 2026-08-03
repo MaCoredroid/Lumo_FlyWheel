@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -260,6 +261,44 @@ def test_hybrid_production_install_is_fail_closed_and_preserves_dual_binding(
     assert record["production_enabled"] is True
     assert record["qualification_profile"] == "k64_root"
     assert record["qualification"]["topology_qualifications"] == topology_records
+
+
+def test_hybrid_production_verification_uses_b4_dual_credential_module(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _load("fr13_hybrid_n5120_module_dispatch", "fr13_cutlass_wave_binary.py")
+    calls: list[tuple[str, str]] = []
+
+    def verify_dual_sidecar(*args, candidate_selector: str, **kwargs):
+        calls.append(("b4", candidate_selector))
+        return {"status": "QUALIFIED"}
+
+    def wrong_verify_dual_sidecar(*args, candidate_selector: str, **kwargs):
+        calls.append(("b1", candidate_selector))
+        raise AssertionError("hybrid credential verification used the B1 module")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "fr13_cutlass_b4_pass",
+        types.SimpleNamespace(verify_dual_sidecar=verify_dual_sidecar),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "fr13_cutlass_streamk_pass",
+        types.SimpleNamespace(verify_dual_sidecar=wrong_verify_dual_sidecar),
+    )
+
+    result = module._verify_production_qualification(
+        tmp_path / "sidecar.json",
+        "a" * 64,
+        tmp_path / "candidate.so",
+        tmp_path / "patch.py",
+        SELECTOR,
+        "hydra27_fixed32",
+    )
+
+    assert result == {"status": "QUALIFIED"}
+    assert calls == [("b4", SELECTOR)]
 
 
 def test_hybrid_full_vocab_is_rejected_before_live_validation(

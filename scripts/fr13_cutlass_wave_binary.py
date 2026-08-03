@@ -495,6 +495,7 @@ def _verify_production_qualification(
         "persistent_b4_m128",
         "identity_stockshape_stage2_b4",
         "identity_twom_b4",
+        "identity_hybrid_n5120_b4",
     }:
         import fr13_cutlass_b4_pass as qualification
     else:
