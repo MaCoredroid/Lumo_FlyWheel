@@ -1985,6 +1985,12 @@ def _fr13_fixed32_observed_begin(
         "mixed_pseudo_rows": 0,
         "all_physical_31": True,
     }
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        fixed32_conv_zero_tail_live_prepare_replay,
+    )
+    fixed32_conv_zero_tail_live_prepare_replay(
+        mode=mode, batch_size=batch, enabled=True
+    )
 
 
 def _fr13_fixed32_observed_work_target(stage, capturing, batch_size):
@@ -4121,6 +4127,11 @@ def _fr13_fixed32_observed_graph_replay(
             "event_index": None,
             "event_complete": False,
         }
+    )
+    tree_kernel.fixed32_conv_zero_tail_live_prepare_replay(
+        mode=event["mode"],
+        batch_size=int(event["batch_size"]),
+        enabled=False,
     )
 
 
@@ -32016,23 +32027,29 @@ def _fr13_f32_flush_one(request):
                     str(_FR13_FIXED32_FLUSH_BOUNDARY_PATH)
                     + "." + str(request["generation"]) + ".json"
                 )
+                flush_binding = {
+                    "action": "final",
+                    "boundary_snapshot_sha256": (
+                        _fr13_f32_flush_hashlib.sha256(
+                            boundary_path.read_bytes()
+                        ).hexdigest()
+                    ),
+                    "complete_work_census_events": len(events),
+                    "events_sha256": _fr13_f32_flush_hashlib.sha256(
+                        canonical_events
+                    ).hexdigest(),
+                    "generation": request["generation"],
+                    "nonce": request["nonce"],
+                    "producer_pid": _FR13_FIXED32_FLUSH_PID,
+                }
                 _gdn._fr13_draft_head_m32_live_finalize(
-                    events,
-                    {
-                        "action": "final",
-                        "boundary_snapshot_sha256": (
-                            _fr13_f32_flush_hashlib.sha256(
-                                boundary_path.read_bytes()
-                            ).hexdigest()
-                        ),
-                        "complete_work_census_events": len(events),
-                        "events_sha256": _fr13_f32_flush_hashlib.sha256(
-                            canonical_events
-                        ).hexdigest(),
-                        "generation": request["generation"],
-                        "nonce": request["nonce"],
-                        "producer_pid": _FR13_FIXED32_FLUSH_PID,
-                    },
+                    events, flush_binding
+                )
+                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                    fixed32_conv_zero_tail_live_finalize,
+                )
+                fixed32_conv_zero_tail_live_finalize(
+                    events, flush_binding
                 )
             # Counters/snapshot describe the closed interval ending here. Break
             # only after persistence so the next wall sample cannot name a
