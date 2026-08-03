@@ -6,6 +6,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 REPO = Path(__file__).resolve().parents[1]
 PATCHER = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
@@ -370,6 +372,22 @@ def test_real_b1_runner_uses_canonical_task_and_only_gates_not_tunes() -> None:
     assert "--expected-tok-per-draft 31" in runner
     assert "scripts/fr13_draft_head_fp8_gate.py" in runner
     assert "draft_head_fp8_real_b1_gate.json" in runner
+    assert (
+        "QROW16_FA2_SHA256="
+        "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+        in runner
+    )
+    assert "QROW16_FA2_BYTES=299507792" in runner
+    assert (
+        "QROW16_LIVE_PASS_SHA256="
+        "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+        in runner
+    )
+    assert 'FR13_FA2_QROW16_PRODUCTION="$QROW16_PRODUCTION"' in runner
+    assert "QROW16_PRODUCTION=1" in runner
+    assert '--qrow16-sidecar "$DRAFT_HEAD_FP8_QROW16_SIDECAR"' in runner
+    assert '--qrow16-capture "$DRAFT_HEAD_FP8_QROW16_CAPTURE"' in runner
+    assert '--qrow16-so "$FORKED_FA2_SO"' in runner
 
 
 def test_gate_validator_can_rebuild_a_promotion_credential() -> None:
@@ -381,7 +399,7 @@ def test_gate_validator_can_rebuild_a_promotion_credential() -> None:
     assert 'parser.add_argument("--expected-gate-sha256")' in validator
     assert "gate_result != result" in validator
     assert "does not match rebuilt raw evidence" in validator
-    assert "fr13.fixed32.draft_head_fp8_promotion_credential.v1" in validator
+    assert "fr13.fixed32.draft_head_fp8_promotion_credential.v2" in validator
     assert '"performance_tuning_eligible": True' in validator
     assert '"formal_floor_acceptance_eligible": False' in validator
 
@@ -407,6 +425,18 @@ def test_timing_runner_is_real_exact4_and_uses_distinct_arm_floors() -> None:
     assert "119.658015414" in runner
     assert "synthetic" not in runner.lower()
     assert "probe-only" not in runner.lower()
+    assert 'QROW16_FA2_SO:?set QROW16_FA2_SO' in runner
+    assert "STOCK_FA2_SO" not in runner
+    assert 'FR13_FA2_QROW16_PRODUCTION=1 \\' in runner
+    assert "FR13_FA2_QROW16_PRODUCTION=0" not in runner
+    assert 'FORKED_FA2_SO="$QROW16_FA2_SO"' in runner
+    assert '--qrow16-sidecar "$GATE_QROW16_SIDECAR_JSON"' in runner
+    assert '--qrow16-capture "$GATE_QROW16_CAPTURE_JSON"' in runner
+    assert '--stock-qrow16-sidecar "$STOCK_QROW16_SIDECAR"' in runner
+    assert '--candidate-qrow16-sidecar "$CANDIDATE_QROW16_SIDECAR"' in runner
+    assert '--stock-qrow16-capture "$STOCK_QROW16_CAPTURE"' in runner
+    assert '--candidate-qrow16-capture "$CANDIDATE_QROW16_CAPTURE"' in runner
+    assert '--qrow16-fa2-sha256 "$QROW16_FA2_SHA256"' in runner
 
     assert '"gpu_components_ms_per_step"' in reducer
     assert '"measured_tps_fullstep_wall"' in reducer
@@ -415,6 +445,8 @@ def test_timing_runner_is_real_exact4_and_uses_distinct_arm_floors() -> None:
     assert "T_CRITICAL_ONE_SIDED_95_DF3" in reducer
     assert '"formal_floor_acceptance_eligible": False' in reducer
     assert "Formal Tail23/Hydra27 acceptance remains separate" in reducer
+    assert "validate_qrow16_production" in reducer
+    assert '"qrow16_production"' in reducer
 
     for path in (
         "scripts/fr13_draft_head_fp8_gate.py",
@@ -422,3 +454,63 @@ def test_timing_runner_is_real_exact4_and_uses_distinct_arm_floors() -> None:
         "scripts/fr13_run_b1_draft_head_fp8_timing.sh",
     ):
         assert f'"{path}"' in manifest
+
+
+def test_qrow16_production_evidence_is_pass_and_capture_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from scripts import fr13_draft_head_fp8_gate as gate
+
+    candidate = tmp_path / "qrow16.so"
+    candidate.write_bytes(b"candidate")
+    candidate_sha = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    sidecar = tmp_path / "sidecar.json"
+    sidecar.write_text("{}\n", encoding="ascii")
+    sidecar_sha = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    capture = tmp_path / "capture.json"
+    capture_payload = {
+        "schema": "fr13.fixed32.fa2_qrow16_production_capture.v1",
+        "status": "ENGAGED",
+        "runtime_mode": "FULL",
+        "batch_size": 1,
+        "layer_count": 16,
+        "candidate_so_sha256": candidate_sha,
+        "pass_sidecar_sha256": sidecar_sha,
+        "dispatch": "qrow16 exact geometry; no fallback",
+        "graph_id": 7,
+        "graph_signature": "c" * 64,
+        "layers": [f"layer.{index}" for index in range(16)],
+    }
+    capture.write_text(
+        json.dumps(capture_payload, sort_keys=True) + "\n", encoding="ascii"
+    )
+    monkeypatch.setattr(gate, "QROW16_SO_SHA256", candidate_sha)
+    monkeypatch.setattr(gate, "QROW16_SO_BYTES", len(candidate.read_bytes()))
+    monkeypatch.setattr(gate, "QROW16_LIVE_PASS_SHA256", "d" * 64)
+    monkeypatch.setattr(
+        gate.qrow16,
+        "verify_sidecar",
+        lambda **_kwargs: {"live_result_sha256": "d" * 64},
+    )
+
+    result = gate.validate_qrow16_production(
+        sidecar_path=sidecar,
+        capture_path=capture,
+        candidate_so=candidate,
+        label="test",
+    )
+    assert result["candidate_so_sha256"] == candidate_sha
+    assert result["production_sidecar_sha256"] == sidecar_sha
+    assert result["graph_signature"] == "c" * 64
+
+    capture_payload["runtime_mode"] = "EAGER"
+    capture.write_text(
+        json.dumps(capture_payload, sort_keys=True) + "\n", encoding="ascii"
+    )
+    with pytest.raises(ValueError, match="runtime_mode drifted"):
+        gate.validate_qrow16_production(
+            sidecar_path=sidecar,
+            capture_path=capture,
+            candidate_so=candidate,
+            label="test",
+        )

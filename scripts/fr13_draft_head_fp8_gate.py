@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import stat
 from pathlib import Path
 from typing import Any
@@ -17,12 +18,14 @@ try:
         validate_live_evidence,
         validate_rebuilt_chat_traffic_audit,
     )
+    from . import fr13_qrow16_pass_sidecar as qrow16
 except ImportError:
     from fr13_draft_head_m32_pass import (
         validate_chat_traffic_audit,
         validate_live_evidence,
         validate_rebuilt_chat_traffic_audit,
     )
+    import fr13_qrow16_pass_sidecar as qrow16
 
 
 SCHEMA = "fr13.fixed32.draft_head_fp8_engagement.v1"
@@ -66,6 +69,13 @@ TRAFFIC = {
     "candidate_weight_floor_ms": 113.514015414,
     "one_sided_u95_cap_ms": 130.541117726,
 }
+QROW16_SO_SHA256 = (
+    "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+)
+QROW16_SO_BYTES = 299_507_792
+QROW16_LIVE_PASS_SHA256 = (
+    "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+)
 ENGAGEMENT_KEYS = {
     "schema",
     "status",
@@ -266,6 +276,78 @@ def _validate_acceptance(
     }
 
 
+def validate_qrow16_production(
+    *,
+    sidecar_path: Path,
+    capture_path: Path,
+    candidate_so: Path,
+    label: str,
+) -> dict[str, Any]:
+    _regular(candidate_so, f"{label} Qrow16 candidate SO")
+    if (
+        candidate_so.stat().st_size != QROW16_SO_BYTES
+        or _file_sha256(candidate_so) != QROW16_SO_SHA256
+    ):
+        raise ValueError(f"{label} Qrow16 candidate identity drifted")
+    _regular(sidecar_path, f"{label} Qrow16 production sidecar")
+    sidecar_sha = _file_sha256(sidecar_path)
+    try:
+        sidecar = qrow16.verify_sidecar(
+            sidecar_path=sidecar_path,
+            expected_sidecar_sha256=sidecar_sha,
+            candidate_so=candidate_so,
+            expected_candidate_sha256=QROW16_SO_SHA256,
+        )
+    except (OSError, ValueError) as error:
+        raise ValueError(
+            f"{label} Qrow16 production sidecar is invalid: {error}"
+        ) from error
+    if sidecar.get("live_result_sha256") != QROW16_LIVE_PASS_SHA256:
+        raise ValueError(f"{label} Qrow16 sidecar is not bound to the live PASS")
+
+    capture, capture_raw = _load(capture_path, f"{label} Qrow16 capture")
+    required = {
+        "schema": "fr13.fixed32.fa2_qrow16_production_capture.v1",
+        "status": "ENGAGED",
+        "runtime_mode": "FULL",
+        "batch_size": 1,
+        "layer_count": 16,
+        "candidate_so_sha256": QROW16_SO_SHA256,
+        "pass_sidecar_sha256": sidecar_sha,
+        "dispatch": "qrow16 exact geometry; no fallback",
+    }
+    if set(capture) != {*required, "graph_id", "graph_signature", "layers"}:
+        raise ValueError(f"{label} Qrow16 capture key set drifted")
+    for key, expected in required.items():
+        if capture.get(key) != expected:
+            raise ValueError(f"{label} Qrow16 capture {key} drifted")
+    graph_id = capture.get("graph_id")
+    graph_signature = capture.get("graph_signature")
+    layers = capture.get("layers")
+    if (
+        isinstance(graph_id, bool)
+        or not isinstance(graph_id, int)
+        or graph_id <= 0
+        or not isinstance(graph_signature, str)
+        or re.fullmatch(r"[0-9a-f]{64}", graph_signature) is None
+        or not isinstance(layers, list)
+        or len(layers) != 16
+        or len(set(layers)) != 16
+        or any(not isinstance(layer, str) or not layer for layer in layers)
+    ):
+        raise ValueError(f"{label} Qrow16 graph identity drifted")
+    return {
+        "candidate_so_sha256": QROW16_SO_SHA256,
+        "candidate_so_bytes": QROW16_SO_BYTES,
+        "live_pass_sha256": QROW16_LIVE_PASS_SHA256,
+        "production_sidecar_sha256": sidecar_sha,
+        "production_capture_sha256": _sha256(capture_raw),
+        "graph_signature": graph_signature,
+        "layer_count": 16,
+        "dispatch": required["dispatch"],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engagement", type=Path, required=True)
@@ -273,6 +355,9 @@ def main() -> int:
     parser.add_argument("--final-flush", type=Path, required=True)
     parser.add_argument("--boundary-snapshot", type=Path, required=True)
     parser.add_argument("--chat-traffic-audit", type=Path, required=True)
+    parser.add_argument("--qrow16-sidecar", type=Path, required=True)
+    parser.add_argument("--qrow16-capture", type=Path, required=True)
+    parser.add_argument("--qrow16-so", type=Path, required=True)
     parser.add_argument("--candidate-source", type=Path, required=True)
     parser.add_argument("--expected-source-sha256", required=True)
     parser.add_argument("--expected-source-commit", required=True)
@@ -335,9 +420,15 @@ def main() -> int:
         audit_path=args.chat_traffic_audit,
         repo=args.repo.resolve(strict=True),
     )
+    qrow16_production = validate_qrow16_production(
+        sidecar_path=args.qrow16_sidecar,
+        capture_path=args.qrow16_capture,
+        candidate_so=args.qrow16_so,
+        label="gate",
+    )
 
     result = {
-        "schema": "fr13.fixed32.draft_head_fp8_real_b1_gate.v1",
+        "schema": "fr13.fixed32.draft_head_fp8_real_b1_gate.v2",
         "status": "PASS",
         "classification": "one_real_swe_verified_b1_integrity_gate",
         "performance_tuning_eligible": False,
@@ -364,6 +455,7 @@ def main() -> int:
         "acceptance_telemetry": acceptance_summary,
         "terminal": terminal,
         "traffic": traffic,
+        "qrow16_production": qrow16_production,
         "integrity_basis": {
             "canonical_task_terminal": True,
             "authenticated_request_census": True,
@@ -387,7 +479,7 @@ def main() -> int:
                 "FP8 real-B1 gate result does not match rebuilt raw evidence"
             )
         result = {
-            "schema": "fr13.fixed32.draft_head_fp8_promotion_credential.v1",
+            "schema": "fr13.fixed32.draft_head_fp8_promotion_credential.v2",
             "status": "PASS",
             "qualification_scope": "exact4_real_swe_verified_timing_only",
             "performance_tuning_eligible": True,
@@ -404,8 +496,11 @@ def main() -> int:
                 "chat_traffic_audit": _file_sha256(
                     args.chat_traffic_audit
                 ),
+                "qrow16_sidecar": _file_sha256(args.qrow16_sidecar),
+                "qrow16_capture": _file_sha256(args.qrow16_capture),
             },
             "engagement": gate_result["engagement"],
+            "qrow16_production": gate_result["qrow16_production"],
             "mandatory_floor": TRAFFIC,
         }
     elif args.expected_gate_sha256 is not None:
