@@ -435,12 +435,12 @@ def test_n5120_single_source_contract_remains_pinned_to_original_patch() -> None
     ]
 
 
-def test_n5120_fullgrid_source_contract_remains_pinned_to_original_patch() -> None:
+def test_n5120_fullgrid_source_contract_remains_pinned_to_c49_repair() -> None:
     module = _load("fr13_cutlass_streamk_n5120_fullgrid_source_contract_test")
     contract = module._source_contract("identity_onen_n5120_fullgrid_b1")
 
     assert contract["patch_source_sha256"] == (
-        "2697a8631bcf7b546c2ca964975d2817203391ef9dfcbb8dd3c4d4d707aa0959"
+        "d626d60ddcba89207444da662e391659fe3444c5301e9e32e1a5f9f85ef6ce29"
     )
     assert contract["patched_dispatch_sha256"] == (
         "194d4b5f529dfb690eeb6d864919ae7f9b859097568a513b3f3cf78051a93499"
