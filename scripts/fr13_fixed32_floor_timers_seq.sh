@@ -20,6 +20,14 @@ case "$FR13_DRAFT_VOCAB_ROOT" in
     exit 2
     ;;
 esac
+FR13_DRAFT_HEAD_FP8=${FR13_DRAFT_HEAD_FP8:-0}
+case "$FR13_DRAFT_HEAD_FP8" in
+  0|1) export FR13_DRAFT_HEAD_FP8 ;;
+  *)
+    echo "FR13_DRAFT_HEAD_FP8 must be 0 or 1" >&2
+    exit 2
+    ;;
+esac
 
 export GPU_UTIL=0.70
 unset FR13_PREWARM_TRIE
@@ -105,8 +113,16 @@ case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
     export FR13_WEIGHT_FLOOR_MS=126.514089260
     ;;
   65536:1)
-    export FR13_MANDATORY_WEIGHT_BYTES=32666638208
-    export FR13_WEIGHT_FLOOR_MS=119.658015414
+    if [[ "$FR13_DRAFT_HEAD_FP8" == "1" ]]; then
+      # Five BF16 K64 head reads (3,355,443,200 B) become five FP8
+      # qweight+FP32-scale reads (1,678,131,200 B). The gathered BF16
+      # source remains resident but is not a mandatory per-event read.
+      export FR13_MANDATORY_WEIGHT_BYTES=30989326208
+      export FR13_WEIGHT_FLOOR_MS=113.514015414
+    else
+      export FR13_MANDATORY_WEIGHT_BYTES=32666638208
+      export FR13_WEIGHT_FLOOR_MS=119.658015414
+    fi
     ;;
   *)
     echo "unsupported fixed32 draft-vocab floor configuration: K=${FR13_DRAFT_VOCAB_K:-unset} ROOT=$FR13_DRAFT_VOCAB_ROOT" >&2

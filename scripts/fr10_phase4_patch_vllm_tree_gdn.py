@@ -21998,6 +21998,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m32_prod_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M32_PRODUCTION", "0"
             )
+            _fr13_dh_fp8_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_FP8", "0"
+            )
             if _fr13_dh_rows_raw not in ("0", "32", "64", "128"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_PAD_ROWS must be exactly one of "
@@ -22015,10 +22018,15 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M32_PRODUCTION must be exactly 0 or 1"
                 )
+            if _fr13_dh_fp8_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_FP8 must be exactly 0 or 1"
+                )
             _fr13_dh_rows = int(_fr13_dh_rows_raw)
             _fr13_dh_ab = _fr13_dh_ab_raw == "1"
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
+            _fr13_dh_fp8 = _fr13_dh_fp8_raw == "1"
             _fr13_dh_modes = sum(
                 int(value)
                 for value in (
@@ -22026,6 +22034,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_ab,
                     _fr13_dh_m32_live,
                     _fr13_dh_m32_prod,
+                    _fr13_dh_fp8,
                 )
             )
             if _fr13_dh_modes > 1:
@@ -22043,7 +22052,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13 draft-head M32 production has no launcher attestation"
                 )
-            if (_fr13_dh_rows or _fr13_dh_ab or _fr13_dh_m32_live or _fr13_dh_m32_prod) and (
+            if (
+                _fr13_dh_rows
+                or _fr13_dh_ab
+                or _fr13_dh_m32_live
+                or _fr13_dh_m32_prod
+                or _fr13_dh_fp8
+            ) and (
                 not _fr13_is_fixed32
                 or not _fr13_dvk_root
                 or not _fr13_single_logits
@@ -22074,6 +22089,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             self._fr13_dh_m32_selected_capture_calls = 0
             self._fr13_dh_m32_fallback_calls = 0
             self._fr13_dh_m32_graph_attestation = None
+            self._fr13_dh_fp8_active = _fr13_dh_fp8
+            self._fr13_dh_fp8_selected_root_calls = 0
+            self._fr13_dh_fp8_selected_capture_calls = 0
+            self._fr13_dh_fp8_fallback_calls = 0
+            self._fr13_dh_fp8_graph_attestations = {}
 
             def _fr13_dvk_prepare():
                 if (
@@ -22164,6 +22184,76 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             f"[FR13_DRAFT_VOCAB] DISABLED (shim build failed): {_fr13_dvk_e!r}",
                             flush=True,
                         )
+                if (
+                    _fr13_dh_fp8
+                    and not getattr(self, "_fr13_dh_fp8_ready", False)
+                ):
+                    _fr13_dh_fp8_sh = self._fr13_dvk_shim
+                    _fr13_dh_fp8_w = _fr13_dh_fp8_sh.weight
+                    if (
+                        type(_fr13_dh_fp8_sh.quant_method).__name__
+                        != "UnquantizedEmbeddingMethod"
+                        or tuple(_fr13_dh_fp8_w.shape) != (65536, 5120)
+                        or tuple(_fr13_dh_fp8_w.stride()) != (5120, 1)
+                        or _fr13_dh_fp8_w.dtype != torch.bfloat16
+                        or not _fr13_dh_fp8_w.is_contiguous()
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head FP8 requires contiguous BF16 "
+                            "UnquantizedEmbeddingMethod "
+                            "weight[65536,5120] stride[5120,1]"
+                        )
+                    if tuple(torch.cuda.get_device_capability()) != (12, 1):
+                        raise RuntimeError(
+                            "FR13 draft-head FP8 is qualified only on SM121"
+                        )
+                    from vllm.model_executor.layers.quantization.utils.w8a8_utils import (
+                        CUTLASS_BLOCK_FP8_SUPPORTED as _fr13_dh_fp8_supported,
+                    )
+                    if not _fr13_dh_fp8_supported:
+                        raise RuntimeError(
+                            "FR13 draft-head FP8 requires vLLM CUTLASS "
+                            "block-FP8 support"
+                        )
+                    from vllm.utils.deep_gemm import (
+                        per_block_cast_to_fp8 as _fr13_dh_fp8_quant_weight,
+                    )
+                    (
+                        self._fr13_dh_fp8_weight,
+                        self._fr13_dh_fp8_weight_scale,
+                    ) = _fr13_dh_fp8_quant_weight(
+                        _fr13_dh_fp8_w,
+                        block_size=[128, 128],
+                        use_ue8m0=False,
+                    )
+                    _fr13_dh_fp8_qw = self._fr13_dh_fp8_weight
+                    _fr13_dh_fp8_ws = self._fr13_dh_fp8_weight_scale
+                    if (
+                        tuple(_fr13_dh_fp8_qw.shape) != (65536, 5120)
+                        or tuple(_fr13_dh_fp8_qw.stride()) != (5120, 1)
+                        or not _fr13_dh_fp8_qw.is_contiguous()
+                        or _fr13_dh_fp8_qw.dtype
+                        != torch.float8_e4m3fn
+                        or tuple(_fr13_dh_fp8_ws.shape) != (512, 40)
+                        or tuple(_fr13_dh_fp8_ws.stride()) != (40, 1)
+                        or _fr13_dh_fp8_ws.dtype != torch.float32
+                        or not _fr13_dh_fp8_ws.is_contiguous()
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head FP8 weight quantization drifted "
+                            "from qweight[65536,5120]/scale[512,40]"
+                        )
+                    self._fr13_dh_fp8_ready = True
+                    print(
+                        "[FR13_DRAFT_HEAD_FP8] static weight ready "
+                        "qweight_shape=(65536,5120) "
+                        "qweight_stride=(5120,1) "
+                        "scale_shape=(512,40) scale_stride=(40,1) "
+                        "block=(128,128) ue8m0=0 "
+                        "retained_candidate_bytes=335626240 "
+                        "calls_per_event=5 mandatory_event_bytes=1678131200",
+                        flush=True,
+                    )
                 if (
                     (
                         _fr13_dh_rows
@@ -22365,6 +22455,45 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     },
                 }
 
+            def _fr13_dh_fp8_contract():
+                return {
+                    "geometry": {
+                        "calls_per_event": 5,
+                        "input_hidden": 5120,
+                        "vocab_rows": 65536,
+                        "weight_shape": [65536, 5120],
+                        "weight_stride": [5120, 1],
+                        "weight_scale_shape": [512, 40],
+                        "weight_scale_stride": [40, 1],
+                        "weight_block": [128, 128],
+                        "activation_group": 128,
+                    },
+                    "candidate": {
+                        "operation": "vllm_cutlass_block_fp8_scaled_mm",
+                        "device": "sm121",
+                        "weight_dtype_bytes": 1,
+                        "weight_scale_dtype": "torch.float32",
+                        "activation_scale_layout": "column_major",
+                        "use_ue8m0": False,
+                        "output_dtype": "torch.bfloat16",
+                        "proposal_logits_source": "fp8_output_direct",
+                        "bf16_shadow_calls": 0,
+                    },
+                    "traffic": {
+                        "bf16_weight_bytes_per_call_removed": 671088640,
+                        "fp8_weight_bytes_per_call": 335544320,
+                        "fp32_weight_scale_bytes_per_call": 81920,
+                        "mandatory_bytes_per_call": 335626240,
+                        "mandatory_bytes_per_event": 1678131200,
+                        "retained_candidate_bytes": 335626240,
+                        "baseline_mandatory_bytes_per_event": 32666638208,
+                        "candidate_mandatory_bytes_per_event": 30989326208,
+                        "floor_bandwidth_gbps": 273,
+                        "candidate_weight_floor_ms": 113.514015414,
+                        "one_sided_u95_cap_ms": 130.541117726,
+                    },
+                }
+
             def _fr13_dh_m32_atomic_json(_path, _payload):
                 import json as _fr13_dh_json
                 import pathlib as _fr13_dh_pathlib
@@ -22410,6 +22539,36 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "FR13 draft-head M32 has no exact-B1 proposal"
                     )
                 return _fr13_dh_proposal["measured"] is True
+
+            def _fr13_dh_fp8_measured_proposal(_batch_size):
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dh_fp8_gdn,
+                )
+
+                _fr13_dh_fp8_proposal = getattr(
+                    _fr13_dh_fp8_gdn,
+                    "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT",
+                    None,
+                )
+                if (
+                    not isinstance(_fr13_dh_fp8_proposal, dict)
+                    or _fr13_dh_fp8_proposal.get("measured")
+                    not in (True, False)
+                    or int(_batch_size) not in (1, 2, 3, 4)
+                    or int(
+                        _fr13_dh_fp8_proposal.get("batch_size", -1)
+                    )
+                    != int(_batch_size)
+                    or _fr13_dh_fp8_proposal.get("mode")
+                    != _fr13_dh_fp8_gdn._FR13_FIXED32_MODE
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head FP8 has no exact fixed32 proposal"
+                    )
+                return (
+                    _fr13_dh_fp8_proposal["measured"] is True,
+                    _fr13_dh_fp8_proposal,
+                )
 
             def _fr13_dh_m32_note_production(_capturing):
                 if getattr(
@@ -22565,6 +22724,261 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 )
                 self._fr13_dh_m32_engagement_written = True
 
+            def _fr13_dh_fp8_note_selection(_capturing, _batch_size):
+                if getattr(
+                    self, "_fr13_dh_fp8_engagement_written", False
+                ):
+                    return
+                if int(_batch_size) not in (1, 2, 3, 4):
+                    raise RuntimeError(
+                        "FR13 draft-head FP8 selection left B1-B4"
+                    )
+                if _capturing:
+                    self._fr13_dh_fp8_selected_capture_calls += 1
+                else:
+                    self._fr13_dh_fp8_selected_root_calls += 1
+                if (
+                    self._fr13_dh_fp8_selected_root_calls > 1
+                    or self._fr13_dh_fp8_selected_capture_calls > 4
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head FP8 selection exceeded its first "
+                        "root/capture lifecycle before replay engagement"
+                    )
+
+            def _fr13_dh_fp8_note_replay(
+                _graph_id, _graph_signature, _batch_size
+            ):
+                if not getattr(self, "_fr13_dh_fp8_active", False):
+                    return
+                if getattr(
+                    self, "_fr13_dh_fp8_engagement_written", False
+                ):
+                    return
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dh_fp8_replay_gdn,
+                )
+
+                (
+                    _fr13_dh_fp8_measured,
+                    _fr13_dh_fp8_proposal,
+                ) = _fr13_dh_fp8_measured_proposal(_batch_size)
+                _fr13_dh_fp8_signature = str(_graph_signature)
+                _fr13_dh_fp8_lifecycle = getattr(
+                    _fr13_dh_fp8_replay_gdn,
+                    "_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE",
+                    {},
+                ).get(int(_graph_id))
+                if (
+                    int(_graph_id) <= 0
+                    or int(_fr13_dh_fp8_proposal.get("graph_id", -1))
+                    != int(_graph_id)
+                    or _fr13_dh_fp8_proposal.get("graph_signature")
+                    != _fr13_dh_fp8_signature
+                    or int(
+                        _fr13_dh_fp8_proposal.get("graph_replays", -1)
+                    )
+                    != 1
+                    or self._fr13_dh_fp8_selected_root_calls != 1
+                    or self._fr13_dh_fp8_fallback_calls != 0
+                    or not isinstance(_fr13_dh_fp8_lifecycle, dict)
+                    or int(
+                        _fr13_dh_fp8_lifecycle.get("captures", -1)
+                    )
+                    != 1
+                    or int(
+                        _fr13_dh_fp8_lifecycle.get("batch_size", -1)
+                    )
+                    != int(_batch_size)
+                    or _fr13_dh_fp8_lifecycle.get("graph_signature")
+                    != _fr13_dh_fp8_signature
+                    or _fr13_dh_fp8_lifecycle.get("capture_origin")
+                    not in ("measured", "unmeasured")
+                    or _fr13_dh_fp8_signature
+                    != (
+                        "d9a4ddece41d146e9949b9f8ff7c2603"
+                        "b8948d157b28ef69244e44469b36150c"
+                    )
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head FP8 replay engagement drifted"
+                    )
+                _fr13_dh_fp8_attestation = (
+                    self._fr13_dh_fp8_graph_attestations.get(
+                        int(_graph_id)
+                    )
+                )
+                if _fr13_dh_fp8_attestation is None:
+                    if self._fr13_dh_fp8_selected_capture_calls != 4:
+                        raise RuntimeError(
+                            "FR13 draft-head FP8 graph capture did not "
+                            "select four loop heads"
+                        )
+                    _fr13_dh_fp8_attestation = {
+                        "graph_id": int(_graph_id),
+                        "graph_signature": _fr13_dh_fp8_signature,
+                        "batch_size": int(_batch_size),
+                        "capture_origin": _fr13_dh_fp8_lifecycle[
+                            "capture_origin"
+                        ],
+                    }
+                    self._fr13_dh_fp8_graph_attestations[
+                        int(_graph_id)
+                    ] = _fr13_dh_fp8_attestation
+                elif (
+                    self._fr13_dh_fp8_selected_capture_calls != 0
+                    or _fr13_dh_fp8_attestation.get("graph_signature")
+                    != _fr13_dh_fp8_signature
+                    or _fr13_dh_fp8_attestation.get("batch_size")
+                    != int(_batch_size)
+                    or _fr13_dh_fp8_attestation.get("capture_origin")
+                    != _fr13_dh_fp8_lifecycle.get("capture_origin")
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head FP8 replay left its attested graph"
+                    )
+                self._fr13_dh_fp8_selected_root_calls = 0
+                self._fr13_dh_fp8_selected_capture_calls = 0
+                if not _fr13_dh_fp8_measured:
+                    return
+                if int(
+                    _fr13_dh_fp8_lifecycle.get("measured_replays", 0)
+                ) < 1:
+                    raise RuntimeError(
+                        "FR13 draft-head FP8 engagement lacks a measured replay"
+                    )
+                _fr13_dh_fp8_contract_value = _fr13_dh_fp8_contract()
+                _fr13_dh_m32_atomic_json(
+                    os.environ.get(
+                        "FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON",
+                        "/logs/fr13_draft_head_fp8.engagement.json",
+                    ),
+                    {
+                        "schema": (
+                            "fr13.fixed32.draft_head_fp8_engagement.v1"
+                        ),
+                        "status": "ENGAGED",
+                        "source_commit": os.environ.get(
+                            "FR13_DRAFT_HEAD_FP8_SOURCE_COMMIT", ""
+                        ),
+                        "candidate_source_sha256": os.environ.get(
+                            "FR13_DRAFT_HEAD_FP8_SOURCE_SHA256", ""
+                        ),
+                        "served_batch_size": int(_batch_size),
+                        "geometry": _fr13_dh_fp8_contract_value[
+                            "geometry"
+                        ],
+                        "candidate": _fr13_dh_fp8_contract_value[
+                            "candidate"
+                        ],
+                        "traffic": _fr13_dh_fp8_contract_value["traffic"],
+                        "selected_root_calls": 1,
+                        "captured_loop_calls": 4,
+                        "fallback_calls": 0,
+                        "drafter_graph_id": int(_graph_id),
+                        "drafter_graph_signature": (
+                            _fr13_dh_fp8_signature
+                        ),
+                        "observed_measured_replays_at_least": 1,
+                        "capture_origin": _fr13_dh_fp8_attestation[
+                            "capture_origin"
+                        ],
+                        "execution_basis": "cudagraph_replay",
+                        "forward_step_index": int(
+                            _fr13_dh_fp8_proposal["forward_step_index"]
+                        ),
+                        "runtime_mode": "FULL",
+                        "steady_state_synchronizations": 0,
+                    },
+                )
+                self._fr13_dh_fp8_engagement_written = True
+
+            def _fr13_dh_fp8_logits(_h):
+                _fr13_dh_fp8_batch = (
+                    int(_h.shape[0]) if _h.ndim == 2 else 0
+                )
+                _fr13_dh_fp8_qw = getattr(
+                    self, "_fr13_dh_fp8_weight", None
+                )
+                _fr13_dh_fp8_ws = getattr(
+                    self, "_fr13_dh_fp8_weight_scale", None
+                )
+                if (
+                    not getattr(self, "_fr13_dh_fp8_ready", False)
+                    or _fr13_dh_fp8_batch not in (1, 2, 3, 4)
+                    or tuple(_h.shape) != (_fr13_dh_fp8_batch, 5120)
+                    or tuple(_h.stride()) != (5120, 1)
+                    or _h.dtype != torch.bfloat16
+                    or not _h.is_contiguous()
+                    or _fr13_dh_fp8_qw.device != _h.device
+                    or _fr13_dh_fp8_ws.device != _h.device
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head FP8 left exact B1-B4 BF16 "
+                        "hidden[B,5120] contract"
+                    )
+                from vllm.model_executor.layers.quantization.utils.fp8_utils import (
+                    per_token_group_quant_fp8 as _fr13_dh_fp8_quant_act,
+                )
+                _fr13_dh_fp8_aq, _fr13_dh_fp8_as = (
+                    _fr13_dh_fp8_quant_act(
+                        _h,
+                        128,
+                        column_major_scales=True,
+                        use_ue8m0=False,
+                    )
+                )
+                if (
+                    tuple(_fr13_dh_fp8_aq.shape)
+                    != (_fr13_dh_fp8_batch, 5120)
+                    or tuple(_fr13_dh_fp8_aq.stride()) != (5120, 1)
+                    or _fr13_dh_fp8_aq.dtype != torch.float8_e4m3fn
+                    or tuple(_fr13_dh_fp8_as.shape)
+                    != (_fr13_dh_fp8_batch, 40)
+                    or tuple(_fr13_dh_fp8_as.stride())
+                    != (1, _fr13_dh_fp8_batch)
+                    or _fr13_dh_fp8_as.dtype != torch.float32
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head FP8 activation quantization drifted"
+                    )
+                from vllm.model_executor.kernels.linear.scaled_mm.cutlass import (
+                    cutlass_scaled_mm as _fr13_dh_fp8_scaled_mm,
+                )
+                _fr13_dh_fp8_out = _fr13_dh_fp8_scaled_mm(
+                    _fr13_dh_fp8_aq,
+                    _fr13_dh_fp8_qw,
+                    _fr13_dh_fp8_as,
+                    _fr13_dh_fp8_ws,
+                    [128, 128],
+                    torch.bfloat16,
+                )
+                if (
+                    tuple(_fr13_dh_fp8_out.shape)
+                    != (_fr13_dh_fp8_batch, 65536)
+                    or tuple(_fr13_dh_fp8_out.stride()) != (65536, 1)
+                    or _fr13_dh_fp8_out.dtype != torch.bfloat16
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head FP8 CUTLASS output drifted"
+                    )
+                _fr13_dh_fp8_capturing = (
+                    torch.cuda.is_current_stream_capturing()
+                )
+                _fr13_dh_fp8_note_selection(
+                    _fr13_dh_fp8_capturing, _fr13_dh_fp8_batch
+                )
+                if not getattr(self, "_fr13_dh_fp8_engaged", False):
+                    self._fr13_dh_fp8_engaged = True
+                    print(
+                        "[FR13_DRAFT_HEAD_FP8] engaged "
+                        f"batch={_fr13_dh_fp8_batch} "
+                        "proposal_logits=fp8_output_direct "
+                        "bf16_shadow_calls=0",
+                        flush=True,
+                    )
+                return _fr13_dh_fp8_out
+
             def _fr13_dvk_logits(_h):
                 # Pair the logits with the only map valid for those rows.
                 # A full-head fallback always returns map=None.
@@ -22582,8 +22996,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m32_prod_on = getattr(
                         self, "_fr13_dh_m32_production_active", False
                     )
+                    _fr13_dh_fp8_on = getattr(
+                        self, "_fr13_dh_fp8_active", False
+                    )
                     _fr13_dh_capturing = False
-                    if _fr13_dh_m32_live_on or _fr13_dh_m32_prod_on:
+                    if _fr13_dh_fp8_on:
+                        _logits = _fr13_dh_fp8_logits(_h)
+                    elif _fr13_dh_m32_live_on or _fr13_dh_m32_prod_on:
                         _fr13_dh_capturing = (
                             torch.cuda.is_current_stream_capturing()
                         )
@@ -22688,6 +23107,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         self, "_fr13_dvk_map_t", None
                     )
                 except Exception as _e:
+                    if getattr(self, "_fr13_dh_fp8_active", False):
+                        self._fr13_dh_fp8_fallback_calls += 1
+                        raise RuntimeError(
+                            "FR13 draft-head FP8 failed its strict runtime "
+                            "contract; BF16 fallback is forbidden"
+                        ) from _e
                     if getattr(
                         self, "_fr13_dh_m32_production_active", False
                     ):
@@ -22969,6 +23394,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr13_dg_key,
                     )
                     _fr13_dh_m32_note_production_replay(
+                        id(_dg["graph"]),
+                        _dg.get("fixed32_signature"),
+                        _fr13_dg_key,
+                    )
+                    _fr13_dh_fp8_note_replay(
                         id(_dg["graph"]),
                         _dg.get("fixed32_signature"),
                         _fr13_dg_key,
@@ -23304,6 +23734,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr13_dg_key,
                     )
                     _fr13_dh_m32_note_production_replay(
+                        id(_fr13_dg_g),
+                        _dg["fixed32_signature"],
+                        _fr13_dg_key,
+                    )
+                    _fr13_dh_fp8_note_replay(
                         id(_fr13_dg_g),
                         _dg["fixed32_signature"],
                         _fr13_dg_key,
