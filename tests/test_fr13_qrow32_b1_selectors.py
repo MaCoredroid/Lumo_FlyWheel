@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -130,6 +132,22 @@ def test_live_gate_is_authenticated_one_task_non_timing_qrow16_served() -> None:
     assert "FR13_SFWD_GPU_TIMER=0" in text
     assert "ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in text
     assert "fr13_qrow32_b1_pass_sidecar.py validate-source" in text
+    assert 'PYTHONPATH="$REPO/scripts${PYTHONPATH:+:$PYTHONPATH}"' in text
+
+
+def test_live_gate_inline_contract_import_resolves_from_repo_root() -> None:
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(REPO / "scripts")
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from scripts import fr13_fixed32_contract, fr13_qrow32_b1_pass_sidecar",
+        ],
+        cwd=REPO,
+        env=environment,
+        check=True,
+    )
 
 
 def test_timing_runner_is_pass_gated_exact4_graph_only() -> None:

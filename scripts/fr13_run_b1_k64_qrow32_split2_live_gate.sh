@@ -74,7 +74,8 @@ unset required
 
 "$PYTHON_BIN" scripts/fr13_qrow32_b1_pass_sidecar.py validate-source \
   --source-root "$QROW32_B1_FA2_SOURCE" >/dev/null
-"$PYTHON_BIN" - "$QROW32_B1_FA2_SO" "$SOURCE_COMMIT" <<'PY'
+PYTHONPATH="$REPO/scripts${PYTHONPATH:+:$PYTHONPATH}" \
+  "$PYTHON_BIN" - "$QROW32_B1_FA2_SO" "$SOURCE_COMMIT" <<'PY'
 import sys
 from pathlib import Path
 
