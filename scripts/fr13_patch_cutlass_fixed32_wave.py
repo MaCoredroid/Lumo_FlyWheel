@@ -468,8 +468,8 @@ class Fr13B4TwoMStaticTileScheduler100
 // does not retain the general persistent scheduler's tile-count state or
 // next-work arithmetic.
 class Fr13B4N5120SingleTileScheduler100
-    : public Fr13DivisorBalancedStaticTileScheduler100 {
-  using Base = Fr13DivisorBalancedStaticTileScheduler100;
+    : public StaticPersistentTileScheduler100 {
+  using Base = StaticPersistentTileScheduler100;
   static constexpr uint32_t kProblemTiles = 40;
 
  public:
