@@ -11,6 +11,10 @@ PATCHER = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 SEQUENCE = REPO / "scripts" / "fr13_fixed32_floor_timers_seq.sh"
 RUNNER = REPO / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
+MEASURE = REPO / "scripts" / "fr13_measure.py"
+TIMING_RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_fp8_timing.sh"
+TIMING_REDUCER = REPO / "scripts" / "fr13_draft_head_fp8_timing.py"
+RUNTIME_MANIFEST = REPO / "scripts" / "fr13_runtime_manifest.py"
 
 
 def _eagle_snippet() -> str:
@@ -192,6 +196,19 @@ printf '%s %s' "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS"
     assert result.stdout == "30989326208 113.514015414"
 
 
+def test_deploy_speed_reducer_binds_fp8_to_exact_k64_root_ledger() -> None:
+    measure = MEASURE.read_text(encoding="utf-8")
+
+    assert '(65_536, 1, 1): (' in measure
+    assert "30_989_326_208" in measure
+    assert "113.514015414" in measure
+    assert 'os.environ.get("FR13_DRAFT_HEAD_FP8", "0")' in measure
+    assert '_draft_head_fp8_raw not in {"0", "1"}' in measure
+    assert '"draft_head_fp8": bool(_draft_vocab_config[2])' in measure
+    assert "(0, 0, 1):" not in measure
+    assert "(65_536, 0, 1):" not in measure
+
+
 def test_drafter_replacement_snippet_compiles() -> None:
     compile(
         "class _C:\n    def propose(self):\n" + _eagle_snippet(),
@@ -288,3 +305,54 @@ def test_real_b1_runner_uses_canonical_task_and_only_gates_not_tunes() -> None:
     assert "--expected-tok-per-draft 31" in runner
     assert "scripts/fr13_draft_head_fp8_gate.py" in runner
     assert "draft_head_fp8_real_b1_gate.json" in runner
+
+
+def test_gate_validator_can_rebuild_a_promotion_credential() -> None:
+    validator = (
+        REPO / "scripts" / "fr13_draft_head_fp8_gate.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'parser.add_argument("--gate-result", type=Path)' in validator
+    assert 'parser.add_argument("--expected-gate-sha256")' in validator
+    assert "gate_result != result" in validator
+    assert "does not match rebuilt raw evidence" in validator
+    assert "fr13.fixed32.draft_head_fp8_promotion_credential.v1" in validator
+    assert '"performance_tuning_eligible": True' in validator
+    assert '"formal_floor_acceptance_eligible": False' in validator
+
+
+def test_timing_runner_is_real_exact4_and_uses_distinct_arm_floors() -> None:
+    runner = TIMING_RUNNER.read_text(encoding="utf-8")
+    reducer = TIMING_REDUCER.read_text(encoding="utf-8")
+    manifest = RUNTIME_MANIFEST.read_text(encoding="utf-8")
+
+    assert "config/fr13_fixed32/subset_b4_four.json" in runner
+    assert "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5" in runner
+    assert "MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1" in runner
+    assert 'run_arm "$STOCK_ARM" 0' in runner
+    assert 'run_arm "$CANDIDATE_ARM" 1' in runner
+    assert "scripts/fr13_bigdenom_swe_serve_variant.sh" in runner
+    assert "scripts/fr13_measure.py deploy-speed" in runner
+    assert "--gate-result \"$GATE_RESULT_JSON\"" in runner
+    assert "--expected-gate-sha256 \"$GATE_RESULT_SHA256\"" in runner
+    assert "30989326208" in runner
+    assert "113.514015414" in runner
+    assert "32666638208" in runner
+    assert "119.658015414" in runner
+    assert "synthetic" not in runner.lower()
+    assert "probe-only" not in runner.lower()
+
+    assert '"gpu_components_ms_per_step"' in reducer
+    assert '"measured_tps_fullstep_wall"' in reducer
+    assert '"accept_per_event"' in reducer
+    assert '"wall_residual_ms"' in reducer
+    assert "T_CRITICAL_ONE_SIDED_95_DF3" in reducer
+    assert '"formal_floor_acceptance_eligible": False' in reducer
+    assert "Formal Tail23/Hydra27 acceptance remains separate" in reducer
+
+    for path in (
+        "scripts/fr13_draft_head_fp8_gate.py",
+        "scripts/fr13_draft_head_fp8_timing.py",
+        "scripts/fr13_run_b1_draft_head_fp8_timing.sh",
+    ):
+        assert f'"{path}"' in manifest

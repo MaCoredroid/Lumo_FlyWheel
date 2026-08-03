@@ -1653,31 +1653,41 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # Corrected fixed32 lower-bound accounting includes every mandatory target,
     # verifier-head, MTP, and drafter-head weight stream in one event. It remains
     # optimistic because nonweight traffic and execution costs are excluded.
+    _draft_head_fp8_raw = os.environ.get("FR13_DRAFT_HEAD_FP8", "0")
+    if _draft_head_fp8_raw not in {"0", "1"}:
+        raise RuntimeError("FR13_DRAFT_HEAD_FP8 must be exactly 0 or 1")
     _draft_vocab_config = (
         int(os.environ.get("FR13_DRAFT_VOCAB_K", "65536")),
         int(os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0")),
+        int(_draft_head_fp8_raw),
     )
     _known_weight_ledgers = {
-        (0, 0): (
+        (0, 0, 0): (
             FULL_VOCAB_MANDATORY_WEIGHT_BYTES,
             FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS,
             "five full-vocabulary drafter-head reads",
         ),
-        (65_536, 0): (
+        (65_536, 0, 0): (
             CURRENT_MANDATORY_WEIGHT_BYTES,
             CURRENT_MANDATORY_WEIGHT_BYTES * 1000.0 / BANDWIDTH_BYTES_PER_S,
             "one full and four 64K drafter-head reads",
         ),
-        (65_536, 1): (
+        (65_536, 1, 0): (
             FIXED32_MANDATORY_WEIGHT_BYTES,
             FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
             "five 64K drafter-head reads",
+        ),
+        (65_536, 1, 1): (
+            30_989_326_208,
+            113.514015414,
+            "five 64K block-FP8 drafter-head qweight and FP32-scale reads",
         ),
     }
     if _draft_vocab_config not in _known_weight_ledgers:
         raise RuntimeError(
             "unsupported fixed32 draft-vocabulary floor configuration: "
-            f"K={_draft_vocab_config[0]} ROOT={_draft_vocab_config[1]}"
+            f"K={_draft_vocab_config[0]} ROOT={_draft_vocab_config[1]} "
+            f"FP8={_draft_vocab_config[2]}"
         )
     (
         _mandatory_weight_bytes,
@@ -1903,6 +1913,7 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "mandatory_weight_bytes": _mandatory_weight_bytes,
         "draft_vocab_k": _draft_vocab_config[0],
         "draft_vocab_root": _draft_vocab_config[1],
+        "draft_head_fp8": bool(_draft_vocab_config[2]),
         "weight_floor_bandwidth_bytes_per_s": BANDWIDTH_BYTES_PER_S,
         "compute_floor_ms": _compute_floor_ms,
         "rows_per_step": _rows_per_step,
