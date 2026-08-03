@@ -385,15 +385,6 @@ class Fr13DivisorBalancedStaticTileScheduler100
 class Fr13B4TwoMStaticTileScheduler100
     : public Fr13DivisorBalancedStaticTileScheduler100 {
   using Base = Fr13DivisorBalancedStaticTileScheduler100;
-  uint32_t current_m_idx_ = 0;
-  uint32_t current_n_idx_ = 0;
-
-  CUTLASS_DEVICE void initialize_work() {
-#if defined(__CUDA_ARCH__)
-    current_m_idx_ = blockIdx.x & 1;
-    current_n_idx_ = blockIdx.x >> 1;
-#endif
-  }
 
   CUTLASS_DEVICE static uint32_t n_grid_stride() {
     return gridDim.x >> 1;
@@ -410,43 +401,39 @@ class Fr13B4TwoMStaticTileScheduler100
   using CLCResponse = typename Base::CLCResponse;
 
   CUTLASS_DEVICE explicit Fr13B4TwoMStaticTileScheduler100(
-      Params const& params) : Base(params) {
-    initialize_work();
-  }
+      Params const& params) : Base(params) {}
 
   CUTLASS_DEVICE explicit Fr13B4TwoMStaticTileScheduler100(
       CLCResponse* response, Params const& params, dim3 block_id_in_cluster)
-      : Base(response, params, block_id_in_cluster) {
-    initialize_work();
-  }
+      : Base(response, params, block_id_in_cluster) {}
 
   template <class ClusterShape>
   CUTLASS_DEVICE WorkTileInfo initial_work_tile_info(
       ClusterShape) const {
-    return get_current_work();
-  }
-
-  CUTLASS_DEVICE WorkTileInfo get_current_work() const {
-    if (current_n_idx_ >= problem_n_tiles()) {
-      return WorkTileInfo::invalid_work_tile();
-    }
-    return {static_cast<int32_t>(current_m_idx_),
-            static_cast<int32_t>(current_n_idx_), 0, true};
-  }
-
-  CUTLASS_DEVICE void advance_to_next_work(uint32_t advance_count = 1) {
-    current_n_idx_ += n_grid_stride() * advance_count;
+#if defined(__CUDA_ARCH__)
+    uint32_t linear_idx = blockIdx.x;
+    return {static_cast<int32_t>(linear_idx & 1),
+            static_cast<int32_t>(linear_idx >> 1), 0, true};
+#else
+    return WorkTileInfo::invalid_work_tile();
+#endif
   }
 
   CUTLASS_DEVICE bool is_last_tile(
-      WorkTileInfo&, uint32_t advance_count = 1) const {
-    return current_n_idx_ +
+      WorkTileInfo& work_tile_info, uint32_t advance_count = 1) const {
+    return static_cast<uint32_t>(work_tile_info.N_idx) +
         n_grid_stride() * advance_count >= problem_n_tiles();
   }
 
-  CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {
-    advance_to_next_work();
-    return cute::make_tuple(get_current_work(), true);
+  CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo work_tile_info) const {
+    uint32_t next_n_idx = static_cast<uint32_t>(work_tile_info.N_idx) +
+        n_grid_stride();
+    if (next_n_idx >= problem_n_tiles()) {
+      return cute::make_tuple(WorkTileInfo::invalid_work_tile(), true);
+    }
+    WorkTileInfo next_work{work_tile_info.M_idx,
+                            static_cast<int32_t>(next_n_idx), 0, true};
+    return cute::make_tuple(next_work, true);
   }
 
   template <class TileSchedulerPipeline, class TileSchedulerPipelineState>
