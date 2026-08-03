@@ -13134,6 +13134,9 @@ def _fr13_fixed32_committer_native_layer_batch(
         if state.get("direct_metadata", False)
         else state["accepted_lens"]
     )
+    extra_launch_kwargs = (
+        {"maxnreg": 167} if decay_reuse and batch != 1 else {}
+    )
     _fr13_fixed32_committer_native_layer_batch_kernel[grid](
         a_rings,
         b_rings,
@@ -13194,6 +13197,7 @@ def _fr13_fixed32_committer_native_layer_batch(
         DECAY_REUSE=bool(decay_reuse),
         num_warps=8,
         num_stages=3,
+        **extra_launch_kwargs,
     )
 
 
