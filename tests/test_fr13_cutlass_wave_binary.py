@@ -53,6 +53,8 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "identity_onen_b1_byte_ab",
         "identity_onen_n5120_single_b1",
         "identity_onen_n5120_single_b1_byte_ab",
+        "identity_onen_n5120_fullgrid_b1",
+        "identity_onen_n5120_fullgrid_b1_byte_ab",
         "identity_stockshape_b4",
         "identity_stockshape_b4_byte_ab",
         "identity_stockshape_stage2_b4",
@@ -122,6 +124,22 @@ def test_pinned_binary_identity_and_selectors() -> None:
     assert "identity_onen_n5120_single_b1" in module.PRODUCTION_SELECTORS
     assert (
         "identity_onen_n5120_single_b1_byte_ab"
+        not in module.PRODUCTION_SELECTORS
+    )
+    assert module.candidate_identity(
+        "identity_onen_n5120_fullgrid_b1_byte_ab"
+    ) == (
+        module.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256,
+        module.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE,
+        "identity_onen_n5120_fullgrid_b1",
+    )
+    assert module.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256 == (
+        "43c78546de316ec14126ded2c8d42ee6807e77dfe9935cad2cf2db017fc74501"
+    )
+    assert module.IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE == 118_837_576
+    assert "identity_onen_n5120_fullgrid_b1" in module.PRODUCTION_SELECTORS
+    assert (
+        "identity_onen_n5120_fullgrid_b1_byte_ab"
         not in module.PRODUCTION_SELECTORS
     )
     assert module.IDENTITY_B4_CANDIDATE_SHA256 == (
@@ -419,6 +437,10 @@ def test_onen_n5120_single_diagnostic_installs_but_direct_requires_sidecar(
         ("identity_onen_n5120_single_b1", "full_vocab"),
         ("identity_onen_n5120_single_b1_byte_ab", None),
         ("identity_onen_n5120_single_b1_byte_ab", "full_vocab"),
+        ("identity_onen_n5120_fullgrid_b1", None),
+        ("identity_onen_n5120_fullgrid_b1", "full_vocab"),
+        ("identity_onen_n5120_fullgrid_b1_byte_ab", None),
+        ("identity_onen_n5120_fullgrid_b1_byte_ab", "full_vocab"),
     ),
 )
 def test_onen_b1_binary_verification_rejects_non_k64_profile(

@@ -289,6 +289,13 @@ def test_k64_root_accepts_divisor_static_stocktile_profile(
             "IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SIZE",
             "IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SHA256",
         ),
+        (
+            "identity_onen_n5120_fullgrid_b1",
+            "identity_onen_n5120_fullgrid_b1_byte_ab",
+            "IDENTITY_ONEN_N5120_FULLGRID_B1_K64_ROOT_LIVE_SCHEMA",
+            "IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE",
+            "IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256",
+        ),
     ),
 )
 def test_k64_root_accepts_source_bound_onen_profile(
@@ -374,7 +381,11 @@ def test_k64_root_accepts_source_bound_onen_profile(
 
 @pytest.mark.parametrize(
     "candidate_selector",
-    ("identity_onen_b1", "identity_onen_n5120_single_b1"),
+    (
+        "identity_onen_b1",
+        "identity_onen_n5120_single_b1",
+        "identity_onen_n5120_fullgrid_b1",
+    ),
 )
 def test_source_bound_onen_sidecar_rejects_full_vocab_profile(
     tmp_path: Path,
@@ -409,15 +420,30 @@ def test_source_bound_onen_sidecar_rejects_full_vocab_profile(
         )
 
 
-def test_n5120_single_source_contract_matches_current_patch() -> None:
+def test_n5120_single_source_contract_remains_pinned_to_original_patch() -> None:
     module = _load("fr13_cutlass_streamk_n5120_source_contract_test")
     contract = module._source_contract("identity_onen_n5120_single_b1")
+
+    assert contract["patch_source_sha256"] == (
+        "eadff808ef7db8de342d8c51e046cda9cc78bc4e308d1c1d08d5b33f7af1d2b0"
+    )
+    assert contract["patched_dispatch_sha256"] == (
+        "5e856f587480d2d04d9127b25e12d40ef82b8d07a2301389ab757523ce206d2d"
+    )
+    assert module.sha256_file(REPO / module.PATCH_SOURCE) != contract[
+        "patch_source_sha256"
+    ]
+
+
+def test_n5120_fullgrid_source_contract_matches_current_patch() -> None:
+    module = _load("fr13_cutlass_streamk_n5120_fullgrid_source_contract_test")
+    contract = module._source_contract("identity_onen_n5120_fullgrid_b1")
 
     assert module.sha256_file(REPO / module.PATCH_SOURCE) == contract[
         "patch_source_sha256"
     ]
     assert contract["patched_dispatch_sha256"] == (
-        "5e856f587480d2d04d9127b25e12d40ef82b8d07a2301389ab757523ce206d2d"
+        "194d4b5f529dfb690eeb6d864919ae7f9b859097568a513b3f3cf78051a93499"
     )
 
 

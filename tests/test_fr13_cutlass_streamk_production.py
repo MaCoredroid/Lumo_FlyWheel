@@ -287,6 +287,7 @@ def _measure(
         ("streamk_force_wide256", "one", "full_vocab"),
         ("identity_onen_b1", "exact4", "k64_root"),
         ("identity_onen_n5120_single_b1", "exact4", "k64_root"),
+        ("identity_onen_n5120_fullgrid_b1", "exact4", "k64_root"),
     ),
 )
 def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
@@ -322,7 +323,7 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
             module.binary, "IDENTITY_ONEN_B1_CANDIDATE_SHA256", candidate_sha256
         )
         diagnostic_selector = "identity_onen_b1_byte_ab"
-    else:
+    elif candidate_selector == "identity_onen_n5120_single_b1":
         monkeypatch.setattr(
             module.binary,
             "IDENTITY_ONEN_N5120_SINGLE_B1_CANDIDATE_SIZE",
@@ -334,6 +335,18 @@ def test_timing_reducer_requires_pinned_task_set_profile_and_current_binding(
             candidate_sha256,
         )
         diagnostic_selector = "identity_onen_n5120_single_b1_byte_ab"
+    else:
+        monkeypatch.setattr(
+            module.binary,
+            "IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SIZE",
+            len(candidate_bytes),
+        )
+        monkeypatch.setattr(
+            module.binary,
+            "IDENTITY_ONEN_N5120_FULLGRID_B1_CANDIDATE_SHA256",
+            candidate_sha256,
+        )
+        diagnostic_selector = "identity_onen_n5120_fullgrid_b1_byte_ab"
 
     if qualification_profile == "k64_root":
         monkeypatch.setattr(

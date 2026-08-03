@@ -39,6 +39,9 @@ IDENTITY_ONEN_B1_K64_ROOT_LIVE_SCHEMA = (
 IDENTITY_ONEN_N5120_SINGLE_B1_K64_ROOT_LIVE_SCHEMA = (
     "fr13.fixed32.cutlass_identity_onen_n5120_single_b1_k64_root_live_gate.v1"
 )
+IDENTITY_ONEN_N5120_FULLGRID_B1_K64_ROOT_LIVE_SCHEMA = (
+    "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_k64_root_live_gate.v1"
+)
 K64_ROOT_SIDECAR_SCHEMA = "fr13.fixed32.cutlass_streamk.k64_root.production_pass.v1"
 ATTESTATION_SCHEMA = "fr13.fixed32.cutlass_streamk_binary.v2"
 PATCH_SOURCE = Path("scripts/fr13_patch_cutlass_fixed32_wave.py")
@@ -59,6 +62,14 @@ SOURCE_CONTRACTS = {
         ),
         "patched_dispatch_sha256": (
             "5e856f587480d2d04d9127b25e12d40ef82b8d07a2301389ab757523ce206d2d"
+        ),
+    },
+    "identity_onen_n5120_fullgrid_b1": {
+        "patch_source_sha256": (
+            "2697a8631bcf7b546c2ca964975d2817203391ef9dfcbb8dd3c4d4d707aa0959"
+        ),
+        "patched_dispatch_sha256": (
+            "194d4b5f529dfb690eeb6d864919ae7f9b859097568a513b3f3cf78051a93499"
         ),
     },
 }
@@ -132,6 +143,17 @@ CANDIDATE_CONTRACTS = {
             IDENTITY_ONEN_N5120_SINGLE_B1_K64_ROOT_LIVE_SCHEMA
         ),
         "diagnostic_selector": "identity_onen_n5120_single_b1_byte_ab",
+        "required_qualification_profile": "k64_root",
+        "source_binding": "required",
+    },
+    "identity_onen_n5120_fullgrid_b1": {
+        "live_schema": (
+            "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_live_gate.v1"
+        ),
+        "k64_root_live_schema": (
+            IDENTITY_ONEN_N5120_FULLGRID_B1_K64_ROOT_LIVE_SCHEMA
+        ),
+        "diagnostic_selector": "identity_onen_n5120_fullgrid_b1_byte_ab",
         "required_qualification_profile": "k64_root",
         "source_binding": "required",
     },
@@ -211,6 +233,7 @@ def _qualification_profile(
         "identity_stage2_pingpong_b1",
         "identity_onen_b1",
         "identity_onen_n5120_single_b1",
+        "identity_onen_n5120_fullgrid_b1",
     }:
         raise QualificationError(
             "B1 k64_root qualification is restricted to wide256 or "
