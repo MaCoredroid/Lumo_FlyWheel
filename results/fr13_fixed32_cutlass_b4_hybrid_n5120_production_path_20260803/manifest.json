@@ -7,7 +7,7 @@
   "performance_claim": false,
   "production_available": false,
   "production_default_enabled": false,
-  "development_base_commit": "27512325e17e52af2b95603dbce22b526208c394",
+  "development_base_commit": "df3646ce73c76e758f914b74701ef2247c195237",
   "candidate": {
     "selector": "identity_hybrid_n5120_b4",
     "diagnostic_selector": "identity_hybrid_n5120_b4_byte_ab",
