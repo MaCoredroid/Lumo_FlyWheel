@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real SWE-Verified K64/root1 B1 or exact4 B4 tree-conv byte gate.
+# Real SWE-Verified K64/root1 B1 or exact4 B4 graph tree-conv byte gate.
 # The incumbent kernel is restored and served; this emits no timing samples.
 set -euo pipefail
 
@@ -28,12 +28,12 @@ case "$BATCH" in
   1)
     SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
     B1=1
-    CLASS=one_real_swe_verified_b1_k64_root_treeconv_byte_diagnostic
+    CLASS=one_real_swe_verified_b1_k64_root_treeconv_graph_gate
     ;;
   4)
     SUBSET=config/fr13_fixed32/subset_b4_four.json
     B1=0
-    CLASS=real_swe_verified_exact4_b4_k64_root_treeconv_byte_gate
+    CLASS=real_swe_verified_exact4_b4_k64_root_treeconv_graph_gate
     ;;
   *) echo "TREECONV_GATE_BATCH must be exactly 1 or 4" >&2; exit 2 ;;
 esac
@@ -82,7 +82,7 @@ if env \
     OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR="$BATCH" SWE_CONCURRENCY="$BATCH" \
     AGENT_WALL_S=5400 KV_CACHE_MEMORY_BYTES=42949672960 \
     FR13_FIXED32_B1_DIAGNOSTIC="$B1" \
-    FR10_METRICS=0 ENFORCE_EAGER=1 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
+    FR10_METRICS=0 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
     FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536 \
     FR13_DRAFT_VOCAB_BLOCKS="$BLOCKS_CONTAINER" FR13_NEEDS_ALLOW= \
     FR13_RING_EXPORT=1 FR13_FLAGS_INKERNEL=1 \
@@ -124,11 +124,14 @@ fi
 "$PYTHON_BIN" scripts/fr13_treeconv_zero_tail_credential.py \
   --comparator "$ARMDIR/logs/fr13_fixed32_treeconv_zero_tail.byte_ab.jsonl" \
   --subset "$SUBSET" --health "$ARMDIR/health.json" \
-  --ledger "$ARMDIR/logs/fr13_fixed32_engine_ingress.jsonl" \
+  --proxy-ledger "$ARMDIR/logs/fr13_fixed32_proxy_ingress.jsonl" \
+  --engine-ledger "$ARMDIR/logs/fr13_fixed32_engine_ingress.jsonl" \
   --work-census "$ARMDIR/logs/fr13_fixed32_work_census.jsonl" \
-  --eager-terminal "$ARMDIR/fixed32_final_flush_skipped.json" \
+  --final-flush "$ARMDIR/fixed32_final_flush.json" \
+  --boundary-snapshot-base "$ARMDIR/logs/fr13_fixed32_boundary_snapshot" \
   --runtime-manifest "$RUNROOT_ABS/runtime_manifest.at_end.json" \
   --source "$SOURCE" --source-commit "$SOURCE_COMMIT" \
   --repo "$PWD" --container-env "$ARMDIR/container_env.txt" \
+  --task-root "$ARMDIR/swe_out/verified/per_task" \
   --mode "$MODE" --batch-size "$BATCH" "${QWEN_ARGS[@]}" \
   --output "$ARMDIR/treeconv_zero_tail.credential.json"

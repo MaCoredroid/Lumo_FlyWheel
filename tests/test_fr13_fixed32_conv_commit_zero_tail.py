@@ -140,9 +140,20 @@ def test_real_task_gate_is_default_off_stock_serving_and_bounded() -> None:
     assert "_launch_direct(zero_tail=False)" in kernel
     assert '"reference_restored_and_served": True' in kernel
     assert '"timing_eligible": False' in kernel
-    assert "comparison_limit <= 320" in kernel
+    assert "not 1 <= limit <= 320" in kernel
+    assert "_fr13_fixed32_conv_zero_tail_compare_kernel[grid]" in kernel
+    assert "treeconv_zero_tail_count_enable" in kernel
+    assert "fixed32_conv_zero_tail_live_prepare_replay" in kernel
+    assert "fixed32_conv_zero_tail_live_finalize" in kernel
+    assert "eager-only" not in ast.unparse(
+        _function(ast.parse(kernel), "launch_fixed32_conv_commit_to_col0")
+    )
     assert "tree-conv zero-tail byte diagnostic must be the only" in variant
-    assert "treeconv_zero_tail_eager_diagnostic" in swe_runner
+    assert "treeconv_zero_tail_graph_diagnostic" in swe_runner
+    assert "ENFORCE_EAGER=0" in runner
+    assert '--final-flush "$ARMDIR/fixed32_final_flush.json"' in runner
+    assert "--proxy-ledger" in runner
+    assert "--task-root" in runner
     assert "config/fr13_fixed32/subset_b4_four.json" in runner
     assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in runner
     assert "AGENT_WALL_S=5400" in runner

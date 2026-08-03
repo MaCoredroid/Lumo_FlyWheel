@@ -29,6 +29,88 @@ _FR13_FIXED32_COMMITTER_TASK_ID_CHARACTERS = frozenset(
 _FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_ARMS = (
     "/logs/fr13_fixed32_conv_commit_zero_tail.arm",
 )
+_FR13_FIXED32_PHYSICAL_PARENT = (
+    -1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 4, 4, 7, 8, 9, 9,
+    9, 12, 13, 14, 14, 14, 17, 18, 19, 23, 24, 25, 26, 28, 29, 30,
+)
+_FR13_FIXED32_TREECONV_MODE_IDENTITY = {
+    "tail6_fixed32": ("Tail23", 0x7A9CE7FF),
+    "hydra27_fixed32": ("Hydra27", 0x7ABDFFFF),
+}
+_FR13_FIXED32_TREECONV_RECORD_SCHEMA = (
+    "fr13.fixed32.treeconv_zero_tail.byte_ab.v2"
+)
+_FR13_FIXED32_TREECONV_TERMINAL_SCHEMA = (
+    "fr13.fixed32.treeconv_zero_tail.byte_ab_terminal.v2"
+)
+
+
+def _fr13_fixed32_treeconv_canonical_json(value: object) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+
+
+def _fr13_fixed32_treeconv_expected_state_src() -> tuple[int, ...]:
+    paths: list[list[int]] = []
+    for node in range(len(_FR13_FIXED32_PHYSICAL_PARENT)):
+        path: list[int] = []
+        cursor = node
+        while cursor >= 0:
+            path.append(cursor)
+            cursor = _FR13_FIXED32_PHYSICAL_PARENT[cursor]
+        paths.append(list(reversed(path)))
+    values: list[int] = []
+    width = 4
+    state_length = 34
+    zero_row = 36 - 1
+    for path in paths:
+        path_length = len(path)
+        for state_col in range(state_length):
+            position = path_length + state_col
+            if position < width - 1:
+                values.append(position)
+            elif state_col < width - 1:
+                values.append(width - 1 + path[position - (width - 1)])
+            else:
+                values.append(zero_row)
+    return tuple(values)
+
+
+_FR13_FIXED32_TREECONV_STATE_SRC = (
+    _fr13_fixed32_treeconv_expected_state_src()
+)
+_FR13_FIXED32_TREECONV_STATE_SRC_SHA256 = hashlib.sha256(
+    _fr13_fixed32_treeconv_canonical_json(_FR13_FIXED32_TREECONV_STATE_SRC)
+).hexdigest()
+
+
+def _fr13_fixed32_treeconv_topology_descriptor(mode: str) -> dict[str, object]:
+    try:
+        logical_topology, valid_mask = _FR13_FIXED32_TREECONV_MODE_IDENTITY[mode]
+    except KeyError as error:
+        raise RuntimeError(f"unsupported fixed32 tree-conv mode {mode!r}") from error
+    return {
+        "schema": "fr13.fixed32.treeconv_state_descriptor.v1",
+        "mode": mode,
+        "logical_topology": logical_topology,
+        "valid_mask": valid_mask,
+        "physical_drafts": 31,
+        "physical_rows_root_inclusive": 32,
+        "conv_width": 4,
+        "conv_state_length": 34,
+        "source_rows_per_request": 36,
+        "live_state_columns": 3,
+        "physical_parent_sha256": hashlib.sha256(
+            _fr13_fixed32_treeconv_canonical_json(
+                _FR13_FIXED32_PHYSICAL_PARENT
+            )
+        ).hexdigest(),
+        "state_src_sha256": _FR13_FIXED32_TREECONV_STATE_SRC_SHA256,
+    }
 
 
 def _fr13_fixed32_conv_commit_zero_tail_requested() -> bool:
@@ -56,20 +138,258 @@ def _fr13_fixed32_conv_commit_zero_tail_byte_ab_requested() -> bool:
     return raw == "1"
 
 
-def _fr13_fixed32_conv_commit_zero_tail_emit(
-    record: dict[str, object],
-) -> None:
-    path = os.environ.get(
-        "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_PATH",
-        "/logs/fr13_fixed32_treeconv_zero_tail.byte_ab.jsonl",
+def _fr13_fixed32_treeconv_comparison_limit() -> int:
+    text = os.environ.get(
+        "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_LIMIT", "320"
     )
-    parent = os.path.dirname(path)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    payload = dict(record)
-    payload["schema"] = "fr13.fixed32.treeconv_zero_tail.byte_ab.v1"
-    with open(path, "a", encoding="ascii") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    try:
+        limit = int(text)
+    except ValueError as error:
+        raise RuntimeError(
+            "FR13 fixed32 conv zero-tail byte A/B limit must be an integer"
+        ) from error
+    if not 1 <= limit <= 320:
+        raise RuntimeError(
+            "FR13 fixed32 conv zero-tail byte A/B limit must be in [1, 320]"
+        )
+    return limit
+
+
+def _fr13_fixed32_treeconv_scalar(
+    state: dict[str, object], key: str
+) -> torch.Tensor:
+    value = state.get(key)
+    anchor = state.get("anchor")
+    if (
+        not torch.is_tensor(value)
+        or not torch.is_tensor(anchor)
+        or value.device != anchor.device
+        or value.dtype != torch.int64
+        or value.ndim != 0
+        or not value.is_contiguous()
+    ):
+        raise RuntimeError(f"FR13 fixed32 tree-conv scalar {key!r} drifted")
+    return value
+
+
+def fixed32_conv_zero_tail_live_prepare_replay(
+    *, mode: str, batch_size: int, enabled: bool
+) -> None:
+    """Order the graph-resident comparator enable around one measured replay."""
+    requested = _fr13_fixed32_conv_commit_zero_tail_byte_ab_requested()
+    state = _FR13_FIXED32_CONV_PREGATHER.get("state")
+    if not requested:
+        if isinstance(state, dict) and state.get("commit_zero_tail_byte_ab"):
+            raise RuntimeError("FR13 fixed32 tree-conv diagnostic state leaked")
+        return
+    if type(enabled) is not bool or not isinstance(state, dict):
+        raise RuntimeError("FR13 fixed32 tree-conv replay state is unavailable")
+    batch = int(batch_size)
+    active = bool(state.get("treeconv_zero_tail_replay_active", False))
+    if (
+        state.get("commit_zero_tail_byte_ab") is not True
+        or state.get("commit_zero_tail") is not False
+        or state.get("mode") != mode
+        or mode != _FR13_FIXED32_MODE
+        or batch not in tuple(state.get("preseeded_batches", ()))
+        or state.get("treeconv_topology_descriptor")
+        != _fr13_fixed32_treeconv_topology_descriptor(mode)
+        or enabled == active
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 tree-conv replay identity/lifecycle drift"
+        )
+    _fr13_fixed32_treeconv_scalar(
+        state, "treeconv_zero_tail_count_enable"
+    ).fill_(1 if enabled else 0)
+    state["treeconv_zero_tail_replay_active"] = enabled
+
+
+def fixed32_conv_zero_tail_live_finalize(
+    events: object, flush_binding: object
+) -> None:
+    """Persist the graph comparator only after the authenticated final flush."""
+    requested = _fr13_fixed32_conv_commit_zero_tail_byte_ab_requested()
+    state = _FR13_FIXED32_CONV_PREGATHER.get("state")
+    if not requested:
+        if isinstance(state, dict) and state.get("commit_zero_tail_byte_ab"):
+            raise RuntimeError("FR13 fixed32 tree-conv finalizer state leaked")
+        return
+    event_rows = list(events) if isinstance(events, (list, tuple)) else []
+    binding = flush_binding if isinstance(flush_binding, dict) else {}
+    hex_chars = frozenset("0123456789abcdef")
+    if (
+        not isinstance(state, dict)
+        or state.get("commit_zero_tail_byte_ab") is not True
+        or state.get("treeconv_zero_tail_replay_active") is not False
+        or not event_rows
+        or len(event_rows) > _fr13_fixed32_treeconv_comparison_limit()
+        or set(binding)
+        != {
+            "action",
+            "boundary_snapshot_sha256",
+            "complete_work_census_events",
+            "events_sha256",
+            "generation",
+            "nonce",
+            "producer_pid",
+        }
+        or binding.get("action") != "final"
+        or type(binding.get("generation")) is not int
+        or int(binding["generation"]) < 1
+        or type(binding.get("producer_pid")) is not int
+        or int(binding["producer_pid"]) < 1
+        or int(binding.get("complete_work_census_events", -1))
+        != len(event_rows)
+        or any(
+            not isinstance(binding.get(key), str)
+            or len(binding[key]) != 64
+            or any(character not in hex_chars for character in binding[key])
+            for key in (
+                "boundary_snapshot_sha256",
+                "events_sha256",
+                "nonce",
+            )
+        )
+    ):
+        raise RuntimeError("FR13 fixed32 tree-conv finalization drifted")
+
+    compared_events = int(
+        _fr13_fixed32_treeconv_scalar(
+            state, "treeconv_zero_tail_compared_events"
+        ).item()
+    )
+    differing_bytes = int(
+        _fr13_fixed32_treeconv_scalar(
+            state, "treeconv_zero_tail_differing_bytes"
+        ).item()
+    )
+    if compared_events != len(event_rows) or differing_bytes != 0:
+        raise RuntimeError(
+            "FR13 fixed32 tree-conv graph comparison failed: "
+            + repr(
+                {
+                    "expected_events": len(event_rows),
+                    "compared_events": compared_events,
+                    "differing_bytes": differing_bytes,
+                }
+            )
+        )
+
+    descriptor = state.get("treeconv_topology_descriptor")
+    mode = state.get("mode")
+    output_rows: list[dict[str, object]] = []
+    total_compared_bytes = 0
+    for expected_index, event in enumerate(event_rows):
+        runtime = event.get("drafter_runtime") if isinstance(event, dict) else None
+        request_digests = (
+            runtime.get("request_id_sha256s")
+            if isinstance(runtime, dict)
+            else None
+        )
+        batch = event.get("batch_size") if isinstance(event, dict) else None
+        compared_bytes = 48 * int(batch or 0) * 10240 * 34 * 2
+        if (
+            not isinstance(event, dict)
+            or event.get("schema") != "fr13-fixed32-work-census-v12"
+            or event.get("event_complete") is not True
+            or event.get("mode") != mode
+            or event.get("event_index") != expected_index
+            or event.get("producer_pid") != binding["producer_pid"]
+            or type(event.get("forward_step_index")) is not int
+            or event["forward_step_index"] < 0
+            or batch not in (1, 2, 3, 4)
+            or not isinstance(request_digests, list)
+            or len(request_digests) != batch
+            or len(set(request_digests)) != batch
+            or any(
+                not isinstance(value, str)
+                or len(value) != 64
+                or any(character not in hex_chars for character in value)
+                for value in request_digests
+            )
+            or runtime.get("request_ids_sha256") is None
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 tree-conv work-event binding drifted at "
+                + str(expected_index)
+            )
+        output_rows.append(
+            {
+                "schema": _FR13_FIXED32_TREECONV_RECORD_SCHEMA,
+                "mode": mode,
+                "event_id": event.get("event_id"),
+                "event_index": expected_index,
+                "forward_step_index": event["forward_step_index"],
+                "producer_pid": binding["producer_pid"],
+                "batch_size": batch,
+                "request_ids_sha256": runtime["request_ids_sha256"],
+                "request_id_sha256s": list(request_digests),
+                "execution_basis": "cudagraph_full_replay",
+                "topology": descriptor,
+                "conv_layers": 48,
+                "conv_channels": 10240,
+                "conv_state_length": 34,
+                "source_rows_per_request": 36,
+                "candidate_zero_tail": True,
+                "reference_zero_tail": False,
+                "reference_restored_and_served": True,
+                "raw_bf16_byte_comparison": True,
+                "compared_bytes": compared_bytes,
+                "differing_bytes": 0,
+                "byte_equal": True,
+                "timing_eligible": False,
+            }
+        )
+        total_compared_bytes += compared_bytes
+    body_sha256 = hashlib.sha256(
+        _fr13_fixed32_treeconv_canonical_json(output_rows)
+    ).hexdigest()
+    output_rows.append(
+        {
+            "schema": _FR13_FIXED32_TREECONV_TERMINAL_SCHEMA,
+            "status": "PASS",
+            "mode": mode,
+            "topology": descriptor,
+            "complete_work_census_events": len(event_rows),
+            "first_event_index": 0,
+            "last_event_index": len(event_rows) - 1,
+            "first_forward_step_index": event_rows[0]["forward_step_index"],
+            "last_forward_step_index": event_rows[-1]["forward_step_index"],
+            "producer_pid": binding["producer_pid"],
+            "counted_graph_replays": compared_events,
+            "total_compared_bytes": total_compared_bytes,
+            "total_differing_bytes": differing_bytes,
+            "comparison_records_sha256": body_sha256,
+            "work_census_events_sha256": binding["events_sha256"],
+            "flush_generation": binding["generation"],
+            "flush_nonce": binding["nonce"],
+            "boundary_snapshot_sha256": binding[
+                "boundary_snapshot_sha256"
+            ],
+            "flush_action": "final",
+            "finalized_by_fixed32_flush": True,
+            "reference_always_served": True,
+            "timing_eligible": False,
+        }
+    )
+    path = Path(
+        os.environ.get(
+            "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_PATH",
+            "/logs/fr13_fixed32_treeconv_zero_tail.byte_ab.jsonl",
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp." + str(os.getpid()))
+    with open(temporary, "w", encoding="ascii") as handle:
+        for row in output_rows:
+            handle.write(
+                _fr13_fixed32_treeconv_canonical_json(row).decode("ascii")
+                + "\n"
+            )
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
 
 
 def _fr13_fixed32_committer_layer_batch_requested() -> bool:
@@ -4778,6 +5098,106 @@ def _fr13_fixed32_conv_direct_col0_kernel(
 
 
 @triton.jit
+def _fr13_fixed32_conv_zero_tail_compare_kernel(
+    anchor_ptr,
+    bank_off16,
+    source_anchor,
+    source_off16,
+    state_src,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    count_enable,
+    compared_events,
+    differing_bytes,
+    ssi_stride_l,
+    ssi_stride_b,
+    ssi_stride_s,
+    path_stride_b,
+    path_stride_s,
+    lens_stride_b,
+    bank_row_stride,
+    bank_c_stride,
+    bank_l_stride,
+    source_row_stride,
+    source_c_stride,
+    CONV_C: tl.constexpr,
+    CONV_L: tl.constexpr,
+    SOURCE_ROWS: tl.constexpr,
+    ELEM_BYTES: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    B: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+):
+    """Compare candidate destination bits to the source-derived incumbent."""
+    pid_l = tl.program_id(0)
+    pid_b = tl.program_id(1)
+    pid_c = tl.program_id(2)
+    if pid_b >= B:
+        return
+
+    enabled = tl.load(count_enable).to(tl.int64)
+    accepted_len = tl.load(accepted_lens + pid_b * lens_stride_b)
+    leaf_pos = tl.maximum(accepted_len - 1, 0)
+    leaf_pos = tl.minimum(leaf_pos, PATH_COLS - 1)
+    leaf_node = tl.load(
+        accepted_paths
+        + pid_b * path_stride_b
+        + leaf_pos * path_stride_s
+    )
+    leaf_node = tl.where(accepted_len > 0, leaf_node, 0)
+    leaf_node = tl.maximum(0, tl.minimum(leaf_node, SPEC_COLS - 1))
+
+    spec_layer = (
+        spec_state_indices
+        + pid_l * ssi_stride_l
+        + pid_b * ssi_stride_b
+    )
+    dst_row = tl.load(spec_layer + 0 * ssi_stride_s)
+    bank = anchor_ptr + tl.load(bank_off16 + pid_l) * (16 // ELEM_BYTES)
+    source = (
+        source_anchor
+        + tl.load(source_off16 + pid_l) * (16 // ELEM_BYTES)
+    )
+    offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+    c_mask = offs_c < CONV_C
+    source_batch = pid_b.to(tl.int64) * SOURCE_ROWS
+    byte_mismatches = tl.zeros((BLOCK_C,), dtype=tl.int32)
+    for state_col in tl.static_range(0, CONV_L):
+        source_row = tl.load(
+            state_src + leaf_node * CONV_L + state_col
+        ).to(tl.int64)
+        reference = tl.load(
+            source
+            + (source_batch + source_row) * source_row_stride
+            + offs_c * source_c_stride,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.uint16, bitcast=True)
+        candidate = tl.load(
+            bank
+            + dst_row.to(tl.int64) * bank_row_stride
+            + offs_c * bank_c_stride
+            + state_col * bank_l_stride,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.uint16, bitcast=True)
+        xor = reference ^ candidate
+        byte_mismatches += (
+            ((xor & 0xFF) != 0).to(tl.int32)
+            + ((xor >> 8) != 0).to(tl.int32)
+        ) * c_mask.to(tl.int32)
+    mismatch_count = tl.sum(byte_mismatches, axis=0).to(tl.int64)
+    tl.atomic_add(differing_bytes, mismatch_count * enabled)
+    tl.atomic_add(
+        compared_events,
+        enabled,
+        mask=(pid_l == 0) & (pid_b == 0) & (pid_c == 0),
+    )
+
+
+@triton.jit
 def _fr13_fixed32_conv_direct_col0_metadata_kernel(
     anchor_ptr,
     bank_off16,
@@ -5583,6 +6003,7 @@ def preseed_fixed32_conv_col0_pregather(
             or conv_c != 10240
             or conv_l != 34
             or source_rows != 36
+            or state_src_values != _FR13_FIXED32_TREECONV_STATE_SRC
             or len(state_src_rows) != 32
             or any(
                 value != source_rows - 1
@@ -5716,6 +6137,15 @@ def preseed_fixed32_conv_col0_pregather(
         )
         for batch in batches
     }
+    zero_tail_count_enable = torch.zeros(
+        (), dtype=torch.int64, device=anchor.device
+    )
+    zero_tail_compared_events = torch.zeros(
+        (), dtype=torch.int64, device=anchor.device
+    )
+    zero_tail_differing_bytes = torch.zeros(
+        (), dtype=torch.int64, device=anchor.device
+    )
     expected_staging_stride = (capacity * row_elems, row_elems, 1)
     if (
         not staging.is_contiguous()
@@ -5793,8 +6223,15 @@ def preseed_fixed32_conv_col0_pregather(
         "commit_zero_tail_byte_ab": zero_tail_byte_ab,
         "commit_live_state_cols": live_state_cols,
         "state_src_digest": hashlib.sha256(
-            json.dumps(state_src_values).encode("ascii")
+            _fr13_fixed32_treeconv_canonical_json(state_src_values)
         ).hexdigest(),
+        "treeconv_topology_descriptor": (
+            _fr13_fixed32_treeconv_topology_descriptor(_FR13_FIXED32_MODE)
+        ),
+        "treeconv_zero_tail_count_enable": zero_tail_count_enable,
+        "treeconv_zero_tail_compared_events": zero_tail_compared_events,
+        "treeconv_zero_tail_differing_bytes": zero_tail_differing_bytes,
+        "treeconv_zero_tail_replay_active": False,
         "staging": staging,
         "row_guard_flags_by_batch": row_guard_flags,
         "row_elems": row_elems,
@@ -5824,8 +6261,6 @@ def preseed_fixed32_conv_col0_pregather(
         "commit_direct_launches_by_batch": {
             batch: 0 for batch in batches
         },
-        "commit_zero_tail_byte_ab_invocations": 0,
-        "commit_zero_tail_byte_ab_passes": 0,
         "live_selfchecked_batches": set(),
         "source_identity": (
             tuple(id(bank) for bank in bank_refs),
@@ -5842,6 +6277,9 @@ def preseed_fixed32_conv_col0_pregather(
             tuple(id(source) for source in source_refs),
             id(source_offsets),
             id(direct_state_src),
+            id(zero_tail_count_enable),
+            id(zero_tail_compared_events),
+            id(zero_tail_differing_bytes),
             id(staging),
             tuple(id(row_guard_flags[batch]) for batch in batches),
         ),
@@ -5864,6 +6302,9 @@ def preseed_fixed32_conv_col0_pregather(
             source_pointers,
             int(source_offsets.data_ptr()),
             int(direct_state_src.data_ptr()),
+            int(zero_tail_count_enable.data_ptr()),
+            int(zero_tail_compared_events.data_ptr()),
+            int(zero_tail_differing_bytes.data_ptr()),
             int(staging.data_ptr()),
             tuple(
                 int(row_guard_flags[batch].data_ptr()) for batch in batches
@@ -6449,6 +6890,9 @@ def launch_fixed32_conv_col0_pregather(
             tuple(id(source) for source in state["source_stagings"]),
             id(state["source_off16"]),
             id(state["state_src"]),
+            id(state["treeconv_zero_tail_count_enable"]),
+            id(state["treeconv_zero_tail_compared_events"]),
+            id(state["treeconv_zero_tail_differing_bytes"]),
             id(state["staging"]),
             tuple(
                 id(state["row_guard_flags_by_batch"][batch])
@@ -6478,6 +6922,9 @@ def launch_fixed32_conv_col0_pregather(
             ),
             int(state["source_off16"].data_ptr()),
             int(state["state_src"].data_ptr()),
+            int(state["treeconv_zero_tail_count_enable"].data_ptr()),
+            int(state["treeconv_zero_tail_compared_events"].data_ptr()),
+            int(state["treeconv_zero_tail_differing_bytes"].data_ptr()),
             int(state["staging"].data_ptr()),
             tuple(
                 int(state["row_guard_flags_by_batch"][batch].data_ptr())
@@ -6822,10 +7269,6 @@ def launch_fixed32_conv_commit_to_col0(
     block = int(state["block"])
     grid = (48, batch, triton.cdiv(conv_c, block))
     zero_tail_byte_ab = bool(state.get("commit_zero_tail_byte_ab", False))
-    if zero_tail_byte_ab and torch.cuda.is_current_stream_capturing():
-        raise RuntimeError(
-            "FR13 fixed32 conv zero-tail byte A/B is eager-only"
-        )
     if zero_tail_byte_ab and committer_state is not None:
         raise RuntimeError(
             "FR13 fixed32 conv zero-tail byte A/B requires the stock metadata route"
@@ -6866,77 +7309,42 @@ def launch_fixed32_conv_commit_to_col0(
         )
 
     if zero_tail_byte_ab:
-        limit_text = os.environ.get(
-            "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_LIMIT", "320"
+        _fr13_fixed32_treeconv_comparison_limit()
+        _launch_direct(zero_tail=True)
+        _fr13_fixed32_conv_zero_tail_compare_kernel[grid](
+            state["anchor"],
+            state["off16"],
+            state["source_anchor"],
+            state["source_off16"],
+            state["state_src"],
+            spec_state_indices,
+            accepted_paths,
+            accepted_lens,
+            state["treeconv_zero_tail_count_enable"],
+            state["treeconv_zero_tail_compared_events"],
+            state["treeconv_zero_tail_differing_bytes"],
+            spec_state_indices.stride(0),
+            spec_state_indices.stride(1),
+            spec_state_indices.stride(2),
+            accepted_paths.stride(0),
+            accepted_paths.stride(1),
+            accepted_lens.stride(0),
+            int(state["anchor"].stride(0)),
+            int(state["anchor"].stride(1)),
+            int(state["anchor"].stride(2)),
+            int(state["source_anchor"].stride(0)),
+            int(state["source_anchor"].stride(1)),
+            CONV_C=conv_c,
+            CONV_L=int(state["conv_l"]),
+            SOURCE_ROWS=int(state["source_rows_per_batch"]),
+            ELEM_BYTES=int(state["element_bytes"]),
+            SPEC_COLS=int(spec_state_indices.shape[2]),
+            PATH_COLS=int(accepted_paths.shape[1]),
+            B=batch,
+            BLOCK_C=block,
+            num_warps=4,
         )
-        try:
-            comparison_limit = int(limit_text)
-        except ValueError as error:
-            raise RuntimeError(
-                "FR13 fixed32 conv zero-tail byte A/B limit must be an integer"
-            ) from error
-        if not 1 <= comparison_limit <= 320:
-            raise RuntimeError(
-                "FR13 fixed32 conv zero-tail byte A/B limit must be in [1, 320]"
-            )
-        invocation = int(state["commit_zero_tail_byte_ab_invocations"])
-        if invocation < comparison_limit:
-            _launch_direct(zero_tail=True)
-            destination_rows = spec_state_indices[:, :batch, 0].to(torch.long)
-            candidate_rows = tuple(
-                bank.index_select(0, destination_rows[layer]).clone()
-                for layer, bank in enumerate(conv_banks)
-            )
-            _launch_direct(zero_tail=False)
-            differing_bytes = 0
-            first_mismatch_layer = None
-            compared_bytes = 0
-            for layer, (bank, candidate) in enumerate(
-                zip(conv_banks, candidate_rows, strict=True)
-            ):
-                reference = bank.index_select(0, destination_rows[layer])
-                reference_bytes = reference.contiguous().view(torch.uint8)
-                candidate_bytes = candidate.contiguous().view(torch.uint8)
-                compared_bytes += int(reference_bytes.numel())
-                difference = reference_bytes != candidate_bytes
-                layer_differing = int(difference.sum().item())
-                differing_bytes += layer_differing
-                if layer_differing and first_mismatch_layer is None:
-                    first_mismatch_layer = layer
-            record = {
-                "invocation": invocation,
-                "mode": state["mode"],
-                "batch": batch,
-                "physical_drafts": 31,
-                "physical_rows_root_inclusive": 32,
-                "conv_layers": 48,
-                "conv_channels": conv_c,
-                "conv_state_length": int(state["conv_l"]),
-                "source_rows_per_request": int(
-                    state["source_rows_per_batch"]
-                ),
-                "live_state_columns": int(state["commit_live_state_cols"]),
-                "state_src_sha256": state["state_src_digest"],
-                "compared_bytes": compared_bytes,
-                "differing_bytes": differing_bytes,
-                "first_mismatch_layer": first_mismatch_layer,
-                "byte_equal": differing_bytes == 0,
-                "candidate_zero_tail": True,
-                "reference_zero_tail": False,
-                "reference_restored_and_served": True,
-                "timing_eligible": False,
-            }
-            _fr13_fixed32_conv_commit_zero_tail_emit(record)
-            state["commit_zero_tail_byte_ab_invocations"] = invocation + 1
-            if differing_bytes:
-                raise RuntimeError(
-                    "FR13 fixed32 conv zero-tail byte A/B mismatch after "
-                    f"reference restore: layer={first_mismatch_layer} "
-                    f"differing_bytes={differing_bytes}"
-                )
-            state["commit_zero_tail_byte_ab_passes"] += 1
-        else:
-            _launch_direct(zero_tail=False)
+        _launch_direct(zero_tail=False)
     elif committer_state is None:
         _launch_direct(zero_tail=bool(state["commit_zero_tail"]))
     else:

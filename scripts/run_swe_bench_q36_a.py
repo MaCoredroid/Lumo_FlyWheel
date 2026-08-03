@@ -9052,10 +9052,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     if batch_gdn_eager_diagnostic not in {"0", "1"}:
         parser.error("FR13_FIXED32_BATCH_GDN_BYTE_AB must be exactly 0 or 1")
-    treeconv_zero_tail_eager_diagnostic = os.environ.get(
+    treeconv_zero_tail_graph_diagnostic = os.environ.get(
         "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB", "0"
     )
-    if treeconv_zero_tail_eager_diagnostic not in {"0", "1"}:
+    if treeconv_zero_tail_graph_diagnostic not in {"0", "1"}:
         parser.error(
             "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB must be exactly 0 or 1"
         )
@@ -9098,7 +9098,6 @@ def main(argv: list[str] | None = None) -> int:
         fixed32_cutlass_diagnostic
         or fixed32_cutlass_b4_diagnostic
         or batch_gdn_eager_diagnostic == "1"
-        or treeconv_zero_tail_eager_diagnostic == "1"
         or sfwd_state_fusion_eager_diagnostic == "1"
         or sfwd_state_fusion_timing_text == "1"
         or sfwd_prior_reuse_text == "1"
@@ -9108,9 +9107,13 @@ def main(argv: list[str] | None = None) -> int:
         and os.environ.get("ENFORCE_EAGER", "0") != "1"
     ):
         parser.error("fixed32 eager kernel diagnostic requires ENFORCE_EAGER=1")
-    if treeconv_zero_tail_eager_diagnostic == "1":
+    if treeconv_zero_tail_graph_diagnostic == "1":
         if not fixed32_enabled:
             parser.error("tree-conv zero-tail byte diagnostic requires fixed32")
+        if os.environ.get("ENFORCE_EAGER", "0") != "0":
+            parser.error(
+                "tree-conv zero-tail byte diagnostic requires FULL graph mode"
+            )
         if os.environ.get("FR13_FIXED32_CONV_COMMIT_ZERO_TAIL", "0") != "0":
             parser.error(
                 "tree-conv zero-tail production and byte diagnostic are exclusive"
@@ -9123,10 +9126,13 @@ def main(argv: list[str] | None = None) -> int:
                 sfwd_state_fusion_eager_diagnostic == "1",
                 sfwd_state_fusion_timing_text == "1",
                 sfwd_prior_reuse_text == "1",
+                fixed32_taw_diagnostic,
+                fixed32_bm8_diagnostic,
+                fixed32_cfwd_qualification,
             )
         ):
             parser.error(
-                "tree-conv zero-tail byte diagnostic must be the only eager kernel diagnostic"
+                "tree-conv zero-tail byte diagnostic must be the only kernel diagnostic"
             )
     if fixed32_cfwd_qualification:
         if not fixed32_enabled:
