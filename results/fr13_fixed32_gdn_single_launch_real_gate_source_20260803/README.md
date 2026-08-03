@@ -40,6 +40,11 @@ block map, validators, subset, and affected tests must equal exact
 `git show <source_commit>:<path>` bytes at current `HEAD`. Credentials are
 distinct for `hydra27:b1`, `tail23:b4`, and `hydra27:b4`.
 
+The reducer also securely reads canonical `arm/git_head.txt` through
+directory-relative no-follow file descriptors. It requires a singly-linked
+regular file, stable descriptor and pathname identity across the read, and
+exact `<source_commit>\n` bytes; the credential records its digest and size.
+
 ## Production boundary
 
 Every live result and credential records `performance_measurement=false` and
@@ -50,14 +55,15 @@ GPU gates pass and a later production credential binds those disjoint results.
 ## Validation
 
 - Combined GDN, runner/reducer, ingress, draft-head, timing-contract, and final
-  FULL-preseed compatibility suite: `286 passed, 1 skipped` (the skip requires
+  FULL-preseed compatibility suite: `292 passed, 1 skipped` (the skip requires
   CUDA/Triton).
 - Adversarial coverage rejects an absent/forged commit, dirty tracked source,
   a self-consistent forged metadata/audit dataset digest, stale observation
   substitution, missing or duplicated exact4 comparator coverage, event-index
   swaps, request/task relabeling, truncation, scope swaps, later restoration
-  failure, and an asserted `graph_id` in durable evidence.
-- Focused GDN and campaign suite: `53 passed`; work-census self-test: PASS with
+  failure, malformed/mismatched/replaced arm Git identity, and an asserted
+  `graph_id` in durable evidence.
+- Focused GDN and campaign suite: `59 passed`; work-census self-test: PASS with
   `177` tamper cases.
 - `bash -n`, `py_compile`, and `git diff --check`: pass.
 

@@ -1,15 +1,16 @@
 FR13 fixed32 ordered GDN real-task runners and reducer validation
 
-PASS  286 passed, 1 skipped
+PASS  292 passed, 1 skipped
       GDN single-launch, path-BV, graph-gate, wide-BV, campaign reducer,
       authenticated ingress/wiring, draft-head compatibility, timing contract,
       and final FULL-preseed coverage. The skip is CUDA/Triton-only.
 
-PASS  53 passed
+PASS  59 passed
       Focused path-BV, real-gate, and campaign tests, including rejection of
       forged commits, dirty worktree source, forged dataset digests, stale
       observations, missing/duplicate exact4 coverage, event/request relabel,
-      truncation, scope swaps, and later restoration failure.
+      truncation, scope swaps, later restoration failure, malformed/mismatched
+      arm Git identity, link substitution, and path-replacement races.
 
 PASS  work-census self-test, including 177 tamper cases
 
