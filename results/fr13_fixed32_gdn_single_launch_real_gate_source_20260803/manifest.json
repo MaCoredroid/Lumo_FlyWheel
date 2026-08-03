@@ -1,0 +1,72 @@
+{
+  "schema": "fr13.fixed32.gdn_single_launch.real_task_gate_source.v1",
+  "status": "SOURCE_READY_REAL_TASK_UNQUALIFIED",
+  "created_at_utc": "2026-08-03T01:08:47Z",
+  "integration_commit": "f87d0c1709a0d68a3840a077c1c688222e8768e9",
+  "source_commit": "878038e3cc1dd0877cda546f120766dce9b10b7b",
+  "merged_origin_main": "7cb1013e8455322de02aa99475c582e49332dbe0",
+  "candidate": "fixed32_gdn_single_launch_tree_v2",
+  "qualification_selector": "FR13_FIXED32_GDN_PATH_BV_CANDIDATE=single_launch",
+  "qualification_contract": {
+    "fixed32_modes": [
+      "tail6_fixed32",
+      "hydra27_fixed32"
+    ],
+    "logical_topologies": [
+      "Tail23",
+      "Hydra27"
+    ],
+    "physical_rows_per_request": 32,
+    "geometry": "BV=8",
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "qualified_batches": [
+      1,
+      4
+    ],
+    "ignored_batches": [
+      2,
+      3
+    ],
+    "b1_task_ids": [
+      "astropy__astropy-12907"
+    ],
+    "b4_task_set": "canonical exact4 SWE-Verified",
+    "candidate_physical_launches_per_request_layer": 1,
+    "reference_physical_launches_per_request_layer": 2,
+    "layer_records_per_qualified_graph": 48,
+    "reference_served": true,
+    "state_restored": true,
+    "default_off": true,
+    "production_eligible": false
+  },
+  "compared_byte_surfaces": [
+    "output",
+    "ring_k",
+    "ring_v",
+    "ring_a",
+    "ring_b",
+    "flags",
+    "counter"
+  ],
+  "restore_only_surfaces": [
+    "export"
+  ],
+  "validation": {
+    "gdn_ingress_regressions": "152 passed, 1 skipped",
+    "preseed_sfwd_regressions": "83 passed",
+    "bash_n": "pass",
+    "py_compile": "pass",
+    "git_diff_check": "pass"
+  },
+  "excluded": {
+    "gpu_execution": true,
+    "real_swe_verified_task": true,
+    "synthetic_probe": true,
+    "byte_pass_observed": true,
+    "timing": true,
+    "tps_measurement": true,
+    "hardware_floor_acceptance": true,
+    "production_authorization": true
+  }
+}
