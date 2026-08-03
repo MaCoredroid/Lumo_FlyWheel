@@ -1,0 +1,10 @@
+source revision: 8959f328ce6b5e36c5eb6bbb1cb53c3c6e5f5bbe
+focused host tests: 28 passed, 1 skipped in 2.85s
+SM121a builds: 8 verified across two fresh caches
+fresh-cache summaries, cubins, PTX, and SASS: identical
+candidate resource frontier: REG99, STACK0, LOCAL0, LDL0, STL0, CALL0
+B1/B4 SASS addressed lines: 3552 -> 3520
+B1/B4 static SASS instructions: 1776 -> 1760
+GPU/runtime/real-task work launched: no
+runtime byte gate status: required before serving
+full-step timing status: required on standing SWE task sets
