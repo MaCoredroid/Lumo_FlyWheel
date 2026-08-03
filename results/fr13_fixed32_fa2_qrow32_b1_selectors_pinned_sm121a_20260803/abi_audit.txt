@@ -1,0 +1,16 @@
+reference_so_sha256=1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86
+reference_so_bytes=299507792
+candidate_so_sha256=5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467
+candidate_so_bytes=300140712
+defined_dynamic_symbol_diff_lines=0
+undefined_dynamic_symbol_diff_lines=0
+needed_and_runpath_diff_lines=0
+candidate_arch_specific_public_dynamic_symbols=0
+qrow32_b1_no_split_launcher_binding=LOCAL
+qrow32_b1_split2_launcher_binding=LOCAL
+added_device_images=2
+added_device_image_target=sm_121a
+gpu_used=false
+
+candidate_needed=libtorch.so,libcudart.so.13,libtorch_cpu.so,libtorch_cuda.so,libc10_cuda.so,libc10.so,libstdc++.so.6,libgcc_s.so.1,libc.so.6,ld-linux-aarch64.so.1
+candidate_runpath=/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64:

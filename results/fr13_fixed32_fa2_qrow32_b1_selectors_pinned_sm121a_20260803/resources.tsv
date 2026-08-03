@@ -1,0 +1,4 @@
+kernel	ctas_per_layer	threads_per_cta	registers	stack_bytes	local_bytes	spill_store_bytes	spill_load_bytes	static_shared_bytes	dynamic_shared_bytes	static_sass_instructions	object_sass_dump_sha256
+qrow32_b1_no_split	24	64	252	0	0	0	0	1024	81920	3992	858d58f94bad7882d6a28c04fe20e3a766013deb6922c9b3e29917b249e3fbeb
+qrow32_b1_split2_main	48	64	254	0	0	0	0	1024	81920	3656	43bd3339f043a6d3ef7d35084ab908fcaa3a7f8db5ad6ddf16ce0aa3c9709f9a
+qrow32_b1_split2_stock_combine	192	128	44	0	0	0	0	1072	0	1080	43bd3339f043a6d3ef7d35084ab908fcaa3a7f8db5ad6ddf16ce0aa3c9709f9a
