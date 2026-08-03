@@ -1,0 +1,77 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_cluster2_rejection.v1",
+  "created_at_utc": "2026-08-03T03:17:56Z",
+  "status": "REJECT_STACK_SPILL_AND_SM121A_MULTICAST_ADVISORY",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/fixed32-b4-cluster2-20260803",
+    "base_commit": "30f8437d2b13d1af6ca14ae8eac68ca5b49fb27b",
+    "patch_source_sha256": "841b5dfc0741aa5051037e3eda005e5a65f7a425b76235a61e8a0779bd31a155",
+    "patch_source_bytes": 74380,
+    "experimental_generated_dispatch_sha256": "ca52b95430efc7a0a17fb31daed0c4ee4aee9995e4fe4b9238bbb9c7cc0ddef3",
+    "experimental_generated_dispatch_bytes": 77500,
+    "candidate_source_retained": false
+  },
+  "pinned_inputs": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "target": "sm_121a",
+    "cuda_compiler": "13.0.88"
+  },
+  "candidate": {
+    "tile_mnk": [64, 128, 128],
+    "cluster_mnk": [2, 1, 1],
+    "mainloop_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+    "mainloop_stage_count": 2,
+    "epilogue": "accumulator_identity_round_to_nearest",
+    "tile_scheduler": "cutlass_generic_cluster_aware",
+    "cluster_multicast_operand": "B",
+    "default_enabled": false,
+    "compiled_dtypes": ["fp16", "bf16"],
+    "object_sha256": "2d09e6443c9a9aca821f3809b85b3627b4e0c0c353a3aecb55cfe3da231f2495",
+    "object_bytes": 22513824,
+    "cubin_sha256": "9a7be0ddb32c502b80300fdf86b70ba9f87b9e2e8fc68bd7d1316324a97b2b25",
+    "cubin_bytes": 2316248
+  },
+  "resource_verdict": {
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 128,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2560,
+    "sass_slots_per_dtype": 2064,
+    "local_load_instructions_per_dtype": 69,
+    "local_store_instructions_per_dtype": 79,
+    "call_instructions_per_dtype": 2,
+    "qmma_instructions_per_dtype": 128,
+    "ffma_instructions_per_dtype": 128,
+    "verdict": "reject"
+  },
+  "compiler_advisories": [
+    "cluster multicast is expected to have substantially reduced performance on sm_121a",
+    "setmaxnreg was ignored to maintain compatibility into an extern call"
+  ],
+  "same_object_comparator": {
+    "variant": "pingpong_twom_identity_stage2",
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "sass_slots_per_dtype": 1040,
+    "local_load_instructions_per_dtype": 0,
+    "local_store_instructions_per_dtype": 0,
+    "call_instructions_per_dtype": 0,
+    "qmma_instructions_per_dtype": 128,
+    "ffma_instructions_per_dtype": 128
+  },
+  "not_run": [
+    "extension link and import",
+    "GPU kernel runtime",
+    "real SWE-Verified byte equality",
+    "full-step timing",
+    "hardware-floor acceptance"
+  ]
+}

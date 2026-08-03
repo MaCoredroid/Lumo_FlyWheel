@@ -1,0 +1,20 @@
+PASS source audit: cluster-M 2 multicasts B across the two physical M tiles
+PASS source audit: generic scheduler retains CUTLASS cluster-aware launch logic
+PASS pinned source application
+PASS isolated SM121a object compilation
+PASS candidate FP16 resource extraction
+PASS candidate BF16 resource extraction
+PASS candidate cubin extraction and identity
+PASS same-object two-M comparison extraction
+PASS post-revert patch and binary tests: 50 passed
+PASS post-revert ruff check
+PASS post-revert Python compile check
+PASS git diff whitespace check
+REJECT candidate stack: 128 bytes per thread for both dtypes
+REJECT candidate SASS local traffic: 69 LDL and 79 STL per dtype
+REJECT candidate control expansion: 2064 slots and 2 calls versus 1040 and 0
+REJECT compiler advisory: cluster multicast substantially reduced on SM121a
+NOT RUN extension link or import because the offline gate rejected the candidate
+NOT RUN GPU execution
+NOT RUN real SWE-Verified workload
+NOT RUN timing or hardware-floor acceptance
