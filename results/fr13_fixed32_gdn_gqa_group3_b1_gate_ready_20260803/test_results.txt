@@ -1,0 +1,12 @@
+focused_pytest=82 passed
+ruff=PASS
+python_compile=PASS
+bash_syntax=PASS
+git_diff_check=PASS
+gpu_execution=NOT_RUN
+docker_or_service_launch=NOT_RUN
+real_swe_verified_byte_ab=NOT_RUN
+synthetic_or_probe_timing=NOT_RUN
+full_step_timing=NOT_RUN
+tps_or_acceptance_measurement=NOT_RUN
+hardware_floor_acceptance=NOT_RUN

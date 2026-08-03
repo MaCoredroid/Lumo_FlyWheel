@@ -1,0 +1,80 @@
+{
+  "schema": "fr13.fixed32.gdn_gqa_group3.b1_gate_ready.v1",
+  "created_at_utc": "2026-08-03T12:48:00Z",
+  "status": "source_bound_real_b1_byte_gate_ready_default_off",
+  "source": {
+    "branch": "codex/fixed32-gdn-gqa3-b1-gate-20260803",
+    "base_main_commit": "ab6cce75dbe6c73ba7f0b7e9f189006a30abac11",
+    "wiring_commit": "01c48765d63d25f6434b2162a6ff98a0d896bb6f",
+    "candidate_source_sha256": "20140d0d0149843afd2102abbae536c42f1deaf8bfea9c048300a29d3aed896f"
+  },
+  "candidate": {
+    "selector": "gqa_group3",
+    "identity": "fixed32_gdn_single_launch_gqa_group3_v1",
+    "default_enabled": false,
+    "production_enabled": false,
+    "reference": "fixed32_gdn_two_launch_reference_v1",
+    "reference_always_served": true,
+    "reference_physical_launches_per_request_layer": 2,
+    "candidate_physical_launches_per_request_layer": 1
+  },
+  "scope": {
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "task_set": "canonical_one_task_b1_diagnostic",
+    "task_count": 1,
+    "concurrency": 1,
+    "mode": "hydra27_fixed32",
+    "logical_topology": "Hydra27",
+    "logical_drafts": 27,
+    "physical_rows": 32,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "gdn_bv": 8,
+    "subset_sha256": "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb",
+    "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+  },
+  "reference_binary": {
+    "role": "stock_exact_safe_fa2",
+    "sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "bytes": 299183936
+  },
+  "gate": {
+    "entrypoint": "scripts/fr13_run_b1_gdn_gqa_group3_live_gate.sh",
+    "candidate_entrypoint_tuple_baked": true,
+    "candidate_entrypoint_mismatch_rejected": true,
+    "runtime_manifest_source_bound": true,
+    "launch_end_manifest_stability_required": true,
+    "authenticated_request_task_join_required": true,
+    "task_completion_required": true,
+    "graph_work_census_required": true,
+    "raw_byte_equal_required": true,
+    "state_restoration_required": true,
+    "production_arm_forced_off": true,
+    "compared_surfaces": [
+      "output",
+      "ring_k",
+      "ring_v",
+      "ring_a",
+      "ring_b",
+      "flags",
+      "counter"
+    ]
+  },
+  "verification": {
+    "focused_tests": "82 passed",
+    "ruff": "pass",
+    "python_compile": "pass",
+    "bash_syntax": "pass",
+    "git_diff_check": "pass"
+  },
+  "not_run": [
+    "GPU execution",
+    "Docker or service launch",
+    "real SWE-Verified task execution",
+    "raw-byte comparison",
+    "synthetic or probe timing",
+    "full-step timing",
+    "TPS or acceptance measurement",
+    "hardware-floor acceptance"
+  ]
+}
