@@ -633,6 +633,29 @@ struct StaticQueryBatchLayout<Fr13Fixed32Qrow32KernelTraits> {
     static constexpr int query_heads_per_kv = 6;
 };
 
+// The exact non-templated entry point gives ptxas a tighter register
+// allocation than the generic split-K kernel. Keep the hard ceiling below the
+// rejected 255-register allocation; the static gate also rejects any spill.
+__global__ __maxnreg__(254)
+void fr13_flash_fwd_fixed32_qrow32_kernel(
+        KERNEL_PARAM_MODIFIER const Flash_fwd_params params) {
+#if defined(ARCH_SUPPORTS_FLASH)
+    FLASH_NAMESPACE::compute_attn_splitkv<
+        Fr13Fixed32Qrow32KernelTraits,
+        false,  // Is_causal
+        false,  // Is_local
+        false,  // Has_alibi
+        false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
+        true,   // Is_even_K: d == kHeadDim == 256
+        false,  // Is_softcap
+        false,  // Split
+        false   // Append_KV
+    >(params);
+#else
+    FLASH_UNSUPPORTED_ARCH
+#endif
+}
+
 // Gate-only entry point. The ordinary and production paths cannot tag the
 // exact4 diagnostic bias layout that selects this hidden function.
 __attribute__((visibility("hidden")))
@@ -669,17 +692,7 @@ void fr13_run_mha_fwd_fixed32_qrow32(
         StaticLayout::query_heads_per_kv,
         StaticLayout::sequences,
         StaticLayout::kv_heads);
-    auto kernel = &flash_fwd_splitkv_kernel<
-        TreeKernelTraits,
-        false,  // Is_causal
-        false,  // Is_local
-        false,  // Has_alibi
-        false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
-        true,   // Is_even_K: d == kHeadDim == 256
-        false,  // Is_softcap
-        false,  // Split
-        false   // Append_KV
-    >;
+    auto kernel = &fr13_flash_fwd_fixed32_qrow32_kernel;
     if (smem_size >= 48 * 1024) {
         C10_CUDA_CHECK(cudaFuncSetAttribute(
             kernel,

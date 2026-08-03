@@ -72,7 +72,7 @@ def _fixture(tmp_path: Path):
             (
                 f"Function : {module.TARGET_KERNEL}",
                 "        /*0000*/ MOV R1, c[0x0][0x28] ;",
-                "        /*0010*/ CALL.REL.NOINC 0x100 ;",
+                "        /*0010*/ BRA 0x20 ;",
                 "        /*0020*/ EXIT ;",
                 "",
             )
@@ -124,7 +124,7 @@ def test_static_gate_accepts_zero_spill_sm121a_and_exact_abi(tmp_path: Path) -> 
         "static_local_bytes": 0,
     }
     assert result["ptxas"]["spill_load_bytes"] == 0
-    assert result["sass"] == {"ldl": 0, "stl": 0, "call": 1}
+    assert result["sass"] == {"ldl": 0, "stl": 0, "call": 0}
     assert result["production_eligible"] is False
     assert result["timing_eligible"] is False
     assert result["default_off"] is True
@@ -134,8 +134,20 @@ def test_static_gate_accepts_zero_spill_sm121a_and_exact_abi(tmp_path: Path) -> 
     ("field", "old", "new", "message"),
     (
         ("resource_usage", "STACK:0", "STACK:8", "nonzero stack"),
+        (
+            "resource_usage",
+            "REG:244",
+            "REG:255",
+            "admitted ceiling",
+        ),
         ("ptxas_log", "0 bytes spill loads", "8 bytes spill loads", "spills"),
         ("sass", "/*0020*/ EXIT", "/*0020*/ LDL R2, [R1]", "local-memory"),
+        (
+            "sass",
+            "/*0010*/ BRA 0x20",
+            "/*0010*/ CALL.REL.NOINC 0x100",
+            "local-memory or call",
+        ),
     ),
 )
 def test_static_gate_rejects_resource_drift(
