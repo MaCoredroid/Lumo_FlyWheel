@@ -568,10 +568,15 @@ if (( _FR13_DRAFT_HEAD_MODES > 1 )); then
 fi
 if (( _FR13_DRAFT_HEAD_MODES > 0 )); then
   [[ -n "${FR13_FIXED32_MODE:-}" \
-     && "$MAX_NUM_SEQS" == "1" \
+     && ( "$MAX_NUM_SEQS" == "1" \
+          || ( "$MAX_NUM_SEQS" == "4" \
+               && "$FR13_DRAFT_HEAD_PAD_ROWS" == "32" \
+               && "$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" == "0" \
+               && "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \
+               && "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" ) ) \
      && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
      && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" ]] || {
-    echo "FR13 draft-head padding requires fixed32 B1 root64" >&2
+    echo "FR13 draft-head padding requires fixed32 B1 or direct M32 B4 root64" >&2
     exit 2
   }
 fi
