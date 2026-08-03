@@ -1,0 +1,128 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_n5120_single_live_ready.v1",
+  "created_at_utc": "2026-08-03T05:49:08Z",
+  "status": "host_link_import_pass_default_off_gpu_qualification_pending",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/fixed32-b1-n5120-single-live-ready-20260803",
+    "source_commit": "85c6eb1e8f4ee58df79382a5dd86dc1172edb40c",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2",
+    "patch_source_sha256": "eadff808ef7db8de342d8c51e046cda9cc78bc4e308d1c1d08d5b33f7af1d2b0",
+    "patched_dispatch_sha256": "5e856f587480d2d04d9127b25e12d40ef82b8d07a2301389ab757523ce206d2d"
+  },
+  "candidate": {
+    "selector": "identity_onen_n5120_single_b1",
+    "diagnostic_selector": "identity_onen_n5120_single_b1_byte_ab",
+    "sha256": "876a3d6a0c972926131b1e447ffba80e345979f2d6de3bfa7bf083e862469367",
+    "bytes": 118468696,
+    "published": false,
+    "publication_reason": "binary exceeds GitHub single-file limit",
+    "host_build_path": "/home/mark/fr13_cutlass_b1_n5120_single_live_ready_20260803/_C_stable_libtorch.identity_onen_n5120_single_b1.abi3.so",
+    "default_enabled": false,
+    "required_qualification_profile": "k64_root",
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "fixed_rows": 32,
+    "specialized_projection_mnk": [
+      [32, 5120, 6144],
+      [32, 5120, 17408]
+    ],
+    "specialized_launch_grid": [1, 40, 1],
+    "specialized_tiles_per_cta": 1,
+    "other_admitted_projections_use_incumbent_onen": true,
+    "out_of_contract_fallback": "stock"
+  },
+  "build": {
+    "result": "pass",
+    "architecture": "sm_121a",
+    "gencode": "arch=compute_121a,code=sm_121a",
+    "cuda_release": "13.0",
+    "nvcc_version": "13.0.88",
+    "cuobjdump_version": "13.0.85",
+    "complete_translation_unit": true,
+    "translation_unit_object_sha256": "1a0fe691138a7e08faa0fbef77114ebebdf7a789d9016e4068f0ed429d08930d",
+    "translation_unit_object_bytes": 23022176,
+    "compile_log_bytes": 0,
+    "link_log_bytes": 0,
+    "full_shared_library_link": "pass",
+    "cpu_import_cuda_visible_devices_empty": "pass",
+    "gpu_runtime_used": false
+  },
+  "elf": {
+    "class": "ELF64",
+    "machine": "AArch64",
+    "type": "DYN",
+    "python_init_symbol": "PyInit__C_stable_libtorch",
+    "needed": [
+      "libtorch.so",
+      "libcudart.so.13",
+      "libcuda.so.1",
+      "libtorch_cpu.so",
+      "libtorch_cuda.so",
+      "libstdc++.so.6",
+      "libgcc_s.so.1",
+      "libc.so.6",
+      "ld-linux-aarch64.so.1"
+    ],
+    "incumbent_dynamic_dependencies_identical": true,
+    "incumbent_undefined_dynamic_symbol_set_identical": true,
+    "incumbent_undefined_dynamic_symbol_count": 183,
+    "candidate_undefined_dynamic_symbol_count": 183,
+    "incumbent_defined_dynamic_symbol_count": 1318,
+    "candidate_defined_dynamic_symbol_count": 1319
+  },
+  "device_codegen": {
+    "result": "pass",
+    "candidate_kernel_records": 2,
+    "dtypes": ["fp16", "bf16"],
+    "encoded_instructions_per_kernel": 520,
+    "nop_instructions_per_kernel": 27,
+    "operational_instructions_per_kernel": 493,
+    "branches_per_kernel": 26,
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "ldl": 0,
+    "stl": 0,
+    "call": 0,
+    "detected_spills": false
+  },
+  "admission": {
+    "source_binding": "selector_specific_required",
+    "byte_gate": "one_real_swe_verified_b1_k64_root_stock_serving_exact_bytes",
+    "timing_default_task_set": "real_swe_verified_exact4",
+    "production_default_enabled": false,
+    "candidate_sha_and_size_fail_closed": true,
+    "k64_root_profile_fail_closed": true
+  },
+  "verification": {
+    "adjacent_tests": "197 passed",
+    "python_byte_compile": "pass",
+    "shell_syntax": "pass",
+    "git_diff_check": "pass",
+    "source_binding_cli": "pass",
+    "sm121a_full_translation_unit_compile": "pass",
+    "full_shared_library_link": "pass",
+    "cpu_import": "pass",
+    "elf_and_dynamic_symbol_audit": "pass",
+    "resource_and_sass_audit": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "GPU correctness",
+    "Docker",
+    "real SWE-Verified task execution",
+    "raw-byte comparison",
+    "B1 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gates": [
+    "authenticated one-task real SWE-Verified K64/root1 raw-byte comparison",
+    "standing-rule exact-four real SWE-Verified full-step timing after byte pass"
+  ]
+}

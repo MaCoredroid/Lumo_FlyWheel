@@ -1,0 +1,3 @@
+dtype	encoded_instructions	nop_instructions	operational_instructions	branches	registers	stack_bytes	local_bytes	shared_bytes	constant0_bytes	ldl	stl	call
+fp16	520	27	493	26	168	0	0	1024	2688	0	0	0
+bf16	520	27	493	26	168	0	0	1024	2688	0	0	0
