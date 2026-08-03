@@ -160,5 +160,6 @@ def test_real_task_gate_is_default_off_stock_serving_and_bounded() -> None:
     assert "FR13_DRAFT_VOCAB_K=65536" in runner
     assert "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL=0" in runner
     assert "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB=1" in runner
+    assert 'PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"' in runner
     assert "PROBE_ONLY" not in runner
     assert "ACCEPT_SPEED_PROBE" not in runner

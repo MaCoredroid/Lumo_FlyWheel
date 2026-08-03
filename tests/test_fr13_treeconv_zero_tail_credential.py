@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -127,6 +128,137 @@ def _metrics(completed: int) -> bytes:
             f"vllm:request_params_max_tokens_bucket{{{bucket_labels}}} {count}"
         )
     return ("\n".join(lines) + "\n").encode("ascii")
+
+
+def _task_metrics(batch: int, step: int, qwen_completed: int) -> bytes:
+    timing = floor_gate.fixture_metrics(
+        [1.0], [2.0], [batch], step, 31
+    ).encode("ascii")
+    return timing + _metrics(qwen_completed)
+
+
+def _runtime_snapshot_metrics(
+    *, mode: str, batch: int, event: dict[str, Any], step: int
+) -> dict[str, Any]:
+    histogram = {
+        str(candidate): int(step == 1 and candidate == batch)
+        for candidate in range(1, 5)
+    }
+    spec_drafts = batch * step
+    zero_by_batch = {str(candidate): 0 for candidate in range(1, 5)}
+    capture_by_batch = {
+        str(candidate): int(candidate <= batch) for candidate in range(1, 5)
+    }
+    ready_capacities = {
+        str(candidate): batch for candidate in range(1, batch + 1)
+    }
+    full_coverage = {
+        str(candidate): 0x0FFF for candidate in range(1, batch + 1)
+    }
+    return {
+        "fixed32": {
+            "pure_decode_forward_steps": step,
+            "complete_work_census_events": step,
+            "complete_spec_rows": spec_drafts,
+            "spec_drafts": spec_drafts,
+            "spec_tokens": 31 * spec_drafts,
+            "batch_histogram": histogram,
+            "first_forward_step": 0 if step else None,
+            "last_forward_step": step - 1 if step else None,
+            "events_sha256": hashlib.sha256(
+                _canonical([event] if step else [])
+            ).hexdigest(),
+        },
+        "sfwd": {
+            "gpu_seconds": 0.001 * step,
+            "steps": step,
+            "drafts": spec_drafts,
+            "wall_seconds": 0.002 * step,
+            "wall_drafts": spec_drafts,
+            "wall_steps": step,
+            "wall_rejected": 0,
+        },
+        "dfwd": {"gpu_seconds": 0.001 * step, "spans": step},
+        "cfwd": {"gpu_seconds": 0.002 * step, "spans": step},
+        "boot_warm": {
+            "schema": "fr13-fixed32-boot-warm-v3",
+            "classification": "unmeasured_boot",
+            "hardware_scope": "device_postprocess_kernels",
+            "wrapper_bookkeeping_warmed": False,
+            "copy_source_dtype": "torch.int64",
+            "copy_destination_dtype": "torch.int32",
+            "mode": mode,
+            "capacity": batch,
+            "vocab_size": 248320,
+            "batches": list(range(1, batch + 1)),
+            "taw_executions": batch,
+            "output_copy_pairs": batch,
+            "slot_copy_pairs": batch * (batch + 1) // 2,
+            "spec_copy_pairs": batch,
+            "flags_zero_fills": 1,
+            "persistent_copy_state_restored": True,
+            "flags_state_restored": True,
+            "conv_commit_direct_launches": batch,
+            "conv_commit_gather_launches": 0,
+            "conv_commit_scatter_launches": 0,
+            "committer_replays": batch,
+            "observed_event_absent": True,
+            "pending_event_absent": True,
+            "taw_cache_lease_current": True,
+            "taw_rng_state_restored": True,
+            "taw_staging_state_restored": True,
+            "taw_measured_state_restored": True,
+            "committer_route_lease_current": True,
+            "committer_bank_state_restored": True,
+            "committer_conv_bank_state_restored": True,
+            "committer_conv_staging_state_restored": True,
+            "committer_alias_destination_contract": "exact_alias_only_16x3",
+            "committer_input_state_restored": True,
+            "committer_measured_state_restored": True,
+            "committer_scratch_overwrite_proven": True,
+        },
+        "committer": {
+            "actual_replays_by_batch": dict(histogram),
+            "actual_replays_enqueued": step,
+            "all_batches_ready": True,
+            "captures": batch,
+            "fast_route_ready": True,
+            "layer_batch_gate_attempts_by_batch": {
+                str(candidate): 0 for candidate in range(1, batch + 1)
+            },
+            "layer_batch_gate_coverage_mask_by_batch": full_coverage,
+            "layer_batch_gate_passed_by_batch": {
+                str(candidate): 1 for candidate in range(1, batch + 1)
+            },
+            "maximum_ready_capacity": batch,
+            "nonpure_committer_replays_by_batch": zero_by_batch,
+            "nonpure_committer_replays_enqueued": 0,
+            "nonpure_dispatch": {
+                "guarded_steps": 0,
+                "piecewise_steps": 0,
+                "none_steps": 0,
+                "forbidden_full_steps": 0,
+            },
+            "preseeded_batches": list(range(1, batch + 1)),
+            "preseeded_graphs": batch,
+            "ready_capacities": ready_capacities,
+            "required_capacity": batch,
+        },
+        "conv_pregather": {
+            "actual_stages": 0,
+            "actual_stages_by_batch": zero_by_batch,
+            "aux_capture_stages": 0,
+            "graph_capture_stages": batch,
+            "graph_capture_stages_by_batch": capture_by_batch,
+            "graph_replay_stages": step,
+            "graph_replay_stages_by_batch": dict(histogram),
+            "max_batch_size": batch,
+            "pointer_entries": 48,
+            "preseeded": True,
+            "preseeded_batches": list(range(1, batch + 1)),
+            "profile_capture_stages": 0,
+        },
+    }
 
 
 def _append(
@@ -449,13 +581,12 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
             "nonce": nonce,
             "action": "final",
             "counters": counters,
-            "metrics": {
-                "fixed32": {
-                    "pure_decode_forward_steps": 1,
-                    "complete_work_census_events": 1,
-                    "events_sha256": terminal["events_sha256"],
-                }
-            },
+            "metrics": _runtime_snapshot_metrics(
+                mode=mode,
+                batch=batch,
+                event=event,
+                step=1,
+            ),
         },
         canonical=True,
     )
@@ -564,12 +695,18 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
         trace_path.write_bytes(b"".join(_canonical(row) + b"\n" for row in trace))
         trace_events[task] = trace
         trace_paths[task] = trace_path
+        (task_dir / "vllm_metrics_pre.txt").write_bytes(
+            _task_metrics(batch, 0, 0)
+        )
+        (task_dir / "vllm_metrics_post.txt").write_bytes(
+            _task_metrics(batch, 1, 1)
+        )
         pre_ack = {
             "schema": credential.FLUSH_ACK_SCHEMA,
             "mode": mode,
             "producer_pid": producer_pid,
-            "generation": 2 * index + 1,
-            "nonce": f"{2 * index + 1:064x}",
+            "generation": index + 1,
+            "nonce": f"{index + 1:064x}",
             "action": "snapshot",
             "status": "ok",
             "counters": {
@@ -584,8 +721,8 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
         }
         post_ack = {
             **pre_ack,
-            "generation": 2 * index + 2,
-            "nonce": f"{2 * index + 2:064x}",
+            "generation": len(tasks) + index + 1,
+            "nonce": f"{len(tasks) + index + 1:064x}",
             "counters": {
                 "pure_decode_forward_steps": 1,
                 "complete_work_census_events": 1,
@@ -611,7 +748,12 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
                     "nonce": ack["nonce"],
                     "action": "snapshot",
                     "counters": ack["counters"],
-                    "metrics": {},
+                    "metrics": _runtime_snapshot_metrics(
+                        mode=mode,
+                        batch=batch,
+                        event=event,
+                        step=ack["counters"]["pure_decode_forward_steps"],
+                    ),
                 },
                 canonical=True,
             )
@@ -700,8 +842,6 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
         if batch == 1:
             metrics_pre = task_dir / "vllm_metrics_pre.txt"
             metrics_post = task_dir / "vllm_metrics_post.txt"
-            metrics_pre.write_bytes(_metrics(0))
-            metrics_post.write_bytes(_metrics(1))
             replay = contract.validate_fixed32_trace_model_requests(
                 trace_events[task],
                 expected_session_id=contract.fixed32_trace_session_id(task),
@@ -838,6 +978,7 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
 def _issue_with_audit_stub(
     monkeypatch: pytest.MonkeyPatch, inputs: dict[str, Any]
 ) -> dict[str, Any]:
+    _stub_repo_import(monkeypatch, inputs)
     arm_dir = Path(inputs["task_root"]).parents[2]
     audit_path = arm_dir / "fixed32_chat_traffic_audit.json"
     audit = json.loads(audit_path.read_bytes())
@@ -849,6 +990,25 @@ def _issue_with_audit_stub(
 
     monkeypatch.setattr(credential, "_validate_real_task_audit", validate)
     return credential.issue_credential(**inputs)
+
+
+def _stub_repo_import(
+    monkeypatch: pytest.MonkeyPatch, inputs: dict[str, Any]
+) -> None:
+    source = (
+        Path(inputs["repo_path"])
+        / "src/lumo_flywheel_serving/inference_proxy.py"
+    )
+
+    def validate(**kwargs: Any) -> dict[str, Any]:
+        assert kwargs["repo"] == Path(inputs["repo_path"])
+        return _identity(source)
+
+    monkeypatch.setattr(
+        credential,
+        "_validate_inference_proxy_import",
+        validate,
+    )
 
 
 @pytest.mark.parametrize("batch", (1, 4))
@@ -868,8 +1028,11 @@ def test_credential_replays_real_graph_evidence(
     assert (payload["qwen_campaign_proof"] is not None) == (batch == 4)
 
 
-def test_credential_rejects_truncated_work_terminal(tmp_path: Path) -> None:
+def test_credential_rejects_truncated_work_terminal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     inputs = _make_fixture(tmp_path, batch=1)
+    _stub_repo_import(monkeypatch, inputs)
     work = Path(inputs["work_census_path"])
     work.write_bytes(work.read_bytes().splitlines(keepends=True)[0])
     with pytest.raises(credential.CredentialError, match="work census is invalid"):
@@ -967,8 +1130,11 @@ def test_credential_rejects_runtime_git_head_tamper(tmp_path: Path) -> None:
         credential.issue_credential(**inputs)
 
 
-def test_credential_rejects_synthetic_real_task_evidence(tmp_path: Path) -> None:
+def test_credential_rejects_synthetic_real_task_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     inputs = _make_fixture(tmp_path, batch=1)
+    _stub_repo_import(monkeypatch, inputs)
     with pytest.raises(credential.CredentialError, match="real-task chat audit"):
         credential.issue_credential(**inputs)
 
@@ -1040,8 +1206,11 @@ def test_real_task_audit_rebuilds_from_independent_pinned_inputs(
     }
 
 
-def test_credential_rejects_shifted_work_stream(tmp_path: Path) -> None:
+def test_credential_rejects_shifted_work_stream(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     inputs = _make_fixture(tmp_path, batch=1)
+    _stub_repo_import(monkeypatch, inputs)
     work = Path(inputs["work_census_path"])
     event = json.loads(work.read_text().splitlines()[0])
     event["forward_step_index"] = 7
@@ -1086,7 +1255,7 @@ def test_credential_rejects_task_interval_past_terminal_stream(
     metadata = json.loads(metadata_path.read_bytes())
     metadata["fixed32_task_boundary"] = boundary
     _write_json(metadata_path, metadata)
-    with pytest.raises(credential.CredentialError, match="exactly cover"):
+    with pytest.raises(credential.CredentialError, match="task metrics differ"):
         _issue_with_audit_stub(monkeypatch, inputs)
 
 
@@ -1177,8 +1346,218 @@ def test_credential_rejects_current_flush_ack_tamper(
         _issue_with_audit_stub(monkeypatch, inputs)
 
 
-def test_credential_rejects_duplicate_container_env_key(tmp_path: Path) -> None:
+def test_credential_rejects_malformed_task_runtime_metrics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     inputs = _make_fixture(tmp_path, batch=1)
+    task = credential.CANONICAL_SUBSETS[1]["task_ids"][0]
+    task_dir = Path(inputs["task_root"]) / task
+    boundary_path = task_dir / "fixed32_task_boundary.json"
+    boundary = json.loads(boundary_path.read_bytes())
+    snapshot_path = Path(boundary["post_runtime_snapshot"]["path"])
+    snapshot = json.loads(snapshot_path.read_bytes())
+    snapshot["metrics"]["fixed32"]["events_sha256"] = "f" * 64
+    _write_json(snapshot_path, snapshot, canonical=True)
+    boundary["post_runtime_snapshot"]["sha256"] = hashlib.sha256(
+        snapshot_path.read_bytes()
+    ).hexdigest()
+    _write_json(boundary_path, boundary)
+    metadata_path = task_dir / "runner_metadata.json"
+    metadata = json.loads(metadata_path.read_bytes())
+    metadata["fixed32_task_boundary"] = boundary
+    _write_json(metadata_path, metadata)
+    with pytest.raises(
+        credential.CredentialError,
+        match=(
+            "runtime snapshot/metrics/census is invalid: "
+            ".*census prefix digest mismatch"
+        ),
+    ):
+        _issue_with_audit_stub(monkeypatch, inputs)
+
+
+@pytest.mark.parametrize("artifact", ("snapshot", "metrics"))
+def test_credential_rejects_symlinked_task_runtime_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    artifact: str,
+) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    task = credential.CANONICAL_SUBSETS[1]["task_ids"][0]
+    task_dir = Path(inputs["task_root"]) / task
+    boundary = json.loads(
+        (task_dir / "fixed32_task_boundary.json").read_bytes()
+    )
+    path = (
+        Path(boundary["post_runtime_snapshot"]["path"])
+        if artifact == "snapshot"
+        else task_dir / "vllm_metrics_post.txt"
+    )
+    target = path.with_name(path.name + ".target")
+    target.write_bytes(path.read_bytes())
+    path.unlink()
+    path.symlink_to(target)
+    with pytest.raises(credential.CredentialError, match="regular non-symlink"):
+        _issue_with_audit_stub(monkeypatch, inputs)
+
+
+def test_credential_rejects_generation_order_counter_regression(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inputs = _make_fixture(tmp_path, batch=4)
+    task_ids = list(credential.CANONICAL_SUBSETS[4]["task_ids"])
+    first_dir = Path(inputs["task_root"]) / task_ids[0]
+    last_dir = Path(inputs["task_root"]) / task_ids[-1]
+    first_boundary_path = first_dir / "fixed32_task_boundary.json"
+    last_boundary_path = last_dir / "fixed32_task_boundary.json"
+    first_boundary = json.loads(first_boundary_path.read_bytes())
+    last_boundary = json.loads(last_boundary_path.read_bytes())
+    base = Path(inputs["boundary_snapshot_base"])
+    generation4_path = Path(str(base) + ".4.json")
+    generation5_path = Path(str(base) + ".5.json")
+    generation4 = json.loads(generation4_path.read_bytes())
+    generation5 = json.loads(generation5_path.read_bytes())
+
+    rewritten4 = {
+        **generation5,
+        "generation": 4,
+        "nonce": f"{4:064x}",
+    }
+    rewritten5 = {
+        **generation4,
+        "generation": 5,
+        "nonce": f"{5:064x}",
+    }
+    _write_json(generation4_path, rewritten4, canonical=True)
+    _write_json(generation5_path, rewritten5, canonical=True)
+    first_boundary["post"].update(
+        {"generation": 4, "nonce": f"{4:064x}"}
+    )
+    first_boundary["post_runtime_snapshot"] = {
+        "schema": credential.BOUNDARY_SCHEMA,
+        "generation": 4,
+        "path": str(generation4_path),
+        "sha256": hashlib.sha256(generation4_path.read_bytes()).hexdigest(),
+    }
+    last_boundary["pre"].update(
+        {"generation": 5, "nonce": f"{5:064x}"}
+    )
+    last_boundary["pre_runtime_snapshot"] = {
+        "schema": credential.BOUNDARY_SCHEMA,
+        "generation": 5,
+        "path": str(generation5_path),
+        "sha256": hashlib.sha256(generation5_path.read_bytes()).hexdigest(),
+    }
+    for task_dir, boundary_path, boundary in (
+        (first_dir, first_boundary_path, first_boundary),
+        (last_dir, last_boundary_path, last_boundary),
+    ):
+        _write_json(boundary_path, boundary)
+        metadata_path = task_dir / "runner_metadata.json"
+        metadata = json.loads(metadata_path.read_bytes())
+        metadata["fixed32_task_boundary"] = boundary
+        _write_json(metadata_path, metadata)
+
+    with pytest.raises(credential.CredentialError, match="ACK counters regress"):
+        _issue_with_audit_stub(monkeypatch, inputs)
+
+
+@pytest.mark.parametrize(
+    ("ambient", "repo_first", "expected_error"),
+    (
+        (None, True, "real-task chat audit"),
+        ("stale", True, "real-task chat audit"),
+        ("stale", False, "git-show-bound repo source"),
+    ),
+)
+def test_credential_cli_uses_repo_first_import_path(
+    tmp_path: Path,
+    ambient: str | None,
+    repo_first: bool,
+    expected_error: str,
+) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    repo = Path(inputs["repo_path"])
+    env = os.environ.copy()
+    if ambient is None:
+        env.pop("PYTHONPATH", None)
+        ambient_path = None
+    else:
+        ambient_path = tmp_path / "stale"
+        package = ambient_path / "lumo_flywheel_serving"
+        package.mkdir(parents=True)
+        (package / "__init__.py").write_text("", encoding="ascii")
+        (package / "inference_proxy.py").write_text(
+            "STALE_INFERENCE_PROXY = True\n",
+            encoding="ascii",
+        )
+    prefix = str(repo / "src") if repo_first else ""
+    suffix = str(ambient_path) if ambient_path is not None else ""
+    env["PYTHONPATH"] = os.pathsep.join(
+        value for value in (prefix, suffix) if value
+    )
+    command = [
+        sys.executable,
+        str(repo / "scripts/fr13_treeconv_zero_tail_credential.py"),
+        "--comparator",
+        str(inputs["comparator_path"]),
+        "--subset",
+        str(inputs["subset_path"]),
+        "--health",
+        str(inputs["health_path"]),
+        "--proxy-ledger",
+        str(inputs["proxy_ledger_path"]),
+        "--engine-ledger",
+        str(inputs["engine_ledger_path"]),
+        "--work-census",
+        str(inputs["work_census_path"]),
+        "--final-flush",
+        str(inputs["final_flush_path"]),
+        "--boundary-snapshot-base",
+        str(inputs["boundary_snapshot_base"]),
+        "--runtime-manifest-launch",
+        str(inputs["runtime_manifest_launch_path"]),
+        "--runtime-manifest-end",
+        str(inputs["runtime_manifest_end_path"]),
+        "--runtime-git-head",
+        str(inputs["runtime_git_head_path"]),
+        "--source",
+        str(inputs["source_path"]),
+        "--repo",
+        str(repo),
+        "--container-env",
+        str(inputs["container_env_path"]),
+        "--task-root",
+        str(inputs["task_root"]),
+        "--source-commit",
+        inputs["source_commit"],
+        "--mode",
+        inputs["mode"],
+        "--batch-size",
+        "1",
+        "--output",
+        str(tmp_path / "credential.json"),
+    ]
+    completed = subprocess.run(
+        command,
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert expected_error in completed.stderr
+    if repo_first:
+        assert "git-show-bound repo source" not in completed.stderr
+
+
+def test_credential_rejects_duplicate_container_env_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inputs = _make_fixture(tmp_path, batch=1)
+    _stub_repo_import(monkeypatch, inputs)
     env_path = Path(inputs["container_env_path"])
     env_path.write_text(
         env_path.read_text(encoding="ascii") + "FR13_FIXED32_MODE=tail6_fixed32\n",

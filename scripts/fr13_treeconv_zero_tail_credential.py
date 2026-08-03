@@ -334,6 +334,29 @@ def _validate_runtime_closure(
     return runtime, launch_raw, end_raw, committed
 
 
+def _validate_inference_proxy_import(
+    *, repo: Path, committed_digests: dict[str, str]
+) -> dict[str, Any]:
+    relative = "src/lumo_flywheel_serving/inference_proxy.py"
+    expected = (repo / relative).resolve(strict=True)
+    try:
+        from lumo_flywheel_serving import inference_proxy
+
+        module_file = getattr(inference_proxy, "__file__", None)
+        actual = Path(module_file).resolve(strict=True) if module_file else None
+    except (ImportError, OSError, TypeError) as error:
+        raise CredentialError("repo inference_proxy import is unavailable") from error
+    raw = _raw(expected, "repo inference_proxy source")
+    if (
+        actual != expected
+        or committed_digests.get(relative) != _sha(raw)
+    ):
+        raise CredentialError(
+            "imported inference_proxy is not the git-show-bound repo source"
+        )
+    return _identity(expected, raw)
+
+
 def _canonical_arm_dir(task_root: Path) -> Path:
     resolved = task_root.resolve(strict=True)
     if len(resolved.parents) < 3:
@@ -588,7 +611,19 @@ def _validate_flush(
     mode: str,
     work_terminal: dict[str, Any],
     comparator_terminal: dict[str, Any],
-) -> tuple[dict[str, Any], bytes, Path, bytes, Path, bytes, Path, bytes]:
+    server_capacity: int,
+    census_path: Path,
+) -> tuple[
+    dict[str, Any],
+    bytes,
+    Path,
+    bytes,
+    Path,
+    bytes,
+    Path,
+    bytes,
+    dict[str, Any],
+]:
     result, result_raw = _json(result_path, "final flush result")
     if set(result) != {"schema", "ack"} or result.get("schema") != FLUSH_RESULT_SCHEMA:
         raise CredentialError("final flush result schema differs")
@@ -641,6 +676,24 @@ def _validate_flush(
         != comparator_terminal["boundary_snapshot_sha256"]
     ):
         raise CredentialError("final boundary snapshot identity differs")
+    try:
+        from fr13_floor_gate import GateError, validate_runtime_boundary_snapshot
+
+        runtime_report = validate_runtime_boundary_snapshot(
+            boundary_path,
+            ack=ack,
+            server_capacity=server_capacity,
+            metrics_path=None,
+            metric_values=None,
+            reference=None,
+            census_path=census_path,
+        )
+    except (ImportError, GateError, KeyError, OSError, TypeError, ValueError) as error:
+        raise CredentialError(
+            f"final runtime snapshot/census is invalid: {error}"
+        ) from error
+    if runtime_report.get("sha256") != _sha(boundary_raw):
+        raise CredentialError("final runtime snapshot changed during validation")
     current_ack_path = boundary_base.parent / "fr13_fixed32_flush_ack.json"
     current_ack, current_ack_raw = _json(current_ack_path, "current flush ack")
     request_path = boundary_base.parent / "fr13_fixed32_flush_request.json"
@@ -667,6 +720,7 @@ def _validate_flush(
         request_raw,
         current_ack_path,
         current_ack_raw,
+        runtime_report,
     )
 
 
@@ -689,31 +743,73 @@ def _validate_task_snapshot(
     boundary_base: Path,
     mode: str,
     producer_pid: int,
+    task_dir: Path,
+    metric_label: str,
+    server_capacity: int,
+    census_path: Path,
     label: str,
-) -> None:
+) -> dict[str, Any]:
     generation = ack.get("generation")
     if not isinstance(reference, dict) or set(reference) != TASK_SNAPSHOT_REF_KEYS:
         raise CredentialError(f"{label} snapshot reference is malformed")
     path = Path(str(boundary_base) + f".{generation}.json")
-    snapshot, raw = _json(path, f"{label} boundary snapshot")
+    metrics_path = task_dir / f"vllm_metrics_{metric_label}.txt"
+    snapshot_raw = _raw(path, f"{label} boundary snapshot")
+    metrics_raw = _raw(metrics_path, f"{label} task metrics")
+    try:
+        from fr13_floor_gate import (
+            EXPECTED_METRIC_LABELS,
+            GateError,
+            load_metric_artifact,
+            validate_runtime_boundary_snapshot,
+        )
+
+        metrics = load_metric_artifact(metrics_path)
+        fixed = metrics.get("fixed32")
+        if (
+            metrics.get("labels") != EXPECTED_METRIC_LABELS
+            or not isinstance(fixed, dict)
+            or fixed.get("pure_decode_forward_steps")
+            != ack["counters"]["pure_decode_forward_steps"]
+            or fixed.get("complete_work_census_events")
+            != ack["counters"]["complete_work_census_events"]
+        ):
+            raise CredentialError(
+                f"{label} task metrics differ from flush counters"
+            )
+        report = validate_runtime_boundary_snapshot(
+            path,
+            ack=ack,
+            server_capacity=server_capacity,
+            metrics_path=metrics_path,
+            metric_values=metrics["values"],
+            reference=reference,
+            census_path=census_path,
+        )
+    except CredentialError:
+        raise
+    except (ImportError, GateError, KeyError, OSError, TypeError, ValueError) as error:
+        raise CredentialError(
+            f"{label} runtime snapshot/metrics/census is invalid: {error}"
+        ) from error
+    expected_metrics_identity = _identity(metrics_path, metrics_raw)
+    loaded_metrics_identity = metrics.get("identity")
     if (
-        set(snapshot) != BOUNDARY_SNAPSHOT_KEYS
-        or reference
-        != {
-            "schema": BOUNDARY_SCHEMA,
-            "generation": generation,
-            "path": str(path),
-            "sha256": _sha(raw),
-        }
-        or snapshot.get("schema") != BOUNDARY_SCHEMA
-        or snapshot.get("mode") != mode
-        or snapshot.get("producer_pid") != producer_pid
-        or snapshot.get("generation") != generation
-        or snapshot.get("nonce") != ack.get("nonce")
-        or snapshot.get("action") != "snapshot"
-        or snapshot.get("counters") != ack.get("counters")
+        report.get("generation") != generation
+        or report.get("sha256") != _sha(snapshot_raw)
+        or not isinstance(loaded_metrics_identity, dict)
+        or loaded_metrics_identity.get("sha256")
+        != expected_metrics_identity["sha256"]
+        or loaded_metrics_identity.get("bytes") != expected_metrics_identity["bytes"]
+        or Path(str(loaded_metrics_identity.get("path"))).resolve()
+        != metrics_path.resolve()
     ):
-        raise CredentialError(f"{label} boundary snapshot identity differs")
+        raise CredentialError(f"{label} runtime snapshot generation differs")
+    return {
+        "runtime_snapshot": report
+        | {"artifact": _identity(path, snapshot_raw)},
+        "metrics": _identity(metrics_path, metrics_raw),
+    }
 
 
 def _validate_ready_ack(
@@ -768,6 +864,7 @@ def _validate_qwen_and_tasks(
     successful_engine_ids: dict[str, str],
     qwen_campaign_path: Path | None,
     boundary_snapshot_base: Path,
+    work_census_path: Path,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any] | None]:
     from fr13_fixed32_contract import (
         ContractError,
@@ -886,22 +983,42 @@ def _validate_qwen_and_tasks(
             or agent.get("network_drop") is not False
         ):
             raise CredentialError(f"real-task provenance/boundary differs for {task_id}")
-        _validate_task_snapshot(
+        pre_runtime = _validate_task_snapshot(
             boundary["pre_runtime_snapshot"],
             pre,
             boundary_base=boundary_snapshot_base,
             mode=mode,
             producer_pid=producer_pid,
+            task_dir=task_dir,
+            metric_label="pre",
+            server_capacity=batch_size,
+            census_path=work_census_path,
             label=f"pre-task {task_id}",
         )
-        _validate_task_snapshot(
+        post_runtime = _validate_task_snapshot(
             boundary["post_runtime_snapshot"],
             post,
             boundary_base=boundary_snapshot_base,
             mode=mode,
             producer_pid=producer_pid,
+            task_dir=task_dir,
+            metric_label="post",
+            server_capacity=batch_size,
+            census_path=work_census_path,
             label=f"post-task {task_id}",
         )
+        pre_committer = pre_runtime["runtime_snapshot"]["committer"]
+        post_committer = post_runtime["runtime_snapshot"]["committer"]
+        if any(
+            pre_committer[key] != post_committer[key]
+            for key in (
+                "layer_batch_gate_attempts_by_batch",
+                "layer_batch_gate_coverage_mask_by_batch",
+            )
+        ):
+            raise CredentialError(
+                f"task runtime gate state changed inside interval for {task_id}"
+            )
 
         task_proxy = [row for row in proxy_rows if row.get("task_key_id") == task_key]
         expected_evidence = {
@@ -1036,6 +1153,10 @@ def _validate_qwen_and_tasks(
             "post_generation": post["generation"],
             "pre_nonce": pre["nonce"],
             "post_nonce": post["nonce"],
+            "pre_ack": pre,
+            "post_ack": post,
+            "pre_runtime": pre_runtime,
+            "post_runtime": post_runtime,
         }
     return task_bindings, campaign_identity
 
@@ -1243,6 +1364,10 @@ def issue_credential(
         source_commit=source_commit,
         batch_size=batch_size,
     )
+    inference_proxy_import = _validate_inference_proxy_import(
+        repo=repo,
+        committed_digests=committed,
+    )
     container_env_raw = _raw(container_env_path, "container environment")
     try:
         env_lines = container_env_raw.decode("utf-8", errors="strict").splitlines()
@@ -1305,12 +1430,15 @@ def issue_credential(
         flush_request_raw,
         current_ack_path,
         current_ack_raw,
+        final_runtime_report,
     ) = _validate_flush(
         final_flush_path,
         boundary_snapshot_base,
         mode=mode,
         work_terminal=work_terminal,
         comparator_terminal=comparator_terminal,
+        server_capacity=batch_size,
+        census_path=work_census_path,
     )
     proxy_rows, engine_rows, successful, ingress = _validate_ledgers(
         proxy_ledger_path, engine_ledger_path, task_ids=task_ids
@@ -1325,6 +1453,7 @@ def issue_credential(
         successful_engine_ids=successful,
         qwen_campaign_path=qwen_campaign_path,
         boundary_snapshot_base=boundary_snapshot_base,
+        work_census_path=work_census_path,
     )
 
     intervals = [
@@ -1339,18 +1468,85 @@ def issue_credential(
         for generation in (binding["pre_generation"], binding["post_generation"])
     )
     final_generation = comparator_terminal["flush_generation"]
-    endpoint_nonces = [
-        nonce
-        for binding in task_bindings.values()
-        for nonce in (binding["pre_nonce"], binding["post_nonce"])
-    ]
+    ack_chain = sorted(
+        [
+            _ready,
+            *(
+                ack
+                for binding in task_bindings.values()
+                for ack in (binding["pre_ack"], binding["post_ack"])
+            ),
+            _result["ack"],
+        ],
+        key=lambda ack: ack["generation"],
+    )
     if (
         endpoint_generations != list(range(1, final_generation))
-        or len(endpoint_nonces) != len(set(endpoint_nonces))
-        or comparator_terminal["flush_nonce"] in endpoint_nonces
-        or FLUSH_READY_NONCE in endpoint_nonces
+        or [ack["generation"] for ack in ack_chain]
+        != list(range(final_generation + 1))
+        or [ack["action"] for ack in ack_chain]
+        != ["ready", *(["snapshot"] * (2 * batch_size)), "final"]
+        or len({ack["nonce"] for ack in ack_chain}) != len(ack_chain)
     ):
         raise CredentialError("task/final flush generation chain is not exact")
+    if any(
+        current["counters"][key] < previous["counters"][key]
+        for previous, current in zip(ack_chain, ack_chain[1:], strict=False)
+        for key in (
+            "pure_decode_forward_steps",
+            "complete_work_census_events",
+        )
+    ):
+        raise CredentialError("flush ACK counters regress across generations")
+    runtime_by_generation = {
+        generation: runtime
+        for binding in task_bindings.values()
+        for generation, runtime in (
+            (
+                binding["pre_generation"],
+                binding["pre_runtime"]["runtime_snapshot"],
+            ),
+            (
+                binding["post_generation"],
+                binding["post_runtime"]["runtime_snapshot"],
+            ),
+        )
+    }
+    runtime_by_generation[final_generation] = final_runtime_report
+    ordered_runtime = [
+        runtime_by_generation[generation]
+        for generation in range(1, final_generation + 1)
+    ]
+    if any(
+        current["boot_warm"] != previous["boot_warm"]
+        or current["committer"]["actual_replays_enqueued"]
+        < previous["committer"]["actual_replays_enqueued"]
+        or current["committer"]["nonpure_committer_replays_enqueued"]
+        < previous["committer"]["nonpure_committer_replays_enqueued"]
+        or any(
+            current["committer"][map_name][batch]
+            < previous["committer"][map_name][batch]
+            for map_name in (
+                "actual_replays_by_batch",
+                "nonpure_committer_replays_by_batch",
+            )
+            for batch in ("1", "2", "3", "4")
+        )
+        or any(
+            current["committer"]["nonpure_dispatch"][key]
+            < previous["committer"]["nonpure_dispatch"][key]
+            for key in (
+                "guarded_steps",
+                "piecewise_steps",
+                "none_steps",
+                "forbidden_full_steps",
+            )
+        )
+        for previous, current in zip(
+            ordered_runtime, ordered_runtime[1:], strict=False
+        )
+    ):
+        raise CredentialError("runtime snapshot counters regress across generations")
     expected_snapshots = {
         Path(str(boundary_snapshot_base) + f".{generation}.json")
         for generation in [*endpoint_generations, final_generation]
@@ -1405,6 +1601,7 @@ def issue_credential(
         "task_subset_sha256": _sha(subset_raw),
         "source_commit": source_commit,
         "committed_runtime_sources": committed,
+        "inference_proxy_import": inference_proxy_import,
         "container_env_sha256": _sha(container_env_raw),
         "runtime_manifest_at_launch": _identity(
             runtime_manifest_launch_path, runtime_launch_raw
@@ -1437,6 +1634,13 @@ def issue_credential(
         "authenticated_engine_requests": len(successful),
         "all_engine_requests_joined_to_comparator": True,
         "per_task_comparator_memberships": task_memberships,
+        "task_runtime_snapshots": {
+            task_id: {
+                "pre": binding["pre_runtime"],
+                "post": binding["post_runtime"],
+            }
+            for task_id, binding in task_bindings.items()
+        },
         "qwen_campaign_proof": campaign_identity,
         "comparison_records": len(records),
         "compared_bytes": sum(record["compared_bytes"] for record in records),

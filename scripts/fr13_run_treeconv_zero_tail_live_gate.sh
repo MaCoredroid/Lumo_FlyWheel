@@ -121,7 +121,8 @@ QWEN_ARGS=()
 if [[ "$BATCH" == "4" ]]; then
   QWEN_ARGS=(--qwen-campaign "$ARMDIR/swe_out/verified/fixed32_qwen_campaign_provenance.json")
 fi
-"$PYTHON_BIN" scripts/fr13_treeconv_zero_tail_credential.py \
+PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" \
+  "$PYTHON_BIN" scripts/fr13_treeconv_zero_tail_credential.py \
   --comparator "$ARMDIR/logs/fr13_fixed32_treeconv_zero_tail.byte_ab.jsonl" \
   --subset "$SUBSET" --health "$ARMDIR/health.json" \
   --proxy-ledger "$ARMDIR/logs/fr13_fixed32_proxy_ingress.jsonl" \
