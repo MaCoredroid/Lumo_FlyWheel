@@ -132,6 +132,7 @@ def test_sfwd_admits_taw_only_for_exact_composed_cfwd_tuple() -> None:
     launcher = _text("fr13_launch_forked_fa2_tree_server.sh")
     required = (
         '_fr13_sfwd_cfwd_composed=0',
+        '"$_fr13_bm8_composed_b1" == "1"',
         '"$_fr13_sfwd_qrow16_production" == "0"',
         '"$_fr13_sfwd_qrow32_production" == "1"',
         '"${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION:-0}" == "1"',

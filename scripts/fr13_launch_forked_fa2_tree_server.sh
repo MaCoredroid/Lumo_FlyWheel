@@ -1089,15 +1089,49 @@ case "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" in
   0|1) ;;
   *) echo "FR13_DFWD_UNIFIED_BM8_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
 esac
+_fr13_bm8_composed_b1=0
+if [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
+      && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+      && "$MAX_NUM_SEQS" == "1" \
+      && "${SWE_CONCURRENCY:-}" == "1" \
+      && "${ENFORCE_EAGER:-0}" == "0" \
+      && "${CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}" == "FULL_AND_PIECEWISE" \
+      && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+      && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+      && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+      && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+      && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
+      && -z "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" \
+      && "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" == "split2" \
+      && "${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION:-0}" == "1" \
+      && "${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH:-}" == "1" \
+      && "$FR13_DFWD_K64_TOP3" == "1" \
+      && "$FR13_DFWD_K64_TOP3_SHA256" == "c0ed75cafdd926eceafcf28671869d54f37addb51bfef5a37c0b07c34f5420ff" \
+      && "$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1" \
+      && "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" \
+      && "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" == "k64_root" \
+      && "$FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION" == "1" \
+      && "$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB" == "0" \
+      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" \
+      && "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" == "0" \
+      && "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" == "1" \
+      && "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" == "0" \
+      && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" \
+      && "$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256" == "570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5" \
+      && "$FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256" == "3baccaa1a83907e15561b1cf807f15a41bd4764513bb43c4046b434937c3274b" \
+      && "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON" == "/logs/fr13_dfwd_unified_bm8.production_capture.json" ]]; then
+  _fr13_bm8_composed_b1=1
+fi
 if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" \
-      && "$FR13_FIXED32_CUTLASS_WAVE" != "stock" ]]; then
-  echo "FR13 DFWD unified BM8 production requires the stock CUTLASS wave" >&2
+      && "$FR13_FIXED32_CUTLASS_WAVE" != "stock" \
+      && "$_fr13_bm8_composed_b1" != "1" ]]; then
+  echo "FR13 DFWD unified BM8 with nonstock CUTLASS requires the exact composed B1 tuple" >&2
   exit 2
 fi
 if [[ "$FR13_FIXED32_CUTLASS_WAVE" != "stock" \
-      && ( "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" != "0" \
-           || "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" != "0" ) ]]; then
-  echo "nonstock CUTLASS wave requires both BM8 selectors to be 0" >&2
+      && "$FR13_DFWD_UNIFIED_BM8_LIVE_AB" != "0" ]]; then
+  echo "nonstock CUTLASS wave forbids BM8 live A/B" >&2
   exit 2
 fi
 case "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" in
@@ -3402,7 +3436,8 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
       ;;
   esac
   _fr13_sfwd_cfwd_composed=0
-  if [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
+  if [[ "$_fr13_bm8_composed_b1" == "1" \
+        && "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
         && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
         && "$_fr13_sfwd_qrow16_production" == "0" \
         && "$_fr13_sfwd_qrow32_production" == "1" \
@@ -3449,7 +3484,8 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         || ( "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
              && "$_fr13_sfwd_cfwd_composed" != "1" ) \
         || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
-        || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
+        || ( "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" \
+             && "$_fr13_sfwd_cfwd_composed" != "1" ) ]]; then
     echo "SFWD conv/post-prep production inherited an incompatible diagnostic or production arm" >&2
     exit 2
   fi

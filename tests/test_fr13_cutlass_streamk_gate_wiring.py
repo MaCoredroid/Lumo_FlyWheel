@@ -54,30 +54,44 @@ def test_launcher_is_digest_pinned_diagnostic_only_and_worker_visible() -> None:
     assert "--expected-production-pass-sha256" in launcher
 
 
-def test_launcher_rejects_cutlass_bm8_composition_before_sidecar_or_docker() -> None:
+def test_launcher_admits_bm8_only_for_exact_composed_b1_before_sidecars() -> None:
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
-    bm8_stock_guard = launcher.index(
-        "FR13 DFWD unified BM8 production requires the stock CUTLASS wave"
+    exact_tuple = launcher.index("_fr13_bm8_composed_b1=0")
+    bm8_composed_guard = launcher.index(
+        "FR13 DFWD unified BM8 with nonstock CUTLASS requires the exact composed B1 tuple"
     )
-    cutlass_bm8_guard = launcher.index(
-        "nonstock CUTLASS wave requires both BM8 selectors to be 0"
-    )
+    bm8_live_guard = launcher.index("nonstock CUTLASS wave forbids BM8 live A/B")
     binary_preflight = launcher.index(
         ".venv/bin/python scripts/fr13_cutlass_wave_binary.py verify"
     )
     sidecar_issue = launcher.index("scripts/fr13_bm8_pass_sidecar.py issue")
     docker_run = launcher.index("docker run -d --pull=never")
-    assert bm8_stock_guard < binary_preflight
-    assert cutlass_bm8_guard < binary_preflight
+    assert exact_tuple < bm8_composed_guard < binary_preflight
+    assert exact_tuple < bm8_live_guard < binary_preflight
     assert binary_preflight < sidecar_issue < docker_run
+    for selector in (
+        '"${FR13_FIXED32_MODE:-}" == "hydra27_fixed32"',
+        '"$FR13_FA2_QROW32_B1_PRODUCTION_ARM" == "split2"',
+        '"$FR13_DFWD_K64_TOP3_SHA256" == "c0ed75cafdd926eceafcf28671869d54f37addb51bfef5a37c0b07c34f5420ff"',
+        '"$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1"',
+        '"$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" == "k64_root"',
+        '"$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1"',
+        '"$FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256" == "570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5"',
+        '"$FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON" == "/logs/fr13_dfwd_unified_bm8.production_capture.json"',
+    ):
+        assert selector in launcher[exact_tuple:bm8_composed_guard]
 
 
 @pytest.mark.parametrize(
     ("bm8_live", "bm8_production", "message"),
     (
-        ("1", "0", "nonstock CUTLASS wave requires both BM8 selectors to be 0"),
-        ("0", "1", "BM8 production requires the stock CUTLASS wave"),
+        ("1", "0", "nonstock CUTLASS wave forbids BM8 live A/B"),
+        (
+            "0",
+            "1",
+            "BM8 with nonstock CUTLASS requires the exact composed B1 tuple",
+        ),
     ),
 )
 def test_launcher_cross_kernel_preflight_runs_before_sidecar_and_docker(
