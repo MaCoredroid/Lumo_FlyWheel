@@ -1,0 +1,11 @@
+PASS focused CPU tests: 34 passed in 1.95s
+PASS generated kernel matches generator
+PASS py_compile: offline audit and verifier
+PASS offline SM121a rejection audit run1
+PASS offline SM121a rejection audit run2
+PASS run1/run2 summary.json byte equality
+PASS checked-in rejection verifier
+PASS SHA256SUMS verification
+REJECTED: B1/B4 registers increased from 56 to 64 for diminishing work savings
+NOT RUN GPU byte equality
+NOT RUN real SWE-Verified B1/B4 timing
