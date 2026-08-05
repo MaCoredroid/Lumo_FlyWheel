@@ -18,7 +18,7 @@ NODE_TRUST_OVERLAY_PATH = (
     SCRIPT_DIR / "fr13_cfwd_packed_walk_node_trust_runtime_overlay.py"
 )
 NODE_TRUST_OVERLAY_SHA256 = (
-    "2a19b24edba9b0c16410dcbd3637f2a7cb2338536d0f230a766e3d225d0fd90c"
+    "8f334ec0ff99e1297415f15b70f59378127e81965e9417d8091a7e801768d153"
 )
 
 

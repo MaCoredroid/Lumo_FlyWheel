@@ -1,0 +1,14 @@
+PASS focused integration pytest: 242 passed
+PASS focused CFWD rebind regression pytest: 73 passed
+PASS bash -n: 6 changed shell scripts
+PASS py_compile: 29 changed Python files
+PASS generated-source diff check: CFWD overlay and SFWD kernel
+PASS git diff --check
+PASS artifact SHA256SUMS: 5 candidate artifact directories
+PASS disabled-U8 credential clearing regression coverage
+PASS CFWD capture-scope lifecycle regression coverage
+PASS all three selectors are strict and default off
+NOT RUN GPU kernel execution
+NOT RUN Docker
+NOT RUN real SWE-Verified B1/B4 byte qualification
+NOT RUN B1/B4 timing or hardware-floor acceptance

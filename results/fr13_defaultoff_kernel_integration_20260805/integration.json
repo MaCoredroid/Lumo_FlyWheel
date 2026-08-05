@@ -1,0 +1,43 @@
+{
+  "base_commit": "fee4cfd2b4de6fca5108da32122973ab720295a6",
+  "candidates": {
+    "b4_dfwd_k64_m4_u8": "77817d7a31a05b07a7f5a1b29e5ee9f7faeeb65d",
+    "cfwd_packed_walk_node_trust": "e7c8bac9b296e6fd3de1c9fef00418c83266e231",
+    "sfwd_embedded_gate_cta": "db73940140147c91b6431914f352ad0bda20e4d1"
+  },
+  "cfwd_capture_scope_contract_sha256": "421465c6c04de8c26e3ea724a7d2f0d3f00fe50b4fdc9f57c35e71e71212297b",
+  "conflicts": [
+    {
+      "file": "scripts/fr13_launch_forked_fa2_tree_server.sh",
+      "resolution": "retained both the main B1 timing guard and B4 M4 guard"
+    },
+    {
+      "file": "scripts/fr13_device_multidraft_cfwd_packed_v3.py",
+      "resolution": "retained main's capture-scope overlay and added the node-trust overlay"
+    }
+  ],
+  "default_off": true,
+  "gpu_execution": false,
+  "source_sha256": {
+    "cfwd_base_overlay": "dae67e424aa871764307311c88301ff65b37fa1f921ffc20c13acef9a7695356",
+    "cfwd_node_trust_overlay": "8f334ec0ff99e1297415f15b70f59378127e81965e9417d8091a7e801768d153",
+    "cfwd_node_trust_runner": "840af3a1e62f33d1fda7f249cac1f10a21054afb3e6f53fe3ae5c405e00a9a2e",
+    "cfwd_wrapper": "67a7a6ad2ad9e3dcb5972d9b654a6325c65970c87a7e0304c7a98c9aa3c3a967",
+    "dfwd_m4_gate": "351716dbe503dcc96cb4ce4605dcea91ef858b4fd3f63ce6cdc29b842cb45096",
+    "inference_proxy": "776be589f7fac1fd6082b17d234967cd547888a1f892c25c82888c8437342b78",
+    "launcher": "a3873fdf3840d6ff9f45ff8c39096da399db60b20473bbc6a3db7ed1c226aa8b",
+    "patcher": "ed6b31034ea31c24d3b3202c602395960cb09f6bc64093360653e4f339f9021b",
+    "runtime_manifest": "db07a5beccb8abf0179012bdad965f9d5682e18ed050f24109ce7daae40db677",
+    "sfwd_runtime": "ae9601d81c243062f2c45684e3c0d364af25595fc95c74212af6376b053cea06",
+    "sfwd_runtime_kernel": "c4c5e20f51a16ff83f0d45a1014c36219ebbe4b5f9ee7e1d22dbaac3872277f9",
+    "shared_b1_runner": "489e69cec9a3e7bde60ff4ee87377cb299f1e6335b37259e876ff847aeb1c712"
+  },
+  "status": "cpu_static_integration_pass",
+  "tests": {
+    "artifact_checksum_directories": 5,
+    "bash_files": 6,
+    "generated_outputs": 2,
+    "py_compile_files": 29,
+    "pytest_passed": 242
+  }
+}
