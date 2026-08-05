@@ -4456,7 +4456,7 @@ def _fr13_fa2_qrow32_b1_live_register(
     window_size, block_table, softcap, num_splits, tree_bias,
 ):
     arm = _fr13_fa2_qrow32_b1_arm("FR13_FA2_QROW32_B1_LIVE_AB_ARM")
-    if arm is None:
+    if arm is None or _FR13_FA2_QROW32_B1_LIVE_ATTEMPTED:
         return tree_bias
     _fr13_fa2_qrow32_b1_require_k64()
     _fr13_fa2_qrow32_b1_require_identity()
@@ -4470,6 +4470,11 @@ def _fr13_fa2_qrow32_b1_live_register(
         num_splits=num_splits, tree_bias=tree_bias,
     )
     if geometry_mismatches:
+        query_rows = int(query.shape[0]) if query.ndim == 3 else -1
+        if 0 < query_rows < 32 and int(max_seqlen_q) == query_rows:
+            # The shadow gate waits for one exact physical32 event. Variable
+            # speculative tails remain on the unmodified incumbent path.
+            return tree_bias
         raise RuntimeError(
             "FR13 qrow32 B1 live gate geometry drifted: "
             + "; ".join(geometry_mismatches)

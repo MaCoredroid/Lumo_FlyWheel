@@ -483,6 +483,35 @@ def test_geometry_failure_reports_only_non_secret_operand_metadata(
     assert str(error.value).endswith("geometry drifted: max_seqlen_q=1")
 
 
+def test_live_register_bypasses_partial_events_before_and_after_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, _ = _selector_namespace(monkeypatch, profile_scope=None)
+    geometry = _b1_geometry()
+    geometry["query"] = torch.empty((25, 24, 256), dtype=torch.bfloat16)
+    geometry["max_seqlen_q"] = 25
+    original_tree_bias = geometry["tree_bias"]
+
+    selected = namespace["_fr13_fa2_qrow32_b1_live_register"](
+        layer=types.SimpleNamespace(layer_name="partial.before.replay"),
+        **geometry,
+    )
+
+    assert selected is original_tree_bias
+    assert namespace["_FR13_FA2_QROW32_B1_LIVE_ATTEMPTED"] is False
+    assert namespace["_FR13_FA2_QROW32_B1_LIVE_GRAPHS"] == {}
+
+    namespace["_FR13_FA2_QROW32_B1_LIVE_ATTEMPTED"] = True
+    exact = _b1_geometry()
+    exact_tree_bias = exact["tree_bias"]
+    selected = namespace["_fr13_fa2_qrow32_b1_live_register"](
+        layer=types.SimpleNamespace(layer_name="exact.after.replay"), **exact
+    )
+
+    assert selected is exact_tree_bias
+    assert namespace["_FR13_FA2_QROW32_B1_LIVE_GRAPHS"] == {}
+
+
 def test_live_register_profile_capture_bypasses_final_geometry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
