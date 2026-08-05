@@ -528,6 +528,39 @@ def test_drafter_ownership_rejects_profile_scope_overlap() -> None:
         profile_end["_fr13_fixed32_profile_capture_scope_end"]()
 
 
+def test_profile_capture_scope_accepts_only_closed_terminal_states() -> None:
+    descriptor = ("FULL", 32, 1, True, False, 0)
+
+    zero_capture = _runtime()
+    zero_capture["_fr13_fixed32_profile_memory_scope_begin"]()
+    zero_capture["_fr13_fixed32_profile_capture_scope_begin"](*descriptor)
+    zero_capture["_fr13_fixed32_profile_capture_scope_end"]()
+    assert zero_capture["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] is None
+    assert zero_capture["_FR13_FIXED32_CAPTURE_CONTEXT"] is None
+    assert zero_capture["_FR13_FIXED32_CAPTURE_MANIFESTS"] == {}
+    zero_capture["_fr13_fixed32_profile_memory_scope_end"]()
+
+    completed_capture = _runtime()
+    completed_capture["_fr13_fixed32_profile_memory_scope_begin"]()
+    completed_capture["_fr13_fixed32_profile_capture_scope_begin"](*descriptor)
+    completed_capture["_fr13_fixed32_capture_begin"](43_103, *descriptor)
+    completed_capture["_fr13_fixed32_capture_end"](43_103, *descriptor)
+    completed_capture["_fr13_fixed32_profile_capture_scope_end"]()
+    assert completed_capture["_FR13_FIXED32_CAPTURE_MANIFESTS"] == {}
+    completed_capture["_fr13_fixed32_profile_memory_scope_end"]()
+
+    for graph_id, completed in ((43_104, False), (None, True), (True, True)):
+        partial = _runtime()
+        partial["_fr13_fixed32_profile_memory_scope_begin"]()
+        partial["_fr13_fixed32_profile_capture_scope_begin"](*descriptor)
+        partial["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"]["graph_id"] = graph_id
+        partial["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"]["completed"] = completed
+        with pytest.raises(RuntimeError, match="did not close cleanly"):
+            partial["_fr13_fixed32_profile_capture_scope_end"]()
+        assert partial["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] is None
+        partial["_fr13_fixed32_profile_memory_scope_end"]()
+
+
 def _emitted_tree_attention_hook():
     patcher_tree = ast.parse(PATCHER_PATH.read_text())
     patch_function = next(

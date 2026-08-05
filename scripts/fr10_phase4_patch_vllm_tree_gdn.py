@@ -889,13 +889,18 @@ def _fr13_fixed32_profile_capture_scope_end():
     # Clear before validating so an exceptional/unbalanced profile attempt
     # cannot leave a stale bypass marker behind.
     _FR13_FIXED32_PROFILE_CAPTURE_SCOPE = None
+    graph_id = scope.get("graph_id") if isinstance(scope, dict) else None
+    completed = scope.get("completed") if isinstance(scope, dict) else None
+    capture_state_closed = (
+        graph_id is None and completed is False
+    ) or (
+        type(graph_id) is int and graph_id > 0 and completed is True
+    )
     if (
         not isinstance(scope, dict)
         or set(scope) != {"descriptor", "graph_id", "completed"}
         or not isinstance(scope.get("descriptor"), dict)
-        or not isinstance(scope.get("graph_id"), int)
-        or int(scope["graph_id"]) <= 0
-        or scope.get("completed") is not True
+        or not capture_state_closed
         or _FR13_FIXED32_CAPTURE_CONTEXT is not None
         or _FR13_FIXED32_CAPTURE_MANIFESTS
         or _FR13_FIXED32_OBSERVED_CURRENT is not None
@@ -36631,12 +36636,13 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 "_fr13_fixed32_profile_capture_scope_begin"
             ](*profile_descriptor),
         )
-        expect_failure(
-            "profile-unbalanced-end",
-            nested_profile["_fr13_fixed32_profile_capture_scope_end"],
-        )
-        if nested_profile["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] is not None:
-            raise AssertionError("unbalanced profile scope was not cleared")
+        nested_profile["_fr13_fixed32_profile_capture_scope_end"]()
+        if (
+            nested_profile["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] is not None
+            or nested_profile["_FR13_FIXED32_CAPTURE_CONTEXT"] is not None
+            or nested_profile["_FR13_FIXED32_CAPTURE_MANIFESTS"]
+        ):
+            raise AssertionError("zero-capture profile scope polluted runtime state")
         nested_profile["_fr13_fixed32_profile_memory_scope_end"]()
 
         profile_measured = new_runtime("tail6_fixed32", 1)
@@ -36656,11 +36662,31 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
                 (31,),
             ),
         )
-        expect_failure(
-            "profile-incomplete-after-measured-reject",
-            profile_measured["_fr13_fixed32_profile_capture_scope_end"],
-        )
+        profile_measured["_fr13_fixed32_profile_capture_scope_end"]()
         profile_measured["_fr13_fixed32_profile_memory_scope_end"]()
+
+        for label, graph_id, completed in (
+            ("partial-graph", 9_008, False),
+            ("completed-without-graph", None, True),
+        ):
+            incomplete_profile = new_runtime("tail6_fixed32", 1)
+            incomplete_profile["_fr13_fixed32_profile_memory_scope_begin"]()
+            incomplete_profile[
+                "_fr13_fixed32_profile_capture_scope_begin"
+            ](*profile_descriptor)
+            incomplete_profile["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"][
+                "graph_id"
+            ] = graph_id
+            incomplete_profile["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"][
+                "completed"
+            ] = completed
+            expect_failure(
+                "profile-incomplete-" + label,
+                incomplete_profile[
+                    "_fr13_fixed32_profile_capture_scope_end"
+                ],
+            )
+            incomplete_profile["_fr13_fixed32_profile_memory_scope_end"]()
 
         mismatched_profile = new_runtime("tail6_fixed32", 1)
         mismatched_profile["_fr13_fixed32_profile_memory_scope_begin"]()
