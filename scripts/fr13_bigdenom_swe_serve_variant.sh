@@ -2600,7 +2600,8 @@ if [[ -n "$FIXED32_MODE" ]]; then
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_single_b1_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_onen_n5120_fullgrid_b1_byte_ab" \
         || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_wide256_fullgrid_b1_byte_ab" \
-        || "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" == "byte_ab" ]]; then
+        || "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" == "byte_ab" \
+        || "${FR13_VERIFIER_HEAD_M32_SHADOW:-0}" == "1" ]]; then
     FIXED32_RUNNER_ARGS+=(
       --fixed32-cutlass-real-event-arm "$FIXED32_CUTLASS_REAL_EVENT_ARM_PATH"
     )

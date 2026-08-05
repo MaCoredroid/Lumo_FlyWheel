@@ -9124,6 +9124,22 @@ def main(argv: list[str] | None = None) -> int:
         "persistent_b4_m128_byte_ab",
         "persistent_b4_m128_static_byte_ab",
     }
+    verifier_head_shadow_text = os.environ.get(
+        "FR13_VERIFIER_HEAD_M32_SHADOW",
+        "0",
+    )
+    if verifier_head_shadow_text not in {"0", "1"}:
+        parser.error("FR13_VERIFIER_HEAD_M32_SHADOW must be exactly 0 or 1")
+    fixed32_verifier_head_shadow = verifier_head_shadow_text == "1"
+    if fixed32_verifier_head_shadow:
+        if not fixed32_enabled or not fixed32_b1_diagnostic:
+            parser.error(
+                "verifier-head M32 shadow requires fixed32 B1 diagnostic mode"
+            )
+        if cutlass_wave != "stock":
+            parser.error(
+                "verifier-head M32 shadow requires the stock CUTLASS wave"
+            )
     batch_gdn_eager_diagnostic = os.environ.get(
         "FR13_FIXED32_BATCH_GDN_BYTE_AB", "0"
     )
@@ -9189,9 +9205,29 @@ def main(argv: list[str] | None = None) -> int:
         > 1
     ):
         parser.error("fixed32 SFWD diagnostics are exclusive")
+    if fixed32_verifier_head_shadow and any(
+        (
+            fixed32_cutlass_diagnostic,
+            fixed32_cutlass_b4_diagnostic,
+            fixed32_taw_diagnostic,
+            fixed32_bm8_diagnostic,
+            fixed32_cfwd_qualification,
+            batch_gdn_eager_diagnostic == "1",
+            treeconv_zero_tail_graph_diagnostic == "1",
+            sfwd_state_fusion_eager_diagnostic == "1",
+            sfwd_state_fusion_timing_text == "1",
+            sfwd_prior_reuse_text == "1",
+            sfwd_conv_postprep_text == "1",
+            sfwd_conv_postprep_byte_text == "1",
+        )
+    ):
+        parser.error(
+            "verifier-head M32 shadow must be the only kernel diagnostic"
+        )
     fixed32_eager_kernel_diagnostic = (
         fixed32_cutlass_diagnostic
         or fixed32_cutlass_b4_diagnostic
+        or fixed32_verifier_head_shadow
         or batch_gdn_eager_diagnostic == "1"
         or sfwd_state_fusion_eager_diagnostic == "1"
         or sfwd_state_fusion_timing_text == "1"
@@ -9222,6 +9258,7 @@ def main(argv: list[str] | None = None) -> int:
             (
                 fixed32_cutlass_diagnostic,
                 fixed32_cutlass_b4_diagnostic,
+                fixed32_verifier_head_shadow,
                 batch_gdn_eager_diagnostic == "1",
                 sfwd_state_fusion_eager_diagnostic == "1",
                 sfwd_state_fusion_timing_text == "1",
@@ -9272,18 +9309,18 @@ def main(argv: list[str] | None = None) -> int:
             "--fixed32-committer-layer-batch-real-event-arm requires "
             "FR13_FIXED32_COMMITTER_LAYER_BATCH_QUALIFICATION=1"
         )
-    if fixed32_cutlass_diagnostic:
+    if fixed32_cutlass_diagnostic or fixed32_verifier_head_shadow:
         if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
             parser.error(
-                "fixed32 CUTLASS, TAW, and BM8 real-task diagnostics are exclusive"
+                "fixed32 kernel, TAW, and BM8 real-task diagnostics are exclusive"
             )
         if not fixed32_enabled or not fixed32_b1_diagnostic:
             parser.error(
-                "fixed32 CUTLASS real-task arm requires fixed32 B1 diagnostic mode"
+                "fixed32 kernel real-task arm requires fixed32 B1 diagnostic mode"
             )
         if args.fixed32_cutlass_real_event_arm is None:
             parser.error(
-                "a CUTLASS Stream-K byte diagnostic requires "
+                "a CUTLASS or verifier-head diagnostic requires "
                 "--fixed32-cutlass-real-event-arm"
             )
         if (
@@ -9298,7 +9335,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.fixed32_cutlass_real_event_arm is not None:
         parser.error(
             "--fixed32-cutlass-real-event-arm requires the "
-            "CUTLASS Stream-K byte-diagnostic selector"
+            "CUTLASS byte-diagnostic or verifier-head shadow selector"
         )
     if fixed32_cutlass_b4_diagnostic:
         if fixed32_taw_diagnostic or fixed32_bm8_diagnostic:
