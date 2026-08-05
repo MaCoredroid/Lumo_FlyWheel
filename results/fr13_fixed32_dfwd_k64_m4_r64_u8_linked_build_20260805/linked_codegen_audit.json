@@ -1,0 +1,21 @@
+{
+  "candidate_dynamic_loop_instructions_per_four_rows": 4760,
+  "candidate_loop_loads_per_four_rows": 40,
+  "candidate_resources": {
+    "constant0_bytes": 928,
+    "local_bytes_per_thread": 0,
+    "registers_per_thread": 56,
+    "shared_bytes_per_cta": 0,
+    "stack_bytes_per_thread": 0
+  },
+  "candidate_static_instructions": 200,
+  "candidate_steady_loop_instructions": 119,
+  "dynamic_loop_instruction_reduction_fraction": 0.38020833333333337,
+  "four_m1_u8_dynamic_loop_instructions": 7680,
+  "four_m1_u8_loop_loads_per_four_rows": 64,
+  "gpu_used": false,
+  "performance_measurement": false,
+  "schema": "fr13.fixed32.dfwd_k64_m4_r64_u8_codegen_audit.v1",
+  "status": "STATIC_CODEGEN_PASS_UNQUALIFIED",
+  "weight_reuse_batch": 4
+}

@@ -466,6 +466,28 @@ _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_VOCAB_ROOT",
 )
 
+_FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_SIDECAR = Path(
+    "/logs/fr13_draft_head_m4_r64_u8.worker_env.json"
+)
+_FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS = (
+    "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB",
+    "FR13_DRAFT_HEAD_M4_R64_U8_SO",
+    "FR13_DRAFT_HEAD_M4_R64_U8_SO_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_BUILD_ATTESTATION_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PATCH_SOURCE_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_RUNNER_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_SUBSET_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_VOCAB_BLOCKS_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT",
+    "FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS",
+    "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_JSON",
+    "FR13_DRAFT_VOCAB_BLOCKS",
+    "FR13_DRAFT_VOCAB_K",
+    "FR13_DRAFT_VOCAB_ROOT",
+)
+
 _FR13_FIXED32_OBSERVED_RUNTIME_SOURCE = r'''
 # FR13_FIXED32_OBSERVED_RUNTIME: event-scoped, host-only accounting at the
 # successful runtime call sites. This deliberately records tensor geometry and
@@ -489,6 +511,25 @@ _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_INTERNAL_PRODUCTION_ATTESTED",
     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_ENGAGEMENT_JSON",
+    "FR13_DRAFT_VOCAB_BLOCKS",
+    "FR13_DRAFT_VOCAB_K",
+    "FR13_DRAFT_VOCAB_ROOT",
+)
+
+_FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS = (
+    "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB",
+    "FR13_DRAFT_HEAD_M4_R64_U8_SO",
+    "FR13_DRAFT_HEAD_M4_R64_U8_SO_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_BUILD_ATTESTATION_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PATCH_SOURCE_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_RUNNER_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_SUBSET_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_VOCAB_BLOCKS_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT",
+    "FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS",
+    "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_JSON",
     "FR13_DRAFT_VOCAB_BLOCKS",
     "FR13_DRAFT_VOCAB_K",
     "FR13_DRAFT_VOCAB_ROOT",
@@ -627,6 +668,111 @@ def _fr13_draft_head_u8_worker_env_bridge(
 _FR13_DRAFT_HEAD_U8_WORKER_ENV_BRIDGE = (
     _fr13_draft_head_u8_worker_env_bridge()
 )
+
+
+def _fr13_draft_head_m4_u8_worker_env_bridge(
+    sidecar_path="/logs/fr13_draft_head_m4_r64_u8.worker_env.json",
+):
+    """Restore the exact B4 live qualification env inside EngineCore."""
+    _hashlib = __import__("hashlib")
+    _json = __import__("json")
+    _os = __import__("os")
+    _pathlib = __import__("pathlib")
+    _stat = __import__("stat")
+    try:
+        required = _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_REQUIRED is True
+    except NameError:
+        required = False
+    path = _pathlib.Path(sidecar_path)
+    if not path.exists() and not path.is_symlink():
+        if required:
+            raise RuntimeError("FR13 draft-head M4 U8 worker env sidecar is missing")
+        return None
+    if not required:
+        raise RuntimeError("FR13 draft-head M4 U8 worker env sidecar leaked while off")
+    info = path.lstat()
+    if (
+        not _stat.S_ISREG(info.st_mode)
+        or _stat.S_IMODE(info.st_mode) != 0o400
+        or not 1 <= info.st_size <= 16384
+    ):
+        raise RuntimeError("FR13 draft-head M4 U8 worker env sidecar is not canonical")
+    raw = path.read_bytes()
+    try:
+        record = _json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError("FR13 draft-head M4 U8 worker env sidecar is not JSON") from exc
+    payload = record.get("payload") if isinstance(record, dict) else None
+    canonical_payload = _json.dumps(
+        payload,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii") if isinstance(payload, dict) else b""
+    payload_sha256 = _hashlib.sha256(canonical_payload).hexdigest()
+    task_ids = (
+        "astropy__astropy-12907,astropy__astropy-13033,"
+        "astropy__astropy-13236,astropy__astropy-13398"
+    )
+    hash_keys = tuple(
+        key for key in _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS
+        if key.endswith("SHA256")
+    )
+    if (
+        not isinstance(record, dict)
+        or set(record) != {"payload", "payload_sha256", "schema"}
+        or record.get("schema")
+        != "fr13.fixed32.dfwd_k64_m4_r64_u8_worker_env.v1"
+        or not isinstance(payload, dict)
+        or tuple(sorted(payload))
+        != tuple(sorted(_FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS))
+        or any(not isinstance(value, str) for value in payload.values())
+        or record.get("payload_sha256") != payload_sha256
+        or payload["FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB"] != "1"
+        or payload["FR13_DRAFT_HEAD_M4_R64_U8_SO"]
+        != "/tmp/fr13_bf16_k64_m4_r64_u8.abi3.so"
+        or payload["FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS"] != task_ids
+        or payload["FR13_DRAFT_HEAD_M4_R64_U8_LIVE_JSON"]
+        != "/logs/fr13_dfwd_k64_m4_r64_u8.live.json"
+        or payload["FR13_DRAFT_VOCAB_K"] != "65536"
+        or payload["FR13_DRAFT_VOCAB_ROOT"] != "1"
+        or payload["FR13_DRAFT_VOCAB_BLOCKS"]
+        != "/workspace/scripts/fr13_dvk_subset_blocks.json"
+        or any(
+            len(payload[key]) != 64
+            or any(ch not in "0123456789abcdef" for ch in payload[key])
+            for key in hash_keys
+        )
+        or len(payload["FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT"]) != 40
+        or any(
+            ch not in "0123456789abcdef"
+            for ch in payload["FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT"]
+        )
+    ):
+        raise RuntimeError("FR13 draft-head M4 U8 worker env payload drifted")
+    conflicts = {
+        key: (_os.environ[key], value)
+        for key, value in payload.items()
+        if key in _os.environ and _os.environ[key] != value
+    }
+    if conflicts:
+        raise RuntimeError(
+            "FR13 draft-head M4 U8 inherited worker env conflicts with sidecar: "
+            + repr(conflicts)
+        )
+    _os.environ.update(payload)
+    return {
+        "schema": "fr13.fixed32.dfwd_k64_m4_r64_u8_worker_env_bridge.v1",
+        "sidecar": str(path),
+        "sidecar_sha256": _hashlib.sha256(raw).hexdigest(),
+        "payload_sha256": payload_sha256,
+        "hydrated_keys": list(_FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS),
+    }
+
+
+_FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_BRIDGE = (
+    _fr13_draft_head_m4_u8_worker_env_bridge()
+)
 _FR13_FIXED32_OBSERVED_CURRENT = None
 _FR13_FIXED32_CAPTURE_CONTEXT = None
 _FR13_FIXED32_CAPTURE_MANIFESTS = {}
@@ -644,6 +790,7 @@ _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
 _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE = []
 _FR13_DRAFT_HEAD_M32_LIVE_STATE = None
 _FR13_DRAFT_HEAD_U8_LIVE_STATE = None
+_FR13_DRAFT_HEAD_M4_U8_LIVE_STATE = None
 _FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT = None
 _FR13_FIXED32_BOOT_WARM_EVIDENCE = None
 _FR13_FIXED32_TOPOLOGY_NEEDLE_EMITTED = False
@@ -1080,6 +1227,230 @@ def _fr13_draft_head_u8_live_finalize(events, flush_binding):
                     expected_steps,
                 )
             )
+        )
+
+
+def _fr13_draft_head_m4_u8_live_register(
+    compares, mismatches, geometry, candidate, identities
+):
+    global _FR13_DRAFT_HEAD_M4_U8_LIVE_STATE
+    _os = __import__("os")
+    bridge = _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_BRIDGE
+    if (
+        _os.environ.get("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "0") != "1"
+        or _FR13_DRAFT_HEAD_M4_U8_LIVE_STATE is not None
+        or tuple(compares.shape) != (5,)
+        or tuple(mismatches.shape) != (5,)
+        or str(compares.dtype) != "torch.int64"
+        or str(mismatches.dtype) != "torch.int64"
+        or compares.device.type != "cuda"
+        or mismatches.device != compares.device
+        or not isinstance(geometry, dict)
+        or not isinstance(candidate, dict)
+        or not isinstance(identities, dict)
+        or not isinstance(bridge, dict)
+        or bridge.get("schema")
+        != "fr13.fixed32.dfwd_k64_m4_r64_u8_worker_env_bridge.v1"
+        or bridge.get("sidecar")
+        != "/logs/fr13_draft_head_m4_r64_u8.worker_env.json"
+        or bridge.get("hydrated_keys")
+        != list(_FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS)
+    ):
+        raise RuntimeError("FR13 draft-head M4 U8 live registration drifted")
+    _FR13_DRAFT_HEAD_M4_U8_LIVE_STATE = {
+        "compares": compares,
+        "mismatches": mismatches,
+        "geometry": geometry,
+        "candidate": candidate,
+        "identities": identities,
+        "worker_env_bridge": bridge,
+        "root_forward_steps": [],
+        "captured_depths": [],
+    }
+
+
+def _fr13_draft_head_m4_u8_live_depth(batch_size):
+    """Bind each B4 shadow call to root or one actual MTP depth."""
+    state = _FR13_DRAFT_HEAD_M4_U8_LIVE_STATE
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    context = _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
+    batch = int(batch_size)
+    if (
+        not isinstance(state, dict)
+        or not isinstance(proposal, dict)
+        or batch != 4
+        or int(proposal.get("batch_size", -1)) != 4
+        or proposal.get("mode") != _FR13_FIXED32_MODE
+        or proposal.get("measured") not in (True, False)
+    ):
+        raise RuntimeError("FR13 draft-head M4 U8 has no exact B4 proposal")
+    if context is None:
+        if (
+            proposal.get("mtp_execution_basis") != "unbound"
+            or int(proposal.get("mtp_forward_calls", -1)) != 0
+            or int(proposal.get("mtp_forward_rows", -1)) != 0
+        ):
+            raise RuntimeError("FR13 draft-head M4 U8 root lifecycle drifted")
+        if proposal["measured"] is True:
+            step = int(proposal.get("forward_step_index", -1))
+            expected_step = len(state["root_forward_steps"])
+            if step != expected_step:
+                raise RuntimeError(
+                    "FR13 draft-head M4 U8 measured root/event sequence drifted: "
+                    + repr((step, expected_step))
+                )
+            state["root_forward_steps"].append(step)
+        return 0
+    if not isinstance(context, dict):
+        raise RuntimeError("FR13 draft-head M4 U8 capture context is malformed")
+    calls = int(context.get("draft_head_u8_calls", -1))
+    rows = int(context.get("draft_head_u8_rows", -1))
+    depth = int(context.get("mtp_forward_calls", -1))
+    if (
+        context.get("capturing") is not True
+        or int(context.get("batch_size", -1)) != 4
+        or context.get("mode") != _FR13_FIXED32_MODE
+        or calls < 0
+        or rows < 0
+        or depth != calls + 1
+        or int(context.get("mtp_forward_rows", -1)) != rows + 4
+        or depth not in (1, 2, 3, 4)
+        or state["captured_depths"] != list(range(1, depth))
+    ):
+        raise RuntimeError(
+            "FR13 draft-head M4 U8 MTP depth lifecycle drifted: "
+            + repr((depth, calls, rows, context))
+        )
+    context["draft_head_u8_calls"] = calls + 1
+    context["draft_head_u8_rows"] = rows + 4
+    state["captured_depths"].append(depth)
+    return depth
+
+
+def _fr13_draft_head_m4_u8_live_finalize(events, flush_binding):
+    _os = __import__("os")
+    enabled = _os.environ.get("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "0")
+    if enabled != "1":
+        if _FR13_DRAFT_HEAD_M4_U8_LIVE_STATE is not None:
+            raise RuntimeError("FR13 draft-head M4 U8 live state leaked while off")
+        return
+    state = _FR13_DRAFT_HEAD_M4_U8_LIVE_STATE
+    event_rows = list(events)
+    event_count = len(event_rows)
+    expected_steps = [
+        int(row.get("forward_step_index", -1)) for row in event_rows
+    ]
+    hex_chars = frozenset("0123456789abcdef")
+    if (
+        not isinstance(state, dict)
+        or not isinstance(flush_binding, dict)
+        or set(flush_binding) != {
+            "action", "boundary_snapshot_sha256",
+            "complete_work_census_events", "events_sha256", "generation",
+            "nonce", "producer_pid",
+        }
+        or flush_binding.get("action") != "final"
+        or type(flush_binding.get("generation")) is not int
+        or int(flush_binding["generation"]) < 1
+        or type(flush_binding.get("producer_pid")) is not int
+        or int(flush_binding["producer_pid"]) < 1
+        or any(
+            not isinstance(flush_binding.get(key), str)
+            or len(flush_binding[key]) != 64
+            or any(value not in hex_chars for value in flush_binding[key])
+            for key in ("nonce", "events_sha256", "boundary_snapshot_sha256")
+        )
+        or event_count < 1
+        or int(flush_binding.get("complete_work_census_events", -1))
+        != event_count
+        or any(int(row.get("batch_size", -1)) != 4 for row in event_rows)
+        or expected_steps != list(range(event_count))
+    ):
+        raise RuntimeError("FR13 draft-head M4 U8 live finalization drifted")
+    compares = tuple(int(value) for value in state["compares"].tolist())
+    mismatches = tuple(int(value) for value in state["mismatches"].tolist())
+    exact = (
+        compares == (event_count,) * 5
+        and mismatches == (0,) * 5
+        and state["captured_depths"] == [1, 2, 3, 4]
+        and state["root_forward_steps"] == expected_steps
+    )
+    labels = ("root", "mtp_depth_1", "mtp_depth_2", "mtp_depth_3", "mtp_depth_4")
+    total_compares = sum(compares)
+    identities = state["identities"]
+    record = {
+        "schema": "fr13.fixed32.dfwd_k64_m4_r64_u8_shadow.v1",
+        "status": "PASS" if exact else "FAIL",
+        "suite": "SWE-Verified",
+        "task_ids": identities["task_ids"],
+        "task_markers": ["swe_verified:" + value for value in identities["task_ids"]],
+        "concurrency": 4,
+        "batch_size": 4,
+        "source_commit": identities["source_commit"],
+        "identities": identities,
+        "worker_env_bridge": state["worker_env_bridge"],
+        "topology": {
+            "mode": "hydra27_fixed32",
+            "batch_size": 4,
+            "physical_rows_per_request": 32,
+            "total_physical_rows": 128,
+            "logical_drafts_per_request": 27,
+            "draft_vocab_k": 65536,
+            "draft_vocab_root": 1,
+            "execution_basis": "FULL_AND_PIECEWISE_graph_replay",
+        },
+        "geometry": state["geometry"],
+        "candidate": state["candidate"],
+        "completed_events": event_count,
+        "complete_work_census_events": event_count,
+        "work_census_last_event_index": event_count - 1,
+        "events_sha256": flush_binding["events_sha256"],
+        "flush_generation": flush_binding["generation"],
+        "flush_nonce": flush_binding["nonce"],
+        "producer_pid": flush_binding["producer_pid"],
+        "boundary_snapshot_sha256": flush_binding["boundary_snapshot_sha256"],
+        "root_forward_steps": state["root_forward_steps"],
+        "captured_mtp_depths": state["captured_depths"],
+        "per_depth_full_logit_comparisons": dict(zip(labels, compares)),
+        "per_depth_raw_bf16_mismatches": dict(zip(labels, mismatches)),
+        "comparison_scope": (
+            "all four rows and all 65536 logits at each of five fixed "
+            "K64/root1 draft-head sites"
+        ),
+        "full_logit_comparisons": total_compares,
+        "compared_elements": total_compares * 4 * 65536,
+        "compared_bytes": total_compares * 4 * 65536 * 2,
+        "raw_bf16_mismatches": sum(mismatches),
+        "reference_always_served": True,
+        "candidate_returned": False,
+        "served_return": "incumbent BF16 logits object unchanged",
+        "performance_measurement": False,
+        "timing_eligible": False,
+        "finalized_by_fixed32_flush": True,
+        "flush_action": "final",
+    }
+    path = __import__("pathlib").Path(
+        _os.environ.get(
+            "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_JSON",
+            "/logs/fr13_dfwd_k64_m4_r64_u8.live.json",
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp." + str(_os.getpid()))
+    with open(temporary, "w", encoding="ascii") as handle:
+        handle.write(
+            __import__("json").dumps(
+                record, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+            ) + "\n"
+        )
+        handle.flush()
+        _os.fsync(handle.fileno())
+    _os.replace(temporary, path)
+    if not exact:
+        raise RuntimeError(
+            "FR13 draft-head M4 U8 final depth/event comparison mismatch: "
+            + repr((compares, mismatches, state["captured_depths"],
+                    state["root_forward_steps"], expected_steps))
         )
 def _fr13_fixed32_unmeasured_full_row_map_valid(batch_rows, compact_batch):
     """Admit equal full/compact rows only for isolated eager diagnostics."""
@@ -5300,6 +5671,7 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
         for key in (
             "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
             "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
+            "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB",
         )
     )
     if (
@@ -9410,6 +9782,9 @@ def _patch_gdn_linear() -> bool:
             "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
         )
     )
+    m4_u8_worker_env_required = (
+        os.environ.get("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "0") == "1"
+    )
 
     text = text.replace(
         "import torch\n",
@@ -9431,6 +9806,7 @@ def _patch_gdn_linear() -> bool:
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
             f"{_fr13_fixed32_runtime_bindings()}"
             f"_FR13_DRAFT_HEAD_U8_WORKER_ENV_REQUIRED = {u8_worker_env_required!r}\n"
+            f"_FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_REQUIRED = {m4_u8_worker_env_required!r}\n"
             f"{_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE}\n"
             "# FR13 DEPRECATION: FR13_APC_HIT_RECURRENT_SUFFIX is force-OFF at gdn\n"
             "# import (this EngineCore process hosts EVERY gate, TP=1) so no stray\n"
@@ -23906,6 +24282,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_u8_prod_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION", "0"
             )
+            _fr13_dh_m4_u8_live_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "0"
+            )
             _fr13_dh_fp8_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_FP8", "0"
             )
@@ -23940,6 +24319,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION must be exactly 0 or 1"
                 )
+            if _fr13_dh_m4_u8_live_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB must be exactly 0 or 1"
+                )
             if _fr13_dh_fp8_raw not in ("0", "1"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_FP8 must be exactly 0 or 1"
@@ -23955,6 +24338,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_u8_live = _fr13_dh_u8_live_raw == "1"
             _fr13_dh_u8_prod = _fr13_dh_u8_prod_raw == "1"
             _fr13_dh_u8_active = _fr13_dh_u8_live or _fr13_dh_u8_prod
+            _fr13_dh_m4_u8_live = _fr13_dh_m4_u8_live_raw == "1"
             _fr13_dh_fp8 = _fr13_dh_fp8_raw == "1"
             _fr13_dh_fp8_static_io = (
                 _fr13_dh_fp8_static_io_raw == "1"
@@ -23993,6 +24377,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m32_prod,
                     _fr13_dh_u8_live,
                     _fr13_dh_u8_prod,
+                    _fr13_dh_m4_u8_live,
                     _fr13_dh_fp8,
                 )
             )
@@ -24028,6 +24413,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr13_dh_m32_live
                 or _fr13_dh_m32_prod
                 or _fr13_dh_u8_active
+                or _fr13_dh_m4_u8_live
                 or _fr13_dh_fp8
             ) and (
                 not _fr13_is_fixed32
@@ -24038,6 +24424,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13 draft-head padding requires exact fixed32, root "
                     "subset, single-logits, and FR13_DRAFT_VOCAB_K=65536"
+                )
+            if _fr13_dh_m4_u8_live and int(batch_size) != 4:
+                raise RuntimeError(
+                    "FR13 draft-head M4 U8 live A/B requires exact B4 geometry"
                 )
             _fr13_dh_source_sha = os.environ.get(
                 "FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256", ""
@@ -24066,6 +24456,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             self._fr13_dh_u8_selected_capture_calls = 0
             self._fr13_dh_u8_fallback_calls = 0
             self._fr13_dh_u8_graph_attestation = None
+            self._fr13_dh_m4_u8_live_active = _fr13_dh_m4_u8_live
+            self._fr13_dh_m4_u8_fallback_calls = 0
             self._fr13_dh_fp8_active = _fr13_dh_fp8
             self._fr13_dh_fp8_selected_root_calls = 0
             self._fr13_dh_fp8_selected_capture_calls = 0
@@ -24555,6 +24947,180 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         flush=True,
                     )
                 if (
+                    _fr13_dh_m4_u8_live
+                    and not getattr(self, "_fr13_dh_m4_u8_ready", False)
+                ):
+                    import hashlib as _fr13_dh_m4_u8_hashlib
+                    import pathlib as _fr13_dh_m4_u8_pathlib
+
+                    _fr13_dh_m4_u8_sh = self._fr13_dvk_shim
+                    _fr13_dh_m4_u8_w = _fr13_dh_m4_u8_sh.weight
+                    if (
+                        type(_fr13_dh_m4_u8_sh.quant_method).__name__
+                        != "UnquantizedEmbeddingMethod"
+                        or tuple(_fr13_dh_m4_u8_w.shape) != (65536, 5120)
+                        or tuple(_fr13_dh_m4_u8_w.stride()) != (5120, 1)
+                        or _fr13_dh_m4_u8_w.dtype != torch.bfloat16
+                        or not _fr13_dh_m4_u8_w.is_contiguous()
+                        or tuple(torch.cuda.get_device_capability()) != (12, 1)
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head M4 U8 requires SM121 and contiguous "
+                            "BF16 UnquantizedEmbeddingMethod weight[65536,5120]"
+                        )
+                    _fr13_dh_m4_u8_paths = {
+                        "candidate_so_sha256": _fr13_dh_m4_u8_pathlib.Path(
+                            "/tmp/fr13_bf16_k64_m4_r64_u8.abi3.so"
+                        ),
+                        "candidate_source_sha256": _fr13_dh_m4_u8_pathlib.Path(
+                            "/workspace/csrc/"
+                            "fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.cu"
+                        ),
+                        "build_attestation_sha256": _fr13_dh_m4_u8_pathlib.Path(
+                            "/workspace/results/"
+                            "fr13_fixed32_dfwd_k64_m4_r64_u8_"
+                            "linked_build_20260805/build_attestation.json"
+                        ),
+                        "patch_source_sha256": _fr13_dh_m4_u8_pathlib.Path(
+                            "/workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py"
+                        ),
+                        "runner_sha256": _fr13_dh_m4_u8_pathlib.Path(
+                            "/workspace/scripts/"
+                            "fr13_run_b4_dfwd_k64_m4_r64_u8_live_gate.sh"
+                        ),
+                        "subset_sha256": _fr13_dh_m4_u8_pathlib.Path(
+                            "/workspace/config/fr13_fixed32/subset_b4_four.json"
+                        ),
+                        "vocab_blocks_sha256": _fr13_dh_m4_u8_pathlib.Path(
+                            "/workspace/scripts/fr13_dvk_subset_blocks.json"
+                        ),
+                        "fa2_sha256": _fr13_dh_m4_u8_pathlib.Path(
+                            "/tmp/fr13_fork_fa2.so"
+                        ),
+                    }
+                    _fr13_dh_m4_u8_env = {
+                        "candidate_so_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_SO_SHA256",
+                        "candidate_source_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_SHA256",
+                        "build_attestation_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_BUILD_ATTESTATION_SHA256",
+                        "patch_source_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_PATCH_SOURCE_SHA256",
+                        "runner_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_RUNNER_SHA256",
+                        "subset_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_SUBSET_SHA256",
+                        "vocab_blocks_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_VOCAB_BLOCKS_SHA256",
+                        "fa2_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256",
+                    }
+                    _fr13_dh_m4_u8_identities = {}
+                    for (
+                        _fr13_dh_m4_u8_key,
+                        _fr13_dh_m4_u8_path,
+                    ) in _fr13_dh_m4_u8_paths.items():
+                        _fr13_dh_m4_u8_expected = os.environ.get(
+                            _fr13_dh_m4_u8_env[_fr13_dh_m4_u8_key], ""
+                        )
+                        if (
+                            len(_fr13_dh_m4_u8_expected) != 64
+                            or any(
+                                char not in "0123456789abcdef"
+                                for char in _fr13_dh_m4_u8_expected
+                            )
+                            or not _fr13_dh_m4_u8_path.is_file()
+                            or _fr13_dh_m4_u8_path.is_symlink()
+                            or _fr13_dh_m4_u8_hashlib.sha256(
+                                _fr13_dh_m4_u8_path.read_bytes()
+                            ).hexdigest() != _fr13_dh_m4_u8_expected
+                        ):
+                            raise RuntimeError(
+                                "FR13 draft-head M4 U8 input identity drifted: "
+                                + _fr13_dh_m4_u8_key
+                            )
+                        _fr13_dh_m4_u8_identities[_fr13_dh_m4_u8_key] = (
+                            _fr13_dh_m4_u8_expected
+                        )
+                    _fr13_dh_m4_u8_pins = {
+                        "candidate_so_sha256": "6cb24782495ff1c1457ebbf9cbcfcd6ca7b372378d3b435f80054688432a365f",
+                        "candidate_source_sha256": "a52361be1c9052a46509cc230ea320c4beb6d15f261327edc835d8da3ae00d9e",
+                        "build_attestation_sha256": "b31ba7fb24fce81b0dceb97d77134f21107511e97538be15cb778c6ac4da5926",
+                        "subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+                        "vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+                        "fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+                    }
+                    if any(
+                        _fr13_dh_m4_u8_identities[key] != value
+                        for key, value in _fr13_dh_m4_u8_pins.items()
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head M4 U8 pinned qualification inputs drifted"
+                        )
+                    _fr13_dh_m4_u8_source_commit = os.environ.get(
+                        "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT", ""
+                    )
+                    _fr13_dh_m4_u8_task_ids = os.environ.get(
+                        "FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS", ""
+                    )
+                    _fr13_dh_m4_u8_expected_tasks = (
+                        "astropy__astropy-12907,astropy__astropy-13033,"
+                        "astropy__astropy-13236,astropy__astropy-13398"
+                    )
+                    if (
+                        len(_fr13_dh_m4_u8_source_commit) != 40
+                        or any(
+                            char not in "0123456789abcdef"
+                            for char in _fr13_dh_m4_u8_source_commit
+                        )
+                        or _fr13_dh_m4_u8_task_ids
+                        != _fr13_dh_m4_u8_expected_tasks
+                        or _fr13_dh_m4_u8_paths[
+                            "candidate_so_sha256"
+                        ].stat().st_size != 134320
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head M4 U8 source/task/binary identity drifted"
+                        )
+                    _fr13_dh_m4_u8_identities.update(
+                        {
+                            "source_commit": _fr13_dh_m4_u8_source_commit,
+                            "task_ids": _fr13_dh_m4_u8_task_ids.split(","),
+                            "candidate_so_bytes": 134320,
+                        }
+                    )
+                    torch.ops.load_library(
+                        str(_fr13_dh_m4_u8_paths["candidate_so_sha256"])
+                    )
+                    self._fr13_dh_m4_u8_op = getattr(
+                        torch.ops.fr13_bf16_k64_head,
+                        "gemvx_m4_shuffle_r64_u8_out",
+                    )
+                    self._fr13_dh_m4_u8_output = torch.empty(
+                        (4, 65536),
+                        dtype=torch.bfloat16,
+                        device=_fr13_dh_m4_u8_w.device,
+                    )
+                    self._fr13_dh_m4_u8_compares = torch.zeros(
+                        (5,), dtype=torch.int64, device=_fr13_dh_m4_u8_w.device
+                    )
+                    self._fr13_dh_m4_u8_mismatches = torch.zeros(
+                        (5,), dtype=torch.int64, device=_fr13_dh_m4_u8_w.device
+                    )
+                    self._fr13_dh_m4_u8_count_enable = torch.zeros(
+                        (), dtype=torch.int64, device=_fr13_dh_m4_u8_w.device
+                    )
+                    from vllm.model_executor.layers.mamba import (
+                        gdn_linear_attn as _fr13_dh_m4_u8_gdn,
+                    )
+                    _fr13_dh_m4_u8_contract_value = _fr13_dh_m4_u8_contract()
+                    _fr13_dh_m4_u8_gdn._fr13_draft_head_m4_u8_live_register(
+                        self._fr13_dh_m4_u8_compares,
+                        self._fr13_dh_m4_u8_mismatches,
+                        _fr13_dh_m4_u8_contract_value["geometry"],
+                        _fr13_dh_m4_u8_contract_value["candidate"],
+                        _fr13_dh_m4_u8_identities,
+                    )
+                    self._fr13_dh_m4_u8_ready = True
+                    print(
+                        "[FR13_DRAFT_HEAD_M4_R64_U8] ready shadow_only=1 "
+                        "incumbent_served=1 batch=4 depths=root,1,2,3,4",
+                        flush=True,
+                    )
+                if (
                     (
                         _fr13_dh_rows
                         or _fr13_dh_ab
@@ -24895,6 +25461,40 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "single_accumulator": True,
                         "reduction_strides": [8, 4, 2, 1],
                         "served_rows": 1,
+                        "shadow_only": True,
+                    },
+                }
+
+            def _fr13_dh_m4_u8_contract():
+                return {
+                    "geometry": {
+                        "batch_size": 4,
+                        "calls_per_event": 5,
+                        "depths": ["root", 1, 2, 3, 4],
+                        "input_shape": [4, 5120],
+                        "input_stride": [5120, 1],
+                        "weight_shape": [65536, 5120],
+                        "weight_stride": [5120, 1],
+                        "output_shape": [4, 65536],
+                        "output_stride": [65536, 1],
+                        "dtype": "torch.bfloat16",
+                    },
+                    "candidate": {
+                        "operation": (
+                            "fr13_bf16_k64_head::"
+                            "gemvx_m4_shuffle_r64_u8_out"
+                        ),
+                        "device": "sm121",
+                        "grid": [1024, 1, 1],
+                        "block": [16, 64, 1],
+                        "rows_per_cta": 64,
+                        "batch_rows": 4,
+                        "weight_reuse": 4,
+                        "lane_products_per_row": 320,
+                        "unroll_steps": 8,
+                        "independent_accumulators": 4,
+                        "reduction_strides": [8, 4, 2, 1],
+                        "served_rows": 4,
                         "shadow_only": True,
                     },
                 }
@@ -25669,6 +26269,85 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 return _fr13_dh_u8_reference
 
+            def _fr13_dh_m4_u8_logits(_sh, _h):
+                if (
+                    not getattr(self, "_fr13_dh_m4_u8_ready", False)
+                    or tuple(_h.shape) != (4, 5120)
+                    or tuple(_h.stride()) != (5120, 1)
+                    or _h.dtype != torch.bfloat16
+                    or not _h.is_contiguous()
+                    or _h.device != _sh.weight.device
+                    or tuple(_sh.weight.shape) != (65536, 5120)
+                    or tuple(_sh.weight.stride()) != (5120, 1)
+                    or _sh.weight.dtype != torch.bfloat16
+                    or not _sh.weight.is_contiguous()
+                    or tuple(self._fr13_dh_m4_u8_output.shape) != (4, 65536)
+                    or tuple(self._fr13_dh_m4_u8_output.stride()) != (65536, 1)
+                    or self._fr13_dh_m4_u8_output.dtype != torch.bfloat16
+                    or self._fr13_dh_m4_u8_output.device != _h.device
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head M4 U8 left exact B4 BF16 head geometry"
+                    )
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dh_m4_u8_runtime_gdn,
+                )
+
+                _fr13_dh_m4_u8_depth = getattr(
+                    _fr13_dh_m4_u8_runtime_gdn,
+                    "_fr13_draft_head_m4_u8_live_depth",
+                )(4)
+                _fr13_dh_m4_u8_proposal = getattr(
+                    _fr13_dh_m4_u8_runtime_gdn,
+                    "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT",
+                    None,
+                )
+                if not isinstance(_fr13_dh_m4_u8_proposal, dict):
+                    raise RuntimeError(
+                        "FR13 draft-head M4 U8 lost its authenticated proposal"
+                    )
+                if _fr13_dh_m4_u8_depth == 0:
+                    self._fr13_dh_m4_u8_count_enable.fill_(
+                        int(_fr13_dh_m4_u8_proposal["measured"] is True)
+                    )
+                _fr13_dh_m4_u8_reference = _sh.quant_method.apply(
+                    _sh, _h, bias=None
+                )
+                self._fr13_dh_m4_u8_op(
+                    self._fr13_dh_m4_u8_output, _h, _sh.weight
+                )
+                if (
+                    tuple(_fr13_dh_m4_u8_reference.shape) != (4, 65536)
+                    or tuple(_fr13_dh_m4_u8_reference.stride()) != (65536, 1)
+                    or _fr13_dh_m4_u8_reference.dtype != torch.bfloat16
+                    or _fr13_dh_m4_u8_reference.device != _h.device
+                    or _fr13_dh_m4_u8_reference.data_ptr()
+                    == self._fr13_dh_m4_u8_output.data_ptr()
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head M4 U8 incumbent/candidate output alias drifted"
+                    )
+                self._fr13_dh_m4_u8_mismatches[
+                    _fr13_dh_m4_u8_depth
+                ].add_(
+                    torch.count_nonzero(
+                        self._fr13_dh_m4_u8_output.view(torch.int16)
+                        != _fr13_dh_m4_u8_reference.view(torch.int16)
+                    )
+                    * self._fr13_dh_m4_u8_count_enable
+                )
+                self._fr13_dh_m4_u8_compares[
+                    _fr13_dh_m4_u8_depth
+                ].add_(self._fr13_dh_m4_u8_count_enable)
+                if not getattr(self, "_fr13_dh_m4_u8_engaged", False):
+                    self._fr13_dh_m4_u8_engaged = True
+                    print(
+                        "[FR13_DRAFT_HEAD_M4_R64_U8] engaged batch=4 "
+                        "full_bf16_matrix=4x65536 incumbent_served=1 shadow_only=1",
+                        flush=True,
+                    )
+                return _fr13_dh_m4_u8_reference
+
             def _fr13_dh_fp8_logits(_h):
                 _fr13_dh_fp8_batch = (
                     int(_h.shape[0]) if _h.ndim == 2 else 0
@@ -25808,8 +26487,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     ) or getattr(
                         self, "_fr13_dh_u8_production_active", False
                     )
+                    _fr13_dh_m4_u8_on = getattr(
+                        self, "_fr13_dh_m4_u8_live_active", False
+                    )
                     _fr13_dh_capturing = False
-                    if _fr13_dh_u8_on:
+                    if _fr13_dh_m4_u8_on:
+                        _logits = _fr13_dh_m4_u8_logits(_sh, _h)
+                    elif _fr13_dh_u8_on:
                         _logits = _fr13_dh_u8_logits(_sh, _h)
                     elif _fr13_dh_fp8_on:
                         _logits = _fr13_dh_fp8_logits(_h)
@@ -25918,6 +26602,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         self, "_fr13_dvk_map_t", None
                     )
                 except Exception as _e:
+                    if getattr(self, "_fr13_dh_m4_u8_live_active", False):
+                        self._fr13_dh_m4_u8_fallback_calls += 1
+                        raise RuntimeError(
+                            "FR13 draft-head M4 U8 live A/B failed its strict "
+                            "runtime contract; incumbent fallback is forbidden"
+                        ) from _e
                     if getattr(
                         self, "_fr13_dh_u8_production_active", False
                     ):
@@ -32505,6 +33195,134 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
     return record
 
 
+def _fr13_write_draft_head_m4_u8_worker_env_sidecar(
+    sidecar_path: Path | None = None,
+) -> dict[str, object] | None:
+    """Bridge the exact four-task M4 live qualification env into EngineCore."""
+    path = (
+        _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_SIDECAR
+        if sidecar_path is None
+        else Path(sidecar_path)
+    )
+    enabled = os.environ.get("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "0")
+    if enabled not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB must be exactly 0 or 1"
+        )
+    if enabled == "0":
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        return None
+    if any(
+        os.environ.get(key, "0") == "1"
+        for key in (
+            "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
+            "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
+        )
+    ):
+        raise RuntimeError("FR13 draft-head M1 and M4 U8 modes are mutually exclusive")
+    payload = {
+        key: os.environ.get(key, "")
+        for key in _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS
+    }
+    task_ids = (
+        "astropy__astropy-12907,astropy__astropy-13033,"
+        "astropy__astropy-13236,astropy__astropy-13398"
+    )
+    exact = {
+        "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB": "1",
+        "FR13_DRAFT_HEAD_M4_R64_U8_SO": (
+            "/tmp/fr13_bf16_k64_m4_r64_u8.abi3.so"
+        ),
+        "FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS": task_ids,
+        "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_JSON": (
+            "/logs/fr13_dfwd_k64_m4_r64_u8.live.json"
+        ),
+        "FR13_DRAFT_VOCAB_BLOCKS": (
+            "/workspace/scripts/fr13_dvk_subset_blocks.json"
+        ),
+        "FR13_DRAFT_VOCAB_K": "65536",
+        "FR13_DRAFT_VOCAB_ROOT": "1",
+    }
+    drift = {
+        key: (payload[key], value)
+        for key, value in exact.items()
+        if payload[key] != value
+    }
+    sha_keys = tuple(
+        key
+        for key in _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS
+        if key.endswith("SHA256")
+    )
+    if (
+        drift
+        or any(
+            re.fullmatch(r"[0-9a-f]{64}", payload[key]) is None
+            for key in sha_keys
+        )
+        or re.fullmatch(
+            r"[0-9a-f]{40}",
+            payload["FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT"],
+        ) is None
+    ):
+        raise RuntimeError(
+            "FR13 draft-head M4 U8 worker env sidecar inputs drifted: "
+            + repr(drift)
+        )
+    canonical_payload = json.dumps(
+        payload,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    record: dict[str, object] = {
+        "schema": "fr13.fixed32.dfwd_k64_m4_r64_u8_worker_env.v1",
+        "payload": payload,
+        "payload_sha256": hashlib.sha256(canonical_payload).hexdigest(),
+    }
+    encoded = (
+        json.dumps(
+            record,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+        + b"\n"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + f".tmp.{os.getpid()}")
+    try:
+        temporary.unlink()
+    except FileNotFoundError:
+        pass
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        0o600,
+    )
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.chmod(0o400)
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+    print(
+        "FR13 draft-head M4 U8 worker env sidecar written: "
+        + str(path)
+        + " sha256="
+        + hashlib.sha256(encoded).hexdigest()
+    )
+    return record
+
+
 def _fr13_write_subop_mab_sidecar() -> None:
     """Bake the FR13_GDN_SUBOP_MAB master switch into a sidecar flag file.
 
@@ -35551,6 +36369,9 @@ def _fr13_f32_flush_one(request):
                     events, flush_binding
                 )
                 _gdn._fr13_draft_head_u8_live_finalize(
+                    events, flush_binding
+                )
+                _gdn._fr13_draft_head_m4_u8_live_finalize(
                     events, flush_binding
                 )
                 from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
@@ -38991,6 +39812,7 @@ def main() -> int:
         _fr13_mode_tmp.write_text(_FR13_FIXED32_MODE + "\n")
         os.replace(_fr13_mode_tmp, _fr13_mode_path)
     _fr13_write_draft_head_u8_worker_env_sidecar()
+    _fr13_write_draft_head_m4_u8_worker_env_sidecar()
     _fr13_write_subop_mab_sidecar()
     try:
         with open('/logs/fr13_dfwd_split.flag', 'w') as _fh:

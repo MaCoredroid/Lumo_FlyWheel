@@ -1,0 +1,66 @@
+{
+  "binary": {
+    "bytes": 134320,
+    "mode": "0555",
+    "path": "/home/mark/shared/fr13_dfwd_m4_u8_linked_build_bb8a4a8a2_20260805/canonical-primary-bin/fr13_bf16_k64_m4_r64_u8.abi3.so",
+    "sha256": "6cb24782495ff1c1457ebbf9cbcfcd6ca7b372378d3b435f80054688432a365f"
+  },
+  "builder": {
+    "path": "scripts/fr13_build_bf16_gemvx_k64_m4_shuffle_r64_u8.py",
+    "sha256": "e13a4fd62c7339e739ca658c07e898c4fe7c85ae13b47c7f9f2cefd471315b51"
+  },
+  "byte_equality_claim": false,
+  "canonicalization": {
+    "command": "strip --strip-unneeded -o OUTPUT INPUT",
+    "reason": "remove nvcc PID-bearing tmpxft local symbols from non-loadable .strtab",
+    "tool": "GNU strip 2.42"
+  },
+  "checker": {
+    "path": "scripts/fr13_check_bf16_gemvx_k64_m4_shuffle_r64_u8_codegen.py",
+    "sha256": "66274a81d34a3e45a0c0b8bbf5571d7db1006a61732e9b63ba65b1999f39c072"
+  },
+  "created_at_utc": "2026-08-05T17:40:26Z",
+  "cuda_arch": "12.1a",
+  "cuda_release": "13.0",
+  "cubin": {
+    "arch": "sm_121a",
+    "bytes": 17192,
+    "sha256": "952395db481f7c1b8d8c631789d961f41c6ec8d3cbb85c80b9ee5f1b2371a4e1"
+  },
+  "docker_used": false,
+  "gpu_runtime_used": false,
+  "kernel_contract": {
+    "batch_scope": "B4_exact",
+    "block": [16, 64, 1],
+    "grid": [1024, 1, 1],
+    "independent_accumulators": 4,
+    "input": "BF16[4,5120] contiguous",
+    "lane_products_per_request": 320,
+    "output": "BF16[4,65536] contiguous",
+    "reduction_strides": [8, 4, 2, 1],
+    "rows_per_cta": 64,
+    "threads_per_cta": 1024,
+    "unroll_steps": 8,
+    "weight": "BF16[65536,5120] contiguous",
+    "weight_reuse_batch": 4
+  },
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "real_task_correctness": false,
+  "rebuild_binary": {
+    "bytes": 134320,
+    "mode": "0555",
+    "path": "/home/mark/shared/fr13_dfwd_m4_u8_linked_build_bb8a4a8a2_20260805/canonical-rebuild-bin/fr13_bf16_k64_m4_r64_u8.abi3.so",
+    "sha256": "6cb24782495ff1c1457ebbf9cbcfcd6ca7b372378d3b435f80054688432a365f"
+  },
+  "registered_operation": "fr13_bf16_k64_head::gemvx_m4_shuffle_r64_u8_out",
+  "runtime_wired": false,
+  "schema": "fr13.fixed32.dfwd_k64_m4_r64_u8_sm121a_canonical_build.v1",
+  "source": {
+    "base_main_commit": "bb8a4a8a283b0e668da5424c11a3df52098a2a55",
+    "path": "csrc/fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.cu",
+    "sha256": "a52361be1c9052a46509cc230ea320c4beb6d15f261327edc835d8da3ae00d9e"
+  },
+  "status": "REPRODUCIBLE_CANONICAL_LINKED_BUILD_UNQUALIFIED",
+  "torch_version": "2.11.0+cu130"
+}

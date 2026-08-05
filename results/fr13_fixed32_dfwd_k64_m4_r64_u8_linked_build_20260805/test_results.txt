@@ -1,0 +1,22 @@
+Two fresh pinned Torch 2.11.0+cu130 linked builds with CUDA_VISIBLE_DEVICES=''
+Builder load/registration: PASS primary and rebuild
+Raw SO comparison: 6 disclosed non-loadable .strtab bytes differ
+Raw GNU build-id comparison: PASS
+Canonical strip --strip-unneeded SO byte comparison: PASS
+Canonical SO independent load/registration: PASS primary and rebuild
+SM121a cubin byte comparison: PASS
+Linked cubin static checker: PASS, 200 instructions, REG=56, zero stack/shared/local
+
+python -m pytest -q \
+  tests/test_fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.py \
+  tests/test_fr13_build_bf16_gemvx_k64_m4_shuffle_r64_u8.py \
+  tests/test_fr13_fixed32_dfwd_k64_m4_r64_u8_linked_build_artifact.py
+21 passed
+
+python -m py_compile builder, checker, and linked-build artifact test
+PASS
+
+git diff --check
+PASS
+
+NOT RUN GPU kernel execution, Docker, SWE-Verified, byte equality, timing, acceptance
