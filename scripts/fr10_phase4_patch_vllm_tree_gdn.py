@@ -458,6 +458,7 @@ _FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING = {}
 _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT = None
 _FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE = []
 _FR13_DRAFT_HEAD_M32_LIVE_STATE = None
+_FR13_DRAFT_HEAD_M1_R32_LIVE_STATE = None
 _FR13_FIXED32_ACCEPTED_OUTPUT_CURRENT = None
 _FR13_FIXED32_BOOT_WARM_EVIDENCE = None
 _FR13_FIXED32_TOPOLOGY_NEEDLE_EMITTED = False
@@ -647,6 +648,214 @@ def _fr13_draft_head_m32_live_finalize(events, flush_binding):
     if not exact:
         raise RuntimeError(
             "FR13 draft-head M32 final comparison/event census mismatch: "
+            + repr((compares, mismatches, event_count, draft_events))
+        )
+
+
+def _fr13_draft_head_m1_r32_live_register(
+    compares, mismatches, lifecycle, geometry, candidate
+):
+    global _FR13_DRAFT_HEAD_M1_R32_LIVE_STATE
+    _os = __import__("os")
+    if _os.environ.get("FR13_DRAFT_HEAD_M1_R32_LIVE_AB", "0") != "1":
+        raise RuntimeError("FR13 exact-order R32 live state registered while off")
+    if (
+        _FR13_DRAFT_HEAD_M1_R32_LIVE_STATE is not None
+        or tuple(compares.shape) != (5,)
+        or tuple(mismatches.shape) != (5,)
+        or str(compares.dtype) != "torch.int64"
+        or str(mismatches.dtype) != "torch.int64"
+        or compares.device.type != "cuda"
+        or mismatches.device != compares.device
+        or not isinstance(lifecycle, dict)
+        or not isinstance(geometry, dict)
+        or not isinstance(candidate, dict)
+    ):
+        raise RuntimeError("FR13 exact-order R32 live registration drifted")
+    _FR13_DRAFT_HEAD_M1_R32_LIVE_STATE = {
+        "compares": compares,
+        "mismatches": mismatches,
+        "lifecycle": lifecycle,
+        "geometry": geometry,
+        "candidate": candidate,
+        "source_commit": _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_R32_SOURCE_COMMIT", ""
+        ),
+        "runtime_source_sha256": _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_R32_RUNTIME_SOURCE_SHA256", ""
+        ),
+        "candidate_source_sha256": _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_R32_CANDIDATE_SOURCE_SHA256", ""
+        ),
+        "candidate_binary_sha256": _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_R32_SHA256", ""
+        ),
+        "instance_id": _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_R32_INSTANCE_ID", ""
+        ),
+    }
+
+
+def _fr13_draft_head_m1_r32_live_finalize(events, flush_binding):
+    _os = __import__("os")
+    if _os.environ.get("FR13_DRAFT_HEAD_M1_R32_LIVE_AB", "0") != "1":
+        if _FR13_DRAFT_HEAD_M1_R32_LIVE_STATE is not None:
+            raise RuntimeError("FR13 exact-order R32 live state leaked while off")
+        return
+    state = _FR13_DRAFT_HEAD_M1_R32_LIVE_STATE
+    event_rows = list(events)
+    event_count = len(event_rows)
+    draft_events = sum(int(row.get("batch_size", -1)) for row in event_rows)
+    hex_chars = frozenset("0123456789abcdef")
+    if (
+        not isinstance(state, dict)
+        or not isinstance(flush_binding, dict)
+        or set(flush_binding) != {
+            "action",
+            "boundary_snapshot_sha256",
+            "complete_work_census_events",
+            "events_sha256",
+            "generation",
+            "nonce",
+            "producer_pid",
+        }
+        or flush_binding.get("action") != "final"
+        or type(flush_binding.get("generation")) is not int
+        or int(flush_binding["generation"]) < 1
+        or type(flush_binding.get("producer_pid")) is not int
+        or int(flush_binding["producer_pid"]) < 1
+        or any(
+            not isinstance(flush_binding.get(key), str)
+            or len(flush_binding[key]) != 64
+            or any(value not in hex_chars for value in flush_binding[key])
+            for key in (
+                "nonce",
+                "events_sha256",
+                "boundary_snapshot_sha256",
+            )
+        )
+        or event_count < 1
+        or draft_events != event_count
+        or any(int(row.get("batch_size", -1)) != 1 for row in event_rows)
+        or int(flush_binding.get("complete_work_census_events", -1))
+        != event_count
+    ):
+        raise RuntimeError("FR13 exact-order R32 live finalization drifted")
+    site_labels = ("root", "mtp_depth_1", "mtp_depth_2", "mtp_depth_3", "mtp_depth_4")
+    compares = tuple(int(value) for value in state["compares"].tolist())
+    mismatches = tuple(int(value) for value in state["mismatches"].tolist())
+    per_site_compares = dict(zip(site_labels, compares))
+    per_site_mismatches = dict(zip(site_labels, mismatches))
+    per_site_values = {
+        label: per_site_compares[label] * 65536 for label in site_labels
+    }
+    total_compares = sum(compares)
+    total_values = sum(per_site_values.values())
+    total_mismatches = sum(mismatches)
+    lifecycle = state["lifecycle"]
+    exact = (
+        compares == (draft_events,) * 5
+        and mismatches == (0,) * 5
+        and total_compares == draft_events * 5
+        and total_values == draft_events * 5 * 65536
+        and isinstance(lifecycle, dict)
+        and set(lifecycle) == {
+            "captured_loop_calls",
+            "selected_root_calls",
+            "fallback_calls",
+            "observed_measured_replays",
+            "drafter_graph_id",
+            "drafter_graph_signature",
+            "capture_origin",
+            "last_measured_forward_step_index",
+        }
+        and lifecycle["captured_loop_calls"] == 4
+        and lifecycle["selected_root_calls"] == 1
+        and lifecycle["fallback_calls"] == 0
+        and lifecycle["observed_measured_replays"] >= draft_events
+        and type(lifecycle["drafter_graph_id"]) is int
+        and lifecycle["drafter_graph_id"] > 0
+        and lifecycle["drafter_graph_signature"]
+        == "d9a4ddece41d146e9949b8ff7c2603b8948d157b28ef69244e44469b36150c"
+        and lifecycle["capture_origin"] in ("measured", "unmeasured")
+        and type(lifecycle["last_measured_forward_step_index"]) is int
+        and lifecycle["last_measured_forward_step_index"] >= 0
+        and state["candidate_source_sha256"]
+        == "56d4fcd551dd022efa00dcb926bb4ea5176e6b5a02fa562ccc1886e007001897"
+        and state["candidate_binary_sha256"]
+        == "c389bf5e01b942cfe73b2e4fc05db7b158f16b61205c9f3e9988cbd8a82474dd"
+        and isinstance(state["runtime_source_sha256"], str)
+        and len(state["runtime_source_sha256"]) == 64
+        and all(value in hex_chars for value in state["runtime_source_sha256"])
+        and isinstance(state["source_commit"], str)
+        and len(state["source_commit"]) == 40
+        and all(value in hex_chars for value in state["source_commit"])
+        and state["instance_id"] == "astropy__astropy-12907"
+    )
+    instance_id = state["instance_id"]
+    record = {
+        "schema": "fr13.fixed32.draft_head_m1_r32_live_ab.v1",
+        "status": "PASS" if exact else "FAIL",
+        "suite": "SWE-Verified",
+        "instance_id": instance_id,
+        "task_marker": "swe_verified:" + instance_id,
+        "concurrency": 1,
+        "batch_size": 1,
+        "source_commit": state["source_commit"],
+        "runtime_source_sha256": state["runtime_source_sha256"],
+        "candidate_source_sha256": state["candidate_source_sha256"],
+        "candidate_binary_sha256": state["candidate_binary_sha256"],
+        "candidate_binary_bytes": 113648,
+        "geometry": state["geometry"],
+        "candidate": state["candidate"],
+        "graph_lifecycle": dict(lifecycle),
+        "completed_events": draft_events,
+        "complete_work_census_events": event_count,
+        "work_census_last_event_index": event_count - 1,
+        "events_sha256": flush_binding["events_sha256"],
+        "flush_generation": flush_binding["generation"],
+        "flush_nonce": flush_binding["nonce"],
+        "producer_pid": flush_binding["producer_pid"],
+        "boundary_snapshot_sha256": flush_binding[
+            "boundary_snapshot_sha256"
+        ],
+        "site_labels": list(site_labels),
+        "per_site_full_logit_comparisons": per_site_compares,
+        "per_site_compared_bf16_values": per_site_values,
+        "per_site_raw_bf16_mismatches": per_site_mismatches,
+        "full_logit_comparisons": total_compares,
+        "compared_bf16_values": total_values,
+        "raw_bf16_mismatches": total_mismatches,
+        "served_return": "incumbent BF16 K64 reference logits unchanged",
+        "performance_measurement": False,
+        "device_counted_without_measured_host_sync": True,
+        "finalized_by_fixed32_flush": True,
+        "flush_action": "final",
+    }
+    path = __import__("pathlib").Path(
+        _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_R32_LIVE_JSON",
+            "/logs/fr13_draft_head_m1_r32.live.json",
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp." + str(_os.getpid()))
+    with open(temporary, "w", encoding="ascii") as handle:
+        handle.write(
+            __import__("json").dumps(
+                record,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        handle.flush()
+        _os.fsync(handle.fileno())
+    _os.replace(temporary, path)
+    if not exact:
+        raise RuntimeError(
+            "FR13 exact-order R32 final comparison/event census mismatch: "
             + repr((compares, mismatches, event_count, draft_events))
         )
 def _fr13_fixed32_unmeasured_full_row_map_valid(batch_rows, compact_batch):
@@ -23371,6 +23580,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m1_r32_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M1_R32", "0"
             )
+            _fr13_dh_m1_r32_live_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_R32_LIVE_AB", "0"
+            )
             _fr13_dh_fp8_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_FP8", "0"
             )
@@ -23401,6 +23613,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M1_R32 must be exactly 0 or 1"
                 )
+            if _fr13_dh_m1_r32_live_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M1_R32_LIVE_AB must be exactly 0 or 1"
+                )
             if _fr13_dh_fp8_raw not in ("0", "1"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_FP8 must be exactly 0 or 1"
@@ -23414,6 +23630,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
             _fr13_dh_m1_r32 = _fr13_dh_m1_r32_raw == "1"
+            _fr13_dh_m1_r32_live = _fr13_dh_m1_r32_live_raw == "1"
+            _fr13_dh_m1_r32_enabled = (
+                _fr13_dh_m1_r32 or _fr13_dh_m1_r32_live
+            )
             _fr13_dh_fp8 = _fr13_dh_fp8_raw == "1"
             _fr13_dh_fp8_static_io = (
                 _fr13_dh_fp8_static_io_raw == "1"
@@ -23451,6 +23671,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m32_live,
                     _fr13_dh_m32_prod,
                     _fr13_dh_m1_r32,
+                    _fr13_dh_m1_r32_live,
                     _fr13_dh_fp8,
                 )
             )
@@ -23474,14 +23695,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr13_dh_ab
                 or _fr13_dh_m32_live
                 or _fr13_dh_m32_prod
-                or _fr13_dh_m1_r32
+                or _fr13_dh_m1_r32_enabled
                 or _fr13_dh_fp8
             ) and (
                 not _fr13_is_fixed32
                 or not _fr13_dvk_root
                 or not _fr13_single_logits
                 or _fr13_dvk_configured != 65536
-                or (_fr13_dh_m1_r32 and int(batch_size) != 1)
+                or (_fr13_dh_m1_r32_enabled and int(batch_size) != 1)
             ):
                 raise RuntimeError(
                     "FR13 draft-head mode requires exact fixed32, root "
@@ -23501,11 +23722,58 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13 draft-head M32 requires its qualified source SHA-256"
                 )
+            if _fr13_dh_m1_r32_live:
+                _fr13_dh_m1_runtime_sha = os.environ.get(
+                    "FR13_DRAFT_HEAD_M1_R32_RUNTIME_SOURCE_SHA256", ""
+                )
+                _fr13_dh_m1_candidate_sha = os.environ.get(
+                    "FR13_DRAFT_HEAD_M1_R32_CANDIDATE_SOURCE_SHA256", ""
+                )
+                _fr13_dh_m1_source_commit = os.environ.get(
+                    "FR13_DRAFT_HEAD_M1_R32_SOURCE_COMMIT", ""
+                )
+                if (
+                    len(_fr13_dh_m1_runtime_sha) != 64
+                    or any(
+                        value not in "0123456789abcdef"
+                        for value in _fr13_dh_m1_runtime_sha
+                    )
+                    or _fr13_dh_m1_candidate_sha
+                    != "56d4fcd551dd022efa00dcb926bb4ea5176e6b5a02fa562ccc1886e007001897"
+                    or len(_fr13_dh_m1_source_commit) != 40
+                    or any(
+                        value not in "0123456789abcdef"
+                        for value in _fr13_dh_m1_source_commit
+                    )
+                    or os.environ.get(
+                        "FR13_DRAFT_HEAD_M1_R32_INSTANCE_ID", ""
+                    )
+                    != "astropy__astropy-12907"
+                ):
+                    raise RuntimeError(
+                        "FR13 exact-order R32 live A/B source or task identity "
+                        "is missing"
+                    )
             self._fr13_dh_pad_rows = _fr13_dh_rows
             self._fr13_dh_ab_active = _fr13_dh_ab
             self._fr13_dh_m32_live_active = _fr13_dh_m32_live
             self._fr13_dh_m32_production_active = _fr13_dh_m32_prod
-            self._fr13_dh_m1_r32_active = _fr13_dh_m1_r32
+            self._fr13_dh_m1_r32_active = _fr13_dh_m1_r32_enabled
+            self._fr13_dh_m1_r32_live_active = _fr13_dh_m1_r32_live
+            self._fr13_dh_m1_r32_live_selected_root_calls = 0
+            self._fr13_dh_m1_r32_live_selected_capture_calls = 0
+            self._fr13_dh_m1_r32_live_fallback_calls = 0
+            self._fr13_dh_m1_r32_live_graph_attestation = None
+            self._fr13_dh_m1_r32_live_lifecycle = {
+                "captured_loop_calls": 0,
+                "selected_root_calls": 0,
+                "fallback_calls": 0,
+                "observed_measured_replays": 0,
+                "drafter_graph_id": None,
+                "drafter_graph_signature": None,
+                "capture_origin": None,
+                "last_measured_forward_step_index": None,
+            }
             self._fr13_dh_m32_selected_root_calls = 0
             self._fr13_dh_m32_selected_capture_calls = 0
             self._fr13_dh_m32_fallback_calls = 0
@@ -23601,7 +23869,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         )
                     except Exception as _fr13_dvk_e:
                         self._fr13_dvk_dead = True
-                        if _fr13_dh_m1_r32:
+                        if _fr13_dh_m1_r32_enabled:
                             raise RuntimeError(
                                 "FR13 exact-order R32 draft head failed to "
                                 "build its exact K64 shim"
@@ -23610,7 +23878,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             f"[FR13_DRAFT_VOCAB] DISABLED (shim build failed): {_fr13_dvk_e!r}",
                             flush=True,
                         )
-                if _fr13_dh_m1_r32 and not getattr(
+                if _fr13_dh_m1_r32_enabled and not getattr(
                     self, "_fr13_dh_m1_r32_ready", False
                 ):
                     if torch.cuda.is_current_stream_capturing():
@@ -23691,12 +23959,35 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         dtype=torch.bfloat16,
                         device=_fr13_dh_m1_w.device,
                     )
+                    if _fr13_dh_m1_r32_live:
+                        self._fr13_dh_m1_r32_live_compares = torch.zeros(
+                            (5,), dtype=torch.int64, device=_fr13_dh_m1_w.device
+                        )
+                        self._fr13_dh_m1_r32_live_mismatches = torch.zeros(
+                            (5,), dtype=torch.int64, device=_fr13_dh_m1_w.device
+                        )
+                        self._fr13_dh_m1_r32_live_count_enable = torch.zeros(
+                            (), dtype=torch.int64, device=_fr13_dh_m1_w.device
+                        )
+                        from vllm.model_executor.layers.mamba import (
+                            gdn_linear_attn as _fr13_dh_m1_live_gdn,
+                        )
+
+                        _fr13_dh_m1_contract = _fr13_dh_m1_r32_contract()
+                        _fr13_dh_m1_live_gdn._fr13_draft_head_m1_r32_live_register(
+                            self._fr13_dh_m1_r32_live_compares,
+                            self._fr13_dh_m1_r32_live_mismatches,
+                            self._fr13_dh_m1_r32_live_lifecycle,
+                            _fr13_dh_m1_contract["geometry"],
+                            _fr13_dh_m1_contract["candidate"],
+                        )
                     self._fr13_dh_m1_r32_seen_eager = False
                     self._fr13_dh_m1_r32_ready = True
                     print(
                         "[FR13_DRAFT_HEAD_M1_R32] ready "
                         "selector=exact_order_r32 input=[1,5120] "
-                        "weight=[65536,5120] output=[1,65536]",
+                        "weight=[65536,5120] output=[1,65536] "
+                        f"live_ab={int(_fr13_dh_m1_r32_live)}",
                         flush=True,
                     )
                 if (
@@ -24138,6 +24429,46 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 return _fr13_dh_out[:_fr13_dh_batch]
 
+            def _fr13_dh_m1_r32_contract():
+                return {
+                    "geometry": {
+                        "batch_size": 1,
+                        "calls_per_event": 5,
+                        "site_labels": [
+                            "root",
+                            "mtp_depth_1",
+                            "mtp_depth_2",
+                            "mtp_depth_3",
+                            "mtp_depth_4",
+                        ],
+                        "values_per_site": 65536,
+                        "input_shape": [1, 5120],
+                        "input_stride": [5120, 1],
+                        "weight_shape": [65536, 5120],
+                        "weight_stride": [5120, 1],
+                        "output_shape": [1, 65536],
+                        "output_stride": [65536, 1],
+                        "dtype": "torch.bfloat16",
+                    },
+                    "candidate": {
+                        "operation": (
+                            "fr13_bf16_k64_head::"
+                            "gemvx_m1_shuffle_r32_out"
+                        ),
+                        "grid": [2048, 1, 1],
+                        "block": [16, 32, 1],
+                        "rows_per_cta": 32,
+                        "k_partition_lanes": 16,
+                        "lane_fmas": 320,
+                        "reduction_strides": [8, 4, 2, 1],
+                        "binary_bytes": 113648,
+                        "binary_sha256": (
+                            "c389bf5e01b942cfe73b2e4fc05db7b1"
+                            "58f16b61205c9f3e9988cbd8a82474dd"
+                        ),
+                    },
+                }
+
             def _fr13_dh_m32_contract():
                 return {
                     "geometry": {
@@ -24285,6 +24616,145 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_fp8_proposal["measured"] is True,
                     _fr13_dh_fp8_proposal,
                 )
+
+            def _fr13_dh_m1_r32_note_live(_capturing):
+                if not getattr(
+                    self, "_fr13_dh_m1_r32_live_active", False
+                ):
+                    return
+                if _capturing:
+                    self._fr13_dh_m1_r32_live_selected_capture_calls += 1
+                else:
+                    self._fr13_dh_m1_r32_live_selected_root_calls += 1
+                if (
+                    self._fr13_dh_m1_r32_live_selected_root_calls > 1
+                    or self._fr13_dh_m1_r32_live_selected_capture_calls > 4
+                ):
+                    raise RuntimeError(
+                        "FR13 exact-order R32 live selection exceeded its "
+                        "root/capture lifecycle before replay"
+                    )
+
+            def _fr13_dh_m1_r32_note_live_replay(
+                _graph_id, _graph_signature, _batch_size
+            ):
+                if not getattr(
+                    self, "_fr13_dh_m1_r32_live_active", False
+                ):
+                    return
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dh_m1_replay_gdn,
+                )
+
+                _fr13_dh_m1_proposal = getattr(
+                    _fr13_dh_m1_replay_gdn,
+                    "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT",
+                    None,
+                )
+                _fr13_dh_m1_signature = str(_graph_signature)
+                _fr13_dh_m1_graph_lifecycle = getattr(
+                    _fr13_dh_m1_replay_gdn,
+                    "_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE",
+                    {},
+                ).get(int(_graph_id))
+                if (
+                    not isinstance(_fr13_dh_m1_proposal, dict)
+                    or int(_batch_size) != 1
+                    or int(_graph_id) <= 0
+                    or int(_fr13_dh_m1_proposal.get("graph_id", -1))
+                    != int(_graph_id)
+                    or _fr13_dh_m1_proposal.get("graph_signature")
+                    != _fr13_dh_m1_signature
+                    or int(_fr13_dh_m1_proposal.get("graph_replays", -1))
+                    != 1
+                    or self._fr13_dh_m1_r32_live_selected_root_calls != 1
+                    or self._fr13_dh_m1_r32_live_fallback_calls != 0
+                    or not isinstance(_fr13_dh_m1_graph_lifecycle, dict)
+                    or int(
+                        _fr13_dh_m1_graph_lifecycle.get("captures", -1)
+                    )
+                    != 1
+                    or int(
+                        _fr13_dh_m1_graph_lifecycle.get("batch_size", -1)
+                    )
+                    != 1
+                    or _fr13_dh_m1_graph_lifecycle.get("graph_signature")
+                    != _fr13_dh_m1_signature
+                    or _fr13_dh_m1_graph_lifecycle.get("capture_origin")
+                    not in ("measured", "unmeasured")
+                    or _fr13_dh_m1_signature
+                    != (
+                        "d9a4ddece41d146e9949b8ff7c2603b"
+                        "8948d157b28ef69244e44469b36150c"
+                    )
+                ):
+                    raise RuntimeError(
+                        "FR13 exact-order R32 live replay engagement drifted"
+                    )
+                _fr13_dh_m1_attestation = getattr(
+                    self,
+                    "_fr13_dh_m1_r32_live_graph_attestation",
+                    None,
+                )
+                if _fr13_dh_m1_attestation is None:
+                    if self._fr13_dh_m1_r32_live_selected_capture_calls != 4:
+                        raise RuntimeError(
+                            "FR13 exact-order R32 graph capture did not select "
+                            "four loop heads"
+                        )
+                    _fr13_dh_m1_attestation = {
+                        "graph_id": int(_graph_id),
+                        "graph_signature": _fr13_dh_m1_signature,
+                        "capture_origin": _fr13_dh_m1_graph_lifecycle[
+                            "capture_origin"
+                        ],
+                    }
+                    self._fr13_dh_m1_r32_live_graph_attestation = (
+                        _fr13_dh_m1_attestation
+                    )
+                    self._fr13_dh_m1_r32_live_lifecycle[
+                        "captured_loop_calls"
+                    ] = 4
+                    self._fr13_dh_m1_r32_live_lifecycle[
+                        "selected_root_calls"
+                    ] = 1
+                    self._fr13_dh_m1_r32_live_lifecycle[
+                        "drafter_graph_id"
+                    ] = int(_graph_id)
+                    self._fr13_dh_m1_r32_live_lifecycle[
+                        "drafter_graph_signature"
+                    ] = _fr13_dh_m1_signature
+                    self._fr13_dh_m1_r32_live_lifecycle[
+                        "capture_origin"
+                    ] = _fr13_dh_m1_graph_lifecycle["capture_origin"]
+                elif (
+                    self._fr13_dh_m1_r32_live_selected_capture_calls != 0
+                    or _fr13_dh_m1_attestation.get("graph_id")
+                    != int(_graph_id)
+                    or _fr13_dh_m1_attestation.get("graph_signature")
+                    != _fr13_dh_m1_signature
+                    or _fr13_dh_m1_attestation.get("capture_origin")
+                    != _fr13_dh_m1_graph_lifecycle.get("capture_origin")
+                ):
+                    raise RuntimeError(
+                        "FR13 exact-order R32 live replay left its attested graph"
+                    )
+                self._fr13_dh_m1_r32_live_selected_root_calls = 0
+                self._fr13_dh_m1_r32_live_selected_capture_calls = 0
+                if _fr13_dh_m1_proposal.get("measured") is not True:
+                    return
+                if int(
+                    _fr13_dh_m1_graph_lifecycle.get("measured_replays", 0)
+                ) < 1:
+                    raise RuntimeError(
+                        "FR13 exact-order R32 live evidence lacks a measured replay"
+                    )
+                self._fr13_dh_m1_r32_live_lifecycle[
+                    "observed_measured_replays"
+                ] += 1
+                self._fr13_dh_m1_r32_live_lifecycle[
+                    "last_measured_forward_step_index"
+                ] = int(_fr13_dh_m1_proposal["forward_step_index"])
 
             def _fr13_dh_m32_note_production(_capturing):
                 if getattr(
@@ -24769,7 +25239,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 return _fr13_dh_fp8_out
 
-            def _fr13_dvk_logits(_h):
+            def _fr13_dvk_logits(_h, _fr13_dh_site):
                 # Pair the logits with the only map valid for those rows.
                 # A full-head fallback always returns map=None.
                 try:
@@ -24788,6 +25258,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                     _fr13_dh_m1_r32_on = getattr(
                         self, "_fr13_dh_m1_r32_active", False
+                    )
+                    _fr13_dh_m1_r32_live_on = getattr(
+                        self, "_fr13_dh_m1_r32_live_active", False
                     )
                     _fr13_dh_fp8_on = getattr(
                         self, "_fr13_dh_fp8_active", False
@@ -24818,6 +25291,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             != torch.bfloat16
                             or self._fr13_dh_m1_r32_output.device
                             != _h.device
+                            or type(_fr13_dh_site) is not int
+                            or _fr13_dh_site not in (0, 1, 2, 3, 4)
                         ):
                             raise RuntimeError(
                                 "FR13 exact-order R32 draft head left its "
@@ -24830,6 +25305,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 "FR13 exact-order R32 draft head reached "
                                 "capture before one eager kernel launch"
                             )
+                        _fr13_dh_m1_r32_note_live(_fr13_dh_capturing)
                         self._fr13_dh_m1_r32_op(
                             self._fr13_dh_m1_r32_output,
                             _h,
@@ -24844,7 +25320,41 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                     flush=True,
                                 )
                             self._fr13_dh_m1_r32_seen_eager = True
-                        _logits = self._fr13_dh_m1_r32_output
+                        if _fr13_dh_m1_r32_live_on:
+                            _fr13_dh_m1_measured = (
+                                _fr13_dh_m32_measured_proposal()
+                            )
+                            if not _fr13_dh_capturing:
+                                self._fr13_dh_m1_r32_live_count_enable.fill_(
+                                    int(_fr13_dh_m1_measured)
+                                )
+                            _fr13_dh_m1_reference = (
+                                _sh.quant_method.apply(
+                                    _sh, _h, bias=None
+                                )
+                            )
+                            _fr13_dh_m1_count_enable = (
+                                self._fr13_dh_m1_r32_live_count_enable
+                            )
+                            self._fr13_dh_m1_r32_live_mismatches[
+                                _fr13_dh_site
+                            ].add_(
+                                torch.count_nonzero(
+                                    self._fr13_dh_m1_r32_output.view(
+                                        torch.int16
+                                    )
+                                    != _fr13_dh_m1_reference.view(
+                                        torch.int16
+                                    )
+                                )
+                                * _fr13_dh_m1_count_enable
+                            )
+                            self._fr13_dh_m1_r32_live_compares[
+                                _fr13_dh_site
+                            ].add_(_fr13_dh_m1_count_enable)
+                            _logits = _fr13_dh_m1_reference
+                        else:
+                            _logits = self._fr13_dh_m1_r32_output
                     elif _fr13_dh_fp8_on:
                         _logits = _fr13_dh_fp8_logits(_h)
                     elif _fr13_dh_m32_live_on or _fr13_dh_m32_prod_on:
@@ -24955,6 +25465,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     if getattr(
                         self, "_fr13_dh_m1_r32_active", False
                     ):
+                        if getattr(
+                            self, "_fr13_dh_m1_r32_live_active", False
+                        ):
+                            self._fr13_dh_m1_r32_live_fallback_calls += 1
+                            self._fr13_dh_m1_r32_live_lifecycle[
+                                "fallback_calls"
+                            ] = self._fr13_dh_m1_r32_live_fallback_calls
                         raise RuntimeError(
                             "FR13 exact-order R32 draft head failed its "
                             "strict runtime contract"
@@ -25041,7 +25558,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     and not getattr(self, "_fr13_dvk_dead", False)
                 ):
                     _fr10_logits, _fr10_root_map = _fr13_dvk_logits(
-                        sample_hidden_states
+                        sample_hidden_states, 0
                     )
                     if not getattr(self, "_fr13_dvk_dead", False):
                         if not getattr(
@@ -25270,6 +25787,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _dg.get("fixed32_signature"),
                         _fr13_dg_key,
                     )
+                    _fr13_dh_m1_r32_note_live_replay(
+                        id(_dg["graph"]),
+                        _dg.get("fixed32_signature"),
+                        _fr13_dg_key,
+                    )
                     _fr13_dh_fp8_note_replay(
                         id(_dg["graph"]),
                         _dg.get("fixed32_signature"),
@@ -25469,7 +25991,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # no leaves in spine-only mode), so its topk is skipped.
                     if _fr13_dvk > 0 and not getattr(self, "_fr13_dvk_dead", False):
                         _fr10_step_logits, _fr10_step_map = _fr13_dvk_logits(
-                            last_hidden_states[:batch_size]
+                            last_hidden_states[:batch_size], token_index + 1
                         )
                     else:
                         _fr10_step_logits = self.model.compute_logits(
@@ -25544,7 +26066,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 else:
                     if _fr13_dvk > 0 and not getattr(self, "_fr13_dvk_dead", False):
                         _fr10_step_logits, _fr10_step_map = _fr13_dvk_logits(
-                            last_hidden_states[:batch_size]
+                            last_hidden_states[:batch_size], token_index + 1
                         )
                     else:
                         _fr10_step_logits = self.model.compute_logits(
@@ -25629,6 +26151,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr13_dg_key,
                     )
                     _fr13_dh_m32_note_production_replay(
+                        id(_fr13_dg_g),
+                        _dg["fixed32_signature"],
+                        _fr13_dg_key,
+                    )
+                    _fr13_dh_m1_r32_note_live_replay(
                         id(_fr13_dg_g),
                         _dg["fixed32_signature"],
                         _fr13_dg_key,
@@ -34399,6 +34926,9 @@ def _fr13_f32_flush_one(request):
                     "producer_pid": _FR13_FIXED32_FLUSH_PID,
                 }
                 _gdn._fr13_draft_head_m32_live_finalize(
+                    events, flush_binding
+                )
+                _gdn._fr13_draft_head_m1_r32_live_finalize(
                     events, flush_binding
                 )
                 from lumo_flywheel_serving.fr10_gdn_tree_kernel import (

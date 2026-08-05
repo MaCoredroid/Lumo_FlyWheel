@@ -1,5 +1,5 @@
-Focused R32 source/runtime: 11 passed
-Adjacent composed-stack, CUTLASS, DFWD top3, FP8, and padding suite: 71 passed
+Focused R32 source/runtime: 15 passed
+Adjacent composed-stack, CUTLASS, DFWD top3, FP8, and padding suite: 75 passed
 Python byte compilation: PASS
 Shell syntax: PASS
 git diff --check: PASS

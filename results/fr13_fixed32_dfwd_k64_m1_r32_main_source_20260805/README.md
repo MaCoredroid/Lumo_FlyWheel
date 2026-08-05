@@ -36,10 +36,22 @@ that arithmetic-partition quality change, subject to a future byte gate.
 ## Static evidence
 
 The current CUDA and builder bytes exactly match the prior no-GPU pinned build.
-The historical binary was re-read from Git and audited without GPU exposure:
+The historical binary is reproducibly bound to build-artifact commit
+`2726be86a89d014c9166611a0eae1cfce41bb905`, path
+`results/fr13_fixed32_dfwd_k64_m1_shuffle_r32_build_20260802`, and manifest
+SHA-256 `c505e691f9d1378a68d4c1f71f7586c9f39b0e986e57c145d6342379f5b7cf13`.
+It was re-read from Git and audited without GPU exposure:
 one SM121a cubin, 18 registers/thread, zero stack/local/shared bytes, four SHFL,
 four FADD, and no BAR, LDL, STL, or CALL. Its size and SHA-256 match the new
 launcher pins.
+
+The default-off `FR13_DRAFT_HEAD_M1_R32_LIVE_AB=1` comparator is now staged.
+It executes candidate and incumbent BF16 K64 heads at the root and four MTP
+sites, serves only the incumbent reference, device-counts every one of the
+65,536 BF16 values per site, and reads counters only during the final fixed32
+flush. Graph lifecycle checks require one root selection, four captured loop
+heads, zero fallback, and measured replay. The authenticated host credential
+issuer remains the next step, so no byte PASS is claimed by this checkpoint.
 
 Focused source/runtime and adjacent-stack tests passed. Python compilation,
 shell syntax, and `git diff --check` passed. The current host Python has PyTorch
@@ -49,7 +61,7 @@ container while the live Gate A preflight is running.
 
 ## Required qualification
 
-1. Add or run an authenticated stock-serving real SWE-Verified B1 byte gate
+1. Complete and run an authenticated stock-serving real SWE-Verified B1 byte gate
    for root and all four MTP head sites. Compare all 65,536 BF16 logits bitwise
    at every site and require zero mismatch.
 2. Only after byte PASS, add a separate source-bound production credential and

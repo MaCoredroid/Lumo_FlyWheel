@@ -17,6 +17,9 @@
     "production_credential_available": false
   },
   "historical_build_binding": {
+    "artifact_commit": "2726be86a89d014c9166611a0eae1cfce41bb905",
+    "artifact_path": "results/fr13_fixed32_dfwd_k64_m1_shuffle_r32_build_20260802",
+    "artifact_manifest_sha256": "c505e691f9d1378a68d4c1f71f7586c9f39b0e986e57c145d6342379f5b7cf13",
     "source_commit": "0f627cfac51d4a85408ba8ad3e3040d33b6f43b6",
     "cuda_sha256": "56d4fcd551dd022efa00dcb926bb4ea5176e6b5a02fa562ccc1886e007001897",
     "builder_sha256": "e5daf123e7bdfbaaecb4cfb850f4b6fd129e55c0f106a20386f9dbcf32325d4f",
@@ -55,5 +58,15 @@
     "acceptance": false,
     "hardware_floor": false,
     "safe_to_merge_during_live_gate_a": false
+  },
+  "staged_live_ab": {
+    "selector": "FR13_DRAFT_HEAD_M1_R32_LIVE_AB=1",
+    "served_return": "incumbent BF16 K64 reference logits unchanged",
+    "sites": ["root", "mtp_depth_1", "mtp_depth_2", "mtp_depth_3", "mtp_depth_4"],
+    "values_compared_per_site": 65536,
+    "measured_step_host_sync": false,
+    "required_captured_loop_heads": 4,
+    "required_fallback_calls": 0,
+    "credential_issuer_complete": false
   }
 }
