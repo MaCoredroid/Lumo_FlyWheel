@@ -1,0 +1,42 @@
+{
+  "artifact_schema": "fr13.fixed32.b1_m128_target_sfwd_exact4_boot_failure.v1",
+  "candidate": {
+    "container_exit_code": 1,
+    "measured": false,
+    "oom_killed": false,
+    "root_cause": "FR13 SFWD conv/post-prep capture lacks preseeded output bindings",
+    "status": "BOOT_FAILURE_BEFORE_HEALTH"
+  },
+  "classification": "real_swe_verified_exact4_b1_paired_attempt",
+  "files": {
+    "candidate_docker_failure_full.log": "66fda660195b0c9ee2402bb50950580313f733ec8a619de50184b99af6c6d144",
+    "candidate_launch.log": "cb2d30e62933ad6e3b6a97fcbaf5bd04888df44b7d30629922e9823dd87f0579",
+    "candidate_runlog.txt": "9f8afe000029dd0a0343f1801fcca86749ecd87a596fe5f233e071ec7e28f1a3",
+    "external_manifest.at_end.json": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_manifest.at_launch.json": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "launcher_meta.txt": "27739f5a6ba7354af5297c338ca767340f8dcc0f96a9e033143700fbbd6b83a1",
+    "reference_deploy_speed_fullwall.json": "eb3d56ae0a1e9aaa69c2b1212fdbc61a0a9b8f152957365f981d433c3ce9b849",
+    "runtime_manifest.at_end.json": "cc2661bd49f73371f9c156c7f138cffccf911ca01cf1233b06869bb5fb74601a",
+    "runtime_manifest.at_launch.json": "cc2661bd49f73371f9c156c7f138cffccf911ca01cf1233b06869bb5fb74601a"
+  },
+  "floor_acceptance_eligible": false,
+  "manifests_stable": true,
+  "reference": {
+    "accept_per_event": 4.782796472917042,
+    "committer_gpu_ms_per_step": 20.52152663013455,
+    "drafter_gpu_ms_per_step": 37.52043729895025,
+    "floor_ratio": 1.9632801613947248,
+    "measured_tps_fullstep_wall": 24.615793145837383,
+    "n_tasks": 4,
+    "overhead_other_ms_per_event": 16.05671966947217,
+    "sfwd_gpu_ms_per_step": 160.82352421561344,
+    "status": "MEASURED",
+    "step_wall_ms": 234.9222078141704,
+    "timing_eligible": true
+  },
+  "source_commit": "a8a904ed6c27a6338d43151038c155ebb76e3656",
+  "status": "CANDIDATE_BOOT_FAILURE",
+  "suite": "SWE-Verified",
+  "task_count": 4,
+  "task_set": "exact4"
+}

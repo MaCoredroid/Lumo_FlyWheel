@@ -1,0 +1,8 @@
+{"candidate_so_sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86", "canonical_sha256": "d97abcbf9c9031744c01cf635605b035ada229bdbed20077f2ac8947872e1bdf", "instance_id": "astropy__astropy-12907", "live_gate_schema": "fr13.fixed32.fa2_qrow16_live_paged_ab.v1", "live_result_canonical_sha256": "2306deb1f36854a9a6419eb1506fe4969cf20c62f9e9bafb5abe13b4e35ac78e", "live_result_sha256": "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77", "lse_sha256": "2adbdcffb3aa7d67ebe4327e14801b94ed9f4276bc6a40af9ec3347af4d02068", "output_sha256": "058930e0f5b77695f3f37ef53540dee09bf36996f32143074c5c1e14011f04f4", "production_scope": "qrow16 exact target tree attention only", "required_runtime": "fixed32 B1 FULL", "schema": "fr13.fixed32.fa2_qrow16_production_pass.v1", "status": "PASS"}
+[launch] TAIL mode ON -> /logs/fr13_tail_mode.arm (head_depth=5 + arctic chain to wide_D)
+               total        used        free      shared  buff/cache   available
+Mem:           117Gi       9.8Gi       108Gi       647Mi       982Mi       107Gi
+Swap:           15Gi          0B        15Gi
+f36cbb4dedb786eb2d051b3af060e5f8edae1803b86c6d797e0f36ec92d44cb1
+[launch] fixed32 container identity id=f36cbb4dedb786eb2d051b3af060e5f8edae1803b86c6d797e0f36ec92d44cb1 name=fr13-bigdenom-hydra27_fixed32_qrow16_target_sfwd_exact4_m128_cooperative_a8a904ed6_exact4_a
+[launch] gpu_oom_guard armed for container=f36cbb4dedb786eb2d051b3af060e5f8edae1803b86c6d797e0f36ec92d44cb1 (floor=9000MiB)
