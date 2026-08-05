@@ -95,6 +95,19 @@ def test_contract_has_exact_fixed32_work_ledger(
     assert contract["candidate_block_stat_workspace_bytes"] == (
         batch_size * 15_360
     )
+    assert contract["decision_programs_per_request_before"] == 30
+    assert contract["decision_programs_per_request_after"] == 30
+    assert contract["decision_values_stored_per_request_before"] == 81
+    assert contract["decision_values_stored_per_request_after"] == 81
+    assert contract["integer_walk_topology_index_loads_per_request_before"] == 24
+    assert contract["integer_walk_topology_index_loads_per_request_after"] == 0
+    assert contract["compact_decision_workspace_bytes_before"] == (
+        batch_size * 529
+    )
+    assert contract["physical_decision_workspace_bytes_after"] == (
+        batch_size * 1_048
+    )
+    assert contract["decision_workspace_bytes_added"] == batch_size * 519
 
 
 @pytest.mark.parametrize(
@@ -130,10 +143,50 @@ def test_workspace_is_persistent_physical32_for_b1_and_b4() -> None:
             (batch_size * 30, 64),
             torch.float32,
         )
-        assert spec["self_token"] == ((batch_size, 13), torch.long)
-        assert spec["source"] == ((batch_size, 17), torch.long)
-        assert spec["accepted"] == ((batch_size, 17), torch.bool)
+        assert spec["self_token"] == ((batch_size, 31), torch.long)
+        assert spec["source"] == ((batch_size, 32), torch.long)
+        assert spec["selected_token"] == ((batch_size, 32), torch.long)
+        assert spec["rejected_token"] == ((batch_size, 32), torch.long)
+        assert spec["accepted"] == ((batch_size, 32), torch.bool)
         assert spec["invalid"] == ((1,), torch.int32)
+
+
+@pytest.mark.parametrize("mode", sorted(kernel.FIXED32_MODES))
+@pytest.mark.parametrize("batch_size", (1, 4))
+def test_physical_decision_slots_preserve_compact_reachable_rows(
+    mode: str, batch_size: int
+) -> None:
+    metadata = _valid_metadata(batch_size, mode)
+    generator = torch.Generator().manual_seed(1_000 * batch_size + len(mode))
+    compact_self = torch.randint(
+        0, 1_000, (batch_size, kernel.SELF_ROWS), generator=generator
+    )
+    compact_target = [
+        torch.randint(
+            0, 1_000, (batch_size, kernel.TARGET_ROWS), generator=generator
+        )
+        for _ in range(4)
+    ]
+    physical_self = torch.full((batch_size, kernel.PHYSICAL_DRAFTS), -1)
+    physical_target = [
+        torch.full((batch_size, kernel.PHYSICAL_ROWS), -1) for _ in range(4)
+    ]
+    self_sources = metadata["self_source_indices"].reshape(batch_size, -1)
+    self_nodes = self_sources - (
+        torch.arange(batch_size).unsqueeze(1) * kernel.PHYSICAL_DRAFTS
+    )
+    physical_self.scatter_(1, self_nodes, compact_self)
+    parent_slots = metadata["target_parent_slots"].expand(batch_size, -1)
+    for physical, compact in zip(
+        physical_target, compact_target, strict=True
+    ):
+        physical.scatter_(1, parent_slots, compact)
+
+    assert torch.equal(torch.gather(physical_self, 1, self_nodes), compact_self)
+    for physical, compact in zip(
+        physical_target, compact_target, strict=True
+    ):
+        assert torch.equal(torch.gather(physical, 1, parent_slots), compact)
 
 
 def _valid_metadata(batch_size: int, mode: str) -> dict[str, torch.Tensor]:
@@ -358,6 +411,36 @@ def test_kernel_uses_scan_terminal_masses_and_sticky_domain_guards() -> None:
     assert "block_cdf" in source
     assert "local_total" in source
     assert "local_total / tl.maximum(selected_block_mass" in source
+    assert "self_token_out + physical_self_offset" in source
+    assert source.count("+ physical_target_offset") == 4
+    assert "self_token_out + self_row" not in source
+    assert "source_out + target_row" not in source
+
+
+def test_served_integer_walk_reads_physical_slots_without_topology_maps() -> None:
+    source = SERVED_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    definitions = {
+        node.name: ast.get_source_segment(source, node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+    kernel_source = definitions[
+        "_fr13_fixed32_taw_physical_slot_commit_kernel"
+    ]
+    assert "self_slot_by_node" not in kernel_source
+    assert "target_slot_by_parent" not in kernel_source
+    assert "request * PHYSICAL_DRAFTS + safe_current" in kernel_source
+    assert "request * PHYSICAL_ROWS + parent_slot" in kernel_source
+
+    walk_source = definitions["_fr13_cfwd_logit_direct_walk_cuda"]
+    assert "_fr13_fixed32_taw_physical_slot_commit_kernel" in walk_source
+    assert 'entry["native_self_slot_by_node"]' not in walk_source
+    assert 'entry["native_target_slot_by_parent"]' not in walk_source
+
+    compare_source = definitions["_fr13_cfwd_logit_direct_compare_kernel"]
+    assert "cand_self_token + self_source" in compare_source
+    assert "cand_source + physical_target_offset" in compare_source
 
 
 def test_candidate_is_default_off_and_wired_only_through_shadow_wrapper() -> None:

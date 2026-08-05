@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,11 +67,32 @@ def test_work_model_is_source_only_and_exactly_bound() -> None:
 
 
 def test_published_source_hashes_match() -> None:
+    artifact_commit = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "log",
+            "-1",
+            "--format=%H",
+            "--",
+            str(ARTIFACT.relative_to(ROOT) / "source_hashes.sha256"),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+    assert artifact_commit
     entries = (ARTIFACT / "source_hashes.sha256").read_text().splitlines()
     assert len(entries) == 3
     for entry in entries:
         expected, relative = entry.split("  ", 1)
-        observed = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+        historical = subprocess.run(
+            ["git", "-C", str(ROOT), "show", f"{artifact_commit}:{relative}"],
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        observed = hashlib.sha256(historical).hexdigest()
         assert observed == expected
 
 

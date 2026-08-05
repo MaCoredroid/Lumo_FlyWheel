@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
-CANDIDATE = "fixed32_cfwd_logit_direct_decisions_v1"
-CANDIDATE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_decisions.v1"
+CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
+CANDIDATE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
 CANDIDATE_SOURCE_SHA256 = (
-    "d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d"
+    "c86e8e9b73b20421213b465ff547a16a8b2177ac065a2475090f907d23f8460d"
 )
 LIVE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_live_ab.v1"
 CREDENTIAL_SCHEMA = "fr13.fixed32.cfwd_logit_direct.production_credential.v1"

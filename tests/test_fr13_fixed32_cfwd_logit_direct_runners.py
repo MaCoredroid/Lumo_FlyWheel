@@ -38,10 +38,10 @@ def _credential(source_commit: str) -> dict:
     return {
         "schema": "fr13.fixed32.cfwd_logit_direct.production_credential.v1",
         "status": "production_timing_ready",
-        "candidate": "fixed32_cfwd_logit_direct_decisions_v1",
-        "candidate_schema": "fr13.fixed32.cfwd_logit_direct_decisions.v1",
+        "candidate": "fixed32_cfwd_logit_direct_physical_slots_v2",
+        "candidate_schema": "fr13.fixed32.cfwd_logit_direct_physical_slots.v2",
         "candidate_source_sha256": (
-            "d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d"
+            "c86e8e9b73b20421213b465ff547a16a8b2177ac065a2475090f907d23f8460d"
         ),
         "integration_source_commit": source_commit,
         "mode": "hydra27_fixed32",
