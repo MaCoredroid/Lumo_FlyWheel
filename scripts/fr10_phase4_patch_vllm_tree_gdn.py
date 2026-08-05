@@ -776,7 +776,7 @@ def _fr13_draft_head_m1_r32_live_finalize(events, flush_binding):
         and type(lifecycle["drafter_graph_id"]) is int
         and lifecycle["drafter_graph_id"] > 0
         and lifecycle["drafter_graph_signature"]
-        == "d9a4ddece41d146e9949b8ff7c2603b8948d157b28ef69244e44469b36150c"
+        == "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
         and lifecycle["capture_origin"] in ("measured", "unmeasured")
         and type(lifecycle["last_measured_forward_step_index"]) is int
         and lifecycle["last_measured_forward_step_index"] >= 0
@@ -24684,7 +24684,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     not in ("measured", "unmeasured")
                     or _fr13_dh_m1_signature
                     != (
-                        "d9a4ddece41d146e9949b8ff7c2603b"
+                        "d9a4ddece41d146e9949b9f8ff7c2603"
                         "8948d157b28ef69244e44469b36150c"
                     )
                 ):

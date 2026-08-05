@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 from pathlib import Path
-
 
 REPO = Path(__file__).resolve().parents[1]
 PATCHER = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
@@ -166,6 +167,35 @@ def test_r32_live_ab_attests_one_root_four_captured_heads_and_measured_replay() 
         observed.index("def _fr13_draft_head_m1_r32_live_finalize") :
     ]
     assert 'state["compares"].tolist()' in finalize
+
+
+def test_r32_graph_signature_is_derived_from_canonical_b1_manifest() -> None:
+    manifest = {
+        "schema": "fr13-fixed32-drafter-graph-manifest-v2",
+        "batch_size": 1,
+        "mtp_forward_calls": 4,
+        "mtp_forward_rows": 4,
+        "tree_attn_calls": 4,
+        "tree_attn_rows": 4,
+        "tree_attn_layer": "mtp.layers.0.self_attn.attn",
+        "tree_attn_bias_shape": [1, 1],
+    }
+    canonical = json.dumps(
+        manifest,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    signature = hashlib.sha256(canonical).hexdigest()
+
+    assert signature == (
+        "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
+    )
+    observed = _observed_runtime_snippet()
+    eagle = _eagle_snippet()
+    assert signature in observed
+    assert signature[:32] in eagle
+    assert signature[32:] in eagle
 
 
 def test_launcher_pins_read_only_r32_binary_and_isolates_candidate() -> None:
