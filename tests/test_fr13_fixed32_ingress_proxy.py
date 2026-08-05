@@ -739,7 +739,7 @@ def test_engine_middleware_arms_sfwd_conv_postprep_from_authenticated_b1_request
     info = os.lstat(marker)
     assert stat.S_ISREG(info.st_mode)
     assert info.st_nlink == 1
-    assert stat.S_IMODE(info.st_mode) == 0o400
+    assert stat.S_IMODE(info.st_mode) == 0o444
 
 
 def test_engine_middleware_rejects_ambiguous_sfwd_b1_route_sidecars(

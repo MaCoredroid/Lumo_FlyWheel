@@ -1805,7 +1805,7 @@ class Fixed32EngineIngress:
             )
             + "\n"
         ).encode("ascii")
-        marker_mode = 0o400 if is_b1 else 0o444
+        marker_mode = 0o444
         if self._sfwd_b4_published_marker is not None:
             published = self._read_sfwd_b4_sidecar(
                 path,
