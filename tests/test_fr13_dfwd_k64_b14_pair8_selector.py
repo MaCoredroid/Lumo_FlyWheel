@@ -186,6 +186,11 @@ def test_launcher_and_runtime_manifest_close_selector_source_and_binary() -> Non
     assert "scripts/fr13_dfwd_k64_b14_pair8_selector.py" in manifest
     assert "csrc/fr13_bf16_gemvx_k64_b14_warp4_pair8.cu" in manifest
     assert "fr13_bf16_k64_b14_warp4_pair8.abi3.so" in manifest
+    assert '-e FR13_DRAFT_HEAD_B14_WARP4_PAIR8="$FR13_DRAFT_HEAD_B14_WARP4_PAIR8"' in launcher
+    assert (
+        '-e FR13_DRAFT_HEAD_B14_WARP4_PAIR8_SOURCE_COMMIT='
+        '"$FR13_DRAFT_HEAD_B14_WARP4_PAIR8_SOURCE_COMMIT"'
+    ) in launcher
 
 
 def test_python_and_shell_sources_parse() -> None:
