@@ -1,0 +1,19 @@
+cd /home/mark/lumoFlyWheel-b1-wide256-directgrid-f81-build-20260805
+
+# Do not execute until the current serial GPU campaign is idle.
+# The worktree must be clean, pushed, and HEAD must equal its upstream.
+test -e .venv || ln -s /home/mark/shared/lumoFlyWheel/.venv .venv
+
+FR13_RUN_B1_TARGET_SFWD_GATE=1 \
+RUNROOT=output/fr13_b1_wide256_directgrid_k64_root_gate_20260805a \
+TAG=wide256_directgrid_20260805a \
+FORKED_FA2_SO=/home/mark/lumoFlyWheel-kernel-integrated/output/fr13_qrow16_production_assets/_vllm_fa2_C.qrow16_num_splits0.abi3.so \
+CUTLASS_STREAMK_SO=/home/mark/fr13_sfwd_directgrid_f81_build/bin/_C_stable_libtorch.identity_wide256_directgrid_f81.abi3.so \
+bash scripts/fr13_run_b1_target_sfwd_conv_postprep_live_gate.sh
+
+# Required result; anything else is not a valid byte gate:
+# output/fr13_b1_wide256_directgrid_k64_root_gate_20260805a/
+#   hydra27_fixed32_k64_root_wide256_directgrid_20260805a/
+#   cutlass_identity_wide256_fullgrid_b1_k64_root_byte_gate.json
+# status=pass, comparisons=320, all five projection shapes,
+# mismatching_comparisons=0, differing_bytes=0, served_result=stock.

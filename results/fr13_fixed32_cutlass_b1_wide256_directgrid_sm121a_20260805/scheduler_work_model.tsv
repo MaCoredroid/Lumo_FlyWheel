@@ -1,0 +1,5 @@
+physical_batch	n	k	calls_per_target_step	tiles_per_call	wide_tile_assignments_per_target_step	physical_grid_ctas	cursor_sequence
+B1	14336	5120	16	56	896	48	cta_id_plus_48k
+B1	16384	5120	48	64	3072	48	cta_id_plus_48k
+B1	34816	5120	64	136	8704	48	cta_id_plus_48k
+TOTAL	-	-	128	-	12672	-	-

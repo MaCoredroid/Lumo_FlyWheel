@@ -1,0 +1,9 @@
+{
+  "bytes": 119982464,
+  "candidate_family": "identity_wide256_fullgrid_b1",
+  "path": "/home/mark/fr13_sfwd_directgrid_f81_build/bin/_C_stable_libtorch.identity_wide256_directgrid_f81.abi3.so",
+  "qualification_profile": "k64_root",
+  "regular": true,
+  "sha256": "7f62f4efac0bb61d2f8367d9ff1e22a47d425ca06dcb74b4cbcd65dc701361de",
+  "symlink": false
+}

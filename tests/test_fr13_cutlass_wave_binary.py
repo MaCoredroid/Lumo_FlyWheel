@@ -197,10 +197,14 @@ def test_pinned_binary_identity_and_selectors() -> None:
     assert module.candidate_identity(
         "identity_wide256_fullgrid_b1_byte_ab"
     ) == (
-        module.IDENTITY_FULLTILE_CANDIDATE_SHA256,
-        module.IDENTITY_FULLTILE_CANDIDATE_SIZE,
+        module.IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SHA256,
+        module.IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SIZE,
         "identity_wide256_fullgrid_b1",
     )
+    assert module.IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SHA256 == (
+        "7d762dfa793671d75d1e353bd37d76fc07370cbe387ad1e315e32584d27927d4"
+    )
+    assert module.IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SIZE == 119_781_296
     assert module.candidate_identity("identity_fullm_b4_byte_ab") == (
         module.IDENTITY_FULLTILE_CANDIDATE_SHA256,
         module.IDENTITY_FULLTILE_CANDIDATE_SIZE,
@@ -495,6 +499,12 @@ def test_fulltile_diagnostic_installs_but_direct_stays_blocked(
     digest = hashlib.sha256(payload).hexdigest()
     monkeypatch.setattr(module, "IDENTITY_FULLTILE_CANDIDATE_SIZE", len(payload))
     monkeypatch.setattr(module, "IDENTITY_FULLTILE_CANDIDATE_SHA256", digest)
+    monkeypatch.setattr(
+        module, "IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SIZE", len(payload)
+    )
+    monkeypatch.setattr(
+        module, "IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SHA256", digest
+    )
     source = tmp_path / "fulltile.so"
     destination = tmp_path / "installed.so"
     attestation = tmp_path / "attestation.json"
@@ -547,6 +557,14 @@ def test_fulltile_binary_verification_requires_k64_root(
     monkeypatch.setattr(
         module,
         "IDENTITY_FULLTILE_CANDIDATE_SHA256",
+        hashlib.sha256(payload).hexdigest(),
+    )
+    monkeypatch.setattr(
+        module, "IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SIZE", len(payload)
+    )
+    monkeypatch.setattr(
+        module,
+        "IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SHA256",
         hashlib.sha256(payload).hexdigest(),
     )
     candidate = tmp_path / "candidate.so"
