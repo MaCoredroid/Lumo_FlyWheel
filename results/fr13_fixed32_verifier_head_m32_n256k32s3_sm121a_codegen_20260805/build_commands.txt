@@ -1,0 +1,26 @@
+REPO=/home/mark/lumoFlyWheel-verifier-head-n256s2-f81-20260805
+CUTLASS=/home/mark/fr13_streamk_build/cutlass-source
+OUT=/home/mark/fr13_bf16_verifier_head_m32_n256k32s3_sm121a_20260805
+
+nice -n 19 /usr/local/cuda/bin/nvcc \
+  -O3 -std=c++17 --threads=1 --fmad=true \
+  --expt-relaxed-constexpr --expt-extended-lambda \
+  -DFR13_CODEGEN_ONLY \
+  -gencode=arch=compute_121a,code=sm_121a \
+  -Xptxas=-v \
+  -I"$CUTLASS/include" \
+  -I"$CUTLASS/tools/util/include" \
+  -c "$REPO/csrc/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.cu" \
+  -o "$OUT/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.cuda.o"
+
+/usr/local/cuda/bin/cuobjdump --dump-resource-usage \
+  "$OUT/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.cuda.o"
+/usr/local/cuda/bin/cuobjdump --dump-sass \
+  "$OUT/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.cuda.o"
+
+# Full shared-object build remains pending in the pinned Torch 2.11 runtime:
+python3 "$REPO/scripts/fr13_build_bf16_verifier_head_m32_n256k32s3_sm121a.py" \
+  --output "$OUT/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.abi3.so" \
+  --build-dir "$OUT/build" \
+  --attestation "$OUT/build_attestation.json" \
+  --cutlass-root "$CUTLASS"

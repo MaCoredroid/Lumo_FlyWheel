@@ -1,0 +1,4 @@
+variant	object_sha256	registers	spill_store_bytes	spill_load_bytes	dynamic_shared_bytes	ldgsts_128b	status	reason
+m32_n256k64s2	5d38ff534467acd027286da3b6311cfe366e2711bb0e49d8add1fba84c1d641a	214	0	0	73728	0	REJECTED	lost asynchronous mainloop and raised register pressure
+m32_n256k64s3	9b659112f0a101a5271887746e0215c1d150175e5573870c44793842878c25f5	160	0	0	110592	54	REJECTED	exceeds compute-capability-12.x 99 KiB per-block shared-memory limit
+m32_n256k32s3	fe550d11191cac5c4a6a8aeb3df8bb4fb17ab08fedfb93ea06257cdda99fb4f7	128	0	0	55296	27	SELECTED	launchable static envelope with asynchronous mainloop

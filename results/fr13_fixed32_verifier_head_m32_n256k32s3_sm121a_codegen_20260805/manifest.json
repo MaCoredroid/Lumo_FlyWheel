@@ -1,0 +1,139 @@
+{
+  "acceptance_valid": false,
+  "baseline": {
+    "codegen_object_sha256": "6dd621b35c4e36bda425429127c2f704c53cde9bd99c03c7880c496d10701651",
+    "dynamic_shared_bytes": 61440,
+    "logical_grid_ctas": 1940,
+    "ptxas_registers": 158,
+    "sass_sha256": "594c78886a33c79dc88b33ec116691f7400210314892845badb4b241cc5f31ff",
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0,
+    "stages": 3,
+    "threadblock_mnk": [
+      32,
+      128,
+      64
+    ],
+    "warp_mnk": [
+      32,
+      64,
+      64
+    ]
+  },
+  "baseline_delta": {
+    "dynamic_shared_bytes": -6144,
+    "logical_grid_ctas": -970,
+    "logical_hidden_tile_bytes_before_cache": -317849600,
+    "registers": -30,
+    "shared_limited_warps_per_sm": 2
+  },
+  "byte_equality_claim": false,
+  "candidate": {
+    "dynamic_shared_bytes": 55296,
+    "full_vocabulary_preserved": true,
+    "input_or_weight_quantized": false,
+    "instruction_mnk": [
+      16,
+      8,
+      16
+    ],
+    "logical_grid_ctas": 970,
+    "logical_grid_mn": [
+      1,
+      970
+    ],
+    "logical_output": "BF16[32,248320] contiguous",
+    "operation": "BF16[32,5120] row-major x BF16[5120,248320] column-major",
+    "problem_mnk": [
+      32,
+      248320,
+      5120
+    ],
+    "production_default_enabled": false,
+    "split_k_slices": 1,
+    "stages": 3,
+    "threadblock_mnk": [
+      32,
+      256,
+      32
+    ],
+    "warp_mnk": [
+      32,
+      64,
+      32
+    ],
+    "workspace_bytes": 0
+  },
+  "codegen": {
+    "arch": "sm_121a",
+    "async_global_to_shared_128b": 27,
+    "barriers": 1,
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cuda_release": "13.0",
+    "dynamic_shared_bytes": 55296,
+    "global_load_128b": 8,
+    "global_store_128b": 16,
+    "hmma_bf16": 32,
+    "nvcc_build": "V13.0.88",
+    "object_bytes": 87368,
+    "object_kind": "device-free codegen object; not a loadable Torch shared object",
+    "object_sha256": "fe550d11191cac5c4a6a8aeb3df8bb4fb17ab08fedfb93ea06257cdda99fb4f7",
+    "ptxas_log_sha256": "7fce90398455bb4ba82c3e71d1ee9878181e6d5f97c6702c7f74681b3eeb5997",
+    "registers": 128,
+    "resource_repeat_byte_identical": true,
+    "resource_report_sha256": "128f531e0abff5021263f7875574b617323b155840d4a9c27081bfaccd82d0c0",
+    "sass_instruction_lines": 1120,
+    "sass_repeat_byte_identical": true,
+    "sass_sha256": "95e406a5e1ea376dd266924dd4cb7f935b0d35e42aadd0dcd115a117536fc59e",
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0,
+    "stack_bytes": 0,
+    "static_shared_bytes": 1024,
+    "status": "PASS"
+  },
+  "created_at_utc": "2026-08-05T11:27:39Z",
+  "docker_used": false,
+  "explored_variants": {
+    "m32_n256k64s2": {
+      "dynamic_shared_bytes": 73728,
+      "ldgsts_128b": 0,
+      "object_sha256": "5d38ff534467acd027286da3b6311cfe366e2711bb0e49d8add1fba84c1d641a",
+      "registers": 214,
+      "status": "REJECTED"
+    },
+    "m32_n256k64s3": {
+      "dynamic_shared_bytes": 110592,
+      "ldgsts_128b": 54,
+      "object_sha256": "9b659112f0a101a5271887746e0215c1d150175e5573870c44793842878c25f5",
+      "registers": 160,
+      "status": "REJECTED"
+    }
+  },
+  "gpu_runtime_used": false,
+  "hardware_constraints": {
+    "candidate_total_reported_shared_bytes_per_cta": 56320,
+    "cc12x_max_shared_bytes_per_block": 101376,
+    "cc12x_max_shared_carveout_bytes_per_sm": 102400,
+    "cc12x_physical_shared_capacity_bytes_per_sm": 131072,
+    "reference": "https://docs.nvidia.com/cuda/blackwell-tuning-guide/",
+    "shared_limited_candidate_ctas_per_sm": 1
+  },
+  "performance_claim": false,
+  "performance_measurement": false,
+  "qualification_required": [
+    "one real SWE-Verified B1 shadow task with every BF16 element compared",
+    "zero raw BF16 mismatches with incumbent logits always served",
+    "frozen-source real-task-set B1 full-step timing",
+    "B4 byte gate and real-task-set timing only after B1 passes"
+  ],
+  "schema": "fr13.fixed32.verifier_head_m32_n256k32s3_sm121a_codegen.v1",
+  "source_base_commit": "f81a1c774b55a7f76d30d30ed0fac2be73665be9",
+  "source_sha256": {
+    "csrc/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.cu": "0f13a9de2922e78fbb4c1739339b64ec4d1c39a22567d2ed21ef922284556fbe",
+    "scripts/fr13_build_bf16_verifier_head_m32_n256k32s3_sm121a.py": "854b805a2dda90620d8442cc29069d4f2d36bc86e9de374e91aa413f56b8c666",
+    "tests/test_fr13_bf16_verifier_head_m32_n256k32s3_sm121a.py": "b6c22647601099ab63c5572a50cddfb53444c6199ca5358d005eca0abc600b2f"
+  },
+  "status": "CODEGEN_PASS_UNQUALIFIED",
+  "synthetic_or_probe_workload_used": false,
+  "verifier_distribution_claim": false
+}
