@@ -1,0 +1,83 @@
+{
+  "schema": "fr13.fixed32.b1_gate_b_m128_directgrid_pass_artifact.v1",
+  "status": "PASS",
+  "source_commit": "2c349c938b0ea85f43c1a9f85dea316aa179ee13",
+  "run": {
+    "classification": "one_real_swe_verified_b1_k64_root_byte_diagnostic",
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "task_id": "astropy__astropy-12907",
+    "batch_size": 1,
+    "concurrency": 1,
+    "physical_rows": 32,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "exit_code": 0,
+    "task_completed": true,
+    "task_resolved": true
+  },
+  "target_candidate": {
+    "family": "identity_wide256_fullgrid_b1",
+    "implementation": "m128_directgrid_v1",
+    "sha256": "7d762dfa793671d75d1e353bd37d76fc07370cbe387ad1e315e32584d27927d4",
+    "bytes": 119781296,
+    "gate_record": "target_gate.json",
+    "gate_record_sha256": "b813e156decb1110d57a50346f031f8f2f490bcc2b471d0432a9c463e7526148",
+    "comparisons": 320,
+    "mismatching_comparisons": 0,
+    "production_enabled": false
+  },
+  "qrow16": {
+    "sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+    "bytes": 299507792,
+    "engagement_record": "qrow_engagement.json",
+    "engagement_record_sha256": "cac4890ab8c19d3fd83821d6cdd9c6d0d629e44585e06b043c8489331f692415",
+    "runtime_mode": "EAGER",
+    "layer_count": 16,
+    "status": "ENGAGED"
+  },
+  "sfwd_conv_postprep": {
+    "gate_record": "sfwd_gate.json",
+    "gate_record_sha256": "1e653980a4a59e395d7d78ce11eb9c3203ec12b9afadaa9253ac97d645fc03e2",
+    "layer_count": 48,
+    "comparisons": 336,
+    "mismatches": 0,
+    "errors": 0,
+    "candidate_returned": false,
+    "reference_returned": true
+  },
+  "source_identity": {
+    "path": "source_manifest.json",
+    "schema": "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1",
+    "sha256": "557e8805948fb86d78d95cf09d62546459590d1e3e9ab27c2b4bc4239eb39b32",
+    "launch_end_byte_identical": true
+  },
+  "task_summary": {
+    "path": "task_summary.json",
+    "sha256": "480af2849d9735830d56660def866296e0aa958eb2cc80e41791797dd70463f7",
+    "resolved": 1,
+    "total": 1
+  },
+  "claims": {
+    "byte_correctness_gate_passed": true,
+    "task_resolved": true,
+    "qualification_complete": true,
+    "production_enabled": false,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "timing_claim": false,
+    "acceptance_claim": false,
+    "performance_claim": false,
+    "hardware_floor_evidence": false
+  },
+  "privacy": {
+    "raw_prompts_absent": true,
+    "raw_responses_absent": true,
+    "raw_patches_absent": true,
+    "raw_traces_absent": true,
+    "raw_logs_absent": true,
+    "raw_environment_absent": true,
+    "process_identities_absent": true,
+    "binaries_absent": true,
+    "tensors_absent": true
+  }
+}

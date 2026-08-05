@@ -1,0 +1,58 @@
+{
+  "schema": "fr13.fixed32.b1_gate_b_m128_directgrid_comparator_summary.v1",
+  "source_commit": "2c349c938b0ea85f43c1a9f85dea316aa179ee13",
+  "task_marker": "swe_verified:astropy__astropy-12907",
+  "records": 320,
+  "first_invocation": 0,
+  "last_invocation": 319,
+  "unique_invocations": 320,
+  "all_byte_equal": true,
+  "mismatch_sum": 0,
+  "shapes": [
+    {
+      "m": 32,
+      "n": 5120,
+      "k": 6144,
+      "comparisons": 80,
+      "bytes_per_comparison": 327680,
+      "all_byte_equal": true,
+      "mismatch_sum": 0
+    },
+    {
+      "m": 32,
+      "n": 5120,
+      "k": 17408,
+      "comparisons": 80,
+      "bytes_per_comparison": 327680,
+      "all_byte_equal": true,
+      "mismatch_sum": 0
+    },
+    {
+      "m": 32,
+      "n": 14336,
+      "k": 5120,
+      "comparisons": 20,
+      "bytes_per_comparison": 917504,
+      "all_byte_equal": true,
+      "mismatch_sum": 0
+    },
+    {
+      "m": 32,
+      "n": 16384,
+      "k": 5120,
+      "comparisons": 60,
+      "bytes_per_comparison": 1048576,
+      "all_byte_equal": true,
+      "mismatch_sum": 0
+    },
+    {
+      "m": 32,
+      "n": 34816,
+      "k": 5120,
+      "comparisons": 80,
+      "bytes_per_comparison": 2228224,
+      "all_byte_equal": true,
+      "mismatch_sum": 0
+    }
+  ]
+}
