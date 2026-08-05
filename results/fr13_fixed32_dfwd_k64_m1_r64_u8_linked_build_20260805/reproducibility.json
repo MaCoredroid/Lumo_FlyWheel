@@ -1,0 +1,29 @@
+{
+  "base_main_commit": "3bdd984c2408467d321c35e758af3776983aaf38",
+  "binary": {
+    "bytes": 117904,
+    "primary_sha256": "8b27df4f3c6a5a0574261ee984159582a87615c3e6d83f2a267f4fa46a3e421e",
+    "rebuild_sha256": "8b27df4f3c6a5a0574261ee984159582a87615c3e6d83f2a267f4fa46a3e421e"
+  },
+  "build_script_sha256": "5f31765be444e21da6dd7af1c39249624cb4741d0fde1019308438f16720eafa",
+  "byte_identical_fresh_builds": true,
+  "candidate_default_off": true,
+  "cubin": {
+    "primary_sha256": "ae3e8ac1fbdf88d0ca9d8c8f8fb971512d0622b02f1c425132dffb7cd696709b",
+    "rebuild_sha256": "ae3e8ac1fbdf88d0ca9d8c8f8fb971512d0622b02f1c425132dffb7cd696709b"
+  },
+  "docker_gpu_attached": false,
+  "gpu_runtime_used": false,
+  "performance_claim": false,
+  "real_task_correctness": false,
+  "runtime_wired": false,
+  "schema": "fr13.fixed32.dfwd_k64_m1_r64_u8_linked_build_reproducibility.v1",
+  "source_sha256": "af0044edd84ff58d353a816f6887894d05a62b221e0efa5af933c2c59676b01b",
+  "status": "REPRODUCIBLE_LINKED_BUILD_UNQUALIFIED",
+  "toolchain": {
+    "cuda_arch": "12.1a",
+    "cuda_release": "13.0",
+    "nvcc_random_seed": "fr13_bf16_k64_m1_r64_u8",
+    "torch": "2.11.0+cu130"
+  }
+}
