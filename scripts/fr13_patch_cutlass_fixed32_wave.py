@@ -693,10 +693,11 @@ class Fr13B1OneNFullGridStaticTileScheduler100
   using Base::Base;
 };
 
-// The wide256 B1 target has one scheduler-N tile, one batch plane, cluster
-// (1,1,1), and enough complete output tiles for a full 48-CTA grid. Preserve
-// the cooperative kernel's complete cursor/advance/termination contract while
-// mapping the bounded linear cursor directly to {M, 0, 0}.
+// The direct-grid B1 target has one scheduler-N tile, one batch plane, cluster
+// (1,1,1), and a source-bound 48-SM GB10 launch. Keep only the two words the
+// ping-pong kernel consumes: its current linear tile and the logical tile
+// bound. The base scheduler's decoded cursor and dynamic grid stride are dead
+// for this exact launch contract.
 class Fr13B1Wide256DirectFullGridStaticTileScheduler100
     : public StaticPersistentTileScheduler100 {
   using Base = StaticPersistentTileScheduler100;
@@ -704,32 +705,26 @@ class Fr13B1Wide256DirectFullGridStaticTileScheduler100
  public:
   using Params = typename Base::Params;
   using WorkTileInfo = typename Base::WorkTileInfo;
-  using CLCResponse = typename Base::CLCResponse;
+ using CLCResponse = typename Base::CLCResponse;
 
  private:
+  static constexpr uint32_t kGridStride = 48;
   uint32_t current_work_linear_idx_ = 0;
   uint32_t problem_tiles_ = 0;
-  uint32_t grid_stride_ = 0;
 
   CUTLASS_DEVICE void initialize_direct_state(Params const& params) {
-    current_work_linear_idx_ = static_cast<uint32_t>(blockIdx.x) *
-        static_cast<uint32_t>(gridDim.y) +
-        static_cast<uint32_t>(blockIdx.y);
+    current_work_linear_idx_ = static_cast<uint32_t>(blockIdx.y);
     problem_tiles_ = static_cast<uint32_t>(params.blocks_per_problem_);
-    grid_stride_ = static_cast<uint32_t>(gridDim.x) *
-        static_cast<uint32_t>(gridDim.y) *
-        static_cast<uint32_t>(gridDim.z);
   }
 
  public:
   CUTLASS_DEVICE explicit Fr13B1Wide256DirectFullGridStaticTileScheduler100(
-      Params const& params) : Base(params) {
+      Params const& params) : Base() {
     initialize_direct_state(params);
   }
 
   CUTLASS_DEVICE explicit Fr13B1Wide256DirectFullGridStaticTileScheduler100(
-      CLCResponse* response, Params const& params, dim3 block_id_in_cluster)
-      : Base(response, params, block_id_in_cluster) {
+      CLCResponse*, Params const& params, dim3) : Base() {
     initialize_direct_state(params);
   }
 
@@ -751,12 +746,12 @@ class Fr13B1Wide256DirectFullGridStaticTileScheduler100
   }
 
   CUTLASS_DEVICE void advance_to_next_work(uint32_t advance_count = 1) {
-    current_work_linear_idx_ += grid_stride_ * advance_count;
+    current_work_linear_idx_ += kGridStride * advance_count;
   }
 
   CUTLASS_DEVICE bool is_last_tile(
       WorkTileInfo&, uint32_t advance_count = 1) const {
-    return current_work_linear_idx_ + grid_stride_ * advance_count >=
+    return current_work_linear_idx_ + kGridStride * advance_count >=
         problem_tiles_;
   }
 

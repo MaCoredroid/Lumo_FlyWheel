@@ -1014,13 +1014,17 @@ def test_b1_wide256_direct_scheduler_keeps_complete_persistent_contract() -> Non
     scheduler = patched[scheduler_start:scheduler_end]
     assert "public StaticPersistentTileScheduler100" in scheduler
     assert "using Base = StaticPersistentTileScheduler100;" in scheduler
-    assert ": Base(params)" in scheduler
-    assert ": Base(response, params, block_id_in_cluster)" in scheduler
+    assert scheduler.count(": Base()") == 2
     assert "public Fr13B1OneNStaticTileScheduler100" not in scheduler
     assert "initialize_direct_state" in scheduler
     assert "current_work_linear_idx_" in scheduler
     assert "problem_tiles_" in scheduler
-    assert "grid_stride_" in scheduler
+    assert "packed_cursor_and_bound_" not in scheduler
+    assert "static constexpr uint32_t kGridStride = 48;" in scheduler
+    assert "grid_stride_" not in scheduler
+    assert "gridDim" not in scheduler
+    assert "blockIdx.x" not in scheduler
+    assert "blockIdx.y" in scheduler
     assert "advance_to_next_work" in scheduler
     assert "is_last_tile" in scheduler
     assert "fetch_next_work" in scheduler
