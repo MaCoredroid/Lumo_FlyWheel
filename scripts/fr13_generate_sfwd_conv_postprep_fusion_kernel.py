@@ -30,6 +30,8 @@ OUTPUT = (
 SOURCE_FUNCTION = "_fr13_fixed32_sfwd_channel_serial_kernel"
 OUTPUT_FUNCTION = "_fr13_fixed32_sfwd_conv_postprep_fusion_kernel"
 NODEGROUP_ROWS = 8
+NODEGROUPS_PER_PROGRAM = 2
+NODEPAIR_PROGRAMS = 2
 
 
 PREAMBLE = '''"""Generated fixed32 SFWD tree-conv/post-prep fusion kernel.
@@ -208,7 +210,7 @@ NODEGROUP_SIGNATURE = '''
 
 
 @triton.jit
-def _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel(
+def _fr13_fixed32_sfwd_conv_postprep_nodepair16_direct_kernel(
     x,
     conv_state,
     spec_state_indices,
@@ -248,18 +250,18 @@ def _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel(
     SOFTPLUS_THRESHOLD: tl.constexpr,
     EMBED_GATE_CTA: tl.constexpr,
 ):
-    """Run four direct eight-node channel groups without gather or shared state."""
+    """Run two serial eight-node groups per direct channel program."""
     pid_b = tl.program_id(0)
     pid_task = tl.program_id(1)
     channel_tiles: tl.constexpr = C // BLOCK_C
-    channel_tasks: tl.constexpr = 4 * channel_tiles
+    channel_tasks: tl.constexpr = 2 * channel_tiles
     Q_DIM: tl.constexpr = H * K
     V_DIM: tl.constexpr = HV * V
     GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK
     GATE_TASKS: tl.constexpr = N // GATE_ROWS
     if pid_task < channel_tasks:
-        pid_group = pid_task // channel_tiles
-        pid_c = pid_task - pid_group * channel_tiles
+        pid_pair = pid_task // channel_tiles
+        pid_c = pid_task - pid_pair * channel_tiles
         offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
         x_batch = x + pid_b * N * X_STRIDE_ROW
         stage_batch = source_stage + pid_b * SOURCE_ROWS * C
@@ -458,16 +460,15 @@ def _nodegroup_store(node: int, *, indent: str) -> list[str]:
     ]
 
 
-def _nodegroup_branch(
+def _nodegroup_body(
     group: int,
     sources: tuple[tuple[int, int, int], ...],
+    *,
+    indent: str,
 ) -> str:
     first = group * NODEGROUP_ROWS
     nodes = tuple(range(first, first + NODEGROUP_ROWS))
-    keyword = "if" if group == 0 else "elif"
-    indent = " " * 8
-    body_indent = " " * 12
-    lines = [f"{indent}{keyword} pid_group == {group}:"]
+    lines: list[str] = []
     prior_rows = sorted(
         {row for node in nodes for row in sources[node] if row < 3}
         | ({0, 1, 2} if group == 0 else set())
@@ -475,7 +476,7 @@ def _nodegroup_branch(
     for row in prior_rows:
         suffix = "" if row == 0 else f" + {row} * C"
         lines.append(
-            f"{body_indent}prior_{row} = tl.load(prior_base{suffix})"
+            f"{indent}prior_{row} = tl.load(prior_base{suffix})"
         )
 
     loaded_x: set[int] = set()
@@ -486,12 +487,12 @@ def _nodegroup_branch(
                 continue
             loaded_x.add(x_row)
             lines.append(
-                f"{body_indent}x_g{group}_{x_row} = tl.load("
+                f"{indent}x_g{group}_{x_row} = tl.load("
             )
             lines.append(
-                f"{body_indent}    x_batch + {x_row} * X_STRIDE_ROW + offs_c"
+                f"{indent}    x_batch + {x_row} * X_STRIDE_ROW + offs_c"
             )
-            lines.append(f"{body_indent})")
+            lines.append(f"{indent})")
 
         operands = tuple(
             f"prior_{row}" if row < 3 else f"x_g{group}_{row - 3}"
@@ -499,25 +500,25 @@ def _nodegroup_branch(
         ) + (f"x_g{group}_{node}",)
         for tap, operand in enumerate(operands):
             lines.append(
-                f"{body_indent}product_{tap} = ("
+                f"{indent}product_{tap} = ("
                 f"{operand} * weight_{tap}"
                 ").to(tl.bfloat16).to(tl.float32)"
             )
             if tap == 0:
-                lines.append(f"{body_indent}acc = bias_value + product_0")
+                lines.append(f"{indent}acc = bias_value + product_0")
             else:
-                lines.append(f"{body_indent}acc = acc + product_{tap}")
+                lines.append(f"{indent}acc = acc + product_{tap}")
         lines.append(
-            f"{body_indent}activated_{node} = acc / "
+            f"{indent}activated_{node} = acc / "
             "(1.0 + tl.exp(0.0 - acc))"
         )
-        lines.extend(_nodegroup_store(node, indent=body_indent))
+        lines.extend(_nodegroup_store(node, indent=indent))
         lines.extend(
             (
-                f"{body_indent}tl.store(",
-                f"{body_indent}    stage_batch + ((WIDTH - 1) + {node}) * C + offs_c,",
-                f"{body_indent}    x_g{group}_{node},",
-                f"{body_indent})",
+                f"{indent}tl.store(",
+                f"{indent}    stage_batch + ((WIDTH - 1) + {node}) * C + offs_c,",
+                f"{indent}    x_g{group}_{node},",
+                f"{indent})",
             )
         )
 
@@ -532,21 +533,45 @@ def _nodegroup_branch(
     if group == 0:
         lines.extend(
             (
-                f"{body_indent}tl.store(stage_batch + offs_c, prior_0)",
-                f"{body_indent}tl.store(stage_batch + C + offs_c, prior_1)",
-                f"{body_indent}tl.store(stage_batch + 2 * C + offs_c, prior_2)",
-                f"{body_indent}tl.store(",
-                f"{body_indent}    stage_batch + (SOURCE_ROWS - 1) * C + offs_c,",
-                f"{body_indent}    0.0,",
-                f"{body_indent})",
+                f"{indent}tl.store(stage_batch + offs_c, prior_0)",
+                f"{indent}tl.store(stage_batch + C + offs_c, prior_1)",
+                f"{indent}tl.store(stage_batch + 2 * C + offs_c, prior_2)",
+                f"{indent}tl.store(",
+                f"{indent}    stage_batch + (SOURCE_ROWS - 1) * C + offs_c,",
+                f"{indent}    0.0,",
+                f"{indent})",
             )
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _nodepair_branch(
+    pair: int,
+    sources: tuple[tuple[int, int, int], ...],
+) -> str:
+    if pair not in range(NODEPAIR_PROGRAMS):
+        raise RuntimeError(f"nodepair index {pair} escaped physical32")
+    keyword = "if" if pair == 0 else "elif"
+    indent = " " * 8
+    body_indent = " " * 12
+    lines = [f"{indent}{keyword} pid_pair == {pair}:"]
+    first_group = pair * NODEGROUPS_PER_PROGRAM
+    for group in range(first_group, first_group + NODEGROUPS_PER_PROGRAM):
+        lines.append(
+            f"{body_indent}# Serial logical nodegroup {group}: rows "
+            f"{group * NODEGROUP_ROWS}-{(group + 1) * NODEGROUP_ROWS - 1}."
+        )
+        lines.append(
+            _nodegroup_body(group, sources, indent=body_indent).rstrip("\n")
         )
     return "\n".join(lines) + "\n"
 
 
 def _nodegroup_kernel() -> str:
     sources = _descriptorless_sources()
-    branches = "".join(_nodegroup_branch(group, sources) for group in range(4))
+    branches = "".join(
+        _nodepair_branch(pair, sources) for pair in range(NODEPAIR_PROGRAMS)
+    )
     return (
         NODEGROUP_SIGNATURE
         + branches

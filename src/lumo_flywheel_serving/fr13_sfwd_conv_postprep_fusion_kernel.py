@@ -2040,7 +2040,7 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
 
 
 @triton.jit
-def _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel(
+def _fr13_fixed32_sfwd_conv_postprep_nodepair16_direct_kernel(
     x,
     conv_state,
     spec_state_indices,
@@ -2080,18 +2080,18 @@ def _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel(
     SOFTPLUS_THRESHOLD: tl.constexpr,
     EMBED_GATE_CTA: tl.constexpr,
 ):
-    """Run four direct eight-node channel groups without gather or shared state."""
+    """Run two serial eight-node groups per direct channel program."""
     pid_b = tl.program_id(0)
     pid_task = tl.program_id(1)
     channel_tiles: tl.constexpr = C // BLOCK_C
-    channel_tasks: tl.constexpr = 4 * channel_tiles
+    channel_tasks: tl.constexpr = 2 * channel_tiles
     Q_DIM: tl.constexpr = H * K
     V_DIM: tl.constexpr = HV * V
     GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK
     GATE_TASKS: tl.constexpr = N // GATE_ROWS
     if pid_task < channel_tasks:
-        pid_group = pid_task // channel_tiles
-        pid_c = pid_task - pid_group * channel_tiles
+        pid_pair = pid_task // channel_tiles
+        pid_c = pid_task - pid_pair * channel_tiles
         offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
         x_batch = x + pid_b * N * X_STRIDE_ROW
         stage_batch = source_stage + pid_b * SOURCE_ROWS * C
@@ -2124,7 +2124,8 @@ def _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel(
         bias_value = tl.zeros((BLOCK_C,), dtype=tl.float32)
         if HAS_BIAS:
             bias_value = tl.load(bias + offs_c).to(tl.float32)
-        if pid_group == 0:
+        if pid_pair == 0:
+            # Serial logical nodegroup 0: rows 0-7.
             prior_0 = tl.load(prior_base)
             prior_1 = tl.load(prior_base + 1 * C)
             prior_2 = tl.load(prior_base + 2 * C)
@@ -2391,7 +2392,7 @@ def _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel(
                 stage_batch + (SOURCE_ROWS - 1) * C + offs_c,
                 0.0,
             )
-        elif pid_group == 1:
+            # Serial logical nodegroup 1: rows 8-15.
             prior_2 = tl.load(prior_base + 2 * C)
             x_g1_0 = tl.load(
                 x_batch + 0 * X_STRIDE_ROW + offs_c
@@ -2667,7 +2668,8 @@ def _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel(
                 stage_batch + ((WIDTH - 1) + 15) * C + offs_c,
                 x_g1_15,
             )
-        elif pid_group == 2:
+        elif pid_pair == 1:
+            # Serial logical nodegroup 2: rows 16-23.
             x_g2_1 = tl.load(
                 x_batch + 1 * X_STRIDE_ROW + offs_c
             )
@@ -2954,7 +2956,7 @@ def _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel(
                 stage_batch + ((WIDTH - 1) + 23) * C + offs_c,
                 x_g2_23,
             )
-        elif pid_group == 3:
+            # Serial logical nodegroup 3: rows 24-31.
             x_g3_9 = tl.load(
                 x_batch + 9 * X_STRIDE_ROW + offs_c
             )

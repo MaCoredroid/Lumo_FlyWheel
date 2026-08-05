@@ -20,7 +20,7 @@ import triton
 
 from lumo_flywheel_serving.fr13_sfwd_conv_postprep_fusion_kernel import (
     _fr13_fixed32_sfwd_conv_postprep_fusion_kernel,
-    _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel,
+    _fr13_fixed32_sfwd_conv_postprep_nodepair16_direct_kernel,
 )
 from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     FIXED32_CHANNEL_SERIAL_ACTIVATION_WINDOW,
@@ -35,10 +35,10 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
 CANDIDATE = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
 EMBEDDED_GATE_CANDIDATE = "fixed32_sfwd_conv_postprep_embedded_gate_cta_v1"
 DIRECT_NODEGROUP8_CANDIDATE = (
-    "fixed32_sfwd_conv_postprep_nodegroup8_direct_v1"
+    "fixed32_sfwd_conv_postprep_nodepair16_serial_direct_v2"
 )
 DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE = (
-    "fixed32_sfwd_conv_postprep_nodegroup8_direct_embedded_gate_v1"
+    "fixed32_sfwd_conv_postprep_nodepair16_serial_direct_embedded_gate_v2"
 )
 CAPTURE_CACHE_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.capture_cache.v1"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
@@ -59,6 +59,9 @@ HEAD_V_DIM = 128
 Q_DIM = NUM_K_HEADS * HEAD_K_DIM
 V_DIM = NUM_V_HEADS * HEAD_V_DIM
 GATE_BLOCK = 64
+DIRECT_NODEGROUPS_PER_PROGRAM = 2
+DIRECT_CHANNEL_PROGRAMS_PER_REQUEST = 80
+DIRECT_GATE_PROGRAMS_PER_REQUEST = 4
 SOFTPLUS_THRESHOLD = 20.0
 BF16_BYTES = 2
 FP32_BYTES = 4
@@ -556,10 +559,16 @@ def _emit_live_pass(
                 "embedded_gate_cta": True,
                 "gate_scheduling": "append_to_first_channel_programs",
                 "channel_programs_per_request": (
-                    160 if direct_nodegroup8 else 40
+                    DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                    if direct_nodegroup8
+                    else 40
                 ),
                 "standalone_gate_programs_per_request": 0,
-                "programs_per_request": 160 if direct_nodegroup8 else 40,
+                "programs_per_request": (
+                    DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                    if direct_nodegroup8
+                    else 40
+                ),
                 "qrow16_production": qrow16,
                 "stock_attention": batch == 4,
             }
@@ -583,9 +592,16 @@ def _emit_live_pass(
         if direct_nodegroup8:
             payload.update(
                 {
-                    "channel_programs_per_request": 160,
-                    "standalone_gate_programs_per_request": 4,
-                    "programs_per_request": 164,
+                    "channel_programs_per_request": (
+                        DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                    ),
+                    "standalone_gate_programs_per_request": (
+                        DIRECT_GATE_PROGRAMS_PER_REQUEST
+                    ),
+                    "programs_per_request": (
+                        DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                        + DIRECT_GATE_PROGRAMS_PER_REQUEST
+                    ),
                 }
             )
     if direct_nodegroup8:
@@ -770,7 +786,11 @@ def fixed32_sfwd_conv_postprep_byte_gate(
                 "task_markers": list(markers),
                 "embedded_gate_cta": True,
                 "gate_scheduling": "append_to_first_channel_programs",
-                "programs_per_request": 160 if direct_nodegroup8 else 40,
+                "programs_per_request": (
+                    DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                    if direct_nodegroup8
+                    else 40
+                ),
                 "qrow16_production": batch == 1,
                 "stock_attention": batch == 4,
             }
@@ -794,9 +814,16 @@ def fixed32_sfwd_conv_postprep_byte_gate(
         if direct_nodegroup8:
             record.update(
                 {
-                    "channel_programs_per_request": 160,
-                    "standalone_gate_programs_per_request": 4,
-                    "programs_per_request": 164,
+                    "channel_programs_per_request": (
+                        DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                    ),
+                    "standalone_gate_programs_per_request": (
+                        DIRECT_GATE_PROGRAMS_PER_REQUEST
+                    ),
+                    "programs_per_request": (
+                        DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                        + DIRECT_GATE_PROGRAMS_PER_REQUEST
+                    ),
                 }
             )
     if direct_nodegroup8:
@@ -874,7 +901,7 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
             conv_width=width,
             conv_state_len=state_len,
         )
-        channel_programs = 4 * CHANNELS // int(incumbent["block_c"])
+        channel_programs = 2 * CHANNELS // int(incumbent["block_c"])
         gating_programs = int(incumbent["gating_programs_per_request"])
         return {
             **incumbent,
@@ -898,28 +925,31 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
             "conv_peak_live_x": 10,
             "conv_peak_live_x_with_stage": 10,
             "node_groups_per_request": 4,
-            "nodes_per_channel_program": 8,
+            "nodegroups_per_channel_program": DIRECT_NODEGROUPS_PER_PROGRAM,
+            "nodes_per_channel_program": 16,
+            "channel_program_pairs_per_request": 2,
             "node_group_rows": ((0, 8), (8, 16), (16, 24), (24, 32)),
             "node_group_unique_x_loads": (8, 14, 18, 14),
             "node_group_peak_live_x": (4, 9, 10, 7),
             "x_loads_per_channel_across_groups": 54,
             "source_edge_writer_group": 0,
-            "producer_shape": "direct_scalar_unrolled_fixed_nodegroups8",
+            "producer_shape": (
+                "direct_scalar_unrolled_two_serial_nodegroups8_per_program"
+            ),
             "has_gather": False,
             "algorithmic_shared_bytes": 0,
             "has_reduction": False,
             "has_barrier": False,
-            "candidate_codegen_registers_per_thread": (
-                48 if embed_gate_cta else 46
-            ),
+            "candidate_codegen_registers_per_thread": None,
             "source_register_ceiling_per_thread": 48,
             "source_register_ceiling_basis": (
-                "direct_nodegroup8_sm121a_standalone46_embedded48"
+                "nodepair16_serial_target_pending_sm121a_codegen"
             ),
-            "offline_codegen_stack_bytes": 0,
-            "offline_codegen_local_bytes": 0,
-            "offline_codegen_shared_bytes": 0,
-            "codegen_registers_verified": True,
+            "offline_codegen_stack_bytes": None,
+            "offline_codegen_local_bytes": None,
+            "offline_codegen_shared_bytes": None,
+            "codegen_registers_verified": False,
+            "codegen_status": "pending_sm121a_offline_codegen",
             "timing_claim": False,
         }
     _exact_host_parent(tree_parent)
@@ -2251,7 +2281,7 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
     num_warps = int(contract["num_warps"])
     channel_tasks = CHANNELS // block_c
     if direct_nodegroup8:
-        channel_tasks *= 4
+        channel_tasks *= 2
     gate_rows_per_task = 2 * block_c // GATE_BLOCK
     gate_tasks = triton.cdiv(ROWS, gate_rows_per_task)
     grid = (
@@ -2266,7 +2296,7 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
         else spec_state_indices
     )
     if direct_nodegroup8:
-        _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel[grid](
+        _fr13_fixed32_sfwd_conv_postprep_nodepair16_direct_kernel[grid](
             x,
             conv_state,
             spec_state_indices,

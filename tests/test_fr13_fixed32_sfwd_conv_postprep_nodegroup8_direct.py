@@ -101,7 +101,7 @@ def _serial_oracle(
     return output, stage
 
 
-def _nodegroup8_oracle(
+def _nodepair16_oracle(
     x: torch.Tensor,
     prior: torch.Tensor,
     weights: torch.Tensor,
@@ -116,43 +116,44 @@ def _nodegroup8_oracle(
     )
     sources = fixed32_descriptorless_sources()
     for request in range(batch):
-        for group in range(4):
-            nodes = range(group * 8, (group + 1) * 8)
-            unique_x = {
-                row - 3
-                for node in nodes
-                for row in sources[node]
-                if row >= 3
-            } | set(nodes)
-            x_values = {row: x[request, row] for row in unique_x}
-            for node in nodes:
-                operands = tuple(
-                    prior[request, row]
-                    if row < 3
-                    else x_values[row - 3]
+        for pair in range(2):
+            for group in range(pair * 2, pair * 2 + 2):
+                nodes = range(group * 8, (group + 1) * 8)
+                unique_x = {
+                    row - 3
+                    for node in nodes
                     for row in sources[node]
-                ) + (x_values[node],)
-                product_0 = (operands[0] * weights[:, 0]).to(
-                    torch.bfloat16
-                ).to(torch.float32)
-                acc = bias + product_0
-                for tap in range(1, 4):
-                    product = (operands[tap] * weights[:, tap]).to(
+                    if row >= 3
+                } | set(nodes)
+                x_values = {row: x[request, row] for row in unique_x}
+                for node in nodes:
+                    operands = tuple(
+                        prior[request, row]
+                        if row < 3
+                        else x_values[row - 3]
+                        for row in sources[node]
+                    ) + (x_values[node],)
+                    product_0 = (operands[0] * weights[:, 0]).to(
                         torch.bfloat16
                     ).to(torch.float32)
-                    acc = acc + product
-                output[request, node] = (
-                    acc / (1.0 + torch.exp(0.0 - acc))
-                ).to(torch.bfloat16)
-                stage[request, node + 3] = x_values[node]
-            if group == 0:
-                stage[request, :3] = prior[request]
-                stage[request, -1] = 0.0
+                    acc = bias + product_0
+                    for tap in range(1, 4):
+                        product = (operands[tap] * weights[:, tap]).to(
+                            torch.bfloat16
+                        ).to(torch.float32)
+                        acc = acc + product
+                    output[request, node] = (
+                        acc / (1.0 + torch.exp(0.0 - acc))
+                    ).to(torch.bfloat16)
+                    stage[request, node + 3] = x_values[node]
+                if group == 0:
+                    stage[request, :3] = prior[request]
+                    stage[request, -1] = 0.0
     return output, stage
 
 
 @pytest.mark.parametrize("batch", (1, 4))
-def test_nodegroup8_cpu_oracle_matches_serial_bytes(batch: int) -> None:
+def test_nodepair16_cpu_oracle_matches_serial_bytes(batch: int) -> None:
     generator = torch.Generator().manual_seed(20260805 + batch)
     channels = 24
     x = torch.randn((batch, 32, channels), generator=generator).to(
@@ -166,7 +167,7 @@ def test_nodegroup8_cpu_oracle_matches_serial_bytes(batch: int) -> None:
     )
     bias = torch.randn((channels,), generator=generator, dtype=torch.float32)
     serial_output, serial_stage = _serial_oracle(x, prior, weights, bias)
-    grouped_output, grouped_stage = _nodegroup8_oracle(x, prior, weights, bias)
+    grouped_output, grouped_stage = _nodepair16_oracle(x, prior, weights, bias)
     assert torch.equal(
         serial_output.contiguous().view(torch.uint8),
         grouped_output.contiguous().view(torch.uint8),
@@ -177,10 +178,10 @@ def test_nodegroup8_cpu_oracle_matches_serial_bytes(batch: int) -> None:
     )
 
 
-def test_nodegroup8_source_is_direct_and_mechanically_covers_fixed32() -> None:
+def test_nodepair16_source_is_direct_and_mechanically_covers_fixed32() -> None:
     source = _function_source(
         KERNEL_PATH,
-        "_fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel",
+        "_fr13_fixed32_sfwd_conv_postprep_nodepair16_direct_kernel",
     )
     expected_x = (
         {0, 1, 2, 3, 4, 5, 6, 7},
@@ -195,8 +196,9 @@ def test_nodegroup8_source_is_direct_and_mechanically_covers_fixed32() -> None:
             if f"x_g{group}_" in line and " = tl.load(" in line
         }
         assert observed == expected
-    assert source.count("if pid_group == 0:") == 1
-    assert sum(source.count(f"elif pid_group == {group}:") for group in (1, 2, 3)) == 3
+    assert source.count("if pid_pair == 0:") == 1
+    assert source.count("elif pid_pair == 1:") == 1
+    assert source.count("# Serial logical nodegroup") == 4
     assert source.count("_fr13_store_fixed32_conv_outputs(") == 32
     assert source.count(".to(tl.bfloat16).to(tl.float32)") == 128
     assert source.count("stage_batch + ((WIDTH - 1) +") == 32
@@ -215,7 +217,7 @@ def test_nodegroup8_source_is_direct_and_mechanically_covers_fixed32() -> None:
         assert forbidden not in source
 
 
-def test_nodegroup8_generator_is_idempotent_and_preserves_incumbent() -> None:
+def test_nodepair16_generator_is_idempotent_and_preserves_incumbent() -> None:
     spec = importlib.util.spec_from_file_location(
         "sfwd_nodegroup8_generator", GENERATOR_PATH
     )
@@ -248,7 +250,7 @@ def _contract(batch: int, **kwargs) -> dict[str, object]:
     )
 
 
-def test_nodegroup8_contract_is_default_off_and_has_exact_program_geometry() -> None:
+def test_nodepair16_contract_is_default_off_and_halves_program_geometry() -> None:
     assert _contract(1) == _contract(1, direct_nodegroup8=False)
     for batch in (1, 4):
         standalone = _contract(batch, direct_nodegroup8=True)
@@ -256,34 +258,37 @@ def test_nodegroup8_contract_is_default_off_and_has_exact_program_geometry() -> 
             batch, direct_nodegroup8=True, embed_gate_cta=True
         )
         assert standalone["candidate"] == candidate.DIRECT_NODEGROUP8_CANDIDATE
-        assert standalone["channel_programs_per_request"] == 160
-        assert standalone["programs_per_request"] == 164
+        assert standalone["channel_programs_per_request"] == 80
+        assert standalone["programs_per_request"] == 84
         assert embedded["candidate"] == (
             candidate.DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE
         )
-        assert embedded["channel_programs_per_request"] == 160
-        assert embedded["programs_per_request"] == 160
+        assert embedded["channel_programs_per_request"] == 80
+        assert embedded["programs_per_request"] == 80
         assert embedded["embedded_gating_channel_programs_per_request"] == 4
         assert standalone["node_groups_per_request"] == 4
-        assert standalone["nodes_per_channel_program"] == 8
+        assert standalone["nodegroups_per_channel_program"] == 2
+        assert standalone["nodes_per_channel_program"] == 16
+        assert standalone["channel_program_pairs_per_request"] == 2
         assert standalone["node_group_unique_x_loads"] == (8, 14, 18, 14)
         assert standalone["node_group_peak_live_x"] == (4, 9, 10, 7)
         assert standalone["has_gather"] is False
         assert standalone["algorithmic_shared_bytes"] == 0
         assert standalone["has_reduction"] is False
         assert standalone["has_barrier"] is False
-        assert standalone["candidate_codegen_registers_per_thread"] == 46
+        assert standalone["candidate_codegen_registers_per_thread"] is None
         assert standalone["source_register_ceiling_per_thread"] == 48
-        assert standalone["offline_codegen_stack_bytes"] == 0
-        assert standalone["offline_codegen_local_bytes"] == 0
-        assert standalone["offline_codegen_shared_bytes"] == 0
-        assert standalone["codegen_registers_verified"] is True
-        assert embedded["candidate_codegen_registers_per_thread"] == 48
+        assert standalone["offline_codegen_stack_bytes"] is None
+        assert standalone["offline_codegen_local_bytes"] is None
+        assert standalone["offline_codegen_shared_bytes"] is None
+        assert standalone["codegen_registers_verified"] is False
+        assert standalone["codegen_status"] == "pending_sm121a_offline_codegen"
+        assert embedded["candidate_codegen_registers_per_thread"] is None
         assert standalone["full_graph_qualified"] is False
         assert standalone["timing_claim"] is False
 
 
-def test_nodegroup8_launcher_selector_keeps_one_launch_per_arm() -> None:
+def test_nodepair16_launcher_selector_keeps_one_launch_per_arm() -> None:
     source = _function_source(
         MODULE_PATH, "launch_fixed32_sfwd_conv_postprep_fusion"
     )
@@ -301,12 +306,12 @@ def test_nodegroup8_launcher_selector_keeps_one_launch_per_arm() -> None:
     assert isinstance(direct_default, ast.Constant)
     assert direct_default.value is False
     assert source.count(
-        "_fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel[grid]("
+        "_fr13_fixed32_sfwd_conv_postprep_nodepair16_direct_kernel[grid]("
     ) == 1
     assert source.count(
         "_fr13_fixed32_sfwd_conv_postprep_fusion_kernel[grid]("
     ) == 1
-    assert "if direct_nodegroup8:\n        channel_tasks *= 4" in source
+    assert "if direct_nodegroup8:\n        channel_tasks *= 2" in source
     assert "channel_tasks if embed_gate_cta else channel_tasks + gate_tasks" in source
 
 
@@ -343,7 +348,7 @@ def _direct_manifest(tmp_path: Path, commit: str) -> tuple[Path, str]:
     return path, hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_nodegroup8_real_b1_control_is_default_off_and_fail_closed(
+def test_nodepair16_real_b1_control_is_default_off_and_fail_closed(
     tmp_path: Path,
 ) -> None:
     enabled = tmp_path / "enabled"
@@ -381,7 +386,7 @@ def test_nodegroup8_real_b1_control_is_default_off_and_fail_closed(
 
 
 @pytest.mark.parametrize("embedded_gate_cta", (False, True))
-def test_nodegroup8_real_b1_byte_gate_binds_candidate_and_serves_reference(
+def test_nodepair16_real_b1_byte_gate_binds_candidate_and_serves_reference(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     embedded_gate_cta: bool,
@@ -445,7 +450,7 @@ def test_nodegroup8_real_b1_byte_gate_binds_candidate_and_serves_reference(
         if embedded_gate_cta
         else candidate.DIRECT_NODEGROUP8_CANDIDATE
     )
-    expected_programs = 160 if embedded_gate_cta else 164
+    expected_programs = 80 if embedded_gate_cta else 84
     assert record["candidate"] == expected_candidate
     assert record["direct_nodegroup8"] is True
     assert record["programs_per_request"] == expected_programs
@@ -458,7 +463,7 @@ def test_nodegroup8_real_b1_byte_gate_binds_candidate_and_serves_reference(
     _reset_byte_gate_state()
 
 
-def test_nodegroup8_selector_reaches_authenticated_real_b1_route() -> None:
+def test_nodepair16_selector_reaches_authenticated_real_b1_route() -> None:
     patcher = PATCHER_PATH.read_text(encoding="utf-8")
     gate = GATE_PATH.read_text(encoding="utf-8")
     launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
@@ -475,3 +480,6 @@ def test_nodegroup8_selector_reaches_authenticated_real_b1_route() -> None:
     assert runner.count('"${DIRECT_ARGS[@]}"') == 5
     assert gate.count('add_argument("--direct-nodegroup8"') == 4
     assert "DIRECT_NODEGROUP8_CANDIDATE" in gate
+    assert f'"{candidate.DIRECT_NODEGROUP8_CANDIDATE}"' in gate
+    assert f'"{candidate.DIRECT_NODEGROUP8_CANDIDATE}"' in patcher
+    assert "DIRECT_CHANNEL_PROGRAMS_PER_REQUEST = 80" in gate

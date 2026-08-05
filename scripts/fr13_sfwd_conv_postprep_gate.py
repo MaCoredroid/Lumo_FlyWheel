@@ -18,9 +18,11 @@ from typing import Any
 
 CANDIDATE = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
 EMBEDDED_GATE_CANDIDATE = "fixed32_sfwd_conv_postprep_embedded_gate_cta_v1"
-DIRECT_NODEGROUP8_CANDIDATE = "fixed32_sfwd_conv_postprep_nodegroup8_direct_v1"
+DIRECT_NODEGROUP8_CANDIDATE = (
+    "fixed32_sfwd_conv_postprep_nodepair16_serial_direct_v2"
+)
 DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE = (
-    "fixed32_sfwd_conv_postprep_nodegroup8_direct_embedded_gate_v1"
+    "fixed32_sfwd_conv_postprep_nodepair16_serial_direct_embedded_gate_v2"
 )
 SOURCE_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1"
 READINESS_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.host_readiness.v1"
@@ -60,6 +62,11 @@ BYTE_SURFACES = (
     "g",
     "beta",
     "commit_source_stage",
+)
+DIRECT_CHANNEL_PROGRAMS_PER_REQUEST = 80
+DIRECT_GATE_PROGRAMS_PER_REQUEST = 4
+DIRECT_STANDALONE_PROGRAMS_PER_REQUEST = (
+    DIRECT_CHANNEL_PROGRAMS_PER_REQUEST + DIRECT_GATE_PROGRAMS_PER_REQUEST
 )
 SOURCE_FILES = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
@@ -349,9 +356,13 @@ def write_host_readiness(args: argparse.Namespace) -> None:
         payload.update(
             {
                 "direct_nodegroup8": True,
-                "channel_programs_per_request": 160,
-                "standalone_gate_programs_per_request": 4,
-                "programs_per_request": 164,
+                "channel_programs_per_request": (
+                    DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                ),
+                "standalone_gate_programs_per_request": (
+                    DIRECT_GATE_PROGRAMS_PER_REQUEST
+                ),
+                "programs_per_request": DIRECT_STANDALONE_PROGRAMS_PER_REQUEST,
             }
         )
     _write_json(Path(args.output).resolve(), payload)
@@ -401,9 +412,13 @@ def _validate_live_pass(
         required.update(
             {
                 "direct_nodegroup8": True,
-                "channel_programs_per_request": 160,
-                "standalone_gate_programs_per_request": 4,
-                "programs_per_request": 164,
+                "channel_programs_per_request": (
+                    DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                ),
+                "standalone_gate_programs_per_request": (
+                    DIRECT_GATE_PROGRAMS_PER_REQUEST
+                ),
+                "programs_per_request": DIRECT_STANDALONE_PROGRAMS_PER_REQUEST,
             }
         )
     drift = {
@@ -618,9 +633,13 @@ def validate_gate(args: argparse.Namespace) -> None:
         readiness_required.update(
             {
                 "direct_nodegroup8": True,
-                "channel_programs_per_request": 160,
-                "standalone_gate_programs_per_request": 4,
-                "programs_per_request": 164,
+                "channel_programs_per_request": (
+                    DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                ),
+                "standalone_gate_programs_per_request": (
+                    DIRECT_GATE_PROGRAMS_PER_REQUEST
+                ),
+                "programs_per_request": DIRECT_STANDALONE_PROGRAMS_PER_REQUEST,
             }
         )
     if any(readiness.get(key) != value for key, value in readiness_required.items()):
@@ -707,9 +726,15 @@ def validate_gate(args: argparse.Namespace) -> None:
             expected.update(
                 {
                     "direct_nodegroup8": True,
-                    "channel_programs_per_request": 160,
-                    "standalone_gate_programs_per_request": 4,
-                    "programs_per_request": 164,
+                    "channel_programs_per_request": (
+                        DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                    ),
+                    "standalone_gate_programs_per_request": (
+                        DIRECT_GATE_PROGRAMS_PER_REQUEST
+                    ),
+                    "programs_per_request": (
+                        DIRECT_STANDALONE_PROGRAMS_PER_REQUEST
+                    ),
                 }
             )
         if any(record.get(key) != value for key, value in expected.items()):
@@ -873,16 +898,20 @@ def validate_gate(args: argparse.Namespace) -> None:
         verdict.update(
             {
                 "direct_nodegroup8": True,
-                "channel_programs_per_request": 160,
-                "standalone_gate_programs_per_request": 4,
-                "programs_per_request": 164,
+                "channel_programs_per_request": (
+                    DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                ),
+                "standalone_gate_programs_per_request": (
+                    DIRECT_GATE_PROGRAMS_PER_REQUEST
+                ),
+                "programs_per_request": DIRECT_STANDALONE_PROGRAMS_PER_REQUEST,
             }
         )
     _write_json(output, verdict)
 
 
 def validate_embedded_gate(args: argparse.Namespace) -> None:
-    """Validate the source-bound 40-CTA shadow gate on real B1 or exact4 B4."""
+    """Validate the source-bound embedded shadow gate on real B1 or exact4 B4."""
     repo = Path(args.repo).resolve()
     arm = Path(args.arm_dir).resolve()
     logs = arm / "logs"
@@ -951,10 +980,16 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
         "embedded_gate_cta": True,
         "gate_scheduling": "append_to_first_channel_programs",
         "channel_programs_per_request": (
-            160 if args.direct_nodegroup8 else 40
+            DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+            if args.direct_nodegroup8
+            else 40
         ),
         "standalone_gate_programs_per_request": 0,
-        "programs_per_request": 160 if args.direct_nodegroup8 else 40,
+        "programs_per_request": (
+            DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+            if args.direct_nodegroup8
+            else 40
+        ),
         "qrow16_production": batch == 1,
         "stock_attention": batch == 4,
         "compared_byte_surfaces": list(BYTE_SURFACES),
@@ -1013,7 +1048,11 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
             "physical_rows_per_request": 32,
             "embedded_gate_cta": True,
             "gate_scheduling": "append_to_first_channel_programs",
-            "programs_per_request": 160 if args.direct_nodegroup8 else 40,
+            "programs_per_request": (
+                DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                if args.direct_nodegroup8
+                else 40
+            ),
             "zero_diff": True,
             "differing_bytes": 0,
             "reference_always_served": True,
@@ -1100,7 +1139,11 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
             "draft_vocab_root": 1,
             "draft_vocab_k": 65536,
             "embedded_gate_cta": True,
-            "programs_per_request": 160 if args.direct_nodegroup8 else 40,
+            "programs_per_request": (
+                DIRECT_CHANNEL_PROGRAMS_PER_REQUEST
+                if args.direct_nodegroup8
+                else 40
+            ),
             "layer_count": LAYERS,
             "compared_byte_surfaces": list(BYTE_SURFACES),
             "reference_returned": True,
