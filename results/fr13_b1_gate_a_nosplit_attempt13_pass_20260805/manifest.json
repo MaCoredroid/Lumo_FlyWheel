@@ -1,0 +1,120 @@
+{
+  "attempt": {
+    "arm_ended_at_utc": "2026-08-05T10:39:06Z",
+    "arm_started_at_utc": "2026-08-05T10:23:56Z",
+    "id": 13,
+    "launcher_ended_at_utc": "2026-08-05T10:39:06Z",
+    "launcher_started_at_utc": "2026-08-05T10:23:40Z",
+    "serve_exit_code": 0
+  },
+  "classification": {
+    "acceptance_valid": false,
+    "combined_gate_valid": true,
+    "floor_acceptance_eligible": false,
+    "gate_a_credential_issuance_valid": true,
+    "hardware_floor_claim": false,
+    "performance_measurement": false,
+    "production_execution": false,
+    "production_sidecar_valid": true,
+    "task_result_valid": true,
+    "timing_eligible": false
+  },
+  "evidence": {
+    "campaign_summary.json": "d1dbfd550130780c18e47ec49d27622cac8e42db96eb4d81a09b1b3b7ff3f21a",
+    "dfwd_k64_top3_credential.json": "447ca4c0f2b514435309cbe2fe16d374a567a229d69a0184dda1541f259c2e3a",
+    "external_manifest.at_end.json": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_manifest.at_launch.json": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "fixed32_chat_traffic_audit.json": "8b10b3af05c8c78d334be17707bad1d2338f715ee82967dd4fd2d012cd31f5d7",
+    "hydra27_gdn_gqa_group3_b1_credential.json": "ed6385222d8c475625d31202b6b2c867de32832642f2acf181f6e3c50c238b83",
+    "launcher_meta.txt": "140bcfee907644046e18b84887addfd3a9deb90c739f7c87f923e110377d98d9",
+    "qrow32_nosplit_live_paged_ab.json": "758cc7e6f0b0b0e756784f335f5d4424057042a22fa61ec53ce9898f56919db2",
+    "qrow32_nosplit_live_verification.json": "10c5789b668d19ef080391e47a242c07b9045f475f05cd5b84a7bb3f760f8292",
+    "qrow32_nosplit_production_pass.json": "71c8765db16a5ec1e8200046e4cd23a6a96b3814be9b2c0c92b4d4306ba00add",
+    "runtime_manifest.at_end.json": "cbae8c79fc07dfaf7b5ac787bda287df8e43118f8b3ef2e8a0f656a6932e4c3b",
+    "runtime_manifest.at_launch.json": "cbae8c79fc07dfaf7b5ac787bda287df8e43118f8b3ef2e8a0f656a6932e4c3b"
+  },
+  "excluded_evidence_bindings": {
+    "container_environment_bytes": 23106,
+    "container_environment_sha256": "42b10c6dfacac87e683c7091f3fdd10dba0af66543ec11666c8914e66fb137ba",
+    "docker_log_bytes": 97592,
+    "docker_log_sha256": "437639dae95666bcd7414dd5b1a71fe25eb2fa52da8494dafc329f9dec27fc2b",
+    "health_bytes": 255,
+    "health_sha256": "75b1b52fd2893540a43edd50a53efddacb4dd344b79c1c96b9874fbb65bfc391"
+  },
+  "manifests": {
+    "external_launch_end_byte_identical": true,
+    "external_manifest_canonical_sha256": "c42fb16d2ea932f0e819c81172c49b69b312b75dd446146b6d7b6ef78af00a9e",
+    "runtime_launch_end_byte_identical": true,
+    "runtime_manifest_canonical_sha256": "ad82b0c2b3336ec84f352f999faf5cdfef79fe81f3f8c19c006ad0795a6d4119",
+    "runtime_source_closure_sha256": "18c58765b150712b49242c5196023db53f7a1fc45f09b9922740547c0c3ebf00"
+  },
+  "provenance": {
+    "attempt_source_commit": "f3d37d59f937dcaa03fb2d822b57ccb1c0eba6f8",
+    "attempt_source_subject": "feat(fr13): promote B1 qrow32 nosplit",
+    "combined_entrypoint_sha256": "7a8eb453cd694be66f26eb93e8062a4384df61a444bee440881ee9c714d719d6",
+    "composed_gate_source_sha256": "c17975f4ce9d112551c1a007ddd7116c87dead52eaecf9bb88458891fa855352",
+    "gdn_entrypoint_sha256": "be66cdfabf4086ba4fb17096e8cecabbb2f64853b88d64a809e42e8b1354fd25",
+    "gdn_runner_sha256": "63ae9a3d7c92513e5d3180f2427345a9b9183619dcf5b61cdbf180cfc6ca3c7d",
+    "patch_source_sha256": "db9b1a542440c5820e3fe7a60801b5f25adbad39d94e535255585fb31591c6c8",
+    "reducer_sha256": "62b72ad89d8660617422708672c214846bdef216c4743237966af60586d81c59"
+  },
+  "qrow32": {
+    "arm": "nosplit",
+    "candidate_num_splits": 0,
+    "candidate_so_sha256": "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a",
+    "layer_count": 16,
+    "lse_raw_byte_mismatches": 0,
+    "output_raw_byte_mismatches": 0,
+    "production_scope": "qrow32 B1 nosplit exact tree attention only",
+    "reference_served": true,
+    "sidecar_canonical_sha256": "cb74506b839cff370d39cb1c2ac8a95f99821cebcb06ae972440ef6c949868a1",
+    "status": "PASS"
+  },
+  "run_contract": {
+    "batch_size": 1,
+    "concurrency": 1,
+    "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "logical_topology": "Hydra27",
+    "physical_rows": 32,
+    "runtime_mode": "FULL",
+    "suite": "SWE-Verified",
+    "task_count": 1,
+    "task_id": "astropy__astropy-12907"
+  },
+  "sanitization": {
+    "binaries_or_tensors_included": false,
+    "environment_or_process_dumps_included": false,
+    "hashed_request_identity_bindings_included": true,
+    "prompt_or_response_bodies_included": false,
+    "raw_logs_included": false,
+    "raw_request_or_response_dumps_included": false,
+    "raw_task_outputs_included": false,
+    "raw_traces_included": false,
+    "structured_source_manifests_included": true
+  },
+  "schema": "fr13.fixed32.b1_gate_a_nosplit_attempt13_pass.v1",
+  "status": "PASS",
+  "task_and_traffic": {
+    "audit_checks_total": 10,
+    "audit_checks_true": 10,
+    "audit_schema": "fr13-fixed32-chat-task-provenance-audit-v3",
+    "completed_engine_requests": 16,
+    "completed_proxy_attempts": 16,
+    "exact_proxy_engine_attempt_parity": true,
+    "failed_proxy_attempts": 0,
+    "logical_requests_aborted": 0,
+    "successful_engine_requests": 16,
+    "task_timed_out": false,
+    "task_verdict": "resolved",
+    "work_census_event_count": 706,
+    "zero_campaign_rejections": true,
+    "zero_failed_or_aborted_requests": true
+  },
+  "validators": {
+    "composed_graph_credentials": "PASS",
+    "gdn_gqa_group3_production_credential": "PASS",
+    "qrow32_nosplit_production_sidecar": "PASS"
+  }
+}
