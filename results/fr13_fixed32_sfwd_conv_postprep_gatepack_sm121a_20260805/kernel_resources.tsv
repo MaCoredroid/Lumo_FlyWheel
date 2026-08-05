@@ -1,0 +1,7 @@
+variant	profile	registers	stack_bytes	local_bytes	shared_bytes	encoded_sass	static_sass	ldg	stg	ldl	stl	calls
+incumbent	b1	56	0	0	0	2736	2589	79	330	0	0	0
+candidate	b1	56	0	0	0	2832	2687	81	332	0	0	0
+delta	b1	0	0	0	0	96	98	2	2	0	0	0
+incumbent	b4	56	0	0	0	2736	2591	79	330	0	0	0
+candidate	b4	56	0	0	0	2840	2692	81	332	0	0	0
+delta	b4	0	0	0	0	104	101	2	2	0	0	0

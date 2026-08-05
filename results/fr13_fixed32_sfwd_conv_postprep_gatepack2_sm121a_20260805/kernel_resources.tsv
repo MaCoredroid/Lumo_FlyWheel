@@ -1,0 +1,9 @@
+variant	profile	registers	stack_bytes	local_bytes	shared_bytes	encoded_sass	static_sass	ldg	stg	ldl	stl	calls
+fusion_baseline	b1	56	0	0	0	2736	2589	79	330	0	0	0
+gatepack1	b1	56	0	0	0	2832	2687	81	332	0	0	0
+gatepack2	b1	56	0	0	0	3032	2881	85	336	0	0	0
+gatepack2_vs_gatepack1	b1	0	0	0	0	200	194	4	4	0	0	0
+fusion_baseline	b4	56	0	0	0	2736	2591	79	330	0	0	0
+gatepack1	b4	56	0	0	0	2840	2692	81	332	0	0	0
+gatepack2	b4	56	0	0	0	3040	2889	85	336	0	0	0
+gatepack2_vs_gatepack1	b4	0	0	0	0	200	197	4	4	0	0	0

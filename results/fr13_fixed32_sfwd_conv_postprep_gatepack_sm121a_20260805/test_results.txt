@@ -1,0 +1,8 @@
+PASS focused CPU tests: 32 passed in 1.49s
+PASS generated kernel matches generator
+PASS py_compile: source, generator, audit, verifier
+PASS offline SM121a audit run1 static gate
+PASS offline SM121a audit run2 static gate
+PASS run1/run2 codegen_summary.json byte equality
+NOT RUN GPU byte equality
+NOT RUN real SWE-Verified B1/B4 timing

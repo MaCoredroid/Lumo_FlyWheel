@@ -632,6 +632,8 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
     block_c = 128 if batch == 1 else 256
     num_warps = 2 if batch == 1 else 4
     channel_programs = CHANNELS // block_c
+    gate_rows_per_program = 2 * block_c // GATE_BLOCK
+    gating_programs = ROWS // gate_rows_per_program
     return {
         "candidate": CANDIDATE,
         "source_only": True,
@@ -664,8 +666,9 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
         "block_c": block_c,
         "num_warps": num_warps,
         "channel_programs_per_request": channel_programs,
-        "gating_programs_per_request": ROWS,
-        "programs_per_request": channel_programs + ROWS,
+        "gate_rows_per_program": gate_rows_per_program,
+        "gating_programs_per_request": gating_programs,
+        "programs_per_request": channel_programs + gating_programs,
         "launches_per_layer": 1,
         "launches_for_all_layers": LAYERS,
         "cross_layer_fusion": False,
@@ -741,6 +744,27 @@ def fixed32_sfwd_conv_postprep_static_ledger(
     logical_traffic_removed = (
         removed_conv_write + removed_conv_reads + removed_dead_qk_write
     )
+    block_c = 128 if batch == 1 else 256
+    channel_programs = CHANNELS // block_c
+    gate_rows_per_program = 2 * block_c // GATE_BLOCK
+    packed_gate_programs = ROWS // gate_rows_per_program
+    baseline_programs_per_request = channel_programs + ROWS
+    packed_programs_per_request = channel_programs + packed_gate_programs
+    gate_row_varying_reads = 2 * ROWS * NUM_V_HEADS * BF16_BYTES
+    gate_row_varying_writes = 2 * ROWS * NUM_V_HEADS * FP32_BYTES
+    gate_invariant_bytes_per_program = NUM_V_HEADS * (
+        FP32_BYTES + BF16_BYTES
+    )
+    baseline_gate_requested_bytes = (
+        gate_row_varying_reads
+        + gate_row_varying_writes
+        + ROWS * gate_invariant_bytes_per_program
+    )
+    packed_gate_requested_bytes = (
+        gate_row_varying_reads
+        + gate_row_varying_writes
+        + packed_gate_programs * gate_invariant_bytes_per_program
+    )
     return {
         "schema": "fr13.fixed32.sfwd_conv_postprep.static_ledger.v1",
         "candidate": CANDIDATE,
@@ -769,12 +793,51 @@ def fixed32_sfwd_conv_postprep_static_ledger(
             ),
             "logical_traffic_removed": logical_traffic_removed * layer_count,
         },
+        "gate_packing": {
+            "gate_rows_per_program": gate_rows_per_program,
+            "baseline_gate_programs_per_request": ROWS,
+            "candidate_gate_programs_per_request": packed_gate_programs,
+            "baseline_programs_per_request": baseline_programs_per_request,
+            "candidate_programs_per_request": packed_programs_per_request,
+            "baseline_programs_per_layer": batch
+            * baseline_programs_per_request,
+            "candidate_programs_per_layer": batch
+            * packed_programs_per_request,
+            "baseline_programs_all_layers": batch
+            * baseline_programs_per_request
+            * layer_count,
+            "candidate_programs_all_layers": batch
+            * packed_programs_per_request
+            * layer_count,
+            "requested_global_bytes_per_request_layer": {
+                "baseline": baseline_gate_requested_bytes,
+                "candidate": packed_gate_requested_bytes,
+                "delta": packed_gate_requested_bytes
+                - baseline_gate_requested_bytes,
+            },
+            "requested_global_bytes_all_layers": {
+                "baseline": batch
+                * baseline_gate_requested_bytes
+                * layer_count,
+                "candidate": batch
+                * packed_gate_requested_bytes
+                * layer_count,
+                "delta": batch
+                * (packed_gate_requested_bytes - baseline_gate_requested_bytes)
+                * layer_count,
+            },
+            "traffic_classification": (
+                "exact_fixed32_requested_bytes_not_measured_dram_bytes"
+            ),
+        },
         "launches": {
             "incumbent_per_layer": 5,
             "candidate_per_layer": 1,
             "incumbent_all_layers": 5 * layer_count,
             "candidate_all_layers": layer_count,
             "removed_all_layers": 4 * layer_count,
+            "current_fusion_baseline_all_layers": layer_count,
+            "gate_packed_candidate_all_layers": layer_count,
         },
         "excludes": (
             "input_weight_reads",
@@ -1569,7 +1632,9 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
     block_c = int(contract["block_c"])
     num_warps = int(contract["num_warps"])
     channel_tasks = CHANNELS // block_c
-    grid = (int(batch_size), channel_tasks + ROWS)
+    gate_rows_per_task = 2 * block_c // GATE_BLOCK
+    gate_tasks = triton.cdiv(ROWS, gate_rows_per_task)
+    grid = (int(batch_size), channel_tasks + gate_tasks)
     bias_arg = bias if bias is not None else x
     conv_tap_arg = conv_tap if conv_tap is not None else query
     sticky_guard_arg = (

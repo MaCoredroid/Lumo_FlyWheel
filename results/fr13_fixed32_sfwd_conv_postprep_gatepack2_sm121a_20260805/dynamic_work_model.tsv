@@ -1,0 +1,15 @@
+profile	metric	fusion_baseline	gatepack1	gatepack2	gatepack2_vs_gatepack1
+b1	gate_rows_per_program	1	2	4	2
+b1	gate_programs_per_request	32	16	8	-8
+b1	total_programs_per_request	112	96	88	-8
+b1	total_programs_all_48_layers	5376	4608	4224	-384
+b1	requested_gate_bytes_per_request_layer	27648	23040	20736	-2304
+b1	requested_gate_bytes_whole_batch_all_48_layers	1327104	1105920	995328	-110592
+b1	kernel_launches_all_48_layers	48	48	48	0
+b4	gate_rows_per_program	1	4	8	4
+b4	gate_programs_per_request	32	8	4	-4
+b4	total_programs_per_request	72	48	44	-4
+b4	total_programs_all_48_layers	13824	9216	8448	-768
+b4	requested_gate_bytes_per_request_layer	27648	20736	19584	-1152
+b4	requested_gate_bytes_whole_batch_all_48_layers	5308416	3981312	3760128	-221184
+b4	kernel_launches_all_48_layers	48	48	48	0

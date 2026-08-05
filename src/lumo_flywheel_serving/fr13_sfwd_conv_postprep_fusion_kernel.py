@@ -1020,31 +1020,35 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
         tl.store(stage_batch + 2 * C + offs_c, prior_2)
         tl.store(stage_batch + (SOURCE_ROWS - 1) * C + offs_c, 0.0)
     else:
-        pid_n = pid_task - channel_tasks
-        if pid_n < N:
-            offs_h = tl.arange(0, GATE_BLOCK)
-            h_mask = offs_h < HV
-            row = pid_b * N + pid_n
+        GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK
+        pid_n_base = (pid_task - channel_tasks) * GATE_ROWS
+        offs_n = pid_n_base + tl.arange(0, GATE_ROWS)[:, None]
+        offs_h_1d = tl.arange(0, GATE_BLOCK)
+        h_mask = offs_h_1d < HV
+        offs_h = offs_h_1d[None, :]
+        gate_mask = (offs_n < N) & (offs_h < HV)
+        row = pid_b * N + offs_n
+        if pid_n_base < N:
             a_value = tl.load(
                 a + row * HV + offs_h,
-                mask=h_mask,
+                mask=gate_mask,
                 other=0.0,
             ).to(tl.float32)
             b_value = tl.load(
                 b + row * HV + offs_h,
-                mask=h_mask,
+                mask=gate_mask,
                 other=0.0,
             ).to(tl.float32)
             A_log_value = tl.load(
-                A_log + offs_h,
+                A_log + offs_h_1d,
                 mask=h_mask,
                 other=0.0,
-            ).to(tl.float32)
+            ).to(tl.float32)[None, :]
             dt_bias_value = tl.load(
-                dt_bias + offs_h,
+                dt_bias + offs_h_1d,
                 mask=h_mask,
                 other=0.0,
-            ).to(tl.float32)
+            ).to(tl.float32)[None, :]
             gate_input = a_value + dt_bias_value
             softplus = tl.where(
                 gate_input > 0,
@@ -1058,5 +1062,5 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
             )
             g_value = -tl.exp(A_log_value) * softplus
             beta_value = tl.sigmoid(b_value)
-            tl.store(g + row * HV + offs_h, g_value, mask=h_mask)
-            tl.store(beta + row * HV + offs_h, beta_value, mask=h_mask)
+            tl.store(g + row * HV + offs_h, g_value, mask=gate_mask)
+            tl.store(beta + row * HV + offs_h, beta_value, mask=gate_mask)
