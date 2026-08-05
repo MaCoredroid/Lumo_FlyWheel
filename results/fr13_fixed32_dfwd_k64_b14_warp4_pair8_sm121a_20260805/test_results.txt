@@ -1,0 +1,5 @@
+Command:
+/home/mark/shared/lumoFlyWheel/.venv/bin/python -m pytest -q tests/test_fr13_bf16_gemvx_k64_b14_warp4_pair8.py tests/test_fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.py tests/test_fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.py tests/test_fr13_build_bf16_gemvx_k64_m1_shuffle_r64_u8.py tests/test_fr13_build_bf16_gemvx_k64_m4_shuffle_r64_u8.py tests/test_fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_artifact.py
+
+Result:
+34 passed in 0.19s

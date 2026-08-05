@@ -1,0 +1,17 @@
+{
+  "cubin_byte_identical": true,
+  "cubin_run1_sha256": "6c589b90c4380e86a8c81de79c80e95da0bb74c99dd559e246f8d50af2ce05d2",
+  "cubin_run2_sha256": "6c589b90c4380e86a8c81de79c80e95da0bb74c99dd559e246f8d50af2ce05d2",
+  "device_compile_command": "CUDA_VISIBLE_DEVICES='' nvcc -std=c++17 -O3 --fmad=true --frandom-seed=fr13_dfwd_b14_warp4_pair8 -DFR13_DEVICE_CODEGEN_ONLY --cubin -gencode arch=compute_121a,code=sm_121a -Xptxas=-v,-warn-spills",
+  "gpu_runtime_used": false,
+  "linked_extension_registered": true,
+  "linked_extension_sha256": "dcd9301f447d1ef4a81240027af3a008558dfa080b8660ac9dba7b2c5800ec7f",
+  "nvcc": "CUDA 13.0.88",
+  "nvdisasm": "CUDA 13.0.85",
+  "sass_byte_identical": true,
+  "sass_run1_sha256": "754810c5a01a3a68e320b262883b37fc2a481a21ad4544681df91b4f6ba02b87",
+  "sass_run2_sha256": "754810c5a01a3a68e320b262883b37fc2a481a21ad4544681df91b4f6ba02b87",
+  "schema": "fr13.fixed32.dfwd_k64_b14_warp4_pair8_reproducibility.v1",
+  "source_sha256": "01fd0ec526afcfa3e3a4a42ec95b95dfa04d566fa8431eee84d72d7eada9ed3f",
+  "status": "PASS"
+}
