@@ -1,0 +1,81 @@
+{
+  "backend": {
+    "target": "sm_121a",
+    "tool_name": "ptxas-blackwell",
+    "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+    "toolkit_version": "12.9"
+  },
+  "candidate": {
+    "batch": 1,
+    "block_c": 256,
+    "calls": 0,
+    "compile_hash": "1daceaa881c21f7d2b8ee5d27834162403c55924edc06ede6382d2adc4543e75",
+    "cubin_bytes": 206136,
+    "cubin_sha256": "93f242bde108ecb91a51f3c20ca30aa5f48a7a0bca50b5c922bb7c19fb17dee6",
+    "encoded_sass_instructions": 3040,
+    "launch_shared_bytes": 0,
+    "ldg": 85,
+    "ldl": 0,
+    "local_bytes": 0,
+    "num_stages": 3,
+    "num_warps": 4,
+    "ptx_sha256": "054dc2c0847ad3cda0a4091d6e171f6ddcac3d443f3f50f7b6ff05bcbf3eeca0",
+    "registers": 56,
+    "sass_sha256": "b8ee499651eedbea77023b45dd4f99c6cdb79b62306cf7c41901e9696553cfb5",
+    "stack_bytes": 0,
+    "static_sass_instructions": 2889,
+    "stg": 336,
+    "stl": 0
+  },
+  "candidate_source_commit": "4d876d6fd1a9a9bfc4ca4f90651bfc2421439e31",
+  "claims": {
+    "floor_acceptance_eligible": false,
+    "gpu_runtime_used": false,
+    "performance_claim": false,
+    "runtime_byte_correctness": false,
+    "timing_claim": false
+  },
+  "comparison": {
+    "candidate_equals_prior_b4_cubin": true,
+    "candidate_equals_prior_b4_sass": true,
+    "candidate_minus_previous_b1": {
+      "channel_programs_all_48_layers": -1920,
+      "gate_programs_all_48_layers": -192,
+      "programs_all_48_layers": -2112,
+      "programs_per_layer": -44,
+      "requested_gate_bytes_all_48_layers": -55296,
+      "requested_gate_bytes_per_layer": -1152,
+      "scheduled_warps_per_layer": 0
+    },
+    "previous_b1": {
+      "block_c": 128,
+      "cubin_sha256": "056dae1ef2e2838d6701514f5b22dee753cfe187e402ab4853f7fdc233f1ea9d",
+      "gate_rows_per_program": 4,
+      "num_warps": 2,
+      "programs_all_48_layers": 4224,
+      "programs_per_layer": 88,
+      "registers": 56,
+      "requested_gate_bytes_all_48_layers": 995328,
+      "requested_gate_bytes_per_layer": 20736,
+      "scheduled_warps_per_layer": 176
+    }
+  },
+  "kernel_source_sha256": "c791db253ca0192f56562d05edefcad0bc53d17386002ce6b5e2a98148e956d8",
+  "launcher_source_sha256": "e4528b587ce2c6e152c3f4632a52ad8e324d20557a964aa4b10c6804607fe4fe",
+  "new_b1_work": {
+    "channel_programs_all_48_layers": 1920,
+    "channel_programs_per_layer": 40,
+    "gate_programs_all_48_layers": 192,
+    "gate_programs_per_layer": 4,
+    "gate_rows_per_program": 8,
+    "programs_all_48_layers": 2112,
+    "programs_per_layer": 44,
+    "requested_gate_bytes_all_48_layers": 940032,
+    "requested_gate_bytes_per_layer": 19584,
+    "scheduled_warps_per_layer": 176
+  },
+  "offline_only": true,
+  "required_next_gate": "real SWE-Verified B1 eager Qrow16 target/SFWD byte gate on exact merged source",
+  "schema": "fr13.fixed32.sfwd_conv_postprep.b1_block256.sm121a.offline_codegen.v1",
+  "status": "PASS"
+}

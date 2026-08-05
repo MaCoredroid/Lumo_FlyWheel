@@ -1,0 +1,7 @@
+PASS focused CPU and artifact tests: 38 passed
+PASS generated kernel remains deterministic
+PASS SM121a offline compile: 56 registers, zero stack/local/shared, zero LDL/STL/CALL
+PASS candidate cubin/SASS identity with prior audited B4 BLOCK_C=256/four-warp build
+PASS grid ledger: 88 to 44 programs/layer; 4224 to 2112 over 48 layers
+NOT RUN GPU byte equality
+NOT RUN real SWE-Verified B1 timing

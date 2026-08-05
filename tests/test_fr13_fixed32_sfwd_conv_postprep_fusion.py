@@ -399,8 +399,8 @@ def test_contract_is_exact_physical32_k64_and_one_launch_per_layer() -> None:
         assert contract["physical_rows_per_request"] == 32
         assert contract["launches_per_layer"] == 1
         assert contract["launches_for_all_layers"] == 48
-        expected_gate_rows = 4 if batch == 1 else 8
-        expected_channel_programs = 80 if batch == 1 else 40
+        expected_gate_rows = 8
+        expected_channel_programs = 40
         assert contract["gate_rows_per_program"] == expected_gate_rows
         assert contract["gating_programs_per_request"] == (
             32 // expected_gate_rows
@@ -450,7 +450,7 @@ def test_contract_is_exact_physical32_k64_and_one_launch_per_layer() -> None:
 
 @pytest.mark.parametrize(
     ("batch_size", "block_c", "gate_rows"),
-    ((1, 128, 4), (4, 256, 8)),
+    ((1, 256, 8), (4, 256, 8)),
 )
 def test_gate_row_tiles_cover_each_fixed32_output_exactly_once(
     batch_size: int,
@@ -768,24 +768,24 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
         "gate_packed_candidate_all_layers": 48,
     }
     assert b1["gate_packing"] == {
-        "gate_rows_per_program": 4,
+        "gate_rows_per_program": 8,
         "baseline_gate_programs_per_request": 32,
-        "candidate_gate_programs_per_request": 8,
-        "baseline_programs_per_request": 112,
-        "candidate_programs_per_request": 88,
-        "baseline_programs_per_layer": 112,
-        "candidate_programs_per_layer": 88,
-        "baseline_programs_all_layers": 5376,
-        "candidate_programs_all_layers": 4224,
+        "candidate_gate_programs_per_request": 4,
+        "baseline_programs_per_request": 72,
+        "candidate_programs_per_request": 44,
+        "baseline_programs_per_layer": 72,
+        "candidate_programs_per_layer": 44,
+        "baseline_programs_all_layers": 3456,
+        "candidate_programs_all_layers": 2112,
         "requested_global_bytes_per_request_layer": {
             "baseline": 27648,
-            "candidate": 20736,
-            "delta": -6912,
+            "candidate": 19584,
+            "delta": -8064,
         },
         "requested_global_bytes_all_layers": {
             "baseline": 1327104,
-            "candidate": 995328,
-            "delta": -331776,
+            "candidate": 940032,
+            "delta": -387072,
         },
         "traffic_classification": (
             "exact_fixed32_requested_bytes_not_measured_dram_bytes"
