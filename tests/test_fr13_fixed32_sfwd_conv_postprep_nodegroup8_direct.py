@@ -267,6 +267,13 @@ def test_nodegroup8_contract_is_default_off_and_has_exact_program_geometry() -> 
         assert standalone["algorithmic_shared_bytes"] == 0
         assert standalone["has_reduction"] is False
         assert standalone["has_barrier"] is False
+        assert standalone["candidate_codegen_registers_per_thread"] == 46
+        assert standalone["source_register_ceiling_per_thread"] == 48
+        assert standalone["offline_codegen_stack_bytes"] == 0
+        assert standalone["offline_codegen_local_bytes"] == 0
+        assert standalone["offline_codegen_shared_bytes"] == 0
+        assert standalone["codegen_registers_verified"] is True
+        assert embedded["candidate_codegen_registers_per_thread"] == 48
         assert standalone["full_graph_qualified"] is False
         assert standalone["timing_claim"] is False
 
