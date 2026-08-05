@@ -1023,12 +1023,18 @@ void fr13_run_mha_fwd_fixed32_qrow32_b1_split2(
     // traits. The main attention kernel remains the two-warp BM32 trait.
     using CombineTraits = Fr13Fixed32Qrow32B1Split2CombineTraits;
     static_assert(CombineTraits::kNThreads == 128);
-    constexpr int kCombineBlockM = 4;
+    // The exact B1 geometry has 768 logical rows. BM16 gives one four-warp
+    // combine CTA per SM on the 48-SM target while preserving FA2's split2
+    // reduction and accumulation order within every logical output element.
+    constexpr int kCombineBlockM = 16;
     constexpr int kLogMaxSplits = 1;
     constexpr bool kEvenK = true;
-    dim3 combine_grid(
-        (StaticLayout::sequences * StaticLayout::query_heads * 32
-         + kCombineBlockM - 1) / kCombineBlockM);
+    constexpr int kCombineRows =
+        StaticLayout::sequences * StaticLayout::query_heads * 32;
+    static_assert(kCombineRows == 768);
+    static_assert(kCombineRows % kCombineBlockM == 0);
+    static_assert(kCombineRows / kCombineBlockM == 48);
+    dim3 combine_grid(kCombineRows / kCombineBlockM);
     flash_fwd_splitkv_combine_kernel<
         CombineTraits, kCombineBlockM, kLogMaxSplits, kEvenK>
         <<<combine_grid, CombineTraits::kNThreads, 0, stream>>>(params);

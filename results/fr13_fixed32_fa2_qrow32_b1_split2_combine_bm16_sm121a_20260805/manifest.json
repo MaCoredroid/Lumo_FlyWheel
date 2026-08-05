@@ -1,0 +1,103 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_b1_split2_combine_bm16_sm121a.v1",
+  "status": "HOST_CODEGEN_PASS_ADMIT_REAL_SWE_VERIFIED_AB",
+  "source": {
+    "branch": "codex/qrow32-split2-combine-bm16-20260805",
+    "base_commit": "372b2bdeae1580c13f2af72917a0ad89a7f46ebe",
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "cutlass_commit": "62750a2b75c802660e4894434dc55e839f322277",
+    "source_closure_sha256": "c70578dc3c531232cfd00aff4d854ac5b9bbb8aa57c704c8c6de9d10d4dffe63",
+    "split2_translation_unit_sha256": "ac03a1438089802d2e628d59088f5aa5ed22bb355a90441a6c90ffdfaacfd888",
+    "generator_sha256": "94df73bb523fe42f6b73cb0bb73da3fe72be84ab826c197ec84b85092d96246a"
+  },
+  "exact_geometry": {
+    "batch": 1,
+    "query_heads": 24,
+    "query_rows": 32,
+    "head_dim": 256,
+    "physical_rows": 32,
+    "context_splits": 2,
+    "logical_combine_rows": 768,
+    "target_sms": 48
+  },
+  "control_bm4": {
+    "block_m": 4,
+    "ctas_per_layer": 192,
+    "threads_per_cta": 128,
+    "registers": 44,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "static_shared_bytes": 1072,
+    "static_sass_instructions": 1080,
+    "full_sass_sha256": "a3a67dea073ac6bfca211f8d7b74f7a4a8feec230bb7142e7d8ce84a7754c636",
+    "combine_sass_sha256": "e7ab06a3000d6151607d2c99bec6764fbf15a1099e3723a5c393026056c4a89f",
+    "object_sha256": "1d7a2a139af0bf930f49bf7218ece39620f53f7238bf1a3d4f4876c4ea5c6c9f",
+    "object_bytes": 784160
+  },
+  "candidate_bm16": {
+    "block_m": 16,
+    "ctas_per_layer": 48,
+    "threads_per_cta": 128,
+    "registers": 76,
+    "stack_bytes": 0,
+    "local_bytes": 0,
+    "static_shared_bytes": 1168,
+    "static_sass_instructions": 1056,
+    "full_sass_sha256": "f359f6cb7d032b9a41d99de1e65a0f4413f52ed9535881e462c9bc10764cc893",
+    "combine_sass_sha256": "65c924e5ad18d627f669b57fc133e2435ac9e2610653ef85751dc2d17ca84d61",
+    "object_sha256": "fc0872481d840bbce2c5b2cf10f3b3e58383940f52dce383e96abc5cb7a40573",
+    "object_bytes": 783568
+  },
+  "equivalence": {
+    "attention_main_sass_identical": true,
+    "attention_main_sass_sha256": "d385f080b928ccbc46aea991d9b7ec40c72669b879d0dfe3db78602423bf1ffe",
+    "logical_output_coverage_identical": true,
+    "lse_reduction_lanes_control": 2,
+    "lse_reduction_lanes_candidate": 2,
+    "per_output_split_accumulation_order": [0, 1],
+    "real_task_raw_byte_comparison": "PENDING"
+  },
+  "economics": {
+    "combine_cta_reduction_percent": 75.0,
+    "combine_static_cta_instruction_proxy_reduction_percent": 75.555556,
+    "combine_bytes_per_layer": 1975296,
+    "combine_bytes_per_16_layer_step": 31604736,
+    "combine_traffic_floor_ms_at_273_gbps": 0.115768,
+    "kernel_launches_removed_per_layer": 0,
+    "measured_performance": false
+  },
+  "toolchain": {
+    "host": true,
+    "docker_used": false,
+    "gpu_used": false,
+    "cuda_cache_disabled": true,
+    "target": "sm_121a",
+    "nvcc": "13.0.88",
+    "optimization": "O3",
+    "use_fast_math": true,
+    "torch_headers": "2.10.0+cu130",
+    "control_matches_pinned_v3_full_sass": true
+  },
+  "verification": {
+    "focused_tests_passed": 69,
+    "focused_tests_skipped": 1,
+    "python_byte_compile": "PASS",
+    "generator_translation_unit_match": "PASS",
+    "offline_codegen": "PASS",
+    "spill_free": true
+  },
+  "classification": {
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "byte_parity_claim": false,
+    "performance_claim": false,
+    "production_eligible": false,
+    "safe_to_merge_over_pinned_generator": false
+  },
+  "admission": {
+    "verdict": "ADMIT_TO_REAL_SWE_VERIFIED_AB",
+    "real_b1_byte_gate": "PENDING",
+    "real_b1_full_step_timing": "PENDING",
+    "production": "NOT_AUTHORIZED"
+  }
+}

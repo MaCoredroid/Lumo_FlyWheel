@@ -1,0 +1,17 @@
+python3 -m py_compile scripts/fr13_patch_fa2_tree_bias.py tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_qrow32_b1_combine_bm16_artifact.py
+PASS
+
+generated split2 translation unit equals FIXED32_QUERY_TILE32_B1_SPLIT2_TRANSLATION_UNIT
+PASS
+
+python3 -m pytest -q tests/test_fr13_qrow32_b1_combine_bm16_artifact.py tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_fa2_qrow32_gate.py tests/test_fr13_fa2_qrow32_static_gate.py tests/test_fr13_fixed32_fa2_identity.py tests/test_fr13_qrow32_b1_selectors.py
+69 passed, 1 skipped in 3.33s
+
+CUDA 13.0.88 SM121a codegen with CUDA cache disabled and no GPU
+BM4 control: REG44 STACK0 LOCAL0 SHARED1072
+BM16 candidate: REG76 STACK0 LOCAL0 SHARED1168
+attention main SASS comparison: byte-identical
+BM4 rebuilt full SASS versus pinned v3 full SASS: byte-identical
+
+No Docker, GPU, synthetic probe, real task, task data, byte gate, linked
+shared object, or performance measurement was used for this checkpoint.

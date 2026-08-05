@@ -511,7 +511,9 @@ def test_fixed32_query_tile32_b1_is_a_distinct_24_cta_candidate(
     assert "params.softmax_lseaccum_ptr != nullptr" in split2
     assert "CombineTraits::kNThreads == 128" in split2
     assert "flash_fwd_splitkv_combine_kernel<" in split2
-    assert "kCombineBlockM = 4" in split2
+    assert "kCombineBlockM = 16" in split2
+    assert "kCombineRows == 768" in split2
+    assert "kCombineRows / kCombineBlockM == 48" in split2
     assert "kLogMaxSplits = 1" in split2
     for source in (candidate, split2):
         assert "static constexpr int64_t page = 2 * 1024 * 4 * 256" in source
@@ -523,6 +525,36 @@ def test_fixed32_query_tile32_b1_is_a_distinct_24_cta_candidate(
         translation_unit,
         fixed32_query_tile32_b1=True,
     )
+
+
+def test_qrow32_b1_split2_bm16_combine_preserves_logical_work_order() -> None:
+    logical_rows = 1 * 24 * 32
+    head_dim = 256
+    num_splits = 2
+    threads = 128
+
+    def schedule(block_m: int) -> dict[tuple[int, int], tuple[int, ...]]:
+        schedule_by_output = {}
+        for block in range(logical_rows // block_m):
+            for row_in_block in range(block_m):
+                row = block * block_m + row_in_block
+                for col in range(head_dim):
+                    output = (row, col)
+                    assert output not in schedule_by_output
+                    schedule_by_output[output] = tuple(range(num_splits))
+        return schedule_by_output
+
+    stock = schedule(4)
+    candidate = schedule(16)
+    assert len(stock) == logical_rows * head_dim
+    assert candidate == stock
+    assert logical_rows // 4 == 192
+    assert logical_rows // 16 == 48
+
+    # Both template instantiations reduce each row's two LSE values with the
+    # same two-lane Allreduce before accumulating split 0 and then split 1.
+    assert min(threads // 4, num_splits) == 2
+    assert min(threads // 16, num_splits) == 2
 
 
 def test_qrow32_b1_interleaved_kv_address_mapping_is_exact() -> None:
