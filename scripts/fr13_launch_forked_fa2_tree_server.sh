@@ -74,6 +74,7 @@ _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON
   FR13_DRAFT_HEAD_M32_TIMING_ARM
   FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB
+  FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION
   FR13_DRAFT_HEAD_M1_R64_U8_SO
   FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256
   FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256
@@ -86,6 +87,12 @@ _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT
   FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID
   FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON
+  FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON
+  FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_SHA256
+  FR13_DRAFT_HEAD_M1_R64_U8_LIVE_FINAL_FLUSH_JSON
+  FR13_DRAFT_HEAD_M1_R64_U8_LIVE_BOUNDARY_SNAPSHOT_JSON
+  FR13_DRAFT_HEAD_M1_R64_U8_LIVE_CHAT_TRAFFIC_AUDIT_JSON
+  FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_ENGAGEMENT_JSON
   FR13_DRAFT_HEAD_FP8
   FR13_DRAFT_HEAD_FP8_STATIC_IO
   FR13_DRAFT_HEAD_FP8_ARM
@@ -187,6 +194,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_FP8]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DFWD_K64_TOP3]}" == "set:1" \
    || "$_FR13_CALLER_SFWD_B4" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_LIVE_PAGED_AB]}" == "set:1" \
@@ -214,6 +222,7 @@ fi
    || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_FP8:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB:-0}" == "1" \
+   || "${FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION:-0}" == "1" \
    || "${FR13_DFWD_K64_TOP3:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" \
    || "${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" == "1" \
@@ -510,6 +519,7 @@ FR13_DRAFT_HEAD_M32_LIVE_CHAT_TRAFFIC_AUDIT_JSON=${FR13_DRAFT_HEAD_M32_LIVE_CHAT
 FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON=${FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON:-/logs/fr13_draft_head_m32.production_engagement.json}
 FR13_DRAFT_HEAD_M32_TIMING_ARM=${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}
 FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB=${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB:-0}
+FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION=${FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION:-0}
 FR13_DRAFT_HEAD_M1_R64_U8_SO=${FR13_DRAFT_HEAD_M1_R64_U8_SO:-}
 FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256=${FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256:-}
 FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256=${FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256:-}
@@ -522,6 +532,12 @@ FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256=${FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256:-}
 FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT=${FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT:-}
 FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID=${FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID:-}
 FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON=${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON:-/logs/fr13_dfwd_k64_m1_r64_u8.live.json}
+FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON=${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON:-}
+FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_SHA256=${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_SHA256:-}
+FR13_DRAFT_HEAD_M1_R64_U8_LIVE_FINAL_FLUSH_JSON=${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_FINAL_FLUSH_JSON:-}
+FR13_DRAFT_HEAD_M1_R64_U8_LIVE_BOUNDARY_SNAPSHOT_JSON=${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_BOUNDARY_SNAPSHOT_JSON:-}
+FR13_DRAFT_HEAD_M1_R64_U8_LIVE_CHAT_TRAFFIC_AUDIT_JSON=${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_CHAT_TRAFFIC_AUDIT_JSON:-}
+FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_ENGAGEMENT_JSON=${FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_ENGAGEMENT_JSON:-/logs/fr13_dfwd_k64_m1_r64_u8.production_engagement.json}
 FR13_DRAFT_HEAD_FP8=${FR13_DRAFT_HEAD_FP8:-0}
 FR13_DRAFT_HEAD_FP8_STATIC_IO=${FR13_DRAFT_HEAD_FP8_STATIC_IO:-0}
 FR13_DRAFT_HEAD_FP8_ARM=${FR13_DRAFT_HEAD_FP8_ARM:-}
@@ -866,8 +882,21 @@ case "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" in
   0|1) ;;
   *) echo "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" == "1" \
+      && "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" == "1" ]]; then
+  echo "FR13 draft-head U8 live and production modes are mutually exclusive" >&2
+  exit 2
+fi
+FR13_DRAFT_HEAD_U8_ACTIVE=0
+[[ "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" == "0" \
+   && "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" == "0" ]] \
+  || FR13_DRAFT_HEAD_U8_ACTIVE=1
 FR13_DRAFT_HEAD_U8_DOCKER_ARGS=()
-if [[ "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" == "0" ]]; then
+if [[ "$FR13_DRAFT_HEAD_U8_ACTIVE" == "0" ]]; then
   [[ -z "$FR13_DRAFT_HEAD_M1_R64_U8_SO" \
      && -z "$FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256" \
      && -z "$FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256" \
@@ -878,7 +907,12 @@ if [[ "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" == "0" ]]; then
      && -z "$FR13_DRAFT_HEAD_M1_R64_U8_VOCAB_BLOCKS_SHA256" \
      && -z "$FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256" \
      && -z "$FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT" \
-     && -z "$FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID" ]] || {
+     && -z "$FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID" \
+     && -z "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON" \
+     && -z "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_SHA256" \
+     && -z "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_FINAL_FLUSH_JSON" \
+     && -z "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_BOUNDARY_SNAPSHOT_JSON" \
+     && -z "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_CHAT_TRAFFIC_AUDIT_JSON" ]] || {
     echo "disabled draft-head U8 gate forbids candidate credentials" >&2
     exit 2
   }
@@ -886,7 +920,6 @@ else
   [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
      && "$MAX_NUM_SEQS" == "1" \
      && "${SWE_CONCURRENCY:-}" == "1" \
-     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
      && "${ENFORCE_EAGER:-0}" == "0" \
      && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" \
      && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
@@ -901,6 +934,33 @@ else
     echo "FR13 draft-head U8 requires isolated real Hydra27 K64/root1 B1 FULL graph geometry" >&2
     exit 2
   }
+  if [[ "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" == "1" ]]; then
+    [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+       && -z "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON" \
+       && -z "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_SHA256" \
+       && -z "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_FINAL_FLUSH_JSON" \
+       && -z "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_BOUNDARY_SNAPSHOT_JSON" \
+       && -z "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_CHAT_TRAFFIC_AUDIT_JSON" ]] || {
+      echo "FR13 draft-head U8 live gate forbids production evidence" >&2
+      exit 2
+    }
+  else
+    [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+       && -f "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON" \
+       && ! -L "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON" \
+       && -f "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_FINAL_FLUSH_JSON" \
+       && ! -L "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_FINAL_FLUSH_JSON" \
+       && -f "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_BOUNDARY_SNAPSHOT_JSON" \
+       && ! -L "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_BOUNDARY_SNAPSHOT_JSON" \
+       && -f "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_CHAT_TRAFFIC_AUDIT_JSON" \
+       && ! -L "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_CHAT_TRAFFIC_AUDIT_JSON" \
+       && "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+       && "$(sha256sum "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON" | awk '{print $1}')" \
+          == "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_SHA256" ]] || {
+      echo "FR13 draft-head U8 production requires exact real-B1 live evidence" >&2
+      exit 2
+    }
+  fi
   [[ "$FR13_DRAFT_HEAD_M1_R64_U8_SO" == /* \
      && "$FR13_DRAFT_HEAD_M1_R64_U8_SO" != *:* \
      && -f "$FR13_DRAFT_HEAD_M1_R64_U8_SO" \
@@ -996,6 +1056,12 @@ if [[ -n "${FR13_DRAFT_HEAD_M32_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
   echo "FR13 draft-head M32 internal attestation is launcher-private" >&2
   exit 2
 fi
+if [[ -n "${FR13_DRAFT_HEAD_M1_R64_U8_INTERNAL_PRODUCTION_ATTESTED:-}" \
+      || -n "${FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR:-}" \
+      || -n "${FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256:-}" ]]; then
+  echo "FR13 draft-head U8 internal production credentials are launcher-private" >&2
+  exit 2
+fi
 if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
       && "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" ]]; then
   echo "FR13 draft-head M32 live A/B and production are mutually exclusive" >&2
@@ -1007,6 +1073,7 @@ _FR13_DRAFT_HEAD_MODES=0
 [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 [[ "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
+[[ "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 [[ "$FR13_DRAFT_HEAD_FP8" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 if (( _FR13_DRAFT_HEAD_MODES > 1 )); then
   echo "FR13 draft-head candidate, diagnostics, and production are mutually exclusive" >&2
@@ -1054,6 +1121,20 @@ if [[ "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" == "1" ]]; then
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
      && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
     echo "FR13 draft-head U8 live A/B must be the only real-B1 diagnostic candidate" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" == "1" ]]; then
+  [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" ]] || {
+    echo "FR13 draft-head U8 production must be the only B1 candidate" >&2
     exit 2
   }
 fi
@@ -2981,6 +3062,38 @@ if [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" ]]; then
   export FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR
   export FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256
 fi
+FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR=""
+FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256=""
+if [[ "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" == "1" ]]; then
+  FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_HOST="$LOG_DIR/fr13_dfwd_k64_m1_r64_u8.production_credential.json"
+  rm -f -- "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_HOST"
+  .venv/bin/python \
+    scripts/fr13_dfwd_k64_m1_r64_u8_production_credential.py issue \
+    --live-result "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON" \
+    --final-flush "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_FINAL_FLUSH_JSON" \
+    --boundary-snapshot "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_BOUNDARY_SNAPSHOT_JSON" \
+    --chat-traffic-audit "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_CHAT_TRAFFIC_AUDIT_JSON" \
+    --repo "$REPO" \
+    --candidate-so "$_FR13_DRAFT_HEAD_U8_HOST_SO" \
+    --candidate-source csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu \
+    --build-attestation results/fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_20260805/build_attestation.json \
+    --patch-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+    --qualification-runner scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh \
+    --subset config/fr13_fixed32/subset_b1_diagnostic_one.json \
+    --vocab-blocks scripts/fr13_dvk_subset_blocks.json \
+    --fa2-so "$FORKED_FA2_SO" \
+    --expected-source-commit "$FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT" \
+    --out "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_HOST" \
+    >/dev/null
+  chmod 0400 "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_HOST"
+  FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR=/logs/fr13_dfwd_k64_m1_r64_u8.production_credential.json
+  FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256=$(
+    sha256sum "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_HOST" \
+      | cut -d' ' -f1
+  )
+  export FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR
+  export FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256
+fi
 if [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "1" ]]; then
   echo "1" > "$LOG_DIR/fr13_fixed32_taw_native_precompute_diagnostic.arm"
   rm -f \
@@ -4459,6 +4572,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR_SHA256" \
   -e FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON="$FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB="$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" \
+  -e FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION="$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_SO="$FR13_DRAFT_HEAD_M1_R64_U8_SO" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256="$FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256="$FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256" \
@@ -4471,6 +4585,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT="$FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID="$FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON="$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON" \
+  -e FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR="$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR" \
+  -e FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256="$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256" \
+  -e FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_ENGAGEMENT_JSON="$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_ENGAGEMENT_JSON" \
   -e FR13_DRAFT_HEAD_FP8="$FR13_DRAFT_HEAD_FP8" \
   -e FR13_DRAFT_HEAD_FP8_STATIC_IO="$FR13_DRAFT_HEAD_FP8_STATIC_IO" \
   -e FR13_DRAFT_HEAD_FP8_ARM="$FR13_DRAFT_HEAD_FP8_ARM" \
@@ -4860,6 +4977,23 @@ if [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" ]]; then
     --candidate-source /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py \
     --expected-candidate-source-sha256 "$FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256"
   export FR13_DRAFT_HEAD_M32_INTERNAL_PRODUCTION_ATTESTED=1
+fi
+if [[ "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" == "1" ]]; then
+  python3 \
+    /workspace/scripts/fr13_dfwd_k64_m1_r64_u8_production_credential.py verify \
+    --credential "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR" \
+    --expected-credential-sha256 "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256" \
+    --candidate-so /tmp/fr13_bf16_k64_m1_r64_u8.abi3.so \
+    --candidate-source /workspace/csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu \
+    --build-attestation /workspace/results/fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_20260805/build_attestation.json \
+    --patch-source /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+    --qualification-runner /workspace/scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh \
+    --subset /workspace/config/fr13_fixed32/subset_b1_diagnostic_one.json \
+    --vocab-blocks /workspace/scripts/fr13_dvk_subset_blocks.json \
+    --fa2-so /tmp/fr13_fork_fa2.so \
+    --expected-source-commit "$FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT" \
+    >/dev/null
+  export FR13_DRAFT_HEAD_M1_R64_U8_INTERNAL_PRODUCTION_ATTESTED=1
 fi
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
 if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then

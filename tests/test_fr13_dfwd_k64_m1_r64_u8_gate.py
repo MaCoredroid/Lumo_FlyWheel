@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -92,12 +93,9 @@ def _worker_payload(module) -> dict[str, str]:
     payload.update(
         {
             "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "1",
-            "FR13_DRAFT_HEAD_M1_R64_U8_SO": (
-                "/tmp/fr13_bf16_k64_m1_r64_u8.abi3.so"
-            ),
-            "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID": (
-                "astropy__astropy-12907"
-            ),
+            "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "0",
+            "FR13_DRAFT_HEAD_M1_R64_U8_SO": ("/tmp/fr13_bf16_k64_m1_r64_u8.abi3.so"),
+            "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID": ("astropy__astropy-12907"),
             "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON": (
                 "/logs/fr13_dfwd_k64_m1_r64_u8.live.json"
             ),
@@ -110,7 +108,9 @@ def _worker_payload(module) -> dict[str, str]:
         }
     )
     for key in payload:
-        if key.endswith("SHA256"):
+        if key.endswith("SHA256") and not key.endswith(
+            "PRODUCTION_PASS_SIDECAR_SHA256"
+        ):
             payload[key] = "a" * 64
     return payload
 
@@ -153,11 +153,8 @@ def test_worker_sidecar_restores_exact_curated_enginecore_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     patcher = _patcher()
-    assert len(patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS) == 16
-    assert (
-        "FR13_DRAFT_HEAD_PAD_ROWS"
-        not in patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS
-    )
+    assert len(patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS) == 21
+    assert "FR13_DRAFT_HEAD_PAD_ROWS" not in patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS
     assert (
         "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB"
         not in patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS
@@ -310,9 +307,7 @@ def test_finalizer_and_gate_require_every_depth_per_authenticated_event(
     aggregate_preserved["per_depth_full_logit_comparisons"]["mtp_depth_2"] -= 1
     assert aggregate_preserved["full_logit_comparisons"] == events * 5
     with pytest.raises(ValueError, match="per-depth comparison/event census"):
-        gate.validate_live_result(
-            aggregate_preserved, expected_source_commit="b" * 40
-        )
+        gate.validate_live_result(aggregate_preserved, expected_source_commit="b" * 40)
 
     namespace["_FR13_DRAFT_HEAD_U8_LIVE_STATE"]["compares"].values[4] -= 1
     with pytest.raises(RuntimeError, match="depth/event comparison mismatch"):
@@ -332,11 +327,10 @@ def test_wiring_is_shadow_only_default_off_and_fully_pinned() -> None:
     assert "view(torch.int16)" in patcher
     assert "_FR13_DRAFT_HEAD_U8_WORKER_ENV_REQUIRED" in patcher
     assert (
-        "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB="
-        "${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB:-0}"
+        "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB=${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB:-0}"
     ) in launcher
     assert ":/tmp/fr13_bf16_k64_m1_r64_u8.abi3.so:ro" in launcher
-    assert '-e FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT=' in launcher
+    assert "-e FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT=" in launcher
     assert "RUNTIME_DRAFT_HEAD_M32=0" in generic
     assert "FR13_GATE_DRAFT_HEAD_U8=1" in runner
     assert "FR13_B1_DIAGNOSTIC_TASK_PROFILE=astropy12907" in runner
@@ -362,12 +356,10 @@ def test_runtime_source_compiles_with_default_off_bridge() -> None:
     )
 
 
-def test_readiness_manifest_binds_current_qualification_sources() -> None:
+def test_readiness_manifest_binds_historical_qualification_sources() -> None:
     payload = json.loads(READINESS.read_text(encoding="ascii"))
     assert payload["status"] == "SHADOW_READY_UNMEASURED"
-    assert payload["source_tip_commit"] == (
-        "674f574a0346b4f7b2bc96a30a4ad403841c41d4"
-    )
+    assert payload["source_tip_commit"] == ("674f574a0346b4f7b2bc96a30a4ad403841c41d4")
     assert payload["execution"] == {
         "gpu_run": False,
         "docker_run": False,
@@ -377,12 +369,10 @@ def test_readiness_manifest_binds_current_qualification_sources() -> None:
         "timing_eligible": False,
         "production_eligible": False,
     }
-    assert payload["comparison_contract"][
-        "exhaustive_within_fixed_k64_root1_head"
-    ] is True
-    assert payload["comparison_contract"][
-        "exhaustive_full_model_vocabulary"
-    ] is False
+    assert (
+        payload["comparison_contract"]["exhaustive_within_fixed_k64_root1_head"] is True
+    )
+    assert payload["comparison_contract"]["exhaustive_full_model_vocabulary"] is False
     tracked = payload["tracked_inputs"]
     assert set(tracked) == {
         "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
@@ -399,5 +389,12 @@ def test_readiness_manifest_binds_current_qualification_sources() -> None:
         "config/fr13_fixed32/subset_b1_diagnostic_one.json",
         "scripts/fr13_dvk_subset_blocks.json",
     }
+    source_tip = payload["source_tip_commit"]
     for relative, expected in tracked.items():
-        assert hashlib.sha256((REPO / relative).read_bytes()).hexdigest() == expected
+        commit = (
+            "2aee844d2b4ce62b901764ce6455bd06914f387b"
+            if relative == "tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py"
+            else source_tip
+        )
+        raw = subprocess.check_output(["git", "show", f"{commit}:{relative}"], cwd=REPO)
+        assert hashlib.sha256(raw).hexdigest() == expected

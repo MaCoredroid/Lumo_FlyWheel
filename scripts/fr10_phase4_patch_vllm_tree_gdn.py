@@ -444,6 +444,7 @@ _FR13_DRAFT_HEAD_U8_WORKER_ENV_SIDECAR = Path(
 )
 _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
+    "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256",
@@ -456,6 +457,10 @@ _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT",
     "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID",
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON",
+    "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR",
+    "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256",
+    "FR13_DRAFT_HEAD_M1_R64_U8_INTERNAL_PRODUCTION_ATTESTED",
+    "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_ENGAGEMENT_JSON",
     "FR13_DRAFT_VOCAB_BLOCKS",
     "FR13_DRAFT_VOCAB_K",
     "FR13_DRAFT_VOCAB_ROOT",
@@ -467,6 +472,7 @@ _FR13_FIXED32_OBSERVED_RUNTIME_SOURCE = r'''
 # enqueue deltas without reading device values or synchronizing the stream.
 _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
+    "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256",
@@ -479,6 +485,10 @@ _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT",
     "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID",
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON",
+    "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR",
+    "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256",
+    "FR13_DRAFT_HEAD_M1_R64_U8_INTERNAL_PRODUCTION_ATTESTED",
+    "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_ENGAGEMENT_JSON",
     "FR13_DRAFT_VOCAB_BLOCKS",
     "FR13_DRAFT_VOCAB_K",
     "FR13_DRAFT_VOCAB_ROOT",
@@ -542,13 +552,54 @@ def _fr13_draft_head_u8_worker_env_bridge(
         sort_keys=True,
     ).encode("ascii")
     payload_sha256 = _hashlib.sha256(canonical_payload).hexdigest()
+    live_enabled = payload["FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB"] == "1"
+    production_enabled = (
+        payload["FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION"] == "1"
+    )
+    production_sha = payload[
+        "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256"
+    ]
     if (
         record.get("payload_sha256") != payload_sha256
-        or payload["FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB"] != "1"
+        or (live_enabled == production_enabled)
         or payload["FR13_DRAFT_VOCAB_K"] != "65536"
         or payload["FR13_DRAFT_VOCAB_ROOT"] != "1"
         or payload["FR13_DRAFT_VOCAB_BLOCKS"]
         != "/workspace/scripts/fr13_dvk_subset_blocks.json"
+        or (
+            live_enabled
+            and (
+                payload[
+                    "FR13_DRAFT_HEAD_M1_R64_U8_"
+                    "INTERNAL_PRODUCTION_ATTESTED"
+                ]
+                or payload[
+                    "FR13_DRAFT_HEAD_M1_R64_U8_"
+                    "PRODUCTION_PASS_SIDECAR"
+                ]
+                or production_sha
+            )
+        )
+        or (
+            production_enabled
+            and (
+                payload[
+                    "FR13_DRAFT_HEAD_M1_R64_U8_"
+                    "INTERNAL_PRODUCTION_ATTESTED"
+                ]
+                != "1"
+                or payload[
+                    "FR13_DRAFT_HEAD_M1_R64_U8_"
+                    "PRODUCTION_PASS_SIDECAR"
+                ]
+                != "/logs/fr13_dfwd_k64_m1_r64_u8.production_credential.json"
+                or len(production_sha) != 64
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in production_sha
+                )
+            )
+        )
     ):
         raise RuntimeError(
             "FR13 draft-head U8 worker env digest/K64-root drifted"
@@ -5203,6 +5254,50 @@ def _fr13_fixed32_drafter_fp8_head_selection(batch_size):
     return True
 
 
+def _fr13_fixed32_drafter_u8_head_selection(batch_size):
+    """Classify one credentialed U8 serving call in the fixed B1 graph."""
+    batch = int(batch_size)
+    proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
+    context = _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
+    if (
+        not isinstance(proposal, dict)
+        or batch != 1
+        or int(proposal.get("batch_size", -1)) != 1
+        or proposal.get("mode") != _FR13_FIXED32_MODE
+        or proposal.get("measured") not in (True, False)
+    ):
+        raise RuntimeError("FR13 draft-head U8 production has no exact B1 proposal")
+    if context is None:
+        if (
+            proposal.get("mtp_execution_basis") != "unbound"
+            or int(proposal.get("mtp_forward_calls", -1)) != 0
+            or int(proposal.get("mtp_forward_rows", -1)) != 0
+        ):
+            raise RuntimeError("FR13 draft-head U8 production root lifecycle drifted")
+        return False
+    if not isinstance(context, dict):
+        raise RuntimeError("FR13 draft-head U8 production capture is malformed")
+    calls = int(context.get("draft_head_u8_calls", -1))
+    rows = int(context.get("draft_head_u8_rows", -1))
+    if (
+        context.get("capturing") is not True
+        or int(context.get("batch_size", -1)) != 1
+        or context.get("mode") != _FR13_FIXED32_MODE
+        or calls < 0
+        or rows < 0
+        or int(context.get("mtp_forward_calls", -1)) != calls + 1
+        or int(context.get("mtp_forward_rows", -1)) != rows + 1
+        or calls not in (0, 1, 2, 3)
+    ):
+        raise RuntimeError(
+            "FR13 draft-head U8 production left capture lifecycle: "
+            + repr((batch, context))
+        )
+    context["draft_head_u8_calls"] = calls + 1
+    context["draft_head_u8_rows"] = rows + 1
+    return True
+
+
 def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
     global _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
     if not _FR13_FIXED32_MODE:
@@ -5210,11 +5305,12 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
     context = _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
     identity = int(graph_id)
     batch = int(batch_size)
-    u8_enabled = (
-        __import__("os").environ.get(
-            "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB", "0"
+    u8_enabled = any(
+        __import__("os").environ.get(key, "0") == "1"
+        for key in (
+            "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
+            "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
         )
-        == "1"
     )
     if (
         not isinstance(context, dict)
@@ -9317,8 +9413,12 @@ def _patch_gdn_linear() -> bool:
     text = GDN_LINEAR_PATH.read_text()
     if "FR10_ENABLE_TREE_GDN" in text:
         return False
-    u8_worker_env_required = (
-        os.environ.get("FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB", "0") == "1"
+    u8_worker_env_required = any(
+        os.environ.get(key, "0") == "1"
+        for key in (
+            "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
+            "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
+        )
     )
 
     text = text.replace(
@@ -23805,6 +23905,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_u8_live_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB", "0"
             )
+            _fr13_dh_u8_prod_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION", "0"
+            )
             _fr13_dh_fp8_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_FP8", "0"
             )
@@ -23835,6 +23938,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB must be exactly 0 or 1"
                 )
+            if _fr13_dh_u8_prod_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION must be exactly 0 or 1"
+                )
             if _fr13_dh_fp8_raw not in ("0", "1"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_FP8 must be exactly 0 or 1"
@@ -23848,6 +23955,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
             _fr13_dh_u8_live = _fr13_dh_u8_live_raw == "1"
+            _fr13_dh_u8_prod = _fr13_dh_u8_prod_raw == "1"
+            _fr13_dh_u8_active = _fr13_dh_u8_live or _fr13_dh_u8_prod
             _fr13_dh_fp8 = _fr13_dh_fp8_raw == "1"
             _fr13_dh_fp8_static_io = (
                 _fr13_dh_fp8_static_io_raw == "1"
@@ -23885,6 +23994,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m32_live,
                     _fr13_dh_m32_prod,
                     _fr13_dh_u8_live,
+                    _fr13_dh_u8_prod,
                     _fr13_dh_fp8,
                 )
             )
@@ -23904,11 +24014,22 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "FR13 draft-head M32 production has no launcher attestation"
                 )
             if (
+                _fr13_dh_u8_prod
+                and os.environ.get(
+                    "FR13_DRAFT_HEAD_M1_R64_U8_"
+                    "INTERNAL_PRODUCTION_ATTESTED"
+                )
+                != "1"
+            ):
+                raise RuntimeError(
+                    "FR13 draft-head U8 production has no validator attestation"
+                )
+            if (
                 _fr13_dh_rows
                 or _fr13_dh_ab
                 or _fr13_dh_m32_live
                 or _fr13_dh_m32_prod
-                or _fr13_dh_u8_live
+                or _fr13_dh_u8_active
                 or _fr13_dh_fp8
             ) and (
                 not _fr13_is_fixed32
@@ -23942,6 +24063,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             self._fr13_dh_m32_fallback_calls = 0
             self._fr13_dh_m32_graph_attestation = None
             self._fr13_dh_u8_live_active = _fr13_dh_u8_live
+            self._fr13_dh_u8_production_active = _fr13_dh_u8_prod
+            self._fr13_dh_u8_selected_root_calls = 0
+            self._fr13_dh_u8_selected_capture_calls = 0
+            self._fr13_dh_u8_fallback_calls = 0
+            self._fr13_dh_u8_graph_attestation = None
             self._fr13_dh_fp8_active = _fr13_dh_fp8
             self._fr13_dh_fp8_selected_root_calls = 0
             self._fr13_dh_fp8_selected_capture_calls = 0
@@ -24192,7 +24318,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             flush=True,
                         )
                 if (
-                    _fr13_dh_u8_live
+                    _fr13_dh_u8_active
                     and not getattr(self, "_fr13_dh_u8_ready", False)
                 ):
                     import hashlib as _fr13_dh_u8_hashlib
@@ -24348,6 +24474,36 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         raise RuntimeError(
                             "FR13 draft-head U8 candidate binary size drifted"
                         )
+                    if _fr13_dh_u8_prod:
+                        _fr13_dh_u8_credential_path = (
+                            _fr13_dh_u8_pathlib.Path(
+                                os.environ.get(
+                                    "FR13_DRAFT_HEAD_M1_R64_U8_"
+                                    "PRODUCTION_PASS_SIDECAR",
+                                    "",
+                                )
+                            )
+                        )
+                        _fr13_dh_u8_credential_sha = os.environ.get(
+                            "FR13_DRAFT_HEAD_M1_R64_U8_"
+                            "PRODUCTION_PASS_SIDECAR_SHA256",
+                            "",
+                        )
+                        if (
+                            str(_fr13_dh_u8_credential_path)
+                            != "/logs/fr13_dfwd_k64_m1_r64_u8."
+                            "production_credential.json"
+                            or not _fr13_dh_u8_credential_path.is_file()
+                            or _fr13_dh_u8_credential_path.is_symlink()
+                            or len(_fr13_dh_u8_credential_sha) != 64
+                            or _fr13_dh_u8_hashlib.sha256(
+                                _fr13_dh_u8_credential_path.read_bytes()
+                            ).hexdigest()
+                            != _fr13_dh_u8_credential_sha
+                        ):
+                            raise RuntimeError(
+                                "FR13 draft-head U8 production credential drifted"
+                            )
                     torch.ops.load_library(
                         str(_fr13_dh_u8_paths["candidate_so_sha256"])
                     )
@@ -24360,31 +24516,44 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         dtype=torch.bfloat16,
                         device=_fr13_dh_u8_w.device,
                     )
-                    self._fr13_dh_u8_compares = torch.zeros(
-                        (5,), dtype=torch.int64, device=_fr13_dh_u8_w.device
-                    )
-                    self._fr13_dh_u8_mismatches = torch.zeros(
-                        (5,), dtype=torch.int64, device=_fr13_dh_u8_w.device
-                    )
-                    self._fr13_dh_u8_count_enable = torch.zeros(
-                        (), dtype=torch.int64, device=_fr13_dh_u8_w.device
-                    )
-                    from vllm.model_executor.layers.mamba import (
-                        gdn_linear_attn as _fr13_dh_u8_gdn,
-                    )
+                    if _fr13_dh_u8_live:
+                        self._fr13_dh_u8_compares = torch.zeros(
+                            (5,),
+                            dtype=torch.int64,
+                            device=_fr13_dh_u8_w.device,
+                        )
+                        self._fr13_dh_u8_mismatches = torch.zeros(
+                            (5,),
+                            dtype=torch.int64,
+                            device=_fr13_dh_u8_w.device,
+                        )
+                        self._fr13_dh_u8_count_enable = torch.zeros(
+                            (),
+                            dtype=torch.int64,
+                            device=_fr13_dh_u8_w.device,
+                        )
+                        from vllm.model_executor.layers.mamba import (
+                            gdn_linear_attn as _fr13_dh_u8_gdn,
+                        )
 
-                    _fr13_dh_u8_contract_value = _fr13_dh_u8_contract()
-                    _fr13_dh_u8_gdn._fr13_draft_head_u8_live_register(
-                        self._fr13_dh_u8_compares,
-                        self._fr13_dh_u8_mismatches,
-                        _fr13_dh_u8_contract_value["geometry"],
-                        _fr13_dh_u8_contract_value["candidate"],
-                        _fr13_dh_u8_identities,
-                    )
+                        _fr13_dh_u8_contract_value = _fr13_dh_u8_contract()
+                        _fr13_dh_u8_gdn._fr13_draft_head_u8_live_register(
+                            self._fr13_dh_u8_compares,
+                            self._fr13_dh_u8_mismatches,
+                            _fr13_dh_u8_contract_value["geometry"],
+                            _fr13_dh_u8_contract_value["candidate"],
+                            _fr13_dh_u8_identities,
+                        )
                     self._fr13_dh_u8_ready = True
                     print(
                         "[FR13_DRAFT_HEAD_M1_R64_U8] ready "
-                        "shadow_only=1 incumbent_served=1 depths=root,1,2,3,4",
+                        + (
+                            "shadow_only=1 incumbent_served=1 "
+                            "depths=root,1,2,3,4"
+                            if _fr13_dh_u8_live
+                            else "production=1 credential_attested=1 "
+                            "preallocated_output=1"
+                        ),
                         flush=True,
                     )
                 if (
@@ -25006,6 +25175,193 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 )
                 self._fr13_dh_m32_engagement_written = True
 
+            def _fr13_dh_u8_note_production():
+                if getattr(
+                    self, "_fr13_dh_u8_engagement_written", False
+                ):
+                    return
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dh_u8_selection_gdn,
+                )
+
+                _fr13_dh_u8_capturing = getattr(
+                    _fr13_dh_u8_selection_gdn,
+                    "_fr13_fixed32_drafter_u8_head_selection",
+                )(1)
+                if _fr13_dh_u8_capturing:
+                    self._fr13_dh_u8_selected_capture_calls += 1
+                else:
+                    self._fr13_dh_u8_selected_root_calls += 1
+                if (
+                    self._fr13_dh_u8_selected_root_calls > 1
+                    or self._fr13_dh_u8_selected_capture_calls > 4
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head U8 selection exceeded its first "
+                        "root/capture lifecycle before replay engagement"
+                    )
+
+            def _fr13_dh_u8_note_production_replay(
+                _graph_id, _graph_signature, _batch_size
+            ):
+                if not getattr(
+                    self, "_fr13_dh_u8_production_active", False
+                ):
+                    return
+                if getattr(
+                    self, "_fr13_dh_u8_engagement_written", False
+                ):
+                    return
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_dh_u8_replay_gdn,
+                )
+
+                _fr13_dh_u8_proposal = getattr(
+                    _fr13_dh_u8_replay_gdn,
+                    "_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT",
+                    None,
+                )
+                _fr13_dh_u8_signature = str(_graph_signature)
+                _fr13_dh_u8_lifecycle = getattr(
+                    _fr13_dh_u8_replay_gdn,
+                    "_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE",
+                    {},
+                ).get(int(_graph_id))
+                if (
+                    not isinstance(_fr13_dh_u8_proposal, dict)
+                    or int(_batch_size) != 1
+                    or int(_graph_id) <= 0
+                    or int(_fr13_dh_u8_proposal.get("graph_id", -1))
+                    != int(_graph_id)
+                    or _fr13_dh_u8_proposal.get("graph_signature")
+                    != _fr13_dh_u8_signature
+                    or int(_fr13_dh_u8_proposal.get("graph_replays", -1))
+                    != 1
+                    or self._fr13_dh_u8_selected_root_calls != 1
+                    or self._fr13_dh_u8_fallback_calls != 0
+                    or not isinstance(_fr13_dh_u8_lifecycle, dict)
+                    or int(_fr13_dh_u8_lifecycle.get("captures", -1)) != 1
+                    or int(_fr13_dh_u8_lifecycle.get("batch_size", -1)) != 1
+                    or _fr13_dh_u8_lifecycle.get("graph_signature")
+                    != _fr13_dh_u8_signature
+                    or _fr13_dh_u8_lifecycle.get("capture_origin")
+                    not in ("measured", "unmeasured")
+                    or _fr13_dh_u8_signature
+                    != (
+                        "d9a4ddece41d146e9949b9f8ff7c2603"
+                        "b8948d157b28ef69244e44469b36150c"
+                    )
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head U8 production replay engagement drifted"
+                    )
+                _fr13_dh_u8_expected_capture_calls = int(
+                    _fr13_dh_u8_lifecycle.get("mtp_forward_calls", -1)
+                )
+                _fr13_dh_u8_lifecycle_capture_calls = int(
+                    _fr13_dh_u8_lifecycle.get("draft_head_u8_calls", -1)
+                )
+                _fr13_dh_u8_attestation = getattr(
+                    self, "_fr13_dh_u8_graph_attestation", None
+                )
+                if _fr13_dh_u8_attestation is None:
+                    if (
+                        _fr13_dh_u8_expected_capture_calls != 4
+                        or _fr13_dh_u8_lifecycle_capture_calls != 4
+                        or self._fr13_dh_u8_selected_capture_calls != 4
+                    ):
+                        raise RuntimeError(
+                            "FR13 draft-head U8 graph capture head count drifted"
+                        )
+                    _fr13_dh_u8_attestation = {
+                        "graph_id": int(_graph_id),
+                        "graph_signature": _fr13_dh_u8_signature,
+                        "captured_loop_calls": 4,
+                        "capture_origin": _fr13_dh_u8_lifecycle[
+                            "capture_origin"
+                        ],
+                    }
+                    self._fr13_dh_u8_graph_attestation = (
+                        _fr13_dh_u8_attestation
+                    )
+                elif (
+                    self._fr13_dh_u8_selected_capture_calls != 0
+                    or _fr13_dh_u8_attestation.get("graph_id")
+                    != int(_graph_id)
+                    or _fr13_dh_u8_attestation.get("graph_signature")
+                    != _fr13_dh_u8_signature
+                    or _fr13_dh_u8_attestation.get("captured_loop_calls") != 4
+                    or _fr13_dh_u8_attestation.get("capture_origin")
+                    != _fr13_dh_u8_lifecycle.get("capture_origin")
+                ):
+                    raise RuntimeError(
+                        "FR13 draft-head U8 replay left its attested graph"
+                    )
+                self._fr13_dh_u8_selected_root_calls = 0
+                self._fr13_dh_u8_selected_capture_calls = 0
+                if _fr13_dh_u8_proposal.get("measured") is not True:
+                    return
+                if int(
+                    _fr13_dh_u8_lifecycle.get("measured_replays", 0)
+                ) < 1:
+                    raise RuntimeError(
+                        "FR13 draft-head U8 engagement lacks a measured replay"
+                    )
+                _fr13_dh_u8_contract_value = _fr13_dh_u8_contract()
+                _fr13_dh_m32_atomic_json(
+                    os.environ.get(
+                        "FR13_DRAFT_HEAD_M1_R64_U8_"
+                        "PRODUCTION_ENGAGEMENT_JSON",
+                        "/logs/fr13_dfwd_k64_m1_r64_u8."
+                        "production_engagement.json",
+                    ),
+                    {
+                        "schema": (
+                            "fr13.fixed32.dfwd_k64_m1_r64_u8_"
+                            "production_engagement.v1"
+                        ),
+                        "status": "ENGAGED",
+                        "source_commit": os.environ.get(
+                            "FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT", ""
+                        ),
+                        "candidate_so_sha256": os.environ.get(
+                            "FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256", ""
+                        ),
+                        "candidate_source_sha256": os.environ.get(
+                            "FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256", ""
+                        ),
+                        "production_credential_sha256": os.environ.get(
+                            "FR13_DRAFT_HEAD_M1_R64_U8_"
+                            "PRODUCTION_PASS_SIDECAR_SHA256",
+                            "",
+                        ),
+                        "geometry": _fr13_dh_u8_contract_value["geometry"],
+                        "qualification_candidate": (
+                            _fr13_dh_u8_contract_value["candidate"]
+                        ),
+                        "selector": "fr13_bf16_k64_m1_r64_u8_direct",
+                        "selected_root_calls": 1,
+                        "captured_loop_calls": 4,
+                        "fallback_calls": 0,
+                        "drafter_graph_id": int(_graph_id),
+                        "drafter_graph_signature": _fr13_dh_u8_signature,
+                        "observed_measured_replays_at_least": 1,
+                        "capture_origin": _fr13_dh_u8_attestation[
+                            "capture_origin"
+                        ],
+                        "execution_basis": "cudagraph_replay",
+                        "forward_step_index": int(
+                            _fr13_dh_u8_proposal["forward_step_index"]
+                        ),
+                        "runtime_mode": "FULL",
+                        "candidate_served": True,
+                        "incumbent_head_calls": 0,
+                        "steady_state_synchronizations": 0,
+                        "performance_claim": False,
+                    },
+                )
+                self._fr13_dh_u8_engagement_written = True
+
             def _fr13_dh_fp8_note_selection(_batch_size):
                 if getattr(
                     self, "_fr13_dh_fp8_engagement_written", False
@@ -25240,6 +25596,21 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     raise RuntimeError(
                         "FR13 draft-head U8 left exact B1 BF16 head geometry"
                     )
+                if getattr(
+                    self, "_fr13_dh_u8_production_active", False
+                ):
+                    _fr13_dh_u8_note_production()
+                    self._fr13_dh_u8_op(
+                        self._fr13_dh_u8_output, _h, _sh.weight
+                    )
+                    if not getattr(self, "_fr13_dh_u8_engaged", False):
+                        self._fr13_dh_u8_engaged = True
+                        print(
+                            "[FR13_DRAFT_HEAD_M1_R64_U8] engaged "
+                            "candidate_served=1 incumbent_head_calls=0",
+                            flush=True,
+                        )
+                    return self._fr13_dh_u8_output
                 from vllm.model_executor.layers.mamba import (
                     gdn_linear_attn as _fr13_dh_u8_runtime_gdn,
                 )
@@ -25294,7 +25665,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     self._fr13_dh_u8_engaged = True
                     print(
                         "[FR13_DRAFT_HEAD_M1_R64_U8] engaged "
-                        "full_bf16_vector=65536 incumbent_served=1",
+                        "full_bf16_vector=65536 incumbent_served=1 "
+                        "shadow_only=1",
                         flush=True,
                     )
                 return _fr13_dh_u8_reference
@@ -25435,6 +25807,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                     _fr13_dh_u8_on = getattr(
                         self, "_fr13_dh_u8_live_active", False
+                    ) or getattr(
+                        self, "_fr13_dh_u8_production_active", False
                     )
                     _fr13_dh_capturing = False
                     if _fr13_dh_u8_on:
@@ -25546,6 +25920,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         self, "_fr13_dvk_map_t", None
                     )
                 except Exception as _e:
+                    if getattr(
+                        self, "_fr13_dh_u8_production_active", False
+                    ):
+                        self._fr13_dh_u8_fallback_calls += 1
+                        raise RuntimeError(
+                            "FR13 draft-head U8 production failed its strict "
+                            "runtime contract; incumbent fallback is forbidden"
+                        ) from _e
                     if getattr(self, "_fr13_dh_u8_live_active", False):
                         raise RuntimeError(
                             "FR13 draft-head U8 live A/B failed its strict "
@@ -25858,6 +26240,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr13_dg_key,
                     )
                     _fr13_dh_m32_note_production_replay(
+                        id(_dg["graph"]),
+                        _dg.get("fixed32_signature"),
+                        _fr13_dg_key,
+                    )
+                    _fr13_dh_u8_note_production_replay(
                         id(_dg["graph"]),
                         _dg.get("fixed32_signature"),
                         _fr13_dg_key,
@@ -26221,6 +26608,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr13_dg_key,
                     )
                     _fr13_dh_m32_note_production_replay(
+                        id(_fr13_dg_g),
+                        _dg["fixed32_signature"],
+                        _fr13_dg_key,
+                    )
+                    _fr13_dh_u8_note_production_replay(
                         id(_fr13_dg_g),
                         _dg["fixed32_signature"],
                         _fr13_dg_key,
@@ -31951,20 +32343,31 @@ def _patch_fp8_utils_gb10_gemv_cfg() -> bool:
 def _fr13_write_draft_head_u8_worker_env_sidecar(
     sidecar_path: Path | None = None,
 ) -> dict[str, object] | None:
-    """Bridge the exact U8 shadow qualification env into EngineCore."""
+    """Bridge one exact U8 qualification or production env into EngineCore."""
     path = (
         _FR13_DRAFT_HEAD_U8_WORKER_ENV_SIDECAR
         if sidecar_path is None
         else Path(sidecar_path)
     )
-    enabled = os.environ.get(
+    live_enabled = os.environ.get(
         "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB", "0"
     )
-    if enabled not in ("0", "1"):
+    production_enabled = os.environ.get(
+        "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION", "0"
+    )
+    if live_enabled not in ("0", "1"):
         raise RuntimeError(
             "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB must be exactly 0 or 1"
         )
-    if enabled == "0":
+    if production_enabled not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION must be exactly 0 or 1"
+        )
+    if live_enabled == production_enabled == "1":
+        raise RuntimeError(
+            "FR13 draft-head U8 live and production modes are mutually exclusive"
+        )
+    if live_enabled == production_enabled == "0":
         try:
             path.unlink()
         except FileNotFoundError:
@@ -31976,7 +32379,6 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
         for key in _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS
     }
     exact = {
-        "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "1",
         "FR13_DRAFT_HEAD_M1_R64_U8_SO": (
             "/tmp/fr13_bf16_k64_m1_r64_u8.abi3.so"
         ),
@@ -31992,6 +32394,36 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
         "FR13_DRAFT_VOCAB_K": "65536",
         "FR13_DRAFT_VOCAB_ROOT": "1",
     }
+    if live_enabled == "1":
+        exact.update(
+            {
+                "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "1",
+                "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "0",
+                "FR13_DRAFT_HEAD_M1_R64_U8_"
+                "PRODUCTION_PASS_SIDECAR": "",
+                "FR13_DRAFT_HEAD_M1_R64_U8_"
+                "PRODUCTION_PASS_SIDECAR_SHA256": "",
+                "FR13_DRAFT_HEAD_M1_R64_U8_"
+                "INTERNAL_PRODUCTION_ATTESTED": "",
+            }
+        )
+    else:
+        exact.update(
+            {
+                "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "0",
+                "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "1",
+                "FR13_DRAFT_HEAD_M1_R64_U8_"
+                "PRODUCTION_PASS_SIDECAR": (
+                    "/logs/fr13_dfwd_k64_m1_r64_u8.production_credential.json"
+                ),
+                "FR13_DRAFT_HEAD_M1_R64_U8_"
+                "INTERNAL_PRODUCTION_ATTESTED": "1",
+                "FR13_DRAFT_HEAD_M1_R64_U8_"
+                "PRODUCTION_ENGAGEMENT_JSON": (
+                    "/logs/fr13_dfwd_k64_m1_r64_u8.production_engagement.json"
+                ),
+            }
+        )
     drift = {
         key: (payload[key], value)
         for key, value in exact.items()
@@ -32001,10 +32433,18 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
         key
         for key in _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS
         if key.endswith("SHA256")
+        and not key.endswith("PRODUCTION_PASS_SIDECAR_SHA256")
     )
+    production_sha = payload[
+        "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256"
+    ]
     if (
         drift
         or any(re.fullmatch(r"[0-9a-f]{64}", payload[key]) is None for key in sha_keys)
+        or (
+            production_enabled == "1"
+            and re.fullmatch(r"[0-9a-f]{64}", production_sha) is None
+        )
         or re.fullmatch(
             r"[0-9a-f]{40}",
             payload["FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT"],
