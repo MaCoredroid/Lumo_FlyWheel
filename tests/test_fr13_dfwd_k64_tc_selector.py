@@ -169,6 +169,11 @@ def test_runtime_dispatch_is_default_off_direct_and_fail_closed() -> None:
     assert "gemm_m1_tc16x256x64_s2_out" in snippet
     assert "gemm_m4_tc16x256x64_s2_out" in snippet
     assert "self._fr13_dh_pair8_op(" in helper
+    assert '_fr13_dh_pair8_runtime_marker = (' in helper
+    assert '"FR13_DRAFT_HEAD_K64_TC"' in helper
+    assert '"FR13_DRAFT_HEAD_B14_WARP4_PAIR8"' in helper
+    assert 'f"[{_fr13_dh_pair8_runtime_marker}] engaged "' in helper
+    assert 'f"[{_fr13_dh_pair8_marker}] engaged "' not in helper
     assert "quant_method.apply" not in helper
     assert "compute_logits" not in helper
     assert "torch.cuda.synchronize" not in helper

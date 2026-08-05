@@ -27564,6 +27564,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
 
             def _fr13_dh_pair8_logits(_sh, _h):
                 _fr13_dh_pair8_batch = int(batch_size)
+                _fr13_dh_pair8_runtime_marker = (
+                    "FR13_DRAFT_HEAD_K64_TC"
+                    if _fr13_dh_tc
+                    else "FR13_DRAFT_HEAD_B14_WARP4_PAIR8"
+                )
                 if (
                     not getattr(self, "_fr13_dh_pair8_ready", False)
                     or _fr13_dh_pair8_batch not in (1, 4)
@@ -27614,7 +27619,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 if not getattr(self, "_fr13_dh_pair8_engaged", False):
                     self._fr13_dh_pair8_engaged = True
                     print(
-                        f"[{_fr13_dh_pair8_marker}] engaged "
+                        f"[{_fr13_dh_pair8_runtime_marker}] engaged "
                         f"batch={_fr13_dh_pair8_batch} candidate_served=1 "
                         "incumbent_head_calls=0 proposal_only=1 "
                         "target_authority_unchanged=1",
