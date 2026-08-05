@@ -10,6 +10,9 @@ PATCHER = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 LIVE_GATE = REPO / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
 RUNNER = REPO / "scripts" / "fr13_run_b1_draft_head_m1_r32.sh"
+LIVE_RUNNER = (
+    REPO / "scripts" / "fr13_run_b1_draft_head_m1_r32_live_ab.sh"
+)
 EXPECTED_SHA256 = (
     "c389bf5e01b942cfe73b2e4fc05db7b158f16b61205c9f3e9988cbd8a82474dd"
 )
@@ -249,6 +252,40 @@ def test_real_b1_runner_selects_only_r32_and_requires_markers() -> None:
     assert "set FR13_DRAFT_HEAD_M1_R32_SO" in runner
     assert "export FR13_B1_WORKLOAD_PROFILE=k64_root" in runner
     assert "export FR13_GATE_DRAFT_HEAD_M1_R32=1" in runner
+    assert "export FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB=0" in runner
+    assert "export FR13_GATE_TAW_NATIVE=0" in runner
+    assert "export FR13_GATE_DFWD_TOP3=0" in runner
+    assert 'exec bash "$SCRIPT_DIR/fr13_run_b1_kernel_live_gate.sh"' in runner
+
+
+def test_authenticated_live_runner_selects_reference_served_r32_gate() -> None:
+    gate = LIVE_GATE.read_text(encoding="utf-8")
+    runner = LIVE_RUNNER.read_text(encoding="utf-8")
+
+    assert (
+        "FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB="
+        "${FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB:-0}"
+    ) in gate
+    assert "direct and live A/B gates are mutually exclusive" in gate
+    assert (
+        'FR13_DRAFT_HEAD_M1_R32_LIVE_AB="'
+        '$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" \\'
+    ) in gate
+    assert (
+        'FR13_DRAFT_HEAD_M1_R32_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \\'
+    ) in gate
+    assert "logs/fr13_draft_head_m1_r32.live.json" in gate
+    assert "scripts/fr13_draft_head_m1_r32_pass.py issue" in gate
+    assert "scripts/fr13_draft_head_m1_r32_pass.py verify" in gate
+    assert "--chat-traffic-audit" in gate
+    assert "--boundary-snapshot" in gate
+    assert "--expected-source-commit \"$SOURCE_COMMIT\"" in gate
+    assert "fr13_draft_head_m1_r32.qualification.json" in gate
+
+    assert "export FR13_B1_WORKLOAD_PROFILE=k64_root" in runner
+    assert "export FR13_B1_DIAGNOSTIC_TASK_PROFILE=astropy12907" in runner
+    assert "export FR13_GATE_DRAFT_HEAD_M1_R32=0" in runner
+    assert "export FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB=1" in runner
     assert "export FR13_GATE_TAW_NATIVE=0" in runner
     assert "export FR13_GATE_DFWD_TOP3=0" in runner
     assert 'exec bash "$SCRIPT_DIR/fr13_run_b1_kernel_live_gate.sh"' in runner

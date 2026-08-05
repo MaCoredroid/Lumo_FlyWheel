@@ -1,7 +1,7 @@
 # Fixed32 DFWD K64 M1 exact-order R32 checkpoint
 
-Status: **default off, fail closed, source and runtime wiring complete; no new
-GPU execution, byte qualification, timing, or production admission**.
+Status: **default off, fail closed, authenticated qualification gate ready; no
+new GPU execution, byte qualification, timing, or production admission**.
 
 This checkpoint ports the exact-order BF16 K64 B1 drafter-head kernel onto
 pushed `main` base `4dc01e59f1c29e57192ea2e0341c4b18b95a8714` without changing
@@ -16,8 +16,9 @@ single logits, and FULL graphs. The launcher requires the immutable 113,648
 byte shared object with SHA-256
 `c389bf5e01b942cfe73b2e4fc05db7b158f16b61205c9f3e9988cbd8a82474dd`,
 mounts it read only, prepares it before capture, and treats any setup or runtime
-error as fatal. It remains mutually exclusive with all other kernel candidates
-and has no production credential path.
+error as fatal. It remains mutually exclusive with all other kernel candidates.
+The direct candidate has no production credential path; the separate live A/B
+arm can issue only a non-production qualification credential.
 
 ## Why this target
 
@@ -51,19 +52,24 @@ sites, serves only the incumbent reference, device-counts every one of the
 65,536 BF16 values per site, and reads counters only during the final fixed32
 flush. Graph lifecycle checks require one root selection, four captured loop
 heads, zero fallback, and measured replay. The authenticated host credential
-issuer remains the next step, so no byte PASS is claimed by this checkpoint.
+issuer and canonical one-task runner are now complete. Issuance is fail closed
+on the exact `astropy__astropy-12907` SWE-Verified subset, source commit,
+runtime and CUDA source bytes, pinned binary, final flush, final boundary, and
+canonically rebuilt chat-traffic audit. A credential explicitly remains
+non-performance, default-off, and not production-admitted. No byte PASS is
+claimed until this gate runs on the real task.
 
-Focused source/runtime and adjacent-stack tests passed. Python compilation,
-shell syntax, and `git diff --check` passed. The current host Python has PyTorch
-2.4.1 rather than the pinned 2.11.0+cu130 build toolchain, so this checkpoint
-uses the byte-identical historical build instead of starting a competing
-container while the live Gate A preflight is running.
+Focused source/runtime/credential and adjacent-stack tests passed. Python
+compilation, shell syntax, and `git diff --check` passed. The current host
+Python has PyTorch 2.4.1 rather than the pinned 2.11.0+cu130 build toolchain, so
+this checkpoint uses the byte-identical historical build instead of starting a
+competing container while the live Gate A preflight is running.
 
 ## Required qualification
 
-1. Complete and run an authenticated stock-serving real SWE-Verified B1 byte gate
-   for root and all four MTP head sites. Compare all 65,536 BF16 logits bitwise
-   at every site and require zero mismatch.
+1. Run the completed authenticated stock-serving real SWE-Verified B1 byte gate
+   for root and all four MTP head sites. It compares all 65,536 BF16 logits
+   bitwise at every site and requires zero mismatch.
 2. Only after byte PASS, add a separate source-bound production credential and
    compose R32 with mapped K64 top3.
 3. Run the standing exact-four real-task timing with DFWD, SFWD, CFWD, full wall,

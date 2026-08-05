@@ -1,7 +1,8 @@
 {
   "schema": "fr13.fixed32.dfwd_k64_m1_r32_main_source.v1",
   "created_at_utc": "2026-08-05T06:30:13Z",
-  "status": "SOURCE_READY_DEFAULT_OFF",
+  "updated_at_utc": "2026-08-05T07:11:25Z",
+  "status": "AUTHENTICATED_QUALIFICATION_GATE_READY_DEFAULT_OFF",
   "base_main_commit": "4dc01e59f1c29e57192ea2e0341c4b18b95a8714",
   "branch": "codex/dfwd-k64-m1-r32-main-20260805",
   "candidate": {
@@ -67,6 +68,11 @@
     "measured_step_host_sync": false,
     "required_captured_loop_heads": 4,
     "required_fallback_calls": 0,
-    "credential_issuer_complete": false
+    "canonical_live_gate_complete": true,
+    "credential_issuer_complete": true,
+    "exact_swe_verified_task": "astropy__astropy-12907",
+    "authenticated_chat_traffic_required": true,
+    "qualification_run_complete": false,
+    "qualification_credential_available": false
   }
 }
