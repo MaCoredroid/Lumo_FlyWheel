@@ -42,6 +42,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_b4_campaign_driver.sh",
     "scripts/fr13_b1_composed_stack_gate.py",
     "scripts/fr13_cfwd_dfwd_u8_composed_gate.py",
+    "scripts/fr13_cfwd_logit_direct_decision_kernel.py",
     "scripts/fr13_cfwd_logit_direct_gate.py",
     "scripts/fr13_cfwd_logit_direct_packed_runtime_overlay.py",
     "scripts/fr13_bigdenom_swe_serve_variant.sh",

@@ -122,7 +122,9 @@ def test_wrapper_routes_cfwd_timing_to_new_full_stack_runner() -> None:
     assert "fr13_run_b1_u8_cfwd_sfwd_stack_timing.sh" in wrapper
     assert "FR13_RUN_QROW32_NOSPLIT_TIMING" not in wrapper
     assert "fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh" not in wrapper
-    assert "scripts/fr13_run_b1_u8_cfwd_sfwd_stack_timing.sh" in _text(MANIFEST)
+    manifest = _text(MANIFEST)
+    assert "scripts/fr13_run_b1_u8_cfwd_sfwd_stack_timing.sh" in manifest
+    assert "scripts/fr13_cfwd_logit_direct_decision_kernel.py" in manifest
 
 
 def test_launcher_admits_only_the_explicit_exact_u8_full_stack_tuple() -> None:
