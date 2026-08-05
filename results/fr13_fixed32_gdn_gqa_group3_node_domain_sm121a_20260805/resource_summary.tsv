@@ -1,0 +1,5 @@
+profile	variant	registers_per_thread	register_bytes_per_cta	stack_bytes_per_thread	local_bytes_per_thread	encoded_sass_instructions	static_sass_instructions	ldg	stg	ldl	stl	calls	cubin_bytes
+base	baseline_gqa_group3_base	120	122880	0	0	2248	2174	85	54	0	0	0	171800
+committer_stack	baseline_gqa_group3_committer_stack	126	129024	0	0	2352	2280	85	82	0	0	0	179712
+base	candidate_node_domain_base	116	118784	0	0	2128	2052	85	54	0	0	0	166096
+committer_stack	candidate_node_domain_committer_stack	122	124928	0	0	2232	2155	85	82	0	0	0	173144

@@ -1,0 +1,34 @@
+{
+  "baseline_revision": "9091ddae2046f42fc5e754f976c3493a033785ac",
+  "builds_verified": 4,
+  "candidate_revision": "8c85135cb6092f01230d93c55b1c6f3fcf7336f3",
+  "fresh_cache_byte_identity": true,
+  "global_memory_operations_unchanged": true,
+  "gpu_execution": false,
+  "ldl_stl_calls": 0,
+  "performance_promotion": false,
+  "registers_per_thread": {
+    "base": {
+      "baseline": 120,
+      "candidate": 116
+    },
+    "committer_stack": {
+      "baseline": 126,
+      "candidate": 122
+    }
+  },
+  "resource_gate": "PASS",
+  "schema": "fr13.fixed32.gdn_gqa_group3_node_domain.sm121a.verify.v1",
+  "stack_local_bytes_per_thread": 0,
+  "static_sass_instructions": {
+    "base": {
+      "baseline": 2174,
+      "candidate": 2052
+    },
+    "committer_stack": {
+      "baseline": 2280,
+      "candidate": 2155
+    }
+  },
+  "status": "PASS"
+}

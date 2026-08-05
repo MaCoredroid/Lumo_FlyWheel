@@ -1,0 +1,17 @@
+baseline_revision=9091ddae2046f42fc5e754f976c3493a033785ac
+candidate_revision=8c85135cb6092f01230d93c55b1c6f3fcf7336f3
+offline_sm121a_builds=4
+fresh_cache_builds=2
+fresh_cache_byte_identity=PASS
+resource_verifier=PASS
+base_b4=REG120_TO_116 STATIC2174_TO_2052 LDG85 STG54
+committer_stack_b4=REG126_TO_122 STATIC2280_TO_2155 LDG85 STG82 MAXNREG128
+stack_local_bytes_per_thread=0
+ldl_stl_calls=0
+focused_pytest=121 passed, 1 skipped
+python_compile=PASS
+git_diff_check=PASS
+gpu_execution=NOT_RUN
+real_swe_verified_byte_ab=NOT_RUN
+real_four_task_timing=NOT_RUN
+hardware_floor_measurement=NOT_RUN
