@@ -1020,7 +1020,7 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
         tl.store(stage_batch + 2 * C + offs_c, prior_2)
         tl.store(stage_batch + (SOURCE_ROWS - 1) * C + offs_c, 0.0)
     else:
-        GATE_ROWS: tl.constexpr = BLOCK_C // GATE_BLOCK
+        GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK
         pid_n_base = (pid_task - channel_tasks) * GATE_ROWS
         offs_n = pid_n_base + tl.arange(0, GATE_ROWS)[:, None]
         offs_h_1d = tl.arange(0, GATE_BLOCK)

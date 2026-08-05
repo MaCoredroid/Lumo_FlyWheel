@@ -632,7 +632,7 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
     block_c = 128 if batch == 1 else 256
     num_warps = 2 if batch == 1 else 4
     channel_programs = CHANNELS // block_c
-    gate_rows_per_program = block_c // GATE_BLOCK
+    gate_rows_per_program = 2 * block_c // GATE_BLOCK
     gating_programs = ROWS // gate_rows_per_program
     return {
         "candidate": CANDIDATE,
@@ -746,7 +746,7 @@ def fixed32_sfwd_conv_postprep_static_ledger(
     )
     block_c = 128 if batch == 1 else 256
     channel_programs = CHANNELS // block_c
-    gate_rows_per_program = block_c // GATE_BLOCK
+    gate_rows_per_program = 2 * block_c // GATE_BLOCK
     packed_gate_programs = ROWS // gate_rows_per_program
     baseline_programs_per_request = channel_programs + ROWS
     packed_programs_per_request = channel_programs + packed_gate_programs
@@ -1632,7 +1632,7 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
     block_c = int(contract["block_c"])
     num_warps = int(contract["num_warps"])
     channel_tasks = CHANNELS // block_c
-    gate_rows_per_task = block_c // GATE_BLOCK
+    gate_rows_per_task = 2 * block_c // GATE_BLOCK
     gate_tasks = triton.cdiv(ROWS, gate_rows_per_task)
     grid = (int(batch_size), channel_tasks + gate_tasks)
     bias_arg = bias if bias is not None else x
