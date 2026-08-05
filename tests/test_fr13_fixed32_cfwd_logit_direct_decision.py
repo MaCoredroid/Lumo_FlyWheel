@@ -442,6 +442,62 @@ def test_served_integer_walk_reads_physical_slots_without_topology_maps() -> Non
     assert "cand_self_token + self_source" in compare_source
     assert "cand_source + physical_target_offset" in compare_source
 
+    assert (
+        "_fr13_fixed32_taw_physical_slot_commit_kernel"
+        in source[
+            source.index("_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (") :
+            source.index("_FR13_FIXED32_TAW_GEOMETRY = {")
+        ]
+    )
+
+
+@pytest.mark.parametrize("mode", sorted(kernel.FIXED32_MODES))
+def test_physical_walk_masks_unwritten_leaf_slots_and_child_address(
+    mode: str,
+) -> None:
+    poison = -(2**63)
+    self_token = [poison] * kernel.PHYSICAL_DRAFTS
+    target_source = [poison] * kernel.PHYSICAL_ROWS
+    for node in kernel.SELF_SOURCE_NODES:
+        self_token[node] = 10_000 + node
+    for parent_slot in kernel.TARGET_PARENT_SLOTS:
+        target_source[parent_slot] = 0
+    # Force root -> node 0 -> leaf node 4. Physical target slot 5 is not a
+    # producer row and remains poisoned; only the leaf self slot may be read.
+    target_source[0] = 0
+    target_source[1] = 1
+    current = -1
+    for _level in range(kernel.WALK_CAP):
+        parent_slot = current + 1
+        children = kernel.MODE_CHILDREN[mode].get(parent_slot, ())
+        has_kids = bool(children)
+        if not has_kids:
+            assert current == 4
+            assert self_token[current] == 10_004
+            assert target_source[parent_slot] == poison
+            break
+        selected_source = target_source[parent_slot]
+        assert 0 <= selected_source < len(children)
+        current = children[selected_source]
+    else:
+        pytest.fail("poison leaf path did not terminate")
+
+    source = SERVED_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    physical_kernel = next(
+        ast.get_source_segment(source, node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_taw_physical_slot_commit_kernel"
+    )
+    assert "mask=leaf & current_valid" in physical_kernel
+    assert "mask=leaf & (~current_valid)" in physical_kernel
+    assert physical_kernel.count("mask=has_kids") == 4
+    assert physical_kernel.count("mask=is_accepted") == 3
+    assert "tl.minimum(selected_source, FANOUT - 1)" in physical_kernel
+    assert "+ safe_source" in physical_kernel
+    assert "other=-1" in physical_kernel
+
 
 def test_candidate_is_default_off_and_wired_only_through_shadow_wrapper() -> None:
     served_source = SERVED_PATH.read_text(encoding="utf-8")
