@@ -1,0 +1,7 @@
+focused_cpu_tests: PASS (73 passed in 1.63s)
+python_compile: PASS
+cold_cache_codegen_identity: PASS
+b1_static_resource_gate: PASS
+b4_static_resource_gate: PASS
+gpu_execution: false
+runtime_speed_claim: false
