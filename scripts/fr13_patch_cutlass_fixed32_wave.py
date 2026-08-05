@@ -78,6 +78,8 @@ struct fr13_fixed32_b1_n5120_single_tile_scheduler {};
 struct fr13_fixed32_b1_onen_fullgrid_static_scheduler {};
 struct fr13_fixed32_b1_wide256_direct_fullgrid_scheduler {};
 struct fr13_fixed32_b4_twom_static_scheduler {};
+template <uint32_t ProblemTiles, uint32_t GridCtas>
+struct fr13_fixed32_b4_twom_exact_scheduler {};
 struct fr13_fixed32_b4_n5120_single_tile_scheduler {};
 struct fr13_fixed32_wide256_recompute_scheduler {};
 }  // namespace vllm
@@ -449,6 +451,90 @@ class Fr13B4TwoMStaticTileScheduler100
       WorkTileInfo&, uint32_t advance_count = 1) const {
     return current_work_linear_idx_ +
         total_grid_size() * advance_count >= problem_tiles();
+  }
+
+  CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {
+    advance_to_next_work();
+    return cute::make_tuple(get_current_work(), true);
+  }
+
+  template <class TileSchedulerPipeline, class TileSchedulerPipelineState>
+  CUTLASS_DEVICE auto fetch_next_work(
+      WorkTileInfo work_tile_info, TileSchedulerPipeline&,
+      TileSchedulerPipelineState) {
+    return fetch_next_work(work_tile_info);
+  }
+};
+
+// The three non-N5120 B4 projections have source-bound complete-tile counts
+// and divisor grids: 544/34, 256/32, and 224/32. Specialize both values so the
+// device scheduler does not read blocks_per_problem_ or gridDim in its hot
+// persistent loop. Each CTA retains the incumbent linear tile order.
+template <uint32_t ProblemTiles, uint32_t GridCtas>
+class Fr13B4TwoMExactStaticTileScheduler100
+    : public Fr13DivisorBalancedStaticTileScheduler100 {
+  using Base = Fr13DivisorBalancedStaticTileScheduler100;
+  static_assert(ProblemTiles % GridCtas == 0);
+  static_assert(GridCtas % 2 == 0);
+  static constexpr uint32_t kProblemNTiles = ProblemTiles / 2;
+  static constexpr uint32_t kNGridStride = GridCtas / 2;
+
+  uint32_t current_n_idx_ = 0;
+
+  CUTLASS_DEVICE void initialize_n_work() {
+#if defined(__CUDA_ARCH__)
+    current_n_idx_ = blockIdx.x >> 1;
+#endif
+  }
+
+ public:
+  using Params = typename Base::Params;
+  using Arguments = typename Base::Arguments;
+  using WorkTileInfo = typename Base::WorkTileInfo;
+  using CLCResponse = typename Base::CLCResponse;
+
+  CUTLASS_DEVICE explicit Fr13B4TwoMExactStaticTileScheduler100(
+      Params const& params) : Base(params) {
+    initialize_n_work();
+  }
+
+  CUTLASS_DEVICE explicit Fr13B4TwoMExactStaticTileScheduler100(
+      CLCResponse* response, Params const& params, dim3 block_id_in_cluster)
+      : Base(response, params, block_id_in_cluster) {
+    initialize_n_work();
+  }
+
+  template <class ProblemShapeMNKL, class BlockShape, class ClusterShape>
+  CUTLASS_HOST_DEVICE static dim3 get_grid_shape(
+      Params const&, ProblemShapeMNKL, BlockShape, ClusterShape,
+      KernelHardwareInfo, Arguments = Arguments{}, bool = true) {
+    return dim3(GridCtas, 1, 1);
+  }
+
+  template <class ClusterShape>
+  CUTLASS_DEVICE WorkTileInfo initial_work_tile_info(ClusterShape) const {
+    return get_current_work();
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work() const {
+#if defined(__CUDA_ARCH__)
+    if (current_n_idx_ >= kProblemNTiles) {
+      return WorkTileInfo::invalid_work_tile();
+    }
+    return {static_cast<int32_t>(blockIdx.x & 1),
+            static_cast<int32_t>(current_n_idx_), 0, true};
+#else
+    return WorkTileInfo::invalid_work_tile();
+#endif
+  }
+
+  CUTLASS_DEVICE void advance_to_next_work(uint32_t advance_count = 1) {
+    current_n_idx_ += kNGridStride * advance_count;
+  }
+
+  CUTLASS_DEVICE bool is_last_tile(
+      WorkTileInfo&, uint32_t advance_count = 1) const {
+    return current_n_idx_ + kNGridStride * advance_count >= kProblemNTiles;
   }
 
   CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {
@@ -838,6 +924,15 @@ struct TileSchedulerSelector<
     vllm::fr13_fixed32_b4_twom_static_scheduler, arch::Sm120,
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
   using Scheduler = Fr13B4TwoMStaticTileScheduler100;
+};
+
+template <uint32_t ProblemTiles, uint32_t GridCtas, class TileShape,
+          class ClusterShape, uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
+    vllm::fr13_fixed32_b4_twom_exact_scheduler<ProblemTiles, GridCtas>,
+    arch::Sm120, TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  using Scheduler = Fr13B4TwoMExactStaticTileScheduler100<
+      ProblemTiles, GridCtas>;
 };
 
 template <class TileShape, class ClusterShape,
@@ -1419,6 +1514,21 @@ struct sm120_blockwise_fp8_config_b4_stockshape_identity_twom {
       OutType, 1, 128, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, false,
       fr13_fixed32_b4_twom_static_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
+template <typename OutType, uint32_t ProblemTiles, uint32_t GridCtas>
+struct sm120_blockwise_fp8_config_b4_stockshape_identity_twom_exact {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_64, _128, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 1, 128, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, false,
+      fr13_fixed32_b4_twom_exact_scheduler<ProblemTiles, GridCtas>,
       cutlass::gemm::collective::StageCount<2>>;
 };
 
@@ -2092,6 +2202,27 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       using Gemm = typename
           sm120_blockwise_fp8_config_b4_m128_n5120_single_identity_stage2<
               OutType>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    if (N == 34816 && K == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b4_stockshape_identity_twom_exact<
+              OutType, 544, 34>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    if (N == 16384 && K == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b4_stockshape_identity_twom_exact<
+              OutType, 256, 32>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    if (N == 14336 && K == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b4_stockshape_identity_twom_exact<
+              OutType, 224, 32>::Gemm;
       return cutlass_gemm_caller_blockwise<Gemm>(
           destination, a, b, a_scales, b_scales);
     }
