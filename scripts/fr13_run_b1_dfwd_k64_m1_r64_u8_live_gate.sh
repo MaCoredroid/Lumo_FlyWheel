@@ -92,7 +92,7 @@ if [[ "$COMPOSE_CFWD" == "1" ]]; then
   }
   .venv/bin/python - <<'PY'
 from scripts import fr13_cfwd_logit_direct_gate as gate
-from scripts import fr13_device_multidraft_kernel as device
+from scripts import fr13_device_multidraft_cfwd_packed_v3 as device
 
 contract = device._fr13_cfwd_logit_direct_integration_source_contract()
 if (
@@ -149,8 +149,10 @@ export FR13_CFWD_LOGIT_DIRECT_BYTE_AB="$COMPOSE_CFWD"
 export FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0
 export FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON=
 export FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256=
+export FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py
 if [[ "$COMPOSE_CFWD" == "1" ]]; then
   export FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON="$TAW_PASS_JSON"
+  export FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py
 fi
 export FR13_DFWD_UNIFIED_BM8_LIVE_AB=0
 export FR13_DFWD_UNIFIED_BM8_PRODUCTION=0

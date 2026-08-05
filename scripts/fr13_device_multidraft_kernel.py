@@ -331,9 +331,14 @@ if triton is not None:
 
 
     @triton.jit
-    def _fr13_fixed32_taw_packed_physical_slot_commit_kernel(
+    def _fr13_fixed32_taw_physical_slot_commit_kernel(
+        child_table,
+        child_counts,
         self_token,
-        event,
+        source,
+        selected_token,
+        rejected_token,
+        accepted,
         bonus_token,
         output_tokens,
         output_lens,
@@ -342,11 +347,12 @@ if triton is not None:
         last_row,
         PHYSICAL_DRAFTS: tl.constexpr,
         PHYSICAL_ROWS: tl.constexpr,
+        FANOUT: tl.constexpr,
         WALK_CAP: tl.constexpr,
         OUTPUT_CAPACITY: tl.constexpr,
         PATH_CAPACITY: tl.constexpr,
     ):
-        """Walk fixed physical slots from packed emitted-token events."""
+        """Walk decisions that the producer scattered into physical slots."""
         request = tl.program_id(0)
         output_columns = tl.arange(0, OUTPUT_CAPACITY)
         path_columns = tl.arange(0, PATH_CAPACITY)
@@ -369,11 +375,11 @@ if triton is not None:
                 0,
                 tl.minimum(current + 1, PHYSICAL_ROWS - 1),
             )
-            packed_event = tl.load(
-                event + request * PHYSICAL_ROWS + parent_slot
+            child_count = tl.load(
+                child_counts + request * PHYSICAL_ROWS + parent_slot
             ).to(tl.int64)
-            has_kids = alive & ((packed_event & 0x800000) != 0)
-            leaf = alive & ((packed_event & 0x800000) == 0)
+            has_kids = alive & (child_count > 0)
+            leaf = alive & (child_count == 0)
             current_valid = (current >= 0) & (current < PHYSICAL_DRAFTS)
 
             safe_current = tl.maximum(
@@ -391,7 +397,19 @@ if triton is not None:
                 mask=leaf,
             )
 
-            emitted_token = packed_event & 0x3FFFF
+            decision_offset = request * PHYSICAL_ROWS + parent_slot
+            is_accepted = has_kids & (tl.load(accepted + decision_offset) != 0)
+            sampled_selected = tl.load(
+                selected_token + decision_offset
+            ).to(tl.int64)
+            sampled_rejected = tl.load(
+                rejected_token + decision_offset
+            ).to(tl.int64)
+            emitted_token = tl.where(
+                is_accepted,
+                sampled_selected,
+                sampled_rejected,
+            )
             tl.store(
                 output_tokens + request * OUTPUT_CAPACITY + output_len,
                 emitted_token,
@@ -399,9 +417,14 @@ if triton is not None:
             )
             output_len += leaf.to(tl.int64) + has_kids.to(tl.int64)
 
-            accepted_row = (packed_event >> 18) & 0x1F
-            is_accepted = has_kids & (accepted_row != 0)
-            accepted_node = accepted_row - 1
+            selected_source = tl.load(source + decision_offset).to(tl.int64)
+            accepted_node = tl.load(
+                child_table
+                + request * PHYSICAL_ROWS * FANOUT
+                + parent_slot * FANOUT
+                + selected_source
+            ).to(tl.int64)
+            accepted_row = accepted_node + 1
             tl.store(
                 accepted_path_rows + request * PATH_CAPACITY + path_len,
                 accepted_row,
@@ -425,15 +448,16 @@ if triton is not None:
         walk_mismatches,
         self_source_indices,
         target_parent_slots,
-        child_table,
-        child_counts,
         ref_self_token,
         cand_self_token,
         ref_source,
+        cand_source,
         ref_selected_token,
+        cand_selected_token,
         ref_rejected_token,
+        cand_rejected_token,
         ref_accepted,
-        cand_event,
+        cand_accepted,
         ref_output_tokens,
         cand_output_tokens,
         ref_output_lens,
@@ -475,59 +499,6 @@ if triton is not None:
             other=0,
         ).to(tl.int64)
         physical_target_offset = target_request * PHYSICAL_ROWS + target_parent
-        reference_source = tl.load(
-            ref_source + offsets,
-            mask=target_mask,
-            other=0,
-        ).to(tl.int64)
-        reference_selected = tl.load(
-            ref_selected_token + offsets,
-            mask=target_mask,
-            other=0,
-        ).to(tl.int64)
-        reference_rejected = tl.load(
-            ref_rejected_token + offsets,
-            mask=target_mask,
-            other=0,
-        ).to(tl.int64)
-        reference_accepted = tl.load(
-            ref_accepted + offsets,
-            mask=target_mask,
-            other=0,
-        ) != 0
-        reference_child_count = tl.load(
-            child_counts + physical_target_offset,
-            mask=target_mask,
-            other=0,
-        ).to(tl.int64)
-        reference_accepted_node = tl.load(
-            child_table
-            + target_request * PHYSICAL_ROWS * 3
-            + target_parent * 3
-            + reference_source,
-            mask=target_mask & reference_accepted,
-            other=-1,
-        ).to(tl.int64)
-        reference_emitted = tl.where(
-            reference_accepted,
-            reference_selected,
-            reference_rejected,
-        )
-        reference_accepted_row = tl.where(
-            reference_accepted,
-            reference_accepted_node + 1,
-            0,
-        )
-        reference_event = tl.where(
-            reference_child_count > 0,
-            reference_emitted | (reference_accepted_row << 18) | 0x800000,
-            0,
-        )
-        candidate_event = tl.load(
-            cand_event + physical_target_offset,
-            mask=target_mask,
-            other=0,
-        ).to(tl.int64)
 
         self_bad = tl.sum(
             tl.where(
@@ -542,10 +513,15 @@ if triton is not None:
             ),
             axis=0,
         )
-        event_bad = tl.sum(
+        source_bad = tl.sum(
             tl.where(
                 target_mask,
-                reference_event != candidate_event,
+                tl.load(ref_source + offsets, mask=target_mask, other=0)
+                != tl.load(
+                    cand_source + physical_target_offset,
+                    mask=target_mask,
+                    other=0,
+                ),
                 0,
             ),
             axis=0,
@@ -553,7 +529,12 @@ if triton is not None:
         selected_bad = tl.sum(
             tl.where(
                 target_mask,
-                (reference_event & 0x3FFFF) != (candidate_event & 0x3FFFF),
+                tl.load(ref_selected_token + offsets, mask=target_mask, other=0)
+                != tl.load(
+                    cand_selected_token + physical_target_offset,
+                    mask=target_mask,
+                    other=0,
+                ),
                 0,
             ),
             axis=0,
@@ -561,7 +542,12 @@ if triton is not None:
         rejected_bad = tl.sum(
             tl.where(
                 target_mask,
-                (reference_event & 0x800000) != (candidate_event & 0x800000),
+                tl.load(ref_rejected_token + offsets, mask=target_mask, other=0)
+                != tl.load(
+                    cand_rejected_token + physical_target_offset,
+                    mask=target_mask,
+                    other=0,
+                ),
                 0,
             ),
             axis=0,
@@ -569,8 +555,12 @@ if triton is not None:
         accepted_bad = tl.sum(
             tl.where(
                 target_mask,
-                ((reference_event >> 18) & 0x1F)
-                != ((candidate_event >> 18) & 0x1F),
+                tl.load(ref_accepted + offsets, mask=target_mask, other=0)
+                != tl.load(
+                    cand_accepted + physical_target_offset,
+                    mask=target_mask,
+                    other=0,
+                ),
                 0,
             ),
             axis=0,
@@ -624,7 +614,7 @@ if triton is not None:
         first = offsets == 0
         event_delta = tl.where(first, enabled.to(tl.int64), 0)
         self_delta = tl.where(first, self_bad.to(tl.int64), 0)
-        source_delta = tl.where(first, event_bad.to(tl.int64), 0)
+        source_delta = tl.where(first, source_bad.to(tl.int64), 0)
         selected_delta = tl.where(first, selected_bad.to(tl.int64), 0)
         rejected_delta = tl.where(first, rejected_bad.to(tl.int64), 0)
         accepted_delta = tl.where(first, accepted_bad.to(tl.int64), 0)
@@ -1541,20 +1531,16 @@ _FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
 _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
 )
-_FR13_CFWD_LOGIT_DIRECT_CANDIDATE = (
-    "fixed32_cfwd_logit_direct_packed_physical_slots_v3"
-)
-_FR13_CFWD_LOGIT_DIRECT_SCHEMA = (
-    "fr13.fixed32.cfwd_logit_direct_packed_physical_slots.v3"
-)
+_FR13_CFWD_LOGIT_DIRECT_CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
+_FR13_CFWD_LOGIT_DIRECT_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
 _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256 = (
-    "5a9107306bdc37200448a6a5add2b84dfd839dc377b11009f218662c63abcc1c"
+    "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192"
 )
 _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA = (
-    "fr13.fixed32.cfwd_logit_direct.integration_source.v2"
+    "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
 )
 _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256 = (
-    "a82ce3f5e526792ca45bb444212e5440e8444778f174fd0650accc4bb5f8558c"
+    "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
 )
 _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_FUNCTIONS = (
     "_fr13_cfwd_logit_direct_requested",
@@ -1578,7 +1564,7 @@ _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_FUNCTIONS = (
     "fr13_fixed32_cfwd_logit_direct_live_finalize",
 )
 _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_KERNEL_SOURCE_FUNCTIONS = (
-    "_fr13_fixed32_taw_packed_physical_slot_commit_kernel",
+    "_fr13_fixed32_taw_physical_slot_commit_kernel",
     "_fr13_cfwd_logit_direct_compare_kernel",
 )
 _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE: dict[str, str] | None = None
@@ -5744,8 +5730,6 @@ def _fr13_cfwd_logit_direct_state(
         "walk_entry": _fr13_cfwd_logit_direct_walk_entry(entry),
         "self_source_indices": entry["native_self_source_indices"],
         "target_parent_slots": entry["all_parent_target_parent_slots"],
-        "child_table": entry["child_table"],
-        "child_counts": entry["child_counts"],
         "count_enable": torch.zeros((1,), dtype=torch.int32, device=device),
         "compared_events": torch.zeros((1,), dtype=torch.int64, device=device),
         "decision_mismatches": torch.zeros(
@@ -5824,6 +5808,9 @@ def _fr13_cfwd_logit_direct_walk_cuda(
     expected = (
         (decisions[0], (batch, physical_drafts), torch.long),
         (decisions[1], (batch, physical_rows), torch.long),
+        (decisions[2], (batch, physical_rows), torch.long),
+        (decisions[3], (batch, physical_rows), torch.long),
+        (decisions[4], (batch, physical_rows), torch.bool),
     )
     if any(
         not isinstance(value, torch.Tensor)
@@ -5834,7 +5821,9 @@ def _fr13_cfwd_logit_direct_walk_cuda(
         for value, shape, dtype in expected
     ):
         raise RuntimeError("FR13 CFWD logit-direct decision layout drift")
-    _fr13_fixed32_taw_packed_physical_slot_commit_kernel[(batch,)](
+    _fr13_fixed32_taw_physical_slot_commit_kernel[(batch,)](
+        entry["child_table"],
+        entry["child_counts"],
         *decisions,
         bonus_flat,
         entry["output_tokens"],
@@ -5844,6 +5833,7 @@ def _fr13_cfwd_logit_direct_walk_cuda(
         entry["last_row"],
         PHYSICAL_DRAFTS=physical_drafts,
         PHYSICAL_ROWS=physical_rows,
+        FANOUT=int(topology.SAMPLER_MAX_FANOUT),
         WALK_CAP=int(topology.WALK_CAP),
         OUTPUT_CAPACITY=int(topology.OUTPUT_PUBLISH_CAPACITY),
         PATH_CAPACITY=int(topology.ACCEPTED_PATH_CAPACITY),
@@ -5861,7 +5851,7 @@ def _fr13_cfwd_logit_direct_walk_cuda(
 def _fr13_cfwd_logit_direct_compare(
     state: dict[str, Any],
     reference_decisions: tuple[Any, Any, Any, Any, Any],
-    candidate_decisions: tuple[Any, Any],
+    candidate_decisions: tuple[Any, Any, Any, Any, Any],
     reference_walk: tuple[Any, Any, Any, Any, Any],
     candidate_walk: tuple[Any, Any, Any, Any, Any],
 ) -> None:
@@ -5875,15 +5865,16 @@ def _fr13_cfwd_logit_direct_compare(
         state["walk_mismatches"],
         state["self_source_indices"],
         state["target_parent_slots"],
-        state["child_table"],
-        state["child_counts"],
         reference_decisions[0],
         candidate_decisions[0],
         reference_decisions[1],
-        reference_decisions[2],
-        reference_decisions[3],
-        reference_decisions[4],
         candidate_decisions[1],
+        reference_decisions[2],
+        candidate_decisions[2],
+        reference_decisions[3],
+        candidate_decisions[3],
+        reference_decisions[4],
+        candidate_decisions[4],
         reference_walk[0],
         candidate_walk[0],
         reference_walk[1],
@@ -6356,15 +6347,8 @@ def fr13_fixed32_cfwd_logit_direct_warm_execute(
         walk = _fr13_cfwd_logit_direct_walk_cuda(
             topology, state["walk_entry"], bonus, decisions
         )
-        reference_warm = (
-            torch.zeros((batch, 13), dtype=torch.long, device=normalized_device),
-            torch.zeros((batch, 17), dtype=torch.long, device=normalized_device),
-            torch.zeros((batch, 17), dtype=torch.long, device=normalized_device),
-            torch.zeros((batch, 17), dtype=torch.long, device=normalized_device),
-            torch.zeros((batch, 17), dtype=torch.bool, device=normalized_device),
-        )
         _fr13_cfwd_logit_direct_compare(
-            state, reference_warm, decisions, walk, walk
+            state, decisions, decisions, walk, walk
         )
     return {
         "ready": True,

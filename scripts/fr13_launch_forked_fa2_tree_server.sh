@@ -733,6 +733,7 @@ if [[ "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" == "1" ]]; then
      && "${ENFORCE_EAGER:-0}" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" \
+     && "${FR13_DEVICE_MULTIDRAFT_KERNEL:-}" == "/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py" \
      && "$(sha256sum scripts/fr13_cfwd_logit_direct_decision_kernel.py | awk '{print $1}')" \
         == "$FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256" ]] || {
     echo "FR13 CFWD logit-direct A/B requires the canonical real SWE Hydra27 B1 FULL graph and native all-parent production" >&2
@@ -747,6 +748,7 @@ if [[ "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" == "1" ]]; then
      && "${ENFORCE_EAGER:-0}" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" \
+     && "${FR13_DEVICE_MULTIDRAFT_KERNEL:-}" == "/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py" \
      && -f "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON" \
      && ! -L "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON" \
      && "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256" =~ ^[0-9a-f]{64}$ \

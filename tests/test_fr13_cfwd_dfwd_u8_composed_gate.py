@@ -29,6 +29,7 @@ def test_runner_admits_only_default_off_full_graph_cfwd_u8_composition() -> None
     assert "FR13_GATE_COMPOSE_CFWD_U8:-0" in source
     assert 'FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION="$COMPOSE_CFWD"' in source
     assert 'FR13_CFWD_LOGIT_DIRECT_BYTE_AB="$COMPOSE_CFWD"' in source
+    assert "fr13_device_multidraft_cfwd_packed_v3.py" in source
     assert "scripts/fr13_taw_b1_credential.py validate-production" in source
     assert "scripts/fr13_run_b1_kernel_live_gate.sh" in source
     assert "scripts/fr13_cfwd_logit_direct_gate.py issue" in source

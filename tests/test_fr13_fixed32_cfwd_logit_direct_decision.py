@@ -10,7 +10,10 @@ import torch
 
 
 KERNEL_PATH = Path("scripts/fr13_cfwd_logit_direct_decision_kernel.py")
-SERVED_PATH = Path("scripts/fr13_device_multidraft_kernel.py")
+SERVED_PATH = Path("scripts/fr13_device_multidraft_cfwd_packed_v3.py")
+BASE_PATH = Path("scripts/fr13_device_multidraft_kernel.py")
+OVERLAY_PATH = Path("scripts/fr13_cfwd_logit_direct_packed_runtime_overlay.py")
+GENERATOR_PATH = Path("scripts/fr13_generate_cfwd_packed_runtime_overlay.py")
 SPEC = importlib.util.spec_from_file_location(
     "fr13_cfwd_logit_direct_decision_kernel_test",
     KERNEL_PATH,
@@ -613,7 +616,7 @@ def test_kernel_uses_scan_terminal_masses_and_sticky_domain_guards() -> None:
 
 
 def test_served_integer_walk_reads_physical_slots_without_topology_maps() -> None:
-    source = SERVED_PATH.read_text(encoding="utf-8")
+    source = OVERLAY_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
     definitions = {
         node.name: ast.get_source_segment(source, node)
@@ -639,23 +642,15 @@ def test_served_integer_walk_reads_physical_slots_without_topology_maps() -> Non
     assert "cand_self_token + self_source" in compare_source
     assert "cand_event + physical_target_offset" in compare_source
 
-    taw_kernel_contract = source[
-        source.index("_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (") :
-        source.index("_FR13_FIXED32_TAW_GEOMETRY = {")
-    ]
-    integration_kernel_contract = source[
-        source.index(
-            "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_KERNEL_SOURCE_FUNCTIONS = ("
-        ) : source.index(
-            "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE"
-        )
+    base_source = BASE_PATH.read_text(encoding="utf-8")
+    taw_kernel_contract = base_source[
+        base_source.index("_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (") :
+        base_source.index("_FR13_FIXED32_TAW_GEOMETRY = {")
     ]
     assert "_fr13_fixed32_taw_packed_physical_slot_commit_kernel" not in (
         taw_kernel_contract
     )
-    assert "_fr13_fixed32_taw_packed_physical_slot_commit_kernel" in (
-        integration_kernel_contract
-    )
+    assert "_fr13_fixed32_taw_packed_physical_slot_commit_kernel" in source
 
 
 def test_cfwd_integration_source_contract_is_separate_and_fail_closed(
@@ -668,6 +663,7 @@ def test_cfwd_integration_source_contract_is_separate_and_fail_closed(
     assert spec is not None and spec.loader is not None
     device = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(device)
+    device = device._base
     contract = device._fr13_cfwd_logit_direct_integration_source_contract()
     assert contract == {
         "integration_source_schema": (
@@ -704,7 +700,7 @@ def test_cfwd_integration_source_contract_is_separate_and_fail_closed(
         "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256",
         "0" * 64,
     )
-    with pytest.raises(RuntimeError, match="integration source digest drift"):
+    with pytest.raises(RuntimeError, match="composed integration source identity drifted"):
         device._fr13_cfwd_logit_direct_integration_source_contract()
 
 
@@ -716,6 +712,7 @@ def test_packed_cfwd_keeps_taw_b1_b4_source_identity_exact() -> None:
     assert spec is not None and spec.loader is not None
     device = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(device)
+    device = device._base
     topology = device._fr13_fixed32_topology()
     for batch_size in (1, 4):
         contract = device._fr13_fixed32_taw_source_contract(
@@ -764,7 +761,7 @@ def test_physical_walk_preseeds_unwritten_leaf_slots_and_child_address(
     else:
         pytest.fail("zero-seeded leaf path did not terminate")
 
-    source = SERVED_PATH.read_text(encoding="utf-8")
+    source = OVERLAY_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
     physical_kernel = next(
         ast.get_source_segment(source, node)
@@ -781,7 +778,10 @@ def test_physical_walk_preseeds_unwritten_leaf_slots_and_child_address(
 
 
 def test_candidate_is_default_off_and_wired_only_through_shadow_wrapper() -> None:
-    served_source = SERVED_PATH.read_text(encoding="utf-8")
+    served_source = (
+        BASE_PATH.read_text(encoding="utf-8")
+        + OVERLAY_PATH.read_text(encoding="utf-8")
+    )
     assert kernel.CANDIDATE in served_source
     assert KERNEL_PATH.name in served_source
     assert 'os.environ.get("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "0")' in served_source
@@ -789,3 +789,22 @@ def test_candidate_is_default_off_and_wired_only_through_shadow_wrapper() -> Non
     assert kernel.fixed32_cfwd_logit_direct_contract(
         1, mode="tail6_fixed32"
     )["candidate_default_off"] is True
+
+
+def test_cfwd_overlay_preserves_credential_bound_device_bytes() -> None:
+    import hashlib
+
+    assert hashlib.sha256(BASE_PATH.read_bytes()).hexdigest() == (
+        "088454e0605c5d41aee7b385c6d0ff66e6a7ddb999a9697258762d0aac9fe166"
+    )
+
+
+def test_cfwd_overlay_is_reproducible_from_reviewed_candidate() -> None:
+    spec = importlib.util.spec_from_file_location(
+        "fr13_generate_cfwd_packed_runtime_overlay_test",
+        GENERATOR_PATH,
+    )
+    assert spec is not None and spec.loader is not None
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    assert generator.generate() == OVERLAY_PATH.read_text(encoding="ascii")
