@@ -76,6 +76,7 @@ struct fr13_fixed32_b1_onen_static_scheduler {};
 struct fr13_fixed32_mtp_m1m4_direct_scheduler {};
 struct fr13_fixed32_b1_n5120_single_tile_scheduler {};
 struct fr13_fixed32_b1_onen_fullgrid_static_scheduler {};
+struct fr13_fixed32_b1_wide256_direct_fullgrid_scheduler {};
 struct fr13_fixed32_b4_twom_static_scheduler {};
 struct fr13_fixed32_b4_n5120_single_tile_scheduler {};
 struct fr13_fixed32_wide256_recompute_scheduler {};
@@ -682,17 +683,106 @@ class Fr13B1N5120SingleTileScheduler100
   }
 };
 
-// The three wider B1 projections have enough complete output tiles to keep all
-// 48 SMs resident. Keep CUTLASS's complete static-persistent device contract as
-// well as its full host grid: the SM120 ping-pong kernel advances scheduler
-// state directly and therefore requires the base cursor and grid size to be
-// initialized. N=5120 remains on the separate exact 40-CTA specialization.
+// The M128 full-grid candidate uses the SM120 ping-pong kernel, which advances
+// scheduler state directly. Preserve CUTLASS's complete initialized contract.
 class Fr13B1OneNFullGridStaticTileScheduler100
     : public StaticPersistentTileScheduler100 {
   using Base = StaticPersistentTileScheduler100;
 
  public:
   using Base::Base;
+};
+
+// The wide256 B1 target has one scheduler-N tile, one batch plane, cluster
+// (1,1,1), and enough complete output tiles for a full 48-CTA grid. Preserve
+// the cooperative kernel's complete cursor/advance/termination contract while
+// mapping the bounded linear cursor directly to {M, 0, 0}.
+class Fr13B1Wide256DirectFullGridStaticTileScheduler100
+    : public StaticPersistentTileScheduler100 {
+  using Base = StaticPersistentTileScheduler100;
+
+ public:
+  using Params = typename Base::Params;
+  using WorkTileInfo = typename Base::WorkTileInfo;
+  using CLCResponse = typename Base::CLCResponse;
+
+ private:
+  uint32_t current_work_linear_idx_ = 0;
+  uint32_t problem_tiles_ = 0;
+  uint32_t grid_stride_ = 0;
+
+  CUTLASS_DEVICE void initialize_direct_state(Params const& params) {
+    current_work_linear_idx_ = static_cast<uint32_t>(blockIdx.x) *
+        static_cast<uint32_t>(gridDim.y) +
+        static_cast<uint32_t>(blockIdx.y);
+    problem_tiles_ = static_cast<uint32_t>(params.blocks_per_problem_);
+    grid_stride_ = static_cast<uint32_t>(gridDim.x) *
+        static_cast<uint32_t>(gridDim.y) *
+        static_cast<uint32_t>(gridDim.z);
+  }
+
+ public:
+  CUTLASS_DEVICE explicit Fr13B1Wide256DirectFullGridStaticTileScheduler100(
+      Params const& params) : Base(params) {
+    initialize_direct_state(params);
+  }
+
+  CUTLASS_DEVICE explicit Fr13B1Wide256DirectFullGridStaticTileScheduler100(
+      CLCResponse* response, Params const& params, dim3 block_id_in_cluster)
+      : Base(response, params, block_id_in_cluster) {
+    initialize_direct_state(params);
+  }
+
+  template <class ClusterShape>
+  CUTLASS_DEVICE WorkTileInfo initial_work_tile_info(ClusterShape) const {
+    return get_current_work();
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work() const {
+    return get_current_work_for_linear_idx(current_work_linear_idx_);
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work_for_linear_idx(
+      uint32_t linear_idx) const {
+    if (linear_idx >= problem_tiles_) {
+      return WorkTileInfo::invalid_work_tile();
+    }
+    return {static_cast<int32_t>(linear_idx), 0, 0, true};
+  }
+
+  CUTLASS_DEVICE void advance_to_next_work(uint32_t advance_count = 1) {
+    current_work_linear_idx_ += grid_stride_ * advance_count;
+  }
+
+  CUTLASS_DEVICE bool is_last_tile(
+      WorkTileInfo&, uint32_t advance_count = 1) const {
+    return current_work_linear_idx_ + grid_stride_ * advance_count >=
+        problem_tiles_;
+  }
+
+  CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {
+    advance_to_next_work();
+    return cute::make_tuple(get_current_work(), true);
+  }
+
+  template <class TileSchedulerPipeline, class TileSchedulerPipelineState>
+  CUTLASS_DEVICE auto fetch_next_work(
+      WorkTileInfo work_tile_info, TileSchedulerPipeline&,
+      TileSchedulerPipelineState) {
+    return fetch_next_work(work_tile_info);
+  }
+
+  CUTLASS_DEVICE static auto work_tile_to_cta_coord(
+      WorkTileInfo work_tile_info) {
+    return cute::make_coord(
+        work_tile_info.M_idx, cute::Int<0>{},
+        cute::Underscore{}, cute::Int<0>{});
+  }
+
+  CUTLASS_DEVICE static auto work_tile_to_cta_coord(
+      WorkTileInfo work_tile_info, dim3) {
+    return work_tile_to_cta_coord(work_tile_info);
+  }
 };
 
 template <class TileShape, class ClusterShape,
@@ -737,6 +827,14 @@ struct TileSchedulerSelector<
     vllm::fr13_fixed32_b1_onen_fullgrid_static_scheduler, arch::Sm120,
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
   using Scheduler = Fr13B1OneNFullGridStaticTileScheduler100;
+};
+
+template <class TileShape, class ClusterShape,
+          uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
+    vllm::fr13_fixed32_b1_wide256_direct_fullgrid_scheduler, arch::Sm120,
+    TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  using Scheduler = Fr13B1Wide256DirectFullGridStaticTileScheduler100;
 };
 
 template <class TileShape, class ClusterShape,
@@ -1216,7 +1314,7 @@ struct sm120_blockwise_fp8_config_b1_wide256_fullgrid_identity_stage2 {
   using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
       OutType, 128, 1, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, true,
-      fr13_fixed32_b1_onen_fullgrid_static_scheduler,
+      fr13_fixed32_b1_wide256_direct_fullgrid_scheduler,
       cutlass::gemm::collective::StageCount<2>>;
 };
 

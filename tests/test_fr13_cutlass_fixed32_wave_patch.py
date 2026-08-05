@@ -598,11 +598,7 @@ def test_b1_onen_scheduler_maps_every_audited_tile_without_divmods() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
     scheduler_start = patched.index("class Fr13B1OneNStaticTileScheduler100")
     scheduler_end = patched.index(
-        "template <class TileShape, class ClusterShape,\n"
-        "          uint32_t SchedulerPipelineStageCount>\n"
-        "struct TileSchedulerSelector<\n"
-        "    vllm::fr13_fixed32_m128_divisor_static_scheduler",
-        scheduler_start,
+        "class Fr13B1N5120SingleTileScheduler100", scheduler_start
     )
     scheduler = patched[scheduler_start:scheduler_end]
 
@@ -760,7 +756,7 @@ def test_fulltile_candidates_reduce_fixed32_panel_and_tile_replays() -> None:
     assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in b1
     assert "using TileShape = Shape<_256, _32, _128>;" in b1
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in b1
-    assert "fr13_fixed32_b1_onen_fullgrid_static_scheduler" in b1
+    assert "fr13_fixed32_b1_wide256_direct_fullgrid_scheduler" in b1
     assert "cutlass::gemm::collective::StageCount<2>" in b1
     assert "StreamK" not in b1
 
@@ -927,11 +923,7 @@ def test_b1_n5120_single_tile_scheduler_removes_persistent_advance() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
     scheduler_start = patched.index("class Fr13B1N5120SingleTileScheduler100")
     scheduler_end = patched.index(
-        "template <class TileShape, class ClusterShape,\n"
-        "          uint32_t SchedulerPipelineStageCount>\n"
-        "struct TileSchedulerSelector<\n"
-        "    vllm::fr13_fixed32_m128_divisor_static_scheduler",
-        scheduler_start,
+        "class Fr13B1OneNFullGridStaticTileScheduler100", scheduler_start
     )
     scheduler = patched[scheduler_start:scheduler_end]
 
@@ -986,12 +978,30 @@ def test_b1_n5120_single_tile_scheduler_removes_persistent_advance() -> None:
     )
 
 
-def test_b1_n5120_fullgrid_keeps_initialized_static_scheduler_contract() -> None:
+def test_b1_m128_fullgrid_keeps_initialized_static_scheduler_contract() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
     scheduler_start = patched.index(
         "class Fr13B1OneNFullGridStaticTileScheduler100"
+    )
+    scheduler_end = patched.index(
+        "class Fr13B1Wide256DirectFullGridStaticTileScheduler100",
+        scheduler_start,
+    )
+    scheduler = patched[scheduler_start:scheduler_end]
+    assert "public StaticPersistentTileScheduler100" in scheduler
+    assert "using Base = StaticPersistentTileScheduler100;" in scheduler
+    assert "using Base::Base;" in scheduler
+    assert "initialize_direct_state" not in scheduler
+
+
+def test_b1_wide256_direct_scheduler_keeps_complete_persistent_contract() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    scheduler_start = patched.index(
+        "class Fr13B1Wide256DirectFullGridStaticTileScheduler100"
     )
     scheduler_end = patched.index(
         "template <class TileShape, class ClusterShape,\n"
@@ -1003,14 +1013,36 @@ def test_b1_n5120_fullgrid_keeps_initialized_static_scheduler_contract() -> None
     scheduler = patched[scheduler_start:scheduler_end]
     assert "public StaticPersistentTileScheduler100" in scheduler
     assert "using Base = StaticPersistentTileScheduler100;" in scheduler
-    assert "using Base::Base;" in scheduler
+    assert ": Base(params)" in scheduler
+    assert ": Base(response, params, block_id_in_cluster)" in scheduler
     assert "public Fr13B1OneNStaticTileScheduler100" not in scheduler
-    assert "get_current_work" not in scheduler
-    assert "advance_to_next_work" not in scheduler
-    assert "fetch_next_work" not in scheduler
+    assert "initialize_direct_state" in scheduler
+    assert "current_work_linear_idx_" in scheduler
+    assert "problem_tiles_" in scheduler
+    assert "grid_stride_" in scheduler
+    assert "advance_to_next_work" in scheduler
+    assert "is_last_tile" in scheduler
+    assert "fetch_next_work" in scheduler
+    assert "get_current_work_for_linear_idx" in scheduler
+    assert "return {static_cast<int32_t>(linear_idx), 0, 0, true};" in scheduler
+    assert "divmod" not in scheduler
     assert "get_grid_shape" not in scheduler
-    assert "fr13_fixed32_b1_onen_fullgrid_static_scheduler" in patched
-    assert "using Scheduler = Fr13B1OneNFullGridStaticTileScheduler100;" in patched
+    assert "fr13_fixed32_b1_wide256_direct_fullgrid_scheduler" in patched
+    assert (
+        "using Scheduler = Fr13B1Wide256DirectFullGridStaticTileScheduler100;"
+        in patched
+    )
+
+    # Direct linear persistence covers each full output tile exactly once for
+    # all three admitted wide256 shapes while keeping the 48-CTA launch.
+    for problem_tiles in (56, 64, 136):
+        assignments = [
+            tile
+            for cta in range(48)
+            for tile in range(cta, problem_tiles, 48)
+        ]
+        assert sorted(assignments) == list(range(problem_tiles))
+        assert len(assignments) == len(set(assignments))
 
     config_start = patched.index(
         "struct sm120_blockwise_fp8_config_b1_onen_fullgrid_identity_pingpong_stage2"
