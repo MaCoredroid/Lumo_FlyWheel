@@ -173,7 +173,9 @@ def test_root_plus_four_capture_engagement_has_no_synchronize() -> None:
     assert '"mtp_forward_calls", -1' in engagement
     assert '"draft_head_fp8_calls", -1' in engagement
     assert "_fr13_dh_fp8_expected_capture_calls != 4" in engagement
-    assert "observed_local=" in engagement
+    assert "_fr13_dh_fp8_observed_capture_calls" in engagement
+    assert "not in (" in engagement
+    assert "observed_object_local=" in engagement
     assert "observed_lifecycle=" in engagement
     assert "expected_from_mtp=" in engagement
     assert '"selected_root_calls": 1' in engagement
