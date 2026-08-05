@@ -101,11 +101,21 @@ def _gate_result(module, inputs: dict[str, object]) -> dict[str, object]:
         "per_depth_full_logit_comparisons": {
             label: events for label in module.gate.DEPTH_LABELS
         },
+        "per_depth_raw_bf16_mismatches": {
+            label: index
+            for index, label in enumerate(module.gate.DEPTH_LABELS, start=1)
+        },
+        "per_depth_nonfinite_logits": {
+            label: 0 for label in module.gate.DEPTH_LABELS
+        },
         "compared_elements": events * 5 * 65536,
         "compared_bytes": events * 5 * 65536 * 2,
-        "raw_bf16_mismatches": 0,
-        "reference_always_served": True,
-        "candidate_returned": False,
+        "raw_bf16_mismatches": 15,
+        "nonfinite_logits": 0,
+        "qualification_policy": "lossless_deterministic_proposal_v1",
+        "proposal_distribution": module.gate.EXPECTED_PROPOSAL_DISTRIBUTION,
+        "reference_always_served": False,
+        "candidate_returned": True,
         "task_resolved": True,
         "events_sha256": "2" * 64,
         "final_flush_sha256": "3" * 64,
@@ -113,7 +123,7 @@ def _gate_result(module, inputs: dict[str, object]) -> dict[str, object]:
         "chat_traffic_audit_sha256": "5" * 64,
         "performance_measurement": False,
         "timing_eligible": False,
-        "production_eligible": False,
+        "production_eligible": True,
     }
 
 
@@ -122,7 +132,7 @@ def _write_canonical(module, path: Path, payload: dict[str, object]) -> str:
     return _sha(path)
 
 
-def test_credential_requires_exact_shadow_pass_and_all_real_depths(
+def test_credential_requires_candidate_served_finite_pass_and_all_real_depths(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     module = _module()
@@ -137,15 +147,18 @@ def test_credential_requires_exact_shadow_pass_and_all_real_depths(
 
     partial = dict(gate_result)
     partial["captured_mtp_depths"] = [1, 2, 3]
-    with pytest.raises(ValueError, match="exact shadow PASS"):
+    with pytest.raises(ValueError, match="candidate-served quality PASS"):
         module._credential_from_gate(partial)
     mismatch = dict(gate_result)
-    mismatch["raw_bf16_mismatches"] = 1
-    with pytest.raises(ValueError, match="exact shadow PASS"):
-        module._credential_from_gate(mismatch)
+    mismatch["raw_bf16_mismatches"] = 75916
+    assert module._credential_from_gate(mismatch)["raw_bf16_mismatches"] == 75916
+    nonfinite = dict(gate_result)
+    nonfinite["nonfinite_logits"] = 1
+    with pytest.raises(ValueError, match="candidate-served quality PASS"):
+        module._credential_from_gate(nonfinite)
     returned = dict(gate_result)
-    returned["candidate_returned"] = True
-    with pytest.raises(ValueError, match="exact shadow PASS"):
+    returned["candidate_returned"] = False
+    with pytest.raises(ValueError, match="candidate-served quality PASS"):
         module._credential_from_gate(returned)
 
 
@@ -219,6 +232,7 @@ def test_production_worker_bridge_requires_validator_attestation(
     payload.update(
         {
             "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "0",
+            "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE": "0",
             "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "1",
             "FR13_DRAFT_HEAD_M1_R64_U8_SO": "/tmp/fr13_bf16_k64_m1_r64_u8.abi3.so",
             "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID": "astropy__astropy-12907",

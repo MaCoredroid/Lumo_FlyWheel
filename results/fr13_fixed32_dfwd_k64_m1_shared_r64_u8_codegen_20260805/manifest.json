@@ -1,0 +1,44 @@
+{
+  "acceptance_valid": false,
+  "artifact_schema": "fr13.fixed32.dfwd_k64_m1_shared_r64_u8_codegen.v1",
+  "candidate": {
+    "block": [16, 64, 1],
+    "dynamic_shared_bytes": 4352,
+    "grid": [1024, 1, 1],
+    "operation": "fr13_bf16_k64_head::gemvx_m1_shared_r64_u8_out",
+    "reduction": "shared_8_4_2_1",
+    "unroll_steps": 8
+  },
+  "correctness_claim": false,
+  "created_at_utc": "2026-08-05T18:45:15Z",
+  "docker_used": false,
+  "gpu_used": false,
+  "performance_claim": false,
+  "production_default_enabled": false,
+  "runtime_wired": false,
+  "sass": {
+    "barriers": 4,
+    "fadd": 4,
+    "ffma_in_unrolled_body": 8,
+    "ldg_u16": 16,
+    "lds": 8,
+    "shuffles": 0,
+    "static_instructions": 112,
+    "sts": 4
+  },
+  "source": {
+    "path": "csrc/fr13_bf16_gemvx_k64_m1_shared_r64_u8.cu",
+    "sha256": "accbe164239de940b2d53ce0b067f99628815c155ae2d33a2ff88a9e31894e58"
+  },
+  "status": "STATIC_CODEGEN_PASS_UNQUALIFIED",
+  "toolchain": {
+    "cuda_release": "13.0",
+    "nvcc": "13.0.88",
+    "target": "sm_121a"
+  },
+  "unlinked_cubin": {
+    "bytes": 9688,
+    "path": "fr13_bf16_gemvx_k64_m1_shared_r64_u8.sm_121a.cubin",
+    "sha256": "f4a0c524241d22d9550456566cb7e5d0f5c2b4caa728a386247d362ccdd17ab9"
+  }
+}

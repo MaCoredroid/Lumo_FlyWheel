@@ -122,6 +122,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/gpu_oom_guard.sh",
     "csrc/fr13_dfwd_k64_top3.cu",
     "csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu",
+    "csrc/fr13_bf16_gemvx_k64_m1_shared_r64_u8.cu",
     "scripts/run_swe_bench_q36_a.py",
     "scripts/sample_dcgm_during_task.py",
     "scripts/swe_x86_helpers/offload_codex_proxy.sh",

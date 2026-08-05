@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# One real SWE-Verified Hydra27 B1 fixed-K64/root1 DFWD U8 shadow gate.
-# It compares all 65,536 configured head logits, not the full model vocabulary.
+# One real SWE-Verified Hydra27 B1 fixed-K64/root1 U8 quality gate.
+# It serves the candidate and records all 65,536 configured logits as drift
+# diagnostics; raw BF16 equality is not required for a lossless drafter.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -128,6 +129,7 @@ export FR13_GATE_DRAFT_HEAD_PAD=0
 # The generic gate uses this outer selector for isolation and terminal evidence.
 export FR13_GATE_DRAFT_HEAD_M32=1
 export FR13_GATE_DRAFT_HEAD_U8=1
+export FR13_GATE_DRAFT_HEAD_U8_QUALITY=1
 export FR13_GATE_DRAFT_HEAD_U8_SO="$DFWD_U8_SO"
 export FR13_GATE_DRAFT_HEAD_FP8=0
 export FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=0

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Issue and verify the exact-B1 K64/root1 DFWD U8 production credential."""
+"""Issue and verify the lossless-proposal B1 K64/root1 U8 credential."""
 
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ gate = importlib.import_module("fr13_dfwd_k64_m1_r64_u8_gate")
 terminal = gate.terminal
 
 
-CREDENTIAL_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_production_credential.v1"
-VALIDATION_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_production_validation.v1"
+CREDENTIAL_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_production_credential.v2"
+VALIDATION_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_production_validation.v2"
 ENGAGEMENT_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_production_engagement.v1"
 SELECTOR = "fr13_bf16_k64_m1_r64_u8_direct"
 GRAPH_SIGNATURE = "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
@@ -54,6 +54,10 @@ CREDENTIAL_KEYS = frozenset(
         "qualification_schema",
         "qualification_task_id",
         "raw_bf16_mismatches",
+        "nonfinite_logits",
+        "qualification_policy",
+        "proposal_distribution",
+        "raw_bf16_equality_required",
         "schema",
         "selector",
         "serve_policy",
@@ -136,15 +140,23 @@ def _credential_from_gate(validated: dict[str, Any]) -> dict[str, Any]:
         or not gate._json_exact(
             validated.get("captured_mtp_depths"), [1, 2, 3, 4]
         )
-        or not gate._json_exact(validated.get("raw_bf16_mismatches"), 0)
-        or validated.get("reference_always_served") is not True
-        or validated.get("candidate_returned") is not False
+        or type(validated.get("raw_bf16_mismatches")) is not int
+        or validated["raw_bf16_mismatches"] < 0
+        or not gate._json_exact(validated.get("nonfinite_logits"), 0)
+        or validated.get("qualification_policy")
+        != "lossless_deterministic_proposal_v1"
+        or not gate._json_exact(
+            validated.get("proposal_distribution"),
+            gate.EXPECTED_PROPOSAL_DISTRIBUTION,
+        )
+        or validated.get("reference_always_served") is not False
+        or validated.get("candidate_returned") is not True
         or validated.get("task_resolved") is not True
         or validated.get("performance_measurement") is not False
         or validated.get("timing_eligible") is not False
-        or validated.get("production_eligible") is not False
+        or validated.get("production_eligible") is not True
     ):
-        raise ValueError("DFWD U8 gate result is not an exact shadow PASS")
+        raise ValueError("DFWD U8 gate result is not a candidate-served quality PASS")
     inputs = _exact_dict(validated.get("inputs"), INPUT_KEYS, "gate inputs")
     evidence = {
         "boundary_snapshot_sha256": validated["boundary_snapshot_sha256"],
@@ -172,9 +184,13 @@ def _credential_from_gate(validated: dict[str, Any]) -> dict[str, Any]:
         "evidence_sha256": evidence,
         "captured_mtp_depths": [1, 2, 3, 4],
         "comparison_scope": gate.COMPARISON_SCOPE,
-        "raw_bf16_mismatches": 0,
-        "incumbent_served_during_qualification": True,
-        "candidate_returned_during_qualification": False,
+        "raw_bf16_mismatches": validated["raw_bf16_mismatches"],
+        "nonfinite_logits": 0,
+        "qualification_policy": "lossless_deterministic_proposal_v1",
+        "proposal_distribution": gate.EXPECTED_PROPOSAL_DISTRIBUTION,
+        "raw_bf16_equality_required": False,
+        "incumbent_served_during_qualification": False,
+        "candidate_returned_during_qualification": True,
         "graph_contract": GRAPH_CONTRACT,
         "production_default_enabled": False,
         "timing_eligible": True,
@@ -248,9 +264,18 @@ def validate_credential(
         or not gate._json_exact(payload.get("candidate"), gate.EXPECTED_CANDIDATE)
         or not gate._json_exact(payload.get("captured_mtp_depths"), [1, 2, 3, 4])
         or payload.get("comparison_scope") != gate.COMPARISON_SCOPE
-        or not gate._json_exact(payload.get("raw_bf16_mismatches"), 0)
-        or payload.get("incumbent_served_during_qualification") is not True
-        or payload.get("candidate_returned_during_qualification") is not False
+        or type(payload.get("raw_bf16_mismatches")) is not int
+        or payload["raw_bf16_mismatches"] < 0
+        or not gate._json_exact(payload.get("nonfinite_logits"), 0)
+        or payload.get("qualification_policy")
+        != "lossless_deterministic_proposal_v1"
+        or not gate._json_exact(
+            payload.get("proposal_distribution"),
+            gate.EXPECTED_PROPOSAL_DISTRIBUTION,
+        )
+        or payload.get("raw_bf16_equality_required") is not False
+        or payload.get("incumbent_served_during_qualification") is not False
+        or payload.get("candidate_returned_during_qualification") is not True
         or not gate._json_exact(payload.get("graph_contract"), GRAPH_CONTRACT)
         or payload.get("production_default_enabled") is not False
         or payload.get("timing_eligible") is not True
