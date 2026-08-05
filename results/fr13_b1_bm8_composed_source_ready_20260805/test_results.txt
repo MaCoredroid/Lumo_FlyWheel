@@ -1,0 +1,15 @@
+bash -n scripts/fr13_launch_forked_fa2_tree_server.sh scripts/fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh scripts/fr13_run_b1_composed_cfwd_production_smoke.sh scripts/fr13_run_b1_composed_cfwd_stack_timing.sh
+PASS
+
+python3 -m py_compile scripts/fr13_b1_composed_stack_gate.py scripts/fr13_b1_composed_stack_timing.py scripts/fr13_runtime_manifest.py scripts/fr10_phase4_patch_vllm_tree_gdn.py
+PASS
+
+python3 -m pytest -q tests/test_fr13_b1_composed_stack.py tests/test_fr13_bm8_production_sidecar.py tests/test_fr13_cutlass_streamk_gate_wiring.py
+48 passed in 0.49s
+
+python3 -m pytest -q tests/test_fr13_b1_composed_stack.py tests/test_fr13_bm8_production_sidecar.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_dfwd_unified_attention_bm8.py -k 'not source_artifact_has_no_gpu_or_speed_claim'
+54 passed, 1 deselected in 0.53s
+
+GPU used: no
+Docker used: no
+Performance claim: no

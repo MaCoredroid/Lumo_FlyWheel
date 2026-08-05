@@ -1,0 +1,41 @@
+{
+  "base_commit": "78aff073d77f9c8bc9dc2528fb808644de202ef0",
+  "branch": "codex/b1-bm8-composed-main-20260805",
+  "checkpoints": [
+    "27bc8eec3776f5d49d5250c3ca3263a271a41dba",
+    "6f11fcb72d060cce52380ccca78713ae55ba6fa9"
+  ],
+  "claims": {
+    "b4_measured": false,
+    "exact4_measured": false,
+    "hardware_floor_acceptance": false,
+    "performance_measurement": false,
+    "production_return_smoke": false
+  },
+  "contracts": {
+    "bm8_capture_schema": "fr13.fixed32.dfwd_unified_bm8_production_capture.v2",
+    "bm8_live_pass_sha256": "570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5",
+    "bm8_production_pass_sha256": "d958c8b08a62d13e2dac9abbb214817748c15c12be212196f2d4b615390c641a",
+    "bm8_qualified_source_sha256": "3baccaa1a83907e15561b1cf807f15a41bd4764513bb43c4046b434937c3274b",
+    "composed_smoke_schema": "fr13.fixed32.b1_composed_bm8_cfwd.production_smoke.v2",
+    "composed_timing_schema": "fr13.fixed32.b1_composed_bm8_stack.exact4_timing.v3"
+  },
+  "implementation_commit": "6f11fcb72d060cce52380ccca78713ae55ba6fa9",
+  "next_required": "one_real_swe_verified_hydra27_b1_production_smoke",
+  "schema": "fr13.fixed32.b1_bm8_composed_source_ready.v1",
+  "source_sha256s": {
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "a6bcbbe24ec74a27a64bac5cf6fe85ea275aece7d0ea17e2c9f72c9a89947e88",
+    "scripts/fr13_b1_composed_stack_gate.py": "fdc6282291a6affc0e33840a8e875a9431827affe3d3daa3201c6746c1f4aa34",
+    "scripts/fr13_b1_composed_stack_timing.py": "59da98510a08f13614d012cbd2dbea5b798362d4b474c72ee40f5c8234afa203",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "91e2dbf4821e8259248d3804c715fbb0d271075d614b729adfdda934b89a18f9",
+    "scripts/fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh": "56d18c81457e858f10987876dee9ceeeebcaaecd5b0eb34ca61b43e351e2c0d2",
+    "scripts/fr13_runtime_manifest.py": "5fd15a428844f132338e06660599708cbfb122dcccdcaf4fc01c0be5dae82d53"
+  },
+  "status": "SOURCE_READY_ONLY",
+  "verification": {
+    "expanded_deselected": 1,
+    "expanded_passed": 54,
+    "focused_passed": 48,
+    "gpu_used": false
+  }
+}
