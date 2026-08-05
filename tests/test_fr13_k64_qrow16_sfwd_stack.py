@@ -31,12 +31,14 @@ def test_qrow16_generated_helper_has_exact_k64_eager_bridge() -> None:
     )
     ast.parse(helper)
     assert '"FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"' in helper
+    assert '"FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB", "0"' in helper
     assert 'os.environ.get("ENFORCE_EAGER", "0") == "1"' in helper
     assert 'os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0") == "1"' in helper
     assert 'os.environ.get("FR13_DRAFT_VOCAB_K", "") == "65536"' in helper
     assert "fa2_qrow16_eager_production_engagement.v1" in helper
     assert '"runtime_mode": "EAGER"' in helper
-    assert '"sfwd_state_fusion_production": True' in helper
+    assert '"sfwd_state_fusion_production": eager_state_fusion' in helper
+    assert '"sfwd_conv_postprep_byte_ab": eager_conv_postprep_gate' in helper
     assert "if not capturing and not eager_sfwd_stack" in helper
 
 
