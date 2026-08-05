@@ -1,0 +1,108 @@
+{
+  "schema": "fr13.fixed32.cutlass_b4_exactshape_scheduler.sm121a.codegen.v1",
+  "created_at_utc": "2026-08-05T19:33:43Z",
+  "status": "RETAIN_OFFLINE_CODEGEN_WIN_RUNTIME_PENDING",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "source": {
+    "branch": "codex/b4-physical32-next-kernel-20260805",
+    "base_commit": "9e264f03990ca351cb0bbea8a34e63233bc44039",
+    "candidate_commit": "1e07e0c244a271eaaa90571254d56c03d7c5dae2",
+    "patch_source_sha256": "5cdc2b3e9df75d817c73de5746a062ea15d5943d19797405d8acd0497fd2d028",
+    "patch_source_bytes": 113277,
+    "generated_dispatch_sha256": "b7be0601958916ce50254ee330ec1f145d3f2f8191a35816c17b892e5a7fa1d7",
+    "generated_dispatch_bytes": 113914
+  },
+  "pinned_inputs": {
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2",
+    "target": "sm_121a",
+    "cuda_compiler": "13.0.88"
+  },
+  "kernel_contract": {
+    "selector": "identity_hybrid_n5120_b4",
+    "default_enabled": false,
+    "production_authorized": false,
+    "physical_rows": 128,
+    "k": 5120,
+    "tile_mnk": [64, 128, 128],
+    "cluster_mnk": [1, 1, 1],
+    "mainloop_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+    "mainloop_stage_count": 2,
+    "epilogue": "accumulator_identity_round_to_nearest",
+    "compiled_dtypes": ["fp16", "bf16"],
+    "candidate_projection_calls": 8,
+    "total_projection_calls": 16
+  },
+  "candidate": {
+    "tile_scheduler": "fr13_fixed32_b4_twom_exact_scheduler",
+    "shape_instances": [
+      {"n": 14336, "problem_tiles": 224, "grid_ctas": 32},
+      {"n": 16384, "problem_tiles": 256, "grid_ctas": 32},
+      {"n": 34816, "problem_tiles": 544, "grid_ctas": 34}
+    ],
+    "object_sha256": "392cc100441aaa6a099186e76c85beb46549bcb241aaf4e5c44f83dd36ac6f68",
+    "object_bytes": 26475608,
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "sass_slots_per_kernel": 1024,
+    "ldc_per_kernel": 2,
+    "ldcu_per_kernel": 15,
+    "branches_per_kernel": 39,
+    "qmma_per_kernel": 128,
+    "ffma_per_kernel": 128,
+    "ldsm_per_kernel": 48,
+    "stsm_per_kernel": 16
+  },
+  "in_object_generic_comparator": {
+    "tile_scheduler": "fr13_fixed32_b4_twom_static_scheduler",
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "sass_slots_per_kernel": 1032,
+    "ldc_per_kernel": 3,
+    "ldcu_per_kernel": 21,
+    "branches_per_kernel": 39,
+    "qmma_per_kernel": 128,
+    "ffma_per_kernel": 128,
+    "ldsm_per_kernel": 48,
+    "stsm_per_kernel": 16
+  },
+  "codegen_delta_per_kernel": {
+    "sass_slots": -8,
+    "ldc": -1,
+    "ldcu": -6,
+    "registers_per_thread": 0,
+    "stack_bytes_per_thread": 0,
+    "branches": 0,
+    "qmma": 0,
+    "ffma": 0
+  },
+  "rejected_precursors": {
+    "count": 2,
+    "reason": "linear cursor forms allocated an 8-byte per-thread stack frame",
+    "retained_in_source": false
+  },
+  "source_checks": {
+    "focused_tests": "64 passed",
+    "ruff": "pass",
+    "python_compile": "pass",
+    "git_diff_check": "pass",
+    "generated_source_exact_match": true
+  },
+  "not_run": [
+    "extension link or import",
+    "GPU kernel runtime",
+    "synthetic or probe performance",
+    "real SWE-Verified byte equality",
+    "full-step B4 timing",
+    "hardware-floor acceptance"
+  ]
+}

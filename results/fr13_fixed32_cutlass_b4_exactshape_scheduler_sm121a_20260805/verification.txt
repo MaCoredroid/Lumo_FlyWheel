@@ -1,0 +1,20 @@
+PASS pinned vLLM source fe9c3d6c5f66 and CUTLASS da5e086dab31
+PASS generated dispatch exactly matches retained patch source
+PASS isolated SM121a object compilation for FP16 and BF16
+PASS all six exact-shape kernels: REG 168, STACK 0, LOCAL 0
+PASS all six exact-shape kernels: LDL 0, STL 0, CALL 0
+PASS exact-shape SASS: 1024 slots versus generic 1032
+PASS exact-shape constant loads: LDC 2 versus 3, LDCU 15 versus 21
+PASS math/order-bearing counts unchanged: BRA 39, QMMA 128, FFMA 128
+PASS shared-memory counts unchanged: LDSM 48, STSM 16
+PASS exact scheduler covers every logical tile once for all three shapes
+PASS exact route covers 8 of 16 real B4 projection calls
+PASS focused source tests: 64 passed
+PASS Ruff, Python compile, and git diff checks
+REJECTED two precursor linear-cursor forms due STACK 8 per thread
+NOT RUN extension link or import
+NOT RUN GPU kernel runtime
+NOT RUN synthetic or probe performance
+NOT RUN real SWE-Verified byte equality
+NOT RUN full-step B4 timing or hardware-floor acceptance
+NOT CLAIMED runtime speedup, promotion, or acceptance

@@ -1,0 +1,9 @@
+variant	problem_tiles	grid_ctas	dtype	sass_slots	ldl	stl	calls	branches	ldc	ldcu	s2r	qmma	ffma	ldsm	stsm	verdict
+exactshape_candidate	224	32	fp16	1024	0	0	0	39	2	15	3	128	128	48	16	retain_offline
+exactshape_candidate	224	32	bf16	1024	0	0	0	39	2	15	3	128	128	48	16	retain_offline
+exactshape_candidate	256	32	fp16	1024	0	0	0	39	2	15	3	128	128	48	16	retain_offline
+exactshape_candidate	256	32	bf16	1024	0	0	0	39	2	15	3	128	128	48	16	retain_offline
+exactshape_candidate	544	34	fp16	1024	0	0	0	39	2	15	3	128	128	48	16	retain_offline
+exactshape_candidate	544	34	bf16	1024	0	0	0	39	2	15	3	128	128	48	16	retain_offline
+generic_in_object	0	0	fp16	1032	0	0	0	39	3	21	3	128	128	48	16	comparator
+generic_in_object	0	0	bf16	1032	0	0	0	39	3	21	3	128	128	48	16	comparator
