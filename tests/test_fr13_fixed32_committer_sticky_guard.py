@@ -106,15 +106,14 @@ def test_sticky_route_keeps_incumbent_fallback_and_binds_direct_lease() -> None:
     assert '"sticky_guard_scalar_reduction_launches_per_event": 0' in preseed
     assert '"sticky_guard_valid_event_global_stores": 0' in preseed
 
-    sticky_start = launch.index("    if sticky_guard:")
-    fallback_start = launch.index("    else:", sticky_start)
-    conv_start = launch.index("    conv_c =", fallback_start)
-    assert "validate_fixed32_conv_commit_rows_sticky(" in launch[
-        sticky_start:fallback_start
-    ]
-    assert "validate_fixed32_conv_commit_rows(" in launch[
-        fallback_start:conv_start
-    ]
+    guard_start = launch.index("    alias_group_guard = bool(")
+    conv_start = launch.index("    conv_c =", guard_start)
+    guard_route = launch[guard_start:conv_start]
+    assert "if alias_group_guard:" in guard_route
+    assert "validate_fixed32_conv_commit_alias_groups_sticky(" in guard_route
+    assert "elif sticky_guard:" in guard_route
+    assert "validate_fixed32_conv_commit_rows_sticky(" in guard_route
+    assert "validate_fixed32_conv_commit_rows(" in guard_route
     assert "validation_guard=(" in launch
     assert 'committer_state["sticky_guard_ok"]' in launch
     assert "validation_guard=(" in replay

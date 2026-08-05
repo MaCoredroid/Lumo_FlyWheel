@@ -135,9 +135,13 @@ def test_launcher_selects_one_direct_kernel_without_host_sync() -> None:
         "_fr13_fixed32_conv_direct_col0_kernel",
         "_fr13_fixed32_conv_direct_col0_metadata_kernel",
     ]
-    assert calls.index("validate_fixed32_conv_commit_rows") < calls.index(
-        "_fr13_fixed32_conv_direct_col0_kernel"
-    )
+    direct_call = source.index("_fr13_fixed32_conv_direct_col0_kernel")
+    for validator in (
+        "validate_fixed32_conv_commit_alias_groups_sticky",
+        "validate_fixed32_conv_commit_rows_sticky",
+        "validate_fixed32_conv_commit_rows",
+    ):
+        assert source.index(validator) < direct_call
     assert calls.index("validate_fixed32_conv_commit_rows") < calls.index(
         "_fr13_fixed32_conv_direct_col0_metadata_kernel"
     )
