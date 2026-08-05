@@ -60,6 +60,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_dfwd_k64_m1_r64_u8_production_credential.py",
     "scripts/fr13_dfwd_k64_m4_r64_u8_gate.py",
     "scripts/fr13_dfwd_k64_m4_r64_u8_production_credential.py",
+    "scripts/fr13_dfwd_k64_b14_pair8_selector.py",
     "scripts/fr13_draft_head_fp8_gate.py",
     "scripts/fr13_draft_head_fp8_timing.py",
     "scripts/fr13_draft_head_m32_pass.py",
@@ -126,6 +127,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "csrc/fr13_dfwd_k64_top3.cu",
     "csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu",
     "csrc/fr13_bf16_gemvx_k64_m1_shared_r64_u8.cu",
+    "csrc/fr13_bf16_gemvx_k64_b14_warp4_pair8.cu",
     "scripts/run_swe_bench_q36_a.py",
     "scripts/sample_dcgm_during_task.py",
     "scripts/swe_x86_helpers/offload_codex_proxy.sh",
@@ -182,6 +184,9 @@ FIXED32_RUNTIME_DATA_AND_CONFIG = (
     "config/fr13_fixed32/subset_b4_sixteen.json",
     "scripts/fr13_dvk_subset_blocks.json",
     "results/fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_20260805/build_attestation.json",
+    "results/fr13_fixed32_dfwd_k64_b14_warp4_pair8_sm121a_20260805/build_attestation.json",
+    "results/fr13_fixed32_dfwd_k64_b14_warp4_pair8_sm121a_20260805/fr13_bf16_k64_b14_warp4_pair8.abi3.so",
+    "results/fr13_fixed32_dfwd_k64_b14_warp4_pair8_sm121a_20260805/manifest.json",
 )
 
 FIXED32_REQUIRED_ABSENCE = ("output/fr13_prewarm/corpus_active.jsonl",)
