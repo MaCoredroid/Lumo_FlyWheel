@@ -1,0 +1,87 @@
+	.target	sm_121a
+
+	.elftype	@"ET_EXEC"
+
+
+//--------------------- .text._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff --------------------------
+	.section	.text._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff,"ax",@progbits
+	.align	128
+.text._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff:
+        .type           _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff,@function
+        .size           _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff,(.L_x_3 - _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff)
+        .other          _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff,@"STO_CUDA_ENTRY STV_DEFAULT"
+_ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff:
+        /*0000*/                   LDC R1, c[0x0][0x37c] ;
+        /*0010*/                   S2R R4, SR_CTAID.X ;
+        /*0020*/                   LDC.64 R2, c[0x0][0x388] ;
+        /*0030*/                   BSSY.RECONVERGENT B0, `(.L_x_0) ;
+        /*0040*/                   LDCU.64 UR4, c[0x0][0x358] ;
+        /*0050*/                   S2R R15, SR_TID.X ;
+        /*0060*/                   S2R R11, SR_TID.Y ;
+        /*0070*/                   LDC.64 R6, c[0x0][0x390] ;
+        /*0080*/                   IMAD R0, R4, 0x50000, RZ ;
+        /*0090*/                   MOV R8, R15 ;
+        /*00a0*/                   LOP3.LUT R0, R15.reuse, R0, RZ, 0xfc, !PT ;
+        /*00b0*/                   IMAD.WIDE.U32 R2, R15, 0x2, R2 ;
+        /*00c0*/                   IMAD R9, R4, 0x40, R11 ;
+        /*00d0*/                   IMAD R11, R11, 0x1400, R0 ;
+        /*00e0*/                   HFMA2 R0, -RZ, RZ, 0, 0 ;
+.L_x_1:
+        /*00f0*/                   IMAD.WIDE.U32 R4, R11.reuse, 0x2, R6 ;
+        /*0100*/                   LDG.E.U16.CONSTANT R10, desc[UR4][R2.64] ;
+        /*0110*/                   LDG.E.U16.CONSTANT R4, desc[UR4][R4.64] ;
+        /*0120*/                   ISETP.GE.U32.AND P0, PT, R8.reuse, 0x13f0, PT ;
+        /*0130*/                   IADD3 R8, PT, PT, R8, 0x10, RZ ;
+        /*0140*/                   IADD3 R11, PT, PT, R11, 0x10, RZ ;
+        /*0150*/                   IADD.64 R2, R2, 0x20 ;
+        /*0160*/                   IMAD.U32 R13, R10, 0x10000, RZ ;
+        /*0170*/                   IMAD.U32 R10, R4, 0x10000, RZ ;
+        /*0180*/                   FFMA R0, R13, R10, R0 ;
+        /*0190*/              @!P0 BRA `(.L_x_1) ;
+        /*01a0*/                   BSYNC.RECONVERGENT B0 ;
+.L_x_0:
+        /*01b0*/                   SHFL.DOWN PT, R3, R0, 0x8, 0x101f ;
+        /*01c0*/                   ISETP.GE.U32.AND P0, PT, R15.reuse, 0x8, PT ;
+        /*01d0*/                   ISETP.NE.AND P1, PT, R15, RZ, PT ;
+        /*01e0*/                   FADD R3, R0, R3 ;
+        /*01f0*/                   FSEL R3, R3, R0, !P0 ;
+        /*0200*/                   ISETP.GE.U32.AND P0, PT, R15, 0x4, PT ;
+        /*0210*/                   SHFL.DOWN PT, R2, R3, 0x4, 0x101f ;
+        /*0220*/              @!P0 FADD R3, R3, R2 ;
+        /*0230*/                   ISETP.GE.U32.AND P0, PT, R15, 0x2, PT ;
+        /*0240*/                   SHFL.DOWN PT, R2, R3, 0x2, 0x101f ;
+        /*0250*/                   FADD R6, R3, R2 ;
+        /*0260*/                   FSEL R0, R6, R3, !P0 ;
+        /*0270*/                   SHFL.DOWN PT, R7, R0, 0x1, 0x101f ;
+        /*0280*/               @P1 EXIT ;
+        /*0290*/                   LDC.64 R4, c[0x0][0x398] ;
+        /*02a0*/                   FADD R0, R6, R7 ;
+        /*02b0*/                   LDC.64 R2, c[0x0][0x380] ;
+        /*02c0*/                   FFMA R0, R0, R4, R5 ;
+        /*02d0*/                   F2FP.BF16.F32.PACK_AB R0, RZ, R0 ;
+        /*02e0*/                   IMAD.WIDE.U32 R2, R9, 0x2, R2 ;
+        /*02f0*/                   STG.E.U16 desc[UR4][R2.64], R0 ;
+        /*0300*/                   EXIT ;
+.L_x_2:
+        /*0310*/                   BRA `(.L_x_2);
+        /*0320*/                   NOP;
+        /*0330*/                   NOP;
+        /*0340*/                   NOP;
+        /*0350*/                   NOP;
+        /*0360*/                   NOP;
+        /*0370*/                   NOP;
+        /*0380*/                   NOP;
+        /*0390*/                   NOP;
+        /*03a0*/                   NOP;
+        /*03b0*/                   NOP;
+        /*03c0*/                   NOP;
+        /*03d0*/                   NOP;
+        /*03e0*/                   NOP;
+        /*03f0*/                   NOP;
+.L_x_3:
+
+
+//--------------------- SYMBOLS --------------------------
+
+	.type		.nv.reservedSmem.offset0,@object
+	.size		.nv.reservedSmem.offset0,0x4

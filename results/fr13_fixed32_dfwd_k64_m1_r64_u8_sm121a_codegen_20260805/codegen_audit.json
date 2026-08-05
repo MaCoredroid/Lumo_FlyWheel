@@ -1,0 +1,30 @@
+{
+  "baseline_dynamic_loop_instructions_per_row": 3520,
+  "baseline_resources": {
+    "constant0_bytes": 928,
+    "local_bytes_per_thread": 0,
+    "registers_per_thread": 18,
+    "shared_bytes_per_cta": 0,
+    "stack_bytes_per_thread": 0
+  },
+  "baseline_static_instructions": 64,
+  "baseline_steady_loop_instructions": 11,
+  "baseline_weight_load_window": 1,
+  "candidate_dynamic_loop_instructions_per_row": 1920,
+  "candidate_resources": {
+    "constant0_bytes": 928,
+    "local_bytes_per_thread": 0,
+    "registers_per_thread": 29,
+    "shared_bytes_per_cta": 0,
+    "stack_bytes_per_thread": 0
+  },
+  "candidate_static_instructions": 96,
+  "candidate_steady_loop_instructions": 48,
+  "candidate_weight_load_window": 8,
+  "dynamic_loop_instruction_delta": -1600,
+  "dynamic_loop_instruction_reduction_fraction": 0.4545454545454546,
+  "gpu_used": false,
+  "performance_measurement": false,
+  "schema": "fr13.fixed32.dfwd_k64_m1_r64_u8_codegen_audit.v1",
+  "status": "STATIC_CODEGEN_PASS_UNQUALIFIED"
+}
