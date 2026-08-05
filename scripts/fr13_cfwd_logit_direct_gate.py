@@ -12,13 +12,19 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
-CANDIDATE = "fixed32_cfwd_logit_direct_decisions_v1"
-CANDIDATE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_decisions.v1"
+CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
+CANDIDATE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
 CANDIDATE_SOURCE_SHA256 = (
-    "d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d"
+    "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192"
 )
-LIVE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_live_ab.v1"
-CREDENTIAL_SCHEMA = "fr13.fixed32.cfwd_logit_direct.production_credential.v1"
+INTEGRATION_SOURCE_SCHEMA = (
+    "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+)
+INTEGRATION_SOURCE_SHA256 = (
+    "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+)
+LIVE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_live_ab.v2"
+CREDENTIAL_SCHEMA = "fr13.fixed32.cfwd_logit_direct.production_credential.v2"
 MODE = "hydra27_fixed32"
 BATCH = 1
 GATE_TASK_ID = "astropy__astropy-12907"
@@ -106,6 +112,8 @@ def _validate_credential(
         "candidate_schema",
         "candidate_source_sha256",
         "integration_source_commit",
+        "integration_source_schema",
+        "integration_source_sha256",
         "mode",
         "qualified_batch",
         "task_count",
@@ -134,6 +142,8 @@ def _validate_credential(
         or payload.get("candidate_schema") != CANDIDATE_SCHEMA
         or payload.get("candidate_source_sha256") != CANDIDATE_SOURCE_SHA256
         or payload.get("integration_source_commit") != expected_source_commit
+        or payload.get("integration_source_schema") != INTEGRATION_SOURCE_SCHEMA
+        or payload.get("integration_source_sha256") != INTEGRATION_SOURCE_SHA256
         or payload.get("mode") != MODE
         or payload.get("qualified_batch") != BATCH
         or payload.get("task_count") != 1
@@ -201,6 +211,8 @@ def issue(
         or live.get("candidate") != CANDIDATE
         or live.get("candidate_schema") != CANDIDATE_SCHEMA
         or live.get("candidate_source_sha256") != CANDIDATE_SOURCE_SHA256
+        or live.get("integration_source_schema") != INTEGRATION_SOURCE_SCHEMA
+        or live.get("integration_source_sha256") != INTEGRATION_SOURCE_SHA256
         or live.get("source_commit") != source_commit
         or live.get("mode") != MODE
         or live.get("instance_id") != task_id
@@ -255,6 +267,8 @@ def issue(
         "candidate_schema": CANDIDATE_SCHEMA,
         "candidate_source_sha256": CANDIDATE_SOURCE_SHA256,
         "integration_source_commit": source_commit,
+        "integration_source_schema": INTEGRATION_SOURCE_SCHEMA,
+        "integration_source_sha256": INTEGRATION_SOURCE_SHA256,
         "mode": MODE,
         "qualified_batch": BATCH,
         "task_count": 1,

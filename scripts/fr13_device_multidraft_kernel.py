@@ -331,11 +331,123 @@ if triton is not None:
 
 
     @triton.jit
+    def _fr13_fixed32_taw_physical_slot_commit_kernel(
+        child_table,
+        child_counts,
+        self_token,
+        source,
+        selected_token,
+        rejected_token,
+        accepted,
+        bonus_token,
+        output_tokens,
+        output_lens,
+        accepted_path_rows,
+        accepted_lens,
+        last_row,
+        PHYSICAL_DRAFTS: tl.constexpr,
+        PHYSICAL_ROWS: tl.constexpr,
+        FANOUT: tl.constexpr,
+        WALK_CAP: tl.constexpr,
+        OUTPUT_CAPACITY: tl.constexpr,
+        PATH_CAPACITY: tl.constexpr,
+    ):
+        """Walk decisions that the producer scattered into physical slots."""
+        request = tl.program_id(0)
+        output_columns = tl.arange(0, OUTPUT_CAPACITY)
+        path_columns = tl.arange(0, PATH_CAPACITY)
+        tl.store(
+            output_tokens + request * OUTPUT_CAPACITY + output_columns,
+            -1,
+        )
+        tl.store(
+            accepted_path_rows + request * PATH_CAPACITY + path_columns,
+            0,
+        )
+
+        current = -1
+        alive = True
+        output_len = 0
+        path_len = 0
+        final_row = 0
+        for _level in tl.static_range(0, WALK_CAP):
+            parent_slot = tl.maximum(
+                0,
+                tl.minimum(current + 1, PHYSICAL_ROWS - 1),
+            )
+            child_count = tl.load(
+                child_counts + request * PHYSICAL_ROWS + parent_slot
+            ).to(tl.int64)
+            has_kids = alive & (child_count > 0)
+            leaf = alive & (child_count == 0)
+            current_valid = (current >= 0) & (current < PHYSICAL_DRAFTS)
+
+            safe_current = tl.maximum(
+                0,
+                tl.minimum(current, PHYSICAL_DRAFTS - 1),
+            )
+            sampled_self = tl.load(
+                self_token + request * PHYSICAL_DRAFTS + safe_current
+            ).to(tl.int64)
+            sampled_bonus = tl.load(bonus_token + request).to(tl.int64)
+            leaf_token = tl.where(current_valid, sampled_self, sampled_bonus)
+            tl.store(
+                output_tokens + request * OUTPUT_CAPACITY + output_len,
+                leaf_token,
+                mask=leaf,
+            )
+
+            decision_offset = request * PHYSICAL_ROWS + parent_slot
+            is_accepted = has_kids & (tl.load(accepted + decision_offset) != 0)
+            sampled_selected = tl.load(
+                selected_token + decision_offset
+            ).to(tl.int64)
+            sampled_rejected = tl.load(
+                rejected_token + decision_offset
+            ).to(tl.int64)
+            emitted_token = tl.where(
+                is_accepted,
+                sampled_selected,
+                sampled_rejected,
+            )
+            tl.store(
+                output_tokens + request * OUTPUT_CAPACITY + output_len,
+                emitted_token,
+                mask=has_kids,
+            )
+            output_len += leaf.to(tl.int64) + has_kids.to(tl.int64)
+
+            selected_source = tl.load(source + decision_offset).to(tl.int64)
+            accepted_node = tl.load(
+                child_table
+                + request * PHYSICAL_ROWS * FANOUT
+                + parent_slot * FANOUT
+                + selected_source
+            ).to(tl.int64)
+            accepted_row = accepted_node + 1
+            tl.store(
+                accepted_path_rows + request * PATH_CAPACITY + path_len,
+                accepted_row,
+                mask=is_accepted,
+            )
+            path_len += is_accepted.to(tl.int64)
+            current = tl.where(is_accepted, accepted_node, current)
+            alive = (alive & (~leaf)) & is_accepted
+            final_row = tl.where(is_accepted, accepted_row, final_row)
+
+        tl.store(output_lens + request, output_len)
+        tl.store(accepted_lens + request, path_len)
+        tl.store(last_row + request, final_row)
+
+
+    @triton.jit
     def _fr13_cfwd_logit_direct_compare_kernel(
         count_enable,
         compared_events,
         decision_mismatches,
         walk_mismatches,
+        self_source_indices,
+        target_parent_slots,
         ref_self_token,
         cand_self_token,
         ref_source,
@@ -356,6 +468,8 @@ if triton is not None:
         cand_accepted_lens,
         ref_last_row,
         cand_last_row,
+        TARGET_ROWS: tl.constexpr,
+        PHYSICAL_ROWS: tl.constexpr,
         SELF_N: tl.constexpr,
         TARGET_N: tl.constexpr,
         OUTPUT_N: tl.constexpr,
@@ -372,12 +486,29 @@ if triton is not None:
         output_mask = enabled & (offsets < OUTPUT_N)
         batch_mask = enabled & (offsets < BATCH_N)
         path_mask = enabled & (offsets < PATH_N)
+        self_source = tl.load(
+            self_source_indices + offsets,
+            mask=self_mask,
+            other=0,
+        ).to(tl.int64)
+        target_request = offsets // TARGET_ROWS
+        target_local = offsets - target_request * TARGET_ROWS
+        target_parent = tl.load(
+            target_parent_slots + target_local,
+            mask=target_mask,
+            other=0,
+        ).to(tl.int64)
+        physical_target_offset = target_request * PHYSICAL_ROWS + target_parent
 
         self_bad = tl.sum(
             tl.where(
                 self_mask,
                 tl.load(ref_self_token + offsets, mask=self_mask, other=0)
-                != tl.load(cand_self_token + offsets, mask=self_mask, other=0),
+                != tl.load(
+                    cand_self_token + self_source,
+                    mask=self_mask,
+                    other=0,
+                ),
                 0,
             ),
             axis=0,
@@ -386,7 +517,11 @@ if triton is not None:
             tl.where(
                 target_mask,
                 tl.load(ref_source + offsets, mask=target_mask, other=0)
-                != tl.load(cand_source + offsets, mask=target_mask, other=0),
+                != tl.load(
+                    cand_source + physical_target_offset,
+                    mask=target_mask,
+                    other=0,
+                ),
                 0,
             ),
             axis=0,
@@ -395,7 +530,11 @@ if triton is not None:
             tl.where(
                 target_mask,
                 tl.load(ref_selected_token + offsets, mask=target_mask, other=0)
-                != tl.load(cand_selected_token + offsets, mask=target_mask, other=0),
+                != tl.load(
+                    cand_selected_token + physical_target_offset,
+                    mask=target_mask,
+                    other=0,
+                ),
                 0,
             ),
             axis=0,
@@ -404,7 +543,11 @@ if triton is not None:
             tl.where(
                 target_mask,
                 tl.load(ref_rejected_token + offsets, mask=target_mask, other=0)
-                != tl.load(cand_rejected_token + offsets, mask=target_mask, other=0),
+                != tl.load(
+                    cand_rejected_token + physical_target_offset,
+                    mask=target_mask,
+                    other=0,
+                ),
                 0,
             ),
             axis=0,
@@ -413,7 +556,11 @@ if triton is not None:
             tl.where(
                 target_mask,
                 tl.load(ref_accepted + offsets, mask=target_mask, other=0)
-                != tl.load(cand_accepted + offsets, mask=target_mask, other=0),
+                != tl.load(
+                    cand_accepted + physical_target_offset,
+                    mask=target_mask,
+                    other=0,
+                ),
                 0,
             ),
             axis=0,
@@ -465,17 +612,66 @@ if triton is not None:
         )
 
         first = offsets == 0
-        tl.atomic_add(compared_events, enabled.to(tl.int64), mask=first)
-        tl.atomic_add(decision_mismatches + 0, self_bad.to(tl.int64), mask=first)
-        tl.atomic_add(decision_mismatches + 1, source_bad.to(tl.int64), mask=first)
-        tl.atomic_add(decision_mismatches + 2, selected_bad.to(tl.int64), mask=first)
-        tl.atomic_add(decision_mismatches + 3, rejected_bad.to(tl.int64), mask=first)
-        tl.atomic_add(decision_mismatches + 4, accepted_bad.to(tl.int64), mask=first)
-        tl.atomic_add(walk_mismatches + 0, output_bad.to(tl.int64), mask=first)
-        tl.atomic_add(walk_mismatches + 1, output_lens_bad.to(tl.int64), mask=first)
-        tl.atomic_add(walk_mismatches + 2, path_bad.to(tl.int64), mask=first)
-        tl.atomic_add(walk_mismatches + 3, accepted_lens_bad.to(tl.int64), mask=first)
-        tl.atomic_add(walk_mismatches + 4, last_row_bad.to(tl.int64), mask=first)
+        event_delta = tl.where(first, enabled.to(tl.int64), 0)
+        self_delta = tl.where(first, self_bad.to(tl.int64), 0)
+        source_delta = tl.where(first, source_bad.to(tl.int64), 0)
+        selected_delta = tl.where(first, selected_bad.to(tl.int64), 0)
+        rejected_delta = tl.where(first, rejected_bad.to(tl.int64), 0)
+        accepted_delta = tl.where(first, accepted_bad.to(tl.int64), 0)
+        output_delta = tl.where(first, output_bad.to(tl.int64), 0)
+        output_lens_delta = tl.where(first, output_lens_bad.to(tl.int64), 0)
+        path_delta = tl.where(first, path_bad.to(tl.int64), 0)
+        accepted_lens_delta = tl.where(
+            first, accepted_lens_bad.to(tl.int64), 0
+        )
+        last_row_delta = tl.where(first, last_row_bad.to(tl.int64), 0)
+        tl.atomic_add(compared_events + offsets, event_delta, mask=first)
+        tl.atomic_add(
+            decision_mismatches + offsets,
+            self_delta,
+            mask=first,
+        )
+        tl.atomic_add(
+            decision_mismatches + 1 + offsets,
+            source_delta,
+            mask=first,
+        )
+        tl.atomic_add(
+            decision_mismatches + 2 + offsets,
+            selected_delta,
+            mask=first,
+        )
+        tl.atomic_add(
+            decision_mismatches + 3 + offsets,
+            rejected_delta,
+            mask=first,
+        )
+        tl.atomic_add(
+            decision_mismatches + 4 + offsets,
+            accepted_delta,
+            mask=first,
+        )
+        tl.atomic_add(walk_mismatches + offsets, output_delta, mask=first)
+        tl.atomic_add(
+            walk_mismatches + 1 + offsets,
+            output_lens_delta,
+            mask=first,
+        )
+        tl.atomic_add(
+            walk_mismatches + 2 + offsets,
+            path_delta,
+            mask=first,
+        )
+        tl.atomic_add(
+            walk_mismatches + 3 + offsets,
+            accepted_lens_delta,
+            mask=first,
+        )
+        tl.atomic_add(
+            walk_mismatches + 4 + offsets,
+            last_row_delta,
+            mask=first,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1335,11 +1531,43 @@ _FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
 _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
 )
-_FR13_CFWD_LOGIT_DIRECT_CANDIDATE = "fixed32_cfwd_logit_direct_decisions_v1"
-_FR13_CFWD_LOGIT_DIRECT_SCHEMA = "fr13.fixed32.cfwd_logit_direct_decisions.v1"
+_FR13_CFWD_LOGIT_DIRECT_CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
+_FR13_CFWD_LOGIT_DIRECT_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
 _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256 = (
-    "d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d"
+    "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192"
 )
+_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA = (
+    "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+)
+_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256 = (
+    "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+)
+_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_FUNCTIONS = (
+    "_fr13_cfwd_logit_direct_requested",
+    "_fr13_cfwd_logit_direct_production_pass",
+    "_fr13_cfwd_logit_direct_selector",
+    "_fr13_cfwd_logit_direct_load",
+    "_fr13_cfwd_logit_direct_entry",
+    "_fr13_cfwd_logit_direct_walk_entry",
+    "_fr13_cfwd_logit_direct_state",
+    "fr13_fixed32_cfwd_logit_direct_capture_begin",
+    "fr13_fixed32_cfwd_logit_direct_capture_end",
+    "_fr13_cfwd_logit_direct_walk_cuda",
+    "_fr13_cfwd_logit_direct_compare",
+    "_fr13_cfwd_logit_direct_tensor_call_census",
+    "_fr13_cfwd_logit_direct_publish_work",
+    "_fr13_cfwd_logit_direct_production_commit",
+    "fr13_fixed32_cfwd_logit_direct_commit",
+    "fr13_fixed32_cfwd_logit_direct_warm_execute",
+    "fr13_fixed32_cfwd_logit_direct_live_prepare_replay",
+    "_fr13_cfwd_logit_direct_real_marker",
+    "fr13_fixed32_cfwd_logit_direct_live_finalize",
+)
+_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_KERNEL_SOURCE_FUNCTIONS = (
+    "_fr13_fixed32_taw_physical_slot_commit_kernel",
+    "_fr13_cfwd_logit_direct_compare_kernel",
+)
+_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE: dict[str, str] | None = None
 _FR13_CFWD_LOGIT_DIRECT_MODULE = None
 _FR13_CFWD_LOGIT_DIRECT_GRAPHS: dict[int, dict[str, Any]] = {}
 _FR13_CFWD_LOGIT_DIRECT_CAPTURE: dict[str, Any] | None = None
@@ -5111,6 +5339,82 @@ def fr13_fixed32_taw_commit(
     )
 
 
+def _fr13_cfwd_logit_direct_integration_source_contract() -> dict[str, str]:
+    """Bind the CFWD-only wrappers and kernels without changing TAW identity."""
+    global _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE
+    if _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE is not None:
+        return dict(_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE)
+
+    try:
+        tree = ast.parse(Path(__file__).resolve().read_text(encoding="utf-8"))
+    except (OSError, SyntaxError) as error:
+        raise RuntimeError(
+            "FR13 CFWD logit-direct cannot inspect integration source"
+        ) from error
+    expected_functions = set(
+        _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_FUNCTIONS
+    )
+    expected_kernels = set(
+        _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_KERNEL_SOURCE_FUNCTIONS
+    )
+    expected = expected_functions | expected_kernels
+    definitions: dict[str, list[Any]] = {name: [] for name in expected}
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name in definitions
+        ):
+            definitions[node.name].append(node)
+    if any(len(nodes) != 1 for nodes in definitions.values()):
+        raise RuntimeError(
+            "FR13 CFWD logit-direct integration source is incomplete or ambiguous"
+        )
+
+    normalized = {
+        name: ast.dump(
+            definitions[name][0],
+            annotate_fields=True,
+            include_attributes=False,
+        )
+        for name in sorted(expected)
+    }
+    canonical = json.dumps(
+        {
+            "schema": _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA,
+            "candidate": {
+                "name": _FR13_CFWD_LOGIT_DIRECT_CANDIDATE,
+                "schema": _FR13_CFWD_LOGIT_DIRECT_SCHEMA,
+                "source_sha256": _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256,
+            },
+            "geometry": _FR13_FIXED32_TAW_GEOMETRY,
+            "functions": {
+                name: normalized[name] for name in sorted(expected_functions)
+            },
+            "kernels": {
+                name: normalized[name] for name in sorted(expected_kernels)
+            },
+        },
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    digest = hashlib.sha256(canonical.encode("ascii")).hexdigest()
+    if digest != _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256:
+        raise RuntimeError(
+            "FR13 CFWD logit-direct integration source digest drift: "
+            f"{digest} != "
+            f"{_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256}"
+        )
+    contract = {
+        "integration_source_schema": (
+            _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA
+        ),
+        "integration_source_sha256": digest,
+    }
+    _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE = contract
+    return dict(contract)
+
+
 def _fr13_cfwd_logit_direct_requested() -> bool:
     raw = os.environ.get("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "0").strip()
     if raw not in ("0", "1"):
@@ -5164,6 +5468,9 @@ def _fr13_cfwd_logit_direct_production_pass(
     source_commit = os.environ.get(
         "FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT", ""
     ).strip()
+    integration_contract = (
+        _fr13_cfwd_logit_direct_integration_source_contract()
+    )
     expected_keys = {
         "schema",
         "status",
@@ -5171,6 +5478,8 @@ def _fr13_cfwd_logit_direct_production_pass(
         "candidate_schema",
         "candidate_source_sha256",
         "integration_source_commit",
+        "integration_source_schema",
+        "integration_source_sha256",
         "mode",
         "qualified_batch",
         "task_count",
@@ -5193,13 +5502,17 @@ def _fr13_cfwd_logit_direct_production_pass(
         not isinstance(payload, dict)
         or set(payload) != expected_keys
         or payload.get("schema")
-        != "fr13.fixed32.cfwd_logit_direct.production_credential.v1"
+        != "fr13.fixed32.cfwd_logit_direct.production_credential.v2"
         or payload.get("status") != "production_timing_ready"
         or payload.get("candidate") != _FR13_CFWD_LOGIT_DIRECT_CANDIDATE
         or payload.get("candidate_schema") != _FR13_CFWD_LOGIT_DIRECT_SCHEMA
         or payload.get("candidate_source_sha256")
         != _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256
         or payload.get("integration_source_commit") != source_commit
+        or payload.get("integration_source_schema")
+        != integration_contract["integration_source_schema"]
+        or payload.get("integration_source_sha256")
+        != integration_contract["integration_source_sha256"]
         or payload.get("mode") != expected_mode
         or payload.get("qualified_batch") != int(expected_batch)
         or payload.get("task_count") != 1
@@ -5239,13 +5552,14 @@ def _fr13_cfwd_logit_direct_production_pass(
     )
     if not engagement_path.exists():
         engagement = {
-            "schema": "fr13.fixed32.cfwd_logit_direct.production_engagement.v1",
+            "schema": "fr13.fixed32.cfwd_logit_direct.production_engagement.v2",
             "status": "engaged",
             "candidate": _FR13_CFWD_LOGIT_DIRECT_CANDIDATE,
             "mode": expected_mode,
             "batch_size": int(expected_batch),
             "source_commit": source_commit,
             "candidate_source_sha256": _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256,
+            **integration_contract,
             "production_pass_sha256": observed_sha,
             "served_return": "logit-direct candidate products",
             "producer_pid": os.getpid(),
@@ -5286,6 +5600,8 @@ def _fr13_cfwd_logit_direct_selector(
         raise RuntimeError(
             "FR13 CFWD logit-direct diagnostic and production are mutually exclusive"
         )
+    if diagnostic or production:
+        _fr13_cfwd_logit_direct_integration_source_contract()
     if production:
         _fr13_cfwd_logit_direct_production_pass(
             expected_mode=mode,
@@ -5412,6 +5728,8 @@ def _fr13_cfwd_logit_direct_state(
         "workspace": workspace,
         "metadata_binding": metadata_binding,
         "walk_entry": _fr13_cfwd_logit_direct_walk_entry(entry),
+        "self_source_indices": entry["native_self_source_indices"],
+        "target_parent_slots": entry["all_parent_target_parent_slots"],
         "count_enable": torch.zeros((1,), dtype=torch.int32, device=device),
         "compared_events": torch.zeros((1,), dtype=torch.int64, device=device),
         "decision_mismatches": torch.zeros(
@@ -5481,18 +5799,18 @@ def _fr13_cfwd_logit_direct_walk_cuda(
     bonus_flat,
     decisions: tuple[Any, Any, Any, Any, Any],
 ) -> tuple[Any, Any, Any, Any, Any]:
-    """Apply the incumbent one-program integer walk to precomputed decisions."""
+    """Walk physical-slot decisions without topology-map indirection."""
     if triton is None or tl is None:
         raise RuntimeError("FR13 CFWD logit-direct walk requires Triton")
     batch = int(entry["batch_size"])
-    self_rows = int(entry["native_self_rows_per_request"])
-    target_rows = int(entry["native_target_rows_per_request"])
+    physical_drafts = int(topology.PHYSICAL_DRAFTS)
+    physical_rows = int(topology.PHYSICAL_ROWS)
     expected = (
-        (decisions[0], (batch, self_rows), torch.long),
-        (decisions[1], (batch, target_rows), torch.long),
-        (decisions[2], (batch, target_rows), torch.long),
-        (decisions[3], (batch, target_rows), torch.long),
-        (decisions[4], (batch, target_rows), torch.bool),
+        (decisions[0], (batch, physical_drafts), torch.long),
+        (decisions[1], (batch, physical_rows), torch.long),
+        (decisions[2], (batch, physical_rows), torch.long),
+        (decisions[3], (batch, physical_rows), torch.long),
+        (decisions[4], (batch, physical_rows), torch.bool),
     )
     if any(
         not isinstance(value, torch.Tensor)
@@ -5503,11 +5821,9 @@ def _fr13_cfwd_logit_direct_walk_cuda(
         for value, shape, dtype in expected
     ):
         raise RuntimeError("FR13 CFWD logit-direct decision layout drift")
-    _fr13_fixed32_taw_all_parent_commit_kernel[(batch,)](
+    _fr13_fixed32_taw_physical_slot_commit_kernel[(batch,)](
         entry["child_table"],
         entry["child_counts"],
-        entry["native_self_slot_by_node"],
-        entry["native_target_slot_by_parent"],
         *decisions,
         bonus_flat,
         entry["output_tokens"],
@@ -5515,11 +5831,9 @@ def _fr13_cfwd_logit_direct_walk_cuda(
         entry["accepted_path_rows"],
         entry["accepted_lens"],
         entry["last_row"],
-        PHYSICAL_DRAFTS=int(topology.PHYSICAL_DRAFTS),
-        PHYSICAL_ROWS=int(topology.PHYSICAL_ROWS),
+        PHYSICAL_DRAFTS=physical_drafts,
+        PHYSICAL_ROWS=physical_rows,
         FANOUT=int(topology.SAMPLER_MAX_FANOUT),
-        SELF_ROWS=self_rows,
-        TARGET_ROWS=target_rows,
         WALK_CAP=int(topology.WALK_CAP),
         OUTPUT_CAPACITY=int(topology.OUTPUT_PUBLISH_CAPACITY),
         PATH_CAPACITY=int(topology.ACCEPTED_PATH_CAPACITY),
@@ -5549,6 +5863,8 @@ def _fr13_cfwd_logit_direct_compare(
         state["compared_events"],
         state["decision_mismatches"],
         state["walk_mismatches"],
+        state["self_source_indices"],
+        state["target_parent_slots"],
         reference_decisions[0],
         candidate_decisions[0],
         reference_decisions[1],
@@ -5569,6 +5885,8 @@ def _fr13_cfwd_logit_direct_compare(
         candidate_walk[3],
         reference_walk[4],
         candidate_walk[4],
+        TARGET_ROWS=17,
+        PHYSICAL_ROWS=32,
         SELF_N=batch * 13,
         TARGET_N=batch * 17,
         OUTPUT_N=batch * 32,
@@ -5640,8 +5958,12 @@ def _fr13_cfwd_logit_direct_publish_work(
         "exact_commit_launches": 1,
         "exact_commit_programs": batch_size,
         "floating_sampling_reimplementation": False,
-        "source_contract_schema": _FR13_CFWD_LOGIT_DIRECT_SCHEMA,
-        "source_contract_sha256": _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256,
+        "source_contract_schema": (
+            _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA
+        ),
+        "source_contract_sha256": (
+            _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256
+        ),
         "tensor_call_census": _fr13_cfwd_logit_direct_tensor_call_census(),
     }
     overlap = set(taw).intersection(layout_contract)
@@ -6234,8 +6556,11 @@ def fr13_fixed32_cfwd_logit_direct_live_finalize(
         count * batch * (32 + 1 + 16 + 1 + 1)
         for batch, count in histogram.items()
     )
+    integration_contract = (
+        _fr13_cfwd_logit_direct_integration_source_contract()
+    )
     record = {
-        "schema": "fr13.fixed32.cfwd_logit_direct_live_ab.v1",
+        "schema": "fr13.fixed32.cfwd_logit_direct_live_ab.v2",
         "status": "PASS",
         "suite": "SWE-Verified",
         "instance_id": instance_id,
@@ -6246,6 +6571,7 @@ def fr13_fixed32_cfwd_logit_direct_live_finalize(
         "candidate": _FR13_CFWD_LOGIT_DIRECT_CANDIDATE,
         "candidate_schema": _FR13_CFWD_LOGIT_DIRECT_SCHEMA,
         "candidate_source_sha256": _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256,
+        **integration_contract,
         "incumbent_source_sha256": _FR13_FIXED32_TAW_SOURCE_SHA256,
         "graph_ids": sorted(graph_ids),
         "complete_work_census_events": len(event_rows),

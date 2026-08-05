@@ -95,6 +95,21 @@ def test_contract_has_exact_fixed32_work_ledger(
     assert contract["candidate_block_stat_workspace_bytes"] == (
         batch_size * 15_360
     )
+    assert contract["decision_programs_per_request_before"] == 30
+    assert contract["decision_programs_per_request_after"] == 30
+    assert contract["decision_values_stored_per_request_before"] == 81
+    assert contract["decision_values_stored_per_request_after"] == 81
+    assert contract["integer_walk_topology_index_loads_per_request_before"] == 24
+    assert contract["integer_walk_topology_index_loads_per_request_after"] == 0
+    assert contract["compact_decision_workspace_bytes_before"] == (
+        batch_size * 529
+    )
+    assert contract["physical_decision_workspace_bytes_after"] == (
+        batch_size * 1_048
+    )
+    assert contract["decision_workspace_bytes_added"] == batch_size * 519
+    assert contract["decision_workspace_zero_seeded_once"] is True
+    assert contract["decision_padding_initialization_stores_per_event"] == 0
 
 
 @pytest.mark.parametrize(
@@ -130,10 +145,50 @@ def test_workspace_is_persistent_physical32_for_b1_and_b4() -> None:
             (batch_size * 30, 64),
             torch.float32,
         )
-        assert spec["self_token"] == ((batch_size, 13), torch.long)
-        assert spec["source"] == ((batch_size, 17), torch.long)
-        assert spec["accepted"] == ((batch_size, 17), torch.bool)
+        assert spec["self_token"] == ((batch_size, 31), torch.long)
+        assert spec["source"] == ((batch_size, 32), torch.long)
+        assert spec["selected_token"] == ((batch_size, 32), torch.long)
+        assert spec["rejected_token"] == ((batch_size, 32), torch.long)
+        assert spec["accepted"] == ((batch_size, 32), torch.bool)
         assert spec["invalid"] == ((1,), torch.int32)
+
+
+@pytest.mark.parametrize("mode", sorted(kernel.FIXED32_MODES))
+@pytest.mark.parametrize("batch_size", (1, 4))
+def test_physical_decision_slots_preserve_compact_reachable_rows(
+    mode: str, batch_size: int
+) -> None:
+    metadata = _valid_metadata(batch_size, mode)
+    generator = torch.Generator().manual_seed(1_000 * batch_size + len(mode))
+    compact_self = torch.randint(
+        0, 1_000, (batch_size, kernel.SELF_ROWS), generator=generator
+    )
+    compact_target = [
+        torch.randint(
+            0, 1_000, (batch_size, kernel.TARGET_ROWS), generator=generator
+        )
+        for _ in range(4)
+    ]
+    physical_self = torch.full((batch_size, kernel.PHYSICAL_DRAFTS), -1)
+    physical_target = [
+        torch.full((batch_size, kernel.PHYSICAL_ROWS), -1) for _ in range(4)
+    ]
+    self_sources = metadata["self_source_indices"].reshape(batch_size, -1)
+    self_nodes = self_sources - (
+        torch.arange(batch_size).unsqueeze(1) * kernel.PHYSICAL_DRAFTS
+    )
+    physical_self.scatter_(1, self_nodes, compact_self)
+    parent_slots = metadata["target_parent_slots"].expand(batch_size, -1)
+    for physical, compact in zip(
+        physical_target, compact_target, strict=True
+    ):
+        physical.scatter_(1, parent_slots, compact)
+
+    assert torch.equal(torch.gather(physical_self, 1, self_nodes), compact_self)
+    for physical, compact in zip(
+        physical_target, compact_target, strict=True
+    ):
+        assert torch.equal(torch.gather(physical, 1, parent_slots), compact)
 
 
 def _valid_metadata(batch_size: int, mode: str) -> dict[str, torch.Tensor]:
@@ -358,6 +413,160 @@ def test_kernel_uses_scan_terminal_masses_and_sticky_domain_guards() -> None:
     assert "block_cdf" in source
     assert "local_total" in source
     assert "local_total / tl.maximum(selected_block_mass" in source
+    assert "self_token_out + physical_self_offset" in source
+    assert source.count("+ physical_target_offset") == 4
+    assert "self_token_out + self_row" not in source
+    assert "source_out + target_row" not in source
+
+
+def test_served_integer_walk_reads_physical_slots_without_topology_maps() -> None:
+    source = SERVED_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    definitions = {
+        node.name: ast.get_source_segment(source, node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+    kernel_source = definitions[
+        "_fr13_fixed32_taw_physical_slot_commit_kernel"
+    ]
+    assert "self_slot_by_node" not in kernel_source
+    assert "target_slot_by_parent" not in kernel_source
+    assert "request * PHYSICAL_DRAFTS + safe_current" in kernel_source
+    assert "request * PHYSICAL_ROWS + parent_slot" in kernel_source
+
+    walk_source = definitions["_fr13_cfwd_logit_direct_walk_cuda"]
+    assert "_fr13_fixed32_taw_physical_slot_commit_kernel" in walk_source
+    assert 'entry["native_self_slot_by_node"]' not in walk_source
+    assert 'entry["native_target_slot_by_parent"]' not in walk_source
+
+    compare_source = definitions["_fr13_cfwd_logit_direct_compare_kernel"]
+    assert "cand_self_token + self_source" in compare_source
+    assert "cand_source + physical_target_offset" in compare_source
+
+    taw_kernel_contract = source[
+        source.index("_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (") :
+        source.index("_FR13_FIXED32_TAW_GEOMETRY = {")
+    ]
+    integration_kernel_contract = source[
+        source.index(
+            "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_KERNEL_SOURCE_FUNCTIONS = ("
+        ) : source.index(
+            "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE"
+        )
+    ]
+    assert "_fr13_fixed32_taw_physical_slot_commit_kernel" not in (
+        taw_kernel_contract
+    )
+    assert "_fr13_fixed32_taw_physical_slot_commit_kernel" in (
+        integration_kernel_contract
+    )
+
+
+def test_cfwd_integration_source_contract_is_separate_and_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "fr13_cfwd_integration_source_contract_test",
+        SERVED_PATH,
+    )
+    assert spec is not None and spec.loader is not None
+    device = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(device)
+    contract = device._fr13_cfwd_logit_direct_integration_source_contract()
+    assert contract == {
+        "integration_source_schema": (
+            "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+        ),
+        "integration_source_sha256": (
+            "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+        ),
+    }
+    assert device._FR13_FIXED32_TAW_SOURCE_SHA256 == (
+        "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
+    )
+    assert device._FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS == (
+        "_fr13_fixed32_taw_exact_commit_kernel",
+        "_fr13_fixed32_taw_all_parent_commit_kernel",
+    )
+    assert "_fr13_fixed32_taw_physical_slot_commit_kernel" in (
+        device._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_KERNEL_SOURCE_FUNCTIONS
+    )
+    assert "_fr13_cfwd_logit_direct_walk_cuda" in (
+        device._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_FUNCTIONS
+    )
+    assert "fr13_fixed32_cfwd_logit_direct_commit" in (
+        device._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_FUNCTIONS
+    )
+
+    monkeypatch.setattr(
+        device,
+        "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE",
+        None,
+    )
+    monkeypatch.setattr(
+        device,
+        "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256",
+        "0" * 64,
+    )
+    with pytest.raises(RuntimeError, match="integration source digest drift"):
+        device._fr13_cfwd_logit_direct_integration_source_contract()
+
+
+@pytest.mark.parametrize("mode", sorted(kernel.FIXED32_MODES))
+def test_physical_walk_preseeds_unwritten_leaf_slots_and_child_address(
+    mode: str,
+) -> None:
+    workspace = kernel.allocate_workspace(device="cpu", batch_size=1)
+    for name in (
+        "self_token",
+        "source",
+        "selected_token",
+        "rejected_token",
+        "accepted",
+    ):
+        assert torch.count_nonzero(workspace[name]).item() == 0
+
+    self_token = workspace["self_token"][0].tolist()
+    target_source = workspace["source"][0].tolist()
+    for node in kernel.SELF_SOURCE_NODES:
+        self_token[node] = 10_000 + node
+    # Force root -> node 0 -> leaf node 4. Physical target slot 5 is not a
+    # producer row and remains safely zero-seeded outside measured replays.
+    target_source[0] = 0
+    target_source[1] = 1
+    metadata = _valid_metadata(1, mode)
+    current = -1
+    for _level in range(kernel.WALK_CAP):
+        parent_slot = current + 1
+        children = kernel.MODE_CHILDREN[mode].get(parent_slot, ())
+        has_kids = bool(children)
+        if not has_kids:
+            assert current == 4
+            assert self_token[current] == 10_004
+            assert target_source[parent_slot] == 0
+            assert metadata["child_table"][0, parent_slot, 0].item() == -1
+            break
+        selected_source = target_source[parent_slot]
+        assert 0 <= selected_source < len(children)
+        current = children[selected_source]
+    else:
+        pytest.fail("zero-seeded leaf path did not terminate")
+
+    source = SERVED_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    physical_kernel = next(
+        ast.get_source_segment(source, node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_taw_physical_slot_commit_kernel"
+    )
+    assert "mask=leaf & current_valid" not in physical_kernel
+    assert physical_kernel.count("mask=has_kids") == 1
+    assert physical_kernel.count("mask=is_accepted") == 1
+    allocation_source = inspect.getsource(kernel.allocate_workspace)
+    assert "torch.zeros" in allocation_source
+    assert "torch.empty" not in allocation_source
 
 
 def test_candidate_is_default_off_and_wired_only_through_shadow_wrapper() -> None:

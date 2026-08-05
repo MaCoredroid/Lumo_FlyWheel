@@ -32,7 +32,7 @@ BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242f
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 STOCK_FA2_BYTES=299183936
 CANDIDATE_SOURCE=scripts/fr13_cfwd_logit_direct_decision_kernel.py
-CANDIDATE_SOURCE_SHA256=d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d
+CANDIDATE_SOURCE_SHA256=c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192
 TAW_SOURCE=scripts/fr13_device_multidraft_kernel.py
 GATE=scripts/fr13_cfwd_logit_direct_gate.py
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
@@ -82,6 +82,30 @@ unset required
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ \
    && -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean at a valid source commit" >&2; exit 2; }
+"$PYTHON_BIN" - "$GATE" "$TAW_SOURCE" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+
+def load(path: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(path))
+    if spec is None or spec.loader is None:
+        raise SystemExit("CFWD integration source contract module is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+gate = load(sys.argv[1], "fr13_cfwd_gate_contract_preflight")
+device = load(sys.argv[2], "fr13_cfwd_device_contract_preflight")
+contract = device._fr13_cfwd_logit_direct_integration_source_contract()
+if (
+    contract.get("integration_source_schema") != gate.INTEGRATION_SOURCE_SCHEMA
+    or contract.get("integration_source_sha256") != gate.INTEGRATION_SOURCE_SHA256
+):
+    raise SystemExit("CFWD integration source contract mismatch")
+PY
 "$PYTHON_BIN" scripts/fr13_taw_b1_credential.py validate-production \
   --mode hydra27_fixed32 \
   --source "$TAW_SOURCE" \

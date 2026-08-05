@@ -36,14 +36,20 @@ def _load(path: Path, name: str):
 
 def _credential(source_commit: str) -> dict:
     return {
-        "schema": "fr13.fixed32.cfwd_logit_direct.production_credential.v1",
+        "schema": "fr13.fixed32.cfwd_logit_direct.production_credential.v2",
         "status": "production_timing_ready",
-        "candidate": "fixed32_cfwd_logit_direct_decisions_v1",
-        "candidate_schema": "fr13.fixed32.cfwd_logit_direct_decisions.v1",
+        "candidate": "fixed32_cfwd_logit_direct_physical_slots_v2",
+        "candidate_schema": "fr13.fixed32.cfwd_logit_direct_physical_slots.v2",
         "candidate_source_sha256": (
-            "d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d"
+            "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192"
         ),
         "integration_source_commit": source_commit,
+        "integration_source_schema": (
+            "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+        ),
+        "integration_source_sha256": (
+            "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+        ),
         "mode": "hydra27_fixed32",
         "qualified_batch": 1,
         "task_count": 1,
@@ -103,6 +109,12 @@ def test_production_selector_is_source_bound_and_emits_engagement(
     engagement = json.loads(engagement_path.read_text(encoding="ascii"))
     assert engagement["served_return"] == "logit-direct candidate products"
     assert engagement["source_commit"] == source_commit
+    assert engagement["integration_source_schema"] == (
+        module._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA
+    )
+    assert engagement["integration_source_sha256"] == (
+        module._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256
+    )
     assert engagement["production_pass_sha256"] == hashlib.sha256(raw).hexdigest()
 
 
@@ -116,6 +128,28 @@ def test_production_selector_rejects_diagnostic_overlap(
         module._fr13_cfwd_logit_direct_selector(
             mode="hydra27_fixed32", batch_size=1
         )
+
+
+def test_cfwd_integration_contract_propagates_without_rekeying_taw() -> None:
+    device = _load(DEVICE_PATH, "fr13_cfwd_direct_contract_device_test")
+    gate = _load(GATE_PATH, "fr13_cfwd_direct_contract_gate_test")
+    census = _load(CENSUS_PATH, "fr13_cfwd_direct_contract_census_test")
+    contract = device._fr13_cfwd_logit_direct_integration_source_contract()
+    assert (
+        contract["integration_source_schema"]
+        == gate.INTEGRATION_SOURCE_SCHEMA
+        == census.TAW_CFWD_LOGIT_DIRECT_SOURCE_SCHEMA
+    )
+    assert (
+        contract["integration_source_sha256"]
+        == gate.INTEGRATION_SOURCE_SHA256
+        == census.TAW_CFWD_LOGIT_DIRECT_SOURCE_SHA256
+    )
+    assert (
+        device._FR13_FIXED32_TAW_SOURCE_SHA256
+        == census.TAW_SOURCE_CONTRACT_SHA256
+        == "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
+    )
 
 
 def test_direct_production_work_census_has_no_pytorch_vocab_materialization() -> None:
@@ -166,6 +200,8 @@ def test_gate_issues_only_from_canonical_real_task_and_final_flush(
         "candidate": gate.CANDIDATE,
         "candidate_schema": gate.CANDIDATE_SCHEMA,
         "candidate_source_sha256": gate.CANDIDATE_SOURCE_SHA256,
+        "integration_source_schema": gate.INTEGRATION_SOURCE_SCHEMA,
+        "integration_source_sha256": gate.INTEGRATION_SOURCE_SHA256,
         "source_commit": source_commit,
         "mode": gate.MODE,
         "instance_id": gate.GATE_TASK_ID,
@@ -254,6 +290,8 @@ def test_live_runner_is_canonical_real_swe_byte_gate() -> None:
         assert prerequisite in text
     assert "--traffic-audit \"$TRAFFIC_AUDIT\"" in text
     assert "--boundary-snapshot \"$BOUNDARY\"" in text
+    assert "_fr13_cfwd_logit_direct_integration_source_contract" in text
+    assert "CFWD integration source contract mismatch" in text
     assert "PROBE_ONLY" not in text and "CAPTURE_ONLY" not in text
 
 
@@ -281,6 +319,9 @@ def test_timing_runner_is_exact4_stock_then_credentialed_candidate() -> None:
     assert "--expected-tok-per-draft 31" in text
     assert '"timing_eligible": True' in text
     assert '"floor_acceptance_eligible": False' in text
+    assert "cfwd_gate.INTEGRATION_SOURCE_SCHEMA" in text
+    assert "cfwd_gate.INTEGRATION_SOURCE_SHA256" in text
+    assert "CFWD integration source contract mismatch" in text
     for field in (
         '"step_wall_ms"',
         '"measured_tps_fullstep_wall"',

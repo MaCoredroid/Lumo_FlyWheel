@@ -33,7 +33,7 @@ BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242f
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 STOCK_FA2_BYTES=299183936
 CANDIDATE_SOURCE=scripts/fr13_cfwd_logit_direct_decision_kernel.py
-CANDIDATE_SOURCE_SHA256=d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d
+CANDIDATE_SOURCE_SHA256=c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192
 TAW_SOURCE=scripts/fr13_device_multidraft_kernel.py
 GATE=scripts/fr13_cfwd_logit_direct_gate.py
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
@@ -89,6 +89,30 @@ unset required
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ \
    && -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean at a valid source commit" >&2; exit 2; }
+"$PYTHON_BIN" - "$GATE" "$TAW_SOURCE" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+
+def load(path: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(path))
+    if spec is None or spec.loader is None:
+        raise SystemExit("CFWD integration source contract module is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+gate = load(sys.argv[1], "fr13_cfwd_gate_contract_preflight")
+device = load(sys.argv[2], "fr13_cfwd_device_contract_preflight")
+contract = device._fr13_cfwd_logit_direct_integration_source_contract()
+if (
+    contract.get("integration_source_schema") != gate.INTEGRATION_SOURCE_SCHEMA
+    or contract.get("integration_source_sha256") != gate.INTEGRATION_SOURCE_SHA256
+):
+    raise SystemExit("CFWD integration source contract mismatch")
+PY
 
 # Credential validation is the first candidate-qualifying action. It binds the
 # one-task byte PASS to this source commit and separately pins the timing set.
@@ -321,6 +345,7 @@ from pathlib import Path
 repo = Path.cwd()
 sys.path.insert(0, str(repo / "scripts"))
 from fr13_b4_timing_math import phase_breakdown
+import fr13_cfwd_logit_direct_gate as cfwd_gate
 
 subset_path, stock_path, candidate_path, engagement_path, credential_path, out_path = map(
     Path, sys.argv[1:7]
@@ -432,19 +457,24 @@ def validate_measure(payload, raw, arm):
 
 expected_engagement_keys = {
     "schema", "status", "candidate", "mode", "batch_size", "source_commit",
-    "candidate_source_sha256", "production_pass_sha256", "served_return",
+    "candidate_source_sha256", "integration_source_schema",
+    "integration_source_sha256", "production_pass_sha256", "served_return",
     "producer_pid",
 }
 if (
     set(engagement) != expected_engagement_keys
     or engagement.get("schema")
-    != "fr13.fixed32.cfwd_logit_direct.production_engagement.v1"
+    != "fr13.fixed32.cfwd_logit_direct.production_engagement.v2"
     or engagement.get("status") != "engaged"
-    or engagement.get("candidate") != "fixed32_cfwd_logit_direct_decisions_v1"
+    or engagement.get("candidate") != "fixed32_cfwd_logit_direct_physical_slots_v2"
     or engagement.get("mode") != "hydra27_fixed32"
     or engagement.get("batch_size") != 1
     or engagement.get("source_commit") != source_commit
     or engagement.get("candidate_source_sha256") != candidate_source_sha
+    or engagement.get("integration_source_schema")
+    != cfwd_gate.INTEGRATION_SOURCE_SCHEMA
+    or engagement.get("integration_source_sha256")
+    != cfwd_gate.INTEGRATION_SOURCE_SHA256
     or engagement.get("production_pass_sha256") != credential_sha
     or engagement.get("served_return") != "logit-direct candidate products"
     or type(engagement.get("producer_pid")) is not int
@@ -512,6 +542,8 @@ summary = {
     "taw_pass_sha256": taw_pass_sha,
     "cfwd_pass_sha256": credential_sha,
     "candidate_source_sha256": candidate_source_sha,
+    "integration_source_schema": cfwd_gate.INTEGRATION_SOURCE_SCHEMA,
+    "integration_source_sha256": cfwd_gate.INTEGRATION_SOURCE_SHA256,
 }
 temporary = out_path.with_name(out_path.name + f".tmp.{os.getpid()}")
 temporary.write_text(

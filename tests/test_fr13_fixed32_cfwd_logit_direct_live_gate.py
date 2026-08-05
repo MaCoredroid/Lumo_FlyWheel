@@ -53,6 +53,11 @@ def test_wrapper_preserves_certified_commit_and_reuses_its_uniform_buffer() -> N
         source.index("_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (")
     ]
     assert "fr13_fixed32_cfwd_logit_direct_commit" not in source_functions
+    kernel_functions = source[
+        source.index("_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (") :
+        source.index("_FR13_FIXED32_TAW_GEOMETRY = {")
+    ]
+    assert "_fr13_fixed32_taw_physical_slot_commit_kernel" not in kernel_functions
 
 
 def test_runtime_hooks_cover_capture_replay_and_authenticated_final_flush() -> None:
@@ -80,7 +85,7 @@ def test_launcher_keeps_gate_off_and_requires_full_graph_native_production() -> 
     assert 'case "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" in' in launcher
     assert '"$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1"' in launcher
     assert '"${ENFORCE_EAGER:-0}" == "0"' in launcher
-    assert "d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d" in launcher
+    assert "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192" in launcher
     assert '-e FR13_CFWD_LOGIT_DIRECT_BYTE_AB="$FR13_CFWD_LOGIT_DIRECT_BYTE_AB"' in launcher
 
 
@@ -170,7 +175,17 @@ def test_final_flush_emits_only_zero_mismatch_real_task_record(
     }
     module.fr13_fixed32_cfwd_logit_direct_live_finalize(events, binding)
     record = json.loads(output.read_text(encoding="ascii"))
+    assert record["schema"] == "fr13.fixed32.cfwd_logit_direct_live_ab.v2"
     assert record["status"] == "PASS"
+    assert record["integration_source_schema"] == (
+        module._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA
+    )
+    assert record["integration_source_sha256"] == (
+        module._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256
+    )
+    assert record["incumbent_source_sha256"] == (
+        "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
+    )
     assert record["counted_graph_replays"] == 2
     assert record["decision_values_compared"] == 162
     assert record["walk_values_compared"] == 102
