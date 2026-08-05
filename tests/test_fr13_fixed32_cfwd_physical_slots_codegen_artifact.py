@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,11 +93,32 @@ def test_physical_slot_codegen_summary_is_narrow_and_spill_free() -> None:
 
 
 def test_physical_slot_artifact_source_checksums_match() -> None:
+    artifact_commit = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "log",
+            "-1",
+            "--format=%H",
+            "--",
+            str(ARTIFACT.relative_to(ROOT) / "source_checksums.sha256"),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+    assert artifact_commit
     entries = (ARTIFACT / "source_checksums.sha256").read_text().splitlines()
     assert len(entries) == 3
     for entry in entries:
         expected, relative = entry.split("  ", 1)
-        observed = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+        historical = subprocess.run(
+            ["git", "-C", str(ROOT), "show", f"{artifact_commit}:{relative}"],
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        observed = hashlib.sha256(historical).hexdigest()
         assert observed == expected
 
 

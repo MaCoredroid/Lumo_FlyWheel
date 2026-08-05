@@ -154,10 +154,10 @@ TAW_SOURCE_CONTRACT_SHA256 = (
     "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
 )
 TAW_CFWD_LOGIT_DIRECT_SOURCE_SCHEMA = (
-    "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+    "fr13.fixed32.cfwd_logit_direct.integration_source.v2"
 )
 TAW_CFWD_LOGIT_DIRECT_SOURCE_SHA256 = (
-    "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+    "a82ce3f5e526792ca45bb444212e5440e8444778f174fd0650accc4bb5f8558c"
 )
 TAW_TENSOR_CALL_CENSUS = {
     "walk_levels": 12,

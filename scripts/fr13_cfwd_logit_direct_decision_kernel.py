@@ -28,8 +28,8 @@ except Exception:  # pragma: no cover - CPU-only source gates
     tl = None
 
 
-CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
-SOURCE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
+CANDIDATE = "fixed32_cfwd_logit_direct_packed_physical_slots_v3"
+SOURCE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_packed_physical_slots.v3"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
 PHYSICAL_DRAFTS = 31
 PHYSICAL_ROWS = 32
@@ -42,6 +42,10 @@ BLOCK_V = 4096
 MAX_VOCAB = 262_144
 MAX_BLOCKS = MAX_VOCAB // BLOCK_V
 FP32_BYTES = 4
+PACKED_EVENT_TOKEN_MASK = 0x3FFFF
+PACKED_EVENT_ACCEPTED_ROW_SHIFT = 18
+PACKED_EVENT_ACCEPTED_ROW_MASK = 0x1F
+PACKED_EVENT_PARENT_MASK = 0x800000
 SELF_SOURCE_NODES = (4, 5, 6, 7, 9, 10, 12, 14, 15, 19, 20, 21, 30)
 TARGET_SOURCE_NODES = (0, 3, 6, 7, 8, 11, 12, 13, 16, 18, 21, 23, 25, 27, 28, 29, 30)
 SELF_UNIFORM_LEVELS = (2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 11)
@@ -129,6 +133,12 @@ def fixed32_cfwd_logit_direct_contract(
     physical_decision_bytes = batch * (
         PHYSICAL_DRAFTS * 8 + PHYSICAL_ROWS * (3 * 8 + 1)
     )
+    # The exact verifier vocabulary fits 18 bits. Pack the emitted token, the
+    # accepted child row, and a parent-event bit into one int64 word. The fixed
+    # walk no longer rereads tree topology or dead intermediate decisions.
+    packed_physical_decision_bytes = batch * (
+        PHYSICAL_DRAFTS * 8 + PHYSICAL_ROWS * 8
+    )
     return {
         "candidate": CANDIDATE,
         "schema": SOURCE_SCHEMA,
@@ -159,15 +169,21 @@ def fixed32_cfwd_logit_direct_contract(
             SELF_ROWS + 4 * TARGET_ROWS
         ),
         "decision_values_stored_per_request_after": (
-            SELF_ROWS + 4 * TARGET_ROWS
+            SELF_ROWS + TARGET_ROWS
         ),
         "integer_walk_topology_index_loads_per_request_before": 2 * WALK_CAP,
         "integer_walk_topology_index_loads_per_request_after": 0,
         "compact_decision_workspace_bytes_before": compact_decision_bytes,
-        "physical_decision_workspace_bytes_after": physical_decision_bytes,
-        "decision_workspace_bytes_added": (
-            physical_decision_bytes - compact_decision_bytes
+        "physical_decision_workspace_bytes_before": physical_decision_bytes,
+        "packed_physical_decision_workspace_bytes_after": (
+            packed_physical_decision_bytes
         ),
+        "decision_workspace_bytes_removed": (
+            physical_decision_bytes - packed_physical_decision_bytes
+        ),
+        "packed_event_token_mask": 0x3FFFF,
+        "packed_event_accepted_row_shift": 18,
+        "packed_event_parent_mask": 0x800000,
         "decision_workspace_zero_seeded_once": True,
         "decision_padding_initialization_stores_per_event": 0,
         "incumbent_full_vocab_fp32_rows_materialized": (
@@ -239,6 +255,118 @@ def logit_direct_decision_oracle(
     )
     rejected = _inverse_cdf_oracle(sampling_weights, uniforms[..., 2])
     return source, selected, rejected, accepted, sampling_weights
+
+
+def pack_physical_event_oracle(
+    source,
+    selected_token,
+    rejected_token,
+    accepted,
+    child_table,
+    child_counts,
+):
+    """Pack exactly the decision products consumed by the physical walk."""
+    if torch is None:
+        raise RuntimeError("packed CFWD event oracle requires torch")
+    batch = int(source.shape[0]) if isinstance(source, torch.Tensor) else 0
+    expected = (batch, PHYSICAL_ROWS)
+    if (
+        batch not in (1, 4)
+        or any(
+            not isinstance(value, torch.Tensor) or tuple(value.shape) != expected
+            for value in (source, selected_token, rejected_token, accepted)
+        )
+        or tuple(child_table.shape) != (batch, PHYSICAL_ROWS, FANOUT)
+        or tuple(child_counts.shape) != expected
+        or any(
+            value.dtype != torch.long
+            for value in (
+                source,
+                selected_token,
+                rejected_token,
+                child_table,
+                child_counts,
+            )
+        )
+        or accepted.dtype != torch.bool
+    ):
+        raise ValueError("packed CFWD event oracle geometry drift")
+    if (
+        torch.any((source < 0) | (source >= FANOUT))
+        or torch.any((selected_token < 0) | (selected_token >= VOCAB_SIZE))
+        or torch.any((rejected_token < 0) | (rejected_token >= VOCAB_SIZE))
+        or torch.any((child_counts < 0) | (child_counts > FANOUT))
+    ):
+        raise ValueError("packed CFWD event oracle domain drift")
+    accepted_node = torch.gather(
+        child_table,
+        2,
+        source.unsqueeze(2),
+    ).squeeze(2)
+    if torch.any(accepted & ((accepted_node < 0) | (accepted_node >= PHYSICAL_DRAFTS))):
+        raise ValueError("packed CFWD accepted child drift")
+    emitted = torch.where(accepted, selected_token, rejected_token)
+    accepted_row = torch.where(accepted, accepted_node + 1, 0)
+    event = (
+        emitted
+        | (accepted_row << PACKED_EVENT_ACCEPTED_ROW_SHIFT)
+        | PACKED_EVENT_PARENT_MASK
+    )
+    return torch.where(child_counts > 0, event, 0)
+
+
+def packed_physical_walk_oracle(self_token, event, bonus_token):
+    """CPU oracle for the fixed-cap packed-event integer committer."""
+    if torch is None:
+        raise RuntimeError("packed CFWD walk oracle requires torch")
+    batch = int(self_token.shape[0]) if isinstance(self_token, torch.Tensor) else 0
+    if (
+        batch not in (1, 4)
+        or tuple(self_token.shape) != (batch, PHYSICAL_DRAFTS)
+        or tuple(event.shape) != (batch, PHYSICAL_ROWS)
+        or tuple(bonus_token.shape) != (batch,)
+        or any(
+            value.dtype != torch.long for value in (self_token, event, bonus_token)
+        )
+    ):
+        raise ValueError("packed CFWD walk oracle geometry drift")
+
+    output = torch.full((batch, PHYSICAL_ROWS), -1, dtype=torch.long)
+    output_lens = torch.zeros(batch, dtype=torch.long)
+    paths = torch.zeros((batch, 16), dtype=torch.long)
+    path_lens = torch.zeros(batch, dtype=torch.long)
+    last_row = torch.zeros(batch, dtype=torch.long)
+    for request in range(batch):
+        current = -1
+        alive = True
+        for _level in range(WALK_CAP):
+            if not alive:
+                continue
+            packed = int(event[request, current + 1])
+            if packed & PACKED_EVENT_PARENT_MASK:
+                output[request, output_lens[request]] = (
+                    packed & PACKED_EVENT_TOKEN_MASK
+                )
+                output_lens[request] += 1
+                accepted_row = (
+                    packed >> PACKED_EVENT_ACCEPTED_ROW_SHIFT
+                ) & PACKED_EVENT_ACCEPTED_ROW_MASK
+                if accepted_row:
+                    paths[request, path_lens[request]] = accepted_row
+                    path_lens[request] += 1
+                    current = accepted_row - 1
+                    last_row[request] = accepted_row
+                else:
+                    alive = False
+            else:
+                output[request, output_lens[request]] = (
+                    self_token[request, current]
+                    if current >= 0
+                    else bonus_token[request]
+                )
+                output_lens[request] += 1
+                alive = False
+    return output, output_lens, paths, path_lens, last_row
 
 
 if triton is not None:
@@ -320,10 +448,7 @@ if triton is not None:
         target_uniform_levels,
         uniforms,
         self_token_out,
-        source_out,
-        selected_token_out,
-        rejected_token_out,
-        accepted_out,
+        event_out,
         invalid_out,
         vocab_size,
         number_of_blocks,
@@ -665,24 +790,18 @@ if triton is not None:
             sampled_token,
             mask=is_self,
         )
-        tl.store(
-            source_out + physical_target_offset,
-            sampled_source,
-            mask=~is_self,
+        accepted_node = tl.sum(
+            tl.where(child_lanes == sampled_source, child_nodes, 0),
+            axis=0,
+        ).to(tl.int64)
+        emitted_token = tl.where(accepted, selected_token, sampled_token)
+        accepted_row = tl.where(accepted, accepted_node + 1, 0)
+        packed_event = (
+            emitted_token | (accepted_row << 18) | 0x800000
         )
         tl.store(
-            selected_token_out + physical_target_offset,
-            selected_token,
-            mask=~is_self,
-        )
-        tl.store(
-            rejected_token_out + physical_target_offset,
-            sampled_token,
-            mask=~is_self,
-        )
-        tl.store(
-            accepted_out + physical_target_offset,
-            accepted,
+            event_out + physical_target_offset,
+            tl.where(child_count > 0, packed_event, 0),
             mask=~is_self,
         )
 
@@ -817,10 +936,7 @@ def workspace_spec(batch_size: int) -> dict[str, tuple[tuple[int, ...], Any]]:
         "block_maxima": ((all_rows, MAX_BLOCKS), torch.float32),
         "block_sums": ((all_rows, MAX_BLOCKS), torch.float32),
         "self_token": ((batch, PHYSICAL_DRAFTS), torch.long),
-        "source": ((batch, PHYSICAL_ROWS), torch.long),
-        "selected_token": ((batch, PHYSICAL_ROWS), torch.long),
-        "rejected_token": ((batch, PHYSICAL_ROWS), torch.long),
-        "accepted": ((batch, PHYSICAL_ROWS), torch.bool),
+        "event": ((batch, PHYSICAL_ROWS), torch.long),
         "invalid": ((1,), torch.int32),
     }
 
@@ -1008,10 +1124,7 @@ def launch_logit_direct_fixed32(
         target_uniform_levels,
         uniforms,
         workspace["self_token"],
-        workspace["source"],
-        workspace["selected_token"],
-        workspace["rejected_token"],
-        workspace["accepted"],
+        workspace["event"],
         workspace["invalid"],
         VOCAB_SIZE,
         number_of_blocks,
@@ -1030,8 +1143,5 @@ def launch_logit_direct_fixed32(
     )
     return (
         workspace["self_token"],
-        workspace["source"],
-        workspace["selected_token"],
-        workspace["rejected_token"],
-        workspace["accepted"],
+        workspace["event"],
     )
