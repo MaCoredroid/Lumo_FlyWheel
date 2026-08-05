@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the real B1 exhaustive fixed-K64 DFWD R64-U8 shadow gate."""
+"""Validate the real B1 candidate-served fixed-K64 DFWD R64-U8 quality gate."""
 
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ if SCRIPT_DIR not in sys.path:
 terminal = importlib.import_module("fr13_draft_head_m32_pass")
 
 
-LIVE_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_shadow.v1"
-GATE_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_real_b1_gate.v1"
+LIVE_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_quality.v2"
+GATE_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_real_b1_gate.v2"
 EXPECTED_INSTANCE = "astropy__astropy-12907"
 EXPECTED_SO_SHA256 = (
     "8b27df4f3c6a5a0574261ee984159582a87615c3e6d83f2a267f4fa46a3e421e"
@@ -55,6 +55,7 @@ DEPTH_LABELS = (
 )
 WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
+    "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE",
     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256",
@@ -117,7 +118,14 @@ EXPECTED_CANDIDATE = {
     "single_accumulator": True,
     "reduction_strides": [8, 4, 2, 1],
     "served_rows": 1,
-    "shadow_only": True,
+    "shadow_only": False,
+}
+EXPECTED_PROPOSAL_DISTRIBUTION = {
+    "candidate_logits_consumed": True,
+    "draft_probs": None,
+    "proposal_token_selector": "argmax_topk",
+    "q_mix_definition": "target_overlap_normalized_over_draft_token_ids",
+    "rejection_sampler": "fr13_fixed32_deterministic_multidraft",
 }
 IDENTITY_KEYS = frozenset(
     {
@@ -157,9 +165,13 @@ LIVE_KEYS = frozenset(
         "instance_id",
         "per_depth_full_logit_comparisons",
         "per_depth_raw_bf16_mismatches",
+        "per_depth_nonfinite_logits",
         "performance_measurement",
         "producer_pid",
         "raw_bf16_mismatches",
+        "nonfinite_logits",
+        "qualification_policy",
+        "proposal_distribution",
         "reference_always_served",
         "root_forward_steps",
         "schema",
@@ -268,10 +280,15 @@ def validate_live_result(
         or not _json_exact(payload.get("candidate"), EXPECTED_CANDIDATE)
         or payload.get("comparison_scope") != COMPARISON_SCOPE
         or not _json_exact(payload.get("captured_mtp_depths"), [1, 2, 3, 4])
-        or payload.get("reference_always_served") is not True
-        or payload.get("candidate_returned") is not False
-        or payload.get("served_return")
-        != "incumbent BF16 logits object unchanged"
+        or payload.get("qualification_policy")
+        != "lossless_deterministic_proposal_v1"
+        or not _json_exact(
+            payload.get("proposal_distribution"),
+            EXPECTED_PROPOSAL_DISTRIBUTION,
+        )
+        or payload.get("reference_always_served") is not False
+        or payload.get("candidate_returned") is not True
+        or payload.get("served_return") != "candidate BF16 logits"
         or payload.get("performance_measurement") is not False
         or payload.get("timing_eligible") is not False
         or payload.get("finalized_by_fixed32_flush") is not True
@@ -284,8 +301,8 @@ def validate_live_result(
         raise ValueError("DFWD U8 live event count is not positive")
     comparisons = payload.get("per_depth_full_logit_comparisons")
     mismatches = payload.get("per_depth_raw_bf16_mismatches")
+    nonfinite = payload.get("per_depth_nonfinite_logits")
     expected_comparisons = {label: events for label in DEPTH_LABELS}
-    expected_mismatches = {label: 0 for label in DEPTH_LABELS}
     if (
         not _json_exact(payload.get("complete_work_census_events"), events)
         or not _json_exact(
@@ -293,7 +310,10 @@ def validate_live_result(
         )
         or not _json_exact(payload.get("root_forward_steps"), list(range(events)))
         or not _json_exact(comparisons, expected_comparisons)
-        or not _json_exact(mismatches, expected_mismatches)
+        or not isinstance(mismatches, dict)
+        or frozenset(mismatches) != frozenset(DEPTH_LABELS)
+        or any(type(value) is not int or value < 0 for value in mismatches.values())
+        or not _json_exact(nonfinite, {label: 0 for label in DEPTH_LABELS})
         or not _json_exact(payload.get("full_logit_comparisons"), events * 5)
         or not _json_exact(
             payload.get("compared_elements"), events * 5 * 65536
@@ -301,13 +321,16 @@ def validate_live_result(
         or not _json_exact(
             payload.get("compared_bytes"), events * 5 * 65536 * 2
         )
-        or not _json_exact(payload.get("raw_bf16_mismatches"), 0)
+        or not _json_exact(
+            payload.get("raw_bf16_mismatches"), sum(mismatches.values())
+        )
+        or not _json_exact(payload.get("nonfinite_logits"), 0)
         or type(payload.get("flush_generation")) is not int
         or payload["flush_generation"] < 1
         or type(payload.get("producer_pid")) is not int
         or payload["producer_pid"] < 1
     ):
-        raise ValueError("DFWD U8 per-depth comparison/event census drifted")
+        raise ValueError("DFWD U8 per-depth quality/event census drifted")
     for key in ("events_sha256", "flush_nonce", "boundary_snapshot_sha256"):
         _sha256(payload.get(key), key)
     return payload
@@ -442,11 +465,18 @@ def validate_gate(
         "per_depth_full_logit_comparisons": {
             label: events for label in DEPTH_LABELS
         },
+        "per_depth_raw_bf16_mismatches": live[
+            "per_depth_raw_bf16_mismatches"
+        ],
+        "per_depth_nonfinite_logits": {label: 0 for label in DEPTH_LABELS},
         "compared_elements": events * 5 * 65536,
         "compared_bytes": events * 5 * 65536 * 2,
-        "raw_bf16_mismatches": 0,
-        "reference_always_served": True,
-        "candidate_returned": False,
+        "raw_bf16_mismatches": live["raw_bf16_mismatches"],
+        "nonfinite_logits": 0,
+        "qualification_policy": "lossless_deterministic_proposal_v1",
+        "proposal_distribution": EXPECTED_PROPOSAL_DISTRIBUTION,
+        "reference_always_served": False,
+        "candidate_returned": True,
         "task_resolved": True,
         "events_sha256": terminal_evidence["events_sha256"],
         "final_flush_sha256": terminal.sha256_file(final_flush),
@@ -458,7 +488,7 @@ def validate_gate(
         ],
         "performance_measurement": False,
         "timing_eligible": False,
-        "production_eligible": False,
+        "production_eligible": True,
     }
 
 

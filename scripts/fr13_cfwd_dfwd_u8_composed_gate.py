@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate one real B1 boot through the unchanged CFWD and DFWD U8 gates."""
+"""Validate one real B1 boot through CFWD and candidate-served DFWD U8 gates."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from scripts import fr13_cfwd_logit_direct_gate as cfwd
 from scripts import fr13_dfwd_k64_m1_r64_u8_gate as dfwd
 
 
-SCHEMA = "fr13.fixed32.cfwd_dfwd_u8.composed_real_b1_gate.v1"
+SCHEMA = "fr13.fixed32.cfwd_dfwd_u8.composed_real_b1_gate.v2"
 TASK_ID = "astropy__astropy-12907"
 SUBSET = Path("config/fr13_fixed32/subset_b1_diagnostic_one.json")
 U8_SOURCE = Path("csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu")
@@ -148,8 +148,15 @@ def validate_composed_gate(
         or cfwd_payload["traffic_audit_sha256"] != _sha(traffic_raw)
         or dfwd_payload["chat_traffic_audit_sha256"] != _sha(traffic_raw)
         or cfwd_payload["reference_always_served"] is not True
-        or dfwd_payload["reference_always_served"] is not True
-        or dfwd_payload["candidate_returned"] is not False
+        or dfwd_payload["reference_always_served"] is not False
+        or dfwd_payload["candidate_returned"] is not True
+        or dfwd_payload["nonfinite_logits"] != 0
+        or dfwd_payload["qualification_policy"]
+        != "lossless_deterministic_proposal_v1"
+        or not dfwd._json_exact(
+            dfwd_payload["proposal_distribution"],
+            dfwd.EXPECTED_PROPOSAL_DISTRIBUTION,
+        )
         or cfwd_payload["timing_eligible"] is not False
         or dfwd_payload["timing_eligible"] is not False
     ):
@@ -175,8 +182,11 @@ def validate_composed_gate(
         "cfwd_credential_sha256": _sha(cfwd_raw),
         "dfwd_u8_gate_sha256": _sha(dfwd_raw),
         "component_validators_reexecuted": True,
-        "reference_always_served": True,
-        "candidates_returned": False,
+        "cfwd_reference_served": True,
+        "dfwd_u8_candidate_served": True,
+        "reference_always_served": False,
+        "candidates_returned": True,
+        "dfwd_u8_proposal_distribution": dfwd.EXPECTED_PROPOSAL_DISTRIBUTION,
         "performance_measurement": False,
         "timing_eligible": False,
         "floor_acceptance_eligible": False,

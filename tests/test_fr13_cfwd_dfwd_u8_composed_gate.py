@@ -80,8 +80,11 @@ def test_composed_validator_reexecutes_both_component_validators(
         "final_flush_sha256": hashlib.sha256(final_raw).hexdigest(),
         "boundary_snapshot_sha256": hashlib.sha256(boundary_raw).hexdigest(),
         "chat_traffic_audit_sha256": hashlib.sha256(traffic_raw).hexdigest(),
-        "reference_always_served": True,
-        "candidate_returned": False,
+        "reference_always_served": False,
+        "candidate_returned": True,
+        "nonfinite_logits": 0,
+        "qualification_policy": "lossless_deterministic_proposal_v1",
+        "proposal_distribution": compose.dfwd.EXPECTED_PROPOSAL_DISTRIBUTION,
         "timing_eligible": False,
     }
     _write(tmp_path / "cfwd.json", cfwd_payload)
@@ -117,6 +120,8 @@ def test_composed_validator_reexecutes_both_component_validators(
     assert result["status"] == "PASS"
     assert result["shared_complete_work_census_events"] == 7
     assert result["component_validators_reexecuted"] is True
+    assert result["dfwd_u8_candidate_served"] is True
+    assert result["candidates_returned"] is True
     assert result["performance_measurement"] is False
     assert result["sfwd_requires_separate_eager_qrow16_boot"] is True
 
@@ -186,8 +191,11 @@ def test_composed_validator_rejects_component_event_drift(
         "completed_events": 3,
         **shared,
         "chat_traffic_audit_sha256": hashlib.sha256(traffic.read_bytes()).hexdigest(),
-        "reference_always_served": True,
-        "candidate_returned": False,
+        "reference_always_served": False,
+        "candidate_returned": True,
+        "nonfinite_logits": 0,
+        "qualification_policy": "lossless_deterministic_proposal_v1",
+        "proposal_distribution": compose.dfwd.EXPECTED_PROPOSAL_DISTRIBUTION,
         "timing_eligible": False,
     }
     _write(tmp_path / "cfwd.json", cfwd_payload)

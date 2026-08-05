@@ -444,6 +444,7 @@ _FR13_DRAFT_HEAD_U8_WORKER_ENV_SIDECAR = Path(
 )
 _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
+    "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE",
     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256",
@@ -472,6 +473,7 @@ _FR13_FIXED32_OBSERVED_RUNTIME_SOURCE = r'''
 # enqueue deltas without reading device values or synchronizing the stream.
 _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
+    "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE",
     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256",
@@ -553,6 +555,9 @@ def _fr13_draft_head_u8_worker_env_bridge(
     ).encode("ascii")
     payload_sha256 = _hashlib.sha256(canonical_payload).hexdigest()
     live_enabled = payload["FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB"] == "1"
+    quality_enabled = (
+        payload["FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE"] == "1"
+    )
     production_enabled = (
         payload["FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION"] == "1"
     )
@@ -562,6 +567,8 @@ def _fr13_draft_head_u8_worker_env_bridge(
     if (
         record.get("payload_sha256") != payload_sha256
         or (live_enabled == production_enabled)
+        or payload["FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE"] not in ("0", "1")
+        or (quality_enabled and not live_enabled)
         or payload["FR13_DRAFT_VOCAB_K"] != "65536"
         or payload["FR13_DRAFT_VOCAB_ROOT"] != "1"
         or payload["FR13_DRAFT_VOCAB_BLOCKS"]
@@ -838,7 +845,7 @@ def _fr13_draft_head_m32_live_finalize(events, flush_binding):
 
 
 def _fr13_draft_head_u8_live_register(
-    compares, mismatches, geometry, candidate, identities
+    compares, mismatches, nonfinite, geometry, candidate, identities
 ):
     global _FR13_DRAFT_HEAD_U8_LIVE_STATE
     _os = __import__("os")
@@ -848,10 +855,13 @@ def _fr13_draft_head_u8_live_register(
         _FR13_DRAFT_HEAD_U8_LIVE_STATE is not None
         or tuple(compares.shape) != (5,)
         or tuple(mismatches.shape) != (5,)
+        or tuple(nonfinite.shape) != (5,)
         or str(compares.dtype) != "torch.int64"
         or str(mismatches.dtype) != "torch.int64"
+        or str(nonfinite.dtype) != "torch.int64"
         or compares.device.type != "cuda"
         or mismatches.device != compares.device
+        or nonfinite.device != compares.device
         or not isinstance(geometry, dict)
         or not isinstance(candidate, dict)
         or not isinstance(identities, dict)
@@ -867,6 +877,7 @@ def _fr13_draft_head_u8_live_register(
     _FR13_DRAFT_HEAD_U8_LIVE_STATE = {
         "compares": compares,
         "mismatches": mismatches,
+        "nonfinite": nonfinite,
         "geometry": geometry,
         "candidate": candidate,
         "identities": identities,
@@ -937,6 +948,9 @@ def _fr13_draft_head_u8_live_depth(batch_size):
 def _fr13_draft_head_u8_live_finalize(events, flush_binding):
     _os = __import__("os")
     enabled = _os.environ.get("FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB", "0")
+    quality_enabled = (
+        _os.environ.get("FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE", "0") == "1"
+    )
     if enabled != "1":
         if _FR13_DRAFT_HEAD_U8_LIVE_STATE is not None:
             raise RuntimeError("FR13 draft-head U8 live state leaked while off")
@@ -984,20 +998,30 @@ def _fr13_draft_head_u8_live_finalize(events, flush_binding):
         raise RuntimeError("FR13 draft-head U8 live finalization drifted")
     compares = tuple(int(value) for value in state["compares"].tolist())
     mismatches = tuple(int(value) for value in state["mismatches"].tolist())
-    exact = (
+    nonfinite = tuple(int(value) for value in state["nonfinite"].tolist())
+    complete = (
         compares == (event_count,) * 5
-        and mismatches == (0,) * 5
         and state["captured_depths"] == [1, 2, 3, 4]
         and state["root_forward_steps"] == expected_steps
+    )
+    qualified = complete and (
+        nonfinite == (0,) * 5 if quality_enabled else mismatches == (0,) * 5
     )
     labels = ("root", "mtp_depth_1", "mtp_depth_2", "mtp_depth_3", "mtp_depth_4")
     per_depth_compares = dict(zip(labels, compares))
     per_depth_mismatches = dict(zip(labels, mismatches))
+    per_depth_nonfinite = dict(zip(labels, nonfinite))
     total_compares = sum(compares)
     identities = state["identities"]
+    candidate = dict(state["candidate"])
+    candidate["shadow_only"] = not quality_enabled
     record = {
-        "schema": "fr13.fixed32.dfwd_k64_m1_r64_u8_shadow.v1",
-        "status": "PASS" if exact else "FAIL",
+        "schema": (
+            "fr13.fixed32.dfwd_k64_m1_r64_u8_quality.v2"
+            if quality_enabled
+            else "fr13.fixed32.dfwd_k64_m1_r64_u8_shadow.v1"
+        ),
+        "status": "PASS" if qualified else "FAIL",
         "suite": "SWE-Verified",
         "instance_id": identities["instance_id"],
         "task_marker": "swe_verified:" + identities["instance_id"],
@@ -1016,7 +1040,7 @@ def _fr13_draft_head_u8_live_finalize(events, flush_binding):
             "execution_basis": "FULL_AND_PIECEWISE_graph_replay",
         },
         "geometry": state["geometry"],
-        "candidate": state["candidate"],
+        "candidate": candidate,
         "completed_events": event_count,
         "complete_work_census_events": event_count,
         "work_census_last_event_index": event_count - 1,
@@ -1031,6 +1055,7 @@ def _fr13_draft_head_u8_live_finalize(events, flush_binding):
         "captured_mtp_depths": state["captured_depths"],
         "per_depth_full_logit_comparisons": per_depth_compares,
         "per_depth_raw_bf16_mismatches": per_depth_mismatches,
+        "per_depth_nonfinite_logits": per_depth_nonfinite,
         "comparison_scope": (
             "all 65536 logits in the fixed K64/root1 draft head; "
             "not the full model vocabulary"
@@ -1039,9 +1064,26 @@ def _fr13_draft_head_u8_live_finalize(events, flush_binding):
         "compared_elements": total_compares * 65536,
         "compared_bytes": total_compares * 65536 * 2,
         "raw_bf16_mismatches": sum(mismatches),
-        "reference_always_served": True,
-        "candidate_returned": False,
-        "served_return": "incumbent BF16 logits object unchanged",
+        "nonfinite_logits": sum(nonfinite),
+        "qualification_policy": (
+            "lossless_deterministic_proposal_v1"
+            if quality_enabled
+            else "raw_bf16_shadow_v1"
+        ),
+        "proposal_distribution": {
+            "candidate_logits_consumed": quality_enabled,
+            "draft_probs": None,
+            "proposal_token_selector": "argmax_topk",
+            "q_mix_definition": "target_overlap_normalized_over_draft_token_ids",
+            "rejection_sampler": "fr13_fixed32_deterministic_multidraft",
+        },
+        "reference_always_served": not quality_enabled,
+        "candidate_returned": quality_enabled,
+        "served_return": (
+            "candidate BF16 logits"
+            if quality_enabled
+            else "incumbent BF16 logits object unchanged"
+        ),
         "performance_measurement": False,
         "timing_eligible": False,
         "finalized_by_fixed32_flush": True,
@@ -1068,13 +1110,14 @@ def _fr13_draft_head_u8_live_finalize(events, flush_binding):
         handle.flush()
         _os.fsync(handle.fileno())
     _os.replace(temporary, path)
-    if not exact:
+    if not qualified:
         raise RuntimeError(
-            "FR13 draft-head U8 final depth/event comparison mismatch: "
+            "FR13 draft-head U8 final depth/event qualification mismatch: "
             + repr(
                 (
                     compares,
                     mismatches,
+                    nonfinite,
                     state["captured_depths"],
                     state["root_forward_steps"],
                     expected_steps,
@@ -23903,6 +23946,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_u8_live_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB", "0"
             )
+            _fr13_dh_u8_quality_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE", "0"
+            )
             _fr13_dh_u8_prod_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION", "0"
             )
@@ -23936,6 +23982,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB must be exactly 0 or 1"
                 )
+            if _fr13_dh_u8_quality_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE must be exactly 0 or 1"
+                )
             if _fr13_dh_u8_prod_raw not in ("0", "1"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION must be exactly 0 or 1"
@@ -23953,8 +24003,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
             _fr13_dh_u8_live = _fr13_dh_u8_live_raw == "1"
+            _fr13_dh_u8_quality = _fr13_dh_u8_quality_raw == "1"
             _fr13_dh_u8_prod = _fr13_dh_u8_prod_raw == "1"
             _fr13_dh_u8_active = _fr13_dh_u8_live or _fr13_dh_u8_prod
+            if _fr13_dh_u8_quality and not _fr13_dh_u8_live:
+                raise RuntimeError(
+                    "FR13 draft-head U8 quality gate requires LIVE_AB=1"
+                )
             _fr13_dh_fp8 = _fr13_dh_fp8_raw == "1"
             _fr13_dh_fp8_static_io = (
                 _fr13_dh_fp8_static_io_raw == "1"
@@ -24525,6 +24580,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             dtype=torch.int64,
                             device=_fr13_dh_u8_w.device,
                         )
+                        self._fr13_dh_u8_nonfinite = torch.zeros(
+                            (5,),
+                            dtype=torch.int64,
+                            device=_fr13_dh_u8_w.device,
+                        )
                         self._fr13_dh_u8_count_enable = torch.zeros(
                             (),
                             dtype=torch.int64,
@@ -24538,6 +24598,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr13_dh_u8_gdn._fr13_draft_head_u8_live_register(
                             self._fr13_dh_u8_compares,
                             self._fr13_dh_u8_mismatches,
+                            self._fr13_dh_u8_nonfinite,
                             _fr13_dh_u8_contract_value["geometry"],
                             _fr13_dh_u8_contract_value["candidate"],
                             _fr13_dh_u8_identities,
@@ -24546,8 +24607,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     print(
                         "[FR13_DRAFT_HEAD_M1_R64_U8] ready "
                         + (
-                            "shadow_only=1 incumbent_served=1 "
-                            "depths=root,1,2,3,4"
+                            (
+                                "quality_gate=1 candidate_served=1 "
+                                "raw_bf16_drift_diagnostic=1 "
+                                if _fr13_dh_u8_quality
+                                else "shadow_only=1 incumbent_served=1 "
+                            )
+                            + "depths=root,1,2,3,4"
                             if _fr13_dh_u8_live
                             else "production=1 credential_attested=1 "
                             "preallocated_output=1"
@@ -24895,7 +24961,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "single_accumulator": True,
                         "reduction_strides": [8, 4, 2, 1],
                         "served_rows": 1,
-                        "shadow_only": True,
+                        "shadow_only": bool(
+                            _fr13_dh_u8_live and not _fr13_dh_u8_quality
+                        ),
                     },
                 }
 
@@ -25656,6 +25724,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                     * self._fr13_dh_u8_count_enable
                 )
+                self._fr13_dh_u8_nonfinite[_fr13_dh_u8_depth].add_(
+                    torch.count_nonzero(
+                        ~torch.isfinite(self._fr13_dh_u8_output)
+                    )
+                    * self._fr13_dh_u8_count_enable
+                )
                 self._fr13_dh_u8_compares[_fr13_dh_u8_depth].add_(
                     self._fr13_dh_u8_count_enable
                 )
@@ -25663,10 +25737,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     self._fr13_dh_u8_engaged = True
                     print(
                         "[FR13_DRAFT_HEAD_M1_R64_U8] engaged "
-                        "full_bf16_vector=65536 incumbent_served=1 "
-                        "shadow_only=1",
+                        + (
+                            "candidate_served=1 finite_gate=1 "
+                            "raw_bf16_drift_diagnostic=1"
+                            if _fr13_dh_u8_quality
+                            else "full_bf16_vector=65536 incumbent_served=1 "
+                            "shadow_only=1"
+                        ),
                         flush=True,
                     )
+                if _fr13_dh_u8_quality:
+                    return self._fr13_dh_u8_output
                 return _fr13_dh_u8_reference
 
             def _fr13_dh_fp8_logits(_h):
@@ -32350,6 +32431,9 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
     live_enabled = os.environ.get(
         "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB", "0"
     )
+    quality_enabled = os.environ.get(
+        "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE", "0"
+    )
     production_enabled = os.environ.get(
         "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION", "0"
     )
@@ -32360,6 +32444,14 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
     if production_enabled not in ("0", "1"):
         raise RuntimeError(
             "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION must be exactly 0 or 1"
+        )
+    if quality_enabled not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE must be exactly 0 or 1"
+        )
+    if quality_enabled == "1" and live_enabled != "1":
+        raise RuntimeError(
+            "FR13 draft-head U8 quality gate requires LIVE_AB=1"
         )
     if live_enabled == production_enabled == "1":
         raise RuntimeError(
@@ -32396,6 +32488,7 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
         exact.update(
             {
                 "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "1",
+                "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE": quality_enabled,
                 "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "0",
                 "FR13_DRAFT_HEAD_M1_R64_U8_"
                 "PRODUCTION_PASS_SIDECAR": "",
@@ -32409,6 +32502,7 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
         exact.update(
             {
                 "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "0",
+                "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE": "0",
                 "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "1",
                 "FR13_DRAFT_HEAD_M1_R64_U8_"
                 "PRODUCTION_PASS_SIDECAR": (

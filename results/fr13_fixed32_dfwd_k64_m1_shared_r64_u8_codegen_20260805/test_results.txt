@@ -1,0 +1,8 @@
+PASS python3 -m py_compile scripts/fr10_phase4_patch_vllm_tree_gdn.py scripts/fr13_cfwd_dfwd_u8_composed_gate.py scripts/fr13_dfwd_k64_m1_r64_u8_gate.py scripts/fr13_dfwd_k64_m1_r64_u8_production_credential.py
+PASS bash -n scripts/fr13_launch_forked_fa2_tree_server.sh scripts/fr13_run_b1_kernel_live_gate.sh scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh
+PASS CUDA_VISIBLE_DEVICES='' PYTHONPATH=src python -m pytest -q tests/test_fr13_cfwd_dfwd_u8_composed_gate.py tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py tests/test_fr13_dfwd_k64_m1_r64_u8_production.py tests/test_fr13_bf16_gemvx_k64_m1_shared_r64_u8.py (19 passed)
+PASS impacted U8 host suite: stack timing, shuffle kernel, shared fallback, composed gate, quality gate, production credential (32 passed)
+PASS nvcc CUDA 13.0.88 device-only compile for sm_121a
+PASS ptxas 30 registers, 0 stack, 0 spills, 1 barrier resource
+PASS SASS 4 BAR, 0 SHFL, 8 LDS, 4 STS, 4 FADD, 8 steady-body FFMA
+NOT RUN GPU kernel execution, Docker, real task, byte comparison, timing, acceptance

@@ -93,6 +93,7 @@ def _worker_payload(module) -> dict[str, str]:
     payload.update(
         {
             "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "1",
+            "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE": "1",
             "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "0",
             "FR13_DRAFT_HEAD_M1_R64_U8_SO": ("/tmp/fr13_bf16_k64_m1_r64_u8.abi3.so"),
             "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID": ("astropy__astropy-12907"),
@@ -153,7 +154,7 @@ def test_worker_sidecar_restores_exact_curated_enginecore_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     patcher = _patcher()
-    assert len(patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS) == 21
+    assert len(patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS) == 22
     assert "FR13_DRAFT_HEAD_PAD_ROWS" not in patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS
     assert (
         "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB"
@@ -206,6 +207,7 @@ def test_worker_sidecar_fails_closed_on_tamper_missing_and_off_leak(
         bridge(str(sidecar))
 
     monkeypatch.setenv("FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB", "0")
+    monkeypatch.setenv("FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE", "0")
     patcher._fr13_write_draft_head_u8_worker_env_sidecar(sidecar)
     assert not sidecar.exists()
 
@@ -273,11 +275,13 @@ def test_finalizer_and_gate_require_every_depth_per_authenticated_event(
     namespace = _runtime_namespace("_fr13_draft_head_u8_live_finalize")
     live_path = tmp_path / "live.json"
     monkeypatch.setenv("FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB", "1")
+    monkeypatch.setenv("FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE", "1")
     monkeypatch.setenv("FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON", str(live_path))
     events = 3
     namespace["_FR13_DRAFT_HEAD_U8_LIVE_STATE"] = {
         "compares": _Counter([events] * 5),
-        "mismatches": _Counter([0] * 5),
+        "mismatches": _Counter([1, 2, 3, 4, 5]),
+        "nonfinite": _Counter([0] * 5),
         "geometry": copy.deepcopy(gate.EXPECTED_GEOMETRY),
         "candidate": copy.deepcopy(gate.EXPECTED_CANDIDATE),
         "identities": _identities(gate),
@@ -301,12 +305,15 @@ def test_finalizer_and_gate_require_every_depth_per_authenticated_event(
     assert live["per_depth_full_logit_comparisons"] == {
         label: events for label in gate.DEPTH_LABELS
     }
+    assert live["raw_bf16_mismatches"] == 15
+    assert live["candidate_returned"] is True
+    assert live["proposal_distribution"] == gate.EXPECTED_PROPOSAL_DISTRIBUTION
 
     aggregate_preserved = copy.deepcopy(live)
     aggregate_preserved["per_depth_full_logit_comparisons"]["mtp_depth_1"] += 1
     aggregate_preserved["per_depth_full_logit_comparisons"]["mtp_depth_2"] -= 1
     assert aggregate_preserved["full_logit_comparisons"] == events * 5
-    with pytest.raises(ValueError, match="per-depth comparison/event census"):
+    with pytest.raises(ValueError, match="per-depth quality/event census"):
         gate.validate_live_result(aggregate_preserved, expected_source_commit="b" * 40)
 
     forged_depth_type = copy.deepcopy(live)
@@ -321,16 +328,22 @@ def test_finalizer_and_gate_require_every_depth_per_authenticated_event(
 
     forged_counter_type = copy.deepcopy(live)
     forged_counter_type["per_depth_raw_bf16_mismatches"]["root"] = False
-    with pytest.raises(ValueError, match="per-depth comparison/event census"):
+    with pytest.raises(ValueError, match="per-depth quality/event census"):
         gate.validate_live_result(forged_counter_type, expected_source_commit="b" * 40)
 
     namespace["_FR13_DRAFT_HEAD_U8_LIVE_STATE"]["compares"].values[4] -= 1
-    with pytest.raises(RuntimeError, match="depth/event comparison mismatch"):
+    with pytest.raises(RuntimeError, match="depth/event qualification mismatch"):
         namespace["_fr13_draft_head_u8_live_finalize"](rows, binding)
     assert json.loads(live_path.read_text(encoding="ascii"))["status"] == "FAIL"
 
+    namespace["_FR13_DRAFT_HEAD_U8_LIVE_STATE"]["compares"].values[4] += 1
+    namespace["_FR13_DRAFT_HEAD_U8_LIVE_STATE"]["nonfinite"].values[2] = 1
+    with pytest.raises(RuntimeError, match="depth/event qualification mismatch"):
+        namespace["_fr13_draft_head_u8_live_finalize"](rows, binding)
+    assert json.loads(live_path.read_text(encoding="ascii"))["nonfinite_logits"] == 1
 
-def test_wiring_is_shadow_only_default_off_and_fully_pinned() -> None:
+
+def test_wiring_is_candidate_served_quality_default_off_and_fully_pinned() -> None:
     patcher = PATCHER.read_text(encoding="utf-8")
     launcher = LAUNCHER.read_text(encoding="utf-8")
     generic = GENERIC_RUNNER.read_text(encoding="utf-8")
@@ -348,6 +361,7 @@ def test_wiring_is_shadow_only_default_off_and_fully_pinned() -> None:
     assert "-e FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT=" in launcher
     assert "RUNTIME_DRAFT_HEAD_M32=0" in generic
     assert "FR13_GATE_DRAFT_HEAD_U8=1" in runner
+    assert "FR13_GATE_DRAFT_HEAD_U8_QUALITY=1" in runner
     assert "FR13_B1_DIAGNOSTIC_TASK_PROFILE=astropy12907" in runner
     assert "CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
     assert (
