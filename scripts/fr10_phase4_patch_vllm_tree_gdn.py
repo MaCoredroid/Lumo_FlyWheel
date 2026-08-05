@@ -8247,7 +8247,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
 def _fr13_fixed32_require_sfwd_conv_postprep_source_manifest() -> dict[str, str]:
     """Bind either selector to the exact candidate source closure."""
     candidate = (
-        "fixed32_sfwd_conv_postprep_nodegroup8_direct_v1"
+        "fixed32_sfwd_conv_postprep_nodepair16_serial_direct_v2"
         if _FR13_FIXED32_SFWD_NODEGROUP8_DIRECT in ("1", True)
         else "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
     )
