@@ -721,6 +721,8 @@ def test_live_gate_is_authenticated_one_task_non_timing_qrow16_served() -> None:
     assert "fixed32_chat_traffic_audit.json" in text
     assert "all(value is True for value in checks.values())" not in text
     assert "any(value is not True for value in checks.values())" in text
+    assert 'ingress = traffic.get("ingress")' in text
+    assert 'ingress.get("exact_proxy_engine_attempt_parity") is not True' in text
     assert '"served_return": "qrow16 captured graph output unchanged"' in text
     assert "FR13_SFWD_GPU_TIMER=0" in text
     assert "ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in text

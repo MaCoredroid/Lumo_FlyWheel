@@ -86,6 +86,45 @@ def test_gate_wrappers_bind_independent_same_boot_credentials() -> None:
     assert "sfwd_conv_postprep_k64_root_b1_gate.json" in eager
 
 
+def test_composed_gate_reads_attempt_parity_from_v3_ingress(tmp_path: Path) -> None:
+    module = _load_gate_module()
+    arm = tmp_path / "arm"
+    arm.mkdir()
+    health = {
+        "swe_orchestrator_rc": 0,
+        "tasks": [
+            {
+                "instance_id": module.TASK_ID,
+                "codex_timed_out": False,
+                "verdict": "resolved",
+            }
+        ],
+    }
+    traffic = {
+        "schema": "fr13-fixed32-chat-task-provenance-audit-v3",
+        "dataset_name": "princeton-nlp/SWE-bench_Verified",
+        "mode": "hydra27_fixed32",
+        "subset": {
+            "sha256": module.SUBSET_SHA256,
+            "task_ids": [module.TASK_ID],
+            "task_count": 1,
+        },
+        "checks": {"all_canonical_tasks_validated": True},
+        "ingress": {"exact_proxy_engine_attempt_parity": True},
+        "tasks": {module.TASK_ID: {}},
+    }
+    (arm / "health.json").write_text(json.dumps(health), encoding="ascii")
+    traffic_path = arm / "fixed32_chat_traffic_audit.json"
+    traffic_path.write_text(json.dumps(traffic), encoding="ascii")
+
+    module._validate_health_and_traffic(arm)
+
+    traffic["ingress"]["exact_proxy_engine_attempt_parity"] = False
+    traffic_path.write_text(json.dumps(traffic), encoding="ascii")
+    with pytest.raises(module.GateError, match="traffic audit drifted"):
+        module._validate_health_and_traffic(arm)
+
+
 def test_runner_wires_optional_cfwd_smoke_and_exact4_evidence() -> None:
     runner = _text("fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh")
     wrapper = _text("fr13_run_b1_composed_stack_timing.sh")

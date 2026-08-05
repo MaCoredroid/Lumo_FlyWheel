@@ -468,6 +468,7 @@ def _validate_health_and_traffic(arm: Path) -> tuple[bytes, bytes]:
         raise GateError("real SWE-Verified task did not resolve cleanly")
     traffic, traffic_raw = _load_json(arm / "fixed32_chat_traffic_audit.json")
     checks = traffic.get("checks")
+    ingress = traffic.get("ingress")
     subset = traffic.get("subset")
     if (
         traffic.get("schema")
@@ -484,7 +485,8 @@ def _validate_health_and_traffic(arm: Path) -> tuple[bytes, bytes]:
         or not isinstance(checks, dict)
         or not checks
         or any(value is not True for value in checks.values())
-        or traffic.get("exact_proxy_engine_attempt_parity") is not True
+        or not isinstance(ingress, dict)
+        or ingress.get("exact_proxy_engine_attempt_parity") is not True
         or set(traffic.get("tasks", {})) != {TASK_ID}
     ):
         raise GateError("authenticated real-task traffic audit drifted")
