@@ -1,0 +1,21 @@
+{
+  "schema": "fr13.fixed32.taw_source_v7.b1_preboot_failure.v1",
+  "status": "failed_preboot",
+  "source_commit": "1f7485ade5ec6bfacf51dde7afa514531effcbcd",
+  "started_at_utc": "2026-08-05T15:45:23Z",
+  "ended_at_utc": "2026-08-05T15:45:29Z",
+  "exit_code": 2,
+  "reason": "B1 wrapper forced FR13_SFWD_GPU_TIMER, FR13_DFWD_GPU_TIMER, and FR13_CFWD_GPU_TIMER to zero while the fixed32 launcher requires each to equal one",
+  "container_created": false,
+  "authenticated_task_started": false,
+  "gpu_work_started": false,
+  "credential_issued": false,
+  "corrective_commit": "f05693885cd0a6f5969eaceb657816ab30a4e917",
+  "corrective_tests": {
+    "focused_passed": 74,
+    "known_stale_full_vocab_test_deselected": 1
+  },
+  "timing_eligible": false,
+  "floor_acceptance_eligible": false
+}
+

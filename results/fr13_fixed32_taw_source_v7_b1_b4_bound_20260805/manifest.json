@@ -1,0 +1,53 @@
+{
+  "schema": "fr13.fixed32.taw_source_v7.b1_b4_bound_artifact.v1",
+  "status": "production_ready",
+  "created_at_utc": "2026-08-05T16:06:28Z",
+  "mode": "hydra27_fixed32",
+  "logical_topology": "Hydra27",
+  "logical_drafts": 27,
+  "physical_drafts": 31,
+  "physical_rows_root_inclusive": 32,
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "source_file_sha256": "088454e0605c5d41aee7b385c6d0ff66e6a7ddb999a9697258762d0aac9fe166",
+  "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
+  "source_contract_sha256": "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290",
+  "b4": {
+    "source_commit": "1f7485ade5ec6bfacf51dde7afa514531effcbcd",
+    "classification": "real_swe_verified_exact4_b4_byte_diagnostic",
+    "task_count": 4,
+    "qualified_batches": [1, 2, 3, 4],
+    "probability_mismatches": 0,
+    "product_mismatches": 0,
+    "production_bundle_sha256": "a53638b78394ae95558576caf95d1d14efeb70c438176141c1026cf6fab082ef",
+    "gate_verdict_sha256": "9a170daac35c6c77a804b95de346dd48ba66adc1ab438a48e33c02e088f4753b"
+  },
+  "b1": {
+    "source_commit": "f05693885cd0a6f5969eaceb657816ab30a4e917",
+    "classification": "one_real_swe_verified_k64_b1_graph_byte_gate",
+    "task_id": "astropy__astropy-12907",
+    "task_verdict": "resolved",
+    "evidence_route": "full_graph_replay",
+    "probability_mismatches": 0,
+    "product_mismatches": 0,
+    "credential_sha256": "7e91b64f210f0c20a8b6625aef8ab60bb383e7b1ac29e66c9c539285057e398b",
+    "live_bundle_sha256": "9d096c714087787818f3588bb96a3abc8c806647ad31f4b131c947bb5ecf167c"
+  },
+  "merge": {
+    "status": "production_ready",
+    "fresh_b1_record_sha256": "0a738b12aaa482240c04b84aa64f96b95eae80496c3b210f62d0033df9e93d35",
+    "production_bundle_sha256": "966d1cc6eb1182da64ec069ad16e07c9e2bec28e17e629d646acc0856268c82a",
+    "binding_sha256": "b3e6b83880116b8dd2f78fed5decf14e35df989c04c44d8f2725adef71c93299",
+    "qualified_batches": [1, 2, 3, 4]
+  },
+  "claims": {
+    "candidate_returned": false,
+    "reference_returned": true,
+    "production_default_enabled": false,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "performance_claim": false,
+    "hardware_floor_claim": false
+  }
+}
+
