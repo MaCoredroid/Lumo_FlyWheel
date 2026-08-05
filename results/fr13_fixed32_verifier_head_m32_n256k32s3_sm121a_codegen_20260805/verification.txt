@@ -1,0 +1,35 @@
+FR13 verifier-head M32 N256/K32/stage3 static verification
+==========================================================
+
+source_base_commit=f81a1c774b55a7f76d30d30ed0fac2be73665be9
+codegen_status=PASS_UNQUALIFIED
+cuda_arch=sm_121a
+gpu_runtime_used=false
+docker_used=false
+performance_measurement=false
+performance_claim=false
+
+ptxas_registers=128
+ptxas_stack_bytes=0
+ptxas_spill_store_bytes=0
+ptxas_spill_load_bytes=0
+dynamic_shared_bytes=55296
+logical_grid_ctas=970
+resource_repeat_byte_identical=true
+sass_repeat_byte_identical=true
+
+baseline_registers=158
+register_delta=-30
+baseline_dynamic_shared_bytes=61440
+dynamic_shared_delta=-6144
+baseline_logical_grid_ctas=1940
+logical_grid_ctas_delta=-970
+
+pytest_command=pytest -q tests/test_fr13_bf16_verifier_head_m32_sm121a.py tests/test_fr13_bf16_verifier_head_m32_n256k32s3_sm121a.py
+pytest_result=14 passed
+
+full_shared_object_built=false
+real_task_byte_gate_run=false
+real_task_timing_run=false
+byte_equality_claim=false
+hardware_floor_claim=false
