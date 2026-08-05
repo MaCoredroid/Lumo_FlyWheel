@@ -862,6 +862,7 @@ _FR13_FIXED32_GRAPH_REPLAY_EVIDENCE = []
 _FR13_FIXED32_TAW_FULL_GRAPH_PASSES = set()
 _FR13_FIXED32_PROFILE_CAPTURE_SCOPE = None
 _FR13_FIXED32_PROFILE_MEMORY_SCOPE = False
+_FR13_FIXED32_SFWD_CONV_POSTPREP_PROFILE_PRESEED = None
 _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT = None
 _FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS = {}
 _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH = {}
@@ -1932,6 +1933,82 @@ def _fr13_fixed32_profile_capture_scope_end():
         )
 
 
+def _fr13_fixed32_sfwd_conv_postprep_profile_capture_active():
+    """Return whether SFWD is running in a coherent throwaway FULL graph."""
+    scope = globals().get("_FR13_FIXED32_PROFILE_CAPTURE_SCOPE")
+    if scope is None:
+        return False
+    graph_id = scope.get("graph_id") if isinstance(scope, dict) else None
+    descriptor = scope.get("descriptor") if isinstance(scope, dict) else None
+    if (
+        not isinstance(scope, dict)
+        or set(scope) != {"descriptor", "graph_id", "completed"}
+        or not isinstance(descriptor, dict)
+        or descriptor.get("runtime_mode") != "FULL"
+        or type(descriptor.get("num_tokens")) is not int
+        or type(descriptor.get("num_reqs")) is not int
+        or descriptor["num_tokens"] != 32 * descriptor["num_reqs"]
+        or descriptor["num_reqs"] not in (1, 2, 3, 4)
+        or descriptor.get("uniform") is not True
+        or descriptor.get("has_lora") is not False
+        or type(descriptor.get("num_active_loras")) is not int
+        or descriptor["num_active_loras"] != 0
+        or (
+            graph_id is not None
+            and (type(graph_id) is not int or graph_id <= 0)
+        )
+        or scope.get("completed") is not False
+        or _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not True
+        or _FR13_FIXED32_CAPTURE_CONTEXT is not None
+        or _FR13_FIXED32_CAPTURE_MANIFESTS
+        or _FR13_FIXED32_OBSERVED_CURRENT is not None
+        or globals().get("_FR13_FIXED32_PENDING_EVENT") is not None
+        or _FR13_FIXED32_CAPTURE_FROZEN
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile capture scope drifted"
+        )
+    return True
+
+
+def _fr13_fixed32_clear_sfwd_conv_postprep_profile_capture():
+    evidence = globals().get(
+        "_FR13_FIXED32_SFWD_CONV_POSTPREP_PROFILE_PRESEED"
+    )
+    if evidence is None:
+        return None
+    layers = globals().get("_FR13_REPLAY_LAYERS")
+    stacks = globals().get("_FR13_EAGER_PACK_STACKS")
+    if not isinstance(layers, dict) or not isinstance(stacks, dict):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile cleanup registries are missing"
+        )
+    order = tuple(str(value) for value in stacks.get("layer_order", ()))
+    if (
+        len(order) != 48
+        or len(set(order)) != 48
+        or any(name not in layers for name in order)
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile cleanup layer order drifted"
+        )
+    from lumo_flywheel_serving.fr13_sfwd_conv_postprep_fusion import (
+        clear_fixed32_sfwd_conv_postprep_profile_capture_bindings as _clear,
+    )
+
+    cleared = _clear(layer_objects=tuple(layers[name] for name in order))
+    if (
+        not isinstance(cleared, dict)
+        or int(cleared.get("cleared", -1)) != 48
+        or int(cleared.get("layers", -1)) != 48
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile bindings did not clear"
+        )
+    globals()["_FR13_FIXED32_SFWD_CONV_POSTPREP_PROFILE_PRESEED"] = None
+    return dict(cleared)
+
+
 def _fr13_fixed32_profile_memory_scope_begin():
     global _FR13_FIXED32_PROFILE_MEMORY_SCOPE
     if not _FR13_FIXED32_MODE:
@@ -1958,6 +2035,7 @@ def _fr13_fixed32_profile_memory_scope_end():
     global _FR13_FIXED32_PROFILE_MEMORY_SCOPE
     if not _FR13_FIXED32_MODE:
         return
+    _fr13_fixed32_clear_sfwd_conv_postprep_profile_capture()
     active = _FR13_FIXED32_PROFILE_MEMORY_SCOPE
     _FR13_FIXED32_PROFILE_MEMORY_SCOPE = False
     if (
@@ -2372,6 +2450,56 @@ def _fr13_fixed32_preseed_sfwd_conv_postprep_capture():
         committer_route=committer_route,
     )
     globals()["_FR13_FIXED32_SFWD_CONV_POSTPREP_PRESEED"] = evidence
+    return dict(evidence)
+
+
+def _fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture(num_reqs):
+    """Seal all eager profile output leases before the first FULL capture."""
+    if not globals().get("_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH", False):
+        return None
+    if not _fr13_fixed32_sfwd_conv_postprep_profile_capture_active():
+        return None
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile output preseed ran during capture"
+        )
+    stacks = globals().get("_FR13_EAGER_PACK_STACKS")
+    layers = globals().get("_FR13_REPLAY_LAYERS")
+    if not isinstance(stacks, dict) or not isinstance(layers, dict):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile preseed registries are missing"
+        )
+    order = tuple(str(value) for value in stacks.get("layer_order", ()))
+    if (
+        len(order) != 48
+        or len(set(order)) != 48
+        or any(name not in layers for name in order)
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile preseed layer order drifted"
+        )
+    from lumo_flywheel_serving.fr13_sfwd_conv_postprep_fusion import (
+        preseed_fixed32_sfwd_conv_postprep_profile_capture_bindings as _preseed,
+    )
+
+    evidence = _preseed(
+        layer_order=order,
+        layer_objects=tuple(layers[name] for name in order),
+        batch_size=int(num_reqs),
+    )
+    if evidence is None:
+        return None
+    if (
+        not isinstance(evidence, dict)
+        or evidence.get("ready") is not True
+        or evidence.get("profile_capture") is not True
+        or int(evidence.get("layers", -1)) != 48
+        or int(num_reqs) not in tuple(evidence.get("batches", ()))
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile output preseed is incomplete"
+        )
+    globals()["_FR13_FIXED32_SFWD_CONV_POSTPREP_PROFILE_PRESEED"] = evidence
     return dict(evidence)
 
 
@@ -11715,6 +11843,9 @@ def _fr13_conv_subop_mab(
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
                 and attn_metadata.num_spec_decodes > 0
             )
+            _fr13_conv_postprep_profile_capture = (
+                _fr13_fixed32_sfwd_conv_postprep_profile_capture_active()
+            )
             _fr13_conv_postprep_active = bool(
                 _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
             )
@@ -12935,11 +13066,21 @@ def _fr13_conv_subop_mab(
                             and _fr13_conv_postprep_cache.get("schema")
                             == "fr13.fixed32.sfwd_conv_postprep.capture_cache.v1"
                         )
+                        _fr13_conv_postprep_profile_graph_cache = bool(
+                            _fr13_conv_postprep_graph_cache
+                            and _fr13_conv_postprep_cache.get(
+                                "profile_capture"
+                            )
+                            is True
+                        )
                         _fr13_conv_postprep_binding = None
                         _fr13_conv_postprep_ssi = spec_state_indices_tensor
                         _fr13_conv_postprep_conv_state = conv_state
                         _fr13_conv_postprep_source_stage = _fr13_wbb_stage
-                        if _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:
+                        if (
+                            _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
+                            and not _fr13_conv_postprep_graph_cache
+                        ):
                             _fr13_conv_postprep_source_stage = torch.empty_like(
                                 _fr13_wbb_stage[
                                     : _fr13_conv_postprep_b * _fr13_wbb_srows
@@ -12985,8 +13126,11 @@ def _fr13_conv_subop_mab(
                                 _fr13_conv_postprep_entry["capture_binding"]
                             )
                             if (
-                                _fr13_wbb_stage
-                                is not _fr13_conv_postprep_source_stage
+                                (
+                                    not _fr13_conv_postprep_profile_graph_cache
+                                    and _fr13_wbb_stage
+                                    is not _fr13_conv_postprep_source_stage
+                                )
                                 or int(conv_state.data_ptr())
                                 != int(_fr13_conv_postprep_conv_state.data_ptr())
                                 or tuple(int(value) for value in conv_state.shape)
@@ -13049,6 +13193,19 @@ def _fr13_conv_subop_mab(
                                 "g": _fr13_conv_postprep_g,
                                 "beta": _fr13_conv_postprep_beta,
                             }
+                            if _fr13_conv_postprep_profile_capture:
+                                _fr13_conv_postprep_cache[
+                                    "profile_capture_pending"
+                                ] = {
+                                    "batch_size": _fr13_conv_postprep_b,
+                                    "spec_state_indices": (
+                                        spec_state_indices_tensor
+                                    ),
+                                    "conv_state": conv_state,
+                                    "source_stage": (
+                                        _fr13_conv_postprep_source_stage
+                                    ),
+                                }
                             self._fr13_fixed32_sfwd_conv_postprep_outputs = (
                                 _fr13_conv_postprep_cache
                             )
@@ -13079,6 +13236,19 @@ def _fr13_conv_subop_mab(
                             _fr13_conv_postprep_beta = (
                                 _fr13_conv_postprep_cache["beta"]
                             )
+                            if _fr13_conv_postprep_profile_capture:
+                                _fr13_conv_postprep_cache[
+                                    "profile_capture_pending"
+                                ] = {
+                                    "batch_size": _fr13_conv_postprep_b,
+                                    "spec_state_indices": (
+                                        spec_state_indices_tensor
+                                    ),
+                                    "conv_state": conv_state,
+                                    "source_stage": (
+                                        _fr13_conv_postprep_source_stage
+                                    ),
+                                }
                         launch_fixed32_sfwd_conv_postprep_fusion(
                             x=mixed_qkv_spec,
                             conv_state=_fr13_conv_postprep_conv_state,
@@ -21958,6 +22128,10 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         "_fr13_fixed32_assert_final_full_preseed_ready(\n"
         "                desc.num_reqs,\n"
         "            )\n"
+        "        _fr13_f32_preseed_gdn."
+        "_fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture(\n"
+        "            desc.num_reqs,\n"
+        "        )\n"
         "        self._dummy_run(\n"
         "            desc.num_tokens,\n"
         "            cudagraph_runtime_mode=cudagraph_runtime_mode,\n"

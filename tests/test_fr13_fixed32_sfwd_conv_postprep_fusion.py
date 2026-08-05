@@ -780,6 +780,82 @@ def test_launcher_requires_opaque_capture_binding_and_has_one_launch() -> None:
     assert "partially preseeded" in source
 
 
+def test_profile_preseed_seals_all_48_b1_output_bindings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    for name, value in {
+        "ROWS": 1,
+        "CHANNELS": 2,
+        "SOURCE_ROWS": 2,
+        "NUM_K_HEADS": 1,
+        "NUM_V_HEADS": 1,
+        "HEAD_K_DIM": 1,
+        "HEAD_V_DIM": 1,
+        "Q_DIM": 1,
+        "V_DIM": 1,
+    }.items():
+        monkeypatch.setattr(candidate, name, value)
+
+    layers = []
+    order = tuple(f"layer.{index}" for index in range(48))
+    for layer_name in order:
+        outputs = {
+            "query": torch.empty((1, 1, 1, 1), dtype=torch.bfloat16),
+            "key_tensor": torch.empty((1, 1, 1, 1), dtype=torch.bfloat16),
+            "value_spec": torch.empty((1, 1, 1, 1), dtype=torch.bfloat16),
+            "value_tree": torch.empty((1, 1, 1), dtype=torch.bfloat16),
+            "g": torch.empty((1, 1), dtype=torch.float32),
+            "beta": torch.empty((1, 1), dtype=torch.float32),
+        }
+        outputs["profile_capture_pending"] = {
+            "batch_size": 1,
+            "spec_state_indices": torch.zeros((1, 1), dtype=torch.int32),
+            "conv_state": torch.empty((2, 2, 2), dtype=torch.bfloat16),
+            "source_stage": torch.empty((2, 2), dtype=torch.bfloat16),
+        }
+        layers.append(
+            types.SimpleNamespace(
+                prefix=layer_name,
+                _fr13_fixed32_sfwd_conv_postprep_outputs=outputs,
+            )
+        )
+
+    evidence = (
+        candidate.preseed_fixed32_sfwd_conv_postprep_profile_capture_bindings(
+            layer_order=order,
+            layer_objects=tuple(layers),
+            batch_size=1,
+        )
+    )
+    assert evidence == {
+        "ready": True,
+        "schema": candidate.CAPTURE_CACHE_SCHEMA,
+        "profile_capture": True,
+        "capacity": 1,
+        "layers": 48,
+        "batches": (1,),
+    }
+    for layer in layers:
+        cache = layer._fr13_fixed32_sfwd_conv_postprep_outputs
+        assert cache["profile_capture"] is True
+        binding = cache["by_batch"][1]["capture_binding"]
+        assert binding.profile_capture is True
+        assert binding.batch_size == 1
+        assert len(binding.operands) == 10
+
+    cleared = (
+        candidate.clear_fixed32_sfwd_conv_postprep_profile_capture_bindings(
+            layer_objects=tuple(layers)
+        )
+    )
+    assert cleared == {"cleared": 48, "layers": 48}
+    assert all(
+        layer._fr13_fixed32_sfwd_conv_postprep_outputs is None
+        for layer in layers
+    )
+
+
 def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
     standalone_b1 = candidate.fixed32_sfwd_conv_postprep_static_ledger(1)
     assert standalone_b1["gate_packing"]["candidate_programs_per_request"] == 44

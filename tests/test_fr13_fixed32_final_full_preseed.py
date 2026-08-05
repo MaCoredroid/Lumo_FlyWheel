@@ -437,6 +437,12 @@ def test_normalized_one_warmup_gets_explicit_capture_shaped_producer(
         _fr13_fixed32_warm_final_full_postprocess=lambda vocab: holder.update(
             warm_vocab=vocab
         ),
+        _fr13_fixed32_preseed_sfwd_conv_postprep_capture=(
+            lambda: holder.update(persistent_sfwd_preseed=True)
+        ),
+        _fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture=(
+            lambda batch: holder.update(profile_preseed_batch=batch)
+        ),
         _fr13_fixed32_assert_final_full_preseed_ready=assert_ready,
     )
     _install_fake_gdn(monkeypatch, fake_gdn)
@@ -471,6 +477,68 @@ def test_normalized_one_warmup_gets_explicit_capture_shaped_producer(
     assert holder["warm_vocab"] == 248320
     assert holder["cfwd_ready"] is True
     assert holder["dfwd_ready"] is True
+    assert holder["persistent_sfwd_preseed"] is True
+    assert holder["profile_preseed_batch"] == 1
+
+
+def test_profile_output_bindings_are_sealed_before_first_full_dummy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "gpu_model_runner.py"
+    source.write_text(_GPU_RUNNER_FIXTURE)
+    monkeypatch.setattr(patcher, "GPU_MODEL_RUNNER_PATH", source)
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    assert patcher._patch_gpu_model_runner_fixed32_final_full_preseed()
+
+    state: dict[str, object] = {}
+
+    def profile_preseed(batch: int) -> None:
+        runner = state["runner"]
+        assert len(runner.calls) == 1
+        assert (
+            runner.calls[0][1]["cudagraph_runtime_mode"]
+            is _CUDAGraphMode.NONE
+        )
+        state["bindings"] = tuple(
+            {"layer": layer, "batch": batch, "output_binding": object()}
+            for layer in range(48)
+        )
+
+    fake_gdn = SimpleNamespace(
+        _fr13_fixed32_final_full_preseed_postcheck_required=lambda mode: False,
+        _fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture=(
+            profile_preseed
+        ),
+    )
+    _install_fake_gdn(monkeypatch, fake_gdn)
+    namespace = {
+        "CUDAGraphMode": _CUDAGraphMode,
+        "SimpleNamespace": SimpleNamespace,
+        "_fr13_cfwd_timer": lambda: None,
+        "_fr13_dfwd_timer": lambda: None,
+    }
+    exec(source.read_text(), namespace)
+    runner = namespace["Runner"](1)
+    state["runner"] = runner
+    descriptor = SimpleNamespace(
+        num_tokens=32,
+        num_reqs=1,
+        uniform=True,
+        has_lora=False,
+        num_active_loras=0,
+    )
+    runner._warmup_and_capture(descriptor, _CUDAGraphMode.FULL)
+
+    bindings = state["bindings"]
+    assert len(bindings) == 48
+    assert tuple(entry["layer"] for entry in bindings) == tuple(range(48))
+    assert all(entry["batch"] == 1 for entry in bindings)
+    assert len(runner.calls) == 2
+    assert (
+        runner.calls[1][1]["cudagraph_runtime_mode"]
+        is _CUDAGraphMode.FULL
+    )
 
 
 def test_ready_metadata_with_stale_lease_fails_before_full_capture(
@@ -487,6 +555,10 @@ def test_ready_metadata_with_stale_lease_fails_before_full_capture(
         _fr13_fixed32_final_full_preseed_postcheck_required=lambda mode: True,
         _fr13_fixed32_final_full_preseed_needed=lambda *args: False,
         _fr13_fixed32_warm_final_full_postprocess=lambda vocab: None,
+        _fr13_fixed32_preseed_sfwd_conv_postprep_capture=lambda: None,
+        _fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture=(
+            lambda batch: None
+        ),
         _fr13_fixed32_assert_final_full_preseed_ready=lambda batch: (
             (_ for _ in ()).throw(RuntimeError("stale fixed32 lease"))
         ),

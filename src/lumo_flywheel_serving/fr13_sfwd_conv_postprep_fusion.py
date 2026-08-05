@@ -1233,6 +1233,7 @@ class _Fixed32SfwdConvPostprepCaptureBinding:
         "pregather_state",
         "committer_route",
         "committer_state",
+        "profile_capture",
     )
 
     def __init__(
@@ -1246,6 +1247,7 @@ class _Fixed32SfwdConvPostprepCaptureBinding:
         pregather_state: dict,
         committer_route: dict,
         committer_state: dict,
+        profile_capture: bool = False,
     ) -> None:
         self.auth = _CAPTURE_BINDING_AUTH
         self.batch_size = int(batch_size)
@@ -1257,6 +1259,7 @@ class _Fixed32SfwdConvPostprepCaptureBinding:
         self.pregather_state = pregather_state
         self.committer_route = committer_route
         self.committer_state = committer_state
+        self.profile_capture = bool(profile_capture)
 
 
 def _capture_preseed_contract(
@@ -1570,6 +1573,245 @@ def preseed_fixed32_sfwd_conv_postprep_capture_bindings(
     }
 
 
+def preseed_fixed32_sfwd_conv_postprep_profile_capture_bindings(
+    *,
+    layer_order: object,
+    layer_objects: object,
+    batch_size: int,
+) -> dict[str, object] | None:
+    """Seal eager profile operands before the throwaway FULL capture."""
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile preseed ran during capture"
+        )
+    if not isinstance(layer_order, (list, tuple)):
+        raise TypeError("fixed32 conv/post-prep layer order must be a sequence")
+    order = tuple(str(value) for value in layer_order)
+    if (
+        not isinstance(layer_objects, (list, tuple))
+        or len(order) != LAYERS
+        or len(set(order)) != LAYERS
+        or len(layer_objects) != LAYERS
+    ):
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile preseed requires 48 ordered layers"
+        )
+    capacity = int(batch_size)
+    if capacity not in (1, 2, 3, 4):
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile preseed requires B1-B4"
+        )
+    caches = tuple(
+        getattr(layer, "_fr13_fixed32_sfwd_conv_postprep_outputs", None)
+        for layer in layer_objects
+    )
+    if all(cache is None for cache in caches):
+        return None
+    graph_caches = tuple(
+        isinstance(cache, dict)
+        and cache.get("schema") == CAPTURE_CACHE_SCHEMA
+        for cache in caches
+    )
+    if any(graph_caches):
+        if not all(graph_caches):
+            raise RuntimeError(
+                "fixed32 conv/post-prep profile caches are partially sealed"
+            )
+        for layer_name, layer, cache in zip(
+            order, layer_objects, caches, strict=True
+        ):
+            if (
+                str(getattr(layer, "prefix", "")) != layer_name
+                or cache.get("profile_capture") is not True
+                or int(cache.get("capacity", 0)) < capacity
+                or capacity not in cache.get("by_batch", {})
+            ):
+                raise RuntimeError(
+                    "fixed32 conv/post-prep sealed profile cache drifted"
+                )
+        return {
+            "ready": True,
+            "schema": CAPTURE_CACHE_SCHEMA,
+            "profile_capture": True,
+            "capacity": int(caches[0]["capacity"]),
+            "layers": LAYERS,
+            "batches": tuple(range(1, int(caches[0]["capacity"]) + 1)),
+        }
+    if any(cache is None or not isinstance(cache, dict) for cache in caches):
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile output caches are incomplete"
+        )
+
+    first_pending = caches[0].get("profile_capture_pending")
+    first_source = (
+        first_pending.get("source_stage")
+        if isinstance(first_pending, dict)
+        else None
+    )
+    if not torch.is_tensor(first_source):
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile preseed lacks eager operands"
+        )
+    states_by_batch = {
+        batch: {
+            "profile_capture": True,
+            "sticky_guard_ok": torch.ones(
+                (), dtype=torch.int32, device=first_source.device
+            ),
+        }
+        for batch in range(1, capacity + 1)
+    }
+    for state in states_by_batch.values():
+        state["sticky_guard_ok_data_ptr"] = int(
+            state["sticky_guard_ok"].data_ptr()
+        )
+    profile_state = {"profile_capture": True, "capacity": capacity}
+    profile_route = {
+        "profile_capture": True,
+        "capacity": capacity,
+        "states_by_batch": states_by_batch,
+    }
+    sealed: list[tuple[object, dict[str, object]]] = []
+    for layer_index, (layer_name, layer, cache) in enumerate(
+        zip(order, layer_objects, caches, strict=True)
+    ):
+        pending = cache.get("profile_capture_pending")
+        base = {
+            "query": cache.get("query"),
+            "key_tensor": cache.get("key_tensor"),
+            "value_spec": cache.get("value_spec"),
+            "value_tree": cache.get("value_tree"),
+            "g": cache.get("g"),
+            "beta": cache.get("beta"),
+        }
+        if (
+            str(getattr(layer, "prefix", "")) != layer_name
+            or not isinstance(pending, dict)
+            or int(pending.get("batch_size", 0)) != capacity
+            or any(not torch.is_tensor(value) for value in base.values())
+        ):
+            raise RuntimeError(
+                "fixed32 conv/post-prep profile eager cache drifted: "
+                f"layer={layer_name!r} index={layer_index}"
+            )
+        spec_state_indices = pending.get("spec_state_indices")
+        conv_state = pending.get("conv_state")
+        source_stage = pending.get("source_stage")
+        if (
+            not torch.is_tensor(spec_state_indices)
+            or not torch.is_tensor(conv_state)
+            or not torch.is_tensor(source_stage)
+            or source_stage.device != first_source.device
+        ):
+            raise RuntimeError(
+                "fixed32 conv/post-prep profile input leases are incomplete"
+            )
+        by_batch: dict[int, dict[str, object]] = {}
+        for batch in range(1, capacity + 1):
+            rows = batch * ROWS
+            query = base["query"].as_strided(
+                (1, rows, NUM_K_HEADS, HEAD_K_DIM),
+                (rows * Q_DIM, Q_DIM, HEAD_K_DIM, 1),
+            )
+            key = base["key_tensor"].as_strided(
+                (1, rows, NUM_K_HEADS, HEAD_K_DIM),
+                (rows * Q_DIM, Q_DIM, HEAD_K_DIM, 1),
+            )
+            value_spec = base["value_spec"].as_strided(
+                (1, rows, NUM_V_HEADS, HEAD_V_DIM),
+                (rows * V_DIM, V_DIM, HEAD_V_DIM, 1),
+            )
+            value_tree = base["value_tree"][:rows]
+            g = base["g"][:rows]
+            beta = base["beta"][:rows]
+            operands = (
+                spec_state_indices,
+                conv_state,
+                query,
+                key,
+                value_spec,
+                value_tree,
+                g,
+                beta,
+                source_stage,
+                states_by_batch[batch]["sticky_guard_ok"],
+            )
+            binding = _Fixed32SfwdConvPostprepCaptureBinding(
+                batch_size=batch,
+                capacity=capacity,
+                layer_index=layer_index,
+                layer_name=layer_name,
+                operands=operands,
+                pregather_state=profile_state,
+                committer_route=profile_route,
+                committer_state=states_by_batch[batch],
+                profile_capture=True,
+            )
+            by_batch[batch] = {
+                "query": query,
+                "key_tensor": key,
+                "value_spec": value_spec,
+                "value_tree": value_tree,
+                "g": g,
+                "beta": beta,
+                "source_stage": source_stage,
+                "spec_state_indices": spec_state_indices,
+                "conv_state": conv_state,
+                "capture_binding": binding,
+            }
+        sealed.append(
+            (
+                layer,
+                {
+                    "schema": CAPTURE_CACHE_SCHEMA,
+                    "profile_capture": True,
+                    "capacity": capacity,
+                    "base": base,
+                    "by_batch": by_batch,
+                    "pregather_state": profile_state,
+                    "committer_route": profile_route,
+                },
+            )
+        )
+    for layer, cache in sealed:
+        layer._fr13_fixed32_sfwd_conv_postprep_outputs = cache
+    return {
+        "ready": True,
+        "schema": CAPTURE_CACHE_SCHEMA,
+        "profile_capture": True,
+        "capacity": capacity,
+        "layers": len(sealed),
+        "batches": tuple(range(1, capacity + 1)),
+    }
+
+
+def clear_fixed32_sfwd_conv_postprep_profile_capture_bindings(
+    *, layer_objects: object
+) -> dict[str, object]:
+    """Drop every temporary profile binding before final-cache allocation."""
+    if not isinstance(layer_objects, (list, tuple)):
+        raise TypeError("fixed32 conv/post-prep profile layers must be a sequence")
+    caches = tuple(
+        getattr(layer, "_fr13_fixed32_sfwd_conv_postprep_outputs", None)
+        for layer in layer_objects
+    )
+    profile_caches = tuple(
+        isinstance(cache, dict) and cache.get("profile_capture") is True
+        for cache in caches
+    )
+    if any(profile_caches) and not all(profile_caches):
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile bindings are partially present"
+        )
+    for layer, profile_cache in zip(layer_objects, profile_caches, strict=True):
+        if profile_cache:
+            layer._fr13_fixed32_sfwd_conv_postprep_outputs = None
+    return {
+        "cleared": sum(profile_caches),
+        "layers": len(layer_objects),
+    }
+
+
 def _validate_capture_binding(
     binding: object,
     *,
@@ -1611,6 +1853,37 @@ def _validate_capture_binding(
         raise RuntimeError(
             "fixed32 conv/post-prep capture operand object/data_ptr drifted"
         )
+    if binding.profile_capture:
+        from vllm.model_executor.layers.mamba import (
+            gdn_linear_attn as profile_gdn,
+        )
+
+        scope = getattr(
+            profile_gdn, "_FR13_FIXED32_PROFILE_CAPTURE_SCOPE", None
+        )
+        descriptor = scope.get("descriptor") if isinstance(scope, dict) else None
+        state = binding.committer_state
+        if (
+            not isinstance(scope, dict)
+            or not isinstance(descriptor, dict)
+            or descriptor.get("runtime_mode") != "FULL"
+            or int(descriptor.get("num_reqs", -1)) != binding.batch_size
+            or getattr(
+                profile_gdn, "_FR13_FIXED32_PROFILE_MEMORY_SCOPE", None
+            )
+            is not True
+            or getattr(profile_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
+            is not None
+            or binding.pregather_state.get("profile_capture") is not True
+            or binding.committer_route.get("profile_capture") is not True
+            or state.get("profile_capture") is not True
+            or int(state["sticky_guard_ok"].data_ptr())
+            != int(state.get("sticky_guard_ok_data_ptr", -1))
+        ):
+            raise RuntimeError(
+                "fixed32 conv/post-prep profile capture lease changed"
+            )
+        return
     pregather_state = binding.pregather_state
     committer_route = binding.committer_route
     committer_state = binding.committer_state
