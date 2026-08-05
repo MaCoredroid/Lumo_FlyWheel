@@ -19,6 +19,7 @@ SOURCE_SHA256 = "a52361be1c9052a46509cc230ea320c4beb6d15f261327edc835d8da3ae00d9
 EXPECTED_TORCH = "2.11.0+cu130"
 EXPECTED_CUDA = "13.0"
 EXPECTED_ARCH = "12.1a"
+EXTENSION_NAME = "fr13_bf16_k64_m4_r64_u8_sm121a"
 CUDA_PACKAGE_INCLUDE = Path(
     "/usr/local/lib/python3.12/dist-packages/nvidia/cu13/include"
 )
@@ -47,6 +48,30 @@ def recorded_path(path: Path) -> str:
         return str(path.relative_to(REPO))
     except ValueError:
         return str(path)
+
+
+def newly_loaded_library(
+    build_dir: Path, loaded_before: set[str], loaded_after: set[str]
+) -> Path:
+    candidates = sorted(
+        candidate
+        for raw_path in loaded_after - loaded_before
+        if (candidate := Path(raw_path).resolve()).parent == build_dir.resolve()
+        and candidate.is_file()
+        and candidate.suffix == ".so"
+        and (
+            candidate.name == f"{EXTENSION_NAME}.so"
+            or (
+                candidate.stem.startswith(f"{EXTENSION_NAME}_v")
+                and candidate.stem.removeprefix(f"{EXTENSION_NAME}_v").isdigit()
+            )
+        )
+    )
+    if len(candidates) != 1:
+        raise RuntimeError(
+            "pinned build did not register exactly one newly loaded FR13 B4 library"
+        )
+    return candidates[0]
 
 
 def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]:
@@ -79,28 +104,32 @@ def build(output: Path, build_dir: Path, attestation: Path) -> dict[str, object]
     attestation = attestation.resolve()
     if output == SOURCE or attestation == SOURCE:
         raise ValueError("build outputs must not replace the CUDA source")
+    if output == attestation:
+        raise ValueError("binary output and build attestation must be distinct")
     output.parent.mkdir(parents=True, exist_ok=True)
     build_dir.mkdir(parents=True, exist_ok=True)
     python_bin_dir = str(Path(sys.executable).parent)
     os.environ["PATH"] = python_bin_dir + os.pathsep + os.environ["PATH"]
     os.environ["TORCH_CUDA_ARCH_LIST"] = EXPECTED_ARCH
-    built = Path(
-        load(
-            name="fr13_bf16_k64_m4_r64_u8_sm121a",
-            sources=[str(SOURCE)],
-            build_directory=str(build_dir),
-            extra_cflags=["-O3", f"-I{CUDA_PACKAGE_INCLUDE}"],
-            extra_cuda_cflags=[
-                "-O3",
-                f"-I{CUDA_PACKAGE_INCLUDE}",
-                "--fmad=true",
-                "--frandom-seed=fr13_bf16_k64_m4_r64_u8",
-                "--expt-relaxed-constexpr",
-                "--threads=1",
-            ],
-            is_python_module=False,
-            verbose=True,
-        )
+    loaded_before = set(torch.ops.loaded_libraries)
+    load(
+        name=EXTENSION_NAME,
+        sources=[str(SOURCE)],
+        build_directory=str(build_dir),
+        extra_cflags=["-O3", f"-I{CUDA_PACKAGE_INCLUDE}"],
+        extra_cuda_cflags=[
+            "-O3",
+            f"-I{CUDA_PACKAGE_INCLUDE}",
+            "--fmad=true",
+            "--frandom-seed=fr13_bf16_k64_m4_r64_u8",
+            "--expt-relaxed-constexpr",
+            "--threads=1",
+        ],
+        is_python_module=False,
+        verbose=True,
+    )
+    built = newly_loaded_library(
+        build_dir, loaded_before, set(torch.ops.loaded_libraries)
     )
     temporary = output.with_name(output.name + f".tmp.{os.getpid()}")
     shutil.copyfile(built, temporary)

@@ -17,7 +17,9 @@
     "candidate_path": "csrc/fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.cu",
     "candidate_sha256": "a52361be1c9052a46509cc230ea320c4beb6d15f261327edc835d8da3ae00d9e",
     "checker_path": "scripts/fr13_check_bf16_gemvx_k64_m4_shuffle_r64_u8_codegen.py",
-    "checker_sha256": "8aac7c18e699e79925b8ffd0ebb67374cdb0af58fc74797e1a8fa44ff99bc115"
+    "checker_sha256": "66274a81d34a3e45a0c0b8bbf5571d7db1006a61732e9b63ba65b1999f39c072",
+    "builder_path": "scripts/fr13_build_bf16_gemvx_k64_m4_shuffle_r64_u8.py",
+    "builder_sha256": "e13a4fd62c7339e739ca658c07e898c4fe7c85ae13b47c7f9f2cefd471315b51"
   },
   "candidate": {
     "operation": "fr13_bf16_k64_head::gemvx_m4_shuffle_r64_u8_out",
@@ -63,8 +65,9 @@
   },
   "required_next_gates": [
     "linked build in pinned deployed Torch/CUDA ABI",
+    "fail-closed default-off exact-B4 runtime wiring with incumbent fallback",
     "real SWE-Verified B4 five-site full-logit byte gate serving incumbent",
-    "clean exact4 B4 full-step timing if byte gate passes",
-    "exact16 B4 confirmation"
+    "clean exact4 real-task B4 diagnostic full-step timing if byte gate passes",
+    "exact16 B4 acceptance with one-sided U95 at or below 1.15x hardware floor"
   ]
 }

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
+
+import pytest
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -106,3 +110,57 @@ def test_codegen_checker_accepts_pinned_sm121a_kernel() -> None:
     assert result["candidate_resources"]["registers_per_thread"] == 56
     assert result["candidate_dynamic_loop_instructions_per_four_rows"] == 4760
     assert result["four_m1_u8_dynamic_loop_instructions"] == 7680
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    (
+        (", 0x8, 0x101f ;", ", 0x4, 0x101f ;"),
+        ("R2.64+0x60000", "R2.64+0x40000"),
+        ("R11.reuse, 0x1380", "R11.reuse, 0x1300"),
+        ("R4.64+0xe0", "R4.64+0xc0"),
+        ("R2.64+0x28e0", "R2.64+0x28c0"),
+    ),
+)
+def test_codegen_checker_rejects_b4_dataflow_mutations(
+    before: str, after: str
+) -> None:
+    sass = (ARTIFACT / "candidate_sass.txt").read_text(encoding="ascii")
+    assert sass.count(before) >= 1
+    mutated = sass.replace(before, after, 1)
+    with pytest.raises(RuntimeError):
+        _load_checker().audit(
+            mutated,
+            (ARTIFACT / "candidate_resource.txt").read_text(encoding="ascii"),
+        )
+
+
+def test_static_artifact_has_exact_json_types_and_hash_bindings() -> None:
+    manifest = json.loads((ARTIFACT / "manifest.json").read_text(encoding="ascii"))
+    audit = json.loads((ARTIFACT / "codegen_audit.json").read_text(encoding="ascii"))
+
+    for key in (
+        "acceptance_valid",
+        "byte_qualified",
+        "timing_eligible",
+        "performance_claim",
+        "production_default_enabled",
+        "runtime_wired",
+        "gpu_used",
+        "docker_used",
+    ):
+        assert type(manifest[key]) is bool
+    for key in ("vocabulary", "hidden", "threads_per_cta", "weight_reuse_batch"):
+        assert type(manifest["candidate"][key]) is int
+    assert type(audit["performance_measurement"]) is bool
+    assert type(audit["gpu_used"]) is bool
+    assert type(audit["candidate_dynamic_loop_instructions_per_four_rows"]) is int
+
+    for path_key, hash_key in (
+        ("candidate_path", "candidate_sha256"),
+        ("checker_path", "checker_sha256"),
+        ("builder_path", "builder_sha256"),
+    ):
+        path = REPO / manifest["source"][path_key]
+        observed = hashlib.sha256(path.read_bytes()).hexdigest()
+        assert observed == manifest["source"][hash_key]

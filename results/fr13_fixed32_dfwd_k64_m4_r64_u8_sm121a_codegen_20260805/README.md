@@ -22,8 +22,9 @@ shared, spills, barriers, calls, or atomics. Two empty-output compilations with
 the fixed `--frandom-seed=fr13_bf16_k64_m4_r64_u8` produced the same cubin
 SHA-256, `c7b2a75dab16fa6a5c4f0038753b9da0f1f3d06ae6a22437797796a4ae9fd26b`.
 
-The next step is a linked build in the pinned deployed Torch/CUDA ABI, then a
-default-off real SWE-Verified B4 shadow gate comparing all 65,536 BF16 logits
-at root and MTP depths 1-4 while always serving the incumbent. Only a clean
-exact4 credential may admit full-step timing; exact16 remains required for
-acceptance.
+The next steps are a linked build in the pinned deployed Torch/CUDA ABI and
+fail-closed, default-off exact-B4 runtime wiring, then a real SWE-Verified B4
+shadow gate comparing all 65,536 BF16 logits at root and MTP depths 1-4 while
+always serving the incumbent. A clean exact4 credential may admit diagnostic
+full-step timing only. Exact16 and one-sided U95 at or below 1.15x the recorded
+hardware floor remain required for acceptance.

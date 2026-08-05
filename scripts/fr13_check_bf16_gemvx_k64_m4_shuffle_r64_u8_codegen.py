@@ -50,6 +50,68 @@ def _loop_counts(sass: str) -> Counter[str]:
     return Counter(instructions)
 
 
+def _require_exact_b4_dataflow(sass: str) -> None:
+    lines = sass.splitlines()
+    shuffle_lines = [line for line in lines if " SHFL.DOWN " in line]
+    for stride in (8, 4, 2, 1):
+        require(
+            sum(f", 0x{stride:x}, 0x101f ;" in line for line in shuffle_lines) == 4,
+            f"width-16 stride-{stride} reduction group drifted",
+        )
+
+    store_lines = [line for line in lines if " STG.E.U16 " in line]
+    for address in (
+        "desc[UR4][R2.64]",
+        "desc[UR4][R2.64+0x20000]",
+        "desc[UR4][R2.64+0x40000]",
+        "desc[UR4][R2.64+0x60000]",
+    ):
+        require(
+            sum(address in line for line in store_lines) == 1,
+            f"exact-B4 output address {address} drifted",
+        )
+
+    loop_start = sass.index(".L_x_1:")
+    loop_end = sass.index("BRA `(.L_x_1)", loop_start)
+    loop = sass[loop_start:loop_end]
+    require(
+        loop.count("ISETP.GE.U32.AND P0, PT, R11.reuse, 0x1380, PT") == 1,
+        "K=5120 loop bound drifted",
+    )
+    require(
+        loop.count("IADD3 R11, PT, PT, R11, 0x80, RZ") == 1,
+        "U8 K-loop increment drifted",
+    )
+    require(
+        loop.count("IADD3 R8, PT, PT, R8, 0x80, RZ") == 1,
+        "U8 weight-row increment drifted",
+    )
+    require(
+        loop.count("IADD.64 R2, R2, 0x100") == 1,
+        "U8 input-pointer increment drifted",
+    )
+
+    for step in range(8):
+        byte_step = step * 0x20
+        weight_offset = "" if byte_step == 0 else f"+0x{byte_step:x}"
+        require(
+            loop.count(f"desc[UR4][R4.64{weight_offset}]") == 1,
+            f"shared weight load step {step} drifted",
+        )
+        for batch_base in (-0x5000, -0x2800, 0, 0x2800):
+            byte_offset = batch_base + byte_step
+            if byte_offset < 0:
+                input_offset = f"+-0x{-byte_offset:x}"
+            elif byte_offset > 0:
+                input_offset = f"+0x{byte_offset:x}"
+            else:
+                input_offset = ""
+            require(
+                loop.count(f"desc[UR4][R2.64{input_offset}]") == 1,
+                f"B4 input load batch offset {batch_base:#x} step {step} drifted",
+            )
+
+
 def _resources(raw: str) -> dict[str, int]:
     match = RESOURCE.search(raw)
     require(match is not None, "kernel resource record not found")
@@ -67,6 +129,7 @@ def audit(sass: str, resource: str) -> dict[str, object]:
     counts = _counts(sass)
     loop = _loop_counts(sass)
     resources = _resources(resource)
+    _require_exact_b4_dataflow(sass)
     require(sum(counts.values()) == 200, "static instruction count drifted")
     require(counts["SHFL.DOWN"] == 16, "four reduction trees drifted")
     require(counts["FADD"] == 16, "four reduction add trees drifted")
