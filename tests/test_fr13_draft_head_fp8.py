@@ -51,6 +51,7 @@ def test_candidate_is_default_off_strict_and_orthogonal_to_cutlass_wave() -> Non
     assert '"FR13_DRAFT_HEAD_FP8", "0"' in snippet
     assert '"FR13_DRAFT_HEAD_FP8_STATIC_IO", "0"' in snippet
     assert '"FR13_DRAFT_HEAD_FP8_ARM", ""' in snippet
+    assert '"arm": _fr13_dh_fp8_arm' in snippet
     assert '_fr13_dh_fp8_raw not in ("0", "1")' in snippet
     assert "FR13_DRAFT_HEAD_FP8=1 requires a canonical" in snippet
     assert "FR13_DRAFT_HEAD_FP8=0 forbids FR13_DRAFT_HEAD_FP8_ARM" in snippet

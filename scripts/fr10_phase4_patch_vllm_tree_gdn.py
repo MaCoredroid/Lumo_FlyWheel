@@ -27193,6 +27193,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             "fr13.fixed32.draft_head_fp8_engagement.v1"
                         ),
                         "status": "ENGAGED",
+                        "arm": _fr13_dh_fp8_arm,
                         "source_commit": os.environ.get(
                             "FR13_DRAFT_HEAD_FP8_SOURCE_COMMIT", ""
                         ),
