@@ -1,0 +1,31 @@
+classification=static_source_only
+gpu_used=0
+docker_used=0
+cuda_cache_touched=0
+synthetic_probe_used=0
+real_swe_verified_task_used=0
+compiler_used=0
+performance_claim=0
+byte_parity_claim=0
+
+python_compile=PASS
+pytest_command=pytest -q tests/test_fr13_fa2_no_bias_pristine_compare.py tests/test_fr13_fa2_qrow32_gate.py tests/test_fr13_fa2_qrow32_gqa_pair.py tests/test_fr13_fa2_qrow32_static_gate.py tests/test_fr13_fa2_tree_kernel_candidates.py
+pytest_result=44 passed in 3.29s
+git_diff_check=PASS
+
+fresh_fa2_commit=29210221863736a08f71a866459e368ad1ac4a95
+first_patch_flash_h=changed
+first_patch_flash_fwd_kernel_h=changed
+first_patch_utils_h=changed
+first_patch_pair_translation_unit=created
+first_patch_flash_api_cpp=changed
+first_patch_flash_api_torch_lib_cpp=changed
+first_patch_other_private_translation_units=unchanged
+second_patch_all_reported_files=unchanged
+
+pending_sm121a_compile=1
+pending_resource_audit=1
+pending_abi_audit=1
+pending_real_exact4_b4_tail23_byte_gate=1
+pending_real_exact4_b4_hydra27_byte_gate=1
+pending_real_exact4_b4_timing=1

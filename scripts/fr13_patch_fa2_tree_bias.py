@@ -94,6 +94,11 @@ struct StaticQueryBatchLayout {
 };
 
 template <typename Kernel_traits>
+struct StaticQueryHeadsPerCTA {
+    static constexpr int value = 1;
+};
+
+template <typename Kernel_traits>
 struct StaticPagedQueryBlockInfo {
     template <typename Params>
     __forceinline__ __device__
@@ -144,10 +149,20 @@ __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
                                                 const int row_idx_offset,
                                                 const int warp_row_stride) {
     constexpr int kStaticQueryRows = StaticQueryRows<Kernel_traits>::value;
-    constexpr bool kStaticQueryTile = kStaticQueryRows != 0;
-    static_assert(!kStaticQueryTile || Kernel_traits::kBlockM == 32);
-    static_assert(!kStaticQueryTile || Kernel_traits::kNWarps == 2);
-    static_assert(!kStaticQueryTile || Kernel_traits::kNThreads == 64);
+    constexpr int kStaticQueryHeadsPerCTA =
+        StaticQueryHeadsPerCTA<Kernel_traits>::value;
+    constexpr bool kStaticQueryTile =
+        kStaticQueryRows * kStaticQueryHeadsPerCTA == Kernel_traits::kBlockM;
+    static_assert(kStaticQueryHeadsPerCTA == 1 || kStaticQueryHeadsPerCTA == 2);
+    static_assert(
+        !kStaticQueryTile
+        || Kernel_traits::kBlockM == 32 * kStaticQueryHeadsPerCTA);
+    static_assert(
+        !kStaticQueryTile
+        || Kernel_traits::kNWarps == 2 * kStaticQueryHeadsPerCTA);
+    static_assert(
+        !kStaticQueryTile
+        || Kernel_traits::kNThreads == 64 * kStaticQueryHeadsPerCTA);
     if constexpr (!kStaticQueryTile) {
         if (params.tree_bias_ptr == nullptr) { return; }
     }
@@ -179,7 +194,12 @@ __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
         const int row_idx_base = query_row_idx_offset + mi * query_warp_row_stride;
         #pragma unroll
         for (int i = 0; i < size<0, 0>(tensor); ++i) {
-            const int q_rel = row_idx_base + i * 8 - tree_bias_q_offset;
+            const int logical_row = row_idx_base + i * 8;
+            const int q_rel = (
+                kStaticQueryTile && kStaticQueryHeadsPerCTA == 2
+                    ? logical_row & (kStaticQueryRows - 1)
+                    : logical_row
+            ) - tree_bias_q_offset;
             if (kStaticQueryTile || (q_rel >= 0 && q_rel < tree_bias_rows)) {
                 #pragma unroll
                 for (int nj = 0; nj < size<1, 1>(tensor); ++nj) {
@@ -223,6 +243,7 @@ FIXED32_QUERY_TILE32_B1_SPLIT2_BATCH_STRIDE_SENTINEL = 0x46523135
 # large enough to be private but small enough for the gate's deliberately
 # padded four-batch diagnostic tensor (about 1.6 MiB of BF32 storage).
 FIXED32_QUERY_TILE32_BATCH_STRIDE_SENTINEL = 0x20013
+FIXED32_QUERY_GQA_PAIR32_BATCH_STRIDE_SENTINEL = 0x20014
 
 
 FIXED32_QUERY_STATIC_PAGE_TRAIT_LEGACY = r'''// FR13_FA2_FIXED32_STATIC_PAGE: stock traits retain the dynamic page size.
@@ -722,6 +743,114 @@ void fr13_run_mha_fwd_fixed32_qrow32(
 '''
 
 
+FIXED32_QUERY_GQA_PAIR32_TRANSLATION_UNIT = r'''// FR13 fixed32 B4 qrow32 GQA-pair gate candidate.
+#include "namespace_config.h"
+#include "flash_fwd_launch_template.h"
+
+namespace FLASH_NAMESPACE {
+
+using Fr13Fixed32Qrow32GqaPairKernelTraits = Flash_fwd_kernel_traits<
+    256, 64, 64, 4, false, false, cutlass::bfloat16_t>;
+
+template <>
+struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32GqaPairKernelTraits> {
+    static constexpr int value = 1024;
+    static constexpr int log2 = 10;
+    static constexpr int block_n_log2 = 6;
+};
+
+template <>
+struct StaticPagedKVStrides<Fr13Fixed32Qrow32GqaPairKernelTraits> {
+    static constexpr int64_t page = 1024 * 4 * 256;
+    static constexpr int64_t row = 4 * 256;
+    static constexpr int64_t head = 256;
+};
+
+template <>
+struct StaticQueryRows<Fr13Fixed32Qrow32GqaPairKernelTraits> {
+    static constexpr int value = 32;
+};
+
+template <>
+struct StaticQueryBatchLayout<Fr13Fixed32Qrow32GqaPairKernelTraits> {
+    static constexpr int sequences = 4;
+    static constexpr int query_heads = 24;
+    static constexpr int kv_heads = 4;
+    static constexpr int query_heads_per_kv = 6;
+};
+
+template <>
+struct StaticQueryHeadsPerCTA<Fr13Fixed32Qrow32GqaPairKernelTraits> {
+    static constexpr int value = 2;
+};
+
+__global__ __maxnreg__(254)
+void fr13_flash_fwd_fixed32_qrow32_gqa_pair_kernel(
+        KERNEL_PARAM_MODIFIER const Flash_fwd_params params) {
+#if defined(ARCH_SUPPORTS_FLASH)
+    FLASH_NAMESPACE::compute_attn_splitkv<
+        Fr13Fixed32Qrow32GqaPairKernelTraits,
+        false,  // Is_causal
+        false,  // Is_local
+        false,  // Has_alibi
+        false,  // Is_even_MN: paged varlen Q has cu_seqlens_q
+        true,   // Is_even_K: d == kHeadDim == 256
+        false,  // Is_softcap
+        false,  // Split
+        false   // Append_KV
+    >(params);
+#else
+    FLASH_UNSUPPORTED_ARCH
+#endif
+}
+
+// Two adjacent query heads in one GQA group share each staged K/V tile. The
+// logical M coordinate is ((query_row, head_in_pair), column), so each head
+// retains 32 independent rows and the same reverse-ordered K loop.
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow32_gqa_pair(
+        Flash_fwd_params &params, cudaStream_t stream) {
+    constexpr static int kTreeBlockM = 64;
+    constexpr static int kTreeBlockN = 64;
+    constexpr static int kTreeWarps = 4;
+    constexpr static int kHeadsPerCTA = 2;
+    using TreeKernelTraits = Fr13Fixed32Qrow32GqaPairKernelTraits;
+    using StaticLayout = StaticQueryBatchLayout<TreeKernelTraits>;
+    static_assert(TreeKernelTraits::kBlockM == kTreeBlockM);
+    static_assert(TreeKernelTraits::kBlockN == kTreeBlockN);
+    static_assert(TreeKernelTraits::kNWarps == kTreeWarps);
+    static_assert(TreeKernelTraits::kNThreads == 128);
+    static_assert(TreeKernelTraits::kGmemThreadsPerRow == 8);
+    static_assert(TreeKernelTraits::kGmemRowsPerThread == 4);
+    static_assert(StaticQueryHeadsPerCTA<TreeKernelTraits>::value == kHeadsPerCTA);
+    static_assert(StaticLayout::sequences == 4);
+    static_assert(StaticLayout::query_heads == 24);
+    static_assert(StaticLayout::kv_heads == 4);
+    static_assert(StaticLayout::query_heads_per_kv == 6);
+    static_assert(StaticLayout::query_heads_per_kv % kHeadsPerCTA == 0);
+    constexpr size_t smem_size = TreeKernelTraits::kSmemSize;
+    static_assert(smem_size == 96 * 1024);
+    // 3 head pairs * B4 * 4 KV heads = 48 CTAs/layer. There is no split-K or
+    // combine launch, and each CTA stages one K/V tile for both query heads.
+    dim3 grid(
+        StaticLayout::query_heads_per_kv / kHeadsPerCTA,
+        StaticLayout::sequences,
+        StaticLayout::kv_heads);
+    auto kernel = &fr13_flash_fwd_fixed32_qrow32_gqa_pair_kernel;
+    if (smem_size >= 48 * 1024) {
+        C10_CUDA_CHECK(cudaFuncSetAttribute(
+            kernel,
+            cudaFuncAttributeMaxDynamicSharedMemorySize,
+            smem_size));
+    }
+    kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>(params);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+} // namespace FLASH_NAMESPACE
+'''
+
+
 FIXED32_QUERY_TILE32_B1_TRANSLATION_UNIT = r'''// FR13 fixed32 B1 qrow32 gate candidate.
 #include "namespace_config.h"
 #include "flash_fwd_launch_template.h"
@@ -1109,6 +1238,73 @@ FIXED32_QUERY_TILE32_API_GATE = r'''    if (params.tree_bias_batch_stride == kFr
             && force_split_kernel,
             "FR13 qrow32 gate dispatch reached non-canonical B4 geometry");
         fr13_run_mha_fwd_fixed32_qrow32(params, stream);
+        return;
+    }
+'''
+
+
+FIXED32_QUERY_GQA_PAIR32_API_DECLARATION = rf'''constexpr int64_t kFr13Qrow32GqaPairBatchStrideSentinel =
+    {FIXED32_QUERY_GQA_PAIR32_BATCH_STRIDE_SENTINEL};
+
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow32_gqa_pair(
+    Flash_fwd_params &params, cudaStream_t stream);
+
+'''
+
+
+FIXED32_QUERY_GQA_PAIR32_API_GATE = r'''    if (params.tree_bias_batch_stride == kFr13Qrow32GqaPairBatchStrideSentinel) {
+        TORCH_CHECK(
+            params.tree_bias_ptr != nullptr
+            && params.is_bf16
+            && !params.is_causal
+            && params.b == 4
+            && params.total_q == 128
+            && params.d == 256
+            && params.d_rounded == 256
+            && params.h == 24
+            && params.h_k == 4
+            && params.h_h_k_ratio == 6
+            && params.seqlen_q == 32
+            && params.seqlen_q_rounded == 128
+            && params.q_head_stride == 256
+            && params.k_batch_stride == 1024 * 4 * 256
+            && params.k_row_stride == 4 * 256
+            && params.k_head_stride == 256
+            && params.v_batch_stride == 1024 * 4 * 256
+            && params.v_row_stride == 4 * 256
+            && params.v_head_stride == 256
+            && params.o_head_stride == 256
+            && params.tree_bias_rows == 32
+            && params.tree_bias_cols == 32
+            && params.tree_bias_row_stride == 32
+            && params.tree_bias_col_stride == 1
+            && params.tree_bias_q_offset == 0
+            && params.tree_bias_k_offset == 0
+            && params.cu_seqlens_q != nullptr
+            && params.cu_seqlens_k != nullptr
+            && params.seqused_k != nullptr
+            && params.is_seqlens_k_cumulative
+            && params.unpadded_lse
+            && !params.seqlenq_ngroups_swapped
+            && params.leftpad_k == nullptr
+            && params.cache_batch_idx == nullptr
+            && params.block_table != nullptr
+            && params.block_table_batch_stride > 0
+            && params.page_block_size == 1024
+            && params.window_size_left < 0
+            && params.window_size_right < 0
+            && params.alibi_slopes_ptr == nullptr
+            && params.knew_ptr == nullptr
+            && params.vnew_ptr == nullptr
+            && params.p_ptr == nullptr
+            && params.softmax_lse_ptr != nullptr
+            && params.p_dropout == 1.0f
+            && params.softcap == 0.0f
+            && params.num_splits == 0
+            && force_split_kernel,
+            "FR13 qrow32 GQA-pair gate reached non-canonical B4 geometry");
+        fr13_run_mha_fwd_fixed32_qrow32_gqa_pair(params, stream);
         return;
     }
 '''
@@ -1598,7 +1794,7 @@ def _patch_fixed32_query_tile32_static_query(
     marker = "// FR13_FA2_QROW32_STATIC_QUERY: exact one-tile varlen query extent."
     if marker in function:
         required = (
-            "constexpr bool kStaticQueryTile = kStaticQueryRows == kBlockM;",
+            "kStaticQueryRows * kStaticHeadGroupSize == kBlockM;",
             "const int query_m_block = kStaticQueryTile ? 0 : m_block;",
             "FLASH_NAMESPACE::copy<kStaticQueryTile || Is_even_MN, Is_even_K>",
             "mask.template apply_mask<Is_causal, Is_even_MN>",
@@ -1618,7 +1814,11 @@ def _patch_fixed32_query_tile32_static_query(
     binfo_anchor = "    const BlockInfo</*Varlen=*/!Is_even_MN> binfo(params, bidb);\n"
     static_query = r'''    // FR13_FA2_QROW32_STATIC_QUERY: exact one-tile varlen query extent.
     constexpr int kStaticQueryRows = StaticQueryRows<Kernel_traits>::value;
-    constexpr bool kStaticQueryTile = kStaticQueryRows == kBlockM;
+    constexpr int kStaticHeadGroupSize =
+        StaticQueryHeadsPerCTA<Kernel_traits>::value;
+    constexpr bool kStaticQueryTile =
+        kStaticQueryRows * kStaticHeadGroupSize == kBlockM;
+    static_assert(kStaticHeadGroupSize == 1 || kStaticHeadGroupSize == 2);
     static_assert(kStaticQueryRows == 0 || kStaticQueryTile);
     const int actual_seqlen_q =
         kStaticQueryTile ? kStaticQueryRows : binfo.actual_seqlen_q;
@@ -1721,9 +1921,13 @@ def _patch_fixed32_query_tile32_static_batch_layout(
         "// FR13_FA2_QROW32_STATIC_BATCH_GRID: blockIdx.x selects the GQA lane."
     )
     if marker in function:
+        pair_layout_marker = (
+            "// FR13_FA2_QROW32_GQA_PAIR_LAYOUT: two heads share the M tile."
+        )
+        query_offset_count = 3 if pair_layout_marker in function else 4
         required_counts = {
             marker: 1,
-            "static_query_offset<Kernel_traits>(binfo, ": 4,
+            "static_query_offset<Kernel_traits>(binfo, ": query_offset_count,
             "bidh / params.h_h_k_ratio": 1,
             "int bidh_k;": 1,
         }
@@ -1762,12 +1966,20 @@ def _patch_fixed32_query_tile32_static_batch_layout(
         StaticQueryBatchLayout<Kernel_traits>::kv_heads;
     constexpr int kStaticQueryHeadsPerKV =
         StaticQueryBatchLayout<Kernel_traits>::query_heads_per_kv;
+    constexpr int kStaticQueryHeadsPerCTA =
+        StaticQueryHeadsPerCTA<Kernel_traits>::value;
     constexpr bool kStaticQueryBatch = kStaticSequences != 0;
     static_assert(
         !kStaticQueryBatch || kStaticSequences == 1 || kStaticSequences == 4);
     static_assert(!kStaticQueryBatch || kStaticQueryHeads == 24);
     static_assert(!kStaticQueryBatch || kStaticKVHeads == 4);
     static_assert(!kStaticQueryBatch || kStaticQueryHeadsPerKV == 6);
+    static_assert(
+        !kStaticQueryBatch
+        || (kStaticQueryHeadsPerCTA == 1 || kStaticQueryHeadsPerCTA == 2));
+    static_assert(
+        !kStaticQueryBatch
+        || kStaticQueryHeadsPerKV % kStaticQueryHeadsPerCTA == 0);
     static_assert(
         !kStaticQueryBatch
         || kStaticQueryHeads == kStaticKVHeads * kStaticQueryHeadsPerKV);
@@ -1809,6 +2021,8 @@ inline __device__ void compute_attn_splitkv(const Params &params) {
         StaticQueryBatchLayout<Kernel_traits>::kv_heads;
     constexpr int kStaticQueryHeadsPerKV =
         StaticQueryBatchLayout<Kernel_traits>::query_heads_per_kv;
+    constexpr int kStaticQueryHeadsPerCTA =
+        StaticQueryHeadsPerCTA<Kernel_traits>::value;
     constexpr bool kStaticQueryBatch = kStaticSequences != 0;
     static_assert(!kStaticQueryBatch || !Split || kStaticSequences == 1);
     static_assert(
@@ -1818,11 +2032,18 @@ inline __device__ void compute_attn_splitkv(const Params &params) {
     static_assert(!kStaticQueryBatch || kStaticQueryHeadsPerKV == 6);
     static_assert(
         !kStaticQueryBatch
+        || (kStaticQueryHeadsPerCTA == 1 || kStaticQueryHeadsPerCTA == 2));
+    static_assert(
+        !kStaticQueryBatch
+        || kStaticQueryHeadsPerKV % kStaticQueryHeadsPerCTA == 0);
+    static_assert(
+        !kStaticQueryBatch
         || kStaticQueryHeads == kStaticKVHeads * kStaticQueryHeadsPerKV);
     if constexpr (kStaticQueryBatch) {
         const int m_block = 0;
         const int bidb = Split ? 0 : blockIdx.y;
-        const int bidh = blockIdx.z * kStaticQueryHeadsPerKV + blockIdx.x;
+        const int bidh = blockIdx.z * kStaticQueryHeadsPerKV
+            + blockIdx.x * kStaticQueryHeadsPerCTA;
         const int n_split_idx = Split ? blockIdx.y : 0;
         const int num_n_splits = Split ? gridDim.y : 1;
         FLASH_NAMESPACE::compute_attn_1rowblock_splitkv<Kernel_traits, Is_causal, Is_local, Has_alibi, Is_even_MN, Is_even_K, Is_softcap, Split, Append_KV>(params, bidb, bidh, m_block, n_split_idx, num_n_splits);
@@ -2238,6 +2459,249 @@ def _patch_fixed32_query_tile32_carry_kv_page_address(
     return True
 
 
+def _patch_fixed32_query_gqa_pair_layout(
+    path: Path,
+    *,
+    fixed32_query_gqa_pair32: bool = False,
+) -> bool:
+    if not fixed32_query_gqa_pair32:
+        return False
+    text = path.read_text()
+    function_signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+    )
+    function_start = text.index(function_signature)
+    function_end = text.index(
+        "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout",
+        function_start,
+    )
+    function = text[function_start:function_end]
+    marker = "// FR13_FA2_QROW32_GQA_PAIR_LAYOUT: two heads share the M tile."
+    if marker in function:
+        required_counts = {
+            marker: 3,
+            "Int<kStaticQueryRows>{},": 5,
+            "Int<kStaticHeadGroupSize>{})": 5,
+            "params.q_row_stride,\n                            "
+            "params.q_head_stride)": 1,
+            "params.o_row_stride,\n                                "
+            "params.o_head_stride)": 1,
+            "params.o_row_stride,\n                            "
+            "params.o_head_stride)": 1,
+            "make_stride(_1{}, params.total_q)": 2,
+        }
+        for snippet, expected in required_counts.items():
+            if function.count(snippet) != expected:
+                raise RuntimeError("qrow32 GQA-pair address layout drifted")
+        return False
+
+    q_tensor = r'''    Tensor mQ = make_tensor(make_gmem_ptr(reinterpret_cast<Element*>(params.q_ptr) + static_query_offset<Kernel_traits>(binfo, params.q_batch_stride, params.q_row_stride, bidb)),
+                            make_shape(actual_seqlen_q, params.h, params.d),
+                            make_stride(params.q_row_stride, params.q_head_stride, _1{}));
+    Tensor gQ = local_tile(mQ(_, bidh, _), Shape<Int<kBlockM>, Int<kHeadDim>>{},
+                           make_coord(query_m_block, 0));  // (kBlockM, kHeadDim)
+'''
+    paired_q_tensor = r'''    // FR13_FA2_QROW32_GQA_PAIR_LAYOUT: two heads share the M tile.
+    Tensor gQ = [&] {
+        if constexpr (kStaticHeadGroupSize == 2) {
+            static_assert(kStaticQueryRows == 32);
+            static_assert(kBlockM == kStaticQueryRows * kStaticHeadGroupSize);
+            auto q_ptr = make_gmem_ptr(
+                reinterpret_cast<Element*>(params.q_ptr)
+                + static_query_offset<Kernel_traits>(
+                    binfo, params.q_batch_stride, params.q_row_stride, bidb)
+                + bidh * params.q_head_stride);
+            return make_tensor(
+                q_ptr,
+                make_layout(
+                    make_shape(
+                        make_shape(
+                            Int<kStaticQueryRows>{},
+                            Int<kStaticHeadGroupSize>{}),
+                        Int<kHeadDim>{}),
+                    make_stride(
+                        make_stride(
+                            params.q_row_stride,
+                            params.q_head_stride),
+                        _1{})));
+        } else {
+            Tensor mQ = make_tensor(
+                make_gmem_ptr(
+                    reinterpret_cast<Element*>(params.q_ptr)
+                    + static_query_offset<Kernel_traits>(
+                        binfo,
+                        params.q_batch_stride,
+                        params.q_row_stride,
+                        bidb)),
+                make_shape(actual_seqlen_q, params.h, params.d),
+                make_stride(
+                    params.q_row_stride, params.q_head_stride, _1{}));
+            return local_tile(
+                mQ(_, bidh, _),
+                Shape<Int<kBlockM>, Int<kHeadDim>>{},
+                make_coord(query_m_block, 0));
+        }
+    }();  // (kBlockM, kHeadDim)
+'''
+    if function.count(q_tensor) != 1:
+        raise RuntimeError("qrow32 GQA-pair Q-tensor anchor drifted")
+    function = function.replace(q_tensor, paired_q_tensor, 1)
+
+    early_output = r'''        Tensor gOaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementO *>(Split ? params.oaccum_ptr : params.o_ptr) + (Split ? row_offset_oaccum : row_offset_o)),
+                                      Shape<Int<kBlockM>, Int<kHeadDim>>{},
+                                     make_stride(Split ? kHeadDim : params.o_row_stride, _1{}));
+        Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(Split ? params.softmax_lseaccum_ptr : params.softmax_lse_ptr) + row_offset_lseaccum),
+                                      Shape<Int<kBlockM>>{}, Stride<_1>{});
+'''
+    paired_early_output = r'''        // FR13_FA2_QROW32_GQA_PAIR_LAYOUT: two heads share the M tile.
+        Tensor gOaccum = [&] {
+            if constexpr (kStaticHeadGroupSize == 2) {
+                static_assert(!Split);
+                auto o_ptr = make_gmem_ptr(
+                    reinterpret_cast<ElementO *>(params.o_ptr)
+                    + static_query_offset<Kernel_traits>(
+                        binfo,
+                        params.o_batch_stride,
+                        params.o_row_stride,
+                        bidb)
+                    + bidh * params.o_head_stride);
+                return make_tensor(
+                    o_ptr,
+                    make_layout(
+                        make_shape(
+                            make_shape(
+                                Int<kStaticQueryRows>{},
+                                Int<kStaticHeadGroupSize>{}),
+                            Int<kHeadDim>{}),
+                        make_stride(
+                            make_stride(
+                                params.o_row_stride,
+                                params.o_head_stride),
+                            _1{})));
+            } else {
+                return make_tensor(
+                    make_gmem_ptr(
+                        reinterpret_cast<ElementO *>(
+                            Split ? params.oaccum_ptr : params.o_ptr)
+                        + (Split ? row_offset_oaccum : row_offset_o)),
+                    Shape<Int<kBlockM>, Int<kHeadDim>>{},
+                    make_stride(
+                        Split ? kHeadDim : params.o_row_stride, _1{}));
+            }
+        }();
+        Tensor gLSEaccum = [&] {
+            if constexpr (kStaticHeadGroupSize == 2) {
+                static_assert(!Split);
+                auto lse_ptr = make_gmem_ptr(
+                    reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr)
+                    + bidh * params.total_q
+                    + static_query_offset<Kernel_traits>(
+                        binfo, params.seqlen_q, 1, bidb));
+                return make_tensor(
+                    lse_ptr,
+                    make_layout(
+                        make_shape(
+                            Int<kStaticQueryRows>{},
+                            Int<kStaticHeadGroupSize>{}),
+                        make_stride(_1{}, params.total_q)));
+            } else {
+                return make_tensor(
+                    make_gmem_ptr(
+                        reinterpret_cast<ElementAccum *>(
+                            Split
+                                ? params.softmax_lseaccum_ptr
+                                : params.softmax_lse_ptr)
+                        + row_offset_lseaccum),
+                    Shape<Int<kBlockM>>{}, Stride<_1>{});
+            }
+        }();
+'''
+    if function.count(early_output) != 1:
+        raise RuntimeError("qrow32 GQA-pair early-output anchor drifted")
+    function = function.replace(early_output, paired_early_output, 1)
+
+    epilogue_output = r'''    Tensor gOaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementO *>(Split ? params.oaccum_ptr : params.o_ptr) + (Split ? row_offset_oaccum : row_offset_o)),
+                                 Shape<Int<kBlockM>, Int<kHeadDim>>{},
+                                 make_stride(Split ? kHeadDim : params.o_row_stride, _1{}));
+    Tensor gLSEaccum = make_tensor(make_gmem_ptr(reinterpret_cast<ElementAccum *>(Split ? params.softmax_lseaccum_ptr : params.softmax_lse_ptr) + row_offset_lseaccum),
+                                   Shape<Int<kBlockM>>{}, Stride<_1>{});
+'''
+    paired_epilogue_output = r'''    // FR13_FA2_QROW32_GQA_PAIR_LAYOUT: two heads share the M tile.
+    Tensor gOaccum = [&] {
+        if constexpr (kStaticHeadGroupSize == 2) {
+            static_assert(!Split);
+            auto o_ptr = make_gmem_ptr(
+                reinterpret_cast<ElementO *>(params.o_ptr)
+                + static_query_offset<Kernel_traits>(
+                    binfo,
+                    params.o_batch_stride,
+                    params.o_row_stride,
+                    bidb)
+                + bidh * params.o_head_stride);
+            return make_tensor(
+                o_ptr,
+                make_layout(
+                    make_shape(
+                        make_shape(
+                            Int<kStaticQueryRows>{},
+                            Int<kStaticHeadGroupSize>{}),
+                        Int<kHeadDim>{}),
+                    make_stride(
+                        make_stride(
+                            params.o_row_stride,
+                            params.o_head_stride),
+                        _1{})));
+        } else {
+            return make_tensor(
+                make_gmem_ptr(
+                    reinterpret_cast<ElementO *>(
+                        Split ? params.oaccum_ptr : params.o_ptr)
+                    + (Split ? row_offset_oaccum : row_offset_o)),
+                Shape<Int<kBlockM>, Int<kHeadDim>>{},
+                make_stride(
+                    Split ? kHeadDim : params.o_row_stride, _1{}));
+        }
+    }();
+    Tensor gLSEaccum = [&] {
+        if constexpr (kStaticHeadGroupSize == 2) {
+            static_assert(!Split);
+            auto lse_ptr = make_gmem_ptr(
+                reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr)
+                + bidh * params.total_q
+                + static_query_offset<Kernel_traits>(
+                    binfo, params.seqlen_q, 1, bidb));
+            return make_tensor(
+                lse_ptr,
+                make_layout(
+                    make_shape(
+                        Int<kStaticQueryRows>{},
+                        Int<kStaticHeadGroupSize>{}),
+                    make_stride(_1{}, params.total_q)));
+        } else {
+            return make_tensor(
+                make_gmem_ptr(
+                    reinterpret_cast<ElementAccum *>(
+                        Split
+                            ? params.softmax_lseaccum_ptr
+                            : params.softmax_lse_ptr)
+                    + row_offset_lseaccum),
+                Shape<Int<kBlockM>>{}, Stride<_1>{});
+        }
+    }();
+'''
+    if function.count(epilogue_output) != 1:
+        raise RuntimeError("qrow32 GQA-pair epilogue-output anchor drifted")
+    function = function.replace(epilogue_output, paired_epilogue_output, 1)
+
+    text = text[:function_start] + function + text[function_end:]
+    path.write_text(text)
+    return True
+
+
 def _patch_fixed32_query_translation_unit(
     path: Path,
     *,
@@ -2288,6 +2752,29 @@ def _patch_fixed32_query_tile32_translation_unit(
     return True
 
 
+def _patch_fixed32_query_gqa_pair32_translation_unit(
+    path: Path,
+    *,
+    fixed32_query_gqa_pair32: bool = False,
+) -> bool:
+    if not fixed32_query_gqa_pair32:
+        return False
+    stock_text = path.read_text()
+    if STOCK_FIXED32_QUERY_INSTANTIATION not in stock_text:
+        raise RuntimeError("stock fixed32 FA2 explicit instantiation drifted")
+    if "FR13_FA2_FIXED32_QUERY_GQA_PAIR32" in stock_text:
+        raise RuntimeError("qrow32 GQA pair must not share the stock instantiation TU")
+    pair_path = path.with_name(
+        "flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu"
+    )
+    if pair_path.exists():
+        if pair_path.read_text() != FIXED32_QUERY_GQA_PAIR32_TRANSLATION_UNIT:
+            raise RuntimeError("existing qrow32 GQA-pair translation unit drifted")
+        return False
+    pair_path.write_text(FIXED32_QUERY_GQA_PAIR32_TRANSLATION_UNIT)
+    return True
+
+
 def _patch_fixed32_query_tile32_b1_translation_unit(
     path: Path,
     *,
@@ -2333,6 +2820,7 @@ def _patch_flash_api_cpp(
     fixed32_query_tile16: bool = False,
     fixed32_query_tile16_static_strides: bool = False,
     fixed32_query_tile32: bool = False,
+    fixed32_query_gqa_pair32: bool = False,
     fixed32_query_tile32_b1: bool = False,
 ) -> bool:
     text = path.read_text()
@@ -2510,6 +2998,14 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
             label="fixed32 FA2 query tile32 gate-only API dispatch",
         )
         changed = changed or did
+    if fixed32_query_gqa_pair32:
+        text, did = _install_hidden_api_gate(
+            text,
+            declaration=FIXED32_QUERY_GQA_PAIR32_API_DECLARATION,
+            gate=FIXED32_QUERY_GQA_PAIR32_API_GATE,
+            label="fixed32 FA2 qrow32 GQA-pair gate-only API dispatch",
+        )
+        changed = changed or did
     if fixed32_query_tile32_b1:
         text, did = _install_hidden_api_gate(
             text,
@@ -2602,15 +3098,24 @@ def patch_fa2_source(
     fixed32_query_tile16: bool = False,
     fixed32_query_tile16_static_strides: bool = False,
     fixed32_query_tile32: bool = False,
+    fixed32_query_gqa_pair32: bool = False,
     fixed32_query_tile32_b1: bool = False,
 ) -> dict[str, bool]:
     if fixed32_query_tile16_static_strides and not fixed32_query_tile16:
         raise ValueError(
             "fixed32 qrow16 static strides require --fixed32-query-tile16"
         )
-    if fixed32_query_tile32 and fixed32_query_tile32_b1:
-        raise ValueError("fixed32 qrow32 B1 and B4 builds are mutually exclusive")
-    fixed32_query_tile32_any = fixed32_query_tile32 or fixed32_query_tile32_b1
+    qrow32_builds = sum(
+        bool(value)
+        for value in (
+            fixed32_query_tile32,
+            fixed32_query_gqa_pair32,
+            fixed32_query_tile32_b1,
+        )
+    )
+    if qrow32_builds > 1:
+        raise ValueError("fixed32 qrow32 source builds are mutually exclusive")
+    fixed32_query_tile32_any = bool(qrow32_builds)
     if fixed32_query_tile32_any and not tree_bias_tile_earlyout:
         raise ValueError(
             "fixed32 qrow32 requires --tree-bias-tile-earlyout in the same "
@@ -2691,6 +3196,13 @@ def patch_fa2_source(
         )
         or flash_fwd_kernel_changed
     )
+    flash_fwd_kernel_changed = (
+        _patch_fixed32_query_gqa_pair_layout(
+            files["flash_fwd_kernel.h"],
+            fixed32_query_gqa_pair32=fixed32_query_gqa_pair32,
+        )
+        or flash_fwd_kernel_changed
+    )
     b1_translation_units_changed = (
         _patch_fixed32_query_tile32_b1_translation_unit(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
@@ -2716,6 +3228,12 @@ def patch_fa2_source(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
             fixed32_query_tile32=fixed32_query_tile32,
         ),
+        "flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu": (
+            _patch_fixed32_query_gqa_pair32_translation_unit(
+                files["flash_fwd_split_hdim256_bf16_sm80.cu"],
+                fixed32_query_gqa_pair32=fixed32_query_gqa_pair32,
+            )
+        ),
         "flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu": (
             b1_translation_units_changed
         ),
@@ -2729,6 +3247,7 @@ def patch_fa2_source(
                 fixed32_query_tile16_static_strides
             ),
             fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_query_gqa_pair32=fixed32_query_gqa_pair32,
             fixed32_query_tile32_b1=fixed32_query_tile32_b1,
         ),
         "flash_api_torch_lib.cpp": _patch_torch_lib(files["flash_api_torch_lib.cpp"]),
@@ -5553,6 +6072,11 @@ def main() -> int:
         help="build the gate-only fixed32 B4 FA2 32-row query-tile candidate",
     )
     parser.add_argument(
+        "--fixed32-query-gqa-pair32",
+        action="store_true",
+        help="build the gate-only B4 FA2 two-query-head GQA-pair candidate",
+    )
+    parser.add_argument(
         "--fixed32-query-tile32-b1",
         action="store_true",
         help="build the gate-only fixed32 B1 FA2 32-row query-tile candidate",
@@ -5615,8 +6139,21 @@ def main() -> int:
             "--fixed32-query-tile32-b1 requires --tree-bias-tile-earlyout in "
             "the same source-build invocation"
         )
-    if args.fixed32_query_tile32 and args.fixed32_query_tile32_b1:
-        parser.error("B1 and B4 qrow32 source candidates are mutually exclusive")
+    if args.fixed32_query_gqa_pair32 and not args.tree_bias_tile_earlyout:
+        parser.error(
+            "--fixed32-query-gqa-pair32 requires --tree-bias-tile-earlyout "
+            "in the same source-build invocation"
+        )
+    qrow32_source_builds = sum(
+        bool(value)
+        for value in (
+            args.fixed32_query_tile32,
+            args.fixed32_query_gqa_pair32,
+            args.fixed32_query_tile32_b1,
+        )
+    )
+    if qrow32_source_builds > 1:
+        parser.error("qrow32 source candidates are mutually exclusive")
     if (
         args.fixed32_query_tile16_static_strides
         and not args.fixed32_query_tile16
@@ -5652,6 +6189,7 @@ def main() -> int:
             args.fixed32_query_tile16_static_strides
         ),
         "fixed32_query_tile32": args.fixed32_query_tile32,
+        "fixed32_query_gqa_pair32": args.fixed32_query_gqa_pair32,
         "fixed32_query_tile32_b1": args.fixed32_query_tile32_b1,
         "fixed32_query_tile16_live_ab": args.fixed32_query_tile16_live_ab,
         "fixed32_query_tile32_live_ab": args.fixed32_query_tile32_live_ab,
@@ -5675,6 +6213,7 @@ def main() -> int:
                 args.fixed32_query_tile16_static_strides
             ),
             fixed32_query_tile32=args.fixed32_query_tile32,
+            fixed32_query_gqa_pair32=args.fixed32_query_gqa_pair32,
             fixed32_query_tile32_b1=args.fixed32_query_tile32_b1,
         )
     if not args.skip_python:

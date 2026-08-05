@@ -1,0 +1,115 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_gqa_pair_source.v1",
+  "created_at_utc": "2026-08-05T08:41:18Z",
+  "status": "PASS_STATIC_SOURCE_CODEGEN_AND_REAL_B4_PENDING",
+  "source": {
+    "branch": "codex/b4-qrow32-kernel-audit-20260805",
+    "base_commit": "ef250238a3a609ea5256ee292854d13e7c7aa6c6",
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "patch_script_sha256": "3de303ed5bb1a5ecf32808aa44ed8eacebb14708f806a7aa54d0e9a9202046c8"
+  },
+  "classification": {
+    "source_candidate": true,
+    "default_off": true,
+    "live_selector_present": false,
+    "production_selector_present": false,
+    "compiler_used": false,
+    "disassembler_used": false,
+    "gpu_used": false,
+    "docker_used": false,
+    "cuda_cache_touched": false,
+    "synthetic_probe_used": false,
+    "real_swe_verified_task_used": false,
+    "byte_parity_claim": false,
+    "performance_measurement": false,
+    "hardware_floor_claim": false,
+    "timing_eligible": false,
+    "production_eligible": false
+  },
+  "fixed_geometry": {
+    "topologies": [
+      "Tail23",
+      "Hydra27"
+    ],
+    "physical_rows_per_batch_slot": 32,
+    "batch_size": 4,
+    "query_heads": 24,
+    "kv_heads": 4,
+    "query_heads_per_kv": 6,
+    "head_dim": 256,
+    "page_block_rows": 1024,
+    "dtype": "bf16",
+    "tree_bias_dtype": "fp32",
+    "split_k": false,
+    "combine_kernel": false
+  },
+  "tracked_b4_evidence": {
+    "qrow32_latest_host_codegen_commit": "9fc17c8b5c785d29f59ca9b6df39ffe840a0c600",
+    "qrow32_registers": 252,
+    "qrow32_stack_bytes": 0,
+    "qrow32_static_local_bytes": 0,
+    "qrow32_spill_load_bytes": 0,
+    "qrow32_spill_store_bytes": 0,
+    "qrow32_sass_ldl": 0,
+    "qrow32_sass_stl": 0,
+    "qrow32_sass_call": 0,
+    "qrow32_real_exact4_byte_pass": false,
+    "qrow32_real_exact4_timing": false,
+    "b4_valid_k64_full_step_timing": "unmeasured",
+    "b4_real_symbol_attribution": "unmeasured"
+  },
+  "candidate": {
+    "name": "fixed32_b4_qrow32_gqa_pair",
+    "block_m": 64,
+    "block_n": 64,
+    "warps": 4,
+    "threads": 128,
+    "source_maxnreg": 254,
+    "dynamic_shared_bytes": 98304,
+    "query_heads_per_cta": 2,
+    "ctas_per_layer": 48,
+    "ctas_per_graph_replay_16_layers": 768,
+    "threads_per_layer": 6144,
+    "warps_per_layer": 192,
+    "kv_scan_ctas_per_batch_kv_head": 3,
+    "private_translation_unit": "flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu",
+    "api_gate_sentinel": 131092
+  },
+  "static_equivalence": {
+    "launch_domain_covers_each_batch_query_head_once": true,
+    "launch_domain_size": 96,
+    "q_address_equivalence_checked": true,
+    "o_address_equivalence_checked": true,
+    "lse_address_equivalence_checked": true,
+    "fused_qkv_query_row_stride_8192_supported": true,
+    "warp_local_row_order_checked": true,
+    "tree_bias_second_head_row_mapping": "logical_row_mod_32",
+    "ordered_attention_math_source_unchanged": true,
+    "real_byte_equivalence_checked": false
+  },
+  "fresh_source": {
+    "first_patch_expected_files_only": true,
+    "second_patch_all_files_unchanged": true,
+    "generated_header_sha256": "43f093e9390efbb57294c2db93c42fcd9c79b3ece2b2768991ff20c814741456",
+    "generated_translation_unit_sha256": "c37863af034944cde276da0a08057edee339522acc55006127e9bd7dabaf925e",
+    "generated_flash_api_cpp_sha256": "e12c50408fed4422df67de528607e55ade0129677e8ca7dc3d5596c1d3203e9c",
+    "generated_flash_h_sha256": "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a",
+    "generated_utils_h_sha256": "5887df63c79a3e42fb9ddad93f64fe3c0625dbee4c547af68b6f2108b7beeb5f"
+  },
+  "verification": {
+    "focused_tests_passed": 44,
+    "focused_tests_failed": 0,
+    "python_byte_compile": "pass",
+    "fresh_source_idempotence": "pass",
+    "repository_diff_check": "pass",
+    "pair_test_sha256": "4bb6e5e940a485004163c91acdb0011391d45ffb33cfa0e4bba423e4bfc57057",
+    "existing_candidate_test_sha256": "747e71b3504676bab1691f33627bbf8ba60e487e69736a5989d4b583b988d9f4"
+  },
+  "required_next_gates": [
+    "fresh CUDA 13 SM121a compile and target-symbol resource audit",
+    "ABI exports imports and DT_NEEDED parity",
+    "canonical real SWE-Verified exact4 B4 Tail23 raw-byte gate",
+    "canonical real SWE-Verified exact4 B4 Hydra27 raw-byte gate",
+    "source-bound exact4 B4 full-step timing only after both byte gates"
+  ]
+}
