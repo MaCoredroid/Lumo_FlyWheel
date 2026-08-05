@@ -1,0 +1,168 @@
+{
+  "base_revision": "8c59e28f4afa56edb526562df78fd72c39561616",
+  "builds": {
+    "base": {
+      "b1": {
+        "backend_producer": {
+          "target": "sm_121a",
+          "tool_name": "ptxas-blackwell",
+          "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+          "toolkit_version": "12.9"
+        },
+        "batch": 1,
+        "calls": 0,
+        "compile_hash": "f174b6ec39b2a7b478248033efff5d557a448050c2e978caa3254d90381349b9",
+        "cubin_bytes": 46320,
+        "cubin_sha256": "9c6caa54b2761c1a9c1bf1fbeda8ba05583bc8e28a47ec8d77f1798327aec299",
+        "elf_shared_bytes": 0,
+        "encoded_sass_instructions": 520,
+        "launch_shared_bytes": 0,
+        "ldg": 35,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 1,
+        "ptx_sha256": "ae58e5f52eecd49bcd410a566452cbf90a71dc98210c4ab580ddde2ba06f81de",
+        "registers": 46,
+        "source_function_sha256": "b766e5c8faeb68b691691acd5f8568cf31896542fd2d27c9ffecb5df6cf39390",
+        "stack_bytes": 0,
+        "static_noncontrol_sass_instructions": 509,
+        "stg": 41,
+        "stl": 0
+      },
+      "b4": {
+        "backend_producer": {
+          "target": "sm_121a",
+          "tool_name": "ptxas-blackwell",
+          "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+          "toolkit_version": "12.9"
+        },
+        "batch": 4,
+        "calls": 0,
+        "compile_hash": "f174b6ec39b2a7b478248033efff5d557a448050c2e978caa3254d90381349b9",
+        "cubin_bytes": 46320,
+        "cubin_sha256": "9c6caa54b2761c1a9c1bf1fbeda8ba05583bc8e28a47ec8d77f1798327aec299",
+        "elf_shared_bytes": 0,
+        "encoded_sass_instructions": 520,
+        "launch_shared_bytes": 0,
+        "ldg": 35,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 1,
+        "ptx_sha256": "ae58e5f52eecd49bcd410a566452cbf90a71dc98210c4ab580ddde2ba06f81de",
+        "registers": 46,
+        "source_function_sha256": "b766e5c8faeb68b691691acd5f8568cf31896542fd2d27c9ffecb5df6cf39390",
+        "stack_bytes": 0,
+        "static_noncontrol_sass_instructions": 509,
+        "stg": 41,
+        "stl": 0
+      }
+    },
+    "candidate": {
+      "b1": {
+        "backend_producer": {
+          "target": "sm_121a",
+          "tool_name": "ptxas-blackwell",
+          "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+          "toolkit_version": "12.9"
+        },
+        "batch": 1,
+        "calls": 0,
+        "compile_hash": "d0f04adf536c701dc45dd614f367f9b76c7e9ffc866a83226d8aff6c3218f255",
+        "cubin_bytes": 43584,
+        "cubin_sha256": "8ad6c0fae276f0c257b0aa601c707f16142e0df7ce04e73ed6f59c574a3f1a2a",
+        "elf_shared_bytes": 0,
+        "encoded_sass_instructions": 512,
+        "launch_shared_bytes": 0,
+        "ldg": 24,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 1,
+        "ptx_sha256": "23ab62df679da71bae5998249402a4745da740cf7235da016138aec6f6393eac",
+        "registers": 44,
+        "source_function_sha256": "19995c9d42b176e19700a3d35cb3616a532ccad580b59f95d6d2b68f82dccc82",
+        "stack_bytes": 0,
+        "static_noncontrol_sass_instructions": 496,
+        "stg": 41,
+        "stl": 0
+      },
+      "b4": {
+        "backend_producer": {
+          "target": "sm_121a",
+          "tool_name": "ptxas-blackwell",
+          "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+          "toolkit_version": "12.9"
+        },
+        "batch": 4,
+        "calls": 0,
+        "compile_hash": "d0f04adf536c701dc45dd614f367f9b76c7e9ffc866a83226d8aff6c3218f255",
+        "cubin_bytes": 43584,
+        "cubin_sha256": "8ad6c0fae276f0c257b0aa601c707f16142e0df7ce04e73ed6f59c574a3f1a2a",
+        "elf_shared_bytes": 0,
+        "encoded_sass_instructions": 512,
+        "launch_shared_bytes": 0,
+        "ldg": 24,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 1,
+        "ptx_sha256": "23ab62df679da71bae5998249402a4745da740cf7235da016138aec6f6393eac",
+        "registers": 44,
+        "source_function_sha256": "19995c9d42b176e19700a3d35cb3616a532ccad580b59f95d6d2b68f82dccc82",
+        "stack_bytes": 0,
+        "static_noncontrol_sass_instructions": 496,
+        "stg": 41,
+        "stl": 0
+      }
+    }
+  },
+  "candidate_revision": "ed66c077bd543f90ad18a78ea974325227a21d7d",
+  "claim_scope": "static_sm121a_codegen_no_gpu_runtime_claim",
+  "compile_contract": {
+    "batches": [
+      1,
+      4
+    ],
+    "jit_specialization": "exact_mock_tensor_shape_stride_alignment",
+    "num_warps": 1,
+    "output_capacity": 32,
+    "path_capacity": 16,
+    "physical_rows": 32,
+    "programs_per_request": 1,
+    "target": "sm_121a",
+    "walk_levels": 12
+  },
+  "conclusion": {
+    "candidate_static_improves_b1_b4": true,
+    "fixed12_topology_work_preserved": true,
+    "gpu_execution": false,
+    "real_swe_verified_byte_gate_required": true,
+    "runtime_speedup_claimed": false
+  },
+  "exact_work": {
+    "bonus_token_loads_per_request_after": 0,
+    "leaf_domain_comparisons_per_request_after": 0,
+    "leaf_domain_comparisons_per_request_before": 24,
+    "leaf_self_token_loads_per_request_after_max": 1,
+    "loop_bound_after": 12,
+    "loop_bound_before": 12,
+    "node_domain_clamps_per_request_after": 0,
+    "node_domain_clamps_per_request_before": 48,
+    "unconditional_self_token_loads_per_request_after": 0,
+    "unconditional_self_token_loads_per_request_before": 12
+  },
+  "schema": "fr13.fixed32.cfwd_packed_walk.node_trust.sm121a.v1",
+  "source_paths": {
+    "base": "scripts/fr13_cfwd_logit_direct_packed_runtime_overlay.py",
+    "candidate": "scripts/fr13_cfwd_packed_walk_node_trust_kernel.py"
+  },
+  "source_sha256": {
+    "base": "30e08c690d4253ce8a051a04a69ff26ab1ea292ecf8190be30de5ccfbb7ccc44",
+    "base_kernel": "b766e5c8faeb68b691691acd5f8568cf31896542fd2d27c9ffecb5df6cf39390",
+    "candidate": "07cd03173ab1a6e6b9aa597d9c912475034f5b8100c2c57d819b2b7bbcf3bc37",
+    "candidate_kernel": "19995c9d42b176e19700a3d35cb3616a532ccad580b59f95d6d2b68f82dccc82"
+  },
+  "status": "pass"
+}

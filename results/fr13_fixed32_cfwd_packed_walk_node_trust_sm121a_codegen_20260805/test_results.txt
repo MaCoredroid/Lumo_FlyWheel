@@ -1,0 +1,9 @@
+PASS focused CPU tests: 55 passed
+PASS py_compile: candidate, tests, audit, verifier
+PASS offline SM121a audit build A static gate
+PASS offline SM121a audit build B static gate
+PASS build A/build B codegen_summary.json byte equality
+PASS checked-in codegen summary verifier
+PASS SHA256SUMS verification
+NOT RUN GPU byte equality
+NOT RUN real SWE-Verified B1/B4 timing
