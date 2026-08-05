@@ -897,12 +897,13 @@ def issue_graph_gate(args: argparse.Namespace) -> None:
     except fixed32_contract.ContractError as error:
         raise GateError(f"external manifest is invalid: {error}") from error
 
+    qrow_arm = str(args.qrow_arm)
     qrow_live, qrow_raw = _load_json(Path(args.qrow_live).resolve())
     patch_sha = _sha256(_regular(repo / "scripts/fr13_patch_fa2_tree_bias.py"))
     qrow_summary = qrow32.validate_live_result(
         qrow_live,
         candidate_sha256=qrow32.CANDIDATE_SHA256,
-        arm=qrow32.ARM,
+        arm=qrow_arm,
         source_commit=source_commit,
         patch_source_sha256=patch_sha,
     )
@@ -937,7 +938,7 @@ def issue_graph_gate(args: argparse.Namespace) -> None:
             "SWE_CONCURRENCY=1",
             "ENFORCE_EAGER=0",
             "CUDAGRAPH_MODE=FULL_AND_PIECEWISE",
-            "FR13_FA2_QROW32_B1_LIVE_AB_ARM=split2",
+            f"FR13_FA2_QROW32_B1_LIVE_AB_ARM={qrow_arm}",
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE=gqa_group3",
             "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH=1",
             "FR13_DFWD_K64_TOP3=1",
@@ -980,8 +981,13 @@ def issue_graph_gate(args: argparse.Namespace) -> None:
     }
     qrow_credential = {
         **common,
-        "schema": "fr13.fixed32.fa2_qrow32_split2_k64_b1_live_verification.v2",
+        "schema": (
+            f"fr13.fixed32.fa2_qrow32_{qrow_arm}_k64_b1_live_verification.v2"
+        ),
         "status": "PASS",
+        "arm": qrow_arm,
+        "selector_sentinel": qrow32.LIVE_ARMS[qrow_arm]["selector_sentinel"],
+        "candidate_num_splits": qrow32.LIVE_ARMS[qrow_arm]["num_splits"],
         "candidate_so_sha256": qrow32.CANDIDATE_SHA256,
         "candidate_so_size": qrow32.CANDIDATE_SIZE,
         "fa2_head": qrow32.FA2_HEAD,
@@ -1053,6 +1059,9 @@ def parser() -> argparse.ArgumentParser:
     issue.add_argument("--repo", required=True)
     issue.add_argument("--source-commit", required=True)
     issue.add_argument("--arm", required=True)
+    issue.add_argument(
+        "--qrow-arm", choices=tuple(qrow32.LIVE_ARMS), default=qrow32.ARM
+    )
     issue.add_argument("--qrow-live", required=True)
     issue.add_argument("--qrow-candidate-so", required=True)
     issue.add_argument("--candidate-so", required=True)

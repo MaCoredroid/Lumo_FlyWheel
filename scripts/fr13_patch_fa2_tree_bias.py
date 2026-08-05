@@ -4047,7 +4047,20 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
 
 FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS = r'''# FR13_FA2_QROW32_B1_SELECTORS
 _FR13_FA2_QROW32_B1_ARMS = {
-    "split2": {"sentinel": 1179791669, "num_splits": 2},
+    "nosplit": {
+        "sentinel": 1179791668,
+        "num_splits": 0,
+        "split_scratch_allocation": "not used; num_splits=0",
+        "candidate_dispatch": "qrow32 B1 nosplit exact geometry; no fallback",
+    },
+    "split2": {
+        "sentinel": 1179791669,
+        "num_splits": 2,
+        "split_scratch_allocation": (
+            "stock FA2 set_params_splitkv via num_splits=2"
+        ),
+        "candidate_dispatch": "qrow32 B1 split2 exact geometry; no fallback",
+    },
 }
 _FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL = 1179791667
 _FR13_FA2_QROW32_B1_CANDIDATE_SHA256 = (
@@ -4085,8 +4098,16 @@ def _fr13_fa2_qrow32_b1_arm(env_name):
     arm = os.environ.get(env_name, "")
     if not arm:
         return None
-    if arm != "split2":
-        raise RuntimeError(f"{env_name} must be empty or split2; got {arm!r}")
+    if env_name == "FR13_FA2_QROW32_B1_PRODUCTION_ARM":
+        if arm != "split2":
+            raise RuntimeError(f"{env_name} must be empty or split2; got {arm!r}")
+    elif env_name == "FR13_FA2_QROW32_B1_LIVE_AB_ARM":
+        if arm not in _FR13_FA2_QROW32_B1_ARMS:
+            raise RuntimeError(
+                f"{env_name} must be empty, nosplit, or split2; got {arm!r}"
+            )
+    else:
+        raise RuntimeError(f"unknown FR13 qrow32 B1 arm selector: {env_name}")
     return arm
 
 
@@ -4123,7 +4144,7 @@ def _fr13_fa2_qrow32_b1_require_identity():
         or os.environ.get("FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256", "")
         != _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256
     ):
-        raise RuntimeError("FR13 qrow32 split2 pinned identity drifted")
+        raise RuntimeError("FR13 qrow32 B1 pinned identity drifted")
     return candidate_digest, source_commit, patch_source
 
 
@@ -4519,9 +4540,7 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "draft_vocab_root": 1, "draft_vocab_k": 65536,
         "arm": arm, "selector_sentinel": config["sentinel"],
         "candidate_num_splits": config["num_splits"],
-        "split_scratch_allocation": (
-            "stock FA2 set_params_splitkv via num_splits=2"
-        ),
+        "split_scratch_allocation": config["split_scratch_allocation"],
         "reference_selector_sentinel": (
             _FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL
         ),
@@ -4541,7 +4560,7 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "seq_len": shared_seq_len, "layers": layers,
         "output_raw_byte_mismatches": output_mismatches,
         "lse_raw_byte_mismatches": lse_mismatches,
-        "candidate_dispatch": "qrow32 B1 split2 exact geometry; no fallback",
+        "candidate_dispatch": config["candidate_dispatch"],
         "served_return": "qrow16 captured graph output unchanged",
         "fallback_allowed": False, "performance_measurement": False,
     }

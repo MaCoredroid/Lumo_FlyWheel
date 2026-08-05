@@ -33,6 +33,17 @@ case "$COMBINED_GRAPH_GATE" in
   0|1) ;;
   *) echo "FR13_GDN_QROW32_DFWD_TOP3_COMBINED_GATE must be exactly 0 or 1" >&2; exit 2 ;;
 esac
+QROW32_GATE_ARM=
+if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
+  QROW32_GATE_ARM=${FR13_GATE_QROW32_ARM:-split2}
+  case "$QROW32_GATE_ARM" in
+    nosplit|split2) ;;
+    *) echo "FR13_GATE_QROW32_ARM must be nosplit or split2" >&2; exit 2 ;;
+  esac
+elif [[ -n "${FR13_GATE_QROW32_ARM:-}" ]]; then
+  echo "FR13_GATE_QROW32_ARM requires the combined graph gate" >&2
+  exit 2
+fi
 KV_CACHE_MEMORY_BYTES=
 if [[ "$FR13_GDN_GATE_BATCH" == "4" ]]; then
   KV_CACHE_MEMORY_BYTES=42949672960
@@ -115,7 +126,7 @@ ENTRYPOINT_PATH="$REPO/$FR13_GDN_GATE_ENTRYPOINT"
 if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
   [[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$QROW32_B1_FA2_BYTES" \
      && "$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')" == "$QROW32_B1_FA2_SHA256" ]] \
-    || { echo "FORKED_FA2_SO is not the pinned Qrow32 split2 binary" >&2; exit 2; }
+    || { echo "FORKED_FA2_SO is not the pinned combined Qrow32 binary" >&2; exit 2; }
   [[ "$QROW32_B1_FA2_SOURCE" == /* \
      && -d "$QROW32_B1_FA2_SOURCE" \
      && ! -L "$QROW32_B1_FA2_SOURCE" ]] \
@@ -181,10 +192,10 @@ unset -f run_variant
   || { echo "fixed K64/root1 floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_gdn_ordered_graph_byte_diagnostic\ncandidate_selector=%s\ncandidate=%s\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nreference_always_served=1\nmode=%s\nlogical_topology=%s\nexpected_batch=%s\ntask_count=%s\nconcurrency=%s\ndraft_vocab_k=65536\ndraft_vocab_root=1\nphysical_rows=32\nreference_launches_per_request_layer=2\ncandidate_launches_per_request_layer=1\ncombined_qrow32_gqa3_dfwd_top3=%s\nqrow32_so_sha256=%s\ndfwd_top3_so_sha256=%s\ndfwd_top3_source_sha256=%s\nsubset_sha256=%s\nsource_commit=%s\nentrypoint=%s\nentrypoint_sha256=%s\ncommon_runner_sha256=%s\nreducer_sha256=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_gdn_ordered_graph_byte_diagnostic\ncandidate_selector=%s\ncandidate=%s\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nreference_always_served=1\nmode=%s\nlogical_topology=%s\nexpected_batch=%s\ntask_count=%s\nconcurrency=%s\ndraft_vocab_k=65536\ndraft_vocab_root=1\nphysical_rows=32\nreference_launches_per_request_layer=2\ncandidate_launches_per_request_layer=1\ncombined_qrow32_gqa3_dfwd_top3=%s\nqrow32_live_arm=%s\nqrow32_so_sha256=%s\ndfwd_top3_so_sha256=%s\ndfwd_top3_source_sha256=%s\nsubset_sha256=%s\nsource_commit=%s\nentrypoint=%s\nentrypoint_sha256=%s\ncommon_runner_sha256=%s\nreducer_sha256=%s\nstarted=%s\n' \
   "$FR13_GDN_GATE_CANDIDATE" "$GATE_CANDIDATE_ID" \
   "$FR13_GDN_GATE_MODE" "$LOGICAL_SLUG" "$BATCH" "$BATCH" "$BATCH" \
-  "$COMBINED_GRAPH_GATE" "$QROW32_B1_FA2_SHA256" \
+  "$COMBINED_GRAPH_GATE" "$QROW32_GATE_ARM" "$QROW32_B1_FA2_SHA256" \
   "$DFWD_K64_TOP3_SHA256" "$DFWD_K64_TOP3_SOURCE_SHA256" \
   "$SUBSET_SHA256" "$SOURCE_COMMIT" "$FR13_GDN_GATE_ENTRYPOINT" \
   "$ENTRYPOINT_SHA256" "$COMMON_RUNNER_SHA256" "$REDUCER_SHA256" \
@@ -205,9 +216,11 @@ QROW32_FA2_HEAD_ENV=
 QROW32_SOURCE_CLOSURE_ENV=
 QROW32_SOURCE_COMMIT_ENV=
 QROW32_PATCH_SOURCE_SHA_ENV=
+QROW32_LIVE_FILE=fr13_fa2_qrow32_b1_live_paged_ab.json
+QROW32_VERIFICATION_FILE=qrow32_live_verification.json
 DFWD_TOP3_SHA_ENV=
 if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
-  QROW32_LIVE_ARM=split2
+  QROW32_LIVE_ARM=$QROW32_GATE_ARM
   QROW32_LIVE_INSTANCE=astropy__astropy-12907
   QROW32_SO_SHA_ENV=$QROW32_B1_FA2_SHA256
   QROW32_SO_BYTES_ENV=$QROW32_B1_FA2_BYTES
@@ -215,6 +228,8 @@ if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
   QROW32_SOURCE_CLOSURE_ENV=$QROW32_B1_SOURCE_CLOSURE_SHA256
   QROW32_SOURCE_COMMIT_ENV=$SOURCE_COMMIT
   QROW32_PATCH_SOURCE_SHA_ENV=$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | awk '{print $1}')
+  QROW32_LIVE_FILE="fr13_fa2_qrow32_b1_${QROW32_LIVE_ARM}_live_paged_ab.json"
+  QROW32_VERIFICATION_FILE="qrow32_${QROW32_LIVE_ARM}_live_verification.json"
   DFWD_TOP3_SHA_ENV=$DFWD_K64_TOP3_SHA256
 fi
 
@@ -263,7 +278,7 @@ if env \
     FR13_FA2_QROW32_LIVE_PAGED_AB=0 \
     FR13_FA2_QROW32_B1_LIVE_AB_ARM="$QROW32_LIVE_ARM" \
     FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID="$QROW32_LIVE_INSTANCE" \
-    FR13_FA2_QROW32_B1_LIVE_AB_JSON=/logs/fr13_fa2_qrow32_b1_split2_live_paged_ab.json \
+    FR13_FA2_QROW32_B1_LIVE_AB_JSON="/logs/$QROW32_LIVE_FILE" \
     FR13_FA2_QROW32_B1_PRODUCTION_ARM= \
     FR13_FA2_QROW32_B1_SO_SHA256="$QROW32_SO_SHA_ENV" \
     FR13_FA2_QROW32_B1_SO_SIZE="$QROW32_SO_BYTES_ENV" \
@@ -322,7 +337,8 @@ if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
     --repo "$REPO" \
     --source-commit "$SOURCE_COMMIT" \
     --arm "$ARMDIR" \
-    --qrow-live "$ARMDIR/logs/fr13_fa2_qrow32_b1_split2_live_paged_ab.json" \
+    --qrow-arm "$QROW32_LIVE_ARM" \
+    --qrow-live "$ARMDIR/logs/$QROW32_LIVE_FILE" \
     --qrow-candidate-so "$FORKED_FA2_SO" \
     --candidate-so "$FR13_GATE_DFWD_TOP3_SO" \
     --build-attestation "$FR13_GATE_DFWD_TOP3_BUILD_ATTESTATION" \
@@ -331,6 +347,6 @@ if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
     --runtime-end "$RUNROOT_ABS/runtime_manifest.at_end.json" \
     --external-launch "$RUNROOT_ABS/external_manifest.at_launch.json" \
     --external-end "$RUNROOT_ABS/external_manifest.at_end.json" \
-    --qrow-output "$ARMDIR/qrow32_split2_live_verification.json" \
+    --qrow-output "$ARMDIR/$QROW32_VERIFICATION_FILE" \
     --dfwd-output "$ARMDIR/dfwd_k64_top3_credential.json"
 fi

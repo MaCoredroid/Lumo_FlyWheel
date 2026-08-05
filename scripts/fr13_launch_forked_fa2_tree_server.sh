@@ -172,6 +172,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_DFWD_K64_TOP3]}" == "set:1" \
    || "$_FR13_CALLER_SFWD_B4" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_LIVE_PAGED_AB]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:nosplit" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:split2" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:split2" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION]}" == "set:1" \
@@ -746,8 +747,8 @@ case "$FR13_FA2_QROW32_LIVE_PAGED_AB" in
   *) echo "FR13_FA2_QROW32_LIVE_PAGED_AB must be 0 or 1" >&2; exit 2 ;;
 esac
 case "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" in
-  ""|split2) ;;
-  *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty or split2" >&2; exit 2 ;;
+  ""|nosplit|split2) ;;
+  *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, or split2" >&2; exit 2 ;;
 esac
 case "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" in
   ""|split2) ;;
@@ -987,7 +988,7 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
      && "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" == "$(git rev-parse HEAD)" \
      && "$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)" \
      && "$(stat -c '%s' "$FORKED_FA2_SO")" == "$FR13_FA2_QROW32_B1_SO_SIZE" ]] || {
-    echo "FR13 qrow32 split2 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance" >&2
+    echo "FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance" >&2
     exit 2
   }
 fi

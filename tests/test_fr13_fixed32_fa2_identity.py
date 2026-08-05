@@ -62,6 +62,24 @@ def test_runtime_identity_selects_only_pinned_qrow32_split2(selector: str) -> No
     )
 
 
+def test_runtime_identity_selects_pinned_qrow32_nosplit_for_live_only() -> None:
+    env = {
+        "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
+        "FR13_FA2_QROW16_PRODUCTION": "0",
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "nosplit",
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+        "FR13_FA2_QROW32_B1_SO_SHA256": QROW32_SPLIT2_EXPECTED_SHA256,
+    }
+    assert contract._expected_runtime_fa2_identity(env) == (
+        QROW32_SPLIT2_EXPECTED_SIZE,
+        QROW32_SPLIT2_EXPECTED_SHA256,
+    )
+    env["FR13_FA2_QROW32_B1_LIVE_AB_ARM"] = ""
+    env["FR13_FA2_QROW32_B1_PRODUCTION_ARM"] = "nosplit"
+    with pytest.raises(contract.ContractError, match="PRODUCTION_ARM must be empty"):
+        contract._expected_runtime_fa2_identity(env)
+
+
 def test_runtime_identity_rejects_unqualified_qrow32_arm_or_binary() -> None:
     env = {
         "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
@@ -70,11 +88,11 @@ def test_runtime_identity_rejects_unqualified_qrow32_arm_or_binary() -> None:
         "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
         "FR13_FA2_QROW32_B1_SO_SHA256": QROW32_SPLIT2_EXPECTED_SHA256,
     }
-    with pytest.raises(contract.ContractError, match="empty or split2"):
+    with pytest.raises(contract.ContractError, match="empty, nosplit, or split2"):
         contract._expected_runtime_fa2_identity(env)
     env["FR13_FA2_QROW32_B1_LIVE_AB_ARM"] = "split2"
     env["FR13_FA2_QROW32_B1_SO_SHA256"] = "0" * 64
-    with pytest.raises(contract.ContractError, match="not the qualified candidate"):
+    with pytest.raises(contract.ContractError, match="not the pinned candidate"):
         contract._expected_runtime_fa2_identity(env)
 
 

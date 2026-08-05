@@ -2842,25 +2842,27 @@ def _expected_runtime_fa2_identity(
             raise ContractError(f"{name} must be exactly 0 or 1")
     if live == "1" and production == "1":
         raise ContractError("qrow16 live and production selectors are mutually exclusive")
-    for name, value in (
-        ("FR13_FA2_QROW32_B1_LIVE_AB_ARM", qrow32_b1_live),
-        ("FR13_FA2_QROW32_B1_PRODUCTION_ARM", qrow32_b1_production),
-    ):
-        if value not in {"", "split2"}:
-            raise ContractError(f"{name} must be empty or split2")
+    if qrow32_b1_live not in {"", "nosplit", "split2"}:
+        raise ContractError(
+            "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, or split2"
+        )
+    if qrow32_b1_production not in {"", "split2"}:
+        raise ContractError(
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or split2"
+        )
     if qrow32_b1_live and qrow32_b1_production:
         raise ContractError(
-            "qrow32 split2 live and production selectors are mutually exclusive"
+            "qrow32 B1 live and production selectors are mutually exclusive"
         )
     if (qrow32_b1_live or qrow32_b1_production) and (
         live == "1" or production == "1"
     ):
-        raise ContractError("qrow16 and qrow32 split2 selectors are mutually exclusive")
+        raise ContractError("qrow16 and qrow32 B1 selectors are mutually exclusive")
     if qrow32_b1_live or qrow32_b1_production:
         declared_sha256 = env.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
         if declared_sha256 != QROW32_B1_SPLIT2_FA2_SHA256:
             raise ContractError(
-                "qrow32 split2 runtime FA2 declaration is not the qualified candidate"
+                "qrow32 B1 runtime FA2 declaration is not the pinned candidate"
             )
         return QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256
     if live == "1":

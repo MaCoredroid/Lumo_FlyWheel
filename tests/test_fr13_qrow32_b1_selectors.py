@@ -133,8 +133,14 @@ def _comparison(seed: str, dtype: str, shape: list[int]) -> dict[str, object]:
 
 
 def _live_payload(
-    module, candidate_sha256: str, source_commit: str, patch_sha256: str
+    module,
+    candidate_sha256: str,
+    source_commit: str,
+    patch_sha256: str,
+    *,
+    arm: str = "split2",
 ) -> dict[str, object]:
+    arm_contract = module.LIVE_ARMS[arm]
     layers = []
     for index in range(3, 64, 4):
         name = f"language_model.model.layers.{index}.self_attn.attn"
@@ -158,13 +164,13 @@ def _live_payload(
         "runtime_mode": "FULL",
         "candidate_so_sha256": candidate_sha256,
         "candidate_so_size": module.CANDIDATE_SIZE,
-        "arm": "split2",
-        "selector_sentinel": 1179791669,
-        "candidate_num_splits": 2,
-        "split_scratch_allocation": "stock FA2 set_params_splitkv via num_splits=2",
+        "arm": arm,
+        "selector_sentinel": arm_contract["selector_sentinel"],
+        "candidate_num_splits": arm_contract["num_splits"],
+        "split_scratch_allocation": arm_contract["split_scratch_allocation"],
         "reference_selector_sentinel": 1179791667,
         "reference_dispatch": "qrow16 incumbent exact geometry; no fallback",
-        "candidate_dispatch": "qrow32 B1 split2 exact geometry; no fallback",
+        "candidate_dispatch": arm_contract["candidate_dispatch"],
         "fa2_head": module.FA2_HEAD,
         "fa2_source_closure_sha256": module.SOURCE_CLOSURE_SHA256,
         "source_commit": source_commit,
@@ -179,13 +185,17 @@ def _live_payload(
     }
 
 
-def test_selectors_are_split2_only_default_off_and_qrow16_served() -> None:
+def test_selectors_admit_live_nosplit_but_keep_qrow16_served() -> None:
     text = PATCHER.read_text()
     helpers = text.split("FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS", 1)[1]
     production = helpers.split("def _fr13_fa2_qrow32_b1_production_begin", 1)[1]
 
-    assert '"split2": {"sentinel": 1179791669, "num_splits": 2}' in helpers
-    assert '"no_split": {"sentinel": 1179791668' not in helpers
+    assert '"nosplit": {' in helpers
+    assert '"sentinel": 1179791668' in helpers
+    assert '"num_splits": 0' in helpers
+    assert '"split2": {' in helpers
+    assert '"sentinel": 1179791669' in helpers
+    assert '"num_splits": 2' in helpers
     assert 'os.environ.get(env_name, "")' in helpers
     assert 'tree_bias = _fr13_fa2_qrow32_b1_live_register(' in text
     assert "_FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL = 1179791667" in helpers
@@ -194,6 +204,30 @@ def test_selectors_are_split2_only_default_off_and_qrow16_served() -> None:
     assert "torch.cuda.synchronize()" not in production
     assert '"candidate_served": True, "fallback_allowed": False' in helpers
     assert "FR13 qrow32 B1 production silently fell back" in helpers
+
+
+def test_nosplit_live_call_uses_hidden_sentinel_and_zero_splits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, _ = _selector_namespace(monkeypatch, profile_scope=None)
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "nosplit")
+    assert namespace["_fr13_fa2_qrow32_b1_arm"](
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM"
+    ) == "nosplit"
+
+    bundle = _b1_geometry()
+    bundle["flash_fn"] = lambda **kwargs: kwargs
+    called = namespace["_fr13_fa2_qrow32_b1_live_call"](
+        bundle, object(), arm="nosplit"
+    )
+    assert called["num_splits"] == 0
+    assert tuple(called["tree_bias"].stride()) == (1179791668, 32, 1)
+
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "nosplit")
+    with pytest.raises(RuntimeError, match="must be empty or split2"):
+        namespace["_fr13_fa2_qrow32_b1_arm"](
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM"
+        )
 
 
 def test_fa2_interface_allows_only_exact_private_b1_split2_tag() -> None:
@@ -591,7 +625,10 @@ def test_production_final_capture_enforces_geometry_and_all_layers(
 def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:
     text = LAUNCHER.read_text()
 
-    assert "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty or split2" in text
+    assert (
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, or split2"
+        in text
+    )
     assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or split2" in text
     assert "FR13 qrow32 B1 live gate requires the canonical K64/root1 real task" in text
     assert '"${FR13_FIXED32_MODE:-}" == "hydra27_fixed32"' in text
@@ -699,7 +736,33 @@ def test_sidecar_is_binary_source_and_split2_bound(tmp_path: Path) -> None:
     assert verified["source_commit"] == source_commit
     assert verified["patch_source_sha256"] == patch_sha256
 
-    with pytest.raises(ValueError, match="must be split2"):
+    nosplit = _live_payload(
+        module,
+        module.CANDIDATE_SHA256,
+        source_commit,
+        patch_sha256,
+        arm="nosplit",
+    )
+    nosplit_summary = module.validate_live_result(
+        nosplit,
+        candidate_sha256=module.CANDIDATE_SHA256,
+        arm="nosplit",
+    )
+    assert nosplit_summary["arm"] == "nosplit"
+
+    with pytest.raises(ValueError, match="production arm must be split2"):
+        module.issue_sidecar(
+            live_result=live,
+            expected_live_sha256=module.sha256_file(live),
+            candidate_so=candidate,
+            expected_candidate_sha256=module.CANDIDATE_SHA256,
+            arm="nosplit",
+            patch_source=PATCHER,
+            expected_source_commit=source_commit,
+            out=tmp_path / "nosplit-pass.json",
+        )
+
+    with pytest.raises(ValueError, match="live arm must be nosplit or split2"):
         module.validate_live_result(
             _live_payload(
                 module, module.CANDIDATE_SHA256, source_commit, patch_sha256

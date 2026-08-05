@@ -16,12 +16,19 @@ case "${FR13_RUN_B1_COMBINED_GRAPH_GATE:-0}" in
     ;;
 esac
 
-: "${QROW32_B1_FA2_SO:?set QROW32_B1_FA2_SO to the pinned split2 binary}"
+: "${QROW32_B1_FA2_SO:?set QROW32_B1_FA2_SO to the pinned combined qrow32 binary}"
 : "${QROW32_B1_FA2_SOURCE:?set QROW32_B1_FA2_SOURCE to its source closure}"
 : "${FR13_GATE_DFWD_TOP3_SO:?set FR13_GATE_DFWD_TOP3_SO to the pinned candidate}"
 : "${FR13_GATE_DFWD_TOP3_BUILD_ATTESTATION:?set the pinned DFWD build attestation}"
 
+FR13_GATE_QROW32_ARM=${FR13_GATE_QROW32_ARM:-split2}
+case "$FR13_GATE_QROW32_ARM" in
+  nosplit|split2) ;;
+  *) echo "FR13_GATE_QROW32_ARM must be nosplit or split2" >&2; exit 2 ;;
+esac
+
 export FORKED_FA2_SO="$QROW32_B1_FA2_SO"
 export FR13_GDN_QROW32_DFWD_TOP3_COMBINED_GATE=1
+export FR13_GATE_QROW32_ARM
 
 exec bash "$SCRIPT_DIR/fr13_run_b1_gdn_gqa_group3_live_gate.sh"

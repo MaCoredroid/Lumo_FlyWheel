@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the qrow32 split2 live gate and issue its production credential."""
+"""Validate qrow32 B1 live gates and issue the split2 production credential."""
 
 from __future__ import annotations
 
@@ -19,6 +19,22 @@ ARM = "split2"
 SELECTOR_SENTINEL = 1179791669
 QROW16_REFERENCE_SENTINEL = 1179791667
 NUM_SPLITS = 2
+LIVE_ARMS = {
+    "nosplit": {
+        "selector_sentinel": 1179791668,
+        "num_splits": 0,
+        "split_scratch_allocation": "not used; num_splits=0",
+        "candidate_dispatch": "qrow32 B1 nosplit exact geometry; no fallback",
+    },
+    ARM: {
+        "selector_sentinel": SELECTOR_SENTINEL,
+        "num_splits": NUM_SPLITS,
+        "split_scratch_allocation": (
+            "stock FA2 set_params_splitkv via num_splits=2"
+        ),
+        "candidate_dispatch": "qrow32 B1 split2 exact geometry; no fallback",
+    },
+}
 CANDIDATE_SHA256 = (
     "ec36c5d26635fead8f626539ff98ab055a756af1e568dbadf88905a41f61862a"
 )
@@ -221,12 +237,13 @@ def validate_live_result(
     source_commit: str | None = None,
     patch_source_sha256: str | None = None,
 ) -> dict[str, Any]:
-    if arm != ARM:
-        raise ValueError("qrow32 production arm must be split2")
+    arm_contract = LIVE_ARMS.get(arm)
+    if arm_contract is None:
+        raise ValueError("qrow32 live arm must be nosplit or split2")
     if candidate_sha256 != CANDIDATE_SHA256:
         raise ValueError("qrow32 live candidate is not pinned")
     if payload.get("schema") != LIVE_SCHEMA or payload.get("status") != "PASS":
-        raise ValueError("qrow32 split2 live result is not a PASS")
+        raise ValueError(f"qrow32 {arm} live result is not a PASS")
     if (
         payload.get("suite") != "SWE-Verified"
         or payload.get("instance_id") != EXACT4_TASK_IDS[0]
@@ -238,14 +255,14 @@ def validate_live_result(
         or payload.get("runtime_mode") != "FULL"
         or payload.get("candidate_so_sha256") != CANDIDATE_SHA256
         or payload.get("candidate_so_size") != CANDIDATE_SIZE
-        or payload.get("arm") != ARM
-        or payload.get("selector_sentinel") != SELECTOR_SENTINEL
-        or payload.get("candidate_num_splits") != NUM_SPLITS
+        or payload.get("arm") != arm
+        or payload.get("selector_sentinel") != arm_contract["selector_sentinel"]
+        or payload.get("candidate_num_splits") != arm_contract["num_splits"]
         or payload.get("reference_selector_sentinel") != QROW16_REFERENCE_SENTINEL
         or payload.get("reference_dispatch")
         != "qrow16 incumbent exact geometry; no fallback"
         or payload.get("candidate_dispatch")
-        != "qrow32 B1 split2 exact geometry; no fallback"
+        != arm_contract["candidate_dispatch"]
         or payload.get("fa2_head") != FA2_HEAD
         or payload.get("fa2_source_closure_sha256") != SOURCE_CLOSURE_SHA256
         or payload.get("layer_count") != 16
@@ -253,9 +270,9 @@ def validate_live_result(
         or payload.get("served_return") != "qrow16 captured graph output unchanged"
         or payload.get("performance_measurement") is not False
         or payload.get("split_scratch_allocation")
-        != "stock FA2 set_params_splitkv via num_splits=2"
+        != arm_contract["split_scratch_allocation"]
     ):
-        raise ValueError("qrow32 split2 live provenance drifted")
+        raise ValueError(f"qrow32 {arm} live provenance drifted")
     live_source_commit = _commit(payload.get("source_commit"), "live source commit")
     live_patch_sha = _sha256(
         payload.get("patch_source_sha256"), "live patch source"
@@ -266,13 +283,13 @@ def validate_live_result(
         raise ValueError("qrow32 live patch source drifted")
     layers = payload.get("layers")
     if not isinstance(layers, list) or len(layers) != 16:
-        raise ValueError("qrow32 split2 live layer set drifted")
+        raise ValueError(f"qrow32 {arm} live layer set drifted")
     output_digests = []
     lse_digests = []
     names = set()
     for index, layer in enumerate(layers):
         if not isinstance(layer, dict) or not isinstance(layer.get("layer_name"), str):
-            raise ValueError("qrow32 split2 live layer record drifted")
+            raise ValueError(f"qrow32 {arm} live layer record drifted")
         names.add(layer["layer_name"])
         output_digests.append(
             _validate_comparison(layer.get("output"), f"layer {index} output")
@@ -285,13 +302,14 @@ def validate_live_result(
         for index in range(3, 64, 4)
     }
     if names != expected_names:
-        raise ValueError("qrow32 split2 live layer identities drifted")
+        raise ValueError(f"qrow32 {arm} live layer identities drifted")
     if (
         payload.get("output_raw_byte_mismatches") != 0
         or payload.get("lse_raw_byte_mismatches") != 0
     ):
-        raise ValueError("qrow32 split2 live aggregate mismatch drifted")
+        raise ValueError(f"qrow32 {arm} live aggregate mismatch drifted")
     return {
+        "arm": arm,
         "instance_id": payload["instance_id"],
         "source_commit": live_source_commit,
         "patch_source_sha256": live_patch_sha,
@@ -318,6 +336,8 @@ def issue_sidecar(
     expected_source_commit: str,
     out: Path,
 ) -> dict[str, Any]:
+    if arm != ARM:
+        raise ValueError("qrow32 production arm must be split2")
     expected_live_sha256 = _sha256(expected_live_sha256, "live result")
     validate_candidate(candidate_so, expected_candidate_sha256)
     patch = validate_patch_source(

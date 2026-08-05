@@ -72,9 +72,12 @@ def test_gate_wrappers_bind_independent_same_boot_credentials() -> None:
     helper = _text("fr13_b1_composed_stack_gate.py")
     eager = _text("fr13_run_b1_target_sfwd_conv_postprep_live_gate.sh")
     assert "FR13_FA2_QROW32_B1_LIVE_AB_ARM=\"$QROW32_LIVE_ARM\"" in graph
+    assert "QROW32_LIVE_ARM=$QROW32_GATE_ARM" in graph
+    assert '--qrow-arm "$QROW32_LIVE_ARM"' in graph
     assert "FR13_FIXED32_GDN_PATH_BV_CANDIDATE=\"$FR13_GDN_GATE_CANDIDATE\"" in graph
     assert "FR13_DFWD_K64_TOP3=\"$COMBINED_GRAPH_GATE\"" in graph
-    assert "--qrow-output \"$ARMDIR/qrow32_split2_live_verification.json\"" in graph
+    assert '--qrow-output "$ARMDIR/$QROW32_VERIFICATION_FILE"' in graph
+    assert 'QROW32_VERIFICATION_FILE="qrow32_${QROW32_LIVE_ARM}_live_verification.json"' in graph
     assert "--dfwd-output \"$ARMDIR/dfwd_k64_top3_credential.json\"" in graph
     assert 'qrow.get("live_result_sha256") != _sha256(qrow_live_raw)' in helper
     assert "Gate-A shared evidence" in helper
