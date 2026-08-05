@@ -90,6 +90,9 @@ _FIXED32_SFWD_B4_ENABLED_NAME = (
 _FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME = (
     "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled"
 )
+_FIXED32_SFWD_CONV_POSTPREP_ENABLED_NAME = (
+    "fr13_fixed32_sfwd_conv_postprep_byte_ab.enabled"
+)
 _FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME = (
     "fr13_fixed32_sfwd_state_fusion.production.arm"
 )
@@ -1489,6 +1492,7 @@ class Fixed32EngineIngress:
             route_names.extend(
                 (
                     _FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME,
+                    _FIXED32_SFWD_CONV_POSTPREP_ENABLED_NAME,
                     _FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME,
                 )
             )

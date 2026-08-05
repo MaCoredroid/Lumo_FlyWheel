@@ -687,6 +687,87 @@ def test_engine_middleware_arms_sfwd_only_after_all_exact4_are_authenticated(
     assert stat.S_IMODE(info.st_mode) == 0o444
 
 
+def test_engine_middleware_arms_sfwd_conv_postprep_from_authenticated_b1_request(
+    tmp_path: Path,
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _task_seed, engine_bearer = _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    enabled = logs / "fr13_fixed32_sfwd_conv_postprep_byte_ab.enabled"
+    enabled.write_bytes(b"1\n")
+    enabled.chmod(0o400)
+    marker = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
+    task_ids = ("astropy__astropy-12907",)
+    observed: list[bytes] = []
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        observed.append(marker.read_bytes())
+        await receive()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}", "more_body": False})
+
+    middleware = Fixed32EngineIngressMiddleware(
+        inner,
+        secret_file=secret_path,
+        canonical_task_ids=task_ids,
+        ledger_path=tmp_path / "engine.jsonl",
+        sfwd_b4_real_event_arm=marker,
+    )
+    middleware.ingress.begin(_begin_payload(task_ids))
+    wire_id = "fr13-chat-" + "13" * 16
+    status, payload = asyncio.run(
+        _asgi_call(
+            middleware,
+            path="/v1/chat/completions",
+            body=b'{"messages":[]}',
+            headers=[
+                (b"authorization", f"Bearer {engine_bearer}".encode()),
+                (
+                    FIXED32_TASK_KEY_HEADER.lower().encode(),
+                    fixed32_task_key_id(task_ids[0]).encode(),
+                ),
+                (b"x-request-id", wire_id.encode()),
+            ],
+        )
+    )
+    assert status == 200
+    assert payload == {}
+    expected = b"swe_verified:astropy__astropy-12907\n"
+    assert observed == [expected]
+    assert marker.read_bytes() == expected
+    info = os.lstat(marker)
+    assert stat.S_ISREG(info.st_mode)
+    assert info.st_nlink == 1
+    assert stat.S_IMODE(info.st_mode) == 0o400
+
+
+def test_engine_middleware_rejects_ambiguous_sfwd_b1_route_sidecars(
+    tmp_path: Path,
+) -> None:
+    secret_path = tmp_path / "secret.json"
+    _write_secret(secret_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    for name in (
+        "fr13_fixed32_sfwd_conv_postprep_byte_ab.enabled",
+        "fr13_fixed32_sfwd_prior_reuse_byte_ab.enabled",
+    ):
+        sidecar = logs / name
+        sidecar.write_bytes(b"1\n")
+        sidecar.chmod(0o400)
+    marker = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
+
+    with pytest.raises(Fixed32IngressError, match="exactly one route sidecar"):
+        Fixed32EngineIngressMiddleware(
+            object(),
+            secret_file=secret_path,
+            canonical_task_ids=("astropy__astropy-12907",),
+            ledger_path=tmp_path / "engine.jsonl",
+            sfwd_b4_real_event_arm=marker,
+        )
+
+
 def test_engine_middleware_rejects_inexact_or_ambiguous_cutlass_b4_arm(
     tmp_path: Path,
 ) -> None:
