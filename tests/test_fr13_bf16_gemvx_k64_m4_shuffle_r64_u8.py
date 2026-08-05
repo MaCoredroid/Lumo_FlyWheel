@@ -1,10 +1,27 @@
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parents[1]
 CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.cu"
+CHECKER = (
+    REPO / "scripts" / "fr13_check_bf16_gemvx_k64_m4_shuffle_r64_u8_codegen.py"
+)
+ARTIFACT = (
+    REPO
+    / "results"
+    / "fr13_fixed32_dfwd_k64_m4_r64_u8_sm121a_codegen_20260805"
+)
+
+
+def _load_checker():
+    spec = importlib.util.spec_from_file_location("fr13_m4_r64_u8_codegen", CHECKER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_source_is_strict_fixed32_k64_m4_r64_u8() -> None:
@@ -79,3 +96,13 @@ def test_op_is_separate_default_off_exact_b4_variant() -> None:
     assert "properties->minor == 1" in source
     assert "C10_CUDA_KERNEL_LAUNCH_CHECK();" in source
     assert "PRODUCTION" not in source
+
+
+def test_codegen_checker_accepts_pinned_sm121a_kernel() -> None:
+    result = _load_checker().audit(
+        (ARTIFACT / "candidate_sass.txt").read_text(encoding="ascii"),
+        (ARTIFACT / "candidate_resource.txt").read_text(encoding="ascii"),
+    )
+    assert result["candidate_resources"]["registers_per_thread"] == 56
+    assert result["candidate_dynamic_loop_instructions_per_four_rows"] == 4760
+    assert result["four_m1_u8_dynamic_loop_instructions"] == 7680

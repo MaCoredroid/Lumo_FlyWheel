@@ -1,0 +1,70 @@
+{
+  "schema": "fr13.fixed32.dfwd_k64_m4_r64_u8_sm121a_artifact.v1",
+  "created_at_utc": "2026-08-05T17:10:00Z",
+  "status": "static_codegen_pass_default_off_runtime_unwired",
+  "acceptance_valid": false,
+  "byte_qualified": false,
+  "timing_eligible": false,
+  "performance_claim": false,
+  "production_default_enabled": false,
+  "runtime_wired": false,
+  "gpu_used": false,
+  "docker_used": false,
+  "source": {
+    "branch": "codex/dfwd-k64-m4-u8-static-20260805",
+    "base_main_commit": "00ac9f36c0ab26beef50a5396022e4f46e843947",
+    "source_checkpoint_commit": "73500ecc1f6afa1962ce923c7cd71ebdc7c4ef3f",
+    "candidate_path": "csrc/fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.cu",
+    "candidate_sha256": "a52361be1c9052a46509cc230ea320c4beb6d15f261327edc835d8da3ae00d9e",
+    "checker_path": "scripts/fr13_check_bf16_gemvx_k64_m4_shuffle_r64_u8_codegen.py",
+    "checker_sha256": "8aac7c18e699e79925b8ffd0ebb67374cdb0af58fc74797e1a8fa44ff99bc115"
+  },
+  "candidate": {
+    "operation": "fr13_bf16_k64_head::gemvx_m4_shuffle_r64_u8_out",
+    "batch_scope": "B4_exact",
+    "vocabulary": 65536,
+    "hidden": 5120,
+    "grid": [1024, 1, 1],
+    "block": [16, 64, 1],
+    "threads_per_cta": 1024,
+    "rows_per_cta": 64,
+    "k_partition_lanes": 16,
+    "lane_products_per_request": 320,
+    "unroll_steps": 8,
+    "steady_loop_iterations": 40,
+    "independent_accumulators": 4,
+    "weight_reuse_batch": 4,
+    "reduction_strides": [8, 4, 2, 1],
+    "cubin_sha256": "c7b2a75dab16fa6a5c4f0038753b9da0f1f3d06ae6a22437797796a4ae9fd26b",
+    "cubin_bytes": 10432
+  },
+  "toolchain": {
+    "nvcc": "CUDA 13.0.88",
+    "cuobjdump": "CUDA 13.0.85",
+    "nvdisasm": "CUDA 13.0.85",
+    "target": "sm_121a",
+    "device_codegen_only": true,
+    "frandom_seed": "fr13_bf16_k64_m4_r64_u8"
+  },
+  "resources": {
+    "registers_per_thread": 56,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 0,
+    "barriers": 0
+  },
+  "static_model": {
+    "candidate_loop_instructions_per_four_rows": 4760,
+    "four_b1_u8_loop_instructions_per_four_rows": 7680,
+    "instruction_reduction_fraction": 0.38020833333333337,
+    "candidate_loop_loads_per_four_rows": 40,
+    "four_b1_u8_loop_loads_per_four_rows": 64,
+    "performance_inference_allowed": false
+  },
+  "required_next_gates": [
+    "linked build in pinned deployed Torch/CUDA ABI",
+    "real SWE-Verified B4 five-site full-logit byte gate serving incumbent",
+    "clean exact4 B4 full-step timing if byte gate passes",
+    "exact16 B4 confirmation"
+  ]
+}

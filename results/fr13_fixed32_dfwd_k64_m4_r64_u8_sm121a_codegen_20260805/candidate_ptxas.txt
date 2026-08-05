@@ -1,0 +1,16 @@
+csrc/fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.cu(16): warning #177-D: variable "<unnamed>::kBatch" was declared but never referenced
+  constexpr int kBatch = 4;
+                ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+csrc/fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.cu(33): warning #177-D: function "<unnamed>::fr13_bf16_gemvx_k64_m4_shuffle_r64_u8_kernel" was declared but never referenced
+  fr13_bf16_gemvx_k64_m4_shuffle_r64_u8_kernel(
+  ^
+
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_ZN73_GLOBAL__N__fe8e7248_40_fr13_bf16_gemvx_k64_m4_shuffle_r64_u8_cu_1123cccc44fr13_bf16_gemvx_k64_m4_shuffle_r64_u8_kernelEP13__nv_bfloat16PKS0_S3_ff' for 'sm_121a'
+ptxas info    : Function properties for _ZN73_GLOBAL__N__fe8e7248_40_fr13_bf16_gemvx_k64_m4_shuffle_r64_u8_cu_1123cccc44fr13_bf16_gemvx_k64_m4_shuffle_r64_u8_kernelEP13__nv_bfloat16PKS0_S3_ff
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 56 registers, used 0 barriers
+ptxas info    : Compile time = 8.973 ms
