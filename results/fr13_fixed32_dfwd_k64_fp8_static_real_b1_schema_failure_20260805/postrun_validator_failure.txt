@@ -1,0 +1,10 @@
+outer_runner_exit_code=1
+failure_phase=postrun_engagement_validation
+exception=ValueError: FP8 engagement key set drifted
+missing_engagement_key=arm
+runtime_arm_env=hydra27_fixed32_k64_root_fb0647d80_20260805a
+source_commit=fb0647d8026c65d59f872e371da9a814dbefe26d
+fixed_by_commit=3967fb29cc69335ac930b522f2a5dea20ce11aa0
+measurement_gate_passed=false
+timing_eligible=false
+floor_acceptance_eligible=false

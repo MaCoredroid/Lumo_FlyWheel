@@ -1,0 +1,49 @@
+{
+  "artifact_schema": "fr13.fixed32.dfwd_k64_fp8_static_real_b1_schema_failure.v1",
+  "candidate": "vllm_cutlass_block_fp8_scaled_mm_static_io",
+  "candidate_served": true,
+  "classification": "real_swe_verified_one_task_b1_diagnostic_postrun_schema_failure",
+  "corrected_by_commit": "3967fb29cc69335ac930b522f2a5dea20ce11aa0",
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "failure": {
+    "exception": "ValueError: FP8 engagement key set drifted",
+    "missing_engagement_key": "arm",
+    "outer_runner_exit_code": 1,
+    "phase": "postrun_engagement_validation"
+  },
+  "floor_acceptance_eligible": false,
+  "matched_reference": {
+    "dfwd_gpu_ms_per_step": 35.0972636024359,
+    "step_wall_ms": 223.971669987,
+    "candidate_dfwd_delta_ms": -7.512419880614843,
+    "candidate_dfwd_delta_percent": -21.40457434434703,
+    "candidate_wall_delta_ms": -6.026793708200586,
+    "candidate_wall_delta_percent": -2.690873228989362,
+    "source": "exact4 reference astropy__astropy-12907 slice"
+  },
+  "measurement": {
+    "accept_per_event": 4.590452261306533,
+    "committer_gpu_ms_per_step": 19.850163268084525,
+    "drafter_gpu_ms_per_step": 27.58484372182106,
+    "floor_ratio": 1.919982087532776,
+    "measured_tps_fullstep_wall": 25.650762508200078,
+    "one_sided_u95_cap_ms": 130.541117726,
+    "overhead_other_ms_per_event": 16.776121586146747,
+    "sfwd_gpu_ms_per_step": 153.7337477027471,
+    "step_wall_ms": 217.94487627879943,
+    "step_wall_minus_cap_ms": 87.40375855279942,
+    "weight_floor_ms": 113.514015414
+  },
+  "physical_rows": 32,
+  "proposal_only": true,
+  "source_commit": "fb0647d8026c65d59f872e371da9a814dbefe26d",
+  "status": "INVALID_POSTRUN_ENGAGEMENT_SCHEMA",
+  "suite": "SWE-Verified",
+  "target_authority_unchanged": true,
+  "task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "task_resolved": true,
+  "timing_eligible": false
+}
