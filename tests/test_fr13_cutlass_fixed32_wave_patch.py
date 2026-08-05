@@ -135,7 +135,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 23
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 24
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
@@ -1008,10 +1008,8 @@ def test_b1_wide256_direct_scheduler_keeps_complete_persistent_contract() -> Non
         "class Fr13B1Wide256DirectFullGridStaticTileScheduler100"
     )
     scheduler_end = patched.index(
-        "template <class TileShape, class ClusterShape,\n"
-        "          uint32_t SchedulerPipelineStageCount>\n"
-        "struct TileSchedulerSelector<\n"
-        "    vllm::fr13_fixed32_m128_divisor_static_scheduler",
+        "template <uint32_t ProblemTiles>\n"
+        "class Fr13B1WideExactFullGridStaticTileScheduler100",
         scheduler_start,
     )
     scheduler = patched[scheduler_start:scheduler_end]
@@ -1081,6 +1079,60 @@ def test_b1_wide256_direct_scheduler_keeps_complete_persistent_contract() -> Non
         "fr13.fixed32.cutlass_identity_onen_n5120_fullgrid_b1_byte_ab.v1"
         in patched
     )
+
+
+def test_b1_wide_exact_scheduler_removes_runtime_bound_for_real_shapes() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    scheduler_start = patched.index(
+        "template <uint32_t ProblemTiles>\n"
+        "class Fr13B1WideExactFullGridStaticTileScheduler100"
+    )
+    scheduler_end = patched.index(
+        "template <class TileShape, class ClusterShape,\n"
+        "          uint32_t SchedulerPipelineStageCount>\n"
+        "struct TileSchedulerSelector<\n"
+        "    vllm::fr13_fixed32_m128_divisor_static_scheduler",
+        scheduler_start,
+    )
+    scheduler = patched[scheduler_start:scheduler_end]
+    assert "template <uint32_t ProblemTiles>" in scheduler
+    assert "public StaticPersistentTileScheduler100" in scheduler
+    assert "static constexpr uint32_t kGridStride = 48;" in scheduler
+    assert "current_work_linear_idx_" in scheduler
+    assert "linear_idx >= ProblemTiles" in scheduler
+    assert "kGridStride * advance_count >=\n        ProblemTiles" in scheduler
+    assert "blocks_per_problem_" not in scheduler
+    assert "problem_tiles_" not in scheduler
+    assert "gridDim" not in scheduler
+    assert "divmod" not in scheduler
+    assert scheduler.count(": Base()") == 2
+
+    selector = "fr13_fixed32_b1_wide_exact_fullgrid_scheduler<ProblemTiles>"
+    assert selector in patched
+    assert (
+        "Fr13B1WideExactFullGridStaticTileScheduler100<ProblemTiles>"
+        in patched
+    )
+
+    runner_start = patched.index("auto run_identity_wide256_fullgrid_b1")
+    runner_end = patched.index("auto run_identity_stockshape_b4", runner_start)
+    runner = patched[runner_start:runner_end]
+    for n, problem_tiles in ((14336, 112), (16384, 128), (34816, 272)):
+        assert f"if (N == {n} && K == 5120)" in runner
+        assert f"OutType, {problem_tiles}>::Gemm" in runner
+    assert "sm120_blockwise_fp8_config_b1_n5120_single_identity_stage2" in runner
+    assert "sm120_blockwise_fp8_config_b1_wide256_fullgrid_identity_stage2" in runner
+
+    for problem_tiles in (112, 128, 272):
+        assignments = [
+            tile
+            for cta in range(48)
+            for tile in range(cta, problem_tiles, 48)
+        ]
+        assert sorted(assignments) == list(range(problem_tiles))
+        assert len(assignments) == len(set(assignments))
 
 
 def test_b4_identity_twom_keeps_complete_tile_math() -> None:

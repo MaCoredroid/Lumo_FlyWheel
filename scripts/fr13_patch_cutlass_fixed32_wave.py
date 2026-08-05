@@ -77,6 +77,8 @@ struct fr13_fixed32_mtp_m1m4_direct_scheduler {};
 struct fr13_fixed32_b1_n5120_single_tile_scheduler {};
 struct fr13_fixed32_b1_onen_fullgrid_static_scheduler {};
 struct fr13_fixed32_b1_wide256_direct_fullgrid_scheduler {};
+template <uint32_t ProblemTiles>
+struct fr13_fixed32_b1_wide_exact_fullgrid_scheduler {};
 struct fr13_fixed32_b4_twom_static_scheduler {};
 template <uint32_t ProblemTiles, uint32_t GridCtas>
 struct fr13_fixed32_b4_twom_exact_scheduler {};
@@ -866,6 +868,92 @@ class Fr13B1Wide256DirectFullGridStaticTileScheduler100
   }
 };
 
+// The three wide B1 projections have source-bound complete-tile counts
+// 112/128/272 and always use the 48-CTA direct grid. Specialize the logical
+// bound so the cooperative kernel does not retain or load
+// blocks_per_problem_ in its persistent loop. Tile ownership and order remain
+// identical to Fr13B1Wide256DirectFullGridStaticTileScheduler100.
+template <uint32_t ProblemTiles>
+class Fr13B1WideExactFullGridStaticTileScheduler100
+    : public StaticPersistentTileScheduler100 {
+  using Base = StaticPersistentTileScheduler100;
+  static_assert(ProblemTiles >= 48);
+  static constexpr uint32_t kGridStride = 48;
+  uint32_t current_work_linear_idx_ = 0;
+
+  CUTLASS_DEVICE void initialize_direct_state() {
+#if defined(__CUDA_ARCH__)
+    current_work_linear_idx_ = static_cast<uint32_t>(blockIdx.y);
+#endif
+  }
+
+ public:
+  using Params = typename Base::Params;
+  using WorkTileInfo = typename Base::WorkTileInfo;
+  using CLCResponse = typename Base::CLCResponse;
+
+  CUTLASS_DEVICE explicit Fr13B1WideExactFullGridStaticTileScheduler100(
+      Params const&) : Base() {
+    initialize_direct_state();
+  }
+
+  CUTLASS_DEVICE explicit Fr13B1WideExactFullGridStaticTileScheduler100(
+      CLCResponse*, Params const&, dim3) : Base() {
+    initialize_direct_state();
+  }
+
+  template <class ClusterShape>
+  CUTLASS_DEVICE WorkTileInfo initial_work_tile_info(ClusterShape) const {
+    return get_current_work();
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work() const {
+    return get_current_work_for_linear_idx(current_work_linear_idx_);
+  }
+
+  CUTLASS_DEVICE WorkTileInfo get_current_work_for_linear_idx(
+      uint32_t linear_idx) const {
+    if (linear_idx >= ProblemTiles) {
+      return WorkTileInfo::invalid_work_tile();
+    }
+    return {static_cast<int32_t>(linear_idx), 0, 0, true};
+  }
+
+  CUTLASS_DEVICE void advance_to_next_work(uint32_t advance_count = 1) {
+    current_work_linear_idx_ += kGridStride * advance_count;
+  }
+
+  CUTLASS_DEVICE bool is_last_tile(
+      WorkTileInfo&, uint32_t advance_count = 1) const {
+    return current_work_linear_idx_ + kGridStride * advance_count >=
+        ProblemTiles;
+  }
+
+  CUTLASS_DEVICE auto fetch_next_work(WorkTileInfo) {
+    advance_to_next_work();
+    return cute::make_tuple(get_current_work(), true);
+  }
+
+  template <class TileSchedulerPipeline, class TileSchedulerPipelineState>
+  CUTLASS_DEVICE auto fetch_next_work(
+      WorkTileInfo work_tile_info, TileSchedulerPipeline&,
+      TileSchedulerPipelineState) {
+    return fetch_next_work(work_tile_info);
+  }
+
+  CUTLASS_DEVICE static auto work_tile_to_cta_coord(
+      WorkTileInfo work_tile_info) {
+    return cute::make_coord(
+        work_tile_info.M_idx, cute::Int<0>{},
+        cute::Underscore{}, cute::Int<0>{});
+  }
+
+  CUTLASS_DEVICE static auto work_tile_to_cta_coord(
+      WorkTileInfo work_tile_info, dim3) {
+    return work_tile_to_cta_coord(work_tile_info);
+  }
+};
+
 template <class TileShape, class ClusterShape,
           uint32_t SchedulerPipelineStageCount>
 struct TileSchedulerSelector<
@@ -916,6 +1004,15 @@ struct TileSchedulerSelector<
     vllm::fr13_fixed32_b1_wide256_direct_fullgrid_scheduler, arch::Sm120,
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
   using Scheduler = Fr13B1Wide256DirectFullGridStaticTileScheduler100;
+};
+
+template <uint32_t ProblemTiles, class TileShape, class ClusterShape,
+          uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
+    vllm::fr13_fixed32_b1_wide_exact_fullgrid_scheduler<ProblemTiles>,
+    arch::Sm120, TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  using Scheduler =
+      Fr13B1WideExactFullGridStaticTileScheduler100<ProblemTiles>;
 };
 
 template <class TileShape, class ClusterShape,
@@ -1406,6 +1503,21 @@ struct sm120_blockwise_fp8_config_b1_wide256_fullgrid_identity_stage2 {
       OutType, 128, 1, 128, TileShape, ClusterShape,
       EpilogueSchedule, KernelSchedule, true,
       fr13_fixed32_b1_wide256_direct_fullgrid_scheduler,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
+template <typename OutType, uint32_t ProblemTiles>
+struct sm120_blockwise_fp8_config_b1_wide_exact_fullgrid_identity_stage2 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_128, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true,
+      fr13_fixed32_b1_wide_exact_fullgrid_scheduler<ProblemTiles>,
       cutlass::gemm::collective::StageCount<2>>;
 };
 
@@ -2144,6 +2256,27 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       using Gemm = typename
           sm120_blockwise_fp8_config_b1_n5120_single_identity_stage2<
               OutType>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    if (N == 14336 && K == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b1_wide_exact_fullgrid_identity_stage2<
+              OutType, 112>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    if (N == 16384 && K == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b1_wide_exact_fullgrid_identity_stage2<
+              OutType, 128>::Gemm;
+      return cutlass_gemm_caller_blockwise<Gemm>(
+          destination, a, b, a_scales, b_scales);
+    }
+    if (N == 34816 && K == 5120) {
+      using Gemm = typename
+          sm120_blockwise_fp8_config_b1_wide_exact_fullgrid_identity_stage2<
+              OutType, 272>::Gemm;
       return cutlass_gemm_caller_blockwise<Gemm>(
           destination, a, b, a_scales, b_scales);
     }
