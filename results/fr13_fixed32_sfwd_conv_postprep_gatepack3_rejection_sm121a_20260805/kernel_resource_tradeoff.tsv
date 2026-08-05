@@ -1,0 +1,13 @@
+profile	metric	gatepack2_4_8_rows	gatepack3_8_16_rows	delta
+b1	registers	56	64	8
+b1	encoded_sass	3032	3416	384
+b1	static_sass	2881	3255	374
+b1	ldg	85	93	8
+b1	stg	336	344	8
+b1	stack_local_shared_ldl_stl_calls	0	0	0
+b4	registers	56	64	8
+b4	encoded_sass	3040	3424	384
+b4	static_sass	2889	3268	379
+b4	ldg	85	93	8
+b4	stg	336	344	8
+b4	stack_local_shared_ldl_stl_calls	0	0	0

@@ -1,0 +1,15 @@
+profile	metric	gatepack2_4_8_rows	gatepack3_8_16_rows	delta
+b1	gate_rows_per_program	4	8	4
+b1	gate_programs_per_request	8	4	-4
+b1	total_programs_per_request	88	84	-4
+b1	total_programs_all_48_layers	4224	4032	-192
+b1	requested_gate_bytes_per_request_layer	20736	19584	-1152
+b1	requested_gate_bytes_whole_batch_all_48_layers	995328	940032	-55296
+b1	kernel_launches_all_48_layers	48	48	0
+b4	gate_rows_per_program	8	16	8
+b4	gate_programs_per_request	4	2	-2
+b4	total_programs_per_request	44	42	-2
+b4	total_programs_all_48_layers	8448	8064	-384
+b4	requested_gate_bytes_per_request_layer	19584	19008	-576
+b4	requested_gate_bytes_whole_batch_all_48_layers	3760128	3649536	-110592
+b4	kernel_launches_all_48_layers	48	48	0
