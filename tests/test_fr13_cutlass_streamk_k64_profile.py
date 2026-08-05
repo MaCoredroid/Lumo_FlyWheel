@@ -573,7 +573,7 @@ def test_n5120_fullgrid_source_contract_remains_pinned_to_qualified_patch() -> N
     ]
 
 
-def test_wide256_fullgrid_source_contract_matches_integrated_patcher() -> None:
+def test_wide256_fullgrid_source_contract_remains_pinned_to_cooperative_patch() -> None:
     module = _load("fr13_cutlass_streamk_wide256_fullgrid_source_contract_test")
     contract = module._source_contract("identity_wide256_fullgrid_b1")
 
@@ -583,7 +583,22 @@ def test_wide256_fullgrid_source_contract_matches_integrated_patcher() -> None:
     assert contract["patched_dispatch_sha256"] == (
         "569aea20321ba5461c4d3c9187aadf5390be363485f9aee538a738ef269ca6f0"
     )
-    assert module.sha256_file(REPO / module.PATCH_SOURCE) == contract[
+    historical = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(REPO),
+            "show",
+            "adbd1092a74c9eb72ea464d3dff0ac2d9549a123:"
+            "scripts/fr13_patch_cutlass_fixed32_wave.py",
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
+    assert hashlib.sha256(historical).hexdigest() == contract[
+        "patch_source_sha256"
+    ]
+    assert module.sha256_file(REPO / module.PATCH_SOURCE) != contract[
         "patch_source_sha256"
     ]
 

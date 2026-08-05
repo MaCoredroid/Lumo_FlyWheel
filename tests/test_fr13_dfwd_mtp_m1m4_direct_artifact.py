@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -22,6 +23,15 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _sha256_at_revision(revision: str, relative: str) -> str:
+    historical = subprocess.run(
+        ["git", "-C", str(ROOT), "show", f"{revision}:{relative}"],
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
+    return hashlib.sha256(historical).hexdigest()
+
+
 def _binary_module():
     path = ROOT / "scripts" / "fr13_cutlass_wave_binary.py"
     spec = importlib.util.spec_from_file_location("fr13_mtp_binary", path)
@@ -39,10 +49,14 @@ def test_artifact_binds_source_and_diagnostic_binary() -> None:
     assert isinstance(source, dict)
     assert isinstance(outputs, dict)
 
-    patch = ROOT / "scripts" / "fr13_patch_cutlass_fixed32_wave.py"
-    verifier = ROOT / "scripts" / "fr13_cutlass_wave_binary.py"
-    assert _sha256(patch) == source["patch_source_sha256"]
-    assert _sha256(verifier) == source["binary_verifier_sha256"]
+    revision = source["source_commit"]
+    assert isinstance(revision, str)
+    assert _sha256_at_revision(
+        revision, "scripts/fr13_patch_cutlass_fixed32_wave.py"
+    ) == source["patch_source_sha256"]
+    assert _sha256_at_revision(
+        revision, "scripts/fr13_cutlass_wave_binary.py"
+    ) == source["binary_verifier_sha256"]
 
     binary = outputs["candidate_binary"]
     assert isinstance(binary, dict)
