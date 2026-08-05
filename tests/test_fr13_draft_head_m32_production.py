@@ -590,7 +590,8 @@ def test_live_gate_uses_real_swe_b1_and_serves_reference() -> None:
     assert "FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}" in text
     assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in text
     assert "astropy__astropy-12907" in text
-    assert 'FR13_DRAFT_HEAD_M32_LIVE_AB="$FR13_GATE_DRAFT_HEAD_M32"' in text
+    assert 'FR13_DRAFT_HEAD_M32_LIVE_AB="$RUNTIME_DRAFT_HEAD_M32"' in text
+    assert "RUNTIME_DRAFT_HEAD_M32=0" in text
     assert "fr13_draft_head_m32_pass.py validate-live" in text
     assert "DRAFT_HEAD_FINAL_FLUSH" in text
     assert "DRAFT_HEAD_BOUNDARY" in text
@@ -729,11 +730,11 @@ def test_published_contract_matches_candidate_source_and_exact_math() -> None:
     assert payload["live_b1_reference_contract"]["gemm_mnk"] == [1, 65536, 5120]
     assert payload["live_b1_reference_contract"]["calls_per_event"] == 5
     assert payload["replacement"]["candidate_gemm_mnk"] == [32, 65536, 5120]
+    # This 2026-08-01 snapshot is immutable historical evidence. Later
+    # default-off patcher additions must not rewrite its recorded source hash.
     assert integration["components"]["draft_head_m32"][
         "candidate_source_sha256"
-    ] == hashlib.sha256(
-        PATCHER.read_bytes()
-    ).hexdigest()
+    ] == "cfebeba4cd7d8365865ea14866db235e645aaed8bce4e4a03134adf471474b0f"
     assert integration["components"]["draft_head_m32"]["source_commit"] == (
         "3b06acebbd673466703268bf0b3647f4bf4a3070"
     )
