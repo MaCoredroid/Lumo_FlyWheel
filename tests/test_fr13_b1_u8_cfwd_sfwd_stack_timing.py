@@ -25,6 +25,12 @@ STALE_TARGET_SHA256 = (
 QROW32_SHA256 = (
     "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a"
 )
+CURRENT_CFWD_SOURCE_SHA256 = (
+    "a7a7b6582cdc11e930916f5e65583195fd31a3b664e8f567bb33a24ea1a64ee0"
+)
+STALE_CFWD_SOURCE_SHA256 = (
+    "5a9107306bdc37200448a6a5add2b84dfd839dc377b11009f218662c63abcc1c"
+)
 
 
 def _text(path: Path) -> str:
@@ -94,6 +100,8 @@ def test_runner_binds_packed_cfwd_current_target_sfwd_and_taw() -> None:
         assert value in text
     assert CURRENT_TARGET_SHA256 in text
     assert STALE_TARGET_SHA256 not in text
+    assert CURRENT_CFWD_SOURCE_SHA256 in text
+    assert STALE_CFWD_SOURCE_SHA256 not in text
     assert text.index('run_arm "$STOCK_ARM" 0') < text.index(
         'run_arm "$CANDIDATE_ARM" 1'
     )
