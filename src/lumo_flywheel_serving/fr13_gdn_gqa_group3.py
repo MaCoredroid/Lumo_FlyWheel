@@ -1,8 +1,9 @@
-"""Fixed32 GDN single-launch candidate grouped by shared key head.
+"""Fixed32 GDN single-launch candidates grouped by shared key head.
 
-The runtime imports this module only for the default-off ``gqa_group3`` live
-gate.  The incumbent remains served while the authenticated post-replay
-comparator qualifies this kernel on the captured graph's persistent operands.
+The runtime imports this module only for the default-off ``gqa_group3`` or
+``gqa_group3_bv16`` live gate.  The incumbent remains served while the
+authenticated post-replay comparator qualifies the selected kernel on the
+captured graph's persistent operands.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import triton.language as tl
 
 
 CANDIDATE = "fixed32_gdn_single_launch_gqa_group3_v1"
+BV16_CANDIDATE = "fixed32_gdn_single_launch_gqa_group3_bv16_v1"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
 PHYSICAL_ROWS = 32
 NUM_K_HEADS = 16
@@ -21,8 +23,11 @@ HEAD_GROUP = 3
 DIM_K = 128
 DIM_V = 128
 BLOCK_V = 8
+SOURCE_BLOCK_VS = frozenset((BLOCK_V, 16))
 GDN_LAYERS = 48
 BF16_BYTES = 2
+DRAFT_VOCAB_K = 65_536
+DRAFT_VOCAB_ROOT = 1
 FIXED32_EXECUTION_SHA256 = (
     "80aed4d1a882ee4d4cde21dbf4314ed3abaae3f7553e35b6db5cd7574fe3b7db"
 )
@@ -53,14 +58,13 @@ def fixed32_gdn_gqa_group3_contract(
         raise ValueError("GQA-group3 qualification is restricted to B1 or B4")
     if mode not in FIXED32_MODES:
         raise ValueError("GQA-group3 requires Tail23 or Hydra27 fixed32 mode")
-    observed = (rows, kh, vh, dk, dv, bv, layer_count)
+    observed = (rows, kh, vh, dk, dv, layer_count)
     expected = (
         PHYSICAL_ROWS,
         NUM_K_HEADS,
         NUM_V_HEADS,
         DIM_K,
         DIM_V,
-        BLOCK_V,
         GDN_LAYERS,
     )
     if observed != expected:
@@ -68,12 +72,17 @@ def fixed32_gdn_gqa_group3_contract(
             "GQA-group3 exact physical32 geometry drift: "
             f"observed={observed!r} expected={expected!r}"
         )
+    if bv not in SOURCE_BLOCK_VS:
+        raise ValueError(
+            "GQA-group3 source BLOCK_V must be exactly 8 or 16"
+        )
     if vh != kh * HEAD_GROUP or dv % bv:
         raise ValueError("GQA-group3 head ratio or value tiling drift")
 
-    value_tiles = dv // bv
-    reference_ctas_per_layer = batch * vh * value_tiles
-    candidate_ctas_per_layer = batch * kh * value_tiles
+    reference_value_tiles = dv // BLOCK_V
+    candidate_value_tiles = dv // bv
+    reference_ctas_per_layer = batch * vh * reference_value_tiles
+    candidate_ctas_per_layer = batch * kh * candidate_value_tiles
     ctas_removed_per_layer = reference_ctas_per_layer - candidate_ctas_per_layer
     qk_bytes_per_node_cta = 2 * dk * BF16_BYTES
     qk_bytes_removed_per_event = (
@@ -94,7 +103,8 @@ def fixed32_gdn_gqa_group3_contract(
         HEAD_GROUP + rows * HEAD_GROUP * 3
     )
     return {
-        "candidate": CANDIDATE,
+        "candidate": BV16_CANDIDATE if bv == 16 else CANDIDATE,
+        "selector": "gqa_group3_bv16" if bv == 16 else "gqa_group3",
         "mode": mode,
         "batch_size": batch,
         "physical_rows_per_request": rows,
@@ -106,6 +116,9 @@ def fixed32_gdn_gqa_group3_contract(
         "dim_k": dk,
         "dim_v": dv,
         "block_v": bv,
+        "default_block_v": BLOCK_V,
+        "draft_vocab_k": DRAFT_VOCAB_K,
+        "draft_vocab_root": DRAFT_VOCAB_ROOT,
         "gdn_layers": layer_count,
         "physical_launches_per_layer": 1,
         "reference_ctas_per_layer": reference_ctas_per_layer,
@@ -761,10 +774,16 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
     flags_export: bool,
     flags_rows: int,
     descriptor_execution_sha256: str,
+    block_v: int = BLOCK_V,
     maxnreg: int | None = None,
 ) -> dict[str, object]:
     """Launch the unserved candidate after explicit caller-side qualification."""
-    contract = fixed32_gdn_gqa_group3_contract(batch_size, mode=mode)
+    contract = fixed32_gdn_gqa_group3_contract(
+        batch_size,
+        mode=mode,
+        block_v=block_v,
+    )
+    selected_block_v = int(contract["block_v"])
     tensors = (
         q,
         k,
@@ -840,7 +859,7 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
     if maxnreg is not None and int(maxnreg) != 128:
         raise ValueError("GQA-group3 maxnreg must be unset or exactly 128")
 
-    grid = (NUM_K_HEADS, DIM_V // BLOCK_V, int(batch_size))
+    grid = (NUM_K_HEADS, DIM_V // selected_block_v, int(batch_size))
     launch_options = {"num_warps": 8}
     if maxnreg is not None:
         launch_options["maxnreg"] = int(maxnreg)
@@ -872,7 +891,7 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         HEAD_GROUP=HEAD_GROUP,
         DIM_K=DIM_K,
         DIM_V=DIM_V,
-        BLOCK_V=BLOCK_V,
+        BLOCK_V=selected_block_v,
         OUTPUT_SCALE=float(output_scale),
         H0_IS_BANK=bool(h0_is_bank),
         H0_INDEX_ROW=int(h0_index_row),

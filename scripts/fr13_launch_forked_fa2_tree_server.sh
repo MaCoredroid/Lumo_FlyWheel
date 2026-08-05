@@ -1449,7 +1449,8 @@ if [[ -n "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]]; then
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
      && "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "0" \
      && ( -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
-          || ( "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" == "gqa_group3" \
+          || ( ( "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" == "gqa_group3" \
+                 || "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" == "gqa_group3_bv16" ) \
                && "${FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH:-}" == "1" \
                && "${FR13_DFWD_K64_TOP3:-0}" == "1" \
                && "$FR10_METRICS" == "1" ) ) ]] || {
@@ -2286,19 +2287,22 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
      || "$_fr13_gdn_path_bv_candidate" == "64" \
 	     || "$_fr13_gdn_path_bv_candidate" == "128" \
 	     || "$_fr13_gdn_path_bv_candidate" == "single_launch" \
-	     || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" ]] || {
-	    echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be exactly 16, 32, 64, 128, single_launch, or gqa_group3" >&2
+	     || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+	     || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ]] || {
+	    echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be exactly 16, 32, 64, 128, single_launch, gqa_group3, or gqa_group3_bv16" >&2
 	    exit 2
 	  }
 	  if [[ ( "$_fr13_gdn_path_bv_candidate" == "single_launch" \
-	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" ) \
+	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ) \
 	        && ( "${FR13_DRAFT_VOCAB_K:-}" != "65536" \
 	             || "${FR13_DRAFT_VOCAB_ROOT:-}" != "1" ) ]]; then
 	    echo "FR13 ordered GDN live gate requires exact K64/root1" >&2
 	    exit 2
 	  fi
 	  if [[ ( "$_fr13_gdn_path_bv_candidate" == "single_launch" \
-	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" ) \
+	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ) \
 	        && ( ! ( "$_fr13_gdn_single_launch_expected_batch" == "1" \
                  || "$_fr13_gdn_single_launch_expected_batch" == "4" ) \
              || "$MAX_NUM_SEQS" != "$_fr13_gdn_single_launch_expected_batch" \
@@ -2307,7 +2311,8 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
 	    exit 2
 	  fi
 	  if [[ ( "$_fr13_gdn_path_bv_candidate" == "single_launch" \
-	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" ) \
+	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ) \
 	        && ( "$FR10_METRICS" != "1" \
              || "${FR13_RING_EXPORT:-1}" != "1" \
              || "${FR13_FLAGS_INKERNEL:-1}" != "1" \
@@ -2322,6 +2327,7 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
 	fi
 	if [[ "$_fr13_gdn_path_bv_candidate" != "single_launch" \
 	      && "$_fr13_gdn_path_bv_candidate" != "gqa_group3" \
+	      && "$_fr13_gdn_path_bv_candidate" != "gqa_group3_bv16" \
 	      && -n "$_fr13_gdn_single_launch_expected_batch" ]]; then
 	  echo "FR13 GDN ordered expected batch is set without its candidate" >&2
   exit 2
@@ -2912,6 +2918,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
         || "$_fr13_fixed32_batch_gdn_bv8_timing" == "1" \
         || "$_fr13_gdn_path_bv_candidate" == "single_launch" \
         || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+        || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" \
         || "$_fr13_gdn_gqa_group3_production" == "1" \
         || ( "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "1" \
              && "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" == "8" ) ]]; then
@@ -3516,7 +3523,8 @@ PY
       > "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
     chmod 400 "$LOG_DIR/fr13_fixed32_gdn_path_bv_candidate.flag"
 	    if [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" \
-	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" ]]; then
+	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ]]; then
       printf '%s\n' "$_fr13_gdn_single_launch_expected_batch" \
         > "$LOG_DIR/fr13_fixed32_gdn_single_launch_expected_batch.flag"
       chmod 400 "$LOG_DIR/fr13_fixed32_gdn_single_launch_expected_batch.flag"
@@ -3762,9 +3770,11 @@ else
 fi
 if (( _fr13_batch_gdn_diagnostic_count == 1 )) \
     || [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" \
-          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" ]]; then
+          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ]]; then
   if [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" \
-        || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" ]]; then
+        || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+        || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ]]; then
     echo "1" > "$LOG_DIR/fr13_fixed32_batch_gdn_graph_byte_ab.enabled"
   fi
   if [[ -n "$_fr13_batch_gdn_bv_candidate" ]]; then
