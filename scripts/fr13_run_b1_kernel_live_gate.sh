@@ -46,17 +46,30 @@ esac
 FR13_GATE_TAW_NATIVE=${FR13_GATE_TAW_NATIVE:-1}
 FR13_GATE_DRAFT_HEAD_PAD=${FR13_GATE_DRAFT_HEAD_PAD:-0}
 FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}
+FR13_GATE_DRAFT_HEAD_U8=${FR13_GATE_DRAFT_HEAD_U8:-0}
 FR13_GATE_DRAFT_HEAD_FP8=${FR13_GATE_DRAFT_HEAD_FP8:-0}
 FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=${FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO:-0}
 FR13_GATE_DFWD_TOP3=${FR13_GATE_DFWD_TOP3:-0}
 FR13_GATE_BM8=${FR13_GATE_BM8:-0}
 FR13_GATE_SFWD_CONV_POSTPREP=${FR13_GATE_SFWD_CONV_POSTPREP:-0}
-for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO FR13_GATE_DFWD_TOP3 FR13_GATE_BM8 FR13_GATE_SFWD_CONV_POSTPREP; do
+for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_U8 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO FR13_GATE_DFWD_TOP3 FR13_GATE_BM8 FR13_GATE_SFWD_CONV_POSTPREP; do
   case "${!gate}" in
     0|1) ;;
     *) echo "$gate must be 0 or 1" >&2; exit 2 ;;
   esac
 done
+if [[ "$FR13_GATE_DRAFT_HEAD_U8" == "1" \
+      && "$FR13_GATE_DRAFT_HEAD_M32" != "1" ]]; then
+  echo "FR13_GATE_DRAFT_HEAD_U8=1 requires the isolated draft-head live gate" >&2
+  exit 2
+fi
+if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" \
+      && "$FR13_GATE_DRAFT_HEAD_U8" == "1" ]]; then
+  :
+elif [[ "$FR13_GATE_DRAFT_HEAD_U8" != "0" ]]; then
+  echo "FR13 draft-head U8 selector drifted" >&2
+  exit 2
+fi
 if [[ "$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO" == "1" \
       && "$FR13_GATE_DRAFT_HEAD_FP8" != "1" ]]; then
   echo "FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=1 requires FR13_GATE_DRAFT_HEAD_FP8=1" >&2
@@ -143,6 +156,50 @@ else
     exit 2
   }
 fi
+FR13_GATE_DRAFT_HEAD_U8_SO=${FR13_GATE_DRAFT_HEAD_U8_SO:-}
+FR13_GATE_DRAFT_HEAD_U8_SHA256=
+FR13_GATE_DRAFT_HEAD_U8_BYTES=
+FR13_GATE_DRAFT_HEAD_U8_SOURCE_SHA256=
+FR13_GATE_DRAFT_HEAD_U8_BUILD_ATTESTATION_SHA256=
+FR13_GATE_DRAFT_HEAD_U8_PATCH_SHA256=
+FR13_GATE_DRAFT_HEAD_U8_RUNNER_SHA256=
+if [[ "$FR13_GATE_DRAFT_HEAD_U8" == "1" ]]; then
+  U8_SOURCE=csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu
+  U8_BUILD_ATTESTATION=results/fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_20260805/build_attestation.json
+  U8_RUNNER=scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh
+  for input in "$FR13_GATE_DRAFT_HEAD_U8_SO" "$U8_SOURCE" \
+      "$U8_BUILD_ATTESTATION" "$U8_RUNNER"; do
+    [[ "$input" == /* || "$input" == "$U8_SOURCE" \
+       || "$input" == "$U8_BUILD_ATTESTATION" || "$input" == "$U8_RUNNER" ]]
+    [[ -f "$input" && ! -L "$input" ]] || {
+      echo "draft-head U8 input is not a regular non-symlink file: $input" >&2
+      exit 2
+    }
+  done
+  unset input
+  [[ "$FR13_GATE_DRAFT_HEAD_U8_SO" == /* \
+     && "$(stat -c '%s' "$FR13_GATE_DRAFT_HEAD_U8_SO")" == "117904" \
+     && "$(sha256sum "$FR13_GATE_DRAFT_HEAD_U8_SO" | awk '{print $1}')" \
+        == "8b27df4f3c6a5a0574261ee984159582a87615c3e6d83f2a267f4fa46a3e421e" \
+     && "$(sha256sum "$U8_SOURCE" | awk '{print $1}')" \
+        == "af0044edd84ff58d353a816f6887894d05a62b221e0efa5af933c2c59676b01b" \
+     && "$(sha256sum "$U8_BUILD_ATTESTATION" | awk '{print $1}')" \
+        == "e7ec95d1fff3b665373ad7b3a14f7e3fad346cf77a5f2f992a90a689e5672c8f" ]] || {
+    echo "draft-head U8 binary/source/build identity drifted" >&2
+    exit 2
+  }
+  FR13_GATE_DRAFT_HEAD_U8_SHA256=8b27df4f3c6a5a0574261ee984159582a87615c3e6d83f2a267f4fa46a3e421e
+  FR13_GATE_DRAFT_HEAD_U8_BYTES=117904
+  FR13_GATE_DRAFT_HEAD_U8_SOURCE_SHA256=af0044edd84ff58d353a816f6887894d05a62b221e0efa5af933c2c59676b01b
+  FR13_GATE_DRAFT_HEAD_U8_BUILD_ATTESTATION_SHA256=e7ec95d1fff3b665373ad7b3a14f7e3fad346cf77a5f2f992a90a689e5672c8f
+  FR13_GATE_DRAFT_HEAD_U8_PATCH_SHA256=$(sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | awk '{print $1}')
+  FR13_GATE_DRAFT_HEAD_U8_RUNNER_SHA256=$(sha256sum "$U8_RUNNER" | awk '{print $1}')
+else
+  [[ -z "$FR13_GATE_DRAFT_HEAD_U8_SO" ]] || {
+    echo "FR13_GATE_DRAFT_HEAD_U8=0 forbids a candidate binary" >&2
+    exit 2
+  }
+fi
 if [[ "$B1_DIAGNOSTIC_TASK_PROFILE" == "astropy13236" \
       && ( ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "identity_onen_n5120_single_b1_byte_ab" \
              && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "identity_onen_n5120_fullgrid_b1_byte_ab" ) \
@@ -190,6 +247,17 @@ case "$B1_WORKLOAD_PROFILE" in
        && "$FR13_GATE_DFWD_TOP3" == "0" \
        && "$FR13_GATE_BM8" == "0" \
        && "$FR13_GATE_GDN_BV" == "0" ]]; then
+      :
+    elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+            && "$FR13_GATE_QROW16" == "0" \
+            && "$FR13_GATE_TAW_NATIVE" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_M32" == "1" \
+            && "$FR13_GATE_DRAFT_HEAD_U8" == "1" \
+            && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
+            && "$FR13_GATE_DFWD_TOP3" == "0" \
+            && "$FR13_GATE_BM8" == "0" \
+            && "$FR13_GATE_GDN_BV" == "0" ]]; then
       :
     elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
             && "$FR13_GATE_QROW16" == "0" \
@@ -260,6 +328,13 @@ ARM="hydra27_fixed32${PROFILE_SUFFIX}_${TAG}"
 SUBSET=$B1_DIAGNOSTIC_SUBSET
 FA2_SHA=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
 SOURCE_COMMIT=$(git rev-parse HEAD)
+if [[ "$FR13_GATE_DRAFT_HEAD_U8" == "1" ]]; then
+  [[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "299183936" \
+     && "$FA2_SHA" == "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d" ]] || {
+    echo "draft-head U8 gate requires the pinned stock FA2 binary" >&2
+    exit 2
+  }
+fi
 DRAFT_HEAD_FP8_ARM=
 QROW16_PRODUCTION=0
 QROW16_PRODUCTION_LIVE_PASS=
@@ -358,6 +433,17 @@ printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=
 printf 'qrow16_production=%s\nqrow16_fa2_sha256=%s\nqrow16_live_pass_sha256=%s\n' \
   "$QROW16_PRODUCTION" "$FA2_SHA" \
   "$QROW16_PRODUCTION_LIVE_PASS_SHA256" >> "$RUNROOT/launcher_meta.txt"
+printf 'draft_head_u8_gate=%s\ndraft_head_u8_so_sha256=%s\ndraft_head_u8_source_sha256=%s\ndraft_head_u8_build_attestation_sha256=%s\ndraft_head_u8_patch_sha256=%s\ndraft_head_u8_runner_sha256=%s\n' \
+  "$FR13_GATE_DRAFT_HEAD_U8" "$FR13_GATE_DRAFT_HEAD_U8_SHA256" \
+  "$FR13_GATE_DRAFT_HEAD_U8_SOURCE_SHA256" \
+  "$FR13_GATE_DRAFT_HEAD_U8_BUILD_ATTESTATION_SHA256" \
+  "$FR13_GATE_DRAFT_HEAD_U8_PATCH_SHA256" \
+  "$FR13_GATE_DRAFT_HEAD_U8_RUNNER_SHA256" >> "$RUNROOT/launcher_meta.txt"
+
+RUNTIME_DRAFT_HEAD_M32=$FR13_GATE_DRAFT_HEAD_M32
+if [[ "$FR13_GATE_DRAFT_HEAD_U8" == "1" ]]; then
+  RUNTIME_DRAFT_HEAD_M32=0
+fi
 
 .venv/bin/python scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 \
@@ -380,9 +466,22 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_FIXED32_TAW_NATIVE_PRECOMPUTE="$FR13_GATE_TAW_NATIVE" \
   FR13_DRAFT_HEAD_PAD_ROWS=0 \
   FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB="$FR13_GATE_DRAFT_HEAD_PAD" \
-  FR13_DRAFT_HEAD_M32_LIVE_AB="$FR13_GATE_DRAFT_HEAD_M32" \
+  FR13_DRAFT_HEAD_M32_LIVE_AB="$RUNTIME_DRAFT_HEAD_M32" \
   FR13_DRAFT_HEAD_M32_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \
   FR13_DRAFT_HEAD_M32_LIVE_JSON=/logs/fr13_draft_head_m32.live.json \
+  FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB="$FR13_GATE_DRAFT_HEAD_U8" \
+  FR13_DRAFT_HEAD_M1_R64_U8_SO="$FR13_GATE_DRAFT_HEAD_U8_SO" \
+  FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256="$FR13_GATE_DRAFT_HEAD_U8_SHA256" \
+  FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256="$FR13_GATE_DRAFT_HEAD_U8_SOURCE_SHA256" \
+  FR13_DRAFT_HEAD_M1_R64_U8_BUILD_ATTESTATION_SHA256="$FR13_GATE_DRAFT_HEAD_U8_BUILD_ATTESTATION_SHA256" \
+  FR13_DRAFT_HEAD_M1_R64_U8_PATCH_SOURCE_SHA256="$FR13_GATE_DRAFT_HEAD_U8_PATCH_SHA256" \
+  FR13_DRAFT_HEAD_M1_R64_U8_RUNNER_SHA256="$FR13_GATE_DRAFT_HEAD_U8_RUNNER_SHA256" \
+  FR13_DRAFT_HEAD_M1_R64_U8_SUBSET_SHA256="$B1_DIAGNOSTIC_SUBSET_SHA256" \
+  FR13_DRAFT_HEAD_M1_R64_U8_VOCAB_BLOCKS_SHA256="$DRAFT_VOCAB_BLOCKS_SHA256" \
+  FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256="$FA2_SHA" \
+  FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT="$SOURCE_COMMIT" \
+  FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \
+  FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON=/logs/fr13_dfwd_k64_m1_r64_u8.live.json \
   FR13_DRAFT_HEAD_FP8="$FR13_GATE_DRAFT_HEAD_FP8" \
   FR13_DRAFT_HEAD_FP8_STATIC_IO="$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO" \
   FR13_DRAFT_HEAD_FP8_ARM="$DRAFT_HEAD_FP8_ARM" \
@@ -426,7 +525,11 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_BM8" == "1" ]]; then
     --expected-instance-id "$B1_DIAGNOSTIC_TASK_ID"
 fi
 if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]]; then
-  DRAFT_HEAD_LIVE="$RUNROOT/$ARM/logs/fr13_draft_head_m32.live.json"
+  if [[ "$FR13_GATE_DRAFT_HEAD_U8" == "1" ]]; then
+    DRAFT_HEAD_LIVE="$RUNROOT/$ARM/logs/fr13_dfwd_k64_m1_r64_u8.live.json"
+  else
+    DRAFT_HEAD_LIVE="$RUNROOT/$ARM/logs/fr13_draft_head_m32.live.json"
+  fi
   DRAFT_HEAD_FINAL_FLUSH="$RUNROOT/$ARM/fixed32_final_flush.json"
   [[ -f "$DRAFT_HEAD_FINAL_FLUSH" && ! -L "$DRAFT_HEAD_FINAL_FLUSH" ]] \
     || { echo "draft-head M32 final flush evidence is missing" >&2; exit 4; }
@@ -441,16 +544,35 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]]; then
   DRAFT_HEAD_TRAFFIC_AUDIT="$RUNROOT/$ARM/fixed32_chat_traffic_audit.json"
   [[ -f "$DRAFT_HEAD_TRAFFIC_AUDIT" && ! -L "$DRAFT_HEAD_TRAFFIC_AUDIT" ]] \
     || { echo "draft-head M32 authenticated traffic audit is missing" >&2; exit 4; }
-  DRAFT_HEAD_SOURCE_SHA=$(sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1)
-  .venv/bin/python scripts/fr13_draft_head_m32_pass.py validate-live \
-    --live-result "$DRAFT_HEAD_LIVE" \
-    --expected-live-sha256 "$(sha256sum "$DRAFT_HEAD_LIVE" | cut -d' ' -f1)" \
-    --final-flush "$DRAFT_HEAD_FINAL_FLUSH" \
-    --boundary-snapshot "$DRAFT_HEAD_BOUNDARY" \
-    --chat-traffic-audit "$DRAFT_HEAD_TRAFFIC_AUDIT" \
-    --candidate-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
-    --expected-candidate-source-sha256 "$DRAFT_HEAD_SOURCE_SHA" \
-    > "$RUNROOT/$ARM/draft_head_m32_live_validation.json"
+  if [[ "$FR13_GATE_DRAFT_HEAD_U8" == "1" ]]; then
+    .venv/bin/python scripts/fr13_dfwd_k64_m1_r64_u8_gate.py \
+      --live-result "$DRAFT_HEAD_LIVE" \
+      --candidate-so "$FR13_GATE_DRAFT_HEAD_U8_SO" \
+      --candidate-source csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu \
+      --build-attestation results/fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_20260805/build_attestation.json \
+      --patch-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+      --runner scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh \
+      --subset "$SUBSET" \
+      --vocab-blocks "$DRAFT_VOCAB_BLOCKS_HOST" \
+      --fa2-so "$FORKED_FA2_SO" \
+      --expected-source-commit "$SOURCE_COMMIT" \
+      --final-flush "$DRAFT_HEAD_FINAL_FLUSH" \
+      --boundary-snapshot "$DRAFT_HEAD_BOUNDARY" \
+      --chat-traffic-audit "$DRAFT_HEAD_TRAFFIC_AUDIT" \
+      --repo "$PWD" \
+      --out "$RUNROOT/$ARM/dfwd_k64_m1_r64_u8_real_b1_gate.json"
+  else
+    DRAFT_HEAD_SOURCE_SHA=$(sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | cut -d' ' -f1)
+    .venv/bin/python scripts/fr13_draft_head_m32_pass.py validate-live \
+      --live-result "$DRAFT_HEAD_LIVE" \
+      --expected-live-sha256 "$(sha256sum "$DRAFT_HEAD_LIVE" | cut -d' ' -f1)" \
+      --final-flush "$DRAFT_HEAD_FINAL_FLUSH" \
+      --boundary-snapshot "$DRAFT_HEAD_BOUNDARY" \
+      --chat-traffic-audit "$DRAFT_HEAD_TRAFFIC_AUDIT" \
+      --candidate-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+      --expected-candidate-source-sha256 "$DRAFT_HEAD_SOURCE_SHA" \
+      > "$RUNROOT/$ARM/draft_head_m32_live_validation.json"
+  fi
 fi
 if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
   DRAFT_HEAD_FP8_ENGAGEMENT="$RUNROOT/$ARM/logs/fr13_draft_head_fp8.engagement.json"
