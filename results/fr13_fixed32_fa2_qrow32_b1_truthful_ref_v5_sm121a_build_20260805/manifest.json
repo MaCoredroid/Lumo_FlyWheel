@@ -1,0 +1,98 @@
+{
+  "abi": {
+    "defined_dynamic_set_matches_reference": true,
+    "dt_needed_set_matches_reference": true,
+    "no_split_launcher_binding": "LOCAL",
+    "qrow16_reference_launcher_binding": "LOCAL",
+    "runpath_set_matches_reference": true,
+    "split2_launcher_binding": "LOCAL",
+    "undefined_dynamic_set_matches_reference": true
+  },
+  "artifacts": {
+    "candidate_so": {
+      "bytes": 300154616,
+      "committed": false,
+      "sha256": "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a"
+    },
+    "flash_api_object": {
+      "bytes": 6080032,
+      "committed": false,
+      "sha256": "96be541895d2f0c37e839dd18d46559e8e010e8b366832d5fd58992195522cc2"
+    },
+    "no_split_object": {
+      "bytes": 732288,
+      "byte_identical_to_v4": true,
+      "committed": false,
+      "sha256": "81551e9f94219e02e6c91e8f4bb926ba3765e1e04a113c9d298f42ee9f3d8b37"
+    },
+    "qrow16_reference_object": {
+      "bytes": 781144,
+      "byte_identical_to_pinned_reference": true,
+      "committed": false,
+      "sha256": "87cb69fbbf25a7044ebc9dba9a02374a869755ebf2d49d20dd554dca2af72fe7"
+    },
+    "qrow16_reference_so": {
+      "bytes": 299507792,
+      "sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+    },
+    "split2_object": {
+      "bytes": 782416,
+      "byte_identical_to_v4": true,
+      "committed": false,
+      "sha256": "d7927d1647212f07a8598c7dbdf78117d802a056e7ffd7fa3ff96ba6d29a9090"
+    }
+  },
+  "build": {
+    "cuda_cache_disabled": true,
+    "cuda_visible_devices": "",
+    "gpu_device_nodes_visible": false,
+    "host_optimization": "O2",
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+    "network": "none",
+    "nvidia_visible_devices": "void",
+    "target": "sm_121a"
+  },
+  "eligibility": {
+    "default_off": true,
+    "next_gate": "real SWE-Verified retained-operand raw-byte qualification",
+    "production_eligible": false,
+    "timing_eligible": false
+  },
+  "evidence": {
+    "byte_parity_measured": false,
+    "gpu_used": false,
+    "hardware_floor_claim": false,
+    "performance_measurement": false,
+    "real_task_run": false,
+    "synthetic_task_run": false
+  },
+  "host_dispatch": {
+    "cuda_kernel_sources_changed_from_v4": false,
+    "kv_batch_stride_elements": 2097152,
+    "no_split_sentinel": 1179791668,
+    "qrow16_reference_force_split_kernel": true,
+    "qrow16_reference_num_splits": 0,
+    "qrow16_reference_sentinel": 1179791667,
+    "source_files_changed_from_v4": [
+      "csrc/flash_attn/flash_api.cpp"
+    ],
+    "split2_sentinel": 1179791669
+  },
+  "provenance": {
+    "artifact_base_commit": "0cb1664cba90c20b2f4e2b5ebae2544d876a0c6d",
+    "fa2_source_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "flash_api_sha256": "3313e28a5512a1399dbefbfec27f3e84540b827770d138a9db8457e414f64d37",
+    "patch_source_sha256": "21a1c29c079b73f491e568a072bdf23ed72fc40061c3dcc5794d1d693c381d1a",
+    "source_closure_sha256": "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff"
+  },
+  "schema": "fr13.fixed32.fa2_qrow32_b1_truthful_ref_v5_sm121a_build.v1",
+  "status": "OFFLINE_BINARY_PASS_PENDING_REAL_TASK_QUALIFICATION",
+  "tests": {
+    "post_merge_focused": "70 passed",
+    "pre_merge_focused": "69 passed, 1 skipped",
+    "python_compile": "PASS",
+    "shell_syntax": "PASS",
+    "source_patch_idempotence": "PASS"
+  }
+}

@@ -1,0 +1,36 @@
+OFFLINE BUILD VERIFICATION
+
+PASS immutable v4 source copied to v5
+PASS full source-tree comparison: only csrc/flash_attn/flash_api.cpp changed
+PASS qrow16 reference sentinel 1179791667 installed beside 1179791668/1179791669
+PASS qrow16 reference gate requires exact B1 geometry, num_splits=0, force_split_kernel
+PASS interleaved K/V page stride fixed at 2 * 1024 * 4 * 256 elements
+PASS qrow16 CUDA object byte-identical to pinned reference
+PASS qrow32 no-split CUDA object byte-identical to v4
+PASS qrow32 split2 CUDA object byte-identical to v4
+PASS source closure validation: 22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff
+PASS candidate identity: a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a
+PASS public defined dynamic symbol set matches qrow16 reference
+PASS public undefined dynamic symbol set matches qrow16 reference
+PASS DT_NEEDED and RUNPATH match qrow16 reference
+PASS qrow16, qrow32 no-split, and qrow32 split2 launchers are LOCAL
+PASS GPU-disabled torch load registered varlen_fwd_tree_bias
+PASS pre-merge focused suite: 69 passed, 1 skipped
+PASS post-merge focused suite: 70 passed
+PASS Python compilation
+PASS shell syntax
+
+BUILD ISOLATION
+
+network=none
+NVIDIA_VISIBLE_DEVICES=void
+CUDA_VISIBLE_DEVICES=
+CUDA_CACHE_DISABLE=1
+gpu_device_nodes_visible=false
+gpu_used=false
+
+NOT CLAIMED
+
+No real-task run, synthetic run, GPU timing, output comparison, LSE
+comparison, speedup, hardware-floor progress, timing eligibility, production
+eligibility, or byte-parity result is claimed by this artifact.
