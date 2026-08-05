@@ -1,8 +1,8 @@
 classification=cpu_only_production_selector_readiness
-source_commit=877fbe54abdb1171a462e5bb96cdbe456a02ed50
-pytest_command=CUDA_VISIBLE_DEVICES='' PYTHONPATH=src /home/mark/shared/lumoFlyWheel/.venv/bin/python -m pytest -q tests/test_fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.py tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py tests/test_fr13_dfwd_k64_m1_r64_u8_production.py tests/test_fr13_draft_head_m32_production.py tests/test_fr13_fixed32_taw_real_task_arm.py
-pytest_result=60 passed in 0.62s
-ruff_format=PASS
+source_commit=0534ee554a3736d0b0f02b57a43796c8cbb0c5e0
+pytest_command=CUDA_VISIBLE_DEVICES='' PYTHONPATH=src /home/mark/shared/lumoFlyWheel/.venv/bin/python -m pytest -q tests/test_fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.py tests/test_fr13_build_bf16_gemvx_k64_m1_shuffle_r64_u8.py tests/test_fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_artifact.py tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py tests/test_fr13_dfwd_k64_m1_r64_u8_production.py tests/test_fr13_draft_head_m32_production.py tests/test_fr13_fixed32_taw_real_task_arm.py
+pytest_result=64 passed in 0.62s
+ruff_format_check=3_FILES_WOULD_BE_REFORMATTED
 ruff_check=PASS
 bash_syntax=PASS
 python_compile=PASS

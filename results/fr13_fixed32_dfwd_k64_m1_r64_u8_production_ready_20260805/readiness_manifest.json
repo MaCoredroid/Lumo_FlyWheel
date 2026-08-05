@@ -1,6 +1,6 @@
 {
   "artifact_schema": "fr13.fixed32.dfwd_k64_m1_r64_u8_production_readiness.v1",
-  "branch": "codex/dfwd-u8-shadow-qualification-20260805",
+  "branch": "codex/review-dfwd-u8-exact-json-types-20260805",
   "candidate": {
     "binary_sha256": "8b27df4f3c6a5a0574261ee984159582a87615c3e6d83f2a267f4fa46a3e421e",
     "binary_size_bytes": 117904,
@@ -15,6 +15,8 @@
       3,
       4
     ],
+    "clean_tracked_worktree_required": true,
+    "exact_json_types_required": true,
     "incumbent_served_during_qualification": true,
     "production_default_enabled": false,
     "raw_bf16_mismatches": 0,
@@ -37,16 +39,21 @@
   },
   "identity": {
     "build_attestation_sha256": "e7ec95d1fff3b665373ad7b3a14f7e3fad346cf77a5f2f992a90a689e5672c8f",
+    "credential_validator_sha256": "4e69e444c18e7aeaa7fc00c63da8be4dbaca4c59bdd75217e3a7a7c07f2cd556",
     "exact16_subset_sha256": "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c",
     "exact4_subset_sha256": "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    "gate_sha256": "e87399f8821d08e1183a77964c49d3094746553f6e2e8f6e7c16b41cfbba1f3f",
+    "launcher_sha256": "30d7994545c25d437ec43f48f9067ae4b0245e545d61efe35212b61ddefdfe4b",
+    "patch_source_sha256": "69d657f3f2b6ea88ffa481144ab542d62ee7302de7d599fde324b5178c23afbd",
     "qualification_runner_sha256": "e31bd70355683947df38647b1192869e186db5c1b48caaaa6bd8459cd1871a52",
     "qualification_subset_sha256": "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb",
+    "timing_runner_sha256": "3abe39c2d266aa5fbe630d3ac4cc4b74c4a8d6bc884f0c235c087adc440eaf4d",
     "vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
   },
   "performance_claim": false,
   "production_eligible": false,
   "selector": "fr13_bf16_k64_m1_r64_u8_direct",
-  "source_commit": "877fbe54abdb1171a462e5bb96cdbe456a02ed50",
+  "source_commit": "0534ee554a3736d0b0f02b57a43796c8cbb0c5e0",
   "status": "READY_FOR_FRESH_REAL_U8_SHADOW_B1",
   "timing": {
     "floor_acceptance_eligible": false,
