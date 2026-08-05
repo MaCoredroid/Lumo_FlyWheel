@@ -293,6 +293,7 @@ for batch in (1, 2, 3, 4):
         record.get("batch_size") != batch
         or record.get("covered_batches") != [batch]
         or record.get("task_marker") != expected_marker
+        or record.get("evidence_route") != "full_graph_replay"
         or record.get("probability_mismatches") != 0
         or record.get("product_mismatches") != 0
         or record.get("reference_returned") is not True

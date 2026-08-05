@@ -448,6 +448,7 @@ _FR13_FIXED32_CAPTURE_CONTEXT = None
 _FR13_FIXED32_CAPTURE_MANIFESTS = {}
 _FR13_FIXED32_CAPTURE_FROZEN = False
 _FR13_FIXED32_GRAPH_REPLAY_EVIDENCE = []
+_FR13_FIXED32_TAW_FULL_GRAPH_PASSES = set()
 _FR13_FIXED32_PROFILE_CAPTURE_SCOPE = None
 _FR13_FIXED32_PROFILE_MEMORY_SCOPE = False
 _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT = None
@@ -1962,6 +1963,46 @@ def _fr13_fixed32_nonpure_commit_replays_by_batch():
     return counters
 
 
+def _fr13_fixed32_taw_full_graph_begin(taw_module, mode, batch_size):
+    key = (str(mode), int(batch_size))
+    full_graph_passed = key in _FR13_FIXED32_TAW_FULL_GRAPH_PASSES
+    if not full_graph_passed:
+        entry = taw_module._fr13_fixed32_taw_native_live_entry(
+            mode=key[0], batch_size=key[1]
+        )
+        if entry.get("native_ab_live_gate_pending") is True:
+            raise RuntimeError(
+                "FR13 fixed32 TAW full-graph gate was already pending"
+            )
+        # An uncaptured root check may write diagnostic evidence, but it must
+        # not satisfy the first measured full-graph replay for this batch.
+        entry["native_ab_live_pass_emitted"] = False
+    gate_report = taw_module.fr13_fixed32_taw_native_live_gate_begin(
+        mode=key[0], batch_size=key[1]
+    )
+    expected = "passed" if full_graph_passed else "armed"
+    if gate_report.get("status") != expected:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native full-graph gate did not "
+            f"{expected}: " + repr(gate_report)
+        )
+    return gate_report
+
+
+def _fr13_fixed32_taw_full_graph_on_replay(taw_module, mode, batch_size):
+    key = (str(mode), int(batch_size))
+    gate_report = taw_module.fr13_fixed32_taw_native_live_gate_on_replay(
+        mode=key[0], batch_size=key[1]
+    )
+    if gate_report.get("status") != "passed":
+        raise RuntimeError(
+            "FR13 fixed32 TAW native live gate did not pass on the first "
+            "measured full-graph replay: " + repr(gate_report)
+        )
+    _FR13_FIXED32_TAW_FULL_GRAPH_PASSES.add(key)
+    return gate_report
+
+
 def _fr13_fixed32_observed_begin(
     mode,
     batch_size,
@@ -2104,15 +2145,7 @@ def _fr13_fixed32_observed_begin(
             raise RuntimeError(
                 "FR13 fixed32 TAW native live gate is missing its module"
             )
-        gate_report = taw_module.fr13_fixed32_taw_native_live_gate_begin(
-            mode=mode,
-            batch_size=batch,
-        )
-        if gate_report.get("status") not in ("armed", "passed"):
-            raise RuntimeError(
-                "FR13 fixed32 TAW native live gate did not arm: "
-                + repr(gate_report)
-            )
+        _fr13_fixed32_taw_full_graph_begin(taw_module, mode, batch)
     _FR13_FIXED32_CAPTURE_FROZEN = True
     globals()["_FR13_FIXED32_CURRENT_FORWARD_STEP"] = forward
     _FR13_FIXED32_OBSERVED_CURRENT = _fr13_fixed32_observed_new_state(
@@ -4276,15 +4309,9 @@ def _fr13_fixed32_observed_graph_replay(
             raise RuntimeError(
                 "FR13 fixed32 TAW native replay gate is missing its module"
             )
-        gate_report = taw_module.fr13_fixed32_taw_native_live_gate_on_replay(
-            mode=event["mode"],
-            batch_size=int(event["batch_size"]),
+        _fr13_fixed32_taw_full_graph_on_replay(
+            taw_module, event["mode"], int(event["batch_size"])
         )
-        if gate_report.get("status") != "passed":
-            raise RuntimeError(
-                "FR13 fixed32 TAW native live gate did not pass on the first "
-                "measured full-graph replay: " + repr(gate_report)
-            )
     event["tree_layers"] = set(tree["layers"])
     event["tree_calls"] = int(tree["calls"])
     event["tree_q_rows"] = int(tree["q_rows"])
