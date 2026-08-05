@@ -36,13 +36,13 @@ LIVE_ARMS = {
     },
 }
 CANDIDATE_SHA256 = (
-    "ec36c5d26635fead8f626539ff98ab055a756af1e568dbadf88905a41f61862a"
+    "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a"
 )
-CANDIDATE_SIZE = 300_153_584
+CANDIDATE_SIZE = 300_154_616
 FA2_HEAD = "29210221863736a08f71a866459e368ad1ac4a95"
 SOURCE_FILES = {
     "csrc/flash_attn/flash_api.cpp": (
-        "c01882eec7e4333ca775f7d64cb0b88634c61bc615cbdc01895f33216dadb158"
+        "3313e28a5512a1399dbefbfec27f3e84540b827770d138a9db8457e414f64d37"
     ),
     "csrc/flash_attn/flash_api_torch_lib.cpp": (
         "c575d9f02ba44bf7022c77b80fdf12173da0ecae8a4d7599934c2cc9fa52e121"
@@ -64,7 +64,7 @@ SOURCE_FILES = {
     ),
 }
 SOURCE_CLOSURE_SHA256 = (
-    "3c559d80c65573932c5c7bfd5ef7081df6c3f1a3f6c888bc36a04ccc264d394b"
+    "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff"
 )
 SOURCE_STATUS = (
     " M csrc/flash_attn/flash_api.cpp",

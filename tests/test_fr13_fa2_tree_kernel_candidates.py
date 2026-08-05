@@ -1810,6 +1810,84 @@ def test_qrow32_b1_api_gate_is_exact_and_idempotent() -> None:
     assert text_again == text
 
 
+def test_qrow32_b1_source_path_installs_truthful_qrow16_reference_gate() -> None:
+    module = _module()
+    dispatch = module.FIXED32_QUERY_TILE16_B1_REFERENCE_API_DISPATCH
+    assert str(module.FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL) in dispatch
+    for tensor in ("k", "v"):
+        assert (
+            f"params.{tensor}_batch_stride == 2 * 1024 * 4 * 256"
+            in dispatch
+        )
+        assert f"params.{tensor}_row_stride == 4 * 256" in dispatch
+        assert f"params.{tensor}_head_stride == 256" in dispatch
+    for exact_check in (
+        "params.b == 1",
+        "params.total_q == 32",
+        "params.seqlen_q_rounded == 128",
+        "params.q_head_stride == 256",
+        "params.o_head_stride == 256",
+        "params.tree_bias_row_stride == 32",
+        "params.tree_bias_col_stride == 1",
+        "params.leftpad_k == nullptr",
+        "params.cache_batch_idx == nullptr",
+        "params.block_table_batch_stride > 0",
+        "params.vnew_ptr == nullptr",
+        "params.p_ptr == nullptr",
+        "params.softmax_lse_ptr != nullptr",
+        "params.p_dropout == 1.0f",
+        "params.num_splits == 0",
+        "force_split_kernel",
+    ):
+        assert exact_check in dispatch
+
+    installed, changed = module._install_qrow16_api_dispatch(
+        module.STOCK_RUN_MHA_FWD,
+        dispatch,
+        label="test qrow16 B1 reference",
+    )
+    assert changed
+    for declaration, gate, label in (
+        (
+            module.FIXED32_QUERY_TILE32_B1_API_DECLARATION,
+            module.FIXED32_QUERY_TILE32_B1_API_GATE,
+            "test qrow32 B1",
+        ),
+        (
+            module.FIXED32_QUERY_TILE32_B1_SPLIT2_API_DECLARATION,
+            module.FIXED32_QUERY_TILE32_B1_SPLIT2_API_GATE,
+            "test qrow32 B1 split2",
+        ),
+    ):
+        installed, changed = module._install_hidden_api_gate(
+            installed,
+            declaration=declaration,
+            gate=gate,
+            label=label,
+        )
+        assert changed
+    expected_sentinels = (
+        module.FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL,
+        module.FIXED32_QUERY_TILE32_B1_BATCH_STRIDE_SENTINEL,
+        module.FIXED32_QUERY_TILE32_B1_SPLIT2_BATCH_STRIDE_SENTINEL,
+    )
+    for sentinel in expected_sentinels:
+        assert installed.count(str(sentinel)) == 1
+    for launcher in (
+        "fr13_run_mha_fwd_fixed32_qrow16",
+        "fr13_run_mha_fwd_fixed32_qrow32_b1",
+        "fr13_run_mha_fwd_fixed32_qrow32_b1_split2",
+    ):
+        assert installed.count(f"{launcher}(") == 2
+    installed_again, changed = module._install_qrow16_api_dispatch(
+        installed,
+        dispatch,
+        label="test qrow16 B1 reference",
+    )
+    assert not changed
+    assert installed_again == installed
+
+
 def test_qrow32_b1_split2_api_gate_requires_stock_scratch() -> None:
     module = _module()
     text, changed = module._install_hidden_api_gate(

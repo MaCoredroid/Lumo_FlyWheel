@@ -1440,6 +1440,85 @@ FIXED32_QUERY_TILE16_STATIC_STRIDES_API_DISPATCH = (
 )
 
 
+_FIXED32_QUERY_TILE16_B1_REFERENCE_EXACT_GEOMETRY = (
+    (
+        r'''            && params.seqlen_q == 32
+''',
+        r'''            && params.total_q == 32
+            && params.seqlen_q == 32
+            && params.seqlen_q_rounded == 128
+            && params.q_head_stride == 256
+''',
+    ),
+    (
+        r'''            && params.tree_bias_cols == 32
+''',
+        r'''            && params.o_head_stride == 256
+            && params.tree_bias_cols == 32
+            && params.tree_bias_row_stride == 32
+            && params.tree_bias_col_stride == 1
+''',
+    ),
+    (
+        r'''            && !params.seqlenq_ngroups_swapped
+''',
+        r'''            && !params.seqlenq_ngroups_swapped
+            && params.leftpad_k == nullptr
+            && params.cache_batch_idx == nullptr
+''',
+    ),
+    (
+        r'''            && params.block_table != nullptr
+''',
+        r'''            && params.block_table != nullptr
+            && params.block_table_batch_stride > 0
+''',
+    ),
+    (
+        r'''            && params.knew_ptr == nullptr
+''',
+        r'''            && params.knew_ptr == nullptr
+            && params.vnew_ptr == nullptr
+            && params.p_ptr == nullptr
+            && params.softmax_lse_ptr != nullptr
+            && params.p_dropout == 1.0f
+''',
+    ),
+    (
+        "FR13 qrow16 internal dispatch reached non-production geometry",
+        "FR13 qrow16 reference dispatch reached non-canonical B1 geometry",
+    ),
+)
+
+
+def _fixed32_query_tile16_b1_reference_api_dispatch() -> str:
+    # Gate A uses interleaved K/V storage. The retained qrow16 object consumes
+    # runtime strides, so keep the static contract's row/head checks while
+    # pinning its page stride to the actual B1 view.
+    dispatch = FIXED32_QUERY_TILE16_STATIC_STRIDES_API_DISPATCH.replace(
+        "params.k_batch_stride == 1024 * 4 * 256",
+        "params.k_batch_stride == 2 * 1024 * 4 * 256",
+        1,
+    ).replace(
+        "params.v_batch_stride == 1024 * 4 * 256",
+        "params.v_batch_stride == 2 * 1024 * 4 * 256",
+        1,
+    )
+    for anchor, replacement in _FIXED32_QUERY_TILE16_B1_REFERENCE_EXACT_GEOMETRY:
+        if dispatch.count(anchor) != 1:
+            raise RuntimeError(
+                "qrow16 B1 reference API geometry anchor is not unique: "
+                f"{anchor!r}"
+            )
+        dispatch = dispatch.replace(anchor, replacement, 1)
+    return dispatch
+
+
+FIXED32_QUERY_TILE16_B1_REFERENCE_API_DISPATCH = (
+    _fixed32_query_tile16_b1_reference_api_dispatch()
+)
+
+
 STOCK_RUN_MHA_FWD = r'''void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, bool force_split_kernel=false) {
     FP16_SWITCH(!params.is_bf16, [&] {
         HEADDIM_SWITCH(params.d, [&] {
@@ -1497,6 +1576,24 @@ def _install_hidden_api_gate(
         )
         changed = True
     return text, changed
+
+
+def _install_qrow16_api_dispatch(
+    text: str,
+    dispatch: str,
+    *,
+    label: str,
+) -> tuple[str, bool]:
+    signature_at = dispatch.index(RUN_MHA_FWD_SIGNATURE)
+    stock_body_at = dispatch.index("    FP16_SWITCH", signature_at)
+    return _install_hidden_api_gate(
+        text,
+        declaration=dispatch[:signature_at],
+        gate=dispatch[
+            signature_at + len(RUN_MHA_FWD_SIGNATURE) : stock_body_at
+        ],
+        label=label,
+    )
 
 
 def _patch_flash_h(path: Path) -> bool:
@@ -2971,22 +3068,14 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
     )
     changed = changed or did
     if fixed32_query_tile16:
-        signature = RUN_MHA_FWD_SIGNATURE
         qrow16_dispatch = (
             FIXED32_QUERY_TILE16_STATIC_STRIDES_API_DISPATCH
             if fixed32_query_tile16_static_strides
             else FIXED32_QUERY_TILE16_API_DISPATCH
         )
-        signature_at = qrow16_dispatch.index(signature)
-        stock_body_at = qrow16_dispatch.index(
-            "    FP16_SWITCH", signature_at
-        )
-        text, did = _install_hidden_api_gate(
+        text, did = _install_qrow16_api_dispatch(
             text,
-            declaration=qrow16_dispatch[:signature_at],
-            gate=qrow16_dispatch[
-                signature_at + len(signature) : stock_body_at
-            ],
+            qrow16_dispatch,
             label="fixed32 FA2 query tile16 hidden API dispatch",
         )
         changed = changed or did
@@ -3007,6 +3096,12 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
         )
         changed = changed or did
     if fixed32_query_tile32_b1:
+        text, did = _install_qrow16_api_dispatch(
+            text,
+            FIXED32_QUERY_TILE16_B1_REFERENCE_API_DISPATCH,
+            label="fixed32 FA2 query tile16 B1 reference hidden API dispatch",
+        )
+        changed = changed or did
         text, did = _install_hidden_api_gate(
             text,
             declaration=FIXED32_QUERY_TILE32_B1_API_DECLARATION,
@@ -4064,12 +4159,12 @@ _FR13_FA2_QROW32_B1_ARMS = {
 }
 _FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL = 1179791667
 _FR13_FA2_QROW32_B1_CANDIDATE_SHA256 = (
-    "ec36c5d26635fead8f626539ff98ab055a756af1e568dbadf88905a41f61862a"
+    "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a"
 )
-_FR13_FA2_QROW32_B1_CANDIDATE_SIZE = 300153584
+_FR13_FA2_QROW32_B1_CANDIDATE_SIZE = 300154616
 _FR13_FA2_QROW32_B1_FA2_HEAD = "29210221863736a08f71a866459e368ad1ac4a95"
 _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256 = (
-    "3c559d80c65573932c5c7bfd5ef7081df6c3f1a3f6c888bc36a04ccc264d394b"
+    "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff"
 )
 _FR13_FA2_QROW32_B1_TARGET_LAYERS = tuple(
     f"language_model.model.layers.{index}.self_attn.attn"

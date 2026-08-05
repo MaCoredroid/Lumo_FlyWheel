@@ -981,10 +981,10 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
      && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
      && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
      && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
-     && "$FR13_FA2_QROW32_B1_SO_SHA256" == "ec36c5d26635fead8f626539ff98ab055a756af1e568dbadf88905a41f61862a" \
-     && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300153584" \
+     && "$FR13_FA2_QROW32_B1_SO_SHA256" == "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a" \
+     && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300154616" \
      && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
-     && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "3c559d80c65573932c5c7bfd5ef7081df6c3f1a3f6c888bc36a04ccc264d394b" \
+     && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff" \
      && "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" == "$(git rev-parse HEAD)" \
      && "$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)" \
      && "$(stat -c '%s' "$FORKED_FA2_SO")" == "$FR13_FA2_QROW32_B1_SO_SIZE" ]] || {
@@ -3382,8 +3382,8 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         && "${FR13_FA2_QROW16_PRODUCTION:-0}" == "0" \
         && -z "${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}" \
         && "${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}" == "split2" \
-        && "${FR13_FA2_QROW32_B1_SO_SHA256:-}" == "ec36c5d26635fead8f626539ff98ab055a756af1e568dbadf88905a41f61862a" \
-        && "${FR13_FA2_QROW32_B1_SO_SIZE:-}" == "300153584" ]]; then
+        && "${FR13_FA2_QROW32_B1_SO_SHA256:-}" == "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a" \
+        && "${FR13_FA2_QROW32_B1_SO_SIZE:-}" == "300154616" ]]; then
     _fr13_sfwd_qrow32_production=1
   fi
   _fr13_sfwd_cutlass_production=0
