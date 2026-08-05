@@ -1,0 +1,56 @@
+{
+  "branch": "codex/dfwd-k64-m1-r64-stage-20260805",
+  "candidate": {
+    "binary_bytes": 113680,
+    "binary_path": "results/fr13_fixed32_dfwd_k64_m1_shuffle_r64_sm121a_20260805/fr13_bf16_gemvx_k64_m1_shuffle_r64.abi3.so",
+    "binary_sha256": "95f3a63200af4af622ca2f788f29c5c422fa425aca6c5e58953190dbd296e009",
+    "block": [16, 64, 1],
+    "grid": [1024, 1, 1],
+    "operation": "fr13_bf16_k64_head::gemvx_m1_shuffle_r64_out",
+    "rows_per_cta": 64,
+    "source_path": "csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64.cu",
+    "source_sha256": "4fa6fed088ef35b97e231370ee4d742c229e6786e9df4e652c45e6ac698bbcb0"
+  },
+  "claims": {
+    "byte_equality": false,
+    "performance": false,
+    "production_admitted": false,
+    "runtime_executed": false
+  },
+  "qualification": {
+    "batch_size": 1,
+    "calls_per_event": 5,
+    "canonical_graph_signature": "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c",
+    "credential_schema": "fr13.fixed32.draft_head_m1_r64_qualification.v1",
+    "expected_raw_bf16_mismatches": 0,
+    "instance_id": "astropy__astropy-12907",
+    "live_schema": "fr13.fixed32.draft_head_m1_r64_live_ab.v1",
+    "performance_measurement": false,
+    "served_return": "incumbent BF16 K64 reference logits unchanged",
+    "site_labels": [
+      "root",
+      "mtp_depth_1",
+      "mtp_depth_2",
+      "mtp_depth_3",
+      "mtp_depth_4"
+    ],
+    "suite": "SWE-Verified",
+    "values_per_site": 65536
+  },
+  "runtime": {
+    "credential_tool": "scripts/fr13_draft_head_m1_r64_pass.py",
+    "gate": "scripts/fr13_run_b1_kernel_live_gate.sh",
+    "launcher": "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "live_runner": "scripts/fr13_run_b1_draft_head_m1_r64_live_ab.sh",
+    "runtime_source": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "runtime_source_sha256": "b8dc543cbea9fa038bb58a741b5537ea3137751c9c0b6a21cbf50ba60e18d91e"
+  },
+  "schema": "fr13.fixed32.draft_head_m1_r64_qualification_source.v1",
+  "source_commit": "264134619fd7380fbf961a5c1d596f69bc80ec06",
+  "status": "READY_FOR_REAL_SWE_VERIFIED_QUALIFICATION",
+  "tests": {
+    "focused_passed": 76,
+    "gpu_used": false,
+    "runtime_used": false
+  }
+}

@@ -1,0 +1,12 @@
+Command:
+/home/mark/lumoFlyWheel-main-merge-staging-20260803/.venv/bin/python -m pytest -q tests/test_fr13_draft_head_m1_r32_pass.py tests/test_fr13_draft_head_m1_r32_runtime.py tests/test_fr13_draft_head_m1_r64_pass.py tests/test_fr13_draft_head_m1_r64_runtime.py tests/test_fr13_bf16_gemvx_k64_m1_shuffle_r64_source.py tests/test_fr13_bf16_gemvx_k64_m1_shuffle_r64_codegen.py tests/test_fr13_bf16_gemvx_k64_m1_shuffle_r64_artifact.py
+
+Result:
+76 passed in 0.94s
+
+Additional checks:
+- bash -n passed for the shared launcher, shared B1 gate, and R32/R64 runners.
+- Python module compilation passed.
+- Embedded observed-runtime source compilation passed in the focused tests.
+- git diff --check passed before the source commit.
+- No GPU, Docker, or serving runtime was used.
