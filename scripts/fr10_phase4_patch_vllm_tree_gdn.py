@@ -24975,7 +24975,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             "draft_head_m32_production_engagement.v1"
                         ),
                         "status": "ENGAGED",
-                        "arm": _fr13_dh_fp8_arm,
                         "source_commit": os.environ.get(
                             "FR13_DRAFT_HEAD_M32_SOURCE_COMMIT", ""
                         ),
