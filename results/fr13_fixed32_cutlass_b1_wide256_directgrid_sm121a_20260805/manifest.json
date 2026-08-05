@@ -1,0 +1,102 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_wide256_directgrid_sm121a.v1",
+  "created_at_utc": "2026-08-05T11:12:15Z",
+  "status": "translation_unit_compile_codegen_audit_pass_default_off_live_gate_pending",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "production_available": false,
+  "production_default_enabled": false,
+  "source": {
+    "branch": "codex/fixed32-b1-wide256-directgrid-20260805",
+    "development_base_commit": "f3d37d59f937dcaa03fb2d822b57ccb1c0eba6f8",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_revision": "v4.4.2",
+    "patch_source_sha256": "7f0d6e37e12898e7a4f747d980747146b7a4fd05361502b5307988cd2948ec11",
+    "patched_dispatch_sha256": "ae5940c68b9099cc1b1469c1f41e801d76ce674d9f92898391ed54bf2b6f7b00",
+    "patched_dispatch_bytes": 108999
+  },
+  "incumbent": {
+    "implementation_commit": "35b6ed462daa1f801308c4c1c80c8862087a1053",
+    "source_branch_tip": "8b8834076fb0677614e380f7a2efacf27be3df6a",
+    "selector": "identity_wide256_fullgrid_b1",
+    "translation_unit_object_sha256": "e9007f1a5aceb67e581157162760fade9c21fa3c88b9a586d5410d1b4625eaf0",
+    "translation_unit_object_bytes": 25507528,
+    "shared_object_sha256": "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da",
+    "shared_object_bytes": 119979144
+  },
+  "candidate": {
+    "scheduler_tag": "fr13_fixed32_b1_wide256_direct_fullgrid_scheduler",
+    "selector": "identity_wide256_fullgrid_b1",
+    "translation_unit_object_sha256": "072196534ea8e1d5e4aae24e7a8f1b0732ab3aea86260e9d8edc5bcc4596acc6",
+    "translation_unit_object_bytes": 25510456,
+    "translation_unit_compile": "pass",
+    "full_shared_library_link": "not_run",
+    "gpu_runtime_used": false,
+    "docker_used": false,
+    "tile_shape_mnk": [256, 32, 128],
+    "cluster_shape_mnk": [1, 1, 1],
+    "physical_grid_ctas": 48,
+    "stage_count": 2,
+    "kernel_schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "arithmetic_changed": false,
+    "reduction_order_changed": false,
+    "launch_count_changed": false,
+    "requested_traffic_changed": false,
+    "split_k_workspace": false,
+    "out_of_contract_fallback": "stock"
+  },
+  "codegen": {
+    "dtypes": ["fp16", "bf16"],
+    "incumbent_encoded_instructions": 1080,
+    "candidate_encoded_instructions": 784,
+    "encoded_instruction_delta": -296,
+    "encoded_instruction_reduction_percent": 27.407407,
+    "incumbent_branches": 35,
+    "candidate_branches": 31,
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "detected_local_load_store_or_call": false,
+    "m128_neighbor_sass_byte_identical": true
+  },
+  "work_model": {
+    "model_kind": "fixed_target_step_histogram_not_timing",
+    "wide_tile_assignments_per_target_step": 12672,
+    "shapes": [
+      {"n": 14336, "calls_per_target_step": 16, "tiles_per_call": 56, "tile_assignments_per_target_step": 896},
+      {"n": 16384, "calls_per_target_step": 48, "tiles_per_call": 64, "tile_assignments_per_target_step": 3072},
+      {"n": 34816, "calls_per_target_step": 64, "tiles_per_call": 136, "tile_assignments_per_target_step": 8704}
+    ]
+  },
+  "verification": {
+    "patch_tests": "43 passed",
+    "python_byte_compile": "pass",
+    "git_diff_check": "pass",
+    "pinned_source_apply": "pass",
+    "sm121a_translation_unit_compile": "pass",
+    "resource_and_sass_audit": "pass",
+    "direct_cursor_exact_coverage_model": "pass"
+  },
+  "not_run": [
+    "full shared-library link",
+    "CPU import",
+    "GPU kernel runtime",
+    "GPU raw-byte correctness",
+    "real SWE-Verified timing",
+    "B1 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gate": {
+    "workload": "authenticated real SWE-Verified task",
+    "profile": "B1 physical32 K64 root1",
+    "projection_shapes": [[5120, 6144], [5120, 17408], [14336, 5120], [16384, 5120], [34816, 5120]],
+    "expected_comparisons": 320,
+    "required_mismatching_comparisons": 0,
+    "required_differing_bytes": 0,
+    "served_result": "stock"
+  }
+}

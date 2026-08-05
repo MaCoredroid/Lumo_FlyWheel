@@ -1,0 +1,9 @@
+path	dtype	tile_m	tile_n	tile_k	registers	stack_bytes	local_bytes	static_shared_bytes	constant0_bytes	ldl	stl	call	status
+incumbent_m256	fp16	256	32	128	168	0	0	1024	2688	0	0	0	reference
+candidate_direct_m256	fp16	256	32	128	168	0	0	1024	2688	0	0	0	compiled
+incumbent_m256	bf16	256	32	128	168	0	0	1024	2688	0	0	0	reference
+candidate_direct_m256	bf16	256	32	128	168	0	0	1024	2688	0	0	0	compiled
+incumbent_m128_neighbor	fp16	128	32	128	168	0	0	1024	2688	0	0	0	reference
+candidate_m128_neighbor	fp16	128	32	128	168	0	0	1024	2688	0	0	0	byte_identical_sass
+incumbent_m128_neighbor	bf16	128	32	128	168	0	0	1024	2688	0	0	0	reference
+candidate_m128_neighbor	bf16	128	32	128	168	0	0	1024	2688	0	0	0	byte_identical_sass
