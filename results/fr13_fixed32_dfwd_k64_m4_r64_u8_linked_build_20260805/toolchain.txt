@@ -1,0 +1,12 @@
+CUDA_VISIBLE_DEVICES=''
+torch=2.11.0+cu130
+torch_cuda=13.0
+nvcc=CUDA 13.0.88
+cuobjdump=CUDA 13.0.85
+nvdisasm=CUDA 13.0.85
+cxx=GCC 13.3.0
+ninja=1.13.0.git.kitware.jobserver-pipe-1
+strip=GNU Binutils 2.42
+target=sm_121a
+docker_used=0
+gpu_runtime_used=0

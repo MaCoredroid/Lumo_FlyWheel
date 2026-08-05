@@ -1,0 +1,1 @@
+ELF file    1: fr13_bf16_k64_m4_r64_u8.abi3.1.sm_121a.cubin

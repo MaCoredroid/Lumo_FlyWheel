@@ -1,0 +1,51 @@
+{
+  "base_main_commit": "bb8a4a8a283b0e668da5424c11a3df52098a2a55",
+  "build_script_sha256": "e13a4fd62c7339e739ca658c07e898c4fe7c85ae13b47c7f9f2cefd471315b51",
+  "candidate_default_off": true,
+  "canonical_binary": {
+    "byte_identical_fresh_builds": true,
+    "bytes": 134320,
+    "primary_sha256": "6cb24782495ff1c1457ebbf9cbcfcd6ca7b372378d3b435f80054688432a365f",
+    "rebuild_sha256": "6cb24782495ff1c1457ebbf9cbcfcd6ca7b372378d3b435f80054688432a365f"
+  },
+  "canonicalization": {
+    "command": "strip --strip-unneeded -o OUTPUT INPUT",
+    "output_load_registration_primary": true,
+    "output_load_registration_rebuild": true,
+    "tool": "GNU strip 2.42"
+  },
+  "cubin": {
+    "byte_identical_fresh_builds": true,
+    "bytes": 17192,
+    "primary_sha256": "952395db481f7c1b8d8c631789d961f41c6ec8d3cbb85c80b9ee5f1b2371a4e1",
+    "rebuild_sha256": "952395db481f7c1b8d8c631789d961f41c6ec8d3cbb85c80b9ee5f1b2371a4e1"
+  },
+  "docker_used": false,
+  "gpu_runtime_used": false,
+  "performance_claim": false,
+  "raw_binary": {
+    "build_id_primary": "f6447be0dfaa61820ce12c62a64b53df5a96fa03",
+    "build_id_rebuild": "f6447be0dfaa61820ce12c62a64b53df5a96fa03",
+    "bytes": 158712,
+    "differing_byte_count": 6,
+    "differing_cmp_offsets_one_based": [143124, 143125, 143126, 143437, 143438, 143439],
+    "difference_section": ".strtab",
+    "loadable_bytes_identical": true,
+    "primary_sha256": "fdbc721a41684f3eac4116d97bcff69e367db7ce62213cbe10a107a03aab5b05",
+    "rebuild_sha256": "3e4980aabbb437cd36cb45e475d8eb2a386a8d2bf3c93b94ac6320d601c73633",
+    "variance": "nvcc PID-bearing tmpxft local symbol names only"
+  },
+  "real_task_correctness": false,
+  "runtime_wired": false,
+  "schema": "fr13.fixed32.dfwd_k64_m4_r64_u8_linked_build_reproducibility.v1",
+  "source_sha256": "a52361be1c9052a46509cc230ea320c4beb6d15f261327edc835d8da3ae00d9e",
+  "status": "REPRODUCIBLE_CANONICAL_LINKED_BUILD_UNQUALIFIED",
+  "toolchain": {
+    "cuda_arch": "12.1a",
+    "cuda_release": "13.0.88",
+    "cxx": "13.3.0",
+    "ninja": "1.13.0.git.kitware.jobserver-pipe-1",
+    "nvcc_random_seed": "fr13_bf16_k64_m4_r64_u8",
+    "torch": "2.11.0+cu130"
+  }
+}
