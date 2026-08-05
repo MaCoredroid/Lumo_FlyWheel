@@ -16,10 +16,10 @@ def test_physical_slot_codegen_summary_is_narrow_and_spill_free() -> None:
     summary = json.loads((ARTIFACT / "codegen_summary.json").read_text())
     assert summary["status"] == "pass"
     assert summary["base_revision"] == (
-        "6a5cc453795fbdb3fe17de289d54390839126458"
+        "2c349c938b0ea85f43c1a9f85dea316aa179ee13"
     )
     assert summary["candidate_revision"] == (
-        "255e2c9fe1a6b8f1b2a1c45e4af3513179149bb1"
+        "c467cce47d3bdf3f43bdf7a8168c79d127406847"
     )
     assert summary["schema"] == (
         "fr13.fixed32.cfwd_physical_slots_preseeded.sm121a.codegen.v1"

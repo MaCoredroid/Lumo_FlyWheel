@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 
 
-BASE = "6a5cc453795fbdb3fe17de289d54390839126458"
-CANDIDATE = "255e2c9fe1a6b8f1b2a1c45e4af3513179149bb1"
+BASE = "2c349c938b0ea85f43c1a9f85dea316aa179ee13"
+CANDIDATE = "c467cce47d3bdf3f43bdf7a8168c79d127406847"
 BLOCK_STATS = "_fr13_cfwd_logit_block_stats_kernel"
 DIRECT_DECISION = "_fr13_cfwd_logit_direct_decision_kernel"
 

@@ -7,15 +7,15 @@
     "source_contract_sha256": "fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8"
   },
   "current_source": {
-    "branch_base_commit": "3f31d56dc0ceadc97edd54f6d087ab3fd2ba1195",
-    "integrated_source_tip": "1f5b63c162b82f7aca29b09a1af28fd71b2ba32d",
-    "file_sha256": "da2ce3bd73f5de6d5c2a12ba83830bc4f03ecd4f2023bfbc581696f5a61b9d3a",
-    "source_contract_sha256": "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da"
+    "branch_base_commit": "2c349c938b0ea85f43c1a9f85dea316aa179ee13",
+    "integrated_source_tip": "c467cce47d3bdf3f43bdf7a8168c79d127406847",
+    "file_sha256": "65aa33703a50c47a8e01b622633a8a95b425ecfdea4a7b4c8f8c6311707a2207",
+    "source_contract_sha256": "694a3f4cd6e36ff1b6503ff19b2968b94a1ac226535a6efb44dcea1bb8a9a57b"
   },
   "candidate_math_projection": {
     "run_sha256": "56c51ada155df8bea5d67a2af4d4a9744b999068f15bb27e0ca0c81327993763",
-    "current_sha256": "56c51ada155df8bea5d67a2af4d4a9744b999068f15bb27e0ca0c81327993763",
-    "equal": true,
+    "current_sha256": "e50bea3ef3dead077f5c6e3abdccfe455d1a136bc0264c0767965bdf0dbbbaac",
+    "equal": false,
     "constant_ast_sha256": {
       "_FR13_FIXED32_TAW_GEOMETRY": "d05a8f0107b08f9657cc5b1a10c0af879bf098014b1717827c017f9540cd90fb",
       "_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS": "94b112a29da5b5958e2e812817fae9d1f6a4a1571d6e45405ecb8ed29078ce43",
@@ -62,9 +62,9 @@
     "production work-census routing"
   ],
   "conclusion": {
-    "candidate_math_equivalent": true,
+    "candidate_math_equivalent": false,
     "full_source_contract_equivalent": false,
-    "diagnostic_evidence_informative_for_current_candidate": true,
+    "diagnostic_evidence_informative_for_current_candidate": false,
     "production_eligible": false,
     "current_source_real_gate_required": true,
     "validator_relaxation_permitted": false
