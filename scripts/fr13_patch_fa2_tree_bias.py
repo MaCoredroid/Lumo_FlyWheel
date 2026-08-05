@@ -2711,9 +2711,31 @@ def patch_fa2_source(
     }
 
 
+FR13_FA2_QROW32_B1_SPLIT2_INTERFACE_HELPER = r'''# FR13_FA2_QROW32_B1_SPLIT2_INTERFACE
+def _fr13_fa2_qrow32_b1_split2_interface_allowed(num_splits, tree_bias):
+    return (
+        num_splits == 2
+        and tree_bias is not None
+        and tree_bias.is_cuda
+        and tree_bias.dtype == torch.float32
+        and tuple(tree_bias.shape) == (1, 32, 32)
+        and tuple(tree_bias.stride()) == (1179791669, 32, 1)
+    )
+
+
+'''
+
+
 def _patch_flash_attn_interface(path: Path) -> bool:
     text = path.read_text()
     changed = False
+    text, did = _insert_once(
+        text,
+        "DEFAULT_FA_VERSION = 2\n",
+        FR13_FA2_QROW32_B1_SPLIT2_INTERFACE_HELPER,
+        "flash_attn_interface private B1 split2 guard",
+    )
+    changed = changed or did
     text, did = _replace_once(
         text,
         "    s_aux=None,\n    cp_world_size=1,\n",
@@ -2724,6 +2746,24 @@ def _patch_flash_attn_interface(path: Path) -> bool:
     old = """        out, softmax_lse = torch.ops._vllm_fa2_C.varlen_fwd(\n            q,\n            k,\n            v,\n            out,\n"""
     new = """        _fr13_fa2_op = (\n            torch.ops._vllm_fa2_C.varlen_fwd_tree_bias\n            if tree_bias is not None\n            else torch.ops._vllm_fa2_C.varlen_fwd\n        )\n        out, softmax_lse = _fr13_fa2_op(\n            q,\n            k,\n            v,\n            out,\n"""
     text, did = _replace_once(text, old, new, "flash_attn_interface choose tree op")
+    changed = changed or did
+    old_guard = '''        if num_splits > 1:
+            raise NotImplementedError("FA2 does not support num_splits > 1")
+'''
+    new_guard = '''        if (
+            num_splits > 1
+            and not _fr13_fa2_qrow32_b1_split2_interface_allowed(
+                num_splits, tree_bias
+            )
+        ):
+            raise NotImplementedError("FA2 does not support num_splits > 1")
+'''
+    text, did = _replace_once(
+        text,
+        old_guard,
+        new_guard,
+        "flash_attn_interface private B1 split2 route",
+    )
     changed = changed or did
     old_tail = """            return_softmax_lse and dropout_p > 0,\n            num_splits,\n            None,\n        )\n"""
     new_tail = """            return_softmax_lse and dropout_p > 0,\n            num_splits,\n            *(([tree_bias] if tree_bias is not None else [])),\n            None,\n        )\n"""

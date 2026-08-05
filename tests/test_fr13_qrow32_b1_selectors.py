@@ -196,6 +196,74 @@ def test_selectors_are_split2_only_default_off_and_qrow16_served() -> None:
     assert "FR13 qrow32 B1 production silently fell back" in helpers
 
 
+def test_fa2_interface_allows_only_exact_private_b1_split2_tag() -> None:
+    patcher = _module(PATCHER, "qrow32_b1_interface_guard")
+    namespace = {"torch": torch}
+    exec(patcher.FR13_FA2_QROW32_B1_SPLIT2_INTERFACE_HELPER, namespace)
+    allowed = namespace["_fr13_fa2_qrow32_b1_split2_interface_allowed"]
+
+    def tagged_bias(**overrides):
+        values = {
+            "is_cuda": True,
+            "dtype": torch.float32,
+            "shape": (1, 32, 32),
+            "stride": lambda: (1179791669, 32, 1),
+        }
+        values.update(overrides)
+        return types.SimpleNamespace(**values)
+
+    assert allowed(2, tagged_bias())
+    assert not allowed(1, tagged_bias())
+    assert not allowed(3, tagged_bias())
+    assert not allowed(2, None)
+    assert not allowed(2, tagged_bias(is_cuda=False))
+    assert not allowed(2, tagged_bias(dtype=torch.bfloat16))
+    assert not allowed(2, tagged_bias(shape=(32, 32)))
+    assert not allowed(
+        2, tagged_bias(stride=lambda: (1179791667, 32, 1))
+    )
+    assert not allowed(
+        2, tagged_bias(stride=lambda: (1179791669, 33, 1))
+    )
+
+
+def test_fa2_interface_patcher_replaces_generic_split_guard(tmp_path: Path) -> None:
+    patcher = _module(PATCHER, "qrow32_b1_interface_patcher")
+    interface = tmp_path / "flash_attn_interface.py"
+    interface.write_text(
+        '''import torch
+
+DEFAULT_FA_VERSION = 2
+
+def flash_attn_varlen_func(
+    s_aux=None,
+    cp_world_size=1,
+):
+    if fa_version == 2:
+        if num_splits > 1:
+            raise NotImplementedError("FA2 does not support num_splits > 1")
+        out, softmax_lse = torch.ops._vllm_fa2_C.varlen_fwd(
+            q,
+            k,
+            v,
+            out,
+            return_softmax_lse and dropout_p > 0,
+            num_splits,
+            None,
+        )
+''',
+        encoding="ascii",
+    )
+
+    assert patcher._patch_flash_attn_interface(interface)
+    assert not patcher._patch_flash_attn_interface(interface)
+    patched = interface.read_text(encoding="ascii")
+    assert patched.count("# FR13_FA2_QROW32_B1_SPLIT2_INTERFACE") == 1
+    assert "and not _fr13_fa2_qrow32_b1_split2_interface_allowed(" in patched
+    assert "if tree_bias is not None" in patched
+    assert "*(([tree_bias] if tree_bias is not None else []))" in patched
+
+
 def test_exact_geometry_accepts_fused_qkv_row_stride_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
