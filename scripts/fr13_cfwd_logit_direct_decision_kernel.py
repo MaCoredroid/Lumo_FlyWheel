@@ -3,8 +3,9 @@
 
 The served all-parent committer first gathers and softmaxes 13 self rows plus
 17 target rows per request. It then materializes normalized target, q_mix, and
-residual rows. This candidate keeps only block log-sum-exp stats and applies
-the sparse q_mix correction while selecting the final token.
+residual rows. This candidate keeps only block log-sum-exp stats, applies the
+sparse q_mix correction while selecting the final token, and scatters the 30
+reachable decision rows into physical slots for an indirection-free walk.
 
 Importing this module is inert. The candidate is deliberately not wired into
 serving; SM121a resource and real SWE-Verified gates must qualify it first.
@@ -27,8 +28,8 @@ except Exception:  # pragma: no cover - CPU-only source gates
     tl = None
 
 
-CANDIDATE = "fixed32_cfwd_logit_direct_decisions_v1"
-SOURCE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_decisions.v1"
+CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
+SOURCE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
 PHYSICAL_DRAFTS = 31
 PHYSICAL_ROWS = 32
@@ -122,6 +123,12 @@ def fixed32_cfwd_logit_direct_contract(
     candidate_workspace_bytes = (
         batch * reachable_rows * MAX_BLOCKS * 2 * FP32_BYTES
     )
+    compact_decision_bytes = batch * (
+        SELF_ROWS * 8 + TARGET_ROWS * (3 * 8 + 1)
+    )
+    physical_decision_bytes = batch * (
+        PHYSICAL_DRAFTS * 8 + PHYSICAL_ROWS * (3 * 8 + 1)
+    )
     return {
         "candidate": CANDIDATE,
         "schema": SOURCE_SCHEMA,
@@ -146,6 +153,21 @@ def fixed32_cfwd_logit_direct_contract(
         "additional_dense_decision_launches_removed_unscored": True,
         "integer_commit_launches_before": 1,
         "integer_commit_launches_after": 1,
+        "decision_programs_per_request_before": reachable_rows,
+        "decision_programs_per_request_after": reachable_rows,
+        "decision_values_stored_per_request_before": (
+            SELF_ROWS + 4 * TARGET_ROWS
+        ),
+        "decision_values_stored_per_request_after": (
+            SELF_ROWS + 4 * TARGET_ROWS
+        ),
+        "integer_walk_topology_index_loads_per_request_before": 2 * WALK_CAP,
+        "integer_walk_topology_index_loads_per_request_after": 0,
+        "compact_decision_workspace_bytes_before": compact_decision_bytes,
+        "physical_decision_workspace_bytes_after": physical_decision_bytes,
+        "decision_workspace_bytes_added": (
+            physical_decision_bytes - compact_decision_bytes
+        ),
         "incumbent_full_vocab_fp32_rows_materialized": (
             incumbent_fp32_rows * batch
         ),
@@ -632,19 +654,35 @@ if triton is not None:
         selected_local = tl.minimum(selected_local, valid_count - 1)
         sampled_token = selected_block * BLOCK_V + selected_local
 
-        tl.store(self_token_out + self_row, sampled_token, mask=is_self)
-        tl.store(source_out + target_row, sampled_source, mask=~is_self)
+        physical_self_offset = source_self.to(tl.int32)
+        physical_target_offset = (
+            request * PHYSICAL_ROWS + parent_slot.to(tl.int32)
+        )
         tl.store(
-            selected_token_out + target_row,
+            self_token_out + physical_self_offset,
+            sampled_token,
+            mask=is_self,
+        )
+        tl.store(
+            source_out + physical_target_offset,
+            sampled_source,
+            mask=~is_self,
+        )
+        tl.store(
+            selected_token_out + physical_target_offset,
             selected_token,
             mask=~is_self,
         )
         tl.store(
-            rejected_token_out + target_row,
+            rejected_token_out + physical_target_offset,
             sampled_token,
             mask=~is_self,
         )
-        tl.store(accepted_out + target_row, accepted, mask=~is_self)
+        tl.store(
+            accepted_out + physical_target_offset,
+            accepted,
+            mask=~is_self,
+        )
 
 
 def _metadata_operands(
@@ -776,11 +814,11 @@ def workspace_spec(batch_size: int) -> dict[str, tuple[tuple[int, ...], Any]]:
     return {
         "block_maxima": ((all_rows, MAX_BLOCKS), torch.float32),
         "block_sums": ((all_rows, MAX_BLOCKS), torch.float32),
-        "self_token": ((batch, SELF_ROWS), torch.long),
-        "source": ((batch, TARGET_ROWS), torch.long),
-        "selected_token": ((batch, TARGET_ROWS), torch.long),
-        "rejected_token": ((batch, TARGET_ROWS), torch.long),
-        "accepted": ((batch, TARGET_ROWS), torch.bool),
+        "self_token": ((batch, PHYSICAL_DRAFTS), torch.long),
+        "source": ((batch, PHYSICAL_ROWS), torch.long),
+        "selected_token": ((batch, PHYSICAL_ROWS), torch.long),
+        "rejected_token": ((batch, PHYSICAL_ROWS), torch.long),
+        "accepted": ((batch, PHYSICAL_ROWS), torch.bool),
         "invalid": ((1,), torch.int32),
     }
 

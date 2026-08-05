@@ -80,7 +80,7 @@ def test_launcher_keeps_gate_off_and_requires_full_graph_native_production() -> 
     assert 'case "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" in' in launcher
     assert '"$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1"' in launcher
     assert '"${ENFORCE_EAGER:-0}" == "0"' in launcher
-    assert "d4ac27d720003bc52deae5ed41795a8bb1ab96d91da2842d33ca07b5233d9d4d" in launcher
+    assert "c86e8e9b73b20421213b465ff547a16a8b2177ac065a2475090f907d23f8460d" in launcher
     assert '-e FR13_CFWD_LOGIT_DIRECT_BYTE_AB="$FR13_CFWD_LOGIT_DIRECT_BYTE_AB"' in launcher
 
 
