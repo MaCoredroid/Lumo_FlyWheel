@@ -1,0 +1,6 @@
+
+Resource usage:
+ Common:
+  GLOBAL:0
+ Function _ZN80_GLOBAL__N__65603993_40_fr13_bf16_gemvx_k64_m1_shuffle_r64_u8_cu_aab6e5ef_63337644fr13_bf16_gemvx_k64_m1_shuffle_r64_u8_kernelEP13__nv_bfloat16PKS0_S3_ff:
+  REG:29 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:928 TEXTURE:0 SURFACE:0 SAMPLER:0

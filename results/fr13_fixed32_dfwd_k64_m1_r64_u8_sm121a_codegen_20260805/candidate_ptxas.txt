@@ -1,0 +1,12 @@
+csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu(33): warning #177-D: function "<unnamed>::fr13_bf16_gemvx_k64_m1_shuffle_r64_u8_kernel" was declared but never referenced
+  fr13_bf16_gemvx_k64_m1_shuffle_r64_u8_kernel(
+  ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_ZN80_GLOBAL__N__65603993_40_fr13_bf16_gemvx_k64_m1_shuffle_r64_u8_cu_aab6e5ef_63337644fr13_bf16_gemvx_k64_m1_shuffle_r64_u8_kernelEP13__nv_bfloat16PKS0_S3_ff' for 'sm_121a'
+ptxas info    : Function properties for _ZN80_GLOBAL__N__65603993_40_fr13_bf16_gemvx_k64_m1_shuffle_r64_u8_cu_aab6e5ef_63337644fr13_bf16_gemvx_k64_m1_shuffle_r64_u8_kernelEP13__nv_bfloat16PKS0_S3_ff
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 29 registers, used 0 barriers
+ptxas info    : Compile time = 2.651 ms
