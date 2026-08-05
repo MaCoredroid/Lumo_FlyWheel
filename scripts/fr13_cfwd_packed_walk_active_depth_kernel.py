@@ -128,11 +128,11 @@ if triton is not None:
             0,
         )
 
-        current = -1
+        current = tl.full((), -1, tl.int64)
         alive = True
         output_len = 0
-        path_len = 0
-        final_row = 0
+        path_len = tl.full((), 0, tl.int64)
+        final_row = tl.full((), 0, tl.int64)
         level = 0
         while alive & (level < WALK_CAP):
             # Bound source proves root row 0 and accepted rows in [1, 31].
