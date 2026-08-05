@@ -1,0 +1,111 @@
+{
+  "schema": "fr13.fixed32.dfwd_k64_fp8_head_m256_offline_audit.v1",
+  "build_audit": {
+    "result": "pass",
+    "compile_elapsed_seconds": 91.02,
+    "compile_max_rss_kib": 9742560,
+    "compile_swaps": 0,
+    "linked_full_extension": true,
+    "cpu_only_load_library": "pass",
+    "cuda_initialized_after_load": false,
+    "cutlass_scaled_mm_operator_present": true,
+    "per_token_group_fp8_quant_operator_present": true
+  },
+  "resource_audit": {
+    "result": "pass",
+    "candidate_kernel_records": 2,
+    "candidate_dtypes": ["fp16", "bf16"],
+    "threads_per_cta": 384,
+    "registers_per_thread": 168,
+    "registers_per_cta": 64512,
+    "barriers": 8,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "detected_spills": false,
+    "stock_threads_per_cta": 384,
+    "stock_registers_per_thread": 168,
+    "stock_registers_per_cta": 64512,
+    "stock_stack_bytes_per_thread": 0,
+    "stock_local_bytes_per_thread": 0,
+    "stock_static_shared_bytes_per_cta": 1024,
+    "stock_constant0_bytes": 2560,
+    "same_register_occupancy_envelope": true,
+    "gb10_resident_ctas_per_sm_from_register_envelope": 1
+  },
+  "sass_audit": {
+    "result": "pass",
+    "counts_equal_across_fp16_and_bf16": true,
+    "candidate": {
+      "instructions": 832,
+      "qmma": 64,
+      "tma": 6,
+      "ldg": 2,
+      "stg": 0,
+      "bra": 37,
+      "exit": 6,
+      "ldl": 0,
+      "stl": 0,
+      "call": 0
+    },
+    "stock": {
+      "instructions": 1176,
+      "qmma": 32,
+      "tma": 4,
+      "ldg": 2,
+      "stg": 0,
+      "bra": 75,
+      "exit": 7,
+      "ldl": 0,
+      "stl": 0,
+      "call": 0
+    },
+    "instruction_delta": -344,
+    "branch_delta": -38,
+    "performance_inference_allowed": false
+  },
+  "shape_and_launch_ledger": {
+    "device": "NVIDIA GB10",
+    "sm_count": 48,
+    "physical_batch_rows": [1, 4],
+    "problem_nk": [65536, 5120],
+    "scheduler_n_tiles_b1": 1,
+    "scheduler_n_tiles_b4": 1,
+    "stock": {
+      "tile_mnk_after_swap_ab": [128, 32, 128],
+      "scheduler": "PersistentTileSchedulerSm100 dynamic CLC",
+      "logical_output_tiles": 512,
+      "physical_grid_ctas": 512,
+      "logical_tiles_per_cta": 1,
+      "nominal_cta_waves_at_48_sms": 11
+    },
+    "candidate": {
+      "tile_mnk_after_swap_ab": [256, 32, 128],
+      "scheduler": "Fr13B1OneNStaticTileScheduler100",
+      "logical_output_tiles": 256,
+      "base_static_grid_ctas": 48,
+      "balanced_physical_grid_ctas": 32,
+      "logical_tiles_per_cta": 8,
+      "nominal_cta_waves_at_48_sms": 1
+    },
+    "launch_cta_delta": -480,
+    "logical_output_tile_delta": -256,
+    "register_occupancy_delta": 0,
+    "b1_b4_geometry_equal": true
+  },
+  "traffic_and_floor_ledger": {
+    "bandwidth_bytes_per_second": 273000000000,
+    "fp8_weight_bytes_per_call": 335544320,
+    "fp32_weight_scale_bytes_per_call": 81920,
+    "mandatory_bytes_per_call": 335626240,
+    "calls_per_event": 5,
+    "five_call_mandatory_bytes": 1678131200,
+    "candidate_full_step_mandatory_bytes": 30989326208,
+    "candidate_mandatory_weight_floor_ms": 113.514015414,
+    "acceptance_multiplier": 1.15,
+    "one_sided_u95_cap_ms": 130.541117726,
+    "nonweight_costs_included": false,
+    "floor_semantics": "optimistic mandatory-weight floor, not measured end-to-end hardware floor"
+  }
+}

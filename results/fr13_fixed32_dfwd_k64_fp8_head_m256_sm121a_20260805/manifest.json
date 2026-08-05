@@ -1,0 +1,100 @@
+{
+  "schema": "fr13.fixed32.dfwd_k64_fp8_head_m256_sm121a.v1",
+  "created_at_utc": "2026-08-05T22:21:47Z",
+  "status": "host_compile_link_import_audit_pass_default_off",
+  "acceptance_valid": false,
+  "performance_claim": false,
+  "gpu_runtime_used": false,
+  "docker_used": false,
+  "source": {
+    "branch": "codex/dfwd-k64-nvfp4-next-20260805",
+    "source_commit": "2f1d8ef87600ad3556af216425a5ccefd644f327",
+    "main_parent_commit": "3967fb29c",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "patch_source_sha256": "6c46a7e59838487820e520385feb4842840b054d660dad8a61fe2a489927899f",
+    "binary_verifier_sha256": "332dabb5ed84b1e8dc386790d5e157d842f4088c2031cca873d5f6ca9bad427f",
+    "build_script_sha256": "9a6cbd5be3d0786b9ff7b43f77d671110af887a346c06664ad954c3f1390726d",
+    "patch_test_sha256": "340c1d575c44a2a6a8af7259ecda711a6542a3abb89e215ff26af5bcd53b5451",
+    "binary_test_sha256": "bc87c6a49127a8fb6d02a9ae70b649a576fa8292944bceff8ef4e5c6b29667e3",
+    "patched_dispatch_sha256": "c8efe4917d5f207e23ca3c5b44feb6a2e704594dd35bc0a9d212a5fa431105ea",
+    "fp8_writer_arm_source_sha256": "980fd75dacbb80c600f6e2abd00bed886e600ba10a3ae60a133fc34aba341475"
+  },
+  "candidate": {
+    "diagnostic_selector": "k64_head_m256_byte_ab",
+    "production_selector": null,
+    "default_enabled": false,
+    "qualification_profile": "k64_root",
+    "admitted_m": [1, 4],
+    "admitted_nk": [65536, 5120],
+    "tile_mnk_after_swap_ab": [256, 32, 128],
+    "cluster_mnk": [1, 1, 1],
+    "stage_count": 2,
+    "schedule": "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+    "accumulator": "float32",
+    "reduction": "ordered full K",
+    "epilogue": "stock CollectiveEpilogue",
+    "candidate_scheduler": "Fr13B1OneNStaticTileScheduler100",
+    "served_output": "stock",
+    "unarmed_behavior": "stock_only",
+    "unknown_or_wrong_shape_behavior": "stock_only"
+  },
+  "host_build": {
+    "result": "pass",
+    "target": "_C_stable_libtorch",
+    "build_type": "RelWithDebInfo",
+    "gencode": "arch=compute_121a,code=sm_121a",
+    "nvcc": "13.0.88",
+    "cxx": "13.3.0",
+    "compile_result": "pass",
+    "link_result": "pass",
+    "python_load_library_result": "pass",
+    "cuda_visible_devices": "",
+    "torch_cuda_initialized_after_load": false
+  },
+  "outputs": {
+    "candidate_object": {
+      "published": false,
+      "path": "/home/mark/fr13_dfwd_k64_fp8_head_m256_compile_20260805/k64_head_m256.o",
+      "bytes": 28481456,
+      "sha256": "e9521e92491b4d6dd2b28f135e2ef4db53edd52debfda4437449922bd685a2d5"
+    },
+    "candidate_binary": {
+      "published": false,
+      "path": "/home/mark/fr13_dfwd_k64_fp8_head_m256_compile_20260805/_C_stable_libtorch.k64_head_m256.sm121a.abi3.so",
+      "bytes": 121825176,
+      "sha256": "d5eb3fe2204766556095a23ccfa98f1d4e13ab0cfa2a54bc23e3bc23a428d7c8",
+      "mode": "0555"
+    },
+    "sm121a_cubin": {
+      "published": false,
+      "path": "/home/mark/fr13_dfwd_k64_fp8_head_m256_compile_20260805/k64_head_m256.1.sm_121a.cubin",
+      "bytes": 3084432,
+      "sha256": "a28861de84c666a54fd9605ba546798fb3d57009813481e789e126acccab8127",
+      "inventory_count": 1
+    }
+  },
+  "source_checks": {
+    "focused_tests": "pass",
+    "pycompile": "pass",
+    "shell_syntax": "pass",
+    "patch_pinned_source": "pass",
+    "git_diff_check": "pass",
+    "binary_verifier": "pass"
+  },
+  "required_next_gates": [
+    "real SWE-Verified K64/root B1 byte comparison",
+    "real SWE-Verified K64/root B4 byte comparison",
+    "source-bound production selector only after both byte gates pass",
+    "clean exact4 B1 and B4 full-step timing after production rebuild"
+  ],
+  "not_run": [
+    "GPU kernel runtime",
+    "GPU correctness",
+    "Docker",
+    "synthetic or probe performance",
+    "real SWE-Verified task",
+    "B1 or B4 timing",
+    "hardware-floor acceptance"
+  ]
+}
