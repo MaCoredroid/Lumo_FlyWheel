@@ -93,7 +93,7 @@ def test_artifact_source_hashes_and_sanitized_scope() -> None:
                     "-C",
                     str(ROOT),
                     "show",
-                    f"{CANDIDATE_REVISION}:{relative}",
+                    f"{REVISION}:{relative}",
                 ],
                 check=True,
                 stdout=subprocess.PIPE,

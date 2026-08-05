@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT = ROOT / "results/fr13_fixed32_gdn_gqa_group3_source_20260803"
+HISTORICAL_SOURCE_REVISION = "936dd110c01d34f8c1c5c64676dde5739d0d2fa3"
 
 
 def test_work_model_is_source_only_and_exactly_bound() -> None:
@@ -37,12 +39,23 @@ def test_work_model_is_source_only_and_exactly_bound() -> None:
     )
 
 
-def test_published_source_hashes_match() -> None:
+def test_published_source_hashes_match_historical_git_blobs() -> None:
     entries = (ARTIFACT / "source_hashes.sha256").read_text().splitlines()
     assert len(entries) == 2
     for entry in entries:
         expected, relative = entry.split("  ", 1)
-        observed = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+        raw = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "show",
+                f"{HISTORICAL_SOURCE_REVISION}:{relative}",
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        observed = hashlib.sha256(raw).hexdigest()
         assert observed == expected
 
 
