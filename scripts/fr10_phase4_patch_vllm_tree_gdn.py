@@ -23481,10 +23481,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or not _fr13_dvk_root
                 or not _fr13_single_logits
                 or _fr13_dvk_configured != 65536
+                or (_fr13_dh_m1_r32 and int(batch_size) != 1)
             ):
                 raise RuntimeError(
-                    "FR13 draft-head padding requires exact fixed32, root "
-                    "subset, single-logits, and FR13_DRAFT_VOCAB_K=65536"
+                    "FR13 draft-head mode requires exact fixed32, root "
+                    "subset, single-logits, FR13_DRAFT_VOCAB_K=65536, "
+                    "and B1 for exact-order R32"
                 )
             _fr13_dh_source_sha = os.environ.get(
                 "FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256", ""
@@ -23655,8 +23657,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             _fr13_dh_m1_char not in "0123456789abcdef"
                             for _fr13_dh_m1_char in _fr13_dh_m1_expected
                         )
+                        or _fr13_dh_m1_expected
+                        != "c389bf5e01b942cfe73b2e4fc05db7b158f16b61205c9f3e9988cbd8a82474dd"
                         or not _fr13_dh_m1_so.is_file()
                         or _fr13_dh_m1_so.is_symlink()
+                        or _fr13_dh_m1_so.stat().st_size != 113648
                     ):
                         raise RuntimeError(
                             "FR13 exact-order R32 draft-head binary identity "

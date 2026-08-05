@@ -46,6 +46,7 @@ def test_r32_mode_is_default_off_and_exact_b1_k64_only() -> None:
     assert "not _fr13_dvk_root" in snippet
     assert "not _fr13_single_logits" in snippet
     assert "_fr13_dvk_configured != 65536" in snippet
+    assert "(_fr13_dh_m1_r32 and int(batch_size) != 1)" in snippet
 
 
 def test_r32_setup_pins_binary_map_weight_and_capture_lifecycle() -> None:
@@ -53,6 +54,8 @@ def test_r32_setup_pins_binary_map_weight_and_capture_lifecycle() -> None:
 
     assert '"/tmp/fr13_bf16_k64_head_r32.abi3.so"' in snippet
     assert '"FR13_DRAFT_HEAD_M1_R32_SHA256", ""' in snippet
+    assert EXPECTED_SHA256 in snippet
+    assert "_fr13_dh_m1_so.stat().st_size != 113648" in snippet
     assert "_fr13_dh_m1_digest.hexdigest()" in snippet
     assert "torch.ops.load_library(str(_fr13_dh_m1_so))" in snippet
     assert "torch.ops.fr13_bf16_k64_head.gemvx_m1_shuffle_r32_out" in snippet
@@ -117,8 +120,11 @@ def test_real_b1_runner_selects_only_r32_and_requires_markers() -> None:
     assert "FR13_GATE_DRAFT_HEAD_M1_R32=${FR13_GATE_DRAFT_HEAD_M1_R32:-0}" in gate
     assert EXPECTED_SHA256 in gate
     assert 'FR13_DRAFT_HEAD_M1_R32="$FR13_GATE_DRAFT_HEAD_M1_R32" \\' in gate
+    assert 'DRAFT_HEAD_M1_R32_RUNTIME_LOG="$RUNROOT/$ARM/docker_after_tasks.log"' in gate
+    assert '[[ -f "$DRAFT_HEAD_M1_R32_RUNTIME_LOG" \\' in gate
     assert "ready selector=exact_order_r32" in gate
     assert "engaged selector=exact_order_r32 eager_launch=1" in gate
+    assert gate.count('"$DRAFT_HEAD_M1_R32_RUNTIME_LOG" >/dev/null || {') == 2
     assert "must be the only enabled kernel candidate" in gate
 
     assert "set FR13_DRAFT_HEAD_M1_R32_SO" in runner

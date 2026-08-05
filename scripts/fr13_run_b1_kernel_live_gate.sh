@@ -489,13 +489,19 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_BM8" == "1" ]]; then
 fi
 if [[ "$serve_rc" == "0" \
       && "$FR13_GATE_DRAFT_HEAD_M1_R32" == "1" ]]; then
+  DRAFT_HEAD_M1_R32_RUNTIME_LOG="$RUNROOT/$ARM/docker_after_tasks.log"
+  [[ -f "$DRAFT_HEAD_M1_R32_RUNTIME_LOG" \
+     && ! -L "$DRAFT_HEAD_M1_R32_RUNTIME_LOG" ]] || {
+    echo "exact-order R32 run completed without its final runtime log" >&2
+    exit 4
+  }
   grep -F "[FR13_DRAFT_HEAD_M1_R32] ready selector=exact_order_r32" \
-    "$RUNROOT/$ARM.runlog" >/dev/null || {
+    "$DRAFT_HEAD_M1_R32_RUNTIME_LOG" >/dev/null || {
     echo "exact-order R32 run completed without its readiness marker" >&2
     exit 4
   }
   grep -F "[FR13_DRAFT_HEAD_M1_R32] engaged selector=exact_order_r32 eager_launch=1" \
-    "$RUNROOT/$ARM.runlog" >/dev/null || {
+    "$DRAFT_HEAD_M1_R32_RUNTIME_LOG" >/dev/null || {
     echo "exact-order R32 run completed without an executed-kernel marker" >&2
     exit 4
   }
