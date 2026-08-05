@@ -99,6 +99,22 @@ QROW32_B1_SPLIT2_FA2_SHA256 = (
     "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a"
 )
 QROW32_B1_SPLIT2_FA2_SIZE = 300_154_616
+QROW32_B1_VISIBILITY_FA2_SHA256 = (
+    "c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79"
+)
+QROW32_B1_VISIBILITY_FA2_SIZE = 300_200_192
+QROW32_B4_FA2_SHA256 = (
+    "77f3fb22c19d0eb2ac0ec28230cf9401221425692a505efde62aa838760d81ce"
+)
+QROW32_B4_FA2_SIZE = 299_876_120
+QROW32_B4_GQA_PAIR_FA2_SHA256 = (
+    "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e"
+)
+QROW32_B4_GQA_PAIR_FA2_SIZE = 299_813_360
+QROW32_B4_VISIBILITY_FA2_SHA256 = (
+    "805635d6881dbf73287d66c10541880b7cf93bcb6bf7b04e50efd3d32728b0aa"
+)
+QROW32_B4_VISIBILITY_FA2_SIZE = 299_810_632
 CONTAINER_FA2_SOURCE = Path("/tmp/fr13_fork_fa2.so")
 CONTAINER_FA2_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so"
@@ -2834,17 +2850,21 @@ def _expected_runtime_fa2_identity(
     production = env.get("FR13_FA2_QROW16_PRODUCTION", "0")
     qrow32_b1_live = env.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
     qrow32_b1_production = env.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
+    qrow32_b4_live = env.get("FR13_FA2_QROW32_LIVE_PAGED_AB", "0")
+    qrow32_b4_arm = env.get("FR13_FA2_QROW32_LIVE_PAGED_AB_ARM", "")
     for name, value in (
         ("FR13_FA2_QROW16_LIVE_PAGED_AB", live),
         ("FR13_FA2_QROW16_PRODUCTION", production),
+        ("FR13_FA2_QROW32_LIVE_PAGED_AB", qrow32_b4_live),
     ):
         if value not in {"0", "1"}:
             raise ContractError(f"{name} must be exactly 0 or 1")
     if live == "1" and production == "1":
         raise ContractError("qrow16 live and production selectors are mutually exclusive")
-    if qrow32_b1_live not in {"", "nosplit", "split2"}:
+    if qrow32_b1_live not in {"", "nosplit", "split2", "visibility"}:
         raise ContractError(
-            "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, or split2"
+            "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, "
+            "or visibility"
         )
     if qrow32_b1_production not in {"", "nosplit"}:
         raise ContractError(
@@ -2855,16 +2875,45 @@ def _expected_runtime_fa2_identity(
             "qrow32 B1 live and production selectors are mutually exclusive"
         )
     if (qrow32_b1_live or qrow32_b1_production) and (
-        live == "1" or production == "1"
+        live == "1" or production == "1" or qrow32_b4_live == "1"
     ):
         raise ContractError("qrow16 and qrow32 B1 selectors are mutually exclusive")
+    if qrow32_b4_arm not in {"", "qrow32", "gqa_pair", "visibility"}:
+        raise ContractError("qrow32 B4 live arm is invalid")
+    if (qrow32_b4_live == "1") != bool(qrow32_b4_arm):
+        raise ContractError("qrow32 B4 live gate and arm must be enabled together")
+    if qrow32_b4_live == "1" and (live == "1" or production == "1"):
+        raise ContractError("qrow16 and qrow32 B4 selectors are mutually exclusive")
     if qrow32_b1_live or qrow32_b1_production:
         declared_sha256 = env.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
-        if declared_sha256 != QROW32_B1_SPLIT2_FA2_SHA256:
+        expected = (
+            (QROW32_B1_VISIBILITY_FA2_SIZE, QROW32_B1_VISIBILITY_FA2_SHA256)
+            if qrow32_b1_live == "visibility"
+            else (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256)
+        )
+        if declared_sha256 != expected[1]:
             raise ContractError(
                 "qrow32 B1 runtime FA2 declaration is not the pinned candidate"
             )
-        return QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256
+        return expected
+    if qrow32_b4_live == "1":
+        identities = {
+            "qrow32": (QROW32_B4_FA2_SIZE, QROW32_B4_FA2_SHA256),
+            "gqa_pair": (
+                QROW32_B4_GQA_PAIR_FA2_SIZE,
+                QROW32_B4_GQA_PAIR_FA2_SHA256,
+            ),
+            "visibility": (
+                QROW32_B4_VISIBILITY_FA2_SIZE,
+                QROW32_B4_VISIBILITY_FA2_SHA256,
+            ),
+        }
+        expected = identities[qrow32_b4_arm]
+        if env.get("FR13_FA2_QROW32_SO_SHA256", "") != expected[1]:
+            raise ContractError(
+                "qrow32 B4 runtime FA2 declaration is not the pinned candidate"
+            )
+        return expected
     if live == "1":
         declared_sha256 = env.get("FR13_FA2_QROW16_SO_SHA256", "")
         if declared_sha256 != QROW16_DIVFREE_FA2_SHA256:
@@ -2977,6 +3026,10 @@ def validate_runtime_attestation(payload: object) -> dict[str, Any]:
         (QROW16_FA2_SIZE, QROW16_FA2_SHA256),
         (QROW16_DIVFREE_FA2_SIZE, QROW16_DIVFREE_FA2_SHA256),
         (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256),
+        (QROW32_B1_VISIBILITY_FA2_SIZE, QROW32_B1_VISIBILITY_FA2_SHA256),
+        (QROW32_B4_FA2_SIZE, QROW32_B4_FA2_SHA256),
+        (QROW32_B4_GQA_PAIR_FA2_SIZE, QROW32_B4_GQA_PAIR_FA2_SHA256),
+        (QROW32_B4_VISIBILITY_FA2_SIZE, QROW32_B4_VISIBILITY_FA2_SHA256),
     }
     for key, record, expected_path in (
         ("source", source, str(CONTAINER_FA2_SOURCE)),

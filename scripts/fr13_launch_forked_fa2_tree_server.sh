@@ -233,6 +233,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_LIVE_PAGED_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:nosplit" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:split2" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:visibility" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:nosplit" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION]}" == "set:1" \
@@ -945,8 +946,8 @@ case "$FR13_FA2_QROW32_LIVE_PAGED_AB" in
   *) echo "FR13_FA2_QROW32_LIVE_PAGED_AB must be 0 or 1" >&2; exit 2 ;;
 esac
 case "$FR13_FA2_QROW32_LIVE_PAGED_AB_ARM" in
-  ""|qrow32|gqa_pair) ;;
-  *) echo "FR13_FA2_QROW32_LIVE_PAGED_AB_ARM must be empty, qrow32, or gqa_pair" >&2; exit 2 ;;
+  ""|qrow32|gqa_pair|visibility) ;;
+  *) echo "FR13_FA2_QROW32_LIVE_PAGED_AB_ARM must be empty, qrow32, gqa_pair, or visibility" >&2; exit 2 ;;
 esac
 if [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" ]]; then
   [[ -n "$FR13_FA2_QROW32_LIVE_PAGED_AB_ARM" ]] \
@@ -956,8 +957,8 @@ else
     || { echo "FR13 qrow32 live A/B arm requires the live gate" >&2; exit 2; }
 fi
 case "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" in
-  ""|nosplit|split2) ;;
-  *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, or split2" >&2; exit 2 ;;
+  ""|nosplit|split2|visibility) ;;
+  *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, or visibility" >&2; exit 2 ;;
 esac
 case "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" in
   ""|nosplit) ;;
@@ -1582,6 +1583,15 @@ if [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" ]]; then
       echo "FR13 qrow32 GQA-pair live A/B binary/source provenance drifted" >&2
       exit 2
     }
+  elif [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB_ARM" == "visibility" ]]; then
+    [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
+       && "$FR13_FA2_QROW32_SO_SHA256" == "805635d6881dbf73287d66c10541880b7cf93bcb6bf7b04e50efd3d32728b0aa" \
+       && "$FR13_FA2_QROW32_SO_SIZE" == "299810632" \
+       && "$FR13_FA2_QROW32_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
+       && "$FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256" == "1dac8f7fd910a564c5c3b792770029f0013e2df48c25c89376e4d5e7da949ced" ]] || {
+      echo "FR13 qrow32 visibility B4 live A/B binary/source provenance drifted" >&2
+      exit 2
+    }
   fi
 fi
 _FR13_FA2_QROW32_B1_CANDIDATE_MODE=0
@@ -1593,16 +1603,29 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
      && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
      && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
      && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
-     && "$FR13_FA2_QROW32_B1_SO_SHA256" == "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a" \
-     && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300154616" \
-     && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
-     && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff" \
      && "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" == "$(git rev-parse HEAD)" \
      && "$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)" \
      && "$(stat -c '%s' "$FORKED_FA2_SO")" == "$FR13_FA2_QROW32_B1_SO_SIZE" ]] || {
     echo "FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance" >&2
     exit 2
   }
+  if [[ "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" == "visibility" ]]; then
+    [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79" \
+       && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300200192" \
+       && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
+       && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "a30eca031cd5067133e6278527787c5987635670930e5840ac983f66b088e4fc" ]] || {
+      echo "FR13 qrow32 B1 visibility binary/source provenance drifted" >&2
+      exit 2
+    }
+  else
+    [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a" \
+       && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300154616" \
+       && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
+       && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff" ]] || {
+      echo "FR13 qrow32 B1 incumbent candidate provenance drifted" >&2
+      exit 2
+    }
+  fi
 fi
 if [[ -n "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]]; then
   [[ "$FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID" == "astropy__astropy-12907" \
@@ -3271,6 +3294,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     "$_FR13_FA2_QROW16_CANDIDATE_MODE" "$FR13_FA2_QROW16_SO_SHA256" \
     "$_FR13_FA2_QROW32_CANDIDATE_MODE" "$FR13_FA2_QROW32_SO_SHA256" \
     "$_FR13_FA2_QROW32_B1_CANDIDATE_MODE" "$FR13_FA2_QROW32_B1_SO_SHA256" <<'PY'
+import os
 import sys
 from pathlib import Path
 
@@ -3308,11 +3332,20 @@ elif qrow32_candidate == "1":
 elif qrow32_b1_candidate == "1":
     if actual_sha256 != qrow32_b1_sha256:
         raise SystemExit("fixed32 qrow32 B1 candidate FA2 sha256 mismatch")
-    if (
-        actual_sha256 != contract.QROW32_B1_SPLIT2_FA2_SHA256
-        or fa2.stat().st_size != contract.QROW32_B1_SPLIT2_FA2_SIZE
-    ):
-        raise SystemExit("fixed32 qrow32 split2 binary identity is not qualified")
+    visibility = os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM") == "visibility"
+    expected_sha256, expected_size = (
+        (
+            contract.QROW32_B1_VISIBILITY_FA2_SHA256,
+            contract.QROW32_B1_VISIBILITY_FA2_SIZE,
+        )
+        if visibility
+        else (
+            contract.QROW32_B1_SPLIT2_FA2_SHA256,
+            contract.QROW32_B1_SPLIT2_FA2_SIZE,
+        )
+    )
+    if actual_sha256 != expected_sha256 or fa2.stat().st_size != expected_size:
+        raise SystemExit("fixed32 qrow32 B1 binary identity is not qualified")
 else:
     if fa2 != expected_fa2:
         raise SystemExit(f"fixed32 FA2 realpath mismatch: {fa2} != {expected_fa2}")
