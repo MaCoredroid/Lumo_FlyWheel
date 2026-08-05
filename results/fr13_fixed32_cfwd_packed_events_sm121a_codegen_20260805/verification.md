@@ -41,6 +41,7 @@ python3 -m pytest -q \
   tests/test_fr13_fixed32_cfwd_logit_direct_live_gate.py \
   tests/test_fr13_fixed32_cfwd_logit_direct_artifact.py \
   tests/test_fr13_fixed32_cfwd_physical_slots_codegen_artifact.py \
+  tests/test_fr13_fixed32_cfwd_packed_events_codegen_artifact.py \
   tests/test_fr13_b1_composed_stack.py \
   tests/test_fr13_fixed32_taw_exact_commit_kernel.py \
   tests/test_fr13_fixed32_taw_exact_commit_cuda.py \
