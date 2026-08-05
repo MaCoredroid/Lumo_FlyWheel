@@ -1,0 +1,279 @@
+{
+  "builds": {
+    "candidate": {
+      "b1": {
+        "backend_producer": {
+          "target": "sm_121a",
+          "tool_name": "ptxas-blackwell",
+          "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+          "toolkit_version": "12.9"
+        },
+        "batch": 1,
+        "block_c": 128,
+        "calls": 0,
+        "compile_hash": "a649e6591d9673c56acf910e5edd946809e3952a7f9cc058fb3f547b1f29381a",
+        "cubin_bytes": 191184,
+        "cubin_sha256": "93b0a14a804c802acfcb99bb6748d55bfef30873b1bfccce96617304bc20c2a7",
+        "elf_shared_bytes": 0,
+        "encoded_sass_instructions": 2832,
+        "launch_shared_bytes": 0,
+        "ldg": 81,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 2,
+        "profile": "b1",
+        "ptx_sha256": "83b49b9ef3e3beba8b47c1dfa84730f90983b0253220a80b252bc208b922d7ed",
+        "registers": 56,
+        "revision": "0bf56d9d4d024129c2ff485c1802546dd518da30",
+        "sass_sha256": "48f9f1132529fd93bdfd9aef77767d3f882944ceeff5295e005ce8f003135bd3",
+        "source_sha256": "5425df9004ccfb2bd1dc595aadb3a8df8c0eaa9f030923b60d58aa375ebbbd71",
+        "stack_bytes": 0,
+        "static_sass_instructions": 2687,
+        "stg": 332,
+        "stl": 0
+      },
+      "b4": {
+        "backend_producer": {
+          "target": "sm_121a",
+          "tool_name": "ptxas-blackwell",
+          "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+          "toolkit_version": "12.9"
+        },
+        "batch": 4,
+        "block_c": 256,
+        "calls": 0,
+        "compile_hash": "dfca5d7604ecfc38a537b56a923cc0f32e97d75780570af298d2574547f78897",
+        "cubin_bytes": 191616,
+        "cubin_sha256": "85ed9ae360dd33ae4df7915d58775c1d807f9d0cca274ae2f665f7d6ab95ba14",
+        "elf_shared_bytes": 0,
+        "encoded_sass_instructions": 2840,
+        "launch_shared_bytes": 0,
+        "ldg": 81,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 4,
+        "profile": "b4",
+        "ptx_sha256": "476816750930e03dfee225e9dd7b25c2f6243844f4675ef089bf8167a9861fe0",
+        "registers": 56,
+        "revision": "0bf56d9d4d024129c2ff485c1802546dd518da30",
+        "sass_sha256": "bb3e438e910e0eedf0b84cf4d0a38872734dceb1f56ac33bf87dfbc3ee840eb9",
+        "source_sha256": "5425df9004ccfb2bd1dc595aadb3a8df8c0eaa9f030923b60d58aa375ebbbd71",
+        "stack_bytes": 0,
+        "static_sass_instructions": 2692,
+        "stg": 332,
+        "stl": 0
+      }
+    },
+    "incumbent": {
+      "b1": {
+        "backend_producer": {
+          "target": "sm_121a",
+          "tool_name": "ptxas-blackwell",
+          "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+          "toolkit_version": "12.9"
+        },
+        "batch": 1,
+        "block_c": 128,
+        "calls": 0,
+        "compile_hash": "387e34986c56bcf076455842fa453df101c9a89b474b6dc29a3e039bdd1331a8",
+        "cubin_bytes": 184432,
+        "cubin_sha256": "c8275d80a039f720bf74d0b544e911ca59e0f7dd2ff0f37a23a179e015cba145",
+        "elf_shared_bytes": 0,
+        "encoded_sass_instructions": 2736,
+        "launch_shared_bytes": 0,
+        "ldg": 79,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 2,
+        "profile": "b1",
+        "ptx_sha256": "33404073e7ede55857a3eceb17d77ff396983d1d7fee6ac096b19c97fa2d0b66",
+        "registers": 56,
+        "revision": "e4dbf0a521e4b7c21c9ea4f5be0db1839aefc1ea",
+        "sass_sha256": "2078e8a68f17b2d2c84424a38f560745357313d3f42581b98b47c9e3da27e478",
+        "source_sha256": "e2de8b7b81b35060ee2f95521c8f520dc43980b98fa570c018ba76e8a78db09a",
+        "stack_bytes": 0,
+        "static_sass_instructions": 2589,
+        "stg": 330,
+        "stl": 0
+      },
+      "b4": {
+        "backend_producer": {
+          "target": "sm_121a",
+          "tool_name": "ptxas-blackwell",
+          "tool_version": "Cuda compilation tools, release 12.9, V12.9.86",
+          "toolkit_version": "12.9"
+        },
+        "batch": 4,
+        "block_c": 256,
+        "calls": 0,
+        "compile_hash": "fffac24c37d26c1f742cafcaa510ef8cf103970a8e753208184385baf24e871b",
+        "cubin_bytes": 184576,
+        "cubin_sha256": "4e856c4d7dcff4364b3e0a11c949ffaa6b77fb0baf6b99e9aa403010464b259d",
+        "elf_shared_bytes": 0,
+        "encoded_sass_instructions": 2736,
+        "launch_shared_bytes": 0,
+        "ldg": 79,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 4,
+        "profile": "b4",
+        "ptx_sha256": "6f718c0b305ef7ecd3a77fbed76a97ca26c05755afa6022772276bef29361cf1",
+        "registers": 56,
+        "revision": "e4dbf0a521e4b7c21c9ea4f5be0db1839aefc1ea",
+        "sass_sha256": "9c06a583af08ea327220aa23531682cbf0a3fb7fdaccada7fe6b2e849517ef6a",
+        "source_sha256": "e2de8b7b81b35060ee2f95521c8f520dc43980b98fa570c018ba76e8a78db09a",
+        "stack_bytes": 0,
+        "static_sass_instructions": 2591,
+        "stg": 330,
+        "stl": 0
+      }
+    }
+  },
+  "codegen_deltas": {
+    "b1": {
+      "calls": 0,
+      "cubin_bytes": 6752,
+      "elf_shared_bytes": 0,
+      "encoded_sass_instructions": 96,
+      "ldg": 2,
+      "ldl": 0,
+      "local_bytes": 0,
+      "registers": 0,
+      "stack_bytes": 0,
+      "static_sass_instructions": 98,
+      "stg": 2,
+      "stl": 0
+    },
+    "b4": {
+      "calls": 0,
+      "cubin_bytes": 7040,
+      "elf_shared_bytes": 0,
+      "encoded_sass_instructions": 104,
+      "ldg": 2,
+      "ldl": 0,
+      "local_bytes": 0,
+      "registers": 0,
+      "stack_bytes": 0,
+      "static_sass_instructions": 101,
+      "stg": 2,
+      "stl": 0
+    }
+  },
+  "compile_contract": {
+    "bank_rows_fixture": 257,
+    "capture_guard": true,
+    "channels": 10240,
+    "conv_state_len": 34,
+    "deployment_configs": {
+      "b1": {
+        "batch": 1,
+        "block_c": 128,
+        "num_warps": 2
+      },
+      "b4": {
+        "batch": 4,
+        "block_c": 256,
+        "num_warps": 4
+      }
+    },
+    "dt_bias_dtype": "bf16",
+    "physical_rows_per_request": 32,
+    "source_rows": 36,
+    "store_conv_tap": false,
+    "target": "sm_121a"
+  },
+  "gpu_api_used": false,
+  "offline_only": true,
+  "required_next_gate": "real SWE-Verified B1 and B4 byte equality, then full-step timing",
+  "revisions": {
+    "candidate": "0bf56d9d4d024129c2ff485c1802546dd518da30",
+    "incumbent": "e4dbf0a521e4b7c21c9ea4f5be0db1839aefc1ea"
+  },
+  "runtime_correctness_claim": false,
+  "schema": "fr13.fixed32.sfwd_conv_postprep.gatepack.sm121a.offline_codegen.v1",
+  "source_path": "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py",
+  "source_sha256": {
+    "candidate": "5425df9004ccfb2bd1dc595aadb3a8df8c0eaa9f030923b60d58aa375ebbbd71",
+    "incumbent": "e2de8b7b81b35060ee2f95521c8f520dc43980b98fa570c018ba76e8a78db09a"
+  },
+  "static_gate_pass": true,
+  "timing_claim": false,
+  "work_model": {
+    "b1": {
+      "batch": 1,
+      "channel_programs_per_request": 80,
+      "gate_programs_per_request": {
+        "candidate": 16,
+        "delta": -16,
+        "incumbent": 32
+      },
+      "gate_rows_per_candidate_program": 2,
+      "kernel_launches_all_48_layers": {
+        "candidate": 48,
+        "delta": 0,
+        "incumbent": 48
+      },
+      "requested_gate_bytes_per_request_layer": {
+        "candidate": 23040,
+        "delta": -4608,
+        "incumbent": 27648
+      },
+      "requested_gate_bytes_whole_batch_all_48_layers": {
+        "candidate": 1105920,
+        "delta": -221184,
+        "incumbent": 1327104
+      },
+      "total_programs_all_48_layers": {
+        "candidate": 4608,
+        "delta": -768,
+        "incumbent": 5376
+      },
+      "total_programs_per_request": {
+        "candidate": 96,
+        "delta": -16,
+        "incumbent": 112
+      },
+      "traffic_classification": "exact_fixed32_source_address_requested_bytes_not_measured_dram_bytes"
+    },
+    "b4": {
+      "batch": 4,
+      "channel_programs_per_request": 40,
+      "gate_programs_per_request": {
+        "candidate": 8,
+        "delta": -24,
+        "incumbent": 32
+      },
+      "gate_rows_per_candidate_program": 4,
+      "kernel_launches_all_48_layers": {
+        "candidate": 48,
+        "delta": 0,
+        "incumbent": 48
+      },
+      "requested_gate_bytes_per_request_layer": {
+        "candidate": 20736,
+        "delta": -6912,
+        "incumbent": 27648
+      },
+      "requested_gate_bytes_whole_batch_all_48_layers": {
+        "candidate": 3981312,
+        "delta": -1327104,
+        "incumbent": 5308416
+      },
+      "total_programs_all_48_layers": {
+        "candidate": 9216,
+        "delta": -4608,
+        "incumbent": 13824
+      },
+      "total_programs_per_request": {
+        "candidate": 48,
+        "delta": -24,
+        "incumbent": 72
+      },
+      "traffic_classification": "exact_fixed32_source_address_requested_bytes_not_measured_dram_bytes"
+    }
+  }
+}

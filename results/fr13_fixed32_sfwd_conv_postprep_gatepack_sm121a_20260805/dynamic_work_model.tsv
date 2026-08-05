@@ -1,0 +1,13 @@
+profile	metric	incumbent	candidate	delta
+b1	gate_programs_per_request	32	16	-16
+b1	total_programs_per_request	112	96	-16
+b1	total_programs_all_48_layers	5376	4608	-768
+b1	requested_gate_bytes_per_request_layer	27648	23040	-4608
+b1	requested_gate_bytes_whole_batch_all_48_layers	1327104	1105920	-221184
+b1	kernel_launches_all_48_layers	48	48	0
+b4	gate_programs_per_request	32	8	-24
+b4	total_programs_per_request	72	48	-24
+b4	total_programs_all_48_layers	13824	9216	-4608
+b4	requested_gate_bytes_per_request_layer	27648	20736	-6912
+b4	requested_gate_bytes_whole_batch_all_48_layers	5308416	3981312	-1327104
+b4	kernel_launches_all_48_layers	48	48	0
