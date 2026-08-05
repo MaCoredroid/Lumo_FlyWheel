@@ -227,7 +227,9 @@ def test_fa2_interface_allows_only_exact_private_b1_split2_tag() -> None:
     )
 
 
-def test_fa2_interface_patcher_replaces_generic_split_guard(tmp_path: Path) -> None:
+def test_fa2_interface_patcher_replaces_generic_split_guard(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     patcher = _module(PATCHER, "qrow32_b1_interface_patcher")
     interface = tmp_path / "flash_attn_interface.py"
     interface.write_text(
@@ -236,6 +238,14 @@ def test_fa2_interface_patcher_replaces_generic_split_guard(tmp_path: Path) -> N
 DEFAULT_FA_VERSION = 2
 
 def flash_attn_varlen_func(
+    q,
+    k,
+    v,
+    out=None,
+    dropout_p=0.0,
+    return_softmax_lse=False,
+    num_splits=0,
+    fa_version=2,
     s_aux=None,
     cp_world_size=1,
 ):
@@ -251,6 +261,7 @@ def flash_attn_varlen_func(
             num_splits,
             None,
         )
+    return out, softmax_lse
 ''',
         encoding="ascii",
     )
@@ -262,6 +273,70 @@ def flash_attn_varlen_func(
     assert "and not _fr13_fa2_qrow32_b1_split2_interface_allowed(" in patched
     assert "if tree_bias is not None" in patched
     assert "*(([tree_bias] if tree_bias is not None else []))" in patched
+
+    calls = []
+
+    def recorder(name):
+        def call(*args):
+            calls.append((name, args))
+            return "served-output", "served-lse"
+
+        return call
+
+    fake_torch = types.SimpleNamespace(
+        float32=object(),
+        ops=types.SimpleNamespace(
+            _vllm_fa2_C=types.SimpleNamespace(
+                varlen_fwd=recorder("stock"),
+                varlen_fwd_tree_bias=recorder("tree_bias"),
+            )
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    namespace = {}
+    exec(compile(patched, str(interface), "exec"), namespace)
+    flash = namespace["flash_attn_varlen_func"]
+    tagged = types.SimpleNamespace(
+        is_cuda=True,
+        dtype=fake_torch.float32,
+        shape=(1, 32, 32),
+        stride=lambda: (1179791669, 32, 1),
+    )
+
+    assert flash("q", "k", "v", num_splits=2, tree_bias=tagged) == (
+        "served-output",
+        "served-lse",
+    )
+    assert [(name, args[-2]) for name, args in calls] == [
+        ("tree_bias", tagged)
+    ]
+
+    ordinary = types.SimpleNamespace(
+        **{**tagged.__dict__, "stride": lambda: (32, 32, 1)}
+    )
+    qrow16 = types.SimpleNamespace(
+        **{**tagged.__dict__, "stride": lambda: (1179791667, 32, 1)}
+    )
+    for rejected_bias, rejected_splits in (
+        (None, 2),
+        (ordinary, 2),
+        (qrow16, 2),
+        (tagged, 3),
+    ):
+        calls.clear()
+        with pytest.raises(NotImplementedError, match="num_splits > 1"):
+            flash(
+                "q",
+                "k",
+                "v",
+                num_splits=rejected_splits,
+                tree_bias=rejected_bias,
+            )
+        assert calls == []
+
+    calls.clear()
+    flash("q", "k", "v", num_splits=1)
+    assert [name for name, _ in calls] == ["stock"]
 
 
 def test_exact_geometry_accepts_fused_qkv_row_stride_only(
