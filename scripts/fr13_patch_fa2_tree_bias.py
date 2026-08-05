@@ -4990,11 +4990,17 @@ def _fr13_fa2_qrow16_production_begin(
         torch.cuda.is_available()
         and torch.cuda.is_current_stream_capturing()
     )
+    eager_state_fusion = os.environ.get(
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
+    ) == "1"
+    eager_conv_postprep_gate = os.environ.get(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB", "0"
+    ) == "1"
+    if not capturing and eager_state_fusion and eager_conv_postprep_gate:
+        raise RuntimeError("FR13 qrow16 eager SFWD routes overlap")
     eager_sfwd_stack = (
         not capturing
-        and os.environ.get(
-            "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
-        ) == "1"
+        and (eager_state_fusion or eager_conv_postprep_gate)
         and os.environ.get("ENFORCE_EAGER", "0") == "1"
         and os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0") == "1"
         and os.environ.get("FR13_DRAFT_VOCAB_K", "") == "65536"
@@ -5094,7 +5100,8 @@ def _fr13_fa2_qrow16_production_begin(
                 "pass_sidecar_sha256": os.environ[
                     "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256"
                 ],
-                "sfwd_state_fusion_production": True,
+                "sfwd_state_fusion_production": eager_state_fusion,
+                "sfwd_conv_postprep_byte_ab": eager_conv_postprep_gate,
                 "draft_vocab_root": 1,
                 "draft_vocab_k": 65536,
                 "dispatch": "qrow16 exact geometry; no fallback",

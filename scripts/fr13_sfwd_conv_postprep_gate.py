@@ -425,6 +425,8 @@ def _validate_qrow_evidence(logs: Path) -> tuple[bytes, bytes]:
         or capture.get("candidate_so_sha256") != QROW16_SHA256
         or capture.get("pass_sidecar_sha256") != sidecar_sha
         or capture.get("dispatch") != "qrow16 exact geometry; no fallback"
+        or capture.get("sfwd_state_fusion_production") is not False
+        or capture.get("sfwd_conv_postprep_byte_ab") is not True
     ):
         raise GateError("pinned Qrow16 production evidence drifted")
     layers = capture.get("layers")
