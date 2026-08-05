@@ -94,6 +94,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_run_b1_u8_cfwd_sfwd_stack_timing.sh",
     "scripts/fr13_run_b1_sfwd_conv_postprep_gate.sh",
     "scripts/fr13_run_b1_target_sfwd_conv_postprep_live_gate.sh",
+    "scripts/fr13_run_b4_sfwd_embedded_gate_live_gate.sh",
     "scripts/fr13_run_b1_dfwd_k64_top3.sh",
     "scripts/fr13_run_b1_draft_head_fp8_timing.sh",
     "scripts/fr13_run_b1_gdn_gqa_group3_live_gate.sh",

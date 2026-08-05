@@ -1487,12 +1487,14 @@ class Fixed32EngineIngress:
             )
 
     def _validate_sfwd_b4_enabled_sidecar(self, path: Path) -> None:
-        route_names = [_FIXED32_SFWD_B4_ENABLED_NAME]
+        route_names = [
+            _FIXED32_SFWD_B4_ENABLED_NAME,
+            _FIXED32_SFWD_CONV_POSTPREP_ENABLED_NAME,
+        ]
         if self.task_ids == _FIXED32_SFWD_B1_TASK_IDS:
             route_names.extend(
                 (
                     _FIXED32_SFWD_PRIOR_REUSE_ENABLED_NAME,
-                    _FIXED32_SFWD_CONV_POSTPREP_ENABLED_NAME,
                     _FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_NAME,
                 )
             )

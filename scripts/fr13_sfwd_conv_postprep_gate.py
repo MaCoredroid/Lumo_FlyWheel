@@ -17,11 +17,24 @@ from typing import Any
 
 
 CANDIDATE = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
+EMBEDDED_GATE_CANDIDATE = "fixed32_sfwd_conv_postprep_embedded_gate_cta_v1"
 SOURCE_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1"
 READINESS_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.host_readiness.v1"
 PASS_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.live_pass.v1"
 TASK_ID = "astropy__astropy-12907"
 TASK_MARKER = f"swe_verified:{TASK_ID}"
+EXACT4_TASK_IDS = (
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+)
+EXACT4_TASK_MARKERS = tuple(
+    f"swe_verified:{task_id}" for task_id in EXACT4_TASK_IDS
+)
+EXACT4_SUBSET_SHA256 = (
+    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+)
 SUBSET = "config/fr13_fixed32/subset_b1_diagnostic_one.json"
 SUBSET_SHA256 = "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb"
 BLOCKS = "scripts/fr13_dvk_subset_blocks.json"
@@ -57,11 +70,13 @@ SOURCE_FILES = (
     "scripts/fr13_run_b1_kernel_live_gate.sh",
     "scripts/fr13_run_b1_sfwd_conv_postprep_gate.sh",
     "scripts/fr13_run_b1_target_sfwd_conv_postprep_live_gate.sh",
+    "scripts/fr13_run_b4_sfwd_embedded_gate_live_gate.sh",
     "scripts/fr13_sfwd_conv_postprep_gate.py",
     "scripts/run_swe_bench_q36_a.py",
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py",
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py",
     "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py",
+    "src/lumo_flywheel_serving/inference_proxy.py",
 )
 MODULE_SOURCE = "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py"
 KERNEL_SOURCE = (
@@ -728,6 +743,225 @@ def validate_gate(args: argparse.Namespace) -> None:
     )
 
 
+def validate_embedded_gate(args: argparse.Namespace) -> None:
+    """Validate the source-bound 40-CTA shadow gate on real B1 or exact4 B4."""
+    repo = Path(args.repo).resolve()
+    arm = Path(args.arm_dir).resolve()
+    logs = arm / "logs"
+    source_commit = str(args.source_commit)
+    batch = int(args.batch_size)
+    if batch not in (1, 4):
+        raise GateError("embedded gate validation requires exact B1 or B4")
+    task_ids = EXACT4_TASK_IDS[:batch]
+    task_markers = EXACT4_TASK_MARKERS[:batch]
+
+    launch, launch_raw = _load_json(Path(args.manifest_launch).resolve())
+    end, end_raw = _load_json(Path(args.manifest_end).resolve())
+    if launch != end or launch_raw != end_raw:
+        raise GateError("embedded gate source manifest changed during the task")
+    files = _validate_source_manifest(launch, source_commit=source_commit)
+    if _git(repo, "rev-parse", "HEAD") != source_commit:
+        raise GateError("embedded gate source commit does not equal HEAD")
+    for relative in SOURCE_FILES:
+        if _file_record(repo / relative) != files[relative]:
+            raise GateError(f"embedded gate source closure drifted: {relative}")
+    source_sha = _sha256(launch_raw)
+    installed = logs / "fr13_fixed32_sfwd_conv_postprep.source_manifest.json"
+    if (
+        _regular(installed) != launch_raw
+        or stat.S_IMODE(installed.lstat().st_mode) != 0o400
+    ):
+        raise GateError("embedded gate installed source manifest drifted")
+
+    marker = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"
+    expected_marker = ("\n".join(task_markers) + "\n").encode("ascii")
+    if (
+        _regular(marker) != expected_marker
+        or stat.S_IMODE(marker.lstat().st_mode) != 0o444
+    ):
+        raise GateError("embedded gate authenticated marker set drifted")
+
+    pass_path = logs / "fr13_fixed32_sfwd_embedded_gate.live_pass.json"
+    live_pass, pass_raw = _load_json(pass_path)
+    pass_required = {
+        "schema": (
+            "fr13.fixed32.sfwd_conv_postprep.embedded_gate."
+            f"{'b1' if batch == 1 else 'exact4_b4'}_live_pass.v1"
+        ),
+        "status": "byte_pass_source_only",
+        "candidate": EMBEDDED_GATE_CANDIDATE,
+        "source_commit": source_commit,
+        "source_manifest_sha256": source_sha,
+        "fixed32_mode": "hydra27_fixed32",
+        "task_ids": list(task_ids),
+        "task_markers": list(task_markers),
+        "batch_size": batch,
+        "task_count": batch,
+        "layer_count": LAYERS,
+        "physical_rows_per_request": 32,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65536,
+        "draft_vocab_blocks_sha256": BLOCKS_SHA256,
+        "embedded_gate_cta": True,
+        "gate_scheduling": "append_to_first_channel_programs",
+        "channel_programs_per_request": 40,
+        "standalone_gate_programs_per_request": 0,
+        "programs_per_request": 40,
+        "qrow16_production": batch == 1,
+        "stock_attention": batch == 4,
+        "compared_byte_surfaces": list(BYTE_SURFACES),
+        "real_task_authenticated": True,
+        "reference_always_served": True,
+        "candidate_returned": False,
+        "decision_exact": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_eligible": False,
+        "comparisons": LAYERS * len(BYTE_SURFACES),
+        "mismatches": 0,
+        "differing_bytes": 0,
+        "errors": 0,
+    }
+    if any(live_pass.get(key) != value for key, value in pass_required.items()):
+        raise GateError("embedded gate live PASS contract drifted")
+    layers = live_pass.get("layers")
+    if not isinstance(layers, list) or len(layers) != LAYERS:
+        raise GateError("embedded gate live PASS does not cover 48 layers")
+    pass_pairs = {
+        (str(item.get("layer_key")), str(item.get("layer_prefix_sha256")))
+        for item in layers
+        if isinstance(item, dict)
+    }
+    if len(pass_pairs) != LAYERS:
+        raise GateError("embedded gate live PASS layer identities collide")
+
+    records_raw = _regular(logs / "fr13_fixed32_sfwd_embedded_gate.byte_ab.jsonl")
+    try:
+        records = [
+            json.loads(line, object_pairs_hook=_reject_duplicates)
+            for line in records_raw.decode("ascii").splitlines()
+        ]
+    except (UnicodeError, json.JSONDecodeError, ValueError) as error:
+        raise GateError("embedded gate byte records are malformed") from error
+    if len(records) != LAYERS:
+        raise GateError("embedded gate did not record exactly 48 layers")
+    record_pairs: set[tuple[str, str]] = set()
+    for record in records:
+        required = {
+            "schema": "fr13.fixed32.sfwd_conv_postprep.embedded_gate.byte_ab.v1",
+            "status": "pass",
+            "candidate": EMBEDDED_GATE_CANDIDATE,
+            "source_commit": source_commit,
+            "source_manifest_sha256": source_sha,
+            "fixed32_mode": "hydra27_fixed32",
+            "task_ids": list(task_ids),
+            "task_markers": list(task_markers),
+            "batch_size": batch,
+            "physical_rows_per_request": 32,
+            "embedded_gate_cta": True,
+            "gate_scheduling": "append_to_first_channel_programs",
+            "programs_per_request": 40,
+            "zero_diff": True,
+            "differing_bytes": 0,
+            "reference_always_served": True,
+            "candidate_returned": False,
+            "decision_exact": True,
+            "timing_eligible": False,
+            "floor_acceptance_eligible": False,
+            "production_eligible": False,
+        }
+        if any(record.get(key) != value for key, value in required.items()):
+            raise GateError("embedded gate byte-record contract drifted")
+        comparisons = record.get("comparisons")
+        if (
+            not isinstance(comparisons, list)
+            or [item.get("name") for item in comparisons if isinstance(item, dict)]
+            != list(BYTE_SURFACES)
+            or any(
+                not isinstance(item, dict)
+                or item.get("byte_equal") is not True
+                or item.get("differing_bytes") != 0
+                for item in comparisons
+            )
+        ):
+            raise GateError("embedded gate comparison surfaces drifted")
+        record_pairs.add(
+            (str(record.get("layer_key")), str(record.get("layer_prefix_sha256")))
+        )
+    if record_pairs != pass_pairs:
+        raise GateError("embedded gate records do not bind the PASS layer set")
+
+    container_env_raw = _regular(arm / "container_env.txt")
+    container_env = container_env_raw.decode("ascii").splitlines()
+    expected_env = (
+        "FR13_FIXED32_MODE=hydra27_fixed32",
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=0",
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=1",
+        "FR13_FIXED32_SFWD_EMBED_GATE_CTA=1",
+        "FR13_DRAFT_VOCAB_ROOT=1",
+        "FR13_DRAFT_VOCAB_K=65536",
+        "FR13_FIXED32_CONV_SOURCE_BATCH=0",
+        "FR13_CONV_WB_BATCHED=1",
+        "ENFORCE_EAGER=1",
+    )
+    if any(container_env.count(value) != 1 for value in expected_env):
+        raise GateError("embedded gate container environment drifted")
+
+    health, health_raw = _load_json(arm / "health.json")
+    health_tasks = health.get("tasks")
+    if (
+        not isinstance(health_tasks, list)
+        or {item.get("instance_id") for item in health_tasks if isinstance(item, dict)}
+        != set(task_ids)
+        or health.get("swe_orchestrator_rc") != 0
+    ):
+        raise GateError("embedded gate did not resolve its real task set")
+    ledger = logs / "fr13_fixed32_engine_ingress.jsonl"
+    sys.path.insert(0, str(repo / "src"))
+    from lumo_flywheel_serving.inference_proxy import verify_fixed32_ingress_ledger
+
+    ledger_result = verify_fixed32_ingress_ledger(
+        ledger, expected_role="engine", require_finalized=True
+    )
+    _write_json(
+        Path(args.output).resolve(),
+        {
+            "schema": (
+                "fr13.fixed32.sfwd_conv_postprep.embedded_gate."
+                f"{'b1' if batch == 1 else 'exact4_b4'}_gate.v1"
+            ),
+            "status": "pass",
+            "candidate": EMBEDDED_GATE_CANDIDATE,
+            "source_commit": source_commit,
+            "source_manifest_sha256": source_sha,
+            "task_ids": list(task_ids),
+            "task_markers": list(task_markers),
+            "batch_size": batch,
+            "concurrency": batch,
+            "physical_rows_per_request": 32,
+            "draft_vocab_root": 1,
+            "draft_vocab_k": 65536,
+            "embedded_gate_cta": True,
+            "programs_per_request": 40,
+            "layer_count": LAYERS,
+            "compared_byte_surfaces": list(BYTE_SURFACES),
+            "reference_returned": True,
+            "candidate_returned": False,
+            "decision_exact": True,
+            "timing_eligible": False,
+            "floor_acceptance_eligible": False,
+            "production_enabled": False,
+            "records_sha256": _sha256(records_raw),
+            "live_pass_sha256": _sha256(pass_raw),
+            "health_sha256": _sha256(health_raw),
+            "container_env_sha256": _sha256(container_env_raw),
+            "engine_ledger_chain_head_sha256": ledger_result[
+                "chain_head_sha256"
+            ],
+        },
+    )
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
@@ -762,6 +996,15 @@ def parser() -> argparse.ArgumentParser:
     validate.add_argument("--target-candidate-so")
     validate.add_argument("--output", required=True)
     validate.set_defaults(function=validate_gate)
+    embedded = commands.add_parser("validate-embedded")
+    embedded.add_argument("--repo", required=True)
+    embedded.add_argument("--arm-dir", required=True)
+    embedded.add_argument("--source-commit", required=True)
+    embedded.add_argument("--batch-size", required=True, choices=("1", "4"))
+    embedded.add_argument("--manifest-launch", required=True)
+    embedded.add_argument("--manifest-end", required=True)
+    embedded.add_argument("--output", required=True)
+    embedded.set_defaults(function=validate_embedded_gate)
     return result
 
 

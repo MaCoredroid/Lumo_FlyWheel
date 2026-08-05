@@ -625,15 +625,23 @@ def test_engine_middleware_arms_cutlass_b4_from_authenticated_exact4_request(
     assert stat.S_IMODE(info.st_mode) == 0o400
 
 
+@pytest.mark.parametrize(
+    "enabled_name",
+    (
+        "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled",
+        "fr13_fixed32_sfwd_conv_postprep_byte_ab.enabled",
+    ),
+)
 def test_engine_middleware_arms_sfwd_only_after_all_exact4_are_authenticated(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    enabled_name: str,
 ) -> None:
     secret_path = tmp_path / "secret.json"
     _task_seed, engine_bearer = _write_secret(secret_path)
     logs = tmp_path / "logs"
     logs.mkdir()
-    enabled = logs / "fr13_fixed32_sfwd_state_fusion_byte_ab.enabled"
+    enabled = logs / enabled_name
     enabled.write_bytes(b"1\n")
     enabled.chmod(0o400)
     marker = logs / "fr13_fixed32_sfwd_state_fusion.real_event.arm"

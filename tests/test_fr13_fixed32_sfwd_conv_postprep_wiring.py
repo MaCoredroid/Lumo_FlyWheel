@@ -14,10 +14,13 @@ PATCHER = ROOT / "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER = ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh"
 VARIANT = ROOT / "scripts/fr13_bigdenom_swe_serve_variant.sh"
 RUNNER = ROOT / "scripts/run_swe_bench_q36_a.py"
+B1_GATE_RUNNER = ROOT / "scripts/fr13_run_b1_sfwd_conv_postprep_gate.sh"
+B4_EMBEDDED_RUNNER = ROOT / "scripts/fr13_run_b4_sfwd_embedded_gate_live_gate.sh"
 GATE = ROOT / "scripts/fr13_sfwd_conv_postprep_gate.py"
 MODULE = ROOT / "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py"
 SELECTOR = "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"
 BYTE_SELECTOR = "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB"
+EMBED_SELECTOR = "FR13_FIXED32_SFWD_EMBED_GATE_CTA"
 QROW16_SHA256 = "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
 QROW16_PASS_SHA256 = (
     "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
@@ -68,11 +71,13 @@ def test_selector_is_default_off_and_baked_only_when_explicit(
 ) -> None:
     monkeypatch.delenv(SELECTOR, raising=False)
     monkeypatch.delenv(BYTE_SELECTOR, raising=False)
+    monkeypatch.delenv(EMBED_SELECTOR, raising=False)
     patcher = _load_patcher("fr13_sfwd_conv_postprep_default_off")
     assert patcher._FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION == "0"
     assert patcher._FR13_FIXED32_SFWD_CONV_POSTPREP_IMPORT == ""
     bindings = patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
     assert "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION = False\n" in bindings
+    assert "_FR13_FIXED32_SFWD_EMBED_GATE_CTA = False\n" in bindings
 
     monkeypatch.setenv(SELECTOR, "1")
     monkeypatch.setenv("MAX_NUM_SEQS", "4")
@@ -94,6 +99,29 @@ def test_selector_rejects_every_noncanonical_value(
     patcher = _load_patcher(f"fr13_sfwd_conv_postprep_bad_{raw!r}")
     with pytest.raises(RuntimeError, match="must be exactly 0 or 1"):
         patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
+
+
+@pytest.mark.parametrize("raw", ("", "true", "2"))
+def test_embedded_gate_selector_is_exact_and_subordinate(
+    monkeypatch: pytest.MonkeyPatch,
+    raw: str,
+) -> None:
+    monkeypatch.setenv(EMBED_SELECTOR, raw)
+    patcher = _load_patcher(f"fr13_sfwd_embed_bad_{raw!r}")
+    with pytest.raises(RuntimeError, match="must be exactly 0 or 1"):
+        patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
+
+    monkeypatch.setenv(EMBED_SELECTOR, "1")
+    monkeypatch.setenv(BYTE_SELECTOR, "0")
+    monkeypatch.setenv("MAX_NUM_SEQS", "1")
+    patcher = _load_patcher(f"fr13_sfwd_embed_naked_{raw!r}")
+    with pytest.raises(RuntimeError, match="exclusive Hydra27 byte gate"):
+        patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
+
+    monkeypatch.setenv(BYTE_SELECTOR, "1")
+    patcher = _load_patcher(f"fr13_sfwd_embed_exact_{raw!r}")
+    bindings = patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
+    assert "_FR13_FIXED32_SFWD_EMBED_GATE_CTA = True\n" in bindings
 
 
 def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runtime(
@@ -428,7 +456,7 @@ def test_source_closure_is_identical_in_host_patcher_and_runtime() -> None:
         for item in module_assignment.value.elts
     )
     assert gate_files == patcher_files == module_files
-    assert len(gate_files) == 17
+    assert len(gate_files) == 19
 
 
 def test_launcher_and_real_task_runner_forward_the_selector() -> None:
@@ -438,17 +466,42 @@ def test_launcher_and_real_task_runner_forward_the_selector() -> None:
     assert f"{SELECTOR}=${{{SELECTOR}:-0}}" in launcher
     assert f'-e {SELECTOR}="${SELECTOR}"' in launcher
     assert f'-e {BYTE_SELECTOR}="${BYTE_SELECTOR}"' in launcher
+    assert f'-e {EMBED_SELECTOR}="${EMBED_SELECTOR}"' in launcher
     assert f"{SELECTOR}=${{{SELECTOR}:-0}}" in variant
     assert f"{BYTE_SELECTOR}=${{{BYTE_SELECTOR}:-0}}" in variant
+    assert f"{EMBED_SELECTOR}=${{{EMBED_SELECTOR}:-0}}" in variant
     assert (
         f'|| ( "${SELECTOR}" == "1" \\\n'
         '           && "${ENFORCE_EAGER:-0}" == "1" )'
     ) in variant
     assert SELECTOR in runner
     assert BYTE_SELECTOR in runner
+    assert EMBED_SELECTOR in runner
     for source in (launcher, variant):
         assert f"{SELECTOR} must be exactly 0 or 1" in source
         assert source.count(SELECTOR) >= 7
     assert "_fr13_sfwd_qrow32_production=1" in launcher
     assert "identity_onen_n5120_fullgrid_b1|identity_wide256_fullgrid_b1" in launcher
     assert "one credentialed Qrow arm" in launcher
+
+
+def test_embedded_gate_runners_bind_real_b1_and_exact4_b4() -> None:
+    b1 = B1_GATE_RUNNER.read_text(encoding="utf-8")
+    b4 = B4_EMBEDDED_RUNNER.read_text(encoding="utf-8")
+    assert f"{EMBED_SELECTOR}=${{{EMBED_SELECTOR}:-0}}" in b1
+    assert "validate-embedded" in b1
+    for token in (
+        "config/fr13_fixed32/subset_b4_four.json",
+        "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+        "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+        "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+        "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4",
+        "FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536",
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=1",
+        "FR13_FIXED32_SFWD_EMBED_GATE_CTA=1",
+        "--batch-size 4",
+        "validate-embedded",
+    ):
+        assert token in b4
+    assert "PROBE_ONLY=1" not in b4
+    assert "ACCEPT_SPEED_PROBE=1" not in b4

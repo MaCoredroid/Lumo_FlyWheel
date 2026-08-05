@@ -189,6 +189,9 @@ _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION = os.environ.get(
 _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB = os.environ.get(
     "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB", "0"
 ).strip()
+_FR13_FIXED32_SFWD_EMBED_GATE_CTA = os.environ.get(
+    "FR13_FIXED32_SFWD_EMBED_GATE_CTA", "0"
+).strip()
 _FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
     "scripts/fr13_b1_composed_stack_gate.py",
@@ -202,11 +205,13 @@ _FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS = (
     "scripts/fr13_run_b1_kernel_live_gate.sh",
     "scripts/fr13_run_b1_sfwd_conv_postprep_gate.sh",
     "scripts/fr13_run_b1_target_sfwd_conv_postprep_live_gate.sh",
+    "scripts/fr13_run_b4_sfwd_embedded_gate_live_gate.sh",
     "scripts/fr13_sfwd_conv_postprep_gate.py",
     "scripts/run_swe_bench_q36_a.py",
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py",
     "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py",
     "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py",
+    "src/lumo_flywheel_serving/inference_proxy.py",
 )
 _FR13_FIXED32_CUTLASS_WAVE = os.environ.get(
     "FR13_FIXED32_CUTLASS_WAVE", "stock"
@@ -7140,9 +7145,23 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB must be exactly 0 or 1"
         )
     sfwd_conv_postprep_byte = sfwd_conv_postprep_byte_raw == "1"
+    sfwd_embed_gate_raw = _FR13_FIXED32_SFWD_EMBED_GATE_CTA
+    if sfwd_embed_gate_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1"
+        )
+    sfwd_embed_gate = sfwd_embed_gate_raw == "1"
     if sfwd_conv_postprep and sfwd_conv_postprep_byte:
         raise RuntimeError(
             "FR13 SFWD conv/post-prep production and byte gate are exclusive"
+        )
+    if sfwd_embed_gate and (
+        not sfwd_conv_postprep_byte
+        or sfwd_conv_postprep
+        or resolved_mode != "hydra27_fixed32"
+    ):
+        raise RuntimeError(
+            "FR13 embedded gate CTA requires the exclusive Hydra27 byte gate"
         )
     sfwd_conv_postprep_graph = bool(
         sfwd_conv_postprep and os.environ.get("ENFORCE_EAGER", "0") == "0"
@@ -7262,6 +7281,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{sfwd_conv_postprep!r}\n"
         "_FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB = "
         f"{sfwd_conv_postprep_byte!r}\n"
+        "_FR13_FIXED32_SFWD_EMBED_GATE_CTA = "
+        f"{sfwd_embed_gate!r}\n"
         "_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH = "
         f"{sfwd_conv_postprep_graph!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH = "
@@ -7282,6 +7303,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
     sfwd_conv_postprep = _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
     sfwd_conv_postprep_byte = _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
+    sfwd_embed_gate = _FR13_FIXED32_SFWD_EMBED_GATE_CTA
     cutlass_wave = _FR13_FIXED32_CUTLASS_WAVE
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
@@ -7367,6 +7389,10 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     if sfwd_conv_postprep_byte not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB must be exactly 0 or 1"
+        )
+    if sfwd_embed_gate not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1"
         )
     streamk_byte_diagnostic = cutlass_wave in (
         "streamk_coop128_byte_ab",
@@ -7464,9 +7490,16 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
             "FR13_FIXED32_EAGER_SFWD_CONV_POSTPREP_BOOT_WARM",
         )
     if sfwd_conv_postprep_byte == "1":
+        batch_text = os.environ.get("MAX_NUM_SEQS", "")
+        if sfwd_embed_gate == "1" and batch_text not in ("1", "4"):
+            raise RuntimeError("FR13 embedded gate CTA warm requires B1 or B4")
         return (
-            "SFWD conv/post-prep B1 byte diagnostic",
-            1,
+            (
+                "SFWD conv/post-prep embedded-gate byte diagnostic"
+                if sfwd_embed_gate == "1"
+                else "SFWD conv/post-prep B1 byte diagnostic"
+            ),
+            int(batch_text) if sfwd_embed_gate == "1" else 1,
             "FR13_FIXED32_EAGER_SFWD_CONV_POSTPREP_BOOT_WARM",
         )
     return None
@@ -7799,6 +7832,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_prior_reuse = _FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB
     sfwd_conv_postprep = _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
     sfwd_conv_postprep_byte = _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
+    sfwd_embed_gate = _FR13_FIXED32_SFWD_EMBED_GATE_CTA
     _fr13_fixed32_eager_boot_warm_contract()
     if gqa_group3_production not in ("0", "1"):
         raise RuntimeError(
@@ -7956,9 +7990,21 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB must be exactly 0 or 1"
         )
+    if sfwd_embed_gate not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1"
+        )
     if sfwd_conv_postprep == "1" and sfwd_conv_postprep_byte == "1":
         raise RuntimeError(
             "FR13 SFWD conv/post-prep production and byte gate are exclusive"
+        )
+    if sfwd_embed_gate == "1" and (
+        sfwd_conv_postprep_byte != "1"
+        or sfwd_conv_postprep == "1"
+        or mode != "hydra27_fixed32"
+    ):
+        raise RuntimeError(
+            "FR13 embedded gate CTA requires the exclusive Hydra27 byte gate"
         )
     if sfwd_conv_postprep == "1" or sfwd_conv_postprep_byte == "1":
         exact_runtime = {
@@ -7975,16 +8021,27 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB": "0",
         }
         if sfwd_conv_postprep_byte == "1":
-            exact_runtime["FR13_FIXED32_B1_DIAGNOSTIC"] = "1"
+            embedded_b4 = (
+                sfwd_embed_gate == "1"
+                and os.environ.get("MAX_NUM_SEQS", "") == "4"
+            )
+            exact_runtime["FR13_FIXED32_B1_DIAGNOSTIC"] = (
+                "0" if embedded_b4 else "1"
+            )
             exact_runtime.update(
                 {
-                    "FR13_FA2_QROW16_PRODUCTION": "1",
+                    "FR13_FA2_QROW16_PRODUCTION": "0" if embedded_b4 else "1",
                     "FR13_FA2_QROW16_SO_SHA256": (
-                        "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+                        ""
+                        if embedded_b4
+                        else "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
                     ),
                     "FR13_FA2_QROW16_LIVE_PASS_SHA256": (
-                        "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
+                        ""
+                        if embedded_b4
+                        else "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
                     ),
+                    "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
                     "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
                 }
             )
@@ -8024,24 +8081,45 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             == "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a"
             and os.environ.get("FR13_FA2_QROW32_B1_SO_SIZE", "") == "300154616"
         )
+        batch_text = os.environ.get("MAX_NUM_SEQS", "")
+        embedded_b4_runtime = bool(
+            sfwd_embed_gate == "1"
+            and sfwd_conv_postprep_byte == "1"
+            and batch_text == "4"
+            and os.environ.get("SWE_CONCURRENCY", "") == "4"
+            and os.environ.get("FR13_FIXED32_CUTLASS_WAVE", "stock") == "stock"
+            and os.environ.get("FR13_FIXED32_CUTLASS_WAVE_PRODUCTION", "0")
+            == "0"
+            and os.environ.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0") == "0"
+            and os.environ.get("FR13_FA2_QROW16_PRODUCTION", "0") == "0"
+            and os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "") == ""
+            and os.environ.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "") == ""
+        )
+        admitted_batch_attention = bool(
+            embedded_b4_runtime
+            or (
+                batch_text == "1"
+                and os.environ.get("SWE_CONCURRENCY", "") == "1"
+                and (qrow16_production + qrow32_production) == 1
+            )
+        )
         if (
             mode not in _FR13_FIXED32_MODES
-            or os.environ.get("MAX_NUM_SEQS", "") != "1"
-            or os.environ.get("SWE_CONCURRENCY", "")
-            != os.environ.get("MAX_NUM_SEQS", "")
+            or not admitted_batch_attention
             or bool(candidate)
             or bool(production)
             or sfwd_b4_byte_diagnostic != "0"
             or sfwd_production != "0"
             or sfwd_prior_reuse != "0"
             or not (eager_runtime or graph_runtime)
-            or (qrow16_production + qrow32_production) != 1
+            or (sfwd_embed_gate == "1" and not eager_runtime)
             or drift
         ):
             raise RuntimeError(
                 "FR13 fixed32 SFWD conv/post-prep fusion requires exclusive "
-                "physical32 B1 K64/root1 with one credentialed Qrow arm in "
-                "eager or FULL graph mode: "
+                "physical32 K64/root1 B1 with one credentialed Qrow arm or "
+                "embedded-gate B4 with its admitted attention arm in eager or "
+                "FULL graph mode: "
                 + repr(drift)
             )
         if sfwd_conv_postprep == "1":
@@ -12307,6 +12385,9 @@ def _fr13_conv_subop_mab(
                             qualification_profile="k64_root",
                             draft_vocab_k=65536,
                             draft_vocab_root=1,
+                            embed_gate_cta=(
+                                _FR13_FIXED32_SFWD_EMBED_GATE_CTA
+                            ),
                             source_only_qualification=True,
                             capture_binding=_fr13_conv_postprep_binding,
                         )
@@ -13520,6 +13601,9 @@ def _fr13_conv_subop_mab(
                                 expected_source_commit=os.environ.get(
                                     "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT",
                                     "",
+                                ),
+                                embedded_gate_cta=(
+                                    _FR13_FIXED32_SFWD_EMBED_GATE_CTA
                                 ),
                             )
                         )

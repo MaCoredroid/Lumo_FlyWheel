@@ -10,6 +10,11 @@ cd "$REPO"
 : "${RUNROOT:?set RUNROOT to a new output directory}"
 : "${TAG:?set TAG to a unique run tag}"
 : "${FORKED_FA2_SO:?set FORKED_FA2_SO to the pinned Qrow16 shared object}"
+FR13_FIXED32_SFWD_EMBED_GATE_CTA=${FR13_FIXED32_SFWD_EMBED_GATE_CTA:-0}
+case "$FR13_FIXED32_SFWD_EMBED_GATE_CTA" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1" >&2; exit 2 ;;
+esac
 
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 SOURCE_COMMIT=$(git rev-parse HEAD)
@@ -89,6 +94,7 @@ export FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0
 export FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB=0
 export FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=0
 export FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=1
+export FR13_FIXED32_SFWD_EMBED_GATE_CTA
 export FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON=
 export FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256=
 export FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH="$MANIFEST_CONTAINER"
@@ -131,12 +137,23 @@ trap runner_exit EXIT
 bash scripts/fr13_run_b1_kernel_live_gate.sh
 finalize_manifest
 
-.venv/bin/python scripts/fr13_sfwd_conv_postprep_gate.py validate \
-  --repo "$REPO" \
-  --arm-dir "$ARMDIR" \
-  --source-commit "$SOURCE_COMMIT" \
-  --task-id "$TASK_ID" \
-  --manifest-launch "$MANIFEST_LAUNCH" \
-  --manifest-end "$MANIFEST_END" \
-  --output "$ARMDIR/sfwd_conv_postprep_k64_root_b1_gate.json"
+if [[ "$FR13_FIXED32_SFWD_EMBED_GATE_CTA" == "1" ]]; then
+  .venv/bin/python scripts/fr13_sfwd_conv_postprep_gate.py validate-embedded \
+    --repo "$REPO" \
+    --arm-dir "$ARMDIR" \
+    --source-commit "$SOURCE_COMMIT" \
+    --batch-size 1 \
+    --manifest-launch "$MANIFEST_LAUNCH" \
+    --manifest-end "$MANIFEST_END" \
+    --output "$ARMDIR/sfwd_embedded_gate_k64_root_b1_gate.json"
+else
+  .venv/bin/python scripts/fr13_sfwd_conv_postprep_gate.py validate \
+    --repo "$REPO" \
+    --arm-dir "$ARMDIR" \
+    --source-commit "$SOURCE_COMMIT" \
+    --task-id "$TASK_ID" \
+    --manifest-launch "$MANIFEST_LAUNCH" \
+    --manifest-end "$MANIFEST_END" \
+    --output "$ARMDIR/sfwd_conv_postprep_k64_root_b1_gate.json"
+fi
 trap - EXIT

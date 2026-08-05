@@ -164,6 +164,7 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION
   FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
   FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
+  FR13_FIXED32_SFWD_EMBED_GATE_CTA
   FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON
   FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256
   FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH
@@ -206,6 +207,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_EMBED_GATE_CTA]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE]}" == "set:byte_ab" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_CFWD_LOGIT_DIRECT_BYTE_AB]}" == "set:1" \
@@ -235,6 +237,7 @@ fi
    || "${FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION:-0}" == "1" \
    || "${FR13_CFWD_LOGIT_DIRECT_BYTE_AB:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:-0}" == "1" \
+   || "${FR13_FIXED32_SFWD_EMBED_GATE_CTA:-0}" == "1" \
    || "${FR13_CFWD_LOGIT_DIRECT_PRODUCTION:-0}" == "1" \
    || "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" != "0" \
    || -n "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO:-}" ]] \
@@ -627,11 +630,14 @@ FR13_FIXED32_SFWD_STATE_FUSION_TIMING_AB=${FR13_FIXED32_SFWD_STATE_FUSION_TIMING
 FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
 FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=${FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION:-0}
 FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=${FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:-0}
+FR13_FIXED32_SFWD_EMBED_GATE_CTA=${FR13_FIXED32_SFWD_EMBED_GATE_CTA:-0}
 FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON=${FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON:-}
 FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256=${FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256:-}
 FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH=${FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH:-}
 FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256=${FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256:-}
 FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT=${FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT:-}
+FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB_PATH=/logs/fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl
+FR13_FIXED32_SFWD_CONV_POSTPREP_PASS_PATH=/logs/fr13_fixed32_sfwd_conv_postprep.live_pass.json
 FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON=${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_JSON:-}
 FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256=${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256:-}
 FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB=${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}
@@ -2623,6 +2629,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   _fr13_fixed32_sfwd_state_fusion_production=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
   _fr13_fixed32_sfwd_conv_postprep=${FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION:-0}
   _fr13_fixed32_sfwd_conv_postprep_byte=${FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:-0}
+  _fr13_fixed32_sfwd_embed_gate=${FR13_FIXED32_SFWD_EMBED_GATE_CTA:-0}
   _fr13_fixed32_sfwd_prior_reuse=${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}
   _fr13_fixed32_batch_gdn_diagnostic=${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}
   _fr13_fixed32_batch_gdn_graph_diagnostic=${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB-0}
@@ -2666,6 +2673,16 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     0|1) ;;
     *) echo "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB must be exactly 0 or 1" >&2; exit 2 ;;
   esac
+  case "$_fr13_fixed32_sfwd_embed_gate" in
+    0|1) ;;
+    *) echo "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1" >&2; exit 2 ;;
+  esac
+  [[ "$_fr13_fixed32_sfwd_embed_gate" == "0" \
+     || ( "$_fr13_fixed32_sfwd_conv_postprep_byte" == "1" \
+          && "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ) ]] || {
+    echo "embedded gate CTA requires the Hydra27 conv/post-prep byte gate" >&2
+    exit 2
+  }
   _fr13_fixed32_sfwd_route_count=$((
     10#$_fr13_fixed32_sfwd_state_fusion_diagnostic
     + 10#$_fr13_fixed32_sfwd_state_fusion_timing
@@ -3646,6 +3663,7 @@ _fr13_sfwd_production=${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}
 _fr13_sfwd_prior_reuse=${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}
 _fr13_sfwd_conv_postprep=${FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION:-0}
 _fr13_sfwd_conv_postprep_byte=${FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:-0}
+_fr13_sfwd_embed_gate=${FR13_FIXED32_SFWD_EMBED_GATE_CTA:-0}
 for _fr13_sfwd_selector in \
   "$_fr13_sfwd_b4_byte_ab" \
   "$_fr13_sfwd_state_fusion_timing" \
@@ -3658,6 +3676,16 @@ for _fr13_sfwd_selector in \
     *) echo "FR13 SFWD selectors must be exactly 0 or 1" >&2; exit 2 ;;
   esac
 done
+case "$_fr13_sfwd_embed_gate" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+[[ "$_fr13_sfwd_embed_gate" == "0" \
+   || ( "$_fr13_sfwd_conv_postprep_byte" == "1" \
+        && "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ) ]] || {
+  echo "embedded gate CTA requires the Hydra27 conv/post-prep byte gate" >&2
+  exit 2
+}
 _fr13_sfwd_route_count=$((
   10#$_fr13_sfwd_b4_byte_ab
   + 10#$_fr13_sfwd_state_fusion_timing
@@ -3816,26 +3844,51 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl" \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep.live_pass.json"
 elif [[ "$_fr13_sfwd_conv_postprep_byte" == "1" ]]; then
-  if [[ "${FR13_FIXED32_MODE:-}" != "hydra27_fixed32" \
-        || "$MAX_NUM_SEQS" != "1" \
-        || "${SWE_CONCURRENCY:-}" != "1" \
-        || "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" != "1" \
-        || "${ENFORCE_EAGER:-0}" != "1" \
-        || "${FR13_DRAFT_VOCAB_ROOT:-0}" != "1" \
-        || "${FR13_DRAFT_VOCAB_K:-65536}" != "65536" \
-        || "${FR13_DRAFT_VOCAB_BLOCKS:-}" != "/workspace/scripts/fr13_dvk_subset_blocks.json" \
-        || "${FR13_RING_EXPORT:-1}" != "1" \
-        || "${FR13_FLAGS_INKERNEL:-1}" != "1" \
-        || "${FR13_TREE_RUNROW_INIT:-1}" != "1" \
-        || "${FR13_TREE_CONV_FUSED:-1}" != "1" \
-        || "${FR13_CONV_WB_BATCHED:-0}" != "1" \
-        || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "0" \
-        || "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" != "0" \
-        || "${FR13_FA2_QROW16_PRODUCTION:-0}" != "1" \
-        || "${FR13_FA2_QROW16_SO_SHA256:-}" != "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86" \
-        || "${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}" != "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77" ]]; then
-    echo "SFWD conv/post-prep byte gate requires exact Hydra27 K64/root1 eager B1 with pinned Qrow16" >&2
+  _fr13_sfwd_conv_postprep_byte_profile=invalid
+  if [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
+        && "${ENFORCE_EAGER:-0}" == "1" \
+        && "${FR13_DRAFT_VOCAB_ROOT:-0}" == "1" \
+        && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+        && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+        && "${FR13_RING_EXPORT:-1}" == "1" \
+        && "${FR13_FLAGS_INKERNEL:-1}" == "1" \
+        && "${FR13_TREE_RUNROW_INIT:-1}" == "1" \
+        && "${FR13_TREE_CONV_FUSED:-1}" == "1" \
+        && "${FR13_CONV_WB_BATCHED:-0}" == "1" \
+        && "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" == "0" \
+        && "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" == "0" ]]; then
+    if [[ "$MAX_NUM_SEQS" == "1" \
+          && "${SWE_CONCURRENCY:-}" == "1" \
+          && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+          && "${FR13_FA2_QROW16_PRODUCTION:-0}" == "1" \
+          && "${FR13_FA2_QROW16_SO_SHA256:-}" == "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86" \
+          && "${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}" == "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77" ]]; then
+      if [[ "$_fr13_sfwd_embed_gate" == "1" ]]; then
+        _fr13_sfwd_conv_postprep_byte_profile=embedded_b1
+      else
+        _fr13_sfwd_conv_postprep_byte_profile=standalone_b1
+      fi
+    elif [[ "$_fr13_sfwd_embed_gate" == "1" \
+            && "$MAX_NUM_SEQS" == "4" \
+            && "${SWE_CONCURRENCY:-}" == "4" \
+            && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+            && "${FR13_FA2_QROW16_PRODUCTION:-0}" == "0" \
+            && -z "${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}" \
+            && -z "${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}" \
+            && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+            && "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "0" ]]; then
+      _fr13_sfwd_conv_postprep_byte_profile=embedded_b4
+    fi
+  fi
+  if [[ "$_fr13_sfwd_conv_postprep_byte_profile" == "invalid" ]]; then
+    echo "SFWD conv/post-prep byte gate requires exact Hydra27 physical32 K64/root1 eager B1, or embedded-gate exact B4" >&2
     exit 2
+  fi
+  _fr13_sfwd_conv_postprep_cutlass_ok=0
+  if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+        || ( "$_fr13_sfwd_conv_postprep_byte_profile" != "embedded_b4" \
+             && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_wide256_fullgrid_b1_byte_ab" ) ]]; then
+    _fr13_sfwd_conv_postprep_cutlass_ok=1
   fi
   if [[ "$_fr13_batch_gdn_diagnostic_count" != "0" \
         || "$_fr13_batch_gdn_production" != "0" \
@@ -3843,15 +3896,14 @@ elif [[ "$_fr13_sfwd_conv_postprep_byte" == "1" ]]; then
         || -n "$_fr13_batch_gdn_bv_production" \
         || -n "$_fr13_gdn_path_bv_candidate" \
         || -n "$_fr13_gdn_path_bv_production" \
-        || ( "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" \
-             && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "identity_wide256_fullgrid_b1_byte_ab" ) \
+        || "$_fr13_sfwd_conv_postprep_cutlass_ok" != "1" \
         || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
         || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
-    echo "SFWD conv/post-prep byte gate permits only pinned Qrow16 and the admitted target full-grid comparator" >&2
+    echo "SFWD conv/post-prep byte gate inherited an incompatible kernel arm" >&2
     exit 2
   fi
   [[ -z "$FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON" \
@@ -3880,11 +3932,19 @@ elif [[ "$_fr13_sfwd_conv_postprep_byte" == "1" ]]; then
   FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH=/logs/fr13_fixed32_sfwd_conv_postprep.source_manifest.json
   FR13_FIXED32_SFWD_CONV_POSTPREP_REAL_EVENT_PATH=/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm
   FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=/logs/fr13_fixed32_sfwd_state_fusion.real_event.arm
+  if [[ "$_fr13_sfwd_embed_gate" == "1" ]]; then
+    FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB_PATH=/logs/fr13_fixed32_sfwd_embedded_gate.byte_ab.jsonl
+    FR13_FIXED32_SFWD_CONV_POSTPREP_PASS_PATH=/logs/fr13_fixed32_sfwd_embedded_gate.live_pass.json
+  fi
   rm -f \
     "$LOG_DIR/fr13_fixed32_sfwd_state_fusion.real_event.arm" \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep.production_pass.json" \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep.live_pass.json" \
-    "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl"
+    "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl" \
+    "$LOG_DIR/fr13_fixed32_sfwd_embedded_gate.live_pass.json" \
+    "$LOG_DIR/fr13_fixed32_sfwd_embedded_gate.byte_ab.jsonl"
+  unset _fr13_sfwd_conv_postprep_byte_profile
+  unset _fr13_sfwd_conv_postprep_cutlass_ok
 elif [[ "$_fr13_sfwd_prior_reuse" == "1" ]]; then
   if [[ -z "${FR13_FIXED32_MODE:-}" \
         || "$MAX_NUM_SEQS" != "1" \
@@ -4577,6 +4637,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION="$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" \
   -e FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION="$FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION" \
   -e FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB="$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB" \
+  -e FR13_FIXED32_SFWD_EMBED_GATE_CTA="$FR13_FIXED32_SFWD_EMBED_GATE_CTA" \
   -e FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON="${FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON:-}" \
   -e FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256="${FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256:-}" \
   -e FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH="${FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH:-}" \
@@ -4584,8 +4645,8 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT="${FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT:-}" \
   -e FR13_FIXED32_SFWD_CONV_POSTPREP_ENABLED_PATH=/logs/fr13_fixed32_sfwd_conv_postprep_byte_ab.enabled \
   -e FR13_FIXED32_SFWD_CONV_POSTPREP_REAL_EVENT_PATH="${FR13_FIXED32_SFWD_CONV_POSTPREP_REAL_EVENT_PATH:-}" \
-  -e FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB_PATH=/logs/fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl \
-  -e FR13_FIXED32_SFWD_CONV_POSTPREP_PASS_PATH=/logs/fr13_fixed32_sfwd_conv_postprep.live_pass.json \
+  -e FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB_PATH="$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB_PATH" \
+  -e FR13_FIXED32_SFWD_CONV_POSTPREP_PASS_PATH="$FR13_FIXED32_SFWD_CONV_POSTPREP_PASS_PATH" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256="${FR13_FIXED32_SFWD_STATE_FUSION_LIVE_PASS_SHA256:-}" \
   -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_ARM_PATH=/logs/fr13_fixed32_sfwd_state_fusion.production.arm \
   -e FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_sfwd_state_fusion.production_pass.json \
