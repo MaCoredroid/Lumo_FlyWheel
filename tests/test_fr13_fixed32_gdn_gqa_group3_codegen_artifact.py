@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -85,7 +86,21 @@ def test_resource_regression_and_static_work_proxies_are_explicit() -> None:
 def test_artifact_source_hashes_and_sanitized_scope() -> None:
     for line in (ARTIFACT / "source_checksums.sha256").read_text().splitlines():
         expected, relative = line.split("  ", 1)
-        assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == expected
+        if relative.startswith("src/"):
+            raw = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(ROOT),
+                    "show",
+                    f"{CANDIDATE_REVISION}:{relative}",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+            ).stdout
+        else:
+            raw = (ROOT / relative).read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == expected
     forbidden = {".cubin", ".ptx", ".sass", ".ttir", ".ttgir", ".llir"}
     assert not any(path.suffix in forbidden for path in ARTIFACT.rglob("*"))
     readme = (ARTIFACT / "README.md").read_text()
