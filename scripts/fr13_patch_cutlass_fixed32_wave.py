@@ -1293,15 +1293,16 @@ struct sm120_blockwise_fp8_config_b1_onen_fullgrid_identity_pingpong_stage2 {
       cutlass::gemm::collective::StageCount<2>>;
 };
 
-// Keep the exact 128x32x128 ping-pong collective that passed the exhaustive
-// B1 byte gate. The 256x32x128 cooperative collective produced sparse output
-// differences against stock, so retain only the direct linear scheduler
-// substitution here. The two N=5120 projections stay on their separate exact
-// 40-CTA specialization.
+// Keep the exact 128x32x128 tile, StageCount2 mainloop, epilogue, and ordered
+// full-K reduction used by the admitted B1 path, but schedule the same tile
+// with CUTLASS's cooperative SM120 kernel. The rejected cooperative candidate
+// changed the tile to 256x32x128 as well; this candidate isolates scheduling
+// while retaining M128. The two N=5120 projections stay on their separate
+// admitted 40-CTA specialization.
 template <typename OutType>
 struct sm120_blockwise_fp8_config_b1_wide256_fullgrid_identity_stage2 {
   using KernelSchedule =
-      cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
   using EpilogueSchedule =
       cutlass::epilogue::collective::EpilogueScheduleAuto;
   using TileShape = Shape<_128, _32, _128>;
