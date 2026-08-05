@@ -1,0 +1,101 @@
+{
+  "classification": "CPU_CODEGEN_ADMISSION_ONLY",
+  "contract": {
+    "batches": [
+      1,
+      4
+    ],
+    "block_m": 32,
+    "block_n": 64,
+    "modes": [
+      "Tail23",
+      "Hydra27"
+    ],
+    "num_splits": 0,
+    "physical_nodes": 32,
+    "root_reduction": true,
+    "tree_bias_values": [
+      "-INFINITY",
+      "0.0f"
+    ],
+    "vocab": 65536
+  },
+  "device": {
+    "arch": "sm_121a",
+    "b1": {
+      "candidate_sass_instructions": 3640,
+      "candidate_sass_sha256": "16a7da0405922543728ccebd78823d2bdcb36e529ce77b06499115559addddb2",
+      "incumbent_sass_instructions": 4008,
+      "incumbent_sass_sha256": "d043812897cd66e9de93dab5e274e2200d0e909045058c3a8f2931d9e3383b37",
+      "instruction_delta": -368,
+      "ldc_delta": 4,
+      "ldg_e_delta": -64
+    },
+    "b4": {
+      "candidate_sass_instructions": 3632,
+      "candidate_sass_sha256": "18975ab7aec03f12e93d57db6f4230a40346cff7e9ccbe2be1a5b309504d16b5",
+      "incumbent_sass_instructions": 3992,
+      "incumbent_sass_sha256": "a814ccdb99b9a63b915ac762c5cc02dc536a98f0d9c1484a5853daaa74024cc5",
+      "instruction_delta": -360,
+      "ldc_delta": 4,
+      "ldg_e_delta": -64
+    },
+    "barriers": 1,
+    "constant3_bytes": 128,
+    "dynamic_shared_bytes": 81920,
+    "local_bytes": 0,
+    "registers": 252,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0,
+    "stack_bytes": 0,
+    "static_shared_bytes": 1024
+  },
+  "gpu_used": false,
+  "performance_measurement": false,
+  "production_eligible": false,
+  "required_next_gates": [
+    "real SWE-Verified B1 raw-byte A/B",
+    "real SWE-Verified exact4 B4 raw-byte A/B",
+    "standing-task full-step B1 and B4 measurement after byte qualification"
+  ],
+  "schema": "fr13.fixed32.fa2_tree_visibility_sm121a_codegen.v1",
+  "source": {
+    "b1_flash_fwd_kernel_sha256": "5e48444ff68c75dee9227570735b15a4273c064c574d21a4c1953019bb9eb876",
+    "b1_qrow32_nosplit_translation_unit_sha256": "a022da77fc020891125aad1c40f82ebeb86a490660ca121b4a346a14c701e04b",
+    "b1_split2_translation_unit_sha256": "223542ecf9bcc8837022aaceeca7468e4a8c866b528c4327c68f924dc4ab344d",
+    "b4_flash_fwd_kernel_sha256": "5e48444ff68c75dee9227570735b15a4273c064c574d21a4c1953019bb9eb876",
+    "b4_qrow32_translation_unit_sha256": "07fbf58dc774d399d511e46d411caedd8f5b8952f6d61876b3fb190a6cef4a17",
+    "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+    "patcher_commit": "ace051c50016b87d9f5a6ac4cee5dfee1ecf6351",
+    "patcher_flags_b1": [
+      "--tree-bias-tile-earlyout",
+      "--fixed32-query-tile32-b1",
+      "--fixed32-tree-visibility-mask"
+    ],
+    "patcher_flags_b4": [
+      "--tree-bias-tile-earlyout",
+      "--fixed32-query-tile32",
+      "--fixed32-tree-visibility-mask"
+    ],
+    "patcher_sha256": "8ff63dff668e7331869f11ff951f3be5f4f0ec4624dbe46c16b68485dde0eee8"
+  },
+  "status": "PASS_CPU_CODEGEN_LIVE_BYTE_AND_TIMING_PENDING",
+  "timing_eligible": false,
+  "traffic_model": {
+    "b1_dense_bytes_per_event": 1572864,
+    "b1_mask_bytes_per_event": [
+      49152,
+      98304
+    ],
+    "b4_dense_bytes_per_event": 6291456,
+    "b4_mask_bytes_per_event": [
+      196608,
+      393216
+    ],
+    "classification": "logical source values before lane mapping and cache",
+    "reduction_ratio": [
+      16,
+      32
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+lane	variant	registers	stack_bytes	local_bytes	spill_store_bytes	spill_load_bytes	static_shared_bytes	barriers	constant3_bytes	sass_instructions	ldg_e	ldc	full_sass_sha256
+B1	incumbent_qrow32_nosplit_v5	252	0	0	0	0	1024	1	0	4008	68	68	d043812897cd66e9de93dab5e274e2200d0e909045058c3a8f2931d9e3383b37
+B1	fixed32_visibility_run1	252	0	0	0	0	1024	1	128	3640	4	72	16a7da0405922543728ccebd78823d2bdcb36e529ce77b06499115559addddb2
+B1	fixed32_visibility_run2	252	0	0	0	0	1024	1	128	3640	4	72	16a7da0405922543728ccebd78823d2bdcb36e529ce77b06499115559addddb2
+B4	incumbent_qrow32_guarded	252	0	0	0	0	1024	1	0	3992	68	68	a814ccdb99b9a63b915ac762c5cc02dc536a98f0d9c1484a5853daaa74024cc5
+B4	fixed32_visibility_run1	252	0	0	0	0	1024	1	128	3632	4	72	18975ab7aec03f12e93d57db6f4230a40346cff7e9ccbe2be1a5b309504d16b5
+B4	fixed32_visibility_run2	252	0	0	0	0	1024	1	128	3632	4	72	18975ab7aec03f12e93d57db6f4230a40346cff7e9ccbe2be1a5b309504d16b5
