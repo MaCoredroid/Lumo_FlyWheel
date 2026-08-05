@@ -1833,6 +1833,7 @@ def test_qrow32_b1_split2_allocates_stock_scratch_for_qlen32() -> None:
     assert changed
     assert "seqlenq_ngroups_swapped || fr13_qrow32_b1_split2" in text
     assert "kFr13Qrow32B1Split2BatchStrideSentinel" in text
+    assert "!fr13_qrow32_b1_split2 || num_splits == 2" in text
     assert "stock-owned accumulation buffers for qlen 32" in text
 
     text_again, changed = module._replace_once(

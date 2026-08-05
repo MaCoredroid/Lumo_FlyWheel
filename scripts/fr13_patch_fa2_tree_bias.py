@@ -1158,6 +1158,9 @@ STOCK_VARLEN_SPLITKV_ALLOCATION = r'''    if (seqlenq_ngroups_swapped) {
 FIXED32_QUERY_TILE32_B1_SPLIT2_ALLOCATION = r'''    const bool fr13_qrow32_b1_split2 =
         params.tree_bias_batch_stride ==
         kFr13Qrow32B1Split2BatchStrideSentinel;
+    TORCH_CHECK(
+        !fr13_qrow32_b1_split2 || num_splits == 2,
+        "FR13 B1 qrow32 split2 scratch setup requires num_splits=2");
     if (seqlenq_ngroups_swapped || fr13_qrow32_b1_split2) {
         // Stock applies split-K only to decoding. The private fixed32 route
         // also needs the stock-owned accumulation buffers for qlen 32.
