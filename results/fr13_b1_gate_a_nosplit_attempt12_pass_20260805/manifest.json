@@ -1,0 +1,117 @@
+{
+  "attempt": {
+    "arm_ended_at_utc": "2026-08-05T10:12:33Z",
+    "arm_started_at_utc": "2026-08-05T10:01:01Z",
+    "id": 12,
+    "launcher_ended_at_utc": "2026-08-05T10:12:33Z",
+    "launcher_started_at_utc": "2026-08-05T10:00:46Z",
+    "serve_exit_code": 0
+  },
+  "classification": {
+    "acceptance_valid": false,
+    "combined_gate_valid": true,
+    "floor_acceptance_eligible": false,
+    "gate_a_credential_issuance_valid": true,
+    "hardware_floor_claim": false,
+    "performance_measurement": false,
+    "production_enabled": false,
+    "task_result_valid": true,
+    "timing_eligible": false
+  },
+  "credentials": {
+    "dfwd_k64_top3": {
+      "original_bytes": 1933,
+      "original_sha256": "dda43ee63d6504135e507afdade38da16cca860c09c7f2f113a6f7f9e9428a69",
+      "sanitized_file": "dfwd_k64_top3_credential.sanitized.json",
+      "status": "PASS"
+    },
+    "gdn_gqa_group3": {
+      "original_bytes": 5025,
+      "original_sha256": "15a89260517aded2c5d83d1ff685f682d4f648ec4e7d0ec8ce5f3224f9b3a4e5",
+      "sanitized_file": "gdn_gqa_group3_credential.sanitized.json",
+      "status": "PASS"
+    },
+    "qrow32_nosplit": {
+      "original_bytes": 1859,
+      "original_sha256": "c46ee444443b8b85f7e8693f4b85a9a91722e8f8581db2b614547baee5c28387",
+      "sanitized_file": "qrow32_nosplit_credential.sanitized.json",
+      "status": "PASS"
+    }
+  },
+  "evidence_bindings": {
+    "container_environment_bytes": 23106,
+    "container_environment_sha256": "e902d52d312ac9ba827885b63248e19dbbd8c3fa5592c5162d732a24efb224a1",
+    "docker_log_bytes": 77985,
+    "docker_log_sha256": "ff1ca91d5e68ef55a041f2e672c5d6d86eaf0a8a294603eea3ceae6c9320aac6",
+    "external_manifest_end_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_manifest_launch_end_identical": true,
+    "external_manifest_launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "health_bytes": 255,
+    "health_sha256": "ea5ad4d67e839cb36d0d9f5787f910336ce94bada1dc6558a81c005408676f31",
+    "qrow_live_result_bytes": 15461,
+    "qrow_live_result_sha256": "532cb6139faf6b679f14956a0a0c39e77f9a9957975e5002256c116c030519ab",
+    "runtime_manifest_end_sha256": "7af94e505dd84bf90d0cb9f58bce3b9aababb8ebf2c5119bfb7c259be72af300",
+    "runtime_manifest_launch_end_identical": true,
+    "runtime_manifest_launch_sha256": "7af94e505dd84bf90d0cb9f58bce3b9aababb8ebf2c5119bfb7c259be72af300",
+    "traffic_audit_bytes": 9878,
+    "traffic_audit_sha256": "f72fd2b00113253fabbb3f480787d04bf4b6965c54c316a2c569a16834dcc7b6"
+  },
+  "production_status": {
+    "downstream_nosplit_credential_admitted": false,
+    "gate_credentials_production_enabled": false,
+    "pending_work": "promote qrow32 no-split in the production selector and composed credential validator, then run production smoke",
+    "source_contract_at_attempt": "live arms admit nosplit or split2; production arm admits split2 only"
+  },
+  "provenance": {
+    "attempt_source_commit": "6b13ff859cb5e532d43b5ab34ea83e764acd5fe9",
+    "attempt_source_subject": "fix(fr13): read traffic parity from ingress audit",
+    "common_runner_sha256": "392ffdeec9a328cbaacad182bd575963a391e729ba99beaccde131b267d80a9d",
+    "composed_gate_source_sha256": "edd9591d767817fcc75770707df57dabfe93408e1d330a333edf9bc8c40e8e74",
+    "entrypoint_sha256": "be66cdfabf4086ba4fb17096e8cecabbb2f64853b88d64a809e42e8b1354fd25",
+    "reducer_sha256": "62b72ad89d8660617422708672c214846bdef216c4743237966af60586d81c59",
+    "subset_sha256": "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb"
+  },
+  "run_contract": {
+    "batch_size": 1,
+    "concurrency": 1,
+    "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "logical_topology": "Hydra27",
+    "physical_rows": 32,
+    "runtime_mode": "FULL",
+    "suite": "SWE-Verified",
+    "task_count": 1,
+    "task_id": "astropy__astropy-12907"
+  },
+  "sanitization": {
+    "binaries_or_tensors_included": false,
+    "container_or_process_identifiers_included": false,
+    "environment_dump_included": false,
+    "prompt_or_response_included": false,
+    "raw_credentials_included": false,
+    "raw_logs_included": false,
+    "request_identifiers_included": false,
+    "source_or_runtime_manifests_included": false,
+    "task_outputs_included": false
+  },
+  "schema": "fr13.fixed32.b1_gate_a_nosplit_attempt12_pass.v1",
+  "status": "PASS",
+  "task_and_traffic": {
+    "audit_checks_total": 10,
+    "audit_checks_true": 10,
+    "audit_schema": "fr13-fixed32-chat-task-provenance-audit-v3",
+    "completed_engine_requests": 10,
+    "completed_proxy_attempts": 10,
+    "exact_proxy_engine_attempt_parity": true,
+    "failed_proxy_attempts": 0,
+    "logical_requests_aborted": 0,
+    "successful_engine_requests": 10,
+    "swe_orchestrator_exit_code": 0,
+    "task_timed_out": false,
+    "task_verdict": "resolved",
+    "work_census_event_count": 382,
+    "zero_campaign_rejections": true,
+    "zero_failed_or_aborted_requests": true
+  }
+}
