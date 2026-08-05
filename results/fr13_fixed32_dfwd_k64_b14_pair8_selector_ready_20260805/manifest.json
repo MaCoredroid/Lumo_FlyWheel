@@ -1,0 +1,92 @@
+{
+  "acceptance_valid": false,
+  "artifact_schema": "fr13.fixed32.dfwd_k64_b14_warp4_pair8_selector_ready.v1",
+  "candidate": {
+    "active_nodes": 27,
+    "batch_scopes": [
+      1,
+      4
+    ],
+    "draft_vocab_k": 65536,
+    "operations": {
+      "b1": "gemvx_m1_warp4_pair8_out",
+      "b4": "gemvx_m4_warp4_pair8_out"
+    },
+    "physical_drafts": 31,
+    "proposal_only": true,
+    "root_reduction": true,
+    "target_authority_changed": false
+  },
+  "default_enabled": false,
+  "docker_used": false,
+  "files": [
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_b14_pair8_selector_ready_20260805/README.md",
+      "sha256": "4bdbe91882aeb9a4f38d0c189f98f058360109fb18129c64f016bc6233cea292"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_b14_pair8_selector_ready_20260805/test_results.txt",
+      "sha256": "0d54e1d22a54eac04807f69434b788fd7a3dbbeeac59ff4dd162b98a7bce4977"
+    },
+    {
+      "path": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+      "sha256": "d776b29f75536aa123f8c8d3cc933e8ec517acc5f055b8b34dcb8b02feec6b2f"
+    },
+    {
+      "path": "scripts/fr13_launch_forked_fa2_tree_server.sh",
+      "sha256": "c3a8f614c05f61d375cdfc899a8202e20d90ad8eba12baac8b65987bf6c07ed1"
+    },
+    {
+      "path": "scripts/fr13_runtime_manifest.py",
+      "sha256": "8ebaf9c09a3f004793cb3c7cf118e3cd7f2a580da5f61e12a27d580539bf1420"
+    },
+    {
+      "path": "scripts/fr13_dfwd_k64_b14_pair8_selector.py",
+      "sha256": "85c451bed87421c750ed0a24ec35b6c44193bdbeec0ebb5952c7686abcc9e0f5"
+    },
+    {
+      "path": "tests/test_fr13_dfwd_k64_b14_pair8_selector.py",
+      "sha256": "989140e4b64ef0548a0cac195ebe77cc798614363f412b853e7a8561909eec94"
+    },
+    {
+      "path": "csrc/fr13_bf16_gemvx_k64_b14_warp4_pair8.cu",
+      "sha256": "01fd0ec526afcfa3e3a4a42ec95b95dfa04d566fa8431eee84d72d7eada9ed3f"
+    },
+    {
+      "bytes": 161056,
+      "path": "results/fr13_fixed32_dfwd_k64_b14_warp4_pair8_sm121a_20260805/fr13_bf16_k64_b14_warp4_pair8.abi3.so",
+      "sha256": "dcd9301f447d1ef4a81240027af3a008558dfa080b8660ac9dba7b2c5800ec7f"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_b14_warp4_pair8_sm121a_20260805/build_attestation.json",
+      "sha256": "3ca9dda783db5fb8a0cabd05ef9671f6a6d2063c8cc979d4c4694d9530dc848f"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_b14_warp4_pair8_sm121a_20260805/manifest.json",
+      "sha256": "577e780472bbc0af53217f5789bb38145bee22b7e9fc962ecc1a1d58f46b4e3e"
+    }
+  ],
+  "gpu_used": false,
+  "mode": "hydra27_fixed32",
+  "performance_measurement": false,
+  "real_swe_verified_task_used": false,
+  "real_task_correctness": false,
+  "required_next_gates": [
+    "real SWE-Verified B1 candidate-served proposal and target-authority gate",
+    "real SWE-Verified B4 candidate-served proposal and target-authority gate",
+    "candidate-served exact4 timing",
+    "candidate-served exact16 confirmation"
+  ],
+  "selector": {
+    "capture_calls": 4,
+    "fallback_calls": 0,
+    "root_calls_at_least": 1,
+    "source_authenticated": true
+  },
+  "source_checkpoint_commit": "a038bdc03ea8896bfa56f66700e6df12b842df0f",
+  "status": "STATIC_SELECTOR_PASS_LIVE_UNMEASURED",
+  "test_result": {
+    "passed": 85,
+    "status": "PASS"
+  }
+}

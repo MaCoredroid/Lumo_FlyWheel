@@ -1,0 +1,31 @@
+FR13 fixed32 packed K64 B1/B4 selector static gate
+Date (UTC): 2026-08-05
+Source checkpoint: a038bdc03ea8896bfa56f66700e6df12b842df0f
+
+Command:
+  PYTHONPATH=. pytest -q tests/test_fr13_dfwd_k64_b14_pair8_selector.py tests/test_fr13_bf16_gemvx_k64_b14_warp4_pair8.py tests/test_fr13_draft_head_pad_rows.py tests/test_fr13_draft_head_fp8.py tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py tests/test_fr13_dfwd_k64_m4_r64_u8_gate.py tests/test_fr13_fixed32_floor_propagation.py
+Result:
+  85 passed in 1.85s
+
+Static checks:
+  python3 -m py_compile scripts/fr13_dfwd_k64_b14_pair8_selector.py scripts/fr10_phase4_patch_vllm_tree_gdn.py scripts/fr13_runtime_manifest.py
+  bash -n scripts/fr13_launch_forked_fa2_tree_server.sh
+Result:
+  PASS
+
+Authenticated selector CLI, B1:
+  status=PASS batch_size=1 operation=gemvx_m1_warp4_pair8_out
+  physical_drafts=31 active_nodes=27 draft_vocab_k=65536
+  proposal_only=true target_authority_changed=false
+
+Authenticated selector CLI, B4:
+  status=PASS batch_size=4 operation=gemvx_m4_warp4_pair8_out
+  physical_drafts=31 active_nodes=27 draft_vocab_k=65536
+  proposal_only=true target_authority_changed=false
+
+GPU used: false
+Docker used: false
+Real SWE-Verified task used: false
+Performance measurement: false
+Acceptance valid: false
+
