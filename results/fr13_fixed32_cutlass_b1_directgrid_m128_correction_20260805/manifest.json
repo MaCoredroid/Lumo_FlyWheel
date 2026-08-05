@@ -1,0 +1,111 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_directgrid_m128_correction.v1",
+  "created_at_utc": "2026-08-05T11:59:04Z",
+  "status": "corrected_host_build_pass_gpu_byte_gate_pending",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "production_default_enabled": false,
+  "source": {
+    "branch": "codex/fixed32-b1-wide256-directgrid-f81-build-20260805",
+    "base_commit": "f81a1c774b55a7f76d30d30ed0fac2be73665be9",
+    "correction_commit": "33fb5acb833b81b2c82b90d76b5107a7718beefb",
+    "correction_parent": "4d68d9f9ec03bb82deb291ccbfcdcfe61740d291",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "patch_source_sha256": "b8efed262d869bc7939693a3ebb7e9a8c2500ccbdc379d39dd018cc837c71aff",
+    "patched_dispatch_sha256": "5964f7e7432c04f20d03e8696cc38a859e5471a6bf9ca8d101198ebe9f948fdc",
+    "binary_registry_sha256": "9755391db9a96629e6af1937f4ab1f97ee82f7c24d4f58b0313f28ba4c16a32d",
+    "qualification_registry_sha256": "f23a301388f8f71e8af6decfccdcef574be7ae9766eda290e4165ecd4a4ec5ce"
+  },
+  "failed_runtime_evidence": {
+    "source_jsonl": "/home/mark/lumoFlyWheel-main-merge-staging-20260803/output/fr13_b1_gate_b_fullgrid_f81a1c7_20260805T112037Z/hydra27_fixed32_k64_root_f81a1c7_20260805T112037Z/logs/fr13_fixed32_cutlass_identity_wide256_fullgrid_b1_byte_ab.jsonl",
+    "task_marker": "swe_verified:astropy__astropy-12907",
+    "m": 32,
+    "n": 16384,
+    "k": 5120,
+    "bytes": 1048576,
+    "byte_equal": false,
+    "mismatch_count": 22,
+    "first_mismatch": 125412,
+    "failed_binary_sha256": "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da",
+    "timing_valid": false
+  },
+  "correction": {
+    "legacy_selector": "identity_wide256_fullgrid_b1",
+    "tile_shape": [128, 32, 128],
+    "kernel_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+    "scheduler": "fr13_fixed32_b1_wide256_direct_fullgrid_scheduler",
+    "stage_count": 2,
+    "collective_matches_correctness_backed_onen_arm": true,
+    "direct_scheduler_retained": true,
+    "m256_cooperative_collective_superseded": true
+  },
+  "build": {
+    "result": "pass",
+    "architecture": "sm_121a",
+    "translation_unit_object_sha256": "56fe709b797b2cca3364a6f55ff20e3d8fef1cd7c16b549aa1327d0eaafe3c0b",
+    "translation_unit_object_bytes": 25068768,
+    "gpu_runtime_used": false,
+    "docker_used": false
+  },
+  "binary": {
+    "path": "/home/mark/fr13_sfwd_m128_directgrid_build/bin/_C_stable_libtorch.identity_m128_directgrid_f81.abi3.so",
+    "sha256": "7d762dfa793671d75d1e353bd37d76fc07370cbe387ad1e315e32584d27927d4",
+    "bytes": 119781296,
+    "mode": "0555",
+    "published": false,
+    "publication_reason": "binary exceeds GitHub single-file limit",
+    "diagnostic_selector": "identity_wide256_fullgrid_b1_byte_ab",
+    "candidate_family": "identity_wide256_fullgrid_b1",
+    "qualification_profile": "k64_root",
+    "repository_verification": "pass",
+    "cpu_import_cuda_visible_devices_empty": "pass"
+  },
+  "device_codegen": {
+    "direct_instructions_per_dtype": 752,
+    "generic_onen_instructions_per_dtype": 968,
+    "instruction_delta": -216,
+    "direct_branch_class_per_dtype": 44,
+    "generic_onen_branch_class_per_dtype": 45,
+    "registers_per_thread": 168,
+    "direct_stack_bytes_per_thread": 8,
+    "direct_local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "constant0_bytes": 2688,
+    "direct_ldl": 3,
+    "direct_stl": 1,
+    "direct_call": 0
+  },
+  "validation": {
+    "focused_tests": "173 passed",
+    "python_byte_compile": "pass",
+    "git_diff_check": "pass",
+    "shared_library_link": "pass",
+    "cpu_import": "pass",
+    "elf_dependency_audit": "pass",
+    "dynamic_symbol_audit": "pass",
+    "cubin_resource_audit": "pass",
+    "diagnostic_binary_identity": "pass"
+  },
+  "not_run": [
+    "corrected GPU kernel runtime",
+    "corrected raw-byte comparison",
+    "real 4-task SWE-Verified timing",
+    "real 16-task SWE-Verified acceptance",
+    "B4 timing",
+    "hardware-floor acceptance"
+  ],
+  "required_next_gate": {
+    "workload": "authenticated real SWE-Verified task set",
+    "physical_rows": 32,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "expected_projection_nk": [[5120, 6144], [5120, 17408], [14336, 5120], [16384, 5120], [34816, 5120]],
+    "required_comparisons": 320,
+    "required_mismatching_comparisons": 0,
+    "required_differing_bytes": 0,
+    "served_result": "stock",
+    "timing_campaign": "exact 4-task set then exact 16-task set"
+  }
+}

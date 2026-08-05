@@ -1,0 +1,5 @@
+path	dtype	tile_m	tile_n	tile_k	instructions	branch_class	registers	stack_bytes	local_bytes	static_shared_bytes	constant0_bytes	ldl	stl	call	status
+direct_m128	fp16	128	32	128	752	44	168	8	0	1024	2688	3	1	0	compiled
+onen_generic_m128	fp16	128	32	128	968	45	168	0	0	1024	2688	0	0	0	correctness_backed_neighbor
+direct_m128	bf16	128	32	128	752	44	168	8	0	1024	2688	3	1	0	compiled
+onen_generic_m128	bf16	128	32	128	968	45	168	0	0	1024	2688	0	0	0	correctness_backed_neighbor
