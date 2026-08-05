@@ -1,0 +1,42 @@
+{
+  "baseline_revision": "6c28fc58992e495bd8d4c8640370cc82f17316ee",
+  "builds_verified": 8,
+  "candidate_revision": "a5174ed5e8ac2d5768a4a9e0fda16786c564e40a",
+  "device_descriptor_loads_removed_per_48_layer_event": {
+    "b1": 724992,
+    "b4": 2899968
+  },
+  "device_descriptor_loads_removed_per_cta": 59,
+  "fresh_cache_byte_identity": true,
+  "gpu_execution": false,
+  "ldg_sites": {
+    "baseline": 85,
+    "candidate": 74
+  },
+  "ldl_stl_calls": 0,
+  "performance_promotion": false,
+  "registers_per_thread": {
+    "base": {
+      "baseline": 116,
+      "candidate": 116
+    },
+    "committer_stack": {
+      "baseline": 122,
+      "candidate": 118
+    }
+  },
+  "resource_gate": "PASS",
+  "schema": "fr13.fixed32.gdn_gqa_group3_static_schedule.sm121a.verify.v1",
+  "stack_local_bytes_per_thread": 0,
+  "static_sass_instructions": {
+    "base": {
+      "baseline": 2052,
+      "candidate": 2012
+    },
+    "committer_stack": {
+      "baseline": 2155,
+      "candidate": 2119
+    }
+  },
+  "status": "PASS"
+}
