@@ -1,0 +1,46 @@
+{
+  "baseline_revision": "cbca5f65a5af17364e356045a3e633f885908d11",
+  "builds_verified": 8,
+  "candidate_revision": "1d08d3952d806306816de12988e5aa1258620566",
+  "fresh_cache_byte_identity": true,
+  "gpu_execution": false,
+  "invocation_atomics_removed_per_event": {
+    "b1": 0,
+    "b4": 3
+  },
+  "ldg_sites": {
+    "baseline": 74,
+    "candidate": 74
+  },
+  "ldl_stl_calls": 0,
+  "performance_promotion": false,
+  "registers_per_thread": {
+    "base": {
+      "baseline": 116,
+      "candidate": 108
+    },
+    "committer_stack": {
+      "baseline": 118,
+      "candidate": 118
+    }
+  },
+  "resource_gate": "PASS",
+  "schema": "fr13.fixed32.gdn_gqa_group3_value_domain.sm121a.verify.v1",
+  "stack_local_bytes_per_thread": 0,
+  "static_sass_instructions": {
+    "base": {
+      "baseline": 2012,
+      "candidate": 1972
+    },
+    "committer_stack": {
+      "baseline": 2119,
+      "candidate": 2078
+    }
+  },
+  "status": "PASS",
+  "value_domain_masks_removed_per_48_layer_event": {
+    "b1": 3575808,
+    "b4": 14303232
+  },
+  "value_domain_masks_removed_per_cta": 291
+}
