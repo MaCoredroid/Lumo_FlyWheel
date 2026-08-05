@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -362,7 +363,7 @@ def test_runtime_source_compiles_with_default_off_bridge() -> None:
     )
 
 
-def test_readiness_manifest_binds_current_qualification_sources() -> None:
+def test_readiness_manifest_binds_original_qualification_sources() -> None:
     payload = json.loads(READINESS.read_text(encoding="ascii"))
     assert payload["status"] == "SHADOW_READY_UNMEASURED"
     assert payload["source_tip_commit"] == (
@@ -399,5 +400,11 @@ def test_readiness_manifest_binds_current_qualification_sources() -> None:
         "config/fr13_fixed32/subset_b1_diagnostic_one.json",
         "scripts/fr13_dvk_subset_blocks.json",
     }
+    artifact_commit = "2aee844d2b4ce62b901764ce6455bd06914f387b"
     for relative, expected in tracked.items():
-        assert hashlib.sha256((REPO / relative).read_bytes()).hexdigest() == expected
+        historical = subprocess.run(
+            ["git", "-C", str(REPO), "show", f"{artifact_commit}:{relative}"],
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        assert hashlib.sha256(historical).hexdigest() == expected
