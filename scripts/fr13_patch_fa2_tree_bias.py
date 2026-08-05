@@ -42,6 +42,11 @@ their dedicated translation units to resolve pages directly from 64-row
 K-block coordinates. The B1 build's independent ``no_split`` and ``split2``
 selectors are default-off, require a real K64/root1 B1 byte qualification, and
 fail closed on final production geometry or attestation drift.
+The composable qrow32-only ``--fixed32-tree-visibility-mask`` candidate keeps
+the same physical32 query/KV schedule but replaces the dense 32x32 fp32
+ancestry-bias loads with the exact self-plus-ancestor bit rows shared by Tail23
+and Hydra27. Inactive physical slots remain in the table; only downstream
+validity decides whether their results participate in rejection sampling.
 The B4 trait also forms its nonnull block-table row directly and constructs
 sequence metadata from only the required dynamic ``seqused_k`` value.
 Its canonical contiguous K/V page, row, and head strides are compile-time
@@ -76,9 +81,13 @@ TREE_BIAS_TILE_OVERLAP_GUARD = r'''    // FR13_FA2_TREE_BIAS_TILE_EARLYOUT: only
 '''
 
 
-def _tree_bias_helper(tile_earlyout: bool) -> str:
+def _tree_bias_helper(
+    tile_earlyout: bool,
+    *,
+    fixed32_tree_visibility_mask: bool = False,
+) -> str:
     overlap_guard = TREE_BIAS_TILE_OVERLAP_GUARD if tile_earlyout else ""
-    return r'''
+    helper = r'''
 // FR13_FA2_TREE_BIAS: add a dense query-suffix ancestry bias after QK.
 template <typename Kernel_traits>
 struct StaticQueryRows {
@@ -226,6 +235,108 @@ __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
 }
 
 '''
+    if not fixed32_tree_visibility_mask:
+        return helper
+
+    visibility_trait = r'''
+template <typename Kernel_traits>
+struct StaticTreeVisibility {
+    static constexpr bool enabled = false;
+
+    __forceinline__ __device__
+    static unsigned int row_mask(const int) { return 0U; }
+};
+
+'''
+    trait_anchor = r'''template <typename Kernel_traits>
+struct StaticQueryHeadsPerCTA {
+    static constexpr int value = 1;
+};
+
+'''
+    if helper.count(trait_anchor) != 1:
+        raise RuntimeError("fixed32 visibility trait anchor drifted")
+    helper = helper.replace(
+        trait_anchor,
+        trait_anchor + visibility_trait,
+        1,
+    )
+
+    static_shape_anchor = r'''    constexpr bool kStaticQueryTile =
+        kStaticQueryRows * kStaticQueryHeadsPerCTA == Kernel_traits::kBlockM;
+'''
+    static_shape_replacement = static_shape_anchor + r'''    constexpr bool kStaticTreeVisibility =
+        StaticTreeVisibility<Kernel_traits>::enabled;
+    constexpr bool kStaticTreeShape =
+        kStaticQueryTile || kStaticTreeVisibility;
+'''
+    if helper.count(static_shape_anchor) != 1:
+        raise RuntimeError("fixed32 visibility shape anchor drifted")
+    helper = helper.replace(
+        static_shape_anchor,
+        static_shape_replacement,
+        1,
+    )
+    helper = helper.replace(
+        "    if constexpr (!kStaticQueryTile) {\n",
+        "    if constexpr (!kStaticTreeShape) {\n",
+        1,
+    )
+
+    dense_metadata = r'''    const float *tree_bias = reinterpret_cast<const float *>(params.tree_bias_ptr)
+        + bidb * params.tree_bias_batch_stride;
+    const int query_rows = kStaticQueryTile ? kStaticQueryRows : binfo.actual_seqlen_q;
+    const int tree_bias_rows = kStaticQueryTile ? 32 : params.tree_bias_rows;
+    const int tree_bias_cols = kStaticQueryTile ? 32 : params.tree_bias_cols;
+    const int tree_bias_q_offset = kStaticQueryTile ? 0 : params.tree_bias_q_offset;
+    const int tree_bias_k_offset = kStaticQueryTile ? 0 : params.tree_bias_k_offset;
+    const int64_t tree_bias_row_stride = kStaticQueryTile ? 32 : params.tree_bias_row_stride;
+    const int64_t tree_bias_col_stride = kStaticQueryTile ? 1 : params.tree_bias_col_stride;
+'''
+    static_metadata = r'''    const float *tree_bias = nullptr;
+    if constexpr (!kStaticTreeVisibility) {
+        tree_bias = reinterpret_cast<const float *>(params.tree_bias_ptr)
+            + bidb * params.tree_bias_batch_stride;
+    }
+    const int query_rows = kStaticTreeShape ? 32 : binfo.actual_seqlen_q;
+    const int tree_bias_rows = kStaticTreeShape ? 32 : params.tree_bias_rows;
+    const int tree_bias_cols = kStaticTreeShape ? 32 : params.tree_bias_cols;
+    const int tree_bias_q_offset = kStaticTreeShape ? 0 : params.tree_bias_q_offset;
+    const int tree_bias_k_offset = kStaticTreeShape ? 0 : params.tree_bias_k_offset;
+    const int64_t tree_bias_row_stride = kStaticTreeShape ? 32 : params.tree_bias_row_stride;
+    const int64_t tree_bias_col_stride = kStaticTreeShape ? 1 : params.tree_bias_col_stride;
+'''
+    if helper.count(dense_metadata) != 1:
+        raise RuntimeError("fixed32 visibility metadata anchor drifted")
+    helper = helper.replace(dense_metadata, static_metadata, 1)
+
+    q_bound = "            if (kStaticQueryTile || (q_rel >= 0 && q_rel < tree_bias_rows)) {\n"
+    q_bound_replacement = r'''            if (kStaticTreeShape || (q_rel >= 0 && q_rel < tree_bias_rows)) {
+                const unsigned int tree_visibility = kStaticTreeVisibility
+                    ? StaticTreeVisibility<Kernel_traits>::row_mask(q_rel)
+                    : 0U;
+'''
+    if helper.count(q_bound) != 1:
+        raise RuntimeError("fixed32 visibility query bound anchor drifted")
+    helper = helper.replace(q_bound, q_bound_replacement, 1)
+
+    dense_bias = r'''                            const float bias = tree_bias[
+                                q_rel * tree_bias_row_stride
+                                + k_rel * tree_bias_col_stride
+                            ];
+'''
+    static_bias = r'''                            const float bias = kStaticTreeVisibility
+                                ? ((tree_visibility & (1U << k_rel)) != 0U
+                                    ? 0.0f : -INFINITY)
+                                : tree_bias[
+                                    q_rel * tree_bias_row_stride
+                                    + k_rel * tree_bias_col_stride
+                                ];
+'''
+    if helper.count(dense_bias) != 1:
+        raise RuntimeError("fixed32 visibility bias-load anchor drifted")
+    helper = helper.replace(dense_bias, static_bias, 1)
+    return helper
 
 
 TREE_BIAS_HELPER = _tree_bias_helper(tile_earlyout=False)
@@ -244,6 +355,93 @@ FIXED32_QUERY_TILE32_B1_SPLIT2_BATCH_STRIDE_SENTINEL = 0x46523135
 # padded four-batch diagnostic tensor (about 1.6 MiB of BF32 storage).
 FIXED32_QUERY_TILE32_BATCH_STRIDE_SENTINEL = 0x20013
 FIXED32_QUERY_GQA_PAIR32_BATCH_STRIDE_SENTINEL = 0x20014
+
+
+FIXED32_PHYSICAL_PARENT = (
+    -1,
+    0, 0, 0,
+    1, 1, 1,
+    2,
+    3,
+    4, 4, 4,
+    7,
+    8,
+    9, 9, 9,
+    12,
+    13,
+    14, 14, 14,
+    17,
+    18,
+    19,
+    23,
+    24,
+    25,
+    26,
+    28,
+    29,
+    30,
+)
+
+
+def _fixed32_visibility_masks() -> tuple[int, ...]:
+    masks = []
+    for node in range(len(FIXED32_PHYSICAL_PARENT)):
+        mask = 0
+        cursor = node
+        while cursor >= 0:
+            mask |= 1 << cursor
+            cursor = FIXED32_PHYSICAL_PARENT[cursor]
+        masks.append(mask)
+    return tuple(masks)
+
+
+FIXED32_TREE_VISIBILITY_MASKS = _fixed32_visibility_masks()
+assert len(FIXED32_TREE_VISIBILITY_MASKS) == 32
+
+
+def _with_fixed32_tree_visibility(
+    source: str,
+    *,
+    trait: str,
+    symbol: str,
+    max_registers: int,
+) -> str:
+    marker = "// FR13_FA2_FIXED32_TREE_VISIBILITY_MASK"
+    if marker in source:
+        raise RuntimeError("fixed32 tree visibility specialization duplicated")
+    initializer = ",\n".join(
+        f"    0x{mask:08x}U" for mask in FIXED32_TREE_VISIBILITY_MASKS
+    )
+    specialization = f'''{marker}: the physical32 parent topology is shared by
+// Tail23 and Hydra27. Inactive slots remain present and retain their exact
+// self-plus-ancestor visibility; the valid-node mask is consumed downstream.
+static __device__ __constant__ unsigned int {symbol}[32] = {{
+{initializer}
+}};
+
+template <>
+struct StaticTreeVisibility<{trait}> {{
+    static constexpr bool enabled = true;
+
+    __forceinline__ __device__
+    static unsigned int row_mask(const int row) {{
+        return {symbol}[row];
+    }}
+}};
+
+'''
+    register_anchor = "__global__ __maxnreg__(254)"
+    if source.count(register_anchor) != 1:
+        raise RuntimeError("fixed32 tree visibility register cap drifted")
+    source = source.replace(
+        register_anchor,
+        f"__global__ __maxnreg__({max_registers})",
+        1,
+    )
+    kernel_anchor = "__global__ __maxnreg__("
+    if source.count(kernel_anchor) != 1:
+        raise RuntimeError("fixed32 tree visibility kernel anchor drifted")
+    return source.replace(kernel_anchor, specialization + kernel_anchor, 1)
 
 
 FIXED32_QUERY_STATIC_PAGE_TRAIT_LEGACY = r'''// FR13_FA2_FIXED32_STATIC_PAGE: stock traits retain the dynamic page size.
@@ -1666,10 +1864,18 @@ def _patch_flash_h(path: Path) -> bool:
     return changed
 
 
-def _patch_flash_fwd_kernel(path: Path, *, tile_earlyout: bool = False) -> bool:
+def _patch_flash_fwd_kernel(
+    path: Path,
+    *,
+    tile_earlyout: bool = False,
+    fixed32_tree_visibility_mask: bool = False,
+) -> bool:
     text = path.read_text()
     changed = False
-    tree_bias_helper = _tree_bias_helper(tile_earlyout)
+    tree_bias_helper = _tree_bias_helper(
+        tile_earlyout,
+        fixed32_tree_visibility_mask=fixed32_tree_visibility_mask,
+    )
     helper_marker = "// FR13_FA2_TREE_BIAS: add a dense query-suffix ancestry bias after QK."
     helper_end_marker = "template<typename Kernel_traits, bool Is_dropout"
     if helper_marker in text:
@@ -2880,6 +3086,7 @@ def _patch_fixed32_query_tile32_translation_unit(
     path: Path,
     *,
     fixed32_query_tile32: bool = False,
+    fixed32_tree_visibility_mask: bool = False,
 ) -> bool:
     if not fixed32_query_tile32:
         return False
@@ -2889,11 +3096,19 @@ def _patch_fixed32_query_tile32_translation_unit(
     if "FR13_FA2_FIXED32_QUERY_TILE32" in stock_text:
         raise RuntimeError("qrow32 must not share the stock instantiation TU")
     qrow_path = path.with_name("flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu")
+    expected = FIXED32_QUERY_TILE32_TRANSLATION_UNIT
+    if fixed32_tree_visibility_mask:
+        expected = _with_fixed32_tree_visibility(
+            expected,
+            trait="Fr13Fixed32Qrow32KernelTraits",
+            symbol="fr13_fixed32_qrow32_tree_visibility",
+            max_registers=252,
+        )
     if qrow_path.exists():
-        if qrow_path.read_text() != FIXED32_QUERY_TILE32_TRANSLATION_UNIT:
+        if qrow_path.read_text() != expected:
             raise RuntimeError("existing qrow32 translation unit drifted")
         return False
-    qrow_path.write_text(FIXED32_QUERY_TILE32_TRANSLATION_UNIT)
+    qrow_path.write_text(expected)
     return True
 
 
@@ -2901,6 +3116,7 @@ def _patch_fixed32_query_gqa_pair32_translation_unit(
     path: Path,
     *,
     fixed32_query_gqa_pair32: bool = False,
+    fixed32_tree_visibility_mask: bool = False,
 ) -> bool:
     if not fixed32_query_gqa_pair32:
         return False
@@ -2912,11 +3128,19 @@ def _patch_fixed32_query_gqa_pair32_translation_unit(
     pair_path = path.with_name(
         "flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu"
     )
+    expected = FIXED32_QUERY_GQA_PAIR32_TRANSLATION_UNIT
+    if fixed32_tree_visibility_mask:
+        expected = _with_fixed32_tree_visibility(
+            expected,
+            trait="Fr13Fixed32Qrow32GqaPairKernelTraits",
+            symbol="fr13_fixed32_qrow32_gqa_pair_tree_visibility",
+            max_registers=252,
+        )
     if pair_path.exists():
-        if pair_path.read_text() != FIXED32_QUERY_GQA_PAIR32_TRANSLATION_UNIT:
+        if pair_path.read_text() != expected:
             raise RuntimeError("existing qrow32 GQA-pair translation unit drifted")
         return False
-    pair_path.write_text(FIXED32_QUERY_GQA_PAIR32_TRANSLATION_UNIT)
+    pair_path.write_text(expected)
     return True
 
 
@@ -2924,6 +3148,7 @@ def _patch_fixed32_query_tile32_b1_translation_unit(
     path: Path,
     *,
     fixed32_query_tile32_b1: bool = False,
+    fixed32_tree_visibility_mask: bool = False,
 ) -> bool:
     if not fixed32_query_tile32_b1:
         return False
@@ -2950,6 +3175,13 @@ def _patch_fixed32_query_tile32_b1_translation_unit(
     )
     changed = False
     for qrow_path, expected, label in candidates:
+        if fixed32_tree_visibility_mask and label == "qrow32 B1 no-split":
+            expected = _with_fixed32_tree_visibility(
+                expected,
+                trait="Fr13Fixed32Qrow32B1KernelTraits",
+                symbol="fr13_fixed32_qrow32_b1_tree_visibility",
+                max_registers=252,
+            )
         if qrow_path.exists():
             if qrow_path.read_text() != expected:
                 raise RuntimeError(f"existing {label} translation unit drifted")
@@ -3243,6 +3475,7 @@ def patch_fa2_source(
     fixed32_query_tile32: bool = False,
     fixed32_query_gqa_pair32: bool = False,
     fixed32_query_tile32_b1: bool = False,
+    fixed32_tree_visibility_mask: bool = False,
 ) -> dict[str, bool]:
     if fixed32_query_tile16_static_strides and not fixed32_query_tile16:
         raise ValueError(
@@ -3259,6 +3492,10 @@ def patch_fa2_source(
     if qrow32_builds > 1:
         raise ValueError("fixed32 qrow32 source builds are mutually exclusive")
     fixed32_query_tile32_any = bool(qrow32_builds)
+    if fixed32_tree_visibility_mask and not fixed32_query_tile32_any:
+        raise ValueError(
+            "fixed32 tree visibility requires a private qrow32 kernel"
+        )
     if fixed32_query_tile32_any and not tree_bias_tile_earlyout:
         raise ValueError(
             "fixed32 qrow32 requires --tree-bias-tile-earlyout in the same "
@@ -3279,6 +3516,7 @@ def patch_fa2_source(
     flash_fwd_kernel_changed = _patch_flash_fwd_kernel(
         files["flash_fwd_kernel.h"],
         tile_earlyout=tree_bias_tile_earlyout,
+        fixed32_tree_visibility_mask=fixed32_tree_visibility_mask,
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_static_paged_path(
@@ -3350,6 +3588,7 @@ def patch_fa2_source(
         _patch_fixed32_query_tile32_b1_translation_unit(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
             fixed32_query_tile32_b1=fixed32_query_tile32_b1,
+            fixed32_tree_visibility_mask=fixed32_tree_visibility_mask,
         )
     )
     return {
@@ -3370,11 +3609,13 @@ def patch_fa2_source(
         "flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu": _patch_fixed32_query_tile32_translation_unit(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
             fixed32_query_tile32=fixed32_query_tile32,
+            fixed32_tree_visibility_mask=fixed32_tree_visibility_mask,
         ),
         "flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu": (
             _patch_fixed32_query_gqa_pair32_translation_unit(
                 files["flash_fwd_split_hdim256_bf16_sm80.cu"],
                 fixed32_query_gqa_pair32=fixed32_query_gqa_pair32,
+                fixed32_tree_visibility_mask=fixed32_tree_visibility_mask,
             )
         ),
         "flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu": (
@@ -6327,6 +6568,14 @@ def main() -> int:
         help="fix canonical K/V strides in the private qrow16 candidate",
     )
     parser.add_argument(
+        "--fixed32-tree-visibility-mask",
+        action="store_true",
+        help=(
+            "replace dense tree-bias reads with the exact physical32 "
+            "self-plus-ancestor bit masks in a private qrow32 kernel"
+        ),
+    )
+    parser.add_argument(
         "--fixed32-query-tile32",
         action="store_true",
         help="build the gate-only fixed32 B4 FA2 32-row query-tile candidate",
@@ -6414,6 +6663,11 @@ def main() -> int:
     )
     if qrow32_source_builds > 1:
         parser.error("qrow32 source candidates are mutually exclusive")
+    if args.fixed32_tree_visibility_mask and not qrow32_source_builds:
+        parser.error(
+            "--fixed32-tree-visibility-mask requires a private qrow32 "
+            "source candidate"
+        )
     if (
         args.fixed32_query_tile16_static_strides
         and not args.fixed32_query_tile16
@@ -6448,6 +6702,7 @@ def main() -> int:
         "fixed32_query_tile16_static_strides": (
             args.fixed32_query_tile16_static_strides
         ),
+        "fixed32_tree_visibility_mask": args.fixed32_tree_visibility_mask,
         "fixed32_query_tile32": args.fixed32_query_tile32,
         "fixed32_query_gqa_pair32": args.fixed32_query_gqa_pair32,
         "fixed32_query_tile32_b1": args.fixed32_query_tile32_b1,
@@ -6475,6 +6730,9 @@ def main() -> int:
             fixed32_query_tile32=args.fixed32_query_tile32,
             fixed32_query_gqa_pair32=args.fixed32_query_gqa_pair32,
             fixed32_query_tile32_b1=args.fixed32_query_tile32_b1,
+            fixed32_tree_visibility_mask=(
+                args.fixed32_tree_visibility_mask
+            ),
         )
     if not args.skip_python:
         payload["python"] = patch_installed_vllm(
