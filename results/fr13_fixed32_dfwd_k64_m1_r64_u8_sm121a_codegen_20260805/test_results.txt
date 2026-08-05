@@ -1,0 +1,12 @@
+python3 -m pytest -q tests/test_fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.py
+.....                                                                    [100%]
+5 passed in 0.02s
+
+python3 -m py_compile scripts/fr13_check_bf16_gemvx_k64_m1_shuffle_r64_u8_codegen.py
+PASS
+
+python3 scripts/fr13_check_bf16_gemvx_k64_m1_shuffle_r64_u8_codegen.py [pinned artifact arguments]
+STATIC_CODEGEN_PASS_UNQUALIFIED
+
+git diff --check 06f45f4bde9bfaf9e8e84eb9d2867d81ba55857d
+PASS
