@@ -4776,7 +4776,7 @@ def _fr13_fixed32_capture_begin(
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
         and (
             _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            not in ("single_launch", "gqa_group3")
+            not in ("single_launch", "gqa_group3", "gqa_group3_bv16")
             or batch == _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
         )
     ):
@@ -4967,7 +4967,7 @@ def _fr13_fixed32_capture_end(
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
         and (
             _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            not in ("single_launch", "gqa_group3")
+            not in ("single_launch", "gqa_group3", "gqa_group3_bv16")
             or int(work["batch_size"])
             == _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
         )
@@ -5215,7 +5215,7 @@ def _fr13_fixed32_observed_graph_replay(
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
         and (
             _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            not in ("single_launch", "gqa_group3")
+            not in ("single_launch", "gqa_group3", "gqa_group3_bv16")
             or int(event["batch_size"])
             == _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
         )
@@ -7753,17 +7753,23 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         "128",
         "single_launch",
         "gqa_group3",
+        "gqa_group3_bv16",
     ):
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
-            "16, 32, 64, 128, single_launch, or gqa_group3"
+            "16, 32, 64, 128, single_launch, gqa_group3, or "
+            "gqa_group3_bv16"
         )
     candidate = (
         candidate_raw
-        if candidate_raw in ("single_launch", "gqa_group3")
+        if candidate_raw in (
+            "single_launch",
+            "gqa_group3",
+            "gqa_group3_bv16",
+        )
         else (int(candidate_raw) if candidate_raw else None)
     )
-    if candidate in ("single_launch", "gqa_group3"):
+    if candidate in ("single_launch", "gqa_group3", "gqa_group3_bv16"):
         if expected_batch_raw not in ("1", "4"):
             raise RuntimeError(
                 "FR13 GDN single-launch patch requires exactly one expected "
@@ -8540,7 +8546,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         raise RuntimeError(
             "FR13 GDN GQA-group3 production batch is set without its arm"
         )
-    if candidate in ("single_launch", "gqa_group3"):
+    if candidate in ("single_launch", "gqa_group3", "gqa_group3_bv16"):
         if expected_batch_raw not in ("1", "4"):
             raise RuntimeError(
                 "FR13 GDN single-launch patch requires exactly one expected "
@@ -8972,10 +8978,12 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             "128",
             "single_launch",
             "gqa_group3",
+            "gqa_group3_bv16",
         ):
             raise RuntimeError(
                 "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be one of "
-                "16, 32, 64, 128, single_launch, or gqa_group3"
+                "16, 32, 64, 128, single_launch, gqa_group3, or "
+                "gqa_group3_bv16"
             )
         if not mode:
             raise RuntimeError(
