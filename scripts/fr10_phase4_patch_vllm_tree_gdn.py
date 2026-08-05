@@ -445,6 +445,7 @@ _FR13_DRAFT_HEAD_U8_WORKER_ENV_SIDECAR = Path(
 _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
     "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE",
+    "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE",
     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256",
@@ -455,6 +456,7 @@ _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_SUBSET_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_VOCAB_BLOCKS_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256",
+    "FR13_DRAFT_HEAD_M1_R64_U8_TAW_SOURCE_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT",
     "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID",
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON",
@@ -472,6 +474,8 @@ _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_SIDECAR = Path(
 )
 _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB",
+    "FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M4_R64_U8_SO",
     "FR13_DRAFT_HEAD_M4_R64_U8_SO_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_SHA256",
@@ -481,9 +485,14 @@ _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M4_R64_U8_SUBSET_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_VOCAB_BLOCKS_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_TAW_SOURCE_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT",
     "FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS",
     "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_JSON",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_INTERNAL_PRODUCTION_ATTESTED",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_ENGAGEMENT_JSON",
     "FR13_DRAFT_VOCAB_BLOCKS",
     "FR13_DRAFT_VOCAB_K",
     "FR13_DRAFT_VOCAB_ROOT",
@@ -496,6 +505,7 @@ _FR13_FIXED32_OBSERVED_RUNTIME_SOURCE = r'''
 _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
     "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE",
+    "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE",
     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256",
@@ -506,6 +516,7 @@ _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_SUBSET_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_VOCAB_BLOCKS_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256",
+    "FR13_DRAFT_HEAD_M1_R64_U8_TAW_SOURCE_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT",
     "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID",
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON",
@@ -520,6 +531,8 @@ _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
 
 _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB",
+    "FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M4_R64_U8_SO",
     "FR13_DRAFT_HEAD_M4_R64_U8_SO_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_SHA256",
@@ -529,9 +542,14 @@ _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M4_R64_U8_SUBSET_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_VOCAB_BLOCKS_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_TAW_SOURCE_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT",
     "FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS",
     "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_JSON",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_INTERNAL_PRODUCTION_ATTESTED",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_ENGAGEMENT_JSON",
     "FR13_DRAFT_VOCAB_BLOCKS",
     "FR13_DRAFT_VOCAB_K",
     "FR13_DRAFT_VOCAB_ROOT",
@@ -599,6 +617,9 @@ def _fr13_draft_head_u8_worker_env_bridge(
     quality_enabled = (
         payload["FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE"] == "1"
     )
+    taw_quality_enabled = (
+        payload["FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE"] == "1"
+    )
     production_enabled = (
         payload["FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION"] == "1"
     )
@@ -609,7 +630,10 @@ def _fr13_draft_head_u8_worker_env_bridge(
         record.get("payload_sha256") != payload_sha256
         or (live_enabled == production_enabled)
         or payload["FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE"] not in ("0", "1")
+        or payload["FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE"]
+        not in ("0", "1")
         or (quality_enabled and not live_enabled)
+        or (taw_quality_enabled and not quality_enabled)
         or payload["FR13_DRAFT_VOCAB_K"] != "65536"
         or payload["FR13_DRAFT_VOCAB_ROOT"] != "1"
         or payload["FR13_DRAFT_VOCAB_BLOCKS"]
@@ -721,9 +745,20 @@ def _fr13_draft_head_m4_u8_worker_env_bridge(
         "astropy__astropy-12907,astropy__astropy-13033,"
         "astropy__astropy-13236,astropy__astropy-13398"
     )
+    live_enabled = payload.get("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB") == "1"
+    quality_enabled = (
+        payload.get("FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE") == "1"
+    )
+    production_enabled = (
+        payload.get("FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION") == "1"
+    )
+    production_sha = payload.get(
+        "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256", ""
+    )
     hash_keys = tuple(
         key for key in _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS
         if key.endswith("SHA256")
+        and not key.endswith("PRODUCTION_PASS_SIDECAR_SHA256")
     )
     if (
         not isinstance(record, dict)
@@ -735,7 +770,9 @@ def _fr13_draft_head_m4_u8_worker_env_bridge(
         != tuple(sorted(_FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS))
         or any(not isinstance(value, str) for value in payload.values())
         or record.get("payload_sha256") != payload_sha256
-        or payload["FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB"] != "1"
+        or (live_enabled == production_enabled)
+        or payload["FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE"] not in ("0", "1")
+        or (quality_enabled and not live_enabled)
         or payload["FR13_DRAFT_HEAD_M4_R64_U8_SO"]
         != "/tmp/fr13_bf16_k64_m4_r64_u8.abi3.so"
         or payload["FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS"] != task_ids
@@ -745,6 +782,35 @@ def _fr13_draft_head_m4_u8_worker_env_bridge(
         or payload["FR13_DRAFT_VOCAB_ROOT"] != "1"
         or payload["FR13_DRAFT_VOCAB_BLOCKS"]
         != "/workspace/scripts/fr13_dvk_subset_blocks.json"
+        or (
+            live_enabled
+            and (
+                payload["FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR"]
+                or production_sha
+                or payload[
+                    "FR13_DRAFT_HEAD_M4_R64_U8_INTERNAL_PRODUCTION_ATTESTED"
+                ]
+            )
+        )
+        or (
+            production_enabled
+            and (
+                payload["FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE"] != "0"
+                or payload[
+                    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR"
+                ]
+                != "/logs/fr13_dfwd_k64_m4_r64_u8.production_credential.json"
+                or len(production_sha) != 64
+                or any(
+                    value not in "0123456789abcdef"
+                    for value in production_sha
+                )
+                or payload[
+                    "FR13_DRAFT_HEAD_M4_R64_U8_INTERNAL_PRODUCTION_ATTESTED"
+                ]
+                != "1"
+            )
+        )
         or any(
             len(payload[key]) != 64
             or any(ch not in "0123456789abcdef" for ch in payload[key])
@@ -1098,6 +1164,12 @@ def _fr13_draft_head_u8_live_finalize(events, flush_binding):
     quality_enabled = (
         _os.environ.get("FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE", "0") == "1"
     )
+    taw_quality_enabled = (
+        _os.environ.get(
+            "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE", "0"
+        )
+        == "1"
+    )
     if enabled != "1":
         if _FR13_DRAFT_HEAD_U8_LIVE_STATE is not None:
             raise RuntimeError("FR13 draft-head U8 live state leaked while off")
@@ -1162,6 +1234,33 @@ def _fr13_draft_head_u8_live_finalize(events, flush_binding):
     identities = state["identities"]
     candidate = dict(state["candidate"])
     candidate["shadow_only"] = not quality_enabled
+    taw_exact_acceptance = None
+    if taw_quality_enabled:
+        taw_module = __import__("sys").modules.get(
+            "_fr13_device_multidraft_kernel"
+        )
+        if taw_module is None:
+            raise RuntimeError(
+                "FR13 draft-head U8 TAW quality lost its device module"
+            )
+        taw_exact_acceptance = (
+            taw_module.fr13_fixed32_taw_candidate_acceptance_census(
+                mode="hydra27_fixed32",
+                batch_size=1,
+                completed_events=event_count,
+                events_sha256=flush_binding["events_sha256"],
+                candidate_binding={
+                    "operation": candidate["operation"],
+                    "candidate_so_sha256": identities[
+                        "candidate_so_sha256"
+                    ],
+                    "candidate_source_sha256": identities[
+                        "candidate_source_sha256"
+                    ],
+                    "task_ids": [identities["instance_id"]],
+                },
+            )
+        )
     record = {
         "schema": (
             "fr13.fixed32.dfwd_k64_m1_r64_u8_quality.v2"
@@ -1224,6 +1323,7 @@ def _fr13_draft_head_u8_live_finalize(events, flush_binding):
             "q_mix_definition": "target_overlap_normalized_over_draft_token_ids",
             "rejection_sampler": "fr13_fixed32_deterministic_multidraft",
         },
+        "taw_exact_acceptance": taw_exact_acceptance,
         "reference_always_served": not quality_enabled,
         "candidate_returned": quality_enabled,
         "served_return": (
@@ -1274,7 +1374,7 @@ def _fr13_draft_head_u8_live_finalize(events, flush_binding):
 
 
 def _fr13_draft_head_m4_u8_live_register(
-    compares, mismatches, geometry, candidate, identities
+    compares, mismatches, nonfinite, geometry, candidate, identities
 ):
     global _FR13_DRAFT_HEAD_M4_U8_LIVE_STATE
     _os = __import__("os")
@@ -1284,10 +1384,13 @@ def _fr13_draft_head_m4_u8_live_register(
         or _FR13_DRAFT_HEAD_M4_U8_LIVE_STATE is not None
         or tuple(compares.shape) != (5,)
         or tuple(mismatches.shape) != (5,)
+        or tuple(nonfinite.shape) != (5,)
         or str(compares.dtype) != "torch.int64"
         or str(mismatches.dtype) != "torch.int64"
+        or str(nonfinite.dtype) != "torch.int64"
         or compares.device.type != "cuda"
         or mismatches.device != compares.device
+        or nonfinite.device != compares.device
         or not isinstance(geometry, dict)
         or not isinstance(candidate, dict)
         or not isinstance(identities, dict)
@@ -1303,6 +1406,7 @@ def _fr13_draft_head_m4_u8_live_register(
     _FR13_DRAFT_HEAD_M4_U8_LIVE_STATE = {
         "compares": compares,
         "mismatches": mismatches,
+        "nonfinite": nonfinite,
         "geometry": geometry,
         "candidate": candidate,
         "identities": identities,
@@ -1373,6 +1477,9 @@ def _fr13_draft_head_m4_u8_live_depth(batch_size):
 def _fr13_draft_head_m4_u8_live_finalize(events, flush_binding):
     _os = __import__("os")
     enabled = _os.environ.get("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "0")
+    quality_enabled = (
+        _os.environ.get("FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE", "0") == "1"
+    )
     if enabled != "1":
         if _FR13_DRAFT_HEAD_M4_U8_LIVE_STATE is not None:
             raise RuntimeError("FR13 draft-head M4 U8 live state leaked while off")
@@ -1412,18 +1519,54 @@ def _fr13_draft_head_m4_u8_live_finalize(events, flush_binding):
         raise RuntimeError("FR13 draft-head M4 U8 live finalization drifted")
     compares = tuple(int(value) for value in state["compares"].tolist())
     mismatches = tuple(int(value) for value in state["mismatches"].tolist())
-    exact = (
+    nonfinite = tuple(int(value) for value in state["nonfinite"].tolist())
+    complete = (
         compares == (event_count,) * 5
-        and mismatches == (0,) * 5
         and state["captured_depths"] == [1, 2, 3, 4]
         and state["root_forward_steps"] == expected_steps
+    )
+    qualified = complete and (
+        nonfinite == (0,) * 5 if quality_enabled else mismatches == (0,) * 5
     )
     labels = ("root", "mtp_depth_1", "mtp_depth_2", "mtp_depth_3", "mtp_depth_4")
     total_compares = sum(compares)
     identities = state["identities"]
+    candidate = dict(state["candidate"])
+    candidate["shadow_only"] = not quality_enabled
+    taw_exact_acceptance = None
+    if quality_enabled:
+        taw_module = __import__("sys").modules.get(
+            "_fr13_device_multidraft_kernel"
+        )
+        if taw_module is None:
+            raise RuntimeError(
+                "FR13 draft-head M4 U8 quality lost its TAW module"
+            )
+        taw_exact_acceptance = (
+            taw_module.fr13_fixed32_taw_candidate_acceptance_census(
+                mode="hydra27_fixed32",
+                batch_size=4,
+                completed_events=event_count,
+                events_sha256=flush_binding["events_sha256"],
+                candidate_binding={
+                    "operation": candidate["operation"],
+                    "candidate_so_sha256": identities[
+                        "candidate_so_sha256"
+                    ],
+                    "candidate_source_sha256": identities[
+                        "candidate_source_sha256"
+                    ],
+                    "task_ids": list(identities["task_ids"]),
+                },
+            )
+        )
     record = {
-        "schema": "fr13.fixed32.dfwd_k64_m4_r64_u8_shadow.v1",
-        "status": "PASS" if exact else "FAIL",
+        "schema": (
+            "fr13.fixed32.dfwd_k64_m4_r64_u8_quality.v2"
+            if quality_enabled
+            else "fr13.fixed32.dfwd_k64_m4_r64_u8_shadow.v1"
+        ),
+        "status": "PASS" if qualified else "FAIL",
         "suite": "SWE-Verified",
         "task_ids": identities["task_ids"],
         "task_markers": ["swe_verified:" + value for value in identities["task_ids"]],
@@ -1443,7 +1586,7 @@ def _fr13_draft_head_m4_u8_live_finalize(events, flush_binding):
             "execution_basis": "FULL_AND_PIECEWISE_graph_replay",
         },
         "geometry": state["geometry"],
-        "candidate": state["candidate"],
+        "candidate": candidate,
         "completed_events": event_count,
         "complete_work_census_events": event_count,
         "work_census_last_event_index": event_count - 1,
@@ -1456,6 +1599,7 @@ def _fr13_draft_head_m4_u8_live_finalize(events, flush_binding):
         "captured_mtp_depths": state["captured_depths"],
         "per_depth_full_logit_comparisons": dict(zip(labels, compares)),
         "per_depth_raw_bf16_mismatches": dict(zip(labels, mismatches)),
+        "per_depth_nonfinite_logits": dict(zip(labels, nonfinite)),
         "comparison_scope": (
             "all four rows and all 65536 logits at each of five fixed "
             "K64/root1 draft-head sites"
@@ -1464,9 +1608,27 @@ def _fr13_draft_head_m4_u8_live_finalize(events, flush_binding):
         "compared_elements": total_compares * 4 * 65536,
         "compared_bytes": total_compares * 4 * 65536 * 2,
         "raw_bf16_mismatches": sum(mismatches),
-        "reference_always_served": True,
-        "candidate_returned": False,
-        "served_return": "incumbent BF16 logits object unchanged",
+        "nonfinite_logits": sum(nonfinite),
+        "qualification_policy": (
+            "lossless_deterministic_proposal_taw_exact_v1"
+            if quality_enabled
+            else "raw_bf16_shadow_v1"
+        ),
+        "proposal_distribution": {
+            "candidate_logits_consumed": quality_enabled,
+            "draft_probs": None,
+            "proposal_token_selector": "argmax_topk",
+            "q_mix_definition": "target_overlap_normalized_over_draft_token_ids",
+            "rejection_sampler": "fr13_fixed32_deterministic_multidraft",
+        },
+        "taw_exact_acceptance": taw_exact_acceptance,
+        "reference_always_served": not quality_enabled,
+        "candidate_returned": quality_enabled,
+        "served_return": (
+            "candidate BF16 logits"
+            if quality_enabled
+            else "incumbent BF16 logits object unchanged"
+        ),
         "performance_measurement": False,
         "timing_eligible": False,
         "finalized_by_fixed32_flush": True,
@@ -1489,10 +1651,10 @@ def _fr13_draft_head_m4_u8_live_finalize(events, flush_binding):
         handle.flush()
         _os.fsync(handle.fileno())
     _os.replace(temporary, path)
-    if not exact:
+    if not qualified:
         raise RuntimeError(
-            "FR13 draft-head M4 U8 final depth/event comparison mismatch: "
-            + repr((compares, mismatches, state["captured_depths"],
+            "FR13 draft-head M4 U8 final depth/event quality mismatch: "
+            + repr((compares, mismatches, nonfinite, state["captured_depths"],
                     state["root_forward_steps"], expected_steps))
         )
 def _fr13_fixed32_unmeasured_full_row_map_valid(batch_rows, compact_batch):
@@ -9827,6 +9989,7 @@ def _patch_gdn_linear() -> bool:
     )
     m4_u8_worker_env_required = (
         os.environ.get("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "0") == "1"
+        or os.environ.get("FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION", "0") == "1"
     )
 
     text = text.replace(
@@ -24325,11 +24488,20 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_u8_quality_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE", "0"
             )
+            _fr13_dh_u8_taw_quality_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE", "0"
+            )
             _fr13_dh_u8_prod_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION", "0"
             )
             _fr13_dh_m4_u8_live_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "0"
+            )
+            _fr13_dh_m4_u8_quality_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE", "0"
+            )
+            _fr13_dh_m4_u8_prod_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION", "0"
             )
             _fr13_dh_fp8_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_FP8", "0"
@@ -24365,6 +24537,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE must be exactly 0 or 1"
                 )
+            if _fr13_dh_u8_taw_quality_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE must be "
+                    "exactly 0 or 1"
+                )
             if _fr13_dh_u8_prod_raw not in ("0", "1"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION must be exactly 0 or 1"
@@ -24372,6 +24549,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             if _fr13_dh_m4_u8_live_raw not in ("0", "1"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB must be exactly 0 or 1"
+                )
+            if _fr13_dh_m4_u8_quality_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE must be exactly 0 or 1"
+                )
+            if _fr13_dh_m4_u8_prod_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION must be exactly 0 or 1"
                 )
             if _fr13_dh_fp8_raw not in ("0", "1"):
                 raise RuntimeError(
@@ -24387,13 +24572,30 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
             _fr13_dh_u8_live = _fr13_dh_u8_live_raw == "1"
             _fr13_dh_u8_quality = _fr13_dh_u8_quality_raw == "1"
+            _fr13_dh_u8_taw_quality = (
+                _fr13_dh_u8_taw_quality_raw == "1"
+            )
             _fr13_dh_u8_prod = _fr13_dh_u8_prod_raw == "1"
             _fr13_dh_u8_active = _fr13_dh_u8_live or _fr13_dh_u8_prod
             if _fr13_dh_u8_quality and not _fr13_dh_u8_live:
                 raise RuntimeError(
                     "FR13 draft-head U8 quality gate requires LIVE_AB=1"
                 )
+            if _fr13_dh_u8_taw_quality and not _fr13_dh_u8_quality:
+                raise RuntimeError(
+                    "FR13 draft-head U8 TAW quality requires candidate-served "
+                    "quality mode"
+                )
             _fr13_dh_m4_u8_live = _fr13_dh_m4_u8_live_raw == "1"
+            _fr13_dh_m4_u8_quality = _fr13_dh_m4_u8_quality_raw == "1"
+            _fr13_dh_m4_u8_prod = _fr13_dh_m4_u8_prod_raw == "1"
+            _fr13_dh_m4_u8_active = (
+                _fr13_dh_m4_u8_live or _fr13_dh_m4_u8_prod
+            )
+            if _fr13_dh_m4_u8_quality and not _fr13_dh_m4_u8_live:
+                raise RuntimeError(
+                    "FR13 draft-head M4 U8 quality requires LIVE_AB=1"
+                )
             _fr13_dh_fp8 = _fr13_dh_fp8_raw == "1"
             _fr13_dh_fp8_static_io = (
                 _fr13_dh_fp8_static_io_raw == "1"
@@ -24432,7 +24634,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m32_prod,
                     _fr13_dh_u8_live,
                     _fr13_dh_u8_prod,
-                    _fr13_dh_m4_u8_live,
+                    _fr13_dh_m4_u8_active,
                     _fr13_dh_fp8,
                 )
             )
@@ -24463,12 +24665,22 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "FR13 draft-head U8 production has no validator attestation"
                 )
             if (
+                _fr13_dh_m4_u8_prod
+                and os.environ.get(
+                    "FR13_DRAFT_HEAD_M4_R64_U8_INTERNAL_PRODUCTION_ATTESTED"
+                )
+                != "1"
+            ):
+                raise RuntimeError(
+                    "FR13 draft-head M4 U8 production has no validator attestation"
+                )
+            if (
                 _fr13_dh_rows
                 or _fr13_dh_ab
                 or _fr13_dh_m32_live
                 or _fr13_dh_m32_prod
                 or _fr13_dh_u8_active
-                or _fr13_dh_m4_u8_live
+                or _fr13_dh_m4_u8_active
                 or _fr13_dh_fp8
             ) and (
                 not _fr13_is_fixed32
@@ -24480,7 +24692,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "FR13 draft-head padding requires exact fixed32, root "
                     "subset, single-logits, and FR13_DRAFT_VOCAB_K=65536"
                 )
-            if _fr13_dh_m4_u8_live and int(batch_size) != 4:
+            if _fr13_dh_m4_u8_active and int(batch_size) != 4:
                 raise RuntimeError(
                     "FR13 draft-head M4 U8 live A/B requires exact B4 geometry"
                 )
@@ -24512,6 +24724,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             self._fr13_dh_u8_fallback_calls = 0
             self._fr13_dh_u8_graph_attestation = None
             self._fr13_dh_m4_u8_live_active = _fr13_dh_m4_u8_live
+            self._fr13_dh_m4_u8_production_active = _fr13_dh_m4_u8_prod
+            self._fr13_dh_m4_u8_active = _fr13_dh_m4_u8_active
             self._fr13_dh_m4_u8_fallback_calls = 0
             self._fr13_dh_fp8_active = _fr13_dh_fp8
             self._fr13_dh_fp8_selected_root_calls = 0
@@ -24815,6 +25029,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "fa2_sha256": _fr13_dh_u8_pathlib.Path(
                             "/tmp/fr13_fork_fa2.so"
                         ),
+                        "taw_source_sha256": _fr13_dh_u8_pathlib.Path(
+                            "/workspace/scripts/fr13_device_multidraft_kernel.py"
+                        ),
                     }
                     _fr13_dh_u8_env = {
                         "candidate_so_sha256": (
@@ -24840,6 +25057,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         ),
                         "fa2_sha256": (
                             "FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256"
+                        ),
+                        "taw_source_sha256": (
+                            "FR13_DRAFT_HEAD_M1_R64_U8_TAW_SOURCE_SHA256"
                         ),
                     }
                     _fr13_dh_u8_identities = {}
@@ -25013,7 +25233,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         flush=True,
                     )
                 if (
-                    _fr13_dh_m4_u8_live
+                    _fr13_dh_m4_u8_active
                     and not getattr(self, "_fr13_dh_m4_u8_ready", False)
                 ):
                     import hashlib as _fr13_dh_m4_u8_hashlib
@@ -25063,6 +25283,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "fa2_sha256": _fr13_dh_m4_u8_pathlib.Path(
                             "/tmp/fr13_fork_fa2.so"
                         ),
+                        "taw_source_sha256": _fr13_dh_m4_u8_pathlib.Path(
+                            "/workspace/scripts/fr13_device_multidraft_kernel.py"
+                        ),
                     }
                     _fr13_dh_m4_u8_env = {
                         "candidate_so_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_SO_SHA256",
@@ -25073,6 +25296,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "subset_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_SUBSET_SHA256",
                         "vocab_blocks_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_VOCAB_BLOCKS_SHA256",
                         "fa2_sha256": "FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256",
+                        "taw_source_sha256": (
+                            "FR13_DRAFT_HEAD_M4_R64_U8_TAW_SOURCE_SHA256"
+                        ),
                     }
                     _fr13_dh_m4_u8_identities = {}
                     for (
@@ -25148,6 +25374,36 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             "candidate_so_bytes": 134320,
                         }
                     )
+                    if _fr13_dh_m4_u8_prod:
+                        _fr13_dh_m4_u8_credential_path = (
+                            _fr13_dh_m4_u8_pathlib.Path(
+                                os.environ.get(
+                                    "FR13_DRAFT_HEAD_M4_R64_U8_"
+                                    "PRODUCTION_PASS_SIDECAR",
+                                    "",
+                                )
+                            )
+                        )
+                        _fr13_dh_m4_u8_credential_sha = os.environ.get(
+                            "FR13_DRAFT_HEAD_M4_R64_U8_"
+                            "PRODUCTION_PASS_SIDECAR_SHA256",
+                            "",
+                        )
+                        if (
+                            str(_fr13_dh_m4_u8_credential_path)
+                            != "/logs/fr13_dfwd_k64_m4_r64_u8."
+                            "production_credential.json"
+                            or not _fr13_dh_m4_u8_credential_path.is_file()
+                            or _fr13_dh_m4_u8_credential_path.is_symlink()
+                            or len(_fr13_dh_m4_u8_credential_sha) != 64
+                            or _fr13_dh_m4_u8_hashlib.sha256(
+                                _fr13_dh_m4_u8_credential_path.read_bytes()
+                            ).hexdigest()
+                            != _fr13_dh_m4_u8_credential_sha
+                        ):
+                            raise RuntimeError(
+                                "FR13 draft-head M4 U8 production credential drifted"
+                            )
                     torch.ops.load_library(
                         str(_fr13_dh_m4_u8_paths["candidate_so_sha256"])
                     )
@@ -25160,30 +25416,48 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         dtype=torch.bfloat16,
                         device=_fr13_dh_m4_u8_w.device,
                     )
-                    self._fr13_dh_m4_u8_compares = torch.zeros(
-                        (5,), dtype=torch.int64, device=_fr13_dh_m4_u8_w.device
-                    )
-                    self._fr13_dh_m4_u8_mismatches = torch.zeros(
-                        (5,), dtype=torch.int64, device=_fr13_dh_m4_u8_w.device
-                    )
-                    self._fr13_dh_m4_u8_count_enable = torch.zeros(
-                        (), dtype=torch.int64, device=_fr13_dh_m4_u8_w.device
-                    )
-                    from vllm.model_executor.layers.mamba import (
-                        gdn_linear_attn as _fr13_dh_m4_u8_gdn,
-                    )
-                    _fr13_dh_m4_u8_contract_value = _fr13_dh_m4_u8_contract()
-                    _fr13_dh_m4_u8_gdn._fr13_draft_head_m4_u8_live_register(
-                        self._fr13_dh_m4_u8_compares,
-                        self._fr13_dh_m4_u8_mismatches,
-                        _fr13_dh_m4_u8_contract_value["geometry"],
-                        _fr13_dh_m4_u8_contract_value["candidate"],
-                        _fr13_dh_m4_u8_identities,
-                    )
+                    if _fr13_dh_m4_u8_live:
+                        self._fr13_dh_m4_u8_compares = torch.zeros(
+                            (5,), dtype=torch.int64,
+                            device=_fr13_dh_m4_u8_w.device,
+                        )
+                        self._fr13_dh_m4_u8_mismatches = torch.zeros(
+                            (5,), dtype=torch.int64,
+                            device=_fr13_dh_m4_u8_w.device,
+                        )
+                        self._fr13_dh_m4_u8_nonfinite = torch.zeros(
+                            (5,), dtype=torch.int64,
+                            device=_fr13_dh_m4_u8_w.device,
+                        )
+                        self._fr13_dh_m4_u8_count_enable = torch.zeros(
+                            (), dtype=torch.int64,
+                            device=_fr13_dh_m4_u8_w.device,
+                        )
+                        from vllm.model_executor.layers.mamba import (
+                            gdn_linear_attn as _fr13_dh_m4_u8_gdn,
+                        )
+                        _fr13_dh_m4_u8_contract_value = _fr13_dh_m4_u8_contract()
+                        _fr13_dh_m4_u8_gdn._fr13_draft_head_m4_u8_live_register(
+                            self._fr13_dh_m4_u8_compares,
+                            self._fr13_dh_m4_u8_mismatches,
+                            self._fr13_dh_m4_u8_nonfinite,
+                            _fr13_dh_m4_u8_contract_value["geometry"],
+                            _fr13_dh_m4_u8_contract_value["candidate"],
+                            _fr13_dh_m4_u8_identities,
+                        )
                     self._fr13_dh_m4_u8_ready = True
                     print(
-                        "[FR13_DRAFT_HEAD_M4_R64_U8] ready shadow_only=1 "
-                        "incumbent_served=1 batch=4 depths=root,1,2,3,4",
+                        "[FR13_DRAFT_HEAD_M4_R64_U8] ready "
+                        + (
+                            "production=1 credential_attested=1 candidate_served=1"
+                            if _fr13_dh_m4_u8_prod
+                            else (
+                                "quality_gate=1 candidate_served=1 taw_exact=1"
+                                if _fr13_dh_m4_u8_quality
+                                else "shadow_only=1 incumbent_served=1"
+                            )
+                        )
+                        + " batch=4 depths=root,1,2,3,4",
                         flush=True,
                     )
                 if (
@@ -25563,7 +25837,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "independent_accumulators": 4,
                         "reduction_strides": [8, 4, 2, 1],
                         "served_rows": 4,
-                        "shadow_only": True,
+                        "shadow_only": bool(
+                            _fr13_dh_m4_u8_live
+                            and not _fr13_dh_m4_u8_quality
+                        ),
                     },
                 }
 
@@ -26374,6 +26651,20 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     gdn_linear_attn as _fr13_dh_m4_u8_runtime_gdn,
                 )
 
+                if _fr13_dh_m4_u8_prod:
+                    self._fr13_dh_m4_u8_op(
+                        self._fr13_dh_m4_u8_output, _h, _sh.weight
+                    )
+                    if not getattr(
+                        self, "_fr13_dh_m4_u8_engaged", False
+                    ):
+                        self._fr13_dh_m4_u8_engaged = True
+                        print(
+                            "[FR13_DRAFT_HEAD_M4_R64_U8] engaged batch=4 "
+                            "production=1 candidate_served=1 incumbent_calls=0",
+                            flush=True,
+                        )
+                    return self._fr13_dh_m4_u8_output
                 _fr13_dh_m4_u8_depth = getattr(
                     _fr13_dh_m4_u8_runtime_gdn,
                     "_fr13_draft_head_m4_u8_live_depth",
@@ -26420,13 +26711,28 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 self._fr13_dh_m4_u8_compares[
                     _fr13_dh_m4_u8_depth
                 ].add_(self._fr13_dh_m4_u8_count_enable)
+                self._fr13_dh_m4_u8_nonfinite[
+                    _fr13_dh_m4_u8_depth
+                ].add_(
+                    torch.count_nonzero(
+                        ~torch.isfinite(self._fr13_dh_m4_u8_output)
+                    )
+                    * self._fr13_dh_m4_u8_count_enable
+                )
                 if not getattr(self, "_fr13_dh_m4_u8_engaged", False):
                     self._fr13_dh_m4_u8_engaged = True
                     print(
                         "[FR13_DRAFT_HEAD_M4_R64_U8] engaged batch=4 "
-                        "full_bf16_matrix=4x65536 incumbent_served=1 shadow_only=1",
+                        + (
+                            "candidate_served=1 finite_gate=1 taw_exact=1"
+                            if _fr13_dh_m4_u8_quality
+                            else "full_bf16_matrix=4x65536 incumbent_served=1 "
+                            "shadow_only=1"
+                        ),
                         flush=True,
                     )
+                if _fr13_dh_m4_u8_quality:
+                    return self._fr13_dh_m4_u8_output
                 return _fr13_dh_m4_u8_reference
 
             def _fr13_dh_fp8_logits(_h):
@@ -26569,7 +26875,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         self, "_fr13_dh_u8_production_active", False
                     )
                     _fr13_dh_m4_u8_on = getattr(
-                        self, "_fr13_dh_m4_u8_live_active", False
+                        self, "_fr13_dh_m4_u8_active", False
                     )
                     _fr13_dh_capturing = False
                     if _fr13_dh_m4_u8_on:
@@ -26683,7 +26989,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         self, "_fr13_dvk_map_t", None
                     )
                 except Exception as _e:
-                    if getattr(self, "_fr13_dh_m4_u8_live_active", False):
+                    if getattr(self, "_fr13_dh_m4_u8_active", False):
                         self._fr13_dh_m4_u8_fallback_calls += 1
                         raise RuntimeError(
                             "FR13 draft-head M4 U8 live A/B failed its strict "
@@ -33124,6 +33430,9 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
     quality_enabled = os.environ.get(
         "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE", "0"
     )
+    taw_quality_enabled = os.environ.get(
+        "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE", "0"
+    )
     production_enabled = os.environ.get(
         "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION", "0"
     )
@@ -33139,9 +33448,17 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
         raise RuntimeError(
             "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE must be exactly 0 or 1"
         )
+    if taw_quality_enabled not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE must be exactly 0 or 1"
+        )
     if quality_enabled == "1" and live_enabled != "1":
         raise RuntimeError(
             "FR13 draft-head U8 quality gate requires LIVE_AB=1"
+        )
+    if taw_quality_enabled == "1" and quality_enabled != "1":
+        raise RuntimeError(
+            "FR13 draft-head U8 TAW quality requires candidate-served quality"
         )
     if live_enabled == production_enabled == "1":
         raise RuntimeError(
@@ -33179,6 +33496,9 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
             {
                 "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "1",
                 "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE": quality_enabled,
+                "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE": (
+                    taw_quality_enabled
+                ),
                 "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "0",
                 "FR13_DRAFT_HEAD_M1_R64_U8_"
                 "PRODUCTION_PASS_SIDECAR": "",
@@ -33193,6 +33513,7 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
             {
                 "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "0",
                 "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE": "0",
+                "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE": "0",
                 "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "1",
                 "FR13_DRAFT_HEAD_M1_R64_U8_"
                 "PRODUCTION_PASS_SIDECAR": (
@@ -33292,18 +33613,31 @@ def _fr13_write_draft_head_u8_worker_env_sidecar(
 def _fr13_write_draft_head_m4_u8_worker_env_sidecar(
     sidecar_path: Path | None = None,
 ) -> dict[str, object] | None:
-    """Bridge the exact four-task M4 live qualification env into EngineCore."""
+    """Bridge one exact4 M4 qualification or production env into EngineCore."""
     path = (
         _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_SIDECAR
         if sidecar_path is None
         else Path(sidecar_path)
     )
-    enabled = os.environ.get("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "0")
-    if enabled not in ("0", "1"):
-        raise RuntimeError(
-            "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB must be exactly 0 or 1"
-        )
-    if enabled == "0":
+    live_enabled = os.environ.get("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "0")
+    quality_enabled = os.environ.get(
+        "FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE", "0"
+    )
+    production_enabled = os.environ.get(
+        "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION", "0"
+    )
+    for name, value in (
+        ("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", live_enabled),
+        ("FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE", quality_enabled),
+        ("FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION", production_enabled),
+    ):
+        if value not in ("0", "1"):
+            raise RuntimeError(name + " must be exactly 0 or 1")
+    if quality_enabled == "1" and live_enabled != "1":
+        raise RuntimeError("FR13 draft-head M4 U8 quality requires LIVE_AB=1")
+    if live_enabled == production_enabled == "1":
+        raise RuntimeError("FR13 draft-head M4 U8 live and production conflict")
+    if live_enabled == production_enabled == "0":
         try:
             path.unlink()
         except FileNotFoundError:
@@ -33326,7 +33660,6 @@ def _fr13_write_draft_head_m4_u8_worker_env_sidecar(
         "astropy__astropy-13236,astropy__astropy-13398"
     )
     exact = {
-        "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB": "1",
         "FR13_DRAFT_HEAD_M4_R64_U8_SO": (
             "/tmp/fr13_bf16_k64_m4_r64_u8.abi3.so"
         ),
@@ -33340,6 +33673,35 @@ def _fr13_write_draft_head_m4_u8_worker_env_sidecar(
         "FR13_DRAFT_VOCAB_K": "65536",
         "FR13_DRAFT_VOCAB_ROOT": "1",
     }
+    if live_enabled == "1":
+        exact.update(
+            {
+                "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB": "1",
+                "FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE": quality_enabled,
+                "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION": "0",
+                "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR": "",
+                "FR13_DRAFT_HEAD_M4_R64_U8_"
+                "PRODUCTION_PASS_SIDECAR_SHA256": "",
+                "FR13_DRAFT_HEAD_M4_R64_U8_"
+                "INTERNAL_PRODUCTION_ATTESTED": "",
+            }
+        )
+    else:
+        exact.update(
+            {
+                "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB": "0",
+                "FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE": "0",
+                "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION": "1",
+                "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR": (
+                    "/logs/fr13_dfwd_k64_m4_r64_u8.production_credential.json"
+                ),
+                "FR13_DRAFT_HEAD_M4_R64_U8_"
+                "INTERNAL_PRODUCTION_ATTESTED": "1",
+                "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_ENGAGEMENT_JSON": (
+                    "/logs/fr13_dfwd_k64_m4_r64_u8.production_engagement.json"
+                ),
+            }
+        )
     drift = {
         key: (payload[key], value)
         for key, value in exact.items()
@@ -33349,12 +33711,20 @@ def _fr13_write_draft_head_m4_u8_worker_env_sidecar(
         key
         for key in _FR13_DRAFT_HEAD_M4_U8_WORKER_ENV_KEYS
         if key.endswith("SHA256")
+        and not key.endswith("PRODUCTION_PASS_SIDECAR_SHA256")
     )
+    production_sha = payload[
+        "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256"
+    ]
     if (
         drift
         or any(
             re.fullmatch(r"[0-9a-f]{64}", payload[key]) is None
             for key in sha_keys
+        )
+        or (
+            production_enabled == "1"
+            and re.fullmatch(r"[0-9a-f]{64}", production_sha) is None
         )
         or re.fullmatch(
             r"[0-9a-f]{40}",

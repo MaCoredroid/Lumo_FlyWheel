@@ -33,11 +33,8 @@ CENSUS_SPEC.loader.exec_module(census_validator)
 
 def test_b1_runner_overrides_legacy_vocab_registry_for_full_vocab() -> None:
     runner = RUNNER_PATH.read_text(encoding="utf-8")
-    full_vocab = runner.index('if [[ "$FR13_DRAFT_VOCAB_K" == "0" ]]')
-    registry_override = runner.index(
-        'export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"',
-        full_vocab,
-    )
+    full_vocab = runner.index("  full_vocab)")
+    registry_override = runner.index("    NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0", full_vocab)
     launch = runner.index("bash scripts/fr13_bigdenom_swe_serve_variant.sh")
 
     assert full_vocab < registry_override < launch
@@ -653,6 +650,8 @@ def test_native_live_gate_binds_and_checks_one_graph_replay(
     entry = {
         "native_ab_probability_mismatches": torch.ones((), dtype=torch.int64),
         "native_ab_product_mismatches": torch.ones((), dtype=torch.int64),
+        "native_ab_accept_decision_mismatches": torch.ones((), dtype=torch.int64),
+        "native_ab_candidate_census_events": torch.ones((), dtype=torch.int64),
         "native_ab_live_marker": None,
         "native_ab_live_gate_pending": False,
         "native_ab_live_pass_emitted": False,
@@ -683,6 +682,8 @@ def test_native_live_gate_binds_and_checks_one_graph_replay(
     assert armed == {"status": "armed", "batch_size": 4}
     assert entry["native_ab_probability_mismatches"].item() == 0
     assert entry["native_ab_product_mismatches"].item() == 0
+    assert entry["native_ab_accept_decision_mismatches"].item() == 0
+    assert entry["native_ab_candidate_census_events"].item() == 0
 
     passed = taw.fr13_fixed32_taw_native_live_gate_on_replay(
         mode=mode, batch_size=4
@@ -696,6 +697,59 @@ def test_native_live_gate_binds_and_checks_one_graph_replay(
             "evidence_route": "full_graph_replay",
         }
     ]
+
+
+def test_candidate_acceptance_census_requires_every_event_and_zero_decision_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry = {
+        "native_ab_candidate_census_events": torch.tensor(3, dtype=torch.int64),
+        "native_ab_probability_mismatches": torch.zeros((), dtype=torch.int64),
+        "native_ab_product_mismatches": torch.zeros((), dtype=torch.int64),
+        "native_ab_accept_decision_mismatches": torch.zeros((), dtype=torch.int64),
+        "native_ab_live_marker": "swe_verified:astropy__astropy-12907",
+    }
+    monkeypatch.setattr(
+        taw, "_fr13_fixed32_taw_native_selector", lambda: "diagnostic"
+    )
+    monkeypatch.setattr(
+        taw, "_fr13_fixed32_taw_native_live_entry", lambda **_kwargs: entry
+    )
+    monkeypatch.setattr(
+        taw,
+        "_fr13_fixed32_taw_source_contract",
+        lambda *_args, **_kwargs: {
+            "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
+            "source_contract_sha256": "a" * 64,
+            "tensor_call_census": {},
+        },
+    )
+    binding = {
+        "operation": "fr13_bf16_k64_head::gemvx_m1_shuffle_r64_u8_out",
+        "candidate_so_sha256": "b" * 64,
+        "candidate_source_sha256": "c" * 64,
+        "task_ids": ["astropy__astropy-12907"],
+    }
+    record = taw.fr13_fixed32_taw_candidate_acceptance_census(
+        mode="hydra27_fixed32",
+        batch_size=1,
+        completed_events=3,
+        events_sha256="d" * 64,
+        candidate_binding=binding,
+    )
+    assert record["status"] == "PASS"
+    assert record["comparison_events"] == 3
+    assert record["accept_decision_mismatches"] == 0
+
+    entry["native_ab_accept_decision_mismatches"].fill_(1)
+    with pytest.raises(RuntimeError, match="final census mismatch"):
+        taw.fr13_fixed32_taw_candidate_acceptance_census(
+            mode="hydra27_fixed32",
+            batch_size=1,
+            completed_events=3,
+            events_sha256="d" * 64,
+            candidate_binding=binding,
+        )
 
 
 def test_launcher_keeps_taw_native_production_default_off_and_source_gated() -> None:

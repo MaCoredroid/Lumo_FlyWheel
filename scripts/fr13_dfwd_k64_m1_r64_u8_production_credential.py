@@ -19,8 +19,8 @@ gate = importlib.import_module("fr13_dfwd_k64_m1_r64_u8_gate")
 terminal = gate.terminal
 
 
-CREDENTIAL_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_production_credential.v2"
-VALIDATION_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_production_validation.v2"
+CREDENTIAL_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_production_credential.v3"
+VALIDATION_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_production_validation.v3"
 ENGAGEMENT_SCHEMA = "fr13.fixed32.dfwd_k64_m1_r64_u8_production_engagement.v1"
 SELECTOR = "fr13_bf16_k64_m1_r64_u8_direct"
 GRAPH_SIGNATURE = "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
@@ -34,6 +34,7 @@ INPUT_KEYS = frozenset(
         "patch_source_sha256",
         "runner_sha256",
         "subset_sha256",
+        "taw_source_sha256",
         "vocab_blocks_sha256",
     }
 )
@@ -57,6 +58,7 @@ CREDENTIAL_KEYS = frozenset(
         "nonfinite_logits",
         "qualification_policy",
         "proposal_distribution",
+        "taw_exact_acceptance",
         "raw_bf16_equality_required",
         "schema",
         "selector",
@@ -149,6 +151,7 @@ def _credential_from_gate(validated: dict[str, Any]) -> dict[str, Any]:
             validated.get("proposal_distribution"),
             gate.EXPECTED_PROPOSAL_DISTRIBUTION,
         )
+        or validated.get("taw_exact_acceptance") is None
         or validated.get("reference_always_served") is not False
         or validated.get("candidate_returned") is not True
         or validated.get("task_resolved") is not True
@@ -188,6 +191,7 @@ def _credential_from_gate(validated: dict[str, Any]) -> dict[str, Any]:
         "nonfinite_logits": 0,
         "qualification_policy": "lossless_deterministic_proposal_v1",
         "proposal_distribution": gate.EXPECTED_PROPOSAL_DISTRIBUTION,
+        "taw_exact_acceptance": validated["taw_exact_acceptance"],
         "raw_bf16_equality_required": False,
         "incumbent_served_during_qualification": False,
         "candidate_returned_during_qualification": True,
@@ -210,6 +214,7 @@ def issue(args: argparse.Namespace) -> dict[str, Any]:
         subset=args.subset,
         vocab_blocks=args.vocab_blocks,
         fa2_so=args.fa2_so,
+        taw_source=args.taw_source,
         expected_source_commit=args.expected_source_commit,
         final_flush=args.final_flush,
         boundary_snapshot=args.boundary_snapshot,
@@ -233,6 +238,7 @@ def validate_credential(
     subset: Path,
     vocab_blocks: Path,
     fa2_so: Path,
+    taw_source: Path,
     expected_source_commit: str,
 ) -> dict[str, Any]:
     expected_digest = gate._sha256(expected_credential_sha256, "expected credential")
@@ -273,6 +279,14 @@ def validate_credential(
             payload.get("proposal_distribution"),
             gate.EXPECTED_PROPOSAL_DISTRIBUTION,
         )
+        or not isinstance(payload.get("taw_exact_acceptance"), dict)
+        or payload["taw_exact_acceptance"].get("status") != "PASS"
+        or payload["taw_exact_acceptance"].get("comparison_events")
+        != payload["taw_exact_acceptance"].get("completed_events")
+        or payload["taw_exact_acceptance"].get("probability_mismatches") != 0
+        or payload["taw_exact_acceptance"].get("product_mismatches") != 0
+        or payload["taw_exact_acceptance"].get("accept_decision_mismatches") != 0
+        or payload["taw_exact_acceptance"].get("target_authority") is not True
         or payload.get("raw_bf16_equality_required") is not False
         or payload.get("incumbent_served_during_qualification") is not False
         or payload.get("candidate_returned_during_qualification") is not True
@@ -293,6 +307,7 @@ def validate_credential(
         "subset_sha256": subset,
         "vocab_blocks_sha256": vocab_blocks,
         "fa2_sha256": fa2_so,
+        "taw_source_sha256": taw_source,
     }
     for label, path in paths.items():
         _regular(path, label)
@@ -336,6 +351,7 @@ def verify(args: argparse.Namespace) -> dict[str, Any]:
         subset=args.subset,
         vocab_blocks=args.vocab_blocks,
         fa2_so=args.fa2_so,
+        taw_source=args.taw_source,
         expected_source_commit=args.expected_source_commit,
     )
 
@@ -419,6 +435,7 @@ def _input_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--subset", type=Path, required=True)
     parser.add_argument("--vocab-blocks", type=Path, required=True)
     parser.add_argument("--fa2-so", type=Path, required=True)
+    parser.add_argument("--taw-source", type=Path, required=True)
     parser.add_argument("--expected-source-commit", required=True)
 
 

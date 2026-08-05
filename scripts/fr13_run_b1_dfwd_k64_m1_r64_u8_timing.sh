@@ -39,6 +39,7 @@ esac
 QUALIFICATION_SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
 QUALIFICATION_SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
 QUALIFICATION_RUNNER=scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh
+TAW_SOURCE=scripts/fr13_device_multidraft_kernel.py
 PATCH_SOURCE=scripts/fr10_phase4_patch_vllm_tree_gdn.py
 CANDIDATE_SOURCE=csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu
 BUILD_ATTESTATION=results/fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_20260805/build_attestation.json
@@ -103,6 +104,7 @@ PREFLIGHT_CREDENTIAL="$RUNROOT_ABS/qualification_credential.preflight.json"
   --subset "$QUALIFICATION_SUBSET" \
   --vocab-blocks "$VOCAB_BLOCKS" \
   --fa2-so "$STOCK_FA2_SO" \
+  --taw-source "$TAW_SOURCE" \
   --expected-source-commit "$SOURCE_COMMIT" \
   --out "$PREFLIGHT_CREDENTIAL" >/dev/null
 PREFLIGHT_CREDENTIAL_SHA256=$(sha256sum "$PREFLIGHT_CREDENTIAL" | cut -d' ' -f1)

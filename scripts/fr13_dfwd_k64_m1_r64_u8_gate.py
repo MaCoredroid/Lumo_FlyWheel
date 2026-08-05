@@ -42,6 +42,9 @@ EXPECTED_FA2_SHA256 = (
     "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
 )
 EXPECTED_FA2_BYTES = 299183936
+EXPECTED_TAW_SOURCE_CONTRACT_SHA256 = (
+    "2b1cc55c6ec3d45c2d6ad0a21be4dc76685df4c974ae7fcfa421d5824a5c1ffb"
+)
 COMPARISON_SCOPE = (
     "all 65536 logits in the fixed K64/root1 draft head; "
     "not the full model vocabulary"
@@ -56,6 +59,7 @@ DEPTH_LABELS = (
 WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
     "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE",
+    "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE",
     "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO",
     "FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256",
@@ -66,6 +70,7 @@ WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_SUBSET_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_VOCAB_BLOCKS_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_FA2_SHA256",
+    "FR13_DRAFT_HEAD_M1_R64_U8_TAW_SOURCE_SHA256",
     "FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT",
     "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID",
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON",
@@ -139,6 +144,7 @@ IDENTITY_KEYS = frozenset(
         "runner_sha256",
         "source_commit",
         "subset_sha256",
+        "taw_source_sha256",
         "vocab_blocks_sha256",
     }
 )
@@ -172,6 +178,7 @@ LIVE_KEYS = frozenset(
         "nonfinite_logits",
         "qualification_policy",
         "proposal_distribution",
+        "taw_exact_acceptance",
         "reference_always_served",
         "root_forward_steps",
         "schema",
@@ -333,6 +340,75 @@ def validate_live_result(
         raise ValueError("DFWD U8 per-depth quality/event census drifted")
     for key in ("events_sha256", "flush_nonce", "boundary_snapshot_sha256"):
         _sha256(payload.get(key), key)
+    _validate_taw_exact_acceptance(payload.get("taw_exact_acceptance"), payload)
+    return payload
+
+
+def _validate_taw_exact_acceptance(
+    payload: Any, live: dict[str, Any]
+) -> dict[str, Any] | None:
+    if payload is None:
+        return None
+    expected_keys = frozenset(
+        {
+            "accept_decision_mismatches",
+            "batch_size",
+            "candidate_token_source",
+            "comparison_events",
+            "completed_events",
+            "draft_probs",
+            "events_sha256",
+            "mode",
+            "probability_mismatches",
+            "product_mismatches",
+            "reference_returned",
+            "schema",
+            "source_contract_schema",
+            "source_contract_sha256",
+            "status",
+            "target_authority",
+            "task_marker",
+        }
+    )
+    events = live.get("completed_events")
+    binding = payload.get("candidate_token_source") if isinstance(payload, dict) else None
+    identities = live.get("identities")
+    if (
+        not isinstance(payload, dict)
+        or frozenset(payload) != expected_keys
+        or payload.get("schema")
+        != "fr13.fixed32.taw_candidate_acceptance_census.v1"
+        or payload.get("status") != "PASS"
+        or payload.get("mode") != "hydra27_fixed32"
+        or not _json_exact(payload.get("batch_size"), 1)
+        or not _json_exact(payload.get("completed_events"), events)
+        or not _json_exact(payload.get("comparison_events"), events)
+        or payload.get("events_sha256") != live.get("events_sha256")
+        or payload.get("task_marker") != f"swe_verified:{EXPECTED_INSTANCE}"
+        or not isinstance(binding, dict)
+        or not _json_exact(
+            binding,
+            {
+                "operation": EXPECTED_CANDIDATE["operation"],
+                "candidate_so_sha256": identities.get("candidate_so_sha256"),
+                "candidate_source_sha256": identities.get(
+                    "candidate_source_sha256"
+                ),
+                "task_ids": [EXPECTED_INSTANCE],
+            },
+        )
+        or payload.get("draft_probs") is not None
+        or payload.get("target_authority") is not True
+        or payload.get("source_contract_schema")
+        != "fr13-fixed32-taw-all-parent-v7"
+        or payload.get("source_contract_sha256")
+        != EXPECTED_TAW_SOURCE_CONTRACT_SHA256
+        or payload.get("probability_mismatches") != 0
+        or payload.get("product_mismatches") != 0
+        or payload.get("accept_decision_mismatches") != 0
+        or payload.get("reference_returned") is not True
+    ):
+        raise ValueError("DFWD U8 TAW exact-acceptance census drifted")
     return payload
 
 
@@ -347,6 +423,7 @@ def _validate_inputs(
     subset: Path,
     vocab_blocks: Path,
     fa2_so: Path,
+    taw_source: Path,
 ) -> dict[str, str | int]:
     paths = {
         "candidate_so_sha256": candidate_so,
@@ -357,6 +434,7 @@ def _validate_inputs(
         "subset_sha256": subset,
         "vocab_blocks_sha256": vocab_blocks,
         "fa2_sha256": fa2_so,
+        "taw_source_sha256": taw_source,
     }
     for label, path in paths.items():
         terminal.require_regular_file(path, label)
@@ -407,6 +485,7 @@ def validate_gate(
     subset: Path,
     vocab_blocks: Path,
     fa2_so: Path,
+    taw_source: Path,
     expected_source_commit: str,
     final_flush: Path,
     boundary_snapshot: Path,
@@ -425,6 +504,7 @@ def validate_gate(
         subset=subset,
         vocab_blocks=vocab_blocks,
         fa2_so=fa2_so,
+        taw_source=taw_source,
     )
     terminal_evidence = terminal.validate_live_evidence(
         live_payload=live,
@@ -448,6 +528,9 @@ def validate_gate(
     }:
         raise ValueError("DFWD U8 real SWE-Verified task did not resolve")
     events = int(live["completed_events"])
+    taw_exact_acceptance = _validate_taw_exact_acceptance(
+        live["taw_exact_acceptance"], live
+    )
     return {
         "schema": GATE_SCHEMA,
         "status": "PASS",
@@ -475,6 +558,7 @@ def validate_gate(
         "nonfinite_logits": 0,
         "qualification_policy": "lossless_deterministic_proposal_v1",
         "proposal_distribution": EXPECTED_PROPOSAL_DISTRIBUTION,
+        "taw_exact_acceptance": taw_exact_acceptance,
         "reference_always_served": False,
         "candidate_returned": True,
         "task_resolved": True,
@@ -488,7 +572,7 @@ def validate_gate(
         ],
         "performance_measurement": False,
         "timing_eligible": False,
-        "production_eligible": True,
+        "production_eligible": taw_exact_acceptance is not None,
     }
 
 
@@ -513,6 +597,7 @@ def main() -> int:
     parser.add_argument("--subset", type=Path, required=True)
     parser.add_argument("--vocab-blocks", type=Path, required=True)
     parser.add_argument("--fa2-so", type=Path, required=True)
+    parser.add_argument("--taw-source", type=Path, required=True)
     parser.add_argument("--expected-source-commit", required=True)
     parser.add_argument("--final-flush", type=Path, required=True)
     parser.add_argument("--boundary-snapshot", type=Path, required=True)
@@ -530,6 +615,7 @@ def main() -> int:
         subset=args.subset,
         vocab_blocks=args.vocab_blocks,
         fa2_so=args.fa2_so,
+        taw_source=args.taw_source,
         expected_source_commit=args.expected_source_commit,
         final_flush=args.final_flush,
         boundary_snapshot=args.boundary_snapshot,

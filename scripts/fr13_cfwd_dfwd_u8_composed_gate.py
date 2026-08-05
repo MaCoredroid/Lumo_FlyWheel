@@ -33,6 +33,7 @@ PATCH_SOURCE = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py")
 RUNNER = Path("scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh")
 VOCAB_BLOCKS = Path("scripts/fr13_dvk_subset_blocks.json")
 CFWD_SOURCE = Path("scripts/fr13_cfwd_logit_direct_decision_kernel.py")
+TAW_SOURCE = Path("scripts/fr13_device_multidraft_kernel.py")
 
 
 class GateError(ValueError):
@@ -123,6 +124,7 @@ def validate_composed_gate(
         subset=repo / SUBSET,
         vocab_blocks=repo / VOCAB_BLOCKS,
         fa2_so=paths["fa2_so"],
+        taw_source=repo / TAW_SOURCE,
         expected_source_commit=source_commit,
         final_flush=paths["final_flush"],
         boundary_snapshot=paths["boundary_snapshot"],
@@ -157,6 +159,8 @@ def validate_composed_gate(
             dfwd_payload["proposal_distribution"],
             dfwd.EXPECTED_PROPOSAL_DISTRIBUTION,
         )
+        or dfwd_payload["taw_exact_acceptance"] is None
+        or dfwd_payload["production_eligible"] is not True
         or cfwd_payload["timing_eligible"] is not False
         or dfwd_payload["timing_eligible"] is not False
     ):
@@ -187,10 +191,13 @@ def validate_composed_gate(
         "reference_always_served": False,
         "candidates_returned": True,
         "dfwd_u8_proposal_distribution": dfwd.EXPECTED_PROPOSAL_DISTRIBUTION,
+        "dfwd_u8_taw_exact_acceptance": dfwd_payload[
+            "taw_exact_acceptance"
+        ],
         "performance_measurement": False,
         "timing_eligible": False,
         "floor_acceptance_eligible": False,
-        "production_eligible": False,
+        "production_eligible": True,
         "sfwd_gate_pack_qualified": False,
         "sfwd_requires_separate_eager_qrow16_boot": True,
     }

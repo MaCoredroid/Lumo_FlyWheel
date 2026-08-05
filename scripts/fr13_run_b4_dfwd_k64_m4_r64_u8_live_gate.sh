@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Default-off real SWE-Verified exact4 B4 K64 M4 DFWD raw-byte shadow gate.
+# Default-off real SWE-Verified exact4 B4 candidate-served DFWD/TAW gate.
 set -euo pipefail
 
 case "${FR13_RUN_B4_DFWD_M4_U8_LIVE_GATE:-0}" in
@@ -41,6 +41,7 @@ SO_SHA256=6cb24782495ff1c1457ebbf9cbcfcd6ca7b372378d3b435f80054688432a365f
 FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 B4_KV_CACHE_MEMORY_BYTES=42949672960
 SOURCE_COMMIT=$(git rev-parse HEAD)
+TAW_SOURCE_SHA256=$(sha256sum scripts/fr13_device_multidraft_kernel.py | awk '{print $1}')
 RUNNER_SHA256=$(sha256sum "$RUNNER" | awk '{print $1}')
 PATCHER_SHA256=$(sha256sum "$PATCHER" | awk '{print $1}')
 GATE_SHA256=$(sha256sum "$GATE" | awk '{print $1}')
@@ -88,8 +89,8 @@ source scripts/fr13_fixed32_floor_timers_seq.sh
 unset -f run_variant
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_exact4_b4_dfwd_k64_m4_r64_u8_byte_gate\nacceptance_valid=0\ntiming_eligible=0\nproduction_enabled=0\nreference_always_served=1\ntask_ids=%s\nsubset_sha256=%s\nbatch_size=4\nconcurrency=4\nphysical_rows_per_request=32\nphysical_rows_total=128\nlogical_drafts_per_request=27\ndraft_vocab_k=65536\ndraft_vocab_root=1\ncandidate_so_sha256=%s\ncandidate_so_bytes=134320\ncandidate_source_sha256=%s\nbuild_attestation_sha256=%s\npatcher_sha256=%s\nrunner_sha256=%s\ngate_sha256=%s\nstock_fa2_sha256=%s\nsource_commit=%s\nlauncher_pid=%s\nstarted=%s\n' \
-  "$TASK_IDS" "$SUBSET_SHA256" "$SO_SHA256" "$SOURCE_SHA256" \
+printf 'classification=real_swe_verified_exact4_b4_dfwd_k64_m4_r64_u8_taw_quality_gate\nacceptance_valid=0\ntiming_eligible=0\nproduction_enabled=0\ncandidate_served=1\ntaw_source_sha256=%s\ntask_ids=%s\nsubset_sha256=%s\nbatch_size=4\nconcurrency=4\nphysical_rows_per_request=32\nphysical_rows_total=128\nlogical_drafts_per_request=27\ndraft_vocab_k=65536\ndraft_vocab_root=1\ncandidate_so_sha256=%s\ncandidate_so_bytes=134320\ncandidate_source_sha256=%s\nbuild_attestation_sha256=%s\npatcher_sha256=%s\nrunner_sha256=%s\ngate_sha256=%s\nstock_fa2_sha256=%s\nsource_commit=%s\nlauncher_pid=%s\nstarted=%s\n' \
+  "$TAW_SOURCE_SHA256" "$TASK_IDS" "$SUBSET_SHA256" "$SO_SHA256" "$SOURCE_SHA256" \
   "$BUILD_SHA256" "$PATCHER_SHA256" "$RUNNER_SHA256" "$GATE_SHA256" \
   "$FA2_SHA256" "$SOURCE_COMMIT" "$$" "$(date -u +%FT%TZ)" \
   > "$RUNROOT_ABS/launcher_meta.txt"
@@ -111,6 +112,8 @@ if env \
     FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json \
     FR13_DEVICE_MULTIDRAFT=1 \
     FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB=1 \
+    FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE=1 \
+    FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION=0 \
     FR13_DRAFT_HEAD_M4_R64_U8_SO="$DFWD_M4_U8_SO" \
     FR13_DRAFT_HEAD_M4_R64_U8_SO_SHA256="$SO_SHA256" \
     FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_SHA256="$SOURCE_SHA256" \
@@ -120,6 +123,7 @@ if env \
     FR13_DRAFT_HEAD_M4_R64_U8_SUBSET_SHA256="$SUBSET_SHA256" \
     FR13_DRAFT_HEAD_M4_R64_U8_VOCAB_BLOCKS_SHA256="$BLOCKS_SHA256" \
     FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256="$FA2_SHA256" \
+    FR13_DRAFT_HEAD_M4_R64_U8_TAW_SOURCE_SHA256="$TAW_SOURCE_SHA256" \
     FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT="$SOURCE_COMMIT" \
     FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS="$TASK_IDS" \
     FR13_DRAFT_HEAD_M4_R64_U8_LIVE_JSON=/logs/fr13_dfwd_k64_m4_r64_u8.live.json \
@@ -130,7 +134,7 @@ if env \
     FR13_DRAFT_HEAD_PAD_ROWS=0 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0 \
     FR13_DRAFT_HEAD_FP8=0 FR13_DRAFT_HEAD_FP8_STATIC_IO=0 \
     FR13_DFWD_K64_TOP3=0 \
-    FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
+    FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1 \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
     FR13_FIXED32_BATCH_GDN_BYTE_AB=0 \
     FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0 \
@@ -211,6 +215,7 @@ done
   --subset "$SUBSET" \
   --vocab-blocks "$BLOCKS" \
   --fa2-so "$FORKED_FA2_SO" \
+  --taw-source scripts/fr13_device_multidraft_kernel.py \
   --expected-source-commit "$SOURCE_COMMIT" \
   --final-flush "$FINAL_FLUSH" \
   --boundary-snapshot "$BOUNDARY" \

@@ -8,6 +8,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
+import types
 
 import pytest
 
@@ -16,6 +18,7 @@ REPO = Path(__file__).resolve().parents[1]
 PATCHER = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 GATE = REPO / "scripts" / "fr13_dfwd_k64_m4_r64_u8_gate.py"
+CREDENTIAL = REPO / "scripts" / "fr13_dfwd_k64_m4_r64_u8_production_credential.py"
 RUNNER = REPO / "scripts" / "fr13_run_b4_dfwd_k64_m4_r64_u8_live_gate.sh"
 
 
@@ -81,6 +84,8 @@ def _worker_payload(patcher) -> dict[str, str]:
     payload.update(
         {
             "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB": "1",
+            "FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE": "0",
+            "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION": "0",
             "FR13_DRAFT_HEAD_M4_R64_U8_SO": "/tmp/fr13_bf16_k64_m4_r64_u8.abi3.so",
             "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT": "b" * 40,
             "FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS": (
@@ -94,7 +99,9 @@ def _worker_payload(patcher) -> dict[str, str]:
         }
     )
     for key in payload:
-        if key.endswith("SHA256"):
+        if key.endswith("SHA256") and not key.endswith(
+            "PRODUCTION_PASS_SIDECAR_SHA256"
+        ):
             payload[key] = "a" * 64
     return payload
 
@@ -110,8 +117,33 @@ def _live(gate, events: int = 3) -> dict[str, object]:
         "runner_sha256": "2" * 64,
         "source_commit": "b" * 40,
         "subset_sha256": gate.SUBSET_SHA256,
+        "taw_source_sha256": "8" * 64,
         "task_ids": list(gate.TASK_IDS),
         "vocab_blocks_sha256": gate.BLOCKS_SHA256,
+    }
+    taw = {
+        "schema": "fr13.fixed32.taw_candidate_acceptance_census.v1",
+        "status": "PASS",
+        "mode": "hydra27_fixed32",
+        "batch_size": 4,
+        "completed_events": events,
+        "comparison_events": events,
+        "events_sha256": "5" * 64,
+        "task_marker": "swe_verified:campaign4_" + gate.SUBSET_SHA256,
+        "candidate_token_source": {
+            "operation": gate.CANDIDATE["operation"],
+            "candidate_so_sha256": gate.SO_SHA256,
+            "candidate_source_sha256": gate.SOURCE_SHA256,
+            "task_ids": list(gate.TASK_IDS),
+        },
+        "draft_probs": None,
+        "target_authority": True,
+        "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
+        "source_contract_sha256": gate.TAW_SOURCE_CONTRACT_SHA256,
+        "probability_mismatches": 0,
+        "product_mismatches": 0,
+        "accept_decision_mismatches": 0,
+        "reference_returned": True,
     }
     return {
         "schema": gate.LIVE_SCHEMA,
@@ -145,14 +177,19 @@ def _live(gate, events: int = 3) -> dict[str, object]:
         "captured_mtp_depths": [1, 2, 3, 4],
         "per_depth_full_logit_comparisons": {label: events for label in gate.DEPTHS},
         "per_depth_raw_bf16_mismatches": {label: 0 for label in gate.DEPTHS},
+        "per_depth_nonfinite_logits": {label: 0 for label in gate.DEPTHS},
         "comparison_scope": gate.COMPARISON_SCOPE,
         "full_logit_comparisons": events * 5,
         "compared_elements": events * 5 * 4 * 65536,
         "compared_bytes": events * 5 * 4 * 65536 * 2,
         "raw_bf16_mismatches": 0,
-        "reference_always_served": True,
-        "candidate_returned": False,
-        "served_return": "incumbent BF16 logits object unchanged",
+        "nonfinite_logits": 0,
+        "qualification_policy": "lossless_deterministic_proposal_taw_exact_v1",
+        "proposal_distribution": gate.PROPOSAL_DISTRIBUTION,
+        "taw_exact_acceptance": taw,
+        "reference_always_served": False,
+        "candidate_returned": True,
+        "served_return": "candidate BF16 logits",
         "performance_measurement": False,
         "timing_eligible": False,
         "finalized_by_fixed32_flush": True,
@@ -251,7 +288,7 @@ def test_live_reducer_requires_all_five_b4_byte_exact_sites() -> None:
         ),
         lambda value: value["identities"].__setitem__("candidate_so_sha256", "0" * 64),
         lambda value: value["task_ids"].reverse(),
-        lambda value: value.__setitem__("reference_always_served", False),
+        lambda value: value.__setitem__("reference_always_served", True),
     ):
         changed = copy.deepcopy(payload)
         mutation(changed)
@@ -266,11 +303,13 @@ def test_final_flush_record_is_consumable_by_strict_b4_reducer(
     namespace = _runtime_namespace("_fr13_draft_head_m4_u8_live_finalize")
     output = tmp_path / "m4.live.json"
     monkeypatch.setenv("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB", "1")
+    monkeypatch.setenv("FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE", "1")
     monkeypatch.setenv("FR13_DRAFT_HEAD_M4_R64_U8_LIVE_JSON", str(output))
     base = _live(gate, events=2)
     namespace["_FR13_DRAFT_HEAD_M4_U8_LIVE_STATE"] = {
         "compares": _Counter([2] * 5),
         "mismatches": _Counter([0] * 5),
+        "nonfinite": _Counter([0] * 5),
         "geometry": gate.GEOMETRY,
         "candidate": gate.CANDIDATE,
         "identities": base["identities"],
@@ -278,6 +317,15 @@ def test_final_flush_record_is_consumable_by_strict_b4_reducer(
         "root_forward_steps": [0, 1],
         "captured_depths": [1, 2, 3, 4],
     }
+    monkeypatch.setitem(
+        sys.modules,
+        "_fr13_device_multidraft_kernel",
+        types.SimpleNamespace(
+            fr13_fixed32_taw_candidate_acceptance_census=(
+                lambda **_kwargs: base["taw_exact_acceptance"]
+            )
+        ),
+    )
     namespace["_fr13_draft_head_m4_u8_live_finalize"](
         [
             {"batch_size": 4, "forward_step_index": 0},
@@ -297,6 +345,62 @@ def test_final_flush_record_is_consumable_by_strict_b4_reducer(
     assert (
         gate.validate_live_result(payload, expected_source_commit="b" * 40) is payload
     )
+
+
+def test_b4_production_credential_requires_full_candidate_taw_census() -> None:
+    credential = _load(CREDENTIAL, "fr13_m4_production_credential")
+    gate = credential.gate
+    live = _live(gate, events=3)
+    inputs = {
+        key: live["identities"][key]
+        for key in credential.INPUT_KEYS
+        if key != "candidate_so_bytes"
+    }
+    inputs["candidate_so_bytes"] = gate.SO_BYTES
+    validated = {
+        "schema": gate.GATE_SCHEMA,
+        "status": "PASS",
+        "source_commit": "b" * 40,
+        "task_ids": list(gate.TASK_IDS),
+        "all_tasks_resolved": True,
+        "topology": gate.TOPOLOGY,
+        "geometry": gate.GEOMETRY,
+        "candidate": gate.CANDIDATE,
+        "inputs": inputs,
+        "live_result_sha256": "a" * 64,
+        "completed_events": 3,
+        "captured_mtp_depths": [1, 2, 3, 4],
+        "comparison_scope": gate.COMPARISON_SCOPE,
+        "raw_bf16_mismatches": 17,
+        "nonfinite_logits": 0,
+        "qualification_policy": "lossless_deterministic_proposal_taw_exact_v1",
+        "proposal_distribution": gate.PROPOSAL_DISTRIBUTION,
+        "taw_exact_acceptance": live["taw_exact_acceptance"],
+        "reference_always_served": False,
+        "candidate_returned": True,
+        "events_sha256": "5" * 64,
+        "final_flush_sha256": "c" * 64,
+        "boundary_snapshot_sha256": "d" * 64,
+        "chat_traffic_audit_sha256": "e" * 64,
+        "performance_measurement": False,
+        "timing_eligible": False,
+        "production_eligible": True,
+    }
+    payload = credential._credential_from_gate(validated)
+    assert payload["production_default_enabled"] is False
+    assert payload["candidate_returned_during_qualification"] is True
+    assert payload["incumbent_served_during_qualification"] is False
+    assert payload["taw_exact_acceptance"]["comparison_events"] == 3
+
+    forged = copy.deepcopy(validated)
+    forged["taw_exact_acceptance"]["accept_decision_mismatches"] = 1
+    with pytest.raises(ValueError, match="exact candidate-served PASS"):
+        credential._credential_from_gate(forged)
+
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    assert "fr13_dfwd_k64_m4_r64_u8_production_credential.py issue" in launcher
+    assert "fr13_dfwd_k64_m4_r64_u8_production_credential.py verify" in launcher
+    assert "FR13_DRAFT_HEAD_M4_R64_U8_INTERNAL_PRODUCTION_ATTESTED=1" in launcher
 
 
 def test_b4_terminal_validator_requires_four_rows_per_event(tmp_path: Path) -> None:

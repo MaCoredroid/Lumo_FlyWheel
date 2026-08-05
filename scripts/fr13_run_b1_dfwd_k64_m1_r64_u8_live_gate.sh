@@ -57,35 +57,6 @@ unset binary
 
 SOURCE_COMMIT=$(git rev-parse HEAD)
 if [[ "$COMPOSE_CFWD" == "1" ]]; then
-  : "${TAW_B1_CREDENTIAL:?set the source-bound Hydra27 B1 credential}"
-  : "${TAW_B1_CREDENTIAL_SHA256:?set its raw SHA-256}"
-  : "${TAW_B1_LIVE_BUNDLE:?set the credentialed Hydra27 B1 replay}"
-  : "${TAW_B1_LIVE_BUNDLE_SHA256:?set its raw SHA-256}"
-  : "${TAW_REVIEWED_B4_PASS:?set the reviewed Hydra27 exact4 B4 bundle}"
-  : "${TAW_REVIEWED_B4_PASS_SHA256:?set its raw SHA-256}"
-  : "${TAW_REVIEWED_B4_VERDICT:?set the reviewed Hydra27 exact4 verdict}"
-  : "${TAW_REVIEWED_B4_VERDICT_SHA256:?set its raw SHA-256}"
-  : "${TAW_MERGE_BINDING:?set the Hydra27 B1/B4 merge binding}"
-  : "${TAW_MERGE_BINDING_SHA256:?set its raw SHA-256}"
-  : "${TAW_PASS_JSON:?set the merged Hydra27 production bundle}"
-  : "${TAW_PASS_SHA256:?set its raw SHA-256}"
-  for binding in \
-    "$TAW_B1_CREDENTIAL:$TAW_B1_CREDENTIAL_SHA256" \
-    "$TAW_B1_LIVE_BUNDLE:$TAW_B1_LIVE_BUNDLE_SHA256" \
-    "$TAW_REVIEWED_B4_PASS:$TAW_REVIEWED_B4_PASS_SHA256" \
-    "$TAW_REVIEWED_B4_VERDICT:$TAW_REVIEWED_B4_VERDICT_SHA256" \
-    "$TAW_MERGE_BINDING:$TAW_MERGE_BINDING_SHA256" \
-    "$TAW_PASS_JSON:$TAW_PASS_SHA256"; do
-    path=${binding%:*}
-    digest=${binding##*:}
-    [[ "$path" == /* && -f "$path" && ! -L "$path" \
-       && "$digest" =~ ^[0-9a-f]{64}$ \
-       && "$(sha256sum "$path" | awk '{print $1}')" == "$digest" ]] || {
-      echo "TAW composition input identity mismatch: $path" >&2
-      exit 2
-    }
-  done
-  unset binding path digest
   [[ "$(sha256sum scripts/fr13_cfwd_logit_direct_decision_kernel.py | awk '{print $1}')" \
        == "a7a7b6582cdc11e930916f5e65583195fd31a3b664e8f567bb33a24ea1a64ee0" ]] || {
     echo "packed CFWD v3 candidate source identity drifted" >&2
@@ -103,16 +74,6 @@ if (
 ):
     raise SystemExit("CFWD integration source contract mismatch")
 PY
-  .venv/bin/python scripts/fr13_taw_b1_credential.py validate-production \
-    --mode hydra27_fixed32 \
-    --source scripts/fr13_device_multidraft_kernel.py \
-    --credential "$TAW_B1_CREDENTIAL" \
-    --b1-live-bundle "$TAW_B1_LIVE_BUNDLE" \
-    --b4-production-pass "$TAW_REVIEWED_B4_PASS" \
-    --b4-gate-verdict "$TAW_REVIEWED_B4_VERDICT" \
-    --merge-binding "$TAW_MERGE_BINDING" \
-    --production-pass "$TAW_PASS_JSON" \
-    >/dev/null
 fi
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] || {
   echo "all Docker containers must be absent before the live gate" >&2
@@ -124,12 +85,13 @@ export FORKED_FA2_SO
 export FR13_B1_WORKLOAD_PROFILE=k64_root
 export FR13_B1_DIAGNOSTIC_TASK_PROFILE=astropy12907
 export FR13_GATE_QROW16=0
-export FR13_GATE_TAW_NATIVE=0
+export FR13_GATE_TAW_NATIVE="$COMPOSE_CFWD"
 export FR13_GATE_DRAFT_HEAD_PAD=0
 # The generic gate uses this outer selector for isolation and terminal evidence.
 export FR13_GATE_DRAFT_HEAD_M32=1
 export FR13_GATE_DRAFT_HEAD_U8=1
 export FR13_GATE_DRAFT_HEAD_U8_QUALITY=1
+export FR13_GATE_DRAFT_HEAD_U8_TAW_QUALITY="$COMPOSE_CFWD"
 export FR13_GATE_DRAFT_HEAD_U8_SO="$DFWD_U8_SO"
 export FR13_GATE_DRAFT_HEAD_FP8=0
 export FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=0
@@ -145,7 +107,7 @@ export FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=0
 export FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0
 export FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=0
 export FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=0
-export FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION="$COMPOSE_CFWD"
+export FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0
 export FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON=
 export FR13_CFWD_LOGIT_DIRECT_BYTE_AB="$COMPOSE_CFWD"
 export FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0
@@ -153,7 +115,6 @@ export FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON=
 export FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256=
 export FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py
 if [[ "$COMPOSE_CFWD" == "1" ]]; then
-  export FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON="$TAW_PASS_JSON"
   export FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py
 fi
 export FR13_DFWD_UNIFIED_BM8_LIVE_AB=0
