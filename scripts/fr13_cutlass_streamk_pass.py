@@ -85,6 +85,24 @@ SOURCE_CONTRACTS = {
     },
 }
 SOURCE_BINDING_SCHEMA = "fr13.fixed32.cutlass_streamk.source_binding.v1"
+RUNTIME_SOURCE_BINDING_SCHEMA = (
+    "fr13.fixed32.cutlass_streamk.runtime_source_binding.v1"
+)
+HISTORICAL_QUALIFICATION_SELECTOR = "identity_wide256_fullgrid_b1"
+HISTORICAL_QUALIFICATION_SOURCE_COMMIT = (
+    "a8a904ed6c27a6338d43151038c155ebb76e3656"
+)
+HISTORICAL_QUALIFICATION_SOURCE_IDENTITY_SHA256 = (
+    "fc062c7288770c81beca2660923a08cb136930400cee98fe64b87ce2a1c134ec"
+)
+HISTORICAL_QUALIFICATION_MODE = "historical_pinned"
+HISTORICAL_QUALIFICATION_FIELDS = frozenset(
+    {
+        "qualification_source_mode",
+        "runtime_source_commit",
+        "runtime_source_identity",
+    }
+)
 SOURCE_BINDING_PATHS = (
     "scripts/fr13_patch_cutlass_fixed32_wave.py",
     "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh",
@@ -96,6 +114,10 @@ SOURCE_BINDING_PATHS = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
     "scripts/run_swe_bench_q36_a.py",
     "scripts/fr13_fixed32_contract.py",
+)
+RUNTIME_SOURCE_BINDING_PATHS = SOURCE_BINDING_PATHS + (
+    "scripts/fr13_runtime_manifest.py",
+    "scripts/fr13_run_b1_target_sfwd_exact4_timing.sh",
 )
 WIDE256_LIVE_SCHEMA = "fr13.fixed32.cutlass_streamk_wide256_live_gate.v1"
 DEFAULT_DIAGNOSTIC_TASK_PROFILE = "astropy12907"
@@ -575,6 +597,165 @@ def validate_source_commit_binding(
     }
 
 
+def _canonical_identity_sha256(source_identity: object) -> str:
+    try:
+        encoded = json.dumps(
+            source_identity,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    except (TypeError, UnicodeError) as error:
+        raise QualificationError("source identity is not canonical JSON") from error
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _canonical_source_repository(patch_source: Path) -> tuple[Path, Path]:
+    _regular_file(patch_source, "Stream-K patch source")
+    resolved_patch_source = patch_source.resolve(strict=True)
+    repo_root = resolved_patch_source.parents[len(PATCH_SOURCE.parts) - 1]
+    if (repo_root / PATCH_SOURCE).resolve(strict=True) != resolved_patch_source:
+        raise QualificationError(
+            "source-binding patch source is not the canonical repository path"
+        )
+    return repo_root, resolved_patch_source
+
+
+def validate_historical_qualification_source_binding(
+    source_commit: str,
+    source_identity: object,
+    patch_source: Path,
+    candidate_selector: str,
+) -> dict[str, object]:
+    if (
+        candidate_selector != HISTORICAL_QUALIFICATION_SELECTOR
+        or source_commit != HISTORICAL_QUALIFICATION_SOURCE_COMMIT
+    ):
+        raise QualificationError(
+            "historical qualification is restricted to the pinned cooperative B1 target"
+        )
+    if (
+        not isinstance(source_identity, dict)
+        or _canonical_identity_sha256(source_identity)
+        != HISTORICAL_QUALIFICATION_SOURCE_IDENTITY_SHA256
+    ):
+        raise QualificationError("historical qualification source identity mismatch")
+    if source_identity.get("schema") != SOURCE_BINDING_SCHEMA:
+        raise QualificationError("historical qualification source schema mismatch")
+    if source_identity.get("source_commit") != source_commit:
+        raise QualificationError("historical qualification source commit mismatch")
+    records = source_identity.get("files")
+    if not isinstance(records, dict) or set(records) != set(SOURCE_BINDING_PATHS):
+        raise QualificationError("historical qualification source manifest mismatch")
+
+    repo_root, _ = _canonical_source_repository(patch_source)
+    resolved_commit = _git_output(
+        repo_root,
+        "rev-parse",
+        "--verify",
+        f"{source_commit}^{{commit}}",
+        label="historical qualification commit resolution",
+    ).decode("ascii").strip()
+    if resolved_commit != source_commit:
+        raise QualificationError(
+            "historical qualification commit does not resolve exactly"
+        )
+    for relative in SOURCE_BINDING_PATHS:
+        record = records.get(relative)
+        if not isinstance(record, dict) or set(record) != {"bytes", "sha256"}:
+            raise QualificationError(
+                f"historical qualification source record is invalid for {relative}"
+            )
+        committed = _git_output(
+            repo_root,
+            "show",
+            f"{source_commit}:{relative}",
+            label=f"historical qualification git show for {relative}",
+        )
+        expected = {
+            "bytes": len(committed),
+            "sha256": hashlib.sha256(committed).hexdigest(),
+        }
+        if record != expected:
+            raise QualificationError(
+                f"historical qualification source record mismatch for {relative}"
+            )
+    patch_record = records[os.fspath(PATCH_SOURCE)]
+    assert isinstance(patch_record, dict)
+    if patch_record.get("sha256") != _source_contract(candidate_selector)[
+        "patch_source_sha256"
+    ]:
+        raise QualificationError(
+            "historical qualification patch source does not match the candidate"
+        )
+    return source_identity
+
+
+def validate_runtime_source_commit_identity(
+    runtime_source_commit: str,
+    patch_source: Path = PATCH_SOURCE,
+) -> dict[str, object]:
+    if re.fullmatch(r"[0-9a-f]{40}", runtime_source_commit) is None:
+        raise QualificationError("runtime source-binding commit is invalid")
+    repo_root, _ = _canonical_source_repository(patch_source)
+    resolved_commit = _git_output(
+        repo_root,
+        "rev-parse",
+        "--verify",
+        f"{runtime_source_commit}^{{commit}}",
+        label="runtime source-binding commit resolution",
+    ).decode("ascii").strip()
+    head_commit = _git_output(
+        repo_root,
+        "rev-parse",
+        "HEAD",
+        label="runtime source-binding HEAD resolution",
+    ).decode("ascii").strip()
+    if resolved_commit != runtime_source_commit or head_commit != runtime_source_commit:
+        raise QualificationError(
+            "runtime source-binding commit does not equal the current HEAD"
+        )
+    _require_clean_tracked_tree(repo_root)
+
+    files: dict[str, object] = {}
+    for relative in RUNTIME_SOURCE_BINDING_PATHS:
+        working_path = repo_root / relative
+        info = _regular_file(working_path, f"runtime source-binding file {relative}")
+        committed = _git_output(
+            repo_root,
+            "show",
+            f"{runtime_source_commit}:{relative}",
+            label=f"runtime source-binding git show for {relative}",
+        )
+        working = working_path.read_bytes()
+        if working != committed:
+            raise QualificationError(
+                f"runtime source-binding working bytes differ from commit for {relative}"
+            )
+        files[relative] = {
+            "bytes": info.st_size,
+            "sha256": hashlib.sha256(committed).hexdigest(),
+        }
+    return {
+        "schema": RUNTIME_SOURCE_BINDING_SCHEMA,
+        "source_commit": runtime_source_commit,
+        "files": files,
+    }
+
+
+def _historical_qualification_requested(payload: dict[str, Any]) -> bool:
+    present = HISTORICAL_QUALIFICATION_FIELDS.intersection(payload)
+    if present and present != HISTORICAL_QUALIFICATION_FIELDS:
+        raise QualificationError(
+            "historical qualification runtime source fields are incomplete"
+        )
+    if not present:
+        return False
+    if payload.get("qualification_source_mode") != HISTORICAL_QUALIFICATION_MODE:
+        raise QualificationError("historical qualification source mode mismatch")
+    return True
+
+
 def _validate_mounted_source_identity(
     source_commit: str,
     source_identity: object,
@@ -672,6 +853,7 @@ def validate_live_result(
     qualification_profile: str = "full_vocab",
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
     diagnostic_task_profile: str = DEFAULT_DIAGNOSTIC_TASK_PROFILE,
+    runtime_source_commit: str | None = None,
 ) -> dict[str, Any]:
     candidate_contract = _candidate_contract(candidate_selector)
     profile = _qualification_profile(candidate_selector, qualification_profile)
@@ -695,7 +877,17 @@ def validate_live_result(
         qualification_profile=qualification_profile,
     )
     source_contract = _source_contract(candidate_selector)
-    patch = _validate_patch_source(patch_source, candidate_selector)
+    historical_qualification = runtime_source_commit is not None
+    runtime_source_identity: dict[str, object] | None = None
+    if historical_qualification:
+        if candidate_selector != HISTORICAL_QUALIFICATION_SELECTOR:
+            raise QualificationError(
+                "runtime source separation is restricted to the historical "
+                "cooperative B1 target"
+            )
+        patch = {"sha256": source_contract["patch_source_sha256"]}
+    else:
+        patch = _validate_patch_source(patch_source, candidate_selector)
     block_map = (
         _validate_draft_vocab_blocks(draft_vocab_blocks)
         if profile["requires_block_map"]
@@ -787,9 +979,25 @@ def validate_live_result(
             )
     source_identity: dict[str, object] | None = None
     if candidate_contract.get("source_binding") == "required":
-        source_identity = validate_source_commit_binding(
-            source_commit, patch_source, candidate_selector
-        )
+        if historical_qualification:
+            source_identity = validate_historical_qualification_source_binding(
+                source_commit,
+                payload.get("source_identity"),
+                patch_source,
+                candidate_selector,
+            )
+            assert runtime_source_commit is not None
+            if runtime_source_commit == source_commit:
+                raise QualificationError(
+                    "historical qualification and runtime source commits must differ"
+                )
+            runtime_source_identity = validate_runtime_source_commit_identity(
+                runtime_source_commit, patch_source
+            )
+        else:
+            source_identity = validate_source_commit_binding(
+                source_commit, patch_source, candidate_selector
+            )
         if payload.get("source_identity") != source_identity:
             raise QualificationError(
                 "Stream-K live PASS source-identity binding mismatch"
@@ -844,6 +1052,15 @@ def validate_live_result(
         )
     if source_identity is not None:
         result["qualification_source_identity"] = source_identity
+    if runtime_source_identity is not None:
+        assert runtime_source_commit is not None
+        result.update(
+            {
+                "qualification_source_mode": HISTORICAL_QUALIFICATION_MODE,
+                "runtime_source_commit": runtime_source_commit,
+                "runtime_source_identity": runtime_source_identity,
+            }
+        )
     return result
 
 
@@ -858,6 +1075,7 @@ def issue_sidecar(
     qualification_profile: str = "full_vocab",
     draft_vocab_blocks: Path = DRAFT_VOCAB_BLOCKS_SOURCE,
     diagnostic_task_profile: str = DEFAULT_DIAGNOSTIC_TASK_PROFILE,
+    runtime_source_commit: str | None = None,
 ) -> dict[str, Any]:
     payload = validate_live_result(
         live_result,
@@ -869,6 +1087,7 @@ def issue_sidecar(
         qualification_profile,
         draft_vocab_blocks,
         diagnostic_task_profile,
+        runtime_source_commit,
     )
     _write_json(output, payload)
     return payload
@@ -923,7 +1142,15 @@ def verify_sidecar(
         qualification_profile=sidecar_profile,
     )
     source_contract = _source_contract(sidecar_selector)
-    patch = _validate_patch_source(patch_source, sidecar_selector)
+    historical_qualification = _historical_qualification_requested(payload)
+    if historical_qualification:
+        if sidecar_selector != HISTORICAL_QUALIFICATION_SELECTOR:
+            raise QualificationError(
+                "historical qualification sidecar selector mismatch"
+            )
+        patch = {"sha256": source_contract["patch_source_sha256"]}
+    else:
+        patch = _validate_patch_source(patch_source, sidecar_selector)
     block_map = (
         _validate_draft_vocab_blocks(draft_vocab_blocks)
         if profile["requires_block_map"]
@@ -994,12 +1221,35 @@ def verify_sidecar(
     ):
         raise QualificationError("sidecar qualification source commit is invalid")
     if candidate_contract.get("source_binding") == "required":
-        source_identity = _validate_runtime_source_commit_binding(
-            source_commit,
-            payload.get("qualification_source_identity"),
-            patch_source,
-            sidecar_selector,
-        )
+        if historical_qualification:
+            source_identity = validate_historical_qualification_source_binding(
+                source_commit,
+                payload.get("qualification_source_identity"),
+                patch_source,
+                sidecar_selector,
+            )
+            runtime_source_commit = payload.get("runtime_source_commit")
+            if (
+                not isinstance(runtime_source_commit, str)
+                or runtime_source_commit == source_commit
+            ):
+                raise QualificationError(
+                    "historical qualification runtime source commit is invalid"
+                )
+            runtime_source_identity = validate_runtime_source_commit_identity(
+                runtime_source_commit, patch_source
+            )
+            if payload.get("runtime_source_identity") != runtime_source_identity:
+                raise QualificationError(
+                    "Stream-K production sidecar runtime source binding mismatch"
+                )
+        else:
+            source_identity = _validate_runtime_source_commit_binding(
+                source_commit,
+                payload.get("qualification_source_identity"),
+                patch_source,
+                sidecar_selector,
+            )
         if payload.get("qualification_source_identity") != source_identity:
             raise QualificationError(
                 "Stream-K production sidecar source-identity binding mismatch"
@@ -1067,6 +1317,12 @@ def validate_production_attestation(
     qualification = payload.get("qualification")
     if not isinstance(qualification, dict):
         raise QualificationError("Stream-K binary attestation lacks qualification")
+    historical_qualification = _historical_qualification_requested(qualification)
+    if (
+        historical_qualification
+        and candidate_selector != HISTORICAL_QUALIFICATION_SELECTOR
+    ):
+        raise QualificationError("historical qualification attestation selector mismatch")
     _validate_task_profile_binding(
         qualification,
         "qualification_task_profile",
@@ -1159,13 +1415,39 @@ def validate_production_attestation(
             "Stream-K attestation qualification source commit is invalid"
         )
     source_identity: dict[str, object] | None = None
+    runtime_source_identity: dict[str, object] | None = None
+    runtime_source_commit: str | None = None
     if candidate_contract.get("source_binding") == "required":
-        source_identity = _validate_runtime_source_commit_binding(
-            qualification_source_commit,
-            qualification.get("qualification_source_identity"),
-            patch_source,
-            candidate_selector,
-        )
+        if historical_qualification:
+            source_identity = validate_historical_qualification_source_binding(
+                qualification_source_commit,
+                qualification.get("qualification_source_identity"),
+                patch_source,
+                candidate_selector,
+            )
+            runtime_source_commit_raw = qualification.get("runtime_source_commit")
+            if (
+                not isinstance(runtime_source_commit_raw, str)
+                or runtime_source_commit_raw == qualification_source_commit
+            ):
+                raise QualificationError(
+                    "Stream-K attestation runtime source commit is invalid"
+                )
+            runtime_source_commit = runtime_source_commit_raw
+            runtime_source_identity = validate_runtime_source_commit_identity(
+                runtime_source_commit, patch_source
+            )
+            if qualification.get("runtime_source_identity") != runtime_source_identity:
+                raise QualificationError(
+                    "Stream-K attestation runtime source-identity binding mismatch"
+                )
+        else:
+            source_identity = _validate_runtime_source_commit_binding(
+                qualification_source_commit,
+                qualification.get("qualification_source_identity"),
+                patch_source,
+                candidate_selector,
+            )
         if qualification.get("qualification_source_identity") != source_identity:
             raise QualificationError(
                 "Stream-K attestation source-identity binding mismatch"
@@ -1212,6 +1494,15 @@ def validate_production_attestation(
         )
     if source_identity is not None:
         result["qualification_source_identity"] = source_identity
+    if runtime_source_identity is not None:
+        assert runtime_source_commit is not None
+        result.update(
+            {
+                "qualification_source_mode": HISTORICAL_QUALIFICATION_MODE,
+                "runtime_source_commit": runtime_source_commit,
+                "runtime_source_identity": runtime_source_identity,
+            }
+        )
     return result
 
 
@@ -1225,6 +1516,7 @@ def main() -> int:
         subparser.add_argument("--candidate-so", type=Path, required=True)
         subparser.add_argument("--patch-source", type=Path, default=PATCH_SOURCE)
         subparser.add_argument("--expected-source-commit")
+        subparser.add_argument("--runtime-source-commit")
         subparser.add_argument(
             "--candidate-selector", default="streamk_coop128"
         )
@@ -1302,6 +1594,7 @@ def main() -> int:
             args.qualification_profile,
             args.draft_vocab_blocks,
             args.diagnostic_task_profile,
+            args.runtime_source_commit,
         )
     elif args.command == "issue":
         payload = issue_sidecar(
@@ -1315,6 +1608,7 @@ def main() -> int:
             args.qualification_profile,
             args.draft_vocab_blocks,
             args.diagnostic_task_profile,
+            args.runtime_source_commit,
         )
     elif args.command == "verify":
         payload = verify_sidecar(

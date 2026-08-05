@@ -805,6 +805,13 @@ def install_candidate(
                 "qualification_source_identity"
             ]
         for key in (
+            "qualification_source_mode",
+            "runtime_source_commit",
+            "runtime_source_identity",
+        ):
+            if key in qualification_record:
+                qualification[key] = qualification_record[key]
+        for key in (
             "authenticated_task_count",
             "authenticated_task_ids",
             "authenticated_task_set_sha256",

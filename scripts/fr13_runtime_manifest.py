@@ -87,6 +87,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_required_tree_flags.sh",
     "scripts/fr13_run_b1_k64_physical32_fullstack_pair.sh",
     "scripts/fr13_run_b1_k64_qrow16_sfwd_stack_timing.sh",
+    "scripts/fr13_run_b1_target_sfwd_exact4_timing.sh",
     "scripts/fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh",
     "scripts/fr13_run_b1_composed_stack_timing.sh",
     "scripts/fr13_run_b1_composed_cfwd_production_smoke.sh",

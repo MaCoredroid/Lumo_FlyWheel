@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exact-source Qrow16 reference vs target/SFWD real B1 timing pair.
+# Exact4 Qrow16 reference vs historical-target/current-SFWD real B1 timing pair.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -7,14 +7,14 @@ REPO=$(cd "$SCRIPT_DIR/.." && pwd)
 RUNNER_PATH=$(realpath "$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")")
 cd "$REPO"
 
-case "${FR13_RUN_B1_QROW16_TARGET_SFWD_TIMING:-0}" in
+case "${FR13_RUN_B1_TARGET_SFWD_EXACT4_TIMING:-0}" in
   1) ;;
   0)
-    echo "Qrow16 target/SFWD timing is disabled; set FR13_RUN_B1_QROW16_TARGET_SFWD_TIMING=1" >&2
+    echo "exact4 target/SFWD timing is disabled; set FR13_RUN_B1_TARGET_SFWD_EXACT4_TIMING=1" >&2
     exit 2
     ;;
   *)
-    echo "FR13_RUN_B1_QROW16_TARGET_SFWD_TIMING must be exactly 0 or 1" >&2
+    echo "FR13_RUN_B1_TARGET_SFWD_EXACT4_TIMING must be exactly 0 or 1" >&2
     exit 2
     ;;
 esac
@@ -22,34 +22,25 @@ esac
 : "${RUNROOT:?set RUNROOT to a new path below output/}"
 : "${TAG:?set TAG to a unique tag}"
 : "${QROW16_FA2_SO:?set QROW16_FA2_SO to the pinned Qrow16 binary}"
-: "${CUTLASS_TARGET_SO:?set the current target shared object}"
-: "${CUTLASS_TARGET_PASS:?set the fresh target live PASS}"
-: "${CUTLASS_TARGET_PASS_SHA256:?set its raw SHA-256}"
+: "${CUTLASS_TARGET_SO:?set CUTLASS_TARGET_SO to the pinned cooperative target}"
 : "${SFWD_CONV_POSTPREP_PASS:?set the fresh SFWD live PASS}"
 : "${SFWD_CONV_POSTPREP_PASS_SHA256:?set its raw SHA-256}"
 : "${SFWD_CONV_POSTPREP_SOURCE_MANIFEST:?set the fresh SFWD source manifest}"
 : "${SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256:?set its raw SHA-256}"
-: "${TARGET_SFWD_COMBINED_SUMMARY:?set the fresh combined target/SFWD summary}"
-: "${TARGET_SFWD_COMBINED_SUMMARY_SHA256:?set its raw SHA-256}"
+: "${SFWD_CONV_POSTPREP_GATE_SUMMARY:?set the fresh standalone SFWD gate summary}"
+: "${SFWD_CONV_POSTPREP_GATE_SUMMARY_SHA256:?set its raw SHA-256}"
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
-TASK_SET=${TASK_SET:-exact4}
-case "$TASK_SET" in
-  exact4)
-    SUBSET=config/fr13_fixed32/subset_b4_four.json
-    SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
-    EXPECTED_TASKS=4
-    ;;
-  exact16)
-    SUBSET=config/fr13_fixed32/subset_b4_sixteen.json
-    SUBSET_SHA256=47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c
-    EXPECTED_TASKS=16
-    ;;
-  *)
-    echo "TASK_SET must be exactly exact4 or exact16" >&2
-    exit 2
-    ;;
-esac
+TASK_SET=exact4
+SUBSET=config/fr13_fixed32/subset_b4_four.json
+SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
+EXPECTED_TASKS=4
+EXPECTED_TASK_IDS=(
+  astropy__astropy-12907
+  astropy__astropy-13033
+  astropy__astropy-13236
+  astropy__astropy-13398
+)
 
 BLOCK_MAP=scripts/fr13_dvk_subset_blocks.json
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
@@ -61,6 +52,11 @@ BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242f
 TARGET_SELECTOR=identity_wide256_fullgrid_b1
 TARGET_SHA256=d8c6502e7a166e6d2124576a9e36814401d6dbc215516adfffa7ac436f93ba0f
 TARGET_BYTES=119704312
+TARGET_PASS="$REPO/results/fr13_b1_m128_cooperative_target_sfwd_real_gate_a8a904ed6_20260805/target_combined_pass.json"
+TARGET_PASS_SHA256=169704fac7c544600437e7785f5d810c9df8ffaf5f9ce70d96d83b21de46236d
+TARGET_QUALIFICATION_SOURCE_COMMIT=a8a904ed6c27a6338d43151038c155ebb76e3656
+TARGET_QUALIFICATION_PATCH_SHA256=ae9591a0c255c54bd8b5fed8576105013fce7f5f0834dbfb51ca1d455441f976
+SFWD_PROFILE_PRESEED_COMMIT=ff067115c547a39bad706c10f91552896a87d264
 WEIGHT_FLOOR_MS=119.658015414
 ONE_SIDED_U95_CAP_MS=137.6067177261
 SOURCE_COMMIT=$(git rev-parse HEAD)
@@ -78,10 +74,10 @@ CANDIDATE_ARM="hydra27_fixed32_qrow16_target_sfwd_${TASK_SET}_${TAG}"
   || { echo "Python environment is unavailable: $PYTHON_BIN" >&2; exit 2; }
 
 INPUT_BINDINGS=(
-  "$CUTLASS_TARGET_PASS:$CUTLASS_TARGET_PASS_SHA256"
+  "$TARGET_PASS:$TARGET_PASS_SHA256"
   "$SFWD_CONV_POSTPREP_PASS:$SFWD_CONV_POSTPREP_PASS_SHA256"
   "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST:$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256"
-  "$TARGET_SFWD_COMBINED_SUMMARY:$TARGET_SFWD_COMBINED_SUMMARY_SHA256"
+  "$SFWD_CONV_POSTPREP_GATE_SUMMARY:$SFWD_CONV_POSTPREP_GATE_SUMMARY_SHA256"
 )
 for binding in "${INPUT_BINDINGS[@]}"; do
   path=${binding%:*}
@@ -110,6 +106,11 @@ unset binary
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" \
    && "$(git rev-parse '@{upstream}')" == "$SOURCE_COMMIT" ]] \
   || { echo "full-stack timing requires a clean source commit pushed to upstream" >&2; exit 2; }
+git merge-base --is-ancestor "$SFWD_PROFILE_PRESEED_COMMIT" "$SOURCE_COMMIT" \
+  || { echo "runtime source lacks the merged SFWD profile-preseed fix" >&2; exit 2; }
+[[ "$(grep -Fc '_fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture(num_reqs)' scripts/fr10_phase4_patch_vllm_tree_gdn.py)" -eq 1 \
+   && "$(grep -Fc 'FR13 SFWD conv/post-prep profile output preseed is incomplete' scripts/fr10_phase4_patch_vllm_tree_gdn.py)" -eq 1 ]] \
+  || { echo "runtime SFWD profile-preseed source contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS/runtime_inputs" "$RUNROOT_ABS/sidecars"
 
@@ -123,23 +124,13 @@ payload, _ = qrow.load_json(Path(sys.argv[1]))
 qrow.validate_live_result(payload, candidate_sha256=sys.argv[2])
 PY
 
-"$PYTHON_BIN" scripts/fr13_b1_composed_stack_gate.py validate-eager-credentials \
-  --repo "$REPO" \
-  --source-commit "$SOURCE_COMMIT" \
-  --combined-summary "$TARGET_SFWD_COMBINED_SUMMARY" \
-  --combined-summary-sha256 "$TARGET_SFWD_COMBINED_SUMMARY_SHA256" \
-  --target-live "$CUTLASS_TARGET_PASS" \
-  --target-live-sha256 "$CUTLASS_TARGET_PASS_SHA256" \
-  --sfwd-pass "$SFWD_CONV_POSTPREP_PASS" \
-  --sfwd-pass-sha256 "$SFWD_CONV_POSTPREP_PASS_SHA256" \
-  --source-manifest "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST" \
-  --source-manifest-sha256 "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" >/dev/null
 "$PYTHON_BIN" scripts/fr13_cutlass_streamk_pass.py validate \
-  --live-result "$CUTLASS_TARGET_PASS" \
-  --expected-live-sha256 "$CUTLASS_TARGET_PASS_SHA256" \
+  --live-result "$TARGET_PASS" \
+  --expected-live-sha256 "$TARGET_PASS_SHA256" \
   --candidate-so "$CUTLASS_TARGET_SO" \
   --patch-source scripts/fr13_patch_cutlass_fixed32_wave.py \
-  --expected-source-commit "$SOURCE_COMMIT" \
+  --expected-source-commit "$TARGET_QUALIFICATION_SOURCE_COMMIT" \
+  --runtime-source-commit "$SOURCE_COMMIT" \
   --candidate-selector "$TARGET_SELECTOR" \
   --qualification-profile k64_root \
   --diagnostic-task-profile astropy12907 \
@@ -151,6 +142,37 @@ PY
   --source-manifest "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST" \
   --expected-source-manifest-sha256 "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" \
   --source-commit "$SOURCE_COMMIT" >/dev/null
+"$PYTHON_BIN" - \
+  "$SFWD_CONV_POSTPREP_GATE_SUMMARY" "$SOURCE_COMMIT" \
+  "$SFWD_CONV_POSTPREP_PASS_SHA256" \
+  "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+summary = json.loads(Path(sys.argv[1]).read_text(encoding="ascii"))
+required = {
+    "schema": "fr13.fixed32.sfwd_conv_postprep.k64_root_b1_gate.v1",
+    "status": "pass",
+    "source_commit": sys.argv[2],
+    "live_pass_sha256": sys.argv[3],
+    "source_manifest_sha256": sys.argv[4],
+    "task_id": "astropy__astropy-12907",
+    "task_count": 1,
+    "fixed32_mode": "hydra27_fixed32",
+    "batch_size": 1,
+    "physical_rows_per_request": 32,
+    "draft_vocab_root": 1,
+    "draft_vocab_k": 65536,
+    "layer_count": 48,
+    "decision_exact": True,
+    "no_fallback": True,
+    "production_enabled": False,
+    "timing_eligible": False,
+}
+if any(summary.get(key) != value for key, value in required.items()):
+    raise SystemExit("fresh SFWD real-task gate summary drifted")
+PY
 
 cp -- "$SFWD_CONV_POSTPREP_PASS" "$RUNROOT_ABS/runtime_inputs/sfwd_pass.json"
 cp -- "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST" "$RUNROOT_ABS/runtime_inputs/sfwd_source_manifest.json"
@@ -177,13 +199,15 @@ unset -f run_variant
    && "$LUMO_SWE_AUTOCOMMIT" == "0" ]] \
   || { echo "fixed K64/root1 B1 floor contract drifted" >&2; exit 2; }
 
-printf 'classification=real_swe_verified_b1_qrow16_target_sfwd_timing_pair\ntask_set=%s\ntask_count=%s\nbatch_size=1\nconcurrency=1\ntiming_eligible=1\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\nmode=hydra27_fixed32\nphysical_rows=32\ndraft_vocab_root=1\ndraft_vocab_k=65536\nruntime=FULL_graph_exact_geometry\nsource_commit=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_pass_sha256=%s\ntarget_selector=%s\ntarget_so_sha256=%s\ntarget_pass_sha256=%s\nsfwd_pass_sha256=%s\nsfwd_source_manifest_sha256=%s\ntarget_sfwd_summary_sha256=%s\nstock_arm=%s\ncandidate_arm=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_b1_target_sfwd_exact4_timing_pair\ntask_set=%s\ntask_count=%s\nbatch_size=1\nconcurrency=1\ntiming_eligible=1\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\nmode=hydra27_fixed32\nphysical_rows=32\ndraft_vocab_root=1\ndraft_vocab_k=65536\nruntime=FULL_graph_exact_geometry\nruntime_source_commit=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_pass_sha256=%s\ntarget_selector=%s\ntarget_so_sha256=%s\ntarget_qualification_source_commit=%s\ntarget_qualification_patch_sha256=%s\ntarget_pass_sha256=%s\nsfwd_pass_sha256=%s\nsfwd_source_manifest_sha256=%s\nsfwd_gate_summary_sha256=%s\nstock_arm=%s\ncandidate_arm=%s\nstarted=%s\n' \
   "$TASK_SET" "$EXPECTED_TASKS" "$SOURCE_COMMIT" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$QROW16_SHA256" "$QROW16_PASS_SHA256" \
-  "$TARGET_SELECTOR" "$TARGET_SHA256" "$CUTLASS_TARGET_PASS_SHA256" \
+  "$TARGET_SELECTOR" "$TARGET_SHA256" \
+  "$TARGET_QUALIFICATION_SOURCE_COMMIT" "$TARGET_QUALIFICATION_PATCH_SHA256" \
+  "$TARGET_PASS_SHA256" \
   "$SFWD_CONV_POSTPREP_PASS_SHA256" \
   "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" \
-  "$TARGET_SFWD_COMBINED_SUMMARY_SHA256" \
+  "$SFWD_CONV_POSTPREP_GATE_SUMMARY_SHA256" \
   "$STOCK_ARM" "$CANDIDATE_ARM" "$(date -u +%FT%TZ)" \
   > "$RUNROOT_ABS/launcher_meta.txt"
 
@@ -243,13 +267,15 @@ run_arm() {
   local production=$2
   local device_kernel=/workspace/scripts/fr13_device_multidraft_kernel.py
   local target_selector=stock target_so="" target_pass="" target_pass_sha=""
+  local target_qualification_source_commit=""
   local sfwd_fusion=0 sfwd_pass="" sfwd_pass_sha="" sfwd_manifest=""
   local sfwd_manifest_sha="" sfwd_commit="" conv_wb_batched=1
   if [[ "$production" == "1" ]]; then
     target_selector=$TARGET_SELECTOR
     target_so=$CUTLASS_TARGET_SO
-    target_pass=$CUTLASS_TARGET_PASS
-    target_pass_sha=$CUTLASS_TARGET_PASS_SHA256
+    target_pass=$TARGET_PASS
+    target_pass_sha=$TARGET_PASS_SHA256
+    target_qualification_source_commit=$TARGET_QUALIFICATION_SOURCE_COMMIT
     sfwd_fusion=1
     sfwd_pass=$SFWD_PASS_CONTAINER
     sfwd_pass_sha=$SFWD_CONV_POSTPREP_PASS_SHA256
@@ -303,6 +329,7 @@ run_arm() {
       FR13_FIXED32_CUTLASS_WAVE_SO="$target_so" \
       FR13_FIXED32_CUTLASS_WAVE_PRODUCTION="$production" \
       FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=k64_root \
+      FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT="$target_qualification_source_commit" \
       FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE=astropy12907 \
       FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON="$target_pass" \
       FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256="$target_pass_sha" \
@@ -356,6 +383,7 @@ run_arm() {
       'FR13_CONV_WB_BATCHED=1' \
       "FR13_FIXED32_CUTLASS_WAVE=$target_selector" \
       "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=$production" \
+      "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT=$target_qualification_source_commit" \
       "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=$sfwd_fusion"; do
     [[ "$(grep -Fxc "$expected" "$env_path")" -eq 1 ]] \
       || { echo "$arm lacks exact environment pin: $expected" >&2; return 4; }
@@ -444,8 +472,11 @@ TARGET_PRODUCTION_SIDECAR_SHA256=$(sha256sum "$TARGET_PRODUCTION_SIDECAR" | awk 
 
 ENGAGEMENT_VALIDATION="$RUNROOT_ABS/fullstack_engagement_validation.json"
 "$PYTHON_BIN" - \
-  "$TARGET_BINARY_RECORD" "$DOCKER_LOG" "$ENGAGEMENT_VALIDATION" \
-  "$SOURCE_COMMIT" "$TARGET_SELECTOR" "$TARGET_SHA256" <<'PY'
+  "$TARGET_BINARY_RECORD" "$TARGET_PRODUCTION_SIDECAR" \
+  "$DOCKER_LOG" "$ENGAGEMENT_VALIDATION" \
+  "$SOURCE_COMMIT" "$TARGET_SELECTOR" "$TARGET_SHA256" \
+  "$TARGET_QUALIFICATION_SOURCE_COMMIT" \
+  "$TARGET_QUALIFICATION_PATCH_SHA256" "$TARGET_PASS_SHA256" <<'PY'
 import hashlib
 import json
 import re
@@ -479,14 +510,23 @@ def load(path):
     return payload, raw
 
 
-binary_path, docker_path, out_path = map(Path, sys.argv[1:4])
-source_commit, target_selector, target_sha = sys.argv[4:7]
+binary_path, sidecar_path, docker_path, out_path = map(Path, sys.argv[1:5])
+(
+    source_commit,
+    target_selector,
+    target_sha,
+    qualification_commit,
+    qualification_patch_sha,
+    target_pass_sha,
+) = sys.argv[5:11]
 binary, binary_raw = load(binary_path)
+sidecar, sidecar_raw = load(sidecar_path)
 docker_info = docker_path.lstat()
 if docker_path.is_symlink() or not stat.S_ISREG(docker_info.st_mode):
     raise SystemExit("Docker log is not a regular file")
 docker_raw = docker_path.read_bytes()
 docker_text = docker_raw.decode("utf-8", errors="replace")
+qualification = binary.get("qualification")
 if (
     binary.get("schema") != "fr13.fixed32.cutlass_streamk_binary.v2"
     or binary.get("selector") != target_selector
@@ -497,6 +537,18 @@ if (
     or not isinstance(binary.get("destination"), dict)
     or binary["destination"].get("sha256") != target_sha
     or binary.get("installed_mode") != "0555"
+    or not isinstance(qualification, dict)
+    or qualification.get("qualification_source_mode") != "historical_pinned"
+    or qualification.get("qualification_source_commit") != qualification_commit
+    or qualification.get("runtime_source_commit") != source_commit
+    or qualification.get("patch_source_sha256") != qualification_patch_sha
+    or sidecar.get("candidate_selector") != target_selector
+    or sidecar.get("candidate_sha256") != target_sha
+    or sidecar.get("live_result_sha256") != target_pass_sha
+    or sidecar.get("qualification_source_mode") != "historical_pinned"
+    or sidecar.get("qualification_source_commit") != qualification_commit
+    or sidecar.get("runtime_source_commit") != source_commit
+    or sidecar.get("patch_source_sha256") != qualification_patch_sha
 ):
     raise SystemExit("current target installation evidence drifted")
 layers = set(
@@ -509,13 +561,29 @@ layers = set(
 marker = "[FR13_SFWD_CONV_POSTPREP] production engaged layer="
 if len(layers) != 48 or docker_text.count(marker) != 48:
     raise SystemExit("SFWD conv/post-prep did not engage exactly 48 layers")
+for forbidden in (
+    "linear fallback engaged",
+    "FR13 SFWD conv/post-prep capture lacks preseeded output bindings",
+    "FR13 SFWD conv/post-prep output preseed ran during capture",
+    "FR13 SFWD conv/post-prep profile output preseed ran during capture",
+    "FR13 SFWD conv/post-prep profile output preseed is incomplete",
+    "FR13 SFWD conv/post-prep graph output preseed is incomplete",
+    "[FR13_STEP_GRAPH] S1 DISABLED",
+):
+    if forbidden in docker_text:
+        raise SystemExit(f"candidate runtime emitted forbidden fallback: {forbidden}")
 payload = {
-    "schema": "fr13.fixed32.b1_qrow16_target_sfwd.engagement_validation.v1",
+    "schema": "fr13.fixed32.b1_target_sfwd_exact4.engagement_validation.v1",
     "status": "PASS",
     "source_commit": source_commit,
     "target_binary_record_sha256": hashlib.sha256(binary_raw).hexdigest(),
+    "target_production_sidecar_sha256": hashlib.sha256(sidecar_raw).hexdigest(),
+    "target_selector_engaged": True,
+    "target_production_attested": True,
+    "target_qualification_source_commit": qualification_commit,
     "docker_log_sha256": hashlib.sha256(docker_raw).hexdigest(),
     "sfwd_engaged_layers": 48,
+    "sfwd_no_fallback": True,
     "u8_production_enabled": False,
     "taw_production_enabled": False,
     "cfwd_production_enabled": False,
@@ -534,10 +602,11 @@ finalize_manifests
   "$TASK_SET" "$EXPECTED_TASKS" "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$SOURCE_COMMIT" "$RUNNER_SHA256" "$SUBSET_SHA256" \
   "$QROW16_SHA256" "$QROW16_PASS_SHA256" \
-  "$TARGET_SELECTOR" "$TARGET_SHA256" "$CUTLASS_TARGET_PASS_SHA256" \
+  "$TARGET_SELECTOR" "$TARGET_SHA256" "$TARGET_PASS_SHA256" \
+  "$TARGET_QUALIFICATION_SOURCE_COMMIT" "$TARGET_QUALIFICATION_PATCH_SHA256" \
   "$SFWD_CONV_POSTPREP_PASS_SHA256" \
   "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" \
-  "$TARGET_SFWD_COMBINED_SUMMARY_SHA256" \
+  "$SFWD_CONV_POSTPREP_GATE_SUMMARY_SHA256" \
   "$WEIGHT_FLOOR_MS" "$ONE_SIDED_U95_CAP_MS" <<'PY'
 import hashlib
 import json
@@ -597,20 +666,33 @@ task_set, expected_tasks, stock_arm, candidate_arm = sys.argv[6:10]
 source_commit, runner_sha, subset_sha = sys.argv[10:13]
 qrow16_sha, qrow16_pass_sha = sys.argv[13:15]
 target_selector, target_sha, target_pass_sha = sys.argv[15:18]
-sfwd_pass_sha, sfwd_manifest_sha, combined_sha = sys.argv[18:21]
-floor_ms, cap_ms = map(float, sys.argv[21:23])
+qualification_commit, qualification_patch_sha = sys.argv[18:20]
+sfwd_pass_sha, sfwd_manifest_sha, sfwd_gate_sha = sys.argv[20:23]
+floor_ms, cap_ms = map(float, sys.argv[23:25])
 subset, subset_raw = load(subset_path)
 stock, stock_raw = load(stock_path)
 candidate, candidate_raw = load(candidate_path)
 stack_validation, stack_raw = load(stack_path)
 task_ids = subset.get("instance_ids")
+expected_task_ids = [
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+]
 if (
     digest(subset_raw) != subset_sha
     or not isinstance(task_ids, list)
     or len(task_ids) != int(expected_tasks)
+    or task_ids != expected_task_ids
     or stack_validation.get("status") != "PASS"
     or stack_validation.get("source_commit") != source_commit
     or stack_validation.get("sfwd_engaged_layers") != 48
+    or stack_validation.get("sfwd_no_fallback") is not True
+    or stack_validation.get("target_selector_engaged") is not True
+    or stack_validation.get("target_production_attested") is not True
+    or stack_validation.get("target_qualification_source_commit")
+    != qualification_commit
 ):
     raise SystemExit("full-stack timing provenance drifted")
 
@@ -666,9 +748,9 @@ def validate_measure(payload, raw, arm):
 s = validate_measure(stock, stock_raw, stock_arm)
 c = validate_measure(candidate, candidate_raw, candidate_arm)
 summary = {
-    "schema": "fr13.fixed32.b1_qrow16_target_sfwd_timing.v1",
+    "schema": "fr13.fixed32.b1_target_sfwd_exact4_timing.v1",
     "status": "MEASURED",
-    "classification": "real_swe_verified_b1_qrow16_target_sfwd_timing_pair",
+    "classification": "real_swe_verified_b1_target_sfwd_exact4_timing_pair",
     "task_set": task_set,
     "task_count": int(expected_tasks),
     "task_ids": task_ids,
@@ -693,9 +775,11 @@ summary = {
         "target_selector": target_selector,
         "target_so_sha256": target_sha,
         "target_live_pass_sha256": target_pass_sha,
+        "target_qualification_source_commit": qualification_commit,
+        "target_qualification_patch_sha256": qualification_patch_sha,
         "sfwd_live_pass_sha256": sfwd_pass_sha,
         "sfwd_source_manifest_sha256": sfwd_manifest_sha,
-        "target_sfwd_combined_summary_sha256": combined_sha,
+        "sfwd_gate_summary_sha256": sfwd_gate_sha,
     },
     "production_selectors": {
         "qrow16": True,

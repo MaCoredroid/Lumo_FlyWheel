@@ -2226,6 +2226,7 @@ else
       fi
       exit 2
     }
+    _fr13_cutlass_runtime_source_args=()
     if [[ "$_fr13_cutlass_b4" == "1" ]]; then
       [[ "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
         echo "CUTLASS persistent M128 production requires a pinned qualification source commit" >&2
@@ -2233,11 +2234,26 @@ else
       }
       _fr13_cutlass_streamk_source_commit=$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT
     else
-      [[ -z "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" ]] || {
-        echo "CUTLASS B1 production forbids a B4 qualification source override" >&2
-        exit 2
-      }
-      _fr13_cutlass_streamk_source_commit=$(git rev-parse HEAD)
+      if [[ -n "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" ]]; then
+        [[ "$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1" \
+           && "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" == "k64_root" \
+           && "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" == "a8a904ed6c27a6338d43151038c155ebb76e3656" ]] || {
+          echo "CUTLASS B1 historical qualification is restricted to the pinned cooperative target" >&2
+          exit 2
+        }
+        _fr13_cutlass_streamk_source_commit=$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT
+        _fr13_cutlass_runtime_source_commit=$(git rev-parse HEAD)
+        [[ "$_fr13_cutlass_runtime_source_commit" != "$_fr13_cutlass_streamk_source_commit" ]] || {
+          echo "CUTLASS B1 historical qualification requires a newer runtime source" >&2
+          exit 2
+        }
+        _fr13_cutlass_runtime_source_args=(
+          --runtime-source-commit "$_fr13_cutlass_runtime_source_commit"
+        )
+        unset _fr13_cutlass_runtime_source_commit
+      else
+        _fr13_cutlass_streamk_source_commit=$(git rev-parse HEAD)
+      fi
     fi
     _fr13_cutlass_pass_script=scripts/fr13_cutlass_streamk_pass.py
     _fr13_cutlass_pass_profile_args=()
@@ -2264,6 +2280,7 @@ else
       --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
       --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
       "${_fr13_cutlass_pass_profile_args[@]}" \
+      "${_fr13_cutlass_runtime_source_args[@]}" \
       >/dev/null
     unset _fr13_cutlass_pass_script
     unset _fr13_cutlass_pass_profile_args
@@ -3538,6 +3555,7 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
       --expected-source-commit "$_fr13_cutlass_streamk_source_commit" \
       --candidate-selector "$FR13_FIXED32_CUTLASS_WAVE" \
       "${_fr13_cutlass_pass_profile_args[@]}" \
+      "${_fr13_cutlass_runtime_source_args[@]}" \
       --out "$_fr13_cutlass_streamk_production_sidecar_host" \
       >/dev/null
   fi
@@ -3550,6 +3568,7 @@ if [[ "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" ]]; then
   unset _fr13_cutlass_streamk_source_commit
   unset _fr13_cutlass_pass_script
   unset _fr13_cutlass_pass_profile_args
+  unset _fr13_cutlass_runtime_source_args
 fi
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR=""
 FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256=""
@@ -5247,6 +5266,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_VOCAB_BLOCKS="${FR13_DRAFT_VOCAB_BLOCKS:-/workspace/scripts/fr13_dvk_subset_blocks.json}" \
   -e FR13_DRAFT_VOCAB_ROOT="$FR13_DRAFT_VOCAB_ROOT" \
   -e FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE="$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" \
+  -e FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT="$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT" \
   -e FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE="$FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE" \
   -e FR13_DRAFT_HEAD_PAD_ROWS="$FR13_DRAFT_HEAD_PAD_ROWS" \
   -e FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB="$FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB" \

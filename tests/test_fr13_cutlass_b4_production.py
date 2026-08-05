@@ -349,7 +349,12 @@ def test_b4_timing_keeps_live_qualification_separate_from_harness_commit() -> No
         in launcher
     )
     assert (
-        "CUTLASS B1 production forbids a B4 qualification source override" in launcher
+        "CUTLASS B1 historical qualification is restricted to the pinned "
+        "cooperative target" in launcher
+    )
+    assert (
+        '--runtime-source-commit "$_fr13_cutlass_runtime_source_commit"'
+        in launcher
     )
 
 
