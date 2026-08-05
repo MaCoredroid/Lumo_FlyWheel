@@ -1,0 +1,45 @@
+{
+  "artifacts": {
+    "b1": {
+      "candidate_so": "/home/mark/fr13_fa2_tree_visibility_live_ready_20260805/b1/_vllm_fa2_qrow32_b1_visibility_sm121a.abi3.so",
+      "candidate_so_sha256": "c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79",
+      "candidate_so_size": 300200192,
+      "fa2_source": "/home/mark/fr13_fa2_tree_visibility_sm121a_20260805/source_b1_qrow32",
+      "fa2_source_closure_sha256": "a30eca031cd5067133e6278527787c5987635670930e5840ac983f66b088e4fc",
+      "gcc11_pinned_object_sha256": "a13d82c99cd69df105306b0f158823e79479c0704badb387db1eb43c9e0ad774",
+      "gcc11_raw_object_sha256": "635ee655a9c4c47ba6b2003085349e84e38a591bf8585fa51f4c5a703cb369e1",
+      "raw_linked_so_sha256": "b578bf9014b486ad4e2d2dcf38c4a19b6fcd54697dd374b940b535f0075dace6",
+      "reference_so_sha256": "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a",
+      "sass_sha256": "16a7da0405922543728ccebd78823d2bdcb36e529ce77b06499115559addddb2"
+    },
+    "b4": {
+      "candidate_so": "/home/mark/fr13_fa2_tree_visibility_live_ready_20260805/b4/_vllm_fa2_qrow32_b4_visibility_sm121a.abi3.so",
+      "candidate_so_sha256": "805635d6881dbf73287d66c10541880b7cf93bcb6bf7b04e50efd3d32728b0aa",
+      "candidate_so_size": 299810632,
+      "fa2_source": "/home/mark/fr13_fa2_tree_visibility_sm121a_20260805/source_b4",
+      "fa2_source_closure_sha256": "1dac8f7fd910a564c5c3b792770029f0013e2df48c25c89376e4d5e7da949ced",
+      "gcc11_pinned_object_sha256": "3a5ca02fa80d069169881e37e114838fe81aeafbf14909a9037d7a138e1be1fb",
+      "gcc11_raw_object_sha256": "fac96beb5c001595f9424e7bd40063ef9555dfe281e0148b104076cf7c346a47",
+      "raw_linked_so_sha256": "35785d5ef7e08cb26e5d644f682c9bceffdee00d3beffb9cac6f2385a4e6f91a",
+      "reference_so_sha256": "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e",
+      "sass_sha256": "18975ab7aec03f12e93d57db6f4230a40346cff7e9ccbe2be1a5b309504d16b5"
+    }
+  },
+  "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+  "fixed32_mode": "hydra27_fixed32",
+  "gpu_used": false,
+  "incumbent_defaults_changed": false,
+  "performance_measurement": false,
+  "physical_rows": 32,
+  "root_reduction": 1,
+  "schema": "fr13.fixed32.fa2_visibility_live_ready.v1",
+  "source_commit": "154d6877b9e33d71b7c07a543d3cf339b448a307",
+  "status": "READY_FOR_REAL_BYTE_GATE",
+  "suite": "SWE-Verified",
+  "tests": {
+    "passed": 105,
+    "skipped": 1
+  },
+  "timing_eligible": false,
+  "vocab_k": 65536
+}

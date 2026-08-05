@@ -1,0 +1,26 @@
+# Run from a clean checkout of source commit 154d6877b9e33d71b7c07a543d3cf339b448a307.
+# Choose an executable campaign-compatible PYTHON_BIN from the active checkout.
+
+# Real SWE-Verified Hydra27 B1 physical32 K64/root1 raw-byte gate.
+env \
+  FR13_RUN_QROW32_SPLIT2_LIVE_GATE=1 \
+  FR13_QROW32_B1_LIVE_ARM=visibility \
+  RUNROOT="$PWD/output/fr13_fa2_visibility_b1_byte_gate_20260805" \
+  TAG=visibility_b1 \
+  QROW32_B1_FA2_SO=/home/mark/fr13_fa2_tree_visibility_live_ready_20260805/b1/_vllm_fa2_qrow32_b1_visibility_sm121a.abi3.so \
+  QROW32_B1_FA2_SOURCE=/home/mark/fr13_fa2_tree_visibility_sm121a_20260805/source_b1_qrow32 \
+  PYTHON_BIN="$PWD/.venv/bin/python" \
+  bash scripts/fr13_run_b1_k64_qrow32_split2_live_gate.sh
+
+# Real SWE-Verified exact4 Hydra27 B4 physical32 K64/root1 raw-byte gate.
+env \
+  RUNROOT="$PWD/output/fr13_fa2_visibility_b4_byte_gate_20260805" \
+  TAG=visibility_b4 \
+  FR13_QROW32_FIXED32_MODE=hydra27_fixed32 \
+  FR13_QROW32_LIVE_AB_ARM=visibility \
+  FR13_QROW32_FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95 \
+  FR13_QROW32_SOURCE_CLOSURE_SHA256=1dac8f7fd910a564c5c3b792770029f0013e2df48c25c89376e4d5e7da949ced \
+  FR13_QROW32_FA2_SOURCE=/home/mark/fr13_fa2_tree_visibility_sm121a_20260805/source_b4 \
+  FORKED_FA2_SO=/home/mark/fr13_fa2_tree_visibility_live_ready_20260805/b4/_vllm_fa2_qrow32_b4_visibility_sm121a.abi3.so \
+  PYTHON_BIN="$PWD/.venv/bin/python" \
+  bash scripts/fr13_run_b4_fa2_qrow32_live_gate.sh

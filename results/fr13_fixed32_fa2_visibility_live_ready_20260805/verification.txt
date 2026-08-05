@@ -1,0 +1,39 @@
+source_commit=154d6877b9e33d71b7c07a543d3cf339b448a307
+source_branch=codex/tree-attn-fixed32-live-gate-20260805
+base_commit=d8845d62c93dddf2b376f231683b4ad25aa65859
+patch_source_sha256=021465133c909487e8aa4136168e009b5ff6ff264d56ec2e877caa6afa2acf54
+visibility_gate_source_sha256=bbb2cf7306b05434c7e11617553fc7d3aba328bfba90831a1680716037c67113
+b1_sidecar_source_sha256=4d5c3adeaa97923d85dfe373bc71d5af96ef568fc97e1c1ddca6ded05a722c29
+
+host_checks:
+- bash -n launcher and B1/B4 live runners: PASS
+- Python byte compilation of selector, contract, and validators: PASS
+- B1 candidate SO and regenerated source closure authentication: PASS
+- B4 candidate SO and regenerated source closure authentication: PASS
+- git diff --check before source commit: PASS
+- FA2/qrow32 focused pytest: 105 passed, 1 skipped
+
+b1_codegen:
+- exact compiler route: nvcc -ccbin aarch64-linux-gnu-g++-11, sm_121a
+- registers=252 stack=0 local=0 spill_load=0 spill_store=0 barriers=1
+- raw_object_sha256=635ee655a9c4c47ba6b2003085349e84e38a591bf8585fa51f4c5a703cb369e1
+- pinned_object_sha256=a13d82c99cd69df105306b0f158823e79479c0704badb387db1eb43c9e0ad774
+- final_so_sha256=c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79
+- final_so_size=300200192
+- source_closure_sha256=a30eca031cd5067133e6278527787c5987635670930e5840ac983f66b088e4fc
+
+b4_codegen:
+- exact compiler route: nvcc -ccbin aarch64-linux-gnu-g++-11, sm_121a
+- registers=252 stack=0 local=0 spill_load=0 spill_store=0 barriers=1
+- raw_object_sha256=fac96beb5c001595f9424e7bd40063ef9555dfe281e0148b104076cf7c346a47
+- pinned_object_sha256=3a5ca02fa80d069169881e37e114838fe81aeafbf14909a9037d7a138e1be1fb
+- final_so_sha256=805635d6881dbf73287d66c10541880b7cf93bcb6bf7b04e50efd3d32728b0aa
+- final_so_size=299810632
+- source_closure_sha256=1dac8f7fd910a564c5c3b792770029f0013e2df48c25c89376e4d5e7da949ced
+
+not_run:
+- GPU execution
+- Docker execution
+- real SWE-Verified B1 byte gate
+- real SWE-Verified exact4 B4 byte gate
+- performance timing or floor acceptance
