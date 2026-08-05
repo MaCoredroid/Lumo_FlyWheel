@@ -175,8 +175,7 @@ def test_layer_batch_recurrence_stops_after_root_plus_accepted_drafts() -> None:
     assert "accepted_lens," in kernel
     assert "cu_seqlens," not in kernel
     assert "accepted_paths + i_n * PATH_CAP + path_offset" in kernel
-    assert "accepted = tl.load(accepted_lens + i_n)" in kernel
-    assert "if PHYSICAL32_I32_INDEX:" in kernel
+    assert "accepted = tl.load(accepted_lens + i_n).to(tl.int64)" in kernel
     assert "T = accepted + 1" in kernel
     assert 'state["accepted_lens"]' in launch
     assert 'state["cu"]' not in launch
