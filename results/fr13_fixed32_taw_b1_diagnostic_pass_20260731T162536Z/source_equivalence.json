@@ -7,8 +7,8 @@
     "source_contract_sha256": "fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8"
   },
   "current_source": {
-    "branch_base_commit": "2c349c938b0ea85f43c1a9f85dea316aa179ee13",
-    "integrated_source_tip": "c467cce47d3bdf3f43bdf7a8168c79d127406847",
+    "branch_base_commit": "640c98539dfdb78923615db14871971ef53b0f19",
+    "integrated_source_tip": "a3443d40b9db4bf12475888a784a88812098d28e",
     "file_sha256": "65aa33703a50c47a8e01b622633a8a95b425ecfdea4a7b4c8f8c6311707a2207",
     "source_contract_sha256": "694a3f4cd6e36ff1b6503ff19b2968b94a1ac226535a6efb44dcea1bb8a9a57b"
   },

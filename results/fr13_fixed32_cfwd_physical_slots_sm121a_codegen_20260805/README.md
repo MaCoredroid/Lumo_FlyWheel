@@ -2,10 +2,11 @@
 
 This artifact supersedes the unsafe `d2348ce9` checkpoint and binds the
 default-off `fixed32_cfwd_logit_direct_physical_slots_v2` integration source
-`c467cce47d3bdf3f43bdf7a8168c79d127406847` to offline SM121a codegen. Its
+`a3443d40b9db4bf12475888a784a88812098d28e` to offline SM121a codegen. Its
 frozen comparison base is current-main checkpoint
-`2c349c938b0ea85f43c1a9f85dea316aa179ee13`, which contains the production
-BF16 SFWD `dt_bias` contract fix and the engaged Qrow16 SFWD byte gate.
+`640c98539dfdb78923615db14871971ef53b0f19`, which contains the production
+BF16 SFWD `dt_bias` contract fix, the engaged Qrow16 SFWD byte gate, and the
+sanitized Gate B result artifact.
 
 The candidate keeps the fixed 13 self plus 17 target decision programs per
 request and their 81 stores, but scatters those products into physical 31/32

@@ -28,7 +28,7 @@ from triton.compiler import ASTSource
 from triton.runtime.jit import MockTensor, create_function_from_signature
 
 
-BASE_REVISION = "2c349c938b0ea85f43c1a9f85dea316aa179ee13"
+BASE_REVISION = "640c98539dfdb78923615db14871971ef53b0f19"
 DEVICE_SOURCE = "scripts/fr13_device_multidraft_kernel.py"
 PRODUCER_SOURCE = "scripts/fr13_cfwd_logit_direct_decision_kernel.py"
 INCUMBENT_COMMIT = "_fr13_fixed32_taw_all_parent_commit_kernel"
