@@ -344,4 +344,4 @@ def test_dual_runner_is_default_off_real_exact4_and_non_timing() -> None:
     assert '"sentinel": 131092' in helper
     assert 'FR13_FA2_QROW32_LIVE_PAGED_AB_ARM' in helper
     assert 'int(num_splits) == int(candidate_contract["num_splits"])' in helper
-    assert "FR13 qrow32 GQA-pair binary/source provenance drifted" in helper
+    assert "FR13 qrow32 binary/source provenance drifted" in helper
