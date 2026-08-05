@@ -1,0 +1,9 @@
+PASS CUDA_VISIBLE_DEVICES='' nvcc CUDA 13.0.88 --cubin sm_121a, fixed frandom seed
+PASS two independent cubins byte-equal sha256 c7b2a75dab16fa6a5c4f0038753b9da0f1f3d06ae6a22437797796a4ae9fd26b
+PASS cuobjdump resources REG=56 STACK=0 SHARED=0 LOCAL=0
+PASS static checker: 200 instructions, 119-instruction U8 loop, no BAR/LDL/STL/CALL/ATOM
+PASS pytest tests/test_fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.py
+PASS review checker rejects shuffle, output-stride, loop-bound, weight-load, and input-load mutations
+PASS review builder resolves the shared library registered by non-Python torch extension load
+PASS independent review rebuild byte-equal sha256 c7b2a75dab16fa6a5c4f0038753b9da0f1f3d06ae6a22437797796a4ae9fd26b
+NOT RUN GPU runtime, Docker, SWE-Verified, byte equality, timing, acceptance
