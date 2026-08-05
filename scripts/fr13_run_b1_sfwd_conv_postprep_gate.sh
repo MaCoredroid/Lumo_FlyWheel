@@ -15,6 +15,15 @@ case "$FR13_FIXED32_SFWD_EMBED_GATE_CTA" in
   0|1) ;;
   *) echo "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1" >&2; exit 2 ;;
 esac
+FR13_FIXED32_SFWD_NODEGROUP8_DIRECT=${FR13_FIXED32_SFWD_NODEGROUP8_DIRECT:-0}
+case "$FR13_FIXED32_SFWD_NODEGROUP8_DIRECT" in
+  0|1) ;;
+  *) echo "FR13_FIXED32_SFWD_NODEGROUP8_DIRECT must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+DIRECT_ARGS=()
+if [[ "$FR13_FIXED32_SFWD_NODEGROUP8_DIRECT" == "1" ]]; then
+  DIRECT_ARGS+=(--direct-nodegroup8)
+fi
 
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 SOURCE_COMMIT=$(git rev-parse HEAD)
@@ -52,12 +61,14 @@ READINESS="$RUNROOT_ABS/sfwd_conv_postprep_host_readiness.json"
 
 mkdir -p "$RUNROOT_ABS"
 .venv/bin/python scripts/fr13_sfwd_conv_postprep_gate.py source-manifest \
+  "${DIRECT_ARGS[@]}" \
   --repo "$REPO" \
   --source-commit "$SOURCE_COMMIT" \
   --output "$MANIFEST_LAUNCH"
 MANIFEST_SHA256=$(sha256sum "$MANIFEST_LAUNCH" | awk '{print $1}')
 MANIFEST_CONTAINER="/workspace/${MANIFEST_LAUNCH#"$REPO/"}"
 .venv/bin/python scripts/fr13_sfwd_conv_postprep_gate.py host-readiness \
+  "${DIRECT_ARGS[@]}" \
   --repo "$REPO" \
   --source-commit "$SOURCE_COMMIT" \
   --source-manifest "$MANIFEST_LAUNCH" \
@@ -95,6 +106,7 @@ export FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB=0
 export FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=0
 export FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=1
 export FR13_FIXED32_SFWD_EMBED_GATE_CTA
+export FR13_FIXED32_SFWD_NODEGROUP8_DIRECT
 export FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON=
 export FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256=
 export FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH="$MANIFEST_CONTAINER"
@@ -111,6 +123,7 @@ MANIFEST_FINALIZED=0
 finalize_manifest() {
   (( MANIFEST_FINALIZED == 0 )) || return 0
   .venv/bin/python scripts/fr13_sfwd_conv_postprep_gate.py source-manifest \
+    "${DIRECT_ARGS[@]}" \
     --repo "$REPO" \
     --source-commit "$SOURCE_COMMIT" \
     --output "$MANIFEST_END"
@@ -139,6 +152,7 @@ finalize_manifest
 
 if [[ "$FR13_FIXED32_SFWD_EMBED_GATE_CTA" == "1" ]]; then
   .venv/bin/python scripts/fr13_sfwd_conv_postprep_gate.py validate-embedded \
+    "${DIRECT_ARGS[@]}" \
     --repo "$REPO" \
     --arm-dir "$ARMDIR" \
     --source-commit "$SOURCE_COMMIT" \
@@ -148,6 +162,7 @@ if [[ "$FR13_FIXED32_SFWD_EMBED_GATE_CTA" == "1" ]]; then
     --output "$ARMDIR/sfwd_embedded_gate_k64_root_b1_gate.json"
 else
   .venv/bin/python scripts/fr13_sfwd_conv_postprep_gate.py validate \
+    "${DIRECT_ARGS[@]}" \
     --repo "$REPO" \
     --arm-dir "$ARMDIR" \
     --source-commit "$SOURCE_COMMIT" \

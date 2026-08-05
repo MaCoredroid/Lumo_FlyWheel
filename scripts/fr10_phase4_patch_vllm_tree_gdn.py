@@ -192,6 +192,9 @@ _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB = os.environ.get(
 _FR13_FIXED32_SFWD_EMBED_GATE_CTA = os.environ.get(
     "FR13_FIXED32_SFWD_EMBED_GATE_CTA", "0"
 ).strip()
+_FR13_FIXED32_SFWD_NODEGROUP8_DIRECT = os.environ.get(
+    "FR13_FIXED32_SFWD_NODEGROUP8_DIRECT", "0"
+).strip()
 _FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
     "scripts/fr13_b1_composed_stack_gate.py",
@@ -7718,6 +7721,12 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1"
         )
     sfwd_embed_gate = sfwd_embed_gate_raw == "1"
+    sfwd_nodegroup8_direct_raw = _FR13_FIXED32_SFWD_NODEGROUP8_DIRECT
+    if sfwd_nodegroup8_direct_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_NODEGROUP8_DIRECT must be exactly 0 or 1"
+        )
+    sfwd_nodegroup8_direct = sfwd_nodegroup8_direct_raw == "1"
     if sfwd_conv_postprep and sfwd_conv_postprep_byte:
         raise RuntimeError(
             "FR13 SFWD conv/post-prep production and byte gate are exclusive"
@@ -7729,6 +7738,17 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         raise RuntimeError(
             "FR13 embedded gate CTA requires Hydra27 conv/post-prep production "
             "or byte gate"
+        )
+    if sfwd_nodegroup8_direct and (
+        not sfwd_conv_postprep_byte
+        or sfwd_conv_postprep
+        or resolved_mode != "hydra27_fixed32"
+        or os.environ.get("MAX_NUM_SEQS", "") != "1"
+        or os.environ.get("SWE_CONCURRENCY", "") != "1"
+    ):
+        raise RuntimeError(
+            "FR13 direct nodegroup8 requires the Hydra27 B1 conv/post-prep "
+            "byte gate"
         )
     sfwd_conv_postprep_graph = bool(
         sfwd_conv_postprep and os.environ.get("ENFORCE_EAGER", "0") == "0"
@@ -7856,6 +7876,8 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
         f"{sfwd_conv_postprep_byte!r}\n"
         "_FR13_FIXED32_SFWD_EMBED_GATE_CTA = "
         f"{sfwd_embed_gate!r}\n"
+        "_FR13_FIXED32_SFWD_NODEGROUP8_DIRECT = "
+        f"{sfwd_nodegroup8_direct!r}\n"
         "_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH = "
         f"{sfwd_conv_postprep_graph!r}\n"
         "_FR13_FIXED32_SFWD_PRIOR_REUSE_SOURCE_MANIFEST_PATH = "
@@ -7877,6 +7899,7 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     sfwd_conv_postprep = _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
     sfwd_conv_postprep_byte = _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
     sfwd_embed_gate = _FR13_FIXED32_SFWD_EMBED_GATE_CTA
+    sfwd_nodegroup8_direct = _FR13_FIXED32_SFWD_NODEGROUP8_DIRECT
     cutlass_wave = _FR13_FIXED32_CUTLASS_WAVE
     if batch_gdn_byte_diagnostic not in ("0", "1"):
         raise RuntimeError(
@@ -7966,6 +7989,20 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     if sfwd_embed_gate not in ("0", "1"):
         raise RuntimeError(
             "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1"
+        )
+    if sfwd_nodegroup8_direct not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_NODEGROUP8_DIRECT must be exactly 0 or 1"
+        )
+    if sfwd_nodegroup8_direct == "1" and (
+        sfwd_conv_postprep_byte != "1"
+        or sfwd_conv_postprep == "1"
+        or _FR13_FIXED32_MODE != "hydra27_fixed32"
+        or os.environ.get("MAX_NUM_SEQS", "") != "1"
+        or os.environ.get("SWE_CONCURRENCY", "") != "1"
+    ):
+        raise RuntimeError(
+            "FR13 direct nodegroup8 eager warm requires Hydra27 B1 byte gate"
         )
     streamk_byte_diagnostic = cutlass_wave in (
         "streamk_coop128_byte_ab",
@@ -8080,7 +8117,11 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
 
 def _fr13_fixed32_require_sfwd_conv_postprep_source_manifest() -> dict[str, str]:
     """Bind either selector to the exact candidate source closure."""
-    candidate = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
+    candidate = (
+        "fixed32_sfwd_conv_postprep_nodegroup8_direct_v1"
+        if _FR13_FIXED32_SFWD_NODEGROUP8_DIRECT in ("1", True)
+        else "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
+    )
     manifest_path = Path(
         os.environ.get(
             "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH", ""
@@ -8487,6 +8528,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     sfwd_conv_postprep = _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
     sfwd_conv_postprep_byte = _FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB
     sfwd_embed_gate = _FR13_FIXED32_SFWD_EMBED_GATE_CTA
+    sfwd_nodegroup8_direct = _FR13_FIXED32_SFWD_NODEGROUP8_DIRECT
     _fr13_fixed32_eager_boot_warm_contract()
     if gqa_group3_production not in ("0", "1"):
         raise RuntimeError(
@@ -8648,6 +8690,10 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         raise RuntimeError(
             "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1"
         )
+    if sfwd_nodegroup8_direct not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_NODEGROUP8_DIRECT must be exactly 0 or 1"
+        )
     if sfwd_conv_postprep == "1" and sfwd_conv_postprep_byte == "1":
         raise RuntimeError(
             "FR13 SFWD conv/post-prep production and byte gate are exclusive"
@@ -8659,6 +8705,18 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         raise RuntimeError(
             "FR13 embedded gate CTA requires Hydra27 conv/post-prep production "
             "or byte gate"
+        )
+    if sfwd_nodegroup8_direct == "1" and (
+        sfwd_conv_postprep_byte != "1"
+        or sfwd_conv_postprep == "1"
+        or sfwd_embed_gate not in ("0", "1")
+        or mode != "hydra27_fixed32"
+        or os.environ.get("MAX_NUM_SEQS", "") != "1"
+        or os.environ.get("SWE_CONCURRENCY", "") != "1"
+    ):
+        raise RuntimeError(
+            "FR13 direct nodegroup8 requires exact Hydra27 physical32 "
+            "K64/root1 eager B1 byte gate"
         )
     if sfwd_conv_postprep == "1" or sfwd_conv_postprep_byte == "1":
         exact_runtime = {
@@ -13048,6 +13106,9 @@ def _fr13_conv_subop_mab(
                             embed_gate_cta=(
                                 _FR13_FIXED32_SFWD_EMBED_GATE_CTA
                             ),
+                            direct_nodegroup8=(
+                                _FR13_FIXED32_SFWD_NODEGROUP8_DIRECT
+                            ),
                             source_only_qualification=True,
                             capture_binding=_fr13_conv_postprep_binding,
                         )
@@ -14264,6 +14325,9 @@ def _fr13_conv_subop_mab(
                                 ),
                                 embedded_gate_cta=(
                                     _FR13_FIXED32_SFWD_EMBED_GATE_CTA
+                                ),
+                                direct_nodegroup8=(
+                                    _FR13_FIXED32_SFWD_NODEGROUP8_DIRECT
                                 ),
                             )
                         )
