@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -109,9 +110,25 @@ def test_artifact_checksums_match() -> None:
     for manifest in ("source_checksums.sha256", "SHA256SUMS"):
         for line in (ARTIFACT / manifest).read_text().splitlines():
             expected, relative = line.split("  ", 1)
-            source = (
-                ROOT / relative
-                if manifest == "source_checksums.sha256"
-                else ARTIFACT / relative
-            )
-            assert hashlib.sha256(source.read_bytes()).hexdigest() == expected
+            if manifest == "source_checksums.sha256" and relative.startswith(
+                "src/"
+            ):
+                raw = subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(ROOT),
+                        "show",
+                        f"{CANDIDATE_REVISION}:{relative}",
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                ).stdout
+            else:
+                source = (
+                    ROOT / relative
+                    if manifest == "source_checksums.sha256"
+                    else ARTIFACT / relative
+                )
+                raw = source.read_bytes()
+            assert hashlib.sha256(raw).hexdigest() == expected

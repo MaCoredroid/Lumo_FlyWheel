@@ -1,0 +1,9 @@
+batch	profile	variant	registers_per_thread	register_bytes_per_cta	stack_bytes_per_thread	local_bytes_per_thread	encoded_sass_instructions	static_sass_instructions	ldg	stg	ldl	stl	calls	cubin_bytes
+b1	base	baseline_static_schedule_base	116	118784	0	0	2080	2012	74	54	0	0	0	161576
+b4	base	baseline_static_schedule_base	116	118784	0	0	2080	2012	74	54	0	0	0	161576
+b1	committer_stack	baseline_static_schedule_committer_stack	118	120832	0	0	2184	2119	74	82	0	0	0	168984
+b4	committer_stack	baseline_static_schedule_committer_stack	118	120832	0	0	2184	2119	74	82	0	0	0	168984
+b1	base	candidate_value_domain_base	108	110592	0	0	2040	1972	74	54	0	0	0	159936
+b4	base	candidate_value_domain_base	108	110592	0	0	2040	1972	74	54	0	0	0	159936
+b1	committer_stack	candidate_value_domain_committer_stack	118	120832	0	0	2144	2078	74	82	0	0	0	167216
+b4	committer_stack	candidate_value_domain_committer_stack	118	120832	0	0	2144	2078	74	82	0	0	0	167344
