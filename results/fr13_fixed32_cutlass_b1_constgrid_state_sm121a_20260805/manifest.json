@@ -1,0 +1,69 @@
+{
+  "schema": "fr13.fixed32.cutlass_b1_constgrid_state_sm121a.v1",
+  "created_at_utc": "2026-08-05T19:12:00Z",
+  "status": "translation_unit_compile_codegen_pass_live_gate_pending",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "production_available": false,
+  "production_default_enabled": false,
+  "source": {
+    "branch": "codex/b1-target-constgrid-next-20260805",
+    "implementation_commit": "ae240ce3416b29494d789d2857c1db1456b9c1ea",
+    "base_commit": "fee4cfd2b4de6fca5108da32122973ab720295a6",
+    "vllm_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "patch_source_sha256": "a81056e1d0ebe89ec996b584fdbf72796b508ca1f117d00acad00afdae630e29",
+    "patched_dispatch_sha256": "96bbf3869831da3bd903809ad5cce07049a75c5aa5edd3d1daea7b25aebfc9ef"
+  },
+  "candidate": {
+    "selector": "identity_wide256_fullgrid_b1",
+    "scheduler_tag": "fr13_fixed32_b1_wide256_direct_fullgrid_scheduler",
+    "tile_shape_mnk": [128, 32, 128],
+    "cluster_shape_mnk": [1, 1, 1],
+    "stage_count": 2,
+    "kernel_schedule": "KernelTmaWarpSpecializedBlockwisePingpongSm120",
+    "physical_grid_ctas": 48,
+    "logical_tile_counts": [112, 128, 272],
+    "arithmetic_changed": false,
+    "reduction_order_changed": false,
+    "launch_count_changed": false,
+    "requested_traffic_changed": false,
+    "translation_unit_object_sha256": "d3db0e7ed7a718c4713b05087bbecaa4b2aef9ab5184df3e41f2d6dfc86322be",
+    "cache_disabled_rebuild_object_sha256": "c15295e54024eefd7d45f0d6d691433094e75f2b0af5f692ba7ce70759e84feb",
+    "translation_unit_object_byte_identical": false
+  },
+  "codegen": {
+    "dtypes": ["fp16", "bf16"],
+    "incumbent_encoded_instructions_per_kernel": 760,
+    "candidate_encoded_instructions_per_kernel": 744,
+    "encoded_instruction_delta_per_kernel": -16,
+    "encoded_instruction_reduction_percent": 2.105263,
+    "registers_per_thread": 168,
+    "stack_bytes_per_thread": 8,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024,
+    "branches_per_kernel": 38,
+    "ldl_per_kernel": 3,
+    "stl_per_kernel": 1,
+    "candidate_target_sass_sha256": "137ecb806e78612da31d8b62622c21af15422a3a5f750066a18504cd98b3d5ef"
+  },
+  "verification": {
+    "patch_tests": "43 passed",
+    "python_byte_compile": "pass",
+    "git_diff_check": "pass",
+    "sm121a_translation_unit_compile": "pass",
+    "second_cache_disabled_compile": "pass",
+    "target_sass_byte_identical_across_compiles": true,
+    "direct_cursor_exact_coverage": "pass"
+  },
+  "not_run": [
+    "full shared-library link",
+    "GPU kernel runtime",
+    "real SWE-Verified raw-byte gate",
+    "real SWE-Verified timing",
+    "B1 full-step timing",
+    "B4 full-step timing",
+    "hardware-floor acceptance"
+  ]
+}
