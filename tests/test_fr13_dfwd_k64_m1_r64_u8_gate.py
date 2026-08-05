@@ -94,6 +94,7 @@ def _worker_payload(module) -> dict[str, str]:
         {
             "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "1",
             "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE": "1",
+            "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE": "0",
             "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "0",
             "FR13_DRAFT_HEAD_M1_R64_U8_SO": ("/tmp/fr13_bf16_k64_m1_r64_u8.abi3.so"),
             "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID": ("astropy__astropy-12907"),
@@ -128,6 +129,7 @@ def _identities(gate) -> dict[str, object]:
         "runner_sha256": "2" * 64,
         "source_commit": "b" * 40,
         "subset_sha256": gate.EXPECTED_SUBSET_SHA256,
+        "taw_source_sha256": "8" * 64,
         "vocab_blocks_sha256": gate.EXPECTED_VOCAB_BLOCKS_SHA256,
     }
 
@@ -154,7 +156,7 @@ def test_worker_sidecar_restores_exact_curated_enginecore_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     patcher = _patcher()
-    assert len(patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS) == 22
+    assert len(patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS) == 24
     assert "FR13_DRAFT_HEAD_PAD_ROWS" not in patcher._FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS
     assert (
         "FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB"
@@ -208,6 +210,7 @@ def test_worker_sidecar_fails_closed_on_tamper_missing_and_off_leak(
 
     monkeypatch.setenv("FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB", "0")
     monkeypatch.setenv("FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE", "0")
+    monkeypatch.setenv("FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE", "0")
     patcher._fr13_write_draft_head_u8_worker_env_sidecar(sidecar)
     assert not sidecar.exists()
 

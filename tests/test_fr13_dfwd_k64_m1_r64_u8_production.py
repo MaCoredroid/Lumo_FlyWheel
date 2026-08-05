@@ -48,6 +48,7 @@ def _input_files(tmp_path: Path) -> dict[str, Path]:
         "subset_sha256": "subset.json",
         "vocab_blocks_sha256": "blocks.json",
         "fa2_sha256": "fa2.so",
+        "taw_source_sha256": "taw.py",
     }
     paths = {}
     for index, (key, name) in enumerate(names.items(), start=1):
@@ -84,6 +85,30 @@ def _pin_temp_inputs(module, monkeypatch, paths: dict[str, Path]) -> dict[str, o
 
 def _gate_result(module, inputs: dict[str, object]) -> dict[str, object]:
     events = 3
+    taw = {
+        "schema": "fr13.fixed32.taw_candidate_acceptance_census.v1",
+        "status": "PASS",
+        "mode": "hydra27_fixed32",
+        "batch_size": 1,
+        "completed_events": events,
+        "comparison_events": events,
+        "events_sha256": "2" * 64,
+        "task_marker": "swe_verified:" + module.gate.EXPECTED_INSTANCE,
+        "candidate_token_source": {
+            "operation": module.gate.EXPECTED_CANDIDATE["operation"],
+            "candidate_so_sha256": inputs["candidate_so_sha256"],
+            "candidate_source_sha256": inputs["candidate_source_sha256"],
+            "task_ids": [module.gate.EXPECTED_INSTANCE],
+        },
+        "draft_probs": None,
+        "target_authority": True,
+        "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
+        "source_contract_sha256": module.gate.EXPECTED_TAW_SOURCE_CONTRACT_SHA256,
+        "probability_mismatches": 0,
+        "product_mismatches": 0,
+        "accept_decision_mismatches": 0,
+        "reference_returned": True,
+    }
     return {
         "schema": module.gate.GATE_SCHEMA,
         "status": "PASS",
@@ -114,6 +139,7 @@ def _gate_result(module, inputs: dict[str, object]) -> dict[str, object]:
         "nonfinite_logits": 0,
         "qualification_policy": "lossless_deterministic_proposal_v1",
         "proposal_distribution": module.gate.EXPECTED_PROPOSAL_DISTRIBUTION,
+        "taw_exact_acceptance": taw,
         "reference_always_served": False,
         "candidate_returned": True,
         "task_resolved": True,
@@ -182,6 +208,7 @@ def test_credential_verifier_binds_canonical_payload_inputs_and_commit(
         subset=paths["subset_sha256"],
         vocab_blocks=paths["vocab_blocks_sha256"],
         fa2_so=paths["fa2_sha256"],
+        taw_source=paths["taw_source_sha256"],
         expected_source_commit="b" * 40,
     )
     assert result["status"] == "PASS"
@@ -202,6 +229,7 @@ def test_credential_verifier_binds_canonical_payload_inputs_and_commit(
             subset=paths["subset_sha256"],
             vocab_blocks=paths["vocab_blocks_sha256"],
             fa2_so=paths["fa2_sha256"],
+            taw_source=paths["taw_source_sha256"],
             expected_source_commit="b" * 40,
         )
 
@@ -220,6 +248,7 @@ def test_credential_verifier_binds_canonical_payload_inputs_and_commit(
             subset=paths["subset_sha256"],
             vocab_blocks=paths["vocab_blocks_sha256"],
             fa2_so=paths["fa2_sha256"],
+            taw_source=paths["taw_source_sha256"],
             expected_source_commit="b" * 40,
         )
 
@@ -233,6 +262,7 @@ def test_production_worker_bridge_requires_validator_attestation(
         {
             "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB": "0",
             "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE": "0",
+            "FR13_DRAFT_HEAD_M1_R64_U8_TAW_QUALITY_GATE": "0",
             "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION": "1",
             "FR13_DRAFT_HEAD_M1_R64_U8_SO": "/tmp/fr13_bf16_k64_m1_r64_u8.abi3.so",
             "FR13_DRAFT_HEAD_M1_R64_U8_INSTANCE_ID": "astropy__astropy-12907",

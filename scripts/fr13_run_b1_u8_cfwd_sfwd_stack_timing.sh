@@ -207,6 +207,7 @@ PREFLIGHT_U8_CREDENTIAL="$RUNROOT_ABS/u8_production_credential.preflight.json"
   --subset "$QUALIFICATION_SUBSET" \
   --vocab-blocks "$BLOCK_MAP" \
   --fa2-so "$STOCK_FA2_SO" \
+  --taw-source "$TAW_SOURCE" \
   --expected-source-commit "$SOURCE_COMMIT" \
   --out "$PREFLIGHT_U8_CREDENTIAL" >/dev/null
 PREFLIGHT_U8_CREDENTIAL_SHA256=$(sha256sum "$PREFLIGHT_U8_CREDENTIAL" | awk '{print $1}')

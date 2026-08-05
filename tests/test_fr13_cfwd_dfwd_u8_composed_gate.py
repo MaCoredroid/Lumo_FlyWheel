@@ -27,10 +27,11 @@ def _write(path: Path, payload: dict) -> bytes:
 def test_runner_admits_only_default_off_full_graph_cfwd_u8_composition() -> None:
     source = RUNNER.read_text(encoding="ascii")
     assert "FR13_GATE_COMPOSE_CFWD_U8:-0" in source
-    assert 'FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION="$COMPOSE_CFWD"' in source
+    assert 'FR13_GATE_TAW_NATIVE="$COMPOSE_CFWD"' in source
+    assert 'FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0' in source
     assert 'FR13_CFWD_LOGIT_DIRECT_BYTE_AB="$COMPOSE_CFWD"' in source
     assert "fr13_device_multidraft_cfwd_packed_v3.py" in source
-    assert "scripts/fr13_taw_b1_credential.py validate-production" in source
+    assert "scripts/fr13_taw_b1_credential.py validate-production" not in source
     assert "scripts/fr13_run_b1_kernel_live_gate.sh" in source
     assert "scripts/fr13_cfwd_logit_direct_gate.py issue" in source
     assert "scripts/fr13_cfwd_dfwd_u8_composed_gate.py" in source
@@ -85,6 +86,16 @@ def test_composed_validator_reexecutes_both_component_validators(
         "nonfinite_logits": 0,
         "qualification_policy": "lossless_deterministic_proposal_v1",
         "proposal_distribution": compose.dfwd.EXPECTED_PROPOSAL_DISTRIBUTION,
+        "taw_exact_acceptance": {
+            "status": "PASS",
+            "completed_events": 7,
+            "comparison_events": 7,
+            "probability_mismatches": 0,
+            "product_mismatches": 0,
+            "accept_decision_mismatches": 0,
+            "target_authority": True,
+        },
+        "production_eligible": True,
         "timing_eligible": False,
     }
     _write(tmp_path / "cfwd.json", cfwd_payload)

@@ -1577,7 +1577,7 @@ _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS: dict[str, Any] | None = None
 _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256: str | None = None
 _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
+    "2b1cc55c6ec3d45c2d6ad0a21be4dc76685df4c974ae7fcfa421d5824a5c1ffb"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1597,6 +1597,7 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_taw_native_live_entry",
     "fr13_fixed32_taw_native_live_gate_begin",
     "fr13_fixed32_taw_native_live_gate_on_replay",
+    "fr13_fixed32_taw_candidate_acceptance_census",
     "_fr13_fixed32_taw_tensor_call_census",
     "_fr13_fixed32_taw_source_contract",
     "_fr13_fixed32_runtime_contract",
@@ -2376,6 +2377,8 @@ def fr13_fixed32_taw_native_live_gate_begin(
         raise RuntimeError("FR13 fixed32 TAW native live gate cannot combine tasks")
     entry["native_ab_probability_mismatches"].zero_()
     entry["native_ab_product_mismatches"].zero_()
+    entry["native_ab_accept_decision_mismatches"].zero_()
+    entry["native_ab_candidate_census_events"].zero_()
     entry["native_ab_live_marker"] = task_marker
     entry["native_ab_live_gate_pending"] = True
     return {"status": "armed", "batch_size": int(batch_size)}
@@ -2400,11 +2403,15 @@ def fr13_fixed32_taw_native_live_gate_on_replay(
         )
     probability_bad = int(entry["native_ab_probability_mismatches"].item())
     product_bad = int(entry["native_ab_product_mismatches"].item())
-    if probability_bad or product_bad:
+    decision_bad = int(
+        entry["native_ab_accept_decision_mismatches"].item()
+    )
+    if probability_bad or product_bad or decision_bad:
         entry["native_ab_live_gate_pending"] = False
         raise AssertionError(
             "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE graph-replay byte mismatch: "
-            f"probabilities={probability_bad} products={product_bad}"
+            f"probabilities={probability_bad} products={product_bad} "
+            f"accept_decisions={decision_bad}"
         )
     task_marker = entry.get("native_ab_live_marker")
     if not isinstance(task_marker, str):
@@ -2424,6 +2431,100 @@ def fr13_fixed32_taw_native_live_gate_on_replay(
         flush=True,
     )
     return {"status": "passed", "batch_size": int(batch_size)}
+
+
+def fr13_fixed32_taw_candidate_acceptance_census(
+    *,
+    mode: str,
+    batch_size: int,
+    completed_events: int,
+    events_sha256: str,
+    candidate_binding: dict[str, Any],
+) -> dict[str, Any]:
+    """Reduce every candidate-token TAW comparison at the final flush."""
+    topology = _fr13_fixed32_topology()
+    if (
+        _fr13_fixed32_taw_native_selector() != "diagnostic"
+        or mode not in topology.VALID_MASK_BY_MODE
+        or type(batch_size) is not int
+        or batch_size not in _FR13_FIXED32_BATCHES
+        or type(completed_events) is not int
+        or completed_events < 1
+        or not isinstance(events_sha256, str)
+        or len(events_sha256) != 64
+        or any(value not in "0123456789abcdef" for value in events_sha256)
+        or not isinstance(candidate_binding, dict)
+        or set(candidate_binding)
+        != {
+            "operation",
+            "candidate_so_sha256",
+            "candidate_source_sha256",
+            "task_ids",
+        }
+        or not isinstance(candidate_binding["operation"], str)
+        or not candidate_binding["operation"]
+        or any(
+            not isinstance(candidate_binding[key], str)
+            or len(candidate_binding[key]) != 64
+            or any(
+                value not in "0123456789abcdef"
+                for value in candidate_binding[key]
+            )
+            for key in ("candidate_so_sha256", "candidate_source_sha256")
+        )
+        or not isinstance(candidate_binding["task_ids"], list)
+        or not candidate_binding["task_ids"]
+        or any(
+            not isinstance(task_id, str) or not task_id
+            for task_id in candidate_binding["task_ids"]
+        )
+    ):
+        raise RuntimeError("FR13 candidate-token TAW census binding drifted")
+    entry = _fr13_fixed32_taw_native_live_entry(
+        mode=mode, batch_size=batch_size
+    )
+    comparisons = int(entry["native_ab_candidate_census_events"].item())
+    probability_bad = int(entry["native_ab_probability_mismatches"].item())
+    product_bad = int(entry["native_ab_product_mismatches"].item())
+    decision_bad = int(
+        entry["native_ab_accept_decision_mismatches"].item()
+    )
+    task_marker = entry.get("native_ab_live_marker")
+    exact = (
+        comparisons == completed_events
+        and probability_bad == 0
+        and product_bad == 0
+        and decision_bad == 0
+        and isinstance(task_marker, str)
+        and task_marker.startswith("swe_verified:")
+    )
+    contract = _fr13_fixed32_taw_source_contract(
+        topology, batch_size=batch_size
+    )
+    record = {
+        "schema": "fr13.fixed32.taw_candidate_acceptance_census.v1",
+        "status": "PASS" if exact else "FAIL",
+        "mode": mode,
+        "batch_size": batch_size,
+        "completed_events": completed_events,
+        "comparison_events": comparisons,
+        "events_sha256": events_sha256,
+        "task_marker": task_marker,
+        "candidate_token_source": dict(candidate_binding),
+        "draft_probs": None,
+        "target_authority": True,
+        "source_contract_schema": contract["source_contract_schema"],
+        "source_contract_sha256": contract["source_contract_sha256"],
+        "probability_mismatches": probability_bad,
+        "product_mismatches": product_bad,
+        "accept_decision_mismatches": decision_bad,
+        "reference_returned": True,
+    }
+    if not exact:
+        raise RuntimeError(
+            "FR13 candidate-token TAW final census mismatch: " + repr(record)
+        )
+    return record
 
 
 def _fr13_fixed32_taw_tensor_call_census(
@@ -2969,6 +3070,16 @@ def fr13_fixed32_taw_preseed(
             device=normalized_device,
         )
         entry["native_ab_product_mismatches"] = torch.zeros(
+            (),
+            dtype=torch.int64,
+            device=normalized_device,
+        )
+        entry["native_ab_accept_decision_mismatches"] = torch.zeros(
+            (),
+            dtype=torch.int64,
+            device=normalized_device,
+        )
+        entry["native_ab_candidate_census_events"] = torch.zeros(
             (),
             dtype=torch.int64,
             device=normalized_device,
@@ -5187,12 +5298,18 @@ def fr13_fixed32_taw_commit(
     if native_selector == "diagnostic":
         probability_mismatches = entry["native_ab_probability_mismatches"]
         product_mismatches = entry["native_ab_product_mismatches"]
+        accept_decision_mismatches = entry[
+            "native_ab_accept_decision_mismatches"
+        ]
+        candidate_census_events = entry["native_ab_candidate_census_events"]
         if target_logits.is_cuda and not torch.cuda.is_current_stream_capturing():
             task_marker = _fr13_fixed32_taw_native_real_event_marker()
             bound_marker = entry.get("native_ab_live_marker")
             if task_marker is not None and bound_marker is None:
                 probability_mismatches.zero_()
                 product_mismatches.zero_()
+                accept_decision_mismatches.zero_()
+                candidate_census_events.zero_()
                 entry["native_ab_root_checks"] = 0
                 entry["native_ab_live_marker"] = task_marker
                 entry["native_ab_live_pass_emitted"] = False
@@ -5262,14 +5379,17 @@ def fr13_fixed32_taw_commit(
             walk_cap=int(topology.WALK_CAP),
             probability_caches=probability_caches,
         )
+        candidate_census_events.add_(1)
         for reference_product, candidate_product in zip(
             reference[:5],
             candidate[:5],
             strict=True,
         ):
-            product_mismatches.add_(
-                torch.count_nonzero(reference_product != candidate_product)
+            mismatches = torch.count_nonzero(
+                reference_product != candidate_product
             )
+            product_mismatches.add_(mismatches)
+            accept_decision_mismatches.add_(mismatches)
         (
             output_tokens,
             output_lens,

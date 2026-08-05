@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the real four-task B4 exhaustive K64 M4 DFWD shadow gate."""
+"""Validate the real exact4 B4 candidate-served K64 M4 DFWD quality gate."""
 
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ if SCRIPT_DIR not in sys.path:
 terminal = importlib.import_module("fr13_draft_head_m32_pass")
 floor_gate = importlib.import_module("fr13_floor_gate")
 
-LIVE_SCHEMA = "fr13.fixed32.dfwd_k64_m4_r64_u8_shadow.v1"
-GATE_SCHEMA = "fr13.fixed32.dfwd_k64_m4_r64_u8_real_b4_gate.v1"
+LIVE_SCHEMA = "fr13.fixed32.dfwd_k64_m4_r64_u8_quality.v2"
+GATE_SCHEMA = "fr13.fixed32.dfwd_k64_m4_r64_u8_real_b4_gate.v2"
 TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
@@ -35,6 +35,9 @@ SUBSET_SHA256 = "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f
 BLOCKS_SHA256 = "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
 FA2_SHA256 = "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
 FA2_BYTES = 299183936
+TAW_SOURCE_CONTRACT_SHA256 = (
+    "2b1cc55c6ec3d45c2d6ad0a21be4dc76685df4c974ae7fcfa421d5824a5c1ffb"
+)
 DEPTHS = ("root", "mtp_depth_1", "mtp_depth_2", "mtp_depth_3", "mtp_depth_4")
 COMPARISON_SCOPE = (
     "all four rows and all 65536 logits at each of five fixed "
@@ -42,6 +45,8 @@ COMPARISON_SCOPE = (
 )
 WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB",
+    "FR13_DRAFT_HEAD_M4_R64_U8_QUALITY_GATE",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION",
     "FR13_DRAFT_HEAD_M4_R64_U8_SO",
     "FR13_DRAFT_HEAD_M4_R64_U8_SO_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_SHA256",
@@ -51,9 +56,14 @@ WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M4_R64_U8_SUBSET_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_VOCAB_BLOCKS_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_FA2_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_TAW_SOURCE_SHA256",
     "FR13_DRAFT_HEAD_M4_R64_U8_SOURCE_COMMIT",
     "FR13_DRAFT_HEAD_M4_R64_U8_TASK_IDS",
     "FR13_DRAFT_HEAD_M4_R64_U8_LIVE_JSON",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_PASS_SIDECAR_SHA256",
+    "FR13_DRAFT_HEAD_M4_R64_U8_INTERNAL_PRODUCTION_ATTESTED",
+    "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION_ENGAGEMENT_JSON",
     "FR13_DRAFT_VOCAB_BLOCKS",
     "FR13_DRAFT_VOCAB_K",
     "FR13_DRAFT_VOCAB_ROOT",
@@ -93,7 +103,14 @@ CANDIDATE = {
     "independent_accumulators": 4,
     "reduction_strides": [8, 4, 2, 1],
     "served_rows": 4,
-    "shadow_only": True,
+    "shadow_only": False,
+}
+PROPOSAL_DISTRIBUTION = {
+    "candidate_logits_consumed": True,
+    "draft_probs": None,
+    "proposal_token_selector": "argmax_topk",
+    "q_mix_definition": "target_overlap_normalized_over_draft_token_ids",
+    "rejection_sampler": "fr13_fixed32_deterministic_multidraft",
 }
 IDENTITY_KEYS = frozenset(
     {
@@ -106,6 +123,7 @@ IDENTITY_KEYS = frozenset(
         "runner_sha256",
         "source_commit",
         "subset_sha256",
+        "taw_source_sha256",
         "task_ids",
         "vocab_blocks_sha256",
     }
@@ -133,9 +151,14 @@ LIVE_KEYS = frozenset(
         "identities",
         "per_depth_full_logit_comparisons",
         "per_depth_raw_bf16_mismatches",
+        "per_depth_nonfinite_logits",
         "performance_measurement",
         "producer_pid",
         "raw_bf16_mismatches",
+        "nonfinite_logits",
+        "qualification_policy",
+        "proposal_distribution",
+        "taw_exact_acceptance",
         "reference_always_served",
         "root_forward_steps",
         "schema",
@@ -240,9 +263,12 @@ def validate_live_result(
         or not _exact(payload.get("candidate"), CANDIDATE)
         or payload.get("comparison_scope") != COMPARISON_SCOPE
         or not _exact(payload.get("captured_mtp_depths"), [1, 2, 3, 4])
-        or payload.get("reference_always_served") is not True
-        or payload.get("candidate_returned") is not False
-        or payload.get("served_return") != "incumbent BF16 logits object unchanged"
+        or payload.get("qualification_policy")
+        != "lossless_deterministic_proposal_taw_exact_v1"
+        or not _exact(payload.get("proposal_distribution"), PROPOSAL_DISTRIBUTION)
+        or payload.get("reference_always_served") is not False
+        or payload.get("candidate_returned") is not True
+        or payload.get("served_return") != "candidate BF16 logits"
         or payload.get("performance_measurement") is not False
         or payload.get("timing_eligible") is not False
         or payload.get("finalized_by_fixed32_flush") is not True
@@ -260,14 +286,25 @@ def validate_live_result(
             payload.get("per_depth_full_logit_comparisons"),
             {label: events for label in DEPTHS},
         )
+        or not isinstance(payload.get("per_depth_raw_bf16_mismatches"), dict)
+        or frozenset(payload["per_depth_raw_bf16_mismatches"])
+        != frozenset(DEPTHS)
+        or any(
+            type(value) is not int or value < 0
+            for value in payload["per_depth_raw_bf16_mismatches"].values()
+        )
         or not _exact(
-            payload.get("per_depth_raw_bf16_mismatches"),
+            payload.get("per_depth_nonfinite_logits"),
             {label: 0 for label in DEPTHS},
         )
         or not _exact(payload.get("full_logit_comparisons"), events * 5)
         or not _exact(payload.get("compared_elements"), events * 5 * 4 * 65536)
         or not _exact(payload.get("compared_bytes"), events * 5 * 4 * 65536 * 2)
-        or not _exact(payload.get("raw_bf16_mismatches"), 0)
+        or not _exact(
+            payload.get("raw_bf16_mismatches"),
+            sum(payload["per_depth_raw_bf16_mismatches"].values()),
+        )
+        or not _exact(payload.get("nonfinite_logits"), 0)
         or type(payload.get("flush_generation")) is not int
         or payload["flush_generation"] < 1
         or type(payload.get("producer_pid")) is not int
@@ -276,7 +313,56 @@ def validate_live_result(
         raise ValueError("DFWD M4 U8 five-site byte/event census drifted")
     for key in ("events_sha256", "flush_nonce", "boundary_snapshot_sha256"):
         _sha(payload.get(key), key)
+    _validate_taw_exact(payload.get("taw_exact_acceptance"), payload)
     return payload
+
+
+def _validate_taw_exact(value: Any, live: dict[str, Any]) -> dict[str, Any]:
+    events = live.get("completed_events")
+    expected_marker = "swe_verified:campaign4_" + SUBSET_SHA256
+    binding = value.get("candidate_token_source") if isinstance(value, dict) else None
+    identities = live.get("identities")
+    expected_keys = {
+        "accept_decision_mismatches", "batch_size", "candidate_token_source",
+        "comparison_events", "completed_events", "draft_probs", "events_sha256",
+        "mode", "probability_mismatches", "product_mismatches",
+        "reference_returned", "schema", "source_contract_schema",
+        "source_contract_sha256", "status", "target_authority", "task_marker",
+    }
+    if (
+        not isinstance(value, dict)
+        or set(value) != expected_keys
+        or value.get("schema")
+        != "fr13.fixed32.taw_candidate_acceptance_census.v1"
+        or value.get("status") != "PASS"
+        or value.get("mode") != "hydra27_fixed32"
+        or not _exact(value.get("batch_size"), 4)
+        or not _exact(value.get("completed_events"), events)
+        or not _exact(value.get("comparison_events"), events)
+        or value.get("events_sha256") != live.get("events_sha256")
+        or value.get("task_marker") != expected_marker
+        or not _exact(
+            binding,
+            {
+                "operation": CANDIDATE["operation"],
+                "candidate_so_sha256": identities.get("candidate_so_sha256"),
+                "candidate_source_sha256": identities.get(
+                    "candidate_source_sha256"
+                ),
+                "task_ids": list(TASK_IDS),
+            },
+        )
+        or value.get("draft_probs") is not None
+        or value.get("target_authority") is not True
+        or value.get("source_contract_schema") != "fr13-fixed32-taw-all-parent-v7"
+        or value.get("source_contract_sha256") != TAW_SOURCE_CONTRACT_SHA256
+        or value.get("probability_mismatches") != 0
+        or value.get("product_mismatches") != 0
+        or value.get("accept_decision_mismatches") != 0
+        or value.get("reference_returned") is not True
+    ):
+        raise ValueError("DFWD M4 U8 TAW exact-acceptance census drifted")
+    return value
 
 
 def _validate_inputs(live: dict[str, Any], paths: dict[str, Path]) -> dict[str, Any]:
@@ -421,6 +507,7 @@ def validate_gate(args: argparse.Namespace) -> dict[str, Any]:
         "subset_sha256": args.subset,
         "vocab_blocks_sha256": args.vocab_blocks,
         "fa2_sha256": args.fa2_so,
+        "taw_source_sha256": args.taw_source,
     }
     inputs = _validate_inputs(live, paths)
     evidence = _validate_b4_terminal(
@@ -459,17 +546,26 @@ def validate_gate(args: argparse.Namespace) -> dict[str, Any]:
         "completed_events": events,
         "captured_mtp_depths": [1, 2, 3, 4],
         "per_depth_full_logit_comparisons": {label: events for label in DEPTHS},
+        "per_depth_raw_bf16_mismatches": live[
+            "per_depth_raw_bf16_mismatches"
+        ],
+        "per_depth_nonfinite_logits": {label: 0 for label in DEPTHS},
         "compared_elements": events * 5 * 4 * 65536,
         "compared_bytes": events * 5 * 4 * 65536 * 2,
-        "raw_bf16_mismatches": 0,
-        "reference_always_served": True,
+        "raw_bf16_mismatches": live["raw_bf16_mismatches"],
+        "nonfinite_logits": 0,
+        "qualification_policy": "lossless_deterministic_proposal_taw_exact_v1",
+        "proposal_distribution": PROPOSAL_DISTRIBUTION,
+        "taw_exact_acceptance": live["taw_exact_acceptance"],
+        "reference_always_served": False,
+        "candidate_returned": True,
         "events_sha256": evidence["events_sha256"],
         "final_flush_sha256": terminal.sha256_file(args.final_flush),
         "boundary_snapshot_sha256": evidence["boundary_snapshot_sha256"],
         "chat_traffic_audit_sha256": traffic_sha,
         "performance_measurement": False,
         "timing_eligible": False,
-        "production_eligible": False,
+        "production_eligible": True,
     }
 
 
@@ -484,6 +580,7 @@ def main() -> int:
     parser.add_argument("--subset", type=Path, required=True)
     parser.add_argument("--vocab-blocks", type=Path, required=True)
     parser.add_argument("--fa2-so", type=Path, required=True)
+    parser.add_argument("--taw-source", type=Path, required=True)
     parser.add_argument("--expected-source-commit", required=True)
     parser.add_argument("--final-flush", type=Path, required=True)
     parser.add_argument("--boundary-snapshot", type=Path, required=True)
