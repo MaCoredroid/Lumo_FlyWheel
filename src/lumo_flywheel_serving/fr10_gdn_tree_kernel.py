@@ -13281,6 +13281,7 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     K_NORM_REUSE: tl.constexpr,
     GATE_REUSE: tl.constexpr,
     DECAY_REUSE: tl.constexpr,
+    PHYSICAL32_I32_INDEX: tl.constexpr,
 ):
     """Native fused-sigmoid state recurrence batched across all layers.
 
@@ -13302,7 +13303,11 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     i_hv = i_nh % HV
     i_h = i_hv // (HV // H)
 
-    accepted = tl.load(accepted_lens + i_n).to(tl.int64)
+    accepted = tl.load(accepted_lens + i_n)
+    if PHYSICAL32_I32_INDEX:
+        accepted = accepted.to(tl.int32)
+    else:
+        accepted = accepted.to(tl.int64)
     # Replay enqueues a device assertion for accepted in [0, 11] and every
     # active node in [0, 31] before this graph. Consume that validated domain
     # directly so the hot scan does not repeat bounds clamps in every program.
@@ -13322,7 +13327,11 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
     state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4
     state_idx = tl.load(
         spec_state_indices + i_l * SPEC_L_STRIDE + i_n * SPEC_B_STRIDE
-    ).to(tl.int64)
+    )
+    if PHYSICAL32_I32_INDEX:
+        state_idx = state_idx.to(tl.int32)
+    else:
+        state_idx = state_idx.to(tl.int64)
     if state_idx <= 0:
         return
     p_h0 = (
@@ -13341,7 +13350,11 @@ def _fr13_fixed32_committer_native_layer_batch_kernel(
             accepted_paths + i_n * PATH_CAP + path_offset,
             mask=i_t > 0,
             other=0,
-        ).to(tl.int64)
+        )
+        if PHYSICAL32_I32_INDEX:
+            path_node = path_node.to(tl.int32)
+        else:
+            path_node = path_node.to(tl.int64)
         node = path_node
         p_k = (
             k_rings
@@ -13578,6 +13591,10 @@ def _fr13_fixed32_committer_native_layer_batch(
         K_NORM_REUSE=bool(k_norm_reuse),
         GATE_REUSE=bool(gate_reuse),
         DECAY_REUSE=bool(decay_reuse),
+        # The BV64 arm is already fail-closed on Hydra27 physical32 B1/B4.
+        # Its validated state/path offsets fit signed int32, avoiding hot-loop
+        # scalar widening while preserving 64-bit pointer base arithmetic.
+        PHYSICAL32_I32_INDEX=bool(bv64_warp4),
         num_warps=kernel_warps,
         num_stages=3,
         **extra_launch_kwargs,
@@ -14008,12 +14025,26 @@ def preseed_fixed32_committer_graph(
         or _FR13_FIXED32_MODE != "hydra27_fixed32"
         or batch not in (1, 4)
         or int(k_rings.shape[2]) != 32
+        or any(
+            int(tensor.numel()) > 2**31
+            for tensor in (
+                banks_list[0],
+                k_rings,
+                v_rings,
+                a_rings,
+                b_rings,
+                k_norm_rings,
+                gate_rings,
+            )
+            if tensor is not None
+        )
         or os.environ.get("FR13_DRAFT_VOCAB_ROOT") != "1"
         or os.environ.get("FR13_DRAFT_VOCAB_K") != "65536"
     ):
         raise RuntimeError(
             "FR13 fixed32 committer BV64/4-warp requires exact Hydra27 "
-            "physical32 K64/root1 layer batching at B1 or B4"
+            "physical32 K64/root1 layer batching with signed-int32-safe "
+            "operand offsets at B1 or B4"
         )
     if metadata_copy_fusion and not layer_batch:
         raise RuntimeError(
@@ -14246,6 +14277,8 @@ def preseed_fixed32_committer_graph(
                 ),
                 "state_elements_per_thread_before_compiler_effects": 64,
                 "bv64_warp4": bv64_warp4,
+                "physical32_i32_index": bv64_warp4,
+                "active_node_count_controls_launch_grid": False,
                 "metadata_copy_fusion": metadata_copy_fusion,
                 "direct_metadata": direct_metadata,
                 "sticky_guard": sticky_guard,

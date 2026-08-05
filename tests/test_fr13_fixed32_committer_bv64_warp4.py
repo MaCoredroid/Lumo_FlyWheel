@@ -64,6 +64,26 @@ def test_candidate_changes_only_independent_value_row_tiling() -> None:
     assert kernel.count("tl.store(") == 1
 
 
+def test_candidate_keeps_validated_physical32_indices_32_bit() -> None:
+    kernel = _text("_fr13_fixed32_committer_native_layer_batch_kernel")
+    launcher = _text("_fr13_fixed32_committer_native_layer_batch")
+
+    assert "PHYSICAL32_I32_INDEX: tl.constexpr" in kernel
+    assert kernel.count("if PHYSICAL32_I32_INDEX:") == 3
+    assert kernel.count(".to(tl.int32)") == 3
+    assert kernel.count(".to(tl.int64)") == 3
+    assert "PHYSICAL32_I32_INDEX=bool(bv64_warp4)" in launcher
+
+    # Every candidate-side scalar address term remains below signed int32.
+    bank_stride = 48 * 128 * 128
+    max_bank_element = (
+        256 * bank_stride + 47 * 128 * 128 + 127 * 128 + 127
+    )
+    max_b4_k_ring_element = 48 * 4 * 32 * 16 * 128 - 1
+    max_b4_v_ring_element = 48 * 4 * 32 * 48 * 128 - 1
+    assert max(max_bank_element, max_b4_k_ring_element, max_b4_v_ring_element) < 2**31
+
+
 def test_candidate_is_exact_hydra27_physical32_k64_root1_b1_b4_only() -> None:
     preseed = _text("preseed_fixed32_committer_graph")
 
@@ -72,6 +92,7 @@ def test_candidate_is_exact_hydra27_physical32_k64_root1_b1_b4_only() -> None:
         '_FR13_FIXED32_MODE != "hydra27_fixed32"',
         'batch not in (1, 4)',
         'int(k_rings.shape[2]) != 32',
+        "int(tensor.numel()) > 2**31",
         'os.environ.get("FR13_DRAFT_VOCAB_ROOT") != "1"',
         'os.environ.get("FR13_DRAFT_VOCAB_K") != "65536"',
     ):
@@ -80,6 +101,8 @@ def test_candidate_is_exact_hydra27_physical32_k64_root1_b1_b4_only() -> None:
     assert '"value_tile": 64 if bv64_warp4 else 128' in preseed
     assert '"kernel_warps": 4 if bv64_warp4 else 8' in preseed
     assert '"state_elements_per_thread_before_compiler_effects": 64' in preseed
+    assert '"physical32_i32_index": bv64_warp4' in preseed
+    assert '"active_node_count_controls_launch_grid": False' in preseed
 
 
 def test_runner_keeps_default_off_and_creates_only_hydra_sidecar() -> None:
@@ -98,10 +121,12 @@ def test_codegen_contract_is_static_exact_b1_b4_sm121a() -> None:
 
     assert 'os.environ.get("CUDA_VISIBLE_DEVICES") != ""' in codegen
     assert 'GPUTarget("cuda", 121, 32)' in codegen
-    assert '"incumbent_bv128_warp8": (128, 8)' in codegen
-    assert '"candidate_bv64_warp4": (64, 4)' in codegen
+    assert '"incumbent_bv128_warp8": (128, 8, False)' in codegen
+    assert '"control_bv64_warp4_i64": (64, 4, False)' in codegen
+    assert '"candidate_bv64_warp4": (64, 4, True)' in codegen
     assert "for batch in (1, 4)" in codegen
     assert '"DECAY_REUSE": True' in codegen
     assert '"K_NORM_REUSE": True' in codegen
     assert '"GATE_REUSE": True' in codegen
+    assert '"PHYSICAL32_I32_INDEX": physical32_i32' in codegen
     assert 'kwargs["maxnreg"] = 167' in codegen

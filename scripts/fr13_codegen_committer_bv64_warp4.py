@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile exact fixed32 committer BV128/8-warp and BV64/4-warp cubins."""
+"""Compile exact fixed32 committer geometry and index-width cubins."""
 
 from __future__ import annotations
 
@@ -29,8 +29,9 @@ from triton.runtime.jit import MockTensor, create_function_from_signature
 SOURCE_PATH = "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
 KERNEL = "_fr13_fixed32_committer_native_layer_batch_kernel"
 VARIANTS = {
-    "incumbent_bv128_warp8": (128, 8),
-    "candidate_bv64_warp4": (64, 4),
+    "incumbent_bv128_warp8": (128, 8, False),
+    "control_bv64_warp4_i64": (64, 4, False),
+    "candidate_bv64_warp4": (64, 4, True),
 }
 INSTRUCTION_RE = re.compile(
     r"^\s*/\*[0-9a-fA-F]+\*/\s+"
@@ -94,7 +95,9 @@ def _jit_kernel(source: str, revision: str):
     return namespace[KERNEL], included
 
 
-def _specialization(fn, backend, *, batch: int, bv: int, warps: int):
+def _specialization(
+    fn, backend, *, batch: int, bv: int, warps: int, physical32_i32: bool
+):
     args = [
         MockTensor(torch.bfloat16, [48, batch, 32, 48]),
         MockTensor(torch.bfloat16, [48, batch, 32, 48]),
@@ -143,6 +146,7 @@ def _specialization(fn, backend, *, batch: int, bv: int, warps: int):
         "K_NORM_REUSE": True,
         "GATE_REUSE": True,
         "DECAY_REUSE": True,
+        "PHYSICAL32_I32_INDEX": physical32_i32,
         "num_warps": warps,
         "num_stages": 3,
     }
@@ -171,10 +175,15 @@ def _operations(sass: str) -> collections.Counter[str]:
 
 def _compile(
     *, fn, source: str, backend, batch: int, label: str, bv: int, warps: int,
-    output: Path,
+    physical32_i32: bool, output: Path,
 ) -> dict[str, object]:
     options, signature, constexprs, attrs = _specialization(
-        fn, backend, batch=batch, bv=bv, warps=warps
+        fn,
+        backend,
+        batch=batch,
+        bv=bv,
+        warps=warps,
+        physical32_i32=physical32_i32,
     )
     compiled = triton.compile(
         ASTSource(
@@ -222,6 +231,7 @@ def _compile(
         "local_bytes": local_bytes,
         "num_stages": 3,
         "num_warps": warps,
+        "physical32_i32_index": physical32_i32,
         "operations": dict(sorted(operations.items())),
         "programs_per_event": 48 * batch * 48 * (128 // bv),
         "ptx_sha256": _sha256(ptx.encode("utf-8")),
@@ -254,7 +264,7 @@ def main() -> int:
     fn, included = _jit_kernel(source, args.revision)
     backend = triton.compiler.make_backend(GPUTarget("cuda", 121, 32))
     variants: dict[str, object] = {}
-    for label, (bv, warps) in VARIANTS.items():
+    for label, (bv, warps, physical32_i32) in VARIANTS.items():
         variants[label] = {
             f"b{batch}": _compile(
                 fn=fn,
@@ -264,6 +274,7 @@ def main() -> int:
                 label=label,
                 bv=bv,
                 warps=warps,
+                physical32_i32=physical32_i32,
                 output=args.output,
             )
             for batch in (1, 4)
@@ -276,6 +287,7 @@ def main() -> int:
             "dim_v": 128,
             "gate_reuse": True,
             "hydra27_physical_rows": 32,
+            "candidate_index_bits": 32,
             "k_norm_reuse": True,
             "layers": 48,
             "target": "sm_121a",
