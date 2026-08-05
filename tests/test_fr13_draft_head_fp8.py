@@ -4,6 +4,7 @@ import ast
 import hashlib
 import json
 import subprocess
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -70,6 +71,57 @@ def test_candidate_is_default_off_strict_and_orthogonal_to_cutlass_wave() -> Non
             "def _fr13_dvk_prepare"
         )
     ]
+
+
+def test_runtime_fp8_guard_rejects_nonexact_hydra27_b1_b4_geometry() -> None:
+    tree = ast.parse(textwrap.dedent(_eagle_snippet()))
+    guard = None
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        for statement in node.body:
+            if not isinstance(statement, ast.Raise):
+                continue
+            message = ast.unparse(statement.exc)
+            if "FR13 direct K64 head requires exact Hydra27" in message:
+                guard = node.test
+                break
+        if guard is not None:
+            break
+    assert guard is not None
+    expression = compile(
+        ast.fix_missing_locations(ast.Expression(guard)),
+        "<fr13-fp8-exact-geometry-guard>",
+        "eval",
+    )
+
+    def rejected(
+        batch: int,
+        *,
+        mode: str = "hydra27_fixed32",
+        wide: bool = True,
+        widths: tuple[int, ...] = (3, 3, 3, 3, 3),
+        fp8: bool = True,
+    ) -> bool:
+        namespace = {
+            "_fr13_dh_pair8": False,
+            "_fr13_dh_tc": False,
+            "_fr13_dh_fp8": fp8,
+            "_FR13_FIXED32_MODE": mode,
+            "batch_size": batch,
+            "_fr10_is_wide": wide,
+            "_fr10_wide_width": dict(enumerate(widths)),
+        }
+        return bool(eval(expression, namespace))
+
+    assert rejected(1) is False
+    assert rejected(4) is False
+    assert rejected(2) is True
+    assert rejected(3) is True
+    assert rejected(1, mode="tail6_fixed32") is True
+    assert rejected(1, wide=False) is True
+    assert rejected(1, widths=(3, 3, 2, 3, 3)) is True
+    assert rejected(2, fp8=False) is False
 
 
 def test_weight_quantization_is_once_before_root_and_bound_to_sm121() -> None:

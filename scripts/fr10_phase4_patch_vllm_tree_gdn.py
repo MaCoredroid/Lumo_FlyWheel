@@ -25123,7 +25123,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "FR13 draft-head padding requires exact fixed32, root "
                     "subset, single-logits, and FR13_DRAFT_VOCAB_K=65536"
                 )
-            if (_fr13_dh_pair8 or _fr13_dh_tc) and (
+            if (_fr13_dh_pair8 or _fr13_dh_tc or _fr13_dh_fp8) and (
                 _FR13_FIXED32_MODE != "hydra27_fixed32"
                 or int(batch_size) not in (1, 4)
                 or not _fr10_is_wide
