@@ -197,6 +197,23 @@ def _commit(value: Any, label: str) -> str:
     return value
 
 
+def _json_exact(value: Any, expected: Any) -> bool:
+    """Compare JSON values without bool/int/float coercion."""
+    if type(value) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return value.keys() == expected.keys() and all(
+            _json_exact(value[key], expected_value)
+            for key, expected_value in expected.items()
+        )
+    if isinstance(expected, list):
+        return len(value) == len(expected) and all(
+            _json_exact(item, expected_item)
+            for item, expected_item in zip(value, expected)
+        )
+    return value == expected
+
+
 def validate_live_result(
     payload: dict[str, Any], *, expected_source_commit: str
 ) -> dict[str, Any]:
@@ -229,13 +246,15 @@ def validate_live_result(
         or payload.get("suite") != "SWE-Verified"
         or payload.get("instance_id") != EXPECTED_INSTANCE
         or payload.get("task_marker") != f"swe_verified:{EXPECTED_INSTANCE}"
-        or payload.get("concurrency") != 1
-        or payload.get("batch_size") != 1
+        or not _json_exact(payload.get("concurrency"), 1)
+        or not _json_exact(payload.get("batch_size"), 1)
         or payload.get("source_commit") != expected_source_commit
         or identities.get("source_commit") != expected_source_commit
         or identities.get("instance_id") != EXPECTED_INSTANCE
         or identities.get("candidate_so_sha256") != EXPECTED_SO_SHA256
-        or identities.get("candidate_so_bytes") != EXPECTED_SO_BYTES
+        or not _json_exact(
+            identities.get("candidate_so_bytes"), EXPECTED_SO_BYTES
+        )
         or identities.get("candidate_source_sha256")
         != EXPECTED_SOURCE_SHA256
         or identities.get("build_attestation_sha256")
@@ -244,11 +263,11 @@ def validate_live_result(
         or identities.get("vocab_blocks_sha256")
         != EXPECTED_VOCAB_BLOCKS_SHA256
         or identities.get("fa2_sha256") != EXPECTED_FA2_SHA256
-        or payload.get("topology") != EXPECTED_TOPOLOGY
-        or payload.get("geometry") != EXPECTED_GEOMETRY
-        or payload.get("candidate") != EXPECTED_CANDIDATE
+        or not _json_exact(payload.get("topology"), EXPECTED_TOPOLOGY)
+        or not _json_exact(payload.get("geometry"), EXPECTED_GEOMETRY)
+        or not _json_exact(payload.get("candidate"), EXPECTED_CANDIDATE)
         or payload.get("comparison_scope") != COMPARISON_SCOPE
-        or payload.get("captured_mtp_depths") != [1, 2, 3, 4]
+        or not _json_exact(payload.get("captured_mtp_depths"), [1, 2, 3, 4])
         or payload.get("reference_always_served") is not True
         or payload.get("candidate_returned") is not False
         or payload.get("served_return")
@@ -268,15 +287,21 @@ def validate_live_result(
     expected_comparisons = {label: events for label in DEPTH_LABELS}
     expected_mismatches = {label: 0 for label in DEPTH_LABELS}
     if (
-        payload.get("complete_work_census_events") != events
-        or payload.get("work_census_last_event_index") != events - 1
-        or payload.get("root_forward_steps") != list(range(events))
-        or comparisons != expected_comparisons
-        or mismatches != expected_mismatches
-        or payload.get("full_logit_comparisons") != events * 5
-        or payload.get("compared_elements") != events * 5 * 65536
-        or payload.get("compared_bytes") != events * 5 * 65536 * 2
-        or payload.get("raw_bf16_mismatches") != 0
+        not _json_exact(payload.get("complete_work_census_events"), events)
+        or not _json_exact(
+            payload.get("work_census_last_event_index"), events - 1
+        )
+        or not _json_exact(payload.get("root_forward_steps"), list(range(events)))
+        or not _json_exact(comparisons, expected_comparisons)
+        or not _json_exact(mismatches, expected_mismatches)
+        or not _json_exact(payload.get("full_logit_comparisons"), events * 5)
+        or not _json_exact(
+            payload.get("compared_elements"), events * 5 * 65536
+        )
+        or not _json_exact(
+            payload.get("compared_bytes"), events * 5 * 65536 * 2
+        )
+        or not _json_exact(payload.get("raw_bf16_mismatches"), 0)
         or type(payload.get("flush_generation")) is not int
         or payload["flush_generation"] < 1
         or type(payload.get("producer_pid")) is not int
@@ -340,7 +365,7 @@ def _validate_inputs(
         or attestation.get("real_task_correctness") is not False
         or not isinstance(binary, dict)
         or binary.get("sha256") != EXPECTED_SO_SHA256
-        or binary.get("bytes") != EXPECTED_SO_BYTES
+        or not _json_exact(binary.get("bytes"), EXPECTED_SO_BYTES)
         or not isinstance(source, dict)
         or source.get("sha256") != EXPECTED_SOURCE_SHA256
     ):

@@ -192,6 +192,24 @@ def test_credential_verifier_binds_canonical_payload_inputs_and_commit(
             expected_source_commit="b" * 40,
         )
 
+    forged_type = json.loads(json.dumps(payload))
+    forged_type["graph_contract"]["root_calls"] = True
+    forged_digest = _write_canonical(module, credential_path, forged_type)
+    with pytest.raises(ValueError, match="provenance drifted"):
+        module.validate_credential(
+            credential_path=credential_path,
+            expected_credential_sha256=forged_digest,
+            candidate_so=paths["candidate_so_sha256"],
+            candidate_source=paths["candidate_source_sha256"],
+            build_attestation=paths["build_attestation_sha256"],
+            patch_source=paths["patch_source_sha256"],
+            qualification_runner=paths["runner_sha256"],
+            subset=paths["subset_sha256"],
+            vocab_blocks=paths["vocab_blocks_sha256"],
+            fa2_so=paths["fa2_sha256"],
+            expected_source_commit="b" * 40,
+        )
+
 
 def test_production_worker_bridge_requires_validator_attestation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -354,6 +372,16 @@ def test_engagement_validator_requires_graph_identity_and_zero_fallbacks(
         == payload
     )
     payload["fallback_calls"] = 1
+    _write_canonical(module, path, payload)
+    with pytest.raises(ValueError, match="engagement drifted"):
+        module.validate_engagement(
+            engagement_path=path,
+            expected_credential_sha256="3" * 64,
+            expected_source_commit="b" * 40,
+        )
+
+    payload["fallback_calls"] = 0
+    payload["selected_root_calls"] = True
     _write_canonical(module, path, payload)
     with pytest.raises(ValueError, match="engagement drifted"):
         module.validate_engagement(

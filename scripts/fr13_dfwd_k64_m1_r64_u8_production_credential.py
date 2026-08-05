@@ -133,8 +133,10 @@ def _credential_from_gate(validated: dict[str, Any]) -> dict[str, Any]:
     if (
         validated.get("schema") != gate.GATE_SCHEMA
         or validated.get("status") != "PASS"
-        or validated.get("captured_mtp_depths") != [1, 2, 3, 4]
-        or validated.get("raw_bf16_mismatches") != 0
+        or not gate._json_exact(
+            validated.get("captured_mtp_depths"), [1, 2, 3, 4]
+        )
+        or not gate._json_exact(validated.get("raw_bf16_mismatches"), 0)
         or validated.get("reference_always_served") is not True
         or validated.get("candidate_returned") is not False
         or validated.get("task_resolved") is not True
@@ -241,15 +243,15 @@ def validate_credential(
         or payload.get("source_commit") != expected_source_commit
         or payload.get("selector") != SELECTOR
         or payload.get("serve_policy") != "candidate_only_after_internal_attestation"
-        or payload.get("topology") != gate.EXPECTED_TOPOLOGY
-        or payload.get("geometry") != gate.EXPECTED_GEOMETRY
-        or payload.get("candidate") != gate.EXPECTED_CANDIDATE
-        or payload.get("captured_mtp_depths") != [1, 2, 3, 4]
+        or not gate._json_exact(payload.get("topology"), gate.EXPECTED_TOPOLOGY)
+        or not gate._json_exact(payload.get("geometry"), gate.EXPECTED_GEOMETRY)
+        or not gate._json_exact(payload.get("candidate"), gate.EXPECTED_CANDIDATE)
+        or not gate._json_exact(payload.get("captured_mtp_depths"), [1, 2, 3, 4])
         or payload.get("comparison_scope") != gate.COMPARISON_SCOPE
-        or payload.get("raw_bf16_mismatches") != 0
+        or not gate._json_exact(payload.get("raw_bf16_mismatches"), 0)
         or payload.get("incumbent_served_during_qualification") is not True
         or payload.get("candidate_returned_during_qualification") is not False
-        or payload.get("graph_contract") != GRAPH_CONTRACT
+        or not gate._json_exact(payload.get("graph_contract"), GRAPH_CONTRACT)
         or payload.get("production_default_enabled") is not False
         or payload.get("timing_eligible") is not True
         or payload.get("performance_claim") is not False
@@ -272,7 +274,9 @@ def validate_credential(
         if terminal.sha256_file(path) != inputs.get(label):
             raise ValueError(f"DFWD U8 credential input drifted: {label}")
     if (
-        inputs.get("candidate_so_bytes") != gate.EXPECTED_SO_BYTES
+        not gate._json_exact(
+            inputs.get("candidate_so_bytes"), gate.EXPECTED_SO_BYTES
+        )
         or candidate_so.stat().st_size != gate.EXPECTED_SO_BYTES
         or inputs.get("candidate_so_sha256") != gate.EXPECTED_SO_SHA256
         or inputs.get("candidate_source_sha256") != gate.EXPECTED_SOURCE_SHA256
@@ -330,12 +334,14 @@ def validate_engagement(
         or payload.get("candidate_so_sha256") != gate.EXPECTED_SO_SHA256
         or payload.get("candidate_source_sha256") != gate.EXPECTED_SOURCE_SHA256
         or payload.get("production_credential_sha256") != expected_credential_sha256
-        or payload.get("geometry") != gate.EXPECTED_GEOMETRY
-        or payload.get("qualification_candidate") != gate.EXPECTED_CANDIDATE
+        or not gate._json_exact(payload.get("geometry"), gate.EXPECTED_GEOMETRY)
+        or not gate._json_exact(
+            payload.get("qualification_candidate"), gate.EXPECTED_CANDIDATE
+        )
         or payload.get("selector") != SELECTOR
-        or payload.get("selected_root_calls") != 1
-        or payload.get("captured_loop_calls") != 4
-        or payload.get("fallback_calls") != 0
+        or not gate._json_exact(payload.get("selected_root_calls"), 1)
+        or not gate._json_exact(payload.get("captured_loop_calls"), 4)
+        or not gate._json_exact(payload.get("fallback_calls"), 0)
         or type(payload.get("drafter_graph_id")) is not int
         or payload["drafter_graph_id"] <= 0
         or payload.get("drafter_graph_signature") != GRAPH_SIGNATURE
@@ -347,8 +353,8 @@ def validate_engagement(
         or payload["forward_step_index"] < 0
         or payload.get("runtime_mode") != "FULL"
         or payload.get("candidate_served") is not True
-        or payload.get("incumbent_head_calls") != 0
-        or payload.get("steady_state_synchronizations") != 0
+        or not gate._json_exact(payload.get("incumbent_head_calls"), 0)
+        or not gate._json_exact(payload.get("steady_state_synchronizations"), 0)
         or payload.get("performance_claim") is not False
     ):
         raise ValueError("DFWD U8 production engagement drifted")

@@ -309,6 +309,21 @@ def test_finalizer_and_gate_require_every_depth_per_authenticated_event(
     with pytest.raises(ValueError, match="per-depth comparison/event census"):
         gate.validate_live_result(aggregate_preserved, expected_source_commit="b" * 40)
 
+    forged_depth_type = copy.deepcopy(live)
+    forged_depth_type["captured_mtp_depths"] = [True, 2, 3, 4]
+    with pytest.raises(ValueError, match="provenance drifted"):
+        gate.validate_live_result(forged_depth_type, expected_source_commit="b" * 40)
+
+    forged_nested_type = copy.deepcopy(live)
+    forged_nested_type["topology"]["batch_size"] = True
+    with pytest.raises(ValueError, match="provenance drifted"):
+        gate.validate_live_result(forged_nested_type, expected_source_commit="b" * 40)
+
+    forged_counter_type = copy.deepcopy(live)
+    forged_counter_type["per_depth_raw_bf16_mismatches"]["root"] = False
+    with pytest.raises(ValueError, match="per-depth comparison/event census"):
+        gate.validate_live_result(forged_counter_type, expected_source_commit="b" * 40)
+
     namespace["_FR13_DRAFT_HEAD_U8_LIVE_STATE"]["compares"].values[4] -= 1
     with pytest.raises(RuntimeError, match="depth/event comparison mismatch"):
         namespace["_fr13_draft_head_u8_live_finalize"](rows, binding)
