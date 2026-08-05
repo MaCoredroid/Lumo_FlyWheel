@@ -18,7 +18,7 @@ import fr13_b1_composed_stack_gate as composed_gate
 
 SCHEMA = "fr13.fixed32.b1_composed_stack.exact4_timing.v2"
 TARGET_SELECTOR = "identity_wide256_fullgrid_b1"
-TARGET_SHA256 = "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da"
+TARGET_SHA256 = "7d762dfa793671d75d1e353bd37d76fc07370cbe387ad1e315e32584d27927d4"
 DFWD_MARKERS = (
     "[FR13_DFWD_K64_TOP3] ready B1 K64 mapped width3",
     "[FR13_DFWD_K64_TOP3] engaged stock_argmax_topk_map_copy=0",
