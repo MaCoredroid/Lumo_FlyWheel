@@ -27,7 +27,7 @@
     "stg": 336,
     "stl": 0
   },
-  "candidate_source_commit": "4d876d6fd535fd3c9157b6d633624da323d705c1",
+  "candidate_source_commit": "4d876d6fd1a9a9bfc4ca4f90651bfc2421439e31",
   "claims": {
     "floor_acceptance_eligible": false,
     "gpu_runtime_used": false,
