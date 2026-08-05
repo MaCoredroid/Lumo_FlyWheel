@@ -10,7 +10,8 @@ import torch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEVICE_PATH = ROOT / "scripts/fr13_device_multidraft_kernel.py"
+DEVICE_PATH = ROOT / "scripts/fr13_device_multidraft_cfwd_packed_v3.py"
+BASE_PATH = ROOT / "scripts/fr13_device_multidraft_kernel.py"
 PATCHER_PATH = ROOT / "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
 LAUNCHER_PATH = ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh"
 
@@ -21,7 +22,7 @@ def _load_device_module():
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module
+    return module._base
 
 
 def test_live_selector_is_strict_and_default_off(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -36,7 +37,7 @@ def test_live_selector_is_strict_and_default_off(monkeypatch: pytest.MonkeyPatch
 
 
 def test_wrapper_preserves_certified_commit_and_reuses_its_uniform_buffer() -> None:
-    source = DEVICE_PATH.read_text(encoding="utf-8")
+    source = BASE_PATH.read_text(encoding="utf-8")
     start = source.index("def fr13_fixed32_cfwd_logit_direct_commit(")
     stop = source.index(
         "def fr13_fixed32_cfwd_logit_direct_live_prepare_replay(", start
@@ -85,7 +86,8 @@ def test_launcher_keeps_gate_off_and_requires_full_graph_native_production() -> 
     assert 'case "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" in' in launcher
     assert '"$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1"' in launcher
     assert '"${ENFORCE_EAGER:-0}" == "0"' in launcher
-    assert "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192" in launcher
+    assert "5a9107306bdc37200448a6a5add2b84dfd839dc377b11009f218662c63abcc1c" in launcher
+    assert "/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py" in launcher
     assert '-e FR13_CFWD_LOGIT_DIRECT_BYTE_AB="$FR13_CFWD_LOGIT_DIRECT_BYTE_AB"' in launcher
 
 

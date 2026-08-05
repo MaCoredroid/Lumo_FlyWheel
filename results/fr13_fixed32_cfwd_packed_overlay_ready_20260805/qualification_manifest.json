@@ -1,0 +1,59 @@
+{
+  "schema": "fr13.fixed32.cfwd_packed_overlay_ready.v1",
+  "status": "CPU_READY_UNMEASURED",
+  "created_utc": "2026-08-05T16:05:16Z",
+  "branch": "codex/cfwd-packed-physical-decisions-20260805",
+  "source_commit": "16a5ff62def58483d8ef170f03eb9f39bcfd9854",
+  "execution": {
+    "gpu_run": false,
+    "docker_run": false,
+    "real_swe_verified_run": false,
+    "runtime_correctness_claim": false,
+    "performance_claim": false,
+    "timing_eligible": false,
+    "floor_acceptance_eligible": false,
+    "production_eligible": false
+  },
+  "credential_preservation": {
+    "canonical_source": "scripts/fr13_device_multidraft_kernel.py",
+    "canonical_source_sha256": "088454e0605c5d41aee7b385c6d0ff66e6a7ddb999a9697258762d0aac9fe166",
+    "whole_file_binding_preserved": true,
+    "taw_source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
+    "taw_source_contract_sha256": "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290",
+    "taw_source_functions_unchanged": true
+  },
+  "overlay": {
+    "source": "scripts/fr13_cfwd_logit_direct_packed_runtime_overlay.py",
+    "source_sha256": "0d9deb7a8bc4484d3953623a81d39304dd56cb0d3748d44f767b885342f39df2",
+    "loader": "scripts/fr13_device_multidraft_cfwd_packed_v3.py",
+    "loader_sha256": "56d51aa98e79753638e2f6dc875a2fa14fea8b96168fdc3353f3538a5f52bf8e",
+    "generator": "scripts/fr13_generate_cfwd_packed_runtime_overlay.py",
+    "generator_sha256": "5f4df96783c71fbee6cc16e6de8e9884b841f682163f81524c5a6ae6b114d104",
+    "generated_from_revision": "103030ea88ad7da28a4bcab187a57200be70756d",
+    "changed_cfwd_helpers": 4,
+    "changed_cfwd_kernels": 2,
+    "candidate_source_sha256": "5a9107306bdc37200448a6a5add2b84dfd839dc377b11009f218662c63abcc1c",
+    "integration_source_schema": "fr13.fixed32.cfwd_logit_direct.integration_source.v2",
+    "integration_source_sha256": "a82ce3f5e526792ca45bb444212e5440e8444778f174fd0650accc4bb5f8558c"
+  },
+  "composed_b1": {
+    "runner": "scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh",
+    "runner_sha256": "b608605a5e8b75b99770f83edfc18dc0cd19ec82372962e83c446a20e4a009a1",
+    "validator": "scripts/fr13_cfwd_dfwd_u8_composed_gate.py",
+    "validator_sha256": "9e14ff918ed6d78a1af3a74ba837c0e012a64fe9e5782c7ba80d55bd550522fd",
+    "execution_basis": "FULL_AND_PIECEWISE_graph_replay",
+    "stock_fa2_sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d",
+    "dfwd_u8_so_sha256": "8b27df4f3c6a5a0574261ee984159582a87615c3e6d83f2a267f4fa46a3e421e",
+    "component_validators_reexecuted": true,
+    "real_b1_required": true
+  },
+  "minimum_real_boots_after_taw_credential": 2,
+  "sfwd_separate_boot_reason": "requires eager execution and pinned Qrow16 FA2; CFWD plus U8 requires FULL graph and stock FA2",
+  "verification": {
+    "focused_tests": "94 passed",
+    "shell_syntax": "PASS",
+    "python_compile": "PASS",
+    "overlay_regeneration": "PASS",
+    "diff_check": "PASS"
+  }
+}

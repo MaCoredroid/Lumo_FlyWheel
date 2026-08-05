@@ -12,16 +12,16 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
-CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
-CANDIDATE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
+CANDIDATE = "fixed32_cfwd_logit_direct_packed_physical_slots_v3"
+CANDIDATE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_packed_physical_slots.v3"
 CANDIDATE_SOURCE_SHA256 = (
-    "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192"
+    "5a9107306bdc37200448a6a5add2b84dfd839dc377b11009f218662c63abcc1c"
 )
 INTEGRATION_SOURCE_SCHEMA = (
-    "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+    "fr13.fixed32.cfwd_logit_direct.integration_source.v2"
 )
 INTEGRATION_SOURCE_SHA256 = (
-    "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+    "a82ce3f5e526792ca45bb444212e5440e8444778f174fd0650accc4bb5f8558c"
 )
 LIVE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_live_ab.v2"
 CREDENTIAL_SCHEMA = "fr13.fixed32.cfwd_logit_direct.production_credential.v2"
