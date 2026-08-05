@@ -14,6 +14,12 @@ capturing the final FULL B1 graph because the Qrow32 live hook rejected the
 observed attention geometry. The two preceding profile lifecycle failures did
 not recur; this rejection is in the later final-capture path.
 
+Source diagnosis verified that the Python gate uniquely required a packed
+query row stride of `6144`, while final capture supplies the valid fused-QKV
+view stride `8192`. The hidden CUDA launcher consumes and validates only the
+head stride `256` and element stride `1`; the rejected row stride is not part
+of the candidate kernel contract.
+
 The launch did not reach health, authenticated task work, or any byte
 comparator replay. It issued no Qrow32, GQA-group3, or DFWD credential and
 produced no timing, TPS, acceptance, kernel qualification, or hardware-floor

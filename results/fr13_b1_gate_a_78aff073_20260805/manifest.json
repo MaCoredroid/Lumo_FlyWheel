@@ -46,7 +46,12 @@
     "gqa_group3_credential_issued": false,
     "dfwd_k64_top3_credential_issued": false,
     "timing_summary_present": false,
-    "root_cause_status": "final_capture_geometry_field_under_source_diagnosis",
+    "root_cause_verified": true,
+    "root_cause_status": "verified_unused_query_row_stride_overconstraint",
+    "rejected_query_row_stride": 8192,
+    "incorrect_required_query_row_stride": 6144,
+    "retained_kernel_query_head_stride": 256,
+    "retained_kernel_query_element_stride": 1,
     "rerun_required": true
   },
   "claims": {
