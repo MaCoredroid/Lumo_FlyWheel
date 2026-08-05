@@ -202,9 +202,9 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "identity_wide256_fullgrid_b1",
     )
     assert module.IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SHA256 == (
-        "7f62f4efac0bb61d2f8367d9ff1e22a47d425ca06dcb74b4cbcd65dc701361de"
+        "7d762dfa793671d75d1e353bd37d76fc07370cbe387ad1e315e32584d27927d4"
     )
-    assert module.IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SIZE == 119_982_464
+    assert module.IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SIZE == 119_781_296
     assert module.candidate_identity("identity_fullm_b4_byte_ab") == (
         module.IDENTITY_FULLTILE_CANDIDATE_SHA256,
         module.IDENTITY_FULLTILE_CANDIDATE_SIZE,

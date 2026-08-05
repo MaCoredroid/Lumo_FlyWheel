@@ -1298,18 +1298,18 @@ struct sm120_blockwise_fp8_config_b1_onen_fullgrid_identity_pingpong_stage2 {
       cutlass::gemm::collective::StageCount<2>>;
 };
 
-// The three wide B1 projections have at least 56 complete 256-row output
-// tiles, so a full 48-CTA grid remains available after doubling scheduler M.
-// This halves activation-panel replays and complete-tile scheduler work while
-// retaining one ordered full-K reduction. The two N=5120 projections stay on
-// their 128-row/40-CTA specialization to avoid under-filling the device.
+// Keep the exact 128x32x128 ping-pong collective that passed the exhaustive
+// B1 byte gate. The 256x32x128 cooperative collective produced sparse output
+// differences against stock, so retain only the direct linear scheduler
+// substitution here. The two N=5120 projections stay on their separate exact
+// 40-CTA specialization.
 template <typename OutType>
 struct sm120_blockwise_fp8_config_b1_wide256_fullgrid_identity_stage2 {
   using KernelSchedule =
-      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwisePingpongSm120;
   using EpilogueSchedule =
       cutlass::epilogue::collective::EpilogueScheduleAuto;
-  using TileShape = Shape<_256, _32, _128>;
+  using TileShape = Shape<_128, _32, _128>;
   using ClusterShape = Shape<_1, _1, _1>;
   using Gemm = cutlass_3x_gemm_fp8_blockwise_identity_static<
       OutType, 128, 1, 128, TileShape, ClusterShape,

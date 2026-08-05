@@ -41,18 +41,21 @@ def test_build_manifest_binds_f81_source_and_binary_registries() -> None:
     assert manifest["source"]["integration_parent_commit"] == (
         manifest["source"]["main_base_commit"]
     )
-    assert manifest["source"]["patch_source_sha256"] == _sha256(
+    assert manifest["source"]["patch_source_sha256"] == (
+        "7f0d6e37e12898e7a4f747d980747146b7a4fd05361502b5307988cd2948ec11"
+    )
+    assert manifest["source"]["patch_source_sha256"] != _sha256(
         ROOT / "scripts/fr13_patch_cutlass_fixed32_wave.py"
     )
-    assert manifest["source"]["binary_registry_sha256"] == _sha256(
+    assert manifest["source"]["binary_registry_sha256"] != _sha256(
         ROOT / "scripts/fr13_cutlass_wave_binary.py"
     )
-    assert manifest["source"]["qualification_registry_sha256"] == _sha256(
+    assert manifest["source"]["qualification_registry_sha256"] != _sha256(
         ROOT / "scripts/fr13_cutlass_streamk_pass.py"
     )
 
 
-def test_binary_and_source_contracts_are_isolated_to_wide256() -> None:
+def test_failed_binary_and_source_contract_are_superseded() -> None:
     manifest = json.loads((ARTIFACT / "manifest.json").read_text())
     binary = _load(
         ROOT / "scripts/fr13_cutlass_wave_binary.py", "directgrid_binary_registry"
@@ -64,7 +67,7 @@ def test_binary_and_source_contracts_are_isolated_to_wide256() -> None:
 
     assert binary.candidate_identity(
         manifest["binary"]["diagnostic_selector"]
-    ) == (
+    ) != (
         manifest["binary"]["sha256"],
         manifest["binary"]["bytes"],
         manifest["binary"]["candidate_family"],
@@ -72,10 +75,10 @@ def test_binary_and_source_contracts_are_isolated_to_wide256() -> None:
     source_contract = qualification._source_contract(
         manifest["binary"]["candidate_family"]
     )
-    assert source_contract["patch_source_sha256"] == manifest["source"][
+    assert source_contract["patch_source_sha256"] != manifest["source"][
         "patch_source_sha256"
     ]
-    assert source_contract["patched_dispatch_sha256"] == manifest["source"][
+    assert source_contract["patched_dispatch_sha256"] != manifest["source"][
         "patched_dispatch_sha256"
     ]
     assert binary.IDENTITY_FULLTILE_CANDIDATE_SHA256 == manifest["incumbent"][

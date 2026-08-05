@@ -27,7 +27,10 @@ def test_wide256_directgrid_artifact_binds_source_and_scope() -> None:
     assert manifest["measurement_valid"] is False
     assert manifest["performance_claim"] is False
     assert manifest["production_default_enabled"] is False
-    assert manifest["source"]["patch_source_sha256"] == _sha256(PATCHER)
+    assert manifest["source"]["patch_source_sha256"] == (
+        "7f0d6e37e12898e7a4f747d980747146b7a4fd05361502b5307988cd2948ec11"
+    )
+    assert manifest["source"]["patch_source_sha256"] != _sha256(PATCHER)
 
     candidate = manifest["candidate"]
     assert candidate["scheduler_tag"] in PATCHER.read_text(encoding="ascii")
