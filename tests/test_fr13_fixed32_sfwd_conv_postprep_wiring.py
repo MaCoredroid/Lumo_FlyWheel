@@ -66,6 +66,36 @@ def _literal_tuple(path: Path, name: str) -> tuple[str, ...]:
     raise AssertionError(f"{path} lacks {name}")
 
 
+def _sfwd_profile_capture_runtime() -> dict[str, object]:
+    patcher = _load_patcher("fr13_sfwd_profile_capture_runtime")
+    tree = ast.parse(patcher._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE)
+    function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name
+        == "_fr13_fixed32_sfwd_conv_postprep_profile_capture_active"
+    )
+    namespace: dict[str, object] = {
+        "_FR13_FIXED32_PROFILE_CAPTURE_SCOPE": None,
+        "_FR13_FIXED32_PROFILE_MEMORY_SCOPE": False,
+        "_FR13_FIXED32_CAPTURE_CONTEXT": None,
+        "_FR13_FIXED32_CAPTURE_MANIFESTS": {},
+        "_FR13_FIXED32_OBSERVED_CURRENT": None,
+        "_FR13_FIXED32_PENDING_EVENT": None,
+        "_FR13_FIXED32_CAPTURE_FROZEN": False,
+    }
+    exec(
+        compile(
+            ast.Module(body=[function], type_ignores=[]),
+            "<fr13-sfwd-profile-capture>",
+            "exec",
+        ),
+        namespace,
+    )
+    return namespace
+
+
 def _embedded_gate_payload(
     *, batch: int, source_commit: str, manifest_sha256: str
 ) -> dict[str, object]:
@@ -150,6 +180,63 @@ def test_selector_rejects_every_noncanonical_value(
     patcher = _load_patcher(f"fr13_sfwd_conv_postprep_bad_{raw!r}")
     with pytest.raises(RuntimeError, match="must be exactly 0 or 1"):
         patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
+
+
+@pytest.mark.parametrize("batch", (1, 4))
+def test_sfwd_profile_capture_guard_covers_throwaway_full_capture_only(
+    batch: int,
+) -> None:
+    runtime = _sfwd_profile_capture_runtime()
+    active = runtime[
+        "_fr13_fixed32_sfwd_conv_postprep_profile_capture_active"
+    ]
+    assert callable(active)
+    assert active() is False
+
+    runtime["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = True
+    runtime["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"] = {
+        "descriptor": {
+            "runtime_mode": "FULL",
+            "num_tokens": 32 * batch,
+            "num_reqs": batch,
+            "uniform": True,
+            "has_lora": False,
+            "num_active_loras": 0,
+        },
+        "graph_id": None,
+        "completed": False,
+    }
+    assert active() is True
+    runtime["_FR13_FIXED32_PROFILE_CAPTURE_SCOPE"]["graph_id"] = 41
+    assert active() is True
+
+    runtime["_FR13_FIXED32_PROFILE_MEMORY_SCOPE"] = False
+    with pytest.raises(RuntimeError, match="profile capture scope drifted"):
+        active()
+
+
+def test_sfwd_profile_capture_records_and_seals_before_full_dummy() -> None:
+    generated = _generated_literals()
+    start = generated.index(
+        "_fr13_conv_postprep_profile_capture = ("
+    )
+    candidate = generated.index(
+        "_fr13_conv_postprep_active = bool(", start
+    )
+    pending = generated.index(
+        '"profile_capture_pending"', candidate
+    )
+    capture_guard = generated.index(
+        "capture lacks preseeded ", candidate
+    )
+    profile_preseed = generated.index(
+        "_fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture("
+    )
+    full_dummy = generated.index(
+        "cudagraph_runtime_mode=cudagraph_runtime_mode,", profile_preseed
+    )
+    assert start < candidate < capture_guard < pending
+    assert profile_preseed < full_dummy
 
 
 @pytest.mark.parametrize("raw", ("", "true", "2"))
