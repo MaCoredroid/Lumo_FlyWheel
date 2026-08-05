@@ -27,6 +27,7 @@ TARGET_KERNEL = (
 )
 QROW_LAUNCHER_MANGLED_FRAGMENT = "fr13_run_mha_fwd_fixed32_qrow32"
 EXPECTED_STATIC_SHARED_BYTES = 1024
+EXPECTED_DYNAMIC_SHARED_BYTES = 80 * 1024
 MAX_REGISTERS = 254
 
 
@@ -175,6 +176,8 @@ def verify_static(args: argparse.Namespace) -> dict[str, Any]:
     expected_source = FIXED32_QUERY_TILE32_TRANSLATION_UNIT.encode("ascii")
     if source.read_bytes() != expected_source:
         raise GateError("qrow32 translation unit differs from the gated generator")
+    if expected_source.count(b"static_assert(smem_size == 80 * 1024);") != 1:
+        raise GateError("qrow32 dynamic shared-memory contract drifted")
 
     qrow_object = _regular(args.qrow_object, "qrow32 SM121a object")
     stock_so = _regular(args.stock_so, "stock FA2 shared object")
@@ -192,6 +195,7 @@ def verify_static(args: argparse.Namespace) -> dict[str, Any]:
     resources = _parse_resources(
         _read_ascii(args.resource_usage, "cuobjdump resource usage")
     )
+    resources["dynamic_shared_bytes"] = EXPECTED_DYNAMIC_SHARED_BYTES
     ptxas = _verify_ptxas(
         _read_ascii(args.ptxas_log, "ptxas log"),
         resources["registers"],

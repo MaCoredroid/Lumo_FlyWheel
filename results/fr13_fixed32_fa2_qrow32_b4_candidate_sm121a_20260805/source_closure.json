@@ -1,0 +1,31 @@
+{
+  "base_gqa_pair_so_sha256": "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e",
+  "base_gqa_pair_source_closure_sha256": "f210a5ebb93930e89b0d9fe0cb6e53a76c9359873ad4268e81d3f17a7443bdf2",
+  "fa2_files": {
+    "csrc/flash_attn/flash_api.cpp": "f6ed4164e181521c55d167e0cf7af04dc10069a6af909481450ae4eb9236d11c",
+    "csrc/flash_attn/flash_api_torch_lib.cpp": "c575d9f02ba44bf7022c77b80fdf12173da0ecae8a4d7599934c2cc9fa52e121",
+    "csrc/flash_attn/src/flash.h": "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a",
+    "csrc/flash_attn/src/flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu": "adee09b98b6f517550547bf73efa6f817c7634b2d50febb6f811e3b637fee1e4",
+    "csrc/flash_attn/src/flash_fwd_kernel.h": "f93bc31541a762abe834a16bc4a85b46b7e5a8f1a4463f4abbd6526ea104bce8",
+    "csrc/flash_attn/src/utils.h": "5887df63c79a3e42fb9ddad93f64fe3c0625dbee4c547af68b6f2108b7beeb5f"
+  },
+  "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+  "fa2_status": [
+    " M csrc/flash_attn/flash_api.cpp",
+    " M csrc/flash_attn/flash_api_torch_lib.cpp",
+    " M csrc/flash_attn/src/flash.h",
+    " M csrc/flash_attn/src/flash_fwd_kernel.h",
+    " M csrc/flash_attn/src/utils.h",
+    "?? csrc/flash_attn/src/flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu"
+  ],
+  "patcher_flags": [
+    "--tree-bias-tile-earlyout",
+    "--fixed32-query-tile32"
+  ],
+  "repo_files": {
+    "csrc/fr13_fa2_qrow32_b4_launcher_adapter.cc": "4873f6dc368bfdbc78ebd2edf4d6d08f5033ae69cec94e0f19ae90610e1f8a6a",
+    "scripts/fr13_fa2_qrow16_so_finalize.py": "e3293c140a0744953c4b653c59da206e2ff431a450db75ba52176bad6c440045",
+    "scripts/fr13_patch_fa2_tree_bias.py": "1ff6b33b9a327254f970c0052b00accfac45681db3dac22b277fc8690f0c9ba8"
+  },
+  "schema": "fr13.fixed32.fa2_qrow32_b4_source_closure.v2"
+}

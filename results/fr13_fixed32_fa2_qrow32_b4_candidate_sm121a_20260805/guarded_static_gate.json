@@ -1,0 +1,56 @@
+{
+  "abi": {
+    "defined_dynamic": {
+      "records": 633,
+      "sha256": "e6dc09cc4d8b9727924df930c2481a4a5b4ca00f0f2b2863ee291a6ea4910ea5"
+    },
+    "dt_needed": {
+      "records": 10,
+      "sha256": "8657168f24fe6365d30c87c1698fb27e601fd20c3944d9358d471f1bd7d767e7"
+    },
+    "undefined_dynamic": {
+      "records": 168,
+      "sha256": "386ff1e0827006ce0ed0ddfa69804ab1d8e28e84b677201e93fd297eb5451f85"
+    }
+  },
+  "candidate_so_sha256": "77f3fb22c19d0eb2ac0ec28230cf9401221425692a505efde62aa838760d81ce",
+  "default_off": true,
+  "gpu_used": false,
+  "object_sha256": "4f5ff36c26ae9148e9900bc175566caa9ef15cdc167c15cdf257ef5577d7f906",
+  "performance_measurement": false,
+  "production_eligible": false,
+  "ptxas": {
+    "barriers": 1,
+    "registers": 252,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0,
+    "stack_bytes": 0
+  },
+  "required_next_gate": "canonical real SWE-Verified exact4 B4 raw-byte A/B for Tail23 and Hydra27",
+  "resources": {
+    "dynamic_shared_bytes": 81920,
+    "registers": 252,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "static_shared_bytes": 1024
+  },
+  "sass": {
+    "call": 0,
+    "ldl": 0,
+    "stl": 0
+  },
+  "schema": "fr13.fixed32.fa2_qrow32_static_admission.v1",
+  "source_sha256": "adee09b98b6f517550547bf73efa6f817c7634b2d50febb6f811e3b637fee1e4",
+  "status": "PASS",
+  "stock_so_sha256": "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e",
+  "target": {
+    "arch": "sm_121a",
+    "block_m": 32,
+    "block_n": 64,
+    "head_dim": 256,
+    "split_k": false,
+    "threads": 64,
+    "warps": 2
+  },
+  "timing_eligible": false
+}

@@ -3791,7 +3791,7 @@ _FR13_FA2_QROW32_LIVE_AB_ARMS = {
         "candidate_so_size": 299876120,
         "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
         "fa2_source_closure_sha256": (
-            "3e3c18565e738f20d0a5ab5fe50d018f3d8cbd5cb94082dcd55ca730a790163c"
+            "dd3bebd047b8ccc2248b0d0e75b9db1f23747c486592ec2a5c72ee96581e10dc"
         ),
     },
     "gqa_pair": {
