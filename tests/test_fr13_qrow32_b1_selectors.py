@@ -6,9 +6,11 @@ import json
 import os
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
+import torch
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -25,6 +27,93 @@ def _module(path: Path, name: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _selector_namespace(monkeypatch: pytest.MonkeyPatch, *, profile_scope):
+    namespace = {"os": os, "torch": torch}
+    patcher = _module(PATCHER, "qrow32_b1_fa2_patcher")
+    exec(patcher.FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS, namespace)
+
+    gdn = types.ModuleType("gdn_linear_attn")
+    gdn._FR13_FIXED32_PROFILE_CAPTURE_SCOPE = profile_scope
+    gdn._FR13_FIXED32_PROFILE_MEMORY_SCOPE = profile_scope is not None
+    gdn._FR13_FIXED32_CAPTURE_CONTEXT = None
+    packages = {
+        "vllm": types.ModuleType("vllm"),
+        "vllm.model_executor": types.ModuleType("vllm.model_executor"),
+        "vllm.model_executor.layers": types.ModuleType("vllm.model_executor.layers"),
+        "vllm.model_executor.layers.mamba": types.ModuleType(
+            "vllm.model_executor.layers.mamba"
+        ),
+        "vllm.model_executor.layers.mamba.gdn_linear_attn": gdn,
+    }
+    packages["vllm.model_executor.layers.mamba"].gdn_linear_attn = gdn
+    for name, module in packages.items():
+        monkeypatch.setitem(sys.modules, name, module)
+
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "split2")
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_ROOT", "1")
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_K", "65536")
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_SO_SHA256",
+        namespace["_FR13_FA2_QROW32_B1_CANDIDATE_SHA256"],
+    )
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SIZE", "300140712")
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_FA2_HEAD",
+        namespace["_FR13_FA2_QROW32_B1_FA2_HEAD"],
+    )
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256",
+        namespace["_FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256"],
+    )
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_SOURCE_COMMIT", "1" * 40)
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256", "2" * 64)
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "split2")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_INTERNAL_ATTESTED", "1")
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS",
+        ",".join(namespace["_FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS"]),
+    )
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256",
+        namespace["_FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256"],
+    )
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256", "3" * 64
+    )
+    return namespace, gdn
+
+
+def _b1_geometry():
+    return {
+        "flash_fn": object(),
+        "query": torch.empty((32, 24, 256), dtype=torch.bfloat16),
+        "key_cache": torch.empty((1, 1024, 4, 256), dtype=torch.bfloat16),
+        "value_cache": torch.empty((1, 1024, 4, 256), dtype=torch.bfloat16),
+        "cu_seqlens_q": torch.tensor([0, 32], dtype=torch.int32),
+        "max_seqlen_q": 32,
+        "seqused_k": torch.tensor([32], dtype=torch.int32),
+        "max_seqlen_k": 32,
+        "softmax_scale": 1.0,
+        "causal": False,
+        "window_size": [-1, -1],
+        "block_table": torch.tensor([[0]], dtype=torch.int32),
+        "softcap": 0.0,
+        "num_splits": 1,
+        "tree_bias": torch.zeros((32, 32), dtype=torch.float32),
+    }
+
+
+def _profile_descriptor() -> dict[str, object]:
+    return {
+        "runtime_mode": "FULL",
+        "num_tokens": 32,
+        "num_reqs": 1,
+        "uniform": True,
+        "has_lora": False,
+        "num_active_loras": 0,
+    }
 
 
 def _comparison(seed: str, dtype: str, shape: list[int]) -> dict[str, object]:
@@ -101,6 +190,186 @@ def test_selectors_are_split2_only_default_off_and_qrow16_served() -> None:
     assert "torch.cuda.synchronize()" not in production
     assert '"candidate_served": True, "fallback_allowed": False' in helpers
     assert "FR13 qrow32 B1 production silently fell back" in helpers
+
+
+def test_live_register_profile_capture_bypasses_final_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    profile_scope = {
+        "descriptor": _profile_descriptor(),
+        "graph_id": 41,
+        "completed": False,
+    }
+    namespace, _ = _selector_namespace(
+        monkeypatch, profile_scope=profile_scope
+    )
+    geometry = _b1_geometry()
+    geometry["query"] = torch.empty((128, 24, 256), dtype=torch.bfloat16)
+
+    selected = namespace["_fr13_fa2_qrow32_b1_live_register"](
+        layer=types.SimpleNamespace(layer_name="profile.throwaway"), **geometry
+    )
+
+    assert tuple(selected.shape) == (1, 32, 32)
+    assert int(selected.stride(0)) == namespace[
+        "_FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL"
+    ]
+    assert namespace["_FR13_FA2_QROW32_B1_LIVE_GRAPHS"] == {}
+
+
+def test_live_register_profile_bypass_requires_profile_memory_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, gdn = _selector_namespace(
+        monkeypatch,
+        profile_scope={
+            "descriptor": _profile_descriptor(),
+            "graph_id": 41,
+            "completed": False,
+        },
+    )
+    gdn._FR13_FIXED32_PROFILE_MEMORY_SCOPE = False
+
+    with pytest.raises(RuntimeError, match="profile capture scope drifted"):
+        namespace["_fr13_fa2_qrow32_b1_live_register"](
+            layer=types.SimpleNamespace(layer_name="profile.throwaway"),
+            **_b1_geometry(),
+        )
+
+
+def test_profile_bypass_rejects_non_b1_descriptor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    descriptor = _profile_descriptor()
+    descriptor["num_tokens"] = 128
+    namespace, _ = _selector_namespace(
+        monkeypatch,
+        profile_scope={
+            "descriptor": descriptor,
+            "graph_id": None,
+            "completed": False,
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="profile capture scope drifted"):
+        namespace["_fr13_fa2_qrow32_b1_live_register"](
+            layer=types.SimpleNamespace(layer_name="profile.throwaway"),
+            **_b1_geometry(),
+        )
+
+
+def test_live_register_final_capture_enforces_geometry_and_all_layers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, gdn = _selector_namespace(monkeypatch, profile_scope=None)
+    gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
+        "descriptor": {"runtime_mode": "FULL", "num_reqs": 1},
+        "graph_id": 77,
+    }
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: True)
+    geometry = _b1_geometry()
+    drifted = dict(geometry)
+    drifted["query"] = torch.empty((128, 24, 256), dtype=torch.bfloat16)
+
+    with pytest.raises(RuntimeError, match="live gate geometry drifted"):
+        namespace["_fr13_fa2_qrow32_b1_live_register"](
+            layer=types.SimpleNamespace(
+                layer_name=namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
+            ),
+            **drifted,
+        )
+
+    for layer_name in namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"]:
+        selected = namespace["_fr13_fa2_qrow32_b1_live_register"](
+            layer=types.SimpleNamespace(layer_name=layer_name), **geometry
+        )
+        assert int(selected.stride(0)) == namespace[
+            "_FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL"
+        ]
+
+    graph = namespace["_FR13_FA2_QROW32_B1_LIVE_GRAPHS"][77]
+    assert set(graph) == set(namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"])
+    assert len(graph) == 16
+
+
+def test_production_profile_warmup_bypasses_before_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, _ = _selector_namespace(
+        monkeypatch,
+        profile_scope={
+            "descriptor": _profile_descriptor(),
+            "graph_id": None,
+            "completed": False,
+        },
+    )
+    geometry = _b1_geometry()
+    geometry.pop("flash_fn")
+    geometry.pop("softmax_scale")
+    geometry["query"] = torch.empty((128, 24, 256), dtype=torch.bfloat16)
+
+    selection = namespace["_fr13_fa2_qrow32_b1_production_begin"](
+        layer=types.SimpleNamespace(layer_name="profile.warmup"), **geometry
+    )
+
+    assert selection["profile_capture_bypass"] is True
+    assert selection["candidate_served"] is False
+    assert int(selection["tree_bias"].stride(0)) == namespace[
+        "_FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL"
+    ]
+    namespace["_fr13_fa2_qrow32_b1_production_end"](
+        selection, completed=True
+    )
+    assert namespace["_FR13_FA2_QROW32_B1_PRODUCTION_GRAPHS"] == {}
+
+
+def test_production_final_capture_enforces_geometry_and_all_layers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, gdn = _selector_namespace(monkeypatch, profile_scope=None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: True)
+    geometry = _b1_geometry()
+    geometry.pop("flash_fn")
+    geometry.pop("softmax_scale")
+
+    with pytest.raises(RuntimeError, match="no final fixed32 capture context"):
+        namespace["_fr13_fa2_qrow32_b1_production_begin"](
+            layer=types.SimpleNamespace(
+                layer_name=namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
+            ),
+            **geometry,
+        )
+
+    gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
+        "descriptor": _profile_descriptor(),
+        "graph_id": 91,
+    }
+    drifted = dict(geometry)
+    drifted["query"] = torch.empty((128, 24, 256), dtype=torch.bfloat16)
+
+    with pytest.raises(RuntimeError, match="production geometry drifted"):
+        namespace["_fr13_fa2_qrow32_b1_production_begin"](
+            layer=types.SimpleNamespace(
+                layer_name=namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
+            ),
+            **drifted,
+        )
+
+    for layer_name in namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"]:
+        selection = namespace["_fr13_fa2_qrow32_b1_production_begin"](
+            layer=types.SimpleNamespace(layer_name=layer_name), **geometry
+        )
+        namespace["_fr13_fa2_qrow32_b1_production_end"](
+            selection, completed=True
+        )
+
+    graph = namespace["_FR13_FA2_QROW32_B1_PRODUCTION_GRAPHS"][91]
+    assert set(graph["layers"]) == set(
+        namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"]
+    )
+    assert len(graph["layers"]) == 16
 
 
 def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:

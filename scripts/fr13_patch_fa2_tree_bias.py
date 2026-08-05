@@ -3638,6 +3638,49 @@ def _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias):
     )
 
 
+def _fr13_fa2_qrow32_b1_profile_capture_active():
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn
+
+    profile_scope = getattr(
+        _fr13_gdn, "_FR13_FIXED32_PROFILE_CAPTURE_SCOPE", None
+    )
+    if profile_scope is None:
+        return False
+    graph_id = (
+        profile_scope.get("graph_id")
+        if isinstance(profile_scope, dict)
+        else None
+    )
+    expected_descriptor = {
+        "runtime_mode": "FULL",
+        "num_tokens": 32,
+        "num_reqs": 1,
+        "uniform": True,
+        "has_lora": False,
+        "num_active_loras": 0,
+    }
+    if (
+        not isinstance(profile_scope, dict)
+        or set(profile_scope) != {"descriptor", "graph_id", "completed"}
+        or profile_scope.get("descriptor") != expected_descriptor
+        or (
+            graph_id is not None
+            and (type(graph_id) is not int or graph_id <= 0)
+        )
+        or profile_scope.get("completed") is not False
+        or getattr(
+            _fr13_gdn, "_FR13_FIXED32_PROFILE_MEMORY_SCOPE", None
+        ) is not True
+        or getattr(
+            _fr13_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None
+        ) is not None
+    ):
+        raise RuntimeError(
+            "FR13 qrow32 B1 selector profile capture scope drifted"
+        )
+    return True
+
+
 def _fr13_fa2_qrow32_b1_live_register(
     *, layer, flash_fn, query, key_cache, value_cache, cu_seqlens_q,
     max_seqlen_q, seqused_k, max_seqlen_k, softmax_scale, causal,
@@ -3648,6 +3691,8 @@ def _fr13_fa2_qrow32_b1_live_register(
         return tree_bias
     _fr13_fa2_qrow32_b1_require_k64()
     _fr13_fa2_qrow32_b1_require_identity()
+    if _fr13_fa2_qrow32_b1_profile_capture_active():
+        return _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias)
     if not _fr13_fa2_qrow32_b1_exact_geometry(
         query=query, key_cache=key_cache, value_cache=value_cache,
         cu_seqlens_q=cu_seqlens_q, max_seqlen_q=max_seqlen_q,
@@ -3886,6 +3931,13 @@ def _fr13_fa2_qrow32_b1_production_begin(
     pass_digest = _fr13_fa2_qrow32_b1_digest(
         "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256", "pass sidecar"
     )
+    if _fr13_fa2_qrow32_b1_profile_capture_active():
+        return {
+            "arm": arm, "candidate_served": False,
+            "profile_capture_bypass": True,
+            "tree_bias": _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias),
+            "num_splits": int(num_splits),
+        }
     capturing = torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
     context = None
     if capturing:
@@ -3893,11 +3945,9 @@ def _fr13_fa2_qrow32_b1_production_begin(
 
         context = getattr(_fr13_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
         if not isinstance(context, dict):
-            return {
-                "arm": arm, "candidate_served": False,
-                "profile_capture_bypass": True, "tree_bias": tree_bias,
-                "num_splits": int(num_splits),
-            }
+            raise RuntimeError(
+                "FR13 qrow32 B1 production has no final fixed32 capture context"
+            )
         descriptor = context.get("descriptor")
         if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 1:
             raise RuntimeError("FR13 qrow32 B1 production is not final fixed32 B1")
