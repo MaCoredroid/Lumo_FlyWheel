@@ -27120,16 +27120,21 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     self._fr13_dh_fp8_selected_capture_calls
                 )
                 if _fr13_dh_fp8_attestation is None:
+                    # FULL capture can run on a sibling Eagle object; the
+                    # authenticated GDN lifecycle remains process-global.
                     if (
                         _fr13_dh_fp8_expected_capture_calls != 4
                         or _fr13_dh_fp8_lifecycle_capture_calls
                         != _fr13_dh_fp8_expected_capture_calls
                         or _fr13_dh_fp8_observed_capture_calls
-                        != _fr13_dh_fp8_lifecycle_capture_calls
+                        not in (
+                            0,
+                            _fr13_dh_fp8_lifecycle_capture_calls,
+                        )
                     ):
                         raise RuntimeError(
                             "FR13 draft-head FP8 graph capture head count "
-                            "drifted: observed_local="
+                            "drifted: observed_object_local="
                             f"{_fr13_dh_fp8_observed_capture_calls} "
                             "observed_lifecycle="
                             f"{_fr13_dh_fp8_lifecycle_capture_calls} "
