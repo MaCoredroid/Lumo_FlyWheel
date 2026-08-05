@@ -90,6 +90,9 @@ def fixed32_gdn_gqa_group3_contract(
     )
     candidate_ctas_per_event = candidate_ctas_per_layer * layer_count
     descriptor_loads_removed_per_cta = 59
+    value_domain_masks_removed_per_cta = (
+        HEAD_GROUP + rows * HEAD_GROUP * 3
+    )
     return {
         "candidate": CANDIDATE,
         "mode": mode,
@@ -132,6 +135,12 @@ def fixed32_gdn_gqa_group3_contract(
         "device_descriptor_loads_removed_per_event": (
             candidate_ctas_per_event * descriptor_loads_removed_per_cta
         ),
+        "value_domain_masks_removed_per_cta": (
+            value_domain_masks_removed_per_cta
+        ),
+        "value_domain_masks_removed_per_event": (
+            candidate_ctas_per_event * value_domain_masks_removed_per_cta
+        ),
         "state_export_writes": 0,
         "state_parent_reads": 0,
         "candidate_default_off": True,
@@ -172,18 +181,13 @@ def _fr13_fixed32_gdn_gqa_group3_value_head_node(
     """Run one sibling recurrence after its key head's q/k is prepared."""
     prior_state = state_i
     value_offsets = (global_node * NUM_VH + pid_vh) * DIM_V + offs_v
-    v_mask = offs_v < DIM_V
-    b_v_raw = tl.load(
-        v + value_offsets,
-        mask=n_ok & v_mask,
-        other=0.0,
-    )
+    b_v_raw = tl.load(v + value_offsets, mask=n_ok, other=0.0)
     b_v = b_v_raw.to(tl.float32)
     if RING_EXPORT:
         tl.store(
             ring_v + value_offsets,
             b_v_raw,
-            mask=n_ok & v_mask,
+            mask=n_ok,
         )
 
     head_offset = global_node * NUM_VH + pid_vh
@@ -258,7 +262,7 @@ def _fr13_fixed32_gdn_gqa_group3_value_head_node(
     if SCAN_ALIGN:
         state_i = state_i.to(tl.bfloat16).to(tl.float32)
 
-    tl.store(out + value_offsets, out_i, mask=n_ok & v_mask)
+    tl.store(out + value_offsets, out_i, mask=n_ok)
     return tl.where(n_ok, state_i, prior_state)
 
 
@@ -514,7 +518,6 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
     pid_vh_2 = pid_vh_0 + 2
     offs_k = tl.arange(0, DIM_K)
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
-    v_mask = offs_v < DIM_V
 
     h0_base = h0
     if H0_IS_BANK:
@@ -540,21 +543,9 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
     state_offsets_2 = (
         (pid_vh_2 * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :]
     )
-    root_state_0 = tl.load(
-        h0_base + state_offsets_0,
-        mask=v_mask[:, None],
-        other=0.0,
-    ).to(tl.float32)
-    root_state_1 = tl.load(
-        h0_base + state_offsets_1,
-        mask=v_mask[:, None],
-        other=0.0,
-    ).to(tl.float32)
-    root_state_2 = tl.load(
-        h0_base + state_offsets_2,
-        mask=v_mask[:, None],
-        other=0.0,
-    ).to(tl.float32)
+    root_state_0 = tl.load(h0_base + state_offsets_0).to(tl.float32)
+    root_state_1 = tl.load(h0_base + state_offsets_1).to(tl.float32)
+    root_state_2 = tl.load(h0_base + state_offsets_2).to(tl.float32)
     b_a_log_0 = tl.load(A_log + pid_vh_0).to(tl.float32)
     b_a_log_1 = tl.load(A_log + pid_vh_1).to(tl.float32)
     b_a_log_2 = tl.load(A_log + pid_vh_2).to(tl.float32)
