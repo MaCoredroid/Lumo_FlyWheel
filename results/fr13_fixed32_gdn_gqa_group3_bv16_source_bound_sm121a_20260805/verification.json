@@ -1,0 +1,8 @@
+{
+  "builds_per_compile": 8,
+  "compile_count": 2,
+  "fresh_cache_byte_identity": true,
+  "gpu_execution": false,
+  "performance_promotion": false,
+  "status": "PASS"
+}

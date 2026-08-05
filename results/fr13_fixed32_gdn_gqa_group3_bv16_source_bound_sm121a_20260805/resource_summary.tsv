@@ -1,0 +1,9 @@
+variant	batch	block_v	grid	programs_48_layer	regs	stack	local	static_sass	ldg	stg	ldl	stl	calls	maxnreg
+baseline_bv8_base	b1	8	16x16x1	12288	108	0	0	1972	74	54	0	0	0	unset
+baseline_bv8_base	b4	8	16x16x4	49152	108	0	0	1972	74	54	0	0	0	unset
+baseline_bv8_committer_stack	b1	8	16x16x1	12288	118	0	0	2078	74	82	0	0	0	128
+baseline_bv8_committer_stack	b4	8	16x16x4	49152	118	0	0	2078	74	82	0	0	0	128
+candidate_bv16_base	b1	16	16x8x1	6144	128	0	0	2602	89	54	0	0	0	unset
+candidate_bv16_base	b4	16	16x8x4	24576	128	0	0	2602	89	54	0	0	0	unset
+candidate_bv16_committer_stack	b1	16	16x8x1	6144	112	0	0	2790	89	82	0	0	0	128
+candidate_bv16_committer_stack	b4	16	16x8x4	24576	112	0	0	2790	89	82	0	0	0	128
