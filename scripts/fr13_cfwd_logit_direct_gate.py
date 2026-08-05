@@ -31,15 +31,32 @@ GATE_TASK_ID = "astropy__astropy-12907"
 GATE_SUBSET_SHA256 = (
     "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb"
 )
-TIMING_SUBSET_SHA256 = (
-    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
-)
-TIMING_TASK_IDS = [
-    "astropy__astropy-12907",
-    "astropy__astropy-13033",
-    "astropy__astropy-13236",
-    "astropy__astropy-13398",
-]
+TIMING_SUBSETS = {
+    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5": [
+        "astropy__astropy-12907",
+        "astropy__astropy-13033",
+        "astropy__astropy-13236",
+        "astropy__astropy-13398",
+    ],
+    "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c": [
+        "astropy__astropy-12907",
+        "astropy__astropy-13033",
+        "astropy__astropy-13236",
+        "astropy__astropy-13398",
+        "astropy__astropy-13453",
+        "astropy__astropy-13579",
+        "astropy__astropy-13977",
+        "astropy__astropy-14096",
+        "astropy__astropy-14182",
+        "astropy__astropy-14309",
+        "astropy__astropy-14365",
+        "astropy__astropy-14369",
+        "astropy__astropy-14508",
+        "astropy__astropy-14539",
+        "astropy__astropy-14598",
+        "astropy__astropy-14995",
+    ],
+}
 
 
 class GateError(ValueError):
@@ -72,6 +89,17 @@ def _object(path: Path, label: str) -> tuple[dict[str, Any], bytes]:
 
 def _sha(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
+
+
+def _validate_timing_subset(path: Path) -> str:
+    subset, raw = _object(path, "timing subset")
+    digest = _sha(raw)
+    expected_task_ids = TIMING_SUBSETS.get(digest)
+    if expected_task_ids is None or subset.get("instance_ids") != expected_task_ids:
+        raise GateError(
+            "timing subset is not canonical exact4 or exact16 SWE-Verified"
+        )
+    return digest
 
 
 def _require_sha(value: object, label: str) -> str:
@@ -329,14 +357,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         credential, raw = _object(args.credential, "production credential")
         if _sha(raw) != args.expected_sha256:
             raise GateError("production credential raw SHA-256 drifted")
-        timing_subset, timing_subset_raw = _object(
-            args.timing_subset, "exact4 subset"
-        )
-        if (
-            _sha(timing_subset_raw) != TIMING_SUBSET_SHA256
-            or timing_subset.get("instance_ids") != TIMING_TASK_IDS
-        ):
-            raise GateError("timing subset is not canonical exact4 SWE-Verified")
+        _validate_timing_subset(args.timing_subset)
         result = _validate_credential(
             credential,
             expected_source_commit=args.source_commit,

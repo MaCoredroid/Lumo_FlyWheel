@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exact4 timing for the smoke-qualified B1 CFWD production stack.
+# Exact4/exact16 timing for the fresh U8, packed-CFWD, target/SFWD stack.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -16,9 +16,6 @@ case "${FR13_RUN_B1_COMPOSED_CFWD_TIMING:-0}" in
     ;;
 esac
 
-export FR13_RUN_QROW32_NOSPLIT_TIMING=1
-export FR13_B1_COMPOSED_STACK_TIMING=1
-export FR13_B1_COMPOSED_CFWD_PRODUCTION=1
-export FR13_B1_COMPOSED_CFWD_SMOKE=0
+export FR13_RUN_B1_U8_CFWD_SFWD_TIMING=1
 
-exec bash "$SCRIPT_DIR/fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh"
+exec bash "$SCRIPT_DIR/fr13_run_b1_u8_cfwd_sfwd_stack_timing.sh"

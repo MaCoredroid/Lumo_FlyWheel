@@ -75,6 +75,7 @@ _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_M32_TIMING_ARM
   FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB
   FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION
+  FR13_B1_U8_CFWD_SFWD_STACK_TIMING
   FR13_DRAFT_HEAD_M1_R64_U8_SO
   FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256
   FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256
@@ -195,6 +196,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_FP8]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_B1_U8_CFWD_SFWD_STACK_TIMING]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DFWD_K64_TOP3]}" == "set:1" \
    || "$_FR13_CALLER_SFWD_B4" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_LIVE_PAGED_AB]}" == "set:1" \
@@ -223,6 +225,7 @@ fi
    || "${FR13_DRAFT_HEAD_FP8:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION:-0}" == "1" \
+   || "${FR13_B1_U8_CFWD_SFWD_STACK_TIMING:-0}" == "1" \
    || "${FR13_DFWD_K64_TOP3:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" \
    || "${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" == "1" \
@@ -520,6 +523,7 @@ FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON=${FR13_DRAFT_HEAD_M32_PRODUCTION_
 FR13_DRAFT_HEAD_M32_TIMING_ARM=${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}
 FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB=${FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB:-0}
 FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION=${FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION:-0}
+FR13_B1_U8_CFWD_SFWD_STACK_TIMING=${FR13_B1_U8_CFWD_SFWD_STACK_TIMING:-0}
 FR13_DRAFT_HEAD_M1_R64_U8_SO=${FR13_DRAFT_HEAD_M1_R64_U8_SO:-}
 FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256=${FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256:-}
 FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256=${FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256:-}
@@ -888,6 +892,47 @@ case "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" in
   0|1) ;;
   *) echo "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_B1_U8_CFWD_SFWD_STACK_TIMING" in
+  0|1) ;;
+  *) echo "FR13_B1_U8_CFWD_SFWD_STACK_TIMING must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+_fr13_b1_u8_cfwd_sfwd_stack=0
+if [[ "$FR13_B1_U8_CFWD_SFWD_STACK_TIMING" == "1" \
+      && "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
+      && "$MAX_NUM_SEQS" == "1" \
+      && "$SWE_CONCURRENCY" == "1" \
+      && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+      && "${ENFORCE_EAGER:-0}" == "0" \
+      && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" \
+      && "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" == "0" \
+      && "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" == "1" \
+      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" \
+      && "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" == "0" \
+      && "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" == "1" \
+      && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+      && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
+      && "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "0" \
+      && -z "$FR13_FA2_QROW32_LIVE_PAGED_AB_ARM" \
+      && -z "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" \
+      && "${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION:-0}" == "0" \
+      && -z "${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH:-}" \
+      && "$FR13_DFWD_K64_TOP3" == "0" \
+      && "$FR13_FIXED32_CUTLASS_WAVE" == "identity_wide256_fullgrid_b1" \
+      && "$FR13_FIXED32_CUTLASS_WAVE_PRODUCTION" == "1" \
+      && "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" == "0" \
+      && "$FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION" == "0" \
+      && "$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" == "0" \
+      && "$FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION" == "1" \
+      && "$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB" == "0" \
+      && "${FR13_DEVICE_MULTIDRAFT_KERNEL:-}" == "/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py" ]]; then
+  _fr13_b1_u8_cfwd_sfwd_stack=1
+fi
+if [[ "$FR13_B1_U8_CFWD_SFWD_STACK_TIMING" == "1" \
+      && "$_fr13_b1_u8_cfwd_sfwd_stack" != "1" ]]; then
+  echo "FR13 U8/CFWD/SFWD timing requires the exact default-off production tuple" >&2
+  exit 2
+fi
 if [[ "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" == "1" \
       && "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" == "1" ]]; then
   echo "FR13 draft-head U8 live and production modes are mutually exclusive" >&2
@@ -1133,14 +1178,15 @@ fi
 if [[ "$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" == "1" ]]; then
   [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
-     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
+     && ( "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
+          || "$_fr13_b1_u8_cfwd_sfwd_stack" == "1" ) \
      && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
      && "$FR13_FA2_QROW16_PRODUCTION" == "0" \
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
      && "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" == "0" \
      && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" \
      && -z "${FR13_FIXED32_GDN_PATH_BV_PRODUCTION:-}" ]] || {
-    echo "FR13 draft-head U8 production must be the only B1 candidate" >&2
+    echo "FR13 draft-head U8 production inherited an incompatible B1 candidate" >&2
     exit 2
   }
 fi
@@ -3683,6 +3729,7 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         && "${FR13_CFWD_LOGIT_DIRECT_PRODUCTION:-0}" == "1" ]]; then
     _fr13_sfwd_cfwd_composed=1
   fi
+  _fr13_sfwd_u8_cfwd_composed=$_fr13_b1_u8_cfwd_sfwd_stack
   if [[ ( "${FR13_FIXED32_MODE:-}" != "tail6_fixed32" \
           && "${FR13_FIXED32_MODE:-}" != "hydra27_fixed32" ) \
         || "$MAX_NUM_SEQS" != "1" \
@@ -3698,8 +3745,9 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         || "${FR13_TREE_CONV_FUSED:-1}" != "1" \
         || "${FR13_CONV_WB_BATCHED:-0}" != "1" \
         || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "0" \
-        || $((10#$_fr13_sfwd_qrow16_production + 10#$_fr13_sfwd_qrow32_production)) != 1 ]]; then
-    echo "SFWD conv/post-prep production requires exact K64/root1 B1 with one credentialed Qrow arm" >&2
+        || ( $((10#$_fr13_sfwd_qrow16_production + 10#$_fr13_sfwd_qrow32_production)) != 1 \
+             && "$_fr13_sfwd_u8_cfwd_composed" != "1" ) ]]; then
+    echo "SFWD conv/post-prep production requires exact K64/root1 B1 with one credentialed Qrow arm or the explicit U8/CFWD stack" >&2
     exit 2
   fi
   if [[ "$_fr13_batch_gdn_diagnostic_count" != "0" \
@@ -3712,7 +3760,8 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
         || ( "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
-             && "$_fr13_sfwd_cfwd_composed" != "1" ) \
+             && "$_fr13_sfwd_cfwd_composed" != "1" \
+             && "$_fr13_sfwd_u8_cfwd_composed" != "1" ) \
         || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
     echo "SFWD conv/post-prep production inherited an incompatible diagnostic or production arm" >&2
@@ -3761,6 +3810,7 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
   unset _fr13_sfwd_qrow16_production _fr13_sfwd_qrow32_production
   unset _fr13_sfwd_cutlass_production
   unset _fr13_sfwd_cfwd_composed
+  unset _fr13_sfwd_u8_cfwd_composed
   rm -f \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep_byte_ab.enabled" \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl" \
@@ -4587,6 +4637,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON="$FR13_DRAFT_HEAD_M32_PRODUCTION_ENGAGEMENT_JSON" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB="$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION="$FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION" \
+  -e FR13_B1_U8_CFWD_SFWD_STACK_TIMING="$FR13_B1_U8_CFWD_SFWD_STACK_TIMING" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_SO="$FR13_DRAFT_HEAD_M1_R64_U8_SO" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256="$FR13_DRAFT_HEAD_M1_R64_U8_SO_SHA256" \
   -e FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256="$FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_SHA256" \

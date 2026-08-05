@@ -20,6 +20,8 @@ LAUNCHER = ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 CENSUS_PATH = ROOT / "scripts" / "fr13_fixed32_work_census.py"
 CANDIDATE_SOURCE = ROOT / "scripts" / "fr13_cfwd_logit_direct_decision_kernel.py"
 ONE_TASK_SUBSET = ROOT / "config" / "fr13_fixed32" / "subset_b1_diagnostic_one.json"
+EXACT4_SUBSET = ROOT / "config" / "fr13_fixed32" / "subset_b4_four.json"
+EXACT16_SUBSET = ROOT / "config" / "fr13_fixed32" / "subset_b4_sixteen.json"
 
 
 def _load(path: Path, name: str):
@@ -266,6 +268,25 @@ def test_gate_issues_only_from_canonical_real_task_and_final_flush(
     assert credential["status"] == "production_timing_ready"
     assert credential["subset_sha256"] == gate.GATE_SUBSET_SHA256
     assert output.is_file()
+
+
+def test_timing_credential_admits_only_canonical_exact4_and_exact16(
+    tmp_path: Path,
+) -> None:
+    gate = _load(GATE_PATH, "fr13_cfwd_direct_timing_subsets_test")
+    observed = {}
+    for subset in (EXACT4_SUBSET, EXACT16_SUBSET):
+        raw = subset.read_bytes()
+        digest = hashlib.sha256(raw).hexdigest()
+        payload = json.loads(raw.decode("ascii"))
+        observed[digest] = payload["instance_ids"]
+        assert gate._validate_timing_subset(subset) == digest
+    assert gate.TIMING_SUBSETS == observed
+
+    unknown = tmp_path / "unknown.json"
+    unknown.write_text("{}\n", encoding="ascii")
+    with pytest.raises(gate.GateError, match="canonical exact4 or exact16"):
+        gate._validate_timing_subset(unknown)
 
 
 def test_live_runner_is_canonical_real_swe_byte_gate() -> None:

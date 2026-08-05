@@ -156,12 +156,15 @@ def test_runner_wires_optional_cfwd_smoke_and_exact4_evidence() -> None:
     assert "FR13_B1_COMPOSED_STACK_TIMING=1" in wrapper
     assert "FR13_B1_COMPOSED_CFWD_SMOKE=1" in smoke_wrapper
     assert "FR13_B1_COMPOSED_CFWD_PRODUCTION=1" in smoke_wrapper
-    assert "FR13_B1_COMPOSED_CFWD_SMOKE=0" in cfwd_wrapper
+    assert "FR13_RUN_B1_U8_CFWD_SFWD_TIMING=1" in cfwd_wrapper
+    assert "fr13_run_b1_u8_cfwd_sfwd_stack_timing.sh" in cfwd_wrapper
+    assert "FR13_RUN_QROW32_NOSPLIT_TIMING" not in cfwd_wrapper
     for source in (
         "scripts/fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh",
         "scripts/fr13_run_b1_composed_stack_timing.sh",
         "scripts/fr13_run_b1_composed_cfwd_production_smoke.sh",
         "scripts/fr13_run_b1_composed_cfwd_stack_timing.sh",
+        "scripts/fr13_run_b1_u8_cfwd_sfwd_stack_timing.sh",
         "scripts/fr13_b1_composed_stack_timing.py",
         "scripts/fr13_cfwd_logit_direct_gate.py",
         "scripts/fr13_qrow32_b1_pass_sidecar.py",
@@ -216,6 +219,8 @@ def test_cfwd_engagement_requires_candidate_served_return() -> None:
         "batch_size": 1,
         "source_commit": source_commit,
         "candidate_source_sha256": module.cfwd_gate.CANDIDATE_SOURCE_SHA256,
+        "integration_source_schema": module.cfwd_gate.INTEGRATION_SOURCE_SCHEMA,
+        "integration_source_sha256": module.cfwd_gate.INTEGRATION_SOURCE_SHA256,
         "production_pass_sha256": credential_sha,
         "served_return": module.CFWD_SERVED_RETURN,
         "producer_pid": 123,

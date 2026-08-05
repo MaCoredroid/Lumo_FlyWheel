@@ -41,8 +41,8 @@ SFWD_COMBINED_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.k64_root_b1_gate.v1"
 SFWD_CANDIDATE = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
 PRODUCTION_SMOKE_SCHEMA = "fr13.fixed32.b1_composed_cfwd.production_smoke.v1"
 TARGET_SELECTOR = "identity_wide256_fullgrid_b1"
-TARGET_SHA256 = "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da"
-CFWD_ENGAGEMENT_SCHEMA = "fr13.fixed32.cfwd_logit_direct.production_engagement.v1"
+TARGET_SHA256 = "7d762dfa793671d75d1e353bd37d76fc07370cbe387ad1e315e32584d27927d4"
+CFWD_ENGAGEMENT_SCHEMA = "fr13.fixed32.cfwd_logit_direct.production_engagement.v2"
 CFWD_SERVED_RETURN = "logit-direct candidate products"
 DFWD_MARKERS = (
     "[FR13_DFWD_K64_TOP3] ready B1 K64 mapped width3",
@@ -534,6 +534,8 @@ def _validate_cfwd_engagement(
         "batch_size",
         "source_commit",
         "candidate_source_sha256",
+        "integration_source_schema",
+        "integration_source_sha256",
         "production_pass_sha256",
         "served_return",
         "producer_pid",
@@ -548,6 +550,10 @@ def _validate_cfwd_engagement(
         or payload.get("source_commit") != source_commit
         or payload.get("candidate_source_sha256")
         != cfwd_gate.CANDIDATE_SOURCE_SHA256
+        or payload.get("integration_source_schema")
+        != cfwd_gate.INTEGRATION_SOURCE_SCHEMA
+        or payload.get("integration_source_sha256")
+        != cfwd_gate.INTEGRATION_SOURCE_SHA256
         or payload.get("production_pass_sha256") != credential_sha256
         or payload.get("served_return") != CFWD_SERVED_RETURN
         or type(payload.get("producer_pid")) is not int
