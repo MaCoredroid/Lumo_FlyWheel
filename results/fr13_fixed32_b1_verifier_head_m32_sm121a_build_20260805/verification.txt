@@ -1,0 +1,36 @@
+STATIC FULL-SO BUILD VERIFICATION
+
+PASS corrected row-major source matches main commit b3cd2c5a9
+PASS pinned CUTLASS da5e086dab31d63815acafdac9a9c5893b1c69e2 and clean tree
+PASS pinned Torch 2.11.0+cu130 and CUDA 13.0 build
+PASS candidate SO SHA256 5b5e8c3051f29bc4f65ef93c96ed22ef38ef07a1754e9c36a167e5158f71f4b7
+PASS candidate SO bytes 186048 and mode 0555
+PASS exactly one cubin and target sm_121a
+PASS resources REG 158, STACK 0, LOCAL 0, static SHARED 1024
+PASS source-locked dynamic shared storage 61440 bytes
+PASS SASS HMMA 64, LDGSTS.128 60, ordinary LDG.128 8, STG.128 16
+PASS SASS LDL 0, STL 0, CALL 0
+PASS offline torch load registered fr13_verifier_head::bf16_m32_out
+PASS focused CPU suite 7 passed
+PASS Ruff and Python byte-compilation
+
+BUILD ISOLATION
+
+network=none
+requested_cpus=1
+MAX_JOBS=1
+NVIDIA_VISIBLE_DEVICES=void
+CUDA_VISIBLE_DEVICES=
+CUDA_CACHE_DISABLE=1
+gpu_device_nodes_visible=false
+source_mount_read_only=true
+cutlass_mount_read_only=true
+git_mount_read_only=true
+nvdisasm_mount_read_only=true
+build_log_cuda_runtime_found=false
+
+NOT CLAIMED
+
+No GPU workload, real task, synthetic task, raw-byte comparison, verifier
+distribution equivalence, timing, TPS, speedup, hardware-floor progress,
+timing eligibility, or production eligibility is claimed by this artifact.

@@ -1,0 +1,106 @@
+{
+  "schema": "fr13.fixed32.b1_bf16_verifier_head_m32_sm121a_full_build.v1",
+  "created_at_utc": "2026-08-05T09:59:40Z",
+  "status": "STATIC_BUILD_PASS_UNQUALIFIED",
+  "provenance": {
+    "artifact_branch_commit": "981b31dba4de5375f794f931b1b1ec14f0776625",
+    "corrected_main_source_commit": "b3cd2c5a9",
+    "corrected_main_documentation_commit": "dbf46dc58",
+    "source_matches_corrected_main": true,
+    "source_sha256": "7cbc9f5157d8e93ee35930b028d97d0c3b1a26a9d79aa87ec6061928f8161768",
+    "builder_sha256": "1458c06ae74782290406894aab236aa6b3d878fc63d83da89a76b3245de1daef",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_clean": true
+  },
+  "build": {
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+    "torch_version": "2.11.0+cu130",
+    "cuda_release": "13.0",
+    "target_arch": "sm_121a",
+    "network": "none",
+    "requested_cpus": 1,
+    "max_jobs": 1,
+    "nvidia_visible_devices": "void",
+    "cuda_visible_devices": "",
+    "cuda_cache_disabled": true,
+    "gpu_device_nodes_visible": false,
+    "source_mount_read_only": true,
+    "cutlass_mount_read_only": true,
+    "git_source_image_id": "sha256:6feaebb3cd611c1b804696a5c2def96df2a3cd13d0b099f6c2133b4185fc054c",
+    "git_version": "2.34.1",
+    "git_binary_sha256": "2237d6e0e591912e6d2f601dff3f080122af7f93a28680fe32ab9de88857e7ee",
+    "git_mount_read_only": true,
+    "nvdisasm_version": "13.0.85",
+    "nvdisasm_binary_sha256": "bc40070d596fa49b81c0905ca1d05e457aaec071280f742997d4a0b511781b25",
+    "nvdisasm_mount_read_only": true
+  },
+  "artifacts": {
+    "candidate_so": {
+      "path": "/home/mark/fr13_bf16_verifier_head_m32_sm121a_20260805/fr13_bf16_verifier_head_m32_sm121a.abi3.so",
+      "sha256": "5b5e8c3051f29bc4f65ef93c96ed22ef38ef07a1754e9c36a167e5158f71f4b7",
+      "bytes": 186048,
+      "mode": "0555",
+      "committed": false
+    },
+    "cuda_object": {
+      "path": "/home/mark/fr13_bf16_verifier_head_m32_sm121a_20260805/build/fr13_bf16_verifier_head_m32_sm121a.cuda.o",
+      "sha256": "6bcb20afecde0f6f1a59db48bfd93b4847658f72f5f0363393587e2e54c2ba42",
+      "bytes": 228688,
+      "committed": false
+    }
+  },
+  "kernel": {
+    "problem_mnk": [32, 248320, 5120],
+    "threadblock_mnk": [32, 128, 64],
+    "warp_mnk": [32, 64, 64],
+    "instruction_mnk": [16, 8, 16],
+    "stages": 3,
+    "split_k_slices": 1,
+    "workspace_bytes": 0,
+    "logical_grid_mn": [1, 1940],
+    "logical_grid_ctas": 1940,
+    "full_vocabulary_preserved": true,
+    "bf16_input_weight_output_preserved": true
+  },
+  "resources": {
+    "cubin_count": 1,
+    "registers": 158,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 61440,
+    "sass_hmma_bf16": 64,
+    "sass_async_global_to_shared_128b": 60,
+    "sass_global_load_128b": 8,
+    "sass_global_load_other": 4,
+    "sass_global_store_128b": 16,
+    "sass_ldl": 0,
+    "sass_stl": 0,
+    "sass_call": 0
+  },
+  "offline_load": {
+    "status": "PASS",
+    "registered_schema": "fr13_verifier_head::bf16_m32_out(Tensor(a!) output, Tensor hidden, Tensor weight) -> ()",
+    "gpu_tensor_created": false
+  },
+  "tests": {
+    "focused_pytest_passed": 7,
+    "ruff": "PASS",
+    "py_compile": "PASS"
+  },
+  "evidence": {
+    "gpu_used": false,
+    "real_task_run": false,
+    "synthetic_task_run": false,
+    "byte_parity_measured": false,
+    "performance_measurement": false,
+    "hardware_floor_claim": false
+  },
+  "eligibility": {
+    "default_off": true,
+    "timing_eligible": false,
+    "production_eligible": false,
+    "next_gate": "one real SWE-Verified B1 raw-BF16 shadow task with incumbent output served"
+  }
+}

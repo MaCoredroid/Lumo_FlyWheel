@@ -24307,7 +24307,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             "draft_head_m32_production_engagement.v1"
                         ),
                         "status": "ENGAGED",
-                        "arm": _fr13_dh_fp8_arm,
                         "source_commit": os.environ.get(
                             "FR13_DRAFT_HEAD_M32_SOURCE_COMMIT", ""
                         ),
@@ -29023,6 +29022,198 @@ def _fr13_flash_attn_op_capture(
     return did_patch
 
 
+def _fr13_verifier_head_m32_patch_config() -> dict[str, str | bool]:
+    """Validate and capture EngineCore-safe verifier-head patch values."""
+
+    selector = os.environ.get("FR13_VERIFIER_HEAD_M32_SHADOW", "0")
+    if selector not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_VERIFIER_HEAD_M32_SHADOW must be exactly 0 or 1"
+        )
+    credential_names = (
+        "FR13_VERIFIER_HEAD_M32_SO",
+        "FR13_VERIFIER_HEAD_M32_SO_SHA256",
+        "FR13_VERIFIER_HEAD_M32_KERNEL_SOURCE",
+        "FR13_VERIFIER_HEAD_M32_KERNEL_SOURCE_SHA256",
+        "FR13_VERIFIER_HEAD_M32_PATCH_SOURCE_SHA256",
+        "FR13_VERIFIER_HEAD_M32_SOURCE_COMMIT",
+        "FR13_VERIFIER_HEAD_M32_INSTANCE_ID",
+    )
+    credentials = {
+        name: os.environ.get(name, "") for name in credential_names
+    }
+    marker_path = os.environ.get(
+        "FR13_VERIFIER_HEAD_M32_REAL_EVENT_PATH",
+        "/logs/fr13_fixed32_cutlass_streamk.real_event.arm",
+    )
+    result_path = os.environ.get(
+        "FR13_VERIFIER_HEAD_M32_LIVE_JSON",
+        "/logs/fr13_verifier_head_m32.live.json",
+    )
+    if selector == "0":
+        if any(credentials.values()):
+            raise RuntimeError(
+                "FR13 verifier-head shadow disabled with live credentials"
+            )
+        return {
+            "enabled": False,
+            "so_path": "",
+            "so_sha256": "",
+            "kernel_path": "",
+            "kernel_sha256": "",
+            "patch_path": os.fspath(Path(__file__).resolve()),
+            "patch_sha256": "",
+            "source_commit": "",
+            "instance_id": "",
+            "marker_path": marker_path,
+            "result_path": result_path,
+        }
+
+    expected = {
+        "FR13_VERIFIER_HEAD_M32_SO": (
+            "/tmp/fr13_verifier_head_m32.abi3.so"
+        ),
+        "FR13_VERIFIER_HEAD_M32_SO_SHA256": (
+            "5b5e8c3051f29bc4f65ef93c96ed22ef"
+            "38ef07a1754e9c36a167e5158f71f4b7"
+        ),
+        "FR13_VERIFIER_HEAD_M32_KERNEL_SOURCE": (
+            "/workspace/csrc/fr13_bf16_verifier_head_m32_sm121a.cu"
+        ),
+        "FR13_VERIFIER_HEAD_M32_KERNEL_SOURCE_SHA256": (
+            "7cbc9f5157d8e93ee35930b028d97d0c"
+            "3b1a26a9d79aa87ec6061928f8161768"
+        ),
+        "FR13_VERIFIER_HEAD_M32_INSTANCE_ID": "astropy__astropy-12907",
+    }
+    if any(credentials[name] != value for name, value in expected.items()):
+        raise RuntimeError(
+            "FR13 verifier-head patch-time candidate credentials drifted"
+        )
+    source_commit = credentials["FR13_VERIFIER_HEAD_M32_SOURCE_COMMIT"]
+    patch_sha256 = credentials[
+        "FR13_VERIFIER_HEAD_M32_PATCH_SOURCE_SHA256"
+    ]
+    if (
+        re.fullmatch(r"[0-9a-f]{40}", source_commit) is None
+        or re.fullmatch(r"[0-9a-f]{64}", patch_sha256) is None
+        or marker_path
+        != "/logs/fr13_fixed32_cutlass_streamk.real_event.arm"
+        or result_path != "/logs/fr13_verifier_head_m32.live.json"
+    ):
+        raise RuntimeError(
+            "FR13 verifier-head patch-time source or evidence binding drifted"
+        )
+    topology = {
+        "FR13_FIXED32_MODE": "hydra27_fixed32",
+        "FR13_FIXED32_B1_DIAGNOSTIC": "1",
+        "FR13_DRAFT_VOCAB_ROOT": "1",
+        "FR13_DRAFT_VOCAB_K": "65536",
+        "MAX_NUM_SEQS": "1",
+        "SWE_CONCURRENCY": "1",
+        "ENFORCE_EAGER": "1",
+        "FR13_FIXED32_CUTLASS_WAVE": "stock",
+    }
+    if any(os.environ.get(name) != value for name, value in topology.items()):
+        raise RuntimeError(
+            "FR13 verifier-head patch-time topology binding drifted"
+        )
+
+    so_path = Path(credentials["FR13_VERIFIER_HEAD_M32_SO"])
+    kernel_path = Path(
+        credentials["FR13_VERIFIER_HEAD_M32_KERNEL_SOURCE"]
+    )
+    patch_path = Path(__file__).resolve()
+    for path, label in (
+        (so_path, "candidate SO"),
+        (kernel_path, "kernel source"),
+        (patch_path, "patch source"),
+    ):
+        try:
+            info = path.lstat()
+        except OSError as error:
+            raise RuntimeError(
+                f"FR13 verifier-head patch-time {label} is unavailable"
+            ) from error
+        if not stat.S_ISREG(info.st_mode) or path.is_symlink():
+            raise RuntimeError(
+                f"FR13 verifier-head patch-time {label} is not regular"
+            )
+    if (
+        so_path.stat().st_size != 186048
+        or hashlib.sha256(so_path.read_bytes()).hexdigest()
+        != expected["FR13_VERIFIER_HEAD_M32_SO_SHA256"]
+        or hashlib.sha256(kernel_path.read_bytes()).hexdigest()
+        != expected["FR13_VERIFIER_HEAD_M32_KERNEL_SOURCE_SHA256"]
+        or hashlib.sha256(patch_path.read_bytes()).hexdigest()
+        != patch_sha256
+    ):
+        raise RuntimeError(
+            "FR13 verifier-head patch-time source or binary identity drifted"
+        )
+    return {
+        "enabled": True,
+        "so_path": os.fspath(so_path),
+        "so_sha256": credentials["FR13_VERIFIER_HEAD_M32_SO_SHA256"],
+        "kernel_path": os.fspath(kernel_path),
+        "kernel_sha256": credentials[
+            "FR13_VERIFIER_HEAD_M32_KERNEL_SOURCE_SHA256"
+        ],
+        "patch_path": os.fspath(patch_path),
+        "patch_sha256": patch_sha256,
+        "source_commit": source_commit,
+        "instance_id": credentials["FR13_VERIFIER_HEAD_M32_INSTANCE_ID"],
+        "marker_path": marker_path,
+        "result_path": result_path,
+    }
+
+
+def _fr13_verifier_head_m32_render_block(
+    template: str,
+    config: dict[str, str | bool],
+    bake_sha256: str,
+) -> str:
+    """Render the baked hook, omitting all executable code when disabled."""
+
+    if re.fullmatch(r"[0-9a-f]{64}", bake_sha256) is None:
+        raise RuntimeError("verifier-head M32 bake SHA-256 is malformed")
+    if config.get("enabled") is not True:
+        return (
+            "        # FR13_VERIFIER_HEAD_M32_SHADOW: default off; no "
+            "executable hook emitted.\n"
+            "        # FR13_VERIFIER_HEAD_M32_BAKE_SHA256="
+            + bake_sha256
+            + "\n"
+        )
+    replacements = {
+        "__FR13_VH_BAKE_SHA256__": bake_sha256,
+        "__FR13_VH_ENABLED__": "True",
+        "__FR13_VH_SO_PATH__": repr(config["so_path"]),
+        "__FR13_VH_SO_SHA256__": repr(config["so_sha256"]),
+        "__FR13_VH_KERNEL_PATH__": repr(config["kernel_path"]),
+        "__FR13_VH_KERNEL_SHA256__": repr(config["kernel_sha256"]),
+        "__FR13_VH_PATCH_PATH__": repr(config["patch_path"]),
+        "__FR13_VH_PATCH_SHA256__": repr(config["patch_sha256"]),
+        "__FR13_VH_SOURCE_COMMIT__": repr(config["source_commit"]),
+        "__FR13_VH_INSTANCE_ID__": repr(config["instance_id"]),
+        "__FR13_VH_MARKER_PATH__": repr(config["marker_path"]),
+        "__FR13_VH_RESULT_PATH__": repr(config["result_path"]),
+    }
+    block = template
+    for placeholder, replacement in replacements.items():
+        if placeholder not in block:
+            raise RuntimeError(
+                "verifier-head M32 bake placeholder is absent: "
+                + placeholder
+            )
+        block = block.replace(placeholder, replacement)
+    if "__FR13_VH_" in block:
+        raise RuntimeError(
+            "verifier-head M32 bake left an unresolved placeholder"
+        )
+    return block
+
+
 def _patch_qwen_root_hidden_capture() -> bool:
     """Diagnostic-only root hidden/logit capture for FR10 verify-forward bisection."""
 
@@ -29598,6 +29789,342 @@ def _fr13_hidden_substitute_layer(state, layer_idx, hidden_states, residual):
         text = text.replace(return_anchor, final_logit_block + return_anchor, 1)
         QWEN3_5_PATH.write_text(text)
         did_patch = True
+
+    text = QWEN3_5_PATH.read_text()
+    verifier_head_sentinel = "# FR13_VERIFIER_HEAD_M32_SHADOW"
+    verifier_head_config = _fr13_verifier_head_m32_patch_config()
+    verifier_head_bake_sha256 = hashlib.sha256(
+        json.dumps(
+            verifier_head_config,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+    ).hexdigest()
+    verifier_head_bake_sentinel = (
+        "# FR13_VERIFIER_HEAD_M32_BAKE_SHA256="
+        + verifier_head_bake_sha256
+    )
+    if verifier_head_sentinel not in text:
+        verifier_head_block = '''        # FR13_VERIFIER_HEAD_M32_SHADOW: run one authenticated real-task
+        # full-vocabulary M32 candidate and always retain the incumbent logits.
+        # FR13_VERIFIER_HEAD_M32_BAKE_SHA256=__FR13_VH_BAKE_SHA256__
+        # Selector, credentials, and topology are baked by pid 1 because the
+        # spawned EngineCore receives a curated environment.
+        if __FR13_VH_ENABLED__ and not getattr(
+            self, "_fr13_vh_shadow_attempted", False
+        ):
+            import hashlib as _fr13_vh_hashlib
+            import json as _fr13_vh_json
+            import stat as _fr13_vh_stat
+
+            _fr13_vh_marker_path = Path(__FR13_VH_MARKER_PATH__)
+            _fr13_vh_exact_m32 = (
+                logits is not None
+                and hidden_states.ndim == 2
+                and logits.ndim == 2
+                and tuple(hidden_states.shape) == (32, 5120)
+                and tuple(logits.shape) == (32, 248320)
+            )
+            if _fr13_vh_marker_path.exists() and _fr13_vh_exact_m32:
+                self._fr13_vh_shadow_attempted = True
+                _fr13_vh_result_path = Path(__FR13_VH_RESULT_PATH__)
+                _fr13_vh_instance = __FR13_VH_INSTANCE_ID__
+                _fr13_vh_source_commit = __FR13_VH_SOURCE_COMMIT__
+                _fr13_vh_patch_sha = __FR13_VH_PATCH_SHA256__
+                _fr13_vh_so_sha = __FR13_VH_SO_SHA256__
+                _fr13_vh_kernel_sha = __FR13_VH_KERNEL_SHA256__
+                _fr13_vh_base = {
+                    "schema": "fr13.fixed32.verifier_head_m32_shadow.v1",
+                    "suite": "SWE-Verified",
+                    "instance_id": _fr13_vh_instance,
+                    "source_commit": _fr13_vh_source_commit,
+                    "patch_source_sha256": _fr13_vh_patch_sha,
+                    "candidate_so_sha256": _fr13_vh_so_sha,
+                    "kernel_source_sha256": _fr13_vh_kernel_sha,
+                    "reference_always_served": True,
+                    "candidate_returned": False,
+                    "served_return": "incumbent BF16 logits object unchanged",
+                    "performance_measurement": False,
+                    "timing_eligible": False,
+                }
+
+                def _fr13_vh_write(_fr13_vh_record):
+                    _fr13_vh_result_path.parent.mkdir(
+                        parents=True, exist_ok=True
+                    )
+                    _fr13_vh_temporary = _fr13_vh_result_path.with_name(
+                        _fr13_vh_result_path.name
+                        + ".tmp."
+                        + str(os.getpid())
+                    )
+                    _fr13_vh_temporary.write_text(
+                        _fr13_vh_json.dumps(
+                            _fr13_vh_record,
+                            ensure_ascii=True,
+                            indent=2,
+                            sort_keys=True,
+                        )
+                        + "\\n",
+                        encoding="ascii",
+                    )
+                    _fr13_vh_temporary.chmod(0o644)
+                    _fr13_vh_temporary.replace(_fr13_vh_result_path)
+
+                try:
+                    _fr13_vh_expected_so_sha = (
+                        "5b5e8c3051f29bc4f65ef93c96ed22ef"
+                        "38ef07a1754e9c36a167e5158f71f4b7"
+                    )
+                    _fr13_vh_expected_kernel_sha = (
+                        "7cbc9f5157d8e93ee35930b028d97d0c"
+                        "3b1a26a9d79aa87ec6061928f8161768"
+                    )
+                    _fr13_vh_so_path = Path(__FR13_VH_SO_PATH__)
+                    _fr13_vh_kernel_path = Path(__FR13_VH_KERNEL_PATH__)
+                    _fr13_vh_patch_path = Path(__FR13_VH_PATCH_PATH__)
+                    if (
+                        str(_fr13_vh_marker_path)
+                        != "/logs/fr13_fixed32_cutlass_streamk.real_event.arm"
+                        or str(_fr13_vh_result_path)
+                        != "/logs/fr13_verifier_head_m32.live.json"
+                        or _fr13_vh_result_path.exists()
+                        or _fr13_vh_result_path.is_symlink()
+                    ):
+                        raise RuntimeError(
+                            "FR13 verifier-head evidence path drifted"
+                        )
+                    _fr13_vh_marker_info = _fr13_vh_marker_path.lstat()
+                    _fr13_vh_marker = _fr13_vh_marker_path.read_bytes()
+                    _fr13_vh_expected_marker = (
+                        "swe_verified:" + _fr13_vh_instance + "\\n"
+                    ).encode("ascii")
+                    if (
+                        _fr13_vh_instance != "astropy__astropy-12907"
+                        or not _fr13_vh_stat.S_ISREG(
+                            _fr13_vh_marker_info.st_mode
+                        )
+                        or _fr13_vh_marker_path.is_symlink()
+                        or _fr13_vh_marker_info.st_nlink != 1
+                        or _fr13_vh_marker_info.st_size
+                        != len(_fr13_vh_expected_marker)
+                        or _fr13_vh_stat.S_IMODE(
+                            _fr13_vh_marker_info.st_mode
+                        )
+                        != 0o400
+                        or _fr13_vh_marker != _fr13_vh_expected_marker
+                    ):
+                        raise RuntimeError(
+                            "FR13 verifier-head real-task marker drifted"
+                        )
+                    if torch.cuda.is_current_stream_capturing():
+                        raise RuntimeError(
+                            "FR13 verifier-head shadow requires eager Hydra27 "
+                            "physical32 K64/root1 real-B1 geometry"
+                        )
+                    if (
+                        len(_fr13_vh_source_commit) != 40
+                        or any(
+                            _fr13_vh_char not in "0123456789abcdef"
+                            for _fr13_vh_char in _fr13_vh_source_commit
+                        )
+                        or len(_fr13_vh_patch_sha) != 64
+                        or any(
+                            _fr13_vh_char not in "0123456789abcdef"
+                            for _fr13_vh_char in _fr13_vh_patch_sha
+                        )
+                        or _fr13_vh_so_sha != _fr13_vh_expected_so_sha
+                        or _fr13_vh_kernel_sha
+                        != _fr13_vh_expected_kernel_sha
+                        or not _fr13_vh_so_path.is_file()
+                        or _fr13_vh_so_path.is_symlink()
+                        or not _fr13_vh_kernel_path.is_file()
+                        or _fr13_vh_kernel_path.is_symlink()
+                    ):
+                        raise RuntimeError(
+                            "FR13 verifier-head candidate credentials drifted"
+                        )
+                    if (
+                        _fr13_vh_hashlib.sha256(
+                            _fr13_vh_so_path.read_bytes()
+                        ).hexdigest()
+                        != _fr13_vh_expected_so_sha
+                        or _fr13_vh_hashlib.sha256(
+                            _fr13_vh_kernel_path.read_bytes()
+                        ).hexdigest()
+                        != _fr13_vh_expected_kernel_sha
+                        or _fr13_vh_hashlib.sha256(
+                            _fr13_vh_patch_path.read_bytes()
+                        ).hexdigest()
+                        != _fr13_vh_patch_sha
+                    ):
+                        raise RuntimeError(
+                            "FR13 verifier-head source or binary identity "
+                            "mismatch"
+                        )
+                    _fr13_vh_weight = self.lm_head.weight
+                    if (
+                        logits is None
+                        or type(self.lm_head.quant_method).__name__
+                        != "UnquantizedEmbeddingMethod"
+                        or tuple(hidden_states.shape) != (32, 5120)
+                        or tuple(hidden_states.stride()) != (5120, 1)
+                        or hidden_states.dtype != torch.bfloat16
+                        or not hidden_states.is_contiguous()
+                        or tuple(_fr13_vh_weight.shape) != (248320, 5120)
+                        or tuple(_fr13_vh_weight.stride()) != (5120, 1)
+                        or _fr13_vh_weight.dtype != torch.bfloat16
+                        or not _fr13_vh_weight.is_contiguous()
+                        or tuple(logits.shape) != (32, 248320)
+                        or tuple(logits.stride()) != (248320, 1)
+                        or logits.dtype != torch.bfloat16
+                        or not logits.is_contiguous()
+                        or hidden_states.device != _fr13_vh_weight.device
+                        or logits.device != hidden_states.device
+                    ):
+                        raise RuntimeError(
+                            "FR13 verifier-head BF16 M32 operand geometry "
+                            "drifted"
+                        )
+                    _fr13_vh_reference_before = (
+                        logits.detach()
+                        .contiguous()
+                        .view(torch.uint8)
+                        .cpu()
+                        .numpy()
+                        .tobytes()
+                    )
+                    torch.ops.load_library(str(_fr13_vh_so_path))
+                    _fr13_vh_candidate = torch.empty_like(logits)
+                    torch.ops.fr13_verifier_head.bf16_m32_out(
+                        _fr13_vh_candidate,
+                        hidden_states,
+                        _fr13_vh_weight,
+                    )
+                    _fr13_vh_candidate_bytes = (
+                        _fr13_vh_candidate.detach()
+                        .contiguous()
+                        .view(torch.uint8)
+                        .cpu()
+                        .numpy()
+                        .tobytes()
+                    )
+                    _fr13_vh_reference_after = (
+                        logits.detach()
+                        .contiguous()
+                        .view(torch.uint8)
+                        .cpu()
+                        .numpy()
+                        .tobytes()
+                    )
+                    _fr13_vh_reference_words = memoryview(
+                        _fr13_vh_reference_before
+                    ).cast("H")
+                    _fr13_vh_candidate_words = memoryview(
+                        _fr13_vh_candidate_bytes
+                    ).cast("H")
+                    _fr13_vh_reference_after_words = memoryview(
+                        _fr13_vh_reference_after
+                    ).cast("H")
+                    _fr13_vh_mismatches = sum(
+                        _fr13_vh_left != _fr13_vh_right
+                        for _fr13_vh_left, _fr13_vh_right in zip(
+                            _fr13_vh_reference_words,
+                            _fr13_vh_candidate_words,
+                        )
+                    ) + abs(
+                        len(_fr13_vh_reference_words)
+                        - len(_fr13_vh_candidate_words)
+                    )
+                    _fr13_vh_reference_mismatches = sum(
+                        _fr13_vh_left != _fr13_vh_right
+                        for _fr13_vh_left, _fr13_vh_right in zip(
+                            _fr13_vh_reference_words,
+                            _fr13_vh_reference_after_words,
+                        )
+                    ) + abs(
+                        len(_fr13_vh_reference_words)
+                        - len(_fr13_vh_reference_after_words)
+                    )
+                    _fr13_vh_passed = (
+                        _fr13_vh_mismatches == 0
+                        and _fr13_vh_reference_mismatches == 0
+                        and len(_fr13_vh_reference_before) == 15892480
+                    )
+                    _fr13_vh_record = {
+                        **_fr13_vh_base,
+                        "status": "PASS" if _fr13_vh_passed else "FAIL",
+                        "task_marker": _fr13_vh_marker.decode("ascii").strip(),
+                        "topology": {
+                            "mode": "hydra27_fixed32",
+                            "batch_size": 1,
+                            "physical_rows": 32,
+                            "draft_vocab_k": 65536,
+                            "draft_vocab_root": 1,
+                            "enforce_eager": True,
+                        },
+                        "geometry": {
+                            "hidden_shape": [32, 5120],
+                            "weight_shape": [248320, 5120],
+                            "output_shape": [32, 248320],
+                            "dtype": "torch.bfloat16",
+                        },
+                        "comparison_calls": 1,
+                        "compared_elements": 7946240,
+                        "compared_bytes": len(_fr13_vh_reference_before),
+                        "raw_bf16_mismatches": _fr13_vh_mismatches,
+                        "reference_preservation_mismatches": (
+                            _fr13_vh_reference_mismatches
+                        ),
+                        "reference_sha256": _fr13_vh_hashlib.sha256(
+                            _fr13_vh_reference_before
+                        ).hexdigest(),
+                        "candidate_sha256": _fr13_vh_hashlib.sha256(
+                            _fr13_vh_candidate_bytes
+                        ).hexdigest(),
+                    }
+                    _fr13_vh_write(_fr13_vh_record)
+                    if not _fr13_vh_passed:
+                        raise RuntimeError(
+                            "FR13 verifier-head raw BF16 shadow mismatch"
+                        )
+                    print(
+                        "[FR13_VERIFIER_HEAD_M32_SHADOW] PASS "
+                        "real_swe_verified_calls=1 compared_bytes=15892480 "
+                        "reference_always_served=1 candidate_returned=0",
+                        flush=True,
+                    )
+                except Exception as _fr13_vh_exc:
+                    if not _fr13_vh_result_path.exists():
+                        _fr13_vh_write(
+                            {
+                                **_fr13_vh_base,
+                                "status": "ERROR",
+                                "error_type": type(_fr13_vh_exc).__name__,
+                                "error": str(_fr13_vh_exc),
+                            }
+                        )
+                    raise RuntimeError(
+                        "FR13 verifier-head M32 shadow gate failed"
+                    ) from _fr13_vh_exc
+'''
+        verifier_head_block = _fr13_verifier_head_m32_render_block(
+            verifier_head_block,
+            verifier_head_config,
+            verifier_head_bake_sha256,
+        )
+        return_anchor = "        return logits\n"
+        if return_anchor not in text:
+            raise RuntimeError(
+                "qwen3_5 verifier-head shadow return anchor not found"
+            )
+        text = text.replace(return_anchor, verifier_head_block + return_anchor, 1)
+        QWEN3_5_PATH.write_text(text)
+        did_patch = True
+    elif verifier_head_bake_sentinel not in text:
+        raise RuntimeError(
+            "qwen3_5 verifier-head M32 patch-time bake identity drifted"
+        )
 
     return did_patch
 

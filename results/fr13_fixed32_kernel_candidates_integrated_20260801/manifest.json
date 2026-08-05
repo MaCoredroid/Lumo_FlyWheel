@@ -18,11 +18,26 @@
     },
     "draft_head_m32": {
       "candidate_source": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
-      "candidate_source_sha256": "cfebeba4cd7d8365865ea14866db235e645aaed8bce4e4a03134adf471474b0f",
+      "candidate_source_sha256": "d31f6a8e96ed49942f30091fce790a10a83ee3f70b17ef450f3723effd024f71",
       "default": "off",
       "gate": "real SWE-Verified B1 full-logit byte equality plus terminal census and authenticated traffic evidence",
       "historical_artifact_source_sha256": "0ecd359c7ffb211f0212db3a83baabfff327c07286fd808ea99ac68d536798e2",
       "source_commit": "3b06acebbd673466703268bf0b3647f4bf4a3070"
+    },
+    "verifier_head_m32_shadow": {
+      "build_attestation": "results/fr13_fixed32_b1_verifier_head_m32_sm121a_build_20260805/build_attestation.json",
+      "build_attestation_sha256": "780ea833962806ea4a374c3092c33ad75f2d23fd255daabb6d39f69533fc3d5c",
+      "build_manifest_sha256": "7ff5de2eee04228fda65a75670c486a7658fb5b06bba3d60b97d0e870581f68f",
+      "candidate_so_bytes": 186048,
+      "candidate_so_sha256": "5b5e8c3051f29bc4f65ef93c96ed22ef38ef07a1754e9c36a167e5158f71f4b7",
+      "candidate_source": "csrc/fr13_bf16_verifier_head_m32_sm121a.cu",
+      "candidate_source_sha256": "7cbc9f5157d8e93ee35930b028d97d0c3b1a26a9d79aa87ec6061928f8161768",
+      "default": "off",
+      "gate": "one real SWE-Verified B1 raw-BF16 shadow comparison with incumbent logits always served",
+      "port_base_commit": "97a0e596f81ca5cb4ae8946e44138f87636c4646",
+      "runtime_patch_source": "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+      "runtime_patch_source_sha256": "d31f6a8e96ed49942f30091fce790a10a83ee3f70b17ef450f3723effd024f71",
+      "status": "BUILT_UNQUALIFIED_REAL_GATE_PENDING"
     },
     "stream_k": {
       "default": "off",
@@ -32,7 +47,8 @@
   },
   "conflict_resolutions": [
     "retained the all-B base's sample-quiesced flush transaction and placed draft-head terminal finalization inside it",
-    "retained both Stream-K credential guards and draft-head M32 environment guards"
+    "retained both Stream-K credential guards and draft-head M32 environment guards",
+    "retained B4 GQA-pair caller guards while adding verifier-head M32 shadow credentials"
   ],
   "docker_used": false,
   "floor_acceptance_claim": false,

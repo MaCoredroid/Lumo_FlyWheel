@@ -49,9 +49,10 @@ FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}
 FR13_GATE_DRAFT_HEAD_FP8=${FR13_GATE_DRAFT_HEAD_FP8:-0}
 FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=${FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO:-0}
 FR13_GATE_DFWD_TOP3=${FR13_GATE_DFWD_TOP3:-0}
+FR13_GATE_VERIFIER_HEAD_M32=${FR13_GATE_VERIFIER_HEAD_M32:-0}
 FR13_GATE_BM8=${FR13_GATE_BM8:-0}
 FR13_GATE_SFWD_CONV_POSTPREP=${FR13_GATE_SFWD_CONV_POSTPREP:-0}
-for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO FR13_GATE_DFWD_TOP3 FR13_GATE_BM8 FR13_GATE_SFWD_CONV_POSTPREP; do
+for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO FR13_GATE_DFWD_TOP3 FR13_GATE_VERIFIER_HEAD_M32 FR13_GATE_BM8 FR13_GATE_SFWD_CONV_POSTPREP; do
   case "${!gate}" in
     0|1) ;;
     *) echo "$gate must be 0 or 1" >&2; exit 2 ;;
@@ -127,6 +128,20 @@ if [[ "$FR13_GATE_DFWD_TOP3" == "1" \
   echo "FR13_GATE_DFWD_TOP3 must be the only enabled kernel candidate" >&2
   exit 2
 fi
+if [[ "$FR13_GATE_VERIFIER_HEAD_M32" == "1" \
+      && ( "$FR13_GATE_QROW16" != "0" \
+           || "$FR13_GATE_TAW_NATIVE" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
+           || "$FR13_GATE_DFWD_TOP3" != "0" \
+           || "$FR13_GATE_BM8" != "0" \
+           || "$FR13_GATE_GDN_BV" != "0" \
+           || "$FR13_GATE_SFWD_CONV_POSTPREP" != "0" \
+           || "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ) ]]; then
+  echo "FR13_GATE_VERIFIER_HEAD_M32 must be the only enabled kernel candidate" >&2
+  exit 2
+fi
 FR13_GATE_DFWD_TOP3_SO=${FR13_GATE_DFWD_TOP3_SO:-}
 FR13_GATE_DFWD_TOP3_SHA256=
 if [[ "$FR13_GATE_DFWD_TOP3" == "1" ]]; then
@@ -140,6 +155,46 @@ if [[ "$FR13_GATE_DFWD_TOP3" == "1" ]]; then
 else
   [[ -z "$FR13_GATE_DFWD_TOP3_SO" ]] || {
     echo "FR13_GATE_DFWD_TOP3=0 forbids a candidate binary" >&2
+    exit 2
+  }
+fi
+FR13_GATE_VERIFIER_HEAD_M32_SO=${FR13_GATE_VERIFIER_HEAD_M32_SO:-}
+FR13_GATE_VERIFIER_HEAD_M32_SHA256=
+FR13_GATE_VERIFIER_HEAD_M32_KERNEL_SOURCE=csrc/fr13_bf16_verifier_head_m32_sm121a.cu
+FR13_GATE_VERIFIER_HEAD_M32_KERNEL_EXPECTED_SHA256=7cbc9f5157d8e93ee35930b028d97d0c3b1a26a9d79aa87ec6061928f8161768
+FR13_GATE_VERIFIER_HEAD_M32_KERNEL_SHA256=
+FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION=results/fr13_fixed32_b1_verifier_head_m32_sm121a_build_20260805/build_attestation.json
+FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION_EXPECTED_SHA256=780ea833962806ea4a374c3092c33ad75f2d23fd255daabb6d39f69533fc3d5c
+FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION_SHA256=
+if [[ "$FR13_GATE_VERIFIER_HEAD_M32" == "1" ]]; then
+  [[ "$FR13_GATE_VERIFIER_HEAD_M32_SO" == /* \
+     && -f "$FR13_GATE_VERIFIER_HEAD_M32_SO" \
+     && ! -L "$FR13_GATE_VERIFIER_HEAD_M32_SO" \
+     && "$(stat -c '%s' "$FR13_GATE_VERIFIER_HEAD_M32_SO")" == "186048" ]] || {
+    echo "FR13_GATE_VERIFIER_HEAD_M32_SO must be the exact regular candidate" >&2
+    exit 2
+  }
+  FR13_GATE_VERIFIER_HEAD_M32_SHA256=$(
+    sha256sum "$FR13_GATE_VERIFIER_HEAD_M32_SO" | awk '{print $1}'
+  )
+  FR13_GATE_VERIFIER_HEAD_M32_KERNEL_SHA256=$FR13_GATE_VERIFIER_HEAD_M32_KERNEL_EXPECTED_SHA256
+  FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION_SHA256=$(
+    sha256sum "$FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION" | awk '{print $1}'
+  )
+  [[ "$FR13_GATE_VERIFIER_HEAD_M32_SHA256" \
+        == "5b5e8c3051f29bc4f65ef93c96ed22ef38ef07a1754e9c36a167e5158f71f4b7" \
+     && "$(sha256sum "$FR13_GATE_VERIFIER_HEAD_M32_KERNEL_SOURCE" | awk '{print $1}')" \
+        == "$FR13_GATE_VERIFIER_HEAD_M32_KERNEL_SHA256" \
+     && -f "$FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION" \
+     && ! -L "$FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION" \
+     && "$FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION_SHA256" \
+        == "$FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION_EXPECTED_SHA256" ]] || {
+    echo "verifier-head M32 build, source, or SO pin drifted" >&2
+    exit 2
+  }
+else
+  [[ -z "$FR13_GATE_VERIFIER_HEAD_M32_SO" ]] || {
+    echo "FR13_GATE_VERIFIER_HEAD_M32=0 forbids a candidate binary" >&2
     exit 2
   }
 fi
@@ -232,6 +287,17 @@ case "$B1_WORKLOAD_PROFILE" in
             && "$FR13_GATE_BM8" == "0" \
             && "$FR13_GATE_GDN_BV" == "0" ]]; then
       :
+    elif [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+            && "$FR13_GATE_VERIFIER_HEAD_M32" == "1" \
+            && "$FR13_GATE_QROW16" == "0" \
+            && "$FR13_GATE_TAW_NATIVE" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
+            && "$FR13_GATE_DFWD_TOP3" == "0" \
+            && "$FR13_GATE_BM8" == "0" \
+            && "$FR13_GATE_GDN_BV" == "0" ]]; then
+      :
     else
       echo "B1 k64_root requires an isolated admitted candidate" >&2
       exit 2
@@ -260,12 +326,23 @@ ARM="hydra27_fixed32${PROFILE_SUFFIX}_${TAG}"
 SUBSET=$B1_DIAGNOSTIC_SUBSET
 FA2_SHA=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
 SOURCE_COMMIT=$(git rev-parse HEAD)
+VERIFIER_HEAD_M32_PATCH_SHA256=
+VERIFIER_HEAD_M32_SOURCE_COMMIT=
+VERIFIER_HEAD_M32_INSTANCE_ID=
+if [[ "$FR13_GATE_VERIFIER_HEAD_M32" == "1" ]]; then
+  VERIFIER_HEAD_M32_PATCH_SHA256=$(
+    sha256sum scripts/fr10_phase4_patch_vllm_tree_gdn.py | awk '{print $1}'
+  )
+  VERIFIER_HEAD_M32_SOURCE_COMMIT=$SOURCE_COMMIT
+  VERIFIER_HEAD_M32_INSTANCE_ID=$B1_DIAGNOSTIC_TASK_ID
+fi
 DRAFT_HEAD_FP8_ARM=
 QROW16_PRODUCTION=0
 QROW16_PRODUCTION_LIVE_PASS=
 QROW16_PRODUCTION_LIVE_PASS_SHA256=
 if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" \
-      || "$FR13_GATE_SFWD_CONV_POSTPREP" == "1" ]]; then
+      || "$FR13_GATE_SFWD_CONV_POSTPREP" == "1" \
+      || "$FR13_GATE_VERIFIER_HEAD_M32" == "1" ]]; then
   if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
     DRAFT_HEAD_FP8_ARM=$ARM
   fi
@@ -339,6 +416,8 @@ elif [[ "${FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB:-0}" == "1" ]]; then
   export ENFORCE_EAGER=1
 elif [[ "${FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:-0}" == "1" ]]; then
   export ENFORCE_EAGER=1
+elif [[ "$FR13_GATE_VERIFIER_HEAD_M32" == "1" ]]; then
+  export ENFORCE_EAGER=1
 fi
 
 mkdir -p "$RUNROOT"
@@ -358,6 +437,11 @@ printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=
 printf 'qrow16_production=%s\nqrow16_fa2_sha256=%s\nqrow16_live_pass_sha256=%s\n' \
   "$QROW16_PRODUCTION" "$FA2_SHA" \
   "$QROW16_PRODUCTION_LIVE_PASS_SHA256" >> "$RUNROOT/launcher_meta.txt"
+printf 'verifier_head_m32_gate=%s\nverifier_head_m32_so_sha256=%s\nverifier_head_m32_kernel_sha256=%s\nverifier_head_m32_build_attestation_sha256=%s\nreference_always_served=1\ncandidate_returned=0\ntiming_eligible=0\n' \
+  "$FR13_GATE_VERIFIER_HEAD_M32" "$FR13_GATE_VERIFIER_HEAD_M32_SHA256" \
+  "$FR13_GATE_VERIFIER_HEAD_M32_KERNEL_SHA256" \
+  "$FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION_SHA256" \
+  >> "$RUNROOT/launcher_meta.txt"
 
 .venv/bin/python scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 \
@@ -390,6 +474,15 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_DFWD_K64_TOP3="$FR13_GATE_DFWD_TOP3" \
   FR13_DFWD_K64_TOP3_SO="$FR13_GATE_DFWD_TOP3_SO" \
   FR13_DFWD_K64_TOP3_SHA256="$FR13_GATE_DFWD_TOP3_SHA256" \
+  FR13_VERIFIER_HEAD_M32_SHADOW="$FR13_GATE_VERIFIER_HEAD_M32" \
+  FR13_VERIFIER_HEAD_M32_SO="$FR13_GATE_VERIFIER_HEAD_M32_SO" \
+  FR13_VERIFIER_HEAD_M32_SO_SHA256="$FR13_GATE_VERIFIER_HEAD_M32_SHA256" \
+  FR13_VERIFIER_HEAD_M32_KERNEL_SOURCE_SHA256="$FR13_GATE_VERIFIER_HEAD_M32_KERNEL_SHA256" \
+  FR13_VERIFIER_HEAD_M32_PATCH_SOURCE_SHA256="$VERIFIER_HEAD_M32_PATCH_SHA256" \
+  FR13_VERIFIER_HEAD_M32_SOURCE_COMMIT="$VERIFIER_HEAD_M32_SOURCE_COMMIT" \
+  FR13_VERIFIER_HEAD_M32_INSTANCE_ID="$VERIFIER_HEAD_M32_INSTANCE_ID" \
+  FR13_VERIFIER_HEAD_M32_LIVE_JSON=/logs/fr13_verifier_head_m32.live.json \
+  FR13_VERIFIER_HEAD_M32_REAL_EVENT_PATH=/logs/fr13_fixed32_cutlass_streamk.real_event.arm \
   FR13_FIXED32_GDN_PATH_BV_CANDIDATE="$FR13_GATE_GDN_BV_CANDIDATE" \
   FORKED_FA2_SO="$FORKED_FA2_SO" \
   FR13_FA2_QROW16_SO_SHA256="$FA2_SHA" \
@@ -498,6 +591,42 @@ if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_FP8" == "1" ]]; then
     --expected-static-io "$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO" \
     --repo "$PWD" \
     --out "$RUNROOT/$ARM/draft_head_fp8_real_b1_gate.json"
+fi
+if [[ "$serve_rc" == "0" && "$FR13_GATE_VERIFIER_HEAD_M32" == "1" ]]; then
+  VERIFIER_HEAD_LIVE="$RUNROOT/$ARM/logs/fr13_verifier_head_m32.live.json"
+  VERIFIER_HEAD_FINAL_FLUSH="$RUNROOT/$ARM/fixed32_final_flush.json"
+  VERIFIER_HEAD_TRAFFIC_AUDIT="$RUNROOT/$ARM/fixed32_chat_traffic_audit.json"
+  for evidence in \
+    "$VERIFIER_HEAD_LIVE" \
+    "$VERIFIER_HEAD_FINAL_FLUSH" \
+    "$VERIFIER_HEAD_TRAFFIC_AUDIT"; do
+    [[ -f "$evidence" && ! -L "$evidence" ]] || {
+      echo "verifier-head M32 gate evidence is missing: $evidence" >&2
+      exit 4
+    }
+  done
+  VERIFIER_HEAD_FLUSH_GENERATION=$(
+    .venv/bin/python -c \
+      'import json,sys; print(json.load(open(sys.argv[1]))["ack"]["generation"])' \
+      "$VERIFIER_HEAD_FINAL_FLUSH"
+  )
+  VERIFIER_HEAD_BOUNDARY="$RUNROOT/$ARM/logs/fr13_fixed32_boundary_snapshot.${VERIFIER_HEAD_FLUSH_GENERATION}.json"
+  [[ -f "$VERIFIER_HEAD_BOUNDARY" && ! -L "$VERIFIER_HEAD_BOUNDARY" ]] || {
+    echo "verifier-head M32 final boundary evidence is missing" >&2
+    exit 4
+  }
+  .venv/bin/python scripts/fr13_verifier_head_m32_gate.py \
+    --live-result "$VERIFIER_HEAD_LIVE" \
+    --candidate-so "$FR13_GATE_VERIFIER_HEAD_M32_SO" \
+    --kernel-source "$FR13_GATE_VERIFIER_HEAD_M32_KERNEL_SOURCE" \
+    --patch-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+    --build-attestation "$FR13_GATE_VERIFIER_HEAD_M32_BUILD_ATTESTATION" \
+    --expected-source-commit "$SOURCE_COMMIT" \
+    --final-flush "$VERIFIER_HEAD_FINAL_FLUSH" \
+    --boundary-snapshot "$VERIFIER_HEAD_BOUNDARY" \
+    --chat-traffic-audit "$VERIFIER_HEAD_TRAFFIC_AUDIT" \
+    --repo "$PWD" \
+    --out "$RUNROOT/$ARM/verifier_head_m32_real_b1_gate.json"
 fi
 if [[ "$serve_rc" == "0" && "$FR13_GATE_DFWD_TOP3" == "1" ]]; then
   DFWD_TOP3_RUNTIME_LOG="$RUNROOT/$ARM/docker_after_tasks.log"

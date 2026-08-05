@@ -1,0 +1,72 @@
+# Extract Git 2.34.1 from the already-local Ubuntu 22.04 SWE image. The
+# pinned vLLM image lacks Git, while the fail-closed builder verifies CUTLASS.
+docker create --name fr13_verifier_git_extract_u22_20260805 \
+  --entrypoint /bin/true \
+  sha256:6feaebb3cd611c1b804696a5c2def96df2a3cd13d0b099f6c2133b4185fc054c
+docker cp fr13_verifier_git_extract_u22_20260805:/usr/bin/git \
+  /home/mark/fr13_bf16_verifier_head_m32_sm121a_20260805/toolchain/git_ubuntu22/bin/git
+docker cp fr13_verifier_git_extract_u22_20260805:/usr/lib/git-core/. \
+  /home/mark/fr13_bf16_verifier_head_m32_sm121a_20260805/toolchain/git_ubuntu22/lib/
+docker rm fr13_verifier_git_extract_u22_20260805
+
+# Full device-free build and offline op-registration check.
+docker run --rm \
+  --name fr13_verifier_head_m32_offline_build_20260805 \
+  --network none \
+  --cpus=1 \
+  --memory=16g \
+  --pids-limit=256 \
+  --user "$(id -u):$(id -g)" \
+  --env NVIDIA_VISIBLE_DEVICES=void \
+  --env CUDA_VISIBLE_DEVICES= \
+  --env CUDA_CACHE_DISABLE=1 \
+  --env MAX_JOBS=1 \
+  --env GIT_EXEC_PATH=/opt/fr13/git-core \
+  --volume /home/mark/lumoFlyWheel-verifier-head-sm121a-20260805:/repo:ro \
+  --volume /home/mark/fr13_streamk_build/cutlass-source:/cutlass:ro \
+  --volume /home/mark/fr13_bf16_verifier_head_m32_sm121a_20260805:/out:rw \
+  --volume /home/mark/fr13_bf16_verifier_head_m32_sm121a_20260805/toolchain/git_ubuntu22/bin/git:/usr/local/bin/git:ro \
+  --volume /home/mark/fr13_bf16_verifier_head_m32_sm121a_20260805/toolchain/git_ubuntu22/lib:/opt/fr13/git-core:ro \
+  --entrypoint /bin/bash \
+  vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776 \
+  -lc 'set -euo pipefail; \
+    test ! -e /dev/nvidia0; \
+    test ! -e /dev/nvidiactl; \
+    test ! -e /dev/nvidia-uvm; \
+    python3 /repo/scripts/fr13_build_bf16_verifier_head_m32_sm121a.py \
+      --output /out/fr13_bf16_verifier_head_m32_sm121a.abi3.so \
+      --build-dir /out/build \
+      --attestation /out/build_attestation.json \
+      --cutlass-root /cutlass; \
+    test ! -e /dev/nvidia0; \
+    test ! -e /dev/nvidiactl; \
+    test ! -e /dev/nvidia-uvm'
+
+# Static SASS/resource audit. The pinned image's cuobjdump uses the matching
+# CUDA 13.0 host nvdisasm mounted read-only; no device is exposed.
+docker run --rm \
+  --name fr13_verifier_head_m32_offline_audit_20260805 \
+  --network none \
+  --cpus=1 \
+  --memory=8g \
+  --pids-limit=128 \
+  --user "$(id -u):$(id -g)" \
+  --env NVIDIA_VISIBLE_DEVICES=void \
+  --env CUDA_VISIBLE_DEVICES= \
+  --env CUDA_CACHE_DISABLE=1 \
+  --env NVDISASM_PATH=/usr/local/bin/nvdisasm \
+  --volume /home/mark/fr13_bf16_verifier_head_m32_sm121a_20260805:/out:rw \
+  --volume /usr/local/cuda-13.0/bin/nvdisasm:/usr/local/bin/nvdisasm:ro \
+  --entrypoint /bin/bash \
+  vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776 \
+  -lc 'set -euo pipefail; \
+    test ! -e /dev/nvidia0; \
+    test ! -e /dev/nvidiactl; \
+    test ! -e /dev/nvidia-uvm; \
+    cuobjdump --list-elf /out/fr13_bf16_verifier_head_m32_sm121a.abi3.so; \
+    cuobjdump --dump-resource-usage /out/fr13_bf16_verifier_head_m32_sm121a.abi3.so; \
+    cuobjdump --dump-sass /out/fr13_bf16_verifier_head_m32_sm121a.abi3.so; \
+    python3 -c "import torch; torch.ops.load_library(\"/out/fr13_bf16_verifier_head_m32_sm121a.abi3.so\"); print(torch._C._dispatch_find_schema_or_throw(\"fr13_verifier_head::bf16_m32_out\", \"\").schema())"; \
+    test ! -e /dev/nvidia0; \
+    test ! -e /dev/nvidiactl; \
+    test ! -e /dev/nvidia-uvm'
