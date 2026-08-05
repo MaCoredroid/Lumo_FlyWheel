@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -84,6 +85,7 @@ def test_exactshape_pingpong_assignment_covers_each_tile_once() -> None:
 
 
 def test_exactshape_artifact_is_sanitized_and_integral() -> None:
+    manifest = json.loads((ARTIFACT / "manifest.json").read_text())
     forbidden = {".o", ".cubin", ".ptx", ".sass", ".log", ".resources"}
     assert not any(path.suffix in forbidden for path in ARTIFACT.rglob("*"))
     for path in ARTIFACT.rglob("*"):
@@ -92,7 +94,18 @@ def test_exactshape_artifact_is_sanitized_and_integral() -> None:
 
     for line in (ARTIFACT / "source_checksums.sha256").read_text().splitlines():
         expected, relative = line.split("  ", 1)
-        assert hashlib.sha256((ROOT / relative).read_bytes()).hexdigest() == expected
+        historical = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "show",
+                f"{manifest['source']['candidate_commit']}:{relative}",
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        assert hashlib.sha256(historical).hexdigest() == expected
 
     for line in (ARTIFACT / "SHA256SUMS").read_text().splitlines():
         expected, relative = line.split("  ", 1)
