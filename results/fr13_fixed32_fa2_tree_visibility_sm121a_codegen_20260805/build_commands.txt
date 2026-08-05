@@ -1,0 +1,34 @@
+# Patcher invocations, each repeated once to prove idempotence.
+python3 scripts/fr13_patch_fa2_tree_bias.py \
+  --fa2-src /home/mark/fr13_fa2_tree_visibility_sm121a_20260805/source_b1_qrow32 \
+  --skip-python --tree-bias-tile-earlyout \
+  --fixed32-query-tile32-b1 --fixed32-tree-visibility-mask
+
+python3 scripts/fr13_patch_fa2_tree_bias.py \
+  --fa2-src /home/mark/fr13_fa2_tree_visibility_sm121a_20260805/source_b4 \
+  --skip-python --tree-bias-tile-earlyout \
+  --fixed32-query-tile32 --fixed32-tree-visibility-mask
+
+# Compile environment and invariant flags. SOURCE, TU, and OBJECT select the
+# two lanes in build_matrix.tsv; each row was compiled twice with a fresh
+# output object.
+CUDA_VISIBLE_DEVICES= CUDA_CACHE_DISABLE=1 \
+PATH=/home/mark/fr13_fa2_qrow32_b4_sm121a_20260805/gcc11-root/usr/bin:$PATH \
+/usr/local/cuda/bin/nvcc \
+  -DFLASHATTENTION_DISABLE_BACKWARD -DFLASHATTENTION_DISABLE_DROPOUT \
+  -DFLASHATTENTION_DISABLE_PYBIND -DPy_LIMITED_API=3 \
+  -DTORCH_EXTENSION_NAME=_vllm_fa2_C -DUSE_C10D_GLOO -DUSE_C10D_NCCL \
+  -DUSE_DISTRIBUTED -DUSE_NVSHMEM -DUSE_RPC -DUSE_TENSORPIPE \
+  -D_vllm_fa2_C_EXPORTS -I$SOURCE/csrc -I$SOURCE/csrc/flash_attn \
+  -I$SOURCE/csrc/flash_attn/src -I$SOURCE/csrc/common \
+  -I/home/mark/shared/lumoFlyWheel-qrow16-thin/output/fr13_fa2_qrow16_num_splits0_build_20260731/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include \
+  -isystem /usr/include/python3.12 \
+  -isystem /home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages/torch/include \
+  -isystem /home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages/torch/include/torch/csrc/api/include \
+  -isystem /usr/local/cuda/include -DONNX_NAMESPACE=onnx_c2 \
+  -Xcudafe --diag_suppress=cc_clobber_ignored,--diag_suppress=field_without_dll_interface,--diag_suppress=base_class_has_different_dll_interface,--diag_suppress=dll_interface_conflict_none_assumed,--diag_suppress=dll_interface_conflict_dllexport_assumed,--diag_suppress=bad_friend_decl \
+  --expt-relaxed-constexpr --expt-extended-lambda -O3 -g -DNDEBUG \
+  -std=c++17 -Xcompiler=-fPIC -DENABLE_FP8 --use_fast_math \
+  -DCUTLASS_ENABLE_DIRECT_CUDA_DRIVER_CALL=1 \
+  -gencode arch=compute_121a,code=sm_121a --ptxas-options=-v \
+  -c $SOURCE/csrc/flash_attn/src/$TU -o $OBJECT

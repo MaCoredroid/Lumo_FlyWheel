@@ -1,0 +1,3 @@
+batch	sequences	layers	query_heads_per_sequence	physical_rows	physical_cols	dense_bytes_per_event	mask_bytes_min_per_event	mask_bytes_max_per_event	bytes_saved_min	bytes_saved_max	reduction_ratio_min	reduction_ratio_max
+B1	1	16	24	32	32	1572864	49152	98304	1474560	1523712	16	32
+B4	4	16	24	32	32	6291456	196608	393216	5898240	6094848	16	32

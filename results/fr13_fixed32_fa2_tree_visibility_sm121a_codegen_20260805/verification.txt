@@ -1,0 +1,55 @@
+SOURCE
+  repository commit: ace051c50016b87d9f5a6ac4cee5dfee1ecf6351
+  FA2 base commit: 29210221863736a08f71a866459e368ad1ac4a95
+  patcher SHA-256: 8ff63dff668e7331869f11ff951f3be5f4f0ec4624dbe46c16b68485dde0eee8
+  test SHA-256: 5a9429493387947ccb7c727934531f9b7f258b36a9a675e4cb47dd9aa14963f7
+  git diff --check: PASS
+  python3 -m py_compile: PASS
+
+FOCUSED TESTS
+  68 passed in 3.89s
+  Files:
+    tests/test_fr13_fa2_fixed32_tree_visibility.py
+    tests/test_fr13_fa2_qrow32_b4_candidate.py
+    tests/test_fr13_fa2_qrow32_gqa_pair.py
+    tests/test_fr13_fa2_tree_kernel_candidates.py
+    tests/test_fr13_qrow32_b1_selectors.py
+
+EXPANDED PATCHER TESTS
+  103 passed, 3 failed in 4.11s
+  The three failures are assertions in
+  tests/test_fr10_phase4_sampled_committer_wiring.py against an unchanged
+  scripts/fr10_phase4_patch_vllm_tree_gdn.py. Neither file differs from the
+  branch base b995d7638; these failures are unrelated to this candidate.
+
+PATCH IDEMPOTENCE
+  B1 first patch: changed; second identical patch: all outputs false
+  B4 first patch: changed; second identical patch: all outputs false
+
+SM121A COMPILE
+  CUDA_VISIBLE_DEVICES was empty and CUDA_CACHE_DISABLE=1 for every compile.
+  nvcc/ptxas: CUDA 13.0.88
+  host compiler: g++-11 11.4.0
+  target: compute_121a,sm_121a
+  B1 run1: PASS, 252 regs, 0 stack, 0 spills, 1 barrier
+  B1 run2: PASS, 252 regs, 0 stack, 0 spills, 1 barrier
+  B4 run1: PASS, 252 regs, 0 stack, 0 spills, 1 barrier
+  B4 run2: PASS, 252 regs, 0 stack, 0 spills, 1 barrier
+  Each object contains one SM121a cubin and no PTX.
+  Full cuobjdump SASS is identical across run1/run2 in each lane.
+
+QROW16 REJECTION CONTROL
+  incumbent: 212 regs, 0 stack, 0 spills
+  visibility cap216: 216 regs, 0 stack, 0 spills
+  visibility cap212: 212 regs, 40 stack bytes, 60-byte spill stores,
+                     44-byte spill loads
+  No qrow16 visibility source was retained.
+
+QUALIFICATION
+  GPU used: no
+  Docker used: no
+  synthetic timing/probe: no
+  real workload run: no
+  performance claim: no
+  production eligible: no
+  next gate: real SWE-Verified raw-byte A/B, then full-step B1 and exact4 B4

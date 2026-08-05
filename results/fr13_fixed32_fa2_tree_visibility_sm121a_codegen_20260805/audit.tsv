@@ -1,0 +1,8 @@
+lane	status	evidence
+B1_qrow16_reference	preserved	Qualified num_splits0 reference remains unchanged
+B1_qrow16_visibility_cap216	rejected	216 registers versus 212-register incumbent
+B1_qrow16_visibility_cap212	rejected	212 registers but 40-byte stack; ptxas 60-byte spill stores and 44-byte spill loads
+B1_qrow32_nosplit	qualified_byte_reference	Gate A attempt14 real task; zero BF16 and LSE mismatches across all 16 target layers
+B1_qrow32_split2	rejected_real_byte	3,104,943 output bytes and 9,551 LSE bytes differed on first real replay
+B4_qrow32	codegen_only	Existing exact4 candidate is live-byte pending
+qrow32_paired_page_load	rejected_source	Adjacent load already compiler-CSE; remaining pairs require long register lifetimes
