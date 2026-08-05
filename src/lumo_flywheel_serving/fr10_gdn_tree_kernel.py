@@ -16000,8 +16000,9 @@ def launch_tree_gdn_prepared(
             or n_pad != 32
         ):
             raise RuntimeError(
-                "FR13_FIXED32_GDN_SINGLE_LAUNCH exact K64/root1 B1 "
-                "contract drift; no fallback is permitted"
+                "FR13_FIXED32_GDN_SINGLE_LAUNCH exact K64/root1 BV8 B1 "
+                "or admitted GQA3 BV16 B1 contract drift; no fallback is "
+                "permitted"
             )
         if _ordered_launch_enabled:
             assert isinstance(_single_launch, dict)
