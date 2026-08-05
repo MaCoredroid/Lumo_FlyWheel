@@ -3637,6 +3637,26 @@ _FR13_FA2_QROW32_LIVE_AB_GRAPHS = {}
 _FR13_FA2_QROW32_LIVE_AB_ATTEMPTED = False
 _FR13_FA2_QROW32_LIVE_AB_PASSED = False
 _FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL = 131091
+_FR13_FA2_QROW32_LIVE_AB_ARMS = {
+    "qrow32": {
+        "sentinel": _FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL,
+        "num_splits": 0,
+        "candidate_dispatch": "qrow32 exact geometry; no fallback",
+    },
+    "gqa_pair": {
+        "sentinel": 131092,
+        "num_splits": 0,
+        "candidate_dispatch": "qrow32 GQA-pair exact geometry; no fallback",
+        "candidate_so_sha256": (
+            "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e"
+        ),
+        "candidate_so_size": 299813360,
+        "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+        "fa2_source_closure_sha256": (
+            "f210a5ebb93930e89b0d9fe0cb6e53a76c9359873ad4268e81d3f17a7443bdf2"
+        ),
+    },
+}
 _FR13_FA2_QROW32_TARGET_LAYERS = tuple(
     f"language_model.model.layers.{index}.self_attn.attn"
     for index in range(3, 64, 4)
@@ -3652,8 +3672,18 @@ _FR13_FA2_QROW32_EXACT4_SUBSET_SHA256 = (
 )
 
 
+def _fr13_fa2_qrow32_live_ab_contract():
+    arm = os.environ.get("FR13_FA2_QROW32_LIVE_PAGED_AB_ARM", "")
+    contract = _FR13_FA2_QROW32_LIVE_AB_ARMS.get(arm)
+    if contract is None:
+        raise RuntimeError("FR13 qrow32 live gate arm is not explicit")
+    return arm, contract
+
+
 def _fr13_fa2_qrow32_candidate_tree_bias(tree_bias):
     """Copy the live mask into the private, semantically exact B4 layout."""
+    _, contract = _fr13_fa2_qrow32_live_ab_contract()
+    sentinel = int(contract["sentinel"])
     if tree_bias.dtype != torch.float32:
         raise RuntimeError("FR13 qrow32 tree bias is not FP32")
     if tuple(tree_bias.shape) not in ((32, 32), (4, 32, 32)):
@@ -3663,13 +3693,13 @@ def _fr13_fa2_qrow32_candidate_tree_bias(tree_bias):
     source = tree_bias.unsqueeze(0).expand(4, -1, -1) if tree_bias.ndim == 2 else tree_bias
     tagged = torch.empty_strided(
         (4, 32, 32),
-        (_FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL, 32, 1),
+        (sentinel, 32, 1),
         dtype=tree_bias.dtype,
         device=tree_bias.device,
     )
     tagged.copy_(source)
     if tuple(tagged.stride()) != (
-        _FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL,
+        sentinel,
         32,
         1,
     ):
@@ -3720,6 +3750,7 @@ def _fr13_fa2_qrow32_live_ab_register(
     if layer_name not in _FR13_FA2_QROW32_TARGET_LAYERS:
         raise RuntimeError("FR13 qrow32 live gate reached a non-target layer")
 
+    _, candidate_contract = _fr13_fa2_qrow32_live_ab_contract()
     exact = (
         query.dtype == torch.bfloat16
         and tuple(query.shape) == (128, 24, 256)
@@ -3745,7 +3776,7 @@ def _fr13_fa2_qrow32_live_ab_register(
         and int(max_seqlen_k) > 0
         and not bool(causal)
         and float(softcap) == 0.0
-        and int(num_splits) in (0, 1)
+        and int(num_splits) == int(candidate_contract["num_splits"])
     )
     if not exact:
         raise RuntimeError("FR13 qrow32 live gate saw non-canonical B4 geometry")
@@ -3901,6 +3932,29 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
         or any(char not in "0123456789abcdef" for char in candidate_so_sha256)
     ):
         raise RuntimeError("FR13 qrow32 live gate has no candidate SO digest")
+    candidate_arm, candidate_contract = _fr13_fa2_qrow32_live_ab_contract()
+    candidate_so_size_raw = os.environ.get("FR13_FA2_QROW32_SO_SIZE", "")
+    try:
+        candidate_so_size = int(candidate_so_size_raw)
+    except ValueError as error:
+        raise RuntimeError("FR13 qrow32 live gate has no candidate SO size") from error
+    fa2_head = os.environ.get("FR13_FA2_QROW32_FA2_HEAD", "")
+    fa2_source_closure_sha256 = os.environ.get(
+        "FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256", ""
+    )
+    if candidate_arm == "gqa_pair" and (
+        candidate_so_sha256 != candidate_contract["candidate_so_sha256"]
+        or candidate_so_size != candidate_contract["candidate_so_size"]
+        or fa2_head != candidate_contract["fa2_head"]
+        or fa2_source_closure_sha256
+        != candidate_contract["fa2_source_closure_sha256"]
+    ):
+        raise RuntimeError("FR13 qrow32 GQA-pair binary/source provenance drifted")
+    if (
+        os.environ.get("FR13_DRAFT_VOCAB_K", "") != "65536"
+        or os.environ.get("FR13_DRAFT_VOCAB_ROOT", "") != "1"
+    ):
+        raise RuntimeError("FR13 qrow32 live gate requires K64/root1")
     source_commit = os.environ.get("FR13_FA2_QROW32_SOURCE_COMMIT", "")
     if (
         len(source_commit) != 40
@@ -3998,8 +4052,15 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
         "physical_rows_per_slot": 32,
         "total_query_rows": 128,
         "fixed32_mode": fixed32_mode,
+        "candidate_arm": candidate_arm,
+        "selector_sentinel": int(candidate_contract["sentinel"]),
         "candidate_so_sha256": candidate_so_sha256,
+        "candidate_so_size": candidate_so_size,
+        "fa2_head": fa2_head,
+        "fa2_source_closure_sha256": fa2_source_closure_sha256,
         "source_commit": source_commit,
+        "draft_vocab_k": 65536,
+        "draft_vocab_root": 1,
         "engine_pid": os.getpid(),
         "graph_id": int(graph_id),
         "runtime_mode": str(runtime_mode).upper(),
@@ -4022,7 +4083,8 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
         "output_raw_byte_mismatches": total_output_mismatches,
         "lse_raw_byte_mismatches": total_lse_mismatches,
         "layers": layer_records,
-        "candidate_dispatch": "qrow32 gate-only exact-geometry require",
+        "incumbent_dispatch": "stock FA2 exact geometry; no fallback",
+        "candidate_dispatch": candidate_contract["candidate_dispatch"],
         "served_return": "stock captured graph output unchanged",
         "fallback_allowed": False,
         "performance_measurement": False,
