@@ -1,0 +1,59 @@
+{
+  "schema": "fr13.fixed32.dfwd_k64_m1_r32_main_source.v1",
+  "created_at_utc": "2026-08-05T06:30:13Z",
+  "status": "SOURCE_READY_DEFAULT_OFF",
+  "base_main_commit": "4dc01e59f1c29e57192ea2e0341c4b18b95a8714",
+  "branch": "codex/dfwd-k64-m1-r32-main-20260805",
+  "candidate": {
+    "selector": "FR13_DRAFT_HEAD_M1_R32=1",
+    "operation": "fr13_bf16_k64_head::gemvx_m1_shuffle_r32_out",
+    "grid": [2048, 1, 1],
+    "block": [16, 32, 1],
+    "rows_per_cta": 32,
+    "k_partition_lanes": 16,
+    "lane_fmas": 320,
+    "reduction_strides": [8, 4, 2, 1],
+    "production_default_enabled": false,
+    "production_credential_available": false
+  },
+  "historical_build_binding": {
+    "source_commit": "0f627cfac51d4a85408ba8ad3e3040d33b6f43b6",
+    "cuda_sha256": "56d4fcd551dd022efa00dcb926bb4ea5176e6b5a02fa562ccc1886e007001897",
+    "builder_sha256": "e5daf123e7bdfbaaecb4cfb850f4b6fd129e55c0f106a20386f9dbcf32325d4f",
+    "binary_sha256": "c389bf5e01b942cfe73b2e4fc05db7b158f16b61205c9f3e9988cbd8a82474dd",
+    "binary_bytes": 113648,
+    "torch": "2.11.0+cu130",
+    "cuda_release": "13.0",
+    "target": "sm_121a",
+    "gpu_exposed": false,
+    "current_source_bytes_match": true
+  },
+  "resources": {
+    "registers_per_thread": 18,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "shared_bytes_per_cta": 0,
+    "shuffle_down": 4,
+    "fadd": 4,
+    "barrier": 0,
+    "local_load_store": 0,
+    "calls": 0
+  },
+  "phase_target": {
+    "phase": "DFWD",
+    "historical_k64_head_ms_per_event": 26.227316014,
+    "mandatory_head_floor_ms_per_event": 12.291000733,
+    "historical_excess_ms_per_event": 13.936315281,
+    "mandatory_weight_bytes_changed": false,
+    "performance_claim": false
+  },
+  "claims": {
+    "new_gpu_used": false,
+    "real_swe_task_run": false,
+    "byte_equality": false,
+    "timing": false,
+    "acceptance": false,
+    "hardware_floor": false,
+    "safe_to_merge_during_live_gate_a": false
+  }
+}

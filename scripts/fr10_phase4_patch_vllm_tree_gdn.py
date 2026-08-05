@@ -23368,6 +23368,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m32_prod_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M32_PRODUCTION", "0"
             )
+            _fr13_dh_m1_r32_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_M1_R32", "0"
+            )
             _fr13_dh_fp8_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_FP8", "0"
             )
@@ -23394,6 +23397,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M32_PRODUCTION must be exactly 0 or 1"
                 )
+            if _fr13_dh_m1_r32_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_M1_R32 must be exactly 0 or 1"
+                )
             if _fr13_dh_fp8_raw not in ("0", "1"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_FP8 must be exactly 0 or 1"
@@ -23406,6 +23413,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_ab = _fr13_dh_ab_raw == "1"
             _fr13_dh_m32_live = _fr13_dh_m32_live_raw == "1"
             _fr13_dh_m32_prod = _fr13_dh_m32_prod_raw == "1"
+            _fr13_dh_m1_r32 = _fr13_dh_m1_r32_raw == "1"
             _fr13_dh_fp8 = _fr13_dh_fp8_raw == "1"
             _fr13_dh_fp8_static_io = (
                 _fr13_dh_fp8_static_io_raw == "1"
@@ -23442,6 +23450,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_ab,
                     _fr13_dh_m32_live,
                     _fr13_dh_m32_prod,
+                    _fr13_dh_m1_r32,
                     _fr13_dh_fp8,
                 )
             )
@@ -23465,6 +23474,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr13_dh_ab
                 or _fr13_dh_m32_live
                 or _fr13_dh_m32_prod
+                or _fr13_dh_m1_r32
                 or _fr13_dh_fp8
             ) and (
                 not _fr13_is_fixed32
@@ -23493,6 +23503,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             self._fr13_dh_ab_active = _fr13_dh_ab
             self._fr13_dh_m32_live_active = _fr13_dh_m32_live
             self._fr13_dh_m32_production_active = _fr13_dh_m32_prod
+            self._fr13_dh_m1_r32_active = _fr13_dh_m1_r32
             self._fr13_dh_m32_selected_root_calls = 0
             self._fr13_dh_m32_selected_capture_calls = 0
             self._fr13_dh_m32_fallback_calls = 0
@@ -23588,10 +23599,101 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         )
                     except Exception as _fr13_dvk_e:
                         self._fr13_dvk_dead = True
+                        if _fr13_dh_m1_r32:
+                            raise RuntimeError(
+                                "FR13 exact-order R32 draft head failed to "
+                                "build its exact K64 shim"
+                            ) from _fr13_dvk_e
                         print(
                             f"[FR13_DRAFT_VOCAB] DISABLED (shim build failed): {_fr13_dvk_e!r}",
                             flush=True,
                         )
+                if _fr13_dh_m1_r32 and not getattr(
+                    self, "_fr13_dh_m1_r32_ready", False
+                ):
+                    if torch.cuda.is_current_stream_capturing():
+                        raise RuntimeError(
+                            "FR13 exact-order R32 draft-head setup reached "
+                            "CUDA graph capture before eager preparation"
+                        )
+                    import hashlib as _fr13_dh_m1_hashlib
+                    import pathlib as _fr13_dh_m1_pathlib
+
+                    _fr13_dh_m1_sh = self._fr13_dvk_shim
+                    _fr13_dh_m1_w = _fr13_dh_m1_sh.weight
+                    _fr13_dh_m1_map = getattr(
+                        self, "_fr13_dvk_map_t", None
+                    )
+                    if (
+                        type(_fr13_dh_m1_sh.quant_method).__name__
+                        != "UnquantizedEmbeddingMethod"
+                        or tuple(_fr13_dh_m1_w.shape) != (65536, 5120)
+                        or tuple(_fr13_dh_m1_w.stride()) != (5120, 1)
+                        or _fr13_dh_m1_w.dtype != torch.bfloat16
+                        or not _fr13_dh_m1_w.is_contiguous()
+                        or not isinstance(_fr13_dh_m1_map, torch.Tensor)
+                        or tuple(_fr13_dh_m1_map.shape) != (65536,)
+                        or tuple(_fr13_dh_m1_map.stride()) != (1,)
+                        or _fr13_dh_m1_map.dtype != torch.int64
+                        or _fr13_dh_m1_map.device != _fr13_dh_m1_w.device
+                        or not _fr13_dh_m1_map.is_contiguous()
+                    ):
+                        raise RuntimeError(
+                            "FR13 exact-order R32 draft head requires the "
+                            "pinned gather-K64 map and contiguous BF16 "
+                            "UnquantizedEmbeddingMethod weight[65536,5120]"
+                        )
+                    _fr13_dh_m1_so = _fr13_dh_m1_pathlib.Path(
+                        "/tmp/fr13_bf16_k64_head_r32.abi3.so"
+                    )
+                    _fr13_dh_m1_expected = os.environ.get(
+                        "FR13_DRAFT_HEAD_M1_R32_SHA256", ""
+                    )
+                    if (
+                        len(_fr13_dh_m1_expected) != 64
+                        or any(
+                            _fr13_dh_m1_char not in "0123456789abcdef"
+                            for _fr13_dh_m1_char in _fr13_dh_m1_expected
+                        )
+                        or not _fr13_dh_m1_so.is_file()
+                        or _fr13_dh_m1_so.is_symlink()
+                    ):
+                        raise RuntimeError(
+                            "FR13 exact-order R32 draft-head binary identity "
+                            "is missing"
+                        )
+                    _fr13_dh_m1_digest = _fr13_dh_m1_hashlib.sha256()
+                    with _fr13_dh_m1_so.open("rb") as _fr13_dh_m1_handle:
+                        for _fr13_dh_m1_chunk in iter(
+                            lambda: _fr13_dh_m1_handle.read(1024 * 1024),
+                            b"",
+                        ):
+                            _fr13_dh_m1_digest.update(_fr13_dh_m1_chunk)
+                    if (
+                        _fr13_dh_m1_digest.hexdigest()
+                        != _fr13_dh_m1_expected
+                    ):
+                        raise RuntimeError(
+                            "FR13 exact-order R32 draft-head binary identity "
+                            "mismatch"
+                        )
+                    torch.ops.load_library(str(_fr13_dh_m1_so))
+                    self._fr13_dh_m1_r32_op = (
+                        torch.ops.fr13_bf16_k64_head.gemvx_m1_shuffle_r32_out
+                    )
+                    self._fr13_dh_m1_r32_output = torch.empty(
+                        (1, 65536),
+                        dtype=torch.bfloat16,
+                        device=_fr13_dh_m1_w.device,
+                    )
+                    self._fr13_dh_m1_r32_seen_eager = False
+                    self._fr13_dh_m1_r32_ready = True
+                    print(
+                        "[FR13_DRAFT_HEAD_M1_R32] ready "
+                        "selector=exact_order_r32 input=[1,5120] "
+                        "weight=[65536,5120] output=[1,65536]",
+                        flush=True,
+                    )
                 if (
                     _fr13_dh_fp8
                     and not getattr(self, "_fr13_dh_fp8_ready", False)
@@ -24679,11 +24781,66 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m32_prod_on = getattr(
                         self, "_fr13_dh_m32_production_active", False
                     )
+                    _fr13_dh_m1_r32_on = getattr(
+                        self, "_fr13_dh_m1_r32_active", False
+                    )
                     _fr13_dh_fp8_on = getattr(
                         self, "_fr13_dh_fp8_active", False
                     )
                     _fr13_dh_capturing = False
-                    if _fr13_dh_fp8_on:
+                    if _fr13_dh_m1_r32_on:
+                        _fr13_dh_capturing = (
+                            torch.cuda.is_current_stream_capturing()
+                        )
+                        if (
+                            not getattr(
+                                self, "_fr13_dh_m1_r32_ready", False
+                            )
+                            or tuple(_h.shape) != (1, 5120)
+                            or tuple(_h.stride()) != (5120, 1)
+                            or _h.dtype != torch.bfloat16
+                            or _h.device != _sh.weight.device
+                            or tuple(_sh.weight.shape) != (65536, 5120)
+                            or tuple(_sh.weight.stride()) != (5120, 1)
+                            or not _sh.weight.is_contiguous()
+                            or tuple(
+                                self._fr13_dh_m1_r32_output.shape
+                            ) != (1, 65536)
+                            or tuple(
+                                self._fr13_dh_m1_r32_output.stride()
+                            ) != (65536, 1)
+                            or self._fr13_dh_m1_r32_output.dtype
+                            != torch.bfloat16
+                            or self._fr13_dh_m1_r32_output.device
+                            != _h.device
+                        ):
+                            raise RuntimeError(
+                                "FR13 exact-order R32 draft head left its "
+                                "exact B1 BF16 runtime contract"
+                            )
+                        if _fr13_dh_capturing and not getattr(
+                            self, "_fr13_dh_m1_r32_seen_eager", False
+                        ):
+                            raise RuntimeError(
+                                "FR13 exact-order R32 draft head reached "
+                                "capture before one eager kernel launch"
+                            )
+                        self._fr13_dh_m1_r32_op(
+                            self._fr13_dh_m1_r32_output,
+                            _h,
+                            _sh.weight,
+                        )
+                        if not _fr13_dh_capturing:
+                            if not self._fr13_dh_m1_r32_seen_eager:
+                                print(
+                                    "[FR13_DRAFT_HEAD_M1_R32] engaged "
+                                    "selector=exact_order_r32 "
+                                    "eager_launch=1",
+                                    flush=True,
+                                )
+                            self._fr13_dh_m1_r32_seen_eager = True
+                        _logits = self._fr13_dh_m1_r32_output
+                    elif _fr13_dh_fp8_on:
                         _logits = _fr13_dh_fp8_logits(_h)
                     elif _fr13_dh_m32_live_on or _fr13_dh_m32_prod_on:
                         _fr13_dh_capturing = (
@@ -24790,6 +24947,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         self, "_fr13_dvk_map_t", None
                     )
                 except Exception as _e:
+                    if getattr(
+                        self, "_fr13_dh_m1_r32_active", False
+                    ):
+                        raise RuntimeError(
+                            "FR13 exact-order R32 draft head failed its "
+                            "strict runtime contract"
+                        ) from _e
                     if getattr(self, "_fr13_dh_fp8_active", False):
                         self._fr13_dh_fp8_fallback_calls += 1
                         raise RuntimeError(

@@ -1,0 +1,13 @@
+Focused R32 source/runtime: 11 passed
+Adjacent composed-stack, CUTLASS, DFWD top3, FP8, and padding suite: 71 passed
+Python byte compilation: PASS
+Shell syntax: PASS
+git diff --check: PASS
+Historical binary identity/resource re-audit without GPU: PASS
+
+Not run:
+- GPU kernel execution
+- real SWE-Verified task
+- raw-byte comparison
+- performance timing
+- acceptance or hardware-floor campaign
