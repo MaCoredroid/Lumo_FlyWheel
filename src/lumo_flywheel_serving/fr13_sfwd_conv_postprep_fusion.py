@@ -1306,7 +1306,7 @@ def fixed32_sfwd_conv_postprep_layout_contract(
         "a": ((required_rows, NUM_V_HEADS), (NUM_V_HEADS, 1), torch.bfloat16),
         "b": ((required_rows, NUM_V_HEADS), (NUM_V_HEADS, 1), torch.bfloat16),
         "A_log": ((NUM_V_HEADS,), (1,), torch.float32),
-        "dt_bias": ((NUM_V_HEADS,), (1,), torch.float32),
+        "dt_bias": ((NUM_V_HEADS,), (1,), torch.bfloat16),
         "query": (
             (1, required_rows, NUM_K_HEADS, HEAD_K_DIM),
             (required_rows * Q_DIM, Q_DIM, HEAD_K_DIM, 1),
