@@ -1,0 +1,25 @@
+status=PASS
+evidence_kind=host_source_and_contract_tests_only
+gpu_run=false
+docker_run=false
+real_swe_verified_run=false
+correctness_claim=false
+performance_claim=false
+
+command=python3 -m pytest -q tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py tests/test_fr13_fixed32_taw_fullgraph_route.py
+result=9 passed in 0.26s
+
+command=python3 -m pytest -q tests/test_fr13_draft_head_m32_production.py tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py tests/test_fr13_fixed32_taw_fullgraph_route.py tests/test_fr13_draft_head_fp8.py
+result=37 passed in 0.87s
+
+command=bash -n scripts/fr13_launch_forked_fa2_tree_server.sh scripts/fr13_run_b1_kernel_live_gate.sh scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh
+result=PASS
+
+command=python3 -m py_compile scripts/fr10_phase4_patch_vllm_tree_gdn.py scripts/fr13_dfwd_k64_m1_r64_u8_gate.py scripts/fr13_runtime_manifest.py tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py tests/test_fr13_draft_head_m32_production.py
+result=PASS
+
+command=git diff --check
+result=PASS
+
+note=No synthetic or probe timing is reported. A real SWE-Verified task run is still required.
+baseline_note=tests/test_fr13_fixed32_drafter_tree_ownership.py has 8 current-main fixture failures because it does not install the now-required TAW module; this branch does not modify that test or runtime behavior.
