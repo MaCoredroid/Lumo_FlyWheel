@@ -346,7 +346,7 @@ def _valid_layout_operands(*, conv_tap: bool = False) -> dict[str, object]:
         "a": torch.empty((rows, candidate.NUM_V_HEADS), dtype=torch.bfloat16),
         "b": torch.empty((rows, candidate.NUM_V_HEADS), dtype=torch.bfloat16),
         "A_log": torch.empty((candidate.NUM_V_HEADS,), dtype=torch.float32),
-        "dt_bias": torch.empty((candidate.NUM_V_HEADS,), dtype=torch.float32),
+        "dt_bias": torch.empty((candidate.NUM_V_HEADS,), dtype=torch.bfloat16),
         "query": torch.empty(
             (1, rows, candidate.NUM_K_HEADS, candidate.HEAD_K_DIM),
             dtype=torch.bfloat16,
@@ -528,6 +528,13 @@ def test_layout_contract_accepts_exact_surfaces_and_rejects_alias_drift() -> Non
     shared_inputs = dict(operands)
     shared_inputs["b"] = shared_inputs["a"]
     candidate.fixed32_sfwd_conv_postprep_layout_contract(**shared_inputs)
+
+
+def test_layout_contract_rejects_nonproduction_fp32_dt_bias() -> None:
+    operands = _valid_layout_operands()
+    operands["dt_bias"] = operands["dt_bias"].to(torch.float32)
+    with pytest.raises(ValueError, match="dt_bias_dtype"):
+        candidate.fixed32_sfwd_conv_postprep_layout_contract(**operands)
 
 
 @pytest.mark.parametrize("invalid_index", (-1, 2))
