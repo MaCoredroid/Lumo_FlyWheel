@@ -1,0 +1,5 @@
+path	dtype	instructions	branches	registers	stack_bytes	local_bytes	static_shared_bytes	ldl	stl
+incumbent	fp16	760	38	168	8	0	1024	3	1
+candidate	fp16	560	29	168	0	0	1024	0	0
+incumbent	bf16	760	38	168	8	0	1024	3	1
+candidate	bf16	560	29	168	0	0	1024	0	0
