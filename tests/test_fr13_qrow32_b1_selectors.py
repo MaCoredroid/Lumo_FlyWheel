@@ -227,6 +227,37 @@ def test_fa2_interface_allows_only_exact_private_b1_split2_tag() -> None:
     )
 
 
+def test_split2_source_setup_allocates_scratch_only_for_private_tag() -> None:
+    patcher = _module(PATCHER, "qrow32_b1_split2_scratch_setup")
+    stock = patcher.STOCK_VARLEN_SPLITKV_SETUP
+
+    unchanged, changed = (
+        patcher._patch_fixed32_query_tile32_b1_split2_scratch_setup(
+            stock, enabled=False
+        )
+    )
+    assert not changed
+    assert unchanged == stock
+
+    patched, changed = (
+        patcher._patch_fixed32_query_tile32_b1_split2_scratch_setup(
+            stock, enabled=True
+        )
+    )
+    assert changed
+    assert "!fr13_qrow32_b1_split2 || num_splits == 2" in patched
+    assert "seqlenq_ngroups_swapped || fr13_qrow32_b1_split2" in patched
+    assert patched.count("set_params_splitkv(") == 1
+
+    idempotent, changed = (
+        patcher._patch_fixed32_query_tile32_b1_split2_scratch_setup(
+            patched, enabled=True
+        )
+    )
+    assert not changed
+    assert idempotent == patched
+
+
 def test_fa2_interface_patcher_replaces_generic_split_guard(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

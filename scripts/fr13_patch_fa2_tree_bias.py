@@ -1150,6 +1150,34 @@ FIXED32_QUERY_TILE32_B1_SPLIT2_API_GATE = r'''    if (params.tree_bias_batch_str
 '''
 
 
+STOCK_VARLEN_SPLITKV_SETUP = r'''    // Keep references to these tensors to extend their lifetime
+    at::Tensor softmax_lse_accum, out_accum;
+    if (seqlenq_ngroups_swapped) {
+        // Only apply split-k for decoding
+        std::tie(softmax_lse_accum, out_accum) =
+            set_params_splitkv(params, batch_size, num_heads, head_size,
+                               max_seqlen_k, max_seqlen_q, head_size_rounded,
+                               p_dropout, num_splits, get_num_sm(get_current_device()), opts);
+    }
+'''
+
+
+FIXED32_QUERY_TILE32_B1_SPLIT2_SCRATCH_SETUP = r'''    // Keep references to these tensors to extend their lifetime
+    at::Tensor softmax_lse_accum, out_accum;
+    const bool fr13_qrow32_b1_split2 =
+        params.tree_bias_batch_stride == kFr13Qrow32B1Split2BatchStrideSentinel;
+    TORCH_CHECK(
+        !fr13_qrow32_b1_split2 || num_splits == 2,
+        "FR13 B1 qrow32 split2 scratch setup requires num_splits=2");
+    if (seqlenq_ngroups_swapped || fr13_qrow32_b1_split2) {
+        std::tie(softmax_lse_accum, out_accum) =
+            set_params_splitkv(params, batch_size, num_heads, head_size,
+                               max_seqlen_k, max_seqlen_q, head_size_rounded,
+                               p_dropout, num_splits, get_num_sm(get_current_device()), opts);
+    }
+'''
+
+
 FIXED32_QUERY_TILE16_API_DISPATCH = rf'''constexpr int64_t kFr13Qrow16BatchStrideSentinel =
     {FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL};
 
@@ -1284,6 +1312,19 @@ def _install_hidden_api_gate(
         )
         changed = True
     return text, changed
+
+
+def _patch_fixed32_query_tile32_b1_split2_scratch_setup(
+    text: str, *, enabled: bool
+) -> tuple[str, bool]:
+    if not enabled:
+        return text, False
+    return _replace_once(
+        text,
+        STOCK_VARLEN_SPLITKV_SETUP,
+        FIXED32_QUERY_TILE32_B1_SPLIT2_SCRATCH_SETUP,
+        "fixed32 FA2 qrow32 B1 split2 scratch setup",
+    )
 
 
 def _patch_flash_h(path: Path) -> bool:
@@ -2506,6 +2547,10 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
             declaration=FIXED32_QUERY_TILE32_B1_SPLIT2_API_DECLARATION,
             gate=FIXED32_QUERY_TILE32_B1_SPLIT2_API_GATE,
             label="fixed32 FA2 query tile32 B1 split2 hidden API dispatch",
+        )
+        changed = changed or did
+        text, did = _patch_fixed32_query_tile32_b1_split2_scratch_setup(
+            text, enabled=True
         )
         changed = changed or did
     if changed:
