@@ -444,13 +444,73 @@ def test_served_integer_walk_reads_physical_slots_without_topology_maps() -> Non
     assert "cand_self_token + self_source" in compare_source
     assert "cand_source + physical_target_offset" in compare_source
 
-    assert (
-        "_fr13_fixed32_taw_physical_slot_commit_kernel"
-        in source[
-            source.index("_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (") :
-            source.index("_FR13_FIXED32_TAW_GEOMETRY = {")
-        ]
+    taw_kernel_contract = source[
+        source.index("_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (") :
+        source.index("_FR13_FIXED32_TAW_GEOMETRY = {")
+    ]
+    integration_kernel_contract = source[
+        source.index(
+            "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_KERNEL_SOURCE_FUNCTIONS = ("
+        ) : source.index(
+            "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE"
+        )
+    ]
+    assert "_fr13_fixed32_taw_physical_slot_commit_kernel" not in (
+        taw_kernel_contract
     )
+    assert "_fr13_fixed32_taw_physical_slot_commit_kernel" in (
+        integration_kernel_contract
+    )
+
+
+def test_cfwd_integration_source_contract_is_separate_and_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "fr13_cfwd_integration_source_contract_test",
+        SERVED_PATH,
+    )
+    assert spec is not None and spec.loader is not None
+    device = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(device)
+    contract = device._fr13_cfwd_logit_direct_integration_source_contract()
+    assert contract == {
+        "integration_source_schema": (
+            "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+        ),
+        "integration_source_sha256": (
+            "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+        ),
+    }
+    assert device._FR13_FIXED32_TAW_SOURCE_SHA256 == (
+        "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
+    )
+    assert device._FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS == (
+        "_fr13_fixed32_taw_exact_commit_kernel",
+        "_fr13_fixed32_taw_all_parent_commit_kernel",
+    )
+    assert "_fr13_fixed32_taw_physical_slot_commit_kernel" in (
+        device._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_KERNEL_SOURCE_FUNCTIONS
+    )
+    assert "_fr13_cfwd_logit_direct_walk_cuda" in (
+        device._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_FUNCTIONS
+    )
+    assert "fr13_fixed32_cfwd_logit_direct_commit" in (
+        device._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_FUNCTIONS
+    )
+
+    monkeypatch.setattr(
+        device,
+        "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE",
+        None,
+    )
+    monkeypatch.setattr(
+        device,
+        "_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256",
+        "0" * 64,
+    )
+    with pytest.raises(RuntimeError, match="integration source digest drift"):
+        device._fr13_cfwd_logit_direct_integration_source_contract()
 
 
 @pytest.mark.parametrize("mode", sorted(kernel.FIXED32_MODES))

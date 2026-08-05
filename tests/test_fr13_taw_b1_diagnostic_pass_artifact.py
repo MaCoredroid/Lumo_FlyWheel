@@ -121,7 +121,7 @@ def test_diagnostic_pass_cannot_arm_current_production() -> None:
         )
 
 
-def test_old_candidate_math_projection_is_not_current_physical_slot_source() -> None:
+def test_candidate_math_projection_is_identical_but_control_source_is_not() -> None:
     proof = json.loads(
         (ARTIFACT / "source_equivalence.json").read_text(encoding="ascii")
     )
@@ -134,15 +134,8 @@ def test_old_candidate_math_projection_is_not_current_physical_slot_source() -> 
     assert current_projection == (
         proof["candidate_math_projection"]["current_sha256"]
     )
-    assert run_projection != current_projection
-    assert proof["candidate_math_projection"]["equal"] is False
-    assert proof["conclusion"]["candidate_math_equivalent"] is False
-    assert (
-        proof["conclusion"][
-            "diagnostic_evidence_informative_for_current_candidate"
-        ]
-        is False
-    )
+    assert run_projection == current_projection
+    assert proof["conclusion"]["candidate_math_equivalent"] is True
     assert proof["conclusion"]["full_source_contract_equivalent"] is False
     assert proof["conclusion"]["production_eligible"] is False
 

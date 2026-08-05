@@ -1536,6 +1536,38 @@ _FR13_CFWD_LOGIT_DIRECT_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.
 _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256 = (
     "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192"
 )
+_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA = (
+    "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+)
+_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256 = (
+    "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+)
+_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_FUNCTIONS = (
+    "_fr13_cfwd_logit_direct_requested",
+    "_fr13_cfwd_logit_direct_production_pass",
+    "_fr13_cfwd_logit_direct_selector",
+    "_fr13_cfwd_logit_direct_load",
+    "_fr13_cfwd_logit_direct_entry",
+    "_fr13_cfwd_logit_direct_walk_entry",
+    "_fr13_cfwd_logit_direct_state",
+    "fr13_fixed32_cfwd_logit_direct_capture_begin",
+    "fr13_fixed32_cfwd_logit_direct_capture_end",
+    "_fr13_cfwd_logit_direct_walk_cuda",
+    "_fr13_cfwd_logit_direct_compare",
+    "_fr13_cfwd_logit_direct_tensor_call_census",
+    "_fr13_cfwd_logit_direct_publish_work",
+    "_fr13_cfwd_logit_direct_production_commit",
+    "fr13_fixed32_cfwd_logit_direct_commit",
+    "fr13_fixed32_cfwd_logit_direct_warm_execute",
+    "fr13_fixed32_cfwd_logit_direct_live_prepare_replay",
+    "_fr13_cfwd_logit_direct_real_marker",
+    "fr13_fixed32_cfwd_logit_direct_live_finalize",
+)
+_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_KERNEL_SOURCE_FUNCTIONS = (
+    "_fr13_fixed32_taw_physical_slot_commit_kernel",
+    "_fr13_cfwd_logit_direct_compare_kernel",
+)
+_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE: dict[str, str] | None = None
 _FR13_CFWD_LOGIT_DIRECT_MODULE = None
 _FR13_CFWD_LOGIT_DIRECT_GRAPHS: dict[int, dict[str, Any]] = {}
 _FR13_CFWD_LOGIT_DIRECT_CAPTURE: dict[str, Any] | None = None
@@ -1545,7 +1577,7 @@ _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS: dict[str, Any] | None = None
 _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256: str | None = None
 _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "694a3f4cd6e36ff1b6503ff19b2968b94a1ac226535a6efb44dcea1bb8a9a57b"
+    "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1596,7 +1628,6 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
 _FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_taw_exact_commit_kernel",
     "_fr13_fixed32_taw_all_parent_commit_kernel",
-    "_fr13_fixed32_taw_physical_slot_commit_kernel",
 )
 _FR13_FIXED32_TAW_GEOMETRY = {
     "physical_drafts": 31,
@@ -5308,6 +5339,82 @@ def fr13_fixed32_taw_commit(
     )
 
 
+def _fr13_cfwd_logit_direct_integration_source_contract() -> dict[str, str]:
+    """Bind the CFWD-only wrappers and kernels without changing TAW identity."""
+    global _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE
+    if _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE is not None:
+        return dict(_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE)
+
+    try:
+        tree = ast.parse(Path(__file__).resolve().read_text(encoding="utf-8"))
+    except (OSError, SyntaxError) as error:
+        raise RuntimeError(
+            "FR13 CFWD logit-direct cannot inspect integration source"
+        ) from error
+    expected_functions = set(
+        _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_FUNCTIONS
+    )
+    expected_kernels = set(
+        _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_KERNEL_SOURCE_FUNCTIONS
+    )
+    expected = expected_functions | expected_kernels
+    definitions: dict[str, list[Any]] = {name: [] for name in expected}
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name in definitions
+        ):
+            definitions[node.name].append(node)
+    if any(len(nodes) != 1 for nodes in definitions.values()):
+        raise RuntimeError(
+            "FR13 CFWD logit-direct integration source is incomplete or ambiguous"
+        )
+
+    normalized = {
+        name: ast.dump(
+            definitions[name][0],
+            annotate_fields=True,
+            include_attributes=False,
+        )
+        for name in sorted(expected)
+    }
+    canonical = json.dumps(
+        {
+            "schema": _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA,
+            "candidate": {
+                "name": _FR13_CFWD_LOGIT_DIRECT_CANDIDATE,
+                "schema": _FR13_CFWD_LOGIT_DIRECT_SCHEMA,
+                "source_sha256": _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256,
+            },
+            "geometry": _FR13_FIXED32_TAW_GEOMETRY,
+            "functions": {
+                name: normalized[name] for name in sorted(expected_functions)
+            },
+            "kernels": {
+                name: normalized[name] for name in sorted(expected_kernels)
+            },
+        },
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    digest = hashlib.sha256(canonical.encode("ascii")).hexdigest()
+    if digest != _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256:
+        raise RuntimeError(
+            "FR13 CFWD logit-direct integration source digest drift: "
+            f"{digest} != "
+            f"{_FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256}"
+        )
+    contract = {
+        "integration_source_schema": (
+            _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA
+        ),
+        "integration_source_sha256": digest,
+    }
+    _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_CACHE = contract
+    return dict(contract)
+
+
 def _fr13_cfwd_logit_direct_requested() -> bool:
     raw = os.environ.get("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "0").strip()
     if raw not in ("0", "1"):
@@ -5361,6 +5468,9 @@ def _fr13_cfwd_logit_direct_production_pass(
     source_commit = os.environ.get(
         "FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT", ""
     ).strip()
+    integration_contract = (
+        _fr13_cfwd_logit_direct_integration_source_contract()
+    )
     expected_keys = {
         "schema",
         "status",
@@ -5368,6 +5478,8 @@ def _fr13_cfwd_logit_direct_production_pass(
         "candidate_schema",
         "candidate_source_sha256",
         "integration_source_commit",
+        "integration_source_schema",
+        "integration_source_sha256",
         "mode",
         "qualified_batch",
         "task_count",
@@ -5390,13 +5502,17 @@ def _fr13_cfwd_logit_direct_production_pass(
         not isinstance(payload, dict)
         or set(payload) != expected_keys
         or payload.get("schema")
-        != "fr13.fixed32.cfwd_logit_direct.production_credential.v1"
+        != "fr13.fixed32.cfwd_logit_direct.production_credential.v2"
         or payload.get("status") != "production_timing_ready"
         or payload.get("candidate") != _FR13_CFWD_LOGIT_DIRECT_CANDIDATE
         or payload.get("candidate_schema") != _FR13_CFWD_LOGIT_DIRECT_SCHEMA
         or payload.get("candidate_source_sha256")
         != _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256
         or payload.get("integration_source_commit") != source_commit
+        or payload.get("integration_source_schema")
+        != integration_contract["integration_source_schema"]
+        or payload.get("integration_source_sha256")
+        != integration_contract["integration_source_sha256"]
         or payload.get("mode") != expected_mode
         or payload.get("qualified_batch") != int(expected_batch)
         or payload.get("task_count") != 1
@@ -5436,13 +5552,14 @@ def _fr13_cfwd_logit_direct_production_pass(
     )
     if not engagement_path.exists():
         engagement = {
-            "schema": "fr13.fixed32.cfwd_logit_direct.production_engagement.v1",
+            "schema": "fr13.fixed32.cfwd_logit_direct.production_engagement.v2",
             "status": "engaged",
             "candidate": _FR13_CFWD_LOGIT_DIRECT_CANDIDATE,
             "mode": expected_mode,
             "batch_size": int(expected_batch),
             "source_commit": source_commit,
             "candidate_source_sha256": _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256,
+            **integration_contract,
             "production_pass_sha256": observed_sha,
             "served_return": "logit-direct candidate products",
             "producer_pid": os.getpid(),
@@ -5483,6 +5600,8 @@ def _fr13_cfwd_logit_direct_selector(
         raise RuntimeError(
             "FR13 CFWD logit-direct diagnostic and production are mutually exclusive"
         )
+    if diagnostic or production:
+        _fr13_cfwd_logit_direct_integration_source_contract()
     if production:
         _fr13_cfwd_logit_direct_production_pass(
             expected_mode=mode,
@@ -5839,8 +5958,12 @@ def _fr13_cfwd_logit_direct_publish_work(
         "exact_commit_launches": 1,
         "exact_commit_programs": batch_size,
         "floating_sampling_reimplementation": False,
-        "source_contract_schema": _FR13_CFWD_LOGIT_DIRECT_SCHEMA,
-        "source_contract_sha256": _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256,
+        "source_contract_schema": (
+            _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SCHEMA
+        ),
+        "source_contract_sha256": (
+            _FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256
+        ),
         "tensor_call_census": _fr13_cfwd_logit_direct_tensor_call_census(),
     }
     overlap = set(taw).intersection(layout_contract)
@@ -6433,8 +6556,11 @@ def fr13_fixed32_cfwd_logit_direct_live_finalize(
         count * batch * (32 + 1 + 16 + 1 + 1)
         for batch, count in histogram.items()
     )
+    integration_contract = (
+        _fr13_cfwd_logit_direct_integration_source_contract()
+    )
     record = {
-        "schema": "fr13.fixed32.cfwd_logit_direct_live_ab.v1",
+        "schema": "fr13.fixed32.cfwd_logit_direct_live_ab.v2",
         "status": "PASS",
         "suite": "SWE-Verified",
         "instance_id": instance_id,
@@ -6445,6 +6571,7 @@ def fr13_fixed32_cfwd_logit_direct_live_finalize(
         "candidate": _FR13_CFWD_LOGIT_DIRECT_CANDIDATE,
         "candidate_schema": _FR13_CFWD_LOGIT_DIRECT_SCHEMA,
         "candidate_source_sha256": _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256,
+        **integration_contract,
         "incumbent_source_sha256": _FR13_FIXED32_TAW_SOURCE_SHA256,
         "graph_ids": sorted(graph_ids),
         "complete_work_census_events": len(event_rows),

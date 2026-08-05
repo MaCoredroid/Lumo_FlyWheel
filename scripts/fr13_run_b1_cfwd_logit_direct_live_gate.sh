@@ -82,6 +82,30 @@ unset required
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ \
    && -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean at a valid source commit" >&2; exit 2; }
+"$PYTHON_BIN" - "$GATE" "$TAW_SOURCE" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+
+def load(path: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(path))
+    if spec is None or spec.loader is None:
+        raise SystemExit("CFWD integration source contract module is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+gate = load(sys.argv[1], "fr13_cfwd_gate_contract_preflight")
+device = load(sys.argv[2], "fr13_cfwd_device_contract_preflight")
+contract = device._fr13_cfwd_logit_direct_integration_source_contract()
+if (
+    contract.get("integration_source_schema") != gate.INTEGRATION_SOURCE_SCHEMA
+    or contract.get("integration_source_sha256") != gate.INTEGRATION_SOURCE_SHA256
+):
+    raise SystemExit("CFWD integration source contract mismatch")
+PY
 "$PYTHON_BIN" scripts/fr13_taw_b1_credential.py validate-production \
   --mode hydra27_fixed32 \
   --source "$TAW_SOURCE" \

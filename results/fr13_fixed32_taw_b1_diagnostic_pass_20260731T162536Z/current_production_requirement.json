@@ -1,13 +1,13 @@
 {
   "schema": "fr13.fixed32.taw_native_precompute.production_requirement.v1",
   "validator_source": "scripts/fr13_device_multidraft_kernel.py:_fr13_fixed32_taw_native_production_pass",
-  "validator_tree_commit": "a3443d40b9db4bf12475888a784a88812098d28e",
+  "validator_tree_commit": "3f31d56dc0ceadc97edd54f6d087ab3fd2ba1195",
   "required_payload": {
     "schema": "fr13.fixed32.taw_native_precompute.live_pass.v1",
     "status": "pass",
-    "candidate": "fixed32_all_parent_commit_v2",
-    "source_contract_schema": "fr13-fixed32-taw-all-parent-v7",
-    "source_contract_sha256": "694a3f4cd6e36ff1b6503ff19b2968b94a1ac226535a6efb44dcea1bb8a9a57b",
+    "candidate": "fixed32_native_precompute_v1",
+    "source_contract_schema": "fr13-fixed32-taw-exact-commit-v3",
+    "source_contract_sha256": "42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da",
     "reference_returned": true,
     "candidate_returned": false,
     "probability_mismatches": 0,

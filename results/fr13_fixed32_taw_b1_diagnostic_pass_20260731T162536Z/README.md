@@ -15,9 +15,9 @@ This is not a production-arming PASS.
 
 The run executed commit `850355982` with source contract
 `fe73ad35a916e41532575e29a5f9f6442d1081d0d1c0d0fc18210fdc8f0f56f8`.
-The current production selector requires the exact all-parent-v7 payload
-schema and source contract
-`694a3f4cd6e36ff1b6503ff19b2968b94a1ac226535a6efb44dcea1bb8a9a57b`.
+The production selector on the coherent next-stack requires the exact v1
+payload schema and source contract
+`42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da`.
 It also adds an in-runtime real-task arm and atomic live-PASS emitter that the
 older run source did not contain.
 
@@ -30,11 +30,16 @@ arm.
 
 ## Source equivalence
 
+The source delta is nevertheless informative for prioritizing the rerun.
 `source_equivalence.json` compares normalized ASTs between the run source and
-the current physical-slot integration. The projection now differs because the
-served all-parent path and executed physical committer have changed. The old
-diagnostic remains valid evidence for its recorded source only; it is neither
-math-equivalent to nor production-informative for the current candidate.
+the next-stack tree. Nineteen candidate-math functions plus the geometry,
+reference census, and diagnostic census have the identical projection hash
+`56c51ada155df8bea5d67a2af4d4a9744b999068f15bb27e0ca0c81327993763`.
+The full source contracts differ because selector, task-marker, PASS-emission,
+production-return, and census-control code changed.
+
+That proof supports `candidate_math_equivalent=true`; it does not confer
+production eligibility.
 
 ## Exact evidence
 
