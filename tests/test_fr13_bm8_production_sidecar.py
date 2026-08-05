@@ -211,6 +211,9 @@ def test_bm8_production_selector_is_default_off_and_fail_closed() -> None:
     assert "qualified source drifted" in patcher
     assert '"status": "CAPTURED_PENDING_REPLAY"' in patcher
     assert 'published["status"] = "ENGAGED"' in patcher
+    assert 'published["graph_captures"] = 1' in patcher
+    assert 'published["measured_replays"] = 1' in patcher
+    assert 'published["unmeasured_replays"] = 0' in patcher
     assert "_fr13_dg_all.pop(_fr13_dg_key, None)" in patcher
 
     assert (
@@ -481,10 +484,14 @@ def test_production_capture_requires_four_dispatches_and_clears_selector(
         22, 1, "d" * 64
     )
     capture = json.loads(capture_json.read_text(encoding="ascii"))
+    assert capture["schema"].endswith("production_capture.v2")
     assert capture["status"] == "ENGAGED"
     assert capture["runtime_mode"] == "FULL"
     assert capture["candidate"]["calls"] == 4
     assert capture["qualified_source_sha256"] == source_sha256
+    assert capture["graph_captures"] == 1
+    assert capture["measured_replays"] == 1
+    assert capture["unmeasured_replays"] == 0
 
     namespace["_fr13_dfwd_unified_bm8_production_begin"](22, 1)
     context["bm8_production"]["guarded_calls"] = 3

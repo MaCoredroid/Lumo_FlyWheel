@@ -16,7 +16,7 @@ import fr13_qrow32_split2_timing as qrow_timing
 import fr13_b1_composed_stack_gate as composed_gate
 
 
-SCHEMA = "fr13.fixed32.b1_composed_stack.exact4_timing.v2"
+SCHEMA = "fr13.fixed32.b1_composed_bm8_stack.exact4_timing.v3"
 TARGET_SELECTOR = "identity_wide256_fullgrid_b1"
 TARGET_SHA256 = "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da"
 DFWD_MARKERS = (
@@ -133,6 +133,8 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
     cfwd_evidence: dict[str, Any] = {}
     if cfwd_production:
         taw_raw = _regular(args.taw_production_pass)
+        bm8_pass, bm8_pass_raw = _load(args.bm8_production_pass)
+        bm8_engagement, bm8_engagement_raw = _load(args.bm8_engagement)
         cfwd_pass, cfwd_pass_raw = _load(args.cfwd_production_pass)
         cfwd_engagement, cfwd_engagement_raw = _load(args.cfwd_engagement)
         smoke, smoke_raw = _load(args.cfwd_smoke_credential)
@@ -140,6 +142,11 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
             taw_raw,
             args.taw_production_pass_sha256,
             "TAW production PASS",
+        )
+        bm8_sha = _expect_sha(
+            bm8_pass_raw,
+            args.bm8_production_pass_sha256,
+            "BM8 production credential",
         )
         cfwd_sha = _expect_sha(
             cfwd_pass_raw,
@@ -160,6 +167,11 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
                 source_commit=args.source_commit,
                 component_hashes=component_hashes,
             )
+            composed_gate._validate_bm8_production_pass(bm8_pass)
+            composed_gate._validate_bm8_engagement(
+                bm8_engagement,
+                credential_sha256=bm8_sha,
+            )
             composed_gate.cfwd_gate._validate_credential(
                 cfwd_pass,
                 expected_source_commit=args.source_commit,
@@ -179,6 +191,7 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
             "sfwd_pass": _sha(sfwd_pass_raw),
             "sfwd_manifest": _sha(sfwd_manifest_raw),
             "target_sfwd_summary": _sha(eager_summary_raw),
+            "dfwd_unified_bm8": bm8_sha,
             "taw_production": taw_sha,
             "cfwd_credential": cfwd_sha,
         }
@@ -186,6 +199,13 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
             raise ValueError("exact4 credentials do not match production smoke")
         cfwd_evidence = {
             "taw_production_pass_sha256": taw_sha,
+            "bm8_production_pass_sha256": bm8_sha,
+            "bm8_measured_replay_engagement_sha256": _sha(
+                bm8_engagement_raw
+            ),
+            "bm8_graph_captures": 1,
+            "bm8_measured_replays": 1,
+            "bm8_unmeasured_replays": 0,
             "cfwd_production_pass_sha256": cfwd_sha,
             "cfwd_production_engagement_sha256": _sha(cfwd_engagement_raw),
             "cfwd_production_smoke_sha256": smoke_sha,
@@ -208,6 +228,7 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
         "FR13_FIXED32_MODE=hydra27_fixed32",
         "FR13_DRAFT_VOCAB_ROOT=1",
         "FR13_DRAFT_VOCAB_K=65536",
+        "FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json",
         "MAX_NUM_SEQS=1",
         "SWE_CONCURRENCY=1",
         "ENFORCE_EAGER=0",
@@ -219,6 +240,7 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
         "FR13_DFWD_K64_TOP3=1",
         f"FR13_FIXED32_CUTLASS_WAVE={TARGET_SELECTOR}",
         "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=1",
+        "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=k64_root",
         "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=1",
         "FR13_CONV_WB_BATCHED=1",
         "FR13_SFWD_GPU_TIMER=1",
@@ -231,6 +253,12 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
             "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=1",
             "FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0",
             "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=1",
+            "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0",
+            "FR13_DFWD_UNIFIED_BM8_PRODUCTION=1",
+            "FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR=/logs/fr13_dfwd_unified_bm8.production_pass.json",
+            f"FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256={composed_gate.BM8_PRODUCTION_PASS_SHA256}",
+            f"FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256={composed_gate.BM8_QUALIFIED_SOURCE_SHA256}",
+            "FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON=/logs/fr13_dfwd_unified_bm8.production_capture.json",
         )
     else:
         required_env += (
@@ -238,6 +266,8 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
             "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0",
             "FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0",
             "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0",
+            "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0",
+            "FR13_DFWD_UNIFIED_BM8_PRODUCTION=0",
         )
     missing = [line for line in required_env if container_lines.count(line) != 1]
     if missing:
@@ -271,7 +301,7 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
         **base,
         "schema": SCHEMA,
         "run_classification": (
-            "real_swe_verified_exact4_b1_composed_cfwd_kernel_stack"
+            "real_swe_verified_exact4_b1_composed_bm8_cfwd_kernel_stack"
             if cfwd_production
             else "real_swe_verified_exact4_b1_composed_kernel_stack"
         ),
@@ -279,6 +309,7 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
             "qrow32_split2": True,
             "gdn_gqa_group3": True,
             "dfwd_k64_top3": True,
+            "dfwd_unified_attention_bm8": cfwd_production,
             "target_gemm_selector": TARGET_SELECTOR,
             "sfwd_conv_postprep": True,
             "taw_native_precompute": cfwd_production,
@@ -374,6 +405,8 @@ def parser() -> argparse.ArgumentParser:
         result.add_argument(f"--{name}", required=True)
     for name in (
         "taw-production-pass",
+        "bm8-production-pass",
+        "bm8-engagement",
         "cfwd-production-pass",
         "cfwd-engagement",
         "cfwd-smoke-credential",
@@ -381,6 +414,7 @@ def parser() -> argparse.ArgumentParser:
         result.add_argument(f"--{name}", type=Path)
     for name in (
         "taw-production-pass-sha256",
+        "bm8-production-pass-sha256",
         "cfwd-production-pass-sha256",
         "cfwd-smoke-credential-sha256",
     ):
@@ -396,6 +430,9 @@ def main() -> int:
     cfwd_values = (
         args.taw_production_pass,
         args.taw_production_pass_sha256,
+        args.bm8_production_pass,
+        args.bm8_production_pass_sha256,
+        args.bm8_engagement,
         args.cfwd_production_pass,
         args.cfwd_production_pass_sha256,
         args.cfwd_engagement,

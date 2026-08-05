@@ -119,6 +119,10 @@ FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
 SOURCE_CLOSURE_SHA256=c10888e721335ff99f93dabdfea7d8a524fbd7e21e8aee3f425f50af06bf5d84
 BASELINE=$REPO/results/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/hydra_valid/deploy_speed_qrow16_prod_exact4_b1_20260731T182827Z.json
 BASELINE_SHA256=0350e791bc825083bfc3635e11c875617fa1d3823eba5f93ebd7f392c50f18d0
+BM8_LIVE_PASS=$REPO/results/fr13_fixed32_bm8_b1_live_pass_20260731T180804Z/run_evidence/live_pass.json
+BM8_LIVE_PASS_SHA256=570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5
+BM8_PRODUCTION_CREDENTIAL=$REPO/results/fr13_fixed32_bm8_production_ready_20260731T193828Z/production_pass.json
+BM8_PRODUCTION_CREDENTIAL_SHA256=d958c8b08a62d13e2dac9abbb214817748c15c12be212196f2d4b615390c641a
 MANDATORY_WEIGHT_BYTES=32666638208
 MANDATORY_WEIGHT_FLOOR_MS=119.658015414
 ONE_SIDED_U95_CAP_MS=137.6067177261
@@ -181,7 +185,8 @@ if [[ "$CFWD_PRODUCTION" == "1" ]]; then
   for required in \
       "$TAW_B1_CREDENTIAL" "$TAW_B1_LIVE_BUNDLE" \
       "$TAW_REVIEWED_B4_PASS" "$TAW_REVIEWED_B4_VERDICT" \
-      "$TAW_MERGE_BINDING" "$TAW_PASS_JSON" "$CFWD_PASS_JSON"; do
+      "$TAW_MERGE_BINDING" "$TAW_PASS_JSON" "$CFWD_PASS_JSON" \
+      "$BM8_LIVE_PASS" "$BM8_PRODUCTION_CREDENTIAL"; do
     [[ "$required" == /* && -f "$required" && ! -L "$required" ]] \
       || { echo "TAW/CFWD input must be an absolute regular file: $required" >&2; exit 2; }
   done
@@ -240,8 +245,10 @@ if [[ "$CFWD_PRODUCTION" == "1" ]]; then
      && "$TAW_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
      && "$(sha256sum "$TAW_PASS_JSON" | awk '{print $1}')" == "$TAW_PASS_SHA256" \
      && "$CFWD_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
-     && "$(sha256sum "$CFWD_PASS_JSON" | awk '{print $1}')" == "$CFWD_PASS_SHA256" ]] \
-    || { echo "TAW/CFWD credential identity drifted" >&2; exit 2; }
+     && "$(sha256sum "$CFWD_PASS_JSON" | awk '{print $1}')" == "$CFWD_PASS_SHA256" \
+     && "$(sha256sum "$BM8_LIVE_PASS" | awk '{print $1}')" == "$BM8_LIVE_PASS_SHA256" \
+     && "$(sha256sum "$BM8_PRODUCTION_CREDENTIAL" | awk '{print $1}')" == "$BM8_PRODUCTION_CREDENTIAL_SHA256" ]] \
+    || { echo "TAW/CFWD/BM8 credential identity drifted" >&2; exit 2; }
   if [[ "$PRODUCTION_SMOKE" == "0" ]]; then
     [[ "$COMPOSED_CFWD_SMOKE_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
        && "$(sha256sum "$COMPOSED_CFWD_SMOKE_PASS" | awk '{print $1}')" \
@@ -260,6 +267,7 @@ if [[ "$CFWD_PRODUCTION" == "1" ]]; then
     --sfwd-pass-sha256 "$SFWD_CONV_POSTPREP_PASS_SHA256"
     --source-manifest-sha256 "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256"
     --combined-summary-sha256 "$TARGET_SFWD_COMBINED_SUMMARY_SHA256"
+    --bm8-credential-sha256 "$BM8_PRODUCTION_CREDENTIAL_SHA256"
     --taw-b1-credential-sha256 "$TAW_B1_CREDENTIAL_SHA256"
     --taw-b1-live-bundle-sha256 "$TAW_B1_LIVE_BUNDLE_SHA256"
     --taw-b4-pass-sha256 "$TAW_REVIEWED_B4_PASS_SHA256"
@@ -276,6 +284,7 @@ if [[ "$CFWD_PRODUCTION" == "1" ]]; then
     --sfwd-pass "$SFWD_PASS_ABS"
     --source-manifest "$SFWD_MANIFEST_ABS"
     --combined-summary "$TARGET_SFWD_COMBINED_SUMMARY"
+    --bm8-credential "$BM8_PRODUCTION_CREDENTIAL"
     --taw-b1-credential "$TAW_B1_CREDENTIAL"
     --taw-b1-live-bundle "$TAW_B1_LIVE_BUNDLE"
     --taw-b4-pass "$TAW_REVIEWED_B4_PASS"
@@ -422,10 +431,10 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
   CLASSIFICATION=real_swe_verified_exact4_b1_composed_kernel_stack
 fi
 if [[ "$CFWD_PRODUCTION" == "1" ]]; then
-  CLASSIFICATION=real_swe_verified_exact4_b1_composed_cfwd_kernel_stack
+  CLASSIFICATION=real_swe_verified_exact4_b1_composed_bm8_cfwd_kernel_stack
 fi
 if [[ "$PRODUCTION_SMOKE" == "1" ]]; then
-  CLASSIFICATION=real_swe_verified_one_task_b1_composed_cfwd_production_smoke
+  CLASSIFICATION=real_swe_verified_one_task_b1_composed_bm8_cfwd_production_smoke
 fi
 printf 'classification=%s\ntask_count=%s\nbatch_size=1\nconcurrency=1\ntiming_eligible=%s\nformal_floor_acceptance_eligible=0\ntopology=hydra27_fixed32\nphysical_rows=32\nlogical_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_root=1\ndraft_vocab_k=65536\nqrow32_split2_production=1\nruntime=FULL_graph_exact_geometry\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nexact16_rule=only_after_exact4_u95_clears_cap\narm=%s\nsource=%s\npatch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\npass_sha256=%s\nqrow16_historical_baseline_sha256=%s\nstarted=%s\n' \
   "$CLASSIFICATION" "$TASK_COUNT" "$TIMING_ELIGIBLE" \
@@ -446,10 +455,11 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
     >> "$RUNROOT_ABS/launcher_meta.txt"
 fi
 if [[ "$CFWD_PRODUCTION" == "1" ]]; then
-  printf 'taw_native_precompute_production=1\ncfwd_logit_direct_production=1\ntaw_b1_credential_sha256=%s\ntaw_b1_live_bundle_sha256=%s\ntaw_reviewed_b4_pass_sha256=%s\ntaw_reviewed_b4_verdict_sha256=%s\ntaw_merge_binding_sha256=%s\ntaw_pass_sha256=%s\ncfwd_pass_sha256=%s\n' \
+  printf 'taw_native_precompute_production=1\ncfwd_logit_direct_production=1\ndfwd_unified_bm8_production=1\ntaw_b1_credential_sha256=%s\ntaw_b1_live_bundle_sha256=%s\ntaw_reviewed_b4_pass_sha256=%s\ntaw_reviewed_b4_verdict_sha256=%s\ntaw_merge_binding_sha256=%s\ntaw_pass_sha256=%s\ncfwd_pass_sha256=%s\nbm8_production_credential_sha256=%s\n' \
     "$TAW_B1_CREDENTIAL_SHA256" "$TAW_B1_LIVE_BUNDLE_SHA256" \
     "$TAW_REVIEWED_B4_PASS_SHA256" "$TAW_REVIEWED_B4_VERDICT_SHA256" \
     "$TAW_MERGE_BINDING_SHA256" "$TAW_PASS_SHA256" "$CFWD_PASS_SHA256" \
+    "$BM8_PRODUCTION_CREDENTIAL_SHA256" \
     >> "$RUNROOT_ABS/launcher_meta.txt"
 fi
 
@@ -561,6 +571,19 @@ if [[ "$CFWD_PRODUCTION" == "1" ]]; then
     FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256="$CFWD_PASS_SHA256"
   )
 fi
+BM8_ENV=(
+  FR13_DFWD_UNIFIED_BM8_LIVE_AB=0
+  FR13_DFWD_UNIFIED_BM8_PRODUCTION=0
+)
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  BM8_ENV=(
+    FR13_DFWD_UNIFIED_BM8_LIVE_AB=0
+    FR13_DFWD_UNIFIED_BM8_PRODUCTION=1
+    FR13_DFWD_UNIFIED_BM8_LIVE_PASS_JSON="$BM8_LIVE_PASS"
+    FR13_DFWD_UNIFIED_BM8_LIVE_PASS_SHA256="$BM8_LIVE_PASS_SHA256"
+    FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON=/logs/fr13_dfwd_unified_bm8.production_capture.json
+  )
+fi
 
 if env \
     OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
@@ -592,7 +615,6 @@ if env \
     FR13_FA2_QROW32_B1_LIVE_PASS_SHA256="$QROW32_B1_PASS_SHA256" \
     FR13_FA2_QROW32_B1_EXACT4_TASK_IDS=astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398 \
     FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256="$EXACT4_SUBSET_SHA256" \
-    FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 FR13_DFWD_UNIFIED_BM8_PRODUCTION=0 \
     FR13_DRAFT_HEAD_PAD_ROWS=0 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0 \
     FR13_DRAFT_HEAD_M32_LIVE_AB=0 FR13_DRAFT_HEAD_M32_PRODUCTION=0 \
     FR13_FIXED32_BATCH_GDN_BYTE_AB=0 \
@@ -604,6 +626,7 @@ if env \
     FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
     FR13_FIXED32_ATTRIBUTION_ONLY=0 \
     "${CFWD_ENV[@]}" \
+    "${BM8_ENV[@]}" \
     "${STACK_ENV[@]}" \
     FORKED_FA2_SO="$QROW32_B1_FA2_SO" RUNROOT="$RUNROOT_ABS" \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh \
@@ -623,6 +646,7 @@ for expected in \
   'FR13_FIXED32_B1_DIAGNOSTIC=0' \
   'FR13_DRAFT_VOCAB_ROOT=1' \
   'FR13_DRAFT_VOCAB_K=65536' \
+  'FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json' \
   'MAX_NUM_SEQS=1' \
   'SWE_CONCURRENCY=1' \
   'ENFORCE_EAGER=0' \
@@ -633,6 +657,8 @@ for expected in \
   'FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2' \
   'FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0' \
   "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=$CFWD_PRODUCTION" \
+  'FR13_DFWD_UNIFIED_BM8_LIVE_AB=0' \
+  "FR13_DFWD_UNIFIED_BM8_PRODUCTION=$CFWD_PRODUCTION" \
   'FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0' \
   "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=$CFWD_PRODUCTION" \
   "FR13_FA2_QROW32_B1_SO_SHA256=$CANDIDATE_SHA256" \
@@ -677,6 +703,17 @@ else
     'FR13_CFWD_GPU_TIMER=1'; do
     [[ "$(grep -Fxc "$expected" "$CONTAINER_ENV")" -eq 1 ]] \
       || { echo "container lacks exact composed-stack pin: $expected" >&2; exit 4; }
+  done
+  unset expected
+fi
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  for expected in \
+    'FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR=/logs/fr13_dfwd_unified_bm8.production_pass.json' \
+    "FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256=$BM8_PRODUCTION_CREDENTIAL_SHA256" \
+    'FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256=3baccaa1a83907e15561b1cf807f15a41bd4764513bb43c4046b434937c3274b' \
+    'FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON=/logs/fr13_dfwd_unified_bm8.production_capture.json'; do
+    [[ "$(grep -Fxc "$expected" "$CONTAINER_ENV")" -eq 1 ]] \
+      || { echo "container lacks exact BM8 production pin: $expected" >&2; exit 4; }
   done
   unset expected
 fi
@@ -765,17 +802,21 @@ if [[ "$CFWD_PRODUCTION" == "1" ]]; then
   TAW_PRODUCTION_ARM="$ARMDIR/logs/fr13_fixed32_taw_native_precompute_production.arm"
   CFWD_PRODUCTION_PASS="$ARMDIR/logs/fr13_cfwd_logit_direct.production_pass.json"
   CFWD_ENGAGEMENT="$ARMDIR/logs/fr13_cfwd_logit_direct.production_engagement.json"
+  BM8_PRODUCTION_PASS="$ARMDIR/logs/fr13_dfwd_unified_bm8.production_pass.json"
+  BM8_ENGAGEMENT="$ARMDIR/logs/fr13_dfwd_unified_bm8.production_capture.json"
   for artifact in \
       "$TAW_PRODUCTION_PASS" "$TAW_PRODUCTION_ARM" \
-      "$CFWD_PRODUCTION_PASS" "$CFWD_ENGAGEMENT"; do
+      "$CFWD_PRODUCTION_PASS" "$CFWD_ENGAGEMENT" \
+      "$BM8_PRODUCTION_PASS" "$BM8_ENGAGEMENT"; do
     [[ -f "$artifact" && ! -L "$artifact" ]] \
       || { echo "TAW/CFWD production evidence is missing or unsafe: $artifact" >&2; exit 4; }
   done
   unset artifact
   [[ "$(sha256sum "$TAW_PRODUCTION_PASS" | awk '{print $1}')" == "$TAW_PASS_SHA256" \
      && "$(cat "$TAW_PRODUCTION_ARM")" == "1" \
-     && "$(sha256sum "$CFWD_PRODUCTION_PASS" | awk '{print $1}')" == "$CFWD_PASS_SHA256" ]] \
-    || { echo "TAW/CFWD copied production credential drifted" >&2; exit 4; }
+     && "$(sha256sum "$CFWD_PRODUCTION_PASS" | awk '{print $1}')" == "$CFWD_PASS_SHA256" \
+     && "$(sha256sum "$BM8_PRODUCTION_PASS" | awk '{print $1}')" == "$BM8_PRODUCTION_CREDENTIAL_SHA256" ]] \
+    || { echo "TAW/CFWD/BM8 copied production credential drifted" >&2; exit 4; }
 fi
 finalize_manifests
 
@@ -848,6 +889,9 @@ if [[ "$CFWD_PRODUCTION" == "1" ]]; then
     --cfwd-production
     --taw-production-pass "$TAW_PRODUCTION_PASS"
     --taw-production-pass-sha256 "$TAW_PASS_SHA256"
+    --bm8-production-pass "$BM8_PRODUCTION_PASS"
+    --bm8-production-pass-sha256 "$BM8_PRODUCTION_CREDENTIAL_SHA256"
+    --bm8-engagement "$BM8_ENGAGEMENT"
     --cfwd-production-pass "$CFWD_PRODUCTION_PASS"
     --cfwd-production-pass-sha256 "$CFWD_PASS_SHA256"
     --cfwd-engagement "$CFWD_ENGAGEMENT"

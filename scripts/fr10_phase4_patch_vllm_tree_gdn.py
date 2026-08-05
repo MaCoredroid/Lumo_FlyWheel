@@ -4604,7 +4604,7 @@ def _fr13_dfwd_unified_bm8_production_end(
                 "FR13 DFWD unified BM8 production did not capture four calls"
             )
         record = {
-            "schema": "fr13.fixed32.dfwd_unified_bm8_production_capture.v1",
+            "schema": "fr13.fixed32.dfwd_unified_bm8_production_capture.v2",
             "status": "CAPTURED_PENDING_REPLAY",
             "runtime_mode": "FULL",
             "batch_size": 1,
@@ -4672,6 +4672,9 @@ def _fr13_dfwd_unified_bm8_production_replay_installed(
     temporary = path.with_name(path.name + ".tmp")
     published = dict(record)
     published["status"] = "ENGAGED"
+    published["graph_captures"] = 1
+    published["measured_replays"] = 1
+    published["unmeasured_replays"] = 0
     temporary.write_text(
         __import__("json").dumps(
             published, ensure_ascii=True, indent=2, sort_keys=True

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import fr13_fixed32_contract as fixed32_contract
+import fr13_bm8_pass_sidecar as bm8_sidecar
 import fr13_cfwd_logit_direct_gate as cfwd_gate
 import fr13_qrow32_b1_pass_sidecar as qrow32
 import fr13_runtime_manifest as runtime_manifest
@@ -39,11 +40,21 @@ QROW_CREDENTIAL_SCHEMA = (
 )
 SFWD_COMBINED_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.k64_root_b1_gate.v1"
 SFWD_CANDIDATE = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
-PRODUCTION_SMOKE_SCHEMA = "fr13.fixed32.b1_composed_cfwd.production_smoke.v1"
+PRODUCTION_SMOKE_SCHEMA = "fr13.fixed32.b1_composed_bm8_cfwd.production_smoke.v2"
 TARGET_SELECTOR = "identity_wide256_fullgrid_b1"
 TARGET_SHA256 = "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da"
 CFWD_ENGAGEMENT_SCHEMA = "fr13.fixed32.cfwd_logit_direct.production_engagement.v1"
 CFWD_SERVED_RETURN = "logit-direct candidate products"
+BM8_CAPTURE_SCHEMA = "fr13.fixed32.dfwd_unified_bm8_production_capture.v2"
+BM8_LIVE_PASS_SHA256 = (
+    "570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5"
+)
+BM8_PRODUCTION_PASS_SHA256 = (
+    "d958c8b08a62d13e2dac9abbb214817748c15c12be212196f2d4b615390c641a"
+)
+BM8_QUALIFIED_SOURCE_SHA256 = (
+    "3baccaa1a83907e15561b1cf807f15a41bd4764513bb43c4046b434937c3274b"
+)
 DFWD_MARKERS = (
     "[FR13_DFWD_K64_TOP3] ready B1 K64 mapped width3",
     "[FR13_DFWD_K64_TOP3] engaged stock_argmax_topk_map_copy=0",
@@ -55,6 +66,7 @@ SIX_WAY_ENV = (
     "FR13_FIXED32_B1_DIAGNOSTIC=0",
     "FR13_DRAFT_VOCAB_ROOT=1",
     "FR13_DRAFT_VOCAB_K=65536",
+    "FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json",
     "MAX_NUM_SEQS=1",
     "SWE_CONCURRENCY=1",
     "ENFORCE_EAGER=0",
@@ -69,12 +81,19 @@ SIX_WAY_ENV = (
     f"FR13_DFWD_K64_TOP3_SHA256={DFWD_CANDIDATE_SHA256}",
     f"FR13_FIXED32_CUTLASS_WAVE={TARGET_SELECTOR}",
     "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=1",
+    "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=k64_root",
     "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=1",
     "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=0",
     "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0",
     "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=1",
     "FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0",
     "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=1",
+    "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0",
+    "FR13_DFWD_UNIFIED_BM8_PRODUCTION=1",
+    "FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR=/logs/fr13_dfwd_unified_bm8.production_pass.json",
+    f"FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256={BM8_PRODUCTION_PASS_SHA256}",
+    f"FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256={BM8_QUALIFIED_SOURCE_SHA256}",
+    "FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON=/logs/fr13_dfwd_unified_bm8.production_capture.json",
 )
 COMPONENT_ARGUMENTS = (
     ("qrow32_composed", "qrow_credential", "qrow_credential_sha256"),
@@ -84,6 +103,7 @@ COMPONENT_ARGUMENTS = (
     ("sfwd_pass", "sfwd_pass", "sfwd_pass_sha256"),
     ("sfwd_manifest", "source_manifest", "source_manifest_sha256"),
     ("target_sfwd_summary", "combined_summary", "combined_summary_sha256"),
+    ("dfwd_unified_bm8", "bm8_credential", "bm8_credential_sha256"),
     ("taw_b1_credential", "taw_b1_credential", "taw_b1_credential_sha256"),
     ("taw_b1_live_bundle", "taw_b1_live_bundle", "taw_b1_live_bundle_sha256"),
     ("taw_b4_pass", "taw_b4_pass", "taw_b4_pass_sha256"),
@@ -554,6 +574,105 @@ def _validate_cfwd_engagement(
         raise GateError("CFWD production served-return engagement drifted")
 
 
+def _validate_bm8_production_pass(payload: object) -> None:
+    required = {
+        "schema",
+        "status",
+        "live_gate_schema",
+        "live_result_sha256",
+        "live_result_canonical_sha256",
+        "instance_id",
+        "qualified_source_commit",
+        "qualified_patcher_sha256",
+        "qualified_unified_attention_sha256",
+        "qualified_eagle_replay_hook_sha256",
+        "candidate",
+        "candidate_artifact_kind",
+        "required_runtime",
+        "production_scope",
+        "canonical_sha256",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise GateError("BM8 production credential key set drifted")
+    body = dict(payload)
+    canonical_sha256 = body.pop("canonical_sha256", None)
+    if (
+        payload.get("schema") != bm8_sidecar.SIDECAR_SCHEMA
+        or payload.get("status") != "PASS"
+        or payload.get("live_gate_schema") != bm8_sidecar.LIVE_SCHEMA
+        or payload.get("live_result_sha256") != BM8_LIVE_PASS_SHA256
+        or payload.get("instance_id") != bm8_sidecar.EXPECTED_INSTANCE
+        or payload.get("qualified_unified_attention_sha256")
+        != BM8_QUALIFIED_SOURCE_SHA256
+        or payload.get("candidate") != bm8_sidecar.EXPECTED_CANDIDATE
+        or payload.get("candidate_artifact_kind") != "triton_jit_source"
+        or payload.get("required_runtime") != "fixed32 B1 FULL"
+        or payload.get("production_scope")
+        != "four exact B1 MTP unified-attention calls"
+        or canonical_sha256 != _sha256(bm8_sidecar.canonical_bytes(body))
+    ):
+        raise GateError("BM8 production credential contract drifted")
+
+
+def _validate_bm8_engagement(
+    payload: object, *, credential_sha256: str
+) -> None:
+    required = {
+        "schema",
+        "status",
+        "runtime_mode",
+        "batch_size",
+        "physical_rows_per_request",
+        "candidate",
+        "dispatch",
+        "drafter_graph_id",
+        "drafter_graph_signature",
+        "target_graph_id",
+        "target_graph_signature",
+        "qualified_source_sha256",
+        "pass_sidecar_sha256",
+        "graph_captures",
+        "measured_replays",
+        "unmeasured_replays",
+    }
+    candidate = {
+        "kernel": "kernel_unified_attention_2d",
+        "block_m": 8,
+        "block_q": 1,
+        "calls": 4,
+    }
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != required
+        or payload.get("schema") != BM8_CAPTURE_SCHEMA
+        or payload.get("status") != "ENGAGED"
+        or payload.get("runtime_mode") != "FULL"
+        or payload.get("batch_size") != 1
+        or payload.get("physical_rows_per_request") != 32
+        or payload.get("candidate") != candidate
+        or payload.get("dispatch") != "BM8 exact B1 geometry; no fallback"
+        or type(payload.get("drafter_graph_id")) is not int
+        or payload["drafter_graph_id"] < 1
+        or type(payload.get("target_graph_id")) is not int
+        or payload["target_graph_id"] < 1
+        or re.fullmatch(
+            r"[0-9a-f]{64}", str(payload.get("drafter_graph_signature"))
+        )
+        is None
+        or re.fullmatch(
+            r"[0-9a-f]{64}", str(payload.get("target_graph_signature"))
+        )
+        is None
+        or payload.get("qualified_source_sha256")
+        != BM8_QUALIFIED_SOURCE_SHA256
+        or payload.get("pass_sidecar_sha256") != credential_sha256
+        or payload.get("graph_captures") != 1
+        or payload.get("measured_replays") != 1
+        or payload.get("unmeasured_replays") != 0
+    ):
+        raise GateError("BM8 four-call measured-replay engagement drifted")
+
+
 def _validate_production_smoke_payload(
     payload: object,
     *,
@@ -582,6 +701,7 @@ def _validate_production_smoke_payload(
         "qrow32_split2": True,
         "gdn_gqa_group3": True,
         "dfwd_k64_top3": True,
+        "dfwd_unified_attention_bm8": True,
         "target_gemm_selector": TARGET_SELECTOR,
         "sfwd_conv_postprep": True,
         "taw_native_precompute": True,
@@ -601,6 +721,8 @@ def _validate_production_smoke_payload(
         or payload.get("runtime_mode") != "FULL"
         or payload.get("production_paths") != paths
         or payload.get("component_credential_sha256s") != component_hashes
+        or component_hashes.get("dfwd_unified_bm8")
+        != BM8_PRODUCTION_PASS_SHA256
         or payload.get("cfwd_served_return") != CFWD_SERVED_RETURN
         or payload.get("performance_measurement") is not False
         or payload.get("timing_eligible") is not False
@@ -659,6 +781,7 @@ def issue_production_smoke(args: argparse.Namespace) -> None:
         "task_count=1",
         "timing_eligible=0",
         "cfwd_logit_direct_production=1",
+        "dfwd_unified_bm8_production=1",
     ):
         if launcher_meta.splitlines().count(line) != 1:
             raise GateError(f"production smoke launcher metadata drifted: {line}")
@@ -737,6 +860,22 @@ def issue_production_smoke(args: argparse.Namespace) -> None:
         source_commit=source_commit,
         credential_sha256=component_hashes["cfwd_credential"],
     )
+    bm8_pass, bm8_pass_raw = _load_json(
+        arm / "logs/fr13_dfwd_unified_bm8.production_pass.json"
+    )
+    _expect_sha(
+        bm8_pass_raw,
+        component_hashes["dfwd_unified_bm8"],
+        "copied BM8 credential",
+    )
+    _validate_bm8_production_pass(bm8_pass)
+    bm8_engagement, bm8_engagement_raw = _load_json(
+        arm / "logs/fr13_dfwd_unified_bm8.production_capture.json"
+    )
+    _validate_bm8_engagement(
+        bm8_engagement,
+        credential_sha256=component_hashes["dfwd_unified_bm8"],
+    )
 
     qrow_sidecar_raw = _regular(
         arm / "logs/fr13_fa2_qrow32_b1_production_pass.json"
@@ -802,6 +941,8 @@ def issue_production_smoke(args: argparse.Namespace) -> None:
         "taw_production_pass": _sha256(taw_pass_raw),
         "cfwd_production_pass": _sha256(cfwd_pass_raw),
         "cfwd_engagement": _sha256(cfwd_engagement_raw),
+        "bm8_production_pass": _sha256(bm8_pass_raw),
+        "bm8_measured_replay_engagement": _sha256(bm8_engagement_raw),
     }
     credential = {
         "schema": PRODUCTION_SMOKE_SCHEMA,
@@ -817,6 +958,7 @@ def issue_production_smoke(args: argparse.Namespace) -> None:
             "qrow32_split2": True,
             "gdn_gqa_group3": True,
             "dfwd_k64_top3": True,
+            "dfwd_unified_attention_bm8": True,
             "target_gemm_selector": TARGET_SELECTOR,
             "sfwd_conv_postprep": True,
             "taw_native_precompute": True,

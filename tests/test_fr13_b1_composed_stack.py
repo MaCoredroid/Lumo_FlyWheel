@@ -108,6 +108,8 @@ def test_runner_wires_optional_cfwd_smoke_and_exact4_evidence() -> None:
         "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=1",
         "--cfwd-engagement",
         "--cfwd-smoke-credential",
+        "FR13_DFWD_UNIFIED_BM8_PRODUCTION=1",
+        "--bm8-engagement",
     )
     for value in required:
         assert value in runner
@@ -121,6 +123,7 @@ def test_runner_wires_optional_cfwd_smoke_and_exact4_evidence() -> None:
         "scripts/fr13_run_b1_composed_cfwd_production_smoke.sh",
         "scripts/fr13_run_b1_composed_cfwd_stack_timing.sh",
         "scripts/fr13_b1_composed_stack_timing.py",
+        "scripts/fr13_bm8_pass_sidecar.py",
         "scripts/fr13_cfwd_logit_direct_gate.py",
         "scripts/fr13_qrow32_b1_pass_sidecar.py",
         "scripts/fr13_qrow32_split2_timing.py",
@@ -200,6 +203,7 @@ def test_production_smoke_credential_binds_all_component_hashes() -> None:
         key: hashlib.sha256(key.encode("ascii")).hexdigest()
         for key, _path_name, _sha_name in module.COMPONENT_ARGUMENTS
     }
+    component_hashes["dfwd_unified_bm8"] = module.BM8_PRODUCTION_PASS_SHA256
     payload = {
         "schema": module.PRODUCTION_SMOKE_SCHEMA,
         "status": "PASS",
@@ -214,6 +218,7 @@ def test_production_smoke_credential_binds_all_component_hashes() -> None:
             "qrow32_split2": True,
             "gdn_gqa_group3": True,
             "dfwd_k64_top3": True,
+            "dfwd_unified_attention_bm8": True,
             "target_gemm_selector": module.TARGET_SELECTOR,
             "sfwd_conv_postprep": True,
             "taw_native_precompute": True,
@@ -237,6 +242,51 @@ def test_production_smoke_credential_binds_all_component_hashes() -> None:
             payload,
             source_commit=source_commit,
             component_hashes=mutated,
+        )
+
+
+def test_bm8_engagement_requires_four_call_measured_replay() -> None:
+    module = _load_gate_module()
+    credential_path = (
+        ROOT
+        / "results"
+        / "fr13_fixed32_bm8_production_ready_20260731T193828Z"
+        / "production_pass.json"
+    )
+    credential = json.loads(credential_path.read_text(encoding="ascii"))
+    module._validate_bm8_production_pass(credential)
+    engagement = {
+        "schema": module.BM8_CAPTURE_SCHEMA,
+        "status": "ENGAGED",
+        "runtime_mode": "FULL",
+        "batch_size": 1,
+        "physical_rows_per_request": 32,
+        "candidate": {
+            "kernel": "kernel_unified_attention_2d",
+            "block_m": 8,
+            "block_q": 1,
+            "calls": 4,
+        },
+        "dispatch": "BM8 exact B1 geometry; no fallback",
+        "drafter_graph_id": 17,
+        "drafter_graph_signature": "7" * 64,
+        "target_graph_id": 23,
+        "target_graph_signature": "8" * 64,
+        "qualified_source_sha256": module.BM8_QUALIFIED_SOURCE_SHA256,
+        "pass_sidecar_sha256": module.BM8_PRODUCTION_PASS_SHA256,
+        "graph_captures": 1,
+        "measured_replays": 1,
+        "unmeasured_replays": 0,
+    }
+    module._validate_bm8_engagement(
+        engagement,
+        credential_sha256=module.BM8_PRODUCTION_PASS_SHA256,
+    )
+    engagement["measured_replays"] = 0
+    with pytest.raises(module.GateError, match="measured-replay"):
+        module._validate_bm8_engagement(
+            engagement,
+            credential_sha256=module.BM8_PRODUCTION_PASS_SHA256,
         )
 
 
@@ -478,6 +528,7 @@ def test_combined_sfwd_gate_validates_target_pass_against_repo_patch(
         f"FR13_FA2_QROW16_LIVE_PASS_SHA256={module.QROW16_PASS_SHA256}",
         "FR13_DRAFT_VOCAB_ROOT=1",
         "FR13_DRAFT_VOCAB_K=65536",
+        "FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json",
         "ENFORCE_EAGER=1",
     ]
     regular_by_name = {
@@ -577,6 +628,7 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         "FR13_FIXED32_MODE=hydra27_fixed32",
         "FR13_DRAFT_VOCAB_ROOT=1",
         "FR13_DRAFT_VOCAB_K=65536",
+        "FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json",
         "MAX_NUM_SEQS=1",
         "SWE_CONCURRENCY=1",
         "ENFORCE_EAGER=0",
@@ -588,6 +640,7 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         "FR13_DFWD_K64_TOP3=1",
         "FR13_FIXED32_CUTLASS_WAVE=identity_wide256_fullgrid_b1",
         "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION=1",
+        "FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=k64_root",
         "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=1",
         "FR13_CONV_WB_BATCHED=1",
         "FR13_SFWD_GPU_TIMER=1",
@@ -597,6 +650,12 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=1",
         "FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0",
         "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=1",
+        "FR13_DFWD_UNIFIED_BM8_LIVE_AB=0",
+        "FR13_DFWD_UNIFIED_BM8_PRODUCTION=1",
+        "FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR=/logs/fr13_dfwd_unified_bm8.production_pass.json",
+        f"FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR_SHA256={module.composed_gate.BM8_PRODUCTION_PASS_SHA256}",
+        f"FR13_DFWD_UNIFIED_BM8_QUALIFIED_SOURCE_SHA256={module.composed_gate.BM8_QUALIFIED_SOURCE_SHA256}",
+        "FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON=/logs/fr13_dfwd_unified_bm8.production_capture.json",
     )
     container, _ = _write(
         tmp_path / "container_env.txt", ("\n".join(required_env) + "\n").encode()
@@ -640,6 +699,49 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
     gqa_arm, _ = _write(tmp_path / "gqa_arm", b"1\n")
     gqa_batch, _ = _write(tmp_path / "gqa_batch", b"1\n")
     taw, taw_sha = _write(tmp_path / "taw", b"taw\n")
+    bm8_pass, bm8_sha = _write(
+        tmp_path / "bm8-production-pass.json",
+        (
+            ROOT
+            / "results"
+            / "fr13_fixed32_bm8_production_ready_20260731T193828Z"
+            / "production_pass.json"
+        ).read_bytes(),
+    )
+    bm8_engagement, _ = _write(
+        tmp_path / "bm8-engagement.json",
+        (
+            json.dumps(
+                {
+                    "schema": module.composed_gate.BM8_CAPTURE_SCHEMA,
+                    "status": "ENGAGED",
+                    "runtime_mode": "FULL",
+                    "batch_size": 1,
+                    "physical_rows_per_request": 32,
+                    "candidate": {
+                        "kernel": "kernel_unified_attention_2d",
+                        "block_m": 8,
+                        "block_q": 1,
+                        "calls": 4,
+                    },
+                    "dispatch": "BM8 exact B1 geometry; no fallback",
+                    "drafter_graph_id": 17,
+                    "drafter_graph_signature": "7" * 64,
+                    "target_graph_id": 23,
+                    "target_graph_signature": "8" * 64,
+                    "qualified_source_sha256": (
+                        module.composed_gate.BM8_QUALIFIED_SOURCE_SHA256
+                    ),
+                    "pass_sidecar_sha256": bm8_sha,
+                    "graph_captures": 1,
+                    "measured_replays": 1,
+                    "unmeasured_replays": 0,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        ).encode("ascii"),
+    )
     cfwd, cfwd_sha = _write(tmp_path / "cfwd.json", b"{}\n")
     cfwd_engagement, _ = _write(tmp_path / "cfwd-engagement.json", b"{}\n")
     component_hashes = {
@@ -649,6 +751,7 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         "sfwd_pass": named["sfwd_pass"][1],
         "sfwd_manifest": named["sfwd_manifest"][1],
         "target_sfwd_summary": named["eager_summary"][1],
+        "dfwd_unified_bm8": bm8_sha,
         "taw_production": taw_sha,
         "cfwd_credential": cfwd_sha,
     }
@@ -710,6 +813,9 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         target_sfwd_combined_summary_sha256=named["eager_summary"][1],
         taw_production_pass=taw,
         taw_production_pass_sha256=taw_sha,
+        bm8_production_pass=bm8_pass,
+        bm8_production_pass_sha256=bm8_sha,
+        bm8_engagement=bm8_engagement,
         cfwd_production_pass=cfwd,
         cfwd_production_pass_sha256=cfwd_sha,
         cfwd_engagement=cfwd_engagement,
@@ -719,7 +825,7 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
     result = module.reduce_composed(args)
     assert result["schema"] == module.SCHEMA
     assert result["run_classification"] == (
-        "real_swe_verified_exact4_b1_composed_cfwd_kernel_stack"
+        "real_swe_verified_exact4_b1_composed_bm8_cfwd_kernel_stack"
     )
     assert result["phase_breakdown_ms_per_event"] == {
         "sfwd_verify_gpu": 80.0,
@@ -732,6 +838,8 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
     assert result["acceptance"]["descriptive_screen_pass"] is True
     assert result["production_evidence"]["sfwd_engaged_layer_count"] == 48
     assert result["composed_stack"]["cfwd_logit_direct"] is True
+    assert result["composed_stack"]["dfwd_unified_attention_bm8"] is True
+    assert result["production_evidence"]["bm8_measured_replays"] == 1
     assert result["production_evidence"]["cfwd_served_return"] == (
         "logit-direct candidate products"
     )
