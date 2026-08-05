@@ -1,0 +1,75 @@
+{
+  "candidate": "fixed32_sfwd_conv_postprep_frontier5_direct_v1",
+  "files": {
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": {
+      "bytes": 1867407,
+      "sha256": "d298bdc0a21b2dcba3dbc88f2f0b39720ee3a1202f22e73c8628bae936c8df90"
+    },
+    "scripts/fr13_b1_composed_stack_gate.py": {
+      "bytes": 46119,
+      "sha256": "d8cd750b07e40da4609131fb5df3bd6e6a02dd093b16bb676294f58e106b01e0"
+    },
+    "scripts/fr13_bigdenom_swe_serve_variant.sh": {
+      "bytes": 137546,
+      "sha256": "ac8b5b0c9fe60c4faa9d63de991dd227d67c1265bc3a856be5c761e7381fd4d9"
+    },
+    "scripts/fr13_cutlass_streamk_pass.py": {
+      "bytes": 53088,
+      "sha256": "c362caf67362b27c6b6cd2f29ac8ad420c8a6bd5120ecb27a08c3bff10261fdd"
+    },
+    "scripts/fr13_cutlass_wave_binary.py": {
+      "bytes": 35947,
+      "sha256": "fa458896f054e52bcd8e65e7cfc1b5dd30daf4c8585cfce2a54e6ae058799557"
+    },
+    "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py": {
+      "bytes": 8673,
+      "sha256": "ca21b2d4f17a3e47b755cf80b52617bc36109ab5faf79a17008f3be6383c23d6"
+    },
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": {
+      "bytes": 303197,
+      "sha256": "60a2a024d65c36d9f7708817cd86d12792d15892f43739836491213c564fcd6d"
+    },
+    "scripts/fr13_patch_cutlass_fixed32_wave.py": {
+      "bytes": 108166,
+      "sha256": "ae9591a0c255c54bd8b5fed8576105013fce7f5f0834dbfb51ca1d455441f976"
+    },
+    "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh": {
+      "bytes": 23189,
+      "sha256": "80fd1efb8930b25300e37a5f1ca634e906d4affdd26ab77f9acc23577a5727f2"
+    },
+    "scripts/fr13_run_b1_kernel_live_gate.sh": {
+      "bytes": 32486,
+      "sha256": "489e69cec9a3e7bde60ff4ee87377cb299f1e6335b37259e876ff847aeb1c712"
+    },
+    "scripts/fr13_run_b1_sfwd_conv_postprep_gate.sh": {
+      "bytes": 5627,
+      "sha256": "b63aaf3e661aae861914fb785ca1bf08d6f39865b8afecea2313744c8957c712"
+    },
+    "scripts/fr13_run_b1_target_sfwd_conv_postprep_live_gate.sh": {
+      "bytes": 4587,
+      "sha256": "30cb7f119fc08c234865309bdd980b0d9fabf26d95b335f172051ca95344e4d4"
+    },
+    "scripts/fr13_sfwd_conv_postprep_gate.py": {
+      "bytes": 32379,
+      "sha256": "e6f27dba0b5d79af0ae159dcc4f4b0f925fc93a6a9168c29944bc91d8bfaf94d"
+    },
+    "scripts/run_swe_bench_q36_a.py": {
+      "bytes": 386958,
+      "sha256": "7b66aa3c2815b646b464ac63aafde2cfbecb416fcd68137086b931b12d677bf9"
+    },
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py": {
+      "bytes": 62189,
+      "sha256": "e4528b587ce2c6e152c3f4632a52ad8e324d20557a964aa4b10c6804607fe4fe"
+    },
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py": {
+      "bytes": 36122,
+      "sha256": "c791db253ca0192f56562d05edefcad0bc53d17386002ce6b5e2a98148e956d8"
+    },
+    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py": {
+      "bytes": 47060,
+      "sha256": "dcb8a21e5c708a2773fda2dbb266346fc771c69efeac63996154288752d5af6d"
+    }
+  },
+  "schema": "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1",
+  "source_commit": "a8a904ed6c27a6338d43151038c155ebb76e3656"
+}
