@@ -168,6 +168,8 @@ def fixed32_cfwd_logit_direct_contract(
         "decision_workspace_bytes_added": (
             physical_decision_bytes - compact_decision_bytes
         ),
+        "decision_workspace_zero_seeded_once": True,
+        "decision_padding_initialization_stores_per_event": 0,
         "incumbent_full_vocab_fp32_rows_materialized": (
             incumbent_fp32_rows * batch
         ),
@@ -824,12 +826,11 @@ def workspace_spec(batch_size: int) -> dict[str, tuple[tuple[int, ...], Any]]:
 
 
 def allocate_workspace(*, device, batch_size: int) -> dict[str, Any]:
-    """Allocate candidate buffers before capture; never called at import."""
+    """Allocate zero-seeded candidate buffers once, before graph capture."""
     workspace = {
-        name: torch.empty(shape, dtype=dtype, device=device)
+        name: torch.zeros(shape, dtype=dtype, device=device)
         for name, (shape, dtype) in workspace_spec(batch_size).items()
     }
-    workspace["invalid"].zero_()
     return workspace
 
 

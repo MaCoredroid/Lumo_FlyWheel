@@ -387,15 +387,9 @@ if triton is not None:
                 tl.minimum(current, PHYSICAL_DRAFTS - 1),
             )
             sampled_self = tl.load(
-                self_token + request * PHYSICAL_DRAFTS + safe_current,
-                mask=leaf & current_valid,
-                other=0,
+                self_token + request * PHYSICAL_DRAFTS + safe_current
             ).to(tl.int64)
-            sampled_bonus = tl.load(
-                bonus_token + request,
-                mask=leaf & (~current_valid),
-                other=0,
-            ).to(tl.int64)
+            sampled_bonus = tl.load(bonus_token + request).to(tl.int64)
             leaf_token = tl.where(current_valid, sampled_self, sampled_bonus)
             tl.store(
                 output_tokens + request * OUTPUT_CAPACITY + output_len,
@@ -404,23 +398,12 @@ if triton is not None:
             )
 
             decision_offset = request * PHYSICAL_ROWS + parent_slot
-            is_accepted = has_kids & (
-                tl.load(
-                    accepted + decision_offset,
-                    mask=has_kids,
-                    other=False,
-                )
-                != 0
-            )
+            is_accepted = has_kids & (tl.load(accepted + decision_offset) != 0)
             sampled_selected = tl.load(
-                selected_token + decision_offset,
-                mask=has_kids,
-                other=0,
+                selected_token + decision_offset
             ).to(tl.int64)
             sampled_rejected = tl.load(
-                rejected_token + decision_offset,
-                mask=has_kids,
-                other=0,
+                rejected_token + decision_offset
             ).to(tl.int64)
             emitted_token = tl.where(
                 is_accepted,
@@ -434,22 +417,12 @@ if triton is not None:
             )
             output_len += leaf.to(tl.int64) + has_kids.to(tl.int64)
 
-            selected_source = tl.load(
-                source + decision_offset,
-                mask=is_accepted,
-                other=0,
-            ).to(tl.int64)
-            safe_source = tl.maximum(
-                0,
-                tl.minimum(selected_source, FANOUT - 1),
-            )
+            selected_source = tl.load(source + decision_offset).to(tl.int64)
             accepted_node = tl.load(
                 child_table
                 + request * PHYSICAL_ROWS * FANOUT
                 + parent_slot * FANOUT
-                + safe_source,
-                mask=is_accepted,
-                other=-1,
+                + selected_source
             ).to(tl.int64)
             accepted_row = accepted_node + 1
             tl.store(
@@ -1561,7 +1534,7 @@ _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
 _FR13_CFWD_LOGIT_DIRECT_CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
 _FR13_CFWD_LOGIT_DIRECT_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
 _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256 = (
-    "c86e8e9b73b20421213b465ff547a16a8b2177ac065a2475090f907d23f8460d"
+    "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192"
 )
 _FR13_CFWD_LOGIT_DIRECT_MODULE = None
 _FR13_CFWD_LOGIT_DIRECT_GRAPHS: dict[int, dict[str, Any]] = {}
@@ -1572,7 +1545,7 @@ _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS: dict[str, Any] | None = None
 _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256: str | None = None
 _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "bd429ab72e2ce1f981f57d5b7b2894cd91302f933aa3164bdafa8144d0d90149"
+    "694a3f4cd6e36ff1b6503ff19b2968b94a1ac226535a6efb44dcea1bb8a9a57b"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None

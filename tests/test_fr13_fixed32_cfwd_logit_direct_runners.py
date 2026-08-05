@@ -41,7 +41,7 @@ def _credential(source_commit: str) -> dict:
         "candidate": "fixed32_cfwd_logit_direct_physical_slots_v2",
         "candidate_schema": "fr13.fixed32.cfwd_logit_direct_physical_slots.v2",
         "candidate_source_sha256": (
-            "c86e8e9b73b20421213b465ff547a16a8b2177ac065a2475090f907d23f8460d"
+            "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192"
         ),
         "integration_source_commit": source_commit,
         "mode": "hydra27_fixed32",

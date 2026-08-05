@@ -108,6 +108,8 @@ def test_contract_has_exact_fixed32_work_ledger(
         batch_size * 1_048
     )
     assert contract["decision_workspace_bytes_added"] == batch_size * 519
+    assert contract["decision_workspace_zero_seeded_once"] is True
+    assert contract["decision_padding_initialization_stores_per_event"] == 0
 
 
 @pytest.mark.parametrize(
@@ -452,20 +454,28 @@ def test_served_integer_walk_reads_physical_slots_without_topology_maps() -> Non
 
 
 @pytest.mark.parametrize("mode", sorted(kernel.FIXED32_MODES))
-def test_physical_walk_masks_unwritten_leaf_slots_and_child_address(
+def test_physical_walk_preseeds_unwritten_leaf_slots_and_child_address(
     mode: str,
 ) -> None:
-    poison = -(2**63)
-    self_token = [poison] * kernel.PHYSICAL_DRAFTS
-    target_source = [poison] * kernel.PHYSICAL_ROWS
+    workspace = kernel.allocate_workspace(device="cpu", batch_size=1)
+    for name in (
+        "self_token",
+        "source",
+        "selected_token",
+        "rejected_token",
+        "accepted",
+    ):
+        assert torch.count_nonzero(workspace[name]).item() == 0
+
+    self_token = workspace["self_token"][0].tolist()
+    target_source = workspace["source"][0].tolist()
     for node in kernel.SELF_SOURCE_NODES:
         self_token[node] = 10_000 + node
-    for parent_slot in kernel.TARGET_PARENT_SLOTS:
-        target_source[parent_slot] = 0
     # Force root -> node 0 -> leaf node 4. Physical target slot 5 is not a
-    # producer row and remains poisoned; only the leaf self slot may be read.
+    # producer row and remains safely zero-seeded outside measured replays.
     target_source[0] = 0
     target_source[1] = 1
+    metadata = _valid_metadata(1, mode)
     current = -1
     for _level in range(kernel.WALK_CAP):
         parent_slot = current + 1
@@ -474,13 +484,14 @@ def test_physical_walk_masks_unwritten_leaf_slots_and_child_address(
         if not has_kids:
             assert current == 4
             assert self_token[current] == 10_004
-            assert target_source[parent_slot] == poison
+            assert target_source[parent_slot] == 0
+            assert metadata["child_table"][0, parent_slot, 0].item() == -1
             break
         selected_source = target_source[parent_slot]
         assert 0 <= selected_source < len(children)
         current = children[selected_source]
     else:
-        pytest.fail("poison leaf path did not terminate")
+        pytest.fail("zero-seeded leaf path did not terminate")
 
     source = SERVED_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -490,13 +501,12 @@ def test_physical_walk_masks_unwritten_leaf_slots_and_child_address(
         if isinstance(node, ast.FunctionDef)
         and node.name == "_fr13_fixed32_taw_physical_slot_commit_kernel"
     )
-    assert "mask=leaf & current_valid" in physical_kernel
-    assert "mask=leaf & (~current_valid)" in physical_kernel
-    assert physical_kernel.count("mask=has_kids") == 4
-    assert physical_kernel.count("mask=is_accepted") == 3
-    assert "tl.minimum(selected_source, FANOUT - 1)" in physical_kernel
-    assert "+ safe_source" in physical_kernel
-    assert "other=-1" in physical_kernel
+    assert "mask=leaf & current_valid" not in physical_kernel
+    assert physical_kernel.count("mask=has_kids") == 1
+    assert physical_kernel.count("mask=is_accepted") == 1
+    allocation_source = inspect.getsource(kernel.allocate_workspace)
+    assert "torch.zeros" in allocation_source
+    assert "torch.empty" not in allocation_source
 
 
 def test_candidate_is_default_off_and_wired_only_through_shadow_wrapper() -> None:

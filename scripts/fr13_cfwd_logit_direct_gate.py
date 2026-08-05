@@ -15,7 +15,7 @@ from typing import Any, Sequence
 CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
 CANDIDATE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
 CANDIDATE_SOURCE_SHA256 = (
-    "c86e8e9b73b20421213b465ff547a16a8b2177ac065a2475090f907d23f8460d"
+    "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192"
 )
 LIVE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_live_ab.v1"
 CREDENTIAL_SCHEMA = "fr13.fixed32.cfwd_logit_direct.production_credential.v1"
