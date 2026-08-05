@@ -1,0 +1,89 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_b1_split2_scratch_v4_sm121a.v1",
+  "created_at_utc": "2026-08-05T08:40:40Z",
+  "status": "OFFLINE_BINARY_PASS_PENDING_REAL_TASK_QUALIFICATION",
+  "source": {
+    "branch": "main",
+    "pin_commit": "dfbb20bc9f274e04296178b56f5599c68b0b70d6",
+    "scratch_repair_commit": "14e525884",
+    "fail_closed_hardening_commit": "8fd10ab09",
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "source_root": "/home/mark/fr13_fa2_qrow32_b1_sm121a_20260803/final_source_v4",
+    "immutable_predecessor": "/home/mark/fr13_fa2_qrow32_b1_sm121a_20260803/final_source_v3",
+    "source_closure_sha256": "3c559d80c65573932c5c7bfd5ef7081df6c3f1a3f6c888bc36a04ccc264d394b",
+    "patch_source_sha256": "ada12d66a6c8b87e1bf5e03f420524b3e764559a090ce6ccd53426c339e8be2b"
+  },
+  "repair": {
+    "private_selector_sentinel": 1179791669,
+    "required_num_splits": 2,
+    "scratch_allocator": "stock_FA2_set_params_splitkv",
+    "scratch_tensor_lifetime": "stock_local_tensor_owners",
+    "ordinary_fa2_predicate_unchanged": true,
+    "tagged_wrong_split_count_rejected_before_allocation": true,
+    "cuda_kernel_sources_changed_from_v3": false
+  },
+  "toolchain": {
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+    "network": "none",
+    "nvidia_visible_devices": "void",
+    "dev_nvidia0_present": false,
+    "target": "sm_121a",
+    "host_optimization": "O2"
+  },
+  "objects": {
+    "flash_api": {
+      "sha256": "e15682d8f496126ab0b5747fcdc40c659fc927cee1eb73a4c5e0b5a8ece43a24",
+      "bytes": 6072744,
+      "rebuilt_for_v4": true
+    },
+    "no_split_pinnedabi": {
+      "sha256": "81551e9f94219e02e6c91e8f4bb926ba3765e1e04a113c9d298f42ee9f3d8b37",
+      "bytes": 732288,
+      "byte_identical_to_v3": true
+    },
+    "split2_pinnedabi": {
+      "sha256": "d7927d1647212f07a8598c7dbdf78117d802a056e7ffd7fa3ff96ba6d29a9090",
+      "bytes": 782416,
+      "byte_identical_to_v3": true
+    }
+  },
+  "linked_binary": {
+    "filename": "_vllm_fa2_qrow32_b1_split2_scratch_v4_sm121a.abi3.so",
+    "sha256": "ec36c5d26635fead8f626539ff98ab055a756af1e568dbadf88905a41f61862a",
+    "bytes": 300153584,
+    "committed_to_git": false
+  },
+  "abi_audit": {
+    "reference_sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+    "defined_dynamic_symbol_diff_lines": 0,
+    "undefined_dynamic_symbol_diff_lines": 0,
+    "needed_and_runpath_diff_lines": 0,
+    "no_split_launcher_binding": "LOCAL",
+    "split2_launcher_binding": "LOCAL"
+  },
+  "verification": {
+    "focused_tests": "79 passed",
+    "source_patch_idempotence": "PASS",
+    "source_closure_validation": "PASS",
+    "candidate_identity_validation": "PASS",
+    "python_compile": "PASS",
+    "shell_syntax": "PASS",
+    "offline_link": "PASS",
+    "offline_abi_audit": "PASS",
+    "offline_torch_operator_load": "PASS"
+  },
+  "classification": {
+    "gpu_used": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "performance_measurement": false,
+    "byte_parity_claim": false,
+    "hardware_floor_claim": false
+  },
+  "admission": {
+    "offline_binary": "PASS",
+    "split2_real_task_byte_gate": "PENDING",
+    "real_exact4_full_step_timing": "PENDING"
+  }
+}

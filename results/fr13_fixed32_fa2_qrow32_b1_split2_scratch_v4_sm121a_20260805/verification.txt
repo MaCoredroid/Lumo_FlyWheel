@@ -1,0 +1,12 @@
+79 passed in 3.60s
+source_patch_idempotence=PASS
+source_closure_validation=PASS
+candidate_identity_validation=PASS
+python_compile=PASS
+shell_syntax=PASS
+offline_link=PASS
+offline_abi_audit=PASS
+offline_torch_operator_load=PASS
+gpu_runtime_validation=PENDING
+real_swe_byte_parity=PENDING
+real_exact4_timing=PENDING
