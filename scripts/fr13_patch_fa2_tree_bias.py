@@ -740,7 +740,7 @@ struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32B1KernelTraits> {
 
 template <>
 struct StaticPagedKVStrides<Fr13Fixed32Qrow32B1KernelTraits> {
-    static constexpr int64_t page = 1024 * 4 * 256;
+    static constexpr int64_t page = 2 * 1024 * 4 * 256;
     static constexpr int64_t row = 4 * 256;
     static constexpr int64_t head = 256;
 };
@@ -820,10 +820,10 @@ void fr13_run_mha_fwd_fixed32_qrow32_b1(
         && params.seqlen_q == 32
         && params.seqlen_q_rounded == 128
         && params.q_head_stride == 256
-        && params.k_batch_stride == 1024 * 4 * 256
+        && params.k_batch_stride == 2 * 1024 * 4 * 256
         && params.k_row_stride == 4 * 256
         && params.k_head_stride == 256
-        && params.v_batch_stride == 1024 * 4 * 256
+        && params.v_batch_stride == 2 * 1024 * 4 * 256
         && params.v_row_stride == 4 * 256
         && params.v_head_stride == 256
         && params.o_head_stride == 256
@@ -891,7 +891,7 @@ struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32B1Split2KernelTraits> {
 
 template <>
 struct StaticPagedKVStrides<Fr13Fixed32Qrow32B1Split2KernelTraits> {
-    static constexpr int64_t page = 1024 * 4 * 256;
+    static constexpr int64_t page = 2 * 1024 * 4 * 256;
     static constexpr int64_t row = 4 * 256;
     static constexpr int64_t head = 256;
 };
@@ -971,10 +971,10 @@ void fr13_run_mha_fwd_fixed32_qrow32_b1_split2(
         && params.seqlen_q == 32
         && params.seqlen_q_rounded == 128
         && params.q_head_stride == 256
-        && params.k_batch_stride == 1024 * 4 * 256
+        && params.k_batch_stride == 2 * 1024 * 4 * 256
         && params.k_row_stride == 4 * 256
         && params.k_head_stride == 256
-        && params.v_batch_stride == 1024 * 4 * 256
+        && params.v_batch_stride == 2 * 1024 * 4 * 256
         && params.v_row_stride == 4 * 256
         && params.v_head_stride == 256
         && params.o_head_stride == 256
@@ -2066,7 +2066,9 @@ def _patch_fixed32_query_tile32_fused_initial_kv_page(
         constexpr int kStaticKVRowStride = static_cast<int>(
             StaticPagedKVStrides<Kernel_traits>::row);
         static_assert(kStaticPageBlockSize == 1024);
-        static_assert(kStaticKVPageStride == 1024 * 4 * 256);
+        static_assert(
+            kStaticKVPageStride
+            == (kStaticSequences == 1 ? 2 : 1) * 1024 * 4 * 256);
         static_assert(kStaticKVRowStride == 4 * 256);
         auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
         const int64_t initial_kv_page_offset =
@@ -3466,12 +3468,12 @@ _FR13_FA2_QROW32_B1_ARMS = {
 }
 _FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL = 1179791667
 _FR13_FA2_QROW32_B1_CANDIDATE_SHA256 = (
-    "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467"
+    "07e02c0a53185c48d745fb221e7c807f97bfe40f61354e4242e9271e743e13c1"
 )
 _FR13_FA2_QROW32_B1_CANDIDATE_SIZE = 300140712
 _FR13_FA2_QROW32_B1_FA2_HEAD = "29210221863736a08f71a866459e368ad1ac4a95"
 _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256 = (
-    "c10888e721335ff99f93dabdfea7d8a524fbd7e21e8aee3f425f50af06bf5d84"
+    "a4a6d96cad9b34b73ddc4fb2fcda230c033b30246509c1a24208b2f2955d2bcc"
 )
 _FR13_FA2_QROW32_B1_TARGET_LAYERS = tuple(
     f"language_model.model.layers.{index}.self_attn.attn"
@@ -3609,7 +3611,7 @@ def _fr13_fa2_qrow32_b1_geometry_mismatches(
             key_cache.dtype == torch.bfloat16
             and tuple(key_cache.shape[1:]) == (1024, 4, 256)
             and tuple(key_cache.stride())
-            == (1024 * 4 * 256, 4 * 256, 256, 1),
+            == (2 * 1024 * 4 * 256, 4 * 256, 256, 1),
             key_meta,
         ),
         (

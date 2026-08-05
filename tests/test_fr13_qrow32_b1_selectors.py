@@ -87,11 +87,14 @@ def _selector_namespace(monkeypatch: pytest.MonkeyPatch, *, profile_scope):
 
 def _b1_geometry():
     fused_qkv = torch.empty((32, 32, 256), dtype=torch.bfloat16)
+    interleaved_kv = torch.empty(
+        (1, 2, 1024, 4, 256), dtype=torch.bfloat16
+    )
     return {
         "flash_fn": object(),
         "query": fused_qkv[:, :24, :],
-        "key_cache": torch.empty((1, 1024, 4, 256), dtype=torch.bfloat16),
-        "value_cache": torch.empty((1, 1024, 4, 256), dtype=torch.bfloat16),
+        "key_cache": interleaved_kv[:, 0],
+        "value_cache": interleaved_kv[:, 1],
         "cu_seqlens_q": torch.tensor([0, 32], dtype=torch.int32),
         "max_seqlen_q": 32,
         "seqused_k": torch.tensor([32], dtype=torch.int32),
@@ -199,7 +202,12 @@ def test_exact_geometry_accepts_fused_qkv_row_stride_only(
     namespace, _ = _selector_namespace(monkeypatch, profile_scope=None)
     geometry = _b1_geometry()
     query = geometry["query"]
+    key_cache = geometry["key_cache"]
+    value_cache = geometry["value_cache"]
     assert tuple(query.stride()) == (32 * 256, 256, 1)
+    assert tuple(key_cache.stride()) == (2 * 1024 * 4 * 256, 4 * 256, 256, 1)
+    assert tuple(value_cache.stride()) == tuple(key_cache.stride())
+    assert value_cache.storage_offset() - key_cache.storage_offset() == 1024 * 4 * 256
     exact_geometry = namespace["_fr13_fa2_qrow32_b1_exact_geometry"]
     exact_args = {
         key: value
@@ -220,6 +228,17 @@ def test_exact_geometry_accepts_fused_qkv_row_stride_only(
     assert tuple(wrong_element.shape) == (32, 24, 256)
     assert int(wrong_element.stride(-1)) == 2
     assert not exact_geometry(**{**exact_args, "query": wrong_element})
+
+    compact_key = torch.empty((1, 1024, 4, 256), dtype=torch.bfloat16)
+    compact_value = torch.empty_like(compact_key)
+    assert tuple(compact_key.stride()) == (1024 * 4 * 256, 4 * 256, 256, 1)
+    assert not exact_geometry(
+        **{
+            **exact_args,
+            "key_cache": compact_key,
+            "value_cache": compact_value,
+        }
+    )
 
 
 def test_geometry_failure_reports_only_non_secret_operand_metadata(
@@ -435,8 +454,8 @@ def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:
     assert '"${FR13_FIXED32_MODE:-}" == "hydra27_fixed32"' in text
     assert '"${ENFORCE_EAGER:-0}" == "0"' in text
     assert '"${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE"' in text
-    assert "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467" in text
-    assert "c10888e721335ff99f93dabdfea7d8a524fbd7e21e8aee3f425f50af06bf5d84" in text
+    assert "07e02c0a53185c48d745fb221e7c807f97bfe40f61354e4242e9271e743e13c1" in text
+    assert "a4a6d96cad9b34b73ddc4fb2fcda230c033b30246509c1a24208b2f2955d2bcc" in text
     assert "--patch-source scripts/fr13_patch_fa2_tree_bias.py" in text
     assert "--patch-source /workspace/scripts/fr13_patch_fa2_tree_bias.py" in text
     assert "FR13_FA2_QROW32_B1_INTERNAL_ATTESTED=1" in text

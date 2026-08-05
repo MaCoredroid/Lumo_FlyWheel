@@ -1,0 +1,68 @@
+{
+  "schema": "fr13.fixed32.fa2_qrow32_b1_interleaved_kv_sm121a.v1",
+  "status": "OFFLINE_BINARY_PASS_PENDING_REAL_TASK_QUALIFICATION",
+  "source": {
+    "branch": "codex/qrow32-interleaved-kv-20260805",
+    "base_commit": "361899240f84d7c5fdf65549ca7ddaa2a4531219",
+    "fa2_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "source_closure_sha256": "a4a6d96cad9b34b73ddc4fb2fcda230c033b30246509c1a24208b2f2955d2bcc"
+  },
+  "geometry": {
+    "backing_layout": "[physical_block, key_or_value, token, kv_head, head_dim]",
+    "key_value_base_delta_elements": 1048576,
+    "key_value_block_stride_elements": 2097152,
+    "row_stride_elements": 1024,
+    "head_stride_elements": 256,
+    "element_stride": 1
+  },
+  "toolchain": {
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "image_id": "sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc",
+    "network": "none",
+    "nvidia_visible_devices": "void",
+    "target": "sm_121a",
+    "nvcc": "13.0.88"
+  },
+  "linked_binary": {
+    "filename": "_vllm_fa2_qrow32_b1_interleaved_kv_sm121a.abi3.so",
+    "sha256": "07e02c0a53185c48d745fb221e7c807f97bfe40f61354e4242e9271e743e13c1",
+    "bytes": 300140712,
+    "committed_to_git": false
+  },
+  "abi_audit": {
+    "reference_sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+    "defined_dynamic_symbol_diff_lines": 0,
+    "undefined_dynamic_symbol_diff_lines": 0,
+    "needed_and_runpath_diff_lines": 0,
+    "no_split_launcher_binding": "LOCAL",
+    "split2_launcher_binding": "LOCAL"
+  },
+  "resources": {
+    "no_split": {"registers": 252, "stack_bytes": 0, "local_bytes": 0},
+    "split2_main": {"registers": 254, "stack_bytes": 0, "local_bytes": 0},
+    "split2_combine": {"registers": 44, "stack_bytes": 0, "local_bytes": 0}
+  },
+  "verification": {
+    "focused_tests_passed": 61,
+    "focused_tests_skipped": 1,
+    "source_closure_validation": "PASS",
+    "candidate_identity_validation": "PASS",
+    "python_byte_compile": "PASS",
+    "shell_syntax": "PASS",
+    "offline_link": "PASS",
+    "offline_abi_audit": "PASS"
+  },
+  "classification": {
+    "gpu_used": false,
+    "synthetic_probe_used": false,
+    "real_swe_task_used": false,
+    "performance_measurement": false,
+    "byte_parity_claim": false,
+    "hardware_floor_claim": false
+  },
+  "admission": {
+    "offline_binary": "PASS",
+    "split2_real_task_byte_gate": "PENDING",
+    "real_exact4_full_step_timing": "PENDING"
+  }
+}
