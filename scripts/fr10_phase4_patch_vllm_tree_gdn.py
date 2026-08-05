@@ -7518,12 +7518,12 @@ def _fr13_fixed32_runtime_bindings(mode: str | None = None) -> str:
             "FR13 SFWD conv/post-prep production and byte gate are exclusive"
         )
     if sfwd_embed_gate and (
-        not sfwd_conv_postprep_byte
-        or sfwd_conv_postprep
+        not (sfwd_conv_postprep or sfwd_conv_postprep_byte)
         or resolved_mode != "hydra27_fixed32"
     ):
         raise RuntimeError(
-            "FR13 embedded gate CTA requires the exclusive Hydra27 byte gate"
+            "FR13 embedded gate CTA requires Hydra27 conv/post-prep production "
+            "or byte gate"
         )
     sfwd_conv_postprep_graph = bool(
         sfwd_conv_postprep and os.environ.get("ENFORCE_EAGER", "0") == "0"
@@ -7955,6 +7955,80 @@ def _fr13_fixed32_require_sfwd_conv_postprep_source_manifest() -> dict[str, str]
     }
 
 
+def _fr13_fixed32_validate_sfwd_embedded_production_pass(
+    payload: object,
+    *,
+    source_commit: str,
+    manifest_sha256: str,
+    batch: int,
+) -> dict[str, object]:
+    """Validate the real B1/B4 embedded-gate verdict before serving it."""
+    if batch not in (1, 4) or not isinstance(payload, dict):
+        raise RuntimeError(
+            "FR13 embedded SFWD production PASS requires exact B1 or B4"
+        )
+    all_task_ids = (
+        "astropy__astropy-12907",
+        "astropy__astropy-13033",
+        "astropy__astropy-13236",
+        "astropy__astropy-13398",
+    )
+    task_ids = all_task_ids[:batch]
+    required = {
+        "schema": (
+            "fr13.fixed32.sfwd_conv_postprep.embedded_gate."
+            f"{'b1' if batch == 1 else 'exact4_b4'}_gate.v1"
+        ),
+        "status": "pass",
+        "candidate": "fixed32_sfwd_conv_postprep_embedded_gate_cta_v1",
+        "source_commit": source_commit,
+        "source_manifest_sha256": manifest_sha256,
+        "task_ids": list(task_ids),
+        "task_markers": [f"swe_verified:{task_id}" for task_id in task_ids],
+        "batch_size": batch,
+        "concurrency": batch,
+        "physical_rows_per_request": 32,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65536,
+        "embedded_gate_cta": True,
+        "programs_per_request": 40,
+        "layer_count": 48,
+        "compared_byte_surfaces": [
+            "query_spec",
+            "key_spec",
+            "value_spec",
+            "value_tree",
+            "g",
+            "beta",
+            "commit_source_stage",
+        ],
+        "reference_returned": True,
+        "candidate_returned": False,
+        "decision_exact": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_enabled": False,
+    }
+    digest_fields = (
+        "records_sha256",
+        "live_pass_sha256",
+        "health_sha256",
+        "container_env_sha256",
+        "engine_ledger_chain_head_sha256",
+    )
+    if (
+        set(payload) != {*required, *digest_fields}
+        or any(payload.get(name) != expected for name, expected in required.items())
+        or any(
+            not isinstance(payload.get(name), str)
+            or re.fullmatch(r"[0-9a-f]{64}", payload[name]) is None
+            for name in digest_fields
+        )
+    ):
+        raise RuntimeError("FR13 embedded SFWD production PASS contract drifted")
+    return dict(payload)
+
+
 def _fr13_fixed32_require_sfwd_conv_postprep_pass() -> dict[str, object]:
     """Bind the served candidate to one frozen real-task byte PASS."""
     candidate = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
@@ -8074,6 +8148,13 @@ def _fr13_fixed32_require_sfwd_conv_postprep_pass() -> dict[str, object]:
             "runtime candidate: " + repr(source_drift)
         )
     batch = int(os.environ.get("MAX_NUM_SEQS", "0"))
+    if _FR13_FIXED32_SFWD_EMBED_GATE_CTA == "1":
+        return _fr13_fixed32_validate_sfwd_embedded_production_pass(
+            payload,
+            source_commit=source_commit,
+            manifest_sha256=manifest_sha256,
+            batch=batch,
+        )
     required = {
         "schema": "fr13.fixed32.sfwd_conv_postprep.live_pass.v1",
         "status": "byte_pass_source_only",
@@ -8361,12 +8442,12 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             "FR13 SFWD conv/post-prep production and byte gate are exclusive"
         )
     if sfwd_embed_gate == "1" and (
-        sfwd_conv_postprep_byte != "1"
-        or sfwd_conv_postprep == "1"
+        (sfwd_conv_postprep_byte == "0" and sfwd_conv_postprep == "0")
         or mode != "hydra27_fixed32"
     ):
         raise RuntimeError(
-            "FR13 embedded gate CTA requires the exclusive Hydra27 byte gate"
+            "FR13 embedded gate CTA requires Hydra27 conv/post-prep production "
+            "or byte gate"
         )
     if sfwd_conv_postprep == "1" or sfwd_conv_postprep_byte == "1":
         exact_runtime = {
@@ -8382,11 +8463,11 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "0",
             "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB": "0",
         }
-        if sfwd_conv_postprep_byte == "1":
-            embedded_b4 = (
-                sfwd_embed_gate == "1"
-                and os.environ.get("MAX_NUM_SEQS", "") == "4"
-            )
+        embedded_b4 = (
+            sfwd_embed_gate == "1"
+            and os.environ.get("MAX_NUM_SEQS", "") == "4"
+        )
+        if sfwd_conv_postprep_byte == "1" or embedded_b4:
             exact_runtime["FR13_FIXED32_B1_DIAGNOSTIC"] = (
                 "0" if embedded_b4 else "1"
             )
@@ -8446,7 +8527,6 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         batch_text = os.environ.get("MAX_NUM_SEQS", "")
         embedded_b4_runtime = bool(
             sfwd_embed_gate == "1"
-            and sfwd_conv_postprep_byte == "1"
             and batch_text == "4"
             and os.environ.get("SWE_CONCURRENCY", "") == "4"
             and os.environ.get("FR13_FIXED32_CUTLASS_WAVE", "stock") == "stock"
@@ -8480,8 +8560,8 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             raise RuntimeError(
                 "FR13 fixed32 SFWD conv/post-prep fusion requires exclusive "
                 "physical32 K64/root1 B1 with one credentialed Qrow arm or "
-                "embedded-gate B4 with its admitted attention arm in eager or "
-                "FULL graph mode: "
+                "embedded-gate B4 with its admitted attention arm in eager "
+                "mode: "
                 + repr(drift)
             )
         if sfwd_conv_postprep == "1":

@@ -398,6 +398,64 @@ def _validate_live_pass(
     return pairs
 
 
+def _validate_embedded_production_pass(
+    payload: dict[str, Any],
+    *,
+    source_commit: str,
+    manifest_sha256: str,
+) -> None:
+    """Validate the durable verdict emitted by the real embedded B1/B4 gate."""
+    batch = payload.get("batch_size")
+    if type(batch) is not int or batch not in (1, 4):
+        raise GateError("embedded SFWD production PASS requires exact B1 or B4")
+    task_ids = EXACT4_TASK_IDS[:batch]
+    required = {
+        "schema": (
+            "fr13.fixed32.sfwd_conv_postprep.embedded_gate."
+            f"{'b1' if batch == 1 else 'exact4_b4'}_gate.v1"
+        ),
+        "status": "pass",
+        "candidate": EMBEDDED_GATE_CANDIDATE,
+        "source_commit": source_commit,
+        "source_manifest_sha256": manifest_sha256,
+        "task_ids": list(task_ids),
+        "task_markers": [f"swe_verified:{task_id}" for task_id in task_ids],
+        "batch_size": batch,
+        "concurrency": batch,
+        "physical_rows_per_request": 32,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65536,
+        "embedded_gate_cta": True,
+        "programs_per_request": 40,
+        "layer_count": LAYERS,
+        "compared_byte_surfaces": list(BYTE_SURFACES),
+        "reference_returned": True,
+        "candidate_returned": False,
+        "decision_exact": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_enabled": False,
+    }
+    digest_fields = (
+        "records_sha256",
+        "live_pass_sha256",
+        "health_sha256",
+        "container_env_sha256",
+        "engine_ledger_chain_head_sha256",
+    )
+    expected_keys = {*required, *digest_fields}
+    if (
+        set(payload) != expected_keys
+        or any(payload.get(key) != value for key, value in required.items())
+        or any(
+            not isinstance(payload.get(key), str)
+            or re.fullmatch(r"[0-9a-f]{64}", payload[key]) is None
+            for key in digest_fields
+        )
+    ):
+        raise GateError("embedded SFWD production PASS contract drifted")
+
+
 def validate_pass(args: argparse.Namespace) -> None:
     repo = Path(args.repo).resolve()
     source_commit = str(args.source_commit)
@@ -415,11 +473,18 @@ def validate_pass(args: argparse.Namespace) -> None:
         raise GateError("SFWD conv/post-prep live PASS SHA-256 drifted")
     if _sha256(manifest_raw) != expected_manifest_sha:
         raise GateError("SFWD conv/post-prep source-manifest SHA-256 drifted")
-    _validate_live_pass(
-        live_pass,
-        source_commit=source_commit,
-        manifest_sha256=expected_manifest_sha,
-    )
+    if live_pass.get("candidate") == EMBEDDED_GATE_CANDIDATE:
+        _validate_embedded_production_pass(
+            live_pass,
+            source_commit=source_commit,
+            manifest_sha256=expected_manifest_sha,
+        )
+    else:
+        _validate_live_pass(
+            live_pass,
+            source_commit=source_commit,
+            manifest_sha256=expected_manifest_sha,
+        )
 
 
 def _validate_qrow_evidence(logs: Path) -> tuple[bytes, bytes]:

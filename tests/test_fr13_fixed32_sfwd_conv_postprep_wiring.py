@@ -66,6 +66,57 @@ def _literal_tuple(path: Path, name: str) -> tuple[str, ...]:
     raise AssertionError(f"{path} lacks {name}")
 
 
+def _embedded_gate_payload(
+    *, batch: int, source_commit: str, manifest_sha256: str
+) -> dict[str, object]:
+    task_ids = (
+        "astropy__astropy-12907",
+        "astropy__astropy-13033",
+        "astropy__astropy-13236",
+        "astropy__astropy-13398",
+    )[:batch]
+    return {
+        "schema": (
+            "fr13.fixed32.sfwd_conv_postprep.embedded_gate."
+            f"{'b1' if batch == 1 else 'exact4_b4'}_gate.v1"
+        ),
+        "status": "pass",
+        "candidate": "fixed32_sfwd_conv_postprep_embedded_gate_cta_v1",
+        "source_commit": source_commit,
+        "source_manifest_sha256": manifest_sha256,
+        "task_ids": list(task_ids),
+        "task_markers": [f"swe_verified:{task_id}" for task_id in task_ids],
+        "batch_size": batch,
+        "concurrency": batch,
+        "physical_rows_per_request": 32,
+        "draft_vocab_root": 1,
+        "draft_vocab_k": 65536,
+        "embedded_gate_cta": True,
+        "programs_per_request": 40,
+        "layer_count": 48,
+        "compared_byte_surfaces": [
+            "query_spec",
+            "key_spec",
+            "value_spec",
+            "value_tree",
+            "g",
+            "beta",
+            "commit_source_stage",
+        ],
+        "reference_returned": True,
+        "candidate_returned": False,
+        "decision_exact": True,
+        "timing_eligible": False,
+        "floor_acceptance_eligible": False,
+        "production_enabled": False,
+        "records_sha256": "1" * 64,
+        "live_pass_sha256": "2" * 64,
+        "health_sha256": "3" * 64,
+        "container_env_sha256": "4" * 64,
+        "engine_ledger_chain_head_sha256": "5" * 64,
+    }
+
+
 def test_selector_is_default_off_and_baked_only_when_explicit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -115,12 +166,19 @@ def test_embedded_gate_selector_is_exact_and_subordinate(
     monkeypatch.setenv(BYTE_SELECTOR, "0")
     monkeypatch.setenv("MAX_NUM_SEQS", "1")
     patcher = _load_patcher(f"fr13_sfwd_embed_naked_{raw!r}")
-    with pytest.raises(RuntimeError, match="exclusive Hydra27 byte gate"):
+    with pytest.raises(RuntimeError, match="production or byte gate"):
         patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
 
     monkeypatch.setenv(BYTE_SELECTOR, "1")
     patcher = _load_patcher(f"fr13_sfwd_embed_exact_{raw!r}")
     bindings = patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
+    assert "_FR13_FIXED32_SFWD_EMBED_GATE_CTA = True\n" in bindings
+
+    monkeypatch.setenv(BYTE_SELECTOR, "0")
+    monkeypatch.setenv(SELECTOR, "1")
+    patcher = _load_patcher(f"fr13_sfwd_embed_production_{raw!r}")
+    bindings = patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32")
+    assert "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION = True\n" in bindings
     assert "_FR13_FIXED32_SFWD_EMBED_GATE_CTA = True\n" in bindings
 
 
@@ -181,13 +239,13 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
     ]
     monkeypatch.setenv("FR13_FIXED32_VALID_MASK", hex(expected_mask))
     monkeypatch.setenv("FR13_FIXED32_ACTIVE_NODES", str(expected_active))
-    with pytest.raises(RuntimeError, match="eager or FULL graph mode"):
+    with pytest.raises(RuntimeError, match="conv/post-prep fusion requires"):
         patcher._fr13_fixed32_validate_patch_env()
 
     monkeypatch.setenv("FR13_DRAFT_VOCAB_K", "65536")
     monkeypatch.setenv("ENFORCE_EAGER", "0")
     monkeypatch.setenv("CUDAGRAPH_MODE", "PIECEWISE")
-    with pytest.raises(RuntimeError, match="eager or FULL graph mode"):
+    with pytest.raises(RuntimeError, match="conv/post-prep fusion requires"):
         patcher._fr13_fixed32_validate_patch_env()
 
     monkeypatch.setenv("CUDAGRAPH_MODE", "FULL_AND_PIECEWISE")
@@ -359,6 +417,170 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
         patcher._fr13_fixed32_validate_patch_env()
 
 
+@pytest.mark.parametrize("batch", (1, 4))
+def test_patch_contract_admits_source_bound_embedded_production(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    batch: int,
+) -> None:
+    monkeypatch.setenv(SELECTOR, "1")
+    monkeypatch.setenv(BYTE_SELECTOR, "0")
+    monkeypatch.setenv(EMBED_SELECTOR, "1")
+    patcher = _load_patcher(f"fr13_sfwd_embedded_production_b{batch}")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_MODE", "hydra27_fixed32")
+    monkeypatch.setattr(
+        patcher, "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION", "1"
+    )
+    monkeypatch.setattr(
+        patcher, "_FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB", "0"
+    )
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_SFWD_EMBED_GATE_CTA", "1")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE", "")
+    monkeypatch.setattr(patcher, "_FR13_FIXED32_GDN_PATH_BV_PRODUCTION", "")
+    monkeypatch.setattr(
+        patcher, "_FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB", "0"
+    )
+    monkeypatch.setattr(
+        patcher, "_FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION", "0"
+    )
+    monkeypatch.setattr(
+        patcher, "_FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB", "0"
+    )
+    monkeypatch.setattr(
+        patcher, "_fr13_fixed32_eager_boot_warm_contract", lambda: None
+    )
+    qrow16 = batch == 1
+    exact = {
+        "MAX_NUM_SEQS": str(batch),
+        "SWE_CONCURRENCY": str(batch),
+        "ENFORCE_EAGER": "1",
+        "CUDAGRAPH_MODE": "FULL_AND_PIECEWISE",
+        "FR13_DRAFT_VOCAB_ROOT": "1",
+        "FR13_DRAFT_VOCAB_K": "65536",
+        "FR13_FIXED32_CONV_SOURCE_BATCH": "0",
+        "FR13_RING_EXPORT": "1",
+        "FR13_FLAGS_INKERNEL": "1",
+        "FR13_TREE_RUNROW_INIT": "1",
+        "FR13_TREE_CONV_FUSED": "1",
+        "FR13_CONV_WB_BATCHED": "1",
+        "FR13_FIXED32_B1_DIAGNOSTIC": "0",
+        "FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB": "0",
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "0",
+        "FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB": "0",
+        "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
+        "FR13_FA2_QROW16_PRODUCTION": "1" if qrow16 else "0",
+        "FR13_FA2_QROW16_SO_SHA256": QROW16_SHA256 if qrow16 else "",
+        "FR13_FA2_QROW16_LIVE_PASS_SHA256": (
+            QROW16_PASS_SHA256 if qrow16 else ""
+        ),
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+        "FR13_FIXED32_CUTLASS_WAVE": "stock",
+        "FR13_FIXED32_CUTLASS_WAVE_PRODUCTION": "0",
+    }
+    for name, value in exact.items():
+        monkeypatch.setenv(name, value)
+    expected_mask, expected_active = patcher._FR13_FIXED32_MODES[
+        "hydra27_fixed32"
+    ]
+    monkeypatch.setenv("FR13_FIXED32_VALID_MASK", hex(expected_mask))
+    monkeypatch.setenv("FR13_FIXED32_ACTIVE_NODES", str(expected_active))
+    for name in (
+        "FR13_FIXED32_WORK_CENSUS",
+        "FR13_FIXED32_DEVICE_PUBLISH",
+        "FR13_FIXED32_ACCEPT_PACK",
+        "FR13_FIXED32_REQKEY_DEVICE",
+        "FR13_FIXED32_KV_REMAP16",
+        "FR13_FIXED32_COMMIT_DEVICE_FILL",
+        "FR13_DEVICE_MULTIDRAFT",
+        "FR13_DRAFTER_GRAPH",
+        "FR13_DRAFTER_SINGLE_LOGITS",
+        "FR13_DM_DEPTHSYNC",
+        "FR13_TAW",
+        "FR13_PARENT_GATHER",
+        "FR13_SUBTREE_PARALLEL",
+        "FR13_EAGER_PACK",
+        "FR13_COMMIT_BATCH_OUTPUT",
+        "FR13_COMMITTER_NATIVE",
+        "FR13_COMMITTER_BATCHED",
+        "FR13_COMMITTER_GRAPH",
+        "FR13_REPLAY_ROUTE",
+        "FR13_ATTN_KV_REMAP",
+        "FR13_SLOT_REORDER",
+        "FR13_KV_REMAP_SYNCFREE",
+        "FR13_CONV_WB_FUSED",
+        "FR13_CONV_PREGATHER",
+        "FR13_CONV_COMMITTED_PATH",
+        "FR13_APC_COMMIT_TO_RUNNING_ROW",
+    ):
+        monkeypatch.setenv(name, "1")
+    monkeypatch.setenv("FR13_FIXED32_TAW_WALK_CAP", "12")
+
+    source_commit = "6" * 40
+    source_paths = patcher._FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS
+    manifest = tmp_path / f"embedded_b{batch}.source_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1",
+                "candidate": "fixed32_sfwd_conv_postprep_frontier5_direct_v1",
+                "source_commit": source_commit,
+                "files": {
+                    relative: {
+                        "bytes": len((ROOT / relative).read_bytes()),
+                        "sha256": hashlib.sha256(
+                            (ROOT / relative).read_bytes()
+                        ).hexdigest(),
+                    }
+                    for relative in source_paths
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    manifest_sha256 = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    manifest.chmod(0o400)
+    production_pass = tmp_path / f"embedded_b{batch}.production_pass.json"
+    production_pass.write_text(
+        json.dumps(
+            _embedded_gate_payload(
+                batch=batch,
+                source_commit=source_commit,
+                manifest_sha256=manifest_sha256,
+            ),
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    production_pass.chmod(0o400)
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON",
+        str(production_pass),
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256",
+        hashlib.sha256(production_pass.read_bytes()).hexdigest(),
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH", str(manifest)
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256",
+        manifest_sha256,
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT", source_commit
+    )
+    patcher._fr13_fixed32_validate_patch_env()
+
+    monkeypatch.setenv("ENFORCE_EAGER", "0")
+    with pytest.raises(RuntimeError, match="embedded-gate B4|embedded gate"):
+        patcher._fr13_fixed32_validate_patch_env()
+
+
 def test_patch_contract_rejects_naked_serving_selector(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -482,7 +704,8 @@ def test_launcher_and_real_task_runner_forward_the_selector() -> None:
         assert source.count(SELECTOR) >= 7
     assert "_fr13_sfwd_qrow32_production=1" in launcher
     assert "identity_onen_n5120_fullgrid_b1|identity_wide256_fullgrid_b1" in launcher
-    assert "one credentialed Qrow arm" in launcher
+    assert "source-qualified embedded Hydra27 eager B1/B4" in launcher
+    assert "fr13_sfwd_conv_postprep_gate.py validate-pass" in launcher
 
 
 def test_embedded_gate_runners_bind_real_b1_and_exact4_b4() -> None:

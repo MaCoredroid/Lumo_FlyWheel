@@ -122,6 +122,7 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION
   FR13_CFWD_LOGIT_DIRECT_BYTE_AB
   FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB
+  FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION
   FR13_CFWD_LOGIT_DIRECT_PRODUCTION
   FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON
   FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256
@@ -226,6 +227,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE]}" == "set:byte_ab" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_CFWD_LOGIT_DIRECT_BYTE_AB]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_CFWD_LOGIT_DIRECT_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO]}" == set:* ]] \
   && _FR13_M32_GUARD_ACTIVE=1
@@ -252,6 +254,7 @@ fi
    || "${FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION:-0}" == "1" \
    || "${FR13_CFWD_LOGIT_DIRECT_BYTE_AB:-0}" == "1" \
+   || "${FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_EMBED_GATE_CTA:-0}" == "1" \
    || "${FR13_CFWD_LOGIT_DIRECT_PRODUCTION:-0}" == "1" \
@@ -593,6 +596,7 @@ FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON=${FR13_FIXED32_TAW_NATIVE_PRECOMPUT
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON:-/logs/fr13_fixed32_taw_native_precompute.live_pass.json}
 FR13_CFWD_LOGIT_DIRECT_BYTE_AB=${FR13_CFWD_LOGIT_DIRECT_BYTE_AB:-0}
 FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB=${FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB:-0}
+FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION=${FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION:-0}
 FR13_CFWD_LOGIT_DIRECT_SOURCE=/workspace/scripts/fr13_cfwd_logit_direct_decision_kernel.py
 FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256=a7a7b6582cdc11e930916f5e65583195fd31a3b664e8f567bb33a24ea1a64ee0
 FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT=$(git rev-parse HEAD)
@@ -776,6 +780,15 @@ case "$FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB" in
   0|1) ;;
   *) echo "FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB must be 0 or 1" >&2; exit 2 ;;
 esac
+case "$FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB" == "1" \
+      && "$FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION" == "1" ]]; then
+  echo "FR13 packed-walk node-trust diagnostic and production are mutually exclusive" >&2
+  exit 2
+fi
 case "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" in
   0|1) ;;
   *) echo "FR13_CFWD_LOGIT_DIRECT_PRODUCTION must be 0 or 1" >&2; exit 2 ;;
@@ -796,6 +809,21 @@ if [[ "$FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB" == "1" ]]; then
      && "${FR13_DRAFT_VOCAB_ROOT:-1}" == "1" \
      && "${FR13_DEVICE_MULTIDRAFT_KERNEL:-}" == "/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py" ]] || {
     echo "FR13 packed-walk node trust requires the canonical real SWE Hydra27 physical32 K64/root1 B1 shadow gate" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION" == "1" ]]; then
+  [[ "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" == "0" \
+     && "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" == "1" \
+     && "$FR13_FIXED32_MODE" == "hydra27_fixed32" \
+     && "$MAX_NUM_SEQS" == "1" \
+     && "$SWE_CONCURRENCY" == "1" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+     && "${ENFORCE_EAGER:-0}" == "0" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+     && "${FR13_DRAFT_VOCAB_ROOT:-1}" == "1" \
+     && "${FR13_DEVICE_MULTIDRAFT_KERNEL:-}" == "/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py" ]] || {
+    echo "FR13 packed-walk node trust production requires the source-bound Hydra27 physical32 K64/root1 B1 FULL route" >&2
     exit 2
   }
 fi
@@ -3807,9 +3835,10 @@ case "$_fr13_sfwd_embed_gate" in
   *) echo "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1" >&2; exit 2 ;;
 esac
 [[ "$_fr13_sfwd_embed_gate" == "0" \
-   || ( "$_fr13_sfwd_conv_postprep_byte" == "1" \
+   || ( ( "$_fr13_sfwd_conv_postprep_byte" == "1" \
+          || "$_fr13_sfwd_conv_postprep" == "1" ) \
         && "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ) ]] || {
-  echo "embedded gate CTA requires the Hydra27 conv/post-prep byte gate" >&2
+  echo "embedded gate CTA requires Hydra27 conv/post-prep production or byte gate" >&2
   exit 2
 }
 _fr13_sfwd_route_count=$((
@@ -3884,12 +3913,28 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
     _fr13_sfwd_cfwd_composed=1
   fi
   _fr13_sfwd_u8_cfwd_composed=$_fr13_b1_u8_cfwd_sfwd_stack
+  _fr13_sfwd_conv_postprep_profile=invalid
+  if [[ "$MAX_NUM_SEQS" == "1" \
+        && "${SWE_CONCURRENCY:-}" == "1" \
+        && ( $((10#$_fr13_sfwd_qrow16_production + 10#$_fr13_sfwd_qrow32_production)) == 1 \
+             || "$_fr13_sfwd_u8_cfwd_composed" == "1" ) ]]; then
+    _fr13_sfwd_conv_postprep_profile=b1
+  elif [[ "$_fr13_sfwd_embed_gate" == "1" \
+          && "$MAX_NUM_SEQS" == "4" \
+          && "${SWE_CONCURRENCY:-}" == "4" \
+          && "$_fr13_sfwd_qrow16_production" == "0" \
+          && "$_fr13_sfwd_qrow32_production" == "0" \
+          && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "stock" \
+          && "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "0" ]]; then
+    _fr13_sfwd_conv_postprep_profile=embedded_b4
+  fi
   if [[ ( "${FR13_FIXED32_MODE:-}" != "tail6_fixed32" \
           && "${FR13_FIXED32_MODE:-}" != "hydra27_fixed32" ) \
-        || "$MAX_NUM_SEQS" != "1" \
-        || "${SWE_CONCURRENCY:-}" != "1" \
+        || "$_fr13_sfwd_conv_postprep_profile" == "invalid" \
         || "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" != "0" \
         || "$_fr13_sfwd_conv_postprep_execution" == "invalid" \
+        || ( "$_fr13_sfwd_embed_gate" == "1" \
+             && "$_fr13_sfwd_conv_postprep_execution" != "eager" ) \
         || "${FR13_DRAFT_VOCAB_ROOT:-0}" != "1" \
         || "${FR13_DRAFT_VOCAB_K:-65536}" != "65536" \
         || "${FR13_DRAFT_VOCAB_BLOCKS:-}" != "/workspace/scripts/fr13_dvk_subset_blocks.json" \
@@ -3898,10 +3943,8 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         || "${FR13_TREE_RUNROW_INIT:-1}" != "1" \
         || "${FR13_TREE_CONV_FUSED:-1}" != "1" \
         || "${FR13_CONV_WB_BATCHED:-0}" != "1" \
-        || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "0" \
-        || ( $((10#$_fr13_sfwd_qrow16_production + 10#$_fr13_sfwd_qrow32_production)) != 1 \
-             && "$_fr13_sfwd_u8_cfwd_composed" != "1" ) ]]; then
-    echo "SFWD conv/post-prep production requires exact K64/root1 B1 with one credentialed Qrow arm or the explicit U8/CFWD stack" >&2
+        || "${FR13_FIXED32_CONV_SOURCE_BATCH:-0}" != "0" ]]; then
+    echo "SFWD conv/post-prep production requires exact K64/root1 B1, or source-qualified embedded Hydra27 eager B1/B4" >&2
     exit 2
   fi
   if [[ "$_fr13_batch_gdn_diagnostic_count" != "0" \
@@ -3965,6 +4008,7 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
   unset _fr13_sfwd_cutlass_production
   unset _fr13_sfwd_cfwd_composed
   unset _fr13_sfwd_u8_cfwd_composed
+  unset _fr13_sfwd_conv_postprep_profile
   rm -f \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep_byte_ab.enabled" \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl" \
@@ -4867,6 +4911,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON="$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON" \
   -e FR13_CFWD_LOGIT_DIRECT_BYTE_AB="$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" \
   -e FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB="$FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB" \
+  -e FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION="$FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION" \
   -e FR13_CFWD_LOGIT_DIRECT_SOURCE="$FR13_CFWD_LOGIT_DIRECT_SOURCE" \
   -e FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256="$FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256" \
   -e FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT="$FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT" \

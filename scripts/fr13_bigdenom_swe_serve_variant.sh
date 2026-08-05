@@ -88,8 +88,9 @@ case "$FR13_FIXED32_SFWD_EMBED_GATE_CTA" in
   *) echo "FAIL: FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1"; exit 2 ;;
 esac
 [[ "$FR13_FIXED32_SFWD_EMBED_GATE_CTA" == "0" \
-   || "$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB" == "1" ]] \
-  || { echo "FAIL: embedded gate CTA requires the SFWD conv/post-prep byte gate"; exit 2; }
+   || "$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB" == "1" \
+   || "$FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION" == "1" ]] \
+  || { echo "FAIL: embedded gate CTA requires SFWD conv/post-prep production or byte gate"; exit 2; }
 case "$FR13_FIXED32_COMMITTER_LAYER_BATCH" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_COMMITTER_LAYER_BATCH must be exactly 0 or 1"; exit 2 ;;

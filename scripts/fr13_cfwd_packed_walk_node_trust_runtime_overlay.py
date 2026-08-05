@@ -12,7 +12,8 @@ from types import ModuleType
 from typing import Any
 
 
-SELECTOR_ENV = "FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB"
+DIAGNOSTIC_SELECTOR_ENV = "FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB"
+PRODUCTION_SELECTOR_ENV = "FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION"
 RUNTIME_SCHEMA = "fr13.fixed32.cfwd_packed_walk.node_trust.runtime.v1"
 BASE_CANDIDATE = "fixed32_cfwd_logit_direct_packed_physical_slots_v3"
 BASE_CANDIDATE_SCHEMA = (
@@ -46,14 +47,31 @@ _REFERENCE_WALK = None
 _NODE_TRUST_MODULE: ModuleType | None = None
 
 
-def _selector_raw() -> str:
-    raw = os.environ.get(SELECTOR_ENV, "0").strip()
-    if raw not in ("0", "1"):
-        raise RuntimeError(f"{SELECTOR_ENV} must be exactly 0 or 1")
-    return raw
+def _selector() -> str:
+    values = {
+        "diagnostic": os.environ.get(DIAGNOSTIC_SELECTOR_ENV, "0").strip(),
+        "production": os.environ.get(PRODUCTION_SELECTOR_ENV, "0").strip(),
+    }
+    for route, raw in values.items():
+        if raw not in ("0", "1"):
+            name = (
+                DIAGNOSTIC_SELECTOR_ENV
+                if route == "diagnostic"
+                else PRODUCTION_SELECTOR_ENV
+            )
+            raise RuntimeError(f"{name} must be exactly 0 or 1")
+    if values["diagnostic"] == values["production"] == "1":
+        raise RuntimeError(
+            "FR13 packed-walk node-trust diagnostic and production are exclusive"
+        )
+    if values["diagnostic"] == "1":
+        return "diagnostic"
+    if values["production"] == "1":
+        return "production"
+    return "off"
 
 
-def runtime_contract(*, installed: bool) -> dict[str, object]:
+def runtime_contract(*, installed: bool, selector: str) -> dict[str, object]:
     return {
         "schema": RUNTIME_SCHEMA,
         "candidate": NODE_TRUST_CANDIDATE,
@@ -64,9 +82,11 @@ def runtime_contract(*, installed: bool) -> dict[str, object]:
         "base_candidate_source_sha256": BASE_CANDIDATE_SOURCE_SHA256,
         "base_integration_source_schema": BASE_INTEGRATION_SOURCE_SCHEMA,
         "base_integration_source_sha256": BASE_INTEGRATION_SOURCE_SHA256,
-        "selector_env": SELECTOR_ENV,
+        "diagnostic_selector_env": DIAGNOSTIC_SELECTOR_ENV,
+        "production_selector_env": PRODUCTION_SELECTOR_ENV,
+        "selector": selector,
         "candidate_default_off": True,
-        "reference_always_served": True,
+        "reference_always_served": selector != "production",
         "shadow_comparator": "_fr13_cfwd_logit_direct_compare",
         "mode": MODE,
         "batches": list(BATCHES),
@@ -93,7 +113,8 @@ def _producer_contract(mode: str) -> dict[str, object]:
 
 
 def _select(topology, entry: dict[str, Any]) -> str:
-    if _selector_raw() == "0":
+    route = _selector()
+    if route == "off":
         return "packed_v3"
     if _RUNTIME_MODULE is None:
         raise RuntimeError("FR13 packed-walk node-trust overlay is not installed")
@@ -115,9 +136,9 @@ def _select(topology, entry: dict[str, Any]) -> str:
         mode=mode,
         batch_size=batch,
     )
-    if selector != "diagnostic":
+    if selector != route:
         raise RuntimeError(
-            "FR13 packed-walk node trust requires CFWD diagnostic shadow mode"
+            f"FR13 packed-walk node trust requires CFWD {route} mode"
         )
     return "node_trust"
 
@@ -184,16 +205,21 @@ def _load_node_trust(path: Path) -> ModuleType:
 def install(module: ModuleType) -> dict[str, object]:
     """Install only when explicitly armed against the exact packed-v3 base."""
     global _NODE_TRUST_MODULE, _REFERENCE_WALK, _RUNTIME_MODULE
-    armed = _selector_raw() == "1"
-    if not armed:
-        return runtime_contract(installed=False)
-    if (
-        os.environ.get("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "0").strip() != "1"
-        or os.environ.get("FR13_CFWD_LOGIT_DIRECT_PRODUCTION", "0").strip()
-        != "0"
-    ):
+    selector = _selector()
+    if selector == "off":
+        return runtime_contract(installed=False, selector=selector)
+    base_diagnostic = os.environ.get(
+        "FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "0"
+    ).strip()
+    base_production = os.environ.get(
+        "FR13_CFWD_LOGIT_DIRECT_PRODUCTION", "0"
+    ).strip()
+    expected_base = (
+        ("1", "0") if selector == "diagnostic" else ("0", "1")
+    )
+    if (base_diagnostic, base_production) != expected_base:
         raise RuntimeError(
-            "FR13 packed-walk node trust requires CFWD diagnostic shadow mode"
+            f"FR13 packed-walk node trust requires CFWD {selector} mode"
         )
     if (
         getattr(module, "_FR13_CFWD_LOGIT_DIRECT_CANDIDATE", None)
@@ -210,7 +236,7 @@ def install(module: ModuleType) -> dict[str, object]:
     ):
         raise RuntimeError("FR13 packed-walk node trust requires exact CFWD v3")
     if getattr(module, "_FR13_CFWD_PACKED_WALK_NODE_TRUST_INSTALLED", False):
-        return runtime_contract(installed=True)
+        return runtime_contract(installed=True, selector=selector)
     source = Path(__file__).resolve().with_name(NODE_TRUST_SOURCE_NAME)
     candidate = _load_node_trust(source)
     _RUNTIME_MODULE = module
@@ -220,7 +246,7 @@ def install(module: ModuleType) -> dict[str, object]:
         _fr13_cfwd_logit_direct_walk_cuda
     )
     module._fr13_cfwd_packed_walk_node_trust_runtime_contract = (
-        lambda: runtime_contract(installed=True)
+        lambda: runtime_contract(installed=True, selector=_selector())
     )
     module._FR13_CFWD_PACKED_WALK_NODE_TRUST_INSTALLED = True
-    return runtime_contract(installed=True)
+    return runtime_contract(installed=True, selector=selector)

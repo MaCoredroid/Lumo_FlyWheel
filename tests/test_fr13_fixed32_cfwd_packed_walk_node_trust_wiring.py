@@ -25,6 +25,7 @@ BASE_RUNNER = ROOT / "scripts" / "fr13_run_b1_cfwd_logit_direct_live_gate.sh"
 LAUNCHER = ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 MANIFEST = ROOT / "scripts" / "fr13_runtime_manifest.py"
 SELECTOR = "FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB"
+PRODUCTION_SELECTOR = "FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION"
 
 
 def _load(path: Path, name: str):
@@ -51,6 +52,7 @@ def _topology() -> SimpleNamespace:
 
 def _armed_wrapper(monkeypatch: pytest.MonkeyPatch, name: str):
     monkeypatch.setenv(SELECTOR, "1")
+    monkeypatch.setenv(PRODUCTION_SELECTOR, "0")
     monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "1")
     monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_PRODUCTION", "0")
     wrapper = _load(WRAPPER, name)
@@ -61,6 +63,7 @@ def test_wrapper_keeps_packed_v3_walk_unmodified_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv(SELECTOR, raising=False)
+    monkeypatch.delenv(PRODUCTION_SELECTOR, raising=False)
     wrapper = _load(WRAPPER, "fr13_node_trust_default_off_test")
     base = wrapper._base
     assert not getattr(
@@ -104,10 +107,33 @@ def test_armed_selector_requires_existing_diagnostic_shadow(
         monkeypatch, "fr13_node_trust_shadow_selector_test"
     )
     monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "0")
-    with pytest.raises(RuntimeError, match="requires CFWD diagnostic shadow"):
+    with pytest.raises(RuntimeError, match="requires CFWD diagnostic mode"):
         overlay._select(
             _topology(), {"mode": "hydra27_fixed32", "batch_size": 1}
         )
+
+
+def test_production_selector_requires_and_reuses_base_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(SELECTOR, "0")
+    monkeypatch.setenv(PRODUCTION_SELECTOR, "1")
+    monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "0")
+    monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_PRODUCTION", "1")
+    wrapper = _load(WRAPPER, "fr13_node_trust_production_selector_test")
+    base = wrapper._base
+    overlay = wrapper._node_trust_overlay
+    monkeypatch.setattr(
+        base,
+        "_fr13_cfwd_logit_direct_selector",
+        lambda **_kwargs: "production",
+    )
+    assert overlay._select(
+        _topology(), {"mode": "hydra27_fixed32", "batch_size": 1}
+    ) == "node_trust"
+    contract = base._fr13_cfwd_packed_walk_node_trust_runtime_contract()
+    assert contract["selector"] == "production"
+    assert contract["reference_always_served"] is False
 
 
 def test_walk_routes_candidate_outputs_into_existing_comparator_buffers(
@@ -157,14 +183,27 @@ def test_selector_and_source_bindings_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     overlay = _load(OVERLAY, "fr13_node_trust_fail_closed_test")
+    monkeypatch.setenv(PRODUCTION_SELECTOR, "0")
     monkeypatch.setenv(SELECTOR, "yes")
     with pytest.raises(RuntimeError, match="must be exactly 0 or 1"):
         overlay.install(SimpleNamespace())
     monkeypatch.setenv(SELECTOR, "1")
     monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "0")
     monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_PRODUCTION", "0")
-    with pytest.raises(RuntimeError, match="requires CFWD diagnostic shadow"):
+    with pytest.raises(RuntimeError, match="requires CFWD diagnostic mode"):
         overlay.install(SimpleNamespace())
+    monkeypatch.setenv(SELECTOR, "1")
+    monkeypatch.setenv(PRODUCTION_SELECTOR, "1")
+    with pytest.raises(RuntimeError, match="diagnostic and production are exclusive"):
+        overlay.install(SimpleNamespace())
+    monkeypatch.setenv(SELECTOR, "0")
+    monkeypatch.setenv(PRODUCTION_SELECTOR, "1")
+    with pytest.raises(RuntimeError, match="requires CFWD production mode"):
+        overlay.install(SimpleNamespace())
+    monkeypatch.setenv(PRODUCTION_SELECTOR, "yes")
+    with pytest.raises(RuntimeError, match="must be exactly 0 or 1"):
+        overlay.install(SimpleNamespace())
+    monkeypatch.setenv(PRODUCTION_SELECTOR, "0")
     monkeypatch.setenv(SELECTOR, "0")
     assert overlay.install(SimpleNamespace())["installed"] is False
     wrapper_source = WRAPPER.read_text(encoding="ascii")
@@ -183,6 +222,7 @@ def test_runtime_contract_is_default_off_and_reuses_shadow_comparator(
     )
     contract = base._fr13_cfwd_packed_walk_node_trust_runtime_contract()
     assert contract["candidate_default_off"] is True
+    assert contract["selector"] == "diagnostic"
     assert contract["reference_always_served"] is True
     assert contract["shadow_comparator"] == "_fr13_cfwd_logit_direct_compare"
     assert contract["mode"] == "hydra27_fixed32"
@@ -209,6 +249,9 @@ def test_runner_is_source_bound_real_swe_k64_b1_shadow() -> None:
     assert "real_swe_verified_one_task" in base
     assert "PROBE_ONLY" not in source and "CAPTURE_ONLY" not in source
     assert f'-e {SELECTOR}="${SELECTOR}"' in launcher
+    assert f'{PRODUCTION_SELECTOR}=${{{PRODUCTION_SELECTOR}:-0}}' in launcher
+    assert f'-e {PRODUCTION_SELECTOR}="${PRODUCTION_SELECTOR}"' in launcher
+    assert "node trust production requires the source-bound" in launcher
     assert "Hydra27 physical32 K64/root1 B1 shadow gate" in launcher
     for path in (CANDIDATE, OVERLAY, RUNNER):
         assert str(path.relative_to(ROOT)) in manifest
