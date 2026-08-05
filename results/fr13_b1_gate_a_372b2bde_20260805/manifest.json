@@ -1,0 +1,92 @@
+{
+  "schema": "fr13.fixed32.b1_gate_a.real_task_split2_scratch_rejection.v1",
+  "created_at_utc": "2026-08-05T08:29:59Z",
+  "status": "REJECTED_REAL_TASK_QROW32_SPLIT2_SCRATCH_NOT_ALLOCATED",
+  "source": {
+    "branch": "main",
+    "commit": "372b2bdeae1580c13f2af72917a0ad89a7f46ebe",
+    "tracked_worktree_clean_at_launch": true,
+    "upstream_commit_match_at_launch": true
+  },
+  "gate_contract": {
+    "entrypoint": "scripts/fr13_run_b1_qrow32_gqa3_dfwd_top3_live_gate.sh",
+    "classification": "one_real_swe_verified_b1_graph_byte_diagnostic",
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "task_set": "canonical_one_task_b1_diagnostic",
+    "planned_task_count": 1,
+    "mode": "hydra27_fixed32",
+    "logical_topology": "Hydra27",
+    "logical_drafts": 27,
+    "physical_rows": 32,
+    "batch_size": 1,
+    "concurrency": 1,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "cudagraph_mode": "FULL_AND_PIECEWISE",
+    "candidates": [
+      "qrow32_split2",
+      "gqa_group3",
+      "dfwd_k64_top3"
+    ]
+  },
+  "observed": {
+    "failure_stage": "first_real_task.qrow32_live_comparator.private_cpp_guard",
+    "failure_class": "fa2_varlen_qlen32_split_scratch_not_allocated",
+    "model_loading_completed": true,
+    "drafter_loading_completed": true,
+    "profile_cudagraph_memory_completed": true,
+    "mixed_graph_capture_completed": true,
+    "final_full_graph_capture_completed": true,
+    "health_record_present": true,
+    "authenticated_task_request_started": true,
+    "completed_swe_verified_tasks": 0,
+    "qrow32_live_replay_reached": true,
+    "qrow32_split2_cpp_operator_entered": true,
+    "qrow32_split2_private_launcher_entered": true,
+    "qrow32_split2_cuda_kernel_launched": false,
+    "qrow_comparator_events": 0,
+    "qrow32_credential_issued": false,
+    "gqa_group3_credential_issued": false,
+    "dfwd_k64_top3_credential_issued": false,
+    "timing_summary_present": false,
+    "orchestrator_return_code": 15,
+    "root_cause_verified_from_source": true,
+    "rerun_required": true
+  },
+  "candidate_identity": {
+    "qrow32_so_sha256": "07e02c0a53185c48d745fb221e7c807f97bfe40f61354e4242e9271e743e13c1",
+    "qrow32_source_closure_sha256": "a4a6d96cad9b34b73ddc4fb2fcda230c033b30246509c1a24208b2f2955d2bcc",
+    "requested_num_splits": 2,
+    "received_num_splits": 0,
+    "received_oaccum_ptr_nonnull": false,
+    "received_softmax_lseaccum_ptr_nonnull": false,
+    "custom_cpp_operator_entered": true,
+    "custom_cuda_candidate_launched": false
+  },
+  "source_readiness": {
+    "private_exact_split2_python_route_cleared": true,
+    "generic_num_splits_guard_remains_fail_closed": true,
+    "stock_splitkv_allocator_reuse_required": true,
+    "ordinary_fa2_allocation_predicate_must_remain_unchanged": true,
+    "repair_commit": "14e525884",
+    "required_next_step": "rebuild_pinned_qrow32_binary_then_rerun_real_gate_a"
+  },
+  "claims": {
+    "kernel_qualification": false,
+    "performance_measurement": false,
+    "tps_measurement": false,
+    "acceptance_measurement": false,
+    "floor_acceptance_eligible": false,
+    "hardware_floor": false
+  },
+  "cleanup": {
+    "failed_container_preserved_during_diagnosis": true,
+    "gpu_compute_processes_after_failure": 0,
+    "gpu_utilization_percent_after_failure": 0
+  },
+  "publication": {
+    "sanitized_reduction_only": true,
+    "raw_artifacts_included": false,
+    "excluded_raw_artifact_hashes_included": false
+  }
+}
