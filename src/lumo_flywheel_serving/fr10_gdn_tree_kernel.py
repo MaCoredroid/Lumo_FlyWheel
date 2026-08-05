@@ -410,6 +410,19 @@ def _fr13_fixed32_committer_layer_batch_requested() -> bool:
     )
 
 
+def _fr13_fixed32_committer_bv64_warp4_requested() -> bool:
+    """Return the boot-time arm for the two-tile committer geometry."""
+    if os.environ.get("FR13_FIXED32_COMMITTER_BV64_WARP4") == "1":
+        return True
+    return any(
+        os.path.exists(path)
+        for path in (
+            "/logs/fr13_fixed32_committer_bv64_warp4.arm",
+            "/tmp/fr13_fixed32_committer_bv64_warp4.arm",
+        )
+    )
+
+
 def _fr13_fixed32_committer_metadata_fusion_requested() -> bool:
     """Return the boot-time arm for conv-to-committer metadata fusion."""
     if os.environ.get("FR13_FIXED32_COMMITTER_METADATA_FUSION") == "1":
@@ -13425,6 +13438,7 @@ def _fr13_fixed32_committer_native_layer_batch(
     k_norm_reuse,
     gate_reuse,
     decay_reuse,
+    bv64_warp4,
 ) -> None:
     """Launch all 48 native-realization scans to disjoint destinations once."""
     layers = 48
@@ -13488,9 +13502,10 @@ def _fr13_fixed32_committer_native_layer_batch(
             "48-layer K=V=128 geometry"
         )
     block_k = triton.next_power_of_2(dim_k)
-    # Own the pinned V=128 state in one program so the K vector and its
-    # normalization are shared by every value row for this value head.
-    block_v = triton.next_power_of_2(dim_v)
+    # The candidate splits only independent value rows. Each program retains
+    # the same ordered K reduction and recurrence, then writes disjoint rows.
+    block_v = 64 if bv64_warp4 else triton.next_power_of_2(dim_v)
+    kernel_warps = 4 if bv64_warp4 else 8
     grid = (1, triton.cdiv(dim_v, block_v), layers * batch * num_vh)
     accepted_paths = (
         state["direct_accepted_paths"]
@@ -13563,7 +13578,7 @@ def _fr13_fixed32_committer_native_layer_batch(
         K_NORM_REUSE=bool(k_norm_reuse),
         GATE_REUSE=bool(gate_reuse),
         DECAY_REUSE=bool(decay_reuse),
-        num_warps=8,
+        num_warps=kernel_warps,
         num_stages=3,
         **extra_launch_kwargs,
     )
@@ -13587,6 +13602,7 @@ def _fr13_fixed32_committer_graph_body(
     k_norm_reuse,
     gate_reuse,
     decay_reuse,
+    bv64_warp4,
     layer_batch=None,
 ) -> None:
     """Record the fixed committer graph body with an optional one-call scan."""
@@ -13691,6 +13707,7 @@ def _fr13_fixed32_committer_graph_body(
             k_norm_reuse=k_norm_reuse,
             gate_reuse=gate_reuse,
             decay_reuse=decay_reuse,
+            bv64_warp4=bv64_warp4,
         )
     else:
         for layer in range(layers):
@@ -13985,6 +14002,19 @@ def preseed_fixed32_committer_graph(
     k_norm_reuse = _fr13_fixed32_committer_knorm_ring_requested()
     gate_reuse = _fr13_fixed32_committer_gate_ring_requested()
     decay_reuse = _fr13_fixed32_committer_decay_ring_requested()
+    bv64_warp4 = _fr13_fixed32_committer_bv64_warp4_requested()
+    if bv64_warp4 and (
+        not layer_batch
+        or _FR13_FIXED32_MODE != "hydra27_fixed32"
+        or batch not in (1, 4)
+        or int(k_rings.shape[2]) != 32
+        or os.environ.get("FR13_DRAFT_VOCAB_ROOT") != "1"
+        or os.environ.get("FR13_DRAFT_VOCAB_K") != "65536"
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 committer BV64/4-warp requires exact Hydra27 "
+            "physical32 K64/root1 layer batching at B1 or B4"
+        )
     if metadata_copy_fusion and not layer_batch:
         raise RuntimeError(
             "FR13 fixed32 metadata fusion requires committer layer batching"
@@ -14130,6 +14160,7 @@ def preseed_fixed32_committer_graph(
         "k_norm_reuse": k_norm_reuse,
         "gate_reuse": gate_reuse,
         "decay_reuse": decay_reuse,
+        "bv64_warp4": bv64_warp4,
         "sticky_guard_ok": sticky_guard_ok,
         "sticky_guard_ok_data_ptr": (
             int(sticky_guard_ok.data_ptr()) if sticky_guard_ok is not None else None
@@ -14204,12 +14235,17 @@ def preseed_fixed32_committer_graph(
                 ),
                 "raw_ab_ring_stores_per_physical_value_head": 2,
                 "raw_ab_ring_store_elision": False,
-                "full_value_tile": True,
-                "value_tile": 128,
-                "kernel_warps": 8,
-                "programs_per_layer_request_value_head": 1,
-                "duplicate_value_tile_k_loads_per_step": 0,
+                "full_value_tile": not bv64_warp4,
+                "value_tile": 64 if bv64_warp4 else 128,
+                "kernel_warps": 4 if bv64_warp4 else 8,
+                "programs_per_layer_request_value_head": (
+                    2 if bv64_warp4 else 1
+                ),
+                "duplicate_value_tile_k_loads_per_step": (
+                    1 if bv64_warp4 else 0
+                ),
                 "state_elements_per_thread_before_compiler_effects": 64,
+                "bv64_warp4": bv64_warp4,
                 "metadata_copy_fusion": metadata_copy_fusion,
                 "direct_metadata": direct_metadata,
                 "sticky_guard": sticky_guard,
@@ -14303,6 +14339,7 @@ def preseed_fixed32_committer_graph(
             k_norm_reuse=k_norm_reuse,
             gate_reuse=gate_reuse,
             decay_reuse=decay_reuse,
+            bv64_warp4=bv64_warp4,
             layer_batch=use_layer_batch,
         )
 
@@ -14350,7 +14387,8 @@ def preseed_fixed32_committer_graph(
         f"neutralizations={state['contract']['neutralizations']} "
         f"gathers={state['contract']['ring_gathers']} "
         f"fused_calls={state['contract']['fused_calls']} "
-        f"layer_batch={int(layer_batch)} replays=1",
+        f"layer_batch={int(layer_batch)} "
+        f"bv64_warp4={int(bv64_warp4)} replays=1",
         flush=True,
     )
     return dict(state["contract"])

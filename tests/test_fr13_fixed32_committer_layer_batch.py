@@ -148,8 +148,9 @@ def test_layer_batch_kernel_keeps_native_recurrence_and_geometry() -> None:
     assert "tl.store(p_o" not in kernel
     assert "state_bank = bank_anchor + tl.load(bank_off16 + i_l) * 4" in kernel
     assert "_gdn_node_step" not in kernel
-    assert "block_v = triton.next_power_of_2(dim_v)" in launch
-    assert "num_warps=8" in launch
+    assert "block_v = 64 if bv64_warp4 else triton.next_power_of_2(dim_v)" in launch
+    assert "kernel_warps = 4 if bv64_warp4 else 8" in launch
+    assert "num_warps=kernel_warps" in launch
     assert "num_stages=3" in launch
     assert "layers * batch * num_vh" in launch
 
@@ -159,7 +160,7 @@ def test_full_value_tile_reuses_one_k_normalization_for_all_value_rows() -> None
     launch = _text("_fr13_fixed32_committer_native_layer_batch")
     loop = kernel[kernel.index("for i_t in tl.range(0, T):") :]
 
-    assert "block_v = triton.next_power_of_2(dim_v)" in launch
+    assert "block_v = 64 if bv64_warp4 else triton.next_power_of_2(dim_v)" in launch
     assert "grid = (1, triton.cdiv(dim_v, block_v)," in launch
     assert loop.count("b_k = tl.load(p_k") == 1
     assert loop.count("tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)") == 1
@@ -335,11 +336,11 @@ def test_layer_batch_candidate_loads_live_ring_rows_without_staging() -> None:
     assert '"event_independent_gate_precompute": True' in preseed
     assert '"gate_precompute_launches_per_process": int(' in preseed
     assert '"gate_exp_per_event": 0' in preseed
-    assert '"full_value_tile": True' in preseed
-    assert '"value_tile": 128' in preseed
-    assert '"kernel_warps": 8' in preseed
-    assert '"programs_per_layer_request_value_head": 1' in preseed
-    assert '"duplicate_value_tile_k_loads_per_step": 0' in preseed
+    assert '"full_value_tile": not bv64_warp4' in preseed
+    assert '"value_tile": 64 if bv64_warp4 else 128' in preseed
+    assert '"kernel_warps": 4 if bv64_warp4 else 8' in preseed
+    assert '2 if bv64_warp4 else 1' in preseed
+    assert '1 if bv64_warp4 else 0' in preseed
     assert '"state_elements_per_thread_before_compiler_effects": 64' in preseed
     assert '"metadata_copy_fusion": metadata_copy_fusion' in preseed
     assert '"metadata_validation_lease": (' in preseed

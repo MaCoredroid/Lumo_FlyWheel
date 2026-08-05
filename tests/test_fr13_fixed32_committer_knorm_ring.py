@@ -128,7 +128,7 @@ def test_committer_replaces_reduction_with_one_scalar_load() -> None:
     assert "node * RING_KN_N_STRIDE" in candidate
     assert "tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)" in fallback
     assert "K_NORM_REUSE=bool(k_norm_reuse)" in launcher
-    assert "num_warps=8" in launcher
+    assert "num_warps=kernel_warps" in launcher
     assert "block_k = triton.next_power_of_2(dim_k)" in launcher
 
 
