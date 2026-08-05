@@ -3747,6 +3747,31 @@ def _fr13_fa2_qrow32_b1_live_register(
     _fr13_fa2_qrow32_b1_require_identity()
     if _fr13_fa2_qrow32_b1_profile_capture_active():
         return _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias)
+    reference_tree_bias = _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias)
+    if not (torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()):
+        return reference_tree_bias
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn
+
+    context = getattr(_fr13_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
+    if not isinstance(context, dict):
+        return reference_tree_bias
+    descriptor = context.get("descriptor")
+    final_b1_descriptor = {
+        "runtime_mode": "FULL",
+        "num_tokens": 32,
+        "num_reqs": 1,
+        "uniform": True,
+        "has_lora": False,
+        "num_active_loras": 0,
+    }
+    if descriptor != final_b1_descriptor:
+        return reference_tree_bias
+    graph_id = int(context.get("graph_id", 0))
+    if graph_id <= 0:
+        raise RuntimeError("FR13 qrow32 B1 live gate graph identity drifted")
+    layer_name = str(getattr(layer, "layer_name", ""))
+    if layer_name not in _FR13_FA2_QROW32_B1_TARGET_LAYERS:
+        raise RuntimeError("FR13 qrow32 B1 live gate reached a non-target layer")
     geometry_mismatches = _fr13_fa2_qrow32_b1_geometry_mismatches(
         query=query, key_cache=key_cache, value_cache=value_cache,
         cu_seqlens_q=cu_seqlens_q, max_seqlen_q=max_seqlen_q,
@@ -3759,23 +3784,6 @@ def _fr13_fa2_qrow32_b1_live_register(
             "FR13 qrow32 B1 live gate geometry drifted: "
             + "; ".join(geometry_mismatches)
         )
-    reference_tree_bias = _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias)
-    if not (torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()):
-        return reference_tree_bias
-    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn
-
-    context = getattr(_fr13_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
-    if not isinstance(context, dict):
-        return reference_tree_bias
-    descriptor = context.get("descriptor")
-    if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 1:
-        return reference_tree_bias
-    graph_id = int(context.get("graph_id", 0))
-    if graph_id <= 0:
-        raise RuntimeError("FR13 qrow32 B1 live gate graph identity drifted")
-    layer_name = str(getattr(layer, "layer_name", ""))
-    if layer_name not in _FR13_FA2_QROW32_B1_TARGET_LAYERS:
-        raise RuntimeError("FR13 qrow32 B1 live gate reached a non-target layer")
     graph = _FR13_FA2_QROW32_B1_LIVE_GRAPHS.setdefault(graph_id, {})
     if layer_name in graph:
         raise RuntimeError("FR13 qrow32 B1 live target layer captured twice")

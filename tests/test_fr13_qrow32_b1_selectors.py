@@ -225,7 +225,13 @@ def test_exact_geometry_accepts_fused_qkv_row_stride_only(
 def test_geometry_failure_reports_only_non_secret_operand_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    namespace, _ = _selector_namespace(monkeypatch, profile_scope=None)
+    namespace, gdn = _selector_namespace(monkeypatch, profile_scope=None)
+    gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
+        "descriptor": _profile_descriptor(),
+        "graph_id": 76,
+    }
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: True)
     geometry = _b1_geometry()
     geometry["max_seqlen_q"] = 1
 
@@ -240,10 +246,76 @@ def test_geometry_failure_reports_only_non_secret_operand_metadata(
 
     with pytest.raises(RuntimeError) as error:
         namespace["_fr13_fa2_qrow32_b1_live_register"](
-            layer=types.SimpleNamespace(layer_name="unused.before.capture"),
+            layer=types.SimpleNamespace(
+                layer_name=namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
+            ),
             **geometry,
         )
     assert str(error.value).endswith("geometry drifted: max_seqlen_q=1")
+
+
+def test_live_register_outside_capture_bypasses_final_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, _ = _selector_namespace(monkeypatch, profile_scope=None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    geometry = _b1_geometry()
+    geometry["query"] = torch.empty((128, 24, 256), dtype=torch.bfloat16)
+
+    selected = namespace["_fr13_fa2_qrow32_b1_live_register"](
+        layer=types.SimpleNamespace(layer_name="outside.capture"), **geometry
+    )
+
+    assert int(selected.stride(0)) == namespace[
+        "_FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL"
+    ]
+    assert namespace["_FR13_FA2_QROW32_B1_LIVE_GRAPHS"] == {}
+
+
+def test_live_register_without_final_context_bypasses_final_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, _ = _selector_namespace(monkeypatch, profile_scope=None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: True)
+    geometry = _b1_geometry()
+    geometry["query"] = torch.empty((128, 24, 256), dtype=torch.bfloat16)
+
+    selected = namespace["_fr13_fa2_qrow32_b1_live_register"](
+        layer=types.SimpleNamespace(layer_name="capture.without.context"),
+        **geometry,
+    )
+
+    assert int(selected.stride(0)) == namespace[
+        "_FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL"
+    ]
+    assert namespace["_FR13_FA2_QROW32_B1_LIVE_GRAPHS"] == {}
+
+
+def test_live_register_non_b1_context_bypasses_final_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, gdn = _selector_namespace(monkeypatch, profile_scope=None)
+    descriptor = _profile_descriptor()
+    descriptor.update({"num_tokens": 64, "num_reqs": 2})
+    gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
+        "descriptor": descriptor,
+        "graph_id": 77,
+    }
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: True)
+    geometry = _b1_geometry()
+    geometry["query"] = torch.empty((64, 24, 256), dtype=torch.bfloat16)
+
+    selected = namespace["_fr13_fa2_qrow32_b1_live_register"](
+        layer=types.SimpleNamespace(layer_name="non.b1.capture"), **geometry
+    )
+
+    assert int(selected.stride(0)) == namespace[
+        "_FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL"
+    ]
+    assert namespace["_FR13_FA2_QROW32_B1_LIVE_GRAPHS"] == {}
 
 
 def test_live_register_profile_capture_bypasses_final_geometry(
@@ -317,7 +389,7 @@ def test_live_register_final_capture_enforces_geometry_and_all_layers(
 ) -> None:
     namespace, gdn = _selector_namespace(monkeypatch, profile_scope=None)
     gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
-        "descriptor": {"runtime_mode": "FULL", "num_reqs": 1},
+        "descriptor": _profile_descriptor(),
         "graph_id": 77,
     }
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
