@@ -119,6 +119,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_run_b4_tail23_all_parent_live_gate.sh",
     "scripts/fr13_run_b4_tail23_hydra27_k64_m128_stack.sh",
     "scripts/fr13_dfwd_k64_tc_selector.py",
+    "scripts/fr13_run_b1_dfwd_k64_tc_real_task.sh",
     "scripts/fr13_run_gdn_single_launch_live_gate.sh",
     "scripts/fr13_run_treeconv_zero_tail_live_gate.sh",
     "scripts/fr13_b4_timing_math.py",
