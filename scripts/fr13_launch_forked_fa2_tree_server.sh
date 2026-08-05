@@ -82,6 +82,15 @@ _FR13_M32_GUARD_NAMES=(
   FR13_DRAFT_HEAD_M1_R32_RUNTIME_SOURCE_SHA256
   FR13_DRAFT_HEAD_M1_R32_CANDIDATE_SOURCE_SHA256
   FR13_DRAFT_HEAD_M1_R32_SOURCE_COMMIT
+  FR13_DRAFT_HEAD_M1_R64
+  FR13_DRAFT_HEAD_M1_R64_LIVE_AB
+  FR13_DRAFT_HEAD_M1_R64_SO
+  FR13_DRAFT_HEAD_M1_R64_SHA256
+  FR13_DRAFT_HEAD_M1_R64_INSTANCE_ID
+  FR13_DRAFT_HEAD_M1_R64_LIVE_JSON
+  FR13_DRAFT_HEAD_M1_R64_RUNTIME_SOURCE_SHA256
+  FR13_DRAFT_HEAD_M1_R64_CANDIDATE_SOURCE_SHA256
+  FR13_DRAFT_HEAD_M1_R64_SOURCE_COMMIT
   FR13_DRAFT_HEAD_FP8
   FR13_DRAFT_HEAD_FP8_STATIC_IO
   FR13_DRAFT_HEAD_FP8_ARM
@@ -179,6 +188,8 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M32_TIMING_ARM]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M1_R32]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M1_R32_LIVE_AB]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M1_R64]}" == "set:1" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_M1_R64_LIVE_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DRAFT_HEAD_FP8]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_DFWD_K64_TOP3]}" == "set:1" \
    || "$_FR13_CALLER_SFWD_B4" == "set:1" \
@@ -206,6 +217,8 @@ fi
    || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M1_R32:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M1_R32_LIVE_AB:-0}" == "1" \
+   || "${FR13_DRAFT_HEAD_M1_R64:-0}" == "1" \
+   || "${FR13_DRAFT_HEAD_M1_R64_LIVE_AB:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_FP8:-0}" == "1" \
    || "${FR13_DFWD_K64_TOP3:-0}" == "1" \
    || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" \
@@ -508,6 +521,12 @@ FR13_DRAFT_HEAD_M1_R32_SO=${FR13_DRAFT_HEAD_M1_R32_SO:-}
 FR13_DRAFT_HEAD_M1_R32_SHA256=${FR13_DRAFT_HEAD_M1_R32_SHA256:-}
 FR13_DRAFT_HEAD_M1_R32_INSTANCE_ID=${FR13_DRAFT_HEAD_M1_R32_INSTANCE_ID:-}
 FR13_DRAFT_HEAD_M1_R32_LIVE_JSON=${FR13_DRAFT_HEAD_M1_R32_LIVE_JSON:-/logs/fr13_draft_head_m1_r32.live.json}
+FR13_DRAFT_HEAD_M1_R64=${FR13_DRAFT_HEAD_M1_R64:-0}
+FR13_DRAFT_HEAD_M1_R64_LIVE_AB=${FR13_DRAFT_HEAD_M1_R64_LIVE_AB:-0}
+FR13_DRAFT_HEAD_M1_R64_SO=${FR13_DRAFT_HEAD_M1_R64_SO:-}
+FR13_DRAFT_HEAD_M1_R64_SHA256=${FR13_DRAFT_HEAD_M1_R64_SHA256:-}
+FR13_DRAFT_HEAD_M1_R64_INSTANCE_ID=${FR13_DRAFT_HEAD_M1_R64_INSTANCE_ID:-}
+FR13_DRAFT_HEAD_M1_R64_LIVE_JSON=${FR13_DRAFT_HEAD_M1_R64_LIVE_JSON:-/logs/fr13_draft_head_m1_r64.live.json}
 FR13_DRAFT_HEAD_FP8=${FR13_DRAFT_HEAD_FP8:-0}
 FR13_DRAFT_HEAD_FP8_STATIC_IO=${FR13_DRAFT_HEAD_FP8_STATIC_IO:-0}
 FR13_DRAFT_HEAD_FP8_ARM=${FR13_DRAFT_HEAD_FP8_ARM:-}
@@ -524,6 +543,11 @@ FR13_DRAFT_HEAD_M1_R32_CANDIDATE_SOURCE_SHA256=$(
   sha256sum csrc/fr13_bf16_gemvx_k64_m1_shuffle.cu | cut -d' ' -f1
 )
 FR13_DRAFT_HEAD_M1_R32_SOURCE_COMMIT=$FR13_DRAFT_HEAD_M32_SOURCE_COMMIT
+FR13_DRAFT_HEAD_M1_R64_RUNTIME_SOURCE_SHA256=$FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256
+FR13_DRAFT_HEAD_M1_R64_CANDIDATE_SOURCE_SHA256=$(
+  sha256sum csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64.cu | cut -d' ' -f1
+)
+FR13_DRAFT_HEAD_M1_R64_SOURCE_COMMIT=$FR13_DRAFT_HEAD_M32_SOURCE_COMMIT
 FR13_DRAFT_HEAD_FP8_SOURCE_SHA256=$FR13_DRAFT_HEAD_M32_QUALIFIED_SOURCE_SHA256
 FR13_DRAFT_HEAD_FP8_SOURCE_COMMIT=$FR13_DRAFT_HEAD_M32_SOURCE_COMMIT
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}
@@ -900,6 +924,69 @@ else
     -v "$FR13_DRAFT_HEAD_M1_R32_SO:/tmp/fr13_bf16_k64_head_r32.abi3.so:ro"
   )
 fi
+case "$FR13_DRAFT_HEAD_M1_R64" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_M1_R64 must be 0 or 1" >&2; exit 2 ;;
+esac
+case "$FR13_DRAFT_HEAD_M1_R64_LIVE_AB" in
+  0|1) ;;
+  *) echo "FR13_DRAFT_HEAD_M1_R64_LIVE_AB must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$FR13_DRAFT_HEAD_M1_R64" == "1" \
+      && "$FR13_DRAFT_HEAD_M1_R64_LIVE_AB" == "1" ]]; then
+  echo "FR13 exact-order R64 direct and live A/B modes are mutually exclusive" >&2
+  exit 2
+fi
+FR13_DRAFT_HEAD_M1_R64_DOCKER_ARGS=()
+if [[ "$FR13_DRAFT_HEAD_M1_R64" == "0" \
+      && "$FR13_DRAFT_HEAD_M1_R64_LIVE_AB" == "0" ]]; then
+  [[ -z "$FR13_DRAFT_HEAD_M1_R64_SO" \
+     && -z "$FR13_DRAFT_HEAD_M1_R64_SHA256" ]] || {
+    echo "FR13_DRAFT_HEAD_M1_R64=0 forbids candidate binary credentials" >&2
+    exit 2
+  }
+else
+  [[ "$MAX_NUM_SEQS" == "1" \
+     && ( "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" \
+          || "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ) \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+     && "${FR13_DRAFT_VOCAB_BLOCKS:-/workspace/scripts/fr13_dvk_subset_blocks.json}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+     && "${ENFORCE_EAGER:-0}" == "0" \
+     && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" ]] || {
+    echo "FR13 exact-order R64 draft head requires real-B1 fixed32 K64/root1 FULL graph geometry" >&2
+    exit 2
+  }
+  [[ "$(sha256sum scripts/fr13_dvk_subset_blocks.json | awk '{print $1}')" \
+        == "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" ]] || {
+    echo "FR13 exact-order R64 draft-head K64 map identity mismatch" >&2
+    exit 2
+  }
+  [[ "$FR13_DRAFT_HEAD_M1_R64_CANDIDATE_SOURCE_SHA256" \
+        == "4fa6fed088ef35b97e231370ee4d742c229e6786e9df4e652c45e6ac698bbcb0" \
+     && "$FR13_DRAFT_HEAD_M1_R64_RUNTIME_SOURCE_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$FR13_DRAFT_HEAD_M1_R64_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+    echo "FR13 exact-order R64 source identity mismatch" >&2
+    exit 2
+  }
+  [[ "$FR13_DRAFT_HEAD_M1_R64_SO" == /* \
+     && "$FR13_DRAFT_HEAD_M1_R64_SO" != *:* \
+     && -f "$FR13_DRAFT_HEAD_M1_R64_SO" \
+     && ! -L "$FR13_DRAFT_HEAD_M1_R64_SO" \
+     && "$(stat -c '%s' "$FR13_DRAFT_HEAD_M1_R64_SO")" == "113680" \
+     && "$FR13_DRAFT_HEAD_M1_R64_SHA256" == "95f3a63200af4af622ca2f788f29c5c422fa425aca6c5e58953190dbd296e009" \
+     && "$(sha256sum "$FR13_DRAFT_HEAD_M1_R64_SO" | awk '{print $1}')" \
+        == "$FR13_DRAFT_HEAD_M1_R64_SHA256" ]] || {
+    echo "FR13 exact-order R64 draft-head binary identity mismatch" >&2
+    exit 2
+  }
+  FR13_DRAFT_HEAD_M1_R64_SO=$(realpath "$FR13_DRAFT_HEAD_M1_R64_SO")
+  FR13_DRAFT_HEAD_M1_R64_DOCKER_ARGS=(
+    -v "$FR13_DRAFT_HEAD_M1_R64_SO:/tmp/fr13_bf16_k64_head_r64.abi3.so:ro"
+  )
+fi
+
 case "$FR13_DRAFT_HEAD_FP8" in
   0|1) ;;
   *) echo "FR13_DRAFT_HEAD_FP8 must be 0 or 1" >&2; exit 2 ;;
@@ -979,6 +1066,8 @@ _FR13_DRAFT_HEAD_MODES=0
 [[ "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 [[ "$FR13_DRAFT_HEAD_M1_R32" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 [[ "$FR13_DRAFT_HEAD_M1_R32_LIVE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
+[[ "$FR13_DRAFT_HEAD_M1_R64" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
+[[ "$FR13_DRAFT_HEAD_M1_R64_LIVE_AB" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 [[ "$FR13_DRAFT_HEAD_FP8" == "0" ]] || ((_FR13_DRAFT_HEAD_MODES+=1))
 if (( _FR13_DRAFT_HEAD_MODES > 1 )); then
   echo "FR13 draft-head candidate, diagnostics, and production are mutually exclusive" >&2
@@ -994,6 +1083,8 @@ if (( _FR13_DRAFT_HEAD_MODES > 0 )); then
                       && "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" \
                       && "$FR13_DRAFT_HEAD_M1_R32" == "0" \
                       && "$FR13_DRAFT_HEAD_M1_R32_LIVE_AB" == "0" \
+                      && "$FR13_DRAFT_HEAD_M1_R64" == "0" \
+                      && "$FR13_DRAFT_HEAD_M1_R64_LIVE_AB" == "0" \
                       && "$FR13_DRAFT_HEAD_FP8" == "0" ) \
                     || ( "$FR13_DRAFT_HEAD_FP8" == "1" \
                          && "$FR13_DRAFT_HEAD_PAD_ROWS" == "0" \
@@ -1001,7 +1092,9 @@ if (( _FR13_DRAFT_HEAD_MODES > 0 )); then
                          && "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "0" \
                          && "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "0" \
                          && "$FR13_DRAFT_HEAD_M1_R32" == "0" \
-                         && "$FR13_DRAFT_HEAD_M1_R32_LIVE_AB" == "0" ) ) ) ) \
+                         && "$FR13_DRAFT_HEAD_M1_R32_LIVE_AB" == "0" \
+                         && "$FR13_DRAFT_HEAD_M1_R64" == "0" \
+                         && "$FR13_DRAFT_HEAD_M1_R64_LIVE_AB" == "0" ) ) ) ) \
      && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
      && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" ]] || {
     echo "FR13 draft-head padding requires fixed32 B1 or direct M32 B4 root64" >&2
@@ -1032,6 +1125,18 @@ if [[ "$FR13_DRAFT_HEAD_M1_R32_LIVE_AB" == "1" ]]; then
      && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
      && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
     echo "FR13 exact-order R32 live A/B requires the isolated canonical real B1 task" >&2
+    exit 2
+  }
+fi
+if [[ "$FR13_DRAFT_HEAD_M1_R64_LIVE_AB" == "1" ]]; then
+  [[ "$FR13_DRAFT_HEAD_M1_R64_INSTANCE_ID" \
+        == "astropy__astropy-12907" \
+     && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
+     && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
+     && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
+     && "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" == "0" \
+     && -z "${FR13_FIXED32_GDN_PATH_BV_CANDIDATE:-}" ]] || {
+    echo "FR13 exact-order R64 live A/B requires the isolated canonical real B1 task" >&2
     exit 2
   }
 fi
@@ -2069,7 +2174,9 @@ if [[ "$FR13_DRAFT_HEAD_M32_LIVE_AB" == "1" \
       || "$FR13_DRAFT_HEAD_M32_PRODUCTION" == "1" \
       || "$FR13_DRAFT_HEAD_M32_TIMING_ARM" == "1" \
       || "$FR13_DRAFT_HEAD_M1_R32" == "1" \
-      || "$FR13_DRAFT_HEAD_M1_R32_LIVE_AB" == "1" ]]; then
+      || "$FR13_DRAFT_HEAD_M1_R32_LIVE_AB" == "1" \
+      || "$FR13_DRAFT_HEAD_M1_R64" == "1" \
+      || "$FR13_DRAFT_HEAD_M1_R64_LIVE_AB" == "1" ]]; then
   [[ "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "0" \
      && "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "0" \
@@ -4225,6 +4332,7 @@ while IFS= read -r _v; do
      || "$_v" == "FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON" \
      || "$_v" == "FR13_FIXED32_SFWD_CONV_POSTPREP_REAL_EVENT_PATH" \
      || "$_v" == "FR13_DRAFT_HEAD_M1_R32_SO" \
+     || "$_v" == "FR13_DRAFT_HEAD_M1_R64_SO" \
      || "$_v" == "FR13_DFWD_K64_TOP3_SO" ]] && continue
   if [[ -n "${FR13_FIXED32_MODE:-}" \
      && "$_v" == "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION" ]]; then
@@ -4254,6 +4362,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   "${FR13_FP8_QUANT_REGCACHE_DOCKER_ARGS[@]}" \
   "${FR13_CUTLASS_WAVE_DOCKER_ARGS[@]}" \
   "${FR13_DRAFT_HEAD_M1_R32_DOCKER_ARGS[@]}" \
+  "${FR13_DRAFT_HEAD_M1_R64_DOCKER_ARGS[@]}" \
   "${FR13_DFWD_K64_TOP3_DOCKER_ARGS[@]}" \
   -v "${FR13_COMPILE_CACHE_DIR:-$HOME/.cache/fr13_vllm_container_cache}:/root/.cache" \
   "${NSYS_DOCKER_ARGS[@]}" \
@@ -4445,6 +4554,14 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DRAFT_HEAD_M1_R32_RUNTIME_SOURCE_SHA256="$FR13_DRAFT_HEAD_M1_R32_RUNTIME_SOURCE_SHA256" \
   -e FR13_DRAFT_HEAD_M1_R32_CANDIDATE_SOURCE_SHA256="$FR13_DRAFT_HEAD_M1_R32_CANDIDATE_SOURCE_SHA256" \
   -e FR13_DRAFT_HEAD_M1_R32_SOURCE_COMMIT="$FR13_DRAFT_HEAD_M1_R32_SOURCE_COMMIT" \
+  -e FR13_DRAFT_HEAD_M1_R64="$FR13_DRAFT_HEAD_M1_R64" \
+  -e FR13_DRAFT_HEAD_M1_R64_LIVE_AB="$FR13_DRAFT_HEAD_M1_R64_LIVE_AB" \
+  -e FR13_DRAFT_HEAD_M1_R64_SHA256="$FR13_DRAFT_HEAD_M1_R64_SHA256" \
+  -e FR13_DRAFT_HEAD_M1_R64_INSTANCE_ID="$FR13_DRAFT_HEAD_M1_R64_INSTANCE_ID" \
+  -e FR13_DRAFT_HEAD_M1_R64_LIVE_JSON="$FR13_DRAFT_HEAD_M1_R64_LIVE_JSON" \
+  -e FR13_DRAFT_HEAD_M1_R64_RUNTIME_SOURCE_SHA256="$FR13_DRAFT_HEAD_M1_R64_RUNTIME_SOURCE_SHA256" \
+  -e FR13_DRAFT_HEAD_M1_R64_CANDIDATE_SOURCE_SHA256="$FR13_DRAFT_HEAD_M1_R64_CANDIDATE_SOURCE_SHA256" \
+  -e FR13_DRAFT_HEAD_M1_R64_SOURCE_COMMIT="$FR13_DRAFT_HEAD_M1_R64_SOURCE_COMMIT" \
   -e FR13_DRAFT_HEAD_FP8="$FR13_DRAFT_HEAD_FP8" \
   -e FR13_DRAFT_HEAD_FP8_STATIC_IO="$FR13_DRAFT_HEAD_FP8_STATIC_IO" \
   -e FR13_DRAFT_HEAD_FP8_ARM="$FR13_DRAFT_HEAD_FP8_ARM" \
