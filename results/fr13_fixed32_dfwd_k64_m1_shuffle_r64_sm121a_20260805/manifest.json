@@ -1,0 +1,101 @@
+{
+  "schema": "fr13.fixed32.dfwd_k64_m1_shuffle_r64_sm121a_artifact.v1",
+  "created_at_utc": "2026-08-05T07:23:14Z",
+  "status": "static_codegen_pass_default_off_runtime_unwired",
+  "acceptance_valid": false,
+  "byte_qualified": false,
+  "timing_eligible": false,
+  "performance_claim": false,
+  "production_default_enabled": false,
+  "runtime_wired": false,
+  "gpu_used": false,
+  "docker_build_used": true,
+  "docker_workload_used": false,
+  "source": {
+    "branch": "codex/dfwd-k64-m1-r64-stage-20260805",
+    "base_r32_commit": "960e99379d6880ed29a61f0acd8861eaa9657c89",
+    "source_checkpoint_commit": "fc744b40009c88f873a53edb2c7e37c2bf81154f",
+    "static_checker_commit": "54bf895d56b1505f4a9f8835c60be560326dfb23",
+    "r32_cuda_sha256": "56d4fcd551dd022efa00dcb926bb4ea5176e6b5a02fa562ccc1886e007001897",
+    "r64_cuda_sha256": "4fa6fed088ef35b97e231370ee4d742c229e6786e9df4e652c45e6ac698bbcb0",
+    "builder_sha256": "746c09709d1156f457b84ef73bbd4a868888316572fdaa49bdc7c9fbd37868a8",
+    "checker_sha256": "d7cdd5d2b28d87e55b7c36c55fce9638eba94b7237007e9b64081f2caa5ed41d",
+    "source_test_sha256": "26d73ff1153eebef3a4b6d8189e6ffd05f94ff3c6b70541fb4bb515d620f7113",
+    "checker_test_sha256": "788e8164d297e91badc463dbf191ee5f23deadaa8be2b64152c9df4a59414559"
+  },
+  "toolchain": {
+    "build_image_digest": "sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "torch": "2.11.0+cu130",
+    "cuda_release": "13.0",
+    "target_arch": "sm_121a",
+    "network_enabled": false,
+    "gpu_exposed": false,
+    "sass_auditor": "CUDA 13.1 nvdisasm V13.1.115",
+    "sass_auditor_gpu_exposed": false
+  },
+  "candidate": {
+    "operation": "fr13_bf16_k64_head::gemvx_m1_shuffle_r64_out",
+    "binary_sha256": "95f3a63200af4af622ca2f788f29c5c422fa425aca6c5e58953190dbd296e009",
+    "binary_bytes": 113680,
+    "object_sha256": "bf1e6e57bef3a10ab263248ba1d43575e415f30e1576e7a63107e3abffa2c0db",
+    "object_bytes": 153576,
+    "cubin_sha256": "4cf8acf76a8e77716786fafaf9c5af4c0f8a3ddfaa6b6cdc77e884d55c53248b",
+    "cubin_bytes": 14648,
+    "grid": [1024, 1, 1],
+    "block": [16, 64, 1],
+    "threads_per_cta": 1024,
+    "rows_per_cta": 64,
+    "k_partition_lanes": 16,
+    "lane_k_iterations": 320,
+    "reduction_strides": [8, 4, 2, 1],
+    "per_row_arithmetic_matches_r32_source": true,
+    "dynamic_shared_bytes": 0
+  },
+  "resources": {
+    "registers_per_thread": 18,
+    "stack_bytes_per_thread": 0,
+    "local_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 0,
+    "constant0_bytes": 928,
+    "compiled_max_threads": [1024, 1, 1]
+  },
+  "sass": {
+    "encoded_instructions_including_nop": 64,
+    "nop": 14,
+    "operational_instructions": 50,
+    "ldg_u16": 2,
+    "stg_u16": 1,
+    "shuffle_down": 4,
+    "fadd": 4,
+    "ffma_static": 2,
+    "bf16_conversion": 1,
+    "cta_barrier": 0,
+    "local_load_store": 0,
+    "calls": 0,
+    "atomics": 0
+  },
+  "abi": {
+    "max_glibc": "2.32",
+    "max_glibcxx": "3.4.21",
+    "max_cxxabi": "1.3.9"
+  },
+  "checks": {
+    "focused_source_and_codegen_tests": "16 passed",
+    "artifact_integrity_tests": "4 passed",
+    "python_compile": "pass",
+    "ruff": "not available in pinned image or host",
+    "diff_check": "pass",
+    "extension_registration": "pass",
+    "source_exact_order": "pass",
+    "resource_audit": "pass",
+    "elf_geometry_audit": "pass",
+    "sass_audit": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "real SWE-Verified task",
+    "byte equality gate",
+    "B1 or B4 full-step timing",
+    "hardware-floor acceptance"
+  ]
+}

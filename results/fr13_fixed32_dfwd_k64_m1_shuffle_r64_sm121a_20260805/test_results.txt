@@ -1,0 +1,17 @@
+11 R32/R64 source-contract tests: pass
+5 fail-closed codegen checker tests: pass
+16 focused tests total: pass
+4 artifact replay and integrity tests: pass
+20 R32/R64 focused and artifact tests total: pass
+Python compile (builder and checker): pass
+Ruff: not available in pinned image or host; not run
+git diff --check: pass
+pinned Torch 2.11.0+cu130 / CUDA 13.0 SM121a compile and link: pass
+extension registration without GPU exposure: pass
+resource audit: pass
+ELF 1024-thread bound audit: pass
+SASS audit: pass
+GPU kernel runtime: not run
+real SWE-Verified task: not run
+byte equality gate: not run
+full-step timing: not run

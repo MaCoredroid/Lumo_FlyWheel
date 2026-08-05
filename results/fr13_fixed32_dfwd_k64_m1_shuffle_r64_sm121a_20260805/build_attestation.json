@@ -1,0 +1,54 @@
+{
+  "binary": {
+    "bytes": 113680,
+    "mode": "0555",
+    "path": "/build/artifact/fr13_bf16_gemvx_k64_m1_shuffle_r64.abi3.so",
+    "sha256": "95f3a63200af4af622ca2f788f29c5c422fa425aca6c5e58953190dbd296e009"
+  },
+  "byte_equality_claim": false,
+  "cuda_arch": "12.1a",
+  "cuda_release": "13.0",
+  "kernel_contract": {
+    "accumulator": "fp32 positive zero",
+    "block": [
+      16,
+      64,
+      1
+    ],
+    "dynamic_shared_bytes": 0,
+    "epilogue": "__fmaf_rn(1.0f, reduced_sum, 0.0f)",
+    "gemv_mnk": [
+      1,
+      65536,
+      5120
+    ],
+    "grid": [
+      1024,
+      1,
+      1
+    ],
+    "k_partition_lanes": 16,
+    "lane_k_iterations": 320,
+    "multiply_accumulate": "__fmaf_rn dependent scalar chain",
+    "output": "__float2bfloat16_rn",
+    "output_rows_per_cta": 64,
+    "reduction": "__fadd_rn width-16 shuffle tree",
+    "reduction_strides": [
+      8,
+      4,
+      2,
+      1
+    ],
+    "threads_per_cta": 1024
+  },
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "resource_claim": false,
+  "schema": "fr13.fixed32.bf16_gemvx_k64_m1_shuffle_r64_build.v1",
+  "source": {
+    "path": "csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64.cu",
+    "sha256": "4fa6fed088ef35b97e231370ee4d742c229e6786e9df4e652c45e6ac698bbcb0"
+  },
+  "status": "BUILT_UNQUALIFIED",
+  "torch_version": "2.11.0+cu130"
+}

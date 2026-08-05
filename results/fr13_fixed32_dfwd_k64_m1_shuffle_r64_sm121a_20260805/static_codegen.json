@@ -1,0 +1,108 @@
+{
+  "acceptance_valid": false,
+  "byte_qualified": false,
+  "candidate": {
+    "binary_bytes": 113680,
+    "binary_sha256": "95f3a63200af4af622ca2f788f29c5c422fa425aca6c5e58953190dbd296e009",
+    "block": [
+      16,
+      64,
+      1
+    ],
+    "cubin_bytes": 14648,
+    "cubin_sha256": "4cf8acf76a8e77716786fafaf9c5af4c0f8a3ddfaa6b6cdc77e884d55c53248b",
+    "dynamic_shared_bytes": 0,
+    "grid": [
+      1024,
+      1,
+      1
+    ],
+    "k_partition_lanes": 16,
+    "lane_k_iterations": 320,
+    "object_bytes": 153576,
+    "object_sha256": "bf1e6e57bef3a10ab263248ba1d43575e415f30e1576e7a63107e3abffa2c0db",
+    "operation": "fr13_bf16_k64_head::gemvx_m1_shuffle_r64_out",
+    "per_row_arithmetic_matches_r32_source": true,
+    "reduction_strides": [
+      8,
+      4,
+      2,
+      1
+    ],
+    "rows_per_cta": 64,
+    "threads_per_cta": 1024
+  },
+  "checks": {
+    "elf_geometry_audit": "pass",
+    "extension_registration": "pass",
+    "resource_audit": "pass",
+    "sass_audit": "pass",
+    "source_exact_order": "pass"
+  },
+  "elf": {
+    "crs_stack_bytes": 0,
+    "cubin_count": 1,
+    "cuda_toolkit": "13.0",
+    "frame_bytes_per_thread": 0,
+    "max_threads": [
+      1024,
+      1,
+      1
+    ],
+    "target": "sm_121a",
+    "virtual_sm": "sm_121"
+  },
+  "gpu_used": false,
+  "not_run": [
+    "GPU kernel runtime",
+    "real SWE-Verified task",
+    "byte equality gate",
+    "B1 or B4 full-step timing",
+    "hardware-floor acceptance"
+  ],
+  "performance_claim": false,
+  "production_default_enabled": false,
+  "resources": {
+    "constant0_bytes": 928,
+    "local_bytes_per_thread": 0,
+    "registers_per_thread": 18,
+    "stack_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 0
+  },
+  "runtime_wired": false,
+  "sass": {
+    "atomics": 0,
+    "bf16_conversion": 1,
+    "calls": 0,
+    "cta_barrier": 0,
+    "encoded_instructions_including_nop": 64,
+    "fadd": 4,
+    "ffma_static": 2,
+    "ldg_u16": 2,
+    "local_load_store": 0,
+    "nop": 14,
+    "operational_instructions": 50,
+    "shuffle_down": 4,
+    "stg_u16": 1
+  },
+  "schema": "fr13.fixed32.dfwd_k64_m1_shuffle_r64_static_codegen.v1",
+  "source": {
+    "branch": "codex/dfwd-k64-m1-r64-stage-20260805",
+    "builder_sha256": "746c09709d1156f457b84ef73bbd4a868888316572fdaa49bdc7c9fbd37868a8",
+    "commit": "fc744b40009c88f873a53edb2c7e37c2bf81154f",
+    "cuda_sha256": "4fa6fed088ef35b97e231370ee4d742c229e6786e9df4e652c45e6ac698bbcb0",
+    "r32_parent_cuda_sha256": "56d4fcd551dd022efa00dcb926bb4ea5176e6b5a02fa562ccc1886e007001897",
+    "source_test_sha256": "26d73ff1153eebef3a4b6d8189e6ffd05f94ff3c6b70541fb4bb515d620f7113"
+  },
+  "status": "STATIC_CODEGEN_PASS_UNQUALIFIED",
+  "timing_eligible": false,
+  "toolchain": {
+    "build_image_digest": "sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "cuda_release": "13.0",
+    "gpu_exposed": false,
+    "network_enabled": false,
+    "sass_auditor": "Build cuda_13.1.r13.1/compiler.37061995_0",
+    "target_arch": "sm_121a",
+    "torch": "2.11.0+cu130"
+  }
+}

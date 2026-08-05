@@ -1,0 +1,13 @@
+
+Fatbin elf code:
+================
+arch = sm_121a
+code version = [1,8]
+host = linux
+compile_size = 64bit
+
+Resource usage:
+ Common:
+  GLOBAL:28 CONSTANT[4]:224
+ Function _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff:
+  REG:18 STACK:0 SHARED:0 LOCAL:0 CONSTANT[0]:928 TEXTURE:0 SURFACE:0 SAMPLER:0

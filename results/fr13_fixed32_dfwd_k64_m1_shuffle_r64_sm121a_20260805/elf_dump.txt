@@ -1,0 +1,461 @@
+
+Fatbin elf code:
+================
+arch = sm_121a
+code version = [1,8]
+host = linux
+compile_size = 64bit
+
+64-bit ELF: type=ET_EXEC, ABI=8, sm=121a, toolkit=13.0, flags=0x6007902
+Sections:
+Index Offset   Size ES Align                      Type    Flags Link     Info Name
+    1     40    573  0  1                       STRTAB        0    0        0 .shstrtab
+    2    5d7   108e  0  1                       STRTAB        0    0        0 .strtab
+    3   1680    3c0 18  8                       SYMTAB        0    2       28 .symtab
+    4   1a40     68  0  1                     PROGBITS        0    0        0 .debug_frame
+    5   1aa8     a8  0  4                         NOTE  2000000    0        0 .note.nv.tkinfo
+    6   1b50     20  0  4                         NOTE  1000040    5        8 .note.nv.cuinfo
+    7   1b70     24  0  4                    CUDA_INFO        0    3        0 .nv.info
+    8   1b94     24  0  4             CUDA_COMPAT_INFO        0    0        0 .nv.compat
+    9   1bb8     cc  0  4                    CUDA_INFO       40    3        e .nv.info._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+    a   1c84     20  8  4               CUDA_CALLGRAPH        0    3        0 .nv.callgraph
+    b   1ca8    2a0 18  8                         RELA       40    3        d .rela.nv.constant4
+    c   1f48     18 18  8                         RELA       40    3        4 .rela.debug_frame
+    d   1f60     e0  0  8                     PROGBITS        2    0        0 .nv.constant4
+    e   2080    400  0 80                     PROGBITS        6    3        3 .text._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+    f   2480     40  0  1                       NOBITS        3    0        0 .nv.shared.reserved.0
+   10   2480     1c  0  1                       NOBITS        3    0        0 .nv.global
+   11   2480    3a0  0  4                     PROGBITS       42    0        e .nv.constant0._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+   12   2820    126  0 10                 CUDA_CAPMERC 10000000   1a        3 .nv.capmerc.text._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+   13   2946     70  0  1                     PROGBITS 10000000    0        0 .nv.merc.debug_frame
+   14   29b8     24  0  4                    CUDA_INFO 10000000   1a        0 .nv.merc.nv.info
+   15   29dc     ec  0  4                    CUDA_INFO 10000040   1a       12 .nv.merc.nv.info._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+   16   2ac8    2a0 18  8                         RELA 10000040   1a       18 .nv.merc.rela.nv.constant.pic
+   17   2d68     18 18  8                         RELA 10000040   1a       13 .nv.merc.rela.debug_frame
+   18   1f60     e0  0  8    CUDA_MERCURY_CONSTANT_PIC 10000002    0        0 .nv.merc.nv.constant.pic
+   19   2d80      0  0  1         CUDA_RESERVED_SHARED 10000003    0        0 .nv.merc.nv.shared.reserved.0
+   1a   2d80    3a8 18  8                       SYMTAB 10000000    2       27 .nv.merc.symtab
+
+.section .strtab
+
+.section .shstrtab
+
+.section .symtab
+ index           value           size      info    other  shndx    name
+   0               0               0        0        0      0     (null)
+ 0x1               0               0      0x3        0    0x5     .note.nv.tkinfo
+ 0x2               0               0      0x3        0    0x6     .note.nv.cuinfo
+ 0x3               0           0x400      0x2     0x10    0xe     _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+ 0x4               0               0      0x3        0    0xe     .text._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+ 0x5            0x40             0x4     0x21        0      0     .nv.reservedSmem.offset0
+ 0x6            0x40               0     0x20     0xa0    0xf     __nv_reservedSMEM_offset_0_alias
+ 0x7               0               0      0x3        0   0x10     .nv.global
+ 0x8             0x9             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo5beginE
+ 0x9               0               0      0x3        0    0xd     .nv.constant4
+ 0xa            0x17             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo3endE
+ 0xb             0x2             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo6cbeginE
+ 0xc            0x10             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo4cendE
+ 0xd             0xb             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo6rbeginE
+ 0xe            0x19             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo4rendE
+ 0xf             0x4             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo7crbeginE
+ 0x10            0x12             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo5crendE
+ 0x11             0x7             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__473_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_436ignoreE
+ 0x12            0x15             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__419piecewise_constructE
+ 0x13               0             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__48in_placeE
+ 0x14             0xe             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__420unreachable_sentinelE
+ 0x15             0xd             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4swapE
+ 0x16            0x1b             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo9iter_moveE
+ 0x17             0x6             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo5beginE
+ 0x18            0x14             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo3endE
+ 0x19             0xa             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo6cbeginE
+ 0x1a            0x18             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4cendE
+ 0x1b             0x3             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo7advanceE
+ 0x1c            0x11             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo9iter_swapE
+ 0x1d             0xc             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4nextE
+ 0x1e            0x1a             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4prevE
+ 0x1f             0x5             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4dataE
+ 0x20            0x13             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo5cdataE
+ 0x21             0x8             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4sizeE
+ 0x22            0x16             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo5ssizeE
+ 0x23             0x1             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo8distanceE
+ 0x24             0xf             0x1      0x1        0   0x10     _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_436thrust24THRUST_300001_SM_1210_NS6system6detail10sequential3seqE
+ 0x25               0               0      0x3        0    0x4     .debug_frame
+ 0x26               0               0      0x3        0    0xa     .nv.callgraph
+ 0x27               0               0      0x3        0   0x11     .nv.constant0._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+
+
+.nv.constant4
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+
+
+.section .rela.nv.constant4	RELA
+0xd8    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_436thrust24THRUST_300001_SM_1210_NS6system6detail10sequential3seqE    R_CUDA_64    0x0
+0xd0    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo8distanceE    R_CUDA_64    0x0
+0xc8    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo5ssizeE    R_CUDA_64    0x0
+0xc0    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4sizeE    R_CUDA_64    0x0
+0xb8    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo5cdataE    R_CUDA_64    0x0
+0xb0    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4dataE    R_CUDA_64    0x0
+0xa8    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4prevE    R_CUDA_64    0x0
+0xa0    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4nextE    R_CUDA_64    0x0
+0x98    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo9iter_swapE    R_CUDA_64    0x0
+0x90    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo7advanceE    R_CUDA_64    0x0
+0x88    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4cendE    R_CUDA_64    0x0
+0x80    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo6cbeginE    R_CUDA_64    0x0
+0x78    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo3endE    R_CUDA_64    0x0
+0x70    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo5beginE    R_CUDA_64    0x0
+0x68    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo9iter_moveE    R_CUDA_64    0x0
+0x60    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std6ranges3__45__cpo4swapE    R_CUDA_64    0x0
+0x58    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__420unreachable_sentinelE    R_CUDA_64    0x0
+0x50    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__48in_placeE    R_CUDA_64    0x0
+0x48    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__419piecewise_constructE    R_CUDA_64    0x0
+0x40    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__473_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_436ignoreE    R_CUDA_64    0x0
+0x38    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo5crendE    R_CUDA_64    0x0
+0x30    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo7crbeginE    R_CUDA_64    0x0
+0x28    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo4rendE    R_CUDA_64    0x0
+0x20    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo6rbeginE    R_CUDA_64    0x0
+0x18    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo4cendE    R_CUDA_64    0x0
+0x10    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo6cbeginE    R_CUDA_64    0x0
+0x8    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo3endE    R_CUDA_64    0x0
+0x0    _ZN71_INTERNAL_6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_434cuda3std3__45__cpo5beginE    R_CUDA_64    0x0
+
+
+.nv.shared.reserved.0
+   No data to be dumped.
+
+
+.nv.constant0._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+0x00000000 0x00000000 0x00000000 0x00000000
+
+
+
+.section .note.nv.tkinfo
+Entry: 1
+  Owner                  Data size        Description
+  NVIDIA Corp            144              NVIDIA CUDA Toolkit Information
+	Note Version: 2
+	Tool Name: ptxas
+	Tool Version: Cuda compilation tools, release 13.0, V13.0.88
+	Tool Branch: Build cuda_13.0.r13.0/compiler.36424714_0
+	Tool Command Line Arguments: -arch sm_121a -m 64
+
+
+.section .note.nv.cuinfo
+Entry: 1
+  Owner                  Data size        Description
+  NVIDIA Corp            8                NVIDIA CUDA Information
+	Note Version: 2
+	CUDA Virtual SM: sm_121
+	CUDA Tool Kit Version: 13.0
+
+
+.nv.info
+	<0x1>
+	Attribute:	EIATTR_REGCOUNT
+	Format:	EIFMT_SVAL
+	Value:	function: _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff(0x3)	register count: 18
+	<0x2>
+	Attribute:	EIATTR_FRAME_SIZE
+	Format:	EIFMT_SVAL
+	Value:	function: _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff(0x3)	frame size: 0x0
+	<0x3>
+	Attribute:	EIATTR_MIN_STACK_SIZE
+	Format:	EIFMT_SVAL
+	Value:	function: _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff(0x3)	min stack size: 0x0
+
+
+.nv.compat
+	<0x1>
+	Attribute:	EICOMPAT_ATTR_CUDA_ACCELERATOR_TARGET
+	Format:	EIFMT_BVAL
+	Value:	0x1
+	<0x2>
+	Attribute:	EICOMPAT_ATTR_ISA_CLASS
+	Format:	EIFMT_BVAL
+	Value:	0x1
+	<0x3>
+	Attribute:	EICOMPAT_ATTR_INST_TCGEN05_MMA
+	Format:	EIFMT_BVAL
+	Value:	0x5
+	<0x4>
+	Attribute:	EICOMPAT_ATTR_MERCURY_ISA_MAJOR_MINOR_VERSION
+	Format:	EIFMT_HVAL
+	Value:	1.1
+	<0x5>
+	Attribute:	EICOMPAT_ATTR_INST_TENSORMAP_V1
+	Format:	EIFMT_BVAL
+	Value:	0x0
+	<0x6>
+	Attribute:	EICOMPAT_ATTR_ENABLE_OPPORTUNISTIC_FINALIZATION
+	Format:	EIFMT_BVAL
+	Value:	0x1
+	<0x7>
+	Attribute:	EICOMPAT_ATTR_CAN_FASTPATH_FINALIZE
+	Format:	EIFMT_SVAL
+	Value:	0x0 0x0
+
+
+.nv.info._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+	<0x1>
+	Attribute:	EIATTR_CUDA_API_VERSION
+	Format:	EIFMT_SVAL
+	Value:	0x82
+	<0x2>
+	Attribute:	EIATTR_KPARAM_INFO
+	Format:	EIFMT_SVAL
+	Value:	Index : 0x0	Ordinal : 0x4	Offset  : 0x1c	Size    : 0x4
+		Pointee's logAlignment : 0x0	Space : 0x0	cbank : 0x1f	Parameter Space : CBANK
+	<0x3>
+	Attribute:	EIATTR_KPARAM_INFO
+	Format:	EIFMT_SVAL
+	Value:	Index : 0x0	Ordinal : 0x3	Offset  : 0x18	Size    : 0x4
+		Pointee's logAlignment : 0x0	Space : 0x0	cbank : 0x1f	Parameter Space : CBANK
+	<0x4>
+	Attribute:	EIATTR_KPARAM_INFO
+	Format:	EIFMT_SVAL
+	Value:	Index : 0x0	Ordinal : 0x2	Offset  : 0x10	Size    : 0x8
+		Pointee's logAlignment : 0x0	Space : 0x5	cbank : 0x1f	Parameter Space : CBANK
+	<0x5>
+	Attribute:	EIATTR_KPARAM_INFO
+	Format:	EIFMT_SVAL
+	Value:	Index : 0x0	Ordinal : 0x1	Offset  : 0x8	Size    : 0x8
+		Pointee's logAlignment : 0x0	Space : 0x5	cbank : 0x1f	Parameter Space : CBANK
+	<0x6>
+	Attribute:	EIATTR_KPARAM_INFO
+	Format:	EIFMT_SVAL
+	Value:	Index : 0x0	Ordinal : 0x0	Offset  : 0x0	Size    : 0x8
+		Pointee's logAlignment : 0x0	Space : 0x5	cbank : 0x1f	Parameter Space : CBANK
+	<0x7>
+	Attribute:	EIATTR_SPARSE_MMA_MASK
+	Format:	EIFMT_HVAL
+	Value:	0x0
+	<0x8>
+	Attribute:	EIATTR_MAXREG_COUNT
+	Format:	EIFMT_HVAL
+	Value:	0x40
+	<0x9>
+	Attribute:	EIATTR_MERCURY_ISA_VERSION
+	Format:	EIFMT_HVAL
+	Value:	1.1
+	<0x10>
+	Attribute:	EIATTR_COOP_GROUP_MASK_REGIDS
+	Format:	EIFMT_SVAL
+	Value:	0xffffffff 0xffffffff 0xffffffff 0xffffffff
+	<0x11>
+	Attribute:	EIATTR_COOP_GROUP_INSTR_OFFSETS
+	Format:	EIFMT_SVAL
+	Value:	0x1b0 0x210 0x240 0x270
+	<0x12>
+	Attribute:	EIATTR_VRC_CTA_INIT_COUNT
+	Format:	EIFMT_BVAL
+	Value:	0x0
+	<0x13>
+	Attribute:	EIATTR_EXIT_INSTR_OFFSETS
+	Format:	EIFMT_SVAL
+	Value:	0x280 0x300
+	<0x14>
+	Attribute:	EIATTR_MAX_THREADS
+	Format:	EIFMT_SVAL
+	Value:	0x400 0x1 0x1
+	<0x15>
+	Attribute:	EIATTR_CRS_STACK_SIZE
+	Format:	EIFMT_SVAL
+	Value:	0x0
+	<0x16>
+	Attribute:	EIATTR_CBANK_PARAM_SIZE
+	Format:	EIFMT_HVAL
+	Value:	0x20
+	<0x17>
+	Attribute:	EIATTR_PARAM_CBANK
+	Format:	EIFMT_SVAL
+	Value:	0x27 0x200380
+	<0x18>
+	Attribute:	EIATTR_SW_WAR
+	Format:	EIFMT_SVAL
+	Value:	0x0
+
+
+.nv.callgraph
+ <0,-1>
+ <0,-2>
+ <0,-3>
+ <0,-4>
+
+
+.text._ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+lmem=0	smem=0
+0xff017b82 0x0000df00 0x00000800 0x000fe200
+0x00047919 0x00000000 0x00002500 0x000e2e00
+0xff027b82 0x0000e200 0x00000a00 0x000e6200
+0x00007945 0x00000170 0x03800200 0x000fe200
+0xff0477ac 0x00006b00 0x08000a00 0x000ea200
+0x000f7919 0x00000000 0x00002100 0x000ee200
+0x000b7919 0x00000000 0x00002200 0x000f2800
+0xff067b82 0x0000e400 0x00000a00 0x000ea200
+0x04007824 0x00050000 0x078e02ff 0x001fe200
+0x00087202 0x0000000f 0x00000f00 0x008fc800
+0x0f007212 0x00000000 0x078efcff 0x040fe200
+0x0f027825 0x00000002 0x078e0002 0x002fc800
+0x04097824 0x00000040 0x078e020b 0x010fe400
+0x0b0b7824 0x00001400 0x078e0200 0x000fe400
+0xff007431 0x00000000 0x000001ff 0x004fce00
+0x0b047825 0x00000002 0x078e0006 0x040fe200
+0x020a7981 0x00000004 0x0c1e9500 0x0000aa00
+0x04047981 0x00000004 0x0c1e9500 0x000ee200
+0x0800780c 0x000013f0 0x03f06070 0x040fe200
+0x08087810 0x00000010 0x07ffe0ff 0x000fe400
+0x0b0b7810 0x00000010 0x07ffe0ff 0x000fe200
+0x02027835 0x00000020 0x078e0200 0x001fc400
+0x0a0d7824 0x00010000 0x078e00ff 0x004fe400
+0x040a7824 0x00010000 0x078e00ff 0x008fc800
+0x0d007223 0x0000000a 0x00000000 0x000fe200
+0x00d48947 0xfffffffc 0x0383ffff 0x000fec00
+0x00007941 0x00000000 0x03800200 0x000fea00
+0x00037f89 0x09101f00 0x000e0000 0x000e2200
+0x0f00780c 0x00000008 0x03f06070 0x040fe200
+0x0f00720c 0x000000ff 0x03f25270 0x000fe200
+0x00037221 0x00000003 0x00000000 0x001fca00
+0x03037208 0x00000000 0x04000000 0x000fe200
+0x0f00780c 0x00000004 0x03f06070 0x000fc800
+0x03027f89 0x08901f00 0x000e0000 0x000e3200
+0x03038221 0x00000002 0x00000000 0x001fe200
+0x0f00780c 0x00000002 0x03f06070 0x000fc800
+0x03027f89 0x08501f00 0x000e0000 0x000e2400
+0x03067221 0x00000002 0x00000000 0x001fca00
+0x06007208 0x00000003 0x04000000 0x000fca00
+0x00077f89 0x08301f00 0x000e0000 0x00006200
+0x0000194d 0x00000000 0x03800000 0x000fea00
+0xff047b82 0x0000e600 0x00000a00 0x000ea200
+0x06007221 0x00000007 0x00000000 0x003fce00
+0xff027b82 0x0000e000 0x00000a00 0x000e2200
+0x00007223 0x00000004 0x00000005 0x004fca00
+0xff00723e 0x00000000 0x000010ff 0x000fe200
+0x09027825 0x00000002 0x078e0002 0x001fca00
+0x02007986 0x00000000 0x0c101504 0x000fe200
+0x0000794d 0x00000000 0x03800000 0x000fea00
+0x00fc7947 0xfffffffc 0x0383ffff 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+0x00007918 0x00000000 0x00000000 0x000fc000
+
+
+.section .debug_frame
+decodeDebugFrame, frameBuf 0xffffffff, total_length 104
+CIE length 36, cie_id -1
+version 3
+augmentation slen 1
+augmentation
+code_align_factor slen 1
+data_align_factor slen 1
+ Debug Frame Common Information Entry
+  length:                 36
+  CIE_id :                -1
+  version:                3
+  augmentation:
+  code align factor:      4
+  data align factor:      -4
+  return address register 0xffffffff
+  initial instructions: 19 bytes, ptr = 0x8080810c, frameBuf = 0xffffffff
+  DW_CFA_def_cfa register R1, offset 0
+  DW_CFA_same_value R255
+  DW_CFA_same_value R1
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+ Debug Frame Description Entry
+  length:                 44
+  CIE_pointer:            0
+  initial_location:       0x0
+  address_range:          0x400
+  function:               _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff
+  instructions: 20 bytes
+  DW_CFA_advance_loc4 delta 60
+  DW_CFA_def_cfa register R1, offset 0
+  DW_CFA_advance_loc4 delta 132
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+
+.section .rela.debug_frame	RELA
+0x44    _ZN73_GLOBAL__N__6a59ba2f_37_fr13_bf16_gemvx_k64_m1_shuffle_r64_cu_88ac19d7_4341fr13_bf16_gemvx_k64_m1_shuffle_r64_kernelEP13__nv_bfloat16PKS0_S3_ff    R_CUDA_64    0x0
