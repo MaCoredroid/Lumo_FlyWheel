@@ -1,0 +1,47 @@
+STATIC BUILD VERIFICATION
+
+PASS fresh FA2 source at 29210221863736a08f71a866459e368ad1ac4a95
+PASS patcher flags --tree-bias-tile-earlyout --fixed32-query-gqa-pair32
+PASS patcher second pass idempotent
+PASS six-file patched source byte-matches regeneration from dbf46dc58
+PASS exactly one sm_121a cubin
+PASS cuobjdump resources: REG 243, STACK 0, SHARED 1024, LOCAL 0
+PASS ptxas: stack 0, spill stores 0, spill loads 0, registers 243
+PASS source-fixed dynamic shared memory 98304 bytes
+PASS target SASS LDL 0, STL 0, CALL 0
+PASS public defined dynamic symbol set matches qrow16 reference
+PASS public undefined dynamic symbol set matches qrow16 reference
+PASS DT_NEEDED set matches qrow16 reference
+PASS RUNPATH set matches qrow16 reference
+PASS GQA-pair launcher is LOCAL
+PASS offline torch load registered varlen_fwd and varlen_fwd_tree_bias
+PASS CPU suite: 46 passed, 1 skipped in 2.61s
+
+The skipped identity test requires an intentionally unstaged FA2 binary.
+
+BUILD ISOLATION
+
+network=none
+requested_cpus=1
+NVIDIA_VISIBLE_DEVICES=void
+CUDA_VISIBLE_DEVICES=
+CUDA_CACHE_DISABLE=1
+gpu_device_nodes_visible=false
+gpu_used=false
+
+TOOLS
+
+nvcc=Build cuda_13.0.r13.0/compiler.36424714_0
+cuobjdump=Build cuda_13.0.r13.0/compiler.36400806_0
+nvdisasm=Build cuda_13.0.r13.0/compiler.36400806_0
+cxx=c++ 11.4.0
+torch=2.11.0+cu130
+
+The pinned image lacks nvdisasm. The matching host CUDA 13 nvdisasm binary
+was mounted read-only into the network-disabled, GPU-disabled pinned image.
+
+NOT CLAIMED
+
+No real-task run, synthetic run, GPU timing, output comparison, LSE
+comparison, speedup, hardware-floor progress, timing eligibility, or
+production eligibility is claimed by this artifact.

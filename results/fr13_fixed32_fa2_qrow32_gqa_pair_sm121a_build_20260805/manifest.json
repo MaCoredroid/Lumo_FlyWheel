@@ -1,0 +1,115 @@
+{
+  "abi": {
+    "defined_dynamic_records": 685,
+    "defined_dynamic_set_matches_reference": true,
+    "dt_needed_records": 10,
+    "dt_needed_set_matches_reference": true,
+    "private_launcher_binding": "LOCAL",
+    "runpath_records": 1,
+    "runpath_set_matches_reference": true,
+    "undefined_dynamic_records": 168,
+    "undefined_dynamic_set_matches_reference": true
+  },
+  "artifacts": {
+    "candidate_so": {
+      "bytes": 299813360,
+      "committed": false,
+      "sha256": "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e"
+    },
+    "flash_api_object": {
+      "bytes": 6076160,
+      "committed": false,
+      "sha256": "1bb21b4ecde52743be3fb64b1f43c6a68c106b9cb1f8961f0df10bd9677a09e0"
+    },
+    "pinned_abi_object": {
+      "bytes": 727800,
+      "committed": false,
+      "sha256": "507a797b93d7392bd1cddfc4468b2cd3e0d9a8c5a1f77d048ae4ae3ab1b97968"
+    },
+    "ptxas_diagnostic_object": {
+      "bytes": 727808,
+      "committed": false,
+      "linked": false,
+      "sha256": "bcf2fab12a4085afad2abb95517ce14e5cacf59caa6687a47469e0791474eea4"
+    },
+    "qrow16_reference_so": {
+      "bytes": 299507792,
+      "sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86"
+    },
+    "raw_object": {
+      "bytes": 727808,
+      "committed": false,
+      "sha256": "892347344a32b60e6cb9433ef31fcffb84d2e13b07b5d4f2296622ed65f130fb"
+    }
+  },
+  "build": {
+    "cuda_cache_disabled": true,
+    "cuda_visible_devices": "",
+    "gpu_device_nodes_visible": false,
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "network": "none",
+    "nvidia_visible_devices": "void",
+    "requested_cpus": 1
+  },
+  "eligibility": {
+    "default_off": true,
+    "next_gate": "canonical real SWE-Verified exact4 B4 raw-byte gates for Tail23 and Hydra27 across all 16 tree-attention layers",
+    "production_eligible": false,
+    "timing_eligible": false
+  },
+  "evidence": {
+    "byte_parity_measured": false,
+    "gpu_used": false,
+    "performance_measurement": false,
+    "real_task_run": false,
+    "synthetic_task_run": false
+  },
+  "provenance": {
+    "artifact_base_commit": "dbf46dc58b05a16fe245167e8e1cd498c813daf6",
+    "build_generator_invocation_commit": "89fba8a9aaad556ed4f20652d36c860e2bdf7949",
+    "fa2_source_commit": "29210221863736a08f71a866459e368ad1ac4a95",
+    "patched_source_manifest_sha256": "77595e1e757a986b74332233dc8c3b5bd6e3755bdac8d0eb75d5c6d8e7dd7540",
+    "patcher_flags": [
+      "--tree-bias-tile-earlyout",
+      "--fixed32-query-gqa-pair32"
+    ],
+    "regenerated_source_matches_artifact_base": true,
+    "translation_unit_sha256": "c37863af034944cde276da0a08057edee339522acc55006127e9bd7dabaf925e"
+  },
+  "resources": {
+    "barriers": 1,
+    "cubin_count": 1,
+    "dynamic_shared_bytes": 98304,
+    "registers": 243,
+    "sass_call": 0,
+    "sass_ldl": 0,
+    "sass_stl": 0,
+    "spill_load_bytes": 0,
+    "spill_store_bytes": 0,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "static_shared_bytes": 1024,
+    "target_arch": "sm_121a"
+  },
+  "schema": "fr13.fixed32.fa2_qrow32_gqa_pair_sm121a_build.v1",
+  "status": "STATIC_BUILD_PASS",
+  "target": {
+    "batch": 4,
+    "block_m": 64,
+    "block_n": 64,
+    "grid_ctas_per_layer": 48,
+    "head_dim": 256,
+    "kv_heads": 4,
+    "query_heads": 24,
+    "query_heads_per_cta": 2,
+    "split_k": false,
+    "threads": 128,
+    "tree_nodes": 32,
+    "warps": 4
+  },
+  "tests": {
+    "passed": 46,
+    "skipped": 1,
+    "skip_reason": "ignored FA2 binary is not staged"
+  }
+}
