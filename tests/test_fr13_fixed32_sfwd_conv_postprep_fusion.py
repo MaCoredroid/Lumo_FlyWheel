@@ -405,9 +405,10 @@ def test_contract_is_exact_physical32_k64_and_one_launch_per_layer() -> None:
         assert contract["gating_programs_per_request"] == (
             32 // expected_gate_rows
         )
-        assert contract["programs_per_request"] == (
-            expected_channel_programs + 32 // expected_gate_rows
-        )
+        assert contract["standalone_gating_programs_per_request"] == 0
+        assert contract["embedded_gating_channel_programs_per_request"] == 4
+        assert contract["gate_scheduling"] == "append_to_first_channel_programs"
+        assert contract["programs_per_request"] == expected_channel_programs
         assert contract["cross_layer_fusion"] is False
         assert contract["conv_product_dtype"] == "bfloat16"
         assert contract["conv_accumulator_dtype"] == "float32"
@@ -452,29 +453,41 @@ def test_contract_is_exact_physical32_k64_and_one_launch_per_layer() -> None:
     ("batch_size", "block_c", "gate_rows"),
     ((1, 256, 8), (4, 256, 8)),
 )
-def test_gate_row_tiles_cover_each_fixed32_output_exactly_once(
+def test_embedded_gate_tiles_and_channels_cover_fixed32_exactly_once(
     batch_size: int,
     block_c: int,
     gate_rows: int,
 ) -> None:
     assert gate_rows == 2 * block_c // candidate.GATE_BLOCK
-    gate_tasks = (candidate.ROWS + gate_rows - 1) // gate_rows
-    visited = []
+    gate_tasks = candidate.ROWS // gate_rows
+    channel_tasks = candidate.CHANNELS // block_c
+    visited_channels = []
+    visited_gates = []
     for request in range(batch_size):
-        for task in range(gate_tasks):
-            for local_row in range(gate_rows):
-                row = task * gate_rows + local_row
-                for head in range(candidate.GATE_BLOCK):
-                    if row < candidate.ROWS and head < candidate.NUM_V_HEADS:
-                        visited.append((request, row, head))
-    expected = {
+        for task in range(channel_tasks):
+            for channel in range(task * block_c, (task + 1) * block_c):
+                visited_channels.append((request, channel))
+            if task < gate_tasks:
+                for local_row in range(gate_rows):
+                    row = task * gate_rows + local_row
+                    for head in range(candidate.GATE_BLOCK):
+                        if head < candidate.NUM_V_HEADS:
+                            visited_gates.append((request, row, head))
+    expected_channels = {
+        (request, channel)
+        for request in range(batch_size)
+        for channel in range(candidate.CHANNELS)
+    }
+    expected_gates = {
         (request, row, head)
         for request in range(batch_size)
         for row in range(candidate.ROWS)
         for head in range(candidate.NUM_V_HEADS)
     }
-    assert len(visited) == len(set(visited))
-    assert set(visited) == expected
+    assert len(visited_channels) == len(set(visited_channels))
+    assert set(visited_channels) == expected_channels
+    assert len(visited_gates) == len(set(visited_gates))
+    assert set(visited_gates) == expected_gates
 
 
 def test_exact_direct_algebra_matches_incumbent_bytes_on_adversarial_values() -> None:
@@ -681,9 +694,12 @@ def test_generator_is_deterministic_and_kernel_has_no_conv_intermediate() -> Non
     assert "tl.sum" not in kernel_source
     assert "tl.dot" not in kernel_source
     assert "barrier" not in kernel_source
-    assert "pid_task < channel_tasks" in kernel_source
+    assert "pid_c = pid_task" in kernel_source
+    assert "pid_task < channel_tasks" not in kernel_source
     assert "GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK" in kernel_source
-    assert "pid_n_base = (pid_task - channel_tasks) * GATE_ROWS" in kernel_source
+    assert "GATE_TASKS: tl.constexpr = N // GATE_ROWS" in kernel_source
+    assert "if pid_task < GATE_TASKS" in kernel_source
+    assert "pid_n_base = pid_task * GATE_ROWS" in kernel_source
     assert "tl.arange(0, GATE_ROWS)[:, None]" in kernel_source
     assert "offs_h_1d = tl.arange(0, GATE_BLOCK)" in kernel_source
     assert "A_log + offs_h_1d" in kernel_source
@@ -723,9 +739,8 @@ def test_launcher_requires_opaque_capture_binding_and_has_one_launch() -> None:
     assert 'capture_binding.committer_state["sticky_guard_ok"]' in launcher_source
     assert "BANK_ROWS=int(conv_state.size(0))" in launcher_source
     assert "CAPTURE_GUARD=capture_binding is not None" in launcher_source
-    assert "gate_rows_per_task = 2 * block_c // GATE_BLOCK" in launcher_source
-    assert "gate_tasks = triton.cdiv(ROWS, gate_rows_per_task)" in launcher_source
-    assert "grid = (int(batch_size), channel_tasks + gate_tasks)" in launcher_source
+    assert "gate_tasks" not in launcher_source
+    assert "grid = (int(batch_size), channel_tasks)" in launcher_source
     assert launcher_source.count(
         "_fr13_fixed32_sfwd_conv_postprep_fusion_kernel[grid]("
     ) == 1
@@ -771,12 +786,14 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
         "gate_rows_per_program": 8,
         "baseline_gate_programs_per_request": 32,
         "candidate_gate_programs_per_request": 4,
+        "candidate_standalone_gate_programs_per_request": 0,
+        "candidate_embedded_gate_programs_per_request": 4,
         "baseline_programs_per_request": 72,
-        "candidate_programs_per_request": 44,
+        "candidate_programs_per_request": 40,
         "baseline_programs_per_layer": 72,
-        "candidate_programs_per_layer": 44,
+        "candidate_programs_per_layer": 40,
         "baseline_programs_all_layers": 3456,
-        "candidate_programs_all_layers": 2112,
+        "candidate_programs_all_layers": 1920,
         "requested_global_bytes_per_request_layer": {
             "baseline": 27648,
             "candidate": 19584,
@@ -797,12 +814,14 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
         "gate_rows_per_program": 8,
         "baseline_gate_programs_per_request": 32,
         "candidate_gate_programs_per_request": 4,
+        "candidate_standalone_gate_programs_per_request": 0,
+        "candidate_embedded_gate_programs_per_request": 4,
         "baseline_programs_per_request": 72,
-        "candidate_programs_per_request": 44,
+        "candidate_programs_per_request": 40,
         "baseline_programs_per_layer": 288,
-        "candidate_programs_per_layer": 176,
+        "candidate_programs_per_layer": 160,
         "baseline_programs_all_layers": 13824,
-        "candidate_programs_all_layers": 8448,
+        "candidate_programs_all_layers": 7680,
         "requested_global_bytes_per_request_layer": {
             "baseline": 27648,
             "candidate": 19584,

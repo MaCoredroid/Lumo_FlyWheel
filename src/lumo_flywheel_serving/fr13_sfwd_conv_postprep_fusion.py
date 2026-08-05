@@ -668,7 +668,10 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
         "channel_programs_per_request": channel_programs,
         "gate_rows_per_program": gate_rows_per_program,
         "gating_programs_per_request": gating_programs,
-        "programs_per_request": channel_programs + gating_programs,
+        "standalone_gating_programs_per_request": 0,
+        "embedded_gating_channel_programs_per_request": gating_programs,
+        "gate_scheduling": "append_to_first_channel_programs",
+        "programs_per_request": channel_programs,
         "launches_per_layer": 1,
         "launches_for_all_layers": LAYERS,
         "cross_layer_fusion": False,
@@ -749,7 +752,7 @@ def fixed32_sfwd_conv_postprep_static_ledger(
     gate_rows_per_program = 2 * block_c // GATE_BLOCK
     packed_gate_programs = ROWS // gate_rows_per_program
     baseline_programs_per_request = channel_programs + ROWS
-    packed_programs_per_request = channel_programs + packed_gate_programs
+    packed_programs_per_request = channel_programs
     gate_row_varying_reads = 2 * ROWS * NUM_V_HEADS * BF16_BYTES
     gate_row_varying_writes = 2 * ROWS * NUM_V_HEADS * FP32_BYTES
     gate_invariant_bytes_per_program = NUM_V_HEADS * (
@@ -797,6 +800,8 @@ def fixed32_sfwd_conv_postprep_static_ledger(
             "gate_rows_per_program": gate_rows_per_program,
             "baseline_gate_programs_per_request": ROWS,
             "candidate_gate_programs_per_request": packed_gate_programs,
+            "candidate_standalone_gate_programs_per_request": 0,
+            "candidate_embedded_gate_programs_per_request": packed_gate_programs,
             "baseline_programs_per_request": baseline_programs_per_request,
             "candidate_programs_per_request": packed_programs_per_request,
             "baseline_programs_per_layer": batch
@@ -1632,9 +1637,7 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
     block_c = int(contract["block_c"])
     num_warps = int(contract["num_warps"])
     channel_tasks = CHANNELS // block_c
-    gate_rows_per_task = 2 * block_c // GATE_BLOCK
-    gate_tasks = triton.cdiv(ROWS, gate_rows_per_task)
-    grid = (int(batch_size), channel_tasks + gate_tasks)
+    grid = (int(batch_size), channel_tasks)
     bias_arg = bias if bias is not None else x
     conv_tap_arg = conv_tap if conv_tap is not None else query
     sticky_guard_arg = (

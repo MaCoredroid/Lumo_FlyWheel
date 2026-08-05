@@ -129,17 +129,18 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
     """Fuse one fixed32 layer's conv, recurrence outputs, and post-prep."""
     pid_b = tl.program_id(0)
     pid_task = tl.program_id(1)
-    channel_tasks: tl.constexpr = C // BLOCK_C
     Q_DIM: tl.constexpr = H * K
     V_DIM: tl.constexpr = HV * V
-    if pid_task < channel_tasks:
-        pid_c = pid_task
+    pid_c = pid_task
 '''
 
 
-GATING = '''    else:
-        GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK
-        pid_n_base = (pid_task - channel_tasks) * GATE_ROWS
+GATING = '''    GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK
+    GATE_TASKS: tl.constexpr = N // GATE_ROWS
+    # The grid contains channel programs only. Its first four programs append
+    # the unchanged gate tiles after their channel stores.
+    if pid_task < GATE_TASKS:
+        pid_n_base = pid_task * GATE_ROWS
         offs_n = pid_n_base + tl.arange(0, GATE_ROWS)[:, None]
         offs_h_1d = tl.arange(0, GATE_BLOCK)
         h_mask = offs_h_1d < HV
@@ -269,9 +270,7 @@ def _producer_body() -> str:
     if joined.count(unsafe_bank_load) != 1:
         raise RuntimeError("frontier-5 bank-row load drifted")
     joined = joined.replace(unsafe_bank_load, guarded_bank_load, 1)
-    return "\n".join(
-        "    " + line if line else "" for line in joined.splitlines()
-    ) + "\n"
+    return joined + "\n"
 
 
 def generate() -> str:
