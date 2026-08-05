@@ -1,0 +1,6 @@
+n	k	real_calls	problem_tiles	grid_ctas	n_tiles	n_grid_stride	tiles_per_cta	route
+14336	5120	1	224	32	112	16	7	exactshape_candidate
+16384	5120	3	256	32	128	16	8	exactshape_candidate
+34816	5120	4	544	34	272	17	16	exactshape_candidate
+5120	6144	4	40	40	40	0	1	existing_n5120_single_tile
+5120	17408	4	40	40	40	0	1	existing_n5120_single_tile

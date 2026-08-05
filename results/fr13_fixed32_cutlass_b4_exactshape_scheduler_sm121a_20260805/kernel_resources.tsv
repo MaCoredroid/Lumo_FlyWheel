@@ -1,0 +1,9 @@
+variant	problem_tiles	grid_ctas	dtype	registers_per_thread	stack_bytes_per_thread	local_bytes_per_thread	static_shared_bytes_per_cta	constant0_bytes	verdict
+exactshape_candidate	224	32	fp16	168	0	0	1024	2688	retain_offline
+exactshape_candidate	224	32	bf16	168	0	0	1024	2688	retain_offline
+exactshape_candidate	256	32	fp16	168	0	0	1024	2688	retain_offline
+exactshape_candidate	256	32	bf16	168	0	0	1024	2688	retain_offline
+exactshape_candidate	544	34	fp16	168	0	0	1024	2688	retain_offline
+exactshape_candidate	544	34	bf16	168	0	0	1024	2688	retain_offline
+generic_in_object	0	0	fp16	168	0	0	1024	2688	comparator
+generic_in_object	0	0	bf16	168	0	0	1024	2688	comparator
