@@ -26,23 +26,22 @@ Compute-versus-memory NCU evidence remains unmeasured.
 ## Candidate
 
 The CUDA op expresses the existing buffers as a GEMM of
-`[248320,5120] row-major` by `[5120,32] column-major`, writing
-`[248320,32] column-major`. Those column-major views are byte-for-byte the
-existing contiguous PyTorch `hidden[32,5120]` and `output[32,248320]`
-storage.
+`[32,5120] row-major` by `[5120,248320] column-major`, writing
+`[32,248320] row-major`. The column-major weight view is byte-for-byte the
+existing contiguous PyTorch `weight[248320,5120]` storage.
 
 The fixed kernel geometry is:
 
-- threadblock: `128x32x64`
-- warp: `64x32x64`
+- threadblock: `32x128x64`
+- warp: `32x64x64`
 - tensor-core instruction: `16x8x16`
 - stages: `3`
 - split-K slices: `1`
 - workspace: `0 bytes`
 - dynamic shared storage: `61440 bytes`
 
-The physical row dimension is exactly one 32-column tile, rather than the
-incumbent symbol's 208-column CTA tile. K remains 64 and there is no split-K,
+The physical row dimension is exactly one 32-row tile, rather than the
+incumbent symbol's 208-row CTA tile. K remains 64 and there is no split-K,
 which makes this the narrowest defensible scheduler change found from the
 available evidence. A scheduler change can still alter BF16 rounding, so the
 candidate is not distribution-qualified by construction.
@@ -62,6 +61,8 @@ CUTLASS commit `da5e086dab31d63815acafdac9a9c5893b1c69e2`.
 - SASS census: `64` BF16 HMMA, `60` asynchronous 128-bit
   global-to-shared loads, `8` ordinary 128-bit global loads, and `16` 128-bit
   stores
+- generated kernel symbol: threadblock `32x128x64`
+- logical grid: `1x1940`, or `1940` CTAs
 
 No GPU, Docker container, synthetic timing, live workload, or performance
 measurement was used.

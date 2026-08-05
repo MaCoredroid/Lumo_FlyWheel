@@ -22,11 +22,11 @@
     "compute_vs_memory_ncu": "UNMEASURED"
   },
   "candidate": {
-    "operation": "BF16[248320,5120] row-major x BF16[5120,32] column-major",
+    "operation": "BF16[32,5120] row-major x BF16[5120,248320] column-major",
     "logical_output": "BF16[32,248320] contiguous",
-    "problem_mnk": [248320, 32, 5120],
-    "threadblock_mnk": [128, 32, 64],
-    "warp_mnk": [64, 32, 64],
+    "problem_mnk": [32, 248320, 5120],
+    "threadblock_mnk": [32, 128, 64],
+    "warp_mnk": [32, 64, 64],
     "instruction_mnk": [16, 8, 16],
     "stages": 3,
     "split_k_slices": 1,
@@ -43,8 +43,8 @@
     "arch": "sm_121a",
     "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
     "cutlass_h_sha256": "3f83df4d3164afea3a865a5e93d7c1aff3cfdd7c604319571a94332b4e9ec8da",
-    "object_sha256": "269917bee674c59c25b8deed5c6cbd869ed438e43e5cb721fc638599bf24653f",
-    "object_bytes": 248472,
+    "object_sha256": "6dd621b35c4e36bda425429127c2f704c53cde9bd99c03c7880c496d10701651",
+    "object_bytes": 248224,
     "registers": 158,
     "stack_bytes": 0,
     "spill_store_bytes": 0,
@@ -54,12 +54,15 @@
     "sass_hmma_bf16": 64,
     "sass_async_global_to_shared_128b": 60,
     "sass_global_load_128b": 8,
-    "sass_global_store_128b": 16
+    "sass_global_store_128b": 16,
+    "symbol_threadblock_mnk": [32, 128, 64],
+    "logical_grid_mn": [1, 1940],
+    "logical_grid_ctas": 1940
   },
   "source_sha256": {
-    "csrc/fr13_bf16_verifier_head_m32_sm121a.cu": "9a9deef637e37f5e149713472852cdb598608721ee88afdd7e7d9d443cc419bd",
-    "scripts/fr13_build_bf16_verifier_head_m32_sm121a.py": "66d3ae7b02f6971ecb31b27dd69e4c921b15c8e6e1e9bc82c59fccab3c3d51bf",
-    "tests/test_fr13_bf16_verifier_head_m32_sm121a.py": "2e41f684337a1abd60d9fa07cf55bcecaa2f1fe7d989e9765939f761ae47137d"
+    "csrc/fr13_bf16_verifier_head_m32_sm121a.cu": "7cbc9f5157d8e93ee35930b028d97d0c3b1a26a9d79aa87ec6061928f8161768",
+    "scripts/fr13_build_bf16_verifier_head_m32_sm121a.py": "1458c06ae74782290406894aab236aa6b3d878fc63d83da89a76b3245de1daef",
+    "tests/test_fr13_bf16_verifier_head_m32_sm121a.py": "b944b466d1e997d7bfee346d94b95f5ba37c5395d4192af540237a3a79f5d4a1"
   },
   "qualification_required": [
     "one real SWE-Verified B1 shadow task with every BF16 element compared",

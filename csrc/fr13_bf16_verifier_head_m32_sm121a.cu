@@ -20,40 +20,39 @@ namespace {
 constexpr int kRows = 32;
 constexpr int kVocab = 248320;
 constexpr int kHidden = 5120;
-constexpr int kThreadblockM = 128;
-constexpr int kThreadblockN = 32;
+constexpr int kThreadblockM = 32;
+constexpr int kThreadblockN = 128;
 constexpr int kThreadblockK = 64;
-constexpr int kWarpM = 64;
-constexpr int kWarpN = 32;
+constexpr int kWarpM = 32;
+constexpr int kWarpN = 64;
 constexpr int kWarpK = 64;
 constexpr int kStages = 3;
 
-static_assert(kVocab % kThreadblockM == 0);
-static_assert(kRows == kThreadblockN);
+static_assert(kRows == kThreadblockM);
+static_assert(kVocab % kThreadblockN == 0);
 static_assert(kHidden % kThreadblockK == 0);
 static_assert(sizeof(at::BFloat16) == sizeof(cutlass::bfloat16_t));
 
 using Element = cutlass::bfloat16_t;
 using Accumulator = float;
-using WeightLayout = cutlass::layout::RowMajor;
-using HiddenLayout = cutlass::layout::ColumnMajor;
-using OutputLayout = cutlass::layout::ColumnMajor;
+using HiddenLayout = cutlass::layout::RowMajor;
+using WeightLayout = cutlass::layout::ColumnMajor;
+using OutputLayout = cutlass::layout::RowMajor;
 using Epilogue = cutlass::epilogue::thread::LinearCombination<
     Element,
     128 / cutlass::sizeof_bits<Element>::value,
     Accumulator,
     Accumulator>;
 
-// The incumbent projects [32,5120] by [248320,5120]^T.  Expressing the
-// operation as [248320,5120] x [5120,32] keeps the exact tensor storage while
-// making the physical row count the narrow GEMM dimension.  K=64 and no
-// split-K preserve the incumbent kernel's observable reduction-depth contract;
-// raw BF16 equality still remains a mandatory live qualification gate.
+// The incumbent projects [32,5120] by [248320,5120]^T. The column-major
+// weight view is byte-identical to the existing contiguous weight storage.
+// K=64 and no split-K preserve the incumbent kernel's observable
+// reduction-depth contract; raw BF16 equality remains a mandatory live gate.
 using VerifierHeadGemm = cutlass::gemm::device::Gemm<
     Element,
-    WeightLayout,
-    Element,
     HiddenLayout,
+    Element,
+    WeightLayout,
     Element,
     OutputLayout,
     Accumulator,
@@ -117,9 +116,9 @@ void fr13_bf16_verifier_head_m32_out(at::Tensor output,
       reinterpret_cast<const Element*>(weight.data_ptr<at::BFloat16>());
 
   typename VerifierHeadGemm::Arguments arguments(
-      {kVocab, kRows, kHidden},
-      {weight_ptr, kHidden},
+      {kRows, kVocab, kHidden},
       {hidden_ptr, kHidden},
+      {weight_ptr, kHidden},
       {output_ptr, kVocab},
       {output_ptr, kVocab},
       {1.0f, 0.0f},
