@@ -140,7 +140,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
         )
-        == 9
+        == 8
     )
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -741,7 +741,7 @@ def test_b1_onen_selector_is_default_off_shape_isolated_and_exact_math() -> None
     assert patched.count("return fixed32_cutlass_wave_variant::stock;") >= 1
 
 
-def test_b1_directgrid_restores_exact_math_and_b4_fullm_reduces_replays() -> None:
+def test_b1_directgrid_keeps_m128_math_and_b4_fullm_reduces_replays() -> None:
     module = _module()
     patched, _ = module.patch_text(_source_fixture(module))
 
@@ -753,7 +753,7 @@ def test_b1_directgrid_restores_exact_math_and_b4_fullm_reduces_replays() -> Non
         b1_start,
     )
     b1 = patched[b1_start:b1_end]
-    assert "KernelTmaWarpSpecializedBlockwisePingpongSm120" in b1
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in b1
     assert "using TileShape = Shape<_128, _32, _128>;" in b1
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in b1
     assert "fr13_fixed32_b1_wide256_direct_fullgrid_scheduler" in b1
@@ -783,6 +783,9 @@ def test_b1_directgrid_restores_exact_math_and_b4_fullm_reduces_replays() -> Non
     ).replace(
         "fr13_fixed32_b1_wide256_direct_fullgrid_scheduler",
         "SCHEDULER",
+    ).replace(
+        "KernelTmaWarpSpecializedBlockwiseCooperativeSm120",
+        "KernelTmaWarpSpecializedBlockwisePingpongSm120",
     )
     assert normalized_direct == normalized_proven
 
