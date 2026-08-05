@@ -241,6 +241,18 @@ def test_live_verifier_requires_all_layers_slots_and_real_exact4(tmp_path: Path)
     assert verification["slot_coverage"] == [0, 1, 2, 3]
 
     tampered = _live_result(module, candidate_sha256, source_commit)
+    tampered["batch_size"] = 4.0
+    result_path.write_text(json.dumps(tampered), encoding="ascii")
+    with pytest.raises(module.GateError, match="batch_size drifted"):
+        module.verify_live(args)
+
+    tampered = _live_result(module, candidate_sha256, source_commit)
+    tampered["output_raw_byte_mismatches"] = False
+    result_path.write_text(json.dumps(tampered), encoding="ascii")
+    with pytest.raises(module.GateError, match="output_raw_byte_mismatches drifted"):
+        module.verify_live(args)
+
+    tampered = _live_result(module, candidate_sha256, source_commit)
     tampered["layers"][7]["slots"][2]["lse"]["raw_byte_mismatches"] = 1
     result_path.write_text(json.dumps(tampered), encoding="ascii")
     with pytest.raises(module.GateError, match="per-slot byte mismatch"):
@@ -251,6 +263,12 @@ def test_live_verifier_requires_all_layers_slots_and_real_exact4(tmp_path: Path)
         encoding="ascii",
     )
     arm_payload = json.loads(campaign_arm.read_text(encoding="ascii"))
+    arm_payload["task_count"] = 4.0
+    campaign_arm.write_text(json.dumps(arm_payload), encoding="ascii")
+    with pytest.raises(module.GateError, match="canonical exact4 arm"):
+        module.verify_live(args)
+
+    arm_payload["task_count"] = 4
     arm_payload["subset_sha256"] = "0" * 64
     campaign_arm.write_text(json.dumps(arm_payload), encoding="ascii")
     with pytest.raises(module.GateError, match="canonical exact4 arm"):

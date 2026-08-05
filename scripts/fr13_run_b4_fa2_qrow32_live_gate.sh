@@ -42,7 +42,13 @@ case "$FIXED32_MODE" in
     ;;
 esac
 case "$LIVE_AB_ARM" in
-  qrow32) ;;
+  qrow32)
+    [[ "$CANDIDATE_SHA256" == "77f3fb22c19d0eb2ac0ec28230cf9401221425692a505efde62aa838760d81ce" \
+       && "$CANDIDATE_BYTES" == "299876120" \
+       && "$FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
+       && "$SOURCE_CLOSURE_SHA256" == "3e3c18565e738f20d0a5ab5fe50d018f3d8cbd5cb94082dcd55ca730a790163c" ]] \
+      || { echo "qrow32 BM32 B4 live gate binary/source provenance drifted" >&2; exit 2; }
+    ;;
   gqa_pair)
     [[ "$CANDIDATE_SHA256" == "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e" \
        && "$CANDIDATE_BYTES" == "299813360" \

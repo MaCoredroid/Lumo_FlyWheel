@@ -88,6 +88,22 @@ def _load_json(path: Path, label: str) -> dict[str, Any]:
     return payload
 
 
+def _json_exact(value: Any, expected: Any) -> bool:
+    if type(value) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return value.keys() == expected.keys() and all(
+            _json_exact(value[key], expected_value)
+            for key, expected_value in expected.items()
+        )
+    if isinstance(expected, list):
+        return len(value) == len(expected) and all(
+            _json_exact(item, expected_item)
+            for item, expected_item in zip(value, expected, strict=True)
+        )
+    return value == expected
+
+
 def verify_build(args: argparse.Namespace) -> dict[str, Any]:
     fa2 = args.fa2_src.resolve(strict=True)
     source_dir = fa2 / "csrc/flash_attn/src"
@@ -239,20 +255,26 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
         "performance_measurement": False,
     }
     for key, value in expected.items():
-        if result.get(key) != value:
+        if not _json_exact(result.get(key), value):
             raise GateError(f"qrow32 live result {key} drifted")
     if args.fixed32_mode not in ("tail6_fixed32", "hydra27_fixed32"):
         raise GateError("qrow32 live mode is not Tail23 or Hydra27")
     operands = result.get("operands")
     if not isinstance(operands, dict) or (
-        operands.get("query_shape") != [128, 24, 256]
-        or operands.get("query_start_loc") != [0, 32, 64, 96, 128]
-        or operands.get("slot_coverage") != [0, 1, 2, 3]
-        or operands.get("key_cache_tail_shape") != [1024, 4, 256]
+        not _json_exact(operands.get("query_shape"), [128, 24, 256])
+        or not _json_exact(
+            operands.get("query_start_loc"), [0, 32, 64, 96, 128]
+        )
+        or not _json_exact(operands.get("slot_coverage"), [0, 1, 2, 3])
+        or not _json_exact(
+            operands.get("key_cache_tail_shape"), [1024, 4, 256]
+        )
         or not isinstance(operands.get("seq_lens"), list)
         or len(operands["seq_lens"]) != 4
+        or any(type(value) is not int for value in operands["seq_lens"])
         or not isinstance(operands.get("suffix_start_mod64"), list)
         or len(operands["suffix_start_mod64"]) != 4
+        or any(type(value) is not int for value in operands["suffix_start_mod64"])
     ):
         raise GateError("qrow32 live operand coverage drifted")
     layers = result.get("layers")
@@ -261,15 +283,19 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
     for expected_layer, layer in zip(TARGET_LAYERS, layers, strict=True):
         if not isinstance(layer, dict) or layer.get("layer_name") != expected_layer:
             raise GateError("qrow32 live layer order or identity drifted")
-        if layer.get("output", {}).get("raw_byte_mismatches") != 0:
+        if not _json_exact(
+            layer.get("output", {}).get("raw_byte_mismatches"), 0
+        ):
             raise GateError(f"qrow32 output mismatch at {expected_layer}")
-        if layer.get("lse", {}).get("raw_byte_mismatches") != 0:
+        if not _json_exact(layer.get("lse", {}).get("raw_byte_mismatches"), 0):
             raise GateError(f"qrow32 LSE mismatch at {expected_layer}")
         slots = layer.get("slots")
-        if not isinstance(slots, list) or [slot.get("slot") for slot in slots] != [0, 1, 2, 3]:
+        if not isinstance(slots, list) or not _json_exact(
+            [slot.get("slot") for slot in slots], [0, 1, 2, 3]
+        ):
             raise GateError(f"qrow32 slot coverage drifted at {expected_layer}")
         if any(
-            slot.get(kind, {}).get("raw_byte_mismatches") != 0
+            not _json_exact(slot.get(kind, {}).get("raw_byte_mismatches"), 0)
             for slot in slots
             for kind in ("output", "lse")
         ):
@@ -281,11 +307,11 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
         campaign_arm.get("schema") != "fr13-fixed32-taw-campaign-arm-v1"
         or campaign_arm.get("state") != "ended"
         or campaign_arm.get("run_classification") != "b4_taw_diagnostic"
-        or campaign_arm.get("batch_size") != 4
-        or campaign_arm.get("concurrency") != 4
-        or campaign_arm.get("task_count") != 4
+        or not _json_exact(campaign_arm.get("batch_size"), 4)
+        or not _json_exact(campaign_arm.get("concurrency"), 4)
+        or not _json_exact(campaign_arm.get("task_count"), 4)
         or campaign_arm.get("subset_sha256") != EXACT4_SUBSET_SHA256
-        or campaign_arm.get("task_ids") != list(TASK_IDS)
+        or not _json_exact(campaign_arm.get("task_ids"), list(TASK_IDS))
         or campaign_arm.get("marker") != expected_marker
     ):
         raise GateError("qrow32 gate is not bound to the canonical exact4 arm")
@@ -294,8 +320,8 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
     if (
         campaign.get("schema") != "fr13-fixed32-qwen-campaign-provenance-v1"
         or campaign.get("metric_scope") != "concurrent_campaign_union"
-        or campaign.get("concurrency") != 4
-        or campaign.get("task_ids") != list(TASK_IDS)
+        or not _json_exact(campaign.get("concurrency"), 4)
+        or not _json_exact(campaign.get("task_ids"), list(TASK_IDS))
     ):
         raise GateError("qrow32 gate is not bound to canonical real exact4 provenance")
     return {
