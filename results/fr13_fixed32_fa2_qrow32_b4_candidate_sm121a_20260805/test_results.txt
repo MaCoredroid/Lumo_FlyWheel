@@ -1,0 +1,16 @@
+PASS pytest -q tests/test_fr13_fa2_qrow32_b4_candidate.py tests/test_fr13_fa2_tree_kernel_candidates.py tests/test_fr13_fa2_qrow32_gate.py tests/test_fr13_fa2_qrow32_static_gate.py
+43 passed in 2.78s
+
+PASS PYTHONPATH=src:.:/home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages pytest -q
+exit_code=0 collected_tests=3262
+
+PASS bash -n scripts/fr13_launch_forked_fa2_tree_server.sh scripts/fr13_run_b4_fa2_qrow32_live_gate.sh
+PASS python3 -m py_compile scripts/fr13_patch_fa2_tree_bias.py tests/test_fr13_fa2_qrow32_b4_candidate.py
+
+PASS scripts/fr13_fa2_qrow32_static_gate.py on guarded SM121a object and finalized candidate
+status=PASS gpu_used=false registers=252 spills=0 stack=0 local=0 shared=1024
+sass_ldl=0 sass_stl=0 sass_call=0
+defined_dynamic_diff=0 undefined_dynamic_diff=0 dt_needed_diff=0
+
+PENDING canonical real SWE-Verified exact4 B4 raw-byte A/B
+No GPU, Docker, timing probe, or synthetic workload was used.

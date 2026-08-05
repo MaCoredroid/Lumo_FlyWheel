@@ -722,6 +722,54 @@ void fr13_run_mha_fwd_fixed32_qrow32(
     static_assert(
         StaticLayout::query_heads
         == StaticLayout::kv_heads * StaticLayout::query_heads_per_kv);
+    TORCH_CHECK(
+        params.tree_bias_ptr != nullptr
+        && params.is_bf16
+        && !params.is_causal
+        && params.b == 4
+        && params.total_q == 128
+        && params.d == 256
+        && params.d_rounded == 256
+        && params.h == 24
+        && params.h_k == 4
+        && params.h_h_k_ratio == 6
+        && params.seqlen_q == 32
+        && params.seqlen_q_rounded == 128
+        && params.q_head_stride == 256
+        && params.k_batch_stride == 1024 * 4 * 256
+        && params.k_row_stride == 4 * 256
+        && params.k_head_stride == 256
+        && params.v_batch_stride == 1024 * 4 * 256
+        && params.v_row_stride == 4 * 256
+        && params.v_head_stride == 256
+        && params.o_head_stride == 256
+        && params.tree_bias_rows == 32
+        && params.tree_bias_cols == 32
+        && params.tree_bias_row_stride == 32
+        && params.tree_bias_col_stride == 1
+        && params.tree_bias_q_offset == 0
+        && params.tree_bias_k_offset == 0
+        && params.cu_seqlens_q != nullptr
+        && params.cu_seqlens_k != nullptr
+        && params.seqused_k != nullptr
+        && params.is_seqlens_k_cumulative
+        && !params.seqlenq_ngroups_swapped
+        && params.leftpad_k == nullptr
+        && params.cache_batch_idx == nullptr
+        && params.block_table != nullptr
+        && params.block_table_batch_stride > 0
+        && params.page_block_size == 1024
+        && params.window_size_left < 0
+        && params.window_size_right < 0
+        && params.alibi_slopes_ptr == nullptr
+        && params.knew_ptr == nullptr
+        && params.vnew_ptr == nullptr
+        && params.p_ptr == nullptr
+        && params.softmax_lse_ptr != nullptr
+        && params.p_dropout == 1.0f
+        && params.softcap == 0.0f
+        && params.num_splits == 0,
+        "FR13 qrow32 B4 launcher reached non-canonical geometry");
     // blockIdx.x is the query-head lane within a six-head GQA group;
     // blockIdx.z is therefore already the KV head. This remains 96 CTAs.
     dim3 grid(
@@ -3731,12 +3779,20 @@ FIXED32_QUERY_TILE32_LIVE_AB_HELPERS = r'''# FR13_FA2_QROW32_LIVE_PAGED_AB
 _FR13_FA2_QROW32_LIVE_AB_GRAPHS = {}
 _FR13_FA2_QROW32_LIVE_AB_ATTEMPTED = False
 _FR13_FA2_QROW32_LIVE_AB_PASSED = False
-_FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL = 131091
+_FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL = 131092
 _FR13_FA2_QROW32_LIVE_AB_ARMS = {
     "qrow32": {
         "sentinel": _FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL,
         "num_splits": 0,
-        "candidate_dispatch": "qrow32 exact geometry; no fallback",
+        "candidate_dispatch": "qrow32 BM32 exact B4 geometry; no fallback",
+        "candidate_so_sha256": (
+            "77f3fb22c19d0eb2ac0ec28230cf9401221425692a505efde62aa838760d81ce"
+        ),
+        "candidate_so_size": 299876120,
+        "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+        "fa2_source_closure_sha256": (
+            "3e3c18565e738f20d0a5ab5fe50d018f3d8cbd5cb94082dcd55ca730a790163c"
+        ),
     },
     "gqa_pair": {
         "sentinel": 131092,
@@ -4037,14 +4093,14 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
     fa2_source_closure_sha256 = os.environ.get(
         "FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256", ""
     )
-    if candidate_arm == "gqa_pair" and (
+    if (
         candidate_so_sha256 != candidate_contract["candidate_so_sha256"]
         or candidate_so_size != candidate_contract["candidate_so_size"]
         or fa2_head != candidate_contract["fa2_head"]
         or fa2_source_closure_sha256
         != candidate_contract["fa2_source_closure_sha256"]
     ):
-        raise RuntimeError("FR13 qrow32 GQA-pair binary/source provenance drifted")
+        raise RuntimeError("FR13 qrow32 binary/source provenance drifted")
     if (
         os.environ.get("FR13_DRAFT_VOCAB_K", "") != "65536"
         or os.environ.get("FR13_DRAFT_VOCAB_ROOT", "") != "1"
