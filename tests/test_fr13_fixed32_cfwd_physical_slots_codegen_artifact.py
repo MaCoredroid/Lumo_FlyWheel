@@ -16,10 +16,10 @@ def test_physical_slot_codegen_summary_is_narrow_and_spill_free() -> None:
     summary = json.loads((ARTIFACT / "codegen_summary.json").read_text())
     assert summary["status"] == "pass"
     assert summary["base_revision"] == (
-        "640c98539dfdb78923615db14871971ef53b0f19"
+        "3bdd984c2408467d321c35e758af3776983aaf38"
     )
     assert summary["candidate_revision"] == (
-        "a3443d40b9db4bf12475888a784a88812098d28e"
+        "1a53d3a01f73d89a6725ac0de94c65ef62bd5fef"
     )
     assert summary["schema"] == (
         "fr13.fixed32.cfwd_physical_slots_preseeded.sm121a.codegen.v1"
@@ -42,9 +42,18 @@ def test_physical_slot_codegen_summary_is_narrow_and_spill_free() -> None:
         "topology_index_scalar_loads_per_request_before": 24,
     }
     assert summary["safety_contract"] == {
+        "cfwd_integration_source_schema": (
+            "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+        ),
+        "cfwd_integration_source_sha256": (
+            "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+        ),
         "decision_padding_initialization_stores_per_event": 0,
         "decision_workspace_zero_seeded_once": True,
         "hot_walk_dynamic_load_masks_added": 0,
+        "incumbent_taw_source_sha256": (
+            "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
+        ),
         "leaf_child_table_source_zero_value": -1,
         "leaf_unwritten_source_value": 0,
         "runtime_source_contract_attests_physical_committer": True,
@@ -97,6 +106,8 @@ def test_physical_slot_artifact_states_unrun_real_gates() -> None:
     assert "not claim a runtime speedup" in readme
     assert "zero-seeded once" in readme
     assert "supersedes the unsafe" in readme
+    assert "separate CFWD integration source contract" in readme
+    assert "998bc633" in readme
     assert "one-task" in readme
     assert "4-task" in readme
     assert "16-task" in readme

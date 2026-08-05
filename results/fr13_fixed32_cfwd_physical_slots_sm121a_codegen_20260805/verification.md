@@ -13,7 +13,7 @@ From repository root, build twice with independent empty Triton caches:
 ```bash
 ART=results/fr13_fixed32_cfwd_physical_slots_sm121a_codegen_20260805
 PY=/home/mark/fr13_streamk_build/venv/bin/python
-REV=a3443d40b9db4bf12475888a784a88812098d28e
+REV=1a53d3a01f73d89a6725ac0de94c65ef62bd5fef
 
 CUDA_VISIBLE_DEVICES= \
 TRITON_CACHE_DIR=/dev/shm/fr13_cfwd_physical_slots_cache_a \

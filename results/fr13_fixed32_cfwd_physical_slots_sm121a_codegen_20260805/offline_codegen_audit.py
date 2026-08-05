@@ -28,7 +28,7 @@ from triton.compiler import ASTSource
 from triton.runtime.jit import MockTensor, create_function_from_signature
 
 
-BASE_REVISION = "640c98539dfdb78923615db14871971ef53b0f19"
+BASE_REVISION = "3bdd984c2408467d321c35e758af3776983aaf38"
 DEVICE_SOURCE = "scripts/fr13_device_multidraft_kernel.py"
 PRODUCER_SOURCE = "scripts/fr13_cfwd_logit_direct_decision_kernel.py"
 INCUMBENT_COMMIT = "_fr13_fixed32_taw_all_parent_commit_kernel"
@@ -492,11 +492,20 @@ def main() -> None:
             "decision_workspace_bytes_per_request_after": 1_048,
         },
         "safety_contract": {
+            "cfwd_integration_source_schema": (
+                "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+            ),
+            "cfwd_integration_source_sha256": (
+                "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+            ),
             "decision_workspace_zero_seeded_once": True,
             "decision_padding_initialization_stores_per_event": 0,
             "leaf_unwritten_source_value": 0,
             "leaf_child_table_source_zero_value": -1,
             "hot_walk_dynamic_load_masks_added": 0,
+            "incumbent_taw_source_sha256": (
+                "998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290"
+            ),
             "runtime_source_contract_attests_physical_committer": True,
         },
         "producer": {},

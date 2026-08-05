@@ -2,19 +2,23 @@
 
 This artifact supersedes the unsafe `d2348ce9` checkpoint and binds the
 default-off `fixed32_cfwd_logit_direct_physical_slots_v2` integration source
-`a3443d40b9db4bf12475888a784a88812098d28e` to offline SM121a codegen. Its
+`1a53d3a01f73d89a6725ac0de94c65ef62bd5fef` to offline SM121a codegen. Its
 frozen comparison base is current-main checkpoint
-`640c98539dfdb78923615db14871971ef53b0f19`, which contains the production
-BF16 SFWD `dt_bias` contract fix, the engaged Qrow16 SFWD byte gate, and the
-sanitized Gate B result artifact.
+`3bdd984c2408467d321c35e758af3776983aaf38`, including the default-off DFWD U8
+source and reproducible codegen artifact.
 
 The candidate keeps the fixed 13 self plus 17 target decision programs per
 request and their 81 stores, but scatters those products into physical 31/32
 slot workspaces. Every persistent workspace tensor is zero-seeded once before
 graph capture. Unwritten leaf decision slots therefore have safe values without
 adding initialization stores, dynamic load masks, or topology-map reads to a
-measured replay. The executed physical committer is also included in the
-fail-closed TAW runtime source contract.
+measured replay. The executed physical committer and CFWD execution wrappers
+are attested by the separate CFWD integration source contract
+`fr13.fixed32.cfwd_logit_direct.integration_source.v1` / `cc266bd4468c...`.
+They are not part of the incumbent TAW source contract. Its reviewed identity
+remains pinned to `998bc6331177469d...`, so this integration does not rekey the
+TAW contract. Fresh reviewed Hydra B4 and B1 credentials are still required
+before the CFWD shadow gate because no usable credential inputs were recovered.
 
 Exact work delta per request:
 
