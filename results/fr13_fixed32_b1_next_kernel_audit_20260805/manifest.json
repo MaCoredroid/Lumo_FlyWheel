@@ -1,0 +1,65 @@
+{
+  "schema": "fr13.fixed32.b1_next_kernel_audit.v1",
+  "created_at_utc": "2026-08-05T08:00:46Z",
+  "status": "evidence_gap_no_new_cuda_candidate",
+  "acceptance_valid": false,
+  "measurement_valid": false,
+  "performance_claim": false,
+  "gpu_runtime_used": false,
+  "docker_used": false,
+  "synthetic_or_probe_workload_used": false,
+  "source_snapshot": {
+    "main_commit": "ef250238a3a609ea5256ee292854d13e7c7aa6c6",
+    "qrow32_v3_commit": "5599995bb96de3eda4c88fd6e2b5707ce2ac95d9",
+    "r32_commit": "a3267649423e149b2198238c730154de044c320a",
+    "r64_commit": "8e213bbbf48e9417bc6c120011e0b91998ebdc19",
+    "bm8_commit": "a69566325b61d9cd80e82d2c7694142fff68c966",
+    "gdn_kernel_source_sha256": "4bd7e7c662cde06a68fe440aa93bfb3cdcfff96835b3404e245cdfe3d9a58075",
+    "cutlass_patch_source_sha256": "623582b257a13f7551c81aaf8e87f7542ddb4d6564636f5e177ec0807126a341"
+  },
+  "evidence": {
+    "hydra27_measurement_summary_sha256": "e776b3a977f00652f0917866911dfdb3252fda9e41f2e1538251ce303c581c73",
+    "nsight_diagnostic_summary_sha256": "b5af7e857b6040850a2fc5853316c5d926e44885e0fab40821d6ac8ccc34cfe4",
+    "nsight_floor_ledger_sha256": "3507bc71b5b7cf72d090de00d45b03a736493121be0a1680e4db19519714c8b4",
+    "nsight_attribution_sha256": "685c410a0ba09d00c8b244bfa06809530337cea383b88fa92a5da1013eadf2d0",
+    "nsight_measured_git_sha": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b",
+    "nsight_basis": "canonical_real_swe_verified_exact4_attribution_only"
+  },
+  "latest_valid_b1_hydra27": {
+    "full_step_wall_ms": 232.77979007137355,
+    "sfwd_gpu_ms": 159.61926324365674,
+    "dfwd_gpu_ms": 36.813368133731736,
+    "cfwd_gpu_ms": 20.677390556513288,
+    "residual_ms": 15.66976813747178,
+    "mandatory_weight_floor_ms": 119.658015414,
+    "acceptance_cap_ms": 137.6067177261,
+    "gap_to_cap_ms": 95.17307234527357
+  },
+  "next_unaddressed_group": {
+    "name": "verifier_full_vocab_bf16_head",
+    "kernel_instances_per_event": 1,
+    "kernel_ms_per_event": 12.152306946651533,
+    "mandatory_weight_bytes": 2542796800,
+    "weight_read_lower_bound_ms_at_273_gbps": 9.314273992673993,
+    "excess_over_weight_lower_bound_ms": 2.83803295397754,
+    "ratio_to_weight_lower_bound": 1.304697172985,
+    "compute_vs_memory_ncu": "UNMEASURED",
+    "new_candidate_staged": false,
+    "decision": "no byte-exact scheduler or math mutation is supported by current evidence"
+  },
+  "static_checks": {
+    "current_main_committer_layer_batch_tests": "26 passed",
+    "git_ancestry_reconciliation": "pass",
+    "artifact_json_parse": "pass",
+    "git_diff_check": "pass"
+  },
+  "not_run": [
+    "GPU kernel runtime",
+    "Docker",
+    "synthetic or probe timing",
+    "real SWE-Verified task execution",
+    "raw-byte comparison",
+    "B1 or B4 timing",
+    "hardware-floor acceptance"
+  ]
+}
