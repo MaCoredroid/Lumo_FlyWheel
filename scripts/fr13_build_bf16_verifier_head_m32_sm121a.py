@@ -59,6 +59,14 @@ def require_cutlass(cutlass_root: Path) -> tuple[Path, str]:
         raise RuntimeError(
             f"pinned build requires CUTLASS {EXPECTED_CUTLASS_COMMIT}, got {commit}"
         )
+    dirty = subprocess.run(
+        ["git", "-C", str(root), "status", "--porcelain=v1", "--untracked-files=all"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    if dirty:
+        raise RuntimeError("pinned build requires a clean CUTLASS source tree")
     return root, sha256_file(header)
 
 
@@ -155,17 +163,19 @@ def build(
             "mode": "0555",
         },
         "kernel_contract": {
-            "problem_mnk": [248320, 32, 5120],
+            "problem_mnk": [32, 248320, 5120],
             "logical_output": "BF16[32,248320] contiguous",
             "weight": "BF16[248320,5120] contiguous",
             "hidden": "BF16[32,5120] contiguous",
-            "threadblock_mnk": [128, 32, 64],
-            "warp_mnk": [64, 32, 64],
+            "threadblock_mnk": [32, 128, 64],
+            "warp_mnk": [32, 64, 64],
             "instruction_mnk": [16, 8, 16],
             "stages": 3,
             "split_k_slices": 1,
             "workspace_bytes": 0,
             "dynamic_shared_storage_bytes": 61440,
+            "logical_grid_mn": [1, 1940],
+            "logical_grid_ctas": 1940,
             "weight_bytes_per_launch": 2542796800,
             "vocabulary_reduced": False,
             "input_or_weight_quantized": False,
