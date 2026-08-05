@@ -56,6 +56,7 @@ def test_composed_validator_reexecutes_both_component_validators(
     cfwd_payload = {
         "integration_source_commit": source_commit,
         "task_ids": [compose.TASK_ID],
+        "qualified_batch": 1,
         "complete_work_census_events": 7,
         "final_flush_sha256": hashlib.sha256(final_raw).hexdigest(),
         "boundary_snapshot_sha256": hashlib.sha256(boundary_raw).hexdigest(),
@@ -108,6 +109,43 @@ def test_composed_validator_reexecutes_both_component_validators(
     assert result["component_validators_reexecuted"] is True
     assert result["performance_measurement"] is False
     assert result["sfwd_requires_separate_eager_qrow16_boot"] is True
+
+    forged_cfwd = dict(cfwd_payload)
+    forged_cfwd["qualified_batch"] = True
+    _write(tmp_path / "cfwd.json", forged_cfwd)
+    with pytest.raises(compose.GateError, match="recorded CFWD credential differs"):
+        compose.validate_composed_gate(
+            repo=ROOT,
+            source_commit=source_commit,
+            cfwd_credential=tmp_path / "cfwd.json",
+            cfwd_live_result=tmp_path / "cfwd-live.json",
+            dfwd_gate=tmp_path / "dfwd.json",
+            dfwd_live_result=tmp_path / "dfwd-live.json",
+            candidate_so=tmp_path / "candidate.so",
+            fa2_so=tmp_path / "fa2.so",
+            final_flush=tmp_path / "final.json",
+            boundary_snapshot=tmp_path / "boundary.json",
+            traffic_audit=tmp_path / "traffic.json",
+        )
+
+    _write(tmp_path / "cfwd.json", cfwd_payload)
+    forged_dfwd = dict(dfwd_payload)
+    forged_dfwd["completed_events"] = 7.0
+    _write(tmp_path / "dfwd.json", forged_dfwd)
+    with pytest.raises(compose.GateError, match="recorded DFWD U8 result differs"):
+        compose.validate_composed_gate(
+            repo=ROOT,
+            source_commit=source_commit,
+            cfwd_credential=tmp_path / "cfwd.json",
+            cfwd_live_result=tmp_path / "cfwd-live.json",
+            dfwd_gate=tmp_path / "dfwd.json",
+            dfwd_live_result=tmp_path / "dfwd-live.json",
+            candidate_so=tmp_path / "candidate.so",
+            fa2_so=tmp_path / "fa2.so",
+            final_flush=tmp_path / "final.json",
+            boundary_snapshot=tmp_path / "boundary.json",
+            traffic_audit=tmp_path / "traffic.json",
+        )
 
 
 def test_composed_validator_rejects_component_event_drift(

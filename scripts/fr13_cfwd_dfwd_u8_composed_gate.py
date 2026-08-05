@@ -110,7 +110,7 @@ def validate_composed_gate(
             source_commit=source_commit,
             output=Path(scratch) / "cfwd.json",
         )
-    if cfwd_payload != expected_cfwd:
+    if not dfwd._json_exact(cfwd_payload, expected_cfwd):
         raise GateError("recorded CFWD credential differs from unchanged validator")
 
     expected_dfwd = dfwd.validate_gate(
@@ -129,7 +129,7 @@ def validate_composed_gate(
         chat_traffic_audit=paths["traffic_audit"],
         repo=repo,
     )
-    if dfwd_payload != expected_dfwd:
+    if not dfwd._json_exact(dfwd_payload, expected_dfwd):
         raise GateError("recorded DFWD U8 result differs from unchanged validator")
 
     final_raw = _regular(paths["final_flush"], "shared final flush")
