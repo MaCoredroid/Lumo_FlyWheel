@@ -1,0 +1,36 @@
+{
+  "schema": "fr13.fixed32.sfwd_conv_postprep.record_digest_summary.v1",
+  "source_commit": "a8a904ed6c27a6338d43151038c155ebb76e3656",
+  "source_raw_jsonl_sha256": "26184365c8ffb5eb43b848040b3a2678075c31acd86776d31d4c4df9ce91a504",
+  "source_raw_jsonl_bytes": 63465552,
+  "source_native": {
+    "attempt_first": 1,
+    "attempt_last": 417,
+    "attempts": 417,
+    "records": 20016,
+    "layer_count": 48,
+    "records_per_attempt_min": 48,
+    "records_per_attempt_max": 48,
+    "surfaces_per_record_min": 7,
+    "surfaces_per_record_max": 7,
+    "surface_comparisons": 140112,
+    "bad_records": 0
+  },
+  "live_pass_native": {
+    "comparisons": 336,
+    "calculation": "48 layers x 7 byte surfaces",
+    "mismatches": 0,
+    "differing_bytes": 0
+  },
+  "derived_final_40_attempt_window": {
+    "derived": true,
+    "attempt_first": 378,
+    "attempt_last": 417,
+    "attempts": 40,
+    "expected_records": 1920,
+    "observed_records": 1920,
+    "zero_mismatch_records": 1920,
+    "bad_records": 0,
+    "surfaces_per_record": 7
+  }
+}

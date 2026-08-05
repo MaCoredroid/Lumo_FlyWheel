@@ -1,0 +1,117 @@
+{
+  "acceptance_valid": false,
+  "batch_size": 1,
+  "binary_attestation_sha256": "5dba47215cc3b6a250bab761a45a8e6eb56ed42edbd1539469f2a2b0f2ee27b5",
+  "candidate": "identity_wide256_fullgrid_b1",
+  "candidate_bytes": 119704312,
+  "candidate_family": "identity_wide256_fullgrid_b1",
+  "candidate_sha256": "d8c6502e7a166e6d2124576a9e36814401d6dbc215516adfffa7ac436f93ba0f",
+  "comparator_timing_eligible": false,
+  "comparison_call_limit": 320,
+  "comparisons": 320,
+  "concurrency": 1,
+  "container_env_sha256": "25c7503b8e1cc9f260c835fcbe5c01937c8edd3b8f2ce00c3c68044057e944a5",
+  "diagnostic_selector": "identity_wide256_fullgrid_b1_byte_ab",
+  "diagnostic_task_profile": "astropy12907",
+  "differing_bytes": 0,
+  "draft_vocab_blocks": "/workspace/scripts/fr13_dvk_subset_blocks.json",
+  "draft_vocab_blocks_sha256": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff",
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "errors": [],
+  "fixed_rows": 32,
+  "floor_acceptance_eligible": false,
+  "mandatory_weight_bytes": 32666638208,
+  "mandatory_weight_floor_ms": 119.658015414,
+  "mismatching_comparisons": 0,
+  "observed_m_values": [
+    32
+  ],
+  "observed_projection_nk": [
+    [
+      5120,
+      6144
+    ],
+    [
+      5120,
+      17408
+    ],
+    [
+      14336,
+      5120
+    ],
+    [
+      16384,
+      5120
+    ],
+    [
+      34816,
+      5120
+    ]
+  ],
+  "one_sided_u95_cap_ms": 137.6067177261,
+  "patch_source_sha256": "ae9591a0c255c54bd8b5fed8576105013fce7f5f0834dbfb51ca1d455441f976",
+  "patched_dispatch_sha256": "569aea20321ba5461c4d3c9187aadf5390be363485f9aee538a738ef269ca6f0",
+  "production_enabled": false,
+  "qualification_profile": "k64_root",
+  "real_task_arm_sha256": "25f212245290d68dce2340f678501e8b5d9b74ffdb09b19f8bb701700dd9b234",
+  "run_classification": "one_real_swe_verified_b1_k64_root_byte_diagnostic",
+  "schema": "fr13.fixed32.cutlass_identity_wide256_fullgrid_b1_k64_root_live_gate.v1",
+  "served_result": "stock",
+  "source_commit": "a8a904ed6c27a6338d43151038c155ebb76e3656",
+  "source_identity": {
+    "files": {
+      "scripts/fr10_phase4_patch_vllm_tree_gdn.py": {
+        "bytes": 1867407,
+        "sha256": "d298bdc0a21b2dcba3dbc88f2f0b39720ee3a1202f22e73c8628bae936c8df90"
+      },
+      "scripts/fr13_bigdenom_swe_serve_variant.sh": {
+        "bytes": 137546,
+        "sha256": "ac8b5b0c9fe60c4faa9d63de991dd227d67c1265bc3a856be5c761e7381fd4d9"
+      },
+      "scripts/fr13_cutlass_streamk_pass.py": {
+        "bytes": 53088,
+        "sha256": "c362caf67362b27c6b6cd2f29ac8ad420c8a6bd5120ecb27a08c3bff10261fdd"
+      },
+      "scripts/fr13_cutlass_wave_binary.py": {
+        "bytes": 35947,
+        "sha256": "fa458896f054e52bcd8e65e7cfc1b5dd30daf4c8585cfce2a54e6ae058799557"
+      },
+      "scripts/fr13_fixed32_contract.py": {
+        "bytes": 112772,
+        "sha256": "4440f0de59f2059cd3d117b9a29ed2a742fd3b24bab739c89e74e61c9e43c8d6"
+      },
+      "scripts/fr13_launch_forked_fa2_tree_server.sh": {
+        "bytes": 303197,
+        "sha256": "60a2a024d65c36d9f7708817cd86d12792d15892f43739836491213c564fcd6d"
+      },
+      "scripts/fr13_patch_cutlass_fixed32_wave.py": {
+        "bytes": 108166,
+        "sha256": "ae9591a0c255c54bd8b5fed8576105013fce7f5f0834dbfb51ca1d455441f976"
+      },
+      "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh": {
+        "bytes": 23189,
+        "sha256": "80fd1efb8930b25300e37a5f1ca634e906d4affdd26ab77f9acc23577a5727f2"
+      },
+      "scripts/fr13_run_b1_kernel_live_gate.sh": {
+        "bytes": 32486,
+        "sha256": "489e69cec9a3e7bde60ff4ee87377cb299f1e6335b37259e876ff847aeb1c712"
+      },
+      "scripts/run_swe_bench_q36_a.py": {
+        "bytes": 386958,
+        "sha256": "7b66aa3c2815b646b464ac63aafde2cfbecb416fcd68137086b931b12d677bf9"
+      }
+    },
+    "schema": "fr13.fixed32.cutlass_streamk.source_binding.v1",
+    "source_commit": "a8a904ed6c27a6338d43151038c155ebb76e3656"
+  },
+  "status": "pass",
+  "task_count": 1,
+  "task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "task_marker": "swe_verified:astropy__astropy-12907",
+  "task_set": "one real SWE-Verified B1 diagnostic task",
+  "timing_eligible": false,
+  "vllm_base_commit": "fe9c3d6c5f66c873d196800384ed6880687b9e52"
+}

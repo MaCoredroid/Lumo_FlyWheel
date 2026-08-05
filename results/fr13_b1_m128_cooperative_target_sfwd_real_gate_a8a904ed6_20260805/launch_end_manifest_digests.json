@@ -1,0 +1,38 @@
+{
+  "schema": "fr13.fixed32.b1_cooperative_gate.launch_end_manifest_digests.v1",
+  "standalone_target": {
+    "runtime": {
+      "launch_sha256": "cff12f451b78625d04a4a86f91eef40fd07b3d5d3445f6a7efbfffe6c63ba011",
+      "end_sha256": "cff12f451b78625d04a4a86f91eef40fd07b3d5d3445f6a7efbfffe6c63ba011",
+      "bytes": 25896,
+      "byte_identical": true
+    },
+    "external": {
+      "launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+      "end_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+      "bytes": 11346,
+      "byte_identical": true
+    }
+  },
+  "combined_qrow16_target_sfwd": {
+    "runtime": {
+      "launch_sha256": "cff12f451b78625d04a4a86f91eef40fd07b3d5d3445f6a7efbfffe6c63ba011",
+      "end_sha256": "cff12f451b78625d04a4a86f91eef40fd07b3d5d3445f6a7efbfffe6c63ba011",
+      "bytes": 25896,
+      "byte_identical": true
+    },
+    "external": {
+      "launch_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+      "end_sha256": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+      "bytes": 11346,
+      "byte_identical": true
+    },
+    "sfwd_source": {
+      "launch_sha256": "29f966890b6d9ad65ffecacd812207843ad72a0470c03551eb2705170b4d247e",
+      "installed_sha256": "29f966890b6d9ad65ffecacd812207843ad72a0470c03551eb2705170b4d247e",
+      "end_sha256": "29f966890b6d9ad65ffecacd812207843ad72a0470c03551eb2705170b4d247e",
+      "bytes": 2599,
+      "byte_identical": true
+    }
+  }
+}
