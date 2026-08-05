@@ -116,6 +116,8 @@ def test_patch_is_default_off_and_shape_gated() -> None:
     assert 'value == "identity_divisor_b4_byte_ab"' in patched
     assert 'value == "identity_hybrid_n5120_b4"' in patched
     assert 'value == "identity_hybrid_n5120_b4_byte_ab"' in patched
+    assert 'value == "k64_head_m256_byte_ab"' in patched
+    assert 'value == "k64_head_m256"' not in patched
     assert "return fixed32_cutlass_wave_variant::stock;" in patched
     for rows in (32, 64, 96, 128):
         assert f"m == {rows}" in patched
@@ -135,7 +137,7 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 24
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 25
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
@@ -920,6 +922,84 @@ def test_mtp_m1m4_direct_is_diagnostic_only_exact_stock_math() -> None:
     assert "constexpr int64_t mtp_m1m4_byte_ab_limit = 320" in patched
     assert "run_stock(out);\n    run_candidate(candidate);" in patched
     assert "return run_stock(out);" in patched
+
+
+def test_k64_head_m256_is_exact_default_off_byte_compare_candidate() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    wrapper_start = patched.index(
+        "struct cutlass_3x_gemm_fp8_blockwise_k64_head_m256"
+    )
+    wrapper_end = patched.index(
+        "struct cutlass_3x_gemm_fp8_blockwise_m128_divisor_static",
+        wrapper_start,
+    )
+    wrapper = patched[wrapper_start:wrapper_end]
+    assert "typename Base::CollectiveEpilogue" in wrapper
+    assert "typename Base::ElementAccumulator" in wrapper
+    assert "MainloopStageCount" in wrapper
+    assert "fr13_fixed32_k64_head_m256_scheduler" in wrapper
+    assert "StreamK" not in wrapper
+    assert "Identity" not in wrapper
+
+    selector_start = patched.index(
+        "vllm::fr13_fixed32_k64_head_m256_scheduler"
+    )
+    selector_end = patched.index("};", selector_start)
+    selector = patched[selector_start:selector_end]
+    assert "using Scheduler = Fr13B1OneNStaticTileScheduler100;" in selector
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_swapab_k64_head_m256"
+    )
+    config_end = patched.index(
+        "enum class fixed32_cutlass_wave_variant", config_start
+    )
+    config = patched[config_start:config_end]
+    assert "KernelTmaWarpSpecializedBlockwiseCooperativeSm120" in config
+    assert "using TileShape = Shape<_256, _32, _128>;" in config
+    assert "OutType, 128, 1, 128, TileShape, ClusterShape" in config
+    assert "cutlass::gemm::collective::StageCount<2>" in config
+
+    assert "(m == 1 || m == 4) && n == 65536 && k == 5120" in patched
+    assert "k64_head_m256_selection" in patched
+    assert "fixed32_cutlass_k64_head_m1m4(M, N, K)" in patched
+    assert "run_k64_head_m256(destination)" in patched
+    assert "(k64_head_m256_byte_ab && M == 4)" in patched
+    assert (
+        '"/logs/fr13_fixed32_cutlass_k64_head_m256_byte_ab.jsonl"'
+        in patched
+    )
+    assert "fr13.fixed32.cutlass_k64_head_m256_byte_ab.v1" in patched
+    assert "run_stock(out);\n    run_candidate(candidate);" in patched
+    assert "return run_stock(out);" in patched
+
+    # The swap-AB problem is 65536xB. M256 halves the stock M128 output
+    # tiles, and B1/B4 each remain exactly one scheduler-N tile.
+    for batch in (1, 4):
+        assert (65_536 + 256 - 1) // 256 == 256
+        assert (batch + 32 - 1) // 32 == 1
+
+
+def test_k64_head_m256_offline_builder_is_pinned_and_single_tu() -> None:
+    builder = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "fr13_build_dfwd_k64_fp8_head_m256_sm121a.sh"
+    ).read_text(encoding="ascii")
+
+    assert "fe9c3d6c5f66c873d196800384ed6880687b9e52" in builder
+    assert "da5e086dab31d63815acafdac9a9c5893b1c69e2" in builder
+    assert "c8efe4917d5f207e23ca3c5b44feb6a2e704594dd35bc0a9d212a5fa431105ea" in builder
+    assert 'PATCHER="$REPO/scripts/fr13_patch_cutlass_fixed32_wave.py"' in builder
+    assert builder.count("/usr/local/cuda/bin/nvcc") == 1
+    assert "arch=compute_121a,code=sm_121a" in builder
+    assert "--resource-usage" in builder
+    assert "CUDA_VISIBLE_DEVICES=''" in builder
+    assert "torch.ops.load_library" in builder
+    assert "docker" not in builder.lower()
+    assert "nvidia-smi" not in builder
 
 
 def test_b1_n5120_single_tile_scheduler_removes_persistent_advance() -> None:

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Add default-off fixed32 CUTLASS projection candidates to pinned vLLM.
+"""Add default-off fixed32 CUTLASS projection/head candidates to pinned vLLM.
 
-The candidate selector is restricted to the real Qwen3.6 projection histogram.
-It does not alter quantization granularity, tile K, accumulation type, or the
-BF16/FP16 epilogue. Scheduler-only variants keep each output tile's complete
-ordered K reduction. Unset and unknown selector values retain stock dispatch.
+Selectors are restricted to the real Qwen3.6 projection histogram or the exact
+K64 head. They do not alter quantization granularity, tile K, accumulation
+type, or the BF16/FP16 epilogue. Scheduler-only variants keep each output
+tile's complete ordered K reduction. Unset and unknown selectors retain stock
+dispatch.
 """
 
 from __future__ import annotations
@@ -74,6 +75,7 @@ struct fr13_fixed32_m128_static_scheduler {};
 struct fr13_fixed32_m128_divisor_static_scheduler {};
 struct fr13_fixed32_b1_onen_static_scheduler {};
 struct fr13_fixed32_mtp_m1m4_direct_scheduler {};
+struct fr13_fixed32_k64_head_m256_scheduler {};
 struct fr13_fixed32_b1_n5120_single_tile_scheduler {};
 struct fr13_fixed32_b1_onen_fullgrid_static_scheduler {};
 struct fr13_fixed32_b1_wide256_direct_fullgrid_scheduler {};
@@ -985,6 +987,14 @@ struct TileSchedulerSelector<
 template <class TileShape, class ClusterShape,
           uint32_t SchedulerPipelineStageCount>
 struct TileSchedulerSelector<
+    vllm::fr13_fixed32_k64_head_m256_scheduler, arch::Sm120,
+    TileShape, ClusterShape, SchedulerPipelineStageCount> {
+  using Scheduler = Fr13B1OneNStaticTileScheduler100;
+};
+
+template <class TileShape, class ClusterShape,
+          uint32_t SchedulerPipelineStageCount>
+struct TileSchedulerSelector<
     vllm::fr13_fixed32_b1_n5120_single_tile_scheduler, arch::Sm120,
     TileShape, ClusterShape, SchedulerPipelineStageCount> {
   using Scheduler = Fr13B1N5120SingleTileScheduler100;
@@ -1152,6 +1162,53 @@ struct cutlass_3x_gemm_fp8_blockwise_mtp_m1m4_direct
       Shape<int, int, int, int>, typename Base::CollectiveMainloop,
       typename Base::CollectiveEpilogue,
       fr13_fixed32_mtp_m1m4_direct_scheduler>>;
+
+  struct GemmKernel : public KernelType {};
+};
+
+// The exact K64 head has one scheduler-N tile after swap-AB.  Widen its
+// scheduler-M tile from 128 to 256 while retaining the FP32 accumulator,
+// ordered full-K reduction, stock epilogue, and a legal two-stage mainloop.
+template <
+    class OutType, int ScaleGranularityM, int ScaleGranularityN,
+    int ScaleGranularityK, class MmaTileShape, class ClusterShape,
+    class EpilogueScheduler, class MainloopScheduler, bool swap_ab_,
+    class MainloopStageCount>
+struct cutlass_3x_gemm_fp8_blockwise_k64_head_m256
+    : cutlass_3x_gemm_fp8_blockwise<
+          OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
+          MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
+          swap_ab_> {
+  using Base = cutlass_3x_gemm_fp8_blockwise<
+      OutType, ScaleGranularityM, ScaleGranularityN, ScaleGranularityK,
+      MmaTileShape, ClusterShape, EpilogueScheduler, MainloopScheduler,
+      swap_ab_>;
+
+  using CollectiveMainloop = conditional_t<
+      Base::swap_ab,
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          typename Base::ElementB,
+          cute::tuple<typename Base::LayoutB_Transpose,
+                      typename Base::LayoutSFA>,
+          Base::AlignmentB, typename Base::ElementA,
+          cute::tuple<typename Base::LayoutA_Transpose,
+                      typename Base::LayoutSFB>,
+          Base::AlignmentA, typename Base::ElementAccumulator, MmaTileShape,
+          ClusterShape, MainloopStageCount, MainloopScheduler>::CollectiveOp,
+      typename cutlass::gemm::collective::CollectiveBuilder<
+          typename Base::ArchTag, typename Base::OperatorClass,
+          typename Base::ElementA,
+          cute::tuple<typename Base::LayoutA, typename Base::LayoutSFA>,
+          Base::AlignmentA, typename Base::ElementB,
+          cute::tuple<typename Base::LayoutB, typename Base::LayoutSFB>,
+          Base::AlignmentB, typename Base::ElementAccumulator, MmaTileShape,
+          ClusterShape, MainloopStageCount, MainloopScheduler>::CollectiveOp>;
+
+  using KernelType = enable_sm120_family<cutlass::gemm::kernel::GemmUniversal<
+      Shape<int, int, int, int>, CollectiveMainloop,
+      typename Base::CollectiveEpilogue,
+      fr13_fixed32_k64_head_m256_scheduler>>;
 
   struct GemmKernel : public KernelType {};
 };
@@ -1661,6 +1718,20 @@ struct sm120_blockwise_fp8_config_swapab_mtp_m1m4_direct {
       EpilogueSchedule, KernelSchedule, true>;
 };
 
+template <typename OutType>
+struct sm120_blockwise_fp8_config_swapab_k64_head_m256 {
+  using KernelSchedule =
+      cutlass::gemm::KernelTmaWarpSpecializedBlockwiseCooperativeSm120;
+  using EpilogueSchedule =
+      cutlass::epilogue::collective::EpilogueScheduleAuto;
+  using TileShape = Shape<_256, _32, _128>;
+  using ClusterShape = Shape<_1, _1, _1>;
+  using Gemm = cutlass_3x_gemm_fp8_blockwise_k64_head_m256<
+      OutType, 128, 1, 128, TileShape, ClusterShape,
+      EpilogueSchedule, KernelSchedule, true,
+      cutlass::gemm::collective::StageCount<2>>;
+};
+
 enum class fixed32_cutlass_wave_variant {
   stock,
   stream_k_cooperative_128,
@@ -1702,6 +1773,7 @@ enum class fixed32_cutlass_wave_variant {
   identity_fullm_b4,
   identity_fullm_b4_byte_ab,
   mtp_m1m4_direct_byte_ab,
+  k64_head_m256_byte_ab,
 };
 
 static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
@@ -1832,6 +1904,9 @@ static inline fixed32_cutlass_wave_variant fixed32_cutlass_wave_selection() {
     if (value == "mtp_m1m4_direct_byte_ab") {
       return fixed32_cutlass_wave_variant::mtp_m1m4_direct_byte_ab;
     }
+    if (value == "k64_head_m256_byte_ab") {
+      return fixed32_cutlass_wave_variant::k64_head_m256_byte_ab;
+    }
     return fixed32_cutlass_wave_variant::stock;
   }();
   return selection;
@@ -1905,6 +1980,11 @@ static inline bool fixed32_cutlass_mtp_m1m4_projection(int m, int n, int k) {
       (n == 16384 && k == 5120) ||
       (n == 14336 && k == 5120);
   return mtp_rows && real_projection;
+}
+
+static inline bool fixed32_cutlass_k64_head_m1m4(
+    int m, int n, int k) {
+  return (m == 1 || m == 4) && n == 65536 && k == 5120;
 }
 
 static inline bool fixed32_cutlass_b1_onen_projection(int m, int n, int k) {
@@ -1996,10 +2076,15 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool mtp_m1m4_direct_selection =
       selected_wave_variant ==
       fixed32_cutlass_wave_variant::mtp_m1m4_direct_byte_ab;
+  const bool k64_head_m256_selection =
+      selected_wave_variant ==
+      fixed32_cutlass_wave_variant::k64_head_m256_byte_ab;
   fixed32_cutlass_wave_variant wave_variant =
       (fixed32_cutlass_real_projection(M, N, K) ||
        (mtp_m1m4_direct_selection &&
-        fixed32_cutlass_mtp_m1m4_projection(M, N, K)))
+        fixed32_cutlass_mtp_m1m4_projection(M, N, K)) ||
+       (k64_head_m256_selection &&
+        fixed32_cutlass_k64_head_m1m4(M, N, K)))
           ? selected_wave_variant
           : fixed32_cutlass_wave_variant::stock;
   // The normal-layout 128x256 forced-StreamK specialization returned CUTLASS
@@ -2121,6 +2206,10 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       mtp_m1m4_direct_selection) {
     wave_variant = fixed32_cutlass_wave_variant::stock;
   }
+  if (!fixed32_cutlass_k64_head_m1m4(M, N, K) &&
+      k64_head_m256_selection) {
+    wave_variant = fixed32_cutlass_wave_variant::stock;
+  }
 
   auto run_stream_k = [&](torch::stable::Tensor& destination) {
     if (M <= 64) {
@@ -2176,6 +2265,13 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   auto run_mtp_m1m4_direct = [&](torch::stable::Tensor& destination) {
     using Gemm = typename
         sm120_blockwise_fp8_config_swapab_mtp_m1m4_direct<OutType>::Gemm;
+    return cutlass_gemm_caller_blockwise<Gemm>(
+        destination, a, b, a_scales, b_scales);
+  };
+
+  auto run_k64_head_m256 = [&](torch::stable::Tensor& destination) {
+    using Gemm = typename
+        sm120_blockwise_fp8_config_swapab_k64_head_m256<OutType>::Gemm;
     return cutlass_gemm_caller_blockwise<Gemm>(
         destination, a, b, a_scales, b_scales);
   };
@@ -2450,6 +2546,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
   const bool mtp_m1m4_direct_byte_ab =
       wave_variant ==
       fixed32_cutlass_wave_variant::mtp_m1m4_direct_byte_ab;
+  const bool k64_head_m256_byte_ab =
+      wave_variant ==
+      fixed32_cutlass_wave_variant::k64_head_m256_byte_ab;
   if (wave_variant ==
           fixed32_cutlass_wave_variant::stream_k_cooperative_128_byte_ab ||
       wide256_byte_ab || static_persistent_byte_ab ||
@@ -2462,8 +2561,11 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       identity_stockshape_stage2_b4_byte_ab || identity_divisor_b4_byte_ab ||
       identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab ||
       identity_hybrid_n5120_b4_byte_ab || identity_fullm_b4_byte_ab ||
-      mtp_m1m4_direct_byte_ab) {
+      mtp_m1m4_direct_byte_ab || k64_head_m256_byte_ab) {
     auto run_candidate = [&](torch::stable::Tensor& destination) {
+      if (k64_head_m256_byte_ab) {
+        return run_k64_head_m256(destination);
+      }
       if (mtp_m1m4_direct_byte_ab) {
         return run_mtp_m1m4_direct(destination);
       }
@@ -2533,7 +2635,8 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
          identity_divisor_b4_byte_ab ||
          identity_divisor_stage2_b4_byte_ab || identity_twom_b4_byte_ab ||
          identity_hybrid_n5120_b4_byte_ab || identity_fullm_b4_byte_ab ||
-         (mtp_m1m4_direct_byte_ab && M == 4))
+         (mtp_m1m4_direct_byte_ab && M == 4) ||
+         (k64_head_m256_byte_ab && M == 4))
             ? fixed32_cutlass_b4_real_task_marker()
             : fixed32_cutlass_real_task_marker();
     if (task_marker.empty()) {
@@ -2600,7 +2703,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       }
     }
     const char* log_path =
-        mtp_m1m4_direct_byte_ab
+        k64_head_m256_byte_ab
+            ? "/logs/fr13_fixed32_cutlass_k64_head_m256_byte_ab.jsonl"
+        : mtp_m1m4_direct_byte_ab
             ? "/logs/fr13_fixed32_cutlass_mtp_m1m4_direct_byte_ab.jsonl"
         : identity_wide256_fullgrid_b1_byte_ab
             ? "/logs/fr13_fixed32_cutlass_identity_wide256_fullgrid_b1_byte_ab.jsonl"
@@ -2646,7 +2751,9 @@ DISPATCH_REPLACEMENT = """  int M = a.size(0), N = b.size(1), K = a.size(1);
       STD_TORCH_CHECK(log.good(),
                       "FR13 Stream-K byte A/B could not open JSONL");
       log << "{\\\"schema\\\":\\\""
-          << (mtp_m1m4_direct_byte_ab
+          << (k64_head_m256_byte_ab
+                  ? "fr13.fixed32.cutlass_k64_head_m256_byte_ab.v1"
+              : mtp_m1m4_direct_byte_ab
                   ? "fr13.fixed32.cutlass_mtp_m1m4_direct_byte_ab.v1"
               : identity_wide256_fullgrid_b1_byte_ab
                   ? "fr13.fixed32.cutlass_identity_wide256_fullgrid_b1_byte_ab.v1"

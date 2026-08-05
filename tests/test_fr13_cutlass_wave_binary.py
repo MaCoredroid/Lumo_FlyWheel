@@ -68,6 +68,7 @@ def test_pinned_binary_identity_and_selectors() -> None:
         "identity_fullm_b4",
         "identity_fullm_b4_byte_ab",
         "mtp_m1m4_direct_byte_ab",
+        "k64_head_m256_byte_ab",
         "identity_divisor_b4",
         "identity_divisor_b4_byte_ab",
         "persistent_b4_m128",
@@ -228,6 +229,17 @@ def test_pinned_binary_identity_and_selectors() -> None:
     )
     assert module.MTP_M1M4_DIRECT_CANDIDATE_SIZE == 119_471_552
     assert "mtp_m1m4_direct_byte_ab" not in module.PRODUCTION_SELECTORS
+    assert module.candidate_identity("k64_head_m256_byte_ab") == (
+        module.K64_HEAD_M256_CANDIDATE_SHA256,
+        module.K64_HEAD_M256_CANDIDATE_SIZE,
+        "k64_head_m256",
+    )
+    assert module.K64_HEAD_M256_CANDIDATE_SHA256 == (
+        "d5eb3fe2204766556095a23ccfa98f1d4e13ab0cfa2a54bc23e3bc23a428d7c8"
+    )
+    assert module.K64_HEAD_M256_CANDIDATE_SIZE == 121_825_176
+    assert module.K64_HEAD_M256_SELECTORS == {"k64_head_m256_byte_ab"}
+    assert "k64_head_m256_byte_ab" not in module.PRODUCTION_SELECTORS
     assert module.B4_M128_CANDIDATE_SHA256 == (
         "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
     )

@@ -74,6 +74,10 @@ MTP_M1M4_DIRECT_CANDIDATE_SHA256 = (
     "65250ccb46057e4726f68b6056eab3e46f71a1bee2ce25eca306d4d889a66ecc"
 )
 MTP_M1M4_DIRECT_CANDIDATE_SIZE = 119_471_552
+K64_HEAD_M256_CANDIDATE_SHA256 = (
+    "d5eb3fe2204766556095a23ccfa98f1d4e13ab0cfa2a54bc23e3bc23a428d7c8"
+)
+K64_HEAD_M256_CANDIDATE_SIZE = 121_825_176
 B4_M128_CANDIDATE_SHA256 = (
     "895495fe82cb0e0278d3b0a39b8e57e1281aa73a10bbba01a94085733c81d64f"
 )
@@ -146,6 +150,7 @@ IDENTITY_FULLM_B4_SELECTORS = frozenset(
     {"identity_fullm_b4", "identity_fullm_b4_byte_ab"}
 )
 MTP_M1M4_DIRECT_SELECTORS = frozenset({"mtp_m1m4_direct_byte_ab"})
+K64_HEAD_M256_SELECTORS = frozenset({"k64_head_m256_byte_ab"})
 IDENTITY_DIVISOR_B4_SELECTORS = frozenset(
     {"identity_divisor_b4", "identity_divisor_b4_byte_ab"}
 )
@@ -170,6 +175,7 @@ CANDIDATE_SELECTORS = (
     | IDENTITY_WIDE256_FULLGRID_B1_SELECTORS
     | IDENTITY_FULLM_B4_SELECTORS
     | MTP_M1M4_DIRECT_SELECTORS
+    | K64_HEAD_M256_SELECTORS
     | IDENTITY_DIVISOR_B4_SELECTORS
     | B4_M128_SELECTORS
     | STATIC_B4_M128_SELECTORS
@@ -301,6 +307,12 @@ def candidate_identity(selector: str) -> tuple[str, int, str]:
             MTP_M1M4_DIRECT_CANDIDATE_SIZE,
             "mtp_m1m4_direct",
         )
+    if selector in K64_HEAD_M256_SELECTORS:
+        return (
+            K64_HEAD_M256_CANDIDATE_SHA256,
+            K64_HEAD_M256_CANDIDATE_SIZE,
+            "k64_head_m256",
+        )
     if selector in IDENTITY_DIVISOR_B4_SELECTORS:
         return (
             IDENTITY_B4_CANDIDATE_SHA256,
@@ -331,6 +343,7 @@ def _verify_qualification_profile(
             | IDENTITY_WIDE256_FULLGRID_B1_SELECTORS
             | IDENTITY_FULLM_B4_SELECTORS
             | MTP_M1M4_DIRECT_SELECTORS
+            | K64_HEAD_M256_SELECTORS
         )
         and qualification_profile != "k64_root"
     ):
@@ -378,6 +391,7 @@ def verify_candidate(
         | IDENTITY_WIDE256_FULLGRID_B1_SELECTORS
         | IDENTITY_FULLM_B4_SELECTORS
         | MTP_M1M4_DIRECT_SELECTORS
+        | K64_HEAD_M256_SELECTORS
     ):
         result["qualification_profile"] = qualification_profile
     if selector in STATIC_B4_M128_SELECTORS:
@@ -871,6 +885,8 @@ def install_candidate(
         | IDENTITY_HYBRID_N5120_B4_SELECTORS
         | IDENTITY_WIDE256_FULLGRID_B1_SELECTORS
         | IDENTITY_FULLM_B4_SELECTORS
+        | MTP_M1M4_DIRECT_SELECTORS
+        | K64_HEAD_M256_SELECTORS
     ):
         payload["qualification_profile"] = qualification_profile
     if qualification is not None:
