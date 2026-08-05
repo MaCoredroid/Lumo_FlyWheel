@@ -2846,9 +2846,9 @@ def _expected_runtime_fa2_identity(
         raise ContractError(
             "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, or split2"
         )
-    if qrow32_b1_production not in {"", "split2"}:
+    if qrow32_b1_production not in {"", "nosplit"}:
         raise ContractError(
-            "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or split2"
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit"
         )
     if qrow32_b1_live and qrow32_b1_production:
         raise ContractError(

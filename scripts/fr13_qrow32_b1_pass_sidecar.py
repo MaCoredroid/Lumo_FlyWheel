@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate qrow32 B1 live gates and issue the split2 production credential."""
+"""Validate qrow32 B1 live gates and issue the no-split production credential."""
 
 from __future__ import annotations
 
@@ -15,20 +15,20 @@ from typing import Any
 
 LIVE_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_live_paged_ab.v2"
 SIDECAR_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_production_pass.v2"
-ARM = "split2"
-SELECTOR_SENTINEL = 1179791669
+ARM = "nosplit"
+SELECTOR_SENTINEL = 1179791668
 QROW16_REFERENCE_SENTINEL = 1179791667
-NUM_SPLITS = 2
+NUM_SPLITS = 0
 LIVE_ARMS = {
-    "nosplit": {
-        "selector_sentinel": 1179791668,
-        "num_splits": 0,
-        "split_scratch_allocation": "not used; num_splits=0",
-        "candidate_dispatch": "qrow32 B1 nosplit exact geometry; no fallback",
-    },
     ARM: {
         "selector_sentinel": SELECTOR_SENTINEL,
         "num_splits": NUM_SPLITS,
+        "split_scratch_allocation": "not used; num_splits=0",
+        "candidate_dispatch": "qrow32 B1 nosplit exact geometry; no fallback",
+    },
+    "split2": {
+        "selector_sentinel": 1179791669,
+        "num_splits": 2,
         "split_scratch_allocation": (
             "stock FA2 set_params_splitkv via num_splits=2"
         ),
@@ -163,7 +163,7 @@ def _git(repo: Path, *args: str) -> str:
 def validate_candidate(candidate_so: Path, expected_sha256: str) -> dict[str, Any]:
     expected_sha256 = _sha256(expected_sha256, "candidate SO")
     if expected_sha256 != CANDIDATE_SHA256:
-        raise ValueError("candidate SO is not the pinned qrow32 split2 binary")
+        raise ValueError("candidate SO is not the pinned qrow32 B1 binary")
     info = _regular(candidate_so, "candidate SO")
     if info.st_size != CANDIDATE_SIZE or sha256_file(candidate_so) != CANDIDATE_SHA256:
         raise ValueError("candidate SO identity mismatch")
@@ -337,7 +337,7 @@ def issue_sidecar(
     out: Path,
 ) -> dict[str, Any]:
     if arm != ARM:
-        raise ValueError("qrow32 production arm must be split2")
+        raise ValueError("qrow32 production arm must be nosplit")
     expected_live_sha256 = _sha256(expected_live_sha256, "live result")
     validate_candidate(candidate_so, expected_candidate_sha256)
     patch = validate_patch_source(
@@ -373,13 +373,13 @@ def issue_sidecar(
         "instance_id": summary["instance_id"],
         "layers_sha256": summary["layers_sha256"],
         "required_runtime": "Hydra27 fixed32 K64 ROOT=1 B1 physical32 FULL graph",
-        "production_scope": "qrow32 B1 split2 exact tree attention only",
+        "production_scope": "qrow32 B1 nosplit exact tree attention only",
         "fallback_allowed": False,
     }
     sidecar = dict(body)
     sidecar["canonical_sha256"] = _digest(canonical_bytes(body))
     if out.exists() or out.is_symlink():
-        raise ValueError(f"refusing to replace qrow32 split2 pass sidecar: {out}")
+        raise ValueError(f"refusing to replace qrow32 nosplit pass sidecar: {out}")
     out.parent.mkdir(parents=True, exist_ok=True)
     temporary = out.with_name(out.name + f".tmp.{os.getpid()}")
     temporary.write_bytes(canonical_bytes(sidecar) + b"\n")
@@ -428,7 +428,7 @@ def verify_sidecar(
         or payload.get("required_runtime")
         != "Hydra27 fixed32 K64 ROOT=1 B1 physical32 FULL graph"
         or payload.get("production_scope")
-        != "qrow32 B1 split2 exact tree attention only"
+        != "qrow32 B1 nosplit exact tree attention only"
         or payload.get("fallback_allowed") is not False
     ):
         raise ValueError("pass sidecar contract drifted")

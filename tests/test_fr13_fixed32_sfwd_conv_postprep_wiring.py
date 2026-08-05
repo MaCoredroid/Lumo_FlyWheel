@@ -295,7 +295,7 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
     monkeypatch.setenv("FR13_FA2_QROW16_SO_SHA256", "")
     monkeypatch.setenv("FR13_FA2_QROW16_LIVE_PASS_SHA256", "")
     monkeypatch.setenv("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
-    monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "split2")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "nosplit")
     monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SHA256", QROW32_SHA256)
     monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SIZE", "300154616")
     patcher._fr13_fixed32_validate_patch_env()

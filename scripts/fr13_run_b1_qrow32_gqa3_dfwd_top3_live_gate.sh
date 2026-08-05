@@ -21,7 +21,7 @@ esac
 : "${FR13_GATE_DFWD_TOP3_SO:?set FR13_GATE_DFWD_TOP3_SO to the pinned candidate}"
 : "${FR13_GATE_DFWD_TOP3_BUILD_ATTESTATION:?set the pinned DFWD build attestation}"
 
-FR13_GATE_QROW32_ARM=${FR13_GATE_QROW32_ARM:-split2}
+FR13_GATE_QROW32_ARM=${FR13_GATE_QROW32_ARM:-nosplit}
 case "$FR13_GATE_QROW32_ARM" in
   nosplit|split2) ;;
   *) echo "FR13_GATE_QROW32_ARM must be nosplit or split2" >&2; exit 2 ;;

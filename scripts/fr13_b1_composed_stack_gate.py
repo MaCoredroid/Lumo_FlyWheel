@@ -35,7 +35,7 @@ DFWD_SOURCE_SHA256 = (
 )
 GQA3_CANDIDATE = "fixed32_gdn_single_launch_gqa_group3_v1"
 QROW_CREDENTIAL_SCHEMA = (
-    "fr13.fixed32.fa2_qrow32_split2_k64_b1_live_verification.v2"
+    "fr13.fixed32.fa2_qrow32_nosplit_k64_b1_live_verification.v2"
 )
 SFWD_COMBINED_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.k64_root_b1_gate.v1"
 SFWD_CANDIDATE = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
@@ -62,7 +62,7 @@ SIX_WAY_ENV = (
     "FR13_FA2_QROW16_LIVE_PAGED_AB=0",
     "FR13_FA2_QROW16_PRODUCTION=0",
     "FR13_FA2_QROW32_B1_LIVE_AB_ARM=",
-    "FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2",
+    "FR13_FA2_QROW32_B1_PRODUCTION_ARM=nosplit",
     "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=1",
     "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH=1",
     "FR13_DFWD_K64_TOP3=1",
@@ -581,7 +581,7 @@ def _validate_production_smoke_payload(
         "exact4_eligible",
     }
     paths = {
-        "qrow32_split2": True,
+        "qrow32_nosplit": True,
         "gdn_gqa_group3": True,
         "dfwd_k64_top3": True,
         "target_gemm_selector": TARGET_SELECTOR,
@@ -752,13 +752,14 @@ def issue_production_smoke(args: argparse.Namespace) -> None:
         or qrow_engagement.get("status") != "ENGAGED"
         or qrow_engagement.get("runtime_mode") != "FULL"
         or qrow_engagement.get("batch_size") != 1
-        or qrow_engagement.get("arm") != "split2"
+        or qrow_engagement.get("arm") != "nosplit"
+        or qrow_engagement.get("num_splits") != 0
         or qrow_engagement.get("candidate_served") is not True
         or qrow_engagement.get("fallback_allowed") is not False
         or qrow_engagement.get("source_commit") != source_commit
         or qrow_engagement.get("pass_sidecar_sha256") != _sha256(qrow_sidecar_raw)
     ):
-        raise GateError("Qrow32 split2 production engagement drifted")
+        raise GateError("Qrow32 nosplit production engagement drifted")
     target_sidecar_raw = _regular(
         arm / "logs/fr13_fixed32_cutlass_streamk.production_pass.json"
     )
@@ -816,7 +817,7 @@ def issue_production_smoke(args: argparse.Namespace) -> None:
         "subset_sha256": SUBSET_SHA256,
         "runtime_mode": "FULL",
         "production_paths": {
-            "qrow32_split2": True,
+            "qrow32_nosplit": True,
             "gdn_gqa_group3": True,
             "dfwd_k64_top3": True,
             "target_gemm_selector": TARGET_SELECTOR,

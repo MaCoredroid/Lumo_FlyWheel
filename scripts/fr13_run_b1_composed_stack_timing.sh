@@ -16,7 +16,7 @@ case "${FR13_RUN_B1_COMPOSED_STACK_TIMING:-0}" in
     ;;
 esac
 
-export FR13_RUN_QROW32_SPLIT2_TIMING=1
+export FR13_RUN_QROW32_NOSPLIT_TIMING=1
 export FR13_B1_COMPOSED_STACK_TIMING=1
 
 exec bash "$SCRIPT_DIR/fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh"

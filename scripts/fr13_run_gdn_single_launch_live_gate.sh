@@ -35,7 +35,7 @@ case "$COMBINED_GRAPH_GATE" in
 esac
 QROW32_GATE_ARM=
 if [[ "$COMBINED_GRAPH_GATE" == "1" ]]; then
-  QROW32_GATE_ARM=${FR13_GATE_QROW32_ARM:-split2}
+  QROW32_GATE_ARM=${FR13_GATE_QROW32_ARM:-nosplit}
   case "$QROW32_GATE_ARM" in
     nosplit|split2) ;;
     *) echo "FR13_GATE_QROW32_ARM must be nosplit or split2" >&2; exit 2 ;;

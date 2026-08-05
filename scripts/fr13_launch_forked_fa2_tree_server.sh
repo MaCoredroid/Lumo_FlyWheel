@@ -174,7 +174,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_LIVE_PAGED_AB]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:nosplit" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:split2" \
-   || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:split2" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:nosplit" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION]}" == "set:1" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB]}" == "set:1" \
@@ -751,8 +751,8 @@ case "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" in
   *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, or split2" >&2; exit 2 ;;
 esac
 case "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" in
-  ""|split2) ;;
-  *) echo "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or split2" >&2; exit 2 ;;
+  ""|nosplit) ;;
+  *) echo "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit" >&2; exit 2 ;;
 esac
 if [[ -n "${FR13_FA2_QROW16_INTERNAL_DISPATCH:-}" \
       || -n "${FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED:-}" ]]; then
@@ -3381,7 +3381,7 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
   if [[ "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" == "0" \
         && "${FR13_FA2_QROW16_PRODUCTION:-0}" == "0" \
         && -z "${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}" \
-        && "${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}" == "split2" \
+        && "${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}" == "nosplit" \
         && "${FR13_FA2_QROW32_B1_SO_SHA256:-}" == "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a" \
         && "${FR13_FA2_QROW32_B1_SO_SIZE:-}" == "300154616" ]]; then
     _fr13_sfwd_qrow32_production=1

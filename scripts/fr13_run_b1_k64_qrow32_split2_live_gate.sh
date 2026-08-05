@@ -250,7 +250,7 @@ live, live_raw = qrow.load_json(Path(live_path))
 summary = qrow.validate_live_result(
     live,
     candidate_sha256=qrow.CANDIDATE_SHA256,
-    arm=qrow.ARM,
+    arm="split2",
     source_commit=source_commit,
     patch_source_sha256=patch_sha,
 )

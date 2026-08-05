@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PASS-gated real SWE-Verified exact4 timing for Hydra27 qrow32 split2.
+# PASS-gated real SWE-Verified exact4 timing for Hydra27 qrow32 no-split.
 # Despite the retained historical filename, this isolates tree attention in FULL graph mode.
 set -euo pipefail
 
@@ -8,14 +8,14 @@ REPO=$(cd "$SCRIPT_DIR/.." && pwd)
 RUNNER_PATH=$(realpath "$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")")
 cd "$REPO"
 
-case "${FR13_RUN_QROW32_SPLIT2_TIMING:-0}" in
+case "${FR13_RUN_QROW32_NOSPLIT_TIMING:-0}" in
   1) ;;
   0)
-    echo "qrow32 split2 timing is disabled; set FR13_RUN_QROW32_SPLIT2_TIMING=1" >&2
+    echo "qrow32 no-split timing is disabled; set FR13_RUN_QROW32_NOSPLIT_TIMING=1" >&2
     exit 2
     ;;
   *)
-    echo "FR13_RUN_QROW32_SPLIT2_TIMING must be exactly 0 or 1" >&2
+    echo "FR13_RUN_QROW32_NOSPLIT_TIMING must be exactly 0 or 1" >&2
     exit 2
     ;;
 esac
@@ -48,7 +48,7 @@ fi
 : "${TAG:?set TAG to a unique run tag}"
 : "${QROW32_B1_FA2_SO:?set QROW32_B1_FA2_SO to the pinned combined binary}"
 : "${QROW32_B1_FA2_SOURCE:?set QROW32_B1_FA2_SOURCE to the pinned FA2 source closure}"
-: "${QROW32_B1_PASS:?set QROW32_B1_PASS to the qrow32 split2 real-task live PASS}"
+: "${QROW32_B1_PASS:?set QROW32_B1_PASS to the qrow32 nosplit real-task live PASS}"
 : "${QROW32_B1_PASS_SHA256:?set QROW32_B1_PASS_SHA256 to its raw SHA-256}"
 if [[ "$COMPOSED_STACK" == "1" ]]; then
   : "${QROW32_B1_COMPOSED_CREDENTIAL:?set the Gate-A Qrow32 composed credential}"
@@ -137,7 +137,7 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
     ARM="hydra27_fixed32_k64_composed_qrow32_gqa3_dfwd3_target_sfwd_exact4_${TAG}"
   fi
 else
-  ARM="hydra27_fixed32_k64_qrow32_split2_exact4_${TAG}"
+  ARM="hydra27_fixed32_k64_qrow32_nosplit_exact4_${TAG}"
 fi
 ARMDIR="$RUNROOT_ABS/$ARM"
 
@@ -417,7 +417,7 @@ mkdir -p "$RUNROOT_ABS/sidecars"
   --output "$RUNROOT_ABS/runtime_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
-CLASSIFICATION=real_swe_verified_exact4_qrow32_split2
+CLASSIFICATION=real_swe_verified_exact4_qrow32_nosplit
 if [[ "$COMPOSED_STACK" == "1" ]]; then
   CLASSIFICATION=real_swe_verified_exact4_b1_composed_kernel_stack
 fi
@@ -427,7 +427,7 @@ fi
 if [[ "$PRODUCTION_SMOKE" == "1" ]]; then
   CLASSIFICATION=real_swe_verified_one_task_b1_composed_cfwd_production_smoke
 fi
-printf 'classification=%s\ntask_count=%s\nbatch_size=1\nconcurrency=1\ntiming_eligible=%s\nformal_floor_acceptance_eligible=0\ntopology=hydra27_fixed32\nphysical_rows=32\nlogical_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_root=1\ndraft_vocab_k=65536\nqrow32_split2_production=1\nruntime=FULL_graph_exact_geometry\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nexact16_rule=only_after_exact4_u95_clears_cap\narm=%s\nsource=%s\npatch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\npass_sha256=%s\nqrow16_historical_baseline_sha256=%s\nstarted=%s\n' \
+printf 'classification=%s\ntask_count=%s\nbatch_size=1\nconcurrency=1\ntiming_eligible=%s\nformal_floor_acceptance_eligible=0\ntopology=hydra27_fixed32\nphysical_rows=32\nlogical_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_root=1\ndraft_vocab_k=65536\nqrow32_nosplit_production=1\nruntime=FULL_graph_exact_geometry\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nexact16_rule=only_after_exact4_u95_clears_cap\narm=%s\nsource=%s\npatch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\npass_sha256=%s\nqrow16_historical_baseline_sha256=%s\nstarted=%s\n' \
   "$CLASSIFICATION" "$TASK_COUNT" "$TIMING_ELIGIBLE" \
   "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
   "$ONE_SIDED_U95_CAP_MS" "$ARM" "$SOURCE_COMMIT" \
@@ -587,7 +587,7 @@ if env \
     FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256="$SOURCE_CLOSURE_SHA256" \
     FR13_FA2_QROW32_B1_SOURCE_COMMIT="$SOURCE_COMMIT" \
     FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256="$PATCH_SOURCE_SHA256" \
-    FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2 \
+    FR13_FA2_QROW32_B1_PRODUCTION_ARM=nosplit \
     FR13_FA2_QROW32_B1_LIVE_PASS_JSON="$QROW32_B1_PASS" \
     FR13_FA2_QROW32_B1_LIVE_PASS_SHA256="$QROW32_B1_PASS_SHA256" \
     FR13_FA2_QROW32_B1_EXACT4_TASK_IDS=astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398 \
@@ -630,7 +630,7 @@ for expected in \
   'FR13_FA2_QROW16_LIVE_PAGED_AB=0' \
   'FR13_FA2_QROW16_PRODUCTION=0' \
   'FR13_FA2_QROW32_B1_LIVE_AB_ARM=' \
-  'FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2' \
+  'FR13_FA2_QROW32_B1_PRODUCTION_ARM=nosplit' \
   'FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0' \
   "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=$CFWD_PRODUCTION" \
   'FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0' \
@@ -710,7 +710,7 @@ SIDECAR_SHA256=$(sha256sum "$SIDECAR" | awk '{print $1}')
   --expected-sidecar-sha256 "$SIDECAR_SHA256" \
   --candidate-so "$QROW32_B1_FA2_SO" \
   --expected-candidate-sha256 "$CANDIDATE_SHA256" \
-  --arm split2 \
+  --arm nosplit \
   --patch-source scripts/fr13_patch_fa2_tree_bias.py \
   --expected-source-commit "$SOURCE_COMMIT" >/dev/null
 if [[ "$COMPOSED_STACK" == "1" ]]; then

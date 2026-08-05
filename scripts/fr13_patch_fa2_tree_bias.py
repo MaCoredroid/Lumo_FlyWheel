@@ -4194,8 +4194,8 @@ def _fr13_fa2_qrow32_b1_arm(env_name):
     if not arm:
         return None
     if env_name == "FR13_FA2_QROW32_B1_PRODUCTION_ARM":
-        if arm != "split2":
-            raise RuntimeError(f"{env_name} must be empty or split2; got {arm!r}")
+        if arm != "nosplit":
+            raise RuntimeError(f"{env_name} must be empty or nosplit; got {arm!r}")
     elif env_name == "FR13_FA2_QROW32_B1_LIVE_AB_ARM":
         if arm not in _FR13_FA2_QROW32_B1_ARMS:
             raise RuntimeError(
@@ -4818,9 +4818,7 @@ def _fr13_fa2_qrow32_b1_production_record(
         "batch_size": 1, "physical_rows": 32, "arm": arm,
         "selector_sentinel": config["sentinel"],
         "num_splits": config["num_splits"],
-        "split_scratch_allocation": (
-            "stock FA2 set_params_splitkv via num_splits=2"
-        ),
+        "split_scratch_allocation": config["split_scratch_allocation"],
         "graph_id": graph_id, "graph_signature": graph_signature,
         "layers": layers, "layer_count": len(layers), "calls_observed": calls,
         "candidate_so_sha256": os.environ["FR13_FA2_QROW32_B1_SO_SHA256"],
@@ -6231,12 +6229,12 @@ def main() -> int:
     parser.add_argument(
         "--fixed32-query-tile32-b1-live-ab",
         action="store_true",
-        help="install the all-layer real-B1 split2-vs-Qrow16 byte gate",
+        help="install the all-layer real-B1 qrow32-vs-Qrow16 byte gate",
     )
     parser.add_argument(
         "--fixed32-query-tile32-b1-production",
         action="store_true",
-        help="install the attested B1 split2 production selector",
+        help="install the attested B1 no-split production selector",
     )
     parser.add_argument(
         "--fixed32-query-tile16-production",

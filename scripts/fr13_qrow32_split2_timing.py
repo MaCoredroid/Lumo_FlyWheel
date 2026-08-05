@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Reduce the PASS-gated qrow32 split2 exact4 timing screen."""
+"""Reduce the PASS-gated qrow32 no-split exact4 timing screen.
+
+The historical filename is retained because the composed timing reducer imports
+this module, but every accepted and emitted contract is explicitly no-split.
+"""
 
 from __future__ import annotations
 
@@ -22,7 +26,7 @@ from fr13_qrow32_b1_pass_sidecar import (
 )
 
 
-SCHEMA = "fr13.fixed32.fa2_qrow32_split2.exact4_timing.v1"
+SCHEMA = "fr13.fixed32.fa2_qrow32_nosplit.exact4_timing.v1"
 MEASURE_SCHEMA = "fr13.measure.deploy_speed.v1"
 ENGAGEMENT_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_production_engagement.v2"
 T_CRITICAL_ONE_SIDED_95_DF3 = 2.3533634348018264
@@ -157,7 +161,7 @@ def reduce_timing(
         or engagement.get("batch_size") != 1
         or engagement.get("physical_rows") != 32
         or engagement.get("arm") != ARM
-        or engagement.get("num_splits") != 2
+        or engagement.get("num_splits") != 0
         or engagement.get("layer_count") != 16
         or engagement.get("candidate_served") is not True
         or engagement.get("fallback_allowed") is not False
@@ -172,7 +176,7 @@ def reduce_timing(
         or sorted(engagement.get("task_ids", [])) != task_ids
         or engagement.get("subset_sha256") != EXACT4_SUBSET_SHA256
     ):
-        raise ValueError("qrow32 split2 FULL graph engagement is incomplete")
+        raise ValueError("qrow32 nosplit FULL graph engagement is incomplete")
     health_tasks = health.get("tasks")
     if (
         health.get("swe_orchestrator_rc") != 0
@@ -207,7 +211,7 @@ def reduce_timing(
     return {
         "schema": SCHEMA,
         "status": "complete",
-        "run_classification": "real_swe_verified_exact4_qrow32_split2",
+        "run_classification": "real_swe_verified_exact4_qrow32_nosplit",
         "task_ids": task_ids,
         "task_count": 4,
         "batch_size": 1,

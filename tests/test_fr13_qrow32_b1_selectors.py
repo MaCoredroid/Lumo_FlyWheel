@@ -69,7 +69,7 @@ def _selector_namespace(monkeypatch: pytest.MonkeyPatch, *, profile_scope):
     )
     monkeypatch.setenv("FR13_FA2_QROW32_B1_SOURCE_COMMIT", "1" * 40)
     monkeypatch.setenv("FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256", "2" * 64)
-    monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "split2")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "nosplit")
     monkeypatch.setenv("FR13_FA2_QROW32_B1_INTERNAL_ATTESTED", "1")
     monkeypatch.setenv(
         "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS",
@@ -138,7 +138,7 @@ def _live_payload(
     source_commit: str,
     patch_sha256: str,
     *,
-    arm: str = "split2",
+    arm: str = "nosplit",
 ) -> dict[str, object]:
     arm_contract = module.LIVE_ARMS[arm]
     layers = []
@@ -224,7 +224,11 @@ def test_nosplit_live_call_uses_hidden_sentinel_and_zero_splits(
     assert tuple(called["tree_bias"].stride()) == (1179791668, 32, 1)
 
     monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "nosplit")
-    with pytest.raises(RuntimeError, match="must be empty or split2"):
+    assert namespace["_fr13_fa2_qrow32_b1_arm"](
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM"
+    ) == "nosplit"
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "split2")
+    with pytest.raises(RuntimeError, match="must be empty or nosplit"):
         namespace["_fr13_fa2_qrow32_b1_arm"](
             "FR13_FA2_QROW32_B1_PRODUCTION_ARM"
         )
@@ -644,7 +648,7 @@ def test_production_profile_warmup_bypasses_before_geometry(
     assert namespace["_FR13_FA2_QROW32_B1_PRODUCTION_GRAPHS"] == {}
 
 
-def test_production_final_capture_enforces_geometry_and_reduction_topology(
+def test_nosplit_production_final_capture_enforces_geometry_and_engages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     namespace, gdn = _selector_namespace(monkeypatch, profile_scope=None)
@@ -677,20 +681,20 @@ def test_production_final_capture_enforces_geometry_and_reduction_topology(
             **drifted,
         )
 
-    with pytest.raises(
-        RuntimeError,
-        match=(
-            "raw-byte qualification requires identical reduction topology: "
-            "reference_partitions=1 candidate_partitions=2"
-        ),
-    ):
-        namespace["_fr13_fa2_qrow32_b1_production_begin"](
-            layer=types.SimpleNamespace(
-                layer_name=namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
-            ),
-            **geometry,
-        )
-    assert namespace["_FR13_FA2_QROW32_B1_PRODUCTION_GRAPHS"] == {}
+    layer_name = namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
+    selection = namespace["_fr13_fa2_qrow32_b1_production_begin"](
+        layer=types.SimpleNamespace(layer_name=layer_name), **geometry
+    )
+    assert selection["arm"] == "nosplit"
+    assert selection["candidate_served"] is True
+    assert selection["num_splits"] == 0
+    assert int(selection["tree_bias"].stride(0)) == 1179791668
+    namespace["_fr13_fa2_qrow32_b1_production_end"](
+        selection, completed=True
+    )
+    assert namespace["_FR13_FA2_QROW32_B1_PRODUCTION_GRAPHS"] == {
+        91: {"layers": {layer_name}, "arm": "nosplit"}
+    }
 
 
 def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:
@@ -700,7 +704,7 @@ def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:
         "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, or split2"
         in text
     )
-    assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or split2" in text
+    assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit" in text
     assert "FR13 qrow32 B1 live gate requires the canonical K64/root1 real task" in text
     assert '"${FR13_FIXED32_MODE:-}" == "hydra27_fixed32"' in text
     assert '"${ENFORCE_EAGER:-0}" == "0"' in text
@@ -728,6 +732,7 @@ def test_live_gate_is_authenticated_one_task_non_timing_qrow16_served() -> None:
     assert "ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in text
     assert "fr13_qrow32_b1_pass_sidecar.py validate-source" in text
     assert 'PYTHONPATH="$REPO/scripts${PYTHONPATH:+:$PYTHONPATH}"' in text
+    assert 'arm="split2"' in text
 
 
 def test_live_gate_inline_contract_import_resolves_from_repo_root() -> None:
@@ -748,11 +753,11 @@ def test_live_gate_inline_contract_import_resolves_from_repo_root() -> None:
 def test_timing_runner_is_pass_gated_exact4_graph_only() -> None:
     text = TIMING_RUNNER.read_text()
 
-    assert "FR13_RUN_QROW32_SPLIT2_TIMING" in text
+    assert "FR13_RUN_QROW32_NOSPLIT_TIMING" in text
     assert ': "${QROW32_B1_PASS:?set QROW32_B1_PASS' in text
     assert "fr13_qrow32_b1_pass_sidecar.py validate-source" in text
     assert "fr13_qrow32_b1_pass_sidecar.py verify" in text
-    assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2" in text
+    assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM=nosplit" in text
     assert "ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in text
     assert "fr13_qrow32_split2_timing.py" in text
     assert "exact16_rule=only_after_exact4_u95_clears_cap" in text
@@ -760,10 +765,10 @@ def test_timing_runner_is_pass_gated_exact4_graph_only() -> None:
     assert "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0" in text
 
 
-def test_sidecar_is_binary_source_and_split2_bound(tmp_path: Path) -> None:
+def test_sidecar_is_binary_source_and_nosplit_bound(tmp_path: Path) -> None:
     module = _module(SIDECAR, "qrow32_sidecar")
     candidate = tmp_path / "candidate.so"
-    candidate.write_bytes(b"split2-candidate")
+    candidate.write_bytes(b"combined-qrow32-candidate")
     module.CANDIDATE_SIZE = candidate.stat().st_size
     module.CANDIDATE_SHA256 = module.sha256_file(candidate)
     source_commit = subprocess.run(
@@ -791,7 +796,7 @@ def test_sidecar_is_binary_source_and_split2_bound(tmp_path: Path) -> None:
         expected_live_sha256=module.sha256_file(live),
         candidate_so=candidate,
         expected_candidate_sha256=module.CANDIDATE_SHA256,
-        arm="split2",
+        arm="nosplit",
         patch_source=PATCHER,
         expected_source_commit=source_commit,
         out=sidecar,
@@ -801,38 +806,68 @@ def test_sidecar_is_binary_source_and_split2_bound(tmp_path: Path) -> None:
         expected_sidecar_sha256=module.sha256_file(sidecar),
         candidate_so=candidate,
         expected_candidate_sha256=module.CANDIDATE_SHA256,
-        arm="split2",
+        arm="nosplit",
         patch_source=PATCHER,
         expected_source_commit=source_commit,
     )
-    assert issued["arm"] == "split2"
+    assert issued["arm"] == "nosplit"
+    assert issued["num_splits"] == 0
+    assert issued["selector_sentinel"] == 1179791668
     assert verified["source_commit"] == source_commit
     assert verified["patch_source_sha256"] == patch_sha256
 
-    nosplit = _live_payload(
+    split2 = _live_payload(
         module,
         module.CANDIDATE_SHA256,
         source_commit,
         patch_sha256,
-        arm="nosplit",
+        arm="split2",
     )
-    nosplit_summary = module.validate_live_result(
-        nosplit,
+    split2_summary = module.validate_live_result(
+        split2,
         candidate_sha256=module.CANDIDATE_SHA256,
-        arm="nosplit",
+        arm="split2",
     )
-    assert nosplit_summary["arm"] == "nosplit"
+    assert split2_summary["arm"] == "split2"
 
-    with pytest.raises(ValueError, match="production arm must be split2"):
+    with pytest.raises(ValueError, match="production arm must be nosplit"):
         module.issue_sidecar(
             live_result=live,
             expected_live_sha256=module.sha256_file(live),
             candidate_so=candidate,
             expected_candidate_sha256=module.CANDIDATE_SHA256,
-            arm="nosplit",
+            arm="split2",
             patch_source=PATCHER,
             expected_source_commit=source_commit,
             out=tmp_path / "nosplit-pass.json",
+        )
+
+    stale = tmp_path / "stale-live.json"
+    stale.write_text(
+        json.dumps(
+            _live_payload(
+                module,
+                module.CANDIDATE_SHA256,
+                "f" * 40,
+                patch_sha256,
+                arm="nosplit",
+            ),
+            ensure_ascii=True,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    with pytest.raises(ValueError, match="live source commit drifted"):
+        module.issue_sidecar(
+            live_result=stale,
+            expected_live_sha256=module.sha256_file(stale),
+            candidate_so=candidate,
+            expected_candidate_sha256=module.CANDIDATE_SHA256,
+            arm="nosplit",
+            patch_source=PATCHER,
+            expected_source_commit=source_commit,
+            out=tmp_path / "stale-pass.json",
         )
 
     with pytest.raises(ValueError, match="live arm must be nosplit or split2"):

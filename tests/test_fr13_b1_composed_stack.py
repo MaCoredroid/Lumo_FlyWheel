@@ -132,7 +132,7 @@ def test_runner_wires_optional_cfwd_smoke_and_exact4_evidence() -> None:
     cfwd_wrapper = _text("fr13_run_b1_composed_cfwd_stack_timing.sh")
     manifest = _text("fr13_runtime_manifest.py")
     required = (
-        "FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2",
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM=nosplit",
         "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=1",
         "FR13_DFWD_K64_TOP3=1",
         'FR13_FIXED32_CUTLASS_WAVE="$TARGET_SELECTOR"',
@@ -252,7 +252,7 @@ def test_production_smoke_credential_binds_all_component_hashes() -> None:
         "subset_sha256": module.SUBSET_SHA256,
         "runtime_mode": "FULL",
         "production_paths": {
-            "qrow32_split2": True,
+            "qrow32_nosplit": True,
             "gdn_gqa_group3": True,
             "dfwd_k64_top3": True,
             "target_gemm_selector": module.TARGET_SELECTOR,
@@ -583,8 +583,8 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
 ) -> None:
     module = _load_timing_module()
     base = {
-        "schema": "fr13.fixed32.fa2_qrow32_split2.exact4_timing.v1",
-        "run_classification": "real_swe_verified_exact4_qrow32_split2",
+        "schema": "fr13.fixed32.fa2_qrow32_nosplit.exact4_timing.v1",
+        "run_classification": "real_swe_verified_exact4_qrow32_nosplit",
         "descriptive_equal_task_one_sided_u95": {
             "mean_ms": 130.0,
             "u95_ms": 135.0,
@@ -623,7 +623,7 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         "ENFORCE_EAGER=0",
         "CUDAGRAPH_MODE=FULL_AND_PIECEWISE",
         "FR10_METRICS=1",
-        "FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2",
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM=nosplit",
         "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=1",
         "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH=1",
         "FR13_DFWD_K64_TOP3=1",

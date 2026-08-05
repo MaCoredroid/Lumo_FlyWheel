@@ -38,7 +38,7 @@ def _write(path: Path, payload: object) -> Path:
 
 def _inputs(tmp_path: Path):
     module = _module()
-    arm = "hydra27_fixed32_k64_qrow32_split2_exact4_test"
+    arm = "hydra27_fixed32_k64_qrow32_nosplit_exact4_test"
     source = "1" * 40
     patch = "2" * 64
     sidecar = "3" * 64
@@ -75,7 +75,7 @@ def _inputs(tmp_path: Path):
         "batch_size": 1,
         "physical_rows": 32,
         "arm": module.ARM,
-        "num_splits": 2,
+        "num_splits": 0,
         "layer_count": 16,
         "candidate_served": True,
         "fallback_allowed": False,

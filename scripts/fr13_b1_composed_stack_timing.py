@@ -213,7 +213,7 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
         "ENFORCE_EAGER=0",
         "CUDAGRAPH_MODE=FULL_AND_PIECEWISE",
         "FR10_METRICS=1",
-        "FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2",
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM=nosplit",
         "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=1",
         "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH=1",
         "FR13_DFWD_K64_TOP3=1",
@@ -276,7 +276,7 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
             else "real_swe_verified_exact4_b1_composed_kernel_stack"
         ),
         "composed_stack": {
-            "qrow32_split2": True,
+            "qrow32_nosplit": True,
             "gdn_gqa_group3": True,
             "dfwd_k64_top3": True,
             "target_gemm_selector": TARGET_SELECTOR,
