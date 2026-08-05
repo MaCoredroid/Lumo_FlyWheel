@@ -8177,8 +8177,9 @@ def _fr13_fixed32_eager_boot_warm_contract() -> tuple[str, int, str] | None:
     )
     if eager_diagnostic_count > 1 and not combined_target_sfwd_byte_gate:
         raise RuntimeError(
-            "FR13 fixed32 eager byte diagnostics permit only the admitted "
-            "target full-grid plus SFWD conv/post-prep tuple"
+            "FR13 fixed32 eager byte diagnostics are mutually exclusive "
+            "except for the admitted target full-grid plus SFWD "
+            "conv/post-prep tuple"
         )
     if batch_gdn_byte_diagnostic == "1":
         return (

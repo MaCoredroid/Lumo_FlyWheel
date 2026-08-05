@@ -1337,7 +1337,12 @@ def test_postprocess_boot_warm_is_unmeasured_and_idempotent(
             "measured_state_restored": True,
         }
 
-    taw = SimpleNamespace(fr13_fixed32_taw_warm_execute=taw_warm)
+    taw = SimpleNamespace(
+        fr13_fixed32_taw_warm_execute=taw_warm,
+        fr13_fixed32_cfwd_logit_direct_warm_execute=lambda *_args, **_kwargs: {
+            "requested": False,
+        },
+    )
     tail_evidence = {
         "ready": True,
         "classification": "unmeasured_boot",
