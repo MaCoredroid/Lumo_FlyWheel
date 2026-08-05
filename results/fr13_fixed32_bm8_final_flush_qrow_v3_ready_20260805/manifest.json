@@ -1,0 +1,65 @@
+{
+  "schema": "fr13.fixed32.bm8_final_flush_qrow_v3.source_ready.v1",
+  "created_at_utc": "2026-08-05T08:10:10Z",
+  "status": "SOURCE_READY_LIVE_BLOCKED_QROW_SPLIT2_WRAPPER",
+  "source": {
+    "branch": "codex/b1-bm8-composed-main-20260805",
+    "bm8_accounting_commit": "5cddc805eae9561ec30cfd4525859a4a4cba7015",
+    "artifact_parent_commit": "f4be2b1cb5430dd2fe9ee7079a14bca390686bc5",
+    "qrow_v3_main_commit": "ef250238a3a609ea5256ee292854d13e7c7aa6c6",
+    "latest_gate_a_rejection_commit": "620c8b1e07dabd7e16ebd7dda04b689c2b41e369"
+  },
+  "bm8_accounting": {
+    "capture_schema": "fr13.fixed32.dfwd_unified_bm8_production_capture.v3",
+    "published_status": "ENGAGED_FINAL",
+    "publication_boundary": "authenticated_reconciled_final_flush",
+    "graph_captures_required": 1,
+    "measured_replays_equal_complete_events_required": true,
+    "unmeasured_replays_required": 0,
+    "event_graph_identity_match_required": true,
+    "event_mtp_forward_calls_required": 4,
+    "final_flush_binding_required_by_smoke_gate": true,
+    "final_flush_binding_required_by_timing_reducer": true
+  },
+  "qrow_v3_identity": {
+    "candidate_so_sha256": "07e02c0a53185c48d745fb221e7c807f97bfe40f61354e4242e9271e743e13c1",
+    "candidate_so_bytes": 300140712,
+    "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+    "source_closure_sha256": "a4a6d96cad9b34b73ddc4fb2fcda230c033b30246509c1a24208b2f2955d2bcc",
+    "offline_binary_identity_rechecked": true,
+    "committed_to_git": false
+  },
+  "verification": {
+    "focused_tests": "89 passed, 1 skipped, 1 deselected",
+    "python_compile": "PASS",
+    "shell_syntax": "PASS",
+    "git_diff_check": "PASS",
+    "multiple_measured_replays_tested": true,
+    "tampered_final_flush_rejected": true,
+    "unmeasured_replay_rejected": true
+  },
+  "live_state": {
+    "latest_gate": "one_real_swe_verified_b1_gate_a",
+    "latest_gate_status": "REJECTED",
+    "failure_stage": "first_real_task.qrow32_live_comparator.candidate_dispatch",
+    "failure_class": "fa2_python_interface_rejected_num_splits_2",
+    "private_qrow32_split2_cpp_operator_entered": false,
+    "required_next_step": "patch_exact_private_split2_route_then_rerun_real_gate_a"
+  },
+  "not_run_for_this_artifact": [
+    "GPU execution",
+    "Docker or service launch",
+    "real SWE-Verified task execution",
+    "raw-byte comparison",
+    "synthetic or probe timing",
+    "full-step timing",
+    "TPS or acceptance measurement",
+    "hardware-floor acceptance"
+  ],
+  "claims": {
+    "qrow_v3_kernel_qualified": false,
+    "bm8_composed_live_qualified": false,
+    "performance_measurement": false,
+    "hardware_floor": false
+  }
+}

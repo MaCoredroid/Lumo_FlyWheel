@@ -1,0 +1,13 @@
+Focused command:
+pytest -q tests/test_fr13_b1_composed_stack.py tests/test_fr13_bm8_production_sidecar.py tests/test_fr13_cutlass_streamk_gate_wiring.py tests/test_fr13_dfwd_unified_attention_bm8.py tests/test_fr13_qrow32_b1_selectors.py tests/test_fr13_fixed32_fa2_identity.py tests/test_fr13_fixed32_sfwd_conv_postprep_wiring.py -k 'not source_artifact_has_no_gpu_or_speed_claim'
+
+Result:
+89 passed, 1 skipped, 1 deselected in 1.36s
+
+Additional checks:
+- bash -n scripts/fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh: PASS
+- python3 -m py_compile on changed Python source and tests: PASS
+- git diff --check: PASS
+- external Qrow v3 binary SHA-256 and byte size: PASS
+
+No GPU or Docker command was run.
