@@ -131,6 +131,7 @@ _BYTE_GATE_STATE: dict[str, object] = {
     "task_marker": None,
     "batch_size": None,
     "embedded_gate_cta": None,
+    "direct_nodegroup8": None,
     "source_binding": None,
     "passed": {},
     "attempts": {},
@@ -200,6 +201,16 @@ def fixed32_sfwd_conv_postprep_gate_control(
         raise RuntimeError(
             "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB must be exactly 0 or 1"
         )
+    direct_raw = str(env.get("FR13_FIXED32_SFWD_NODEGROUP8_DIRECT", "0"))
+    if direct_raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_SFWD_NODEGROUP8_DIRECT must be exactly 0 or 1"
+        )
+    direct_nodegroup8 = direct_raw == "1"
+    if direct_nodegroup8 and raw != "1":
+        raise RuntimeError(
+            "FR13 direct nodegroup8 requires the conv/post-prep byte gate"
+        )
     enabled = Path(
         enabled_path
         or env.get(
@@ -226,6 +237,15 @@ def fixed32_sfwd_conv_postprep_gate_control(
         raise RuntimeError(
             "FR13 SFWD conv/post-prep gate batch is not admitted by its schedule"
         )
+    if direct_nodegroup8 and (
+        fixed32_mode != "hydra27_fixed32"
+        or batch_text != "1"
+        or str(env.get("FR13_DRAFT_VOCAB_ROOT", "")) != "1"
+        or str(env.get("FR13_DRAFT_VOCAB_K", "")) != "65536"
+    ):
+        raise RuntimeError(
+            "FR13 direct nodegroup8 requires Hydra27 physical32 K64/root1 B1"
+        )
     enabled_raw = _read_single_link_regular(
         enabled, label="byte-gate arm", limit=16
     )
@@ -250,6 +270,7 @@ def _source_binding(
     manifest_path: str,
     expected_manifest_sha256: str,
     expected_source_commit: str,
+    direct_nodegroup8: bool = False,
 ) -> dict[str, str]:
     if (
         not manifest_path
@@ -309,7 +330,8 @@ def _source_binding(
                 source_drift[relative] = (files.get(relative), actual)
     if (
         payload.get("schema") != SOURCE_MANIFEST_SCHEMA
-        or payload.get("candidate") != CANDIDATE
+        or payload.get("candidate")
+        != (DIRECT_NODEGROUP8_CANDIDATE if direct_nodegroup8 else CANDIDATE)
         or payload.get("source_commit") != expected_source_commit
         or not isinstance(source_entry, dict)
         or source_entry.get("sha256") != source_sha256
@@ -408,6 +430,7 @@ def _emit_live_pass(
     task_markers: tuple[str, ...],
     batch_size: int,
     embedded_gate_cta: bool,
+    direct_nodegroup8: bool,
     layers: dict[int, str],
     source_binding: dict[str, str],
 ) -> None:
@@ -430,6 +453,14 @@ def _emit_live_pass(
             "FR13 SFWD conv/post-prep PASS requires exact K64/root1"
         )
     batch = int(batch_size)
+    if direct_nodegroup8 and (
+        fixed32_mode != "hydra27_fixed32"
+        or batch != 1
+        or task_markers != (TASK_MARKER,)
+    ):
+        raise RuntimeError(
+            "direct nodegroup8 PASS requires authenticated Hydra27 B1"
+        )
     if embedded_gate_cta:
         if fixed32_mode != "hydra27_fixed32" or (
             (batch == 1 and task_markers != (TASK_MARKER,))
@@ -478,7 +509,13 @@ def _emit_live_pass(
         ),
         "status": "byte_pass_source_only",
         "candidate": (
-            EMBEDDED_GATE_CANDIDATE if embedded_gate_cta else CANDIDATE
+            DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE
+            if direct_nodegroup8 and embedded_gate_cta
+            else DIRECT_NODEGROUP8_CANDIDATE
+            if direct_nodegroup8
+            else EMBEDDED_GATE_CANDIDATE
+            if embedded_gate_cta
+            else CANDIDATE
         ),
         **source_binding,
         "fixed32_mode": fixed32_mode,
@@ -518,9 +555,11 @@ def _emit_live_pass(
                 "task_markers": list(task_markers),
                 "embedded_gate_cta": True,
                 "gate_scheduling": "append_to_first_channel_programs",
-                "channel_programs_per_request": 40,
+                "channel_programs_per_request": (
+                    160 if direct_nodegroup8 else 40
+                ),
                 "standalone_gate_programs_per_request": 0,
-                "programs_per_request": 40,
+                "programs_per_request": 160 if direct_nodegroup8 else 40,
                 "qrow16_production": qrow16,
                 "stock_attention": batch == 4,
             }
@@ -541,6 +580,16 @@ def _emit_live_pass(
                 "qrow16_live_pass_sha256": qrow_pass_sha256,
             }
         )
+        if direct_nodegroup8:
+            payload.update(
+                {
+                    "channel_programs_per_request": 160,
+                    "standalone_gate_programs_per_request": 4,
+                    "programs_per_request": 164,
+                }
+            )
+    if direct_nodegroup8:
+        payload["direct_nodegroup8"] = True
     temporary = path.with_name(f"{path.name}.tmp.{os.getpid()}")
     with temporary.open("w", encoding="ascii") as handle:
         json.dump(payload, handle, ensure_ascii=True, sort_keys=True)
@@ -573,12 +622,15 @@ def fixed32_sfwd_conv_postprep_byte_gate(
     expected_source_manifest_sha256: str,
     expected_source_commit: str,
     embedded_gate_cta: bool = False,
+    direct_nodegroup8: bool = False,
 ) -> dict[str, object]:
     """Compare the complete consumer boundary while serving only the reference."""
     if torch.cuda.is_current_stream_capturing():
         raise RuntimeError("FR13 SFWD conv/post-prep byte gate is eager-only")
     if type(embedded_gate_cta) is not bool:
         raise TypeError("embedded_gate_cta must be bool")
+    if type(direct_nodegroup8) is not bool:
+        raise TypeError("direct_nodegroup8 must be bool")
     batch = int(batch_size)
     if fixed32_mode not in FIXED32_MODES or batch not in (1, 4):
         raise RuntimeError(
@@ -605,7 +657,12 @@ def fixed32_sfwd_conv_postprep_byte_gate(
             or markers != expected_markers
         )
     )
-    if standalone_marker_invalid or embedded_marker_invalid:
+    direct_marker_invalid = direct_nodegroup8 and (
+        fixed32_mode != "hydra27_fixed32"
+        or batch != 1
+        or markers != (TASK_MARKER,)
+    )
+    if standalone_marker_invalid or embedded_marker_invalid or direct_marker_invalid:
         raise RuntimeError(
             "FR13 SFWD conv/post-prep byte gate requires its canonical real "
             "task marker set"
@@ -617,11 +674,13 @@ def fixed32_sfwd_conv_postprep_byte_gate(
         state["task_marker"] = markers
         state["batch_size"] = batch
         state["embedded_gate_cta"] = embedded_gate_cta
+        state["direct_nodegroup8"] = direct_nodegroup8
         _invalidate_live_pass()
     elif (
         tuple(state["task_marker"]) != markers
         or int(state.get("batch_size", -1)) != batch
         or bool(state.get("embedded_gate_cta")) != embedded_gate_cta
+        or bool(state.get("direct_nodegroup8")) != direct_nodegroup8
     ):
         raise RuntimeError(
             "FR13 SFWD conv/post-prep cannot combine marker, batch, or schedule"
@@ -631,6 +690,7 @@ def fixed32_sfwd_conv_postprep_byte_gate(
             manifest_path=source_manifest_path,
             expected_manifest_sha256=expected_source_manifest_sha256,
             expected_source_commit=expected_source_commit,
+            direct_nodegroup8=direct_nodegroup8,
         )
     source_binding = dict(state["source_binding"])
     key = int(layer_key)
@@ -672,7 +732,13 @@ def fixed32_sfwd_conv_postprep_byte_gate(
     record = {
         "status": "pass" if passed else "mismatch_reference_served",
         "candidate": (
-            EMBEDDED_GATE_CANDIDATE if embedded_gate_cta else CANDIDATE
+            DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE
+            if direct_nodegroup8 and embedded_gate_cta
+            else DIRECT_NODEGROUP8_CANDIDATE
+            if direct_nodegroup8
+            else EMBEDDED_GATE_CANDIDATE
+            if embedded_gate_cta
+            else CANDIDATE
         ),
         **source_binding,
         "fixed32_mode": fixed32_mode,
@@ -704,7 +770,7 @@ def fixed32_sfwd_conv_postprep_byte_gate(
                 "task_markers": list(markers),
                 "embedded_gate_cta": True,
                 "gate_scheduling": "append_to_first_channel_programs",
-                "programs_per_request": 40,
+                "programs_per_request": 160 if direct_nodegroup8 else 40,
                 "qrow16_production": batch == 1,
                 "stock_attention": batch == 4,
             }
@@ -725,6 +791,16 @@ def fixed32_sfwd_conv_postprep_byte_gate(
                 "qrow16_live_pass_sha256": QROW16_LIVE_PASS_SHA256,
             }
         )
+        if direct_nodegroup8:
+            record.update(
+                {
+                    "channel_programs_per_request": 160,
+                    "standalone_gate_programs_per_request": 4,
+                    "programs_per_request": 164,
+                }
+            )
+    if direct_nodegroup8:
+        record["direct_nodegroup8"] = True
     _emit_byte_record(record, embedded_gate_cta=embedded_gate_cta)
     if not passed:
         state["failed"] = True
@@ -735,6 +811,7 @@ def fixed32_sfwd_conv_postprep_byte_gate(
             task_markers=markers,
             batch_size=batch,
             embedded_gate_cta=embedded_gate_cta,
+            direct_nodegroup8=direct_nodegroup8,
             layers=dict(passed_layers),
             source_binding=source_binding,
         )

@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import importlib.util
+import json
 import sys
 import types
 from pathlib import Path
@@ -30,6 +31,10 @@ GENERATOR_PATH = (
 INCUMBENT_KERNEL_SHA256 = (
     "0384e4947e605846c9ed995bc73fa1252a6f5f815d1bc905685527fbf7f8d8ff"
 )
+PATCHER_PATH = ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
+GATE_PATH = ROOT / "scripts" / "fr13_sfwd_conv_postprep_gate.py"
+LAUNCHER_PATH = ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
+RUNNER_PATH = ROOT / "scripts" / "fr13_run_b1_sfwd_conv_postprep_gate.sh"
 
 sys.path.insert(0, str(ROOT / "src"))
 try:
@@ -303,3 +308,170 @@ def test_nodegroup8_launcher_selector_keeps_one_launch_per_arm() -> None:
     ) == 1
     assert "if direct_nodegroup8:\n        channel_tasks *= 4" in source
     assert "channel_tasks if embed_gate_cta else channel_tasks + gate_tasks" in source
+
+
+def _reset_byte_gate_state() -> None:
+    candidate._BYTE_GATE_STATE.clear()
+    candidate._BYTE_GATE_STATE.update(
+        task_marker=None,
+        batch_size=None,
+        embedded_gate_cta=None,
+        direct_nodegroup8=None,
+        source_binding=None,
+        passed={},
+        attempts={},
+        failed=False,
+    )
+
+
+def _direct_manifest(tmp_path: Path, commit: str) -> tuple[Path, str]:
+    path = tmp_path / "direct.source_manifest.json"
+    payload = {
+        "schema": candidate.SOURCE_MANIFEST_SCHEMA,
+        "candidate": candidate.DIRECT_NODEGROUP8_CANDIDATE,
+        "source_commit": commit,
+        "files": {
+            relative: {
+                "bytes": len((ROOT / relative).read_bytes()),
+                "sha256": hashlib.sha256((ROOT / relative).read_bytes()).hexdigest(),
+            }
+            for relative in candidate.SOURCE_FILES
+        },
+    }
+    path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="ascii")
+    path.chmod(0o400)
+    return path, hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_nodegroup8_real_b1_control_is_default_off_and_fail_closed(
+    tmp_path: Path,
+) -> None:
+    enabled = tmp_path / "enabled"
+    enabled.write_bytes(b"1\n")
+    enabled.chmod(0o400)
+    event = tmp_path / "event"
+    event.write_text(candidate.TASK_MARKER + "\n", encoding="ascii")
+    event.chmod(0o444)
+    assert candidate.fixed32_sfwd_conv_postprep_gate_control(
+        fixed32_mode="hydra27_fixed32",
+        environ={},
+        enabled_path=str(enabled),
+        event_path=str(event),
+    ) == (False, None)
+    exact = {
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB": "1",
+        "FR13_FIXED32_SFWD_NODEGROUP8_DIRECT": "1",
+        "FR13_DRAFT_VOCAB_ROOT": "1",
+        "FR13_DRAFT_VOCAB_K": "65536",
+        "MAX_NUM_SEQS": "1",
+    }
+    assert candidate.fixed32_sfwd_conv_postprep_gate_control(
+        fixed32_mode="hydra27_fixed32",
+        environ=exact,
+        enabled_path=str(enabled),
+        event_path=str(event),
+    ) == (True, candidate.TASK_MARKER)
+    with pytest.raises(RuntimeError, match="Hydra27 physical32 K64/root1 B1"):
+        candidate.fixed32_sfwd_conv_postprep_gate_control(
+            fixed32_mode="tail6_fixed32",
+            environ=exact,
+            enabled_path=str(enabled),
+            event_path=str(event),
+        )
+
+
+@pytest.mark.parametrize("embedded_gate_cta", (False, True))
+def test_nodegroup8_real_b1_byte_gate_binds_candidate_and_serves_reference(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    embedded_gate_cta: bool,
+) -> None:
+    commit = "8" * 40
+    manifest, manifest_sha256 = _direct_manifest(tmp_path, commit)
+    records = tmp_path / "records.jsonl"
+    live_pass = tmp_path / "live_pass.json"
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB_PATH", str(records)
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_PASS_PATH", str(live_pass)
+    )
+    monkeypatch.setenv(
+        "FR13_DRAFT_VOCAB_BLOCKS",
+        str(ROOT / "scripts" / "fr13_dvk_subset_blocks.json"),
+    )
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_ROOT", "1")
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_K", "65536")
+    monkeypatch.setenv("FR13_FA2_QROW16_PRODUCTION", "1")
+    monkeypatch.setenv("FR13_FA2_QROW16_SO_SHA256", candidate.QROW16_FA2_SHA256)
+    monkeypatch.setenv(
+        "FR13_FA2_QROW16_LIVE_PASS_SHA256", candidate.QROW16_LIVE_PASS_SHA256
+    )
+    reference = torch.tensor([1.0, -2.0], dtype=torch.bfloat16)
+    _reset_byte_gate_state()
+    for layer_key in range(1, candidate.LAYERS + 1):
+        record = candidate.fixed32_sfwd_conv_postprep_byte_gate(
+            fixed32_mode="hydra27_fixed32",
+            task_marker=candidate.TASK_MARKER,
+            layer_prefix=f"model.layers.{layer_key}",
+            layer_key=layer_key,
+            batch_size=1,
+            reference_query=reference,
+            candidate_query=reference.clone(),
+            reference_key=reference,
+            candidate_key=reference.clone(),
+            reference_value_spec=reference,
+            candidate_value_spec=reference.clone(),
+            reference_value_tree=reference,
+            candidate_value_tree=reference.clone(),
+            reference_g=reference,
+            candidate_g=reference.clone(),
+            reference_beta=reference,
+            candidate_beta=reference.clone(),
+            reference_source_stage=reference,
+            candidate_source_stage=reference.clone(),
+            source_manifest_path=str(manifest),
+            expected_source_manifest_sha256=manifest_sha256,
+            expected_source_commit=commit,
+            embedded_gate_cta=embedded_gate_cta,
+            direct_nodegroup8=True,
+        )
+        assert record["zero_diff"] is True
+        assert record["reference_always_served"] is True
+        assert record["candidate_returned"] is False
+    expected_candidate = (
+        candidate.DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE
+        if embedded_gate_cta
+        else candidate.DIRECT_NODEGROUP8_CANDIDATE
+    )
+    expected_programs = 160 if embedded_gate_cta else 164
+    assert record["candidate"] == expected_candidate
+    assert record["direct_nodegroup8"] is True
+    assert record["programs_per_request"] == expected_programs
+    payload = json.loads(live_pass.read_text(encoding="ascii"))
+    assert payload["candidate"] == expected_candidate
+    assert payload["direct_nodegroup8"] is True
+    assert payload["programs_per_request"] == expected_programs
+    assert payload["reference_always_served"] is True
+    assert payload["candidate_returned"] is False
+    _reset_byte_gate_state()
+
+
+def test_nodegroup8_selector_reaches_authenticated_real_b1_route() -> None:
+    patcher = PATCHER_PATH.read_text(encoding="utf-8")
+    gate = GATE_PATH.read_text(encoding="utf-8")
+    launcher = LAUNCHER_PATH.read_text(encoding="utf-8")
+    runner = RUNNER_PATH.read_text(encoding="utf-8")
+    selector = "FR13_FIXED32_SFWD_NODEGROUP8_DIRECT"
+    assert f'{selector}", "0"' in patcher
+    assert "direct_nodegroup8=(" in patcher
+    assert patcher.count("_FR13_FIXED32_SFWD_NODEGROUP8_DIRECT") >= 8
+    assert f"{selector}=${{{selector}:-0}}" in launcher
+    assert f'-e {selector}="${selector}"' in launcher
+    assert "direct nodegroup8 byte gate requires exact Hydra27 B1" in launcher
+    assert f"{selector}=${{{selector}:-0}}" in runner
+    assert "DIRECT_ARGS+=(--direct-nodegroup8)" in runner
+    assert runner.count('"${DIRECT_ARGS[@]}"') == 5
+    assert gate.count('add_argument("--direct-nodegroup8"') == 4
+    assert "DIRECT_NODEGROUP8_CANDIDATE" in gate

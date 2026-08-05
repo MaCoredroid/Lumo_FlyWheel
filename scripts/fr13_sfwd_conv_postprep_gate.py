@@ -18,6 +18,10 @@ from typing import Any
 
 CANDIDATE = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
 EMBEDDED_GATE_CANDIDATE = "fixed32_sfwd_conv_postprep_embedded_gate_cta_v1"
+DIRECT_NODEGROUP8_CANDIDATE = "fixed32_sfwd_conv_postprep_nodegroup8_direct_v1"
+DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE = (
+    "fixed32_sfwd_conv_postprep_nodegroup8_direct_embedded_gate_v1"
+)
 SOURCE_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1"
 READINESS_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.host_readiness.v1"
 PASS_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.live_pass.v1"
@@ -87,6 +91,16 @@ LAYERS = 48
 
 class GateError(RuntimeError):
     """A source, runtime, or evidence contract failed closed."""
+
+
+def _candidate(*, direct_nodegroup8: bool, embedded_gate_cta: bool = False) -> str:
+    if direct_nodegroup8:
+        return (
+            DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE
+            if embedded_gate_cta
+            else DIRECT_NODEGROUP8_CANDIDATE
+        )
+    return EMBEDDED_GATE_CANDIDATE if embedded_gate_cta else CANDIDATE
 
 
 def _reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -184,12 +198,13 @@ def _stream_record(path: Path) -> dict[str, Any]:
 
 
 def _validate_source_manifest(
-    payload: dict[str, Any], *, source_commit: str
+    payload: dict[str, Any], *, source_commit: str, direct_nodegroup8: bool = False
 ) -> dict[str, dict[str, Any]]:
     files = payload.get("files")
     if (
         payload.get("schema") != SOURCE_SCHEMA
-        or payload.get("candidate") != CANDIDATE
+        or payload.get("candidate")
+        != _candidate(direct_nodegroup8=direct_nodegroup8)
         or payload.get("source_commit") != source_commit
         or not isinstance(files, dict)
         or tuple(sorted(files)) != tuple(sorted(SOURCE_FILES))
@@ -233,7 +248,7 @@ def write_source_manifest(args: argparse.Namespace) -> None:
         Path(args.output).resolve(),
         {
             "schema": SOURCE_SCHEMA,
-            "candidate": CANDIDATE,
+            "candidate": _candidate(direct_nodegroup8=args.direct_nodegroup8),
             "source_commit": source_commit,
             "files": files,
         },
@@ -270,12 +285,19 @@ def write_host_readiness(args: argparse.Namespace) -> None:
 
     manifest_path = Path(args.source_manifest).resolve()
     manifest, manifest_raw = _load_json(manifest_path)
-    files = _validate_source_manifest(manifest, source_commit=source_commit)
+    files = _validate_source_manifest(
+        manifest,
+        source_commit=source_commit,
+        direct_nodegroup8=args.direct_nodegroup8,
+    )
     with tempfile.TemporaryDirectory(prefix="fr13-sfwd-conv-postprep-") as temporary:
         regenerated = Path(temporary) / "manifest.json"
         write_source_manifest(
             argparse.Namespace(
-                repo=str(repo), source_commit=source_commit, output=str(regenerated)
+                repo=str(repo),
+                source_commit=source_commit,
+                output=str(regenerated),
+                direct_nodegroup8=args.direct_nodegroup8,
             )
         )
         if _regular(regenerated) != manifest_raw:
@@ -291,12 +313,10 @@ def write_host_readiness(args: argparse.Namespace) -> None:
         raise GateError("K64 block-map SHA-256 drifted")
     _validate_qrow_live_pass(repo)
     manifest_sha = _sha256(manifest_raw)
-    _write_json(
-        Path(args.output).resolve(),
-        {
+    payload = {
             "schema": READINESS_SCHEMA,
             "status": "ready_for_one_real_swe_verified_hydra27_b1_byte_gate",
-            "candidate": CANDIDATE,
+            "candidate": _candidate(direct_nodegroup8=args.direct_nodegroup8),
             "source_commit": source_commit,
             "branch": branch,
             "upstream_commit": upstream_commit,
@@ -324,8 +344,17 @@ def write_host_readiness(args: argparse.Namespace) -> None:
             "production_eligible": False,
             "gpu_or_docker_used": False,
             "launched": False,
-        },
-    )
+        }
+    if args.direct_nodegroup8:
+        payload.update(
+            {
+                "direct_nodegroup8": True,
+                "channel_programs_per_request": 160,
+                "standalone_gate_programs_per_request": 4,
+                "programs_per_request": 164,
+            }
+        )
+    _write_json(Path(args.output).resolve(), payload)
 
 
 def _validate_live_pass(
@@ -333,11 +362,12 @@ def _validate_live_pass(
     *,
     source_commit: str,
     manifest_sha256: str,
+    direct_nodegroup8: bool = False,
 ) -> set[tuple[str, str]]:
     required = {
         "schema": PASS_SCHEMA,
         "status": "byte_pass_source_only",
-        "candidate": CANDIDATE,
+        "candidate": _candidate(direct_nodegroup8=direct_nodegroup8),
         "source_commit": source_commit,
         "source_manifest_sha256": manifest_sha256,
         "fixed32_mode": "hydra27_fixed32",
@@ -367,6 +397,15 @@ def _validate_live_pass(
         "differing_bytes": 0,
         "errors": 0,
     }
+    if direct_nodegroup8:
+        required.update(
+            {
+                "direct_nodegroup8": True,
+                "channel_programs_per_request": 160,
+                "standalone_gate_programs_per_request": 4,
+                "programs_per_request": 164,
+            }
+        )
     drift = {
         key: (payload.get(key), value)
         for key, value in required.items()
@@ -534,7 +573,11 @@ def validate_gate(args: argparse.Namespace) -> None:
     end, end_raw = _load_json(Path(args.manifest_end).resolve())
     if launch_raw != end_raw or launch != end:
         raise GateError("source manifest changed during the task")
-    files = _validate_source_manifest(launch, source_commit=source_commit)
+    files = _validate_source_manifest(
+        launch,
+        source_commit=source_commit,
+        direct_nodegroup8=args.direct_nodegroup8,
+    )
     source_sha = _sha256(launch_raw)
 
     readiness, readiness_raw = _load_json(
@@ -543,7 +586,7 @@ def validate_gate(args: argparse.Namespace) -> None:
     readiness_required = {
         "schema": READINESS_SCHEMA,
         "status": "ready_for_one_real_swe_verified_hydra27_b1_byte_gate",
-        "candidate": CANDIDATE,
+        "candidate": _candidate(direct_nodegroup8=args.direct_nodegroup8),
         "source_commit": source_commit,
         "upstream_commit": source_commit,
         "source_manifest_sha256": source_sha,
@@ -571,6 +614,15 @@ def validate_gate(args: argparse.Namespace) -> None:
         "gpu_or_docker_used": False,
         "launched": False,
     }
+    if args.direct_nodegroup8:
+        readiness_required.update(
+            {
+                "direct_nodegroup8": True,
+                "channel_programs_per_request": 160,
+                "standalone_gate_programs_per_request": 4,
+                "programs_per_request": 164,
+            }
+        )
     if any(readiness.get(key) != value for key, value in readiness_required.items()):
         raise GateError("SFWD conv/post-prep host-readiness contract drifted")
 
@@ -599,7 +651,10 @@ def validate_gate(args: argparse.Namespace) -> None:
         logs / "fr13_fixed32_sfwd_conv_postprep.live_pass.json"
     )
     pass_pairs = _validate_live_pass(
-        live_pass, source_commit=source_commit, manifest_sha256=source_sha
+        live_pass,
+        source_commit=source_commit,
+        manifest_sha256=source_sha,
+        direct_nodegroup8=args.direct_nodegroup8,
     )
     records_raw = _regular(
         logs / "fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl"
@@ -624,7 +679,7 @@ def validate_gate(args: argparse.Namespace) -> None:
         expected = {
             "schema": "fr13.fixed32.sfwd_conv_postprep.byte_ab.v1",
             "status": "pass",
-            "candidate": CANDIDATE,
+            "candidate": _candidate(direct_nodegroup8=args.direct_nodegroup8),
             "source_commit": source_commit,
             "source_manifest_sha256": source_sha,
             "fixed32_mode": "hydra27_fixed32",
@@ -648,6 +703,15 @@ def validate_gate(args: argparse.Namespace) -> None:
             "floor_acceptance_eligible": False,
             "production_eligible": False,
         }
+        if args.direct_nodegroup8:
+            expected.update(
+                {
+                    "direct_nodegroup8": True,
+                    "channel_programs_per_request": 160,
+                    "standalone_gate_programs_per_request": 4,
+                    "programs_per_request": 164,
+                }
+            )
         if any(record.get(key) != value for key, value in expected.items()):
             raise GateError("SFWD conv/post-prep comparison record drifted")
         comparisons = record.get("comparisons")
@@ -746,6 +810,8 @@ def validate_gate(args: argparse.Namespace) -> None:
         "FR13_DRAFT_VOCAB_K=65536",
         "ENFORCE_EAGER=1",
     )
+    if args.direct_nodegroup8:
+        expected_env += ("FR13_FIXED32_SFWD_NODEGROUP8_DIRECT=1",)
     if any(container_env.count(value) != 1 for value in expected_env):
         raise GateError("container environment did not preserve the exclusive gate")
     if "FR10_ALLOW_LINEAR_FALLBACK=1" in container_env:
@@ -760,12 +826,10 @@ def validate_gate(args: argparse.Namespace) -> None:
         raise GateError("K64/root1 engagement or no-fallback evidence drifted")
 
     output = Path(args.output).resolve()
-    _write_json(
-        output,
-        {
+    verdict = {
             "schema": "fr13.fixed32.sfwd_conv_postprep.k64_root_b1_gate.v1",
             "status": "pass",
-            "candidate": CANDIDATE,
+            "candidate": _candidate(direct_nodegroup8=args.direct_nodegroup8),
             "source_commit": source_commit,
             "source_manifest_sha256": source_sha,
             "task_id": TASK_ID,
@@ -804,8 +868,17 @@ def validate_gate(args: argparse.Namespace) -> None:
                 "identity_wide256_fullgrid_b1" if target_live_sha256 else None
             ),
             "combined_target_live_pass_sha256": target_live_sha256,
-        },
-    )
+        }
+    if args.direct_nodegroup8:
+        verdict.update(
+            {
+                "direct_nodegroup8": True,
+                "channel_programs_per_request": 160,
+                "standalone_gate_programs_per_request": 4,
+                "programs_per_request": 164,
+            }
+        )
+    _write_json(output, verdict)
 
 
 def validate_embedded_gate(args: argparse.Namespace) -> None:
@@ -817,6 +890,8 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
     batch = int(args.batch_size)
     if batch not in (1, 4):
         raise GateError("embedded gate validation requires exact B1 or B4")
+    if args.direct_nodegroup8 and batch != 1:
+        raise GateError("direct nodegroup8 embedded gate requires exact B1")
     task_ids = EXACT4_TASK_IDS[:batch]
     task_markers = EXACT4_TASK_MARKERS[:batch]
 
@@ -824,7 +899,11 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
     end, end_raw = _load_json(Path(args.manifest_end).resolve())
     if launch != end or launch_raw != end_raw:
         raise GateError("embedded gate source manifest changed during the task")
-    files = _validate_source_manifest(launch, source_commit=source_commit)
+    files = _validate_source_manifest(
+        launch,
+        source_commit=source_commit,
+        direct_nodegroup8=args.direct_nodegroup8,
+    )
     if _git(repo, "rev-parse", "HEAD") != source_commit:
         raise GateError("embedded gate source commit does not equal HEAD")
     for relative in SOURCE_FILES:
@@ -854,7 +933,9 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
             f"{'b1' if batch == 1 else 'exact4_b4'}_live_pass.v1"
         ),
         "status": "byte_pass_source_only",
-        "candidate": EMBEDDED_GATE_CANDIDATE,
+        "candidate": _candidate(
+            direct_nodegroup8=args.direct_nodegroup8, embedded_gate_cta=True
+        ),
         "source_commit": source_commit,
         "source_manifest_sha256": source_sha,
         "fixed32_mode": "hydra27_fixed32",
@@ -869,9 +950,11 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
         "draft_vocab_blocks_sha256": BLOCKS_SHA256,
         "embedded_gate_cta": True,
         "gate_scheduling": "append_to_first_channel_programs",
-        "channel_programs_per_request": 40,
+        "channel_programs_per_request": (
+            160 if args.direct_nodegroup8 else 40
+        ),
         "standalone_gate_programs_per_request": 0,
-        "programs_per_request": 40,
+        "programs_per_request": 160 if args.direct_nodegroup8 else 40,
         "qrow16_production": batch == 1,
         "stock_attention": batch == 4,
         "compared_byte_surfaces": list(BYTE_SURFACES),
@@ -887,6 +970,8 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
         "differing_bytes": 0,
         "errors": 0,
     }
+    if args.direct_nodegroup8:
+        pass_required["direct_nodegroup8"] = True
     if any(live_pass.get(key) != value for key, value in pass_required.items()):
         raise GateError("embedded gate live PASS contract drifted")
     layers = live_pass.get("layers")
@@ -915,7 +1000,10 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
         required = {
             "schema": "fr13.fixed32.sfwd_conv_postprep.embedded_gate.byte_ab.v1",
             "status": "pass",
-            "candidate": EMBEDDED_GATE_CANDIDATE,
+            "candidate": _candidate(
+                direct_nodegroup8=args.direct_nodegroup8,
+                embedded_gate_cta=True,
+            ),
             "source_commit": source_commit,
             "source_manifest_sha256": source_sha,
             "fixed32_mode": "hydra27_fixed32",
@@ -925,7 +1013,7 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
             "physical_rows_per_request": 32,
             "embedded_gate_cta": True,
             "gate_scheduling": "append_to_first_channel_programs",
-            "programs_per_request": 40,
+            "programs_per_request": 160 if args.direct_nodegroup8 else 40,
             "zero_diff": True,
             "differing_bytes": 0,
             "reference_always_served": True,
@@ -935,6 +1023,8 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
             "floor_acceptance_eligible": False,
             "production_eligible": False,
         }
+        if args.direct_nodegroup8:
+            required["direct_nodegroup8"] = True
         if any(record.get(key) != value for key, value in required.items()):
             raise GateError("embedded gate byte-record contract drifted")
         comparisons = record.get("comparisons")
@@ -969,6 +1059,8 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
         "FR13_CONV_WB_BATCHED=1",
         "ENFORCE_EAGER=1",
     )
+    if args.direct_nodegroup8:
+        expected_env += ("FR13_FIXED32_SFWD_NODEGROUP8_DIRECT=1",)
     if any(container_env.count(value) != 1 for value in expected_env):
         raise GateError("embedded gate container environment drifted")
 
@@ -988,15 +1080,16 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
     ledger_result = verify_fixed32_ingress_ledger(
         ledger, expected_role="engine", require_finalized=True
     )
-    _write_json(
-        Path(args.output).resolve(),
-        {
+    verdict = {
             "schema": (
                 "fr13.fixed32.sfwd_conv_postprep.embedded_gate."
                 f"{'b1' if batch == 1 else 'exact4_b4'}_gate.v1"
             ),
             "status": "pass",
-            "candidate": EMBEDDED_GATE_CANDIDATE,
+            "candidate": _candidate(
+                direct_nodegroup8=args.direct_nodegroup8,
+                embedded_gate_cta=True,
+            ),
             "source_commit": source_commit,
             "source_manifest_sha256": source_sha,
             "task_ids": list(task_ids),
@@ -1007,7 +1100,7 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
             "draft_vocab_root": 1,
             "draft_vocab_k": 65536,
             "embedded_gate_cta": True,
-            "programs_per_request": 40,
+            "programs_per_request": 160 if args.direct_nodegroup8 else 40,
             "layer_count": LAYERS,
             "compared_byte_surfaces": list(BYTE_SURFACES),
             "reference_returned": True,
@@ -1023,8 +1116,10 @@ def validate_embedded_gate(args: argparse.Namespace) -> None:
             "engine_ledger_chain_head_sha256": ledger_result[
                 "chain_head_sha256"
             ],
-        },
-    )
+        }
+    if args.direct_nodegroup8:
+        verdict["direct_nodegroup8"] = True
+    _write_json(Path(args.output).resolve(), verdict)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -1034,6 +1129,7 @@ def parser() -> argparse.ArgumentParser:
     manifest.add_argument("--repo", required=True)
     manifest.add_argument("--source-commit", required=True)
     manifest.add_argument("--output", required=True)
+    manifest.add_argument("--direct-nodegroup8", action="store_true")
     manifest.set_defaults(function=write_source_manifest)
     readiness = commands.add_parser("host-readiness")
     readiness.add_argument("--repo", required=True)
@@ -1041,6 +1137,7 @@ def parser() -> argparse.ArgumentParser:
     readiness.add_argument("--source-manifest", required=True)
     readiness.add_argument("--fa2-so", required=True)
     readiness.add_argument("--output", required=True)
+    readiness.add_argument("--direct-nodegroup8", action="store_true")
     readiness.set_defaults(function=write_host_readiness)
     pass_parser = commands.add_parser("validate-pass")
     pass_parser.add_argument("--repo", required=True)
@@ -1060,6 +1157,7 @@ def parser() -> argparse.ArgumentParser:
     validate.add_argument("--target-live-pass")
     validate.add_argument("--target-candidate-so")
     validate.add_argument("--output", required=True)
+    validate.add_argument("--direct-nodegroup8", action="store_true")
     validate.set_defaults(function=validate_gate)
     embedded = commands.add_parser("validate-embedded")
     embedded.add_argument("--repo", required=True)
@@ -1069,6 +1167,7 @@ def parser() -> argparse.ArgumentParser:
     embedded.add_argument("--manifest-launch", required=True)
     embedded.add_argument("--manifest-end", required=True)
     embedded.add_argument("--output", required=True)
+    embedded.add_argument("--direct-nodegroup8", action="store_true")
     embedded.set_defaults(function=validate_embedded_gate)
     return result
 
