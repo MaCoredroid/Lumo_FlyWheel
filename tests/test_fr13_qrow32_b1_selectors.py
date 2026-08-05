@@ -58,7 +58,7 @@ def _selector_namespace(monkeypatch: pytest.MonkeyPatch, *, profile_scope):
         "FR13_FA2_QROW32_B1_SO_SHA256",
         namespace["_FR13_FA2_QROW32_B1_CANDIDATE_SHA256"],
     )
-    monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SIZE", "300140712")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SIZE", "300153584")
     monkeypatch.setenv(
         "FR13_FA2_QROW32_B1_FA2_HEAD",
         namespace["_FR13_FA2_QROW32_B1_FA2_HEAD"],
@@ -597,8 +597,8 @@ def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:
     assert '"${FR13_FIXED32_MODE:-}" == "hydra27_fixed32"' in text
     assert '"${ENFORCE_EAGER:-0}" == "0"' in text
     assert '"${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE"' in text
-    assert "07e02c0a53185c48d745fb221e7c807f97bfe40f61354e4242e9271e743e13c1" in text
-    assert "a4a6d96cad9b34b73ddc4fb2fcda230c033b30246509c1a24208b2f2955d2bcc" in text
+    assert "ec36c5d26635fead8f626539ff98ab055a756af1e568dbadf88905a41f61862a" in text
+    assert "3c559d80c65573932c5c7bfd5ef7081df6c3f1a3f6c888bc36a04ccc264d394b" in text
     assert "--patch-source scripts/fr13_patch_fa2_tree_bias.py" in text
     assert "--patch-source /workspace/scripts/fr13_patch_fa2_tree_bias.py" in text
     assert "FR13_FA2_QROW32_B1_INTERNAL_ATTESTED=1" in text

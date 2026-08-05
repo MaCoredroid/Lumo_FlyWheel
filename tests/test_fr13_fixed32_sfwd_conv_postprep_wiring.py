@@ -22,7 +22,7 @@ QROW16_SHA256 = "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb8
 QROW16_PASS_SHA256 = (
     "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77"
 )
-QROW32_SHA256 = "07e02c0a53185c48d745fb221e7c807f97bfe40f61354e4242e9271e743e13c1"
+QROW32_SHA256 = "ec36c5d26635fead8f626539ff98ab055a756af1e568dbadf88905a41f61862a"
 BLOCKS_SHA256 = "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
 
 
@@ -297,7 +297,7 @@ def test_patch_contract_rejects_non_k64_and_accepts_credentialed_full_graph_runt
     monkeypatch.setenv("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
     monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "split2")
     monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SHA256", QROW32_SHA256)
-    monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SIZE", "300140712")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SIZE", "300153584")
     patcher._fr13_fixed32_validate_patch_env()
 
     monkeypatch.setenv("FR13_FA2_QROW16_PRODUCTION", "1")
