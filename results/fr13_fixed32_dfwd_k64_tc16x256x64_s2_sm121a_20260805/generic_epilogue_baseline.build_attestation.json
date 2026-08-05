@@ -1,0 +1,99 @@
+{
+  "acceptance_valid": false,
+  "binary": {
+    "bytes": 314520,
+    "mode": "0555",
+    "path": "/home/mark/fr13_dfwd_k64_tc16x256x64_s2_build_20260805/fr13_bf16_k64_tc16x256x64_s2.abi3.so",
+    "sha256": "0ed6f927b05f05352a88b13d27d90d9b6a1831c78a31a6e69d0f43d17c66a21c"
+  },
+  "compute_model": {
+    "claim": "modeled only; no timing or achieved-throughput measurement",
+    "padding_factor": {
+      "b1": 16,
+      "b4": 4
+    },
+    "tensor_core_executed_flops_per_call": 10737418240,
+    "useful_flops": {
+      "b1": 671088640,
+      "b4": 2684354560
+    }
+  },
+  "cuda_arch": "12.1a",
+  "cuda_release": "13.0",
+  "cutlass": {
+    "commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_h_sha256": "3f83df4d3164afea3a865a5e93d7c1aff3cfdd7c604319571a94332b4e9ec8da"
+  },
+  "gpu_runtime_used": false,
+  "kernel_contract": {
+    "batch_scopes": [
+      1,
+      4
+    ],
+    "dynamic_shared_storage_bytes": 69632,
+    "input": "BF16[B,5120] contiguous, B in {1,4}",
+    "instruction_mnk": [
+      16,
+      8,
+      16
+    ],
+    "logical_grid_ctas": 256,
+    "output": "BF16[B,65536] contiguous",
+    "problem_mnk": {
+      "b1": [
+        1,
+        65536,
+        5120
+      ],
+      "b4": [
+        4,
+        65536,
+        5120
+      ]
+    },
+    "proposal_only": true,
+    "split_k_slices": 1,
+    "stages": 2,
+    "target_authority_changed": false,
+    "threadblock_mnk": [
+      16,
+      256,
+      64
+    ],
+    "threads_per_cta": 128,
+    "warp_mnk": [
+      16,
+      64,
+      64
+    ],
+    "weight": "BF16[65536,5120] contiguous",
+    "workspace_bytes": 0
+  },
+  "logical_global_traffic_model": {
+    "b1": {
+      "duplicated_input_read_bytes": 2621440,
+      "global_read_bytes": 673710080,
+      "output_write_bytes": 131072,
+      "total_bytes": 673841152
+    },
+    "b4": {
+      "duplicated_input_read_bytes": 10485760,
+      "global_read_bytes": 681574400,
+      "output_write_bytes": 524288,
+      "total_bytes": 682098688
+    },
+    "scope": "algorithmic global bytes; not measured DRAM traffic",
+    "weight_bytes_per_call": 671088640
+  },
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "real_task_correctness": false,
+  "runtime_wired": false,
+  "schema": "fr13.fixed32.dfwd_k64_tc16x256x64_s2_sm121a_build.v1",
+  "source": {
+    "path": "csrc/fr13_bf16_gemm_k64_tc16x256x64_s2.cu",
+    "sha256": "41ea6f40ad24b3dc4c0648d0a603d9d6bd7d6e05f172f5b8e1955873075d08ad"
+  },
+  "status": "BUILT_UNQUALIFIED",
+  "torch_version": "2.11.0+cu130"
+}

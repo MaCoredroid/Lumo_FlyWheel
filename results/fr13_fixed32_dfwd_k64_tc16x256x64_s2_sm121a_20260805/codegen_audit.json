@@ -1,0 +1,125 @@
+{
+  "acceptance_valid": false,
+  "architecture": "sm_121a",
+  "compute_model": {
+    "claim": "modeled only; no timing or achieved-throughput measurement",
+    "padding_factor": {
+      "b1": 16,
+      "b4": 4
+    },
+    "tensor_core_executed_flops_per_call": 10737418240,
+    "useful_flops": {
+      "b1": 671088640,
+      "b4": 2684354560
+    }
+  },
+  "gpu_used": false,
+  "kernel_contract": {
+    "epilogue_source_reads_disabled": true,
+    "instruction_mnk": [
+      16,
+      8,
+      16
+    ],
+    "logical_grid_ctas": 256,
+    "problem_mnk": {
+      "b1": [
+        1,
+        65536,
+        5120
+      ],
+      "b4": [
+        4,
+        65536,
+        5120
+      ]
+    },
+    "stages": 2,
+    "threadblock_mnk": [
+      16,
+      256,
+      64
+    ],
+    "threads_per_cta": 128,
+    "warp_mnk": [
+      16,
+      64,
+      64
+    ]
+  },
+  "logical_global_traffic_model": {
+    "b1": {
+      "duplicated_input_read_bytes": 2621440,
+      "global_read_bytes": 673710080,
+      "output_write_bytes": 131072,
+      "pair8_global_read_bytes": 838860800,
+      "pair8_global_read_reduction_fraction": 0.19687500000000002,
+      "total_bytes": 673841152
+    },
+    "b4": {
+      "duplicated_input_read_bytes": 10485760,
+      "global_read_bytes": 681574400,
+      "output_write_bytes": 524288,
+      "pair8_global_read_bytes": 1342177280,
+      "pair8_global_read_reduction_fraction": 0.4921875,
+      "total_bytes": 682098688
+    },
+    "input_replication_factor": 256,
+    "scope": "algorithmic global bytes; not measured DRAM traffic",
+    "weight_bytes_per_call": 671088640
+  },
+  "only_alpha_epilogue_codegen_delta": {
+    "generic_epilogue_barriers": 10,
+    "generic_epilogue_global_loads": 42,
+    "generic_epilogue_global_stores": 8,
+    "generic_epilogue_static_instructions": 952,
+    "only_alpha_barriers": 6,
+    "only_alpha_global_loads": 36,
+    "only_alpha_global_stores": 4,
+    "only_alpha_static_instructions": 760,
+    "scope": "static compiler output; not a performance measurement",
+    "static_instruction_reduction_fraction": 0.2016806722689075
+  },
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "real_task_correctness": false,
+  "resources": {
+    "b1": {
+      "launch_dynamic_shared_bytes": 69632,
+      "local_bytes_per_thread": 0,
+      "registers_per_thread": 168,
+      "stack_bytes_per_thread": 0,
+      "static_shared_bytes": 1024
+    },
+    "b4": {
+      "launch_dynamic_shared_bytes": 69632,
+      "local_bytes_per_thread": 0,
+      "registers_per_thread": 168,
+      "stack_bytes_per_thread": 0,
+      "static_shared_bytes": 1024
+    }
+  },
+  "runtime_wired": false,
+  "sass": {
+    "b1_selected_instruction_counts": {
+      "BAR.SYNC.DEFER_BLOCKING": 6,
+      "HMMA.16816.F32.BF16": 32,
+      "LDG.E": 1,
+      "LDG.E.64": 1,
+      "LDG.E.LTC128B.128": 34,
+      "STG.E.128": 4
+    },
+    "b1_static_instructions": 760,
+    "b4_selected_instruction_counts": {
+      "BAR.SYNC.DEFER_BLOCKING": 6,
+      "HMMA.16816.F32.BF16": 32,
+      "LDG.E": 1,
+      "LDG.E.64": 1,
+      "LDG.E.LTC128B.128": 34,
+      "STG.E.128": 4
+    },
+    "b4_static_instructions": 760
+  },
+  "schema": "fr13.fixed32.dfwd_k64_tc16x256x64_s2_codegen_audit.v1",
+  "status": "STATIC_CODEGEN_PASS_UNQUALIFIED"
+}
