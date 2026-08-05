@@ -1,0 +1,11 @@
+PASS focused node-trust plus existing CFWD tests: 78 passed
+PASS broader launcher/provenance tests before external-cache case: 215 passed, 1 skipped
+PASS default-off preserves original packed-v3 walk function
+PASS exact selector admits only Hydra27 physical32 B1/B4
+PASS candidate outputs route through existing CFWD shadow comparator
+PASS source/hash binding verifier
+PASS bash -n: launcher and real SWE B1 gate runner
+PASS py_compile: overlay, wrapper, manifest, wiring test, verifier
+BLOCKED unrelated broad-test case: missing required local Hugging Face SWE-Verified cache blob
+NOT RUN GPU byte equality
+NOT RUN real SWE-Verified B1/B4 timing
