@@ -3559,7 +3559,7 @@ def _fr13_fa2_qrow32_b1_require_exact4():
     return task_ids
 
 
-def _fr13_fa2_qrow32_b1_exact_geometry(
+def _fr13_fa2_qrow32_b1_geometry_mismatches(
     *,
     query,
     key_cache,
@@ -3575,36 +3575,89 @@ def _fr13_fa2_qrow32_b1_exact_geometry(
     num_splits,
     tree_bias,
 ):
-    exact = (
-        query.dtype == torch.bfloat16
-        and tuple(query.shape) == (32, 24, 256)
-        and int(query.stride(-2)) == 256
-        and int(query.stride(-1)) == 1
-        and key_cache.dtype == torch.bfloat16
-        and value_cache.dtype == torch.bfloat16
-        and tuple(key_cache.shape[1:]) == (1024, 4, 256)
-        and tuple(value_cache.shape) == tuple(key_cache.shape)
-        and tuple(key_cache.stride()) == (1024 * 4 * 256, 4 * 256, 256, 1)
-        and tuple(value_cache.stride()) == tuple(key_cache.stride())
-        and cu_seqlens_q.dtype == torch.int32
-        and tuple(cu_seqlens_q.shape) == (2,)
-        and seqused_k.dtype == torch.int32
-        and tuple(seqused_k.shape) == (1,)
-        and block_table.dtype == torch.int32
-        and block_table.ndim == 2
-        and int(block_table.shape[0]) == 1
-        and tree_bias.dtype == torch.float32
-        and tuple(tree_bias.shape) in ((32, 32), (1, 32, 32))
-        and int(tree_bias.stride(-1)) == 1
-        and int(max_seqlen_q) == 32
-        and int(max_seqlen_k) > 0
-        and not bool(causal)
-        and float(softcap) == 0.0
-        and int(num_splits) in (0, 1)
+    query_meta = (str(query.dtype), tuple(query.shape), tuple(query.stride()))
+    key_meta = (
+        str(key_cache.dtype), tuple(key_cache.shape), tuple(key_cache.stride())
     )
-    if window_size is not None:
-        exact = exact and tuple(int(x) for x in window_size) == (-1, -1)
-    return bool(exact)
+    value_meta = (
+        str(value_cache.dtype),
+        tuple(value_cache.shape),
+        tuple(value_cache.stride()),
+    )
+    cu_seqlens_q_meta = (str(cu_seqlens_q.dtype), tuple(cu_seqlens_q.shape))
+    seqused_k_meta = (str(seqused_k.dtype), tuple(seqused_k.shape))
+    block_table_meta = (str(block_table.dtype), tuple(block_table.shape))
+    tree_bias_meta = (
+        str(tree_bias.dtype), tuple(tree_bias.shape), tuple(tree_bias.stride())
+    )
+    window_meta = (
+        None
+        if window_size is None
+        else tuple(int(value) for value in window_size)
+    )
+    checks = (
+        (
+            "query(dtype,shape,stride)",
+            query.dtype == torch.bfloat16
+            and tuple(query.shape) == (32, 24, 256)
+            and int(query.stride(-2)) == 256
+            and int(query.stride(-1)) == 1,
+            query_meta,
+        ),
+        (
+            "key_cache(dtype,shape,stride)",
+            key_cache.dtype == torch.bfloat16
+            and tuple(key_cache.shape[1:]) == (1024, 4, 256)
+            and tuple(key_cache.stride())
+            == (1024 * 4 * 256, 4 * 256, 256, 1),
+            key_meta,
+        ),
+        (
+            "value_cache(dtype,shape,stride)",
+            value_cache.dtype == torch.bfloat16
+            and tuple(value_cache.shape) == tuple(key_cache.shape)
+            and tuple(value_cache.stride()) == tuple(key_cache.stride()),
+            value_meta,
+        ),
+        (
+            "cu_seqlens_q(dtype,shape)",
+            cu_seqlens_q.dtype == torch.int32
+            and tuple(cu_seqlens_q.shape) == (2,),
+            cu_seqlens_q_meta,
+        ),
+        (
+            "seqused_k(dtype,shape)",
+            seqused_k.dtype == torch.int32 and tuple(seqused_k.shape) == (1,),
+            seqused_k_meta,
+        ),
+        (
+            "block_table(dtype,shape)",
+            block_table.dtype == torch.int32
+            and block_table.ndim == 2
+            and int(block_table.shape[0]) == 1,
+            block_table_meta,
+        ),
+        (
+            "tree_bias(dtype,shape,stride)",
+            tree_bias.dtype == torch.float32
+            and tuple(tree_bias.shape) in ((32, 32), (1, 32, 32))
+            and int(tree_bias.stride(-1)) == 1,
+            tree_bias_meta,
+        ),
+        ("max_seqlen_q", int(max_seqlen_q) == 32, int(max_seqlen_q)),
+        ("max_seqlen_k", int(max_seqlen_k) > 0, int(max_seqlen_k)),
+        ("causal", not bool(causal), bool(causal)),
+        ("softcap", float(softcap) == 0.0, float(softcap)),
+        ("num_splits", int(num_splits) in (0, 1), int(num_splits)),
+        ("window_size", window_meta in (None, (-1, -1)), window_meta),
+    )
+    return tuple(
+        f"{name}={actual!r}" for name, valid, actual in checks if not valid
+    )
+
+
+def _fr13_fa2_qrow32_b1_exact_geometry(**geometry):
+    return not _fr13_fa2_qrow32_b1_geometry_mismatches(**geometry)
 
 
 def _fr13_fa2_qrow32_b1_candidate_tree_bias(tree_bias, arm):
@@ -3694,14 +3747,18 @@ def _fr13_fa2_qrow32_b1_live_register(
     _fr13_fa2_qrow32_b1_require_identity()
     if _fr13_fa2_qrow32_b1_profile_capture_active():
         return _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias)
-    if not _fr13_fa2_qrow32_b1_exact_geometry(
+    geometry_mismatches = _fr13_fa2_qrow32_b1_geometry_mismatches(
         query=query, key_cache=key_cache, value_cache=value_cache,
         cu_seqlens_q=cu_seqlens_q, max_seqlen_q=max_seqlen_q,
         seqused_k=seqused_k, max_seqlen_k=max_seqlen_k, causal=causal,
         window_size=window_size, block_table=block_table, softcap=softcap,
         num_splits=num_splits, tree_bias=tree_bias,
-    ):
-        raise RuntimeError("FR13 qrow32 B1 live gate geometry drifted")
+    )
+    if geometry_mismatches:
+        raise RuntimeError(
+            "FR13 qrow32 B1 live gate geometry drifted: "
+            + "; ".join(geometry_mismatches)
+        )
     reference_tree_bias = _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias)
     if not (torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()):
         return reference_tree_bias
@@ -3954,14 +4011,18 @@ def _fr13_fa2_qrow32_b1_production_begin(
             raise RuntimeError("FR13 qrow32 B1 production is not final fixed32 B1")
     elif os.environ.get("ENFORCE_EAGER", "0") != "1":
         raise RuntimeError("FR13 qrow32 B1 production ran outside capture or eager")
-    if not _fr13_fa2_qrow32_b1_exact_geometry(
+    geometry_mismatches = _fr13_fa2_qrow32_b1_geometry_mismatches(
         query=query, key_cache=key_cache, value_cache=value_cache,
         cu_seqlens_q=cu_seqlens_q, max_seqlen_q=max_seqlen_q,
         seqused_k=seqused_k, max_seqlen_k=max_seqlen_k, causal=causal,
         window_size=window_size, block_table=block_table, softcap=softcap,
         num_splits=num_splits, tree_bias=tree_bias,
-    ):
-        raise RuntimeError("FR13 qrow32 B1 production geometry drifted")
+    )
+    if geometry_mismatches:
+        raise RuntimeError(
+            "FR13 qrow32 B1 production geometry drifted: "
+            + "; ".join(geometry_mismatches)
+        )
     layer_name = str(getattr(layer, "layer_name", ""))
     if layer_name not in _FR13_FA2_QROW32_B1_TARGET_LAYERS:
         raise RuntimeError("FR13 qrow32 B1 production layer identity drifted")

@@ -208,6 +208,9 @@ def test_exact_geometry_accepts_fused_qkv_row_stride_only(
     }
 
     assert exact_geometry(**exact_args)
+    assert namespace["_fr13_fa2_qrow32_b1_geometry_mismatches"](
+        **exact_args
+    ) == ()
 
     wrong_head = torch.empty((32, 24, 257), dtype=torch.bfloat16)[..., :256]
     assert tuple(wrong_head.stride()) == (24 * 257, 257, 1)
@@ -217,6 +220,30 @@ def test_exact_geometry_accepts_fused_qkv_row_stride_only(
     assert tuple(wrong_element.shape) == (32, 24, 256)
     assert int(wrong_element.stride(-1)) == 2
     assert not exact_geometry(**{**exact_args, "query": wrong_element})
+
+
+def test_geometry_failure_reports_only_non_secret_operand_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, _ = _selector_namespace(monkeypatch, profile_scope=None)
+    geometry = _b1_geometry()
+    geometry["max_seqlen_q"] = 1
+
+    mismatches = namespace["_fr13_fa2_qrow32_b1_geometry_mismatches"](
+        **{
+            key: value
+            for key, value in geometry.items()
+            if key not in {"flash_fn", "softmax_scale"}
+        }
+    )
+    assert mismatches == ("max_seqlen_q=1",)
+
+    with pytest.raises(RuntimeError) as error:
+        namespace["_fr13_fa2_qrow32_b1_live_register"](
+            layer=types.SimpleNamespace(layer_name="unused.before.capture"),
+            **geometry,
+        )
+    assert str(error.value).endswith("geometry drifted: max_seqlen_q=1")
 
 
 def test_live_register_profile_capture_bypasses_final_geometry(
