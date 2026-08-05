@@ -41,7 +41,7 @@ The fixed kernel geometry is:
 - dynamic shared storage: `61440 bytes`
 
 The physical row dimension is exactly one 32-row tile, rather than the
-incumbent symbol's 208-row CTA tile. K remains 64 and there is no split-K,
+incumbent symbol's 128-row CTA tile. K remains 64 and there is no split-K,
 which makes this the narrowest defensible scheduler change found from the
 available evidence. A scheduler change can still alter BF16 rounding, so the
 candidate is not distribution-qualified by construction.
