@@ -48,12 +48,6 @@ def _contract() -> object:
         "BLOCK_V",
         "GDN_LAYERS",
         "BF16_BYTES",
-        "FIXED32_ROOT_NODES_PACKED",
-        "FIXED32_GROUP_PATH_INDICES_PACKED",
-        "FIXED32_PATH_LENGTHS_PACKED",
-        "FIXED32_BRANCH_PATH_0_PACKED",
-        "FIXED32_BRANCH_PATH_1_PACKED",
-        "FIXED32_BRANCH_PATH_2_PACKED",
     }
     tree, _source = _tree_and_source()
     body = [
@@ -304,49 +298,49 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
 
 
 def test_compile_time_physical32_schedule_matches_validated_descriptors() -> None:
-    tree, _source = _tree_and_source()
-    names = {
-        "FIXED32_ROOT_NODES_PACKED",
-        "FIXED32_GROUP_PATH_INDICES_PACKED",
-        "FIXED32_PATH_LENGTHS_PACKED",
-        "FIXED32_BRANCH_PATH_0_PACKED",
-        "FIXED32_BRANCH_PATH_1_PACKED",
-        "FIXED32_BRANCH_PATH_2_PACKED",
-    }
-    values = {
-        target.id: ast.literal_eval(node.value)
-        for node in tree.body
-        if isinstance(node, ast.Assign)
-        for target in node.targets
-        if isinstance(target, ast.Name) and target.id in names
-    }
-    roots = [
-        (values["FIXED32_ROOT_NODES_PACKED"] >> (index * 5)) & 0x1F
-        for index in range(5)
-    ]
+    kernel = _function_source(
+        "_fr13_fixed32_gdn_gqa_group3_single_launch_kernel"
+    )
+    roots = [index if index < 2 else index * 5 - 6 for index in range(5)]
     path_slots = [
         (
-            values["FIXED32_GROUP_PATH_INDICES_PACKED"] >> (index * 4)
+            0
+            if member == 2 and root < 4
+            else (
+                (0 if member == 0 else 8 + member)
+                if root == 4
+                else root * 2 + member + 1
+            )
         )
-        & 0xF
-        for index in range(15)
+        for root in range(5)
+        for member in range(3)
     ]
     path_ids = [
         path_slots[root * 3 + member]
         for root in range(5)
         for member in range(3 if root == 4 else 2)
     ]
-    path_lengths = [
-        (values["FIXED32_PATH_LENGTHS_PACKED"] >> (index * 3)) & 0x7
-        for index in range(11)
-    ]
+    path_lengths = [7, 5, 7] + [1] * 8
     branch_paths = []
     for path_id, path_length in enumerate(path_lengths):
-        if path_id < 3:
-            packed = values[f"FIXED32_BRANCH_PATH_{path_id}_PACKED"]
+        if path_id == 0:
             branch_paths.append(
                 [
-                    (packed >> (offset * 5)) & 0x1F
+                    19
+                    + offset * 2
+                    + min(offset, 1) * 3
+                    - max(offset - 3, 0)
+                    for offset in range(path_length)
+                ]
+            )
+        elif path_id == 1:
+            branch_paths.append(
+                [2 + offset * 5 for offset in range(path_length)]
+            )
+        elif path_id == 2:
+            branch_paths.append(
+                [
+                    3 + offset * 5 - max(offset - 4, 0) * 3
                     for offset in range(path_length)
                 ]
             )
@@ -355,6 +349,11 @@ def test_compile_time_physical32_schedule_matches_validated_descriptors() -> Non
                 [5 + ((path_id - 3) >> 1) * 5 + ((path_id - 3) & 1)]
             )
 
+    assert "root_index * 5 - 6" in kernel
+    assert "root_index * 2 + member + 1" in kernel
+    assert "tl.minimum(path_offset, 1) * 3" in kernel
+    assert "2 + path_offset * 5" in kernel
+    assert "tl.maximum(path_offset - 4, 0) * 3" in kernel
     assert roots == [0, 1, 4, 9, 14]
     assert path_slots == [1, 2, 0, 3, 4, 0, 5, 6, 0, 7, 8, 0, 0, 9, 10]
     assert path_ids == [1, 2, 3, 4, 5, 6, 7, 8, 0, 9, 10]

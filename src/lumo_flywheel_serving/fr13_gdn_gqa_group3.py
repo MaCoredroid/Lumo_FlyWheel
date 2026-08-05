@@ -26,12 +26,6 @@ BF16_BYTES = 2
 FIXED32_EXECUTION_SHA256 = (
     "80aed4d1a882ee4d4cde21dbf4314ed3abaae3f7553e35b6db5cd7574fe3b7db"
 )
-FIXED32_ROOT_NODES_PACKED = 0xE49020
-FIXED32_GROUP_PATH_INDICES_PACKED = 0x0A90087065043021
-FIXED32_PATH_LENGTHS_PACKED = 0x492493EF
-FIXED32_BRANCH_PATH_0_PACKED = 0x7FDDE6B13
-FIXED32_BRANCH_PATH_1_PACKED = 0x168B0E2
-FIXED32_BRANCH_PATH_2_PACKED = 0x6F3793503
 
 
 def fixed32_gdn_gqa_group3_contract(
@@ -495,12 +489,6 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
     RAW_GATING: tl.constexpr,
     COUNT_INVOCATION: tl.constexpr,
     SCAN_ALIGN: tl.constexpr,
-    FIXED32_ROOT_NODES_PACKED: tl.constexpr,
-    FIXED32_GROUP_PATH_INDICES_PACKED: tl.constexpr,
-    FIXED32_PATH_LENGTHS_PACKED: tl.constexpr,
-    FIXED32_BRANCH_PATH_0_PACKED: tl.constexpr,
-    FIXED32_BRANCH_PATH_1_PACKED: tl.constexpr,
-    FIXED32_BRANCH_PATH_2_PACKED: tl.constexpr,
     RING_EXPORT: tl.constexpr,
     K_NORM_EXPORT: tl.constexpr,
     GATE_EXPORT: tl.constexpr,
@@ -575,9 +563,11 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
     b_dt_bias_2 = tl.load(dt_bias + pid_vh_2).to(tl.float32)
 
     for root_index in tl.range(0, 5):
-        root_node = (
-            (FIXED32_ROOT_NODES_PACKED >> (root_index * 5)) & 0x1F
-        ).to(tl.int32)
+        root_node = tl.where(
+            root_index < 2,
+            root_index,
+            root_index * 5 - 6,
+        )
         root_state_0, root_state_1, root_state_2 = (
             _fr13_fixed32_gdn_gqa_group3_node(
                 root_state_0,
@@ -628,32 +618,38 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
         )
         for member in tl.static_range(0, 3):
             member_ok = (member < 2) | (root_index == 4)
-            path_slot = root_index * 3 + member
-            path_index = (
-                (FIXED32_GROUP_PATH_INDICES_PACKED >> (path_slot * 4))
-                & 0xF
-            ).to(tl.int32)
+            path_index = tl.where(
+                root_index == 4,
+                tl.where(member == 0, 0, 8 + member),
+                root_index * 2 + member + 1,
+            )
             path_len = tl.where(
                 member_ok,
-                (FIXED32_PATH_LENGTHS_PACKED >> (path_index * 3)) & 0x7,
+                tl.where(
+                    path_index == 0,
+                    7,
+                    tl.where(path_index == 1, 5, tl.where(path_index == 2, 7, 1)),
+                ),
                 0,
-            ).to(tl.int32)
+            )
             branch_state_0 = root_state_0
             branch_state_1 = root_state_1
             branch_state_2 = root_state_2
             for path_offset in tl.range(0, path_len):
-                branch_path_packed = tl.where(
+                branch_path_node = tl.where(
                     path_index == 0,
-                    FIXED32_BRANCH_PATH_0_PACKED,
+                    19
+                    + path_offset * 2
+                    + tl.minimum(path_offset, 1) * 3
+                    - tl.maximum(path_offset - 3, 0),
                     tl.where(
                         path_index == 1,
-                        FIXED32_BRANCH_PATH_1_PACKED,
-                        FIXED32_BRANCH_PATH_2_PACKED,
+                        2 + path_offset * 5,
+                        3
+                        + path_offset * 5
+                        - tl.maximum(path_offset - 4, 0) * 3,
                     ),
                 )
-                branch_path_node = (
-                    (branch_path_packed >> (path_offset * 5)) & 0x1F
-                ).to(tl.int32)
                 single_path_index = path_index - 3
                 single_path_node = (
                     5
@@ -899,14 +895,6 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         RAW_GATING=bool(raw_gating),
         COUNT_INVOCATION=bool(count_invocation),
         SCAN_ALIGN=bool(scan_align),
-        FIXED32_ROOT_NODES_PACKED=FIXED32_ROOT_NODES_PACKED,
-        FIXED32_GROUP_PATH_INDICES_PACKED=(
-            FIXED32_GROUP_PATH_INDICES_PACKED
-        ),
-        FIXED32_PATH_LENGTHS_PACKED=FIXED32_PATH_LENGTHS_PACKED,
-        FIXED32_BRANCH_PATH_0_PACKED=FIXED32_BRANCH_PATH_0_PACKED,
-        FIXED32_BRANCH_PATH_1_PACKED=FIXED32_BRANCH_PATH_1_PACKED,
-        FIXED32_BRANCH_PATH_2_PACKED=FIXED32_BRANCH_PATH_2_PACKED,
         RING_EXPORT=bool(ring_export),
         K_NORM_EXPORT=bool(k_norm_export),
         GATE_EXPORT=bool(gate_export),
