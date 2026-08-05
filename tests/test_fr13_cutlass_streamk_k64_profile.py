@@ -302,8 +302,8 @@ def test_k64_root_accepts_divisor_static_stocktile_profile(
             "identity_wide256_fullgrid_b1",
             "identity_wide256_fullgrid_b1_byte_ab",
             "IDENTITY_WIDE256_FULLGRID_B1_K64_ROOT_LIVE_SCHEMA",
-            "IDENTITY_FULLTILE_CANDIDATE_SIZE",
-            "IDENTITY_FULLTILE_CANDIDATE_SHA256",
+            "IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SIZE",
+            "IDENTITY_WIDE256_FULLGRID_B1_CANDIDATE_SHA256",
         ),
     ),
 )
@@ -558,7 +558,7 @@ def test_n5120_single_source_contract_remains_pinned_to_original_patch() -> None
     ]
 
 
-def test_n5120_fullgrid_source_contract_matches_integrated_patcher() -> None:
+def test_n5120_fullgrid_source_contract_remains_pinned_to_qualified_patch() -> None:
     module = _load("fr13_cutlass_streamk_n5120_fullgrid_source_contract_test")
     contract = module._source_contract("identity_onen_n5120_fullgrid_b1")
 
@@ -568,7 +568,7 @@ def test_n5120_fullgrid_source_contract_matches_integrated_patcher() -> None:
     assert contract["patched_dispatch_sha256"] == (
         "710da7d3a8e24c83f9f095222d5297d96f610c6310f3a8537ed1b925a25ece56"
     )
-    assert module.sha256_file(REPO / module.PATCH_SOURCE) == contract[
+    assert module.sha256_file(REPO / module.PATCH_SOURCE) != contract[
         "patch_source_sha256"
     ]
 
@@ -577,7 +577,12 @@ def test_wide256_fullgrid_source_contract_matches_integrated_patcher() -> None:
     module = _load("fr13_cutlass_streamk_wide256_fullgrid_source_contract_test")
     contract = module._source_contract("identity_wide256_fullgrid_b1")
 
-    assert contract == module._source_contract("identity_onen_n5120_fullgrid_b1")
+    assert contract["patch_source_sha256"] == (
+        "7f0d6e37e12898e7a4f747d980747146b7a4fd05361502b5307988cd2948ec11"
+    )
+    assert contract["patched_dispatch_sha256"] == (
+        "ae5940c68b9099cc1b1469c1f41e801d76ce674d9f92898391ed54bf2b6f7b00"
+    )
     assert module.sha256_file(REPO / module.PATCH_SOURCE) == contract[
         "patch_source_sha256"
     ]
