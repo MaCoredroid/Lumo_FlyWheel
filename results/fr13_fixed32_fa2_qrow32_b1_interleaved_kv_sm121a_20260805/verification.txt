@@ -1,0 +1,10 @@
+61 passed, 1 skipped in 3.33s
+source_closure_validation=PASS
+candidate_identity_validation=PASS
+python_byte_compile=PASS
+shell_syntax=PASS
+offline_link=PASS
+offline_abi_audit=PASS
+gpu_runtime_validation=PENDING
+real_swe_byte_parity=PENDING
+real_exact4_timing=PENDING

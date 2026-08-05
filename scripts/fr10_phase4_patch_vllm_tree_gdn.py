@@ -7500,7 +7500,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             and os.environ.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
             == "split2"
             and os.environ.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
-            == "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467"
+            == "07e02c0a53185c48d745fb221e7c807f97bfe40f61354e4242e9271e743e13c1"
             and os.environ.get("FR13_FA2_QROW32_B1_SO_SIZE", "") == "300140712"
         )
         if (

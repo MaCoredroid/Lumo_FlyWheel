@@ -513,10 +513,48 @@ def test_fixed32_query_tile32_b1_is_a_distinct_24_cta_candidate(
     assert "flash_fwd_splitkv_combine_kernel<" in split2
     assert "kCombineBlockM = 4" in split2
     assert "kLogMaxSplits = 1" in split2
+    for source in (candidate, split2):
+        assert "static constexpr int64_t page = 2 * 1024 * 4 * 256" in source
+        assert "params.k_batch_stride == 2 * 1024 * 4 * 256" in source
+        assert "params.v_batch_stride == 2 * 1024 * 4 * 256" in source
+        assert "static constexpr int64_t row = 4 * 256" in source
+        assert "static constexpr int64_t head = 256" in source
     assert not module._patch_fixed32_query_tile32_b1_translation_unit(
         translation_unit,
         fixed32_query_tile32_b1=True,
     )
+
+
+def test_qrow32_b1_interleaved_kv_address_mapping_is_exact() -> None:
+    page_rows = 1024
+    kv_heads = 4
+    head_dim = 256
+    compact_page = page_rows * kv_heads * head_dim
+    block_stride = 2 * compact_page
+    key_base = 0
+    value_base = compact_page
+
+    assert value_base - key_base == 1024 * 4 * 256
+    assert block_stride == 2 * 1024 * 4 * 256
+
+    for physical_block in (0, 1, 7, 605):
+        for row in (0, 63, 64, 1023):
+            for kv_head in range(kv_heads):
+                for column in (0, 127, 255):
+                    relative = (
+                        physical_block * block_stride
+                        + row * kv_heads * head_dim
+                        + kv_head * head_dim
+                        + column
+                    )
+                    key_address = key_base + relative
+                    value_address = value_base + relative
+                    assert value_address - key_address == compact_page
+                    if physical_block:
+                        prior_key = key_address - block_stride
+                        prior_value = value_address - block_stride
+                        assert key_address - prior_key == block_stride
+                        assert value_address - prior_value == block_stride
 
 
 def test_qrow16_private_kernel_preserves_exact_flags() -> None:
@@ -1255,6 +1293,7 @@ def test_qrow32_fuses_only_the_identical_initial_kv_page_address(
     assert "params.v_row_stride" not in static_branch
     assert "StaticPagedKVStrides<Kernel_traits>::page" in static_branch
     assert "StaticPagedKVStrides<Kernel_traits>::row" in static_branch
+    assert "(kStaticSequences == 1 ? 2 : 1) * 1024 * 4 * 256" in static_branch
     assert "tKgK.data() = gK.data() + initial_kv_page_offset;" in static_branch
     assert "tVgV.data() = gV.data() + initial_kv_page_offset;" in static_branch
     for sentinel in (
@@ -1284,9 +1323,9 @@ def test_qrow32_fuses_only_the_identical_initial_kv_page_address(
     # Exhaust all qrow32 threads and K blocks across four nonidentity physical
     # pages. Partial sizes cover every clamp boundary used by the final tile.
     block_table = (7, 3, 11, 5)
-    k_page_stride = 1024 * 4 * 256
+    k_page_stride = 2 * 1024 * 4 * 256
     k_row_stride = 4 * 256
-    v_page_stride = 1024 * 4 * 256
+    v_page_stride = 2 * 1024 * 4 * 256
     v_row_stride = 4 * 256
 
     def resolve_offset(
@@ -1482,7 +1521,7 @@ def test_qrow32_carries_each_k_advance_address_into_the_next_v_copy(
         raise AssertionError("K/V page carry accepted an unfused initial address")
 
     block_table = (7, 3, 11, 5)
-    page_stride = 1024 * 4 * 256
+    page_stride = 2 * 1024 * 4 * 256
     row_stride = 4 * 256
 
     def resolve_offset(
