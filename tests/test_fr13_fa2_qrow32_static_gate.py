@@ -122,6 +122,7 @@ def test_static_gate_accepts_zero_spill_sm121a_and_exact_abi(tmp_path: Path) -> 
         "stack_bytes": 0,
         "static_shared_bytes": 1024,
         "static_local_bytes": 0,
+        "dynamic_shared_bytes": 81920,
     }
     assert result["ptxas"]["spill_load_bytes"] == 0
     assert result["sass"] == {"ldl": 0, "stl": 0, "call": 0}

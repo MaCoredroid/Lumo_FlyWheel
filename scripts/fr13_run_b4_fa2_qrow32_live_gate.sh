@@ -46,7 +46,7 @@ case "$LIVE_AB_ARM" in
     [[ "$CANDIDATE_SHA256" == "77f3fb22c19d0eb2ac0ec28230cf9401221425692a505efde62aa838760d81ce" \
        && "$CANDIDATE_BYTES" == "299876120" \
        && "$FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
-       && "$SOURCE_CLOSURE_SHA256" == "3e3c18565e738f20d0a5ab5fe50d018f3d8cbd5cb94082dcd55ca730a790163c" ]] \
+       && "$SOURCE_CLOSURE_SHA256" == "dd3bebd047b8ccc2248b0d0e75b9db1f23747c486592ec2a5c72ee96581e10dc" ]] \
       || { echo "qrow32 BM32 B4 live gate binary/source provenance drifted" >&2; exit 2; }
     ;;
   gqa_pair)

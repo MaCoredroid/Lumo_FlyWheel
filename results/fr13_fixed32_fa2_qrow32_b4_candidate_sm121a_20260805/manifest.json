@@ -8,12 +8,22 @@
     "undefined_dynamic_diff": 0,
     "undefined_dynamic_records": 168
   },
+  "build_provenance": {
+    "command_evidence": "build_commands.txt",
+    "finalizer_manifest": "guarded_so_finalize_manifest.json",
+    "finalizer_sha256": "e3293c140a0744953c4b653c59da206e2ff431a450db75ba52176bad6c440045",
+    "link_input_inventory": "link_input_objects.tsv",
+    "source_closure": "source_closure.json",
+    "source_closure_canonicalization": "json.dumps(ensure_ascii=True,separators=(',',':'),sort_keys=True)",
+    "static_gate_output": "guarded_static_gate.json"
+  },
   "candidate": {
     "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
     "object_sha256": "4f5ff36c26ae9148e9900bc175566caa9ef15cdc167c15cdf257ef5577d7f906",
+    "raw_link_sha256": "5ee59d2100cef0a0cb7bc38d5c954e8bfbde350b25af7398d53b485c5da099f9",
     "sha256": "77f3fb22c19d0eb2ac0ec28230cf9401221425692a505efde62aa838760d81ce",
     "size": 299876120,
-    "source_closure_sha256": "3e3c18565e738f20d0a5ab5fe50d018f3d8cbd5cb94082dcd55ca730a790163c"
+    "source_closure_sha256": "dd3bebd047b8ccc2248b0d0e75b9db1f23747c486592ec2a5c72ee96581e10dc"
   },
   "classification": "CPU_CODEGEN_ADMISSION_ONLY",
   "device": {
@@ -21,17 +31,21 @@
     "barriers": 1,
     "block_m": 32,
     "block_n": 64,
+    "cubin_bytes": 107184,
+    "cubin_sha256": "208fcacccafeb6dd555668f010be0b5a3a9abedb1895658058182c6bd6e6dd9a",
+    "dynamic_shared_bytes": 81920,
     "local_bytes": 0,
+    "ptx_present": false,
     "registers": 252,
     "sass_call": 0,
     "sass_instruction_lines": 3992,
     "sass_ldl": 0,
     "sass_sha256": "a814ccdb99b9a63b915ac762c5cc02dc536a98f0d9c1484a5853daaa74024cc5",
     "sass_stl": 0,
-    "shared_bytes": 1024,
     "spill_load_bytes": 0,
     "spill_store_bytes": 0,
     "stack_bytes": 0,
+    "static_shared_bytes": 1024,
     "threads": 64,
     "warps": 2
   },
@@ -41,18 +55,29 @@
     "launch_delta_per_layer": 0,
     "qrow16_ctas_16_layers": 3072,
     "qrow16_ctas_per_layer": 192,
+    "qrow16_threads_per_layer": 6144,
+    "qrow16_warps_per_layer": 192,
     "qrow32_ctas_16_layers": 1536,
     "qrow32_ctas_per_layer": 96,
+    "qrow32_threads_per_layer": 6144,
+    "qrow32_warps_per_layer": 192,
     "reduction_ctas": 1536,
     "reduction_percent": 50
   },
   "performance_measurement": false,
   "production_eligible": false,
   "required_next_gate": "canonical real SWE-Verified exact4 B4 raw-byte A/B",
-  "schema": "fr13.fixed32.fa2_qrow32_b4_candidate_sm121a.v1",
+  "schema": "fr13.fixed32.fa2_qrow32_b4_candidate_sm121a.v2",
   "source": {
     "adapter_sha256": "4873f6dc368bfdbc78ebd2edf4d6d08f5033ae69cec94e0f19ae90610e1f8a6a",
+    "fa2_modified_file_count": 6,
+    "flash_fwd_kernel_sha256": "f93bc31541a762abe834a16bc4a85b46b7e5a8f1a4463f4abbd6526ea104bce8",
     "gqa_pair_api_source_closure_sha256": "f210a5ebb93930e89b0d9fe0cb6e53a76c9359873ad4268e81d3f17a7443bdf2",
+    "patcher_flags": [
+      "--tree-bias-tile-earlyout",
+      "--fixed32-query-tile32"
+    ],
+    "patcher_sha256_at_build": "1ff6b33b9a327254f970c0052b00accfac45681db3dac22b277fc8690f0c9ba8",
     "qrow32_translation_unit_sha256": "adee09b98b6f517550547bf73efa6f817c7634b2d50febb6f811e3b637fee1e4"
   },
   "status": "PASS_CPU_CODEGEN_LIVE_BYTE_GATE_PENDING",

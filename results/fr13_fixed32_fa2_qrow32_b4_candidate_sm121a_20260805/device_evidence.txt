@@ -1,0 +1,49 @@
+classification=cpu_codegen_admission_only
+gpu_used=0
+object_sha256=4f5ff36c26ae9148e9900bc175566caa9ef15cdc167c15cdf257ef5577d7f906
+object_bytes=734736
+cubin_count=1
+cubin_arch=sm_121a
+cubin_sha256=208fcacccafeb6dd555668f010be0b5a3a9abedb1895658058182c6bd6e6dd9a
+cubin_bytes=107184
+ptx_present=0
+ptx_list_result=cuobjdump info: No PTX file found to extract
+kernel=_ZN5flash36fr13_flash_fwd_fixed32_qrow32_kernelENS_16Flash_fwd_paramsE
+registers=252
+stack_bytes=0
+spill_store_bytes=0
+spill_load_bytes=0
+static_shared_bytes=1024
+dynamic_shared_bytes=81920
+static_local_bytes=0
+barriers=1
+sass_instruction_lines=3992
+sass_ldl=0
+sass_stl=0
+sass_call=0
+sass_sha256=a814ccdb99b9a63b915ac762c5cc02dc536a98f0d9c1484a5853daaa74024cc5
+
+cuobjdump_list_elf:
+ELF file    1: qrow32_b4.guarded.gcc11.pinnedabi.sm121a.1.sm_121a.cubin
+
+cuobjdump_resource_usage:
+Fatbin elf code:
+================
+arch = sm_121a
+code version = [1,8]
+host = linux
+compile_size = 64bit
+
+Resource usage:
+ Common:
+  GLOBAL:30 CONSTANT[4]:240
+ Function _ZN5flash36fr13_flash_fwd_fixed32_qrow32_kernelENS_16Flash_fwd_paramsE:
+  REG:252 STACK:0 SHARED:1024 LOCAL:0 CONSTANT[0]:1416 TEXTURE:0 SURFACE:0 SAMPLER:0
+
+ptxas_summary:
+ptxas info    : 30 bytes gmem
+ptxas info    : Compiling entry function '_ZN5flash36fr13_flash_fwd_fixed32_qrow32_kernelENS_16Flash_fwd_paramsE' for 'sm_121a'
+ptxas info    : Function properties for _ZN5flash36fr13_flash_fwd_fixed32_qrow32_kernelENS_16Flash_fwd_paramsE
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 252 registers, used 1 barriers
+ptxas info    : Compile time = 140.716 ms

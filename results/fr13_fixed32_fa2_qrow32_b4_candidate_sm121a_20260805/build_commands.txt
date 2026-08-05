@@ -1,0 +1,118 @@
+FR13 FA2 qrow32 exact-B4 guarded build commands
+
+The commands below are normalized only by replacing the original absolute
+paths with the variables declared here. They were recovered from structured
+Codex session 019fd2a1-900e-7a43-ba21-7b994d01b414 at timestamps
+2026-08-05T16:22:35Z through 2026-08-05T16:28:51Z.
+
+REPO=/home/mark/lumoFlyWheel-sfwd-qrow32-b4-candidate-20260805
+BUILD=/home/mark/fr13_fa2_qrow32_b4_sm121a_20260805
+FA2=$BUILD/source_guarded
+BASE=/home/mark/shared/lumoFlyWheel-qrow16-thin/output/fr13_fa2_qrow16_num_splits0_build_20260731/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/CMakeFiles/_vllm_fa2_C.dir
+CUTLASS=/home/mark/shared/lumoFlyWheel-qrow16-thin/output/fr13_fa2_qrow16_num_splits0_build_20260731/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src/csrc/cutlass/include
+GQA=/home/mark/fr13_fa2_qrow32_gqa_pair_sm121a_20260805
+TORCH=/home/mark/fr13_streamk_build/venv/lib/python3.12/site-packages/torch
+GCC11=$BUILD/gcc11-root
+
+[patch]
+cd "$REPO"
+CUDA_VISIBLE_DEVICES='' python3 scripts/fr13_patch_fa2_tree_bias.py \
+  --fa2-src "$FA2" --skip-python \
+  --tree-bias-tile-earlyout --fixed32-query-tile32
+
+[compile-qrow32]
+GCC_EXEC_PREFIX="$GCC11/usr/lib/gcc/" /usr/local/cuda/bin/nvcc \
+  -ccbin "$GCC11/usr/bin/aarch64-linux-gnu-g++-11" \
+  -DFLASHATTENTION_DISABLE_BACKWARD -DFLASHATTENTION_DISABLE_DROPOUT \
+  -DFLASHATTENTION_DISABLE_PYBIND -DPy_LIMITED_API=3 \
+  -DTORCH_EXTENSION_NAME=_vllm_fa2_C -DUSE_C10D_GLOO -DUSE_C10D_NCCL \
+  -DUSE_DISTRIBUTED -DUSE_NVSHMEM -DUSE_RPC -DUSE_TENSORPIPE \
+  -D_vllm_fa2_C_EXPORTS \
+  -I"$FA2/csrc" -I"$FA2/csrc/flash_attn" \
+  -I"$FA2/csrc/flash_attn/src" -I"$FA2/csrc/common" -I"$CUTLASS" \
+  -isystem /usr/include/python3.12 -isystem "$TORCH/include" \
+  -isystem "$TORCH/include/torch/csrc/api/include" \
+  -isystem /usr/local/cuda/include -DONNX_NAMESPACE=onnx_c2 \
+  -Xcudafe \
+  --diag_suppress=cc_clobber_ignored,--diag_suppress=field_without_dll_interface,--diag_suppress=base_class_has_different_dll_interface,--diag_suppress=dll_interface_conflict_none_assumed,--diag_suppress=dll_interface_conflict_dllexport_assumed,--diag_suppress=bad_friend_decl \
+  --expt-relaxed-constexpr --expt-extended-lambda -O3 -g -DNDEBUG \
+  -std=c++17 -Xcompiler=-fPIC -DENABLE_FP8 --use_fast_math \
+  -DCUTLASS_ENABLE_DIRECT_CUDA_DRIVER_CALL=1 \
+  -gencode arch=compute_121a,code=sm_121a --ptxas-options=-v -c \
+  "$FA2/csrc/flash_attn/src/flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu" \
+  -o "$BUILD/qrow32_b4.guarded.gcc11.raw.sm121a.o"
+raw_object_sha256=595f8e13783eef22cedbc49173dbe20a23f249068cd0be52569f046b9d8d518e
+
+[pin-thrust-abi]
+cp "$BUILD/qrow32_b4.guarded.gcc11.raw.sm121a.o" \
+  "$BUILD/qrow32_b4.guarded.gcc11.pinnedabi.sm121a.o"
+objcopy \
+  --redefine-sym _ZN6thrust24THRUST_300001_SM_1210_NS6system6detail10sequential3seqE=_ZN6thrust23THRUST_300001_SM_800_NS6system6detail10sequential3seqE \
+  "$BUILD/qrow32_b4.guarded.gcc11.pinnedabi.sm121a.o"
+pinned_object_sha256=4f5ff36c26ae9148e9900bc175566caa9ef15cdc167c15cdf257ef5577d7f906
+
+[compile-adapter]
+cd "$REPO"
+GCC_EXEC_PREFIX="$GCC11/usr/lib/gcc/" \
+  "$GCC11/usr/bin/aarch64-linux-gnu-g++-11" \
+  -fPIC -O2 -g -DNDEBUG -fvisibility=hidden \
+  -c csrc/fr13_fa2_qrow32_b4_launcher_adapter.cc \
+  -o "$BUILD/fr13_fa2_qrow32_b4_launcher_adapter.gcc11.o"
+adapter_object_sha256=ecac1739b707a9640b4cb33cb4660a3b51f5287f0ef7f631ab7afc20fd46f6e4
+
+[link]
+mapfile -t objects < <(find "$BASE" -type f -name '*.o' \
+  ! -name 'flash_api.cpp.o' | sort)
+/usr/bin/c++ -fPIC -O2 -g -DNDEBUG -shared \
+  -o "$BUILD/_vllm_fa2_qrow32_b4_guarded_raw_sm121a.abi3.so" \
+  "$GQA/flash_api_pair.o" "${objects[@]}" \
+  "$BUILD/qrow32_b4.guarded.gcc11.pinnedabi.sm121a.o" \
+  "$BUILD/fr13_fa2_qrow32_b4_launcher_adapter.gcc11.o" \
+  -L/usr/local/cuda/targets/sbsa-linux/lib/stubs \
+  -L/usr/local/cuda/targets/sbsa-linux/lib \
+  '-Wl,-rpath,/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64:' \
+  "$TORCH/lib/libtorch.so" /usr/local/cuda/lib64/libcudart.so \
+  /usr/local/cuda/targets/sbsa-linux/lib/stubs/libcuda.so \
+  -Wl,--no-as-needed,"$TORCH/lib/libtorch_cpu.so" -Wl,--as-needed \
+  -Wl,--no-as-needed,"$TORCH/lib/libtorch_cuda.so" -Wl,--as-needed \
+  "$TORCH/lib/libc10_cuda.so" "$TORCH/lib/libc10.so" \
+  /usr/local/cuda/lib64/libcudart.so -lcudadevrt -lcudart_static \
+  -lrt -lpthread -ldl
+raw_candidate_sha256=5ee59d2100cef0a0cb7bc38d5c954e8bfbde350b25af7398d53b485c5da099f9
+
+[finalize]
+cd "$REPO"
+CUDA_VISIBLE_DEVICES='' python3 scripts/fr13_fa2_qrow16_so_finalize.py \
+  --candidate "$BUILD/_vllm_fa2_qrow32_b4_guarded_raw_sm121a.abi3.so" \
+  --expected-candidate-sha256 5ee59d2100cef0a0cb7bc38d5c954e8bfbde350b25af7398d53b485c5da099f9 \
+  --reference "$GQA/_vllm_fa2_qrow32_gqa_pair_sm121a.abi3.so" \
+  --expected-reference-sha256 543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e \
+  --output "$BUILD/_vllm_fa2_qrow32_b4_guarded_sm121a.abi3.so" \
+  --manifest "$BUILD/guarded_so_finalize_manifest.json"
+final_candidate_sha256=77f3fb22c19d0eb2ac0ec28230cf9401221425692a505efde62aa838760d81ce
+final_candidate_bytes=299876120
+
+[static-gate]
+cd "$REPO"
+CUDA_VISIBLE_DEVICES='' python3 scripts/fr13_fa2_qrow32_static_gate.py \
+  --qrow-source "$FA2/csrc/flash_attn/src/flash_fwd_fr13_qrow32_hdim256_bf16_sm80.cu" \
+  --qrow-object "$BUILD/qrow32_b4.guarded.gcc11.pinnedabi.sm121a.o" \
+  --stock-so "$GQA/_vllm_fa2_qrow32_gqa_pair_sm121a.abi3.so" \
+  --candidate-so "$BUILD/_vllm_fa2_qrow32_b4_guarded_sm121a.abi3.so" \
+  --elf-list "$BUILD/guarded_cuobjdump_list_elf.txt" \
+  --resource-usage "$BUILD/guarded_cuobjdump_resource_usage.txt" \
+  --ptxas-log "$BUILD/ptxas_guarded_summary.txt" \
+  --sass "$BUILD/guarded_qrow32_b4.sm121a.sass" \
+  --stock-defined "$BUILD/reference_defined_dynamic.txt" \
+  --candidate-defined "$BUILD/candidate_defined_dynamic.txt" \
+  --stock-undefined "$BUILD/reference_undefined_dynamic.txt" \
+  --candidate-undefined "$BUILD/candidate_undefined_dynamic.txt" \
+  --stock-needed "$BUILD/reference_dt_needed.txt" \
+  --candidate-needed "$BUILD/candidate_dt_needed.txt" \
+  --output "$BUILD/guarded_static_gate.json"
+
+The resolved ordered link inputs are pinned in link_input_objects.tsv.
+The CUDA object embeds build-dependent host bytes: an exact later replay of
+the NVCC command produced raw object SHA-256 6002495f4681fe4eba38a98773aabf1427f1f3f1540ce796f30946c4c6f3b00f,
+while its target SASS remained byte-identical at
+a814ccdb99b9a63b915ac762c5cc02dc536a98f0d9c1484a5853daaa74024cc5.
