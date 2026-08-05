@@ -20,6 +20,12 @@ NODE_TRUST_OVERLAY_PATH = (
 NODE_TRUST_OVERLAY_SHA256 = (
     "b6790fe8626cc3877e8ebaab8415a827a2ca7275248247efc2b433b9c1a0425b"
 )
+ACTIVE_DEPTH_OVERLAY_PATH = (
+    SCRIPT_DIR / "fr13_cfwd_packed_walk_active_depth_runtime_overlay.py"
+)
+ACTIVE_DEPTH_OVERLAY_SHA256 = (
+    "8c8ef918c09102244587ba3fc46339b86cd8448bcb62db6ba04035713c07caee"
+)
 
 
 def _sha256(path: Path) -> str:
@@ -46,6 +52,8 @@ if _sha256(OVERLAY_PATH) != OVERLAY_SHA256:
     raise RuntimeError("packed CFWD runtime overlay identity drifted")
 if _sha256(NODE_TRUST_OVERLAY_PATH) != NODE_TRUST_OVERLAY_SHA256:
     raise RuntimeError("packed-walk node-trust runtime overlay identity drifted")
+if _sha256(ACTIVE_DEPTH_OVERLAY_PATH) != ACTIVE_DEPTH_OVERLAY_SHA256:
+    raise RuntimeError("packed-walk active-depth runtime overlay identity drifted")
 
 _base = _load("_fr13_device_multidraft_credential_bound_base", BASE_PATH)
 _overlay = _load("_fr13_cfwd_logit_direct_packed_runtime_overlay", OVERLAY_PATH)
@@ -55,6 +63,11 @@ _node_trust_overlay = _load(
     NODE_TRUST_OVERLAY_PATH,
 )
 _node_trust_overlay.install(_base)
+_active_depth_overlay = _load(
+    "_fr13_cfwd_packed_walk_active_depth_runtime_overlay",
+    ACTIVE_DEPTH_OVERLAY_PATH,
+)
+_active_depth_overlay.install(_base)
 
 # Export the base module's API. Its function objects retain the base namespace,
 # where the installer replaced only the reviewed CFWD symbols.
