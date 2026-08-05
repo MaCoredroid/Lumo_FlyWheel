@@ -275,6 +275,16 @@ def test_candidate_resolver_is_exact_fixed32_bv8_only(tmp_path: Path) -> None:
             )
             == candidate
         )
+    assert resolve(
+        "tail6_fixed32",
+        environ={
+            "FR13_FIXED32_GDN_PATH_BV_CANDIDATE": "gqa_group3_bv16",
+            "FR13_DRAFT_VOCAB_K": "65536",
+            "FR13_DRAFT_VOCAB_ROOT": "1",
+        },
+        sidecars=(),
+        geom_override={"BV": 8},
+    ) == "gqa_group3_bv16"
     with pytest.raises(RuntimeError, match="expected one of"):
         resolve(
             "tail6_fixed32",

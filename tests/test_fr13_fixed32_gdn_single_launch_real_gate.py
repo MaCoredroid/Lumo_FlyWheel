@@ -582,8 +582,11 @@ def test_route_is_stock_serving_and_production_cannot_accept_gate_value() -> Non
     assert '"reference_served": True' in kernel
     assert '"state_restored": True' in kernel
     assert '"fixed32_gdn_single_launch_tree_v2"' in kernel
-    assert 'candidate_raw in ("single_launch", "gqa_group3")' in patcher
-    assert 'candidate in ("single_launch", "gqa_group3")' in patcher
+    assert '"gqa_group3_bv16"' in patcher
+    assert (
+        'candidate in ("single_launch", "gqa_group3", "gqa_group3_bv16")'
+        in patcher
+    )
     assert '"FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8"' in patcher
     assert '|| "$_fr13_gdn_path_bv_candidate" == "single_launch"' in launcher
     assert "ordered GDN live gate requires exact K64/root1" in launcher

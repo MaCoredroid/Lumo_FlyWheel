@@ -875,6 +875,7 @@ _FR13_FIXED32_GDN_PATH_BV_PRODUCTION_PASS = (
 _FR13_FIXED32_GDN_PATH_BV_CANDIDATE_ID = "fixed32_gdn_path_bv_v1"
 _FR13_FIXED32_GDN_SINGLE_LAUNCH_GATE_VALUE = "single_launch"
 _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE = "gqa_group3"
+_FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE = "gqa_group3_bv16"
 _FR13_FIXED32_GDN_BV_SURFACES = (
     "export",
     "ring_k",
@@ -1142,16 +1143,16 @@ def _fr13_resolve_fixed32_gdn_path_bv_candidate(
             continue
         try:
             with open(path, encoding="ascii") as handle:
-                raw_sidecar = handle.read(16)
+                raw_sidecar = handle.read(32)
         except (OSError, UnicodeError) as error:
             raise RuntimeError(
                 "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: cannot read sidecar "
                 f"{path}: {error}"
             ) from error
-        if len(raw_sidecar) >= 16:
+        if len(raw_sidecar) >= 32:
             raise RuntimeError(
                 "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: sidecar exceeds "
-                f"15 bytes: {path}"
+                f"31 bytes: {path}"
             )
         sources.append((f"sidecar:{path}", raw_sidecar.strip()))
     if not sources:
@@ -1166,12 +1167,14 @@ def _fr13_resolve_fixed32_gdn_path_bv_candidate(
             "128",
             "single_launch",
             "gqa_group3",
+            "gqa_group3_bv16",
         )
     ]
     if invalid:
         raise RuntimeError(
             "FR13_FIXED32_GDN_PATH_BV_CANDIDATE: expected one of "
-            "16, 32, 64, 128, single_launch, or gqa_group3, got "
+            "16, 32, 64, 128, single_launch, gqa_group3, or "
+            "gqa_group3_bv16, got "
             + ", ".join(
                 f"{source}={value!r}" for source, value in invalid
             )
@@ -1195,7 +1198,7 @@ def _fr13_resolve_fixed32_gdn_path_bv_candidate(
             "to be pinned exactly to FR13_TREE_GDN_GEOM_OVERRIDE=BV=8"
         )
     value = values.pop()
-    if value in ("single_launch", "gqa_group3"):
+    if value in ("single_launch", "gqa_group3", "gqa_group3_bv16"):
         if str(env.get("FR13_DRAFT_VOCAB_ROOT", "")).strip() != "1" or str(
             env.get("FR13_DRAFT_VOCAB_K", "")
         ).strip() != "65536":
@@ -1226,7 +1229,10 @@ def _fr13_fixed32_gdn_gqa_group3_source_sha256() -> str:
 
 
 def _fr13_fixed32_gdn_path_bv_source_sha256() -> str:
-    if globals().get("_FR13_FIXED32_GDN_PATH_BV_CANDIDATE") == "gqa_group3":
+    if globals().get("_FR13_FIXED32_GDN_PATH_BV_CANDIDATE") in (
+        "gqa_group3",
+        "gqa_group3_bv16",
+    ):
         return _fr13_fixed32_gdn_gqa_group3_source_sha256()
     try:
         payload = Path(__file__).resolve().read_bytes()
@@ -1276,7 +1282,11 @@ def _fr13_resolve_fixed32_gdn_single_launch_expected_batch(
                 f"3 bytes: {path}"
             )
         sources.append((f"sidecar:{path}", value.strip()))
-    if candidate not in ("single_launch", "gqa_group3"):
+    if candidate not in (
+        "single_launch",
+        "gqa_group3",
+        "gqa_group3_bv16",
+    ):
         if sources:
             raise RuntimeError(
                 "FR13 GDN ordered expected batch is set without the "
@@ -1308,6 +1318,9 @@ def _fr13_fixed32_gdn_single_launch_diagnostic_identity(
         ),
         "gqa_group3": (
             "fixed32_gdn_single_launch_gqa_group3_v1"
+        ),
+        "gqa_group3_bv16": (
+            "fixed32_gdn_single_launch_gqa_group3_bv16_v1"
         ),
     }.get(candidate)
     if topology is None or batch not in (1, 4) or identity is None:
@@ -1598,7 +1611,7 @@ def _fr13_fixed32_gdn_bv_real_event_marker() -> str:
     default_path = (
         "/logs/fr13_fixed32_batch_gdn_byte_ab.real_event.arm"
         if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-        in ("single_launch", "gqa_group3")
+        in ("single_launch", "gqa_group3", "gqa_group3_bv16")
         else _FR13_FIXED32_GDN_PATH_BV_REAL_EVENT
     )
     path = os.environ.get(
@@ -1654,6 +1667,7 @@ def _fr13_fixed32_gdn_bv_live_pass_emit(
         in (
             _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID,
             "fixed32_gdn_single_launch_gqa_group3_v1",
+            "fixed32_gdn_single_launch_gqa_group3_bv16_v1",
         )
     )
     topology = {
@@ -1728,12 +1742,14 @@ def _fr13_fixed32_gdn_bv_live_pass_emit(
                 _fr13_fixed32_gdn_single_launch_diagnostic_identity(
                     _FR13_FIXED32_MODE,
                     batch_size,
-                    (
-                        "gqa_group3"
-                        if result["candidate"]
-                        == "fixed32_gdn_single_launch_gqa_group3_v1"
-                        else "single_launch"
-                    ),
+                    {
+                        "fixed32_gdn_single_launch_gqa_group3_v1": (
+                            "gqa_group3"
+                        ),
+                        "fixed32_gdn_single_launch_gqa_group3_bv16_v1": (
+                            "gqa_group3_bv16"
+                        ),
+                    }.get(result["candidate"], "single_launch"),
                 )
             ),
         )
@@ -1794,7 +1810,12 @@ def _fr13_fixed32_gdn_single_launch_observation_emit(
         "comparator_events": comparator_events,
         "physical_rows": 32,
         "reference_bv": 8,
-        "candidate_bv": 8,
+        "candidate_bv": (
+            16
+            if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+            == _FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE
+            else 8
+        ),
         "reference_physical_launches_per_request_layer": 2,
         "candidate_physical_launches_per_request_layer": 1,
         "compared_byte_surfaces": list(
@@ -1885,7 +1906,7 @@ _FR13_FIXED32_GDN_PRESCALED_PATH_BASE = (
             _FR13_FIXED32_GDN_SINGLE_LAUNCH
             or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
             or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            in ("single_launch", "gqa_group3")
+            in ("single_launch", "gqa_group3", "gqa_group3_bv16")
         )
     )
 )
@@ -1957,7 +1978,7 @@ def fixed32_gdn_bv_live_capture_begin(
     batch = int(batch_size)
     if (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-        in ("single_launch", "gqa_group3")
+        in ("single_launch", "gqa_group3", "gqa_group3_bv16")
         and batch != _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
     ):
         return
@@ -1999,7 +2020,7 @@ def _fr13_fixed32_gdn_bv_live_capture_register(record: dict) -> None:
     expected_surfaces = (
         _FR13_FIXED32_GDN_SINGLE_LAUNCH_STATE_SURFACES
         if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-        in ("single_launch", "gqa_group3")
+        in ("single_launch", "gqa_group3", "gqa_group3_bv16")
         else _FR13_FIXED32_GDN_BV_SURFACES
     )
     if (
@@ -2034,7 +2055,7 @@ def fixed32_gdn_bv_live_capture_end(
     batch = int(batch_size)
     if (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-        in ("single_launch", "gqa_group3")
+        in ("single_launch", "gqa_group3", "gqa_group3_bv16")
         and batch != _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
     ):
         if _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT is not None:
@@ -2056,7 +2077,7 @@ def fixed32_gdn_bv_live_capture_end(
         != (
             48
             if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            in ("single_launch", "gqa_group3")
+            in ("single_launch", "gqa_group3", "gqa_group3_bv16")
             else 48 * batch
         )
         or not isinstance(records, list)
@@ -2168,12 +2189,13 @@ def _fr13_fixed32_gdn_single_launch_compare_records(
     records,
 ) -> dict[str, object]:
     """Run stock then ordered single-launch and restore served bytes."""
-    candidate_id = (
-        "fixed32_gdn_single_launch_gqa_group3_v1"
-        if globals().get("_FR13_FIXED32_GDN_PATH_BV_CANDIDATE")
-        == "gqa_group3"
-        else _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID
-    )
+    selector = globals().get("_FR13_FIXED32_GDN_PATH_BV_CANDIDATE")
+    candidate_id = {
+        "gqa_group3": "fixed32_gdn_single_launch_gqa_group3_v1",
+        "gqa_group3_bv16": (
+            "fixed32_gdn_single_launch_gqa_group3_bv16_v1"
+        ),
+    }.get(selector, _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID)
     checked = 0
     for index, record in enumerate(records):
         snapshot = record["snapshot"]
@@ -2239,7 +2261,7 @@ def _fr13_fixed32_gdn_single_launch_compare_records(
         "records": checked,
         "candidate": candidate_id,
         "reference_bv": 8,
-        "candidate_bv": 8,
+        "candidate_bv": 16 if selector == "gqa_group3_bv16" else 8,
         "reference_physical_launches": 2,
         "candidate_physical_launches": 1,
     }
@@ -2266,7 +2288,7 @@ def fixed32_gdn_bv_live_gate_on_replay(
     expected = int(expected_records)
     if (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-        in ("single_launch", "gqa_group3")
+        in ("single_launch", "gqa_group3", "gqa_group3_bv16")
         and batch != _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
     ):
         return {
@@ -2276,7 +2298,7 @@ def fixed32_gdn_bv_live_gate_on_replay(
         }
     single_launch = (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-        in ("single_launch", "gqa_group3")
+        in ("single_launch", "gqa_group3", "gqa_group3_bv16")
     )
     if not single_launch and state["status"] == "passed":
         return dict(state)
@@ -2305,7 +2327,7 @@ def fixed32_gdn_bv_live_gate_on_replay(
         != (
             48
             if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            in ("single_launch", "gqa_group3")
+            in ("single_launch", "gqa_group3", "gqa_group3_bv16")
             else 48 * batch
         )
         or not isinstance(records, tuple)
@@ -2565,13 +2587,20 @@ _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID = (
 _FR13_FIXED32_GDN_GQA_GROUP3_CANDIDATE_ID = (
     "fixed32_gdn_single_launch_gqa_group3_v1"
 )
+_FR13_FIXED32_GDN_GQA_GROUP3_BV16_CANDIDATE_ID = (
+    "fixed32_gdn_single_launch_gqa_group3_bv16_v1"
+)
 _FR13_FIXED32_GDN_GQA_GROUP3_LAUNCH = None
 if (
     _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-    == _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE
+    in (
+        _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE,
+        _FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE,
+    )
     or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
 ):
     from lumo_flywheel_serving.fr13_gdn_gqa_group3 import (
+        BV16_CANDIDATE as _fr13_fixed32_gdn_gqa_group3_bv16_candidate_id,
         CANDIDATE as _fr13_fixed32_gdn_gqa_group3_candidate_id,
         launch_fixed32_gdn_gqa_group3_source_candidate,
     )
@@ -2579,6 +2608,8 @@ if (
     if (
         _fr13_fixed32_gdn_gqa_group3_candidate_id
         != _FR13_FIXED32_GDN_GQA_GROUP3_CANDIDATE_ID
+        or _fr13_fixed32_gdn_gqa_group3_bv16_candidate_id
+        != _FR13_FIXED32_GDN_GQA_GROUP3_BV16_CANDIDATE_ID
     ):
         raise RuntimeError("FR13 fixed32 GDN GQA-group3 identity drift")
     _FR13_FIXED32_GDN_GQA_GROUP3_LAUNCH = (
@@ -2592,6 +2623,8 @@ def _fr13_fixed32_gdn_ordered_candidate_id() -> str:
         return _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID
     if candidate == _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE:
         return _FR13_FIXED32_GDN_GQA_GROUP3_CANDIDATE_ID
+    if candidate == _FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE:
+        return _FR13_FIXED32_GDN_GQA_GROUP3_BV16_CANDIDATE_ID
     raise RuntimeError(
         "FR13 fixed32 ordered GDN candidate identity requested without its gate"
     )
@@ -3411,7 +3444,7 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
         )
     if (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-        in ("single_launch", "gqa_group3")
+        in ("single_launch", "gqa_group3", "gqa_group3_bv16")
     ):
         # B1 is captured by launch_tree_gdn_prepared. B4 uses this folded
         # stock-serving capture route; B2/B3 remain outside qualification.
@@ -5365,7 +5398,7 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
             _FR13_FIXED32_GDN_SINGLE_LAUNCH
             or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
             or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            in ("single_launch", "gqa_group3")
+            in ("single_launch", "gqa_group3", "gqa_group3_bv16")
         ):
             single_contract = _fr13_fixed32_gdn_single_launch_contract(levels)
             max_group_paths = int(single_contract["max_group_paths"])
@@ -15939,6 +15972,13 @@ def launch_tree_gdn_prepared(
         _ordered_launch_enabled = (
             _single_launch_enabled or _gqa_group3_enabled
         )
+        _ordered_block_v = (
+            16
+            if _gqa_group3_enabled
+            and _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+            == _FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE
+            else 8
+        )
         if _single_launch_enabled and _gqa_group3_enabled:
             raise RuntimeError(
                 "FR13 fixed32 ordered GDN launch selectors overlapped"
@@ -15953,14 +15993,14 @@ def launch_tree_gdn_prepared(
             or _single_launch["contract"].get("critical_node_steps") != 32
             or _single_launch["contract"].get("outer_root_loop")
             != "ordered_tl_range"
-            or _path_block_v != 8
+            or _path_block_v != _ordered_block_v
             or _geom != {"BV": 8}
             or _subtree_selfcheck_armed
             or n_actual != 32
             or n_pad != 32
         ):
             raise RuntimeError(
-                "FR13_FIXED32_GDN_SINGLE_LAUNCH exact K64/root1 BV8 B1 "
+                "FR13_FIXED32_GDN_SINGLE_LAUNCH exact K64/root1 B1 "
                 "contract drift; no fallback is permitted"
             )
         if _ordered_launch_enabled:
@@ -16052,12 +16092,19 @@ def launch_tree_gdn_prepared(
                     descriptor_execution_sha256=str(
                         _single_contract["execution_sha256"]
                     ),
+                    block_v=_ordered_block_v,
                     maxnreg=(128 if _gate_export else None),
                 )
                 _ordered_candidate_id = (
-                    _FR13_FIXED32_GDN_GQA_GROUP3_CANDIDATE_ID
+                    _FR13_FIXED32_GDN_GQA_GROUP3_BV16_CANDIDATE_ID
+                    if _ordered_block_v == 16
+                    else _FR13_FIXED32_GDN_GQA_GROUP3_CANDIDATE_ID
                 )
-                _route = "fixed32_single_launch_gqa_group3"
+                _route = (
+                    "fixed32_single_launch_gqa_group3_bv16"
+                    if _ordered_block_v == 16
+                    else "fixed32_single_launch_gqa_group3"
+                )
             else:
                 _tree_gdn_kernel_fixed32_single_launch[
                     (num_vh, triton.cdiv(dim_v, _path_block_v), 1)
@@ -16401,7 +16448,7 @@ def launch_tree_gdn_prepared(
 
     if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None and not (
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-        in ("single_launch", "gqa_group3")
+        in ("single_launch", "gqa_group3", "gqa_group3_bv16")
         and isinstance(_FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT, dict)
         and int(_FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT.get("batch_size", -1))
         != 1
@@ -16447,11 +16494,18 @@ def launch_tree_gdn_prepared(
 
         _gdn_single_launch_gate = (
             _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            in ("single_launch", "gqa_group3")
+            in ("single_launch", "gqa_group3", "gqa_group3_bv16")
         )
         _gdn_gqa_group3_gate = (
             _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            == _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE
+            in (
+                _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE,
+                _FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE,
+            )
+        )
+        _gdn_gqa_group3_bv16_gate = (
+            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+            == _FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE
         )
         _gdn_ordered_candidate_id = (
             _fr13_fixed32_gdn_ordered_candidate_id()
@@ -16512,10 +16566,16 @@ def launch_tree_gdn_prepared(
                         f"candidate selector: {_path_block_v!r}"
                     )
                 _gate_out = torch.empty_like(out)
+                _gate_block_v = (
+                    16
+                    if _candidate != "fixed32_gdn_two_launch_reference_v1"
+                    and _gdn_gqa_group3_bv16_gate
+                    else 8
+                )
                 _launch_paths(
                     _gate_out,
                     _count=True,
-                    _path_block_v=8,
+                    _path_block_v=_gate_block_v,
                     _counter_arg=_gdn_bv_gate_counter(),
                     _single_launch_override=_single_launch,
                     _gqa_group3_override=(
@@ -16958,7 +17018,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
             _FR13_FIXED32_GDN_SINGLE_LAUNCH
             or _fr13_fixed32_gdn_gqa_group3_production_for_batch(4)
             or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            in ("single_launch", "gqa_group3")
+            in ("single_launch", "gqa_group3", "gqa_group3_bv16")
         )
         or batch != 4
         or not isinstance(single_launch, dict)
@@ -17055,9 +17115,20 @@ def launch_tree_gdn_prepared_fixed32_batch(
         _ordered_launch_enabled = (
             _single_launch_enabled or _gqa_group3_enabled
         )
+        _ordered_block_v = (
+            16
+            if _gqa_group3_enabled
+            and _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+            == _FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE
+            else 8
+        )
         if _single_launch_enabled and _gqa_group3_enabled:
             raise RuntimeError(
                 "FR13 fixed32 batched ordered GDN launch selectors overlapped"
+            )
+        if _ordered_launch_enabled and _block_v != _ordered_block_v:
+            raise RuntimeError(
+                "FR13 fixed32 batched ordered GDN BLOCK_V drift"
             )
         if _ordered_launch_enabled:
             assert isinstance(single_launch, dict)
@@ -17148,12 +17219,19 @@ def launch_tree_gdn_prepared_fixed32_batch(
                     descriptor_execution_sha256=str(
                         single_contract["execution_sha256"]
                     ),
+                    block_v=_ordered_block_v,
                     maxnreg=(128 if gate_export else None),
                 )
                 ordered_candidate_id = (
-                    _FR13_FIXED32_GDN_GQA_GROUP3_CANDIDATE_ID
+                    _FR13_FIXED32_GDN_GQA_GROUP3_BV16_CANDIDATE_ID
+                    if _ordered_block_v == 16
+                    else _FR13_FIXED32_GDN_GQA_GROUP3_CANDIDATE_ID
                 )
-                ordered_route = "fixed32_single_launch_gqa_group3"
+                ordered_route = (
+                    "fixed32_single_launch_gqa_group3_bv16"
+                    if _ordered_block_v == 16
+                    else "fixed32_single_launch_gqa_group3"
+                )
             else:
                 _tree_gdn_kernel_fixed32_single_launch[
                     (num_vh, triton.cdiv(dim_v, _block_v), batch)
@@ -17411,7 +17489,14 @@ def launch_tree_gdn_prepared_fixed32_batch(
         ordered_candidate_id = _fr13_fixed32_gdn_ordered_candidate_id()
         gqa_group3_gate = (
             _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
-            == _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE
+            in (
+                _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE,
+                _FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE,
+            )
+        )
+        gqa_group3_bv16_gate = (
+            _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
+            == _FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE
         )
 
         def _single_launch_gate_snapshot():
@@ -17443,7 +17528,7 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 physical_launches = 2
             elif candidate == ordered_candidate_id:
                 _launch_batched(
-                    8,
+                    16 if gqa_group3_bv16_gate else 8,
                     _single_launch_override=not gqa_group3_gate,
                     _gqa_group3_override=gqa_group3_gate,
                 )

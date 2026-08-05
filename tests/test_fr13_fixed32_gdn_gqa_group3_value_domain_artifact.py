@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -10,6 +11,7 @@ ARTIFACT = (
     ROOT
     / "results/fr13_fixed32_gdn_gqa_group3_value_domain_sm121a_20260805"
 )
+CANDIDATE_REVISION = "1d08d3952d806306816de12988e5aa1258620566"
 
 
 def test_value_domain_codegen_resources_are_exact_and_spill_free() -> None:
@@ -75,9 +77,25 @@ def test_value_domain_artifact_is_verified_and_sanitized() -> None:
     for manifest in ("source_checksums.sha256", "SHA256SUMS"):
         for line in (ARTIFACT / manifest).read_text().splitlines():
             expected, relative = line.split("  ", 1)
-            source = (
-                ROOT / relative
-                if manifest == "source_checksums.sha256"
-                else ARTIFACT / relative
-            )
-            assert hashlib.sha256(source.read_bytes()).hexdigest() == expected
+            if manifest == "source_checksums.sha256" and relative.startswith(
+                "src/"
+            ):
+                raw = subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(ROOT),
+                        "show",
+                        f"{CANDIDATE_REVISION}:{relative}",
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                ).stdout
+            else:
+                source = (
+                    ROOT / relative
+                    if manifest == "source_checksums.sha256"
+                    else ARTIFACT / relative
+                )
+                raw = source.read_bytes()
+            assert hashlib.sha256(raw).hexdigest() == expected

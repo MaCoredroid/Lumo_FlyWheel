@@ -38,6 +38,7 @@ def _function_source(name: str) -> str:
 def _contract() -> object:
     constants = {
         "CANDIDATE",
+        "BV16_CANDIDATE",
         "FIXED32_MODES",
         "PHYSICAL_ROWS",
         "NUM_K_HEADS",
@@ -46,8 +47,11 @@ def _contract() -> object:
         "DIM_K",
         "DIM_V",
         "BLOCK_V",
+        "SOURCE_BLOCK_VS",
         "GDN_LAYERS",
         "BF16_BYTES",
+        "DRAFT_VOCAB_K",
+        "DRAFT_VOCAB_ROOT",
     }
     tree, _source = _tree_and_source()
     body = [
@@ -134,6 +138,44 @@ def test_contract_closes_exact_b1_b4_physical_work(
 
 
 @pytest.mark.parametrize(
+    ("batch", "mode", "candidate", "removed", "bytes_removed"),
+    (
+        (1, "tail6_fixed32", 128, 30_720, 503_316_480),
+        (4, "hydra27_fixed32", 512, 122_880, 2_013_265_920),
+    ),
+)
+def test_bv16_contract_halves_gqa_programs_under_exact_k64_scope(
+    batch: int,
+    mode: str,
+    candidate: int,
+    removed: int,
+    bytes_removed: int,
+) -> None:
+    result = _contract()(batch, mode=mode, block_v=16)
+
+    assert result["candidate"] == (
+        "fixed32_gdn_single_launch_gqa_group3_bv16_v1"
+    )
+    assert result["selector"] == "gqa_group3_bv16"
+    assert result["block_v"] == 16
+    assert result["default_block_v"] == 8
+    assert result["draft_vocab_k"] == 65_536
+    assert result["draft_vocab_root"] == 1
+    assert result["physical_rows_per_request"] == 32
+    assert result["reference_ctas_per_layer"] == 768 * batch
+    assert result["candidate_ctas_per_layer"] == candidate
+    assert result["ctas_removed_per_event"] == removed
+    assert result["qk_bytes_removed_per_event"] == bytes_removed
+    assert result["device_descriptor_loads_removed_per_event"] == (
+        candidate * 48 * 59
+    )
+    assert result["value_domain_masks_removed_per_event"] == (
+        candidate * 48 * 291
+    )
+    assert result["candidate_default_off"] is True
+
+
+@pytest.mark.parametrize(
     ("kwargs", "message"),
     (
         ({"batch_size": 2, "mode": "tail6_fixed32"}, "B1 or B4"),
@@ -166,9 +208,9 @@ def test_contract_closes_exact_b1_b4_physical_work(
             {
                 "batch_size": 1,
                 "mode": "tail6_fixed32",
-                "block_v": 16,
+                "block_v": 32,
             },
-            "geometry drift",
+            "BLOCK_V must be exactly 8 or 16",
         ),
         (
             {
@@ -291,7 +333,11 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert "path_len = tl.where(\n                member_ok," in kernel
     assert kernel.count("_fr13_fixed32_gdn_gqa_group3_node(") == 2
     assert "if H0_IS_BANK:" in kernel
-    assert "grid = (NUM_K_HEADS, DIM_V // BLOCK_V, int(batch_size))" in launch
+    assert (
+        "grid = (NUM_K_HEADS, DIM_V // selected_block_v, int(batch_size))"
+        in launch
+    )
+    assert "BLOCK_V=selected_block_v" in launch
     assert 'launch_options = {"num_warps": 8}' in launch
     assert 'int(maxnreg) != 128' in launch
     assert 'launch_options["maxnreg"] = int(maxnreg)' in launch
@@ -395,14 +441,21 @@ def test_candidate_is_default_off_and_gate_wired_without_serving() -> None:
     launcher = LAUNCHER.read_text(encoding="utf-8")
     _tree, source = _tree_and_source()
 
-    assert "default-off ``gqa_group3`` live" in source
-    assert '== _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE' in served
+    assert "``gqa_group3_bv16`` live gate" in source
+    assert "_FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE" in served
+    assert '"gqa_group3_bv16"' in served
     assert "_FR13_FIXED32_GDN_GQA_GROUP3_LAUNCH = None" in served
     assert "launch_fixed32_gdn_gqa_group3_source_candidate" in served
     assert served.count("descriptor_execution_sha256=str(") == 2
     assert served.count('["execution_sha256"]') >= 2
+    assert served.count("block_v=_ordered_block_v") == 2
+    assert "16 if gqa_group3_bv16_gate else 8" in served
     assert '"gqa_group3"' in patcher
+    assert '"gqa_group3_bv16"' in patcher
     assert '"gqa_group3"' in launcher
+    assert '"gqa_group3_bv16"' in launcher
+    assert '"FR13_DRAFT_VOCAB_K", ""' in served
+    assert '= "65536"' in served
     assert '"candidate_served": False' in served
 
 
