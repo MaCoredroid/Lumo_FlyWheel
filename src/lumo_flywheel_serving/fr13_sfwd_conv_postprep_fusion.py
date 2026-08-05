@@ -629,8 +629,8 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
             "fixed32 conv/post-prep fusion requires rows/width/state "
             f"({ROWS}, {CONV_WIDTH}, {CONV_STATE_LEN})"
         )
-    block_c = 128 if batch == 1 else 256
-    num_warps = 2 if batch == 1 else 4
+    block_c = 256
+    num_warps = 4
     channel_programs = CHANNELS // block_c
     gate_rows_per_program = 2 * block_c // GATE_BLOCK
     gating_programs = ROWS // gate_rows_per_program
@@ -744,7 +744,7 @@ def fixed32_sfwd_conv_postprep_static_ledger(
     logical_traffic_removed = (
         removed_conv_write + removed_conv_reads + removed_dead_qk_write
     )
-    block_c = 128 if batch == 1 else 256
+    block_c = 256
     channel_programs = CHANNELS // block_c
     gate_rows_per_program = 2 * block_c // GATE_BLOCK
     packed_gate_programs = ROWS // gate_rows_per_program
