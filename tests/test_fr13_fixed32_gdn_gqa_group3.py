@@ -48,6 +48,12 @@ def _contract() -> object:
         "BLOCK_V",
         "GDN_LAYERS",
         "BF16_BYTES",
+        "FIXED32_ROOT_NODES_PACKED",
+        "FIXED32_GROUP_PATH_INDICES_PACKED",
+        "FIXED32_PATH_LENGTHS_PACKED",
+        "FIXED32_BRANCH_PATH_0_PACKED",
+        "FIXED32_BRANCH_PATH_1_PACKED",
+        "FIXED32_BRANCH_PATH_2_PACKED",
     }
     tree, _source = _tree_and_source()
     body = [
@@ -115,6 +121,11 @@ def test_contract_closes_exact_b1_b4_physical_work(
     )
     assert result["source_node_clamp_sites_removed_per_event"] == (
         candidate_node_visits * 4
+    )
+    assert result["device_descriptor_pointer_args_removed"] == 5
+    assert result["device_descriptor_loads_removed_per_cta"] == 59
+    assert result["device_descriptor_loads_removed_per_event"] == (
+        candidate * 48 * 59
     )
     assert result["state_export_writes"] == 0
     assert result["state_parent_reads"] == 0
@@ -259,9 +270,15 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert "pid_kh = tl.program_id(0)" in kernel
     assert "pid_vh_0 = pid_kh * HEAD_GROUP" in kernel
     assert "tl.arange(0, HEAD_GROUP)" not in kernel
-    assert "for root_index in tl.range(0, ROOT_STEPS):" in kernel
-    assert "for member in tl.static_range(0, MAX_GROUP_PATHS):" in kernel
+    assert "for root_index in tl.range(0, 5):" in kernel
+    assert "for member in tl.static_range(0, 3):" in kernel
     assert "for path_offset in tl.range(0, path_len):" in kernel
+    assert "tl.load(root_nodes" not in kernel
+    assert "tl.load(group_path_counts" not in kernel
+    assert "tl.load(group_path_indices" not in kernel
+    assert "tl.load(branch_lengths" not in kernel
+    assert "tl.load(branch_nodes" not in kernel
+    assert "path_len = tl.where(\n                member_ok," in kernel
     assert kernel.count("_fr13_fixed32_gdn_gqa_group3_node(") == 2
     assert "if H0_IS_BANK:" in kernel
     assert "grid = (NUM_K_HEADS, DIM_V // BLOCK_V, int(batch_size))" in launch
@@ -273,6 +290,88 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert "expected_descriptor_numels" in launch
     assert "immutable physical32 descriptor drift" in launch
     assert "TRUST_FIXED32_NODE_DOMAIN=True" in launch
+    kernel_arguments = launch.split(
+        "_fr13_fixed32_gdn_gqa_group3_single_launch_kernel[grid](", 1
+    )[1].split("N_ACTUAL=PHYSICAL_ROWS", 1)[0]
+    for descriptor in (
+        "root_nodes",
+        "branch_nodes",
+        "branch_lengths",
+        "group_path_indices",
+        "group_path_counts",
+    ):
+        assert descriptor not in kernel_arguments
+
+
+def test_compile_time_physical32_schedule_matches_validated_descriptors() -> None:
+    tree, _source = _tree_and_source()
+    names = {
+        "FIXED32_ROOT_NODES_PACKED",
+        "FIXED32_GROUP_PATH_INDICES_PACKED",
+        "FIXED32_PATH_LENGTHS_PACKED",
+        "FIXED32_BRANCH_PATH_0_PACKED",
+        "FIXED32_BRANCH_PATH_1_PACKED",
+        "FIXED32_BRANCH_PATH_2_PACKED",
+    }
+    values = {
+        target.id: ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name) and target.id in names
+    }
+    roots = [
+        (values["FIXED32_ROOT_NODES_PACKED"] >> (index * 5)) & 0x1F
+        for index in range(5)
+    ]
+    path_slots = [
+        (
+            values["FIXED32_GROUP_PATH_INDICES_PACKED"] >> (index * 4)
+        )
+        & 0xF
+        for index in range(15)
+    ]
+    path_ids = [
+        path_slots[root * 3 + member]
+        for root in range(5)
+        for member in range(3 if root == 4 else 2)
+    ]
+    path_lengths = [
+        (values["FIXED32_PATH_LENGTHS_PACKED"] >> (index * 3)) & 0x7
+        for index in range(11)
+    ]
+    branch_paths = []
+    for path_id, path_length in enumerate(path_lengths):
+        if path_id < 3:
+            packed = values[f"FIXED32_BRANCH_PATH_{path_id}_PACKED"]
+            branch_paths.append(
+                [
+                    (packed >> (offset * 5)) & 0x1F
+                    for offset in range(path_length)
+                ]
+            )
+        else:
+            branch_paths.append(
+                [5 + ((path_id - 3) >> 1) * 5 + ((path_id - 3) & 1)]
+            )
+
+    assert roots == [0, 1, 4, 9, 14]
+    assert path_slots == [1, 2, 0, 3, 4, 0, 5, 6, 0, 7, 8, 0, 0, 9, 10]
+    assert path_ids == [1, 2, 3, 4, 5, 6, 7, 8, 0, 9, 10]
+    assert path_lengths == [7, 5, 7, 1, 1, 1, 1, 1, 1, 1, 1]
+    assert branch_paths == [
+        [19, 24, 26, 28, 29, 30, 31],
+        [2, 7, 12, 17, 22],
+        [3, 8, 13, 18, 23, 25, 27],
+        [5],
+        [6],
+        [10],
+        [11],
+        [15],
+        [16],
+        [20],
+        [21],
+    ]
 
 
 def test_candidate_is_default_off_and_gate_wired_without_serving() -> None:
