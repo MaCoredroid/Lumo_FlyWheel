@@ -1,0 +1,9 @@
+variant	problem_tiles	dtype	slots	branches	ldc	ldcu	constant_loads	s2r	qmma	ffma	ldsm	stsm	nop	isetp	uisetp	uiadd3	imad
+generic	0	fp16	560	29	5	15	20	3	32	32	24	4	23	16	11	33	13
+exact	112	fp16	560	29	4	12	16	3	32	32	24	4	24	15	12	33	13
+exact	128	fp16	560	29	4	12	16	3	32	32	24	4	24	15	12	33	13
+exact	272	fp16	560	29	4	12	16	3	32	32	24	4	24	15	12	33	13
+generic	0	bf16	560	29	5	15	20	3	32	32	24	4	23	16	11	33	13
+exact	112	bf16	560	29	4	12	16	3	32	32	24	4	24	15	12	33	13
+exact	128	bf16	560	29	4	12	16	3	32	32	24	4	24	15	12	33	13
+exact	272	bf16	560	29	4	12	16	3	32	32	24	4	24	15	12	33	13

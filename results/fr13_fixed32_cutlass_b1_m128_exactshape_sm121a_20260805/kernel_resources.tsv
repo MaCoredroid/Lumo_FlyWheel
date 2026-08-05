@@ -1,0 +1,9 @@
+variant	problem_tiles	dtype	registers	stack_bytes	local_bytes	static_shared_bytes	ldl	stl	call
+generic	0	fp16	168	0	0	1024	0	0	0
+exact	112	fp16	168	0	0	1024	0	0	0
+exact	128	fp16	168	0	0	1024	0	0	0
+exact	272	fp16	168	0	0	1024	0	0	0
+generic	0	bf16	168	0	0	1024	0	0	0
+exact	112	bf16	168	0	0	1024	0	0	0
+exact	128	bf16	168	0	0	1024	0	0	0
+exact	272	bf16	168	0	0	1024	0	0	0
