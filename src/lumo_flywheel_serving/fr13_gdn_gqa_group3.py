@@ -23,6 +23,9 @@ DIM_V = 128
 BLOCK_V = 8
 GDN_LAYERS = 48
 BF16_BYTES = 2
+FIXED32_EXECUTION_SHA256 = (
+    "80aed4d1a882ee4d4cde21dbf4314ed3abaae3f7553e35b6db5cd7574fe3b7db"
+)
 
 
 def fixed32_gdn_gqa_group3_contract(
@@ -82,6 +85,9 @@ def fixed32_gdn_gqa_group3_contract(
     qk_norm_reductions_removed_per_event = (
         ctas_removed_per_layer * rows * 2 * layer_count
     )
+    candidate_node_visits_per_event = (
+        candidate_ctas_per_layer * rows * layer_count
+    )
     return {
         "candidate": CANDIDATE,
         "mode": mode,
@@ -109,6 +115,14 @@ def fixed32_gdn_gqa_group3_contract(
             qk_norm_reductions_removed_per_event * dk
         ),
         "node_updates_per_request_layer": rows,
+        "trusted_node_domain": (0, rows - 1),
+        "source_node_domain_guard_sites_removed_per_visit": HEAD_GROUP + 1,
+        "source_node_domain_guard_sites_removed_per_event": (
+            candidate_node_visits_per_event * (HEAD_GROUP + 1)
+        ),
+        "source_node_clamp_sites_removed_per_event": (
+            candidate_node_visits_per_event * (HEAD_GROUP + 1)
+        ),
         "state_export_writes": 0,
         "state_parent_reads": 0,
         "candidate_default_off": True,
@@ -132,12 +146,11 @@ def _fr13_fixed32_gdn_gqa_group3_value_head_node(
     ring_a,
     ring_b,
     ring_gate,
-    pid_batch,
     pid_vh,
     pid_v,
     offs_v,
-    node,
-    N_ACTUAL: tl.constexpr,
+    n_ok,
+    global_node,
     NUM_VH: tl.constexpr,
     DIM_V: tl.constexpr,
     OUTPUT_SCALE: tl.constexpr,
@@ -149,9 +162,6 @@ def _fr13_fixed32_gdn_gqa_group3_value_head_node(
 ):
     """Run one sibling recurrence after its key head's q/k is prepared."""
     prior_state = state_i
-    n_ok = (node >= 0) & (node < N_ACTUAL)
-    node_c = tl.maximum(node, 0)
-    global_node = pid_batch * N_ACTUAL + node_c
     value_offsets = (global_node * NUM_VH + pid_vh) * DIM_V + offs_v
     v_mask = offs_v < DIM_V
     b_v_raw = tl.load(
@@ -288,11 +298,16 @@ def _fr13_fixed32_gdn_gqa_group3_node(
     K_NORM_EXPORT: tl.constexpr,
     GATE_EXPORT: tl.constexpr,
     DECAY_EXPORT: tl.constexpr,
+    TRUST_FIXED32_NODE_DOMAIN: tl.constexpr,
 ):
     """Run three value heads after loading and normalizing shared q/k once."""
-    n_ok = (node >= 0) & (node < N_ACTUAL)
-    node_c = tl.maximum(node, 0)
-    global_node = pid_batch * N_ACTUAL + node_c
+    if TRUST_FIXED32_NODE_DOMAIN:
+        n_ok = True
+        global_node = pid_batch * N_ACTUAL + node
+    else:
+        n_ok = (node >= 0) & (node < N_ACTUAL)
+        node_c = tl.maximum(node, 0)
+        global_node = pid_batch * N_ACTUAL + node_c
     b_q = tl.load(
         q + (global_node * NUM_KH + pid_kh) * DIM_K + offs_k,
         mask=n_ok,
@@ -346,12 +361,11 @@ def _fr13_fixed32_gdn_gqa_group3_node(
         ring_a,
         ring_b,
         ring_gate,
-        pid_batch,
         pid_vh_0,
         pid_v,
         offs_v,
-        node,
-        N_ACTUAL=N_ACTUAL,
+        n_ok,
+        global_node,
         NUM_VH=NUM_VH,
         DIM_V=DIM_V,
         OUTPUT_SCALE=OUTPUT_SCALE,
@@ -377,12 +391,11 @@ def _fr13_fixed32_gdn_gqa_group3_node(
         ring_a,
         ring_b,
         ring_gate,
-        pid_batch,
         pid_vh_1,
         pid_v,
         offs_v,
-        node,
-        N_ACTUAL=N_ACTUAL,
+        n_ok,
+        global_node,
         NUM_VH=NUM_VH,
         DIM_V=DIM_V,
         OUTPUT_SCALE=OUTPUT_SCALE,
@@ -408,12 +421,11 @@ def _fr13_fixed32_gdn_gqa_group3_node(
         ring_a,
         ring_b,
         ring_gate,
-        pid_batch,
         pid_vh_2,
         pid_v,
         offs_v,
-        node,
-        N_ACTUAL=N_ACTUAL,
+        n_ok,
+        global_node,
         NUM_VH=NUM_VH,
         DIM_V=DIM_V,
         OUTPUT_SCALE=OUTPUT_SCALE,
@@ -483,6 +495,7 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
     DECAY_EXPORT: tl.constexpr,
     FLAGS_EXPORT: tl.constexpr,
     FLAGS_ROWS: tl.constexpr,
+    TRUST_FIXED32_NODE_DOMAIN: tl.constexpr,
 ):
     """Map one CTA to the three value heads sharing a fixed32 key head."""
     pid_kh = tl.program_id(0)
@@ -596,6 +609,7 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
                 K_NORM_EXPORT=K_NORM_EXPORT,
                 GATE_EXPORT=GATE_EXPORT,
                 DECAY_EXPORT=DECAY_EXPORT,
+                TRUST_FIXED32_NODE_DOMAIN=TRUST_FIXED32_NODE_DOMAIN,
             )
         )
         group_path_count = tl.load(group_path_counts + root_index)
@@ -669,6 +683,9 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
                         K_NORM_EXPORT=K_NORM_EXPORT,
                         GATE_EXPORT=GATE_EXPORT,
                         DECAY_EXPORT=DECAY_EXPORT,
+                        TRUST_FIXED32_NODE_DOMAIN=(
+                            TRUST_FIXED32_NODE_DOMAIN
+                        ),
                     )
                 )
 
@@ -730,6 +747,7 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
     decay_export: bool,
     flags_export: bool,
     flags_rows: int,
+    descriptor_execution_sha256: str,
     maxnreg: int | None = None,
 ) -> dict[str, object]:
     """Launch the unserved candidate after explicit caller-side qualification."""
@@ -772,6 +790,38 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         raise ValueError("GQA-group3 q geometry drift")
     if int(v.shape[1]) != NUM_V_HEADS or int(v.shape[2]) != DIM_V:
         raise ValueError("GQA-group3 v geometry drift")
+    if descriptor_execution_sha256 != FIXED32_EXECUTION_SHA256:
+        raise ValueError("GQA-group3 physical32 descriptor provenance drift")
+    descriptor_numels = (
+        int(root_nodes.numel()),
+        int(branch_nodes.numel()),
+        int(branch_lengths.numel()),
+        int(group_path_indices.numel()),
+        int(group_path_counts.numel()),
+    )
+    expected_descriptor_numels = (
+        5,
+        77,
+        77 if prescaled_path_base else 11,
+        15,
+        5,
+    )
+    if (
+        (int(root_steps), int(max_path_len), int(max_group_paths))
+        != (5, 7, 3)
+        or descriptor_numels != expected_descriptor_numels
+        or any(
+            tensor.dtype != torch.int32 or not tensor.is_contiguous()
+            for tensor in (
+                root_nodes,
+                branch_nodes,
+                branch_lengths,
+                group_path_indices,
+                group_path_counts,
+            )
+        )
+    ):
+        raise ValueError("GQA-group3 immutable physical32 descriptor drift")
     if decay_export and not gate_export:
         raise ValueError("GQA-group3 decay export requires gate export")
     if maxnreg is not None and int(maxnreg) != 128:
@@ -837,6 +887,9 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         DECAY_EXPORT=bool(decay_export),
         FLAGS_EXPORT=bool(flags_export),
         FLAGS_ROWS=int(flags_rows),
+        # The validated preseed provenance proves every loaded descriptor node
+        # is in [0, 31], so the hot recurrence does not need per-node clamps.
+        TRUST_FIXED32_NODE_DOMAIN=True,
         **launch_options,
     )
     return contract

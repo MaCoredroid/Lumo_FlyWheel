@@ -107,6 +107,15 @@ def test_contract_closes_exact_b1_b4_physical_work(
     assert result["qk_bytes_removed_per_event"] == bytes_removed
     assert result["qk_norm_reductions_removed_per_event"] == removed * 64
     assert result["qk_norm_lane_terms_removed_per_event"] == removed * 8_192
+    candidate_node_visits = candidate * 32 * 48
+    assert result["trusted_node_domain"] == (0, 31)
+    assert result["source_node_domain_guard_sites_removed_per_visit"] == 4
+    assert result["source_node_domain_guard_sites_removed_per_event"] == (
+        candidate_node_visits * 4
+    )
+    assert result["source_node_clamp_sites_removed_per_event"] == (
+        candidate_node_visits * 4
+    )
     assert result["state_export_writes"] == 0
     assert result["state_parent_reads"] == 0
     assert result["candidate_default_off"] is True
@@ -239,7 +248,14 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert "tl.arange(0, HEAD_GROUP)" not in node
     assert "axis=1" in value_head
     assert "prior_state = state_i" in value_head
+    assert "node >= 0" not in value_head
+    assert "tl.maximum(node, 0)" not in value_head
+    assert "n_ok" in value_head
+    assert "global_node" in value_head
     assert "return tl.where(n_ok, state_i, prior_state)" in value_head
+    assert "if TRUST_FIXED32_NODE_DOMAIN:" in node
+    assert "n_ok = True" in node
+    assert "global_node = pid_batch * N_ACTUAL + node" in node
     assert "pid_kh = tl.program_id(0)" in kernel
     assert "pid_vh_0 = pid_kh * HEAD_GROUP" in kernel
     assert "tl.arange(0, HEAD_GROUP)" not in kernel
@@ -252,6 +268,11 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert 'launch_options = {"num_warps": 8}' in launch
     assert 'int(maxnreg) != 128' in launch
     assert 'launch_options["maxnreg"] = int(maxnreg)' in launch
+    assert "descriptor_execution_sha256 != FIXED32_EXECUTION_SHA256" in launch
+    assert "physical32 descriptor provenance drift" in launch
+    assert "expected_descriptor_numels" in launch
+    assert "immutable physical32 descriptor drift" in launch
+    assert "TRUST_FIXED32_NODE_DOMAIN=True" in launch
 
 
 def test_candidate_is_default_off_and_gate_wired_without_serving() -> None:
@@ -264,6 +285,8 @@ def test_candidate_is_default_off_and_gate_wired_without_serving() -> None:
     assert '== _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE' in served
     assert "_FR13_FIXED32_GDN_GQA_GROUP3_LAUNCH = None" in served
     assert "launch_fixed32_gdn_gqa_group3_source_candidate" in served
+    assert served.count("descriptor_execution_sha256=str(") == 2
+    assert served.count('["execution_sha256"]') >= 2
     assert '"gqa_group3"' in patcher
     assert '"gqa_group3"' in launcher
     assert '"candidate_served": False' in served
@@ -294,6 +317,10 @@ def test_value_head_helper_calls_exactly_match_the_ast_signature() -> None:
 
     assert "ring_k" not in signature
     assert "ring_k_norm" not in signature
+    assert "node" not in signature
+    assert "N_ACTUAL" not in signature
+    assert "n_ok" in signature
+    assert "global_node" in signature
     assert len(calls) == 3
     for sibling, call in enumerate(calls):
         assert len(call.args) + len(call.keywords) == len(signature)
@@ -305,5 +332,5 @@ def test_value_head_helper_calls_exactly_match_the_ast_signature() -> None:
         expected_positionals[0] = f"state_{sibling}"
         expected_positionals[8] = f"b_a_log_{sibling}"
         expected_positionals[9] = f"b_dt_bias_{sibling}"
-        expected_positionals[16] = f"pid_vh_{sibling}"
+        expected_positionals[15] = f"pid_vh_{sibling}"
         assert actual_positionals == expected_positionals
