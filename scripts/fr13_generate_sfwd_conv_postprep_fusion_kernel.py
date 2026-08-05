@@ -125,6 +125,7 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
     BLOCK_C: tl.constexpr,
     GATE_BLOCK: tl.constexpr,
     SOFTPLUS_THRESHOLD: tl.constexpr,
+    EMBED_GATE_CTA: tl.constexpr,
 ):
     """Fuse one fixed32 layer's conv, recurrence outputs, and post-prep."""
     pid_b = tl.program_id(0)
@@ -132,56 +133,73 @@ def _fr13_fixed32_sfwd_conv_postprep_fusion_kernel(
     channel_tasks: tl.constexpr = C // BLOCK_C
     Q_DIM: tl.constexpr = H * K
     V_DIM: tl.constexpr = HV * V
-    if pid_task < channel_tasks:
+    GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK
+    GATE_TASKS: tl.constexpr = N // GATE_ROWS
+    if EMBED_GATE_CTA:
         pid_c = pid_task
 '''
 
 
-GATING = '''    else:
-        GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK
-        pid_n_base = (pid_task - channel_tasks) * GATE_ROWS
-        offs_n = pid_n_base + tl.arange(0, GATE_ROWS)[:, None]
-        offs_h_1d = tl.arange(0, GATE_BLOCK)
-        h_mask = offs_h_1d < HV
-        offs_h = offs_h_1d[None, :]
-        gate_mask = (offs_n < N) & (offs_h < HV)
-        row = pid_b * N + offs_n
-        if pid_n_base < N:
-            a_value = tl.load(
-                a + row * HV + offs_h,
-                mask=gate_mask,
-                other=0.0,
-            ).to(tl.float32)
-            b_value = tl.load(
-                b + row * HV + offs_h,
-                mask=gate_mask,
-                other=0.0,
-            ).to(tl.float32)
-            A_log_value = tl.load(
-                A_log + offs_h_1d,
-                mask=h_mask,
-                other=0.0,
-            ).to(tl.float32)[None, :]
-            dt_bias_value = tl.load(
-                dt_bias + offs_h_1d,
-                mask=h_mask,
-                other=0.0,
-            ).to(tl.float32)[None, :]
-            gate_input = a_value + dt_bias_value
-            softplus = tl.where(
-                gate_input > 0,
-                gate_input + tl.log(1.0 + tl.exp(-gate_input)),
-                tl.log(1.0 + tl.exp(gate_input)),
-            )
-            softplus = tl.where(
-                gate_input <= SOFTPLUS_THRESHOLD,
-                softplus,
-                gate_input,
-            )
-            g_value = -tl.exp(A_log_value) * softplus
-            beta_value = tl.sigmoid(b_value)
-            tl.store(g + row * HV + offs_h, g_value, mask=gate_mask)
-            tl.store(beta + row * HV + offs_h, beta_value, mask=gate_mask)
+EMBEDDED_GATING = '''        # The 40-program schedule appends the four unchanged gate tiles to
+        # its first four channel programs.
+        if pid_task < GATE_TASKS:
+            pid_n_base = pid_task * GATE_ROWS
+'''
+
+
+STANDALONE_PROLOGUE = '''    else:
+        if pid_task < channel_tasks:
+            pid_c = pid_task
+'''
+
+
+STANDALONE_GATING = '''        else:
+            pid_n_base = (pid_task - channel_tasks) * GATE_ROWS
+'''
+
+
+GATING_BODY = '''offs_n = pid_n_base + tl.arange(0, GATE_ROWS)[:, None]
+offs_h_1d = tl.arange(0, GATE_BLOCK)
+h_mask = offs_h_1d < HV
+offs_h = offs_h_1d[None, :]
+gate_mask = (offs_n < N) & (offs_h < HV)
+row = pid_b * N + offs_n
+if pid_n_base < N:
+    a_value = tl.load(
+        a + row * HV + offs_h,
+        mask=gate_mask,
+        other=0.0,
+    ).to(tl.float32)
+    b_value = tl.load(
+        b + row * HV + offs_h,
+        mask=gate_mask,
+        other=0.0,
+    ).to(tl.float32)
+    A_log_value = tl.load(
+        A_log + offs_h_1d,
+        mask=h_mask,
+        other=0.0,
+    ).to(tl.float32)[None, :]
+    dt_bias_value = tl.load(
+        dt_bias + offs_h_1d,
+        mask=h_mask,
+        other=0.0,
+    ).to(tl.float32)[None, :]
+    gate_input = a_value + dt_bias_value
+    softplus = tl.where(
+        gate_input > 0,
+        gate_input + tl.log(1.0 + tl.exp(-gate_input)),
+        tl.log(1.0 + tl.exp(gate_input)),
+    )
+    softplus = tl.where(
+        gate_input <= SOFTPLUS_THRESHOLD,
+        softplus,
+        gate_input,
+    )
+    g_value = -tl.exp(A_log_value) * softplus
+    beta_value = tl.sigmoid(b_value)
+    tl.store(g + row * HV + offs_h, g_value, mask=gate_mask)
+    tl.store(beta + row * HV + offs_h, beta_value, mask=gate_mask)
 '''
 
 
@@ -269,13 +287,27 @@ def _producer_body() -> str:
     if joined.count(unsafe_bank_load) != 1:
         raise RuntimeError("frontier-5 bank-row load drifted")
     joined = joined.replace(unsafe_bank_load, guarded_bank_load, 1)
-    return "\n".join(
-        "    " + line if line else "" for line in joined.splitlines()
-    ) + "\n"
+    return joined + "\n"
+
+
+def _indent_block(source: str, spaces: int) -> str:
+    prefix = " " * spaces
+    return "\n".join(prefix + line if line else "" for line in source.splitlines()) + "\n"
 
 
 def generate() -> str:
-    return PREAMBLE + SIGNATURE + _producer_body() + GATING
+    producer = _producer_body()
+    return (
+        PREAMBLE
+        + SIGNATURE
+        + _indent_block(producer, 4)
+        + EMBEDDED_GATING
+        + _indent_block(GATING_BODY, 12)
+        + STANDALONE_PROLOGUE
+        + _indent_block(producer, 8)
+        + STANDALONE_GATING
+        + _indent_block(GATING_BODY, 12)
+    )
 
 
 def main() -> None:

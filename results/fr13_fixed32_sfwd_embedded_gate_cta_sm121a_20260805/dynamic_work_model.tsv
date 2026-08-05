@@ -1,0 +1,5 @@
+profile	variant	standalone_gate_ctas_per_request_layer	embedded_gate_channel_ctas_per_request_layer	ctas_per_request_layer	ctas_whole_batch_all_48_layers	launched_warps_whole_batch_all_48_layers	requested_gate_bytes_whole_batch_all_48_layers	kernel_launches_all_48_layers
+b1	baseline	4	0	44	2112	8448	940032	48
+b1	candidate	0	4	40	1920	7680	940032	48
+b4	baseline	4	0	44	8448	33792	3760128	48
+b4	candidate	0	4	40	7680	30720	3760128	48

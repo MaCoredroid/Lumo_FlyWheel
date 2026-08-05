@@ -1,0 +1,11 @@
+CUDA_VISIBLE_DEVICES='' PYTHONPATH=src \
+  /home/mark/shared/lumoFlyWheel/.venv/bin/python -m pytest -q \
+  tests/test_fr13_fixed32_sfwd_conv_postprep_fusion.py \
+  tests/test_fr13_fixed32_sfwd_conv_postprep_wiring.py \
+  tests/test_fr13_fixed32_sfwd_b1_block256_codegen_artifact.py \
+  tests/test_fr13_fixed32_sfwd_gatepack2_codegen_artifact.py \
+  tests/test_fr13_fixed32_sfwd_embedded_gate_codegen_artifact.py \
+  tests/test_fr13_b1_gate_b_m128_directgrid_pass_artifact.py
+
+.............................................                            [100%]
+45 passed in 1.67s

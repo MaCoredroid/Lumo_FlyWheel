@@ -1,0 +1,17 @@
+CUDA_VISIBLE_DEVICES='' PYTHONPATH=src \
+  /home/mark/lumoFlyWheel-sfwd-conv-postprep-livegate-20260803/.venv/bin/python \
+  -m pytest -q \
+  tests/test_fr13_fixed32_ingress_proxy.py \
+  tests/test_fr13_fixed32_sfwd_conv_postprep_fusion.py \
+  tests/test_fr13_fixed32_sfwd_conv_postprep_wiring.py \
+  tests/test_fr13_fixed32_sfwd_embedded_gate_codegen_artifact.py \
+  tests/test_fr13_fixed32_sfwd_embedded_gate_selector_codegen_artifact.py \
+  tests/test_fr13_b1_composed_stack.py \
+  tests/test_fr13_b1_u8_cfwd_sfwd_stack_timing.py \
+  tests/test_fr13_k64_qrow16_sfwd_stack.py \
+  tests/test_fr13_qrow16_production_sidecar.py \
+  tests/test_fr13_fixed32_sfwd_state_fusion.py
+
+........................................................................ [ 57%]
+......................................................                   [100%]
+126 passed in 2.59s

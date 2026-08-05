@@ -405,9 +405,10 @@ def test_contract_is_exact_physical32_k64_and_one_launch_per_layer() -> None:
         assert contract["gating_programs_per_request"] == (
             32 // expected_gate_rows
         )
-        assert contract["programs_per_request"] == (
-            expected_channel_programs + 32 // expected_gate_rows
-        )
+        assert contract["standalone_gating_programs_per_request"] == 4
+        assert contract["embedded_gating_channel_programs_per_request"] == 0
+        assert contract["gate_scheduling"] == "standalone_after_channel_programs"
+        assert contract["programs_per_request"] == expected_channel_programs + 4
         assert contract["cross_layer_fusion"] is False
         assert contract["conv_product_dtype"] == "bfloat16"
         assert contract["conv_accumulator_dtype"] == "float32"
@@ -428,6 +429,31 @@ def test_contract_is_exact_physical32_k64_and_one_launch_per_layer() -> None:
         assert contract["offline_codegen_shared_bytes"] == 0
         assert contract["codegen_registers_verified"] is True
         assert contract["timing_claim"] is False
+    for batch in (1, 4):
+        embedded = candidate.fixed32_sfwd_conv_postprep_fusion_contract(
+            batch,
+            fixed32_mode="hydra27_fixed32",
+            tree_parent=list(candidate.FIXED32_PARENT),
+            qualification_profile="k64_root",
+            draft_vocab_k=65536,
+            draft_vocab_root=1,
+            embed_gate_cta=True,
+        )
+        assert embedded["candidate"] == candidate.EMBEDDED_GATE_CANDIDATE
+        assert embedded["standalone_gating_programs_per_request"] == 0
+        assert embedded["embedded_gating_channel_programs_per_request"] == 4
+        assert embedded["gate_scheduling"] == "append_to_first_channel_programs"
+        assert embedded["programs_per_request"] == 40
+    with pytest.raises(RuntimeError, match="exact Hydra27 physical32 B1 or B4"):
+        candidate.fixed32_sfwd_conv_postprep_fusion_contract(
+            2,
+            fixed32_mode="hydra27_fixed32",
+            tree_parent=list(candidate.FIXED32_PARENT),
+            qualification_profile="k64_root",
+            draft_vocab_k=65536,
+            draft_vocab_root=1,
+            embed_gate_cta=True,
+        )
     with pytest.raises(RuntimeError, match="physical32 K64/root1"):
         candidate.fixed32_sfwd_conv_postprep_fusion_contract(
             1,
@@ -452,29 +478,41 @@ def test_contract_is_exact_physical32_k64_and_one_launch_per_layer() -> None:
     ("batch_size", "block_c", "gate_rows"),
     ((1, 256, 8), (4, 256, 8)),
 )
-def test_gate_row_tiles_cover_each_fixed32_output_exactly_once(
+def test_embedded_gate_tiles_and_channels_cover_fixed32_exactly_once(
     batch_size: int,
     block_c: int,
     gate_rows: int,
 ) -> None:
     assert gate_rows == 2 * block_c // candidate.GATE_BLOCK
-    gate_tasks = (candidate.ROWS + gate_rows - 1) // gate_rows
-    visited = []
+    gate_tasks = candidate.ROWS // gate_rows
+    channel_tasks = candidate.CHANNELS // block_c
+    visited_channels = []
+    visited_gates = []
     for request in range(batch_size):
-        for task in range(gate_tasks):
-            for local_row in range(gate_rows):
-                row = task * gate_rows + local_row
-                for head in range(candidate.GATE_BLOCK):
-                    if row < candidate.ROWS and head < candidate.NUM_V_HEADS:
-                        visited.append((request, row, head))
-    expected = {
+        for task in range(channel_tasks):
+            for channel in range(task * block_c, (task + 1) * block_c):
+                visited_channels.append((request, channel))
+            if task < gate_tasks:
+                for local_row in range(gate_rows):
+                    row = task * gate_rows + local_row
+                    for head in range(candidate.GATE_BLOCK):
+                        if head < candidate.NUM_V_HEADS:
+                            visited_gates.append((request, row, head))
+    expected_channels = {
+        (request, channel)
+        for request in range(batch_size)
+        for channel in range(candidate.CHANNELS)
+    }
+    expected_gates = {
         (request, row, head)
         for request in range(batch_size)
         for row in range(candidate.ROWS)
         for head in range(candidate.NUM_V_HEADS)
     }
-    assert len(visited) == len(set(visited))
-    assert set(visited) == expected
+    assert len(visited_channels) == len(set(visited_channels))
+    assert set(visited_channels) == expected_channels
+    assert len(visited_gates) == len(set(visited_gates))
+    assert set(visited_gates) == expected_gates
 
 
 def test_exact_direct_algebra_matches_incumbent_bytes_on_adversarial_values() -> None:
@@ -662,8 +700,8 @@ def test_generator_is_deterministic_and_kernel_has_no_conv_intermediate() -> Non
     assert "out" not in {argument.arg for argument in kernel.args.args}
     assert "conv_output" not in {argument.arg for argument in kernel.args.args}
     assert "out_batch" not in kernel_source
-    assert kernel_source.count("_fr13_store_fixed32_conv_outputs(") == 32
-    assert kernel_source.count("tl.load(x_batch") == 32
+    assert kernel_source.count("_fr13_store_fixed32_conv_outputs(") == 64
+    assert kernel_source.count("tl.load(x_batch") == 64
     assert (
         "bank_row_ok = (bank_row_raw >= 0) & (bank_row_raw < BANK_ROWS)"
         in kernel_source
@@ -677,18 +715,23 @@ def test_generator_is_deterministic_and_kernel_has_no_conv_intermediate() -> Non
         in kernel_source
     )
     assert "prior_base = conv_state + bank_row_raw" not in kernel_source
-    assert kernel_source.count(".to(tl.bfloat16).to(tl.float32)") == 128
+    assert kernel_source.count(".to(tl.bfloat16).to(tl.float32)") == 256
     assert "tl.sum" not in kernel_source
     assert "tl.dot" not in kernel_source
     assert "barrier" not in kernel_source
-    assert "pid_task < channel_tasks" in kernel_source
+    assert "EMBED_GATE_CTA: tl.constexpr" in kernel_source
+    assert "if EMBED_GATE_CTA" in kernel_source
+    assert "pid_c = pid_task" in kernel_source
+    assert "if pid_task < channel_tasks" in kernel_source
     assert "GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK" in kernel_source
-    assert "pid_n_base = (pid_task - channel_tasks) * GATE_ROWS" in kernel_source
+    assert "GATE_TASKS: tl.constexpr = N // GATE_ROWS" in kernel_source
+    assert kernel_source.count("if pid_task < GATE_TASKS") == 1
+    assert "pid_n_base = pid_task * GATE_ROWS" in kernel_source
     assert "tl.arange(0, GATE_ROWS)[:, None]" in kernel_source
     assert "offs_h_1d = tl.arange(0, GATE_BLOCK)" in kernel_source
     assert "A_log + offs_h_1d" in kernel_source
     assert "dt_bias + offs_h_1d" in kernel_source
-    assert kernel_source.count(").to(tl.float32)[None, :]") == 2
+    assert kernel_source.count(").to(tl.float32)[None, :]") == 4
     assert "gate_mask = (offs_n < N) & (offs_h < HV)" in kernel_source
     assert "gate_input <= SOFTPLUS_THRESHOLD" in kernel_source
     store_helper = next(
@@ -723,9 +766,9 @@ def test_launcher_requires_opaque_capture_binding_and_has_one_launch() -> None:
     assert 'capture_binding.committer_state["sticky_guard_ok"]' in launcher_source
     assert "BANK_ROWS=int(conv_state.size(0))" in launcher_source
     assert "CAPTURE_GUARD=capture_binding is not None" in launcher_source
-    assert "gate_rows_per_task = 2 * block_c // GATE_BLOCK" in launcher_source
-    assert "gate_tasks = triton.cdiv(ROWS, gate_rows_per_task)" in launcher_source
-    assert "grid = (int(batch_size), channel_tasks + gate_tasks)" in launcher_source
+    assert "gate_tasks = triton.cdiv" in launcher_source
+    assert "channel_tasks if embed_gate_cta else channel_tasks + gate_tasks" in launcher_source
+    assert "EMBED_GATE_CTA=embed_gate_cta" in launcher_source
     assert launcher_source.count(
         "_fr13_fixed32_sfwd_conv_postprep_fusion_kernel[grid]("
     ) == 1
@@ -738,7 +781,14 @@ def test_launcher_requires_opaque_capture_binding_and_has_one_launch() -> None:
 
 
 def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
-    b1 = candidate.fixed32_sfwd_conv_postprep_static_ledger(1)
+    standalone_b1 = candidate.fixed32_sfwd_conv_postprep_static_ledger(1)
+    assert standalone_b1["gate_packing"]["candidate_programs_per_request"] == 44
+    assert standalone_b1["gate_packing"][
+        "candidate_standalone_gate_programs_per_request"
+    ] == 4
+    b1 = candidate.fixed32_sfwd_conv_postprep_static_ledger(
+        1, embed_gate_cta=True
+    )
     assert b1["per_layer_bytes"] == {
         "incumbent_conv_intermediate_write": 655360,
         "incumbent_rearrange_read": 655360,
@@ -771,12 +821,14 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
         "gate_rows_per_program": 8,
         "baseline_gate_programs_per_request": 32,
         "candidate_gate_programs_per_request": 4,
+        "candidate_standalone_gate_programs_per_request": 0,
+        "candidate_embedded_gate_programs_per_request": 4,
         "baseline_programs_per_request": 72,
-        "candidate_programs_per_request": 44,
+        "candidate_programs_per_request": 40,
         "baseline_programs_per_layer": 72,
-        "candidate_programs_per_layer": 44,
+        "candidate_programs_per_layer": 40,
         "baseline_programs_all_layers": 3456,
-        "candidate_programs_all_layers": 2112,
+        "candidate_programs_all_layers": 1920,
         "requested_global_bytes_per_request_layer": {
             "baseline": 27648,
             "candidate": 19584,
@@ -792,17 +844,21 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
         ),
     }
 
-    b4 = candidate.fixed32_sfwd_conv_postprep_static_ledger(4)
+    b4 = candidate.fixed32_sfwd_conv_postprep_static_ledger(
+        4, embed_gate_cta=True
+    )
     assert b4["gate_packing"] == {
         "gate_rows_per_program": 8,
         "baseline_gate_programs_per_request": 32,
         "candidate_gate_programs_per_request": 4,
+        "candidate_standalone_gate_programs_per_request": 0,
+        "candidate_embedded_gate_programs_per_request": 4,
         "baseline_programs_per_request": 72,
-        "candidate_programs_per_request": 44,
+        "candidate_programs_per_request": 40,
         "baseline_programs_per_layer": 288,
-        "candidate_programs_per_layer": 176,
+        "candidate_programs_per_layer": 160,
         "baseline_programs_all_layers": 13824,
-        "candidate_programs_all_layers": 8448,
+        "candidate_programs_all_layers": 7680,
         "requested_global_bytes_per_request_layer": {
             "baseline": 27648,
             "candidate": 19584,
@@ -818,11 +874,13 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
         ),
     }
     assert "timing" in b1["excludes"]
-    b4 = candidate.fixed32_sfwd_conv_postprep_static_ledger(4)
+    b4 = candidate.fixed32_sfwd_conv_postprep_static_ledger(
+        4, embed_gate_cta=True
+    )
     for name, value in b1["per_layer_bytes"].items():
         assert b4["per_layer_bytes"][name] == 4 * value
     tap = candidate.fixed32_sfwd_conv_postprep_static_ledger(
-        1, store_conv_tap=True
+        1, store_conv_tap=True, embed_gate_cta=True
     )
     assert tap["per_layer_bytes"]["optional_conv_tap_write"] == 655360
     assert tap["all_layer_bytes"]["conv_intermediate_write_removed"] == 0
@@ -860,6 +918,23 @@ def test_byte_gate_requires_exact_arm_and_authenticated_task(
         enabled_path=str(enabled),
         event_path=str(event),
     ) == (True, candidate.TASK_MARKER)
+
+    event.chmod(0o644)
+    event.write_text(
+        "\n".join(candidate.EXACT4_TASK_MARKERS) + "\n", encoding="ascii"
+    )
+    event.chmod(0o444)
+    embedded_environ = {
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB": "1",
+        "FR13_FIXED32_SFWD_EMBED_GATE_CTA": "1",
+        "MAX_NUM_SEQS": "4",
+    }
+    assert candidate.fixed32_sfwd_conv_postprep_gate_control(
+        fixed32_mode="hydra27_fixed32",
+        environ=embedded_environ,
+        enabled_path=str(enabled),
+        event_path=str(event),
+    ) == (True, candidate.EXACT4_TASK_MARKERS)
 
     event.chmod(0o644)
     with pytest.raises(RuntimeError, match="marker mode must be 0444"):
@@ -959,6 +1034,79 @@ def test_byte_gate_emits_48_layer_pass_and_mismatch_is_sticky(
     for layer_key in range(1, 49):
         assert compare(layer_key, reference.clone())["zero_diff"] is True
     assert not live_pass.exists()
+
+
+def test_embedded_gate_emits_exact4_b4_source_pass(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    commit = "2" * 40
+    manifest, manifest_sha256 = _byte_gate_source_manifest(tmp_path, commit)
+    records = tmp_path / "embedded_records.jsonl"
+    live_pass = tmp_path / "embedded_pass.json"
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB_PATH", str(records)
+    )
+    monkeypatch.setenv(
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_PASS_PATH", str(live_pass)
+    )
+    monkeypatch.setenv(
+        "FR13_DRAFT_VOCAB_BLOCKS",
+        str(ROOT / "scripts" / "fr13_dvk_subset_blocks.json"),
+    )
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_ROOT", "1")
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_K", "65536")
+    monkeypatch.setenv("FR13_FA2_QROW16_PRODUCTION", "0")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
+    monkeypatch.setenv("FR13_FIXED32_CUTLASS_WAVE", "stock")
+    reference = torch.tensor([1.0, -2.0], dtype=torch.bfloat16)
+    candidate._BYTE_GATE_STATE.update(
+        task_marker=None,
+        source_binding=None,
+        passed={},
+        attempts={},
+        failed=False,
+    )
+    for layer_key in range(1, 49):
+        record = candidate.fixed32_sfwd_conv_postprep_byte_gate(
+            fixed32_mode="hydra27_fixed32",
+            task_marker=candidate.EXACT4_TASK_MARKERS,
+            layer_prefix=f"model.layers.{layer_key}",
+            layer_key=layer_key,
+            batch_size=4,
+            reference_query=reference,
+            candidate_query=reference.clone(),
+            reference_key=reference,
+            candidate_key=reference.clone(),
+            reference_value_spec=reference,
+            candidate_value_spec=reference.clone(),
+            reference_value_tree=reference,
+            candidate_value_tree=reference.clone(),
+            reference_g=reference,
+            candidate_g=reference.clone(),
+            reference_beta=reference,
+            candidate_beta=reference.clone(),
+            reference_source_stage=reference,
+            candidate_source_stage=reference.clone(),
+            source_manifest_path=str(manifest),
+            expected_source_manifest_sha256=manifest_sha256,
+            expected_source_commit=commit,
+            embedded_gate_cta=True,
+        )
+        assert record["zero_diff"] is True
+        assert record["programs_per_request"] == 40
+    payload = json.loads(live_pass.read_text(encoding="ascii"))
+    assert payload["schema"].endswith("exact4_b4_live_pass.v1")
+    assert payload["candidate"] == candidate.EMBEDDED_GATE_CANDIDATE
+    assert payload["task_markers"] == list(candidate.EXACT4_TASK_MARKERS)
+    assert payload["batch_size"] == 4
+    assert payload["stock_attention"] is True
+    assert payload["qrow16_production"] is False
+    assert payload["programs_per_request"] == 40
+    first_record = json.loads(records.read_text(encoding="ascii").splitlines()[0])
+    assert first_record["schema"].endswith("embedded_gate.byte_ab.v1")
 
 
 def test_sanitized_artifact_binds_sources_ledgers_and_resource_gate() -> None:

@@ -37,17 +37,7 @@ def test_b1_block256_artifact_is_offline_and_spill_free() -> None:
 
 
 def test_b1_block256_artifact_binds_sources_and_exact_work_reduction() -> None:
-    kernel = ROOT / "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py"
-    launcher = ROOT / "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py"
     assert SUMMARY["candidate_source_commit"] == SOURCE_COMMIT
-    assert (
-        hashlib.sha256(kernel.read_bytes()).hexdigest()
-        == SUMMARY["kernel_source_sha256"]
-    )
-    assert (
-        hashlib.sha256(launcher.read_bytes()).hexdigest()
-        == SUMMARY["launcher_source_sha256"]
-    )
     for relative, expected in (
         (
             "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py",

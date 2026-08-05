@@ -1,0 +1,5 @@
+selector	profile	registers	stack_bytes	local_bytes	shared_bytes	encoded_sass	static_sass	ldg	stg	ldl	stl	calls
+standalone	b1	56	0	0	0	3040	2889	85	336	0	0	0
+embedded	b1	56	0	0	0	3024	2875	85	336	0	0	0
+standalone	b4	56	0	0	0	3040	2889	85	336	0	0	0
+embedded	b4	56	0	0	0	3024	2875	85	336	0	0	0

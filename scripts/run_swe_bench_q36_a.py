@@ -9175,6 +9175,22 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(
             "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB must be exactly 0 or 1"
         )
+    sfwd_embed_gate_text = os.environ.get(
+        "FR13_FIXED32_SFWD_EMBED_GATE_CTA",
+        "0",
+    )
+    if sfwd_embed_gate_text not in {"0", "1"}:
+        parser.error(
+            "FR13_FIXED32_SFWD_EMBED_GATE_CTA must be exactly 0 or 1"
+        )
+    if sfwd_embed_gate_text == "1" and (
+        sfwd_conv_postprep_byte_text != "1"
+        or os.environ.get("FR13_FIXED32_MODE", "") != "hydra27_fixed32"
+        or os.environ.get("MAX_NUM_SEQS", "") not in {"1", "4"}
+    ):
+        parser.error(
+            "embedded gate CTA requires the Hydra27 B1/B4 conv/post-prep byte gate"
+        )
     if (
         sum(
             value == "1"
