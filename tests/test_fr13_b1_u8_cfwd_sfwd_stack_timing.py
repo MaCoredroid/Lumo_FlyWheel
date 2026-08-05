@@ -100,6 +100,9 @@ def test_runner_binds_packed_cfwd_current_target_sfwd_and_taw() -> None:
     assert text.index("fr13_taw_b1_credential.py validate-production") < text.index(
         "docker ps -aq"
     )
+    for binary in ("STOCK_FA2_SO", "DFWD_U8_SO", "CUTLASS_TARGET_SO"):
+        assert f'"$(stat -c \'%h\' "${binary}")" == "1"' in text
+    assert '"$(stat -c \'%h\' "$binary")" == "1"' in text
 
 
 def test_runner_supports_only_exact4_and_exact16_and_marks_no_floor_claim() -> None:

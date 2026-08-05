@@ -341,10 +341,16 @@ finalize_manifests() {
     || { echo "external manifest changed during timing" >&2; return 14; }
   [[ "$(sha256sum "$RUNNER_PATH" | awk '{print $1}')" == "$RUNNER_SHA256" \
      && -f "$STOCK_FA2_SO" && ! -L "$STOCK_FA2_SO" \
+     && "$(stat -c '%h' "$STOCK_FA2_SO")" == "1" \
+     && "$(stat -c '%s' "$STOCK_FA2_SO")" == "$STOCK_FA2_BYTES" \
      && "$(sha256sum "$STOCK_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" \
      && -f "$DFWD_U8_SO" && ! -L "$DFWD_U8_SO" \
+     && "$(stat -c '%h' "$DFWD_U8_SO")" == "1" \
+     && "$(stat -c '%s' "$DFWD_U8_SO")" == "$U8_SO_BYTES" \
      && "$(sha256sum "$DFWD_U8_SO" | awk '{print $1}')" == "$U8_SO_SHA256" \
      && -f "$CUTLASS_TARGET_SO" && ! -L "$CUTLASS_TARGET_SO" \
+     && "$(stat -c '%h' "$CUTLASS_TARGET_SO")" == "1" \
+     && "$(stat -c '%s' "$CUTLASS_TARGET_SO")" == "$TARGET_BYTES" \
      && "$(sha256sum "$CUTLASS_TARGET_SO" | awk '{print $1}')" == "$TARGET_SHA256" ]] \
     || { echo "full-stack runner or binary changed during timing" >&2; return 14; }
   for binding in "${INPUT_BINDINGS[@]}"; do
