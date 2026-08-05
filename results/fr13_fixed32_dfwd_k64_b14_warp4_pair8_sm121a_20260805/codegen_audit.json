@@ -1,0 +1,49 @@
+{
+  "acceptance_valid": false,
+  "gpu_used": false,
+  "logical_global_load_model": {
+    "b1": {
+      "candidate_load_instructions": 1638400,
+      "candidate_requested_bytes": 838860800,
+      "incumbent_r64_u8_load_instructions": 20971520,
+      "incumbent_r64_u8_requested_bytes": 1342177280,
+      "load_instruction_reduction_fraction": 0.921875,
+      "requested_byte_reduction_fraction": 0.375
+    },
+    "b4": {
+      "candidate_load_instructions": 2621440,
+      "candidate_requested_bytes": 1342177280,
+      "incumbent_r64_u8_load_instructions": 52428800,
+      "incumbent_r64_u8_requested_bytes": 3355443200,
+      "load_instruction_reduction_fraction": 0.95,
+      "requested_byte_reduction_fraction": 0.6
+    },
+    "scope": "warp_request_bytes_before_cache_coalescing; not measured DRAM traffic",
+    "weight_bytes_per_call": 671088640
+  },
+  "performance_measurement": false,
+  "resources": {
+    "m1_warp4_pair8_kernel": {
+      "barriers": 0,
+      "registers_per_thread": 40,
+      "spill_loads": 0,
+      "spill_stores": 0,
+      "stack_bytes_per_thread": 0
+    },
+    "m4_warp4_pair8_kernel": {
+      "barriers": 0,
+      "registers_per_thread": 80,
+      "spill_loads": 0,
+      "spill_stores": 0,
+      "stack_bytes_per_thread": 0
+    }
+  },
+  "sass": {
+    "b1_packed_loads": 5,
+    "b1_static_instructions": 176,
+    "b4_packed_loads": 8,
+    "b4_static_instructions": 472
+  },
+  "schema": "fr13.fixed32.dfwd_k64_b14_warp4_pair8_codegen_audit.v1",
+  "status": "STATIC_CODEGEN_PASS_UNQUALIFIED"
+}

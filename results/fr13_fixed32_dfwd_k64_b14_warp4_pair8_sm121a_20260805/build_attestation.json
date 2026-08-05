@@ -1,0 +1,55 @@
+{
+  "acceptance_valid": false,
+  "binary": {
+    "bytes": 161056,
+    "mode": "0555",
+    "path": "/home/mark/fr13_dfwd_b14_warp4_pair8_build_20260805/fr13_bf16_k64_b14_warp4_pair8.abi3.so",
+    "sha256": "dcd9301f447d1ef4a81240027af3a008558dfa080b8660ac9dba7b2c5800ec7f"
+  },
+  "cuda_arch": "12.1a",
+  "cuda_release": "13.0",
+  "gpu_runtime_used": false,
+  "kernel_contract": {
+    "batch_scopes": [
+      1,
+      4
+    ],
+    "block": [
+      32,
+      8,
+      1
+    ],
+    "elements_per_packed_load": 8,
+    "grid": [
+      2048,
+      1,
+      1
+    ],
+    "input": "BF16[B,5120] contiguous, B in {1,4}",
+    "output": "BF16[B,65536] contiguous",
+    "proposal_only": true,
+    "reduction_strides": [
+      16,
+      8,
+      4,
+      2,
+      1
+    ],
+    "rows_per_cta": 32,
+    "rows_per_warp": 4,
+    "target_authority_changed": false,
+    "threads_per_cta": 256,
+    "weight": "BF16[65536,5120] contiguous"
+  },
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "real_task_correctness": false,
+  "runtime_wired": false,
+  "schema": "fr13.fixed32.dfwd_k64_b14_warp4_pair8_sm121a_build.v1",
+  "source": {
+    "path": "csrc/fr13_bf16_gemvx_k64_b14_warp4_pair8.cu",
+    "sha256": "01fd0ec526afcfa3e3a4a42ec95b95dfa04d566fa8431eee84d72d7eada9ed3f"
+  },
+  "status": "BUILT_UNQUALIFIED",
+  "torch_version": "2.11.0+cu130"
+}

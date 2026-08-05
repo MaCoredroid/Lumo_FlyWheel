@@ -1,0 +1,25 @@
+csrc/fr13_bf16_gemvx_k64_b14_warp4_pair8.cu(18): warning #177-D: variable "<unnamed>::kBatch4" was declared but never referenced
+  constexpr int kBatch4 = 4;
+                ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+csrc/fr13_bf16_gemvx_k64_b14_warp4_pair8.cu(113): warning #177-D: function "<unnamed>::fr13_bf16_gemvx_k64_m1_warp4_pair8_kernel" was declared but never referenced
+  fr13_bf16_gemvx_k64_m1_warp4_pair8_kernel(
+  ^
+
+csrc/fr13_bf16_gemvx_k64_b14_warp4_pair8.cu(157): warning #177-D: function "<unnamed>::fr13_bf16_gemvx_k64_m4_warp4_pair8_kernel" was declared but never referenced
+  fr13_bf16_gemvx_k64_m4_warp4_pair8_kernel(
+  ^
+
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function '_ZN71_GLOBAL__N__de7934a6_38_fr13_bf16_gemvx_k64_b14_warp4_pair8_cu_1ace57de41fr13_bf16_gemvx_k64_m4_warp4_pair8_kernelEP13__nv_bfloat16PKS0_S3_' for 'sm_121a'
+ptxas info    : Function properties for _ZN71_GLOBAL__N__de7934a6_38_fr13_bf16_gemvx_k64_b14_warp4_pair8_cu_1ace57de41fr13_bf16_gemvx_k64_m4_warp4_pair8_kernelEP13__nv_bfloat16PKS0_S3_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 80 registers, used 0 barriers
+ptxas info    : Compile time = 29.960 ms
+ptxas info    : Compiling entry function '_ZN71_GLOBAL__N__de7934a6_38_fr13_bf16_gemvx_k64_b14_warp4_pair8_cu_1ace57de41fr13_bf16_gemvx_k64_m1_warp4_pair8_kernelEP13__nv_bfloat16PKS0_S3_' for 'sm_121a'
+ptxas info    : Function properties for _ZN71_GLOBAL__N__de7934a6_38_fr13_bf16_gemvx_k64_b14_warp4_pair8_cu_1ace57de41fr13_bf16_gemvx_k64_m1_warp4_pair8_kernelEP13__nv_bfloat16PKS0_S3_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 40 registers, used 0 barriers
+ptxas info    : Compile time = 3.445 ms
