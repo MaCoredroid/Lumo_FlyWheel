@@ -832,13 +832,17 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
             "algorithmic_shared_bytes": 0,
             "has_reduction": False,
             "has_barrier": False,
-            "candidate_codegen_registers_per_thread": None,
-            "source_register_ceiling_per_thread": None,
-            "source_register_ceiling_basis": "pending_offline_sm121a_codegen",
-            "offline_codegen_stack_bytes": None,
-            "offline_codegen_local_bytes": None,
-            "offline_codegen_shared_bytes": None,
-            "codegen_registers_verified": False,
+            "candidate_codegen_registers_per_thread": (
+                48 if embed_gate_cta else 46
+            ),
+            "source_register_ceiling_per_thread": 48,
+            "source_register_ceiling_basis": (
+                "direct_nodegroup8_sm121a_standalone46_embedded48"
+            ),
+            "offline_codegen_stack_bytes": 0,
+            "offline_codegen_local_bytes": 0,
+            "offline_codegen_shared_bytes": 0,
+            "codegen_registers_verified": True,
             "timing_claim": False,
         }
     _exact_host_parent(tree_parent)
