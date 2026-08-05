@@ -1,0 +1,70 @@
+{
+  "schema": "fr13.fixed32.b1_bf16_verifier_head_m32_sm121a_codegen.v1",
+  "created_at_utc": "2026-08-05T08:51:00Z",
+  "status": "CODEGEN_PASS_UNQUALIFIED",
+  "performance_measurement": false,
+  "performance_claim": false,
+  "byte_equality_claim": false,
+  "verifier_distribution_claim": false,
+  "acceptance_valid": false,
+  "gpu_runtime_used": false,
+  "docker_used": false,
+  "synthetic_or_probe_workload_used": false,
+  "source_base_commit": "1c7189f97f9fe0ac84a5d065fc264d95113b967a",
+  "measured_basis": {
+    "workload": "canonical_real_swe_verified_exact4_attribution_only",
+    "measured_source_commit": "1a7a765447c8ce6068e0dd5d3a344d58ace85f2b",
+    "incumbent_kernel": "nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bz_TNNN",
+    "kernel_ms_per_event": 12.152306946651533,
+    "mandatory_weight_bytes": 2542796800,
+    "weight_read_lower_bound_ms_at_273_gbps": 9.314273992673993,
+    "excess_over_weight_lower_bound_ms": 2.83803295397754,
+    "compute_vs_memory_ncu": "UNMEASURED"
+  },
+  "candidate": {
+    "operation": "BF16[248320,5120] row-major x BF16[5120,32] column-major",
+    "logical_output": "BF16[32,248320] contiguous",
+    "problem_mnk": [248320, 32, 5120],
+    "threadblock_mnk": [128, 32, 64],
+    "warp_mnk": [64, 32, 64],
+    "instruction_mnk": [16, 8, 16],
+    "stages": 3,
+    "split_k_slices": 1,
+    "workspace_bytes": 0,
+    "dynamic_shared_storage_bytes": 61440,
+    "full_vocabulary_preserved": true,
+    "bf16_input_weight_output_preserved": true,
+    "production_default_enabled": false
+  },
+  "codegen": {
+    "status": "PASS",
+    "nvcc_release": "13.0",
+    "nvcc_build": "V13.0.88",
+    "arch": "sm_121a",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_h_sha256": "3f83df4d3164afea3a865a5e93d7c1aff3cfdd7c604319571a94332b4e9ec8da",
+    "object_sha256": "269917bee674c59c25b8deed5c6cbd869ed438e43e5cb721fc638599bf24653f",
+    "object_bytes": 248472,
+    "registers": 158,
+    "stack_bytes": 0,
+    "spill_store_bytes": 0,
+    "spill_load_bytes": 0,
+    "barriers": 1,
+    "static_shared_bytes": 1024,
+    "sass_hmma_bf16": 64,
+    "sass_async_global_to_shared_128b": 60,
+    "sass_global_load_128b": 8,
+    "sass_global_store_128b": 16
+  },
+  "source_sha256": {
+    "csrc/fr13_bf16_verifier_head_m32_sm121a.cu": "9a9deef637e37f5e149713472852cdb598608721ee88afdd7e7d9d443cc419bd",
+    "scripts/fr13_build_bf16_verifier_head_m32_sm121a.py": "66d3ae7b02f6971ecb31b27dd69e4c921b15c8e6e1e9bc82c59fccab3c3d51bf",
+    "tests/test_fr13_bf16_verifier_head_m32_sm121a.py": "2e41f684337a1abd60d9fa07cf55bcecaa2f1fe7d989e9765939f761ae47137d"
+  },
+  "qualification_required": [
+    "one real SWE-Verified B1 shadow task with every BF16 element compared",
+    "zero raw BF16 mismatches with incumbent logits always served",
+    "frozen-source exact4 B1 stock-versus-candidate full-step timing",
+    "B4 byte gate and exact4 timing only after B1 passes"
+  ]
+}
