@@ -1,0 +1,131 @@
+{
+  "schema": "fr13.fixed32.bf16_verifier_head_m32_n256k32s3_sm121a_full_build.v1",
+  "created_at_utc": "2026-08-05T12:19:13Z",
+  "status": "STATIC_BUILD_PASS_UNQUALIFIED",
+  "provenance": {
+    "port_base_commit": "cea04fef6fb9f793720c63391158e9f2c326f058",
+    "source_commit": "93a9d882e0ac8c5035453e1de4460492f6b8ef72",
+    "source_tree_matches_commit": true,
+    "cuda_source_sha256": "0f13a9de2922e78fbb4c1739339b64ec4d1c39a22567d2ed21ef922284556fbe",
+    "builder_sha256": "e3461dd1bdbc4ef996e71fc3821745fbcc2495d3dd9ecde7bc3ed6b514253bb5",
+    "test_sha256": "feedc1a568d83d86847cca82f5c9bd3d29fa44921c729010cc445b3ae8ba7f0f",
+    "artifact_test_sha256": "2d7dc2417226f78123ff92f0eca145399ed06ddf7983cd9dc4fc4b93cf422aaf",
+    "codegen_manifest_sha256": "acb37a88f54d7e3824e35879fd14f48b1f25af144cd1f2a49980c5c52be63e9a",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_clean": true,
+    "cutlass_h_sha256": "3f83df4d3164afea3a865a5e93d7c1aff3cfdd7c604319571a94332b4e9ec8da"
+  },
+  "build": {
+    "external_directory": "/home/mark/fr13_bf16_verifier_head_m32_n256k32s3_cea04fef_20260805",
+    "host_arch": "aarch64",
+    "python_version": "3.12.3",
+    "torch_version": "2.11.0+cu130",
+    "cuda_release": "13.0",
+    "cuda_toolkit_package": "13.0.2",
+    "nvidia_cudnn_cu13": "9.19.0.56",
+    "nvidia_cusparse": "12.6.3.3",
+    "target_arch": "sm_121a",
+    "max_jobs": 1,
+    "nvidia_visible_devices": "void",
+    "cuda_visible_devices": "",
+    "cuda_cache_disabled": true,
+    "docker_used": false,
+    "gpu_used": false,
+    "build_log_cuda_runtime_found": false,
+    "build_log_sha256": "14ac91bd6d03196c3768d069009b041064c68d2af30f8972d34b22a737f00360"
+  },
+  "artifacts": {
+    "build_attestation_sha256": "7083b65c464ccdcfef2bd0adf6e4aa2df3f0f2f56e0a40f22778cf34af4b48e2",
+    "candidate_so": {
+      "path": "/home/mark/fr13_bf16_verifier_head_m32_n256k32s3_cea04fef_20260805/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.abi3.so",
+      "sha256": "03f5d07a7f4029d7bc4a6a271a3c7e34f433c2f139d9adb374fcd0a80d1b91a7",
+      "bytes": 235328,
+      "mode": "0555",
+      "committed": false
+    },
+    "cuda_object": {
+      "sha256": "15618cdae8bdfdddf19ebad1f70be8ecff819f061f25b137bd0266c52d7e85ba",
+      "bytes": 224920,
+      "committed": false
+    },
+    "cubin_list_sha256": "74501aa13e7a043aea0cfe80a226c5dfe9086641af5796c03200fc7a797e785b",
+    "resource_usage_sha256": "fc9cb2ac2fd967245e326ad59e896e07ee8402db0c8bfa74c2c2da27e2e0d039",
+    "sass_sha256": "95e406a5e1ea376dd266924dd4cb7f935b0d35e42aadd0dcd115a117536fc59e",
+    "dependency_resolution_sha256": "63058b6fc666a60267da92229b0ecf3ffdf075e6252930e5ef561fc00888d3d9",
+    "cpu_import_schema_sha256": "260b202f444be4c3a7c43d57ae35819f238366ac7952446b22283a448cc86207",
+    "wrong_torch_rejection_sha256": "abb3c048fba42accf5533ac2c1bf171a964c5799cbf12ee9403da37895911861"
+  },
+  "kernel": {
+    "problem_mnk": [32, 248320, 5120],
+    "threadblock_mnk": [32, 256, 32],
+    "warp_mnk": [32, 64, 32],
+    "instruction_mnk": [16, 8, 16],
+    "stages": 3,
+    "split_k_slices": 1,
+    "workspace_bytes": 0,
+    "logical_grid_mn": [1, 970],
+    "logical_grid_ctas": 970,
+    "full_vocabulary_preserved": true,
+    "bf16_input_weight_output_preserved": true
+  },
+  "resources": {
+    "cubin_count": 1,
+    "registers": 128,
+    "stack_bytes": 0,
+    "static_local_bytes": 0,
+    "static_shared_bytes": 1024,
+    "dynamic_shared_bytes": 55296,
+    "sass_instruction_lines": 1120,
+    "sass_hmma_bf16": 32,
+    "sass_async_global_to_shared_128b": 27,
+    "sass_global_load_128b": 8,
+    "sass_global_load_other": 4,
+    "sass_global_store_128b": 16,
+    "sass_ldl": 0,
+    "sass_stl": 0,
+    "sass_call": 0,
+    "sass_matches_codegen": true
+  },
+  "cpu_import": {
+    "status": "PASS",
+    "registered_schema": "fr13_verifier_head::bf16_m32_n256k32s3_out(Tensor(a!) output, Tensor hidden, Tensor weight) -> ()",
+    "dynamic_dependencies_resolved": true,
+    "gpu_tensor_created": false
+  },
+  "pinning": {
+    "wrong_torch_rejected_before_output": true,
+    "unpinned_cutlass_rejected_by_test": true,
+    "runtime_geometry_checks_present": true
+  },
+  "gate_a_preservation": {
+    "current_source_sha256": "7cbc9f5157d8e93ee35930b028d97d0c3b1a26a9d79aa87ec6061928f8161768",
+    "current_launcher_sha256": "0cfaa7f6a1697a9f5cd64401c37212895e5363872b0abc4981fe106a426e4172",
+    "current_binary_sha256": "5b5e8c3051f29bc4f65ef93c96ed22ef38ef07a1754e9c36a167e5158f71f4b7",
+    "current_binary_bytes": 186048,
+    "source_or_launcher_changed_from_base": false,
+    "current_binary_modified": false,
+    "candidate_wired_into_gate": false
+  },
+  "tests": {
+    "focused_pytest_passed": 45,
+    "broader_regressions_passed": 84,
+    "ruff": "PASS",
+    "py_compile": "PASS",
+    "json": "PASS",
+    "sha256sums": "PASS"
+  },
+  "evidence": {
+    "real_task_run": false,
+    "synthetic_task_run": false,
+    "byte_parity_measured": false,
+    "performance_measurement": false,
+    "performance_claim": false,
+    "hardware_floor_claim": false
+  },
+  "eligibility": {
+    "default_off": true,
+    "timing_eligible": false,
+    "production_eligible": false,
+    "next_gate": "one real SWE-Verified B1 raw-BF16 shadow task with incumbent logits always served"
+  }
+}

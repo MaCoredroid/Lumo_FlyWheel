@@ -1,0 +1,2 @@
+binary_sha256	arch	cubin_count	registers	stack_bytes	static_local_bytes	static_shared_bytes	dynamic_shared_bytes
+03f5d07a7f4029d7bc4a6a271a3c7e34f433c2f139d9adb374fcd0a80d1b91a7	sm_121a	1	128	0	0	1024	55296

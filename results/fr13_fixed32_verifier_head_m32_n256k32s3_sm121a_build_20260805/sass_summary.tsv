@@ -1,0 +1,2 @@
+binary_sha256	sass_sha256	instruction_lines	hmma_bf16	ldgsts_128b	ldg_128b	ldg_other	stg_128b	ldl	stl	call
+03f5d07a7f4029d7bc4a6a271a3c7e34f433c2f139d9adb374fcd0a80d1b91a7	95e406a5e1ea376dd266924dd4cb7f935b0d35e42aadd0dcd115a117536fc59e	1120	32	27	8	4	16	0	0	0

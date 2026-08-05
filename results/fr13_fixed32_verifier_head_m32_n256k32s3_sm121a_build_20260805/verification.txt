@@ -1,0 +1,39 @@
+STATIC FULL-SO BUILD VERIFICATION
+
+PASS source commit 93a9d882e0ac8c5035453e1de4460492f6b8ef72
+PASS CUDA source SHA256 0f13a9de2922e78fbb4c1739339b64ec4d1c39a22567d2ed21ef922284556fbe
+PASS builder SHA256 e3461dd1bdbc4ef996e71fc3821745fbcc2495d3dd9ecde7bc3ed6b514253bb5
+PASS pinned CUTLASS da5e086dab31d63815acafdac9a9c5893b1c69e2 and clean tree
+PASS pinned Torch 2.11.0+cu130 and CUDA 13.0 build
+PASS candidate SO SHA256 03f5d07a7f4029d7bc4a6a271a3c7e34f433c2f139d9adb374fcd0a80d1b91a7
+PASS candidate SO bytes 235328 and mode 0555
+PASS all dynamic dependencies resolved in the private pinned runtime
+PASS fresh CPU-only torch load registered bf16_m32_n256k32s3_out
+PASS exactly one cubin and target sm_121a
+PASS resources REG 128, STACK 0, LOCAL 0, static SHARED 1024
+PASS source-locked dynamic shared storage 55296 bytes
+PASS full-SO SASS byte-matches staged codegen SASS
+PASS SASS HMMA 32, LDGSTS.128 27, LDG.128 8, STG.128 16
+PASS SASS LDL 0, STL 0, CALL 0
+PASS wrong Torch 2.4.1 rejected before creating output
+PASS focused source, artifact, M32, and B4 guard suite 45 passed
+PASS broader inherited regression suite 84 passed
+PASS Ruff, Python byte-compilation, JSON, and SHA256SUMS
+PASS current Gate A source, launcher, and binary identities unchanged
+
+BUILD ISOLATION
+
+external_build_directory=/home/mark/fr13_bf16_verifier_head_m32_n256k32s3_cea04fef_20260805
+MAX_JOBS=1
+NVIDIA_VISIBLE_DEVICES=void
+CUDA_VISIBLE_DEVICES=
+CUDA_CACHE_DISABLE=1
+docker_used=false
+gpu_used=false
+build_log_cuda_runtime_found=false
+
+NOT CLAIMED
+
+No GPU workload, real task, synthetic task, raw-byte comparison, verifier
+distribution equivalence, timing, TPS, speedup, hardware-floor progress,
+timing eligibility, or production eligibility is claimed by this artifact.

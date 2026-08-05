@@ -1,0 +1,37 @@
+REPO=/home/mark/lumoFlyWheel-verifier-head-n256k32s3-cea-20260805
+OUT=/home/mark/fr13_bf16_verifier_head_m32_n256k32s3_cea04fef_20260805
+CUTLASS=/home/mark/fr13_streamk_build/cutlass-source
+
+# Private exact-Torch runtime. The source environment remains unchanged.
+mkdir -p "$OUT"
+cp -al /home/mark/fr13_streamk_build/venv "$OUT/venv"
+PIP_DISABLE_PIP_VERSION_CHECK=1 "$OUT/venv/bin/python" -m pip install \
+  --no-deps --upgrade 'torch==2.11.0+cu130' \
+  --index-url https://download.pytorch.org/whl/cu130
+PIP_DISABLE_PIP_VERSION_CHECK=1 "$OUT/venv/bin/python" -m pip install \
+  --upgrade 'torch==2.11.0+cu130' \
+  --index-url https://download.pytorch.org/whl/cu130
+
+# Full loadable extension build. No Docker or GPU device is used.
+MAX_JOBS=1 \
+CUDA_HOME=/usr/local/cuda \
+CUDA_VISIBLE_DEVICES= \
+NVIDIA_VISIBLE_DEVICES=void \
+CUDA_CACHE_DISABLE=1 \
+nice -n 19 "$OUT/venv/bin/python" \
+  "$REPO/scripts/fr13_build_bf16_verifier_head_m32_n256k32s3_sm121a.py" \
+  --output "$OUT/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.abi3.so" \
+  --build-dir "$OUT/build" \
+  --attestation "$OUT/build_attestation.json" \
+  --cutlass-root "$CUTLASS"
+
+# Fresh CPU-only import and static-resource audit.
+CUDA_VISIBLE_DEVICES= NVIDIA_VISIBLE_DEVICES=void CUDA_CACHE_DISABLE=1 \
+  "$OUT/venv/bin/python" -c \
+  'import torch; p="/home/mark/fr13_bf16_verifier_head_m32_n256k32s3_cea04fef_20260805/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.abi3.so"; torch.ops.load_library(p); print(torch.__version__); print(torch.version.cuda); print(torch._C._dispatch_find_schema_or_throw("fr13_verifier_head::bf16_m32_n256k32s3_out", "").schema())'
+/usr/local/cuda/bin/cuobjdump --list-elf \
+  "$OUT/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.abi3.so"
+/usr/local/cuda/bin/cuobjdump --dump-resource-usage \
+  "$OUT/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.abi3.so"
+/usr/local/cuda/bin/cuobjdump --dump-sass \
+  "$OUT/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.abi3.so"

@@ -1,0 +1,84 @@
+{
+  "binary": {
+    "bytes": 235328,
+    "mode": "0555",
+    "path": "/home/mark/fr13_bf16_verifier_head_m32_n256k32s3_cea04fef_20260805/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.abi3.so",
+    "sha256": "03f5d07a7f4029d7bc4a6a271a3c7e34f433c2f139d9adb374fcd0a80d1b91a7"
+  },
+  "byte_equality_claim": false,
+  "cuda_arch": "12.1a",
+  "cuda_release": "13.0",
+  "cutlass": {
+    "commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_h_sha256": "3f83df4d3164afea3a865a5e93d7c1aff3cfdd7c604319571a94332b4e9ec8da"
+  },
+  "kernel_contract": {
+    "dynamic_shared_storage_bytes": 55296,
+    "full_vocabulary_preserved": true,
+    "hidden": "BF16[32,5120] contiguous",
+    "input_or_weight_quantized": false,
+    "instruction_mnk": [
+      16,
+      8,
+      16
+    ],
+    "logical_grid_ctas": 970,
+    "logical_grid_mn": [
+      1,
+      970
+    ],
+    "logical_output": "BF16[32,248320] contiguous",
+    "problem_mnk": [
+      32,
+      248320,
+      5120
+    ],
+    "split_k_slices": 1,
+    "stages": 3,
+    "threadblock_mnk": [
+      32,
+      256,
+      32
+    ],
+    "warp_mnk": [
+      32,
+      64,
+      32
+    ],
+    "weight": "BF16[248320,5120] contiguous",
+    "weight_bytes_per_launch": 2542796800,
+    "workspace_bytes": 0
+  },
+  "performance_claim": false,
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "qualification_required": [
+    "one real SWE-Verified B1 shadow task with every BF16 element compared",
+    "zero raw BF16 mismatches and unchanged served incumbent logits",
+    "frozen-source exact4 B1 stock-versus-candidate full-step timing",
+    "only after B1 passes, repeat byte gate and exact4 timing on B4"
+  ],
+  "real_task_correctness": false,
+  "schema": "fr13.fixed32.bf16_verifier_head_m32_n256k32s3_sm121a_build.v1",
+  "source": {
+    "path": "csrc/fr13_bf16_verifier_head_m32_n256k32s3_sm121a.cu",
+    "sha256": "0f13a9de2922e78fbb4c1739339b64ec4d1c39a22567d2ed21ef922284556fbe"
+  },
+  "static_baseline_delta": {
+    "baseline_dynamic_shared_storage_bytes": 61440,
+    "baseline_logical_grid_ctas": 1940,
+    "baseline_ptxas_registers": 158,
+    "baseline_stages": 3,
+    "baseline_threadblock_mnk": [
+      32,
+      128,
+      64
+    ],
+    "dynamic_shared_storage_bytes_delta": -6144,
+    "logical_grid_ctas_delta": -970,
+    "ptxas_registers_delta": -30
+  },
+  "status": "BUILT_UNQUALIFIED",
+  "torch_version": "2.11.0+cu130",
+  "verifier_distribution_claim": false
+}
