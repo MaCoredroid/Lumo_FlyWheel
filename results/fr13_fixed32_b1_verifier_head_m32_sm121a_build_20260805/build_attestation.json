@@ -1,0 +1,50 @@
+{
+  "binary": {
+    "bytes": 186048,
+    "mode": "0555",
+    "path": "/out/fr13_bf16_verifier_head_m32_sm121a.abi3.so",
+    "sha256": "5b5e8c3051f29bc4f65ef93c96ed22ef38ef07a1754e9c36a167e5158f71f4b7"
+  },
+  "byte_equality_claim": false,
+  "cuda_arch": "12.1a",
+  "cuda_release": "13.0",
+  "cutlass": {
+    "commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "cutlass_h_sha256": "3f83df4d3164afea3a865a5e93d7c1aff3cfdd7c604319571a94332b4e9ec8da"
+  },
+  "kernel_contract": {
+    "dynamic_shared_storage_bytes": 61440,
+    "hidden": "BF16[32,5120] contiguous",
+    "input_or_weight_quantized": false,
+    "instruction_mnk": [16, 8, 16],
+    "logical_grid_ctas": 1940,
+    "logical_grid_mn": [1, 1940],
+    "logical_output": "BF16[32,248320] contiguous",
+    "problem_mnk": [32, 248320, 5120],
+    "split_k_slices": 1,
+    "stages": 3,
+    "threadblock_mnk": [32, 128, 64],
+    "vocabulary_reduced": false,
+    "warp_mnk": [32, 64, 64],
+    "weight": "BF16[248320,5120] contiguous",
+    "weight_bytes_per_launch": 2542796800,
+    "workspace_bytes": 0
+  },
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "qualification_required": [
+    "one real SWE-Verified B1 shadow task with every BF16 element compared",
+    "zero raw BF16 mismatches and unchanged served incumbent logits",
+    "frozen-source exact4 B1 stock-versus-candidate full-step timing",
+    "only after B1 passes, repeat byte gate and exact4 timing on B4"
+  ],
+  "real_task_correctness": false,
+  "schema": "fr13.fixed32.bf16_verifier_head_m32_sm121a_build.v1",
+  "source": {
+    "path": "csrc/fr13_bf16_verifier_head_m32_sm121a.cu",
+    "sha256": "7cbc9f5157d8e93ee35930b028d97d0c3b1a26a9d79aa87ec6061928f8161768"
+  },
+  "status": "BUILT_UNQUALIFIED",
+  "torch_version": "2.11.0+cu130",
+  "verifier_distribution_claim": false
+}
