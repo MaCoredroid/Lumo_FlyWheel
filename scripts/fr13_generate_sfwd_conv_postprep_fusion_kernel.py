@@ -29,6 +29,7 @@ OUTPUT = (
 )
 SOURCE_FUNCTION = "_fr13_fixed32_sfwd_channel_serial_kernel"
 OUTPUT_FUNCTION = "_fr13_fixed32_sfwd_conv_postprep_fusion_kernel"
+NODEGROUP_ROWS = 8
 
 
 PREAMBLE = '''"""Generated fixed32 SFWD tree-conv/post-prep fusion kernel.
@@ -203,6 +204,109 @@ if pid_n_base < N:
 '''
 
 
+NODEGROUP_SIGNATURE = '''
+
+
+@triton.jit
+def _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel(
+    x,
+    conv_state,
+    spec_state_indices,
+    sticky_guard_ok,
+    conv_weights,
+    bias,
+    a,
+    b,
+    A_log,
+    dt_bias,
+    query,
+    key,
+    value_spec,
+    value_tree,
+    g,
+    beta,
+    source_stage,
+    conv_tap,
+    CONV_STRIDE_ROW: tl.constexpr,
+    BANK_ROWS: tl.constexpr,
+    B: tl.constexpr,
+    N: tl.constexpr,
+    C: tl.constexpr,
+    WIDTH: tl.constexpr,
+    STATE_LEN: tl.constexpr,
+    SOURCE_ROWS: tl.constexpr,
+    H: tl.constexpr,
+    HV: tl.constexpr,
+    K: tl.constexpr,
+    V: tl.constexpr,
+    HAS_BIAS: tl.constexpr,
+    STORE_CONV_TAP: tl.constexpr,
+    CAPTURE_GUARD: tl.constexpr,
+    X_STRIDE_ROW: tl.constexpr,
+    BLOCK_C: tl.constexpr,
+    GATE_BLOCK: tl.constexpr,
+    SOFTPLUS_THRESHOLD: tl.constexpr,
+    EMBED_GATE_CTA: tl.constexpr,
+):
+    """Run four direct eight-node channel groups without gather or shared state."""
+    pid_b = tl.program_id(0)
+    pid_task = tl.program_id(1)
+    channel_tiles: tl.constexpr = C // BLOCK_C
+    channel_tasks: tl.constexpr = 4 * channel_tiles
+    Q_DIM: tl.constexpr = H * K
+    V_DIM: tl.constexpr = HV * V
+    GATE_ROWS: tl.constexpr = 2 * BLOCK_C // GATE_BLOCK
+    GATE_TASKS: tl.constexpr = N // GATE_ROWS
+    if pid_task < channel_tasks:
+        pid_group = pid_task // channel_tiles
+        pid_c = pid_task - pid_group * channel_tiles
+        offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+        x_batch = x + pid_b * N * X_STRIDE_ROW
+        stage_batch = source_stage + pid_b * SOURCE_ROWS * C
+
+        bank_row_raw = tl.load(spec_state_indices + pid_b * N).to(tl.int64)
+        bank_row_ok = (bank_row_raw >= 0) & (bank_row_raw < BANK_ROWS)
+        bank_row = tl.maximum(0, tl.minimum(bank_row_raw, BANK_ROWS - 1))
+        if CAPTURE_GUARD:
+            tl.atomic_xchg(sticky_guard_ok, 0, mask=~bank_row_ok)
+        prior_base = conv_state + bank_row * CONV_STRIDE_ROW + offs_c
+
+        weight_channels = conv_weights + offs_c * WIDTH
+        weight_pair_01 = tl.load(weight_channels.to(tl.pointer_type(tl.uint32)))
+        weight_pair_23 = tl.load(
+            (weight_channels + 2).to(tl.pointer_type(tl.uint32))
+        )
+        weight_0 = weight_pair_01.to(tl.uint16).to(
+            tl.bfloat16, bitcast=True
+        )
+        weight_1 = (weight_pair_01 >> 16).to(tl.uint16).to(
+            tl.bfloat16, bitcast=True
+        )
+        weight_2 = weight_pair_23.to(tl.uint16).to(
+            tl.bfloat16, bitcast=True
+        )
+        weight_3 = (weight_pair_23 >> 16).to(tl.uint16).to(
+            tl.bfloat16, bitcast=True
+        )
+
+        bias_value = tl.zeros((BLOCK_C,), dtype=tl.float32)
+        if HAS_BIAS:
+            bias_value = tl.load(bias + offs_c).to(tl.float32)
+'''
+
+
+NODEGROUP_EMBEDDED_GATING = '''    if EMBED_GATE_CTA:
+        if pid_task < GATE_TASKS:
+            pid_n_base = pid_task * GATE_ROWS
+'''
+
+
+NODEGROUP_STANDALONE_GATING = '''    else:
+        if pid_task >= channel_tasks:
+            pid_n_base = (pid_task - channel_tasks) * GATE_ROWS
+'''
+
+
 def _source_function() -> str:
     raw = SOURCE.read_text(encoding="utf-8")
     tree = ast.parse(raw)
@@ -290,6 +394,169 @@ def _producer_body() -> str:
     return joined + "\n"
 
 
+def _descriptorless_sources() -> tuple[tuple[int, int, int], ...]:
+    """Evaluate only the pure topology declarations from the Triton module."""
+    raw = SOURCE.read_text(encoding="utf-8")
+    tree = ast.parse(raw)
+    names = {
+        "FIXED32_ROWS",
+        "fixed32_derived_parent_q",
+        "fixed32_descriptorless_sources",
+    }
+    selected: list[ast.stmt] = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id in names
+            for target in node.targets
+        ):
+            selected.append(node)
+        elif isinstance(node, ast.FunctionDef) and node.name in names:
+            selected.append(node)
+    namespace: dict[str, object] = {}
+    exec(
+        compile(ast.Module(body=selected, type_ignores=[]), str(SOURCE), "exec"),
+        namespace,
+    )
+    rows = namespace["fixed32_descriptorless_sources"]()
+    if (
+        not isinstance(rows, tuple)
+        or len(rows) != 32
+        or any(
+            not isinstance(triple, tuple)
+            or len(triple) != 3
+            or any(type(row) is not int for row in triple)
+            for triple in rows
+        )
+    ):
+        raise RuntimeError("fixed32 descriptorless source topology drifted")
+    for node, triple in enumerate(rows):
+        if any(row < 0 or row >= node + 3 for row in triple):
+            raise RuntimeError(
+                f"fixed32 descriptorless source row {node} escaped its prefix"
+            )
+    return rows
+
+
+def _nodegroup_store(node: int, *, indent: str) -> list[str]:
+    return [
+        f"{indent}_fr13_store_fixed32_conv_outputs(",
+        f"{indent}    query,",
+        f"{indent}    key,",
+        f"{indent}    value_spec,",
+        f"{indent}    value_tree,",
+        f"{indent}    conv_tap,",
+        f"{indent}    activated_{node},",
+        f"{indent}    pid_b,",
+        f"{indent}    {node},",
+        f"{indent}    offs_c,",
+        f"{indent}    N,",
+        f"{indent}    C,",
+        f"{indent}    Q_DIM,",
+        f"{indent}    V_DIM,",
+        f"{indent}    STORE_CONV_TAP,",
+        f"{indent})",
+    ]
+
+
+def _nodegroup_branch(
+    group: int,
+    sources: tuple[tuple[int, int, int], ...],
+) -> str:
+    first = group * NODEGROUP_ROWS
+    nodes = tuple(range(first, first + NODEGROUP_ROWS))
+    keyword = "if" if group == 0 else "elif"
+    indent = " " * 8
+    body_indent = " " * 12
+    lines = [f"{indent}{keyword} pid_group == {group}:"]
+    prior_rows = sorted(
+        {row for node in nodes for row in sources[node] if row < 3}
+        | ({0, 1, 2} if group == 0 else set())
+    )
+    for row in prior_rows:
+        suffix = "" if row == 0 else f" + {row} * C"
+        lines.append(
+            f"{body_indent}prior_{row} = tl.load(prior_base{suffix})"
+        )
+
+    loaded_x: set[int] = set()
+    for node in nodes:
+        x_rows = tuple(row - 3 for row in sources[node] if row >= 3) + (node,)
+        for x_row in x_rows:
+            if x_row in loaded_x:
+                continue
+            loaded_x.add(x_row)
+            lines.append(
+                f"{body_indent}x_g{group}_{x_row} = tl.load("
+            )
+            lines.append(
+                f"{body_indent}    x_batch + {x_row} * X_STRIDE_ROW + offs_c"
+            )
+            lines.append(f"{body_indent})")
+
+        operands = tuple(
+            f"prior_{row}" if row < 3 else f"x_g{group}_{row - 3}"
+            for row in sources[node]
+        ) + (f"x_g{group}_{node}",)
+        for tap, operand in enumerate(operands):
+            lines.append(
+                f"{body_indent}product_{tap} = ("
+                f"{operand} * weight_{tap}"
+                ").to(tl.bfloat16).to(tl.float32)"
+            )
+            if tap == 0:
+                lines.append(f"{body_indent}acc = bias_value + product_0")
+            else:
+                lines.append(f"{body_indent}acc = acc + product_{tap}")
+        lines.append(
+            f"{body_indent}activated_{node} = acc / "
+            "(1.0 + tl.exp(0.0 - acc))"
+        )
+        lines.extend(_nodegroup_store(node, indent=body_indent))
+        lines.extend(
+            (
+                f"{body_indent}tl.store(",
+                f"{body_indent}    stage_batch + ((WIDTH - 1) + {node}) * C + offs_c,",
+                f"{body_indent}    x_g{group}_{node},",
+                f"{body_indent})",
+            )
+        )
+
+    expected_x = {
+        row - 3
+        for node in nodes
+        for row in sources[node]
+        if row >= 3
+    } | set(nodes)
+    if loaded_x != expected_x:
+        raise RuntimeError(f"nodegroup {group} x-row coverage drifted")
+    if group == 0:
+        lines.extend(
+            (
+                f"{body_indent}tl.store(stage_batch + offs_c, prior_0)",
+                f"{body_indent}tl.store(stage_batch + C + offs_c, prior_1)",
+                f"{body_indent}tl.store(stage_batch + 2 * C + offs_c, prior_2)",
+                f"{body_indent}tl.store(",
+                f"{body_indent}    stage_batch + (SOURCE_ROWS - 1) * C + offs_c,",
+                f"{body_indent}    0.0,",
+                f"{body_indent})",
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _nodegroup_kernel() -> str:
+    sources = _descriptorless_sources()
+    branches = "".join(_nodegroup_branch(group, sources) for group in range(4))
+    return (
+        NODEGROUP_SIGNATURE
+        + branches
+        + NODEGROUP_EMBEDDED_GATING
+        + _indent_block(GATING_BODY, 12)
+        + NODEGROUP_STANDALONE_GATING
+        + _indent_block(GATING_BODY, 12)
+    )
+
+
 def _indent_block(source: str, spaces: int) -> str:
     prefix = " " * spaces
     return "\n".join(prefix + line if line else "" for line in source.splitlines()) + "\n"
@@ -307,6 +574,7 @@ def generate() -> str:
         + _indent_block(producer, 8)
         + STANDALONE_GATING
         + _indent_block(GATING_BODY, 12)
+        + _nodegroup_kernel()
     )
 
 

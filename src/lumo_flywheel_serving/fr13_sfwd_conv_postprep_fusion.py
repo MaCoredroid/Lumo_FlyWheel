@@ -20,6 +20,7 @@ import triton
 
 from lumo_flywheel_serving.fr13_sfwd_conv_postprep_fusion_kernel import (
     _fr13_fixed32_sfwd_conv_postprep_fusion_kernel,
+    _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel,
 )
 from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
     FIXED32_CHANNEL_SERIAL_ACTIVATION_WINDOW,
@@ -33,6 +34,12 @@ from lumo_flywheel_serving.fr13_sfwd_prior_reuse_descriptorless import (
 
 CANDIDATE = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
 EMBEDDED_GATE_CANDIDATE = "fixed32_sfwd_conv_postprep_embedded_gate_cta_v1"
+DIRECT_NODEGROUP8_CANDIDATE = (
+    "fixed32_sfwd_conv_postprep_nodegroup8_direct_v1"
+)
+DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE = (
+    "fixed32_sfwd_conv_postprep_nodegroup8_direct_embedded_gate_v1"
+)
 CAPTURE_CACHE_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.capture_cache.v1"
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
 QUALIFICATION_PROFILE = "k64_root"
@@ -762,6 +769,7 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
     draft_vocab_k: int,
     draft_vocab_root: int,
     embed_gate_cta: bool = False,
+    direct_nodegroup8: bool = False,
     tree_rows: int = ROWS,
     conv_width: int = CONV_WIDTH,
     conv_state_len: int = CONV_STATE_LEN,
@@ -773,6 +781,66 @@ def fixed32_sfwd_conv_postprep_fusion_contract(
     state_len = int(conv_state_len)
     if type(embed_gate_cta) is not bool:
         raise TypeError("embed_gate_cta must be bool")
+    if type(direct_nodegroup8) is not bool:
+        raise TypeError("direct_nodegroup8 must be bool")
+    if direct_nodegroup8:
+        incumbent = fixed32_sfwd_conv_postprep_fusion_contract(
+            batch,
+            fixed32_mode=fixed32_mode,
+            tree_parent=tree_parent,
+            qualification_profile=qualification_profile,
+            draft_vocab_k=draft_vocab_k,
+            draft_vocab_root=draft_vocab_root,
+            embed_gate_cta=embed_gate_cta,
+            direct_nodegroup8=False,
+            tree_rows=rows,
+            conv_width=width,
+            conv_state_len=state_len,
+        )
+        channel_programs = 4 * CHANNELS // int(incumbent["block_c"])
+        gating_programs = int(incumbent["gating_programs_per_request"])
+        return {
+            **incumbent,
+            "candidate": (
+                DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE
+                if embed_gate_cta
+                else DIRECT_NODEGROUP8_CANDIDATE
+            ),
+            "full_graph_qualified": False,
+            "channel_programs_per_request": channel_programs,
+            "standalone_gating_programs_per_request": (
+                0 if embed_gate_cta else gating_programs
+            ),
+            "embedded_gating_channel_programs_per_request": (
+                gating_programs if embed_gate_cta else 0
+            ),
+            "programs_per_request": channel_programs + (
+                0 if embed_gate_cta else gating_programs
+            ),
+            "conv_node_order": tuple(range(ROWS)),
+            "conv_peak_live_x": 10,
+            "conv_peak_live_x_with_stage": 10,
+            "node_groups_per_request": 4,
+            "nodes_per_channel_program": 8,
+            "node_group_rows": ((0, 8), (8, 16), (16, 24), (24, 32)),
+            "node_group_unique_x_loads": (8, 14, 18, 14),
+            "node_group_peak_live_x": (4, 9, 10, 7),
+            "x_loads_per_channel_across_groups": 54,
+            "source_edge_writer_group": 0,
+            "producer_shape": "direct_scalar_unrolled_fixed_nodegroups8",
+            "has_gather": False,
+            "algorithmic_shared_bytes": 0,
+            "has_reduction": False,
+            "has_barrier": False,
+            "candidate_codegen_registers_per_thread": None,
+            "source_register_ceiling_per_thread": None,
+            "source_register_ceiling_basis": "pending_offline_sm121a_codegen",
+            "offline_codegen_stack_bytes": None,
+            "offline_codegen_local_bytes": None,
+            "offline_codegen_shared_bytes": None,
+            "codegen_registers_verified": False,
+            "timing_claim": False,
+        }
     _exact_host_parent(tree_parent)
     if batch not in (1, 2, 3, 4):
         raise ValueError("fixed32 conv/post-prep fusion requires B1-B4")
@@ -1766,6 +1834,7 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
     draft_vocab_k: int,
     draft_vocab_root: int,
     embed_gate_cta: bool = False,
+    direct_nodegroup8: bool = False,
     source_only_qualification: bool = False,
     capture_binding: object | None = None,
 ) -> dict[str, object]:
@@ -1787,6 +1856,7 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
         draft_vocab_k=draft_vocab_k,
         draft_vocab_root=draft_vocab_root,
         embed_gate_cta=embed_gate_cta,
+        direct_nodegroup8=direct_nodegroup8,
     )
     if capture_binding is not None:
         _validate_capture_binding(
@@ -1826,6 +1896,8 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
     block_c = int(contract["block_c"])
     num_warps = int(contract["num_warps"])
     channel_tasks = CHANNELS // block_c
+    if direct_nodegroup8:
+        channel_tasks *= 4
     gate_rows_per_task = 2 * block_c // GATE_BLOCK
     gate_tasks = triton.cdiv(ROWS, gate_rows_per_task)
     grid = (
@@ -1839,47 +1911,90 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
         if capture_binding is not None
         else spec_state_indices
     )
-    _fr13_fixed32_sfwd_conv_postprep_fusion_kernel[grid](
-        x,
-        conv_state,
-        spec_state_indices,
-        sticky_guard_arg,
-        conv_weights,
-        bias_arg,
-        a,
-        b,
-        A_log,
-        dt_bias,
-        query,
-        key,
-        value_spec,
-        value_tree,
-        g,
-        beta,
-        source_stage,
-        conv_tap_arg,
-        CONV_STRIDE_ROW=int(conv_state.stride(0)),
-        BANK_ROWS=int(conv_state.size(0)),
-        B=int(batch_size),
-        N=ROWS,
-        C=CHANNELS,
-        WIDTH=CONV_WIDTH,
-        STATE_LEN=CONV_STATE_LEN,
-        SOURCE_ROWS=SOURCE_ROWS,
-        H=NUM_K_HEADS,
-        HV=NUM_V_HEADS,
-        K=HEAD_K_DIM,
-        V=HEAD_V_DIM,
-        HAS_BIAS=bias is not None,
-        STORE_CONV_TAP=conv_tap is not None,
-        CAPTURE_GUARD=capture_binding is not None,
-        X_STRIDE_ROW=X_ROW_STRIDE,
-        BLOCK_C=block_c,
-        GATE_BLOCK=GATE_BLOCK,
-        SOFTPLUS_THRESHOLD=SOFTPLUS_THRESHOLD,
-        EMBED_GATE_CTA=embed_gate_cta,
-        num_warps=num_warps,
-    )
+    if direct_nodegroup8:
+        _fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct_kernel[grid](
+            x,
+            conv_state,
+            spec_state_indices,
+            sticky_guard_arg,
+            conv_weights,
+            bias_arg,
+            a,
+            b,
+            A_log,
+            dt_bias,
+            query,
+            key,
+            value_spec,
+            value_tree,
+            g,
+            beta,
+            source_stage,
+            conv_tap_arg,
+            CONV_STRIDE_ROW=int(conv_state.stride(0)),
+            BANK_ROWS=int(conv_state.size(0)),
+            B=int(batch_size),
+            N=ROWS,
+            C=CHANNELS,
+            WIDTH=CONV_WIDTH,
+            STATE_LEN=CONV_STATE_LEN,
+            SOURCE_ROWS=SOURCE_ROWS,
+            H=NUM_K_HEADS,
+            HV=NUM_V_HEADS,
+            K=HEAD_K_DIM,
+            V=HEAD_V_DIM,
+            HAS_BIAS=bias is not None,
+            STORE_CONV_TAP=conv_tap is not None,
+            CAPTURE_GUARD=capture_binding is not None,
+            X_STRIDE_ROW=X_ROW_STRIDE,
+            BLOCK_C=block_c,
+            GATE_BLOCK=GATE_BLOCK,
+            SOFTPLUS_THRESHOLD=SOFTPLUS_THRESHOLD,
+            EMBED_GATE_CTA=embed_gate_cta,
+            num_warps=num_warps,
+        )
+    else:
+        _fr13_fixed32_sfwd_conv_postprep_fusion_kernel[grid](
+            x,
+            conv_state,
+            spec_state_indices,
+            sticky_guard_arg,
+            conv_weights,
+            bias_arg,
+            a,
+            b,
+            A_log,
+            dt_bias,
+            query,
+            key,
+            value_spec,
+            value_tree,
+            g,
+            beta,
+            source_stage,
+            conv_tap_arg,
+            CONV_STRIDE_ROW=int(conv_state.stride(0)),
+            BANK_ROWS=int(conv_state.size(0)),
+            B=int(batch_size),
+            N=ROWS,
+            C=CHANNELS,
+            WIDTH=CONV_WIDTH,
+            STATE_LEN=CONV_STATE_LEN,
+            SOURCE_ROWS=SOURCE_ROWS,
+            H=NUM_K_HEADS,
+            HV=NUM_V_HEADS,
+            K=HEAD_K_DIM,
+            V=HEAD_V_DIM,
+            HAS_BIAS=bias is not None,
+            STORE_CONV_TAP=conv_tap is not None,
+            CAPTURE_GUARD=capture_binding is not None,
+            X_STRIDE_ROW=X_ROW_STRIDE,
+            BLOCK_C=block_c,
+            GATE_BLOCK=GATE_BLOCK,
+            SOFTPLUS_THRESHOLD=SOFTPLUS_THRESHOLD,
+            EMBED_GATE_CTA=embed_gate_cta,
+            num_warps=num_warps,
+        )
     return {
         **contract,
         "layout": layout,
