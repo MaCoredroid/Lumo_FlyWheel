@@ -86,7 +86,7 @@ if [[ "$COMPOSE_CFWD" == "1" ]]; then
   done
   unset binding path digest
   [[ "$(sha256sum scripts/fr13_cfwd_logit_direct_decision_kernel.py | awk '{print $1}')" \
-       == "5a9107306bdc37200448a6a5add2b84dfd839dc377b11009f218662c63abcc1c" ]] || {
+       == "a7a7b6582cdc11e930916f5e65583195fd31a3b664e8f567bb33a24ea1a64ee0" ]] || {
     echo "packed CFWD v3 candidate source identity drifted" >&2
     exit 2
   }

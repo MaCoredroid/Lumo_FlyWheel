@@ -1,0 +1,15 @@
+candidate_source_sha256=a7a7b6582cdc11e930916f5e65583195fd31a3b664e8f567bb33a24ea1a64ee0
+integration_source_sha256=5c30860712e9766fd397b3e90e2ea203ad4ee2a89302d4a3c3c0e412452e4e07
+command=PYTHONPATH=$PWD pytest -q tests/test_fr13_fixed32_cfwd_logit_direct_decision.py tests/test_fr13_fixed32_cfwd_logit_direct_runners.py tests/test_fr13_fixed32_cfwd_logit_direct_live_gate.py tests/test_fr13_cfwd_dfwd_u8_composed_gate.py -x
+result=61 passed in 2.34s
+command=PYTHONPATH=$PWD pytest -q <all CFWD, composed-U8, and linked-U8 focused tests> -x
+result=89 passed in 2.70s
+command=python3 -m py_compile <changed Python sources>
+result=PASS
+command=bash -n <affected B1 CFWD/U8 runners and launcher>
+result=PASS
+command=regenerate packed runtime overlay and compare exact bytes
+result=PASS
+real_swe_verified_gate=REQUIRED
+timing_claim=NONE
+hardware_floor_claim=NONE

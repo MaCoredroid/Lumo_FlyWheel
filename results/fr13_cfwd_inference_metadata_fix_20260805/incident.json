@@ -1,0 +1,46 @@
+{
+  "schema": "fr13.fixed32.cfwd_inference_metadata_boot_fix.v1",
+  "status": "SOURCE_FIX_CPU_STATIC_PASS_REAL_GATE_PENDING",
+  "failed_source_commit": "9091ddae2046f42fc5e754f976c3493a033785ac",
+  "run": {
+    "batch_size": 1,
+    "mode": "hydra27_fixed32",
+    "physical_rows": 32,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "runroot": "output/fr13_b1_cfwd_u8_composed_9091ddae2_20260805T170633Z",
+    "container_id": "07d46a15c18259416e3a9bc70fd7a75528ac597bf4212b1c825fe93b5fb19069",
+    "started_at_utc": "2026-08-05T17:07:32.693920636Z",
+    "finished_at_utc": "2026-08-05T17:14:44.317047303Z",
+    "exit_code": 1,
+    "oom_killed": false,
+    "docker_log_bytes": 53225,
+    "docker_log_lines": 399,
+    "docker_log_sha256": "48a6f3cd63bddedfc7e0bcb2da87528e476c2f7cc06392ca774437d8e536c6ea",
+    "service_ready": false,
+    "swe_verified_task_traffic": false,
+    "measurement_consumed": false
+  },
+  "failure": {
+    "phase": "full_cuda_graph_capture",
+    "exception": "RuntimeError: Inference tensors do not track version counter.",
+    "source_path": "scripts/fr13_cfwd_logit_direct_decision_kernel.py",
+    "source_function": "prepare_metadata_binding"
+  },
+  "fix": {
+    "candidate_source_sha256": "a7a7b6582cdc11e930916f5e65583195fd31a3b664e8f567bb33a24ea1a64ee0",
+    "integration_source_sha256": "5c30860712e9766fd397b3e90e2ea203ad4ee2a89302d4a3c3c0e412452e4e07",
+    "normal_tensor_version_bound": true,
+    "inference_tensor_pointer_bound": true,
+    "inference_tensor_version_sentinel": -1,
+    "exact_value_attested_before_binding": true,
+    "pointer_replacement_rejected": true
+  },
+  "claims": {
+    "cpu_static_regression_pass": true,
+    "real_task_gate_pass": false,
+    "timing_claim": false,
+    "speedup_claim": false,
+    "hardware_floor_claim": false
+  }
+}

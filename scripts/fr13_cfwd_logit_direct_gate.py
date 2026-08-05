@@ -15,13 +15,13 @@ from typing import Any, Sequence
 CANDIDATE = "fixed32_cfwd_logit_direct_packed_physical_slots_v3"
 CANDIDATE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_packed_physical_slots.v3"
 CANDIDATE_SOURCE_SHA256 = (
-    "5a9107306bdc37200448a6a5add2b84dfd839dc377b11009f218662c63abcc1c"
+    "a7a7b6582cdc11e930916f5e65583195fd31a3b664e8f567bb33a24ea1a64ee0"
 )
 INTEGRATION_SOURCE_SCHEMA = (
     "fr13.fixed32.cfwd_logit_direct.integration_source.v2"
 )
 INTEGRATION_SOURCE_SHA256 = (
-    "a82ce3f5e526792ca45bb444212e5440e8444778f174fd0650accc4bb5f8558c"
+    "5c30860712e9766fd397b3e90e2ea203ad4ee2a89302d4a3c3c0e412452e4e07"
 )
 LIVE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_live_ab.v2"
 CREDENTIAL_SCHEMA = "fr13.fixed32.cfwd_logit_direct.production_credential.v2"

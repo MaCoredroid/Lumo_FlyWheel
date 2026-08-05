@@ -443,6 +443,36 @@ def test_metadata_binding_is_exact_and_pointer_version_bound(
         )
 
 
+def test_metadata_binding_supports_inference_tensors_and_rejects_replacement() -> None:
+    with torch.inference_mode():
+        metadata = _valid_metadata(1, "hydra27_fixed32")
+        assert all(
+            torch.is_inference(value)
+            for _name, value in kernel._metadata_operands(**metadata)
+        )
+        binding = kernel.prepare_metadata_binding(
+            **metadata,
+            batch_size=1,
+            mode="hydra27_fixed32",
+        )
+        assert all(version == -1 for _name, _pointer, version in binding.identities)
+        kernel._validate_metadata_binding(
+            binding,
+            operands=kernel._metadata_operands(**metadata),
+            batch_size=1,
+            mode="hydra27_fixed32",
+        )
+
+        metadata["target_parent_slots"] = metadata["target_parent_slots"].clone()
+        with pytest.raises(ValueError, match="metadata binding drift"):
+            kernel._validate_metadata_binding(
+                binding,
+                operands=kernel._metadata_operands(**metadata),
+                batch_size=1,
+                mode="hydra27_fixed32",
+            )
+
+
 def test_metadata_binding_rejects_wrong_topology_contents() -> None:
     metadata = _valid_metadata(1, "hydra27_fixed32")
     metadata["child_table"][0, 7, 0] = -1
@@ -670,7 +700,7 @@ def test_cfwd_integration_source_contract_is_separate_and_fail_closed(
             "fr13.fixed32.cfwd_logit_direct.integration_source.v2"
         ),
         "integration_source_sha256": (
-            "a82ce3f5e526792ca45bb444212e5440e8444778f174fd0650accc4bb5f8558c"
+            "5c30860712e9766fd397b3e90e2ea203ad4ee2a89302d4a3c3c0e412452e4e07"
         ),
     }
     assert device._FR13_FIXED32_TAW_SOURCE_SHA256 == (

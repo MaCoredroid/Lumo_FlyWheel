@@ -90,6 +90,16 @@ class Fixed32CfwdMetadataBinding(NamedTuple):
     identities: tuple[tuple[str, int, int], ...]
 
 
+def _metadata_identity(name: str, value) -> tuple[str, int, int]:
+    """Bind storage plus mutation version when PyTorch provides one."""
+    # TAW metadata is created while vLLM runs under inference_mode. Inference
+    # tensors deliberately have no version counter, so their exact contents are
+    # attested in prepare_metadata_binding and their storage remains pointer
+    # bound. Normal tensors retain the stronger in-place mutation check.
+    version = -1 if torch.is_inference(value) else int(value._version)
+    return name, int(value.data_ptr()), version
+
+
 def fixed32_cfwd_logit_direct_contract(
     batch_size: int,
     *,
@@ -896,10 +906,7 @@ def prepare_metadata_binding(
     return Fixed32CfwdMetadataBinding(
         mode=mode,
         batch_size=batch,
-        identities=tuple(
-            (name, int(value.data_ptr()), int(value._version))
-            for name, value in operands
-        ),
+        identities=tuple(_metadata_identity(name, value) for name, value in operands),
     )
 
 
@@ -912,10 +919,7 @@ def _validate_metadata_binding(
 ) -> None:
     if not isinstance(binding, Fixed32CfwdMetadataBinding):
         raise TypeError("logit-direct CFWD requires an exact metadata binding")
-    observed = tuple(
-        (name, int(value.data_ptr()), int(value._version))
-        for name, value in operands
-    )
+    observed = tuple(_metadata_identity(name, value) for name, value in operands)
     if (
         binding.mode != mode
         or binding.batch_size != int(batch_size)
