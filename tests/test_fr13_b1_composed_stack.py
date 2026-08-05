@@ -83,9 +83,11 @@ def test_gate_wrappers_bind_independent_same_boot_credentials() -> None:
     assert "sfwd_conv_postprep_k64_root_b1_gate.json" in eager
 
 
-def test_exact4_runner_enables_all_five_production_paths_and_timers() -> None:
+def test_runner_wires_optional_cfwd_smoke_and_exact4_evidence() -> None:
     runner = _text("fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh")
     wrapper = _text("fr13_run_b1_composed_stack_timing.sh")
+    smoke_wrapper = _text("fr13_run_b1_composed_cfwd_production_smoke.sh")
+    cfwd_wrapper = _text("fr13_run_b1_composed_cfwd_stack_timing.sh")
     manifest = _text("fr13_runtime_manifest.py")
     required = (
         "FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2",
@@ -100,18 +102,141 @@ def test_exact4_runner_enables_all_five_production_paths_and_timers() -> None:
         "fr13_b1_composed_stack_timing.py",
         "TARGET_SFWD_COMBINED_SUMMARY_SHA256",
         "production engaged layer=",
+        "issue-production-smoke",
+        "validate-production-smoke",
+        "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=1",
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=1",
+        "--cfwd-engagement",
+        "--cfwd-smoke-credential",
     )
     for value in required:
         assert value in runner
     assert "FR13_B1_COMPOSED_STACK_TIMING=1" in wrapper
+    assert "FR13_B1_COMPOSED_CFWD_SMOKE=1" in smoke_wrapper
+    assert "FR13_B1_COMPOSED_CFWD_PRODUCTION=1" in smoke_wrapper
+    assert "FR13_B1_COMPOSED_CFWD_SMOKE=0" in cfwd_wrapper
     for source in (
         "scripts/fr13_run_b1_k64_qrow32_b1_sfwd_stack_timing.sh",
         "scripts/fr13_run_b1_composed_stack_timing.sh",
+        "scripts/fr13_run_b1_composed_cfwd_production_smoke.sh",
+        "scripts/fr13_run_b1_composed_cfwd_stack_timing.sh",
         "scripts/fr13_b1_composed_stack_timing.py",
+        "scripts/fr13_cfwd_logit_direct_gate.py",
         "scripts/fr13_qrow32_b1_pass_sidecar.py",
         "scripts/fr13_qrow32_split2_timing.py",
     ):
         assert source in manifest
+
+
+def test_sfwd_admits_taw_only_for_exact_composed_cfwd_tuple() -> None:
+    launcher = _text("fr13_launch_forked_fa2_tree_server.sh")
+    required = (
+        '_fr13_sfwd_cfwd_composed=0',
+        '"$_fr13_sfwd_qrow16_production" == "0"',
+        '"$_fr13_sfwd_qrow32_production" == "1"',
+        '"${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION:-0}" == "1"',
+        '"${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH:-}" == "1"',
+        '"${FR13_DFWD_K64_TOP3:-0}" == "1"',
+        '"${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_wide256_fullgrid_b1"',
+        '"${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0"',
+        '"${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" == "1"',
+        '"${FR13_CFWD_LOGIT_DIRECT_BYTE_AB:-0}" == "0"',
+        '"${FR13_CFWD_LOGIT_DIRECT_PRODUCTION:-0}" == "1"',
+        '&& "$_fr13_sfwd_cfwd_composed" != "1"',
+    )
+    for value in required:
+        assert value in launcher
+
+
+def test_six_way_environment_rejects_every_single_selector_near_miss() -> None:
+    module = _load_gate_module()
+    exact = list(module.SIX_WAY_ENV)
+    module.validate_six_way_environment(("\n".join(exact) + "\n").encode("ascii"))
+    for index, line in enumerate(exact):
+        name, _separator, _value = line.partition("=")
+        near_miss = list(exact)
+        near_miss[index] = f"{name}=near-miss"
+        with pytest.raises(module.GateError, match="environment drifted"):
+            module.validate_six_way_environment(
+                ("\n".join(near_miss) + "\n").encode("ascii")
+            )
+
+
+def test_cfwd_engagement_requires_candidate_served_return() -> None:
+    module = _load_gate_module()
+    source_commit = "1" * 40
+    credential_sha = "2" * 64
+    payload = {
+        "schema": module.CFWD_ENGAGEMENT_SCHEMA,
+        "status": "engaged",
+        "candidate": module.cfwd_gate.CANDIDATE,
+        "mode": "hydra27_fixed32",
+        "batch_size": 1,
+        "source_commit": source_commit,
+        "candidate_source_sha256": module.cfwd_gate.CANDIDATE_SOURCE_SHA256,
+        "production_pass_sha256": credential_sha,
+        "served_return": module.CFWD_SERVED_RETURN,
+        "producer_pid": 123,
+    }
+    module._validate_cfwd_engagement(
+        payload,
+        source_commit=source_commit,
+        credential_sha256=credential_sha,
+    )
+    payload["served_return"] = "reference products"
+    with pytest.raises(module.GateError, match="served-return"):
+        module._validate_cfwd_engagement(
+            payload,
+            source_commit=source_commit,
+            credential_sha256=credential_sha,
+        )
+
+
+def test_production_smoke_credential_binds_all_component_hashes() -> None:
+    module = _load_gate_module()
+    source_commit = "1" * 40
+    component_hashes = {
+        key: hashlib.sha256(key.encode("ascii")).hexdigest()
+        for key, _path_name, _sha_name in module.COMPONENT_ARGUMENTS
+    }
+    payload = {
+        "schema": module.PRODUCTION_SMOKE_SCHEMA,
+        "status": "PASS",
+        "source_commit": source_commit,
+        "mode": "hydra27_fixed32",
+        "batch_size": 1,
+        "task_id": module.TASK_ID,
+        "task_count": 1,
+        "subset_sha256": module.SUBSET_SHA256,
+        "runtime_mode": "FULL",
+        "production_paths": {
+            "qrow32_split2": True,
+            "gdn_gqa_group3": True,
+            "dfwd_k64_top3": True,
+            "target_gemm_selector": module.TARGET_SELECTOR,
+            "sfwd_conv_postprep": True,
+            "taw_native_precompute": True,
+            "cfwd_logit_direct": True,
+        },
+        "component_credential_sha256s": component_hashes,
+        "runtime_evidence_sha256s": {"health": "2" * 64},
+        "cfwd_served_return": module.CFWD_SERVED_RETURN,
+        "performance_measurement": False,
+        "timing_eligible": False,
+        "exact4_eligible": True,
+    }
+    module._validate_production_smoke_payload(
+        payload,
+        source_commit=source_commit,
+        component_hashes=component_hashes,
+    )
+    mutated = dict(component_hashes, cfwd_credential="3" * 64)
+    with pytest.raises(module.GateError, match="credential drifted"):
+        module._validate_production_smoke_payload(
+            payload,
+            source_commit=source_commit,
+            component_hashes=mutated,
+        )
 
 
 def test_gate_b_summary_binds_target_sfwd_manifest_and_source(
@@ -467,6 +592,10 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         "FR13_SFWD_GPU_TIMER=1",
         "FR13_DFWD_GPU_TIMER=1",
         "FR13_CFWD_GPU_TIMER=1",
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0",
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=1",
+        "FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0",
+        "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=1",
     )
     container, _ = _write(
         tmp_path / "container_env.txt", ("\n".join(required_env) + "\n").encode()
@@ -509,7 +638,41 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         named[name] = _write(tmp_path / name, f"{name}\n".encode())
     gqa_arm, _ = _write(tmp_path / "gqa_arm", b"1\n")
     gqa_batch, _ = _write(tmp_path / "gqa_batch", b"1\n")
+    taw, taw_sha = _write(tmp_path / "taw", b"taw\n")
+    cfwd, cfwd_sha = _write(tmp_path / "cfwd.json", b"{}\n")
+    cfwd_engagement, _ = _write(tmp_path / "cfwd-engagement.json", b"{}\n")
+    component_hashes = {
+        "qrow32_composed": named["qrow_credential"][1],
+        "gqa3": named["gqa"][1],
+        "dfwd_top3": named["dfwd_credential"][1],
+        "sfwd_pass": named["sfwd_pass"][1],
+        "sfwd_manifest": named["sfwd_manifest"][1],
+        "target_sfwd_summary": named["eager_summary"][1],
+        "taw_production": taw_sha,
+        "cfwd_credential": cfwd_sha,
+    }
+    smoke, smoke_sha = _write(
+        tmp_path / "smoke.json",
+        (
+            json.dumps(
+                {"component_credential_sha256s": component_hashes}, sort_keys=True
+            )
+            + "\n"
+        ).encode("ascii"),
+    )
+    monkeypatch.setattr(
+        module.composed_gate, "_validate_production_smoke_payload", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        module.composed_gate.cfwd_gate,
+        "_validate_credential",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        module.composed_gate, "_validate_cfwd_engagement", lambda *_args, **_kwargs: None
+    )
     args = SimpleNamespace(
+        cfwd_production=True,
         subset=tmp_path / "unused-subset",
         measure=measure,
         baseline=tmp_path / "unused-baseline",
@@ -544,11 +707,18 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         dfwd_credential_sha256=named["dfwd_credential"][1],
         target_sfwd_combined_summary=named["eager_summary"][0],
         target_sfwd_combined_summary_sha256=named["eager_summary"][1],
+        taw_production_pass=taw,
+        taw_production_pass_sha256=taw_sha,
+        cfwd_production_pass=cfwd,
+        cfwd_production_pass_sha256=cfwd_sha,
+        cfwd_engagement=cfwd_engagement,
+        cfwd_smoke_credential=smoke,
+        cfwd_smoke_credential_sha256=smoke_sha,
     )
     result = module.reduce_composed(args)
     assert result["schema"] == module.SCHEMA
     assert result["run_classification"] == (
-        "real_swe_verified_exact4_b1_composed_kernel_stack"
+        "real_swe_verified_exact4_b1_composed_cfwd_kernel_stack"
     )
     assert result["phase_breakdown_ms_per_event"] == {
         "sfwd_verify_gpu": 80.0,
@@ -560,3 +730,16 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
     assert result["full_step_tps"] == {"wall": 40.0, "gpu_components": 45.0}
     assert result["acceptance"]["descriptive_screen_pass"] is True
     assert result["production_evidence"]["sfwd_engaged_layer_count"] == 48
+    assert result["composed_stack"]["cfwd_logit_direct"] is True
+    assert result["production_evidence"]["cfwd_served_return"] == (
+        "logit-direct candidate products"
+    )
+
+
+def test_forked_launcher_forwards_patch_contract_into_container() -> None:
+    launcher = (ROOT / "scripts/fr13_launch_forked_fa2_tree_server.sh").read_text(
+        encoding="utf-8"
+    )
+    assert '-e CUDAGRAPH_MODE="$CUDAGRAPH_MODE"' in launcher
+    assert '-e MAX_NUM_SEQS="$MAX_NUM_SEQS"' in launcher
+    assert '-e SWE_CONCURRENCY="${SWE_CONCURRENCY:-}"' in launcher

@@ -25,6 +25,24 @@ case "$COMPOSED_STACK" in
   0|1) ;;
   *) echo "FR13_B1_COMPOSED_STACK_TIMING must be exactly 0 or 1" >&2; exit 2 ;;
 esac
+CFWD_PRODUCTION=${FR13_B1_COMPOSED_CFWD_PRODUCTION:-0}
+case "$CFWD_PRODUCTION" in
+  0|1) ;;
+  *) echo "FR13_B1_COMPOSED_CFWD_PRODUCTION must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+PRODUCTION_SMOKE=${FR13_B1_COMPOSED_CFWD_SMOKE:-0}
+case "$PRODUCTION_SMOKE" in
+  0|1) ;;
+  *) echo "FR13_B1_COMPOSED_CFWD_SMOKE must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "$CFWD_PRODUCTION" == "1" && "$COMPOSED_STACK" != "1" ]]; then
+  echo "composed CFWD production requires the composed B1 stack" >&2
+  exit 2
+fi
+if [[ "$PRODUCTION_SMOKE" == "1" && "$CFWD_PRODUCTION" != "1" ]]; then
+  echo "composed CFWD smoke requires composed CFWD production" >&2
+  exit 2
+fi
 
 : "${RUNROOT:?set RUNROOT to a new path under output/}"
 : "${TAG:?set TAG to a unique run tag}"
@@ -51,10 +69,42 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
   : "${TARGET_SFWD_COMBINED_SUMMARY:?set the Gate-B combined target/SFWD summary}"
   : "${TARGET_SFWD_COMBINED_SUMMARY_SHA256:?set its raw SHA-256}"
 fi
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  : "${TAW_B1_CREDENTIAL:?set the source-bound Hydra27 B1 TAW credential}"
+  : "${TAW_B1_CREDENTIAL_SHA256:?set its raw SHA-256}"
+  : "${TAW_B1_LIVE_BUNDLE:?set the credentialed Hydra27 B1 TAW replay}"
+  : "${TAW_B1_LIVE_BUNDLE_SHA256:?set its raw SHA-256}"
+  : "${TAW_REVIEWED_B4_PASS:?set the reviewed Hydra27 exact4 TAW bundle}"
+  : "${TAW_REVIEWED_B4_PASS_SHA256:?set its raw SHA-256}"
+  : "${TAW_REVIEWED_B4_VERDICT:?set the reviewed Hydra27 exact4 TAW verdict}"
+  : "${TAW_REVIEWED_B4_VERDICT_SHA256:?set its raw SHA-256}"
+  : "${TAW_MERGE_BINDING:?set the Hydra27 B1/B4 TAW merge binding}"
+  : "${TAW_MERGE_BINDING_SHA256:?set its raw SHA-256}"
+  : "${TAW_PASS_JSON:?set the merged Hydra27 TAW production bundle}"
+  : "${TAW_PASS_SHA256:?set its raw SHA-256}"
+  : "${CFWD_PASS_JSON:?set the source-bound CFWD production credential}"
+  : "${CFWD_PASS_SHA256:?set its raw SHA-256}"
+  if [[ "$PRODUCTION_SMOKE" == "0" ]]; then
+    : "${COMPOSED_CFWD_SMOKE_PASS:?set the prior one-task production smoke credential}"
+    : "${COMPOSED_CFWD_SMOKE_PASS_SHA256:?set its raw SHA-256}"
+  fi
+fi
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
-SUBSET=config/fr13_fixed32/subset_b4_four.json
-SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
+EXACT4_SUBSET=config/fr13_fixed32/subset_b4_four.json
+EXACT4_SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
+ONE_TASK_SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
+ONE_TASK_SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
+SUBSET=$EXACT4_SUBSET
+SUBSET_SHA256=$EXACT4_SUBSET_SHA256
+TASK_COUNT=4
+TIMING_ELIGIBLE=1
+if [[ "$PRODUCTION_SMOKE" == "1" ]]; then
+  SUBSET=$ONE_TASK_SUBSET
+  SUBSET_SHA256=$ONE_TASK_SUBSET_SHA256
+  TASK_COUNT=1
+  TIMING_ELIGIBLE=0
+fi
 BLOCK_MAP=scripts/fr13_dvk_subset_blocks.json
 BLOCK_MAP_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
 BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
@@ -79,7 +129,13 @@ RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 RUNROOT_REL=${RUNROOT_ABS#"$REPO/"}
 if [[ "$COMPOSED_STACK" == "1" ]]; then
-  ARM="hydra27_fixed32_k64_composed_qrow32_gqa3_dfwd3_target_sfwd_exact4_${TAG}"
+  if [[ "$PRODUCTION_SMOKE" == "1" ]]; then
+    ARM="hydra27_fixed32_k64_composed_cfwd_production_smoke_${TAG}"
+  elif [[ "$CFWD_PRODUCTION" == "1" ]]; then
+    ARM="hydra27_fixed32_k64_composed_qrow32_gqa3_dfwd3_target_sfwd_cfwd_exact4_${TAG}"
+  else
+    ARM="hydra27_fixed32_k64_composed_qrow32_gqa3_dfwd3_target_sfwd_exact4_${TAG}"
+  fi
 else
   ARM="hydra27_fixed32_k64_qrow32_split2_exact4_${TAG}"
 fi
@@ -93,11 +149,15 @@ ARMDIR="$RUNROOT_ABS/$ARM"
   || { echo "RUNROOT must be new: $RUNROOT_ABS" >&2; exit 2; }
 [[ -x "$PYTHON_BIN" ]] \
   || { echo "Python environment is unavailable: $PYTHON_BIN" >&2; exit 2; }
-for required in "$QROW32_B1_FA2_SO" "$QROW32_B1_PASS" "$BASELINE"; do
+for required in "$QROW32_B1_FA2_SO" "$QROW32_B1_PASS"; do
   [[ "$required" == /* && -f "$required" && ! -L "$required" ]] \
     || { echo "required input must be an absolute regular file: $required" >&2; exit 2; }
 done
 unset required
+if [[ "$PRODUCTION_SMOKE" == "0" ]]; then
+  [[ "$BASELINE" == /* && -f "$BASELINE" && ! -L "$BASELINE" ]] \
+    || { echo "baseline must be an absolute regular file: $BASELINE" >&2; exit 2; }
+fi
 if [[ "$COMPOSED_STACK" == "1" ]]; then
   for required in \
       "$QROW32_B1_COMPOSED_CREDENTIAL" "$GQA3_PASS" \
@@ -117,6 +177,22 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
   SFWD_PASS_CONTAINER="/workspace/${SFWD_PASS_ABS#"$REPO/"}"
   SFWD_MANIFEST_CONTAINER="/workspace/${SFWD_MANIFEST_ABS#"$REPO/"}"
 fi
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  for required in \
+      "$TAW_B1_CREDENTIAL" "$TAW_B1_LIVE_BUNDLE" \
+      "$TAW_REVIEWED_B4_PASS" "$TAW_REVIEWED_B4_VERDICT" \
+      "$TAW_MERGE_BINDING" "$TAW_PASS_JSON" "$CFWD_PASS_JSON"; do
+    [[ "$required" == /* && -f "$required" && ! -L "$required" ]] \
+      || { echo "TAW/CFWD input must be an absolute regular file: $required" >&2; exit 2; }
+  done
+  unset required
+  if [[ "$PRODUCTION_SMOKE" == "0" ]]; then
+    [[ "$COMPOSED_CFWD_SMOKE_PASS" == /* \
+       && -f "$COMPOSED_CFWD_SMOKE_PASS" \
+       && ! -L "$COMPOSED_CFWD_SMOKE_PASS" ]] \
+      || { echo "production smoke credential must be an absolute regular file" >&2; exit 2; }
+  fi
+fi
 [[ "$QROW32_B1_FA2_SOURCE" == /* \
    && -d "$QROW32_B1_FA2_SOURCE" \
    && ! -L "$QROW32_B1_FA2_SOURCE" ]] \
@@ -125,9 +201,15 @@ fi
    && "$(sha256sum "$QROW32_B1_FA2_SO" | awk '{print $1}')" == "$CANDIDATE_SHA256" \
    && "$(sha256sum "$QROW32_B1_PASS" | awk '{print $1}')" == "$QROW32_B1_PASS_SHA256" \
    && "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" \
-   && "$(sha256sum "$BLOCK_MAP" | awk '{print $1}')" == "$BLOCK_MAP_SHA256" \
-   && "$(sha256sum "$BASELINE" | awk '{print $1}')" == "$BASELINE_SHA256" ]] \
+   && "$(sha256sum "$EXACT4_SUBSET" | awk '{print $1}')" == "$EXACT4_SUBSET_SHA256" \
+   && "$(sha256sum "$ONE_TASK_SUBSET" | awk '{print $1}')" == "$ONE_TASK_SUBSET_SHA256" \
+   && "$(sha256sum "$BLOCK_MAP" | awk '{print $1}')" == "$BLOCK_MAP_SHA256" ]] \
   || { echo "qrow32 exact4 timing prerequisite identity drifted" >&2; exit 2; }
+if [[ "$PRODUCTION_SMOKE" == "0" \
+      && "$(sha256sum "$BASELINE" | awk '{print $1}')" != "$BASELINE_SHA256" ]]; then
+  echo "qrow16 historical baseline identity drifted" >&2
+  exit 2
+fi
 if [[ "$COMPOSED_STACK" == "1" ]]; then
   [[ "$(stat -c '%s' "$DFWD_TOP3_SO")" == "$DFWD_TOP3_BYTES" \
      && "$(sha256sum "$DFWD_TOP3_SO" | awk '{print $1}')" == "$DFWD_TOP3_SHA256" \
@@ -143,6 +225,66 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
   [[ "$(sha256sum "$TARGET_SFWD_COMBINED_SUMMARY" | awk '{print $1}')" \
        == "$TARGET_SFWD_COMBINED_SUMMARY_SHA256" ]] \
     || { echo "combined target/SFWD summary identity drifted" >&2; exit 2; }
+fi
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  [[ "$TAW_B1_CREDENTIAL_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$TAW_B1_CREDENTIAL" | awk '{print $1}')" == "$TAW_B1_CREDENTIAL_SHA256" \
+     && "$TAW_B1_LIVE_BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$TAW_B1_LIVE_BUNDLE" | awk '{print $1}')" == "$TAW_B1_LIVE_BUNDLE_SHA256" \
+     && "$TAW_REVIEWED_B4_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$TAW_REVIEWED_B4_PASS" | awk '{print $1}')" == "$TAW_REVIEWED_B4_PASS_SHA256" \
+     && "$TAW_REVIEWED_B4_VERDICT_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$TAW_REVIEWED_B4_VERDICT" | awk '{print $1}')" == "$TAW_REVIEWED_B4_VERDICT_SHA256" \
+     && "$TAW_MERGE_BINDING_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$TAW_MERGE_BINDING" | awk '{print $1}')" == "$TAW_MERGE_BINDING_SHA256" \
+     && "$TAW_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$TAW_PASS_JSON" | awk '{print $1}')" == "$TAW_PASS_SHA256" \
+     && "$CFWD_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$CFWD_PASS_JSON" | awk '{print $1}')" == "$CFWD_PASS_SHA256" ]] \
+    || { echo "TAW/CFWD credential identity drifted" >&2; exit 2; }
+  if [[ "$PRODUCTION_SMOKE" == "0" ]]; then
+    [[ "$COMPOSED_CFWD_SMOKE_PASS_SHA256" =~ ^[0-9a-f]{64}$ \
+       && "$(sha256sum "$COMPOSED_CFWD_SMOKE_PASS" | awk '{print $1}')" \
+          == "$COMPOSED_CFWD_SMOKE_PASS_SHA256" ]] \
+      || { echo "composed CFWD smoke credential identity drifted" >&2; exit 2; }
+  fi
+fi
+CFWD_COMPONENT_HASH_ARGS=()
+CFWD_COMPONENT_ARGS=()
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  CFWD_COMPONENT_HASH_ARGS=(
+    --qrow-credential-sha256 "$QROW32_B1_COMPOSED_CREDENTIAL_SHA256"
+    --gdn-credential-sha256 "$GQA3_PASS_SHA256"
+    --dfwd-credential-sha256 "$DFWD_TOP3_CREDENTIAL_SHA256"
+    --target-live-sha256 "$CUTLASS_TARGET_PASS_SHA256"
+    --sfwd-pass-sha256 "$SFWD_CONV_POSTPREP_PASS_SHA256"
+    --source-manifest-sha256 "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256"
+    --combined-summary-sha256 "$TARGET_SFWD_COMBINED_SUMMARY_SHA256"
+    --taw-b1-credential-sha256 "$TAW_B1_CREDENTIAL_SHA256"
+    --taw-b1-live-bundle-sha256 "$TAW_B1_LIVE_BUNDLE_SHA256"
+    --taw-b4-pass-sha256 "$TAW_REVIEWED_B4_PASS_SHA256"
+    --taw-b4-verdict-sha256 "$TAW_REVIEWED_B4_VERDICT_SHA256"
+    --taw-merge-binding-sha256 "$TAW_MERGE_BINDING_SHA256"
+    --taw-production-sha256 "$TAW_PASS_SHA256"
+    --cfwd-credential-sha256 "$CFWD_PASS_SHA256"
+  )
+  CFWD_COMPONENT_ARGS=(
+    --qrow-credential "$QROW32_B1_COMPOSED_CREDENTIAL"
+    --gdn-credential "$GQA3_PASS"
+    --dfwd-credential "$DFWD_TOP3_CREDENTIAL"
+    --target-live "$CUTLASS_TARGET_PASS"
+    --sfwd-pass "$SFWD_PASS_ABS"
+    --source-manifest "$SFWD_MANIFEST_ABS"
+    --combined-summary "$TARGET_SFWD_COMBINED_SUMMARY"
+    --taw-b1-credential "$TAW_B1_CREDENTIAL"
+    --taw-b1-live-bundle "$TAW_B1_LIVE_BUNDLE"
+    --taw-b4-pass "$TAW_REVIEWED_B4_PASS"
+    --taw-b4-verdict "$TAW_REVIEWED_B4_VERDICT"
+    --taw-merge-binding "$TAW_MERGE_BINDING"
+    --taw-production "$TAW_PASS_JSON"
+    --cfwd-credential "$CFWD_PASS_JSON"
+    "${CFWD_COMPONENT_HASH_ARGS[@]}"
+  )
 fi
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
@@ -224,6 +366,30 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
     --expected-source-manifest-sha256 "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" \
     --source-commit "$SOURCE_COMMIT"
 fi
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  "$PYTHON_BIN" scripts/fr13_cfwd_logit_direct_gate.py validate \
+    --credential "$CFWD_PASS_JSON" \
+    --expected-sha256 "$CFWD_PASS_SHA256" \
+    --source-commit "$SOURCE_COMMIT" \
+    --timing-subset "$EXACT4_SUBSET" >/dev/null
+  "$PYTHON_BIN" scripts/fr13_taw_b1_credential.py validate-production \
+    --mode hydra27_fixed32 \
+    --source scripts/fr13_device_multidraft_kernel.py \
+    --credential "$TAW_B1_CREDENTIAL" \
+    --b1-live-bundle "$TAW_B1_LIVE_BUNDLE" \
+    --b4-production-pass "$TAW_REVIEWED_B4_PASS" \
+    --b4-gate-verdict "$TAW_REVIEWED_B4_VERDICT" \
+    --merge-binding "$TAW_MERGE_BINDING" \
+    --production-pass "$TAW_PASS_JSON" >/dev/null
+  if [[ "$PRODUCTION_SMOKE" == "0" ]]; then
+    "$PYTHON_BIN" scripts/fr13_b1_composed_stack_gate.py validate-production-smoke \
+      --repo "$REPO" \
+      --source-commit "$SOURCE_COMMIT" \
+      --credential "$COMPOSED_CFWD_SMOKE_PASS" \
+      --expected-sha256 "$COMPOSED_CFWD_SMOKE_PASS_SHA256" \
+      "${CFWD_COMPONENT_HASH_ARGS[@]}" >/dev/null
+  fi
+fi
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before timing" >&2; exit 2; }
 
@@ -255,8 +421,15 @@ CLASSIFICATION=real_swe_verified_exact4_qrow32_split2
 if [[ "$COMPOSED_STACK" == "1" ]]; then
   CLASSIFICATION=real_swe_verified_exact4_b1_composed_kernel_stack
 fi
-printf 'classification=%s\ntask_count=4\nbatch_size=1\nconcurrency=1\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\ntopology=hydra27_fixed32\nphysical_rows=32\nlogical_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_root=1\ndraft_vocab_k=65536\nqrow32_split2_production=1\nruntime=FULL_graph_exact_geometry\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nexact16_rule=only_after_exact4_u95_clears_cap\narm=%s\nsource=%s\npatch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\npass_sha256=%s\nqrow16_historical_baseline_sha256=%s\nstarted=%s\n' \
-  "$CLASSIFICATION" "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  CLASSIFICATION=real_swe_verified_exact4_b1_composed_cfwd_kernel_stack
+fi
+if [[ "$PRODUCTION_SMOKE" == "1" ]]; then
+  CLASSIFICATION=real_swe_verified_one_task_b1_composed_cfwd_production_smoke
+fi
+printf 'classification=%s\ntask_count=%s\nbatch_size=1\nconcurrency=1\ntiming_eligible=%s\nformal_floor_acceptance_eligible=0\ntopology=hydra27_fixed32\nphysical_rows=32\nlogical_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_root=1\ndraft_vocab_k=65536\nqrow32_split2_production=1\nruntime=FULL_graph_exact_geometry\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nexact16_rule=only_after_exact4_u95_clears_cap\narm=%s\nsource=%s\npatch_source_sha256=%s\nrunner_sha256=%s\nsubset_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\npass_sha256=%s\nqrow16_historical_baseline_sha256=%s\nstarted=%s\n' \
+  "$CLASSIFICATION" "$TASK_COUNT" "$TIMING_ELIGIBLE" \
+  "$MANDATORY_WEIGHT_BYTES" "$MANDATORY_WEIGHT_FLOOR_MS" \
   "$ONE_SIDED_U95_CAP_MS" "$ARM" "$SOURCE_COMMIT" \
   "$PATCH_SOURCE_SHA256" "$RUNNER_SHA256" "$SUBSET_SHA256" \
   "$CANDIDATE_SHA256" "$CANDIDATE_BYTES" "$FA2_HEAD" \
@@ -270,6 +443,13 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
     "$SFWD_CONV_POSTPREP_PASS_SHA256" \
     "$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256" \
     "$TARGET_SFWD_COMBINED_SUMMARY_SHA256" \
+    >> "$RUNROOT_ABS/launcher_meta.txt"
+fi
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  printf 'taw_native_precompute_production=1\ncfwd_logit_direct_production=1\ntaw_b1_credential_sha256=%s\ntaw_b1_live_bundle_sha256=%s\ntaw_reviewed_b4_pass_sha256=%s\ntaw_reviewed_b4_verdict_sha256=%s\ntaw_merge_binding_sha256=%s\ntaw_pass_sha256=%s\ncfwd_pass_sha256=%s\n' \
+    "$TAW_B1_CREDENTIAL_SHA256" "$TAW_B1_LIVE_BUNDLE_SHA256" \
+    "$TAW_REVIEWED_B4_PASS_SHA256" "$TAW_REVIEWED_B4_VERDICT_SHA256" \
+    "$TAW_MERGE_BINDING_SHA256" "$TAW_PASS_SHA256" "$CFWD_PASS_SHA256" \
     >> "$RUNROOT_ABS/launcher_meta.txt"
 fi
 
@@ -361,6 +541,26 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
     FR13_CONV_WB_BATCHED=1
   )
 fi
+CFWD_ENV=(
+  FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0
+  FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0
+  FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON=
+  FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0
+  FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0
+  FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON=
+  FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256=
+)
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  CFWD_ENV=(
+    FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0
+    FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=1
+    FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON="$TAW_PASS_JSON"
+    FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0
+    FR13_CFWD_LOGIT_DIRECT_PRODUCTION=1
+    FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON="$CFWD_PASS_JSON"
+    FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256="$CFWD_PASS_SHA256"
+  )
+fi
 
 if env \
     OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
@@ -376,7 +576,6 @@ if env \
     FR13_CFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${ARM}_cfwd.json" \
     FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=0 \
     FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0 \
-    FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0 FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0 \
     FR13_FIXED32_CONV_SOURCE_BATCH=0 \
     FR13_TREE_CONV_FUSED=1 \
     FR13_FA2_QROW16_LIVE_PAGED_AB=0 FR13_FA2_QROW16_PRODUCTION=0 \
@@ -392,9 +591,7 @@ if env \
     FR13_FA2_QROW32_B1_LIVE_PASS_JSON="$QROW32_B1_PASS" \
     FR13_FA2_QROW32_B1_LIVE_PASS_SHA256="$QROW32_B1_PASS_SHA256" \
     FR13_FA2_QROW32_B1_EXACT4_TASK_IDS=astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398 \
-    FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256="$SUBSET_SHA256" \
-    FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
-    FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
+    FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256="$EXACT4_SUBSET_SHA256" \
     FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 FR13_DFWD_UNIFIED_BM8_PRODUCTION=0 \
     FR13_DRAFT_HEAD_PAD_ROWS=0 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0 \
     FR13_DRAFT_HEAD_M32_LIVE_AB=0 FR13_DRAFT_HEAD_M32_PRODUCTION=0 \
@@ -406,6 +603,7 @@ if env \
     FR13_FIXED32_GDN_PATH_BV_CANDIDATE= \
     FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
     FR13_FIXED32_ATTRIBUTION_ONLY=0 \
+    "${CFWD_ENV[@]}" \
     "${STACK_ENV[@]}" \
     FORKED_FA2_SO="$QROW32_B1_FA2_SO" RUNROOT="$RUNROOT_ABS" \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh \
@@ -422,16 +620,21 @@ printf 'serve_rc=%s ended=%s\n' "$serve_rc" "$(date -u +%FT%TZ)" \
 CONTAINER_ENV="$ARMDIR/container_env.txt"
 for expected in \
   'FR13_FIXED32_MODE=hydra27_fixed32' \
+  'FR13_FIXED32_B1_DIAGNOSTIC=0' \
   'FR13_DRAFT_VOCAB_ROOT=1' \
   'FR13_DRAFT_VOCAB_K=65536' \
   'MAX_NUM_SEQS=1' \
   'SWE_CONCURRENCY=1' \
   'ENFORCE_EAGER=0' \
   'CUDAGRAPH_MODE=FULL_AND_PIECEWISE' \
+  'FR13_FA2_QROW16_LIVE_PAGED_AB=0' \
+  'FR13_FA2_QROW16_PRODUCTION=0' \
   'FR13_FA2_QROW32_B1_LIVE_AB_ARM=' \
   'FR13_FA2_QROW32_B1_PRODUCTION_ARM=split2' \
   'FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0' \
-  'FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0' \
+  "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=$CFWD_PRODUCTION" \
+  'FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0' \
+  "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=$CFWD_PRODUCTION" \
   "FR13_FA2_QROW32_B1_SO_SHA256=$CANDIDATE_SHA256" \
   "FR13_FA2_QROW32_B1_SO_SIZE=$CANDIDATE_BYTES" \
   "FR13_FA2_QROW32_B1_FA2_HEAD=$FA2_HEAD" \
@@ -479,18 +682,24 @@ else
 fi
 
 MEASURE="$ARMDIR/deploy_speed_fullwall.json"
-"$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
-  --arm "$ARM" \
-  --out-root "$ARMDIR/swe_out" \
-  --expected-tok-per-draft 31 \
-  --batch-size 1 \
-  --out "$MEASURE"
+if [[ "$PRODUCTION_SMOKE" == "0" ]]; then
+  "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
+    --arm "$ARM" \
+    --out-root "$ARMDIR/swe_out" \
+    --expected-tok-per-draft 31 \
+    --batch-size 1 \
+    --out "$MEASURE"
+fi
 
 SIDECAR="$ARMDIR/logs/fr13_fa2_qrow32_b1_production_pass.json"
 ENGAGEMENT="$ARMDIR/logs/fr13_fa2_qrow32_b1_production_engagement.json"
 HEALTH="$ARMDIR/health.json"
 TRAFFIC_AUDIT="$ARMDIR/fixed32_chat_traffic_audit.json"
-for artifact in "$MEASURE" "$SIDECAR" "$ENGAGEMENT" "$HEALTH" "$TRAFFIC_AUDIT"; do
+COMMON_ARTIFACTS=("$SIDECAR" "$ENGAGEMENT" "$HEALTH" "$TRAFFIC_AUDIT")
+if [[ "$PRODUCTION_SMOKE" == "0" ]]; then
+  COMMON_ARTIFACTS+=("$MEASURE")
+fi
+for artifact in "${COMMON_ARTIFACTS[@]}"; do
   [[ -f "$artifact" && ! -L "$artifact" ]] \
     || { echo "exact4 timing artifact is missing or unsafe: $artifact" >&2; exit 4; }
 done
@@ -551,7 +760,43 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
   [[ "$(grep -Fc '[FR13_SFWD_CONV_POSTPREP] production engaged layer=' "$DOCKER_LOG")" -eq 48 ]] \
     || { echo "SFWD conv/post-prep production did not engage exactly 48 layers" >&2; exit 4; }
 fi
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  TAW_PRODUCTION_PASS="$ARMDIR/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
+  TAW_PRODUCTION_ARM="$ARMDIR/logs/fr13_fixed32_taw_native_precompute_production.arm"
+  CFWD_PRODUCTION_PASS="$ARMDIR/logs/fr13_cfwd_logit_direct.production_pass.json"
+  CFWD_ENGAGEMENT="$ARMDIR/logs/fr13_cfwd_logit_direct.production_engagement.json"
+  for artifact in \
+      "$TAW_PRODUCTION_PASS" "$TAW_PRODUCTION_ARM" \
+      "$CFWD_PRODUCTION_PASS" "$CFWD_ENGAGEMENT"; do
+    [[ -f "$artifact" && ! -L "$artifact" ]] \
+      || { echo "TAW/CFWD production evidence is missing or unsafe: $artifact" >&2; exit 4; }
+  done
+  unset artifact
+  [[ "$(sha256sum "$TAW_PRODUCTION_PASS" | awk '{print $1}')" == "$TAW_PASS_SHA256" \
+     && "$(cat "$TAW_PRODUCTION_ARM")" == "1" \
+     && "$(sha256sum "$CFWD_PRODUCTION_PASS" | awk '{print $1}')" == "$CFWD_PASS_SHA256" ]] \
+    || { echo "TAW/CFWD copied production credential drifted" >&2; exit 4; }
+fi
 finalize_manifests
+
+if [[ "$PRODUCTION_SMOKE" == "1" ]]; then
+  SMOKE_PASS="$RUNROOT_ABS/composed_cfwd_production_smoke.json"
+  "$PYTHON_BIN" scripts/fr13_b1_composed_stack_gate.py issue-production-smoke \
+    --repo "$REPO" \
+    --source-commit "$SOURCE_COMMIT" \
+    --arm "$ARMDIR" \
+    --runtime-launch "$RUNROOT_ABS/runtime_manifest.at_launch.json" \
+    --runtime-end "$RUNROOT_ABS/runtime_manifest.at_end.json" \
+    --external-launch "$RUNROOT_ABS/external_manifest.at_launch.json" \
+    --external-end "$RUNROOT_ABS/external_manifest.at_end.json" \
+    --output "$SMOKE_PASS" \
+    "${CFWD_COMPONENT_ARGS[@]}"
+  SMOKE_PASS_SHA256=$(sha256sum "$SMOKE_PASS" | awk '{print $1}')
+  printf 'production_smoke=%s\nproduction_smoke_sha256=%s\nended=%s\n' \
+    "$SMOKE_PASS" "$SMOKE_PASS_SHA256" "$(date -u +%FT%TZ)" \
+    >> "$RUNROOT_ABS/launcher_meta.txt"
+  exit 0
+fi
 
 TIMING_REDUCER=scripts/fr13_qrow32_split2_timing.py
 if [[ "$COMPOSED_STACK" == "1" ]]; then
@@ -596,6 +841,18 @@ if [[ "$COMPOSED_STACK" == "1" ]]; then
     --dfwd-credential-sha256 "$DFWD_TOP3_CREDENTIAL_SHA256"
     --target-sfwd-combined-summary "$TARGET_SFWD_COMBINED_SUMMARY"
     --target-sfwd-combined-summary-sha256 "$TARGET_SFWD_COMBINED_SUMMARY_SHA256"
+  )
+fi
+if [[ "$CFWD_PRODUCTION" == "1" ]]; then
+  REDUCER_ARGS+=(
+    --cfwd-production
+    --taw-production-pass "$TAW_PRODUCTION_PASS"
+    --taw-production-pass-sha256 "$TAW_PASS_SHA256"
+    --cfwd-production-pass "$CFWD_PRODUCTION_PASS"
+    --cfwd-production-pass-sha256 "$CFWD_PASS_SHA256"
+    --cfwd-engagement "$CFWD_ENGAGEMENT"
+    --cfwd-smoke-credential "$COMPOSED_CFWD_SMOKE_PASS"
+    --cfwd-smoke-credential-sha256 "$COMPOSED_CFWD_SMOKE_PASS_SHA256"
   )
 fi
 "$PYTHON_BIN" "$TIMING_REDUCER" "${REDUCER_ARGS[@]}"

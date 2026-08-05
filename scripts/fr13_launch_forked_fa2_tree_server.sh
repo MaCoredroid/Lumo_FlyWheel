@@ -3401,6 +3401,23 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
       exit 2
       ;;
   esac
+  _fr13_sfwd_cfwd_composed=0
+  if [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
+        && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+        && "$_fr13_sfwd_qrow16_production" == "0" \
+        && "$_fr13_sfwd_qrow32_production" == "1" \
+        && "${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION:-0}" == "1" \
+        && "${FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH:-}" == "1" \
+        && "${FR13_DFWD_K64_TOP3:-0}" == "1" \
+        && "${FR13_DFWD_K64_TOP3_SHA256:-}" == "c0ed75cafdd926eceafcf28671869d54f37addb51bfef5a37c0b07c34f5420ff" \
+        && "${FR13_FIXED32_CUTLASS_WAVE:-stock}" == "identity_wide256_fullgrid_b1" \
+        && "${FR13_FIXED32_CUTLASS_WAVE_PRODUCTION:-0}" == "1" \
+        && "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" == "0" \
+        && "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" == "1" \
+        && "${FR13_CFWD_LOGIT_DIRECT_BYTE_AB:-0}" == "0" \
+        && "${FR13_CFWD_LOGIT_DIRECT_PRODUCTION:-0}" == "1" ]]; then
+    _fr13_sfwd_cfwd_composed=1
+  fi
   if [[ ( "${FR13_FIXED32_MODE:-}" != "tail6_fixed32" \
           && "${FR13_FIXED32_MODE:-}" != "hydra27_fixed32" ) \
         || "$MAX_NUM_SEQS" != "1" \
@@ -3429,7 +3446,8 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         || "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" != "0" \
         || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" != "0" \
         || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE:-0}" != "0" \
-        || "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
+        || ( "${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}" != "0" \
+             && "$_fr13_sfwd_cfwd_composed" != "1" ) \
         || "${FR13_DFWD_UNIFIED_BM8_LIVE_AB:-0}" != "0" \
         || "${FR13_DFWD_UNIFIED_BM8_PRODUCTION:-0}" != "0" ]]; then
     echo "SFWD conv/post-prep production inherited an incompatible diagnostic or production arm" >&2
@@ -3477,6 +3495,7 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
   FR13_FIXED32_SFWD_STATE_FUSION_REAL_EVENT_PATH=
   unset _fr13_sfwd_qrow16_production _fr13_sfwd_qrow32_production
   unset _fr13_sfwd_cutlass_production
+  unset _fr13_sfwd_cfwd_composed
   rm -f \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep_byte_ab.enabled" \
     "$LOG_DIR/fr13_fixed32_sfwd_conv_postprep.byte_ab.jsonl" \
@@ -4122,6 +4141,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   "${FR13_FIXED32_DOCKER_ARGS[@]}" \
   "${FR13_ENV_FORWARD_ARGS[@]}" \
   -e ENFORCE_EAGER="${ENFORCE_EAGER:-0}" \
+  -e CUDAGRAPH_MODE="$CUDAGRAPH_MODE" \
+  -e MAX_NUM_SEQS="$MAX_NUM_SEQS" \
+  -e SWE_CONCURRENCY="${SWE_CONCURRENCY:-}" \
   -e FR13_FIXED32_MIDDLEWARE_FLAGS="$FR13_FIXED32_MIDDLEWARE_FLAGS" \
   -e PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF" \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \

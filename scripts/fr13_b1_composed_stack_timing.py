@@ -13,9 +13,10 @@ from pathlib import Path
 from typing import Any
 
 import fr13_qrow32_split2_timing as qrow_timing
+import fr13_b1_composed_stack_gate as composed_gate
 
 
-SCHEMA = "fr13.fixed32.b1_composed_stack.exact4_timing.v1"
+SCHEMA = "fr13.fixed32.b1_composed_stack.exact4_timing.v2"
 TARGET_SELECTOR = "identity_wide256_fullgrid_b1"
 TARGET_SHA256 = "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da"
 DFWD_MARKERS = (
@@ -63,6 +64,7 @@ def _expect_sha(raw: bytes, expected: str, label: str) -> str:
 
 
 def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
+    cfwd_production = bool(getattr(args, "cfwd_production", False))
     base = qrow_timing.reduce_timing(
         subset_path=args.subset,
         measure_path=args.measure,
@@ -128,6 +130,67 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
             "target/SFWD combined summary",
         ),
     }
+    cfwd_evidence: dict[str, Any] = {}
+    if cfwd_production:
+        taw_raw = _regular(args.taw_production_pass)
+        cfwd_pass, cfwd_pass_raw = _load(args.cfwd_production_pass)
+        cfwd_engagement, cfwd_engagement_raw = _load(args.cfwd_engagement)
+        smoke, smoke_raw = _load(args.cfwd_smoke_credential)
+        taw_sha = _expect_sha(
+            taw_raw,
+            args.taw_production_pass_sha256,
+            "TAW production PASS",
+        )
+        cfwd_sha = _expect_sha(
+            cfwd_pass_raw,
+            args.cfwd_production_pass_sha256,
+            "CFWD production credential",
+        )
+        smoke_sha = _expect_sha(
+            smoke_raw,
+            args.cfwd_smoke_credential_sha256,
+            "composed CFWD production smoke",
+        )
+        component_hashes = smoke.get("component_credential_sha256s")
+        if not isinstance(component_hashes, dict):
+            raise ValueError("composed CFWD production smoke lacks component hashes")
+        try:
+            composed_gate._validate_production_smoke_payload(
+                smoke,
+                source_commit=args.source_commit,
+                component_hashes=component_hashes,
+            )
+            composed_gate.cfwd_gate._validate_credential(
+                cfwd_pass,
+                expected_source_commit=args.source_commit,
+                expected_subset_sha256=composed_gate.cfwd_gate.GATE_SUBSET_SHA256,
+            )
+            composed_gate._validate_cfwd_engagement(
+                cfwd_engagement,
+                source_commit=args.source_commit,
+                credential_sha256=cfwd_sha,
+            )
+        except (composed_gate.GateError, composed_gate.cfwd_gate.GateError) as error:
+            raise ValueError(str(error)) from error
+        current_components = {
+            "qrow32_composed": _sha(qrow_composed_raw),
+            "gqa3": _sha(gqa_raw),
+            "dfwd_top3": _sha(dfwd_credential_raw),
+            "sfwd_pass": _sha(sfwd_pass_raw),
+            "sfwd_manifest": _sha(sfwd_manifest_raw),
+            "target_sfwd_summary": _sha(eager_summary_raw),
+            "taw_production": taw_sha,
+            "cfwd_credential": cfwd_sha,
+        }
+        if any(component_hashes.get(key) != value for key, value in current_components.items()):
+            raise ValueError("exact4 credentials do not match production smoke")
+        cfwd_evidence = {
+            "taw_production_pass_sha256": taw_sha,
+            "cfwd_production_pass_sha256": cfwd_sha,
+            "cfwd_production_engagement_sha256": _sha(cfwd_engagement_raw),
+            "cfwd_production_smoke_sha256": smoke_sha,
+            "cfwd_served_return": composed_gate.CFWD_SERVED_RETURN,
+        }
     if (
         target_binary.get("schema") != "fr13.fixed32.cutlass_streamk_binary.v2"
         or target_binary.get("selector") != TARGET_SELECTOR
@@ -162,6 +225,20 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
         "FR13_DFWD_GPU_TIMER=1",
         "FR13_CFWD_GPU_TIMER=1",
     )
+    if cfwd_production:
+        required_env += (
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0",
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=1",
+            "FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0",
+            "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=1",
+        )
+    else:
+        required_env += (
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0",
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0",
+            "FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0",
+            "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0",
+        )
     missing = [line for line in required_env if container_lines.count(line) != 1]
     if missing:
         raise ValueError(f"composed container environment drifted: {missing!r}")
@@ -193,13 +270,19 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
     return {
         **base,
         "schema": SCHEMA,
-        "run_classification": "real_swe_verified_exact4_b1_composed_kernel_stack",
+        "run_classification": (
+            "real_swe_verified_exact4_b1_composed_cfwd_kernel_stack"
+            if cfwd_production
+            else "real_swe_verified_exact4_b1_composed_kernel_stack"
+        ),
         "composed_stack": {
             "qrow32_split2": True,
             "gdn_gqa_group3": True,
             "dfwd_k64_top3": True,
             "target_gemm_selector": TARGET_SELECTOR,
             "sfwd_conv_postprep": True,
+            "taw_native_precompute": cfwd_production,
+            "cfwd_logit_direct": cfwd_production,
         },
         "phase_breakdown_ms_per_event": {
             "sfwd_verify_gpu": sfwd_ms,
@@ -227,6 +310,7 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
         },
         "production_evidence": {
             **evidence,
+            **cfwd_evidence,
             "qrow_timing_core_sha256": _sha(
                 (
                     json.dumps(
@@ -249,6 +333,7 @@ def reduce_composed(args: argparse.Namespace) -> dict[str, Any]:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
+    result.add_argument("--cfwd-production", action="store_true")
     for name in (
         "subset",
         "measure",
@@ -287,6 +372,19 @@ def parser() -> argparse.ArgumentParser:
         "target-sfwd-combined-summary-sha256",
     ):
         result.add_argument(f"--{name}", required=True)
+    for name in (
+        "taw-production-pass",
+        "cfwd-production-pass",
+        "cfwd-engagement",
+        "cfwd-smoke-credential",
+    ):
+        result.add_argument(f"--{name}", type=Path)
+    for name in (
+        "taw-production-pass-sha256",
+        "cfwd-production-pass-sha256",
+        "cfwd-smoke-credential-sha256",
+    ):
+        result.add_argument(f"--{name}")
     result.add_argument("--floor-ms", type=float, required=True)
     result.add_argument("--cap-ms", type=float, required=True)
     result.add_argument("--out", type=Path, required=True)
@@ -295,6 +393,17 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = parser().parse_args()
+    cfwd_values = (
+        args.taw_production_pass,
+        args.taw_production_pass_sha256,
+        args.cfwd_production_pass,
+        args.cfwd_production_pass_sha256,
+        args.cfwd_engagement,
+        args.cfwd_smoke_credential,
+        args.cfwd_smoke_credential_sha256,
+    )
+    if args.cfwd_production != all(value is not None for value in cfwd_values):
+        raise SystemExit("CFWD production evidence must be supplied all-or-none")
     output = reduce_composed(args)
     args.out.write_text(
         json.dumps(output, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
