@@ -135,12 +135,12 @@ def test_candidates_keep_scale_k_tile_cluster_and_numeric_math() -> None:
     patched, _ = module.patch_text(_source_fixture(module))
 
     assert patched.count("cutlass::gemm::StreamKScheduler") == 2
-    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 22
+    assert patched.count("using ClusterShape = Shape<_1, _1, _1>;") == 23
     assert (
         module.CONFIG_REPLACEMENT.count(
             "KernelTmaWarpSpecializedBlockwisePingpongSm120"
         )
-        == 9
+        == 10
     )
     assert "OutType, 128, 1, 128, TileShape, ClusterShape" in patched
     assert "using TileShape = Shape<_128, _32, _128>;" in patched
@@ -1133,6 +1133,10 @@ def test_b4_hybrid_n5120_routes_only_exact_projections() -> None:
         "sm120_blockwise_fp8_config_b4_m128_n5120_single_identity_stage2"
         in runner
     )
+    for problem_tiles, grid_ctas in ((544, 34), (256, 32), (224, 32)):
+        assert f"OutType, {problem_tiles}, {grid_ctas}>::Gemm" in runner
+    for n in (34816, 16384, 14336):
+        assert f"N == {n} && K == 5120" in runner
     assert "return run_identity_twom_b4(destination);" in runner
     assert "run_stock" not in runner
 
@@ -1214,6 +1218,75 @@ def test_b4_hybrid_n5120_uses_exact_x_axis_single_tile_scheduler() -> None:
     generic = patched[generic_start:generic_end]
     assert "fr13_fixed32_m128_static_scheduler" in generic
     assert "fr13_fixed32_b4_n5120_single_tile_scheduler" not in generic
+
+
+def test_b4_hybrid_uses_compile_time_two_m_projection_schedulers() -> None:
+    module = _module()
+    patched, _ = module.patch_text(_source_fixture(module))
+
+    scheduler_start = patched.index(
+        "class Fr13B4TwoMExactStaticTileScheduler100"
+    )
+    scheduler_end = patched.index(
+        "// The two admitted B4 N=5120 projections", scheduler_start
+    )
+    scheduler = patched[scheduler_start:scheduler_end]
+    assert "public Fr13DivisorBalancedStaticTileScheduler100" in scheduler
+    assert "static_assert(ProblemTiles % GridCtas == 0);" in scheduler
+    assert "static constexpr uint32_t kProblemNTiles = ProblemTiles / 2;" in scheduler
+    assert "static constexpr uint32_t kNGridStride = GridCtas / 2;" in scheduler
+    assert "uint32_t current_n_idx_ = 0;" in scheduler
+    assert "current_n_idx_ = blockIdx.x >> 1;" in scheduler
+    assert "current_n_idx_ >= kProblemNTiles" in scheduler
+    assert "kNGridStride * advance_count" in scheduler
+    assert "static_cast<int32_t>(blockIdx.x & 1)" in scheduler
+    assert "return dim3(GridCtas, 1, 1);" in scheduler
+    assert "gridDim" not in scheduler
+    assert "blocks_per_problem_" not in scheduler
+    assert "scheduler_params" not in scheduler
+    assert ": Base(params)" in scheduler
+    assert ": Base(response, params, block_id_in_cluster)" in scheduler
+
+    selector = (
+        "fr13_fixed32_b4_twom_exact_scheduler<ProblemTiles, GridCtas>"
+    )
+    assert selector in patched
+    assert (
+        "Fr13B4TwoMExactStaticTileScheduler100<\n"
+        "      ProblemTiles, GridCtas>"
+    ) in patched
+
+    config_start = patched.index(
+        "struct sm120_blockwise_fp8_config_b4_stockshape_identity_twom_exact"
+    )
+    config_end = patched.index(
+        "// The five real MTP projections", config_start
+    )
+    config = patched[config_start:config_end]
+    assert "KernelTmaWarpSpecializedBlockwisePingpongSm120" in config
+    assert "using TileShape = Shape<_64, _128, _128>;" in config
+    assert "cutlass::gemm::collective::StageCount<2>" in config
+    assert selector in config
+
+    exact_schedules = {
+        34816: (544, 34, 16),
+        16384: (256, 32, 8),
+        14336: (224, 32, 7),
+    }
+    for n, (tiles, ctas, tiles_per_cta) in exact_schedules.items():
+        assert tiles == 2 * (n // 128)
+        assert tiles % ctas == 0
+        assert tiles // ctas == tiles_per_cta
+        assignments = [
+            cta + iteration * ctas
+            for cta in range(ctas)
+            for iteration in range(tiles_per_cta)
+        ]
+        assert sorted(assignments) == list(range(tiles))
+        coordinates = [(linear & 1, linear >> 1) for linear in assignments]
+        expected = [(m, n_tile) for m in range(2) for n_tile in range(n // 128)]
+        assert sorted(coordinates) == sorted(expected)
+        assert len(coordinates) == len(set(coordinates))
 
 
 def test_wide256_is_b1_only_and_large_rows_fail_to_stock() -> None:
