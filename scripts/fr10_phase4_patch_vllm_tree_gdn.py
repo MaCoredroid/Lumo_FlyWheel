@@ -24675,6 +24675,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr13_dh_m4_u8_prod_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION", "0"
             )
+            _fr13_dh_pair8_raw = os.environ.get(
+                "FR13_DRAFT_HEAD_B14_WARP4_PAIR8", "0"
+            )
             _fr13_dh_fp8_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_FP8", "0"
             )
@@ -24730,6 +24733,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION must be exactly 0 or 1"
                 )
+            if _fr13_dh_pair8_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR13_DRAFT_HEAD_B14_WARP4_PAIR8 must be exactly 0 or 1"
+                )
             if _fr13_dh_fp8_raw not in ("0", "1"):
                 raise RuntimeError(
                     "FR13_DRAFT_HEAD_FP8 must be exactly 0 or 1"
@@ -24768,6 +24775,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13 draft-head M4 U8 quality requires LIVE_AB=1"
                 )
+            _fr13_dh_pair8 = _fr13_dh_pair8_raw == "1"
             _fr13_dh_fp8 = _fr13_dh_fp8_raw == "1"
             _fr13_dh_fp8_static_io = (
                 _fr13_dh_fp8_static_io_raw == "1"
@@ -24807,6 +24815,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_u8_live,
                     _fr13_dh_u8_prod,
                     _fr13_dh_m4_u8_active,
+                    _fr13_dh_pair8,
                     _fr13_dh_fp8,
                 )
             )
@@ -24853,6 +24862,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr13_dh_m32_prod
                 or _fr13_dh_u8_active
                 or _fr13_dh_m4_u8_active
+                or _fr13_dh_pair8
                 or _fr13_dh_fp8
             ) and (
                 not _fr13_is_fixed32
@@ -24863,6 +24873,20 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 raise RuntimeError(
                     "FR13 draft-head padding requires exact fixed32, root "
                     "subset, single-logits, and FR13_DRAFT_VOCAB_K=65536"
+                )
+            if _fr13_dh_pair8 and (
+                _FR13_FIXED32_MODE != "hydra27_fixed32"
+                or int(batch_size) not in (1, 4)
+                or not _fr10_is_wide
+                or tuple(
+                    int(_fr10_wide_width.get(_fr13_pair8_depth, 0))
+                    for _fr13_pair8_depth in range(5)
+                )
+                != (3, 3, 3, 3, 3)
+            ):
+                raise RuntimeError(
+                    "FR13 packed pair8 head requires exact Hydra27 physical32 "
+                    "K64/root1 B1 or B4 geometry"
                 )
             if _fr13_dh_m4_u8_active and int(batch_size) != 4:
                 raise RuntimeError(
@@ -24899,6 +24923,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             self._fr13_dh_m4_u8_production_active = _fr13_dh_m4_u8_prod
             self._fr13_dh_m4_u8_active = _fr13_dh_m4_u8_active
             self._fr13_dh_m4_u8_fallback_calls = 0
+            self._fr13_dh_pair8_active = _fr13_dh_pair8
+            self._fr13_dh_pair8_selected_root_calls = 0
+            self._fr13_dh_pair8_selected_capture_calls = 0
+            self._fr13_dh_pair8_fallback_calls = 0
             self._fr13_dh_fp8_active = _fr13_dh_fp8
             self._fr13_dh_fp8_selected_root_calls = 0
             self._fr13_dh_fp8_selected_capture_calls = 0
@@ -25148,6 +25176,156 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             "workspace_reused_across_root_and_loop=1",
                             flush=True,
                         )
+                if (
+                    _fr13_dh_pair8
+                    and not getattr(self, "_fr13_dh_pair8_ready", False)
+                ):
+                    import hashlib as _fr13_dh_pair8_hashlib
+                    import json as _fr13_dh_pair8_json
+                    import pathlib as _fr13_dh_pair8_pathlib
+
+                    _fr13_dh_pair8_sh = self._fr13_dvk_shim
+                    _fr13_dh_pair8_w = _fr13_dh_pair8_sh.weight
+                    _fr13_dh_pair8_batch = int(batch_size)
+                    if (
+                        type(_fr13_dh_pair8_sh.quant_method).__name__
+                        != "UnquantizedEmbeddingMethod"
+                        or tuple(_fr13_dh_pair8_w.shape) != (65536, 5120)
+                        or tuple(_fr13_dh_pair8_w.stride()) != (5120, 1)
+                        or _fr13_dh_pair8_w.dtype != torch.bfloat16
+                        or not _fr13_dh_pair8_w.is_contiguous()
+                        or tuple(torch.cuda.get_device_capability()) != (12, 1)
+                        or _fr13_dh_pair8_batch not in (1, 4)
+                    ):
+                        raise RuntimeError(
+                            "FR13 packed pair8 head requires SM121, exact B1/B4, "
+                            "and contiguous BF16 weight[65536,5120]"
+                        )
+                    _fr13_dh_pair8_root = _fr13_dh_pair8_pathlib.Path(
+                        "/workspace"
+                    )
+                    _fr13_dh_pair8_paths = {
+                        "source": _fr13_dh_pair8_root / (
+                            "csrc/fr13_bf16_gemvx_k64_b14_warp4_pair8.cu"
+                        ),
+                        "binary": _fr13_dh_pair8_root / (
+                            "results/fr13_fixed32_dfwd_k64_b14_"
+                            "warp4_pair8_sm121a_20260805/"
+                            "fr13_bf16_k64_b14_warp4_pair8.abi3.so"
+                        ),
+                        "build": _fr13_dh_pair8_root / (
+                            "results/fr13_fixed32_dfwd_k64_b14_"
+                            "warp4_pair8_sm121a_20260805/build_attestation.json"
+                        ),
+                        "manifest": _fr13_dh_pair8_root / (
+                            "results/fr13_fixed32_dfwd_k64_b14_"
+                            "warp4_pair8_sm121a_20260805/manifest.json"
+                        ),
+                    }
+                    _fr13_dh_pair8_expected = {
+                        "source": (
+                            "01fd0ec526afcfa3e3a4a42ec95b95d"
+                            "fa04d566fa8431eee84d72d7eada9ed3f"
+                        ),
+                        "binary": (
+                            "dcd9301f447d1ef4a81240027af3a008"
+                            "558dfa080b8660ac9dba7b2c5800ec7f"
+                        ),
+                        "build": (
+                            "3ca9dda783db5fb8a0cabd05ef9671f6"
+                            "a6d2063c8cc979d4c4694d9530dc848f"
+                        ),
+                        "manifest": (
+                            "577e780472bbc0af53217f5789bb38145"
+                            "bee22b7e9fc962ecc1a1d58f46b4e3e"
+                        ),
+                    }
+                    for (
+                        _fr13_dh_pair8_key,
+                        _fr13_dh_pair8_path,
+                    ) in _fr13_dh_pair8_paths.items():
+                        if (
+                            not _fr13_dh_pair8_path.is_file()
+                            or _fr13_dh_pair8_path.is_symlink()
+                            or _fr13_dh_pair8_hashlib.sha256(
+                                _fr13_dh_pair8_path.read_bytes()
+                            ).hexdigest()
+                            != _fr13_dh_pair8_expected[_fr13_dh_pair8_key]
+                        ):
+                            raise RuntimeError(
+                                "FR13 packed pair8 input identity drifted: "
+                                + _fr13_dh_pair8_key
+                            )
+                    if _fr13_dh_pair8_paths["binary"].stat().st_size != 161056:
+                        raise RuntimeError(
+                            "FR13 packed pair8 candidate binary size drifted"
+                        )
+                    _fr13_dh_pair8_build = _fr13_dh_pair8_json.loads(
+                        _fr13_dh_pair8_paths["build"].read_text(encoding="ascii")
+                    )
+                    _fr13_dh_pair8_contract = _fr13_dh_pair8_build.get(
+                        "kernel_contract", {}
+                    )
+                    if (
+                        _fr13_dh_pair8_build.get("schema")
+                        != "fr13.fixed32.dfwd_k64_b14_warp4_pair8_"
+                        "sm121a_build.v1"
+                        or _fr13_dh_pair8_build.get("status")
+                        != "BUILT_UNQUALIFIED"
+                        or _fr13_dh_pair8_build.get("source", {}).get("sha256")
+                        != _fr13_dh_pair8_expected["source"]
+                        or _fr13_dh_pair8_build.get("binary", {}).get("sha256")
+                        != _fr13_dh_pair8_expected["binary"]
+                        or _fr13_dh_pair8_build.get("binary", {}).get("bytes")
+                        != 161056
+                        or _fr13_dh_pair8_contract.get("batch_scopes") != [1, 4]
+                        or _fr13_dh_pair8_contract.get("proposal_only") is not True
+                        or _fr13_dh_pair8_contract.get(
+                            "target_authority_changed"
+                        ) is not False
+                    ):
+                        raise RuntimeError(
+                            "FR13 packed pair8 build attestation contract drifted"
+                        )
+                    _fr13_dh_pair8_source_commit = os.environ.get(
+                        "FR13_DRAFT_HEAD_B14_WARP4_PAIR8_SOURCE_COMMIT", ""
+                    )
+                    if (
+                        len(_fr13_dh_pair8_source_commit) != 40
+                        or any(
+                            _fr13_dh_pair8_char not in "0123456789abcdef"
+                            for _fr13_dh_pair8_char in _fr13_dh_pair8_source_commit
+                        )
+                    ):
+                        raise RuntimeError(
+                            "FR13 packed pair8 source commit is not canonical"
+                        )
+                    torch.ops.load_library(
+                        str(_fr13_dh_pair8_paths["binary"])
+                    )
+                    _fr13_dh_pair8_op_name = (
+                        "gemvx_m1_warp4_pair8_out"
+                        if _fr13_dh_pair8_batch == 1
+                        else "gemvx_m4_warp4_pair8_out"
+                    )
+                    self._fr13_dh_pair8_op = getattr(
+                        torch.ops.fr13_bf16_k64_head,
+                        _fr13_dh_pair8_op_name,
+                    )
+                    self._fr13_dh_pair8_output = torch.empty(
+                        (_fr13_dh_pair8_batch, 65536),
+                        dtype=torch.bfloat16,
+                        device=_fr13_dh_pair8_w.device,
+                    )
+                    self._fr13_dh_pair8_ready = True
+                    print(
+                        "[FR13_DRAFT_HEAD_B14_WARP4_PAIR8] ready "
+                        f"batch={_fr13_dh_pair8_batch} "
+                        f"operation={_fr13_dh_pair8_op_name} "
+                        "candidate_served=1 proposal_only=1 "
+                        "target_authority_unchanged=1 preallocated_output=1",
+                        flush=True,
+                    )
                 if (
                     _fr13_dh_u8_active
                     and not getattr(self, "_fr13_dh_u8_ready", False)
@@ -27021,6 +27199,54 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 return _fr13_dh_fp8_out
 
+            def _fr13_dh_pair8_logits(_sh, _h):
+                _fr13_dh_pair8_batch = int(batch_size)
+                if (
+                    not getattr(self, "_fr13_dh_pair8_ready", False)
+                    or _fr13_dh_pair8_batch not in (1, 4)
+                    or tuple(_h.shape) != (_fr13_dh_pair8_batch, 5120)
+                    or tuple(_h.stride()) != (5120, 1)
+                    or _h.dtype != torch.bfloat16
+                    or not _h.is_contiguous()
+                    or _h.device != _sh.weight.device
+                    or tuple(_sh.weight.shape) != (65536, 5120)
+                    or tuple(_sh.weight.stride()) != (5120, 1)
+                    or _sh.weight.dtype != torch.bfloat16
+                    or not _sh.weight.is_contiguous()
+                    or tuple(self._fr13_dh_pair8_output.shape)
+                    != (_fr13_dh_pair8_batch, 65536)
+                    or tuple(self._fr13_dh_pair8_output.stride()) != (65536, 1)
+                    or self._fr13_dh_pair8_output.dtype != torch.bfloat16
+                    or self._fr13_dh_pair8_output.device != _h.device
+                ):
+                    raise RuntimeError(
+                        "FR13 packed pair8 head left exact B1/B4 BF16 geometry"
+                    )
+                _fr13_dh_pair8_capturing = (
+                    torch.cuda.is_current_stream_capturing()
+                )
+                if _fr13_dh_pair8_capturing:
+                    self._fr13_dh_pair8_selected_capture_calls += 1
+                    if self._fr13_dh_pair8_selected_capture_calls > 4:
+                        raise RuntimeError(
+                            "FR13 packed pair8 captured more than four loop calls"
+                        )
+                else:
+                    self._fr13_dh_pair8_selected_root_calls += 1
+                self._fr13_dh_pair8_op(
+                    self._fr13_dh_pair8_output, _h, _sh.weight
+                )
+                if not getattr(self, "_fr13_dh_pair8_engaged", False):
+                    self._fr13_dh_pair8_engaged = True
+                    print(
+                        "[FR13_DRAFT_HEAD_B14_WARP4_PAIR8] engaged "
+                        f"batch={_fr13_dh_pair8_batch} candidate_served=1 "
+                        "incumbent_head_calls=0 proposal_only=1 "
+                        "target_authority_unchanged=1",
+                        flush=True,
+                    )
+                return self._fr13_dh_pair8_output
+
             def _fr13_dvk_logits(_h):
                 # Pair the logits with the only map valid for those rows.
                 # A full-head fallback always returns map=None.
@@ -27049,8 +27275,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_dh_m4_u8_on = getattr(
                         self, "_fr13_dh_m4_u8_active", False
                     )
+                    _fr13_dh_pair8_on = getattr(
+                        self, "_fr13_dh_pair8_active", False
+                    )
                     _fr13_dh_capturing = False
-                    if _fr13_dh_m4_u8_on:
+                    if _fr13_dh_pair8_on:
+                        _logits = _fr13_dh_pair8_logits(_sh, _h)
+                    elif _fr13_dh_m4_u8_on:
                         _logits = _fr13_dh_m4_u8_logits(_sh, _h)
                     elif _fr13_dh_u8_on:
                         _logits = _fr13_dh_u8_logits(_sh, _h)
@@ -27161,6 +27392,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         self, "_fr13_dvk_map_t", None
                     )
                 except Exception as _e:
+                    if getattr(self, "_fr13_dh_pair8_active", False):
+                        self._fr13_dh_pair8_fallback_calls += 1
+                        raise RuntimeError(
+                            "FR13 packed pair8 head failed its strict runtime "
+                            "contract; incumbent fallback is forbidden"
+                        ) from _e
                     if getattr(self, "_fr13_dh_m4_u8_active", False):
                         self._fr13_dh_m4_u8_fallback_calls += 1
                         raise RuntimeError(
@@ -27878,6 +28115,21 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 _dg["graph"] = _fr13_dg_g
                 _fr13_dg_all[_fr13_dg_key] = _dg
+                if _fr13_dh_pair8:
+                    if (
+                        self._fr13_dh_pair8_selected_capture_calls != 4
+                        or self._fr13_dh_pair8_selected_root_calls < 1
+                        or self._fr13_dh_pair8_fallback_calls != 0
+                    ):
+                        raise RuntimeError(
+                            "FR13 packed pair8 graph selection count drifted"
+                        )
+                    print(
+                        "[FR13_DRAFT_HEAD_B14_WARP4_PAIR8] graph "
+                        "captured_calls=4 root_calls_at_least=1 "
+                        "fallback_calls=0",
+                        flush=True,
+                    )
                 if _fr13_dfwd_top3:
                     if (
                         self._fr13_dfwd_top3_capture_calls != 4
