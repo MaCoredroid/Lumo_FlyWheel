@@ -18,6 +18,12 @@ LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 GENERIC_RUNNER = REPO / "scripts" / "fr13_run_b1_kernel_live_gate.sh"
 LIVE_RUNNER = REPO / "scripts" / "fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh"
 MANIFEST = REPO / "scripts" / "fr13_runtime_manifest.py"
+READINESS = (
+    REPO
+    / "results"
+    / "fr13_fixed32_dfwd_k64_m1_r64_u8_shadow_ready_20260805"
+    / "qualification_manifest.json"
+)
 
 
 def _load(path: Path, name: str):
@@ -354,3 +360,44 @@ def test_runtime_source_compiles_with_default_off_bridge() -> None:
     assert namespace["_FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS"] == tuple(
         _gate().WORKER_ENV_KEYS
     )
+
+
+def test_readiness_manifest_binds_current_qualification_sources() -> None:
+    payload = json.loads(READINESS.read_text(encoding="ascii"))
+    assert payload["status"] == "SHADOW_READY_UNMEASURED"
+    assert payload["source_tip_commit"] == (
+        "674f574a0346b4f7b2bc96a30a4ad403841c41d4"
+    )
+    assert payload["execution"] == {
+        "gpu_run": False,
+        "docker_run": False,
+        "real_swe_verified_run": False,
+        "correctness_claim": False,
+        "performance_claim": False,
+        "timing_eligible": False,
+        "production_eligible": False,
+    }
+    assert payload["comparison_contract"][
+        "exhaustive_within_fixed_k64_root1_head"
+    ] is True
+    assert payload["comparison_contract"][
+        "exhaustive_full_model_vocabulary"
+    ] is False
+    tracked = payload["tracked_inputs"]
+    assert set(tracked) == {
+        "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+        "scripts/fr13_launch_forked_fa2_tree_server.sh",
+        "scripts/fr13_run_b1_kernel_live_gate.sh",
+        "scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh",
+        "scripts/fr13_dfwd_k64_m1_r64_u8_gate.py",
+        "scripts/fr13_runtime_manifest.py",
+        "tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py",
+        "tests/test_fr13_draft_head_m32_production.py",
+        "csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu",
+        "results/fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_20260805/"
+        "build_attestation.json",
+        "config/fr13_fixed32/subset_b1_diagnostic_one.json",
+        "scripts/fr13_dvk_subset_blocks.json",
+    }
+    for relative, expected in tracked.items():
+        assert hashlib.sha256((REPO / relative).read_bytes()).hexdigest() == expected

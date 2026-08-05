@@ -1,0 +1,78 @@
+{
+  "schema": "fr13.fixed32.dfwd_k64_m1_r64_u8_shadow_ready.v1",
+  "status": "SHADOW_READY_UNMEASURED",
+  "created_utc": "2026-08-05T15:11:46Z",
+  "branch": "codex/dfwd-u8-shadow-qualification-20260805",
+  "base_commit": "1f7485ade5ec6bfacf51dde7afa514531effcbcd",
+  "u8_wiring_commit": "67aa481eb9563daa035490185bcf649945b5ad6e",
+  "source_tip_commit": "674f574a0346b4f7b2bc96a30a4ad403841c41d4",
+  "execution": {
+    "gpu_run": false,
+    "docker_run": false,
+    "real_swe_verified_run": false,
+    "correctness_claim": false,
+    "performance_claim": false,
+    "timing_eligible": false,
+    "production_eligible": false
+  },
+  "prepared_real_task": {
+    "suite": "SWE-Verified",
+    "instance_id": "astropy__astropy-12907",
+    "concurrency": 1,
+    "batch_size": 1,
+    "topology": "hydra27_fixed32",
+    "physical_rows": 32,
+    "logical_drafts": 27,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "cudagraph_mode": "FULL_AND_PIECEWISE"
+  },
+  "comparison_contract": {
+    "scope": "all 65536 logits in the fixed K64/root1 draft head; not the full model vocabulary",
+    "exhaustive_within_fixed_k64_root1_head": true,
+    "exhaustive_full_model_vocabulary": false,
+    "depths": ["root", "mtp_depth_1", "mtp_depth_2", "mtp_depth_3", "mtp_depth_4"],
+    "comparison": "exact BF16 raw bits via int16 view",
+    "candidate_returned": false,
+    "incumbent_served_unchanged": true,
+    "required_comparisons_per_event": 5,
+    "required_mismatches": 0
+  },
+  "candidate": {
+    "operation": "fr13_bf16_k64_head::gemvx_m1_shuffle_r64_u8_out",
+    "device": "sm121",
+    "grid": [1024, 1, 1],
+    "block": [16, 64, 1],
+    "rows_per_cta": 64,
+    "unroll_steps": 8,
+    "shared_object_path": "/home/mark/fr13_dfwd_u8_linked_build_3bdd984c2/det-primary-bin/fr13_bf16_k64_m1_r64_u8.abi3.so",
+    "shared_object_bytes": 117904,
+    "shared_object_sha256": "8b27df4f3c6a5a0574261ee984159582a87615c3e6d83f2a267f4fa46a3e421e"
+  },
+  "stock_fa2": {
+    "path": "/home/mark/shared/lumoFlyWheel-fa2-suffix-only/output/fr13_fa2_suffix_fc855e59_build/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so",
+    "bytes": 299183936,
+    "sha256": "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
+  },
+  "tracked_inputs": {
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": "78c738976d4925861b75ee99621d66241b4add8966004228e38a56d561b3d5b1",
+    "scripts/fr13_launch_forked_fa2_tree_server.sh": "46a57041d15ff04618c124b83d4e805320273b22899ff4eb273c38d1ff6d2ccf",
+    "scripts/fr13_run_b1_kernel_live_gate.sh": "0d97be37a36ea9e3e015b2e2458221db361f2f0e424176359942b75e89c02b9b",
+    "scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh": "e31bd70355683947df38647b1192869e186db5c1b48caaaa6bd8459cd1871a52",
+    "scripts/fr13_dfwd_k64_m1_r64_u8_gate.py": "6a5ae0f5004534e1d9c24e865712b877aee16c9cbed3f4a7858c2694099281ae",
+    "scripts/fr13_runtime_manifest.py": "545077316241819314f93b67be48124ce4af89d43bc3d89728a577c3a87de3e8",
+    "tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py": "bb1762c3a231065d3eb5d4fe74634d13494fe8c4f1b41c81cbbff27b9ebda630",
+    "tests/test_fr13_draft_head_m32_production.py": "574c3be584a8968540464e67b4afba422ddbb49db0aaceb5d31246d88313fc9c",
+    "csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu": "af0044edd84ff58d353a816f6887894d05a62b221e0efa5af933c2c59676b01b",
+    "results/fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_20260805/build_attestation.json": "e7ec95d1fff3b665373ad7b3a14f7e3fad346cf77a5f2f992a90a689e5672c8f",
+    "config/fr13_fixed32/subset_b1_diagnostic_one.json": "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb",
+    "scripts/fr13_dvk_subset_blocks.json": "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
+  },
+  "verification": {
+    "u8_and_taw_tests": "9 passed",
+    "combined_u8_taw_m32_fp8_tests": "37 passed",
+    "shell_syntax": "PASS",
+    "python_compile": "PASS",
+    "diff_check": "PASS"
+  }
+}
