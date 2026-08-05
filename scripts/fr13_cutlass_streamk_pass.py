@@ -77,10 +77,10 @@ SOURCE_CONTRACTS = {
     },
     "identity_wide256_fullgrid_b1": {
         "patch_source_sha256": (
-            "b8efed262d869bc7939693a3ebb7e9a8c2500ccbdc379d39dd018cc837c71aff"
+            "ae9591a0c255c54bd8b5fed8576105013fce7f5f0834dbfb51ca1d455441f976"
         ),
         "patched_dispatch_sha256": (
-            "5964f7e7432c04f20d03e8696cc38a859e5471a6bf9ca8d101198ebe9f948fdc"
+            "569aea20321ba5461c4d3c9187aadf5390be363485f9aee538a738ef269ca6f0"
         ),
     },
 }
