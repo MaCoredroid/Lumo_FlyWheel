@@ -1,0 +1,16 @@
+python3 -m pytest -q \
+  tests/test_fr13_build_bf16_gemvx_k64_m1_shuffle_r64_u8.py \
+  tests/test_fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.py \
+  tests/test_fr13_fixed32_dfwd_k64_m1_r64_u8_linked_build_artifact.py
+9 passed
+
+python3 -m py_compile \
+  scripts/fr13_build_bf16_gemvx_k64_m1_shuffle_r64_u8.py
+PASS
+
+Two fresh pinned linked builds
+SO byte comparison: PASS
+sm_121a cubin byte comparison: PASS
+
+git diff --check
+PASS

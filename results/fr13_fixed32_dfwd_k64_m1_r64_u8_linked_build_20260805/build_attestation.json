@@ -1,0 +1,50 @@
+{
+  "binary": {
+    "bytes": 117904,
+    "mode": "0555",
+    "path": "/out/det-primary-bin/fr13_bf16_k64_m1_r64_u8.abi3.so",
+    "sha256": "8b27df4f3c6a5a0574261ee984159582a87615c3e6d83f2a267f4fa46a3e421e"
+  },
+  "byte_equality_claim": false,
+  "cuda_arch": "12.1a",
+  "cuda_release": "13.0",
+  "gpu_runtime_used": false,
+  "kernel_contract": {
+    "batch_scope": "B1_only",
+    "block": [
+      16,
+      64,
+      1
+    ],
+    "grid": [
+      1024,
+      1,
+      1
+    ],
+    "input": "BF16[1,5120] contiguous",
+    "lane_products": 320,
+    "output": "BF16[1,65536] contiguous",
+    "reduction_strides": [
+      8,
+      4,
+      2,
+      1
+    ],
+    "rows_per_cta": 64,
+    "single_accumulator": true,
+    "threads_per_cta": 1024,
+    "unroll_steps": 8,
+    "weight": "BF16[65536,5120] contiguous"
+  },
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "real_task_correctness": false,
+  "runtime_wired": false,
+  "schema": "fr13.fixed32.dfwd_k64_m1_r64_u8_sm121a_build.v1",
+  "source": {
+    "path": "csrc/fr13_bf16_gemvx_k64_m1_shuffle_r64_u8.cu",
+    "sha256": "af0044edd84ff58d353a816f6887894d05a62b221e0efa5af933c2c59676b01b"
+  },
+  "status": "BUILT_UNQUALIFIED",
+  "torch_version": "2.11.0+cu130"
+}
