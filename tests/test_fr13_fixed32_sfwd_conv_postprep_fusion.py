@@ -399,6 +399,15 @@ def test_contract_is_exact_physical32_k64_and_one_launch_per_layer() -> None:
         assert contract["physical_rows_per_request"] == 32
         assert contract["launches_per_layer"] == 1
         assert contract["launches_for_all_layers"] == 48
+        expected_gate_rows = 2 if batch == 1 else 4
+        expected_channel_programs = 80 if batch == 1 else 40
+        assert contract["gate_rows_per_program"] == expected_gate_rows
+        assert contract["gating_programs_per_request"] == (
+            32 // expected_gate_rows
+        )
+        assert contract["programs_per_request"] == (
+            expected_channel_programs + 32 // expected_gate_rows
+        )
         assert contract["cross_layer_fusion"] is False
         assert contract["conv_product_dtype"] == "bfloat16"
         assert contract["conv_accumulator_dtype"] == "float32"
@@ -644,7 +653,14 @@ def test_generator_is_deterministic_and_kernel_has_no_conv_intermediate() -> Non
     assert "tl.dot" not in kernel_source
     assert "barrier" not in kernel_source
     assert "pid_task < channel_tasks" in kernel_source
-    assert "pid_n = pid_task - channel_tasks" in kernel_source
+    assert "GATE_ROWS: tl.constexpr = BLOCK_C // GATE_BLOCK" in kernel_source
+    assert "pid_n_base = (pid_task - channel_tasks) * GATE_ROWS" in kernel_source
+    assert "tl.arange(0, GATE_ROWS)[:, None]" in kernel_source
+    assert "offs_h_1d = tl.arange(0, GATE_BLOCK)" in kernel_source
+    assert "A_log + offs_h_1d" in kernel_source
+    assert "dt_bias + offs_h_1d" in kernel_source
+    assert kernel_source.count(").to(tl.float32)[None, :]") == 2
+    assert "gate_mask = (offs_n < N) & (offs_h < HV)" in kernel_source
     assert "gate_input <= SOFTPLUS_THRESHOLD" in kernel_source
     store_helper = next(
         node
@@ -678,7 +694,9 @@ def test_launcher_requires_opaque_capture_binding_and_has_one_launch() -> None:
     assert 'capture_binding.committer_state["sticky_guard_ok"]' in launcher_source
     assert "BANK_ROWS=int(conv_state.size(0))" in launcher_source
     assert "CAPTURE_GUARD=capture_binding is not None" in launcher_source
-    assert "grid = (int(batch_size), channel_tasks + ROWS)" in launcher_source
+    assert "gate_rows_per_task = block_c // GATE_BLOCK" in launcher_source
+    assert "gate_tasks = triton.cdiv(ROWS, gate_rows_per_task)" in launcher_source
+    assert "grid = (int(batch_size), channel_tasks + gate_tasks)" in launcher_source
     assert launcher_source.count(
         "_fr13_fixed32_sfwd_conv_postprep_fusion_kernel[grid]("
     ) == 1
@@ -717,6 +735,58 @@ def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
         "incumbent_all_layers": 240,
         "candidate_all_layers": 48,
         "removed_all_layers": 192,
+        "current_fusion_baseline_all_layers": 48,
+        "gate_packed_candidate_all_layers": 48,
+    }
+    assert b1["gate_packing"] == {
+        "gate_rows_per_program": 2,
+        "baseline_gate_programs_per_request": 32,
+        "candidate_gate_programs_per_request": 16,
+        "baseline_programs_per_request": 112,
+        "candidate_programs_per_request": 96,
+        "baseline_programs_per_layer": 112,
+        "candidate_programs_per_layer": 96,
+        "baseline_programs_all_layers": 5376,
+        "candidate_programs_all_layers": 4608,
+        "requested_global_bytes_per_request_layer": {
+            "baseline": 27648,
+            "candidate": 23040,
+            "delta": -4608,
+        },
+        "requested_global_bytes_all_layers": {
+            "baseline": 1327104,
+            "candidate": 1105920,
+            "delta": -221184,
+        },
+        "traffic_classification": (
+            "exact_fixed32_requested_bytes_not_measured_dram_bytes"
+        ),
+    }
+
+    b4 = candidate.fixed32_sfwd_conv_postprep_static_ledger(4)
+    assert b4["gate_packing"] == {
+        "gate_rows_per_program": 4,
+        "baseline_gate_programs_per_request": 32,
+        "candidate_gate_programs_per_request": 8,
+        "baseline_programs_per_request": 72,
+        "candidate_programs_per_request": 48,
+        "baseline_programs_per_layer": 288,
+        "candidate_programs_per_layer": 192,
+        "baseline_programs_all_layers": 13824,
+        "candidate_programs_all_layers": 9216,
+        "requested_global_bytes_per_request_layer": {
+            "baseline": 27648,
+            "candidate": 20736,
+            "delta": -6912,
+        },
+        "requested_global_bytes_all_layers": {
+            "baseline": 5308416,
+            "candidate": 3981312,
+            "delta": -1327104,
+        },
+        "traffic_classification": (
+            "exact_fixed32_requested_bytes_not_measured_dram_bytes"
+        ),
     }
     assert "timing" in b1["excludes"]
     b4 = candidate.fixed32_sfwd_conv_postprep_static_ledger(4)
@@ -888,12 +958,14 @@ def test_sanitized_artifact_binds_sources_ledgers_and_resource_gate() -> None:
         assert hashlib.sha256(raw).hexdigest() == expected["sha256"]
 
     ledgers = json.loads((ARTIFACT / "static_ledger.json").read_text())
-    assert ledgers["b1"] == json.loads(
-        json.dumps(candidate.fixed32_sfwd_conv_postprep_static_ledger(1))
-    )
-    assert ledgers["b4"] == json.loads(
-        json.dumps(candidate.fixed32_sfwd_conv_postprep_static_ledger(4))
-    )
+    for batch, key in ((1, "b1"), (4, "b4")):
+        legacy_ledger = json.loads(
+            json.dumps(candidate.fixed32_sfwd_conv_postprep_static_ledger(batch))
+        )
+        legacy_ledger.pop("gate_packing")
+        legacy_ledger["launches"].pop("current_fusion_baseline_all_layers")
+        legacy_ledger["launches"].pop("gate_packed_candidate_all_layers")
+        assert ledgers[key] == legacy_ledger
     codegen = json.loads((ARTIFACT / "codegen_summary.json").read_text())
     assert codegen["offline_only"] is True
     assert codegen["timing_claim"] is False
