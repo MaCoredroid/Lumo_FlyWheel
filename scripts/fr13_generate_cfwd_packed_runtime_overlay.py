@@ -15,14 +15,93 @@ SOURCE = "scripts/fr13_device_multidraft_kernel.py"
 OUTPUT = ROOT / "scripts/fr13_cfwd_logit_direct_packed_runtime_overlay.py"
 CHANGED_FUNCTIONS = (
     "_fr13_cfwd_logit_direct_state",
+    "fr13_fixed32_cfwd_logit_direct_capture_begin",
+    "fr13_fixed32_cfwd_logit_direct_capture_end",
     "_fr13_cfwd_logit_direct_walk_cuda",
     "_fr13_cfwd_logit_direct_compare",
     "fr13_fixed32_cfwd_logit_direct_warm_execute",
+)
+LOCAL_FUNCTIONS = (
+    "fr13_fixed32_cfwd_logit_direct_capture_begin",
+    "fr13_fixed32_cfwd_logit_direct_capture_end",
 )
 CHANGED_KERNELS = (
     "_fr13_fixed32_taw_packed_physical_slot_commit_kernel",
     "_fr13_cfwd_logit_direct_compare_kernel",
 )
+
+
+if False:  # Extracted into the generated runtime overlay.
+
+    def fr13_fixed32_cfwd_logit_direct_capture_begin(
+        graph_id: int,
+        *,
+        mode: str,
+        batch_size: int,
+    ) -> None:
+        """Bind prewarmed committer state to the target graph identity."""
+        global _FR13_CFWD_LOGIT_DIRECT_CAPTURE
+        if int(batch_size) not in (1, 4):
+            return
+        selector = _fr13_cfwd_logit_direct_selector(
+            mode=mode, batch_size=int(batch_size)
+        )
+        if selector == "reference":
+            return
+        if _FR13_CFWD_LOGIT_DIRECT_CAPTURE is not None:
+            raise RuntimeError("FR13 CFWD logit-direct captures overlapped")
+        identity = int(graph_id)
+        if identity <= 0 or identity in _FR13_CFWD_LOGIT_DIRECT_GRAPHS:
+            raise RuntimeError("FR13 CFWD logit-direct graph identity was reused")
+        _, valid_mask = _fr13_fixed32_runtime_contract(mode)
+        entry = _fr13_cfwd_logit_direct_entry(mode, int(batch_size))
+        key = fr13_fixed32_taw_cache_key(
+            mode,
+            valid_mask,
+            int(batch_size),
+            entry["child_table"].device,
+        )
+        state = _FR13_CFWD_LOGIT_DIRECT_WARM.get(key)
+        if (
+            not isinstance(state, dict)
+            or state.get("graph_id") is not None
+            or state.get("mode") != mode
+            or state.get("batch_size") != int(batch_size)
+            or state.get("device") != entry["child_table"].device
+            or state.get("bound_calls") != 0
+        ):
+            raise RuntimeError("FR13 CFWD logit-direct prewarmed state drift")
+        state["graph_id"] = identity
+        _FR13_CFWD_LOGIT_DIRECT_GRAPHS[identity] = state
+        _FR13_CFWD_LOGIT_DIRECT_CAPTURE = state
+
+
+    def fr13_fixed32_cfwd_logit_direct_capture_end(
+        graph_id: int,
+        *,
+        mode: str,
+        batch_size: int,
+    ) -> None:
+        """Verify target capture excludes CFWD, then bind its external call site."""
+        global _FR13_CFWD_LOGIT_DIRECT_CAPTURE
+        if int(batch_size) not in (1, 4):
+            return
+        selector = _fr13_cfwd_logit_direct_selector(
+            mode=mode, batch_size=int(batch_size)
+        )
+        if selector == "reference":
+            return
+        state = _FR13_CFWD_LOGIT_DIRECT_CAPTURE
+        if (
+            not isinstance(state, dict)
+            or state.get("graph_id") != int(graph_id)
+            or state.get("mode") != mode
+            or state.get("batch_size") != int(batch_size)
+            or state.get("bound_calls") != 0
+        ):
+            raise RuntimeError("FR13 CFWD logit-direct capture binding drift")
+        state["bound_calls"] = 1
+        _FR13_CFWD_LOGIT_DIRECT_CAPTURE = None
 
 
 def _candidate_source() -> str:
@@ -56,8 +135,9 @@ def _indent(source: str) -> str:
 
 def generate() -> str:
     candidate = _candidate_source()
+    local = Path(__file__).resolve().read_text(encoding="utf-8")
     definitions = "\n\n\n".join(
-        _indent(_definition(candidate, name))
+        _indent(_definition(local if name in LOCAL_FUNCTIONS else candidate, name))
         for name in (*CHANGED_KERNELS, *CHANGED_FUNCTIONS)
     )
     return f'''#!/usr/bin/env python3
@@ -78,7 +158,7 @@ CANDIDATE = "fixed32_cfwd_logit_direct_packed_physical_slots_v3"
 CANDIDATE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_packed_physical_slots.v3"
 CANDIDATE_SOURCE_SHA256 = "a7a7b6582cdc11e930916f5e65583195fd31a3b664e8f567bb33a24ea1a64ee0"
 INTEGRATION_SOURCE_SCHEMA = "fr13.fixed32.cfwd_logit_direct.integration_source.v2"
-INTEGRATION_SOURCE_SHA256 = "5c30860712e9766fd397b3e90e2ea203ad4ee2a89302d4a3c3c0e412452e4e07"
+INTEGRATION_SOURCE_SHA256 = "421465c6c04de8c26e3ea724a7d2f0d3f00fe50b4fdc9f57c35e71e71212297b"
 CHANGED_FUNCTIONS = {CHANGED_FUNCTIONS!r}
 CHANGED_KERNELS = {CHANGED_KERNELS!r}
 

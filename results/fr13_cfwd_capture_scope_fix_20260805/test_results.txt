@@ -1,0 +1,30 @@
+2026-08-05T17:54:23Z
+
+python3 -m pytest -q \
+  tests/test_fr13_fixed32_cfwd_logit_direct_live_gate.py \
+  tests/test_fr13_fixed32_cfwd_logit_direct_decision.py \
+  tests/test_fr13_fixed32_cfwd_logit_direct_runners.py \
+  tests/test_fr13_b1_composed_stack.py \
+  tests/test_fr13_b1_u8_cfwd_sfwd_stack_timing.py \
+  tests/test_fr13_cfwd_dfwd_u8_composed_gate.py \
+  tests/test_fr13_k64_qrow16_sfwd_stack.py \
+  tests/test_fr13_qrow16_production_sidecar.py \
+  tests/test_fr13_fixed32_sfwd_state_fusion.py
+
+102 passed in 3.15s
+
+bash -n \
+  scripts/fr13_run_b1_cfwd_logit_direct_live_gate.sh \
+  scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh \
+  scripts/fr13_run_b1_u8_cfwd_sfwd_stack_timing.sh \
+  scripts/fr13_launch_forked_fa2_tree_server.sh
+PASS
+
+git diff --check
+PASS
+
+python3 -m py_compile \
+  scripts/fr13_generate_cfwd_packed_runtime_overlay.py \
+  scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+  tests/test_fr13_fixed32_cfwd_logit_direct_live_gate.py
+PASS

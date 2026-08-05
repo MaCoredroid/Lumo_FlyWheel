@@ -13,7 +13,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 BASE_PATH = SCRIPT_DIR / "fr13_device_multidraft_kernel.py"
 BASE_SHA256 = "088454e0605c5d41aee7b385c6d0ff66e6a7ddb999a9697258762d0aac9fe166"
 OVERLAY_PATH = SCRIPT_DIR / "fr13_cfwd_logit_direct_packed_runtime_overlay.py"
-OVERLAY_SHA256 = "30e08c690d4253ce8a051a04a69ff26ab1ea292ecf8190be30de5ccfbb7ccc44"
+OVERLAY_SHA256 = "dae67e424aa871764307311c88301ff65b37fa1f921ffc20c13acef9a7695356"
 
 
 def _sha256(path: Path) -> str:

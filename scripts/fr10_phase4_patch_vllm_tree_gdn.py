@@ -4810,16 +4810,6 @@ def _fr13_fixed32_observed_graph_replay(
         batch_size=int(event["batch_size"]),
         enabled=False,
     )
-    taw_module = __import__("sys").modules.get(
-        "_fr13_device_multidraft_kernel"
-    )
-    if taw_module is None:
-        raise RuntimeError("FR13 fixed32 replay end is missing the TAW module")
-    taw_module.fr13_fixed32_cfwd_logit_direct_live_prepare_replay(
-        mode=event["mode"],
-        batch_size=int(event["batch_size"]),
-        enabled=False,
-    )
 
 
 def _fr13_fixed32_drafter_proposal_begin(
@@ -18032,7 +18022,7 @@ def _lumo_tree_canonical_multidraft_sample(
                 batch_size=_fr13_f32_batch,
             )
         )
-        _fr13_f32_output = _fr13_fixed32_device_commit_route(
+        _fr13_f32_commit_result = (
             _fr13_f32_dm.fr13_fixed32_cfwd_logit_direct_commit(
                 _fr13_f32_counts,
                 draft_token_ids,
@@ -18044,7 +18034,15 @@ def _lumo_tree_canonical_multidraft_sample(
                 generators=_fr13_f32_generators,
                 all_greedy=False,
                 mode=_FR13_FIXED32_MODE,
-            ),
+            )
+        )
+        _fr13_f32_dm.fr13_fixed32_cfwd_logit_direct_live_prepare_replay(
+            mode=_FR13_FIXED32_MODE,
+            batch_size=_fr13_f32_batch,
+            enabled=False,
+        )
+        _fr13_f32_output = _fr13_fixed32_device_commit_route(
+            _fr13_f32_commit_result,
             _fr13_f32_output,
             _fr13_f32_accepted,
         )

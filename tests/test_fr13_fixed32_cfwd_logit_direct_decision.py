@@ -700,7 +700,7 @@ def test_cfwd_integration_source_contract_is_separate_and_fail_closed(
             "fr13.fixed32.cfwd_logit_direct.integration_source.v2"
         ),
         "integration_source_sha256": (
-            "5c30860712e9766fd397b3e90e2ea203ad4ee2a89302d4a3c3c0e412452e4e07"
+            "421465c6c04de8c26e3ea724a7d2f0d3f00fe50b4fdc9f57c35e71e71212297b"
         ),
     }
     assert device._FR13_FIXED32_TAW_SOURCE_SHA256 == (

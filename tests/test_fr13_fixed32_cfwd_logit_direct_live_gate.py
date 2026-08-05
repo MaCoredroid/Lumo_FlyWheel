@@ -71,6 +71,19 @@ def test_runtime_hooks_cover_capture_replay_and_authenticated_final_flush() -> N
     assert patcher.count(
         "fr13_fixed32_cfwd_logit_direct_live_prepare_replay("
     ) == 2
+    graph_replay = patcher.index("def _fr13_fixed32_observed_graph_replay(")
+    drafter_begin = patcher.index("def _fr13_fixed32_drafter_proposal_begin(")
+    assert "fr13_fixed32_cfwd_logit_direct_live_prepare_replay(" not in (
+        patcher[graph_replay:drafter_begin]
+    )
+    commit = patcher.index("_fr13_f32_commit_result = (")
+    replay_end = patcher.index(
+        "fr13_fixed32_cfwd_logit_direct_live_prepare_replay(", commit
+    )
+    route = patcher.index(
+        "_fr13_f32_output = _fr13_fixed32_device_commit_route(", replay_end
+    )
+    assert commit < replay_end < route
     flush_binding = patcher.index("flush_binding = {")
     finalize = patcher.index(
         "fr13_fixed32_cfwd_logit_direct_live_finalize(", flush_binding
@@ -94,31 +107,53 @@ def test_launcher_keeps_gate_off_and_requires_full_graph_native_production() -> 
 def test_graph_workspace_is_owned_and_sealed_once(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_device_module()
     monkeypatch.setenv("FR13_CFWD_LOGIT_DIRECT_BYTE_AB", "1")
-    entry = {"mode": "tail6_fixed32", "batch_size": 1}
+    device = torch.device("cpu")
+    valid_mask = 0x3F
+    entry = {
+        "mode": "tail6_fixed32",
+        "batch_size": 1,
+        "child_table": torch.empty(0, device=device),
+    }
     monkeypatch.setattr(
         module,
         "_fr13_cfwd_logit_direct_entry",
         lambda mode, batch_size: entry,
     )
-
-    def make_state(_entry, *, graph_id):
-        return {
-            "graph_id": graph_id,
-            "mode": "tail6_fixed32",
-            "batch_size": 1,
-            "bound_calls": 0,
-        }
-
-    monkeypatch.setattr(module, "_fr13_cfwd_logit_direct_state", make_state)
+    monkeypatch.setattr(
+        module,
+        "_fr13_fixed32_runtime_contract",
+        lambda mode: (object(), valid_mask),
+    )
+    key = module.fr13_fixed32_taw_cache_key(
+        "tail6_fixed32", valid_mask, 1, device
+    )
+    state = {
+        "graph_id": None,
+        "mode": "tail6_fixed32",
+        "batch_size": 1,
+        "device": device,
+        "bound_calls": 0,
+    }
+    module._FR13_CFWD_LOGIT_DIRECT_WARM[key] = state
     module.fr13_fixed32_cfwd_logit_direct_capture_begin(
         17, mode="tail6_fixed32", batch_size=1
     )
-    assert module._FR13_CFWD_LOGIT_DIRECT_CAPTURE is module._FR13_CFWD_LOGIT_DIRECT_GRAPHS[17]
-    module._FR13_CFWD_LOGIT_DIRECT_CAPTURE["bound_calls"] = 1
+    assert module._FR13_CFWD_LOGIT_DIRECT_CAPTURE is state
+    assert module._FR13_CFWD_LOGIT_DIRECT_GRAPHS[17] is state
+    assert state["graph_id"] == 17
+    assert state["bound_calls"] == 0
+    state["bound_calls"] = 1
+    with pytest.raises(RuntimeError, match="capture binding drift"):
+        module.fr13_fixed32_cfwd_logit_direct_capture_end(
+            17, mode="tail6_fixed32", batch_size=1
+        )
+    assert module._FR13_CFWD_LOGIT_DIRECT_CAPTURE is state
+    state["bound_calls"] = 0
     module.fr13_fixed32_cfwd_logit_direct_capture_end(
         17, mode="tail6_fixed32", batch_size=1
     )
     assert module._FR13_CFWD_LOGIT_DIRECT_CAPTURE is None
+    assert state["bound_calls"] == 1
     with pytest.raises(RuntimeError, match="identity was reused"):
         module.fr13_fixed32_cfwd_logit_direct_capture_begin(
             17, mode="tail6_fixed32", batch_size=1
