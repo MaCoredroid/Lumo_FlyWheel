@@ -1,0 +1,7 @@
+PASS: 104 focused fixed32 committer/row-guard/direct-metadata tests
+PASS: 8 paired fresh-cache SM121a builds verified byte-identical
+PASS: zero stack/local/LDL/STL/CALL/shared/BAR at B1 and B4
+PASS: threefold program and peer-row reduction at B1 and B4
+PASS: aggregate static SASS and LDG issue counts decrease at B1 and B4
+GPU execution: none
+Real SWE-Verified execution: none
