@@ -557,7 +557,7 @@ FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON=${FR13_FIXED32_TAW_NATIVE_PRECOMPUT
 FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON=${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON:-/logs/fr13_fixed32_taw_native_precompute.live_pass.json}
 FR13_CFWD_LOGIT_DIRECT_BYTE_AB=${FR13_CFWD_LOGIT_DIRECT_BYTE_AB:-0}
 FR13_CFWD_LOGIT_DIRECT_SOURCE=/workspace/scripts/fr13_cfwd_logit_direct_decision_kernel.py
-FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256=c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192
+FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256=5a9107306bdc37200448a6a5add2b84dfd839dc377b11009f218662c63abcc1c
 FR13_CFWD_LOGIT_DIRECT_SOURCE_COMMIT=$(git rev-parse HEAD)
 FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_PATH=/logs/fr13_cfwd_logit_direct.real_event.arm
 FR13_CFWD_LOGIT_DIRECT_REAL_EVENT_UID=
@@ -749,6 +749,7 @@ if [[ "$FR13_CFWD_LOGIT_DIRECT_BYTE_AB" == "1" ]]; then
      && "${ENFORCE_EAGER:-0}" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" \
+     && "${FR13_DEVICE_MULTIDRAFT_KERNEL:-}" == "/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py" \
      && "$(sha256sum scripts/fr13_cfwd_logit_direct_decision_kernel.py | awk '{print $1}')" \
         == "$FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256" ]] || {
     echo "FR13 CFWD logit-direct A/B requires the canonical real SWE Hydra27 B1 FULL graph and native all-parent production" >&2
@@ -763,6 +764,7 @@ if [[ "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION" == "1" ]]; then
      && "${ENFORCE_EAGER:-0}" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION" == "1" \
+     && "${FR13_DEVICE_MULTIDRAFT_KERNEL:-}" == "/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py" \
      && -f "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON" \
      && ! -L "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON" \
      && "$FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256" =~ ^[0-9a-f]{64}$ \

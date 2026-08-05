@@ -12,7 +12,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEVICE_PATH = ROOT / "scripts" / "fr13_device_multidraft_kernel.py"
+DEVICE_PATH = ROOT / "scripts" / "fr13_device_multidraft_cfwd_packed_v3.py"
 GATE_PATH = ROOT / "scripts" / "fr13_cfwd_logit_direct_gate.py"
 LIVE_RUNNER = ROOT / "scripts" / "fr13_run_b1_cfwd_logit_direct_live_gate.sh"
 TIMING_RUNNER = ROOT / "scripts" / "fr13_run_b1_cfwd_logit_direct_timing.sh"
@@ -31,24 +31,26 @@ def _load(path: Path, name: str):
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
-    return module
+    return module._base if path == DEVICE_PATH else module
 
 
 def _credential(source_commit: str) -> dict:
     return {
         "schema": "fr13.fixed32.cfwd_logit_direct.production_credential.v2",
         "status": "production_timing_ready",
-        "candidate": "fixed32_cfwd_logit_direct_physical_slots_v2",
-        "candidate_schema": "fr13.fixed32.cfwd_logit_direct_physical_slots.v2",
+        "candidate": "fixed32_cfwd_logit_direct_packed_physical_slots_v3",
+        "candidate_schema": (
+            "fr13.fixed32.cfwd_logit_direct_packed_physical_slots.v3"
+        ),
         "candidate_source_sha256": (
-            "c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192"
+            "5a9107306bdc37200448a6a5add2b84dfd839dc377b11009f218662c63abcc1c"
         ),
         "integration_source_commit": source_commit,
         "integration_source_schema": (
-            "fr13.fixed32.cfwd_logit_direct.integration_source.v1"
+            "fr13.fixed32.cfwd_logit_direct.integration_source.v2"
         ),
         "integration_source_sha256": (
-            "cc266bd4468c78193ef63701489eba666ec14b91530443a92439051796a6cc09"
+            "a82ce3f5e526792ca45bb444212e5440e8444778f174fd0650accc4bb5f8558c"
         ),
         "mode": "hydra27_fixed32",
         "qualified_batch": 1,
@@ -276,6 +278,10 @@ def test_live_runner_is_canonical_real_swe_byte_gate() -> None:
     assert "FR13_DRAFT_VOCAB_K=65536 FR13_DRAFT_VOCAB_ROOT=1" in text
     assert "FR13_CFWD_LOGIT_DIRECT_BYTE_AB=1" in text
     assert "FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0" in text
+    assert (
+        "FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/"
+        "fr13_device_multidraft_cfwd_packed_v3.py"
+    ) in text
     assert "fr13_taw_b1_credential.py validate-production" in text
     assert text.index("fr13_taw_b1_credential.py validate-production") < text.index(
         "docker ps -aq"
@@ -316,6 +322,10 @@ def test_timing_runner_is_exact4_stock_then_credentialed_candidate() -> None:
         assert prerequisite in text
     assert 'run_arm "$STOCK_ARM" 0' in text
     assert 'run_arm "$CANDIDATE_ARM" 1' in text
+    assert (
+        "FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/"
+        "fr13_device_multidraft_cfwd_packed_v3.py"
+    ) in text
     assert "--expected-tok-per-draft 31" in text
     assert '"timing_eligible": True' in text
     assert '"floor_acceptance_eligible": False' in text

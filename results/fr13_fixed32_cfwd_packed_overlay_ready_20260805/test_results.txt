@@ -1,0 +1,28 @@
+status=PASS
+evidence_kind=cpu_source_contract_and_runner_tests_only
+source_commit=16a5ff62def58483d8ef170f03eb9f39bcfd9854
+gpu_run=false
+docker_run=false
+real_swe_verified_run=false
+runtime_correctness_claim=false
+performance_claim=false
+timing_eligible=false
+floor_acceptance_eligible=false
+production_eligible=false
+
+command=CUDA_VISIBLE_DEVICES='' python3 -m pytest -q <all CFWD tests> tests/test_fr13_dfwd_k64_m1_r64_u8_gate.py tests/test_fr13_fixed32_taw_fullgraph_route.py tests/test_fr13_k64_physical32_fullstack_route.py
+result=94 passed in 3.08s
+
+command=bash -n scripts/fr13_run_b1_cfwd_logit_direct_live_gate.sh scripts/fr13_run_b1_cfwd_logit_direct_timing.sh scripts/fr13_run_b1_dfwd_k64_m1_r64_u8_live_gate.sh scripts/fr13_launch_forked_fa2_tree_server.sh
+result=PASS
+
+command=python3 -m py_compile scripts/fr13_generate_cfwd_packed_runtime_overlay.py scripts/fr13_cfwd_logit_direct_packed_runtime_overlay.py scripts/fr13_device_multidraft_cfwd_packed_v3.py scripts/fr13_device_multidraft_kernel.py scripts/fr13_cfwd_dfwd_u8_composed_gate.py scripts/fr13_runtime_manifest.py
+result=PASS
+
+command=git diff --check
+result=PASS
+
+canonical_source_sha256=088454e0605c5d41aee7b385c6d0ff66e6a7ddb999a9697258762d0aac9fe166
+taw_source_contract_sha256=998bc6331177469d6890f97f3e066e1d07c2ca2d8ab4bff723f32d5229fef290
+cfwd_integration_source_sha256=a82ce3f5e526792ca45bb444212e5440e8444778f174fd0650accc4bb5f8558c
+note=No probe or synthetic timing is reported; real SWE-Verified gates remain required.

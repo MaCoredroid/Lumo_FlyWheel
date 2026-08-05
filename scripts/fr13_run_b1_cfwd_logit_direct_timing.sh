@@ -33,8 +33,9 @@ BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242f
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 STOCK_FA2_BYTES=299183936
 CANDIDATE_SOURCE=scripts/fr13_cfwd_logit_direct_decision_kernel.py
-CANDIDATE_SOURCE_SHA256=c3d5d0f1b210cd545c5ce2dcbc6e50eaa2c7fbb508097d4347db152c428a0192
+CANDIDATE_SOURCE_SHA256=5a9107306bdc37200448a6a5add2b84dfd839dc377b11009f218662c63abcc1c
 TAW_SOURCE=scripts/fr13_device_multidraft_kernel.py
+CFWD_RUNTIME_SOURCE=scripts/fr13_device_multidraft_cfwd_packed_v3.py
 GATE=scripts/fr13_cfwd_logit_direct_gate.py
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 WEIGHT_FLOOR_MS=119.658015414
@@ -89,7 +90,7 @@ unset required
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ \
    && -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean at a valid source commit" >&2; exit 2; }
-"$PYTHON_BIN" - "$GATE" "$TAW_SOURCE" <<'PY'
+"$PYTHON_BIN" - "$GATE" "$CFWD_RUNTIME_SOURCE" <<'PY'
 import importlib.util
 import sys
 from pathlib import Path
@@ -138,6 +139,7 @@ PY
 export BSIZE=1 CONC=1 WALL=0
 export FR13_DRAFT_VOCAB_K=65536 FR13_DRAFT_VOCAB_ROOT=1
 export FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
+export FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_cfwd_packed_v3.py
 export FR13_FLOOR_ORDER=TH
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
@@ -466,7 +468,8 @@ if (
     or engagement.get("schema")
     != "fr13.fixed32.cfwd_logit_direct.production_engagement.v2"
     or engagement.get("status") != "engaged"
-    or engagement.get("candidate") != "fixed32_cfwd_logit_direct_physical_slots_v2"
+    or engagement.get("candidate")
+    != "fixed32_cfwd_logit_direct_packed_physical_slots_v3"
     or engagement.get("mode") != "hydra27_fixed32"
     or engagement.get("batch_size") != 1
     or engagement.get("source_commit") != source_commit
