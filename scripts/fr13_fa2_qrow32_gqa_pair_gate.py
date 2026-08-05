@@ -1,0 +1,397 @@
+#!/usr/bin/env python3
+"""Fail-closed identity and dual real-B4 gates for FA2 qrow32 GQA-pair."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import stat
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import fr13_fa2_qrow32_gate as qrow32_gate
+from fr13_patch_fa2_tree_bias import (
+    FIXED32_QUERY_GQA_PAIR32_API_DECLARATION,
+    FIXED32_QUERY_GQA_PAIR32_API_GATE,
+    FIXED32_QUERY_GQA_PAIR32_BATCH_STRIDE_SENTINEL,
+    FIXED32_QUERY_GQA_PAIR32_TRANSLATION_UNIT,
+)
+
+
+CANDIDATE_ARM = "gqa_pair"
+CANDIDATE_SHA256 = (
+    "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e"
+)
+CANDIDATE_SIZE = 299_813_360
+FA2_HEAD = "29210221863736a08f71a866459e368ad1ac4a95"
+SOURCE_FILES = {
+    "csrc/flash_attn/flash_api.cpp": (
+        "e12c50408fed4422df67de528607e55ade0129677e8ca7dc3d5596c1d3203e9c"
+    ),
+    "csrc/flash_attn/flash_api_torch_lib.cpp": (
+        "c575d9f02ba44bf7022c77b80fdf12173da0ecae8a4d7599934c2cc9fa52e121"
+    ),
+    "csrc/flash_attn/src/flash.h": (
+        "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a"
+    ),
+    "csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu": (
+        "c37863af034944cde276da0a08057edee339522acc55006127e9bd7dabaf925e"
+    ),
+    "csrc/flash_attn/src/flash_fwd_kernel.h": (
+        "43f093e9390efbb57294c2db93c42fcd9c79b3ece2b2768991ff20c814741456"
+    ),
+    "csrc/flash_attn/src/utils.h": (
+        "5887df63c79a3e42fb9ddad93f64fe3c0625dbee4c547af68b6f2108b7beeb5f"
+    ),
+}
+SOURCE_STATUS = (
+    " M csrc/flash_attn/flash_api.cpp",
+    " M csrc/flash_attn/flash_api_torch_lib.cpp",
+    " M csrc/flash_attn/src/flash.h",
+    " M csrc/flash_attn/src/flash_fwd_kernel.h",
+    " M csrc/flash_attn/src/utils.h",
+    "?? csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu",
+)
+SOURCE_CLOSURE_SHA256 = (
+    "f210a5ebb93930e89b0d9fe0cb6e53a76c9359873ad4268e81d3f17a7443bdf2"
+)
+ARM_SCHEMA = "fr13.fixed32.fa2_qrow32_gqa_pair_b4_live_verification.v1"
+DUAL_SCHEMA = "fr13.fixed32.fa2_qrow32_gqa_pair_b4_dual_gate.v1"
+HEX = frozenset("0123456789abcdef")
+
+
+class GateError(ValueError):
+    pass
+
+
+def _canonical_bytes(payload: dict[str, Any]) -> bytes:
+    return json.dumps(
+        payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+    ).encode("ascii")
+
+
+def _sha256_bytes(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _regular(path: Path, label: str) -> Any:
+    try:
+        info = path.lstat()
+    except FileNotFoundError as error:
+        raise GateError(f"{label} is missing: {path}") from error
+    if not stat.S_ISREG(info.st_mode) or path.is_symlink():
+        raise GateError(f"{label} must be a regular non-symlink file")
+    return info
+
+
+def _reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise GateError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _load_json(path: Path, label: str) -> tuple[dict[str, Any], bytes]:
+    _regular(path, label)
+    raw = path.read_bytes()
+    try:
+        payload = json.loads(
+            raw,
+            object_pairs_hook=_reject_duplicates,
+            parse_constant=lambda value: (_ for _ in ()).throw(
+                GateError(f"non-finite JSON value: {value}")
+            ),
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise GateError(f"{label} is not valid JSON: {error}") from error
+    if not isinstance(payload, dict):
+        raise GateError(f"{label} root must be an object")
+    return payload, raw
+
+
+def _git(repo: Path, *args: str) -> str:
+    try:
+        return subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        ).stdout.rstrip("\n")
+    except subprocess.CalledProcessError as error:
+        raise GateError(f"git {' '.join(args)} failed for {repo}") from error
+
+
+def _require_commit(value: str, label: str) -> str:
+    if not re.fullmatch(r"[0-9a-f]{40}", value):
+        raise GateError(f"{label} is not a full lowercase commit")
+    return value
+
+
+def validate_candidate(candidate_so: Path, fa2_source: Path) -> dict[str, Any]:
+    info = _regular(candidate_so, "GQA-pair candidate SO")
+    if info.st_size != CANDIDATE_SIZE or _sha256_file(candidate_so) != CANDIDATE_SHA256:
+        raise GateError("GQA-pair candidate SO identity drifted")
+    if not fa2_source.is_dir() or fa2_source.is_symlink():
+        raise GateError("FA2 source root must be a non-symlink directory")
+    head = _git(fa2_source, "rev-parse", "HEAD")
+    if head != FA2_HEAD:
+        raise GateError("FA2 source HEAD drifted")
+    status_lines = tuple(
+        line
+        for line in _git(
+            fa2_source, "status", "--porcelain=v1", "--untracked-files=all"
+        ).splitlines()
+        if line
+    )
+    if status_lines != SOURCE_STATUS:
+        raise GateError("FA2 regenerated source set drifted")
+    files: dict[str, str] = {}
+    for relative, expected in SOURCE_FILES.items():
+        path = fa2_source / relative
+        _regular(path, f"FA2 source {relative}")
+        actual = _sha256_file(path)
+        if actual != expected:
+            raise GateError(f"FA2 source hash drifted: {relative}")
+        files[relative] = actual
+    closure = {"fa2_head": head, "files": files}
+    if _sha256_bytes(_canonical_bytes(closure)) != SOURCE_CLOSURE_SHA256:
+        raise GateError("FA2 source closure digest drifted")
+
+    translation_unit = (
+        fa2_source
+        / "csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu"
+    )
+    if translation_unit.read_text(encoding="ascii") != FIXED32_QUERY_GQA_PAIR32_TRANSLATION_UNIT:
+        raise GateError("GQA-pair translation unit differs from the generator")
+    api = (fa2_source / "csrc/flash_attn/flash_api.cpp").read_text(
+        encoding="ascii"
+    )
+    if (
+        api.count(FIXED32_QUERY_GQA_PAIR32_API_DECLARATION.strip()) != 1
+        or api.count(FIXED32_QUERY_GQA_PAIR32_API_GATE.strip()) != 1
+    ):
+        raise GateError("GQA-pair fail-closed API dispatch drifted")
+    return {
+        "candidate_arm": CANDIDATE_ARM,
+        "candidate_so_sha256": CANDIDATE_SHA256,
+        "candidate_so_size": CANDIDATE_SIZE,
+        "fa2_head": FA2_HEAD,
+        "fa2_source_closure_sha256": SOURCE_CLOSURE_SHA256,
+        "selector_sentinel": FIXED32_QUERY_GQA_PAIR32_BATCH_STRIDE_SENTINEL,
+    }
+
+
+def _require_summary(
+    value: Any, *, label: str, dtype: str, shape: list[int], byte_count: int
+) -> None:
+    if not isinstance(value, dict) or (
+        value.get("dtype") != dtype
+        or value.get("shape") != shape
+        or value.get("bytes") != byte_count
+        or value.get("raw_byte_mismatches") != 0
+    ):
+        raise GateError(f"{label} raw-byte contract drifted")
+    stock = value.get("stock_sha256")
+    candidate = value.get("candidate_sha256")
+    if (
+        not isinstance(stock, str)
+        or len(stock) != 64
+        or any(char not in HEX for char in stock)
+        or candidate != stock
+    ):
+        raise GateError(f"{label} digest identity drifted")
+
+
+def verify_arm(args: argparse.Namespace) -> dict[str, Any]:
+    identity = validate_candidate(args.candidate_so, args.fa2_source)
+    source_commit = _require_commit(args.source_commit, "source commit")
+    try:
+        base = qrow32_gate.verify_live(args)
+    except qrow32_gate.GateError as error:
+        raise GateError(str(error)) from error
+    result, result_raw = _load_json(args.result, "GQA-pair live result")
+    expected = {
+        "candidate_arm": CANDIDATE_ARM,
+        "candidate_dispatch": "qrow32 GQA-pair exact geometry; no fallback",
+        "candidate_so_sha256": CANDIDATE_SHA256,
+        "candidate_so_size": CANDIDATE_SIZE,
+        "draft_vocab_k": 65536,
+        "draft_vocab_root": 1,
+        "fa2_head": FA2_HEAD,
+        "fa2_source_closure_sha256": SOURCE_CLOSURE_SHA256,
+        "incumbent_dispatch": "stock FA2 exact geometry; no fallback",
+        "selector_sentinel": FIXED32_QUERY_GQA_PAIR32_BATCH_STRIDE_SENTINEL,
+        "source_commit": source_commit,
+    }
+    for key, value in expected.items():
+        if result.get(key) != value:
+            raise GateError(f"GQA-pair live result {key} drifted")
+    for layer in result["layers"]:
+        layer_name = layer["layer_name"]
+        _require_summary(
+            layer.get("output"),
+            label=f"{layer_name} output",
+            dtype="torch.bfloat16",
+            shape=[128, 24, 256],
+            byte_count=128 * 24 * 256 * 2,
+        )
+        _require_summary(
+            layer.get("lse"),
+            label=f"{layer_name} LSE",
+            dtype="torch.float32",
+            shape=[24, 128],
+            byte_count=24 * 128 * 4,
+        )
+        for slot in layer["slots"]:
+            slot_id = slot["slot"]
+            _require_summary(
+                slot.get("output"),
+                label=f"{layer_name} slot {slot_id} output",
+                dtype="torch.bfloat16",
+                shape=[32, 24, 256],
+                byte_count=32 * 24 * 256 * 2,
+            )
+            _require_summary(
+                slot.get("lse"),
+                label=f"{layer_name} slot {slot_id} LSE",
+                dtype="torch.float32",
+                shape=[24, 32],
+                byte_count=24 * 32 * 4,
+            )
+    logical_topology = {
+        "tail6_fixed32": "Tail23",
+        "hydra27_fixed32": "Hydra27",
+    }[args.fixed32_mode]
+    return {
+        "schema": ARM_SCHEMA,
+        "status": "PASS",
+        "fixed32_mode": args.fixed32_mode,
+        "logical_topology": logical_topology,
+        **identity,
+        "source_commit": source_commit,
+        "task_ids": list(qrow32_gate.TASK_IDS),
+        "subset_sha256": qrow32_gate.EXACT4_SUBSET_SHA256,
+        "layer_count": base["layer_count"],
+        "slot_coverage": base["slot_coverage"],
+        "output_raw_byte_mismatches": 0,
+        "lse_raw_byte_mismatches": 0,
+        "live_result_sha256": _sha256_bytes(result_raw),
+        "fallback_allowed": False,
+        "performance_measurement": False,
+    }
+
+
+def verify_dual(args: argparse.Namespace) -> dict[str, Any]:
+    identity = validate_candidate(args.candidate_so, args.fa2_source)
+    source_commit = _require_commit(args.source_commit, "source commit")
+    tail, tail_raw = _load_json(args.tail_verification, "Tail23 verification")
+    hydra, hydra_raw = _load_json(args.hydra_verification, "Hydra27 verification")
+    for payload, mode, topology in (
+        (tail, "tail6_fixed32", "Tail23"),
+        (hydra, "hydra27_fixed32", "Hydra27"),
+    ):
+        live_result_sha256 = payload.get("live_result_sha256")
+        if (
+            payload.get("schema") != ARM_SCHEMA
+            or payload.get("status") != "PASS"
+            or payload.get("fixed32_mode") != mode
+            or payload.get("logical_topology") != topology
+            or payload.get("source_commit") != source_commit
+            or payload.get("task_ids") != list(qrow32_gate.TASK_IDS)
+            or payload.get("subset_sha256") != qrow32_gate.EXACT4_SUBSET_SHA256
+            or payload.get("layer_count") != 16
+            or payload.get("slot_coverage") != [0, 1, 2, 3]
+            or payload.get("output_raw_byte_mismatches") != 0
+            or payload.get("lse_raw_byte_mismatches") != 0
+            or payload.get("fallback_allowed") is not False
+            or payload.get("performance_measurement") is not False
+            or not isinstance(live_result_sha256, str)
+            or len(live_result_sha256) != 64
+            or any(char not in HEX for char in live_result_sha256)
+        ):
+            raise GateError(f"{topology} GQA-pair arm verification drifted")
+        for key, value in identity.items():
+            if payload.get(key) != value:
+                raise GateError(f"{topology} GQA-pair identity {key} drifted")
+    return {
+        "schema": DUAL_SCHEMA,
+        "status": "PASS",
+        **identity,
+        "source_commit": source_commit,
+        "task_ids": list(qrow32_gate.TASK_IDS),
+        "subset_sha256": qrow32_gate.EXACT4_SUBSET_SHA256,
+        "qualified_topologies": ["Tail23", "Hydra27"],
+        "tail23_verification_sha256": _sha256_bytes(tail_raw),
+        "hydra27_verification_sha256": _sha256_bytes(hydra_raw),
+        "layer_count_per_topology": 16,
+        "output_raw_byte_mismatches": 0,
+        "lse_raw_byte_mismatches": 0,
+        "fallback_allowed": False,
+        "performance_measurement": False,
+        "timing_eligible": False,
+        "production_eligible": False,
+    }
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    candidate = commands.add_parser("validate-candidate")
+    candidate.add_argument("--candidate-so", type=Path, required=True)
+    candidate.add_argument("--fa2-source", type=Path, required=True)
+
+    arm = commands.add_parser("verify-arm")
+    arm.add_argument("--result", type=Path, required=True)
+    arm.add_argument("--campaign-arm", type=Path, required=True)
+    arm.add_argument("--campaign-provenance", type=Path, required=True)
+    arm.add_argument("--candidate-so", type=Path, required=True)
+    arm.add_argument("--fa2-source", type=Path, required=True)
+    arm.add_argument(
+        "--fixed32-mode",
+        choices=("tail6_fixed32", "hydra27_fixed32"),
+        required=True,
+    )
+    arm.add_argument("--source-commit", required=True)
+
+    dual = commands.add_parser("verify-dual")
+    dual.add_argument("--tail-verification", type=Path, required=True)
+    dual.add_argument("--hydra-verification", type=Path, required=True)
+    dual.add_argument("--candidate-so", type=Path, required=True)
+    dual.add_argument("--fa2-source", type=Path, required=True)
+    dual.add_argument("--source-commit", required=True)
+    return parser
+
+
+def main() -> int:
+    args = _parser().parse_args()
+    if args.command == "validate-candidate":
+        result = validate_candidate(args.candidate_so, args.fa2_source)
+    elif args.command == "verify-arm":
+        result = verify_arm(args)
+    else:
+        result = verify_dual(args)
+    print(json.dumps(result, ensure_ascii=True, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
