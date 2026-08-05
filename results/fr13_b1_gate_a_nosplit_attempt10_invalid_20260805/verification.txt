@@ -1,0 +1,36 @@
+ATTEMPT10 SANITIZED VERIFICATION
+
+PASS source commit 0cb1664cba90c20b2f4e2b5ebae2544d876a0c6d
+PASS truthful-reference v5 SO a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a
+PASS authenticated real SWE-Verified qrow exact32 event observed
+PASS qrow32 B1 no-split candidate num_splits=0
+PASS qrow16 reference output served
+PASS all 16 target tree-attention layers compared
+PASS BF16 output bytes compared: 6291456
+PASS BF16 output raw-byte mismatches: 0
+PASS FP32 LSE bytes compared: 49152
+PASS FP32 LSE raw-byte mismatches: 0
+
+OVERALL ATTEMPT INVALID
+
+FAIL diagnostic shadow gate remained armed after exact32 replay
+FAIL later legitimate qlen=25 reached the exact32-only registration path
+FAIL engine stopped on the fail-closed geometry check
+FAIL task result invalid
+FAIL combined Gate A invalid
+FAIL launcher exit code 15
+
+FOLLOW-UP REFERENCE
+
+fix_commit=23074f17f684a3fe11c1bd61f48173a124afa075
+fix_subject=fix(fr13): disarm qrow shadow gate after replay
+fix_in_attempt_source=false
+fix_cherry_picked_by_evidence_branch=false
+fix_merged_by_evidence_branch=false
+
+NOT CLAIMED
+
+No performance measurement, timing validity, floor acceptance, production
+eligibility, task pass, combined Gate A pass, speedup, or hardware-floor
+progress is claimed. No raw prompt, response, task output, secret, request
+identifier, environment dump, raw log, or container identifier is included.

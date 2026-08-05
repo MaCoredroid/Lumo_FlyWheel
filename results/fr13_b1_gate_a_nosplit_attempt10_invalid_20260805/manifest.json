@@ -1,0 +1,70 @@
+{
+  "attempt": {
+    "ended_at_utc": "2026-08-05T09:36:42Z",
+    "id": 10,
+    "launcher_exit_code": 15,
+    "started_at_utc": "2026-08-05T09:24:28Z"
+  },
+  "classification": {
+    "acceptance_valid": false,
+    "combined_gate_valid": false,
+    "floor_acceptance_eligible": false,
+    "hardware_floor_claim": false,
+    "performance_measurement": false,
+    "production_eligible": false,
+    "qrow_component_byte_result_valid": true,
+    "task_result_valid": false,
+    "timing_eligible": false
+  },
+  "failure": {
+    "engine_stopped": true,
+    "expected_query_rows": 32,
+    "observed_query_rows": 25,
+    "reason": "qrow exact32 diagnostic shadow gate remained armed after its replay and rejected a later legitimate non-target query",
+    "stage": "post_qrow_replay_task_execution"
+  },
+  "follow_up": {
+    "fix_commit": "23074f17f684a3fe11c1bd61f48173a124afa075",
+    "fix_in_attempt_source": false,
+    "fix_in_evidence_branch": false,
+    "fix_subject": "fix(fr13): disarm qrow shadow gate after replay"
+  },
+  "provenance": {
+    "attempt_source_commit": "0cb1664cba90c20b2f4e2b5ebae2544d876a0c6d",
+    "candidate_so_sha256": "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a",
+    "fa2_source_closure_sha256": "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff",
+    "patch_source_sha256": "21a1c29c079b73f491e568a072bdf23ed72fc40061c3dcc5794d1d693c381d1a",
+    "qrow_byte_result_file": "qrow_byte_result.json",
+    "qrow_byte_result_sha256": "fe88b0aa2673a75a78f9f22c61f2f350f51704ab106393d0732227ea7a443fdc"
+  },
+  "qrow_result": {
+    "arm": "nosplit",
+    "layer_count": 16,
+    "lse_raw_byte_mismatches": 0,
+    "output_raw_byte_mismatches": 0,
+    "physical_query_rows": 32,
+    "reference_served": true,
+    "status": "PASS"
+  },
+  "run_contract": {
+    "batch_size": 1,
+    "concurrency": 1,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "logical_topology": "Hydra27",
+    "physical_rows": 32,
+    "suite": "SWE-Verified",
+    "task_count": 1
+  },
+  "sanitization": {
+    "container_identifiers_included": false,
+    "credentials_included": false,
+    "environment_dump_included": false,
+    "prompt_or_response_included": false,
+    "raw_logs_included": false,
+    "request_identifiers_included": false,
+    "task_outputs_included": false
+  },
+  "schema": "fr13.fixed32.b1_gate_a_nosplit_attempt10_invalid.v1",
+  "status": "INVALID_SHADOW_GATE_LIFECYCLE"
+}

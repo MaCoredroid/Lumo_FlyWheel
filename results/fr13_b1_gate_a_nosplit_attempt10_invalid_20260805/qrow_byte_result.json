@@ -1,0 +1,32 @@
+{
+  "arm": "nosplit",
+  "batch_size": 1,
+  "candidate_num_splits": 0,
+  "candidate_selector_sentinel": 1179791668,
+  "candidate_so_bytes": 300154616,
+  "candidate_so_sha256": "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a",
+  "comparison": {
+    "layer_count": 16,
+    "lse_bytes_per_layer": 3072,
+    "lse_raw_byte_mismatches": 0,
+    "lse_total_bytes": 49152,
+    "output_bytes_per_layer": 393216,
+    "output_raw_byte_mismatches": 0,
+    "output_total_bytes": 6291456
+  },
+  "concurrency": 1,
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+  "fa2_source_closure_sha256": "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff",
+  "fallback_allowed": false,
+  "performance_measurement": false,
+  "physical_query_rows": 32,
+  "reference_selector_sentinel": 1179791667,
+  "reference_served": true,
+  "runtime_mode": "FULL",
+  "schema": "fr13.fixed32.fa2_qrow32_b1_attempt10_sanitized.v1",
+  "source_commit": "0cb1664cba90c20b2f4e2b5ebae2544d876a0c6d",
+  "status": "PASS",
+  "suite": "SWE-Verified"
+}
