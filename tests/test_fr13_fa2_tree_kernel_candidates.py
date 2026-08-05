@@ -914,7 +914,8 @@ template<typename Kernel_traits, bool Is_dropout
     )
     candidate = kernel.read_text()
     assert candidate.count("FR13_FA2_QROW32_STATIC_QUERY") == 1
-    assert "constexpr bool kStaticQueryTile = kStaticQueryRows == kBlockM" in candidate
+    assert "kStaticQueryRows * kStaticHeadGroupSize == kBlockM" in candidate
+    assert "StaticQueryHeadsPerCTA<Kernel_traits>::value" in candidate
     assert "const int query_m_block = kStaticQueryTile ? 0 : m_block" in candidate
     assert "if constexpr (!kStaticQueryTile)" in candidate
     assert candidate.count(
@@ -1043,6 +1044,25 @@ inline __device__ void compute_attn_splitkv(const Params &params) {
         fixed32_query_tile32=True,
     )
     assert kernel.read_text() == candidate
+
+    # The optional head-pair layout formats one of the static query offsets
+    # across lines. Its marker makes that exact three-prefix form admissible.
+    pair_candidate = candidate.replace(
+        "static_query_offset<Kernel_traits>(binfo, ",
+        "static_query_offset<Kernel_traits>(\n                binfo, ",
+        1,
+    ).replace(
+        "// FR13_FA2_QROW32_STATIC_BATCH_LAYOUT: fixed exact4 CTA coordinates.",
+        "// FR13_FA2_QROW32_STATIC_BATCH_LAYOUT: fixed exact4 CTA coordinates.\n"
+        "    // FR13_FA2_QROW32_GQA_PAIR_LAYOUT: two heads share the M tile.",
+        1,
+    )
+    kernel.write_text(pair_candidate)
+    assert not module._patch_fixed32_query_tile32_static_batch_layout(
+        kernel,
+        fixed32_query_tile32=True,
+    )
+    assert kernel.read_text() == pair_candidate
 
     # Exhaust the complete launch domain. The remap is a bijection onto the
     # original (batch, query-head) domain, and blockIdx.z is exactly qhead // 6.
