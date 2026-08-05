@@ -196,6 +196,47 @@ def test_selectors_are_split2_only_default_off_and_qrow16_served() -> None:
     assert "FR13 qrow32 B1 production silently fell back" in helpers
 
 
+def test_split2_is_not_raw_byte_eligible_against_no_split_reference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, _ = _selector_namespace(monkeypatch, profile_scope=None)
+    require_same_reduction = namespace[
+        "_fr13_fa2_qrow32_b1_require_same_reduction"
+    ]
+
+    for reference_num_splits in (0, 1):
+        with pytest.raises(
+            RuntimeError,
+            match=(
+                "raw-byte qualification requires identical reduction topology: "
+                "reference_partitions=1 candidate_partitions=2"
+            ),
+        ):
+            require_same_reduction("split2", reference_num_splits)
+
+    assert require_same_reduction("split2", 2) is None
+
+
+def test_live_and_production_paths_enforce_same_reduction_before_selection() -> None:
+    text = PATCHER.read_text()
+    helpers = text.split("FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS", 1)[1]
+    live = helpers.split("def _fr13_fa2_qrow32_b1_live_replay", 1)[1].split(
+        "def _fr13_fa2_qrow32_b1_production_begin", 1
+    )[0]
+    production = helpers.split(
+        "def _fr13_fa2_qrow32_b1_production_begin", 1
+    )[1].split("def _fr13_fa2_qrow32_b1_production_end", 1)[0]
+
+    assert "arm, bundle[\"num_splits\"]" in live
+    assert "arm, num_splits" in production
+    assert live.index("arm, bundle[\"num_splits\"]") < live.index(
+        "_fr13_fa2_qrow32_b1_live_call("
+    )
+    assert production.index("arm, num_splits") < production.index(
+        "_fr13_fa2_qrow32_b1_candidate_tree_bias("
+    )
+
+
 def test_fa2_interface_allows_only_exact_private_b1_split2_tag() -> None:
     patcher = _module(PATCHER, "qrow32_b1_interface_guard")
     namespace = {"torch": torch}
@@ -540,7 +581,7 @@ def test_production_profile_warmup_bypasses_before_geometry(
     assert namespace["_FR13_FA2_QROW32_B1_PRODUCTION_GRAPHS"] == {}
 
 
-def test_production_final_capture_enforces_geometry_and_all_layers(
+def test_production_final_capture_enforces_geometry_and_reduction_topology(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     namespace, gdn = _selector_namespace(monkeypatch, profile_scope=None)
@@ -573,19 +614,20 @@ def test_production_final_capture_enforces_geometry_and_all_layers(
             **drifted,
         )
 
-    for layer_name in namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"]:
-        selection = namespace["_fr13_fa2_qrow32_b1_production_begin"](
-            layer=types.SimpleNamespace(layer_name=layer_name), **geometry
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "raw-byte qualification requires identical reduction topology: "
+            "reference_partitions=1 candidate_partitions=2"
+        ),
+    ):
+        namespace["_fr13_fa2_qrow32_b1_production_begin"](
+            layer=types.SimpleNamespace(
+                layer_name=namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
+            ),
+            **geometry,
         )
-        namespace["_fr13_fa2_qrow32_b1_production_end"](
-            selection, completed=True
-        )
-
-    graph = namespace["_FR13_FA2_QROW32_B1_PRODUCTION_GRAPHS"][91]
-    assert set(graph["layers"]) == set(
-        namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"]
-    )
-    assert len(graph["layers"]) == 16
+    assert namespace["_FR13_FA2_QROW32_B1_PRODUCTION_GRAPHS"] == {}
 
 
 def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:

@@ -4090,6 +4090,20 @@ def _fr13_fa2_qrow32_b1_arm(env_name):
     return arm
 
 
+def _fr13_fa2_qrow32_b1_require_same_reduction(arm, reference_num_splits):
+    """Keep the raw-byte gate on the incumbent reduction topology."""
+    candidate_num_splits = int(_FR13_FA2_QROW32_B1_ARMS[arm]["num_splits"])
+    reference_partitions = max(1, int(reference_num_splits))
+    candidate_partitions = max(1, candidate_num_splits)
+    if reference_partitions != candidate_partitions:
+        raise RuntimeError(
+            "FR13 qrow32 B1 raw-byte qualification requires identical "
+            "reduction topology: "
+            f"reference_partitions={reference_partitions} "
+            f"candidate_partitions={candidate_partitions}"
+        )
+
+
 def _fr13_fa2_qrow32_b1_digest(env_name, label, *, length=64):
     value = os.environ.get(env_name, "")
     if len(value) != length or any(c not in "0123456789abcdef" for c in value):
@@ -4475,6 +4489,9 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
     shared_seq_len = None
     for layer_name in _FR13_FA2_QROW32_B1_TARGET_LAYERS:
         bundle = graph[layer_name]
+        _fr13_fa2_qrow32_b1_require_same_reduction(
+            arm, bundle["num_splits"]
+        )
         q_start = [int(x) for x in bundle["cu_seqlens_q"].cpu().tolist()]
         seq_lens = [int(x) for x in bundle["seqused_k"].cpu().tolist()]
         if q_start != [0, 32] or len(seq_lens) != 1 or seq_lens[0] < 32:
@@ -4608,6 +4625,7 @@ def _fr13_fa2_qrow32_b1_production_begin(
             "FR13 qrow32 B1 production geometry drifted: "
             + "; ".join(geometry_mismatches)
         )
+    _fr13_fa2_qrow32_b1_require_same_reduction(arm, num_splits)
     layer_name = str(getattr(layer, "layer_name", ""))
     if layer_name not in _FR13_FA2_QROW32_B1_TARGET_LAYERS:
         raise RuntimeError("FR13 qrow32 B1 production layer identity drifted")

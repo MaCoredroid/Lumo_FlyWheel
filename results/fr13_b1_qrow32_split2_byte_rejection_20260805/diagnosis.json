@@ -1,0 +1,58 @@
+{
+  "candidate": {
+    "arm": "split2",
+    "num_splits": 2,
+    "so_bytes": 300153584,
+    "so_sha256": "ec36c5d26635fead8f626539ff98ab055a756af1e568dbadf88905a41f61862a",
+    "source_closure_sha256": "3c559d80c65573932c5c7bfd5ef7081df6c3f1a3f6c888bc36a04ccc264d394b"
+  },
+  "classification": {
+    "acceptance_eligible": false,
+    "candidate_served": false,
+    "hardware_floor_claim": false,
+    "performance_measurement": false,
+    "real_swe_verified_event": true,
+    "task_payload_included": false,
+    "timing_claim": false
+  },
+  "focused_tests": {
+    "passed": 51,
+    "suite": [
+      "tests/test_fr13_qrow32_b1_selectors.py",
+      "tests/test_fr13_fa2_tree_kernel_candidates.py",
+      "tests/test_fr13_fa2_qrow32_gqa_pair.py"
+    ]
+  },
+  "mismatch": {
+    "layer_count": 16,
+    "lse_bytes_per_layer": 3072,
+    "lse_per_layer_max": 700,
+    "lse_per_layer_min": 430,
+    "lse_raw_byte_mismatches": 9551,
+    "output_bytes_per_layer": 393216,
+    "output_per_layer_max": 198163,
+    "output_per_layer_min": 188158,
+    "output_raw_byte_mismatches": 3104943,
+    "sequence_length": 22899
+  },
+  "reference": {
+    "artifact_claimed_dispatch": "qrow16 incumbent exact geometry; no fallback",
+    "artifact_claimed_sentinel": 1179791667,
+    "captured_num_splits": 0,
+    "observed_dispatch": "generic stock FA2 no-split fallback",
+    "provenance_claim_truthful": false,
+    "vllm_batch_invariant": 0
+  },
+  "rejection": {
+    "policy": "raw-byte qualification requires identical normalized reduction partition counts",
+    "root_cause": "split-K reassociates two independent online-softmax and output partial reductions before stock combine",
+    "scratch_layout_defect_found": false,
+    "status": "REJECTED"
+  },
+  "run": {
+    "frozen_source_commit": "49b1ecd37fa8a4618c6cfd3946069bddf865cdeb",
+    "runtime_mode": "FULL",
+    "suite": "SWE-Verified"
+  },
+  "schema": "fr13.fixed32.fa2_qrow32_b1_split2_byte_rejection.v1"
+}
