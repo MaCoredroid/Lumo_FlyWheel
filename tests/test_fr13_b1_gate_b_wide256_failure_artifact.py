@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -48,7 +49,9 @@ def test_source_manifest_is_bound_to_frozen_source() -> None:
         manifest["source_identity"]["sha256"]
     )
     for relative, identity in source["files"].items():
-        content = (ROOT / relative).read_bytes()
+        content = subprocess.check_output(
+            ["git", "show", f"{source['source_commit']}:{relative}"], cwd=ROOT
+        )
         assert len(content) == identity["bytes"]
         assert hashlib.sha256(content).hexdigest() == identity["sha256"]
 
