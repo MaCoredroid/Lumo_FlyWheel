@@ -47,17 +47,23 @@ FR13_GATE_TAW_NATIVE=${FR13_GATE_TAW_NATIVE:-1}
 FR13_GATE_DRAFT_HEAD_PAD=${FR13_GATE_DRAFT_HEAD_PAD:-0}
 FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}
 FR13_GATE_DRAFT_HEAD_M1_R32=${FR13_GATE_DRAFT_HEAD_M1_R32:-0}
+FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB=${FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB:-0}
 FR13_GATE_DRAFT_HEAD_FP8=${FR13_GATE_DRAFT_HEAD_FP8:-0}
 FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=${FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO:-0}
 FR13_GATE_DFWD_TOP3=${FR13_GATE_DFWD_TOP3:-0}
 FR13_GATE_BM8=${FR13_GATE_BM8:-0}
 FR13_GATE_SFWD_CONV_POSTPREP=${FR13_GATE_SFWD_CONV_POSTPREP:-0}
-for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_M1_R32 FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO FR13_GATE_DFWD_TOP3 FR13_GATE_BM8 FR13_GATE_SFWD_CONV_POSTPREP; do
+for gate in FR13_GATE_TAW_NATIVE FR13_GATE_DRAFT_HEAD_PAD FR13_GATE_DRAFT_HEAD_M32 FR13_GATE_DRAFT_HEAD_M1_R32 FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB FR13_GATE_DRAFT_HEAD_FP8 FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO FR13_GATE_DFWD_TOP3 FR13_GATE_BM8 FR13_GATE_SFWD_CONV_POSTPREP; do
   case "${!gate}" in
     0|1) ;;
     *) echo "$gate must be 0 or 1" >&2; exit 2 ;;
   esac
 done
+if [[ "$FR13_GATE_DRAFT_HEAD_M1_R32" == "1" \
+      && "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" == "1" ]]; then
+  echo "FR13 exact-order R32 direct and live A/B gates are mutually exclusive" >&2
+  exit 2
+fi
 if [[ "$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO" == "1" \
       && "$FR13_GATE_DRAFT_HEAD_FP8" != "1" ]]; then
   echo "FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=1 requires FR13_GATE_DRAFT_HEAD_FP8=1" >&2
@@ -75,6 +81,7 @@ if [[ "$FR13_GATE_SFWD_CONV_POSTPREP" == "1" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M1_R32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
            || "$FR13_GATE_DFWD_TOP3" != "0" \
            || "$FR13_GATE_BM8" != "0" \
@@ -90,6 +97,7 @@ if [[ "$FR13_GATE_BM8" == "1" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M1_R32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
            || "$FR13_GATE_DFWD_TOP3" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
@@ -101,6 +109,7 @@ if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" \
            || "$FR13_GATE_TAW_NATIVE" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M1_R32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
            || "$FR13_GATE_DFWD_TOP3" != "0" \
            || "$FR13_GATE_BM8" != "0" \
@@ -108,7 +117,8 @@ if [[ "$FR13_GATE_DRAFT_HEAD_M32" == "1" \
   echo "FR13_GATE_DRAFT_HEAD_M32 must be the only enabled kernel candidate" >&2
   exit 2
 fi
-if [[ "$FR13_GATE_DRAFT_HEAD_M1_R32" == "1" \
+if [[ ( "$FR13_GATE_DRAFT_HEAD_M1_R32" == "1" \
+        || "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" == "1" ) \
       && ( "$FR13_GATE_QROW16" != "0" \
            || "$FR13_GATE_TAW_NATIVE" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
@@ -117,7 +127,7 @@ if [[ "$FR13_GATE_DRAFT_HEAD_M1_R32" == "1" \
            || "$FR13_GATE_DFWD_TOP3" != "0" \
            || "$FR13_GATE_BM8" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
-  echo "FR13_GATE_DRAFT_HEAD_M1_R32 must be the only enabled kernel candidate" >&2
+  echo "FR13_GATE_DRAFT_HEAD_M1_R32 modes must be the only enabled kernel candidate" >&2
   exit 2
 fi
 if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" \
@@ -126,6 +136,7 @@ if [[ "$FR13_GATE_DRAFT_HEAD_FP8" == "1" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M1_R32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" != "0" \
            || "$FR13_GATE_DFWD_TOP3" != "0" \
            || "$FR13_GATE_BM8" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" ) ]]; then
@@ -138,6 +149,7 @@ if [[ "$FR13_GATE_DFWD_TOP3" == "1" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M1_R32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
            || "$FR13_GATE_BM8" != "0" \
            || "$FR13_GATE_GDN_BV" != "0" \
@@ -163,7 +175,8 @@ else
 fi
 FR13_GATE_DRAFT_HEAD_M1_R32_SO=${FR13_GATE_DRAFT_HEAD_M1_R32_SO:-}
 FR13_GATE_DRAFT_HEAD_M1_R32_SHA256=
-if [[ "$FR13_GATE_DRAFT_HEAD_M1_R32" == "1" ]]; then
+if [[ "$FR13_GATE_DRAFT_HEAD_M1_R32" == "1" \
+      || "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" == "1" ]]; then
   [[ "$FR13_GATE_DRAFT_HEAD_M1_R32_SO" == /* \
      && -f "$FR13_GATE_DRAFT_HEAD_M1_R32_SO" \
      && ! -L "$FR13_GATE_DRAFT_HEAD_M1_R32_SO" \
@@ -178,7 +191,7 @@ if [[ "$FR13_GATE_DRAFT_HEAD_M1_R32" == "1" ]]; then
   }
 else
   [[ -z "$FR13_GATE_DRAFT_HEAD_M1_R32_SO" ]] || {
-    echo "FR13_GATE_DRAFT_HEAD_M1_R32=0 forbids a candidate binary" >&2
+    echo "disabled FR13 R32 gates forbid a candidate binary" >&2
     exit 2
   }
 fi
@@ -190,6 +203,7 @@ if [[ "$B1_DIAGNOSTIC_TASK_PROFILE" == "astropy13236" \
            || "$FR13_GATE_DRAFT_HEAD_PAD" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M32" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_M1_R32" != "0" \
+           || "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" != "0" \
            || "$FR13_GATE_DRAFT_HEAD_FP8" != "0" \
            || "$FR13_GATE_DFWD_TOP3" != "0" \
            || "$FR13_GATE_BM8" != "0" \
@@ -227,6 +241,7 @@ case "$B1_WORKLOAD_PROFILE" in
        && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_M1_R32" == "0" \
+       && "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" == "0" \
        && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
        && "$FR13_GATE_DFWD_TOP3" == "0" \
        && "$FR13_GATE_BM8" == "0" \
@@ -238,6 +253,7 @@ case "$B1_WORKLOAD_PROFILE" in
             && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_M1_R32" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_FP8" == "1" \
             && "$FR13_GATE_DFWD_TOP3" == "0" \
             && "$FR13_GATE_BM8" == "0" \
@@ -248,7 +264,8 @@ case "$B1_WORKLOAD_PROFILE" in
             && "$FR13_GATE_TAW_NATIVE" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
-            && "$FR13_GATE_DRAFT_HEAD_M1_R32" == "1" \
+            && ( "$FR13_GATE_DRAFT_HEAD_M1_R32" == "1" \
+                 || "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" == "1" ) \
             && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
             && "$FR13_GATE_DFWD_TOP3" == "0" \
             && "$FR13_GATE_BM8" == "0" \
@@ -260,6 +277,7 @@ case "$B1_WORKLOAD_PROFILE" in
             && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_M1_R32" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
             && "$FR13_GATE_DFWD_TOP3" == "1" \
             && "$FR13_GATE_BM8" == "0" \
@@ -272,6 +290,7 @@ case "$B1_WORKLOAD_PROFILE" in
             && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_M1_R32" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
             && "$FR13_GATE_BM8" == "0" \
             && "$FR13_GATE_GDN_BV" == "0" ]]; then
@@ -283,6 +302,7 @@ case "$B1_WORKLOAD_PROFILE" in
             && "$FR13_GATE_DRAFT_HEAD_PAD" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_M32" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_M1_R32" == "0" \
+            && "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" == "0" \
             && "$FR13_GATE_DRAFT_HEAD_FP8" == "0" \
             && "$FR13_GATE_DFWD_TOP3" == "0" \
             && "$FR13_GATE_BM8" == "0" \
@@ -368,6 +388,7 @@ export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"
 export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"
 export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
 export FR13_DRAFT_HEAD_M1_R32="$FR13_GATE_DRAFT_HEAD_M1_R32"
+export FR13_DRAFT_HEAD_M1_R32_LIVE_AB="$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB"
 export FR13_DRAFT_HEAD_M1_R32_SHA256="$FR13_GATE_DRAFT_HEAD_M1_R32_SHA256"
 export FR13_DRAFT_HEAD_FP8="$FR13_GATE_DRAFT_HEAD_FP8"
 export FR13_DRAFT_HEAD_FP8_STATIC_IO="$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO"
@@ -417,6 +438,9 @@ printf 'launcher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nfa2_sha256=%s\nbm8_gate=
 printf 'qrow16_production=%s\nqrow16_fa2_sha256=%s\nqrow16_live_pass_sha256=%s\n' \
   "$QROW16_PRODUCTION" "$FA2_SHA" \
   "$QROW16_PRODUCTION_LIVE_PASS_SHA256" >> "$RUNROOT/launcher_meta.txt"
+printf 'draft_head_m1_r32_live_ab_gate=%s\ndraft_head_m1_r32_instance_id=%s\n' \
+  "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" "$B1_DIAGNOSTIC_TASK_ID" \
+  >> "$RUNROOT/launcher_meta.txt"
 
 .venv/bin/python scripts/fr13_runtime_manifest.py \
   --repo "$PWD" --profile fixed32 \
@@ -443,8 +467,11 @@ OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
   FR13_DRAFT_HEAD_M32_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \
   FR13_DRAFT_HEAD_M32_LIVE_JSON=/logs/fr13_draft_head_m32.live.json \
   FR13_DRAFT_HEAD_M1_R32="$FR13_GATE_DRAFT_HEAD_M1_R32" \
+  FR13_DRAFT_HEAD_M1_R32_LIVE_AB="$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" \
   FR13_DRAFT_HEAD_M1_R32_SO="$FR13_GATE_DRAFT_HEAD_M1_R32_SO" \
   FR13_DRAFT_HEAD_M1_R32_SHA256="$FR13_GATE_DRAFT_HEAD_M1_R32_SHA256" \
+  FR13_DRAFT_HEAD_M1_R32_INSTANCE_ID="$B1_DIAGNOSTIC_TASK_ID" \
+  FR13_DRAFT_HEAD_M1_R32_LIVE_JSON=/logs/fr13_draft_head_m1_r32.live.json \
   FR13_DRAFT_HEAD_FP8="$FR13_GATE_DRAFT_HEAD_FP8" \
   FR13_DRAFT_HEAD_FP8_STATIC_IO="$FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO" \
   FR13_DRAFT_HEAD_FP8_ARM="$DRAFT_HEAD_FP8_ARM" \
@@ -505,6 +532,65 @@ if [[ "$serve_rc" == "0" \
     echo "exact-order R32 run completed without an executed-kernel marker" >&2
     exit 4
   }
+fi
+if [[ "$serve_rc" == "0" \
+      && "$FR13_GATE_DRAFT_HEAD_M1_R32_LIVE_AB" == "1" ]]; then
+  DRAFT_HEAD_M1_R32_LIVE="$RUNROOT/$ARM/logs/fr13_draft_head_m1_r32.live.json"
+  DRAFT_HEAD_M1_R32_FINAL_FLUSH="$RUNROOT/$ARM/fixed32_final_flush.json"
+  DRAFT_HEAD_M1_R32_TRAFFIC_AUDIT="$RUNROOT/$ARM/fixed32_chat_traffic_audit.json"
+  for evidence in \
+    "$DRAFT_HEAD_M1_R32_LIVE" \
+    "$DRAFT_HEAD_M1_R32_FINAL_FLUSH" \
+    "$DRAFT_HEAD_M1_R32_TRAFFIC_AUDIT"; do
+    [[ -f "$evidence" && ! -L "$evidence" ]] || {
+      echo "exact-order R32 authenticated evidence is missing: $evidence" >&2
+      exit 4
+    }
+  done
+  DRAFT_HEAD_M1_R32_FLUSH_GENERATION=$(
+    .venv/bin/python -c \
+      'import json,sys; print(json.load(open(sys.argv[1]))["ack"]["generation"])' \
+      "$DRAFT_HEAD_M1_R32_FINAL_FLUSH"
+  )
+  DRAFT_HEAD_M1_R32_BOUNDARY="$RUNROOT/$ARM/logs/fr13_fixed32_boundary_snapshot.${DRAFT_HEAD_M1_R32_FLUSH_GENERATION}.json"
+  [[ -f "$DRAFT_HEAD_M1_R32_BOUNDARY" \
+     && ! -L "$DRAFT_HEAD_M1_R32_BOUNDARY" ]] || {
+    echo "exact-order R32 final boundary evidence is missing" >&2
+    exit 4
+  }
+  DRAFT_HEAD_M1_R32_LIVE_SHA256=$(
+    sha256sum "$DRAFT_HEAD_M1_R32_LIVE" | cut -d' ' -f1
+  )
+  DRAFT_HEAD_M1_R32_CREDENTIAL="$RUNROOT/$ARM/fr13_draft_head_m1_r32.qualification.json"
+  .venv/bin/python scripts/fr13_draft_head_m1_r32_pass.py issue \
+    --live-result "$DRAFT_HEAD_M1_R32_LIVE" \
+    --expected-live-sha256 "$DRAFT_HEAD_M1_R32_LIVE_SHA256" \
+    --final-flush "$DRAFT_HEAD_M1_R32_FINAL_FLUSH" \
+    --boundary-snapshot "$DRAFT_HEAD_M1_R32_BOUNDARY" \
+    --chat-traffic-audit "$DRAFT_HEAD_M1_R32_TRAFFIC_AUDIT" \
+    --runtime-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+    --candidate-source csrc/fr13_bf16_gemvx_k64_m1_shuffle.cu \
+    --candidate-binary "$FR13_GATE_DRAFT_HEAD_M1_R32_SO" \
+    --expected-source-commit "$SOURCE_COMMIT" \
+    --repo "$PWD" \
+    --out "$DRAFT_HEAD_M1_R32_CREDENTIAL" \
+    > "$RUNROOT/$ARM/fr13_draft_head_m1_r32.qualification_issue.json"
+  DRAFT_HEAD_M1_R32_CREDENTIAL_SHA256=$(
+    sha256sum "$DRAFT_HEAD_M1_R32_CREDENTIAL" | cut -d' ' -f1
+  )
+  .venv/bin/python scripts/fr13_draft_head_m1_r32_pass.py verify \
+    --credential "$DRAFT_HEAD_M1_R32_CREDENTIAL" \
+    --expected-credential-sha256 "$DRAFT_HEAD_M1_R32_CREDENTIAL_SHA256" \
+    --runtime-source scripts/fr10_phase4_patch_vllm_tree_gdn.py \
+    --candidate-source csrc/fr13_bf16_gemvx_k64_m1_shuffle.cu \
+    --candidate-binary "$FR13_GATE_DRAFT_HEAD_M1_R32_SO" \
+    --expected-source-commit "$SOURCE_COMMIT" \
+    --repo "$PWD" \
+    > "$RUNROOT/$ARM/fr13_draft_head_m1_r32.qualification_verify.json"
+  printf 'draft_head_m1_r32_live_sha256=%s\ndraft_head_m1_r32_credential_sha256=%s\n' \
+    "$DRAFT_HEAD_M1_R32_LIVE_SHA256" \
+    "$DRAFT_HEAD_M1_R32_CREDENTIAL_SHA256" \
+    >> "$RUNROOT/launcher_meta.txt"
 fi
 if [[ "$serve_rc" == "0" && "$FR13_GATE_DRAFT_HEAD_M32" == "1" ]]; then
   DRAFT_HEAD_LIVE="$RUNROOT/$ARM/logs/fr13_draft_head_m32.live.json"
