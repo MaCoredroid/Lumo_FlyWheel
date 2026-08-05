@@ -409,6 +409,9 @@ def test_launcher_and_runner_keep_incumbent_default_and_fixed_task_sets() -> Non
     )
     assert "production_credential.py issue" in launcher
     assert "production_credential.py verify" in launcher
+    clean_guard = '[[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]]'
+    assert clean_guard in launcher
+    assert launcher.index(clean_guard) < launcher.index("production_credential.py issue")
     assert launcher.index(
         "export FR13_DRAFT_HEAD_M1_R64_U8_INTERNAL_PRODUCTION_ATTESTED=1"
     ) < launcher.index("python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py")

@@ -945,6 +945,10 @@ else
       exit 2
     }
   else
+    [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] || {
+      echo "FR13 draft-head U8 production requires a clean tracked worktree" >&2
+      exit 2
+    }
     [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
        && -f "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON" \
        && ! -L "$FR13_DRAFT_HEAD_M1_R64_U8_LIVE_PASS_JSON" \
