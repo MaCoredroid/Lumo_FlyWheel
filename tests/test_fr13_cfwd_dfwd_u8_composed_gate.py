@@ -39,6 +39,16 @@ def test_runner_admits_only_default_off_full_graph_cfwd_u8_composition() -> None
     assert "CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in source
     generic = GENERIC.read_text(encoding="ascii")
     assert "scripts/fr13_dfwd_k64_m1_r64_u8_gate.py" in generic
+    for assignment in (
+        'FR13_DEVICE_MULTIDRAFT_KERNEL="${FR13_DEVICE_MULTIDRAFT_KERNEL:-/workspace/scripts/fr13_device_multidraft_kernel.py}"',
+        'FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION="${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION:-0}"',
+        'FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON="${FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON:-}"',
+        'FR13_CFWD_LOGIT_DIRECT_BYTE_AB="${FR13_CFWD_LOGIT_DIRECT_BYTE_AB:-0}"',
+        'FR13_CFWD_LOGIT_DIRECT_PRODUCTION="${FR13_CFWD_LOGIT_DIRECT_PRODUCTION:-0}"',
+        'FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON="${FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON:-}"',
+        'FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256="${FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256:-}"',
+    ):
+        assert assignment in generic
     manifest = MANIFEST.read_text(encoding="ascii")
     assert '"scripts/fr13_cfwd_dfwd_u8_composed_gate.py"' in manifest
 
