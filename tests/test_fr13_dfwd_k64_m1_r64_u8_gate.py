@@ -350,6 +350,13 @@ def test_wiring_is_shadow_only_default_off_and_fully_pinned() -> None:
     assert "FR13_GATE_DRAFT_HEAD_U8=1" in runner
     assert "FR13_B1_DIAGNOSTIC_TASK_PROFILE=astropy12907" in runner
     assert "CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
+    assert (
+        "FORKED_FA2_SO=${FORKED_FA2_SO:-$REPO/output/auto_research/"
+        "qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-"
+        "fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/"
+        "build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so}"
+        in runner
+    )
     assert "TIMING_ARM" not in runner
     for relative in (
         "scripts/fr13_dfwd_k64_m1_r64_u8_gate.py",

@@ -10,7 +10,7 @@ cd "$REPO"
 : "${RUNROOT:?set RUNROOT to a new path below output/}"
 : "${TAG:?set TAG to a unique run tag}"
 
-FORKED_FA2_SO=${FORKED_FA2_SO:-/home/mark/shared/lumoFlyWheel-fa2-suffix-only/output/fr13_fa2_suffix_fc855e59_build/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so}
+FORKED_FA2_SO=${FORKED_FA2_SO:-$REPO/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so}
 DFWD_U8_SO=${DFWD_U8_SO:-/home/mark/fr13_dfwd_u8_linked_build_3bdd984c2/det-primary-bin/fr13_bf16_k64_m1_r64_u8.abi3.so}
 COMPOSE_CFWD=${FR13_GATE_COMPOSE_CFWD_U8:-0}
 case "$COMPOSE_CFWD" in
