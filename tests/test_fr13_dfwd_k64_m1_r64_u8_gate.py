@@ -348,6 +348,15 @@ def test_wiring_is_shadow_only_default_off_and_fully_pinned() -> None:
     assert "-e FR13_DRAFT_HEAD_M1_R64_U8_SOURCE_COMMIT=" in launcher
     assert "RUNTIME_DRAFT_HEAD_M32=0" in generic
     assert "FR13_GATE_DRAFT_HEAD_U8=1" in runner
+    assert "RUNTIME_DRAFT_HEAD_U8_SUBSET_SHA256=" in generic
+    assert (
+        'FR13_DRAFT_HEAD_M1_R64_U8_SUBSET_SHA256="'
+        '$RUNTIME_DRAFT_HEAD_U8_SUBSET_SHA256"'
+    ) in generic
+    assert (
+        'FR13_DRAFT_HEAD_M1_R64_U8_LIVE_JSON="'
+        '$RUNTIME_DRAFT_HEAD_U8_LIVE_JSON"'
+    ) in generic
     assert "FR13_B1_DIAGNOSTIC_TASK_PROFILE=astropy12907" in runner
     assert "CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in runner
     assert (
