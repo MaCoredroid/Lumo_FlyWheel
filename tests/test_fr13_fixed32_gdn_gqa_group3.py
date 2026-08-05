@@ -262,11 +262,13 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert "n_ok" in value_head
     assert "global_node" in value_head
     assert "return tl.where(n_ok, state_i, prior_state)" in value_head
+    assert "b_q = b_q * OUTPUT_SCALE" not in value_head
     assert "v_mask" not in value_head
     assert "mask=n_ok & v_mask" not in value_head
     assert "if TRUST_FIXED32_NODE_DOMAIN:" in node
     assert "n_ok = True" in node
     assert "global_node = pid_batch * N_ACTUAL + node" in node
+    assert node.count("b_q = b_q * OUTPUT_SCALE") == 1
     assert "pid_kh = tl.program_id(0)" in kernel
     assert "pid_vh_0 = pid_kh * HEAD_GROUP" in kernel
     assert "v_mask" not in kernel

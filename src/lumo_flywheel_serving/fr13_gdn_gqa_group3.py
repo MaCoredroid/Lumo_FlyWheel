@@ -171,7 +171,6 @@ def _fr13_fixed32_gdn_gqa_group3_value_head_node(
     global_node,
     NUM_VH: tl.constexpr,
     DIM_V: tl.constexpr,
-    OUTPUT_SCALE: tl.constexpr,
     RAW_GATING: tl.constexpr,
     SCAN_ALIGN: tl.constexpr,
     RING_EXPORT: tl.constexpr,
@@ -250,7 +249,6 @@ def _fr13_fixed32_gdn_gqa_group3_value_head_node(
         else:
             b_b = tl.sigmoid(b_raw_b.to(tl.float32))
 
-    b_q = b_q * OUTPUT_SCALE
     if DECAY_EXPORT:
         state_i *= b_decay
     else:
@@ -354,6 +352,7 @@ def _fr13_fixed32_gdn_gqa_group3_node(
         else:
             b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
             b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
+    b_q = b_q * OUTPUT_SCALE
 
     pid_vh_0 = pid_kh * HEAD_GROUP
     pid_vh_1 = pid_vh_0 + 1
@@ -381,7 +380,6 @@ def _fr13_fixed32_gdn_gqa_group3_node(
         global_node,
         NUM_VH=NUM_VH,
         DIM_V=DIM_V,
-        OUTPUT_SCALE=OUTPUT_SCALE,
         RAW_GATING=RAW_GATING,
         SCAN_ALIGN=SCAN_ALIGN and not K_NORM_EXPORT and not GATE_EXPORT,
         RING_EXPORT=RING_EXPORT,
@@ -411,7 +409,6 @@ def _fr13_fixed32_gdn_gqa_group3_node(
         global_node,
         NUM_VH=NUM_VH,
         DIM_V=DIM_V,
-        OUTPUT_SCALE=OUTPUT_SCALE,
         RAW_GATING=RAW_GATING,
         SCAN_ALIGN=SCAN_ALIGN and not K_NORM_EXPORT and not GATE_EXPORT,
         RING_EXPORT=RING_EXPORT,
@@ -441,7 +438,6 @@ def _fr13_fixed32_gdn_gqa_group3_node(
         global_node,
         NUM_VH=NUM_VH,
         DIM_V=DIM_V,
-        OUTPUT_SCALE=OUTPUT_SCALE,
         RAW_GATING=RAW_GATING,
         SCAN_ALIGN=SCAN_ALIGN and not K_NORM_EXPORT and not GATE_EXPORT,
         RING_EXPORT=RING_EXPORT,
