@@ -1,0 +1,5 @@
+Command:
+/home/mark/shared/fr13_toolchain_torch211_cu130/bin/python -m pytest -q tests/test_fr13_bf16_gemm_k64_tc16x256x64_s2.py tests/test_fr13_bf16_gemm_k64_tc16x256x64_s2_artifact.py
+
+Result:
+13 passed in 0.06s

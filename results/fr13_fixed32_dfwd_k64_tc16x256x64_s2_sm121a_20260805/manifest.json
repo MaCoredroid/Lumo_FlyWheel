@@ -1,0 +1,172 @@
+{
+  "acceptance_valid": false,
+  "artifact_schema": "fr13.fixed32.dfwd_k64_tc16x256x64_s2_sm121a_artifact.v1",
+  "candidate": {
+    "batch_scopes": [
+      1,
+      4
+    ],
+    "compute_padding_factor": {
+      "b1": 16,
+      "b4": 4
+    },
+    "full_vocab_preserved": true,
+    "hidden": 5120,
+    "instruction_mnk": [
+      16,
+      8,
+      16
+    ],
+    "logical_grid_ctas": 256,
+    "proposal_only": true,
+    "stages": 2,
+    "target_authority_changed": false,
+    "threadblock_mnk": [
+      16,
+      256,
+      64
+    ],
+    "threads_per_cta": 128,
+    "vocabulary": 65536,
+    "warp_mnk": [
+      16,
+      64,
+      64
+    ],
+    "weight_layout_conversion": false
+  },
+  "docker_used": false,
+  "files": [
+    {
+      "path": "csrc/fr13_bf16_gemm_k64_tc16x256x64_s2.cu",
+      "sha256": "8c55f0c1b8dc18b37b0cf6f06b5a8c608a62868cb027019b63b28126fa622095"
+    },
+    {
+      "path": "scripts/fr13_build_bf16_gemm_k64_tc16x256x64_s2.py",
+      "sha256": "5ed1248be7fd20d25ebb2303dcd50a5f45ad14335a70843831a76290e897913f"
+    },
+    {
+      "path": "scripts/fr13_check_bf16_gemm_k64_tc16x256x64_s2_codegen.py",
+      "sha256": "d155881b1263eb3abede75122941eb7913a81831d81f97efa6db9069d54a360b"
+    },
+    {
+      "path": "tests/test_fr13_bf16_gemm_k64_tc16x256x64_s2.py",
+      "sha256": "2f88dccfe2a5c03264077f3ad53e17bc4cf050452de9ac118d52ed09b5ada849"
+    },
+    {
+      "path": "tests/test_fr13_bf16_gemm_k64_tc16x256x64_s2_artifact.py",
+      "sha256": "848998bd71539c60dab6639f00a645e8a65b4fcc799f8537fa48d1fe130a5eea"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/README.md",
+      "sha256": "3b878709ea70b92b17bd319cad6fa116331e379f3ed4a4dabeb73cf1368e1731"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/build_attestation.json",
+      "sha256": "8a405cad4a8f9995d8e70cb6496f08e1e1e4645ed9636ff52ed18957a8adfdb8"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/candidate.cubin",
+      "sha256": "44e465d835b776a7631a60d7a35366256c90dc45db4b5aed07a5909becb9fb29"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/candidate.resource.txt",
+      "sha256": "01d24aa4a7ceacf5932d133058c420da7e8ed92b910f5dea38962a5df93945e2"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/candidate.sass",
+      "sha256": "d3bcfc604c33738cbcc9bfef74787d0dceb0b01033df2f0e970a5988d7504758"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/codegen_audit.json",
+      "sha256": "e82c94bf22203220ff62ed2bb1d24cb1e62ef6d528b3255dc0cdd264950a96e4"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/fr13_bf16_k64_tc16x256x64_s2.abi3.so",
+      "sha256": "c5c4cc7051003f521bb01fd8db4a340a5f9e8b4c579ee79ffb6a4ed3b43021a8"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/generic_epilogue_baseline.build_attestation.json",
+      "sha256": "db31eafa202e3157c300323f6fa63e2f2a2086344d637880d50cd58ad5221f03"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/generic_epilogue_baseline.cubin",
+      "sha256": "c867a5f967cb68e2aa9024800b3e4a701681a83da1d88c8c81f9805378dbc2df"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/generic_epilogue_baseline.resource.txt",
+      "sha256": "9ca351bfd9f0ea612780cc411c9c4705e3b3a4a173536d0aa3e9ec336e2c3a6a"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/generic_epilogue_baseline.sass",
+      "sha256": "ce49b189ab0f8219a6043e02008c249d647c6d4ace528c3d4ec204bdb6e3c604"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/only_alpha_comparison.json",
+      "sha256": "9835765b93554748cc34546019519f5f877aee46ecf5902ba82438260c612a19"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/reproducibility.json",
+      "sha256": "be549f19569fd445ff56da662dad42a78517a62588bce2dcf466dfe174a7842d"
+    },
+    {
+      "path": "results/fr13_fixed32_dfwd_k64_tc16x256x64_s2_sm121a_20260805/test_results.txt",
+      "sha256": "755d42e42cae43ba569f0ca11fc590e06bbe8aaab667d6c325f3f31dfbb0de73"
+    }
+  ],
+  "gpu_used": false,
+  "logical_global_traffic_model": {
+    "b1": {
+      "duplicated_input_read_bytes": 2621440,
+      "global_read_bytes": 673710080,
+      "output_write_bytes": 131072,
+      "pair8_global_read_reduction_fraction": 0.196875,
+      "total_bytes": 673841152
+    },
+    "b4": {
+      "duplicated_input_read_bytes": 10485760,
+      "global_read_bytes": 681574400,
+      "output_write_bytes": 524288,
+      "pair8_global_read_reduction_fraction": 0.4921875,
+      "total_bytes": 682098688
+    },
+    "scope": "algorithmic global bytes; not measured DRAM traffic",
+    "weight_bytes_per_call": 671088640
+  },
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "real_task_correctness": false,
+  "required_next_gates": [
+    "source-authenticated default-off runtime selector",
+    "real SWE-Verified B1 proposal and target-authority gate",
+    "real SWE-Verified B4 proposal and target-authority gate",
+    "candidate-served exact4 timing",
+    "candidate-served exact16 confirmation"
+  ],
+  "resources": {
+    "barriers_per_kernel": 6,
+    "dynamic_shared_bytes_per_cta": 69632,
+    "local_bytes_per_thread": 0,
+    "registers_per_thread": 168,
+    "spill_loads": 0,
+    "spill_stores": 0,
+    "stack_bytes_per_thread": 0,
+    "static_shared_bytes_per_cta": 1024
+  },
+  "runtime_wired": false,
+  "source": {
+    "branch": "codex/dfwd-k64-arch-next-20260805",
+    "integrated_main_commit": "addc1af4cf86ad24f70d367b68e0afecbd4f87d8",
+    "source_checkpoint_commit": "a618b3ad1342929adb8470529ac8bdb85d67d2c5"
+  },
+  "status": "STATIC_CODEGEN_PASS_DEFAULT_OFF_RUNTIME_UNWIRED",
+  "timing_eligible": false,
+  "toolchain": {
+    "cuda_release": "13.0",
+    "cutlass_commit": "da5e086dab31d63815acafdac9a9c5893b1c69e2",
+    "nvcc": "13.0.88",
+    "nvdisasm": "13.0.85",
+    "target": "sm_121a",
+    "torch": "2.11.0+cu130"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "acceptance_valid": false,
+  "candidate": {
+    "barriers_per_kernel": 6,
+    "cubin_bytes": 107072,
+    "cubin_sha256": "44e465d835b776a7631a60d7a35366256c90dc45db4b5aed07a5909becb9fb29",
+    "global_load_instructions_per_kernel": 36,
+    "global_store_instructions_per_kernel": 4,
+    "linked_extension_bytes": 248984,
+    "linked_extension_sha256": "c5c4cc7051003f521bb01fd8db4a340a5f9e8b4c579ee79ffb6a4ed3b43021a8",
+    "source_sha256": "8c55f0c1b8dc18b37b0cf6f06b5a8c608a62868cb027019b63b28126fa622095",
+    "static_instructions_per_kernel": 760
+  },
+  "delta": {
+    "barriers_removed_per_kernel": 4,
+    "cubin_bytes_removed": 7504,
+    "global_load_instructions_removed_per_kernel": 6,
+    "global_store_instructions_removed_per_kernel": 4,
+    "linked_extension_bytes_removed": 65536,
+    "linked_extension_size_reduction_fraction": 0.208368307262,
+    "static_instruction_reduction_fraction": 0.201680672269,
+    "static_instructions_removed_per_kernel": 192
+  },
+  "generic_epilogue_baseline": {
+    "barriers_per_kernel": 10,
+    "cubin_bytes": 114576,
+    "cubin_sha256": "c867a5f967cb68e2aa9024800b3e4a701681a83da1d88c8c81f9805378dbc2df",
+    "global_load_instructions_per_kernel": 42,
+    "global_store_instructions_per_kernel": 8,
+    "linked_extension_bytes": 314520,
+    "linked_extension_sha256": "0ed6f927b05f05352a88b13d27d90d9b6a1831c78a31a6e69d0f43d17c66a21c",
+    "source_sha256": "41ea6f40ad24b3dc4c0648d0a603d9d6bd7d6e05f172f5b8e1955873075d08ad",
+    "static_instructions_per_kernel": 952
+  },
+  "performance_measurement": false,
+  "schema": "fr13.fixed32.dfwd_k64_tc16x256x64_s2_only_alpha_delta.v1",
+  "scope": "static compiler output; not a performance measurement"
+}
