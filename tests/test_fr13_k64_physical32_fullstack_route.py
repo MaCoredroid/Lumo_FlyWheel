@@ -188,6 +188,8 @@ def test_b1_gate_is_real_k64_graph_replay_and_mode_specific() -> None:
     assert "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1" in gate
     assert "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0" in gate
     assert "ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in gate
+    assert "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1" in gate
+    assert "FR13_SFWD_GPU_TIMER=0" not in gate
     assert "reference_always_served=1" in gate
     assert "candidate_returned=0" in gate
     assert "tail6_fixed32)" in gate
