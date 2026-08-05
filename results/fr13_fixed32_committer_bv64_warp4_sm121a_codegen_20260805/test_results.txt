@@ -1,0 +1,20 @@
+Focused source and routing suite:
+
+52 passed in 0.70s
+
+Command:
+
+python3 -m pytest -q \
+  tests/test_fr13_fixed32_committer_bv64_warp4.py \
+  tests/test_fr13_fixed32_committer_layer_batch.py \
+  tests/test_fr13_fixed32_committer_gate_ring.py \
+  tests/test_fr13_fixed32_committer_knorm_ring.py \
+  tests/test_fr13_fixed32_committer_decay_ring.py
+
+Additional checks:
+
+bash -n scripts/fr13_bigdenom_swe_serve_variant.sh
+python3 -m py_compile scripts/fr13_codegen_committer_bv64_warp4.py
+git diff --check
+
+All passed.

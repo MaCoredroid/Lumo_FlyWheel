@@ -1,0 +1,35 @@
+{
+  "batches": {
+    "b1": {
+      "candidate_programs_per_event": 4608,
+      "candidate_register_allocation_per_cta": 16384,
+      "candidate_registers_per_thread": 128,
+      "candidate_static_sass_instructions": 895,
+      "incumbent_programs_per_event": 2304,
+      "incumbent_register_allocation_per_cta": 43264,
+      "incumbent_registers_per_thread": 169,
+      "incumbent_static_sass_instructions": 828
+    },
+    "b4": {
+      "candidate_programs_per_event": 18432,
+      "candidate_register_allocation_per_cta": 20992,
+      "candidate_registers_per_thread": 164,
+      "candidate_static_sass_instructions": 894,
+      "incumbent_programs_per_event": 9216,
+      "incumbent_register_allocation_per_cta": 41216,
+      "incumbent_registers_per_thread": 161,
+      "incumbent_static_sass_instructions": 887
+    }
+  },
+  "builds_verified": 8,
+  "candidate_local_bytes": 0,
+  "candidate_stack_bytes": 0,
+  "fresh_cache_byte_identity": true,
+  "gpu_execution": false,
+  "incumbent_local_bytes": 0,
+  "incumbent_stack_bytes": 0,
+  "ordered_recurrence_source_unchanged": true,
+  "schema": "fr13.fixed32.committer_bv64_warp4.sm121a.verify.v1",
+  "source_revision": "5d15020c99aa58365096ee1c27a2c1afc4825644",
+  "status": "PASS"
+}
