@@ -1150,6 +1150,20 @@ FIXED32_QUERY_TILE32_B1_SPLIT2_API_GATE = r'''    if (params.tree_bias_batch_str
 '''
 
 
+STOCK_VARLEN_SPLITKV_ALLOCATION = r'''    if (seqlenq_ngroups_swapped) {
+        // Only apply split-k for decoding
+'''
+
+
+FIXED32_QUERY_TILE32_B1_SPLIT2_ALLOCATION = r'''    const bool fr13_qrow32_b1_split2 =
+        params.tree_bias_batch_stride ==
+        kFr13Qrow32B1Split2BatchStrideSentinel;
+    if (seqlenq_ngroups_swapped || fr13_qrow32_b1_split2) {
+        // Stock applies split-K only to decoding. The private fixed32 route
+        // also needs the stock-owned accumulation buffers for qlen 32.
+'''
+
+
 FIXED32_QUERY_TILE16_API_DISPATCH = rf'''constexpr int64_t kFr13Qrow16BatchStrideSentinel =
     {FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL};
 
@@ -2506,6 +2520,13 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
             declaration=FIXED32_QUERY_TILE32_B1_SPLIT2_API_DECLARATION,
             gate=FIXED32_QUERY_TILE32_B1_SPLIT2_API_GATE,
             label="fixed32 FA2 query tile32 B1 split2 hidden API dispatch",
+        )
+        changed = changed or did
+        text, did = _replace_once(
+            text,
+            STOCK_VARLEN_SPLITKV_ALLOCATION,
+            FIXED32_QUERY_TILE32_B1_SPLIT2_ALLOCATION,
+            "fixed32 FA2 query tile32 B1 split2 scratch allocation",
         )
         changed = changed or did
     if changed:

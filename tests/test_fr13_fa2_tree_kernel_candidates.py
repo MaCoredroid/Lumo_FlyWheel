@@ -1822,6 +1822,29 @@ def test_qrow32_b1_split2_api_gate_requires_stock_scratch() -> None:
     assert text_again == text
 
 
+def test_qrow32_b1_split2_allocates_stock_scratch_for_qlen32() -> None:
+    module = _module()
+    text, changed = module._replace_once(
+        module.STOCK_VARLEN_SPLITKV_ALLOCATION,
+        module.STOCK_VARLEN_SPLITKV_ALLOCATION,
+        module.FIXED32_QUERY_TILE32_B1_SPLIT2_ALLOCATION,
+        "test qrow32 B1 split2 scratch allocation",
+    )
+    assert changed
+    assert "seqlenq_ngroups_swapped || fr13_qrow32_b1_split2" in text
+    assert "kFr13Qrow32B1Split2BatchStrideSentinel" in text
+    assert "stock-owned accumulation buffers for qlen 32" in text
+
+    text_again, changed = module._replace_once(
+        text,
+        module.STOCK_VARLEN_SPLITKV_ALLOCATION,
+        module.FIXED32_QUERY_TILE32_B1_SPLIT2_ALLOCATION,
+        "test qrow32 B1 split2 scratch allocation",
+    )
+    assert not changed
+    assert text_again == text
+
+
 def test_qrow32_source_patch_requires_exact_safe_tile_earlyout(tmp_path: Path) -> None:
     module = _module()
     try:
