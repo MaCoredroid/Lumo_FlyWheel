@@ -23,6 +23,9 @@ DIM_V = 128
 BLOCK_V = 8
 GDN_LAYERS = 48
 BF16_BYTES = 2
+FIXED32_EXECUTION_SHA256 = (
+    "80aed4d1a882ee4d4cde21dbf4314ed3abaae3f7553e35b6db5cd7574fe3b7db"
+)
 
 
 def fixed32_gdn_gqa_group3_contract(
@@ -744,6 +747,7 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
     decay_export: bool,
     flags_export: bool,
     flags_rows: int,
+    descriptor_execution_sha256: str,
     maxnreg: int | None = None,
 ) -> dict[str, object]:
     """Launch the unserved candidate after explicit caller-side qualification."""
@@ -786,6 +790,8 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         raise ValueError("GQA-group3 q geometry drift")
     if int(v.shape[1]) != NUM_V_HEADS or int(v.shape[2]) != DIM_V:
         raise ValueError("GQA-group3 v geometry drift")
+    if descriptor_execution_sha256 != FIXED32_EXECUTION_SHA256:
+        raise ValueError("GQA-group3 physical32 descriptor provenance drift")
     descriptor_numels = (
         int(root_nodes.numel()),
         int(branch_nodes.numel()),
@@ -881,7 +887,7 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         DECAY_EXPORT=bool(decay_export),
         FLAGS_EXPORT=bool(flags_export),
         FLAGS_ROWS=int(flags_rows),
-        # The exact preseed contract above proves every loaded descriptor node
+        # The validated preseed provenance proves every loaded descriptor node
         # is in [0, 31], so the hot recurrence does not need per-node clamps.
         TRUST_FIXED32_NODE_DOMAIN=True,
         **launch_options,

@@ -268,6 +268,8 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert 'launch_options = {"num_warps": 8}' in launch
     assert 'int(maxnreg) != 128' in launch
     assert 'launch_options["maxnreg"] = int(maxnreg)' in launch
+    assert "descriptor_execution_sha256 != FIXED32_EXECUTION_SHA256" in launch
+    assert "physical32 descriptor provenance drift" in launch
     assert "expected_descriptor_numels" in launch
     assert "immutable physical32 descriptor drift" in launch
     assert "TRUST_FIXED32_NODE_DOMAIN=True" in launch
@@ -283,6 +285,8 @@ def test_candidate_is_default_off_and_gate_wired_without_serving() -> None:
     assert '== _FR13_FIXED32_GDN_GQA_GROUP3_GATE_VALUE' in served
     assert "_FR13_FIXED32_GDN_GQA_GROUP3_LAUNCH = None" in served
     assert "launch_fixed32_gdn_gqa_group3_source_candidate" in served
+    assert served.count("descriptor_execution_sha256=str(") == 2
+    assert served.count('["execution_sha256"]') >= 2
     assert '"gqa_group3"' in patcher
     assert '"gqa_group3"' in launcher
     assert '"candidate_served": False' in served
