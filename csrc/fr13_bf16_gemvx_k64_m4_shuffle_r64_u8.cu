@@ -15,14 +15,14 @@ constexpr int kHidden = 5120;
 constexpr int kVocab = 65536;
 constexpr int kBatch = 4;
 constexpr int kLanes = 16;
-constexpr int kRowsPerCta = 32;
+constexpr int kRowsPerCta = 64;
 constexpr int kCtas = kVocab / kRowsPerCta;
 constexpr unsigned kFullWarpMask = 0xffffffffu;
 
 static_assert(kHidden % (kLanes * 8) == 0);
 static_assert(kVocab % kRowsPerCta == 0);
-static_assert(kLanes * kRowsPerCta == 512);
-static_assert(kCtas == 2048);
+static_assert(kLanes * kRowsPerCta == 1024);
+static_assert(kCtas == 1024);
 #if !defined(FR13_DEVICE_CODEGEN_ONLY)
 static_assert(sizeof(at::BFloat16) == sizeof(__nv_bfloat16));
 #endif
@@ -30,7 +30,7 @@ static_assert(sizeof(at::BFloat16) == sizeof(__nv_bfloat16));
 // Reuse every BF16 head weight across the four requests while retaining four
 // independent scalar FMA chains and the incumbent width-16 reduction tree.
 __global__ __launch_bounds__(kLanes * kRowsPerCta) void
-fr13_bf16_gemvx_k64_m4_shuffle_r32_u8_kernel(
+fr13_bf16_gemvx_k64_m4_shuffle_r64_u8_kernel(
     __nv_bfloat16* __restrict__ output,
     const __nv_bfloat16* __restrict__ input,
     const __nv_bfloat16* __restrict__ weight, const float alpha,
@@ -98,34 +98,34 @@ fr13_bf16_gemvx_k64_m4_shuffle_r32_u8_kernel(
 }
 
 #if !defined(FR13_DEVICE_CODEGEN_ONLY)
-void fr13_bf16_gemvx_k64_m4_shuffle_r32_u8_out(
+void fr13_bf16_gemvx_k64_m4_shuffle_r64_u8_out(
     at::Tensor output, const at::Tensor& input, const at::Tensor& weight) {
   TORCH_CHECK(input.is_cuda() && weight.is_cuda() && output.is_cuda(),
-              "FR13 BF16 K64 M4 R32 U8 requires CUDA tensors");
+              "FR13 BF16 K64 M4 R64 U8 requires CUDA tensors");
   TORCH_CHECK(input.device() == weight.device() &&
                   output.device() == input.device(),
-              "FR13 BF16 K64 M4 R32 U8 tensors must share one CUDA device");
+              "FR13 BF16 K64 M4 R64 U8 tensors must share one CUDA device");
   TORCH_CHECK(input.scalar_type() == at::kBFloat16 &&
                   weight.scalar_type() == at::kBFloat16 &&
                   output.scalar_type() == at::kBFloat16,
-              "FR13 BF16 K64 M4 R32 U8 requires BF16 tensors");
+              "FR13 BF16 K64 M4 R64 U8 requires BF16 tensors");
   TORCH_CHECK(input.sizes() == at::IntArrayRef({kBatch, kHidden}) &&
                   input.strides() == at::IntArrayRef({kHidden, 1}),
-              "FR13 BF16 K64 M4 R32 U8 input must be contiguous [4,5120]");
+              "FR13 BF16 K64 M4 R64 U8 input must be contiguous [4,5120]");
   TORCH_CHECK(weight.sizes() == at::IntArrayRef({kVocab, kHidden}) &&
                   weight.strides() == at::IntArrayRef({kHidden, 1}),
-              "FR13 BF16 K64 M4 R32 U8 weight must be contiguous [65536,5120]");
+              "FR13 BF16 K64 M4 R64 U8 weight must be contiguous [65536,5120]");
   TORCH_CHECK(output.sizes() == at::IntArrayRef({kBatch, kVocab}) &&
                   output.strides() == at::IntArrayRef({kVocab, 1}),
-              "FR13 BF16 K64 M4 R32 U8 output must be contiguous [4,65536]");
+              "FR13 BF16 K64 M4 R64 U8 output must be contiguous [4,65536]");
 
   const c10::cuda::CUDAGuard device_guard(input.device());
   const cudaDeviceProp* properties = at::cuda::getCurrentDeviceProperties();
   TORCH_CHECK(properties != nullptr && properties->major == 12 &&
                   properties->minor == 1,
-              "FR13 BF16 K64 M4 R32 U8 is qualified only for SM121");
+              "FR13 BF16 K64 M4 R64 U8 is qualified only for SM121");
   const dim3 block(kLanes, kRowsPerCta, 1);
-  fr13_bf16_gemvx_k64_m4_shuffle_r32_u8_kernel
+  fr13_bf16_gemvx_k64_m4_shuffle_r64_u8_kernel
       <<<kCtas, block, 0, at::cuda::getCurrentCUDAStream()>>>(
           reinterpret_cast<__nv_bfloat16*>(
               output.data_ptr<at::BFloat16>()),
@@ -143,11 +143,11 @@ void fr13_bf16_gemvx_k64_m4_shuffle_r32_u8_out(
 #if !defined(FR13_DEVICE_CODEGEN_ONLY)
 TORCH_LIBRARY_FRAGMENT(fr13_bf16_k64_head, library) {
   library.def(
-      "gemvx_m4_shuffle_r32_u8_out(Tensor(a!) output, Tensor input, Tensor weight) -> ()");
+      "gemvx_m4_shuffle_r64_u8_out(Tensor(a!) output, Tensor input, Tensor weight) -> ()");
 }
 
 TORCH_LIBRARY_IMPL(fr13_bf16_k64_head, CUDA, library) {
-  library.impl("gemvx_m4_shuffle_r32_u8_out",
-               &fr13_bf16_gemvx_k64_m4_shuffle_r32_u8_out);
+  library.impl("gemvx_m4_shuffle_r64_u8_out",
+               &fr13_bf16_gemvx_k64_m4_shuffle_r64_u8_out);
 }
 #endif

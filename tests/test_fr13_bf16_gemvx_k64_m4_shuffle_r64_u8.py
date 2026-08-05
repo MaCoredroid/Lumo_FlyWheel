@@ -4,19 +4,19 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parents[1]
-CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m4_shuffle_r32_u8.cu"
+CUDA = REPO / "csrc" / "fr13_bf16_gemvx_k64_m4_shuffle_r64_u8.cu"
 
 
-def test_source_is_strict_fixed32_k64_m4_r32_u8() -> None:
+def test_source_is_strict_fixed32_k64_m4_r64_u8() -> None:
     source = CUDA.read_text(encoding="ascii")
     for declaration in (
         "constexpr int kHidden = 5120;",
         "constexpr int kVocab = 65536;",
         "constexpr int kBatch = 4;",
         "constexpr int kLanes = 16;",
-        "constexpr int kRowsPerCta = 32;",
-        "static_assert(kLanes * kRowsPerCta == 512);",
-        "static_assert(kCtas == 2048);",
+        "constexpr int kRowsPerCta = 64;",
+        "static_assert(kLanes * kRowsPerCta == 1024);",
+        "static_assert(kCtas == 1024);",
     ):
         assert declaration in source
     assert "const dim3 block(kLanes, kRowsPerCta, 1);" in source
@@ -69,7 +69,7 @@ def test_reduction_and_output_are_exactly_per_request() -> None:
 def test_op_is_separate_default_off_exact_b4_variant() -> None:
     source = CUDA.read_text(encoding="ascii")
     assert (
-        "gemvx_m4_shuffle_r32_u8_out(Tensor(a!) output, Tensor input, "
+        "gemvx_m4_shuffle_r64_u8_out(Tensor(a!) output, Tensor input, "
         "Tensor weight) -> ()" in source
     )
     assert "input.sizes() == at::IntArrayRef({kBatch, kHidden})" in source
