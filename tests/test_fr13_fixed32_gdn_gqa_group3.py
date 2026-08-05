@@ -125,6 +125,9 @@ def test_contract_closes_exact_b1_b4_physical_work(
     assert result["value_domain_masks_removed_per_event"] == (
         candidate * 48 * 291
     )
+    assert result["reference_invocation_atomics_per_event"] == batch
+    assert result["candidate_invocation_atomics_per_event"] == 1
+    assert result["invocation_atomics_removed_per_event"] == batch - 1
     assert result["state_export_writes"] == 0
     assert result["state_parent_reads"] == 0
     assert result["candidate_default_off"] is True
@@ -270,6 +273,9 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert "global_node = pid_batch * N_ACTUAL + node" in node
     assert node.count("b_q = b_q * OUTPUT_SCALE") == 1
     assert "pid_kh = tl.program_id(0)" in kernel
+    assert (
+        "mask=(pid_kh == 0) & (pid_v == 0) & (pid_batch == 0)" in kernel
+    )
     assert "pid_vh_0 = pid_kh * HEAD_GROUP" in kernel
     assert "v_mask" not in kernel
     assert "mask=v_mask[:, None]" not in kernel

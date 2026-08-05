@@ -141,6 +141,9 @@ def fixed32_gdn_gqa_group3_contract(
         "value_domain_masks_removed_per_event": (
             candidate_ctas_per_event * value_domain_masks_removed_per_cta
         ),
+        "reference_invocation_atomics_per_event": batch,
+        "candidate_invocation_atomics_per_event": 1,
+        "invocation_atomics_removed_per_event": batch - 1,
         "state_export_writes": 0,
         "state_parent_reads": 0,
         "candidate_default_off": True,
@@ -506,7 +509,7 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
             invocation_counter,
             1,
             sem="relaxed",
-            mask=(pid_kh == 0) & (pid_v == 0),
+            mask=(pid_kh == 0) & (pid_v == 0) & (pid_batch == 0),
         )
 
     pid_vh_0 = pid_kh * HEAD_GROUP
