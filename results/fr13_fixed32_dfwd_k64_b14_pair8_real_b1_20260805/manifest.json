@@ -1,0 +1,49 @@
+{
+  "artifact_schema": "fr13.fixed32.dfwd_k64_b14_pair8_real_b1.v1",
+  "candidate": "gemvx_m1_warp4_pair8_out",
+  "candidate_served": true,
+  "candidate_so_sha256": "dcd9301f447d1ef4a81240027af3a008558dfa080b8660ac9dba7b2c5800ec7f",
+  "classification": "real_swe_verified_one_task_b1_diagnostic",
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "files": {
+    "deploy_speed_fullwall.json": "d61701c744b0f727cb5f1f87592c8deabc9bfe869a74f91727636eb14439f95f",
+    "docker_full.log": "ac4353808f0ea2772c914ea3b44cea539d9af70a1c0f550ec37e8966dfd30e64",
+    "external_manifest.at_end.json": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "external_manifest.at_launch.json": "fa87878d666d5d1d741df3e122adfc2e2793fc3ce35546ac806020573720eb3f",
+    "fixed32_b1_diagnostic.json": "5aa1ecc96dca2d759885190e05726f403a24cdf403064a57b179526f8f97ea64",
+    "fixed32_chat_traffic_audit.json": "a520d542a2f62ea1f0782892e8e483e213cbdf6d44c0a8de6efdffff1378fc95",
+    "launcher_meta.txt": "4975adf05de1b97890e1f5558705bdfc52ae1b69c0aafe5acf8f963eabcffeef",
+    "normalized_eval.json": "bd3ee951a8f9ccc50922ddfa11e5d52ab41709f64768d8528b02172b0b59dfd2",
+    "pair8_real_task_summary.json": "894e0012420e34b628f025139b1215b0faa7769ed2599187389973d0019e3351",
+    "runner.log": "9b411af3848c0c7fb2cd9b4c590abafeb629a8321d33149d1401b51d27afc3a5",
+    "runtime_manifest.at_end.json": "e6a7f247771f439536ef692cf0e10b0d48901ab09344e6f78d2fe5ac5a558666",
+    "runtime_manifest.at_launch.json": "e6a7f247771f439536ef692cf0e10b0d48901ab09344e6f78d2fe5ac5a558666"
+  },
+  "floor_acceptance_eligible": false,
+  "manifests_stable": true,
+  "matched_reference": {
+    "dfwd_gpu_ms_per_step": 35.0972636024359,
+    "pair8_delta_ms": 0.08045143898476681,
+    "pair8_delta_percent": 0.22922424920666096,
+    "source": "exact4 reference astropy__astropy-12907 slice"
+  },
+  "measurement": {
+    "accept_per_event": 4.4393939393939394,
+    "committer_gpu_ms_per_step": 32.6182588302728,
+    "drafter_gpu_ms_per_step": 35.17771504142067,
+    "floor_ratio": 1.864188158081002,
+    "measured_tps_fullstep_wall": 24.384787347151082,
+    "overhead_other_ms_per_event": 3.0594708036264517,
+    "sfwd_gpu_ms_per_step": 152.20961067893288,
+    "step_wall_ms": 223.06505535425282
+  },
+  "physical_rows": 32,
+  "source_commit": "dcc044225176868b4fdda9d4cbe723afa60e6820",
+  "status": "PASS_NO_DFWD_SPEEDUP",
+  "suite": "SWE-Verified",
+  "task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "timing_eligible": false
+}
