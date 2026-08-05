@@ -1,0 +1,61 @@
+{
+  "schema": "fr13.fixed32.b1_gate_b_wide256_first_event_failure_artifact.v1",
+  "status": "FAIL",
+  "source_commit": "f81a1c774b55a7f76d30d30ed0fac2be73665be9",
+  "run": {
+    "classification": "one_real_swe_verified_b1_k64_root_byte_diagnostic",
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "task_id": "astropy__astropy-12907",
+    "batch_size": 1,
+    "concurrency": 1,
+    "physical_rows": 32,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "exit_code": 15,
+    "task_completed": false
+  },
+  "candidate": {
+    "family": "identity_wide256_fullgrid_b1",
+    "diagnostic_selector": "identity_wide256_fullgrid_b1_byte_ab",
+    "sha256": "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da",
+    "bytes": 119979144,
+    "default_enabled": false,
+    "production_enabled": false
+  },
+  "failure": {
+    "comparator_record": "comparator_failure.json",
+    "raw_record_sha256": "3fd8993edb30abf552ed4f6c4b197161c842db3c4e1454790681cec291ec2da7",
+    "invocation": 0,
+    "shape_mnk": [32, 16384, 5120],
+    "compared_bytes": 1048576,
+    "mismatch_count": 22,
+    "first_mismatch_byte": 125412,
+    "credential_issued": false
+  },
+  "source_identity": {
+    "path": "source_manifest.json",
+    "schema": "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1",
+    "sha256": "79d39ea3e911d8fdbf1f342d265538d2fad5cb8bc0285c337f0a1c7776abcb8a",
+    "launch_end_byte_identical": true
+  },
+  "claims": {
+    "byte_correctness": false,
+    "production_eligible": false,
+    "timing_eligible": false,
+    "timing_claim": false,
+    "acceptance_claim": false,
+    "performance_claim": false,
+    "hardware_floor_evidence": false
+  },
+  "privacy": {
+    "raw_prompts_absent": true,
+    "raw_responses_absent": true,
+    "raw_patches_absent": true,
+    "raw_traces_absent": true,
+    "raw_logs_absent": true,
+    "raw_environment_absent": true,
+    "process_identities_absent": true,
+    "binaries_absent": true,
+    "tensors_absent": true
+  }
+}
