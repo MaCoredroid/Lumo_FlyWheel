@@ -86,9 +86,10 @@ def _selector_namespace(monkeypatch: pytest.MonkeyPatch, *, profile_scope):
 
 
 def _b1_geometry():
+    fused_qkv = torch.empty((32, 32, 256), dtype=torch.bfloat16)
     return {
         "flash_fn": object(),
-        "query": torch.empty((32, 24, 256), dtype=torch.bfloat16),
+        "query": fused_qkv[:, :24, :],
         "key_cache": torch.empty((1, 1024, 4, 256), dtype=torch.bfloat16),
         "value_cache": torch.empty((1, 1024, 4, 256), dtype=torch.bfloat16),
         "cu_seqlens_q": torch.tensor([0, 32], dtype=torch.int32),
@@ -190,6 +191,32 @@ def test_selectors_are_split2_only_default_off_and_qrow16_served() -> None:
     assert "torch.cuda.synchronize()" not in production
     assert '"candidate_served": True, "fallback_allowed": False' in helpers
     assert "FR13 qrow32 B1 production silently fell back" in helpers
+
+
+def test_exact_geometry_accepts_fused_qkv_row_stride_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, _ = _selector_namespace(monkeypatch, profile_scope=None)
+    geometry = _b1_geometry()
+    query = geometry["query"]
+    assert tuple(query.stride()) == (32 * 256, 256, 1)
+    exact_geometry = namespace["_fr13_fa2_qrow32_b1_exact_geometry"]
+    exact_args = {
+        key: value
+        for key, value in geometry.items()
+        if key not in {"flash_fn", "softmax_scale"}
+    }
+
+    assert exact_geometry(**exact_args)
+
+    wrong_head = torch.empty((32, 24, 257), dtype=torch.bfloat16)[..., :256]
+    assert tuple(wrong_head.stride()) == (24 * 257, 257, 1)
+    assert not exact_geometry(**{**exact_args, "query": wrong_head})
+
+    wrong_element = torch.empty((32, 24, 512), dtype=torch.bfloat16)[..., ::2]
+    assert tuple(wrong_element.shape) == (32, 24, 256)
+    assert int(wrong_element.stride(-1)) == 2
+    assert not exact_geometry(**{**exact_args, "query": wrong_element})
 
 
 def test_live_register_profile_capture_bypasses_final_geometry(

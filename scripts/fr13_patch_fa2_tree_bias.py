@@ -3578,7 +3578,8 @@ def _fr13_fa2_qrow32_b1_exact_geometry(
     exact = (
         query.dtype == torch.bfloat16
         and tuple(query.shape) == (32, 24, 256)
-        and tuple(query.stride()) == (24 * 256, 256, 1)
+        and int(query.stride(-2)) == 256
+        and int(query.stride(-1)) == 1
         and key_cache.dtype == torch.bfloat16
         and value_cache.dtype == torch.bfloat16
         and tuple(key_cache.shape[1:]) == (1024, 4, 256)
