@@ -1,0 +1,24 @@
+{
+  "base_commit": "2c280237463b8f4ec7b331ca82446b0dd8b2bcec",
+  "branch": "codex/sfwd-direct-nodegroups8-next-20260805",
+  "files": {
+    "scripts/fr13_generate_sfwd_conv_postprep_fusion_kernel.py": {
+      "bytes": 17810,
+      "sha256": "3885ea21175720f39017bea802799cea2283e6733396e0661735c9abfda3a293"
+    },
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py": {
+      "bytes": 73986,
+      "sha256": "7a8ad857b34e8a03947d34de7f15306ac28b2ee155672cab9564abcb252a181e"
+    },
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py": {
+      "bytes": 119111,
+      "sha256": "cc978bc7d40512e7b554a0d9953d3b0ce9802841a2be885d3361e1792303763c"
+    },
+    "tests/test_fr13_fixed32_sfwd_conv_postprep_nodegroup8_direct.py": {
+      "bytes": 11280,
+      "sha256": "d6e8b77378f57480a2e74e878d7e826c60df58c646b9cc2d9615ec9134f39407"
+    }
+  },
+  "schema": "fr13.fixed32.sfwd.nodegroup8_direct.source_manifest.v1",
+  "source_commit": "b73d78f681d0cea8487b97a75eaf2ac44d3bc8ec"
+}

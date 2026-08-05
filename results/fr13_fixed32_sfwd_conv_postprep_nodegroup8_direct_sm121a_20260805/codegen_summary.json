@@ -1,0 +1,595 @@
+{
+  "acceptance_claim": false,
+  "block_c": 256,
+  "builds": {
+    "incumbent": {
+      "b1_embedded": {
+        "batch": 1,
+        "block_c": 256,
+        "calls": 0,
+        "compile_hash": "c6e2769ab14efc27fbdcdc4a804d1b74f1bb76f1daf1f924c4e846850fa622d9",
+        "cubin_bytes": 204672,
+        "cubin_sha256": "3a1e86efce186184a243c8036461dd3fdc0ffc4cfbebbb06b627eb855f0f57b5",
+        "elf_shared_bytes": 0,
+        "embedded_gate_cta": true,
+        "encoded_sass_instructions": 3024,
+        "kernel": "incumbent",
+        "launch_shared_bytes": 0,
+        "ldg": 85,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 4,
+        "profile": "b1_embedded",
+        "ptx_sha256": "71c21f652856bfc65992aa53855fa40f6db82192656ec2dde87270ddd0e9507e",
+        "registers_per_thread": 56,
+        "sass_sha256": "50ac6d9bd6a3e4cdac1e2561a93e3f6f7535f7f9f2ceb57102b271fa20ff0f8e",
+        "stack_bytes": 0,
+        "static_sass_instructions": 2875,
+        "stg": 336,
+        "stl": 0
+      },
+      "b1_standalone": {
+        "batch": 1,
+        "block_c": 256,
+        "calls": 0,
+        "compile_hash": "91d3fdcc4d87527ff46e12f873f534b34876850acb86ff9876192971ce7e3270",
+        "cubin_bytes": 206120,
+        "cubin_sha256": "0212d8283ccb4db8d2fe73685c9a2247a4ff2571c013de4a636c5aa9bfa0bd9f",
+        "elf_shared_bytes": 0,
+        "embedded_gate_cta": false,
+        "encoded_sass_instructions": 3040,
+        "kernel": "incumbent",
+        "launch_shared_bytes": 0,
+        "ldg": 85,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 4,
+        "profile": "b1_standalone",
+        "ptx_sha256": "26d69df8bc14001205f4463b90e7aea4a0c258dd812547f86b3a7e3b4e6914ae",
+        "registers_per_thread": 56,
+        "sass_sha256": "b8ee499651eedbea77023b45dd4f99c6cdb79b62306cf7c41901e9696553cfb5",
+        "stack_bytes": 0,
+        "static_sass_instructions": 2889,
+        "stg": 336,
+        "stl": 0
+      },
+      "b4_embedded": {
+        "batch": 4,
+        "block_c": 256,
+        "calls": 0,
+        "compile_hash": "1226e5fd4c60c9dd266643c5668fda8896644d85b95e25745314434ce09eb993",
+        "cubin_bytes": 204672,
+        "cubin_sha256": "3a1e86efce186184a243c8036461dd3fdc0ffc4cfbebbb06b627eb855f0f57b5",
+        "elf_shared_bytes": 0,
+        "embedded_gate_cta": true,
+        "encoded_sass_instructions": 3024,
+        "kernel": "incumbent",
+        "launch_shared_bytes": 0,
+        "ldg": 85,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 4,
+        "profile": "b4_embedded",
+        "ptx_sha256": "71c21f652856bfc65992aa53855fa40f6db82192656ec2dde87270ddd0e9507e",
+        "registers_per_thread": 56,
+        "sass_sha256": "50ac6d9bd6a3e4cdac1e2561a93e3f6f7535f7f9f2ceb57102b271fa20ff0f8e",
+        "stack_bytes": 0,
+        "static_sass_instructions": 2875,
+        "stg": 336,
+        "stl": 0
+      },
+      "b4_standalone": {
+        "batch": 4,
+        "block_c": 256,
+        "calls": 0,
+        "compile_hash": "ba04828c6b2ea3d8b9dad767ca190e5ca99660235b6da1a922e6b6e1d61a3e7b",
+        "cubin_bytes": 206120,
+        "cubin_sha256": "0212d8283ccb4db8d2fe73685c9a2247a4ff2571c013de4a636c5aa9bfa0bd9f",
+        "elf_shared_bytes": 0,
+        "embedded_gate_cta": false,
+        "encoded_sass_instructions": 3040,
+        "kernel": "incumbent",
+        "launch_shared_bytes": 0,
+        "ldg": 85,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 4,
+        "profile": "b4_standalone",
+        "ptx_sha256": "26d69df8bc14001205f4463b90e7aea4a0c258dd812547f86b3a7e3b4e6914ae",
+        "registers_per_thread": 56,
+        "sass_sha256": "b8ee499651eedbea77023b45dd4f99c6cdb79b62306cf7c41901e9696553cfb5",
+        "stack_bytes": 0,
+        "static_sass_instructions": 2889,
+        "stg": 336,
+        "stl": 0
+      }
+    },
+    "nodegroup8_direct": {
+      "b1_embedded": {
+        "batch": 1,
+        "block_c": 256,
+        "calls": 0,
+        "compile_hash": "9409618856a2e87a7005530ca2b27afcc6157ee2f1e8b4f776af27980fbd13a3",
+        "cubin_bytes": 220640,
+        "cubin_sha256": "5f2be7ce34c12a2690103f4076f826ebfecbbf5198976fd27f8166e65756aad2",
+        "elf_shared_bytes": 0,
+        "embedded_gate_cta": true,
+        "encoded_sass_instructions": 3408,
+        "kernel": "nodegroup8_direct",
+        "launch_shared_bytes": 0,
+        "ldg": 131,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 4,
+        "profile": "b1_embedded",
+        "ptx_sha256": "9a78e9cc84cd12da92f36583d0600a8c35cfb2cb4d80f2f454d8589b1e0638e1",
+        "registers_per_thread": 48,
+        "sass_sha256": "31abfe6c7b8ced938f9450c3cad062e1e8a6d2eeef14afeb5ec91b94309bf8a3",
+        "stack_bytes": 0,
+        "static_sass_instructions": 3258,
+        "stg": 336,
+        "stl": 0
+      },
+      "b1_standalone": {
+        "batch": 1,
+        "block_c": 256,
+        "calls": 0,
+        "compile_hash": "ee16a407943f6d10f298a05ebcbcb110014c87837e93e1e1248ea559a2a289b5",
+        "cubin_bytes": 216536,
+        "cubin_sha256": "460c097e50c4de05b050f0750b5e2e98337505d23b05c87b0070bf16c963f8d2",
+        "elf_shared_bytes": 0,
+        "embedded_gate_cta": false,
+        "encoded_sass_instructions": 3392,
+        "kernel": "nodegroup8_direct",
+        "launch_shared_bytes": 0,
+        "ldg": 131,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 4,
+        "profile": "b1_standalone",
+        "ptx_sha256": "a4495e010fcddbecd1ab4c549f3560b5fdb3e0b96771fb1c05cfacc678c00bfe",
+        "registers_per_thread": 46,
+        "sass_sha256": "b74b36ce29f02bcada8a6b96d85d930beae73c53ff7c63bfacddced4e2974e8f",
+        "stack_bytes": 0,
+        "static_sass_instructions": 3236,
+        "stg": 336,
+        "stl": 0
+      },
+      "b4_embedded": {
+        "batch": 4,
+        "block_c": 256,
+        "calls": 0,
+        "compile_hash": "2e2a6f231fca4fb0e8626709aa2606aec8bc927ace8da6184675d04f1af8479b",
+        "cubin_bytes": 220640,
+        "cubin_sha256": "5f2be7ce34c12a2690103f4076f826ebfecbbf5198976fd27f8166e65756aad2",
+        "elf_shared_bytes": 0,
+        "embedded_gate_cta": true,
+        "encoded_sass_instructions": 3408,
+        "kernel": "nodegroup8_direct",
+        "launch_shared_bytes": 0,
+        "ldg": 131,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 4,
+        "profile": "b4_embedded",
+        "ptx_sha256": "9a78e9cc84cd12da92f36583d0600a8c35cfb2cb4d80f2f454d8589b1e0638e1",
+        "registers_per_thread": 48,
+        "sass_sha256": "31abfe6c7b8ced938f9450c3cad062e1e8a6d2eeef14afeb5ec91b94309bf8a3",
+        "stack_bytes": 0,
+        "static_sass_instructions": 3258,
+        "stg": 336,
+        "stl": 0
+      },
+      "b4_standalone": {
+        "batch": 4,
+        "block_c": 256,
+        "calls": 0,
+        "compile_hash": "447a073313079d0f98c922ad544241b1a806de714ae408f5675063cea49ab802",
+        "cubin_bytes": 216536,
+        "cubin_sha256": "460c097e50c4de05b050f0750b5e2e98337505d23b05c87b0070bf16c963f8d2",
+        "elf_shared_bytes": 0,
+        "embedded_gate_cta": false,
+        "encoded_sass_instructions": 3392,
+        "kernel": "nodegroup8_direct",
+        "launch_shared_bytes": 0,
+        "ldg": 131,
+        "ldl": 0,
+        "local_bytes": 0,
+        "num_stages": 3,
+        "num_warps": 4,
+        "profile": "b4_standalone",
+        "ptx_sha256": "a4495e010fcddbecd1ab4c549f3560b5fdb3e0b96771fb1c05cfacc678c00bfe",
+        "registers_per_thread": 46,
+        "sass_sha256": "b74b36ce29f02bcada8a6b96d85d930beae73c53ff7c63bfacddced4e2974e8f",
+        "stack_bytes": 0,
+        "static_sass_instructions": 3236,
+        "stg": 336,
+        "stl": 0
+      }
+    }
+  },
+  "comparison": {
+    "b1_embedded": {
+      "calls": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "cubin_bytes": {
+        "delta": 15968,
+        "incumbent": 204672,
+        "nodegroup8_direct": 220640
+      },
+      "elf_shared_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "encoded_sass_instructions": {
+        "delta": 384,
+        "incumbent": 3024,
+        "nodegroup8_direct": 3408
+      },
+      "launch_shared_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "ldg": {
+        "delta": 46,
+        "incumbent": 85,
+        "nodegroup8_direct": 131
+      },
+      "ldl": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "local_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "registers_per_thread": {
+        "delta": -8,
+        "incumbent": 56,
+        "nodegroup8_direct": 48
+      },
+      "stack_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "static_sass_instructions": {
+        "delta": 383,
+        "incumbent": 2875,
+        "nodegroup8_direct": 3258
+      },
+      "stg": {
+        "delta": 0,
+        "incumbent": 336,
+        "nodegroup8_direct": 336
+      },
+      "stl": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      }
+    },
+    "b1_standalone": {
+      "calls": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "cubin_bytes": {
+        "delta": 10416,
+        "incumbent": 206120,
+        "nodegroup8_direct": 216536
+      },
+      "elf_shared_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "encoded_sass_instructions": {
+        "delta": 352,
+        "incumbent": 3040,
+        "nodegroup8_direct": 3392
+      },
+      "launch_shared_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "ldg": {
+        "delta": 46,
+        "incumbent": 85,
+        "nodegroup8_direct": 131
+      },
+      "ldl": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "local_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "registers_per_thread": {
+        "delta": -10,
+        "incumbent": 56,
+        "nodegroup8_direct": 46
+      },
+      "stack_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "static_sass_instructions": {
+        "delta": 347,
+        "incumbent": 2889,
+        "nodegroup8_direct": 3236
+      },
+      "stg": {
+        "delta": 0,
+        "incumbent": 336,
+        "nodegroup8_direct": 336
+      },
+      "stl": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      }
+    },
+    "b4_embedded": {
+      "calls": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "cubin_bytes": {
+        "delta": 15968,
+        "incumbent": 204672,
+        "nodegroup8_direct": 220640
+      },
+      "elf_shared_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "encoded_sass_instructions": {
+        "delta": 384,
+        "incumbent": 3024,
+        "nodegroup8_direct": 3408
+      },
+      "launch_shared_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "ldg": {
+        "delta": 46,
+        "incumbent": 85,
+        "nodegroup8_direct": 131
+      },
+      "ldl": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "local_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "registers_per_thread": {
+        "delta": -8,
+        "incumbent": 56,
+        "nodegroup8_direct": 48
+      },
+      "stack_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "static_sass_instructions": {
+        "delta": 383,
+        "incumbent": 2875,
+        "nodegroup8_direct": 3258
+      },
+      "stg": {
+        "delta": 0,
+        "incumbent": 336,
+        "nodegroup8_direct": 336
+      },
+      "stl": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      }
+    },
+    "b4_standalone": {
+      "calls": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "cubin_bytes": {
+        "delta": 10416,
+        "incumbent": 206120,
+        "nodegroup8_direct": 216536
+      },
+      "elf_shared_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "encoded_sass_instructions": {
+        "delta": 352,
+        "incumbent": 3040,
+        "nodegroup8_direct": 3392
+      },
+      "launch_shared_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "ldg": {
+        "delta": 46,
+        "incumbent": 85,
+        "nodegroup8_direct": 131
+      },
+      "ldl": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "local_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "registers_per_thread": {
+        "delta": -10,
+        "incumbent": 56,
+        "nodegroup8_direct": 46
+      },
+      "stack_bytes": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      },
+      "static_sass_instructions": {
+        "delta": 347,
+        "incumbent": 2889,
+        "nodegroup8_direct": 3236
+      },
+      "stg": {
+        "delta": 0,
+        "incumbent": 336,
+        "nodegroup8_direct": 336
+      },
+      "stl": {
+        "delta": 0,
+        "incumbent": 0,
+        "nodegroup8_direct": 0
+      }
+    }
+  },
+  "gpu_visible": false,
+  "memory_guard": {
+    "minimum_mem_available_kib": 20971520,
+    "samples": [
+      {
+        "mem_available_kib": 34204544,
+        "stage": "before_source_read"
+      },
+      {
+        "mem_available_kib": 34194120,
+        "stage": "before_incumbent_b1_standalone"
+      },
+      {
+        "mem_available_kib": 34127000,
+        "stage": "after_incumbent_b1_standalone"
+      },
+      {
+        "mem_available_kib": 34127000,
+        "stage": "before_incumbent_b1_embedded"
+      },
+      {
+        "mem_available_kib": 34097668,
+        "stage": "after_incumbent_b1_embedded"
+      },
+      {
+        "mem_available_kib": 34097668,
+        "stage": "before_incumbent_b4_standalone"
+      },
+      {
+        "mem_available_kib": 34126532,
+        "stage": "after_incumbent_b4_standalone"
+      },
+      {
+        "mem_available_kib": 34126532,
+        "stage": "before_incumbent_b4_embedded"
+      },
+      {
+        "mem_available_kib": 34157472,
+        "stage": "after_incumbent_b4_embedded"
+      },
+      {
+        "mem_available_kib": 34157472,
+        "stage": "before_nodegroup8_direct_b1_standalone"
+      },
+      {
+        "mem_available_kib": 34149100,
+        "stage": "after_nodegroup8_direct_b1_standalone"
+      },
+      {
+        "mem_available_kib": 34149100,
+        "stage": "before_nodegroup8_direct_b1_embedded"
+      },
+      {
+        "mem_available_kib": 34236612,
+        "stage": "after_nodegroup8_direct_b1_embedded"
+      },
+      {
+        "mem_available_kib": 34236612,
+        "stage": "before_nodegroup8_direct_b4_standalone"
+      },
+      {
+        "mem_available_kib": 34302436,
+        "stage": "after_nodegroup8_direct_b4_standalone"
+      },
+      {
+        "mem_available_kib": 34302436,
+        "stage": "before_nodegroup8_direct_b4_embedded"
+      },
+      {
+        "mem_available_kib": 34298200,
+        "stage": "after_nodegroup8_direct_b4_embedded"
+      }
+    ]
+  },
+  "num_stages": 3,
+  "num_warps": 4,
+  "offline_only": true,
+  "prior_rowgroup8_real_b1_regression": {
+    "artifact": "results/fr13_fixed32_sfwd_rowgroup8_k64_root_b1_timing_rejection_20260802",
+    "candidate": "fixed32_sfwd_state_fusion_rowgroup8_v3",
+    "candidate_ms_per_step": 244.569046597,
+    "delta_ms_per_step": 2.282206918,
+    "delta_percent": 0.941944235,
+    "distinction": "measured v3 used an 8x256 row tensor, dynamic source_flat descriptors, masked prior/x selection, and row-dependent addresses; this candidate uses fixed scalar-unrolled node branches and has no source descriptor, gather, shared tile, reduction, or barrier",
+    "equivalent_design": false,
+    "stock_ms_per_step": 242.286839679
+  },
+  "schema": "fr13.fixed32.sfwd.nodegroup8_direct.sm121a_codegen.v1",
+  "shape": {
+    "incumbent_channel_programs_per_request": 40,
+    "incumbent_x_loads_per_channel": 32,
+    "node_groups": 4,
+    "nodegroup8_channel_programs_per_request": 160,
+    "nodegroup8_x_loads_per_channel_across_groups": 54,
+    "nodes_per_group": 8
+  },
+  "source_commit": "b73d78f681d0cea8487b97a75eaf2ac44d3bc8ec",
+  "source_path": "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion_kernel.py",
+  "source_sha256": "cc978bc7d40512e7b554a0d9953d3b0ce9802841a2be885d3361e1792303763c",
+  "target": "sm_121a",
+  "timing_claim": false,
+  "toolchain": {
+    "cuobjdump": "Build cuda_13.0.r13.0/compiler.36400806_0",
+    "nvdisasm": "Build cuda_13.0.r13.0/compiler.36400806_0",
+    "python": "3.12.3",
+    "triton": "3.6.0"
+  }
+}

@@ -1,0 +1,9 @@
+kernel	profile	batch	embedded_gate_cta	registers_per_thread	stack_bytes	local_bytes	elf_shared_bytes	launch_shared_bytes	cubin_bytes	static_sass_instructions	ldg	stg	calls
+incumbent	b1_standalone	1	False	56	0	0	0	0	206120	2889	85	336	0
+incumbent	b1_embedded	1	True	56	0	0	0	0	204672	2875	85	336	0
+incumbent	b4_standalone	4	False	56	0	0	0	0	206120	2889	85	336	0
+incumbent	b4_embedded	4	True	56	0	0	0	0	204672	2875	85	336	0
+nodegroup8_direct	b1_standalone	1	False	46	0	0	0	0	216536	3236	131	336	0
+nodegroup8_direct	b1_embedded	1	True	48	0	0	0	0	220640	3258	131	336	0
+nodegroup8_direct	b4_standalone	4	False	46	0	0	0	0	216536	3236	131	336	0
+nodegroup8_direct	b4_embedded	4	True	48	0	0	0	0	220640	3258	131	336	0
