@@ -17,6 +17,7 @@ FIXED32_MODE=${FR13_QROW32_FIXED32_MODE:-hydra27_fixed32}
 LIVE_AB_ARM=${FR13_QROW32_LIVE_AB_ARM:-qrow32}
 FA2_HEAD=${FR13_QROW32_FA2_HEAD:-}
 SOURCE_CLOSURE_SHA256=${FR13_QROW32_SOURCE_CLOSURE_SHA256:-}
+FA2_SOURCE=${FR13_QROW32_FA2_SOURCE:-}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 TASK_IDS=astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398
@@ -56,8 +57,17 @@ case "$LIVE_AB_ARM" in
        && "$SOURCE_CLOSURE_SHA256" == "f210a5ebb93930e89b0d9fe0cb6e53a76c9359873ad4268e81d3f17a7443bdf2" ]] \
       || { echo "GQA-pair live gate binary/source provenance drifted" >&2; exit 2; }
     ;;
+  visibility)
+    [[ "$FIXED32_MODE" == "hydra27_fixed32" \
+       && "$CANDIDATE_SHA256" == "805635d6881dbf73287d66c10541880b7cf93bcb6bf7b04e50efd3d32728b0aa" \
+       && "$CANDIDATE_BYTES" == "299810632" \
+       && "$FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
+       && "$SOURCE_CLOSURE_SHA256" == "1dac8f7fd910a564c5c3b792770029f0013e2df48c25c89376e4d5e7da949ced" \
+       && "$FA2_SOURCE" == /* && -d "$FA2_SOURCE" && ! -L "$FA2_SOURCE" ]] \
+      || { echo "visibility B4 live gate binary/source provenance drifted" >&2; exit 2; }
+    ;;
   *)
-    echo "FR13_QROW32_LIVE_AB_ARM must be qrow32 or gqa_pair" >&2
+    echo "FR13_QROW32_LIVE_AB_ARM must be qrow32, gqa_pair, or visibility" >&2
     exit 2
     ;;
 esac
@@ -81,6 +91,10 @@ ARMDIR="$RUNROOT_ABS/$ARM"
   || { echo "pinned K64 block-map SHA-256 drift" >&2; exit 2; }
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
+if [[ "$LIVE_AB_ARM" == "visibility" ]]; then
+  "$PYTHON_BIN" scripts/fr13_fa2_fixed32_visibility_gate.py validate-b4 \
+    --candidate-so "$FORKED_FA2_SO" --fa2-source "$FA2_SOURCE" >/dev/null
+fi
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before the gate" >&2; exit 2; }
 
@@ -180,11 +194,21 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
   || { echo "qrow32 gate runner changed during execution" >&2; exit 14; }
 (( serve_rc == 0 )) || exit "$serve_rc"
 
-"$PYTHON_BIN" scripts/fr13_fa2_qrow32_gate.py verify-live \
-  --result "$ARMDIR/logs/fr13_fa2_qrow32_live_paged_ab.json" \
-  --campaign-arm "$ARMDIR/swe_out/verified/fixed32_taw_campaign_arm.json" \
-  --campaign-provenance "$ARMDIR/swe_out/verified/fixed32_qwen_campaign_provenance.json" \
-  --candidate-so "$FORKED_FA2_SO" \
-  --fixed32-mode "$FIXED32_MODE" \
-  --source-commit "$SOURCE_COMMIT" \
-  > "$ARMDIR/qrow32_live_verification.json"
+if [[ "$LIVE_AB_ARM" == "visibility" ]]; then
+  "$PYTHON_BIN" scripts/fr13_fa2_fixed32_visibility_gate.py verify-b4 \
+    --result "$ARMDIR/logs/fr13_fa2_qrow32_live_paged_ab.json" \
+    --campaign-arm "$ARMDIR/swe_out/verified/fixed32_taw_campaign_arm.json" \
+    --campaign-provenance "$ARMDIR/swe_out/verified/fixed32_qwen_campaign_provenance.json" \
+    --candidate-so "$FORKED_FA2_SO" --fa2-source "$FA2_SOURCE" \
+    --fixed32-mode "$FIXED32_MODE" --source-commit "$SOURCE_COMMIT" \
+    > "$ARMDIR/qrow32_live_verification.json"
+else
+  "$PYTHON_BIN" scripts/fr13_fa2_qrow32_gate.py verify-live \
+    --result "$ARMDIR/logs/fr13_fa2_qrow32_live_paged_ab.json" \
+    --campaign-arm "$ARMDIR/swe_out/verified/fixed32_taw_campaign_arm.json" \
+    --campaign-provenance "$ARMDIR/swe_out/verified/fixed32_qwen_campaign_provenance.json" \
+    --candidate-so "$FORKED_FA2_SO" \
+    --fixed32-mode "$FIXED32_MODE" \
+    --source-commit "$SOURCE_COMMIT" \
+    > "$ARMDIR/qrow32_live_verification.json"
+fi

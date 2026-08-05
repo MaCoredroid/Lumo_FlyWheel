@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One authenticated real SWE-Verified Hydra27 B1 byte gate for qrow32 split2.
+# One authenticated real SWE-Verified Hydra27 B1 byte gate for qrow32.
 # The incumbent Qrow16 FULL graph is served; this script emits no timing data.
 set -euo pipefail
 
@@ -27,16 +27,30 @@ esac
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 FIXED32_MODE=hydra27_fixed32
+LIVE_ARM=${FR13_QROW32_B1_LIVE_ARM:-split2}
 TASK_ID=astropy__astropy-12907
 SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
 SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
 BLOCK_MAP=scripts/fr13_dvk_subset_blocks.json
 BLOCK_MAP_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
 BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
-CANDIDATE_SHA256=a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a
-CANDIDATE_BYTES=300154616
 FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
-SOURCE_CLOSURE_SHA256=22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff
+case "$LIVE_ARM" in
+  split2)
+    CANDIDATE_SHA256=a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a
+    CANDIDATE_BYTES=300154616
+    SOURCE_CLOSURE_SHA256=22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff
+    ;;
+  visibility)
+    CANDIDATE_SHA256=c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79
+    CANDIDATE_BYTES=300200192
+    SOURCE_CLOSURE_SHA256=a30eca031cd5067133e6278527787c5987635670930e5840ac983f66b088e4fc
+    ;;
+  *)
+    echo "FR13_QROW32_B1_LIVE_ARM must be split2 or visibility" >&2
+    exit 2
+    ;;
+esac
 MANDATORY_WEIGHT_BYTES=32666638208
 MANDATORY_WEIGHT_FLOOR_MS=119.658015414
 ONE_SIDED_U95_CAP_MS=137.6067177261
@@ -45,7 +59,7 @@ SOURCE_COMMIT=$(git rev-parse HEAD)
 PATCH_SOURCE_SHA256=$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | awk '{print $1}')
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
-ARM="hydra27_fixed32_fa2_qrow32_split2_k64_b1_gate_${TAG}"
+ARM="hydra27_fixed32_fa2_qrow32_${LIVE_ARM}_k64_b1_gate_${TAG}"
 ARMDIR="$RUNROOT_ABS/$ARM"
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
@@ -64,7 +78,7 @@ unset required
 [[ -f "$QROW32_B1_FA2_SO" \
    && "$(stat -c '%s' "$QROW32_B1_FA2_SO")" == "$CANDIDATE_BYTES" \
    && "$(sha256sum "$QROW32_B1_FA2_SO" | awk '{print $1}')" == "$CANDIDATE_SHA256" ]] \
-  || { echo "QROW32_B1_FA2_SO is not the pinned qrow32 split2 binary" >&2; exit 2; }
+  || { echo "QROW32_B1_FA2_SO is not the pinned qrow32 $LIVE_ARM binary" >&2; exit 2; }
 [[ -d "$QROW32_B1_FA2_SOURCE" \
    && "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" \
    && "$(sha256sum "$BLOCK_MAP" | awk '{print $1}')" == "$BLOCK_MAP_SHA256" ]] \
@@ -73,24 +87,33 @@ unset required
   || { echo "tracked worktree must be clean" >&2; exit 2; }
 
 "$PYTHON_BIN" scripts/fr13_qrow32_b1_pass_sidecar.py validate-source \
-  --source-root "$QROW32_B1_FA2_SOURCE" >/dev/null
+  --source-root "$QROW32_B1_FA2_SOURCE" --arm "$LIVE_ARM" >/dev/null
 PYTHONPATH="$REPO/scripts${PYTHONPATH:+:$PYTHONPATH}" \
-  "$PYTHON_BIN" - "$QROW32_B1_FA2_SO" "$SOURCE_COMMIT" <<'PY'
+  "$PYTHON_BIN" - "$QROW32_B1_FA2_SO" "$SOURCE_COMMIT" "$LIVE_ARM" <<'PY'
 import sys
 from pathlib import Path
 
-from scripts import fr13_fixed32_contract as contract
+from scripts import fr13_fixed32_contract as fixed_contract
 from scripts import fr13_qrow32_b1_pass_sidecar as qrow
 
-qrow.validate_candidate(Path(sys.argv[1]), qrow.CANDIDATE_SHA256)
+arm = sys.argv[3]
+candidate = qrow._candidate_contract(arm)
+qrow.validate_candidate(Path(sys.argv[1]), candidate["sha256"], arm=arm)
 qrow.validate_patch_source(
     Path("scripts/fr13_patch_fa2_tree_bias.py"),
     expected_source_commit=sys.argv[2],
 )
-if (
-    contract.QROW32_B1_SPLIT2_FA2_SHA256 != qrow.CANDIDATE_SHA256
-    or contract.QROW32_B1_SPLIT2_FA2_SIZE != qrow.CANDIDATE_SIZE
-):
+expected = fixed_contract._expected_runtime_fa2_identity(
+    {
+        "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
+        "FR13_FA2_QROW16_PRODUCTION": "0",
+        "FR13_FA2_QROW32_LIVE_PAGED_AB": "0",
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM": arm,
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+        "FR13_FA2_QROW32_B1_SO_SHA256": candidate["sha256"],
+    }
+)
+if expected != (candidate["size"], candidate["sha256"]):
     raise SystemExit("runtime and pass-sidecar binary pins differ")
 PY
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
@@ -123,8 +146,8 @@ mkdir -p "$RUNROOT_ABS"
   --output "$RUNROOT_ABS/runtime_manifest.at_launch.json"
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
-printf 'classification=authenticated_one_real_swe_verified_qrow32_split2_byte_gate\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nqrow16_reference_served=1\ncandidate_returned=0\nmode=%s\ntask_count=1\ntask_id=%s\nsubset_sha256=%s\nbatch_size=1\nconcurrency=1\nphysical_rows=32\ndraft_vocab_root=1\ndraft_vocab_k=65536\ndraft_vocab_blocks_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\nsource=%s\npatch_source_sha256=%s\nrunner_sha256=%s\nstarted=%s\n' \
-  "$FIXED32_MODE" "$TASK_ID" "$SUBSET_SHA256" "$BLOCK_MAP_SHA256" \
+printf 'classification=authenticated_one_real_swe_verified_qrow32_%s_byte_gate\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nqrow16_reference_served=1\ncandidate_returned=0\nmode=%s\ntask_count=1\ntask_id=%s\nsubset_sha256=%s\nbatch_size=1\nconcurrency=1\nphysical_rows=32\ndraft_vocab_root=1\ndraft_vocab_k=65536\ndraft_vocab_blocks_sha256=%s\ncandidate_so_sha256=%s\ncandidate_so_bytes=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\nsource=%s\npatch_source_sha256=%s\nrunner_sha256=%s\nstarted=%s\n' \
+  "$LIVE_ARM" "$FIXED32_MODE" "$TASK_ID" "$SUBSET_SHA256" "$BLOCK_MAP_SHA256" \
   "$CANDIDATE_SHA256" "$CANDIDATE_BYTES" "$FA2_HEAD" \
   "$SOURCE_CLOSURE_SHA256" "$SOURCE_COMMIT" "$PATCH_SOURCE_SHA256" \
   "$RUNNER_SHA256" "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/launcher_meta.txt"
@@ -157,9 +180,9 @@ if env \
     FR13_DRAFT_HEAD_M32_LIVE_AB=0 FR13_DRAFT_HEAD_M32_PRODUCTION=0 \
     FR13_FA2_QROW16_LIVE_PAGED_AB=0 FR13_FA2_QROW16_PRODUCTION=0 \
     FR13_FA2_QROW32_LIVE_PAGED_AB=0 \
-    FR13_FA2_QROW32_B1_LIVE_AB_ARM=split2 \
+    FR13_FA2_QROW32_B1_LIVE_AB_ARM="$LIVE_ARM" \
     FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID="$TASK_ID" \
-    FR13_FA2_QROW32_B1_LIVE_AB_JSON=/logs/fr13_fa2_qrow32_b1_split2_live_paged_ab.json \
+    FR13_FA2_QROW32_B1_LIVE_AB_JSON="/logs/fr13_fa2_qrow32_b1_${LIVE_ARM}_live_paged_ab.json" \
     FR13_FA2_QROW32_B1_PRODUCTION_ARM= \
     FR13_FA2_QROW32_B1_SO_SHA256="$CANDIDATE_SHA256" \
     FR13_FA2_QROW32_B1_SO_SIZE="$CANDIDATE_BYTES" \
@@ -209,7 +232,7 @@ for expected in \
   'FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=0' \
   'FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0' \
   'FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0' \
-  'FR13_FA2_QROW32_B1_LIVE_AB_ARM=split2' \
+  "FR13_FA2_QROW32_B1_LIVE_AB_ARM=$LIVE_ARM" \
   "FR13_FA2_QROW32_B1_SO_SHA256=$CANDIDATE_SHA256" \
   "FR13_FA2_QROW32_B1_SO_SIZE=$CANDIDATE_BYTES" \
   "FR13_FA2_QROW32_B1_FA2_HEAD=$FA2_HEAD" \
@@ -217,24 +240,24 @@ for expected in \
   "FR13_FA2_QROW32_B1_SOURCE_COMMIT=$SOURCE_COMMIT" \
   "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=$PATCH_SOURCE_SHA256"; do
   [[ "$(grep -Fxc "$expected" "$CONTAINER_ENV")" -eq 1 ]] \
-    || { echo "container lacks exact qrow32 split2 gate pin: $expected" >&2; exit 4; }
+    || { echo "container lacks exact qrow32 $LIVE_ARM gate pin: $expected" >&2; exit 4; }
 done
 unset expected
 
-LIVE_RESULT="$ARMDIR/logs/fr13_fa2_qrow32_b1_split2_live_paged_ab.json"
+LIVE_RESULT="$ARMDIR/logs/fr13_fa2_qrow32_b1_${LIVE_ARM}_live_paged_ab.json"
 DIAGNOSTIC="$ARMDIR/fixed32_b1_diagnostic.json"
 HEALTH="$ARMDIR/health.json"
 TRAFFIC_AUDIT="$ARMDIR/fixed32_chat_traffic_audit.json"
 for artifact in "$LIVE_RESULT" "$DIAGNOSTIC" "$HEALTH" "$TRAFFIC_AUDIT"; do
   [[ -f "$artifact" && ! -L "$artifact" ]] \
-    || { echo "qrow32 split2 gate artifact is missing or unsafe: $artifact" >&2; exit 4; }
+    || { echo "qrow32 $LIVE_ARM gate artifact is missing or unsafe: $artifact" >&2; exit 4; }
 done
 unset artifact
 "$PYTHON_BIN" - \
   "$LIVE_RESULT" "$DIAGNOSTIC" "$HEALTH" "$TRAFFIC_AUDIT" \
   "$QROW32_B1_FA2_SO" "$SOURCE_COMMIT" "$PATCH_SOURCE_SHA256" \
-  "$SUBSET_SHA256" "$BLOCK_MAP_SHA256" \
-  "$ARMDIR/qrow32_split2_live_verification.json" <<'PY'
+  "$SUBSET_SHA256" "$BLOCK_MAP_SHA256" "$LIVE_ARM" \
+  "$ARMDIR/qrow32_${LIVE_ARM}_live_verification.json" <<'PY'
 import hashlib
 import json
 import sys
@@ -244,17 +267,18 @@ from scripts import fr13_qrow32_b1_pass_sidecar as qrow
 
 (
     live_path, diagnostic_path, health_path, traffic_path, candidate_path,
-    source_commit, patch_sha, subset_sha, block_sha, output_path,
+    source_commit, patch_sha, subset_sha, block_sha, live_arm, output_path,
 ) = sys.argv[1:]
+candidate = qrow._candidate_contract(live_arm)
 live, live_raw = qrow.load_json(Path(live_path))
 summary = qrow.validate_live_result(
     live,
-    candidate_sha256=qrow.CANDIDATE_SHA256,
-    arm="split2",
+    candidate_sha256=candidate["sha256"],
+    arm=live_arm,
     source_commit=source_commit,
     patch_source_sha256=patch_sha,
 )
-qrow.validate_candidate(Path(candidate_path), qrow.CANDIDATE_SHA256)
+qrow.validate_candidate(Path(candidate_path), candidate["sha256"], arm=live_arm)
 diagnostic, diagnostic_raw = qrow.load_json(Path(diagnostic_path))
 if diagnostic != {
     "schema": "fr13-fixed32-b1-diagnostic-v1",
@@ -302,7 +326,7 @@ if (
 ):
     raise SystemExit("authenticated real-task traffic audit drifted")
 payload = {
-    "schema": "fr13.fixed32.fa2_qrow32_split2_k64_b1_live_verification.v1",
+    "schema": f"fr13.fixed32.fa2_qrow32_{live_arm}_k64_b1_live_verification.v1",
     "status": "PASS",
     "suite": "SWE-Verified",
     "task_ids": [summary["instance_id"]],
@@ -314,10 +338,10 @@ payload = {
     "topology": "hydra27_fixed32",
     "draft_vocab_root": 1,
     "draft_vocab_k": 65536,
-    "candidate_so_sha256": qrow.CANDIDATE_SHA256,
-    "candidate_so_size": qrow.CANDIDATE_SIZE,
+    "candidate_so_sha256": candidate["sha256"],
+    "candidate_so_size": candidate["size"],
     "fa2_head": qrow.FA2_HEAD,
-    "fa2_source_closure_sha256": qrow.SOURCE_CLOSURE_SHA256,
+    "fa2_source_closure_sha256": candidate["source_closure_sha256"],
     "source_commit": source_commit,
     "patch_source_sha256": patch_sha,
     "live_result_sha256": hashlib.sha256(live_raw).hexdigest(),

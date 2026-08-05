@@ -4048,6 +4048,21 @@ _FR13_FA2_QROW32_LIVE_AB_ARMS = {
             "f210a5ebb93930e89b0d9fe0cb6e53a76c9359873ad4268e81d3f17a7443bdf2"
         ),
     },
+    "visibility": {
+        "sentinel": 131092,
+        "num_splits": 0,
+        "candidate_dispatch": (
+            "qrow32 fixed32 visibility-mask exact B4 geometry; no fallback"
+        ),
+        "candidate_so_sha256": (
+            "805635d6881dbf73287d66c10541880b7cf93bcb6bf7b04e50efd3d32728b0aa"
+        ),
+        "candidate_so_size": 299810632,
+        "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+        "fa2_source_closure_sha256": (
+            "1dac8f7fd910a564c5c3b792770029f0013e2df48c25c89376e4d5e7da949ced"
+        ),
+    },
 }
 _FR13_FA2_QROW32_TARGET_LAYERS = tuple(
     f"language_model.model.layers.{index}.self_attn.attn"
@@ -4325,6 +4340,8 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
     ):
         raise RuntimeError("FR13 qrow32 live gate has no candidate SO digest")
     candidate_arm, candidate_contract = _fr13_fa2_qrow32_live_ab_contract()
+    if candidate_arm == "visibility" and fixed32_mode != "hydra27_fixed32":
+        raise RuntimeError("FR13 qrow32 visibility gate requires Hydra27")
     candidate_so_size_raw = os.environ.get("FR13_FA2_QROW32_SO_SIZE", "")
     try:
         candidate_so_size = int(candidate_so_size_raw)
@@ -4515,6 +4532,14 @@ _FR13_FA2_QROW32_B1_ARMS = {
         ),
         "candidate_dispatch": "qrow32 B1 split2 exact geometry; no fallback",
     },
+    "visibility": {
+        "sentinel": 1179791668,
+        "num_splits": 0,
+        "split_scratch_allocation": "not used; num_splits=0",
+        "candidate_dispatch": (
+            "qrow32 B1 fixed32 visibility exact geometry; no fallback"
+        ),
+    },
 }
 _FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL = 1179791667
 _FR13_FA2_QROW32_B1_CANDIDATE_SHA256 = (
@@ -4524,6 +4549,13 @@ _FR13_FA2_QROW32_B1_CANDIDATE_SIZE = 300154616
 _FR13_FA2_QROW32_B1_FA2_HEAD = "29210221863736a08f71a866459e368ad1ac4a95"
 _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256 = (
     "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff"
+)
+_FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SHA256 = (
+    "c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79"
+)
+_FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SIZE = 300200192
+_FR13_FA2_QROW32_B1_VISIBILITY_SOURCE_CLOSURE_SHA256 = (
+    "a30eca031cd5067133e6278527787c5987635670930e5840ac983f66b088e4fc"
 )
 _FR13_FA2_QROW32_B1_TARGET_LAYERS = tuple(
     f"language_model.model.layers.{index}.self_attn.attn"
@@ -4558,7 +4590,8 @@ def _fr13_fa2_qrow32_b1_arm(env_name):
     elif env_name == "FR13_FA2_QROW32_B1_LIVE_AB_ARM":
         if arm not in _FR13_FA2_QROW32_B1_ARMS:
             raise RuntimeError(
-                f"{env_name} must be empty, nosplit, or split2; got {arm!r}"
+                f"{env_name} must be empty, nosplit, split2, or visibility; "
+                f"got {arm!r}"
             )
     else:
         raise RuntimeError(f"unknown FR13 qrow32 B1 arm selector: {env_name}")
@@ -4593,7 +4626,26 @@ def _fr13_fa2_qrow32_b1_require_k64():
         raise RuntimeError("FR13 qrow32 B1 selectors require K64 ROOT=1")
 
 
-def _fr13_fa2_qrow32_b1_require_identity():
+def _fr13_fa2_qrow32_b1_identity(arm=None):
+    if arm == "visibility":
+        return {
+            "candidate_sha256": _FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SHA256,
+            "candidate_size": _FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SIZE,
+            "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
+            "source_closure_sha256": (
+                _FR13_FA2_QROW32_B1_VISIBILITY_SOURCE_CLOSURE_SHA256
+            ),
+        }
+    return {
+        "candidate_sha256": _FR13_FA2_QROW32_B1_CANDIDATE_SHA256,
+        "candidate_size": _FR13_FA2_QROW32_B1_CANDIDATE_SIZE,
+        "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
+        "source_closure_sha256": _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256,
+    }
+
+
+def _fr13_fa2_qrow32_b1_require_identity(arm=None):
+    identity = _fr13_fa2_qrow32_b1_identity(arm)
     candidate_digest = _fr13_fa2_qrow32_b1_digest(
         "FR13_FA2_QROW32_B1_SO_SHA256", "candidate SO"
     )
@@ -4604,13 +4656,13 @@ def _fr13_fa2_qrow32_b1_require_identity():
         "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256", "patch source"
     )
     if (
-        candidate_digest != _FR13_FA2_QROW32_B1_CANDIDATE_SHA256
+        candidate_digest != identity["candidate_sha256"]
         or int(os.environ.get("FR13_FA2_QROW32_B1_SO_SIZE", "0"))
-        != _FR13_FA2_QROW32_B1_CANDIDATE_SIZE
+        != identity["candidate_size"]
         or os.environ.get("FR13_FA2_QROW32_B1_FA2_HEAD", "")
-        != _FR13_FA2_QROW32_B1_FA2_HEAD
+        != identity["fa2_head"]
         or os.environ.get("FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256", "")
-        != _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256
+        != identity["source_closure_sha256"]
     ):
         raise RuntimeError("FR13 qrow32 B1 pinned identity drifted")
     return candidate_digest, source_commit, patch_source
@@ -4818,7 +4870,7 @@ def _fr13_fa2_qrow32_b1_live_register(
     if arm is None or _FR13_FA2_QROW32_B1_LIVE_ATTEMPTED:
         return tree_bias
     _fr13_fa2_qrow32_b1_require_k64()
-    _fr13_fa2_qrow32_b1_require_identity()
+    _fr13_fa2_qrow32_b1_require_identity(arm)
     if _fr13_fa2_qrow32_b1_profile_capture_active():
         return _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias)
     geometry_mismatches = _fr13_fa2_qrow32_b1_geometry_mismatches(
@@ -4954,7 +5006,7 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         raise RuntimeError("FR13 qrow32 B1 live topology drifted")
     _fr13_fa2_qrow32_b1_require_k64()
     candidate_digest, source_commit, patch_source_digest = (
-        _fr13_fa2_qrow32_b1_require_identity()
+        _fr13_fa2_qrow32_b1_require_identity(arm)
     )
     graph = _FR13_FA2_QROW32_B1_LIVE_GRAPHS.get(int(graph_id))
     if not isinstance(graph, dict) or set(graph) != set(
@@ -5008,6 +5060,7 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         layers.append({"layer_name": layer_name, "output": output, "lse": lse})
     passed = output_mismatches == 0 and lse_mismatches == 0
     config = _FR13_FA2_QROW32_B1_ARMS[arm]
+    identity = _fr13_fa2_qrow32_b1_identity(arm)
     record = {
         "schema": "fr13.fixed32.fa2_qrow32_b1_live_paged_ab.v2",
         "status": "PASS" if passed else "FAIL", "suite": "SWE-Verified",
@@ -5021,12 +5074,10 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
             _FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL
         ),
         "reference_dispatch": "qrow16 incumbent exact geometry; no fallback",
-        "candidate_so_size": _FR13_FA2_QROW32_B1_CANDIDATE_SIZE,
+        "candidate_so_size": identity["candidate_size"],
         "candidate_so_sha256": candidate_digest,
-        "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
-        "fa2_source_closure_sha256": (
-            _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256
-        ),
+        "fa2_head": identity["fa2_head"],
+        "fa2_source_closure_sha256": identity["source_closure_sha256"],
         "source_commit": source_commit,
         "patch_source_sha256": patch_source_digest,
         "runtime_mode": "FULL", "graph_id": int(graph_id),

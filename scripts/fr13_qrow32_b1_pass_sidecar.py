@@ -16,6 +16,7 @@ from typing import Any
 LIVE_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_live_paged_ab.v2"
 SIDECAR_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_production_pass.v2"
 ARM = "nosplit"
+VISIBILITY_ARM = "visibility"
 SELECTOR_SENTINEL = 1179791668
 QROW16_REFERENCE_SENTINEL = 1179791667
 NUM_SPLITS = 0
@@ -33,6 +34,14 @@ LIVE_ARMS = {
             "stock FA2 set_params_splitkv via num_splits=2"
         ),
         "candidate_dispatch": "qrow32 B1 split2 exact geometry; no fallback",
+    },
+    VISIBILITY_ARM: {
+        "selector_sentinel": SELECTOR_SENTINEL,
+        "num_splits": NUM_SPLITS,
+        "split_scratch_allocation": "not used; num_splits=0",
+        "candidate_dispatch": (
+            "qrow32 B1 fixed32 visibility exact geometry; no fallback"
+        ),
     },
 }
 CANDIDATE_SHA256 = (
@@ -65,6 +74,36 @@ SOURCE_FILES = {
 }
 SOURCE_CLOSURE_SHA256 = (
     "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff"
+)
+VISIBILITY_CANDIDATE_SHA256 = (
+    "c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79"
+)
+VISIBILITY_CANDIDATE_SIZE = 300_200_192
+VISIBILITY_SOURCE_FILES = {
+    "csrc/flash_attn/flash_api.cpp": (
+        "a84a1c22234f2787cd0c27307e2dbbb5b8bc4859072533070be021710ec7d55e"
+    ),
+    "csrc/flash_attn/flash_api_torch_lib.cpp": (
+        "c575d9f02ba44bf7022c77b80fdf12173da0ecae8a4d7599934c2cc9fa52e121"
+    ),
+    "csrc/flash_attn/src/flash.h": (
+        "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a"
+    ),
+    "csrc/flash_attn/src/flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu": (
+        "a022da77fc020891125aad1c40f82ebeb86a490660ca121b4a346a14c701e04b"
+    ),
+    "csrc/flash_attn/src/flash_fwd_fr13_qrow32_b1_split2_hdim256_bf16_sm80.cu": (
+        "223542ecf9bcc8837022aaceeca7468e4a8c866b528c4327c68f924dc4ab344d"
+    ),
+    "csrc/flash_attn/src/flash_fwd_kernel.h": (
+        "5e48444ff68c75dee9227570735b15a4273c064c574d21a4c1953019bb9eb876"
+    ),
+    "csrc/flash_attn/src/utils.h": (
+        "5887df63c79a3e42fb9ddad93f64fe3c0625dbee4c547af68b6f2108b7beeb5f"
+    ),
+}
+VISIBILITY_SOURCE_CLOSURE_SHA256 = (
+    "a30eca031cd5067133e6278527787c5987635670930e5840ac983f66b088e4fc"
 )
 SOURCE_STATUS = (
     " M csrc/flash_attn/flash_api.cpp",
@@ -160,17 +199,39 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout.rstrip("\n")
 
 
-def validate_candidate(candidate_so: Path, expected_sha256: str) -> dict[str, Any]:
+def _candidate_contract(arm: str) -> dict[str, Any]:
+    if arm == VISIBILITY_ARM:
+        return {
+            "sha256": VISIBILITY_CANDIDATE_SHA256,
+            "size": VISIBILITY_CANDIDATE_SIZE,
+            "source_files": VISIBILITY_SOURCE_FILES,
+            "source_closure_sha256": VISIBILITY_SOURCE_CLOSURE_SHA256,
+        }
+    if arm not in {ARM, "split2"}:
+        raise ValueError("qrow32 live arm must be nosplit, split2, or visibility")
+    return {
+        "sha256": CANDIDATE_SHA256,
+        "size": CANDIDATE_SIZE,
+        "source_files": SOURCE_FILES,
+        "source_closure_sha256": SOURCE_CLOSURE_SHA256,
+    }
+
+
+def validate_candidate(
+    candidate_so: Path, expected_sha256: str, *, arm: str = ARM
+) -> dict[str, Any]:
+    contract = _candidate_contract(arm)
     expected_sha256 = _sha256(expected_sha256, "candidate SO")
-    if expected_sha256 != CANDIDATE_SHA256:
+    if expected_sha256 != contract["sha256"]:
         raise ValueError("candidate SO is not the pinned qrow32 B1 binary")
     info = _regular(candidate_so, "candidate SO")
-    if info.st_size != CANDIDATE_SIZE or sha256_file(candidate_so) != CANDIDATE_SHA256:
+    if info.st_size != contract["size"] or sha256_file(candidate_so) != contract["sha256"]:
         raise ValueError("candidate SO identity mismatch")
-    return {"size": CANDIDATE_SIZE, "sha256": CANDIDATE_SHA256}
+    return {"size": contract["size"], "sha256": contract["sha256"]}
 
 
-def validate_source_closure(source_root: Path) -> dict[str, Any]:
+def validate_source_closure(source_root: Path, *, arm: str = ARM) -> dict[str, Any]:
+    contract = _candidate_contract(arm)
     if not source_root.is_dir() or source_root.is_symlink():
         raise ValueError("FA2 source root must be a non-symlink directory")
     head = _git(source_root, "rev-parse", "HEAD")
@@ -186,7 +247,7 @@ def validate_source_closure(source_root: Path) -> dict[str, Any]:
     if status != SOURCE_STATUS:
         raise ValueError("FA2 modified source set drifted")
     records: dict[str, str] = {}
-    for relative, expected in SOURCE_FILES.items():
+    for relative, expected in contract["source_files"].items():
         path = source_root / relative
         _regular(path, f"FA2 source {relative}")
         actual = sha256_file(path)
@@ -194,9 +255,9 @@ def validate_source_closure(source_root: Path) -> dict[str, Any]:
             raise ValueError(f"FA2 source hash drifted: {relative}")
         records[relative] = actual
     closure = {"fa2_head": head, "files": records}
-    if _digest(canonical_bytes(closure)) != SOURCE_CLOSURE_SHA256:
+    if _digest(canonical_bytes(closure)) != contract["source_closure_sha256"]:
         raise ValueError("FA2 source closure digest drifted")
-    closure["canonical_sha256"] = SOURCE_CLOSURE_SHA256
+    closure["canonical_sha256"] = contract["source_closure_sha256"]
     return closure
 
 
@@ -239,8 +300,9 @@ def validate_live_result(
 ) -> dict[str, Any]:
     arm_contract = LIVE_ARMS.get(arm)
     if arm_contract is None:
-        raise ValueError("qrow32 live arm must be nosplit or split2")
-    if candidate_sha256 != CANDIDATE_SHA256:
+        raise ValueError("qrow32 live arm must be nosplit, split2, or visibility")
+    candidate_contract = _candidate_contract(arm)
+    if candidate_sha256 != candidate_contract["sha256"]:
         raise ValueError("qrow32 live candidate is not pinned")
     if payload.get("schema") != LIVE_SCHEMA or payload.get("status") != "PASS":
         raise ValueError(f"qrow32 {arm} live result is not a PASS")
@@ -253,8 +315,8 @@ def validate_live_result(
         or payload.get("draft_vocab_root") != 1
         or payload.get("draft_vocab_k") != 65536
         or payload.get("runtime_mode") != "FULL"
-        or payload.get("candidate_so_sha256") != CANDIDATE_SHA256
-        or payload.get("candidate_so_size") != CANDIDATE_SIZE
+        or payload.get("candidate_so_sha256") != candidate_contract["sha256"]
+        or payload.get("candidate_so_size") != candidate_contract["size"]
         or payload.get("arm") != arm
         or payload.get("selector_sentinel") != arm_contract["selector_sentinel"]
         or payload.get("candidate_num_splits") != arm_contract["num_splits"]
@@ -264,7 +326,8 @@ def validate_live_result(
         or payload.get("candidate_dispatch")
         != arm_contract["candidate_dispatch"]
         or payload.get("fa2_head") != FA2_HEAD
-        or payload.get("fa2_source_closure_sha256") != SOURCE_CLOSURE_SHA256
+        or payload.get("fa2_source_closure_sha256")
+        != candidate_contract["source_closure_sha256"]
         or payload.get("layer_count") != 16
         or payload.get("fallback_allowed") is not False
         or payload.get("served_return") != "qrow16 captured graph output unchanged"
@@ -447,6 +510,9 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     source = subparsers.add_parser("validate-source")
     source.add_argument("--source-root", required=True, type=Path)
+    source.add_argument(
+        "--arm", choices=(ARM, "split2", VISIBILITY_ARM), default=ARM
+    )
     for name in ("issue", "verify"):
         command = subparsers.add_parser(name)
         if name == "issue":
@@ -463,7 +529,7 @@ def main() -> int:
         command.add_argument("--expected-source-commit", required=True)
     args = parser.parse_args()
     if args.command == "validate-source":
-        result = validate_source_closure(args.source_root)
+        result = validate_source_closure(args.source_root, arm=args.arm)
     elif args.command == "issue":
         result = issue_sidecar(
             live_result=args.live_result,

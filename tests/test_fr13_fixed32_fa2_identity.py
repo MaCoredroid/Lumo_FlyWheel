@@ -98,7 +98,9 @@ def test_runtime_identity_rejects_unqualified_qrow32_arm_or_binary() -> None:
         "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
         "FR13_FA2_QROW32_B1_SO_SHA256": QROW32_SPLIT2_EXPECTED_SHA256,
     }
-    with pytest.raises(contract.ContractError, match="empty, nosplit, or split2"):
+    with pytest.raises(
+        contract.ContractError, match="empty, nosplit, split2, or visibility"
+    ):
         contract._expected_runtime_fa2_identity(env)
     env["FR13_FA2_QROW32_B1_LIVE_AB_ARM"] = "split2"
     env["FR13_FA2_QROW32_B1_SO_SHA256"] = "0" * 64

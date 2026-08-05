@@ -701,7 +701,7 @@ def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:
     text = LAUNCHER.read_text()
 
     assert (
-        "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, or split2"
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, or visibility"
         in text
     )
     assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit" in text
@@ -732,7 +732,8 @@ def test_live_gate_is_authenticated_one_task_non_timing_qrow16_served() -> None:
     assert "ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in text
     assert "fr13_qrow32_b1_pass_sidecar.py validate-source" in text
     assert 'PYTHONPATH="$REPO/scripts${PYTHONPATH:+:$PYTHONPATH}"' in text
-    assert 'arm="split2"' in text
+    assert 'LIVE_ARM=${FR13_QROW32_B1_LIVE_ARM:-split2}' in text
+    assert 'arm=live_arm' in text
 
 
 def test_live_gate_inline_contract_import_resolves_from_repo_root() -> None:
@@ -870,7 +871,9 @@ def test_sidecar_is_binary_source_and_nosplit_bound(tmp_path: Path) -> None:
             out=tmp_path / "stale-pass.json",
         )
 
-    with pytest.raises(ValueError, match="live arm must be nosplit or split2"):
+    with pytest.raises(
+        ValueError, match="live arm must be nosplit, split2, or visibility"
+    ):
         module.validate_live_result(
             _live_payload(
                 module, module.CANDIDATE_SHA256, source_commit, patch_sha256
