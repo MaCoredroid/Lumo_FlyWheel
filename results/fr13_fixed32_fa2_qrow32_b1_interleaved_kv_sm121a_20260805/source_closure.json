@@ -1,0 +1,13 @@
+{
+  "canonical_sha256": "a4a6d96cad9b34b73ddc4fb2fcda230c033b30246509c1a24208b2f2955d2bcc",
+  "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+  "files": {
+    "csrc/flash_attn/flash_api.cpp": "8ee357feda9721787eed93c1a1f91f573f833e2104cdb80cc11f610ba1621ec9",
+    "csrc/flash_attn/flash_api_torch_lib.cpp": "c575d9f02ba44bf7022c77b80fdf12173da0ecae8a4d7599934c2cc9fa52e121",
+    "csrc/flash_attn/src/flash.h": "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a",
+    "csrc/flash_attn/src/flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu": "00f38d6ed68580d0e9c957ed0620d9655b1e4bf24bf16e970e693341bfa60cc1",
+    "csrc/flash_attn/src/flash_fwd_fr13_qrow32_b1_split2_hdim256_bf16_sm80.cu": "223542ecf9bcc8837022aaceeca7468e4a8c866b528c4327c68f924dc4ab344d",
+    "csrc/flash_attn/src/flash_fwd_kernel.h": "5829b5c6832ce962fc6864f491901ed68e8a24b165d5cff914e94c38b0de8177",
+    "csrc/flash_attn/src/utils.h": "5887df63c79a3e42fb9ddad93f64fe3c0625dbee4c547af68b6f2108b7beeb5f"
+  }
+}

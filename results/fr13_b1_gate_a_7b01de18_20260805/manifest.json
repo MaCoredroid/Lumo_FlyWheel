@@ -1,0 +1,73 @@
+{
+  "schema": "fr13.fixed32.b1_gate_a.pretask_final_capture_unresolved_geometry.v1",
+  "created_at_utc": "2026-08-05T07:20:27Z",
+  "status": "REJECTED_PRETASK_QROW32_FINAL_CAPTURE_GEOMETRY_UNRESOLVED",
+  "source": {
+    "branch": "main",
+    "commit": "7b01de18c47b0f23addfba092ac81bcd0c70f685",
+    "tracked_worktree_clean_at_launch": true,
+    "upstream_commit_match_at_launch": true
+  },
+  "gate_contract": {
+    "entrypoint": "scripts/fr13_run_b1_qrow32_gqa3_dfwd_top3_live_gate.sh",
+    "classification": "one_real_swe_verified_b1_graph_byte_diagnostic",
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "task_set": "canonical_one_task_b1_diagnostic",
+    "planned_task_count": 1,
+    "mode": "hydra27_fixed32",
+    "logical_topology": "Hydra27",
+    "logical_drafts": 27,
+    "physical_rows": 32,
+    "batch_size": 1,
+    "concurrency": 1,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "cudagraph_mode": "FULL_AND_PIECEWISE",
+    "candidates": [
+      "qrow32_split2",
+      "gqa_group3",
+      "dfwd_k64_top3"
+    ]
+  },
+  "observed": {
+    "failure_stage": "engine_boot.final_full_cudagraph_capture.qrow32_live_hook",
+    "failure_class": "qrow32_live_gate_geometry_rejected_during_final_capture",
+    "model_loading_completed": true,
+    "initial_profile_memory_completed": true,
+    "profile_cudagraph_memory_completed": true,
+    "mixed_graph_capture_completed": true,
+    "final_full_graph_capture_started": true,
+    "qrow32_live_hook_reached": true,
+    "health_record_present": false,
+    "authenticated_tasks_started": 0,
+    "completed_swe_verified_tasks": 0,
+    "qrow_comparator_events": 0,
+    "gqa_comparator_events": 0,
+    "qrow32_credential_issued": false,
+    "gqa_group3_credential_issued": false,
+    "dfwd_k64_top3_credential_issued": false,
+    "timing_summary_present": false,
+    "root_cause_verified": false,
+    "root_cause_status": "unresolved_remaining_exact_geometry_field",
+    "rerun_required": true
+  },
+  "source_readiness": {
+    "fused_qkv_query_row_stride_fix_present": true,
+    "fused_qkv_query_row_stride_fix_resolved_rejection": false,
+    "remaining_guard_relaxation_justified": false,
+    "required_next_step": "field_specific_nonsecret_geometry_diagnostic_rerun"
+  },
+  "claims": {
+    "kernel_qualification": false,
+    "performance_measurement": false,
+    "tps_measurement": false,
+    "acceptance_measurement": false,
+    "floor_acceptance_eligible": false,
+    "hardware_floor": false
+  },
+  "publication": {
+    "sanitized_reduction_only": true,
+    "raw_artifacts_included": false,
+    "excluded_raw_artifact_hashes_included": false
+  }
+}

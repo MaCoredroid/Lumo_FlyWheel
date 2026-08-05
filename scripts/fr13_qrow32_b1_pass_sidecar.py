@@ -20,7 +20,7 @@ SELECTOR_SENTINEL = 1179791669
 QROW16_REFERENCE_SENTINEL = 1179791667
 NUM_SPLITS = 2
 CANDIDATE_SHA256 = (
-    "5eec90f317cf6126cd57ab7f77b392ae6a1430d28210dcb31756abe788ef3467"
+    "07e02c0a53185c48d745fb221e7c807f97bfe40f61354e4242e9271e743e13c1"
 )
 CANDIDATE_SIZE = 300_140_712
 FA2_HEAD = "29210221863736a08f71a866459e368ad1ac4a95"
@@ -35,20 +35,20 @@ SOURCE_FILES = {
         "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a"
     ),
     "csrc/flash_attn/src/flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu": (
-        "7a6a28dd269dc72dd18d8269f5cfcc437532317504a2e5d471b41611046467bc"
+        "00f38d6ed68580d0e9c957ed0620d9655b1e4bf24bf16e970e693341bfa60cc1"
     ),
     "csrc/flash_attn/src/flash_fwd_fr13_qrow32_b1_split2_hdim256_bf16_sm80.cu": (
-        "0dc2cac4247ec25e5262260dc518d5753059361215e3d23d87c94dc6863ab40e"
+        "223542ecf9bcc8837022aaceeca7468e4a8c866b528c4327c68f924dc4ab344d"
     ),
     "csrc/flash_attn/src/flash_fwd_kernel.h": (
-        "0a8ddf26363b01b35bd613e88713a253266945c010bfa99d1856701cb7522867"
+        "5829b5c6832ce962fc6864f491901ed68e8a24b165d5cff914e94c38b0de8177"
     ),
     "csrc/flash_attn/src/utils.h": (
         "5887df63c79a3e42fb9ddad93f64fe3c0625dbee4c547af68b6f2108b7beeb5f"
     ),
 }
 SOURCE_CLOSURE_SHA256 = (
-    "c10888e721335ff99f93dabdfea7d8a524fbd7e21e8aee3f425f50af06bf5d84"
+    "a4a6d96cad9b34b73ddc4fb2fcda230c033b30246509c1a24208b2f2955d2bcc"
 )
 SOURCE_STATUS = (
     " M csrc/flash_attn/flash_api.cpp",
