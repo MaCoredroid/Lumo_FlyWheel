@@ -1,0 +1,1 @@
+{"schema":"fr13.fixed32.cutlass_identity_wide256_fullgrid_b1_byte_ab.v1","invocation":0,"task_marker":"swe_verified:astropy__astropy-12907","m":32,"n":16384,"k":5120,"bytes":1048576,"byte_equal":true,"mismatch_count":0,"first_mismatch":null}

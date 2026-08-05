@@ -1,0 +1,69 @@
+{
+  "schema": "fr13.fixed32.b1_gate_b_m128_directgrid_marker_mode_failure_artifact.v1",
+  "status": "INCOMPLETE",
+  "source_commit": "97a0e596f81ca5cb4ae8946e44138f87636c4646",
+  "run": {
+    "classification": "one_real_swe_verified_b1_k64_root_byte_diagnostic",
+    "dataset": "princeton-nlp/SWE-bench_Verified",
+    "task_id": "astropy__astropy-12907",
+    "batch_size": 1,
+    "concurrency": 1,
+    "physical_rows": 32,
+    "draft_vocab_k": 65536,
+    "draft_vocab_root": 1,
+    "exit_code": 15,
+    "task_completed": false
+  },
+  "candidate": {
+    "family": "identity_wide256_fullgrid_b1",
+    "diagnostic_selector": "identity_wide256_fullgrid_b1_byte_ab",
+    "implementation": "m128_directgrid_v1",
+    "sha256": "7d762dfa793671d75d1e353bd37d76fc07370cbe387ad1e315e32584d27927d4",
+    "bytes": 119781296,
+    "default_enabled": false,
+    "production_enabled": false
+  },
+  "first_comparator": {
+    "record": "comparator_pass.json",
+    "raw_record_sha256": "bdc41c1eb8f7370fe51697fd67b0d106445afb27e301bea7583beb64597c6923",
+    "invocation": 0,
+    "shape_mnk": [32, 16384, 5120],
+    "compared_bytes": 1048576,
+    "byte_equal": true,
+    "mismatch_count": 0
+  },
+  "failure": {
+    "classification": "authenticated_marker_mode_contract_mismatch",
+    "published_mode": "0400",
+    "required_mode": "0444",
+    "credential_issued": false,
+    "corrective_commit": "8508c7a6607e589700f12ad19e8ed5e424742f98"
+  },
+  "source_identity": {
+    "path": "source_manifest.json",
+    "schema": "fr13.fixed32.sfwd_conv_postprep.source_manifest.v1",
+    "sha256": "6f6d2e058a00835bfd905cb48e8208aa9176988bcf15a1429120b6d597b6b111",
+    "launch_end_byte_identical": true
+  },
+  "claims": {
+    "first_invocation_byte_equal": true,
+    "qualification_complete": false,
+    "production_eligible": false,
+    "timing_eligible": false,
+    "timing_claim": false,
+    "acceptance_claim": false,
+    "performance_claim": false,
+    "hardware_floor_evidence": false
+  },
+  "privacy": {
+    "raw_prompts_absent": true,
+    "raw_responses_absent": true,
+    "raw_patches_absent": true,
+    "raw_traces_absent": true,
+    "raw_logs_absent": true,
+    "raw_environment_absent": true,
+    "process_identities_absent": true,
+    "binaries_absent": true,
+    "tensors_absent": true
+  }
+}
