@@ -1,0 +1,5 @@
+variant	profile	registers	stack_bytes	local_bytes	shared_bytes	encoded_sass	static_sass	ldg	stg	ldl	stl	calls
+baseline	b1	56	0	0	0	3040	2889	85	336	0	0	0
+candidate	b1	56	0	0	0	3024	2875	85	336	0	0	0
+baseline	b4	56	0	0	0	3040	2889	85	336	0	0	0
+candidate	b4	56	0	0	0	3024	2875	85	336	0	0	0
