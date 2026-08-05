@@ -121,6 +121,10 @@ def test_contract_closes_exact_b1_b4_physical_work(
     assert result["device_descriptor_loads_removed_per_event"] == (
         candidate * 48 * 59
     )
+    assert result["value_domain_masks_removed_per_cta"] == 291
+    assert result["value_domain_masks_removed_per_event"] == (
+        candidate * 48 * 291
+    )
     assert result["state_export_writes"] == 0
     assert result["state_parent_reads"] == 0
     assert result["candidate_default_off"] is True
@@ -258,11 +262,15 @@ def test_kernel_reuses_qk_and_preserves_ordered_single_launch_contract() -> None
     assert "n_ok" in value_head
     assert "global_node" in value_head
     assert "return tl.where(n_ok, state_i, prior_state)" in value_head
+    assert "v_mask" not in value_head
+    assert "mask=n_ok & v_mask" not in value_head
     assert "if TRUST_FIXED32_NODE_DOMAIN:" in node
     assert "n_ok = True" in node
     assert "global_node = pid_batch * N_ACTUAL + node" in node
     assert "pid_kh = tl.program_id(0)" in kernel
     assert "pid_vh_0 = pid_kh * HEAD_GROUP" in kernel
+    assert "v_mask" not in kernel
+    assert "mask=v_mask[:, None]" not in kernel
     assert "tl.arange(0, HEAD_GROUP)" not in kernel
     assert "for root_index in tl.range(0, 5):" in kernel
     assert "for member in tl.static_range(0, 3):" in kernel
