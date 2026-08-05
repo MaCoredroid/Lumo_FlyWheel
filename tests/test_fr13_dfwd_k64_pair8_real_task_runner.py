@@ -16,6 +16,7 @@ def test_pair8_real_task_is_real_b1_but_not_acceptance_evidence() -> None:
     assert "FR13_FIXED32_B1_DIAGNOSTIC=1" in text
     assert "MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1" in text
     assert "FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536" in text
+    assert "FR10_METRICS=0 ENFORCE_EAGER=0" in text
     assert "classification=one_real_swe_verified_b1_hydra27_fixed32_k64_pair8_diagnostic" in text
     assert "acceptance_valid=0" in text
     assert "timing_eligible=0" in text
