@@ -26,6 +26,12 @@ BF16_BYTES = 2
 FIXED32_EXECUTION_SHA256 = (
     "80aed4d1a882ee4d4cde21dbf4314ed3abaae3f7553e35b6db5cd7574fe3b7db"
 )
+FIXED32_ROOT_NODES_PACKED = 0xE49020
+FIXED32_GROUP_PATH_INDICES_PACKED = 0x0A90087065043021
+FIXED32_PATH_LENGTHS_PACKED = 0x492493EF
+FIXED32_BRANCH_PATH_0_PACKED = 0x7FDDE6B13
+FIXED32_BRANCH_PATH_1_PACKED = 0x168B0E2
+FIXED32_BRANCH_PATH_2_PACKED = 0x6F3793503
 
 
 def fixed32_gdn_gqa_group3_contract(
@@ -88,6 +94,8 @@ def fixed32_gdn_gqa_group3_contract(
     candidate_node_visits_per_event = (
         candidate_ctas_per_layer * rows * layer_count
     )
+    candidate_ctas_per_event = candidate_ctas_per_layer * layer_count
+    descriptor_loads_removed_per_cta = 59
     return {
         "candidate": CANDIDATE,
         "mode": mode,
@@ -122,6 +130,13 @@ def fixed32_gdn_gqa_group3_contract(
         ),
         "source_node_clamp_sites_removed_per_event": (
             candidate_node_visits_per_event * (HEAD_GROUP + 1)
+        ),
+        "device_descriptor_pointer_args_removed": 5,
+        "device_descriptor_loads_removed_per_cta": (
+            descriptor_loads_removed_per_cta
+        ),
+        "device_descriptor_loads_removed_per_event": (
+            candidate_ctas_per_event * descriptor_loads_removed_per_cta
         ),
         "state_export_writes": 0,
         "state_parent_reads": 0,
@@ -453,11 +468,6 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
     h0_indices,
     h0_num_accepted_tokens,
     invocation_counter,
-    root_nodes,
-    branch_nodes,
-    branch_lengths,
-    group_path_indices,
-    group_path_counts,
     out,
     ring_k,
     ring_v,
@@ -485,10 +495,6 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
     RAW_GATING: tl.constexpr,
     COUNT_INVOCATION: tl.constexpr,
     SCAN_ALIGN: tl.constexpr,
-    ROOT_STEPS: tl.constexpr,
-    MAX_PATH_LEN: tl.constexpr,
-    MAX_GROUP_PATHS: tl.constexpr,
-    PRESCALED_PATH_BASE: tl.constexpr,
     RING_EXPORT: tl.constexpr,
     K_NORM_EXPORT: tl.constexpr,
     GATE_EXPORT: tl.constexpr,
@@ -562,8 +568,10 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
     b_dt_bias_1 = tl.load(dt_bias + pid_vh_1).to(tl.float32)
     b_dt_bias_2 = tl.load(dt_bias + pid_vh_2).to(tl.float32)
 
-    for root_index in tl.range(0, ROOT_STEPS):
-        root_node = tl.load(root_nodes + root_index)
+    for root_index in tl.range(0, 5):
+        root_node = (
+            (FIXED32_ROOT_NODES_PACKED >> (root_index * 5)) & 0x1F
+        ).to(tl.int32)
         root_state_0, root_state_1, root_state_2 = (
             _fr13_fixed32_gdn_gqa_group3_node(
                 root_state_0,
@@ -612,32 +620,45 @@ def _fr13_fixed32_gdn_gqa_group3_single_launch_kernel(
                 TRUST_FIXED32_NODE_DOMAIN=TRUST_FIXED32_NODE_DOMAIN,
             )
         )
-        group_path_count = tl.load(group_path_counts + root_index)
-        for member in tl.static_range(0, MAX_GROUP_PATHS):
-            member_ok = member < group_path_count
-            path_index = tl.load(
-                group_path_indices
-                + root_index * MAX_GROUP_PATHS
-                + member,
-                mask=member_ok,
-                other=0,
-            )
-            path_base = (
-                path_index
-                if PRESCALED_PATH_BASE
-                else path_index * MAX_PATH_LEN
-            )
-            path_len = tl.load(
-                branch_lengths
-                + (path_base if PRESCALED_PATH_BASE else path_index),
-                mask=member_ok,
-                other=0,
-            )
+        for member in tl.static_range(0, 3):
+            member_ok = (member < 2) | (root_index == 4)
+            path_slot = root_index * 3 + member
+            path_index = (
+                (FIXED32_GROUP_PATH_INDICES_PACKED >> (path_slot * 4))
+                & 0xF
+            ).to(tl.int32)
+            path_len = tl.where(
+                member_ok,
+                (FIXED32_PATH_LENGTHS_PACKED >> (path_index * 3)) & 0x7,
+                0,
+            ).to(tl.int32)
             branch_state_0 = root_state_0
             branch_state_1 = root_state_1
             branch_state_2 = root_state_2
             for path_offset in tl.range(0, path_len):
-                branch_node = tl.load(branch_nodes + path_base + path_offset)
+                branch_path_packed = tl.where(
+                    path_index == 0,
+                    FIXED32_BRANCH_PATH_0_PACKED,
+                    tl.where(
+                        path_index == 1,
+                        FIXED32_BRANCH_PATH_1_PACKED,
+                        FIXED32_BRANCH_PATH_2_PACKED,
+                    ),
+                )
+                branch_path_node = (
+                    (branch_path_packed >> (path_offset * 5)) & 0x1F
+                ).to(tl.int32)
+                single_path_index = path_index - 3
+                single_path_node = (
+                    5
+                    + (single_path_index >> 1) * 5
+                    + (single_path_index & 1)
+                )
+                branch_node = tl.where(
+                    path_index < 3,
+                    branch_path_node,
+                    single_path_node,
+                )
                 branch_state_0, branch_state_1, branch_state_2 = (
                     _fr13_fixed32_gdn_gqa_group3_node(
                         branch_state_0,
@@ -845,11 +866,6 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         h0_indices,
         h0_num_accepted_tokens,
         invocation_counter,
-        root_nodes,
-        branch_nodes,
-        branch_lengths,
-        group_path_indices,
-        group_path_counts,
         out,
         ring_k,
         ring_v,
@@ -877,10 +893,6 @@ def launch_fixed32_gdn_gqa_group3_source_candidate(
         RAW_GATING=bool(raw_gating),
         COUNT_INVOCATION=bool(count_invocation),
         SCAN_ALIGN=bool(scan_align),
-        ROOT_STEPS=int(root_steps),
-        MAX_PATH_LEN=int(max_path_len),
-        MAX_GROUP_PATHS=int(max_group_paths),
-        PRESCALED_PATH_BASE=bool(prescaled_path_base),
         RING_EXPORT=bool(ring_export),
         K_NORM_EXPORT=bool(k_norm_export),
         GATE_EXPORT=bool(gate_export),
