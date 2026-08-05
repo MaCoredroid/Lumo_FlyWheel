@@ -28,7 +28,7 @@ from triton.compiler import ASTSource
 from triton.runtime.jit import MockTensor, create_function_from_signature
 
 
-BASE_REVISION = "dfb04b3b20e246118006ab2f4cb91a4a196f2491"
+BASE_REVISION = "6a5cc453795fbdb3fe17de289d54390839126458"
 DEVICE_SOURCE = "scripts/fr13_device_multidraft_kernel.py"
 PRODUCER_SOURCE = "scripts/fr13_cfwd_logit_direct_decision_kernel.py"
 INCUMBENT_COMMIT = "_fr13_fixed32_taw_all_parent_commit_kernel"
@@ -447,7 +447,7 @@ def main() -> None:
         },
     }
     summary: dict[str, object] = {
-        "schema": "fr13.fixed32.cfwd_physical_slots.sm121a.codegen.v1",
+        "schema": "fr13.fixed32.cfwd_physical_slots_preseeded.sm121a.codegen.v1",
         "status": "pending",
         "base_revision": BASE_REVISION,
         "candidate_revision": revision,
@@ -490,6 +490,14 @@ def main() -> None:
             "topology_index_scalar_loads_per_request_after": 0,
             "decision_workspace_bytes_per_request_before": 529,
             "decision_workspace_bytes_per_request_after": 1_048,
+        },
+        "safety_contract": {
+            "decision_workspace_zero_seeded_once": True,
+            "decision_padding_initialization_stores_per_event": 0,
+            "leaf_unwritten_source_value": 0,
+            "leaf_child_table_source_zero_value": -1,
+            "hot_walk_dynamic_load_masks_added": 0,
+            "runtime_source_contract_attests_physical_committer": True,
         },
         "producer": {},
         "commit": {},

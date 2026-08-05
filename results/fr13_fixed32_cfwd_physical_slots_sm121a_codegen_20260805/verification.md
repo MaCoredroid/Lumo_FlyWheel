@@ -13,7 +13,7 @@ From repository root, build twice with independent empty Triton caches:
 ```bash
 ART=results/fr13_fixed32_cfwd_physical_slots_sm121a_codegen_20260805
 PY=/home/mark/fr13_streamk_build/venv/bin/python
-REV=d2348ce9260292dcf6f9c687a774ed9966b92928
+REV=255e2c9fe1a6b8f1b2a1c45e4af3513179149bb1
 
 CUDA_VISIBLE_DEVICES= \
 TRITON_CACHE_DIR=/dev/shm/fr13_cfwd_physical_slots_cache_a \
@@ -46,7 +46,7 @@ python3 -m pytest -q \
   -k 'not b1_runner_overrides_legacy_vocab_registry_for_full_vocab'
 ```
 
-The one deselected assertion is already incompatible with the exact frozen
-base: its runner lacks the literal it searches for. It is unrelated to this
-candidate. The CUDA test skips because this audit intentionally has no GPU.
-
+The known native-runner literal assertion may be deselected because its runner
+lacks the searched literal at the frozen base and this candidate does not touch
+that runner. GPU and Docker execution are intentionally excluded from this
+isolated integration worktree.

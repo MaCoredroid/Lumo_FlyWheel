@@ -1,7 +1,7 @@
-source_revision=d2348ce9260292dcf6f9c687a774ed9966b92928
-frozen_base=dfb04b3b20e246118006ab2f4cb91a4a196f2491
-focused_host_tests=PASS:84
-cuda_tests=SKIP:1:no_gpu
+source_revision=255e2c9fe1a6b8f1b2a1c45e4af3513179149bb1
+frozen_base=6a5cc453795fbdb3fe17de289d54390839126458
+focused_host_tests=PASS:105
+cuda_tests=SKIP:1:no_visible_gpu
 preexisting_runner_literal_test=DESELECTED:1
 fresh_cache_sm121a_builds=PASS:2
 compiled_producer_kernels_per_build=4

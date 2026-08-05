@@ -1,13 +1,19 @@
-# Fixed32 CFWD Physical-Slot SM121a Audit
+# Fixed32 CFWD Preseeded Physical-Slot SM121a Audit
 
-This artifact binds the default-off
-`fixed32_cfwd_logit_direct_physical_slots_v2` source checkpoint
-`d2348ce9260292dcf6f9c687a774ed9966b92928` to offline SM121a codegen.
+This artifact supersedes the unsafe `d2348ce9` checkpoint and binds the
+default-off `fixed32_cfwd_logit_direct_physical_slots_v2` integration source
+`255e2c9fe1a6b8f1b2a1c45e4af3513179149bb1` to offline SM121a codegen. Its
+frozen comparison base is current-main checkpoint
+`6a5cc453795fbdb3fe17de289d54390839126458`, which contains the production
+BF16 SFWD `dt_bias` contract fix.
 
 The candidate keeps the fixed 13 self plus 17 target decision programs per
-request and their 81 stores, but writes those products into physical 31/32
-slot workspaces. The one-program integer walk then indexes decisions directly
-and removes its two topology-table reads at each of 12 unrolled levels.
+request and their 81 stores, but scatters those products into physical 31/32
+slot workspaces. Every persistent workspace tensor is zero-seeded once before
+graph capture. Unwritten leaf decision slots therefore have safe values without
+adding initialization stores, dynamic load masks, or topology-map reads to a
+measured replay. The executed physical committer is also included in the
+fail-closed TAW runtime source contract.
 
 Exact work delta per request:
 
@@ -15,6 +21,7 @@ Exact work delta per request:
 - decision values stored: `81 -> 81`
 - integer commit launches/programs: `1/1 -> 1/1`
 - topology-index scalar loads in the integer walk: `24 -> 0`
+- decision-padding initialization stores per replay: `0`
 - persistent decision workspace: `529 -> 1048` bytes
 
 Offline SM121a results for both B1 and B4 commit specializations:
@@ -27,11 +34,11 @@ Offline SM121a results for both B1 and B4 commit specializations:
 
 The direct-decision producer remains at 80 registers with zero stack/local,
 spill, or call use. The diagnostic comparator compiles spill-free at 35
-registers for B1 and 32 for B4.
+registers for B1 and 32 for B4. Two independent fresh-cache builds were
+byte-identical at the summary level.
 
 These are static codegen counts and an exact source work ledger. They are not
 dynamic memory-traffic measurements and do not claim a runtime speedup. GPU
 execution was not performed in this worktree. A real SWE-Verified one-task
 byte-equivalence shadow gate remains required first, followed by the standing
 4-task and 16-task performance gates before production or merge acceptance.
-

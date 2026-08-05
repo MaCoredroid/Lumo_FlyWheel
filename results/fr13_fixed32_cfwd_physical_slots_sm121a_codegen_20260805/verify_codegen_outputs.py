@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 
 
-BASE = "dfb04b3b20e246118006ab2f4cb91a4a196f2491"
-CANDIDATE = "d2348ce9260292dcf6f9c687a774ed9966b92928"
+BASE = "6a5cc453795fbdb3fe17de289d54390839126458"
+CANDIDATE = "255e2c9fe1a6b8f1b2a1c45e4af3513179149bb1"
 BLOCK_STATS = "_fr13_cfwd_logit_block_stats_kernel"
 DIRECT_DECISION = "_fr13_cfwd_logit_direct_decision_kernel"
 
@@ -36,7 +36,7 @@ def main() -> None:
         raise SystemExit("independent fresh-cache codegen summaries differ")
     if (
         primary["schema"]
-        != "fr13.fixed32.cfwd_physical_slots.sm121a.codegen.v1"
+        != "fr13.fixed32.cfwd_physical_slots_preseeded.sm121a.codegen.v1"
         or primary["status"] != "pass"
         or primary["base_revision"] != BASE
         or primary["candidate_revision"] != CANDIDATE
@@ -82,6 +82,15 @@ def main() -> None:
         "topology_index_scalar_loads_per_request_before": 24,
     }:
         raise SystemExit("logical work ledger drift")
+    if primary["safety_contract"] != {
+        "decision_padding_initialization_stores_per_event": 0,
+        "decision_workspace_zero_seeded_once": True,
+        "hot_walk_dynamic_load_masks_added": 0,
+        "leaf_child_table_source_zero_value": -1,
+        "leaf_unwritten_source_value": 0,
+        "runtime_source_contract_attests_physical_committer": True,
+    }:
+        raise SystemExit("physical-slot safety contract drift")
 
     producer = primary["producer"]
     for label in ("incumbent", "candidate"):

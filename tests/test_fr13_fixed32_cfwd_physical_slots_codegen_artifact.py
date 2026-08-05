@@ -16,10 +16,13 @@ def test_physical_slot_codegen_summary_is_narrow_and_spill_free() -> None:
     summary = json.loads((ARTIFACT / "codegen_summary.json").read_text())
     assert summary["status"] == "pass"
     assert summary["base_revision"] == (
-        "dfb04b3b20e246118006ab2f4cb91a4a196f2491"
+        "6a5cc453795fbdb3fe17de289d54390839126458"
     )
     assert summary["candidate_revision"] == (
-        "d2348ce9260292dcf6f9c687a774ed9966b92928"
+        "255e2c9fe1a6b8f1b2a1c45e4af3513179149bb1"
+    )
+    assert summary["schema"] == (
+        "fr13.fixed32.cfwd_physical_slots_preseeded.sm121a.codegen.v1"
     )
     assert summary["claim_scope"] == (
         "static_sm121a_codegen_and_exact_work_only_no_runtime_speed_claim"
@@ -37,6 +40,14 @@ def test_physical_slot_codegen_summary_is_narrow_and_spill_free() -> None:
         "decision_workspace_bytes_per_request_before": 529,
         "topology_index_scalar_loads_per_request_after": 0,
         "topology_index_scalar_loads_per_request_before": 24,
+    }
+    assert summary["safety_contract"] == {
+        "decision_padding_initialization_stores_per_event": 0,
+        "decision_workspace_zero_seeded_once": True,
+        "hot_walk_dynamic_load_masks_added": 0,
+        "leaf_child_table_source_zero_value": -1,
+        "leaf_unwritten_source_value": 0,
+        "runtime_source_contract_attests_physical_committer": True,
     }
     direct = "_fr13_cfwd_logit_direct_decision_kernel"
     assert summary["producer"]["incumbent"][direct]["registers"] == 80
@@ -84,6 +95,8 @@ def test_physical_slot_artifact_states_unrun_real_gates() -> None:
     readme = (ARTIFACT / "README.md").read_text()
     results = (ARTIFACT / "test_results.txt").read_text()
     assert "not claim a runtime speedup" in readme
+    assert "zero-seeded once" in readme
+    assert "supersedes the unsafe" in readme
     assert "one-task" in readme
     assert "4-task" in readme
     assert "16-task" in readme
