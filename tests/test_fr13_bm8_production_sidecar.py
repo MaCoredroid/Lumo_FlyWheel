@@ -199,6 +199,8 @@ def test_bm8_production_selector_is_default_off_and_fail_closed() -> None:
     assert "_fr13_dfwd_unified_bm8_production_end" in patcher
     assert "_fr13_dfwd_unified_bm8_production_call" in patcher
     assert "_fr13_dfwd_unified_bm8_production_replay_installed" in patcher
+    assert "_fr13_dfwd_unified_bm8_production_finalize" in patcher
+    assert "_gdn._fr13_dfwd_unified_bm8_production_finalize(" in patcher
     assert "descriptor.get(\"runtime_mode\") == \"FULL\"" in patcher
     assert "physical_rows_per_request\", -1)) == 32" in patcher
     assert "dispatches - dispatches_before != 4" in patcher
@@ -210,10 +212,12 @@ def test_bm8_production_selector_is_default_off_and_fail_closed() -> None:
     assert 'os.environ.pop("FR13_DFWD_UNIFIED_BM8_INTERNAL", None)' in patcher
     assert "qualified source drifted" in patcher
     assert '"status": "CAPTURED_PENDING_REPLAY"' in patcher
-    assert 'published["status"] = "ENGAGED"' in patcher
+    assert 'published["status"] = "ENGAGED_FINAL"' in patcher
     assert 'published["graph_captures"] = 1' in patcher
-    assert 'published["measured_replays"] = 1' in patcher
-    assert 'published["unmeasured_replays"] = 0' in patcher
+    assert 'published["measured_replays"] = measured_replays' in patcher
+    assert 'published["unmeasured_replays"] = unmeasured_replays' in patcher
+    assert 'measured_replays != len(events)' in patcher
+    assert 'unmeasured_replays != 0' in patcher
     assert "_fr13_dg_all.pop(_fr13_dg_key, None)" in patcher
 
     assert (
@@ -389,9 +393,10 @@ def test_production_capture_requires_four_dispatches_and_clears_selector(
             "_fr13_dfwd_unified_bm8_production_begin",
             "_fr13_dfwd_unified_bm8_production_end",
             "_fr13_dfwd_unified_bm8_production_replay_installed",
+            "_fr13_dfwd_unified_bm8_production_finalize",
         }
     ]
-    assert len(selected) == 3
+    assert len(selected) == 4
 
     candidate_source = tmp_path / "triton_unified_attention.py"
     candidate_source.write_bytes(b"qualified runtime source")
@@ -476,6 +481,8 @@ def test_production_capture_requires_four_dispatches_and_clears_selector(
         "captures": 1,
         "measured_replays": 1,
         "unmeasured_replays": 0,
+        "capture_origin": "measured",
+        "graph_signature": "d" * 64,
     }
     namespace["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"].update(
         {"graph_id": 22, "graph_signature": "d" * 64, "graph_replays": 1}
@@ -483,15 +490,70 @@ def test_production_capture_requires_four_dispatches_and_clears_selector(
     namespace["_fr13_dfwd_unified_bm8_production_replay_installed"](
         22, 1, "d" * 64
     )
+    assert not capture_json.exists()
+    events = [
+        {
+            "event_complete": True,
+            "batch_size": 1,
+            "drafter_runtime": {
+                "graph_id": 22,
+                "graph_signature": "d" * 64,
+                "graph_replays": 1,
+                "mtp_forward_calls": 4,
+            },
+        }
+        for _ in range(3)
+    ]
+    namespace["_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE"][22][
+        "measured_replays"
+    ] = len(events)
+    events_sha256 = _sha(
+        json.dumps(events, sort_keys=True, separators=(",", ":")).encode()
+    )
+    flush_binding = {
+        "action": "final",
+        "boundary_snapshot_sha256": "e" * 64,
+        "complete_work_census_events": len(events),
+        "events_sha256": events_sha256,
+        "generation": 4,
+        "nonce": "f" * 64,
+        "producer_pid": os.getpid(),
+    }
+    namespace["_fr13_dfwd_unified_bm8_production_finalize"](
+        events, flush_binding
+    )
     capture = json.loads(capture_json.read_text(encoding="ascii"))
-    assert capture["schema"].endswith("production_capture.v2")
-    assert capture["status"] == "ENGAGED"
+    assert capture["schema"].endswith("production_capture.v3")
+    assert capture["status"] == "ENGAGED_FINAL"
     assert capture["runtime_mode"] == "FULL"
     assert capture["candidate"]["calls"] == 4
     assert capture["qualified_source_sha256"] == source_sha256
     assert capture["graph_captures"] == 1
-    assert capture["measured_replays"] == 1
+    assert capture["measured_replays"] == len(events)
     assert capture["unmeasured_replays"] == 0
+    assert capture["final_flush_binding"] == flush_binding
+
+    stale = dict(capture)
+    stale["status"] = "ENGAGED_PENDING_FINAL_FLUSH"
+    for key in (
+        "graph_captures",
+        "measured_replays",
+        "unmeasured_replays",
+        "final_flush_binding",
+    ):
+        stale.pop(key, None)
+    namespace["_FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING"][22] = stale
+    namespace["_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE"][22][
+        "unmeasured_replays"
+    ] = 1
+    with pytest.raises(RuntimeError, match="final replay accounting drifted"):
+        namespace["_fr13_dfwd_unified_bm8_production_finalize"](
+            events, flush_binding
+        )
+    namespace["_FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING"].clear()
+    namespace["_FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE"][22][
+        "unmeasured_replays"
+    ] = 0
 
     namespace["_fr13_dfwd_unified_bm8_production_begin"](22, 1)
     context["bm8_production"]["guarded_calls"] = 3

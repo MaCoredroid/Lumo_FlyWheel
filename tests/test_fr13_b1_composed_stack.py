@@ -55,6 +55,22 @@ def _write(path: Path, raw: bytes) -> tuple[Path, str]:
     return path, hashlib.sha256(raw).hexdigest()
 
 
+def _final_flush(*, events: int, nonce: str = "9" * 64) -> dict[str, object]:
+    return {
+        "schema": "fr13-fixed32-flush-client-result-v1",
+        "ack": {
+            "schema": "fr13-fixed32-flush-ack-v1",
+            "mode": "hydra27_fixed32",
+            "producer_pid": 4312,
+            "generation": 7,
+            "nonce": nonce,
+            "action": "final",
+            "status": "ok",
+            "counters": {"complete_work_census_events": events},
+        },
+    }
+
+
 def test_composed_gate_helper_runs_directly() -> None:
     completed = subprocess.run(
         [sys.executable, "scripts/fr13_b1_composed_stack_gate.py", "--help"],
@@ -110,6 +126,7 @@ def test_runner_wires_optional_cfwd_smoke_and_exact4_evidence() -> None:
         "--cfwd-smoke-credential",
         "FR13_DFWD_UNIFIED_BM8_PRODUCTION=1",
         "--bm8-engagement",
+        "--bm8-final-flush",
     )
     for value in required:
         assert value in runner
@@ -245,7 +262,7 @@ def test_production_smoke_credential_binds_all_component_hashes() -> None:
         )
 
 
-def test_bm8_engagement_requires_four_call_measured_replay() -> None:
+def test_bm8_engagement_requires_final_flush_replay_accounting() -> None:
     module = _load_gate_module()
     credential_path = (
         ROOT
@@ -255,9 +272,10 @@ def test_bm8_engagement_requires_four_call_measured_replay() -> None:
     )
     credential = json.loads(credential_path.read_text(encoding="ascii"))
     module._validate_bm8_production_pass(credential)
+    measured_replays = 3
     engagement = {
         "schema": module.BM8_CAPTURE_SCHEMA,
-        "status": "ENGAGED",
+        "status": "ENGAGED_FINAL",
         "runtime_mode": "FULL",
         "batch_size": 1,
         "physical_rows_per_request": 32,
@@ -275,18 +293,39 @@ def test_bm8_engagement_requires_four_call_measured_replay() -> None:
         "qualified_source_sha256": module.BM8_QUALIFIED_SOURCE_SHA256,
         "pass_sidecar_sha256": module.BM8_PRODUCTION_PASS_SHA256,
         "graph_captures": 1,
-        "measured_replays": 1,
+        "measured_replays": measured_replays,
         "unmeasured_replays": 0,
+        "first_measured_replay_attested": True,
+        "final_flush_binding": {
+            "action": "final",
+            "boundary_snapshot_sha256": "a" * 64,
+            "complete_work_census_events": measured_replays,
+            "events_sha256": "b" * 64,
+            "generation": 7,
+            "nonce": "9" * 64,
+            "producer_pid": 4312,
+        },
     }
+    final_flush = _final_flush(events=measured_replays)
     module._validate_bm8_engagement(
         engagement,
         credential_sha256=module.BM8_PRODUCTION_PASS_SHA256,
+        final_flush=final_flush,
     )
-    engagement["measured_replays"] = 0
-    with pytest.raises(module.GateError, match="measured-replay"):
+    tampered = json.loads(json.dumps(final_flush))
+    tampered["ack"]["nonce"] = "8" * 64
+    with pytest.raises(module.GateError, match="final-flush"):
         module._validate_bm8_engagement(
             engagement,
             credential_sha256=module.BM8_PRODUCTION_PASS_SHA256,
+            final_flush=tampered,
+        )
+    engagement["unmeasured_replays"] = 1
+    with pytest.raises(module.GateError, match="final-flush"):
+        module._validate_bm8_engagement(
+            engagement,
+            credential_sha256=module.BM8_PRODUCTION_PASS_SHA256,
+            final_flush=final_flush,
         )
 
 
@@ -708,13 +747,19 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
             / "production_pass.json"
         ).read_bytes(),
     )
+    measured_replays = 3
+    bm8_flush_payload = _final_flush(events=measured_replays)
+    bm8_final_flush, _ = _write(
+        tmp_path / "fixed32-final-flush.json",
+        (json.dumps(bm8_flush_payload, sort_keys=True) + "\n").encode("ascii"),
+    )
     bm8_engagement, _ = _write(
         tmp_path / "bm8-engagement.json",
         (
             json.dumps(
                 {
                     "schema": module.composed_gate.BM8_CAPTURE_SCHEMA,
-                    "status": "ENGAGED",
+                    "status": "ENGAGED_FINAL",
                     "runtime_mode": "FULL",
                     "batch_size": 1,
                     "physical_rows_per_request": 32,
@@ -734,8 +779,18 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
                     ),
                     "pass_sidecar_sha256": bm8_sha,
                     "graph_captures": 1,
-                    "measured_replays": 1,
+                    "measured_replays": measured_replays,
                     "unmeasured_replays": 0,
+                    "first_measured_replay_attested": True,
+                    "final_flush_binding": {
+                        "action": "final",
+                        "boundary_snapshot_sha256": "a" * 64,
+                        "complete_work_census_events": measured_replays,
+                        "events_sha256": "b" * 64,
+                        "generation": 7,
+                        "nonce": "9" * 64,
+                        "producer_pid": 4312,
+                    },
                 },
                 sort_keys=True,
             )
@@ -816,6 +871,7 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         bm8_production_pass=bm8_pass,
         bm8_production_pass_sha256=bm8_sha,
         bm8_engagement=bm8_engagement,
+        bm8_final_flush=bm8_final_flush,
         cfwd_production_pass=cfwd,
         cfwd_production_pass_sha256=cfwd_sha,
         cfwd_engagement=cfwd_engagement,
@@ -839,7 +895,10 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
     assert result["production_evidence"]["sfwd_engaged_layer_count"] == 48
     assert result["composed_stack"]["cfwd_logit_direct"] is True
     assert result["composed_stack"]["dfwd_unified_attention_bm8"] is True
-    assert result["production_evidence"]["bm8_measured_replays"] == 1
+    assert (
+        result["production_evidence"]["bm8_measured_replays"]
+        == measured_replays
+    )
     assert result["production_evidence"]["cfwd_served_return"] == (
         "logit-direct candidate products"
     )

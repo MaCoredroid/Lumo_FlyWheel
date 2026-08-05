@@ -4604,7 +4604,7 @@ def _fr13_dfwd_unified_bm8_production_end(
                 "FR13 DFWD unified BM8 production did not capture four calls"
             )
         record = {
-            "schema": "fr13.fixed32.dfwd_unified_bm8_production_capture.v2",
+            "schema": "fr13.fixed32.dfwd_unified_bm8_production_capture.v3",
             "status": "CAPTURED_PENDING_REPLAY",
             "runtime_mode": "FULL",
             "batch_size": 1,
@@ -4663,6 +4663,108 @@ def _fr13_dfwd_unified_bm8_production_replay_installed(
         raise RuntimeError(
             "FR13 DFWD unified BM8 production replay/install drifted"
         )
+    record["status"] = "ENGAGED_PENDING_FINAL_FLUSH"
+    record["first_measured_replay_attested"] = True
+
+
+def _fr13_dfwd_unified_bm8_production_finalize(events, flush_binding):
+    """Publish BM8 engagement only from the reconciled final flush."""
+    _os = __import__("os")
+    if _os.environ.get("FR13_DFWD_UNIFIED_BM8_PRODUCTION", "0") != "1":
+        return
+    if (
+        _os.environ.get("FR13_DFWD_UNIFIED_BM8_LIVE_AB", "0") != "0"
+        or _os.environ.get(
+            "FR13_DFWD_UNIFIED_BM8_INTERNAL_PRODUCTION_ATTESTED"
+        )
+        != "1"
+        or _os.environ.get("FR13_DFWD_UNIFIED_BM8_INTERNAL") is not None
+    ):
+        raise RuntimeError("FR13 DFWD unified BM8 final attestation drifted")
+    if (
+        not isinstance(events, list)
+        or not events
+        or not isinstance(flush_binding, dict)
+        or set(flush_binding)
+        != {
+            "action",
+            "boundary_snapshot_sha256",
+            "complete_work_census_events",
+            "events_sha256",
+            "generation",
+            "nonce",
+            "producer_pid",
+        }
+        or flush_binding.get("action") != "final"
+        or type(flush_binding.get("generation")) is not int
+        or flush_binding["generation"] < 1
+        or type(flush_binding.get("producer_pid")) is not int
+        or flush_binding["producer_pid"] != _os.getpid()
+        or type(flush_binding.get("complete_work_census_events")) is not int
+        or flush_binding["complete_work_census_events"] != len(events)
+    ):
+        raise RuntimeError("FR13 DFWD unified BM8 final flush binding drifted")
+    for key in ("boundary_snapshot_sha256", "events_sha256", "nonce"):
+        value = flush_binding.get(key)
+        if (
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+        ):
+            raise RuntimeError(
+                "FR13 DFWD unified BM8 final flush digest drifted: " + key
+            )
+    canonical_events = __import__("json").dumps(
+        events, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    if __import__("hashlib").sha256(canonical_events).hexdigest() != (
+        flush_binding["events_sha256"]
+    ):
+        raise RuntimeError("FR13 DFWD unified BM8 final event hash drifted")
+    if len(_FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING) != 1:
+        raise RuntimeError("FR13 DFWD unified BM8 final capture count drifted")
+    identity, record = next(
+        iter(_FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING.items())
+    )
+    lifecycle = _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE.get(identity)
+    measured_replays = (
+        int(lifecycle.get("measured_replays", -1))
+        if isinstance(lifecycle, dict)
+        else -1
+    )
+    unmeasured_replays = (
+        int(lifecycle.get("unmeasured_replays", -1))
+        if isinstance(lifecycle, dict)
+        else -1
+    )
+    if (
+        not isinstance(record, dict)
+        or record.get("status") != "ENGAGED_PENDING_FINAL_FLUSH"
+        or record.get("first_measured_replay_attested") is not True
+        or not isinstance(lifecycle, dict)
+        or int(lifecycle.get("captures", -1)) != 1
+        or lifecycle.get("capture_origin") != "measured"
+        or lifecycle.get("graph_signature")
+        != record.get("drafter_graph_signature")
+        or measured_replays != len(events)
+        or measured_replays < 1
+        or unmeasured_replays != 0
+    ):
+        raise RuntimeError("FR13 DFWD unified BM8 final replay accounting drifted")
+    for event in events:
+        runtime = event.get("drafter_runtime") if isinstance(event, dict) else None
+        if (
+            not isinstance(event, dict)
+            or event.get("event_complete") is not True
+            or int(event.get("batch_size", -1)) != 1
+            or not isinstance(runtime, dict)
+            or int(runtime.get("graph_id", 0)) != identity
+            or runtime.get("graph_signature")
+            != record.get("drafter_graph_signature")
+            or int(runtime.get("graph_replays", -1)) != 1
+            or int(runtime.get("mtp_forward_calls", -1)) != 4
+        ):
+            raise RuntimeError("FR13 DFWD unified BM8 final event scope drifted")
     path = __import__("pathlib").Path(
         _os.environ.get(
             "FR13_DFWD_UNIFIED_BM8_PRODUCTION_CAPTURE_JSON",
@@ -4671,10 +4773,11 @@ def _fr13_dfwd_unified_bm8_production_replay_installed(
     )
     temporary = path.with_name(path.name + ".tmp")
     published = dict(record)
-    published["status"] = "ENGAGED"
+    published["status"] = "ENGAGED_FINAL"
     published["graph_captures"] = 1
-    published["measured_replays"] = 1
-    published["unmeasured_replays"] = 0
+    published["measured_replays"] = measured_replays
+    published["unmeasured_replays"] = unmeasured_replays
+    published["final_flush_binding"] = dict(flush_binding)
     temporary.write_text(
         __import__("json").dumps(
             published, ensure_ascii=True, indent=2, sort_keys=True
@@ -34254,6 +34357,9 @@ def _fr13_f32_flush_one(request):
                         "FR13 fixed32 final flush is missing the TAW module"
                     )
                 taw_module.fr13_fixed32_cfwd_logit_direct_live_finalize(
+                    events, flush_binding
+                )
+                _gdn._fr13_dfwd_unified_bm8_production_finalize(
                     events, flush_binding
                 )
             # Counters/snapshot describe the closed interval ending here. Break

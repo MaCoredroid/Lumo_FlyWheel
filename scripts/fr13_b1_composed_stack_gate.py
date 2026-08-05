@@ -40,12 +40,12 @@ QROW_CREDENTIAL_SCHEMA = (
 )
 SFWD_COMBINED_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.k64_root_b1_gate.v1"
 SFWD_CANDIDATE = "fixed32_sfwd_conv_postprep_frontier5_direct_v1"
-PRODUCTION_SMOKE_SCHEMA = "fr13.fixed32.b1_composed_bm8_cfwd.production_smoke.v2"
+PRODUCTION_SMOKE_SCHEMA = "fr13.fixed32.b1_composed_bm8_cfwd.production_smoke.v3"
 TARGET_SELECTOR = "identity_wide256_fullgrid_b1"
 TARGET_SHA256 = "85937b5c35ec87bce12e4b5d677dd67f63004f9a9d9fb6d64473a5bd3b53b2da"
 CFWD_ENGAGEMENT_SCHEMA = "fr13.fixed32.cfwd_logit_direct.production_engagement.v1"
 CFWD_SERVED_RETURN = "logit-direct candidate products"
-BM8_CAPTURE_SCHEMA = "fr13.fixed32.dfwd_unified_bm8_production_capture.v2"
+BM8_CAPTURE_SCHEMA = "fr13.fixed32.dfwd_unified_bm8_production_capture.v3"
 BM8_LIVE_PASS_SHA256 = (
     "570caf42e3e75ff0d3717042b0dfc58b23a90041e71103f70a07f6d7563445b5"
 )
@@ -615,7 +615,10 @@ def _validate_bm8_production_pass(payload: object) -> None:
 
 
 def _validate_bm8_engagement(
-    payload: object, *, credential_sha256: str
+    payload: object,
+    *,
+    credential_sha256: str,
+    final_flush: object,
 ) -> None:
     required = {
         "schema",
@@ -634,6 +637,8 @@ def _validate_bm8_engagement(
         "graph_captures",
         "measured_replays",
         "unmeasured_replays",
+        "first_measured_replay_attested",
+        "final_flush_binding",
     }
     candidate = {
         "kernel": "kernel_unified_attention_2d",
@@ -641,11 +646,21 @@ def _validate_bm8_engagement(
         "block_q": 1,
         "calls": 4,
     }
+    binding = (
+        payload.get("final_flush_binding")
+        if isinstance(payload, dict)
+        else None
+    )
+    ack = final_flush.get("ack") if isinstance(final_flush, dict) else None
+    counters = ack.get("counters") if isinstance(ack, dict) else None
+    measured_replays = (
+        payload.get("measured_replays") if isinstance(payload, dict) else None
+    )
     if (
         not isinstance(payload, dict)
         or set(payload) != required
         or payload.get("schema") != BM8_CAPTURE_SCHEMA
-        or payload.get("status") != "ENGAGED"
+        or payload.get("status") != "ENGAGED_FINAL"
         or payload.get("runtime_mode") != "FULL"
         or payload.get("batch_size") != 1
         or payload.get("physical_rows_per_request") != 32
@@ -667,10 +682,45 @@ def _validate_bm8_engagement(
         != BM8_QUALIFIED_SOURCE_SHA256
         or payload.get("pass_sidecar_sha256") != credential_sha256
         or payload.get("graph_captures") != 1
-        or payload.get("measured_replays") != 1
+        or type(measured_replays) is not int
+        or measured_replays < 1
         or payload.get("unmeasured_replays") != 0
+        or payload.get("first_measured_replay_attested") is not True
+        or not isinstance(binding, dict)
+        or set(binding)
+        != {
+            "action",
+            "boundary_snapshot_sha256",
+            "complete_work_census_events",
+            "events_sha256",
+            "generation",
+            "nonce",
+            "producer_pid",
+        }
+        or binding.get("action") != "final"
+        or binding.get("complete_work_census_events") != measured_replays
+        or type(binding.get("generation")) is not int
+        or binding["generation"] < 1
+        or type(binding.get("producer_pid")) is not int
+        or binding["producer_pid"] < 1
+        or any(
+            re.fullmatch(r"[0-9a-f]{64}", str(binding.get(key))) is None
+            for key in ("boundary_snapshot_sha256", "events_sha256", "nonce")
+        )
+        or not isinstance(final_flush, dict)
+        or final_flush.get("schema") != "fr13-fixed32-flush-client-result-v1"
+        or not isinstance(ack, dict)
+        or ack.get("schema") != "fr13-fixed32-flush-ack-v1"
+        or ack.get("action") != "final"
+        or ack.get("status") != "ok"
+        or ack.get("mode") != "hydra27_fixed32"
+        or ack.get("producer_pid") != binding.get("producer_pid")
+        or ack.get("generation") != binding.get("generation")
+        or ack.get("nonce") != binding.get("nonce")
+        or not isinstance(counters, dict)
+        or counters.get("complete_work_census_events") != measured_replays
     ):
-        raise GateError("BM8 four-call measured-replay engagement drifted")
+        raise GateError("BM8 final-flush replay engagement drifted")
 
 
 def _validate_production_smoke_payload(
@@ -872,10 +922,6 @@ def issue_production_smoke(args: argparse.Namespace) -> None:
     bm8_engagement, bm8_engagement_raw = _load_json(
         arm / "logs/fr13_dfwd_unified_bm8.production_capture.json"
     )
-    _validate_bm8_engagement(
-        bm8_engagement,
-        credential_sha256=component_hashes["dfwd_unified_bm8"],
-    )
 
     qrow_sidecar_raw = _regular(
         arm / "logs/fr13_fa2_qrow32_b1_production_pass.json"
@@ -925,6 +971,11 @@ def issue_production_smoke(args: argparse.Namespace) -> None:
         or ack.get("mode") != "hydra27_fixed32"
     ):
         raise GateError("production smoke final flush drifted")
+    _validate_bm8_engagement(
+        bm8_engagement,
+        credential_sha256=component_hashes["dfwd_unified_bm8"],
+        final_flush=final_flush,
+    )
 
     runtime_hashes = {
         "runtime_manifest": _sha256(runtime_end),

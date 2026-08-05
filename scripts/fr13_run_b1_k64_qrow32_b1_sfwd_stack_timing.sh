@@ -892,6 +892,7 @@ if [[ "$CFWD_PRODUCTION" == "1" ]]; then
     --bm8-production-pass "$BM8_PRODUCTION_PASS"
     --bm8-production-pass-sha256 "$BM8_PRODUCTION_CREDENTIAL_SHA256"
     --bm8-engagement "$BM8_ENGAGEMENT"
+    --bm8-final-flush "$ARMDIR/fixed32_final_flush.json"
     --cfwd-production-pass "$CFWD_PRODUCTION_PASS"
     --cfwd-production-pass-sha256 "$CFWD_PASS_SHA256"
     --cfwd-engagement "$CFWD_ENGAGEMENT"
