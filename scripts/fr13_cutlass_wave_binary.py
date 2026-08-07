@@ -453,6 +453,7 @@ def _verify_production_qualification(
             expected_sidecar_sha256,
             candidate,
             patch_source,
+            draft_vocab_blocks=patch_source.parent / "fr13_dvk_subset_blocks.json",
             candidate_selector=selector,
         )
     kwargs = {"fixed32_mode": fixed32_mode} if selector == "persistent_b4_m128" else {}
