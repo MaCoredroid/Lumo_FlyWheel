@@ -3266,6 +3266,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
         || "$_fr13_fixed32_sfwd_state_fusion_timing" == "1" \
         || "$_fr13_fixed32_sfwd_state_fusion_production" == "1" \
         || "$_fr13_fixed32_sfwd_prior_reuse" == "1" \
+        || "$_fr13_fixed32_sfwd_conv_postprep_byte" == "1" \
         || ( "$_fr13_fixed32_sfwd_conv_postprep" == "1" \
              && "${ENFORCE_EAGER:-0}" == "1" ) ]]; then
     _fixed32_expected_eager=1
