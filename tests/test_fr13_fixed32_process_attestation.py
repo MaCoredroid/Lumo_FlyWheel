@@ -183,6 +183,78 @@ def test_streamk_eager_diagnostic_is_exact_b1_contract() -> None:
         )
 
 
+def test_sfwd_byte_diagnostic_is_eager_at_b1_and_b4() -> None:
+    """The SFWD conv/post-prep + prior-reuse byte gates boot --enforce-eager.
+
+    B1 is fr13_run_b1_sfwd_conv_postprep_gate.sh /
+    fr13_run_b1_sfwd_prior_reuse_gate.sh (stock wave); B4 is
+    fr13_run_b4_sfwd_embedded_gate_live_gate.sh.
+    """
+    for concurrency in (1, 4):
+        default = contract.expected_pid1_argv(concurrency)
+        eager = contract.expected_process_pid1_argv(
+            concurrency,
+            attribution_only=False,
+            sfwd_byte_diagnostic=True,
+        )
+
+        assert eager == [*default, "--enforce-eager"]
+        assert contract.validate_process_pid1_argv(
+            eager,
+            concurrency,
+            attribution_only=False,
+            sfwd_byte_diagnostic=True,
+        ) == eager
+        with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
+            contract.validate_process_pid1_argv(
+                eager,
+                concurrency,
+                attribution_only=False,
+            )
+        with pytest.raises(contract.ContractError, match="PID1 argv mismatch"):
+            contract.validate_process_pid1_argv(
+                default,
+                concurrency,
+                attribution_only=False,
+                sfwd_byte_diagnostic=True,
+            )
+
+
+def test_sfwd_byte_diagnostic_composes_with_the_b1_cutlass_byte_wave() -> None:
+    """conv/post-prep byte A/B also rides identity_wide256_fullgrid_b1_byte_ab."""
+    expected = [*contract.expected_pid1_argv(1), "--enforce-eager"]
+
+    assert contract.validate_process_pid1_argv(
+        expected,
+        1,
+        attribution_only=False,
+        streamk_eager_diagnostic=True,
+        sfwd_byte_diagnostic=True,
+    ) == expected
+
+
+def test_sfwd_byte_diagnostic_excludes_graph_and_attribution() -> None:
+    with pytest.raises(
+        contract.ContractError,
+        match="process diagnostics are mutually exclusive",
+    ):
+        contract.expected_process_pid1_argv(
+            4,
+            attribution_only=False,
+            graph_diagnostic=True,
+            sfwd_byte_diagnostic=True,
+        )
+    with pytest.raises(
+        contract.ContractError,
+        match="eager diagnostic cannot be attribution-only",
+    ):
+        contract.expected_process_pid1_argv(
+            1,
+            attribution_only=True,
+            sfwd_byte_diagnostic=True,
+        )
+
+
 def test_graph_diagnostic_is_b4_only_and_not_attribution() -> None:
     with pytest.raises(
         contract.ContractError,
@@ -305,15 +377,21 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     assert '"${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \\' in serve
     assert '"${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \\' in serve
     assert '"${FR13_FIXED32_CUTLASS_WAVE:-stock}" \\' in serve
-    assert '"$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" <<\'PY\'' in serve
+    assert '"$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \\' in serve
+    assert '"$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB" \\' in serve
+    assert '"$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" <<\'PY\'' in serve
     assert "attribution_only_text = sys.argv[7]" in serve
     assert "batch_gdn_byte_ab_text = sys.argv[8]" in serve
     assert "batch_gdn_graph_byte_ab_text = sys.argv[9]" in serve
     assert "cutlass_wave = sys.argv[10]" in serve
     assert "sfwd_b4_byte_ab_text = sys.argv[11]" in serve
+    assert "sfwd_conv_postprep_byte_ab_text = sys.argv[12]" in serve
+    assert "sfwd_prior_reuse_byte_ab_text = sys.argv[13]" in serve
     assert "attribution_only_text = os.environ" not in serve
     assert "batch_gdn_byte_ab_text = os.environ" not in serve
     assert "batch_gdn_graph_byte_ab_text = os.environ" not in serve
+    assert "sfwd_conv_postprep_byte_ab_text = os.environ" not in serve
+    assert "sfwd_prior_reuse_byte_ab_text = os.environ" not in serve
     assert "eager_diagnostic=(" in serve
     assert "batch_gdn_byte_ab_text == \"1\"" in serve
     assert '"persistent_b4_m128_byte_ab",' in serve
@@ -321,3 +399,6 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     assert (
         "graph_diagnostic=batch_gdn_graph_byte_ab_text == \"1\"" in serve
     )
+    assert "sfwd_byte_diagnostic=(" in serve
+    assert 'sfwd_conv_postprep_byte_ab_text == "1"' in serve
+    assert 'or sfwd_prior_reuse_byte_ab_text == "1"' in serve

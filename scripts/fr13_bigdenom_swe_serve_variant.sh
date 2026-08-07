@@ -2001,7 +2001,9 @@ PY
     "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" \
     "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" \
     "${FR13_FIXED32_CUTLASS_WAVE:-stock}" \
-    "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" <<'PY'
+    "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \
+    "$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB" \
+    "$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" <<'PY'
 import json
 import subprocess
 import sys
@@ -2021,6 +2023,8 @@ batch_gdn_byte_ab_text = sys.argv[8]
 batch_gdn_graph_byte_ab_text = sys.argv[9]
 cutlass_wave = sys.argv[10]
 sfwd_b4_byte_ab_text = sys.argv[11]
+sfwd_conv_postprep_byte_ab_text = sys.argv[12]
+sfwd_prior_reuse_byte_ab_text = sys.argv[13]
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -2046,6 +2050,14 @@ if batch_gdn_graph_byte_ab_text not in {"0", "1"}:
 if sfwd_b4_byte_ab_text not in {"0", "1"}:
     raise SystemExit(
         "fixed32 SFWD B4 byte diagnostic selector must be exactly 0 or 1"
+    )
+if sfwd_conv_postprep_byte_ab_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 SFWD conv/post-prep byte diagnostic selector must be exactly 0 or 1"
+    )
+if sfwd_prior_reuse_byte_ab_text not in {"0", "1"}:
+    raise SystemExit(
+        "fixed32 SFWD prior-reuse byte diagnostic selector must be exactly 0 or 1"
     )
 if cutlass_wave not in {
     "stock",
@@ -2118,6 +2130,15 @@ try:
                 "identity_onen_n5120_fullgrid_b1_byte_ab",
                 "identity_wide256_fullgrid_b1_byte_ab",
             )
+        ),
+        # SFWD conv/post-prep (B1 standalone + B4 embedded CTA) and prior-reuse
+        # byte gates are eager kernel diagnostics on the stock wave, so PID1
+        # carries the trailing '--enforce-eager' exactly as the launcher pins
+        # it (_fixed32_expected_eager) and as this script's own
+        # _fixed32_eager_kernel_diagnostic predicate already asserts.
+        sfwd_byte_diagnostic=(
+            sfwd_conv_postprep_byte_ab_text == "1"
+            or sfwd_prior_reuse_byte_ab_text == "1"
         ),
     )
 except contract.ContractError as error:

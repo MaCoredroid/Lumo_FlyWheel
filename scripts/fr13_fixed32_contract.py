@@ -692,6 +692,7 @@ def expected_process_pid1_argv(
     eager_diagnostic: bool = False,
     graph_diagnostic: bool = False,
     streamk_eager_diagnostic: bool = False,
+    sfwd_byte_diagnostic: bool = False,
 ) -> list[str]:
     if type(attribution_only) is not bool:
         raise ContractError("fixed32 attribution-only selector must be boolean")
@@ -703,14 +704,31 @@ def expected_process_pid1_argv(
         raise ContractError(
             "fixed32 Stream-K eager-diagnostic selector must be boolean"
         )
+    if type(sfwd_byte_diagnostic) is not bool:
+        raise ContractError(
+            "fixed32 SFWD byte-diagnostic selector must be boolean"
+        )
     if sum(
         (eager_diagnostic, graph_diagnostic, streamk_eager_diagnostic)
     ) > 1:
         raise ContractError(
             "fixed32 process diagnostics are mutually exclusive"
         )
+    # The SFWD conv/post-prep and prior-reuse byte gates are eager kernel byte
+    # diagnostics (fr13_run_b1_sfwd_conv_postprep_gate.sh,
+    # fr13_run_b4_sfwd_embedded_gate_live_gate.sh,
+    # fr13_run_b1_sfwd_prior_reuse_gate.sh). They are legal at B1 and B4 and
+    # they ride EITHER the stock wave or a B1 CUTLASS byte wave, so they
+    # compose with the Stream-K B1 eager selector instead of excluding it —
+    # both selectors demand the identical trailing '--enforce-eager'. They
+    # never compose with the graph diagnostic, which is the one non-eager
+    # selector.
+    if sfwd_byte_diagnostic and graph_diagnostic:
+        raise ContractError(
+            "fixed32 process diagnostics are mutually exclusive"
+        )
     if attribution_only and (
-        eager_diagnostic or streamk_eager_diagnostic
+        eager_diagnostic or streamk_eager_diagnostic or sfwd_byte_diagnostic
     ):
         raise ContractError(
             "fixed32 eager diagnostic cannot be attribution-only"
@@ -732,7 +750,7 @@ def expected_process_pid1_argv(
             "fixed32 Stream-K eager diagnostic requires concurrency 1"
         )
     vllm_argv = expected_pid1_argv(concurrency)
-    if eager_diagnostic or streamk_eager_diagnostic:
+    if eager_diagnostic or streamk_eager_diagnostic or sfwd_byte_diagnostic:
         vllm_argv = [*vllm_argv, "--enforce-eager"]
     if not attribution_only:
         return vllm_argv
@@ -747,6 +765,7 @@ def validate_process_pid1_argv(
     eager_diagnostic: bool = False,
     graph_diagnostic: bool = False,
     streamk_eager_diagnostic: bool = False,
+    sfwd_byte_diagnostic: bool = False,
 ) -> list[str]:
     expected = expected_process_pid1_argv(
         concurrency,
@@ -754,6 +773,7 @@ def validate_process_pid1_argv(
         eager_diagnostic=eager_diagnostic,
         graph_diagnostic=graph_diagnostic,
         streamk_eager_diagnostic=streamk_eager_diagnostic,
+        sfwd_byte_diagnostic=sfwd_byte_diagnostic,
     )
     if argv != expected:
         raise ContractError(f"fixed32 PID1 argv mismatch: {argv!r}")
