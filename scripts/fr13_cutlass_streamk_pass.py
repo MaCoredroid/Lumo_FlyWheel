@@ -621,7 +621,7 @@ def _canonical_source_repository(patch_source: Path) -> tuple[Path, Path]:
     return repo_root, resolved_patch_source
 
 
-def validate_historical_qualification_source_binding(
+def _validate_pinned_historical_source_identity(
     source_commit: str,
     source_identity: object,
     patch_source: Path,
@@ -647,6 +647,35 @@ def validate_historical_qualification_source_binding(
     records = source_identity.get("files")
     if not isinstance(records, dict) or set(records) != set(SOURCE_BINDING_PATHS):
         raise QualificationError("historical qualification source manifest mismatch")
+    for relative in SOURCE_BINDING_PATHS:
+        record = records.get(relative)
+        if not isinstance(record, dict) or set(record) != {"bytes", "sha256"}:
+            raise QualificationError(
+                f"historical qualification source record is invalid for {relative}"
+            )
+    _canonical_source_repository(patch_source)
+    patch_record = records[os.fspath(PATCH_SOURCE)]
+    assert isinstance(patch_record, dict)
+    if patch_record.get("sha256") != _source_contract(candidate_selector)[
+        "patch_source_sha256"
+    ]:
+        raise QualificationError(
+            "historical qualification patch source does not match the candidate"
+        )
+    return source_identity
+
+
+def validate_historical_qualification_source_binding(
+    source_commit: str,
+    source_identity: object,
+    patch_source: Path,
+    candidate_selector: str,
+) -> dict[str, object]:
+    identity = _validate_pinned_historical_source_identity(
+        source_commit, source_identity, patch_source, candidate_selector
+    )
+    records = identity["files"]
+    assert isinstance(records, dict)
 
     repo_root, _ = _canonical_source_repository(patch_source)
     resolved_commit = _git_output(
@@ -661,11 +690,6 @@ def validate_historical_qualification_source_binding(
             "historical qualification commit does not resolve exactly"
         )
     for relative in SOURCE_BINDING_PATHS:
-        record = records.get(relative)
-        if not isinstance(record, dict) or set(record) != {"bytes", "sha256"}:
-            raise QualificationError(
-                f"historical qualification source record is invalid for {relative}"
-            )
         committed = _git_output(
             repo_root,
             "show",
@@ -676,19 +700,11 @@ def validate_historical_qualification_source_binding(
             "bytes": len(committed),
             "sha256": hashlib.sha256(committed).hexdigest(),
         }
-        if record != expected:
+        if records[relative] != expected:
             raise QualificationError(
                 f"historical qualification source record mismatch for {relative}"
             )
-    patch_record = records[os.fspath(PATCH_SOURCE)]
-    assert isinstance(patch_record, dict)
-    if patch_record.get("sha256") != _source_contract(candidate_selector)[
-        "patch_source_sha256"
-    ]:
-        raise QualificationError(
-            "historical qualification patch source does not match the candidate"
-        )
-    return source_identity
+    return identity
 
 
 def validate_runtime_source_commit_identity(
@@ -827,6 +843,63 @@ def _validate_mounted_source_identity(
     return source_identity
 
 
+def _validate_mounted_runtime_source_identity(
+    runtime_source_commit: str,
+    runtime_source_identity: object,
+    patch_source: Path,
+) -> dict[str, object]:
+    if re.fullmatch(r"[0-9a-f]{40}", runtime_source_commit) is None:
+        raise QualificationError("runtime source-binding commit is invalid")
+    if not isinstance(runtime_source_identity, dict) or set(
+        runtime_source_identity
+    ) != {"schema", "source_commit", "files"}:
+        raise QualificationError(
+            "mounted runtime source identity has an invalid structure"
+        )
+    if runtime_source_identity.get("schema") != RUNTIME_SOURCE_BINDING_SCHEMA:
+        raise QualificationError("mounted runtime source identity schema mismatch")
+    if runtime_source_identity.get("source_commit") != runtime_source_commit:
+        raise QualificationError("mounted runtime source identity commit mismatch")
+    files = runtime_source_identity.get("files")
+    if not isinstance(files, dict) or set(files) != set(RUNTIME_SOURCE_BINDING_PATHS):
+        raise QualificationError(
+            "mounted runtime source identity file manifest mismatch"
+        )
+
+    repo_root, _ = _canonical_source_repository(patch_source)
+    for relative in RUNTIME_SOURCE_BINDING_PATHS:
+        record = files.get(relative)
+        if not isinstance(record, dict) or set(record) != {"bytes", "sha256"}:
+            raise QualificationError(
+                f"mounted runtime source identity record is invalid for {relative}"
+            )
+        expected_bytes = record.get("bytes")
+        expected_sha256 = record.get("sha256")
+        if (
+            not isinstance(expected_bytes, int)
+            or isinstance(expected_bytes, bool)
+            or expected_bytes < 0
+            or not isinstance(expected_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+        ):
+            raise QualificationError(
+                f"mounted runtime source identity record is invalid for {relative}"
+            )
+        working_path = repo_root / relative
+        info = _regular_file(
+            working_path, f"mounted runtime source-binding file {relative}"
+        )
+        if info.st_size != expected_bytes:
+            raise QualificationError(
+                f"mounted runtime source-binding file size mismatch for {relative}"
+            )
+        if sha256_file(working_path) != expected_sha256:
+            raise QualificationError(
+                f"mounted runtime source-binding file SHA-256 mismatch for {relative}"
+            )
+    return runtime_source_identity
+
+
 def _validate_runtime_source_commit_binding(
     source_commit: str,
     source_identity: object,
@@ -840,6 +913,47 @@ def _validate_runtime_source_commit_binding(
     except _GitUnavailableError:
         return _validate_mounted_source_identity(
             source_commit, source_identity, patch_source, candidate_selector
+        )
+
+
+# The launcher issues the production sidecar on the host, where the repository
+# is a git worktree and every source-binding fact is derived under git.  The
+# pinned serving image ships no git binary and /workspace is a linked worktree
+# whose git directory is not mounted, so in-container re-verification degrades
+# to the mounted-tree checks below -- exactly as the runtime-commit binding
+# already does.  The sidecar is itself pinned by
+# FR13_FIXED32_CUTLASS_WAVE_PRODUCTION_PASS_SIDECAR_SHA256, the historical
+# identity is pinned byte-for-byte by
+# HISTORICAL_QUALIFICATION_SOURCE_IDENTITY_SHA256, and the runtime identity is
+# re-derived from the mounted repository, so nothing is taken on trust.
+def _validate_historical_qualification_binding(
+    source_commit: str,
+    source_identity: object,
+    patch_source: Path,
+    candidate_selector: str,
+) -> dict[str, object]:
+    try:
+        return validate_historical_qualification_source_binding(
+            source_commit, source_identity, patch_source, candidate_selector
+        )
+    except _GitUnavailableError:
+        return _validate_pinned_historical_source_identity(
+            source_commit, source_identity, patch_source, candidate_selector
+        )
+
+
+def _validate_runtime_source_identity_binding(
+    runtime_source_commit: str,
+    runtime_source_identity: object,
+    patch_source: Path,
+) -> dict[str, object]:
+    try:
+        return validate_runtime_source_commit_identity(
+            runtime_source_commit, patch_source
+        )
+    except _GitUnavailableError:
+        return _validate_mounted_runtime_source_identity(
+            runtime_source_commit, runtime_source_identity, patch_source
         )
 
 
@@ -1222,7 +1336,7 @@ def verify_sidecar(
         raise QualificationError("sidecar qualification source commit is invalid")
     if candidate_contract.get("source_binding") == "required":
         if historical_qualification:
-            source_identity = validate_historical_qualification_source_binding(
+            source_identity = _validate_historical_qualification_binding(
                 source_commit,
                 payload.get("qualification_source_identity"),
                 patch_source,
@@ -1236,8 +1350,10 @@ def verify_sidecar(
                 raise QualificationError(
                     "historical qualification runtime source commit is invalid"
                 )
-            runtime_source_identity = validate_runtime_source_commit_identity(
-                runtime_source_commit, patch_source
+            runtime_source_identity = _validate_runtime_source_identity_binding(
+                runtime_source_commit,
+                payload.get("runtime_source_identity"),
+                patch_source,
             )
             if payload.get("runtime_source_identity") != runtime_source_identity:
                 raise QualificationError(
@@ -1419,7 +1535,7 @@ def validate_production_attestation(
     runtime_source_commit: str | None = None
     if candidate_contract.get("source_binding") == "required":
         if historical_qualification:
-            source_identity = validate_historical_qualification_source_binding(
+            source_identity = _validate_historical_qualification_binding(
                 qualification_source_commit,
                 qualification.get("qualification_source_identity"),
                 patch_source,
@@ -1434,8 +1550,10 @@ def validate_production_attestation(
                     "Stream-K attestation runtime source commit is invalid"
                 )
             runtime_source_commit = runtime_source_commit_raw
-            runtime_source_identity = validate_runtime_source_commit_identity(
-                runtime_source_commit, patch_source
+            runtime_source_identity = _validate_runtime_source_identity_binding(
+                runtime_source_commit,
+                qualification.get("runtime_source_identity"),
+                patch_source,
             )
             if qualification.get("runtime_source_identity") != runtime_source_identity:
                 raise QualificationError(
