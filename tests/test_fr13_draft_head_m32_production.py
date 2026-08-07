@@ -196,7 +196,7 @@ def _traffic_audit(tmp_path: Path, events: int = 7) -> Path:
     request_sha = _sha(b"request")
     task_set_sha = _sha(b"task-set")
     payload = {
-        "schema": "fr13-fixed32-chat-task-provenance-audit-v2",
+        "schema": "fr13-fixed32-chat-task-provenance-audit-v3",
         "mode": "hydra27_fixed32",
         "dataset_name": "princeton-nlp/SWE-bench_Verified",
         "subset": {
@@ -239,6 +239,9 @@ def _traffic_audit(tmp_path: Path, events: int = 7) -> Path:
                 "request_step_memberships": events,
                 "sha256": _sha(b"census"),
                 "successful_engine_requests": 1,
+                "successful_engine_requests_with_pure_decode": 1,
+                "successful_engine_requests_without_pure_decode": 0,
+                "successful_engine_requests_without_pure_decode_sha256": _sha(b"[]"),
                 "terminal_schema": "fr13-fixed32-work-census-terminal-v12",
             },
             "engine": {"authenticated": True},

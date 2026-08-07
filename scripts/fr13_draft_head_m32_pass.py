@@ -184,7 +184,7 @@ TRAFFIC_CHECK_KEYS = frozenset(
         "all_task_agent_and_eval_terminal",
         "all_trace_request_counts_match_authenticated_proxy",
         "all_proxy_attempts_match_engine_requests",
-        "all_successful_engine_requests_match_census",
+        "all_census_requests_match_successful_engine_requests",
         "all_census_requests_inside_task_brackets",
         "no_campaign_rejections_or_aborted_requests",
         "no_fixed32_traffic_outside_task_brackets",
@@ -216,6 +216,9 @@ CENSUS_KEYS = frozenset(
         "request_step_memberships",
         "sha256",
         "successful_engine_requests",
+        "successful_engine_requests_with_pure_decode",
+        "successful_engine_requests_without_pure_decode",
+        "successful_engine_requests_without_pure_decode_sha256",
         "terminal_schema",
     }
 )
@@ -719,7 +722,7 @@ def validate_chat_traffic_audit(
 
     expected_interval = [0, expected_events]
     if (
-        audit["schema"] != "fr13-fixed32-chat-task-provenance-audit-v2"
+        audit["schema"] != "fr13-fixed32-chat-task-provenance-audit-v3"
         or audit["mode"] != EXPECTED_MODE
         or audit["dataset_name"] != EXPECTED_DATASET
         or subset
@@ -798,6 +801,7 @@ def validate_rebuilt_chat_traffic_audit(
         dataset_record_digests={
             EXPECTED_INSTANCE: EXPECTED_DATASET_RECORD_SHA256
         },
+        concurrency=1,
     )
     actual, _ = load_json(audit_path)
     if actual != expected:
