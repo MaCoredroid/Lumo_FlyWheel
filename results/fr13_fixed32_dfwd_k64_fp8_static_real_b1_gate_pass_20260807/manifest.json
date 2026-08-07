@@ -1,0 +1,58 @@
+{
+  "artifact_schema": "fr13.fixed32.dfwd_k64_fp8_static_real_b1_gate_pass.v1",
+  "arm": "hydra27_fixed32_k64_root_3967fb29c_20260805a",
+  "candidate": "vllm_cutlass_block_fp8_scaled_mm_static_io",
+  "candidate_served": true,
+  "classification": "one_real_swe_verified_b1_integrity_gate",
+  "draft_vocab_k": 65536,
+  "draft_vocab_root": 1,
+  "events": 849,
+  "floor_acceptance_eligible": false,
+  "gate": {
+    "gate_result_sha256": "4740af2371f9a330ff628ed0895d7fcb24935334370dc1a148f29839ef6d338c",
+    "gate_schema": "fr13.fixed32.draft_head_fp8_real_b1_gate.v2",
+    "original_postrun_gate_crashed": true,
+    "original_crash_cause": "traffic validator pinned to chat-task-provenance-audit-v2 while fr13_floor_gate.py writer emits v3",
+    "ran_at": "2026-08-07T20:03:34Z",
+    "ran_over_unmodified_evidence": true,
+    "validator_fix_commit": "8d89e064781a9afcf0362592854bc18f5764947c"
+  },
+  "matched_reference": {
+    "candidate_dfwd_delta_ms": -7.073949588095431,
+    "candidate_dfwd_delta_percent": -20.15527383623283,
+    "candidate_wall_delta_ms": -7.223644833635149,
+    "candidate_wall_delta_percent": -3.225249351426647,
+    "dfwd_gpu_ms_per_step": 35.0972636024359,
+    "source": "exact4 reference astropy__astropy-12907 slice",
+    "step_wall_ms": 223.971669987
+  },
+  "measurement": {
+    "accept_per_event": 4.025912838633687,
+    "committer_gpu_ms_per_step": 19.754194405671438,
+    "drafter_gpu_ms_per_step": 28.02331401434047,
+    "floor_ratio": 1.9094384456655624,
+    "measured_tps_fullstep_wall": 23.187813753216396,
+    "one_sided_u95_cap_ms": 130.541117726,
+    "overhead_other_ms_per_event": 16.1826030458343,
+    "sfwd_gpu_ms_per_step": 152.78791368751865,
+    "step_wall_minus_cap_ms": 86.20690742736485,
+    "step_wall_ms": 216.74802515336486,
+    "weight_floor_ms": 113.514015414
+  },
+  "performance_tuning_eligible": false,
+  "physical_rows": 32,
+  "production_default_enabled": false,
+  "proposal_only": true,
+  "run_ended": "2026-08-05T22:32:05Z",
+  "run_started": "2026-08-05T22:19:13Z",
+  "source_commit": "3967fb29cc69335ac930b522f2a5dea20ce11aa0",
+  "static_io": true,
+  "status": "PASS",
+  "suite": "SWE-Verified",
+  "target_authority_unchanged": true,
+  "task_ids": [
+    "astropy__astropy-12907"
+  ],
+  "task_resolved": true,
+  "timing_eligible": false
+}

@@ -1,0 +1,77 @@
+{
+  "acceptance_telemetry": {
+    "accepted_drafts": 3418,
+    "accepted_drafts_per_event": 4.025912838633687,
+    "arm": "hydra27_fixed32_k64_root_3967fb29c_20260805a",
+    "committed_tokens_per_event": 5.025912838633687,
+    "events": 849
+  },
+  "acceptance_telemetry_sha256": "b86278503704e01b7c950837863d310babcb237fac6ea1423d6e65903094331c",
+  "arm": "hydra27_fixed32_k64_root_3967fb29c_20260805a",
+  "boundary_snapshot_sha256": "bdbe887bc8337c720cf1a8987e36d40ef3b315c4a04b77cf23273b202177fa8c",
+  "candidate_source_sha256": "980fd75dacbb80c600f6e2abd00bed886e600ba10a3ae60a133fc34aba341475",
+  "chat_traffic_audit_sha256": "25984460ee4072eab47fc7a7afa057f29dcdb5e222a62b9515ded5da9b13a68e",
+  "classification": "one_real_swe_verified_b1_integrity_gate",
+  "engagement": {
+    "activation_io": "static_preallocated_raw_out_ops",
+    "bf16_shadow_calls": 0,
+    "captured_loop_calls": 4,
+    "fallback_calls": 0,
+    "proposal_logits_source": "fp8_output_direct",
+    "selected_root_calls": 1,
+    "steady_state_synchronizations": 0
+  },
+  "engagement_sha256": "c5783cd1ddd961e4e1741009339e9df89767b5a4f6ab12f299248e0bff5d119d",
+  "final_flush_sha256": "1e9b832f2c42511cfced0444e7aabebcbf6fc1102951841723b8a4418ac63471",
+  "floor_acceptance_eligible": false,
+  "instance_id": "astropy__astropy-12907",
+  "integrity_basis": {
+    "authenticated_request_census": true,
+    "canonical_task_terminal": true,
+    "draft_probs": null,
+    "drafter_quality_may_change": true,
+    "verifier_and_committer_route": "unchanged_fixed32_rejection_sampling"
+  },
+  "mandatory_floor": {
+    "baseline_mandatory_bytes_per_event": 32666638208,
+    "bf16_weight_bytes_per_call_removed": 671088640,
+    "candidate_mandatory_bytes_per_event": 30989326208,
+    "candidate_weight_floor_ms": 113.514015414,
+    "floor_bandwidth_gbps": 273,
+    "fp32_weight_scale_bytes_per_call": 81920,
+    "fp8_weight_bytes_per_call": 335544320,
+    "mandatory_bytes_per_call": 335626240,
+    "mandatory_bytes_per_event": 1678131200,
+    "one_sided_u95_cap_ms": 130.541117726,
+    "retained_candidate_bytes": 335626240
+  },
+  "performance_tuning_eligible": false,
+  "production_default_enabled": false,
+  "qrow16_production": {
+    "candidate_so_bytes": 299507792,
+    "candidate_so_sha256": "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86",
+    "dispatch": "qrow16 exact geometry; no fallback",
+    "graph_signature": "e75050eed5cbab05470f412dbbac6c649cfb37c33b5fb32c21d678234bef221c",
+    "layer_count": 16,
+    "live_pass_sha256": "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77",
+    "production_capture_sha256": "d28d1f3a733e61cebbab6253cd4a775b04f0fad8e43664444c2ba9818b8b38d0",
+    "production_sidecar_sha256": "9d2d59f4bb2b6d9a202a60f41c71ff69f7e7c60b24dade34932b3c1ceb6e407f"
+  },
+  "schema": "fr13.fixed32.draft_head_fp8_real_b1_gate.v2",
+  "source_commit": "3967fb29cc69335ac930b522f2a5dea20ce11aa0",
+  "static_io": true,
+  "status": "PASS",
+  "suite": "SWE-Verified",
+  "terminal": {
+    "boundary_snapshot_sha256": "bdbe887bc8337c720cf1a8987e36d40ef3b315c4a04b77cf23273b202177fa8c",
+    "completed_events": 849,
+    "events_sha256": "f5d4fc293f10f655c3f969a8fb27522c4f717c443e1b48db6971339cc446ae0e",
+    "flush_generation": 3
+  },
+  "traffic": {
+    "chat_traffic_audit_sha256": "25984460ee4072eab47fc7a7afa057f29dcdb5e222a62b9515ded5da9b13a68e",
+    "completed_events": 849,
+    "fetch_status_sha256": "dc51b8c96c2d745df3bd5590d990230a482fd247123599548e0632fdbf97fc22",
+    "trace_completed_logical_model_requests": 14
+  }
+}
