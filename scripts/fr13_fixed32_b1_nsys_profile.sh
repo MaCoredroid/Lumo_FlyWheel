@@ -1353,6 +1353,47 @@ export LUMO_SWE_AUTOCOMMIT=0
 export FR13_FIXED32_ATTRIBUTION_ONLY=1
 export FR13_FIXED32_NVTX_PROFILE=1
 export LUMO_NSYS_WRAP_VLLM=1
+
+# Attribution must capture the CURRENT production stack, not the stack the
+# defaults select. FR13_FA2_QROW16_PRODUCTION defaults to 0 in the launcher and
+# FR13_DRAFT_VOCAB_ROOT defaults to 0 in the floor sequence, so an unpinned
+# profile re-measures the pre-Qrow16 kernels and annotates them with the wrong
+# 126.514089260 ms floor. Pin both exactly as the production stack-timing runner
+# does (scripts/fr13_run_b1_k64_qrow16_sfwd_stack_timing.sh).
+QROW16_SO_SHA256=1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86
+QROW16_SO_BYTES=299507792
+QROW16_LIVE_PASS_JSON="$REPO/results/fr13_fixed32_qrow16_num_splits0_live_pass_20260731T173608Z/fr13_fa2_qrow16_live_paged_ab.json"
+QROW16_LIVE_PASS_SHA256=36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77
+DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
+[[ -n "${FORKED_FA2_SO:-}" ]] || {
+  echo "FAIL: set FORKED_FA2_SO to the pinned qrow16 production .so" >&2
+  exit 2
+}
+[[ "$FORKED_FA2_SO" == /* && -f "$FORKED_FA2_SO" && ! -L "$FORKED_FA2_SO" ]] || {
+  echo "FAIL: FORKED_FA2_SO must be an absolute regular file" >&2
+  exit 2
+}
+[[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$QROW16_SO_BYTES" \
+   && "$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')" == "$QROW16_SO_SHA256" ]] || {
+  echo "FAIL: FORKED_FA2_SO is not the pinned qrow16 production binary" >&2
+  exit 2
+}
+[[ -f "$QROW16_LIVE_PASS_JSON" && ! -L "$QROW16_LIVE_PASS_JSON" \
+   && "$(sha256sum "$QROW16_LIVE_PASS_JSON" | awk '{print $1}')" \
+      == "$QROW16_LIVE_PASS_SHA256" ]] || {
+  echo "FAIL: qrow16 production live PASS identity drifted" >&2
+  exit 2
+}
+export FORKED_FA2_SO
+export FR13_FA2_QROW16_PRODUCTION=1
+export FR13_FA2_QROW16_SO_SHA256="$QROW16_SO_SHA256"
+export FR13_FA2_QROW16_LIVE_PASS_JSON="$QROW16_LIVE_PASS_JSON"
+export FR13_FA2_QROW16_LIVE_PASS_SHA256="$QROW16_LIVE_PASS_SHA256"
+export FR13_FA2_QROW16_LIVE_PAGED_AB=0
+export FR13_DRAFT_VOCAB_ROOT=1
+export FR13_DRAFT_VOCAB_K=65536
+export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
+
 export LUMO_NSYS_SESSION_NAME="$NSYS_EXPECTED_SESSION_NAME"
 export LUMO_NSYS_BIN=${LUMO_NSYS_BIN:-/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys}
 export LUMO_NSYS_TRACE=${LUMO_NSYS_TRACE:-cuda,cuda-sw,nvtx}
