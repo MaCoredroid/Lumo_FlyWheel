@@ -1349,6 +1349,137 @@ def _sticky_guard_observation(
     }
 
 
+def _layer_geometry_failures(
+    *,
+    layer: object,
+    layer_name: str,
+    capacity: int,
+    source_stage: object,
+    spec_state_indices: object,
+    conv_state: object,
+) -> list[dict[str, object]]:
+    """Return one entry per failed per-layer geometry predicate.
+
+    A single boolean chain over fifteen predicates cannot say which one
+    tripped, which is how this raise cost a container boot to interpret.
+    Report observed vs expected for every predicate that failed.
+    """
+    failures: list[dict[str, object]] = []
+
+    def check(name: str, ok: bool, observed: object, expected: object) -> None:
+        if not ok:
+            failures.append(
+                {"check": name, "observed": observed, "expected": expected}
+            )
+
+    prefix = str(getattr(layer, "prefix", ""))
+    check("layer.prefix", prefix == layer_name, prefix, layer_name)
+
+    missing = False
+    for name, tensor in (
+        ("source_stage", source_stage),
+        ("spec_state_indices", spec_state_indices),
+        ("conv_state", conv_state),
+    ):
+        if not torch.is_tensor(tensor):
+            missing = True
+            check(f"{name}.is_tensor", False, _tensor_observation(tensor), "tensor")
+    if missing:
+        # Every predicate below dereferences these; stop rather than mask the
+        # real finding with an AttributeError.
+        return failures
+
+    check(
+        "source_stage.device",
+        source_stage.device.type == "cuda",
+        str(source_stage.device),
+        "cuda",
+    )
+    check(
+        "source_stage.dtype",
+        source_stage.dtype == torch.bfloat16,
+        str(source_stage.dtype),
+        "torch.bfloat16",
+    )
+    check("source_stage.ndim", source_stage.ndim == 2, source_stage.ndim, 2)
+    if source_stage.ndim == 2:
+        check(
+            "source_stage.rows",
+            int(source_stage.shape[0]) >= capacity * SOURCE_ROWS,
+            int(source_stage.shape[0]),
+            f">={capacity * SOURCE_ROWS}",
+        )
+        check(
+            "source_stage.channels",
+            int(source_stage.shape[1]) == CHANNELS,
+            int(source_stage.shape[1]),
+            CHANNELS,
+        )
+        check(
+            "source_stage.stride",
+            tuple(int(v) for v in source_stage.stride()) == (CHANNELS, 1),
+            tuple(int(v) for v in source_stage.stride()),
+            (CHANNELS, 1),
+        )
+
+    check(
+        "spec_state_indices.dtype",
+        spec_state_indices.dtype == torch.int32,
+        str(spec_state_indices.dtype),
+        "torch.int32",
+    )
+    check(
+        "spec_state_indices.device",
+        spec_state_indices.device == source_stage.device,
+        str(spec_state_indices.device),
+        str(source_stage.device),
+    )
+    check(
+        "spec_state_indices.ndim", spec_state_indices.ndim == 2,
+        spec_state_indices.ndim, 2,
+    )
+    if spec_state_indices.ndim == 2:
+        # The SSI tensor is the builder-owned, full-capacity group registered
+        # through register_fixed32_conv_col0_ssi_group, whose own contract is
+        # shape[0] >= capacity -- it is sized for decode_cudagraph_max_bs, not
+        # for this batch. Only rows [0, capacity) are ever read, so require a
+        # floor here, not equality.
+        check(
+            "spec_state_indices.rows",
+            int(spec_state_indices.shape[0]) >= capacity,
+            int(spec_state_indices.shape[0]),
+            f">={capacity}",
+        )
+        # The fused kernel addresses row pid_b as `ssi + pid_b * ROWS`, so the
+        # row pitch and the column count are hard kernel requirements.
+        check(
+            "spec_state_indices.cols",
+            int(spec_state_indices.shape[1]) == ROWS,
+            int(spec_state_indices.shape[1]),
+            ROWS,
+        )
+        check(
+            "spec_state_indices.stride",
+            tuple(int(v) for v in spec_state_indices.stride()) == (ROWS, 1),
+            tuple(int(v) for v in spec_state_indices.stride()),
+            (ROWS, 1),
+        )
+
+    check(
+        "conv_state.device",
+        conv_state.device == source_stage.device,
+        str(conv_state.device),
+        str(source_stage.device),
+    )
+    check(
+        "conv_state.dtype",
+        conv_state.dtype == torch.bfloat16,
+        str(conv_state.dtype),
+        "torch.bfloat16",
+    )
+    return failures
+
+
 def _capture_runtime_guard(committer_sticky_guard: bool) -> str:
     """Name the sentinel the captured fusion poisons on an invalid replay.
 
@@ -1608,30 +1739,19 @@ def preseed_fixed32_sfwd_conv_postprep_capture_bindings(
         source_stage = source_stages[layer_index]
         spec_state_indices = ssi_sources[layer_index]
         conv_state = conv_banks[layer_index]
-        if (
-            str(getattr(layer, "prefix", "")) != layer_name
-            or not torch.is_tensor(source_stage)
-            or source_stage.device.type != "cuda"
-            or source_stage.dtype != torch.bfloat16
-            or source_stage.ndim != 2
-            or int(source_stage.shape[0]) < capacity * SOURCE_ROWS
-            or int(source_stage.shape[1]) != CHANNELS
-            or tuple(int(value) for value in source_stage.stride())
-            != (CHANNELS, 1)
-            or not torch.is_tensor(spec_state_indices)
-            or spec_state_indices.dtype != torch.int32
-            or spec_state_indices.device != source_stage.device
-            or tuple(int(value) for value in spec_state_indices.shape)
-            != (capacity, ROWS)
-            or tuple(int(value) for value in spec_state_indices.stride())
-            != (ROWS, 1)
-            or not torch.is_tensor(conv_state)
-            or conv_state.device != source_stage.device
-            or conv_state.dtype != torch.bfloat16
-        ):
+        failures = _layer_geometry_failures(
+            layer=layer,
+            layer_name=layer_name,
+            capacity=capacity,
+            source_stage=source_stage,
+            spec_state_indices=spec_state_indices,
+            conv_state=conv_state,
+        )
+        if failures:
             raise RuntimeError(
-                "fixed32 conv/post-prep capture preseed layer geometry drifted: "
-                f"layer={layer_name!r} index={layer_index}"
+                "fixed32 conv/post-prep capture preseed layer geometry "
+                f"drifted: layer={layer_name!r} index={layer_index} "
+                + repr(failures)
             )
         capacity_rows = capacity * ROWS
         base = {

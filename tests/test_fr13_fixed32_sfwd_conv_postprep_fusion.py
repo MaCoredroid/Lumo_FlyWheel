@@ -984,6 +984,104 @@ def test_capture_preseed_contract_follows_the_committer_sticky_arm(
     )
 
 
+def _layer_geometry_operands(
+    *,
+    ssi_shape: tuple[int, int] = (64, 32),
+    ssi_stride: tuple[int, int] | None = None,
+) -> dict[str, object]:
+    source_stage = torch.empty(
+        (candidate.SOURCE_ROWS, candidate.CHANNELS), dtype=torch.bfloat16
+    )
+    if ssi_stride is None:
+        spec_state_indices = torch.zeros(ssi_shape, dtype=torch.int32)
+    else:
+        base = torch.zeros(
+            (ssi_shape[0], max(ssi_stride[0], ssi_shape[1])), dtype=torch.int32
+        )
+        spec_state_indices = base.as_strided(ssi_shape, ssi_stride)
+    return {
+        "layer": types.SimpleNamespace(prefix="model.layers.0.linear_attn"),
+        "layer_name": "model.layers.0.linear_attn",
+        "capacity": 1,
+        "source_stage": source_stage,
+        "spec_state_indices": spec_state_indices,
+        "conv_state": torch.empty((67, 10240, 34), dtype=torch.bfloat16)[:1],
+    }
+
+
+def test_layer_geometry_accepts_the_builder_full_capacity_ssi() -> None:
+    """Regression for the 2026-08-08 boot screen at bb49d7cc2.
+
+    ssi_sources are the builder-owned SSI groups registered through
+    register_fixed32_conv_col0_ssi_group, whose contract is shape[0] >=
+    capacity: they are sized for decode_cudagraph_max_bs, not for the batch.
+    Demanding shape == (capacity, ROWS) rejected every layer at index 0.
+    """
+    failures = candidate._layer_geometry_failures(**_layer_geometry_operands())
+    # CPU tensors trip only the cuda-device predicate; nothing about the SSI.
+    assert [entry["check"] for entry in failures] == ["source_stage.device"]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected_check"),
+    (
+        # The fused kernel addresses row pid_b as `ssi + pid_b * ROWS`, so the
+        # column count and row pitch stay hard requirements.
+        ({"ssi_shape": (64, 16)}, "spec_state_indices.cols"),
+        (
+            {"ssi_shape": (64, 32), "ssi_stride": (64, 1)},
+            "spec_state_indices.stride",
+        ),
+    ),
+)
+def test_layer_geometry_still_rejects_kernel_incompatible_ssi(
+    kwargs: dict[str, object],
+    expected_check: str,
+) -> None:
+    failures = candidate._layer_geometry_failures(
+        **_layer_geometry_operands(**kwargs)
+    )
+    checks = [entry["check"] for entry in failures]
+    assert expected_check in checks
+    entry = next(e for e in failures if e["check"] == expected_check)
+    assert "observed" in entry and "expected" in entry
+
+
+def test_layer_geometry_rejects_too_few_ssi_rows() -> None:
+    failures = candidate._layer_geometry_failures(
+        **{**_layer_geometry_operands(), "capacity": 4}
+    )
+    checks = [entry["check"] for entry in failures]
+    assert "source_stage.rows" in checks  # 36 rows < 4 * SOURCE_ROWS
+    entry = next(e for e in failures if e["check"] == "source_stage.rows")
+    assert entry["observed"] == candidate.SOURCE_ROWS
+    assert entry["expected"] == f">={4 * candidate.SOURCE_ROWS}"
+
+
+def test_layer_geometry_reports_every_failed_predicate() -> None:
+    operands = _layer_geometry_operands()
+    operands["layer"] = types.SimpleNamespace(prefix="wrong.layer")
+    operands["spec_state_indices"] = torch.zeros((64, 32), dtype=torch.int64)
+    failures = candidate._layer_geometry_failures(**operands)
+    checks = {entry["check"] for entry in failures}
+    assert {"layer.prefix", "spec_state_indices.dtype"} <= checks
+    prefix = next(e for e in failures if e["check"] == "layer.prefix")
+    assert prefix["observed"] == "wrong.layer"
+    assert prefix["expected"] == "model.layers.0.linear_attn"
+    dtype = next(e for e in failures if e["check"] == "spec_state_indices.dtype")
+    assert dtype["observed"] == "torch.int64"
+    assert dtype["expected"] == "torch.int32"
+
+
+def test_layer_geometry_reports_a_non_tensor_without_raising() -> None:
+    operands = _layer_geometry_operands()
+    operands["spec_state_indices"] = None
+    failures = candidate._layer_geometry_failures(**operands)
+    assert [entry["check"] for entry in failures] == [
+        "spec_state_indices.is_tensor"
+    ]
+
+
 def test_committer_publishes_no_sticky_route_without_layer_batching() -> None:
     """Pin the kernel fact the capture contract depends on.
 
