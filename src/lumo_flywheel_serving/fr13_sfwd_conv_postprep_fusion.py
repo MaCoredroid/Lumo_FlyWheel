@@ -1303,6 +1303,52 @@ def _capture_guard_scalar(device: torch.device) -> torch.Tensor:
     return torch.ones((), dtype=torch.int32, device=device)
 
 
+def _tensor_observation(value: object) -> object:
+    """Describe a tensor without holding it, for fail-loud messages."""
+    if value is None:
+        return None
+    if not torch.is_tensor(value):
+        return f"<not-a-tensor: {type(value).__name__}>"
+    return {
+        "dtype": str(value.dtype),
+        "shape": tuple(int(size) for size in value.shape),
+        "contiguous": bool(value.is_contiguous()),
+        "data_ptr": int(value.data_ptr()),
+    }
+
+
+def _sticky_guard_observation(
+    state: object, *, first_armed: object = None
+) -> dict[str, object]:
+    """Report what the committer route actually published.
+
+    Every fixed32 capture-preseed failure so far has been a mismatch between
+    the contract's model of the committer route and what the route publishes,
+    and each one cost a container boot to identify. Put the observed tuple in
+    the message so the next trip diagnoses itself.
+    """
+    if not isinstance(state, dict):
+        return {"state": f"<not-a-dict: {type(state).__name__}>"}
+    contract = state.get("contract")
+    return {
+        "sticky_guard": state.get("sticky_guard"),
+        "direct_metadata": state.get("direct_metadata"),
+        "layer_batch": state.get("layer_batch"),
+        "metadata_copy_fusion": state.get("metadata_copy_fusion"),
+        "sticky_guard_route": (
+            contract.get("sticky_guard_route", "<absent>")
+            if isinstance(contract, dict)
+            else f"<no-contract: {type(contract).__name__}>"
+        ),
+        "contract_keys": (
+            sorted(contract) if isinstance(contract, dict) else None
+        ),
+        "sticky_guard_ok": _tensor_observation(state.get("sticky_guard_ok")),
+        "sticky_guard_ok_data_ptr": state.get("sticky_guard_ok_data_ptr"),
+        "first_batch_sticky_guard": first_armed,
+    }
+
+
 def _capture_runtime_guard(committer_sticky_guard: bool) -> str:
     """Name the sentinel the captured fusion poisons on an invalid replay.
 
@@ -1401,11 +1447,19 @@ def _capture_preseed_contract(
         # actually armed instead, and fail loud on a half-armed state or on a
         # route whose batches disagree.
         armed = state.get("sticky_guard")
+        route = contract.get("sticky_guard_route") if isinstance(contract, dict) else None
+        # The committer only *describes* its sticky route when committer layer
+        # batching is on: the whole route-descriptor block is published inside
+        # `if layer_batch:`. With layer batching off -- the shipping fixed32
+        # serve shape -- state["contract"] carries only the eight base keys and
+        # has no sticky_guard_route at all, so an absent route is coherent for
+        # an unarmed guard. An armed guard always implies layer batching
+        # (sticky requires direct metadata requires layer batch), so it must
+        # name the v5 route.
         if armed is True:
             coherent = (
                 state.get("direct_metadata") is True
-                and contract.get("sticky_guard_route")
-                == "fixed32_ownerpath_warp32_sticky_scalar_v5"
+                and route == "fixed32_ownerpath_warp32_sticky_scalar_v5"
                 and torch.is_tensor(sticky_ok)
                 and sticky_ok.dtype == torch.int32
                 and tuple(sticky_ok.shape) == ()
@@ -1415,7 +1469,7 @@ def _capture_preseed_contract(
             )
         elif armed is False:
             coherent = (
-                contract.get("sticky_guard_route") == "stock_bool_vector_v4"
+                route in (None, "stock_bool_vector_v4")
                 and sticky_ok is None
                 and state.get("sticky_guard_ok_data_ptr") is None
             )
@@ -1424,7 +1478,8 @@ def _capture_preseed_contract(
         if not coherent or (sticky_guard is not None and armed is not sticky_guard):
             raise RuntimeError(
                 "fixed32 conv/post-prep capture binding requires a coherent "
-                f"committer sticky guard for B={batch}"
+                f"committer sticky guard for B={batch}: "
+                + repr(_sticky_guard_observation(state, first_armed=sticky_guard))
             )
         sticky_guard = armed
     return capacity, ssi_sources, conv_banks, source_stages, bool(sticky_guard)
@@ -2113,7 +2168,29 @@ def _validate_capture_binding(
         )
     ):
         raise RuntimeError(
-            "fixed32 conv/post-prep persistent capture lease changed"
+            "fixed32 conv/post-prep persistent capture lease changed: "
+            + repr(
+                {
+                    "layer": binding.layer_name,
+                    "batch": binding.batch_size,
+                    "pregather_rebound": current_pregather is not pregather_state,
+                    "committer_rebound": current_committer is not committer_route,
+                    "ssi_rebound": pregather_state["ssi_sources"][layer_index]
+                    is not spec_state_indices,
+                    "bank_rebound": pregather_state["banks"][layer_index]
+                    is not conv_state,
+                    "staging_rebound": pregather_state["source_stagings"][
+                        layer_index
+                    ]
+                    is not source_stage,
+                    "state_rebound": committer_route["states_by_batch"].get(
+                        binding.batch_size
+                    )
+                    is not committer_state,
+                    "bound_sticky_guard": binding.committer_sticky_guard,
+                    "observed": _sticky_guard_observation(committer_state),
+                }
+            )
         )
 
 

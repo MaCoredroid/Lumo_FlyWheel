@@ -859,7 +859,10 @@ def test_profile_preseed_seals_all_48_b1_output_bindings(
 
 
 def _capture_contract_states(
-    *, sticky_guard: bool, batches: tuple[int, ...] = (1,)
+    *,
+    sticky_guard: bool,
+    batches: tuple[int, ...] = (1,),
+    layer_batch: bool | None = None,
 ) -> tuple[dict, dict]:
     """Build a pregather/committer pair shaped like the live fixed32 route."""
     order = tuple(f"model.layers.{index}.linear_attn" for index in range(48))
@@ -898,12 +901,30 @@ def _capture_contract_states(
                 },
             }
         else:
+            # The committer publishes its sticky route descriptor only inside
+            # `if layer_batch:`. With layer batching off -- the shipping
+            # fixed32 serve shape, confirmed by the container's
+            # "COMMIT_DEVICE_FILL ... layer_batch=0" line -- the base contract
+            # carries eight keys and no sticky_guard_route at all.
+            contract: dict[str, object] = {
+                "mode": "hydra27_fixed32",
+                "batch": batch,
+                "path_cap": 16,
+                "neutralizations": 5,
+                "ring_gathers": 4,
+                "fused_calls": 48,
+                "graph_replays_per_event": 1,
+                "preseed_capacity": 0,
+            }
+            if layer_batch:
+                contract["sticky_guard_route"] = "stock_bool_vector_v4"
             states_by_batch[batch] = {
                 "direct_metadata": False,
                 "sticky_guard": False,
+                "layer_batch": bool(layer_batch),
                 "sticky_guard_ok": None,
                 "sticky_guard_ok_data_ptr": None,
-                "contract": {"sticky_guard_route": "stock_bool_vector_v4"},
+                "contract": contract,
             }
     committer = {
         "mode": "hydra27_fixed32",
@@ -914,10 +935,18 @@ def _capture_contract_states(
     return pregather, committer
 
 
-@pytest.mark.parametrize("sticky_guard", (False, True))
+@pytest.mark.parametrize(
+    ("sticky_guard", "layer_batch"),
+    (
+        (False, False),  # the shipping fixed32 serve shape: no route key
+        (False, True),   # layer batching on, sticky off: route says stock
+        (True, True),    # sticky armed: implies layer batch + direct metadata
+    ),
+)
 def test_capture_preseed_contract_follows_the_committer_sticky_arm(
     monkeypatch: pytest.MonkeyPatch,
     sticky_guard: bool,
+    layer_batch: bool,
 ) -> None:
     """The FULL-capture preseed must not demand an arm nobody sets.
 
@@ -928,7 +957,9 @@ def test_capture_preseed_contract_follows_the_committer_sticky_arm(
     (container 73fb69b2e6d2, "requires the persistent sticky guard for B=1").
     """
     monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
-    pregather, committer = _capture_contract_states(sticky_guard=sticky_guard)
+    pregather, committer = _capture_contract_states(
+        sticky_guard=sticky_guard, layer_batch=layer_batch
+    )
     order = tuple(pregather["layer_order"])
     (
         capacity,
@@ -951,6 +982,86 @@ def test_capture_preseed_contract_follows_the_committer_sticky_arm(
         if sticky_guard
         else "persistent_fusion_owned_scalar"
     )
+
+
+def test_committer_publishes_no_sticky_route_without_layer_batching() -> None:
+    """Pin the kernel fact the capture contract depends on.
+
+    The committer's sticky_guard_route lives in the descriptor block published
+    inside `if layer_batch:`. Demanding it unconditionally is what killed the
+    boot screen at df1c50627 with "requires a coherent committer sticky guard
+    for B=1" (container c58d90ca2458, COMMIT_DEVICE_FILL ... layer_batch=0).
+    If the kernel ever publishes the route unconditionally, this test fails and
+    the contract can be tightened again.
+    """
+    kernel = (
+        ROOT / "src" / "lumo_flywheel_serving" / "fr10_gdn_tree_kernel.py"
+    ).read_text(encoding="utf-8")
+    base = kernel.index('        "contract": {\n            "mode": _FR13_FIXED32_MODE,\n            "batch": batch,')
+    update = kernel.index('    if layer_batch:\n        state["contract"].update(', base)
+    base_block = kernel[base:update]
+    assert "sticky_guard_route" not in base_block
+    assert "direct_metadata" not in base_block
+    # ... and it *is* published once layer batching is on.
+    armed_block = kernel[update : update + 6000]
+    assert '"sticky_guard_route"' in armed_block
+    assert "fixed32_ownerpath_warp32_sticky_scalar_v5" in armed_block
+
+
+def test_sticky_guard_failure_reports_the_observed_route_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every capture-preseed trip so far cost a container boot to identify.
+
+    The raise must carry what the committer actually published.
+    """
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    pregather, committer = _capture_contract_states(
+        sticky_guard=False, layer_batch=False
+    )
+    committer["states_by_batch"][1]["sticky_guard"] = None
+    with pytest.raises(RuntimeError) as excinfo:
+        candidate._capture_preseed_contract(
+            layer_order=tuple(pregather["layer_order"]),
+            pregather_state=pregather,
+            committer_route=committer,
+        )
+    message = str(excinfo.value)
+    assert "coherent committer sticky guard for B=1" in message
+    for field in (
+        "'sticky_guard': None",
+        "'direct_metadata': False",
+        "'layer_batch': False",
+        "'sticky_guard_route': '<absent>'",
+        "'contract_keys'",
+        "'sticky_guard_ok': None",
+    ):
+        assert field in message, field
+
+
+def test_sticky_guard_observation_survives_odd_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The diagnostic must never raise while describing a failure."""
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    assert candidate._sticky_guard_observation("not-a-dict")["state"].startswith(
+        "<not-a-dict"
+    )
+    observation = candidate._sticky_guard_observation(
+        {
+            "sticky_guard": True,
+            "contract": ["unexpected"],
+            "sticky_guard_ok": object(),
+        }
+    )
+    assert observation["sticky_guard_route"].startswith("<no-contract")
+    assert observation["sticky_guard_ok"].startswith("<not-a-tensor")
+    tensor_view = candidate._tensor_observation(
+        torch.ones((), dtype=torch.int32)
+    )
+    assert tensor_view["dtype"] == "torch.int32"
+    assert tensor_view["shape"] == ()
+    assert tensor_view["contiguous"] is True
 
 
 @pytest.mark.parametrize(
