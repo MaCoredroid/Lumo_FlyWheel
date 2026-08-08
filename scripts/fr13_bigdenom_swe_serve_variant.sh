@@ -598,6 +598,16 @@ if (( NATIVE_DECODE == 1 )); then PROBE_MODE=naive_mtp; else PROBE_MODE=tree_mtp
 # subset + MAX_NUM_SEQS_OVR=4 + SWE_CONCURRENCY=4.
 MAX_NUM_SEQS_OVR=${MAX_NUM_SEQS_OVR:-1}
 SWE_CONCURRENCY=${SWE_CONCURRENCY:-1}
+# FR13_B4_TASK_REFILL (DEFAULT 0 = OFF): keep SWE_CONCURRENCY tasks in flight
+# from a task POOL larger than the slot count, admitting the next task the
+# moment one finishes, instead of running one fixed wave that decays 4->3->2->1.
+# OFF is byte-identical to every banked run. ON changes the served workload, so
+# a citable measurement under it requires its own contract (the exact4 bindings
+# pin n_tasks == concurrency == 4 and will reject a pool run).
+FR13_B4_TASK_REFILL=${FR13_B4_TASK_REFILL:-0}
+[[ "$FR13_B4_TASK_REFILL" == "0" || "$FR13_B4_TASK_REFILL" == "1" ]] \
+  || { echo "FAIL: FR13_B4_TASK_REFILL must be exactly 0 or 1"; exit 2; }
+export FR13_B4_TASK_REFILL
 if [[ -n "$FIXED32_MODE" ]]; then
   [[ "$MAX_NUM_SEQS_OVR" == "$SWE_CONCURRENCY" ]] \
     || {
