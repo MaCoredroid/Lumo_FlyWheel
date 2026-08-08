@@ -675,3 +675,253 @@ def test_both_gates_attest_the_shape_and_expect_per_shape_rows(gate: str) -> Non
         assert zeroed in source, (gate, zeroed)
     assert '"fused_calls": CONV_PREGATHER_LAYERS if row_fused else 0' in source
     assert '"fused_layers": CONV_PREGATHER_LAYERS if row_fused else 0' in source
+
+
+# --- both shapes through the fixtures and both v5 gate twins -------------
+
+
+import importlib.util as _importlib_util  # noqa: E402
+import json as _json  # noqa: E402
+
+
+def _load_gate(name: str, relative: str):
+    spec = _importlib_util.spec_from_file_location(name, ROOT / relative)
+    assert spec is not None and spec.loader is not None
+    module = _importlib_util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+FLOOR_GATE = _load_gate("fr13_forward_census_floor_gate", "scripts/fr13_floor_gate.py")
+DEPTH_GATE = _load_gate(
+    "fr13_forward_census_depth_acceptance", "scripts/fr13_depth_acceptance.py"
+)
+
+
+def _arm_records(mode: str, *, events: int = 3, kernel_shape: str | None = None):
+    records = [
+        census.reference_event(
+            mode,
+            1,
+            f"{mode}:shape-fixture:{index}",
+            event_index=index,
+            forward_step_index=index,
+            request_ids=[f"req-{mode}-{index}"],
+        )
+        for index in range(events)
+    ]
+    terminal = census.reference_terminal_summary(
+        records,
+        fixture_synthetic_runtime_proof=True,
+        **({} if kernel_shape is None else {"kernel_shape": kernel_shape}),
+    )
+    return [*records, terminal]
+
+
+def _campaign_report():
+    tail = _arm_records(census.TAIL_MODE)
+    hydra = _arm_records(census.HYDRA_MODE)
+    return census.validate_campaign(
+        [(record, f"tail:{index}") for index, record in enumerate(tail)],
+        [(record, f"hydra:{index}") for index, record in enumerate(hydra)],
+        required_batches=(1,),
+    )
+
+
+def _fused_row(row: dict) -> dict:
+    return {
+        **row,
+        "graph_signature": census.forward_graph_structural_signature(
+            row["batch_size"], kernel_shape=census.FUSED_KERNEL_SHAPE
+        ),
+        "conv_layout_sha256": None,
+        "kernel_shape": census.FUSED_KERNEL_SHAPE,
+        "fused_calls": census.CONV_PREGATHER_LAYERS,
+        "fused_layers": census.CONV_PREGATHER_LAYERS,
+        "stage_calls": 0,
+        "stage_before_all_consumes": False,
+        "row_elems": 0,
+        "programs": 0,
+        "ssi_pointer_entries": 0,
+        "ssi_groups": 0,
+        "source_validations": 0,
+        "staged_rows": 0,
+        "consume_calls": 0,
+        "consume_hits": 0,
+        "freshness_matches": 0,
+    }
+
+
+def _fused_report(mutate=None, modes=(census.TAIL_MODE, census.HYDRA_MODE)):
+    report = _json.loads(_json.dumps(_campaign_report()))
+    for mode in modes:
+        rows = [
+            _fused_row(row)
+            for row in report["forward_graph_registries"][mode]
+        ]
+        if mutate is not None:
+            for row in rows:
+                mutate(row)
+        report["forward_graph_registries"][mode] = rows
+        report["terminal_summaries"][mode]["forward_graph_registry"] = (
+            _json.loads(_json.dumps(rows))
+        )
+    return report
+
+
+def test_the_census_fixture_registry_records_its_own_shape() -> None:
+    """The fixture the gates' self-tests build carries the attested trio."""
+    for shape in census.KERNEL_SHAPES:
+        events = [
+            census.reference_event(
+                census.TAIL_MODE,
+                1,
+                f"tail:shape:{index}",
+                event_index=index,
+                forward_step_index=index,
+                request_ids=[f"req-{index}"],
+            )
+            for index in range(2)
+        ]
+        row = census.reference_terminal_summary(
+            events,
+            fixture_synthetic_runtime_proof=True,
+            kernel_shape=shape,
+        )["forward_graph_registry"][0]
+        assert census.FORWARD_GRAPH_REGISTRY_KERNEL_SHAPE_KEYS <= set(row)
+        assert (
+            census.assert_kernel_shape_attested(
+                row["kernel_shape"], row["graph_signature"], source="fixture"
+            )
+            == shape
+        )
+        fused = shape == census.FUSED_KERNEL_SHAPE
+        assert row["fused_calls"] == (
+            census.CONV_PREGATHER_LAYERS if fused else 0
+        )
+        assert row["stage_calls"] == (0 if fused else 1)
+        assert row["staged_rows"] == (
+            0 if fused else census.CONV_PREGATHER_LAYERS
+        )
+        # The fused route publishes no staging layout digest.
+        assert (row["conv_layout_sha256"] is None) is fused
+
+
+def test_the_unfused_campaign_fixture_satisfies_both_v5_twins() -> None:
+    """The fixture route feeds the v13 gates; this is what self-test runs."""
+    report = _campaign_report()
+    floor = FLOOR_GATE.validate_work_census_v5_report(report, required_batch=1)
+    depth = DEPTH_GATE.validate_work_census_v5_report(report, required_batch=1)
+    # Depth acceptance sha256-compares its summary against the floor gate's.
+    assert floor == depth
+    lifecycle = floor["forward_graph_pregather_lifecycle"]
+    assert lifecycle["kernel_shape"] == census.UNFUSED_KERNEL_SHAPE
+    assert lifecycle["stage_precedes_all_layer_consumes"]
+    assert lifecycle["per_batch"]["1"]["stage_calls_per_capture"] == 1
+
+
+def test_the_fused_registry_satisfies_both_v5_twins() -> None:
+    report = _fused_report()
+    floor = FLOOR_GATE.validate_work_census_v5_report(report, required_batch=1)
+    depth = DEPTH_GATE.validate_work_census_v5_report(report, required_batch=1)
+    assert floor == depth
+    lifecycle = floor["forward_graph_pregather_lifecycle"]
+    assert lifecycle["kernel_shape"] == census.FUSED_KERNEL_SHAPE
+    # Nothing staged, so nothing is claimed about staging order or digests.
+    assert not lifecycle["stage_precedes_all_layer_consumes"]
+    assert not lifecycle["conv_layout_signatures_unique_within_each_arm"]
+    assert not lifecycle["conv_layout_signatures_equal_across_arms_per_batch"]
+    per_batch = lifecycle["per_batch"]["1"]
+    assert per_batch["fused_calls"] == census.CONV_PREGATHER_LAYERS
+    assert per_batch["fused_layers"] == census.CONV_PREGATHER_LAYERS
+    assert per_batch["conv_layout_sha256"] is None
+    for zeroed in (
+        "stage_calls_per_capture",
+        "row_elems",
+        "programs",
+        "ssi_pointer_entries",
+        "ssi_groups",
+        "source_validations",
+        "staged_rows",
+        "consume_calls",
+        "consume_hits",
+        "freshness_matches",
+    ):
+        assert per_batch[zeroed] == 0, zeroed
+    assert per_batch["stage_before_all_consumes"] is False
+
+
+@pytest.mark.parametrize(
+    ("mutate", "needle"),
+    (
+        (
+            lambda row: row.__setitem__(
+                "kernel_shape", census.UNFUSED_KERNEL_SHAPE
+            ),
+            "but its graph_signature attests",
+        ),
+        (
+            lambda row: row.__setitem__("conv_layout_sha256", "0" * 64),
+            "identity is invalid",
+        ),
+        (
+            lambda row: row.__setitem__("stage_calls", 1),
+            "does not prove one ordered final-FULL pregather capture",
+        ),
+        (
+            lambda row: row.__setitem__(
+                "consume_calls", census.CONV_PREGATHER_LAYERS
+            ),
+            "does not prove one ordered final-FULL pregather capture",
+        ),
+        (
+            lambda row: row.__setitem__(
+                "fused_calls", census.CONV_PREGATHER_LAYERS - 1
+            ),
+            "does not prove one ordered final-FULL pregather capture",
+        ),
+    ),
+)
+def test_both_v5_twins_reject_a_fused_row_that_also_staged(
+    mutate, needle: str
+) -> None:
+    """An arm that took both routes satisfies neither shape.
+
+    The shape attestation is the census module's own, so it raises the
+    census error in both gates; every other rejection is the gate's.
+    """
+    report = _fused_report(mutate)
+    with pytest.raises(
+        (FLOOR_GATE.GateError, census.CensusError), match=needle
+    ):
+        FLOOR_GATE.validate_work_census_v5_report(report, required_batch=1)
+    with pytest.raises((ValueError, census.CensusError), match=needle):
+        DEPTH_GATE.validate_work_census_v5_report(report, required_batch=1)
+
+
+def test_both_v5_twins_reject_arms_that_ran_different_shapes() -> None:
+    report = _fused_report(modes=(census.TAIL_MODE,))
+    needle = "forward graph/layout signatures differ"
+    with pytest.raises(FLOOR_GATE.GateError, match=needle):
+        FLOOR_GATE.validate_work_census_v5_report(report, required_batch=1)
+    with pytest.raises(ValueError, match=needle):
+        DEPTH_GATE.validate_work_census_v5_report(report, required_batch=1)
+
+
+def test_a_fused_terminal_needs_events_that_never_staged() -> None:
+    """The per-event schema is a separate family, so this fails closed."""
+    tail = _arm_records(
+        census.TAIL_MODE, kernel_shape=census.FUSED_KERNEL_SHAPE
+    )
+    hydra = _arm_records(
+        census.HYDRA_MODE, kernel_shape=census.FUSED_KERNEL_SHAPE
+    )
+    with pytest.raises(
+        census.CensusError,
+        match="publish no staging layout digest",
+    ):
+        census.validate_campaign(
+            [(record, f"tail:{index}") for index, record in enumerate(tail)],
+            [(record, f"hydra:{index}") for index, record in enumerate(hydra)],
+            required_batches=(1,),
+        )

@@ -30,6 +30,7 @@ from fr13_fixed32_work_census import SCHEMA as WORK_CENSUS_EVENT_SCHEMA
 from fr13_fixed32_work_census import SUPPORTED_BATCH_SIZES
 from fr13_fixed32_work_census import TERMINAL_SCHEMA as WORK_CENSUS_TERMINAL_SCHEMA
 from fr13_fixed32_work_census import (
+    FUSED_KERNEL_SHAPE,
     assert_kernel_shape_attested,
     forward_graph_structural_signature,
 )
@@ -1712,28 +1713,56 @@ def validate_work_census_v5_report(
                 f"B{batch}: Tail/Hydra final-FULL forward graph/layout "
                 "signatures differ"
             )
+        # The summary describes the work the arm actually did. Restating the
+        # unfused staging class here would republish counters the fused arm's
+        # rows already pinned at zero.
+        summary_fused = tail_row["kernel_shape"] == FUSED_KERNEL_SHAPE
         forward_per_batch[str(batch)] = {
             "graph_signature": tail_row["graph_signature"],
             "conv_layout_sha256": tail_row["conv_layout_sha256"],
+            "kernel_shape": tail_row["kernel_shape"],
             "captures_per_arm": 1,
             "capture_origin": "final_full",
-            "stage_calls_per_capture": 1,
-            "stage_before_all_consumes": True,
+            "fused_calls": CONV_PREGATHER_LAYERS if summary_fused else 0,
+            "fused_layers": CONV_PREGATHER_LAYERS if summary_fused else 0,
+            "stage_calls_per_capture": 0 if summary_fused else 1,
+            "stage_before_all_consumes": not summary_fused,
             "layers": CONV_PREGATHER_LAYERS,
             "requests": batch,
-            "row_elems": CONV_PREGATHER_ROW_ELEMS,
+            "row_elems": 0 if summary_fused else CONV_PREGATHER_ROW_ELEMS,
             "programs": tail_row["programs"],
-            "ssi_pointer_entries": CONV_PREGATHER_LAYERS,
-            "ssi_groups": 3,
-            "source_validations": CONV_PREGATHER_LAYERS,
-            "staged_rows": CONV_PREGATHER_LAYERS * batch,
-            "consume_calls": CONV_PREGATHER_LAYERS,
-            "consume_hits": CONV_PREGATHER_LAYERS,
+            "ssi_pointer_entries": (
+                0 if summary_fused else CONV_PREGATHER_LAYERS
+            ),
+            "ssi_groups": 0 if summary_fused else 3,
+            "source_validations": (
+                0 if summary_fused else CONV_PREGATHER_LAYERS
+            ),
+            "staged_rows": (
+                0 if summary_fused else CONV_PREGATHER_LAYERS * batch
+            ),
+            "consume_calls": 0 if summary_fused else CONV_PREGATHER_LAYERS,
+            "consume_hits": 0 if summary_fused else CONV_PREGATHER_LAYERS,
             "consume_fallbacks": 0,
-            "freshness_matches": CONV_PREGATHER_LAYERS,
+            "freshness_matches": (
+                0 if summary_fused else CONV_PREGATHER_LAYERS
+            ),
             "tail_measured_replays": tail_row["measured_replays"],
             "hydra_measured_replays": hydra_row["measured_replays"],
         }
+
+    # One campaign ran under one shape. A registry that mixes them describes
+    # an arm that took both routes and proves neither canonical structure.
+    campaign_shapes = {
+        row["kernel_shape"] for row in forward_per_batch.values()
+    }
+    if len(campaign_shapes) != 1:
+        raise ValueError(
+            "forward graph registry mixes kernel shapes across batches: "
+            f"{sorted(campaign_shapes)}"
+        )
+    campaign_shape = campaign_shapes.pop()
+    campaign_fused = campaign_shape == FUSED_KERNEL_SHAPE
 
     return {
         "physical_work_comparison": {
@@ -1752,13 +1781,21 @@ def validate_work_census_v5_report(
         "forward_graph_pregather_lifecycle": {
             "registry_batch_sizes": list(range(1, required_batch + 1)),
             "per_batch": forward_per_batch,
+            "kernel_shape": campaign_shape,
             "one_final_full_capture_per_batch_per_arm": True,
             "graph_signatures_unique_within_each_arm": True,
-            "conv_layout_signatures_unique_within_each_arm": True,
+            # The fused route publishes no staging layout digest and runs no
+            # stage kernel, so these flags state what was proven rather than
+            # restating an unfused property of work that never happened.
+            "conv_layout_signatures_unique_within_each_arm": (
+                not campaign_fused
+            ),
             "graph_signatures_equal_across_arms_per_batch": True,
-            "conv_layout_signatures_equal_across_arms_per_batch": True,
+            "conv_layout_signatures_equal_across_arms_per_batch": (
+                not campaign_fused
+            ),
             "measured_replays_match_event_histograms": True,
-            "stage_precedes_all_layer_consumes": True,
+            "stage_precedes_all_layer_consumes": not campaign_fused,
             "profile_auxiliary_and_host_stage_counts_zero": True,
             "nonpure_dispatch_by_mode": nonpure_dispatch_by_mode,
             "nonpure_committer_replays_by_mode": (
@@ -5446,6 +5483,90 @@ def self_test() -> None:
             malformed_auxiliary_report,
             "profile pregather stage mismatch",
             "pregather auxiliary/host stage counts are not zero",
+        )
+
+        def fused_forward_row(row: dict) -> dict:
+            """The same B, as the fused kernel shape publishes it."""
+            return {
+                **row,
+                "graph_signature": forward_graph_structural_signature(
+                    row["batch_size"], kernel_shape=FUSED_KERNEL_SHAPE
+                ),
+                # No staging kernel ran, so there is no layout digest and
+                # every subsumed counter is the zero it is.
+                "conv_layout_sha256": None,
+                "kernel_shape": FUSED_KERNEL_SHAPE,
+                "fused_calls": CONV_PREGATHER_LAYERS,
+                "fused_layers": CONV_PREGATHER_LAYERS,
+                "stage_calls": 0,
+                "stage_before_all_consumes": False,
+                "row_elems": 0,
+                "programs": 0,
+                "ssi_pointer_entries": 0,
+                "ssi_groups": 0,
+                "source_validations": 0,
+                "staged_rows": 0,
+                "consume_calls": 0,
+                "consume_hits": 0,
+                "freshness_matches": 0,
+            }
+
+        def fused_v5_report(mutate=None) -> dict:
+            report = json.loads(
+                json.dumps(original_gate["fixed32_work_census"]["report"])
+            )
+            for mode in ("tail6_fixed32", "hydra27_fixed32"):
+                rows = [
+                    fused_forward_row(row)
+                    for row in report["forward_graph_registries"][mode]
+                ]
+                if mutate is not None:
+                    for row in rows:
+                        mutate(row)
+                report["forward_graph_registries"][mode] = rows
+                report["terminal_summaries"][mode][
+                    "forward_graph_registry"
+                ] = json.loads(json.dumps(rows))
+            return report
+
+        def expect_fused_v5_failure(mutate, label: str, expected: str) -> None:
+            try:
+                validate_work_census_v5_report(
+                    fused_v5_report(mutate),
+                    required_batch=4,
+                )
+            except ValueError as error:
+                assert expected in str(error), (label, str(error))
+            else:
+                raise AssertionError(f"{label} did not fail closed")
+
+        fused_work = validate_work_census_v5_report(
+            fused_v5_report(),
+            required_batch=4,
+        )
+        fused_lifecycle = fused_work["forward_graph_pregather_lifecycle"]
+        assert fused_lifecycle["kernel_shape"] == FUSED_KERNEL_SHAPE
+        assert not fused_lifecycle["stage_precedes_all_layer_consumes"]
+        fused_b1 = fused_lifecycle["per_batch"]["1"]
+        assert fused_b1["fused_calls"] == CONV_PREGATHER_LAYERS
+        assert fused_b1["stage_calls_per_capture"] == 0
+        assert fused_b1["conv_layout_sha256"] is None
+        expect_fused_v5_failure(
+            lambda row: row.__setitem__(
+                "kernel_shape", "unfused_conv_pregather"
+            ),
+            "fused row declaring the unfused shape",
+            "but its graph_signature attests",
+        )
+        expect_fused_v5_failure(
+            lambda row: row.__setitem__("conv_layout_sha256", "0" * 64),
+            "fused row publishing a staging layout digest",
+            "identity is invalid",
+        )
+        expect_fused_v5_failure(
+            lambda row: row.__setitem__("consume_calls", CONV_PREGATHER_LAYERS),
+            "fused row carrying subsumed consumes",
+            "does not prove one ordered final-FULL pregather capture",
         )
 
         for tail_slo, hydra_slo in ((True, False), (False, True), (True, True)):

@@ -7477,28 +7477,56 @@ def validate_work_census_v5_report(
                 f"B{batch}: Tail/Hydra final-FULL forward graph/layout "
                 "signatures differ"
             )
+        # The summary describes the work the arm actually did. Restating the
+        # unfused staging class here would republish counters the fused arm's
+        # rows already pinned at zero.
+        summary_fused = tail_row["kernel_shape"] == FUSED_KERNEL_SHAPE
         forward_per_batch[str(batch)] = {
             "graph_signature": tail_row["graph_signature"],
             "conv_layout_sha256": tail_row["conv_layout_sha256"],
+            "kernel_shape": tail_row["kernel_shape"],
             "captures_per_arm": 1,
             "capture_origin": "final_full",
-            "stage_calls_per_capture": 1,
-            "stage_before_all_consumes": True,
+            "fused_calls": CONV_PREGATHER_LAYERS if summary_fused else 0,
+            "fused_layers": CONV_PREGATHER_LAYERS if summary_fused else 0,
+            "stage_calls_per_capture": 0 if summary_fused else 1,
+            "stage_before_all_consumes": not summary_fused,
             "layers": CONV_PREGATHER_LAYERS,
             "requests": batch,
-            "row_elems": CONV_PREGATHER_ROW_ELEMS,
+            "row_elems": 0 if summary_fused else CONV_PREGATHER_ROW_ELEMS,
             "programs": tail_row["programs"],
-            "ssi_pointer_entries": CONV_PREGATHER_LAYERS,
-            "ssi_groups": 3,
-            "source_validations": CONV_PREGATHER_LAYERS,
-            "staged_rows": CONV_PREGATHER_LAYERS * batch,
-            "consume_calls": CONV_PREGATHER_LAYERS,
-            "consume_hits": CONV_PREGATHER_LAYERS,
+            "ssi_pointer_entries": (
+                0 if summary_fused else CONV_PREGATHER_LAYERS
+            ),
+            "ssi_groups": 0 if summary_fused else 3,
+            "source_validations": (
+                0 if summary_fused else CONV_PREGATHER_LAYERS
+            ),
+            "staged_rows": (
+                0 if summary_fused else CONV_PREGATHER_LAYERS * batch
+            ),
+            "consume_calls": 0 if summary_fused else CONV_PREGATHER_LAYERS,
+            "consume_hits": 0 if summary_fused else CONV_PREGATHER_LAYERS,
             "consume_fallbacks": 0,
-            "freshness_matches": CONV_PREGATHER_LAYERS,
+            "freshness_matches": (
+                0 if summary_fused else CONV_PREGATHER_LAYERS
+            ),
             "tail_measured_replays": tail_row["measured_replays"],
             "hydra_measured_replays": hydra_row["measured_replays"],
         }
+
+    # One campaign ran under one shape. A registry that mixes them describes
+    # an arm that took both routes and proves neither canonical structure.
+    campaign_shapes = {
+        row["kernel_shape"] for row in forward_per_batch.values()
+    }
+    if len(campaign_shapes) != 1:
+        raise GateError(
+            "forward graph registry mixes kernel shapes across batches: "
+            f"{sorted(campaign_shapes)}"
+        )
+    campaign_shape = campaign_shapes.pop()
+    campaign_fused = campaign_shape == FUSED_KERNEL_SHAPE
 
     return {
         "physical_work_comparison": {
@@ -7517,13 +7545,21 @@ def validate_work_census_v5_report(
         "forward_graph_pregather_lifecycle": {
             "registry_batch_sizes": list(range(1, required_batch + 1)),
             "per_batch": forward_per_batch,
+            "kernel_shape": campaign_shape,
             "one_final_full_capture_per_batch_per_arm": True,
             "graph_signatures_unique_within_each_arm": True,
-            "conv_layout_signatures_unique_within_each_arm": True,
+            # The fused route publishes no staging layout digest and runs no
+            # stage kernel, so these flags state what was proven rather than
+            # restating an unfused property of work that never happened.
+            "conv_layout_signatures_unique_within_each_arm": (
+                not campaign_fused
+            ),
             "graph_signatures_equal_across_arms_per_batch": True,
-            "conv_layout_signatures_equal_across_arms_per_batch": True,
+            "conv_layout_signatures_equal_across_arms_per_batch": (
+                not campaign_fused
+            ),
             "measured_replays_match_event_histograms": True,
-            "stage_precedes_all_layer_consumes": True,
+            "stage_precedes_all_layer_consumes": not campaign_fused,
             "profile_auxiliary_and_host_stage_counts_zero": True,
             "nonpure_dispatch_by_mode": nonpure_dispatch_by_mode,
             "nonpure_committer_replays_by_mode": (
@@ -10141,6 +10177,107 @@ def self_test(repo: Path) -> None:
             ),
             "pregather auxiliary/host stage counts are not zero",
         )
+
+        def fused_forward_row(row: dict[str, Any]) -> dict[str, Any]:
+            """The same B, as the fused kernel shape publishes it."""
+            return {
+                **row,
+                "graph_signature": forward_graph_structural_signature(
+                    row["batch_size"], kernel_shape=FUSED_KERNEL_SHAPE
+                ),
+                # No staging kernel ran, so there is no layout digest and
+                # every subsumed counter is the zero it is.
+                "conv_layout_sha256": None,
+                "kernel_shape": FUSED_KERNEL_SHAPE,
+                "fused_calls": CONV_PREGATHER_LAYERS,
+                "fused_layers": CONV_PREGATHER_LAYERS,
+                "stage_calls": 0,
+                "stage_before_all_consumes": False,
+                "row_elems": 0,
+                "programs": 0,
+                "ssi_pointer_entries": 0,
+                "ssi_groups": 0,
+                "source_validations": 0,
+                "staged_rows": 0,
+                "consume_calls": 0,
+                "consume_hits": 0,
+                "freshness_matches": 0,
+            }
+
+        def fused_v5_report(
+            mutate: Any = None,
+            modes: tuple[str, ...] = ("tail6_fixed32", "hydra27_fixed32"),
+        ) -> dict[str, Any]:
+            report = json.loads(json.dumps(b1_work_census["report"]))
+            for mode in modes:
+                rows = [
+                    fused_forward_row(row)
+                    for row in report["forward_graph_registries"][mode]
+                ]
+                if mutate is not None:
+                    for row in rows:
+                        mutate(row)
+                report["forward_graph_registries"][mode] = rows
+                report["terminal_summaries"][mode][
+                    "forward_graph_registry"
+                ] = json.loads(json.dumps(rows))
+            return report
+
+        fused_work = validate_work_census_v5_report(
+            fused_v5_report(),
+            required_batch=1,
+        )
+        fused_lifecycle = fused_work["forward_graph_pregather_lifecycle"]
+        assert fused_lifecycle["kernel_shape"] == FUSED_KERNEL_SHAPE
+        assert not fused_lifecycle["stage_precedes_all_layer_consumes"]
+        assert not fused_lifecycle[
+            "conv_layout_signatures_unique_within_each_arm"
+        ]
+        fused_b1 = fused_lifecycle["per_batch"]["1"]
+        assert fused_b1["fused_calls"] == CONV_PREGATHER_LAYERS
+        assert fused_b1["fused_layers"] == CONV_PREGATHER_LAYERS
+        assert fused_b1["stage_calls_per_capture"] == 0
+        assert fused_b1["conv_layout_sha256"] is None
+        assert fused_b1["staged_rows"] == 0
+
+        expect_gate_error(
+            lambda: validate_work_census_v5_report(
+                fused_v5_report(
+                    lambda row: row.__setitem__(
+                        "kernel_shape", UNFUSED_KERNEL_SHAPE
+                    )
+                ),
+                required_batch=1,
+            ),
+            "but its graph_signature attests",
+        )
+        expect_gate_error(
+            lambda: validate_work_census_v5_report(
+                fused_v5_report(
+                    lambda row: row.__setitem__(
+                        "conv_layout_sha256", "0" * 64
+                    )
+                ),
+                required_batch=1,
+            ),
+            "identity is invalid",
+        )
+        expect_gate_error(
+            lambda: validate_work_census_v5_report(
+                fused_v5_report(
+                    lambda row: row.__setitem__("stage_calls", 1)
+                ),
+                required_batch=1,
+            ),
+            "does not prove one ordered final-FULL pregather capture",
+        )
+        expect_gate_error(
+            lambda: validate_work_census_v5_report(
+                fused_v5_report(modes=("tail6_fixed32",)),
+                required_batch=1,
+            ),
+            "forward graph/layout signatures differ",
+        )
         tail_b1 = b1["arms"]["tail6_fixed32"]["statistics"]
         equal = tail_b1["task_cluster_equal_weight"]["wall_ms_per_step"]
         assert equal["cluster_count"] == 4 and equal["df"] == 3
@@ -10249,6 +10386,58 @@ def self_test(repo: Path) -> None:
             final_runtime_snapshot_path.read_bytes()
         )
         pregather_tamper_path = base / "pregather_boundary_tamper.json"
+        pregather_census_path = (
+            tail_arm / "logs" / "fr13_fixed32_work_census.jsonl"
+        )
+        final_events = int(
+            final_ack["counters"]["complete_work_census_events"]
+        )
+
+        def pregather_shape_snapshot(shape: str) -> dict[str, Any]:
+            """The same boundary snapshot as one kernel shape wrote it."""
+            snapshot = json.loads(json.dumps(good_runtime_snapshot))
+            counters = snapshot["metrics"]["conv_pregather"]
+            counters["kernel_shape"] = shape
+            counters.update(
+                runtime_snapshot_pregather_shape_counters(
+                    shape,
+                    server_capacity=1,
+                    events=final_events,
+                    expected_replays_by_batch=good_runtime_snapshot[
+                        "metrics"
+                    ]["conv_pregather"]["graph_replay_stages_by_batch"],
+                )
+            )
+            return snapshot
+
+        def validate_pregather_boundary(
+            snapshot: dict[str, Any],
+        ) -> dict[str, Any]:
+            pregather_tamper_path.write_text(
+                json.dumps(snapshot, ensure_ascii=True, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            return validate_runtime_boundary_snapshot(
+                pregather_tamper_path,
+                ack=final_ack,
+                server_capacity=1,
+                metrics_path=None,
+                metric_values=None,
+                reference=None,
+                census_path=pregather_census_path,
+            )
+
+        # Both canonical shapes are accepted, and each snapshot records the
+        # one its own counters attest.
+        for shape in KERNEL_SHAPES:
+            shape_report = validate_pregather_boundary(
+                pregather_shape_snapshot(shape)
+            )
+            if shape_report["kernel_shape"] != shape:
+                raise AssertionError(
+                    f"boundary snapshot shape {shape} was not attested: "
+                    f"{shape_report['kernel_shape']}"
+                )
 
         def expect_pregather_boundary_failure(
             label: str,
@@ -10256,8 +10445,15 @@ def self_test(repo: Path) -> None:
             needle: str = (
                 "committer/nonpure/in-graph pregather counters do not reconcile"
             ),
+            base_snapshot: dict[str, Any] | None = None,
         ) -> None:
-            tampered = json.loads(json.dumps(good_runtime_snapshot))
+            tampered = json.loads(
+                json.dumps(
+                    good_runtime_snapshot
+                    if base_snapshot is None
+                    else base_snapshot
+                )
+            )
             mutate(tampered["metrics"]["conv_pregather"])
             pregather_tamper_path.write_text(
                 json.dumps(tampered, ensure_ascii=True, sort_keys=True) + "\n",
@@ -10271,11 +10467,7 @@ def self_test(repo: Path) -> None:
                     metrics_path=None,
                     metric_values=None,
                     reference=None,
-                    census_path=(
-                        tail_arm
-                        / "logs"
-                        / "fr13_fixed32_work_census.jsonl"
-                    ),
+                    census_path=pregather_census_path,
                 ),
                 needle,
             )
@@ -10289,10 +10481,15 @@ def self_test(repo: Path) -> None:
                 ),
             ),
             (
+                # Flip rather than zero, so the tamper is a real change under
+                # both shapes: the fused class already carries zero here.
                 "capture-histogram",
                 lambda counters: counters[
                     "graph_capture_stages_by_batch"
-                ].__setitem__("1", 0),
+                ].__setitem__(
+                    "1",
+                    1 - counters["graph_capture_stages_by_batch"]["1"],
+                ),
             ),
             (
                 "profile-stage",
@@ -10333,6 +10530,45 @@ def self_test(repo: Path) -> None:
                 ),
             ),
         )
+        # Every tamper fails closed under both shapes, and each shape rejects
+        # the other's class alongside a declaration it cannot support.
+        for shape in KERNEL_SHAPES:
+            shape_snapshot = pregather_shape_snapshot(shape)
+            other_shape = next(
+                candidate
+                for candidate in KERNEL_SHAPES
+                if candidate != shape
+            )
+            for label, mutate in pregather_boundary_tampers:
+                expect_pregather_boundary_failure(
+                    f"{shape}:{label}",
+                    mutate,
+                    base_snapshot=shape_snapshot,
+                )
+            expect_pregather_boundary_failure(
+                f"{shape}:legacy-stage-key",
+                lambda counters: counters.__setitem__("stage_launches", 0),
+                "conv_pregather: keys mismatch",
+                base_snapshot=shape_snapshot,
+            )
+            expect_pregather_boundary_failure(
+                f"{shape}:declared-shape-disproved",
+                lambda counters, other=other_shape: counters.__setitem__(
+                    "kernel_shape", other
+                ),
+                "but its conv work counters attest",
+                base_snapshot=shape_snapshot,
+            )
+            expect_pregather_boundary_failure(
+                f"{shape}:non-canonical-shape",
+                lambda counters: counters.__setitem__(
+                    "kernel_shape", "fused"
+                ),
+                "is not a canonical kernel shape",
+                base_snapshot=shape_snapshot,
+            )
+        # The v4 snapshot that predates the field is the unfused shape it ran
+        # under, and every tamper still fails closed against it.
         for label, mutate in pregather_boundary_tampers:
             expect_pregather_boundary_failure(label, mutate)
         expect_pregather_boundary_failure(

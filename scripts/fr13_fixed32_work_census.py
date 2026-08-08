@@ -2975,10 +2975,12 @@ def _validate_terminal(
             ),
             row_label,
         )
+        row_shape = UNFUSED_KERNEL_SHAPE
         if FORWARD_GRAPH_REGISTRY_KERNEL_SHAPE_KEYS & set(row):
-            assert_kernel_shape_attested(
+            row_shape = assert_kernel_shape_attested(
                 row["kernel_shape"], row["graph_signature"], source=row_label
             )
+        row_fused = row_shape == FUSED_KERNEL_SHAPE
         batch = _integer(row["batch_size"], f"{row_label}.batch_size", minimum=1)
         if batch not in SUPPORTED_BATCH_SIZES or batch in forward_batches:
             raise CensusError(
@@ -2988,13 +2990,24 @@ def _validate_terminal(
         signature = _sha256(
             row["graph_signature"], f"{row_label}.graph_signature"
         )
-        conv_layout_sha256 = _sha256(
-            row["conv_layout_sha256"],
-            f"{row_label}.conv_layout_sha256",
+        # The fused route runs no staging kernel, so it publishes no staging
+        # layout digest and the key is carried as the None it is.
+        conv_layout_sha256 = (
+            None
+            if row_fused
+            else _sha256(
+                row["conv_layout_sha256"],
+                f"{row_label}.conv_layout_sha256",
+            )
         )
+        if row_fused and row["conv_layout_sha256"] is not None:
+            raise CensusError(
+                f"{row_label}.conv_layout_sha256: the fused route publishes "
+                f"no staging layout digest, got {row['conv_layout_sha256']!r}"
+            )
         _expect(
             signature,
-            forward_graph_structural_signature(batch),
+            forward_graph_structural_signature(batch, kernel_shape=row_shape),
             f"{row_label}.graph_signature",
         )
         if signature in forward_signatures:
@@ -3007,47 +3020,104 @@ def _validate_terminal(
             for event in events
             if event.batch_size == batch
         }
-        if event_layouts and event_layouts != {conv_layout_sha256}:
+        if row_fused:
+            # No same-B event may publish a staging layout digest for work the
+            # fused kernel subsumed. The per-event schema is a separate family
+            # that still requires one, so a fused terminal is unprovable until
+            # that family learns the shape, and it fails closed here rather
+            # than being accepted on counters no event corroborates.
+            if event_layouts:
+                raise CensusError(
+                    f"{row_label}: a fused row requires same-B events that "
+                    "publish no staging layout digest, got "
+                    f"{sorted(event_layouts)}"
+                )
+        elif event_layouts and event_layouts != {conv_layout_sha256}:
             raise CensusError(
                 f"{row_label}.conv_layout_sha256: terminal layout does not "
                 f"match same-B events {sorted(event_layouts)}"
             )
         row_elems = _integer(
-            row["row_elems"], f"{row_label}.row_elems", minimum=1
+            row["row_elems"],
+            f"{row_label}.row_elems",
+            minimum=0 if row_fused else 1,
         )
         programs = (
-            CONV_PREGATHER_LAYERS
-            * batch
-            * ((row_elems + CONV_PREGATHER_BLOCK - 1) // CONV_PREGATHER_BLOCK)
+            0
+            if row_fused
+            else (
+                CONV_PREGATHER_LAYERS
+                * batch
+                * (
+                    (row_elems + CONV_PREGATHER_BLOCK - 1)
+                    // CONV_PREGATHER_BLOCK
+                )
+            )
         )
         checked = _fixed_section(
             row,
-            keys=FORWARD_GRAPH_REGISTRY_KEYS,
+            keys=FORWARD_GRAPH_REGISTRY_KEYS
+            | (
+                FORWARD_GRAPH_REGISTRY_KERNEL_SHAPE_KEYS
+                if FORWARD_GRAPH_REGISTRY_KERNEL_SHAPE_KEYS & set(row)
+                else frozenset()
+            ),
             expected={
                 "batch_size": batch,
                 "graph_signature": signature,
-                "conv_layout_sha256": conv_layout_sha256,
+                **(
+                    {}
+                    if row_fused
+                    else {"conv_layout_sha256": conv_layout_sha256}
+                ),
                 "captures": 1,
                 "capture_origin": "final_full",
-                "stage_calls": 1,
-                "stage_before_all_consumes": True,
+                # The fused kernel subsumes staging and consuming; every
+                # subsumed counter is required to be the zero it is, so an arm
+                # that also took the staging route matches neither shape.
+                "stage_calls": 0 if row_fused else 1,
+                "stage_before_all_consumes": not row_fused,
                 "layers": CONV_PREGATHER_LAYERS,
                 "requests": batch,
-                "row_elems": CONV_PREGATHER_ROW_ELEMS,
+                "row_elems": 0 if row_fused else CONV_PREGATHER_ROW_ELEMS,
                 "programs": programs,
-                "ssi_pointer_entries": CONV_PREGATHER_LAYERS,
-                "ssi_groups": 3,
-                "source_validations": CONV_PREGATHER_LAYERS,
-                "staged_rows": CONV_PREGATHER_LAYERS * batch,
-                "consume_calls": CONV_PREGATHER_LAYERS,
-                "consume_hits": CONV_PREGATHER_LAYERS,
+                "ssi_pointer_entries": (
+                    0 if row_fused else CONV_PREGATHER_LAYERS
+                ),
+                "ssi_groups": 0 if row_fused else 3,
+                "source_validations": (
+                    0 if row_fused else CONV_PREGATHER_LAYERS
+                ),
+                "staged_rows": (
+                    0 if row_fused else CONV_PREGATHER_LAYERS * batch
+                ),
+                "consume_calls": 0 if row_fused else CONV_PREGATHER_LAYERS,
+                "consume_hits": 0 if row_fused else CONV_PREGATHER_LAYERS,
                 "consume_fallbacks": 0,
-                "freshness_matches": CONV_PREGATHER_LAYERS,
+                "freshness_matches": (
+                    0 if row_fused else CONV_PREGATHER_LAYERS
+                ),
                 "measured_replays": expected_histogram[str(batch)],
+                **(
+                    {
+                        "kernel_shape": row_shape,
+                        "fused_calls": (
+                            CONV_PREGATHER_LAYERS if row_fused else 0
+                        ),
+                        "fused_layers": (
+                            CONV_PREGATHER_LAYERS if row_fused else 0
+                        ),
+                    }
+                    if FORWARD_GRAPH_REGISTRY_KERNEL_SHAPE_KEYS & set(row)
+                    else {}
+                ),
             },
             label=row_label,
         )
-        forward_registry.append(dict(checked))
+        checked_row = dict(checked)
+        if row_fused:
+            checked_row["conv_layout_sha256"] = None
+        forward_registry.append(checked_row)
     capacity = max(forward_batches)
     if capacity not in SUPPORTED_CAMPAIGN_CAPACITIES:
         raise CensusError(
@@ -4036,9 +4106,17 @@ def reference_terminal_summary(
     nonpure_dispatch: Mapping[str, Any] | None = None,
     nonpure_committer_replays_by_batch: Mapping[str, Any] | None = None,
     fixture_synthetic_runtime_proof: bool = False,
+    kernel_shape: str = UNFUSED_KERNEL_SHAPE,
 ) -> dict[str, Any]:
-    """Build the exact terminal record for an ordered sequence of v5 events."""
+    """Build the exact terminal record for an ordered sequence of v5 events.
 
+    ``kernel_shape`` only selects which canonical forward registry the
+    synthetic fixture route builds; an explicit ``forward_graph_registry``
+    is used as given, since it comes from a runtime that already recorded
+    its own shape.
+    """
+
+    _validated_kernel_shape(kernel_shape)
     if not events:
         raise ValueError("terminal summary requires at least one event")
     modes = {event.get("mode") for event in events}
@@ -4099,45 +4177,77 @@ def reference_terminal_summary(
         )
     if forward_graph_registry is None:
         capacity = max(int(event["batch_size"]) for event in events)
+        fixture_fused = kernel_shape == FUSED_KERNEL_SHAPE
         forward_graph_registry = [
             {
                 "batch_size": batch,
-                "graph_signature": forward_graph_structural_signature(batch),
-                "conv_layout_sha256": next(
-                    (
-                        str(event["conv_pregather"]["layout_sha256"])
-                        for event in events
-                        if int(event["batch_size"]) == batch
-                    ),
-                    _fixture_conv_layout_signature(batch),
+                "graph_signature": forward_graph_structural_signature(
+                    batch, kernel_shape=kernel_shape
+                ),
+                # The fused route runs no staging kernel, so it publishes no
+                # staging layout digest.
+                "conv_layout_sha256": (
+                    None
+                    if fixture_fused
+                    else next(
+                        (
+                            str(event["conv_pregather"]["layout_sha256"])
+                            for event in events
+                            if int(event["batch_size"]) == batch
+                        ),
+                        _fixture_conv_layout_signature(batch),
+                    )
                 ),
                 "captures": 1,
                 "capture_origin": "final_full",
-                "stage_calls": 1,
-                "stage_before_all_consumes": True,
+                "kernel_shape": kernel_shape,
+                "fused_calls": CONV_PREGATHER_LAYERS if fixture_fused else 0,
+                "fused_layers": CONV_PREGATHER_LAYERS if fixture_fused else 0,
+                # The fused kernel subsumes staging and consuming; every
+                # subsumed counter is carried as the zero it is.
+                "stage_calls": 0 if fixture_fused else 1,
+                "stage_before_all_consumes": not fixture_fused,
                 "layers": CONV_PREGATHER_LAYERS,
                 "requests": batch,
-                "row_elems": CONV_PREGATHER_ROW_ELEMS,
+                "row_elems": (
+                    0 if fixture_fused else CONV_PREGATHER_ROW_ELEMS
+                ),
                 "programs": (
-                    CONV_PREGATHER_LAYERS
-                    * batch
-                    * (
-                        (
-                            CONV_PREGATHER_ROW_ELEMS
-                            + CONV_PREGATHER_BLOCK
-                            - 1
+                    0
+                    if fixture_fused
+                    else (
+                        CONV_PREGATHER_LAYERS
+                        * batch
+                        * (
+                            (
+                                CONV_PREGATHER_ROW_ELEMS
+                                + CONV_PREGATHER_BLOCK
+                                - 1
+                            )
+                            // CONV_PREGATHER_BLOCK
                         )
-                        // CONV_PREGATHER_BLOCK
                     )
                 ),
-                "ssi_pointer_entries": CONV_PREGATHER_LAYERS,
-                "ssi_groups": 3,
-                "source_validations": CONV_PREGATHER_LAYERS,
-                "staged_rows": CONV_PREGATHER_LAYERS * batch,
-                "consume_calls": CONV_PREGATHER_LAYERS,
-                "consume_hits": CONV_PREGATHER_LAYERS,
+                "ssi_pointer_entries": (
+                    0 if fixture_fused else CONV_PREGATHER_LAYERS
+                ),
+                "ssi_groups": 0 if fixture_fused else 3,
+                "source_validations": (
+                    0 if fixture_fused else CONV_PREGATHER_LAYERS
+                ),
+                "staged_rows": (
+                    0 if fixture_fused else CONV_PREGATHER_LAYERS * batch
+                ),
+                "consume_calls": (
+                    0 if fixture_fused else CONV_PREGATHER_LAYERS
+                ),
+                "consume_hits": (
+                    0 if fixture_fused else CONV_PREGATHER_LAYERS
+                ),
                 "consume_fallbacks": 0,
-                "freshness_matches": CONV_PREGATHER_LAYERS,
+                "freshness_matches": (
+                    0 if fixture_fused else CONV_PREGATHER_LAYERS
+                ),
                 "measured_replays": batch_histogram[str(batch)],
             }
             for batch in range(1, capacity + 1)
