@@ -1,0 +1,291 @@
+==============================================================================
+FR13 fixed32 B1 -- attack-ladder measurements
+source: fr13_fixed32_b1_real_swe.nsys-rep (sqlite export)
+        sha256 241d4541f5c4767a649fe49968a4af2991346156bf073a71fae6752980f45c48
+scope : 1146 complete fr13.fixed32.step instances; 1147 graph-812 replays
+        4,324,314 kernel rows; 4,105,181 CUDA runtime rows; 1 stream (id 7)
+==============================================================================
+
+==============================================================================
+CUDA GRAPH INVENTORY                       (5 graphs, 5773 replays = 5.04/step)
+==============================================================================
+graphId  replays  nodes/replay  gpu_ms/step  phase
+    812     1147          1894        155.4  sfwd  (ENTIRE PHASE = ONE GRAPH)
+    815     1188           176         27.4  dfwd
+    809     1146            78          4.4  cfwd
+    806     1146             9          1.4  dfwd
+    803     1146             9          0.9  dfwd
+
+launchType/graph split over all 4,324,314 kernels:
+  REGULAR, no graph : 1,832,234
+  REGULAR, in graph : 2,492,080
+
+==============================================================================
+TARGET GEMM -- LAUNCH GEOMETRY
+==============================================================================
+kernel  cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_blockwise<
+        bfloat16_t,128,1,128, tuple<C<128>,C<32>,C<128>>, tuple<C<1>,C<1>,C<1>>,
+        EpilogueScheduleAuto, KernelTmaWarpSpecializedBlockwiseCooperativeSm120,
+        true>::GemmKernel>(T1::Params)
+
+grid (decode)          (1, gridY, 1)     -> CTA count = gridY
+block                  (384, 1, 1)       -> 3 warpgroups, cooperative
+registers/thread       168
+static  shared memory  0 B
+dynamic shared memory  93,184 B (91 KB)  -> 1 CTA per SM on 48 SMs
+cluster                (1, 1, 1)
+launchType             REGULAR
+graph                  812 (293,549 / 293,549 SFWD instances are graph nodes)
+stream                 7
+
+Rare prefill shapes (gridX in {4,6,12,17,20,26,27,28,29}) total 0.11 inst/step
+and are excluded from the decode analysis.
+
+==============================================================================
+TARGET GEMM -- PER-SHAPE DISTRIBUTION INSIDE GRAPH 812
+==============================================================================
+projection      CTAs  inst/step   p5_us  p50_us  mean_us  ms/step  ms@p5
+mlp_gate_up      272       64.0   796.4   815.5    824.4   52.748  50.958
+mlp_down          40       64.0   396.6   404.8    410.9   26.312  25.395
+gdn_in_proj      128       48.0   371.5   384.2    389.2   18.675  17.828
+gdn_o_proj        40       48.5   183.7   187.7    190.1    9.230   8.918
+attn_qkv_gate    112       16.0   329.2   338.4    343.3    5.492   5.265
+attn_o_proj       40       15.4   135.6   146.5    146.5    2.254   2.087
+-------------------------------------------------------------------------
+TOTAL                     256.0                            114.712 110.451
+(the 48.5/15.4 split is the duration threshold at 160 us cutting a tail;
+ the true counts are 48 and 16 -- 48 GDN + 16 attention layers = 64)
+
+derived shapes and achieved bandwidth (TileM = 128):
+projection       N        K       bytes/inst   mean GB/s   %of 273
+mlp_gate_up      34816    5120    178.26 MB       216.2      79.2
+mlp_down          5120   17408     89.13 MB       216.9      79.4
+gdn_in_proj      16384    5120     83.89 MB       215.5      78.9
+gdn_o_proj        5120    8192     41.94 MB       220.6      80.8
+attn_qkv_gate    14336    5120     73.40 MB       213.8      78.3
+attn_o_proj       5120    6144     31.46 MB       214.7      78.6
+-------------------------------------------------------------------------
+per step: 24.830 GB of weights, 114.712 ms  ->  216.4 GB/s (79.3%)
+at class p5                       110.451 ms ->  224.9 GB/s weights only
+all traffic at p5 (25.857 GB)     110.451 ms ->  234.1 GB/s (85.8%)
+
+raw gridY histogram (gridY=40 is trimodal, hence the duration split):
+  gridY   n(capture)  per_step  min_us  mean_us  ms/step
+    272        73387     63.98   770.5    824.4   52.748
+     40       146774    127.96   132.3    295.4   37.797   <- 3 populations
+    128        55041     47.99   359.0    389.2   18.675
+    112        18347     16.00   318.7    343.3    5.492
+
+==============================================================================
+TARGET GEMM -- WAVE QUANTIZATION TEST  (the key negative result)
+==============================================================================
+shape             CTAs   waves  last-wave fill   achieved GB/s
+mlp_down/gdn_o/     40    0.83      40/48 = 83%   214.7 - 220.6
+  attn_o
+attn_qkv           112    2.33      16/48 = 33%   213.8
+gdn_in_proj        128    2.67      32/48 = 67%   215.5
+mlp_gate_up        272    5.67      32/48 = 67%   216.2
+
+The worst-filled shapes are the FASTEST per byte. Bandwidth is flat at
+214-221 GB/s across a 6.8x range in CTA count. Perfect wave packing returns
+0 ms. The limiter is the memory controller, not SM fill.
+
+==============================================================================
+TARGET GEMM -- INTER-KERNEL GAPS  (single stream: gap = start - prev end)
+==============================================================================
+scope              n(capture)   us/step   mean_ns   max_ns
+target GEMM            293549      9.17      35.8    10272
+all sfwd nodes        2171829    404.26     213.5    98752
+
+graph-812 replay:  span 155.8069 ms/step
+                   busy 155.4027 ms/step
+                   gap    0.4043 ms/step  (0.26%), 1894.5 nodes
+
+==============================================================================
+TARGET GEMM -- EXCESS OVER THE 89.3 ms WEIGHT-READ FLOOR
+==============================================================================
+component                                            ms/step
+launch / gap overhead between instances                0.009
+tail / wave quantization (M=32 on 48 SMs)             ~0
+traffic omitted by the weights-only floor              5.42
+  (fp8 blockwise scales +0.776 GB, bf16 epilogue
+   writes +0.251 GB -> all-traffic floor 94.72 ms)
+per-instance jitter above class p5                     4.26
+steady-state DRAM efficiency gap (85.8% -> 100%)      15.73
+--------------------------------------------------------------
+total                                                 25.41   (vs 25.5 stated)
+
+variance is not schedulable:
+  per-instance sigma (gate_up)      29.43 us
+  per-step-mean sigma (gate_up)      6.07 us
+  drift with node position          none: 815.7 us at nodes 0-200,
+                                          820.5 us at nodes 1800+
+
+==============================================================================
+GDN -- LEVEL STRUCTURE (_tree_gdn_path_kernel, graph 812)
+==============================================================================
+level  grid            n_paths  regs  blk  inst/step  min_us  mean_us  ms/step
+0      (48, 16,  1)          1    48  256       48.0   74.98    83.19   3.9918
+1      (48, 16, 11)         11    40  256       48.0  167.58   174.10   8.3545
+------------------------------------------------------------------------------
+                                              96.0                     12.3463
+
+launch grid is (num_vh, cdiv(dim_v, block_v), n_paths)
+  -- fr10_gdn_tree_kernel.py:16268
+source ledger: logical_launches 2, logical_programs 12,
+               logical_padded_slots 82, logical_critical_path 12
+level0 -> level1 gap: -0.128 us (back to back inside the graph)
+
+work normalisation (768 CTA-groups = 48 x 16):
+level  CTA-groups  slots  work units  duration    ns/unit
+0             768      5       3,840   83.19 us    21.66
+1             768     77      59,136  174.10 us     2.944
+--> level 0 is 7.36x less efficient per unit of work
+
+fused single-launch model:
+  62,976 units x 2.944 ns = 185.4 us/layer x 48 layers = 8.90 ms/step
+  win = 12.347 - 8.900 = 3.45 ms/step
+  (independently reproduces the banked 8.9 ms prior model)
+
+==============================================================================
+FA2 QROW16 (graph 812)
+==============================================================================
+kernel   flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<256,16,64,1>,
+         ... bfloat16_t ...>(flash::Flash_fwd_params)
+grid                (2, 1, 24) = 48 CTAs = exactly one wave on 48 SMs
+block               (32, 1, 1)  -- kNWarps = 1, one warp
+registers/thread    255
+dynamic shared mem  73,728 B -> 1 CTA/SM -> 32 resident threads per SM
+inst/step           16.0 (one per attention layer)
+ms/step             21.3504
+
+duration     min      p5     p50    mean     p95      max
+   (us)   1000.5  1037.8  1272.8  1334.8  1852.7   2437.4
+
+gaps to preceding kernel:  mean 101.9 ns, max 576 ns  -> 1.6 us/step total
+
+context ramp (OLS over 1147 per-step means, in launch order):
+  t(step) = 1090.8 us + 0.4260 us/step
+
+KV geometry (all three factors pinned by independent evidence):
+  q heads          24        FA2 grid.z
+  kv heads          4        "each KV head serves six query heads"
+                             (results/fr13_fixed32_fa2_qrow32_gqa_pair_source_20260805)
+  head dim        256        FA2 kernel traits
+  dtype          bf16        vllm::reshape_and_cache_flash_kernel<
+                               __nv_bfloat16,__nv_bfloat16,Fp8KVCacheDataType(0)>
+  -> KV bytes/token/layer = 2 x 4 x 256 x 2 = 4096 B
+
+committed tokens/step = 5.753885  (results/fr13_hardware_floor_status_20260805)
+
+  marginal traffic          5.754 x 4096 = 23,568 B/step
+  marginal time                            0.4260 us/step
+  achieved unique-byte BW                  55.3 GB/s  = 20.3% of 273
+  implied context (mid-capture)          ~18.0k tokens
+  per-layer KV-scan floor at 273 GB/s      270.5 us
+  measured mean                           1334.8 us
+  ratio to floor                             4.93x
+  FA2 floor / measured             4.33 / 21.36 ms/step
+  structural headroom                       17.03 ms/step
+
+KV re-staging: 24 q-head CTAs x 2 m_blocks = 48 CTAs over 4 kv heads
+               -> each KV byte staged 12x
+  perfect L2 dedupe bound   273.0 GB/s unique
+  zero   L2 dedupe bound     22.75 GB/s unique
+  measured                   55.3 GB/s  (2.43x above the no-dedupe bound)
+
+KV cache append: reshape_and_cache_flash_kernel grid.x = 32 (tree tokens),
+                 16.0 inst/step in graph 812
+
+==============================================================================
+HOST -- PER-STEP GPU LEDGER  (NVTX host range -> correlationId -> kernel)
+==============================================================================
+range           gpu_span_ms  gpu_busy_ms  GPU_IDLE_ms   gpu_ops
+step                237.032      221.222       15.810    3690.6
+  sfwd              155.807      155.292        0.515    1894.5
+  postprocess        12.339       12.339        0.000       2.0
+  cfwd               20.686       17.439        3.247    1189.0
+  dfwd               35.107       33.887        1.220     299.0
+
+phase order in a step: sfwd -> postprocess -> cfwd -> dfwd -> (tail)
+GPU is 93.3% busy inside the step envelope.
+
+inter-phase GPU gaps                                   ms/step
+  step_start -> sfwd                                     0.000
+  sfwd -> postprocess                                    0.004
+  postprocess -> cfwd                                    0.003
+  cfwd -> dfwd                                           1.224
+  dfwd -> step_end (TAIL)                               11.969
+-----------------------------------------------------------------
+  total                                                 13.200
+  (matches the banked 13.114 ms "residual outside phase ranges")
+
+post-DFWD tail composition                             ms/step
+  gpu span                                              11.969
+  gpu busy (un-phased work)                              1.889
+  GPU IDLE                                              10.080
+  host CUDA API time in the same window                  2.300
+  => host CPU outside any CUDA call                     ~7.780
+
+top kernels in the tail        n/step   ms/step
+  index_elementwise_kernel       16.1    1.2700
+  _zero_kv_blocks_kernel          0.0    0.4663
+  batch_memcpy_kernel             0.0    0.0414
+  unrolled_elementwise_kernel    11.0    0.0145
+  _scatter_gather_elementwise     6.0    0.0108
+  _compute_slot_mapping_kernel    4.0    0.0091
+
+top host APIs in the tail      n/step   cpu_ms/step
+  cudaStreamSynchronize            2.3        1.685
+  cudaLaunchKernel                92.8        0.319
+  cudaMemcpyAsync                 63.1        0.219
+  cudaEventSynchronize             4.0        0.021
+
+==============================================================================
+HOST -- CUDA API CENSUS (whole capture, one CUDA thread)
+==============================================================================
+thread 281480429306181: 4,103,993 calls, 273,771 ms CPU over 300 s
+                        = 91% of wall clock inside CUDA APIs
+
+api                              calls/step  cpu_ms/step  mean_us
+cudaLaunchKernel_v7000               1538.9      173.961   113.05
+cudaMemcpyAsync_v3020                 143.9       56.205   390.48
+cuLaunchKernelEx                       44.8        2.971    66.36
+cudaGraphLaunch_v10000                  5.0        2.554   507.00
+cudaStreamSynchronize_v3020             7.6        1.815   238.92
+cuLaunchKernel                         15.7        0.896    57.20
+cudaMemsetAsync_v3020                  69.4        0.245     3.53
+cuKernelGetName                      1538.9        0.116     0.08  (CUPTI-injected)
+cudaEventRecordWithFlags_v11010        25.2        0.041     1.62
+cudaStreamIsCapturing_v10000           97.5        0.020     0.20
+
+memcpy census                    n/step    total_bytes   mean_B   gpu_ms/step
+Device-to-Device                  361.8  206,889,254,964  498,974        1.130
+Host-to-Device                     48.8      198,653,721    3,551        0.029
+Device-to-Host                      5.2          829,956      140        0.008
+
+profiler overhead                     n   mean_us   ms/step
+  thread 281480429306181 (main)     113       3.1     0.000
+  thread 281480429306237 (flush)    996   44661.6    38.816
+  thread 281480429307912              3     189.5     0.000
+
+==============================================================================
+EAGER-LAUNCH RECOVERY MODEL (ladder items 3 and 5)
+==============================================================================
+phase   eager_ops/step  graph_ops/step  idle_ms/step  idle/op   at 213ns/node  recoverable
+cfwd            1111.0            78.0         3.247   2.73 us          0.253        2.99
+dfwd             105.0           194.0         1.220   4.08 us          0.064        1.16
+
+cfwd op-size profile             ops/step   gpu_ms/step
+  < 2 us                            784.1        0.9889
+  2 - 5 us                          250.7        0.8345
+  5 - 20 us                          37.4        0.3365
+  20 - 100 us                        85.6        6.5136
+  >= 100 us                          31.2        8.7803
+
+dfwd op-size profile             ops/step   gpu_ms/step
+  < 2 us                            171.2        0.2300
+  2 - 5 us                           75.4        0.2085
+  5 - 20 us                          16.4        0.1747
+  20 - 100 us                         0.9        0.0261
+  >= 100 us                          35.0       33.2863

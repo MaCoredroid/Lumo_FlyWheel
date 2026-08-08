@@ -1,0 +1,219 @@
+{
+  "schema": "fr13.fixed32.attack_ladder.v1",
+  "stamp": "20260808",
+  "analysis_only": true,
+  "acceptance_valid": false,
+  "gpu_touched": false,
+  "serving_code_changed": false,
+  "source": {
+    "report": "output/fr13_fixed32_b1_nsys_20260808T212056Z/tail6_fixed32_b1_nsys_f32_20260808T212056Z/logs/fr13_fixed32_b1_real_swe.nsys-rep",
+    "report_sha256": "241d4541f5c4767a649fe49968a4af2991346156bf073a71fae6752980f45c48",
+    "report_bytes": 218692330,
+    "curated_reduction": "results/fr13_fixed32_b1_nsys_attribution_20260808T212056Z",
+    "kernel_rows": 4324314,
+    "runtime_rows": 4105181,
+    "complete_steps": 1146,
+    "graph812_replays": 1147,
+    "streams": [7]
+  },
+  "hardware": {"device": "GB10", "sms": 48, "dram_gb_s": 273, "memory": "unified LPDDR5X shared CPU/GPU"},
+  "envelope_ms_step": 237.248,
+  "campaign_floor_ms_step": 119.658015414,
+  "campaign_cap_ms_step": 137.6067177261,
+
+  "ladder": [
+    {"rank": 1, "lever": "Move post-DFWD host tail off the step critical path",
+     "modeled_ms_step": 10.08, "realistic_ms_step": [5.0, 7.0], "pct_env": 4.25,
+     "verdict": "LEGAL", "risk": "medium",
+     "evidence": "tail span 11.969 ms, GPU busy 1.889 ms, CUDA-API 2.30 ms => ~7.78 ms non-CUDA host; GPU idle 10.080 ms/step",
+     "dependency": "remove the 2.3 cudaStreamSynchronize/step from the submit path"},
+
+    {"rank": 2, "lever": "GDN two-level scan -> fused single launch",
+     "modeled_ms_step": 3.45, "pct_env": 1.45, "verdict": "LEGAL", "risk": "medium-high",
+     "evidence": "L0 21.66 ns/unit vs L1 2.944 ns/unit; fused 62976 units x 2.944 ns = 185.4 us/layer = 8.90 ms/step",
+     "dependency": "per-node ready flags, not a grid-wide barrier; FR13_SUBTREE_PARALLEL_SELFCHECK byte gate exists"},
+
+    {"rank": 3, "lever": "CUDA-graph capture of CFWD's 1111 eager ops",
+     "modeled_ms_step": 2.99, "pct_env": 1.26, "verdict": "LEGAL", "risk": "low",
+     "evidence": "cfwd idle 3.247 ms over 1189 ops (2.73 us/op); sfwd graph achieves 213 ns/node",
+     "dependency": "cfwd already has graphId=809 with 78 nodes; extend coverage"},
+
+    {"rank": 4, "lever": "CFWD->DFWD boundary bubble",
+     "modeled_ms_step": 1.22, "pct_env": 0.52, "verdict": "LEGAL", "risk": "medium",
+     "evidence": "measured inter-phase GPU gap 1.224 ms/step",
+     "dependency": "likely a sampled-token dependency; requires an on-device handoff"},
+
+    {"rank": 5, "lever": "Complete DFWD graph capture (105 eager ops)",
+     "modeled_ms_step": 1.16, "pct_env": 0.49, "verdict": "LEGAL", "risk": "low",
+     "evidence": "dfwd idle 1.220 ms over 299 ops; graphId=815 already covers 176",
+     "dependency": "none"},
+
+    {"rank": 6, "lever": "SFWD intra-graph gap",
+     "modeled_ms_step": 0.52, "pct_env": 0.22, "verdict": "AT_FLOOR", "risk": "n/a",
+     "evidence": "404.26 us/step over 1894.5 nodes = 213 ns/node, the graph-replay floor",
+     "dependency": "none"},
+
+    {"rank": 7, "lever": "Target GEMM persistent / megakernel / CUDA-graph node fusion",
+     "modeled_ms_step": 0.009, "pct_env": 0.004, "verdict": "DEAD", "risk": "n/a",
+     "evidence": "256 GEMM instances/step, total gap 9.17 us/step, mean 35.8 ns; already all graph nodes in graphId=812",
+     "dependency": "none"},
+
+    {"rank": 8, "lever": "Target GEMM wave / tile quantization",
+     "modeled_ms_step": 0.0, "pct_env": 0.0, "verdict": "DEAD", "risk": "n/a",
+     "evidence": "40-CTA shapes (0.83 wave, 8 SMs idle) achieve 214.7-220.6 GB/s vs 216.2 GB/s for the 272-CTA 5.67-wave shape",
+     "dependency": "none"},
+
+    {"rank": 9, "lever": "Target GEMM L2 policy",
+     "modeled_ms_step": 0.0, "pct_env": 0.0, "verdict": "DEAD", "risk": "n/a",
+     "evidence": "24.830 GB streamed per step with zero intra-step reuse; A operand <=340 KB already L2-resident",
+     "dependency": "none"},
+
+    {"rank": 10, "lever": "Target GEMM stream ordering / concurrency",
+     "modeled_ms_step": 0.0, "pct_env": 0.0, "verdict": "DEAD", "risk": "n/a",
+     "evidence": "single stream (id 7); strict layer dependency chain, and the one latency-bound partner (FA2) is the GEMM's own consumer",
+     "dependency": "none"},
+
+    {"rank": 11, "lever": "FA2 persistent across layers",
+     "modeled_ms_step": 0.0016, "pct_env": 0.0007, "verdict": "DEAD", "risk": "n/a",
+     "evidence": "16 instances/step, mean gap 101.9 ns, max 576 ns",
+     "dependency": "none"},
+
+    {"rank": 12, "lever": "FA2 KV L2-persistence window (cudaAccessPolicyWindow)",
+     "modeled_ms_step": null, "upper_bound_ms_step": 17.03, "pct_env": null,
+     "verdict": "LEGAL_SPECULATIVE", "risk": "unknown",
+     "evidence": "each KV byte staged 12x; measured 55.3 GB/s unique sits between the 22.75 GB/s no-dedupe and 273 GB/s perfect-dedupe bounds",
+     "dependency": "needs an L2 hit-rate metrics run; this capture has no metric sampling"}
+  ],
+
+  "not_addressable": [
+    {"item": "Target GEMM bandwidth shortfall", "ms_step": 15.73, "jitter_ms_step": 4.26,
+     "evidence": "85.8% of the 273 GB/s roofline at class p5, 82.4% at mean",
+     "why": "no legal scheduler lever changes DRAM efficiency"},
+    {"item": "FA2 tile geometry (kBlockM 16->32, GQA-pair head mapping)", "upper_bound_ms_step": 17.03,
+     "evidence": "FA2 is 4.93x above its per-layer KV-scan floor",
+     "why": "BLOCKED by the exact-math rule; B1 byte gates pending. The GQA-pair source artifact claims attention arithmetic is unchanged, which if it survives a B1 byte gate would make it legal."}
+  ],
+
+  "totals": {
+    "legal_ceiling_ms_step": 19.4,
+    "legal_realistic_ms_step": [10.0, 14.0],
+    "pct_env_ceiling": 8.2,
+    "target_gemm_contribution_ms_step": 0.009,
+    "verdict": "The ladder cannot close the acceptance gap. Applying the full ceiling lands near 213 ms/step against a 137.607 ms/step cap."
+  },
+
+  "target_gemm": {
+    "kernel": "cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_blockwise<bfloat16_t,128,1,128,tuple<C<128>,C<32>,C<128>>,tuple<C<1>,C<1>,C<1>>,EpilogueScheduleAuto,KernelTmaWarpSpecializedBlockwiseCooperativeSm120,true>>",
+    "ms_step": 114.712, "inst_step": 256.0,
+    "block": [384,1,1], "registers_per_thread": 168, "dynamic_smem_bytes": 93184,
+    "ctas_per_sm": 1, "cluster": [1,1,1], "in_cuda_graph": true, "graph_id": 812,
+    "derived_model": {"hidden": 5120, "intermediate": 17408, "layers": 64,
+                      "gdn_layers": 48, "attn_layers": 16, "vocab": 248320, "tile_m": 128},
+    "shapes": [
+      {"name": "mlp_gate_up",   "ctas": 272, "inst_step": 64, "p5_us": 796.4, "p50_us": 815.5, "mean_us": 824.4, "ms_step": 52.748, "n": 34816, "k": 5120,  "bytes": 178257920, "mean_gb_s": 216.2},
+      {"name": "mlp_down",      "ctas": 40,  "inst_step": 64, "p5_us": 396.6, "p50_us": 404.8, "mean_us": 410.9, "ms_step": 26.312, "n": 5120,  "k": 17408, "bytes": 89128960,  "mean_gb_s": 216.9},
+      {"name": "gdn_in_proj",   "ctas": 128, "inst_step": 48, "p5_us": 371.5, "p50_us": 384.2, "mean_us": 389.2, "ms_step": 18.675, "n": 16384, "k": 5120,  "bytes": 83886080,  "mean_gb_s": 215.5},
+      {"name": "gdn_o_proj",    "ctas": 40,  "inst_step": 48, "p5_us": 183.7, "p50_us": 187.7, "mean_us": 190.1, "ms_step": 9.230,  "n": 5120,  "k": 8192,  "bytes": 41943040,  "mean_gb_s": 220.6},
+      {"name": "attn_qkv_gate", "ctas": 112, "inst_step": 16, "p5_us": 329.2, "p50_us": 338.4, "mean_us": 343.3, "ms_step": 5.492,  "n": 14336, "k": 5120,  "bytes": 73400320,  "mean_gb_s": 213.8},
+      {"name": "attn_o_proj",   "ctas": 40,  "inst_step": 16, "p5_us": 135.6, "p50_us": 146.5, "mean_us": 146.5, "ms_step": 2.254,  "n": 5120,  "k": 6144,  "bytes": 31457280,  "mean_gb_s": 214.7}
+    ],
+    "gap_us_step": 9.17, "gap_mean_ns": 35.8,
+    "weights_gb_step": 24.830, "all_traffic_gb_step": 25.857,
+    "floor_banked_ms": 89.3, "floor_weights_derived_ms": 90.95, "floor_all_traffic_ms": 94.72,
+    "excess_decomposition_ms_step": {
+      "launch_gap": 0.009, "wave_quantization": 0.0,
+      "floor_model_incompleteness": 5.42, "per_instance_jitter": 4.26,
+      "dram_efficiency_gap": 15.73, "total": 25.41
+    }
+  },
+
+  "gdn": {
+    "ms_step": 12.3463, "inst_step": 96.0, "layers": 48, "launches_per_layer": 2,
+    "levels": [
+      {"level": 0, "grid": [48,16,1],  "n_paths": 1,  "nodes": 5, "regs": 48, "inst_step": 48.0, "min_us": 74.98,  "mean_us": 83.19,  "ms_step": 3.9918, "work_units": 3840,  "ns_per_unit": 21.66},
+      {"level": 1, "grid": [48,16,11], "n_paths": 11, "max_path_len": 7, "regs": 40, "inst_step": 48.0, "min_us": 167.58, "mean_us": 174.10, "ms_step": 8.3545, "work_units": 59136, "ns_per_unit": 2.944}
+    ],
+    "level0_to_level1_gap_us": -0.128,
+    "fused_model_us_per_layer": 185.4, "fused_ms_step": 8.90,
+    "win_ms_step": 3.45, "prior_model_ms_step": 8.9, "prior_model_reproduced": true,
+    "necessary_condition": "per-node ready flag so a level-1 path starts when its level-0 parent retires; a grid-wide barrier returns only the ~0 us launch gap"
+  },
+
+  "fa2_qrow16": {
+    "ms_step": 21.3504, "inst_step": 16.0,
+    "grid": [2,1,24], "ctas": 48, "waves": 1.0, "block": [32,1,1], "warps_per_cta": 1,
+    "registers_per_thread": 255, "dynamic_smem_bytes": 73728, "resident_threads_per_sm": 32,
+    "duration_us": {"min": 1000.5, "p5": 1037.8, "p50": 1272.8, "mean": 1334.8, "p95": 1852.7, "max": 2437.4},
+    "gap_mean_ns": 101.9, "gap_max_ns": 576, "gap_ms_step": 0.0016,
+    "ramp_ols": {"intercept_us": 1090.8, "slope_us_per_step": 0.4260, "n": 1147},
+    "kv": {"q_heads": 24, "kv_heads": 4, "head_dim": 256, "dtype": "bf16",
+           "bytes_per_token_per_layer": 4096, "restaging_factor": 12},
+    "committed_tokens_per_step": 5.753885004,
+    "achieved_unique_gb_s": 55.3, "pct_of_roofline": 20.3,
+    "implied_context_tokens": 18031,
+    "per_layer_floor_us": 270.5, "ratio_to_floor": 4.93,
+    "floor_ms_step": 4.33, "headroom_ms_step": 17.03,
+    "near_floor": false,
+    "conclusion": "FA2 is ~5x above its KV-scan bandwidth floor, but every lever that closes it is a tile-geometry change barred by the exact-math rule. Launch/gap and persistence levers are worth 0.0016 ms."
+  },
+
+  "host": {
+    "step_gpu_span_ms": 237.032, "step_gpu_busy_ms": 221.222, "step_gpu_idle_ms": 15.810,
+    "gpu_busy_pct": 93.3,
+    "phase_order": ["sfwd", "postprocess", "cfwd", "dfwd"],
+    "phases": [
+      {"name": "sfwd",        "span_ms": 155.807, "busy_ms": 155.292, "idle_ms": 0.515, "ops": 1894.5, "eager_ops": 0},
+      {"name": "postprocess", "span_ms": 12.339,  "busy_ms": 12.339,  "idle_ms": 0.000, "ops": 2.0,    "eager_ops": 2},
+      {"name": "cfwd",        "span_ms": 20.686,  "busy_ms": 17.439,  "idle_ms": 3.247, "ops": 1189.0, "eager_ops": 1111},
+      {"name": "dfwd",        "span_ms": 35.107,  "busy_ms": 33.887,  "idle_ms": 1.220, "ops": 299.0,  "eager_ops": 105}
+    ],
+    "inter_phase_gaps_ms_step": {
+      "step_start_to_sfwd": 0.000, "sfwd_to_postprocess": 0.004,
+      "postprocess_to_cfwd": 0.003, "cfwd_to_dfwd": 1.224,
+      "dfwd_to_step_end_tail": 11.969, "total": 13.200
+    },
+    "post_dfwd_tail": {
+      "span_ms": 11.969, "gpu_busy_ms": 1.889, "gpu_idle_ms": 10.080,
+      "cuda_api_cpu_ms": 2.300, "non_cuda_host_ms": 7.780,
+      "top_kernels": [
+        {"name": "index_elementwise_kernel", "per_step": 16.1, "ms_step": 1.2700},
+        {"name": "_zero_kv_blocks_kernel", "per_step": 0.0, "ms_step": 0.4663},
+        {"name": "_compute_slot_mapping_kernel", "per_step": 4.0, "ms_step": 0.0091}
+      ],
+      "top_apis": [
+        {"name": "cudaStreamSynchronize", "per_step": 2.3, "cpu_ms_step": 1.685},
+        {"name": "cudaLaunchKernel", "per_step": 92.8, "cpu_ms_step": 0.319},
+        {"name": "cudaMemcpyAsync", "per_step": 63.1, "cpu_ms_step": 0.219}
+      ]
+    },
+    "api_census": [
+      {"api": "cudaLaunchKernel",      "per_step": 1538.9, "cpu_ms_step": 173.961, "mean_us": 113.05, "note": "blocking on a full launch queue, not CPU burn"},
+      {"api": "cudaMemcpyAsync",       "per_step": 143.9,  "cpu_ms_step": 56.205,  "mean_us": 390.48},
+      {"api": "cuLaunchKernelEx",      "per_step": 44.8,   "cpu_ms_step": 2.971,   "mean_us": 66.36},
+      {"api": "cudaGraphLaunch",       "per_step": 5.0,    "cpu_ms_step": 2.554,   "mean_us": 507.00},
+      {"api": "cudaStreamSynchronize", "per_step": 7.6,    "cpu_ms_step": 1.815,   "mean_us": 238.92}
+    ],
+    "cuda_thread": {"globalTid": 281480429306181, "calls": 4103993, "cpu_ms": 273771,
+                    "pct_of_wall_in_cuda_apis": 91.0},
+    "memcpy": [
+      {"kind": "Device-to-Device", "per_step": 361.8, "total_bytes": 206889254964, "mean_bytes": 498974, "gpu_ms_step": 1.130},
+      {"kind": "Host-to-Device",   "per_step": 48.8,  "total_bytes": 198653721,    "mean_bytes": 3551,   "gpu_ms_step": 0.029},
+      {"kind": "Device-to-Host",   "per_step": 5.2,   "total_bytes": 829956,       "mean_bytes": 140,    "gpu_ms_step": 0.008}
+    ],
+    "cuda_graphs": [
+      {"graphId": 812, "replays": 1147, "nodes_per_replay": 1894, "gpu_ms_step": 155.4, "phase": "sfwd"},
+      {"graphId": 815, "replays": 1188, "nodes_per_replay": 176,  "gpu_ms_step": 27.4,  "phase": "dfwd"},
+      {"graphId": 809, "replays": 1146, "nodes_per_replay": 78,   "gpu_ms_step": 4.4,   "phase": "cfwd"},
+      {"graphId": 806, "replays": 1146, "nodes_per_replay": 9,    "gpu_ms_step": 1.4,   "phase": "dfwd"},
+      {"graphId": 803, "replays": 1146, "nodes_per_replay": 9,    "gpu_ms_step": 0.9,   "phase": "dfwd"}
+    ]
+  },
+
+  "caveats": [
+    "attribution_only: the capture is a profiling window; acceptance_valid=false",
+    "cuKernelGetName is CUPTI-injected at 1538.9 calls/step; PROFILER_OVERHEAD totals 38.8 ms/step but lives on a separate flush thread (main CUDA thread carries 113 records at 3.1 us). The post-DFWD tail contains only 92.8 launches/step so its CUPTI share is ~0.2 ms.",
+    "GB10's 273 GB/s LPDDR5X is shared between CPU and GPU; host traffic during SFWD may contribute to the 4.26 ms of GEMM jitter and cannot be separated in this trace",
+    "no DRAM counters: trace is cuda,cuda-sw,nvtx with no metric sampling. All bandwidth figures are duration + byte model. The byte model is cross-checked five ways and reproduces both the banked 89.3 ms GEMM floor (to 1.8%) and the banked 8.9 ms GDN fused model (exactly).",
+    "model geometry is derived from grid shapes, kernel template parameters, run-evidence vocab_size and measured durations; no model config is present in the tree"
+  ]
+}
