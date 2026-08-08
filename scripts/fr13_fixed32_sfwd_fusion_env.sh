@@ -139,6 +139,55 @@ fr13_fixed32_sfwd_fusion_env() {
   )
 }
 
+# Integer route pins the launcher validates before it starts a container, and
+# that the caller's process environment (not the variant's XFLAGS) must carry.
+# The launcher reads them as "${NAME:-}", so an unexported pin arrives as the
+# empty string and int("") fails deep inside the launcher as the opaque
+# "fixed32 integer route pin is malformed" -- which is how the boot screen
+# failed at 050d5ae9b. Assert them here, by name, where the cause is obvious.
+# (FR13_FIXED32_VALID_MASK / _ACTIVE_NODES / _PHYSICAL_DRAFTS are the variant's
+# XFLAGS and are deliberately not asserted here.)
+FR13_FIXED32_SFWD_FUSION_ROUTE_PINS=(
+  FR13_FIXED32_TAW_WALK_CAP
+)
+
+# The exported boot preamble. This is NOT optional decoration: the floor
+# sequence is the only place FR13_FIXED32_TAW_WALK_CAP and ~50 other fixed32
+# route/committer/census pins are exported, and the launcher inherits them
+# from the process environment rather than from the env-prefix array. A caller
+# that skips this boots a materially different engine.
+fr13_fixed32_sfwd_fusion_route_preamble() {
+  local sequence=${1:-scripts/fr13_fixed32_floor_timers_seq.sh}
+
+  [[ -f "$sequence" ]] \
+    || { echo "fixed32 SFWD fusion preamble lacks sequence: $sequence" >&2; return 2; }
+  # The sequence names its arms with $TAG even when run_variant is stubbed.
+  [[ -n "${TAG:-}" ]] \
+    || { echo "fixed32 SFWD fusion preamble requires TAG" >&2; return 2; }
+  export BSIZE=1 CONC=1 WALL=0
+  export FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536
+  export FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
+  export FR13_FLOOR_ORDER=TH
+  source scripts/fr13_canonical_env.sh
+  # The sequence dispatches arms through run_variant; stub it so sourcing only
+  # publishes the environment.
+  run_variant() { :; }
+  source "$sequence"
+  unset -f run_variant
+
+  local pin
+  for pin in "${FR13_FIXED32_SFWD_FUSION_ROUTE_PINS[@]}"; do
+    [[ -n "${!pin:-}" ]] \
+      || { echo "fixed32 SFWD fusion preamble left $pin unset" >&2; return 2; }
+  done
+  [[ "${FR13_FIXED32_TAW_WALK_CAP:-}" =~ ^[0-9]+$ ]] \
+    || { echo "fixed32 SFWD fusion preamble walk cap is not an integer" >&2; return 2; }
+  [[ "${FR13_MANDATORY_WEIGHT_BYTES:-}" == "32666638208" ]] \
+    || { echo "fixed32 SFWD fusion preamble weight contract drifted" >&2; return 2; }
+  [[ "${LUMO_SWE_AUTOCOMMIT:-}" == "0" ]] \
+    || { echo "fixed32 SFWD fusion preamble must not autocommit" >&2; return 2; }
+}
+
 # The seven fallback/preseed strings a healthy SFWD conv/post-prep production
 # boot must never emit. Shared so the timing pair's engagement validator and
 # the boot screen reject exactly the same set.

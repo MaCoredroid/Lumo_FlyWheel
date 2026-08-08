@@ -187,17 +187,11 @@ SFWD_MANIFEST_CONTAINER="/workspace/$RUNROOT_REL/runtime_inputs/sfwd_source_mani
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before timing" >&2; exit 2; }
 
-export BSIZE=1 CONC=1 WALL=0
-export FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536
-export FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
-export FR13_FLOOR_ORDER=TH
-source scripts/fr13_canonical_env.sh
-run_variant() { :; }
-source "$SEQUENCE"
-unset -f run_variant
-[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "32666638208" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "$WEIGHT_FLOOR_MS" \
-   && "$LUMO_SWE_AUTOCOMMIT" == "0" ]] \
+# Shared with scripts/fr13_run_b1_sfwd_fusion_boot_diag.sh: the floor sequence
+# is the only place FR13_FIXED32_TAW_WALK_CAP and the rest of the fixed32
+# route/committer pins reach the launcher's process environment.
+fr13_fixed32_sfwd_fusion_route_preamble "$SEQUENCE"
+[[ "$FR13_WEIGHT_FLOOR_MS" == "$WEIGHT_FLOOR_MS" ]] \
   || { echo "fixed K64/root1 B1 floor contract drifted" >&2; exit 2; }
 
 printf 'classification=real_swe_verified_b1_target_sfwd_exact4_timing_pair\ntask_set=%s\ntask_count=%s\nbatch_size=1\nconcurrency=1\ntiming_eligible=1\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\nmode=hydra27_fixed32\nphysical_rows=32\ndraft_vocab_root=1\ndraft_vocab_k=65536\nruntime=FULL_graph_exact_geometry\nruntime_source_commit=%s\nrunner_sha256=%s\nsubset_sha256=%s\nqrow16_fa2_sha256=%s\nqrow16_pass_sha256=%s\ntarget_selector=%s\ntarget_so_sha256=%s\ntarget_qualification_source_commit=%s\ntarget_qualification_patch_sha256=%s\ntarget_pass_sha256=%s\nsfwd_pass_sha256=%s\nsfwd_source_manifest_sha256=%s\nsfwd_gate_summary_sha256=%s\nstock_arm=%s\ncandidate_arm=%s\nstarted=%s\n' \

@@ -61,6 +61,11 @@ TARGET_BYTES=119704312
 TARGET_PASS="$REPO/results/fr13_b1_m128_cooperative_target_sfwd_real_gate_a8a904ed6_20260805/target_combined_pass.json"
 TARGET_PASS_SHA256=169704fac7c544600437e7785f5d810c9df8ffaf5f9ce70d96d83b21de46236d
 TARGET_QUALIFICATION_SOURCE_COMMIT=a8a904ed6c27a6338d43151038c155ebb76e3656
+# Deliberately the pair's 4-task subset, not a 1-task diagnostic subset: the
+# screen never dispatches a task, and a diagnostic subset would flip
+# FR13_FIXED32_B1_DIAGNOSTIC and boot a different engine than the arm under
+# screen. The runlog banner reading "tasks=4 diagnostic=0" is the correct
+# signal that the screen matches the candidate arm.
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SOURCE_COMMIT=$(git rev-parse HEAD)
 DIAG_SHA256=$(sha256sum "$DIAG_PATH" | awk '{print $1}')
@@ -196,6 +201,12 @@ PY
 trap teardown EXIT
 
 free -g > "$RUNROOT_ABS/free_before_boot.txt" 2>/dev/null || true
+
+# Same exported route/committer preamble the timing pair boots with. Skipping
+# it is how the first screen died pre-docker: the launcher reads
+# FR13_FIXED32_TAW_WALK_CAP as "${NAME:-}" and int("") is "fixed32 integer
+# route pin is malformed".
+fr13_fixed32_sfwd_fusion_route_preamble
 
 declare -a FR13_FIXED32_SFWD_FUSION_ENV
 declare device_kernel target_selector target_so target_pass target_pass_sha

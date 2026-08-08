@@ -74,6 +74,81 @@ def test_both_runners_share_one_candidate_env_definition() -> None:
         assert pin not in timing_code, pin
 
 
+def test_both_runners_share_one_route_preamble() -> None:
+    """The launcher inherits fixed32 route pins from the process environment.
+
+    The floor sequence is the only place FR13_FIXED32_TAW_WALK_CAP is
+    exported, and the launcher reads it as "${NAME:-}", so a caller that skips
+    the preamble hands it the empty string and dies pre-docker with the opaque
+    "fixed32 integer route pin is malformed" (boot screen, 050d5ae9b).
+    """
+    shared = SHARED_ENV.read_text(encoding="utf-8")
+    diag = DIAG.read_text(encoding="utf-8")
+    timing = TIMING.read_text(encoding="utf-8")
+
+    assert "fr13_fixed32_sfwd_fusion_route_preamble() {" in shared
+    for source in (diag, timing):
+        assert source.count("fr13_fixed32_sfwd_fusion_route_preamble") == 1
+        # The preamble body must not be re-inlined next to the call.
+        assert "source scripts/fr13_canonical_env.sh" not in source
+        assert "run_variant() { :; }" not in source
+    assert "source scripts/fr13_canonical_env.sh" in shared
+    assert "run_variant() { :; }" in shared
+    assert "FR13_FIXED32_TAW_WALK_CAP" in shared
+
+
+def test_route_preamble_exports_the_pin_the_launcher_validates(
+    tmp_path: Path,
+) -> None:
+    """Regression: run the real preamble and read the pin back."""
+    script = tmp_path / "preamble.sh"
+    script.write_text(
+        "set -euo pipefail\n"
+        f"cd {ROOT}\n"
+        "TAG=pytest\n"
+        "source scripts/fr13_fixed32_sfwd_fusion_env.sh\n"
+        "fr13_fixed32_sfwd_fusion_route_preamble\n"
+        'printf "%s\\n" "$FR13_FIXED32_TAW_WALK_CAP" '
+        '"$FR13_MANDATORY_WEIGHT_BYTES" "$LUMO_SWE_AUTOCOMMIT"\n',
+        encoding="utf-8",
+    )
+    out = subprocess.run(
+        ["bash", str(script)], check=True, capture_output=True, text=True
+    ).stdout.split()
+    walk_cap, weight_bytes, autocommit = out
+    assert walk_cap.isdigit() and int(walk_cap) > 0
+    assert weight_bytes == "32666638208"
+    assert autocommit == "0"
+
+
+def test_route_preamble_refuses_without_a_tag(tmp_path: Path) -> None:
+    script = tmp_path / "preamble_notag.sh"
+    script.write_text(
+        "set -uo pipefail\n"
+        f"cd {ROOT}\n"
+        "unset TAG\n"
+        "source scripts/fr13_fixed32_sfwd_fusion_env.sh\n"
+        "fr13_fixed32_sfwd_fusion_route_preamble && echo UNEXPECTED\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        ["bash", str(script)], capture_output=True, text=True
+    )
+    assert "requires TAG" in result.stderr
+    assert "UNEXPECTED" not in result.stdout
+
+
+def test_diag_screens_the_pair_subset_not_a_diagnostic_subset() -> None:
+    """A 1-task diagnostic subset would flip FR13_FIXED32_B1_DIAGNOSTIC."""
+    diag = DIAG.read_text(encoding="utf-8")
+    timing = TIMING.read_text(encoding="utf-8")
+    assert "SUBSET=config/fr13_fixed32/subset_b4_four.json" in diag
+    assert "subset_b4_four.json" in timing
+    assert "FR13_FIXED32_B1_DIAGNOSTIC=0" in _shared_env_array(
+        "FR13_FIXED32_SFWD_FUSION_ENV"
+    )
+
+
 def test_shared_env_pins_the_composed_candidate_shape() -> None:
     entries = _shared_env_array("FR13_FIXED32_SFWD_FUSION_ENV")
     joined = "\n".join(entries)
