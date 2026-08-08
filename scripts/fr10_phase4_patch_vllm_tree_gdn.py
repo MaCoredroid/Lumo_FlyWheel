@@ -7676,20 +7676,44 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
     ):
         raise RuntimeError("FR13 fixed32 observed seal identity drift")
     _fr13_fixed32_validate_forward_work(event, "event")
+    take_shape = _fr13_fixed32_kernel_shape()
+    if event["kernel_shape"] != take_shape:
+        raise RuntimeError(
+            "FR13 fixed32 event kernel shape drifted: "
+            + repr((event["kernel_shape"], take_shape))
+        )
+    take_fused = take_shape == "sfwd_fused_conv_postprep"
+    # Exactly one conv work section is published, and it is the one this
+    # arm's kernel shape names: the fused arm carries no conv_pregather
+    # section at all, so demanding one here rejects every fused event.
+    conv_work_sections = {
+        "conv_pregather": isinstance(event["conv_pregather"], dict),
+        "sfwd_conv_postprep": isinstance(event["sfwd_conv_postprep"], dict),
+    }
+    expected_conv_work_sections = {
+        "conv_pregather": not take_fused,
+        "sfwd_conv_postprep": take_fused,
+    }
+    shape_independent_sections = {
+        name: isinstance(event[name], dict)
+        for name in (
+            "conv_commit",
+            "committer",
+            "preforward_pack",
+            "output_publish",
+            "accepted_path_pack",
+            "request_key_pack",
+            "batch_purity",
+        )
+    }
     if (
         event["execution_basis"] != "cudagraph_full_replay"
         or int(event["forward_graph_replays"]) != 1
         or not isinstance(event["forward_graph_id"], int)
         or not isinstance(event["forward_graph_signature"], str)
         or len(event["forward_graph_signature"]) != 64
-        or not isinstance(event["conv_commit"], dict)
-        or not isinstance(event["conv_pregather"], dict)
-        or not isinstance(event["committer"], dict)
-        or not isinstance(event["preforward_pack"], dict)
-        or not isinstance(event["output_publish"], dict)
-        or not isinstance(event["accepted_path_pack"], dict)
-        or not isinstance(event["request_key_pack"], dict)
-        or not isinstance(event["batch_purity"], dict)
+        or conv_work_sections != expected_conv_work_sections
+        or not all(shape_independent_sections.values())
     ):
         raise RuntimeError(
             "FR13 fixed32 event lacks one exact full-graph replay: "
@@ -7699,6 +7723,23 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
                     "graph_replays": event["forward_graph_replays"],
                     "graph_id": event["forward_graph_id"],
                     "graph_signature": event["forward_graph_signature"],
+                    # Name the sections too: the replay fields above are
+                    # usually the ones that pass, so a message carrying only
+                    # them reads as a met requirement reported unmet.
+                    "kernel_shape": take_shape,
+                    "conv_work_sections_expected": sorted(
+                        name
+                        for name, want in expected_conv_work_sections.items()
+                        if want
+                    ),
+                    "conv_work_sections_present": sorted(
+                        name for name, seen in conv_work_sections.items() if seen
+                    ),
+                    "sections_absent": sorted(
+                        name
+                        for name, seen in shape_independent_sections.items()
+                        if not seen
+                    ),
                 }
             )
         )

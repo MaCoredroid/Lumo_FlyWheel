@@ -1192,3 +1192,147 @@ def test_a_fused_terminal_still_rejects_events_that_staged() -> None:
             [(r, f"h:{i}") for i, r in enumerate(hydra_records)],
             required_batches=(1,),
         )
+
+
+# --- replay provenance under both shapes ---------------------------------
+
+
+def _observed_take_runtime(*, fused: bool):
+    """Exec the commit-seal replay check out of the embedded runtime."""
+    source = PATCHER.read_text(encoding="utf-8")
+    runtime = next(
+        node.value.value
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE"
+        and isinstance(node.value, ast.Constant)
+    )
+    wanted = {
+        "_fr13_fixed32_observed_take",
+        "_fr13_fixed32_observed_current",
+        "_fr13_fixed32_kernel_shape",
+        "_fr13_fixed32_validate_forward_work",
+    }
+    definitions = [
+        node
+        for node in ast.parse(runtime).body
+        if isinstance(node, ast.FunctionDef) and node.name in wanted
+    ]
+    assert {node.name for node in definitions} == wanted
+    namespace: dict[str, object] = {
+        "_FR13_FIXED32_TARGET_TREE_LAYERS": TREE_LAYERS,
+        "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION": fused,
+        "_FR13_FIXED32_MODE": "hydra27_fixed32",
+        "_FR13_FIXED32_OBSERVED_CURRENT": None,
+    }
+    exec(
+        compile(
+            ast.Module(body=definitions, type_ignores=[]),
+            "<observed-take>",
+            "exec",
+        ),
+        namespace,
+    )
+    return namespace
+
+
+def _sealed_event(*, fused: bool, batch: int = 1) -> dict[str, object]:
+    """One completed event, as the writer publishes it for its shape."""
+    event = dict(_work(fused=fused, batch=batch))
+    # _work() is the capture-time census; a sealed event has replayed once.
+    if not fused:
+        event["conv_stage_replays"] = 1
+    section = {
+        "route": "fused_conv_postprep_single_kernel",
+        "layers": 48,
+        "requests": batch,
+        "calls": 48,
+        "calls_per_layer": 1,
+        "stage_calls": 0,
+        "staged_rows": 0,
+        "consume_calls": 0,
+        "consume_hits": 0,
+        "consume_fallbacks": 0,
+        "freshness_matches": 0,
+    }
+    event.update(
+        mode="hydra27_fixed32",
+        forward_step_index=0,
+        request_ids=("req-0",),
+        execution_basis="cudagraph_full_replay",
+        forward_graph_replays=1,
+        forward_graph_id=253756081434992,
+        forward_graph_signature="2e" + "0" * 62,
+        kernel_shape=(
+            "sfwd_fused_conv_postprep" if fused else "unfused_conv_pregather"
+        ),
+        conv_pregather=None if fused else {"route": "in_graph_preconsume"},
+        sfwd_conv_postprep=section if fused else None,
+        conv_commit={},
+        committer={},
+        preforward_pack={},
+        output_publish={},
+        accepted_path_pack={},
+        request_key_pack={},
+        kv_remap={},
+        batch_purity={},
+        drafter={},
+        drafter_runtime={},
+        taw={},
+        gdn_comparator=None,
+        gdn_parent_sha256="c" * 64,
+        gdn_ancestry_sha256="d" * 64,
+        failures={},
+    )
+    return event
+
+
+@pytest.mark.parametrize("fused", (False, True))
+@pytest.mark.parametrize("batch", (1, 4))
+def test_replay_provenance_accepts_one_replay_under_both_shapes(
+    fused: bool, batch: int
+) -> None:
+    """Regression: the fused event has no conv_pregather section to find."""
+    runtime = _observed_take_runtime(fused=fused)
+    event = _sealed_event(fused=fused, batch=batch)
+    runtime["_FR13_FIXED32_OBSERVED_CURRENT"] = event
+    observed = runtime["_fr13_fixed32_observed_take"](
+        "hydra27_fixed32", batch, 0
+    )
+    assert observed["kernel_shape"] == event["kernel_shape"]
+    assert (observed["conv_pregather"] is None) is fused
+    assert (observed["sfwd_conv_postprep"] is None) is not fused
+
+
+@pytest.mark.parametrize("fused", (False, True))
+def test_replay_provenance_rejects_the_other_shapes_section(
+    fused: bool,
+) -> None:
+    """An event publishing the wrong section fails, and the message says so."""
+    runtime = _observed_take_runtime(fused=fused)
+    event = _sealed_event(fused=fused)
+    event["conv_pregather"], event["sfwd_conv_postprep"] = (
+        event["sfwd_conv_postprep"],
+        event["conv_pregather"],
+    )
+    runtime["_FR13_FIXED32_OBSERVED_CURRENT"] = event
+    with pytest.raises(RuntimeError) as caught:
+        runtime["_fr13_fixed32_observed_take"]("hydra27_fixed32", 1, 0)
+    message = str(caught.value)
+    assert "lacks one exact full-graph replay" in message
+    # The replay fields pass here, so the message must name the section that
+    # did not -- reporting only the passing fields is what misled the diag.
+    assert "conv_work_sections_expected" in message
+    assert "conv_work_sections_present" in message
+    assert "kernel_shape" in message
+
+
+def test_replay_provenance_rejects_an_event_whose_shape_drifted() -> None:
+    runtime = _observed_take_runtime(fused=True)
+    event = _sealed_event(fused=True)
+    event["kernel_shape"] = "unfused_conv_pregather"
+    runtime["_FR13_FIXED32_OBSERVED_CURRENT"] = event
+    with pytest.raises(RuntimeError, match="event kernel shape drifted"):
+        runtime["_fr13_fixed32_observed_take"]("hydra27_fixed32", 1, 0)
