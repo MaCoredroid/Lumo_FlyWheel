@@ -1,0 +1,231 @@
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PATCHER = ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
+
+TREE_LAYERS = frozenset(
+    "language_model.model.layers.%d.self_attn.attn" % layer
+    for layer in range(3, 64, 4)
+)
+SFWD_LAYERS = frozenset(
+    "language_model.model.layers.%d.linear_attn" % layer for layer in range(48)
+)
+
+
+def _census_runtime() -> dict[str, object]:
+    """Exec the census validator out of the embedded runtime source."""
+    source = PATCHER.read_text(encoding="utf-8")
+    runtime = next(
+        node.value.value
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE"
+        and isinstance(node.value, ast.Constant)
+    )
+    wanted = {
+        "_fr13_fixed32_validate_forward_work",
+        "_fr13_fixed32_observed_sfwd_conv_postprep",
+    }
+    definitions = [
+        node
+        for node in ast.parse(runtime).body
+        if isinstance(node, ast.FunctionDef) and node.name in wanted
+    ]
+    assert {node.name for node in definitions} == wanted
+    namespace: dict[str, object] = {
+        "_FR13_FIXED32_TARGET_TREE_LAYERS": TREE_LAYERS,
+        "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION": False,
+    }
+    exec(
+        compile(
+            ast.Module(body=definitions, type_ignores=[]), "<census>", "exec"
+        ),
+        namespace,
+    )
+    return namespace
+
+
+def _work(*, fused: bool, batch: int = 1) -> dict[str, object]:
+    """The census a real B1 FULL capture publishes.
+
+    Fused values are the ones observed in the 2026-08-08 boot screen at
+    f4591891c (container log, "captured forward work is incomplete"): every
+    conv_* counter sits at its initial value because the fusion replaces the
+    pregather stage kernel and the 48 per-layer consumes with one kernel per
+    layer.
+    """
+    work: dict[str, object] = {
+        "batch_size": batch,
+        "tree_calls": 16,
+        "tree_layers": set(TREE_LAYERS),
+        "tree_q_rows": 16 * batch * 32,
+        "tree_bias_shape": (32, 32),
+        "gdn_scan_calls": 48 * batch,
+        "gdn_calls": {index: 1 for index in range(48 * batch)},
+        "gdn_layers": set(range(48)),
+        "gdn_launches": 48 * batch * 2,
+        "gdn_path_programs": 48 * batch * 12,
+        "gdn_padded_slots": 48 * batch * 82,
+        "gdn_nodes": 48 * batch * 32,
+        "gdn_critical_path": 12,
+        "gdn_grid_z": (1, 11),
+        "gdn_max_path_lengths": (5, 7),
+        "gdn_export_or_mask": 16915,
+    }
+    if fused:
+        work.update(
+            conv_consume_calls=0,
+            conv_consume_layers=set(),
+            conv_consume_hits=0,
+            conv_consume_fallbacks=0,
+            conv_freshness_matches=0,
+            conv_stage_calls=0,
+            conv_stage_replays=0,
+            conv_stage_before_all_consumes=False,
+            conv_stage_layers=0,
+            conv_stage_programs=0,
+            conv_stage_ssi_pointer_entries=0,
+            conv_stage_ssi_groups=0,
+            conv_stage_row_elems=0,
+            conv_stage_block=0,
+            conv_stage_layer=None,
+            conv_stage_source=None,
+            conv_stage_instance=None,
+            conv_source_layers={},
+            sfwd_conv_postprep_calls=48,
+            sfwd_conv_postprep_layers=set(SFWD_LAYERS),
+        )
+    else:
+        names = {index: "layer.%d" % index for index in range(48)}
+        work.update(
+            conv_consume_calls=48,
+            conv_consume_layers=set(names.values()),
+            conv_consume_hits=48,
+            conv_consume_fallbacks=0,
+            conv_freshness_matches=48,
+            conv_stage_calls=1,
+            conv_stage_replays=0,
+            conv_stage_before_all_consumes=True,
+            conv_stage_layers=48,
+            conv_stage_programs=48 * batch,
+            conv_stage_ssi_pointer_entries=48,
+            conv_stage_ssi_groups=3,
+            conv_stage_row_elems=1024,
+            conv_stage_block=1024,
+            conv_stage_layer="layer.0",
+            conv_stage_source="a" * 64,
+            conv_stage_instance="b" * 64,
+            conv_source_layers=names,
+            sfwd_conv_postprep_calls=0,
+            sfwd_conv_postprep_layers=set(),
+        )
+    return work
+
+
+@pytest.mark.parametrize("batch", (1, 4))
+def test_census_accepts_the_unfused_capture(batch: int) -> None:
+    runtime = _census_runtime()
+    runtime["_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"] = False
+    runtime["_fr13_fixed32_validate_forward_work"](
+        _work(fused=False, batch=batch), "captured"
+    )
+
+
+@pytest.mark.parametrize("batch", (1, 4))
+def test_census_accepts_the_fused_capture(batch: int) -> None:
+    """Regression for the 2026-08-08 boot screen at f4591891c."""
+    runtime = _census_runtime()
+    runtime["_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"] = True
+    runtime["_fr13_fixed32_validate_forward_work"](
+        _work(fused=True, batch=batch), "captured"
+    )
+
+
+def test_fused_census_still_proves_every_layer_reached_the_graph() -> None:
+    """Relaxing conv_* must not become a hole in the census.
+
+    The fused class is the replacement proof: a kernel missing from the
+    captured graph has to still fail the census.
+    """
+    runtime = _census_runtime()
+    runtime["_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"] = True
+    validate = runtime["_fr13_fixed32_validate_forward_work"]
+    for missing in (1, 48):
+        work = _work(fused=True)
+        kept = sorted(SFWD_LAYERS)[: 48 - missing]
+        work["sfwd_conv_postprep_calls"] = 48 - missing
+        work["sfwd_conv_postprep_layers"] = set(kept)
+        with pytest.raises(RuntimeError, match="forward work is incomplete"):
+            validate(work, "captured")
+
+
+def test_each_shape_rejects_the_other_shapes_conv_counters() -> None:
+    """Fusion off must not accept a census with no conv work, and vice versa."""
+    runtime = _census_runtime()
+    validate = runtime["_fr13_fixed32_validate_forward_work"]
+    runtime["_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"] = False
+    with pytest.raises(RuntimeError, match="forward work is incomplete"):
+        validate(_work(fused=True), "captured")
+    runtime["_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"] = True
+    with pytest.raises(RuntimeError, match="forward work is incomplete"):
+        validate(_work(fused=False), "captured")
+
+
+def test_sfwd_observer_counts_each_layer_once() -> None:
+    runtime = _census_runtime()
+    observe = runtime["_fr13_fixed32_observed_sfwd_conv_postprep"]
+    event = {
+        "batch_size": 1,
+        "sfwd_conv_postprep_layers": set(),
+        "sfwd_conv_postprep_calls": 0,
+        "conv_stage_calls": 0,
+        "conv_consume_calls": 0,
+    }
+    runtime["_fr13_fixed32_observed_work_target"] = (
+        lambda label, capturing, batch: (event, True)
+    )
+    for name in sorted(SFWD_LAYERS):
+        observe(name, 1, True)
+    assert event["sfwd_conv_postprep_calls"] == 48
+    assert event["sfwd_conv_postprep_layers"] == set(SFWD_LAYERS)
+    # A layer reported twice into one event is a census defect, not a no-op.
+    with pytest.raises(RuntimeError, match="SFWD conv/post-prep census drift"):
+        observe(sorted(SFWD_LAYERS)[0], 1, True)
+
+
+def test_sfwd_observer_rejects_mixing_with_the_unfused_conv_path() -> None:
+    """The two paths are exclusive; both counting would double-count the work."""
+    runtime = _census_runtime()
+    observe = runtime["_fr13_fixed32_observed_sfwd_conv_postprep"]
+    for conflicting in ("conv_stage_calls", "conv_consume_calls"):
+        event = {
+            "batch_size": 1,
+            "sfwd_conv_postprep_layers": set(),
+            "sfwd_conv_postprep_calls": 0,
+            "conv_stage_calls": 0,
+            "conv_consume_calls": 0,
+        }
+        event[conflicting] = 1
+        runtime["_fr13_fixed32_observed_work_target"] = (
+            lambda label, capturing, batch: (event, True)
+        )
+        with pytest.raises(RuntimeError, match="SFWD conv/post-prep census drift"):
+            observe("language_model.model.layers.0.linear_attn", 1, True)
+
+
+def test_sfwd_observer_is_inert_without_an_active_event() -> None:
+    runtime = _census_runtime()
+    runtime["_fr13_fixed32_observed_work_target"] = (
+        lambda label, capturing, batch: (None, False)
+    )
+    runtime["_fr13_fixed32_observed_sfwd_conv_postprep"](
+        "language_model.model.layers.0.linear_attn", 1, False
+    )

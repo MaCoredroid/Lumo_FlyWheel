@@ -1786,6 +1786,11 @@ def _fr13_fixed32_observed_new_state(
         "conv_stage_source": None,
         "conv_stage_instance": None,
         "conv_source_layers": {},
+        # The SFWD conv/post-prep fusion subsumes the pregather stage and the
+        # per-layer consume into one kernel, so it reports its own work class
+        # rather than incrementing the unfused conv counters.
+        "sfwd_conv_postprep_layers": set(),
+        "sfwd_conv_postprep_calls": 0,
         "conv_commit": None,
         "conv_pregather": None,
         "committer": None,
@@ -4496,6 +4501,48 @@ def _fr13_fixed32_observed_conv_source(
     sources[index] = name
 
 
+def _fr13_fixed32_observed_sfwd_conv_postprep(
+    layer_name, batch_size, capturing=False
+):
+    """Record one fused conv/post-prep call into the forward work census.
+
+    The fusion replaces the pregather stage kernel and the 48 per-layer
+    consumes with a single kernel per layer, so none of the conv_* counters
+    move. Without its own class the census would have to drop the conv
+    expectation entirely and would stop proving that the conv work reached the
+    captured graph at all.
+    """
+    event, _capture = _fr13_fixed32_observed_work_target(
+        "sfwd conv/post-prep fusion", capturing, batch_size
+    )
+    if event is None:
+        return
+    name = str(layer_name)
+    batch = int(batch_size)
+    if (
+        not name
+        or batch != int(event["batch_size"])
+        or name in event["sfwd_conv_postprep_layers"]
+        or int(event["conv_stage_calls"]) != 0
+        or int(event["conv_consume_calls"]) != 0
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 SFWD conv/post-prep census drift: "
+            + repr(
+                {
+                    "layer": name,
+                    "batch": batch,
+                    "event_batch": event["batch_size"],
+                    "already_seen": name in event["sfwd_conv_postprep_layers"],
+                    "conv_stage_calls": event["conv_stage_calls"],
+                    "conv_consume_calls": event["conv_consume_calls"],
+                }
+            )
+        )
+    event["sfwd_conv_postprep_layers"].add(name)
+    event["sfwd_conv_postprep_calls"] += 1
+
+
 def _fr13_fixed32_observed_conv_consume(
     layer_name, layer_index, batch_size, hit, capturing=False
 ):
@@ -4634,7 +4681,66 @@ def _fr13_fixed32_validate_forward_work(work, label):
             set(work["conv_source_layers"].values())
             == set(work["conv_consume_layers"])
         ),
+        "sfwd_conv_postprep_calls": int(work["sfwd_conv_postprep_calls"]),
+        "sfwd_conv_postprep_layers": len(work["sfwd_conv_postprep_layers"]),
     }
+    # The SFWD conv/post-prep fusion replaces the pregather stage kernel and
+    # the 48 per-layer consumes with one kernel per layer, so every conv_*
+    # counter legitimately stays at its initial value and the fused class
+    # carries the proof instead. Values below are the ones a real fused B1
+    # FULL capture produced (2026-08-08 boot screen at f4591891c); the fused
+    # class is what keeps this an assertion that the work reached the graph
+    # rather than a hole in the census.
+    if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION:
+        conv_expected = {
+            "conv_calls": 0,
+            "conv_layers": 0,
+            "conv_hits": 0,
+            "conv_fallbacks": 0,
+            "conv_freshness": 0,
+            "conv_stage_calls": 0,
+            "conv_stage_replays": 0,
+            "conv_stage_before_all_consumes": False,
+            "conv_stage_layers": 0,
+            "conv_stage_programs": 0,
+            "conv_stage_ssi_pointer_entries": 0,
+            "conv_stage_ssi_groups": 0,
+            "conv_stage_row_elems_positive": False,
+            "conv_stage_block": 0,
+            "conv_stage_layer_present": False,
+            "conv_stage_source_sha256": False,
+            "conv_stage_instance_sha256": False,
+            "conv_source_validations": 0,
+            "conv_source_indices": (),
+            "conv_source_names": True,
+            "sfwd_conv_postprep_calls": 48,
+            "sfwd_conv_postprep_layers": 48,
+        }
+    else:
+        conv_expected = {
+            "conv_calls": 48,
+            "conv_layers": 48,
+            "conv_hits": 48,
+            "conv_fallbacks": 0,
+            "conv_freshness": 48,
+            "conv_stage_calls": 1,
+            "conv_stage_replays": 0 if str(label) == "captured" else 1,
+            "conv_stage_before_all_consumes": True,
+            "conv_stage_layers": 48,
+            "conv_stage_programs": expected_stage_programs,
+            "conv_stage_ssi_pointer_entries": 48,
+            "conv_stage_ssi_groups": 3,
+            "conv_stage_row_elems_positive": True,
+            "conv_stage_block": 1024,
+            "conv_stage_layer_present": True,
+            "conv_stage_source_sha256": True,
+            "conv_stage_instance_sha256": True,
+            "conv_source_validations": 48,
+            "conv_source_indices": tuple(range(48)),
+            "conv_source_names": True,
+            "sfwd_conv_postprep_calls": 0,
+            "sfwd_conv_postprep_layers": 0,
+        }
     expected = {
         "tree_calls": 16,
         "tree_layers": 16,
@@ -4652,26 +4758,7 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "gdn_grid_z": (1, 11),
         "gdn_max_path_lengths": (5, 7),
         "gdn_export_or_mask": 16915,
-        "conv_calls": 48,
-        "conv_layers": 48,
-        "conv_hits": 48,
-        "conv_fallbacks": 0,
-        "conv_freshness": 48,
-        "conv_stage_calls": 1,
-        "conv_stage_replays": 0 if str(label) == "captured" else 1,
-        "conv_stage_before_all_consumes": True,
-        "conv_stage_layers": 48,
-        "conv_stage_programs": expected_stage_programs,
-        "conv_stage_ssi_pointer_entries": 48,
-        "conv_stage_ssi_groups": 3,
-        "conv_stage_row_elems_positive": True,
-        "conv_stage_block": 1024,
-        "conv_stage_layer_present": True,
-        "conv_stage_source_sha256": True,
-        "conv_stage_instance_sha256": True,
-        "conv_source_validations": 48,
-        "conv_source_indices": tuple(range(48)),
-        "conv_source_names": True,
+        **conv_expected,
     }
     if actual != expected:
         raise RuntimeError(
@@ -13408,6 +13495,18 @@ def _fr13_conv_subop_mab(
                             source_only_qualification=True,
                             capture_binding=_fr13_conv_postprep_binding,
                         )
+                        if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION and (
+                            _fr13_conv_postprep_capturing
+                            or _fr13_fixed32_observed_event_active()
+                        ):
+                            # One fused call per layer replaces the pregather
+                            # stage plus this layer's conv consume; the census
+                            # counts it as its own work class.
+                            _fr13_fixed32_observed_sfwd_conv_postprep(
+                                str(self.prefix),
+                                int(_fr13_conv_postprep_b),
+                                _fr13_conv_postprep_capturing,
+                            )
                         if (
                             _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
                             and not getattr(

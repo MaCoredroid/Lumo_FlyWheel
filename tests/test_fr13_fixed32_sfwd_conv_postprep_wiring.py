@@ -398,6 +398,40 @@ def test_sfwd_profile_producer_never_runs_in_eager_boot_warm(
     assert eager_marker not in patched
 
 
+def test_fused_branch_reports_its_work_to_the_forward_census() -> None:
+    """The census expects 48 fused calls; the fused branch must publish them.
+
+    The conv_* counters stay at zero under fusion because the pregather stage
+    and the per-layer consumes are subsumed, so this call site is the only
+    thing proving the fused kernels reached the captured graph. If it is
+    dropped the census fails inverted (expects 48, observes 0).
+    """
+    source = PATCHER.read_text(encoding="utf-8")
+    fragment = next(
+        node.value.value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "conv_replacement"
+        and isinstance(node.value, ast.Constant)
+    )
+    call = "_fr13_fixed32_observed_sfwd_conv_postprep("
+    assert fragment.count(call) == 1
+    index = fragment.index(call)
+    # Guarded exactly like the unfused conv observers.
+    guard = fragment.rindex(
+        "_fr13_fixed32_observed_event_active()", 0, index
+    )
+    assert "_fr13_conv_postprep_capturing" in fragment[guard - 200 : index]
+    assert "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION" in fragment[guard - 200 : index]
+    # It must sit after the fused launch and before the once-only engagement
+    # marker, so it counts every call rather than only the first per layer.
+    launch = fragment.rindex("launch_fixed32_sfwd_conv_postprep_fusion(", 0, index)
+    marker = fragment.index("[FR13_SFWD_CONV_POSTPREP] production engaged", index)
+    assert launch < index < marker
+
+
 def test_sfwd_profile_seal_fails_loud_without_eager_operands() -> None:
     patcher_module = _load_patcher("fr13_sfwd_profile_seal_failloud")
     tree = ast.parse(patcher_module._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE)
