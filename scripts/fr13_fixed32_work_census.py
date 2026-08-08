@@ -97,9 +97,9 @@ from fr13_fixed32_topology import (
 
 SCHEMA = "fr13-fixed32-work-census-v12"
 TERMINAL_SCHEMA = "fr13-fixed32-work-census-terminal-v12"
-REPORT_SCHEMA = "fr13-fixed32-work-census-report-v12"
-ARM_REPORT_SCHEMA = "fr13-fixed32-work-census-arm-report-v12"
-SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v12"
+REPORT_SCHEMA = "fr13-fixed32-work-census-report-v13"
+ARM_REPORT_SCHEMA = "fr13-fixed32-work-census-arm-report-v13"
+SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v13"
 
 TAIL_MODE = "tail6_fixed32"
 HYDRA_MODE = "hydra27_fixed32"
@@ -677,6 +677,12 @@ DRAFTER_GRAPH_REGISTRY_KEYS = frozenset(
         "unmeasured_replays",
     }
 )
+# Added with the fused structural shape. Recorded v12 evidence predates them,
+# so they are optional here and required by the v13 gates; a row that carries
+# them is validated against its own signature.
+FORWARD_GRAPH_REGISTRY_KERNEL_SHAPE_KEYS = frozenset(
+    {"kernel_shape", "fused_calls", "fused_layers"}
+)
 FORWARD_GRAPH_REGISTRY_KEYS = frozenset(
     {
         "batch_size",
@@ -1149,6 +1155,36 @@ def forward_graph_structural_signature(
             f"computed={digest} pinned={pinned}"
         )
     return digest
+
+
+def kernel_shape_for_signature(signature: str) -> str:
+    """Derive the kernel shape a signature attests to.
+
+    The shape is never taken on a report's word: it is whichever pinned
+    canonical structural reference the report's own embedded signature
+    matches. A signature matching neither reference has no shape and fails
+    closed here, so an unknown or forged value cannot enter the chain.
+    """
+    for shape, pinned in FORWARD_GRAPH_STRUCTURAL_SIGNATURES.items():
+        if signature in pinned.values():
+            return shape
+    raise CensusError(
+        "forward graph signature matches no pinned canonical structure: "
+        f"{signature!r}"
+    )
+
+
+def assert_kernel_shape_attested(
+    declared: object, signature: str, *, source: str
+) -> str:
+    """Reject a report claiming a shape its own signature does not prove."""
+    attested = kernel_shape_for_signature(signature)
+    if declared != attested:
+        raise CensusError(
+            f"{source}.kernel_shape: report declares {declared!r} but its "
+            f"graph_signature attests {attested!r}"
+        )
+    return attested
 
 
 def validate_event(raw: object, *, source: str) -> ValidatedEvent:
@@ -2929,7 +2965,20 @@ def _validate_terminal(
     for index, raw_row in enumerate(raw_forward_registry):
         row_label = f"{source}.forward_graph_registry[{index}]"
         row = _mapping(raw_row, row_label)
-        _exact_keys(row, FORWARD_GRAPH_REGISTRY_KEYS, row_label)
+        _exact_keys(
+            row,
+            FORWARD_GRAPH_REGISTRY_KEYS
+            | (
+                FORWARD_GRAPH_REGISTRY_KERNEL_SHAPE_KEYS
+                if FORWARD_GRAPH_REGISTRY_KERNEL_SHAPE_KEYS & set(row)
+                else frozenset()
+            ),
+            row_label,
+        )
+        if FORWARD_GRAPH_REGISTRY_KERNEL_SHAPE_KEYS & set(row):
+            assert_kernel_shape_attested(
+                row["kernel_shape"], row["graph_signature"], source=row_label
+            )
         batch = _integer(row["batch_size"], f"{row_label}.batch_size", minimum=1)
         if batch not in SUPPORTED_BATCH_SIZES or batch in forward_batches:
             raise CensusError(

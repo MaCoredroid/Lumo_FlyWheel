@@ -588,3 +588,90 @@ def test_replay_evidence_records_the_kernel_shape() -> None:
     assert '"kernel_shape": registry_shape,' in source
     assert '"kernel_shape": _fr13_fixed32_kernel_shape(),' in source
     assert '"conv_pregather_stage_replays": 0 if replay_fused else 1,' in source
+
+
+# --- attested kernel_shape (report schema v13) ---------------------------
+
+
+def test_report_schema_family_is_v13() -> None:
+    for schema in (
+        census.REPORT_SCHEMA,
+        census.ARM_REPORT_SCHEMA,
+        census.SELF_TEST_SCHEMA,
+    ):
+        assert schema.endswith("-v13")
+    # The per-event schema is a separate family and must not have moved.
+    assert census.SCHEMA == "fr13-fixed32-work-census-v12"
+
+
+@pytest.mark.parametrize("batch", (1, 2, 3, 4))
+def test_kernel_shape_is_derived_from_the_signature(batch: int) -> None:
+    for shape in census.KERNEL_SHAPES:
+        signature = census.forward_graph_structural_signature(
+            batch, kernel_shape=shape
+        )
+        assert census.kernel_shape_for_signature(signature) == shape
+        assert (
+            census.assert_kernel_shape_attested(shape, signature, source="r")
+            == shape
+        )
+
+
+def test_a_report_cannot_claim_a_shape_its_signature_disproves() -> None:
+    fused = census.forward_graph_structural_signature(
+        1, kernel_shape=census.FUSED_KERNEL_SHAPE
+    )
+    unfused = census.forward_graph_structural_signature(1)
+    with pytest.raises(census.CensusError, match="but its graph_signature attests"):
+        census.assert_kernel_shape_attested(
+            census.UNFUSED_KERNEL_SHAPE, fused, source="r"
+        )
+    with pytest.raises(census.CensusError, match="but its graph_signature attests"):
+        census.assert_kernel_shape_attested(
+            census.FUSED_KERNEL_SHAPE, unfused, source="r"
+        )
+
+
+def test_unknown_signatures_and_shapes_fail_closed() -> None:
+    for bogus in ("0" * 64, "", "not-a-signature"):
+        with pytest.raises(census.CensusError, match="matches no pinned canonical"):
+            census.kernel_shape_for_signature(bogus)
+    # A declared value outside the closed set can never be attested.
+    fused = census.forward_graph_structural_signature(
+        1, kernel_shape=census.FUSED_KERNEL_SHAPE
+    )
+    for bogus in ("fused", "unknown", None, "", "SFWD_FUSED_CONV_POSTPREP"):
+        with pytest.raises(census.CensusError, match="but its graph_signature attests"):
+            census.assert_kernel_shape_attested(bogus, fused, source="r")
+
+
+def test_v12_rows_without_the_shape_trio_still_validate() -> None:
+    """Constraint 4: recorded evidence predates the field and is untouched."""
+    trio = census.FORWARD_GRAPH_REGISTRY_KERNEL_SHAPE_KEYS
+    assert trio == {"kernel_shape", "fused_calls", "fused_layers"}
+    # The trio is not part of the required key set, so a v12-shaped row is
+    # exactly as valid as it was.
+    assert not (trio & census.FORWARD_GRAPH_REGISTRY_KEYS)
+
+
+@pytest.mark.parametrize(
+    "gate", ("scripts/fr13_floor_gate.py", "scripts/fr13_depth_acceptance.py")
+)
+def test_both_gates_attest_the_shape_and_expect_per_shape_rows(gate: str) -> None:
+    source = (ROOT / gate).read_text(encoding="utf-8")
+    # Attested, not declared.
+    assert "assert_kernel_shape_attested(" in source
+    assert 'row["kernel_shape"],' in source
+    # Per-shape canonical reference.
+    assert "kernel_shape=row_shape" in source
+    # The fused row pins the subsumed unfused work at zero, so an arm that
+    # took both routes satisfies neither shape.
+    for zeroed in (
+        '"stage_calls": 0 if row_fused else 1',
+        '"consume_calls": 0 if row_fused else CONV_PREGATHER_LAYERS',
+        '"source_validations": 0 if row_fused else CONV_PREGATHER_LAYERS',
+        '"staged_rows": 0 if row_fused else CONV_PREGATHER_LAYERS * batch',
+    ):
+        assert zeroed in source, (gate, zeroed)
+    assert '"fused_calls": CONV_PREGATHER_LAYERS if row_fused else 0' in source
+    assert '"fused_layers": CONV_PREGATHER_LAYERS if row_fused else 0' in source

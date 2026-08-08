@@ -83,6 +83,7 @@ from fr13_fixed32_work_census import (  # noqa: E402
 )
 from fr13_fixed32_work_census import validate_event as validate_work_census_event  # noqa: E402
 from fr13_fixed32_work_census import (  # noqa: E402
+    assert_kernel_shape_attested,
     forward_graph_structural_signature,
 )
 from fr13_runtime_manifest import (  # noqa: E402
@@ -7084,6 +7085,9 @@ def validate_work_census_v5_report(
     forward_registry_keys = {
         "batch_size",
         "graph_signature",
+        "kernel_shape",
+        "fused_calls",
+        "fused_layers",
         "conv_layout_sha256",
         "captures",
         "capture_origin",
@@ -7234,17 +7238,38 @@ def validate_work_census_v5_report(
             batch = row["batch_size"]
             signature = row["graph_signature"]
             layout_signature = row["conv_layout_sha256"]
+            # Attested, never declared: the shape is whichever pinned
+            # canonical structure this row's own signature matches, and a row
+            # claiming a different one is rejected.
+            row_shape = assert_kernel_shape_attested(
+                row["kernel_shape"],
+                signature,
+                source=f"forward_graph_registries.{mode}[{index}]",
+            )
+            row_fused = row_shape == "sfwd_fused_conv_postprep"
             if (
                 type(batch) is not int
                 or batch not in expected_batches
                 or batch in forward_by_mode[mode]
                 or not isinstance(signature, str)
                 or re.fullmatch(r"[0-9a-f]{64}", signature) is None
-                or signature != forward_graph_structural_signature(batch)
+                or signature
+                != forward_graph_structural_signature(
+                    batch, kernel_shape=row_shape
+                )
                 or signature in signatures
-                or not isinstance(layout_signature, str)
-                or re.fullmatch(r"[0-9a-f]{64}", layout_signature) is None
-                or layout_signature in layout_signatures
+                or (
+                    # The fused route runs no staging kernel, so it publishes
+                    # no staging layout digest.
+                    layout_signature is not None
+                    if row_fused
+                    else (
+                        not isinstance(layout_signature, str)
+                        or re.fullmatch(r"[0-9a-f]{64}", layout_signature)
+                        is None
+                        or layout_signature in layout_signatures
+                    )
+                )
             ):
                 raise GateError(
                     f"{mode}: forward graph registry row {index} identity is invalid"
@@ -7265,20 +7290,26 @@ def validate_work_census_v5_report(
                 "batch_size": batch,
                 "captures": 1,
                 "capture_origin": "final_full",
-                "stage_calls": 1,
-                "stage_before_all_consumes": True,
+                "kernel_shape": row_shape,
+                "fused_calls": CONV_PREGATHER_LAYERS if row_fused else 0,
+                "fused_layers": CONV_PREGATHER_LAYERS if row_fused else 0,
+                # The fused kernel subsumes staging and consuming; both are
+                # pinned at zero so an arm that also took the unfused route
+                # cannot satisfy this row.
+                "stage_calls": 0 if row_fused else 1,
+                "stage_before_all_consumes": not row_fused,
                 "layers": CONV_PREGATHER_LAYERS,
                 "requests": batch,
-                "row_elems": CONV_PREGATHER_ROW_ELEMS,
-                "programs": expected_programs,
-                "ssi_pointer_entries": CONV_PREGATHER_LAYERS,
-                "ssi_groups": 3,
-                "source_validations": CONV_PREGATHER_LAYERS,
-                "staged_rows": CONV_PREGATHER_LAYERS * batch,
-                "consume_calls": CONV_PREGATHER_LAYERS,
-                "consume_hits": CONV_PREGATHER_LAYERS,
+                "row_elems": 0 if row_fused else CONV_PREGATHER_ROW_ELEMS,
+                "programs": 0 if row_fused else expected_programs,
+                "ssi_pointer_entries": 0 if row_fused else CONV_PREGATHER_LAYERS,
+                "ssi_groups": 0 if row_fused else 3,
+                "source_validations": 0 if row_fused else CONV_PREGATHER_LAYERS,
+                "staged_rows": 0 if row_fused else CONV_PREGATHER_LAYERS * batch,
+                "consume_calls": 0 if row_fused else CONV_PREGATHER_LAYERS,
+                "consume_hits": 0 if row_fused else CONV_PREGATHER_LAYERS,
                 "consume_fallbacks": 0,
-                "freshness_matches": CONV_PREGATHER_LAYERS,
+                "freshness_matches": 0 if row_fused else CONV_PREGATHER_LAYERS,
                 "measured_replays": histograms[mode][str(batch)][
                     "event_count"
                 ],
