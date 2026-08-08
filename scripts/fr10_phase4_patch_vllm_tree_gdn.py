@@ -7682,18 +7682,10 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
             "FR13 fixed32 event kernel shape drifted: "
             + repr((event["kernel_shape"], take_shape))
         )
-    take_fused = take_shape == "sfwd_fused_conv_postprep"
-    # Exactly one conv work section is published, and it is the one this
-    # arm's kernel shape names: the fused arm carries no conv_pregather
-    # section at all, so demanding one here rejects every fused event.
-    conv_work_sections = {
-        "conv_pregather": isinstance(event["conv_pregather"], dict),
-        "sfwd_conv_postprep": isinstance(event["sfwd_conv_postprep"], dict),
-    }
-    expected_conv_work_sections = {
-        "conv_pregather": not take_fused,
-        "sfwd_conv_postprep": take_fused,
-    }
+    # One resolver owns the shape-to-section mapping for every reader, so the
+    # seal and the record builder cannot drift apart. It raises its own
+    # self-naming error when the sections and the shape disagree.
+    _fr13_fixed32_observed_conv_work(event, "commit seal")
     shape_independent_sections = {
         name: isinstance(event[name], dict)
         for name in (
@@ -7712,7 +7704,6 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
         or not isinstance(event["forward_graph_id"], int)
         or not isinstance(event["forward_graph_signature"], str)
         or len(event["forward_graph_signature"]) != 64
-        or conv_work_sections != expected_conv_work_sections
         or not all(shape_independent_sections.values())
     ):
         raise RuntimeError(
@@ -7727,14 +7718,6 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
                     # usually the ones that pass, so a message carrying only
                     # them reads as a met requirement reported unmet.
                     "kernel_shape": take_shape,
-                    "conv_work_sections_expected": sorted(
-                        name
-                        for name, want in expected_conv_work_sections.items()
-                        if want
-                    ),
-                    "conv_work_sections_present": sorted(
-                        name for name, seen in conv_work_sections.items() if seen
-                    ),
                     "sections_absent": sorted(
                         name
                         for name, seen in shape_independent_sections.items()
@@ -7899,9 +7882,67 @@ def _fr13_fixed32_observed_kv(
     }
 
 
+def _fr13_fixed32_observed_conv_work(observed, label):
+    """Resolve the conv work section an observed record published.
+
+    Every reader of a record's conv work goes through here, so none of them
+    has to name a section literally. Exactly one of the two canonical
+    sections is published and it is the one the record's own kernel_shape
+    names: a record carrying both took both routes, one carrying neither
+    proves no shape, and both fail closed naming what was found.
+    """
+    shape = observed.get("kernel_shape")
+    if shape not in ("unfused_conv_pregather", "sfwd_fused_conv_postprep"):
+        raise RuntimeError(
+            "FR13 fixed32 observed kernel shape is not canonical at "
+            + str(label)
+            + ": "
+            + repr(shape)
+        )
+    fused = shape == "sfwd_fused_conv_postprep"
+    present = {
+        "conv_pregather": isinstance(observed.get("conv_pregather"), dict),
+        "sfwd_conv_postprep": isinstance(
+            observed.get("sfwd_conv_postprep"), dict
+        ),
+    }
+    expected = {
+        "conv_pregather": not fused,
+        "sfwd_conv_postprep": fused,
+    }
+    if present != expected:
+        raise RuntimeError(
+            "FR13 fixed32 observed conv work section does not match its "
+            "kernel shape at "
+            + str(label)
+            + ": "
+            + repr(
+                {
+                    "kernel_shape": shape,
+                    "expected": sorted(
+                        name for name, want in expected.items() if want
+                    ),
+                    "present": sorted(
+                        name for name, seen in present.items() if seen
+                    ),
+                }
+            )
+        )
+    name = "sfwd_conv_postprep" if fused else "conv_pregather"
+    route = (
+        "fused_conv_postprep_single_kernel"
+        if fused
+        else "in_graph_preconsume"
+    )
+    return shape, name, route
+
+
 def _fr13_fixed32_failure_counts(observed, taw):
     if not isinstance(observed, dict) or not isinstance(taw, dict):
         raise RuntimeError("FR13 fixed32 failure evidence is missing")
+    _conv_shape, conv_section, conv_route = _fr13_fixed32_observed_conv_work(
+        observed, "failure counts"
+    )
 
     def count(section, field):
         value = observed.get(section, {}).get(field)
@@ -7962,7 +8003,8 @@ def _fr13_fixed32_failure_counts(observed, taw):
                 "syncfree_target16_postsample_drafter1_postforward",
             ),
             ("conv_commit", "fixed32_direct_source_col0"),
-            ("conv_pregather", "in_graph_preconsume"),
+            # Resolved from the record's shape, never named literally.
+            (conv_section, conv_route),
             ("committer", "fixed16_device_fill_graph"),
         )
     )
@@ -7987,7 +8029,9 @@ def _fr13_fixed32_failure_counts(observed, taw):
                 ("request_key_pack", "fallback"),
                 ("kv_remap", "fallback"),
                 ("conv_commit", "fallback"),
-                ("conv_pregather", "consume_fallbacks"),
+                # Both shapes publish consume_fallbacks; only the section
+                # carrying it differs.
+                (conv_section, "consume_fallbacks"),
                 ("committer", "fallback"),
             )
         ) + route_mismatches,
@@ -8089,6 +8133,9 @@ def _fr13_fixed32_observed_build_record(
         raise RuntimeError(
             "FR13 fixed32 TAW payload is not canonical JSON"
         ) from exc
+    # The conv work section is shape-dependent, so it is resolved rather than
+    # listed: the rest of these are published by every shape.
+    _fr13_fixed32_observed_conv_work(observed, "observed record")
     for section in (
         "drafter",
         "drafter_runtime",
@@ -8096,7 +8143,6 @@ def _fr13_fixed32_observed_build_record(
         "accepted_path_pack",
         "request_key_pack",
         "conv_commit",
-        "conv_pregather",
         "committer",
         "kv_remap",
     ):

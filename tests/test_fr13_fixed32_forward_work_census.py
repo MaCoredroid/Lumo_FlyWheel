@@ -1213,6 +1213,7 @@ def _observed_take_runtime(*, fused: bool):
         "_fr13_fixed32_observed_take",
         "_fr13_fixed32_observed_current",
         "_fr13_fixed32_kernel_shape",
+        "_fr13_fixed32_observed_conv_work",
         "_fr13_fixed32_validate_forward_work",
     }
     definitions = [
@@ -1321,11 +1322,10 @@ def test_replay_provenance_rejects_the_other_shapes_section(
     with pytest.raises(RuntimeError) as caught:
         runtime["_fr13_fixed32_observed_take"]("hydra27_fixed32", 1, 0)
     message = str(caught.value)
-    assert "lacks one exact full-graph replay" in message
-    # The replay fields pass here, so the message must name the section that
-    # did not -- reporting only the passing fields is what misled the diag.
-    assert "conv_work_sections_expected" in message
-    assert "conv_work_sections_present" in message
+    # The replay fields all pass here, so the message must name the section
+    # that did not: reporting only the passing fields is what misled the diag.
+    assert "conv work section does not match its kernel shape" in message
+    assert "'expected'" in message and "'present'" in message
     assert "kernel_shape" in message
 
 
@@ -1336,3 +1336,225 @@ def test_replay_provenance_rejects_an_event_whose_shape_drifted() -> None:
     runtime["_FR13_FIXED32_OBSERVED_CURRENT"] = event
     with pytest.raises(RuntimeError, match="event kernel shape drifted"):
         runtime["_fr13_fixed32_observed_take"]("hydra27_fixed32", 1, 0)
+
+
+# --- every observed-section reader goes through the resolver -------------
+
+
+_TAW_EVIDENCE = {
+    "loop_iterations": 1,
+    "topology_cache_hit": True,
+    "cache_misses": 0,
+}
+
+
+def _conv_work_runtime(*, fused: bool):
+    """Exec the resolver and its two real callers out of the runtime."""
+    source = PATCHER.read_text(encoding="utf-8")
+    runtime = next(
+        node.value.value
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE"
+        and isinstance(node.value, ast.Constant)
+    )
+    wanted = {
+        "_fr13_fixed32_observed_conv_work",
+        "_fr13_fixed32_failure_counts",
+    }
+    definitions = [
+        node
+        for node in ast.parse(runtime).body
+        if isinstance(node, ast.FunctionDef) and node.name in wanted
+    ]
+    assert {node.name for node in definitions} == wanted
+    namespace: dict[str, object] = {
+        "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION": fused,
+    }
+    exec(
+        compile(
+            ast.Module(body=definitions, type_ignores=[]),
+            "<conv-work>",
+            "exec",
+        ),
+        namespace,
+    )
+    return namespace
+
+
+def _observed_record(*, fused: bool, batch: int = 1) -> dict[str, object]:
+    """One observed record as _fr13_fixed32_observed_take returns it."""
+    record: dict[str, object] = {
+        "mode": "hydra27_fixed32",
+        "batch_size": batch,
+        "kernel_shape": (
+            "sfwd_fused_conv_postprep" if fused else "unfused_conv_pregather"
+        ),
+        "conv_pregather": (
+            None
+            if fused
+            else {"route": "in_graph_preconsume", "consume_fallbacks": 0}
+        ),
+        "sfwd_conv_postprep": (
+            {
+                "route": "fused_conv_postprep_single_kernel",
+                "consume_fallbacks": 0,
+            }
+            if fused
+            else None
+        ),
+        "output_publish": {
+            "route": "device_fixed32",
+            "fallback": 0,
+            "capacity": 64,
+        },
+        "accepted_path_pack": {
+            "route": "device_fixed16",
+            "fallback": 0,
+            "capacity": 64,
+            "overflow": 0,
+        },
+        "request_key_pack": {"route": "device_rowmap", "fallback": 0},
+        "kv_remap": {
+            "route": "syncfree_target16_postsample_drafter1_postforward",
+            "fallback": 0,
+        },
+        "conv_commit": {
+            "route": "fixed32_direct_source_col0",
+            "fallback": 0,
+        },
+        "committer": {
+            "route": "fixed16_device_fill_graph",
+            "fallback": 0,
+            "overflow": 0,
+            "graph_dead": 0,
+            "graph_replays": 1,
+            "graph_captures": 0,
+        },
+        "batch_purity": {
+            "batch_rows": batch,
+            "spec_rows": batch,
+            "physical_draft_counts": [31] * batch,
+            "mixed_pseudo_rows": 0,
+            "all_physical_31": True,
+        },
+    }
+    return record
+
+
+@pytest.mark.parametrize("fused", (False, True))
+def test_the_resolver_names_the_section_for_each_shape(fused: bool) -> None:
+    runtime = _conv_work_runtime(fused=fused)
+    shape, section, route = runtime["_fr13_fixed32_observed_conv_work"](
+        _observed_record(fused=fused), "test"
+    )
+    assert shape == (
+        "sfwd_fused_conv_postprep" if fused else "unfused_conv_pregather"
+    )
+    assert section == (
+        "sfwd_conv_postprep" if fused else "conv_pregather"
+    )
+    assert route == (
+        "fused_conv_postprep_single_kernel"
+        if fused
+        else "in_graph_preconsume"
+    )
+
+
+@pytest.mark.parametrize("fused", (False, True))
+def test_failure_counts_reads_the_published_section_under_both_shapes(
+    fused: bool,
+) -> None:
+    """Regression: the fused record has no conv_pregather to .get() into."""
+    runtime = _conv_work_runtime(fused=fused)
+    counts = runtime["_fr13_fixed32_failure_counts"](
+        _observed_record(fused=fused),
+        _TAW_EVIDENCE,
+    )
+    # No route mismatch and no fallback: the resolver pointed the reader at
+    # the section this shape actually published.
+    assert counts["fallback"] == 0
+    assert counts["overflow"] == 0
+    assert counts["graph_dead"] == 0
+
+
+@pytest.mark.parametrize("fused", (False, True))
+def test_readers_reject_a_record_carrying_the_other_shapes_section(
+    fused: bool,
+) -> None:
+    runtime = _conv_work_runtime(fused=fused)
+    record = _observed_record(fused=fused)
+    record["conv_pregather"], record["sfwd_conv_postprep"] = (
+        record["sfwd_conv_postprep"],
+        record["conv_pregather"],
+    )
+    with pytest.raises(
+        RuntimeError, match="conv work section does not match its kernel shape"
+    ):
+        runtime["_fr13_fixed32_observed_conv_work"](record, "test")
+    with pytest.raises(
+        RuntimeError, match="conv work section does not match its kernel shape"
+    ):
+        runtime["_fr13_fixed32_failure_counts"](
+            record, _TAW_EVIDENCE
+        )
+
+
+def test_readers_reject_a_record_carrying_both_or_neither_section() -> None:
+    runtime = _conv_work_runtime(fused=True)
+    both = _observed_record(fused=True)
+    both["conv_pregather"] = {
+        "route": "in_graph_preconsume",
+        "consume_fallbacks": 0,
+    }
+    neither = _observed_record(fused=True)
+    neither["sfwd_conv_postprep"] = None
+    for record in (both, neither):
+        with pytest.raises(
+            RuntimeError,
+            match="conv work section does not match its kernel shape",
+        ):
+            runtime["_fr13_fixed32_observed_conv_work"](record, "test")
+
+
+@pytest.mark.parametrize("shape", ("fused", "", None, "conv_pregather"))
+def test_readers_reject_a_non_canonical_observed_kernel_shape(shape) -> None:
+    runtime = _conv_work_runtime(fused=True)
+    record = _observed_record(fused=True)
+    record["kernel_shape"] = shape
+    with pytest.raises(
+        RuntimeError, match="observed kernel shape is not canonical"
+    ):
+        runtime["_fr13_fixed32_observed_conv_work"](record, "test")
+
+
+def test_no_reader_names_a_conv_work_section_literally() -> None:
+    """By construction: the fixed section lists carry no conv work name.
+
+    Every literal that remains is a writer, the resolver itself, or a
+    manifest read that already branches on shape. A reader that iterates a
+    hardcoded section tuple is what broke the last two boots.
+    """
+    source = PATCHER.read_text(encoding="utf-8")
+    runtime = next(
+        node.value.value
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE"
+        and isinstance(node.value, ast.Constant)
+    )
+    sections = {"conv_pregather", "sfwd_conv_postprep"}
+    offenders = []
+    for node in ast.walk(ast.parse(runtime)):
+        if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+            for element in node.elts:
+                if (
+                    isinstance(element, ast.Constant)
+                    and element.value in sections
+                ):
+                    offenders.append((element.lineno, element.value))
+    assert offenders == [], offenders
