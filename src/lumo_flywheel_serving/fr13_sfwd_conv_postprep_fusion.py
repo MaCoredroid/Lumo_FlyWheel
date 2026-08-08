@@ -1264,6 +1264,8 @@ class _Fixed32SfwdConvPostprepCaptureBinding:
         "committer_route",
         "committer_state",
         "profile_capture",
+        "capture_guard_ok",
+        "committer_sticky_guard",
     )
 
     def __init__(
@@ -1277,6 +1279,8 @@ class _Fixed32SfwdConvPostprepCaptureBinding:
         pregather_state: dict,
         committer_route: dict,
         committer_state: dict,
+        capture_guard_ok: torch.Tensor,
+        committer_sticky_guard: bool = False,
         profile_capture: bool = False,
     ) -> None:
         self.auth = _CAPTURE_BINDING_AUTH
@@ -1289,7 +1293,53 @@ class _Fixed32SfwdConvPostprepCaptureBinding:
         self.pregather_state = pregather_state
         self.committer_route = committer_route
         self.committer_state = committer_state
+        self.capture_guard_ok = capture_guard_ok
+        self.committer_sticky_guard = bool(committer_sticky_guard)
         self.profile_capture = bool(profile_capture)
+
+
+def _capture_guard_scalar(device: torch.device) -> torch.Tensor:
+    """Allocate the persistent int32 sentinel the captured fusion writes."""
+    return torch.ones((), dtype=torch.int32, device=device)
+
+
+def _capture_runtime_guard(committer_sticky_guard: bool) -> str:
+    """Name the sentinel the captured fusion poisons on an invalid replay.
+
+    Out-of-bounds safety never depends on this: the kernel clamps the bank row
+    before every load. The sentinel only exists so an invalid replay can fail
+    the committer's async assertion permanently, which requires the committer
+    to have armed its own sticky guard.
+    """
+    return (
+        "persistent_sticky_committer_scalar"
+        if committer_sticky_guard
+        else "persistent_fusion_owned_scalar"
+    )
+
+
+def fixed32_sfwd_conv_postprep_capture_runtime_guard(
+    *, committer_route: object
+) -> str:
+    """Name the capture sentinel a committer route implies.
+
+    The preseed evidence and the patcher's post-capture assertion must agree on
+    this string; deriving both from one helper keeps them from drifting apart.
+    """
+    if not isinstance(committer_route, dict):
+        raise TypeError("fixed32 conv/post-prep committer route must be a dict")
+    states = committer_route.get("states_by_batch")
+    if not isinstance(states, dict) or not states:
+        raise RuntimeError(
+            "fixed32 conv/post-prep committer route has no per-batch states"
+        )
+    armed = {bool(state.get("sticky_guard")) for state in states.values()}
+    if len(armed) != 1:
+        raise RuntimeError(
+            "fixed32 conv/post-prep committer sticky guard is split across "
+            "batches"
+        )
+    return _capture_runtime_guard(armed.pop())
 
 
 def _capture_preseed_contract(
@@ -1338,26 +1388,46 @@ def _capture_preseed_contract(
         raise RuntimeError(
             "fixed32 conv/post-prep capture binding persistent preseed drifted"
         )
+    sticky_guard = None
     for batch in batches:
         state = states_by_batch[batch]
         sticky_ok = state.get("sticky_guard_ok")
-        if (
-            state.get("direct_metadata") is not True
-            or state.get("sticky_guard") is not True
-            or state.get("contract", {}).get("sticky_guard_route")
-            != "fixed32_ownerpath_warp32_sticky_scalar_v5"
-            or not torch.is_tensor(sticky_ok)
-            or sticky_ok.dtype != torch.int32
-            or tuple(sticky_ok.shape) != ()
-            or not sticky_ok.is_contiguous()
-            or int(sticky_ok.data_ptr())
-            != int(state.get("sticky_guard_ok_data_ptr", -1))
-        ):
-            raise RuntimeError(
-                "fixed32 conv/post-prep capture binding requires the persistent "
-                f"sticky guard for B={batch}"
+        contract = state.get("contract", {})
+        # The committer's sticky guard is an opt-in arm
+        # (FR13_FIXED32_COMMITTER_STICKY_GUARD, itself gated behind direct
+        # persistent metadata and committer layer batching). No fixed32 serving
+        # launcher arms it, so demanding it here made the FULL-graph capture
+        # preseed unsatisfiable. Require *coherence* with whatever the route
+        # actually armed instead, and fail loud on a half-armed state or on a
+        # route whose batches disagree.
+        armed = state.get("sticky_guard")
+        if armed is True:
+            coherent = (
+                state.get("direct_metadata") is True
+                and contract.get("sticky_guard_route")
+                == "fixed32_ownerpath_warp32_sticky_scalar_v5"
+                and torch.is_tensor(sticky_ok)
+                and sticky_ok.dtype == torch.int32
+                and tuple(sticky_ok.shape) == ()
+                and sticky_ok.is_contiguous()
+                and int(sticky_ok.data_ptr())
+                == int(state.get("sticky_guard_ok_data_ptr", -1))
             )
-    return capacity, ssi_sources, conv_banks, source_stages
+        elif armed is False:
+            coherent = (
+                contract.get("sticky_guard_route") == "stock_bool_vector_v4"
+                and sticky_ok is None
+                and state.get("sticky_guard_ok_data_ptr") is None
+            )
+        else:
+            coherent = False
+        if not coherent or (sticky_guard is not None and armed is not sticky_guard):
+            raise RuntimeError(
+                "fixed32 conv/post-prep capture binding requires a coherent "
+                f"committer sticky guard for B={batch}"
+            )
+        sticky_guard = armed
+    return capacity, ssi_sources, conv_banks, source_stages, bool(sticky_guard)
 
 
 def preseed_fixed32_sfwd_conv_postprep_capture_bindings(
@@ -1375,7 +1445,13 @@ def preseed_fixed32_sfwd_conv_postprep_capture_bindings(
         raise TypeError("fixed32 conv/post-prep requires 48 ordered layer objects")
     if not isinstance(pregather_state, dict) or not isinstance(committer_route, dict):
         raise TypeError("fixed32 conv/post-prep persistent states must be dicts")
-    capacity, ssi_sources, conv_banks, source_stages = _capture_preseed_contract(
+    (
+        capacity,
+        ssi_sources,
+        conv_banks,
+        source_stages,
+        committer_sticky_guard,
+    ) = _capture_preseed_contract(
         layer_order=order,
         pregather_state=pregather_state,
         committer_route=committer_route,
@@ -1451,8 +1527,23 @@ def preseed_fixed32_sfwd_conv_postprep_capture_bindings(
             "bound_output_views": LAYERS * capacity * 6,
             "capture_host_syncs_per_layer": 0,
             "ssi_value_proof": "persistent_pregather_boot_selfcheck",
-            "runtime_guard": "persistent_sticky_committer_scalar",
+            "runtime_guard": _capture_runtime_guard(committer_sticky_guard),
         }
+    # One persistent sentinel per batch, shared by all 48 layers exactly as the
+    # committer's own sticky scalar is. When the committer armed its sticky
+    # guard we bind that very tensor so an invalid replay poisons the
+    # committer's existing async assertion; otherwise the fusion owns the
+    # sentinel so the captured kernel keeps an identical specialization
+    # (CAPTURE_GUARD=True) and a valid, pointer-stable store target.
+    guard_device = source_stages[0].device
+    capture_guards = {
+        batch: (
+            states_by_batch[batch]["sticky_guard_ok"]
+            if committer_sticky_guard
+            else _capture_guard_scalar(guard_device)
+        )
+        for batch in expected_batches
+    }
     pending: list[tuple[object, dict[str, object]]] = []
     output_tensors = 0
     output_views = 0
@@ -1549,7 +1640,7 @@ def preseed_fixed32_sfwd_conv_postprep_capture_bindings(
                 g,
                 beta,
                 source_stage,
-                states_by_batch[batch]["sticky_guard_ok"],
+                capture_guards[batch],
             )
             binding = _Fixed32SfwdConvPostprepCaptureBinding(
                 batch_size=batch,
@@ -1560,6 +1651,8 @@ def preseed_fixed32_sfwd_conv_postprep_capture_bindings(
                 pregather_state=pregather_state,
                 committer_route=committer_route,
                 committer_state=states_by_batch[batch],
+                capture_guard_ok=capture_guards[batch],
+                committer_sticky_guard=committer_sticky_guard,
             )
             by_batch[batch] = {
                 "query": query,
@@ -1599,7 +1692,7 @@ def preseed_fixed32_sfwd_conv_postprep_capture_bindings(
         "bound_output_views": output_views,
         "capture_host_syncs_per_layer": 0,
         "ssi_value_proof": "persistent_pregather_boot_selfcheck",
-        "runtime_guard": "persistent_sticky_committer_scalar",
+        "runtime_guard": _capture_runtime_guard(committer_sticky_guard),
     }
 
 
@@ -1844,6 +1937,8 @@ def preseed_fixed32_sfwd_conv_postprep_profile_capture_bindings(
                 pregather_state=profile_state,
                 committer_route=profile_route,
                 committer_state=states_by_batch[batch],
+                capture_guard_ok=states_by_batch[batch]["sticky_guard_ok"],
+                committer_sticky_guard=False,
                 profile_capture=True,
             )
             by_batch[batch] = {
@@ -1941,7 +2036,7 @@ def _validate_capture_binding(
         g,
         beta,
         source_stage,
-        binding.committer_state.get("sticky_guard_ok"),
+        binding.capture_guard_ok,
     )
     if any(
         current is not bound
@@ -2003,10 +2098,19 @@ def _validate_capture_binding(
         or pregather_state["source_stagings"][layer_index] is not source_stage
         or committer_route["states_by_batch"].get(binding.batch_size)
         is not committer_state
-        or committer_state.get("direct_metadata") is not True
-        or committer_state.get("sticky_guard") is not True
-        or int(committer_state["sticky_guard_ok"].data_ptr())
-        != int(committer_state.get("sticky_guard_ok_data_ptr", -1))
+        # The committer must not re-arm (or disarm) its sticky guard behind a
+        # live binding: the captured graph writes whichever sentinel was bound.
+        or committer_state.get("sticky_guard") is not binding.committer_sticky_guard
+        or (
+            binding.committer_sticky_guard
+            and (
+                committer_state.get("direct_metadata") is not True
+                or committer_state.get("sticky_guard_ok")
+                is not binding.capture_guard_ok
+                or int(committer_state["sticky_guard_ok"].data_ptr())
+                != int(committer_state.get("sticky_guard_ok_data_ptr", -1))
+            )
+        )
     ):
         raise RuntimeError(
             "fixed32 conv/post-prep persistent capture lease changed"
@@ -2360,7 +2464,7 @@ def launch_fixed32_sfwd_conv_postprep_fusion(
     bias_arg = bias if bias is not None else x
     conv_tap_arg = conv_tap if conv_tap is not None else query
     sticky_guard_arg = (
-        capture_binding.committer_state["sticky_guard_ok"]
+        capture_binding.capture_guard_ok
         if capture_binding is not None
         else spec_state_indices
     )

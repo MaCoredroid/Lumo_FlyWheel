@@ -763,7 +763,9 @@ def test_launcher_requires_opaque_capture_binding_and_has_one_launch() -> None:
     assert "capture_binding is None and capturing" in launcher_source
     assert "_validate_capture_binding(" in launcher_source
     assert "state_indices_prevalidated=capture_binding is not None" in launcher_source
-    assert 'capture_binding.committer_state["sticky_guard_ok"]' in launcher_source
+    # The sentinel comes from the binding, not straight from the committer
+    # state: it is the committer's sticky scalar only when that arm is on.
+    assert "capture_binding.capture_guard_ok" in launcher_source
     assert "BANK_ROWS=int(conv_state.size(0))" in launcher_source
     assert "CAPTURE_GUARD=capture_binding is not None" in launcher_source
     assert "gate_tasks = triton.cdiv" in launcher_source
@@ -854,6 +856,180 @@ def test_profile_preseed_seals_all_48_b1_output_bindings(
         layer._fr13_fixed32_sfwd_conv_postprep_outputs is None
         for layer in layers
     )
+
+
+def _capture_contract_states(
+    *, sticky_guard: bool, batches: tuple[int, ...] = (1,)
+) -> tuple[dict, dict]:
+    """Build a pregather/committer pair shaped like the live fixed32 route."""
+    order = tuple(f"model.layers.{index}.linear_attn" for index in range(48))
+    spec_state_indices = torch.zeros((1, 1), dtype=torch.int32)
+    pregather = {
+        "max_batch_size": batches[-1],
+        "layer_order": order,
+        "preseeded_batches": batches,
+        "live_selfchecked_batches": batches,
+        "ssi_sources": tuple(object() for _ in order),
+        "banks": tuple(object() for _ in order),
+        "source_stagings": tuple(object() for _ in order),
+        "mode": "hydra27_fixed32",
+        "commit_spec_state_indices": spec_state_indices,
+        "contract": {
+            "commit_route": "fixed32_direct_source_col0",
+            "commit_row_guard_route": (
+                "fixed32_triton_alias3_ownerpath_warp32_physical32_v4"
+            ),
+            "commit_row_guard_physical_rows": candidate.ROWS,
+        },
+    }
+    states_by_batch = {}
+    for batch in batches:
+        if sticky_guard:
+            sticky_ok = torch.ones((), dtype=torch.int32)
+            states_by_batch[batch] = {
+                "direct_metadata": True,
+                "sticky_guard": True,
+                "sticky_guard_ok": sticky_ok,
+                "sticky_guard_ok_data_ptr": int(sticky_ok.data_ptr()),
+                "contract": {
+                    "sticky_guard_route": (
+                        "fixed32_ownerpath_warp32_sticky_scalar_v5"
+                    ),
+                },
+            }
+        else:
+            states_by_batch[batch] = {
+                "direct_metadata": False,
+                "sticky_guard": False,
+                "sticky_guard_ok": None,
+                "sticky_guard_ok_data_ptr": None,
+                "contract": {"sticky_guard_route": "stock_bool_vector_v4"},
+            }
+    committer = {
+        "mode": "hydra27_fixed32",
+        "capacity": batches[-1],
+        "spec_state_indices": spec_state_indices,
+        "states_by_batch": states_by_batch,
+    }
+    return pregather, committer
+
+
+@pytest.mark.parametrize("sticky_guard", (False, True))
+def test_capture_preseed_contract_follows_the_committer_sticky_arm(
+    monkeypatch: pytest.MonkeyPatch,
+    sticky_guard: bool,
+) -> None:
+    """The FULL-capture preseed must not demand an arm nobody sets.
+
+    FR13_FIXED32_COMMITTER_STICKY_GUARD is opt-in and sits behind direct
+    persistent metadata and committer layer batching; no fixed32 serving
+    launcher arms any of the three. Demanding it made the FULL-graph capture
+    preseed unsatisfiable and killed EngineCore init on 2026-08-08
+    (container 73fb69b2e6d2, "requires the persistent sticky guard for B=1").
+    """
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    pregather, committer = _capture_contract_states(sticky_guard=sticky_guard)
+    order = tuple(pregather["layer_order"])
+    (
+        capacity,
+        ssi_sources,
+        conv_banks,
+        source_stages,
+        armed,
+    ) = candidate._capture_preseed_contract(
+        layer_order=order,
+        pregather_state=pregather,
+        committer_route=committer,
+    )
+    assert capacity == 1
+    assert len(ssi_sources) == len(conv_banks) == len(source_stages) == 48
+    assert armed is sticky_guard
+    assert candidate.fixed32_sfwd_conv_postprep_capture_runtime_guard(
+        committer_route=committer
+    ) == (
+        "persistent_sticky_committer_scalar"
+        if sticky_guard
+        else "persistent_fusion_owned_scalar"
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        {"sticky_guard": True},  # claims armed, keeps unarmed route/scalar
+        {"sticky_guard_ok": torch.ones((), dtype=torch.int32)},
+        {"sticky_guard_ok_data_ptr": 1},
+        {"contract": {"sticky_guard_route": "fixed32_ownerpath_warp32_sticky_scalar_v5"}},
+        {"sticky_guard": None},
+    ),
+)
+def test_capture_preseed_contract_rejects_half_armed_sticky_guard(
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: dict[str, object],
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    pregather, committer = _capture_contract_states(sticky_guard=False)
+    committer["states_by_batch"][1].update(mutation)
+    with pytest.raises(RuntimeError, match="coherent committer sticky guard"):
+        candidate._capture_preseed_contract(
+            layer_order=tuple(pregather["layer_order"]),
+            pregather_state=pregather,
+            committer_route=committer,
+        )
+
+
+def test_capture_preseed_contract_rejects_split_sticky_arm_across_batches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    pregather, committer = _capture_contract_states(
+        sticky_guard=False, batches=(1, 2)
+    )
+    armed = _capture_contract_states(sticky_guard=True, batches=(1,))[1]
+    committer["states_by_batch"][2] = armed["states_by_batch"][1]
+    with pytest.raises(RuntimeError, match="coherent committer sticky guard"):
+        candidate._capture_preseed_contract(
+            layer_order=tuple(pregather["layer_order"]),
+            pregather_state=pregather,
+            committer_route=committer,
+        )
+    with pytest.raises(RuntimeError, match="sticky guard is split"):
+        candidate.fixed32_sfwd_conv_postprep_capture_runtime_guard(
+            committer_route=committer
+        )
+
+
+def test_capture_binding_requires_an_explicit_capture_guard() -> None:
+    """Every binding carries the sentinel the captured kernel will write."""
+    assert (
+        "capture_guard_ok"
+        in candidate._Fixed32SfwdConvPostprepCaptureBinding.__slots__
+    )
+    guard = torch.ones((), dtype=torch.int32)
+    binding = candidate._Fixed32SfwdConvPostprepCaptureBinding(
+        batch_size=1,
+        capacity=1,
+        layer_index=0,
+        layer_name="model.layers.0.linear_attn",
+        operands=(guard,),
+        pregather_state={},
+        committer_route={},
+        committer_state={},
+        capture_guard_ok=guard,
+    )
+    assert binding.capture_guard_ok is guard
+    assert binding.committer_sticky_guard is False
+    with pytest.raises(TypeError):
+        candidate._Fixed32SfwdConvPostprepCaptureBinding(
+            batch_size=1,
+            capacity=1,
+            layer_index=0,
+            layer_name="model.layers.0.linear_attn",
+            operands=(guard,),
+            pregather_state={},
+            committer_route={},
+            committer_state={},
+        )
 
 
 def _profile_probe_layers(count: int = 48) -> list[types.SimpleNamespace]:

@@ -2615,6 +2615,10 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
         sfwd_preseed = globals().get(
             "_FR13_FIXED32_SFWD_CONV_POSTPREP_PRESEED"
         )
+        from lumo_flywheel_serving.fr13_sfwd_conv_postprep_fusion import (
+            fixed32_sfwd_conv_postprep_capture_runtime_guard as _fr13_sfwd_guard,
+        )
+
         sfwd_expected = {
             "ready": True,
             "schema": "fr13.fixed32.sfwd_conv_postprep.capture_cache.v1",
@@ -2625,7 +2629,14 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
             "bound_output_views": 48 * capacity * 6,
             "capture_host_syncs_per_layer": 0,
             "ssi_value_proof": "persistent_pregather_boot_selfcheck",
-            "runtime_guard": "persistent_sticky_committer_scalar",
+            # The committer's sticky guard is an opt-in arm no fixed32 serving
+            # launcher sets, so the sentinel the captured fusion poisons is
+            # fusion-owned there. Derive the name instead of pinning it.
+            "runtime_guard": _fr13_sfwd_guard(
+                committer_route=getattr(
+                    _fr13_f32_kernel, "_FR13_FIXED32_COMMITTER_FAST_ROUTE", {}
+                ).get("state"),
+            ),
         }
         if sfwd_preseed != sfwd_expected:
             raise RuntimeError(
