@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -495,6 +497,138 @@ def test_diag_smoke_python_blocks_compile() -> None:
             lines.pop(0)
         assert lines, f"block {index} has no python body"
         compile("\n".join(lines) + "\n", f"<diag block {index}>", "exec")
+
+
+def _smoke_sampling() -> dict[str, float | int]:
+    """The sampling shape the shared env hands the smoke driver."""
+    types = {
+        "temperature": float,
+        "top_p": float,
+        "top_k": int,
+        "presence_penalty": float,
+        "min_p": float,
+    }
+    shape: dict[str, float | int] = {}
+    for entry in _shared_env_array("FR13_FIXED32_SFWD_FUSION_SMOKE_SAMPLING"):
+        key, _, value = ast.literal_eval(entry).partition("=")
+        shape[key] = types[key](value)
+    return shape
+
+
+def test_smoke_sampling_matches_the_campaign_proxy_pins() -> None:
+    """The screen bypasses the proxy, so it must carry what the proxy stamps.
+
+    The pair's bodies are normalised by inference_proxy from LUMO_PROXY_FORCE_*;
+    the screen freezes the driver before that proxy exists and talks to the
+    engine directly. These values are those pins, read from the helper that
+    launches the campaign's proxy, so a campaign that re-pins its sampling fails
+    this suite instead of quietly leaving the screen testing another engine.
+    """
+    helper = (
+        ROOT / "scripts" / "swe_x86_helpers" / "relaunch_proxy_remote.sh"
+    ).read_text(encoding="utf-8")
+    pins = {
+        "temperature": "LUMO_PROXY_FORCE_TEMPERATURE",
+        "top_p": "LUMO_PROXY_FORCE_TOP_P",
+        "top_k": "LUMO_PROXY_FORCE_TOP_K",
+        "presence_penalty": "LUMO_PROXY_FORCE_PRESENCE_PENALTY",
+        "min_p": "LUMO_PROXY_FORCE_MIN_P",
+    }
+    sampling = _smoke_sampling()
+    assert sorted(sampling) == sorted(pins)
+    for key, env_name in pins.items():
+        match = re.search(
+            rf"^[ \t]*export {env_name}=\$\{{{env_name}:-([^}}]*)\}}$",
+            helper,
+            re.MULTILINE,
+        )
+        assert match is not None, f"{env_name} default not found in {helper!r}"[:120]
+        assert float(match.group(1)) == float(sampling[key]), key
+    # The qwen sampling profile is the default-ON path; only the lossless A/B
+    # gate opts out, and the screen is not that gate.
+    assert '"${LUMO_PROXY_QWEN_SAMPLING:-1}" = "1"' in helper
+    # And the campaign driver's own temperature pin agrees.
+    variant = VARIANT.read_text(encoding="utf-8")
+    assert 'LUMO_PROXY_FORCE_TEMPERATURE="${DEPLOY_FORCE_TEMP:-0.6}"' in variant
+    assert sampling["temperature"] == 0.6
+
+
+def test_smoke_sampling_is_what_the_proxy_would_have_stamped() -> None:
+    """Compare against the production normaliser rather than a second opinion."""
+    from lumo_flywheel_serving.inference_proxy import (
+        normalize_chat_completions_request_payload,
+    )
+
+    campaign_env = {
+        "LUMO_PROXY_FORCE_TEMPERATURE": "0.6",
+        "LUMO_PROXY_FORCE_TOP_P": "0.95",
+        "LUMO_PROXY_FORCE_TOP_K": "20",
+        "LUMO_PROXY_FORCE_PRESENCE_PENALTY": "1.0",
+        "LUMO_PROXY_FORCE_MIN_P": "0",
+        "LUMO_PROXY_MAX_OUTPUT_TOKENS": "32768",
+    }
+    base = {"model": "qwen3.6-27b", "messages": [], "max_tokens": 96, "stream": False}
+    with mock.patch.dict(os.environ, campaign_env, clear=False):
+        stamped = normalize_chat_completions_request_payload(base)
+    sampling = _smoke_sampling()
+    assert {key: stamped[key] for key in sampling} == sampling
+    # The screen's short generations survive the campaign's output cap untouched.
+    assert stamped["max_tokens"] == 96
+
+
+def test_smoke_refuses_a_greedy_or_partial_sampling_shape(tmp_path: Path) -> None:
+    """fixed32 refuses greedy decoding, and refusing it late costs the engine.
+
+    temperature 0.0 makes the rejection sampler raise "FR13 fixed32 requires
+    sampled temp>0" before the proposal seal, which kills EngineCore and answers
+    with a bare 500 -- the 2026-08-08 failure. The driver refuses first, where
+    the message survives and no engine dies to deliver it.
+    """
+    source = DIAG.read_text(encoding="utf-8")
+    lines = re.findall(r"<<'PY'.*?\n(.*?)\nPY\n", source, re.DOTALL)[3].splitlines()
+    while not lines[0].startswith("import "):
+        lines.pop(0)
+    driver = tmp_path / "driver.py"
+    driver.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def run(*sampling: str) -> subprocess.CompletedProcess:
+        # Validation precedes every network call, so no engine is needed.
+        return subprocess.run(
+            [sys.executable, str(driver), "secret", "subset", "task", "9950",
+             "model", "1", "96", "record", "evidence", *sampling],
+            capture_output=True,
+            text=True,
+        )
+
+    good = [f"{key}={value}" for key, value in _smoke_sampling().items()]
+    greedy = run(*[e if not e.startswith("temperature=") else "temperature=0.0"
+                   for e in good])
+    assert greedy.returncode != 0
+    assert "temperature must be > 0" in greedy.stdout + greedy.stderr
+
+    partial = run("temperature=0.6", "top_p=0.95")
+    assert partial.returncode != 0
+    assert "incomplete" in partial.stdout + partial.stderr
+
+    unknown = run(*good, "repetition_penalty=1.2")
+    assert unknown.returncode != 0
+    assert "not usable" in unknown.stdout + unknown.stderr
+
+    # The full shape gets past validation and fails later, on the network.
+    ok = run(*good)
+    assert "sampling" not in ok.stdout + ok.stderr
+
+
+def test_smoke_payload_carries_the_shape_and_no_hardcoded_greedy() -> None:
+    code = _strip_comments(DIAG.read_text(encoding="utf-8"))
+    assert "**sampling," in code
+    assert '"temperature": 0.0' not in code
+    assert "FR13_FIXED32_SFWD_FUSION_SMOKE_SAMPLING[@]" in code
+    # The shape reaches the runroot, so a run can be read back for what it sent.
+    assert '"sampling": sampling,' in code
+    assert "sampling=sampling," in code
+    # The contract's raise site is swept like the other runtime validators.
+    assert "requires sampled temp>0" in SHARED_ENV.read_text(encoding="utf-8")
 
 
 def _diag_function(name: str) -> str:

@@ -24,6 +24,17 @@
 # minutes into the pair. The smoke costs ~1-2 minutes and is the difference
 # between "it booted" and "it can serve".
 #
+# Those completions carry the campaign's sampling shape (temperature 0.6,
+# top_p 0.95, top_k 20, presence_penalty 1.0, min_p 0), which the shared env
+# owns and a test binds to the proxy relaunch helper's defaults. The pair gets
+# them stamped on by the offload proxy; the screen freezes the driver before
+# that proxy exists and talks to the engine directly, so it has to carry them
+# itself. It is not optional dressing: fixed32 refuses greedy decoding, and the
+# temperature 0.0 the first smoke sent raised "FR13 fixed32 requires sampled
+# temp>0" inside the rejection sampler, killed EngineCore before the proposal
+# seal, and returned a bare 500. Only max_tokens is deliberately unlike the
+# pair's, and only because a screen has no reason to pay for long generations.
+#
 # This produces NO citable evidence. classification=diagnostic_boot_only.
 # It does not measure timing and cannot promote anything.
 set -euo pipefail
@@ -630,6 +641,7 @@ if [[ "$FR13_BOOT_DIAG_SMOKE" == "1" ]]; then
   PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" - \
     "$SMOKE_SECRET" "$SUBSET" "$SMOKE_TASK_ID" "$SMOKE_PORT" "$SMOKE_MODEL" \
     "$SMOKE_REQUESTS" "$SMOKE_MAX_TOKENS" "$SMOKE_RECORD" "$SMOKE_EVIDENCE" \
+    "${FR13_FIXED32_SFWD_FUSION_SMOKE_SAMPLING[@]}" \
     > "$SMOKE_LOG" 2>&1 <<'PY' \
     || { SMOKE_SENT=$(grep -c '^smoke request ' "$SMOKE_LOG" || true); \
          SMOKE_OK=$(grep -c '^smoke response ok ' "$SMOKE_LOG" || true); \
@@ -667,10 +679,39 @@ from lumo_flywheel_serving.inference_proxy import (
     max_tokens_text,
     record_path,
     evidence_path,
+    *sampling_argv,
 ) = sys.argv
 port = int(port_text)
 count = int(count_text)
 max_tokens = int(max_tokens_text)
+
+# The campaign's sampling shape, passed in from the shared env. The pair gets
+# these stamped on by the offload proxy; the screen bypasses the proxy, so it
+# has to carry them itself or it is not screening the pair's engine at all.
+SAMPLING_TYPES = {
+    "temperature": float,
+    "top_p": float,
+    "top_k": int,
+    "presence_penalty": float,
+    "min_p": float,
+}
+sampling = {}
+for entry in sampling_argv:
+    key, sep, value = entry.partition("=")
+    if not sep or key not in SAMPLING_TYPES or key in sampling:
+        raise SystemExit(f"smoke sampling entry is not usable: {entry!r}")
+    sampling[key] = SAMPLING_TYPES[key](value)
+if sorted(sampling) != sorted(SAMPLING_TYPES):
+    raise SystemExit(f"smoke sampling shape is incomplete: {sampling!r}")
+# fixed32 refuses greedy decoding: temp 0 makes the rejection sampler raise
+# "FR13 fixed32 requires sampled temp>0" before the proposal seal and take
+# EngineCore down with it. Refuse here, where the message survives, rather than
+# discovering it as a bare 500 from a dead engine.
+if not sampling["temperature"] > 0:
+    raise SystemExit(
+        "fixed32 requires sampled decoding: smoke temperature must be > 0, "
+        f"got {sampling['temperature']!r}"
+    )
 
 
 def record(event, **fields):
@@ -749,7 +790,13 @@ served = 0
 for index in range(count):
     wire_id = "fr13-chat-" + secrets.token_hex(16)
     print(f"smoke request {index} max_tokens={max_tokens}", flush=True)
-    record("chat_dispatch", index=index, wire_id=wire_id, max_tokens=max_tokens)
+    record(
+        "chat_dispatch",
+        index=index,
+        wire_id=wire_id,
+        max_tokens=max_tokens,
+        sampling=sampling,
+    )
     started = time.monotonic()
     response = observe(
         "chat_response",
@@ -767,8 +814,8 @@ for index in range(count):
                     {"role": "user", "content": PROMPTS[index % len(PROMPTS)]}
                 ],
                 "max_tokens": max_tokens,
-                "temperature": 0.0,
                 "stream": False,
+                **sampling,
             },
             timeout=600,
         ),
@@ -865,6 +912,7 @@ Path(record_path).write_text(
             "task_key_id": task_key_id,
             "model": model,
             "max_tokens": max_tokens,
+            "sampling": sampling,
             "requests_sent": count,
             "responses_ok": served,
             "accepted_engine_requests": ledger.get("accepted_engine_requests"),

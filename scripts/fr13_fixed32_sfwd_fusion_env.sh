@@ -235,6 +235,7 @@ FR13_FIXED32_SFWD_FUSION_CENSUS_FORBIDDEN=(
   "replay evidence did not bind completed event"
   "event lacks one exact full-graph replay"
   "drafter graph replay drift"
+  "requires sampled temp>0"
 )
 
 # The terminal-flush failure fragments. The campaign driver runs the fixed32
@@ -250,4 +251,30 @@ FR13_FIXED32_SFWD_FUSION_FLUSH_FORBIDDEN=(
   "FAIL: fixed32 terminal flush"
   "fixed32 final flush missing PID or ready ack"
   "fixed32 teardown skipped container operations"
+)
+
+# The campaign's sampling shape, for the boot screen's smoke traffic.
+#
+# The pair's requests reach the engine through the offload proxy, which stamps
+# these onto every /v1/chat/completions body from LUMO_PROXY_FORCE_* (see
+# normalize_chat_completions_request_payload). The screen talks to the engine's
+# fixed32 ingress DIRECTLY -- it freezes the driver before the proxy exists --
+# so nothing stamps them for it, and whatever it sends IS the sampling shape.
+#
+# fixed32 refuses greedy decoding outright: with all_greedy the rejection
+# sampler raises "FR13 fixed32 requires sampled temp>0, no draft_probs, and
+# max_spec_len=31" before the proposal seal, which kills EngineCore and answers
+# the request with a bare 500. The 2026-08-08 screen sent temperature 0.0 and
+# died on its first forward for exactly that reason.
+#
+# An array, not scalars: bash cannot export an array, so these can never reach
+# the launcher's `compgen -v | grep -E '^(FR[0-9]+_|LUMO_|VLLM_)'` -e sweep and
+# perturb the very engine the screen exists to compare against. Each value is
+# bound by test to its authoritative default in the proxy relaunch helper.
+FR13_FIXED32_SFWD_FUSION_SMOKE_SAMPLING=(
+  "temperature=0.6"
+  "top_p=0.95"
+  "top_k=20"
+  "presence_penalty=1.0"
+  "min_p=0"
 )
