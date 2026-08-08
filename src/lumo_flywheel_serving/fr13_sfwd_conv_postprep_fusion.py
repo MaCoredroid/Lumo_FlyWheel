@@ -1349,6 +1349,38 @@ def _sticky_guard_observation(
     }
 
 
+CAPTURE_OPERAND_NAMES = (
+    "spec_state_indices",
+    "conv_state",
+    "query",
+    "key",
+    "value_spec",
+    "value_tree",
+    "g",
+    "beta",
+    "source_stage",
+    "capture_guard_ok",
+)
+
+
+def _failure_collector() -> tuple[list[dict[str, object]], object]:
+    """A checklist that records observed vs expected for each failed predicate.
+
+    A boolean chain over a dozen predicates cannot say which one tripped. Every
+    fail-loud contract in this FULL-capture path uses this so a live trip
+    identifies itself from the log instead of costing a container boot.
+    """
+    failures: list[dict[str, object]] = []
+
+    def check(name: str, ok: bool, observed: object, expected: object) -> None:
+        if not ok:
+            failures.append(
+                {"check": name, "observed": observed, "expected": expected}
+            )
+
+    return failures, check
+
+
 def _layer_geometry_failures(
     *,
     layer: object,
@@ -1358,19 +1390,8 @@ def _layer_geometry_failures(
     spec_state_indices: object,
     conv_state: object,
 ) -> list[dict[str, object]]:
-    """Return one entry per failed per-layer geometry predicate.
-
-    A single boolean chain over fifteen predicates cannot say which one
-    tripped, which is how this raise cost a container boot to interpret.
-    Report observed vs expected for every predicate that failed.
-    """
-    failures: list[dict[str, object]] = []
-
-    def check(name: str, ok: bool, observed: object, expected: object) -> None:
-        if not ok:
-            failures.append(
-                {"check": name, "observed": observed, "expected": expected}
-            )
+    """Return one entry per failed per-layer geometry predicate."""
+    failures, check = _failure_collector()
 
     prefix = str(getattr(layer, "prefix", ""))
     check("layer.prefix", prefix == layer_name, prefix, layer_name)
@@ -1541,29 +1562,87 @@ def _capture_preseed_contract(
     source_stages = tuple(pregather_state.get("source_stagings", ()))
     pregather_contract = pregather_state.get("contract", {})
     states_by_batch = committer_route.get("states_by_batch", {})
-    if (
-        capacity not in (1, 2, 3, 4)
-        or len(layer_order) != LAYERS
-        or len(set(layer_order)) != LAYERS
-        or tuple(pregather_state.get("layer_order", ())) != layer_order
-        or tuple(pregather_state.get("preseeded_batches", ())) != batches
-        or set(pregather_state.get("live_selfchecked_batches", ())) != set(batches)
-        or len(ssi_sources) != LAYERS
-        or len(conv_banks) != LAYERS
-        or len(source_stages) != LAYERS
-        or pregather_contract.get("commit_route") != "fixed32_direct_source_col0"
-        or pregather_contract.get("commit_row_guard_route")
-        != "fixed32_triton_alias3_ownerpath_warp32_physical32_v4"
-        or int(pregather_contract.get("commit_row_guard_physical_rows", -1))
-        != ROWS
-        or committer_route.get("mode") != pregather_state.get("mode")
-        or int(committer_route.get("capacity", 0)) != capacity
-        or committer_route.get("spec_state_indices")
-        is not pregather_state.get("commit_spec_state_indices")
-        or tuple(sorted(states_by_batch)) != batches
+    failures, check = _failure_collector()
+    check("capacity", capacity in (1, 2, 3, 4), capacity, "1..4")
+    check("layer_order.len", len(layer_order) == LAYERS, len(layer_order), LAYERS)
+    check(
+        "layer_order.unique",
+        len(set(layer_order)) == LAYERS,
+        len(set(layer_order)),
+        LAYERS,
+    )
+    check(
+        "pregather.layer_order",
+        tuple(pregather_state.get("layer_order", ())) == layer_order,
+        "<mismatch>",
+        "identical 48-name order",
+    )
+    check(
+        "pregather.preseeded_batches",
+        tuple(pregather_state.get("preseeded_batches", ())) == batches,
+        tuple(pregather_state.get("preseeded_batches", ())),
+        batches,
+    )
+    check(
+        "pregather.live_selfchecked_batches",
+        set(pregather_state.get("live_selfchecked_batches", ())) == set(batches),
+        sorted(pregather_state.get("live_selfchecked_batches", ())),
+        sorted(batches),
+    )
+    for name, published in (
+        ("ssi_sources", ssi_sources),
+        ("banks", conv_banks),
+        ("source_stagings", source_stages),
     ):
+        check(f"pregather.{name}.len", len(published) == LAYERS, len(published), LAYERS)
+    check(
+        "pregather.commit_route",
+        pregather_contract.get("commit_route") == "fixed32_direct_source_col0",
+        pregather_contract.get("commit_route", "<absent>"),
+        "fixed32_direct_source_col0",
+    )
+    check(
+        "pregather.commit_row_guard_route",
+        pregather_contract.get("commit_row_guard_route")
+        == "fixed32_triton_alias3_ownerpath_warp32_physical32_v4",
+        pregather_contract.get("commit_row_guard_route", "<absent>"),
+        "fixed32_triton_alias3_ownerpath_warp32_physical32_v4",
+    )
+    check(
+        "pregather.commit_row_guard_physical_rows",
+        int(pregather_contract.get("commit_row_guard_physical_rows", -1)) == ROWS,
+        pregather_contract.get("commit_row_guard_physical_rows", "<absent>"),
+        ROWS,
+    )
+    check(
+        "committer.mode",
+        committer_route.get("mode") == pregather_state.get("mode"),
+        committer_route.get("mode", "<absent>"),
+        pregather_state.get("mode", "<absent>"),
+    )
+    check(
+        "committer.capacity",
+        int(committer_route.get("capacity", 0)) == capacity,
+        committer_route.get("capacity", "<absent>"),
+        capacity,
+    )
+    check(
+        "committer.spec_state_indices.identity",
+        committer_route.get("spec_state_indices")
+        is pregather_state.get("commit_spec_state_indices"),
+        _tensor_observation(committer_route.get("spec_state_indices")),
+        _tensor_observation(pregather_state.get("commit_spec_state_indices")),
+    )
+    check(
+        "committer.states_by_batch",
+        tuple(sorted(states_by_batch)) == batches,
+        tuple(sorted(states_by_batch)),
+        batches,
+    )
+    if failures:
         raise RuntimeError(
-            "fixed32 conv/post-prep capture binding persistent preseed drifted"
+            "fixed32 conv/post-prep capture binding persistent preseed "
+            "drifted: " + repr(failures)
         )
     sticky_guard = None
     for batch in batches:
@@ -2200,7 +2279,18 @@ def _validate_capture_binding(
         or binding.auth is not _CAPTURE_BINDING_AUTH
         or binding.batch_size != int(batch_size)
     ):
-        raise RuntimeError("fixed32 conv/post-prep capture binding is invalid")
+        raise RuntimeError(
+            "fixed32 conv/post-prep capture binding is invalid: "
+            + repr(
+                {
+                    "type": type(binding).__name__,
+                    "authentic": getattr(binding, "auth", None)
+                    is _CAPTURE_BINDING_AUTH,
+                    "batch_size": getattr(binding, "batch_size", None),
+                    "expected_batch_size": int(batch_size),
+                }
+            )
+        )
     operands = (
         spec_state_indices,
         conv_state,
@@ -2213,14 +2303,30 @@ def _validate_capture_binding(
         source_stage,
         binding.capture_guard_ok,
     )
-    if any(
-        current is not bound
-        for current, bound in zip(operands, binding.operands, strict=True)
-    ) or tuple(_tensor_binding_signature(value) for value in operands) != (
-        binding.signatures
+    operand_failures, check = _failure_collector()
+    for name, current, bound, signature in zip(
+        CAPTURE_OPERAND_NAMES,
+        operands,
+        binding.operands,
+        binding.signatures,
+        strict=True,
     ):
+        check(f"{name}.identity", current is bound, id(current), id(bound))
+        check(
+            f"{name}.signature",
+            _tensor_binding_signature(current) == signature
+            if torch.is_tensor(current)
+            else False,
+            _tensor_observation(current),
+            {"data_ptr": signature[1], "shape": signature[4], "stride": signature[5]}
+            if len(signature) > 5
+            else signature,
+        )
+    if operand_failures:
         raise RuntimeError(
-            "fixed32 conv/post-prep capture operand object/data_ptr drifted"
+            "fixed32 conv/post-prep capture operand object/data_ptr drifted: "
+            f"layer={binding.layer_name!r} batch={binding.batch_size} "
+            + repr(operand_failures)
         )
     if binding.profile_capture:
         from vllm.model_executor.layers.mamba import (

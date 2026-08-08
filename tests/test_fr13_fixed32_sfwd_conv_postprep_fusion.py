@@ -984,6 +984,76 @@ def test_capture_preseed_contract_follows_the_committer_sticky_arm(
     )
 
 
+def _dict_literal_keys(source: str, node: ast.AST) -> set[str]:
+    return {
+        key.value
+        for key in node.keys
+        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+    }
+
+
+def test_preseed_evidence_keys_match_the_patcher_expectation() -> None:
+    """The patcher compares the evidence dict with whole-dict equality.
+
+    scripts/fr10_phase4_patch_vllm_tree_gdn.py builds an `sfwd_expected`
+    literal and asserts `sfwd_preseed != sfwd_expected` fails the boot. Any key
+    added to or removed from either side breaks a FULL-capture boot with no
+    other symptom, and no test covered the pair -- the final-full-preseed tests
+    never arm _FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH, so that branch is skipped
+    there. Pin the key sets against each other statically.
+    """
+    module_src = MODULE_PATH.read_text(encoding="utf-8")
+    module_tree = ast.parse(module_src)
+    producer = next(
+        node
+        for node in ast.walk(module_tree)
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "preseed_fixed32_sfwd_conv_postprep_capture_bindings"
+    )
+    returns = [
+        node.value
+        for node in ast.walk(producer)
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Dict)
+    ]
+    assert len(returns) == 2, "expected the sealed and fresh-build returns"
+    producer_keys = [_dict_literal_keys(module_src, node) for node in returns]
+    assert producer_keys[0] == producer_keys[1], "producer returns disagree"
+
+    patcher_src = PATCHER_PATH.read_text(encoding="utf-8")
+    # sfwd_expected lives inside the runtime source the patcher embeds into
+    # gdn_linear_attn.py, not in the patcher's own module body.
+    runtime_src = next(
+        node.value.value
+        for node in ast.parse(patcher_src).body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE"
+        and isinstance(node.value, ast.Constant)
+    )
+    expected = None
+    for node in ast.walk(ast.parse(runtime_src)):
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "sfwd_expected"
+            and isinstance(node.value, ast.Dict)
+        ):
+            expected = node.value
+            break
+    assert expected is not None, "patcher lacks the sfwd_expected literal"
+    assert _dict_literal_keys(runtime_src, expected) == producer_keys[0]
+    # And the values the patcher pins literally must still be what the module
+    # names, so a rename of either side fails here rather than at boot.
+    assert '"schema": CAPTURE_CACHE_SCHEMA' in module_src
+    assert candidate.CAPTURE_CACHE_SCHEMA in patcher_src
+    assert '"ssi_value_proof": "persistent_pregather_boot_selfcheck"' in module_src
+    assert "persistent_pregather_boot_selfcheck" in patcher_src
+    # runtime_guard is derived on both sides through one helper, never pinned.
+    assert "fixed32_sfwd_conv_postprep_capture_runtime_guard" in patcher_src
+
+
 def _layer_geometry_operands(
     *,
     ssi_shape: tuple[int, int] = (64, 32),

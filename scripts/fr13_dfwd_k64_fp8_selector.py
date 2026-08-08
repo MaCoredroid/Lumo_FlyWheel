@@ -19,7 +19,7 @@ class SelectorError(RuntimeError):
 
 SCHEMA = "fr13.fixed32.dfwd_k64_fp8_static_selector.v1"
 SOURCE_REL = "scripts/fr10_phase4_patch_vllm_tree_gdn.py"
-SOURCE_SHA256 = "a10ccce4453794b6ec8217c9ad571c2800a553a1cd3a643fe60a615b5d2601ff"
+SOURCE_SHA256 = "ce563c34bb3a58abb2929e563883c8c330e0b1f21c0b5f2dc2d8608446985f57"
 SMOKE_SOURCE_REL = "scripts/fr13_draft_head_fp8_sm121_smoke.py"
 SMOKE_SOURCE_SHA256 = "68af218f3ffc5c13789e73a32bf4f30410eed3182a3d2aec5cbc188b8374b048"
 SMOKE_RESULT_REL = "results/fr13_draft_head_fp8_sm121_smoke_20260803/result.json"

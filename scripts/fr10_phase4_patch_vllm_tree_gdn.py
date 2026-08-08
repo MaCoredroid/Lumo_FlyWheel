@@ -13230,9 +13230,53 @@ def _fr13_conv_subop_mab(
                                     _fr13_conv_postprep_conv_state.storage_offset()
                                 )
                             ):
+                                # Built only on the failure path: this runs per
+                                # layer on every graph-cache forward, so the
+                                # timing arm must not pay for the observation.
                                 raise RuntimeError(
                                     "FR13 SFWD conv/post-prep graph input lease "
-                                    "object/data_ptr drifted"
+                                    "object/data_ptr drifted: "
+                                    + repr(
+                                        {
+                                            "layer": str(self.prefix),
+                                            "batch": _fr13_conv_postprep_b,
+                                            "profile_cache": bool(
+                                                _fr13_conv_postprep_profile_graph_cache
+                                            ),
+                                            "staging_identity": bool(
+                                                _fr13_wbb_stage
+                                                is _fr13_conv_postprep_source_stage
+                                            ),
+                                            "conv_state_observed": (
+                                                int(conv_state.data_ptr()),
+                                                tuple(
+                                                    int(value)
+                                                    for value in conv_state.shape
+                                                ),
+                                                tuple(
+                                                    int(value)
+                                                    for value in conv_state.stride()
+                                                ),
+                                                int(conv_state.storage_offset()),
+                                            ),
+                                            "conv_state_bound": (
+                                                int(
+                                                    _fr13_conv_postprep_conv_state.data_ptr()
+                                                ),
+                                                tuple(
+                                                    int(value)
+                                                    for value in _fr13_conv_postprep_conv_state.shape
+                                                ),
+                                                tuple(
+                                                    int(value)
+                                                    for value in _fr13_conv_postprep_conv_state.stride()
+                                                ),
+                                                int(
+                                                    _fr13_conv_postprep_conv_state.storage_offset()
+                                                ),
+                                            ),
+                                        }
+                                    )
                                 )
                         elif _fr13_conv_postprep_capturing:
                             raise RuntimeError(
