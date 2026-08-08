@@ -944,8 +944,8 @@ def _fixture_conv_layout_signature(batch_size: int) -> str:
     return hashlib.sha256(_canonical_json(payload).encode("ascii")).hexdigest()
 
 
-UNFUSED_KERNEL_SHAPE = "conv_pregather"
-FUSED_KERNEL_SHAPE = "sfwd_conv_postprep_fused"
+UNFUSED_KERNEL_SHAPE = "unfused_conv_pregather"
+FUSED_KERNEL_SHAPE = "sfwd_fused_conv_postprep"
 KERNEL_SHAPES = (UNFUSED_KERNEL_SHAPE, FUSED_KERNEL_SHAPE)
 
 STRUCTURAL_MANIFEST_SCHEMA = "fr13-fixed32-forward-graph-structural-manifest-v1"

@@ -451,3 +451,140 @@ def test_unknown_kernel_shape_is_rejected() -> None:
             census.forward_graph_structural_manifest(1, kernel_shape=bad)
         with pytest.raises(ValueError, match="kernel_shape"):
             census.forward_graph_structural_signature(1, kernel_shape=bad)
+
+
+# --- replay-side restore (the fabrication gap) ---------------------------
+
+
+def _replay_runtime() -> dict[str, object]:
+    """Exec the pieces of the replay restore we can drive directly."""
+    source = PATCHER.read_text(encoding="utf-8")
+    runtime = next(
+        node.value.value
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE"
+        and isinstance(node.value, ast.Constant)
+    )
+    wanted = {
+        "_fr13_fixed32_kernel_shape",
+        "_fr13_fixed32_pregather_capture_expectation",
+    }
+    definitions = [
+        node
+        for node in ast.parse(runtime).body
+        if isinstance(node, ast.FunctionDef) and node.name in wanted
+    ]
+    assert {node.name for node in definitions} == wanted
+    namespace: dict[str, object] = {
+        "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION": False
+    }
+    exec(
+        compile(ast.Module(body=definitions, type_ignores=[]), "<rt>", "exec"),
+        namespace,
+    )
+    return namespace
+
+
+def test_kernel_shape_is_a_closed_enumerated_set() -> None:
+    runtime = _replay_runtime()
+    shape = runtime["_fr13_fixed32_kernel_shape"]
+    assert shape() == "unfused_conv_pregather"
+    runtime["_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"] = True
+    assert shape() == "sfwd_fused_conv_postprep"
+    # The runtime vocabulary and the census vocabulary must be one set.
+    assert set(census.KERNEL_SHAPES) == {
+        "unfused_conv_pregather",
+        "sfwd_fused_conv_postprep",
+    }
+
+
+@pytest.mark.parametrize("capacity", (1, 4))
+def test_pregather_capture_expectation_follows_the_shape(capacity: int) -> None:
+    runtime = _replay_runtime()
+    expectation = runtime["_fr13_fixed32_pregather_capture_expectation"]
+    stages, by_batch = expectation(capacity)
+    assert stages == capacity
+    assert by_batch == {b: 1 if b <= capacity else 0 for b in (1, 2, 3, 4)}
+    runtime["_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"] = True
+    stages, by_batch = expectation(capacity)
+    assert stages == 0
+    assert by_batch == {b: 0 for b in (1, 2, 3, 4)}
+
+
+def test_replay_restore_never_fabricates_unfused_conv_work() -> None:
+    """The worst failure mode in an evidence chain is invented counters.
+
+    The replay path used to restore conv_stage_calls/consume_calls and a
+    staging layout digest from the manifest unconditionally. Under fusion no
+    kernel in the arm performs that work, so a fused replay would have carried
+    48 consumes and a staging digest that never happened. Assert the fused
+    branch restores the fused class and leaves every subsumed counter at zero.
+    """
+    source = PATCHER.read_text(encoding="utf-8")
+    runtime = next(
+        node.value.value
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE"
+        and isinstance(node.value, ast.Constant)
+    )
+    replay = next(
+        ast.get_source_segment(runtime, node)
+        for node in ast.parse(runtime).body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_observed_graph_replay"
+    )
+    assert replay is not None
+    # Anchor on the restore block (the last fused branch), not the earlier
+    # provenance one.
+    fused_index = replay.rindex("if replay_fused:")
+    unfused_index = replay.index("    else:", fused_index)
+    fused_block = replay[fused_index:unfused_index]
+    # The fused branch restores the fused class...
+    assert 'event["sfwd_conv_postprep_calls"] = int(sfwd_section["calls"])' in fused_block
+    assert 'event["sfwd_conv_postprep_layers"] = set(' in fused_block
+    # ...and pins every subsumed counter at zero rather than reading the
+    # unfused manifest section.
+    for zeroed in (
+        'event["conv_stage_replays"] = 0',
+        'event["conv_stage_before_all_consumes"] = False',
+        'event["conv_stage_layer"] = None',
+        'event["conv_stage_layers"] = 0',
+        'event["conv_stage_row_elems"] = 0',
+        'event["conv_stage_block"] = 0',
+        'event["conv_stage_programs"] = 0',
+        'event["conv_stage_ssi_pointer_entries"] = 0',
+        'event["conv_stage_ssi_groups"] = 0',
+        'event["conv_stage_source"] = None',
+        'event["conv_stage_instance"] = None',
+        'event["conv_source_layers"] = {}',
+        'event["conv_consume_layers"] = set()',
+        'event["conv_consume_hits"] = 0',
+        'event["conv_consume_fallbacks"] = 0',
+    ):
+        assert zeroed in fused_block, zeroed
+    # The fused branch must never read the unfused section.
+    assert 'conv["' not in fused_block
+    # And the unfused branch must be unchanged in what it restores.
+    unfused_block = replay[unfused_index:]
+    for restored in (
+        'event["conv_stage_calls"] = int(conv["stage_calls"])',
+        'event["conv_stage_replays"] = 1',
+        'event["conv_stage_source"] = conv["layout_sha256"]',
+        'event["conv_consume_calls"] = int(conv["consume_calls"])',
+    ):
+        assert restored in unfused_block, restored
+
+
+def test_replay_evidence_records_the_kernel_shape() -> None:
+    """Constraint 3: the difference is explicit in the evidence, never silent."""
+    source = PATCHER.read_text(encoding="utf-8")
+    assert '"kernel_shape": replay_shape,' in source
+    assert '"kernel_shape": registry_shape,' in source
+    assert '"kernel_shape": _fr13_fixed32_kernel_shape(),' in source
+    assert '"conv_pregather_stage_replays": 0 if replay_fused else 1,' in source

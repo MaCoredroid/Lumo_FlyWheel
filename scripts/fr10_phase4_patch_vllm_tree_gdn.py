@@ -3331,13 +3331,18 @@ def _fr13_fixed32_observed_begin(
     pregather = _fr13_f32_pregather_counters()
     capture_by_batch = pregather.get("graph_capture_stages_by_batch", {})
     actual_by_batch = pregather.get("actual_stages_by_batch", {})
+    (
+        _fr13_f32_begin_capture_stages,
+        _fr13_f32_begin_capture_by_batch,
+    ) = _fr13_fixed32_pregather_capture_expectation(capacity)
     if (
         pregather.get("preseeded") is not True
         or int(pregather.get("pointer_entries", -1)) != 48
         or int(pregather.get("max_batch_size", -1)) != capacity
         or tuple(pregather.get("preseeded_batches", ()))
         != tuple(range(1, capacity + 1))
-        or int(pregather.get("graph_capture_stages", -1)) != capacity
+        or int(pregather.get("graph_capture_stages", -1))
+        != _fr13_f32_begin_capture_stages
         or {
             batch: int(
                 capture_by_batch.get(
@@ -3346,10 +3351,7 @@ def _fr13_fixed32_observed_begin(
             )
             for batch in (1, 2, 3, 4)
         }
-        != {
-            batch: 1 if batch <= capacity else 0
-            for batch in (1, 2, 3, 4)
-        }
+        != _fr13_f32_begin_capture_by_batch
         or int(pregather.get("actual_stages", -1)) != 0
         or any(
             int(actual_by_batch.get(batch, actual_by_batch.get(str(batch), -1)))
@@ -4623,6 +4625,32 @@ def _fr13_fixed32_graph_descriptor(
     return descriptor
 
 
+def _fr13_fixed32_kernel_shape():
+    """House-enumerated kernel shape this arm ran under.
+
+    Closed set: an arm is one of exactly these two, and every evidence
+    artifact records which one so the difference is never silent.
+    """
+    return (
+        "sfwd_fused_conv_postprep"
+        if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+        else "unfused_conv_pregather"
+    )
+
+
+def _fr13_fixed32_pregather_capture_expectation(capacity):
+    """Expected pregather capture-stage counts for this arm's kernel shape.
+
+    The SFWD fusion subsumes the pregather stage kernel, so nothing launches
+    at capture and both counters stay at zero.
+    """
+    if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION:
+        return 0, {batch: 0 for batch in (1, 2, 3, 4)}
+    return capacity, {
+        batch: 1 if batch <= capacity else 0 for batch in (1, 2, 3, 4)
+    }
+
+
 def _fr13_fixed32_validate_forward_work(work, label):
     batch = int(work["batch_size"])
     expected_gdn_calls = 48 * batch
@@ -4818,6 +4846,14 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
         tree = manifest.get("tree_attn")
         gdn = manifest.get("gdn")
         conv = manifest.get("conv_pregather")
+        sfwd = manifest.get("sfwd_conv_postprep")
+        registry_shape = _fr13_fixed32_kernel_shape()
+        registry_fused = registry_shape == "sfwd_fused_conv_postprep"
+        if manifest.get("kernel_shape") != registry_shape:
+            raise RuntimeError(
+                "FR13 fixed32 forward manifest kernel shape drifted: "
+                + repr((manifest.get("kernel_shape"), registry_shape))
+            )
         batch = int(manifest.get("batch_size", -1))
         if (
             manifest.get("schema")
@@ -4834,7 +4870,8 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
             or int(descriptor.get("num_active_loras", -1)) != 0
             or not isinstance(tree, dict)
             or not isinstance(gdn, dict)
-            or not isinstance(conv, dict)
+            or not isinstance(sfwd if registry_fused else conv, dict)
+            or (conv is not None and sfwd is not None)
         ):
             raise RuntimeError(
                 "FR13 fixed32 live forward manifest registry drift: "
@@ -4842,25 +4879,38 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
             )
         tree_calls = int(tree.get("calls", -1))
         scan_calls = int(gdn.get("scan_calls", -1))
-        row_elems = int(conv.get("row_elems", -1))
-        block = int(conv.get("block", -1))
-        conv_layout_sha256 = conv.get("layout_sha256")
-        conv_instance_sha256 = conv.get("instance_sha256")
+        # The fused route has no staging kernel, so it publishes no row/block
+        # divisors and no staging layout digests.
+        row_elems = -1 if registry_fused else int(conv.get("row_elems", -1))
+        block = -1 if registry_fused else int(conv.get("block", -1))
+        conv_layout_sha256 = None if registry_fused else conv.get("layout_sha256")
+        conv_instance_sha256 = (
+            None if registry_fused else conv.get("instance_sha256")
+        )
         if (
             tree_calls <= 0
             or scan_calls <= 0
-            or row_elems <= 0
-            or block <= 0
-            or not isinstance(conv_layout_sha256, str)
-            or len(conv_layout_sha256) != 64
-            or not isinstance(conv_instance_sha256, str)
-            or len(conv_instance_sha256) != 64
+            or (
+                not registry_fused
+                and (
+                    row_elems <= 0
+                    or block <= 0
+                    or not isinstance(conv_layout_sha256, str)
+                    or len(conv_layout_sha256) != 64
+                    or not isinstance(conv_instance_sha256, str)
+                    or len(conv_instance_sha256) != 64
+                )
+            )
         ):
             raise RuntimeError(
                 "FR13 fixed32 forward structural divisors are invalid"
             )
         structural = {
-            "schema": "fr13-fixed32-forward-graph-structural-manifest-v1",
+            "schema": (
+                "fr13-fixed32-forward-graph-structural-manifest-sfwd-fused-v1"
+                if registry_fused
+                else "fr13-fixed32-forward-graph-structural-manifest-v1"
+            ),
             "batch_size": batch,
             "descriptor_geometry": {
                 "physical_drafts": (
@@ -4901,7 +4951,26 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
                 ),
                 "export_or_mask": int(gdn.get("export_or_mask", -1)),
             },
-            "conv_pregather": {
+            **({
+                "sfwd_conv_postprep": {
+                    "route": sfwd.get("route"),
+                    "layers": int(sfwd.get("layers", -1)),
+                    "requests": int(sfwd.get("requests", -1)),
+                    "calls": int(sfwd.get("calls", -1)),
+                    "calls_per_layer": int(sfwd.get("calls_per_layer", -1)),
+                    "capture_guard": sfwd.get("capture_guard"),
+                    "stage_calls": int(sfwd.get("stage_calls", -1)),
+                    "consume_calls": int(sfwd.get("consume_calls", -1)),
+                    "source_validations": int(
+                        sfwd.get("source_validations", -1)
+                    ),
+                    "freshness_matches": int(
+                        sfwd.get("freshness_matches", -1)
+                    ),
+                    "staged_rows": int(sfwd.get("staged_rows", -1)),
+                }
+            } if registry_fused else {}),
+            **({} if registry_fused else {"conv_pregather": {
                 "route": conv.get("route"),
                 "stage_calls": int(conv.get("stage_calls", -1)),
                 "stage_before_all_consumes": conv.get(
@@ -4933,9 +5002,11 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
                 "freshness_matches": int(
                     conv.get("freshness_matches", -1)
                 ),
-            },
+            }}),
         }
-        expected = forward_graph_structural_manifest(batch)
+        expected = forward_graph_structural_manifest(
+            batch, kernel_shape=registry_shape
+        )
         if structural != expected:
             raise RuntimeError(
                 "FR13 fixed32 live forward structure drift: "
@@ -4950,12 +5021,16 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
         live_structural_signature = __import__("hashlib").sha256(
             structural_canonical.encode("ascii")
         ).hexdigest()
-        if live_structural_signature != forward_graph_structural_signature(batch):
+        if live_structural_signature != forward_graph_structural_signature(
+            batch, kernel_shape=registry_shape
+        ):
             raise RuntimeError(
                 "FR13 fixed32 live forward structural signature drift"
             )
         manifests[batch] = {
             "conv": conv,
+            "sfwd": sfwd,
+            "kernel_shape": registry_shape,
             "structural_signature": live_structural_signature,
             "conv_layout_sha256": conv_layout_sha256,
         }
@@ -4964,13 +5039,45 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
             "FR13 fixed32 live forward registry is not contiguous: "
             + repr(sorted(manifests))
         )
-    return [
-        {
+    def _fr13_f32_registry_row(batch):
+        entry = manifests[batch]
+        row = {
             "batch_size": batch,
-            "graph_signature": manifests[batch]["structural_signature"],
-            "conv_layout_sha256": manifests[batch]["conv_layout_sha256"],
+            "graph_signature": entry["structural_signature"],
+            "kernel_shape": entry["kernel_shape"],
+            "conv_layout_sha256": entry["conv_layout_sha256"],
             "captures": 1,
             "capture_origin": "final_full",
+            "measured_replays": normalized_measured[batch],
+        }
+        if entry["kernel_shape"] == "sfwd_fused_conv_postprep":
+            fused = entry["sfwd"]
+            # The fused route reports its own class; the subsumed unfused
+            # counters are carried as the zeros they are, never omitted.
+            row.update(
+                fused_calls=int(fused["calls"]),
+                fused_layers=int(fused["layers"]),
+                stage_calls=int(fused["stage_calls"]),
+                stage_before_all_consumes=False,
+                layers=int(fused["layers"]),
+                requests=int(fused["requests"]),
+                row_elems=0,
+                programs=0,
+                ssi_pointer_entries=0,
+                ssi_groups=0,
+                source_validations=int(fused["source_validations"]),
+                staged_rows=int(fused["staged_rows"]),
+                consume_calls=int(fused["consume_calls"]),
+                consume_hits=0,
+                consume_fallbacks=0,
+                freshness_matches=int(fused["freshness_matches"]),
+            )
+            return row
+        row.update(fused_calls=0, fused_layers=0)
+        return row
+    return [
+        {
+            **_fr13_f32_registry_row(batch),
             "stage_calls": int(manifests[batch]["conv"]["stage_calls"]),
             "stage_before_all_consumes": manifests[batch]["conv"][
                 "stage_before_all_consumes"
@@ -4995,8 +5102,9 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
             "freshness_matches": int(
                 manifests[batch]["conv"]["freshness_matches"]
             ),
-            "measured_replays": normalized_measured[batch],
         }
+        if manifests[batch]["kernel_shape"] == "unfused_conv_pregather"
+        else _fr13_f32_registry_row(batch)
         for batch in range(1, capacity + 1)
     ]
 
@@ -5232,7 +5340,32 @@ def _fr13_fixed32_capture_end(
             "parent_sha256": work["gdn_parent_sha256"],
             "ancestry_sha256": work["gdn_ancestry_sha256"],
         },
-        "conv_pregather": {
+        # The fused arm publishes its own section instead: under fusion every
+        # conv_* counter is zero and the layout/instance digests are absent,
+        # so a conv_pregather section here would be a fabricated one.
+        **(
+            {
+                "sfwd_conv_postprep": {
+                    "route": "fused_conv_postprep_single_kernel",
+                    "layers": len(work["sfwd_conv_postprep_layers"]),
+                    "requests": int(work["batch_size"]),
+                    "calls": int(work["sfwd_conv_postprep_calls"]),
+                    "calls_per_layer": 1,
+                    "capture_guard": True,
+                    "fused_layers": sorted(
+                        work["sfwd_conv_postprep_layers"]
+                    ),
+                    "stage_calls": int(work["conv_stage_calls"]),
+                    "consume_calls": int(work["conv_consume_calls"]),
+                    "source_validations": len(work["conv_source_layers"]),
+                    "freshness_matches": int(work["conv_freshness_matches"]),
+                    "staged_rows": 0,
+                }
+            }
+            if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+            else {}
+        ),
+        **({} if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION else {"conv_pregather": {
             "route": "in_graph_preconsume",
             "stage_calls": int(work["conv_stage_calls"]),
             "stage_before_all_consumes": work[
@@ -5261,7 +5394,8 @@ def _fr13_fixed32_capture_end(
             "consume_hits": int(work["conv_consume_hits"]),
             "consume_fallbacks": int(work["conv_consume_fallbacks"]),
             "freshness_matches": int(work["conv_freshness_matches"]),
-        },
+        }}),
+        "kernel_shape": _fr13_fixed32_kernel_shape(),
     }
     canonical = __import__("json").dumps(
         payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
@@ -5427,18 +5561,62 @@ def _fr13_fixed32_observed_graph_replay(
     pregather_state = getattr(
         tree_kernel, "_FR13_FIXED32_CONV_PREGATHER", {}
     ).get("state")
+    replay_shape = _fr13_fixed32_kernel_shape()
+    replay_fused = replay_shape == "sfwd_fused_conv_postprep"
     conv = manifest.get("conv_pregather")
-    if not isinstance(conv, dict):
+    sfwd_section = manifest.get("sfwd_conv_postprep")
+    if manifest.get("kernel_shape") != replay_shape:
+        raise RuntimeError(
+            "FR13 fixed32 replay manifest kernel shape drifted: "
+            + repr((manifest.get("kernel_shape"), replay_shape))
+        )
+    if not isinstance(sfwd_section if replay_fused else conv, dict):
         raise RuntimeError("FR13 fixed32 replay conv manifest is missing")
-    live_conv = _fr13_fixed32_conv_runtime_contract(
-        pregather_state, event["batch_size"]
-    )
     pregather_counters = tree_kernel.fixed32_conv_col0_pregather_counters()
     batch_key = int(event["batch_size"])
     captures_by_batch = pregather_counters.get(
         "graph_capture_stages_by_batch"
     )
-    if (
+    if replay_fused:
+        # The fused route stages nothing, so there is no runtime staging
+        # contract to compare against and every stage counter must be zero.
+        if (
+            sfwd_section.get("route") != "fused_conv_postprep_single_kernel"
+            or int(sfwd_section.get("layers", -1)) != 48
+            or int(sfwd_section.get("calls", -1)) != 48
+            or int(sfwd_section.get("requests", -1)) != batch_key
+            or len(sfwd_section.get("fused_layers", ())) != 48
+            or int(sfwd_section.get("stage_calls", -1)) != 0
+            or int(sfwd_section.get("consume_calls", -1)) != 0
+            or int(sfwd_section.get("source_validations", -1)) != 0
+            or int(sfwd_section.get("freshness_matches", -1)) != 0
+            or not isinstance(captures_by_batch, dict)
+            or int(
+                captures_by_batch.get(
+                    batch_key, captures_by_batch.get(str(batch_key), -1)
+                )
+            )
+            != 0
+            or int(pregather_counters.get("actual_stages", -1)) != 0
+            or any(
+                int(value) != 0
+                for value in pregather_counters.get(
+                    "actual_stages_by_batch", {}
+                ).values()
+            )
+            or int(pregather_counters.get("profile_capture_stages", -1)) != 0
+            or int(pregather_counters.get("aux_capture_stages", -1)) != 0
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 graph replay fused conv provenance drift: "
+                + repr((sfwd_section, pregather_counters))
+            )
+        live_conv = None
+    else:
+        live_conv = _fr13_fixed32_conv_runtime_contract(
+            pregather_state, event["batch_size"]
+        )
+    if not replay_fused and (
         conv.get("route") != "in_graph_preconsume"
         or int(conv.get("stage_calls", -1)) != 1
         or conv.get("stage_before_all_consumes") is not True
@@ -5649,31 +5827,63 @@ def _fr13_fixed32_observed_graph_replay(
     event["gdn_export_or_mask"] = int(gdn["export_or_mask"])
     event["gdn_parent_sha256"] = gdn["parent_sha256"]
     event["gdn_ancestry_sha256"] = gdn["ancestry_sha256"]
-    event["conv_stage_calls"] = int(conv["stage_calls"])
-    event["conv_stage_replays"] = 1
-    event["conv_stage_before_all_consumes"] = conv[
-        "stage_before_all_consumes"
-    ]
-    event["conv_stage_layer"] = conv["stage_layer"]
-    event["conv_stage_layers"] = int(conv["layers"])
-    event["conv_stage_row_elems"] = int(conv["row_elems"])
-    event["conv_stage_block"] = int(conv["block"])
-    event["conv_stage_programs"] = int(conv["programs"])
-    event["conv_stage_ssi_pointer_entries"] = int(
-        conv["ssi_pointer_entries"]
-    )
-    event["conv_stage_ssi_groups"] = int(conv["ssi_groups"])
-    event["conv_stage_source"] = conv["layout_sha256"]
-    event["conv_stage_instance"] = conv["instance_sha256"]
-    event["conv_source_layers"] = {
-        int(index): str(name)
-        for index, name in conv["source_validations"]
-    }
-    event["conv_consume_layers"] = set(conv["consume_layers"])
-    event["conv_consume_calls"] = int(conv["consume_calls"])
-    event["conv_consume_hits"] = int(conv["consume_hits"])
-    event["conv_consume_fallbacks"] = int(conv["consume_fallbacks"])
-    event["conv_freshness_matches"] = int(conv["freshness_matches"])
+    if replay_fused:
+        # Restore the fused class from the manifest and leave every subsumed
+        # conv_* counter at the zero the fused arm actually produced. The
+        # previous unconditional restore fabricated 48 consumes and a staging
+        # digest that no kernel in this arm ever performed.
+        event["sfwd_conv_postprep_calls"] = int(sfwd_section["calls"])
+        event["sfwd_conv_postprep_layers"] = set(
+            sfwd_section["fused_layers"]
+        )
+        event["conv_stage_calls"] = int(sfwd_section["stage_calls"])
+        event["conv_stage_replays"] = 0
+        event["conv_stage_before_all_consumes"] = False
+        event["conv_stage_layer"] = None
+        event["conv_stage_layers"] = 0
+        event["conv_stage_row_elems"] = 0
+        event["conv_stage_block"] = 0
+        event["conv_stage_programs"] = 0
+        event["conv_stage_ssi_pointer_entries"] = 0
+        event["conv_stage_ssi_groups"] = 0
+        event["conv_stage_source"] = None
+        event["conv_stage_instance"] = None
+        event["conv_source_layers"] = {}
+        event["conv_consume_layers"] = set()
+        event["conv_consume_calls"] = int(sfwd_section["consume_calls"])
+        event["conv_consume_hits"] = 0
+        event["conv_consume_fallbacks"] = 0
+        event["conv_freshness_matches"] = int(
+            sfwd_section["freshness_matches"]
+        )
+    else:
+        event["sfwd_conv_postprep_calls"] = 0
+        event["sfwd_conv_postprep_layers"] = set()
+        event["conv_stage_calls"] = int(conv["stage_calls"])
+        event["conv_stage_replays"] = 1
+        event["conv_stage_before_all_consumes"] = conv[
+            "stage_before_all_consumes"
+        ]
+        event["conv_stage_layer"] = conv["stage_layer"]
+        event["conv_stage_layers"] = int(conv["layers"])
+        event["conv_stage_row_elems"] = int(conv["row_elems"])
+        event["conv_stage_block"] = int(conv["block"])
+        event["conv_stage_programs"] = int(conv["programs"])
+        event["conv_stage_ssi_pointer_entries"] = int(
+            conv["ssi_pointer_entries"]
+        )
+        event["conv_stage_ssi_groups"] = int(conv["ssi_groups"])
+        event["conv_stage_source"] = conv["layout_sha256"]
+        event["conv_stage_instance"] = conv["instance_sha256"]
+        event["conv_source_layers"] = {
+            int(index): str(name)
+            for index, name in conv["source_validations"]
+        }
+        event["conv_consume_layers"] = set(conv["consume_layers"])
+        event["conv_consume_calls"] = int(conv["consume_calls"])
+        event["conv_consume_hits"] = int(conv["consume_hits"])
+        event["conv_consume_fallbacks"] = int(conv["consume_fallbacks"])
+        event["conv_freshness_matches"] = int(conv["freshness_matches"])
     event["execution_basis"] = "cudagraph_full_replay"
     event["forward_graph_id"] = identity
     event["forward_graph_signature"] = expected_signature
@@ -5687,7 +5897,8 @@ def _fr13_fixed32_observed_graph_replay(
             "graph_id": identity,
             "graph_signature": expected_signature,
             "matching_replays": 1,
-            "conv_pregather_stage_replays": 1,
+            "conv_pregather_stage_replays": 0 if replay_fused else 1,
+            "kernel_shape": replay_shape,
             "event_index": None,
             "event_complete": False,
         }
@@ -7095,17 +7306,33 @@ def _fr13_fixed32_observed_commit(
                 "actual_stages_by_batch", {}
             ).values()
         )
-        or pregather_contract.get("route") != "in_graph_preconsume"
-        or pregather_layers != 48
-        or row_elems <= 0
-        or block <= 0
-        or int(pregather_contract.get("graph_capture_stages", -1)) <= 0
-        or int(event["conv_stage_calls"]) != 1
-        or int(event["conv_stage_replays"]) != 1
-        or event["conv_stage_before_all_consumes"] is not True
-        or int(event["conv_stage_layers"]) != pregather_layers
-        or int(event["conv_stage_row_elems"]) != row_elems
-        or int(event["conv_stage_block"]) != block
+        or (
+            # The fused arm stages nothing at commit: the pregather contract
+            # still describes the (unused) staging route, but the event must
+            # carry zeros and the fused class instead.
+            (
+                int(event["conv_stage_calls"]) != 0
+                or int(event["conv_stage_replays"]) != 0
+                or event["conv_stage_before_all_consumes"] is not False
+                or int(event["conv_stage_layers"]) != 0
+                or int(event["sfwd_conv_postprep_calls"]) != 48
+                or len(event["sfwd_conv_postprep_layers"]) != 48
+            )
+            if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+            else (
+                pregather_contract.get("route") != "in_graph_preconsume"
+                or pregather_layers != 48
+                or row_elems <= 0
+                or block <= 0
+                or int(pregather_contract.get("graph_capture_stages", -1)) <= 0
+                or int(event["conv_stage_calls"]) != 1
+                or int(event["conv_stage_replays"]) != 1
+                or event["conv_stage_before_all_consumes"] is not True
+                or int(event["conv_stage_layers"]) != pregather_layers
+                or int(event["conv_stage_row_elems"]) != row_elems
+                or int(event["conv_stage_block"]) != block
+            )
+        )
     ):
         raise RuntimeError(
             "FR13 fixed32 conv pregather stage drift: "
