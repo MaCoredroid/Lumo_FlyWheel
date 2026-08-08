@@ -200,3 +200,54 @@ FR13_FIXED32_SFWD_FUSION_FORBIDDEN=(
   "FR13 SFWD conv/post-prep graph output preseed is incomplete"
   "[FR13_STEP_GRAPH] S1 DISABLED"
 )
+
+# The runtime census/commit/replay validator family is self-diagnosing: every
+# site raises a distinctive fragment into the container log the instant an
+# invariant fails, and not one of them can run before a MEASURED forward --
+# reaching /health proves only EngineCore init and the final capture. A boot
+# that has since served real requests and emitted none of these is the positive
+# evidence that the pre-freeze census gate, the replay provenance and
+# census-restore checks, the commit-time counter checks, the forward-graph
+# registry, the capture manifest fused section, the attested kernel shape and
+# the v13 work census all ran and passed.
+#
+# Exact substrings, deliberately not a loose "fixed32.*census" regex: that
+# pattern also matches the benign runtime path
+# /logs/fr13_fixed32_work_census.jsonl, which a healthy engine is free to print.
+# tests/test_fr13_sfwd_fusion_boot_diag.py pins every fragment to a live raise
+# site, so a renamed validator fails the suite instead of quietly turning the
+# sweep into a no-op.
+FR13_FIXED32_SFWD_FUSION_CENSUS_FORBIDDEN=(
+  "census drift"
+  "census observation is missing"
+  "counters mismatch"
+  "counters are incoherent"
+  "forward work is incomplete"
+  "geometry drifted"
+  "capture set is incomplete before freeze"
+  "unscoped eager work after capture freeze"
+  "eager work mixed with graph replay"
+  "provenance drift"
+  "kernel shape drifted"
+  "manifest semantic drift"
+  "forward manifest registry drift"
+  "replay identity/signature/batch drift"
+  "replay evidence did not bind completed event"
+  "event lacks one exact full-graph replay"
+  "drafter graph replay drift"
+)
+
+# The terminal-flush failure fragments. The campaign driver runs the fixed32
+# terminal flush from its own EXIT trap, so a failure lands either in the
+# driver runlog (harness side) or in the container log the driver captured
+# before removing the container (engine side). The screen sweeps both.
+FR13_FIXED32_SFWD_FUSION_FLUSH_FORBIDDEN=(
+  "[FR13_FIXED32_FLUSH] failed generation"
+  "[FR13_FIXED32_FLUSH] rejected unbound request"
+  "fixed32 flush saw a pending TAW callback"
+  "fixed32 flush saw an incomplete"
+  "fixed32 flush quiescence is already active"
+  "FAIL: fixed32 terminal flush"
+  "fixed32 final flush missing PID or ready ack"
+  "fixed32 teardown skipped container operations"
+)

@@ -12,6 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SHARED_ENV = ROOT / "scripts" / "fr13_fixed32_sfwd_fusion_env.sh"
 DIAG = ROOT / "scripts" / "fr13_run_b1_sfwd_fusion_boot_diag.sh"
 TIMING = ROOT / "scripts" / "fr13_run_b1_target_sfwd_exact4_timing.sh"
+# The two files the smoke phase's forbidden fragments must stay bound to: the
+# runtime validators live in the patcher, the teardown flush in the driver.
+PATCHER = ROOT / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
+VARIANT = ROOT / "scripts" / "fr13_bigdenom_swe_serve_variant.sh"
 
 
 @pytest.mark.parametrize("script", (SHARED_ENV, DIAG, TIMING))
@@ -254,3 +258,236 @@ def test_diag_checks_capture_time_evidence() -> None:
     assert '"runtime_mode": "FULL"' in diag
     assert "[FR13_SFWD_CONV_POSTPREP] production engaged layer=" in diag
     assert "-ne 48" in diag
+
+
+def test_diag_smokes_the_engine_after_health() -> None:
+    """Health proves capture; the runtime validators need a measured forward.
+
+    Reaching /health only proves EngineCore init and the final FULL capture. The
+    census/commit/replay family is reached exclusively by a real request, so the
+    screen serves a few before it decides anything.
+    """
+    diag = DIAG.read_text(encoding="utf-8")
+    assert "FR13_BOOT_DIAG_SMOKE=${FR13_BOOT_DIAG_SMOKE:-1}" in diag
+    assert "FR13_BOOT_DIAG_SMOKE must be exactly 0 or 1" in diag
+    code = _strip_comments(diag)
+    # Real OpenAI chat traffic through the engine's own fixed32 ingress, which
+    # admits nothing without a campaign, a task key and a bound wire ID.
+    for pin in (
+        "/fr13/fixed32/ingress/begin",
+        "/fr13/fixed32/ingress/finalize",
+        "/v1/chat/completions",
+        "X-Fr13-Task-Key-ID",
+        "X-Request-ID",
+        "load_fixed32_ingress_secrets",
+        "fixed32_canonical_task_set_sha256",
+        "fixed32_task_key_id",
+        '"fr13-chat-"',
+        # Served text alone cannot prove the drafter ran.
+        "vllm:spec_decode_num_drafts_total",
+        "vllm:spec_decode_num_draft_tokens_total",
+    ):
+        assert pin in code, pin
+    # One canonical task key, deliberately not all four: authenticating every
+    # key publishes the SFWD real-event arm, and a screen must mint no evidence.
+    assert "SMOKE_TASK_ID=astropy__astropy-12907" in code
+    # Bounded on both axes so the phase cannot grow into a run.
+    assert "SMOKE_REQUESTS=${FR13_BOOT_DIAG_SMOKE_REQUESTS:-6}" in code
+    assert "SMOKE_MAX_TOKENS=${FR13_BOOT_DIAG_SMOKE_MAX_TOKENS:-96}" in code
+    assert "FR13_BOOT_DIAG_SMOKE_REQUESTS must be 1..8" in code
+    assert "FR13_BOOT_DIAG_SMOKE_MAX_TOKENS must be 1..256" in code
+
+
+def test_smoke_knobs_never_reach_the_screened_container() -> None:
+    """The launcher forwards every FR13_* variable it can see into the engine.
+
+    fr13_launch_forked_fa2_tree_server.sh builds its -e list from
+    ``compgen -v | grep -E '^(FR[0-9]+_|LUMO_|VLLM_)'`` against an opt-OUT skip
+    list, so any exported FR13_BOOT_DIAG_SMOKE* knob would boot an engine whose
+    environment differs from the timing pair's by exactly the variable this
+    screen introduced -- and the screen is sound only while they match.
+    """
+    launcher = (ROOT / "scripts" / "fr13_launch_forked_fa2_tree_server.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "compgen -v | grep -E '^(FR[0-9]+_|LUMO_|VLLM_)'" in launcher
+    assert "FR13_BOOT_DIAG_SMOKE" not in launcher
+
+    code = _strip_comments(DIAG.read_text(encoding="utf-8"))
+    # The selector is demoted (its value is still read); the rest are deleted.
+    assert "export -n FR13_BOOT_DIAG_SMOKE" in code
+    for knob in (
+        "FR13_BOOT_DIAG_SMOKE_REQUESTS",
+        "FR13_BOOT_DIAG_SMOKE_MAX_TOKENS",
+        "FR13_BOOT_DIAG_SMOKE_TEARDOWN_GRACE_S",
+    ):
+        assert knob in code, knob
+    unset_block = code[code.index("unset FR13_BOOT_DIAG_SMOKE_REQUESTS"):]
+    for knob in (
+        "FR13_BOOT_DIAG_SMOKE_REQUESTS",
+        "FR13_BOOT_DIAG_SMOKE_MAX_TOKENS",
+        "FR13_BOOT_DIAG_SMOKE_TEARDOWN_GRACE_S",
+    ):
+        assert knob in unset_block[: unset_block.index("\n\n")], knob
+    # Nothing may re-export any of them afterwards.
+    assert "export FR13_BOOT_DIAG_SMOKE" not in code
+
+
+def test_smoke_knobs_are_scrubbed_from_a_real_shell(tmp_path: Path) -> None:
+    """Regression: source the header and read the child environment back."""
+    script = tmp_path / "scrub.sh"
+    script.write_text(
+        "set -euo pipefail\n"
+        "FR13_BOOT_DIAG_SMOKE=${FR13_BOOT_DIAG_SMOKE:-1}\n"
+        "SMOKE_REQUESTS=${FR13_BOOT_DIAG_SMOKE_REQUESTS:-6}\n"
+        "SMOKE_MAX_TOKENS=${FR13_BOOT_DIAG_SMOKE_MAX_TOKENS:-96}\n"
+        "SMOKE_TEARDOWN_GRACE_S=${FR13_BOOT_DIAG_SMOKE_TEARDOWN_GRACE_S:-180}\n"
+        "export -n FR13_BOOT_DIAG_SMOKE\n"
+        "unset FR13_BOOT_DIAG_SMOKE_REQUESTS FR13_BOOT_DIAG_SMOKE_MAX_TOKENS \\\n"
+        "  FR13_BOOT_DIAG_SMOKE_TEARDOWN_GRACE_S\n"
+        'printf "%s %s %s\\n" "$FR13_BOOT_DIAG_SMOKE" "$SMOKE_REQUESTS" '
+        '"$SMOKE_MAX_TOKENS"\n'
+        "env | grep -c '^FR13_BOOT_DIAG_SMOKE' || true\n",
+        encoding="utf-8",
+    )
+    # Exactly the lines the diag's header runs, with every knob set the way an
+    # operator would set them.
+    result = subprocess.run(
+        ["bash", str(script)],
+        check=True,
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": "/usr/bin:/bin",
+            "FR13_BOOT_DIAG_SMOKE": "0",
+            "FR13_BOOT_DIAG_SMOKE_REQUESTS": "4",
+            "FR13_BOOT_DIAG_SMOKE_MAX_TOKENS": "64",
+            "FR13_BOOT_DIAG_SMOKE_TEARDOWN_GRACE_S": "240",
+        },
+    )
+    values, forwarded = result.stdout.split("\n")[:2]
+    # The operator's values survive inside the script ...
+    assert values.split() == ["0", "4", "64"]
+    # ... and none of them survives into anything the script launches.
+    assert forwarded == "0"
+
+
+def test_diag_freezes_the_campaign_driver_for_the_smoke() -> None:
+    """The engine admits exactly one ingress campaign, so only one may open it.
+
+    Left running past health the driver opens its own; frozen, the screen owns
+    the campaign. The CONT must come back before the TERM or the driver never
+    runs the EXIT trap that performs the terminal flush.
+    """
+    code = _strip_comments(DIAG.read_text(encoding="utf-8"))
+    assert "kill -STOP" in code
+    assert "VARIANT_FROZEN=1" in code
+    teardown = code[code.index("teardown() {"):]
+    assert "kill -CONT" in teardown
+    assert teardown.index("kill -CONT") < teardown.index("kill -TERM")
+    # The flush needs room to finish before the screen kills what is running it.
+    assert "TEARDOWN_GRACE_S" in code
+    # Freezing before the driver publishes its flush prerequisites would make it
+    # report a missing PID -- a flush failure that never happened. The screen
+    # waits for the evidence, and reads no flush verdict without it.
+    assert "fixed32_process_identity.json" in code
+    assert "fr13_fixed32_flush_ack.json" in code
+    assert "SMOKE_FLUSH_READY=1" in code
+    assert "SMOKE_RAN == 1 && SMOKE_FLUSH_READY == 1" in code
+    assert code.index("SMOKE_FLUSH_READY=1") < code.index("kill -STOP")
+
+
+def test_diag_sweeps_the_validator_and_flush_lists_from_the_shared_env() -> None:
+    """Three lists, one home: the screen inlines none of them."""
+    code = _strip_comments(DIAG.read_text(encoding="utf-8"))
+    assert "FR13_FIXED32_SFWD_FUSION_CENSUS_FORBIDDEN[@]" in code
+    assert "FR13_FIXED32_SFWD_FUSION_FLUSH_FORBIDDEN[@]" in code
+    # The capture-time list is swept twice: once at boot and again after the
+    # smoke, because a fallback can appear on a forward that never appeared at
+    # capture.
+    assert code.count("FR13_FIXED32_SFWD_FUSION_FORBIDDEN[@]") == 2
+
+
+def test_census_forbidden_strings_are_live_runtime_raise_sites() -> None:
+    """A renamed validator must fail the suite, not void the sweep in silence."""
+    fragments = tuple(
+        ast.literal_eval(entry)
+        for entry in _shared_env_array("FR13_FIXED32_SFWD_FUSION_CENSUS_FORBIDDEN")
+    )
+    assert len(fragments) == len(set(fragments))
+    assert len(fragments) >= 12
+    patcher = PATCHER.read_text(encoding="utf-8")
+    for fragment in fragments:
+        assert fragment in patcher, fragment
+    # The four validator families the screen exists to sweep.
+    for family in (
+        "census drift",
+        "counters mismatch",
+        "forward work is incomplete",
+        "geometry drifted",
+    ):
+        assert family in fragments, family
+
+
+def test_flush_forbidden_strings_are_live_teardown_failure_sites() -> None:
+    fragments = tuple(
+        ast.literal_eval(entry)
+        for entry in _shared_env_array("FR13_FIXED32_SFWD_FUSION_FLUSH_FORBIDDEN")
+    )
+    assert len(fragments) == len(set(fragments))
+    patcher = PATCHER.read_text(encoding="utf-8")
+    variant = VARIANT.read_text(encoding="utf-8")
+    for fragment in fragments:
+        assert fragment in patcher or fragment in variant, fragment
+    # Both sides of the flush: the engine's own report and the driver's verdict.
+    assert "[FR13_FIXED32_FLUSH] failed generation" in fragments
+    assert "FAIL: fixed32 terminal flush" in fragments
+
+
+def test_diag_documents_and_uses_the_smoke_verdicts() -> None:
+    diag = DIAG.read_text(encoding="utf-8")
+    assert "#   smoke_request_failed     7" in diag
+    assert "#   smoke_validator_tripped  8" in diag
+    code = _strip_comments(diag)
+    for verdict in ("smoke_request_failed", "smoke_validator_tripped"):
+        assert f"VERDICT={verdict}" in code, verdict
+    assert "exit 7" in code
+    assert "exit 8" in code
+
+
+def test_diag_summary_carries_the_smoke_fields_and_stays_non_citable() -> None:
+    diag = DIAG.read_text(encoding="utf-8")
+    assert '"schema": "fr13.fixed32.sfwd_fusion_boot_diag.v2"' in diag
+    for field in (
+        '"smoke_enabled"',
+        '"smoke_ran"',
+        '"smoke_requests_sent"',
+        '"smoke_responses_ok"',
+        '"smoke_validator_strings_clean"',
+        '"smoke_flush_strings_clean"',
+    ):
+        assert field in diag, field
+    # A sweep that never ran reports null, never a default-clean False.
+    assert '"unchecked": None' in diag
+    assert "SMOKE_VALIDATORS_CLEAN=unchecked" in diag
+    assert "SMOKE_FLUSH_CLEAN=unchecked" in diag
+    # Serving real traffic must not make the screen citable.
+    assert '"classification": "diagnostic_boot_only"' in diag
+    assert '"citable": False' in diag
+    assert '"timing_eligible": False' in diag
+    assert '"fr13.fixed32.sfwd_fusion_boot_diag_smoke.v1"' in diag
+
+
+def test_diag_smoke_python_blocks_compile() -> None:
+    """The phase is an embedded driver; bash -n cannot see inside its heredoc."""
+    source = DIAG.read_text(encoding="utf-8")
+    blocks = re.findall(r"<<'PY'.*?\n(.*?)\nPY\n", source, re.DOTALL)
+    assert len(blocks) == 3
+    for index, block in enumerate(blocks):
+        lines = block.splitlines()
+        # Drop the invoking command's own backslash continuations, which the
+        # heredoc marker precedes on the same line.
+        while lines and not lines[0].startswith("import "):
+            lines.pop(0)
+        assert lines, f"block {index} has no python body"
+        compile("\n".join(lines) + "\n", f"<diag block {index}>", "exec")
