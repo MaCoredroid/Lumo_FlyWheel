@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -219,6 +220,116 @@ def test_sfwd_observer_rejects_mixing_with_the_unfused_conv_path() -> None:
         )
         with pytest.raises(RuntimeError, match="SFWD conv/post-prep census drift"):
             observe("language_model.model.layers.0.linear_attn", 1, True)
+
+
+def _flush_pregather_predicate():
+    """Wrap the flush block's real conv-pregather predicate as a callable.
+
+    The check lives inside the `fixed_flush` source the patcher injects, in a
+    no-argument function that reads whole-module state, so slice out the
+    predicate text itself and drive it directly.
+    """
+    source = PATCHER.read_text(encoding="utf-8")
+    fragment = next(
+        node.value.value
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "fixed_flush"
+        and isinstance(node.value, ast.Constant)
+    )
+    lines = fragment.splitlines()
+    start = next(
+        i for i, line in enumerate(lines) if "_fr13_f32_flush_fused = bool(" in line
+    )
+    end = next(
+        i
+        for i, line in enumerate(lines)
+        if i > start and "conv pregather counters mismatch" in line
+    )
+    # Take the block up to and including the raise's closing repr line.
+    tail = next(
+        i for i, line in enumerate(lines) if i > end and line.strip() == ")"
+    )
+    body = "\n".join(lines[start : tail + 1])
+    body = body.replace(
+        'getattr(gdn, "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION", False)', "fused"
+    )
+    # The raise reports a sibling local from the enclosing flush scope.
+    wrapper = (
+        "def _predicate(pc, preseed_cap, fused):\n"
+        "    expected_pregather_replays_by_batch = {}\n"
+        + textwrap.indent(textwrap.dedent(body), "    ")
+    )
+    namespace: dict[str, object] = {}
+    exec(wrapper, namespace)
+    return namespace["_predicate"]
+
+
+def _pregather_counters(*, fused: bool, preseed_cap: int = 1) -> dict[str, object]:
+    """Counters a real arm publishes. Fused values are the observed ones."""
+    capture = 0 if fused else preseed_cap
+    return {
+        "preseeded": True,
+        "pointer_entries": 48,
+        "preseeded_batches": tuple(range(1, preseed_cap + 1)),
+        "max_batch_size": preseed_cap,
+        "actual_stages": 0,
+        "actual_stages_by_batch": {batch: 0 for batch in (1, 2, 3, 4)},
+        "graph_capture_stages": capture,
+        "graph_capture_stages_by_batch": {
+            batch: 0 if fused else (1 if batch <= preseed_cap else 0)
+            for batch in (1, 2, 3, 4)
+        },
+        "profile_capture_stages": 0,
+        "aux_capture_stages": 0,
+    }
+
+
+@pytest.mark.parametrize("preseed_cap", (1, 4))
+@pytest.mark.parametrize("fused", (False, True))
+def test_flush_pregather_accepts_its_own_shape(
+    fused: bool, preseed_cap: int
+) -> None:
+    """Regression for the 2026-08-08 candidate arm at 569e97a28.
+
+    The flush demanded graph_capture_stages == preseed_cap, but the fusion
+    subsumes the pregather stage kernel so nothing launches at capture. The
+    observed counters were exactly the fused set below.
+    """
+    predicate = _flush_pregather_predicate()
+    predicate(
+        _pregather_counters(fused=fused, preseed_cap=preseed_cap),
+        preseed_cap,
+        fused,
+    )
+
+
+@pytest.mark.parametrize("fused", (False, True))
+def test_flush_pregather_rejects_the_other_shape(fused: bool) -> None:
+    """Shapes stay mutually exclusive: neither may accept the other's counts."""
+    predicate = _flush_pregather_predicate()
+    with pytest.raises(RuntimeError, match="conv pregather counters mismatch"):
+        predicate(_pregather_counters(fused=not fused), 1, fused)
+
+
+def test_flush_pregather_still_rejects_live_stage_launches() -> None:
+    """Relaxing capture stages must not relax the live-replay stage floor."""
+    predicate = _flush_pregather_predicate()
+    counters = _pregather_counters(fused=True)
+    counters["actual_stages"] = 1
+    counters["actual_stages_by_batch"] = {1: 1, 2: 0, 3: 0, 4: 0}
+    with pytest.raises(RuntimeError, match="conv pregather counters mismatch"):
+        predicate(counters, 1, True)
+
+
+def test_flush_pregather_message_names_the_shape() -> None:
+    predicate = _flush_pregather_predicate()
+    with pytest.raises(RuntimeError, match=r"mismatch \(fused\)"):
+        predicate(_pregather_counters(fused=False), 1, True)
+    with pytest.raises(RuntimeError, match=r"mismatch \(unfused\)"):
+        predicate(_pregather_counters(fused=True), 1, False)
 
 
 def test_sfwd_observer_is_inert_without_an_active_event() -> None:

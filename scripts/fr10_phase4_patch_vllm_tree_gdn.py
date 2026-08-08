@@ -908,6 +908,13 @@ try:
     _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC
 except NameError:
     _FR13_FIXED32_EAGER_KERNEL_DIAGNOSTIC = False
+try:
+    # _fr13_fixed32_validate_forward_work branches on this. Production always
+    # gets it from _fr13_fixed32_runtime_bindings, but a bare exec of this
+    # source (the patcher self-test) otherwise dies with a NameError.
+    _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION
+except NameError:
+    _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION = False
 _FR13_FIXED32_DRAFTER_TREE_LAYER = "mtp.layers.0.self_attn.attn"
 _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
     "language_model.model.layers.%d.self_attn.attn" % layer
@@ -37581,13 +37588,31 @@ def _fr13_f32_flush_reconcile():
         )
         for batch in (1, 2, 3, 4)
     }
+    # The SFWD conv/post-prep fusion subsumes the pregather stage kernel, so
+    # under fusion there is no stage launch to count at capture and every
+    # stage counter stays at zero. The positive proof that the fused kernels
+    # reached the captured graph is the forward work census
+    # (sfwd_conv_postprep_calls == 48 with 48 distinct layers), which is
+    # fail-loud at capture time -- the engine cannot reach this flush without
+    # it having passed. Requiring the unfused stage counts here is what killed
+    # the 2026-08-08 candidate arm at generation 1.
+    _fr13_f32_flush_fused = bool(
+        getattr(gdn, "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION", False)
+    )
+    expected_capture_stages = 0 if _fr13_f32_flush_fused else preseed_cap
+    expected_capture_stages_by_batch = {
+        batch: 0
+        if _fr13_f32_flush_fused
+        else (1 if batch <= preseed_cap else 0)
+        for batch in (1, 2, 3, 4)
+    }
     if (
         pc.get("preseeded") is not True
         or int(pc["pointer_entries"]) != 48
         or int(pc["max_batch_size"]) != preseed_cap
         or tuple(pc["preseeded_batches"])
         != tuple(range(1, preseed_cap + 1))
-        or int(pc["graph_capture_stages"]) != preseed_cap
+        or int(pc["graph_capture_stages"]) != expected_capture_stages
         or {
             batch: int(
                 pc["graph_capture_stages_by_batch"].get(
@@ -37597,10 +37622,7 @@ def _fr13_f32_flush_reconcile():
             )
             for batch in (1, 2, 3, 4)
         }
-        != {
-            batch: 1 if batch <= preseed_cap else 0
-            for batch in (1, 2, 3, 4)
-        }
+        != expected_capture_stages_by_batch
         or int(pc["profile_capture_stages"]) != 0
         or int(pc["aux_capture_stages"]) != 0
         or int(pc["actual_stages"]) != 0
@@ -37608,7 +37630,9 @@ def _fr13_f32_flush_reconcile():
         != {batch: 0 for batch in (1, 2, 3, 4)}
     ):
         raise RuntimeError(
-            "fixed32 conv pregather counters mismatch: "
+            "fixed32 conv pregather counters mismatch"
+            + (" (fused)" if _fr13_f32_flush_fused else " (unfused)")
+            + ": "
             + repr((pc, expected_pregather_replays_by_batch))
         )
     forward_registry = gdn._fr13_fixed32_forward_graph_registry(
