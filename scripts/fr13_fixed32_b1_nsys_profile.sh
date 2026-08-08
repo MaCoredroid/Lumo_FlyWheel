@@ -28,7 +28,9 @@ NSYS_SESSION_STATE=""
 NSYS_SESSION_PRESENT=0
 NSYS_SESSION_QUERY_OK=0
 NSYS_INJECTED_SESSION_ID=""
+NSYS_IDENTITY_ATTESTED=0
 NSYS_EXPECTED_SESSION_NAME=""
+NSYS_LAST_SESSION_SNAPSHOT=""
 NSYS_LIFECYCLE_ERROR=""
 NSYS_COLLECTION_OBSERVED=0
 NSYS_POST_COLLECTION_OBSERVED=0
@@ -376,6 +378,50 @@ refresh_engine_core_start_ticks() {
     && [[ "$ENGINE_CORE_CURRENT_START_TICKS" =~ ^[1-9][0-9]*$ ]]
 }
 
+# Print exactly what the pinned process identity offered, so a rejected
+# attestation names the missing evidence instead of only its verdict.
+_log_process_identity_nsight_evidence() {
+  local evidence=""
+  local identity_path=${PROCESS_IDENTITY:-}
+  # A diagnostic must never itself break the lifecycle it is explaining.
+  if [[ -z "${JQ_BIN:-}" || ! -x "${JQ_BIN:-}" || ! -r "$identity_path" ]]; then
+    _lifecycle_log \
+      "process identity Nsight evidence: <unreadable process identity at ${identity_path:-<unset>}>"
+    return 0
+  fi
+  evidence=$(
+    "$JQ_BIN" -r --arg name "${NSYS_EXPECTED_SESSION_NAME:-}" '
+      def vals($rec; $key):
+        [ $rec.environ[]?
+          | select(type == "string" and startswith($key + "="))
+          | ltrimstr($key + "=") ];
+      "schema=\(.schema // "<missing>")"
+      + " expected_session_name=\($name)"
+      + " pid1.LUMO_NSYS_SESSION_NAME=\(vals(.pid1; "LUMO_NSYS_SESSION_NAME"))"
+      + " engine_core.pid=\(.engine_core.pid // "<missing>")"
+      + " engine_core.argv=\(.engine_core.argv // "<missing>")"
+      + " engine_core.environ_count=\(.engine_core.environ | length? // "<missing>")"
+      + " engine_core.NSYS_PROFILING_SESSION_ID="
+      + "\(vals(.engine_core; "NSYS_PROFILING_SESSION_ID"))"
+      + " engine_core.NVTX_INJECTION64_PATH="
+      + "\(vals(.engine_core; "NVTX_INJECTION64_PATH"))"
+      + " engine_core.NSYSDK_INJECTION64_PATH="
+      + "\(vals(.engine_core; "NSYSDK_INJECTION64_PATH"))"
+    ' "$identity_path" 2>/dev/null
+  ) || evidence="<unparseable process identity at $identity_path>"
+  [[ -n "$evidence" ]] || evidence="<empty process identity at $identity_path>"
+  _lifecycle_log "process identity Nsight evidence: $evidence"
+}
+
+# Record the Nsight session table a decision was made from, so a failed
+# binding shows the rows Nsight actually reported.
+_log_nsys_sessions_snapshot() {
+  local reason=$1
+  local snapshot=${NSYS_LAST_SESSION_SNAPSHOT:-}
+  _lifecycle_log \
+    "nsys sessions list returned: ${snapshot:-<no snapshot captured>} ($reason)"
+}
+
 refresh_run_identity_evidence() {
   local -a container_ids=()
   local engine_core_pid=""
@@ -416,7 +462,7 @@ refresh_run_identity_evidence() {
     return 2
   fi
 
-  if [[ -n "$NSYS_INJECTED_SESSION_ID" ]]; then
+  if (( NSYS_IDENTITY_ATTESTED == 1 )); then
     if [[ ! -f "$PROCESS_IDENTITY" \
        || -L "$PROCESS_IDENTITY" \
        || ! -s "$PROCESS_IDENTITY" \
@@ -475,38 +521,56 @@ refresh_run_identity_evidence() {
 "run container identity changed before process-identity validation"
     return 2
   fi
+  # Nsight injects NSYS_PROFILING_SESSION_ID into the process it launches (the
+  # `vllm serve` root), not into every descendant. vLLM renames its engine
+  # subprocess with setproctitle("VLLM::EngineCore"), which overwrites the
+  # front of that process's contiguous argv+environ block: /proc/<engine>/environ
+  # begins with a NUL-filled hole and only the tail of the inherited environment
+  # survives. NSYS_PROFILING_SESSION_ID lives in the destroyed prefix, so the
+  # engine's environ can never carry it. Anchor the run instead on evidence the
+  # engine does retain -- the Nsight injection libraries it was started under --
+  # plus the run-unique session name pinned on the nsys frontend (PID 1), and
+  # resolve the numeric ID from `nsys sessions list` by that unique name.
   injected_session_id=$(
-    "$JQ_BIN" -er '
+    "$JQ_BIN" -er --arg name "$NSYS_EXPECTED_SESSION_NAME" '
+      def vals($rec; $key):
+        [ $rec.environ[]
+          | select(startswith($key + "="))
+          | ltrimstr($key + "=") ];
       if (
         type == "object"
         and .schema == "fr13-fixed32-process-identity-v1"
+        and (.pid1 | type == "object")
+        and (.pid1.environ | type == "array")
+        and all(.pid1.environ[]; type == "string")
         and (.engine_core | type == "object")
         and (.engine_core.pid | type == "number")
         and (.engine_core.pid > 1)
         and .engine_core.argv == ["VLLM::EngineCore"]
         and (.engine_core.environ | type == "array")
         and all(.engine_core.environ[]; type == "string")
+        and (vals(.pid1; "LUMO_NSYS_SESSION_NAME") == [$name])
+        and ((vals(.engine_core; "NVTX_INJECTION64_PATH") | length) == 1)
         and (
-          [
-            .engine_core.environ[]
-            | select(startswith("NSYS_PROFILING_SESSION_ID="))
-          ]
-          | length == 1
+          vals(.engine_core; "NVTX_INJECTION64_PATH")
+          == vals(.engine_core; "NSYSDK_INJECTION64_PATH")
         )
       ) then
         (
-          .engine_core.environ[]
-          | select(startswith("NSYS_PROFILING_SESSION_ID="))
-          | sub("^NSYS_PROFILING_SESSION_ID="; "")
-          | select(test("^[1-9][0-9]*$"))
+          vals(.engine_core; "NSYS_PROFILING_SESSION_ID")
+          | if length == 0 then ""
+            elif length == 1 and (.[0] | test("^[1-9][0-9]*$")) then .[0]
+            else error("ambiguous NSYS_PROFILING_SESSION_ID")
+            end
         )
       else
         empty
       end
     ' "$PROCESS_IDENTITY" 2>> "$NSYS_LIFECYCLE_LOG"
   ) || {
+    _log_process_identity_nsight_evidence
     NSYS_LIFECYCLE_ERROR=\
-"EngineCore process identity has no unique numeric Nsight session ID"
+"EngineCore process identity does not attest the run-unique Nsight session"
     return 2
   }
   engine_core_pid=$(
@@ -545,8 +609,9 @@ refresh_run_identity_evidence() {
   ENGINE_CORE_START_TICKS=$ENGINE_CORE_CURRENT_START_TICKS
   ENGINE_CORE_LIVENESS_OK=1
   NSYS_INJECTED_SESSION_ID=$injected_session_id
+  NSYS_IDENTITY_ATTESTED=1
   _lifecycle_log \
-    "attested EngineCore-injected Nsight session id=$NSYS_INJECTED_SESSION_ID engine_pid=$ENGINE_CORE_PID engine_start_ticks=$ENGINE_CORE_START_TICKS container_id=$PROFILE_CONTAINER_ID"
+    "attested Nsight-injected EngineCore identity session_name=$NSYS_EXPECTED_SESSION_NAME injected_session_id=${NSYS_INJECTED_SESSION_ID:-<resolved by run-unique name>} engine_pid=$ENGINE_CORE_PID engine_start_ticks=$ENGINE_CORE_START_TICKS container_id=$PROFILE_CONTAINER_ID"
 }
 
 accept_terminal_profile_container() {
@@ -704,7 +769,7 @@ refresh_run_nsys_session() {
     *) return 1 ;;
   esac
   [[ -n "$PROFILE_CONTAINER_ID" ]] \
-    && [[ -n "$NSYS_INJECTED_SESSION_ID" ]] || return 0
+    && (( NSYS_IDENTITY_ATTESTED == 1 )) || return 0
   if (( PROFILE_CONTAINER_RUNNING == 0 )); then
     accept_terminal_profile_container
     return $?
@@ -731,6 +796,7 @@ refresh_run_nsys_session() {
       2>> "$NSYS_LIFECYCLE_LOG"
   )
   query_rc=$?
+  NSYS_LAST_SESSION_SNAPSHOT=$snapshot
   if ! _reattest_profile_container "$CONTAINER"; then
     NSYS_LIFECYCLE_ERROR=\
 "run container identity or incarnation changed during Nsight session query"
@@ -754,6 +820,7 @@ refresh_run_nsys_session() {
       and (.accessible | type == "boolean")
     )
   ' <<< "$snapshot" >/dev/null || {
+    _log_nsys_sessions_snapshot "malformed JSON"
     NSYS_LIFECYCLE_ERROR=\
 "container-scoped Nsight session query returned malformed JSON"
     return 2
@@ -768,13 +835,46 @@ refresh_run_nsys_session() {
     return 2
   }
   if (( name_row_count > 1 )); then
+    _log_nsys_sessions_snapshot "duplicate run-unique session name"
     NSYS_LIFECYCLE_ERROR=\
 "container Nsight namespace has duplicate rows for the run-unique session name"
     return 2
   fi
 
-  if [[ -z "$NSYS_SESSION_ID" ]]; then
-    [[ -n "$NSYS_INJECTED_SESSION_ID" ]] || return 0
+  if [[ -z "$NSYS_SESSION_ID" && -z "$NSYS_INJECTED_SESSION_ID" ]]; then
+    # No session ID was injected into the engine's surviving environment, so the
+    # run-unique session name is the anchor. It is already proven unique above
+    # and pinned on the nsys frontend by the process identity.
+    if (( name_row_count == 0 )); then
+      if (( PROFILE_CONTAINER_RUNNING == 0 )); then
+        accept_terminal_profile_container
+        return $?
+      fi
+      validate_engine_core_liveness_after_session_query || return 2
+      return 0
+    fi
+    row=$(
+      "$JQ_BIN" -c --arg name "$NSYS_EXPECTED_SESSION_NAME" \
+        '.[] | select(.name == $name)' <<< "$snapshot"
+    ) || {
+      _log_nsys_sessions_snapshot "unreadable run-unique session row"
+      NSYS_LIFECYCLE_ERROR=\
+"unable to read the run-unique Nsight session row"
+      return 2
+    }
+    NSYS_SESSION_ID=$("$JQ_BIN" -r '.id' <<< "$row")
+    if [[ ! "$NSYS_SESSION_ID" =~ ^[1-9][0-9]*$ ]] \
+        || [[ "$("$JQ_BIN" -r '.accessible' <<< "$row")" != "true" ]]; then
+      _log_nsys_sessions_snapshot "run-unique session row not usable"
+      NSYS_SESSION_ID=""
+      NSYS_LIFECYCLE_ERROR=\
+"run-unique Nsight session row has no accessible numeric session ID"
+      return 2
+    fi
+    NSYS_SESSION_NAME=$NSYS_EXPECTED_SESSION_NAME
+    _lifecycle_log \
+      "bound exact run Nsight session id=$NSYS_SESSION_ID name=$NSYS_SESSION_NAME via run-unique session name"
+  elif [[ -z "$NSYS_SESSION_ID" ]]; then
     row_count=$(
       "$JQ_BIN" -r --arg id "$NSYS_INJECTED_SESSION_ID" \
         '[.[] | select(.id == $id)] | length' <<< "$snapshot"
@@ -790,6 +890,8 @@ refresh_run_nsys_session() {
     fi
     if (( row_count == 0 )); then
       if (( name_row_count == 1 )); then
+        _log_nsys_sessions_snapshot \
+          "run-unique name bound to an unexpected session ID"
         NSYS_LIFECYCLE_ERROR=\
 "run-unique Nsight session name is attached to a different session ID"
         return 2
@@ -825,8 +927,11 @@ refresh_run_nsys_session() {
 
   NSYS_SESSION_PRESENT=0
   NSYS_SESSION_STATE=""
-  if [[ "$NSYS_SESSION_ID" != "$NSYS_INJECTED_SESSION_ID" ]] \
+  if [[ -n "$NSYS_INJECTED_SESSION_ID" \
+     && "$NSYS_SESSION_ID" != "$NSYS_INJECTED_SESSION_ID" ]] \
+      || [[ ! "$NSYS_SESSION_ID" =~ ^[1-9][0-9]*$ ]] \
       || [[ "$NSYS_SESSION_NAME" != "$NSYS_EXPECTED_SESSION_NAME" ]]; then
+    _log_nsys_sessions_snapshot "bound session drifted"
     NSYS_LIFECYCLE_ERROR=\
 "bound Nsight session identity drifted from run-bound evidence"
     return 2
@@ -921,7 +1026,8 @@ stop_exact_nsys_session() {
   local refresh_rc=0
   local stop_rc=0
   [[ "$NSYS_SESSION_ID" =~ ^[1-9][0-9]*$ ]] \
-    && [[ "$NSYS_SESSION_ID" == "$NSYS_INJECTED_SESSION_ID" ]] \
+    && { [[ -z "$NSYS_INJECTED_SESSION_ID" ]] \
+      || [[ "$NSYS_SESSION_ID" == "$NSYS_INJECTED_SESSION_ID" ]]; } \
     && [[ "$NSYS_SESSION_NAME" == "$NSYS_EXPECTED_SESSION_NAME" ]] \
     || return 1
   refresh_run_nsys_session
@@ -930,7 +1036,8 @@ stop_exact_nsys_session() {
     && (( NSYS_SESSION_QUERY_OK == 1 )) \
     && (( NSYS_SESSION_PRESENT == 1 )) \
     && [[ "$NSYS_SESSION_STATE" == "Collection" ]] \
-    && [[ "$NSYS_SESSION_ID" == "$NSYS_INJECTED_SESSION_ID" ]] \
+    && { [[ -z "$NSYS_INJECTED_SESSION_ID" ]] \
+      || [[ "$NSYS_SESSION_ID" == "$NSYS_INJECTED_SESSION_ID" ]]; } \
     && [[ "$NSYS_SESSION_NAME" == "$NSYS_EXPECTED_SESSION_NAME" ]] \
     || {
       _lifecycle_log \
@@ -1071,7 +1178,7 @@ wait_for_fresh_stable_report() {
     esac
 
     if (( session_started_at < 0 )) \
-        && [[ -n "$NSYS_INJECTED_SESSION_ID" ]]; then
+        && (( NSYS_IDENTITY_ATTESTED == 1 )); then
       session_started_at=$SECONDS
       _lifecycle_log \
         "starting delayed-session deadlines from pinned EngineCore identity"
@@ -1174,6 +1281,7 @@ wait_for_fresh_stable_report() {
     if (( session_started_at < 0 )) \
         && (( SECONDS - identity_wait_started_at \
           >= LUMO_NSYS_BOOT_TIMEOUT_S )); then
+      _log_process_identity_nsight_evidence
       fail_nsys_lifecycle \
         "timed out waiting for the run-bound EngineCore Nsight identity"
       return 1
@@ -1181,6 +1289,7 @@ wait_for_fresh_stable_report() {
     if (( session_started_at >= 0 )) \
         && [[ -z "$NSYS_SESSION_ID" ]] \
         && (( SECONDS - session_started_at >= LUMO_NSYS_SESSION_TIMEOUT_S )); then
+      _log_nsys_sessions_snapshot "session never appeared before the deadline"
       fail_nsys_lifecycle "timed out waiting for the fresh run Nsight session"
       return 1
     fi

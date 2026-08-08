@@ -21,6 +21,10 @@ CONTAINER_INIT_PID = "4242"
 CONTAINER_RESTART_COUNT = "0"
 SESSION_ID = "10206"
 SESSION_NAME = "fr13-fixed32-20260730T120000Z-p4242"
+INJECTION_LIB = (
+    "/opt/nvidia/nsight-systems-cli/2026.2.1/target-linux-sbsa-armv8"
+    "/libToolsInjection64.so"
+)
 CONTAINER_NSYS_BIN = "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys"
 CONTAINER_TIMEOUT_BIN = "/usr/bin/timeout"
 CONTAINER_BASH_BIN = "/bin/bash"
@@ -62,7 +66,31 @@ def _incarnation_attestation() -> str:
     )
 
 
-def _write_process_identity(path: Path, session_id: str = SESSION_ID) -> None:
+def _write_process_identity(
+    path: Path,
+    session_id: str | None = SESSION_ID,
+    *,
+    injection: bool = True,
+    session_name: str = SESSION_NAME,
+) -> None:
+    """Write a process identity artifact.
+
+    ``session_id=None`` models the real runtime: vLLM renames its engine
+    subprocess with setproctitle("VLLM::EngineCore"), which overwrites the front
+    of that process's argv+environ block, so NSYS_PROFILING_SESSION_ID never
+    survives in /proc/<engine>/environ. Only the Nsight injection variables that
+    live in the surviving tail remain.
+    """
+    engine_environ = []
+    if session_id is not None:
+        engine_environ.append(f"NSYS_PROFILING_SESSION_ID={session_id}")
+    if injection:
+        engine_environ.extend(
+            [
+                f"NVTX_INJECTION64_PATH={INJECTION_LIB}",
+                f"NSYSDK_INJECTION64_PATH={INJECTION_LIB}",
+            ]
+        )
     path.write_text(
         json.dumps(
             {
@@ -70,13 +98,13 @@ def _write_process_identity(path: Path, session_id: str = SESSION_ID) -> None:
                 "pid1": {
                     "pid": 1,
                     "argv": ["nsys", "profile", "vllm", "serve"],
-                    "environ": [f"LUMO_NSYS_SESSION_NAME={SESSION_NAME}"],
+                    "environ": [f"LUMO_NSYS_SESSION_NAME={session_name}"],
                     "forked_fa2_maps": [],
                 },
                 "engine_core": {
                     "pid": 321,
                     "argv": ["VLLM::EngineCore"],
-                    "environ": [f"NSYS_PROFILING_SESSION_ID={session_id}"],
+                    "environ": sorted(engine_environ),
                     "forked_fa2_maps": [],
                 },
             },
@@ -606,6 +634,7 @@ refresh_run_nsys_session() {
       ;;
     2)
       NSYS_INJECTED_SESSION_ID=42
+      NSYS_IDENTITY_ATTESTED=1
       NSYS_SESSION_ID=42
       NSYS_SESSION_STATE=Collection
       NSYS_SESSION_PRESENT=1
@@ -980,7 +1009,10 @@ wait "$DRIVER_PID" || exit 34
     assert "export_symlink" not in calls
     lifecycle = lifecycle_log.read_text(encoding="utf-8")
     assert f"attested run container id={CONTAINER_ID}" in lifecycle
-    assert f"attested EngineCore-injected Nsight session id={SESSION_ID}" in lifecycle
+    assert (
+        f"attested Nsight-injected EngineCore identity "
+        f"session_name={SESSION_NAME} injected_session_id={SESSION_ID}"
+    ) in lifecycle
     assert f"bound exact run Nsight session id={SESSION_ID}" in lifecycle
     assert "bound exact run Nsight session id=7777" not in lifecycle
     assert "Nsight collection window opened with teardown control frozen" in lifecycle
@@ -1063,6 +1095,7 @@ ENGINE_CORE_PID=321
 ENGINE_CORE_START_TICKS=9001
 ENGINE_CORE_LIVENESS_OK=1
 NSYS_INJECTED_SESSION_ID=$EXPECTED_SESSION_ID
+NSYS_IDENTITY_ATTESTED=1
 NSYS_SESSION_ID=$EXPECTED_SESSION_ID
 NSYS_EXPECTED_SESSION_NAME=$EXPECTED_SESSION_NAME
 NSYS_SESSION_NAME=$EXPECTED_SESSION_NAME
@@ -1245,6 +1278,229 @@ stop_exact_nsys_session
     lifecycle = lifecycle_log.read_text(encoding="utf-8")
     assert f"bound exact run Nsight session id={SESSION_ID}" in lifecycle
     assert "bound exact run Nsight session id=7777" not in lifecycle
+
+
+def test_engine_environ_without_session_id_binds_by_run_unique_name(
+    tmp_path: Path,
+) -> None:
+    """The observed runtime: no NSYS_PROFILING_SESSION_ID reaches EngineCore.
+
+    Nsight injects NSYS_PROFILING_SESSION_ID into the `vllm serve` root it
+    launches. vLLM's setproctitle("VLLM::EngineCore") then overwrites the front
+    of the engine subprocess's argv+environ block, so the variable is absent
+    from /proc/<engine>/environ. The run-unique session name must still bind the
+    session, and the stop must still target only that exact session.
+    """
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    fake_nsys = tmp_path / "nsys"
+    docker_calls = tmp_path / "docker.calls"
+    nsys_calls = tmp_path / "nsys.calls"
+    snapshot = tmp_path / "sessions.json"
+    boundary = tmp_path / "run.boundary"
+    cidfile = tmp_path / "container.cid"
+    process_identity = tmp_path / "process_identity.json"
+    lifecycle_log = tmp_path / "lifecycle.log"
+    boundary.touch()
+    os.utime(boundary, (time.time() - 10, time.time() - 10))
+    cidfile.write_text(f"{CONTAINER_ID}\n", encoding="ascii")
+    _write_process_identity(process_identity, None)
+    _write_identity_docker(fake_docker)
+    _write_executable(
+        fake_nsys,
+        """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$NSYS_CALLS"
+if [[ "$1 $2" == "sessions list" ]]; then
+  [[ "${FAKE_NSYS_CONTAINER_CONTEXT:-0}" == "1" ]] || exit 18
+  cat "$SESSION_SNAPSHOT"
+  exit 0
+fi
+if [[ "$1" == "stop" ]]; then
+  [[ "${FAKE_NSYS_CONTAINER_CONTEXT:-0}" == "1" ]] || exit 18
+  exit 0
+fi
+exit 9
+""",
+    )
+    unrelated = [
+        {
+            "id": "7777",
+            "state": "Collection",
+            "name": "unrelated-session",
+            "accessible": True,
+        }
+    ]
+    exact = [
+        *unrelated,
+        {
+            "id": SESSION_ID,
+            "state": "Collection",
+            "name": SESSION_NAME,
+            "accessible": True,
+        },
+    ]
+    snapshot.write_text(json.dumps(unrelated), encoding="ascii")
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+        "CONTAINER_ID": CONTAINER_ID,
+        "CONTAINER_NAME": "profile-test-container",
+        "DOCKER_CALLS": os.fspath(docker_calls),
+        "CONTAINER_NSYS": os.fspath(fake_nsys),
+        "NSYS_CALLS": os.fspath(nsys_calls),
+        "SESSION_SNAPSHOT": os.fspath(snapshot),
+        "EXACT_SNAPSHOT": json.dumps(exact, separators=(",", ":")),
+    }
+    script = r"""
+source "$1"
+NSYS_LIFECYCLE_LOG=$2
+LUMO_NSYS_BIN=$3
+JQ_BIN=$(command -v jq)
+RUN_BOUNDARY=$4
+PROFILE_CONTAINER_CIDFILE=$5
+PROCESS_IDENTITY=$6
+CONTAINER=$CONTAINER_NAME
+NSYS_EXPECTED_SESSION_NAME=$7
+LUMO_NSYS_STOP_TIMEOUT_S=1
+LUMO_NSYS_STOP_KILL_AFTER_S=1
+refresh_run_nsys_session || exit 21
+# The identity is attested even though no session ID was injected.
+(( NSYS_IDENTITY_ATTESTED == 1 )) || exit 22
+[[ -z "$NSYS_INJECTED_SESSION_ID" ]] || exit 23
+# The unrelated session must not bind, and stop must refuse while unbound.
+[[ -z "$NSYS_SESSION_ID" ]] || exit 24
+if stop_exact_nsys_session; then
+  exit 20
+fi
+printf '%s\n' "$EXACT_SNAPSHOT" > "$SESSION_SNAPSHOT"
+refresh_run_nsys_session || exit 25
+[[ "$NSYS_SESSION_ID" == "10206" ]] || exit 26
+[[ "$NSYS_SESSION_NAME" == "$NSYS_EXPECTED_SESSION_NAME" ]] || exit 27
+stop_exact_nsys_session
+"""
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            os.fspath(lifecycle_log),
+            os.fspath(fake_nsys),
+            os.fspath(boundary),
+            os.fspath(cidfile),
+            os.fspath(process_identity),
+            SESSION_NAME,
+        ],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    stop_calls = [
+        line
+        for line in nsys_calls.read_text(encoding="utf-8").splitlines()
+        if line.startswith("stop ")
+    ]
+    assert stop_calls == [f"stop --session={SESSION_ID}"]
+    lifecycle = lifecycle_log.read_text(encoding="utf-8")
+    assert (
+        f"bound exact run Nsight session id={SESSION_ID} name={SESSION_NAME} "
+        "via run-unique session name"
+    ) in lifecycle
+    assert "bound exact run Nsight session id=7777" not in lifecycle
+    assert "injected_session_id=<resolved by run-unique name>" in lifecycle
+
+
+@pytest.mark.parametrize(
+    ("identity_kwargs", "expected_evidence"),
+    (
+        pytest.param(
+            {"injection": False},
+            "engine_core.NVTX_INJECTION64_PATH=[]",
+            id="engine-not-under-nsight-injection",
+        ),
+        pytest.param(
+            {"session_name": "fr13-fixed32-20260730T120000Z-p9999"},
+            "pid1.LUMO_NSYS_SESSION_NAME=[\"fr13-fixed32-20260730T120000Z-p9999\"]",
+            id="frontend-pinned-a-different-run",
+        ),
+    ),
+)
+def test_identity_without_nsight_evidence_fails_closed_and_self_diagnoses(
+    tmp_path: Path,
+    identity_kwargs: dict[str, object],
+    expected_evidence: str,
+) -> None:
+    """A rejected attestation must name the evidence it actually found."""
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_docker = fake_bin / "docker"
+    docker_calls = tmp_path / "docker.calls"
+    boundary = tmp_path / "run.boundary"
+    cidfile = tmp_path / "container.cid"
+    process_identity = tmp_path / "process_identity.json"
+    lifecycle_log = tmp_path / "lifecycle.log"
+    boundary.touch()
+    os.utime(boundary, (time.time() - 10, time.time() - 10))
+    cidfile.write_text(f"{CONTAINER_ID}\n", encoding="ascii")
+    _write_process_identity(process_identity, None, **identity_kwargs)
+    _write_identity_docker(fake_docker)
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+        "CONTAINER_ID": CONTAINER_ID,
+        "CONTAINER_NAME": "profile-test-container",
+        "DOCKER_CALLS": os.fspath(docker_calls),
+        "CONTAINER_NSYS": "/nonexistent-nsys",
+    }
+    script = r"""
+source "$1"
+NSYS_LIFECYCLE_LOG=$2
+JQ_BIN=$(command -v jq)
+RUN_BOUNDARY=$3
+PROFILE_CONTAINER_CIDFILE=$4
+PROCESS_IDENTITY=$5
+CONTAINER=$CONTAINER_NAME
+NSYS_EXPECTED_SESSION_NAME=$6
+refresh_run_identity_evidence
+(( $? == 2 )) || exit 21
+(( NSYS_IDENTITY_ATTESTED == 0 )) || exit 22
+printf '%s\n' "$NSYS_LIFECYCLE_ERROR"
+"""
+    completed = subprocess.run(
+        [
+            "bash",
+            "-c",
+            script,
+            "--",
+            os.fspath(PROFILE),
+            os.fspath(lifecycle_log),
+            os.fspath(boundary),
+            os.fspath(cidfile),
+            os.fspath(process_identity),
+            SESSION_NAME,
+        ],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert (
+        "does not attest the run-unique Nsight session" in completed.stdout
+    ), completed.stdout
+    lifecycle = lifecycle_log.read_text(encoding="utf-8")
+    assert "process identity Nsight evidence:" in lifecycle
+    assert expected_evidence in lifecycle
 
 
 @pytest.mark.parametrize(
@@ -1711,6 +1967,7 @@ PROFILE_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT
 PROFILE_CONTAINER_INIT_PID=$CONTAINER_INIT_PID
 PROFILE_CONTAINER_RESTART_COUNT=$CONTAINER_RESTART_COUNT
 NSYS_INJECTED_SESSION_ID=10206
+NSYS_IDENTITY_ATTESTED=1
 ENGINE_CORE_PID=321
 ENGINE_CORE_START_TICKS=9001
 if [[ "$BOUND" == "1" ]]; then
@@ -2483,6 +2740,7 @@ NSYS_LIFECYCLE_LOG=$2
 LUMO_NSYS_BIN=$3
 NSYS_SESSION_ID=10206
 NSYS_INJECTED_SESSION_ID=10206
+NSYS_IDENTITY_ATTESTED=1
 NSYS_SESSION_NAME=$4
 NSYS_EXPECTED_SESSION_NAME=$4
 PROCESS_IDENTITY=$5
