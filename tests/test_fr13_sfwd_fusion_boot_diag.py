@@ -631,6 +631,201 @@ def test_smoke_payload_carries_the_shape_and_no_hardcoded_greedy() -> None:
     assert "requires sampled temp>0" in SHARED_ENV.read_text(encoding="utf-8")
 
 
+def _smoke_driver(tmp_path: Path) -> Path:
+    """The screen's embedded smoke driver, lifted out to be run for real."""
+    lines = re.findall(
+        r"<<'PY'.*?\n(.*?)\nPY\n", DIAG.read_text(encoding="utf-8"), re.DOTALL
+    )[3].splitlines()
+    while not lines[0].startswith("import "):
+        lines.pop(0)
+    driver = tmp_path / "smoke_driver.py"
+    driver.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return driver
+
+
+# The message shape the engine actually returned at 1b2a89d6d: the qwen thinking
+# profile answered into the reasoning channel and stopped on length at 96 tokens
+# with content still null.
+LIVE_REASONING_ONLY = {
+    "choices": [
+        {
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": None,
+                "refusal": None,
+                "tool_calls": [],
+                "reasoning": "Here's a thinking process:\n\n1. **Analyze**",
+            },
+            "finish_reason": "length",
+        }
+    ],
+    "usage": {"prompt_tokens": 24, "completion_tokens": 96, "total_tokens": 120},
+}
+
+
+def _run_smoke_driver(tmp_path: Path, chat_body: dict, count: int = 1):
+    """Drive the smoke against a stub engine that returns `chat_body`."""
+    import json as _json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    body_text = _json.dumps(chat_body)
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def _send(self, code: int, body: str, ctype: str = "application/json"):
+            raw = body.encode()
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def do_GET(self):
+            if self.path == "/metrics":
+                self._send(
+                    200,
+                    "vllm:spec_decode_num_drafts_total 9.0\n"
+                    "vllm:spec_decode_num_draft_tokens_total 31.0\n",
+                    "text/plain",
+                )
+            else:
+                self._send(200, "")
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            if self.path == "/v1/chat/completions":
+                self._send(200, body_text)
+            elif self.path.endswith("/begin"):
+                self._send(200, "{}")
+            else:
+                self._send(
+                    200,
+                    _json.dumps(
+                        {
+                            "accepted_engine_requests": count,
+                            "completed_engine_requests": count,
+                        }
+                    ),
+                )
+
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    port = server.server_address[1]
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        from lumo_flywheel_serving.inference_proxy import (
+            FIXED32_INGRESS_SECRETS_SCHEMA,
+        )
+
+        secret = tmp_path / "secret.json"
+        secret.write_text(
+            json.dumps(
+                {
+                    "schema": FIXED32_INGRESS_SECRETS_SCHEMA,
+                    "task_hmac_key_hex": "ab" * 32,
+                    "engine_bearer": "b" * 48,
+                }
+            ),
+            encoding="utf-8",
+        )
+        secret.chmod(0o600)
+        task_id = "astropy__astropy-12907"
+        subset = tmp_path / "subset.json"
+        subset.write_text(
+            json.dumps({"instance_ids": [task_id, "b", "c", "d"]}), encoding="utf-8"
+        )
+        record = tmp_path / "smoke_summary.json"
+        evidence = tmp_path / "smoke_requests.jsonl"
+        proc = subprocess.run(
+            [
+                sys.executable, str(_smoke_driver(tmp_path)), str(secret),
+                str(subset), task_id, str(port), "qwen3.6-27b", str(count), "96",
+                str(record), str(evidence),
+                *[f"{key}={value}" for key, value in _smoke_sampling().items()],
+            ],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+        )
+    finally:
+        server.shutdown()
+    summary = json.loads(record.read_text(encoding="utf-8")) if record.exists() else None
+    steps = (
+        [json.loads(line) for line in evidence.read_text(encoding="utf-8").splitlines()]
+        if evidence.exists()
+        else []
+    )
+    return proc, summary, steps
+
+
+def test_smoke_counts_a_thinking_only_turn_as_served(tmp_path: Path) -> None:
+    """The 1b2a89d6d trip: real output, in the reasoning channel, called empty.
+
+    The qwen thinking profile the screen now pins emits into the reasoning
+    channel first, and at max_tokens=96 the turn stops on length while still
+    inside it. The campaign accounts for that as a served turn -- its own trace
+    records thinking blocks beside text and tool_use -- and so must the screen,
+    whose interest is the forward rather than the answer.
+    """
+    proc, summary, steps = _run_smoke_driver(tmp_path, LIVE_REASONING_ONLY, count=2)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert summary is not None
+    assert summary["responses_ok"] == 2
+    assert summary["responses_reasoning_only"] == 2
+    # The bash-side count contract is grepped off this exact prefix.
+    assert proc.stdout.count("smoke response ok ") == 2
+    served = [step for step in steps if step["event"] == "chat_served"]
+    assert len(served) == 2
+    assert served[0]["finish_reason"] == "length"
+    assert served[0]["completion_tokens"] == 96
+    assert served[0]["channels"] == {"reasoning": len(
+        LIVE_REASONING_ONLY["choices"][0]["message"]["reasoning"]
+    )}
+
+
+def test_smoke_still_refuses_a_turn_that_produced_nothing(tmp_path: Path) -> None:
+    """Accepting the reasoning channel must not accept an empty response."""
+    import copy
+
+    blank = copy.deepcopy(LIVE_REASONING_ONLY)
+    blank["choices"][0]["message"]["reasoning"] = None
+    proc, summary, _ = _run_smoke_driver(tmp_path / "blank", blank)
+    assert proc.returncode != 0
+    assert "produced no text" in proc.stdout + proc.stderr
+    assert summary is None
+
+    for finish_reason in (None, "content_filter"):
+        unfinished = copy.deepcopy(LIVE_REASONING_ONLY)
+        unfinished["choices"][0]["finish_reason"] = finish_reason
+        proc, summary, _ = _run_smoke_driver(
+            tmp_path / f"unfinished{finish_reason}", unfinished
+        )
+        assert proc.returncode != 0, finish_reason
+        assert "did not finish" in proc.stdout + proc.stderr
+        assert summary is None
+
+
+def test_smoke_does_not_miscount_a_plain_answer(tmp_path: Path) -> None:
+    """A turn that reached the content channel is served and not reasoning-only."""
+    import copy
+
+    answered = copy.deepcopy(LIVE_REASONING_ONLY)
+    answered["choices"][0]["message"]["content"] = "a real answer"
+    answered["choices"][0]["message"]["reasoning"] = None
+    answered["choices"][0]["finish_reason"] = "stop"
+    proc, summary, steps = _run_smoke_driver(tmp_path, answered)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert summary["responses_ok"] == 1
+    assert summary["responses_reasoning_only"] == 0
+    served = [step for step in steps if step["event"] == "chat_served"][0]
+    assert served["channels"] == {"content": len("a real answer")}
+    assert served["finish_reason"] == "stop"
+
+
 def _diag_function(name: str) -> str:
     """Lift one bash function out of the screen so a test can run it for real."""
     match = re.search(

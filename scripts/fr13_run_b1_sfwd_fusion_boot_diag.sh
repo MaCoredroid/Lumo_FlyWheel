@@ -35,6 +35,14 @@
 # seal, and returned a bare 500. Only max_tokens is deliberately unlike the
 # pair's, and only because a screen has no reason to pay for long generations.
 #
+# That profile also decides what a served turn looks like: thinking mode emits
+# into the reasoning channel first, and at max_tokens=96 the turn stops on
+# length while still inside it, with content null. A turn counts as served when
+# it finished and produced text in EITHER channel -- the campaign's own trace
+# records thinking blocks beside text and tool_use, and the proxy calls a
+# reasoning-only turn unproductive rather than empty. The screen wants the
+# forward executed, not an answer written.
+#
 # This produces NO citable evidence. classification=diagnostic_boot_only.
 # It does not measure timing and cannot promote anything.
 set -euo pipefail
@@ -785,8 +793,12 @@ PROMPTS = (
     "Explain the difference between a tuple and a list in Python.",
     "Describe briefly what unittest.mock.patch does.",
 )
+# A turn the engine finished. "length" is the normal one here: the screen caps
+# generation at max_tokens deliberately, so a completed smoke turn stops on it.
+FINISHED = ("stop", "length", "tool_calls")
 task_key_id = fixed32_task_key_id(task_id)
 served = 0
+reasoning_only = 0
 for index in range(count):
     wire_id = "fr13-chat-" + secrets.token_hex(16)
     print(f"smoke request {index} max_tokens={max_tokens}", flush=True)
@@ -828,14 +840,54 @@ for index in range(count):
             f"chat completion {index} failed: HTTP {response.status_code} "
             f"{response.text[:2000]}"
         )
-    choices = response.json().get("choices")
+    payload = response.json()
+    choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
         raise SystemExit(f"chat completion {index} returned no choices")
-    content = choices[0].get("message", {}).get("content")
-    if not isinstance(content, str) or not content:
-        raise SystemExit(f"chat completion {index} returned empty content")
+    choice = choices[0]
+    message = choice.get("message") or {}
+    finish_reason = choice.get("finish_reason")
+    if finish_reason not in FINISHED:
+        raise SystemExit(
+            f"chat completion {index} did not finish: finish_reason="
+            f"{finish_reason!r}"
+        )
+    # The qwen thinking profile puts the turn in the reasoning channel first, and
+    # at max_tokens=96 it never gets out of it: content stays null and the turn
+    # stops on length. That is a served turn, not an empty response, and it is
+    # how the campaign accounts for one -- its own agent trace records thinking
+    # blocks beside text and tool_use, and the proxy calls a turn that produced
+    # only reasoning a "reasoning-only dead turn": unproductive, still a turn.
+    # The screen wants the forward, not the answer. vLLM spells the channel
+    # reasoning on this build and reasoning_content on others; accept either.
+    text = {
+        key: message.get(key)
+        for key in ("content", "reasoning_content", "reasoning")
+        if isinstance(message.get(key), str) and message.get(key)
+    }
+    usage = payload.get("usage") or {}
+    record(
+        "chat_served",
+        index=index,
+        wire_id=wire_id,
+        finish_reason=finish_reason,
+        completion_tokens=usage.get("completion_tokens"),
+        channels={key: len(value) for key, value in text.items()},
+    )
+    if not text:
+        raise SystemExit(
+            f"chat completion {index} produced no text in content, "
+            f"reasoning_content or reasoning: {message!r}"[:400]
+        )
+    if "content" not in text:
+        reasoning_only += 1
     served += 1
-    print(f"smoke response ok {index} chars={len(content)}", flush=True)
+    print(
+        f"smoke response ok {index} finish={finish_reason} "
+        f"chars={sum(len(value) for value in text.values())} "
+        f"channels={','.join(sorted(text))}",
+        flush=True,
+    )
 
 # The middleware books completion only after the response is fully sent, so a
 # finalize that races the last one legitimately sees 409 active_requests.
@@ -915,6 +967,7 @@ Path(record_path).write_text(
             "sampling": sampling,
             "requests_sent": count,
             "responses_ok": served,
+            "responses_reasoning_only": reasoning_only,
             "accepted_engine_requests": ledger.get("accepted_engine_requests"),
             "completed_engine_requests": ledger.get("completed_engine_requests"),
             "spec_decode": spec,
@@ -927,6 +980,7 @@ Path(record_path).write_text(
 )
 print(
     f"smoke served {served}/{count} completions"
+    f" ({reasoning_only} reasoning-only)"
     f" drafts={spec['vllm:spec_decode_num_drafts_total']}"
     f" draft_tokens={spec['vllm:spec_decode_num_draft_tokens_total']}",
     flush=True,
