@@ -1,0 +1,85 @@
+==============================================================================
+STEP ENVELOPE
+==============================================================================
+steps (nvtx fr13.fixed32.step instances) : 1146
+step envelope GPU                        :  237.248 ms/step
+  sum of disjoint phases                 :  224.134 ms/step  (94.5%)
+  residual (outside phase ranges)        :   13.114 ms/step  (5.5%)
+total GPU ops in step                    : 1,990,552
+
+==============================================================================
+PHASE CARVE-UP
+==============================================================================
+phase            ms/step   % child    % env     gpu_ops
+sfwd             155.943      69.6     65.7       1,147
+dfwd              35.138      15.7     14.8     148,980
+cfwd              20.704       9.2      8.7   1,370,616
+postprocess       12.350       5.5      5.2       2,292
+-------------------------------------------------------
+phases total     224.134     100.0     94.5
+
+==============================================================================
+SFWD CARVE-UP BY CATEGORY  (phase total 155.943 ms/step)
+==============================================================================
+category                                 ms/step   % sfwd   % env
+target GEMM (CUTLASS fp8 blockwise)      114.812     73.6    48.4
+FA2 tree attention (qrow16)               21.369     13.7     9.0
+GDN                                       12.357      7.9     5.2
+elementwise/other                          3.693      2.4     1.6
+quant                                      1.483      1.0     0.6
+conv                                       0.542      0.3     0.2
+cuBLAS GEMM/GEMV                           0.390      0.3     0.2
+norm/triton                                0.201      0.1     0.1
+(unlisted tail beyond top-20)              1.096      0.7     0.5
+-----------------------------------------------------------------
+SFWD TOTAL                               155.943    100.0    65.7
+
+==============================================================================
+SFWD TOP KERNELS
+==============================================================================
+  ms/step  % sfwd   inst/step  kernel
+  114.812    73.6       256.2  void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_blockwise<cutlass::bfloat16_t, (in
+   21.369    13.7        16.0  void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<(int)256, (int)16, (int)64,
+   12.357     7.9        96.1  _tree_gdn_path_kernel
+    1.170     0.8       192.1  void at::native::elementwise_kernel<(int)128, (int)2, void at::native::gpu_kernel_impl_n
+    0.824     0.5        64.0  void vllm::silu_and_mul_per_block_quant_kernel<c10::BFloat16, c10::Float8_e4m3fn, (bool)
+    0.803     0.5        48.0  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::Ten
+    0.486     0.3        48.0  void at::native::elementwise_kernel<(int)128, (int)4, void at::native::gpu_kernel_impl_n
+    0.431     0.3         1.0  _fr13_conv_col0_pregather_kernel
+    0.390     0.3        48.0  nvjet_sm121_tst_mma_192x16x64_3_32x16x64_tmaAB_splitK_TNNN
+    0.345     0.2       192.1  void per_token_group_quant_8bit_kernel<c10::BFloat16, __nv_fp8_e4m3, (bool)1, (bool)0, f
+    0.268     0.2       144.1  void at::native::elementwise_kernel<(int)128, (int)4, void at::native::gpu_kernel_impl_n
+    0.262     0.2        48.0  void at::native::<unnamed>::indexSelectSmallIndex<c10::BFloat16, long, unsigned int, (in
+
+==============================================================================
+DFWD TOP KERNELS   (phase total 35.138 ms/step)
+==============================================================================
+  ms/step  % phase   inst/step  kernel
+   13.621     38.8         5.0  std::enable_if<!T7, void>::type internal::gemvx::kernel<int, int, __nv_bfloat16, __nv_bf
+    8.665     24.7        20.0  void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_blockwise<cutlass::bfloat16_t, (in
+    7.197     20.5         4.0  kernel_unified_attention_2d
+    2.560      7.3         5.0  nvjet_sm121_tst_mma_64x112x64_4_16x112x64_tmaAB_bz_TNNN
+    1.242      3.5         1.0  void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<(int)256, (int)64, (int)64,
+    0.062      0.2         5.0  void vllm::silu_and_mul_per_block_quant_kernel<c10::BFloat16, c10::Float8_e4m3fn, (bool)
+    0.062      0.2         5.0  void at::native::reduce_kernel<(int)512, (int)1, at::native::ReduceOp<c10::BFloat16, at:
+    0.032      0.1        14.0  void at::native::index_elementwise_kernel<(int)128, (int)4, void at::native::gpu_index_k
+
+==============================================================================
+CFWD TOP KERNELS   (phase total 20.704 ms/step)
+==============================================================================
+  ms/step  % phase   inst/step  kernel
+    4.031     19.5        48.0  fused_sigmoid_gating_delta_rule_update_kernel
+    2.228     10.8        26.0  void at::native::<unnamed>::cunn_SoftMaxForward<(int)4, float, float, float, at::native:
+    1.625      7.9        18.0  void at::native::vectorized_elementwise_kernel<(int)4, at::native::CUDAFunctor_add<float
+    1.372      6.6         4.0  void at::native::elementwise_kernel<(int)128, (int)4, void at::native::gpu_kernel_impl_n
+    1.260      6.1        14.0  void at::native::vectorized_elementwise_kernel<(int)2, at::native::FillFunctor<long>, st
+    1.219      5.9         6.0  void at::native::elementwise_kernel<(int)128, (int)4, void at::native::gpu_kernel_impl<a
+    1.130      5.5         2.0  _topk_topp_kernel
+    0.640      3.1        51.0  void at::native::elementwise_kernel<(int)128, (int)2, void at::native::gpu_kernel_impl_n
+
+==============================================================================
+POSTPROCESS TOP KERNELS   (phase total 12.350 ms/step)
+==============================================================================
+  ms/step  % phase   inst/step  kernel
+   12.348    100.0         1.0  nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bz_TNNN
+    0.002      0.0         1.0  void at::native::vectorized_gather_kernel<(int)16, long>(char *, char *, T2 *, int, long

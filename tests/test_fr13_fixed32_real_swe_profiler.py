@@ -96,6 +96,21 @@ def test_fixed32_profiler_binds_proven_capture_and_real_swe_evidence() -> None:
     assert "--nsys-discard-environment true" in text
 
 
+def test_fixed32_reduction_runs_with_this_checkout_on_the_python_path() -> None:
+    """The reducer must import this repo's lumo_flywheel_serving.
+
+    The venv resolves that name through an editable-install .pth pointing at a
+    different tree where the package is only a namespace stub, so an
+    unqualified interpreter cannot import inference_proxy and the fixed32
+    ingress verifier comes back unavailable.
+    """
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert (
+        'PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}" \\\n'
+        "  .venv/bin/python scripts/fr13_fixed32_nsys_reduce.py"
+    ) in text
+
+
 def test_fixed32_profiler_snapshots_terminal_engine_ledger_before_thaw() -> None:
     text = SCRIPT.read_text(encoding="utf-8")
 

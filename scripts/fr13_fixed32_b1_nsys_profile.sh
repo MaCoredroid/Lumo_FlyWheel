@@ -1720,7 +1720,13 @@ if ! find "$RUNROOT/$ARM/swe_out/verified/per_task" -mindepth 1 -maxdepth 1 \
   exit 4
 fi
 
-if ! .venv/bin/python scripts/fr13_fixed32_nsys_reduce.py \
+# The reducer imports the fixed32 ingress verifier from this checkout's
+# lumo_flywheel_serving. The venv resolves that name through an editable-install
+# .pth that points at a different tree, where the package is only a namespace
+# stub, so an unqualified interpreter cannot see inference_proxy at all. Put this
+# repo's src ahead of it, as every other serving entry point does.
+if ! PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}" \
+  .venv/bin/python scripts/fr13_fixed32_nsys_reduce.py \
   "$REPORT" \
   --output "$REDUCED" \
   --nsys-bin "$LUMO_NSYS_BIN" \

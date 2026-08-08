@@ -948,6 +948,24 @@ def _digest_values(values: Sequence[str]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _serving_package_origin() -> str:
+    """Describe where lumo_flywheel_serving resolved from.
+
+    A stale editable-install .pth can point the name at a namespace stub in an
+    unrelated tree, which makes the submodule import fail for reasons no message
+    about the verifier itself would explain.
+    """
+    try:
+        import lumo_flywheel_serving
+    except Exception as exc:  # pragma: no cover - defensive
+        return f"<unimportable: {exc}>"
+    origin = getattr(lumo_flywheel_serving, "__file__", None)
+    if origin:
+        return origin
+    search_path = list(getattr(lumo_flywheel_serving, "__path__", []))
+    return f"<namespace package at {search_path}>"
+
+
 def _validate_ingress_ledgers(
     proxy_path: Path,
     engine_path: Path,
@@ -960,7 +978,10 @@ def _validate_ingress_ledgers(
             verify_fixed32_ingress_ledger,
         )
     except ImportError as exc:
-        raise ReductionError("fixed32 ingress verifier is unavailable") from exc
+        raise ReductionError(
+            f"fixed32 ingress verifier is unavailable: {exc}; "
+            f"lumo_flywheel_serving resolved to {_serving_package_origin()}"
+        ) from exc
 
     expected_task_keys = {fixed32_task_key_id(task_id) for task_id in EXACT4_TASK_IDS}
     canonical_task_set_sha256 = fixed32_canonical_task_set_sha256(EXACT4_TASK_IDS)
