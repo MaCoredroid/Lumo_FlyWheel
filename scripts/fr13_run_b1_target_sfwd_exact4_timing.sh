@@ -6,6 +6,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(cd "$SCRIPT_DIR/.." && pwd)
 RUNNER_PATH=$(realpath "$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")")
 cd "$REPO"
+source scripts/fr13_fixed32_sfwd_fusion_env.sh
 
 case "${FR13_RUN_B1_TARGET_SFWD_EXACT4_TIMING:-0}" in
   1) ;;
@@ -265,88 +266,17 @@ trap runner_exit EXIT
 run_arm() {
   local arm=$1
   local production=$2
-  local device_kernel=/workspace/scripts/fr13_device_multidraft_kernel.py
-  local target_selector=stock target_so="" target_pass="" target_pass_sha=""
-  local target_qualification_source_commit=""
-  local sfwd_fusion=0 sfwd_pass="" sfwd_pass_sha="" sfwd_manifest=""
-  local sfwd_manifest_sha="" sfwd_commit="" conv_wb_batched=1
-  if [[ "$production" == "1" ]]; then
-    target_selector=$TARGET_SELECTOR
-    target_so=$CUTLASS_TARGET_SO
-    target_pass=$TARGET_PASS
-    target_pass_sha=$TARGET_PASS_SHA256
-    target_qualification_source_commit=$TARGET_QUALIFICATION_SOURCE_COMMIT
-    sfwd_fusion=1
-    sfwd_pass=$SFWD_PASS_CONTAINER
-    sfwd_pass_sha=$SFWD_CONV_POSTPREP_PASS_SHA256
-    sfwd_manifest=$SFWD_MANIFEST_CONTAINER
-    sfwd_manifest_sha=$SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256
-    sfwd_commit=$SOURCE_COMMIT
-  fi
+  local device_kernel target_selector target_so target_pass target_pass_sha
+  local target_qualification_source_commit
+  local sfwd_fusion sfwd_pass sfwd_pass_sha sfwd_manifest
+  local sfwd_manifest_sha sfwd_commit conv_wb_batched
+  local FR13_FIXED32_SFWD_FUSION_ENV
+  # Shared with scripts/fr13_run_b1_sfwd_fusion_boot_diag.sh so the boot screen
+  # cannot drift from the arm it screens.
+  fr13_fixed32_sfwd_fusion_env "$arm" "$production"
 
   echo "===== $arm: B1 task_set=$TASK_SET target_sfwd_production=$production ====="
-  if env \
-      RUNROOT="$RUNROOT_ABS" \
-      OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
-      LUMO_SWE_AUTOCOMMIT=0 \
-      FR13_FIXED32_B1_DIAGNOSTIC=0 \
-      FR10_METRICS=0 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
-      FR13_RING_EXPORT=1 FR13_FLAGS_INKERNEL=1 \
-      FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536 \
-      FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json \
-      FR13_DEVICE_MULTIDRAFT=1 FR13_DEVICE_MULTIDRAFT_KERNEL="$device_kernel" \
-      FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \
-      FR13_SFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${arm}.json" \
-      FR13_DFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${arm}_dfwd.json" \
-      FR13_CFWD_GPU_TIMER_JSON="/workspace/$RUNROOT_REL/sidecars/${arm}_cfwd.json" \
-      FR13_B1_U8_CFWD_SFWD_STACK_TIMING=0 \
-      FR13_DRAFT_HEAD_PAD_ROWS=0 FR13_DRAFT_HEAD_PAD_ALL_BYTE_AB=0 \
-      FR13_DRAFT_HEAD_M32_LIVE_AB=0 FR13_DRAFT_HEAD_M32_PRODUCTION=0 \
-      FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB=0 \
-      FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION=0 \
-      FR13_DRAFT_HEAD_FP8=0 FR13_DFWD_K64_TOP3=0 \
-      FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
-      FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
-      FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_JSON= \
-      FR13_CFWD_LOGIT_DIRECT_BYTE_AB=0 \
-      FR13_CFWD_LOGIT_DIRECT_PRODUCTION=0 \
-      FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_JSON= \
-      FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256= \
-      FR13_FA2_QROW16_LIVE_PAGED_AB=0 \
-      FR13_FA2_QROW16_SO_SHA256="$QROW16_SHA256" \
-      FR13_FA2_QROW16_PRODUCTION=1 \
-      FR13_FA2_QROW16_LIVE_PASS_JSON="$QROW16_PASS" \
-      FR13_FA2_QROW16_LIVE_PASS_SHA256="$QROW16_PASS_SHA256" \
-      FR13_FA2_QROW32_LIVE_PAGED_AB=0 \
-      FR13_FA2_QROW32_B1_LIVE_AB_ARM= FR13_FA2_QROW32_B1_PRODUCTION_ARM= \
-      FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=0 \
-      FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH= \
-      FR13_FIXED32_GDN_PATH_BV_CANDIDATE= FR13_FIXED32_GDN_PATH_BV_PRODUCTION= \
-      FR13_FIXED32_BATCH_GDN_BYTE_AB=0 FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0 \
-      FR13_FIXED32_BATCH_GDN_PRODUCTION=0 FR13_FIXED32_BATCH_GDN_BV_CANDIDATE= \
-      FR13_DFWD_UNIFIED_BM8_LIVE_AB=0 FR13_DFWD_UNIFIED_BM8_PRODUCTION=0 \
-      FR13_FIXED32_CUTLASS_WAVE="$target_selector" \
-      FR13_FIXED32_CUTLASS_WAVE_SO="$target_so" \
-      FR13_FIXED32_CUTLASS_WAVE_PRODUCTION="$production" \
-      FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE=k64_root \
-      FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_SOURCE_COMMIT="$target_qualification_source_commit" \
-      FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE=astropy12907 \
-      FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_JSON="$target_pass" \
-      FR13_FIXED32_CUTLASS_WAVE_LIVE_PASS_SHA256="$target_pass_sha" \
-      FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB=0 \
-      FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION=0 \
-      FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB=0 \
-      FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION="$sfwd_fusion" \
-      FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB=0 \
-      FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_JSON="$sfwd_pass" \
-      FR13_FIXED32_SFWD_CONV_POSTPREP_LIVE_PASS_SHA256="$sfwd_pass_sha" \
-      FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_PATH="$sfwd_manifest" \
-      FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_MANIFEST_SHA256="$sfwd_manifest_sha" \
-      FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_COMMIT="$sfwd_commit" \
-      FR13_CONV_WB_BATCHED="$conv_wb_batched" \
-      FR13_TREE_CONV_FUSED=1 FR13_FIXED32_CONV_SOURCE_BATCH=0 \
-      FR13_FIXED32_ATTRIBUTION_ONLY=0 \
-      FORKED_FA2_SO="$QROW16_FA2_SO" \
+  if env "${FR13_FIXED32_SFWD_FUSION_ENV[@]}" \
       bash scripts/fr13_bigdenom_swe_serve_variant.sh \
         "$arm" hydra27_fixed32 "$SUBSET" \
         > "$RUNROOT_ABS/$arm.runlog" 2>&1; then

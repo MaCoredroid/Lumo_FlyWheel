@@ -12,6 +12,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO / "scripts"
 RUNNER = SCRIPTS / "fr13_run_b1_target_sfwd_exact4_timing.sh"
+SHARED_ENV = SCRIPTS / "fr13_fixed32_sfwd_fusion_env.sh"
 LAUNCHER = SCRIPTS / "fr13_launch_forked_fa2_tree_server.sh"
 MANIFEST = SCRIPTS / "fr13_runtime_manifest.py"
 HISTORICAL_PASS = (
@@ -262,7 +263,13 @@ def test_dual_identity_fields_are_all_or_nothing() -> None:
 
 
 def test_exact4_runner_pins_workload_runtime_and_real_credentials() -> None:
-    runner = RUNNER.read_text(encoding="ascii")
+    # The candidate serve environment lives in the file the runner sources, so
+    # that scripts/fr13_run_b1_sfwd_fusion_boot_diag.sh cannot boot a different
+    # shape than the arm it screens. The runner's effective definition is the
+    # pair of files; pin against both.
+    runner = RUNNER.read_text(encoding="ascii") + SHARED_ENV.read_text(
+        encoding="ascii"
+    )
 
     assert "TASK_SET=exact4" in runner
     assert "exact16" not in runner
