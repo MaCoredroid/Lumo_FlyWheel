@@ -239,6 +239,94 @@ def test_sfwd_profile_capture_records_and_seals_before_full_dummy() -> None:
     assert profile_preseed < full_dummy
 
 
+def test_sfwd_profile_producer_runs_capture_shaped_forward_before_sealing(
+    tmp_path: Path,
+) -> None:
+    """The profile scope must publish its own eager operands.
+
+    Sealing alone is not enough: the stock warmup loop in
+    ``_warmup_and_capture`` builds ``for_cudagraph_capture=False`` metadata, so
+    the GDN builder reports ``num_spec_decodes == 0`` and no layer ever creates
+    the conv/post-prep output cache the seal depends on.
+    """
+    patcher_module = _load_patcher("fr13_sfwd_profile_producer_wiring")
+    runner = tmp_path / "gpu_model_runner.py"
+    runner.write_text(
+        "                profile_seq_lens=profile_seq_lens,\n"
+        "            )\n"
+        "        self._dummy_run(\n"
+        "            desc.num_tokens,\n"
+        "            cudagraph_runtime_mode=cudagraph_runtime_mode,\n",
+        encoding="utf-8",
+    )
+    patcher_module.GPU_MODEL_RUNNER_PATH = runner
+    patcher_module._FR13_FIXED32_MODE = "hydra27_fixed32"
+    assert patcher_module._patch_gpu_model_runner_fixed32_final_full_preseed()
+    patched = runner.read_text(encoding="utf-8")
+    assert "# FR13_FIXED32_SFWD_PROFILE_PRODUCER" in patched
+
+    producer_needed = patched.index(
+        "_fr13_fixed32_sfwd_conv_postprep_profile_producer_needed(\n"
+    )
+    producer_capturing = patched.index(
+        "                is_graph_capturing=True,\n", producer_needed
+    )
+    profile_preseed = patched.index(
+        "_fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture(\n",
+        producer_capturing,
+    )
+    full_dummy = patched.index(
+        "            cudagraph_runtime_mode=cudagraph_runtime_mode,\n",
+        profile_preseed,
+    )
+    assert producer_needed < producer_capturing < profile_preseed < full_dummy
+    # The producer forward is eager and capture-shaped, never a graph capture.
+    producer_block = patched[producer_needed:profile_preseed]
+    assert "cudagraph_runtime_mode=CUDAGraphMode.NONE," in producer_block
+    assert "force_attention=True," in producer_block
+
+    # The injection is idempotent: a second pass must not stack producers.
+    assert not patcher_module._patch_gpu_model_runner_fixed32_final_full_preseed()
+    assert runner.read_text(encoding="utf-8") == patched
+    assert patched.count(
+        "_fr13_fixed32_sfwd_conv_postprep_profile_producer_needed("
+    ) == 1
+
+
+def test_sfwd_profile_seal_fails_loud_without_eager_operands() -> None:
+    patcher_module = _load_patcher("fr13_sfwd_profile_seal_failloud")
+    tree = ast.parse(patcher_module._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE)
+    seal = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name
+        == "_fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture"
+    )
+    source = ast.unparse(seal)
+    # A missing seal must raise instead of silently returning None into the
+    # FULL capture, which is how the 2026-08-08 arm died.
+    assert "if evidence is None:\n        return None" not in source
+    assert "evidence is None" in source
+    assert "profile output preseed is incomplete" in source
+
+    producer = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name
+        == "_fr13_fixed32_sfwd_conv_postprep_profile_producer_needed"
+    )
+    producer_source = ast.unparse(producer)
+    assert (
+        "fixed32_sfwd_conv_postprep_profile_producer_pending"
+        in producer_source
+    )
+    assert "_fr13_fixed32_sfwd_conv_postprep_profile_capture_active()" in (
+        producer_source
+    )
+
+
 @pytest.mark.parametrize("raw", ("", "true", "2"))
 def test_embedded_gate_selector_is_exact_and_subordinate(
     monkeypatch: pytest.MonkeyPatch,

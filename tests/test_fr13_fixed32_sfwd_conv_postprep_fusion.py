@@ -856,6 +856,213 @@ def test_profile_preseed_seals_all_48_b1_output_bindings(
     )
 
 
+def _profile_probe_layers(count: int = 48) -> list[types.SimpleNamespace]:
+    return [
+        types.SimpleNamespace(
+            prefix=f"layer.{index}",
+            _fr13_fixed32_sfwd_conv_postprep_outputs=None,
+        )
+        for index in range(count)
+    ]
+
+
+def test_profile_producer_probe_demands_an_eager_forward_when_unpublished(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    probe = candidate.fixed32_sfwd_conv_postprep_profile_producer_pending
+    layers = _profile_probe_layers()
+
+    # No layer ran the fixed32 tree-conv route yet: the stock warmup builds
+    # for_cudagraph_capture=False metadata, so num_spec_decodes is 0.
+    assert probe(layer_objects=tuple(layers), batch_size=1) is True
+
+    for layer in layers:
+        layer._fr13_fixed32_sfwd_conv_postprep_outputs = {
+            "profile_capture_pending": {"batch_size": 1},
+        }
+    assert probe(layer_objects=tuple(layers), batch_size=1) is False
+
+    for layer in layers:
+        layer._fr13_fixed32_sfwd_conv_postprep_outputs = {
+            "schema": candidate.CAPTURE_CACHE_SCHEMA,
+            "profile_capture": True,
+            "by_batch": {1: {}},
+        }
+    assert probe(layer_objects=tuple(layers), batch_size=1) is False
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    (
+        (
+            {
+                "schema": "fr13.fixed32.sfwd_conv_postprep.capture_cache.v1",
+                "profile_capture": True,
+                "by_batch": {1: {}},
+            },
+            "partially sealed",
+        ),
+        ({"profile_capture_pending": {"batch_size": 1}}, "partial"),
+        ({"query": None}, "non-profile caches"),
+    ),
+)
+def test_profile_producer_probe_rejects_partial_layer_states(
+    monkeypatch: pytest.MonkeyPatch,
+    payload: dict[str, object],
+    message: str,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    probe = candidate.fixed32_sfwd_conv_postprep_profile_producer_pending
+    layers = _profile_probe_layers()
+    layers[17]._fr13_fixed32_sfwd_conv_postprep_outputs = payload
+    with pytest.raises(RuntimeError, match=message):
+        probe(layer_objects=tuple(layers), batch_size=1)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    (
+        (
+            {"layer_objects": (), "batch_size": 1},
+            "requires 48 layers",
+        ),
+        (
+            {"layer_objects": tuple(_profile_probe_layers()), "batch_size": 5},
+            "requires B1-B4",
+        ),
+    ),
+)
+def test_profile_producer_probe_enforces_layer_and_batch_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    with pytest.raises(RuntimeError, match=message):
+        candidate.fixed32_sfwd_conv_postprep_profile_producer_pending(**kwargs)
+
+
+def test_profile_producer_probe_refuses_to_run_during_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: True)
+    with pytest.raises(RuntimeError, match="ran during capture"):
+        candidate.fixed32_sfwd_conv_postprep_profile_producer_pending(
+            layer_objects=tuple(_profile_probe_layers()),
+            batch_size=1,
+        )
+
+
+def _profile_producer_runtime() -> dict[str, object]:
+    """Exec the patcher's profile-producer runtime against the real module."""
+    spec = importlib.util.spec_from_file_location(
+        "fr13_profile_producer_patcher", PATCHER_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    patcher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(patcher)
+    tree = ast.parse(patcher._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE)
+    wanted = {
+        "_fr13_fixed32_sfwd_conv_postprep_profile_producer_needed",
+        "_fr13_fixed32_sfwd_conv_postprep_profile_capture_active",
+        "_fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture",
+        "_fr13_fixed32_graph_descriptor",
+    }
+    definitions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name in wanted
+    ]
+    assert {node.name for node in definitions} == wanted
+    namespace: dict[str, object] = {"torch": torch}
+    exec(patcher._fr13_fixed32_runtime_bindings("hydra27_fixed32"), namespace)
+    exec(
+        compile(
+            ast.Module(body=definitions, type_ignores=[]),
+            "<fr13-profile-producer>",
+            "exec",
+        ),
+        namespace,
+    )
+    namespace.update(
+        _FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH=True,
+        _FR13_FIXED32_PROFILE_MEMORY_SCOPE=True,
+        _FR13_FIXED32_CAPTURE_CONTEXT=None,
+        _FR13_FIXED32_CAPTURE_MANIFESTS={},
+        _FR13_FIXED32_OBSERVED_CURRENT=None,
+        _FR13_FIXED32_PENDING_EVENT=None,
+        _FR13_FIXED32_CAPTURE_FROZEN=False,
+        _FR13_FIXED32_PROFILE_CAPTURE_SCOPE={
+            "descriptor": {
+                "runtime_mode": "FULL",
+                "num_tokens": 32,
+                "num_reqs": 1,
+                "uniform": True,
+                "has_lora": False,
+                "num_active_loras": 0,
+            },
+            "graph_id": None,
+            "completed": False,
+        },
+    )
+    order = tuple(f"model.layers.{index}.linear_attn" for index in range(48))
+    layers = {
+        name: types.SimpleNamespace(
+            prefix=name,
+            _fr13_fixed32_sfwd_conv_postprep_outputs=None,
+        )
+        for name in order
+    }
+    namespace["_FR13_EAGER_PACK_STACKS"] = {"layer_order": order}
+    namespace["_FR13_REPLAY_LAYERS"] = layers
+    return namespace
+
+
+def test_profile_producer_needed_until_layers_publish_eager_operands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    runtime = _profile_producer_runtime()
+    needed = runtime[
+        "_fr13_fixed32_sfwd_conv_postprep_profile_producer_needed"
+    ]
+    layers = runtime["_FR13_REPLAY_LAYERS"]
+
+    # The stock warmup publishes nothing, so the profile scope owes an eager
+    # capture-shaped forward before the throwaway FULL graph is captured.
+    assert needed("FULL", 32, 1, True, False, 0) is True
+    # PIECEWISE profiling and a disarmed scope never demand a producer.
+    assert needed("PIECEWISE", 32, 1, True, False, 0) is False
+    runtime["_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH"] = False
+    assert needed("FULL", 32, 1, True, False, 0) is False
+    runtime["_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH"] = True
+
+    for layer in layers.values():
+        layer._fr13_fixed32_sfwd_conv_postprep_outputs = {
+            "profile_capture_pending": {"batch_size": 1},
+        }
+    assert needed("FULL", 32, 1, True, False, 0) is False
+
+
+def test_profile_seal_fails_loud_when_no_layer_published_operands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression for the 2026-08-08 candidate-arm EngineCore init crash.
+
+    The seal used to return None when every layer cache was empty, so the FULL
+    profile capture proceeded and died inside the graph with "capture lacks
+    preseeded output bindings".
+    """
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    runtime = _profile_producer_runtime()
+    seal = runtime[
+        "_fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture"
+    ]
+    with pytest.raises(RuntimeError, match="profile output preseed is incomplete"):
+        seal(1)
+
+
 def test_static_ledger_counts_exact_bytes_and_launches_without_timing() -> None:
     standalone_b1 = candidate.fixed32_sfwd_conv_postprep_static_ledger(1)
     assert standalone_b1["gate_packing"]["candidate_programs_per_request"] == 44

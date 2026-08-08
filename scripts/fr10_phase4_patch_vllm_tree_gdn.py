@@ -2487,10 +2487,9 @@ def _fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture(num_reqs):
         layer_objects=tuple(layers[name] for name in order),
         batch_size=int(num_reqs),
     )
-    if evidence is None:
-        return None
     if (
-        not isinstance(evidence, dict)
+        evidence is None
+        or not isinstance(evidence, dict)
         or evidence.get("ready") is not True
         or evidence.get("profile_capture") is not True
         or int(evidence.get("layers", -1)) != 48
@@ -2501,6 +2500,77 @@ def _fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture(num_reqs):
         )
     globals()["_FR13_FIXED32_SFWD_CONV_POSTPREP_PROFILE_PRESEED"] = evidence
     return dict(evidence)
+
+
+def _fr13_fixed32_sfwd_conv_postprep_profile_producer_needed(
+    runtime_mode,
+    num_tokens,
+    num_reqs,
+    uniform,
+    has_lora,
+    num_active_loras,
+):
+    """Return whether the throwaway FULL profile still needs an eager producer.
+
+    ``profile_cudagraph_memory`` reaches ``_warmup_and_capture`` with the stock
+    warmup loop only, and that loop runs ``for_cudagraph_capture=False``
+    metadata. The GDN builder then reports ``num_spec_decodes == 0``, the
+    fixed32 tree-conv route never executes, and no layer publishes the eager
+    conv/post-prep operands the profile preseed seals -- the FULL capture then
+    fails with "capture lacks preseeded output bindings". Run one eager
+    capture-shaped forward inside the armed profile scope before sealing.
+    """
+    if not globals().get("_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH", False):
+        return False
+    if str(runtime_mode).upper() != "FULL":
+        return False
+    if not _fr13_fixed32_sfwd_conv_postprep_profile_capture_active():
+        return False
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile producer ran during capture"
+        )
+    descriptor = _fr13_fixed32_graph_descriptor(
+        str(runtime_mode).upper(),
+        num_tokens,
+        num_reqs,
+        uniform,
+        has_lora,
+        num_active_loras,
+    )
+    scope = globals().get("_FR13_FIXED32_PROFILE_CAPTURE_SCOPE")
+    if (
+        not isinstance(scope, dict)
+        or scope.get("descriptor") != descriptor
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile producer descriptor drifted"
+        )
+    stacks = globals().get("_FR13_EAGER_PACK_STACKS")
+    layers = globals().get("_FR13_REPLAY_LAYERS")
+    if not isinstance(stacks, dict) or not isinstance(layers, dict):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile producer registries are missing"
+        )
+    order = tuple(str(value) for value in stacks.get("layer_order", ()))
+    if (
+        len(order) != 48
+        or len(set(order)) != 48
+        or any(name not in layers for name in order)
+    ):
+        raise RuntimeError(
+            "FR13 SFWD conv/post-prep profile producer layer order drifted"
+        )
+    from lumo_flywheel_serving.fr13_sfwd_conv_postprep_fusion import (
+        fixed32_sfwd_conv_postprep_profile_producer_pending as _pending,
+    )
+
+    return bool(
+        _pending(
+            layer_objects=tuple(layers[name] for name in order),
+            batch_size=int(num_reqs),
+        )
+    )
 
 
 def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
@@ -22066,7 +22136,8 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         return False
     text = GPU_MODEL_RUNNER_PATH.read_text()
     sentinel = "# FR13_FIXED32_FINAL_FULL_PRESEED"
-    if sentinel in text:
+    profile_sentinel = "# FR13_FIXED32_SFWD_PROFILE_PRODUCER"
+    if sentinel in text or profile_sentinel in text:
         return False
     anchor = (
         "                profile_seq_lens=profile_seq_lens,\n"
@@ -22128,6 +22199,33 @@ def _patch_gpu_model_runner_fixed32_final_full_preseed() -> bool:
         "            _fr13_f32_preseed_gdn."
         "_fr13_fixed32_assert_final_full_preseed_ready(\n"
         "                desc.num_reqs,\n"
+        "            )\n"
+        "        " + profile_sentinel + ": the stock warmup loop above builds\n"
+        "        # for_cudagraph_capture=False metadata, so the GDN builder\n"
+        "        # reports num_spec_decodes=0 and no layer publishes the eager\n"
+        "        # conv/post-prep operands the throwaway FULL profile graph must\n"
+        "        # bind. Run one capture-shaped eager forward inside the armed\n"
+        "        # profile scope before sealing the profile output bindings.\n"
+        "        if _fr13_f32_preseed_gdn."
+        "_fr13_fixed32_sfwd_conv_postprep_profile_producer_needed(\n"
+        "            cudagraph_runtime_mode.name,\n"
+        "            desc.num_tokens,\n"
+        "            desc.num_reqs,\n"
+        "            desc.uniform,\n"
+        "            desc.has_lora,\n"
+        "            desc.num_active_loras,\n"
+        "        ):\n"
+        "            self._dummy_run(\n"
+        "                desc.num_tokens,\n"
+        "                cudagraph_runtime_mode=CUDAGraphMode.NONE,\n"
+        "                force_attention=True,\n"
+        "                uniform_decode=desc.uniform,\n"
+        "                allow_microbatching=allow_microbatching,\n"
+        "                skip_eplb=True,\n"
+        "                remove_lora=False,\n"
+        "                is_graph_capturing=True,\n"
+        "                num_active_loras=desc.num_active_loras,\n"
+        "                profile_seq_lens=profile_seq_lens,\n"
         "            )\n"
         "        _fr13_f32_preseed_gdn."
         "_fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture(\n"

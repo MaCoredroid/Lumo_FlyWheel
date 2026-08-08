@@ -1603,6 +1603,75 @@ def preseed_fixed32_sfwd_conv_postprep_capture_bindings(
     }
 
 
+def fixed32_sfwd_conv_postprep_profile_producer_pending(
+    *,
+    layer_objects: object,
+    batch_size: int,
+) -> bool:
+    """Report whether the throwaway FULL profile still needs an eager producer.
+
+    ``profile_cudagraph_memory`` only runs the stock warmup loop before its
+    FULL capture, and that loop builds ``for_cudagraph_capture=False``
+    metadata: the GDN builder then reports ``num_spec_decodes == 0``, the
+    fixed32 tree-conv route never executes, and no layer publishes the eager
+    conv/post-prep operands that the profile preseed has to seal. Probe the 48
+    layers so the caller can run one capture-shaped eager forward first.
+    """
+    if torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile producer probe ran during capture"
+        )
+    if (
+        not isinstance(layer_objects, (list, tuple))
+        or len(layer_objects) != LAYERS
+    ):
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile producer probe requires 48 layers"
+        )
+    capacity = int(batch_size)
+    if capacity not in (1, 2, 3, 4):
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile producer probe requires B1-B4"
+        )
+    caches = tuple(
+        getattr(layer, "_fr13_fixed32_sfwd_conv_postprep_outputs", None)
+        for layer in layer_objects
+    )
+    sealed = tuple(
+        isinstance(cache, dict)
+        and cache.get("schema") == CAPTURE_CACHE_SCHEMA
+        and cache.get("profile_capture") is True
+        and capacity in cache.get("by_batch", {})
+        for cache in caches
+    )
+    if all(sealed):
+        return False
+    if any(sealed):
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile caches are partially sealed"
+        )
+    published = tuple(
+        isinstance(cache, dict)
+        and isinstance(cache.get("profile_capture_pending"), dict)
+        and int(
+            cache["profile_capture_pending"].get("batch_size", 0)
+        )
+        == capacity
+        for cache in caches
+    )
+    if all(published):
+        return False
+    if any(published):
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile eager operands are partial"
+        )
+    if any(cache is not None for cache in caches):
+        raise RuntimeError(
+            "fixed32 conv/post-prep profile probe found non-profile caches"
+        )
+    return True
+
+
 def preseed_fixed32_sfwd_conv_postprep_profile_capture_bindings(
     *,
     layer_order: object,

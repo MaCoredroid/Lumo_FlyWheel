@@ -24,7 +24,7 @@ esac
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SOURCE_COMMIT=$(git rev-parse --verify HEAD)
-SOURCE_SHA256=980fd75dacbb80c600f6e2abd00bed886e600ba10a3ae60a133fc34aba341475
+SOURCE_SHA256=f3349c515b818271b4ef258e7633229c27cfcbe7cd0b42bdb7d0b5d79cbee053
 SELECTOR=scripts/fr13_dfwd_k64_fp8_selector.py
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 RUNROOT_REL=${RUNROOT_ABS#"$REPO/"}
