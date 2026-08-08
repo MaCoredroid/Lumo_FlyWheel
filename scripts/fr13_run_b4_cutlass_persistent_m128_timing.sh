@@ -629,9 +629,19 @@ temporary.write_text(
 os.replace(temporary, report_path)
 PY
   fi
+  # B=4 co-residency: every task opens its /metrics bracket on the same engine
+  # state, so the brackets NEST and a naive sum multiply-counts the shared
+  # prefix. fr13_measure.py reduces on the arm-authoritative bracket instead and
+  # cross-gates that choice against this arm's own engine-side work census, which
+  # is topology-blind. The census is mandatory here: an ungated B4 aggregate is
+  # exactly the artifact the alignment study invalidated.
+  local deploy_census="$RUNROOT_ABS/$arm/logs/fr13_fixed32_work_census.jsonl"
+  [[ -f "$deploy_census" && ! -L "$deploy_census" ]] \
+    || { echo "$arm lacks the work census the B4 bracket reduction is gated on" >&2; return 4; }
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" --out-root "$RUNROOT_ABS/$arm/swe_out" \
     --expected-tok-per-draft 31 --batch-size 4 \
+    --work-census "$deploy_census" \
     --out "$RUNROOT_ABS/$arm/deploy_speed_fullwall.json"
   printf 'arm=%s serve_rc=0 container_env_sha256=%s ended=%s\n' \
     "$arm" "$(sha256sum "$container_env" | awk '{print $1}')" \
@@ -864,6 +874,19 @@ def validate(record, label):
         or record.get("floor_is_full_step_hardware_floor") is not False
     ):
         raise SystemExit(f"{label} deploy-speed provenance is not exact4 B4")
+    # The B4 aggregate is only citable if the per-task bracket reduction was
+    # cross-gated against the arm's own engine-side work census. An ungated
+    # reduction is what carried the nested-bracket inflation.
+    reduction = record.get("bracket_reduction")
+    if not isinstance(reduction, dict) or reduction.get("topology") not in {
+        "nested",
+        "disjoint",
+    }:
+        raise SystemExit(f"{label} deploy-speed carries no bracket-topology provenance")
+    if (reduction.get("work_census_gate") or {}).get("status") != "pass":
+        raise SystemExit(
+            f"{label} deploy-speed bracket reduction was not work-census gated"
+        )
     for key in (
         "measured_tps_fullstep_wall", "step_wall_ms", "accept_per_event",
         "committed_per_event", "wall_steps_measured", "events_per_step",

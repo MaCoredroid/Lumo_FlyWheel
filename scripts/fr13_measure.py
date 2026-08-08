@@ -8,7 +8,10 @@ SWE-bench-Verified tasks, chat-templated via /v1/responses, multi-turn, real
 tool calls). The four deployment numbers, on the deployment trajectory:
   {s/fwd, accept/event, committed/event, derived-TPS}  (SPEED, instrument OFF)
     -> cmd_deploy_speed: raw-counter delta of the per-task /metrics brackets
-       run_swe_bench_q36_a.py already captures during the codex loop.
+       run_swe_bench_q36_a.py already captures during the codex loop, composed
+       on the topology those brackets actually have (sequential arms sum;
+       concurrent arms take the arm-authoritative bracket -- see
+       _bracket_reduce -- because their brackets nest and summing inflates).
   {clear-margin flip rate + Wilson CI vs each arm's OWN no-spec RECURRENT
    decode oracle; native-E5 = the within-floor BAR}    (LOSSLESS, instrument ON)
     -> cmd_deploy_lossless: consumes the big-denom rescore consolidation.
@@ -1481,6 +1484,134 @@ def _find_task_dirs(out_root: str) -> list[Path]:
             and (d / "vllm_metrics_post.txt").exists()]
 
 
+def _bracket_reduce(task_dirs: list[Path]) -> dict[str, Any]:
+    """Reduce the per-task /metrics brackets to ONE topology-safe arm delta.
+
+    run_swe_bench_q36_a.py brackets /metrics around EACH task. How those
+    brackets compose into an arm total depends on the ADMISSION TOPOLOGY, and
+    only one of the two cases is a sum:
+
+      DISJOINT (concurrency 1): the tasks run one after another, so the
+        brackets TILE the arm end to end and never overlap. The arm delta IS
+        their sum -- this is the historical reduction and stays byte-identical.
+
+      NESTED (concurrency > 1): the campaign admits every task at the same
+        instant, so every bracket opens on the SAME counter origin t0 and they
+        close at different times. The brackets are therefore NESTED, each one
+        containing all the earlier-closing ones, and SUMMING them
+        multiply-counts the shared prefix. Measured inflation on the recorded
+        B4 runroots is 1.7-2.6x (scripts/fr13_b4_alignment_reduce.py). For
+        nested brackets the arm delta is the ARM-AUTHORITATIVE bracket: the
+        WIDEST one, i.e. the task whose post-snapshot is written last, which by
+        nesting contains every other bracket and spans the whole arm.
+
+    Topology is CLASSIFIED FROM THE EVIDENCE, not assumed from --batch-size: a
+    shared origin across every pre-snapshot counter vector is what nesting
+    means, so that is what is tested. A partially-overlapping arm (staggered
+    admission) matches neither case; it classifies as disjoint here and is then
+    caught by the work-census cross-gate in cmd_deploy_speed, which fails closed
+    rather than reporting an inflated sum.
+    """
+    records: list[dict[str, Any]] = []
+    for d in task_dirs:
+        post_path = d / "vllm_metrics_post.txt"
+        before = _scrape_metrics_file(str(d / "vllm_metrics_pre.txt"))
+        after = _scrape_metrics_file(str(post_path))
+        records.append({
+            "instance_id": d.name,
+            "pre": before,
+            "delta": _delta(after, before),
+            "post_mtime": post_path.stat().st_mtime,
+        })
+
+    # A bracket "origin" is the full pre-snapshot counter vector. One distinct
+    # origin across >1 task == every task opened its bracket on the same engine
+    # state == nested.
+    origins = {tuple(r["pre"][c] for c in COUNTERS) for r in records}
+    nested = len(records) > 1 and len(origins) == 1
+
+    # Historical accumulation, preserved verbatim (same order, same float ops)
+    # so the disjoint result is bit-for-bit what it has always been.
+    summed = {c: 0.0 for c in COUNTERS}
+    for r in records:
+        for c in COUNTERS:
+            summed[c] += r["delta"][c]
+
+    if nested:
+        closing = max(records, key=lambda r: r["post_mtime"])
+        delta = {c: closing["delta"][c] for c in COUNTERS}
+        closing_task = closing["instance_id"]
+    else:
+        delta = summed
+        closing_task = None
+
+    return {
+        "delta": delta,
+        "summed_delta": summed,
+        "topology": "nested" if nested else "disjoint",
+        "closing_task": closing_task,
+        "distinct_bracket_origins": len(origins),
+        "per_task_delta": [r["delta"] for r in records],
+    }
+
+
+def _work_census_counts(path: str) -> dict[str, Any]:
+    """Reduce a whole-arm pure-decode work census to step / event counts.
+
+    logs/fr13_fixed32_work_census.jsonl is emitted by the engine once per
+    completed pure-decode forward, so it is a WHOLE-ARM record and is
+    TOPOLOGY-BLIND: it neither knows nor cares how the per-task /metrics
+    brackets overlap. That independence is exactly what makes it the cross-gate
+    on _bracket_reduce. Same reduction as
+    scripts/fr13_b4_alignment_reduce.py::_census.
+    """
+    p = Path(path)
+    if not p.is_file() or p.is_symlink():
+        raise RuntimeError(
+            f"class-9 FAIL-LOUD [deploy-speed]: work census {path!r} is not a "
+            "regular file -- the bracket reduction cannot be cross-gated."
+        )
+    by_batch: dict[int, int] = {}
+    steps = 0
+    with p.open(encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            if not record.get("event_complete"):
+                continue
+            size = record.get("batch_size")
+            if isinstance(size, bool) or not isinstance(size, int) or size < 1:
+                raise RuntimeError(
+                    f"class-9 FAIL-LOUD [deploy-speed]: work census {path!r} "
+                    "has a completed event without a positive integer batch_size."
+                )
+            purity = record.get("batch_purity") or {}
+            if purity.get("mixed_pseudo_rows"):
+                raise RuntimeError(
+                    f"class-9 FAIL-LOUD [deploy-speed]: work census {path!r} "
+                    "has a completed event carrying mixed pseudo rows -- that "
+                    "is not a pure-decode step and cannot gate the pure-decode "
+                    "bracket counters."
+                )
+            by_batch[size] = by_batch.get(size, 0) + 1
+            steps += 1
+    if steps == 0:
+        raise RuntimeError(
+            f"class-9 FAIL-LOUD [deploy-speed]: work census {path!r} records no "
+            "completed pure-decode event -- nothing to cross-gate against."
+        )
+    events = sum(size * count for size, count in by_batch.items())
+    return {
+        "path": path,
+        "steps": steps,
+        "events": events,
+        "events_per_step": events / steps,
+        "event_counts_by_batch": {str(k): by_batch[k] for k in sorted(by_batch)},
+    }
+
+
 def cmd_deploy_speed(args: argparse.Namespace) -> int:
     """DEPLOYMENT-regime SPEED (OFF, regime=deployment): s/fwd + accept/event +
     committed + derived TPS on the REAL codex trajectory, from the per-task
@@ -1495,7 +1626,13 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     --out-root = a run_swe_bench_q36_a out-root (e.g. output/fr13_bigdenom_swe/
     cat9_a/swe_out). --batch-size labels which co-residency regime the arm was
     booted in (B=1 MAX_NUM_SEQS=1 deployment, or B=4). --expected-tok-per-draft
-    is the class-9 engagement gate (5 for native E5, len(TREE) for a tree arm)."""
+    is the class-9 engagement gate (5 for native E5, len(TREE) for a tree arm).
+
+    BRACKET TOPOLOGY: the per-task brackets are composed by _bracket_reduce, NOT
+    blindly summed. Sequential (B=1) arms have disjoint brackets and sum exactly
+    as before; concurrent (B>1) arms open every bracket on one shared origin, so
+    the arm delta is the widest bracket instead. --work-census supplies the
+    independent engine-side witness and makes the reduction fail closed."""
     assert_speed_basis(args.basis)
     task_dirs = _find_task_dirs(args.out_root)
     if not task_dirs:
@@ -1504,15 +1641,13 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
             f"under {args.out_root!r} (vllm_metrics_pre/post.txt). The codex "
             "deployment run did not produce a bracketed task -- nothing to reduce."
         )
-    # Aggregate the raw-counter delta OVER ALL tasks (the deployment workload).
-    agg = {c: 0.0 for c in COUNTERS}
+    # Reduce the per-task brackets to ONE arm delta on the TOPOLOGY the recorded
+    # pre-snapshots actually show (disjoint -> sum, as always; nested -> the
+    # arm-authoritative widest bracket). See _bracket_reduce.
+    bracket = _bracket_reduce(task_dirs)
+    agg = bracket["delta"]
     per_task: list[dict[str, Any]] = []
-    for d in task_dirs:
-        before = _scrape_metrics_file(str(d / "vllm_metrics_pre.txt"))
-        after = _scrape_metrics_file(str(d / "vllm_metrics_post.txt"))
-        md = _delta(after, before)
-        for c in COUNTERS:
-            agg[c] += md[c]
+    for d, md in zip(task_dirs, bracket["per_task_delta"]):
         drafts = md[M_DRAFTS]
         tpot_sum_d = md.get(M_TPOT_SUM, 0.0)
         fwd_gpu_d = md.get(M_DECODE_FWD_GPU_S, 0.0)
@@ -1543,6 +1678,49 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
             "accept_per_event": (md[M_ACCEPTED] / drafts) if drafts > 0 else None,
             "per_request_decode_tps": (md.get(M_TPOT_COUNT, 0.0) / tpot_sum_d) if tpot_sum_d > 0 else None,
         })
+
+    # CROSS-GATE the bracket reduction against the arm's own work census. The
+    # census counts completed pure-decode forwards engine-side and is
+    # topology-blind, so it is an INDEPENDENT witness to the two pure-decode
+    # bracket counters. Agreement means the selected bracket really does span
+    # the whole arm exactly once; disagreement means the topology classification
+    # is wrong (staggered admission, a lost bracket, a restarted engine) and the
+    # aggregate is NOT trustworthy -> FAIL CLOSED. Never downgrade to a warning:
+    # a silently inflated aggregate is exactly the defect this gate exists for.
+    census = _work_census_counts(args.work_census) if args.work_census else None
+    census_gate: dict[str, Any]
+    if census is None:
+        census_gate = {"status": "absent"}
+        if bracket["topology"] == "nested":
+            print(
+                "WARNING [deploy-speed]: nested per-task /metrics brackets "
+                f"reduced on the arm-authoritative bracket ({bracket['closing_task']}) "
+                "with NO work-census cross-gate. Pass --work-census "
+                "<arm>/logs/fr13_fixed32_work_census.jsonl to make the "
+                "aggregate citable.",
+                file=sys.stderr,
+            )
+    else:
+        gate_steps = agg.get(M_DECODE_FWD_GPU_STEPS, 0.0)
+        gate_events = agg.get(M_DECODE_FWD_GPU_DRAFTS, 0.0)
+        if gate_steps != float(census["steps"]) or gate_events != float(census["events"]):
+            raise RuntimeError(
+                "class-9 FAIL-LOUD [deploy-speed]: the "
+                f"{bracket['topology']} per-task /metrics bracket reduction "
+                f"disagrees with the arm work census. bracket steps={gate_steps:.0f} "
+                f"events={gate_events:.0f}; census steps={census['steps']} "
+                f"events={census['events']}. The bracket topology classification "
+                "is not supported by the engine-side record, so no arm aggregate "
+                "can be reported."
+            )
+        census_gate = {
+            "status": "pass",
+            "census_path": census["path"],
+            "census_steps": census["steps"],
+            "census_events": census["events"],
+            "census_events_per_step": census["events_per_step"],
+            "census_event_counts_by_batch": census["event_counts_by_batch"],
+        }
 
     # class-9 engagement: tok/draft over the WHOLE deployment workload == expected.
     spec_like = {"expected_tok_per_draft": args.expected_tok_per_draft, "arm": args.arm}
@@ -1591,9 +1769,9 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # FR13_DFWD/CFWD_GPU_TIMER: per-arm component GPU totals (drafter propose /
     # committer rejection-sampler dispatch) + per-step ms, from the synthetic
     # bracket lines (sidecar-sourced). null when a timer was off / the brackets
-    # predate the wiring (no crash). Totals share the per-task-bracket overlap
-    # caveat of the other summed aggregates at B>1; ms-per-step is a ratio, so
-    # the overlap cancels.
+    # predate the wiring (no crash). Totals are on the topology-safe arm delta
+    # (_bracket_reduce), so they no longer carry the B>1 nested-bracket
+    # over-count; ms-per-step is a ratio and was already immune to it.
     agg_drafter_s = agg.get(M_DRAFTER_GPU_S, 0.0)
     agg_drafter_spans = agg.get(M_DRAFTER_GPU_SPANS, 0.0)
     agg_committer_s = agg.get(M_COMMITTER_GPU_S, 0.0)
@@ -1776,13 +1954,14 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     per_request_decode_tps = (agg[M_TPOT_COUNT] / tpot_sum) if tpot_sum > 0 else None
 
     # Aggregate throughput (REPORTING-ONLY, not a kernel-speed basis): total
-    # generation_tokens over the UNION measurement window / union wall. The per-task
-    # brackets OVERLAP at B>1, so use the earliest-pre -> latest-post SINGLE delta
-    # (NOT the summed agg[M_GEN_TOK], which double-counts the overlapping windows).
+    # generation_tokens over the UNION measurement window / union wall, from the
+    # earliest-pre -> latest-post SINGLE delta. On a nested arm this is the same
+    # window _bracket_reduce already selects, so agg and the union agree; the
+    # union form is kept because it is also correct for a staggered arm and it
+    # is what supplies the wall the rates below divide by.
     aggregate_decode_tps = None
     aggregate_window_wall_s = None
-    union_decode_s = None  # earliest-pre -> latest-post single delta (NOT the summed
-    # agg[M_DECODE_S], which double-counts the OVERLAPPING per-task brackets at B>1).
+    union_decode_s = None  # earliest-pre -> latest-post single delta.
     try:
         earliest_pre = min((d / "vllm_metrics_pre.txt" for d in task_dirs),
                            key=lambda p: p.stat().st_mtime)
@@ -1803,14 +1982,15 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # re-prefilled codex contexts) drags the gen/wall aggregate down WITHOUT being a
     # decode slowdown - the workload confound behind "why is our aggregate low" (user
     # 2026-06-16). request_decode_time EXCLUDES prefill, so per_request_decode_tps is
-    # unaffected; only aggregate_decode_tps (gen/wall) absorbs it. (A RATIO -> the
-    # bracket-overlap over-count cancels, so the summed agg is fine here.)
+    # unaffected; only aggregate_decode_tps (gen/wall) absorbs it. (A RATIO, and agg
+    # is now the topology-safe arm delta, so this is a true whole-arm ratio.)
     prefill_frac = (agg[M_PREFILL_S] / agg[M_DECODE_S]) if agg[M_DECODE_S] > 0 else None
     # effective_concurrency: UNION decode-stream-seconds / union wall = avg co-resident
     # streams over the window (bounded by batch_size). aggregate_decode_tps ~=
     # per_request_decode_tps x eff_conc, separating batch-fullness from per-stream (the
     # 39.9-vs-ours decomposition; lower eff_conc = drained batch / fewer tasks). MUST
-    # use union_decode_s, NOT summed agg[M_DECODE_S] (the latter gives >batch_size).
+    # use union_decode_s: a NAIVE sum of the per-task decode seconds gives >batch_size
+    # on a nested arm, which is the same defect _bracket_reduce removes upstream.
     effective_concurrency = (
         (union_decode_s / aggregate_window_wall_s)
         if (union_decode_s and aggregate_window_wall_s and aggregate_window_wall_s > 0)
@@ -1863,6 +2043,42 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "out_root": args.out_root,
         "n_tasks": len(task_dirs),
         "task_instance_ids": [d.name for d in task_dirs],
+        # How the per-task /metrics brackets were composed into this arm total,
+        # and what independently witnessed that composition. Read this BEFORE
+        # citing any aggregate below: "disjoint" is the historical sum;
+        # "nested" means the aggregate came from the single arm-authoritative
+        # bracket because summing would have multiply-counted the shared prefix.
+        "bracket_reduction": {
+            "topology": bracket["topology"],
+            "closing_task": bracket["closing_task"],
+            "distinct_bracket_origins": bracket["distinct_bracket_origins"],
+            "basis": (
+                "sum of the disjoint per-task bracket deltas"
+                if bracket["topology"] == "disjoint"
+                else "the widest (last-closing) nested bracket, which spans the whole arm"
+            ),
+            "work_census_gate": census_gate,
+            "note": (
+                "Nested brackets all open on one counter origin, so their sum "
+                "multiply-counts the shared prefix (1.7-2.6x on the recorded B4 "
+                "runroots; see scripts/fr13_b4_alignment_reduce.py). Topology is "
+                "classified from the recorded pre-snapshot counter vectors, not "
+                "assumed from --batch-size."
+            ),
+            # What the discarded naive sum WOULD have reported, per counter, as a
+            # multiple of the reduced arm delta. Only emitted when they differ.
+            **(
+                {
+                    "summed_bracket_inflation": {
+                        c: bracket["summed_delta"][c] / bracket["delta"][c]
+                        for c in COUNTERS
+                        if bracket["delta"][c]
+                    }
+                }
+                if bracket["topology"] == "nested"
+                else {}
+            ),
+        },
         "engagement": eng,
         "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
         "s_per_fwd": s_fwd,
@@ -2500,6 +2716,12 @@ def build_parser() -> argparse.ArgumentParser:
                     help="co-residency regime the arm was booted in (1 or 4)")
     ds.add_argument("--basis", default="decode_seconds",
                     help="speed basis; banned: tps/accept/wall/req_elapsed")
+    ds.add_argument("--work-census", default=None,
+                    help="arm pure-decode work census "
+                         "(<arm>/logs/fr13_fixed32_work_census.jsonl). Cross-gates "
+                         "the per-task bracket reduction against the engine-side "
+                         "step/event record and FAILS CLOSED on disagreement. "
+                         "REQUIRED for a citable B>1 aggregate.")
     ds.add_argument("--out", required=True)
     ds.set_defaults(func=cmd_deploy_speed)
 
