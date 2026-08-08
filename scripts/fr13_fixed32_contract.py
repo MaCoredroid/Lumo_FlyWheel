@@ -1071,6 +1071,7 @@ def _fixed32_qwen_compaction_metric_evidence(
     normal_request_count: int,
     successful_compaction_count: int,
     synthetic_compaction_failure_terminal: bool,
+    unobservable_compaction_boundaries: int,
     expected_completed_logical_model_requests: int,
     metrics_pre: bytes,
     metrics_post: bytes,
@@ -1181,10 +1182,16 @@ def _fixed32_qwen_compaction_metric_evidence(
         )
 
     failed_compactions = total_compactions - successful_compaction_count
+    # A compaction inside a delegated (sub-agent) conversation can never show
+    # up as a top-level input-token drop, so demand trace-visible or synthetic
+    # evidence only for compactions beyond the unobservable boundaries the
+    # trace actually contains. The exact 32768/20000 algebra above already
+    # pins every engine request.
     if (
         failed_compactions > 0
         and successful_compaction_count <= 0
         and synthetic_compaction_failure_terminal is not True
+        and failed_compactions > unobservable_compaction_boundaries
     ):
         raise ContractError(
             "fixed32 qwen failed compactions lack a trace-visible "
@@ -1205,6 +1212,9 @@ def _fixed32_qwen_compaction_metric_evidence(
         "successful_compaction_requests": successful_compaction_count,
         "failed_compaction_requests": failed_compactions,
         "total_compaction_requests": total_compactions,
+        "unobservable_compaction_boundaries": (
+            unobservable_compaction_boundaries
+        ),
         "max_tokens_count": deltas["max_tokens_count"],
         "max_tokens_sum": deltas["max_tokens_sum"],
         "max_tokens_le_10000": deltas["max_tokens_le_10000"],
@@ -1268,6 +1278,43 @@ def _fixed32_qwen_group_input_tokens(
             "fixed32 qwen assistant group input-token usage differs"
         )
     return next(iter(positive_values), None)
+
+
+def _fixed32_qwen_unobservable_compaction_boundaries(
+    assistant_groups: list[
+        list[tuple[dict[str, Any], dict[str, Any], str, int]]
+    ],
+) -> int:
+    """Count response-group boundaries where a compaction cannot be seen.
+
+    ``_fixed32_qwen_hidden_compaction_requests`` infers a successful
+    compaction from an input-token drop between consecutive *top-level*
+    response groups. Delegated (sub-agent) conversations report
+    ``{"input_tokens": 0, "output_tokens": 0}`` on every assistant record, so
+    a compaction performed inside one is structurally invisible to that
+    detector no matter how large the delegated context grows. Each adjacent
+    pair of such unobservable groups within one delegated conversation is one
+    boundary a compaction can legitimately hide behind; the count bounds how
+    many unattributed compactions the engine histogram may report.
+    """
+    boundaries = 0
+    previous_parent: str | None = None
+    previous_unobservable = False
+    for group in assistant_groups:
+        parent_tool_use_id = group[0][0].get("parent_tool_use_id")
+        unobservable = (
+            parent_tool_use_id is not None
+            and _fixed32_qwen_group_input_tokens(group) is None
+        )
+        if (
+            unobservable
+            and previous_unobservable
+            and parent_tool_use_id == previous_parent
+        ):
+            boundaries += 1
+        previous_parent = parent_tool_use_id
+        previous_unobservable = unobservable
+    return boundaries
 
 
 def _fixed32_qwen_hidden_compaction_requests(
@@ -2187,6 +2234,11 @@ def validate_fixed32_trace_model_requests(
             successful_compaction_count=len(hidden_compaction_requests),
             synthetic_compaction_failure_terminal=(
                 synthetic_compaction_failure_terminal
+            ),
+            unobservable_compaction_boundaries=(
+                _fixed32_qwen_unobservable_compaction_boundaries(
+                    assistant_groups
+                )
             ),
             expected_completed_logical_model_requests=(
                 expected_completed_logical_model_requests

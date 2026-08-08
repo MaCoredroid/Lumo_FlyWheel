@@ -844,6 +844,107 @@ def test_qwen_failed_only_compaction_terminal_near_miss_fails_closed(
         )
 
 
+def _qwen_subagent_compaction_trace() -> list[dict[str, Any]]:
+    """Delegated conversation whose assistant records carry no usage.
+
+    Production Qwen traces report ``{"input_tokens": 0, "output_tokens": 0}``
+    on every assistant record inside a delegated (sub-agent) conversation, so
+    a compaction performed there can never surface as a top-level
+    input-token drop.
+    """
+    events = _nested_agent_qwen_result_trace()
+    for event in events:
+        if (
+            event.get("type") == "assistant"
+            and event.get("parent_tool_use_id") is not None
+        ):
+            event["message"]["usage"] = {
+                "input_tokens": 0,
+                "output_tokens": 0,
+            }
+    _set_top_level_group_input_tokens(events, [10, 20])
+    events[-1]["usage"] = {
+        "input_tokens": 50,
+        "output_tokens": 8,
+        "total_tokens": 58,
+    }
+    return events
+
+
+def test_qwen_subagent_compaction_reconciles_without_a_visible_drop() -> None:
+    events = _qwen_subagent_compaction_trace()
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=6,
+        compactions=1,
+        normal_requests=5,
+        prompt_tokens=50,
+        generation_tokens=8,
+    )
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        expected_completed_logical_model_requests=6,
+        metrics_pre=metrics_pre,
+        metrics_post=metrics_post,
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 6
+    assert trace_requests["hidden_successful_compaction_model_requests"] == 0
+    assert trace_requests["hidden_failed_compaction_model_requests"] == 1
+    assert trace_requests["synthetic_compaction_failure_terminal"] is False
+    evidence = trace_requests["qwen_compaction_metric_evidence"]
+    assert evidence["unobservable_compaction_boundaries"] == 1
+    assert evidence["normal_requests"] == 5
+    assert evidence["total_compaction_requests"] == 1
+
+
+def test_qwen_compactions_beyond_unobservable_boundaries_fail_closed() -> None:
+    events = _qwen_subagent_compaction_trace()
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=7,
+        compactions=2,
+        normal_requests=5,
+        prompt_tokens=50,
+        generation_tokens=8,
+    )
+
+    with pytest.raises(
+        contract.ContractError,
+        match="exact synthetic failure terminal",
+    ):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+            expected_completed_logical_model_requests=7,
+            metrics_pre=metrics_pre,
+            metrics_post=metrics_post,
+        )
+
+
+def test_top_level_trace_has_no_unobservable_boundaries() -> None:
+    events = _qwen_failed_compaction_trace()
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=16,
+        compactions=3,
+        normal_requests=13,
+        prompt_tokens=8_500,
+        generation_tokens=100,
+        before_offset=17,
+    )
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        expected_completed_logical_model_requests=16,
+        metrics_pre=metrics_pre,
+        metrics_post=metrics_post,
+    )
+
+    evidence = trace_requests["qwen_compaction_metric_evidence"]
+    assert evidence["unobservable_compaction_boundaries"] == 0
+
+
 @pytest.mark.parametrize(
     ("overrides", "expected_completed", "message"),
     (
