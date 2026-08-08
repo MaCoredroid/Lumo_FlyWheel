@@ -44,7 +44,7 @@ import sys
 import threading
 import time
 import traceback
-from collections import Counter
+from collections import Counter, deque
 from pathlib import Path
 from typing import Any
 
@@ -3210,6 +3210,214 @@ def _run_with_fixed32_taw_campaign_arm(
         if arm.active:
             arm.finish()
             _write_artifact()
+
+
+FR13_TASK_REFILL_ENV = "FR13_B4_TASK_REFILL"
+FR13_TASK_REFILL_LEDGER_FILENAME = "fr13_task_refill_ledger.jsonl"
+FR13_TASK_REFILL_SUMMARY_FILENAME = "fr13_task_refill_summary.json"
+
+
+def _task_refill_enabled() -> bool:
+    """FR13_B4_TASK_REFILL: continuous task-pool admission. DEFAULT OFF.
+
+    OFF (the default, and what every banked contract was measured under) leaves
+    admission byte-identical: ThreadPoolExecutor.map over the whole subset,
+    results consumed in submission order.
+    """
+    raw = os.environ.get(FR13_TASK_REFILL_ENV, "0")
+    if raw not in {"0", "1"}:
+        raise Fixed32BoundaryError(
+            f"{FR13_TASK_REFILL_ENV} must be exactly 0 or 1"
+        )
+    return raw == "1"
+
+
+def _run_task_pool_with_refill(
+    *,
+    job: Any,
+    instance_ids: list[str],
+    concurrency: int,
+    ledger_path: Path | None = None,
+    summary_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Hold `concurrency` tasks in flight until the task pool drains.
+
+    WHY THIS EXISTS. The B4 arms are measured at nominal co-residency 4, but the
+    measured co-residency is far below it: the alignment study attributes 54.7%
+    of the shortfall to TASK-END SKEW. With a pool of exactly `concurrency`
+    tasks that is unavoidable -- agent sessions end 798s..2234s apart, so the
+    served batch is full width for only ~36% of the arm and then decays
+    4 -> 3 -> 2 -> 1 with nothing to backfill it. A pool LARGER than the slot
+    count fixes that: the moment a task finishes, the next one is admitted.
+
+    WHAT IS ACTUALLY DIFFERENT FROM ex.map. ThreadPoolExecutor.map already
+    queues every task up front and lets each worker pull the next one on
+    return, so worker-level backfill is not new. What this admitter adds is the
+    three things the measurement needs and map cannot give:
+
+      1. COMPLETION-ORDER collection. map yields in SUBMISSION order, so one
+         slow task stalls the consumption loop and an exception raised out of
+         it leaves the remaining queue running to completion under a shutdown
+         that does not cancel. Here results are taken as they land, and a
+         failure STOPS ADMISSION (the pool is dropped) while the in-flight
+         tasks drain -- the circuit breaker stops the campaign instead of
+         torching the rest of the pool.
+      2. An ADMISSION LEDGER. Nothing downstream can currently prove occupancy
+         stayed at the nominal width; the floor gate parses task start/end
+         lines but does not validate their interleaving. This records every
+         admit and every completion with a monotonic clock and the resulting
+         depth, and reduces it to the time-weighted mean depth and the
+         full-width fraction -- the quantities the co-residency decomposition
+         is arguing about.
+      3. A hard INVARIANT that in-flight never exceeds `concurrency`, which is
+         what the engine's --max-num-seqs attestation and the floor gate's
+         `steps <= drafts <= concurrency * steps` bound both depend on.
+
+    WHAT IT DOES NOT FIX. Admission here means "a worker thread picked the task
+    up", not "the engine is decoding it". Each task first hydrates its repo,
+    rsyncs its workspace to the agent host and starts its container; the engine
+    sees nothing until then. So the depth this ledger reports is an UPPER BOUND
+    on decode co-residency, and the residual gap is per-task setup, not skew.
+    Overlapping that setup would mean admitting a task before its predecessor's
+    engine work drains, which would break the in-flight invariant above; it
+    needs a separate setup-prefetch stage, not a wider pool.
+    """
+    if concurrency < 1:
+        raise Fixed32BoundaryError("task-pool refill requires concurrency >= 1")
+
+    pending = deque(instance_ids)
+    inflight: dict[Any, str] = {}
+    results: list[dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
+    failure: BaseException | None = None
+    origin = time.monotonic()
+    peak_depth = 0
+
+    def _record(event: str, instance_id: str, depth: int) -> None:
+        events.append(
+            {
+                "event": event,
+                "instance_id": instance_id,
+                "t_s": round(time.monotonic() - origin, 6),
+                "wall": _iso_now(),
+                "depth": depth,
+                "pending": len(pending),
+            }
+        )
+
+    with _cf.ThreadPoolExecutor(max_workers=concurrency) as executor:
+
+        def _admit() -> None:
+            nonlocal peak_depth
+            while pending and len(inflight) < concurrency:
+                instance_id = pending.popleft()
+                inflight[executor.submit(job, instance_id)] = instance_id
+                peak_depth = max(peak_depth, len(inflight))
+                _record("admit", instance_id, len(inflight))
+
+        _admit()
+        while inflight:
+            done, _ = _cf.wait(inflight, return_when=_cf.FIRST_COMPLETED)
+            for future in done:
+                instance_id = inflight.pop(future)
+                try:
+                    results.append(future.result())
+                except BaseException as error:  # noqa: BLE001 - re-raised below
+                    # Stop admitting: a dead endpoint (the circuit breaker) must
+                    # not be allowed to burn the rest of the pool.
+                    pending.clear()
+                    if failure is None:
+                        failure = error
+                _record("complete", instance_id, len(inflight))
+            _admit()
+
+    if len(inflight) != 0:
+        raise Fixed32BoundaryError("task-pool refill left work in flight")
+    if peak_depth > concurrency:
+        raise Fixed32BoundaryError(
+            f"task-pool refill exceeded its slot count: {peak_depth} > {concurrency}"
+        )
+
+    summary = _reduce_task_refill_ledger(
+        events, concurrency=concurrency, task_count=len(instance_ids)
+    )
+    summary["peak_depth"] = peak_depth
+    summary["completed"] = len(results)
+    summary["aborted"] = failure is not None
+
+    if ledger_path is not None:
+        _write_jsonl_atomic(ledger_path, events)
+    if summary_path is not None:
+        _write_json_atomic(summary_path, summary)
+
+    print(
+        f"[{_iso_now()}] task-refill: pool={len(instance_ids)} slots={concurrency} "
+        f"mean_depth={summary['time_weighted_mean_depth']:.4f} "
+        f"full_width_fraction={summary['full_width_fraction']:.4f}",
+        flush=True,
+    )
+
+    if failure is not None:
+        raise failure
+    return results
+
+
+def _reduce_task_refill_ledger(
+    events: list[dict[str, Any]], *, concurrency: int, task_count: int
+) -> dict[str, Any]:
+    """Time-weight the admission ledger into occupancy the reducer can cite."""
+    ordered = sorted(events, key=lambda e: (e["t_s"], e["event"] != "admit"))
+    span = 0.0
+    weighted = 0.0
+    full_width = 0.0
+    previous_t = ordered[0]["t_s"] if ordered else 0.0
+    depth = 0
+    for event in ordered:
+        width = event["t_s"] - previous_t
+        if width > 0:
+            span += width
+            weighted += depth * width
+            if depth >= concurrency:
+                full_width += width
+        depth = event["depth"]
+        previous_t = event["t_s"]
+    return {
+        "schema": "fr13.task_refill.summary.v1",
+        "task_count": task_count,
+        "slots": concurrency,
+        "arm_wall_s": span,
+        "time_weighted_mean_depth": (weighted / span) if span > 0 else 0.0,
+        "full_width_fraction": (full_width / span) if span > 0 else 0.0,
+        "admissions": sum(1 for e in ordered if e["event"] == "admit"),
+        "note": (
+            "depth counts tasks held by a worker thread, which is an UPPER "
+            "BOUND on engine decode co-residency: a freshly admitted task is "
+            "still hydrating its repo and starting its container."
+        ),
+    }
+
+
+def _write_jsonl_atomic(path: Path, records: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        "".join(
+            json.dumps(record, ensure_ascii=True, sort_keys=True) + "\n"
+            for record in records
+        ),
+        encoding="ascii",
+    )
+    os.replace(temporary, path)
+
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+        encoding="ascii",
+    )
+    os.replace(temporary, path)
 
 
 class _Fixed32Bm8RealTaskArm(_Fixed32TawRealTaskArm):
@@ -9577,10 +9785,36 @@ def main(argv: list[str] | None = None) -> int:
             _autocommit_task_artifacts(per_task_root / iid, iid)
         return res
 
+    # FR13_B4_TASK_REFILL (default OFF): hold the slot count full from a task
+    # POOL instead of running one fixed wave. OFF is byte-identical to every
+    # banked run. ON changes the served workload, so a citable measurement under
+    # it needs its own contract -- see _run_task_pool_with_refill.
+    task_refill = _task_refill_enabled()
+    if task_refill and args.concurrency <= 1:
+        parser.error(
+            f"{FR13_TASK_REFILL_ENV}=1 is meaningless at concurrency 1 "
+            "(there is no slot to refill)"
+        )
+    if task_refill and len(instance_ids) <= args.concurrency:
+        parser.error(
+            f"{FR13_TASK_REFILL_ENV}=1 needs a task pool LARGER than the slot "
+            f"count; got {len(instance_ids)} tasks for {args.concurrency} slots"
+        )
+
     def _run_jobs() -> None:
         if args.concurrency <= 1:
             for iid in instance_ids:
                 summaries.append(_job(iid))
+        elif task_refill:
+            summaries.extend(
+                _run_task_pool_with_refill(
+                    job=_job,
+                    instance_ids=instance_ids,
+                    concurrency=args.concurrency,
+                    ledger_path=dataset_out / FR13_TASK_REFILL_LEDGER_FILENAME,
+                    summary_path=dataset_out / FR13_TASK_REFILL_SUMMARY_FILENAME,
+                )
+            )
         else:
             with _cf.ThreadPoolExecutor(max_workers=args.concurrency) as ex:
                 for res in ex.map(_job, instance_ids):

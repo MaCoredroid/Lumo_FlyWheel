@@ -35,6 +35,13 @@ WALL_ENV="$WALL"; [[ "$WALL" == "0" ]] && WALL_ENV=""
 BSIZE=${BSIZE:-4}    # vLLM max_num_seqs (B). B=1 = single-stream, no co-residency.
 CONC=${CONC:-4}      # codex task concurrency. B=1 clean => CONC=1 (one task at a time).
 TAG=${TAG:-b4}       # arm-name / sidecar / deploy-json suffix (keeps B=1 + B=4 separate).
+# FR13_B4_TASK_REFILL=1 keeps CONC tasks in flight from a pool bigger than CONC
+# (admit on completion) instead of one decaying wave. DEFAULT 0 = OFF = every
+# banked contract's admission. Needs SUBSET larger than CONC, and its output is
+# NOT exact4-citable without a contract update.
+FR13_B4_TASK_REFILL=${FR13_B4_TASK_REFILL:-0}
+[[ "$FR13_B4_TASK_REFILL" == "0" || "$FR13_B4_TASK_REFILL" == "1" ]] \
+  || { echo "FAIL: FR13_B4_TASK_REFILL must be exactly 0 or 1" >&2; exit 2; }
 mkdir -p "$RUNROOT" output/fr13_sfwd_sidecar
 
 FIXED32_MANIFEST_ACTIVE=0
@@ -125,6 +132,7 @@ run_native() {  # arm spec_n expect offload
   local arm=$1 spec_n=$2 expect=$3 offload=$4
   echo "===== NATIVE ARM $arm (E$spec_n) B=$BSIZE offload=$offload ====="
   OFFLOAD_AGENT=$offload SPEC_N=$spec_n MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL_ENV \
+    FR13_B4_TASK_REFILL="$FR13_B4_TASK_REFILL" \
     FR13_SFWD_GPU_TIMER="${FR13_SFWD_GPU_TIMER:-1}" \
     FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
     FR13_DFWD_GPU_TIMER="${FR13_DFWD_GPU_TIMER:-1}" \
@@ -154,6 +162,7 @@ run_variant() {  # arm kind expect offload
   # t0.6 speed lever; lossless-within-floor; user 2026-06-16 accepted). Engages on tree
   # arms at temp>0 only; no-op for the native bars.
   OFFLOAD_AGENT=$offload MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL_ENV \
+    FR13_B4_TASK_REFILL="$FR13_B4_TASK_REFILL" \
     FR13_DEVICE_MULTIDRAFT=${FR13_DEVICE_MULTIDRAFT:-1} \
     FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
     FR13_SFWD_GPU_TIMER="${FR13_SFWD_GPU_TIMER:-1}" \
