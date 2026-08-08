@@ -944,8 +944,59 @@ def _fixture_conv_layout_signature(batch_size: int) -> str:
     return hashlib.sha256(_canonical_json(payload).encode("ascii")).hexdigest()
 
 
-def forward_graph_structural_manifest(batch_size: int) -> dict[str, Any]:
-    """Return the mode-independent final-FULL graph contract for one B."""
+UNFUSED_KERNEL_SHAPE = "conv_pregather"
+FUSED_KERNEL_SHAPE = "sfwd_conv_postprep_fused"
+KERNEL_SHAPES = (UNFUSED_KERNEL_SHAPE, FUSED_KERNEL_SHAPE)
+
+STRUCTURAL_MANIFEST_SCHEMA = "fr13-fixed32-forward-graph-structural-manifest-v1"
+STRUCTURAL_MANIFEST_FUSED_SCHEMA = (
+    "fr13-fixed32-forward-graph-structural-manifest-sfwd-fused-v1"
+)
+
+SFWD_CONV_POSTPREP_ROUTE = "fused_conv_postprep_single_kernel"
+
+# Two canonical structural references, each pinned. An arm matches exactly
+# one. These are written-down constants, never derived from what a runtime
+# was observed to do: a runtime that disagrees with its arm's reference is a
+# failure, not a new reference.
+FORWARD_GRAPH_STRUCTURAL_SIGNATURES = {
+    UNFUSED_KERNEL_SHAPE: {
+        1: "2373bfbd2ac6ab7a6fd67af5570385f2aea2a16a1e80b804bdf12e092f319423",
+        2: "508a856a418e5954083e8aaf93efa1e6f89b65562f3c20414418b9dd640e5362",
+        3: "f451f42fc2803a8a3a7d7359e39487ba944fc27618a043d5026d766f2e94cba7",
+        4: "025bc236c194ee88a512ccb633b0247cfa3e4a15e17975061083b62d7be921cb",
+    },
+    FUSED_KERNEL_SHAPE: {
+        1: "f15d7b06d0e3c72ae6d53aa43c2f27501ef0c4238cbcd01e65844eaf1b63b875",
+        2: "f85e059f6937e2d0cd63d9173bf088c545b18bd6fccceb76b1d20cfcb05dc7f1",
+        3: "8d0c4bc4e81ea41831a45c4c069ee0e2ab67a585379f1347d8918a6b399d011d",
+        4: "f8a2ca1fc246a3058430a653b1fd27796622e21bdf80db5b93a2d19e831ed547",
+    },
+}
+
+
+def _validated_kernel_shape(kernel_shape: str) -> str:
+    if kernel_shape not in KERNEL_SHAPES:
+        raise ValueError(
+            f"forward graph kernel_shape must be in {KERNEL_SHAPES}, "
+            f"got {kernel_shape!r}"
+        )
+    return kernel_shape
+
+
+def forward_graph_structural_manifest(
+    batch_size: int, *, kernel_shape: str = UNFUSED_KERNEL_SHAPE
+) -> dict[str, Any]:
+    """Return the mode-independent final-FULL graph contract for one B.
+
+    ``kernel_shape`` selects which canonical reference applies. The workload
+    identity -- descriptor geometry, tree attention, GDN -- is shared and
+    strict across both: that is what makes a stock/candidate pair comparable.
+    Only the conv work structure differs, because the SFWD fusion replaces the
+    pregather stage kernel and the 48 per-layer consumes with one fused kernel
+    per layer.
+    """
+    _validated_kernel_shape(kernel_shape)
     if (
         isinstance(batch_size, bool)
         or not isinstance(batch_size, int)
@@ -954,6 +1005,51 @@ def forward_graph_structural_manifest(batch_size: int) -> dict[str, Any]:
         raise ValueError(
             f"forward graph batch_size must be in {SUPPORTED_BATCH_SIZES}"
         )
+    if kernel_shape == FUSED_KERNEL_SHAPE:
+        return {
+            "schema": STRUCTURAL_MANIFEST_FUSED_SCHEMA,
+            "batch_size": batch_size,
+            "descriptor_geometry": {
+                "physical_drafts": PHYSICAL_DRAFTS,
+                "verify_rows_per_request": VERIFY_ROWS_PER_REQUEST,
+                "verify_rows": VERIFY_ROWS_PER_REQUEST * batch_size,
+                "model_layers": MODEL_LAYERS,
+            },
+            "tree_attention": {
+                "layers": TREE_ATTENTION_LAYERS,
+                "calls_per_event": TREE_CALLS_PER_EVENT,
+                "q_rows_per_call": TREE_ROWS_PER_REQUEST * batch_size,
+                "bias_shape": list(TREE_BIAS_SHAPE),
+                "physical_parent_sha256": PHYSICAL_PARENT_SHA256,
+            },
+            "gdn": {
+                "layers": GDN_LAYERS,
+                "scan_calls": GDN_SCAN_CALLS_PER_REQUEST * batch_size,
+                "launches_per_scan": GDN_LAUNCHES_PER_SCAN,
+                "path_programs_per_scan": GDN_PATH_PROGRAMS_PER_SCAN,
+                "padded_slots_per_scan": GDN_PADDED_SLOTS_PER_SCAN,
+                "nodes_per_scan": GDN_NODES_PER_SCAN,
+                "critical_path": GDN_CRITICAL_PATH,
+                "grid_z": list(GDN_GRID_Z),
+                "max_path_lengths": list(GDN_MAX_PATH_LENGTHS),
+                "export_or_mask": GDN_EXPORT_OR_MASK,
+            },
+            "sfwd_conv_postprep": {
+                "route": SFWD_CONV_POSTPREP_ROUTE,
+                "layers": CONV_PREGATHER_LAYERS,
+                "requests": batch_size,
+                "calls": CONV_PREGATHER_LAYERS,
+                "calls_per_layer": 1,
+                "capture_guard": True,
+                # The fused kernel subsumes both of these; they are pinned at
+                # zero so a run that also took the unfused route fails.
+                "stage_calls": 0,
+                "consume_calls": 0,
+                "source_validations": 0,
+                "freshness_matches": 0,
+                "staged_rows": 0,
+            },
+        }
     conv_pregather_programs = (
         CONV_PREGATHER_LAYERS
         * batch_size
@@ -1025,16 +1121,34 @@ def forward_graph_structural_manifest(batch_size: int) -> dict[str, Any]:
     }
 
 
-def forward_graph_structural_signature(batch_size: int) -> str:
-    """Hash only deterministic structural facts shared by both arms."""
-    manifest = forward_graph_structural_manifest(batch_size)
+def forward_graph_structural_signature(
+    batch_size: int, *, kernel_shape: str = UNFUSED_KERNEL_SHAPE
+) -> str:
+    """Hash the canonical structural facts for one arm's kernel shape.
+
+    The result is checked against the pinned table: the canonical references
+    are written down, so an accidental edit to a manifest fails here rather
+    than silently reclassifying an arm.
+    """
+    _validated_kernel_shape(kernel_shape)
+    manifest = forward_graph_structural_manifest(
+        batch_size, kernel_shape=kernel_shape
+    )
     canonical = json.dumps(
         manifest,
         ensure_ascii=True,
         separators=(",", ":"),
         sort_keys=True,
     )
-    return hashlib.sha256(canonical.encode("ascii")).hexdigest()
+    digest = hashlib.sha256(canonical.encode("ascii")).hexdigest()
+    pinned = FORWARD_GRAPH_STRUCTURAL_SIGNATURES[kernel_shape].get(batch_size)
+    if pinned is not None and digest != pinned:
+        raise CensusError(
+            "forward graph structural manifest drifted from its pinned "
+            f"signature: kernel_shape={kernel_shape} batch_size={batch_size} "
+            f"computed={digest} pinned={pinned}"
+        )
+    return digest
 
 
 def validate_event(raw: object, *, source: str) -> ValidatedEvent:

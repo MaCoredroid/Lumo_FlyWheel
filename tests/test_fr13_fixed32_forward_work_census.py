@@ -340,3 +340,114 @@ def test_sfwd_observer_is_inert_without_an_active_event() -> None:
     runtime["_fr13_fixed32_observed_sfwd_conv_postprep"](
         "language_model.model.layers.0.linear_attn", 1, False
     )
+
+
+# --- canonical structural references -------------------------------------
+#
+# Two pinned references, one per kernel shape. The stock arm must keep the
+# reference it has always had; the fused arm carries its own.
+
+import sys as _sys  # noqa: E402
+
+if str(ROOT / "scripts") not in _sys.path:
+    _sys.path.insert(0, str(ROOT / "scripts"))
+import fr13_fixed32_work_census as census  # noqa: E402
+
+
+UNFUSED_SIGNATURES = {
+    1: "2373bfbd2ac6ab7a6fd67af5570385f2aea2a16a1e80b804bdf12e092f319423",
+    2: "508a856a418e5954083e8aaf93efa1e6f89b65562f3c20414418b9dd640e5362",
+    3: "f451f42fc2803a8a3a7d7359e39487ba944fc27618a043d5026d766f2e94cba7",
+    4: "025bc236c194ee88a512ccb633b0247cfa3e4a15e17975061083b62d7be921cb",
+}
+
+
+@pytest.mark.parametrize("batch", (1, 2, 3, 4))
+def test_unfused_structural_signature_is_unchanged(batch: int) -> None:
+    """The stock arm's reference must stay byte-identical forever.
+
+    These are the values the module produced before the fused shape existed.
+    """
+    assert census.forward_graph_structural_signature(batch) == UNFUSED_SIGNATURES[batch]
+    assert (
+        census.forward_graph_structural_signature(
+            batch, kernel_shape=census.UNFUSED_KERNEL_SHAPE
+        )
+        == UNFUSED_SIGNATURES[batch]
+    )
+    manifest = census.forward_graph_structural_manifest(batch)
+    assert manifest["schema"] == census.STRUCTURAL_MANIFEST_SCHEMA
+    assert "conv_pregather" in manifest
+    assert "sfwd_conv_postprep" not in manifest
+
+
+@pytest.mark.parametrize("batch", (1, 2, 3, 4))
+def test_fused_reference_is_pinned_and_distinct(batch: int) -> None:
+    fused = census.forward_graph_structural_signature(
+        batch, kernel_shape=census.FUSED_KERNEL_SHAPE
+    )
+    assert fused == census.FORWARD_GRAPH_STRUCTURAL_SIGNATURES[
+        census.FUSED_KERNEL_SHAPE
+    ][batch]
+    # An arm matches exactly one reference.
+    assert fused != UNFUSED_SIGNATURES[batch]
+    manifest = census.forward_graph_structural_manifest(
+        batch, kernel_shape=census.FUSED_KERNEL_SHAPE
+    )
+    assert manifest["schema"] == census.STRUCTURAL_MANIFEST_FUSED_SCHEMA
+    assert "conv_pregather" not in manifest
+    assert manifest["sfwd_conv_postprep"]["calls"] == 48
+    # The fused route must pin the subsumed unfused work at zero, so a run
+    # that took both routes cannot match this reference.
+    for subsumed in (
+        "stage_calls",
+        "consume_calls",
+        "source_validations",
+        "freshness_matches",
+        "staged_rows",
+    ):
+        assert manifest["sfwd_conv_postprep"][subsumed] == 0
+
+
+@pytest.mark.parametrize("batch", (1, 2, 3, 4))
+def test_workload_identity_is_shared_across_shapes(batch: int) -> None:
+    """What makes the pair comparable stays strict and identical.
+
+    Kernel structure is what the candidate is allowed to change; the workload
+    -- draft counts, verify rows, tree geometry, GDN scan shape -- is not.
+    """
+    unfused = census.forward_graph_structural_manifest(batch)
+    fused = census.forward_graph_structural_manifest(
+        batch, kernel_shape=census.FUSED_KERNEL_SHAPE
+    )
+    for shared in ("batch_size", "descriptor_geometry", "tree_attention", "gdn"):
+        assert unfused[shared] == fused[shared], shared
+
+
+def test_signature_rejects_a_manifest_edit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The canonical references are written down, not derived.
+
+    Editing a manifest without updating its pin must fail loudly rather than
+    silently reclassify an arm.
+    """
+    original = census.forward_graph_structural_manifest
+
+    def tampered(batch_size, *, kernel_shape=census.UNFUSED_KERNEL_SHAPE):
+        manifest = dict(original(batch_size, kernel_shape=kernel_shape))
+        manifest["batch_size"] = manifest["batch_size"] + 100
+        return manifest
+
+    monkeypatch.setattr(census, "forward_graph_structural_manifest", tampered)
+    for shape in census.KERNEL_SHAPES:
+        with pytest.raises(census.CensusError, match="drifted from its pinned"):
+            census.forward_graph_structural_signature(1, kernel_shape=shape)
+
+
+def test_unknown_kernel_shape_is_rejected() -> None:
+    for bad in ("fused", "", "CONV_PREGATHER", None):
+        with pytest.raises(ValueError, match="kernel_shape"):
+            census.forward_graph_structural_manifest(1, kernel_shape=bad)
+        with pytest.raises(ValueError, match="kernel_shape"):
+            census.forward_graph_structural_signature(1, kernel_shape=bad)
