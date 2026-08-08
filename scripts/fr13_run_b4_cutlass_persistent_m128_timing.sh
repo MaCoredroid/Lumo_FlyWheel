@@ -144,6 +144,10 @@ CANDIDATE_ARM="${FIXED32_MODE}_cutlass_${CANDIDATE_ARM_SLUG}${ARM_PROFILE_SUFFIX
 ALL_PARENT_PRODUCTION=0
 ALL_PARENT_PASS_SHA256=
 ALL_PARENT_VERDICT_SHA256=
+# The hot-path TAW commit route is a function of the committer this run selects.
+# Without an all-parent credential both arms run the reference committer, so the
+# work census records the reference route on every event.
+WORK_CENSUS_ROUTE=fixed32_pytorch_exact_float_triton_integer_commit
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
   || { echo "TAG contains unsafe characters" >&2; exit 2; }
@@ -289,6 +293,7 @@ PY
   ALL_PARENT_PRODUCTION=1
   ALL_PARENT_PASS_SHA256=$(sha256sum "$ALL_PARENT_PASS_JSON" | awk '{print $1}')
   ALL_PARENT_VERDICT_SHA256=$(sha256sum "$ALL_PARENT_VERDICT_JSON" | awk '{print $1}')
+  WORK_CENSUS_ROUTE=fixed32_native_precompute_production_candidate_return
 fi
 [[ "$(stat -c '%s' "$STOCK_FA2_SO")" == "$STOCK_FA2_BYTES" \
    && "$(sha256sum "$STOCK_FA2_SO" | awk '{print $1}')" == "$STOCK_FA2_SHA256" ]] \
@@ -548,18 +553,22 @@ run_arm() {
     [[ "$(grep -Fxc "FR13_DRAFT_VOCAB_BLOCKS=$DRAFT_VOCAB_BLOCKS_CONTAINER" "$container_env")" -eq 1 ]] \
       || { echo "$arm did not run the pinned root-64K block map" >&2; return 4; }
   fi
+  local work_census="$RUNROOT_ABS/$arm/logs/fr13_fixed32_work_census.jsonl"
+  local work_report="$RUNROOT_ABS/$arm/work_census_validation.json"
   if (( ALL_PARENT_PRODUCTION == 1 )); then
     local all_parent_marker="$RUNROOT_ABS/$arm/logs/fr13_fixed32_taw_native_precompute_production.arm"
     local all_parent_credential="$RUNROOT_ABS/$arm/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
-    local work_census="$RUNROOT_ABS/$arm/logs/fr13_fixed32_work_census.jsonl"
-    local work_report="$RUNROOT_ABS/$arm/work_census_validation.json"
     [[ -f "$all_parent_marker" && ! -L "$all_parent_marker" \
        && "$(<"$all_parent_marker")" == "1" ]] \
       || { echo "$arm lacks all-parent production engagement" >&2; return 4; }
     [[ -f "$all_parent_credential" && ! -L "$all_parent_credential" \
        && "$(sha256sum "$all_parent_credential" | awk '{print $1}')" == "$ALL_PARENT_PASS_SHA256" ]] \
       || { echo "$arm used the wrong all-parent production credential" >&2; return 4; }
-    "$PYTHON_BIN" - "$work_census" "$work_report" "$FIXED32_MODE" <<'PY'
+  fi
+  # The paired summary binds one work-census report per arm regardless of the
+  # committer selector, so every arm must reduce its census here.
+  "$PYTHON_BIN" - \
+    "$work_census" "$work_report" "$FIXED32_MODE" "$WORK_CENSUS_ROUTE" <<'PY'
 import hashlib
 import json
 import os
@@ -572,9 +581,9 @@ import fr13_fixed32_work_census as census
 census_path = Path(sys.argv[1])
 report_path = Path(sys.argv[2])
 mode = sys.argv[3]
+expected_route = sys.argv[4]
 if not census_path.is_file() or census_path.is_symlink():
-    raise SystemExit("all-parent production work census is missing")
-expected_route = "fixed32_native_precompute_production_candidate_return"
+    raise SystemExit("hot-path work census is missing")
 report = census.validate_arm(
     census.load_jsonl(census_path),
     expected_mode=mode,
@@ -592,7 +601,6 @@ temporary.write_text(
 )
 os.replace(temporary, report_path)
 PY
-  fi
   "$PYTHON_BIN" scripts/fr13_measure.py deploy-speed \
     --arm "$arm" --out-root "$RUNROOT_ABS/$arm/swe_out" \
     --expected-tok-per-draft 31 --batch-size 4 \
@@ -664,7 +672,7 @@ finalize_manifests
   "$RUNROOT_ABS/$STOCK_ARM/logs/fr13_fixed32_work_census.jsonl" \
   "$RUNROOT_ABS/$CANDIDATE_ARM/logs/fr13_fixed32_work_census.jsonl" \
   "$CANDIDATE_SELECTOR" "$CUTLASS_B4_TAIL23_PASS_SHA256" \
-  "$CUTLASS_B4_HYDRA27_PASS_SHA256" <<'PY'
+  "$CUTLASS_B4_HYDRA27_PASS_SHA256" "$WORK_CENSUS_ROUTE" <<'PY'
 import hashlib
 import json
 import math
@@ -694,6 +702,14 @@ all_parent_verdict_sha256 = sys.argv[31]
 stock_work_path, candidate_work_path = map(Path, sys.argv[32:34])
 stock_census_path, candidate_census_path = map(Path, sys.argv[34:36])
 candidate_selector, tail23_live_sha256, hydra27_live_sha256 = sys.argv[36:39]
+work_census_route = sys.argv[39]
+expected_work_census_route = (
+    "fixed32_native_precompute_production_candidate_return"
+    if all_parent_production
+    else "fixed32_pytorch_exact_float_triton_integer_commit"
+)
+if work_census_route != expected_work_census_route:
+    raise SystemExit("work-census route does not match the selected committer")
 task_ids = sorted(json.loads(subset_path.read_text(encoding="ascii"))["instance_ids"])
 stock = json.loads(stock_path.read_text(encoding="utf-8"))
 candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
@@ -714,7 +730,7 @@ def load_work_report(report_path, census_path, label):
         census_raw=census_raw,
         census_source=str(census_path),
         expected_mode=fixed32_mode,
-        expected_route="fixed32_native_precompute_production_candidate_return",
+        expected_route=work_census_route,
         required_batches=(4,),
     )
     return report, hashlib.sha256(report_raw).hexdigest()
