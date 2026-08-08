@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -457,7 +459,7 @@ def test_diag_documents_and_uses_the_smoke_verdicts() -> None:
 
 def test_diag_summary_carries_the_smoke_fields_and_stays_non_citable() -> None:
     diag = DIAG.read_text(encoding="utf-8")
-    assert '"schema": "fr13.fixed32.sfwd_fusion_boot_diag.v2"' in diag
+    assert '"schema": "fr13.fixed32.sfwd_fusion_boot_diag.v3"' in diag
     for field in (
         '"smoke_enabled"',
         '"smoke_ran"',
@@ -465,12 +467,14 @@ def test_diag_summary_carries_the_smoke_fields_and_stays_non_citable() -> None:
         '"smoke_responses_ok"',
         '"smoke_validator_strings_clean"',
         '"smoke_flush_strings_clean"',
+        '"smoke_producer_alive_at_teardown"',
     ):
         assert field in diag, field
     # A sweep that never ran reports null, never a default-clean False.
     assert '"unchecked": None' in diag
     assert "SMOKE_VALIDATORS_CLEAN=unchecked" in diag
     assert "SMOKE_FLUSH_CLEAN=unchecked" in diag
+    assert "SMOKE_PRODUCER_ALIVE=unchecked" in diag
     # Serving real traffic must not make the screen citable.
     assert '"classification": "diagnostic_boot_only"' in diag
     assert '"citable": False' in diag
@@ -482,7 +486,7 @@ def test_diag_smoke_python_blocks_compile() -> None:
     """The phase is an embedded driver; bash -n cannot see inside its heredoc."""
     source = DIAG.read_text(encoding="utf-8")
     blocks = re.findall(r"<<'PY'.*?\n(.*?)\nPY\n", source, re.DOTALL)
-    assert len(blocks) == 3
+    assert len(blocks) == 4
     for index, block in enumerate(blocks):
         lines = block.splitlines()
         # Drop the invoking command's own backslash continuations, which the
@@ -491,3 +495,225 @@ def test_diag_smoke_python_blocks_compile() -> None:
             lines.pop(0)
         assert lines, f"block {index} has no python body"
         compile("\n".join(lines) + "\n", f"<diag block {index}>", "exec")
+
+
+def _diag_function(name: str) -> str:
+    """Lift one bash function out of the screen so a test can run it for real."""
+    match = re.search(
+        rf"^{name}\(\) \{{\n(.*?)^\}}$",
+        DIAG.read_text(encoding="utf-8"),
+        re.MULTILINE | re.DOTALL,
+    )
+    assert match is not None, f"{DIAG} lacks function {name}"
+    return f"{name}() {{\n{match.group(1)}}}\n"
+
+
+def test_container_log_is_captured_before_any_teardown_signal() -> None:
+    """The engine's stack trace lives in a log teardown is about to destroy.
+
+    The 2026-08-08 screen answered "HTTP 500 EngineCore encountered an issue"
+    with boot_docker.log still ending at /health: the request-failure path exited
+    straight to teardown, which removes the container, and the only re-read of
+    the log sat on the success path below it.
+    """
+    code = _strip_comments(DIAG.read_text(encoding="utf-8"))
+    teardown = code[code.index("teardown() {"):]
+    assert "capture_container_log" in teardown
+    # Before the driver is continued, TERMed, KILLed, or any container removed.
+    for signal in ("kill -CONT", "kill -TERM", "kill -KILL", "docker rm -f"):
+        assert teardown.index("capture_container_log") < teardown.index(signal), signal
+    # And the smoke's own failure path dumps it rather than exiting blind.
+    assert code.count("capture_container_log") >= 3
+
+
+def test_container_log_capture_never_clobbers_a_good_capture(tmp_path: Path) -> None:
+    """A reaped container must not turn the evidence into an empty file."""
+    stub = tmp_path / "bin"
+    stub.mkdir()
+    docker = stub / "docker"
+    docker.write_text(
+        "#!/usr/bin/env bash\n"
+        'case "$DOCKER_STUB" in\n'
+        '  content) echo "engine traceback line"; exit 0;;\n'
+        '  empty) exit 0;;\n'
+        '  gone) echo "Error: No such container" >&2; exit 1;;\n'
+        "esac\n",
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    log = tmp_path / "boot_docker.log"
+
+    def run(mode: str, container: str = "cid") -> int:
+        script = (
+            "set -u\n"
+            f'CONTAINER_ID="{container}"\n'
+            f'DOCKER_LOG="{log}"\n'
+            + _diag_function("capture_container_log")
+            + "capture_container_log\n"
+        )
+        return subprocess.run(
+            ["bash", "-c", script],
+            env={"PATH": f"{stub}:/usr/bin:/bin", "DOCKER_STUB": mode},
+        ).returncode
+
+    assert run("content") == 0
+    assert log.read_text(encoding="utf-8") == "engine traceback line\n"
+    # Container reaped, and container never promoted: the good capture stands.
+    assert run("gone") == 1
+    assert log.read_text(encoding="utf-8") == "engine traceback line\n"
+    assert run("empty") == 1
+    assert log.read_text(encoding="utf-8") == "engine traceback line\n"
+    assert run("content", container="") == 1
+    assert log.read_text(encoding="utf-8") == "engine traceback line\n"
+    # No debris left beside the evidence.
+    assert not (tmp_path / "boot_docker.log.partial").exists()
+
+
+def test_teardown_probes_the_producer_before_it_signals() -> None:
+    """Asked after the CONT/TERM, the answer would describe teardown's own work."""
+    code = _strip_comments(DIAG.read_text(encoding="utf-8"))
+    teardown = code[code.index("teardown() {"):]
+    assert "SMOKE_PRODUCER_ALIVE=true" in teardown
+    assert "SMOKE_PRODUCER_ALIVE=false" in teardown
+    assert teardown.index("SMOKE_PRODUCER_ALIVE=true") < teardown.index("kill -CONT")
+    # The probe addresses the same EngineCore the terminal flush addresses.
+    assert "smoke_producer_pid" in code
+    assert "engine_core" in code
+    assert "docker exec" in teardown
+
+
+def test_request_failure_outranks_the_flush_it_caused() -> None:
+    """Cause before consequence: 0 served completions is an rc=7, not an rc=8.
+
+    An engine that dies serving the smoke leaves the terminal flush no live
+    producer, so the flush fails too. Promoting that to smoke_validator_tripped
+    names the symptom and buries the cause -- which is exactly the verdict the
+    2026-08-08 screen published against smoke_responses_ok=0.
+    """
+    code = _strip_comments(DIAG.read_text(encoding="utf-8"))
+    teardown = code[code.index("teardown() {"):]
+    sweep = teardown[teardown.index("SMOKE_FLUSH_CLEAN=true"):]
+    # The flush finding is still published...
+    assert "SMOKE_FLUSH_CLEAN=false" in sweep
+    # ...but it only owns the verdict when the smoke actually served something.
+    assert "(( SMOKE_OK == 0 ))" in sweep
+    assert sweep.index("(( SMOKE_OK == 0 ))") < sweep.index(
+        "VERDICT=smoke_validator_tripped"
+    )
+    guarded = sweep[sweep.index("(( SMOKE_OK == 0 ))"):]
+    assert "VERDICT=smoke_request_failed" in guarded
+    assert guarded.index("VERDICT=smoke_request_failed") < guarded.index(
+        "VERDICT=smoke_validator_tripped"
+    )
+    assert "rc=7" in guarded and "rc=8" in guarded
+
+
+def _run_teardown(tmp_path: Path, *, smoke_ok: int, flush_failed: bool) -> dict:
+    """Run the screen's real teardown() over stubs and read back its summary."""
+    stub = tmp_path / "bin"
+    stub.mkdir(parents=True)
+    # ps -aq must come back empty or teardown reports unclean Docker state.
+    (stub / "docker").write_text("#!/usr/bin/env bash\nexit 1\n", encoding="utf-8")
+    (stub / "docker").chmod(0o755)
+    (stub / "free").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    (stub / "free").chmod(0o755)
+    armdir = tmp_path / "arm"
+    armdir.mkdir()
+    runlog = tmp_path / "arm.runlog"
+    runlog.write_text(
+        "FAIL: fixed32 terminal flush rc=2\n" if flush_failed else "all clean\n",
+        encoding="utf-8",
+    )
+    summary = tmp_path / "boot_diag_summary.json"
+    source = DIAG.read_text(encoding="utf-8")
+    script = "\n".join(
+        (
+            "set -uo pipefail",
+            f'RUNROOT_ABS="{tmp_path}"',
+            f'ARMDIR="{armdir}"',
+            f'RUNLOG="{runlog}"',
+            f'SUMMARY="{summary}"',
+            f'DOCKER_LOG="{tmp_path}/boot_docker.log"',
+            f'PYTHON_BIN="{sys.executable}"',
+            'ARM=arm; SOURCE_COMMIT=deadbeef; DIAG_SHA256=cafe; CONTAINER_ID=""',
+            'VARIANT_PID=""; VARIANT_FROZEN=0; FR13_BOOT_DIAG_SMOKE=1',
+            "SMOKE_RAN=1; SMOKE_FLUSH_READY=1",
+            f"SMOKE_OK={smoke_ok}; SMOKE_SENT=1",
+            "SMOKE_VALIDATORS_CLEAN=unchecked; SMOKE_FLUSH_CLEAN=unchecked",
+            "SMOKE_PRODUCER_ALIVE=unchecked; TEARDOWN_GRACE_S=1",
+            "VERDICT=smoke_request_failed",
+            'DETAIL="smoke traffic failed: HTTP 500 EngineCore encountered an issue"'
+            if smoke_ok == 0
+            else 'VERDICT=pass; DETAIL="boot and smoke clean"',
+            'FR13_FIXED32_SFWD_FUSION_FLUSH_FORBIDDEN=("FAIL: fixed32 terminal flush")',
+            _diag_function("capture_container_log"),
+            _diag_function("smoke_producer_pid"),
+            re.search(r"^teardown\(\) \{\n.*?^\}$", source, re.MULTILINE | re.DOTALL)
+            .group(0),
+            f"(exit {7 if smoke_ok == 0 else 0}); teardown",
+        )
+    )
+    subprocess.run(
+        ["bash", "-c", script],
+        env={"PATH": f"{stub}:/usr/bin:/bin"},
+        capture_output=True,
+    )
+    return json.loads(summary.read_text(encoding="utf-8"))
+
+
+def test_teardown_verdict_names_the_cause_not_the_consequence(tmp_path: Path) -> None:
+    """The regression this exists for, run rather than pattern-matched.
+
+    A smoke that served nothing leaves the terminal flush no live producer, so
+    the flush fails too. The 2026-08-08 screen published that flush failure as
+    the verdict -- rc=8 smoke_validator_tripped against smoke_responses_ok=0 --
+    which names the symptom and buries the cause.
+    """
+    failed = _run_teardown(tmp_path / "a", smoke_ok=0, flush_failed=True)
+    assert failed["verdict"] == "smoke_request_failed"
+    assert failed["exit_code"] == 7
+    assert failed["smoke_responses_ok"] == 0
+    # The flush finding is still published, it just does not own the verdict.
+    assert failed["smoke_flush_strings_clean"] is False
+    assert "dead producer" in failed["detail"]
+    assert "EngineCore" in failed["detail"]
+
+    # A flush string after a smoke that DID serve is a real validator trip.
+    tripped = _run_teardown(tmp_path / "b", smoke_ok=3, flush_failed=True)
+    assert tripped["verdict"] == "smoke_validator_tripped"
+    assert tripped["exit_code"] == 8
+    assert tripped["smoke_flush_strings_clean"] is False
+
+    # And a clean flush stays clean.
+    clean = _run_teardown(tmp_path / "c", smoke_ok=3, flush_failed=False)
+    assert clean["verdict"] == "pass"
+    assert clean["exit_code"] == 0
+    assert clean["smoke_flush_strings_clean"] is True
+    for outcome in (failed, tripped, clean):
+        assert outcome["schema"] == "fr13.fixed32.sfwd_fusion_boot_diag.v3"
+        assert outcome["citable"] is False
+        # No container was promoted, so liveness is unknowable, never a bare False.
+        assert outcome["smoke_producer_alive_at_teardown"] is None
+
+
+def test_smoke_records_per_step_request_evidence() -> None:
+    """The runroot must name which step failed and what the engine answered."""
+    code = _strip_comments(DIAG.read_text(encoding="utf-8"))
+    assert "smoke_requests.jsonl" in code
+    assert "SMOKE_EVIDENCE" in code
+    assert '"fr13.fixed32.sfwd_fusion_boot_diag_smoke_step.v1"' in code
+    for event in (
+        '"ingress_begin"',
+        '"chat_dispatch"',
+        '"chat_response"',
+        '"ingress_finalize"',
+        '"spec_decode_counters"',
+        '"post_smoke_health"',
+    ):
+        assert event in code, event
+    # Status and body, written as the phase goes: a step that dies still leaves
+    # its record, and 200 chars of a 500 is not a diagnosis.
+    assert "status_code=response.status_code" in code
+    assert "body_head=response.text[:2000]" in code
+    assert "handle.flush()" in code
+    assert "response.text[:200]\n" not in code

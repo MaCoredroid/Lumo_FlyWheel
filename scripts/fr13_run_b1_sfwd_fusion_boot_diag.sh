@@ -57,6 +57,21 @@ esac
 #   smoke_validator_tripped  8  a runtime validator or the terminal flush raised
 #   (any)                    6  teardown could not clean Docker state
 #
+# Cause outranks consequence. An engine that dies serving the smoke also leaves
+# the terminal flush nothing to flush, so the flush fails too -- and reporting
+# THAT as the verdict names the symptom and buries the cause. When the smoke
+# served nothing (smoke_responses_ok=0) the verdict stays smoke_request_failed,
+# whatever the flush sweep then finds; the flush finding is still published in
+# the summary. The 2026-08-08 screen reported rc=8 with smoke_responses_ok=0 for
+# what was a plain rc=7.
+#
+# Every failure path captures the container log BEFORE teardown signals anything.
+# An engine-side death writes its stack trace there and nowhere else, and
+# teardown removes the container that holds it. That same screen came back with
+# "HTTP 500 EngineCore encountered an issue" and a capture still ending at
+# /health, which is a screen that found a failure and discarded the evidence
+# naming it. Per-step request evidence lands in smoke_requests.jsonl.
+#
 # The smoke phase is ON by default. Set FR13_BOOT_DIAG_SMOKE=0 to stop at
 # health, which is exactly what the screen did before the phase existed.
 #
@@ -204,6 +219,10 @@ DOCKER_LOG="$RUNROOT_ABS/boot_docker.log"
 SUMMARY="$RUNROOT_ABS/boot_diag_summary.json"
 SMOKE_LOG="$RUNROOT_ABS/smoke_phase.log"
 SMOKE_RECORD="$RUNROOT_ABS/smoke_summary.json"
+# One record per HTTP step the smoke performs, written as it goes. The screen
+# has to be able to say WHICH step failed and what the engine answered, from the
+# runroot alone, without the container that produced it still existing.
+SMOKE_EVIDENCE="$RUNROOT_ABS/smoke_requests.jsonl"
 VERDICT=unknown
 DETAIL=""
 CONTAINER_ID=""
@@ -220,11 +239,72 @@ SMOKE_FLUSH_PREREQ_S=120
 # actually run, so a summary can never claim a validator was clean by default.
 SMOKE_VALIDATORS_CLEAN=unchecked
 SMOKE_FLUSH_CLEAN=unchecked
+# Whether the EngineCore that the terminal flush addresses was still alive when
+# teardown began. A flush that fails against a dead producer is reporting the
+# engine's death, not delivering a validator's verdict.
+SMOKE_PRODUCER_ALIVE=unchecked
 TEARDOWN_GRACE_S=30
+
+# The container log is the only place an engine-side death writes its stack
+# trace, and every failure path ends in a teardown that removes the container.
+# Safe to call repeatedly: each capture supersedes the last with a superset of
+# it, and a capture that comes back empty leaves the previous one in place.
+capture_container_log() {
+  [[ -n "$CONTAINER_ID" ]] || return 1
+  local partial="$DOCKER_LOG.partial"
+  if docker logs "$CONTAINER_ID" > "$partial" 2>&1 && [[ -s "$partial" ]]; then
+    mv -f "$partial" "$DOCKER_LOG"
+    return 0
+  fi
+  rm -f "$partial"
+  return 1
+}
+
+# The attested EngineCore PID the driver publishes: the same producer the
+# terminal flush addresses, and the one whose death the flush reports.
+smoke_producer_pid() {
+  [[ -f "$ARMDIR/fixed32_process_identity.json" ]] || return 1
+  "$PYTHON_BIN" - "$ARMDIR/fixed32_process_identity.json" <<'PY' 2>/dev/null
+import json
+import sys
+from pathlib import Path
+
+pid = (
+    json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    .get("engine_core", {})
+    .get("pid")
+)
+if not isinstance(pid, int) or pid <= 0:
+    raise SystemExit(1)
+print(pid)
+PY
+}
 
 teardown() {
   local rc=$?
   trap - EXIT
+  # Before ANY signal goes out. Teardown is about to stop the driver and remove
+  # every container, and an engine that died mid-smoke wrote its stack trace to
+  # a log that only exists until then. The 2026-08-08 screen returned "HTTP 500
+  # EngineCore encountered an issue" with the capture still ending at /health,
+  # because the request-failure path exited before the post-smoke re-read: the
+  # screen found the failure and discarded the only evidence naming it.
+  if capture_container_log; then
+    echo "[boot-diag] container log captured pre-teardown -> $DOCKER_LOG ($(wc -l < "$DOCKER_LOG") lines)"
+  fi
+  # Probe the producer before the CONT/TERM, so the answer describes the state
+  # the smoke left behind rather than anything teardown itself did to it.
+  if (( SMOKE_RAN == 1 )) && [[ -n "$CONTAINER_ID" ]]; then
+    local producer_pid
+    producer_pid=$(smoke_producer_pid || true)
+    if [[ -n "$producer_pid" ]] \
+       && docker exec "$CONTAINER_ID" kill -0 "$producer_pid" >/dev/null 2>&1; then
+      SMOKE_PRODUCER_ALIVE=true
+    else
+      SMOKE_PRODUCER_ALIVE=false
+      echo "DIAG WARNING: EngineCore PID ${producer_pid:-<unpublished>} is not alive before teardown; the terminal flush has no live producer" >&2
+    fi
+  fi
   if [[ -n "$VARIANT_PID" ]] && kill -0 "$VARIANT_PID" 2>/dev/null; then
     # The smoke phase freezes the campaign driver. Continue it before the TERM
     # or it can never run its own EXIT trap -- and that trap is what performs
@@ -252,10 +332,26 @@ teardown() {
          || grep -Fq -- "$fragment" "$ARMDIR/docker_full.log" 2>/dev/null \
          || grep -Fq -- "$fragment" "$ARMDIR/fixed32_final_flush.stderr" 2>/dev/null; then
         SMOKE_FLUSH_CLEAN=false
-        VERDICT=smoke_validator_tripped
-        DETAIL="terminal flush emitted: $fragment"
-        echo "DIAG FAIL: $DETAIL" >&2
-        rc=8
+        echo "DIAG FAIL: terminal flush emitted: $fragment" >&2
+        # Cause before consequence. A smoke that served nothing leaves an engine
+        # the flush cannot address, and the flush then fails for that reason --
+        # reporting it as a validator trip names the symptom and buries the
+        # cause, which is how the 2026-08-08 screen returned rc=8 with
+        # smoke_responses_ok=0 for what was a plain rc=7. The flush finding is
+        # still published; it just does not get to own the verdict.
+        if (( SMOKE_OK == 0 )); then
+          if [[ "$VERDICT" == "smoke_request_failed" ]]; then
+            DETAIL="$DETAIL; terminal flush then failed against a dead producer"
+          else
+            VERDICT=smoke_request_failed
+            DETAIL="smoke served 0/$SMOKE_SENT completions; terminal flush then failed: $fragment"
+            rc=7
+          fi
+        else
+          VERDICT=smoke_validator_tripped
+          DETAIL="terminal flush emitted: $fragment"
+          rc=8
+        fi
         break
       fi
     done
@@ -275,7 +371,7 @@ teardown() {
   "$PYTHON_BIN" - "$SUMMARY" "$VERDICT" "$DETAIL" "$ARM" "$SOURCE_COMMIT" \
     "$DIAG_SHA256" "$CONTAINER_ID" "$rc" "$FR13_BOOT_DIAG_SMOKE" "$SMOKE_RAN" \
     "$SMOKE_SENT" "$SMOKE_OK" "$SMOKE_VALIDATORS_CLEAN" \
-    "$SMOKE_FLUSH_CLEAN" <<'PY' || true
+    "$SMOKE_FLUSH_CLEAN" "$SMOKE_PRODUCER_ALIVE" <<'PY' || true
 import json
 import sys
 from pathlib import Path
@@ -296,6 +392,7 @@ from pathlib import Path
     smoke_responses_ok,
     smoke_validators_clean,
     smoke_flush_clean,
+    smoke_producer_alive,
 ) = sys.argv
 
 
@@ -307,7 +404,7 @@ def tristate(value):
 Path(summary_path).write_text(
     json.dumps(
         {
-            "schema": "fr13.fixed32.sfwd_fusion_boot_diag.v2",
+            "schema": "fr13.fixed32.sfwd_fusion_boot_diag.v3",
             "classification": "diagnostic_boot_only",
             "citable": False,
             "timing_eligible": False,
@@ -324,6 +421,7 @@ Path(summary_path).write_text(
             "smoke_responses_ok": int(smoke_responses_ok),
             "smoke_validator_strings_clean": tristate(smoke_validators_clean),
             "smoke_flush_strings_clean": tristate(smoke_flush_clean),
+            "smoke_producer_alive_at_teardown": tristate(smoke_producer_alive),
         },
         indent=2,
         sort_keys=True,
@@ -531,13 +629,18 @@ if [[ "$FR13_BOOT_DIAG_SMOKE" == "1" ]]; then
   # assumed from the intended count -- a driver that dies on request 3 reports 3.
   PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" - \
     "$SMOKE_SECRET" "$SUBSET" "$SMOKE_TASK_ID" "$SMOKE_PORT" "$SMOKE_MODEL" \
-    "$SMOKE_REQUESTS" "$SMOKE_MAX_TOKENS" "$SMOKE_RECORD" \
+    "$SMOKE_REQUESTS" "$SMOKE_MAX_TOKENS" "$SMOKE_RECORD" "$SMOKE_EVIDENCE" \
     > "$SMOKE_LOG" 2>&1 <<'PY' \
     || { SMOKE_SENT=$(grep -c '^smoke request ' "$SMOKE_LOG" || true); \
          SMOKE_OK=$(grep -c '^smoke response ok ' "$SMOKE_LOG" || true); \
          VERDICT=smoke_request_failed; \
          DETAIL="smoke traffic failed: $(tail -1 "$SMOKE_LOG")"; \
-         echo "DIAG FAIL: $DETAIL" >&2; tail -20 "$SMOKE_LOG" >&2; exit 7; }
+         echo "DIAG FAIL: $DETAIL" >&2; tail -20 "$SMOKE_LOG" >&2; \
+         echo "---- per-step smoke evidence: $SMOKE_EVIDENCE ----" >&2; \
+         capture_container_log \
+           && { echo "---- last 60 container log lines, post-smoke ----" >&2; \
+                tail -60 "$DOCKER_LOG" >&2; }; \
+         exit 7; }
 import json
 import re
 import secrets
@@ -563,10 +666,43 @@ from lumo_flywheel_serving.inference_proxy import (
     count_text,
     max_tokens_text,
     record_path,
+    evidence_path,
 ) = sys.argv
 port = int(port_text)
 count = int(count_text)
 max_tokens = int(max_tokens_text)
+
+
+def record(event, **fields):
+    """Append one evidence record, flushed, so a step that dies still leaves it."""
+    with open(evidence_path, "a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "schema": "fr13.fixed32.sfwd_fusion_boot_diag_smoke_step.v1",
+                    "event": event,
+                    "monotonic": round(time.monotonic(), 3),
+                    **fields,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        handle.flush()
+
+
+def observe(event, response, started, **fields):
+    """Record an HTTP outcome. The body head is the diagnostic: an engine that
+    died mid-forward answers 500 with the reason, and the container log that
+    holds the stack trace does not outlive teardown."""
+    record(
+        event,
+        status_code=response.status_code,
+        elapsed_s=round(time.monotonic() - started, 3),
+        body_head=response.text[:2000],
+        **fields,
+    )
+    return response
 
 subset = json.loads(Path(subset_path).read_text(encoding="utf-8"))
 task_ids = tuple(subset["instance_ids"])
@@ -579,19 +715,24 @@ control = {"Authorization": f"Bearer {secret.engine_bearer}"}
 
 # The engine admits inference only inside an open ingress campaign, and admits
 # exactly one. The campaign driver is frozen, so this is that one campaign.
-begin = requests.post(
-    base + "/fr13/fixed32/ingress/begin",
-    headers=control,
-    json={
-        "schema": "fr13-fixed32-ingress-begin-v1",
-        "canonical_task_count": len(task_ids),
-        "canonical_task_set_sha256": fixed32_canonical_task_set_sha256(task_ids),
-    },
-    timeout=60,
+_started = time.monotonic()
+begin = observe(
+    "ingress_begin",
+    requests.post(
+        base + "/fr13/fixed32/ingress/begin",
+        headers=control,
+        json={
+            "schema": "fr13-fixed32-ingress-begin-v1",
+            "canonical_task_count": len(task_ids),
+            "canonical_task_set_sha256": fixed32_canonical_task_set_sha256(task_ids),
+        },
+        timeout=60,
+    ),
+    _started,
 )
 if begin.status_code != 200:
     raise SystemExit(
-        f"ingress begin failed: HTTP {begin.status_code} {begin.text[:200]}"
+        f"ingress begin failed: HTTP {begin.status_code} {begin.text[:2000]}"
     )
 
 # Ordinary chat traffic. The engine always proposes through the tree drafter, so
@@ -608,27 +749,37 @@ served = 0
 for index in range(count):
     wire_id = "fr13-chat-" + secrets.token_hex(16)
     print(f"smoke request {index} max_tokens={max_tokens}", flush=True)
-    response = requests.post(
-        base + "/v1/chat/completions",
-        headers={
-            **control,
-            "Content-Type": "application/json",
-            "X-Fr13-Task-Key-ID": task_key_id,
-            "X-Request-ID": wire_id,
-        },
-        json={
-            "model": model,
-            "messages": [{"role": "user", "content": PROMPTS[index % len(PROMPTS)]}],
-            "max_tokens": max_tokens,
-            "temperature": 0.0,
-            "stream": False,
-        },
-        timeout=600,
+    record("chat_dispatch", index=index, wire_id=wire_id, max_tokens=max_tokens)
+    started = time.monotonic()
+    response = observe(
+        "chat_response",
+        requests.post(
+            base + "/v1/chat/completions",
+            headers={
+                **control,
+                "Content-Type": "application/json",
+                "X-Fr13-Task-Key-ID": task_key_id,
+                "X-Request-ID": wire_id,
+            },
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "user", "content": PROMPTS[index % len(PROMPTS)]}
+                ],
+                "max_tokens": max_tokens,
+                "temperature": 0.0,
+                "stream": False,
+            },
+            timeout=600,
+        ),
+        started,
+        index=index,
+        wire_id=wire_id,
     )
     if response.status_code != 200:
         raise SystemExit(
             f"chat completion {index} failed: HTTP {response.status_code} "
-            f"{response.text[:200]}"
+            f"{response.text[:2000]}"
         )
     choices = response.json().get("choices")
     if not isinstance(choices, list) or not choices:
@@ -643,11 +794,17 @@ for index in range(count):
 # finalize that races the last one legitimately sees 409 active_requests.
 ledger = None
 for attempt in range(6):
-    finalize = requests.post(
-        base + "/fr13/fixed32/ingress/finalize",
-        headers=control,
-        json={"schema": "fr13-fixed32-ingress-finalize-v1"},
-        timeout=60,
+    started = time.monotonic()
+    finalize = observe(
+        "ingress_finalize",
+        requests.post(
+            base + "/fr13/fixed32/ingress/finalize",
+            headers=control,
+            json={"schema": "fr13-fixed32-ingress-finalize-v1"},
+            timeout=60,
+        ),
+        started,
+        attempt=attempt,
     )
     if finalize.status_code == 200:
         ledger = finalize.json()
@@ -655,7 +812,7 @@ for attempt in range(6):
     if finalize.status_code != 409:
         raise SystemExit(
             f"ingress finalize failed: HTTP {finalize.status_code} "
-            f"{finalize.text[:200]}"
+            f"{finalize.text[:2000]}"
         )
     time.sleep(2)
 if ledger is None:
@@ -663,7 +820,13 @@ if ledger is None:
 
 # Positive proof the drafter actually ran: served text alone cannot distinguish
 # a spec-decode forward from a plain one.
+started = time.monotonic()
 metrics = requests.get(base + "/metrics", timeout=60)
+record(
+    "metrics_scrape",
+    status_code=metrics.status_code,
+    elapsed_s=round(time.monotonic() - started, 3),
+)
 if metrics.status_code != 200:
     raise SystemExit(f"metrics scrape failed: HTTP {metrics.status_code}")
 spec = {}
@@ -677,10 +840,15 @@ for name in (
         re.MULTILINE,
     )
     spec[name] = float(match.group(1)) if match is not None else 0.0
+record(
+    "spec_decode_counters",
+    **{key.replace(":", "_"): value for key, value in spec.items()},
+)
 if min(spec.values()) <= 0:
     raise SystemExit(f"spec decode never engaged during the smoke: {spec!r}")
 
-health = requests.get(base + "/health", timeout=30)
+started = time.monotonic()
+health = observe("post_smoke_health", requests.get(base + "/health", timeout=30), started)
 if health.status_code != 200:
     raise SystemExit(
         f"engine is not healthy after the smoke: HTTP {health.status_code}"
