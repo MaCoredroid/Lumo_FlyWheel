@@ -293,6 +293,111 @@ def test_sfwd_profile_producer_runs_capture_shaped_forward_before_sealing(
     ) == 1
 
 
+@pytest.mark.parametrize(
+    ("fusion", "byte_ab", "enforce_eager"),
+    (
+        ("0", "1", "1"),  # standalone SFWD conv/post-prep byte gate
+        ("1", "0", "1"),  # fusion pinned eager
+        ("0", "0", "0"),  # fusion off, graph boot
+    ),
+)
+def test_sfwd_profile_producer_and_seal_are_inert_without_graph_fusion(
+    monkeypatch: pytest.MonkeyPatch,
+    fusion: str,
+    byte_ab: str,
+    enforce_eager: str,
+) -> None:
+    """Only a FUSION+graph boot may arm the profile producer or the seal.
+
+    The standalone byte gate runs ENFORCE_EAGER=1 with cudagraph_mode NONE, so
+    it never reaches _warmup_and_capture at all; even if it did, both entry
+    points must be no-ops there. Pinning this keeps the profile-capture repair
+    from leaking into the eager gate shape.
+    """
+    patcher_module = _load_patcher("fr13_sfwd_profile_inert")
+    monkeypatch.setattr(
+        patcher_module, "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION", fusion
+    )
+    monkeypatch.setattr(
+        patcher_module, "_FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB", byte_ab
+    )
+    monkeypatch.setenv("ENFORCE_EAGER", enforce_eager)
+    monkeypatch.setenv("MAX_NUM_SEQS", "1")
+    bindings = patcher_module._fr13_fixed32_runtime_bindings("hydra27_fixed32")
+    assert "_FR13_FIXED32_SFWD_CONV_POSTPREP_GRAPH = False" in bindings
+
+    tree = ast.parse(patcher_module._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE)
+    wanted = {
+        "_fr13_fixed32_sfwd_conv_postprep_profile_producer_needed",
+        "_fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture",
+    }
+    definitions = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name in wanted
+    ]
+    assert {node.name for node in definitions} == wanted
+    namespace: dict[str, object] = {}
+    exec(bindings, namespace)
+    exec(
+        compile(
+            ast.Module(body=definitions, type_ignores=[]),
+            "<fr13-sfwd-inert>",
+            "exec",
+        ),
+        namespace,
+    )
+    # No torch, no registries, no profile scope: both must bail out on the
+    # graph-fusion selector alone, before touching anything else.
+    needed = namespace[
+        "_fr13_fixed32_sfwd_conv_postprep_profile_producer_needed"
+    ]
+    seal = namespace[
+        "_fr13_fixed32_preseed_sfwd_conv_postprep_profile_capture"
+    ]
+    assert needed("FULL", 32, 1, True, False, 0) is False
+    assert seal(1) is None
+
+
+def test_sfwd_profile_producer_never_runs_in_eager_boot_warm(
+    tmp_path: Path,
+) -> None:
+    """capture_model's eager boot-warm block must not gain a profile producer.
+
+    ENFORCE_EAGER boots return from capture_model before any capture, so the
+    producer belongs solely to _warmup_and_capture.
+    """
+    patcher_module = _load_patcher("fr13_sfwd_eager_boot_warm")
+    source = ast.parse(PATCHER.read_text(encoding="utf-8"))
+    function = next(
+        node
+        for node in ast.walk(source)
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_patch_gpu_model_runner_fixed32_final_full_preseed"
+    )
+    producer = "_fr13_fixed32_sfwd_conv_postprep_profile_producer_needed"
+    body = ast.unparse(function)
+    assert body.count(producer) == 1
+    eager_marker = "FR13_FIXED32_EAGER_SFWD_CONV_POSTPREP_BOOT_WARM"
+    # The producer belongs to the _warmup_and_capture inject only; the eager
+    # boot-warm inject (capture_model) must never reference it.
+    runner = tmp_path / "gpu_model_runner.py"
+    runner.write_text(
+        "                profile_seq_lens=profile_seq_lens,\n"
+        "            )\n"
+        "        self._dummy_run(\n"
+        "            desc.num_tokens,\n"
+        "            cudagraph_runtime_mode=cudagraph_runtime_mode,\n",
+        encoding="utf-8",
+    )
+    patcher_module.GPU_MODEL_RUNNER_PATH = runner
+    patcher_module._FR13_FIXED32_MODE = "hydra27_fixed32"
+    assert patcher_module._patch_gpu_model_runner_fixed32_final_full_preseed()
+    patched = runner.read_text(encoding="utf-8")
+    assert patched.count(producer) == 1
+    assert eager_marker not in patched
+
+
 def test_sfwd_profile_seal_fails_loud_without_eager_operands() -> None:
     patcher_module = _load_patcher("fr13_sfwd_profile_seal_failloud")
     tree = ast.parse(patcher_module._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE)

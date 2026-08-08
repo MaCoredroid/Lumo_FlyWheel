@@ -247,6 +247,69 @@ def test_qrow16_eager_selector_admits_only_one_authenticated_sfwd_route(
     assert begin(**exact) is None
 
 
+@pytest.mark.parametrize("rows", (2, 22, 31))
+def test_qrow16_eager_declines_chunked_prefill_tail_segments(
+    monkeypatch: pytest.MonkeyPatch,
+    rows: int,
+) -> None:
+    """A short final prefill chunk is not the attested fixed32 B1 step.
+
+    The tree metadata builder splits with
+    ``decode_threshold=tree_attn_bias.shape[0]`` (32), so the last chunk of a
+    chunked prefill is classified as a decode whenever
+    ``prompt_len % long_prefill_token_threshold`` lands in (1, 32]. It carries
+    the tree bias and reaches the qrow16 arm with fewer than 32 query rows.
+    Before this guard those steps raised "geometry drifted" mid-run and killed
+    the engine (2026-08-08 standalone SFWD gate, container db4ee6c2, request
+    with num_computed_tokens=23552 + num_scheduled_tokens=22).
+    """
+    namespace = {"os": os, "torch": torch}
+    exec(
+        _patcher_literal("FIXED32_QUERY_TILE16_PRODUCTION_HELPERS"),
+        namespace,
+    )
+    begin = namespace["_fr13_fa2_qrow16_production_begin"]
+    for name, value in {
+        "FR13_FA2_QROW16_PRODUCTION": "1",
+        "FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED": "1",
+        "FR13_FA2_QROW16_PRODUCTION_PASS_SIDECAR_SHA256": "1" * 64,
+        "FR13_FA2_QROW16_SO_SHA256": "2" * 64,
+        "ENFORCE_EAGER": "1",
+        "FR13_DRAFT_VOCAB_ROOT": "1",
+        "FR13_DRAFT_VOCAB_K": "65536",
+        "FR13_FIXED32_SFWD_STATE_FUSION_PRODUCTION": "0",
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB": "1",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    def _call(query_rows: int, max_seqlen_q: int) -> object:
+        return begin(
+            layer=type("Layer", (), {"layer_name": "layer.0"})(),
+            query=torch.empty((query_rows, 24, 256), dtype=torch.bfloat16),
+            key_cache=torch.empty((1, 1024, 4, 256), dtype=torch.bfloat16),
+            value_cache=torch.empty((1, 1024, 4, 256), dtype=torch.bfloat16),
+            cu_seqlens_q=torch.tensor((0, query_rows), dtype=torch.int32),
+            max_seqlen_q=max_seqlen_q,
+            seqused_k=torch.tensor((23574,), dtype=torch.int32),
+            max_seqlen_k=23574,
+            causal=False,
+            window_size=(-1, -1),
+            block_table=torch.zeros((1, 24), dtype=torch.int32),
+            num_splits=0,
+            tree_bias=torch.zeros((32, 32), dtype=torch.float32),
+        )
+
+    # Prefill tail: decline, so the reference tree bias serves the segment.
+    assert _call(rows, rows) is None
+    # The attested 32-row spec-decode step is untouched and still served.
+    served = _call(32, 32)
+    assert served is not None
+    assert tuple(served.shape) == (1, 32, 32)
+    # A step that claims the tree shape but drifts still fails loud.
+    with pytest.raises(RuntimeError, match="production geometry drifted"):
+        _call(32, 31)
+
+
 def test_sfwd_gate_binds_qrow16_to_conv_postprep_eager_engagement(
     tmp_path: Path,
 ) -> None:

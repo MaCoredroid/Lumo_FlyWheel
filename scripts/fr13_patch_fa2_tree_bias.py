@@ -5291,6 +5291,7 @@ _FR13_FA2_QROW16_EAGER_STATE = {
     "emitted": False,
 }
 _FR13_FA2_QROW16_BATCH_STRIDE_SENTINEL = 1179791667
+_FR13_FA2_QROW16_PRODUCTION_ROWS = 32
 
 
 def _fr13_fa2_qrow16_candidate_tree_bias(tree_bias):
@@ -5354,6 +5355,17 @@ def _fr13_fa2_qrow16_production_begin(
         and os.environ.get("FR13_DRAFT_VOCAB_K", "") == "65536"
     )
     if not capturing and not eager_sfwd_stack:
+        return None
+    if not capturing and 1 < int(query.shape[0]) < _FR13_FA2_QROW16_PRODUCTION_ROWS:
+        # The tree metadata builder splits with
+        # decode_threshold=tree_attn_bias.shape[0], so the *final chunk of a
+        # chunked prefill* is classified as a decode whenever its length lands
+        # in (1, 32]. Those segments carry the tree bias and reach this arm
+        # with fewer than 32 query rows even though they are not the attested
+        # fixed32 B1 spec-decode step (no drafts are scheduled). Decline so the
+        # reference bias serves them, exactly as before qrow16 production was
+        # engaged. A real spec step is always 32 rows, so anything that claims
+        # the tree shape still gets the exact check below and fails loud.
         return None
     context = None
     if capturing:
