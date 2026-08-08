@@ -37965,9 +37965,21 @@ def _fr13_f32_flush_write_boundary(request, counters):
     for event in events:
         batch_histogram[str(int(event["batch_size"]))] += 1
     pregather_metrics = dict(pregather_counters())
-    pregather_metrics["graph_replay_stages"] = len(events)
+    # The boundary snapshot records which kernel shape produced it. Under
+    # fusion the pregather stage kernel is subsumed, so no stage replays
+    # alongside a measured forward; publishing len(events) there would
+    # fabricate staging work no kernel in this arm performed.
+    boundary_shape = gdn._fr13_fixed32_kernel_shape()
+    boundary_fused = boundary_shape == "sfwd_fused_conv_postprep"
+    pregather_metrics["kernel_shape"] = boundary_shape
+    pregather_metrics["graph_replay_stages"] = (
+        0 if boundary_fused else len(events)
+    )
     pregather_metrics["graph_replay_stages_by_batch"] = {
-        batch: int(batch_histogram[str(batch)]) for batch in (1, 2, 3, 4)
+        batch: (
+            0 if boundary_fused else int(batch_histogram[str(batch)])
+        )
+        for batch in (1, 2, 3, 4)
     }
     nonpure_replays_by_batch = {
         batch: int(value)

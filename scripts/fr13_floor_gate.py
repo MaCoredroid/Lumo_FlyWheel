@@ -83,6 +83,9 @@ from fr13_fixed32_work_census import (  # noqa: E402
 )
 from fr13_fixed32_work_census import validate_event as validate_work_census_event  # noqa: E402
 from fr13_fixed32_work_census import (  # noqa: E402
+    FUSED_KERNEL_SHAPE,
+    KERNEL_SHAPES,
+    UNFUSED_KERNEL_SHAPE,
     assert_kernel_shape_attested,
     forward_graph_structural_signature,
 )
@@ -262,6 +265,27 @@ RUNTIME_MANIFEST_PROFILE = "fixed32"
 RUNTIME_MANIFEST_SEQUENCE = "scripts/fr13_fixed32_floor_timers_seq.sh"
 FIXED32_BOUNDARY_SCHEMA = "fr13-fixed32-task-boundary-v1"
 FIXED32_RUNTIME_SNAPSHOT_SCHEMA = "fr13-fixed32-boundary-snapshot-v4"
+FIXED32_RUNTIME_SNAPSHOT_PREGATHER_KEYS = frozenset(
+    {
+        "preseeded",
+        "pointer_entries",
+        "preseeded_batches",
+        "max_batch_size",
+        "graph_capture_stages",
+        "graph_capture_stages_by_batch",
+        "profile_capture_stages",
+        "aux_capture_stages",
+        "actual_stages",
+        "actual_stages_by_batch",
+        "graph_replay_stages",
+        "graph_replay_stages_by_batch",
+    }
+)
+# Added with the fused structural shape. Snapshots recorded before the fused
+# arm existed predate the field, so it is optional here -- a v4 snapshot
+# validates exactly as it did -- and a snapshot that carries it is attested
+# against its own conv work counters before anything is derived from it.
+FIXED32_RUNTIME_SNAPSHOT_PREGATHER_SHAPE_KEYS = frozenset({"kernel_shape"})
 SFWD_MAIN_SIDECAR_SCHEMA = "fr13.sfwd_gpu_timer.v2"
 SFWD_SAMPLE_SIDECAR_SCHEMA = "fr13.sfwd_per_step_samples.v2"
 FIXED32_CHAT_TRAFFIC_AUDIT_SCHEMA = (
@@ -959,6 +983,86 @@ def load_metric_artifact(path: Path) -> dict[str, Any]:
     }
 
 
+def runtime_snapshot_pregather_shape_counters(
+    kernel_shape: str,
+    *,
+    server_capacity: int,
+    events: int,
+    expected_replays_by_batch: dict[str, int],
+) -> dict[str, Any]:
+    """Conv work counters a boundary snapshot must carry under ``kernel_shape``.
+
+    The two canonical conv structures are mutually exclusive here. The fused
+    kernel subsumes the pregather stage kernel, so no stage launches at
+    capture and none replays; the unfused route stages once per ready batch
+    at capture and once per measured forward. Preseeding, the pointer table
+    and the batch ceiling are workload identity and are shared, so they stay
+    outside this class and are required of both shapes.
+    """
+    if kernel_shape == FUSED_KERNEL_SHAPE:
+        return {
+            "graph_capture_stages": 0,
+            "graph_capture_stages_by_batch": {
+                str(batch): 0 for batch in range(1, 5)
+            },
+            "graph_replay_stages": 0,
+            "graph_replay_stages_by_batch": {
+                str(batch): 0 for batch in range(1, 5)
+            },
+        }
+    return {
+        "graph_capture_stages": server_capacity,
+        "graph_capture_stages_by_batch": {
+            str(batch): int(batch <= server_capacity)
+            for batch in range(1, 5)
+        },
+        "graph_replay_stages": events,
+        "graph_replay_stages_by_batch": dict(expected_replays_by_batch),
+    }
+
+
+def assert_runtime_snapshot_kernel_shape_attested(
+    declared: object,
+    observed: dict[str, Any],
+    *,
+    server_capacity: int,
+    events: int,
+    expected_replays_by_batch: dict[str, int],
+    label: str,
+) -> str:
+    """Kernel shape a boundary snapshot ran under, attested by its counters.
+
+    The snapshot carries no graph signature, so the reverse lookup the census
+    report uses is unavailable; the attestation here is the snapshot's own
+    recorded conv work counters. The declared shape must name one of the two
+    canonical shapes and must not be contradicted by those counters. A
+    snapshot whose counters match neither class falls through to the counter
+    reconciliation, which reports it against the shape it declares.
+    """
+    if declared not in KERNEL_SHAPES:
+        raise GateError(
+            f"{label}.kernel_shape is not a canonical kernel shape: "
+            f"{declared!r}"
+        )
+    attested = [
+        shape
+        for shape in KERNEL_SHAPES
+        if observed
+        == runtime_snapshot_pregather_shape_counters(
+            shape,
+            server_capacity=server_capacity,
+            events=events,
+            expected_replays_by_batch=expected_replays_by_batch,
+        )
+    ]
+    if attested and declared not in attested:
+        raise GateError(
+            f"{label}.kernel_shape: snapshot declares {declared!r} but its "
+            f"conv work counters attest {attested[0]!r}"
+        )
+    return declared
+
+
 def validate_runtime_boundary_snapshot(
     path: Path,
     *,
@@ -1320,9 +1424,6 @@ def validate_runtime_boundary_snapshot(
     expected_by_batch = {
         str(batch): batch_counts[batch] for batch in range(1, 5)
     }
-    expected_capture_by_batch = {
-        str(batch): int(batch <= server_capacity) for batch in range(1, 5)
-    }
     zero_by_batch = {str(batch): 0 for batch in range(1, 5)}
     expected_ready_capacities = {
         str(batch): server_capacity
@@ -1362,20 +1463,12 @@ def validate_runtime_boundary_snapshot(
     )
     exact_keys(
         pregather,
-        {
-            "preseeded",
-            "pointer_entries",
-            "preseeded_batches",
-            "max_batch_size",
-            "graph_capture_stages",
-            "graph_capture_stages_by_batch",
-            "profile_capture_stages",
-            "aux_capture_stages",
-            "actual_stages",
-            "actual_stages_by_batch",
-            "graph_replay_stages",
-            "graph_replay_stages_by_batch",
-        },
+        FIXED32_RUNTIME_SNAPSHOT_PREGATHER_KEYS
+        | (
+            FIXED32_RUNTIME_SNAPSHOT_PREGATHER_SHAPE_KEYS
+            if FIXED32_RUNTIME_SNAPSHOT_PREGATHER_SHAPE_KEYS & set(pregather)
+            else frozenset()
+        ),
         f"{path}:conv_pregather",
     )
     for key in (
@@ -1558,6 +1651,23 @@ def validate_runtime_boundary_snapshot(
         + nonpure_by_batch[str(batch)]
         for batch in range(1, 5)
     }
+    pregather_shape_counters = {
+        "graph_capture_stages": pregather["graph_capture_stages"],
+        "graph_capture_stages_by_batch": capture_by_batch,
+        "graph_replay_stages": pregather["graph_replay_stages"],
+        "graph_replay_stages_by_batch": replay_by_batch,
+    }
+    # Attested, never declared: a snapshot missing the field is the unfused
+    # shape it was written under, and one carrying it must agree with its own
+    # counters.
+    pregather_kernel_shape = assert_runtime_snapshot_kernel_shape_attested(
+        pregather.get("kernel_shape", UNFUSED_KERNEL_SHAPE),
+        pregather_shape_counters,
+        server_capacity=server_capacity,
+        events=events,
+        expected_replays_by_batch=expected_by_batch,
+        label=f"{path}:conv_pregather",
+    )
     if (
         committer["all_batches_ready"] is not True
         or committer["fast_route_ready"] is not True
@@ -1587,14 +1697,20 @@ def validate_runtime_boundary_snapshot(
         or pregather["pointer_entries"] != 48
         or pregather_preseeded_batches != expected_preseeded_batches
         or pregather["max_batch_size"] != server_capacity
-        or pregather["graph_capture_stages"] != server_capacity
-        or capture_by_batch != expected_capture_by_batch
         or pregather["profile_capture_stages"] != 0
         or pregather["aux_capture_stages"] != 0
         or pregather["actual_stages"] != 0
         or host_by_batch != zero_by_batch
-        or pregather["graph_replay_stages"] != events
-        or replay_by_batch != expected_by_batch
+        # Positive per-shape requirement: the fused route pins the capture
+        # and replay stage counters at zero, so an arm that also took the
+        # staging route satisfies neither shape's class.
+        or pregather_shape_counters
+        != runtime_snapshot_pregather_shape_counters(
+            pregather_kernel_shape,
+            server_capacity=server_capacity,
+            events=events,
+            expected_replays_by_batch=expected_by_batch,
+        )
     ):
         raise GateError(
             f"{path}: committer/nonpure/in-graph pregather counters do not reconcile"
@@ -1649,6 +1765,8 @@ def validate_runtime_boundary_snapshot(
         "sha256": expected_reference["sha256"],
         "generation": ack["generation"],
         "events_sha256": expected_events_hash,
+        # Every artifact records which shape the arm it describes ran under.
+        "kernel_shape": pregather_kernel_shape,
         "boot_warm": dict(boot_warm),
         "committer": {
             "layer_batch_gate_attempts_by_batch": (

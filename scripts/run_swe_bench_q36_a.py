@@ -4171,6 +4171,33 @@ _FIXED32_BOUNDARY_METRIC_KEYS = frozenset(
         "conv_pregather",
     }
 )
+_FIXED32_BOUNDARY_PREGATHER_KEYS = frozenset(
+    {
+        "preseeded",
+        "pointer_entries",
+        "preseeded_batches",
+        "max_batch_size",
+        "graph_capture_stages",
+        "graph_capture_stages_by_batch",
+        "profile_capture_stages",
+        "aux_capture_stages",
+        "actual_stages",
+        "actual_stages_by_batch",
+        "graph_replay_stages",
+        "graph_replay_stages_by_batch",
+    }
+)
+# Added with the fused structural shape. Snapshots recorded before the fused
+# arm existed predate the field, so it is optional here -- a v4 snapshot
+# validates exactly as it did -- and a snapshot that carries it is attested
+# against its own conv work counters before anything is derived from it.
+_FIXED32_BOUNDARY_PREGATHER_SHAPE_KEYS = frozenset({"kernel_shape"})
+_FIXED32_UNFUSED_KERNEL_SHAPE = "unfused_conv_pregather"
+_FIXED32_FUSED_KERNEL_SHAPE = "sfwd_fused_conv_postprep"
+_FIXED32_KERNEL_SHAPES = (
+    _FIXED32_UNFUSED_KERNEL_SHAPE,
+    _FIXED32_FUSED_KERNEL_SHAPE,
+)
 _FIXED32_REQUIRED_METRICS = {
     "vllm:fr13_decode_forward_gpu_seconds_total",
     "vllm:fr13_decode_forward_gpu_steps_total",
@@ -4337,6 +4364,86 @@ def _fixed32_nonnegative_float(value: Any, label: str) -> float:
     ):
         raise Fixed32BoundaryError(f"{label} must be finite and nonnegative")
     return float(value)
+
+
+def _fixed32_pregather_shape_counters(
+    kernel_shape: str,
+    *,
+    server_capacity: int,
+    events: int,
+    expected_replays_by_batch: dict[str, int],
+) -> dict[str, Any]:
+    """Conv work counters a boundary snapshot must carry under ``kernel_shape``.
+
+    The two canonical conv structures are mutually exclusive here. The fused
+    kernel subsumes the pregather stage kernel, so no stage launches at
+    capture and none replays; the unfused route stages once per ready batch
+    at capture and once per measured forward. Preseeding, the pointer table
+    and the batch ceiling are workload identity and are shared, so they stay
+    outside this class and are required of both shapes.
+    """
+    if kernel_shape == _FIXED32_FUSED_KERNEL_SHAPE:
+        return {
+            "graph_capture_stages": 0,
+            "graph_capture_stages_by_batch": {
+                str(batch): 0 for batch in range(1, 5)
+            },
+            "graph_replay_stages": 0,
+            "graph_replay_stages_by_batch": {
+                str(batch): 0 for batch in range(1, 5)
+            },
+        }
+    return {
+        "graph_capture_stages": server_capacity,
+        "graph_capture_stages_by_batch": {
+            str(batch): int(batch <= server_capacity)
+            for batch in range(1, 5)
+        },
+        "graph_replay_stages": events,
+        "graph_replay_stages_by_batch": dict(expected_replays_by_batch),
+    }
+
+
+def _fixed32_attested_kernel_shape(
+    declared: Any,
+    observed: dict[str, Any],
+    *,
+    server_capacity: int,
+    events: int,
+    expected_replays_by_batch: dict[str, int],
+    label: str,
+) -> str:
+    """Kernel shape a boundary snapshot ran under, attested by its counters.
+
+    The shape is never taken on the snapshot's word. It must name one of the
+    two canonical shapes, and the snapshot's own recorded conv work counters
+    must not exhibit the other one: a snapshot claiming a shape its counters
+    disprove is rejected here, before any expectation is built from it. A
+    snapshot whose counters match neither class falls through to the counter
+    reconciliation, which reports it against the shape it declares.
+    """
+    if declared not in _FIXED32_KERNEL_SHAPES:
+        raise Fixed32BoundaryError(
+            f"{label}.kernel_shape is not a canonical kernel shape: "
+            f"{declared!r}"
+        )
+    attested = [
+        shape
+        for shape in _FIXED32_KERNEL_SHAPES
+        if observed
+        == _fixed32_pregather_shape_counters(
+            shape,
+            server_capacity=server_capacity,
+            events=events,
+            expected_replays_by_batch=expected_replays_by_batch,
+        )
+    ]
+    if attested and declared not in attested:
+        raise Fixed32BoundaryError(
+            f"{label}.kernel_shape: snapshot declares {declared!r} but its "
+            f"conv work counters attest {attested[0]!r}"
+        )
+    return declared
 
 
 def _load_fixed32_boundary_snapshot(
@@ -4656,9 +4763,6 @@ def _load_fixed32_boundary_snapshot(
     committer = metrics["committer"]
     conv = metrics["conv_pregather"]
     expected_by_batch = {str(batch): histogram[batch] for batch in range(1, 5)}
-    expected_capture_by_batch = {
-        str(batch): int(batch <= server_capacity) for batch in range(1, 5)
-    }
     zero_by_batch = {str(batch): 0 for batch in range(1, 5)}
     expected_ready_capacities = {
         str(batch): server_capacity
@@ -4699,21 +4803,11 @@ def _load_fixed32_boundary_snapshot(
     )
     _fixed32_exact_keys(
         conv,
-        frozenset(
-            {
-                "preseeded",
-                "pointer_entries",
-                "preseeded_batches",
-                "max_batch_size",
-                "graph_capture_stages",
-                "graph_capture_stages_by_batch",
-                "profile_capture_stages",
-                "aux_capture_stages",
-                "actual_stages",
-                "actual_stages_by_batch",
-                "graph_replay_stages",
-                "graph_replay_stages_by_batch",
-            }
+        _FIXED32_BOUNDARY_PREGATHER_KEYS
+        | (
+            _FIXED32_BOUNDARY_PREGATHER_SHAPE_KEYS
+            if _FIXED32_BOUNDARY_PREGATHER_SHAPE_KEYS & set(conv)
+            else frozenset()
         ),
         f"{path}:conv_pregather",
     )
@@ -4901,6 +4995,23 @@ def _load_fixed32_boundary_snapshot(
         + nonpure_replays_by_batch[str(batch)]
         for batch in range(1, 5)
     }
+    conv_shape_counters = {
+        "graph_capture_stages": conv["graph_capture_stages"],
+        "graph_capture_stages_by_batch": conv_capture_by_batch,
+        "graph_replay_stages": conv["graph_replay_stages"],
+        "graph_replay_stages_by_batch": conv_replays_by_batch,
+    }
+    # Attested, never declared: a snapshot missing the field is the unfused
+    # shape it was written under, and one carrying it must agree with its own
+    # counters.
+    conv_kernel_shape = _fixed32_attested_kernel_shape(
+        conv.get("kernel_shape", _FIXED32_UNFUSED_KERNEL_SHAPE),
+        conv_shape_counters,
+        server_capacity=server_capacity,
+        events=events,
+        expected_replays_by_batch=expected_by_batch,
+        label=f"{path}:conv_pregather",
+    )
     if (
         committer["all_batches_ready"] is not True
         or committer["fast_route_ready"] is not True
@@ -4930,14 +5041,20 @@ def _load_fixed32_boundary_snapshot(
         or conv["pointer_entries"] != 48
         or conv_preseeded_batches != expected_preseeded_batches
         or conv["max_batch_size"] != server_capacity
-        or conv["graph_capture_stages"] != server_capacity
-        or conv_capture_by_batch != expected_capture_by_batch
         or conv["profile_capture_stages"] != 0
         or conv["aux_capture_stages"] != 0
         or conv["actual_stages"] != 0
         or conv_host_by_batch != zero_by_batch
-        or conv["graph_replay_stages"] != events
-        or conv_replays_by_batch != expected_by_batch
+        # Positive per-shape requirement: the fused route pins the capture
+        # and replay stage counters at zero, so an arm that also took the
+        # staging route satisfies neither shape's class.
+        or conv_shape_counters
+        != _fixed32_pregather_shape_counters(
+            conv_kernel_shape,
+            server_capacity=server_capacity,
+            events=events,
+            expected_replays_by_batch=expected_by_batch,
+        )
     ):
         raise Fixed32BoundaryError(
             f"{path}: committer/nonpure/in-graph pregather counters do not reconcile"

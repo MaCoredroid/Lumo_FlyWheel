@@ -5,6 +5,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -35,7 +36,13 @@ PATCHER_PATH = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py")
 def _snapshot(
     *,
     server_capacity: int,
+    kernel_shape: str | None = None,
 ) -> tuple[dict[str, object], SimpleNamespace]:
+    """A boundary snapshot for one kernel shape.
+
+    ``kernel_shape`` of ``None`` builds the v4-era snapshot that predates the
+    field entirely, which is what every recorded snapshot looks like.
+    """
     histogram = (
         {"1": 5, "2": 0, "3": 0, "4": 0}
         if server_capacity == 1
@@ -88,10 +95,16 @@ def _snapshot(
             "forbidden_full_steps": 0,
         }
     )
-    capture_by_batch = {
-        str(batch): int(batch <= server_capacity) for batch in range(1, 5)
-    }
     zero_by_batch = {str(batch): 0 for batch in range(1, 5)}
+    fused = kernel_shape == "sfwd_fused_conv_postprep"
+    capture_by_batch = (
+        dict(zero_by_batch)
+        if fused
+        else {
+            str(batch): int(batch <= server_capacity)
+            for batch in range(1, 5)
+        }
+    )
     payload: dict[str, object] = {
         "schema": "fr13-fixed32-boundary-snapshot-v4",
         "mode": "tail6_fixed32",
@@ -206,10 +219,12 @@ def _snapshot(
                 "actual_stages": 0,
                 "actual_stages_by_batch": zero_by_batch,
                 "aux_capture_stages": 0,
-                "graph_capture_stages": server_capacity,
+                "graph_capture_stages": 0 if fused else server_capacity,
                 "graph_capture_stages_by_batch": capture_by_batch,
-                "graph_replay_stages": events,
-                "graph_replay_stages_by_batch": by_batch,
+                "graph_replay_stages": 0 if fused else events,
+                "graph_replay_stages_by_batch": (
+                    dict(zero_by_batch) if fused else by_batch
+                ),
                 "max_batch_size": server_capacity,
                 "pointer_entries": 48,
                 "preseeded": True,
@@ -217,6 +232,9 @@ def _snapshot(
                     range(1, server_capacity + 1)
                 ),
                 "profile_capture_stages": 0,
+                **({} if kernel_shape is None else {
+                    "kernel_shape": kernel_shape,
+                }),
             },
         },
     }
@@ -852,9 +870,14 @@ def test_both_validators_reject_malformed_ack_counter(
         )
 
 
+@pytest.mark.parametrize(
+    "kernel_shape",
+    ("unfused_conv_pregather", "sfwd_fused_conv_postprep"),
+)
 def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    kernel_shape: str,
 ) -> None:
     patcher_tree = ast.parse(PATCHER_PATH.read_text(encoding="utf-8"))
     fixed_flush_sources = [
@@ -886,6 +909,7 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
         "none_steps": 1,
         "forbidden_full_steps": 0,
     }
+    fused = kernel_shape == "sfwd_fused_conv_postprep"
     gdn = SimpleNamespace(
         _fr13_fixed32_nonpure_commit_replays_by_batch=(
             lambda: dict(nonpure_by_batch)
@@ -893,6 +917,7 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
         _fr13_fixed32_nonpure_dispatch_counters=(
             lambda: dict(nonpure_dispatch)
         ),
+        _fr13_fixed32_kernel_shape=lambda: kernel_shape,
     )
     timer = SimpleNamespace(
         _accum_s=1.0,
@@ -969,12 +994,16 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
         "ready_capacities": {1: 4, 2: 4, 3: 4, 4: 4},
         "required_capacity": 4,
     }
+    # The fused kernel subsumes the pregather stage kernel: nothing stages at
+    # capture, so the counters the runtime publishes are its own zeros.
     pregather_counters = {
         "actual_stages": 0,
         "actual_stages_by_batch": {1: 0, 2: 0, 3: 0, 4: 0},
         "aux_capture_stages": 0,
-        "graph_capture_stages": 4,
-        "graph_capture_stages_by_batch": {1: 1, 2: 1, 3: 1, 4: 1},
+        "graph_capture_stages": 0 if fused else 4,
+        "graph_capture_stages_by_batch": (
+            {1: 0, 2: 0, 3: 0, 4: 0} if fused else {1: 1, 2: 1, 3: 1, 4: 1}
+        ),
         "max_batch_size": 4,
         "pointer_entries": 48,
         "preseeded": True,
@@ -1064,9 +1093,22 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
     assert snapshot["metrics"]["committer"][
         "nonpure_committer_replays_by_batch"
     ] == {"1": 0, "2": 1, "3": 0, "4": 0}
+    # Every artifact records which shape the arm ran under, and the fused arm
+    # replays no staging kernel alongside its measured forward.
+    assert snapshot["metrics"]["conv_pregather"][
+        "kernel_shape"
+    ] == kernel_shape
     assert snapshot["metrics"]["conv_pregather"][
         "graph_replay_stages"
-    ] == 1
+    ] == (0 if fused else 1)
+    assert snapshot["metrics"]["conv_pregather"][
+        "graph_replay_stages_by_batch"
+    ] == ({"1": 0, "2": 0, "3": 0, "4": 0} if fused else {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 1,
+    })
 
     ack = SimpleNamespace(
         mode="tail6_fixed32",
@@ -1102,3 +1144,231 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
     assert floor_report["committer"][
         "nonpure_committer_replays_enqueued"
     ] == 1
+
+
+# --- fused kernel shape in the boundary snapshot -------------------------
+
+
+import fr13_fixed32_work_census as census  # noqa: E402
+
+
+def _accept(
+    tmp_path: Path,
+    payload: dict[str, object],
+    ack: SimpleNamespace,
+    *,
+    server_capacity: int,
+) -> dict[str, object]:
+    """Run both boundary-snapshot validators over one payload."""
+    base_path = _write_snapshot(tmp_path, payload)
+    loaded, snapshot_path, _digest = (
+        orchestrator._load_fixed32_boundary_snapshot(
+            base_path=base_path,
+            ack=ack,
+            server_capacity=server_capacity,
+        )
+    )
+    assert loaded == payload
+    return floor_gate.validate_runtime_boundary_snapshot(
+        snapshot_path,
+        ack=_ack_dict(ack),
+        server_capacity=server_capacity,
+        metrics_path=None,
+        metric_values=None,
+        reference=None,
+        census_path=_write_census(tmp_path, payload),
+    )
+
+
+def test_boundary_kernel_shapes_are_the_census_closed_set() -> None:
+    """The runner mirrors the enum; the floor gate imports it."""
+    assert orchestrator._FIXED32_KERNEL_SHAPES == census.KERNEL_SHAPES
+    assert (
+        orchestrator._FIXED32_UNFUSED_KERNEL_SHAPE
+        == census.UNFUSED_KERNEL_SHAPE
+    )
+    assert (
+        orchestrator._FIXED32_FUSED_KERNEL_SHAPE == census.FUSED_KERNEL_SHAPE
+    )
+    assert floor_gate.KERNEL_SHAPES == census.KERNEL_SHAPES
+
+
+@pytest.mark.parametrize("server_capacity", (1, 4))
+@pytest.mark.parametrize("kernel_shape", census.KERNEL_SHAPES)
+def test_task_boundary_accepts_both_kernel_shapes(
+    tmp_path: Path,
+    server_capacity: int,
+    kernel_shape: str,
+) -> None:
+    payload, ack = _snapshot(
+        server_capacity=server_capacity,
+        kernel_shape=kernel_shape,
+    )
+    report = _accept(
+        tmp_path,
+        payload,
+        ack,
+        server_capacity=server_capacity,
+    )
+    assert report["kernel_shape"] == kernel_shape
+
+
+@pytest.mark.parametrize("server_capacity", (1, 4))
+def test_v4_snapshots_without_the_shape_field_are_the_unfused_shape(
+    tmp_path: Path,
+    server_capacity: int,
+) -> None:
+    """Constraint: recorded evidence predates the field and is untouched."""
+    payload, ack = _snapshot(server_capacity=server_capacity)
+    assert "kernel_shape" not in payload["metrics"]["conv_pregather"]
+    report = _accept(
+        tmp_path,
+        payload,
+        ack,
+        server_capacity=server_capacity,
+    )
+    assert report["kernel_shape"] == census.UNFUSED_KERNEL_SHAPE
+    # The field is optional, never required.
+    assert not (
+        orchestrator._FIXED32_BOUNDARY_PREGATHER_SHAPE_KEYS
+        & orchestrator._FIXED32_BOUNDARY_PREGATHER_KEYS
+    )
+    assert not (
+        floor_gate.FIXED32_RUNTIME_SNAPSHOT_PREGATHER_SHAPE_KEYS
+        & floor_gate.FIXED32_RUNTIME_SNAPSHOT_PREGATHER_KEYS
+    )
+
+
+@pytest.mark.parametrize(
+    ("declared", "counter_shape"),
+    (
+        (census.FUSED_KERNEL_SHAPE, census.UNFUSED_KERNEL_SHAPE),
+        (census.UNFUSED_KERNEL_SHAPE, census.FUSED_KERNEL_SHAPE),
+    ),
+)
+def test_task_boundary_rejects_a_shape_its_counters_disprove(
+    tmp_path: Path,
+    declared: str,
+    counter_shape: str,
+) -> None:
+    payload, ack = _snapshot(
+        server_capacity=4,
+        kernel_shape=counter_shape,
+    )
+    payload["metrics"]["conv_pregather"]["kernel_shape"] = declared
+    base_path = _write_snapshot(tmp_path, payload)
+    snapshot_path = Path(f"{base_path}.{ack.generation}.json")
+    needle = (
+        f"snapshot declares '{declared}' but its conv work counters attest "
+        f"'{counter_shape}'"
+    )
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match=re.escape(needle),
+    ):
+        orchestrator._load_fixed32_boundary_snapshot(
+            base_path=base_path,
+            ack=ack,
+            server_capacity=4,
+        )
+    with pytest.raises(floor_gate.GateError, match=re.escape(needle)):
+        floor_gate.validate_runtime_boundary_snapshot(
+            snapshot_path,
+            ack=_ack_dict(ack),
+            server_capacity=4,
+            metrics_path=None,
+            metric_values=None,
+            reference=None,
+            census_path=_write_census(tmp_path, payload),
+        )
+
+
+@pytest.mark.parametrize(
+    "declared",
+    ("fused", "unknown", None, "", "SFWD_FUSED_CONV_POSTPREP", 0),
+)
+def test_task_boundary_rejects_non_canonical_kernel_shapes(
+    tmp_path: Path,
+    declared: object,
+) -> None:
+    payload, ack = _snapshot(
+        server_capacity=4,
+        kernel_shape=census.FUSED_KERNEL_SHAPE,
+    )
+    payload["metrics"]["conv_pregather"]["kernel_shape"] = declared
+    base_path = _write_snapshot(tmp_path, payload)
+    snapshot_path = Path(f"{base_path}.{ack.generation}.json")
+    with pytest.raises(
+        orchestrator.Fixed32BoundaryError,
+        match="is not a canonical kernel shape",
+    ):
+        orchestrator._load_fixed32_boundary_snapshot(
+            base_path=base_path,
+            ack=ack,
+            server_capacity=4,
+        )
+    with pytest.raises(
+        floor_gate.GateError,
+        match="is not a canonical kernel shape",
+    ):
+        floor_gate.validate_runtime_boundary_snapshot(
+            snapshot_path,
+            ack=_ack_dict(ack),
+            server_capacity=4,
+            metrics_path=None,
+            metric_values=None,
+            reference=None,
+            census_path=_write_census(tmp_path, payload),
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("graph_capture_stages", 4),
+        ("graph_capture_stages_by_batch", {"1": 1, "2": 1, "3": 1, "4": 1}),
+        ("graph_replay_stages", 5),
+        ("graph_replay_stages_by_batch", {"1": 2, "2": 1, "3": 1, "4": 1}),
+        ("profile_capture_stages", 1),
+        ("aux_capture_stages", 1),
+        ("actual_stages", 1),
+        ("actual_stages_by_batch", {"1": 1, "2": 0, "3": 0, "4": 0}),
+        ("pointer_entries", 0),
+        ("preseeded", False),
+    ),
+)
+def test_fused_boundary_rejects_subsumed_pregather_work(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    """An arm that also took the staging route satisfies neither shape."""
+    payload, ack = _snapshot(
+        server_capacity=4,
+        kernel_shape=census.FUSED_KERNEL_SHAPE,
+    )
+    payload["metrics"]["conv_pregather"][field] = value
+    _assert_both_validators_reject(
+        tmp_path,
+        payload,
+        ack,
+        server_capacity=4,
+    )
+
+
+@pytest.mark.parametrize("kernel_shape", census.KERNEL_SHAPES)
+def test_boundary_rejects_unknown_conv_pregather_keys(
+    tmp_path: Path,
+    kernel_shape: str,
+) -> None:
+    payload, ack = _snapshot(
+        server_capacity=4,
+        kernel_shape=kernel_shape,
+    )
+    payload["metrics"]["conv_pregather"]["stage_launches"] = 0
+    _assert_both_validators_reject(
+        tmp_path,
+        payload,
+        ack,
+        server_capacity=4,
+    )
