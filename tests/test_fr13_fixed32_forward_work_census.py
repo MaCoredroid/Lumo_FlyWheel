@@ -925,3 +925,270 @@ def test_a_fused_terminal_needs_events_that_never_staged() -> None:
             [(record, f"hydra:{index}") for index, record in enumerate(hydra)],
             required_batches=(1,),
         )
+
+
+# --- the per-event census family learns the fused shape ------------------
+
+
+def _event_writer_sections() -> dict[str, set[str]]:
+    """Keys the runtime writer publishes for each conv work section."""
+    source = PATCHER.read_text(encoding="utf-8")
+    runtime = next(
+        node.value.value
+        for node in ast.parse(source).body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE"
+        and isinstance(node.value, ast.Constant)
+    )
+    sections: dict[str, set[str]] = {}
+    for node in ast.walk(ast.parse(runtime)):
+        if not isinstance(node, ast.Assign) or not isinstance(
+            node.value, ast.Dict
+        ):
+            continue
+        for target in node.targets:
+            if (
+                isinstance(target, ast.Subscript)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "event"
+                and isinstance(target.slice, ast.Constant)
+                and target.slice.value
+                in ("conv_pregather", "sfwd_conv_postprep")
+            ):
+                sections[target.slice.value] = {
+                    key.value
+                    for key in node.value.keys
+                    if isinstance(key, ast.Constant)
+                }
+    return sections
+
+
+def test_the_event_writer_and_validator_agree_on_both_sections() -> None:
+    sections = _event_writer_sections()
+    assert sections["conv_pregather"] == set(census.CONV_PREGATHER_KEYS)
+    assert sections["sfwd_conv_postprep"] == set(
+        census.SFWD_CONV_POSTPREP_KEYS
+    )
+
+
+def test_the_fused_event_section_cannot_carry_staging_geometry() -> None:
+    """row_elems/programs/layout are staging grid, not fused observations."""
+    for forbidden in ("row_elems", "programs", "layout_sha256"):
+        assert forbidden not in census.SFWD_CONV_POSTPREP_KEYS
+    # staged_rows survives only so the fused arm states the zero explicitly.
+    assert "staged_rows" in census.SFWD_CONV_POSTPREP_KEYS
+
+
+def test_the_writer_records_the_shape_and_never_both_sections() -> None:
+    source = PATCHER.read_text(encoding="utf-8")
+    assert 'event["kernel_shape"] = _fr13_fixed32_kernel_shape()' in source
+    assert 'event["conv_pregather"] = None' in source
+    assert 'event["sfwd_conv_postprep"] = None' in source
+    assert '"route": "fused_conv_postprep_single_kernel",' in source
+
+
+def _shape_event(shape: str, **kwargs):
+    return census.reference_event(
+        census.TAIL_MODE,
+        1,
+        "tail:event-shape",
+        event_index=0,
+        forward_step_index=0,
+        request_ids=["req-0"],
+        kernel_shape=shape,
+        **kwargs,
+    )
+
+
+@pytest.mark.parametrize("shape", census.KERNEL_SHAPES)
+def test_events_validate_under_both_shapes(shape: str) -> None:
+    event = _shape_event(shape)
+    validated = census.validate_event(event, source="s")
+    fused = shape == census.FUSED_KERNEL_SHAPE
+    assert (validated.conv_layout_sha256 is None) is fused
+    conv = validated.normalized_work["conv_pregather"]
+    if fused:
+        assert conv["kernel_shape"] == census.FUSED_KERNEL_SHAPE
+        assert conv["route"] == census.SFWD_CONV_POSTPREP_ROUTE
+        assert conv["calls_per_event"] == census.CONV_PREGATHER_LAYERS
+        for zeroed in (
+            "stage_calls_per_event",
+            "row_elems",
+            "programs_per_request",
+            "staged_rows_per_request",
+            "consume_calls_per_event",
+            "consume_hits_per_event",
+            "freshness_matches_per_event",
+        ):
+            assert conv[zeroed] == 0, zeroed
+    else:
+        assert conv["route"] == census.CONV_PREGATHER_ROUTE
+        assert conv["stage_calls_per_event"] == 1
+        assert conv["row_elems"] == census.CONV_PREGATHER_ROW_ELEMS
+
+
+def test_v12_events_without_the_shape_keys_still_validate() -> None:
+    """Constraint: recorded evidence predates both keys and is untouched."""
+    event = {
+        key: value
+        for key, value in _shape_event(census.UNFUSED_KERNEL_SHAPE).items()
+        if key not in census.EVENT_KERNEL_SHAPE_KEYS
+    }
+    assert not (census.EVENT_KERNEL_SHAPE_KEYS & set(event))
+    validated = census.validate_event(event, source="s")
+    assert validated.conv_layout_sha256 is not None
+    # The optional pair is never in the required key set.
+    assert not (census.EVENT_KERNEL_SHAPE_KEYS & census.TOP_LEVEL_KEYS)
+
+
+@pytest.mark.parametrize(
+    ("declared", "section_shape"),
+    (
+        (census.FUSED_KERNEL_SHAPE, census.UNFUSED_KERNEL_SHAPE),
+        (census.UNFUSED_KERNEL_SHAPE, census.FUSED_KERNEL_SHAPE),
+    ),
+)
+def test_an_event_cannot_declare_a_shape_its_section_disproves(
+    declared: str, section_shape: str
+) -> None:
+    event = dict(_shape_event(section_shape))
+    event["kernel_shape"] = declared
+    with pytest.raises(census.CensusError, match="but it carries sections"):
+        census.validate_event(event, source="s")
+
+
+def test_an_event_that_took_both_routes_proves_neither() -> None:
+    event = dict(_shape_event(census.FUSED_KERNEL_SHAPE))
+    event["conv_pregather"] = _shape_event(
+        census.UNFUSED_KERNEL_SHAPE
+    )["conv_pregather"]
+    with pytest.raises(census.CensusError, match="but it carries sections"):
+        census.validate_event(event, source="s")
+    empty = dict(_shape_event(census.FUSED_KERNEL_SHAPE))
+    empty["sfwd_conv_postprep"] = None
+    with pytest.raises(census.CensusError, match="but it carries sections"):
+        census.validate_event(empty, source="s")
+
+
+@pytest.mark.parametrize(
+    "declared", ("fused", "", None, "SFWD_FUSED_CONV_POSTPREP", 0)
+)
+def test_events_reject_non_canonical_kernel_shapes(declared) -> None:
+    event = dict(_shape_event(census.FUSED_KERNEL_SHAPE))
+    event["kernel_shape"] = declared
+    with pytest.raises(census.CensusError, match="kernel_shape: expected one of"):
+        census.validate_event(event, source="s")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("calls", census.CONV_PREGATHER_LAYERS - 1),
+        ("calls_per_layer", 2),
+        ("stage_calls", 1),
+        ("staged_rows", census.CONV_PREGATHER_LAYERS),
+        ("consume_calls", census.CONV_PREGATHER_LAYERS),
+        ("consume_hits", census.CONV_PREGATHER_LAYERS),
+        ("freshness_matches", census.CONV_PREGATHER_LAYERS),
+        ("route", census.CONV_PREGATHER_ROUTE),
+    ),
+)
+def test_a_fused_event_that_also_staged_is_rejected(field: str, value) -> None:
+    event = dict(_shape_event(census.FUSED_KERNEL_SHAPE))
+    event["sfwd_conv_postprep"] = {
+        **event["sfwd_conv_postprep"],
+        field: value,
+    }
+    with pytest.raises(census.CensusError):
+        census.validate_event(event, source="s")
+
+
+@pytest.mark.parametrize("shape", census.KERNEL_SHAPES)
+def test_a_whole_campaign_validates_under_both_shapes(shape: str) -> None:
+    """The chain the runner walks: events, terminal, campaign, both gates."""
+    def arm(mode: str):
+        events = [
+            census.reference_event(
+                mode,
+                1,
+                f"{mode}:campaign:{index}",
+                event_index=index,
+                forward_step_index=index,
+                request_ids=[f"req-{mode}-{index}"],
+                kernel_shape=shape,
+            )
+            for index in range(3)
+        ]
+        return [
+            *events,
+            census.reference_terminal_summary(
+                events,
+                fixture_synthetic_runtime_proof=True,
+                kernel_shape=shape,
+            ),
+        ]
+
+    tail, hydra = arm(census.TAIL_MODE), arm(census.HYDRA_MODE)
+    report = census.validate_campaign(
+        [(record, f"tail:{index}") for index, record in enumerate(tail)],
+        [(record, f"hydra:{index}") for index, record in enumerate(hydra)],
+        required_batches=(1,),
+    )
+    floor = FLOOR_GATE.validate_work_census_v5_report(report, required_batch=1)
+    depth = DEPTH_GATE.validate_work_census_v5_report(report, required_batch=1)
+    assert floor == depth
+    assert (
+        floor["forward_graph_pregather_lifecycle"]["kernel_shape"] == shape
+    )
+
+
+def test_a_fused_terminal_still_rejects_events_that_staged() -> None:
+    """The contradiction the exact4 candidate arm recorded."""
+    events = [
+        census.reference_event(
+            census.TAIL_MODE,
+            1,
+            f"tail:mixed:{index}",
+            event_index=index,
+            forward_step_index=index,
+            request_ids=[f"req-{index}"],
+        )
+        for index in range(2)
+    ]
+    hydra = [
+        census.reference_event(
+            census.HYDRA_MODE,
+            1,
+            f"hydra:mixed:{index}",
+            event_index=index,
+            forward_step_index=index,
+            request_ids=[f"hreq-{index}"],
+        )
+        for index in range(2)
+    ]
+    tail_records = [
+        *events,
+        census.reference_terminal_summary(
+            events,
+            fixture_synthetic_runtime_proof=True,
+            kernel_shape=census.FUSED_KERNEL_SHAPE,
+        ),
+    ]
+    hydra_records = [
+        *hydra,
+        census.reference_terminal_summary(
+            hydra,
+            fixture_synthetic_runtime_proof=True,
+            kernel_shape=census.FUSED_KERNEL_SHAPE,
+        ),
+    ]
+    with pytest.raises(
+        census.CensusError, match="publish no staging layout digest"
+    ):
+        census.validate_campaign(
+            [(r, f"t:{i}") for i, r in enumerate(tail_records)],
+            [(r, f"h:{i}") for i, r in enumerate(hydra_records)],
+            required_batches=(1,),
+        )

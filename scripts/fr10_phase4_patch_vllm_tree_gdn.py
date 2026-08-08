@@ -1799,7 +1799,9 @@ def _fr13_fixed32_observed_new_state(
         "sfwd_conv_postprep_layers": set(),
         "sfwd_conv_postprep_calls": 0,
         "conv_commit": None,
+        "kernel_shape": None,
         "conv_pregather": None,
+        "sfwd_conv_postprep": None,
         "committer": None,
         "preforward_pack": None,
         "output_publish": None,
@@ -7427,23 +7429,48 @@ def _fr13_fixed32_observed_commit(
         "fallback": 0,
     }
     programs = pregather_layers * batch * ((row_elems + block - 1) // block)
-    event["conv_pregather"] = {
-        "route": "in_graph_preconsume",
-        "layout_sha256": event["conv_stage_source"],
-        "stage_calls": int(event["conv_stage_replays"]),
-        "stage_before_all_consumes": event[
-            "conv_stage_before_all_consumes"
-        ],
-        "layers": pregather_layers,
-        "requests": batch,
-        "row_elems": row_elems,
-        "programs": programs,
-        "staged_rows": pregather_layers * batch,
-        "consume_calls": int(event["conv_consume_calls"]),
-        "consume_hits": int(event["conv_consume_hits"]),
-        "consume_fallbacks": int(event["conv_consume_fallbacks"]),
-        "freshness_matches": int(event["conv_freshness_matches"]),
-    }
+    event["kernel_shape"] = _fr13_fixed32_kernel_shape()
+    if _FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION:
+        # The fused kernel subsumes the pregather stage kernel. row_elems,
+        # programs and staged_rows are the staging route's grid geometry read
+        # off the preseeded contract, not launches: no staging kernel ran, so
+        # publishing them here would record work no kernel in this arm
+        # performed, and the route name would name a route it never took.
+        # The fused arm publishes its own class instead, and every subsumed
+        # counter is carried as the zero it is.
+        event["conv_pregather"] = None
+        event["sfwd_conv_postprep"] = {
+            "route": "fused_conv_postprep_single_kernel",
+            "layers": len(event["sfwd_conv_postprep_layers"]),
+            "requests": batch,
+            "calls": int(event["sfwd_conv_postprep_calls"]),
+            "calls_per_layer": 1,
+            "stage_calls": int(event["conv_stage_replays"]),
+            "staged_rows": 0,
+            "consume_calls": int(event["conv_consume_calls"]),
+            "consume_hits": int(event["conv_consume_hits"]),
+            "consume_fallbacks": int(event["conv_consume_fallbacks"]),
+            "freshness_matches": int(event["conv_freshness_matches"]),
+        }
+    else:
+        event["sfwd_conv_postprep"] = None
+        event["conv_pregather"] = {
+            "route": "in_graph_preconsume",
+            "layout_sha256": event["conv_stage_source"],
+            "stage_calls": int(event["conv_stage_replays"]),
+            "stage_before_all_consumes": event[
+                "conv_stage_before_all_consumes"
+            ],
+            "layers": pregather_layers,
+            "requests": batch,
+            "row_elems": row_elems,
+            "programs": programs,
+            "staged_rows": pregather_layers * batch,
+            "consume_calls": int(event["conv_consume_calls"]),
+            "consume_hits": int(event["conv_consume_hits"]),
+            "consume_fallbacks": int(event["conv_consume_fallbacks"]),
+            "freshness_matches": int(event["conv_freshness_matches"]),
+        }
     path_cap = normalized_committer["path_cap"]
     fused_calls = normalized_committer["fused_calls"]
     ring_gathers = normalized_committer["ring_gathers"]
@@ -7728,7 +7755,18 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
             "export_or_mask": int(event["gdn_export_or_mask"]),
         },
         "conv_commit": dict(event["conv_commit"]),
-        "conv_pregather": dict(event["conv_pregather"]),
+        # Exactly one conv work section is published, and the shape names it.
+        "kernel_shape": event["kernel_shape"],
+        "conv_pregather": (
+            None
+            if event["conv_pregather"] is None
+            else dict(event["conv_pregather"])
+        ),
+        "sfwd_conv_postprep": (
+            None
+            if event["sfwd_conv_postprep"] is None
+            else dict(event["sfwd_conv_postprep"])
+        ),
         "committer": dict(event["committer"]),
         "output_publish": dict(event["output_publish"]),
         "accepted_path_pack": dict(event["accepted_path_pack"]),
@@ -8068,7 +8106,17 @@ def _fr13_fixed32_observed_build_record(
         "request_key_pack": dict(observed["request_key_pack"]),
         "kv_remap": dict(observed["kv_remap"]),
         "conv_commit": dict(observed["conv_commit"]),
-        "conv_pregather": dict(observed["conv_pregather"]),
+        "kernel_shape": observed["kernel_shape"],
+        "conv_pregather": (
+            None
+            if observed["conv_pregather"] is None
+            else dict(observed["conv_pregather"])
+        ),
+        "sfwd_conv_postprep": (
+            None
+            if observed["sfwd_conv_postprep"] is None
+            else dict(observed["sfwd_conv_postprep"])
+        ),
         "committer": dict(observed["committer"]),
         "failures": failures,
     }

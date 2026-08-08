@@ -258,6 +258,7 @@ CONV_ROW_GUARD_ALIAS_VECTOR_LOADS_PER_EVENT = 2
 CONV_ROW_GUARD_SELECTED_ROW_LOADS_PER_PROGRAM = 0
 CONV_ROW_GUARD_PEER_TOPOLOGY_PROOF = "preseed_lease_audit"
 CONV_PREGATHER_ROUTE = "in_graph_preconsume"
+SFWD_CONV_POSTPREP_ROUTE = "fused_conv_postprep_single_kernel"
 COMMITTER_ROUTE = "fixed16_device_fill_graph"
 if TREE_ATTENTION_LAYERS + GDN_LAYERS != MODEL_LAYERS:
     raise RuntimeError(
@@ -297,6 +298,11 @@ TOP_LEVEL_KEYS = frozenset(
         "failures",
     }
 )
+# Added with the fused structural shape. Events recorded before the fused arm
+# existed predate both keys, so they are optional here -- a v12 event
+# validates exactly as it did, as the unfused shape it ran under -- and an
+# event that carries them is attested against its own conv work section.
+EVENT_KERNEL_SHAPE_KEYS = frozenset({"kernel_shape", "sfwd_conv_postprep"})
 GDN_COMPARATOR_SCHEMA = "fr13.fixed32.gdn_single_launch.comparator_event.v1"
 GDN_COMPARATOR_CANDIDATES = frozenset(
     (
@@ -608,6 +614,27 @@ CONV_PREGATHER_KEYS = frozenset(
         "freshness_matches",
     }
 )
+# The fused arm's own per-event class. It publishes what the fused kernel did
+# -- one call per layer, in one kernel -- and carries every counter the
+# pregather route would have produced as the zero it is. There is no
+# layout_sha256, no row/program grid and no staged rows here, because no
+# staging kernel launched: restating that geometry would record work this arm
+# never performed.
+SFWD_CONV_POSTPREP_KEYS = frozenset(
+    {
+        "route",
+        "layers",
+        "requests",
+        "calls",
+        "calls_per_layer",
+        "stage_calls",
+        "staged_rows",
+        "consume_calls",
+        "consume_hits",
+        "consume_fallbacks",
+        "freshness_matches",
+    }
+)
 COMMITTER_KEYS = frozenset(
     {
         "route",
@@ -777,7 +804,8 @@ class ValidatedEvent:
     producer_pid: int
     mode: str
     batch_size: int
-    conv_layout_sha256: str
+    # None under fusion: the fused route publishes no staging digest.
+    conv_layout_sha256: str | None
     drafter_graph_signature: str
     drafter_graph_captures: int
     normalized_work: dict[str, Any]
@@ -1191,8 +1219,14 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     """Validate one event and return its arm-independent work signature."""
 
     event = _mapping(raw, source)
-    expected_event_keys = TOP_LEVEL_KEYS | (
-        {"gdn_comparator"} if "gdn_comparator" in event else set()
+    expected_event_keys = (
+        TOP_LEVEL_KEYS
+        | ({"gdn_comparator"} if "gdn_comparator" in event else set())
+        | (
+            set(EVENT_KERNEL_SHAPE_KEYS)
+            if EVENT_KERNEL_SHAPE_KEYS & set(event)
+            else set()
+        )
     )
     _exact_keys(event, frozenset(expected_event_keys), source)
 
@@ -2229,51 +2263,155 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         },
         label=f"{source}.conv_commit",
     )
-    conv_pregather_raw = _mapping(event["conv_pregather"], f"{source}.conv_pregather")
-    _exact_keys(
-        conv_pregather_raw,
-        CONV_PREGATHER_KEYS,
-        f"{source}.conv_pregather",
+    # Attested, never declared. The event carries no graph signature, so the
+    # attestation is structural: the two canonical conv work sections are
+    # mutually exclusive, and the shape an event declares must be the one
+    # whose section it actually published. An event carrying both sections
+    # took both routes and proves neither.
+    event_shape = event.get("kernel_shape", UNFUSED_KERNEL_SHAPE)
+    if event_shape not in KERNEL_SHAPES:
+        raise CensusError(
+            f"{source}.kernel_shape: expected one of {list(KERNEL_SHAPES)}, "
+            f"got {event_shape!r}"
+        )
+    event_fused = event_shape == FUSED_KERNEL_SHAPE
+    published = {
+        "conv_pregather": isinstance(event["conv_pregather"], Mapping),
+        "sfwd_conv_postprep": isinstance(
+            event.get("sfwd_conv_postprep"), Mapping
+        ),
+    }
+    expected_section = (
+        "sfwd_conv_postprep" if event_fused else "conv_pregather"
     )
-    conv_layout_sha256 = _sha256(
-        conv_pregather_raw["layout_sha256"],
-        f"{source}.conv_pregather.layout_sha256",
-    )
-    conv_row_elems = _integer(
-        conv_pregather_raw["row_elems"],
-        f"{source}.conv_pregather.row_elems",
-        minimum=1,
-    )
-    _expect(
-        conv_row_elems,
-        CONV_PREGATHER_ROW_ELEMS,
-        f"{source}.conv_pregather.row_elems",
-    )
-    conv_pregather_programs = (
-        CONV_PREGATHER_LAYERS
-        * batch_size
-        * ((conv_row_elems + CONV_PREGATHER_BLOCK - 1) // CONV_PREGATHER_BLOCK)
-    )
-    conv_pregather = _fixed_section(
-        conv_pregather_raw,
-        keys=CONV_PREGATHER_KEYS,
-        expected={
-            "route": CONV_PREGATHER_ROUTE,
-            "layout_sha256": conv_layout_sha256,
-            "stage_calls": 1,
-            "stage_before_all_consumes": True,
-            "layers": CONV_PREGATHER_LAYERS,
-            "requests": batch_size,
-            "row_elems": conv_row_elems,
-            "programs": conv_pregather_programs,
-            "staged_rows": CONV_PREGATHER_LAYERS * batch_size,
-            "consume_calls": CONV_PREGATHER_LAYERS,
-            "consume_hits": CONV_PREGATHER_LAYERS,
+    if published != {
+        "conv_pregather": not event_fused,
+        "sfwd_conv_postprep": event_fused,
+    }:
+        raise CensusError(
+            f"{source}.kernel_shape: event declares {event_shape!r}, which "
+            f"publishes {expected_section}, but it carries sections "
+            f"{sorted(name for name, seen in published.items() if seen)}"
+        )
+    if event_fused:
+        # Positive fused class: one call per layer in one kernel, and every
+        # counter the staging route would have produced pinned at the zero it
+        # is. An arm that also staged satisfies neither shape.
+        sfwd_raw = _mapping(
+            event["sfwd_conv_postprep"], f"{source}.sfwd_conv_postprep"
+        )
+        _exact_keys(
+            sfwd_raw,
+            SFWD_CONV_POSTPREP_KEYS,
+            f"{source}.sfwd_conv_postprep",
+        )
+        conv_layout_sha256 = None
+        conv_work = _fixed_section(
+            sfwd_raw,
+            keys=SFWD_CONV_POSTPREP_KEYS,
+            expected={
+                "route": SFWD_CONV_POSTPREP_ROUTE,
+                "layers": CONV_PREGATHER_LAYERS,
+                "requests": batch_size,
+                "calls": CONV_PREGATHER_LAYERS,
+                "calls_per_layer": 1,
+                "stage_calls": 0,
+                "staged_rows": 0,
+                "consume_calls": 0,
+                "consume_hits": 0,
+                "consume_fallbacks": 0,
+                "freshness_matches": 0,
+            },
+            label=f"{source}.sfwd_conv_postprep",
+        )
+        conv_normalized = {
+            "kernel_shape": FUSED_KERNEL_SHAPE,
+            "route": conv_work["route"],
+            "calls_per_event": conv_work["calls"],
+            "calls_per_layer": conv_work["calls_per_layer"],
+            "layers": conv_work["layers"],
+            # The subsumed staging class, as the zeros it is.
+            "stage_calls_per_event": 0,
+            "stage_before_all_consumes": False,
+            "row_elems": 0,
+            "programs_per_request": 0,
+            "staged_rows_per_request": 0,
+            "consume_calls_per_event": 0,
+            "consume_hits_per_event": 0,
             "consume_fallbacks": 0,
-            "freshness_matches": CONV_PREGATHER_LAYERS,
-        },
-        label=f"{source}.conv_pregather",
-    )
+            "freshness_matches_per_event": 0,
+        }
+    else:
+        conv_pregather_raw = _mapping(
+            event["conv_pregather"], f"{source}.conv_pregather"
+        )
+        _exact_keys(
+            conv_pregather_raw,
+            CONV_PREGATHER_KEYS,
+            f"{source}.conv_pregather",
+        )
+        conv_layout_sha256 = _sha256(
+            conv_pregather_raw["layout_sha256"],
+            f"{source}.conv_pregather.layout_sha256",
+        )
+        conv_row_elems = _integer(
+            conv_pregather_raw["row_elems"],
+            f"{source}.conv_pregather.row_elems",
+            minimum=1,
+        )
+        _expect(
+            conv_row_elems,
+            CONV_PREGATHER_ROW_ELEMS,
+            f"{source}.conv_pregather.row_elems",
+        )
+        conv_pregather_programs = (
+            CONV_PREGATHER_LAYERS
+            * batch_size
+            * (
+                (conv_row_elems + CONV_PREGATHER_BLOCK - 1)
+                // CONV_PREGATHER_BLOCK
+            )
+        )
+        conv_work = _fixed_section(
+            conv_pregather_raw,
+            keys=CONV_PREGATHER_KEYS,
+            expected={
+                "route": CONV_PREGATHER_ROUTE,
+                "layout_sha256": conv_layout_sha256,
+                "stage_calls": 1,
+                "stage_before_all_consumes": True,
+                "layers": CONV_PREGATHER_LAYERS,
+                "requests": batch_size,
+                "row_elems": conv_row_elems,
+                "programs": conv_pregather_programs,
+                "staged_rows": CONV_PREGATHER_LAYERS * batch_size,
+                "consume_calls": CONV_PREGATHER_LAYERS,
+                "consume_hits": CONV_PREGATHER_LAYERS,
+                "consume_fallbacks": 0,
+                "freshness_matches": CONV_PREGATHER_LAYERS,
+            },
+            label=f"{source}.conv_pregather",
+        )
+        conv_normalized = {
+            "route": conv_work["route"],
+            "stage_calls_per_event": conv_work["stage_calls"],
+            "stage_before_all_consumes": conv_work[
+                "stage_before_all_consumes"
+            ],
+            "layers": conv_work["layers"],
+            "row_elems": conv_work["row_elems"],
+            "programs_per_request": (
+                int(conv_work["programs"]) // batch_size
+            ),
+            "staged_rows_per_request": (
+                int(conv_work["staged_rows"]) // batch_size
+            ),
+            "consume_calls_per_event": conv_work["consume_calls"],
+            "consume_hits_per_event": conv_work["consume_hits"],
+            "consume_fallbacks": conv_work["consume_fallbacks"],
+            "freshness_matches_per_event": conv_work["freshness_matches"],
+        }
+    conv_pregather = conv_work
     committer_raw = _mapping(event["committer"], f"{source}.committer")
     _exact_keys(committer_raw, COMMITTER_KEYS, f"{source}.committer")
     committer_fused_calls = _integer(
@@ -2338,7 +2476,12 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             (request_key_pack, REQUEST_KEY_PACK_ROUTE),
             (kv_remap, KV_REMAP_ROUTE),
             (conv_commit, CONV_COMMIT_ROUTE),
-            (conv_pregather, CONV_PREGATHER_ROUTE),
+            (
+                conv_pregather,
+                SFWD_CONV_POSTPREP_ROUTE
+                if event_fused
+                else CONV_PREGATHER_ROUTE,
+            ),
             (committer, COMMITTER_ROUTE),
         )
     )
@@ -2671,23 +2814,9 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "skips": conv_commit["skips"],
             "fallback": conv_commit["fallback"],
         },
-        "conv_pregather": {
-            "route": conv_pregather["route"],
-            "stage_calls_per_event": conv_pregather["stage_calls"],
-            "stage_before_all_consumes": conv_pregather[
-                "stage_before_all_consumes"
-            ],
-            "layers": conv_pregather["layers"],
-            "row_elems": conv_pregather["row_elems"],
-            "programs_per_request": (int(conv_pregather["programs"]) // batch_size),
-            "staged_rows_per_request": (
-                int(conv_pregather["staged_rows"]) // batch_size
-            ),
-            "consume_calls_per_event": conv_pregather["consume_calls"],
-            "consume_hits_per_event": conv_pregather["consume_hits"],
-            "consume_fallbacks": conv_pregather["consume_fallbacks"],
-            "freshness_matches_per_event": conv_pregather["freshness_matches"],
-        },
+        # Keyed by the family name, not the route: the normalized signature
+        # is the conv work this event proved, whichever shape produced it.
+        "conv_pregather": conv_normalized,
         "committer": {
             "route": committer["route"],
             "layers": committer["layers"],
@@ -3022,15 +3151,14 @@ def _validate_terminal(
         }
         if row_fused:
             # No same-B event may publish a staging layout digest for work the
-            # fused kernel subsumed. The per-event schema is a separate family
-            # that still requires one, so a fused terminal is unprovable until
-            # that family learns the shape, and it fails closed here rather
-            # than being accepted on counters no event corroborates.
-            if event_layouts:
+            # fused kernel subsumed, so a fused terminal is corroborated only
+            # by events that ran the fused shape themselves.
+            staging_layouts = event_layouts - {None}
+            if staging_layouts:
                 raise CensusError(
                     f"{row_label}: a fused row requires same-B events that "
                     "publish no staging layout digest, got "
-                    f"{sorted(event_layouts)}"
+                    f"{sorted(staging_layouts)}"
                 )
         elif event_layouts and event_layouts != {conv_layout_sha256}:
             raise CensusError(
@@ -3808,8 +3936,15 @@ def reference_event(
     request_ids: Sequence[str] | None = None,
     drafter_runtime: Mapping[str, Any] | None = None,
     taw: Mapping[str, Any] | None = None,
+    kernel_shape: str = UNFUSED_KERNEL_SHAPE,
 ) -> dict[str, Any]:
-    """Build an exact synthetic event for reducer and validator self-tests."""
+    """Build an exact synthetic event for reducer and validator self-tests.
+
+    ``kernel_shape`` selects which canonical conv work section the event
+    publishes; the two are mutually exclusive and the shape is recorded.
+    """
+    _validated_kernel_shape(kernel_shape)
+    fixture_fused = kernel_shape == FUSED_KERNEL_SHAPE
     semantics = MODE_SEMANTICS[mode]
     tree_calls = TREE_CALLS_PER_EVENT
     gdn_scan_calls = GDN_SCAN_CALLS_PER_REQUEST * batch_size
@@ -4057,7 +4192,23 @@ def reference_event(
             "skips": 0,
             "fallback": 0,
         },
-        "conv_pregather": {
+        "kernel_shape": kernel_shape,
+        # Mutually exclusive: an event publishes the section for the route it
+        # actually took, and never both.
+        "sfwd_conv_postprep": {
+            "route": SFWD_CONV_POSTPREP_ROUTE,
+            "layers": CONV_PREGATHER_LAYERS,
+            "requests": batch_size,
+            "calls": CONV_PREGATHER_LAYERS,
+            "calls_per_layer": 1,
+            "stage_calls": 0,
+            "staged_rows": 0,
+            "consume_calls": 0,
+            "consume_hits": 0,
+            "consume_fallbacks": 0,
+            "freshness_matches": 0,
+        } if fixture_fused else None,
+        "conv_pregather": None if fixture_fused else {
             "route": CONV_PREGATHER_ROUTE,
             "layout_sha256": _fixture_conv_layout_signature(batch_size),
             "stage_calls": 1,
