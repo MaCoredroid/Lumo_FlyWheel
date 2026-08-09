@@ -133,8 +133,10 @@ def _write_task(
     )
 
 
-def _build_arm(arm_dir: Path, *, nested: bool, tasks: int = 2) -> None:
-    """Write one arm whose per-task brackets are nested or disjoint."""
+def _build_arm(
+    arm_dir: Path, *, nested: bool, tasks: int = 2, staggered: bool = False
+) -> None:
+    """Write one arm whose per-task brackets are nested, disjoint or staggered."""
     per_task = arm_dir / "swe_out" / "verified" / "per_task"
     for index in range(tasks):
         name = f"task-{index}"
@@ -143,6 +145,13 @@ def _build_arm(arm_dir: Path, *, nested: bool, tasks: int = 2) -> None:
             post = _scale(index + 1)
             started = "2026-01-01T00:00:00Z"
             elapsed = 100.0 * (index + 1)
+        elif staggered:
+            # A refilled pool: task k is admitted half a unit before task k-1
+            # finishes, so the brackets overlap without sharing an origin.
+            pre = _scale(index * 0.5)
+            post = _scale(index + 1)
+            started = f"2026-01-01T00:0{index}:00Z"
+            elapsed = 90.0
         else:
             pre = _scale(index)
             post = _scale(index + 1)
@@ -176,7 +185,9 @@ def _build_arm(arm_dir: Path, *, nested: bool, tasks: int = 2) -> None:
     )
 
 
-def _build_runroot(root: Path, *, nested: bool, concurrency: int) -> Path:
+def _build_runroot(
+    root: Path, *, nested: bool, concurrency: int, staggered: bool = False
+) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     (root / "launcher_meta.txt").write_text(
         "\n".join(
@@ -194,7 +205,7 @@ def _build_runroot(root: Path, *, nested: bool, concurrency: int) -> Path:
         encoding="utf-8",
     )
     for arm in ("arm_stock", "arm_candidate"):
-        _build_arm(root / arm, nested=nested)
+        _build_arm(root / arm, nested=nested, staggered=staggered)
     return root
 
 
@@ -218,6 +229,22 @@ def test_nested_brackets_take_the_widest_not_the_sum(tmp_path: Path) -> None:
     # The widest bracket is 2 units; naively summing the nested brackets gives 3.
     assert arm["counters"]["requests"] == pytest.approx(4.0)
     assert arm["summed_bracket_inflation"]["vllm:prompt_tokens_total"] == pytest.approx(1.5)
+
+
+def test_staggered_brackets_take_the_envelope_not_the_sum(tmp_path: Path) -> None:
+    """A refilled pool overlaps without nesting; summing multiply-counts it."""
+    root = _build_runroot(
+        tmp_path / "pool", nested=False, concurrency=4, staggered=True
+    )
+    report = reducer._reduce_runroot(root, "B4")
+    arm = report["arms"][0]
+    assert arm["bracket_topology"] == "staggered"
+    # Envelope is 2 units; naively summing the overlapping brackets gives 2.5.
+    assert arm["counters"]["requests"] == pytest.approx(4.0)
+    assert arm["counters"]["pure_decode_events"] == pytest.approx(20.0)
+    assert arm["summed_bracket_inflation"]["vllm:prompt_tokens_total"] == pytest.approx(
+        1.25
+    )
 
 
 def test_census_disagreement_is_fatal(tmp_path: Path) -> None:

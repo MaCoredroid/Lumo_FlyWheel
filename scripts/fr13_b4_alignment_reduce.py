@@ -12,8 +12,10 @@ NESTED and the sum multiply-counts the shared prefix.
 This reducer re-derives each arm's aggregates from the same recorded evidence
 without that assumption:
 
-  * it classifies the bracket topology (disjoint vs nested) from the recorded
-    pre-snapshot counter vectors and takes the arm delta accordingly,
+  * it classifies the bracket topology (disjoint, nested, or staggered when a
+    refilled pool overlaps its brackets without sharing an origin) from the
+    recorded pre/post counter vectors and takes the arm delta accordingly --
+    the sum, the widest bracket, or the envelope max(post)-min(pre),
   * it cross-checks the result against the arm's own work census (which is a
     whole-arm record and is topology-blind),
   * and it emits the batch-invariant per-request quantities -- prefill token
@@ -140,6 +142,41 @@ def _task_dirs(arm_dir: Path) -> list[Path]:
     return sorted(p for p in root.iterdir() if p.is_dir())
 
 
+def _staggered(records: list[dict[str, Any]], names: tuple[str, ...]) -> bool:
+    """True when any two brackets OVERLAP on the monotonic engine counters.
+
+    Engine counters never decrease, so bracket A closed at or before bracket B
+    opened iff every counter satisfies post_A <= pre_B.  Two brackets therefore
+    overlap unless one of them wholly precedes the other.  Tiled concurrency-1
+    brackets touch (post_k == pre_k+1) but never overlap, so they stay disjoint
+    and keep summing; a refilled pool admits a task while others are still in
+    flight, which is exactly an overlap.
+    """
+    if len(records) < 2:
+        return False
+    usable = [
+        n
+        for n in names
+        if all(
+            r["pre"].get(n) is not None and r["post"].get(n) is not None
+            for r in records
+        )
+    ]
+    if not usable:
+        return False
+    for i, first in enumerate(records):
+        for second in records[i + 1 :]:
+            first_then_second = all(
+                first["post"][n] <= second["pre"][n] for n in usable
+            )
+            second_then_first = all(
+                second["post"][n] <= first["pre"][n] for n in usable
+            )
+            if not (first_then_second or second_then_first):
+                return True
+    return False
+
+
 def _bracket(arm_dir: Path) -> dict[str, Any]:
     """Reduce the per-task engine brackets to one topology-safe arm delta.
 
@@ -147,6 +184,20 @@ def _bracket(arm_dir: Path) -> dict[str, Any]:
     sum.  Nested brackets (concurrency > 1, every task opening at the same
     instant) all share one origin, so the arm delta is the widest bracket --
     the one whose post-snapshot is last -- and summing would multiply-count.
+
+    STAGGERED brackets (a continuously refilled pool: more tasks than slots,
+    each admitted as an earlier one finishes) are neither.  They open on
+    DIFFERENT origins, so they are not nested, but they still OVERLAP, so they
+    do not tile and summing multiply-counts every overlap.  Measured on the
+    16-task refill runroot that is a 1.87x-4.00x inflation across every bracket
+    counter.  For overlapping brackets on monotonic engine counters the arm
+    window is the ENVELOPE -- max(post) - min(pre) -- which is the outer hull of
+    the brackets and counts the arm exactly once.
+
+    Topology is classified from the recorded evidence, never assumed from a
+    concurrency argument: one shared origin is what nesting means, and pairwise
+    bracket overlap is what staggering means.  A concurrency-1 arm has neither,
+    so it still sums and stays byte-identical.
     """
     tasks = _task_dirs(arm_dir)
     names = BRACKET_COUNTERS + GLOBAL_COUNTERS
@@ -173,6 +224,7 @@ def _bracket(arm_dir: Path) -> dict[str, Any]:
         tuple(r["pre"].get(n) for n in BRACKET_COUNTERS) for r in records
     }
     nested = len(records) > 1 and len(origins) == 1
+    staggered = not nested and _staggered(records, BRACKET_COUNTERS)
     closing = max(records, key=lambda r: r["post_mtime"])
 
     delta: dict[str, float | None] = {}
@@ -181,6 +233,12 @@ def _bracket(arm_dir: Path) -> dict[str, Any]:
             pre = closing["pre"].get(name)
             post = closing["post"].get(name)
             delta[name] = None if pre is None or post is None else post - pre
+        elif staggered:
+            values = [(r["post"].get(name), r["pre"].get(name)) for r in records]
+            if any(post is None or pre is None for post, pre in values):
+                delta[name] = None
+            else:
+                delta[name] = max(p for p, _ in values) - min(q for _, q in values)
         else:
             values = [(r["post"].get(name), r["pre"].get(name)) for r in records]
             if any(post is None or pre is None for post, pre in values):
@@ -194,10 +252,18 @@ def _bracket(arm_dir: Path) -> dict[str, Any]:
         if not any(post is None or pre is None for post, pre in values):
             naive[name] = sum(post - pre for post, pre in values)
 
+    if nested:
+        topology = "nested"
+    elif staggered:
+        topology = "staggered"
+    else:
+        topology = "disjoint"
+
     return {
-        "topology": "nested" if nested else "disjoint",
+        "topology": topology,
         "closing_task": closing["instance_id"],
         "task_count": len(records),
+        "distinct_bracket_origins": len(origins),
         "delta": delta,
         "summed_delta": naive,
     }

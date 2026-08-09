@@ -286,25 +286,91 @@ def test_census_gate_would_have_rejected_the_naive_sum(tmp_path):
     assert "nested" in message
 
 
-def test_staggered_admission_fails_closed_instead_of_summing(tmp_path):
-    """Partially-overlapping brackets match NEITHER topology.  They classify as
-    disjoint, and the census must then catch the resulting over-count rather
-    than let an inflated aggregate through."""
-    root = tmp_path / "swe_out"
-    for k in range(4):
-        # Origins differ slightly (staggered starts) but the windows still
-        # overlap heavily -- the sum is nonsense either way.
+def _staggered_arm(root: Path, n_tasks: int = 4) -> None:
+    """A refilled pool: origins differ (not nested) but the windows overlap
+    heavily (not disjoint), so neither historical reduction applies."""
+    for k in range(n_tasks):
+        task = root / "verified" / "per_task" / f"stag-{k}"
         _write_bracket(
             root,
             f"stag-{k}",
             _scale(UNIT_B4, 0.01 * k),
             _scale(UNIT_B4, float(k + 1)),
         )
+        os.utime(
+            task / "vllm_metrics_post.txt",
+            (1_700_000_000 + k, 1_700_000_000 + k),
+        )
+
+
+def test_staggered_brackets_reduce_to_the_envelope_not_the_sum(tmp_path):
+    """Partially-overlapping brackets match NEITHER historical topology.
+
+    They must reduce to the ENVELOPE max(post)-min(pre), which spans the arm
+    exactly once, instead of the sum, which multiply-counts every overlap.
+    """
+    root = tmp_path / "swe_out"
+    _staggered_arm(root)
+
+    reduced = measure._bracket_reduce(measure._find_task_dirs(str(root)))
+
+    assert reduced["topology"] == "staggered"
+    assert reduced["distinct_bracket_origins"] == 4
+    assert reduced["closing_task"] == "stag-3"
+
+    envelope = _scale(UNIT_B4, 4.0)
+    naive_sum = _scale(UNIT_B4, (1.0 + 2.0 + 3.0 + 4.0) - 0.01 * (0 + 1 + 2 + 3))
+    for counter in measure.COUNTERS:
+        assert reduced["delta"][counter] == pytest.approx(
+            envelope[counter], rel=0, abs=1e-9
+        )
+        assert reduced["summed_delta"][counter] == pytest.approx(
+            naive_sum[counter], rel=0, abs=1e-9
+        )
+        # The defect this fixes: the naive sum is 2.485x the truth here.
+        assert reduced["summed_delta"][counter] == pytest.approx(
+            2.485 * reduced["delta"][counter], rel=1e-12
+        )
+
+
+def test_staggered_envelope_agrees_with_the_work_census(tmp_path):
+    """The envelope spans the arm once, so it must equal the topology-blind
+    census -- which is what makes a refilled pool citable at all."""
+    root = tmp_path / "swe_out"
+    _staggered_arm(root)
     census = _write_census(tmp_path / "work_census.jsonl", steps=100, batch_size=4)
+
+    rec = _run(root, tmp_path / "b4.json", batch_size=4, work_census=census)
+
+    assert rec["bracket_reduction"]["topology"] == "staggered"
+    gate = rec["bracket_reduction"]["work_census_gate"]
+    assert gate["status"] == "pass"
+    assert gate["census_steps"] == 100
+    assert gate["census_events"] == 400
+
+
+def test_staggered_admission_still_fails_closed_on_census_disagreement(tmp_path):
+    """The envelope is not exempt from the cross-gate: a census that disagrees
+    with it still kills the aggregate."""
+    root = tmp_path / "swe_out"
+    _staggered_arm(root)
+    census = _write_census(tmp_path / "work_census.jsonl", steps=50, batch_size=4)
 
     with pytest.raises(RuntimeError) as excinfo:
         _run(root, tmp_path / "b4.json", batch_size=4, work_census=census)
     assert "disagrees with the arm work census" in str(excinfo.value)
+    assert "staggered" in str(excinfo.value)
+
+
+def test_staggered_admission_requires_a_census_at_all(tmp_path):
+    """The envelope keeps no independent per-task check, so an absent census is
+    fatal for this topology rather than a warning."""
+    root = tmp_path / "swe_out"
+    _staggered_arm(root)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        _run(root, tmp_path / "b4.json", batch_size=4, work_census=None)
+    assert "work census is MANDATORY" in str(excinfo.value)
 
 
 def test_census_gate_also_binds_a_sequential_arm(tmp_path):

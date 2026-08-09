@@ -1484,6 +1484,31 @@ def _find_task_dirs(out_root: str) -> list[Path]:
             and (d / "vllm_metrics_post.txt").exists()]
 
 
+def _brackets_overlap(records: list[dict[str, Any]]) -> bool:
+    """True when any two /metrics brackets OVERLAP on the monotonic counters.
+
+    Engine counters never decrease, so bracket A closed at or before bracket B
+    opened iff post_A <= pre_B on every counter. Two brackets therefore overlap
+    unless one wholly precedes the other. Tiled concurrency-1 brackets touch
+    (post_k == pre_k+1) but never overlap, so they stay disjoint and keep
+    summing; a refilled pool admits a task while others are still in flight,
+    which is exactly an overlap.
+    """
+    if len(records) < 2:
+        return False
+    for i, first in enumerate(records):
+        for second in records[i + 1 :]:
+            first_then_second = all(
+                first["post"][c] <= second["pre"][c] for c in COUNTERS
+            )
+            second_then_first = all(
+                second["post"][c] <= first["pre"][c] for c in COUNTERS
+            )
+            if not (first_then_second or second_then_first):
+                return True
+    return False
+
+
 def _bracket_reduce(task_dirs: list[Path]) -> dict[str, Any]:
     """Reduce the per-task /metrics brackets to ONE topology-safe arm delta.
 
@@ -1505,12 +1530,25 @@ def _bracket_reduce(task_dirs: list[Path]) -> dict[str, Any]:
         WIDEST one, i.e. the task whose post-snapshot is written last, which by
         nesting contains every other bracket and spans the whole arm.
 
+      STAGGERED (a continuously refilled pool: more tasks than slots, each
+        admitted as an earlier one finishes): the brackets open on DIFFERENT
+        origins, so they are not nested, but they still OVERLAP, so they do not
+        tile either and summing multiply-counts every overlap. Measured
+        inflation on the 16-task refill runroot is 1.87-4.00x across every
+        bracket counter. For overlapping brackets on monotonic counters the arm
+        delta is the ENVELOPE -- max(post) - min(pre) -- the outer hull of the
+        brackets, which spans the arm exactly once.
+
     Topology is CLASSIFIED FROM THE EVIDENCE, not assumed from --batch-size: a
     shared origin across every pre-snapshot counter vector is what nesting
-    means, so that is what is tested. A partially-overlapping arm (staggered
-    admission) matches neither case; it classifies as disjoint here and is then
-    caught by the work-census cross-gate in cmd_deploy_speed, which fails closed
-    rather than reporting an inflated sum.
+    means, and pairwise bracket overlap is what staggering means, so that is
+    what is tested. A concurrency-1 arm is neither, so it still sums and stays
+    bit-for-bit what it has always been.
+
+    The work-census cross-gate in cmd_deploy_speed remains mandatory and
+    fail-closed on every topology; for STAGGERED it is also required to be
+    PRESENT, because the envelope is the one reduction with no independent
+    per-task check left in it.
     """
     records: list[dict[str, Any]] = []
     for d in task_dirs:
@@ -1520,6 +1558,7 @@ def _bracket_reduce(task_dirs: list[Path]) -> dict[str, Any]:
         records.append({
             "instance_id": d.name,
             "pre": before,
+            "post": after,
             "delta": _delta(after, before),
             "post_mtime": post_path.stat().st_mtime,
         })
@@ -1529,6 +1568,7 @@ def _bracket_reduce(task_dirs: list[Path]) -> dict[str, Any]:
     # state == nested.
     origins = {tuple(r["pre"][c] for c in COUNTERS) for r in records}
     nested = len(records) > 1 and len(origins) == 1
+    staggered = not nested and _brackets_overlap(records)
 
     # Historical accumulation, preserved verbatim (same order, same float ops)
     # so the disjoint result is bit-for-bit what it has always been.
@@ -1541,14 +1581,24 @@ def _bracket_reduce(task_dirs: list[Path]) -> dict[str, Any]:
         closing = max(records, key=lambda r: r["post_mtime"])
         delta = {c: closing["delta"][c] for c in COUNTERS}
         closing_task = closing["instance_id"]
+        topology = "nested"
+    elif staggered:
+        delta = {
+            c: max(r["post"][c] for r in records)
+            - min(r["pre"][c] for r in records)
+            for c in COUNTERS
+        }
+        closing_task = max(records, key=lambda r: r["post_mtime"])["instance_id"]
+        topology = "staggered"
     else:
         delta = summed
         closing_task = None
+        topology = "disjoint"
 
     return {
         "delta": delta,
         "summed_delta": summed,
-        "topology": "nested" if nested else "disjoint",
+        "topology": topology,
         "closing_task": closing_task,
         "distinct_bracket_origins": len(origins),
         "per_task_delta": [r["delta"] for r in records],
@@ -1690,6 +1740,17 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     census = _work_census_counts(args.work_census) if args.work_census else None
     census_gate: dict[str, Any]
     if census is None:
+        if bracket["topology"] == "staggered":
+            raise RuntimeError(
+                "class-9 FAIL-LOUD [deploy-speed]: the per-task /metrics "
+                "brackets are STAGGERED (a refilled pool: "
+                f"{bracket['distinct_bracket_origins']} distinct origins across "
+                f"{len(task_dirs)} overlapping brackets), so the arm delta is "
+                "the envelope max(post)-min(pre). The envelope keeps no "
+                "independent per-task check, so the work census is MANDATORY "
+                "for this topology. Pass --work-census "
+                "<arm>/logs/fr13_fixed32_work_census.jsonl."
+            )
         census_gate = {"status": "absent"}
         if bracket["topology"] == "nested":
             print(
