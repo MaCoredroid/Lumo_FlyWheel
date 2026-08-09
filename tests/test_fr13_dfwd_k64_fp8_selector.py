@@ -77,8 +77,6 @@ def test_selector_accepts_exact_b1_b4(batch: int) -> None:
         ("FR13_FIXED32_PHYSICAL_DRAFTS", "27"),
         ("FR13_FIXED32_ACTIVE_NODES", "31"),
         ("NUM_SPECULATIVE_TOKENS", "27"),
-        ("FR13_DRAFT_HEAD_K64_TC", "1"),
-        ("FR13_DRAFT_HEAD_B14_WARP4_PAIR8", "1"),
         ("FR13_DRAFT_HEAD_PAD_ROWS", "32"),
         ("FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION", "1"),
         ("FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION", "1"),

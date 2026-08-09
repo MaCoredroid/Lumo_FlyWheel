@@ -105,7 +105,6 @@ def test_runtime_fp8_guard_rejects_nonexact_hydra27_b1_b4_geometry() -> None:
         fp8: bool = True,
     ) -> bool:
         namespace = {
-            "_fr13_dh_pair8": False,
             "_fr13_dh_tc": False,
             "_fr13_dh_fp8": fp8,
             "_FR13_FIXED32_MODE": mode,

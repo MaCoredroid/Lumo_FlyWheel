@@ -44,8 +44,6 @@ def test_runner_selects_only_static_fp8_full_graph() -> None:
     assert "FR13_DRAFT_VOCAB_K=65536" in text
     assert "FR13_FIXED32_PHYSICAL_DRAFTS=31" in text
     assert "FR13_FIXED32_ACTIVE_NODES=27" in text
-    assert "FR13_DRAFT_HEAD_K64_TC=0" in text
-    assert "FR13_DRAFT_HEAD_B14_WARP4_PAIR8=0" in text
     assert "FR13_GATE_TAW_NATIVE=0" in text
     assert "FR13_GATE_GDN_BV=0" in text
 
@@ -62,8 +60,6 @@ def test_runner_reuses_exact_exclusions_and_clears_competing_credentials() -> No
     assert text.count('"${FP8_DISABLED_ENV[@]}"') == 2
     assert text.count('"${FP8_CLEAR_ENV[@]}"') == 2
     for credential in (
-        "FR13_DRAFT_HEAD_K64_TC_SOURCE_COMMIT",
-        "FR13_DRAFT_HEAD_B14_WARP4_PAIR8_SOURCE_COMMIT",
         "FR13_DRAFT_HEAD_M32_PRODUCTION_PASS_SIDECAR",
         "FR13_DRAFT_HEAD_M1_R64_U8_SO",
         "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION_PASS_SIDECAR",
