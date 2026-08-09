@@ -41,7 +41,7 @@ export FR13_ENABLE_APC="${FR13_ENABLE_APC:-1}"                # cache ON (goal =
 export MAMBA_BLOCK_SIZE="${MAMBA_BLOCK_SIZE:-1024}"
 export APC_BLOCK_SIZE="${APC_BLOCK_SIZE:-1024}"
 export MAMBA_SSM_CACHE_DTYPE="${MAMBA_SSM_CACHE_DTYPE:-float32}"  # LOSSLESSNESS choice; change = behavior gate (PARKED)
-export FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}"  # QUEUED 2026-08-09, default OFF: MambaSpec num_speculative_blocks -> cdiv(num_spec_tokens, MAMBA_BLOCK_SIZE). Patcher preflight refuses =1 (slots are per-draft-node); see fr13_required_tree_flags.sh
+export FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}"  # QUEUED 2026-08-09, default OFF: B4 mamba page lever. ONE flag arms BOTH halves: MambaSpec num_speculative_blocks -> cdiv(num_spec_tokens, MAMBA_BLOCK_SIZE) (2 physical pages/group/request, not 32) AND the gdn_attn scratch-window rehome that keeps the logical spec window num_spec+1 wide over those 2 pages. Preflight now enforces the 2-slot floor (col0 + one real scratch page) instead of refusing; see fr13_required_tree_flags.sh
 # BAKED 2026-07-27 (cleanup+bake, launcher defaults now 1): FR13_COMMITTER_GRAPH,
 # FR13_TAW, FR13_DRAFTER_GRAPH, FR13_PARENT_GATHER (all ran clean in every S1/A-B arm).
 # EXPERIMENT-ONLY (default off): FR13_STEP_GRAPH (=1/=2/=3 capture modes; A/B verdict:
