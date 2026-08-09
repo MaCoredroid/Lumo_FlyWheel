@@ -106,9 +106,19 @@ FR13_BOOT_DIAG_SMOKE=${FR13_BOOT_DIAG_SMOKE:-1}
 SMOKE_REQUESTS=${FR13_BOOT_DIAG_SMOKE_REQUESTS:-6}
 SMOKE_MAX_TOKENS=${FR13_BOOT_DIAG_SMOKE_MAX_TOKENS:-96}
 SMOKE_TEARDOWN_GRACE_S=${FR13_BOOT_DIAG_SMOKE_TEARDOWN_GRACE_S:-180}
+# ADDITIVE, DEFAULT OFF: when set to a directory, the smoke also writes one
+# pair_*.json per SERVED turn in the proxy pair-dump schema
+# (inference_proxy.py::_pair_dump_upstream), so the screen's own traffic can be
+# reduced by scripts/fr13_swe_stream_to_oracle_src.py into a recurrent-decode
+# oracle --src. That reducer is the only served-stream vehicle the oracle
+# accepts, and the formal fixed32 ingress deliberately retains no raw proxy
+# dumps (offload_codex_proxy.sh sets LUMO_PROXY_FIXED32_DISABLE_RAW_DUMPS=1),
+# so a fixed32-shaped lossless gate has no other capture point. Unset => the
+# screen behaves exactly as before, byte for byte.
+SMOKE_PAIR_DUMP_DIR=${FR13_BOOT_DIAG_SMOKE_PAIR_DUMP_DIR:-}
 export -n FR13_BOOT_DIAG_SMOKE
 unset FR13_BOOT_DIAG_SMOKE_REQUESTS FR13_BOOT_DIAG_SMOKE_MAX_TOKENS \
-  FR13_BOOT_DIAG_SMOKE_TEARDOWN_GRACE_S
+  FR13_BOOT_DIAG_SMOKE_TEARDOWN_GRACE_S FR13_BOOT_DIAG_SMOKE_PAIR_DUMP_DIR
 case "$FR13_BOOT_DIAG_SMOKE" in
   0|1) ;;
   *)
@@ -179,6 +189,13 @@ ARMDIR="$RUNROOT_ABS/$ARM"
   || { echo "FR13_BOOT_DIAG_SMOKE_MAX_TOKENS must be 1..256" >&2; exit 2; }
 [[ "$SMOKE_TEARDOWN_GRACE_S" =~ ^[0-9]+$ && "$SMOKE_TEARDOWN_GRACE_S" -ge 30 ]] \
   || { echo "FR13_BOOT_DIAG_SMOKE_TEARDOWN_GRACE_S must be >= 30" >&2; exit 2; }
+# An absolute, non-symlink path the driver may create. Refusing a relative one
+# keeps the capture out of the repo tree by accident, and refusing a symlink
+# keeps it from being aimed somewhere else after the fact.
+if [[ -n "$SMOKE_PAIR_DUMP_DIR" ]]; then
+  [[ "$SMOKE_PAIR_DUMP_DIR" == /* && ! -L "$SMOKE_PAIR_DUMP_DIR" ]] \
+    || { echo "FR13_BOOT_DIAG_SMOKE_PAIR_DUMP_DIR must be an absolute non-symlink path" >&2; exit 2; }
+fi
 # A dev screen must still boot a coherent tree, but it deliberately does NOT
 # require the commit to be pushed: it exists to be run on work in progress.
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
@@ -646,7 +663,8 @@ if [[ "$FR13_BOOT_DIAG_SMOKE" == "1" ]]; then
   # The driver logs one line per dispatched request and one per accepted
   # response, so both summary counts are read back off evidence rather than
   # assumed from the intended count -- a driver that dies on request 3 reports 3.
-  PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" - \
+  PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" \
+  FR13_BOOT_DIAG_SMOKE_PAIR_DUMP_DIR="$SMOKE_PAIR_DUMP_DIR" "$PYTHON_BIN" - \
     "$SMOKE_SECRET" "$SUBSET" "$SMOKE_TASK_ID" "$SMOKE_PORT" "$SMOKE_MODEL" \
     "$SMOKE_REQUESTS" "$SMOKE_MAX_TOKENS" "$SMOKE_RECORD" "$SMOKE_EVIDENCE" \
     "${FR13_FIXED32_SFWD_FUSION_SMOKE_SAMPLING[@]}" \
@@ -662,6 +680,7 @@ if [[ "$FR13_BOOT_DIAG_SMOKE" == "1" ]]; then
                 tail -60 "$DOCKER_LOG" >&2; }; \
          exit 7; }
 import json
+import os
 import re
 import secrets
 import sys
@@ -752,6 +771,78 @@ def observe(event, response, started, **fields):
         **fields,
     )
     return response
+
+
+pair_dump_dir = os.environ.get("FR13_BOOT_DIAG_SMOKE_PAIR_DUMP_DIR", "").strip()
+if pair_dump_dir:
+    Path(pair_dump_dir).mkdir(parents=True, exist_ok=True)
+
+
+def pair_dump(index, wire_id, prompt, text, finish_reason, usage):
+    """Write ONE served turn in the proxy pair-dump schema, or return None.
+
+    scripts/fr13_swe_stream_to_oracle_src.py is the reducer the recurrent-decode
+    oracle's --src comes from, and it reads exactly two keys: ``request`` (which
+    it renders through the chat template: instructions -> system, each ``message``
+    input item -> its role) and ``response.output`` (whose reasoning/message text
+    it concatenates IN EMITTED ORDER into the served stream). Emit both in that
+    shape so the reducer runs verbatim -- no fork, no second schema.
+
+    Order matters: the qwen thinking profile emits the reasoning channel first
+    and the message channel after it, which is the order the reducer's
+    ``_served_text_from_response`` assumes. The channel MARKERS are not part of
+    the scored stream, exactly as for a real proxy dump.
+    """
+    if not pair_dump_dir:
+        return None
+    output = []
+    for key in ("reasoning_content", "reasoning"):
+        if key in text:
+            output.append(
+                {
+                    "type": "reasoning",
+                    "content": [{"type": "reasoning_text", "text": text[key]}],
+                }
+            )
+            break
+    if "content" in text:
+        output.append(
+            {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": text["content"]}],
+            }
+        )
+    name = f"pair_{wire_id}_{index:06d}_smoke.json"
+    Path(pair_dump_dir, name).write_text(
+        json.dumps(
+            {
+                "schema": "fr13.fixed32.sfwd_fusion_boot_diag_smoke_pair.v1",
+                "seq": index,
+                "kind": "smoke",
+                "wire_id": wire_id,
+                "finish_reason": finish_reason,
+                "max_tokens": max_tokens,
+                "sampling": sampling,
+                "usage": usage,
+                "request": {
+                    "model": model,
+                    "input": [
+                        {
+                            "type": "message",
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": prompt}],
+                        }
+                    ],
+                },
+                "response": {"output": output},
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return name
+
 
 subset = json.loads(Path(subset_path).read_text(encoding="utf-8"))
 task_ids = tuple(subset["instance_ids"])
@@ -882,6 +973,16 @@ for index in range(count):
     if "content" not in text:
         reasoning_only += 1
     served += 1
+    dumped = pair_dump(
+        index,
+        wire_id,
+        PROMPTS[index % len(PROMPTS)],
+        text,
+        finish_reason,
+        usage,
+    )
+    if dumped is not None:
+        record("smoke_pair_dump", index=index, wire_id=wire_id, file=dumped)
     print(
         f"smoke response ok {index} finish={finish_reason} "
         f"chars={sum(len(value) for value in text.values())} "

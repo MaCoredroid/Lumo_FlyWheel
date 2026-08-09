@@ -664,7 +664,12 @@ LIVE_REASONING_ONLY = {
 }
 
 
-def _run_smoke_driver(tmp_path: Path, chat_body: dict, count: int = 1):
+def _run_smoke_driver(
+    tmp_path: Path,
+    chat_body: dict,
+    count: int = 1,
+    pair_dump_dir: Path | None = None,
+):
     """Drive the smoke against a stub engine that returns `chat_body`."""
     import json as _json
     import threading
@@ -749,7 +754,13 @@ def _run_smoke_driver(tmp_path: Path, chat_body: dict, count: int = 1):
             ],
             capture_output=True,
             text=True,
-            env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+            env={
+                **os.environ,
+                "PYTHONPATH": str(ROOT / "src"),
+                "FR13_BOOT_DIAG_SMOKE_PAIR_DUMP_DIR": (
+                    "" if pair_dump_dir is None else str(pair_dump_dir)
+                ),
+            },
         )
     finally:
         server.shutdown()
@@ -824,6 +835,141 @@ def test_smoke_does_not_miscount_a_plain_answer(tmp_path: Path) -> None:
     served = [step for step in steps if step["event"] == "chat_served"][0]
     assert served["channels"] == {"content": len("a real answer")}
     assert served["finish_reason"] == "stop"
+
+
+def _oracle_reducer():
+    """The REAL reducer module, so these tests bind the shape it actually reads."""
+    import importlib.util
+
+    path = ROOT / "scripts" / "fr13_swe_stream_to_oracle_src.py"
+    spec = importlib.util.spec_from_file_location("fr13_oracle_reducer", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_smoke_pair_dump_is_off_unless_asked(tmp_path: Path) -> None:
+    """Default OFF: the screen writes no served-stream capture at all.
+
+    The capture exists for the fixed32 lossless gate and nothing else. A screen
+    that started retaining request/response text by default would be retaining
+    it for every unrelated boot screen too.
+    """
+    proc, summary, steps = _run_smoke_driver(tmp_path, LIVE_REASONING_ONLY, count=2)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert summary["responses_ok"] == 2
+    assert [step for step in steps if step["event"] == "smoke_pair_dump"] == []
+    assert sorted(p.name for p in tmp_path.glob("pair_*.json")) == []
+
+
+def test_smoke_pair_dump_round_trips_through_the_real_reducer(tmp_path: Path) -> None:
+    """ON: one pair per SERVED turn, in the schema the oracle reducer consumes.
+
+    The binding assertion is not "a file appeared" but that
+    scripts/fr13_swe_stream_to_oracle_src.py's own two extractors read back the
+    prompt that was sent and the served text that came out, in the EMITTED
+    channel order (reasoning then message). If either extractor drifts, the
+    oracle would score a stream the engine never produced.
+    """
+    import copy
+
+    both = copy.deepcopy(LIVE_REASONING_ONLY)
+    both["choices"][0]["message"]["reasoning"] = "THOUGHT "
+    both["choices"][0]["message"]["content"] = "ANSWER"
+    dumps = tmp_path / "pair_dumps"
+    proc, summary, steps = _run_smoke_driver(
+        tmp_path, both, count=2, pair_dump_dir=dumps
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert summary["responses_ok"] == 2
+
+    files = sorted(dumps.glob("pair_*.json"))
+    assert len(files) == 2, [p.name for p in files]
+    recorded = [step for step in steps if step["event"] == "smoke_pair_dump"]
+    assert [step["file"] for step in recorded] == [p.name for p in files]
+
+    reducer = _oracle_reducer()
+
+    class _Tok:
+        """Stand-in chat template; the reducer only needs role/content fidelity."""
+
+        def apply_chat_template(self, msgs, tokenize=False, add_generation_prompt=True):
+            return "".join(f"<{m['role']}>{m['content']}" for m in msgs)
+
+    for path in files:
+        pair = json.loads(path.read_text(encoding="utf-8"))
+        # Served text is the two channels concatenated in emitted order.
+        assert reducer._served_text_from_response(pair["response"]) == "THOUGHT ANSWER"
+        # The prompt survives as a single user message the template can render.
+        rendered = reducer._prompt_from_request(pair["request"], _Tok())
+        assert rendered.startswith("<user>") and len(rendered) > len("<user>")
+        assert pair["finish_reason"] in ("stop", "length", "tool_calls")
+        assert pair["sampling"]["temperature"] > 0
+
+
+def test_smoke_pair_dump_never_records_a_refused_turn(tmp_path: Path) -> None:
+    """A turn the screen refuses must not reach the capture.
+
+    The oracle's denominator is served positions; a turn that produced no text
+    is not one, and letting it through would put a fiction in the src.
+    """
+    import copy
+
+    blank = copy.deepcopy(LIVE_REASONING_ONLY)
+    blank["choices"][0]["message"]["reasoning"] = None
+    dumps = tmp_path / "pair_dumps"
+    proc, summary, _ = _run_smoke_driver(
+        tmp_path / "blank", blank, pair_dump_dir=dumps
+    )
+    assert proc.returncode != 0
+    assert summary is None
+    assert sorted(dumps.glob("pair_*.json")) == []
+
+
+def test_smoke_pair_dump_dir_is_a_scrubbed_knob() -> None:
+    """It is a smoke knob, so it obeys the smoke-knob contract: never exported.
+
+    fr13_launch_forked_fa2_tree_server.sh forwards every visible FR13_* variable
+    into the engine, so an exported capture path would change the engine env the
+    screen exists to match.
+    """
+    code = _strip_comments(DIAG.read_text(encoding="utf-8"))
+    assert "FR13_BOOT_DIAG_SMOKE_PAIR_DUMP_DIR" in code
+    unset_block = code[code.index("unset FR13_BOOT_DIAG_SMOKE_REQUESTS"):]
+    assert (
+        "FR13_BOOT_DIAG_SMOKE_PAIR_DUMP_DIR"
+        in unset_block[: unset_block.index("\n\n")]
+    )
+    assert "export FR13_BOOT_DIAG_SMOKE_PAIR_DUMP_DIR" not in code
+    # It reaches the driver on the driver's own command line env, not the shell's.
+    assert (
+        'FR13_BOOT_DIAG_SMOKE_PAIR_DUMP_DIR="$SMOKE_PAIR_DUMP_DIR" "$PYTHON_BIN"'
+        in code
+    )
+
+
+def test_smoke_pair_dump_dir_must_be_absolute_and_not_a_symlink(tmp_path: Path) -> None:
+    """Refuse a relative path or a symlink rather than follow it."""
+    header = _strip_comments(DIAG.read_text(encoding="utf-8"))
+    start = header.index('if [[ -n "$SMOKE_PAIR_DUMP_DIR" ]]; then')
+    guard = header[start : header.index("\nfi\n", start) + len("\nfi\n")]
+    script = tmp_path / "guard.sh"
+    link = tmp_path / "link"
+    link.symlink_to(tmp_path)
+    for value, ok in (
+        (str(tmp_path / "fresh"), True),
+        ("relative/path", False),
+        (str(link), False),
+        ("", True),
+    ):
+        script.write_text(
+            'SMOKE_PAIR_DUMP_DIR="$1"\n' + guard + "\necho ACCEPTED\n",
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            ["bash", str(script), value], capture_output=True, text=True
+        )
+        assert (result.returncode == 0) is ok, (value, result.stdout, result.stderr)
 
 
 def _diag_function(name: str) -> str:
