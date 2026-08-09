@@ -46,6 +46,10 @@ export MAMBA_SSM_CACHE_DTYPE="${MAMBA_SSM_CACHE_DTYPE:-float32}"  # LOSSLESSNESS
 # EXPERIMENT-ONLY (default off): FR13_STEP_GRAPH (=1/=2/=3 capture modes; A/B verdict:
 # no speed effect vs staged — see FR13_CLEANUP_BAKE_PLAN.md #72 closure).
 # DELETED 2026-07-27: FR13_HC_INTERNAL (retired mechanism), FR13_APC_BURN_NODE_BANK.
+# DELETED 2026-07-25: FR13_CONV_NODEBANK, FR13_SPEC_BLOCKS_CAP (both measured BELOW
+# the 32.14 no-lever baseline -- 28.05 / 29.62 tps; FR13_LEVER_REDESIGN.md). Neither
+# env is read anywhere; do not re-export them. The launcher forwarded both until
+# 2026-08-09 even though the implementations went at 2026-07-25.
 
 # ---- proxy (offload, alienware) ----
 export LUMO_PROXY_SSE_HEARTBEAT_S="${LUMO_PROXY_SSE_HEARTBEAT_S:-15}"  # EMIT-WEDGE protection (3a86c8a85; regressed to 0 until 4df608b75)

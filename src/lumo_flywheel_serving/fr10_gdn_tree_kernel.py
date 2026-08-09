@@ -5810,61 +5810,6 @@ def _linear_remap_rows_gather_kernel(
     )
 
 
-@triton.jit
-def _linear_remap_rows_gather_from_bank_kernel(
-    bank,               # [B, N_TREE, ROW_ELEMS] node-window bank (conv nodebank)
-    state,              # pool state (dst: linear cols via ssi)
-    spec_state_indices,
-    accepted_paths,
-    num_accepted_tokens,
-    B: tl.constexpr,
-    N_TREE: tl.constexpr,
-    PATH_COLS: tl.constexpr,
-    PATH_POW2: tl.constexpr,
-    SPEC_COLS: tl.constexpr,
-    ROW_ELEMS: tl.constexpr,
-    BLOCK: tl.constexpr,
-):
-    """FR13_CONV_NODEBANK remap: src = OUR bank rows (node deposits no longer
-    live in spec-slot pool pages), dst = pool linear cols via ssi — the stock
-    linear-reader contract is preserved bit-for-bit (same values, same dst
-    write order/masks as _linear_remap_rows_gather_kernel; only the src
-    ADDRESS space changes). Gather-before-scatter race-freedom inherited: one
-    program owns all path cols for a (batch, block) slice."""
-    pid_b = tl.program_id(0)
-    pid_blk = tl.program_id(1)
-    offs = pid_blk * BLOCK + tl.arange(0, BLOCK)
-    ks = tl.arange(0, PATH_POW2)
-    accepted_len = tl.load(num_accepted_tokens + pid_b)
-    valid_path = (
-        (pid_b < B) & (ks < PATH_COLS) & (ks < SPEC_COLS) & (ks < accepted_len)
-    )
-    src_col = tl.load(
-        accepted_paths + pid_b * PATH_COLS + ks, mask=valid_path, other=0
-    )
-    src_col = tl.maximum(0, tl.minimum(src_col, N_TREE - 1))
-    dst_bank = tl.load(
-        spec_state_indices + pid_b * SPEC_COLS + ks, mask=valid_path, other=0
-    ).to(tl.int64)
-    mask = valid_path[:, None] & (offs[None, :] < ROW_ELEMS)
-    vals = tl.load(
-        bank + (pid_b * N_TREE + src_col)[:, None] * ROW_ELEMS + offs[None, :],
-        mask=mask,
-    )
-    tl.store(
-        state + dst_bank[:, None] * ROW_ELEMS + offs[None, :], vals, mask=mask
-    )
-
-
-_FR13_CONV_NODEBANK: dict = {}
-
-
-
-
-
-
-
-
 def _remap_state_rows(
     state: torch.Tensor,
     spec_state_indices: torch.Tensor,
@@ -11756,11 +11701,14 @@ def launch_tree_gdn_replay(
         )
     path_cols = int(accepted_paths.shape[1])
     if path_cols > spec_cols:
-        # FR13_SPEC_BLOCKS_CAP: the accepted-paths BUFFER stays tree-wide
-        # (22) while the capped ssi is narrower (13). Content is bounded by
-        # accepted_len <= MAX_PATH (12) < spec_cols, and every path-col read
-        # below is masked by accepted_len, so clamping the window is
-        # value-identical (cols >= spec_cols were only ever masked lanes).
+        # Defensive width clamp. It was introduced for FR13_SPEC_BLOCKS_CAP,
+        # which narrowed the ssi (22 -> 13) while the accepted-paths BUFFER
+        # stayed tree-wide; that cap was DELETED 2026-07-25 (dce60d18c), so
+        # the two widths now agree and this branch is not expected to fire.
+        # It is kept because it is value-identical either way: content is
+        # bounded by accepted_len <= MAX_PATH (12) < spec_cols, and every
+        # path-col read below is masked by accepted_len, so cols >= spec_cols
+        # were only ever masked lanes.
         path_cols = spec_cols
     if prev_lens.numel() < num_spec_decodes or accepted_lens.numel() < num_spec_decodes:
         raise ValueError(
@@ -15438,11 +15386,14 @@ def launch_tree_gdn_replay_all_layers(
         )
     path_cols = int(accepted_paths.shape[1])
     if path_cols > spec_cols:
-        # FR13_SPEC_BLOCKS_CAP: the accepted-paths BUFFER stays tree-wide
-        # (22) while the capped ssi is narrower (13). Content is bounded by
-        # accepted_len <= MAX_PATH (12) < spec_cols, and every path-col read
-        # below is masked by accepted_len, so clamping the window is
-        # value-identical (cols >= spec_cols were only ever masked lanes).
+        # Defensive width clamp. It was introduced for FR13_SPEC_BLOCKS_CAP,
+        # which narrowed the ssi (22 -> 13) while the accepted-paths BUFFER
+        # stayed tree-wide; that cap was DELETED 2026-07-25 (dce60d18c), so
+        # the two widths now agree and this branch is not expected to fire.
+        # It is kept because it is value-identical either way: content is
+        # bounded by accepted_len <= MAX_PATH (12) < spec_cols, and every
+        # path-col read below is masked by accepted_len, so cols >= spec_cols
+        # were only ever masked lanes.
         path_cols = spec_cols
     if prev_lens.ndim != 2 or prev_lens.shape[0] < num_layers or (
         prev_lens.shape[1] < num_spec_decodes

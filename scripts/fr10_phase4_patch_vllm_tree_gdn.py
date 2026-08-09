@@ -9904,12 +9904,13 @@ def _patch_gdn_attn() -> bool:
     fixed32_mode = _FR13_FIXED32_MODE
     fixed32_path_cols = "16" if fixed32_mode else "self.num_spec + 1"
 
-    # FR13_SPEC_BLOCKS_CAP consumer-side width caps: gdn_attn derives ssi
-    # widths from self.num_spec (a TOKEN count) rather than the capped
-    # MambaSpec field; a one-sided cap crashes at the persistent-buffer
-    # copy_ (13-col block table vs 22-col buffer). Page-column widths move
-    # to self._fr13_page_cols; token-count uses of num_spec (cudagraph bs,
-    # spec_token_indx) stay uncapped.
+    # Page-column widths below derive from self.num_spec (a TOKEN count).
+    # They used to route through self._fr13_page_cols so FR13_SPEC_BLOCKS_CAP
+    # could narrow them, because a one-sided cap crashes at the
+    # persistent-buffer copy_ (13-col block table vs 22-col buffer). That cap
+    # was DELETED 2026-07-25 (dce60d18c) after measuring 29.62 tps against a
+    # 32.14 no-lever baseline; nothing assigns _fr13_page_cols any more, so
+    # the widths are unconditional and page/token uses no longer diverge.
 
     text = text.replace(
         "from dataclasses import dataclass\n",
@@ -10297,7 +10298,7 @@ def _patch_gdn_attn() -> bool:
             "                    if _FR13_FIXED32_MODE\n"
             "                    else self.fr10_tree_accepted_path_bs\n"
             "                )\n"
-            "                _fr13_spec_cols = int(getattr(self, '_fr13_page_cols', int(self.num_spec) + 1))  # FR13_SPEC_BLOCKS_CAP-aware: the replay ssi stack must match the (possibly capped) ssi width or the per-step copy_ shape-mismatches\n"
+            "                _fr13_spec_cols = int(self.num_spec) + 1  # replay ssi stack width; must match the ssi width or the per-step copy_ shape-mismatches. FR13_SPEC_BLOCKS_CAP was the only narrower and it was deleted 2026-07-25, so this is unconditional.\n"
             "                _fr13_fwd_ctx = (\n"
             "                    self.vllm_config.compilation_config.static_forward_context\n"
             "                )\n"
@@ -10639,7 +10640,7 @@ def _patch_gdn_attn() -> bool:
             "                    gdn_linear_attn as _fr13_tcf_mod,\n"
             "                )\n"
             "                _fr13_tcf_bs = int(self.fr10_tree_accepted_path_bs)\n"
-            "                _fr13_tcf_cols = int(getattr(self, '_fr13_page_cols', int(self.num_spec) + 1))  # FR13_SPEC_BLOCKS_CAP-aware prep width\n"
+            "                _fr13_tcf_cols = int(self.num_spec) + 1  # prep width (FR13_SPEC_BLOCKS_CAP deleted 2026-07-25; never narrowed)\n"
             "                _fr13_tcf_ranked = []\n"
             "                for _fr13_tcf_name in layer_names:\n"
             "                    _fr13_tcf_digits = [\n"
@@ -14745,8 +14746,10 @@ def _fr13_conv_subop_mab(
                             )
                     # FR13_CONV_WB_BATCHED (B2c): ONE batched writeback for all
                     # requests (replaces B per-request launches; same bytes,
-                    # disjoint dsts). Fires only on the fused arm; nodebank
-                    # route adds the batched col0 pool write. No same-step
+                    # disjoint dsts). Fires only on the fused arm; the pool
+                    # route is now the only route (the nodebank arm, which
+                    # added a batched col0 pool write here, was deleted
+                    # 2026-07-25). No same-step
                     # reader of these dsts runs before this point (taps/scan
                     # read the staged source; committer + pregather run
                     # post-forward; the linear remap consumed PREV-step
@@ -24470,10 +24473,12 @@ def get_conv_copy_spec(
             # and these boundary copies are enqueued a full execute_model
             # later on the same stream -> col0 already holds byte-identical
             # content to the node row ("all served readers col0" redundancy).
-            # This removes the LAST pool node-row reader on the served path:
-            # required under FR13_CONV_NODEBANK / FR13_SPEC_BLOCKS_CAP (node
-            # rows are write-never/absent there) and a byte-identical
-            # simplification in pool mode.
+            # This removes the LAST pool node-row reader on the served path.
+            # It was originally required to un-park FR13_CONV_NODEBANK /
+            # FR13_SPEC_BLOCKS_CAP (node rows are write-never/absent there);
+            # both were deleted 2026-07-25, so what remains is the
+            # byte-identical simplification in pool mode, which is now the
+            # only mode and stands on its own.
             src_state = state[block_ids[cur_block_idx]]
             return MambaCopySpec(
                 start_addr=src_state.data_ptr(), num_elements=src_state.numel()
