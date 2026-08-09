@@ -573,7 +573,7 @@ def test_timing_runner_is_stock_first_exact4_full_wall_and_fail_closed() -> None
         "export BSIZE=4",
         "export CONC=4",
         "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4",
-        "B4_KV_CACHE_MEMORY_BYTES=42949672960",
+        "B4_KV_CACHE_MEMORY_BYTES=49392123904",
         "production_bv=8",
         "TIMING_KIND=hydra27_fixed32",
         'STOCK_ARM="hydra27_fixed32_stock_${TAG}"',

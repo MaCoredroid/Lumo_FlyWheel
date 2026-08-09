@@ -432,7 +432,7 @@ def test_timing_runner_is_exact4_full_wall_stock_first_and_floor_ineligible() ->
         "export BSIZE=4",
         "export CONC=4",
         "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4",
-        "B4_KV_CACHE_MEMORY_BYTES=42949672960",
+        "B4_KV_CACHE_MEMORY_BYTES=49392123904",
         'KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES"',
         "kv_cache_memory_bytes=%s",
         "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1",
@@ -469,7 +469,7 @@ def test_timing_runner_is_exact4_full_wall_stock_first_and_floor_ineligible() ->
 def test_b4_uses_a_pinned_manual_kv_cache_without_changing_context_length() -> None:
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
-    assert "_fixed32_expected_kv_cache_memory_bytes=42949672960" in launcher
+    assert "_fixed32_expected_kv_cache_memory_bytes=49392123904" in launcher
     assert (
         '"KV_CACHE_MEMORY_BYTES|$KV_CACHE_MEMORY_BYTES|'
         '$_fixed32_expected_kv_cache_memory_bytes"' in launcher

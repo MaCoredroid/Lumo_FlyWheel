@@ -139,7 +139,7 @@ SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 TIMING_HARNESS_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
-B4_KV_CACHE_MEMORY_BYTES=42949672960
+B4_KV_CACHE_MEMORY_BYTES=49392123904
 case "$FIXED32_MODE" in
   tail6_fixed32)
     LOGICAL_TOPOLOGY=Tail23

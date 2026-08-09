@@ -25,7 +25,7 @@ ARM="tail6_fixed32_${TAG}"
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
 FA2_SHA256=$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')
-B4_KV_CACHE_MEMORY_BYTES=42949672960
+B4_KV_CACHE_MEMORY_BYTES=49392123904
 
 [[ "$FA2_SHA256" =~ ^[0-9a-f]{64}$ ]]
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \

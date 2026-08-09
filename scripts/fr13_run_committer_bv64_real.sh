@@ -55,7 +55,7 @@ case "$BATCH" in
     SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
     B1_DIAGNOSTIC=0
     CLASS=real_swe_verified_exact4_b4_committer_bv64_diagnostic
-    KV_CACHE_MEMORY_BYTES=42949672960
+    KV_CACHE_MEMORY_BYTES=49392123904
     ;;
   *)
     echo "FR13_COMMITTER_BV64_REAL_BATCH must be exactly 1 or 4" >&2

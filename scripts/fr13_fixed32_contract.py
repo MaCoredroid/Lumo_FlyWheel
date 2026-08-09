@@ -123,7 +123,33 @@ CONTAINER_FA2_DESTINATION = Path(
 MODEL_ROOT = Path("/models/qwen3.6-27b-fp8")
 # The canonical exact4 prompts need enough live KV capacity to admit four
 # concurrent real requests; 20 GiB capped the scheduler at physical B2.
-FIXED32_B4_KV_CACHE_MEMORY_BYTES = 40 * 1024**3
+#
+# 40 GiB was still too small to hold four of them RESIDENT. The engine reports
+# "GPU KV cache size: 153,600 tokens" at 40 GiB, against a four-task working set
+# of ~4 x 40k = ~160k tokens, so the pool cannot cover the batch it is booted
+# for and the tail of the oldest prefix is evicted to admit the newest. The
+# 16-task refill diagnostic measured the consequence directly: once the pool
+# runs full-width, APC hit rate collapses to 33-40% (40.5% at 23:19:38) while KV
+# utilisation pins at 75-83%
+# (output/fr13_b4_refill_diag_20260808T230623Z/analysis/apc_timeline.txt).
+# 46 GiB restores ~176k tokens, which covers the working set with margin.
+#
+# This is the sizing lever, not FR13_SPEC_BLOCKS_CAP. That flag is a TRAP: the
+# lever it named was measured BELOW the no-lever baseline (cap 29.62 vs 32.14
+# tps) and its implementation was excised on 2026-07-25 in dce60d18c -- 101
+# lines covering the env read, the mamba patch, the consumer width caps and the
+# preflight. The launcher still forwards FR13_SPEC_BLOCKS_CAP into the
+# container and fr13_required_tree_flags.sh still calls it QUEUED, but nothing
+# reads it, so setting it silently does nothing. FR13_LEVER_REDESIGN.md already
+# routes the cache-hit-rate concern here, to pool sizing, instead.
+#
+# Raising this DOES NOT re-profile memory: vLLM logs "reserved 40.0 GiB memory
+# for KV Cache as specified by kv_cache_memory_bytes config and skipped memory
+# profiling. This does not respect the gpu_memory_utilization config", so the
+# 0.70 GPU_UTIL is not the binding constraint. The measured headroom is
+# "Initial free memory 104.25 GiB", so 46 GiB leaves ~58 GiB for weights and
+# activations, and the B4 container cap stays at 112g.
+FIXED32_B4_KV_CACHE_MEMORY_BYTES = 46 * 1024**3
 MODEL_AUXILIARY_FILES = (
     ".gitattributes",
     "LICENSE",
