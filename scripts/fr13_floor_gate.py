@@ -258,6 +258,15 @@ MIN_B4_EXACT_EVENTS = 512
 MIN_B4_GE3_FRACTION = 0.65
 MIN_B4_MEAN_OCCUPANCY = 2.9
 MAX_B4_MEAN_OCCUPANCY_GAP = 0.25
+# A continuously refilled task pool (FR13_B4_TASK_REFILL=1) exists to hold the
+# served width at the slot count instead of letting it decay 4 -> 3 -> 2 -> 1 as
+# sessions end.  If it did not actually do that, the run is not a pool run in
+# any useful sense and must not be cited as one, so the admission ledger has to
+# clear an occupancy floor.  The recorded 16-task diagnostic measured
+# time_weighted_mean_depth 3.3988 and full_width_fraction 0.7804 at 4 slots.
+MIN_POOL_TIME_WEIGHTED_DEPTH = 3.2
+MIN_POOL_FULL_WIDTH_FRACTION = 0.60
+TASK_REFILL_SUMMARY_SCHEMA = "fr13.task_refill.summary.v1"
 BLOCK_SENSITIVITY = (64, 128, 256, 512)
 BOOTSTRAP_REPS = 10_000
 BOOTSTRAP_SEED = 20260729
@@ -1886,6 +1895,155 @@ def validate_fixed32_run_subset(
         "run_classification": "b1_diagnostic",
         "gate_eligible": False,
         "floor_acceptance_eligible": False,
+    }
+
+
+def _reduce_refill_ledger(events: list[dict[str, Any]], concurrency: int) -> dict[str, float]:
+    """Independently time-weight the admission ledger.
+
+    Deliberately a SECOND implementation of the reduction
+    run_swe_bench_q36_a.py::_reduce_task_refill_ledger already did, so the
+    summary the runner wrote cannot be trusted on its own word: the gate
+    recomputes it from the raw events and requires agreement.
+    """
+    ordered = sorted(events, key=lambda e: (e["t_s"], e["event"] != "admit"))
+    span = 0.0
+    weighted = 0.0
+    full_width = 0.0
+    previous_t = ordered[0]["t_s"] if ordered else 0.0
+    depth = 0
+    for event in ordered:
+        width = event["t_s"] - previous_t
+        if width > 0:
+            span += width
+            weighted += depth * width
+            if depth >= concurrency:
+                full_width += width
+        depth = event["depth"]
+        previous_t = event["t_s"]
+    return {
+        "arm_wall_s": span,
+        "time_weighted_mean_depth": (weighted / span) if span > 0 else 0.0,
+        "full_width_fraction": (full_width / span) if span > 0 else 0.0,
+    }
+
+
+def validate_task_refill_ledger(
+    arm_dir: Path, *, concurrency: int, task_count: int
+) -> dict[str, Any]:
+    """Bind a task-pool run to its admission ledger, or prove it was not one.
+
+    A pool run's citable claim is that it held the served width at the slot
+    count.  That claim lives entirely in the admission ledger, so the ledger is
+    REQUIRED EVIDENCE: present, internally consistent, recomputable, and above
+    the occupancy floor.  Every failure names the measured value, because a
+    gate that only says "rejected" makes the next run guess.
+    """
+    root = arm_dir / "swe_out" / "verified"
+    ledger_path = root / "fr13_task_refill_ledger.jsonl"
+    summary_path = root / "fr13_task_refill_summary.json"
+    if not ledger_path.is_file() and not summary_path.is_file():
+        # Not a pool run: the ThreadPoolExecutor.map path leaves no ledger.
+        return {"status": "absent", "pool_run": False}
+    if not ledger_path.is_file() or not summary_path.is_file():
+        raise GateError(
+            f"{arm_dir}: task-pool evidence is half-present "
+            f"(ledger={ledger_path.is_file()}, summary={summary_path.is_file()}); "
+            "a pool run must record both"
+        )
+
+    events = [
+        json.loads(line)
+        for line in read_text(ledger_path).splitlines()
+        if line.strip()
+    ]
+    if not events:
+        raise GateError(f"{ledger_path}: admission ledger is empty")
+    summary = json.loads(read_text(summary_path))
+    if summary.get("schema") != TASK_REFILL_SUMMARY_SCHEMA:
+        raise GateError(
+            f"{summary_path}: expected schema {TASK_REFILL_SUMMARY_SCHEMA}, "
+            f"got {summary.get('schema')!r}"
+        )
+
+    slots = summary.get("slots")
+    if slots != concurrency:
+        raise GateError(
+            f"{summary_path}: pool slots {slots} != serving concurrency "
+            f"{concurrency}; the floor-gate bounds are fed the SLOT count, so a "
+            "pool may never widen them"
+        )
+    if summary.get("task_count") != task_count:
+        raise GateError(
+            f"{summary_path}: pool task_count {summary.get('task_count')} != "
+            f"campaign task count {task_count}"
+        )
+    if task_count <= concurrency:
+        raise GateError(
+            f"{summary_path}: a task pool must be LARGER than its slot count "
+            f"({task_count} tasks, {concurrency} slots); at parity it is the "
+            "ordinary all-at-once campaign and refill buys nothing"
+        )
+    if summary.get("aborted") is not False:
+        raise GateError(f"{summary_path}: pool run aborted; evidence is partial")
+    if summary.get("completed") != task_count:
+        raise GateError(
+            f"{summary_path}: pool completed {summary.get('completed')} of "
+            f"{task_count} tasks"
+        )
+    peak = summary.get("peak_depth")
+    if not isinstance(peak, int) or peak > concurrency:
+        raise GateError(
+            f"{summary_path}: peak in-flight depth {peak} exceeds the slot "
+            f"count {concurrency}; the in-flight invariant was violated"
+        )
+
+    recomputed = _reduce_refill_ledger(events, concurrency)
+    for key, value in recomputed.items():
+        recorded = summary.get(key)
+        if not isinstance(recorded, (int, float)) or not math.isclose(
+            float(recorded), value, rel_tol=1e-9, abs_tol=1e-9
+        ):
+            raise GateError(
+                f"{summary_path}: recorded {key}={recorded} disagrees with the "
+                f"ledger recomputation {value}"
+            )
+
+    depth = recomputed["time_weighted_mean_depth"]
+    if depth < MIN_POOL_TIME_WEIGHTED_DEPTH:
+        raise GateError(
+            f"{summary_path}: time-weighted mean depth {depth:.4f} is below the "
+            f"pool floor {MIN_POOL_TIME_WEIGHTED_DEPTH} at {concurrency} slots; "
+            "the pool did not hold the served width and the run is not citable "
+            "as a pool run"
+        )
+    fraction = recomputed["full_width_fraction"]
+    if fraction < MIN_POOL_FULL_WIDTH_FRACTION:
+        raise GateError(
+            f"{summary_path}: full-width fraction {fraction:.4f} is below the "
+            f"pool floor {MIN_POOL_FULL_WIDTH_FRACTION}; the arm ran at less "
+            "than full slot occupancy for too much of its wall"
+        )
+
+    return {
+        "status": "pass",
+        "pool_run": True,
+        "ledger_path": str(ledger_path),
+        "summary_path": str(summary_path),
+        "slots": concurrency,
+        "task_count": task_count,
+        "admissions": summary.get("admissions"),
+        "peak_depth": peak,
+        "arm_wall_s": recomputed["arm_wall_s"],
+        "time_weighted_mean_depth": depth,
+        "full_width_fraction": fraction,
+        "depth_floor": MIN_POOL_TIME_WEIGHTED_DEPTH,
+        "full_width_floor": MIN_POOL_FULL_WIDTH_FRACTION,
+        "depth_basis": (
+            "worker-thread in-flight depth, an UPPER BOUND on engine decode "
+            "co-residency: a freshly admitted task is still hydrating its repo "
+            "and starting its container, so the engine sees nothing yet"
+        ),
     }
 
 
@@ -6719,6 +6877,9 @@ def reduce_arm(
             f"{arm}: inferred concurrency {concurrency} != "
             f"expected {expected_concurrency}"
         )
+    task_refill = validate_task_refill_ledger(
+        arm_dir, concurrency=concurrency, task_count=task_count
+    )
     task_dirs = task_directories(arm_dir, task_count)
     launch = resolve_subset_from_runlog(
         repo,
@@ -6876,6 +7037,7 @@ def reduce_arm(
             "arm": expected_kind,
             "artifact_dir": str(arm_dir),
             "inferred_concurrency": concurrency,
+            "task_refill": task_refill,
             "expected_draft_tokens_per_event": expected_tokens,
             "active_logical_drafts_per_event": mode_spec["active_drafts"],
             "valid_mask": f"{mode_spec['valid_mask']:#010x}",
