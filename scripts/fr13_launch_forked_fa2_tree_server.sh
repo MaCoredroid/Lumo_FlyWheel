@@ -2832,6 +2832,17 @@ if [[ "$_fr13_subtree_selfcheck" == "1" && "$_fr13_subtree_parallel" != "1" ]]; 
   echo "FR13_SUBTREE_PARALLEL_SELFCHECK=1 requires FR13_SUBTREE_PARALLEL=1" >&2
   exit 2
 fi
+# FR13_MAMBA_SPEC_BLOCKS_CDIV (default 0=OFF, PATCH-TIME): rewrites MambaSpec's
+# num_speculative_blocks from num_speculative_tokens (31) to
+# cdiv(num_speculative_tokens, mamba_block_size) (=1 at 31/1024). Read only by
+# fr10_phase4_patch_vllm_tree_gdn.py inside the container, so the -e line below
+# is what actually carries it. The patcher's slot-demand preflight refuses the
+# ON state while the GDN spec path still indexes one mamba state slot per draft
+# node -- see fr13_required_tree_flags.sh for the evidence.
+case "${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}" in
+  0|1) ;;
+  *) echo "FR13_MAMBA_SPEC_BLOCKS_CDIV must be 0 or 1" >&2; exit 2 ;;
+esac
 if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
         || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
         || "$_fr13_batch_gdn_production" == "1" ) \
@@ -3228,6 +3239,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_SPEC_BLOCKS_CAP="${FR13_SPEC_BLOCKS_CAP:-0}" \
   -e FR13_SUBTREE_PARALLEL="${FR13_SUBTREE_PARALLEL:-1}" \
   -e FR13_SUBTREE_PARALLEL_SELFCHECK="${FR13_SUBTREE_PARALLEL_SELFCHECK:-0}" \
+  -e FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}" \
   -e FR13_DRAFTER_GRAPH="${FR13_DRAFTER_GRAPH:-1}" \
   -e FR13_DFWD_SPLIT_NEEDLE="${FR13_DFWD_SPLIT_NEEDLE:-0}" \
   -e FR13_DVK_DRAFTID_DUMP="${FR13_DVK_DRAFTID_DUMP:-}" \
