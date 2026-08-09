@@ -195,6 +195,9 @@ _FR13_FIXED32_SFWD_EMBED_GATE_CTA = os.environ.get(
 _FR13_FIXED32_SFWD_NODEGROUP8_DIRECT = os.environ.get(
     "FR13_FIXED32_SFWD_NODEGROUP8_DIRECT", "0"
 ).strip()
+_FR13_MAMBA_SPEC_BLOCKS_CDIV = os.environ.get(
+    "FR13_MAMBA_SPEC_BLOCKS_CDIV", "0"
+).strip()
 _FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
     "scripts/fr13_b1_composed_stack_gate.py",
@@ -23955,6 +23958,180 @@ def _patch_gpu_model_runner_replay_boundary_tap_d() -> bool:
     return True
 
 
+def _fr13_mamba_spec_blocks_cdiv() -> bool:
+    """FR13_MAMBA_SPEC_BLOCKS_CDIV patch-time gate (strict 0/1, default OFF).
+
+    Stock MambaSpec sets num_speculative_blocks = num_speculative_tokens (31 at
+    NUM_SPECULATIVE_TOKENS=31), so every request reserves 31 extra mamba pages
+    per kv-cache group on top of its running page. At B4 with 3 GDN groups that
+    is 3 * (1 + 31) = 96 mamba pages pinned per request, 384 of 692 pool pages
+    (55%) before a single block is cached, and the LRU then evicts mamba pages
+    for 89-93% of its pops (20260809T064230Z salvage analysis; B4 APC hit 77%
+    vs B1 89% on identical tasks).
+
+    ON rewrites the construction site to cdiv(num_speculative_tokens,
+    mamba_block_size) = 1 at 31/1024. READ THE PREFLIGHT IN main() BEFORE
+    ARMING THIS: it is a slot count, not a token range, and the GDN spec
+    kernels index it per draft node. See _patch_mamba_abstract_spec_blocks_cdiv
+    and _fr13_assert_mamba_spec_blocks_cdiv_slot_demand.
+    """
+    raw = _FR13_MAMBA_SPEC_BLOCKS_CDIV
+    if raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV must be exactly 0 or 1 "
+            f"(observed {raw!r})"
+        )
+    return raw == "1"
+
+
+def _patch_mamba_abstract_spec_blocks_cdiv() -> bool:
+    """Right-size MambaSpec.num_speculative_blocks at CONSTRUCTION (abstract.py).
+
+    Single construction site: every allocator/scheduler/width consumer reads
+    the spec field, so one edit flows coherently to page accounting
+    (kv_cache_interface.MambaSpec.max_memory_usage_bytes -> page_size_bytes *
+    (2 + num_speculative_blocks) in align mode), the MambaManager reservation
+    (single_type_kv_cache_manager.allocate_new_blocks /
+    get_num_blocks_to_allocate), the align gather
+    (attention/backends/utils.mamba_get_block_table_tensor, which returns
+    exactly 1 + num_speculative_blocks columns) and the running-state index
+    (worker/mamba_utils.preprocess_mamba curr_state_idx).
+
+    The gdn_attn page-column widths derive from self.num_spec (a TOKEN count)
+    and are NOT narrowed here -- deliberately. FR13_SPEC_BLOCKS_CAP narrowed
+    them through self._fr13_page_cols and was DELETED 2026-07-25 (dce60d18c)
+    after measuring 29.62 tps against a 32.14 no-lever baseline; it also
+    required FR13_CONV_NODEBANK (deleted the same day) because the tree conv
+    node deposits address ssi columns 0..tree_n-1. main()'s slot-demand
+    preflight refuses the ON state for exactly that reason, so this patch can
+    never engage against a runtime that still needs the wider window.
+    """
+    if not _fr13_mamba_spec_blocks_cdiv():
+        return False
+    text = MAMBA_ABSTRACT_PATH.read_text()
+    if "FR13_MAMBA_SPEC_BLOCKS_CDIV" in text:
+        return False
+    import_anchor = "from vllm.v1.kv_cache_interface import KVCacheSpec, MambaSpec\n"
+    if text.count(import_anchor) != 1:
+        raise RuntimeError(
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV: abstract.py kv_cache_interface import "
+            f"anchor count {text.count(import_anchor)} != 1"
+        )
+    anchor = (
+        "            num_speculative_blocks=(\n"
+        "                vllm_config.speculative_config.num_speculative_tokens\n"
+        "                if vllm_config.speculative_config\n"
+        "                else 0\n"
+        "            ),\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV: abstract.py construction anchor count "
+            f"{text.count(anchor)} != 1"
+        )
+    text = text.replace(
+        import_anchor,
+        import_anchor + "from vllm.utils.math_utils import cdiv  # FR13_MAMBA_SPEC_BLOCKS_CDIV\n",
+        1,
+    )
+    inject = (
+        "            # FR13_MAMBA_SPEC_BLOCKS_CDIV (patch-time baked, default\n"
+        "            # OFF): a 31-token draft crosses at most one\n"
+        "            # mamba_block_size (1024) boundary, so the running state\n"
+        "            # needs one spare page ahead of it, not one per draft\n"
+        "            # token. Reserving per token pins 3 * 32 = 96 mamba pages\n"
+        "            # per B4 request (55% of the pool) and drives 89-93% of\n"
+        "            # LRU evictions into mamba pops.\n"
+        "            num_speculative_blocks=(\n"
+        "                cdiv(\n"
+        "                    vllm_config.speculative_config.num_speculative_tokens,\n"
+        "                    mamba_block_size,\n"
+        "                )\n"
+        "                if vllm_config.speculative_config\n"
+        "                else 0\n"
+        "            ),\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    MAMBA_ABSTRACT_PATH.write_text(text)
+    return True
+
+
+def _fr13_assert_mamba_spec_blocks_cdiv_slot_demand() -> None:
+    """FAIL-LOUD: refuse FR13_MAMBA_SPEC_BLOCKS_CDIV=1 while the runtime still
+    demands one mamba state slot per draft node.
+
+    num_speculative_blocks is a count of STATE SLOTS, not a token range. Each
+    mamba page holds exactly one (conv_state, ssm_state) pair --
+    MambaSpec.page_size_bytes is sum(prod(shape) * itemsize), independent of
+    block_size -- and block_size only sets the prefix-cache token alignment.
+    The spec slots are indexed PER DRAFT NODE by at least four live consumers:
+
+      1. vllm/model_executor/layers/fla/ops/fused_recurrent.py (stock kernel):
+         `final_state_idx = tl.load(ssm_state_indices + i_n * stride + i_t)`
+         inside `for i_t in range(0, T)` -- the recurrent state after EVERY
+         speculative token is stored to its own page; the initial-state load
+         reads column `num_accepted_tokens - 1`.
+      2. gdn_linear_attn spec branch: `ssm_state_indices=
+         spec_state_indices_tensor` (the full [B, num_spec+1] window).
+      3. FR13 tree conv writeback: `launch_conv_state_writeback(dst_rows=
+         spec_state_indices_tensor[b, :tree_n], tree_n=len(parent))` --
+         fr13_tree_conv_fused.launch_conv_state_writeback raises when
+         dst_rows.numel() < tree_n.
+      4. FR13 accepted-path remap: fr10_gdn_tree_kernel._remap_state_rows /
+         fr13_tree_conv_fused.prepare_replay_conv_remap_rows read
+         spec_state_indices[b, accepted_paths[b, k]] with node ordinals up to
+         SPEC_COLS - 1.
+
+    gdn_attn builds that window as `block_table_tensor[mask, : self.num_spec +
+    1]` over a table that mamba_get_block_table_tensor already narrowed to
+    `1 + num_speculative_blocks` columns, and copies it into a persistent
+    (max_bs, num_spec + 1) buffer. Shrinking the reservation alone therefore
+    either shape-mismatches that copy_ or feeds the kernels a short dst_rows.
+
+    The invariant: 1 + num_speculative_blocks must cover the widest per-node
+    window the runtime indexes, which is num_speculative_tokens + 1. Raise
+    unless the reservation still covers it. This opens by itself once a
+    consumer remap (a private per-node scratch bank) lands and lowers the
+    demand -- it does not have to be edited then.
+    """
+    if not _fr13_mamba_spec_blocks_cdiv():
+        return
+    num_spec_tokens = int(
+        os.environ.get("NUM_SPECULATIVE_TOKENS", "0").strip() or 0
+    )
+    mamba_block_size = int(
+        os.environ.get("MAMBA_BLOCK_SIZE", "1024").strip() or 1024
+    )
+    if mamba_block_size <= 0:
+        raise RuntimeError(
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV: MAMBA_BLOCK_SIZE must be positive "
+            f"(observed {mamba_block_size})"
+        )
+    if num_spec_tokens <= 0:
+        return
+    reserved_cols = 1 + -(-num_spec_tokens // mamba_block_size)
+    demanded_cols = num_spec_tokens + 1
+    if reserved_cols < demanded_cols:
+        raise RuntimeError(
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV=1 would reserve "
+            f"{reserved_cols} mamba state slots per request "
+            f"(1 + cdiv({num_spec_tokens}, {mamba_block_size})) but the GDN "
+            f"speculative path indexes {demanded_cols} of them PER DRAFT "
+            "NODE: the stock FLA fused_recurrent kernel stores one recurrent "
+            "state per speculative token to ssm_state_indices[b, i_t], and "
+            "the FR13 tree conv writeback scatters tree_n node windows to "
+            "spec_state_indices[b, :tree_n]. num_speculative_blocks is a "
+            "STATE-SLOT count, not a token range -- a mamba page holds one "
+            "state regardless of mamba_block_size, so ceil-dividing it by "
+            "the block size is a units error, not a right-sizing. Shrinking "
+            "the reservation requires REMAPPING those per-node consumers to "
+            "a private scratch bank first (that pairing was "
+            "FR13_CONV_NODEBANK + FR13_SPEC_BLOCKS_CAP, both deleted "
+            "2026-07-25 in dce60d18c at 28.05 / 29.62 tps against a 32.14 "
+            "no-lever baseline). Unset FR13_MAMBA_SPEC_BLOCKS_CDIV."
+        )
+
+
 def _patch_mamba_utils_tree_accept_bias() -> bool:
     text = MAMBA_UTILS_PATH.read_text()
     sentinel = "# FR10_TREE_MAMBA_ACCEPTED_COPY_BIAS"
@@ -41354,6 +41531,7 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
 
 def main() -> int:
     _fr13_fixed32_validate_patch_env()
+    _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
     if _FR13_FIXED32_MODE:
         _fr13_mode_path = Path("/logs/fr13_fixed32_mode.flag")
         _fr13_mode_tmp = _fr13_mode_path.with_name(
@@ -41373,6 +41551,7 @@ def main() -> int:
     _fr13_write_replay_durable_ab_sidecar()
     _fr13_write_apc_env_sidecar()
     patch_steps = [
+        (MAMBA_ABSTRACT_PATH, _patch_mamba_abstract_spec_blocks_cdiv()),
         (CUDA_GRAPH_WRAPPER_PATH, _patch_cudagraph_wrapper_subspan_mark()),
         (REQUEST_PATH, _patch_request_decode_mode()),
         (SCHED_OUTPUT_PATH, _patch_sched_output_decode_mode()),

@@ -138,10 +138,17 @@ MODEL_ROOT = Path("/models/qwen3.6-27b-fp8")
 # lever it named was measured BELOW the no-lever baseline (cap 29.62 vs 32.14
 # tps) and its implementation was excised on 2026-07-25 in dce60d18c -- 101
 # lines covering the env read, the mamba patch, the consumer width caps and the
-# preflight. The launcher still forwards FR13_SPEC_BLOCKS_CAP into the
-# container and fr13_required_tree_flags.sh still calls it QUEUED, but nothing
-# reads it, so setting it silently does nothing. FR13_LEVER_REDESIGN.md already
-# routes the cache-hit-rate concern here, to pool sizing, instead.
+# preflight. Nothing reads the env, and since 2026-08-09 (d96d36200) neither
+# the launcher nor fr13_required_tree_flags.sh advertises it any more.
+# FR13_LEVER_REDESIGN.md already routes the cache-hit-rate concern here, to
+# pool sizing, instead.
+#
+# FR13_MAMBA_SPEC_BLOCKS_CDIV (2026-08-09) is the same territory and is BLOCKED
+# for the same structural reason: num_speculative_blocks counts mamba STATE
+# SLOTS, one per draft node, not a token range, so it cannot be ceil-divided by
+# mamba_block_size. See fr13_required_tree_flags.sh for the four per-node
+# consumers and fr10_phase4_patch_vllm_tree_gdn.py's
+# _fr13_assert_mamba_spec_blocks_cdiv_slot_demand for the fail-loud preflight.
 #
 # Raising this DOES NOT re-profile memory: vLLM logs "reserved 40.0 GiB memory
 # for KV Cache as specified by kv_cache_memory_bytes config and skipped memory
