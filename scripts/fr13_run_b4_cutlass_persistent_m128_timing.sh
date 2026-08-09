@@ -690,7 +690,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "scripts")
-from fr13_b4_timing_math import phase_breakdown, positive
+from fr13_b4_timing_math import phase_breakdown, positive, promotion_verdict
 import fr13_fixed32_work_census as work_census
 
 subset_path, stock_path, candidate_path, binding_path, out_path = map(Path, sys.argv[1:6])
@@ -916,6 +916,7 @@ summary = {
     },
     "task_ids": task_ids,
     "decision_metric": "measured_tps_fullstep_wall",
+    "promotion": promotion_verdict(stock_phases, candidate_phases),
     "draft_vocab_root": draft_vocab_root,
     "draft_vocab_k": draft_vocab_k,
     "target_verifier_vocabulary": "full",
