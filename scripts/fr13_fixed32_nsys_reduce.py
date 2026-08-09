@@ -53,6 +53,18 @@ PHASE_RANGES = {
     "dfwd": "fr13.fixed32.dfwd",
 }
 ATTRIBUTION_RANGES = {"step": STEP_RANGE, **PHASE_RANGES}
+# FR13_HOST_TAIL_NVTX sub-ranges. They live inside the post-DFWD tail, which the
+# four phase ranges above deliberately do not cover, and they are OPTIONAL: a
+# capture taken with FR13_HOST_TAIL_NVTX=0 contains none of them, and one taken
+# with it on may contain any subset. They are listed here so their presence is
+# tolerated rather than fatal -- the exact-match guard below would otherwise
+# reject the capture outright.
+HOST_TAIL_RANGES = {
+    "sample_readback": "fr13.fixed32.sample_readback",
+    "output_proc": "fr13.fixed32.output_proc",
+    "sched_next": "fr13.fixed32.sched_next",
+    "kv_bookkeep": "fr13.fixed32.kv_bookkeep",
+}
 FIXED32_RANGE_PREFIX = "fr13.fixed32."
 MAX_CAPTURE_BOUNDARY_RANGE_DELTA = 2
 EXACT4_SUBSET_SHA256 = (
@@ -179,15 +191,16 @@ def _require_exact_phase_ranges(
     report_name: str,
 ) -> None:
     expected = set(ATTRIBUTION_RANGES.values())
+    optional = set(HOST_TAIL_RANGES.values())
     observed = {
         value
         for row in rows
         if (value := _nvtx_range_field(row, range_column)) is not None
         and value.startswith(FIXED32_RANGE_PREFIX)
     }
-    if observed != expected:
-        missing = sorted(expected - observed)
-        unexpected = sorted(observed - expected)
+    missing = sorted(expected - observed)
+    unexpected = sorted(observed - expected - optional)
+    if missing or unexpected:
         raise ReductionError(
             f"{report_name} fixed32 NVTX ranges do not match exactly; "
             f"missing={missing}, unexpected={unexpected}"
