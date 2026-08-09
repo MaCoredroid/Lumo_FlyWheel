@@ -78,7 +78,10 @@ def test_runner_requires_b4_eager_and_graph_engagement_and_rejects_fallbacks() -
 def test_summary_has_full_wall_phase_acceptance_and_quality_tradeoff() -> None:
     text = _text()
 
-    assert "from fr13_b4_timing_math import phase_breakdown, positive" in text
+    assert (
+        "from fr13_b4_timing_math import phase_breakdown, positive, promotion_verdict"
+        in text
+    )
     for field in (
         '"step_wall_ms"',
         '"measured_tps_fullstep_wall"',

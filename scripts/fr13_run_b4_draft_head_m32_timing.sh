@@ -246,7 +246,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "scripts")
-from fr13_b4_timing_math import phase_breakdown, positive
+from fr13_b4_timing_math import phase_breakdown, positive, promotion_verdict
 from fr13_floor_gate import (
     build_fixed32_chat_traffic_audit,
     pinned_dataset_record_digests,
@@ -503,6 +503,7 @@ summary = {
     "optimistic_floor_ms": stock_floor,
     "optimistic_floor_is_full_step_hardware_floor": False,
     "decision_metric": "measured_tps_fullstep_wall",
+    "promotion": promotion_verdict(stock_phases, candidate_phases),
     "candidate_scope": "proposal_quality",
     "draft_logits_may_differ": True,
     "acceptance_may_differ": True,

@@ -461,5 +461,8 @@ def test_b4_timing_binds_all_parent_verdict_and_uses_per_step_sfwd() -> None:
     assert "census.load_jsonl(census_path)" in timing
     assert "work_census.validate_bound_arm_report(" in timing
     assert "census_raw=census_raw" in timing
-    assert "from fr13_b4_timing_math import phase_breakdown, positive" in timing
+    assert (
+        "from fr13_b4_timing_math import phase_breakdown, positive, promotion_verdict"
+        in timing
+    )
     assert 'positive(record, "s_per_fwd_gpu_per_forward")' not in timing
