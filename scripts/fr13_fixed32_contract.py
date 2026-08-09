@@ -143,12 +143,19 @@ MODEL_ROOT = Path("/models/qwen3.6-27b-fp8")
 # FR13_LEVER_REDESIGN.md already routes the cache-hit-rate concern here, to
 # pool sizing, instead.
 #
-# FR13_MAMBA_SPEC_BLOCKS_CDIV (2026-08-09) is the same territory and is BLOCKED
-# for the same structural reason: num_speculative_blocks counts mamba STATE
-# SLOTS, one per draft node, not a token range, so it cannot be ceil-divided by
-# mamba_block_size. See fr13_required_tree_flags.sh for the four per-node
-# consumers and fr10_phase4_patch_vllm_tree_gdn.py's
-# _fr13_assert_mamba_spec_blocks_cdiv_slot_demand for the fail-loud preflight.
+# FR13_MAMBA_SPEC_BLOCKS_CDIV (2026-08-09) is the same territory but is NOT the
+# same lever. The structural objection still holds for a bare reservation cut --
+# num_speculative_blocks counts mamba STATE SLOTS, one per draft node, not a
+# token range -- so the flag arms the cut TOGETHER WITH the consumer-side
+# rehome that makes it legal: _patch_gdn_attn_mamba_spec_scratch_table keeps the
+# gdn_attn spec window num_spec+1 columns wide and republishes the single align
+# spare page across columns 1..num_spec. Consumer widths are therefore untouched
+# (which is precisely how it differs from the deleted FR13_SPEC_BLOCKS_CAP), and
+# only the PHYSICAL page count drops, 3*32 -> 3*2 per request. See
+# fr13_required_tree_flags.sh for the per-node consumer audit and
+# fr10_phase4_patch_vllm_tree_gdn.py's
+# _fr13_assert_mamba_spec_blocks_cdiv_slot_demand (2-slot floor) plus
+# _fr13_assert_mamba_spec_blocks_cdiv_coherent (both halves or neither).
 #
 # Raising this DOES NOT re-profile memory: vLLM logs "reserved 40.0 GiB memory
 # for KV Cache as specified by kv_cache_memory_bytes config and skipped memory
