@@ -3880,6 +3880,14 @@ if [[ "${FR13_COMMITTER_GRAPH:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_graph.arm" 2>/dev/null || true
 fi
+# FR13_CFWD_CAPTURE_REMAINDER folds the committer fill into the committer graph
+# (attack ladder lever 3). Default OFF; the sidecar is removed when unarmed so a
+# prior ON boot cannot leak into this one.
+if [[ "${FR13_CFWD_CAPTURE_REMAINDER:-0}" == "1" ]]; then
+  echo "1" > "$LOG_DIR/fr13_cfwd_capture_remainder.arm"
+else
+  rm -f "$LOG_DIR/fr13_cfwd_capture_remainder.arm" 2>/dev/null || true
+fi
 # The batched-GDN byte gates stay reference-served until a real SWE-Verified
 # task is explicitly armed after readiness. The EngineCore worker sees these
 # /logs sidecars even when its curated environment drops FR13_*.
@@ -5128,6 +5136,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_COMMIT_TO_RUNNING_ROW="${FR13_APC_COMMIT_TO_RUNNING_ROW:-1}" \
   -e FR13_TREE_RUNROW_INIT="${FR13_TREE_RUNROW_INIT:-1}" \
   -e FR13_COMMITTER_GRAPH="${FR13_COMMITTER_GRAPH:-1}" \
+  -e FR13_CFWD_CAPTURE_REMAINDER="${FR13_CFWD_CAPTURE_REMAINDER:-0}" \
   -e FR13_REPLAY_ONLY_GPU_TIMER="${FR13_REPLAY_ONLY_GPU_TIMER:-0}" \
   -e FR13_REPLAY_ONLY_GPU_TIMER_JSON="${FR13_REPLAY_ONLY_GPU_TIMER_JSON:-}" \
   -e FR13_GRAPH_TIMER="${FR13_GRAPH_TIMER:-0}" \
