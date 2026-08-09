@@ -23997,14 +23997,22 @@ def _patch_mamba_abstract_spec_blocks_cdiv() -> bool:
     exactly 1 + num_speculative_blocks columns) and the running-state index
     (worker/mamba_utils.preprocess_mamba curr_state_idx).
 
-    The gdn_attn page-column widths derive from self.num_spec (a TOKEN count)
-    and are NOT narrowed here -- deliberately. FR13_SPEC_BLOCKS_CAP narrowed
-    them through self._fr13_page_cols and was DELETED 2026-07-25 (dce60d18c)
-    after measuring 29.62 tps against a 32.14 no-lever baseline; it also
-    required FR13_CONV_NODEBANK (deleted the same day) because the tree conv
-    node deposits address ssi columns 0..tree_n-1. main()'s slot-demand
-    preflight refuses the ON state for exactly that reason, so this patch can
-    never engage against a runtime that still needs the wider window.
+    This is HALF of the B4 page-narrowing lever and never ships alone. It
+    narrows only the PHYSICAL reservation; the LOGICAL spec window that
+    gdn_attn hands the kernels is restored to its full self.num_spec + 1 width
+    by _patch_gdn_attn_mamba_spec_scratch_table(), armed by the SAME flag. The
+    align gather then yields exactly two real pages -- col0 (the running state)
+    and the one spare page align mode already reserves ahead of it -- and the
+    scratch patch republishes that spare across logical columns 1..num_spec.
+
+    That is why this is NOT the deleted FR13_SPEC_BLOCKS_CAP. That lever
+    narrowed the CONSUMER widths through self._fr13_page_cols (deleted
+    2026-07-25, dce60d18c, 29.62 tps vs a 32.14 no-lever baseline) and so
+    short-fed kernels that index per draft node, which is why it needed
+    FR13_CONV_NODEBANK. Here the consumer widths are untouched: every consumer
+    still sees num_spec + 1 columns, so the tree conv writeback's
+    dst_rows.numel() >= tree_n guard and the conv row guard's all-32-columns
+    bounds check never observe the narrowing at all.
     """
     if not _fr13_mamba_spec_blocks_cdiv():
         return False
@@ -24056,43 +24064,199 @@ def _patch_mamba_abstract_spec_blocks_cdiv() -> bool:
     return True
 
 
+# col0 (running state) + exactly ONE shared scratch page. This is the physical
+# slot demand once _patch_gdn_attn_mamba_spec_scratch_table has rehomed every
+# per-node logical column onto the scratch page; it is what the abstract.py
+# cdiv rewrite must still reserve, and what main()'s preflight enforces.
+_FR13_MAMBA_SPEC_SCRATCH_PHYSICAL_COLS = 2
+
+_FR13_MAMBA_SPEC_SCRATCH_SENTINEL = "# FR13_MAMBA_SPEC_SCRATCH_WINDOW"
+
+
+def _patch_gdn_attn_mamba_spec_scratch_table() -> bool:
+    """Restore the LOGICAL spec window after the physical narrowing (gdn_attn).
+
+    Pairs with _patch_mamba_abstract_spec_blocks_cdiv under the one flag. With
+    num_speculative_blocks = cdiv(31, 1024) = 1, MambaManager.allocate_new_blocks
+    hands each request 1 + 1 = 2 real mamba pages per group (align branch,
+    single_type_kv_cache_manager.py) and mamba_get_block_table_tensor gathers
+    1 + num_speculative_blocks = 2 columns. gdn_attn then slices
+    [mask, : self.num_spec + 1] off that 2-column table -- Python slicing
+    narrows SILENTLY -- and copy_s the result into a persistent
+    (max_bs, num_spec + 1) buffer, which is the exact shape mismatch the
+    FR13_SPEC_BLOCKS_CAP tombstone documents. This patch closes that gap: it
+    republishes gathered column 1 (the spare page align mode already reserves
+    ahead of the running state) across logical columns 1..num_spec, so the
+    window keeps its full width over only two distinct physical pages.
+
+    WHY POINTING THE SPEC COLUMNS AT SCRATCH IS SAFE (verified against the
+    extracted serving image, not assumed):
+
+      * Nothing in the fixed32 spec forward writes the SSM bank at all --
+        launch_tree_gdn_prepared raises if handed a per-node state buffer
+        ("the tree replay route does not stage per-node states") and the
+        fixed32 call site passes none. The deleted burn (2026-07-27) was the
+        only writer that ever assumed columns 1..num_spec were private, and it
+        is passed burn_node_bank=False at every live call site.
+      * Every served reader is col0. The committer broadcasts col0 across its
+        whole ssm_state_indices table and omits num_accepted_tokens, so stock
+        FLA takes i_t = 0 (fused_recurrent / fused_sigmoid_gating); conv
+        writeback and conv prior gather address + 0 * ssi_stride_s; the
+        accepted-path remap and the per-node conv writeback are both off under
+        fixed32 (full_node_writebacks == 0, conv_remaps == 0, asserted). The
+        deployed CUDA-graph committer ALREADY hands stock FLA a fully aliased
+        16-column table of one repeated page id, so column aliasing is the
+        established production pattern here, not a new one.
+      * Host-side block_ids reads are col0 too: under
+        FR13_APC_COMMIT_TO_RUNNING_ROW (=1, fail-loud) the patched
+        get_temporal_copy_spec reads block_ids[cur_block_idx], not
+        block_ids[cur_block_idx + num_accepted_tokens - 1]. preprocess_mamba's
+        curr_state_idx = num_blocks - 1 - num_speculative_blocks is invariant
+        under the narrowing (num_blocks carries the same term).
+      * The conv commit row guard loads all num_spec + 1 columns and requires
+        each strictly inside (0, BANK_ROWS); the scratch page is a real
+        allocated page, so it passes. That guard's destination_unique check
+        compares only col0 against alias peers, so aliasing columns 1.. is
+        invisible to it.
+
+    The duplication lives ONLY in this downstream tensor. The scheduler-side
+    req_to_blocks list still holds each page exactly once, so block ref-counts,
+    free_blocks and the prefix-cache hash path keep stock semantics -- no page
+    is double-freed, leaked, or hashed twice. (The worker-side logical table
+    already tolerates duplicate ids today: the scheduler ships only the delta
+    and never propagates its own null-out of vacated slots.)
+
+    The scratch page is not a new entity outside the allocator's model: it IS
+    the align spare, so it follows the stock lifecycle. Garbage written into it
+    is inert because the only way it is ever read is by becoming the running
+    state at a mamba_block_size rollover, and preprocess_mamba copies the live
+    state from the previous running page into it (collect_mamba_copy_meta,
+    prev_state_idx -> curr_state_idx, conv and temporal both) before the
+    forward that would read it. That is already what happens today to whichever
+    spare page is next; the narrowing only changes which page absorbed the dead
+    per-node deposits. curr_state_idx = num_blocks - 1 - num_speculative_blocks
+    is invariant under the narrowing because num_blocks carries the same term.
+
+    KNOWN CONSTRAINT: do not combine this flag with a diagnostic arm that
+    re-enables the eager per-request conv writeback (FR13_CONV_WB_FUSED != 1,
+    FR13_TCF_SELFCHECK=1, FR10_METRICS=1 with tree conv diag, or the commit
+    handoff logs). That path falls through to a raw
+    conv_state.index_copy_(0, spec_state_indices_tensor[b, :tree_n], ...),
+    which with aliased columns writes the same page repeatedly instead of
+    raising. It is dead in the fixed32 production configuration (both fused
+    writeback call sites are gated off by FR13_CONV_WB_BATCHED=1 and by
+    `not _FR13_FIXED32_MODE`), which is why the width guard it would otherwise
+    trip is not load-bearing here.
+    """
+    if not _fr13_mamba_spec_blocks_cdiv():
+        return False
+    text = GDN_ATTN_PATH.read_text()
+    sentinel = _FR13_MAMBA_SPEC_SCRATCH_SENTINEL
+    if sentinel in text:
+        return False
+
+    helper_anchor = "class GDNAttentionBackend(AttentionBackend):\n"
+    if text.count(helper_anchor) != 1:
+        raise RuntimeError(
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV: gdn_attn backend class anchor count "
+            f"{text.count(helper_anchor)} != 1"
+        )
+    helper = (
+        "def _fr13_mamba_spec_scratch_window(selected, num_spec):  "
+        + sentinel
+        + "\n"
+        "    \"\"\"Widen a physically-narrowed mamba window to the logical spec width.\n"
+        "\n"
+        "    ``selected`` is the align gather for the spec rows: column 0 is the\n"
+        "    running state page, column 1 the single spare page reserved ahead of\n"
+        "    it. Republish that spare across columns 1..num_spec so every consumer\n"
+        "    still sees num_spec + 1 columns over two distinct physical pages.\n"
+        "    Reads always resolve to column 0; the scratch column absorbs any\n"
+        "    per-node store harmlessly. See the patcher's\n"
+        "    _patch_gdn_attn_mamba_spec_scratch_table for the full writeup.\n"
+        "    \"\"\"\n"
+        "    cols = num_spec + 1\n"
+        "    have = int(selected.shape[1])\n"
+        "    if have >= cols:\n"
+        "        # Already full width (mamba_cache_mode all/none, or the physical\n"
+        "        # narrowing not in force): stock behaviour, byte for byte.\n"
+        "        return selected[:, :cols]\n"
+        "    if have < 2:\n"
+        "        raise RuntimeError(\n"
+        "            \"FR13_MAMBA_SPEC_BLOCKS_CDIV: mamba block window has \"\n"
+        "            + str(have)\n"
+        "            + \" column(s); need col0 plus one scratch column\"\n"
+        "        )\n"
+        "    # cat materialises a contiguous int32 table: the FLA kernels index\n"
+        "    # ssm_state_indices with a bare + i_t (implicit column stride 1).\n"
+        "    return torch.cat(\n"
+        "        (selected[:, :1], selected[:, 1:2].expand(-1, cols - 1)), dim=1\n"
+        "    )\n"
+        "\n"
+        "\n"
+    )
+    text = text.replace(helper_anchor, helper + helper_anchor, 1)
+
+    call_anchor = (
+        "                spec_state_indices_tensor = block_table_tensor[\n"
+        "                    spec_sequence_masks_cpu, : self.num_spec + 1\n"
+        "                ]\n"
+    )
+    if text.count(call_anchor) != 2:
+        raise RuntimeError(
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV: gdn_attn spec-window anchor count "
+            f"{text.count(call_anchor)} != 2"
+        )
+    call_inject = (
+        "                spec_state_indices_tensor = (\n"
+        "                    _fr13_mamba_spec_scratch_window(  " + sentinel + "\n"
+        "                        block_table_tensor[spec_sequence_masks_cpu],\n"
+        "                        self.num_spec,\n"
+        "                    )\n"
+        "                )\n"
+    )
+    text = text.replace(call_anchor, call_inject, 2)
+
+    GDN_ATTN_PATH.write_text(text)
+    return True
+
+
 def _fr13_assert_mamba_spec_blocks_cdiv_slot_demand() -> None:
-    """FAIL-LOUD: refuse FR13_MAMBA_SPEC_BLOCKS_CDIV=1 while the runtime still
-    demands one mamba state slot per draft node.
+    """FAIL-LOUD: the reservation must still cover col0 plus one scratch page.
 
     num_speculative_blocks is a count of STATE SLOTS, not a token range. Each
     mamba page holds exactly one (conv_state, ssm_state) pair --
     MambaSpec.page_size_bytes is sum(prod(shape) * itemsize), independent of
     block_size -- and block_size only sets the prefix-cache token alignment.
-    The spec slots are indexed PER DRAFT NODE by at least four live consumers:
+    Ceil-dividing a slot count by a token block size is therefore a units
+    error on its own, and this preflight used to refuse the flag outright for
+    that reason: the GDN speculative path indexed one slot PER DRAFT NODE, so
+    the demand was num_speculative_tokens + 1.
 
-      1. vllm/model_executor/layers/fla/ops/fused_recurrent.py (stock kernel):
-         `final_state_idx = tl.load(ssm_state_indices + i_n * stride + i_t)`
-         inside `for i_t in range(0, T)` -- the recurrent state after EVERY
-         speculative token is stored to its own page; the initial-state load
-         reads column `num_accepted_tokens - 1`.
-      2. gdn_linear_attn spec branch: `ssm_state_indices=
-         spec_state_indices_tensor` (the full [B, num_spec+1] window).
-      3. FR13 tree conv writeback: `launch_conv_state_writeback(dst_rows=
-         spec_state_indices_tensor[b, :tree_n], tree_n=len(parent))` --
-         fr13_tree_conv_fused.launch_conv_state_writeback raises when
-         dst_rows.numel() < tree_n.
-      4. FR13 accepted-path remap: fr10_gdn_tree_kernel._remap_state_rows /
-         fr13_tree_conv_fused.prepare_replay_conv_remap_rows read
-         spec_state_indices[b, accepted_paths[b, k]] with node ordinals up to
-         SPEC_COLS - 1.
+    That demand is now met by construction rather than by reservation. The
+    same flag arms _patch_gdn_attn_mamba_spec_scratch_table, which keeps the
+    logical window at num_spec + 1 columns and points every per-node column at
+    ONE shared scratch page, so the per-node consumers still get the width
+    they index while only two physical pages back it. The four consumers the
+    old refusal named are all satisfied or inert under fixed32:
 
-    gdn_attn builds that window as `block_table_tensor[mask, : self.num_spec +
-    1]` over a table that mamba_get_block_table_tensor already narrowed to
-    `1 + num_speculative_blocks` columns, and copies it into a persistent
-    (max_bs, num_spec + 1) buffer. Shrinking the reservation alone therefore
-    either shape-mismatches that copy_ or feeds the kernels a short dst_rows.
+      1. stock FLA fused_recurrent / fused_sigmoid_gating store per i_t to
+         ssm_state_indices[b, i_t] -- absorbed by the scratch column; h0 is
+         loaded to registers once before the loop opens, and the served
+         committer omits num_accepted_tokens so the load is i_t = 0 anyway.
+      2. gdn_linear_attn still receives the full [B, num_spec + 1] window.
+      3. the FR13 tree conv writeback still sees an unnarrowed logical table,
+         so launch_conv_state_writeback's dst_rows.numel() >= tree_n guard
+         never observes the narrowing -- and it is off under fixed32 regardless
+         (full_node_writebacks == 0, asserted).
+      4. the accepted-path remap is off under fixed32 (conv_remaps == 0,
+         asserted).
 
-    The invariant: 1 + num_speculative_blocks must cover the widest per-node
-    window the runtime indexes, which is num_speculative_tokens + 1. Raise
-    unless the reservation still covers it. This opens by itself once a
-    consumer remap (a private per-node scratch bank) lands and lowers the
-    demand -- it does not have to be edited then.
+    What remains load-bearing is the PHYSICAL floor: the align gather must
+    still yield a real scratch page in column 1, i.e. 1 + num_speculative_blocks
+    must be at least _FR13_MAMBA_SPEC_SCRATCH_PHYSICAL_COLS. A NULL_BLOCK_ID
+    filler would fail the conv row guard's strict (0, BANK_ROWS) bounds check
+    on all num_spec + 1 columns, so a one-column reservation is refused here.
     """
     if not _fr13_mamba_spec_blocks_cdiv():
         return
@@ -24110,25 +24274,45 @@ def _fr13_assert_mamba_spec_blocks_cdiv_slot_demand() -> None:
     if num_spec_tokens <= 0:
         return
     reserved_cols = 1 + -(-num_spec_tokens // mamba_block_size)
-    demanded_cols = num_spec_tokens + 1
+    demanded_cols = _FR13_MAMBA_SPEC_SCRATCH_PHYSICAL_COLS
     if reserved_cols < demanded_cols:
         raise RuntimeError(
             "FR13_MAMBA_SPEC_BLOCKS_CDIV=1 would reserve "
             f"{reserved_cols} mamba state slots per request "
-            f"(1 + cdiv({num_spec_tokens}, {mamba_block_size})) but the GDN "
-            f"speculative path indexes {demanded_cols} of them PER DRAFT "
-            "NODE: the stock FLA fused_recurrent kernel stores one recurrent "
-            "state per speculative token to ssm_state_indices[b, i_t], and "
-            "the FR13 tree conv writeback scatters tree_n node windows to "
-            "spec_state_indices[b, :tree_n]. num_speculative_blocks is a "
-            "STATE-SLOT count, not a token range -- a mamba page holds one "
-            "state regardless of mamba_block_size, so ceil-dividing it by "
-            "the block size is a units error, not a right-sizing. Shrinking "
-            "the reservation requires REMAPPING those per-node consumers to "
-            "a private scratch bank first (that pairing was "
-            "FR13_CONV_NODEBANK + FR13_SPEC_BLOCKS_CAP, both deleted "
-            "2026-07-25 in dce60d18c at 28.05 / 29.62 tps against a 32.14 "
-            "no-lever baseline). Unset FR13_MAMBA_SPEC_BLOCKS_CDIV."
+            f"(1 + cdiv({num_spec_tokens}, {mamba_block_size})) but the "
+            f"narrowed GDN speculative path needs {demanded_cols}: column 0 "
+            "for the running state and ONE real scratch page for logical "
+            "columns 1..num_spec, which _patch_gdn_attn_mamba_spec_scratch_"
+            "table republishes across the window. The scratch column must be "
+            "a genuinely allocated page -- the fixed32 conv commit row guard "
+            "loads every one of the num_spec + 1 columns and requires each "
+            "strictly inside (0, BANK_ROWS), so NULL_BLOCK_ID is not a legal "
+            "filler. Unset FR13_MAMBA_SPEC_BLOCKS_CDIV."
+        )
+
+
+def _fr13_assert_mamba_spec_blocks_cdiv_coherent() -> None:
+    """FAIL-LOUD: the physical narrowing and the logical rehome ship together.
+
+    The dangerous state is a half-applied lever: abstract.py narrowed to
+    cdiv(...) while gdn_attn still slices [: self.num_spec + 1] off the now
+    2-column align gather. Python slicing narrows silently, so that state does
+    not raise -- it feeds the kernels a 2-column window and shape-mismatches
+    the copy_ into the persistent (max_bs, num_spec + 1) buffer. Anchor drift
+    in either patch site is exactly how that would happen, so assert the two
+    sentinels landed together after the patch pass.
+    """
+    if not _fr13_mamba_spec_blocks_cdiv():
+        return
+    abstract_on = "FR13_MAMBA_SPEC_BLOCKS_CDIV" in MAMBA_ABSTRACT_PATH.read_text()
+    scratch_on = _FR13_MAMBA_SPEC_SCRATCH_SENTINEL in GDN_ATTN_PATH.read_text()
+    if abstract_on != scratch_on:
+        raise RuntimeError(
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV incoherent: abstract.py cdiv "
+            f"rewrite={abstract_on} but gdn_attn scratch window={scratch_on}. "
+            "The physical page narrowing and the logical spec-window rehome "
+            "are one lever and must both apply; a half-applied pair silently "
+            "short-feeds the GDN spec kernels."
         )
 
 
@@ -41557,6 +41741,13 @@ def main() -> int:
         (SCHED_OUTPUT_PATH, _patch_sched_output_decode_mode()),
         (SCHEDULER_PATH, _patch_scheduler_decode_modes()),
         (GDN_ATTN_PATH, _patch_gdn_attn()),
+        # FR13_MAMBA_SPEC_BLOCKS_CDIV, logical half: republishes the single
+        # align scratch page across spec window columns 1..num_spec so the
+        # consumers keep their full width over the 2 physical pages the
+        # abstract.py cdiv rewrite above reserves. MUST run after
+        # _patch_gdn_attn -- its anchors are the stock slice sites, which that
+        # patch leaves intact, and this keeps its many anchors unperturbed.
+        (GDN_ATTN_PATH, _patch_gdn_attn_mamba_spec_scratch_table()),
         (GDN_LINEAR_PATH, _patch_gdn_linear()),
         (SCHEDULER_PATH, _patch_scheduler_spec_trace()),
         (SCHEDULER_PATH, _patch_scheduler_fr13_freereq_cleanup()),
@@ -41666,6 +41857,7 @@ def main() -> int:
     patched: dict[str, bool] = {}
     for path, did_patch in patch_steps:
         patched[str(path)] = patched.get(str(path), False) or did_patch
+    _fr13_assert_mamba_spec_blocks_cdiv_coherent()
     if patched.get(str(QWEN3_NEXT_PATH), False):
         patched[str(QWEN3_5_PATH)] = True
     import py_compile
