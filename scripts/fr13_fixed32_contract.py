@@ -103,7 +103,7 @@ CONTAINER_FA2_DESTINATION = Path(
 MODEL_ROOT = Path("/models/qwen3.6-27b-fp8")
 # The canonical exact4 prompts need enough live KV capacity to admit four
 # concurrent real requests; 20 GiB capped the scheduler at physical B2.
-FIXED32_B4_KV_CACHE_MEMORY_BYTES = 40 * 1024**3
+FIXED32_B4_KV_CACHE_MEMORY_BYTES = 46 * 1024**3
 MODEL_AUXILIARY_FILES = (
     ".gitattributes",
     "LICENSE",
