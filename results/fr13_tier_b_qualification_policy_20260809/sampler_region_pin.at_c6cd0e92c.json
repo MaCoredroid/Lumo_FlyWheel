@@ -1,0 +1,35 @@
+{
+  "patcher": "fr10_phase4_patch_vllm_tree_gdn.py",
+  "patcher_bytes": 1980561,
+  "patcher_sha256": "0696bfc5458d01cca72767c6b54432490463722840153ffbab3b732bf09235c2",
+  "region_bytes": 170550,
+  "region_functions": [
+    {
+      "bytes": 164899,
+      "end_lineno": 21387,
+      "lineno": 17962,
+      "lines": 3426,
+      "name": "_patch_rejection_sampler_tree_lcp",
+      "sha256": "65522b35481c6fd6fc339ce9eb4a3d7392da465d1a9718d22071523706adb2e7"
+    },
+    {
+      "bytes": 3334,
+      "end_lineno": 38457,
+      "lineno": 38380,
+      "lines": 78,
+      "name": "_patch_rejection_sampler_bonus_handoff",
+      "sha256": "d5da80d71ecf9d9d21ab28f5f64a45ebab082cbf4470eef2f42f9f332762ecb3"
+    },
+    {
+      "bytes": 2083,
+      "end_lineno": 38495,
+      "lineno": 38460,
+      "lines": 36,
+      "name": "_patch_rejection_sampler_target_logits_handoff",
+      "sha256": "686dab2ff89960c82f45438231fb57988861f64275dd6720ff3b71719d68c77f"
+    }
+  ],
+  "sampler_region_sha256": "d93df2c2eaa2f88fe4db2c5939b5b8c9df6bd328fcf6500a3c551f8041bbb785",
+  "sampler_target": "vllm/v1/sample/rejection_sampler.py",
+  "schema": "fr13.tier_b.sampler_region_pin.v1"
+}
