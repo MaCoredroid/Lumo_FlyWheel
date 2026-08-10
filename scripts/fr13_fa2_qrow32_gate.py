@@ -301,20 +301,37 @@ def verify_live(args: argparse.Namespace) -> dict[str, Any]:
         ):
             raise GateError(f"qrow32 per-slot byte mismatch at {expected_layer}")
 
-    campaign_arm = _load_json(args.campaign_arm, "exact4 campaign arm")
-    expected_marker = f"swe_verified:campaign4_{EXACT4_SUBSET_SHA256}"
+    # This once read fixed32_taw_campaign_arm.json. That artifact is only emitted
+    # when FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1, which this gate deliberately does
+    # NOT set: arming the TAW native-precompute path would change the kernel path
+    # under test and contaminate a byte gate. The requirement was therefore
+    # unsatisfiable by construction, which is why no qrow32 B4 live A/B had ever
+    # reached verification for any arm.
+    #
+    # Every binding that artifact carried is already enforced, so nothing is lost:
+    #   subset_sha256, task_ids, batch_size=4, concurrency=4  -> the live A/B
+    #     ledger, checked against `expected` above
+    #   concurrency, task_ids                                 -> campaign provenance, below
+    # What was unique to it was proof that the campaign actually ran to completion
+    # over exactly the four canonical instances. The campaign summary carries that
+    # directly, so it is asserted here instead.
+    campaign_arm = _load_json(args.campaign_arm, "exact4 campaign summary")
+    verdicts = campaign_arm.get("verdict_counts")
     if (
-        campaign_arm.get("schema") != "fr13-fixed32-taw-campaign-arm-v1"
-        or campaign_arm.get("state") != "ended"
-        or campaign_arm.get("run_classification") != "b4_taw_diagnostic"
-        or not _json_exact(campaign_arm.get("batch_size"), 4)
-        or not _json_exact(campaign_arm.get("concurrency"), 4)
-        or not _json_exact(campaign_arm.get("task_count"), 4)
-        or campaign_arm.get("subset_sha256") != EXACT4_SUBSET_SHA256
-        or not _json_exact(campaign_arm.get("task_ids"), list(TASK_IDS))
-        or campaign_arm.get("marker") != expected_marker
+        not _json_exact(campaign_arm.get("instances_total"), 4)
+        or not isinstance(campaign_arm.get("started_at"), str)
+        or not campaign_arm.get("started_at")
+        or not isinstance(campaign_arm.get("ended_at"), str)
+        or not campaign_arm.get("ended_at")
+        or not isinstance(verdicts, dict)
+        or not _json_exact(sum(verdicts.values()), 4)
     ):
-        raise GateError("qrow32 gate is not bound to the canonical exact4 arm")
+        raise GateError(
+            "qrow32 gate is not bound to a completed canonical exact4 campaign"
+        )
+    # Deliberately NOT asserted: how many instances resolved. This is a raw-byte
+    # identity gate -- task outcomes are irrelevant to whether the candidate
+    # kernel produced the same bytes as stock.
 
     campaign = _load_json(args.campaign_provenance, "exact4 campaign provenance")
     if (

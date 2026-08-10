@@ -197,7 +197,7 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
 if [[ "$LIVE_AB_ARM" == "visibility" ]]; then
   "$PYTHON_BIN" scripts/fr13_fa2_fixed32_visibility_gate.py verify-b4 \
     --result "$ARMDIR/logs/fr13_fa2_qrow32_live_paged_ab.json" \
-    --campaign-arm "$ARMDIR/swe_out/verified/fixed32_taw_campaign_arm.json" \
+    --campaign-arm "$ARMDIR/swe_out/verified/campaign_summary.json" \
     --campaign-provenance "$ARMDIR/swe_out/verified/fixed32_qwen_campaign_provenance.json" \
     --candidate-so "$FORKED_FA2_SO" --fa2-source "$FA2_SOURCE" \
     --fixed32-mode "$FIXED32_MODE" --source-commit "$SOURCE_COMMIT" \
@@ -205,7 +205,7 @@ if [[ "$LIVE_AB_ARM" == "visibility" ]]; then
 else
   "$PYTHON_BIN" scripts/fr13_fa2_qrow32_gate.py verify-live \
     --result "$ARMDIR/logs/fr13_fa2_qrow32_live_paged_ab.json" \
-    --campaign-arm "$ARMDIR/swe_out/verified/fixed32_taw_campaign_arm.json" \
+    --campaign-arm "$ARMDIR/swe_out/verified/campaign_summary.json" \
     --campaign-provenance "$ARMDIR/swe_out/verified/fixed32_qwen_campaign_provenance.json" \
     --candidate-so "$FORKED_FA2_SO" \
     --fixed32-mode "$FIXED32_MODE" \

@@ -179,22 +179,21 @@ def _arm_args(
         tmp_path / f"{mode}.live.json",
         json.dumps(_live_result(module, mode, source_commit)),
     )
+    # The campaign summary the runner actually writes. The TAW campaign-arm
+    # artifact this used to model is only emitted under
+    # FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=1, which this gate must not set.
+    # Resolution counts are deliberately mixed: a raw-byte gate must pass
+    # regardless of how many instances resolved.
     campaign_arm = _write(
         tmp_path / f"{mode}.arm.json",
         json.dumps(
             {
-                "schema": "fr13-fixed32-taw-campaign-arm-v1",
-                "state": "ended",
-                "run_classification": "b4_taw_diagnostic",
-                "batch_size": 4,
-                "concurrency": 4,
-                "task_count": 4,
-                "subset_sha256": module.qrow32_gate.EXACT4_SUBSET_SHA256,
-                "task_ids": list(module.qrow32_gate.TASK_IDS),
-                "marker": (
-                    "swe_verified:campaign4_"
-                    + module.qrow32_gate.EXACT4_SUBSET_SHA256
-                ),
+                "model_name_or_path": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+                "started_at": "2026-08-10T05:42:06Z",
+                "ended_at": "2026-08-10T06:33:40Z",
+                "instances_total": 4,
+                "verdict_counts": {"resolved": 1, "failed": 3},
+                "resolved_rate": 0.25,
             }
         ),
     )

@@ -94,7 +94,7 @@ run_arm() {
 
   "$PYTHON_BIN" "$GATE" verify-arm \
     --result "$arm_dir/logs/fr13_fa2_qrow32_live_paged_ab.json" \
-    --campaign-arm "$arm_dir/swe_out/verified/fixed32_taw_campaign_arm.json" \
+    --campaign-arm "$arm_dir/swe_out/verified/campaign_summary.json" \
     --campaign-provenance "$arm_dir/swe_out/verified/fixed32_qwen_campaign_provenance.json" \
     --candidate-so "$QROW32_GQA_PAIR_FA2_SO" \
     --fa2-source "$QROW32_GQA_PAIR_FA2_SOURCE" \
