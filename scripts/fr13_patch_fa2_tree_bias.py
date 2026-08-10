@@ -348,6 +348,9 @@ STOCK_FIXED32_QUERY_INSTANTIATION = r'''template void run_mha_fwd_splitkv_dispat
 FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL = 0x46523133
 FIXED32_QUERY_TILE32_B1_BATCH_STRIDE_SENTINEL = 0x46523134
 FIXED32_QUERY_TILE32_B1_SPLIT2_BATCH_STRIDE_SENTINEL = 0x46523135
+# The B1 family tags its private dispatches with a four-byte ASCII run
+# ("FR13", "FR14", "FR15", ...). The GQA-pair B1 arm takes the next tag.
+FIXED32_QUERY_GQA_PAIR32_B1_BATCH_STRIDE_SENTINEL = 0x46523136
 
 
 # Unlike B1, B4 dereferences the tree-bias batch stride. Keep this sentinel
@@ -355,6 +358,21 @@ FIXED32_QUERY_TILE32_B1_SPLIT2_BATCH_STRIDE_SENTINEL = 0x46523135
 # padded four-batch diagnostic tensor (about 1.6 MiB of BF32 storage).
 FIXED32_QUERY_TILE32_BATCH_STRIDE_SENTINEL = 0x20013
 FIXED32_QUERY_GQA_PAIR32_BATCH_STRIDE_SENTINEL = 0x20014
+
+
+# A shared sentinel would silently route one arm's traffic into another arm's
+# kernel, so every private dispatch tag must stay distinct by construction.
+_FIXED32_BATCH_STRIDE_SENTINELS = (
+    FIXED32_QUERY_TILE16_BATCH_STRIDE_SENTINEL,
+    FIXED32_QUERY_TILE32_B1_BATCH_STRIDE_SENTINEL,
+    FIXED32_QUERY_TILE32_B1_SPLIT2_BATCH_STRIDE_SENTINEL,
+    FIXED32_QUERY_GQA_PAIR32_B1_BATCH_STRIDE_SENTINEL,
+    FIXED32_QUERY_TILE32_BATCH_STRIDE_SENTINEL,
+    FIXED32_QUERY_GQA_PAIR32_BATCH_STRIDE_SENTINEL,
+)
+assert len(set(_FIXED32_BATCH_STRIDE_SENTINELS)) == len(
+    _FIXED32_BATCH_STRIDE_SENTINELS
+), "FR13 private dispatch sentinels must be pairwise distinct"
 
 
 FIXED32_PHYSICAL_PARENT = (
@@ -1414,6 +1432,94 @@ void fr13_run_mha_fwd_fixed32_qrow32_b1_split2(
 '''
 
 
+# The B1 GQA-pair translation unit is derived mechanically from the B4 GQA-pair
+# unit rather than retyped. Every trait the two share -- the fused paged-KV page
+# stride, the 1024-entry page, the 32 static query rows, the two query heads per
+# CTA, kBlockM=64 / kBlockN=64 / kNWarps=4, Split=false -- therefore stays
+# byte-identical to the unit that carried the dual byte gate, and the only
+# deltas are the ones B1 actually forces: StaticQueryBatchLayout::sequences and
+# the private symbol names. Each substitution below is anchored and counted, so
+# any future drift in the B4 unit fails here instead of silently forking the two
+# kernels apart.
+_FIXED32_QUERY_GQA_PAIR32_B1_TRANSLATION_UNIT_SUBSTITUTIONS = (
+    (
+        "// FR13 fixed32 B4 qrow32 GQA-pair gate candidate.",
+        "// FR13 fixed32 B1 qrow32 GQA-pair gate candidate.",
+        1,
+    ),
+    (
+        "Fr13Fixed32Qrow32GqaPairKernelTraits",
+        "Fr13Fixed32Qrow32GqaPairB1KernelTraits",
+        8,
+    ),
+    (
+        "fr13_flash_fwd_fixed32_qrow32_gqa_pair_kernel",
+        "fr13_flash_fwd_fixed32_qrow32_gqa_pair_b1_kernel",
+        2,
+    ),
+    (
+        "fr13_run_mha_fwd_fixed32_qrow32_gqa_pair(",
+        "fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_b1(",
+        1,
+    ),
+    (
+        "    static constexpr int sequences = 4;",
+        "    static constexpr int sequences = 1;",
+        1,
+    ),
+    (
+        "    static_assert(StaticLayout::sequences == 4);",
+        "    static_assert(StaticLayout::sequences == 1);",
+        1,
+    ),
+    (
+        "    // 3 head pairs * B4 * 4 KV heads = 48 CTAs/layer. There is no "
+        "split-K or\n"
+        "    // combine launch, and each CTA stages one K/V tile for both "
+        "query heads.",
+        "    // 3 head pairs * B1 * 4 KV heads = 12 CTAs/layer. There is no "
+        "split-K or\n"
+        "    // combine launch, and each CTA stages one K/V tile for both "
+        "query heads.\n"
+        "    // The incumbent B1 qrow16 kernel spends 48 single-warp CTAs "
+        "re-staging the\n"
+        "    // same KV; pairing the GQA heads removes half of that redundant "
+        "staging\n"
+        "    // at sequences=1.",
+        1,
+    ),
+)
+
+
+def _fixed32_query_gqa_pair32_b1_translation_unit() -> str:
+    unit = FIXED32_QUERY_GQA_PAIR32_TRANSLATION_UNIT
+    for anchor, replacement, expected in (
+        _FIXED32_QUERY_GQA_PAIR32_B1_TRANSLATION_UNIT_SUBSTITUTIONS
+    ):
+        if unit.count(anchor) != expected:
+            raise RuntimeError(
+                "B4 GQA-pair translation unit drifted at the B1 derivation "
+                f"anchor {anchor!r}: expected {expected}, found "
+                f"{unit.count(anchor)}"
+            )
+        unit = unit.replace(anchor, replacement)
+    for survivor in (
+        "sequences = 4",
+        "Fr13Fixed32Qrow32GqaPairKernelTraits",
+        "B4",
+    ):
+        if survivor in unit:
+            raise RuntimeError(
+                f"B1 GQA-pair translation unit still carries B4 text: {survivor!r}"
+            )
+    return unit
+
+
+FIXED32_QUERY_GQA_PAIR32_B1_TRANSLATION_UNIT = (
+    _fixed32_query_gqa_pair32_b1_translation_unit()
+)
+
+
 RUN_MHA_FWD_SIGNATURE = (
     "void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, "
     "bool force_split_kernel=false) {\n"
@@ -1554,6 +1660,89 @@ FIXED32_QUERY_GQA_PAIR32_API_GATE = r'''    if (params.tree_bias_batch_stride ==
         return;
     }
 '''
+
+
+FIXED32_QUERY_GQA_PAIR32_B1_API_DECLARATION = rf'''constexpr int64_t kFr13Qrow32GqaPairB1BatchStrideSentinel =
+    {FIXED32_QUERY_GQA_PAIR32_B1_BATCH_STRIDE_SENTINEL};
+
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_b1(
+    Flash_fwd_params &params, cudaStream_t stream);
+
+'''
+
+
+# Same derivation discipline as the translation unit: the B1 GQA-pair gate is
+# the B4 GQA-pair gate with the two operands B1 actually changes. Everything
+# else -- including `unpadded_lse` and `is_seqlens_k_cumulative`, which the
+# paired LSE layout depends on because it addresses softmax_lse as
+# [head, total_q] -- is inherited verbatim from the operand set the B4 dual byte
+# gate exercised. mha_varlen_fwd_impl passes /*unpadded_lse*/true and
+# set_params_fprop sets is_seqlens_k_cumulative=true unconditionally at
+# fa2_head 29210221863736a08f71a866459e368ad1ac4a95, and force_split_kernel is
+# `paged_KV`, which the inherited `block_table != nullptr` already pins.
+_FIXED32_QUERY_GQA_PAIR32_B1_API_GATE_SUBSTITUTIONS = (
+    (
+        "kFr13Qrow32GqaPairBatchStrideSentinel",
+        "kFr13Qrow32GqaPairB1BatchStrideSentinel",
+        1,
+    ),
+    ("            && params.b == 4\n", "            && params.b == 1\n", 1),
+    (
+        "            && params.total_q == 128\n",
+        "            && params.total_q == 32\n",
+        1,
+    ),
+    (
+        "        fr13_run_mha_fwd_fixed32_qrow32_gqa_pair(params, stream);",
+        "        fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_b1(params, stream);",
+        1,
+    ),
+    (
+        '"FR13 qrow32 GQA-pair gate reached non-canonical B4 geometry"',
+        '"FR13 qrow32 GQA-pair gate reached non-canonical B1 geometry"',
+        1,
+    ),
+)
+
+
+def _fixed32_query_gqa_pair32_b1_api_gate() -> str:
+    gate = FIXED32_QUERY_GQA_PAIR32_API_GATE
+    for anchor, replacement, expected in (
+        _FIXED32_QUERY_GQA_PAIR32_B1_API_GATE_SUBSTITUTIONS
+    ):
+        if gate.count(anchor) != expected:
+            raise RuntimeError(
+                "B4 GQA-pair API gate drifted at the B1 derivation anchor "
+                f"{anchor!r}: expected {expected}, found {gate.count(anchor)}"
+            )
+        gate = gate.replace(anchor, replacement)
+    # The B1 shapes must actually be the ones the B1 lineage live-validates.
+    for required in (
+        "            && params.b == 1\n",
+        "            && params.total_q == 32\n",
+        "            && params.seqlen_q == 32\n",
+        "            && params.seqlen_q_rounded == 128\n",
+        "            && params.k_batch_stride == 2 * 1024 * 4 * 256\n",
+        "            && params.v_batch_stride == 2 * 1024 * 4 * 256\n",
+        "            && params.page_block_size == 1024\n",
+        "            && params.unpadded_lse\n",
+        "            && params.num_splits == 0\n",
+    ):
+        if gate.count(required) != 1:
+            raise RuntimeError(
+                f"B1 GQA-pair API gate lost a required operand: {required!r}"
+            )
+    for forbidden in ("B4", "params.b == 4", "params.total_q == 128"):
+        if forbidden in gate:
+            raise RuntimeError(
+                "B1 GQA-pair API gate still carries B4 geometry: "
+                f"{forbidden!r}"
+            )
+    return gate
+
+
+FIXED32_QUERY_GQA_PAIR32_B1_API_GATE = _fixed32_query_gqa_pair32_b1_api_gate()
 
 
 FIXED32_QUERY_TILE32_B1_API_DECLARATION = rf'''constexpr int64_t kFr13Qrow32B1BatchStrideSentinel =
@@ -3144,6 +3333,42 @@ def _patch_fixed32_query_gqa_pair32_translation_unit(
     return True
 
 
+def _patch_fixed32_query_gqa_pair32_b1_translation_unit(
+    path: Path,
+    *,
+    fixed32_query_gqa_pair32_b1: bool = False,
+    fixed32_tree_visibility_mask: bool = False,
+) -> bool:
+    if not fixed32_query_gqa_pair32_b1:
+        return False
+    stock_text = path.read_text()
+    if STOCK_FIXED32_QUERY_INSTANTIATION not in stock_text:
+        raise RuntimeError("stock fixed32 FA2 explicit instantiation drifted")
+    if "FR13_FA2_FIXED32_QUERY_GQA_PAIR32" in stock_text:
+        raise RuntimeError(
+            "qrow32 B1 GQA pair must not share the stock instantiation TU"
+        )
+    pair_path = path.with_name(
+        "flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu"
+    )
+    expected = FIXED32_QUERY_GQA_PAIR32_B1_TRANSLATION_UNIT
+    if fixed32_tree_visibility_mask:
+        expected = _with_fixed32_tree_visibility(
+            expected,
+            trait="Fr13Fixed32Qrow32GqaPairB1KernelTraits",
+            symbol="fr13_fixed32_qrow32_gqa_pair_b1_tree_visibility",
+            max_registers=252,
+        )
+    if pair_path.exists():
+        if pair_path.read_text() != expected:
+            raise RuntimeError(
+                "existing qrow32 B1 GQA-pair translation unit drifted"
+            )
+        return False
+    pair_path.write_text(expected)
+    return True
+
+
 def _patch_fixed32_query_tile32_b1_translation_unit(
     path: Path,
     *,
@@ -3199,6 +3424,7 @@ def _patch_flash_api_cpp(
     fixed32_query_tile32: bool = False,
     fixed32_query_gqa_pair32: bool = False,
     fixed32_query_tile32_b1: bool = False,
+    fixed32_query_gqa_pair32_b1: bool = False,
 ) -> bool:
     text = path.read_text()
     changed = False
@@ -3403,6 +3629,25 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
             "fixed32 FA2 query tile32 B1 split2 scratch allocation",
         )
         changed = changed or did
+    if fixed32_query_gqa_pair32_b1:
+        # The B1 byte gate compares against the qrow16 incumbent, so the
+        # reference sentinel needs its dispatch in the same binary. This is the
+        # identical reference dispatch the qrow32 B1 arms install; no split-K
+        # scratch patch is installed because the GQA-pair arm keeps
+        # num_splits=0.
+        text, did = _install_qrow16_api_dispatch(
+            text,
+            FIXED32_QUERY_TILE16_B1_REFERENCE_API_DISPATCH,
+            label="fixed32 FA2 query tile16 B1 reference hidden API dispatch",
+        )
+        changed = changed or did
+        text, did = _install_hidden_api_gate(
+            text,
+            declaration=FIXED32_QUERY_GQA_PAIR32_B1_API_DECLARATION,
+            gate=FIXED32_QUERY_GQA_PAIR32_B1_API_GATE,
+            label="fixed32 FA2 qrow32 B1 GQA-pair gate-only API dispatch",
+        )
+        changed = changed or did
     if changed:
         path.write_text(text)
     return changed
@@ -3475,6 +3720,7 @@ def patch_fa2_source(
     fixed32_query_tile32: bool = False,
     fixed32_query_gqa_pair32: bool = False,
     fixed32_query_tile32_b1: bool = False,
+    fixed32_query_gqa_pair32_b1: bool = False,
     fixed32_tree_visibility_mask: bool = False,
 ) -> dict[str, bool]:
     if fixed32_query_tile16_static_strides and not fixed32_query_tile16:
@@ -3487,8 +3733,12 @@ def patch_fa2_source(
             fixed32_query_tile32,
             fixed32_query_gqa_pair32,
             fixed32_query_tile32_b1,
+            fixed32_query_gqa_pair32_b1,
         )
     )
+    # Both GQA-pair candidates need the paired ((row, head), column) address
+    # layout in the shared kernel header; only the trait geometry differs.
+    gqa_pair_layout = bool(fixed32_query_gqa_pair32 or fixed32_query_gqa_pair32_b1)
     if qrow32_builds > 1:
         raise ValueError("fixed32 qrow32 source builds are mutually exclusive")
     fixed32_query_tile32_any = bool(qrow32_builds)
@@ -3580,7 +3830,7 @@ def patch_fa2_source(
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_gqa_pair_layout(
             files["flash_fwd_kernel.h"],
-            fixed32_query_gqa_pair32=fixed32_query_gqa_pair32,
+            fixed32_query_gqa_pair32=gqa_pair_layout,
         )
         or flash_fwd_kernel_changed
     )
@@ -3624,6 +3874,13 @@ def patch_fa2_source(
         "flash_fwd_fr13_qrow32_b1_split2_hdim256_bf16_sm80.cu": (
             b1_translation_units_changed
         ),
+        "flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu": (
+            _patch_fixed32_query_gqa_pair32_b1_translation_unit(
+                files["flash_fwd_split_hdim256_bf16_sm80.cu"],
+                fixed32_query_gqa_pair32_b1=fixed32_query_gqa_pair32_b1,
+                fixed32_tree_visibility_mask=fixed32_tree_visibility_mask,
+            )
+        ),
         "flash_api.cpp": _patch_flash_api_cpp(
             files["flash_api.cpp"],
             fixed32_query_tile16=fixed32_query_tile16,
@@ -3633,6 +3890,7 @@ def patch_fa2_source(
             fixed32_query_tile32=fixed32_query_tile32,
             fixed32_query_gqa_pair32=fixed32_query_gqa_pair32,
             fixed32_query_tile32_b1=fixed32_query_tile32_b1,
+            fixed32_query_gqa_pair32_b1=fixed32_query_gqa_pair32_b1,
         ),
         "flash_api_torch_lib.cpp": _patch_torch_lib(files["flash_api_torch_lib.cpp"]),
     }
@@ -4583,6 +4841,14 @@ _FR13_FA2_QROW32_B1_ARMS = {
             "qrow32 B1 fixed32 visibility exact geometry; no fallback"
         ),
     },
+    "gqa_pair": {
+        "sentinel": 1179791670,
+        "num_splits": 0,
+        "split_scratch_allocation": "not used; num_splits=0",
+        "candidate_dispatch": (
+            "qrow32 B1 GQA-pair exact geometry; no fallback"
+        ),
+    },
 }
 _FR13_FA2_QROW32_B1_QROW16_REFERENCE_SENTINEL = 1179791667
 _FR13_FA2_QROW32_B1_CANDIDATE_SHA256 = (
@@ -4599,6 +4865,14 @@ _FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SHA256 = (
 _FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SIZE = 300200192
 _FR13_FA2_QROW32_B1_VISIBILITY_SOURCE_CLOSURE_SHA256 = (
     "a30eca031cd5067133e6278527787c5987635670930e5840ac983f66b088e4fc"
+)
+# The GQA-pair B1 source closure is fixed by the codegen and pinned ahead of the
+# build; the binary identity is empty until the .so exists, and an empty pin is
+# a hard refusal rather than a skipped check.
+_FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SHA256 = ""
+_FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SIZE = 0
+_FR13_FA2_QROW32_B1_GQA_PAIR_SOURCE_CLOSURE_SHA256 = (
+    "172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4"
 )
 _FR13_FA2_QROW32_B1_TARGET_LAYERS = tuple(
     f"language_model.model.layers.{index}.self_attn.attn"
@@ -4633,8 +4907,8 @@ def _fr13_fa2_qrow32_b1_arm(env_name):
     elif env_name == "FR13_FA2_QROW32_B1_LIVE_AB_ARM":
         if arm not in _FR13_FA2_QROW32_B1_ARMS:
             raise RuntimeError(
-                f"{env_name} must be empty, nosplit, split2, or visibility; "
-                f"got {arm!r}"
+                f"{env_name} must be empty or one of "
+                f"{', '.join(sorted(_FR13_FA2_QROW32_B1_ARMS))}; got {arm!r}"
             )
     else:
         raise RuntimeError(f"unknown FR13 qrow32 B1 arm selector: {env_name}")
@@ -4670,6 +4944,25 @@ def _fr13_fa2_qrow32_b1_require_k64():
 
 
 def _fr13_fa2_qrow32_b1_identity(arm=None):
+    if arm == "gqa_pair":
+        if (
+            not _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SHA256
+            or not _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SIZE
+        ):
+            raise RuntimeError(
+                "FR13 qrow32 B1 GQA-pair binary is not pinned: fill "
+                "_FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SHA256 and "
+                "_FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SIZE from the build "
+                "attestation before selecting this arm"
+            )
+        return {
+            "candidate_sha256": _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SHA256,
+            "candidate_size": _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SIZE,
+            "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
+            "source_closure_sha256": (
+                _FR13_FA2_QROW32_B1_GQA_PAIR_SOURCE_CLOSURE_SHA256
+            ),
+        }
     if arm == "visibility":
         return {
             "candidate_sha256": _FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SHA256,
@@ -7396,6 +7689,11 @@ def main() -> int:
         help="build the gate-only fixed32 B1 FA2 32-row query-tile candidate",
     )
     parser.add_argument(
+        "--fixed32-query-gqa-pair32-b1",
+        action="store_true",
+        help="build the gate-only B1 FA2 two-query-head GQA-pair candidate",
+    )
+    parser.add_argument(
         "--fixed32-query-tile16-live-ab",
         action="store_true",
         help="install the one-shot live paged B1 stock/qrow16 byte gate",
@@ -7464,12 +7762,18 @@ def main() -> int:
             "--fixed32-query-gqa-pair32 requires --tree-bias-tile-earlyout "
             "in the same source-build invocation"
         )
+    if args.fixed32_query_gqa_pair32_b1 and not args.tree_bias_tile_earlyout:
+        parser.error(
+            "--fixed32-query-gqa-pair32-b1 requires --tree-bias-tile-earlyout "
+            "in the same source-build invocation"
+        )
     qrow32_source_builds = sum(
         bool(value)
         for value in (
             args.fixed32_query_tile32,
             args.fixed32_query_gqa_pair32,
             args.fixed32_query_tile32_b1,
+            args.fixed32_query_gqa_pair32_b1,
         )
     )
     if qrow32_source_builds > 1:
@@ -7500,11 +7804,22 @@ def main() -> int:
         (args.fixed32_query_tile32_b1_live_ab
          or args.fixed32_query_tile32_b1_production)
         and not args.skip_source
-        and not args.fixed32_query_tile32_b1
+        and not (
+            args.fixed32_query_tile32_b1 or args.fixed32_query_gqa_pair32_b1
+        )
     ):
         parser.error(
             "a combined qrow32 B1 source/selector patch requires "
-            "--fixed32-query-tile32-b1"
+            "--fixed32-query-tile32-b1 or --fixed32-query-gqa-pair32-b1"
+        )
+    if (
+        args.fixed32_query_tile32_b1_production
+        and args.fixed32_query_gqa_pair32_b1
+    ):
+        # The B1 production selector only issues the attested no-split
+        # credential; the GQA-pair arm is byte-gate-only until it earns one.
+        parser.error(
+            "the B1 production selector requires --fixed32-query-tile32-b1"
         )
     if (
         args.fixed32_query_tile32_b4_production
@@ -7526,6 +7841,7 @@ def main() -> int:
         "fixed32_query_tile32": args.fixed32_query_tile32,
         "fixed32_query_gqa_pair32": args.fixed32_query_gqa_pair32,
         "fixed32_query_tile32_b1": args.fixed32_query_tile32_b1,
+        "fixed32_query_gqa_pair32_b1": args.fixed32_query_gqa_pair32_b1,
         "fixed32_query_tile16_live_ab": args.fixed32_query_tile16_live_ab,
         "fixed32_query_tile32_live_ab": args.fixed32_query_tile32_live_ab,
         "fixed32_query_tile32_b1_live_ab": (
@@ -7553,6 +7869,7 @@ def main() -> int:
             fixed32_query_tile32=args.fixed32_query_tile32,
             fixed32_query_gqa_pair32=args.fixed32_query_gqa_pair32,
             fixed32_query_tile32_b1=args.fixed32_query_tile32_b1,
+            fixed32_query_gqa_pair32_b1=args.fixed32_query_gqa_pair32_b1,
             fixed32_tree_visibility_mask=(
                 args.fixed32_tree_visibility_mask
             ),
