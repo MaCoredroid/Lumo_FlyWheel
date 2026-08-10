@@ -274,7 +274,7 @@ def _body(
     }
 
 
-def issue_sidecar(
+def validate_binding(
     *,
     dual_gate: Path,
     expected_dual_gate_sha256: str,
@@ -283,8 +283,8 @@ def issue_sidecar(
     arm: str,
     patch_source: Path,
     expected_source_commit: str,
-    out: Path,
 ) -> dict[str, Any]:
+    """The credential body, without writing it: a pre-flight for runners."""
     if arm != ARM:
         raise SidecarError("qrow32 B4 production arm must be gqa_pair")
     expected_dual_gate_sha256 = _sha256(expected_dual_gate_sha256, "dual gate")
@@ -296,11 +296,33 @@ def issue_sidecar(
     if _digest(raw) != expected_dual_gate_sha256:
         raise SidecarError("dual gate raw SHA-256 mismatch")
     summary = validate_dual_gate(payload, source_commit=patch["source_commit"])
-    body = _body(
+    return _body(
         patch=patch,
         dual_gate_sha256=expected_dual_gate_sha256,
         dual_gate_canonical_sha256=_digest(canonical_bytes(payload)),
         summary=summary,
+    )
+
+
+def issue_sidecar(
+    *,
+    dual_gate: Path,
+    expected_dual_gate_sha256: str,
+    candidate_so: Path,
+    expected_candidate_sha256: str,
+    arm: str,
+    patch_source: Path,
+    expected_source_commit: str,
+    out: Path,
+) -> dict[str, Any]:
+    body = validate_binding(
+        dual_gate=dual_gate,
+        expected_dual_gate_sha256=expected_dual_gate_sha256,
+        candidate_so=candidate_so,
+        expected_candidate_sha256=expected_candidate_sha256,
+        arm=arm,
+        patch_source=patch_source,
+        expected_source_commit=expected_source_commit,
     )
     sidecar = dict(body)
     sidecar["canonical_sha256"] = _digest(canonical_bytes(body))
@@ -376,14 +398,15 @@ def verify_sidecar(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for name in ("issue", "verify"):
+    for name in ("validate", "issue", "verify"):
         command = subparsers.add_parser(name)
-        if name == "issue":
+        if name in ("validate", "issue"):
             # By PATH, never by runroot: a credential must be issued against
             # the dual gate re-run at the production plumbing commit.
             command.add_argument("--dual-gate", required=True, type=Path)
             command.add_argument("--expected-dual-gate-sha256", required=True)
-            command.add_argument("--out", required=True, type=Path)
+            if name == "issue":
+                command.add_argument("--out", required=True, type=Path)
         else:
             command.add_argument("--sidecar", required=True, type=Path)
             command.add_argument("--expected-sidecar-sha256", required=True)
@@ -397,7 +420,17 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = _parser().parse_args()
-    if args.command == "issue":
+    if args.command == "validate":
+        result = validate_binding(
+            dual_gate=args.dual_gate,
+            expected_dual_gate_sha256=args.expected_dual_gate_sha256,
+            candidate_so=args.candidate_so,
+            expected_candidate_sha256=args.expected_candidate_sha256,
+            arm=args.arm,
+            patch_source=args.patch_source,
+            expected_source_commit=args.expected_source_commit,
+        )
+    elif args.command == "issue":
         result = issue_sidecar(
             dual_gate=args.dual_gate,
             expected_dual_gate_sha256=args.expected_dual_gate_sha256,
