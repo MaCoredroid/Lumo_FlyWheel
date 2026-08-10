@@ -206,12 +206,52 @@ for kind in stock candidate; do
   readelf -W -d "$so" | awk '$2 == "(RPATH)" || $2 == "(RUNPATH)" {print $2, $5}' | sort -u > "$BUILD/${kind}_runtime_path.txt"
 done
 unset kind so
-for f in defined_dynamic undefined_dynamic dt_needed runtime_path; do
+# Exported interface, library set and search path must be exactly identical.
+# These are what make the candidate a drop-in replacement, and they admit no
+# allowance.
+for f in defined_dynamic dt_needed runtime_path; do
   diff -u "$BUILD/stock_$f.txt" "$BUILD/candidate_$f.txt" > "$BUILD/$f.diff" || true
   b=$(stat -c %s "$BUILD/$f.diff"); printf '%s.diff=%s bytes\n' "$f" "$b"
   test "$b" -eq 0 || { echo "ABI DRIFT in $f" >&2; exit 94; }
 done
 unset f b
+
+# undefined_dynamic carries one scoped allowance. Host-compiler inline/outline
+# decisions on cold error paths inside PyTorch's own header templates (e.g. the
+# c10 CUDA device-guard constructor's assertion message) move a versioned
+# libstdc++ import in and out of the import table as unrelated parts of the
+# translation unit change. Such an import adds no library, no version floor and
+# no served-path behaviour, so it is permitted -- but ONLY additively, ONLY for
+# @GLIBCXX_* versioned names, and ONLY while the three diffs above are empty
+# (asserted immediately above, so reaching here proves it). Anything else --
+# a removed import, or an addition from any other library or with no version
+# tag -- is still hard drift.
+diff -u "$BUILD/stock_undefined_dynamic.txt" "$BUILD/candidate_undefined_dynamic.txt" \
+  > "$BUILD/undefined_dynamic.diff" || true
+printf 'undefined_dynamic.diff=%s bytes\n' "$(stat -c %s "$BUILD/undefined_dynamic.diff")"
+removed=$(grep -E '^-[^-]' "$BUILD/undefined_dynamic.diff" | sed 's/^-//' || true)
+[[ -z "$removed" ]] || {
+  echo "ABI DRIFT in undefined_dynamic: imports removed:" >&2
+  printf '%s\n' "$removed" >&2; exit 94; }
+added=$(grep -E '^\+[^+]' "$BUILD/undefined_dynamic.diff" | sed 's/^+//' || true)
+if [[ -n "$added" ]]; then
+  printf '%s\n' "$added" > "$BUILD/undefined_dynamic_allowed.txt"
+  while IFS= read -r symbol; do
+    [[ -n "$symbol" ]] || continue
+    [[ "$symbol" == *@GLIBCXX_* ]] || {
+      echo "ABI DRIFT in undefined_dynamic: not a versioned libstdc++ import: $symbol" >&2
+      exit 94; }
+    grep -qx 'libstdc++.so.6' "$BUILD/candidate_dt_needed.txt" || {
+      echo "ABI DRIFT: libstdc++ import without libstdc++ in DT_NEEDED: $symbol" >&2
+      exit 94; }
+  done <<< "$added"
+  echo "undefined_dynamic: $(grep -c . "$BUILD/undefined_dynamic_allowed.txt") cold-path libstdc++ import(s) allowed:"
+  sed 's/^/  /' "$BUILD/undefined_dynamic_allowed.txt"
+  # Resolvability is not asserted textually. The mandatory offline torch load
+  # below dynamically links the candidate inside the pinned image, which fails
+  # loudly on any unresolved import -- that is the proof.
+fi
+unset removed added symbol
 # The private launcher must stay LOCAL: a dynamic export would let anything but
 # the in-binary sentinel gate reach the candidate kernel.
 if readelf -W --dyn-syms "$CAND" | c++filt | grep -qF "$LAUNCHER_SYMBOL"; then
@@ -222,8 +262,14 @@ grep -q ' LOCAL ' "$BUILD/candidate_private_launcher_symbol.txt" \
   || { echo "private launcher is not LOCAL" >&2; exit 94; }
 echo ABI_AUDIT_PASS
 
-echo "== offline torch load (no GPU) =="
+echo "== offline torch load (no GPU) -- MANDATORY =="
+# This is not a smoke test. It dynamically links the candidate inside the pinned
+# image, so it is the proof that every undefined import -- including any allowed
+# above -- actually resolves there. Its exit status must not be swallowed by the
+# tee pipeline, or an unresolved import would pass silently.
+set -o pipefail
 "${DRUN[@]}" -v "$BUILD:/build:ro" "$IMAGE" -lc "
+if compgen -G '/dev/nvidia*' >/dev/null; then echo unexpected_gpu_device >&2; exit 91; fi
 python3 - <<'PY'
 import json, torch
 torch.ops.load_library('/build/$(basename "$SO")')
@@ -232,6 +278,9 @@ ok = hasattr(ns, 'varlen_fwd') and hasattr(ns, 'varlen_fwd_tree_bias')
 print(json.dumps({'library_loaded': True, 'registered_required_ops': bool(ok), 'torch': torch.__version__}, sort_keys=True))
 raise SystemExit(0 if ok else 95)
 PY" | tee "$BUILD/offline_torch_load.txt"
+grep -q '"library_loaded": true' "$BUILD/offline_torch_load.txt" \
+  && grep -q '"registered_required_ops": true' "$BUILD/offline_torch_load.txt" \
+  || { echo "offline torch load did not qualify the candidate" >&2; exit 95; }
 
 echo "== RESULT =="
 sha256sum "$SO" | tee "$BUILD/candidate_so_sha256.txt"

@@ -26,6 +26,11 @@ GQA_PAIR_B1_SENTINEL = 1179791670
 GQA_PAIR_B1_SOURCE_CLOSURE_SHA256 = (
     "172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4"
 )
+GQA_PAIR_B1_SO_SHA256 = (
+    "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae"
+)
+GQA_PAIR_B1_SO_SIZE = 299815552
+LIVE_GATE = REPO / "scripts/fr13_run_b1_k64_qrow32_split2_live_gate.sh"
 CODEGEN_FILES = (
     "csrc/flash_attn/flash_api.cpp",
     "csrc/flash_attn/flash_api_torch_lib.cpp",
@@ -319,7 +324,7 @@ def test_b1_gqa_pair_arm_registers_in_the_b1_live_ab_registry() -> None:
     assert tags.count(GQA_PAIR_B1_SENTINEL) == 1
 
 
-def test_b1_gqa_pair_arm_is_selectable_but_refuses_while_the_binary_is_unpinned(
+def test_b1_gqa_pair_arm_is_selectable_and_pinned_to_the_built_binary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = _patcher()
@@ -332,22 +337,17 @@ def test_b1_gqa_pair_arm_is_selectable_but_refuses_while_the_binary_is_unpinned(
         == "gqa_pair"
     )
 
-    # The source closure is pinned ahead of the build; the binary is not, and an
-    # empty pin must be a hard refusal that names what to fill.
-    assert (
-        namespace["_FR13_FA2_QROW32_B1_GQA_PAIR_SOURCE_CLOSURE_SHA256"]
-        == GQA_PAIR_B1_SOURCE_CLOSURE_SHA256
-    )
-    assert namespace["_FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SHA256"] == ""
-    assert namespace["_FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SIZE"] == 0
-    with pytest.raises(RuntimeError, match="GQA-pair binary is not pinned"):
-        namespace["_fr13_fa2_qrow32_b1_identity"]("gqa_pair")
+    identity = namespace["_fr13_fa2_qrow32_b1_identity"]("gqa_pair")
+    assert identity["candidate_sha256"] == GQA_PAIR_B1_SO_SHA256
+    assert identity["candidate_size"] == GQA_PAIR_B1_SO_SIZE
+    assert identity["source_closure_sha256"] == GQA_PAIR_B1_SOURCE_CLOSURE_SHA256
+    assert identity["fa2_head"] == FA2_HEAD
 
-    # The already-built arms are untouched.
+    # A distinct binary from every other B1 arm.
     for arm in ("nosplit", "split2", "visibility"):
-        identity = namespace["_fr13_fa2_qrow32_b1_identity"](arm)
-        assert len(identity["candidate_sha256"]) == 64
-        assert identity["candidate_size"] > 0
+        other = namespace["_fr13_fa2_qrow32_b1_identity"](arm)
+        assert other["candidate_sha256"] != identity["candidate_sha256"]
+        assert other["candidate_size"] != identity["candidate_size"]
 
 
 def test_b1_gqa_pair_stays_out_of_the_b1_production_selector(
@@ -378,8 +378,8 @@ def test_b1_gqa_pair_gate_defs_pin_the_source_and_refuse_the_unbuilt_binary() ->
     assert (
         sidecar.GQA_PAIR_SOURCE_CLOSURE_SHA256 == GQA_PAIR_B1_SOURCE_CLOSURE_SHA256
     )
-    assert sidecar.GQA_PAIR_CANDIDATE_SHA256 == ""
-    assert sidecar.GQA_PAIR_CANDIDATE_SIZE == 0
+    assert sidecar.GQA_PAIR_CANDIDATE_SHA256 == GQA_PAIR_B1_SO_SHA256
+    assert sidecar.GQA_PAIR_CANDIDATE_SIZE == GQA_PAIR_B1_SO_SIZE
 
     # The GQA-pair codegen emits ONE translation unit, so reusing the no-split
     # arm's modified-source set would make source validation unsatisfiable.
@@ -396,9 +396,11 @@ def test_b1_gqa_pair_gate_defs_pin_the_source_and_refuse_the_unbuilt_binary() ->
     # Source qualification must not depend on the binary identity.
     contract = sidecar.gqa_pair_source_contract()
     assert contract["source_closure_sha256"] == GQA_PAIR_B1_SOURCE_CLOSURE_SHA256
-    with pytest.raises(ValueError, match="GQA-pair binary is not pinned"):
-        sidecar._candidate_contract("gqa_pair")
-    with pytest.raises(ValueError, match="GQA-pair binary is not pinned"):
+    candidate = sidecar._candidate_contract("gqa_pair")
+    assert candidate["sha256"] == GQA_PAIR_B1_SO_SHA256
+    assert candidate["size"] == GQA_PAIR_B1_SO_SIZE
+    # A live result claiming any other binary is still refused.
+    with pytest.raises(ValueError, match="live candidate is not pinned"):
         sidecar.validate_live_result({}, candidate_sha256="0" * 64, arm="gqa_pair")
 
 
@@ -429,8 +431,8 @@ def test_b1_gqa_pair_is_admitted_by_the_runtime_contract_and_launcher() -> None:
     sys.path.insert(0, str(REPO / "scripts"))
     import fr13_fixed32_contract as contract
 
-    assert contract.QROW32_B1_GQA_PAIR_FA2_SHA256 == ""
-    assert contract.QROW32_B1_GQA_PAIR_FA2_SIZE == 0
+    assert contract.QROW32_B1_GQA_PAIR_FA2_SHA256 == GQA_PAIR_B1_SO_SHA256
+    assert contract.QROW32_B1_GQA_PAIR_FA2_SIZE == GQA_PAIR_B1_SO_SIZE
 
     env = {
         "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
@@ -438,13 +440,18 @@ def test_b1_gqa_pair_is_admitted_by_the_runtime_contract_and_launcher() -> None:
         "FR13_FA2_QROW32_LIVE_PAGED_AB": "0",
         "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "gqa_pair",
         "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
-        "FR13_FA2_QROW32_B1_SO_SHA256": "0" * 64,
+        "FR13_FA2_QROW32_B1_SO_SHA256": GQA_PAIR_B1_SO_SHA256,
     }
-    # Recognised as a legal arm (not "invalid arm"), then refused for the one
-    # honest reason: the binary is not pinned yet.
-    with pytest.raises(contract.ContractError, match="GQA-pair binary is not pinned"):
+    # The runtime contract and the gate must agree on the binary, exactly.
+    assert contract._expected_runtime_fa2_identity(env) == (
+        GQA_PAIR_B1_SO_SIZE,
+        GQA_PAIR_B1_SO_SHA256,
+    )
+    env["FR13_FA2_QROW32_B1_SO_SHA256"] = "0" * 64
+    with pytest.raises(contract.ContractError, match="not the pinned candidate"):
         contract._expected_runtime_fa2_identity(env)
 
+    env["FR13_FA2_QROW32_B1_SO_SHA256"] = GQA_PAIR_B1_SO_SHA256
     env["FR13_FA2_QROW32_B1_LIVE_AB_ARM"] = "gqa_pair_typo"
     with pytest.raises(contract.ContractError, match="must be empty, nosplit"):
         contract._expected_runtime_fa2_identity(env)
@@ -497,6 +504,55 @@ def test_b1_gqa_pair_build_recipe_is_pinned_cpu_only_and_reuses_reference_object
     )
     assert "REG:243" not in executable
     assert "Register count is RECORDED, not asserted" in recipe
+
+
+def test_b1_gqa_pair_audit_allowance_is_narrow_and_additive_only() -> None:
+    recipe = BUILD_RECIPE.read_text()
+
+    # The three diffs that establish drop-in replacement admit no allowance.
+    assert "for f in defined_dynamic dt_needed runtime_path; do" in recipe
+    assert 'test "$b" -eq 0 || { echo "ABI DRIFT in $f" >&2; exit 94; }' in recipe
+    # undefined_dynamic: additive only, versioned libstdc++ only.
+    assert "imports removed:" in recipe
+    assert '[[ "$symbol" == *@GLIBCXX_* ]]' in recipe
+    assert "not a versioned libstdc++ import" in recipe
+    assert "grep -qx 'libstdc++.so.6' \"$BUILD/candidate_dt_needed.txt\"" in recipe
+    # Resolvability is proven by the mandatory load, not asserted textually.
+    assert "MANDATORY" in recipe
+    assert "set -o pipefail" in recipe
+    assert "offline torch load did not qualify the candidate" in recipe
+
+
+def test_b1_gqa_pair_live_gate_runner_carries_the_pinned_arm() -> None:
+    runner = LIVE_GATE.read_text()
+
+    assert "  gqa_pair)" in runner
+    assert f"CANDIDATE_SHA256={GQA_PAIR_B1_SO_SHA256}" in runner
+    assert f"CANDIDATE_BYTES={GQA_PAIR_B1_SO_SIZE}" in runner
+    assert f"SOURCE_CLOSURE_SHA256={GQA_PAIR_B1_SOURCE_CLOSURE_SHA256}" in runner
+    assert (
+        "FR13_QROW32_B1_LIVE_ARM must be split2, visibility, or gqa_pair" in runner
+    )
+    # The runner's pins must equal the gate's own contract, or the gate would
+    # verify one binary while the server loaded another.
+    sidecar = _module(SIDECAR, "fr13_b1_gqa_pair_sidecar_runner")
+    contract = sidecar._candidate_contract("gqa_pair")
+    block = runner.split("  gqa_pair)")[1].split(";;")[0]
+    assert contract["sha256"] in block
+    assert str(contract["size"]) in block
+    assert contract["source_closure_sha256"] in block
+    # Every artifact the runner verifies is arm-parameterised, so the GQA-pair
+    # arm demands nothing the split2/visibility arms do not already produce.
+    assert (
+        'LIVE_RESULT="$ARMDIR/logs/fr13_fa2_qrow32_b1_${LIVE_ARM}'
+        '_live_paged_ab.json"' in runner
+    )
+    for shared in (
+        'DIAGNOSTIC="$ARMDIR/fixed32_b1_diagnostic.json"',
+        'HEALTH="$ARMDIR/health.json"',
+        'TRAFFIC_AUDIT="$ARMDIR/fixed32_chat_traffic_audit.json"',
+    ):
+        assert shared in runner
 
 
 @pytest.mark.parametrize("armed", ["0", "bogus"])

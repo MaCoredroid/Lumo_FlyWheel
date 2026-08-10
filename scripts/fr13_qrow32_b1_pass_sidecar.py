@@ -160,10 +160,10 @@ GQA_PAIR_SOURCE_FILES = {
 GQA_PAIR_SOURCE_CLOSURE_SHA256 = (
     "172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4"
 )
-# Empty until the pinned-image build produces the .so. An empty pin is a hard
-# refusal in _candidate_contract, never a skipped check.
-GQA_PAIR_CANDIDATE_SHA256 = ""
-GQA_PAIR_CANDIDATE_SIZE = 0
+GQA_PAIR_CANDIDATE_SHA256 = (
+    "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae"
+)
+GQA_PAIR_CANDIDATE_SIZE = 299_815_552
 EXACT4_TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
