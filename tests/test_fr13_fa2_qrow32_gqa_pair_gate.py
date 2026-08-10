@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -321,6 +322,14 @@ def test_dual_gate_hash_binds_tail23_and_hydra27(
         module.verify_dual(args)
 
 
+def _declared(runner: str, key: str) -> str:
+    """Read a key=value the runner bakes into its launcher_meta.txt banner."""
+    matches = re.findall(rf"\\n{re.escape(key)}=([^\\%]*?)\\n", runner)
+    assert matches, f"{key} is not declared in the runner banner"
+    assert len(set(matches)) == 1, f"{key} is declared inconsistently: {matches}"
+    return matches[0]
+
+
 def test_dual_runner_is_default_off_real_exact4_and_non_timing() -> None:
     runner = Path(
         "scripts/fr13_run_b4_fa2_qrow32_gqa_pair_live_gate.sh"
@@ -331,9 +340,25 @@ def test_dual_runner_is_default_off_real_exact4_and_non_timing() -> None:
     assert "FR13_QROW32_LIVE_AB_ARM=gqa_pair" in runner
     assert "task_count_per_topology=4" in runner
     assert "draft_vocab_k=65536" in runner
-    assert "timing_eligible=0" in runner
-    assert "production_enabled=0" in runner
     assert "verify-dual" in runner
+
+    # production_enabled is not a constant of the GQA-pair arm -- it is a
+    # property of the RUN MODE. The byte gate always returns the stock captured
+    # output, so it must declare 0 and must declare that it served the
+    # reference; the timing pair actually serves the candidate on one arm, so
+    # it must declare the opposite. Asserting the byte gate's 0 in isolation
+    # would keep passing if the two ever silently swapped meaning, so the
+    # invariant under test is the equivalence, checked in both directions.
+    assert _declared(runner, "timing_eligible") == "0"
+    assert _declared(runner, "production_enabled") == "0"
+    assert _declared(runner, "reference_always_served") == "1"
+
+    timing = Path(
+        "scripts/fr13_run_b4_fa2_qrow32_gqa_pair_timing.sh"
+    ).read_text(encoding="ascii")
+    assert _declared(timing, "timing_eligible") == "1"
+    assert "reference_always_served" not in timing
+    assert "FR13_FA2_QROW32_B4_PRODUCTION_ARM=\"$production_arm\"" in timing
 
     patcher = Path("scripts/fr13_patch_fa2_tree_bias.py").read_text(
         encoding="ascii"
