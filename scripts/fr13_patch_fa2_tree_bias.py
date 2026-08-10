@@ -849,7 +849,7 @@ struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32KernelTraits> {
 
 template <>
 struct StaticPagedKVStrides<Fr13Fixed32Qrow32KernelTraits> {
-    static constexpr int64_t page = 1024 * 4 * 256;
+    static constexpr int64_t page = 2 * 1024 * 4 * 256;
     static constexpr int64_t row = 4 * 256;
     static constexpr int64_t head = 256;
 };
@@ -934,10 +934,10 @@ void fr13_run_mha_fwd_fixed32_qrow32(
         && params.seqlen_q == 32
         && params.seqlen_q_rounded == 128
         && params.q_head_stride == 256
-        && params.k_batch_stride == 1024 * 4 * 256
+        && params.k_batch_stride == 2 * 1024 * 4 * 256
         && params.k_row_stride == 4 * 256
         && params.k_head_stride == 256
-        && params.v_batch_stride == 1024 * 4 * 256
+        && params.v_batch_stride == 2 * 1024 * 4 * 256
         && params.v_row_stride == 4 * 256
         && params.v_head_stride == 256
         && params.o_head_stride == 256
@@ -1007,7 +1007,7 @@ struct StaticPagedKVBlockSize<Fr13Fixed32Qrow32GqaPairKernelTraits> {
 
 template <>
 struct StaticPagedKVStrides<Fr13Fixed32Qrow32GqaPairKernelTraits> {
-    static constexpr int64_t page = 1024 * 4 * 256;
+    static constexpr int64_t page = 2 * 1024 * 4 * 256;
     static constexpr int64_t row = 4 * 256;
     static constexpr int64_t head = 256;
 };
@@ -1445,10 +1445,10 @@ FIXED32_QUERY_TILE32_API_GATE = r'''    if (params.tree_bias_batch_stride == kFr
             && params.seqlen_q == 32
             && params.seqlen_q_rounded == 128
             && params.q_head_stride == 256
-            && params.k_batch_stride == 1024 * 4 * 256
+            && params.k_batch_stride == 2 * 1024 * 4 * 256
             && params.k_row_stride == 4 * 256
             && params.k_head_stride == 256
-            && params.v_batch_stride == 1024 * 4 * 256
+            && params.v_batch_stride == 2 * 1024 * 4 * 256
             && params.v_row_stride == 4 * 256
             && params.v_head_stride == 256
             && params.o_head_stride == 256
@@ -1514,10 +1514,10 @@ FIXED32_QUERY_GQA_PAIR32_API_GATE = r'''    if (params.tree_bias_batch_stride ==
             && params.seqlen_q == 32
             && params.seqlen_q_rounded == 128
             && params.q_head_stride == 256
-            && params.k_batch_stride == 1024 * 4 * 256
+            && params.k_batch_stride == 2 * 1024 * 4 * 256
             && params.k_row_stride == 4 * 256
             && params.k_head_stride == 256
-            && params.v_batch_stride == 1024 * 4 * 256
+            && params.v_batch_stride == 2 * 1024 * 4 * 256
             && params.v_row_stride == 4 * 256
             && params.v_head_stride == 256
             && params.o_head_stride == 256
@@ -2657,7 +2657,7 @@ def _patch_fixed32_query_tile32_fused_initial_kv_page(
         static_assert(kStaticPageBlockSize == 1024);
         static_assert(
             kStaticKVPageStride
-            == (kStaticSequences == 1 ? 2 : 1) * 1024 * 4 * 256);
+            == 2 * 1024 * 4 * 256);
         static_assert(kStaticKVRowStride == 4 * 256);
         auto final_block_size = binfo.actual_seqlen_k - (n_block_max - 1) * kBlockN;
         const int64_t initial_kv_page_offset =
@@ -4180,7 +4180,7 @@ def _fr13_fa2_qrow32_live_ab_register(
         ),
         (
             "key_cache.stride",
-            tuple(key_cache.stride()) == (1024 * 4 * 256, 4 * 256, 256, 1),
+            tuple(key_cache.stride()) == (2 * 1024 * 4 * 256, 4 * 256, 256, 1),
             tuple(key_cache.stride()),
         ),
         (
