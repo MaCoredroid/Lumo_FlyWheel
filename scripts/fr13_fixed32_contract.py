@@ -2984,6 +2984,8 @@ def _expected_runtime_fa2_identity(
     qrow32_b1_production = env.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
     qrow32_b4_live = env.get("FR13_FA2_QROW32_LIVE_PAGED_AB", "0")
     qrow32_b4_arm = env.get("FR13_FA2_QROW32_LIVE_PAGED_AB_ARM", "")
+    qrow32_b4_timing = env.get("FR13_FA2_QROW32_B4_TIMING_ARM", "")
+    qrow32_b4_production = env.get("FR13_FA2_QROW32_B4_PRODUCTION_ARM", "")
     for name, value in (
         ("FR13_FA2_QROW16_LIVE_PAGED_AB", live),
         ("FR13_FA2_QROW16_PRODUCTION", production),
@@ -3016,6 +3018,39 @@ def _expected_runtime_fa2_identity(
         raise ContractError("qrow32 B4 live gate and arm must be enabled together")
     if qrow32_b4_live == "1" and (live == "1" or production == "1"):
         raise ContractError("qrow16 and qrow32 B4 selectors are mutually exclusive")
+    if qrow32_b4_timing not in {"", "stock_dispatch", "gqa_pair"}:
+        raise ContractError(
+            "FR13_FA2_QROW32_B4_TIMING_ARM must be empty, stock_dispatch, "
+            "or gqa_pair"
+        )
+    if qrow32_b4_production not in {"", "gqa_pair"}:
+        raise ContractError(
+            "FR13_FA2_QROW32_B4_PRODUCTION_ARM must be empty or gqa_pair"
+        )
+    # The timing pair is a single-variable delta: both arms load the identical
+    # pinned GQA-pair binary and differ only in whether the served decode call
+    # carries the sentinel. The two declarations must therefore agree exactly.
+    if (qrow32_b4_timing == "gqa_pair") != (qrow32_b4_production == "gqa_pair"):
+        raise ContractError(
+            "qrow32 B4 timing and production arms must agree on the served kernel"
+        )
+    if qrow32_b4_timing and (
+        live == "1"
+        or production == "1"
+        or qrow32_b4_live == "1"
+        or qrow32_b1_live
+        or qrow32_b1_production
+    ):
+        raise ContractError(
+            "qrow32 B4 timing and other private FA2 selectors are mutually exclusive"
+        )
+    if qrow32_b4_timing:
+        if env.get("FR13_FA2_QROW32_SO_SHA256", "") != QROW32_B4_GQA_PAIR_FA2_SHA256:
+            raise ContractError(
+                "qrow32 B4 timing runtime FA2 declaration is not the pinned "
+                "GQA-pair candidate"
+            )
+        return QROW32_B4_GQA_PAIR_FA2_SIZE, QROW32_B4_GQA_PAIR_FA2_SHA256
     if qrow32_b1_live or qrow32_b1_production:
         declared_sha256 = env.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
         expected = (
