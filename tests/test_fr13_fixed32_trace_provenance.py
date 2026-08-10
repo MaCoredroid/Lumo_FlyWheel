@@ -3364,3 +3364,314 @@ def test_fixed32_provenance_rejects_trace_version_or_postrun_digest(
             task_auth_before=_task_evidence(task_key_id, 0, 1),
             task_auth_after=_task_evidence(task_key_id, 13, 53),
         )
+
+
+# ------------------------------------------------- no-patch terminal record
+# A trajectory that ends without submitting a patch is legal traffic under
+# temp-0.6 canonical sampling, and SWE-bench scores that instance unresolved.
+# The eval worker never invokes the harness on an empty prediction, so it can
+# report no harness exit code; the runner writes an explicit synthetic terminal
+# instead and the traffic audit accepts exactly that record.
+
+_NO_PATCH_MODEL_ID = "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a"
+_NO_PATCH_EVAL_HOST = "mark-Alienware-Aurora-ACT1250"
+
+
+def _no_patch_worker_report(task_id: str = TASK_A) -> dict[str, Any]:
+    """The record the x86 eval worker writes when it skips the harness."""
+    return {
+        "instance_id": task_id,
+        "verdict": "failed",
+        "passed": False,
+        "failure_mode": "patch_apply_failed",
+        "error": "empty_patch",
+        "arch": "x86_64",
+        "eval_host": _NO_PATCH_EVAL_HOST,
+        "eval_wall_clock_seconds": 0.0,
+    }
+
+
+def _synthesized_no_patch_terminal(task_id: str = TASK_A) -> dict[str, Any]:
+    runner = _load_runner()
+    terminal = runner._synthetic_no_patch_eval_report(
+        _no_patch_worker_report(task_id),
+        instance_id=task_id,
+        dataset_name=floor_gate.SWE_VERIFIED_DATASET,
+        model_name=_NO_PATCH_MODEL_ID,
+        patch_text="",
+    )
+    assert terminal is not None
+    return terminal
+
+
+def _no_patch_task_dir(
+    root: Path,
+    task_id: str = TASK_A,
+) -> tuple[Path, dict[str, Any], dict[str, Any]]:
+    task_dir = root / task_id
+    (task_dir / "eval").mkdir(parents=True)
+    (task_dir / "patch.diff").write_bytes(b"")
+    (task_dir / "qwen_trace.jsonl").write_text(
+        "".join(
+            json.dumps(event) + "\n"
+            for event in _reasoning_only_final_qwen_result_trace()
+        ),
+        encoding="utf-8",
+    )
+    (task_dir / "eval" / "predictions.jsonl").write_text(
+        json.dumps(
+            {
+                "instance_id": task_id,
+                "model_name_or_path": _NO_PATCH_MODEL_ID,
+                "model_patch": "",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    terminal = _synthesized_no_patch_terminal(task_id)
+    (task_dir / "eval" / "eval_report.json").write_text(
+        json.dumps(terminal, indent=2),
+        encoding="utf-8",
+    )
+    metadata = {
+        "instance_id": task_id,
+        "dataset_name": floor_gate.SWE_VERIFIED_DATASET,
+        "patch_bytes": 0,
+        "eval_report": terminal,
+        "ended_at": "2026-08-10T20:46:28Z",
+    }
+    (task_dir / "runner_metadata.json").write_text(
+        json.dumps(metadata, indent=2),
+        encoding="utf-8",
+    )
+    return task_dir, metadata, terminal
+
+
+def _accept_no_patch(
+    task_dir: Path,
+    metadata: dict[str, Any],
+    terminal: dict[str, Any],
+) -> None:
+    floor_gate._fixed32_no_patch_eval_terminal(
+        terminal,
+        task_dir=task_dir,
+        task_id=metadata["instance_id"],
+        metadata=metadata,
+        metadata_path=task_dir / "runner_metadata.json",
+    )
+
+
+def test_runner_rewrites_a_no_patch_worker_record_into_an_honest_terminal(
+) -> None:
+    terminal = _synthesized_no_patch_terminal()
+    assert terminal == {
+        "schema": floor_gate.FIXED32_SYNTHETIC_NO_PATCH_EVAL_SCHEMA,
+        "track": "swe_bench",
+        "instance_id": TASK_A,
+        "model_id": _NO_PATCH_MODEL_ID,
+        "dataset_name": floor_gate.SWE_VERIFIED_DATASET,
+        "verdict": "failed",
+        "passed": False,
+        "failure_mode": "patch_apply_failed",
+        "error": "empty_patch",
+        "synthetic_no_patch": True,
+        "harness_invoked": False,
+        "harness_exit_code": None,
+        "patch_bytes": 0,
+        "eval_wall_clock_seconds": 0.0,
+        "arch": "x86_64",
+        "eval_host": _NO_PATCH_EVAL_HOST,
+        "worker_report": _no_patch_worker_report(),
+    }
+    # The record never claims a harness ran, and it quotes the worker verbatim.
+    assert terminal["harness_invoked"] is False
+    assert terminal["harness_exit_code"] is None
+    assert terminal["worker_report"] == _no_patch_worker_report()
+
+
+@pytest.mark.parametrize(
+    "patch_text,mutate",
+    (
+        # A submission that exists is evaluated by the harness, not synthesized.
+        ("diff --git a b\n", lambda report: None),
+        # The harness ran, so its own verdict stands.
+        ("", lambda report: report.__setitem__("harness_exit_code", 0)),
+        # A crashed eval must never become a no-patch failure.
+        ("", lambda report: report.__setitem__("verdict", "crash")),
+        ("", lambda report: report.__setitem__("failure_mode", "infra_error")),
+        ("", lambda report: report.__setitem__("error", "patch_missing")),
+        ("", lambda report: report.__setitem__("passed", True)),
+        ("", lambda report: report.__setitem__("instance_id", "other__task-1")),
+        # A nonzero eval wall clock means the worker did more than skip.
+        ("", lambda report: report.__setitem__("eval_wall_clock_seconds", 12.5)),
+        ("", lambda report: report.pop("arch")),
+    ),
+)
+def test_runner_declines_to_synthesize_anything_but_an_empty_submission(
+    patch_text: str,
+    mutate: Any,
+) -> None:
+    runner = _load_runner()
+    report = _no_patch_worker_report()
+    mutate(report)
+    assert (
+        runner._synthetic_no_patch_eval_report(
+            report,
+            instance_id=TASK_A,
+            dataset_name=floor_gate.SWE_VERIFIED_DATASET,
+            model_name=_NO_PATCH_MODEL_ID,
+            patch_text=patch_text,
+        )
+        is None
+    )
+
+
+def test_audit_accepts_the_honest_no_patch_terminal(tmp_path: Path) -> None:
+    task_dir, metadata, terminal = _no_patch_task_dir(tmp_path)
+    _accept_no_patch(task_dir, metadata, terminal)
+    # The persisted eval artifact is the same record the metadata carries, so
+    # the audit's byte-identity clause holds for the synthesized terminal too.
+    assert (
+        floor_gate.exact_json(
+            task_dir / "eval" / "eval_report.json",
+            label="eval_report",
+        )
+        == metadata["eval_report"]
+    )
+
+
+def test_audit_rejects_the_truncated_worker_record_the_gate_used_to_see(
+    tmp_path: Path,
+) -> None:
+    """The pre-fix on-disk shape stays rejected -- the fix is not a loosening."""
+    task_dir, metadata, _terminal = _no_patch_task_dir(tmp_path)
+    truncated = _no_patch_worker_report()
+    metadata["eval_report"] = truncated
+    assert "schema" not in truncated
+    assert "harness_exit_code" not in truncated
+    assert "dataset_name" not in truncated
+    with pytest.raises(floor_gate.GateError):
+        _accept_no_patch(task_dir, metadata, truncated)
+
+
+def _drop_result_event(task_dir: Path) -> None:
+    """A killed trajectory never emits its terminal result event."""
+    lines = (task_dir / "qwen_trace.jsonl").read_text().splitlines(True)
+    (task_dir / "qwen_trace.jsonl").write_text("".join(lines[:-1]))
+
+
+def _error_result_event(task_dir: Path) -> None:
+    lines = (task_dir / "qwen_trace.jsonl").read_text().splitlines()
+    final = json.loads(lines[-1])
+    final["is_error"] = True
+    final["subtype"] = "error_during_execution"
+    lines[-1] = json.dumps(final)
+    (task_dir / "qwen_trace.jsonl").write_text("\n".join(lines) + "\n")
+
+
+@pytest.mark.parametrize(
+    "corrupt",
+    (
+        # A crashed or aborted trajectory is not a task that declined to submit.
+        lambda task_dir, metadata, terminal: _drop_result_event(task_dir),
+        lambda task_dir, metadata, terminal: _error_result_event(task_dir),
+        lambda task_dir, metadata, terminal: (
+            task_dir / "orchestrator_crash.json"
+        ).write_text("{}", encoding="utf-8"),
+        lambda task_dir, metadata, terminal: (
+            task_dir / "qwen_trace.jsonl"
+        ).unlink(),
+        # The submission must really have been empty.
+        lambda task_dir, metadata, terminal: (
+            task_dir / "patch.diff"
+        ).write_text("diff --git a b\n", encoding="utf-8"),
+        lambda task_dir, metadata, terminal: metadata.pop("patch_bytes"),
+        lambda task_dir, metadata, terminal: metadata.__setitem__(
+            "patch_bytes", 1872
+        ),
+        lambda task_dir, metadata, terminal: (
+            task_dir / "eval" / "predictions.jsonl"
+        ).write_text(
+            json.dumps(
+                {
+                    "instance_id": TASK_A,
+                    "model_name_or_path": _NO_PATCH_MODEL_ID,
+                    "model_patch": "diff --git a b\n",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        ),
+        lambda task_dir, metadata, terminal: (
+            task_dir / "eval" / "predictions.jsonl"
+        ).unlink(),
+        # The worker's own record must show the skipped harness.
+        lambda task_dir, metadata, terminal: terminal.pop("worker_report"),
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "worker_report", dict(terminal["worker_report"], verdict="crash")
+        ),
+        lambda task_dir, metadata, terminal: terminal["worker_report"].pop(
+            "error"
+        ),
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "worker_report",
+            dict(terminal["worker_report"], eval_host="somewhere-else"),
+        ),
+        # Nothing looser than the exact synthetic record is accepted.
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "harness_exit_code", 0
+        ),
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "harness_invoked", True
+        ),
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "verdict", "resolved"
+        ),
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "passed", True
+        ),
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "synthetic_no_patch", False
+        ),
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "dataset_name", "princeton-nlp/SWE-bench"
+        ),
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "instance_id", "other__task-1"
+        ),
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "eval_wall_clock_seconds", 12.5
+        ),
+        lambda task_dir, metadata, terminal: terminal.__setitem__(
+            "patch_bytes", 1872
+        ),
+        lambda task_dir, metadata, terminal: terminal.__setitem__("extra", 1),
+        lambda task_dir, metadata, terminal: terminal.pop("track"),
+    ),
+)
+def test_audit_no_patch_terminal_fails_closed(
+    tmp_path: Path,
+    corrupt: Any,
+) -> None:
+    task_dir, metadata, terminal = _no_patch_task_dir(tmp_path)
+    corrupt(task_dir, metadata, terminal)
+    with pytest.raises(floor_gate.GateError):
+        _accept_no_patch(task_dir, metadata, terminal)
+
+
+def test_traffic_audit_only_relaxes_the_terminal_for_the_synthetic_schema(
+) -> None:
+    source = (SCRIPTS / "fr13_floor_gate.py").read_text(encoding="utf-8")
+    assert (
+        'eval_report.get("schema")\n'
+        "            == FIXED32_SYNTHETIC_NO_PATCH_EVAL_SCHEMA"
+    ) in source
+    # Every other report still has to carry a real harness exit code.
+    assert (
+        'or not isinstance(harness_exit_code, int)\n'
+        "            ):\n"
+        "                raise GateError(\n"
+        '                    f"{metadata_path}: fixed32 task has no terminal '
+        'SWE verdict"'
+    ) in source
