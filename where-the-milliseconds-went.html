@@ -1,0 +1,2069 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Where Every Millisecond Went: A Full Accounting of a 232-Millisecond Decode Step - Lumo FlyWheel Vol. IX</title>
+<meta name="description" content="A complete accounting of a speculative decode step on a Gated-DeltaNet hybrid: what a twelve-week campaign bought, where the remaining 113 milliseconds above the hardware floor actually sit, why the single largest consumer of that time has no legal optimization left, and a second kernel-admission tier for candidates that cannot be byte-identical by construction.">
+<meta property="og:title" content="Where Every Millisecond Went: A Full Accounting of a 232-Millisecond Decode Step">
+<meta property="og:description" content="The step is 232.8 ms against a 119.7 ms hardware floor. This volume prices every phase, every remaining lever, and every candidate - and finds that the 48%-of-envelope target GEMM has no legal lever at all.">
+<meta name="author" content="Mark Ma">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Crect x='10' y='38' width='30' height='10' rx='2' fill='%238bd3dd'/%3E%3Crect x='40' y='38' width='8' height='10' rx='2' fill='%23e7c76f'/%3E%3Crect x='48' y='38' width='6' height='10' rx='2' fill='%23a7d98d'/%3E%3Cpath d='M10 26 h44' stroke='%23d88989' stroke-width='3' stroke-dasharray='5 3'/%3E%3Ctext x='10' y='20' font-family='monospace' font-size='11' fill='%23a8a196'%3Efloor%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #111111;
+    --paper: #171717;
+    --paper-2: #202020;
+    --paper-3: #292929;
+    --ink: #f2efe7;
+    --text: #d8d3c8;
+    --muted: #a8a196;
+    --quiet: #7f776d;
+    --rule: #3b3934;
+    --rule-2: #565147;
+    --cyan: #8bd3dd;
+    --green: #a7d98d;
+    --amber: #e7c76f;
+    --rose: #d88989;
+    --cyan-soft: #193235;
+    --green-soft: #233320;
+    --amber-soft: #3b3018;
+    --rose-soft: #3a2323;
+    --grid-major: rgba(255, 255, 255, 0.025);
+    --grid-minor: rgba(255, 255, 255, 0.018);
+    --grid-opacity: 0.42;
+    --link-underline: rgba(139, 211, 221, 0.36);
+    --soft-panel: rgba(255, 255, 255, 0.018);
+    --soft-panel-2: rgba(255, 255, 255, 0.012);
+    --soft-panel-3: rgba(255, 255, 255, 0.026);
+    --flow-wash: rgba(139, 211, 221, 0.035);
+    --flow-bg: #0c0c0c;
+    --flow-card-bg: #101010;
+    --control-bg: #121212;
+    --green-wash: rgba(167, 217, 141, 0.045);
+    --bias-on-fill: rgba(231, 199, 111, 0.5);
+    --bias-off-fill: rgba(255, 255, 255, 0.03);
+    --bias-off-stroke: rgba(255, 255, 255, 0.08);
+    --callout-fill: rgba(255, 255, 255, 0.02);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f7;
+      --paper: #ffffff;
+      --paper-2: #eef1f0;
+      --paper-3: #dde3e1;
+      --ink: #151715;
+      --text: #303431;
+      --muted: #626a64;
+      --quiet: #7a827d;
+      --rule: #d8ddd9;
+      --rule-2: #b7c0bb;
+      --cyan: #1c7380;
+      --green: #3f7b3a;
+      --amber: #876812;
+      --rose: #a54444;
+      --cyan-soft: #e3f3f5;
+      --green-soft: #e4f2df;
+      --amber-soft: #f3ead2;
+      --rose-soft: #f5dfdf;
+      --grid-major: rgba(18, 24, 22, 0.055);
+      --grid-minor: rgba(18, 24, 22, 0.038);
+      --grid-opacity: 0.55;
+      --link-underline: rgba(28, 115, 128, 0.34);
+      --soft-panel: rgba(18, 24, 22, 0.028);
+      --soft-panel-2: rgba(18, 24, 22, 0.018);
+      --soft-panel-3: rgba(18, 24, 22, 0.038);
+      --flow-wash: rgba(28, 115, 128, 0.075);
+      --flow-bg: #fbfbfa;
+      --flow-card-bg: #ffffff;
+      --control-bg: #f8faf9;
+      --green-wash: rgba(63, 123, 58, 0.08);
+      --bias-on-fill: rgba(135, 104, 18, 0.22);
+      --bias-off-fill: rgba(18, 24, 22, 0.035);
+      --bias-off-stroke: rgba(18, 24, 22, 0.12);
+      --callout-fill: rgba(18, 24, 22, 0.025);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-minor) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: var(--grid-opacity);
+  }
+  ::selection { background: var(--cyan-soft); color: var(--ink); }
+  a {
+    color: var(--cyan);
+    text-decoration: none;
+    border-bottom: 1px solid var(--link-underline);
+  }
+  a:hover { border-bottom-color: currentColor; }
+  a:focus-visible {
+    outline: 3px solid var(--cyan);
+    outline-offset: 3px;
+  }
+  strong { color: var(--ink); font-weight: 720; }
+  code, .mono {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    color: var(--cyan);
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 28px 92px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .brandmark {
+    color: var(--ink);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .topbar nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px 16px;
+  }
+  .topbar a {
+    color: var(--muted);
+    border-bottom-color: transparent;
+  }
+  .topbar a:hover { color: var(--cyan); }
+
+  header.hero {
+    min-height: 88vh;
+    display: grid;
+    align-content: center;
+    padding: 52px 0 42px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .kicker {
+    margin: 0 0 18px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h1 {
+    max-width: 980px;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: clamp(42px, 7vw, 82px);
+    line-height: 1.02;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .title-subtitle {
+    max-width: 820px;
+    margin: 14px 0 0;
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+  .subhead {
+    max-width: 900px;
+    margin: 18px 0 0;
+    color: var(--text);
+    font-size: 21px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .hero-tldr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.46fr);
+    gap: 22px;
+    align-items: end;
+    max-width: 980px;
+    margin: 26px 0 0;
+    padding: 18px 0 20px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero-tldr p {
+    margin: 0;
+    color: var(--text);
+  }
+  .hero-tldr .tldr-copy {
+    max-width: 68ch;
+    font-size: 18px;
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+  .hero-result {
+    justify-self: end;
+    width: min(100%, 330px);
+  }
+  .hero-number {
+    display: block;
+    color: var(--green);
+    font-family: var(--serif);
+    font-size: clamp(40px, 4.3vw, 62px);
+    line-height: 0.96;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .hero-result p {
+    margin-top: 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: 28px 0 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .byline span:not(:first-child)::before {
+    content: "/";
+    color: var(--rule-2);
+    margin-right: 14px;
+  }
+  .paper-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 34px 0 0;
+  }
+  .paper-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .paper-nav a:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+
+  .section {
+    margin: 74px 0;
+  }
+  .section h2 {
+    max-width: 780px;
+    margin: 0 0 16px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1.12;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .section h3 {
+    margin: 0 0 8px;
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1.3;
+  }
+  .section > p,
+  .main-col > p {
+    max-width: 74ch;
+    margin: 0 0 18px;
+    text-wrap: pretty;
+  }
+  .main-col > p:last-child,
+  .section > p:last-child { margin-bottom: 0; }
+
+  .abstract-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    margin-top: 34px;
+  }
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 22px;
+  }
+  .panel h2,
+  .panel h3 {
+    margin: 0 0 12px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .panel p {
+    margin: 0 0 14px;
+  }
+  .panel p:last-child { margin-bottom: 0; }
+  .claim-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .claim {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .claim:last-child { border-bottom: 0; padding-bottom: 0; }
+  .claim .state {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    color: var(--muted);
+  }
+  .claim p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .state.pass { color: var(--green); }
+  .state.warn { color: var(--amber); }
+  .state.info { color: var(--cyan); }
+
+  .sidenote {
+    color: var(--muted);
+    border-left: 1px solid var(--rule-2);
+    padding-left: 13px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .sidenote::before {
+    content: "plain explanation";
+    display: block;
+    margin-bottom: 7px;
+    color: var(--amber);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .sidenote p {
+    margin: 0 0 10px;
+  }
+  .sidenote p:last-child { margin-bottom: 0; }
+
+  .figure {
+    margin: 28px 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px;
+    overflow: hidden;
+  }
+  .figure-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .figure-head strong { color: var(--cyan); }
+  .caption {
+    max-width: 78ch;
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .diagram text {
+    font-family: var(--mono);
+    fill: var(--text);
+    font-size: 13px;
+  }
+  .diagram .label {
+    fill: var(--ink);
+    font-weight: 800;
+  }
+  .diagram .tiny {
+    fill: var(--muted);
+    font-size: 11px;
+  }
+  .diagram .node {
+    fill: var(--paper-2);
+    stroke: var(--rule-2);
+    stroke-width: 1.2;
+  }
+  .diagram .node-cyan { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .diagram .node-green { fill: var(--green-soft); stroke: var(--green); }
+  .diagram .node-amber { fill: var(--amber-soft); stroke: var(--amber); }
+  .diagram .node-rose { fill: var(--rose-soft); stroke: var(--rose); }
+  .diagram .edge {
+    stroke: var(--rule-2);
+    stroke-width: 1.6;
+    fill: none;
+  }
+  .diagram .arrow {
+    stroke: var(--cyan);
+    stroke-width: 1.6;
+    fill: none;
+    marker-end: url(#arrow);
+  }
+  .diagram .dash {
+    stroke-dasharray: 6 5;
+  }
+
+  .flow-figure {
+    clear: both;
+    background:
+      linear-gradient(180deg, var(--flow-wash), transparent 36%),
+      var(--flow-bg);
+    overflow-x: auto;
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  .flow-figure.is-paused .flow-edge,
+  .flow-figure.is-paused .flow-node,
+  .flow-figure.is-paused .bias-on,
+  .flow-figure.is-paused .scan-window,
+  .flow-figure.is-paused .cache-cursor {
+    animation-play-state: paused;
+  }
+  .flow-control {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--control-bg);
+    color: var(--text);
+    font: 800 12px var(--mono);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1), color 160ms cubic-bezier(0.25, 1, 0.5, 1), background 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .flow-control:hover,
+  .flow-control:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-why {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 16px 0 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--rule);
+  }
+  .flow-why div {
+    background: var(--flow-card-bg);
+    padding: 13px 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .flow-why strong {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .code-grounding {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .code-grounding a {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 7px 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .code-grounding a:hover,
+  .code-grounding a:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-svg .lane {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-title {
+    fill: var(--ink);
+    font: 800 16px var(--mono);
+  }
+  .flow-svg .flow-sub {
+    fill: var(--muted);
+    font: 12px var(--mono);
+  }
+  .flow-svg .math {
+    fill: var(--text);
+    font: 13px var(--mono);
+  }
+  .flow-svg .native-fill { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .flow-svg .tree-fill { fill: var(--green-soft); stroke: var(--green); }
+  .flow-svg .fa-fill { fill: var(--amber-soft); stroke: var(--amber); }
+  .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .bad-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .meta-fill {
+    fill: var(--soft-panel-3);
+    stroke: var(--rule-2);
+  }
+  .flow-svg .kernel-card {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-node {
+    stroke-width: 1.4;
+    animation: nodePulse 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .flow-svg .flow-node.s2 { animation-delay: 0.35s; }
+  .flow-svg .flow-node.s3 { animation-delay: 0.7s; }
+  .flow-svg .flow-edge {
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 10 9;
+    animation: flowDash 2.4s linear infinite;
+  }
+  .flow-svg .native-edge { stroke: var(--cyan); }
+  .flow-svg .tree-edge { stroke: var(--green); animation-duration: 2.9s; }
+  .flow-svg .fa-edge { stroke: var(--amber); animation-duration: 2.1s; }
+  .flow-svg .warn-edge { stroke: var(--amber); animation-duration: 3s; }
+  .flow-svg .commit-edge { stroke: var(--rose); animation-duration: 3.2s; }
+  .flow-svg .bad-edge {
+    stroke: var(--rose);
+    stroke-dasharray: 7 8;
+    animation-duration: 3.8s;
+  }
+  .flow-svg .quiet-edge {
+    stroke: var(--rule-2);
+    stroke-dasharray: 2 8;
+    animation-duration: 4.4s;
+  }
+  .flow-svg .bias-on {
+    fill: var(--bias-on-fill);
+    animation: biasGlow 2.6s ease-in-out infinite;
+  }
+  .flow-svg .bias-off {
+    fill: var(--bias-off-fill);
+    stroke: var(--bias-off-stroke);
+  }
+  .flow-svg .code-label {
+    fill: var(--cyan);
+    font: 11px var(--mono);
+  }
+  .flow-svg .callout {
+    fill: var(--callout-fill);
+    stroke: var(--rule-2);
+    stroke-width: 1;
+  }
+  .flow-svg .scan-window {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    animation: scanWindow 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .flow-svg .cache-cursor {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+  }
+  .flow-svg .legend-dot { stroke: none; }
+  @keyframes flowDash {
+    to { stroke-dashoffset: -38; }
+  }
+  @keyframes nodePulse {
+    0%, 100% { opacity: 0.82; }
+    45%, 55% { opacity: 1; stroke-width: 2.7; }
+  }
+  @keyframes biasGlow {
+    0%, 100% { opacity: 0.48; }
+    50% { opacity: 1; }
+  }
+  @keyframes scanWindow {
+    0%, 100% { transform: translateX(0); opacity: 0.65; }
+    50% { transform: translateX(96px); opacity: 1; }
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.52fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .mini-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .mini-card p {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .mini-card p:last-child { margin-bottom: 0; }
+
+  .definition-box,
+  .glossary-strip {
+    margin: 22px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel);
+  }
+  .definition-box {
+    max-width: 900px;
+    padding: 16px 18px;
+  }
+  .definition-box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .glossary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+  }
+  .glossary-strip div {
+    padding: 14px 16px;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .glossary-strip div:nth-child(3n) { border-right: 0; }
+  .glossary-strip div:nth-last-child(-n + 3) { border-bottom: 0; }
+  .glossary-strip dfn {
+    display: block;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .glossary-strip span {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .confidence-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 14px;
+    align-items: start;
+    margin: 20px 0 24px;
+    padding: 15px 17px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--green-wash);
+  }
+  .confidence-row strong {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .confidence-row p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .fold {
+    margin: 26px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel-2);
+    overflow: hidden;
+  }
+  .fold > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    min-height: 58px;
+    padding: 15px 18px;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 850;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary::after {
+    content: "+";
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--cyan);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .fold[open] > summary {
+    border-bottom: 1px solid var(--rule);
+    background: var(--soft-panel);
+  }
+  .fold[open] > summary::after { content: "-"; }
+  .fold > summary small {
+    display: block;
+    grid-column: 1;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .fold-body {
+    padding: 18px;
+  }
+  .fold-body > :first-child { margin-top: 0; }
+  .fold-body > :last-child { margin-bottom: 0; }
+
+  .equation {
+    margin: 22px 0;
+    padding: 18px 20px;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .equation .muted { color: var(--muted); }
+  .equation .hl { color: var(--amber); }
+  .equation .ok { color: var(--green); }
+
+  .source-exhibit {
+    margin: 24px 0;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .source-exhibit .source-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .source-exhibit .source-head strong {
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .source-exhibit pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .source-exhibit code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .source-exhibit .source-note {
+    margin: 0;
+    padding: 0 16px 16px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .source-exhibit > .grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin: 16px;
+  }
+
+  .compare-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin: 24px 0;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--rule);
+  }
+  .compare-strip article {
+    min-height: 100%;
+    padding: 18px;
+    background: var(--paper);
+  }
+  .compare-strip h3 {
+    margin-bottom: 9px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .compare-strip p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .box {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .box .tag {
+    display: inline-flex;
+    margin-bottom: 10px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 760;
+  }
+  .box.good .tag { color: var(--green); background: var(--green-soft); }
+  .box.warn .tag { color: var(--amber); background: var(--amber-soft); }
+  .box.bad .tag { color: var(--rose); background: var(--rose-soft); }
+  .box.info .tag { color: var(--cyan); background: var(--cyan-soft); }
+  .box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--paper);
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  table {
+    border-collapse: collapse;
+    min-width: 760px;
+    width: 100%;
+    font-size: 14px;
+  }
+  caption {
+    caption-side: top;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+    text-align: left;
+  }
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--rule);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--paper-2);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num {
+    font-family: var(--mono);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .pill {
+    display: inline-flex;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .pill.good { color: var(--green); background: var(--green-soft); }
+  .pill.warn { color: var(--amber); background: var(--amber-soft); }
+  .pill.info { color: var(--cyan); background: var(--cyan-soft); }
+  .pill.bad { color: var(--rose); background: var(--rose-soft); }
+
+  .failure-note {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-ledger {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .failure-card {
+    min-width: 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .failure-card.contaminated { border-color: var(--rose); }
+  .failure-card.superseded { border-color: var(--amber); }
+  .failure-card.settled { border-color: var(--rule-2); }
+  .failure-card.open { border-color: var(--cyan); }
+  .failure-card header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .failure-card h3 {
+    margin: 0;
+    min-width: 0;
+    max-width: 58ch;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.25;
+  }
+  .failure-card p {
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-card p:last-child { margin-bottom: 0; }
+  .failure-card ul {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 12px;
+    padding-left: 18px;
+    color: var(--text);
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .failure-card .conclusion {
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    color: var(--text);
+  }
+  .failure-card code { overflow-wrap: anywhere; }
+
+  .shape-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .shape {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .shape h3 {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .shape h3 span {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .path-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .path-list li {
+    padding: 3px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .receipt-list {
+    columns: 2 330px;
+    column-gap: 34px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .receipt-list li {
+    break-inside: avoid;
+    margin: 0 0 12px;
+    font-size: 15px;
+  }
+
+  footer {
+    margin-top: 86px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  @media (min-width: 1040px) {
+    header.hero > .sidenote,
+    .section > .sidenote {
+      float: right;
+      clear: right;
+      width: 282px;
+      margin: 6px 0 20px 34px;
+    }
+  }
+  @media (max-width: 960px) {
+    .page { padding: 0 18px 72px; }
+    .topbar { flex-direction: column; align-items: flex-start; }
+    .topbar nav { justify-content: flex-start; }
+    header.hero { min-height: auto; padding: 26px 0 20px; }
+    h1 { font-size: 40px; }
+    .subhead {
+      margin-top: 18px;
+      font-size: 17px;
+      line-height: 1.48;
+    }
+    .title-subtitle {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .byline span:not(:first-child)::before { content: none; }
+    .abstract-grid, .two-col, .shape-grid, .hero-tldr, .confidence-row { grid-template-columns: 1fr; }
+    .glossary-strip { grid-template-columns: 1fr; }
+    .glossary-strip div,
+    .glossary-strip div:nth-child(3n),
+    .glossary-strip div:nth-last-child(-n + 3) {
+      border-right: 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .glossary-strip div:last-child { border-bottom: 0; }
+    .compare-strip { grid-template-columns: 1fr; }
+    .table-wrap::before,
+    .flow-figure::before {
+      display: inline-flex;
+      position: sticky;
+      left: 8px;
+      z-index: 1;
+      margin: 8px 8px 0;
+      padding: 4px 7px;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      background: var(--paper);
+      color: var(--muted);
+      font: 800 11px var(--mono);
+    }
+    .table-wrap::before { content: "wide table: scroll sideways"; }
+    .flow-figure::before { content: "wide figure: scroll sideways"; }
+    .section { margin: 56px 0; }
+    .section h2 { font-size: 30px; }
+    .hero-result {
+      justify-self: start;
+      width: 100%;
+    }
+    .hero-tldr {
+      gap: 14px;
+      margin-top: 16px;
+      padding: 12px 0 14px;
+    }
+    .hero-tldr .tldr-copy {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .hero-number { font-size: 36px; }
+    .byline { margin-top: 16px; }
+    .paper-nav {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin-top: 18px;
+      padding-bottom: 6px;
+      scrollbar-color: var(--rule-2) transparent;
+    }
+    .paper-nav a {
+      flex: 0 0 auto;
+    }
+    .sidenote {
+      display: block;
+      margin: 18px 0 22px;
+      padding: 13px 16px 13px 14px;
+      background: var(--paper-2);
+      border: 1px solid var(--rule);
+      border-left: 1px solid var(--rule-2);
+      border-radius: 7px;
+    }
+    .claim { grid-template-columns: 1fr; gap: 4px; }
+    .flow-figure .flow-svg {
+      width: 960px;
+      max-width: none;
+    }
+    .flow-why { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    .flow-svg .flow-edge,
+    .flow-svg .flow-node,
+    .flow-svg .bias-on,
+    .flow-svg .scan-window,
+    .flow-svg .cache-cursor {
+      animation: none !important;
+    }
+    .flow-svg .flow-edge { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brandmark">Lumo FlyWheel / Serving Lab</div>
+    <nav aria-label="Site navigation">
+      <a href="index.html">Vol. I</a>
+      <a href="round-f.html">Vol. II</a>
+      <a href="gdn-tree-scan.html">Vol. III</a>
+      <a href="gdn-prefix-cache.html">Vol. IV</a>
+      <a href="stateless-tree.html">Vol. V</a>
+      <a href="spine-reorder.html">Vol. VI</a>
+      <a href="keep-or-replay.html">Vol. VII</a>
+      <a href="every-lever.html">Vol. VIII</a>
+      <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Repository</a>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <p class="kicker">Volume IX / illustrated systems paper</p>
+    <h1>Where Every Millisecond Went</h1>
+    <p class="title-subtitle">A Full Accounting of a 232-Millisecond Decode Step &mdash; What the Campaign Bought, Where the Remaining Time Sits, and Why the Largest Consumer of It Has No Legal Lever Left</p>
+    <p class="subhead"><a href="every-lever.html">Vol.&nbsp;VIII</a> inventoried sixteen speed attempts and ended with a deficit that had changed shape: no longer a per-event tax, but a fixed per-step one. This volume is what happened when we went after that fixed cost with a real profiler and a hard target &mdash; the mandatory weight-read floor of the machine itself. The result is the most complete accounting this series has produced: every phase of the step priced, every remaining lever ranked <em>legal</em>, <em>blocked</em>, or <em>dead</em>, and a byte model cross-checked five independent ways against 4.3&nbsp;million profiled kernel rows. The campaign's own headline is a win &mdash; the step is down roughly a third and the quality regression of earlier volumes is gone &mdash; and the accounting's headline is a refusal: <strong>the single kernel class that consumes 48% of the step has no legal optimization remaining</strong>, and everything still legal adds up to a fifth of what closing the target would require.</p>
+    <div class="hero-tldr" aria-label="TLDR and headline result">
+      <p class="tldr-copy"><strong>TL;DR:</strong> <strong>What the campaign bought.</strong> The batch-one step is <strong>232.780&nbsp;ms</strong> at <strong>24.72&nbsp;tok/s</strong>, accepting <strong>4.754</strong> drafts per event and committing <strong>5.754</strong> tokens &mdash; down from roughly <strong>342&nbsp;ms/step</strong> eleven days earlier on the prior arm, with the drafter cut 61%, the verify forward 27%, and the committer 25%. Quality, which earlier volumes lost, is back: four arms on one binary at <strong>9&ndash;11 of 16</strong> resolved with <strong>zero give-ups</strong> and zero crashes, against a garble-era low of 6/16 with five give-ups. Deployment concurrency was unblocked too &mdash; effective decode batch <strong>1.3&nbsp;&rarr;&nbsp;3.20</strong>, byte-identical at batch one. <strong>What the accounting found.</strong> Against a mandatory weight-read floor of <strong>119.658&nbsp;ms/step</strong> the step sits at <strong>1.945&times;</strong>, and the profiler says the biggest piece of that is untouchable: the target GEMM is <strong>114.812&nbsp;ms/step, 48.4% of the envelope</strong>, already fully graph-captured, already at <strong>85.8% of the 273&nbsp;GB/s roofline</strong>, with <em>no wave-quantization penalty at all</em> &mdash; the shapes that leave a sixth of the machine idle run <em>faster per byte</em> than the ones that fill it. Every scheduler lever held in reserve against it &mdash; persistent kernels, megakernel fusion, stream ordering, L2 policy &mdash; is worth a combined <strong>0.009&nbsp;ms/step</strong>. <strong>What is left.</strong> The recoverable time is elsewhere and mostly host-side: a <strong>10.08&nbsp;ms/step</strong> idle tail where the GPU waits on Python, <strong>3.45&nbsp;ms</strong> from fusing a two-level scan whose first level is 7.36&times; less efficient than its second, and an attention kernel running <strong>4.93&times; above its own key-value floor</strong> because each KV byte is staged twelve times. Summed and priced honestly, the entire legal ladder is <strong>19.4&nbsp;ms/step</strong> against a <strong>95.2&nbsp;ms/step</strong> gap to the acceptance cap. It does not close. That conclusion, not a speedup, is this volume's deliverable &mdash; along with <strong>Tier&nbsp;B</strong>, a second kernel-admission tier for candidates that cannot be byte-identical <em>by construction</em> rather than by defect, which unblocks up to 17&nbsp;ms of the wall and still does not change the arithmetic.</p>
+      <div class="hero-result">
+        <span class="hero-number">232.8 ms</span>
+        <p><strong>the batch-one step, against a 119.658&nbsp;ms hardware floor</strong> &mdash; <strong>1.945&times;</strong>, or <strong>113.1&nbsp;ms/step</strong> above the mandatory weight read. Of that overage, <strong>19.4&nbsp;ms</strong> is legal to attack and <strong>10&ndash;14&nbsp;ms</strong> realistic. Clearing the campaign's acceptance cap of 137.607&nbsp;ms/step needs a <strong>40.9%</strong> wall reduction. Applying every legal lever perfectly lands near <strong>213&nbsp;ms/step</strong> &mdash; still 1.55&times; the cap. The gap is not a scheduling problem; it is arithmetic, and the exact-math rule is what stands between the campaign and the only class of change that could close it.</p>
+      </div>
+    </div>
+    <div class="byline">
+      <span><strong>Mark Ma</strong></span>
+      <span>ML systems / inference</span>
+      <span>Qwen 3.6-27B FP8 / GB10</span>
+      <span>August 2026</span>
+    </div>
+    <div class="paper-nav">
+      <a href="#abstract">Abstract</a>
+      <a href="#reader-map">Reader map</a>
+      <a href="#achieved">What was bought</a>
+      <a href="#anatomy">Anatomy of a step</a>
+      <a href="#gemm">The GEMM verdict</a>
+      <a href="#elsewhere">Where the time is</a>
+      <a href="#ladder">The ladder</a>
+      <a href="#null">The null result</a>
+      <a href="#b4">Batch four</a>
+      <a href="#tierb">Tier B</a>
+      <a href="#limitations">Limits</a>
+      <a href="#future">Future work</a>
+      <a href="#receipts">Source trail</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="abstract">
+      <h2>Abstract</h2>
+      <p>This volume prices a speculative decode step. Not a lever, not an ablation &mdash; the whole step, phase by phase and kernel class by kernel class, against the one number the hardware will not negotiate: the time it takes to read the model's weights out of memory once. On a GB10 with 273&nbsp;GB/s of unified LPDDR5X and 27&nbsp;GB of FP8 weights, that mandatory read is <strong>119.658&nbsp;ms per step</strong>. Our step is <strong>232.780&nbsp;ms</strong>. Everything here is an account of the difference.</p>
+      <p>Two things are worth saying before the accounting, because they are what makes it possible. First, the campaign works. Over the weeks covered by <a href="every-lever.html">Vol.&nbsp;VIII</a> and this one, the batch-one step came down from roughly 342&nbsp;ms to 232.8, the drafter fell by 61%, the deployment scheduler stopped serialising a four-request queue into an effective batch of 1.3, and the agentic quality regression that dominated Volumes V and VI closed completely &mdash; four arms on one binary now resolve 9&ndash;11 of 16 with <em>zero</em> give-ups, where the garble-era tree burned 9.6 agent-hours failing to converge on five tasks. Second, the accounting is only meaningful because of a rule that has governed every candidate in this series: <strong>exact math</strong>. A kernel is admitted when its output tensors are bit-for-bit identical to the incumbent's on a real authenticated event. That rule is why 232.780 and 119.658 can be compared at all, and it is also, as this volume shows, the binding constraint on everything left.</p>
+      <p>The accounting itself is built on a 219&nbsp;MB Nsight capture &mdash; 4,324,314 GPU kernel rows, 4,105,181 CUDA runtime rows, 1,146 complete step instances &mdash; exported to SQL and reduced offline. Its central finding is a negative one, and it concerns the largest single consumer of time in the step. The target GEMM &mdash; the projections that make up the model's forward pass &mdash; is <strong>114.812&nbsp;ms/step, 48.4% of the envelope</strong>, and it has <em>no legal scheduler lever</em>. It is already one CUDA graph with a mean inter-node gap of 213&nbsp;nanoseconds. It already runs at 85.8% of the memory roofline. And it has no wave-quantization penalty whatsoever: the launch shapes that leave eight of forty-eight streaming multiprocessors idle for the kernel's entire duration achieve <strong>214.7&ndash;220.6&nbsp;GB/s</strong>, matching or beating the shapes that fill the machine at 216.2. Under-filling the GPU costs nothing here, because the memory controller, not the SM count, is the limit. Persistent scheduling, megakernel fusion, graph-node fusion, stream ordering and L2 policy are worth a <em>combined</em> 0.009&nbsp;ms/step against it.</p>
+      <p>The recoverable time is elsewhere, and it is mostly not on the GPU at all. A 10.08&nbsp;ms/step idle tail sits after the drafter, of which roughly 7.8&nbsp;ms is host Python outside any CUDA call. A two-level recurrent scan wastes 3.45&nbsp;ms/step because its first level is <em>7.36&times; less efficient per unit of work</em> than its second &mdash; a five-deep serial chain holding the whole GPU while doing 6% of the work. And the attention kernel runs <strong>4.93&times; above its own key-value read floor</strong>, because forty-eight thread blocks stage the same four KV heads and each byte is therefore fetched twelve times. That last one is worth 17.03&nbsp;ms and is blocked, not dead: the fix is a tile-geometry change that reassociates a floating-point reduction and therefore cannot be byte-identical.</p>
+      <p>Summed, ranked, and priced against the evidence, the full legal ladder is <strong>19.4&nbsp;ms/step</strong> &mdash; 10 to 14 realistic. The gap to the acceptance cap is <strong>95.2&nbsp;ms/step</strong>. Applying everything legal lands near 213&nbsp;ms/step, still 1.55&times; the cap. <em>The ladder cannot close the gap.</em> Only arithmetic changes could, and the exact-math rule bars them. Publishing that conclusion, with the measurement that forces it, is the deliverable &mdash; alongside a composed six-kernel stack that measured null at <strong>1.0016&times; stock step wall</strong>, six frontier branches disposed with zero merges, three kernel families deleted from the serving path, and <strong>Tier&nbsp;B</strong>: a second admission tier, with a hard mechanical invariant on the rejection sampler, for candidates whose only deviation from byte identity is the order in which floating-point numbers were added.</p>
+
+      <div class="definition-box" aria-label="How this accounting is reported">
+        <p><strong>How every number in this paper is scoped:</strong> a measurement carries its <em>arm</em>, its <em>batch size</em>, and its <em>basis</em> in the same sentence, because in this workload all three move it. The profiled numbers come from an attribution capture where <code>acceptance_valid=false</code> &mdash; they localise time, they are not acceptance evidence, and host-side totals inside them carry profiler inflation that is called out where it matters. The step-wall numbers come from a separate canonical timing arm. Modelled figures are labelled <em>modelled</em> and carry the model that produced them. Where a bandwidth is quoted, it is derived from measured durations plus a byte model, not from hardware counters &mdash; the capture has no metric sampling &mdash; and that byte model is cross-checked five independent ways in <a href="#gemm">the GEMM section</a>.</p>
+      </div>
+
+      <h3>Names in this paper</h3>
+      <div class="glossary-strip" aria-label="Names in this paper">
+        <div><dfn>the floor</dfn><span>119.658&nbsp;ms/step &mdash; the mandatory read of the model's weights out of LPDDR5X, once per step. Nothing legal goes below it.</span></div>
+        <div><dfn>the cap</dfn><span>137.607&nbsp;ms/step &mdash; 1.15&times; the floor, the campaign's declared acceptance threshold. We are at 232.8.</span></div>
+        <div><dfn>SFWD / DFWD / CFWD</dfn><span>the three spans of a speculative step: the verify forward, the drafter's proposal, the committer's write-back.</span></div>
+        <div><dfn>target GEMM</dfn><span>the model's projection matrix multiplies inside the verify forward &mdash; 48.4% of the step and the subject of this volume's central negative result.</span></div>
+        <div><dfn>roofline</dfn><span>273&nbsp;GB/s, the machine's unified memory bandwidth, shared between CPU and GPU. A streaming weight read cannot beat it.</span></div>
+        <div><dfn>wave quantization</dfn><span>the classic penalty for launching a thread-block count that does not divide evenly into the machine. Measured here at zero.</span></div>
+        <div><dfn>exact math</dfn><span>the campaign's admission rule: a candidate kernel's outputs must be bit-for-bit identical to the incumbent's. Called Tier&nbsp;A below.</span></div>
+        <div><dfn>Tier B</dfn><span>the new second tier, for kernels that are byte-impossible by construction because they reassociate a floating-point reduction.</span></div>
+        <div><dfn>eps / events per step</dfn><span>speculative events per step. It multiplies aggregate throughput without making anything faster &mdash; see <a href="#b4">batch four</a>.</span></div>
+        <div><dfn>legal / blocked / dead</dfn><span>the three verdicts on the ladder: available now, available only if the exact-math wall moves, and measured worthless.</span></div>
+        <div><dfn>give-up</dfn><span>an agentic episode that ends with an empty patch for behavioural reasons. The quality metric earlier volumes lost and this one reports at zero.</span></div>
+        <div><dfn>attribution capture</dfn><span>a profiling run that localises time but is not acceptance evidence. Every profiled number here is one.</span></div>
+      </div>
+
+      <div class="abstract-grid">
+        <div class="panel">
+          <h2>Contribution</h2>
+          <p>A complete, evidence-backed accounting of a speculative decode step against the hardware floor, and an attack ladder for what remains with every item labelled legal, blocked, or dead &mdash; including the finding that the largest item on the board has nothing on it. Plus the campaign ledger that makes the accounting worth reading: what twelve weeks of speed and quality work actually bought, stated in the same units.</p>
+          <p>This page is the sequel to <a href="every-lever.html">Vol.&nbsp;VIII</a> and is self-contained. It is deliberately a negative result with a full audit trail. The literature is well supplied with papers reporting the lever that worked; it is poorly supplied with the measurement that says a whole class of levers is worthless on this hardware and why &mdash; which is precisely the thing we would have wanted to read before spending the weeks.</p>
+        </div>
+        <aside class="panel">
+          <h2>Status</h2>
+          <div class="claim-list">
+            <div class="claim"><span class="state pass">STEP DOWN A THIRD</span><p>232.780&nbsp;ms/step at 24.72&nbsp;tok/s, accept 4.754/event &mdash; from ~342&nbsp;ms on the prior arm. Drafter &minus;61%, verify &minus;27%, committer &minus;25%.</p></div>
+            <div class="claim"><span class="state pass">QUALITY RECOVERED</span><p>Four arms, one binary: 9&ndash;11 of 16 resolved, <strong>zero give-ups</strong>, zero crashes over ~9h. The garble-era 6/16-with-five-give-ups regression is closed.</p></div>
+            <div class="claim"><span class="state warn">TARGET NOT MET</span><p>1.945&times; the floor; 95.2&nbsp;ms/step from the cap. The full legal ladder is 19.4&nbsp;ms. It does not close, and we say so.</p></div>
+            <div class="claim"><span class="state warn">COMPOSED STACK NULL</span><p>Six merged kernels, measured together: 1.0016&times; stock step wall. Everything landed; nothing moved.</p></div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="source-exhibit" aria-label="Falsification checks">
+        <div class="source-head">
+          <strong>What would falsify this?</strong>
+          <span>Skeptic checks before trusting the accounting</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">The byte model</span><p>A hardware-counter run &mdash; DRAM traffic, L2 hit rate &mdash; disagreeing with the durations-plus-bytes model here. Every bandwidth figure in this volume is derived, not counted, and the capture has no metric sampling.</p></div>
+          <div class="box bad"><span class="tag">The GEMM verdict</span><p>A persistent or fused target-GEMM implementation measuring materially better than 0.009&nbsp;ms/step, which would mean the 213&nbsp;ns inter-node gap is not the real launch cost.</p></div>
+          <div class="box bad"><span class="tag">The host tail</span><p>Splitting the post-drafter tail with finer instrumentation and finding a genuine data dependency rather than bookkeeping &mdash; which kills the ladder's single largest item.</p></div>
+          <div class="box bad"><span class="tag">Model geometry</span><p>No model config is present in the tree; every dimension in the GEMM analysis is inferred from grid shapes, template parameters and durations. A published config contradicting <code>H=5120</code> would unpick the byte accounting.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="reader-map">
+      <h2>Five-Minute Reader Map</h2>
+      <aside class="sidenote">
+        <p><strong>Read path:</strong> the ledger of what was bought, so the accounting has a subject; then the step taken apart; then the GEMM verdict, which is the paper's spine; then what is actually left. Batch four and Tier&nbsp;B are about how the campaign decides, and are the most portable part.</p>
+      </aside>
+      <p>The shortest version: the campaign is working &mdash; the step is down a third and the quality regression is gone &mdash; and it is not going to reach its target. The profiler says the biggest cost is already at the machine's limit, that the levers held in reserve against it are worth nine microseconds, and that everything still legal adds to a fifth of what would be needed. What remains interesting is where the time <em>is</em> (a host tail, a badly-balanced scan, an attention kernel fetching every byte twelve times) and what the campaign changed about deciding: a promotion rule that rejects gains bought with scheduling luck, and a second admission tier for kernels that arithmetic forbids from ever being byte-identical.</p>
+
+      <div class="source-exhibit" aria-label="Five-minute reading path">
+        <div class="source-head">
+          <strong>Read in this order</strong>
+          <span>The blog path before the full paper path</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">What was bought</span><p>342&nbsp;&rarr;&nbsp;232.8&nbsp;ms/step, drafter &minus;61%, quality back to 9&ndash;11 of 16 with zero give-ups, deployment batch 1.3&nbsp;&rarr;&nbsp;3.20. The wins are real and they are measured.</p></div>
+          <div class="box info"><span class="tag">The step</span><p>Where 237&nbsp;ms of profiled envelope goes: verify 155.8, drafter 35.1, committer 20.7, post-process 12.3, and 15.8&nbsp;ms of idle &mdash; most of it in one tail.</p></div>
+          <div class="box bad"><span class="tag">The GEMM verdict</span><p>48.4% of the step, 85.8% of roofline, zero wave-quantization penalty, 0.009&nbsp;ms of total available lever. The most load-bearing negative result in the series.</p></div>
+          <div class="box warn"><span class="tag">What is left</span><p>A 10.08&nbsp;ms host-idle tail, 3.45&nbsp;ms of scan imbalance, and 17.03&nbsp;ms of attention headroom behind the exact-math wall. Nineteen point four, total.</p></div>
+          <div class="box good"><span class="tag">How we decide now</span><p>A candidate posted +17.2% aggregate throughput while every individual request got 3% slower. The promotion rule that now catches that &mdash; and Tier&nbsp;B &mdash; are the transferable half.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="achieved">
+      <h2>What the Campaign Bought</h2>
+      <aside class="sidenote">
+        <p><strong>Why this section comes first:</strong> an accounting of what is left is only interesting if you know what has already been taken. Every number below is measured, and each carries the arm it was measured on.</p>
+        <p><strong>The honest caveat, stated up front:</strong> the two columns of the trajectory table are <em>different arms with different tree shapes</em>. They are a campaign trajectory, not a controlled before-and-after.</p>
+      </aside>
+      <p>Three things moved over the campaign: the step got faster, the agent got its quality back, and the deployment scheduler stopped throwing away concurrency. They are worth stating in that order because the first is what this volume goes on to audit, the second is what makes the first admissible at all, and the third is what makes batch four a real regime rather than a batch of one wearing a costume.</p>
+
+      <h3>The step, by phase</h3>
+      <p>The per-phase trajectory is the clearest picture of what the levers of <a href="every-lever.html">Vol.&nbsp;VIII</a> bought. The left column is the batch-one pair measured on 2026-07-25; the right is the canonical Hydra27 arm measured on 2026-07-31 and still the campaign's latest valid batch-one point.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Per-phase batch-one trajectory. <strong>The two columns are different arms and different tree shapes</strong> &mdash; a campaign trajectory, not a matched A/B. Both are GPU-timed per physical step.</caption>
+          <thead><tr><th>Span</th><th>2026-07-25 (2i pair)</th><th>2026-07-31 (Hydra27 qrow16, exact4)</th><th>Change</th></tr></thead>
+          <tbody>
+            <tr><td><strong>SFWD</strong> &mdash; verify forward</td><td class="num">219.9&nbsp;ms</td><td class="num">159.619&nbsp;ms</td><td class="num">&minus;27%</td></tr>
+            <tr><td><strong>DFWD</strong> &mdash; drafter</td><td class="num">94.6&nbsp;ms</td><td class="num">36.813&nbsp;ms</td><td class="num">&minus;61%</td></tr>
+            <tr><td><strong>CFWD</strong> &mdash; committer</td><td class="num">27.5&nbsp;ms</td><td class="num">20.677&nbsp;ms</td><td class="num">&minus;25%</td></tr>
+            <tr><td>Host and unattributed residual</td><td class="num">&mdash;</td><td class="num">15.670&nbsp;ms</td><td class="num">&mdash;</td></tr>
+            <tr><td><strong>Full-step wall</strong></td><td class="num">~342&nbsp;ms</td><td class="num"><strong>232.780&nbsp;ms</strong></td><td class="num"><strong>&minus;32%</strong></td></tr>
+            <tr><td>Floor ratio</td><td class="num">~3.4&times;</td><td class="num"><strong>1.945&times;</strong></td><td class="num">&mdash;</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The right-hand column carries its own supporting numbers: <strong>24.718&nbsp;tok/s</strong> on full-step wall, <strong>4.754</strong> accepted drafts per event, <strong>5.754</strong> committed tokens per event. That acceptance is the tree's structural advantage over native linear multi-token prediction and it has held throughout &mdash; it is the reason the campaign exists. The superset property that <a href="spine-reorder.html">Vol.&nbsp;VI</a> was written to restore is also holding empirically: a wider tree out-accepts its own subset by <strong>+0.166</strong> against a predicted +0.17.</p>
+
+      <div class="source-exhibit" aria-label="Scope of the trajectory claim">
+        <div class="source-head">
+          <strong>What this table does and does not claim</strong>
+          <span>Read before quoting the &minus;32%</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Does claim</span><p>That the campaign's batch-one step-wall came down by roughly a third over eleven days, and that the drafter carried most of it &mdash; consistent with the drafter levers of Vol.&nbsp;VIII being the campaign's largest.</p></div>
+          <div class="box bad"><span class="tag">Does not claim</span><p>That any single change produced &minus;32%. The arms differ in tree shape and configuration; this is a trajectory across a campaign, not a controlled contrast, and the individually-gated component wins are in Vol.&nbsp;VIII.</p></div>
+          <div class="box warn"><span class="tag">Also not claimed</span><p>That the currently-merged stack measures here. It does not &mdash; see <a href="#null">the null result</a>. The 232.780 point is the qrow16 arm; the six-kernel composed stack has <em>no</em> valid current timing at all.</p></div>
+        </div>
+      </div>
+
+      <h3>Quality: the regression that closed</h3>
+      <p>Volumes <a href="stateless-tree.html">V</a> and <a href="spine-reorder.html">VI</a> were substantially about a quality failure. A branched speculative tree that is lossless in the token sense was still degrading the <em>agent</em> &mdash; committing plausible-but-wrong neighbour identifiers inside otherwise-correct code, which the model would then notice and loop on. In its worst measured form the tree resolved 6 of 16 tasks with five give-ups, having burned 9.6 agent-hours grinding on tasks the linear baseline solved. Those give-ups were not quick bails: the shortest ran 39 minutes and the longest four and a half hours before emitting an empty patch.</p>
+      <p>That is closed. The four-arm campaign on a single binary reads:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Four arms, one binary, all-cache-on ship environment, no wall limit. Sixteen SWE-Verified tasks at temperature 0.6, honest give-up gate (no auto-continue nudge).</caption>
+          <thead><tr><th>Arm</th><th>Resolved</th><th>Give-ups</th><th>Accept/event</th><th>ms/step</th><th>Crashes</th></tr></thead>
+          <tbody>
+            <tr><td>Branched tree (8-node) + spine reorder</td><td class="num">9 / 16</td><td class="num"><strong>0</strong></td><td class="num">3.500</td><td class="num">206.5</td><td class="num">0</td></tr>
+            <tr><td>Native MTP-5 (the bar)</td><td class="num">9 / 16</td><td class="num"><strong>0</strong></td><td class="num">3.442</td><td class="num">210.3</td><td class="num">0</td></tr>
+            <tr><td>Branched tree (6-node, rooted) + spine reorder</td><td class="num">9 / 16</td><td class="num"><strong>0</strong></td><td class="num">3.333</td><td class="num">204.3</td><td class="num">0</td></tr>
+            <tr><td>Wide tree (t33333) + spine reorder</td><td class="num"><strong>11 / 16</strong></td><td class="num"><strong>0</strong></td><td class="num"><strong>3.567</strong></td><td class="num">233.9</td><td class="num">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Zero give-ups across all four arms, and the tree at parity with or above the native bar on resolve. The 11/16 is the best resolve ever recorded on this subset, and the campaign's own standing caution applies &mdash; at sixteen tasks, 11-versus-9 is inside variance and should be replicated before it is claimed. What is <em>not</em> inside variance is the give-up count going from five to zero, because a give-up is a categorical failure mode with a documented signature, not a coin flip. This band &mdash; 8 to 11 resolved, zero give-ups &mdash; is what <a href="#tierb">Tier&nbsp;B</a> later adopts as its behavioural gate.</p>
+
+      <h3>Deployment: the concurrency that was being thrown away</h3>
+      <p>A separate win, and an instructive one, because for weeks the campaign was measuring &ldquo;batch four&rdquo; runs that were not batch four. The scheduler's per-step token budget had been set exactly equal to the recurrent-state block size to satisfy a prefix-caching correctness constraint. Each step deducted the running decodes from that single budget first, leaving less than one block for the waiting queue &mdash; and the block-aligned split rounds a non-final prefill chunk <em>down</em> to a block multiple, so the remainder became zero and the waiting loop broke. Prefill and decode became mutually exclusive per step, and four queued agentic requests serialised into an effective decode batch of about 1.3.</p>
+      <p>The fix is two flags, and both are required: cap every request's per-step prefill chunk at one block, which enforces the correctness constraint <em>directly and per-request</em>, and only then raise the global budget. Raising the budget alone would have re-poisoned the cache. Measured effect: the running-request distribution moved from 80&ndash;85% at one to a mean of <strong>3.20</strong>, and batch one stayed byte-identical because per-request chunk boundaries never moved.</p>
+
+      <div class="source-exhibit" aria-label="What the campaign bought, summary">
+        <div class="source-head">
+          <strong>The ledger, in one place</strong>
+          <span>All measured; each carries its arm</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Speed</span><p>Batch-one step ~342&nbsp;&rarr;&nbsp;232.780&nbsp;ms across the campaign. 24.718&nbsp;tok/s, accept 4.754/event, committed 5.754/event on the current arm.</p></div>
+          <div class="box good"><span class="tag">Quality</span><p>9&ndash;11 of 16 resolved, <strong>zero give-ups</strong>, zero crashes over ~9 hours, across four arms on one binary. Superset property holding at +0.166 accept.</p></div>
+          <div class="box good"><span class="tag">Deployment</span><p>Effective decode batch 1.3&nbsp;&rarr;&nbsp;3.20, byte-identical at batch one. Batch four is now a real regime.</p></div>
+          <div class="box good"><span class="tag">Machinery</span><p>Five-kernel batch-one composition and a six-way committer composition merged behind fail-closed production contracts; 52 focused composition tests passing.</p></div>
+          <div class="box warn"><span class="tag">Not yet</span><p>No current-stack byte gate, timing, or acceptance run exists for the merged six-way composition at either batch size. Landed is not measured.</p></div>
+          <div class="box warn"><span class="tag">The gap</span><p>1.945&times; the floor. 95.173&nbsp;ms/step from the cap. A 40.885% wall reduction required. The rest of this paper is why that is hard.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="anatomy">
+      <h2>Anatomy of a 232-Millisecond Step</h2>
+      <aside class="sidenote">
+        <p><strong>Instrument:</strong> a 218.7&nbsp;MB Nsight capture, exported to SQLite and reduced offline &mdash; 4,324,314 GPU kernel rows, 4,105,181 CUDA runtime rows, 1,146 complete step instances. Host ranges are projected onto GPU operations by correlation ID.</p>
+        <p><strong>Status:</strong> <code>attribution_only=true</code>, <code>acceptance_valid=false</code>. This capture localises time. It is not acceptance evidence and its absolute host-side totals carry profiler inflation.</p>
+      </aside>
+      <p>The profiled envelope is <strong>237.248&nbsp;ms/step</strong> &mdash; close to the 232.780 of the canonical timing arm, with the difference consistent with profiling overhead. Projecting the host phase markers onto GPU operations gives the ledger the rest of this volume is built on.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Per-step GPU ledger, 1,146 complete step instances. Phase order is verify &rarr; post-process &rarr; committer &rarr; drafter, then an inter-step tail.</caption>
+          <thead><tr><th>Range</th><th>GPU span (ms)</th><th>GPU busy (ms)</th><th>GPU <em>idle</em> (ms)</th><th>GPU ops</th></tr></thead>
+          <tbody>
+            <tr><td><strong>step</strong></td><td class="num"><strong>237.032</strong></td><td class="num"><strong>221.222</strong></td><td class="num"><strong>15.810</strong></td><td class="num">3690.6</td></tr>
+            <tr><td>sfwd &mdash; verify forward</td><td class="num">155.807</td><td class="num">155.292</td><td class="num">0.515</td><td class="num">1894.5</td></tr>
+            <tr><td>postprocess &mdash; the output head</td><td class="num">12.339</td><td class="num">12.339</td><td class="num"><strong>0.000</strong></td><td class="num">2.0</td></tr>
+            <tr><td>cfwd &mdash; committer</td><td class="num">20.686</td><td class="num">17.439</td><td class="num">3.247</td><td class="num">1189.0</td></tr>
+            <tr><td>dfwd &mdash; drafter</td><td class="num">35.107</td><td class="num">33.887</td><td class="num">1.220</td><td class="num">299.0</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The GPU is <strong>93.3% busy</strong> inside the step envelope. That single number kills an entire class of optimisation before it is proposed: there is no meaningful room to hide host work behind GPU work, because there is almost no GPU idle to hide it in. At deployment concurrency the picture is worse for that class, not better &mdash; a separate batch-four capture put the GPU at <strong>97% busy</strong>. Overlap and async hiding were already declared dead in <a href="every-lever.html">Vol.&nbsp;VIII</a>; this capture is why they stay dead.</p>
+
+      <h3>Where the 15.8 milliseconds of idle actually sits</h3>
+      <p>Idle time inside a step is the only thing a scheduling change can recover, so it is worth locating precisely. Breaking the step at its phase boundaries:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Idle at phase boundaries. The residual is essentially one object.</caption>
+          <thead><tr><th>Boundary</th><th>ms/step</th></tr></thead>
+          <tbody>
+            <tr><td>step start &rarr; sfwd</td><td class="num">0.000</td></tr>
+            <tr><td>sfwd &rarr; postprocess</td><td class="num">0.004</td></tr>
+            <tr><td>postprocess &rarr; cfwd</td><td class="num">0.003</td></tr>
+            <tr><td>cfwd &rarr; dfwd</td><td class="num">1.224</td></tr>
+            <tr><td><strong>dfwd &rarr; step end (the tail)</strong></td><td class="num"><strong>11.969</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Three of the five boundaries are effectively zero. The residual is <em>one tail</em> after the drafter, plus a small bubble before it. Inside that tail the GPU does 1.889&nbsp;ms of un-phased bookkeeping work &mdash; slot-mapping and block-zeroing kernels &mdash; and is idle for <strong>10.080&nbsp;ms</strong>. Host CUDA API time in the same window totals only 2.30&nbsp;ms. Which means roughly <strong>7.8&nbsp;ms/step is host CPU outside any CUDA call at all</strong>: Python and framework work &mdash; sampler output handling, detokenisation, scheduling, request bookkeeping &mdash; while the GPU waits with an empty queue. It is the single largest addressable block in the trace, and it contains no arithmetic whatsoever.</p>
+
+      <div class="figure" aria-labelledby="fig1-title">
+        <div class="figure-head"><strong id="fig1-title">Figure 1</strong><span>The step, to scale: four phases, one idle tail, and a floor that is nearly half of it</span></div>
+        <svg class="diagram" viewBox="0 0 1120 320" role="img" aria-label="A horizontal bar showing the 237 millisecond step divided into verify 155.8ms, postprocess 12.3ms, committer 20.7ms, drafter 35.1ms and a 12ms idle tail. Beneath it a second bar shows the 119.658 millisecond mandatory weight-read floor, which spans about half the step, and a marker at 137.6 for the acceptance cap.">
+          <!-- scale: 237.25ms mapped to 900px starting at x=110 -> 3.794 px/ms -->
+          <text x="110" y="34" class="tiny">Profiled step envelope, 237.248 ms/step &mdash; to scale</text>
+          <rect x="110" y="46" width="591" height="46" rx="3" fill="#193235" stroke="#8bd3dd" stroke-width="1.5"></rect>
+          <rect x="701" y="46" width="47" height="46" rx="3" fill="#3b3018" stroke="#e7c76f" stroke-width="1.5"></rect>
+          <rect x="748" y="46" width="78" height="46" rx="3" fill="#233320" stroke="#a7d98d" stroke-width="1.5"></rect>
+          <rect x="826" y="46" width="133" height="46" rx="3" fill="#233320" stroke="#a7d98d" stroke-width="1.5"></rect>
+          <rect x="959" y="46" width="51" height="46" rx="3" fill="#3a2323" stroke="#d88989" stroke-width="1.5" stroke-dasharray="4 3"></rect>
+          <text x="118" y="74" class="tiny" fill="#8bd3dd">verify forward &mdash; 155.8 ms</text>
+          <text x="705" y="112" class="tiny" fill="#e7c76f">head</text><text x="705" y="126" class="tiny" fill="#e7c76f">12.3</text>
+          <text x="752" y="112" class="tiny" fill="#a7d98d">commit</text><text x="752" y="126" class="tiny" fill="#a7d98d">20.7</text>
+          <text x="830" y="112" class="tiny" fill="#a7d98d">drafter &mdash; 35.1</text>
+          <text x="905" y="36" class="tiny" fill="#d88989">idle tail</text><text x="920" y="126" class="tiny" fill="#d88989">12.0</text>
+
+          <!-- floor bar -->
+          <text x="110" y="176" class="tiny">Mandatory weight read &mdash; the floor the hardware sets</text>
+          <rect x="110" y="188" width="454" height="34" rx="3" fill="#292929" stroke="#a8a196" stroke-width="1.5"></rect>
+          <text x="118" y="210" class="tiny" fill="#f2efe7">119.658 ms &mdash; 27 GB of FP8 weights at 273 GB/s. Nothing legal goes below this.</text>
+          <line x1="632" y1="182" x2="632" y2="232" stroke="#e7c76f" stroke-width="2" stroke-dasharray="5 3"></line>
+          <text x="640" y="200" class="tiny" fill="#e7c76f">acceptance cap 137.607 ms (1.15&times; floor)</text>
+          <text x="640" y="216" class="tiny" fill="#e7c76f">&mdash; we are 95.2 ms to the right of it</text>
+
+          <!-- legal ladder bracket -->
+          <line x1="937" y1="254" x2="1010" y2="254" stroke="#a7d98d" stroke-width="3"></line>
+          <text x="700" y="258" class="tiny" fill="#a7d98d">the entire legal ladder, to the same scale &rarr;</text>
+          <text x="880" y="278" class="tiny" fill="#a7d98d">19.4 ms</text>
+          <text x="110" y="300" class="tiny">The bracket on the right is everything this volume finds legal to remove, drawn at the same scale as the step above it.</text>
+        </svg>
+        <p class="caption">Figure 1 is the argument of this paper in one picture. The step is the top bar; the floor is the bar beneath it, and it accounts for a little over half. The dashed marker is the acceptance cap the campaign declared, at 1.15&times; the floor. The short green bracket on the lower right &mdash; drawn to the same scale &mdash; is the sum of every lever this volume finds legal. The visual disproportion is the finding: the remaining legal work is small against the remaining distance, and no rearrangement of it changes that.</p>
+      </div>
+
+      <h3>What is already fully captured</h3>
+      <p>Five CUDA graphs cover the step, replaying 5.04 times per step between them. One of them carries the entire verify phase:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>CUDA graph inventory over the capture. Graph 812 is the whole verify forward.</caption>
+          <thead><tr><th>Graph</th><th>Replays</th><th>Nodes per replay</th><th>GPU ms/step</th><th>Phase</th></tr></thead>
+          <tbody>
+            <tr><td>812</td><td class="num">1147</td><td class="num">1894</td><td class="num">155.4</td><td><strong>verify (the entire phase)</strong></td></tr>
+            <tr><td>815</td><td class="num">1188</td><td class="num">176</td><td class="num">27.4</td><td>drafter</td></tr>
+            <tr><td>809</td><td class="num">1146</td><td class="num">78</td><td class="num">4.4</td><td>committer</td></tr>
+            <tr><td>806</td><td class="num">1146</td><td class="num">9</td><td class="num">1.4</td><td>drafter</td></tr>
+            <tr><td>803</td><td class="num">1146</td><td class="num">9</td><td class="num">0.9</td><td>drafter</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The total inter-node gap across all 1894 nodes of graph 812 is <strong>0.404&nbsp;ms/step</strong> &mdash; 0.26% of the phase, 213&nbsp;nanoseconds per node. That figure is the graph-replay floor on this machine, and it is the number that decides the next section: any lever whose mechanism is &ldquo;launch fewer things&rdquo; is bounded above by the gap it can remove, and inside the verify phase there is almost no gap to remove.</p>
+      <p>The committer and drafter are the opposite case. The committer runs <strong>1111 eager operations per step</strong> against 78 graph nodes; the drafter runs 105 eager against 194 captured. Their idle-per-eager-op is 2.73 and 4.08 microseconds respectively, against the verify graph's demonstrated 213&nbsp;ns per node. Closing that difference is worth 2.99 and 1.16&nbsp;ms/step &mdash; two of the few unambiguously live items on the ladder. The committer's profile shows why it is available: <strong>784 of its 1111 operations per step run in under 2 microseconds</strong>, contributing 0.989&nbsp;ms of actual GPU time while carrying roughly 2.1&nbsp;ms of launch bubble between them.</p>
+    </section>
+
+    <section class="section" id="gemm">
+      <h2>The Target GEMM Has No Legal Lever</h2>
+      <aside class="sidenote">
+        <p><strong>Why this section is long:</strong> it is the paper's central claim and it is negative. A negative result about the largest cost in a system deserves more evidence than a positive one, not less &mdash; so the byte model behind it is derived in the open and cross-checked five ways.</p>
+      </aside>
+      <p>The projections inside the verify forward &mdash; the matrix multiplies that read the model's weights &mdash; run <strong>256.2 instances per step</strong> and cost <strong>114.812&nbsp;ms/step</strong>. That is <strong>48.4% of the entire step envelope</strong>. It is by a wide margin the largest single thing in the system, and every scheduler-level mechanism the campaign had been holding in reserve was aimed at it.</p>
+      <p>All of them are worth a combined <strong>0.009&nbsp;ms/step</strong>.</p>
+
+      <h3>The four reasons, each independently measured</h3>
+
+      <div class="grid">
+        <div class="box bad">
+          <span class="tag">Already captured</span>
+          <h3>There is no launch overhead to remove</h3>
+          <p>All 293,549 target-GEMM instances in the capture are nodes inside one CUDA graph. The 256 GEMM instances per step carry a <strong>mean inter-node gap of 35.8&nbsp;nanoseconds</strong>, totalling <strong>9.17&nbsp;microseconds per step</strong>. A persistent kernel or a megakernel cannot recover time that is not being spent.</p>
+        </div>
+        <div class="box bad">
+          <span class="tag">No wave quantization</span>
+          <h3>Under-filling the machine is free</h3>
+          <p>The shapes launching 40 thread blocks leave 8 of 48 SMs idle for the whole kernel and achieve <strong>214.7&ndash;220.6&nbsp;GB/s</strong>. The shapes launching 272 achieve <strong>216.2</strong>. Bandwidth is flat across a 6.8&times; range in block count and a 0.83&ndash;5.67 range in wave count. Perfect wave packing returns <strong>zero</strong>.</p>
+        </div>
+        <div class="box bad">
+          <span class="tag">At the roofline</span>
+          <h3>85.8% of what the memory can do</h3>
+          <p>At the 5th percentile the GEMM already streams at 85.8% of the 273&nbsp;GB/s ceiling; 82.4% at the mean. That is the practical limit for a streaming read on LPDDR5X, and the machine's memory is shared with the CPU.</p>
+        </div>
+        <div class="box bad">
+          <span class="tag">Nothing to cache</span>
+          <h3>L2 policy has no subject</h3>
+          <p><strong>24.83&nbsp;GB is streamed per step with zero intra-step reuse.</strong> There is one stream, and the layer dependency chain admits no legal concurrent partner &mdash; the one latency-bound kernel that would pair well with it is its own consumer.</p>
+        </div>
+      </div>
+
+      <p>The second of those is the most load-bearing negative result in the document, and it is worth dwelling on because it inverts a standard intuition. Wave quantization is the well-known penalty for launching a thread-block count that does not divide evenly across the machine: the last wave runs with idle SMs, and you pay for a full wave's latency to do a partial wave's work. Here the <em>worst-filled shapes are the fastest per byte</em>. The reason is that in a weight-bound regime the tile that pads is the one holding the activations &mdash; at most a few hundred kilobytes &mdash; while the weight bytes streamed are unchanged. The kernel is limited by the memory controller, not by how many SMs are working, so leaving SMs idle costs nothing at all.</p>
+
+      <h3>The byte model, derived in the open</h3>
+      <p>No model configuration file is present in the tree. Every dimension below is inferred from launch grids, kernel template parameters, and measured durations &mdash; so the derivation is shown, and then checked four independent ways.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The six projection shapes, resolved from 256.0 instances per step. Block counts equal the launch grid's Y dimension; each block streams one weight tile.</caption>
+          <thead><tr><th>Projection</th><th>Blocks</th><th>Inst/step</th><th>p50 &micro;s</th><th>ms/step</th><th>MB/inst</th><th>GB/s</th></tr></thead>
+          <tbody>
+            <tr><td>MLP gate/up</td><td class="num">272</td><td class="num">64</td><td class="num">815.5</td><td class="num">52.748</td><td class="num">178.26</td><td class="num">216.2</td></tr>
+            <tr><td>MLP down</td><td class="num">40</td><td class="num">64</td><td class="num">404.8</td><td class="num">26.312</td><td class="num">89.13</td><td class="num">216.9</td></tr>
+            <tr><td>GDN in-projection</td><td class="num">128</td><td class="num">48</td><td class="num">384.2</td><td class="num">18.675</td><td class="num">83.89</td><td class="num">215.5</td></tr>
+            <tr><td>GDN out-projection</td><td class="num">40</td><td class="num">48</td><td class="num">187.7</td><td class="num">9.230</td><td class="num">41.94</td><td class="num"><strong>220.6</strong></td></tr>
+            <tr><td>Attention QKV + gate</td><td class="num">112</td><td class="num">16</td><td class="num">338.4</td><td class="num">5.492</td><td class="num">73.40</td><td class="num">213.8</td></tr>
+            <tr><td>Attention out-projection</td><td class="num">40</td><td class="num">16</td><td class="num">146.5</td><td class="num">2.254</td><td class="num">31.46</td><td class="num">214.7</td></tr>
+            <tr><td><strong>total</strong></td><td></td><td class="num"><strong>256.0</strong></td><td></td><td class="num"><strong>114.712</strong></td><td class="num"><strong>24.830 GB</strong></td><td class="num"><strong>216.4</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The instance counts alone pin the architecture: splitting the trimodal 40-block population by duration gives 16 / 48 / 64 per step, which resolves as <strong>64 layers = 48 Gated-DeltaNet + 16 attention</strong> &mdash; independently corroborated by a separate fusion artifact that names 48 layers. From there, a tile width of 128 is the only value consistent with the roofline (64 would imply 54&nbsp;GB/s, absurdly low; 256 would imply 865&nbsp;GB/s, impossible), which fixes the hidden dimension at 5120 and the MLP intermediate at 17408.</p>
+
+      <div class="source-exhibit" aria-label="Cross-checks on the byte model">
+        <div class="source-head">
+          <strong>Four independent checks on the derivation</strong>
+          <span>Each uses a different quantity</span>
+        </div>
+        <div class="grid">
+          <div class="box info"><span class="tag">Check A &mdash; ratio</span><p>The gate/up and down projections have an exact 2:1 byte ratio by construction. Measured duration ratio: <strong>824.4 / 410.9 = 2.006</strong>.</p></div>
+          <div class="box info"><span class="tag">Check B &mdash; the head</span><p>Vocabulary 248,320 &times; hidden 5120 &times; 2&nbsp;B = 2.543&nbsp;GB for the bf16 output head. The post-process phase is one kernel at 12.348&nbsp;ms/step &rArr; <strong>206&nbsp;GB/s</strong>. Consistent, and confirms the hidden dimension.</p></div>
+          <div class="box info"><span class="tag">Check C &mdash; attention</span><p>The attention out-projection's 146.5&nbsp;&micro;s implies exactly <strong>K = 6144 = 24 query heads &times; 256 head-dim</strong> &mdash; fixed independently by the attention kernel's own launch grid and traits.</p></div>
+          <div class="box info"><span class="tag">Check D &mdash; the floor</span><p>Total 24.830&nbsp;GB/step against the separately-banked weights-only floor of 89.3&nbsp;ms &rArr; 24.38&nbsp;GB. <strong>Agreement to 1.8%.</strong></p></div>
+        </div>
+      </div>
+
+      <h3>Decomposing the excess &mdash; and finding it is not ours</h3>
+      <p>The GEMM runs 25.4&nbsp;ms above the weights-only floor. Where that goes is the whole question, because a scheduling problem and a physics problem call for opposite responses.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The ~25.5&nbsp;ms excess over the 89.3&nbsp;ms weights-only floor, decomposed. Only the first row is a scheduling quantity.</caption>
+          <thead><tr><th>Component</th><th>ms/step</th><th>How measured</th></tr></thead>
+          <tbody>
+            <tr><td>Launch / gap overhead between instances</td><td class="num"><strong>0.009</strong></td><td>256 gaps/step, mean 35.8&nbsp;ns</td></tr>
+            <tr><td>Tail / wave quantization</td><td class="num"><strong>&asymp; 0</strong></td><td>40-block shapes match or beat 272-block shapes on GB/s</td></tr>
+            <tr><td>Traffic the weights-only floor omits</td><td class="num">5.42</td><td>FP8 blockwise scales (+3.125%) plus bf16 epilogue writes</td></tr>
+            <tr><td>Per-instance jitter above class p5</td><td class="num">4.26</td><td>114.712 measured &minus; 110.451 at class p5</td></tr>
+            <tr><td><strong>Steady-state DRAM efficiency gap</strong></td><td class="num"><strong>15.73</strong></td><td>110.451 at p5 vs a 94.72 all-traffic floor &rArr; 85.8% of roofline</td></tr>
+            <tr><td><strong>total</strong></td><td class="num"><strong>25.41</strong></td><td>vs 25.5 stated excess</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Two rows carry 78% of the excess and neither is addressable. The 15.73&nbsp;ms is the difference between 85.8% of roofline and 100% of it &mdash; a memory-system property, not a code property. The 4.26&nbsp;ms of jitter is not a scheduling artifact either, and the trace can show that directly: the per-<em>instance</em> standard deviation is 29.4&nbsp;&micro;s while the per-<em>step-mean</em> standard deviation is only 6.07&nbsp;&micro;s, and there is no drift with position inside the graph replay (815.7&nbsp;&micro;s at nodes 0&ndash;200 against 820.5&nbsp;&micro;s at nodes 1800+). That signature is DRAM refresh and page-conflict noise, plus CPU contention for the same LPDDR5X the GPU is reading &mdash; this is a unified-memory machine, and the host is not idle.</p>
+
+      <div class="source-exhibit" aria-label="GEMM lever verdicts">
+        <div class="source-head">
+          <strong>Every lever we were holding, priced</strong>
+          <span>The reserve, spent</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">0.009 ms</span><p><strong>Persistent kernel / megakernel.</strong> Total GEMM gap is 9.17&nbsp;&micro;s/step. A megakernel cannot recover time that is not being spent.</p></div>
+          <div class="box bad"><span class="tag">&le;0.009 ms</span><p><strong>CUDA-graph node fusion.</strong> Already fully captured; node gap is 213&nbsp;ns and the GEMM's own share of it is 35.8&nbsp;ns.</p></div>
+          <div class="box bad"><span class="tag">0 ms</span><p><strong>Stream ordering / concurrency.</strong> One stream, and the layer chain admits no legal concurrent partner.</p></div>
+          <div class="box bad"><span class="tag">0 ms</span><p><strong>L2 policy.</strong> 24.83&nbsp;GB streamed per step with zero intra-step reuse; the only reusable operand is already resident.</p></div>
+        </div>
+      </div>
+
+      <p>One further consequence, recorded because it disposed of a whole work item: the output head is in the same position. The post-process phase is a single kernel running <strong>12.339&nbsp;ms/step GPU-busy with 0.000&nbsp;ms of idle</strong> at 206&nbsp;GB/s against the 273&nbsp;GB/s ceiling. It is already memory-bound and gapless, so even a perfect replacement recovers only the roofline shortfall &mdash; about <strong>2.8&nbsp;ms/step</strong>, under 1.2% of the envelope. A staged verifier-head kernel and its gate wiring were archived on exactly that number.</p>
+    </section>
+    <section class="section" id="elsewhere">
+      <h2>Where the Time Actually Is</h2>
+      <aside class="sidenote">
+        <p><strong>The pattern:</strong> the three live items are a host tail, a load imbalance, and a redundant memory fetch. None of them is arithmetic, and none of them is in the kernel class that dominates the step.</p>
+      </aside>
+      <p>If the largest cost is untouchable, the interesting question becomes which of the smaller ones are not. Three are worth their own treatment.</p>
+
+      <h3>The host tail &mdash; 10.08 ms of an empty queue</h3>
+      <p>The largest single addressable block in the trace is the idle after the drafter, and it is unusual in that it is almost entirely <em>not</em> a CUDA problem. Of the 11.969&nbsp;ms boundary, 1.889 is un-phased GPU bookkeeping and 10.080 is idle. Host CUDA API time in the same window is 2.30&nbsp;ms &mdash; 2.3 stream synchronisations at 1.685&nbsp;ms, 92.8 kernel launches at 0.319&nbsp;ms, 63.1 async copies at 0.219&nbsp;ms. The remaining <strong>~7.8&nbsp;ms/step is host CPU outside any CUDA call</strong>: sampler output handling, detokenisation, the scheduler, request accounting.</p>
+      <p>What the stream synchronisations are waiting on is visible in the memory-copy census. Device-to-host traffic in the tail is <strong>5.2 copies per step of 140 bytes each</strong> &mdash; the sampled-token readback. The host is stopping the pipeline to learn which tokens were accepted, in order to do bookkeeping that the next step's launch does not actually need. That is what makes the lever legal: nothing about it touches arithmetic, so the change must be byte-identical by construction and the existing byte gate is both sufficient and the acceptance criterion.</p>
+
+      <div class="source-exhibit" aria-label="The host tail lever, as designed">
+        <div class="source-head">
+          <strong>The design, and its falsification</strong>
+          <span>10.08 ms ceiling, 5&ndash;7 realistic</span>
+        </div>
+        <div class="grid">
+          <div class="box info"><span class="tag">Step 0</span><p><strong>Instrument, do not guess.</strong> Four new markers inside the tail &mdash; sample readback, output processing, scheduling, KV bookkeeping &mdash; then re-run the <em>existing</em> offline reduction unchanged. This is the only step to take before choosing a design.</p></div>
+          <div class="box info"><span class="tag">Step 1</span><p><strong>Split submit from retire.</strong> The submit path enqueues the next step's verify graph as soon as draft tokens are on device; everything that only <em>reads</em> results moves to a retire queue on a second thread. Nothing in retire may gate a submit.</p></div>
+          <div class="box info"><span class="tag">Step 2</span><p><strong>Delete the sync from the submit path.</strong> Keep the accepted-token count on device and let the next step's slot-mapping and block-table kernels consume it directly, so the host never needs the <em>value</em> in order to enqueue.</p></div>
+          <div class="box bad"><span class="tag">Falsification</span><p>If GPU idle in the post-drafter window does not fall after step 1, the tail is a genuine data dependency rather than bookkeeping, and the lever dies. Re-run the same reduction and read the same boundary off the same table.</p></div>
+        </div>
+      </div>
+
+      <h3>The scan &mdash; a first level that starves the machine</h3>
+      <p>The recurrent scan runs in two launches per layer, 96 instances per step across the 48 Gated-DeltaNet layers, costing 12.357&nbsp;ms/step. Level 0 scans the single heavy path rooted at the state carried in from the previous step; level 1 scans the eleven terminal paths that branch off the states level 0 exported. The obvious lever &mdash; fuse them into one launch &mdash; is worth nothing: the measured gap between the two launches is <strong>&minus;0.128&nbsp;&micro;s</strong>. They are already back-to-back inside the verify graph.</p>
+      <p>The real finding is a load imbalance, and it only appears when the two levels are normalised by the work they actually do:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The two scan levels normalised by padded work units. Level 0 holds the whole GPU while doing 6% of the work.</caption>
+          <thead><tr><th>Level</th><th>Block groups</th><th>Slots</th><th>Work units</th><th>Duration</th><th>ns per unit</th></tr></thead>
+          <tbody>
+            <tr><td>0 &mdash; heavy path from the root</td><td class="num">768</td><td class="num">5</td><td class="num">3,840</td><td class="num">83.19&nbsp;&micro;s</td><td class="num"><strong>21.66</strong></td></tr>
+            <tr><td>1 &mdash; export-rooted terminals</td><td class="num">768</td><td class="num">77</td><td class="num">59,136</td><td class="num">174.10&nbsp;&micro;s</td><td class="num"><strong>2.944</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Level 0 is <strong>7.36&times; less efficient per unit of work</strong>. It is a five-deep serial chain over 768 blocks &mdash; sixteen blocks per SM &mdash; latency-bound, holding the machine while doing a twentieth of the arithmetic. Modelling all 82 padded slots at level 1's demonstrated 2.944&nbsp;ns/unit gives 185.4&nbsp;&micro;s per layer, or <strong>8.90&nbsp;ms/step</strong> across 48 layers &mdash; which independently reproduces a previously banked 8.9&nbsp;ms model from measured durations alone. The win is <strong>3.45&nbsp;ms/step</strong>, plus the off-model elimination of an fp32 state export and re-read per layer.</p>
+      <p>There is a necessary condition, and it is the entire value of the lever. The fused kernel must let a level-1 path start as soon as its own level-0 parent node retires &mdash; a per-node ready flag. A grid-wide barrier between the levels re-serialises the schedule and returns only the ~0&nbsp;&micro;s launch gap. That distinction <em>is</em> the 3.45&nbsp;ms.</p>
+
+      <h3>Attention &mdash; a perfect wave with almost nothing in it, fetching every byte twelve times</h3>
+      <p>The attention kernel costs 21.369&nbsp;ms/step across 16 instances, one per attention layer. Its launch geometry is striking: a grid of exactly <strong>48 blocks on 48 SMs</strong> &mdash; a perfect single wave &mdash; with a block size of 32 threads. One warp. Seventy-three kilobytes of dynamic shared memory pins it to one block per SM, so the machine runs with <strong>32 resident threads per SM</strong> and 255 registers each. Launch overhead is nil: the mean gap to the preceding kernel is 101.9&nbsp;ns, 1.6&nbsp;&micro;s across the whole step. Persistence across layers recovers 0.0016&nbsp;ms. Dead as a launch lever.</p>
+      <p>The cost is elsewhere. Regressing duration against step index over all 1147 steps isolates the marginal cost of context growth at 0.4260&nbsp;&micro;s/step. With four KV heads, head-dimension 256, and bf16 storage &mdash; each pinned independently by evidence &mdash; a token costs 4096 bytes of KV per layer, and at 5.754 committed tokens per step the marginal traffic is 23,568 bytes. That works out to an achieved unique-byte throughput of <strong>55.3&nbsp;GB/s &mdash; 20.3% of the roofline</strong>.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Attention against its own key-value read floor.</caption>
+          <thead><tr><th>Quantity</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>Per-layer KV-scan floor at 273&nbsp;GB/s</td><td class="num">270.5&nbsp;&micro;s</td></tr>
+            <tr><td>Measured mean</td><td class="num">1334.8&nbsp;&micro;s</td></tr>
+            <tr><td><strong>Ratio to floor</strong></td><td class="num"><strong>4.93&times;</strong></td></tr>
+            <tr><td>Floor across the step</td><td class="num">4.33&nbsp;ms/step</td></tr>
+            <tr><td>Measured across the step</td><td class="num">21.36&nbsp;ms/step</td></tr>
+            <tr><td><strong>Structural headroom</strong></td><td class="num"><strong>17.03&nbsp;ms/step</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The cause is structural and this repository's own earlier audit already named it: 24 query-head blocks &times; 2 row blocks = 48 blocks all stage the same <strong>four</strong> KV heads, so <strong>each KV byte is staged twelve times</strong>. Bracketing the possibilities is instructive &mdash; perfect L2 deduplication would give 273&nbsp;GB/s of unique bytes, zero deduplication would give 273/12 = 22.75, and the measured 55.3 sits 2.43&times; above the no-deduplication bound. L2 is already absorbing roughly half the redundancy on its own.</p>
+      <p>Two levers exist and neither is simply available. An L2 persistence window on the KV region is <strong>legal but unquantified</strong> &mdash; pure launch policy, no arithmetic, and it attacks exactly the thing costing time; but this capture has no metric sampling, so the win cannot be modelled here and needs an L2 hit-rate run. Folding the two row blocks into one by doubling the row-block tile would halve the staging directly, and is <strong>blocked</strong>: it is a tile-geometry change and drifts bytes. The closest thing to a live candidate is a query-head pairing that cuts KV scans per group from six to three while claiming that total query rows, attention arithmetic, launched threads and launched warps per layer are all unchanged. If that invariance claim survives a byte gate it becomes legal and is worth a large fraction of the 17&nbsp;ms. Its gate is pending. Until then it is blocked, not banked &mdash; and it is the reason <a href="#tierb">Tier&nbsp;B</a> exists.</p>
+    </section>
+
+    <section class="section" id="ladder">
+      <h2>The Ladder, and the Arithmetic That Kills It</h2>
+      <aside class="sidenote">
+        <p><strong>Three verdicts:</strong> <span class="pill good">legal</span> available now under exact math; <span class="pill warn">blocked</span> available only if the exact-math wall moves; <span class="pill bad">dead</span> measured worthless, with the measurement given.</p>
+      </aside>
+      <p>Every mechanism the campaign can name, priced against the 237.248&nbsp;ms/step envelope, ranked by what it is worth.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The full attack ladder. Modelled milliseconds per step; percentages against the 237.248&nbsp;ms envelope.</caption>
+          <thead><tr><th>#</th><th>Lever</th><th>ms/step</th><th>% env</th><th>Verdict</th><th>Dependency</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Move the post-drafter host tail off the critical path</td><td class="num"><strong>10.08</strong> ceiling</td><td class="num">4.2%</td><td><span class="pill good">legal</span></td><td>Threading and ordering only; zero GPU arithmetic. 5&ndash;7&nbsp;ms realistic.</td></tr>
+            <tr><td>2</td><td>Fuse the two-level scan into a single ready-flag launch</td><td class="num"><strong>3.45</strong></td><td class="num">1.45%</td><td><span class="pill good">legal</span></td><td>Codegen change; needs per-node ready flags, <em>not</em> a grid barrier.</td></tr>
+            <tr><td>3</td><td>Capture the committer's 1111 eager operations</td><td class="num"><strong>2.99</strong></td><td class="num">1.26%</td><td><span class="pill good">legal</span></td><td>Low risk. The committer already has a graph covering 78 nodes; extend it.</td></tr>
+            <tr><td>4</td><td>The committer&rarr;drafter boundary bubble</td><td class="num">1.22</td><td class="num">0.52%</td><td><span class="pill good">legal</span></td><td>Medium. Likely a sampled-token dependency; needs the handoff kept on device.</td></tr>
+            <tr><td>5</td><td>Complete the drafter's graph capture (105 eager ops)</td><td class="num">1.16</td><td class="num">0.49%</td><td><span class="pill good">legal</span></td><td>Low. A graph already covers 176 of 299 operations.</td></tr>
+            <tr><td>6</td><td>Verify-phase intra-graph gap</td><td class="num">0.52</td><td class="num">0.22%</td><td><span class="pill warn">at floor</span></td><td>Already 213&nbsp;ns/node &mdash; the graph-replay floor.</td></tr>
+            <tr><td>7</td><td>Target GEMM persistent / megakernel / node fusion</td><td class="num">0.009</td><td class="num">0.004%</td><td><span class="pill bad">dead</span></td><td>256 GEMM gaps total 9.17&nbsp;&micro;s/step.</td></tr>
+            <tr><td>8</td><td>Target GEMM wave / tile quantization</td><td class="num">&asymp;0</td><td class="num">0%</td><td><span class="pill bad">dead</span></td><td>40-block shapes match or beat 272-block shapes on GB/s.</td></tr>
+            <tr><td>9</td><td>Target GEMM L2 policy</td><td class="num">0</td><td class="num">0%</td><td><span class="pill bad">dead</span></td><td>24.83&nbsp;GB streamed/step, zero intra-step reuse.</td></tr>
+            <tr><td>10</td><td>Target GEMM stream ordering / concurrency</td><td class="num">0</td><td class="num">0%</td><td><span class="pill bad">dead</span></td><td>Single stream; strict layer dependency chain.</td></tr>
+            <tr><td>11</td><td>Attention persistent across layers</td><td class="num">0.0016</td><td class="num">0%</td><td><span class="pill bad">dead</span></td><td>16 gaps &times; 102&nbsp;ns.</td></tr>
+            <tr><td>12</td><td>Attention KV L2-persistence window</td><td class="num">&le;17.0</td><td class="num">&le;7.2%</td><td><span class="pill good">legal</span>, speculative</td><td>Launch policy only. Needs an L2-metrics run; this trace has no metric sampling.</td></tr>
+            <tr><td>&mdash;</td><td>Target GEMM bandwidth shortfall</td><td class="num">15.73 (+4.26)</td><td class="num">8.4%</td><td><span class="pill bad">not addressable</span></td><td>85.8% of roofline at p5; 82.4% at mean.</td></tr>
+            <tr><td>&mdash;</td><td>Attention tile geometry (row-block 16&rarr;32, head pairing)</td><td class="num">&le;17.0</td><td class="num">&le;7.2%</td><td><span class="pill warn">blocked</span></td><td>Exact math. Byte gates pending.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>Legal, evidence-backed total: 19.4&nbsp;ms/step ceiling &mdash; 8.2% of the envelope. Ten to fourteen realistic. None of it comes from the target GEMM.</strong></p>
+
+      <h3>The arithmetic</h3>
+      <div class="equation">
+        <p><span class="muted">current</span> 232.780&nbsp;ms/step &nbsp;&minus;&nbsp; <span class="ok">every legal lever</span> 19.4&nbsp;ms &nbsp;=&nbsp; <span class="hl">213.4&nbsp;ms/step</span></p>
+        <p><span class="muted">acceptance cap</span> 137.607&nbsp;ms/step &nbsp;&rarr;&nbsp; <span class="hl">still 1.55&times;</span></p>
+        <p><span class="muted">required</span> a 40.885% wall reduction &nbsp;&mdash;&nbsp; <span class="ok">available</span> 8.2%</p>
+      </div>
+
+      <p>This is the deliverable. Applying <em>everything</em> the campaign can legally do, perfectly and with no regressions, moves the step from 1.945&times; the floor to about 1.78&times;, against a target of 1.15&times;. It is not close, and the shortfall is not a matter of finding one more lever &mdash; the ladder above is exhaustive over the mechanisms the trace can see, and the two largest items on it are both attention headroom behind the same wall.</p>
+      <p>Only arithmetic changes could close a gap of that size: a smaller model, a different numeric format, a fundamentally different attention, an accept rate high enough to amortise a step that costs what it costs. All of them change served bytes, and the exact-math rule bars them from this campaign by construction. Saying so plainly, with the measurement attached, is more useful than a fourteenth lever.</p>
+
+      <div class="source-exhibit" aria-label="What the ladder does not include">
+        <div class="source-head">
+          <strong>What the ladder deliberately excludes</strong>
+          <span>And why each exclusion is honest</span>
+        </div>
+        <div class="grid">
+          <div class="box warn"><span class="tag">Acceptance</span><p>Raising accepted tokens per event does not reduce <em>step</em> time and so has no row here &mdash; but it does raise throughput, and under a fixed-cost deficit it is the campaign's other win condition. It is scored on a different axis, not omitted.</p></div>
+          <div class="box warn"><span class="tag">Concurrency</span><p>Events per step multiplies aggregate throughput at fixed step time. It is excluded here on purpose: it is not a speed lever, and <a href="#b4">the next section</a> is about a candidate that was nearly promoted for confusing the two.</p></div>
+          <div class="box warn"><span class="tag">Unmeasured mechanisms</span><p>The trace is <code>cuda,cuda-sw,nvtx</code> with no metric sampling. Anything whose evidence would require DRAM or L2 counters &mdash; item 12 above &mdash; is marked speculative rather than scored.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="null">
+      <h2>The Null Result, and What We Deleted Because of It</h2>
+      <aside class="sidenote">
+        <p><strong>The uncomfortable pairing:</strong> a six-kernel stack that all landed and all gated, measured together, moved the step wall by 0.16%. The ladder above explains why, and it was measured after.</p>
+      </aside>
+      <p>Running alongside the profiling was a kernel campaign: five composed kernels on the batch-one path &mdash; a split reduction on the attention rows, a query-head grouping, a mapped truncated draft head, a full-grid target GEMM, and a fused convolution and post-preparation &mdash; joined by a sixth, a logit-direct committer. All merged behind fail-closed production contracts. Fifty-two focused composition tests passing. Both offline code generations compiling without register spills.</p>
+      <p>Measured together on four real SWE-Verified tasks, the composed stack's step wall came out at <strong>1.0016&times; stock</strong>. Null.</p>
+      <p>The same artifact reports a full-wall throughput ratio of 1.0714, which is a more flattering number and is the wrong one to quote: it moves with acceptance &mdash; 4.676 against 4.289 accepted drafts per event between the two arms &mdash; not with kernel speed. The step-wall ratio is the kernel-honest measurement and it is 1.0016. The artifact records <code>performance_claim = false</code> and <code>production_default_enabled = false</code>, which is the correct way to bank a result like this.</p>
+
+      <h3>Six branches, zero merges</h3>
+      <p>The null result forced a disposition review of six outstanding frontier branches. The most useful thing to come out of it was methodological, and it is a check worth stealing: <strong>raw ahead-counts systematically overstate outstanding work</strong>, because a commit that has been cherry-picked onto the trunk still counts as ahead. Asking git for patch-equivalence instead reduced <strong>18 nominally-outstanding commits to 8 genuinely new ones</strong> &mdash; and revealed that one branch was fully absorbed already and that another's kernel had landed on the trunk weeks earlier through a different path. Two of the six had <em>zero</em> commits ahead; they were strict ancestors of the trunk.</p>
+      <p>All six were archived, none merged. Five of the eight genuinely-new commits were on the one branch a standing policy bars, and the rest were priced against ladder rows measured dead. Archiving here means recorded, not deleted &mdash; every branch stays on the remote at its named tip and git preserves the history.</p>
+
+      <h3>Deleting the code that was measured worthless</h3>
+      <p>Three draft and verifier head families were removed from the serving path: a packed pair head, a Tensor Core draft head, and the full-vocabulary verifier head archived on the 2.8&nbsp;ms figure above. All three were launcher-default off and never production selectors, so removal is behaviour-preserving on every arm. Removing them took the two <code>.cu</code> sources, their builders, codegen checkers, selectors, runners and five test files, plus the environment reads, validators, the mutual-exclusion mode sum, eight state-initialisation counters, a 255-line emitted ready block, a 65-line logits function, two dispatch arms, two fail-closed unwinder arms and two graph-attestation blocks.</p>
+      <p>The more interesting deletion is the one that removed nothing but wiring &mdash; and it is a genuine hazard class worth naming.</p>
+
+      <div class="source-exhibit" aria-label="The trap-flag class">
+        <div class="source-head">
+          <strong>The trap flag</strong>
+          <span>A deleted lever an operator could still &ldquo;enable&rdquo;</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">The measurement</span><p>Two levers were measured <em>below</em> the no-lever baseline in isolation gates &mdash; 28.05 and 29.62 tok/s against 32.14 &mdash; and their implementations were deleted on 2026-07-25.</p></div>
+          <div class="box bad"><span class="tag">The residue</span><p>The launcher kept forwarding both environment variables into the container. The declared single-source-of-truth flag registry still described both as <em>queued</em>, three weeks after they were gone.</p></div>
+          <div class="box bad"><span class="tag">The failure mode</span><p>One would have raised a misleading error. The other was worse: <strong>nothing read it any more</strong>, so setting it would have been accepted and silently ignored &mdash; and an operator would have believed they were measuring a lever that no longer existed.</p></div>
+          <div class="box good"><span class="tag">The fix</span><p>Both forwarding lines removed; both registry entries rewritten from <em>queued</em> to <em>deleted</em>, carrying the measured verdict and the deleting commit. A deletion is not finished until the wiring around it is gone too.</p></div>
+        </div>
+      </div>
+
+      <p>That episode is the second time this series has lost real time to a flag that was not what it appeared to be &mdash; <a href="every-lever.html">Vol.&nbsp;VIII</a> documented two correctness fixes that had been silently off for weeks. The lesson has now been paid for twice: the registry is the artifact that has to be correct, because it is the one a future run consults.</p>
+    </section>
+    <section class="section" id="b4">
+      <h2>Batch Four: A Candidate That Was Faster Without Making Anything Faster</h2>
+      <aside class="sidenote">
+        <p><strong>Why this is in a performance paper:</strong> it is the measurement failure most likely to be replicated by anyone benchmarking a server, and it nearly shipped a regression here.</p>
+      </aside>
+      <p>Until this window, a batch-four candidate was judged on one number: committed tokens per second, summed over every co-resident request. That number is an aggregate, and it factors exactly:</p>
+
+      <div class="equation">
+        <p><span class="muted">aggregate throughput</span> &nbsp;=&nbsp; <span class="ok">per-request rate</span> &nbsp;&times;&nbsp; <span class="hl">requests resident per step</span></p>
+      </div>
+
+      <p>Only the first factor is a property of the kernel stack. The second is a property of how four agentic sessions happened to overlap on that particular run &mdash; task-end skew, agent think time, container setup. A candidate can therefore post a large aggregate gain <em>without making anything faster</em>, purely by being measured on a run where more requests were resident.</p>
+      <p>This is not hypothetical. A two-M candidate cleared the aggregate metric decisively and would have been promoted on it:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The two-M candidate against stock. Same subset, same campaign, two metrics.</caption>
+          <thead><tr><th>Metric</th><th>What it measures</th><th>Delta</th></tr></thead>
+          <tbody>
+            <tr><td>Aggregate throughput</td><td>Committed tokens/sec summed over all co-resident requests</td><td class="num"><strong>+17.2%</strong></td></tr>
+            <tr><td>Per-request step rate</td><td>The batch-invariant rate &mdash; how fast one request is actually served</td><td class="num"><strong>&minus;2.96%</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The implied co-residency ratio is 1.172&nbsp;/&nbsp;0.9704 = <strong>1.2077</strong>. The entire aggregate gain is that ratio: the candidate arm was measured with about 21% more requests resident per step, and <em>every individual agent session was slower under it than under stock</em>. Promoting it would have shipped a regression and then baked the scheduling luck into the baseline, so the next candidate would have had to beat a number that was never a real speed.</p>
+      <p>Promotion now requires both conditions:</p>
+
+      <div class="grid">
+        <div class="box good"><span class="tag">Condition 1 &mdash; new</span><h3>Non-regression on the batch-invariant rate</h3><p>The candidate's per-request step rate must be <strong>&ge;</strong> stock's. This is the condition that cannot be bought with co-residency, and it is what rejects the two-M shape.</p></div>
+        <div class="box good"><span class="tag">Condition 2 &mdash; retained</span><h3>A real aggregate gain</h3><p>The candidate's aggregate throughput must be <strong>&gt;</strong> stock's. A change that moves nothing is not worth its risk.</p></div>
+      </div>
+
+      <p>The asymmetry is deliberate: condition 1 is <em>at least</em>, because a pure co-residency improvement is still real work and must not be punished; condition 2 is <em>strictly greater</em>, because something has to actually move. The phase breakdown now reports both rates per arm and fails loudly if the per-request rate disagrees with aggregate divided by events per step &mdash; the identity that makes the decomposition meaningful in the first place.</p>
+      <p>Two limits are recorded with it so the rule is not overread. It decides <em>promotion</em>, not acceptance &mdash; the floor cap is untouched. And the per-request rate is batch-invariant but <strong>not co-residency-corrected</strong>: it does not say what the candidate would have done at the stock arm's co-residency, because serving more requests concurrently genuinely costs per-request latency. It is a non-regression guard, not a counterfactual. Removing the confound properly needs arms matched on co-residency, which is what a continuous task-pool refill exists to make possible.</p>
+
+      <h3>A pool that could not hold the batch it was booted for</h3>
+      <p>The refill work turned up a second measurement problem, this one in the configuration. The batch-four arms were booting a key-value pool sized at 40&nbsp;GiB, which the engine reported as <strong>153,600 tokens</strong> &mdash; against a four-task working set of roughly 160,000. The pool was undersized <em>by construction</em>, so the tail of the oldest prefix was evicted to admit the newest.</p>
+      <p>A sixteen-task diagnostic measured the consequence rather than inferring it: once the pool ran full-width, prefix-cache hit rate collapsed to <strong>33&ndash;40%</strong> while pool utilisation pinned at 75&ndash;83%. That combination is diagnostic &mdash; a cache thrashing against its own capacity, not a cold cache warming up. Raising the reservation to 46&nbsp;GiB restores roughly 176,000 tokens and covers the working set with margin. It is a sizing change only: no topology, no sampler, no kernel, no context length, so it cannot move output bytes.</p>
+      <p>Worth noting for the record is why the fix is sizing and not the flag that nominally addressed exactly this concern. That flag was one of the trap flags of the previous section &mdash; measured below baseline, implementation excised weeks earlier, still forwarded, still documented as queued, and read by nothing.</p>
+
+      <div class="source-exhibit" aria-label="Batch-four lessons">
+        <div class="source-head">
+          <strong>Three portable lessons from batch four</strong>
+          <span>None of them is about a kernel</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Decompose the metric</span><p>If your headline number is a product of a code property and a scheduling property, it will eventually reward the scheduling property. Report both factors and assert the identity between them.</p></div>
+          <div class="box good"><span class="tag">Size for the batch you boot</span><p>A cache smaller than the working set does not degrade gracefully; it thrashes, and the signature &mdash; low hit rate with high utilisation &mdash; is distinguishable from a cold start if you look.</p></div>
+          <div class="box good"><span class="tag">Deployment is a different regime</span><p>At batch four the GPU is 97% busy and most steps mix prefill with decode. Levers designed and priced at batch one must be repriced against the decode share of the wall, not assumed to transfer.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="tierb">
+      <h2>Tier B: Admitting Kernels That Cannot Be Byte-Identical</h2>
+      <aside class="sidenote">
+        <p><strong>Status:</strong> a policy, greenlit under one condition &mdash; correct rejection sampling &mdash; which is codified below as a hard invariant and made mechanical. No kernel has been qualified under it yet, and nothing on the trunk becomes Tier&nbsp;B by its existence.</p>
+      </aside>
+      <p>Every kernel in this campaign is admitted on byte identity: the candidate's output tensors must be bit-for-bit equal to the incumbent's on a real authenticated event. Call that <strong>Tier&nbsp;A</strong>. It is the default, it is always preferred, and nothing here weakens it.</p>
+      <p>Tier&nbsp;A has a structural blind spot, and this volume has been circling it since <a href="#elsewhere">the attention section</a>. Some kernel changes are byte-impossible <em>by construction</em> rather than by defect &mdash; they reassociate a floating-point reduction, and floating-point addition is not associative. The campaign has already measured and rejected on exactly this: a candidate that split the attention reduction into two independent partials and combined them could not match the incumbent's single ordered reduction, and the rejection artifact says so precisely &mdash; it cannot satisfy a raw-byte contract in general, <em>even when both paths implement the same real-valued attention formula</em>.</p>
+      <p>That artifact is the correct Tier&nbsp;A verdict and it stands. But that final clause is the whole motivation for a second tier. Tier&nbsp;A cannot distinguish <em>a kernel that computes something else</em> from <em>a kernel that computes the same thing in a different order</em>. It rejects both, and the ladder puts up to <strong>17.0&nbsp;ms/step</strong> behind that single wall.</p>
+
+      <h3>What the claim actually is</h3>
+      <p>Speculative decoding is lossless because of the rejection sampler, not because of the drafter. Given a target distribution <em>p</em> and <em>any</em> draft proposal <em>q</em>, the sampler emits samples distributed exactly as <em>p</em>, whatever <em>q</em> is. This is why drafter changes are cheap here: the sampler absorbs them by construction. Tier&nbsp;B does not touch <em>q</em>. It perturbs <em>p</em> itself, into <em>p<sub>&epsilon;</sub></em>. So:</p>
+
+      <div class="equation">
+        <p><span class="muted">Tier A:</span> &nbsp; served distribution &nbsp;==&nbsp; <span class="ok">p</span> &nbsp;&nbsp;<span class="muted">(exact, by byte identity)</span></p>
+        <p><span class="muted">Tier B:</span> &nbsp; served distribution &nbsp;==&nbsp; <span class="hl">p<sub>&epsilon;</sub></span> &nbsp;&nbsp;<span class="muted">(exact, by the sampler)</span></p>
+        <p><span class="muted">and</span> &nbsp; ||&thinsp;p<sub>&epsilon;</sub> &minus; p&thinsp;|| &nbsp;<span class="ok">is bounded and measured</span></p>
+      </div>
+
+      <p>The served distribution remains exactly lossless <em>with respect to the perturbed verifier</em>, and three gates exist to prove the perturbation is behaviourally immaterial. The policy is explicit that the claim must be stated in those two halves and never collapsed into the single word &ldquo;lossless.&rdquo; That distinction is the entire epistemic content of the tier.</p>
+
+      <h3>The hard invariant: the sampler does not move</h3>
+      <p>If the sampler itself drifts, the first half of that claim evaporates. The served distribution is then neither <em>p</em> nor <em>p<sub>&epsilon;</sub></em> but an unbounded third thing, and two uncontrolled errors compound with no instrument able to separate them. So the sampler's immutability is not a gate to be traded off &mdash; it is an invariant, asserted mechanically on every qualification.</p>
+      <p>The mechanism is worth describing because it is a small, transferable piece of engineering. The three functions in the patcher that write the rejection sampler are located <strong>by parsing the syntax tree, not by line number</strong>, and their concatenated source is hashed under a per-function banner. The consequences are all intended: an edit anywhere else in the 41,690-line patcher does not move the pin; an edit inside any of the three does; renaming, deleting or reordering one does; and if the patcher ever grows a <em>new</em> sampler-writing function, the extractor <strong>fails closed</strong> rather than silently leaving the new code unpinned. A run that cannot produce a matching pin is not a failed Tier&nbsp;B candidate &mdash; it is not a Tier&nbsp;B run at all, and must not be recorded as one.</p>
+
+      <h3>The three gates, all required</h3>
+      <p>There is no partial Tier&nbsp;B and no &ldquo;two of three plus judgement.&rdquo; A candidate clearing (a) and (b) but not (c) is rejected.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The Tier-B gates. Each answers a question the others cannot.</caption>
+          <thead><tr><th>Gate</th><th>What it measures</th><th>The design decision worth noting</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>(a) Shadow logit bound</strong></td>
+              <td>The candidate runs shadow alongside the incumbent on a real authenticated task; maximum absolute and relative logit deviation, argmax flips, and values compared are recorded.</td>
+              <td><strong>The bound is declared per candidate. There is no global &epsilon;.</strong> A geometry change that moves logits by 2<sup>&minus;10</sup> and one that moves them by 2<sup>&minus;4</sup> are not the same risk and must not share a threshold. Argmax flips are <em>reported, not gated</em> &mdash; a flip at a near-tie is the expected consequence of any reordering, and gating on zero would make Tier&nbsp;B equivalent to Tier&nbsp;A and pointless.</td>
+            </tr>
+            <tr>
+              <td><strong>(b) Acceptance parity</strong></td>
+              <td>Accepted drafts per event within interval of the incumbent on <em>paired</em> arms &mdash; same four hash-pinned tasks, same session. A cross-session comparison is inadmissible.</td>
+              <td>The interval on four pairs is wide, so a one-sided slack of 0.05 accepted drafts per event also binds &mdash; the campaign's established multi-spine-signature detector. This is the only gate that reads the perturbed logits <em>through the sampler</em>, which is where a drift that matters shows up first and cheapest.</td>
+            </tr>
+            <tr>
+              <td><strong>(c) Behavioural band</strong></td>
+              <td>A full sixteen-task campaign at batch four, temperature 0.6, landing inside the historical band on three axes: resolve rate 8&ndash;11 of 16, zero garble regression, zero give-up anomalies.</td>
+              <td>The garble criterion is <em>relative</em> and deliberately so: the tree arm itself sits at an 8&ndash;11% undefined-name rate against native's 0%, so an absolute-zero bar is not satisfiable. Tier&nbsp;B is not the workstream that closes that gap; it is the one that must not widen it.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The band's floor is the gate; its ceiling is not a failure condition. A candidate resolving 12 of 16 passes. The upper edge is recorded so a suspiciously high number reads as &ldquo;replicate before claiming&rdquo; &mdash; the same caution the campaign applies to its own 11/16 high-water mark.</p>
+
+      <h3>The limits, stated in the policy itself</h3>
+      <p>The most creditable thing about the document is that it bounds its own strength. Three limits are written into it:</p>
+
+      <div class="grid">
+        <div class="box warn">
+          <span class="tag">Resolution</span>
+          <h3>The band detects a broken agent, not a costly one</h3>
+          <p>At sixteen tasks the 95% Wilson interval on 8/16 spans <strong>[0.280, 0.720]</strong> &mdash; roughly 4.5 to 11.5 resolves. The entire 8&ndash;11 band sits inside the interval of its own floor. Gate (c) can catch a candidate that has broken the agent; it <em>cannot</em> detect one that has cost one or two resolves. That is why (a) and (b) are required rather than supporting: the logit bound is the only gate with tight resolution. A Tier&nbsp;B pass is reported as &ldquo;no behavioural difference <em>detectable at n=16</em>,&rdquo; never as &ldquo;no behavioural difference.&rdquo;</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Composition</span>
+          <h3>Two qualified kernels are not a qualified stack</h3>
+          <p>Two independently qualified Tier&nbsp;B kernels in one serving stack have not been qualified together, and their &epsilon; bounds do not add in any way the policy models. A stack serving more than one requires its own qualification on the composed stack.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Generality</span>
+          <h3>The bound is measured, not proven</h3>
+          <p>Gate (a) bounds deviation <em>on the captured task</em>. It is not a worst-case bound over inputs and no claim of one should be made from it. A candidate whose deviation is input-dependent in a way the task subsets do not exercise will pass and still be wrong; the only defence offered is the breadth of gate (c) and the stickiness below.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Stickiness</span>
+          <h3>The price of a weaker claim</h3>
+          <p>A qualification binds to an exact triple &mdash; the candidate binary, the sampler-region hash, and the serving source commit &mdash; and any change to any of the three voids it entirely. No incremental refresh, no inheritance from a sibling in the same family. A Tier&nbsp;A candidate re-proves itself with one byte comparison; a Tier&nbsp;B candidate cannot, because its admission rests on behavioural evidence that does not transfer across binaries.</p>
+        </div>
+      </div>
+
+      <h3>What Tier B is not about</h3>
+      <p>Two boundaries are drawn sharply. <strong>Drafter changes are not Tier&nbsp;B's concern</strong>, and the distinction is not one of degree: a drafter change perturbs <em>q</em>, which the sampler corrects exactly and by construction, so it needs no &epsilon; bound at all. A verifier change perturbs <em>p</em>, which nothing corrects. And <strong>the tier is scoped to verifier-forward kernels only</strong> &mdash; everything upstream of the sampler. The unifying test is one sentence: a Tier&nbsp;B candidate may perturb the verifier's logits; it may not perturb the mechanism that consumes them.</p>
+      <p>Nothing here is retroactive. No existing arm becomes Tier&nbsp;B by this document; every arm on the trunk today is Tier&nbsp;A or covered by the drafter exemption, and stays that way. The first candidate is the attention-geometry family &mdash; the query-head pairing from <a href="#elsewhere">the attention section</a> if its byte gate drifts, and if it turns out byte-identical then it is a Tier&nbsp;A candidate and Tier&nbsp;B does not apply to it at all.</p>
+      <p>And the standing caveat, which the policy states about itself: the full legal ladder is 19.4&nbsp;ms/step against a 237&nbsp;ms envelope and <strong>cannot close the gap to the cap. Tier&nbsp;B does not change that arithmetic.</strong> It unblocks a class of levers. It does not make the campaign's headline target reachable.</p>
+    </section>
+    <section class="section" id="limitations">
+      <h2>Threats to Validity</h2>
+      <aside class="sidenote">
+        <p><strong>Honest scope:</strong> the robust claims are the <em>relative</em> ones inside the capture &mdash; which phase carries the time, which gaps exist, which shapes are faster per byte. The absolute bandwidths are modelled, and the ladder totals inherit that.</p>
+      </aside>
+      <div class="grid">
+        <div class="box warn">
+          <span class="tag">No hardware counters</span>
+          <h3>Every bandwidth here is derived</h3>
+          <p>The capture is <code>cuda,cuda-sw,nvtx</code> with no metric sampling, so all bandwidth figures come from measured durations plus a byte model. That model is cross-checked five independent ways and reproduces both the banked GEMM floor to 1.8% and the banked fused-scan model exactly &mdash; but it is a model. The one ladder item that genuinely needs counters, the attention L2 persistence window, is marked speculative rather than scored for that reason.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Derived geometry</span>
+          <h3>No model config is present in the tree</h3>
+          <p>Every dimension in the GEMM analysis &mdash; hidden size, MLP intermediate, layer split, head count &mdash; is inferred from launch grids, kernel template parameters, vocabulary size in the run evidence, and measured durations. The four cross-checks agree, but a published configuration contradicting the hidden dimension would unpick the byte accounting and with it the roofline percentages.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Attribution only</span>
+          <h3>Profiled numbers are not acceptance numbers</h3>
+          <p>The capture carries <code>acceptance_valid=false</code>. The name-lookup call is CUPTI-injected once per eager launch and total profiler overhead is 38.8&nbsp;ms/step &mdash; though it lives on a separate flush thread, and the post-drafter tail contains only 92.8 launches, so its share there is about 0.2&nbsp;ms and the 10.08&nbsp;ms idle figure is substantially genuine. Absolute host-side totals elsewhere are inflated and should not be quoted as acceptance evidence.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Shared memory system</span>
+          <h3>The CPU is reading the same DRAM</h3>
+          <p>This is a unified-memory machine: the 273&nbsp;GB/s is shared between CPU and GPU. Host traffic during the verify forward is a plausible contributor to the 4.26&nbsp;ms of GEMM jitter, and this trace cannot separate the two. It also means the 85.8%-of-roofline figure may be closer to a practical ceiling than it looks.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">The current arm</span>
+          <h3>Landed is not measured</h3>
+          <p>The 232.780&nbsp;ms/step point is the qrow16 arm of 2026-07-31, not the merged six-kernel composition. That composition has <strong>no</strong> current-stack byte gate, timing, or acceptance evidence at either batch size, and its own campaign status document says so. Nothing in this volume should be read as a performance claim for the merged stack beyond the composed null.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Cross-arm trajectory</span>
+          <h3>The &minus;32% spans two arms</h3>
+          <p>The per-phase trajectory in <a href="#achieved">the ledger</a> compares arms with different tree shapes and configurations. It is a campaign trajectory and is labelled as one. The individually-gated component wins that support it are in <a href="every-lever.html">Vol.&nbsp;VIII</a>, each measured on its own controlled pair.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Quality at n=16</span>
+          <h3>The band is coarse and known to be</h3>
+          <p>Resolve rates are on sixteen tasks. The 11-versus-9 contrast is inside variance and the campaign's own caution applies. The give-up count going to zero is the more robust reading, because a give-up is a categorical failure with a documented signature rather than a graded outcome.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Modelled wins</span>
+          <h3>The two largest legal items are designs</h3>
+          <p>The host tail (10.08&nbsp;ms) and the scan fusion (3.45&nbsp;ms) are modelled from measured quantities, not built and measured. Each carries an explicit falsification in its own section, and the scan number depends entirely on a per-node ready flag rather than a grid barrier &mdash; a design detail that, if got wrong, returns nearly zero.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="future">
+      <h2>Future Work</h2>
+      <aside class="sidenote">
+        <p><strong>The frame:</strong> with the step-time ladder priced and short, the interesting work moves to the other two axes &mdash; what a step <em>commits</em>, and what the decoder costs in resources that step time does not see.</p>
+      </aside>
+      <p>The ladder is the near-term queue and it is ordered by measured value, not by appeal. But the more important consequence of this volume is that step time is no longer where the leverage is, and two other axes are.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The queue, in order, with what decides each.</caption>
+          <thead><tr><th>Work</th><th>Worth</th><th>What decides it</th></tr></thead>
+          <tbody>
+            <tr><td>Instrument the post-drafter tail with four markers</td><td class="num">prerequisite</td><td><span class="pill good">do first</span> No new machinery; re-runs the existing reduction unchanged. Nothing else in lever 1 should be built before it reports.</td></tr>
+            <tr><td>Split submit from retire; delete the sync from the submit path</td><td class="num">10.08 ceiling</td><td><span class="pill good">legal</span> Byte-identical by construction, so the existing byte gate is both sufficient and the criterion.</td></tr>
+            <tr><td>Committer and drafter graph capture of remaining eager ops</td><td class="num">4.15</td><td><span class="pill good">legal</span> Independent of the tail work and lower risk; can proceed in parallel.</td></tr>
+            <tr><td>Scan fusion with per-node ready flags</td><td class="num">3.45</td><td><span class="pill good">legal</span> Fully independent of all host work. A grid barrier returns ~0 &mdash; that detail is the whole win.</td></tr>
+            <tr><td>Attention KV L2-persistence window</td><td class="num">&le;17.0</td><td><span class="pill warn">needs counters</span> An L2 hit-rate run is the prerequisite; this trace cannot model it.</td></tr>
+            <tr><td>Attention geometry through Tier&nbsp;B</td><td class="num">&le;17.0</td><td><span class="pill warn">first candidate</span> Byte gate first. If it drifts, three Tier-B gates. If it does not, it is Tier&nbsp;A and ships normally.</td></tr>
+            <tr><td>Target GEMM, any scheduler mechanism</td><td class="num">0.009</td><td><span class="pill bad">closed</span> Measured. Do not reopen without a counter-based measurement contradicting the gap and roofline figures.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The two axes that step time does not see</h3>
+      <p><strong>Acceptance.</strong> <a href="every-lever.html">Vol.&nbsp;VIII</a> established that the deficit is fixed rather than marginal, which inverts the value of acceptance: a fixed cost is <em>diluted</em> by a better speculator where a marginal one is aggravated by it. This volume hardens that conclusion, because it shows the fixed cost is largely irreducible. If 213&nbsp;ms/step is close to the floor of what this stack can cost under exact math, then every additional token committed per event is throughput that is kept outright. We sit at 4.754 accepted drafts per event. That is the axis with room on it.</p>
+      <p><strong>Cache capacity.</strong> The finding <a href="every-lever.html">Vol.&nbsp;VIII</a> closed on remains open and is the most under-instrumented thing in the system. The recurrent state pool is a fixed number of pages, and a speculative decoder must reserve enough to hold its in-flight state. At four concurrent requests the tree reserves <strong>88 pages against native's 24</strong> &mdash; leaving <strong>39 cacheable checkpoints against native's 103</strong>. The tree does not only cost time per step; it costs prefix-cache capacity, which on an agentic workload full of repeated context is its own throughput term, and one that none of the step-time analysis in this volume captures. The pool-sizing work of <a href="#b4">the batch-four section</a> is the first measurement to touch it, and it found a cache thrashing at 33&ndash;40% hit rate. That is a large number to have been invisible to every instrument in this paper.</p>
+      <p>Which is the note to end on. This volume is an unusually complete accounting of one axis, and its main finding on that axis is that the axis is nearly exhausted. The costs a system is not instrumenting are the ones most likely to be paying for its wins &mdash; and after nine volumes of step-time work, the honest read is that the next result probably does not come from a kernel.</p>
+    </section>
+
+    <section class="section" id="config">
+      <h2>Canonical Config Appendix</h2>
+      <aside class="sidenote">
+        <p><strong>Why config gets its own section:</strong> this series has now lost more time to flags that were not what we thought they were than to any kernel &mdash; twice. There is one source of truth and it is a file, not a memory.</p>
+      </aside>
+      <details class="fold">
+        <summary>
+          <span>The fixed target, the floor, and the gate ladder</span>
+          <small>Everything a run must match to be comparable to the numbers in this paper.</small>
+        </summary>
+        <div class="fold-body">
+          <div class="table-wrap">
+            <table>
+              <caption>The campaign's fixed target as of this volume.</caption>
+              <thead><tr><th>Surface</th><th>Setting</th><th>Why it is pinned</th></tr></thead>
+              <tbody>
+                <tr><td>Hardware</td><td>GB10, 48 SMs, 273&nbsp;GB/s LPDDR5X, unified CPU/GPU memory</td><td>Sets the roofline every number in this paper is measured against, and means host traffic competes with the model read.</td></tr>
+                <tr><td>Model</td><td>Qwen 3.6-27B FP8, GDN hybrid &mdash; 64 layers = 48 GDN + 16 attention; hidden 5120; vocabulary 248,320</td><td>Derived from the capture, not read from a config; see <a href="#gemm">the four cross-checks</a>.</td></tr>
+                <tr><td>Topology</td><td>Hydra27, K64 drafter vocabulary, root enabled, 32 physical rows per request</td><td>The canonical decode shape for this campaign's batch-one and batch-four arms.</td></tr>
+                <tr><td><strong>Floor</strong></td><td><code>119.658015414 ms/step</code></td><td>The mandatory weight read. Corrected once during the campaign; this is the current value.</td></tr>
+                <tr><td><strong>Acceptance cap</strong></td><td><code>137.6067177261 ms/step</code> &mdash; one-sided U95 at or below 1.15&times; the floor</td><td>The declared target. Not met; the gap is 95.173&nbsp;ms/step.</td></tr>
+                <tr><td>Screening gate</td><td>Four distinct hash-pinned SWE-Verified tasks (exact4)</td><td>Sixteen-task acceptance is required only <em>after</em> exact4 clears the cap, so it has not run.</td></tr>
+                <tr><td>Batch definitions</td><td>B1 = concurrency one. B4 = four distinct canonical tasks at concurrency four.</td><td>Batch four only became a real regime after the scheduler fix; earlier &ldquo;B4&rdquo; runs were effectively 1.3.</td></tr>
+                <tr><td>Admission</td><td>Tier&nbsp;A byte identity by default; Tier&nbsp;B only after a byte failure is <em>attributed at source</em> to reduction order</td><td>An unexplained byte failure is a defect, not a Tier-B candidate. Tier&nbsp;B is not an escape hatch from a failing gate.</td></tr>
+                <tr><td>Sampler</td><td>Pinned by syntax-tree hash over three patcher functions; asserted on every Tier-B qualification</td><td>The one thing that may never drift. A run that cannot produce a matching pin is not a Tier-B run.</td></tr>
+                <tr><td>Correctness inheritance</td><td>The attention-KV remap of <a href="stateless-tree.html">Vol.&nbsp;V</a> and the contiguous-spine reorder of <a href="spine-reorder.html">Vol.&nbsp;VI</a>, both defaults with fail-loud boot assertions</td><td>Both were found silently off for weeks once. They are the reason the give-up count is zero.</td></tr>
+                <tr><td>Scheduler</td><td>Per-request prefill chunk capped at one block; global batched-token budget raised only behind that cap, with a coupling assertion</td><td>Raising the budget alone re-poisons the prefix cache. The assertion fails loud on a half-revert.</td></tr>
+                <tr><td>Key-value pool (B4)</td><td>46&nbsp;GiB, covering ~176k tokens against a ~160k four-task working set</td><td>At 40&nbsp;GiB the cache thrashed at 33&ndash;40% hit rate with utilisation pinned at 75&ndash;83%.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="section" id="receipts">
+      <h2>Source Trail</h2>
+      <p>The claims above are grounded in the Nsight capture and its curated reduction, the campaign's hardware-floor status document, the branch disposition review, and the Tier-B policy. This work runs on <code>main</code>; the analyses are offline and read-only, and each states so in its own header.</p>
+      <details class="fold">
+        <summary>
+          <span>Full source trail</span>
+          <small>The capture, the reductions, the policies, and the prior volumes.</small>
+        </summary>
+        <div class="fold-body">
+          <ul class="receipt-list">
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr13_attack_ladder_analysis_20260808/README.md">The attack ladder analysis</a> - the Nsight reduction this volume is built on: the per-step GPU ledger, the six-shape GEMM decomposition, the scan and attention floors, the ladder with every verdict, and the runnable SQL that produced each table.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr13_hardware_floor_status_20260805/README.md">Hardware-floor status</a> - the fixed target, the floor and cap, the current valid batch-one measurement, and the status-by-evidence-class table that says plainly what is landed versus what is measured.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr13_tier_b_qualification_policy_20260809/README.md">The Tier-B policy</a> - the p versus p-epsilon distinction, the sampler invariant, the three gates, sticky re-qualification, the artifact schema, and the policy's own limits.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr13_frontier_disposition_20260809/README.md">Frontier branch disposition</a> - six branches, zero merges, and the patch-equivalence check that reduced eighteen nominally-outstanding commits to eight.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr13_b4_promotion_criterion_20260809/README.md">The batch-four promotion criterion</a> - the aggregate-versus-per-request decomposition, the two-M case that forced it, and the scope note on what the rule does not claim.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_B4_CACHE_MATRIX_RESULTS.md">The batch-four matrix</a> - the four-arm resolve and give-up table, the superset confirmation, and the scheduler serialization root cause with its two-flag fix.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_BEAT_NATIVE_HEADROOM.md">The headroom ledger</a> - the earlier per-phase batch-one figures the trajectory table compares against, and the hardware frame behind the weight-read floor.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_required_tree_flags.sh">Required tree flags</a> - the declared single source of truth, now carrying deleted entries with their measured verdicts and deleting commits.</li>
+            <li><a href="every-lever.html">Vol. VIII</a> - the sixteen-lever inventory and the fixed-versus-marginal reframing this volume audits.</li>
+            <li><a href="keep-or-replay.html">Vol. VII</a> - the committer asymmetry and the break-even model.</li>
+            <li><a href="spine-reorder.html">Vol. VI</a> - the one-ULP superset violation and the contiguous-spine reorder, now a default.</li>
+            <li><a href="stateless-tree.html">Vol. V</a> - the stateless-tree lifecycle and the attention-KV garble fix.</li>
+            <li><a href="gdn-prefix-cache.html">Vol. IV</a> - the prefix cache whose capacity the open cache-pressure front concerns.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Volume IX. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a>, <a href="round-f.html">Vol. II</a>, <a href="gdn-tree-scan.html">Vol. III</a>, <a href="gdn-prefix-cache.html">Vol. IV</a>, <a href="stateless-tree.html">Vol. V</a>, <a href="spine-reorder.html">Vol. VI</a>, <a href="keep-or-replay.html">Vol. VII</a>, and <a href="every-lever.html">Vol. VIII</a>, but this page does not require them. Last updated 2026-08-10.</p>
+  </footer>
+</div>
+</body>
+</html>
