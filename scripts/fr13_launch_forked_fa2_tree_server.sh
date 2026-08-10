@@ -984,8 +984,8 @@ else
     || { echo "FR13 qrow32 live A/B arm requires the live gate" >&2; exit 2; }
 fi
 case "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" in
-  ""|nosplit|split2|visibility) ;;
-  *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, or visibility" >&2; exit 2 ;;
+  ""|nosplit|split2|visibility|gqa_pair) ;;
+  *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, visibility, or gqa_pair" >&2; exit 2 ;;
 esac
 case "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" in
   ""|nosplit) ;;

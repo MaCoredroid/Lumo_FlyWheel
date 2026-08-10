@@ -103,6 +103,10 @@ QROW32_B1_VISIBILITY_FA2_SHA256 = (
     "c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79"
 )
 QROW32_B1_VISIBILITY_FA2_SIZE = 300_200_192
+# The B1 GQA-pair candidate is not built yet. An empty pin is a hard refusal in
+# _expected_runtime_fa2_identity, never a skipped check.
+QROW32_B1_GQA_PAIR_FA2_SHA256 = ""
+QROW32_B1_GQA_PAIR_FA2_SIZE = 0
 QROW32_B4_FA2_SHA256 = (
     "77f3fb22c19d0eb2ac0ec28230cf9401221425692a505efde62aa838760d81ce"
 )
@@ -2995,10 +2999,10 @@ def _expected_runtime_fa2_identity(
             raise ContractError(f"{name} must be exactly 0 or 1")
     if live == "1" and production == "1":
         raise ContractError("qrow16 live and production selectors are mutually exclusive")
-    if qrow32_b1_live not in {"", "nosplit", "split2", "visibility"}:
+    if qrow32_b1_live not in {"", "nosplit", "split2", "visibility", "gqa_pair"}:
         raise ContractError(
             "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, "
-            "or visibility"
+            "visibility, or gqa_pair"
         )
     if qrow32_b1_production not in {"", "nosplit"}:
         raise ContractError(
@@ -3053,11 +3057,24 @@ def _expected_runtime_fa2_identity(
         return QROW32_B4_GQA_PAIR_FA2_SIZE, QROW32_B4_GQA_PAIR_FA2_SHA256
     if qrow32_b1_live or qrow32_b1_production:
         declared_sha256 = env.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
-        expected = (
-            (QROW32_B1_VISIBILITY_FA2_SIZE, QROW32_B1_VISIBILITY_FA2_SHA256)
-            if qrow32_b1_live == "visibility"
-            else (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256)
-        )
+        if qrow32_b1_live == "gqa_pair":
+            if not QROW32_B1_GQA_PAIR_FA2_SHA256 or not QROW32_B1_GQA_PAIR_FA2_SIZE:
+                raise ContractError(
+                    "qrow32 B1 GQA-pair binary is not pinned: fill "
+                    "QROW32_B1_GQA_PAIR_FA2_SHA256 and "
+                    "QROW32_B1_GQA_PAIR_FA2_SIZE from the build attestation "
+                    "before running this arm"
+                )
+            expected = (
+                QROW32_B1_GQA_PAIR_FA2_SIZE,
+                QROW32_B1_GQA_PAIR_FA2_SHA256,
+            )
+        else:
+            expected = (
+                (QROW32_B1_VISIBILITY_FA2_SIZE, QROW32_B1_VISIBILITY_FA2_SHA256)
+                if qrow32_b1_live == "visibility"
+                else (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256)
+            )
         if declared_sha256 != expected[1]:
             raise ContractError(
                 "qrow32 B1 runtime FA2 declaration is not the pinned candidate"
@@ -3198,6 +3215,10 @@ def validate_runtime_attestation(payload: object) -> dict[str, Any]:
         (QROW32_B4_GQA_PAIR_FA2_SIZE, QROW32_B4_GQA_PAIR_FA2_SHA256),
         (QROW32_B4_VISIBILITY_FA2_SIZE, QROW32_B4_VISIBILITY_FA2_SHA256),
     }
+    if QROW32_B1_GQA_PAIR_FA2_SHA256 and QROW32_B1_GQA_PAIR_FA2_SIZE:
+        known_identities.add(
+            (QROW32_B1_GQA_PAIR_FA2_SIZE, QROW32_B1_GQA_PAIR_FA2_SHA256)
+        )
     for key, record, expected_path in (
         ("source", source, str(CONTAINER_FA2_SOURCE)),
         ("destination", destination, str(CONTAINER_FA2_DESTINATION)),
