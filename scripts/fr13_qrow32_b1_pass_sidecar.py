@@ -262,7 +262,6 @@ def _candidate_contract(arm: str) -> dict[str, Any]:
             "size": GQA_PAIR_CANDIDATE_SIZE,
             "source_files": GQA_PAIR_SOURCE_FILES,
             "source_closure_sha256": GQA_PAIR_SOURCE_CLOSURE_SHA256,
-            "source_status": GQA_PAIR_SOURCE_STATUS,
         }
     if arm == VISIBILITY_ARM:
         return {
@@ -270,7 +269,6 @@ def _candidate_contract(arm: str) -> dict[str, Any]:
             "size": VISIBILITY_CANDIDATE_SIZE,
             "source_files": VISIBILITY_SOURCE_FILES,
             "source_closure_sha256": VISIBILITY_SOURCE_CLOSURE_SHA256,
-            "source_status": SOURCE_STATUS,
         }
     if arm not in {ARM, "split2"}:
         raise ValueError(
@@ -281,8 +279,12 @@ def _candidate_contract(arm: str) -> dict[str, Any]:
         "size": CANDIDATE_SIZE,
         "source_files": SOURCE_FILES,
         "source_closure_sha256": SOURCE_CLOSURE_SHA256,
-        "source_status": SOURCE_STATUS,
     }
+
+
+def _source_status(arm: str) -> tuple[str, ...]:
+    """The modified-source set the codegen produces for this arm."""
+    return GQA_PAIR_SOURCE_STATUS if arm == GQA_PAIR_ARM else SOURCE_STATUS
 
 
 def gqa_pair_source_contract() -> dict[str, Any]:
@@ -331,7 +333,7 @@ def validate_source_closure(source_root: Path, *, arm: str = ARM) -> dict[str, A
         ).splitlines()
         if line
     )
-    if status != contract["source_status"]:
+    if status != _source_status(arm):
         raise ValueError("FA2 modified source set drifted")
     records: dict[str, str] = {}
     for relative, expected in contract["source_files"].items():

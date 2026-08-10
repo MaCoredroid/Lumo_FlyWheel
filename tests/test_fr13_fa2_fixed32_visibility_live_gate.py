@@ -40,7 +40,7 @@ def test_visibility_arms_are_explicit_and_incumbent_defaults_are_unchanged() -> 
     assert "805635d6881dbf73287d66c10541880b7cf93bcb6bf7b04e50efd3d32728b0aa" in patcher
     assert 'candidate_arm == "visibility" and fixed32_mode != "hydra27_fixed32"' in patcher
     assert '""|qrow32|gqa_pair|visibility)' in launcher
-    assert '""|nosplit|split2|visibility)' in launcher
+    assert '""|nosplit|split2|visibility|gqa_pair)' in launcher
     assert '""|nosplit) ;;' in launcher
     assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit" in launcher
     assert 'LIVE_AB_ARM=${FR13_QROW32_LIVE_AB_ARM:-qrow32}' in b4_runner
