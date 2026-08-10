@@ -101,11 +101,22 @@ STOCK_ANCHOR = (
 )
 
 
-def _load_patcher(monkeypatch, *, flag: str) -> types.ModuleType:
-    """Import the patcher fresh with FR13_MAMBA_SPEC_BLOCKS_CDIV=flag."""
+def _load_patcher(
+    monkeypatch, *, flag: str, fixed32: str | None = None
+) -> types.ModuleType:
+    """Import the patcher fresh with FR13_MAMBA_SPEC_BLOCKS_CDIV=flag.
+
+    ``fixed32`` is baked at import too (the patcher reads FR13_FIXED32_MODE
+    once, at module scope). Default None means UNSET, hermetically: the
+    ambient shell must not decide whether the fixed32 guard fires.
+    """
     monkeypatch.setenv("FR13_MAMBA_SPEC_BLOCKS_CDIV", flag)
+    if fixed32 is None:
+        monkeypatch.delenv("FR13_FIXED32_MODE", raising=False)
+    else:
+        monkeypatch.setenv("FR13_FIXED32_MODE", fixed32)
     spec = importlib.util.spec_from_file_location(
-        f"_fr13_patcher_cdiv_{flag}", PATCHER
+        f"_fr13_patcher_cdiv_{flag}_{fixed32}", PATCHER
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -165,6 +176,7 @@ def test_patch_fn_and_preflight_are_defined_once() -> None:
         "_patch_gdn_attn_mamba_spec_scratch_table",
         "_fr13_assert_mamba_spec_blocks_cdiv_slot_demand",
         "_fr13_assert_mamba_spec_blocks_cdiv_coherent",
+        "_fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32",
     ):
         assert names.count(fn) == 1, f"{fn} must be defined exactly once"
 
@@ -365,6 +377,124 @@ def test_preflight_rejects_a_nonpositive_block_size(monkeypatch) -> None:
     monkeypatch.setenv("MAMBA_BLOCK_SIZE", "0")
     with pytest.raises(RuntimeError, match="MAMBA_BLOCK_SIZE must be positive"):
         module._fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
+
+
+# --------------------------------------------------------------------------
+# the fail-loud fixed32 guard (the lever is fixed32-ONLY)
+# --------------------------------------------------------------------------
+#
+# WHY THIS EXISTS: the scratch rehome makes logical columns 1..num_spec ALIASES
+# of one physical page. Exactly one per-draft-node consumer survives outside
+# fixed32 -- the batched tree conv writeback, whose call site is gated on the
+# literal `_FR13_CONV_WB_BATCHED and not _FR13_FIXED32_MODE` -- and it hands
+# dst_rows=spec_state_indices_tensor[:b, :tree_n].reshape(-1), one destination
+# row per node. Against an aliased table those tree_n rows are the SAME page.
+# The dst_rows.numel() >= tree_n guard measures the LOGICAL width, which the
+# rehome deliberately leaves unnarrowed, so it passes and the collapse is
+# silent. This preflight is the blocking precondition for promoting the flag to
+# a B4 default.
+
+
+def test_fixed32_guard_is_inert_when_flag_off(monkeypatch) -> None:
+    """=0 is unaffected: no fixed32 in the environment, no refusal."""
+    module = _load_patcher(monkeypatch, flag="0")
+    assert module._FR13_FIXED32_MODE == ""
+    module._fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()
+    # ...and the rest of the cdiv preflight family stays inert too.
+    monkeypatch.setenv("NUM_SPECULATIVE_TOKENS", "31")
+    monkeypatch.setenv("MAMBA_BLOCK_SIZE", "1024")
+    module._fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
+
+
+@pytest.mark.parametrize("mode", ["tail6_fixed32", "hydra27_fixed32"])
+def test_fixed32_guard_admits_an_armed_boot(monkeypatch, mode: str) -> None:
+    """=1 with fixed32 armed is the production configuration: it passes."""
+    module = _load_patcher(monkeypatch, flag="1", fixed32=mode)
+    assert module._FR13_FIXED32_MODE == mode
+    assert mode in module._FR13_FIXED32_MODES
+    module._fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()
+    # The floor preflight still runs on the production geometry.
+    monkeypatch.setenv("NUM_SPECULATIVE_TOKENS", "31")
+    monkeypatch.setenv("MAMBA_BLOCK_SIZE", "1024")
+    module._fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
+
+
+def test_fixed32_guard_refuses_an_unarmed_boot(monkeypatch) -> None:
+    """=1 without fixed32 must REFUSE, and the message must self-diagnose."""
+    module = _load_patcher(monkeypatch, flag="1")
+    with pytest.raises(RuntimeError) as excinfo:
+        module._fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()
+    message = str(excinfo.value)
+    assert "FR13_MAMBA_SPEC_BLOCKS_CDIV=1 requires fixed32 to be armed" in message
+    # It must name the observed state, not just the rule.
+    assert "FR13_FIXED32_MODE is ''" in message
+    # It must name the MECHANISM: which code path, which tensor, which failure.
+    assert "_FR13_CONV_WB_BATCHED and not " in message
+    assert "_FR13_FIXED32_MODE`" in message
+    assert "spec_state_indices[:, :tree_n]" in message
+    assert "col-aliased scratch" in message
+    assert "last writer wins" in message
+    # And why nothing downstream would catch it.
+    assert "dst_rows.numel() >= tree_n" in message
+    assert "LOGICAL width" in message
+    assert "silent" in message
+    # And the two ways out.
+    assert "Set FR13_FIXED32_MODE" in message
+    assert "tail6_fixed32" in message
+    assert "hydra27_fixed32" in message
+    assert "unset FR13_MAMBA_SPEC_BLOCKS_CDIV" in message
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+def test_fixed32_guard_treats_a_blank_mode_as_unarmed(
+    monkeypatch, blank: str
+) -> None:
+    """The patcher .strip()s FR13_FIXED32_MODE, so whitespace is NOT armed."""
+    module = _load_patcher(monkeypatch, flag="1", fixed32=blank)
+    assert module._FR13_FIXED32_MODE == ""
+    with pytest.raises(RuntimeError, match="requires fixed32 to be armed"):
+        module._fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()
+
+
+def test_fixed32_guard_detects_fixed32_the_house_way(monkeypatch) -> None:
+    """Non-empty _FR13_FIXED32_MODE, the same test every fixed32-coupled
+    preflight in this file uses -- not a private env read of its own."""
+    fn_start = TEXT.index(
+        "def _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()"
+    )
+    fn_end = TEXT.index(
+        "def _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()", fn_start
+    )
+    body = TEXT[fn_start:fn_end]
+    assert "if not _fr13_mamba_spec_blocks_cdiv():\n        return" in body
+    assert "if _FR13_FIXED32_MODE:\n        return" in body
+    assert 'os.environ.get("FR13_FIXED32_MODE"' not in body
+    assert body.count("raise RuntimeError(") == 1
+
+
+def test_fixed32_guard_runs_in_main_before_any_patch_step() -> None:
+    """It gates the whole patch pass, so it must fire before the floor check
+    and before anything is written to the vLLM tree."""
+    call = "    _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()\n"
+    floor = "    _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()\n"
+    assert TEXT.count(call) == 1
+    main_at = TEXT.index("def main() -> int:")
+    call_at = TEXT.index(call, main_at)
+    floor_at = TEXT.index(floor, main_at)
+    steps_at = TEXT.index("    patch_steps = [", main_at)
+    assert main_at < call_at < floor_at < steps_at
+
+
+def test_known_constraint_is_documented_as_enforced() -> None:
+    """The scratch-table writeup used to merely WARN about the non-fixed32
+    writeback; it must now point at the preflight that refuses it."""
+    fn_start = TEXT.index("def _patch_gdn_attn_mamba_spec_scratch_table()")
+    fn_end = TEXT.index(
+        "def _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()", fn_start
+    )
+    body = TEXT[fn_start:fn_end]
+    assert "KNOWN CONSTRAINT" in body
+    assert "_fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32" in body
 
 
 # --------------------------------------------------------------------------
@@ -634,3 +764,9 @@ def test_registry_entry_is_comment_only_and_carries_the_verdict() -> None:
     assert "consumer widths are untouched" in line.lower()
     # The one combination that is still unsafe has to be named.
     assert "KNOWN CONSTRAINT" in line
+    # ...and the entry must record that it is ENFORCED, not just advertised.
+    assert "_fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32" in line
+    assert "ENFORCED GUARD (fixed32-only)" in line
+    assert "unless FR13_FIXED32_MODE is non-empty" in line
+    assert "_FR13_CONV_WB_BATCHED and not " in line
+    assert "spec_state_indices[:, :tree_n]" in line

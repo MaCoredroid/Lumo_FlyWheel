@@ -23973,7 +23973,9 @@ def _fr13_mamba_spec_blocks_cdiv() -> bool:
     mamba_block_size) = 1 at 31/1024. READ THE PREFLIGHT IN main() BEFORE
     ARMING THIS: it is a slot count, not a token range, and the GDN spec
     kernels index it per draft node. See _patch_mamba_abstract_spec_blocks_cdiv
-    and _fr13_assert_mamba_spec_blocks_cdiv_slot_demand.
+    and _fr13_assert_mamba_spec_blocks_cdiv_slot_demand. The lever is
+    FIXED32-ONLY and _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32
+    refuses it without FR13_FIXED32_MODE.
     """
     raw = _FR13_MAMBA_SPEC_BLOCKS_CDIV
     if raw not in ("0", "1"):
@@ -24146,7 +24148,12 @@ def _patch_gdn_attn_mamba_spec_scratch_table() -> bool:
     raising. It is dead in the fixed32 production configuration (both fused
     writeback call sites are gated off by FR13_CONV_WB_BATCHED=1 and by
     `not _FR13_FIXED32_MODE`), which is why the width guard it would otherwise
-    trip is not load-bearing here.
+    trip is not load-bearing here. That "in the fixed32 configuration" caveat
+    is now ENFORCED, not merely documented: the batched writeback's own gate is
+    a literal `not _FR13_FIXED32_MODE`, so outside fixed32 the per-draft-node
+    scatter is live against an aliased table, and
+    _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32 refuses the flag
+    unless FR13_FIXED32_MODE is armed.
     """
     if not _fr13_mamba_spec_blocks_cdiv():
         return False
@@ -24219,6 +24226,61 @@ def _patch_gdn_attn_mamba_spec_scratch_table() -> bool:
 
     GDN_ATTN_PATH.write_text(text)
     return True
+
+
+def _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32() -> None:
+    """FAIL-LOUD: the col-aliased scratch table is a FIXED32-ONLY lever.
+
+    The narrowing keeps the logical spec window num_spec + 1 columns wide by
+    republishing ONE physical scratch page across columns 1..num_spec
+    (_patch_gdn_attn_mamba_spec_scratch_table). Those columns are therefore
+    ALIASES, not private per-draft-node slots, and every consumer that treats
+    them as private silently collapses instead of raising.
+
+    Exactly one such consumer is still live outside fixed32: the batched tree
+    conv writeback, whose call site is gated on the literal
+    `_FR13_CONV_WB_BATCHED and not _FR13_FIXED32_MODE`. It hands
+    launch_conv_state_writeback_batched
+    dst_rows=spec_state_indices_tensor[:b, :tree_n].reshape(-1) -- one
+    destination row PER DRAFT NODE -- so under the aliased table all tree_n
+    node states scatter onto the single scratch page and the last writer wins.
+    Nothing catches it: the guard that would, dst_rows.numel() >= tree_n,
+    inspects the LOGICAL width, which the rehome deliberately leaves
+    unnarrowed, so it passes on a table that no longer addresses tree_n
+    distinct pages.
+
+    Under fixed32 that whole path is dead -- the same `not _FR13_FIXED32_MODE`
+    literal gates it off, and full_node_writebacks == 0 / conv_remaps == 0 are
+    asserted every event -- and every served conv commit is col0-only
+    (route fixed32_direct_source_col0, + 0 * ssi_stride_s). That is the ONLY
+    configuration in which aliasing columns 1..num_spec is sound, which is why
+    the lever refuses to arm without it rather than documenting the hazard and
+    hoping. This is the KNOWN CONSTRAINT in
+    _patch_gdn_attn_mamba_spec_scratch_table, enforced instead of advertised.
+    """
+    if not _fr13_mamba_spec_blocks_cdiv():
+        return
+    if _FR13_FIXED32_MODE:
+        return
+    raise RuntimeError(
+        "FR13_MAMBA_SPEC_BLOCKS_CDIV=1 requires fixed32 to be armed but "
+        f"FR13_FIXED32_MODE is {_FR13_FIXED32_MODE!r}. The lever republishes "
+        "ONE physical scratch page across logical columns 1..num_spec, so "
+        "those columns are ALIASES, not private per-draft-node slots. Outside "
+        "fixed32 the batched tree conv writeback is live -- its call site is "
+        "gated on the literal `_FR13_CONV_WB_BATCHED and not "
+        "_FR13_FIXED32_MODE` -- and it scatters per-draft-node conv state "
+        "across spec_state_indices[:, :tree_n], which the col-aliased scratch "
+        "table collapses onto the single scratch page: tree_n node states land "
+        "on one row and the last writer wins. The dst_rows.numel() >= tree_n "
+        "guard cannot catch it because it measures the LOGICAL width, which "
+        "the rehome leaves unnarrowed, so the corruption is silent. Under "
+        "fixed32 that path is dead (full_node_writebacks == 0 and "
+        "conv_remaps == 0, asserted every event) and every served conv commit "
+        "is col0-only. Set FR13_FIXED32_MODE (one of "
+        f"{sorted(_FR13_FIXED32_MODES)}) or unset "
+        "FR13_MAMBA_SPEC_BLOCKS_CDIV."
+    )
 
 
 def _fr13_assert_mamba_spec_blocks_cdiv_slot_demand() -> None:
@@ -41715,6 +41777,7 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
 
 def main() -> int:
     _fr13_fixed32_validate_patch_env()
+    _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()
     _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
     if _FR13_FIXED32_MODE:
         _fr13_mode_path = Path("/logs/fr13_fixed32_mode.flag")
