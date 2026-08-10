@@ -69,6 +69,12 @@ docker image inspect "$IMAGE" >/dev/null 2>&1 \
 
 SOURCE_COMMIT=$(git rev-parse HEAD)
 mkdir -p "$BUILD"
+# Host-side provenance. It is a separate file because compile_env.txt is written
+# by the build container as root and is not appendable from the host.
+printf 'repo_commit=%s\nsource_closure_sha256=%s\nrunner_sha256=%s\nstarted=%s\n' \
+  "$SOURCE_COMMIT" "$SOURCE_CLOSURE_SHA256" \
+  "$(sha256sum "${BASH_SOURCE[0]}" | awk '{print $1}')" \
+  "$(date -u +%FT%TZ)" > "$BUILD/build_provenance.txt"
 
 # ------------------------------------------- 1. regenerate the FA2 source
 cp -a "$FA2_ORIGIN" "$SOURCE"
@@ -117,8 +123,6 @@ nice -n 19 ionice -c 3 nvcc \$DEFINES \$INCLUDES \$CUDA_FLAGS -c \
   -o /build/$OBJ.raw.sm121a.o 2>&1 | tee /build/compile.log >/dev/null
 echo TU_COMPILED
 "
-printf 'repo_commit=%s\nsource_closure_sha256=%s\n' \
-  "$SOURCE_COMMIT" "$SOURCE_CLOSURE_SHA256" >> "$BUILD/compile_env.txt"
 
 echo "== Step C: compile flash_api.cpp (host compiler, -O2) =="
 "${DRUN[@]}" -v "$SOURCE:/src:ro" -v "$CUTLASS:/cutlass:ro" -v "$BUILD:/build" "$IMAGE" -lc "
