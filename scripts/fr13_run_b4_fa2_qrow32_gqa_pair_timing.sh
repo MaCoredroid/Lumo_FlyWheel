@@ -388,7 +388,8 @@ CANDIDATE_SIDECAR_SHA256=$(sha256sum "$CANDIDATE_SIDECAR" | awk '{print $1}')
   --expected-candidate-sha256 "$CANDIDATE_SHA256" \
   --arm gqa_pair \
   --patch-source "$PATCH_SOURCE" \
-  --expected-source-commit "$SOURCE_COMMIT" >/dev/null
+  --expected-source-commit "$SOURCE_COMMIT" \
+  --expected-patch-source-sha256 "$PATCH_SOURCE_SHA256" >/dev/null
 
 finalize_manifests
 

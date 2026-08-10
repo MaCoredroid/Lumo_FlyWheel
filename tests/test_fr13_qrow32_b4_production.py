@@ -121,6 +121,25 @@ def _issue(module, candidate, source_commit, gate, gate_sha, out):
     )
 
 
+def _patcher_sha256() -> str:
+    return hashlib.sha256(PATCHER.read_bytes()).hexdigest()
+
+
+def _verify(module, out, candidate, source_commit, *, raw=None):
+    return module.verify_sidecar(
+        sidecar_path=out,
+        expected_sidecar_sha256=hashlib.sha256(
+            out.read_bytes() if raw is None else raw
+        ).hexdigest(),
+        candidate_so=candidate,
+        expected_candidate_sha256=module.CANDIDATE_SHA256,
+        arm=module.ARM,
+        patch_source=PATCHER,
+        expected_source_commit=source_commit,
+        expected_patch_source_sha256=_patcher_sha256(),
+    )
+
+
 def test_sidecar_binds_a_dual_gate_pass_to_the_production_credential(
     sidecar_fixture,
 ) -> None:
@@ -139,15 +158,7 @@ def test_sidecar_binds_a_dual_gate_pass_to_the_production_credential(
     assert issued["dual_gate_timing_eligible"] is False
     assert issued["dual_gate_production_eligible"] is False
 
-    verified = module.verify_sidecar(
-        sidecar_path=out,
-        expected_sidecar_sha256=hashlib.sha256(out.read_bytes()).hexdigest(),
-        candidate_so=candidate,
-        expected_candidate_sha256=module.CANDIDATE_SHA256,
-        arm=module.ARM,
-        patch_source=REPO / "scripts/fr13_patch_fa2_tree_bias.py",
-        expected_source_commit=source_commit,
-    )
+    verified = _verify(module, out, candidate, source_commit)
     assert verified["canonical_sha256"] == issued["canonical_sha256"]
 
     # Issuing is single-shot: an existing credential is never silently replaced.
@@ -235,15 +246,76 @@ def test_sidecar_verify_rejects_a_tampered_credential(sidecar_fixture) -> None:
     out.chmod(0o600)
     out.write_bytes(raw)
     with pytest.raises(module.SidecarError, match="canonical digest mismatch"):
-        module.verify_sidecar(
+        _verify(module, out, candidate, source_commit, raw=raw)
+
+
+def test_sidecar_verify_needs_no_git_binary(sidecar_fixture, monkeypatch) -> None:
+    """The pinned runtime image ships no git; verification must not need one.
+
+    Regression: the first B4 candidate arm died at container init because
+    verify_sidecar shelled out to `git rev-parse --show-toplevel`, and
+    vllm/vllm-openai has no git binary -- FileNotFoundError killed the server
+    before health, so the counted-bypass selector was never even reached.
+    Issuing still runs on the host, where git is present and still used.
+    """
+    module, candidate, source_commit, payload, tmp_path = sidecar_fixture
+    gate, gate_sha = _write_gate(tmp_path, payload)
+    out = tmp_path / "production_pass.json"
+    issued = _issue(module, candidate, source_commit, gate, gate_sha, out)
+
+    # Reproduce the container exactly: nothing resolvable on PATH, and any
+    # attempt to spawn a subprocess at all is a test failure.
+    empty = tmp_path / "empty-bin"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+
+    def _no_subprocess(*args, **kwargs):
+        raise AssertionError("verify_sidecar must not shell out (git is absent)")
+
+    monkeypatch.setattr(module.subprocess, "run", _no_subprocess)
+
+    verified = _verify(module, out, candidate, source_commit)
+    assert verified["canonical_sha256"] == issued["canonical_sha256"]
+
+
+def test_sidecar_verify_is_fail_closed_on_the_patch_source(sidecar_fixture) -> None:
+    """Digest verification must refuse anything but the issued patcher bytes."""
+    module, candidate, source_commit, payload, tmp_path = sidecar_fixture
+    gate, gate_sha = _write_gate(tmp_path, payload)
+    out = tmp_path / "production_pass.json"
+    _issue(module, candidate, source_commit, gate, gate_sha, out)
+
+    def _verify_with(patch_source, expected_digest):
+        return module.verify_sidecar(
             sidecar_path=out,
-            expected_sidecar_sha256=hashlib.sha256(raw).hexdigest(),
+            expected_sidecar_sha256=hashlib.sha256(out.read_bytes()).hexdigest(),
             candidate_so=candidate,
             expected_candidate_sha256=module.CANDIDATE_SHA256,
             arm=module.ARM,
-            patch_source=REPO / "scripts/fr13_patch_fa2_tree_bias.py",
+            patch_source=patch_source,
             expected_source_commit=source_commit,
+            expected_patch_source_sha256=expected_digest,
         )
+
+    # The caller's declared digest is not the patcher on disk.
+    with pytest.raises(module.SidecarError, match="patch source digest drifted"):
+        _verify_with(PATCHER, "0" * 64)
+
+    # A substituted patcher is refused even when the caller's declared digest
+    # matches the impostor: the credential body carries the real one, and the
+    # two must agree.
+    impostor = tmp_path / "fr13_patch_fa2_tree_bias.py"
+    impostor.write_bytes(b"# not the patcher\n")
+    with pytest.raises(module.SidecarError, match="contract drifted"):
+        _verify_with(
+            impostor, hashlib.sha256(impostor.read_bytes()).hexdigest()
+        )
+
+    # A patcher at the wrong path is refused before its bytes are read.
+    renamed = tmp_path / "not_the_patcher.py"
+    renamed.write_bytes(PATCHER.read_bytes())
+    with pytest.raises(module.SidecarError, match="patch source path drifted"):
+        _verify_with(renamed, _patcher_sha256())
 
 
 # --------------------------------------------------------------------------
@@ -685,6 +757,16 @@ def test_launcher_issues_verifies_and_privately_scopes_the_credential() -> None:
     launcher = LAUNCHER.read_text(encoding="utf-8")
     assert "fr13_qrow32_b4_pass_sidecar.py issue" in launcher
     assert "fr13_qrow32_b4_pass_sidecar.py verify" in launcher
+    # In-container verification runs where there is no git, so the launcher
+    # must hand it the patcher digest it validated against the host tree.
+    verify_block = launcher[
+        launcher.index("fr13_qrow32_b4_pass_sidecar.py verify") :
+    ]
+    verify_block = verify_block[: verify_block.index("INTERNAL_ATTESTED=1")]
+    assert (
+        '--expected-patch-source-sha256 "\\$FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256"'
+        in verify_block
+    )
     assert "FR13_FA2_QROW32_B4_INTERNAL_ATTESTED=1" in launcher
     assert "FR13 qrow32 B4 internal attestation is launcher-private" in launcher
     assert "FR13 qrow32 production sidecar credentials are launcher-private" in launcher

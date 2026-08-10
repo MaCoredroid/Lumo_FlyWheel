@@ -5765,6 +5765,7 @@ if [[ -n "\${FR13_FA2_QROW32_B4_PRODUCTION_ARM}" ]]; then
     --arm "\$FR13_FA2_QROW32_B4_PRODUCTION_ARM" \
     --patch-source /workspace/scripts/fr13_patch_fa2_tree_bias.py \
     --expected-source-commit "\$FR13_FA2_QROW32_SOURCE_COMMIT" \
+    --expected-patch-source-sha256 "\$FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256" \
     >/dev/null
   export FR13_FA2_QROW32_B4_INTERNAL_ATTESTED=1
 fi
