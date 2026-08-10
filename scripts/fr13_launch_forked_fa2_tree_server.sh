@@ -5865,6 +5865,18 @@ if os.environ.get('FR13_FA2_QROW32_B1_PRODUCTION_ARM', ''):
     graph_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/compilation/cuda_graph.py')
     if 'FR13_FA2_QROW32_B1_PRODUCTION_CAPTURE_END' not in graph_path.read_text():
         raise SystemExit(f'qrow32 B1 production postcheck missing in {graph_path}')
+if os.environ.get('FR13_FA2_QROW32_B4_PRODUCTION_ARM', ''):
+    if os.environ.get('FR13_FA2_QROW32_B4_INTERNAL_ATTESTED') != '1':
+        raise SystemExit('qrow32 B4 production attestation missing')
+    if 'FR13_FA2_QROW32_B4_PRODUCTION' not in text:
+        raise SystemExit(f'qrow32 B4 production selector missing in {path}')
+    if '_fr13_fa2_qrow32_b4_production_begin(' not in text:
+        raise SystemExit(f'qrow32 B4 production call site missing in {path}')
+    if '_fr13_fa2_qrow32_b4_production_end(' not in text:
+        raise SystemExit(f'qrow32 B4 production end hook missing in {path}')
+    graph_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/compilation/cuda_graph.py')
+    if 'FR13_FA2_QROW32_B4_PRODUCTION_CAPTURE_END' not in graph_path.read_text():
+        raise SystemExit(f'qrow32 B4 production postcheck missing in {graph_path}')
 if os.environ.get('FR13_FA2_QROW16_PRODUCTION', '0') == '1':
     if os.environ.get('FR13_FA2_QROW16_INTERNAL_PRODUCTION_ATTESTED') != '1':
         raise SystemExit('qrow16 production attestation missing')

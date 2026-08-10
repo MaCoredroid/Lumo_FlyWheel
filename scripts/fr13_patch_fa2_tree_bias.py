@@ -5367,6 +5367,34 @@ _FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS = (
 _FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256 = (
     "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
 )
+# The candidate is qualified for exactly one operating point: the final fixed32
+# B4 FULL graph. Every other tree-attention decode the runtime is REQUIRED to
+# execute -- the memory-profile bootstrap graph, the mandatory FULL captures for
+# batches 1..capacity-1, and any step routed piecewise/eager -- keeps the stock
+# untagged dispatch. Those are declared bypasses, not fallbacks: they are
+# counted, they are reported in the engagement record, and they cannot mask a
+# missing B4 engagement because the capture-end hook still fails the run unless
+# all 16 target layers engaged the candidate in the FULL B4 graph.
+_FR13_FA2_QROW32_B4_BYPASS_COUNTS = {
+    "profile_capture": 0,
+    "non_b4_capture": 0,
+    "outside_capture": 0,
+}
+
+
+def _fr13_fa2_qrow32_b4_bypass(arm, tree_bias, num_splits, reason):
+    """Serve the stock untagged operand at a non-qualified operating point."""
+    if reason not in _FR13_FA2_QROW32_B4_BYPASS_COUNTS:
+        raise RuntimeError("FR13 qrow32 B4 production bypass reason drifted")
+    _FR13_FA2_QROW32_B4_BYPASS_COUNTS[reason] += 1
+    return {
+        "arm": arm,
+        "candidate_served": False,
+        "bypass_reason": reason,
+        "profile_capture_bypass": reason == "profile_capture",
+        "tree_bias": tree_bias,
+        "num_splits": int(num_splits),
+    }
 
 
 def _fr13_fa2_qrow32_b4_arm(env_name):
@@ -5648,12 +5676,9 @@ def _fr13_fa2_qrow32_b4_production_begin(
     if _fr13_fa2_qrow32_b4_profile_capture_active():
         # Memory-profile bootstrap graphs are not exact4 traffic. Serving the
         # untagged mask there keeps the stock dispatch and emits no engagement.
-        return {
-            "arm": arm, "candidate_served": False,
-            "profile_capture_bypass": True,
-            "tree_bias": tree_bias,
-            "num_splits": int(num_splits),
-        }
+        return _fr13_fa2_qrow32_b4_bypass(
+            arm, tree_bias, num_splits, "profile_capture"
+        )
     capturing = torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
     context = None
     if capturing:
@@ -5665,10 +5690,31 @@ def _fr13_fa2_qrow32_b4_production_begin(
                 "FR13 qrow32 B4 production has no final fixed32 capture context"
             )
         descriptor = context.get("descriptor")
-        if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 4:
-            raise RuntimeError("FR13 qrow32 B4 production is not final fixed32 B4")
+        if not isinstance(descriptor, dict):
+            raise RuntimeError(
+                "FR13 qrow32 B4 production capture descriptor drifted"
+            )
+        capture_num_reqs = int(descriptor.get("num_reqs", -1))
+        if capture_num_reqs not in (1, 2, 3, 4):
+            raise RuntimeError("FR13 qrow32 B4 production capture batch drifted")
+        if capture_num_reqs != 4:
+            # The fixed32 runtime MANDATES a FULL graph for every batch in
+            # 1..capacity (fr10 freeze check), and every one of those captures
+            # runs all 16 tree layers. Only the B4 graph is the qualified
+            # operating point, so the sub-B4 captures keep stock and are
+            # counted; the capture-end hook still fails the run if the B4 graph
+            # does not engage the candidate on all 16 target layers.
+            return _fr13_fa2_qrow32_b4_bypass(
+                arm, tree_bias, num_splits, "non_b4_capture"
+            )
     elif os.environ.get("ENFORCE_EAGER", "0") != "1":
-        raise RuntimeError("FR13 qrow32 B4 production ran outside capture or eager")
+        # A step routed piecewise (a mixed prefill+decode step is routine at
+        # concurrency 4) reaches this decode eagerly. The stock dispatch is
+        # byte-identical there, so bypassing is correct; raising would kill the
+        # server on ordinary traffic.
+        return _fr13_fa2_qrow32_b4_bypass(
+            arm, tree_bias, num_splits, "outside_capture"
+        )
     geometry_mismatches = _fr13_fa2_qrow32_b4_geometry_mismatches(
         query=query, key_cache=key_cache, value_cache=value_cache,
         cu_seqlens_q=cu_seqlens_q, max_seqlen_q=max_seqlen_q,
@@ -5709,7 +5755,14 @@ def _fr13_fa2_qrow32_b4_production_end(selection, *, completed):
         return
     if not completed:
         return
-    if selection.get("profile_capture_bypass") is True:
+    reason = selection.get("bypass_reason")
+    if reason is not None:
+        if (
+            reason not in _FR13_FA2_QROW32_B4_BYPASS_COUNTS
+            or selection.get("candidate_served") is not False
+            or selection.get("arm") != arm
+        ):
+            raise RuntimeError("FR13 qrow32 B4 production bypass drifted")
         return
     if selection.get("candidate_served") is not True or selection.get("arm") != arm:
         raise RuntimeError("FR13 qrow32 B4 production did not serve selected arm")
@@ -5777,6 +5830,8 @@ def _fr13_fa2_qrow32_b4_production_record(
         "subset_sha256": _FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256,
         "draft_vocab_root": 1, "draft_vocab_k": 65536,
         "candidate_served": True, "fallback_allowed": False,
+        "candidate_scope": "final_fixed32_b4_full_graph_only",
+        "bypass_counts": dict(sorted(_FR13_FA2_QROW32_B4_BYPASS_COUNTS.items())),
         "dispatch": config["candidate_dispatch"],
     }
 
@@ -5788,7 +5843,15 @@ def _fr13_fa2_qrow32_b4_production_capture_end(
     if arm is None or graph_signature is None:
         return
     if str(runtime_mode).upper() != "FULL" or int(batch_size) != 4:
-        raise RuntimeError("FR13 qrow32 B4 production captured outside FULL B4")
+        # The runtime captures a FULL graph for every batch in 1..capacity and
+        # signs all of them; only the B4 graph is the qualified operating
+        # point. Such a graph is not a failure -- but it must not have engaged
+        # the candidate, or the sentinel leaked outside its qualification.
+        if _FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS.get(int(graph_id)) is not None:
+            raise RuntimeError(
+                "FR13 qrow32 B4 production engaged outside FULL B4"
+            )
+        return
     graph = _FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS.get(int(graph_id))
     layers = [] if not isinstance(graph, dict) else sorted(graph.get("layers", ()))
     if (

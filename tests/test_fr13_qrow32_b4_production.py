@@ -6,9 +6,11 @@ import ast
 import hashlib
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -392,9 +394,243 @@ def test_b4_helper_block_serves_the_gqa_pair_sentinel_fail_closed() -> None:
     assert "FR13 qrow32 B4 production exact4 identity drifted" in helpers
     assert "FR13 qrow32 B4 production silently fell back" in helpers
     assert "FR13 qrow32 B4 production geometry drifted" in helpers
-    assert 'int(descriptor.get("num_reqs", -1)) != 4' in helpers
+    assert "capture_num_reqs != 4" in helpers
     assert "torch.empty_strided(" in helpers
     assert '"candidate_served": True' in helpers
+    # The sub-B4 FULL captures the fixed32 runtime mandates, and any
+    # piecewise/eager step, are declared bypasses -- not hard failures.
+    assert "FR13 qrow32 B4 production is not final fixed32 B4" not in helpers
+    assert "FR13 qrow32 B4 production ran outside capture or eager" not in helpers
+    assert "FR13 qrow32 B4 production captured outside FULL B4" not in helpers
+    assert "FR13 qrow32 B4 production engaged outside FULL B4" in helpers
+
+
+# --------------------------------------------------------------------------
+# Selector behaviour at the operating points the runtime actually visits
+# --------------------------------------------------------------------------
+
+
+class _FakeCuda:
+    def __init__(self, state: dict[str, bool]) -> None:
+        self._state = state
+
+    def is_available(self) -> bool:
+        return True
+
+    def is_current_stream_capturing(self) -> bool:
+        return bool(self._state["capturing"])
+
+
+class _FakeTorch:
+    float32 = "float32"
+
+    def __init__(self, state: dict[str, bool]) -> None:
+        self.cuda = _FakeCuda(state)
+
+
+@pytest.fixture()
+def b4_selector(monkeypatch: pytest.MonkeyPatch):
+    """Execute the installed helper block against stub torch/vllm modules."""
+    patcher = _module(PATCHER, "qrow32_b4_helpers_exec")
+    state = {"capturing": False}
+    namespace: dict[str, object] = {
+        "os": os,
+        "torch": _FakeTorch(state),
+        "__name__": "fr13_b4_helpers",
+    }
+    exec(  # noqa: S102 - the helper block is repo source, executed on purpose
+        compile(
+            patcher.FIXED32_QUERY_TILE32_B4_PRODUCTION_HELPERS,
+            "<b4_helpers>",
+            "exec",
+        ),
+        namespace,
+    )
+    gdn = types.ModuleType("vllm.model_executor.layers.mamba.gdn_linear_attn")
+    gdn._FR13_FIXED32_CAPTURE_CONTEXT = None
+    gdn._FR13_FIXED32_PROFILE_CAPTURE_SCOPE = None
+    gdn._FR13_FIXED32_PROFILE_MEMORY_SCOPE = False
+    mamba = types.ModuleType("vllm.model_executor.layers.mamba")
+    mamba.gdn_linear_attn = gdn
+    for name, module in (
+        ("vllm", types.ModuleType("vllm")),
+        ("vllm.model_executor", types.ModuleType("vllm.model_executor")),
+        (
+            "vllm.model_executor.layers",
+            types.ModuleType("vllm.model_executor.layers"),
+        ),
+        ("vllm.model_executor.layers.mamba", mamba),
+        ("vllm.model_executor.layers.mamba.gdn_linear_attn", gdn),
+    ):
+        monkeypatch.setitem(sys.modules, name, module)
+    arm = namespace["_FR13_FA2_QROW32_B4_ARMS"]["gqa_pair"]
+    for name, value in (
+        ("FR13_FA2_QROW32_B4_PRODUCTION_ARM", "gqa_pair"),
+        ("FR13_FA2_QROW32_B4_INTERNAL_ATTESTED", "1"),
+        ("FR13_DRAFT_VOCAB_ROOT", "1"),
+        ("FR13_DRAFT_VOCAB_K", "65536"),
+        ("FR13_FIXED32_MODE", "hydra27_fixed32"),
+        ("FR13_FA2_QROW32_SO_SHA256", arm["candidate_sha256"]),
+        ("FR13_FA2_QROW32_SO_SIZE", str(arm["candidate_size"])),
+        ("FR13_FA2_QROW32_FA2_HEAD", arm["fa2_head"]),
+        (
+            "FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256",
+            arm["source_closure_sha256"],
+        ),
+        ("FR13_FA2_QROW32_SOURCE_COMMIT", "c" * 40),
+        ("FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256", "d" * 64),
+        ("FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256", "e" * 64),
+        ("FR13_FA2_QROW32_B4_DUAL_GATE_SHA256", "f" * 64),
+        (
+            "FR13_FA2_QROW32_B4_EXACT4_TASK_IDS",
+            ",".join(namespace["_FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS"]),
+        ),
+        (
+            "FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256",
+            namespace["_FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256"],
+        ),
+    ):
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("ENFORCE_EAGER", raising=False)
+    return namespace, gdn, state
+
+
+def _begin(namespace: dict[str, object], bias: object = None) -> object:
+    return namespace["_fr13_fa2_qrow32_b4_production_begin"](
+        layer=object(), query=None, key_cache=None, value_cache=None,
+        cu_seqlens_q=None, max_seqlen_q=32, seqused_k=None, max_seqlen_k=1,
+        causal=False, window_size=None, block_table=None, softcap=0.0,
+        num_splits=0, tree_bias=bias if bias is not None else object(),
+    )
+
+
+def test_sub_b4_full_captures_bypass_instead_of_killing_the_server(
+    b4_selector,
+) -> None:
+    namespace, gdn, state = b4_selector
+    # The fixed32 runtime MANDATES a FULL graph for every batch in 1..capacity
+    # and runs all 16 tree layers inside each one, so this is not an anomaly:
+    # it is startup on the candidate arm.
+    state["capturing"] = True
+    bias = object()
+    for batch in (1, 2, 3):
+        gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
+            "graph_id": 100 + batch,
+            "descriptor": {"num_reqs": batch, "runtime_mode": "FULL"},
+        }
+        selection = _begin(namespace, bias)
+        assert selection["candidate_served"] is False
+        assert selection["bypass_reason"] == "non_b4_capture"
+        # The untagged operand and the caller's num_splits: stock dispatch.
+        assert selection["tree_bias"] is bias
+        assert selection["num_splits"] == 0
+        namespace["_fr13_fa2_qrow32_b4_production_end"](
+            selection, completed=True
+        )
+    assert namespace["_FR13_FA2_QROW32_B4_BYPASS_COUNTS"]["non_b4_capture"] == 3
+    # No sub-B4 graph engaged the candidate.
+    assert namespace["_FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS"] == {}
+
+
+def test_a_piecewise_or_eager_step_bypasses_instead_of_raising(
+    b4_selector,
+) -> None:
+    namespace, _gdn, state = b4_selector
+    # ENFORCE_EAGER=0 with CUDAGRAPH_MODE=FULL_AND_PIECEWISE: a mixed
+    # prefill+decode step is routine at concurrency 4 and runs eagerly.
+    state["capturing"] = False
+    selection = _begin(namespace)
+    assert selection["candidate_served"] is False
+    assert selection["bypass_reason"] == "outside_capture"
+    namespace["_fr13_fa2_qrow32_b4_production_end"](selection, completed=True)
+    assert namespace["_FR13_FA2_QROW32_B4_BYPASS_COUNTS"]["outside_capture"] == 1
+
+
+def test_an_unknown_capture_batch_is_still_fail_closed(b4_selector) -> None:
+    namespace, gdn, state = b4_selector
+    state["capturing"] = True
+    gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
+        "graph_id": 7,
+        "descriptor": {"num_reqs": 7, "runtime_mode": "FULL"},
+    }
+    with pytest.raises(RuntimeError, match="capture batch drifted"):
+        _begin(namespace)
+
+
+def test_a_forged_bypass_selection_is_rejected_by_the_end_hook(
+    b4_selector,
+) -> None:
+    namespace, _gdn, _state = b4_selector
+    with pytest.raises(RuntimeError, match="bypass drifted"):
+        namespace["_fr13_fa2_qrow32_b4_production_end"](
+            {
+                "arm": "gqa_pair",
+                "candidate_served": True,
+                "bypass_reason": "non_b4_capture",
+            },
+            completed=True,
+        )
+    with pytest.raises(RuntimeError, match="bypass drifted"):
+        namespace["_fr13_fa2_qrow32_b4_production_end"](
+            {
+                "arm": "gqa_pair",
+                "candidate_served": False,
+                "bypass_reason": "invented_reason",
+            },
+            completed=True,
+        )
+
+
+def test_capture_end_tolerates_sub_b4_graphs_but_not_a_sentinel_leak(
+    b4_selector, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    namespace, _gdn, _state = b4_selector
+    engagement = tmp_path / "engagement.json"
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B4_PRODUCTION_ENGAGEMENT_JSON", str(engagement)
+    )
+    capture_end = namespace["_fr13_fa2_qrow32_b4_production_capture_end"]
+    # A signed sub-B4 FULL graph that engaged nothing is normal startup.
+    capture_end(11, "a" * 64, "FULL", 1)
+    assert not engagement.exists()
+    # The same graph having engaged the candidate is a sentinel leak.
+    namespace["_FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS"][11] = {
+        "layers": {"language_model.model.layers.3.self_attn.attn"},
+        "arm": "gqa_pair",
+    }
+    with pytest.raises(RuntimeError, match="engaged outside FULL B4"):
+        capture_end(11, "a" * 64, "FULL", 1)
+    # And the qualified B4 graph is still required to engage every layer.
+    with pytest.raises(RuntimeError, match="did not capture all target tree"):
+        capture_end(12, "b" * 64, "FULL", 4)
+    assert not engagement.exists()
+
+
+def test_the_engagement_record_discloses_its_scope_and_bypasses(
+    b4_selector, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    namespace, _gdn, state = b4_selector
+    state["capturing"] = False
+    namespace["_fr13_fa2_qrow32_b4_production_end"](
+        _begin(namespace), completed=True
+    )
+    engagement = tmp_path / "engagement.json"
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B4_PRODUCTION_ENGAGEMENT_JSON", str(engagement)
+    )
+    layers = list(namespace["_FR13_FA2_QROW32_B4_TARGET_LAYERS"])
+    namespace["_FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS"][21] = {
+        "layers": set(layers),
+        "arm": "gqa_pair",
+    }
+    namespace["_fr13_fa2_qrow32_b4_production_capture_end"](
+        21, "c" * 64, "FULL", 4
+    )
+    record = json.loads(engagement.read_text(encoding="ascii"))
+    assert record["candidate_scope"] == "final_fixed32_b4_full_graph_only"
+    assert record["bypass_counts"]["outside_capture"] == 1
+    assert record["layer_count"] == 16
+    assert record["candidate_served"] is True
 
 
 # --------------------------------------------------------------------------
@@ -563,6 +799,46 @@ def test_timing_runner_is_default_off_and_a_single_variable_pair() -> None:
     assert "emitted a GQA-pair engagement on the stock-dispatch arm" in text
     assert "formal_floor_acceptance_eligible=0" in text
     assert '"production_default_enabled": False' in text
+
+
+def test_launcher_postchecks_the_b4_selector_in_the_container() -> None:
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    # The in-container post-patch verification block: the one that proves each
+    # private selector is installed in the tree_attn.py the server imports.
+    anchor = launcher.index("qrow32 B1 production selector missing in")
+    start = launcher.rindex("python3 - <<'PY'", 0, anchor)
+    block = launcher[start : launcher.index("\nPY\n", anchor)]
+    # The arm is only honest if the selector is provably installed in the
+    # process that serves. Without this, a no-op patch would serve stock while
+    # the run reported itself as the candidate arm.
+    assert (
+        "if os.environ.get('FR13_FA2_QROW32_B4_PRODUCTION_ARM', ''):" in block
+    )
+    guard = block[
+        block.index("if os.environ.get('FR13_FA2_QROW32_B4_PRODUCTION_ARM', ''):") :
+    ]
+    for needle in (
+        "qrow32 B4 production attestation missing",
+        "_fr13_fa2_qrow32_b4_production_begin(",
+        "_fr13_fa2_qrow32_b4_production_end(",
+        "FR13_FA2_QROW32_B4_PRODUCTION_CAPTURE_END",
+    ):
+        assert needle in guard
+
+
+def test_timing_runner_states_the_arm_delta_it_actually_delivers() -> None:
+    text = TIMING_RUNNER.read_text(encoding="utf-8")
+    # The batch stride IS the dispatch predicate, so the candidate arm cannot
+    # serve the candidate kernel without also paying the retag. Claiming a bare
+    # kernel swap would overstate the harness.
+    assert "ONLY_ARM_DELTA=FA2_stock_dispatch_to_qrow32_gqa_pair" in text
+    assert "with_candidate_side_bias_retag" in text
+    assert '"arm_delta_disclosure"' in text
+    assert '"overhead_charged_to": "candidate"' in text
+    assert '"bias_direction": "conservative_against_candidate"' in text
+    assert '"regression_verdict_is_confounded_by_harness": True' in text
+    assert "empty_strided((4,32,32),(131092,32,1))" in text
+    assert 'engagement.get("candidate_scope")' in text
 
 
 def test_timing_runner_revalidates_the_gate_binding_before_launching() -> None:

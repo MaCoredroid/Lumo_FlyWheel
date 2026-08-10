@@ -2,13 +2,35 @@
 # Exact4 real SWE-Verified B4 full-wall timing: stock FA2 dispatch vs the
 # dual-byte-gate-qualified qrow32 GQA-pair kernel.
 #
-# The single-variable delta is the SERVED KERNEL and nothing else. Both arms
-# load the identical pinned GQA-pair FA2 binary, run the identical canonical
-# exact4 subset at the identical B4 sampling, and differ only in whether the
-# patched tree_attn decode call tags the tree bias with the 0x20014 batch
-# stride the forked flash_api dispatch is gated on. That is exactly the pair
-# the dual raw-byte gate proved byte-identical, so any wall-time difference is
-# the kernel and cannot be a binary, subset, or sampling difference.
+# Both arms load the identical pinned GQA-pair FA2 binary and run the identical
+# canonical exact4 subset at the identical B4 sampling, so no wall-time
+# difference can come from a binary, subset, or sampling difference. The arm
+# delta is the tree_attn decode call site on the 16 target layers of the final
+# fixed32 B4 FULL graph, and it is NOT a bare kernel swap. State it exactly:
+#
+#   stock arm     : the 2-D (32,32) census bias goes straight into
+#                   flash_attn_varlen_func; set_params_tree_bias leaves
+#                   tree_bias_batch_stride == 0, so all 4 batch slots read one
+#                   shared 4 KB tile and the stock dispatch runs.
+#   candidate arm : the patched call site first materialises the tagged operand
+#                   the dual byte gate qualified -- empty_strided((4,32,32),
+#                   (0x20014,32,1)) + copy_, recorded INTO the captured graph
+#                   and therefore replayed every step, once per target layer --
+#                   and the 0x20014 batch stride is the C++ dispatch predicate,
+#                   so the GQA-pair kernel runs and reads 4 distinct planes.
+#
+# The retag copy and the 4-plane operand layout are inseparable from the
+# dispatch: the batch stride IS the selector, so there is no way to serve the
+# candidate kernel with the stock operand. Both extra costs are charged to the
+# CANDIDATE arm, so the pair is conservative: a PROMOTABLE verdict is sound,
+# while a no-gain/regression verdict is confounded by harness overhead and must
+# not be read as a kernel result. The dual raw-byte gate proved the two
+# operands produce identical BYTES; it says nothing about their identical cost.
+#
+# Scope: the candidate is served only where it is qualified -- the final fixed32
+# B4 FULL graph. The mandatory sub-B4 FULL captures, the memory-profile
+# bootstrap graph, and any piecewise/eager step keep the stock dispatch on both
+# arms and are counted in the engagement record's bypass_counts.
 #
 # This paired screen is not the formal statistical hardware-floor acceptance
 # gate. Promotion here means only fr13_b4_timing_math.promotion_verdict.
@@ -66,7 +88,7 @@ SUMMARY_SCHEMA=fr13.fixed32.fa2_qrow32_gqa_pair_b4.full_wall_timing_pair.v1
 RUN_CLASSIFICATION=real_swe_verified_exact4_b4_fa2_qrow32_gqa_pair_timing
 LAUNCH_CLASSIFICATION=real_swe_verified_exact4_b4_fa2_qrow32_gqa_pair_timing_candidate
 ENGAGEMENT_SCHEMA=fr13.fixed32.fa2_qrow32_b4_production_engagement.v1
-ONLY_ARM_DELTA=FA2_stock_dispatch_to_qrow32_gqa_pair
+ONLY_ARM_DELTA=FA2_stock_dispatch_to_qrow32_gqa_pair_with_candidate_side_bias_retag
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 GATE_SHA256=$(sha256sum "$GATE" | awk '{print $1}')
@@ -543,6 +565,10 @@ if (
     or engagement.get("task_ids") != task_ids
     or engagement.get("candidate_served") is not True
     or engagement.get("fallback_allowed") is not False
+    # The candidate is qualified for the final B4 FULL graph only; every other
+    # decode the runtime must execute keeps stock and is counted there.
+    or engagement.get("candidate_scope") != "final_fixed32_b4_full_graph_only"
+    or not isinstance(engagement.get("bypass_counts"), dict)
 ):
     raise SystemExit("candidate arm did not serve the GQA-pair kernel on every layer")
 if (
@@ -574,6 +600,21 @@ summary = {
     "status": "complete",
     "run_classification": run_classification,
     "only_arm_delta": only_arm_delta,
+    # The delta is the served dispatch plus the operand retag that selects it.
+    # Both extra costs land on the candidate, so the pair can only understate a
+    # gain -- it cannot manufacture one.
+    "arm_delta_disclosure": {
+        "served_dispatch": "stock_fa2 -> qrow32_gqa_pair",
+        "candidate_only_overhead": (
+            "per-target-layer empty_strided((4,32,32),(131092,32,1)) + copy_ "
+            "recorded into the captured graph and replayed every step"
+        ),
+        "bias_operand": "2d_broadcast_tile -> 4_plane_batch_strided",
+        "overhead_charged_to": "candidate",
+        "bias_direction": "conservative_against_candidate",
+        "candidate_scope": "final_fixed32_b4_full_graph_only",
+        "regression_verdict_is_confounded_by_harness": True,
+    },
     "task_count": 4,
     "batch_size": 4,
     "concurrency": 4,
