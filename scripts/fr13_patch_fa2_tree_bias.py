@@ -5326,6 +5326,492 @@ def _fr13_fa2_qrow32_b1_production_capture_end(
 '''
 
 
+# The B4 GQA-pair production selector. Unlike the B4 live gate -- which always
+# returns the stock captured output and exercises the candidate only in an
+# offline replay -- this block injects the GQA-pair batch-stride sentinel on the
+# SERVED decode call, so the forked FA2 C++ dispatch takes
+# fr13_run_mha_fwd_fixed32_qrow32_gqa_pair for real exact4 traffic.
+FIXED32_QUERY_TILE32_B4_PRODUCTION_HELPERS = r'''# FR13_FA2_QROW32_B4_PRODUCTION
+_FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS = {}
+_FR13_FA2_QROW32_B4_EAGER_STATE = {
+    "layers": set(),
+    "calls": 0,
+    "emitted": False,
+}
+_FR13_FA2_QROW32_B4_BATCH_STRIDE_SENTINEL = 131092
+_FR13_FA2_QROW32_B4_ARMS = {
+    "gqa_pair": {
+        "sentinel": _FR13_FA2_QROW32_B4_BATCH_STRIDE_SENTINEL,
+        "num_splits": 0,
+        "candidate_dispatch": "qrow32 GQA-pair exact geometry; no fallback",
+        "candidate_sha256": (
+            "af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb"
+        ),
+        "candidate_size": 299813360,
+        "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+        "source_closure_sha256": (
+            "9c3f9e751da7b783e9d07d8e40d5bc2234b99e719a1048668bd6c82244ed2d81"
+        ),
+    },
+}
+_FR13_FA2_QROW32_B4_TARGET_LAYERS = tuple(
+    f"language_model.model.layers.{index}.self_attn.attn"
+    for index in range(3, 64, 4)
+)
+_FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS = (
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+)
+_FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256 = (
+    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+)
+
+
+def _fr13_fa2_qrow32_b4_arm(env_name):
+    arm = os.environ.get(env_name, "")
+    if not arm:
+        return None
+    if env_name != "FR13_FA2_QROW32_B4_PRODUCTION_ARM":
+        raise RuntimeError(f"unknown FR13 qrow32 B4 arm selector: {env_name}")
+    if arm not in _FR13_FA2_QROW32_B4_ARMS:
+        raise RuntimeError(f"{env_name} must be empty or gqa_pair; got {arm!r}")
+    return arm
+
+
+def _fr13_fa2_qrow32_b4_digest(env_name, label, *, length=64):
+    value = os.environ.get(env_name, "")
+    if len(value) != length or any(c not in "0123456789abcdef" for c in value):
+        raise RuntimeError(f"FR13 qrow32 B4 {label} digest drifted")
+    return value
+
+
+def _fr13_fa2_qrow32_b4_require_k64():
+    root = int(os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0"))
+    k = int(os.environ.get("FR13_DRAFT_VOCAB_K", "0"))
+    if root != 1 or k != 65536:
+        raise RuntimeError("FR13 qrow32 B4 production requires K64 ROOT=1")
+
+
+def _fr13_fa2_qrow32_b4_require_topology():
+    mode = os.environ.get("FR13_FIXED32_MODE", "")
+    if mode not in ("tail6_fixed32", "hydra27_fixed32"):
+        raise RuntimeError("FR13 qrow32 B4 production topology mode drifted")
+    return mode
+
+
+def _fr13_fa2_qrow32_b4_require_identity(arm):
+    identity = _FR13_FA2_QROW32_B4_ARMS[arm]
+    candidate_digest = _fr13_fa2_qrow32_b4_digest(
+        "FR13_FA2_QROW32_SO_SHA256", "candidate SO"
+    )
+    source_commit = _fr13_fa2_qrow32_b4_digest(
+        "FR13_FA2_QROW32_SOURCE_COMMIT", "source commit", length=40
+    )
+    patch_source = _fr13_fa2_qrow32_b4_digest(
+        "FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256", "patch source"
+    )
+    if (
+        candidate_digest != identity["candidate_sha256"]
+        or int(os.environ.get("FR13_FA2_QROW32_SO_SIZE", "0"))
+        != identity["candidate_size"]
+        or os.environ.get("FR13_FA2_QROW32_FA2_HEAD", "") != identity["fa2_head"]
+        or os.environ.get("FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256", "")
+        != identity["source_closure_sha256"]
+    ):
+        raise RuntimeError("FR13 qrow32 B4 pinned identity drifted")
+    return candidate_digest, source_commit, patch_source
+
+
+def _fr13_fa2_qrow32_b4_require_exact4():
+    task_ids = tuple(
+        value
+        for value in os.environ.get(
+            "FR13_FA2_QROW32_B4_EXACT4_TASK_IDS", ""
+        ).split(",")
+        if value
+    )
+    subset = os.environ.get("FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256", "")
+    if (
+        task_ids != _FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS
+        or subset != _FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256
+    ):
+        raise RuntimeError("FR13 qrow32 B4 production exact4 identity drifted")
+    return task_ids
+
+
+def _fr13_fa2_qrow32_b4_geometry_mismatches(
+    *,
+    query,
+    key_cache,
+    value_cache,
+    cu_seqlens_q,
+    max_seqlen_q,
+    seqused_k,
+    max_seqlen_k,
+    causal,
+    window_size,
+    block_table,
+    softcap,
+    num_splits,
+    tree_bias,
+):
+    """The exact B4 shape the raw-byte dual gate qualified; nothing else."""
+    query_meta = (str(query.dtype), tuple(query.shape), tuple(query.stride()))
+    key_meta = (
+        str(key_cache.dtype), tuple(key_cache.shape), tuple(key_cache.stride())
+    )
+    value_meta = (
+        str(value_cache.dtype),
+        tuple(value_cache.shape),
+        tuple(value_cache.stride()),
+    )
+    cu_seqlens_q_meta = (str(cu_seqlens_q.dtype), tuple(cu_seqlens_q.shape))
+    seqused_k_meta = (str(seqused_k.dtype), tuple(seqused_k.shape))
+    block_table_meta = (str(block_table.dtype), tuple(block_table.shape))
+    tree_bias_meta = (
+        str(tree_bias.dtype), tuple(tree_bias.shape), tuple(tree_bias.stride())
+    )
+    window_meta = (
+        None
+        if window_size is None
+        else tuple(int(value) for value in window_size)
+    )
+    checks = (
+        (
+            "query(dtype,shape,stride)",
+            query.dtype == torch.bfloat16
+            and tuple(query.shape) == (128, 24, 256)
+            and int(query.stride(-2)) == 256
+            and int(query.stride(-1)) == 1,
+            query_meta,
+        ),
+        (
+            "key_cache(dtype,shape,stride)",
+            key_cache.dtype == torch.bfloat16
+            and tuple(key_cache.shape[1:]) == (1024, 4, 256)
+            and tuple(key_cache.stride())
+            == (2 * 1024 * 4 * 256, 4 * 256, 256, 1),
+            key_meta,
+        ),
+        (
+            "value_cache(dtype,shape,stride)",
+            value_cache.dtype == torch.bfloat16
+            and tuple(value_cache.shape) == tuple(key_cache.shape)
+            and tuple(value_cache.stride()) == tuple(key_cache.stride()),
+            value_meta,
+        ),
+        (
+            "cu_seqlens_q(dtype,shape)",
+            cu_seqlens_q.dtype == torch.int32
+            and tuple(cu_seqlens_q.shape) == (5,),
+            cu_seqlens_q_meta,
+        ),
+        (
+            "seqused_k(dtype,shape)",
+            seqused_k.dtype == torch.int32 and tuple(seqused_k.shape) == (4,),
+            seqused_k_meta,
+        ),
+        (
+            "block_table(dtype,shape)",
+            block_table.dtype == torch.int32
+            and block_table.ndim == 2
+            and int(block_table.shape[0]) == 4,
+            block_table_meta,
+        ),
+        (
+            "tree_bias(dtype,shape,stride)",
+            tree_bias.dtype == torch.float32
+            and tuple(tree_bias.shape) in ((32, 32), (4, 32, 32))
+            and int(tree_bias.stride(-1)) == 1,
+            tree_bias_meta,
+        ),
+        ("max_seqlen_q", int(max_seqlen_q) == 32, int(max_seqlen_q)),
+        ("max_seqlen_k", int(max_seqlen_k) > 0, int(max_seqlen_k)),
+        ("causal", not bool(causal), bool(causal)),
+        ("softcap", float(softcap) == 0.0, float(softcap)),
+        ("num_splits", int(num_splits) == 0, int(num_splits)),
+        ("window_size", window_meta in (None, (-1, -1)), window_meta),
+    )
+    return tuple(
+        f"{name}={actual!r}" for name, valid, actual in checks if not valid
+    )
+
+
+def _fr13_fa2_qrow32_b4_exact_geometry(**geometry):
+    return not _fr13_fa2_qrow32_b4_geometry_mismatches(**geometry)
+
+
+def _fr13_fa2_qrow32_b4_candidate_tree_bias(tree_bias, arm):
+    """Byte-for-byte the tagged operand the dual raw-byte gate qualified.
+
+    The tag is the batch stride itself: the forked FA2 flash_api dispatch is
+    gated on params.tree_bias_batch_stride == 0x20014, so a mask laid out with
+    that stride -- and only such a mask -- selects the GQA-pair kernel.
+    """
+    sentinel = int(_FR13_FA2_QROW32_B4_ARMS[arm]["sentinel"])
+    if tree_bias.dtype != torch.float32:
+        raise RuntimeError("FR13 qrow32 B4 tree bias is not FP32")
+    if tuple(tree_bias.shape) not in ((32, 32), (4, 32, 32)):
+        raise RuntimeError("FR13 qrow32 B4 tree bias shape drifted")
+    if int(tree_bias.stride(-1)) != 1:
+        raise RuntimeError("FR13 qrow32 B4 tree bias columns are not contiguous")
+    source = (
+        tree_bias.unsqueeze(0).expand(4, -1, -1)
+        if tree_bias.ndim == 2
+        else tree_bias
+    )
+    tagged = torch.empty_strided(
+        (4, 32, 32),
+        (sentinel, 32, 1),
+        dtype=tree_bias.dtype,
+        device=tree_bias.device,
+    )
+    tagged.copy_(source)
+    if tuple(tagged.stride()) != (sentinel, 32, 1):
+        raise RuntimeError("FR13 qrow32 B4 selector stride was not preserved")
+    return tagged
+
+
+def _fr13_fa2_qrow32_b4_profile_capture_active():
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn
+
+    profile_scope = getattr(
+        _fr13_gdn, "_FR13_FIXED32_PROFILE_CAPTURE_SCOPE", None
+    )
+    if profile_scope is None:
+        return False
+    graph_id = (
+        profile_scope.get("graph_id")
+        if isinstance(profile_scope, dict)
+        else None
+    )
+    if (
+        not isinstance(profile_scope, dict)
+        or set(profile_scope) != {"descriptor", "graph_id", "completed"}
+        or not isinstance(profile_scope.get("descriptor"), dict)
+        or (
+            graph_id is not None
+            and (type(graph_id) is not int or graph_id <= 0)
+        )
+        or profile_scope.get("completed") is not False
+        or getattr(
+            _fr13_gdn, "_FR13_FIXED32_PROFILE_MEMORY_SCOPE", None
+        ) is not True
+        or getattr(
+            _fr13_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None
+        ) is not None
+    ):
+        raise RuntimeError(
+            "FR13 qrow32 B4 selector profile capture scope drifted"
+        )
+    return True
+
+
+def _fr13_fa2_qrow32_b4_write(path_env, default_path, record):
+    import json as _json
+    from pathlib import Path as _Path
+
+    path = _Path(os.environ.get(path_env, default_path))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        _json.dumps(record, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+        encoding="ascii",
+    )
+    temporary.replace(path)
+
+
+def _fr13_fa2_qrow32_b4_production_begin(
+    *, layer, query, key_cache, value_cache, cu_seqlens_q, max_seqlen_q,
+    seqused_k, max_seqlen_k, causal, window_size, block_table, softcap,
+    num_splits, tree_bias,
+):
+    arm = _fr13_fa2_qrow32_b4_arm("FR13_FA2_QROW32_B4_PRODUCTION_ARM")
+    if arm is None:
+        return None
+    if os.environ.get("FR13_FA2_QROW32_B4_INTERNAL_ATTESTED") != "1":
+        raise RuntimeError("FR13 qrow32 B4 production has no launcher attestation")
+    _fr13_fa2_qrow32_b4_require_k64()
+    fixed32_mode = _fr13_fa2_qrow32_b4_require_topology()
+    task_ids = _fr13_fa2_qrow32_b4_require_exact4()
+    candidate_digest, source_commit, patch_source_digest = (
+        _fr13_fa2_qrow32_b4_require_identity(arm)
+    )
+    pass_digest = _fr13_fa2_qrow32_b4_digest(
+        "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256", "pass sidecar"
+    )
+    dual_gate_digest = _fr13_fa2_qrow32_b4_digest(
+        "FR13_FA2_QROW32_B4_DUAL_GATE_SHA256", "dual gate"
+    )
+    if _fr13_fa2_qrow32_b4_profile_capture_active():
+        # Memory-profile bootstrap graphs are not exact4 traffic. Serving the
+        # untagged mask there keeps the stock dispatch and emits no engagement.
+        return {
+            "arm": arm, "candidate_served": False,
+            "profile_capture_bypass": True,
+            "tree_bias": tree_bias,
+            "num_splits": int(num_splits),
+        }
+    capturing = torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
+    context = None
+    if capturing:
+        from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn
+
+        context = getattr(_fr13_gdn, "_FR13_FIXED32_CAPTURE_CONTEXT", None)
+        if not isinstance(context, dict):
+            raise RuntimeError(
+                "FR13 qrow32 B4 production has no final fixed32 capture context"
+            )
+        descriptor = context.get("descriptor")
+        if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 4:
+            raise RuntimeError("FR13 qrow32 B4 production is not final fixed32 B4")
+    elif os.environ.get("ENFORCE_EAGER", "0") != "1":
+        raise RuntimeError("FR13 qrow32 B4 production ran outside capture or eager")
+    geometry_mismatches = _fr13_fa2_qrow32_b4_geometry_mismatches(
+        query=query, key_cache=key_cache, value_cache=value_cache,
+        cu_seqlens_q=cu_seqlens_q, max_seqlen_q=max_seqlen_q,
+        seqused_k=seqused_k, max_seqlen_k=max_seqlen_k, causal=causal,
+        window_size=window_size, block_table=block_table, softcap=softcap,
+        num_splits=num_splits, tree_bias=tree_bias,
+    )
+    if geometry_mismatches:
+        raise RuntimeError(
+            "FR13 qrow32 B4 production geometry drifted: "
+            + "; ".join(geometry_mismatches)
+        )
+    layer_name = str(getattr(layer, "layer_name", ""))
+    if layer_name not in _FR13_FA2_QROW32_B4_TARGET_LAYERS:
+        raise RuntimeError("FR13 qrow32 B4 production layer identity drifted")
+    config = _FR13_FA2_QROW32_B4_ARMS[arm]
+    return {
+        "arm": arm, "candidate_served": True, "profile_capture_bypass": False,
+        "tree_bias": _fr13_fa2_qrow32_b4_candidate_tree_bias(tree_bias, arm),
+        "num_splits": config["num_splits"], "sentinel": config["sentinel"],
+        "layer_name": layer_name, "capturing": capturing,
+        "graph_id": int(context.get("graph_id", 0)) if capturing else 0,
+        "fixed32_mode": fixed32_mode,
+        "candidate_so_sha256": candidate_digest,
+        "source_commit": source_commit,
+        "patch_source_sha256": patch_source_digest,
+        "pass_sidecar_sha256": pass_digest,
+        "dual_gate_sha256": dual_gate_digest,
+        "task_ids": list(task_ids),
+    }
+
+
+def _fr13_fa2_qrow32_b4_production_end(selection, *, completed):
+    arm = _fr13_fa2_qrow32_b4_arm("FR13_FA2_QROW32_B4_PRODUCTION_ARM")
+    if selection is None:
+        if arm is not None:
+            raise RuntimeError("FR13 qrow32 B4 production silently fell back")
+        return
+    if not completed:
+        return
+    if selection.get("profile_capture_bypass") is True:
+        return
+    if selection.get("candidate_served") is not True or selection.get("arm") != arm:
+        raise RuntimeError("FR13 qrow32 B4 production did not serve selected arm")
+    config = _FR13_FA2_QROW32_B4_ARMS[arm]
+    bias = selection["tree_bias"]
+    if (
+        int(selection["num_splits"]) != config["num_splits"]
+        or int(bias.stride(0)) != config["sentinel"]
+    ):
+        raise RuntimeError("FR13 qrow32 B4 production selector was not preserved")
+    if selection["capturing"]:
+        graph_id = int(selection["graph_id"])
+        if graph_id <= 0:
+            raise RuntimeError("FR13 qrow32 B4 production graph identity drifted")
+        graph = _FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS.setdefault(
+            graph_id, {"layers": set(), "arm": arm}
+        )
+        if graph["arm"] != arm or selection["layer_name"] in graph["layers"]:
+            raise RuntimeError("FR13 qrow32 B4 production capture engagement drifted")
+        graph["layers"].add(selection["layer_name"])
+        return
+    state = _FR13_FA2_QROW32_B4_EAGER_STATE
+    state["calls"] = int(state["calls"]) + 1
+    state["layers"].add(selection["layer_name"])
+    if len(state["layers"]) == 16 and not state["emitted"]:
+        record = _fr13_fa2_qrow32_b4_production_record(
+            arm=arm, runtime_mode="EAGER", graph_id=0,
+            graph_signature=None, layers=sorted(state["layers"]),
+            calls=int(state["calls"]),
+        )
+        _fr13_fa2_qrow32_b4_write(
+            "FR13_FA2_QROW32_B4_PRODUCTION_ENGAGEMENT_JSON",
+            "/logs/fr13_fa2_qrow32_b4_production_engagement.json", record,
+        )
+        state["emitted"] = True
+
+
+def _fr13_fa2_qrow32_b4_production_record(
+    *, arm, runtime_mode, graph_id, graph_signature, layers, calls,
+):
+    config = _FR13_FA2_QROW32_B4_ARMS[arm]
+    return {
+        "schema": "fr13.fixed32.fa2_qrow32_b4_production_engagement.v1",
+        "status": "ENGAGED", "runtime_mode": runtime_mode,
+        "batch_size": 4, "concurrency": 4, "physical_rows_per_slot": 32,
+        "total_query_rows": 128, "arm": arm,
+        "fixed32_mode": os.environ["FR13_FIXED32_MODE"],
+        "selector_sentinel": config["sentinel"],
+        "num_splits": config["num_splits"],
+        "graph_id": graph_id, "graph_signature": graph_signature,
+        "layers": layers, "layer_count": len(layers), "calls_observed": calls,
+        "candidate_so_sha256": os.environ["FR13_FA2_QROW32_SO_SHA256"],
+        "candidate_so_size": config["candidate_size"],
+        "fa2_head": config["fa2_head"],
+        "fa2_source_closure_sha256": config["source_closure_sha256"],
+        "source_commit": os.environ["FR13_FA2_QROW32_SOURCE_COMMIT"],
+        "patch_source_sha256": os.environ[
+            "FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256"
+        ],
+        "pass_sidecar_sha256": os.environ[
+            "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256"
+        ],
+        "dual_gate_sha256": os.environ["FR13_FA2_QROW32_B4_DUAL_GATE_SHA256"],
+        "task_ids": list(_FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS),
+        "subset_sha256": _FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256,
+        "draft_vocab_root": 1, "draft_vocab_k": 65536,
+        "candidate_served": True, "fallback_allowed": False,
+        "dispatch": config["candidate_dispatch"],
+    }
+
+
+def _fr13_fa2_qrow32_b4_production_capture_end(
+    graph_id, graph_signature, runtime_mode, batch_size,
+):
+    arm = _fr13_fa2_qrow32_b4_arm("FR13_FA2_QROW32_B4_PRODUCTION_ARM")
+    if arm is None or graph_signature is None:
+        return
+    if str(runtime_mode).upper() != "FULL" or int(batch_size) != 4:
+        raise RuntimeError("FR13 qrow32 B4 production captured outside FULL B4")
+    graph = _FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS.get(int(graph_id))
+    layers = [] if not isinstance(graph, dict) else sorted(graph.get("layers", ()))
+    if (
+        len(layers) != 16
+        or set(layers) != set(_FR13_FA2_QROW32_B4_TARGET_LAYERS)
+        or graph.get("arm") != arm
+    ):
+        raise RuntimeError(
+            "FR13 qrow32 B4 production did not capture all target tree layers"
+        )
+    record = _fr13_fa2_qrow32_b4_production_record(
+        arm=arm, runtime_mode="FULL", graph_id=int(graph_id),
+        graph_signature=str(graph_signature), layers=layers, calls=len(layers),
+    )
+    _fr13_fa2_qrow32_b4_write(
+        "FR13_FA2_QROW32_B4_PRODUCTION_ENGAGEMENT_JSON",
+        "/logs/fr13_fa2_qrow32_b4_production_engagement.json", record,
+    )
+
+
+'''
+
+
 FIXED32_QUERY_TILE16_PRODUCTION_HELPERS = r'''# FR13_FA2_QROW16_PRODUCTION
 _FR13_FA2_QROW16_PRODUCTION_GRAPHS = {}
 _FR13_FA2_QROW16_EAGER_STATE = {
@@ -5673,9 +6159,31 @@ def _patch_tree_attn(
     fixed32_query_tile32_live_ab: bool = False,
     fixed32_query_tile32_b1_live_ab: bool = False,
     fixed32_query_tile32_b1_production: bool = False,
+    fixed32_query_tile32_b4_production: bool = False,
     fixed32_query_tile16_production: bool = False,
     dfwd_unified_bm8_production: bool = False,
 ) -> bool:
+    # Every private FA2 decode selector rewrites the SAME
+    # `if not _fr13_reordered:` decode call. Two of them installed together
+    # would silently produce a first-one-wins call site, so the invariant is
+    # enforced here -- at the only place that edits tree_attn.py -- rather than
+    # left to the argparse front door, which is not the only caller.
+    _private_selectors = {
+        "fixed32_query_tile16_live_ab": fixed32_query_tile16_live_ab,
+        "fixed32_query_tile32_live_ab": fixed32_query_tile32_live_ab,
+        "fixed32_query_tile32_b1_live_ab": fixed32_query_tile32_b1_live_ab,
+        "fixed32_query_tile32_b1_production": fixed32_query_tile32_b1_production,
+        "fixed32_query_tile32_b4_production": fixed32_query_tile32_b4_production,
+        "fixed32_query_tile16_production": fixed32_query_tile16_production,
+    }
+    _active_selectors = sorted(
+        name for name, value in _private_selectors.items() if value
+    )
+    if len(_active_selectors) > 1:
+        raise ValueError(
+            "tree_attn private FA2 decode selectors are mutually exclusive: "
+            + ", ".join(_active_selectors)
+        )
     text = path.read_text()
     changed = False
     old_filter = (
@@ -5838,6 +6346,14 @@ def _fr13_sr_causal_flag():
             "def _get_depth_counts(",
             FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS,
             "qrow32 B1 live and production selector helpers",
+        )
+        changed = changed or did
+    if fixed32_query_tile32_b4_production:
+        text, did = _insert_once(
+            text,
+            "def _get_depth_counts(",
+            FIXED32_QUERY_TILE32_B4_PRODUCTION_HELPERS,
+            "qrow32 B4 GQA-pair production selector helpers",
         )
         changed = changed or did
     if fixed32_query_tile16_production:
@@ -6218,6 +6734,93 @@ def _fr13_sr_causal_flag():
             )
         text = text.replace(production_call, production_replacement, 1)
         changed = True
+    if fixed32_query_tile32_b4_production and (
+        "_fr13_fa2_qrow32_b4_production_begin(\n" not in text.split(
+            "class TreeAttentionImpl", 1
+        )[-1]
+    ):
+        # The served decode call itself: the selection's tagged tree_bias goes
+        # straight into flash_attn_varlen_func(out=output[...]), so the forked
+        # FA2 dispatch takes the GQA-pair kernel for real exact4 traffic.
+        production_call = """                    flash_attn_varlen_func(
+                        q=query[:num_decode_tokens],
+                        k=key_cache,
+                        v=value_cache,
+                        out=output[:num_decode_tokens],
+                        cu_seqlens_q=decode_meta.query_start_loc,
+                        max_seqlen_q=decode_meta.max_query_len,
+                        seqused_k=decode_meta.seq_lens,
+                        max_seqlen_k=decode_meta.max_seq_len,
+                        softmax_scale=self.scale,
+                        causal=_fr13_sr_causal_flag(),
+                        alibi_slopes=None,
+                        window_size=sliding_window_size,
+                        block_table=decode_meta.block_table,
+                        softcap=self.logits_soft_cap,
+                        fa_version=2,
+                        tree_bias=tree_bias,
+                    )
+"""
+        production_replacement = """                    _fr13_qrow32_b4_selection = _fr13_fa2_qrow32_b4_production_begin(
+                        layer=layer,
+                        query=query[:num_decode_tokens],
+                        key_cache=key_cache,
+                        value_cache=value_cache,
+                        cu_seqlens_q=decode_meta.query_start_loc,
+                        max_seqlen_q=decode_meta.max_query_len,
+                        seqused_k=decode_meta.seq_lens,
+                        max_seqlen_k=decode_meta.max_seq_len,
+                        causal=_fr13_sr_causal_flag(),
+                        window_size=sliding_window_size,
+                        block_table=decode_meta.block_table,
+                        softcap=self.logits_soft_cap,
+                        num_splits=1 if envs.VLLM_BATCH_INVARIANT else 0,
+                        tree_bias=tree_bias,
+                    )
+                    try:
+                        flash_attn_varlen_func(
+                            q=query[:num_decode_tokens],
+                            k=key_cache,
+                            v=value_cache,
+                            out=output[:num_decode_tokens],
+                            cu_seqlens_q=decode_meta.query_start_loc,
+                            max_seqlen_q=decode_meta.max_query_len,
+                            seqused_k=decode_meta.seq_lens,
+                            max_seqlen_k=decode_meta.max_seq_len,
+                            softmax_scale=self.scale,
+                            causal=_fr13_sr_causal_flag(),
+                            alibi_slopes=None,
+                            window_size=sliding_window_size,
+                            block_table=decode_meta.block_table,
+                            softcap=self.logits_soft_cap,
+                            fa_version=2,
+                            num_splits=(
+                                _fr13_qrow32_b4_selection["num_splits"]
+                                if _fr13_qrow32_b4_selection is not None
+                                else (1 if envs.VLLM_BATCH_INVARIANT else 0)
+                            ),
+                            tree_bias=(
+                                _fr13_qrow32_b4_selection["tree_bias"]
+                                if _fr13_qrow32_b4_selection is not None
+                                else tree_bias
+                            ),
+                        )
+                    except BaseException:
+                        _fr13_fa2_qrow32_b4_production_end(
+                            _fr13_qrow32_b4_selection, completed=False
+                        )
+                        raise
+                    else:
+                        _fr13_fa2_qrow32_b4_production_end(
+                            _fr13_qrow32_b4_selection, completed=True
+                        )
+"""
+        if text.count(production_call) != 1:
+            raise RuntimeError(
+                "qrow32 B4 attested production decode call is not unique"
+            )
+        text = text.replace(production_call, production_replacement, 1)
+        changed = True
     if fixed32_query_tile16_production and (
         "_fr13_fa2_qrow16_production_begin(\n" not in text.split(
             "class TreeAttentionImpl", 1
@@ -6579,6 +7182,31 @@ def _patch_cuda_graph_qrow32_b1_production(path: Path) -> bool:
     return True
 
 
+def _patch_cuda_graph_qrow32_b4_production(path: Path) -> bool:
+    text = path.read_text()
+    sentinel = "# FR13_FA2_QROW32_B4_PRODUCTION_CAPTURE_END"
+    if sentinel in text:
+        return False
+    anchor = "            entry.cudagraph = cudagraph\n"
+    if text.count(anchor) != 1:
+        raise RuntimeError("qrow32 B4 production capture-end anchor is not unique")
+    replacement = anchor + f'''            {sentinel}: fail unless every exact
+            # target tree layer captured the GQA-pair candidate in final B4.
+            from vllm.v1.attention.backends.tree_attn import (
+                _fr13_fa2_qrow32_b4_production_capture_end,
+            )
+            _fr13_fa2_qrow32_b4_production_capture_end(
+                id(entry.cudagraph),
+                getattr(entry, "_fr13_fixed32_graph_signature", None),
+                self.runtime_mode.name,
+                entry.batch_descriptor.num_reqs,
+            )
+'''
+    path.write_text(text.replace(anchor, replacement, 1))
+    py_compile.compile(path, doraise=True)
+    return True
+
+
 def patch_installed_vllm(
     site_packages: Path,
     *,
@@ -6586,6 +7214,7 @@ def patch_installed_vllm(
     fixed32_query_tile32_live_ab: bool = False,
     fixed32_query_tile32_b1_live_ab: bool = False,
     fixed32_query_tile32_b1_production: bool = False,
+    fixed32_query_tile32_b4_production: bool = False,
     fixed32_query_tile16_production: bool = False,
     dfwd_unified_bm8_production: bool = False,
 ) -> dict[str, bool]:
@@ -6600,6 +7229,9 @@ def patch_installed_vllm(
             fixed32_query_tile32_b1_live_ab=fixed32_query_tile32_b1_live_ab,
             fixed32_query_tile32_b1_production=(
                 fixed32_query_tile32_b1_production
+            ),
+            fixed32_query_tile32_b4_production=(
+                fixed32_query_tile32_b4_production
             ),
             fixed32_query_tile16_production=fixed32_query_tile16_production,
             dfwd_unified_bm8_production=dfwd_unified_bm8_production,
@@ -6625,6 +7257,10 @@ def patch_installed_vllm(
         )
     elif fixed32_query_tile32_b1_production:
         result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b1_production(
+            site_packages / "vllm/compilation/cuda_graph.py"
+        )
+    elif fixed32_query_tile32_b4_production:
+        result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b4_production(
             site_packages / "vllm/compilation/cuda_graph.py"
         )
     elif fixed32_query_tile16_production:
@@ -6717,6 +7353,11 @@ def main() -> int:
         help="install the attested B1 no-split production selector",
     )
     parser.add_argument(
+        "--fixed32-query-tile32-b4-production",
+        action="store_true",
+        help="install the attested exact4 B4 qrow32 GQA-pair production selector",
+    )
+    parser.add_argument(
         "--fixed32-query-tile16-production",
         action="store_true",
         help="install the attested exact-B1 qrow16 production selector",
@@ -6739,6 +7380,7 @@ def main() -> int:
             args.fixed32_query_tile32_live_ab,
             args.fixed32_query_tile32_b1_live_ab,
             args.fixed32_query_tile32_b1_production,
+            args.fixed32_query_tile32_b4_production,
             args.fixed32_query_tile16_production,
         )
     )
@@ -6801,6 +7443,15 @@ def main() -> int:
             "a combined qrow32 B1 source/selector patch requires "
             "--fixed32-query-tile32-b1"
         )
+    if (
+        args.fixed32_query_tile32_b4_production
+        and not args.skip_source
+        and not args.fixed32_query_gqa_pair32
+    ):
+        parser.error(
+            "a combined qrow32 B4 source/production patch requires "
+            "--fixed32-query-gqa-pair32"
+        )
 
     payload: dict[str, object] = {
         "tree_bias_tile_earlyout": args.tree_bias_tile_earlyout,
@@ -6819,6 +7470,9 @@ def main() -> int:
         ),
         "fixed32_query_tile32_b1_production": (
             args.fixed32_query_tile32_b1_production
+        ),
+        "fixed32_query_tile32_b4_production": (
+            args.fixed32_query_tile32_b4_production
         ),
         "fixed32_query_tile16_production": args.fixed32_query_tile16_production,
         "dfwd_unified_bm8_production": args.dfwd_unified_bm8_production,
@@ -6850,6 +7504,9 @@ def main() -> int:
             ),
             fixed32_query_tile32_b1_production=(
                 args.fixed32_query_tile32_b1_production
+            ),
+            fixed32_query_tile32_b4_production=(
+                args.fixed32_query_tile32_b4_production
             ),
             fixed32_query_tile16_production=args.fixed32_query_tile16_production,
             dfwd_unified_bm8_production=args.dfwd_unified_bm8_production,
