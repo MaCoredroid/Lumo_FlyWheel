@@ -56,6 +56,9 @@ DRAFT_VOCAB_BLOCKS_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621b
 QUALIFICATION_PROFILE=k64_root
 B4_KV_CACHE_MEMORY_BYTES=49392123904
 EXPECTED_TOK_PER_DRAFT=31
+SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
+MANDATORY_WEIGHT_BYTES=32666638208
+MANDATORY_WEIGHT_FLOOR_MS=119.658015414
 
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
@@ -82,6 +85,27 @@ ON_ARM="${FIXED32_MODE}_stock_mambacdiv1_${TAG}"
   || { echo "STOCK_FA2_SO is not the exact-safe stock FA2 binary" >&2; exit 2; }
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "all Docker containers must be absent before the pair" >&2; exit 2; }
+
+# The same exported route preamble the citable runner builds before it launches
+# an arm. Skipping it is how the first attempt died pre-docker: the launcher
+# reads FR13_FIXED32_TAW_WALK_CAP as "${NAME:-}" and int("") raises "fixed32
+# integer route pin is malformed". The floor-contract assertion below is the
+# runner's, kept so this driver cannot boot a different fixed-work floor.
+export BSIZE=4
+export CONC=4
+export WALL=0
+export FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"
+export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"
+export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
+export FR13_NEEDS_ALLOW="$NEEDS_ALLOW"
+export FR13_FLOOR_ORDER=TH
+source scripts/fr13_canonical_env.sh
+run_variant() { :; }
+source "$SEQUENCE"
+unset -f run_variant
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "$MANDATORY_WEIGHT_BYTES" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "$MANDATORY_WEIGHT_FLOOR_MS" ]] \
+  || { echo "canonical B4 qualification floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"
 printf 'classification=diagnostic_within_run_lever_pair\nciteable_cutlass_timing=0\nformal_floor_acceptance_eligible=0\nonly_arm_delta=FR13_MAMBA_SPEC_BLOCKS_CDIV_0_to_1\nlever=FR13_MAMBA_SPEC_BLOCKS_CDIV\nboth_arms_cutlass=stock\nfixed32_mode=%s\nbatch_size=4\nconcurrency=4\nkv_cache_memory_bytes=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nqualification_profile=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\nsubset=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\nsource_commit=%s\nrunner_sha256=%s\noff_arm=%s\non_arm=%s\nrunroot=%s\nstarted=%s\n' \
