@@ -4158,35 +4158,78 @@ def _fr13_fa2_qrow32_live_ab_register(
         raise RuntimeError("FR13 qrow32 live gate reached a non-target layer")
 
     _, candidate_contract = _fr13_fa2_qrow32_live_ab_contract()
-    exact = (
-        query.dtype == torch.bfloat16
-        and tuple(query.shape) == (128, 24, 256)
-        and int(query.stride(-1)) == 1
-        and int(query.stride(-2)) == 256
-        and key_cache.dtype == torch.bfloat16
-        and value_cache.dtype == torch.bfloat16
-        and tuple(key_cache.shape[1:]) == (1024, 4, 256)
-        and tuple(value_cache.shape) == tuple(key_cache.shape)
-        and tuple(key_cache.stride()) == (1024 * 4 * 256, 4 * 256, 256, 1)
-        and tuple(value_cache.stride()) == tuple(key_cache.stride())
-        and cu_seqlens_q.dtype == torch.int32
-        and tuple(cu_seqlens_q.shape) == (5,)
-        and seqused_k.dtype == torch.int32
-        and tuple(seqused_k.shape) == (4,)
-        and block_table.dtype == torch.int32
-        and block_table.ndim == 2
-        and int(block_table.shape[0]) == 4
-        and tree_bias.dtype == torch.float32
-        and tuple(tree_bias.shape) in ((32, 32), (4, 32, 32))
-        and int(tree_bias.stride(-1)) == 1
-        and int(max_seqlen_q) == 32
-        and int(max_seqlen_k) > 0
-        and not bool(causal)
-        and float(softcap) == 0.0
-        and int(num_splits) == int(candidate_contract["num_splits"])
+    # Each predicate carries its observed value so a drift names itself. A bare
+    # conjunction here is undiagnosable: it cannot distinguish a genuinely wrong
+    # engine shape from a dummy-run tensor that merely has not been filled yet.
+    _checks = (
+        ("query.dtype", query.dtype == torch.bfloat16, query.dtype),
+        ("query.shape", tuple(query.shape) == (128, 24, 256), tuple(query.shape)),
+        ("query.stride(-1)", int(query.stride(-1)) == 1, int(query.stride(-1))),
+        ("query.stride(-2)", int(query.stride(-2)) == 256, int(query.stride(-2))),
+        ("key_cache.dtype", key_cache.dtype == torch.bfloat16, key_cache.dtype),
+        ("value_cache.dtype", value_cache.dtype == torch.bfloat16, value_cache.dtype),
+        (
+            "key_cache.shape[1:]",
+            tuple(key_cache.shape[1:]) == (1024, 4, 256),
+            tuple(key_cache.shape),
+        ),
+        (
+            "value_cache.shape",
+            tuple(value_cache.shape) == tuple(key_cache.shape),
+            tuple(value_cache.shape),
+        ),
+        (
+            "key_cache.stride",
+            tuple(key_cache.stride()) == (1024 * 4 * 256, 4 * 256, 256, 1),
+            tuple(key_cache.stride()),
+        ),
+        (
+            "value_cache.stride",
+            tuple(value_cache.stride()) == tuple(key_cache.stride()),
+            tuple(value_cache.stride()),
+        ),
+        ("cu_seqlens_q.dtype", cu_seqlens_q.dtype == torch.int32, cu_seqlens_q.dtype),
+        (
+            "cu_seqlens_q.shape",
+            tuple(cu_seqlens_q.shape) == (5,),
+            tuple(cu_seqlens_q.shape),
+        ),
+        ("seqused_k.dtype", seqused_k.dtype == torch.int32, seqused_k.dtype),
+        ("seqused_k.shape", tuple(seqused_k.shape) == (4,), tuple(seqused_k.shape)),
+        ("block_table.dtype", block_table.dtype == torch.int32, block_table.dtype),
+        ("block_table.ndim", block_table.ndim == 2, block_table.ndim),
+        (
+            "block_table.shape[0]",
+            int(block_table.shape[0]) == 4,
+            tuple(block_table.shape),
+        ),
+        ("tree_bias.dtype", tree_bias.dtype == torch.float32, tree_bias.dtype),
+        (
+            "tree_bias.shape",
+            tuple(tree_bias.shape) in ((32, 32), (4, 32, 32)),
+            tuple(tree_bias.shape),
+        ),
+        (
+            "tree_bias.stride(-1)",
+            int(tree_bias.stride(-1)) == 1,
+            int(tree_bias.stride(-1)),
+        ),
+        ("max_seqlen_q", int(max_seqlen_q) == 32, int(max_seqlen_q)),
+        ("max_seqlen_k", int(max_seqlen_k) > 0, int(max_seqlen_k)),
+        ("causal", not bool(causal), bool(causal)),
+        ("softcap", float(softcap) == 0.0, float(softcap)),
+        (
+            "num_splits",
+            int(num_splits) == int(candidate_contract["num_splits"]),
+            int(num_splits),
+        ),
     )
-    if not exact:
-        raise RuntimeError("FR13 qrow32 live gate saw non-canonical B4 geometry")
+    _failed = [(name, observed) for name, ok, observed in _checks if not ok]
+    if _failed:
+        raise RuntimeError(
+            "FR13 qrow32 live gate saw non-canonical B4 geometry: "
+            + "; ".join(f"{name}={observed!r}" for name, observed in _failed)
+        )
     if window_size is not None and tuple(int(x) for x in window_size) != (-1, -1):
         raise RuntimeError("FR13 qrow32 live gate requires a full attention window")
 
