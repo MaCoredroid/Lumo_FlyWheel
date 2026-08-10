@@ -57,6 +57,8 @@ def _write_arm(
     census_steps: int | None = None,
     task_ids: list[str] | None = None,
     env: dict[str, str] | None = None,
+    reduce_now: bool = True,
+    arm_complete: bool = True,
 ) -> Path:
     """One B=4 arm: four NESTED brackets on a shared origin + a work census.
 
@@ -102,12 +104,19 @@ def _write_arm(
         "".join(f"{k}={v}\n" for k, v in sorted(env_state.items())), encoding="utf-8"
     )
 
-    topo._run(
-        out_root,
-        arm_dir / "deploy_speed_fullwall.json",
-        batch_size=4,
-        work_census=census,
-    )
+    if reduce_now:
+        topo._run(
+            out_root,
+            arm_dir / "deploy_speed_fullwall.json",
+            batch_size=4,
+            work_census=census,
+        )
+    else:
+        # Mimic the campaign driver: it writes deploy_speed_${TAG}.json and does
+        # NOT pass --work-census, so its aggregate is UNGATED.
+        topo._run(out_root, arm_dir / "deploy_speed_gate0.json", batch_size=4)
+    if arm_complete:
+        (arm_dir / "arm_ended_at.txt").write_text("2026-08-10T00:00:00Z\n", encoding="utf-8")
     return arm_dir
 
 
@@ -382,3 +391,75 @@ def test_runner_pins_the_citability_contract():
     assert "FR13_FLOOR_ORDER" in text
     # preflight: the GPU must be uncontended before any launch.
     assert "docker ps -aq" in text
+
+
+# --------------------------------------------------------------------------- #
+# offline finalization: the driver's artifact is ungated and must be re-reduced #
+# --------------------------------------------------------------------------- #
+def test_driver_artifact_is_ungated_and_the_gate_refuses_it(tmp_path):
+    """deploy_speed_${TAG}.json carries work_census_gate absent -> not citable."""
+    arm = _write_arm(tmp_path / "tail6_fixed32_gate0", reduce_now=False)
+    driver_artifact = json.loads((arm / "deploy_speed_gate0.json").read_text())
+    assert driver_artifact["bracket_reduction"]["work_census_gate"]["status"] == "absent"
+
+    record = gate.reduce_pass_arm(arm, mode="tail6_fixed32", pass_index=0, floor_order="TH")
+    assert record["included"] is False
+    assert "not a regular file" in record["exclusion_reason"]
+
+
+def test_finalize_reruns_the_reduction_with_the_census(tmp_path):
+    arm = _write_arm(tmp_path / "tail6_fixed32_gate0", reduce_now=False)
+    action = gate.finalize_arm(arm, expected_tok_per_draft=32)
+    assert action["action"] == "finalized"
+
+    speed = json.loads((arm / gate.DEPLOY_SPEED_FILENAME).read_text())
+    assert speed["bracket_reduction"]["work_census_gate"]["status"] == "pass"
+    assert speed["bracket_reduction"]["topology"] == "nested"
+
+    record = gate.reduce_pass_arm(arm, mode="tail6_fixed32", pass_index=0, floor_order="TH")
+    assert record["included"] is True, record["exclusion_reason"]
+    # Finalization must not change the measured aggregate -- only witness it.
+    driver_artifact = json.loads((arm / "deploy_speed_gate0.json").read_text())
+    assert record["measured_tps_fullstep_wall"] == pytest.approx(
+        driver_artifact["measured_tps_fullstep_wall"]
+    )
+
+
+def test_finalize_is_idempotent(tmp_path):
+    arm = _write_arm(tmp_path / "tail6_fixed32_gate0", reduce_now=False)
+    assert gate.finalize_arm(arm, expected_tok_per_draft=32)["action"] == "finalized"
+    assert gate.finalize_arm(arm, expected_tok_per_draft=32)["action"] == "already_present"
+
+
+def test_finalize_refuses_an_arm_that_is_still_serving(tmp_path):
+    """No arm_ended_at.txt => brackets/census still growing => torn read."""
+    arm = _write_arm(
+        tmp_path / "hydra27_fixed32_gate1", reduce_now=False, arm_complete=False
+    )
+    assert gate.finalize_arm(arm, expected_tok_per_draft=32)["action"] == "skipped_arm_still_serving"
+    assert not (arm / gate.DEPLOY_SPEED_FILENAME).exists()
+
+
+def test_finalize_without_a_census_fails_closed_rather_than_reducing(tmp_path):
+    arm = _write_arm(tmp_path / "tail6_fixed32_gate0", reduce_now=False)
+    (arm / gate.WORK_CENSUS_RELPATH).unlink()
+    assert gate.finalize_arm(arm, expected_tok_per_draft=32)["action"] == "skipped_no_work_census"
+    assert not (arm / gate.DEPLOY_SPEED_FILENAME).exists()
+
+
+def test_finalize_gate_root_walks_every_pass(tmp_path):
+    root = tmp_path / "gate"
+    for index in range(4):
+        pass_dir = root / f"pass_{index:02d}"
+        pass_dir.mkdir(parents=True)
+        for mode in MODES:
+            _write_arm(pass_dir / f"{mode}_gate{index}", reduce_now=False)
+    actions = gate.finalize_gate_root(root, expected_tok_per_draft=32)
+    assert len(actions) == 8
+    assert all(a["action"] == "finalized" for a in actions)
+
+    payload = gate.build_verdict(
+        repo=REPO, gate_root=root, source_commit="x",
+        topology_passes=gate.discover_passes(root), min_passes=4,
+    )
+    assert payload["gate_verdict"] == "PASS"

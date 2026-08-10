@@ -533,3 +533,77 @@ TMPDIR=/home/mark/shared/tmp-scratch .venv/bin/python -m pytest \
 3. **Mamba narrowing stays OFF** for this gate, per the standing instruction not to flip
    defaults. Once Mark greenlights the flip, the gate reruns and the two verdicts form the
    citable promotion pair.
+
+---
+
+## 8. Addendum (2026-08-10, mid-campaign): two defects found by the first run
+
+### 8.1 The driver's deploy-speed artifact is UNGATED
+
+`fr13_b4_campaign_driver.sh::reduce` (`:185-199`) writes `deploy_speed_${TAG}.json` and
+does **not** pass `--work-census`. Its output therefore records
+`work_census_gate.status: "absent"` — an ungated B4 aggregate, exactly the artifact the
+alignment study invalidated. The pair-runner
+(`fr13_run_b4_cutlass_persistent_m128_timing.sh:613-617`) does pass it; the campaign driver
+never did, because before this gate nothing downstream demanded it.
+
+The gate correctly refused those arms. **Fix is offline and lossless:** every input the
+cross-gate needs (the four per-task pre/post `/metrics` brackets and the arm's own
+26.8 MB `logs/fr13_fixed32_work_census.jsonl`) is written during serving and persists, so
+the reduction is simply re-run *with* the witness. Implemented as
+`fr13_b4_floor_gate_reduce.py --finalize`, which calls the same
+`fr13_measure.py cmd_deploy_speed` the driver called. Verified on pass_00: the aggregate is
+**unchanged** (34.406 TPS both before and after) — finalization does not alter the
+measurement, it *witnesses* it (census 3766 steps / 5206 events).
+
+Finalization is idempotent, writes via `os.replace`, and refuses any arm lacking
+`arm_ended_at.txt` — an arm still serving is still appending to its brackets and census, so
+reducing it would be a torn read.
+
+### 8.2 The canonical per-pass floor gate is unrecoverable for this campaign
+
+`fr13_floor_gate.py:4879-4884` pins `summary.file_count == 62` and
+`python_package_file_count == 25`. The fixed32 closure on this branch is **90 / 26**. Worse,
+the pin contradicts the manifest builder itself: `fr13_runtime_manifest.py` PROFILES
+`["fixed32"]` declares `package_file_count=26` (`:150`), so **25 is unsatisfiable by
+construction**. The pin was last correct at `d944ae98b` (2026-07-30) and the closure has
+since grown. `pass_00/fixed32_floor_gate.json` is the only such file anywhere in `output/`
+— the canonical gate has never successfully run on this branch, so this is systemic and
+pre-existing, not introduced by the gate runner.
+
+**It cannot be repaired retroactively, and the reason is structural:**
+`validate_source_fingerprint` rebuilds the closure and requires `current == end`, and
+`scripts/fr13_floor_gate.py` is itself inside that closure (`FIXED32_VERDICT_TOOLS`,
+`fr13_runtime_manifest.py:134-139`). So correcting the pin changes the closure hash and
+makes the already-recorded manifests mismatch. **The pin is self-referential: you cannot
+both match a recorded closure and have a corrected pin inside it.** Any fix therefore
+applies to *future* campaigns only.
+
+Consequence for this gate: **none that affects citability.** What the canonical gate would
+have contributed is (a) its cap verdict, which at B4 is descriptive anyway
+(`b4_cap_applicable: false`, §4), and (b) a within-run bootstrap on step wall, which the
+between-pass interval on `step_wall_ms` covers. Crucially, **manifest stability is still
+enforced** — by the driver's own `finalize_fixed32_manifest`, which byte-compares
+at-launch against at-end and exits 14 on drift; pass_00 passed it. So the provenance
+guarantee in §1.4 item 6 holds; only §1.4 item 3 (floor-gate ingest) is unavailable, and
+the reducer never depended on it.
+
+**Do not fix the pin while a campaign is serving.** Editing any closure file mid-flight
+changes the closure between a pass's at-launch and at-end manifest, which trips
+`finalize_fixed32_manifest` and kills that pass. The correction (62→90, 25→26, or better,
+deriving both from the profile spec instead of duplicating them) must land after serving
+completes.
+
+### 8.3 First real numbers (pass_00, census-gated, narrowing OFF)
+
+| Arm | agg TPS | per-request TPS | events/step | step wall | floor ratio | prefill_frac |
+|---|---|---|---|---|---|---|
+| Tail23 | 34.406 | 24.889 | 1.3824 | 268.95 ms | 2.126 | 0.532 |
+| Hydra27 | 47.609 | 25.303 | 1.8816 | 291.86 ms | 2.307 | 0.505 |
+
+This single pass already vindicates §3.1.1 empirically: the **per-request rate is
+essentially topology-invariant (24.89 vs 25.30, +1.7%)** while the **aggregate differs by
+38%** — and the entire difference is `events_per_step` (1.38 vs 1.88), i.e. co-residency.
+Anyone citing the aggregate as a topology result would be citing the admission schedule.
+Note also that Hydra27's higher aggregate comes with a *worse* step wall (291.9 vs
+268.9 ms) and a worse floor ratio — it is not faster, it is more co-resident.

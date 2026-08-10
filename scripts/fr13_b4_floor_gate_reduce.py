@@ -116,6 +116,99 @@ class B4GateError(RuntimeError):
     """A pass artifact failed a fail-closed gate."""
 
 
+# --------------------------------------------------------------------------- #
+# offline finalization                                                         #
+# --------------------------------------------------------------------------- #
+# fr13_b4_campaign_driver.sh::reduce writes deploy_speed_${TAG}.json and does
+# NOT pass --work-census, so its artifact records work_census_gate.status
+# "absent".  That is an UNGATED B4 aggregate -- precisely the artifact the
+# alignment study invalidated -- so this gate refuses it.  The fix is offline and
+# lossless: every input the census cross-gate needs (the four per-task
+# pre/post /metrics brackets and the arm's own work census) is written to the
+# runroot during serving and is still there afterwards, so the reduction is
+# simply re-run WITH the census.  Nothing is recomputed from the model; this
+# calls the same fr13_measure.py cmd_deploy_speed the driver called, with the
+# witness it omitted.
+DEPLOY_SPEED_FILENAME = "deploy_speed_fullwall.json"
+ARM_COMPLETE_MARKER = "arm_ended_at.txt"
+WORK_CENSUS_RELPATH = "logs/fr13_fixed32_work_census.jsonl"
+EXPECTED_TOK_PER_DRAFT = 31
+
+
+def finalize_arm(
+    arm_dir: Path, *, expected_tok_per_draft: float = EXPECTED_TOK_PER_DRAFT
+) -> dict[str, Any]:
+    """Re-reduce one COMPLETED arm with its work census. Idempotent.
+
+    Refuses to touch an arm that is still serving: an arm writes
+    arm_ended_at.txt when it finishes, so its absence means the brackets and the
+    census are still being appended to and any reduction would be a torn read.
+    """
+    result: dict[str, Any] = {"arm": arm_dir.name, "action": None}
+    target = arm_dir / DEPLOY_SPEED_FILENAME
+    if target.is_file():
+        result["action"] = "already_present"
+        return result
+    if not (arm_dir / ARM_COMPLETE_MARKER).is_file():
+        result["action"] = "skipped_arm_still_serving"
+        return result
+    census = arm_dir / WORK_CENSUS_RELPATH
+    if not census.is_file() or census.is_symlink():
+        result["action"] = "skipped_no_work_census"
+        return result
+    out_root = arm_dir / "swe_out"
+    if not out_root.is_dir():
+        result["action"] = "skipped_no_swe_out"
+        return result
+
+    import argparse as _argparse
+    import importlib.util as _importlib
+
+    spec = _importlib.spec_from_file_location(
+        "fr13_measure", Path(__file__).resolve().parent / "fr13_measure.py"
+    )
+    if spec is None or spec.loader is None:
+        raise B4GateError("cannot load scripts/fr13_measure.py")
+    measure = _importlib.module_from_spec(spec)
+    spec.loader.exec_module(measure)
+
+    # Write via a temp file then os.replace so an interrupted finalize can never
+    # leave a half-written aggregate that a later run would treat as evidence.
+    temporary = target.with_name(target.name + ".tmp")
+    measure.cmd_deploy_speed(
+        _argparse.Namespace(
+            arm=arm_dir.name,
+            out_root=str(out_root),
+            expected_tok_per_draft=float(expected_tok_per_draft),
+            batch_size=4,
+            basis="decode_seconds",
+            work_census=str(census),
+            out=str(temporary),
+        )
+    )
+    temporary.replace(target)
+    result["action"] = "finalized"
+    result["work_census"] = str(census)
+    return result
+
+
+def finalize_gate_root(
+    gate_root: Path, *, expected_tok_per_draft: float = EXPECTED_TOK_PER_DRAFT
+) -> list[dict[str, Any]]:
+    """Finalize every completed arm under <gate_root>/pass_NN/."""
+    actions: list[dict[str, Any]] = []
+    for pass_dir in sorted(p for p in gate_root.glob("pass_*") if p.is_dir()):
+        for mode in TOPOLOGIES:
+            for arm_dir in sorted(pass_dir.glob(f"{mode}_*")):
+                if arm_dir.is_dir() and not arm_dir.is_symlink():
+                    actions.append(
+                        finalize_arm(
+                            arm_dir, expected_tok_per_draft=expected_tok_per_draft
+                        )
+                    )
+    return actions
+
+
 def _finite(value: Any, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise B4GateError(f"{label} is missing or not numeric")
@@ -220,7 +313,7 @@ def reduce_pass_arm(
         "exclusion_reason": None,
     }
     try:
-        speed_path = arm_dir / "deploy_speed_fullwall.json"
+        speed_path = arm_dir / DEPLOY_SPEED_FILENAME
         speed = exact_json(speed_path, label=f"{arm_dir.name} deploy-speed")
 
         if speed.get("schema") != DEPLOY_SPEED_SCHEMA:
@@ -600,12 +693,24 @@ def main(argv: list[str] | None = None) -> int:
                         help="campaign root holding pass_NN/ directories")
     parser.add_argument("--source-commit", default="")
     parser.add_argument("--min-passes", type=int, default=DEFAULT_MIN_PASSES)
+    parser.add_argument(
+        "--finalize",
+        action="store_true",
+        help="re-reduce completed arms WITH their work census before reducing. "
+             "The campaign driver writes an ungated deploy_speed_${TAG}.json; this "
+             "re-runs the same fr13_measure.py reduction with the witness it "
+             "omitted. Offline, idempotent, and skips arms still serving.",
+    )
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args(argv)
 
     gate_root = args.gate_root.resolve()
     if not gate_root.is_dir():
         raise B4GateError(f"gate root {gate_root} is not a directory")
+
+    finalize_actions = finalize_gate_root(gate_root) if args.finalize else []
+    for action in finalize_actions:
+        print(f"[finalize] {action['arm']}: {action['action']}")
 
     payload = build_verdict(
         repo=args.repo.resolve(),
@@ -614,6 +719,7 @@ def main(argv: list[str] | None = None) -> int:
         topology_passes=discover_passes(gate_root),
         min_passes=args.min_passes,
     )
+    payload["finalize_actions"] = finalize_actions
     text = json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n"
     out = args.out or (gate_root / "fr13_b4_formal_floor_gate.json")
     out.parent.mkdir(parents=True, exist_ok=True)
