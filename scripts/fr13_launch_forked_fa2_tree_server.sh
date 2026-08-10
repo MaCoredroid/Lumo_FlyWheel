@@ -1556,10 +1556,10 @@ if [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" ]]; then
       exit 2
     }
   elif [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB_ARM" == "gqa_pair" ]]; then
-    [[ "$FR13_FA2_QROW32_SO_SHA256" == "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e" \
+    [[ "$FR13_FA2_QROW32_SO_SHA256" == "af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb" \
        && "$FR13_FA2_QROW32_SO_SIZE" == "299813360" \
        && "$FR13_FA2_QROW32_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
-       && "$FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256" == "f210a5ebb93930e89b0d9fe0cb6e53a76c9359873ad4268e81d3f17a7443bdf2" ]] || {
+       && "$FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256" == "9c3f9e751da7b783e9d07d8e40d5bc2234b99e719a1048668bd6c82244ed2d81" ]] || {
       echo "FR13 qrow32 GQA-pair live A/B binary/source provenance drifted" >&2
       exit 2
     }
