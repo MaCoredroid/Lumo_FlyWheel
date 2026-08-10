@@ -1192,7 +1192,13 @@ def _move_result_before_final_text(events: list[dict[str, Any]]) -> None:
 
 
 def _remove_final_text(events: list[dict[str, Any]]) -> None:
+    """Close the trace on the reasoning-only turn that precedes the text."""
     del events[-2]
+
+
+def _blank_final_text(events: list[dict[str, Any]]) -> None:
+    """A whitespace text record is still a text record, not reasoning."""
+    events[-2]["message"]["content"] = [{"type": "text", "text": "   "}]
 
 
 def _duplicate_assistant_identity(events: list[dict[str, Any]]) -> None:
@@ -1210,7 +1216,7 @@ def _duplicate_assistant_identity(events: list[dict[str, Any]]) -> None:
         lambda events: events[-1].__setitem__("is_error", True),
         lambda events: events[-2]["message"].__setitem__("id", ""),
         lambda events: events[-2]["message"].__setitem__("id", "tool-turn-11"),
-        _remove_final_text,
+        _blank_final_text,
     ),
 )
 def test_qwen_result_trace_tamper_fails_closed(
@@ -1218,6 +1224,139 @@ def test_qwen_result_trace_tamper_fails_closed(
 ) -> None:
     events = copy.deepcopy(_qwen_result_trace())
     mutate(events)
+
+    with pytest.raises(contract.ContractError):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def _reasoning_only_final_qwen_result_trace() -> list[dict[str, Any]]:
+    """The astropy__astropy-13398 shape: the task closes on reasoning.
+
+    The final top-level assistant group is one record whose only content is a
+    ``thinking`` block, so the run emits no closing text and the Qwen result
+    carries the empty string. The engine still served that turn.
+    """
+    events = copy.deepcopy(_qwen_result_trace())
+    _remove_final_text(events)
+    events[-2]["message"]["content"] = [
+        {
+            "type": "thinking",
+            "thinking": "This is the key test - test_straight_overhead.",
+            "signature": "",
+        }
+    ]
+    events[-1]["result"] = ""
+    return events
+
+
+def test_qwen_reasoning_only_final_group_counts_as_served(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    canonical = contract.validate_fixed32_trace_model_requests(
+        _qwen_result_trace(),
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+    events = _reasoning_only_final_qwen_result_trace()
+    final_group = _top_level_assistant_groups(events)[-1]
+    assert len(final_group) == 1
+    assert [
+        item["type"] for item in final_group[0]["message"]["content"]
+    ] == ["thinking"]
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    assert trace_requests["trace_format"] == "qwen_result"
+    # The reasoning-only close is served work: it contributes exactly the
+    # one logical model request the canonical text close contributes.
+    assert trace_requests["completed_logical_model_requests"] == (
+        canonical["completed_logical_model_requests"]
+    )
+    assert trace_requests["completed_logical_model_requests"] == 13
+    assert trace_requests["synthetic_compaction_failure_terminal"] is False
+    assert trace_requests["hidden_compaction_model_requests"] == 0
+    request_ids = trace_requests["model_request_ids"]
+    assert len(request_ids) == len(set(request_ids)) == 13
+    # Only the final group's identity moves; it is still present.
+    assert request_ids[:-1] == canonical["model_request_ids"][:-1]
+    assert request_ids[-1] != canonical["model_request_ids"][-1]
+    assert request_ids[-1] == contract._fixed32_qwen_group_request_id(
+        [final_group[0]["uuid"]]
+    )
+
+    trace_path = tmp_path / "qwen_trace.jsonl"
+    trace_path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    task_key_id = "a" * 64
+    provenance = runner._fixed32_real_task_provenance(
+        instance_id=TASK_A,
+        trace_path=trace_path,
+        agent_meta=_fixed32_agent_meta(runner, tmp_path),
+        task_key_id=task_key_id,
+        task_auth_before=_task_evidence(task_key_id, 0, 1),
+        task_auth_after=_task_evidence(task_key_id, 13, 53),
+    )
+    assert provenance["trace_completed_logical_model_requests"] == 13
+    assert provenance["completed_logical_model_requests"] == 13
+
+    floor_trace = floor_gate._fixed32_trace_model_requests(
+        trace_path,
+        provenance=provenance,
+    )
+    assert floor_trace["completed_logical_model_requests"] == 13
+    assert len(floor_trace["model_request_id_sha256s"]) == 13
+
+
+def test_qwen_multi_record_reasoning_only_final_group_is_served() -> None:
+    events = _reasoning_only_final_qwen_result_trace()
+    session_id = contract.fixed32_trace_session_id(TASK_A)
+    events.insert(
+        len(events) - 1,
+        _assistant_event(
+            response_id="final-thinking-continued",
+            session_id=session_id,
+            content=[{"type": "thinking", "thinking": "still reasoning"}],
+            stop_reason=None,
+        ),
+    )
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=session_id,
+    )
+
+    assert trace_requests["completed_logical_model_requests"] == 13
+    assert trace_requests["model_request_ids"][-1] == (
+        contract._fixed32_qwen_group_request_id(
+            ["final-thinking", "final-thinking-continued"]
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "final_content",
+    (
+        [{"type": "text", "text": "   "}],
+        [
+            {"type": "thinking", "thinking": "complete"},
+            {"type": "text", "text": ""},
+        ],
+        [{"type": "redacted_thinking", "data": "opaque"}],
+    ),
+)
+def test_qwen_final_group_without_text_or_reasoning_fails_closed(
+    final_content: list[dict[str, Any]],
+) -> None:
+    events = _reasoning_only_final_qwen_result_trace()
+    events[-2]["message"]["content"] = final_content
 
     with pytest.raises(contract.ContractError):
         contract.validate_fixed32_trace_model_requests(

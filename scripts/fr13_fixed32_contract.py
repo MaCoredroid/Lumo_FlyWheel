@@ -834,6 +834,24 @@ def _fixed32_nonempty_text_record(message: dict[str, Any]) -> bool:
     )
 
 
+def _fixed32_qwen_reasoning_only_record(message: dict[str, Any]) -> bool:
+    """True when an assistant record carries reasoning content and nothing else.
+
+    Qwen may legally close a task on a reasoning-only turn: the record holds
+    only ``thinking`` blocks, so it contributes no visible text and no
+    ``tool_use``. The engine still served that logical model request -- the
+    turn appears in the engine's request metrics -- so the campaign policy
+    counts it as served and it must reconcile like any other response group.
+    """
+    content = message.get("content")
+    if not isinstance(content, list) or not content:
+        return False
+    return all(
+        isinstance(item, dict) and item.get("type") == "thinking"
+        for item in content
+    )
+
+
 def _fixed32_qwen_synthetic_compaction_failure(
     group: list[tuple[dict[str, Any], dict[str, Any], str, int]],
     *,
@@ -2202,10 +2220,19 @@ def validate_fixed32_trace_model_requests(
 
         is_final_group = group_index == len(assistant_groups) - 1
         if is_final_group:
+            # A final group is canonical when it closes on exactly one
+            # nonempty text record. Qwen may instead close on a
+            # reasoning-only turn, whose records carry ``thinking`` blocks
+            # and nothing else; that turn was still served by the engine, so
+            # it is accepted here and counted below like any other group.
+            reasoning_only_final_group = nonempty_text_count == 0 and all(
+                _fixed32_qwen_reasoning_only_record(message)
+                for _event, message, _event_id, _event_index in group
+            )
             if (
                 parent_tool_use_id is not None
                 or terminal_count != 0
-                or nonempty_text_count != 1
+                or (nonempty_text_count != 1 and not reasoning_only_final_group)
             ):
                 raise ContractError(
                     "fixed32 qwen final assistant response group is invalid"
