@@ -212,61 +212,18 @@ run_arm "$OFF_ARM" 0
 run_arm "$ON_ARM" 1
 
 # ---- the only-arm-delta proof ---------------------------------------------
-# The whole point of this driver. Any second differing variable makes the APC
-# delta attributable to something other than the lever, so it is fatal.
-"$PYTHON_BIN" - "$RUNROOT_ABS/$OFF_ARM/container_env.txt" \
-                "$RUNROOT_ABS/$ON_ARM/container_env.txt" \
-                "$RUNROOT_ABS/only_arm_delta.json" <<'PY' \
+# The whole point of this driver, and a separate re-runnable script so a fix to
+# the proof never requires re-running two hours of GPU. Any configuration key
+# differing besides the lever makes the APC delta attributable to something
+# else, so it is fatal; per-arm identity (paths carrying the arm name, Docker's
+# HOSTNAME) is separated mechanically rather than by a hand-kept list.
+"$PYTHON_BIN" scripts/fr13_mamba_narrow_only_arm_delta.py \
+  --runroot "$RUNROOT_ABS" \
+  --off-arm "$OFF_ARM" \
+  --on-arm "$ON_ARM" \
+  --expect-key FR13_MAMBA_SPEC_BLOCKS_CDIV --expect-off 0 --expect-on 1 \
+  --out "$RUNROOT_ABS/only_arm_delta.json" \
   || { echo "only-arm-delta proof FAILED" >&2; exit 6; }
-import json
-import sys
-from pathlib import Path
-
-off_path, on_path, out_path = sys.argv[1:4]
-
-
-def env(path):
-    d = {}
-    for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
-        key, sep, value = line.partition("=")
-        if sep:
-            d[key] = value
-    return d
-
-
-off, on = env(off_path), env(on_path)
-keys = sorted(set(off) | set(on))
-# Per-arm paths carry the arm name by construction; they are identity, not
-# configuration, and are excluded by name rather than by pattern-matching values.
-NAME_BEARING = {
-    "FR13_SFWD_GPU_TIMER_JSON",
-    "FR13_DFWD_GPU_TIMER_JSON",
-    "FR13_CFWD_GPU_TIMER_JSON",
-}
-diff = {
-    k: {"off": off.get(k), "on": on.get(k)}
-    for k in keys
-    if off.get(k) != on.get(k) and k not in NAME_BEARING
-}
-result = {
-    "schema": "fr13.mamba_narrow.within_run_only_arm_delta.v1",
-    "differing_keys": sorted(diff),
-    "diff": diff,
-    "name_bearing_excluded": sorted(NAME_BEARING),
-    "n_keys_compared": len(keys),
-}
-Path(out_path).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-print(json.dumps(result, indent=2, sort_keys=True))
-expected = {"FR13_MAMBA_SPEC_BLOCKS_CDIV"}
-if set(diff) != expected:
-    raise SystemExit(
-        "only-arm-delta violated: arms differ in "
-        f"{sorted(set(diff))}, expected exactly {sorted(expected)}"
-    )
-if (diff["FR13_MAMBA_SPEC_BLOCKS_CDIV"]["off"], diff["FR13_MAMBA_SPEC_BLOCKS_CDIV"]["on"]) != ("0", "1"):
-    raise SystemExit("the lever did not read 0 on the OFF arm and 1 on the ON arm")
-print("only-arm-delta OK: the arms differ in exactly FR13_MAMBA_SPEC_BLOCKS_CDIV (0 -> 1)")
-PY
 
 "$PYTHON_BIN" scripts/fr13_mamba_narrow_within_run_reduce.py \
   --runroot "$RUNROOT_ABS" \
