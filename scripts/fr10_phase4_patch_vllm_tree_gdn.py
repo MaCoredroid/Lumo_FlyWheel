@@ -198,6 +198,9 @@ _FR13_FIXED32_SFWD_NODEGROUP8_DIRECT = os.environ.get(
 _FR13_MAMBA_SPEC_BLOCKS_CDIV = os.environ.get(
     "FR13_MAMBA_SPEC_BLOCKS_CDIV", "0"
 ).strip()
+_FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS = os.environ.get(
+    "FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS", "0"
+).strip()
 _FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
     "scripts/fr13_b1_composed_stack_gate.py",
@@ -18999,6 +19002,17 @@ def _fr13_fixed32_taw_work_callback(payload):
     _g._FR13_FIXED32_PENDING_TAW = payload
 
 
+try:
+    # Baked as a literal by the patcher prelude (pid 1, where the FR13_*
+    # master env is present -- the mp/spawn EngineCore worker's curated env
+    # drops bare masters, so reading os.environ here would silently disarm).
+    # A bare exec of this source (the patcher self-test) has no prelude, and
+    # OFF is the byte-identical incumbent, so NameError defaults OFF.
+    _FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS
+except NameError:
+    _FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS = False
+
+
 def _fr13_fixed32_device_commit_route(
     products,
     output_token_ids,
@@ -19163,13 +19177,29 @@ def _fr13_fixed32_device_commit_route(
         "output_tokens": device_output,
         "output_lens": device_output_lens,
     }
-    for compact_row, slot_row in enumerate(slot_indices):
-        slot_paths[slot_row].copy_(device_paths[compact_row])
-        slot_lens[slot_row].copy_(device_lens[compact_row])
     # Compact spec rows are always dense; only pure events also have
-    # sampler-row == compact-spec-row order.
-    spec_paths[:batch].copy_(device_paths)
-    spec_lens[:batch].copy_(device_lens)
+    # sampler-row == compact-spec-row order. The slot family is sparse: only
+    # the rows named by slot_indices are written, every other row keeps its
+    # previous content, and both forms below honour that.
+    #
+    # OFF (default) is the incumbent statement-for-statement: 2*B + 2 ATen
+    # launches, one per slot row plus the two compact copies. ON is the
+    # constant-4-launch form. Byte identity, disjoint-storage and
+    # distinct-index preconditions are enforced inside the module, per event.
+    from lumo_flywheel_serving.fr13_fixed32_commit_slot_scatter import (
+        publish_committer_paths as _fr13_f32_publish_paths,
+    )
+    _fr13_f32_publish_paths(
+        slot_paths=slot_paths,
+        slot_lens=slot_lens,
+        spec_paths=spec_paths,
+        spec_lens=spec_lens,
+        device_paths=device_paths,
+        device_lens=device_lens,
+        slot_indices=slot_indices,
+        batch=batch,
+        batched=_FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS,
+    )
     _g._LUMO_FA_TREE_COMMIT_NROWS = batch
 
     stacks = getattr(_g, "_FR13_EAGER_PACK_STACKS", None)
@@ -20761,10 +20791,13 @@ def _lumo_tree_canonical_multidraft_sample(
         pass
     return output_token_ids
 '''
+    _fr13_assert_fixed32_conv_commit_batched_slots_requires_fixed32()
     helper = (
         f"\n_FR13_FIXED32_MODE = {_FR13_FIXED32_MODE!r}\n"
         f"_FR13_FIXED32_VALID_MASK = "
         f"{_FR13_FIXED32_MODES.get(_FR13_FIXED32_MODE, (0, 0))[0]!r}\n"
+        f"_FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS = "
+        f"{_fr13_fixed32_conv_commit_batched_slots()!r}\n"
         + _FR13_FIXED32_SAMPLER_COMPACTION_SOURCE
         + helper
     )
@@ -23984,6 +24017,56 @@ def _fr13_mamba_spec_blocks_cdiv() -> bool:
             f"(observed {raw!r})"
         )
     return raw == "1"
+
+
+def _fr13_fixed32_conv_commit_batched_slots() -> bool:
+    """FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS gate (strict 0/1, default OFF).
+
+    The fixed32 device commit route publishes this event's accepted tree paths
+    twice: once compact (``spec_paths``/``spec_lens``, the buffers the conv
+    committer and the GDN replay actually read) and once sparse into
+    sampler-slot order (``slot_paths``/``slot_lens``). The incumbent slot
+    publish is a Python loop with one ``copy_`` per row, so the block costs
+    ``2 * B + 2`` ATen launches per event, each moving a 16-element int32 row.
+
+    ON replaces the loop with two ``index_copy_`` calls sourced from the
+    compact rows, making the block a constant 4 launches: 0 saved at B1, 2 at
+    B2, 6 at B4. It is a B4 lever. The byte argument, the disjoint-storage
+    precondition and the distinct-index precondition all live in
+    ``lumo_flywheel_serving.fr13_fixed32_commit_slot_scatter``, enforced per
+    event rather than argued once.
+
+    The lever is FIXED32-ONLY and
+    ``_fr13_assert_fixed32_conv_commit_batched_slots_requires_fixed32``
+    refuses it without FR13_FIXED32_MODE.
+    """
+    raw = _FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS
+    if raw not in ("0", "1"):
+        raise RuntimeError(
+            "FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS must be exactly 0 or 1 "
+            f"(observed {raw!r})"
+        )
+    return raw == "1"
+
+
+def _fr13_assert_fixed32_conv_commit_batched_slots_requires_fixed32() -> None:
+    """FAIL-LOUD: the batched slot publish is a FIXED32-ONLY lever.
+
+    Delegates to the served module's own predicate so the patcher and the
+    EngineCore worker cannot drift into disagreeing about when the lever is
+    legal. Outside fixed32 the commit route is the staged/S1 transport, which
+    reorders accepted paths through a host list and never publishes the compact
+    rows the batched form reads: the flag would be either inert or wrong, and a
+    lever that can be inert is a lever that can fake a candidate arm.
+    """
+    from lumo_flywheel_serving.fr13_fixed32_commit_slot_scatter import (
+        assert_batched_slots_requires_fixed32 as _fr13_assert_batched_slots,
+    )
+
+    _fr13_assert_batched_slots(
+        enabled=_fr13_fixed32_conv_commit_batched_slots(),
+        fixed32_mode=_FR13_FIXED32_MODE or None,
+    )
 
 
 def _patch_mamba_abstract_spec_blocks_cdiv() -> bool:
@@ -41994,6 +42077,10 @@ def main() -> int:
     _fr13_fixed32_validate_patch_env()
     _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()
     _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
+    # Also asserted at the rejection-sampler patch site; that site early-returns
+    # on an already-patched image, so the preflight is the copy that always
+    # runs. An arm that cannot arm must die here, not serve as stock.
+    _fr13_assert_fixed32_conv_commit_batched_slots_requires_fixed32()
     if _FR13_FIXED32_MODE:
         _fr13_mode_path = Path("/logs/fr13_fixed32_mode.flag")
         _fr13_mode_tmp = _fr13_mode_path.with_name(
