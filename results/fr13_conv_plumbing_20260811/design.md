@@ -298,7 +298,67 @@ that quotes it as a speed win is misreading it.
 
 ---
 
-## 6. What remains for the byte gate + timing pair (alienware)
+## 6. Validation performed on this branch
+
+### 6.1 CPU tests
+
+`TMPDIR=/home/mark/shared/tmp-scratch`, `--basetemp` under it,
+`--ignore=tests/test_codex_long_assets.py`. `tests/test_fr13_attn_kv_remap.py`
+is additionally ignored: this host's venv has no `triton`, so the module cannot
+import. That is an environment limit, not a result.
+
+| run | collected | failed | passed | skipped |
+|---|---:|---:|---:|---:|
+| `origin/main` `1e0158bf2` (baseline worktree) | 3993 | **151** | 3787 | 55 |
+| this branch `423a8d298` | 4027 | **151** | 3820 | 55 |
+
+`comm` over the sorted FAILED node-id sets: **0 new failures, 0 fixed** — the
+two sets are identical. `comm` over the sorted collected node-id sets: **+34,
+−0**, all 34 being the new module. Re-running the new module inside the full
+collection context (`-k conv_commit_batched_slots` over `tests/`) gives
+**34 passed, 3993 deselected**. The 151 pre-existing failures are inherited
+from main and untouched by this branch.
+
+### 6.2 Local GPU validation — NOT reachable for this flag
+
+`scripts/fr13_run_b1_sfwd_fusion_boot_diag.sh` does drive its traffic locally
+(*"No SWE task, no stock arm, no offload proxy"*), so the alienware outage is
+**not** what blocks it. What blocks it is that it is the boot screen for a
+**different candidate**: it hard-requires `SFWD_CONV_POSTPREP_PASS` +
+`SFWD_CONV_POSTPREP_SOURCE_MANIFEST` (a *fresh live PASS credential*, produced
+only by the SFWD byte gate — which does need the gate path) plus the pinned
+`QROW16_FA2_SO` and `CUTLASS_TARGET_SO` binaries, none of which exist in this
+worktree. Booting it would arm `FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION=1`, i.e.
+validate the §3 candidate, not this one. There is no credential-free fixed32
+boot entry point in tree.
+
+Offline stand-ins for what a boot would have caught, all green:
+the injected helper **compiles** both bare and with the prelude
+(`test_injected_helper_compiles_with_and_without_the_prelude`); the route AST
+keeps publish → conv commit → replay ordering; the new module imports under the
+served `PYTHONPATH`; and OFF is measured at exactly `2 + 2B` launches, i.e.
+launch-identical to the incumbent.
+
+### 6.3 `/models` symlink migration — VALIDATED
+
+`/models -> /home/mark/shared/models` was exercised through the launcher's own
+bind (`-v /models:/models`, `fr13_launch_forked_fa2_tree_server.sh:5137`) on
+the pinned serving image
+(`vllm/vllm-openai@sha256:3dbe092e…c38e776`, `--pull=never`):
+
+```
+/models/            qwen3.5-27b-fp8  qwen3.6-27b-bf16diag  qwen3.6-27b-fp8
+/models/qwen3.6-27b-fp8   66 safetensors, 29G, config.json reads clean
+```
+
+Docker verified at **0 containers before and after**. The mount resolves
+through the symlink; no failure to report. This does **not** cover the engine's
+own weight load, only the bind — but a broken bind is the failure mode the
+migration risked, and it is not present.
+
+---
+
+## 7. What remains for the byte gate + timing pair (alienware)
 
 1. **This lever.** Local boot diagnostic with the flag ON (boot + FULL capture +
    smoke serve) — runnable locally, no offload proxy. A B4 timing pair is
