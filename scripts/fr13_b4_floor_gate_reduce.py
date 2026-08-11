@@ -51,6 +51,7 @@ import json
 import math
 import re
 import statistics
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -126,12 +127,33 @@ _CANONICAL_DEFAULT_RE = re.compile(
 )
 
 
-def resolve_canonical_defaults(repo: Path) -> dict[str, str]:
-    """Read the shipped default of every lever from the canonical env registry."""
-    path = repo / CANONICAL_ENV_RELPATH
-    if not path.is_file():
-        raise B4GateError(f"missing canonical env registry {path}")
-    text = path.read_text(encoding="utf-8", errors="replace")
+def resolve_canonical_defaults(repo: Path, commit: str = "") -> dict[str, str]:
+    """Read the shipped default of every lever from the canonical env registry.
+
+    Resolved AT THE CAMPAIGN'S OWN COMMIT when one is given, not from whatever
+    the working tree happens to hold now. A campaign must be judged against the
+    stack the branch shipped WHEN IT RAN: after the 2026-08-10 promotion flipped
+    FR13_MAMBA_SPEC_BLOCKS_CDIV 0 -> 1, reducing the earlier narrowing-OFF
+    baseline against today's registry would reject all eight of its arms for
+    "not running the shipped stack" -- when running OFF was exactly correct for
+    that campaign. Both halves of an OFF/ON promotion pair have to stay
+    reducible, so provenance is read from the commit, not the checkout.
+    """
+    if commit:
+        try:
+            text = subprocess.run(
+                ["git", "-C", str(repo), "show", f"{commit}:{CANONICAL_ENV_RELPATH}"],
+                capture_output=True, text=True, check=True,
+            ).stdout
+        except (subprocess.CalledProcessError, OSError) as error:
+            raise B4GateError(
+                f"cannot read {CANONICAL_ENV_RELPATH} at commit {commit}: {error}"
+            ) from error
+    else:
+        path = repo / CANONICAL_ENV_RELPATH
+        if not path.is_file():
+            raise B4GateError(f"missing canonical env registry {path}")
+        text = path.read_text(encoding="utf-8", errors="replace")
     return {m.group(1): m.group(2) for m in _CANONICAL_DEFAULT_RE.finditer(text)}
 
 
@@ -692,7 +714,7 @@ def build_verdict(
             "physical_rows": 32,
             "drafts": 31,
             "contract_pinned_stack": dict(sorted(CONTRACT_PINNED_STACK.items())),
-            "shipped_defaults_at_reduce_time": dict(sorted((expected or {}).items())),
+            "shipped_defaults_at_campaign_commit": dict(sorted((expected or {}).items())),
             "min_included_passes": min_passes,
         },
         # WHICH STACK THIS GATE MEASURED. Recorded, never pinned: the gate follows
@@ -822,7 +844,9 @@ def main(argv: list[str] | None = None) -> int:
     if not gate_root.is_dir():
         raise B4GateError(f"gate root {gate_root} is not a directory")
 
-    canonical_defaults = resolve_canonical_defaults(args.repo.resolve())
+    canonical_defaults = resolve_canonical_defaults(
+        args.repo.resolve(), args.source_commit
+    )
     expected = expected_stack(canonical_defaults)
 
     finalize_actions = finalize_gate_root(gate_root) if args.finalize else []

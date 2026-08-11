@@ -547,7 +547,7 @@ def test_verdict_records_the_measured_stack_state(gate_root):
     assert payload["measured_stack_state"]["FR13_MAMBA_SPEC_BLOCKS_CDIV"] == (
         SHIPPED["FR13_MAMBA_SPEC_BLOCKS_CDIV"]
     )
-    assert payload["contract"]["shipped_defaults_at_reduce_time"] == SHIPPED
+    assert payload["contract"]["shipped_defaults_at_campaign_commit"] == SHIPPED
 
 
 # --------------------------------------------------------------------------- #
@@ -672,3 +672,21 @@ def test_runner_supports_a_slot_preserving_makeup_pass():
     assert "FLOOR_ORDER_OVERRIDE" in text
     # and must never silently overwrite recorded evidence
     assert "pass dir already exists" in text
+
+
+def test_shipped_defaults_are_read_at_the_campaign_commit_not_the_checkout():
+    """Both halves of an OFF/ON promotion pair must stay reducible.
+
+    The narrowing-OFF baseline ran before 749f83af6 flipped the default. Judging
+    it against today's registry would reject every one of its arms for not
+    running a stack that did not exist yet.
+    """
+    import subprocess
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO,
+                          capture_output=True, text=True, check=True).stdout.strip()
+    at_head = gate.resolve_canonical_defaults(REPO, head)
+    assert at_head["FR13_MAMBA_SPEC_BLOCKS_CDIV"] == "1"
+    # the commit that shipped the lever OFF
+    before = gate.resolve_canonical_defaults(REPO, "34e175824")
+    assert before["FR13_MAMBA_SPEC_BLOCKS_CDIV"] == "0"
+    assert at_head != before
