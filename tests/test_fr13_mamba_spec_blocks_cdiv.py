@@ -729,11 +729,35 @@ def test_launcher_validates_strict_and_forwards_default_off() -> None:
     ) < LAUNCHER_TEXT.index('-e FR13_MAMBA_SPEC_BLOCKS_CDIV=')
 
 
-def test_canonical_env_exports_default_off() -> None:
+def test_canonical_env_exports_the_promoted_default_on() -> None:
+    """PROMOTED 2026-08-10 (749f83af6): the B4 mamba page lever ships ON.
+
+    It shipped OFF while it was queued; Mark promoted it after the within-run
+    pair proved APC 83.1 -> 92.8% and per-request TPS 15.07 -> 18.00 on
+    identical binaries. The canonical registry is the single source of truth for
+    what the branch ships, so this pins the registry, and consumers resolve the
+    default from it rather than hardcoding either value.
+    """
     assert (
-        'export FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}"'
+        'export FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-1}"'
         in CANONICAL_TEXT
     )
+
+
+def test_campaign_driver_sources_the_canonical_registry_before_launching() -> None:
+    """This is what keeps the launcher's own ':-0' fallback harmless.
+
+    scripts/fr13_launch_forked_fa2_tree_server.sh still defaults the lever OFF
+    in two places (the patch-time case and the container -e passthrough). Those
+    are only safe because every campaign path sources fr13_canonical_env.sh
+    first, which EXPORTS the promoted value, so the launcher's fallback is never
+    reached. If that sourcing were ever removed, a campaign would silently serve
+    narrowing OFF while its provenance claimed the shipped default -- so pin it.
+    """
+    driver = (REPO / "scripts" / "fr13_b4_campaign_driver.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'source "$SCRIPT_DIR/fr13_canonical_env.sh"' in driver
 
 
 def test_registry_entry_is_comment_only_and_carries_the_verdict() -> None:
