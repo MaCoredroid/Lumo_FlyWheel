@@ -34566,6 +34566,221 @@ def _patch_gpu_model_runner_cfwd_gpu_timer() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_host_tail() -> bool:
+    """FR13_HOST_TAIL_NVTX / FR13_HOST_TAIL_DEFER (BOTH DEFAULT-OFF).
+
+    Attack-ladder lever 1 (results/fr13_attack_ladder_analysis_20260808 SS5.2):
+    the post-DFWD tail is 11.969 ms/step of which 10.080 ms is GPU idle and only
+    2.300 ms is CUDA API time, leaving ~7.8 ms/step of host CPU outside any CUDA
+    call. The trace localises that block but cannot split it, and SS6 is explicit
+    that instrumenting is the only step to take before choosing a design.
+
+    FR13_HOST_TAIL_NVTX adds sub-ranges inside the tail so the existing offline
+    reduction can attribute it. FR13_HOST_TAIL_DEFER moves the FR13-owned census
+    seal off the submit path onto a single retire thread, joined before the next
+    step's tail can read it, so fail-loud behaviour is preserved.
+
+    Both default OFF, and when off the emitted source runs the original
+    statements in the original order.
+
+    Ordering: must run AFTER _patch_gpu_model_runner_sfwd_gpu_timer (which
+    installs the _fr13_fixed32_nvtx_* helpers) and AFTER
+    _patch_gpu_model_runner_replay_draft_reqkey (which installs the tail
+    anchors this patch wraps)."""
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "_fr13_host_tail_defer_enabled"
+    if sentinel in text:
+        return False
+    if "_fr13_fixed32_nvtx_begin" not in text:
+        raise RuntimeError(
+            "FR13_HOST_TAIL_NVTX: _fr13_fixed32_nvtx_begin helper missing from "
+            "gpu_model_runner.py -- _patch_gpu_model_runner_sfwd_gpu_timer "
+            "(which installs the NVTX module block) must run BEFORE this patch."
+        )
+
+    module_block = '''
+
+# FR13_HOST_TAIL: post-DFWD tail attribution and retire-side deferral.
+_FR13_HOST_TAIL_RETIRE = None
+
+
+def _fr13_host_tail_nvtx_enabled():
+    return __import__("os").environ.get("FR13_HOST_TAIL_NVTX", "0") == "1"
+
+
+def _fr13_host_tail_defer_enabled():
+    return __import__("os").environ.get("FR13_HOST_TAIL_DEFER", "0") == "1"
+
+
+class _Fr13HostTailRetire:
+    """Single-worker retire queue for post-DFWD bookkeeping.
+
+    Work submitted here must not be a precondition for the next submit. The
+    queue is joined before anything reads its results, and an exception on the
+    worker is re-raised on the joining thread so the fail-loud contracts the
+    census seal relies on are preserved rather than swallowed."""
+
+    def __init__(self):
+        import queue
+        import threading
+
+        self._queue = queue.Queue()
+        self._error = None
+        self._pending = 0
+        self._lock = threading.Lock()
+        self._idle = threading.Condition(self._lock)
+        self._thread = threading.Thread(
+            target=self._run, name="fr13-host-tail-retire", daemon=True
+        )
+        self._thread.start()
+
+    def _run(self):
+        while True:
+            item = self._queue.get()
+            if item is None:
+                return
+            try:
+                item()
+            except BaseException as exc:  # noqa: BLE001
+                with self._lock:
+                    if self._error is None:
+                        self._error = exc
+            finally:
+                with self._lock:
+                    self._pending -= 1
+                    if self._pending == 0:
+                        self._idle.notify_all()
+
+    def submit(self, fn):
+        with self._lock:
+            self._pending += 1
+        self._queue.put(fn)
+
+    def drain(self):
+        with self._lock:
+            while self._pending:
+                self._idle.wait()
+            error = self._error
+            self._error = None
+        if error is not None:
+            raise error
+
+
+def _fr13_host_tail_retire():
+    global _FR13_HOST_TAIL_RETIRE
+    if _FR13_HOST_TAIL_RETIRE is None:
+        _FR13_HOST_TAIL_RETIRE = _Fr13HostTailRetire()
+    return _FR13_HOST_TAIL_RETIRE
+
+
+def _fr13_host_tail_drain():
+    if _FR13_HOST_TAIL_RETIRE is not None:
+        _FR13_HOST_TAIL_RETIRE.drain()
+'''
+    text = text + module_block
+
+    # ---- sub-range around the sampled-token readback (the D2H + sync) ----
+    readback_anchor = (
+        "                self._copy_draft_token_ids_to_cpu(scheduler_output)\n"
+    )
+    if text.count(readback_anchor) != 1:
+        raise RuntimeError(
+            "FR13_HOST_TAIL_NVTX: draft-token readback anchor count "
+            f"{text.count(readback_anchor)} != 1 in gpu_model_runner.py"
+        )
+    readback_inject = (
+        "                _fr13_tail_nvtx = _fr13_fixed32_nvtx_begin(\n"
+        "                    'sample_readback', _fr13_host_tail_nvtx_enabled()\n"
+        "                )\n"
+        "                self._copy_draft_token_ids_to_cpu(scheduler_output)\n"
+        "                _fr13_fixed32_nvtx_end(_fr13_tail_nvtx)\n"
+    )
+    text = text.replace(readback_anchor, readback_inject, 1)
+
+    # ---- retire-side census seal ----
+    # The seal only *reads* the completed proposal, so it is not a precondition
+    # for the next submit. Any prior step's seal is drained first, which is what
+    # keeps the census strictly ordered.
+    seal_anchor = (
+        "                    _fr13_f32_draft_gdn._fr13_fixed32_drafter_proposal_end(\n"
+        "                        _fr13_f32_draft_gdn._FR13_FIXED32_MODE,\n"
+        "                        _fr13_f32_draft_req_ids,\n"
+        "                        tuple(int(_d) for _d in self._draft_token_ids.shape),\n"
+        "                        str(self._draft_token_ids.dtype),\n"
+        "                        self._draft_token_ids.device.type,\n"
+        "                        True,\n"
+        "                    )\n"
+    )
+    if text.count(seal_anchor) != 1:
+        raise RuntimeError(
+            "FR13_HOST_TAIL_DEFER: drafter proposal seal anchor count "
+            f"{text.count(seal_anchor)} != 1 in gpu_model_runner.py"
+        )
+    seal_inject = (
+        "                    _fr13_host_tail_drain()\n"
+        "                    _fr13_seal_args = (\n"
+        "                        _fr13_f32_draft_gdn._FR13_FIXED32_MODE,\n"
+        "                        _fr13_f32_draft_req_ids,\n"
+        "                        tuple(int(_d) for _d in self._draft_token_ids.shape),\n"
+        "                        str(self._draft_token_ids.dtype),\n"
+        "                        self._draft_token_ids.device.type,\n"
+        "                        True,\n"
+        "                    )\n"
+        "                    if _fr13_host_tail_defer_enabled():\n"
+        "                        _fr13_host_tail_retire().submit(\n"
+        "                            lambda _a=_fr13_seal_args: (\n"
+        "                                _fr13_f32_draft_gdn\n"
+        "                                ._fr13_fixed32_drafter_proposal_end(*_a)\n"
+        "                            )\n"
+        "                        )\n"
+        "                    else:\n"
+        "                        _fr13_f32_draft_gdn._fr13_fixed32_drafter_proposal_end(\n"
+        "                            *_fr13_seal_args\n"
+        "                        )\n"
+    )
+    text = text.replace(seal_anchor, seal_inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_scheduler_host_tail_nvtx() -> bool:
+    """FR13_HOST_TAIL_NVTX (DEFAULT-OFF): mark Scheduler.update_from_output.
+
+    This is the `sched_next` slice of the post-DFWD tail -- request accounting
+    and the next step's scheduling decision, which the ladder names as one of
+    the four unlabelled consumers of the ~7.8 ms of non-CUDA host time."""
+    text = SCHEDULER_PATH.read_text()
+    sentinel = "_fr13_sched_next_nvtx"
+    if sentinel in text:
+        return False
+    anchor = "    def update_from_output(\n"
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "FR13_HOST_TAIL_NVTX: Scheduler.update_from_output anchor count "
+            f"{text.count(anchor)} != 1 in scheduler.py"
+        )
+    helper = (
+        "    def _fr13_sched_next_nvtx(self, opening):\n"
+        "        if __import__('os').environ.get('FR13_HOST_TAIL_NVTX', '0') != '1':\n"
+        "            return False\n"
+        "        try:\n"
+        "            import torch as _fr13_sched_torch\n"
+        "            if opening:\n"
+        "                _fr13_sched_torch.cuda.nvtx.range_push(\n"
+        "                    'fr13.fixed32.sched_next'\n"
+        "                )\n"
+        "            else:\n"
+        "                _fr13_sched_torch.cuda.nvtx.range_pop()\n"
+        "            return True\n"
+        "        except Exception:  # noqa: BLE001\n"
+        "            return False\n"
+        "\n"
+    )
+    text = text.replace(anchor, helper + anchor, 1)
+    SCHEDULER_PATH.write_text(text)
+    return True
+
+
 def _patch_fp8_utils_gb10_gemv_cfg() -> bool:
     """OPT-A: GB10/sm_121-tuned fp8 w8a8 block-scaled-mm decode config.
 
@@ -41639,6 +41854,12 @@ def main() -> int:
         # are owned by another workstream). Must run AFTER the sfwd timer
         # patch, whose module block defines the _fr13_cfwd_* helpers.
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_cfwd_gpu_timer()),
+        # FR13_HOST_TAIL_NVTX / FR13_HOST_TAIL_DEFER: post-DFWD tail
+        # attribution and retire-side census. Must run AFTER the sfwd timer
+        # patch (NVTX helpers) and AFTER the replay-draft-reqkey patch, which
+        # emits the readback and census-seal anchors this patch wraps.
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_host_tail()),
+        (SCHEDULER_PATH, _patch_scheduler_host_tail_nvtx()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sample_return_probe()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),

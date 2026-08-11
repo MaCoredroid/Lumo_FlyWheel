@@ -103,12 +103,16 @@ QROW32_B1_VISIBILITY_FA2_SHA256 = (
     "c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79"
 )
 QROW32_B1_VISIBILITY_FA2_SIZE = 300_200_192
+QROW32_B1_GQA_PAIR_FA2_SHA256 = (
+    "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae"
+)
+QROW32_B1_GQA_PAIR_FA2_SIZE = 299_815_552
 QROW32_B4_FA2_SHA256 = (
     "77f3fb22c19d0eb2ac0ec28230cf9401221425692a505efde62aa838760d81ce"
 )
 QROW32_B4_FA2_SIZE = 299_876_120
 QROW32_B4_GQA_PAIR_FA2_SHA256 = (
-    "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e"
+    "af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb"
 )
 QROW32_B4_GQA_PAIR_FA2_SIZE = 299_813_360
 QROW32_B4_VISIBILITY_FA2_SHA256 = (
@@ -830,6 +834,24 @@ def _fixed32_nonempty_text_record(message: dict[str, Any]) -> bool:
         and item.get("type") == "text"
         and isinstance(item.get("text"), str)
         and bool(item["text"].strip())
+        for item in content
+    )
+
+
+def _fixed32_qwen_reasoning_only_record(message: dict[str, Any]) -> bool:
+    """True when an assistant record carries reasoning content and nothing else.
+
+    Qwen may legally close a task on a reasoning-only turn: the record holds
+    only ``thinking`` blocks, so it contributes no visible text and no
+    ``tool_use``. The engine still served that logical model request -- the
+    turn appears in the engine's request metrics -- so the campaign policy
+    counts it as served and it must reconcile like any other response group.
+    """
+    content = message.get("content")
+    if not isinstance(content, list) or not content:
+        return False
+    return all(
+        isinstance(item, dict) and item.get("type") == "thinking"
         for item in content
     )
 
@@ -2202,10 +2224,19 @@ def validate_fixed32_trace_model_requests(
 
         is_final_group = group_index == len(assistant_groups) - 1
         if is_final_group:
+            # A final group is canonical when it closes on exactly one
+            # nonempty text record. Qwen may instead close on a
+            # reasoning-only turn, whose records carry ``thinking`` blocks
+            # and nothing else; that turn was still served by the engine, so
+            # it is accepted here and counted below like any other group.
+            reasoning_only_final_group = nonempty_text_count == 0 and all(
+                _fixed32_qwen_reasoning_only_record(message)
+                for _event, message, _event_id, _event_index in group
+            )
             if (
                 parent_tool_use_id is not None
                 or terminal_count != 0
-                or nonempty_text_count != 1
+                or (nonempty_text_count != 1 and not reasoning_only_final_group)
             ):
                 raise ContractError(
                     "fixed32 qwen final assistant response group is invalid"
@@ -2957,6 +2988,8 @@ def _expected_runtime_fa2_identity(
     qrow32_b1_production = env.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
     qrow32_b4_live = env.get("FR13_FA2_QROW32_LIVE_PAGED_AB", "0")
     qrow32_b4_arm = env.get("FR13_FA2_QROW32_LIVE_PAGED_AB_ARM", "")
+    qrow32_b4_timing = env.get("FR13_FA2_QROW32_B4_TIMING_ARM", "")
+    qrow32_b4_production = env.get("FR13_FA2_QROW32_B4_PRODUCTION_ARM", "")
     for name, value in (
         ("FR13_FA2_QROW16_LIVE_PAGED_AB", live),
         ("FR13_FA2_QROW16_PRODUCTION", production),
@@ -2966,10 +2999,10 @@ def _expected_runtime_fa2_identity(
             raise ContractError(f"{name} must be exactly 0 or 1")
     if live == "1" and production == "1":
         raise ContractError("qrow16 live and production selectors are mutually exclusive")
-    if qrow32_b1_live not in {"", "nosplit", "split2", "visibility"}:
+    if qrow32_b1_live not in {"", "nosplit", "split2", "visibility", "gqa_pair"}:
         raise ContractError(
             "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, "
-            "or visibility"
+            "visibility, or gqa_pair"
         )
     if qrow32_b1_production not in {"", "nosplit"}:
         raise ContractError(
@@ -2989,13 +3022,59 @@ def _expected_runtime_fa2_identity(
         raise ContractError("qrow32 B4 live gate and arm must be enabled together")
     if qrow32_b4_live == "1" and (live == "1" or production == "1"):
         raise ContractError("qrow16 and qrow32 B4 selectors are mutually exclusive")
+    if qrow32_b4_timing not in {"", "stock_dispatch", "gqa_pair"}:
+        raise ContractError(
+            "FR13_FA2_QROW32_B4_TIMING_ARM must be empty, stock_dispatch, "
+            "or gqa_pair"
+        )
+    if qrow32_b4_production not in {"", "gqa_pair"}:
+        raise ContractError(
+            "FR13_FA2_QROW32_B4_PRODUCTION_ARM must be empty or gqa_pair"
+        )
+    # The timing pair is a single-variable delta: both arms load the identical
+    # pinned GQA-pair binary and differ only in whether the served decode call
+    # carries the sentinel. The two declarations must therefore agree exactly.
+    if (qrow32_b4_timing == "gqa_pair") != (qrow32_b4_production == "gqa_pair"):
+        raise ContractError(
+            "qrow32 B4 timing and production arms must agree on the served kernel"
+        )
+    if qrow32_b4_timing and (
+        live == "1"
+        or production == "1"
+        or qrow32_b4_live == "1"
+        or qrow32_b1_live
+        or qrow32_b1_production
+    ):
+        raise ContractError(
+            "qrow32 B4 timing and other private FA2 selectors are mutually exclusive"
+        )
+    if qrow32_b4_timing:
+        if env.get("FR13_FA2_QROW32_SO_SHA256", "") != QROW32_B4_GQA_PAIR_FA2_SHA256:
+            raise ContractError(
+                "qrow32 B4 timing runtime FA2 declaration is not the pinned "
+                "GQA-pair candidate"
+            )
+        return QROW32_B4_GQA_PAIR_FA2_SIZE, QROW32_B4_GQA_PAIR_FA2_SHA256
     if qrow32_b1_live or qrow32_b1_production:
         declared_sha256 = env.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
-        expected = (
-            (QROW32_B1_VISIBILITY_FA2_SIZE, QROW32_B1_VISIBILITY_FA2_SHA256)
-            if qrow32_b1_live == "visibility"
-            else (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256)
-        )
+        if qrow32_b1_live == "gqa_pair":
+            if not QROW32_B1_GQA_PAIR_FA2_SHA256 or not QROW32_B1_GQA_PAIR_FA2_SIZE:
+                raise ContractError(
+                    "qrow32 B1 GQA-pair binary is not pinned: fill "
+                    "QROW32_B1_GQA_PAIR_FA2_SHA256 and "
+                    "QROW32_B1_GQA_PAIR_FA2_SIZE from the build attestation "
+                    "before running this arm"
+                )
+            expected = (
+                QROW32_B1_GQA_PAIR_FA2_SIZE,
+                QROW32_B1_GQA_PAIR_FA2_SHA256,
+            )
+        else:
+            expected = (
+                (QROW32_B1_VISIBILITY_FA2_SIZE, QROW32_B1_VISIBILITY_FA2_SHA256)
+                if qrow32_b1_live == "visibility"
+                else (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256)
+            )
         if declared_sha256 != expected[1]:
             raise ContractError(
                 "qrow32 B1 runtime FA2 declaration is not the pinned candidate"
@@ -3136,6 +3215,10 @@ def validate_runtime_attestation(payload: object) -> dict[str, Any]:
         (QROW32_B4_GQA_PAIR_FA2_SIZE, QROW32_B4_GQA_PAIR_FA2_SHA256),
         (QROW32_B4_VISIBILITY_FA2_SIZE, QROW32_B4_VISIBILITY_FA2_SHA256),
     }
+    if QROW32_B1_GQA_PAIR_FA2_SHA256 and QROW32_B1_GQA_PAIR_FA2_SIZE:
+        known_identities.add(
+            (QROW32_B1_GQA_PAIR_FA2_SIZE, QROW32_B1_GQA_PAIR_FA2_SHA256)
+        )
     for key, record, expected_path in (
         ("source", source, str(CONTAINER_FA2_SOURCE)),
         ("destination", destination, str(CONTAINER_FA2_DESTINATION)),

@@ -382,7 +382,7 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert f"static constexpr int value = {static_page_size}" in candidate
     assert f"static constexpr int log2 = {static_page_log2}" in candidate
     assert f"static constexpr int block_n_log2 = {static_block_n_log2}" in candidate
-    assert "static constexpr int64_t page = 1024 * 4 * 256" in candidate
+    assert "static constexpr int64_t page = 2 * 1024 * 4 * 256" in candidate
     assert "static constexpr int64_t row = 4 * 256" in candidate
     assert "static constexpr int64_t head = 256" in candidate
     assert "StaticQueryRows<Fr13Fixed32Qrow32KernelTraits>" in candidate
@@ -412,10 +412,10 @@ def test_fixed32_query_tile32_preserves_stock_warp_local_row_mapping(
     assert "params.tree_bias_cols == 32" in api_gate
     assert "params.tree_bias_row_stride == 32" in api_gate
     assert "params.tree_bias_col_stride == 1" in api_gate
-    assert "params.k_batch_stride == 1024 * 4 * 256" in api_gate
+    assert "params.k_batch_stride == 2 * 1024 * 4 * 256" in api_gate
     assert "params.k_row_stride == 4 * 256" in api_gate
     assert "params.k_head_stride == 256" in api_gate
-    assert "params.v_batch_stride == 1024 * 4 * 256" in api_gate
+    assert "params.v_batch_stride == 2 * 1024 * 4 * 256" in api_gate
     assert "params.v_row_stride == 4 * 256" in api_gate
     assert "params.v_head_stride == 256" in api_gate
     assert "params.cu_seqlens_q != nullptr" in api_gate
@@ -1313,7 +1313,10 @@ def test_qrow32_fuses_only_the_identical_initial_kv_page_address(
     assert "params.v_row_stride" not in static_branch
     assert "StaticPagedKVStrides<Kernel_traits>::page" in static_branch
     assert "StaticPagedKVStrides<Kernel_traits>::row" in static_branch
-    assert "(kStaticSequences == 1 ? 2 : 1) * 1024 * 4 * 256" in static_branch
+    assert "== 2 * 1024 * 4 * 256" in static_branch
+    # The layout is NOT batch-dependent: a live B4 diagnostic observed the same
+    # interleaved block stride the B1 attempt-5 diagnostic found.
+    assert "kStaticSequences == 1 ? 2 : 1" not in static_branch
     assert "tKgK.data() = gK.data() + initial_kv_page_offset;" in static_branch
     assert "tVgV.data() = gV.data() + initial_kv_page_offset;" in static_branch
     for sentinel in (

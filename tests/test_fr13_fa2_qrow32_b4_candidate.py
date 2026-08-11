@@ -26,7 +26,7 @@ QROW32_B4_KERNEL_HEADER_SHA256 = (
     "f93bc31541a762abe834a16bc4a85b46b7e5a8f1a4463f4abbd6526ea104bce8"
 )
 GQA_PAIR_KERNEL_HEADER_SHA256 = (
-    "43f093e9390efbb57294c2db93c42fcd9c79b3ece2b2768991ff20c814741456"
+    "4f08741030c46d7e1ef1b88a10d4946f625559fedd7658c3b288e0d7a5d58d13"
 )
 ARTIFACT = Path(
     "results/fr13_fixed32_fa2_qrow32_b4_candidate_sm121a_20260805"
@@ -57,8 +57,8 @@ def test_b1_qrow32_launcher_cannot_cover_exact4_b4() -> None:
     assert "static constexpr int sequences = 4;" in b4
     assert "params.b == 4" in b4
     assert "params.total_q == 128" in b4
-    assert "params.k_batch_stride == 1024 * 4 * 256" in b4
-    assert "params.v_batch_stride == 1024 * 4 * 256" in b4
+    assert "params.k_batch_stride == 2 * 1024 * 4 * 256" in b4
+    assert "params.v_batch_stride == 2 * 1024 * 4 * 256" in b4
     assert "FR13 qrow32 B4 launcher reached non-canonical geometry" in b4
 
 
@@ -108,7 +108,15 @@ def test_qrow32_b4_arm_is_pinned_at_every_selector_boundary() -> None:
     assert isinstance(arms, dict)
     contract = arms["qrow32"]
     qrow32_source = module.FIXED32_QUERY_TILE32_TRANSLATION_UNIT.encode("ascii")
-    assert hashlib.sha256(qrow32_source).hexdigest() == QROW32_B4_SOURCE_SHA256
+    # SUPERSEDED: the banked 20260805 B4 artifacts were built before the
+    # interleaved-KV correction. A live B4 diagnostic (2026-08-10) observed
+    # key_cache block stride 2*1024*4*256, so every B4 translation unit and the
+    # shared flash_fwd_kernel.h assertion now carry the doubled page stride and
+    # the generator can no longer reproduce those artifacts. Their pinned .so
+    # files therefore fail closed at their own source-closure check, which is
+    # the intended behaviour -- they must be rebuilt before they can be gated.
+    assert hashlib.sha256(qrow32_source).hexdigest() != QROW32_B4_SOURCE_SHA256
+    assert "page = 2 * 1024 * 4 * 256" in module.FIXED32_QUERY_TILE32_TRANSLATION_UNIT
     closure = json.loads((ARTIFACT / "source_closure.json").read_text("ascii"))
     canonical_closure = json.dumps(
         closure,

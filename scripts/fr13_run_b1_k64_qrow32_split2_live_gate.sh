@@ -46,8 +46,16 @@ case "$LIVE_ARM" in
     CANDIDATE_BYTES=300200192
     SOURCE_CLOSURE_SHA256=a30eca031cd5067133e6278527787c5987635670930e5840ac983f66b088e4fc
     ;;
+  gqa_pair)
+    # Two GQA heads per CTA at sequences=1: 12 CTAs/layer against the
+    # incumbent qrow16's 48. num_splits stays 0, so the reduction topology
+    # matches the reference and the byte comparison remains meaningful.
+    CANDIDATE_SHA256=3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae
+    CANDIDATE_BYTES=299815552
+    SOURCE_CLOSURE_SHA256=172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4
+    ;;
   *)
-    echo "FR13_QROW32_B1_LIVE_ARM must be split2 or visibility" >&2
+    echo "FR13_QROW32_B1_LIVE_ARM must be split2, visibility, or gqa_pair" >&2
     exit 2
     ;;
 esac

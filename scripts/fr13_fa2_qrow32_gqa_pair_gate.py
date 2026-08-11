@@ -28,13 +28,13 @@ from fr13_patch_fa2_tree_bias import (
 
 CANDIDATE_ARM = "gqa_pair"
 CANDIDATE_SHA256 = (
-    "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e"
+    "af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb"
 )
 CANDIDATE_SIZE = 299_813_360
 FA2_HEAD = "29210221863736a08f71a866459e368ad1ac4a95"
 SOURCE_FILES = {
     "csrc/flash_attn/flash_api.cpp": (
-        "e12c50408fed4422df67de528607e55ade0129677e8ca7dc3d5596c1d3203e9c"
+        "ff33ed53d024ee4cb2f6a69fb168bcb4c07013ecef34d692c74fe8fd0222222c"
     ),
     "csrc/flash_attn/flash_api_torch_lib.cpp": (
         "c575d9f02ba44bf7022c77b80fdf12173da0ecae8a4d7599934c2cc9fa52e121"
@@ -43,10 +43,10 @@ SOURCE_FILES = {
         "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a"
     ),
     "csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu": (
-        "c37863af034944cde276da0a08057edee339522acc55006127e9bd7dabaf925e"
+        "0c18535d6eb74bd8aae420fa139bef1f6115eb711b42db36c50fba27dc066884"
     ),
     "csrc/flash_attn/src/flash_fwd_kernel.h": (
-        "43f093e9390efbb57294c2db93c42fcd9c79b3ece2b2768991ff20c814741456"
+        "4f08741030c46d7e1ef1b88a10d4946f625559fedd7658c3b288e0d7a5d58d13"
     ),
     "csrc/flash_attn/src/utils.h": (
         "5887df63c79a3e42fb9ddad93f64fe3c0625dbee4c547af68b6f2108b7beeb5f"
@@ -61,7 +61,7 @@ SOURCE_STATUS = (
     "?? csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu",
 )
 SOURCE_CLOSURE_SHA256 = (
-    "f210a5ebb93930e89b0d9fe0cb6e53a76c9359873ad4268e81d3f17a7443bdf2"
+    "9c3f9e751da7b783e9d07d8e40d5bc2234b99e719a1048668bd6c82244ed2d81"
 )
 ARM_SCHEMA = "fr13.fixed32.fa2_qrow32_gqa_pair_b4_live_verification.v1"
 DUAL_SCHEMA = "fr13.fixed32.fa2_qrow32_gqa_pair_b4_dual_gate.v1"

@@ -701,7 +701,8 @@ def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:
     text = LAUNCHER.read_text()
 
     assert (
-        "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, or visibility"
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, "
+        "visibility, or gqa_pair"
         in text
     )
     assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit" in text
@@ -872,7 +873,8 @@ def test_sidecar_is_binary_source_and_nosplit_bound(tmp_path: Path) -> None:
         )
 
     with pytest.raises(
-        ValueError, match="live arm must be nosplit, split2, or visibility"
+        ValueError,
+        match="live arm must be nosplit, split2, visibility, or gqa_pair",
     ):
         module.validate_live_result(
             _live_payload(

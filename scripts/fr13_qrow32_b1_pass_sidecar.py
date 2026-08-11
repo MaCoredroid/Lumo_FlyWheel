@@ -17,7 +17,9 @@ LIVE_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_live_paged_ab.v2"
 SIDECAR_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_production_pass.v2"
 ARM = "nosplit"
 VISIBILITY_ARM = "visibility"
+GQA_PAIR_ARM = "gqa_pair"
 SELECTOR_SENTINEL = 1179791668
+GQA_PAIR_SELECTOR_SENTINEL = 1179791670
 QROW16_REFERENCE_SENTINEL = 1179791667
 NUM_SPLITS = 0
 LIVE_ARMS = {
@@ -42,6 +44,12 @@ LIVE_ARMS = {
         "candidate_dispatch": (
             "qrow32 B1 fixed32 visibility exact geometry; no fallback"
         ),
+    },
+    GQA_PAIR_ARM: {
+        "selector_sentinel": GQA_PAIR_SELECTOR_SENTINEL,
+        "num_splits": NUM_SPLITS,
+        "split_scratch_allocation": "not used; num_splits=0",
+        "candidate_dispatch": "qrow32 B1 GQA-pair exact geometry; no fallback",
     },
 }
 CANDIDATE_SHA256 = (
@@ -114,6 +122,48 @@ SOURCE_STATUS = (
     "?? csrc/flash_attn/src/flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu",
     "?? csrc/flash_attn/src/flash_fwd_fr13_qrow32_b1_split2_hdim256_bf16_sm80.cu",
 )
+# The GQA-pair B1 codegen emits one translation unit, not the no-split/split2
+# pair, so its modified-source set is its own.
+GQA_PAIR_SOURCE_STATUS = (
+    " M csrc/flash_attn/flash_api.cpp",
+    " M csrc/flash_attn/flash_api_torch_lib.cpp",
+    " M csrc/flash_attn/src/flash.h",
+    " M csrc/flash_attn/src/flash_fwd_kernel.h",
+    " M csrc/flash_attn/src/utils.h",
+    "?? csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu",
+)
+# flash_fwd_kernel.h below is byte-identical to the header in the B4 GQA-pair
+# closure that passed the dual byte gate (9c3f9e75...), so the paired
+# ((query_row, head_in_pair), column) address layout under test at B1 is the
+# same code that was proven arithmetically invariant at B4. flash.h, utils.h and
+# flash_api_torch_lib.cpp are byte-identical to the qrow32 B1 closure above.
+GQA_PAIR_SOURCE_FILES = {
+    "csrc/flash_attn/flash_api.cpp": (
+        "2c78d7bd17f8406956781b4e7bd70722ba147c651ec4dc0030ed3685a462b634"
+    ),
+    "csrc/flash_attn/flash_api_torch_lib.cpp": (
+        "c575d9f02ba44bf7022c77b80fdf12173da0ecae8a4d7599934c2cc9fa52e121"
+    ),
+    "csrc/flash_attn/src/flash.h": (
+        "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a"
+    ),
+    "csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu": (
+        "edc5e2a9116142a5efd6f4e21ee80c2da3caf823a476595d7a72877e50cfb105"
+    ),
+    "csrc/flash_attn/src/flash_fwd_kernel.h": (
+        "4f08741030c46d7e1ef1b88a10d4946f625559fedd7658c3b288e0d7a5d58d13"
+    ),
+    "csrc/flash_attn/src/utils.h": (
+        "5887df63c79a3e42fb9ddad93f64fe3c0625dbee4c547af68b6f2108b7beeb5f"
+    ),
+}
+GQA_PAIR_SOURCE_CLOSURE_SHA256 = (
+    "172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4"
+)
+GQA_PAIR_CANDIDATE_SHA256 = (
+    "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae"
+)
+GQA_PAIR_CANDIDATE_SIZE = 299_815_552
 EXACT4_TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
@@ -200,6 +250,19 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def _candidate_contract(arm: str) -> dict[str, Any]:
+    if arm == GQA_PAIR_ARM:
+        if not GQA_PAIR_CANDIDATE_SHA256 or not GQA_PAIR_CANDIDATE_SIZE:
+            raise ValueError(
+                "qrow32 B1 GQA-pair binary is not pinned: fill "
+                "GQA_PAIR_CANDIDATE_SHA256 and GQA_PAIR_CANDIDATE_SIZE from "
+                "the build attestation before gating this arm"
+            )
+        return {
+            "sha256": GQA_PAIR_CANDIDATE_SHA256,
+            "size": GQA_PAIR_CANDIDATE_SIZE,
+            "source_files": GQA_PAIR_SOURCE_FILES,
+            "source_closure_sha256": GQA_PAIR_SOURCE_CLOSURE_SHA256,
+        }
     if arm == VISIBILITY_ARM:
         return {
             "sha256": VISIBILITY_CANDIDATE_SHA256,
@@ -208,12 +271,32 @@ def _candidate_contract(arm: str) -> dict[str, Any]:
             "source_closure_sha256": VISIBILITY_SOURCE_CLOSURE_SHA256,
         }
     if arm not in {ARM, "split2"}:
-        raise ValueError("qrow32 live arm must be nosplit, split2, or visibility")
+        raise ValueError(
+            "qrow32 live arm must be nosplit, split2, visibility, or gqa_pair"
+        )
     return {
         "sha256": CANDIDATE_SHA256,
         "size": CANDIDATE_SIZE,
         "source_files": SOURCE_FILES,
         "source_closure_sha256": SOURCE_CLOSURE_SHA256,
+    }
+
+
+def _source_status(arm: str) -> tuple[str, ...]:
+    """The modified-source set the codegen produces for this arm."""
+    return GQA_PAIR_SOURCE_STATUS if arm == GQA_PAIR_ARM else SOURCE_STATUS
+
+
+def gqa_pair_source_contract() -> dict[str, Any]:
+    """The GQA-pair source closure, pinnable before the binary exists.
+
+    The codegen fixes the source, so `validate-source` can qualify a
+    regenerated tree ahead of the build; only the .so identity waits.
+    """
+    return {
+        "source_files": GQA_PAIR_SOURCE_FILES,
+        "source_closure_sha256": GQA_PAIR_SOURCE_CLOSURE_SHA256,
+        "source_status": GQA_PAIR_SOURCE_STATUS,
     }
 
 
@@ -231,7 +314,13 @@ def validate_candidate(
 
 
 def validate_source_closure(source_root: Path, *, arm: str = ARM) -> dict[str, Any]:
-    contract = _candidate_contract(arm)
+    # The GQA-pair source closure is pinned before its binary exists, so source
+    # qualification must not depend on the .so identity.
+    contract = (
+        gqa_pair_source_contract()
+        if arm == GQA_PAIR_ARM
+        else _candidate_contract(arm)
+    )
     if not source_root.is_dir() or source_root.is_symlink():
         raise ValueError("FA2 source root must be a non-symlink directory")
     head = _git(source_root, "rev-parse", "HEAD")
@@ -244,7 +333,7 @@ def validate_source_closure(source_root: Path, *, arm: str = ARM) -> dict[str, A
         ).splitlines()
         if line
     )
-    if status != SOURCE_STATUS:
+    if status != _source_status(arm):
         raise ValueError("FA2 modified source set drifted")
     records: dict[str, str] = {}
     for relative, expected in contract["source_files"].items():
@@ -300,7 +389,9 @@ def validate_live_result(
 ) -> dict[str, Any]:
     arm_contract = LIVE_ARMS.get(arm)
     if arm_contract is None:
-        raise ValueError("qrow32 live arm must be nosplit, split2, or visibility")
+        raise ValueError(
+            "qrow32 live arm must be nosplit, split2, visibility, or gqa_pair"
+        )
     candidate_contract = _candidate_contract(arm)
     if candidate_sha256 != candidate_contract["sha256"]:
         raise ValueError("qrow32 live candidate is not pinned")
@@ -511,7 +602,9 @@ def main() -> int:
     source = subparsers.add_parser("validate-source")
     source.add_argument("--source-root", required=True, type=Path)
     source.add_argument(
-        "--arm", choices=(ARM, "split2", VISIBILITY_ARM), default=ARM
+        "--arm",
+        choices=(ARM, "split2", VISIBILITY_ARM, GQA_PAIR_ARM),
+        default=ARM,
     )
     for name in ("issue", "verify"):
         command = subparsers.add_parser(name)

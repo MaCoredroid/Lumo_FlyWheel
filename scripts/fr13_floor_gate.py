@@ -301,6 +301,47 @@ FIXED32_CHAT_TRAFFIC_AUDIT_SCHEMA = (
     "fr13-fixed32-chat-task-provenance-audit-v3"
 )
 FIXED32_REAL_TASK_PROVENANCE_SCHEMA = "fr13-fixed32-real-task-provenance-v3"
+# The one terminal record a task that submitted no patch may carry. The eval
+# worker cannot run the SWE-bench harness on an empty prediction, so the runner
+# synthesizes this record instead of leaving the task without a verdict; every
+# field of it, and the worker record it quotes, is pinned below.
+FIXED32_SYNTHETIC_NO_PATCH_EVAL_SCHEMA = (
+    "lumo.swe_bench_q36_a.synthetic_no_patch_eval.v1"
+)
+FIXED32_SYNTHETIC_NO_PATCH_EVAL_KEYS = frozenset({
+    "schema",
+    "track",
+    "instance_id",
+    "model_id",
+    "dataset_name",
+    "verdict",
+    "passed",
+    "failure_mode",
+    "error",
+    "synthetic_no_patch",
+    "harness_invoked",
+    "harness_exit_code",
+    "patch_bytes",
+    "eval_wall_clock_seconds",
+    "arch",
+    "eval_host",
+    "worker_report",
+})
+FIXED32_NO_PATCH_WORKER_REPORT_KEYS = frozenset({
+    "instance_id",
+    "verdict",
+    "passed",
+    "failure_mode",
+    "error",
+    "arch",
+    "eval_host",
+    "eval_wall_clock_seconds",
+})
+FIXED32_NO_PATCH_PREDICTION_KEYS = frozenset({
+    "instance_id",
+    "model_name_or_path",
+    "model_patch",
+})
 FIXED32_QWEN_CAMPAIGN_PROOF_SCHEMA = (
     "fr13-fixed32-qwen-campaign-provenance-v1"
 )
@@ -3843,6 +3884,164 @@ def _fixed32_proxy_runtime_identity(
     }
 
 
+def _fixed32_trace_normal_result_event(trace_path: Path) -> dict[str, Any]:
+    """Fail closed unless the trajectory ended on a normal Qwen result event.
+
+    The agent emits exactly one terminal ``result`` event when it ends of its
+    own accord. A crashed, killed or truncated trajectory has no such event --
+    or has one flagged as an error -- so requiring it here is what keeps an
+    aborted run from being read as an agent that simply chose not to submit.
+    """
+    _raw, events = _fixed32_qwen_trace_events(trace_path)
+    final = events[-1] if events else None
+    if (
+        not isinstance(final, dict)
+        or final.get("type") != "result"
+        or final.get("subtype") != "success"
+        or final.get("is_error") is not False
+        or any(event.get("type") == "result" for event in events[:-1])
+    ):
+        raise GateError(
+            f"{trace_path}: trajectory did not end on a normal result event"
+        )
+    return final
+
+
+def _fixed32_exact_zero(value: object) -> bool:
+    """True only for a real numeric zero -- ``False`` is not a zero here."""
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and value == 0
+    )
+
+
+def _fixed32_no_patch_eval_terminal(
+    eval_report: dict[str, Any],
+    *,
+    task_dir: Path,
+    task_id: str,
+    metadata: dict[str, Any],
+    metadata_path: Path,
+) -> None:
+    """Accept the single honest terminal shape for a no-patch trajectory.
+
+    Under temp-0.6 canonical sampling a task may legally end on a reasoning
+    turn and never call apply_patch. SWE-bench scores such an instance as
+    unresolved, so the honest verdict is ``failed`` -- but the harness is never
+    invoked on an empty prediction, so no ``harness_exit_code`` exists and the
+    generic terminal check cannot apply. The runner therefore writes an
+    explicit synthetic record; this accepts exactly that record and nothing
+    looser, and only when independent artifacts corroborate every claim it
+    makes:
+
+    * the submission really was empty -- ``patch.diff`` is zero bytes, the
+      runner counted zero patch bytes, and the prediction handed to the eval
+      worker carried an empty ``model_patch``;
+    * the eval worker really did short-circuit -- its own truncated record is
+      quoted verbatim under ``worker_report`` and must show the empty-patch
+      skip, so the runner cannot manufacture a no-patch outcome on its own;
+    * the trajectory really did end normally -- the trace closes on a
+      non-error ``result`` event and the task recorded no orchestrator crash.
+
+    Anything else fails closed, so a crashed or aborted task can never
+    masquerade as a task that merely declined to submit.
+    """
+    label = f"{metadata_path}: fixed32 no-patch terminal"
+    exact_keys(eval_report, FIXED32_SYNTHETIC_NO_PATCH_EVAL_KEYS, label)
+    worker_report = eval_report["worker_report"]
+    if not isinstance(worker_report, dict):
+        raise GateError(f"{label} quotes no eval worker record")
+    exact_keys(
+        worker_report,
+        FIXED32_NO_PATCH_WORKER_REPORT_KEYS,
+        f"{label} worker record",
+    )
+    if (
+        eval_report["track"] != "swe_bench"
+        or eval_report["instance_id"] != task_id
+        or eval_report["dataset_name"] != SWE_VERIFIED_DATASET
+        or eval_report["verdict"] != "failed"
+        or eval_report["passed"] is not False
+        or eval_report["failure_mode"] != "patch_apply_failed"
+        or eval_report["error"] != "empty_patch"
+        or eval_report["synthetic_no_patch"] is not True
+        or eval_report["harness_invoked"] is not False
+        or eval_report["harness_exit_code"] is not None
+        or type(eval_report["patch_bytes"]) is not int
+        or eval_report["patch_bytes"] != 0
+        or not _fixed32_exact_zero(eval_report["eval_wall_clock_seconds"])
+        or not isinstance(eval_report["model_id"], str)
+        or not eval_report["model_id"]
+        or not isinstance(eval_report["arch"], str)
+        or not eval_report["arch"]
+        or not isinstance(eval_report["eval_host"], str)
+        or not eval_report["eval_host"]
+    ):
+        raise GateError(f"{label} is not the exact synthetic no-patch record")
+    if (
+        worker_report["instance_id"] != task_id
+        or worker_report["verdict"] != "failed"
+        or worker_report["passed"] is not False
+        or worker_report["failure_mode"] != "patch_apply_failed"
+        or worker_report["error"] != "empty_patch"
+        or worker_report["arch"] != eval_report["arch"]
+        or worker_report["eval_host"] != eval_report["eval_host"]
+        or not _fixed32_exact_zero(worker_report["eval_wall_clock_seconds"])
+    ):
+        raise GateError(
+            f"{label} worker record does not show a skipped harness"
+        )
+
+    patch_path = task_dir / "patch.diff"
+    patch_raw, _patch_text = strict_utf8_artifact(
+        patch_path,
+        label=str(patch_path),
+    )
+    if (
+        patch_raw != b""
+        or type(metadata.get("patch_bytes")) is not int
+        or metadata.get("patch_bytes") != 0
+    ):
+        raise GateError(f"{label} does not match an empty submission")
+
+    predictions_path = task_dir / "eval" / "predictions.jsonl"
+    _predictions_raw, predictions_text = strict_utf8_artifact(
+        predictions_path,
+        label=str(predictions_path),
+    )
+    prediction_lines = predictions_text.splitlines()
+    if len(prediction_lines) != 1:
+        raise GateError(
+            f"{predictions_path}: expected exactly one no-patch prediction"
+        )
+    prediction = exact_json_text(
+        prediction_lines[0],
+        label=str(predictions_path),
+    )
+    exact_keys(
+        prediction,
+        FIXED32_NO_PATCH_PREDICTION_KEYS,
+        str(predictions_path),
+    )
+    if (
+        prediction["instance_id"] != task_id
+        or prediction["model_name_or_path"] != eval_report["model_id"]
+        or prediction["model_patch"] != ""
+    ):
+        raise GateError(
+            f"{predictions_path}: prediction is not the empty submission the "
+            "no-patch terminal claims"
+        )
+
+    crash_path = task_dir / "orchestrator_crash.json"
+    if crash_path.exists() or crash_path.is_symlink():
+        raise GateError(
+            f"{crash_path}: a crashed task cannot carry a no-patch terminal"
+        )
+    _fixed32_trace_normal_result_event(task_dir / "qwen_trace.jsonl")
+
+
 def build_fixed32_chat_traffic_audit(
     arm_dir: Path,
     *,
@@ -3901,34 +4100,53 @@ def build_fixed32_chat_traffic_audit(
                 f"{metadata_path}: fixed32 task agent did not complete cleanly"
             )
         eval_report = metadata.get("eval_report")
-        verdict = (
-            eval_report.get("verdict")
-            if isinstance(eval_report, dict)
-            else None
-        )
-        passed = (
-            eval_report.get("passed")
-            if isinstance(eval_report, dict)
-            else None
-        )
-        harness_exit_code = (
-            eval_report.get("harness_exit_code")
-            if isinstance(eval_report, dict)
-            else None
-        )
         if (
-            not isinstance(eval_report, dict)
-            or eval_report.get("instance_id") != task_id
-            or eval_report.get("dataset_name") != SWE_VERIFIED_DATASET
-            or verdict not in {"resolved", "failed"}
-            or not isinstance(passed, bool)
-            or passed is not (verdict == "resolved")
-            or isinstance(harness_exit_code, bool)
-            or not isinstance(harness_exit_code, int)
+            isinstance(eval_report, dict)
+            and eval_report.get("schema")
+            == FIXED32_SYNTHETIC_NO_PATCH_EVAL_SCHEMA
         ):
-            raise GateError(
-                f"{metadata_path}: fixed32 task has no terminal SWE verdict"
+            # A trajectory that submits no patch is a legal traffic shape under
+            # temp-0.6 canonical sampling, and SWE-bench counts it unresolved.
+            # The harness is never invoked on an empty prediction, so there is
+            # no harness exit code to record; the runner writes an explicit
+            # synthetic terminal instead and this accepts exactly that record.
+            _fixed32_no_patch_eval_terminal(
+                eval_report,
+                task_dir=task_dir,
+                task_id=task_id,
+                metadata=metadata,
+                metadata_path=metadata_path,
             )
+            verdict, passed, harness_exit_code = "failed", False, None
+        else:
+            verdict = (
+                eval_report.get("verdict")
+                if isinstance(eval_report, dict)
+                else None
+            )
+            passed = (
+                eval_report.get("passed")
+                if isinstance(eval_report, dict)
+                else None
+            )
+            harness_exit_code = (
+                eval_report.get("harness_exit_code")
+                if isinstance(eval_report, dict)
+                else None
+            )
+            if (
+                not isinstance(eval_report, dict)
+                or eval_report.get("instance_id") != task_id
+                or eval_report.get("dataset_name") != SWE_VERIFIED_DATASET
+                or verdict not in {"resolved", "failed"}
+                or not isinstance(passed, bool)
+                or passed is not (verdict == "resolved")
+                or isinstance(harness_exit_code, bool)
+                or not isinstance(harness_exit_code, int)
+            ):
+                raise GateError(
+                    f"{metadata_path}: fixed32 task has no terminal SWE verdict"
+                )
         eval_path = task_dir / "eval" / "eval_report.json"
         if exact_json(eval_path, label=str(eval_path)) != eval_report:
             raise GateError(

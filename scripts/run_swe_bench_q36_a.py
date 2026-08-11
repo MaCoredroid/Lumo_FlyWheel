@@ -8261,6 +8261,93 @@ def _run_agent_dispatch(**kwargs: Any) -> dict[str, Any]:
     return _run_agent_local(**kwargs)
 
 
+# ---- no-patch terminal ------------------------------------------------------
+# temp-0.6 canonical sampling makes a no-submission trajectory a recurring legal
+# shape: the agent may close its final turn on reasoning and never call
+# apply_patch. SWE-bench scores such an instance as unresolved, so the honest
+# terminal state is a FAILED task -- but the eval worker cannot obtain that
+# verdict from the harness, because `run_evaluation` is never invoked on an
+# empty prediction. The worker short-circuits and writes a truncated record
+# that carries neither `dataset_name` nor `harness_exit_code` (there is no
+# harness exit code to report), which leaves the task with no terminal verdict
+# any auditor can read.
+#
+# Rather than loosen what a terminal verdict means, the runner writes the
+# terminal record itself, explicitly and honestly: it states that the harness
+# was never invoked, carries the worker's own short-circuit record verbatim so
+# the synthesis stays auditable, and is produced ONLY when every condition of
+# the empty-submission path holds. A crashed or aborted eval never takes this
+# path and keeps its own record.
+SYNTHETIC_NO_PATCH_EVAL_SCHEMA = "lumo.swe_bench_q36_a.synthetic_no_patch_eval.v1"
+_NO_PATCH_WORKER_REPORT_KEYS = frozenset({
+    "instance_id",
+    "verdict",
+    "passed",
+    "failure_mode",
+    "error",
+    "arch",
+    "eval_host",
+    "eval_wall_clock_seconds",
+})
+
+
+def _synthetic_no_patch_eval_report(
+    worker_report: dict[str, Any],
+    *,
+    instance_id: str,
+    dataset_name: str,
+    model_name: str,
+    patch_text: str,
+) -> dict[str, Any] | None:
+    """Return the honest terminal record for a task that submitted no patch.
+
+    Returns None -- leaving the worker's record untouched -- unless the
+    submission was exactly empty and the worker's record is exactly the
+    empty-patch short-circuit it writes before skipping the harness. Any other
+    record (a crash, an infra error, or a report from a harness that actually
+    ran and therefore carries `harness_exit_code`) is left alone.
+    """
+    if patch_text != "":
+        return None
+    if set(worker_report) != set(_NO_PATCH_WORKER_REPORT_KEYS):
+        return None
+    wall_clock = worker_report["eval_wall_clock_seconds"]
+    if (
+        worker_report["instance_id"] != instance_id
+        or worker_report["verdict"] != "failed"
+        or worker_report["passed"] is not False
+        or worker_report["failure_mode"] != "patch_apply_failed"
+        or worker_report["error"] != "empty_patch"
+        or isinstance(wall_clock, bool)
+        or not isinstance(wall_clock, (int, float))
+        or wall_clock != 0
+        or not isinstance(worker_report["arch"], str)
+        or not worker_report["arch"]
+        or not isinstance(worker_report["eval_host"], str)
+        or not worker_report["eval_host"]
+    ):
+        return None
+    return {
+        "schema": SYNTHETIC_NO_PATCH_EVAL_SCHEMA,
+        "track": "swe_bench",
+        "instance_id": instance_id,
+        "model_id": model_name,
+        "dataset_name": dataset_name,
+        "verdict": "failed",
+        "passed": False,
+        "failure_mode": "patch_apply_failed",
+        "error": "empty_patch",
+        "synthetic_no_patch": True,
+        "harness_invoked": False,
+        "harness_exit_code": None,
+        "patch_bytes": 0,
+        "eval_wall_clock_seconds": 0.0,
+        "arch": worker_report["arch"],
+        "eval_host": worker_report["eval_host"],
+        "worker_report": dict(worker_report),
+    }
+
+
 def _run_eval(
     *,
     instance_id: str,
@@ -8741,9 +8828,24 @@ def _process_one(
     eval_report_path = eval_output / "eval_report.json"
     if eval_report_path.is_file():
         try:
-            summary["eval_report"] = json.loads(eval_report_path.read_text())
+            eval_report = json.loads(eval_report_path.read_text())
         except Exception:  # noqa: BLE001
-            pass
+            eval_report = None
+        if isinstance(eval_report, dict):
+            no_patch_terminal = _synthetic_no_patch_eval_report(
+                eval_report,
+                instance_id=instance_id,
+                dataset_name=dataset_name,
+                model_name=model_name,
+                patch_text=patch_text,
+            )
+            if no_patch_terminal is not None:
+                eval_report_path.write_text(
+                    json.dumps(no_patch_terminal, indent=2),
+                    encoding="utf-8",
+                )
+                eval_report = no_patch_terminal
+            summary["eval_report"] = eval_report
 
     # Tear down the worktree to free disk; preserve patch and artifacts.
     _remove_workspace(cache_path, workspace_path)

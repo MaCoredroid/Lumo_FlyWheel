@@ -11420,6 +11420,25 @@ _FR13_GT_PENDING = []               # deferred (e0,e1,e2,e3) quads (FR13_GRAPH_T
 _FR13_GT_ACCUM = [0.0, 0.0, 0.0, 0]  # fill_s, replay_s, burn_s, n
 _FR13_GT_LAST_DUMP = [0.0]
 _FR13_GRAPH_COMMITTER_ANNOUNCED = False
+_FR13_CFWD_CAPTURE_REMAINDER_ANNOUNCED = False
+
+
+def _fr13_cfwd_capture_remainder_on() -> bool:
+    """FR13_CFWD_CAPTURE_REMAINDER (default OFF).
+
+    Extends the FR13_COMMITTER_GRAPH capture region from `_loop()` alone to
+    `_fill(); _loop()`, so the per-step buffer fill becomes graph nodes instead
+    of eager launches. Env is read fresh (the EngineCore worker drops bare
+    FR13_* vars, so the launcher also drops a sidecar)."""
+    if os.environ.get("FR13_CFWD_CAPTURE_REMAINDER") == "1":
+        return True
+    for _p in (
+        "/logs/fr13_cfwd_capture_remainder.arm",
+        "/tmp/fr13_cfwd_capture_remainder.arm",
+    ):
+        if os.path.exists(_p):
+            return True
+    return False
 
 
 def _fr13_native_committer_all_layers_graph(
@@ -11461,7 +11480,11 @@ def _fr13_native_committer_all_layers_graph(
         )
 
     # ---- lazy-init persistent buffers (graph-stable addresses) ----
-    sig = (L, MAX_B, MAX_PATH, num_kh, dim_k, num_vh, dim_v, id(banks_list[0]))
+    # The remainder arm is part of the signature: an armed and an unarmed graph
+    # have different captured bodies, so they must never share a cache entry.
+    _remainder = _fr13_cfwd_capture_remainder_on()
+    sig = (L, MAX_B, MAX_PATH, num_kh, dim_k, num_vh, dim_v, id(banks_list[0]),
+           _remainder)
     st = _FR13_GRAPH_COMMITTER.get(sig)
     if st is None:
         _dt = k_rings.dtype
@@ -11479,31 +11502,100 @@ def _fr13_native_committer_all_layers_graph(
     kbuf, vbuf, abuf, bbuf = st["kbuf"], st["vbuf"], st["abuf"], st["bbuf"]
     qbuf, cu_fixed, ssi_buf = st["qbuf"], st["cu"], st["ssi"]
 
+    # ---- FR13_CFWD_CAPTURE_REMAINDER: capture-legal staging buffers ----
+    if _remainder:
+        if burn_node_bank:
+            raise RuntimeError(
+                "FR13_CFWD_CAPTURE_REMAINDER requires burn OFF "
+                "(burn is eager and mutates the banks outside the graph)"
+            )
+        RING = int(k_rings.shape[2])
+        if "node_mat" not in st:
+            # Every one of these is a device tensor at a fixed address, so the
+            # captured fill re-reads them on each replay. Staging rows for
+            # b >= B are neutral: acc_stage = -1 makes `valid` all-False, which
+            # reproduces the untouched (memset) padding of the eager fill.
+            st["acc_stage"] = torch.full(
+                (MAX_B,), -1, device=dev, dtype=torch.long)
+            st["path_stage"] = torch.zeros(
+                (MAX_B, MAX_PATH - 1), device=dev, dtype=torch.long)
+            st["ssi_stage"] = torch.full(
+                (L, MAX_B, 1), SCRATCH, device=dev, dtype=torch.int32)
+            st["node_mat"] = torch.zeros(
+                (MAX_B, MAX_PATH), device=dev, dtype=torch.long)
+            st["ar"] = torch.arange(MAX_PATH, device=dev)
+            st["arb"] = torch.arange(MAX_B, device=dev)
+            st["ring_ptrs"] = None
+
     _tm = os.environ.get("FR13_GRAPH_TIMER") == "1"
     if _tm:
         _e0, _e1, _e2, _e3 = (torch.cuda.Event(enable_timing=True) for _ in range(4))
         _e0.record()
-    # ---- fill fixed buffers: full re-neutralize (cheap memset) then overwrite real slots ----
-    abuf.fill_(-1e4)
-    bbuf.zero_()
-    kbuf.zero_()
-    vbuf.zero_()
-    ssi_buf.fill_(SCRATCH)
-    for b in range(B):
-        _nl = seg[b]
-        nodes = torch.cat([
-            torch.full((1,), int(root_node), dtype=torch.long, device=dev),
-            accepted_paths[b, :int(acc[b])].to(torch.long),
-        ])
-        s0 = b * MAX_PATH
-        kbuf[:, s0:s0 + _nl] = k_rings[:, b, nodes]
-        vbuf[:, s0:s0 + _nl] = v_rings[:, b, nodes]
-        abuf[:, s0:s0 + _nl] = a_rings[:, b, nodes]
-        bbuf[:, s0:s0 + _nl] = b_rings[:, b, nodes]
-    # per-layer running row broadcast across all MAX_PATH cols, ALL layers at once (1 op, not L*B)
-    ssi_buf[:, :B, :] = spec_state_indices[:, :B, 0:1].to(torch.int32)
+    if not _remainder:
+        # ---- fill fixed buffers: full re-neutralize (cheap memset) then overwrite real slots ----
+        abuf.fill_(-1e4)
+        bbuf.zero_()
+        kbuf.zero_()
+        vbuf.zero_()
+        ssi_buf.fill_(SCRATCH)
+        for b in range(B):
+            _nl = seg[b]
+            nodes = torch.cat([
+                torch.full((1,), int(root_node), dtype=torch.long, device=dev),
+                accepted_paths[b, :int(acc[b])].to(torch.long),
+            ])
+            s0 = b * MAX_PATH
+            kbuf[:, s0:s0 + _nl] = k_rings[:, b, nodes]
+            vbuf[:, s0:s0 + _nl] = v_rings[:, b, nodes]
+            abuf[:, s0:s0 + _nl] = a_rings[:, b, nodes]
+            bbuf[:, s0:s0 + _nl] = b_rings[:, b, nodes]
+        # per-layer running row broadcast across all MAX_PATH cols, ALL layers at once (1 op, not L*B)
+        ssi_buf[:, :B, :] = spec_state_indices[:, :B, 0:1].to(torch.int32)
+    else:
+        # FR13_CFWD_CAPTURE_REMAINDER: the ONLY eager work left is staging the
+        # three varying device tensors into fixed addresses. Everything the old
+        # eager fill did (5 memsets + a Python loop over B issuing 4 gathers and
+        # 4 slice copies each + the ssi broadcast) moves inside the graph.
+        st["acc_stage"].fill_(-1)
+        st["acc_stage"][:B].copy_(accepted_lens[:B])
+        st["path_stage"].zero_()
+        st["path_stage"][:B].copy_(accepted_paths[:B, :MAX_PATH - 1])
+        st["ssi_stage"].fill_(SCRATCH)
+        st["ssi_stage"][:, :B].copy_(spec_state_indices[:, :B, 0:1])
     if _tm:
         _e1.record()
+
+    def _fill():
+        """Device-only restatement of the eager fill, byte-equivalent to it.
+
+        Position j of request b is real iff j <= accepted_lens[b]; node 0 is the
+        root and node j>0 is accepted_paths[b, j-1], which is exactly the
+        `cat([root, accepted_paths[b, :acc]])` the eager path builds. Padding
+        slots get the state-neutral values (a=-1e4 => decay 1, k=v=b=0 => no
+        write), so the `where` covers every element and the five memsets the
+        eager path needed are subsumed."""
+        nm = st["node_mat"]
+        nm[:, 0] = int(root_node)
+        nm[:, 1:] = st["path_stage"].clamp(min=0)
+        valid = st["ar"].unsqueeze(0) <= st["acc_stage"].unsqueeze(1)
+        safe = torch.where(
+            valid, nm, torch.zeros_like(nm)).clamp(0, RING - 1)
+        bidx = st["arb"].view(MAX_B, 1)
+        k_sel = k_rings[:, bidx, safe]
+        v_sel = v_rings[:, bidx, safe]
+        a_sel = a_rings[:, bidx, safe]
+        b_sel = b_rings[:, bidx, safe]
+        m4 = valid.view(1, MAX_B, MAX_PATH, 1, 1)
+        m3 = valid.view(1, MAX_B, MAX_PATH, 1)
+        kbuf.view(L, MAX_B, MAX_PATH, num_kh, dim_k)[:] = torch.where(
+            m4, k_sel, torch.zeros_like(k_sel))
+        vbuf.view(L, MAX_B, MAX_PATH, num_vh, dim_v)[:] = torch.where(
+            m4, v_sel, torch.zeros_like(v_sel))
+        abuf.view(L, MAX_B, MAX_PATH, num_vh)[:] = torch.where(
+            m3, a_sel, torch.full_like(a_sel, -1e4))
+        bbuf.view(L, MAX_B, MAX_PATH, num_vh)[:] = torch.where(
+            m3, b_sel, torch.zeros_like(b_sel))
+        ssi_buf[:] = st["ssi_stage"]
 
     def _loop():
         for _L in range(L):
@@ -11520,6 +11612,18 @@ def _fr13_native_committer_all_layers_graph(
                 use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
             )
 
+    def _body():
+        # FR13_CFWD_CAPTURE_REMAINDER folds the fill into the captured region.
+        if _remainder:
+            _fill()
+        _loop()
+
+    def _ring_ptrs():
+        return (
+            k_rings.data_ptr(), v_rings.data_ptr(),
+            a_rings.data_ptr(), b_rings.data_ptr(),
+        )
+
     if st["graph"] is None:
         # capture ONCE. Warmup(3x)+capture(1x) mutate the running rows 4x with THIS step's data, so save
         # the running rows first, capture, RESTORE them, then replay once for the real (single) commit.
@@ -11531,15 +11635,21 @@ def _fr13_native_committer_all_layers_graph(
         _s.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(_s):
             for _ in range(3):
-                _loop()
+                _body()
         torch.cuda.current_stream().wait_stream(_s)
         gph = torch.cuda.CUDAGraph()
         with torch.cuda.graph(gph):
-            _loop()
+            _body()
         for _L in range(L):
             col0, val = saved[_L]
             banks_list[_L][col0] = val
         st["graph"] = gph
+        if _remainder:
+            # The captured fill dereferences the ring tensors directly, so their
+            # addresses are baked into the graph. Record them and fail loud on
+            # replay if they ever move -- silently reading a stale ring would
+            # commit wrong state with no other symptom.
+            st["ring_ptrs"] = _ring_ptrs()
         gph.replay()
         global _FR13_GRAPH_COMMITTER_ANNOUNCED
         if not _FR13_GRAPH_COMMITTER_ANNOUNCED:
@@ -11549,7 +11659,28 @@ def _fr13_native_committer_all_layers_graph(
                 "(MAX_B=" + str(MAX_B) + " MAX_PATH=" + str(MAX_PATH) + "); replaying per commit",
                 flush=True,
             )
+        global _FR13_CFWD_CAPTURE_REMAINDER_ANNOUNCED
+        if _remainder and not _FR13_CFWD_CAPTURE_REMAINDER_ANNOUNCED:
+            _FR13_CFWD_CAPTURE_REMAINDER_ANNOUNCED = True
+            print(
+                "[FR13_CFWD_CAPTURE_REMAINDER ENGAGED] committer fill folded into "
+                "the captured region (MAX_B=" + str(MAX_B)
+                + " MAX_PATH=" + str(MAX_PATH) + "); 3 staging copies remain eager",
+                flush=True,
+            )
     else:
+        if _remainder:
+            if st.get("ring_ptrs") is None:
+                raise RuntimeError(
+                    "FR13_CFWD_CAPTURE_REMAINDER: graph was captured without the "
+                    "fill; the arm was toggled on after capture. Restart the "
+                    "engine with the flag set before the first commit."
+                )
+            if st["ring_ptrs"] != _ring_ptrs():
+                raise RuntimeError(
+                    "FR13_CFWD_CAPTURE_REMAINDER: k/v/a/b ring addresses moved "
+                    "after capture; the captured fill would read stale memory"
+                )
         st["graph"].replay()
     if _tm:
         _e2.record()

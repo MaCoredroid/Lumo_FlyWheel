@@ -51,10 +51,10 @@ case "$LIVE_AB_ARM" in
       || { echo "qrow32 BM32 B4 live gate binary/source provenance drifted" >&2; exit 2; }
     ;;
   gqa_pair)
-    [[ "$CANDIDATE_SHA256" == "543f353aed3af6307b988e0b2972e0bae4bb6025055840f8818a451bcfb1717e" \
+    [[ "$CANDIDATE_SHA256" == "af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb" \
        && "$CANDIDATE_BYTES" == "299813360" \
        && "$FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
-       && "$SOURCE_CLOSURE_SHA256" == "f210a5ebb93930e89b0d9fe0cb6e53a76c9359873ad4268e81d3f17a7443bdf2" ]] \
+       && "$SOURCE_CLOSURE_SHA256" == "9c3f9e751da7b783e9d07d8e40d5bc2234b99e719a1048668bd6c82244ed2d81" ]] \
       || { echo "GQA-pair live gate binary/source provenance drifted" >&2; exit 2; }
     ;;
   visibility)
@@ -197,7 +197,7 @@ cmp -s "$RUNROOT_ABS/external_manifest.at_launch.json" \
 if [[ "$LIVE_AB_ARM" == "visibility" ]]; then
   "$PYTHON_BIN" scripts/fr13_fa2_fixed32_visibility_gate.py verify-b4 \
     --result "$ARMDIR/logs/fr13_fa2_qrow32_live_paged_ab.json" \
-    --campaign-arm "$ARMDIR/swe_out/verified/fixed32_taw_campaign_arm.json" \
+    --campaign-arm "$ARMDIR/swe_out/verified/campaign_summary.json" \
     --campaign-provenance "$ARMDIR/swe_out/verified/fixed32_qwen_campaign_provenance.json" \
     --candidate-so "$FORKED_FA2_SO" --fa2-source "$FA2_SOURCE" \
     --fixed32-mode "$FIXED32_MODE" --source-commit "$SOURCE_COMMIT" \
@@ -205,7 +205,7 @@ if [[ "$LIVE_AB_ARM" == "visibility" ]]; then
 else
   "$PYTHON_BIN" scripts/fr13_fa2_qrow32_gate.py verify-live \
     --result "$ARMDIR/logs/fr13_fa2_qrow32_live_paged_ab.json" \
-    --campaign-arm "$ARMDIR/swe_out/verified/fixed32_taw_campaign_arm.json" \
+    --campaign-arm "$ARMDIR/swe_out/verified/campaign_summary.json" \
     --campaign-provenance "$ARMDIR/swe_out/verified/fixed32_qwen_campaign_provenance.json" \
     --candidate-so "$FORKED_FA2_SO" \
     --fixed32-mode "$FIXED32_MODE" \

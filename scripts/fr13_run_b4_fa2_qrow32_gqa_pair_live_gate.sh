@@ -30,7 +30,7 @@ cd "$REPO"
 
 PYTHON_BIN=${PYTHON_BIN:-/home/mark/lumoFlyWheel-b4-compactionfix-rerun/.venv/bin/python}
 FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
-SOURCE_CLOSURE_SHA256=f210a5ebb93930e89b0d9fe0cb6e53a76c9359873ad4268e81d3f17a7443bdf2
+SOURCE_CLOSURE_SHA256=9c3f9e751da7b783e9d07d8e40d5bc2234b99e719a1048668bd6c82244ed2d81
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 
@@ -94,7 +94,7 @@ run_arm() {
 
   "$PYTHON_BIN" "$GATE" verify-arm \
     --result "$arm_dir/logs/fr13_fa2_qrow32_live_paged_ab.json" \
-    --campaign-arm "$arm_dir/swe_out/verified/fixed32_taw_campaign_arm.json" \
+    --campaign-arm "$arm_dir/swe_out/verified/campaign_summary.json" \
     --campaign-provenance "$arm_dir/swe_out/verified/fixed32_qwen_campaign_provenance.json" \
     --candidate-so "$QROW32_GQA_PAIR_FA2_SO" \
     --fa2-source "$QROW32_GQA_PAIR_FA2_SOURCE" \
