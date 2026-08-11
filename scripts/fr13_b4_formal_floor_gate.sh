@@ -48,6 +48,15 @@ REPO=$(cd "$SCRIPT_DIR/.." && pwd)
 cd "$REPO"
 
 PASSES=${PASSES:-4}
+# MAKEUP MODE: append passes to an EXISTING gate root instead of starting a new
+# campaign. Used when infrastructure (not the stack) destroys a pass -- e.g. the
+# 2026-08-11 ON campaign, where a transient alienware->GB10 Tailscale blip at the
+# preflight moment killed pass_03's Tail23 arm before it served a single request.
+# The replacement pass MUST reuse the dead pass's TH/HT slot, so the order is
+# forced rather than derived from index parity.
+MAKEUP_GATE_ROOT=${MAKEUP_GATE_ROOT:-}
+PASS_INDEX_START=${PASS_INDEX_START:-0}
+FLOOR_ORDER_OVERRIDE=${FLOOR_ORDER_OVERRIDE:-}
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
@@ -56,14 +65,30 @@ SEQUENCE_FILE=scripts/fr13_fixed32_floor_timers_seq.sh
 # The gate admits exactly 4 or 16 included passes -- that is what keeps the
 # between-pass interval on the repo's pinned one-sided t criticals (df 3 or 15)
 # instead of inventing a new constant.
-case "$PASSES" in
-  4|16) ;;
-  *) echo "FAIL: PASSES must be 4 or 16 (pinned t criticals); got $PASSES" >&2; exit 2 ;;
+# A FRESH campaign must be 4 or 16 so the between-pass interval lands on the
+# repo's pinned one-sided t criticals. A MAKEUP run is exempt: it tops an
+# existing campaign back up, and the reducer -- not this loop -- enforces the
+# final 4-or-16 admissibility per topology.
+if [[ -z "$MAKEUP_GATE_ROOT" ]]; then
+  case "$PASSES" in
+    4|16) ;;
+    *) echo "FAIL: PASSES must be 4 or 16 (pinned t criticals); got $PASSES" >&2; exit 2 ;;
+  esac
+fi
+case "$FLOOR_ORDER_OVERRIDE" in
+  ""|TH|HT) ;;
+  *) echo "FAIL: FLOOR_ORDER_OVERRIDE must be TH or HT" >&2; exit 2 ;;
 esac
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 SOURCE_COMMIT=$(git rev-parse HEAD)
-GATE_ROOT="$REPO/output/fr13_b4_formal_floor_gate_${STAMP}"
+if [[ -n "$MAKEUP_GATE_ROOT" ]]; then
+  GATE_ROOT=$(realpath -m "$MAKEUP_GATE_ROOT")
+  [[ -d "$GATE_ROOT" ]] \
+    || { echo "FAIL: makeup gate root does not exist: $GATE_ROOT" >&2; exit 2; }
+else
+  GATE_ROOT="$REPO/output/fr13_b4_formal_floor_gate_${STAMP}"
+fi
 
 # ---------------------------------------------------------------- preflight --
 [[ -f "$SUBSET" && ! -L "$SUBSET" \
@@ -74,8 +99,10 @@ GATE_ROOT="$REPO/output/fr13_b4_formal_floor_gate_${STAMP}"
 [[ -x "$PYTHON_BIN" ]] || { echo "FAIL: no $PYTHON_BIN" >&2; exit 2; }
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "FAIL: tracked worktree must be clean" >&2; exit 2; }
-[[ ! -e "$GATE_ROOT" && ! -L "$GATE_ROOT" ]] \
-  || { echo "FAIL: gate root must be new: $GATE_ROOT" >&2; exit 2; }
+if [[ -z "$MAKEUP_GATE_ROOT" ]]; then
+  [[ ! -e "$GATE_ROOT" && ! -L "$GATE_ROOT" ]] \
+    || { echo "FAIL: gate root must be new: $GATE_ROOT" >&2; exit 2; }
+fi
 
 # GPU coordination: never contend with another campaign.
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
@@ -100,10 +127,14 @@ echo "===== B4 FORMAL FLOOR GATE $STAMP ($PASSES passes x 2 topologies) ====="
 
 # ------------------------------------------------------------------- passes --
 completed=0
-for (( index=0; index<PASSES; index++ )); do
+for (( offset=0; offset<PASSES; offset++ )); do
+  index=$(( PASS_INDEX_START + offset ))
   pass_dir="$GATE_ROOT/pass_$(printf '%02d' "$index")"
   # Balance first-arm/second-arm position across passes.
   if (( index % 2 == 0 )); then order=TH; else order=HT; fi
+  [[ -n "$FLOOR_ORDER_OVERRIDE" ]] && order=$FLOOR_ORDER_OVERRIDE
+  [[ ! -e "$pass_dir" ]] \
+    || { echo "FAIL: pass dir already exists: $pass_dir" >&2; exit 2; }
   mkdir -p "$pass_dir"
   printf '%s\n' "$order" > "$pass_dir/floor_order.txt"
 
@@ -156,11 +187,15 @@ printf 'passes_completed=%s ended=%s\n' "$completed" "$(date -u +%FT%TZ)" \
 
 # ------------------------------------------------------------------ reduce ---
 echo "===== reducing $completed/$PASSES passes ====="
+# --finalize is MANDATORY here: the campaign driver writes an ungated
+# deploy_speed_${TAG}.json, so without it every arm is excluded for a missing
+# deploy_speed_fullwall.json and the verdict is vacuous.
 "$PYTHON_BIN" scripts/fr13_b4_floor_gate_reduce.py \
   --repo "$REPO" \
   --gate-root "$GATE_ROOT" \
   --source-commit "$SOURCE_COMMIT" \
-  --min-passes "$PASSES"
+  --finalize \
+  --min-passes 4
 rc=$?
 echo "===== B4 FORMAL FLOOR GATE DONE rc=$rc ====="
 echo "verdict: $GATE_ROOT/fr13_b4_formal_floor_gate.json"

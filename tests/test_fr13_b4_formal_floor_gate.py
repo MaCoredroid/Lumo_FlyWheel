@@ -548,3 +548,127 @@ def test_verdict_records_the_measured_stack_state(gate_root):
         SHIPPED["FR13_MAMBA_SPEC_BLOCKS_CDIV"]
     )
     assert payload["contract"]["shipped_defaults_at_reduce_time"] == SHIPPED
+
+
+# --------------------------------------------------------------------------- #
+# a pass is atomic: paired evidence, or none                                   #
+# --------------------------------------------------------------------------- #
+def _mixed_gate_root(tmp_path, broken_mode="tail6_fixed32", broken_index=3):
+    """4 passes where one arm of one pass never produced a reduction."""
+    root = tmp_path / "gate"
+    for index in range(4):
+        pass_dir = root / f"pass_{index:02d}"
+        pass_dir.mkdir(parents=True)
+        for mode in MODES:
+            arm = pass_dir / f"{mode}_gate{index}"
+            if mode == broken_mode and index == broken_index:
+                # served zero traffic: no census, so no reduction is possible
+                arm.mkdir(parents=True)
+                continue
+            _write_arm(arm, wall_scale=1.0 + 0.125 * index)
+    return root
+
+
+def test_a_broken_arm_voids_its_whole_pass(tmp_path):
+    """The surviving Hydra27 arm of a broken pass must NOT be admitted alone."""
+    root = _mixed_gate_root(tmp_path)
+    passes = gate.discover_passes(root, SHIPPED)
+    payload = gate.build_verdict(
+        repo=REPO, gate_root=root, source_commit="x",
+        topology_passes=passes, min_passes=4, expected=SHIPPED,
+    )
+    assert payload["void_passes"], "the broken pass must be recorded as void"
+    assert payload["void_passes"][0]["pass_index"] == 3
+
+    survivor = next(r for r in passes["hydra27_fixed32"] if r["pass_index"] == 3)
+    assert survivor["included"] is False
+    assert survivor["voided_by_pass_atomicity"] is True
+    assert "pass 3 is VOID" in survivor["exclusion_reason"]
+
+    # both topologies now sit at 3 -> inadmissible, which is the honest answer
+    for mode in MODES:
+        assert payload["topologies"][mode]["included_pass_count"] == 3
+    assert payload["gate_verdict"] == "NOT_EVALUATED_INSUFFICIENT_PASSES"
+
+
+def test_a_makeup_pass_restores_admissibility(tmp_path):
+    """Replacing the void pass with a makeup pass makes BOTH topologies 4."""
+    root = _mixed_gate_root(tmp_path)
+    makeup = root / "pass_04"
+    makeup.mkdir(parents=True)
+    (makeup / "floor_order.txt").write_text("HT", encoding="utf-8")
+    for mode in MODES:
+        _write_arm(makeup / f"{mode}_gate4", wall_scale=1.5)
+
+    payload = gate.build_verdict(
+        repo=REPO, gate_root=root, source_commit="x",
+        topology_passes=gate.discover_passes(root, SHIPPED),
+        min_passes=4, expected=SHIPPED,
+    )
+    assert payload["gate_verdict"] == "PASS"
+    assert payload["citable"] is True
+    for mode in MODES:
+        topo_out = payload["topologies"][mode]
+        assert topo_out["included_pass_count"] == 4
+        # the void pass is excluded from BOTH, so the two topologies are paired
+        assert {p["pass_index"] for p in topo_out["passes"] if p["included"]} == {
+            0, 1, 2, 4
+        }
+    assert payload["gates"]["every_included_pass_is_complete"] is True
+
+
+def test_pass_atomicity_keys_on_validity_not_on_value(tmp_path):
+    """The void rule must never depend on a measured number."""
+    fast = _mixed_gate_root(tmp_path / "fast")
+    slow = _mixed_gate_root(tmp_path / "slow")
+    # make the surviving arm of the void pass wildly faster in one tree
+    import shutil
+    shutil.rmtree(slow / "pass_03" / "hydra27_fixed32_gate3")
+    _write_arm(slow / "pass_03" / "hydra27_fixed32_gate3", wall_scale=4.0)
+
+    def voided(root):
+        p = gate.build_verdict(
+            repo=REPO, gate_root=root, source_commit="x",
+            topology_passes=gate.discover_passes(root, SHIPPED),
+            min_passes=4, expected=SHIPPED,
+        )
+        return [v["pass_index"] for v in p["void_passes"]]
+
+    assert voided(fast) == voided(slow) == [3]
+
+
+def test_a_missing_arm_directory_also_voids_the_pass(tmp_path):
+    root = tmp_path / "gate"
+    for index in range(4):
+        pass_dir = root / f"pass_{index:02d}"
+        pass_dir.mkdir(parents=True)
+        modes = MODES if index != 2 else ("hydra27_fixed32",)
+        for mode in modes:
+            _write_arm(pass_dir / f"{mode}_gate{index}")
+    payload = gate.build_verdict(
+        repo=REPO, gate_root=root, source_commit="x",
+        topology_passes=gate.discover_passes(root, SHIPPED),
+        min_passes=4, expected=SHIPPED,
+    )
+    assert [v["pass_index"] for v in payload["void_passes"]] == [2]
+    assert "no arm directory" in payload["void_passes"][0]["reason"]
+
+
+# --------------------------------------------------------------------------- #
+# runner: makeup mode + the finalize wiring                                    #
+# --------------------------------------------------------------------------- #
+def test_runner_finalizes_before_the_auto_verdict():
+    """Without --finalize the auto-verdict excludes every arm and is vacuous."""
+    text = (REPO / "scripts" / "fr13_b4_formal_floor_gate.sh").read_text(encoding="utf-8")
+    reduce_call = text[text.index("fr13_b4_floor_gate_reduce.py"):]
+    assert "--finalize" in reduce_call[:400]
+
+
+def test_runner_supports_a_slot_preserving_makeup_pass():
+    text = (REPO / "scripts" / "fr13_b4_formal_floor_gate.sh").read_text(encoding="utf-8")
+    assert "MAKEUP_GATE_ROOT" in text
+    assert "PASS_INDEX_START" in text
+    # the replacement must be able to reuse the dead pass's TH/HT slot
+    assert "FLOOR_ORDER_OVERRIDE" in text
+    # and must never silently overwrite recorded evidence
+    assert "pass dir already exists" in text

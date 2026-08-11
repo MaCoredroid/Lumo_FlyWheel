@@ -511,6 +511,58 @@ _INTERVAL_FIELDS = (
 )
 
 
+def apply_pass_atomicity(
+    topology_passes: dict[str, list[dict[str, Any]]]
+) -> list[dict[str, Any]]:
+    """A PASS is the atomic unit of evidence: all its arms, or none of them.
+
+    Both topologies are deliberately run back to back inside one pass so they
+    share host conditions -- same boot, same page cache age, same thermal state.
+    That is what makes the Tail23/Hydra27 contrast PAIRED. Admitting a surviving
+    arm from an otherwise-broken pass would silently unpair it, comparing one
+    topology's pass {0,1,2,3} against the other's {0,1,2,4}, and would also
+    break the first-arm/second-arm position balance the alternating TH/HT order
+    exists to guarantee.
+
+    So when any arm of a pass is not included, every arm of that pass is voided.
+    The rule keys ONLY on validity, never on a measured value, so it cannot be
+    used to select a favourable number.
+
+    This is what design.md 1.4 always specified ("every pass must clear all of
+    the following or it is excluded"); the first implementation drifted to
+    arm-level inclusion.
+    """
+    by_index: dict[int, list[dict[str, Any]]] = {}
+    for mode in TOPOLOGIES:
+        for record in topology_passes.get(mode, []):
+            by_index.setdefault(record["pass_index"], []).append(record)
+
+    voided: list[dict[str, Any]] = []
+    for index in sorted(by_index):
+        arms = by_index[index]
+        modes_present = {
+            m for m in TOPOLOGIES for r in topology_passes.get(m, [])
+            if r["pass_index"] == index
+        }
+        broken = [r for r in arms if not r.get("included")]
+        missing = sorted(set(TOPOLOGIES) - modes_present)
+        if not broken and not missing:
+            continue
+        reasons = [f"{r['arm']}: {r['exclusion_reason']}" for r in broken]
+        reasons += [f"{m}: no arm directory" for m in missing]
+        summary = f"pass {index} is VOID -- " + "; ".join(reasons)
+        voided.append({"pass_index": index, "reason": summary})
+        for record in arms:
+            if record.get("included"):
+                record["included"] = False
+                record["exclusion_reason"] = (
+                    f"{summary}. A pass is atomic: its arms are paired evidence, "
+                    "so a surviving arm cannot be admitted alone."
+                )
+                record["voided_by_pass_atomicity"] = True
+    return voided
+
+
 def reduce_topology(mode: str, passes: list[dict[str, Any]], min_passes: int) -> dict[str, Any]:
     included = [p for p in passes if p.get("included")]
     out: dict[str, Any] = {
@@ -556,6 +608,7 @@ def build_verdict(
     min_passes: int,
     expected: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    void_passes = apply_pass_atomicity(topology_passes)
     topologies = {
         mode: reduce_topology(mode, topology_passes.get(mode, []), min_passes)
         for mode in TOPOLOGIES
@@ -575,6 +628,10 @@ def build_verdict(
     gates = {
         "subset_bytes_canonical_exact4": True,
         "one_stack_state_across_all_passes": len(observed_states) == 1,
+        "every_included_pass_is_complete": all(
+            p["pass_index"] not in {v["pass_index"] for v in void_passes}
+            for p in included
+        ),
         "all_passes_nested_bracket": bool(included)
         and all(p["bracket"]["topology"] == REQUIRED_BRACKET_TOPOLOGY for p in included),
         "all_passes_work_census_gated": bool(included)
@@ -641,6 +698,7 @@ def build_verdict(
         # WHICH STACK THIS GATE MEASURED. Recorded, never pinned: the gate follows
         # the branch's shipped default so a promoted lever is measured, not rejected.
         "measured_stack_state": measured_stack,
+        "void_passes": void_passes,
         "b4_cap_applicable": False,
         "b4_cap_reason": (
             "B4 mandatory bytes at ~35-38k tok/request are 42-49 GB => a 155-179 ms "
