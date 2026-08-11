@@ -99,13 +99,49 @@ REQUIRED_BRACKET_TOPOLOGY = "nested"
 DEPLOY_SPEED_SCHEMA = "fr13.measure.deploy_speed.v1"
 DEFAULT_MIN_PASSES = 4
 
-# Levers that MUST sit at their branch default for the run to be citable.  A gate
-# that flipped a default measures a different stack than the one it names.
-REQUIRED_DEFAULT_STACK = {
-    "FR13_MAMBA_SPEC_BLOCKS_CDIV": "0",
-    "FR13_B4_TASK_REFILL": "0",
-    "FR13_FULL_ATTN_KV_FP8": "0",
-}
+# The gate must measure the stack the branch SHIPS -- not a hand-flipped one, and
+# not a value frozen into this file.  Two different obligations, so two mechanisms:
+#
+#   CONTRACT_PINNED_STACK -- values the exact4 citability contract requires no
+#     matter what any default says.  Task refill is the only one: the driver
+#     states its output "is NOT exact4-citable without a contract update".
+#
+#   CANONICAL_DEFAULT_LEVERS -- levers whose expected value IS whatever
+#     scripts/fr13_canonical_env.sh currently ships, resolved at reduce time.
+#     These are recorded, not pinned.  Pinning them here would be exactly the
+#     wrong thing: when Mark promotes a lever (as with the 2026-08-10 mamba
+#     narrowing flip 0 -> 1), the gate must follow the shipped default and
+#     measure the new stack, not reject every arm for disagreeing with a stale
+#     constant.  What stays enforced is that every arm in the campaign ran the
+#     SAME state and that the state matches the shipped default.
+CONTRACT_PINNED_STACK = {"FR13_B4_TASK_REFILL": "0"}
+CANONICAL_DEFAULT_LEVERS = (
+    "FR13_MAMBA_SPEC_BLOCKS_CDIV",
+    "FR13_FULL_ATTN_KV_FP8",
+)
+CANONICAL_ENV_RELPATH = "scripts/fr13_canonical_env.sh"
+# export NAME="${NAME:-VALUE}"
+_CANONICAL_DEFAULT_RE = re.compile(
+    r'^\s*export\s+([A-Z0-9_]+)="\$\{\1:-([^}"]*)\}"', re.M
+)
+
+
+def resolve_canonical_defaults(repo: Path) -> dict[str, str]:
+    """Read the shipped default of every lever from the canonical env registry."""
+    path = repo / CANONICAL_ENV_RELPATH
+    if not path.is_file():
+        raise B4GateError(f"missing canonical env registry {path}")
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return {m.group(1): m.group(2) for m in _CANONICAL_DEFAULT_RE.finditer(text)}
+
+
+def expected_stack(canonical_defaults: dict[str, str]) -> dict[str, str]:
+    """Contract pins plus the shipped default of each tracked lever."""
+    expected = dict(CONTRACT_PINNED_STACK)
+    for lever in CANONICAL_DEFAULT_LEVERS:
+        if lever in canonical_defaults:
+            expected[lever] = canonical_defaults[lever]
+    return expected
 
 _APC_QUERIES = "vllm:prefix_cache_queries_total"
 _APC_HITS = "vllm:prefix_cache_hits_total"
@@ -297,6 +333,7 @@ def reduce_pass_arm(
     mode: str,
     pass_index: int,
     floor_order: str | None,
+    expected: dict[str, str],
 ) -> dict[str, Any]:
     """Reduce ONE arm of ONE pass, or record why it is excluded.
 
@@ -357,13 +394,10 @@ def reduce_pass_arm(
 
         # --- stack state: no default may have been flipped -------------------
         env = read_container_env(arm_dir)
-        stack_state = {
-            key: env.get(key, "<unrecorded>") for key in sorted(REQUIRED_DEFAULT_STACK)
-        }
+        tracked = sorted(set(expected) | set(CANONICAL_DEFAULT_LEVERS))
+        stack_state = {key: env.get(key, "<unrecorded>") for key in tracked}
         flipped = sorted(
-            key
-            for key, want in REQUIRED_DEFAULT_STACK.items()
-            if env.get(key, want) != want
+            key for key, want in expected.items() if env.get(key, want) != want
         )
 
         apc = read_apc(arm_dir)
@@ -402,9 +436,13 @@ def reduce_pass_arm(
         if flipped:
             record["included"] = False
             record["exclusion_reason"] = (
-                "stack defaults were flipped for this pass: "
-                + ", ".join(flipped)
-                + " -- a citable gate measures the branch default stack"
+                "arm did not run the shipped stack: "
+                + ", ".join(
+                    f"{k}={env.get(k, '<unrecorded>')!r} but the branch ships "
+                    f"{expected[k]!r}"
+                    for k in flipped
+                )
+                + " -- a citable gate measures the stack the branch ships"
             )
     except (B4GateError, TimingMathError, json.JSONDecodeError, OSError) as error:
         record["included"] = False
@@ -516,6 +554,7 @@ def build_verdict(
     source_commit: str,
     topology_passes: dict[str, list[dict[str, Any]]],
     min_passes: int,
+    expected: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     topologies = {
         mode: reduce_topology(mode, topology_passes.get(mode, []), min_passes)
@@ -524,8 +563,18 @@ def build_verdict(
     all_passes = [p for mode in TOPOLOGIES for p in topology_passes.get(mode, [])]
     included = [p for p in all_passes if p.get("included")]
 
+    # Every included arm must have run the SAME lever state -- a campaign that
+    # changed stack mid-flight measures nothing.
+    observed_states = {
+        json.dumps(p["stack_state"], sort_keys=True) for p in included
+    }
+    measured_stack = (
+        json.loads(next(iter(observed_states))) if len(observed_states) == 1 else None
+    )
+
     gates = {
         "subset_bytes_canonical_exact4": True,
+        "one_stack_state_across_all_passes": len(observed_states) == 1,
         "all_passes_nested_bracket": bool(included)
         and all(p["bracket"]["topology"] == REQUIRED_BRACKET_TOPOLOGY for p in included),
         "all_passes_work_census_gated": bool(included)
@@ -585,9 +634,13 @@ def build_verdict(
             "task_ids": list(EXACT4_TASK_IDS),
             "physical_rows": 32,
             "drafts": 31,
-            "required_default_stack": dict(sorted(REQUIRED_DEFAULT_STACK.items())),
+            "contract_pinned_stack": dict(sorted(CONTRACT_PINNED_STACK.items())),
+            "shipped_defaults_at_reduce_time": dict(sorted((expected or {}).items())),
             "min_included_passes": min_passes,
         },
+        # WHICH STACK THIS GATE MEASURED. Recorded, never pinned: the gate follows
+        # the branch's shipped default so a promoted lever is measured, not rejected.
+        "measured_stack_state": measured_stack,
         "b4_cap_applicable": False,
         "b4_cap_reason": (
             "B4 mandatory bytes at ~35-38k tok/request are 42-49 GB => a 155-179 ms "
@@ -621,7 +674,9 @@ def build_verdict(
     }
 
 
-def discover_passes(gate_root: Path) -> dict[str, list[dict[str, Any]]]:
+def discover_passes(
+    gate_root: Path, expected: dict[str, str]
+) -> dict[str, list[dict[str, Any]]]:
     """Find <gate_root>/pass_NN/<mode>_<tag>/ arm directories."""
     found: dict[str, list[dict[str, Any]]] = {mode: [] for mode in TOPOLOGIES}
     for pass_dir in sorted(p for p in gate_root.glob("pass_*") if p.is_dir()):
@@ -644,6 +699,7 @@ def discover_passes(gate_root: Path) -> dict[str, list[dict[str, Any]]]:
                             mode=mode,
                             pass_index=pass_index,
                             floor_order=floor_order,
+                            expected=expected,
                         )
                     )
     return found
@@ -708,6 +764,9 @@ def main(argv: list[str] | None = None) -> int:
     if not gate_root.is_dir():
         raise B4GateError(f"gate root {gate_root} is not a directory")
 
+    canonical_defaults = resolve_canonical_defaults(args.repo.resolve())
+    expected = expected_stack(canonical_defaults)
+
     finalize_actions = finalize_gate_root(gate_root) if args.finalize else []
     for action in finalize_actions:
         print(f"[finalize] {action['arm']}: {action['action']}")
@@ -716,8 +775,9 @@ def main(argv: list[str] | None = None) -> int:
         repo=args.repo.resolve(),
         gate_root=gate_root,
         source_commit=args.source_commit,
-        topology_passes=discover_passes(gate_root),
+        topology_passes=discover_passes(gate_root, expected),
         min_passes=args.min_passes,
+        expected=expected,
     )
     payload["finalize_actions"] = finalize_actions
     text = json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n"

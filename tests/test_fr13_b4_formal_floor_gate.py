@@ -44,6 +44,12 @@ measure = topo.measure
 TASK_IDS = list(gate.EXACT4_TASK_IDS)
 MODES = ("tail6_fixed32", "hydra27_fixed32")
 
+# The stack the branch currently SHIPS. Resolved from the canonical env registry
+# so this suite follows a promotion (e.g. the 2026-08-10 mamba narrowing flip
+# 0 -> 1) instead of asserting a stale constant.
+CANONICAL = gate.resolve_canonical_defaults(REPO)
+SHIPPED = gate.expected_stack(CANONICAL)
+
 
 # --------------------------------------------------------------------------- #
 # fixtures: build a real deploy_speed_fullwall.json from synthetic brackets     #
@@ -94,11 +100,7 @@ def _write_arm(
         arm_dir / "logs" / "fr13_fixed32_work_census.jsonl", steps, census_batch
     )
 
-    env_state = {
-        "FR13_MAMBA_SPEC_BLOCKS_CDIV": "0",
-        "FR13_B4_TASK_REFILL": "0",
-        "FR13_FULL_ATTN_KV_FP8": "0",
-    }
+    env_state = dict(SHIPPED)
     env_state.update(env or {})
     (arm_dir / "container_env.txt").write_text(
         "".join(f"{k}={v}\n" for k, v in sorted(env_state.items())), encoding="utf-8"
@@ -162,8 +164,7 @@ def test_nested_brackets_are_not_summed_and_the_gate_reads_the_widest(tmp_path):
     assert speed["bracket_reduction"]["distinct_bracket_origins"] == 1
     assert speed["bracket_reduction"]["closing_task"] == TASK_IDS[-1]
 
-    record = gate.reduce_pass_arm(
-        arm, mode="hydra27_fixed32", pass_index=0, floor_order="TH"
+    record = gate.reduce_pass_arm(arm, expected=SHIPPED, mode="hydra27_fixed32", pass_index=0, floor_order="TH"
     )
     assert record["included"] is True, record["exclusion_reason"]
 
@@ -192,7 +193,7 @@ def test_census_mismatch_fails_closed_and_is_never_reported(tmp_path):
 def test_arm_without_a_deploy_speed_json_is_excluded_with_a_reason(tmp_path):
     arm = tmp_path / "tail6_fixed32_missing"
     arm.mkdir(parents=True)
-    record = gate.reduce_pass_arm(arm, mode="tail6_fixed32", pass_index=0, floor_order=None)
+    record = gate.reduce_pass_arm(arm, expected=SHIPPED, mode="tail6_fixed32", pass_index=0, floor_order=None)
     assert record["included"] is False
     assert "not a regular file" in record["exclusion_reason"]
 
@@ -205,7 +206,7 @@ def test_an_ungated_bracket_reduction_is_excluded(tmp_path):
     speed["bracket_reduction"]["work_census_gate"] = {"status": "absent"}
     path.write_text(json.dumps(speed), encoding="utf-8")
 
-    record = gate.reduce_pass_arm(arm, mode="hydra27_fixed32", pass_index=0, floor_order=None)
+    record = gate.reduce_pass_arm(arm, expected=SHIPPED, mode="hydra27_fixed32", pass_index=0, floor_order=None)
     assert record["included"] is False
     assert "not work-census gated" in record["exclusion_reason"]
 
@@ -218,7 +219,7 @@ def test_a_disjoint_b4_bracket_is_refused(tmp_path):
     speed["bracket_reduction"]["topology"] = "disjoint"
     path.write_text(json.dumps(speed), encoding="utf-8")
 
-    record = gate.reduce_pass_arm(arm, mode="hydra27_fixed32", pass_index=0, floor_order=None)
+    record = gate.reduce_pass_arm(arm, expected=SHIPPED, mode="hydra27_fixed32", pass_index=0, floor_order=None)
     assert record["included"] is False
     assert "bracket topology is 'disjoint'" in record["exclusion_reason"]
 
@@ -227,7 +228,7 @@ def test_non_finite_numbers_are_rejected_on_ingest(tmp_path):
     arm = _write_arm(tmp_path / "hydra27_fixed32_x")
     path = arm / "deploy_speed_fullwall.json"
     path.write_text(path.read_text().replace('"step_wall_ms":', '"step_wall_ms": NaN, "_old":'))
-    record = gate.reduce_pass_arm(arm, mode="hydra27_fixed32", pass_index=0, floor_order=None)
+    record = gate.reduce_pass_arm(arm, expected=SHIPPED, mode="hydra27_fixed32", pass_index=0, floor_order=None)
     assert record["included"] is False
     assert "non-finite" in record["exclusion_reason"]
 
@@ -267,8 +268,8 @@ def test_full_gate_passes_and_is_citable(gate_root):
         repo=REPO,
         gate_root=gate_root,
         source_commit="deadbeef",
-        topology_passes=gate.discover_passes(gate_root),
-        min_passes=4,
+        topology_passes=gate.discover_passes(gate_root, SHIPPED),
+        min_passes=4, expected=SHIPPED,
     )
     assert payload["gate_verdict"] == "PASS"
     assert payload["analysis_valid"] is True
@@ -288,7 +289,7 @@ def test_three_passes_degrade_to_not_evaluated(tmp_path):
     root = _build_gate_root(tmp_path / "gate", n_passes=3)
     payload = gate.build_verdict(
         repo=REPO, gate_root=root, source_commit="x",
-        topology_passes=gate.discover_passes(root), min_passes=4,
+        topology_passes=gate.discover_passes(root, SHIPPED), min_passes=4, expected=SHIPPED,
     )
     assert payload["gate_verdict"] == "NOT_EVALUATED_INSUFFICIENT_PASSES"
     assert payload["citable"] is False
@@ -299,7 +300,7 @@ def test_a_single_missing_topology_is_not_evaluated(tmp_path):
     root = _build_gate_root(tmp_path / "gate", modes=("hydra27_fixed32",))
     payload = gate.build_verdict(
         repo=REPO, gate_root=root, source_commit="x",
-        topology_passes=gate.discover_passes(root), min_passes=4,
+        topology_passes=gate.discover_passes(root, SHIPPED), min_passes=4, expected=SHIPPED,
     )
     assert payload["gate_verdict"] == "NOT_EVALUATED_INSUFFICIENT_PASSES"
     assert payload["gates"]["both_topologies_present"] is False
@@ -309,13 +310,16 @@ def test_a_single_missing_topology_is_not_evaluated(tmp_path):
 # stack identity: a flipped default is a different stack                       #
 # --------------------------------------------------------------------------- #
 def test_a_flipped_mamba_narrowing_default_makes_the_run_non_citable(tmp_path):
+    """Flip AWAY from whatever the branch ships -- in either direction."""
+    shipped = SHIPPED["FR13_MAMBA_SPEC_BLOCKS_CDIV"]
+    other = "0" if shipped == "1" else "1"
     root = _build_gate_root(
-        tmp_path / "gate", env={"FR13_MAMBA_SPEC_BLOCKS_CDIV": "1"}
+        tmp_path / "gate", env={"FR13_MAMBA_SPEC_BLOCKS_CDIV": other}
     )
-    passes = gate.discover_passes(root)
+    passes = gate.discover_passes(root, SHIPPED)
     payload = gate.build_verdict(
         repo=REPO, gate_root=root, source_commit="x",
-        topology_passes=passes, min_passes=4,
+        topology_passes=passes, min_passes=4, expected=SHIPPED,
     )
     assert payload["citable"] is False
     excluded = passes["hydra27_fixed32"][0]
@@ -328,7 +332,7 @@ def test_task_refill_makes_the_run_non_citable(tmp_path):
     root = _build_gate_root(tmp_path / "gate", env={"FR13_B4_TASK_REFILL": "1"})
     payload = gate.build_verdict(
         repo=REPO, gate_root=root, source_commit="x",
-        topology_passes=gate.discover_passes(root), min_passes=4,
+        topology_passes=gate.discover_passes(root, SHIPPED), min_passes=4, expected=SHIPPED,
     )
     assert payload["citable"] is False
 
@@ -338,7 +342,7 @@ def test_non_canonical_task_identities_are_refused(tmp_path):
         tmp_path / "hydra27_fixed32_x",
         task_ids=["astropy__astropy-12907", "django__django-1", "a__b-2", "c__d-3"],
     )
-    record = gate.reduce_pass_arm(arm, mode="hydra27_fixed32", pass_index=0, floor_order=None)
+    record = gate.reduce_pass_arm(arm, expected=SHIPPED, mode="hydra27_fixed32", pass_index=0, floor_order=None)
     assert record["included"] is False
     assert "canonical exact4 task identities" in record["exclusion_reason"]
 
@@ -350,7 +354,7 @@ def test_reduction_is_deterministic(gate_root):
     def once():
         payload = gate.build_verdict(
             repo=REPO, gate_root=gate_root, source_commit="x",
-            topology_passes=gate.discover_passes(gate_root), min_passes=4,
+            topology_passes=gate.discover_passes(gate_root, SHIPPED), min_passes=4, expected=SHIPPED,
         )
         payload.pop("generated_at_utc")
         return json.dumps(payload, sort_keys=True, allow_nan=False)
@@ -361,7 +365,7 @@ def test_reduction_is_deterministic(gate_root):
 def test_verdict_serializes_without_nan(gate_root):
     payload = gate.build_verdict(
         repo=REPO, gate_root=gate_root, source_commit="x",
-        topology_passes=gate.discover_passes(gate_root), min_passes=4,
+        topology_passes=gate.discover_passes(gate_root, SHIPPED), min_passes=4, expected=SHIPPED,
     )
     json.dumps(payload, indent=2, sort_keys=True, allow_nan=False)
 
@@ -402,7 +406,7 @@ def test_driver_artifact_is_ungated_and_the_gate_refuses_it(tmp_path):
     driver_artifact = json.loads((arm / "deploy_speed_gate0.json").read_text())
     assert driver_artifact["bracket_reduction"]["work_census_gate"]["status"] == "absent"
 
-    record = gate.reduce_pass_arm(arm, mode="tail6_fixed32", pass_index=0, floor_order="TH")
+    record = gate.reduce_pass_arm(arm, expected=SHIPPED, mode="tail6_fixed32", pass_index=0, floor_order="TH")
     assert record["included"] is False
     assert "not a regular file" in record["exclusion_reason"]
 
@@ -416,7 +420,7 @@ def test_finalize_reruns_the_reduction_with_the_census(tmp_path):
     assert speed["bracket_reduction"]["work_census_gate"]["status"] == "pass"
     assert speed["bracket_reduction"]["topology"] == "nested"
 
-    record = gate.reduce_pass_arm(arm, mode="tail6_fixed32", pass_index=0, floor_order="TH")
+    record = gate.reduce_pass_arm(arm, expected=SHIPPED, mode="tail6_fixed32", pass_index=0, floor_order="TH")
     assert record["included"] is True, record["exclusion_reason"]
     # Finalization must not change the measured aggregate -- only witness it.
     driver_artifact = json.loads((arm / "deploy_speed_gate0.json").read_text())
@@ -460,6 +464,87 @@ def test_finalize_gate_root_walks_every_pass(tmp_path):
 
     payload = gate.build_verdict(
         repo=REPO, gate_root=root, source_commit="x",
-        topology_passes=gate.discover_passes(root), min_passes=4,
+        topology_passes=gate.discover_passes(root, SHIPPED), min_passes=4, expected=SHIPPED,
     )
     assert payload["gate_verdict"] == "PASS"
+
+
+# --------------------------------------------------------------------------- #
+# the gate follows a PROMOTED default instead of a stale constant              #
+# --------------------------------------------------------------------------- #
+def test_shipped_defaults_are_resolved_from_the_canonical_env_registry():
+    """The expected stack is read from the repo, never frozen into the gate."""
+    text = (REPO / gate.CANONICAL_ENV_RELPATH).read_text(encoding="utf-8")
+    for lever, value in CANONICAL.items():
+        assert f'{lever}:-{value}' in text
+    # the promoted B4 lever must be tracked
+    assert "FR13_MAMBA_SPEC_BLOCKS_CDIV" in CANONICAL
+
+
+def test_an_arm_running_the_shipped_narrowing_state_is_included(tmp_path):
+    """Regression: a promoted lever must be MEASURED, not rejected.
+
+    The 2026-08-10 promotion flipped FR13_MAMBA_SPEC_BLOCKS_CDIV 0 -> 1. A gate
+    that pinned the old value would have excluded every arm of the ON campaign
+    and reported NOT_EVALUATED against a perfectly good run.
+    """
+    shipped = SHIPPED["FR13_MAMBA_SPEC_BLOCKS_CDIV"]
+    arm = _write_arm(
+        tmp_path / "hydra27_fixed32_gate0",
+        env={"FR13_MAMBA_SPEC_BLOCKS_CDIV": shipped},
+    )
+    record = gate.reduce_pass_arm(
+        arm, expected=SHIPPED, mode="hydra27_fixed32", pass_index=0, floor_order="TH"
+    )
+    assert record["included"] is True, record["exclusion_reason"]
+    assert record["stack_state"]["FR13_MAMBA_SPEC_BLOCKS_CDIV"] == shipped
+
+
+def test_task_refill_stays_a_hard_contract_pin(tmp_path):
+    """Refill is pinned by the exact4 contract, not by any shipped default."""
+    assert gate.CONTRACT_PINNED_STACK["FR13_B4_TASK_REFILL"] == "0"
+    assert SHIPPED["FR13_B4_TASK_REFILL"] == "0"
+    arm = _write_arm(
+        tmp_path / "hydra27_fixed32_gate0", env={"FR13_B4_TASK_REFILL": "1"}
+    )
+    record = gate.reduce_pass_arm(
+        arm, expected=SHIPPED, mode="hydra27_fixed32", pass_index=0, floor_order=None
+    )
+    assert record["included"] is False
+    assert "FR13_B4_TASK_REFILL" in record["exclusion_reason"]
+
+
+def test_a_stack_change_mid_campaign_is_refused(tmp_path):
+    """All included arms must have run ONE stack state."""
+    root = tmp_path / "gate"
+    shipped = SHIPPED["FR13_MAMBA_SPEC_BLOCKS_CDIV"]
+    for index in range(4):
+        pass_dir = root / f"pass_{index:02d}"
+        pass_dir.mkdir(parents=True)
+        for mode in MODES:
+            env = dict(SHIPPED)
+            if index == 3:
+                # a lever that changed halfway through the campaign
+                env["FR13_FULL_ATTN_KV_FP8"] = "1"
+            _write_arm(pass_dir / f"{mode}_gate{index}", env=env)
+    payload = gate.build_verdict(
+        repo=REPO, gate_root=root, source_commit="x",
+        topology_passes=gate.discover_passes(root, SHIPPED),
+        min_passes=4, expected=SHIPPED,
+    )
+    assert payload["gates"]["one_stack_state_across_all_passes"] is False
+    assert payload["citable"] is False
+    assert payload["measured_stack_state"] is None
+
+
+def test_verdict_records_the_measured_stack_state(gate_root):
+    payload = gate.build_verdict(
+        repo=REPO, gate_root=gate_root, source_commit="x",
+        topology_passes=gate.discover_passes(gate_root, SHIPPED),
+        min_passes=4, expected=SHIPPED,
+    )
+    assert payload["citable"] is True
+    assert payload["measured_stack_state"]["FR13_MAMBA_SPEC_BLOCKS_CDIV"] == (
+        SHIPPED["FR13_MAMBA_SPEC_BLOCKS_CDIV"]
+    )
+    assert payload["contract"]["shipped_defaults_at_reduce_time"] == SHIPPED
