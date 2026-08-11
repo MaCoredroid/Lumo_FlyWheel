@@ -1,0 +1,154 @@
+{
+  "acceptance_valid": false,
+  "analysis_only": true,
+  "attribution_only": true,
+  "capture": "/home/mark/lumoFlyWheel-b1-target-sfwd-exact4-timing-20260805/output/fr13_fixed32_b1_nsys_20260808T212056Z/tail6_fixed32_b1_nsys_f32_20260808T212056Z/logs/fr13_fixed32_b1_real_swe.sqlite",
+  "curated_publishable": false,
+  "decode_wall_band_ms": [
+    150.0,
+    400.0
+  ],
+  "host_attributable_gpu_idle_ms_per_step": 10.421248317699115,
+  "host_step_wall_ms_per_step": 230.96441076106194,
+  "schema": "fr13.host_tail_attribution.v1",
+  "segments": {
+    "A sfwd(host)": {
+      "command_buffer_full_ms_per_step": 0.0,
+      "gpu_busy_ms_per_step": 1.6746005292035395,
+      "gpu_idle_by_host_activity_ms_per_step": {
+        "<python: no CUDA call>": 0.04894110884955752,
+        "cudaEventRecordWithFlags": 0.0020479433628318583,
+        "cudaGraphLaunch": 1.947560153097345
+      },
+      "gpu_idle_ms_per_step": 1.9994918601769913,
+      "in_cuda_api_ms_per_step": 2.007210661946903,
+      "outside_cuda_api_ms_per_step": 1.6668817274336283,
+      "wall_ms_per_step": 3.674092389380531
+    },
+    "B gap sfwd->postprocess": {
+      "command_buffer_full_ms_per_step": 0.0,
+      "gpu_busy_ms_per_step": 0.07124486814159293,
+      "gpu_idle_by_host_activity_ms_per_step": {},
+      "gpu_idle_ms_per_step": 2.8363716814159295e-05,
+      "in_cuda_api_ms_per_step": 0.018299893805309733,
+      "outside_cuda_api_ms_per_step": 0.05297333805309735,
+      "wall_ms_per_step": 0.07127323185840709
+    },
+    "C postprocess(host)": {
+      "command_buffer_full_ms_per_step": 0.0,
+      "gpu_busy_ms_per_step": 0.17739283805309736,
+      "gpu_idle_by_host_activity_ms_per_step": {},
+      "gpu_idle_ms_per_step": 4.421681415929204e-05,
+      "in_cuda_api_ms_per_step": 0.019095277876106192,
+      "outside_cuda_api_ms_per_step": 0.15834177699115046,
+      "wall_ms_per_step": 0.17743705486725664
+    },
+    "D gap postprocess->cfwd": {
+      "command_buffer_full_ms_per_step": 0.0,
+      "gpu_busy_ms_per_step": 0.1813368495575221,
+      "gpu_idle_by_host_activity_ms_per_step": {},
+      "gpu_idle_ms_per_step": 3.1093805309734515e-05,
+      "in_cuda_api_ms_per_step": 0.008115214159292035,
+      "outside_cuda_api_ms_per_step": 0.17325272920353982,
+      "wall_ms_per_step": 0.18136794336283185
+    },
+    "E cfwd(host)": {
+      "command_buffer_full_ms_per_step": 165.45853612743363,
+      "gpu_busy_ms_per_step": 175.77591239292033,
+      "gpu_idle_by_host_activity_ms_per_step": {
+        "<python: no CUDA call>": 0.34748199911504424,
+        "cuKernelGetName": 0.0032292026548672564,
+        "cuLaunchKernelEx": 0.0047910938053097344,
+        "cudaGraphLaunch": 0.04457219292035398,
+        "cudaLaunchKernel": 0.3883812123893805,
+        "cudaMemcpyAsync": 0.01615854778761062,
+        "cudaMemsetAsync": 0.00466375575221239
+      },
+      "gpu_idle_ms_per_step": 0.8094793380530974,
+      "in_cuda_api_ms_per_step": 170.31952967079647,
+      "outside_cuda_api_ms_per_step": 6.265862060176991,
+      "wall_ms_per_step": 176.58539173097344
+    },
+    "F gap cfwd->dfwd": {
+      "command_buffer_full_ms_per_step": 0.00031444955752212386,
+      "gpu_busy_ms_per_step": 8.486076896460176,
+      "gpu_idle_by_host_activity_ms_per_step": {
+        "<python: no CUDA call>": 0.46953598761061943,
+        "cuKernelGetName": 0.005128021238938053,
+        "cudaEventCreateWithFlags": 0.0016456176991150443,
+        "cudaEventQuery": 0.001119212389380531,
+        "cudaEventRecordWithFlags": 0.004026592920353982,
+        "cudaLaunchKernel": 0.24186175132743365,
+        "cudaMemcpyAsync": 2.1848923840707966,
+        "cudaStreamSynchronize": 0.0019336070796460176
+      },
+      "gpu_idle_ms_per_step": 2.911100675221239,
+      "in_cuda_api_ms_per_step": 10.235960892035399,
+      "outside_cuda_api_ms_per_step": 1.1612166796460177,
+      "wall_ms_per_step": 11.397177571681416
+    },
+    "G dfwd(host)": {
+      "command_buffer_full_ms_per_step": 0.0,
+      "gpu_busy_ms_per_step": 33.96746358584071,
+      "gpu_idle_by_host_activity_ms_per_step": {
+        "<python: no CUDA call>": 0.7986302327433629,
+        "cuKernelGetName": 0.0017297433628318585,
+        "cuLaunchKernelEx": 0.008795782300884956,
+        "cudaEventRecordWithFlags": 0.0010364699115044248,
+        "cudaGraphLaunch": 0.027804623008849557,
+        "cudaLaunchKernel": 0.05782478318584071,
+        "cudaMemcpyAsync": 0.3364388221238938,
+        "cudaStreamIsCapturing": 0.0014306327433628318,
+        "cudaStreamSynchronize": 0.005687098230088496,
+        "cudaStreamWaitEvent": 0.0019324973451327434
+      },
+      "gpu_idle_ms_per_step": 1.24307072920354,
+      "in_cuda_api_ms_per_step": 33.25232274690266,
+      "outside_cuda_api_ms_per_step": 1.9582115681415928,
+      "wall_ms_per_step": 35.21053431504425
+    },
+    "H TAIL dfwd->next sfwd": {
+      "command_buffer_full_ms_per_step": 0.0,
+      "gpu_busy_ms_per_step": 0.20913448318584038,
+      "gpu_idle_by_host_activity_ms_per_step": {
+        "<python: no CUDA call>": 2.856849331858407,
+        "cuKernelGetName": 0.00796022831858407,
+        "cuLaunchKernel": 0.008595313274336283,
+        "cuLaunchKernelEx": 0.013179989380530973,
+        "cudaEventCreateWithFlags": 0.003990126548672566,
+        "cudaEventDestroy": 0.0018972787610619468,
+        "cudaEventQuery": 0.011369023008849559,
+        "cudaEventRecord": 0.0022580486725663714,
+        "cudaEventRecordWithFlags": 0.01618618053097345,
+        "cudaEventSynchronize": 0.007327504424778761,
+        "cudaLaunchKernel": 0.3065948876106195,
+        "cudaMemcpyAsync": 0.20639129380530974,
+        "cudaStreamIsCapturing": 0.010468328318584071,
+        "cudaStreamSynchronize": 0.0028302654867256635,
+        "cudaStreamWaitEvent": 0.0021042407079646017
+      },
+      "gpu_idle_ms_per_step": 3.4580020407079646,
+      "in_cuda_api_ms_per_step": 0.6411180318584071,
+      "outside_cuda_api_ms_per_step": 3.0260184920353983,
+      "wall_ms_per_step": 3.667136523893805
+    }
+  },
+  "stamp": "20260811T124003Z",
+  "steps_decode_cadence": 1130,
+  "steps_total": 1145,
+  "tail_distribution_all_steps": {
+    "max_ms": 3055.274016,
+    "mean_ms": 34.34777841746725,
+    "n": 1145,
+    "p05_ms": 3.118624,
+    "p50_ms": 3.5884,
+    "p95_ms": 4.568864
+  },
+  "tail_outliers": {
+    "contribution_to_mean_ms": 30.728682983406117,
+    "count": 15,
+    "remainder_mean_ms": 3.667136523893805,
+    "share_of_steps": 0.013100436681222707,
+    "threshold_ms": 10.0
+  }
+}

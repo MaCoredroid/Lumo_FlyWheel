@@ -64,6 +64,14 @@ HOST_TAIL_RANGES = {
     "output_proc": "fr13.fixed32.output_proc",
     "sched_next": "fr13.fixed32.sched_next",
     "kv_bookkeep": "fr13.fixed32.kv_bookkeep",
+    # prep_next covers the NEXT step's input preparation, which is where the
+    # post-DFWD tail's host time actually is: on decode-cadence steps the
+    # banked 20260808T212056Z capture puts 3.458 ms/step of GPU idle in the
+    # dfwd_end -> next-sfwd_start window, 2.857 ms of it inside no CUDA call.
+    # It also fires on prefill forwards, which is deliberate -- prefill
+    # forwards land in that same window and are what inflate the tail's MEAN
+    # to 11.977 ms against a 3.588 ms median.
+    "prep_next": "fr13.fixed32.prep_next",
 }
 FIXED32_RANGE_PREFIX = "fr13.fixed32."
 MAX_CAPTURE_BOUNDARY_RANGE_DELTA = 2

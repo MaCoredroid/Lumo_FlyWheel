@@ -4868,6 +4868,21 @@ case "${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}" in
   0|1) ;;
   *) echo "FR13_MAMBA_SPEC_BLOCKS_CDIV must be 0 or 1" >&2; exit 2 ;;
 esac
+# FR13 host-residual rung (all default 0=OFF, all PATCH-TIME, all fixed32-only).
+# NVTX adds post-DFWD tail sub-ranges for the offline nsys reduction; DEFER
+# moves the fixed32 census seal onto a retire thread; PREP_BAKE replaces the
+# per-step tree depth-position derivation with the literals it can only
+# produce under fixed32. Read only by fr10_phase4_patch_vllm_tree_gdn.py inside
+# the container, so the -e lines below are what actually carry them; the
+# patcher's main() preflight refuses any of them without FR13_FIXED32_MODE.
+for _fr13_host_tail_flag in FR13_HOST_TAIL_NVTX FR13_HOST_TAIL_DEFER \
+                            FR13_HOST_TAIL_PREP_BAKE; do
+  case "${!_fr13_host_tail_flag:-0}" in
+    0|1) ;;
+    *) echo "$_fr13_host_tail_flag must be 0 or 1" >&2; exit 2 ;;
+  esac
+done
+unset _fr13_host_tail_flag
 if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
         || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
         || "$_fr13_batch_gdn_production" == "1" ) \
@@ -5291,6 +5306,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_CFWD_CAPTURE_REMAINDER="${FR13_CFWD_CAPTURE_REMAINDER:-0}" \
   -e FR13_HOST_TAIL_NVTX="${FR13_HOST_TAIL_NVTX:-0}" \
   -e FR13_HOST_TAIL_DEFER="${FR13_HOST_TAIL_DEFER:-0}" \
+  -e FR13_HOST_TAIL_PREP_BAKE="${FR13_HOST_TAIL_PREP_BAKE:-0}" \
   -e FR13_REPLAY_ONLY_GPU_TIMER="${FR13_REPLAY_ONLY_GPU_TIMER:-0}" \
   -e FR13_REPLAY_ONLY_GPU_TIMER_JSON="${FR13_REPLAY_ONLY_GPU_TIMER_JSON:-}" \
   -e FR13_GRAPH_TIMER="${FR13_GRAPH_TIMER:-0}" \
