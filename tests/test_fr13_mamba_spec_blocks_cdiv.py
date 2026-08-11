@@ -1,4 +1,4 @@
-"""FR13_MAMBA_SPEC_BLOCKS_CDIV patch-site gate (mamba spec-block right-sizing).
+"""FR13_MAMBA_SPEC_BLOCKS_CDIV patch-site gate (mamba physical-page narrowing).
 
 ONE patch-time flag, default OFF, byte-inert when OFF; the anchor-replace +
 exact-count house pattern used by the neighbouring mamba patchers
@@ -8,23 +8,31 @@ _node_copy).
 Instrument under test:
   - scripts/fr10_phase4_patch_vllm_tree_gdn.py
       _fr13_mamba_spec_blocks_cdiv()                     strict 0/1 env read
-      _patch_mamba_abstract_spec_blocks_cdiv()           the anchor replace
-      _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()  the fail-loud preflight
+      _patch_mamba_abstract_spec_blocks_cdiv()           the PHYSICAL cut
+      _patch_gdn_attn_mamba_spec_scratch_table()         the LOGICAL rehome
+      _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()  the 2-slot floor
+      _fr13_assert_mamba_spec_blocks_cdiv_coherent()     both halves or neither
   - scripts/fr13_launch_forked_fa2_tree_server.sh        strict 0/1 + docker -e
   - scripts/fr13_canonical_env.sh                        default-OFF export
   - scripts/fr13_required_tree_flags.sh                  comment-only QUEUED
 
-WHY THE PREFLIGHT EXISTS (the thing these tests really protect): the lever's
-premise is a units error. MambaSpec.num_speculative_blocks counts mamba STATE
-SLOTS -- one page per (conv_state, ssm_state) pair, sized by
-page_size_bytes = sum(prod(shape) * itemsize) and independent of block_size --
-so ceil-dividing it by mamba_block_size does not "right-size" anything. The GDN
-speculative path indexes those slots per draft NODE (stock FLA
-fused_recurrent.py stores one recurrent state per speculative token to
-ssm_state_indices[b, i_t]; the FR13 tree conv writeback scatters tree_n node
-windows to spec_state_indices[b, :tree_n]). The preflight refuses =1 while
-1 + cdiv(num_spec_tokens, mamba_block_size) < num_spec_tokens + 1, and opens by
-itself if a per-node scratch rehome ever lowers that demand.
+WHAT THESE TESTS REALLY PROTECT: the flag arms TWO patch sites that are only
+safe together. MambaSpec.num_speculative_blocks counts mamba STATE SLOTS -- one
+page per (conv_state, ssm_state) pair, sized by page_size_bytes =
+sum(prod(shape) * itemsize) and independent of block_size -- so ceil-dividing it
+by mamba_block_size is a units error IF TAKEN ALONE: the GDN speculative path
+indexes those slots per draft NODE. The lever is legal only because the second
+site keeps the LOGICAL window num_spec + 1 columns wide, republishing the single
+align spare page across columns 1..num_spec, so no consumer is ever narrowed --
+only the PHYSICAL page count drops (3 * 32 -> 3 * 2 per request).
+
+Hence the two fail-louds. The preflight enforces the floor that makes the
+scratch column real (1 + cdiv(...) >= 2; a NULL_BLOCK_ID filler would fail the
+conv commit row guard's strict (0, BANK_ROWS) check on all num_spec + 1
+columns). The coherence assert refuses a HALF-APPLIED pair, which is the one
+state nothing else would catch: Python slicing narrows silently, so an
+abstract.py cut without the gdn_attn rehome short-feeds the kernels a 2-column
+window instead of raising.
 """
 
 from __future__ import annotations
@@ -93,11 +101,22 @@ STOCK_ANCHOR = (
 )
 
 
-def _load_patcher(monkeypatch, *, flag: str) -> types.ModuleType:
-    """Import the patcher fresh with FR13_MAMBA_SPEC_BLOCKS_CDIV=flag."""
+def _load_patcher(
+    monkeypatch, *, flag: str, fixed32: str | None = None
+) -> types.ModuleType:
+    """Import the patcher fresh with FR13_MAMBA_SPEC_BLOCKS_CDIV=flag.
+
+    ``fixed32`` is baked at import too (the patcher reads FR13_FIXED32_MODE
+    once, at module scope). Default None means UNSET, hermetically: the
+    ambient shell must not decide whether the fixed32 guard fires.
+    """
     monkeypatch.setenv("FR13_MAMBA_SPEC_BLOCKS_CDIV", flag)
+    if fixed32 is None:
+        monkeypatch.delenv("FR13_FIXED32_MODE", raising=False)
+    else:
+        monkeypatch.setenv("FR13_FIXED32_MODE", fixed32)
     spec = importlib.util.spec_from_file_location(
-        f"_fr13_patcher_cdiv_{flag}", PATCHER
+        f"_fr13_patcher_cdiv_{flag}_{fixed32}", PATCHER
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -154,7 +173,10 @@ def test_patch_fn_and_preflight_are_defined_once() -> None:
     for fn in (
         "_fr13_mamba_spec_blocks_cdiv",
         "_patch_mamba_abstract_spec_blocks_cdiv",
+        "_patch_gdn_attn_mamba_spec_scratch_table",
         "_fr13_assert_mamba_spec_blocks_cdiv_slot_demand",
+        "_fr13_assert_mamba_spec_blocks_cdiv_coherent",
+        "_fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32",
     ):
         assert names.count(fn) == 1, f"{fn} must be defined exactly once"
 
@@ -179,7 +201,7 @@ def test_preflight_runs_in_main_before_any_patch_step() -> None:
 def test_anchor_is_exact_count_guarded() -> None:
     fn_start = TEXT.index("def _patch_mamba_abstract_spec_blocks_cdiv()")
     fn_end = TEXT.index(
-        "def _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()", fn_start
+        "def _patch_gdn_attn_mamba_spec_scratch_table()", fn_start
     )
     body = TEXT[fn_start:fn_end]
     # Both anchors are count-asserted (not `in`-tested), house fail-loud style.
@@ -299,25 +321,43 @@ def test_preflight_is_inert_when_flag_off(monkeypatch) -> None:
     module._fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
 
 
-def test_preflight_refuses_the_production_geometry(monkeypatch) -> None:
-    """31 draft tokens / 1024-token mamba block: reserves 2 slots, needs 32."""
+def test_preflight_admits_the_production_geometry(monkeypatch) -> None:
+    """31 draft tokens / 1024-token mamba block reserves col0 + one scratch.
+
+    This is the case the preflight used to REFUSE. The scratch rehome
+    (_patch_gdn_attn_mamba_spec_scratch_table, same flag) lowers the physical
+    demand to 2, exactly as the old refusal said it would: it "opens by itself
+    once a per-node scratch rehome lands".
+    """
     module = _load_patcher(monkeypatch, flag="1")
     monkeypatch.setenv("NUM_SPECULATIVE_TOKENS", "31")
     monkeypatch.setenv("MAMBA_BLOCK_SIZE", "1024")
+    module._fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
+    assert module._FR13_MAMBA_SPEC_SCRATCH_PHYSICAL_COLS == 2
+
+
+def test_preflight_refuses_a_reservation_below_the_scratch_floor(
+    monkeypatch,
+) -> None:
+    """One slot is col0 with NO scratch page -- the conv row guard rejects a
+    NULL_BLOCK_ID filler, so the floor of 2 is load-bearing."""
+    module = _load_patcher(monkeypatch, flag="1")
+    monkeypatch.setenv("NUM_SPECULATIVE_TOKENS", "31")
+    monkeypatch.setenv("MAMBA_BLOCK_SIZE", "1024")
+    monkeypatch.setattr(module, "_FR13_MAMBA_SPEC_SCRATCH_PHYSICAL_COLS", 3)
     with pytest.raises(RuntimeError) as excinfo:
         module._fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
     message = str(excinfo.value)
     assert "would reserve 2 mamba state slots" in message
-    assert "indexes 32 of them PER DRAFT NODE" in message
     # The message must name the mechanism, not just fail.
-    assert "ssm_state_indices[b, i_t]" in message
-    assert "spec_state_indices[b, :tree_n]" in message
-    assert "STATE-SLOT count, not a token range" in message
+    assert "ONE real scratch page" in message
+    assert "(0, BANK_ROWS)" in message
+    assert "NULL_BLOCK_ID is not a legal" in message
 
 
-def test_preflight_opens_when_demand_is_met(monkeypatch) -> None:
-    """A per-node scratch rehome that lowers the demand opens the gate with no
-    edit here: block_size 1 makes cdiv the identity, so reserved == demanded."""
+def test_preflight_still_scales_with_the_block_size(monkeypatch) -> None:
+    """block_size 1 makes cdiv the identity: 32 reserved slots clears the
+    floor of 2 just as well. The floor is a minimum, not an equality."""
     module = _load_patcher(monkeypatch, flag="1")
     monkeypatch.setenv("NUM_SPECULATIVE_TOKENS", "31")
     monkeypatch.setenv("MAMBA_BLOCK_SIZE", "1")
@@ -337,6 +377,333 @@ def test_preflight_rejects_a_nonpositive_block_size(monkeypatch) -> None:
     monkeypatch.setenv("MAMBA_BLOCK_SIZE", "0")
     with pytest.raises(RuntimeError, match="MAMBA_BLOCK_SIZE must be positive"):
         module._fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
+
+
+# --------------------------------------------------------------------------
+# the fail-loud fixed32 guard (the lever is fixed32-ONLY)
+# --------------------------------------------------------------------------
+#
+# WHY THIS EXISTS: the scratch rehome makes logical columns 1..num_spec ALIASES
+# of one physical page. Exactly one per-draft-node consumer survives outside
+# fixed32 -- the batched tree conv writeback, whose call site is gated on the
+# literal `_FR13_CONV_WB_BATCHED and not _FR13_FIXED32_MODE` -- and it hands
+# dst_rows=spec_state_indices_tensor[:b, :tree_n].reshape(-1), one destination
+# row per node. Against an aliased table those tree_n rows are the SAME page.
+# The dst_rows.numel() >= tree_n guard measures the LOGICAL width, which the
+# rehome deliberately leaves unnarrowed, so it passes and the collapse is
+# silent. This preflight is the blocking precondition for promoting the flag to
+# a B4 default.
+
+
+def test_fixed32_guard_is_inert_when_flag_off(monkeypatch) -> None:
+    """=0 is unaffected: no fixed32 in the environment, no refusal."""
+    module = _load_patcher(monkeypatch, flag="0")
+    assert module._FR13_FIXED32_MODE == ""
+    module._fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()
+    # ...and the rest of the cdiv preflight family stays inert too.
+    monkeypatch.setenv("NUM_SPECULATIVE_TOKENS", "31")
+    monkeypatch.setenv("MAMBA_BLOCK_SIZE", "1024")
+    module._fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
+
+
+@pytest.mark.parametrize("mode", ["tail6_fixed32", "hydra27_fixed32"])
+def test_fixed32_guard_admits_an_armed_boot(monkeypatch, mode: str) -> None:
+    """=1 with fixed32 armed is the production configuration: it passes."""
+    module = _load_patcher(monkeypatch, flag="1", fixed32=mode)
+    assert module._FR13_FIXED32_MODE == mode
+    assert mode in module._FR13_FIXED32_MODES
+    module._fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()
+    # The floor preflight still runs on the production geometry.
+    monkeypatch.setenv("NUM_SPECULATIVE_TOKENS", "31")
+    monkeypatch.setenv("MAMBA_BLOCK_SIZE", "1024")
+    module._fr13_assert_mamba_spec_blocks_cdiv_slot_demand()
+
+
+def test_fixed32_guard_refuses_an_unarmed_boot(monkeypatch) -> None:
+    """=1 without fixed32 must REFUSE, and the message must self-diagnose."""
+    module = _load_patcher(monkeypatch, flag="1")
+    with pytest.raises(RuntimeError) as excinfo:
+        module._fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()
+    message = str(excinfo.value)
+    assert "FR13_MAMBA_SPEC_BLOCKS_CDIV=1 requires fixed32 to be armed" in message
+    # It must name the observed state, not just the rule.
+    assert "FR13_FIXED32_MODE is ''" in message
+    # It must name the MECHANISM: which code path, which tensor, which failure.
+    assert "_FR13_CONV_WB_BATCHED and not " in message
+    assert "_FR13_FIXED32_MODE`" in message
+    assert "spec_state_indices[:, :tree_n]" in message
+    assert "col-aliased scratch" in message
+    assert "last writer wins" in message
+    # And why nothing downstream would catch it.
+    assert "dst_rows.numel() >= tree_n" in message
+    assert "LOGICAL width" in message
+    assert "silent" in message
+    # And the two ways out.
+    assert "Set FR13_FIXED32_MODE" in message
+    assert "tail6_fixed32" in message
+    assert "hydra27_fixed32" in message
+    assert "unset FR13_MAMBA_SPEC_BLOCKS_CDIV" in message
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t"])
+def test_fixed32_guard_treats_a_blank_mode_as_unarmed(
+    monkeypatch, blank: str
+) -> None:
+    """The patcher .strip()s FR13_FIXED32_MODE, so whitespace is NOT armed."""
+    module = _load_patcher(monkeypatch, flag="1", fixed32=blank)
+    assert module._FR13_FIXED32_MODE == ""
+    with pytest.raises(RuntimeError, match="requires fixed32 to be armed"):
+        module._fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()
+
+
+def test_fixed32_guard_detects_fixed32_the_house_way(monkeypatch) -> None:
+    """Non-empty _FR13_FIXED32_MODE, the same test every fixed32-coupled
+    preflight in this file uses -- not a private env read of its own."""
+    fn_start = TEXT.index(
+        "def _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()"
+    )
+    fn_end = TEXT.index(
+        "def _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()", fn_start
+    )
+    body = TEXT[fn_start:fn_end]
+    assert "if not _fr13_mamba_spec_blocks_cdiv():\n        return" in body
+    assert "if _FR13_FIXED32_MODE:\n        return" in body
+    assert 'os.environ.get("FR13_FIXED32_MODE"' not in body
+    assert body.count("raise RuntimeError(") == 1
+
+
+def test_fixed32_guard_runs_in_main_before_any_patch_step() -> None:
+    """It gates the whole patch pass, so it must fire before the floor check
+    and before anything is written to the vLLM tree."""
+    call = "    _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()\n"
+    floor = "    _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()\n"
+    assert TEXT.count(call) == 1
+    main_at = TEXT.index("def main() -> int:")
+    call_at = TEXT.index(call, main_at)
+    floor_at = TEXT.index(floor, main_at)
+    steps_at = TEXT.index("    patch_steps = [", main_at)
+    assert main_at < call_at < floor_at < steps_at
+
+
+def test_known_constraint_is_documented_as_enforced() -> None:
+    """The scratch-table writeup used to merely WARN about the non-fixed32
+    writeback; it must now point at the preflight that refuses it."""
+    fn_start = TEXT.index("def _patch_gdn_attn_mamba_spec_scratch_table()")
+    fn_end = TEXT.index(
+        "def _fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32()", fn_start
+    )
+    body = TEXT[fn_start:fn_end]
+    assert "KNOWN CONSTRAINT" in body
+    assert "_fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32" in body
+
+
+# --------------------------------------------------------------------------
+# the gdn_attn scratch window (the logical half of the lever)
+# --------------------------------------------------------------------------
+
+
+STOCK_SPEC_SLICE = (
+    "                spec_state_indices_tensor = block_table_tensor[\n"
+    "                    spec_sequence_masks_cpu, : self.num_spec + 1\n"
+    "                ]\n"
+)
+
+STOCK_GDN_ATTN = (
+    '"""Backend for GatedDeltaNet attention."""\n'
+    "\n"
+    "import torch\n"
+    "\n"
+    "\n"
+    "class GDNAttentionBackend(AttentionBackend):\n"
+    "    pass\n"
+    "\n"
+    "\n"
+    "class GDNAttentionMetadataBuilder:\n"
+    "    def build(self):\n"
+    "        if True:\n"
+    "            if True:\n"
+    + STOCK_SPEC_SLICE
+    + "            else:\n"
+    + STOCK_SPEC_SLICE
+    + "        return spec_state_indices_tensor\n"
+)
+
+
+def _patched_gdn_attn(monkeypatch, tmp_path, *, flag: str):
+    module = _load_patcher(monkeypatch, flag=flag)
+    target = tmp_path / "gdn_attn.py"
+    target.write_text(STOCK_GDN_ATTN)
+    module.GDN_ATTN_PATH = target
+    return module, target
+
+
+def test_scratch_window_off_arm_is_a_byte_noop(monkeypatch, tmp_path) -> None:
+    module, target = _patched_gdn_attn(monkeypatch, tmp_path, flag="0")
+    assert module._patch_gdn_attn_mamba_spec_scratch_table() is False
+    assert target.read_text() == STOCK_GDN_ATTN
+
+
+def test_scratch_window_rewrites_both_sites_and_compiles(
+    monkeypatch, tmp_path
+) -> None:
+    module, target = _patched_gdn_attn(monkeypatch, tmp_path, flag="1")
+    assert module._patch_gdn_attn_mamba_spec_scratch_table() is True
+    patched = target.read_text()
+
+    # BOTH slice sites are rewritten -- a single-site patch would leave one
+    # path silently short-fed by the narrowed align gather.
+    assert STOCK_SPEC_SLICE not in patched
+    assert patched.count("_fr13_mamba_spec_scratch_window(") == 3  # def + 2 uses
+    assert patched.count(module._FR13_MAMBA_SPEC_SCRATCH_SENTINEL) == 3
+    # The logical width still comes from the TOKEN count, never from the
+    # narrowed block count.
+    assert patched.count("self.num_spec,\n") == 2
+    ast.parse(patched)
+    py_compile.compile(str(target), doraise=True)
+
+    # Second application is a no-op (sentinel), not a double patch.
+    assert module._patch_gdn_attn_mamba_spec_scratch_table() is False
+    assert target.read_text() == patched
+
+
+def test_scratch_window_anchor_counts_fail_loud(monkeypatch, tmp_path) -> None:
+    module, target = _patched_gdn_attn(monkeypatch, tmp_path, flag="1")
+    # Exactly two slice sites are required: one is anchor drift, not a subset.
+    target.write_text(STOCK_GDN_ATTN.replace(STOCK_SPEC_SLICE, "            x = 1\n", 1))
+    with pytest.raises(RuntimeError, match="spec-window anchor count 1 != 2"):
+        module._patch_gdn_attn_mamba_spec_scratch_table()
+
+    target.write_text(STOCK_GDN_ATTN.replace(STOCK_SPEC_SLICE, "            x = 1\n"))
+    with pytest.raises(RuntimeError, match="spec-window anchor count 0 != 2"):
+        module._patch_gdn_attn_mamba_spec_scratch_table()
+
+    target.write_text(
+        STOCK_GDN_ATTN.replace(
+            "class GDNAttentionBackend(AttentionBackend):\n", "class Other:\n", 1
+        )
+    )
+    with pytest.raises(RuntimeError, match="backend class anchor count 0 != 1"):
+        module._patch_gdn_attn_mamba_spec_scratch_table()
+
+
+def test_scratch_window_semantics(monkeypatch, tmp_path) -> None:
+    """The emitted helper must map col0 -> col0 and the single align spare
+    across every speculative column, contiguously and strictly positive."""
+    torch = pytest.importorskip("torch")
+    module, target = _patched_gdn_attn(monkeypatch, tmp_path, flag="1")
+    module._patch_gdn_attn_mamba_spec_scratch_table()
+    src = target.read_text()
+    helper = src[
+        src.index("def _fr13_mamba_spec_scratch_window") : src.index(
+            "class GDNAttentionBackend"
+        )
+    ]
+    namespace: dict = {"torch": torch}
+    exec(helper, namespace)  # noqa: S102 - executing our own emitted source
+    widen = namespace["_fr13_mamba_spec_scratch_window"]
+
+    # The narrowed align gather: col0 = running page, col1 = the one spare.
+    narrowed = torch.tensor([[101, 102], [201, 202]], dtype=torch.int32)
+    out = widen(narrowed, 31)
+    assert tuple(out.shape) == (2, 32)
+    assert out.dtype == torch.int32
+    # The FLA kernels index ssm_state_indices with a bare `+ i_t`.
+    assert out.stride(1) == 1
+    assert out[:, 0].tolist() == [101, 201]
+    for row, scratch in ((0, 102), (1, 202)):
+        assert set(out[row, 1:].tolist()) == {scratch}
+    # The conv commit row guard requires every column strictly > 0.
+    assert bool((out > 0).all())
+
+    # Only two DISTINCT physical pages back the whole 32-wide window.
+    assert len(set(out[0].tolist())) == 2
+
+    # Already-full-width tables (mamba_cache_mode all/none, or the physical
+    # narrowing not in force) must behave exactly like the stock slice.
+    wide = (torch.arange(2 * 40, dtype=torch.int32).reshape(2, 40) + 1)
+    assert torch.equal(widen(wide, 31), wide[:, :32])
+
+    # A window with no scratch column at all is a wiring bug, not a silent
+    # narrowing.
+    with pytest.raises(RuntimeError, match="need col0 plus one scratch column"):
+        widen(torch.tensor([[7]], dtype=torch.int32), 31)
+
+
+def test_scratch_patch_step_runs_after_patch_gdn_attn() -> None:
+    """_patch_gdn_attn rewrites gdn_attn.py wholesale; this patch's anchors are
+    the stock slice sites it leaves intact, so ordering is asserted."""
+    scratch = "(GDN_ATTN_PATH, _patch_gdn_attn_mamba_spec_scratch_table()),"
+    base = "(GDN_ATTN_PATH, _patch_gdn_attn()),"
+    assert TEXT.count(scratch) == 1
+    assert TEXT.index("    patch_steps = [") < TEXT.index(scratch)
+    assert TEXT.index(base) < TEXT.index(scratch)
+
+
+# --------------------------------------------------------------------------
+# the two halves ship together
+# --------------------------------------------------------------------------
+
+
+def test_coherence_assert_runs_in_main_after_the_patch_steps() -> None:
+    call = "    _fr13_assert_mamba_spec_blocks_cdiv_coherent()\n"
+    assert TEXT.count(call) == 1
+    main_at = TEXT.index("def main() -> int:")
+    steps_at = TEXT.index("    patch_steps = [", main_at)
+    assert steps_at < TEXT.index(call, main_at)
+
+
+def test_coherence_is_inert_when_flag_off(monkeypatch, tmp_path) -> None:
+    module = _load_patcher(monkeypatch, flag="0")
+    module.MAMBA_ABSTRACT_PATH = tmp_path / "abstract.py"
+    module.GDN_ATTN_PATH = tmp_path / "gdn_attn.py"
+    module.MAMBA_ABSTRACT_PATH.write_text(STOCK_ABSTRACT)
+    module.GDN_ATTN_PATH.write_text(STOCK_GDN_ATTN)
+    module._fr13_assert_mamba_spec_blocks_cdiv_coherent()
+
+
+def test_coherence_accepts_both_halves_applied(monkeypatch, tmp_path) -> None:
+    module = _load_patcher(monkeypatch, flag="1")
+    module.MAMBA_ABSTRACT_PATH = tmp_path / "abstract.py"
+    module.GDN_ATTN_PATH = tmp_path / "gdn_attn.py"
+    module.MAMBA_ABSTRACT_PATH.write_text(STOCK_ABSTRACT)
+    module.GDN_ATTN_PATH.write_text(STOCK_GDN_ATTN)
+    assert module._patch_mamba_abstract_spec_blocks_cdiv() is True
+    assert module._patch_gdn_attn_mamba_spec_scratch_table() is True
+    module._fr13_assert_mamba_spec_blocks_cdiv_coherent()
+
+
+def test_coherence_refuses_a_half_applied_pair(monkeypatch, tmp_path) -> None:
+    """The failure mode this guards: abstract.py narrowed to a 2-column align
+    gather while gdn_attn still slices [: num_spec + 1] off it. Python slicing
+    narrows SILENTLY, so nothing else would raise."""
+    module = _load_patcher(monkeypatch, flag="1")
+    module.MAMBA_ABSTRACT_PATH = tmp_path / "abstract.py"
+    module.GDN_ATTN_PATH = tmp_path / "gdn_attn.py"
+
+    # physical half only
+    module.MAMBA_ABSTRACT_PATH.write_text(STOCK_ABSTRACT)
+    module.GDN_ATTN_PATH.write_text(STOCK_GDN_ATTN)
+    assert module._patch_mamba_abstract_spec_blocks_cdiv() is True
+    with pytest.raises(RuntimeError, match="incoherent"):
+        module._fr13_assert_mamba_spec_blocks_cdiv_coherent()
+
+    # logical half only
+    module.MAMBA_ABSTRACT_PATH.write_text(STOCK_ABSTRACT)
+    module.GDN_ATTN_PATH.write_text(STOCK_GDN_ATTN)
+    assert module._patch_gdn_attn_mamba_spec_scratch_table() is True
+    with pytest.raises(RuntimeError, match="incoherent"):
+        module._fr13_assert_mamba_spec_blocks_cdiv_coherent()
+
+
+@pytest.mark.skipif(
+    not (PRISTINE / "v1" / "attention" / "backends" / "gdn_attn.py").exists(),
+    reason="pristine vLLM tree not extracted",
+)
+def test_stock_gdn_attn_carries_exactly_two_spec_slice_sites() -> None:
+    """The hermetic fixture above must match the real anchor multiplicity."""
+    shipped = (PRISTINE / "v1" / "attention" / "backends" / "gdn_attn.py").read_text()
+    assert shipped.count(STOCK_SPEC_SLICE) == 2
+    assert shipped.count("class GDNAttentionBackend(AttentionBackend):\n") == 1
 
 
 # --------------------------------------------------------------------------
@@ -362,11 +729,35 @@ def test_launcher_validates_strict_and_forwards_default_off() -> None:
     ) < LAUNCHER_TEXT.index('-e FR13_MAMBA_SPEC_BLOCKS_CDIV=')
 
 
-def test_canonical_env_exports_default_off() -> None:
+def test_canonical_env_exports_the_promoted_default_on() -> None:
+    """PROMOTED 2026-08-10 (749f83af6): the B4 mamba page lever ships ON.
+
+    It shipped OFF while it was queued; Mark promoted it after the within-run
+    pair proved APC 83.1 -> 92.8% and per-request TPS 15.07 -> 18.00 on
+    identical binaries. The canonical registry is the single source of truth for
+    what the branch ships, so this pins the registry, and consumers resolve the
+    default from it rather than hardcoding either value.
+    """
     assert (
-        'export FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}"'
+        'export FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-1}"'
         in CANONICAL_TEXT
     )
+
+
+def test_campaign_driver_sources_the_canonical_registry_before_launching() -> None:
+    """This is what keeps the launcher's own ':-0' fallback harmless.
+
+    scripts/fr13_launch_forked_fa2_tree_server.sh still defaults the lever OFF
+    in two places (the patch-time case and the container -e passthrough). Those
+    are only safe because every campaign path sources fr13_canonical_env.sh
+    first, which EXPORTS the promoted value, so the launcher's fallback is never
+    reached. If that sourcing were ever removed, a campaign would silently serve
+    narrowing OFF while its provenance claimed the shipped default -- so pin it.
+    """
+    driver = (REPO / "scripts" / "fr13_b4_campaign_driver.sh").read_text(
+        encoding="utf-8"
+    )
+    assert 'source "$SCRIPT_DIR/fr13_canonical_env.sh"' in driver
 
 
 def test_registry_entry_is_comment_only_and_carries_the_verdict() -> None:
@@ -380,9 +771,26 @@ def test_registry_entry_is_comment_only_and_carries_the_verdict() -> None:
     assert line.lstrip().startswith("#")
     assert '"FR13_MAMBA_SPEC_BLOCKS_CDIV=' not in REGISTRY_TEXT
     assert "QUEUED (built 2026-08-09, default 0=OFF)" in line
-    # The measured motivation and the blocking verdict both have to be on record.
+    # The measured motivation stays on record.
     assert "384 of 692 pool pages" in line
     assert "89-93% of LRU evictions are mamba pops" in line
-    assert "DOES NOT SHIP AS-IS" in line
     assert "fused_recurrent.py" in line
     assert "_fr13_assert_mamba_spec_blocks_cdiv_slot_demand" in line
+    # BOTH halves must be described -- the entry is the only place a reader
+    # learns the physical cut never ships without the logical rehome.
+    assert "_patch_gdn_attn_mamba_spec_scratch_table" in line
+    assert "_fr13_assert_mamba_spec_blocks_cdiv_coherent" in line
+    # The superseded verdict must stay legible as superseded, not be erased.
+    assert "DOES NOT SHIP AS-IS" in line
+    assert "SUPERSEDES" in line
+    # The distinction from the deleted lever is the whole argument.
+    assert "FR13_SPEC_BLOCKS_CAP" in line
+    assert "consumer widths are untouched" in line.lower()
+    # The one combination that is still unsafe has to be named.
+    assert "KNOWN CONSTRAINT" in line
+    # ...and the entry must record that it is ENFORCED, not just advertised.
+    assert "_fr13_assert_mamba_spec_blocks_cdiv_requires_fixed32" in line
+    assert "ENFORCED GUARD (fixed32-only)" in line
+    assert "unless FR13_FIXED32_MODE is non-empty" in line
+    assert "_FR13_CONV_WB_BATCHED and not " in line
+    assert "spec_state_indices[:, :tree_n]" in line

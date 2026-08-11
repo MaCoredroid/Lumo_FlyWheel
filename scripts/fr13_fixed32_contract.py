@@ -147,12 +147,20 @@ MODEL_ROOT = Path("/models/qwen3.6-27b-fp8")
 # FR13_LEVER_REDESIGN.md already routes the cache-hit-rate concern here, to
 # pool sizing, instead.
 #
-# FR13_MAMBA_SPEC_BLOCKS_CDIV (2026-08-09) is the same territory and is BLOCKED
-# for the same structural reason: num_speculative_blocks counts mamba STATE
-# SLOTS, one per draft node, not a token range, so it cannot be ceil-divided by
-# mamba_block_size. See fr13_required_tree_flags.sh for the four per-node
-# consumers and fr10_phase4_patch_vllm_tree_gdn.py's
-# _fr13_assert_mamba_spec_blocks_cdiv_slot_demand for the fail-loud preflight.
+# FR13_MAMBA_SPEC_BLOCKS_CDIV (2026-08-09) started in the same territory and
+# was BLOCKED for the same structural reason -- num_speculative_blocks counts
+# mamba STATE SLOTS, one per draft node, not a token range, so the physical
+# narrowing alone short-fed the per-node consumers. That objection was answered
+# on 2026-08-10 by pairing the narrowing with the col-aliased scratch table
+# (9d8095ea0), which keeps every logical spec-window column at its full
+# num_spec + 1 width over two physical pages, so the flag is now PROMOTED to
+# the fixed32 B4 default (749f83af6). It is fixed32-only: the fail-loud guard
+# 4b3c7f8d4 refuses it otherwise. See fr13_required_tree_flags.sh for the
+# per-node consumer audit and fr10_phase4_patch_vllm_tree_gdn.py's
+# _fr13_assert_mamba_spec_blocks_cdiv_slot_demand /
+# _fr13_assert_mamba_spec_blocks_cdiv_coherent for the fail-loud preflights.
+# It is a page-reclaim lever, not a pool-sizing one; this constant stays the
+# sizing lever.
 #
 # Raising this DOES NOT re-profile memory: vLLM logs "reserved 40.0 GiB memory
 # for KV Cache as specified by kv_cache_memory_bytes config and skipped memory
