@@ -1,6 +1,7 @@
 """FR13_MAMBA_SPEC_BLOCKS_CDIV patch-site gate (mamba physical-page narrowing).
 
-ONE patch-time flag, default OFF, byte-inert when OFF; the anchor-replace +
+ONE patch-time flag, PROMOTED ON 2026-08-10 (749f83af6), byte-inert when OFF;
+the anchor-replace +
 exact-count house pattern used by the neighbouring mamba patchers
 (_patch_mamba_utils_preprocess_context_flag, _patch_mamba_state_utils_tree_conv
 _node_copy).
@@ -13,7 +14,7 @@ Instrument under test:
       _fr13_assert_mamba_spec_blocks_cdiv_slot_demand()  the 2-slot floor
       _fr13_assert_mamba_spec_blocks_cdiv_coherent()     both halves or neither
   - scripts/fr13_launch_forked_fa2_tree_server.sh        strict 0/1 + docker -e
-  - scripts/fr13_canonical_env.sh                        default-OFF export
+  - scripts/fr13_canonical_env.sh                        default-ON export
   - scripts/fr13_required_tree_flags.sh                  comment-only QUEUED
 
 WHAT THESE TESTS REALLY PROTECT: the flag arms TWO patch sites that are only
@@ -40,6 +41,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import py_compile
+import re
 import types
 from pathlib import Path
 
@@ -711,22 +713,62 @@ def test_stock_gdn_attn_carries_exactly_two_spec_slice_sites() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_launcher_validates_strict_and_forwards_default_off() -> None:
-    assert 'case "${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}" in' in LAUNCHER_TEXT
+def test_launcher_validates_strict_and_forwards_the_shipped_default() -> None:
+    assert 'case "${FR13_MAMBA_SPEC_BLOCKS_CDIV:-1}" in' in LAUNCHER_TEXT
     assert (
         'echo "FR13_MAMBA_SPEC_BLOCKS_CDIV must be 0 or 1" >&2; exit 2 ;;'
         in LAUNCHER_TEXT
     )
     # The patcher runs INSIDE the container, so the -e line is what carries it.
     assert (
-        '-e FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}" \\'
+        '-e FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-1}" \\'
         in LAUNCHER_TEXT
     )
-    assert LAUNCHER_TEXT.count("FR13_MAMBA_SPEC_BLOCKS_CDIV:-1") == 0
+    assert LAUNCHER_TEXT.count("FR13_MAMBA_SPEC_BLOCKS_CDIV:-0") == 0
     # Validation must precede the docker run that forwards it.
     assert LAUNCHER_TEXT.index(
-        'case "${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}" in'
+        'case "${FR13_MAMBA_SPEC_BLOCKS_CDIV:-1}" in'
     ) < LAUNCHER_TEXT.index('-e FR13_MAMBA_SPEC_BLOCKS_CDIV=')
+
+
+def _shell_default(text: str, variable: str) -> set[str]:
+    """Every ``${VAR:-X}`` default X that `text` gives `variable`."""
+    return set(
+        re.findall(
+            r"\$\{" + re.escape(variable) + r":-([^}]*)\}",
+            text,
+        )
+    )
+
+
+def test_launcher_fallbacks_match_the_canonical_shipped_default() -> None:
+    """The launcher's own fallbacks may never contradict the canonical registry.
+
+    fr13_canonical_env.sh is the single source of truth for what this branch
+    ships. The launcher restates that default twice -- the patch-time `case`
+    validation and the container `-e` passthrough -- and both were left at 0 when
+    the lever was promoted ON (749f83af6), so the launcher disagreed with the
+    registry for two days.
+
+    That was harmless ONLY because every campaign path sources the canonical env
+    first, which exports the value and stops the fallback being reached. It is a
+    bad thing to be one deleted `source` line away from: a campaign would then
+    silently serve narrowing OFF while its provenance claimed the shipped
+    default, and nothing would have contradicted it.
+
+    So compare the files rather than restating a literal in a third place. A
+    future promotion that flips the canonical default must flip the launcher too,
+    or this fails.
+    """
+    canonical = _shell_default(CANONICAL_TEXT, "FR13_MAMBA_SPEC_BLOCKS_CDIV")
+    assert len(canonical) == 1, f"canonical env must declare one default: {canonical}"
+    launcher = _shell_default(LAUNCHER_TEXT, "FR13_MAMBA_SPEC_BLOCKS_CDIV")
+    assert launcher == canonical, (
+        "launcher fallbacks disagree with fr13_canonical_env.sh: "
+        f"launcher={sorted(launcher)} canonical={sorted(canonical)}"
+    )
+    # Both launcher sites are covered, not just whichever one happens to match.
+    assert LAUNCHER_TEXT.count("${FR13_MAMBA_SPEC_BLOCKS_CDIV:-") == 2
 
 
 def test_canonical_env_exports_the_promoted_default_on() -> None:
@@ -745,14 +787,14 @@ def test_canonical_env_exports_the_promoted_default_on() -> None:
 
 
 def test_campaign_driver_sources_the_canonical_registry_before_launching() -> None:
-    """This is what keeps the launcher's own ':-0' fallback harmless.
+    """The canonical registry must reach the launcher, not merely agree with it.
 
-    scripts/fr13_launch_forked_fa2_tree_server.sh still defaults the lever OFF
-    in two places (the patch-time case and the container -e passthrough). Those
-    are only safe because every campaign path sources fr13_canonical_env.sh
-    first, which EXPORTS the promoted value, so the launcher's fallback is never
-    reached. If that sourcing were ever removed, a campaign would silently serve
-    narrowing OFF while its provenance claimed the shipped default -- so pin it.
+    The launcher's two fallbacks now match the promoted default, so a dropped
+    `source` line no longer silently inverts the lever. But agreement is not the
+    same as resolution: sourcing fr13_canonical_env.sh is what makes the registry
+    the value a campaign actually runs with, and what keeps its provenance
+    truthful about where that value came from. Pin the sourcing as well as the
+    agreement -- they fail differently and are worth catching separately.
     """
     driver = (REPO / "scripts" / "fr13_b4_campaign_driver.sh").read_text(
         encoding="utf-8"

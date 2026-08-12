@@ -4851,7 +4851,7 @@ if [[ "$_fr13_subtree_selfcheck" == "1" && "$_fr13_subtree_parallel" != "1" ]]; 
   echo "FR13_SUBTREE_PARALLEL_SELFCHECK=1 requires FR13_SUBTREE_PARALLEL=1" >&2
   exit 2
 fi
-# FR13_MAMBA_SPEC_BLOCKS_CDIV (default 0=OFF, PATCH-TIME): the B4 mamba page
+# FR13_MAMBA_SPEC_BLOCKS_CDIV (default 1=ON, PATCH-TIME): the B4 mamba page
 # lever. ONE flag, TWO coupled patch sites. (1) rewrites MambaSpec's
 # num_speculative_blocks from num_speculative_tokens (31) to
 # cdiv(num_speculative_tokens, mamba_block_size) (=1 at 31/1024), so the align
@@ -4864,7 +4864,13 @@ fi
 # patcher enforces a 2-slot floor (col0 + one real scratch page) and fails loud
 # if only one of the two halves applies -- see fr13_required_tree_flags.sh for
 # the per-node consumer audit and the superseded verdict.
-case "${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}" in
+# The fallback below must track fr13_canonical_env.sh, which is the single
+# source of truth for what this branch ships (PROMOTED ON 2026-08-10, 749f83af6).
+# In practice every campaign path sources that file first, so this fallback is
+# not reached -- but when it IS reached it must not contradict the shipped
+# default, or a campaign would serve narrowing OFF while its provenance claimed
+# ON. tests/test_fr13_mamba_spec_blocks_cdiv.py parses both files and compares.
+case "${FR13_MAMBA_SPEC_BLOCKS_CDIV:-1}" in
   0|1) ;;
   *) echo "FR13_MAMBA_SPEC_BLOCKS_CDIV must be 0 or 1" >&2; exit 2 ;;
 esac
@@ -5305,7 +5311,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_PATH="${FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB_PATH:-/logs/fr13_fixed32_treeconv_zero_tail.byte_ab.jsonl}" \
   -e FR13_SUBTREE_PARALLEL="${FR13_SUBTREE_PARALLEL:-1}" \
   -e FR13_SUBTREE_PARALLEL_SELFCHECK="${FR13_SUBTREE_PARALLEL_SELFCHECK:-0}" \
-  -e FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-0}" \
+  -e FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-1}" \
   -e FR13_DRAFTER_GRAPH="${FR13_DRAFTER_GRAPH:-1}" \
   -e FR13_DFWD_SPLIT_NEEDLE="${FR13_DFWD_SPLIT_NEEDLE:-0}" \
   -e FR13_DVK_DRAFTID_DUMP="${FR13_DVK_DRAFTID_DUMP:-}" \
