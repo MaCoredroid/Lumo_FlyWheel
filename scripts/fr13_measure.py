@@ -2113,21 +2113,38 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
             "topology": bracket["topology"],
             "closing_task": bracket["closing_task"],
             "distinct_bracket_origins": bracket["distinct_bracket_origins"],
-            "basis": (
-                "sum of the disjoint per-task bracket deltas"
-                if bracket["topology"] == "disjoint"
-                else "the widest (last-closing) nested bracket, which spans the whole arm"
-            ),
+            # One basis string per topology. This used to fall through to the
+            # nested wording for STAGGERED arms, so a refilled-pool artifact
+            # carried provenance claiming it used "the widest nested bracket"
+            # when it had actually used the envelope -- the one line of the
+            # record a reader checks before citing an aggregate.
+            "basis": {
+                "disjoint": "sum of the disjoint per-task bracket deltas",
+                "nested": (
+                    "the widest (last-closing) nested bracket, which spans the "
+                    "whole arm"
+                ),
+                "staggered": (
+                    "the ENVELOPE max(post)-min(pre) over overlapping brackets "
+                    "that do not share an origin, which spans the whole arm"
+                ),
+            }[bracket["topology"]],
             "work_census_gate": census_gate,
             "note": (
                 "Nested brackets all open on one counter origin, so their sum "
                 "multiply-counts the shared prefix (1.7-2.6x on the recorded B4 "
-                "runroots; see scripts/fr13_b4_alignment_reduce.py). Topology is "
-                "classified from the recorded pre-snapshot counter vectors, not "
-                "assumed from --batch-size."
+                "runroots; see scripts/fr13_b4_alignment_reduce.py). Staggered "
+                "brackets (a refilled pool) open on different origins but still "
+                "overlap, so their sum multiply-counts too (1.87-4.00x on the "
+                "recorded 16-task refill runroot) and the envelope is taken "
+                "instead. Topology is classified from the recorded pre-snapshot "
+                "counter vectors, not assumed from --batch-size."
             ),
             # What the discarded naive sum WOULD have reported, per counter, as a
-            # multiple of the reduced arm delta. Only emitted when they differ.
+            # multiple of the reduced arm delta. Emitted for every topology whose
+            # reduction is not the sum -- previously nested only, which silently
+            # withheld the LARGER (1.87-4.00x) refilled-pool inflation from the
+            # measure-side artifact even though the alignment reducer published it.
             **(
                 {
                     "summed_bracket_inflation": {
@@ -2136,7 +2153,7 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
                         if bracket["delta"][c]
                     }
                 }
-                if bracket["topology"] == "nested"
+                if bracket["topology"] in ("nested", "staggered")
                 else {}
             ),
         },
