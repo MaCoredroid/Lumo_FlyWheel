@@ -1197,7 +1197,14 @@ def _remove_final_text(events: list[dict[str, Any]]) -> None:
 
 
 def _blank_final_text(events: list[dict[str, Any]]) -> None:
-    """A whitespace text record is still a text record, not reasoning."""
+    """Blank the closing text record, leaving the reasoning record before it.
+
+    This is a legal live shape, not tampering -- see
+    ``test_qwen_blank_final_text_after_reasoning_is_served``. Blanking text
+    cannot forge served work: the group still counts as exactly one logical
+    model request and that count must reconcile against the engine's own
+    metrics, which is where trace tampering is actually caught.
+    """
     events[-2]["message"]["content"] = [{"type": "text", "text": "   "}]
 
 
@@ -1216,7 +1223,6 @@ def _duplicate_assistant_identity(events: list[dict[str, Any]]) -> None:
         lambda events: events[-1].__setitem__("is_error", True),
         lambda events: events[-2]["message"].__setitem__("id", ""),
         lambda events: events[-2]["message"].__setitem__("id", "tool-turn-11"),
-        _blank_final_text,
     ),
 )
 def test_qwen_result_trace_tamper_fails_closed(
@@ -1224,6 +1230,76 @@ def test_qwen_result_trace_tamper_fails_closed(
 ) -> None:
     events = copy.deepcopy(_qwen_result_trace())
     mutate(events)
+
+    with pytest.raises(contract.ContractError):
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+        )
+
+
+def test_qwen_blank_final_text_after_reasoning_is_served() -> None:
+    """A closing turn may trail its reasoning with a whitespace-only record.
+
+    Observed live: astropy__astropy-13398 closed a 434-event trajectory on
+    ``"\\n\\n"`` after a thinking record, having already produced a real
+    2216-byte patch. The turn was served, so it counts like any other group.
+    """
+    canonical = contract.validate_fixed32_trace_model_requests(
+        _qwen_result_trace(),
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+    events = copy.deepcopy(_qwen_result_trace())
+    _blank_final_text(events)
+    final_group = _top_level_assistant_groups(events)[-1]
+    assert [
+        item["type"] for item in final_group[0]["message"]["content"]
+    ] == ["thinking"]
+    assert final_group[-1]["message"]["content"] == [
+        {"type": "text", "text": "   "}
+    ]
+
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_A),
+    )
+
+    # Blanking the visible text changes nothing about how much work was
+    # served: same request count, same group identities.
+    assert trace_requests["completed_logical_model_requests"] == (
+        canonical["completed_logical_model_requests"]
+    )
+    assert trace_requests["model_request_ids"] == canonical["model_request_ids"]
+
+
+def test_qwen_blank_final_text_still_reconciles_against_engine_metrics() -> None:
+    """The count control, not the text, is what catches a forged trace."""
+    events = copy.deepcopy(_qwen_result_trace())
+    _blank_final_text(events)
+    session_id = contract.fixed32_trace_session_id(TASK_A)
+
+    truthful = contract.validate_fixed32_trace_model_requests(
+        events, expected_session_id=session_id
+    )
+    served = truthful["completed_logical_model_requests"]
+
+    # Accepting the blank close does not let a trace claim work the engine
+    # never served: the metric-proven count still has to agree exactly.
+    for wrong in (served - 1, served + 1):
+        with pytest.raises(contract.ContractError):
+            contract.validate_fixed32_trace_model_requests(
+                events,
+                expected_session_id=session_id,
+                expected_completed_logical_model_requests=wrong,
+            )
+
+
+def test_qwen_blank_final_group_without_reasoning_fails_closed() -> None:
+    """A bare whitespace close carries no evidence the turn was served."""
+    events = copy.deepcopy(_qwen_result_trace())
+    # Drop the reasoning record, leaving only the blank text record.
+    _blank_final_text(events)
+    del events[-3]
 
     with pytest.raises(contract.ContractError):
         contract.validate_fixed32_trace_model_requests(
