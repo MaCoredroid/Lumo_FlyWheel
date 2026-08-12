@@ -3457,6 +3457,10 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   done
   [[ -z "$FR13_SERVE_BATCH_FLAGS" ]] \
     || { echo "fixed32 forbids FR13_SERVE_BATCH_FLAGS" >&2; exit 2; }
+  # The B1 binary-identity preflight below resolves its pin arm from these two
+  # variables, so make them visible to the child interpreter regardless of how
+  # the caller set them.
+  export FR13_FA2_QROW32_B1_LIVE_AB_ARM FR13_FA2_QROW32_B1_PRODUCTION_ARM
   PYTHONPATH="$REPO/scripts" .venv/bin/python - \
     "$REPO" "$IMAGE" "$FORKED_FA2_SO" "$TREE" "$SPEC_CONFIG" \
     "$_FR13_FA2_QROW16_CANDIDATE_MODE" "$FR13_FA2_QROW16_SO_SHA256" \
@@ -3512,9 +3516,14 @@ elif qrow32_b4_candidate == "1":
 elif qrow32_b1_candidate == "1":
     if actual_sha256 != qrow32_b1_sha256:
         raise SystemExit("fixed32 qrow32 B1 candidate FA2 sha256 mismatch")
-    # Every B1 arm has its own qualified binary; the empty live arm is the
-    # nosplit production selector and keeps the incumbent identity.
-    b1_live_arm = os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
+    # Every B1 arm has its own qualified binary. Resolve the arm that actually
+    # decides which binary is loaded: a production launch has no live arm, so
+    # keying on the live arm alone would check a GQA-pair production run
+    # against the incumbent no-split pins and refuse the candidate .so. This
+    # mirrors the bash pin case and fr13_fixed32_contract's pin-arm rule.
+    b1_pin_arm = os.environ.get(
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM", ""
+    ) or os.environ.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
     expected_sha256, expected_size = {
         "visibility": (
             contract.QROW32_B1_VISIBILITY_FA2_SHA256,
@@ -3525,7 +3534,7 @@ elif qrow32_b1_candidate == "1":
             contract.QROW32_B1_GQA_PAIR_FA2_SIZE,
         ),
     }.get(
-        b1_live_arm,
+        b1_pin_arm,
         (
             contract.QROW32_B1_SPLIT2_FA2_SHA256,
             contract.QROW32_B1_SPLIT2_FA2_SIZE,
@@ -3533,7 +3542,7 @@ elif qrow32_b1_candidate == "1":
     )
     if not expected_sha256 or not expected_size:
         raise SystemExit(
-            f"fixed32 qrow32 B1 arm {b1_live_arm!r} has no pinned binary identity"
+            f"fixed32 qrow32 B1 arm {b1_pin_arm!r} has no pinned binary identity"
         )
     if actual_sha256 != expected_sha256 or fa2.stat().st_size != expected_size:
         raise SystemExit("fixed32 qrow32 B1 binary identity is not qualified")

@@ -838,3 +838,251 @@ def test_timing_runner_summary_argv_arity_matches_its_invocation() -> None:
     # argv[0] is "-", so the last positional is index 38.
     assert max([highest] + slices) <= 39
     assert max(slices) == 39
+
+
+# --------------------------------------------------------------------------
+# The launcher's host-side FA2 identity preflight (inline Python, pre-docker)
+# --------------------------------------------------------------------------
+
+
+_STUB_CONTRACT = '''
+import hashlib
+from pathlib import Path
+
+FA2_REPO_RELATIVE = "stock_fa2.so"
+IMAGE_REFERENCE = "stub-image@sha256:{image}"
+FA2_SHA256 = "{stock_sha}"
+FA2_SIZE = {stock_size}
+QROW32_B4_GQA_PAIR_FA2_SHA256 = "b4" * 32
+QROW32_B4_GQA_PAIR_FA2_SIZE = 1
+QROW32_B1_SPLIT2_FA2_SHA256 = "{split2_sha}"
+QROW32_B1_SPLIT2_FA2_SIZE = {split2_size}
+QROW32_B1_VISIBILITY_FA2_SHA256 = "{vis_sha}"
+QROW32_B1_VISIBILITY_FA2_SIZE = {vis_size}
+QROW32_B1_GQA_PAIR_FA2_SHA256 = "{pair_sha}"
+QROW32_B1_GQA_PAIR_FA2_SIZE = {pair_size}
+
+
+def sha256_file(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _docker_image_record():
+    return None
+
+
+def fixed32_tree_text():
+    return "TREE"
+
+
+def speculative_config_text():
+    return "SPEC"
+'''
+
+
+def _launcher_fa2_preflight_source() -> str:
+    text = LAUNCHER.read_text(encoding="utf-8")
+    marker = '"$_FR13_FA2_QROW32_B4_CANDIDATE_MODE" <<\'PY\'\n'
+    body = text.split(marker, 1)[1]
+    return body.split("\nPY\n", 1)[0]
+
+
+def _run_launcher_fa2_preflight(
+    tmp_path: Path, *, arm_env: dict, candidate_name: str
+):
+    """Execute the launcher's real preflight against stubbed pins.
+
+    The genuine pinned binaries are ~300 MB, so the contract module is
+    shadowed with a stub whose pins point at small fixtures. The code under
+    test is the launcher's own bytes, extracted verbatim.
+    """
+    import hashlib
+    import os
+
+    stage = tmp_path / "stage"
+    stage.mkdir(parents=True)
+    binaries = {}
+    for name, payload in {
+        "stock_fa2.so": b"stock",
+        "split2": b"split2-binary",
+        "visibility": b"visibility-binary",
+        "gqa_pair": b"gqa-pair-binary",
+    }.items():
+        path = stage / f"{name}.so" if name != "stock_fa2.so" else stage / name
+        path.write_bytes(payload)
+        binaries[name] = (
+            path,
+            hashlib.sha256(payload).hexdigest(),
+            len(payload),
+        )
+
+    stub_dir = tmp_path / "stub"
+    stub_dir.mkdir(parents=True)
+    (stub_dir / "fr13_fixed32_contract.py").write_text(
+        _STUB_CONTRACT.format(
+            image="0" * 64,
+            stock_sha=binaries["stock_fa2.so"][1],
+            stock_size=binaries["stock_fa2.so"][2],
+            split2_sha=binaries["split2"][1],
+            split2_size=binaries["split2"][2],
+            vis_sha=binaries["visibility"][1],
+            vis_size=binaries["visibility"][2],
+            pair_sha=binaries["gqa_pair"][1],
+            pair_size=binaries["gqa_pair"][2],
+        ),
+        encoding="utf-8",
+    )
+    script = tmp_path / "preflight.py"
+    script.write_text(_launcher_fa2_preflight_source(), encoding="utf-8")
+
+    fa2_path, fa2_sha, _ = binaries[candidate_name]
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(stub_dir)
+    env.update(arm_env)
+    return subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            str(stage),                     # repo
+            "stub-image@sha256:" + "0" * 64,  # image
+            str(fa2_path),                  # FORKED_FA2_SO
+            "TREE",
+            "SPEC",
+            "0",                            # qrow16 candidate
+            "",                             # qrow16 sha
+            "0",                            # qrow32 candidate
+            "",                             # qrow32 sha
+            "1",                            # qrow32 B1 candidate
+            fa2_sha,                        # declared B1 sha
+            "0",                            # qrow32 B4 candidate
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def test_launcher_preflight_pins_the_production_arm_not_the_live_arm(
+    tmp_path: Path,
+) -> None:
+    """A GQA-pair PRODUCTION launch has no live arm.
+
+    Keying the host-side binary-identity preflight on
+    FR13_FA2_QROW32_B1_LIVE_AB_ARM alone resolved the empty live arm to the
+    incumbent split2 pins, so the candidate .so was rejected with
+    "binary identity is not qualified" and the candidate arm of the timing
+    pair could never boot. This is the same arm-blind defect fixed in the
+    bash pin case, the patcher and the runtime contract.
+    """
+    result = _run_launcher_fa2_preflight(
+        tmp_path,
+        arm_env={
+            "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+        },
+        candidate_name="gqa_pair",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "not qualified" not in result.stderr
+
+
+def test_launcher_preflight_still_refuses_a_mismatched_binary(
+    tmp_path: Path,
+) -> None:
+    """The widened resolution must not become permissive."""
+    result = _run_launcher_fa2_preflight(
+        tmp_path,
+        arm_env={
+            "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+        },
+        candidate_name="split2",
+    )
+    assert result.returncode != 0
+    assert "B1 binary identity is not qualified" in result.stderr
+
+
+def test_launcher_preflight_keeps_the_live_arm_and_nosplit_resolutions(
+    tmp_path: Path,
+) -> None:
+    """The live arm still wins, and the empty/nosplit case is unchanged."""
+    # A live visibility gate resolves to the visibility binary even though a
+    # production arm is not set.
+    ok = _run_launcher_fa2_preflight(
+        tmp_path / "a",
+        arm_env={
+            "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "visibility",
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+        },
+        candidate_name="visibility",
+    )
+    assert ok.returncode == 0, ok.stderr
+
+    # The no-split production arm keeps the incumbent split2 identity.
+    nosplit = _run_launcher_fa2_preflight(
+        tmp_path / "b",
+        arm_env={
+            "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "nosplit",
+        },
+        candidate_name="split2",
+    )
+    assert nosplit.returncode == 0, nosplit.stderr
+
+    # A live arm and a production arm cannot disagree in practice, but if a
+    # caller set both the live arm must decide, because it decides the .so.
+    both = _run_launcher_fa2_preflight(
+        tmp_path / "c",
+        arm_env={
+            "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "visibility",
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+        },
+        candidate_name="visibility",
+    )
+    assert both.returncode == 0, both.stderr
+
+
+def test_launcher_exports_the_arm_variables_to_the_preflight() -> None:
+    """os.environ only sees exported variables."""
+    text = LAUNCHER.read_text(encoding="utf-8")
+    export_line = (
+        "export FR13_FA2_QROW32_B1_LIVE_AB_ARM "
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM"
+    )
+    assert export_line in text
+    assert text.index(export_line) < text.index(
+        'fixed32 qrow32 B1 binary identity is not qualified'
+    )
+
+
+def test_build_checklist_lists_every_gqa_pair_pin_site() -> None:
+    """A rebuild that follows the checklist must not leave a pin stale.
+
+    Each pinned site is a hard-fail comparison; this campaign has already
+    been burned by a rebuild that updated only some of them.
+    """
+    build = REPO / "scripts/fr13_build_fa2_qrow32_gqa_pair_b1_sm121a.sh"
+    checklist = build.read_text(encoding="utf-8")
+    pinned = subprocess.run(
+        [
+            "grep",
+            "-rl",
+            "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae",
+            str(REPO / "scripts"),
+        ],
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    for path in pinned:
+        name = Path(path).name
+        if name == build.name or Path(path).suffix not in (".sh", ".py"):
+            continue
+        assert name in checklist, f"{name} pins the candidate but is not in the checklist"
+
+
+def test_timing_runner_is_in_the_runtime_manifest() -> None:
+    """The manifest is this pair's provenance record; the runner is in it."""
+    manifest = (REPO / "scripts/fr13_runtime_manifest.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"scripts/fr13_run_b1_fa2_qrow32_gqa_pair_timing.sh",' in manifest
