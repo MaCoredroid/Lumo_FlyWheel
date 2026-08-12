@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Validate qrow32 B1 live gates and issue the no-split production credential."""
+"""Validate qrow32 B1 live gates and issue the no-split production credential.
+
+Issuing runs on the HOST, where git resolves the patcher's repository and HEAD.
+Verifying runs INSIDE the pinned runtime image, which ships no git binary, so
+``verify`` proves the patcher by digest instead -- see
+``validate_patch_source_digest``. Both directions are fail-closed; only the
+mechanism differs, because only the host has a repository to interrogate.
+"""
 
 from __future__ import annotations
 
@@ -22,6 +29,7 @@ SELECTOR_SENTINEL = 1179791668
 GQA_PAIR_SELECTOR_SENTINEL = 1179791670
 QROW16_REFERENCE_SENTINEL = 1179791667
 NUM_SPLITS = 0
+PATCH_SOURCE_RELATIVE = "scripts/fr13_patch_fa2_tree_bias.py"
 LIVE_ARMS = {
     ARM: {
         "selector_sentinel": SELECTOR_SENTINEL,
@@ -360,9 +368,48 @@ def validate_patch_source(
     if head != expected_source_commit:
         raise ValueError("patch source commit drifted")
     relative = patch_source.resolve().relative_to(repo.resolve()).as_posix()
-    if relative != "scripts/fr13_patch_fa2_tree_bias.py":
+    if relative != PATCH_SOURCE_RELATIVE:
         raise ValueError("patch source path drifted")
     return {"source_commit": head, "patch_source_sha256": sha256_file(patch_source)}
+
+
+def validate_patch_source_digest(
+    patch_source: Path,
+    *,
+    expected_source_commit: str,
+    expected_patch_source_sha256: str,
+) -> dict[str, str]:
+    """The git-free patch-source identity check, used to VERIFY a credential.
+
+    The pinned runtime image ships no git binary, so a credential cannot be
+    re-derived from the repository inside the container. It does not need to
+    be. ``issue`` already bound this credential on the host, where git proved
+    the patcher lives at the expected path of a repository whose HEAD is the
+    expected commit. What the container must establish is narrower and, for the
+    risk that matters, stricter: that the patcher bytes about to run ARE the
+    bytes that binding was made against. A digest proves exactly that, and it
+    proves it about the file rather than about a working tree that git would
+    have been asked to describe.
+
+    Fail-closed is preserved: the digest is supplied by the caller (the
+    launcher, which validated it against the host tree at issue time) AND is
+    cross-checked against the digest recorded in the credential body, so a
+    swapped patcher fails whether or not the credential was also swapped.
+    """
+    _regular(patch_source, "patch source")
+    expected_source_commit = _commit(expected_source_commit, "source commit")
+    expected_patch_source_sha256 = _sha256(
+        expected_patch_source_sha256, "patch source"
+    )
+    if patch_source.name != PATCH_SOURCE_RELATIVE.rsplit("/", 1)[-1]:
+        raise ValueError("patch source path drifted")
+    observed = sha256_file(patch_source)
+    if observed != expected_patch_source_sha256:
+        raise ValueError("patch source digest drifted")
+    return {
+        "source_commit": expected_source_commit,
+        "patch_source_sha256": observed,
+    }
 
 
 def _validate_comparison(value: Any, label: str) -> str:
@@ -551,11 +598,16 @@ def verify_sidecar(
     arm: str,
     patch_source: Path,
     expected_source_commit: str,
+    expected_patch_source_sha256: str,
 ) -> dict[str, Any]:
+    # Verification runs INSIDE the pinned runtime image, which has no git, so
+    # the patch source is proven by digest rather than by repository state.
     expected_sidecar_sha256 = _sha256(expected_sidecar_sha256, "pass sidecar")
     validate_candidate(candidate_so, expected_candidate_sha256)
-    patch = validate_patch_source(
-        patch_source, expected_source_commit=expected_source_commit
+    patch = validate_patch_source_digest(
+        patch_source,
+        expected_source_commit=expected_source_commit,
+        expected_patch_source_sha256=expected_patch_source_sha256,
     )
     payload, raw = load_json(sidecar_path)
     if _digest(raw) != expected_sidecar_sha256:
@@ -615,6 +667,11 @@ def main() -> int:
         else:
             command.add_argument("--sidecar", required=True, type=Path)
             command.add_argument("--expected-sidecar-sha256", required=True)
+            # Verification runs in the git-less runtime image; the launcher
+            # supplies the digest it validated against the host tree.
+            command.add_argument(
+                "--expected-patch-source-sha256", required=True
+            )
         command.add_argument("--candidate-so", required=True, type=Path)
         command.add_argument("--expected-candidate-sha256", required=True)
         command.add_argument("--arm", required=True, choices=(ARM,))
@@ -643,6 +700,7 @@ def main() -> int:
             arm=args.arm,
             patch_source=args.patch_source,
             expected_source_commit=args.expected_source_commit,
+            expected_patch_source_sha256=args.expected_patch_source_sha256,
         )
     print(json.dumps(result, ensure_ascii=True, sort_keys=True))
     return 0
