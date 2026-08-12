@@ -3004,9 +3004,9 @@ def _expected_runtime_fa2_identity(
             "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, "
             "visibility, or gqa_pair"
         )
-    if qrow32_b1_production not in {"", "nosplit"}:
+    if qrow32_b1_production not in {"", "nosplit", "gqa_pair"}:
         raise ContractError(
-            "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit"
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty, nosplit, or gqa_pair"
         )
     if qrow32_b1_live and qrow32_b1_production:
         raise ContractError(
@@ -3057,7 +3057,12 @@ def _expected_runtime_fa2_identity(
         return QROW32_B4_GQA_PAIR_FA2_SIZE, QROW32_B4_GQA_PAIR_FA2_SHA256
     if qrow32_b1_live or qrow32_b1_production:
         declared_sha256 = env.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
-        if qrow32_b1_live == "gqa_pair":
+        # Resolve the arm that decides which binary is loaded. A production
+        # launch has no live arm, so keying on the live arm alone would check
+        # a GQA-pair production run against the split2/incumbent pins and
+        # demand the wrong .so.
+        qrow32_b1_pin_arm = qrow32_b1_live or qrow32_b1_production
+        if qrow32_b1_pin_arm == "gqa_pair":
             if not QROW32_B1_GQA_PAIR_FA2_SHA256 or not QROW32_B1_GQA_PAIR_FA2_SIZE:
                 raise ContractError(
                     "qrow32 B1 GQA-pair binary is not pinned: fill "
@@ -3072,7 +3077,7 @@ def _expected_runtime_fa2_identity(
         else:
             expected = (
                 (QROW32_B1_VISIBILITY_FA2_SIZE, QROW32_B1_VISIBILITY_FA2_SHA256)
-                if qrow32_b1_live == "visibility"
+                if qrow32_b1_pin_arm == "visibility"
                 else (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256)
             )
         if declared_sha256 != expected[1]:

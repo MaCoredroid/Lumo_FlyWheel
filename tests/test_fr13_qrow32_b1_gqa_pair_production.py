@@ -625,6 +625,55 @@ def test_launcher_admits_gqa_pair_and_pins_it_to_its_own_binary() -> None:
     )
 
 
+def test_runtime_contract_resolves_the_production_arm_to_its_own_binary() -> None:
+    """The in-container contract must admit gqa_pair AND pin its binary.
+
+    It carried the same two defects the launcher did: the arm was rejected
+    outright, and the binary was resolved from the LIVE arm only, so a
+    production launch (which has no live arm) would have been required to
+    present the split2/incumbent .so.
+    """
+    # The contract imports its sibling topology module, so scripts/ must be
+    # importable before it loads.
+    sys.path.insert(0, str(REPO / "scripts"))
+    contract = _module(
+        REPO / "scripts/fr13_fixed32_contract.py", "b1_gqa_pair_contract"
+    )
+    env = {
+        "FR13_FA2_QROW16_LIVE_PAGED_AB": "0",
+        "FR13_FA2_QROW16_PRODUCTION": "0",
+        "FR13_FA2_QROW32_LIVE_PAGED_AB": "0",
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+        "FR13_FA2_QROW32_B1_SO_SHA256": contract.QROW32_B1_GQA_PAIR_FA2_SHA256,
+    }
+    assert contract._expected_runtime_fa2_identity(env) == (
+        contract.QROW32_B1_GQA_PAIR_FA2_SIZE,
+        contract.QROW32_B1_GQA_PAIR_FA2_SHA256,
+    )
+
+    # Presenting the incumbent binary to the GQA-pair production arm fails.
+    env["FR13_FA2_QROW32_B1_SO_SHA256"] = contract.QROW32_B1_SPLIT2_FA2_SHA256
+    with pytest.raises(contract.ContractError, match="not the pinned candidate"):
+        contract._expected_runtime_fa2_identity(env)
+
+    # The no-split production arm still resolves to the incumbent binary.
+    env["FR13_FA2_QROW32_B1_PRODUCTION_ARM"] = "nosplit"
+    assert contract._expected_runtime_fa2_identity(env) == (
+        contract.QROW32_B1_SPLIT2_FA2_SIZE,
+        contract.QROW32_B1_SPLIT2_FA2_SHA256,
+    )
+
+    # And the gate-only instruments are still refused as production arms.
+    for refused in ("split2", "visibility"):
+        env["FR13_FA2_QROW32_B1_PRODUCTION_ARM"] = refused
+        with pytest.raises(
+            contract.ContractError,
+            match="must be empty, nosplit, or gqa_pair",
+        ):
+            contract._expected_runtime_fa2_identity(env)
+
+
 def test_launcher_pairs_the_timing_arm_with_the_selector() -> None:
     text = LAUNCHER.read_text(encoding="utf-8")
     assert (
