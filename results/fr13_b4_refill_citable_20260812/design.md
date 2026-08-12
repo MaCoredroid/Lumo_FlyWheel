@@ -316,3 +316,31 @@ Changes:
 3. `scripts/fr13_b4_pool16_refill_gate.sh` — the campaign runner, structurally the
    formal gate runner with the pool16 binding.
 4. `tests/test_fr13_b4_pool16_refill_timing.py`.
+
+---
+
+## 6. LAUNCH RECORD
+
+Campaign root `output/fr13_b4_pool16_refill_gate_20260812T100655Z`, source commit
+f868c69e0, `PASSES=4`, launched detached with `setsid nohup`.
+
+Two false starts, both caught in under two minutes because the failures are fast and
+recorded rather than silent:
+
+1. **Missing launch assets.** `output/fr13_acceptance_ladder/prompts_swe4.json` and
+   `output/auto_research/` are required by the runtime and external manifest builders
+   but are not tracked, so a fresh sparse worktree does not have them. Copied from
+   `lumoFlyWheel-gdn-single-launch-20260812`. Side effect: this also fixed a baseline
+   test failure (`test_fixed32_runtime_manifest_includes_qwen_settings`).
+2. **The test suite boots vLLM containers.** The full pytest run was still going when
+   the campaign launched; a test started `lumo-flywheel-vllm:26.01-py3-v0.19.0` one
+   second before the arm's `docker ps not empty before boot` hygiene check, which
+   correctly refused to boot. **Never run the suite concurrently with a campaign
+   launch** -- the gate's own preflight checks Docker once, at the start, and cannot
+   see a container that appears later.
+
+Test state at launch: 155 failed / 3842 passed / 55 skipped, against a branch baseline
+of 156 failed / 3794 passed. **Zero new failures**, +48 from this rung's own tests, one
+baseline failure fixed. (`--ignore` of `test_codex_long_assets.py` per the standing rule
+and of `test_fr13_attn_kv_remap.py`, which needs Triton and cannot import on the host
+venv. The 155 are pre-existing environment failures, not regressions.)
