@@ -486,18 +486,58 @@ def test_the_exact4_contract_is_unchanged() -> None:
     assert payload["exact4_contrast"] is None
 
 
-def test_the_exact4_contrast_is_refused_when_the_stacks_differ() -> None:
+def test_the_exact4_contrast_is_refused_when_a_shipped_default_differs() -> None:
     reference = {
         "schema": "fr13.b4_formal_floor_gate.v1",
         "citable": True,
-        "measured_stack_state": {"FR13_MAMBA_SPEC_BLOCKS_CDIV": "0"},
+        "measured_stack_state": {
+            "FR13_B4_TASK_REFILL": "0",
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV": "0",
+        },
         "topologies": {},
     }
     contrast = reduce_mod.build_exact4_contrast(
-        {}, reference, {"FR13_MAMBA_SPEC_BLOCKS_CDIV": "1"}, POOL16
+        {},
+        reference,
+        {"FR13_B4_TASK_REFILL": "1", "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1"},
+        POOL16,
     )
     assert contrast["status"] == "refused"
-    assert "same stack state" in contrast["reason"]
+    assert "FR13_MAMBA_SPEC_BLOCKS_CDIV" in contrast["reason"]
+
+
+def test_the_contrast_is_not_refused_for_the_pin_that_must_differ() -> None:
+    """FR13_B4_TASK_REFILL differs BY CONSTRUCTION between the two classes.
+
+    Demanding whole-stack equality would make this contrast unsatisfiable and put
+    a sixth unsatisfiable precondition into the campaign.  Only the shipped-default
+    levers are compared; the pins are recorded as deliberately different.
+    """
+    reference = {
+        "citable": True,
+        "measured_stack_state": {
+            "FR13_B4_TASK_REFILL": "0",
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1",
+            "FR13_FULL_ATTN_KV_FP8": "0",
+        },
+        "topologies": {},
+    }
+    contrast = reduce_mod.build_exact4_contrast(
+        {},
+        reference,
+        {
+            "FR13_B4_TASK_REFILL": "1",
+            "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1",
+            "FR13_FULL_ATTN_KV_FP8": "0",
+        },
+        POOL16,
+    )
+    assert contrast["status"] == "evaluated"
+    assert "FR13_B4_TASK_REFILL" in contrast["deliberately_different_pins"]
+    assert contrast["shipped_default_levers_compared"] == {
+        "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1",
+        "FR13_FULL_ATTN_KV_FP8": "0",
+    }
 
 
 def test_the_exact4_contrast_is_refused_when_the_reference_is_not_citable() -> None:
@@ -509,7 +549,8 @@ def test_the_exact4_contrast_is_refused_when_the_reference_is_not_citable() -> N
 
 
 def test_the_exact4_contrast_is_descriptive_and_lists_its_confounds() -> None:
-    stack = {"FR13_B4_TASK_REFILL": "0", "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1"}
+    ref_stack = {"FR13_B4_TASK_REFILL": "0", "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1"}
+    pool_stack = {"FR13_B4_TASK_REFILL": "1", "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1"}
 
     def _topo(agg: float, per_request: float, events: float) -> dict:
         def _stat(point: float) -> dict:
@@ -527,10 +568,10 @@ def test_the_exact4_contrast_is_descriptive_and_lists_its_confounds() -> None:
     pool = {"hydra27_fixed32": _topo(41.0, 21.3, 1.93)}
     reference = {
         "citable": True,
-        "measured_stack_state": stack,
+        "measured_stack_state": ref_stack,
         "topologies": {"hydra27_fixed32": _topo(34.47, 21.20, 1.637)},
     }
-    contrast = reduce_mod.build_exact4_contrast(pool, reference, stack, POOL16)
+    contrast = reduce_mod.build_exact4_contrast(pool, reference, pool_stack, POOL16)
     assert contrast["status"] == "evaluated"
     assert contrast["role"] == "descriptive"
     assert len(contrast["confounds"]) >= 4
@@ -547,7 +588,8 @@ def test_the_exact4_contrast_is_descriptive_and_lists_its_confounds() -> None:
 
 def test_an_aggregate_gain_bought_with_a_per_request_regression_is_flagged() -> None:
     """3c6d663d6: +17.2% aggregate while every request got 3% slower."""
-    stack = {"FR13_B4_TASK_REFILL": "0"}
+    ref_stack = {"FR13_B4_TASK_REFILL": "0", "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1"}
+    pool_stack = {"FR13_B4_TASK_REFILL": "1", "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1"}
 
     def _stat(point: float, spread: float) -> dict:
         return {
@@ -569,10 +611,10 @@ def test_an_aggregate_gain_bought_with_a_per_request_regression_is_flagged() -> 
     pool = {"hydra27_fixed32": _topo(41.0, 17.0, 0.2)}
     reference = {
         "citable": True,
-        "measured_stack_state": stack,
+        "measured_stack_state": ref_stack,
         "topologies": {"hydra27_fixed32": _topo(34.47, 21.2, 0.2)},
     }
-    contrast = reduce_mod.build_exact4_contrast(pool, reference, stack, POOL16)
+    contrast = reduce_mod.build_exact4_contrast(pool, reference, pool_stack, POOL16)
     block = contrast["per_topology"]["hydra27_fixed32"]
     assert block["measured_tps_fullstep_wall"]["relative_change"] > 0
     assert block["per_request_non_regression"] is False

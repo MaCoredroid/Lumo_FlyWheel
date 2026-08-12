@@ -962,18 +962,45 @@ def build_exact4_contrast(
         record["reason"] = "the exact4 reference is not itself citable"
         return record
     reference_stack = reference.get("measured_stack_state")
-    if measured_stack is None or reference_stack != measured_stack:
+    # Compare only the SHIPPED-DEFAULT levers.  The classes' own contract pins are
+    # required to differ -- pool16 pins FR13_B4_TASK_REFILL=1 for its ledger and
+    # exact4 pins it 0 -- so demanding whole-dict equality would make this contrast
+    # unsatisfiable by construction, which is the exact fossil this campaign keeps
+    # digging up.  What must match is every lever whose value is a shipped default,
+    # because those are the ones that change what the engine does.
+    record["deliberately_different_pins"] = sorted(
+        set(RUN_CLASSES[run_class_name]["contract_pinned_stack"])
+        | set(RUN_CLASSES["exact4_formal_floor"]["contract_pinned_stack"])
+    )
+    if measured_stack is None or not isinstance(reference_stack, dict):
         record["status"] = "refused"
         record["reason"] = (
-            "the two campaigns did not measure the same stack state "
-            f"(pool16 {measured_stack!r} vs exact4 {reference_stack!r}); a "
-            "cross-campaign contrast is only meaningful at equal lever state"
+            "one of the campaigns has no single measured stack state to compare"
+        )
+        record["reference_measured_stack_state"] = reference_stack
+        return record
+    compared = {
+        lever: (measured_stack.get(lever), reference_stack.get(lever))
+        for lever in CANONICAL_DEFAULT_LEVERS
+    }
+    differing = sorted(k for k, (a, b) in compared.items() if a != b)
+    if differing:
+        record["status"] = "refused"
+        record["reason"] = (
+            "the two campaigns did not run the same shipped-default levers: "
+            + ", ".join(
+                f"{k}={compared[k][0]!r} vs {compared[k][1]!r}" for k in differing
+            )
+            + "; a cross-campaign contrast is only meaningful at equal lever state"
         )
         record["reference_measured_stack_state"] = reference_stack
         return record
 
     record["status"] = "evaluated"
     record["reference_measured_stack_state"] = reference_stack
+    record["shipped_default_levers_compared"] = {
+        lever: value for lever, (value, _) in compared.items()
+    }
     per_topology: dict[str, Any] = {}
     regressions: list[str] = []
     for mode, topo in topologies.items():
