@@ -5467,6 +5467,37 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         )
 
 
+# The B1 candidate is qualified for exactly one operating point: the final
+# fixed32 B1 FULL graph. Other tree-attention decodes the runtime is REQUIRED
+# to execute keep the stock dispatch. The one that matters at boot is vLLM's
+# memory-profiling warmup forward: with ENFORCE_EAGER=0 it runs before any
+# capture exists, so it is neither capturing nor eager. Raising there killed
+# engine-core init outright -- the legacy nosplit arm never hit it because it
+# only ever ran eager-pinned. These are declared bypasses, not fallbacks: they
+# are counted, reported in the engagement record, and cannot mask a missing
+# engagement, because the capture-end hook still fails the run unless all 16
+# target layers engaged the candidate in the FULL B1 graph.
+_FR13_FA2_QROW32_B1_BYPASS_COUNTS = {
+    "profile_capture": 0,
+    "outside_capture": 0,
+}
+
+
+def _fr13_fa2_qrow32_b1_bypass(arm, tree_bias, num_splits, reason):
+    """Serve a non-candidate operand at a non-qualified operating point."""
+    if reason not in _FR13_FA2_QROW32_B1_BYPASS_COUNTS:
+        raise RuntimeError("FR13 qrow32 B1 production bypass reason drifted")
+    _FR13_FA2_QROW32_B1_BYPASS_COUNTS[reason] += 1
+    return {
+        "arm": arm,
+        "candidate_served": False,
+        "bypass_reason": reason,
+        "profile_capture_bypass": reason == "profile_capture",
+        "tree_bias": tree_bias,
+        "num_splits": int(num_splits),
+    }
+
+
 def _fr13_fa2_qrow32_b1_production_begin(
     *, layer, query, key_cache, value_cache, cu_seqlens_q, max_seqlen_q,
     seqused_k, max_seqlen_k, causal, window_size, block_table, softcap,
@@ -5491,12 +5522,14 @@ def _fr13_fa2_qrow32_b1_production_begin(
         "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256", "pass sidecar"
     )
     if _fr13_fa2_qrow32_b1_profile_capture_active():
-        return {
-            "arm": arm, "candidate_served": False,
-            "profile_capture_bypass": True,
-            "tree_bias": _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias),
-            "num_splits": int(num_splits),
-        }
+        # Unchanged operand: the profile capture keeps serving the qrow16
+        # incumbent geometry it always served. Only the accounting is new.
+        return _fr13_fa2_qrow32_b1_bypass(
+            arm,
+            _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias),
+            num_splits,
+            "profile_capture",
+        )
     capturing = torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
     context = None
     if capturing:
@@ -5511,7 +5544,13 @@ def _fr13_fa2_qrow32_b1_production_begin(
         if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 1:
             raise RuntimeError("FR13 qrow32 B1 production is not final fixed32 B1")
     elif os.environ.get("ENFORCE_EAGER", "0") != "1":
-        raise RuntimeError("FR13 qrow32 B1 production ran outside capture or eager")
+        # vLLM's memory-profiling warmup forward runs at init, before any
+        # graph exists, so it is neither capturing nor eager. It must serve
+        # the UNTAGGED operand -- the candidate may only engage inside the
+        # final FULL B1 graph -- and raising here killed engine-core init.
+        return _fr13_fa2_qrow32_b1_bypass(
+            arm, tree_bias, num_splits, "outside_capture"
+        )
     geometry_mismatches = _fr13_fa2_qrow32_b1_geometry_mismatches(
         query=query, key_cache=key_cache, value_cache=value_cache,
         cu_seqlens_q=cu_seqlens_q, max_seqlen_q=max_seqlen_q,
@@ -5550,7 +5589,26 @@ def _fr13_fa2_qrow32_b1_production_end(selection, *, completed):
         return
     if not completed:
         return
-    if selection.get("profile_capture_bypass") is True:
+    reason = selection.get("bypass_reason")
+    if reason is not None:
+        if (
+            reason not in _FR13_FA2_QROW32_B1_BYPASS_COUNTS
+            or selection.get("candidate_served") is not False
+            or selection.get("arm") != arm
+        ):
+            raise RuntimeError("FR13 qrow32 B1 production bypass drifted")
+        # Sentinel-leak guard: a bypass must never have carried the retag,
+        # or the candidate would have engaged at an unqualified point while
+        # being accounted as stock.
+        bypass_bias = selection.get("tree_bias")
+        if (
+            bypass_bias is not None
+            and int(bypass_bias.stride(0))
+            == _FR13_FA2_QROW32_B1_ARMS[arm]["sentinel"]
+        ):
+            raise RuntimeError(
+                "FR13 qrow32 B1 production bypass carried the candidate sentinel"
+            )
         return
     if selection.get("candidate_served") is not True or selection.get("arm") != arm:
         raise RuntimeError("FR13 qrow32 B1 production did not serve selected arm")
@@ -5618,6 +5676,8 @@ def _fr13_fa2_qrow32_b1_production_record(
         "subset_sha256": _FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256,
         "draft_vocab_root": 1, "draft_vocab_k": 65536,
         "candidate_served": True, "fallback_allowed": False,
+        "candidate_scope": "final_fixed32_b1_full_graph_only",
+        "bypass_counts": dict(sorted(_FR13_FA2_QROW32_B1_BYPASS_COUNTS.items())),
         "dispatch": config["candidate_dispatch"],
     }
 

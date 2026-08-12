@@ -1086,3 +1086,193 @@ def test_timing_runner_is_in_the_runtime_manifest() -> None:
         encoding="utf-8"
     )
     assert '"scripts/fr13_run_b1_fa2_qrow32_gqa_pair_timing.sh",' in manifest
+
+
+# --------------------------------------------------------------------------
+# Bypass at the operating points the runtime visits before the B1 graph exists
+# --------------------------------------------------------------------------
+
+
+def test_boot_profile_forward_bypasses_instead_of_killing_engine_init(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """vLLM's memory-profiling warmup is neither capturing nor eager.
+
+    With ENFORCE_EAGER=0 it runs at init before any graph exists. Raising
+    there killed engine-core init on the candidate arm; the legacy nosplit
+    path never hit it because it only ever ran eager-pinned.
+    """
+    namespace, _gdn = _selector_namespace(monkeypatch)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    monkeypatch.delenv("ENFORCE_EAGER", raising=False)
+    geometry = _b1_geometry()
+    bias = geometry["tree_bias"]
+
+    selection = namespace["_fr13_fa2_qrow32_b1_production_begin"](
+        layer=types.SimpleNamespace(
+            layer_name=namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
+        ),
+        **geometry,
+    )
+
+    assert selection["candidate_served"] is False
+    assert selection["bypass_reason"] == "outside_capture"
+    # The UNTAGGED operand and the caller's num_splits: stock dispatch.
+    assert selection["tree_bias"] is bias
+    assert selection["num_splits"] == 0
+    namespace["_fr13_fa2_qrow32_b1_production_end"](selection, completed=True)
+    assert (
+        namespace["_FR13_FA2_QROW32_B1_BYPASS_COUNTS"]["outside_capture"] == 1
+    )
+    # Nothing engaged, so no graph was recorded.
+    assert namespace["_FR13_FA2_QROW32_B1_PRODUCTION_GRAPHS"] == {}
+
+
+def test_the_full_b1_capture_still_engages_the_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bypassing outside capture must not weaken the qualified point."""
+    namespace, gdn = _selector_namespace(monkeypatch)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: True)
+    gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
+        "descriptor": {"num_reqs": 1},
+        "graph_id": 31,
+    }
+
+    selection = namespace["_fr13_fa2_qrow32_b1_production_begin"](
+        layer=types.SimpleNamespace(
+            layer_name=namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
+        ),
+        **_b1_geometry(),
+    )
+
+    assert selection["candidate_served"] is True
+    assert selection.get("bypass_reason") is None
+    assert int(selection["tree_bias"].stride(0)) == GQA_PAIR_SENTINEL
+    namespace["_fr13_fa2_qrow32_b1_production_end"](selection, completed=True)
+
+
+def test_a_bypass_carrying_the_sentinel_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bypass accounted as stock must not have engaged the candidate."""
+    namespace, _gdn = _selector_namespace(monkeypatch)
+    leaked = namespace["_fr13_fa2_qrow32_b1_candidate_tree_bias"](
+        torch.zeros((32, 32), dtype=torch.float32), "gqa_pair"
+    )
+    assert int(leaked.stride(0)) == GQA_PAIR_SENTINEL
+
+    with pytest.raises(RuntimeError, match="carried the candidate sentinel"):
+        namespace["_fr13_fa2_qrow32_b1_production_end"](
+            {
+                "arm": "gqa_pair",
+                "candidate_served": False,
+                "bypass_reason": "outside_capture",
+                "tree_bias": leaked,
+                "num_splits": 0,
+            },
+            completed=True,
+        )
+
+
+def test_a_forged_bypass_selection_is_rejected_by_the_end_hook(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    namespace, _gdn = _selector_namespace(monkeypatch)
+    with pytest.raises(RuntimeError, match="bypass drifted"):
+        namespace["_fr13_fa2_qrow32_b1_production_end"](
+            {
+                "arm": "gqa_pair",
+                "candidate_served": True,
+                "bypass_reason": "outside_capture",
+            },
+            completed=True,
+        )
+    with pytest.raises(RuntimeError, match="bypass drifted"):
+        namespace["_fr13_fa2_qrow32_b1_production_end"](
+            {
+                "arm": "gqa_pair",
+                "candidate_served": False,
+                "bypass_reason": "invented_reason",
+            },
+            completed=True,
+        )
+
+
+def test_the_legacy_nosplit_arm_is_unaffected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """nosplit keeps its own sentinel when captured, and bypasses the same."""
+    namespace, gdn = _selector_namespace(monkeypatch, arm="nosplit")
+    nosplit_sentinel = namespace["_FR13_FA2_QROW32_B1_ARMS"]["nosplit"]["sentinel"]
+    assert nosplit_sentinel != GQA_PAIR_SENTINEL
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    monkeypatch.delenv("ENFORCE_EAGER", raising=False)
+    geometry = _b1_geometry()
+    bias = geometry["tree_bias"]
+    bypass = namespace["_fr13_fa2_qrow32_b1_production_begin"](
+        layer=types.SimpleNamespace(
+            layer_name=namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
+        ),
+        **geometry,
+    )
+    assert bypass["bypass_reason"] == "outside_capture"
+    assert bypass["tree_bias"] is bias
+    namespace["_fr13_fa2_qrow32_b1_production_end"](bypass, completed=True)
+
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: True)
+    gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
+        "descriptor": {"num_reqs": 1},
+        "graph_id": 41,
+    }
+    selection = namespace["_fr13_fa2_qrow32_b1_production_begin"](
+        layer=types.SimpleNamespace(
+            layer_name=namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"][0]
+        ),
+        **_b1_geometry(),
+    )
+    assert selection["candidate_served"] is True
+    assert int(selection["tree_bias"].stride(0)) == nosplit_sentinel
+    namespace["_fr13_fa2_qrow32_b1_production_end"](selection, completed=True)
+
+
+def test_the_engagement_record_reports_the_bypass_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bypasses are declared in the artifact, not hidden."""
+    namespace, _gdn = _selector_namespace(monkeypatch)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "is_current_stream_capturing", lambda: False)
+    monkeypatch.delenv("ENFORCE_EAGER", raising=False)
+    for layer_name in namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"]:
+        selection = namespace["_fr13_fa2_qrow32_b1_production_begin"](
+            layer=types.SimpleNamespace(layer_name=layer_name), **_b1_geometry()
+        )
+        namespace["_fr13_fa2_qrow32_b1_production_end"](selection, completed=True)
+
+    record = namespace["_fr13_fa2_qrow32_b1_production_record"](
+        arm="gqa_pair", runtime_mode="FULL", graph_id=51,
+        graph_signature="sig",
+        layers=sorted(namespace["_FR13_FA2_QROW32_B1_TARGET_LAYERS"]),
+        calls=16,
+    )
+
+    # One profiling pass over the 16 target layers; the live boot signature is
+    # two passes, i.e. outside_capture == 32.
+    assert record["bypass_counts"]["outside_capture"] == 16
+    assert record["candidate_scope"] == "final_fixed32_b1_full_graph_only"
+    assert record["candidate_served"] is True
+
+
+def test_the_helper_block_no_longer_aborts_outside_capture() -> None:
+    """The installed block is what runs in the container."""
+    patcher = _module(PATCHER, "qrow32_b1_bypass_helpers")
+    helpers = patcher.FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS
+    assert "FR13 qrow32 B1 production ran outside capture or eager" not in helpers
+    assert "_fr13_fa2_qrow32_b1_bypass(" in helpers
+    # The qualified point stays fail-closed.
+    assert "did not capture all target tree layers" in helpers
