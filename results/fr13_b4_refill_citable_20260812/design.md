@@ -408,3 +408,119 @@ on long turns.
 Verified directly against pass 0's preserved bytes: the real `{stop: 389, length: 1}`
 now reconciles, and injected `abort`/`error`/`repetition`, a short stop count, and a
 broken histogram all still refuse.
+
+---
+
+## 8. PASS 0 EXCLUDED IN-DRIVER, SALVAGED OFFLINE — AND TWO LATENT GATE DEFECTS
+
+Pass 0 served **both** arms cleanly (16/16 tasks each, manifests byte-equal, the
+completion-class fix held at finalization) and the driver still recorded `rc=2`.
+
+### Which world: salvageable. Proven, not assumed
+
+1. **Every artifact the reducer needs is present** for both arms: `arm_ended_at.txt`,
+   `container_env.txt`, `metrics_before/after_swe.txt`, the 66 MB / 49 MB work censuses,
+   16 post-brackets each, and both pool ledgers (depth 3.513 / 3.629 against the 3.2
+   floor; width 0.713 / 0.819 against 0.60).
+2. **Both reduce cleanly** with `--work-census`, offline, read-only.
+3. **The reducer decides inclusion from evidence, never from driver rc.** It reads
+   `deploy_speed_fullwall.json` — which `--finalize` *creates* — plus the container env,
+   the metrics brackets and the pool ledger. It never opens `fixed32_floor_gate.json` and
+   never looks at a pass's exit code.
+4. **The citable exact4 baseline was produced under exactly these conditions**: all five
+   of its passes recorded `NOT_EVALUATED_INVALID_INPUT` in-pass and `rc=2`, and the
+   campaign is `PASS`/`citable=true`.
+
+Running the real reducer over the live gate root returned both pass-0 arms
+`included=True` with `pool_ledger.status=pass`, and correctly skipped the still-serving
+pass-1 arm as `skipped_arm_still_serving`. **Decision: let the campaign keep serving; fix
+offline.** Zero GPU waste.
+
+The fixes could not be made in the running worktree: `fr13_floor_gate.py`,
+`fr13_measure.py`, `fr13_fixed32_contract.py`, the driver and the serve variant are all in
+the per-pass runtime-manifest closure, which the driver compares byte-for-byte at launch
+and at end and fails the pass on any change. Work was done in a separate worktree on
+`codex/fr13-fixed32-inpass-gate-20260812`.
+
+### Defect 1 — the in-pass floor gate has been dead since 2026-08-02
+
+`FIXED32_PRESEED` in `fr13_floor_gate.py` is a literal copy of the engine's preseed line.
+Commit **3b3351cf1** ("add fixed32 ordered GDN single launch") inserted `single_launch=0`
+into the emitted line (`fr10_gdn_tree_kernel.py:5514`) and never updated the needle. From
+that commit on, **every fixed32 in-pass floor gate has failed** — B1 and B4, exact4 and
+pool16 — with "expected exactly one current runtime needle".
+
+It went unnoticed because campaign verdicts come from the offline reducers. In the sealed
+exact4 gate it was masked one layer earlier by the closure-cardinality drift that
+f962c089f later fixed; with that gone, the stale needle is the only thing left. Fixed, and
+pinned at `single_launch=0` deliberately — the needle attests the runtime SHAPE, and
+promoting single-launch must update this line rather than be silently accepted.
+
+### Defect 2 — the 0.99 wall-retention floor is met by no B4 arm ever recorded
+
+With the needle fixed, the in-pass gate runs far deeper and stops at
+`MIN_RETAINED_WALL_FRACTION = 0.99`. Measured `wall_steps / forward_steps`:
+
+| | retained | unbracketed | chain resets | cap rejections |
+|---|---|---|---|---|
+| pool16 tail23 pass0 | 0.9106 | 839 | **839** | 0 |
+| pool16 hydra27 pass0 | 0.9062 | 649 | **649** | 0 |
+| exact4 sealed arms (12) | 0.9363 – 0.9870 | 121–344 | identical | 0 |
+
+`unbracketed == n_wall_chain_resets` **exactly**, in every arm of both campaigns, with
+`n_wall_rejected = 0` throughout. The mechanism is complete: a wall chain measures
+start-to-start between consecutive decode steps and resets whenever the served request set
+changes, so the first step after each reset carries no wall sample. Continuous admission
+resets the chain more often — which is the class's own subject matter.
+
+**This floor is NOT changed.** No arm in either campaign has ever met it, so tuning it to
+admit pool16 data would be exactly the basis-laundering this rung must not do. It is
+reported as found and left for whoever owns the wall-chain instrumentation.
+
+### Is the aggregate flattered by the retention gap?
+
+Directly testable, because the sidecar records draft counts for both populations:
+
+| | events/step, all steps | events/step, bracketed only | selectivity |
+|---|---|---|---|
+| pool16 tail23 | 3.0040 | 3.0021 | **−0.06%** |
+| pool16 hydra27 | 3.0384 | 3.0343 | **−0.14%** |
+| exact4 sealed arms | — | — | −1.19% … −2.37% |
+
+On the occupancy axis pool16's retention is **an order of magnitude less selective than
+the citable baseline's**, and in the same direction. The contrast is not flattered by it.
+What cannot be measured is whether the first step after a reset is slower in *wall* terms,
+because those steps have no wall sample by construction — so the class now publishes
+`retained_wall_fraction` per arm and states that `step_wall_ms` (wall-bracketed steps) and
+`events_per_step` (all census steps) do not share one basis.
+
+### Also fixed
+
+`fr13_b4_campaign_driver.sh::reduce` now passes `--work-census` when the arm wrote one.
+That is why every pool16 in-pass reduce died at `fr13_measure.py:1744`: the envelope keeps
+no independent per-task check, so the census is mandatory for a staggered topology. The
+in-pass artifact becomes census-gated for nested arms too — strictly better than the
+ungated one it replaced — and an absent census leaves behaviour unchanged.
+
+### Pass 0's numbers (ONE pass, not citable)
+
+| | pool16 pass0 | exact4 ON gate (4 passes, sealed) |
+|---|---|---|
+| Tail23 events/step | **3.004** | 1.529 |
+| Hydra27 events/step | **3.038** | 1.637 |
+| Tail23 aggregate TPS | **48.42** | 33.85 |
+| Hydra27 aggregate TPS | **50.46** | 34.47 |
+| Tail23 per-request TPS | 16.12 | 22.38 |
+| Hydra27 per-request TPS | 16.61 | 21.20 |
+| step wall | 364.6 / 360.2 ms | 271.7 / 279.8 ms |
+| prefill share | 0.172 / 0.189 | 0.308 / 0.290 |
+| APC hit | 0.911 / 0.901 | 0.898 / 0.912 |
+
+events/step roughly **doubles** and aggregate rises ~43–46%, but per-request service drops
+~22–28% and the step wall rises ~29–34%. That is the 3c6d663d6 shape, at a scale the
+exact4 campaign never reached: the batch is genuinely fuller (census batch-width 4 on
+3676/9385 steps against 2408/11390 in the 2026-08-09 diagnostic), each step carries ~3
+events instead of ~1.6, and a wider step costs more wall. **The class's
+`per_request_non_regression` verdict will read FALSE**, and that is the honest headline:
+this is a throughput/latency trade, not a free win. One pass proves nothing on its own —
+four are needed for the pinned critical.

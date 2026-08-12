@@ -672,3 +672,88 @@ def test_the_exact4_reference_is_optional_and_never_gates_citability() -> None:
     text = GATE_RUNNER.read_text(encoding="utf-8")
     assert "does NOT affect citability" in text
     assert "EXACT4_REFERENCE=\"\"" in text  # cleared, not fatal, when absent
+
+
+# --------------------------------------------------------------------------- #
+# 8. the in-pass gate and the wall-bracket basis                               #
+# --------------------------------------------------------------------------- #
+def test_the_preseed_needle_matches_what_the_engine_actually_prints() -> None:
+    """3b3351cf1 added single_launch= to the emitted line and never updated the
+    needle, silently disabling every fixed32 in-pass floor gate since 2026-08-02."""
+    gate = _load("fr13_floor_gate_needle", "scripts/fr13_floor_gate.py")
+    emitter = (
+        ROOT / "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"
+    ).read_text(encoding="utf-8")
+    assert "single_launch={int(fixed32_single_launch is not None)} " in emitter
+    assert "single_launch=0 route_armed=1 selfcheck_armed=0" in gate.FIXED32_PRESEED
+    # the needle must be a prefix-exact rendering of the f-string's literal parts
+    for literal in ("[FR13_SUBTREE_PARALLEL] preseeded: n=", "schedule=", "levels=",
+                    "lens=", "critical=", "(monolith ", "single_launch=",
+                    "route_armed=", "selfcheck_armed="):
+        assert literal in emitter
+        assert literal.split("{")[0] in gate.FIXED32_PRESEED
+
+
+def test_the_driver_passes_the_work_census_when_the_arm_wrote_one() -> None:
+    """A STAGGERED arm cannot be reduced without it -- fr13_measure.py:1744."""
+    driver = (SCRIPTS / "fr13_b4_campaign_driver.sh").read_text(encoding="utf-8")
+    assert "--work-census" in driver
+    assert "fr13_fixed32_work_census.jsonl" in driver
+    assert "NO work census" in driver  # absent census stays ungated, not fatal
+
+
+def test_wall_retention_is_reported_on_every_arm(tmp_path: Path) -> None:
+    arm = _arm(tmp_path, name="hydra27_fixed32_pool0", staggered=True, tasks=16)
+    _write_pool_ledger(arm)
+    record = reduce_mod.reduce_pass_arm(
+        arm,
+        mode="hydra27_fixed32",
+        pass_index=0,
+        floor_order="TH",
+        expected={"FR13_B4_TASK_REFILL": "1", "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1"},
+        run_class=reduce_mod.RUN_CLASSES[POOL16],
+    )
+    assert record["included"] is True, record["exclusion_reason"]
+    retention = record["wall_retention"]
+    assert retention is not None
+    assert 0.0 < retention["retained_wall_fraction"] <= 1.0
+    assert "wall-chain reset" in retention["basis_note"]
+
+
+def test_the_class_discloses_the_in_pass_gate_and_the_wall_basis() -> None:
+    text = " ".join(reduce_mod.RUN_CLASSES[POOL16]["does_not_claim"])
+    assert "in-pass fr13_floor_gate.py vouched" in text
+    assert "citable exact4 ON gate included" in text
+    assert "share one basis" in text
+    assert "retained_wall_fraction" in text
+
+
+def test_the_in_pass_gate_verdict_is_recorded_but_never_gates(tmp_path: Path) -> None:
+    """It has never reached a verdict in this generation; hiding that would let a
+    reader assume provenance the arm does not have."""
+    pass_dir = tmp_path / "pass_00"
+    arm = _arm(pass_dir, name="hydra27_fixed32_pool0", staggered=True, tasks=16)
+    _write_pool_ledger(arm)
+    _arm(pass_dir, name="tail6_fixed32_pool0", staggered=True, tasks=16)
+    _write_pool_ledger(pass_dir / "tail6_fixed32_pool0")
+    (pass_dir / "floor_order.txt").write_text("TH\n", encoding="utf-8")
+    (pass_dir / "fixed32_floor_gate.json").write_text(
+        json.dumps(
+            {
+                "gate_verdict": "NOT_EVALUATED_INVALID_INPUT",
+                "analysis_valid": False,
+                "error": "retained wall fraction 0.910602 is below 0.990000",
+            }
+        ),
+        encoding="utf-8",
+    )
+    found = reduce_mod.discover_passes(
+        tmp_path,
+        {"FR13_B4_TASK_REFILL": "1", "FR13_MAMBA_SPEC_BLOCKS_CDIV": "1"},
+        reduce_mod.RUN_CLASSES[POOL16],
+    )
+    record = found["hydra27_fixed32"][0]
+    assert record["in_pass_floor_gate"]["gate_verdict"] == "NOT_EVALUATED_INVALID_INPUT"
+    assert record["in_pass_floor_gate"]["role"] == "reported_never_gated"
+    # ...and it did NOT gate: the arm is still included on its own evidence.
+    assert record["included"] is True, record["exclusion_reason"]

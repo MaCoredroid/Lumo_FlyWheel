@@ -333,6 +333,17 @@ RUN_CLASSES: dict[str, dict[str, Any]] = {
             "that FR13_B4_TASK_REFILL=1 produced the number: the flag is the "
             "admission LEDGER, not a schedule lever (see read_pool_ledger). The "
             "schedule change under test is the pool size",
+            "that the driver's in-pass fr13_floor_gate.py vouched for any arm: it "
+            "has not reached a verdict for ANY fixed32 campaign in this generation, "
+            "the citable exact4 ON gate included. Its per-pass verdict is recorded "
+            "under in_pass_floor_gate so the gap is visible rather than assumed away",
+            "that step_wall_ms and events_per_step share one basis: the wall mean is "
+            "over wall-bracketed steps, the event rate over all census steps. "
+            "retained_wall_fraction reports the gap per arm (pass_00: 0.911 tail / "
+            "0.906 hydra, every unbracketed step a wall-chain reset, zero cap "
+            "rejections). Measured selectivity on the occupancy axis is -0.06%/-0.14% "
+            "for pool16 against -1.19%..-2.37% for the exact4 reference arms, so the "
+            "contrast is not flattered by it -- but it is not zero and is published",
         ),
     },
 }
@@ -658,6 +669,32 @@ def reduce_pass_arm(
                 "exactly the artifact the alignment study invalidated"
             )
 
+        # --- wall-bracket retention -----------------------------------------
+        # step_wall_ms is measured over steps the WALL CHAIN bracketed, while
+        # events_per_step comes from the census over EVERY forward step. The two
+        # bases differ whenever the chain resets, and the chain resets on every
+        # request-set change -- which is exactly what continuous admission does.
+        # Measured on pass_00: unbracketed steps == wall_chain_resets exactly
+        # (839 tail / 649 hydra), zero cap rejections. So this is reported on
+        # every arm rather than left for a reader to discover.
+        census_steps = census_gate.get("census_steps")
+        wall_steps = speed.get("wall_steps_measured")
+        wall_retention = None
+        if isinstance(census_steps, (int, float)) and census_steps and isinstance(
+            wall_steps, (int, float)
+        ):
+            wall_retention = {
+                "wall_steps_measured": float(wall_steps),
+                "census_forward_steps": float(census_steps),
+                "retained_wall_fraction": float(wall_steps) / float(census_steps),
+                "basis_note": (
+                    "step_wall_ms is a mean over wall-bracketed steps; "
+                    "events_per_step is over all census steps. The unbracketed "
+                    "steps are the first step after each wall-chain reset, and a "
+                    "chain resets when the served request set changes."
+                ),
+            }
+
         # --- rate identities -------------------------------------------------
         breakdown = phase_breakdown(speed, arm_dir.name)
 
@@ -683,6 +720,7 @@ def reduce_pass_arm(
                 "included": True,
                 "deploy_speed_path": str(speed_path),
                 "pool_ledger": pool_ledger,
+                "wall_retention": wall_retention,
                 "bracket": {
                     "topology": topology,
                     "closing_task": bracket.get("closing_task"),
@@ -914,6 +952,16 @@ def reduce_topology(
         out[key] = (
             cluster_interval(values) if len(values) == len(included) and values else None
         )
+    retention = [
+        float(p["wall_retention"]["retained_wall_fraction"])
+        for p in included
+        if p.get("wall_retention")
+    ]
+    out["retained_wall_fraction"] = (
+        cluster_interval(retention)
+        if len(retention) == len(included) and retention
+        else None
+    )
     return out
 
 
@@ -1219,6 +1267,27 @@ def discover_passes(
             if order_path.is_file()
             else None
         )
+        # The driver's IN-PASS fr13_floor_gate.py verdict. RECORDED, NEVER GATED --
+        # and recorded precisely because it does not pass. It has not evaluated for
+        # any fixed32 campaign in this generation, including the citable exact4 ON
+        # gate (output/fr13_b4_formal_floor_gate_20260811T041931Z: PASS/citable=true
+        # with all five passes NOT_EVALUATED_INVALID_INPUT in-pass and rc=2). Both
+        # campaign verdicts therefore rest on the offline reducers reading arm
+        # evidence. Surfacing it here stops a reader assuming the in-pass gate
+        # vouched for an arm when it never ran to a verdict.
+        in_pass = pass_dir / "fixed32_floor_gate.json"
+        in_pass_gate: dict[str, Any] | None = None
+        if in_pass.is_file() and not in_pass.is_symlink():
+            try:
+                payload = exact_json(in_pass, label="in-pass floor gate")
+                in_pass_gate = {
+                    "gate_verdict": payload.get("gate_verdict"),
+                    "analysis_valid": payload.get("analysis_valid"),
+                    "error": payload.get("error"),
+                    "role": "reported_never_gated",
+                }
+            except B4GateError:
+                in_pass_gate = {"gate_verdict": "UNREADABLE", "role": "reported_never_gated"}
         for mode in TOPOLOGIES:
             for arm_dir in sorted(pass_dir.glob(f"{mode}_*")):
                 if arm_dir.is_dir() and not arm_dir.is_symlink():
@@ -1232,6 +1301,7 @@ def discover_passes(
                             run_class=run_class,
                         )
                     )
+                    found[mode][-1]["in_pass_floor_gate"] = in_pass_gate
     return found
 
 
