@@ -4886,6 +4886,11 @@ _FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS = (
 _FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256 = (
     "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
 )
+# The arms that may serve REAL traffic. "visibility" and "split2" are gate-only
+# instruments -- they exist to observe or to vary reduction topology, and
+# neither was ever byte-qualified as a served dispatch -- so admitting them here
+# would let a diagnostic build answer production requests.
+_FR13_FA2_QROW32_B1_PRODUCTION_ARMS = ("nosplit", "gqa_pair")
 _FR13_FA2_QROW32_B1_LIVE_GRAPHS = {}
 _FR13_FA2_QROW32_B1_LIVE_ATTEMPTED = False
 _FR13_FA2_QROW32_B1_PRODUCTION_GRAPHS = {}
@@ -4901,8 +4906,11 @@ def _fr13_fa2_qrow32_b1_arm(env_name):
     if not arm:
         return None
     if env_name == "FR13_FA2_QROW32_B1_PRODUCTION_ARM":
-        if arm != "nosplit":
-            raise RuntimeError(f"{env_name} must be empty or nosplit; got {arm!r}")
+        if arm not in _FR13_FA2_QROW32_B1_PRODUCTION_ARMS:
+            raise RuntimeError(
+                f"{env_name} must be empty or one of "
+                f"{', '.join(_FR13_FA2_QROW32_B1_PRODUCTION_ARMS)}; got {arm!r}"
+            )
     elif env_name == "FR13_FA2_QROW32_B1_LIVE_AB_ARM":
         if arm not in _FR13_FA2_QROW32_B1_ARMS:
             raise RuntimeError(
@@ -5122,6 +5130,24 @@ def _fr13_fa2_qrow32_b1_exact_geometry(**geometry):
 
 
 def _fr13_fa2_qrow32_b1_candidate_tree_bias(tree_bias, arm):
+    """Retag the operand so the forked FA2 dispatch selects this arm's kernel.
+
+    The tag IS the batch stride: flash_api gates on
+    params.tree_bias_batch_stride == the arm's sentinel, so a mask laid out with
+    that stride -- and only such a mask -- reaches the candidate kernel.
+
+    At B1 this is a pure metadata retag (as_strided), NOT the B4 sibling's
+    empty_strided+copy_. That divergence is deliberate and load-bearing twice
+    over. Correctness: batch is 1, so stride(0) is never dereferenced and the
+    view addresses exactly the same 1024 floats the untagged mask did -- whereas
+    B4 must materialize because its sentinel stride really is used to index
+    batches 1..3, which would read far out of bounds. Measurement: this path is
+    about to be timed, and a copy would add 16 extra device-to-device kernels
+    per step to the candidate arm alone, manufacturing an arm asymmetry in the
+    very quantity under test. as_strided is also the exact construction the
+    sealed byte gate qualified, so production serves the operand that was
+    proven rather than a re-derived equivalent.
+    """
     config = _FR13_FA2_QROW32_B1_ARMS[arm]
     base = tree_bias[0] if tree_bias.ndim == 3 else tree_bias
     if base.dtype != torch.float32 or tuple(base.shape) != (32, 32):
@@ -5135,6 +5161,10 @@ def _fr13_fa2_qrow32_b1_candidate_tree_bias(tree_bias, arm):
     )
     if int(tagged.stride(0)) != config["sentinel"]:
         raise RuntimeError("FR13 qrow32 B1 selector tag was not preserved")
+    # Pin the zero-copy property the timing claim rests on: the tagged operand
+    # must alias the incumbent's bytes, not a duplicate of them.
+    if tagged.data_ptr() != base.data_ptr():
+        raise RuntimeError("FR13 qrow32 B1 selector retag copied the operand")
     return tagged
 
 
@@ -5449,8 +5479,13 @@ def _fr13_fa2_qrow32_b1_production_begin(
         raise RuntimeError("FR13 qrow32 B1 production has no launcher attestation")
     _fr13_fa2_qrow32_b1_require_k64()
     task_ids = _fr13_fa2_qrow32_b1_require_exact4()
+    # Bind the identity of THIS arm's binary. Each production arm ships in its
+    # own .so with its own source closure, so an arm-blind check would let the
+    # GQA-pair selector run against the no-split binary (whose dispatch has no
+    # GQA-pair gate at all, so the sentinel would be silently ignored and the
+    # run would time the incumbent kernel while claiming the candidate).
     candidate_digest, source_commit, patch_source_digest = (
-        _fr13_fa2_qrow32_b1_require_identity()
+        _fr13_fa2_qrow32_b1_require_identity(arm)
     )
     pass_digest = _fr13_fa2_qrow32_b1_digest(
         "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256", "pass sidecar"
@@ -5557,6 +5592,8 @@ def _fr13_fa2_qrow32_b1_production_record(
     *, arm, runtime_mode, graph_id, graph_signature, layers, calls,
 ):
     config = _FR13_FA2_QROW32_B1_ARMS[arm]
+    # Report the identity of the arm that actually ran, not the incumbent's.
+    identity = _fr13_fa2_qrow32_b1_identity(arm)
     return {
         "schema": "fr13.fixed32.fa2_qrow32_b1_production_engagement.v2",
         "status": "ENGAGED", "runtime_mode": runtime_mode,
@@ -5567,11 +5604,9 @@ def _fr13_fa2_qrow32_b1_production_record(
         "graph_id": graph_id, "graph_signature": graph_signature,
         "layers": layers, "layer_count": len(layers), "calls_observed": calls,
         "candidate_so_sha256": os.environ["FR13_FA2_QROW32_B1_SO_SHA256"],
-        "candidate_so_size": _FR13_FA2_QROW32_B1_CANDIDATE_SIZE,
-        "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
-        "fa2_source_closure_sha256": (
-            _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256
-        ),
+        "candidate_so_size": identity["candidate_size"],
+        "fa2_head": identity["fa2_head"],
+        "fa2_source_closure_sha256": identity["source_closure_sha256"],
         "source_commit": os.environ["FR13_FA2_QROW32_B1_SOURCE_COMMIT"],
         "patch_source_sha256": os.environ[
             "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256"
@@ -5583,7 +5618,7 @@ def _fr13_fa2_qrow32_b1_production_record(
         "subset_sha256": _FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256,
         "draft_vocab_root": 1, "draft_vocab_k": 65536,
         "candidate_served": True, "fallback_allowed": False,
-        "dispatch": f"qrow32 B1 {arm} exact geometry; no fallback",
+        "dispatch": config["candidate_dispatch"],
     }
 
 
