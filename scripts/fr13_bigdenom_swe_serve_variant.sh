@@ -2523,10 +2523,31 @@ fi
 AGENT_ARGS=()
 if [[ "$OFFLOAD_AGENT" == "1" ]]; then
   echo "[offload] OFFLOAD_AGENT=1 — proxy+agent on $OFFLOAD_HOST, GB10 stays vLLM-only"
-  if ! ssh -o BatchMode=yes -o ConnectTimeout=15 "$OFFLOAD_HOST" \
-        "curl -fsS -m 6 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo ok" \
-        2>/dev/null | grep -q ok; then
-    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_AGENT=0 to fall back)"
+  # This preflight used to be a single probe, which made an arm's whole boot
+  # hostage to one packet: the leading edge of the 2026-08-11 alienware outage
+  # killed an arm over a link that was serving again seconds later. Retry a
+  # bounded number of times (~60s total), logging each attempt so the link's
+  # state at boot stays on the record, then fail closed exactly as before.
+  # This buys tolerance for a transient blip, NOT for a down link -- a link that
+  # is still unreachable after the window is refused, same message, same rc.
+  OFFLOAD_PREFLIGHT_ATTEMPTS="${OFFLOAD_PREFLIGHT_ATTEMPTS:-3}"
+  OFFLOAD_PREFLIGHT_SLEEP_S="${OFFLOAD_PREFLIGHT_SLEEP_S:-25}"
+  offload_preflight_ok=0
+  for (( offload_attempt=1; offload_attempt<=OFFLOAD_PREFLIGHT_ATTEMPTS; offload_attempt++ )); do
+    if ssh -o BatchMode=yes -o ConnectTimeout=15 "$OFFLOAD_HOST" \
+          "curl -fsS -m 6 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo ok" \
+          2>/dev/null | grep -q ok; then
+      offload_preflight_ok=1
+      echo "[offload] preflight attempt $offload_attempt/$OFFLOAD_PREFLIGHT_ATTEMPTS: link OK"
+      break
+    fi
+    echo "[offload] preflight attempt $offload_attempt/$OFFLOAD_PREFLIGHT_ATTEMPTS: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health"
+    if (( offload_attempt < OFFLOAD_PREFLIGHT_ATTEMPTS )); then
+      sleep "$OFFLOAD_PREFLIGHT_SLEEP_S"
+    fi
+  done
+  if [[ "$offload_preflight_ok" != "1" ]]; then
+    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_AGENT=0 to fall back) after $OFFLOAD_PREFLIGHT_ATTEMPTS attempts"
     exit 5
   fi
   echo "[offload] alienware -> GB10 vLLM $GB10_TS_IP:$PORT/health OK"
