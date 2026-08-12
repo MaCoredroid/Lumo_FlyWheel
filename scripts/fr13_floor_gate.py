@@ -5420,7 +5420,7 @@ def runtime_closure_cardinality(
     ``fr13_runtime_manifest`` owns what the fixed32 runtime closure contains, so
     it also owns how many files that is.  Restating those counts as literals here
     made the per-pass gate unsatisfiable rather than strict: the pin read 62/25
-    while the profile had already grown to 90/26 and then to 150/30, so a pass
+    while the profile had already grown to 90/26 and then to 151/30, so a pass
     over a perfectly healthy closure still exited rc=2.  The 25 was worse than
     stale -- it contradicted the builder's own ``package_file_count``, which the
     builder itself validates, so no tree whatsoever could satisfy both.

@@ -3426,7 +3426,7 @@ def test_runtime_closure_cardinality_follows_the_shipped_fixed32_profile() -> No
     """The shipped cardinality is derived from the profile, never transcribed.
 
     The literals this replaced (62 files / 25 Python package files) went stale
-    twice -- the profile grew to 90/26 and then to 150/30 -- and because the gate
+    twice -- the profile grew to 90/26 and then to 151/30 -- and because the gate
     demanded the stale numbers, every fixed32 pass exited rc=2 on a closure that
     was perfectly healthy.  Recompute independently here so a future closure
     change fails this test instead of a campaign.
