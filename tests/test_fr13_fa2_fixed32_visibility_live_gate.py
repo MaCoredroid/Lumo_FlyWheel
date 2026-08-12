@@ -41,8 +41,15 @@ def test_visibility_arms_are_explicit_and_incumbent_defaults_are_unchanged() -> 
     assert 'candidate_arm == "visibility" and fixed32_mode != "hydra27_fixed32"' in patcher
     assert '""|qrow32|gqa_pair|visibility)' in launcher
     assert '""|nosplit|split2|visibility|gqa_pair)' in launcher
-    assert '""|nosplit) ;;' in launcher
-    assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit" in launcher
+    # The B1 production selector now also admits the byte-qualified gqa_pair
+    # arm. What this test guards is that VISIBILITY is not admitted with it:
+    # it is a gate-only instrument and must never answer production traffic.
+    assert '""|nosplit|gqa_pair) ;;' in launcher
+    assert '""|visibility) ;;' not in launcher
+    assert (
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty, nosplit, or gqa_pair"
+        in launcher
+    )
     assert 'LIVE_AB_ARM=${FR13_QROW32_LIVE_AB_ARM:-qrow32}' in b4_runner
     assert 'LIVE_ARM=${FR13_QROW32_B1_LIVE_ARM:-split2}' in b1_runner
     assert 'FR13_FA2_QROW32_B1_PRODUCTION_ARM= \\' in b1_runner
