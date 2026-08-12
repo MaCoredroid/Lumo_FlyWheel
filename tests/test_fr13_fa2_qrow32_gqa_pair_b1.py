@@ -350,16 +350,33 @@ def test_b1_gqa_pair_arm_is_selectable_and_pinned_to_the_built_binary(
         assert other["candidate_size"] != identity["candidate_size"]
 
 
-def test_b1_gqa_pair_stays_out_of_the_b1_production_selector(
+def test_b1_gqa_pair_is_a_production_arm_but_the_instruments_are_not(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """gqa_pair is now servable; split2 and visibility must never be.
+
+    This test previously asserted gqa_pair was refused here. It is admitted as
+    of the production selector work: the arm is byte-qualified as a SERVED
+    dispatch. split2 and visibility are not -- one varies reduction topology,
+    the other only observes -- so they stay refused even though both are
+    registered arms.
+    """
     module = _patcher()
     namespace: dict[str, object] = {"os": os}
     exec(module.FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS, namespace)
 
     monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "gqa_pair")
-    with pytest.raises(RuntimeError, match="must be empty or nosplit"):
+    assert (
         namespace["_fr13_fa2_qrow32_b1_arm"]("FR13_FA2_QROW32_B1_PRODUCTION_ARM")
+        == "gqa_pair"
+    )
+
+    for refused in ("split2", "visibility"):
+        monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", refused)
+        with pytest.raises(RuntimeError, match="must be empty or one of"):
+            namespace["_fr13_fa2_qrow32_b1_arm"](
+                "FR13_FA2_QROW32_B1_PRODUCTION_ARM"
+            )
 
 
 # ------------------------------------------------------------- gate defs
@@ -462,8 +479,10 @@ def test_b1_gqa_pair_is_admitted_by_the_runtime_contract_and_launcher() -> None:
         "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, "
         "visibility, or gqa_pair" in launcher
     )
-    # Production remains no-split only.
-    assert '""|nosplit) ;;' in launcher
+    # Production admits the byte-qualified GQA-pair arm alongside no-split,
+    # and each arm is pinned to its own binary via the resolved pin arm.
+    assert '""|nosplit|gqa_pair) ;;' in launcher
+    assert 'case "$_FR13_FA2_QROW32_B1_PIN_ARM" in' in launcher
 
 
 # ---------------------------------------------------------- build recipe

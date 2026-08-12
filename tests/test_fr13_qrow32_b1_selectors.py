@@ -228,7 +228,9 @@ def test_nosplit_live_call_uses_hidden_sentinel_and_zero_splits(
         "FR13_FA2_QROW32_B1_PRODUCTION_ARM"
     ) == "nosplit"
     monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "split2")
-    with pytest.raises(RuntimeError, match="must be empty or nosplit"):
+    # split2 is a registered arm but a gate-only instrument, so it stays
+    # refused as a PRODUCTION arm even now that gqa_pair is admitted.
+    with pytest.raises(RuntimeError, match="must be empty or one of nosplit, gqa_pair"):
         namespace["_fr13_fa2_qrow32_b1_arm"](
             "FR13_FA2_QROW32_B1_PRODUCTION_ARM"
         )
@@ -705,7 +707,10 @@ def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:
         "visibility, or gqa_pair"
         in text
     )
-    assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit" in text
+    assert (
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty, nosplit, or gqa_pair"
+        in text
+    )
     assert "FR13 qrow32 B1 live gate requires the canonical K64/root1 real task" in text
     assert '"${FR13_FIXED32_MODE:-}" == "hydra27_fixed32"' in text
     assert '"${ENFORCE_EAGER:-0}" == "0"' in text
@@ -1012,10 +1017,16 @@ def test_launcher_hands_the_patcher_digest_to_in_container_verify() -> None:
     `sha256sum scripts/fr13_patch_fa2_tree_bias.py`.
     """
     launcher = LAUNCHER.read_text(encoding="utf-8")
+    # The subcommand is now selected per arm (verify / verify-gqa-pair), so
+    # anchor on the invocation rather than on a literal subcommand.
     verify_block = launcher[
-        launcher.index("fr13_qrow32_b1_pass_sidecar.py verify") :
+        launcher.index(
+            'fr13_qrow32_b1_pass_sidecar.py "\\$_fr13_b1_verify_command"'
+        ) :
     ]
     verify_block = verify_block[: verify_block.index("INTERNAL_ATTESTED=1")]
+    # Both arms go through this one call site, so the digest covers both.
+    assert "_fr13_b1_verify_command=verify-gqa-pair" in launcher
     assert (
         '--expected-patch-source-sha256 "\\$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256"'
         in verify_block
