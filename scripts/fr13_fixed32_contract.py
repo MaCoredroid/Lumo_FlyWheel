@@ -1021,6 +1021,99 @@ def _fixed32_qwen_metric_labels(
     return ",".join(fields)
 
 
+# --------------------------------------------------------------------------- #
+# engine completion classes                                                    #
+# --------------------------------------------------------------------------- #
+# Every completed logical model request terminates in exactly one vLLM
+# finished_reason, and the algebra needs a category for each one that
+# LEGITIMATELY occurs.  Until 2026-08-12 it had only one, "stop", and pinned the
+# other four at zero.
+#
+#   stop    the model emitted its stop condition.  The overwhelming majority.
+#
+#   length  the model reached its max_tokens cap (32768 visible / 20000
+#           compaction) and its response was truncated.  LEGAL AND ACCOUNTED,
+#           not tolerated: the engine served the request to completion, the
+#           decode work is fully counted in generation_tokens and in the step
+#           wall, and the request occupies its histogram bucket exactly like any
+#           other (max_tokens_count / le_50000 / le_inf / max_tokens_sum all
+#           reconcile to the digit).  What the agent received was a truncated
+#           assistant message -- an ordinary outcome of real agent traffic on
+#           long turns, not a defect and not a measurement error.
+#
+#   abort / error / repetition  DEFECTS.  Still pinned at zero.  An aborted or
+#           errored request means the engine did not serve what was asked, and a
+#           repetition stop means vLLM's degenerate-output detector fired.  None
+#           of those may appear in evidence-grade traffic.
+#
+# WHY THIS ONLY SURFACED NOW.  The class is rare, so it is a function of scale.
+# An exact4 arm serves roughly 100 logical requests; the first 16-task pool arm
+# served 390 and produced exactly one length termination (in
+# astropy__astropy-14369, the last-closing bracket).  The 4-task campaigns the
+# algebra was validated on never drew one.  The count is published in the metric
+# evidence so a reader can see how much truncated traffic a campaign contained
+# rather than having it silently absorbed into a "non_stop" bucket.
+QWEN_TERMINAL_COMPLETION_REASONS = ("stop", "length")
+QWEN_FORBIDDEN_COMPLETION_REASONS = ("abort", "error", "repetition")
+
+
+def _fixed32_qwen_completion_classes(
+    deltas: dict[str, int],
+    *,
+    completed: int,
+    scope: str,
+) -> dict[str, int]:
+    """Split completed engine requests into terminal classes, or fail loud.
+
+    One implementation for both the single-task and the campaign-union path:
+    they had the identical clause and drifting them apart is how a class ends up
+    legal in one and forbidden in the other.
+
+    Every failure names the measured numbers.  A gate that only says "do not
+    reconcile" makes the next run guess -- which is exactly what the first
+    pool16 pass had to do.
+    """
+    counts = {
+        reason: deltas[f"request_success_{reason}"]
+        for reason in QWEN_TERMINAL_COMPLETION_REASONS
+    }
+    forbidden = {
+        reason: deltas[f"request_success_{reason}"]
+        for reason in QWEN_FORBIDDEN_COMPLETION_REASONS
+        if deltas[f"request_success_{reason}"] != 0
+    }
+    if forbidden:
+        raise ContractError(
+            f"fixed32 qwen {scope} engine completion metrics do not reconcile: "
+            "forbidden completion reasons present ("
+            + ", ".join(f"{k}={v}" for k, v in sorted(forbidden.items()))
+            + "); abort/error/repetition mean the engine did not serve what was "
+            "asked and may never appear in evidence-grade traffic"
+        )
+    terminal_total = sum(counts.values())
+    histogram = {
+        key: deltas[key]
+        for key in ("max_tokens_count", "max_tokens_le_inf", "max_tokens_le_50000")
+    }
+    mismatched = {k: v for k, v in histogram.items() if v != completed}
+    if mismatched or terminal_total != completed:
+        raise ContractError(
+            f"fixed32 qwen {scope} engine completion metrics do not reconcile: "
+            f"completed={completed} but "
+            + ", ".join(
+                f"{reason}={counts[reason]}"
+                for reason in QWEN_TERMINAL_COMPLETION_REASONS
+            )
+            + f" (terminal total {terminal_total})"
+            + (
+                "; histogram " + ", ".join(f"{k}={v}" for k, v in sorted(mismatched.items()))
+                if mismatched
+                else ""
+            )
+        )
+    return counts
+
+
 def _fixed32_qwen_metric_snapshot(
     raw: bytes,
     *,
@@ -1157,19 +1250,9 @@ def _fixed32_qwen_compaction_metric_evidence(
         deltas[key] = after[key] - before[key]
 
     completed = expected_completed_logical_model_requests
-    if (
-        deltas["max_tokens_count"] != completed
-        or deltas["max_tokens_le_inf"] != completed
-        or deltas["max_tokens_le_50000"] != completed
-        or deltas["request_success_stop"] != completed
-        or any(
-            deltas[f"request_success_{reason}"] != 0
-            for reason in ("length", "abort", "error", "repetition")
-        )
-    ):
-        raise ContractError(
-            "fixed32 qwen engine completion metrics do not reconcile"
-        )
+    completion_classes = _fixed32_qwen_completion_classes(
+        deltas, completed=completed, scope="task"
+    )
     if deltas["max_tokens_le_10000"] != 0:
         raise ContractError(
             "fixed32 qwen max-token histogram has an unpinned low request"
@@ -1284,11 +1367,14 @@ def _fixed32_qwen_compaction_metric_evidence(
         "max_tokens_le_20000": deltas["max_tokens_le_20000"],
         "max_tokens_le_50000": deltas["max_tokens_le_50000"],
         "max_tokens_le_inf": deltas["max_tokens_le_inf"],
-        "request_success_stop": deltas["request_success_stop"],
-        "request_success_non_stop": sum(
-            deltas[f"request_success_{reason}"]
-            for reason in ("length", "abort", "error", "repetition")
-        ),
+        "request_success_stop": completion_classes["stop"],
+        # Truncated-at-max_tokens completions, counted rather than absorbed.
+        # Published so a reader can see how much of a campaign's traffic ran to
+        # its output cap; forbidden reasons are proven zero by
+        # _fixed32_qwen_completion_classes, so this IS the whole non-stop
+        # remainder and request_success_non_stop stays exact.
+        "request_success_length": completion_classes["length"],
+        "request_success_non_stop": completion_classes["length"],
         "prompt_tokens": deltas["prompt_tokens"],
         "generation_tokens": deltas["generation_tokens"],
         "visible_prompt_tokens": visible_input,
@@ -2594,19 +2680,9 @@ def validate_fixed32_qwen_campaign_metrics(
     total_compactions = (
         successful_compaction_total + failed_compaction_total
     )
-    if (
-        deltas["max_tokens_count"] != completed_total
-        or deltas["max_tokens_le_inf"] != completed_total
-        or deltas["max_tokens_le_50000"] != completed_total
-        or deltas["request_success_stop"] != completed_total
-        or any(
-            deltas[f"request_success_{reason}"] != 0
-            for reason in ("length", "abort", "error", "repetition")
-        )
-    ):
-        raise ContractError(
-            "fixed32 qwen campaign engine completion metrics do not reconcile"
-        )
+    completion_classes = _fixed32_qwen_completion_classes(
+        deltas, completed=completed_total, scope="campaign"
+    )
     if deltas["max_tokens_le_10000"] != 0:
         raise ContractError(
             "fixed32 qwen campaign max-token histogram has an unpinned low request"
@@ -2650,11 +2726,14 @@ def validate_fixed32_qwen_campaign_metrics(
         "max_tokens_le_20000": deltas["max_tokens_le_20000"],
         "max_tokens_le_50000": deltas["max_tokens_le_50000"],
         "max_tokens_le_inf": deltas["max_tokens_le_inf"],
-        "request_success_stop": deltas["request_success_stop"],
-        "request_success_non_stop": sum(
-            deltas[f"request_success_{reason}"]
-            for reason in ("length", "abort", "error", "repetition")
-        ),
+        "request_success_stop": completion_classes["stop"],
+        # Truncated-at-max_tokens completions, counted rather than absorbed.
+        # Published so a reader can see how much of a campaign's traffic ran to
+        # its output cap; forbidden reasons are proven zero by
+        # _fixed32_qwen_completion_classes, so this IS the whole non-stop
+        # remainder and request_success_non_stop stays exact.
+        "request_success_length": completion_classes["length"],
+        "request_success_non_stop": completion_classes["length"],
         "prompt_tokens": deltas["prompt_tokens"],
         "generation_tokens": deltas["generation_tokens"],
         "visible_prompt_tokens": visible_prompt_total,

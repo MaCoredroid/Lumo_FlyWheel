@@ -344,3 +344,67 @@ of 156 failed / 3794 passed. **Zero new failures**, +48 from this rung's own tes
 baseline failure fixed. (`--ignore` of `test_codex_long_assets.py` per the standing rule
 and of `test_fr13_attn_kv_remap.py`, which needs Triton and cannot import on the host
 venv. The 155 are pre-existing environment failures, not regressions.)
+
+---
+
+## 7. PASS 0 ABORTED — THE CAMPAIGN ALGEBRA HAD NO CATEGORY FOR A LEGAL OUTCOME
+
+Pass 0's Tail23 arm served cleanly for **5202 s (87 min)**, completed all 16 tasks,
+and posted a perfect engagement record (`drafts delta=29445, draft_tokens/drafts=31.0`).
+It then failed at `_finalize_fixed32_qwen_campaign_provenance`
+(`run_swe_bench_q36_a.py:9145`) with *"fixed32 qwen campaign engine completion metrics
+do not reconcile"*. The traffic-audit error that followed (missing
+`runner_metadata.json`) is downstream noise: finalization aborts before publishing, so
+only `runner_metadata.pending.json` exists.
+
+The run was stopped after pass 0 rather than allowed to repeat the failure three more
+times (~15 GPU-h saved). Pass 1 was 3 minutes into serving and was torn down
+evidence-first (`pass_01/_aborted_evidence/`).
+
+### The divergence, computed from both sides offline
+
+| | |
+|---|---|
+| engine `max_tokens_count` / `le_50000` / `le_inf` | 390 / 390 / 390 |
+| engine `request_success_stop` | **389** |
+| engine `request_success_length` | **1** |
+| engine `abort` / `error` / `repetition` | 0 / 0 / 0 |
+| trace-side completions (16 tasks) | 386 |
+| `max_tokens_le_20000` (failed compactions) | 4 |
+| ⇒ `completed_total` | 386 + 4 = **390** |
+| `max_tokens_sum` | 12 728 448 = 386·32768 + 4·20000 **exactly** |
+
+**Every term reconciles except one.** The campaign algebra pinned
+`request_success_stop == completed_total` and all four other finished reasons to zero.
+Exactly one of 390 requests terminated on `length` — it hit its 32768-token output cap
+and was truncated. Attributed to **`astropy__astropy-14369`**, the last-closing bracket
+(its post snapshot is the only one recording the `length`, and its `stop` post-count 389
+is the campaign total, with the next-highest at 388).
+
+**Why it only appeared now: scale.** An exact4 arm serves ~100 logical requests; this
+arm served 390. The 4-task campaigns the algebra was validated on never drew one. It is
+not a 16-task bug — it is a rare-class bug that 4-task campaigns cannot reach.
+
+### The fix: a category, not a tolerance
+
+A `length` termination is a **legal, accounted** outcome. The engine served the request
+to completion; the decode work is fully counted in `generation_tokens` and in the step
+wall; the request occupies its histogram bucket exactly like any other. What the agent
+received was a truncated assistant message — an ordinary outcome of real agent traffic
+on long turns.
+
+- New `QWEN_TERMINAL_COMPLETION_REASONS = ("stop", "length")`; the identity becomes
+  `stop + length == completed_total`.
+- `abort` / `error` / `repetition` stay **pinned at zero** — those mean the engine did
+  not serve what was asked, or vLLM's degenerate-output detector fired.
+- `request_success_length` is **published** in both metric-evidence records, so a reader
+  sees how much truncated traffic a campaign contained instead of it being absorbed into
+  an opaque `non_stop` bucket. Legality does not depend on the count; every truncated
+  request is counted.
+- One shared helper `_fixed32_qwen_completion_classes` for the single-task and
+  campaign-union paths, which carried the identical clause. Every failure now names the
+  measured numbers — the first pool16 pass had to guess.
+
+Verified directly against pass 0's preserved bytes: the real `{stop: 389, length: 1}`
+now reconciles, and injected `abort`/`error`/`repetition`, a short stop count, and a
+broken histogram all still refuse.
