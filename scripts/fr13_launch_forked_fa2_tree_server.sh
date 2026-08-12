@@ -245,6 +245,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:nosplit" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:split2" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:visibility" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:gqa_pair" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:nosplit" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B4_TIMING_ARM]}" == "set:stock_dispatch" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B4_TIMING_ARM]}" == "set:gqa_pair" \
@@ -1694,23 +1695,40 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
     echo "FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance" >&2
     exit 2
   }
-  if [[ "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" == "visibility" ]]; then
-    [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79" \
-       && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300200192" \
-       && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
-       && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "a30eca031cd5067133e6278527787c5987635670930e5840ac983f66b088e4fc" ]] || {
-      echo "FR13 qrow32 B1 visibility binary/source provenance drifted" >&2
-      exit 2
-    }
-  else
-    [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a" \
-       && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300154616" \
-       && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
-       && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff" ]] || {
-      echo "FR13 qrow32 B1 incumbent candidate provenance drifted" >&2
-      exit 2
-    }
-  fi
+  # Each B1 arm carries its own binary + source-closure pins. The empty live arm
+  # (the nosplit production selector) keeps the incumbent pins, so it stays on
+  # the default branch.
+  case "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" in
+    visibility)
+      [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79" \
+         && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300200192" \
+         && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
+         && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "a30eca031cd5067133e6278527787c5987635670930e5840ac983f66b088e4fc" ]] || {
+        echo "FR13 qrow32 B1 visibility binary/source provenance drifted" >&2
+        exit 2
+      }
+      ;;
+    gqa_pair)
+      # The GQA-pair B1 unit is one translation unit derived from the
+      # byte-qualified B4 sibling, so its closure digest is its own.
+      [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae" \
+         && "$FR13_FA2_QROW32_B1_SO_SIZE" == "299815552" \
+         && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
+         && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4" ]] || {
+        echo "FR13 qrow32 B1 GQA-pair binary/source provenance drifted" >&2
+        exit 2
+      }
+      ;;
+    *)
+      [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a" \
+         && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300154616" \
+         && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
+         && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff" ]] || {
+        echo "FR13 qrow32 B1 incumbent candidate provenance drifted" >&2
+        exit 2
+      }
+      ;;
+  esac
 fi
 if [[ -n "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]]; then
   [[ "$FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID" == "astropy__astropy-12907" \
@@ -3425,18 +3443,29 @@ elif qrow32_b4_candidate == "1":
 elif qrow32_b1_candidate == "1":
     if actual_sha256 != qrow32_b1_sha256:
         raise SystemExit("fixed32 qrow32 B1 candidate FA2 sha256 mismatch")
-    visibility = os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM") == "visibility"
-    expected_sha256, expected_size = (
-        (
+    # Every B1 arm has its own qualified binary; the empty live arm is the
+    # nosplit production selector and keeps the incumbent identity.
+    b1_live_arm = os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
+    expected_sha256, expected_size = {
+        "visibility": (
             contract.QROW32_B1_VISIBILITY_FA2_SHA256,
             contract.QROW32_B1_VISIBILITY_FA2_SIZE,
-        )
-        if visibility
-        else (
+        ),
+        "gqa_pair": (
+            contract.QROW32_B1_GQA_PAIR_FA2_SHA256,
+            contract.QROW32_B1_GQA_PAIR_FA2_SIZE,
+        ),
+    }.get(
+        b1_live_arm,
+        (
             contract.QROW32_B1_SPLIT2_FA2_SHA256,
             contract.QROW32_B1_SPLIT2_FA2_SIZE,
-        )
+        ),
     )
+    if not expected_sha256 or not expected_size:
+        raise SystemExit(
+            f"fixed32 qrow32 B1 arm {b1_live_arm!r} has no pinned binary identity"
+        )
     if actual_sha256 != expected_sha256 or fa2.stat().st_size != expected_size:
         raise SystemExit("fixed32 qrow32 B1 binary identity is not qualified")
 else:
