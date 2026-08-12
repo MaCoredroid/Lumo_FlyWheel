@@ -92,6 +92,8 @@ from fr13_fixed32_work_census import (  # noqa: E402
 from fr13_runtime_manifest import (  # noqa: E402
     ManifestError as RuntimeManifestError,
 )
+from fr13_runtime_manifest import PROFILES as RUNTIME_MANIFEST_PROFILES  # noqa: E402
+from fr13_runtime_manifest import ProfileSpec as RuntimeManifestProfileSpec  # noqa: E402
 from fr13_runtime_manifest import build_manifest as build_runtime_manifest  # noqa: E402
 
 
@@ -5408,6 +5410,52 @@ def validate_external_fingerprint(runroot: Path) -> dict[str, Any]:
     }
 
 
+def runtime_closure_cardinality(
+    spec: RuntimeManifestProfileSpec | None = None,
+    *,
+    sequence: str = RUNTIME_MANIFEST_SEQUENCE,
+) -> tuple[int, int]:
+    """Derive (file_count, python_package_file_count) from the manifest profile.
+
+    ``fr13_runtime_manifest`` owns what the fixed32 runtime closure contains, so
+    it also owns how many files that is.  Restating those counts as literals here
+    made the per-pass gate unsatisfiable rather than strict: the pin read 62/25
+    while the profile had already grown to 90/26 and then to 150/30, so a pass
+    over a perfectly healthy closure still exited rc=2.  The 25 was worse than
+    stale -- it contradicted the builder's own ``package_file_count``, which the
+    builder itself validates, so no tree whatsoever could satisfy both.
+
+    Deriving loses no strictness.  The closure is already rebuilt and compared
+    against the campaign manifest byte-for-byte above; a closure that silently
+    changed size is refused there, on content, not on a number transcribed into a
+    second file that drifts every time the closure legitimately grows.
+
+    The arithmetic mirrors ``build_manifest``'s ``closure_paths`` exactly,
+    including that the sequence joins ``host_script_source``.
+    """
+    if spec is None:
+        try:
+            spec = RUNTIME_MANIFEST_PROFILES[RUNTIME_MANIFEST_PROFILE]
+        except KeyError as error:
+            raise GateError(
+                f"unknown runtime manifest profile: {RUNTIME_MANIFEST_PROFILE}"
+            ) from error
+    package_file_count = len(spec.python_package_source)
+    if package_file_count != spec.package_file_count:
+        raise GateError(
+            "runtime manifest profile is self-inconsistent: "
+            f"{package_file_count} Python package files declared as "
+            f"{spec.package_file_count}"
+        )
+    sections = (
+        (*spec.host_script_source, sequence),
+        spec.python_package_source,
+        spec.runtime_data_and_config,
+        spec.verdict_tools,
+    )
+    return sum(len(paths) for paths in sections), package_file_count
+
+
 def validate_source_fingerprint(repo: Path, runroot: Path) -> dict[str, Any]:
     at_launch = runroot / "runtime_manifest.at_launch.json"
     at_end = runroot / "runtime_manifest.at_end.json"
@@ -5428,12 +5476,17 @@ def validate_source_fingerprint(repo: Path, runroot: Path) -> dict[str, Any]:
             f"{runroot}: current runtime closure does not match the campaign manifest"
         )
     summary = launch.get("summary")
+    expected_file_count, expected_package_file_count = runtime_closure_cardinality()
     if (
         not isinstance(summary, dict)
-        or summary.get("file_count") != 62
-        or summary.get("python_package_file_count") != 25
+        or summary.get("file_count") != expected_file_count
+        or summary.get("python_package_file_count") != expected_package_file_count
     ):
-        raise GateError(f"{at_launch}: runtime closure cardinality is not pinned")
+        raise GateError(
+            f"{at_launch}: runtime closure cardinality is not pinned "
+            f"(expected {expected_file_count} files / "
+            f"{expected_package_file_count} Python package files)"
+        )
     return {
         "at_launch": str(at_launch),
         "at_end": str(at_end),
@@ -10402,8 +10455,16 @@ def self_test(repo: Path) -> None:
         assert b1["gates"]["fixed32_scope_limitations_explicit"]
         assert b1["external_artifact_fingerprint"]["byte_equal"]
         assert b1["matched_runtime_attestation"]["byte_equal"]
-        assert b1["source_runtime_fingerprint"]["file_count"] == 62
-        assert b1["source_runtime_fingerprint"]["python_package_file_count"] == 25
+        self_test_file_count, self_test_package_file_count = (
+            runtime_closure_cardinality()
+        )
+        assert (
+            b1["source_runtime_fingerprint"]["file_count"] == self_test_file_count
+        )
+        assert (
+            b1["source_runtime_fingerprint"]["python_package_file_count"]
+            == self_test_package_file_count
+        )
         tail_metric_brackets = b1["arms"]["tail6_fixed32"]["provenance"][
             "task_metric_brackets"
         ]
