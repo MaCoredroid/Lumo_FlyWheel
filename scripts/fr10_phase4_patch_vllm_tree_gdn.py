@@ -201,6 +201,15 @@ _FR13_MAMBA_SPEC_BLOCKS_CDIV = os.environ.get(
 _FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS = os.environ.get(
     "FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS", "0"
 ).strip()
+# FR13 host-residual rung. All three are read ONCE, here at patch time (pid 1,
+# where the FR13_* master env exists), and baked as literals into the injected
+# source: the mp/spawn EngineCore worker's curated env drops bare masters, so
+# an os.environ read in the worker would silently disarm the arm.
+_FR13_HOST_TAIL_NVTX = os.environ.get("FR13_HOST_TAIL_NVTX", "0").strip()
+_FR13_HOST_TAIL_DEFER = os.environ.get("FR13_HOST_TAIL_DEFER", "0").strip()
+_FR13_HOST_TAIL_PREP_BAKE = os.environ.get(
+    "FR13_HOST_TAIL_PREP_BAKE", "0"
+).strip()
 _FR13_FIXED32_SFWD_CONV_POSTPREP_SOURCE_PATHS = (
     "scripts/fr10_phase4_patch_vllm_tree_gdn.py",
     "scripts/fr13_b1_composed_stack_gate.py",
@@ -22012,6 +22021,55 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
             "                _fr10_depth_offsets = np.array(\n",
             1,
         )
+        if _fr13_host_tail_flags()["prep_bake"]:
+            # FR13_HOST_TAIL_PREP_BAKE. Under fixed32 the two statements above
+            # are already tautologies: _fr10_tree_src was just replaced with
+            # the baked _FR13_FIXED32_TREE_SOURCE literal, so the sort and the
+            # topology assertion can only ever produce _FR13_FIXED32_CHOICES.
+            # The derivation is a pure function of a compile-time constant and
+            # costs a measured 242 us/step at the deployed 31 paths
+            # (scripts/fr13_host_tail_cost_probe.py, GB10 p50) -- ~7% of the
+            # 3.458 ms/step post-DFWD host-tail idle. Replace it with the
+            # literals it can only produce. Fresh list / fresh np.ndarray on
+            # every call, so nothing cached is aliased across steps.
+            from lumo_flywheel_serving.fr13_host_tail_prep import (
+                baked_plan_source,
+                derive_tree_depth_plan,
+            )
+
+            plan = derive_tree_depth_plan(_FR13_FIXED32_TREE_SOURCE)
+            if plan["choices"] != tuple(
+                tuple(choice) for choice in _FR13_FIXED32_CHOICES
+            ):
+                raise RuntimeError(
+                    "FR13_HOST_TAIL_PREP_BAKE: the plan derived from "
+                    "_FR13_FIXED32_TREE_SOURCE does not reproduce "
+                    "_FR13_FIXED32_CHOICES. The bake replaces the runtime "
+                    "topology assertion, so it may only be emitted when the "
+                    "assertion it removes is provably vacuous."
+                )
+            start_marker = "                _fr10_choices = sorted(\n"
+            end_marker = (
+                "                _fr10_tree_n = int(len(_fr10_depth_offsets))\n"
+            )
+            if inject.count(start_marker) != 1 or inject.count(end_marker) != 1:
+                raise RuntimeError(
+                    "FR13_HOST_TAIL_PREP_BAKE: depth-position derivation span "
+                    f"markers {inject.count(start_marker)}/"
+                    f"{inject.count(end_marker)} != 1/1"
+                )
+            span_start = inject.index(start_marker)
+            span_end = inject.index(end_marker)
+            if span_start >= span_end:
+                raise RuntimeError(
+                    "FR13_HOST_TAIL_PREP_BAKE: depth-position derivation span "
+                    "markers are out of order"
+                )
+            inject = (
+                inject[:span_start]
+                + baked_plan_source(_FR13_FIXED32_TREE_SOURCE, " " * 16)
+                + inject[span_end:]
+            )
     if anchor not in text:
         raise RuntimeError("gpu_model_runner slot-mapping position anchor not found")
     text = text.replace(anchor, inject, 1)
@@ -24067,6 +24125,63 @@ def _fr13_assert_fixed32_conv_commit_batched_slots_requires_fixed32() -> None:
         enabled=_fr13_fixed32_conv_commit_batched_slots(),
         fixed32_mode=_FR13_FIXED32_MODE or None,
     )
+
+
+def _fr13_host_tail_flags() -> dict:
+    """FR13 host-residual rung flags: strict 0/1, all DEFAULT-OFF.
+
+    Resolution and validation happen exactly once, at patch time, and the
+    resolved booleans are baked into the injected source. Parsing is strict:
+    ``FR13_HOST_TAIL_NVTX=true`` raises rather than serving as stock.
+
+    * ``FR13_HOST_TAIL_NVTX``  -- tail sub-ranges for the offline reduction.
+    * ``FR13_HOST_TAIL_DEFER`` -- census seal onto the retire thread.
+    * ``FR13_HOST_TAIL_PREP_BAKE`` -- bake the fixed32 tree depth-position
+      plan instead of re-deriving it every step (measured 242 us/step at the
+      deployed 31 paths; scripts/fr13_host_tail_cost_probe.py).
+
+    All three are fixed32-only. NVTX and DEFER already no-op outside fixed32
+    (``_fr13_fixed32_nvtx_enabled`` gates on ``_FR13_FIXED32_MODE`` and the
+    seal only exists on the fixed32 route), so arming them outside fixed32 is
+    a silent no-op arm -- which is the failure mode the campaign has shipped
+    before. PREP_BAKE is not merely inert outside fixed32, it is *wrong*; see
+    ``assert_host_tail_prep_requires_fixed32``.
+    """
+    from lumo_flywheel_serving.fr13_host_tail_prep import (
+        assert_host_tail_prep_requires_fixed32,
+        strict_flag,
+    )
+
+    nvtx = strict_flag(_FR13_HOST_TAIL_NVTX, "FR13_HOST_TAIL_NVTX")
+    defer = strict_flag(_FR13_HOST_TAIL_DEFER, "FR13_HOST_TAIL_DEFER")
+    bake = strict_flag(_FR13_HOST_TAIL_PREP_BAKE, "FR13_HOST_TAIL_PREP_BAKE")
+    assert_host_tail_prep_requires_fixed32(bake, _FR13_FIXED32_MODE)
+    for name, value in (
+        ("FR13_HOST_TAIL_NVTX", nvtx),
+        ("FR13_HOST_TAIL_DEFER", defer),
+    ):
+        if value and not _FR13_FIXED32_MODE:
+            raise RuntimeError(
+                f"{name}=1 requires fixed32 to be armed but FR13_FIXED32_MODE "
+                f"is {_FR13_FIXED32_MODE!r}. Outside fixed32 the machinery it "
+                "arms is unreachable -- the NVTX helpers gate on "
+                "_FR13_FIXED32_MODE and the deferred seal only runs on the "
+                "fixed32 drafter route -- so the arm would report as armed and "
+                "serve as stock, which is exactly the failure this preflight "
+                "exists to prevent. Set FR13_FIXED32_MODE (one of "
+                f"{sorted(_FR13_FIXED32_MODES)}) or unset {name}."
+            )
+    return {"nvtx": nvtx, "defer": defer, "prep_bake": bake}
+
+
+def _fr13_assert_host_tail_flags() -> None:
+    """main() preflight: resolve and validate the host-tail flags.
+
+    Also asserted at each patch site, but every one of those sites
+    early-returns on an already-patched image, so this is the copy that always
+    runs. An arm that cannot arm must die here, not serve as stock.
+    """
+    _fr13_host_tail_flags()
 
 
 def _patch_mamba_abstract_spec_blocks_cdiv() -> bool:
@@ -34927,18 +35042,26 @@ def _patch_gpu_model_runner_host_tail() -> bool:
             "(which installs the NVTX module block) must run BEFORE this patch."
         )
 
-    module_block = '''
+    flags = _fr13_host_tail_flags()
+    module_block = f'''
 
 # FR13_HOST_TAIL: post-DFWD tail attribution and retire-side deferral.
+# Both flags are BAKED from the PATCH-TIME env (pid 1). The mp/spawn
+# EngineCore worker gets a curated env that drops bare FR13_* masters, so an
+# os.environ read here would silently disarm the arm in the only process that
+# matters. Strict 0/1 parsing and the fixed32 preconditions were enforced in
+# _fr13_host_tail_flags before this text was emitted.
+_FR13_HOST_TAIL_NVTX = {flags["nvtx"]!r}
+_FR13_HOST_TAIL_DEFER = {flags["defer"]!r}
 _FR13_HOST_TAIL_RETIRE = None
 
 
 def _fr13_host_tail_nvtx_enabled():
-    return __import__("os").environ.get("FR13_HOST_TAIL_NVTX", "0") == "1"
+    return _FR13_HOST_TAIL_NVTX
 
 
 def _fr13_host_tail_defer_enabled():
-    return __import__("os").environ.get("FR13_HOST_TAIL_DEFER", "0") == "1"
+    return _FR13_HOST_TAIL_DEFER
 
 
 class _Fr13HostTailRetire:
@@ -35026,6 +35149,48 @@ def _fr13_host_tail_drain():
     )
     text = text.replace(readback_anchor, readback_inject, 1)
 
+    # ---- sub-range over the NEXT step's input preparation ----
+    # This is where the post-DFWD tail's host time actually is. On
+    # decode-cadence steps the banked capture measures the window
+    # dfwd_end -> next sfwd_start at 3.667 ms host wall / 3.458 ms GPU idle,
+    # of which 2.857 ms is host CPU inside no CUDA call at all, and the window
+    # is dominated by step N+1's _update_states + _prepare_inputs + attention
+    # metadata build. `sample_readback` (the only sub-range shipped before
+    # this) sits in step N and cannot see any of it. The range closes at the
+    # existing step-NVTX close, i.e. immediately before the next forward, so
+    # `prep_next` is exactly the unlabelled remainder.
+    prep_anchor = (
+        "        num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens\n"
+        "        with (\n"
+        "            record_function_or_nullcontext(\"gpu_model_runner: preprocess\"),\n"
+        "            self.synchronize_input_prep(),\n"
+        "        ):\n"
+    )
+    if text.count(prep_anchor) != 1:
+        raise RuntimeError(
+            "FR13_HOST_TAIL_NVTX: preprocess anchor count "
+            f"{text.count(prep_anchor)} != 1 in gpu_model_runner.py"
+        )
+    prep_inject = (
+        "        self._fr13_prep_nvtx = _fr13_fixed32_nvtx_begin(\n"
+        "            'prep_next', _fr13_host_tail_nvtx_enabled()\n"
+        "        )\n"
+    ) + prep_anchor
+    text = text.replace(prep_anchor, prep_inject, 1)
+
+    close_anchor = "        _fr13_fixed32_step_nvtx_close()\n"
+    if text.count(close_anchor) != 1:
+        raise RuntimeError(
+            "FR13_HOST_TAIL_NVTX: step-NVTX close anchor count "
+            f"{text.count(close_anchor)} != 1 in gpu_model_runner.py -- "
+            "_patch_gpu_model_runner_sfwd_gpu_timer must run first."
+        )
+    close_inject = (
+        "        _fr13_fixed32_nvtx_end(getattr(self, '_fr13_prep_nvtx', False))\n"
+        "        self._fr13_prep_nvtx = False\n"
+    ) + close_anchor
+    text = text.replace(close_anchor, close_inject, 1)
+
     # ---- retire-side census seal ----
     # The seal only *reads* the completed proposal, so it is not a precondition
     # for the next submit. Any prior step's seal is drained first, which is what
@@ -35077,11 +35242,22 @@ def _patch_scheduler_host_tail_nvtx() -> bool:
 
     This is the `sched_next` slice of the post-DFWD tail -- request accounting
     and the next step's scheduling decision, which the ladder names as one of
-    the four unlabelled consumers of the ~7.8 ms of non-CUDA host time."""
+    the four unlabelled consumers of the non-CUDA host time.
+
+    DEFECT FIXED HERE: the first cut of this patch injected the
+    ``_fr13_sched_next_nvtx`` *definition* and never a call to it, so
+    ``fr13.fixed32.sched_next`` could not appear in any capture no matter how
+    the flag was set -- an unsatisfiable measurement precondition, and the
+    reducer's ``HOST_TAIL_RANGES`` entry for it was therefore dead. The
+    definition is now paired with a wrapper that renames the stock method and
+    calls it, so the range opens exactly once per ``update_from_output``.
+
+    The flag is baked, not read from the worker's env."""
     text = SCHEDULER_PATH.read_text()
     sentinel = "_fr13_sched_next_nvtx"
     if sentinel in text:
         return False
+    enabled = _fr13_host_tail_flags()["nvtx"]
     anchor = "    def update_from_output(\n"
     if text.count(anchor) != 1:
         raise RuntimeError(
@@ -35089,8 +35265,10 @@ def _patch_scheduler_host_tail_nvtx() -> bool:
             f"{text.count(anchor)} != 1 in scheduler.py"
         )
     helper = (
+        f"    _FR13_HOST_TAIL_NVTX = {enabled!r}\n"
+        "\n"
         "    def _fr13_sched_next_nvtx(self, opening):\n"
-        "        if __import__('os').environ.get('FR13_HOST_TAIL_NVTX', '0') != '1':\n"
+        "        if not Scheduler._FR13_HOST_TAIL_NVTX:\n"
         "            return False\n"
         "        try:\n"
         "            import torch as _fr13_sched_torch\n"
@@ -35104,8 +35282,20 @@ def _patch_scheduler_host_tail_nvtx() -> bool:
         "        except Exception:  # noqa: BLE001\n"
         "            return False\n"
         "\n"
+        "    def update_from_output(self, *_fr13_a, **_fr13_kw):\n"
+        "        _fr13_opened = self._fr13_sched_next_nvtx(True)\n"
+        "        try:\n"
+        "            return self._fr13_update_from_output_inner(\n"
+        "                *_fr13_a, **_fr13_kw\n"
+        "            )\n"
+        "        finally:\n"
+        "            if _fr13_opened:\n"
+        "                self._fr13_sched_next_nvtx(False)\n"
+        "\n"
     )
-    text = text.replace(anchor, helper + anchor, 1)
+    text = text.replace(
+        anchor, helper + "    def _fr13_update_from_output_inner(\n", 1
+    )
     SCHEDULER_PATH.write_text(text)
     return True
 
@@ -42081,6 +42271,10 @@ def main() -> int:
     # on an already-patched image, so the preflight is the copy that always
     # runs. An arm that cannot arm must die here, not serve as stock.
     _fr13_assert_fixed32_conv_commit_batched_slots_requires_fixed32()
+    # Host-residual rung. Also asserted at each host-tail patch site, but every
+    # one of those early-returns on an already-patched image, so this is the
+    # copy that always runs.
+    _fr13_assert_host_tail_flags()
     if _FR13_FIXED32_MODE:
         _fr13_mode_path = Path("/logs/fr13_fixed32_mode.flag")
         _fr13_mode_tmp = _fr13_mode_path.with_name(

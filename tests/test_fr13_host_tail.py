@@ -28,8 +28,14 @@ def _fn_node(name: str) -> ast.FunctionDef:
     raise AssertionError(f"{name} not found in {PATCHER}")
 
 
-def _module_block() -> str:
-    """The literal source string this patch appends to gpu_model_runner.py."""
+def _module_block(*, nvtx: bool = False, defer: bool = False) -> str:
+    """The source string this patch appends to gpu_model_runner.py.
+
+    The block is an f-string: the host-residual rung bakes the resolved flags
+    into it as literals at patch time, because the mp/spawn EngineCore worker
+    gets a curated env that drops bare FR13_* masters. Evaluating it here with
+    a stub ``flags`` mapping is what lets the test see both armings.
+    """
     for node in ast.walk(_fn_node("_patch_gpu_model_runner_host_tail")):
         if (
             isinstance(node, ast.Assign)
@@ -38,7 +44,12 @@ def _module_block() -> str:
                 for t in node.targets
             )
         ):
-            return ast.literal_eval(node.value)
+            expression = ast.Expression(body=node.value)
+            ast.fix_missing_locations(expression)
+            return eval(  # noqa: S307 - patcher-owned literal, not user input
+                compile(expression, "<fr13-host-tail-block>", "eval"),
+                {"flags": {"nvtx": nvtx, "defer": defer}},
+            )
     raise AssertionError("module_block assignment not found")
 
 
@@ -46,17 +57,37 @@ def _module_block() -> str:
 
 
 def test_both_flags_are_opt_in() -> None:
+    """OFF is the default, and the value is BAKED, never read in the worker.
+
+    The first cut of this patch read os.environ inside the served process.
+    That process is the mp/spawn EngineCore worker, whose curated env drops
+    bare FR13_* masters, so an arm could report as armed at pid 1 and run as
+    stock where it mattered. The host-residual rung moved the read to patch
+    time; see tests/test_fr13_host_tail_prep_bake.py for the strict-parsing
+    and fixed32 preconditions that now guard it.
+    """
     block = _module_block()
-    assert 'environ.get("FR13_HOST_TAIL_NVTX", "0") == "1"' in block
-    assert 'environ.get("FR13_HOST_TAIL_DEFER", "0") == "1"' in block
-    # Injected source cannot rely on the target module's imports.
-    assert '__import__("os")' in block
+    assert "_FR13_HOST_TAIL_NVTX = False" in block
+    assert "_FR13_HOST_TAIL_DEFER = False" in block
+    armed = _module_block(nvtx=True, defer=True)
+    assert "_FR13_HOST_TAIL_NVTX = True" in armed
+    assert "_FR13_HOST_TAIL_DEFER = True" in armed
+    for text in (block, armed):
+        code = "\n".join(
+            line for line in text.splitlines() if not line.lstrip().startswith("#")
+        )
+        assert "environ" not in code, "the worker must not read the flag env"
+        assert 'get("FR13_HOST_TAIL' not in code
 
 
 def test_flags_reach_the_server() -> None:
     launcher = LAUNCHER.read_text()
     assert '-e FR13_HOST_TAIL_NVTX="${FR13_HOST_TAIL_NVTX:-0}"' in launcher
     assert '-e FR13_HOST_TAIL_DEFER="${FR13_HOST_TAIL_DEFER:-0}"' in launcher
+    assert (
+        '-e FR13_HOST_TAIL_PREP_BAKE="${FR13_HOST_TAIL_PREP_BAKE:-0}"'
+        in launcher
+    )
 
 
 # --------------------------------------------------------------- anchors
@@ -98,6 +129,19 @@ def test_scheduler_range_is_named_as_the_ladder_specifies() -> None:
     src = ast.unparse(_fn_node("_patch_scheduler_host_tail_nvtx"))
     assert "fr13.fixed32.sched_next" in src
     assert "text.count(anchor) != 1" in src
+
+
+def test_scheduler_range_is_actually_opened() -> None:
+    """Regression: the first cut defined the helper and never called it.
+
+    ``fr13.fixed32.sched_next`` was reserved in the reducer and could not
+    appear in any capture -- an unsatisfiable measurement precondition. The
+    patch now renames the stock method and wraps it.
+    """
+    src = ast.unparse(_fn_node("_patch_scheduler_host_tail_nvtx"))
+    assert "self._fr13_sched_next_nvtx(True)" in src
+    assert "self._fr13_sched_next_nvtx(False)" in src
+    assert "_fr13_update_from_output_inner" in src
 
 
 # --------------------------------------------------------------- reducer
