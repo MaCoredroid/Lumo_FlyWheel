@@ -7013,7 +7013,14 @@ def _fr13_fa2_qrow32_b4_production_end(selection, *, completed):
             graph_signature=None, layers=sorted(state["layers"]),
             calls=int(state["calls"]),
             batch_size=int(selection.get("batch_size", 0)),
-            padded=False,
+            # ENFORCE_EAGER has no capture, so a padded width cannot get this
+            # far -- the padded branch refuses to run outside capture. Derive
+            # the flag from the width anyway rather than hard-coding a value
+            # that is only correct because of a guard somewhere else.
+            padded=(
+                int(selection.get("batch_size", 0))
+                != _FR13_FA2_QROW32_B34_CANONICAL_WIDTH
+            ),
         )
         _fr13_fa2_qrow32_b34_write_engagement(
             int(selection.get("batch_size", 0)), record

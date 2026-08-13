@@ -18,6 +18,17 @@
 #   * the shadow half is precisely what that early return writes: zeros in its
 #     32 O rows, +INF in its 32 LSE entries.
 #
+# CAVEAT 4 OF THE DE-RISK, CARRIED FORWARD SO THE TIMING ARM INHERITS IT. The
+# width-3 wave-recovery fraction is 0.37 +/- 0.05, NOT 0.3682. The four-figure
+# form came from a wave model whose own in-family residual is 10-15% (b=3 vs
+# b=4 at equal wave count: +9.9% on medians, +15.4% on per-step totals). So the
+# expected gross return is 25.6 +/- 3.5 ms/step (16 layers x 4.3441 ms/launch x
+# 0.37 +/- 0.05), less 0.14-0.28 ms/step of staging and 0.023 ms/step of shadow
+# stores. Even the pessimistic end clears the sealed four-pass MDE (4.20 ms
+# hydra27 / 6.42 ms tail6) by 3-5x. These numbers are stamped into
+# launcher_meta.txt below so the timing arm that follows this gate cannot
+# quietly re-acquire the lost significant digits.
+#
 # NOTHING about the binary moves: the .so sha256, its size, the six per-file
 # source digests and the C++ 33-clause TORCH_CHECK are all re-validated here
 # unchanged, before and after. Zero rebuild, zero re-seal.
@@ -90,7 +101,7 @@ mkdir -p "$RUNROOT_ABS"
   --fa2-source "$QROW32_GQA_PAIR_FA2_SOURCE" \
   > "$RUNROOT_ABS/candidate_identity.at_launch.json"
 
-printf 'classification=real_swe_verified_exact4_b34_fa2_qrow32_gqa_pair_dual_byte_gate\nacceptance_valid=0\ntiming_eligible=0\nproduction_enabled=0\nreference_always_served=1\nqualified_topologies=Tail23,Hydra27\ntask_count_per_topology=4\ngated_widths=3,4\ncanonical_width=4\nshadow_slot=3\nshadow_seqused_k=0\npoisoned_shadow_arm=1\nbatch_size=4\nconcurrency=4\nphysical_rows_per_slot=32\ndraft_vocab_k=65536\ndraft_vocab_root=1\nfa2_head=%s\nfa2_source_closure_sha256=%s\nsource_commit=%s\nrunner_sha256=%s\ninner_runner_sha256=%s\ngate_sha256=%s\npatcher_sha256=%s\nlauncher_pid=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b34_fa2_qrow32_gqa_pair_dual_byte_gate\nacceptance_valid=0\ntiming_eligible=0\nproduction_enabled=0\nreference_always_served=1\nqualified_topologies=Tail23,Hydra27\ntask_count_per_topology=4\ngated_widths=3,4\ncanonical_width=4\nexpected_width3_recovery_fraction=0.37\nexpected_width3_recovery_fraction_sigma=0.05\nexpected_width3_gross_ms_per_step=25.6\nexpected_width3_gross_ms_per_step_sigma=3.5\nstaging_cost_ms_per_step_range=0.14-0.28\nstaging_footprint_bytes=3145728\nshadow_slot=3\nshadow_seqused_k=0\npoisoned_shadow_arm=1\nbatch_size=4\nconcurrency=4\nphysical_rows_per_slot=32\ndraft_vocab_k=65536\ndraft_vocab_root=1\nfa2_head=%s\nfa2_source_closure_sha256=%s\nsource_commit=%s\nrunner_sha256=%s\ninner_runner_sha256=%s\ngate_sha256=%s\npatcher_sha256=%s\nlauncher_pid=%s\nstarted=%s\n' \
   "$FA2_HEAD" "$SOURCE_CLOSURE_SHA256" "$SOURCE_COMMIT" \
   "$RUNNER_SHA256" "$INNER_SHA256" "$GATE_SHA256" "$PATCHER_SHA256" \
   "$$" "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/launcher_meta.txt"
