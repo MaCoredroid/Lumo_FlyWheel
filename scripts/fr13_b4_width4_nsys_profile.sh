@@ -98,7 +98,26 @@ echo "===== FR13 B4 WIDTH-4 NSYS ATTRIBUTION $STAMP (DIAGNOSTIC, NOT CITABLE) ==
 # GPU coordination -- identical to the pool16 gate's rule.
 [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
   || { echo "FAIL: Docker is not clean -- another campaign may be serving" >&2; exit 2; }
-if pgrep -af '[f]r13_bigdenom_swe_serve_variant|[f]r13_b4_campaign_driver' >/dev/null 2>&1; then
+# A bare `pgrep -f fr13_...` is NOT safe here and produced a false positive on
+# the first launch: any shell whose own command line merely CONTAINS the pattern
+# -- including the wrapper that launches this script -- matches it, and the
+# `[f]oo` bracket trick does not help because the text is in a different
+# process's argv. Match the real thing instead: a process whose argv is exactly
+# `bash <path>/fr13_b4_campaign_driver.sh` or the serve variant.
+_fr13_serving_process_running() {
+  local pid cmd
+  for pid in $(pgrep -f 'fr13_b4_campaign_driver|fr13_bigdenom_swe_serve_variant' 2>/dev/null); do
+    [[ "$pid" == "$$" ]] && continue
+    [[ -r "/proc/$pid/cmdline" ]] || continue
+    cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null) || continue
+    if [[ "$cmd" =~ ^(/[a-z/]*/)?bash[[:space:]]+[^[:space:]]*fr13_(b4_campaign_driver|bigdenom_swe_serve_variant)\.sh([[:space:]]|$) ]]; then
+      echo "  offending pid=$pid cmd=$cmd" >&2
+      return 0
+    fi
+  done
+  return 1
+}
+if _fr13_serving_process_running; then
   echo "FAIL: an fr13 serve/driver process is already running" >&2
   exit 2
 fi

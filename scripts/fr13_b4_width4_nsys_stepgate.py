@@ -69,6 +69,7 @@ means are 3.567-3.678, and width 1-2 accounts for only ~141 of 5545 steps.
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import subprocess
@@ -103,13 +104,41 @@ class GateError(RuntimeError):
 
 
 def _scrape(url: str, timeout_s: float) -> str:
+    # A booting vLLM refuses, resets AND half-opens this port in turn, so every
+    # transport failure must land in one bucket. urllib.error.URLError is an
+    # OSError subclass, as are ConnectionResetError/ConnectionRefusedError and
+    # socket.timeout; http.client raises several of its own. Catching OSError +
+    # HTTPException covers the lot -- an earlier version caught only URLError
+    # and died on a reset while the model was still loading.
     try:
         with urllib.request.urlopen(url, timeout=timeout_s) as handle:
             if handle.status != 200:
                 raise GateError(f"metrics endpoint returned HTTP {handle.status}")
             return handle.read().decode("utf-8")
-    except urllib.error.URLError as error:
-        raise GateError(f"metrics endpoint unreachable: {error}") from error
+    except (OSError, http.client.HTTPException) as error:
+        raise GateError(
+            f"metrics endpoint unreachable ({type(error).__name__}): {error}"
+        ) from error
+
+
+def _scrape_retry(url: str, timeout_s: float, *, attempts: int = 12,
+                  backoff_s: float = 5.0) -> str:
+    """Scrape, tolerating transient transport failures.
+
+    Used for BOTH the polling loops and the bracket edges. Retrying an edge is
+    safe -- and strictly better than dying mid-capture -- because a slower edge
+    only widens the measured open/close ambiguity, which is published and
+    bounded, rather than silently biasing the bracket.
+    """
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            return _scrape(url, timeout_s)
+        except GateError as error:
+            last = error
+            if attempt + 1 < attempts:
+                time.sleep(backoff_s)
+    raise GateError(f"metrics scrape failed after {attempts} attempts: {last}")
 
 
 def _counter(text: str, name: str) -> float:
@@ -253,7 +282,7 @@ def _wait_for_arm_condition(
     history: list[tuple[int, float]] = []
     last_report = 0.0
     while time.time() < deadline:
-        text = _scrape(url, timeout_s=15.0)
+        text = _scrape_retry(url, timeout_s=15.0)
         steps = _steps(text)
         drafts = _counter(text, DRAFTS_COUNTER)
         history.append((steps, drafts))
@@ -362,7 +391,7 @@ def main() -> int:
     record["arm_condition"] = armed
 
     # ---- OPEN EDGE -------------------------------------------------------
-    open_lo_text = _scrape(args.metrics_url, timeout_s=15.0)
+    open_lo_text = _scrape_retry(args.metrics_url, timeout_s=15.0)
     open_lo = _steps(open_lo_text)
     record["metrics_open_lo_path"] = _save(
         out_dir, "metrics_capture_open_lo.txt", open_lo_text
@@ -379,7 +408,7 @@ def main() -> int:
         timeout_s=args.exec_timeout_s,
     )
 
-    open_hi_text = _scrape(args.metrics_url, timeout_s=15.0)
+    open_hi_text = _scrape_retry(args.metrics_url, timeout_s=15.0)
     open_hi = _steps(open_hi_text)
     record["metrics_open_hi_path"] = _save(
         out_dir, "metrics_capture_open_hi.txt", open_hi_text
@@ -405,7 +434,7 @@ def main() -> int:
     deadline = time.time() + args.capture_timeout_s
     last_report = 0.0
     while True:
-        text = _scrape(args.metrics_url, timeout_s=15.0)
+        text = _scrape_retry(args.metrics_url, timeout_s=15.0)
         steps = _steps(text)
         if steps >= target:
             break
@@ -420,7 +449,7 @@ def main() -> int:
         time.sleep(args.poll_s)
 
     # ---- CLOSE EDGE ------------------------------------------------------
-    close_lo_text = _scrape(args.metrics_url, timeout_s=15.0)
+    close_lo_text = _scrape_retry(args.metrics_url, timeout_s=15.0)
     close_lo = _steps(close_lo_text)
     record["metrics_close_lo_path"] = _save(
         out_dir, "metrics_capture_close_lo.txt", close_lo_text
@@ -437,7 +466,7 @@ def main() -> int:
         timeout_s=max(args.exec_timeout_s, 600),
     )
 
-    close_hi_text = _scrape(args.metrics_url, timeout_s=15.0)
+    close_hi_text = _scrape_retry(args.metrics_url, timeout_s=15.0)
     close_hi = _steps(close_hi_text)
     record["metrics_close_hi_path"] = _save(
         out_dir, "metrics_capture_close_hi.txt", close_hi_text
