@@ -1,0 +1,293 @@
+==============================================================================
+FR13 B4 WIDTH-4 NSYS ATTRIBUTION -- DIAGNOSTIC, NOT CITABLE
+==============================================================================
+
+acceptance_valid = false. CUPTI was attached for the whole arm lifetime,
+so every absolute number below is profiler-perturbed and must NOT be
+compared as a regression against an unprofiled wall point.
+
+------------------------------------------------------------------------------
+1. CAPTURE VALIDITY  (must pass before any kernel is named)
+------------------------------------------------------------------------------
+  session                  fr13-fixed32-20260813T030940Z-p2154934
+  inner bracket steps      [1790, 2329) = 539 steps
+  outer bracket steps      [1790, 2329) = 539 steps
+  edge ambiguity           open 0 / close 0 steps (0.00% of inner)
+  armed at step            1790 (trailing events/step 3.824 over 200 steps)
+
+  census records in range  539 vs counter steps 539   IDENTITY HOLDS
+  census events in range   1760 vs counter events 1760   IDENTITY HOLDS
+  batch-width histogram    {'1': 4, '2': 74, '3': 236, '4': 225}
+  width-4 fraction         41.7%   census events/step 3.2653
+  NVTX step instances      541 (counter inner 539, outer 539)   CONSISTENT
+
+------------------------------------------------------------------------------
+2. PHASE SPLIT RECONCILIATION vs THE SEALED (UNPROFILED) WIDTH-4 POINT
+------------------------------------------------------------------------------
+  sealed source: results/fr13_b4_refill_citable_20260812/fr13_b4_width4_operating_point.json
+  topology tail6_fixed32, n=4 arms
+
+  component                     capture     sealed     delta      pct
+  sfwd_gpu_ms_per_step          260.085    261.905    -1.821    -0.7%
+  dfwd_gpu_ms_per_step           50.202     45.534     4.668    10.3%
+  cfwd_gpu_ms_per_step           62.042     65.196    -3.154    -4.8%
+  gpu_component_ms_per_step     372.329    372.636    -0.307    -0.1%
+  other_wall_ms_per_step         19.220     14.952     4.267    28.5%
+  step_wall_ms                  391.548    387.588     3.960     1.0%
+  events_per_step                 3.265      3.600    -0.335    -9.3%
+
+  A capture ABOVE the sealed point is expected: CUPTI inflates the arm.
+  The reconciliation is read for SHAPE (relative phase shares), not for
+  absolute agreement.
+
+  capture phase shares          ms/step  % of wall
+  sfwd                          260.085      66.4%
+  cfwd                           62.042      15.8%
+  dfwd                           50.202      12.8%
+  other (wall residual)          19.220       4.9%
+  TOTAL step wall               391.548     100.0%
+
+------------------------------------------------------------------------------
+3. NVTX->GPU PROJECTION  (span / busy / idle, ms per captured step)
+------------------------------------------------------------------------------
+  range                 span      busy      idle         ops  instances
+  step               391.590   373.071    18.519   2,761,464        541
+  sfwd               256.233   254.903     1.329   1,788,045        541
+  cfwd                61.951    57.857     4.094     631,642        541
+  dfwd                50.004    46.329     3.675     164,291        540
+  postprocess         12.670    12.670     0.000       1,080        541
+
+  busy computed as interval UNION; equals plain sum: False
+  GPU-PROJECTION residual (step envelope - disjoint phases): 1.312 ms/step
+    NOTE: this is NOT other_wall_ms_per_step and NOT gpu idle.
+
+  host-tail sub-range         busy      idle       ops
+  sample_readback            0.000     0.000         0
+
+------------------------------------------------------------------------------
+2b. BATCH-CONDITIONED WALL INSIDE THE CAPTURE, AND MEASURED CUPTI COST
+------------------------------------------------------------------------------
+  width         steps     frac    mean ms
+  1                 1     0.2%     294.76
+  2                60    12.7%     307.93
+  3               203    43.1%     379.04
+  4               207    43.9%     428.52
+  blend           471              391.55
+
+  width-4 wall, THIS capture (profiled)  : 428.52 ms/step
+  width-4 wall, sealed (UNPROFILED)      : 411.05 ms/step
+  => CUPTI inflation                     : +17.47 ms/step (+4.3%)
+     Measured on a like-for-like width-4 population.
+     REPORTED, NEVER SUBTRACTED.
+
+------------------------------------------------------------------------------
+3b. NVTX PHASE  vs  COUNTER PHASE  (two different partitions)
+------------------------------------------------------------------------------
+  phase            nvtx busy     counter     delta    ratio
+  sfwd               254.903     260.085    -5.181    0.980
+  dfwd                46.329      50.202    -3.873    0.923
+  cfwd                57.857      62.042    -4.185    0.933
+
+  postprocess (NVTX, absent from the counter split): 12.670 ms/step
+  counter 'other' (wall residual):                   19.220 ms/step
+  postprocess as fraction of 'other':               65.9%
+  'other' MINUS postprocess:                        6.550 ms/step
+    -> host-bookkeeping levers aimed at 'other' are priced
+       against THIS remainder, not against the whole bucket.
+
+------------------------------------------------------------------------------
+4.SFWD  kernel groups (ms/step, GPU rows only)
+------------------------------------------------------------------------------
+  group                      ms/step   % phase    % wall        inst
+  conv                         1.842      0.7%      0.5%      26,485
+  elementwise                 10.633      4.2%      2.7%     670,704
+  fa2_attention               69.748     27.4%     17.8%       8,648
+  gather_scatter               2.127      0.8%      0.5%     169,392
+  gdn_scan                    40.978     16.1%     10.5%     169,392
+  gemm_fp8_cutlass           122.151     47.9%     31.2%     138,369
+  gemm_other                   0.602      0.2%      0.2%      25,752
+  other                        1.917      0.8%      0.5%     229,928
+  quant                        4.403      1.7%      1.1%     216,201
+  reduce_norm                  0.265      0.1%      0.1%      25,944
+  PHASE TOTAL (projected)    254.903
+
+  top kernels:
+     105.220 ms/step    218.9/step  [gemm_fp8_cutlass]
+      void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_block...
+      69.748 ms/step     16.0/step  [fa2_attention]
+      void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_trait...
+      40.978 ms/step    313.1/step  [gdn_scan]
+      _tree_gdn_path_kernel
+      16.931 ms/step     36.9/step  [gemm_fp8_cutlass]
+      void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_block...
+       3.614 ms/step    626.2/step  [elementwise]
+      void at::native::elementwise_kernel<(int)128, (int)2, void ...
+       3.138 ms/step    156.6/step  [elementwise]
+      void at::native::unrolled_elementwise_kernel<at::native::di...
+       2.392 ms/step     63.9/step  [quant]
+      void vllm::silu_and_mul_per_block_quant_kernel<c10::BFloat1...
+       2.371 ms/step    156.6/step  [elementwise]
+      void at::native::elementwise_kernel<(int)128, (int)4, void ...
+       1.545 ms/step      1.0/step  [conv]
+      _fr13_conv_col0_pregather_kernel
+       1.206 ms/step    156.6/step  [other]
+      void at::native::<unnamed>::CatArrayBatchedCopy<at::native:...
+
+------------------------------------------------------------------------------
+4.CFWD  kernel groups (ms/step, GPU rows only)
+------------------------------------------------------------------------------
+  group                      ms/step   % phase    % wall        inst
+  conv                         0.600      1.0%      0.2%         540
+  elementwise                 28.447     49.2%      7.3%     297,564
+  gather_scatter               1.669      2.9%      0.4%      15,000
+  gdn_delta_rule              10.928     18.9%      2.8%      25,920
+  other                        8.672     15.0%      2.2%      24,148
+  reduce_norm                  0.686      1.2%      0.2%      51,840
+  sampling                     3.783      6.5%      1.0%       1,080
+  softmax                      2.277      3.9%      0.6%      14,040
+  PHASE TOTAL (projected)     57.857
+
+  top kernels:
+      10.928 ms/step     47.9/step  [gdn_delta_rule]
+      fused_sigmoid_gating_delta_rule_update_kernel
+       6.877 ms/step     36.7/step  [other]
+      void at::native::tensor_kernel_scan_innermost_dim<float, st...
+       5.412 ms/step     18.0/step  [elementwise]
+      void at::native::vectorized_elementwise_kernel<(int)4, at::...
+       4.639 ms/step     13.0/step  [elementwise]
+      void at::native::vectorized_elementwise_kernel<(int)2, at::...
+       4.073 ms/step      6.0/step  [elementwise]
+      void at::native::elementwise_kernel<(int)128, (int)4, void ...
+       3.811 ms/step      6.0/step  [elementwise]
+      void at::native::elementwise_kernel<(int)128, (int)4, void ...
+       3.783 ms/step      2.0/step  [sampling]
+      _topk_topp_kernel
+       3.718 ms/step      6.0/step  [elementwise]
+      void at::native::_scatter_gather_elementwise_kernel<(int)12...
+       2.277 ms/step     26.0/step  [softmax]
+      void at::native::<unnamed>::cunn_SoftMaxForward<(int)4, flo...
+       2.170 ms/step     50.9/step  [elementwise]
+      void at::native::elementwise_kernel<(int)128, (int)2, void ...
+
+------------------------------------------------------------------------------
+4.DFWD  kernel groups (ms/step, GPU rows only)
+------------------------------------------------------------------------------
+  group                      ms/step   % phase    % wall        inst
+  elementwise                  0.074      0.2%      0.0%      22,823
+  fa2_attention                4.300      9.3%      1.1%         540
+  gather_scatter               0.014      0.0%      0.0%       2,160
+  gemm_fp8_cutlass             8.769     18.9%      2.2%      10,800
+  gemm_other                  16.876     36.4%      4.3%       5,400
+  other                        0.078      0.2%      0.0%      10,780
+  quant                        0.181      0.4%      0.0%      18,900
+  reduce_norm                  0.131      0.3%      0.0%       5,400
+  sampling                     0.119      0.3%      0.0%      24,240
+  unified_attention           15.589     33.6%      4.0%       2,160
+  PHASE TOTAL (projected)     46.329
+
+  top kernels:
+      15.589 ms/step      4.0/step  [unified_attention]
+      kernel_unified_attention_2d
+      14.212 ms/step      5.0/step  [gemm_other]
+      void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616...
+       7.177 ms/step     16.5/step  [gemm_fp8_cutlass]
+      void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_block...
+       4.300 ms/step      1.0/step  [fa2_attention]
+      void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_trait...
+       2.022 ms/step      4.0/step  [gemm_other]
+      nvjet_sm121_tst_mma_64x112x64_4_16x112x64_tmaAB_bz_TNNN
+       1.593 ms/step      3.4/step  [gemm_fp8_cutlass]
+      void cutlass::device_kernel<vllm::cutlass_3x_gemm_fp8_block...
+       0.239 ms/step      0.4/step  [gemm_other]
+      nvjet_sm121_tst_mma_128x96x64_3_64x24x64_tmaAB_bz_TNNN
+       0.227 ms/step      0.4/step  [gemm_other]
+      nvjet_sm121_tst_mma_128x128x64_3_128x16x64_tmaAB_bz_TNNN
+       0.112 ms/step      5.0/step  [reduce_norm]
+      void at::native::reduce_kernel<(int)512, (int)1, at::native...
+       0.100 ms/step      0.0/step  [gemm_other]
+      std::enable_if<!T7, void>::type internal::gemvx::kernel<int...
+
+------------------------------------------------------------------------------
+4.POSTPROCESS  kernel groups (ms/step, GPU rows only)
+------------------------------------------------------------------------------
+  group                      ms/step   % phase    % wall        inst
+  gather_scatter               0.003      0.0%      0.0%         540
+  gemm_other                  12.667    100.0%      3.2%         540
+  PHASE TOTAL (projected)     12.670
+
+  top kernels:
+      12.667 ms/step      1.0/step  [gemm_other]
+      nvjet_sm121_tst_mma_128x208x64_2_32x104x64_tmaAB_bz_TNNN
+       0.003 ms/step      1.0/step  [gather_scatter]
+      void at::native::vectorized_gather_kernel<(int)16, long>(ch...
+
+------------------------------------------------------------------------------
+5. MEMCPY CENSUS  (the F-window 4-byte D2H lives here)
+------------------------------------------------------------------------------
+  copy_kind        count  per_step      mean_B  gpu_ms/step
+  8              387,324    715.94   1682075.1       7.9276
+  1               50,165     92.73     17219.0       0.1008
+  2                3,421      6.32       458.0       0.0140
+  <=8-byte copies: 39,092 total, 72.26/step, 0.0811 gpu ms/step
+
+------------------------------------------------------------------------------
+6. PROFILER OVERHEAD -- LOCATED, NEVER SUBTRACTED
+------------------------------------------------------------------------------
+  tid 281478365708546        1,373 records  mean   22500.4 us    57.104 ms/step
+  tid 281536851086952            4 records  mean    1150.9 us     0.009 ms/step
+  tid 281537941606057            4 records  mean    1105.2 us     0.008 ms/step
+  tid 281537002081905            4 records  mean    1066.4 us     0.008 ms/step
+  tid 281537639616151            4 records  mean    1038.5 us     0.008 ms/step
+  tid 281537404735113            4 records  mean     978.9 us     0.007 ms/step
+  tid 281537706725019            4 records  mean     960.0 us     0.007 ms/step
+  tid 281537169854075            4 records  mean     957.0 us     0.007 ms/step
+  tid 281537572507283            4 records  mean     948.7 us     0.007 ms/step
+  tid 281538176487095            4 records  mean     858.6 us     0.006 ms/step
+  tid 281537874497189            4 records  mean     853.1 us     0.006 ms/step
+  tid 281538008714925            4 records  mean     837.6 us     0.006 ms/step
+  tid 281537337626245            4 records  mean     795.5 us     0.006 ms/step
+  tid 281478365710062            3 records  mean     285.5 us     0.002 ms/step
+  tid 281478365708583            3 records  mean     201.9 us     0.001 ms/step
+  tid 281478365708490          100 records  mean       5.8 us     0.001 ms/step
+  tid 281537874497191            1 records  mean     398.5 us     0.001 ms/step
+  tid 281536851086954            1 records  mean     390.9 us     0.001 ms/step
+  tid 281537706725020            1 records  mean     371.1 us     0.001 ms/step
+  tid 281537002081907            1 records  mean     365.2 us     0.001 ms/step
+  tid 281538008714927            1 records  mean     350.3 us     0.001 ms/step
+  tid 281537941606059            1 records  mean     322.1 us     0.001 ms/step
+  tid 281537169854077            1 records  mean     321.9 us     0.001 ms/step
+  tid 281538176487097            1 records  mean     314.0 us     0.001 ms/step
+  tid 281537404735115            1 records  mean     312.8 us     0.001 ms/step
+  tid 281537639616153            1 records  mean     312.4 us     0.001 ms/step
+  tid 281537337626247            1 records  mean     301.7 us     0.001 ms/step
+  tid 281536851086953            1 records  mean     300.6 us     0.001 ms/step
+  tid 281537874497190            1 records  mean     296.4 us     0.001 ms/step
+  tid 281537572507285            1 records  mean     269.1 us     0.000 ms/step
+  tid 281537706725021            2 records  mean     133.4 us     0.000 ms/step
+  tid 281538008714926            1 records  mean     254.1 us     0.000 ms/step
+  tid 281537941606058            1 records  mean     232.7 us     0.000 ms/step
+  tid 281537169854076            1 records  mean     217.2 us     0.000 ms/step
+  tid 281538176487096            1 records  mean     200.0 us     0.000 ms/step
+  tid 281537337626246            1 records  mean     191.0 us     0.000 ms/step
+  tid 281537639616152            1 records  mean     188.0 us     0.000 ms/step
+  tid 281537572507284            1 records  mean     186.6 us     0.000 ms/step
+  tid 281537002081906            1 records  mean     182.2 us     0.000 ms/step
+  tid 281537404735114            1 records  mean     170.3 us     0.000 ms/step
+
+  No host row enters any GPU total in this artifact. Overhead that
+  sits on a flush thread is not on the critical path; overhead on
+  the main CUDA thread would be.
+
+------------------------------------------------------------------------------
+7. CUDA GRAPH INVENTORY
+------------------------------------------------------------------------------
+  graph          kernels   replays  nodes/replay  gpu ms/step
+  1622           847,575       225          3767      116.930
+  1625           746,484       238          3136      109.875
+  1628           186,406        74          2519       27.024
+  1637            52,976       301           176       20.804
+  1640            51,920       295           176       19.668
+  1616            23,858       302            79        6.373
+  1619            17,775       225            79        6.017
+  1643            14,784        84           176        5.487
+

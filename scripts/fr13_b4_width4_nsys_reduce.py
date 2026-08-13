@@ -203,72 +203,115 @@ def _nvtx_phase_windows(conn: sqlite3.Connection) -> dict[str, list[tuple[int, i
     return out
 
 
-def _project_range(conn: sqlite3.Connection, windows: list[tuple[int, int]]
-                   ) -> dict[str, float]:
-    """NVTX host range -> RUNTIME rows starting inside it -> their kernels.
+class _Projection:
+    """NVTX host range -> GPU ops, by linear merge rather than a SQL range join.
 
-    Graph replays correlate one cudaGraphLaunch to every node of the graph,
-    which is why a single runtime call can project to ~1900 GPU ops.
+    The relation is: an NVTX host range [a,b) selects CUDA RUNTIME rows whose
+    `start` falls inside it; each such row's `correlationId` selects its GPU
+    kernel rows. A graph replay correlates one cudaGraphLaunch to every node of
+    the graph, which is why one runtime call can project to ~1900 GPU ops.
+
+    Expressed in SQL as a three-way join with a BETWEEN predicate this is
+    quadratic and does not finish on this trace (3.58 M kernel rows, 3.56 M
+    runtime rows, 8215 NVTX ranges). The B1 notes specify the intended shape --
+    "a linear merge over both streams sorted by host start" -- so that is what
+    this does: sort the runtime starts once, binary-search each window, and
+    gather kernels through a correlationId index built once.
     """
-    if not windows:
-        return {"span_ns": 0, "busy_ns": 0, "idle_ns": 0, "ops": 0, "instances": 0}
-    conn.execute("DROP TABLE IF EXISTS _win")
-    conn.execute("CREATE TEMP TABLE _win(a INTEGER, b INTEGER)")
-    conn.executemany("INSERT INTO _win VALUES (?,?)", windows)
-    conn.execute("CREATE INDEX IF NOT EXISTS _win_a ON _win(a,b)")
-    rows = _q(conn, """
-        SELECT k.start, k.end
-        FROM CUPTI_ACTIVITY_KIND_KERNEL k
-        JOIN CUPTI_ACTIVITY_KIND_RUNTIME r ON r.correlationId = k.correlationId
-        JOIN _win w ON r.start >= w.a AND r.start < w.b
-    """)
-    if not rows:
-        return {"span_ns": 0, "busy_ns": 0, "idle_ns": 0, "ops": 0,
-                "instances": len(windows)}
-    # busy = union of [start,end), not the plain sum. On a single-stream trace
-    # the two agree, but that must be verified rather than assumed.
-    rows.sort()
-    span = max(e for _, e in rows) - min(s for s, _ in rows)
-    union = 0
-    cs, ce = rows[0]
-    for s, e in rows[1:]:
-        if s > ce:
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        rt = _q(conn, "SELECT start, correlationId FROM "
+                      "CUPTI_ACTIVITY_KIND_RUNTIME ORDER BY start")
+        self._starts = [r[0] for r in rt]
+        self._corr = [r[1] for r in rt]
+        self._by_corr: dict[int, list[tuple[int, int, int]]] = {}
+        for cid, ks, ke, name in _q(conn,
+                "SELECT correlationId, start, end, "
+                "COALESCE(demangledName, shortName) "
+                "FROM CUPTI_ACTIVITY_KIND_KERNEL"):
+            self._by_corr.setdefault(cid, []).append((ks, ke, name))
+        self._names = {i: v for i, v in _q(conn, "SELECT id, value FROM StringIds")}
+
+    def _ops(self, windows):
+        import bisect
+        out = []
+        for a, b in windows:
+            lo = bisect.bisect_left(self._starts, a)
+            hi = bisect.bisect_left(self._starts, b)
+            for j in range(lo, hi):
+                ks = self._by_corr.get(self._corr[j])
+                if ks:
+                    out.extend(ks)
+        return out
+
+    def project(self, windows):
+        """Per-range span / busy / idle.
+
+        SPAN AND IDLE ARE PER INSTANCE AND SUMMED, never taken from the global
+        first-to-last extent. A range like `fr13.fixed32.dfwd` occurs once per
+        step; the wall between one step's dfwd and the next step's dfwd is not
+        dfwd idle, it is the rest of the step. Measuring span as
+        max(end)-min(start) across ALL instances charges every range with the
+        entire capture -- which is how this first read produced a nonsensical
+        "618 ms/step of dfwd idle" inside a 391 ms step.
+
+        So: span_i and busy_i are computed INSIDE each range instance, and the
+        reported totals are the sums. idle is then genuinely "GPU gap while this
+        range was open".
+        """
+        if not windows:
+            return {"span_ns": 0, "busy_ns": 0, "idle_ns": 0, "ops": 0,
+                    "instances": 0}
+        import bisect
+        span_tot = busy_tot = plain_tot = ops_tot = 0
+        nonempty = 0
+        for a, b in windows:
+            lo = bisect.bisect_left(self._starts, a)
+            hi = bisect.bisect_left(self._starts, b)
+            rows = []
+            for j in range(lo, hi):
+                ks = self._by_corr.get(self._corr[j])
+                if ks:
+                    rows.extend((s, e) for s, e, _ in ks)
+            if not rows:
+                continue
+            nonempty += 1
+            rows.sort()
+            span_tot += max(e for _, e in rows) - min(s for s, _ in rows)
+            # busy = UNION of [start,end), not the plain sum: this trace is not
+            # single-stream and kernels do overlap, so the two differ.
+            union = 0
+            cs, ce = rows[0]
+            for s, e in rows[1:]:
+                if s > ce:
+                    union += ce - cs
+                    cs, ce = s, e
+                else:
+                    ce = max(ce, e)
             union += ce - cs
-            cs, ce = s, e
-        else:
-            ce = max(ce, e)
-    union += ce - cs
-    plain = sum(e - s for s, e in rows)
-    return {
-        "span_ns": span,
-        "busy_ns": union,
-        "busy_plain_sum_ns": plain,
-        "union_equals_plain_sum": union == plain,
-        "idle_ns": span - union,
-        "ops": len(rows),
-        "instances": len(windows),
-    }
+            busy_tot += union
+            plain_tot += sum(e - s for s, e in rows)
+            ops_tot += len(rows)
+        return {
+            "span_ns": span_tot,
+            "busy_ns": busy_tot,
+            "busy_plain_sum_ns": plain_tot,
+            "union_equals_plain_sum": busy_tot == plain_tot,
+            "idle_ns": span_tot - busy_tot,
+            "ops": ops_tot,
+            "instances": len(windows),
+            "instances_with_ops": nonempty,
+        }
 
-
-def _kernels_in_range(conn: sqlite3.Connection, windows: list[tuple[int, int]],
-                      top: int) -> list[dict[str, Any]]:
-    if not windows:
-        return []
-    conn.execute("DROP TABLE IF EXISTS _win2")
-    conn.execute("CREATE TEMP TABLE _win2(a INTEGER, b INTEGER)")
-    conn.executemany("INSERT INTO _win2 VALUES (?,?)", windows)
-    rows = _q(conn, """
-        SELECT COALESCE(sd.value, sn.value) nm,
-               COUNT(*) n, SUM(k.end - k.start) tot
-        FROM CUPTI_ACTIVITY_KIND_KERNEL k
-        JOIN CUPTI_ACTIVITY_KIND_RUNTIME r ON r.correlationId = k.correlationId
-        JOIN _win2 w ON r.start >= w.a AND r.start < w.b
-        LEFT JOIN StringIds sd ON sd.id = k.demangledName
-        LEFT JOIN StringIds sn ON sn.id = k.shortName
-        GROUP BY nm ORDER BY tot DESC
-    """)
-    return [{"name": nm, "instances": n, "total_time_ns": tot}
-            for nm, n, tot in rows[:top]]
+    def kernels(self, windows, top):
+        agg = {}
+        for s, e, nid in self._ops(windows):
+            n, tot = agg.get(nid, (0, 0))
+            agg[nid] = (n + 1, tot + (e - s))
+        rows = sorted(agg.items(), key=lambda kv: -kv[1][1])[:top]
+        return [{"name": self._names.get(nid, str(nid)),
+                 "instances": n, "total_time_ns": tot}
+                for nid, (n, tot) in rows]
 
 
 # --------------------------------------------------------------- classify --
@@ -546,6 +589,7 @@ def main() -> int:
         ]
 
         windows = _nvtx_phase_windows(conn)
+        projector = _Projection(conn)
         observed = sorted(windows)
         out["nvtx_ranges_observed"] = {k: len(windows[k]) for k in observed}
         if STEP_RANGE not in windows:
@@ -572,7 +616,7 @@ def main() -> int:
         for phase, rng in {"step": STEP_RANGE, **PHASE_RANGES}.items():
             if rng not in windows:
                 continue
-            pr = _project_range(conn, windows[rng])
+            pr = projector.project(windows[rng])
             pr["ms_per_step"] = pr["busy_ns"] / div / 1e6
             pr["span_ms_per_step"] = pr["span_ns"] / div / 1e6
             pr["idle_ms_per_step"] = pr["idle_ns"] / div / 1e6
@@ -581,7 +625,7 @@ def main() -> int:
 
         for tail_name, rng in HOST_TAIL_RANGES.items():
             if rng in windows:
-                pr = _project_range(conn, windows[rng])
+                pr = projector.project(windows[rng])
                 pr["ms_per_step"] = pr["busy_ns"] / div / 1e6
                 pr["span_ms_per_step"] = pr["span_ns"] / div / 1e6
                 pr["idle_ms_per_step"] = pr["idle_ns"] / div / 1e6
@@ -643,7 +687,7 @@ def main() -> int:
         for phase, rng in PHASE_RANGES.items():
             if rng not in windows:
                 continue
-            rows = _kernels_in_range(conn, windows[rng], args.top)
+            rows = projector.kernels(windows[rng], args.top)
             groups: dict[str, dict[str, float]] = {}
             for r in rows:
                 g = _kernel_group(r["name"])
