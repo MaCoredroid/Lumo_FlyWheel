@@ -55,10 +55,19 @@ validity section and withholds every kernel table.
 | census identity | **539 census records == 539 counter steps** |
 | event identity | **1760 census events == 1760 counter events** |
 | NVTX cross-check | 541 `fr13.fixed32.step` instances vs 539 counter steps — inside the ±2 capture-boundary allowance the B1 reducer pins |
-| batch widths in capture | `{1: 4, 2: 74, 3: 236, 4: 225}` |
+| batch widths in capture | `{1: 4, 2: 74, 3: 236, 4: 225}` — 85.7% of captured steps at width 3–4 |
 
 Both identities are exact equalities, and they are the same ones
 `fr13_measure.cmd_deploy_speed` enforces for a whole arm.
+
+**Re-verified after the arm completed**, against the finished 67 MB census and
+the published pool ledger rather than a mid-flight prefix — both identities still
+hold exactly. The arm ran to `ARM_DONE ... swerc=0`, 16/16 tasks, 9/16 resolved,
+`arm_wall_s` 4474.4, and its ledger reads `slots 4`, `task_count 16`,
+`completed 16`, `aborted false`, `peak_depth 4`,
+`time_weighted_mean_depth 3.206`, `full_width_fraction 0.619` — i.e. the pool
+held width, so the captured steps sit inside a genuine depth-4 phase rather than
+a drain.
 
 ### Split reconciliation against the sealed, unprofiled point
 
