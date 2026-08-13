@@ -288,7 +288,7 @@ stat -c '%s bytes' "$SO"
 grep -E 'REG:|STACK:' "$BUILD/cuobjdump_resource_usage.txt" || true
 echo BUILD_COMPLETE
 echo
-echo "NEXT: pin candidate_so_sha256 + size into ALL FIVE of these; every one is a"
+echo "NEXT: pin candidate_so_sha256 + size into ALL SIX of these; every one is a"
 echo "hard-fail comparison, so a rebuild that updates only some is rejected at launch:"
 echo "  scripts/fr13_qrow32_b1_pass_sidecar.py    GQA_PAIR_CANDIDATE_SHA256 / _SIZE"
 echo "  scripts/fr13_fixed32_contract.py          QROW32_B1_GQA_PAIR_FA2_SHA256 / _SIZE"
@@ -299,5 +299,13 @@ echo "                                            (SO_SHA256 / SO_SIZE / SOURCE_
 echo "  scripts/fr13_run_b1_fa2_qrow32_gqa_pair_timing.sh"
 echo "                                            CANDIDATE_SHA256 / CANDIDATE_BYTES /"
 echo "                                            SOURCE_CLOSURE_SHA256"
+echo "  scripts/fr13_canonical_env.sh             the citation on the promoted"
+echo "                                            FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT"
+echo "                                            (PROMOTED 2026-08-13). Not a"
+echo "                                            comparison -- it is the shipped"
+echo "                                            default's evidence line, and a"
+echo "                                            rebuild that leaves it stale makes"
+echo "                                            the registry cite a binary nothing"
+echo "                                            can load."
 echo "then add the gqa_pair arm case to scripts/fr13_run_b1_k64_qrow32_split2_live_gate.sh."
 echo "Verify none were missed: grep -rn \"\$(sha256sum \"\$SO\" | cut -d' ' -f1)\" scripts/"
