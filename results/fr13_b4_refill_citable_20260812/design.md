@@ -524,3 +524,90 @@ events instead of ~1.6, and a wider step costs more wall. **The class's
 `per_request_non_regression` verdict will read FALSE**, and that is the honest headline:
 this is a throughput/latency trade, not a free win. One pass proves nothing on its own —
 four are needed for the pinned critical.
+
+---
+
+## 9. CAMPAIGN COMPLETE — NOT CITABLE. THE POOL HAS TWO PHASES, NOT ONE OPERATING POINT
+
+All four passes served both arms (8/8 arms, 16/16 tasks each). The verdict is
+**`NOT_EVALUATED_INSUFFICIENT_PASSES`, `citable=false`**: passes 2 and 3 are excluded on
+**both** topologies because the pool did not hold the served width.
+
+| pass | topo | pool depth | full width | events/step | aggregate | per-request | step ms | arm wall | drain-tail frac | longest task |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | H / T | 3.629 / 3.513 | 0.819 / 0.713 | 3.038 / 3.004 | 50.46 / 48.42 | 16.61 / 16.12 | 360 / 365 | 1.10 / 1.47 h | 0.18 / 0.29 | 2841 / 5306 s |
+| 1 | H / T | 3.508 / 3.443 | 0.784 / 0.750 | 2.795 / 2.725 | 48.56 / 51.13 | 17.37 / 18.76 | 343 / 341 | 1.19 / 1.34 h | 0.22 / 0.25 | 2701 / 3620 s |
+| 2 | H / T | **3.180 / 3.107** | 0.698 / 0.530 | 2.404 / 2.496 | 42.31 / 42.54 | 17.60 / 17.04 | 326 / 329 | 1.46 / 1.63 h | 0.30 / 0.47 | 3873 / 5205 s |
+| 3 | H / T | **2.408 / 2.266** | 0.389 / 0.352 | 1.788 / 1.667 | 32.36 / 29.49 | 18.09 / 17.69 | 296 / 276 | 2.64 / 2.17 h | 0.61 / 0.65 | **9493** / 5091 s |
+
+The 3.2 depth floor did exactly its job: it excluded precisely the arms where the pool
+stopped being a pool.
+
+### The structural finding: a 16-task pool at 4 slots is TWO regimes, wall-blended
+
+A pool can only backfill while unstarted tasks remain. After the 13th admission there is
+nothing behind the last four, and the arm degenerates into **exactly the exact4 drain**
+(4→3→2→1). So every pool16 arm is a wall-weighted blend of
+
+* a **full-width phase** at depth 4 (the eff≈3 regime the rung was opened to find), and
+* a **drain phase** structurally identical to exact4.
+
+`events_per_step` is therefore not an operating point — it is a mixture weight. The
+drain-tail fraction rose 0.18 → 0.65 across the campaign and events/step tracked it
+inversely, 3.04 → 1.67. **Median task duration was flat (576–861 s) in every pass**; what
+grew was the tail (longest task 2841 s → 9493 s). One straggler sets the whole arm's
+measured co-residency.
+
+**No infrastructure drift was demonstrated.** Disk is 63% used with 1.4 T free; medians are
+flat; alienware carried only a 30-hour-old exited container unrelated to this campaign.
+The two arms inside a pass share host conditions and a task-difficulty draw, so there are
+4 independent draws, not 8; a monotonic ordering of 4 draws has probability 1/24 ≈ 4%.
+That is unusual, not extraordinary, and it is consistent with heavy-tailed agent
+trajectories. Asserting a cause would be over-reading.
+
+### The two included passes (descriptive only — df=1, no interval exists)
+
+| statistic | Hydra27 pass0/1 → mean | Tail23 pass0/1 → mean | exact4 ON (4 passes, sealed) | delta |
+|---|---|---|---|---|
+| aggregate TPS | 50.46 / 48.56 → **49.51** | 48.42 / 51.13 → **49.77** | 34.47 / 33.85 | **+43.6% / +47.0%** |
+| per-request step TPS | 16.61 / 17.37 → **16.99** | 16.12 / 18.76 → **17.44** | 21.20 / 22.38 | **−19.9% / −22.1%** |
+| events/step | 3.038 / 2.795 → **2.917** | 3.004 / 2.725 → **2.864** | 1.637 / 1.529 | +78.2% / +87.4% |
+| step wall ms | 360.2 / 343.5 → 351.9 | 364.6 / 341.5 → 353.0 | 279.8 / 271.7 | +25.8% / +29.9% |
+| prefill share | 0.189 / 0.203 → 0.196 | 0.172 / 0.183 → 0.177 | 0.290 / 0.308 | −32.5% / −42.3% |
+| APC hit | 0.901 / 0.908 → 0.904 | 0.911 / 0.892 → 0.902 | 0.912 / 0.898 | flat |
+| pool depth | 3.629 / 3.508 → 3.568 | 3.513 / 3.443 → 3.478 | n/a (pool == slots) | — |
+| full-width fraction | 0.819 / 0.784 → 0.801 | 0.713 / 0.750 → 0.731 | ~0.36 (measured 2026-08-08) | — |
+| retained wall fraction | 0.906 / 0.914 → 0.910 | 0.911 / 0.932 → 0.922 | 0.936–0.987 | — |
+
+`per_request_non_regression` reads **FALSE** on both topologies: the pool16 per-request
+interval sits below the exact4 interval and does not overlap it. Mechanically that is a
+regression verdict, and by 3c6d663d6 an aggregate gain bought with a per-request loss is
+not a promotion.
+
+### What is and is not established
+
+**Established:** a 16-task pool at 4 slots reaches depth ~3.5 and full width ~0.73–0.82,
+lifting aggregate TPS ~44–47% over the exact4 baseline while per-request service falls
+~20–22% and prefill share falls ~33–42% at flat APC. Narrowing's KV headroom does convert
+into occupancy.
+
+**Not established:** any pinned operating point. The campaign's own events/step spans
+1.67–3.04, and only half its passes held the pool width. **eff≈3 cannot be sealed from this
+evidence** — it was observed in pass 0 (3.00/3.04) and approached in pass 1 (2.73/2.80),
+then decayed with the drain tail. Four included passes per topology are required before any
+number here is citable.
+
+### Recommended next design, before more GPU is spent
+
+Measure the operating point instead of the blend: **bracket the metrics to the window where
+depth == slots.** The admission ledger already timestamps every admit and complete, and the
+work census is per-step, so the full-width window is recoverable — but the per-task
+Prometheus brackets do not align to it, so this needs a new arm-level bracket emitted at
+the depth-4 entry/exit boundaries. That would make events/step a property of the schedule
+rather than of one straggler, and would shrink the between-pass variance that made this
+campaign uncitable. The alternative — a pool large enough that the drain is negligible —
+costs proportionally more GPU and is blocked by `EVIDENCE_SETS` pinning 16.
+
+**The width-3 nsys attribution should profile inside the full-width window specifically**;
+profiling a wall-blended arm would attribute the drain phase as if it were the operating
+point.
