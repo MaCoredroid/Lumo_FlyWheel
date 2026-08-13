@@ -5835,7 +5835,42 @@ _FR13_FA2_QROW32_B34_CANONICAL_ROWS = 128
 # allocated and always safe to name. The shadow never reads it (seqused_k == 0)
 # but the row is pinned to it rather than left stale, per fail-closed doctrine.
 _FR13_FA2_QROW32_B34_NULL_BLOCK_ID = 0
+# MARK'S RULING 2026-08-13. candidate_scope moves off the sealed
+# final_fixed32_b4_full_graph_only token to this b3-inclusive one. It names
+# what actually changed: the qualified operating points are now the FULL
+# graphs at widths 3 and 4, width 3 reaching the sealed .so by padding to the
+# canonical width-4 geometry with an inert shadow request. Nothing about the
+# BINARY moved -- the .so sha256, its size, the six per-file source digests
+# and the C++ 33-clause TORCH_CHECK are all unchanged, and the kernel is still
+# only ever handed (b == 4, total_q == 128).
+_FR13_FA2_QROW32_B34_CANDIDATE_SCOPE = "final_fixed32_b34_full_graph_only"
+# The token the sealed +29.50 ms/step width-4 result was recorded under.
+# Readers of banked artifacts must accept it; writers must not emit it.
+_FR13_FA2_QROW32_B34_SEALED_B4_SCOPE = "final_fixed32_b4_full_graph_only"
 _FR13_FA2_QROW32_B34_STAGING = {}
+# CAVEAT 2 of the de-risk (verification_1.implementation_hazard_found): the
+# staging MUST be allocated from a PRE-CAPTURE hook.
+#
+#   * Lazy allocate-on-first-use is UNREACHABLE. Outside capture the selector
+#     takes the "outside_capture" bypass long before it reaches the padded
+#     branch, so the first call that ever asks for staging is inside capture.
+#   * An allocation raised inside capture comes from the graph's PRIVATE
+#     memory pool. Its address is valid only while that graph owns the pool;
+#     the moment another graph is captured into the same pool the staging
+#     buffers silently alias somebody else's tensors. That is a corruption
+#     with no exception attached to it.
+#
+# So allocation is done exactly once per (device, block_columns), from
+# _fr13_fa2_qrow32_b34_precapture_staging, which the patcher injects into
+# CUDAGraphWrapper.__call__ beside the fr10 fixed32 capture-lifecycle begin
+# hook -- after torch.cuda.CUDAGraph() is constructed and BEFORE the
+# torch.cuda.graph(...) context is entered. The selector never allocates: it
+# uses _fr13_fa2_qrow32_b34_require_staging, which raises.
+_FR13_FA2_QROW32_B34_PRECAPTURE = {
+    "calls": 0,
+    "allocations": [],
+    "graphs": {},
+}
 
 
 def _fr13_fa2_qrow32_b4_bypass(arm, tree_bias, num_splits, reason):
@@ -6049,6 +6084,32 @@ def _fr13_fa2_qrow32_b4_exact_geometry(**geometry):
     return not _fr13_fa2_qrow32_b4_geometry_mismatches(**geometry)
 
 
+def _fr13_fa2_qrow32_b34_staging_key(device, block_columns):
+    """One canonical registry key, so pre-capture and serve cannot disagree.
+
+    torch.device("cuda") and torch.device("cuda:0") stringify differently but
+    name the same allocator. Resolving the index here means a hook that saw
+    the block table's device and a selector that saw the query's device
+    produce the same key -- and a genuine cross-device drift still produces a
+    different one.
+    """
+    resolved = device if isinstance(device, torch.device) else torch.device(device)
+    if resolved.type != "cuda":
+        raise RuntimeError(
+            "FR13 qrow32 B34 staging is CUDA-only: " + repr(str(resolved))
+        )
+    index = resolved.index
+    if index is None:
+        index = int(torch.cuda.current_device())
+    columns = int(block_columns)
+    if columns <= 0:
+        raise RuntimeError(
+            "FR13 qrow32 B34 staging block columns are not positive: "
+            + repr(columns)
+        )
+    return ("cuda:" + str(int(index)), columns)
+
+
 def _fr13_fa2_qrow32_b34_staging(device, block_columns):
     """Persistent padded operands. Allocated ONCE, outside any graph pool.
 
@@ -6058,8 +6119,13 @@ def _fr13_fa2_qrow32_b34_staging(device, block_columns):
     num_input_tokens == 96 for the width-3 decode graph). Rows [96:128) do not
     exist, so the padded call MUST run against private staging, and the
     canonical rows must be copied in and out.
+
+    CALLED ONLY FROM THE PRE-CAPTURE HOOK. The serving path uses
+    _fr13_fa2_qrow32_b34_require_staging, which raises instead of allocating.
     """
-    key = (str(device), int(block_columns))
+    key = _fr13_fa2_qrow32_b34_staging_key(device, block_columns)
+    device = torch.device(key[0])
+    block_columns = key[1]
     staged = _FR13_FA2_QROW32_B34_STAGING.get(key)
     if staged is not None:
         return staged
@@ -6097,6 +6163,143 @@ def _fr13_fa2_qrow32_b34_staging(device, block_columns):
         ),
     }
     _FR13_FA2_QROW32_B34_STAGING[key] = staged
+    return staged
+
+
+def _fr13_fa2_qrow32_b34_require_staging(device, block_columns):
+    """Look the staging up; NEVER allocate. The serving path's only door.
+
+    If this raises, the pre-capture hook did not run for this operating point
+    -- which means the padded call would otherwise have allocated from the
+    capturing graph's private pool. Fail loud, on the capture, at startup,
+    rather than serve a buffer that will alias another graph's memory.
+    """
+    key = _fr13_fa2_qrow32_b34_staging_key(device, block_columns)
+    staged = _FR13_FA2_QROW32_B34_STAGING.get(key)
+    if staged is None:
+        raise RuntimeError(
+            "FR13 qrow32 B34 staging was not allocated before capture for "
+            + repr(key)
+            + "; the pre-capture hook did not run (allocated keys: "
+            + repr(sorted(_FR13_FA2_QROW32_B34_STAGING))
+            + ", precapture calls: "
+            + repr(int(_FR13_FA2_QROW32_B34_PRECAPTURE["calls"]))
+            + ")"
+        )
+    return staged
+
+
+def _fr13_fa2_qrow32_b34_precapture_block_table():
+    """The live decode block table for a target tree layer, pre-capture.
+
+    CUDAGraphWrapper.__call__ runs INSIDE set_forward_context, and a FULL
+    capture always builds attention metadata first
+    (gpu_model_runner._dummy_run: `if force_attention or
+    cudagraph_runtime_mode == CUDAGraphMode.FULL:` -> _build_attention_metadata),
+    so the block table the padded call will be asked to mirror is already
+    resolvable at capture-begin. Reading it here -- rather than deriving
+    max_model_len // block_size -- means the staged block table is the same
+    width as the real one BY CONSTRUCTION, not by a re-derivation that could
+    drift.
+    """
+    from vllm.forward_context import get_forward_context
+
+    context = get_forward_context()
+    metadata = getattr(context, "attn_metadata", None)
+    if isinstance(metadata, list):
+        # DP micro-batching hands over one dict per ubatch; the block table is
+        # the same object in each, so the first is representative.
+        metadata = metadata[0] if metadata else None
+    if not isinstance(metadata, dict):
+        raise RuntimeError(
+            "FR13 qrow32 B34 pre-capture staging has no per-layer attention "
+            "metadata: " + repr(type(metadata).__name__)
+        )
+    for layer_name in _FR13_FA2_QROW32_B4_TARGET_LAYERS:
+        per_layer = metadata.get(layer_name)
+        if per_layer is None:
+            continue
+        block_table = getattr(per_layer, "block_table", None)
+        if block_table is None or block_table.ndim != 2:
+            raise RuntimeError(
+                "FR13 qrow32 B34 pre-capture staging saw a non-2D block table"
+            )
+        return block_table
+    raise RuntimeError(
+        "FR13 qrow32 B34 pre-capture staging found no target tree layer in "
+        "the forward context attention metadata"
+    )
+
+
+def _fr13_fa2_qrow32_b34_precapture_staging(graph_id, runtime_mode, num_reqs):
+    """CAVEAT 2: allocate the padded staging BEFORE the capture begins.
+
+    Injected into CUDAGraphWrapper.__call__ immediately after
+    `cudagraph = torch.cuda.CUDAGraph()` and before the `torch.cuda.graph(...)`
+    context is entered -- the same lifecycle point the fr10 patcher uses for
+    _fr13_fixed32_capture_begin, but strictly ahead of it, so the allocation
+    can never land in the graph's private pool.
+
+    Returns the staging dict it made available, or None when this operating
+    point does not need one. It is a no-op unless the B4 production arm is
+    armed, the graph is FULL, and its width is a qualified width that is not
+    already the canonical width (only width 3 is padded; width 4 IS the
+    canonical geometry and runs against the caller's own tensors).
+    """
+    arm = _fr13_fa2_qrow32_b4_arm("FR13_FA2_QROW32_B4_PRODUCTION_ARM")
+    if arm is None:
+        return None
+    if str(runtime_mode).upper() != "FULL":
+        return None
+    width = int(num_reqs)
+    if (
+        width not in _FR13_FA2_QROW32_B34_WIDTHS
+        or width == _FR13_FA2_QROW32_B34_CANONICAL_WIDTH
+    ):
+        return None
+    if _fr13_fa2_qrow32_b4_profile_capture_active():
+        # The memory-profile bootstrap graph is not a qualified operating
+        # point (the selector bypasses it), and allocating 3.0 MiB inside the
+        # profile scope would bias the KV-cache sizing decision.
+        return None
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 qrow32 B34 pre-capture staging hook ran INSIDE capture; "
+            "the injection point moved and the allocation would come from "
+            "the graph's private pool"
+        )
+    block_table = _fr13_fa2_qrow32_b34_precapture_block_table()
+    key = _fr13_fa2_qrow32_b34_staging_key(
+        block_table.device, int(block_table.shape[1])
+    )
+    fresh = key not in _FR13_FA2_QROW32_B34_STAGING
+    staged = _fr13_fa2_qrow32_b34_staging(key[0], key[1])
+    mismatches = _fr13_fa2_qrow32_b34_shadow_mismatches(staged, width)
+    if mismatches:
+        raise RuntimeError(
+            "FR13 qrow32 B34 pre-capture staging is malformed: "
+            + "; ".join(mismatches)
+        )
+    _FR13_FA2_QROW32_B34_PRECAPTURE["calls"] += 1
+    _FR13_FA2_QROW32_B34_PRECAPTURE["graphs"][int(graph_id)] = {
+        "batch_size": width,
+        "key": list(key),
+    }
+    if fresh:
+        _FR13_FA2_QROW32_B34_PRECAPTURE["allocations"].append(
+            {
+                "device": key[0],
+                "block_columns": key[1],
+                "batch_size": width,
+                "graph_id": int(graph_id),
+                # 2 x (128,24,256) bf16 = 3,145,728 B, shared by all 16 target
+                # layers and by every padded width. The de-risk budgets 3.0 MiB.
+                "staging_bytes": (
+                    staged["query"].numel() * staged["query"].element_size()
+                    + staged["out"].numel() * staged["out"].element_size()
+                ),
+            }
+        )
     return staged
 
 
@@ -6228,11 +6431,9 @@ def _fr13_fa2_qrow32_b4_profile_capture_active():
     return True
 
 
-def _fr13_fa2_qrow32_b4_write(path_env, default_path, record):
+def _fr13_fa2_qrow32_b4_write_path(path, record):
     import json as _json
-    from pathlib import Path as _Path
 
-    path = _Path(os.environ.get(path_env, default_path))
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(
@@ -6240,6 +6441,56 @@ def _fr13_fa2_qrow32_b4_write(path_env, default_path, record):
         encoding="ascii",
     )
     temporary.replace(path)
+
+
+def _fr13_fa2_qrow32_b4_write(path_env, default_path, record):
+    from pathlib import Path as _Path
+
+    _fr13_fa2_qrow32_b4_write_path(
+        _Path(os.environ.get(path_env, default_path)), record
+    )
+
+
+_FR13_FA2_QROW32_B34_ENGAGEMENT_ENV = (
+    "FR13_FA2_QROW32_B4_PRODUCTION_ENGAGEMENT_JSON"
+)
+_FR13_FA2_QROW32_B34_ENGAGEMENT_DEFAULT = (
+    "/logs/fr13_fa2_qrow32_b4_production_engagement.json"
+)
+
+
+def _fr13_fa2_qrow32_b34_engagement_path(batch_size):
+    """One record per engaged width, never one overwriting the other.
+
+    The CANONICAL width keeps the original variable and the original default
+    path byte for byte: the sealed width-4 timing lineage reads exactly that
+    file, and widening the scope must not move it. A padded width is written
+    beside it with a `_b<width>` infix DERIVED from the same variable, so the
+    launcher contract gains no new environment name and a b=3 capture can
+    never clobber the b=4 engagement record.
+    """
+    from pathlib import Path as _Path
+
+    base = _Path(
+        os.environ.get(
+            _FR13_FA2_QROW32_B34_ENGAGEMENT_ENV,
+            _FR13_FA2_QROW32_B34_ENGAGEMENT_DEFAULT,
+        )
+    )
+    width = int(batch_size)
+    if width == _FR13_FA2_QROW32_B34_CANONICAL_WIDTH:
+        return base
+    if width not in _FR13_FA2_QROW32_B34_WIDTHS:
+        raise RuntimeError(
+            "FR13 qrow32 B34 engagement width is not qualified: " + repr(width)
+        )
+    return base.with_name(base.stem + "_b" + str(width) + base.suffix)
+
+
+def _fr13_fa2_qrow32_b34_write_engagement(batch_size, record):
+    _fr13_fa2_qrow32_b4_write_path(
+        _fr13_fa2_qrow32_b34_engagement_path(batch_size), record
+    )
 
 
 def _fr13_fa2_qrow32_b4_production_begin(
@@ -6329,7 +6580,17 @@ def _fr13_fa2_qrow32_b4_production_begin(
         )
     staged = None
     if batch_size != _FR13_FA2_QROW32_B34_CANONICAL_WIDTH:
-        staged = _fr13_fa2_qrow32_b34_staging(
+        if not capturing:
+            # Unreachable by construction (the outside-capture bypass fires
+            # first), and stated anyway: the padded branch must never enqueue
+            # its stage-in/copy-back outside the graph, because then they
+            # would not be graph NODES and the replay would serve stale rows.
+            raise RuntimeError(
+                "FR13 qrow32 B34 padded branch reached outside CUDA capture"
+            )
+        # NEVER allocate here -- see _FR13_FA2_QROW32_B34_PRECAPTURE. This is
+        # a lookup that raises if the pre-capture hook did not run.
+        staged = _fr13_fa2_qrow32_b34_require_staging(
             query.device, int(block_table.shape[1])
         )
         shadow_mismatches = _fr13_fa2_qrow32_b34_shadow_mismatches(
@@ -6392,11 +6653,28 @@ def _fr13_fa2_qrow32_b4_production_end(selection, *, completed):
         if graph_id <= 0:
             raise RuntimeError("FR13 qrow32 B4 production graph identity drifted")
         graph = _FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS.setdefault(
-            graph_id, {"layers": set(), "arm": arm}
+            graph_id,
+            {
+                "layers": set(),
+                "arm": arm,
+                "staged_layers": set(),
+                "batch_size": int(selection.get("batch_size", 0)),
+            },
         )
-        if graph["arm"] != arm or selection["layer_name"] in graph["layers"]:
+        if (
+            graph["arm"] != arm
+            or selection["layer_name"] in graph["layers"]
+            or int(graph.get("batch_size", 0))
+            != int(selection.get("batch_size", 0))
+        ):
             raise RuntimeError("FR13 qrow32 B4 production capture engagement drifted")
         graph["layers"].add(selection["layer_name"])
+        if selection.get("staged") is not None:
+            # The stage-in and copy-back were enqueued on the capturing stream
+            # inside this layer's forward, so they ARE nodes of this graph.
+            # Recording it per layer is what lets the capture-end hook prove
+            # that no target layer served the padded width eagerly.
+            graph["staged_layers"].add(selection["layer_name"])
         return
     state = _FR13_FA2_QROW32_B4_EAGER_STATE
     state["calls"] = int(state["calls"]) + 1
@@ -6406,24 +6684,55 @@ def _fr13_fa2_qrow32_b4_production_end(selection, *, completed):
             arm=arm, runtime_mode="EAGER", graph_id=0,
             graph_signature=None, layers=sorted(state["layers"]),
             calls=int(state["calls"]),
+            batch_size=int(selection.get("batch_size", 0)),
+            padded=False,
         )
-        _fr13_fa2_qrow32_b4_write(
-            "FR13_FA2_QROW32_B4_PRODUCTION_ENGAGEMENT_JSON",
-            "/logs/fr13_fa2_qrow32_b4_production_engagement.json", record,
+        _fr13_fa2_qrow32_b34_write_engagement(
+            int(selection.get("batch_size", 0)), record
         )
         state["emitted"] = True
 
 
 def _fr13_fa2_qrow32_b4_production_record(
     *, arm, runtime_mode, graph_id, graph_signature, layers, calls,
+    batch_size, padded,
 ):
     config = _FR13_FA2_QROW32_B4_ARMS[arm]
     task_ids, subset_sha256 = _fr13_fa2_qrow32_b4_require_canonical_task_set()
+    width = int(batch_size)
+    if width not in _FR13_FA2_QROW32_B34_WIDTHS:
+        raise RuntimeError(
+            "FR13 qrow32 B34 engagement record width is not qualified: "
+            + repr(width)
+        )
+    if bool(padded) != (width != _FR13_FA2_QROW32_B34_CANONICAL_WIDTH):
+        raise RuntimeError(
+            "FR13 qrow32 B34 engagement record padding disagrees with width"
+        )
     return {
         "schema": "fr13.fixed32.fa2_qrow32_b4_production_engagement.v1",
         "status": "ENGAGED", "runtime_mode": runtime_mode,
-        "batch_size": 4, "concurrency": 4, "physical_rows_per_slot": 32,
-        "total_query_rows": 128, "arm": arm,
+        # batch_size is the width the RUNTIME served. total_query_rows is the
+        # width the .SO saw: at width 3 they differ by exactly the 32 shadow
+        # rows, and saying so in the record is the whole disclosure.
+        "batch_size": width, "concurrency": width,
+        "physical_rows_per_slot": 32,
+        "total_query_rows": width * _FR13_FA2_QROW32_B34_ROWS,
+        "padded_to_canonical_width": bool(padded),
+        "canonical_width": _FR13_FA2_QROW32_B34_CANONICAL_WIDTH,
+        "canonical_query_rows": _FR13_FA2_QROW32_B34_CANONICAL_ROWS,
+        "shadow_slot": (
+            _FR13_FA2_QROW32_B34_CANONICAL_WIDTH - 1 if padded else None
+        ),
+        "shadow_seqused_k": 0 if padded else None,
+        "shadow_block_table_page": (
+            _FR13_FA2_QROW32_B34_NULL_BLOCK_ID if padded else None
+        ),
+        "staging_precapture_allocations": [
+            dict(entry)
+            for entry in _FR13_FA2_QROW32_B34_PRECAPTURE["allocations"]
+        ],
+        "arm": arm,
         "fixed32_mode": os.environ["FR13_FIXED32_MODE"],
         "selector_sentinel": config["sentinel"],
         "num_splits": config["num_splits"],
@@ -6446,7 +6755,13 @@ def _fr13_fa2_qrow32_b4_production_record(
         "task_count": len(task_ids),
         "draft_vocab_root": 1, "draft_vocab_k": 65536,
         "candidate_served": True, "fallback_allowed": False,
-        "candidate_scope": "final_fixed32_b4_full_graph_only",
+        # MARK'S RULING 2026-08-13: the scope token moves off
+        # final_fixed32_b4_full_graph_only to the b3-inclusive token. The .so,
+        # its six source digests and the C++ 33-clause TORCH_CHECK are
+        # UNCHANGED -- the widening is python-side only, and the kernel still
+        # only ever sees the canonical (b == 4, total_q == 128) geometry.
+        "candidate_scope": _FR13_FA2_QROW32_B34_CANDIDATE_SCOPE,
+        "candidate_scope_widths": list(_FR13_FA2_QROW32_B34_WIDTHS),
         "bypass_counts": dict(sorted(_FR13_FA2_QROW32_B4_BYPASS_COUNTS.items())),
         "dispatch": config["candidate_dispatch"],
     }
@@ -6481,14 +6796,46 @@ def _fr13_fa2_qrow32_b4_production_capture_end(
         raise RuntimeError(
             "FR13 qrow32 B4 production did not capture all target tree layers"
         )
+    width = int(batch_size)
+    padded = width != _FR13_FA2_QROW32_B34_CANONICAL_WIDTH
+    if int(graph.get("batch_size", 0)) != width:
+        raise RuntimeError(
+            "FR13 qrow32 B34 capture width disagrees with the served width"
+        )
+    staged_layers = set(graph.get("staged_layers", ()))
+    if padded:
+        # CAVEAT 1/2 closure. Every target layer of a padded graph must have
+        # gone through the staging branch, which means its stage-in and
+        # copy-back were enqueued while this graph was capturing and are
+        # therefore graph NODES -- not eager copies that would leave the
+        # replay serving stale rows. A pre-capture allocation must also exist.
+        if staged_layers != set(_FR13_FA2_QROW32_B4_TARGET_LAYERS):
+            raise RuntimeError(
+                "FR13 qrow32 B34 padded graph did not stage every target "
+                "layer: " + repr(sorted(
+                    set(_FR13_FA2_QROW32_B4_TARGET_LAYERS) - staged_layers
+                ))
+            )
+        precapture = _FR13_FA2_QROW32_B34_PRECAPTURE["graphs"].get(int(graph_id))
+        if (
+            not isinstance(precapture, dict)
+            or int(precapture.get("batch_size", -1)) != width
+            or not _FR13_FA2_QROW32_B34_PRECAPTURE["allocations"]
+        ):
+            raise RuntimeError(
+                "FR13 qrow32 B34 padded graph has no pre-capture staging "
+                "record; the allocation hook did not run for this graph"
+            )
+    elif staged_layers:
+        raise RuntimeError(
+            "FR13 qrow32 B34 canonical-width graph used padded staging"
+        )
     record = _fr13_fa2_qrow32_b4_production_record(
         arm=arm, runtime_mode="FULL", graph_id=int(graph_id),
         graph_signature=str(graph_signature), layers=layers, calls=len(layers),
+        batch_size=width, padded=padded,
     )
-    _fr13_fa2_qrow32_b4_write(
-        "FR13_FA2_QROW32_B4_PRODUCTION_ENGAGEMENT_JSON",
-        "/logs/fr13_fa2_qrow32_b4_production_engagement.json", record,
-    )
+    _fr13_fa2_qrow32_b34_write_engagement(width, record)
 
 
 '''
@@ -7918,6 +8265,73 @@ def _patch_cuda_graph_qrow32_b1_production(path: Path) -> bool:
     return True
 
 
+def _patch_cuda_graph_qrow32_b34_precapture_staging(path: Path) -> bool:
+    """CAVEAT 2: inject the pre-capture staging allocation hook.
+
+    The anchor is the CUDAGraph construction itself, and the hook is inserted
+    IMMEDIATELY AFTER it -- which is:
+
+      * after `validate_cudagraph_capturing_enabled()` and the input-address
+        snapshot, so the wrapper has already decided that it is going to
+        capture this batch descriptor, and
+      * before the `with ExitStack()` / `with torch.cuda.graph(...)` block, so
+        the stream is NOT capturing yet and the 3.0 MiB of staging comes from
+        the ordinary caching allocator rather than the graph's private pool,
+        and
+      * strictly ahead of the fr10 patcher's `_fr13_fixed32_capture_begin`
+        injection, which anchors on the same line
+        (scripts/fr10_phase4_patch_vllm_tree_gdn.py:39965-39986) -- exactly
+        where the de-risk puts it ("the allocation belongs immediately before
+        that", verification_1.implementation_hazard_found.required_fix).
+
+    The hook takes runtime_mode and num_reqs straight from the wrapper's own
+    scope, so it does not depend on the fr10 capture context existing yet and
+    the two patchers may be applied in either order.
+    """
+    text = path.read_text()
+    sentinel = "# FR13_FA2_QROW32_B34_PRECAPTURE_STAGING"
+    if sentinel in text:
+        return False
+    # ORDERING IS LOAD-BEARING AND IS THEREFORE ASSERTED, NOT ASSUMED. The fr10
+    # patcher's capture-begin anchor spans three lines --
+    # `cudagraph = torch.cuda.CUDAGraph()`, a blank line, and
+    # `with ExitStack() as stack:` -- so an insertion between them would break
+    # it. The launcher already runs fr10 first
+    # (scripts/fr13_launch_forked_fa2_tree_server.sh:6024 then :6033); this
+    # check turns "already ran" from a coincidence into a precondition. It is
+    # also the honest statement of the dependency: the B4/B3 production
+    # selector cannot serve without the fixed32 capture context that hook
+    # installs.
+    if "_fr13_fixed32_capture_begin(" not in text:
+        raise RuntimeError(
+            "qrow32 B34 pre-capture staging requires the fr10 fixed32 "
+            "capture-begin hook to be installed first"
+        )
+    anchor = "            cudagraph = torch.cuda.CUDAGraph()\n"
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "qrow32 B34 pre-capture staging anchor is not unique"
+        )
+    replacement = anchor + f'''            {sentinel}: allocate the padded
+            # b=3 staging buffers BEFORE capture begins. Lazy allocation is
+            # unreachable and in-capture allocation would come from this
+            # graph's private pool; the serving path therefore only ever
+            # looks the staging up, and raises if it is absent.
+            if self.runtime_mode.name == "FULL":
+                from vllm.v1.attention.backends.tree_attn import (
+                    _fr13_fa2_qrow32_b34_precapture_staging,
+                )
+                _fr13_fa2_qrow32_b34_precapture_staging(
+                    id(cudagraph),
+                    self.runtime_mode.name,
+                    entry.batch_descriptor.num_reqs,
+                )
+'''
+    path.write_text(text.replace(anchor, replacement, 1))
+    py_compile.compile(path, doraise=True)
+    return True
+
+
 def _patch_cuda_graph_qrow32_b4_production(path: Path) -> bool:
     text = path.read_text()
     sentinel = "# FR13_FA2_QROW32_B4_PRODUCTION_CAPTURE_END"
@@ -7996,8 +8410,17 @@ def patch_installed_vllm(
             site_packages / "vllm/compilation/cuda_graph.py"
         )
     elif fixed32_query_tile32_b4_production:
-        result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b4_production(
-            site_packages / "vllm/compilation/cuda_graph.py"
+        cuda_graph_path = site_packages / "vllm/compilation/cuda_graph.py"
+        # Order matters only for readability: both edits are idempotent and
+        # anchor on distinct lines. The staging hook MUST be present whenever
+        # the B4/B3 production selector is, because the selector refuses to
+        # allocate and a width-3 FULL capture would otherwise fail closed.
+        result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b34_precapture_staging(
+            cuda_graph_path
+        )
+        result["cuda_graph.py"] = (
+            _patch_cuda_graph_qrow32_b4_production(cuda_graph_path)
+            or result["cuda_graph.py"]
         )
     elif fixed32_query_tile16_production:
         result["cuda_graph.py"] = _patch_cuda_graph_qrow16_production(
