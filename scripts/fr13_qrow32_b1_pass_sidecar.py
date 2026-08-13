@@ -1,5 +1,22 @@
 #!/usr/bin/env python3
-"""Validate qrow32 B1 live gates and issue the no-split production credential."""
+"""Validate qrow32 B1 live gates and issue the production credentials.
+
+Two arms are credentialed here, from two different shapes of evidence:
+
+* ``nosplit`` (``issue``/``verify``) binds a live A/B PASS directly.
+* ``gqa_pair`` (``issue-gqa-pair``/``verify-gqa-pair``) binds the SEALED byte
+  gate artifact plus the live A/B result that gate references by digest. Both
+  are supplied by path, never by runroot, so the credential cannot be issued
+  against a stale gate: the gate's ``source_commit`` must equal the production
+  plumbing commit, which means the gate has to be re-run whenever the patcher
+  that serves the candidate changes.
+
+Issuing runs on the HOST, where git resolves the patcher's repository and HEAD.
+Verifying runs INSIDE the pinned runtime image, which ships no git binary, so
+``verify`` proves the patcher by digest instead -- see
+``validate_patch_source_digest``. Both directions are fail-closed; only the
+mechanism differs, because only the host has a repository to interrogate.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +32,32 @@ from typing import Any
 
 LIVE_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_live_paged_ab.v2"
 SIDECAR_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_production_pass.v2"
+# The sealed B1 GQA-pair byte gate and the credential issued from it. The gate
+# artifact is the authenticated wrapper (health, traffic audit, container and
+# diagnostic bindings); the raw-byte evidence itself lives in the live A/B
+# result the gate binds by digest, which is why both are required to issue.
+GQA_PAIR_GATE_SCHEMA = "fr13.fixed32.fa2_qrow32_gqa_pair_k64_b1_live_verification.v1"
+GQA_PAIR_SIDECAR_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_gqa_pair_production_pass.v1"
+GQA_PAIR_GATE_TOPOLOGY = "hydra27_fixed32"
+# The byte gate ran ONE authenticated real task. That is narrower than the
+# exact4 set production serves, and the credential says so rather than
+# laundering the difference: what bridges the gap is the selector's per-call
+# exact-geometry check, which hard-raises instead of serving any decode whose
+# shape is not the one the gate qualified.
+GQA_PAIR_GATE_TASK_IDS = ("astropy__astropy-12907",)
+GQA_PAIR_GATE_SUBSET_SHA256 = (
+    "cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb"
+)
+GQA_PAIR_SERVED_RETURN = "qrow16 captured graph output unchanged"
+GQA_PAIR_CREDENTIAL_BASIS = (
+    "raw-byte output/LSE equality between the qrow16 incumbent and GQA-pair "
+    "dispatches across all 16 tree layers of the final FULL B1 graph, on one "
+    "authenticated real SWE-Verified task at this source commit"
+)
+GQA_PAIR_REQUIRED_RUNTIME = (
+    "Hydra27 fixed32 K64 ROOT=1 B1 physical32 FULL graph"
+)
+GQA_PAIR_PRODUCTION_SCOPE = "qrow32 B1 GQA-pair exact tree attention only"
 ARM = "nosplit"
 VISIBILITY_ARM = "visibility"
 GQA_PAIR_ARM = "gqa_pair"
@@ -22,6 +65,7 @@ SELECTOR_SENTINEL = 1179791668
 GQA_PAIR_SELECTOR_SENTINEL = 1179791670
 QROW16_REFERENCE_SENTINEL = 1179791667
 NUM_SPLITS = 0
+PATCH_SOURCE_RELATIVE = "scripts/fr13_patch_fa2_tree_bias.py"
 LIVE_ARMS = {
     ARM: {
         "selector_sentinel": SELECTOR_SENTINEL,
@@ -360,9 +404,48 @@ def validate_patch_source(
     if head != expected_source_commit:
         raise ValueError("patch source commit drifted")
     relative = patch_source.resolve().relative_to(repo.resolve()).as_posix()
-    if relative != "scripts/fr13_patch_fa2_tree_bias.py":
+    if relative != PATCH_SOURCE_RELATIVE:
         raise ValueError("patch source path drifted")
     return {"source_commit": head, "patch_source_sha256": sha256_file(patch_source)}
+
+
+def validate_patch_source_digest(
+    patch_source: Path,
+    *,
+    expected_source_commit: str,
+    expected_patch_source_sha256: str,
+) -> dict[str, str]:
+    """The git-free patch-source identity check, used to VERIFY a credential.
+
+    The pinned runtime image ships no git binary, so a credential cannot be
+    re-derived from the repository inside the container. It does not need to
+    be. ``issue`` already bound this credential on the host, where git proved
+    the patcher lives at the expected path of a repository whose HEAD is the
+    expected commit. What the container must establish is narrower and, for the
+    risk that matters, stricter: that the patcher bytes about to run ARE the
+    bytes that binding was made against. A digest proves exactly that, and it
+    proves it about the file rather than about a working tree that git would
+    have been asked to describe.
+
+    Fail-closed is preserved: the digest is supplied by the caller (the
+    launcher, which validated it against the host tree at issue time) AND is
+    cross-checked against the digest recorded in the credential body, so a
+    swapped patcher fails whether or not the credential was also swapped.
+    """
+    _regular(patch_source, "patch source")
+    expected_source_commit = _commit(expected_source_commit, "source commit")
+    expected_patch_source_sha256 = _sha256(
+        expected_patch_source_sha256, "patch source"
+    )
+    if patch_source.name != PATCH_SOURCE_RELATIVE.rsplit("/", 1)[-1]:
+        raise ValueError("patch source path drifted")
+    observed = sha256_file(patch_source)
+    if observed != expected_patch_source_sha256:
+        raise ValueError("patch source digest drifted")
+    return {
+        "source_commit": expected_source_commit,
+        "patch_source_sha256": observed,
+    }
 
 
 def _validate_comparison(value: Any, label: str) -> str:
@@ -479,6 +562,277 @@ def validate_live_result(
     }
 
 
+def validate_gqa_pair_gate(
+    payload: dict[str, Any], *, source_commit: str
+) -> dict[str, Any]:
+    """Validate the sealed B1 GQA-pair byte gate artifact.
+
+    This checks the gate's own account of itself. The raw-byte equality is NOT
+    asserted here -- the gate artifact does not carry the mismatch counts, it
+    carries the digest of the live A/B result that does, and
+    ``validate_gqa_pair_binding`` follows that digest and re-validates the
+    evidence directly.
+    """
+    if payload.get("schema") != GQA_PAIR_GATE_SCHEMA:
+        raise ValueError("GQA-pair gate schema drifted")
+    if payload.get("status") != "PASS":
+        raise ValueError("GQA-pair gate result is not a PASS")
+    contract = _candidate_contract(GQA_PAIR_ARM)
+    if (
+        payload.get("candidate_so_sha256") != contract["sha256"]
+        or payload.get("candidate_so_size") != contract["size"]
+        or payload.get("fa2_head") != FA2_HEAD
+        or payload.get("fa2_source_closure_sha256")
+        != contract["source_closure_sha256"]
+    ):
+        raise ValueError("GQA-pair gate candidate identity drifted")
+    if (
+        payload.get("suite") != "SWE-Verified"
+        or payload.get("topology") != GQA_PAIR_GATE_TOPOLOGY
+        or payload.get("task_ids") != list(GQA_PAIR_GATE_TASK_IDS)
+        or payload.get("subset_sha256") != GQA_PAIR_GATE_SUBSET_SHA256
+        or payload.get("batch_size") != 1
+        or payload.get("concurrency") != 1
+        or payload.get("physical_rows") != 32
+        or payload.get("draft_vocab_root") != 1
+        or payload.get("draft_vocab_k") != 65536
+    ):
+        raise ValueError("GQA-pair gate operating point drifted")
+    # The byte gate served the incumbent and measured nothing. Those are
+    # properties of THAT run; a gate artifact claiming otherwise has been
+    # edited, and it is exactly those two claims a timing verdict would want to
+    # borrow illegitimately.
+    if (
+        payload.get("performance_measurement") is not False
+        or payload.get("served_return") != GQA_PAIR_SERVED_RETURN
+    ):
+        raise ValueError("GQA-pair gate eligibility fields were rewritten")
+    gate_commit = _commit(payload.get("source_commit"), "GQA-pair gate source commit")
+    if gate_commit != source_commit:
+        raise ValueError(
+            "GQA-pair gate was not produced at the production plumbing commit"
+        )
+    summary = {"source_commit": gate_commit}
+    for key in (
+        "live_result_sha256",
+        "layers_sha256",
+        "health_sha256",
+        "traffic_audit_sha256",
+        "block_map_sha256",
+        "diagnostic_binding_sha256",
+        "patch_source_sha256",
+    ):
+        summary[key] = _sha256(payload.get(key), f"GQA-pair gate {key}")
+    return summary
+
+
+def validate_gqa_pair_binding(
+    *,
+    gate: Path,
+    expected_gate_sha256: str,
+    live_result: Path,
+    candidate_so: Path,
+    expected_candidate_sha256: str,
+    arm: str,
+    patch_source: Path,
+    expected_source_commit: str,
+) -> dict[str, Any]:
+    """The GQA-pair credential body, without writing it: a runner pre-flight."""
+    if arm != GQA_PAIR_ARM:
+        raise ValueError("qrow32 B1 GQA-pair credential arm must be gqa_pair")
+    expected_gate_sha256 = _sha256(expected_gate_sha256, "GQA-pair gate")
+    validate_candidate(candidate_so, expected_candidate_sha256, arm=GQA_PAIR_ARM)
+    patch = validate_patch_source(
+        patch_source, expected_source_commit=expected_source_commit
+    )
+    gate_payload, gate_raw = load_json(gate)
+    if _digest(gate_raw) != expected_gate_sha256:
+        raise ValueError("GQA-pair gate raw SHA-256 mismatch")
+    gate_summary = validate_gqa_pair_gate(
+        gate_payload, source_commit=patch["source_commit"]
+    )
+    if gate_summary["patch_source_sha256"] != patch["patch_source_sha256"]:
+        raise ValueError("GQA-pair gate patch source drifted")
+    # Follow the gate's own digest to the raw-byte evidence and re-validate it.
+    live_payload, live_raw = load_json(live_result)
+    if _digest(live_raw) != gate_summary["live_result_sha256"]:
+        raise ValueError("GQA-pair live result is not the one the gate bound")
+    live_summary = validate_live_result(
+        live_payload,
+        candidate_sha256=expected_candidate_sha256,
+        arm=GQA_PAIR_ARM,
+        source_commit=patch["source_commit"],
+        patch_source_sha256=patch["patch_source_sha256"],
+    )
+    if live_summary["layers_sha256"] != gate_summary["layers_sha256"]:
+        raise ValueError("GQA-pair gate layer digest does not bind its evidence")
+    contract = _candidate_contract(GQA_PAIR_ARM)
+    arm_contract = LIVE_ARMS[GQA_PAIR_ARM]
+    body = {
+        "schema": GQA_PAIR_SIDECAR_SCHEMA,
+        "status": "PASS",
+        "arm": GQA_PAIR_ARM,
+        "selector_sentinel": arm_contract["selector_sentinel"],
+        "num_splits": arm_contract["num_splits"],
+        "reference": "qrow16 incumbent exact geometry",
+        "reference_selector_sentinel": QROW16_REFERENCE_SENTINEL,
+        "candidate_so_size": contract["size"],
+        "candidate_so_sha256": contract["sha256"],
+        "fa2_head": FA2_HEAD,
+        "fa2_source_closure_sha256": contract["source_closure_sha256"],
+        "source_commit": patch["source_commit"],
+        "patch_source_sha256": patch["patch_source_sha256"],
+        "gate_schema": GQA_PAIR_GATE_SCHEMA,
+        "gate_sha256": expected_gate_sha256,
+        "gate_canonical_sha256": _digest(canonical_bytes(gate_payload)),
+        "gate_topology": GQA_PAIR_GATE_TOPOLOGY,
+        "gate_task_ids": list(GQA_PAIR_GATE_TASK_IDS),
+        "gate_subset_sha256": GQA_PAIR_GATE_SUBSET_SHA256,
+        "gate_performance_measurement": False,
+        "gate_served_return": GQA_PAIR_SERVED_RETURN,
+        "gate_health_sha256": gate_summary["health_sha256"],
+        "gate_traffic_audit_sha256": gate_summary["traffic_audit_sha256"],
+        "gate_block_map_sha256": gate_summary["block_map_sha256"],
+        "gate_diagnostic_binding_sha256": gate_summary[
+            "diagnostic_binding_sha256"
+        ],
+        "live_gate_schema": LIVE_SCHEMA,
+        "live_result_sha256": gate_summary["live_result_sha256"],
+        "live_result_canonical_sha256": _digest(canonical_bytes(live_payload)),
+        "instance_id": live_summary["instance_id"],
+        "layers_sha256": live_summary["layers_sha256"],
+        "layer_count": 16,
+        "output_raw_byte_mismatches": 0,
+        "lse_raw_byte_mismatches": 0,
+        "credential_basis": GQA_PAIR_CREDENTIAL_BASIS,
+        "required_runtime": GQA_PAIR_REQUIRED_RUNTIME,
+        "production_scope": GQA_PAIR_PRODUCTION_SCOPE,
+        # Production serves exact4; the gate qualified one task. The selector's
+        # exact-geometry hard-raise is what makes the wider scope safe, not any
+        # claim the gate made.
+        "production_task_ids": list(EXACT4_TASK_IDS),
+        "production_subset_sha256": EXACT4_SUBSET_SHA256,
+        "gate_scope_narrower_than_production": True,
+        "fallback_allowed": False,
+    }
+    return body
+
+
+def issue_gqa_pair_sidecar(
+    *,
+    gate: Path,
+    expected_gate_sha256: str,
+    live_result: Path,
+    candidate_so: Path,
+    expected_candidate_sha256: str,
+    arm: str,
+    patch_source: Path,
+    expected_source_commit: str,
+    out: Path,
+) -> dict[str, Any]:
+    body = validate_gqa_pair_binding(
+        gate=gate,
+        expected_gate_sha256=expected_gate_sha256,
+        live_result=live_result,
+        candidate_so=candidate_so,
+        expected_candidate_sha256=expected_candidate_sha256,
+        arm=arm,
+        patch_source=patch_source,
+        expected_source_commit=expected_source_commit,
+    )
+    sidecar = dict(body)
+    sidecar["canonical_sha256"] = _digest(canonical_bytes(body))
+    if out.exists() or out.is_symlink():
+        raise ValueError(f"refusing to replace qrow32 B1 GQA-pair sidecar: {out}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    temporary = out.with_name(out.name + f".tmp.{os.getpid()}")
+    temporary.write_bytes(canonical_bytes(sidecar) + b"\n")
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, out)
+    return sidecar
+
+
+def verify_gqa_pair_sidecar(
+    *,
+    sidecar_path: Path,
+    expected_sidecar_sha256: str,
+    candidate_so: Path,
+    expected_candidate_sha256: str,
+    arm: str,
+    patch_source: Path,
+    expected_source_commit: str,
+    expected_patch_source_sha256: str,
+) -> dict[str, Any]:
+    # Verification runs INSIDE the pinned runtime image, which has no git, so
+    # the patch source is proven by digest rather than by repository state.
+    if arm != GQA_PAIR_ARM:
+        raise ValueError("qrow32 B1 GQA-pair credential arm must be gqa_pair")
+    expected_sidecar_sha256 = _sha256(expected_sidecar_sha256, "pass sidecar")
+    validate_candidate(candidate_so, expected_candidate_sha256, arm=GQA_PAIR_ARM)
+    patch = validate_patch_source_digest(
+        patch_source,
+        expected_source_commit=expected_source_commit,
+        expected_patch_source_sha256=expected_patch_source_sha256,
+    )
+    payload, raw = load_json(sidecar_path)
+    if _digest(raw) != expected_sidecar_sha256:
+        raise ValueError("pass sidecar raw SHA-256 mismatch")
+    canonical = payload.pop("canonical_sha256", None)
+    if _sha256(canonical, "sidecar canonical") != _digest(canonical_bytes(payload)):
+        raise ValueError("pass sidecar canonical digest mismatch")
+    contract = _candidate_contract(GQA_PAIR_ARM)
+    arm_contract = LIVE_ARMS[GQA_PAIR_ARM]
+    if (
+        payload.get("schema") != GQA_PAIR_SIDECAR_SCHEMA
+        or payload.get("status") != "PASS"
+        or payload.get("arm") != GQA_PAIR_ARM
+        or payload.get("selector_sentinel") != arm_contract["selector_sentinel"]
+        or payload.get("num_splits") != arm_contract["num_splits"]
+        or payload.get("reference") != "qrow16 incumbent exact geometry"
+        or payload.get("reference_selector_sentinel") != QROW16_REFERENCE_SENTINEL
+        or payload.get("candidate_so_size") != contract["size"]
+        or payload.get("candidate_so_sha256") != contract["sha256"]
+        or payload.get("fa2_head") != FA2_HEAD
+        or payload.get("fa2_source_closure_sha256")
+        != contract["source_closure_sha256"]
+        or payload.get("source_commit") != patch["source_commit"]
+        or payload.get("patch_source_sha256") != patch["patch_source_sha256"]
+        or payload.get("gate_schema") != GQA_PAIR_GATE_SCHEMA
+        or payload.get("gate_topology") != GQA_PAIR_GATE_TOPOLOGY
+        or payload.get("gate_task_ids") != list(GQA_PAIR_GATE_TASK_IDS)
+        or payload.get("gate_subset_sha256") != GQA_PAIR_GATE_SUBSET_SHA256
+        or payload.get("gate_performance_measurement") is not False
+        or payload.get("gate_served_return") != GQA_PAIR_SERVED_RETURN
+        or payload.get("live_gate_schema") != LIVE_SCHEMA
+        or payload.get("instance_id") != GQA_PAIR_GATE_TASK_IDS[0]
+        or payload.get("layer_count") != 16
+        or payload.get("output_raw_byte_mismatches") != 0
+        or payload.get("lse_raw_byte_mismatches") != 0
+        or payload.get("credential_basis") != GQA_PAIR_CREDENTIAL_BASIS
+        or payload.get("required_runtime") != GQA_PAIR_REQUIRED_RUNTIME
+        or payload.get("production_scope") != GQA_PAIR_PRODUCTION_SCOPE
+        or payload.get("production_task_ids") != list(EXACT4_TASK_IDS)
+        or payload.get("production_subset_sha256") != EXACT4_SUBSET_SHA256
+        or payload.get("gate_scope_narrower_than_production") is not True
+        or payload.get("fallback_allowed") is not False
+    ):
+        raise ValueError("pass sidecar contract drifted")
+    for key in (
+        "gate_sha256",
+        "gate_canonical_sha256",
+        "gate_health_sha256",
+        "gate_traffic_audit_sha256",
+        "gate_block_map_sha256",
+        "gate_diagnostic_binding_sha256",
+        "live_result_sha256",
+        "live_result_canonical_sha256",
+        "layers_sha256",
+    ):
+        _sha256(payload.get(key), key)
+    payload["canonical_sha256"] = canonical
+    return payload
+
+
 def issue_sidecar(
     *,
     live_result: Path,
@@ -551,11 +905,16 @@ def verify_sidecar(
     arm: str,
     patch_source: Path,
     expected_source_commit: str,
+    expected_patch_source_sha256: str,
 ) -> dict[str, Any]:
+    # Verification runs INSIDE the pinned runtime image, which has no git, so
+    # the patch source is proven by digest rather than by repository state.
     expected_sidecar_sha256 = _sha256(expected_sidecar_sha256, "pass sidecar")
     validate_candidate(candidate_so, expected_candidate_sha256)
-    patch = validate_patch_source(
-        patch_source, expected_source_commit=expected_source_commit
+    patch = validate_patch_source_digest(
+        patch_source,
+        expected_source_commit=expected_source_commit,
+        expected_patch_source_sha256=expected_patch_source_sha256,
     )
     payload, raw = load_json(sidecar_path)
     if _digest(raw) != expected_sidecar_sha256:
@@ -615,14 +974,72 @@ def main() -> int:
         else:
             command.add_argument("--sidecar", required=True, type=Path)
             command.add_argument("--expected-sidecar-sha256", required=True)
+            # Verification runs in the git-less runtime image; the launcher
+            # supplies the digest it validated against the host tree.
+            command.add_argument(
+                "--expected-patch-source-sha256", required=True
+            )
         command.add_argument("--candidate-so", required=True, type=Path)
         command.add_argument("--expected-candidate-sha256", required=True)
         command.add_argument("--arm", required=True, choices=(ARM,))
         command.add_argument("--patch-source", required=True, type=Path)
         command.add_argument("--expected-source-commit", required=True)
+    # The GQA-pair arm keeps its own subcommands rather than overloading the
+    # no-split ones: its evidence is a different artifact pair (sealed gate +
+    # the live A/B result the gate binds), and the incumbent credential path
+    # stays byte-for-byte unchanged.
+    for name in ("validate-gqa-pair", "issue-gqa-pair", "verify-gqa-pair"):
+        command = subparsers.add_parser(name)
+        if name == "verify-gqa-pair":
+            command.add_argument("--sidecar", required=True, type=Path)
+            command.add_argument("--expected-sidecar-sha256", required=True)
+            # Verification runs in the git-less runtime image; the launcher
+            # supplies the digest it validated against the host tree.
+            command.add_argument(
+                "--expected-patch-source-sha256", required=True
+            )
+        else:
+            # By PATH, never by runroot: the credential must be issued against
+            # a gate re-run at the production plumbing commit.
+            command.add_argument("--gate", required=True, type=Path)
+            command.add_argument("--expected-gate-sha256", required=True)
+            command.add_argument("--live-result", required=True, type=Path)
+            if name == "issue-gqa-pair":
+                command.add_argument("--out", required=True, type=Path)
+        command.add_argument("--candidate-so", required=True, type=Path)
+        command.add_argument("--expected-candidate-sha256", required=True)
+        command.add_argument("--arm", required=True, choices=(GQA_PAIR_ARM,))
+        command.add_argument("--patch-source", required=True, type=Path)
+        command.add_argument("--expected-source-commit", required=True)
     args = parser.parse_args()
     if args.command == "validate-source":
         result = validate_source_closure(args.source_root, arm=args.arm)
+    elif args.command in ("validate-gqa-pair", "issue-gqa-pair"):
+        binding = dict(
+            gate=args.gate,
+            expected_gate_sha256=args.expected_gate_sha256,
+            live_result=args.live_result,
+            candidate_so=args.candidate_so,
+            expected_candidate_sha256=args.expected_candidate_sha256,
+            arm=args.arm,
+            patch_source=args.patch_source,
+            expected_source_commit=args.expected_source_commit,
+        )
+        if args.command == "validate-gqa-pair":
+            result = validate_gqa_pair_binding(**binding)
+        else:
+            result = issue_gqa_pair_sidecar(out=args.out, **binding)
+    elif args.command == "verify-gqa-pair":
+        result = verify_gqa_pair_sidecar(
+            sidecar_path=args.sidecar,
+            expected_sidecar_sha256=args.expected_sidecar_sha256,
+            candidate_so=args.candidate_so,
+            expected_candidate_sha256=args.expected_candidate_sha256,
+            arm=args.arm,
+            patch_source=args.patch_source,
+            expected_source_commit=args.expected_source_commit,
+            expected_patch_source_sha256=args.expected_patch_source_sha256,
+        )
     elif args.command == "issue":
         result = issue_sidecar(
             live_result=args.live_result,
@@ -643,6 +1060,7 @@ def main() -> int:
             arm=args.arm,
             patch_source=args.patch_source,
             expected_source_commit=args.expected_source_commit,
+            expected_patch_source_sha256=args.expected_patch_source_sha256,
         )
     print(json.dumps(result, ensure_ascii=True, sort_keys=True))
     return 0

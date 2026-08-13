@@ -864,6 +864,28 @@ def _fixed32_qwen_reasoning_only_record(message: dict[str, Any]) -> bool:
     )
 
 
+def _fixed32_qwen_blank_text_record(message: dict[str, Any]) -> bool:
+    """True when an assistant record carries only whitespace-only text blocks.
+
+    Qwen may trail its closing reasoning with a text record that is pure
+    whitespace -- observed live as ``"\\n\\n"``. The record contributes no
+    visible text and no ``tool_use``, so it can never be read as a
+    submission; it only shows that the turn emitted an empty message. It is
+    never sufficient on its own (see the caller), because a bare whitespace
+    record is indistinguishable from a degenerate empty response.
+    """
+    content = message.get("content")
+    if not isinstance(content, list) or not content:
+        return False
+    return all(
+        isinstance(item, dict)
+        and item.get("type") == "text"
+        and isinstance(item.get("text"), str)
+        and not item["text"].strip()
+        for item in content
+    )
+
+
 def _fixed32_qwen_synthetic_compaction_failure(
     group: list[tuple[dict[str, Any], dict[str, Any], str, int]],
     *,
@@ -2237,9 +2259,30 @@ def validate_fixed32_trace_model_requests(
             # reasoning-only turn, whose records carry ``thinking`` blocks
             # and nothing else; that turn was still served by the engine, so
             # it is accepted here and counted below like any other group.
-            reasoning_only_final_group = nonempty_text_count == 0 and all(
-                _fixed32_qwen_reasoning_only_record(message)
+            #
+            # That closing turn may also trail its reasoning with a
+            # whitespace-only text record -- observed live as ``"\n\n"``
+            # ending a 434-event trajectory that had already produced a real
+            # 2216-byte patch. The blank record carries no visible text, so
+            # it still cannot be read as a submission, and the reasoning in
+            # the same group remains the positive evidence that the engine
+            # served the turn. A final group carrying no reasoning at all
+            # stays invalid: a bare whitespace record on its own is
+            # indistinguishable from a degenerate empty response.
+            silent_records = [
+                message
                 for _event, message, _event_id, _event_index in group
+            ]
+            reasoning_only_final_group = nonempty_text_count == 0 and (
+                any(
+                    _fixed32_qwen_reasoning_only_record(message)
+                    for message in silent_records
+                )
+                and all(
+                    _fixed32_qwen_reasoning_only_record(message)
+                    or _fixed32_qwen_blank_text_record(message)
+                    for message in silent_records
+                )
             )
             if (
                 parent_tool_use_id is not None
@@ -3012,9 +3055,9 @@ def _expected_runtime_fa2_identity(
             "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, "
             "visibility, or gqa_pair"
         )
-    if qrow32_b1_production not in {"", "nosplit"}:
+    if qrow32_b1_production not in {"", "nosplit", "gqa_pair"}:
         raise ContractError(
-            "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit"
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty, nosplit, or gqa_pair"
         )
     if qrow32_b1_live and qrow32_b1_production:
         raise ContractError(
@@ -3065,7 +3108,12 @@ def _expected_runtime_fa2_identity(
         return QROW32_B4_GQA_PAIR_FA2_SIZE, QROW32_B4_GQA_PAIR_FA2_SHA256
     if qrow32_b1_live or qrow32_b1_production:
         declared_sha256 = env.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
-        if qrow32_b1_live == "gqa_pair":
+        # Resolve the arm that decides which binary is loaded. A production
+        # launch has no live arm, so keying on the live arm alone would check
+        # a GQA-pair production run against the split2/incumbent pins and
+        # demand the wrong .so.
+        qrow32_b1_pin_arm = qrow32_b1_live or qrow32_b1_production
+        if qrow32_b1_pin_arm == "gqa_pair":
             if not QROW32_B1_GQA_PAIR_FA2_SHA256 or not QROW32_B1_GQA_PAIR_FA2_SIZE:
                 raise ContractError(
                     "qrow32 B1 GQA-pair binary is not pinned: fill "
@@ -3080,7 +3128,7 @@ def _expected_runtime_fa2_identity(
         else:
             expected = (
                 (QROW32_B1_VISIBILITY_FA2_SIZE, QROW32_B1_VISIBILITY_FA2_SHA256)
-                if qrow32_b1_live == "visibility"
+                if qrow32_b1_pin_arm == "visibility"
                 else (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256)
             )
         if declared_sha256 != expected[1]:

@@ -86,7 +86,9 @@ def test_runtime_identity_selects_pinned_qrow32_nosplit_for_production() -> None
         QROW32_SPLIT2_EXPECTED_SHA256,
     )
     env["FR13_FA2_QROW32_B1_PRODUCTION_ARM"] = "split2"
-    with pytest.raises(contract.ContractError, match="empty or nosplit"):
+    # split2 stays refused as a production arm even now that the
+    # byte-qualified gqa_pair arm is admitted alongside nosplit.
+    with pytest.raises(contract.ContractError, match="empty, nosplit, or gqa_pair"):
         contract._expected_runtime_fa2_identity(env)
 
 

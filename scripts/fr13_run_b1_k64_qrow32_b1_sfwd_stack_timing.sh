@@ -712,7 +712,8 @@ SIDECAR_SHA256=$(sha256sum "$SIDECAR" | awk '{print $1}')
   --expected-candidate-sha256 "$CANDIDATE_SHA256" \
   --arm nosplit \
   --patch-source scripts/fr13_patch_fa2_tree_bias.py \
-  --expected-source-commit "$SOURCE_COMMIT" >/dev/null
+  --expected-source-commit "$SOURCE_COMMIT" \
+  --expected-patch-source-sha256 "$PATCH_SOURCE_SHA256" >/dev/null
 if [[ "$COMPOSED_STACK" == "1" ]]; then
   GQA3_PRODUCTION_CREDENTIAL="$ARMDIR/logs/fr13_fixed32_gdn_gqa_group3.production_credential.json"
   GQA3_PRODUCTION_ARM="$ARMDIR/logs/fr13_fixed32_gdn_gqa_group3.production.arm"

@@ -29,6 +29,9 @@ PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 FIXED32_MODE=hydra27_fixed32
 LIVE_ARM=${FR13_QROW32_B1_LIVE_ARM:-split2}
 TASK_ID=astropy__astropy-12907
+# The B1 diagnostic profile selects the subset/task pair; pin it here rather
+# than inheriting the serve variant's default, and assert it in the binding.
+B1_DIAGNOSTIC_PROFILE=astropy12907
 SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
 SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
 BLOCK_MAP=scripts/fr13_dvk_subset_blocks.json
@@ -164,12 +167,13 @@ if env \
     RUNROOT="$RUNROOT_ABS" \
     OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S= \
     LUMO_SWE_AUTOCOMMIT=0 FR13_FIXED32_B1_DIAGNOSTIC=1 \
+    FR13_B1_DIAGNOSTIC_TASK_PROFILE="$B1_DIAGNOSTIC_PROFILE" \
     FR13_DRAFT_VOCAB_ROOT=1 FR13_DRAFT_VOCAB_K=65536 \
     FR13_DRAFT_VOCAB_BLOCKS="$BLOCK_MAP_CONTAINER" FR13_NEEDS_ALLOW= \
     FR13_MANDATORY_WEIGHT_BYTES="$MANDATORY_WEIGHT_BYTES" \
     FR13_WEIGHT_FLOOR_MS="$MANDATORY_WEIGHT_FLOOR_MS" \
     FR10_METRICS=0 ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE \
-    FR13_SFWD_GPU_TIMER=0 FR13_DFWD_GPU_TIMER=0 FR13_CFWD_GPU_TIMER=0 \
+    FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION=0 \
     FR13_FIXED32_BATCH_GDN_BYTE_AB=0 FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB=0 \
@@ -265,6 +269,7 @@ unset artifact
   "$LIVE_RESULT" "$DIAGNOSTIC" "$HEALTH" "$TRAFFIC_AUDIT" \
   "$QROW32_B1_FA2_SO" "$SOURCE_COMMIT" "$PATCH_SOURCE_SHA256" \
   "$SUBSET_SHA256" "$BLOCK_MAP_SHA256" "$LIVE_ARM" \
+  "$B1_DIAGNOSTIC_PROFILE" \
   "$ARMDIR/qrow32_${LIVE_ARM}_live_verification.json" <<'PY'
 import hashlib
 import json
@@ -275,7 +280,8 @@ from scripts import fr13_qrow32_b1_pass_sidecar as qrow
 
 (
     live_path, diagnostic_path, health_path, traffic_path, candidate_path,
-    source_commit, patch_sha, subset_sha, block_sha, live_arm, output_path,
+    source_commit, patch_sha, subset_sha, block_sha, live_arm,
+    diagnostic_profile, output_path,
 ) = sys.argv[1:]
 candidate = qrow._candidate_contract(live_arm)
 live, live_raw = qrow.load_json(Path(live_path))
@@ -292,9 +298,11 @@ if diagnostic != {
     "schema": "fr13-fixed32-b1-diagnostic-v1",
     "run_classification": "b1_diagnostic",
     "gate_eligible": False,
+    "timing_eligible": False,
     "floor_acceptance_eligible": False,
     "max_num_seqs": 1,
     "swe_concurrency": 1,
+    "diagnostic_profile": diagnostic_profile,
     "subset_path": str(Path("config/fr13_fixed32/subset_b1_diagnostic_one.json").resolve()),
     "subset_sha256": subset_sha,
     "task_ids": [qrow.EXACT4_TASK_IDS[0]],

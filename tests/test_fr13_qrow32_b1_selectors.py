@@ -228,7 +228,9 @@ def test_nosplit_live_call_uses_hidden_sentinel_and_zero_splits(
         "FR13_FA2_QROW32_B1_PRODUCTION_ARM"
     ) == "nosplit"
     monkeypatch.setenv("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "split2")
-    with pytest.raises(RuntimeError, match="must be empty or nosplit"):
+    # split2 is a registered arm but a gate-only instrument, so it stays
+    # refused as a PRODUCTION arm even now that gqa_pair is admitted.
+    with pytest.raises(RuntimeError, match="must be empty or one of nosplit, gqa_pair"):
         namespace["_fr13_fa2_qrow32_b1_arm"](
             "FR13_FA2_QROW32_B1_PRODUCTION_ARM"
         )
@@ -705,7 +707,10 @@ def test_launcher_requires_exact_binary_source_graph_and_real_gate() -> None:
         "visibility, or gqa_pair"
         in text
     )
-    assert "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or nosplit" in text
+    assert (
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty, nosplit, or gqa_pair"
+        in text
+    )
     assert "FR13 qrow32 B1 live gate requires the canonical K64/root1 real task" in text
     assert '"${FR13_FIXED32_MODE:-}" == "hydra27_fixed32"' in text
     assert '"${ENFORCE_EAGER:-0}" == "0"' in text
@@ -729,7 +734,15 @@ def test_live_gate_is_authenticated_one_task_non_timing_qrow16_served() -> None:
     assert 'ingress = traffic.get("ingress")' in text
     assert 'ingress.get("exact_proxy_engine_attempt_parity") is not True' in text
     assert '"served_return": "qrow16 captured graph output unchanged"' in text
-    assert "FR13_SFWD_GPU_TIMER=0" in text
+    # The fixed32 launcher requires the GPU timers on for every run
+    # (hardware-floor evidence), so the gate pins them on rather than off --
+    # pinning them off made the gate unlaunchable. They are instrumentation:
+    # what makes this gate non-timing is the classification it emits and the
+    # performance_measurement flag it asserts, both checked below.
+    assert "FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1" in text
+    assert "FR13_SFWD_GPU_TIMER=0" not in text
+    assert "timing_eligible=0" in text
+    assert '"performance_measurement": False' in text
     assert "ENFORCE_EAGER=0 CUDAGRAPH_MODE=FULL_AND_PIECEWISE" in text
     assert "fr13_qrow32_b1_pass_sidecar.py validate-source" in text
     assert 'PYTHONPATH="$REPO/scripts${PYTHONPATH:+:$PYTHONPATH}"' in text
@@ -811,6 +824,7 @@ def test_sidecar_is_binary_source_and_nosplit_bound(tmp_path: Path) -> None:
         arm="nosplit",
         patch_source=PATCHER,
         expected_source_commit=source_commit,
+        expected_patch_source_sha256=patch_sha256,
     )
     assert issued["arm"] == "nosplit"
     assert issued["num_splits"] == 0
@@ -883,3 +897,163 @@ def test_sidecar_is_binary_source_and_nosplit_bound(tmp_path: Path) -> None:
             candidate_sha256=module.CANDIDATE_SHA256,
             arm="no_split",
         )
+
+
+def _issue_b1_credential(module, tmp_path: Path):
+    """Issue a real B1 credential the way the host launcher does."""
+    candidate = tmp_path / "candidate.so"
+    candidate.write_bytes(b"combined-qrow32-candidate")
+    module.CANDIDATE_SIZE = candidate.stat().st_size
+    module.CANDIDATE_SHA256 = module.sha256_file(candidate)
+    source_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
+    patch_sha256 = module.sha256_file(PATCHER)
+    live = tmp_path / "live.json"
+    live.write_text(
+        json.dumps(
+            _live_payload(module, module.CANDIDATE_SHA256, source_commit, patch_sha256),
+            ensure_ascii=True,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="ascii",
+    )
+    sidecar = tmp_path / "pass.json"
+    issued = module.issue_sidecar(
+        live_result=live,
+        expected_live_sha256=module.sha256_file(live),
+        candidate_so=candidate,
+        expected_candidate_sha256=module.CANDIDATE_SHA256,
+        arm="nosplit",
+        patch_source=PATCHER,
+        expected_source_commit=source_commit,
+        out=sidecar,
+    )
+    return candidate, source_commit, patch_sha256, sidecar, issued
+
+
+def test_sidecar_verify_needs_no_git_binary(tmp_path: Path, monkeypatch) -> None:
+    """The pinned runtime image ships no git; verification must not need one.
+
+    This is the B4 failure (8940cd1ba) in its B1 form. There, the candidate arm
+    died at container init because verify_sidecar shelled out to
+    `git rev-parse --show-toplevel` and vllm/vllm-openai carries no git binary --
+    FileNotFoundError killed the server before health, so the selector was never
+    reached. The B1 production arm carried the identical dependency and had
+    simply never been run in-container. Issuing still runs on the host, where git
+    is present and still used.
+    """
+    module = _module(SIDECAR, "qrow32_sidecar_nogit")
+    candidate, source_commit, patch_sha256, sidecar, issued = _issue_b1_credential(
+        module, tmp_path
+    )
+
+    # Reproduce the container exactly: nothing resolvable on PATH, and any
+    # attempt to spawn a subprocess at all is a test failure.
+    empty = tmp_path / "empty-bin"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+
+    def _no_subprocess(*args, **kwargs):
+        raise AssertionError("verify_sidecar must not shell out (git is absent)")
+
+    monkeypatch.setattr(module.subprocess, "run", _no_subprocess)
+
+    verified = module.verify_sidecar(
+        sidecar_path=sidecar,
+        expected_sidecar_sha256=module.sha256_file(sidecar),
+        candidate_so=candidate,
+        expected_candidate_sha256=module.CANDIDATE_SHA256,
+        arm="nosplit",
+        patch_source=PATCHER,
+        expected_source_commit=source_commit,
+        expected_patch_source_sha256=patch_sha256,
+    )
+    assert verified["canonical_sha256"] == issued["canonical_sha256"]
+    assert verified["patch_source_sha256"] == patch_sha256
+
+
+def test_sidecar_verify_is_fail_closed_on_the_patch_source(tmp_path: Path) -> None:
+    """Digest verification must refuse anything but the issued patcher bytes."""
+    module = _module(SIDECAR, "qrow32_sidecar_failclosed")
+    candidate, source_commit, patch_sha256, sidecar, _ = _issue_b1_credential(
+        module, tmp_path
+    )
+
+    def _verify_with(patch_source, expected_digest):
+        return module.verify_sidecar(
+            sidecar_path=sidecar,
+            expected_sidecar_sha256=module.sha256_file(sidecar),
+            candidate_so=candidate,
+            expected_candidate_sha256=module.CANDIDATE_SHA256,
+            arm="nosplit",
+            patch_source=patch_source,
+            expected_source_commit=source_commit,
+            expected_patch_source_sha256=expected_digest,
+        )
+
+    # The caller's declared digest is not the patcher on disk.
+    with pytest.raises(ValueError, match="patch source digest drifted"):
+        _verify_with(PATCHER, "0" * 64)
+
+    # A substituted patcher is refused even when the caller's declared digest
+    # matches the impostor: the credential body carries the real one, and the
+    # two must agree.
+    impostor = tmp_path / "fr13_patch_fa2_tree_bias.py"
+    impostor.write_bytes(b"# not the patcher\n")
+    with pytest.raises(ValueError, match="contract drifted"):
+        _verify_with(impostor, module.sha256_file(impostor))
+
+    # A patcher at the wrong path is refused before its bytes are read.
+    renamed = tmp_path / "not_the_patcher.py"
+    renamed.write_bytes(PATCHER.read_bytes())
+    with pytest.raises(ValueError, match="patch source path drifted"):
+        _verify_with(renamed, patch_sha256)
+
+
+def test_launcher_hands_the_patcher_digest_to_in_container_verify() -> None:
+    """In-container verification runs where there is no git.
+
+    So the launcher must hand it the patcher digest it already validated against
+    the host tree -- the same digest the host-side guard compares to
+    `sha256sum scripts/fr13_patch_fa2_tree_bias.py`.
+    """
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    # The subcommand is now selected per arm (verify / verify-gqa-pair), so
+    # anchor on the invocation rather than on a literal subcommand.
+    verify_block = launcher[
+        launcher.index(
+            'fr13_qrow32_b1_pass_sidecar.py "\\$_fr13_b1_verify_command"'
+        ) :
+    ]
+    verify_block = verify_block[: verify_block.index("INTERNAL_ATTESTED=1")]
+    # Both arms go through this one call site, so the digest covers both.
+    assert "_fr13_b1_verify_command=verify-gqa-pair" in launcher
+    assert (
+        '--expected-patch-source-sha256 "\\$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256"'
+        in verify_block
+    )
+    # The digest the launcher forwards is the one it bound on the host.
+    assert (
+        '"$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" == '
+        '"$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d\' \' -f1)"'
+        in launcher
+    )
+    assert (
+        '-e FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256='
+        '"$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256"' in launcher
+    )
+
+
+def test_host_side_timing_runner_supplies_the_patcher_digest() -> None:
+    """The host-side verify caller must satisfy the now-required argument."""
+    text = TIMING_RUNNER.read_text()
+    verify_block = text[text.index("fr13_qrow32_b1_pass_sidecar.py verify") :]
+    verify_block = verify_block[: verify_block.index("\nif ")]
+    assert '--expected-patch-source-sha256 "$PATCH_SOURCE_SHA256"' in verify_block
