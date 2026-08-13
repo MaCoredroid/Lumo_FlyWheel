@@ -170,7 +170,7 @@ threshold at four passes: **MDE = 6.42 ms/step** (Tail23), 4.20 ms (Hydra27).
 |---|---|---:|---:|---|---|
 | 1 | **B4 FA2 `gqa_pair` re-test** | 69.75 ms/step (17.0%) | see below | ≫ | **RE-TEST — rank 1** |
 | 2 | **GDN `single_launch` B4 route** | 51.91 ms/step GDN total | ~7.0 ms | 1.09× | **PROMOTE — rank 2** |
-| 3 | **prefill contention** | ~38% of window wall is not decode steps | dilution factor | n/a | **rank 3, and it taxes 1 and 2** |
+| 3 | **prefill contention** | **40.7%** of window wall is outside decode steps | dilution factor | n/a | **rank 3, and it taxes 1 and 2** |
 | 4 | **F-window 4-byte D2H** | 6.55 ms host residual; 0.081 ms of ≤8 B copies | ~2.9 ms | 0.45× | **BELOW THRESHOLD** |
 | 5 | *(new)* GEMM + LM head | 134.82 ms/step (32.8%) | **0** | — | **FLOOR, not a lever** |
 
@@ -212,13 +212,26 @@ unmeasurable at n=4.
 
 Observed directly and unmistakably during the capture: for **~10 minutes** the
 pure-decode step counter did not advance at all (1153 → 1153) while
-`prompt_tokens_total` climbed 4.04 M → 5.46 M with 4 requests resident. Decode
-steps accounted for 211.85 s of span inside a ~343 s collection — **~38% of
-window wall is not decode steps**.
+`prompt_tokens_total` climbed 4.04 M → 5.46 M with 4 requests resident.
+
+Measured from the trace's own NVTX step ranges (540 real ranges; one
+capture-boundary artifact at a bogus timestamp excluded):
+
+```
+collection extent            360.19 s
+inside decode step ranges    213.75 s   (59.3%)
+outside decode step ranges   146.44 s   (40.7%)
+  concentrated in 33 gaps > 1 s totalling 146.4 s, longest 20.6 s
+mean decode step duration    395.83 ms over 540 steps
+```
+
+**40.7% of the captured window wall is not inside a decode step at all**, and it
+is not diffuse — essentially all of it is 33 discrete gaps averaging 4.4 s. Those
+are prefill bursts and agent tool-use stalls, not per-step overhead.
 
 This is not a kernel lever, and it is the reason the other two are worth less
 than their ms/step suggests: a decode-step saving of X ms moves total wall by
-roughly 0.62·X. It is also why `events_per_step` in the capture is 3.265 against
+roughly 0.59·X. It is also why `events_per_step` in the capture is 3.265 against
 the window's 3.600 — co-residency oscillates with agent tool-use.
 
 ### 4. F-window 4-byte D2H — real, and below the detection threshold
@@ -257,8 +270,9 @@ stack near the cap.
    kernel. Re-test before anything else.
 2. **GDN `single_launch` B4 route** — kernel work already done, ~7.0 ms expected,
    clears the MDE by 1.09×. Cheapest promotion available.
-3. **Prefill contention / scheduling** — ~38% of window wall, and it dilutes 1
-   and 2 by ~0.62. Not a kernel change; the biggest structural item left.
+3. **Prefill contention / scheduling** — 40.7% of window wall sits outside
+   decode steps, in 33 discrete gaps, so a decode-step saving of X ms moves
+   total wall by ~0.59·X. Not a kernel change; the biggest structural item left.
 4. **CFWD small-kernel consolidation** *(new, unranked)* — 37.1 ms/step of
    elementwise + other across 321k tiny instances per step. Not yet a lever
    because no candidate exists, but it is the third-largest addressable pile and
