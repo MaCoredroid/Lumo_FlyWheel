@@ -292,6 +292,131 @@ def batch_conditioned(
     return {"available": True, **result}
 
 
+def per_width_placebo(
+    stock_bc: dict[str, Any], candidate_bc: dict[str, Any]
+) -> dict[str, Any]:
+    """The strongest causal evidence this design produces, and it is free.
+
+    The candidate kernel is served at EXACTLY ONE operating point -- the final
+    fixed32 B4 FULL graph, i.e. served batch width == slots. Every narrower step
+    inside the same window runs the IDENTICAL stock dispatch on BOTH arms,
+    because the candidate's scope is `final_fixed32_b4_full_graph_only`.
+
+    So the narrow widths are a NATURAL PLACEBO, drawn from the same arms, the
+    same hosts, the same window and the same wall chain as the treated width.
+    If a step-wall gain shows up at widths where the code is identical, the
+    contrast is measuring arm-to-arm confound rather than the kernel, and the
+    headline delta must not be believed. If the gain appears only at the treated
+    width, the effect is localised to the intervention.
+
+    DIFFERENCE-IN-DIFFERENCES. The widest untreated width is the control: its
+    arm-to-arm delta estimates the confound that also contaminates the treated
+    width. Subtracting it (additive) or dividing it out (multiplicative) gives a
+    confound-corrected effect. Both are reported because neither model is
+    established, and the honest read is the range they span.
+    """
+    s_by = stock_bc.get("by_width") or {}
+    c_by = candidate_bc.get("by_width") or {}
+    widths = sorted({int(w) for w in s_by} & {int(w) for w in c_by})
+    if not widths:
+        return {"available": False, "reason": "no shared served widths"}
+    treated = max(widths)
+    rows = []
+    for w in widths:
+        s = s_by[str(w)]
+        c = c_by[str(w)]
+        rows.append(
+            {
+                "width": w,
+                "candidate_engaged": w == treated,
+                "role": "treated" if w == treated else "placebo",
+                "stock_mean_ms": s["mean_ms"],
+                "stock_steps": s["steps"],
+                "candidate_mean_ms": c["mean_ms"],
+                "candidate_steps": c["steps"],
+                "candidate_minus_stock_ms": c["mean_ms"] - s["mean_ms"],
+                "improvement_ms": s["mean_ms"] - c["mean_ms"],
+            }
+        )
+    controls = [r for r in rows if not r["candidate_engaged"] and r["stock_steps"] >= 100]
+    treated_row = next(r for r in rows if r["candidate_engaged"])
+    out: dict[str, Any] = {
+        "available": True,
+        "treated_width": treated,
+        "rows": rows,
+        "placebo_note": (
+            "widths below the treated width run the IDENTICAL stock dispatch on "
+            "both arms (candidate_scope is final_fixed32_b4_full_graph_only), so "
+            "any delta there is arm-to-arm confound, not kernel"
+        ),
+        "min_control_steps_for_did": 100,
+    }
+    if not controls:
+        out["difference_in_differences"] = {
+            "available": False,
+            "reason": "no untreated width carries enough steps to serve as a control",
+        }
+        return out
+    control = max(controls, key=lambda r: r["width"])
+    raw = treated_row["candidate_minus_stock_ms"]
+    ctrl = control["candidate_minus_stock_ms"]
+    ratio = (
+        control["candidate_mean_ms"] / control["stock_mean_ms"]
+        if control["stock_mean_ms"]
+        else None
+    )
+    out["difference_in_differences"] = {
+        "available": True,
+        "control_width": control["width"],
+        "control_steps": {
+            "stock": control["stock_steps"],
+            "candidate": control["candidate_steps"],
+        },
+        "raw_treated_delta_ms": raw,
+        "control_delta_ms": ctrl,
+        "additive_effect_ms": raw - ctrl,
+        "multiplicative_effect_ms": (
+            treated_row["candidate_mean_ms"] - treated_row["stock_mean_ms"] * ratio
+            if ratio
+            else None
+        ),
+        "confound_direction": (
+            "the control shows the candidate arm SLOWER where the code is "
+            "identical, so the confound works AGAINST the candidate and the raw "
+            "delta UNDERSTATES the kernel effect"
+            if ctrl > 0
+            else "the control shows the candidate arm faster where the code is "
+            "identical, so part of the raw delta is arm-to-arm confound and the "
+            "raw delta OVERSTATES the kernel effect"
+        ),
+        "interpretation": (
+            "additive and multiplicative are two models of the same confound; "
+            "neither is established, so the honest effect is the range they span"
+        ),
+    }
+    # Width scaling: the quantity the width-4 attribution said FA2 owns.
+    if len(widths) >= 2:
+        prev = max(w for w in widths if w < treated)
+        s_scale = s_by[str(treated)]["mean_ms"] - s_by[str(prev)]["mean_ms"]
+        c_scale = c_by[str(treated)]["mean_ms"] - c_by[str(prev)]["mean_ms"]
+        out["width_scaling_cost"] = {
+            "from_width": prev,
+            "to_width": treated,
+            "stock_ms": s_scale,
+            "candidate_ms": c_scale,
+            "removed_ms": s_scale - c_scale,
+            "removed_fraction": (s_scale - c_scale) / s_scale if s_scale else None,
+            "nsys_attributed_fa2_width4_cost_ms": 48.4,
+            "corroboration_note": (
+                "the STOCK arm's width-scaling cost is an INDEPENDENT reproduction "
+                "of the Nsight-attributed FA2 width-4 cost, measured by a "
+                "different instrument (per-step wall samples vs kernel "
+                "attribution). Agreement is evidence the basis is sound"
+            ),
+        }
+    return out
+
+
 def judge(step_wall_improvement_ms: float, thresholds: dict[str, Any]) -> dict[str, Any]:
     """Apply the pre-registered thresholds. No threshold is chosen here."""
     mde = thresholds["mde_ms"]
@@ -535,6 +660,35 @@ def build_payload(
     verdict["basis"] = basis
     verdict["basis_note"] = basis_note
 
+    placebo = (
+        per_width_placebo(stock_bc, candidate_bc)
+        if (stock_bc["available"] and candidate_bc["available"])
+        else {"available": False, "reason": "no batch-conditioned detail"}
+    )
+    step_wall_basis["per_width_placebo"] = placebo
+    # A gain at a width where the candidate is NOT served would mean the headline
+    # is measuring arm-to-arm confound. Surface that in the verdict rather than
+    # leaving it for a reader to notice.
+    if placebo.get("available"):
+        leaks = [
+            r
+            for r in placebo["rows"]
+            if not r["candidate_engaged"]
+            and r["stock_steps"] >= placebo["min_control_steps_for_did"]
+            and r["improvement_ms"] >= basis_thresholds["mde_ms"]
+        ]
+        verdict["placebo_clean"] = not leaks
+        verdict["placebo_leak_widths"] = [r["width"] for r in leaks]
+        verdict["placebo_reading"] = (
+            "no untreated width shows a gain at or above the MDE, so the effect "
+            "is localised to the one operating point where the candidate is "
+            "served"
+            if not leaks
+            else "an untreated width shows a gain at or above the MDE: the "
+            "headline delta is contaminated by arm-to-arm confound and must NOT "
+            "be read as a kernel result"
+        )
+
     subset_ids = sorted(
         json.loads(subset.read_text(encoding="ascii"))["instance_ids"]
     )
@@ -660,7 +814,36 @@ def render(payload: dict[str, Any]) -> str:
         f"  blended-basis contrast: {bl['improvement_ms']:+.3f} ms "
         f"(its own MDE {bl['mde_ms_for_this_basis']:.2f} ms)"
     )
+    pl = b.get("per_width_placebo") or {}
+    if pl.get("available"):
+        lines += ["", "  PER-WIDTH PLACEBO (candidate serves ONLY the treated width)"]
+        lines.append(
+            f"    {'width':>5} {'stock ms':>10} {'cand ms':>10} {'impr ms':>9} {'role':>8}"
+        )
+        for r in pl["rows"]:
+            lines.append(
+                f"    {r['width']:>5} {r['stock_mean_ms']:>10.2f} "
+                f"{r['candidate_mean_ms']:>10.2f} {r['improvement_ms']:>+9.2f} "
+                f"{r['role']:>8}"
+            )
+        did = pl.get("difference_in_differences") or {}
+        if did.get("available"):
+            lines.append(
+                f"    DiD vs width {did['control_width']}: additive "
+                f"{did['additive_effect_ms']:+.2f} ms, multiplicative "
+                f"{did['multiplicative_effect_ms']:+.2f} ms"
+            )
+        ws = pl.get("width_scaling_cost") or {}
+        if ws:
+            lines.append(
+                f"    width {ws['from_width']}->{ws['to_width']} cost: stock "
+                f"{ws['stock_ms']:+.2f} ms (nsys FA2 "
+                f"{ws['nsys_attributed_fa2_width4_cost_ms']:+.1f}), candidate "
+                f"{ws['candidate_ms']:+.2f} ms, removed {ws['removed_ms']:+.2f} ms"
+            )
     v = payload["verdict_detail"]
+    if "placebo_clean" in v:
+        lines.append(f"  placebo clean: {v['placebo_clean']}  {v['placebo_reading']}")
     sd_units = v.get("improvement_in_sealed_sd_units")
     sd_note = f" ({sd_units:+.2f} sealed SD)" if sd_units is not None else ""
     lines += [

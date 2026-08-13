@@ -330,6 +330,166 @@ def test_positive_always_means_the_candidate_is_better() -> None:
     assert deltas["per_request_step_tps"]["orientation"] == "higher is better"
 
 
+# --------------------------------------------------------------------------
+# the per-width placebo: the design's strongest causal check
+# --------------------------------------------------------------------------
+def _bc(by_width: dict[int, tuple[int, float]]) -> dict:
+    return {
+        "available": True,
+        "by_width": {
+            str(w): {"steps": n, "mean_ms": ms, "fraction": 0.0, "sd_ms": 0.0}
+            for w, (n, ms) in by_width.items()
+        },
+    }
+
+
+def test_placebo_is_clean_when_the_gain_is_localised_to_the_treated_width() -> None:
+    module = _reducer()
+    stock = _bc({2: (100, 285.0), 3: (1000, 362.0), 4: (3000, 411.0)})
+    cand = _bc({2: (100, 302.0), 3: (1000, 370.0), 4: (3000, 382.0)})
+    p = module.per_width_placebo(stock, cand)
+    assert p["treated_width"] == 4
+    roles = {r["width"]: r["role"] for r in p["rows"]}
+    assert roles == {2: "placebo", 3: "placebo", 4: "treated"}
+    did = p["difference_in_differences"]
+    assert did["control_width"] == 3
+    # control shows candidate SLOWER -> confound works against the candidate
+    assert did["control_delta_ms"] > 0
+    assert "UNDERSTATES" in did["confound_direction"]
+    # raw -29, control +8 -> additive -37
+    assert did["additive_effect_ms"] == pytest.approx(-37.0, abs=0.5)
+
+
+def test_placebo_detects_a_leak_when_an_untreated_width_also_gains() -> None:
+    """The failure this check exists to catch: an arm-wide speedup."""
+    module = _reducer()
+    stock = _bc({3: (1000, 362.0), 4: (3000, 411.0)})
+    cand = _bc({3: (1000, 342.0), 4: (3000, 391.0)})  # both widths 20ms faster
+    p = module.per_width_placebo(stock, cand)
+    did = p["difference_in_differences"]
+    # an arm-wide shift must leave ~zero after differencing
+    assert did["additive_effect_ms"] == pytest.approx(0.0, abs=0.5)
+    assert "OVERSTATES" in did["confound_direction"]
+
+
+def test_width_scaling_cost_is_reported_against_the_nsys_attribution() -> None:
+    module = _reducer()
+    stock = _bc({3: (1000, 362.08), 4: (3000, 411.26)})
+    cand = _bc({3: (1000, 369.79), 4: (3000, 381.75)})
+    ws = module.per_width_placebo(stock, cand)["width_scaling_cost"]
+    assert ws["stock_ms"] == pytest.approx(49.18, abs=0.05)
+    assert ws["nsys_attributed_fa2_width4_cost_ms"] == 48.4
+    assert ws["removed_ms"] == pytest.approx(37.21, abs=0.05)
+
+
+def test_a_thin_control_width_is_refused_as_a_did_basis() -> None:
+    """One sampled step is not a control; it must not drive the correction."""
+    module = _reducer()
+    stock = _bc({1: (1, 272.0), 4: (3000, 411.0)})
+    cand = _bc({1: (6, 253.0), 4: (3000, 382.0)})
+    p = module.per_width_placebo(stock, cand)
+    assert p["difference_in_differences"]["available"] is False
+
+
+# --------------------------------------------------------------------------
+# the pool16 identity must be ONE string everywhere it is written down
+# --------------------------------------------------------------------------
+LAUNCHER = REPO / "scripts/fr13_launch_forked_fa2_tree_server.sh"
+PATCHER = REPO / "scripts/fr13_patch_fa2_tree_bias.py"
+SUBSET16 = REPO / "config/fr13_fixed32/subset_b4_sixteen.json"
+
+
+def _subset16_csv() -> str:
+    return ",".join(json.loads(SUBSET16.read_text(encoding="ascii"))["instance_ids"])
+
+
+def _patcher_pool16_csv() -> str:
+    spec = importlib.util.spec_from_file_location("patcher_for_pool16", PATCHER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    import os as _os
+
+    namespace: dict[str, object] = {"os": _os}
+    exec(  # noqa: S102 - repo source, executed on purpose
+        compile(
+            module.FIXED32_QUERY_TILE32_B4_PRODUCTION_HELPERS, "<helpers>", "exec"
+        ),
+        namespace,
+    )
+    return ",".join(namespace["_FR13_FA2_QROW32_B4_POOL16_TASK_IDS"])
+
+
+def _launcher_pool16_csv() -> str:
+    text = LAUNCHER.read_text(encoding="utf-8")
+    marker = f"|{POOL16_SHA}"
+    line = next(l for l in text.splitlines() if marker in l)
+    return line.split('"')[1].split("|")[0]
+
+
+def test_the_pool16_task_list_is_identical_in_all_four_places() -> None:
+    """Runner, subset file, shell launcher predicate, in-container patcher.
+
+    These are four INDEPENDENT hardcodings of the same ordered list. Any drift
+    between them fails the arm at boot -- after the stock arm has already burned
+    hours -- so it is checked here, on CPU, instead of live.
+    """
+    from_file = _subset16_csv()
+    runner_line = next(
+        l for l in RUNNER.read_text(encoding="utf-8").splitlines()
+        if l.startswith("TASK_IDS=")
+    )
+    from_runner = runner_line.split("=", 1)[1]
+    assert from_runner == from_file, "runner TASK_IDS drifted from the subset file"
+    assert _launcher_pool16_csv() == from_file, "launcher case drifted"
+    assert _patcher_pool16_csv() == from_file, "patcher constant drifted"
+    assert len(from_file.split(",")) == 16
+
+
+def _run_launcher_predicate(ids: str, sha: str) -> str:
+    """Execute the launcher's own case block in isolation and report the verdict."""
+    text = LAUNCHER.read_text(encoding="utf-8")
+    start = text.index("  _FR13_FA2_QROW32_B4_TASK_SET=\n")
+    end = text.index("  esac\n", start) + len("  esac\n")
+    block = text[start:end]
+    script = (
+        f"FR13_FA2_QROW32_B4_EXACT4_TASK_IDS={ids!r}\n"
+        f"FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256={sha!r}\n"
+        + block
+        + 'printf "%s" "${_FR13_FA2_QROW32_B4_TASK_SET:-REFUSED}"\n'
+    ).replace("'", '"')
+    proc = subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True, check=True
+    )
+    return proc.stdout.strip() or "REFUSED"
+
+
+def test_launcher_predicate_admits_both_pinned_sets() -> None:
+    exact4 = (
+        "astropy__astropy-12907,astropy__astropy-13033,"
+        "astropy__astropy-13236,astropy__astropy-13398"
+    )
+    assert _run_launcher_predicate(exact4, EXACT4_SHA) == "exact4"
+    assert _run_launcher_predicate(_subset16_csv(), POOL16_SHA) == "pool16"
+
+
+@pytest.mark.parametrize(
+    "ids,sha",
+    [
+        (
+            "astropy__astropy-12907,astropy__astropy-13033,"
+            "astropy__astropy-13236,astropy__astropy-13398",
+            POOL16_SHA,
+        ),
+        (None, EXACT4_SHA),
+        ("", EXACT4_SHA),
+        ("astropy__astropy-12907", EXACT4_SHA),
+    ],
+)
+def test_launcher_predicate_refuses_unpinned_or_mismatched_sets(ids, sha) -> None:
+    task_ids = _subset16_csv() if ids is None else ids
+    assert _run_launcher_predicate(task_ids, sha) == "REFUSED"
+
+
 def test_batch_conditioned_analysis_is_reusable_with_an_explicit_arm_name() -> None:
     """The pool16 campaign's <mode>_pool<N> naming must not be assumed."""
     spec = importlib.util.spec_from_file_location(
