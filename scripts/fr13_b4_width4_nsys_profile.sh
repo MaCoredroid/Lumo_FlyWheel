@@ -81,6 +81,13 @@ MIN_EVENTS_PER_STEP=${MIN_EVENTS_PER_STEP:-3.4}
 NSYS_SESSION_NAME="fr13-fixed32-${STAMP}-p$$"
 NSYS_BIN=/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys
 METRICS_URL=${METRICS_URL:-http://127.0.0.1:9950/metrics}
+# THE COUNTER SOURCE. The fr13 timers are worker-process-local prometheus
+# Counters and are NOT aggregated into the API server's /metrics in
+# single-API-server mode (run_swe_bench_q36_a.py:2596,2681) -- the runner
+# synthesizes them from these per-pid JSON sidecars for its own bracket
+# path, and so does the step gate. The container env points at
+# /workspace/... ; on the host that is the repo root.
+SIDECAR_BASE=${SIDECAR_BASE:-$REPO/output/fr13_sfwd_sidecar/${ARM}.json}
 
 # --------------------------------------------------------------- preflight --
 echo "===== FR13 B4 WIDTH-4 NSYS ATTRIBUTION $STAMP (DIAGNOSTIC, NOT CITABLE) ====="
@@ -237,6 +244,7 @@ echo "[profile] handing off to the step gate"
   --nsys-bin "$NSYS_BIN" \
   --session "$NSYS_SESSION_NAME" \
   --metrics-url "$METRICS_URL" \
+  --sidecar-base "$SIDECAR_BASE" \
   --out-dir "$CAPTURE_DIR" \
   --start-step "$START_STEP" \
   --capture-steps "$CAPTURE_STEPS" \

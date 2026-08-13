@@ -99,11 +99,86 @@ REQUIRED_COUNTERS = (
 )
 
 
+# Set from --sidecar-base. When set it is the ONLY counter source; /metrics
+# does not carry the fr13 counters in single-API-server mode.
+_SIDECAR_BASE: "Path | None" = None
+
+
 class GateError(RuntimeError):
     """The step-gated capture cannot be driven to a valid bracket."""
 
 
+def _sidecar_counters(base: Path) -> str:
+    """Build the fr13 counter block from the worker's JSON timer sidecars.
+
+    THE COUNTERS ARE NOT ON /metrics. In single-API-server mode the worker's
+    prometheus Counters are process-local and are never aggregated into the API
+    server's endpoint (`run_swe_bench_q36_a.py:2596`, `:2681`); the runner
+    synthesizes the `vllm:fr13_*` lines from these sidecars for its own bracket
+    path. A gate that polled /metrics would therefore wait forever -- as this
+    one did, watching a healthy endpoint serve 442 metrics with not one fr13
+    counter among them.
+
+    `n_pure_decode_steps_timed` is the absolute forward-step counter that
+    indexes the work census: on the banked pool16 tail23 pass-0 arm it reads
+    9385, exactly the census record count.
+
+    Sidecars are per-pid (`<base>.<pid>`) and summed, matching the runner.
+    Output is metrics text so every downstream consumer -- including the
+    reducer's counter parser -- is unchanged.
+    """
+    sfwd = {"seconds": 0.0, "steps": 0.0, "drafts": 0.0, "wall_seconds": 0.0,
+            "wall_steps": 0.0, "wall_drafts": 0.0}
+    found = False
+    for path in sorted(base.parent.glob(base.name + ".*")):
+        if ".samples." in path.name:
+            continue
+        try:
+            d = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        found = True
+        sfwd["seconds"] += float(d.get("decode_forward_gpu_seconds", 0.0))
+        sfwd["steps"] += float(d.get("n_pure_decode_steps_timed", 0.0))
+        sfwd["drafts"] += float(d.get("n_drafts_in_timed_steps", 0.0))
+        sfwd["wall_seconds"] += float(d.get("decode_step_wall_seconds", 0.0))
+        sfwd["wall_steps"] += float(d.get("n_wall_steps", 0.0))
+        sfwd["wall_drafts"] += float(d.get("n_drafts_in_wall_steps", 0.0))
+    if not found:
+        raise GateError(f"no sfwd timer sidecar yet at {base}.*")
+
+    spans: dict[str, tuple[float, float]] = {}
+    for label, suffix in (("fr13_drafter_gpu", "_dfwd"),
+                          ("fr13_committer_gpu", "_cfwd")):
+        sec = n = 0.0
+        for path in sorted(
+            base.parent.glob(base.stem + suffix + base.suffix + ".*")
+        ):
+            try:
+                d = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            sec += float(d.get("gpu_seconds", 0.0))
+            n += float(d.get("n_spans", 0.0))
+        spans[label] = (sec, n)
+
+    lines = [
+        f"vllm:fr13_decode_forward_gpu_seconds_total {sfwd['seconds']:.9f}",
+        f"vllm:fr13_decode_forward_gpu_steps_total {sfwd['steps']:.1f}",
+        f"vllm:fr13_decode_forward_gpu_drafts_total {sfwd['drafts']:.1f}",
+        f"vllm:fr13_decode_step_wall_seconds_total {sfwd['wall_seconds']:.9f}",
+        f"vllm:fr13_decode_step_wall_steps_total {sfwd['wall_steps']:.1f}",
+        f"vllm:fr13_decode_step_wall_drafts_total {sfwd['wall_drafts']:.1f}",
+    ]
+    for label, (sec, n) in spans.items():
+        lines.append(f"vllm:{label}_seconds_total {sec:.9f}")
+        lines.append(f"vllm:{label}_spans_total {n:.1f}")
+    return "\n".join(lines) + "\n"
+
+
 def _scrape(url: str, timeout_s: float) -> str:
+    if _SIDECAR_BASE is not None:
+        return _sidecar_counters(_SIDECAR_BASE)
     # A booting vLLM refuses, resets AND half-opens this port in turn, so every
     # transport failure must land in one bucket. urllib.error.URLError is an
     # OSError subclass, as are ConnectionResetError/ConnectionRefusedError and
@@ -246,7 +321,8 @@ def _log(message: str) -> None:
 
 
 def _wait_for_endpoint(url: str, deadline: float, poll_s: float) -> None:
-    _log(f"waiting for metrics endpoint {url}")
+    _log(f"waiting for counters (source: "
+     f"{_SIDECAR_BASE if _SIDECAR_BASE is not None else url})")
     while time.time() < deadline:
         try:
             text = _scrape(url, timeout_s=10.0)
@@ -259,9 +335,9 @@ def _wait_for_endpoint(url: str, deadline: float, poll_s: float) -> None:
             # Endpoint is up but the fr13 counters are not registered yet.
             time.sleep(poll_s)
             continue
-        _log("metrics endpoint is live and carrying the fr13 step counter")
+        _log("counter source is live and carrying the fr13 step counter")
         return
-    raise GateError("timed out waiting for a live fr13 metrics endpoint")
+    raise GateError("timed out waiting for a live fr13 counter source")
 
 
 def _wait_for_arm_condition(
@@ -325,6 +401,13 @@ def main() -> int:
     parser.add_argument("--nsys-bin", required=True)
     parser.add_argument("--session", required=True)
     parser.add_argument("--metrics-url", required=True)
+    parser.add_argument(
+        "--sidecar-base",
+        default=None,
+        help="Path to the sfwd timer sidecar base (per-pid files are "
+             "<base>.<pid>). REQUIRED in single-API-server mode, where "
+             "the fr13 counters never reach /metrics.",
+    )
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--start-step", type=int, required=True)
     parser.add_argument("--capture-steps", type=int, required=True)
@@ -339,6 +422,9 @@ def main() -> int:
     parser.add_argument("--max-edge-ambiguity-steps", type=int, default=25)
     args = parser.parse_args()
 
+    global _SIDECAR_BASE
+    if args.sidecar_base:
+        _SIDECAR_BASE = Path(args.sidecar_base)
     if args.capture_steps <= 0:
         raise GateError("--capture-steps must be positive")
     if args.start_step < 0:
