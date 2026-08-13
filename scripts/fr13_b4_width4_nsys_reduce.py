@@ -457,11 +457,21 @@ def main() -> int:
         widths: dict[int, int] = {}
         seen = 0
         events = 0
+        skipped_non_step = 0
         with census.open() as fh:
             for line in fh:
                 if not line.strip():
                     continue
                 rec = json.loads(line)
+                # A COMPLETED arm's census ends with one
+                # `fr13-fixed32-work-census-terminal-v12` record, which carries
+                # no forward_step_index and is not a step. Skip exactly those:
+                # counting it would break the step identity by one, and reading
+                # it as a step raises. (A capture reduced mid-arm never sees it,
+                # which is why this only appeared once the arm finished.)
+                if "forward_step_index" not in rec or "batch_size" not in rec:
+                    skipped_non_step += 1
+                    continue
                 idx = rec["forward_step_index"]
                 if lo <= idx < hi:
                     seen += 1
@@ -480,6 +490,7 @@ def main() -> int:
             "batch_width_histogram": {str(k): widths[k] for k in sorted(widths)},
             "width4_fraction": widths.get(4, 0) / seen if seen else None,
             "census_events_per_step": events / seen if seen else None,
+            "non_step_records_skipped": skipped_non_step,
         }
     else:
         out["census_cross_check"] = {"status": "census_absent"}
