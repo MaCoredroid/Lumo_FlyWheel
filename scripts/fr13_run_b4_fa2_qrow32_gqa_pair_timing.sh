@@ -566,9 +566,17 @@ if (
     or engagement.get("task_ids") != task_ids
     or engagement.get("candidate_served") is not True
     or engagement.get("fallback_allowed") is not False
-    # The candidate is qualified for the final B4 FULL graph only; every other
-    # decode the runtime must execute keeps stock and is counted there.
-    or engagement.get("candidate_scope") != "final_fixed32_b4_full_graph_only"
+    # The candidate is qualified for the final FULL graph at the widths named
+    # by candidate_scope; every other decode the runtime must execute keeps
+    # stock and is counted there. MARK'S RULING 2026-08-13 moved that token
+    # from final_fixed32_b4_full_graph_only to the b3-inclusive
+    # final_fixed32_b34_full_graph_only. BOTH are accepted on read so the
+    # sealed +29.50 ms/step width-4 pair stays re-verifiable; the batch_size
+    # and total_query_rows clauses above still pin THIS run to width 4.
+    or engagement.get("candidate_scope") not in (
+        "final_fixed32_b4_full_graph_only",
+        "final_fixed32_b34_full_graph_only",
+    )
     or not isinstance(engagement.get("bypass_counts"), dict)
 ):
     raise SystemExit("candidate arm did not serve the GQA-pair kernel on every layer")
@@ -613,7 +621,7 @@ summary = {
         "bias_operand": "2d_broadcast_tile -> 4_plane_batch_strided",
         "overhead_charged_to": "candidate",
         "bias_direction": "conservative_against_candidate",
-        "candidate_scope": "final_fixed32_b4_full_graph_only",
+        "candidate_scope": engagement.get("candidate_scope"),
         "regression_verdict_is_confounded_by_harness": True,
     },
     "task_count": 4,

@@ -61,9 +61,22 @@ EXACT4_SUBSET_SHA256 = (
 )
 PATCH_SOURCE_RELATIVE = "scripts/fr13_patch_fa2_tree_bias.py"
 REQUIRED_RUNTIME = (
-    "fixed32 K64 ROOT=1 exact4 B4 physical32 FULL graph on Tail23 or Hydra27"
+    "fixed32 K64 ROOT=1 exact4 physical32 FULL graph at width 3 or 4 on "
+    "Tail23 or Hydra27"
 )
-PRODUCTION_SCOPE = "qrow32 GQA-pair B4 exact tree attention only"
+# MARK'S RULING 2026-08-13. The credential's scope widens from the width-4
+# FULL graph to the width-3 and width-4 FULL graphs. Width 3 reaches the
+# SAME sealed binary by padding to the canonical (b == 4, total_q == 128)
+# geometry with an inert zero-key shadow request in slot 3 -- the kernel is
+# never handed a geometry it was not qualified for, and CANDIDATE_SHA256,
+# CANDIDATE_SIZE, FA2_HEAD and SOURCE_CLOSURE_SHA256 below are UNCHANGED.
+# Zero rebuild, zero re-seal. The sidecar digest is derived at issue time, so
+# this reissues the credential without moving a single binary pin.
+PRODUCTION_SCOPE = (
+    "qrow32 GQA-pair exact tree attention at FULL-graph widths 3 and 4 only; "
+    "width 3 padded to the canonical width-4 geometry with a zero-key shadow "
+    "request in slot 3"
+)
 CREDENTIAL_BASIS = (
     "dual-topology raw-byte output/LSE equality between the stock and "
     "GQA-pair dispatches of the pinned binary at this source commit"

@@ -94,6 +94,17 @@ FA2_MS_PER_STEP_AT_WIDTH4 = 69.74838122735675
 FA2_RECOVERY_TARGET_FRACTION = 0.10
 
 # The exact4 pair's measured candidate-side overhead, reported as context only.
+# MARK'S RULING 2026-08-13. candidate_scope moved off the sealed
+# final_fixed32_b4_full_graph_only token to a b3-inclusive one when the
+# qualified operating points widened to the FULL graphs at widths 3 AND 4.
+# READERS MUST ACCEPT BOTH: the banked +29.50 ms/step width-4 pair
+# (output/fr13_b4_gqa_width4_timing_20260813T104433Z) was recorded under the
+# sealed token and must stay re-reducible byte for byte. WRITERS emit only the
+# new one. The .so identity pins are untouched by the widening.
+SEALED_B4_CANDIDATE_SCOPE = "final_fixed32_b4_full_graph_only"
+B34_CANDIDATE_SCOPE = "final_fixed32_b34_full_graph_only"
+ACCEPTED_CANDIDATE_SCOPES = (SEALED_B4_CANDIDATE_SCOPE, B34_CANDIDATE_SCOPE)
+
 EXACT4_RETAG_OVERHEAD_MS_PER_STEP = 1.92
 EXACT4_PRIOR_VERDICT = (
     "NULL on speed: kernel-attributable residual +1.92 ms/step sfwd COST, "
@@ -300,7 +311,12 @@ def per_width_placebo(
     The candidate kernel is served at EXACTLY ONE operating point -- the final
     fixed32 B4 FULL graph, i.e. served batch width == slots. Every narrower step
     inside the same window runs the IDENTICAL stock dispatch on BOTH arms,
-    because the candidate's scope is `final_fixed32_b4_full_graph_only`.
+    because the candidate's scope excludes them. Until 2026-08-13 that scope
+    was `final_fixed32_b4_full_graph_only` and the untreated widths were 1..3;
+    under Mark's ruling it is `final_fixed32_b34_full_graph_only` and width 3
+    is TREATED, so the placebo set shrinks to widths 1 and 2. The placebo
+    argument is unchanged in kind -- only the boundary moved -- and the
+    treated width is still read off the data, not assumed.
 
     So the narrow widths are a NATURAL PLACEBO, drawn from the same arms, the
     same hosts, the same window and the same wall chain as the treated width.
@@ -346,8 +362,10 @@ def per_width_placebo(
         "rows": rows,
         "placebo_note": (
             "widths below the treated width run the IDENTICAL stock dispatch on "
-            "both arms (candidate_scope is final_fixed32_b4_full_graph_only), so "
-            "any delta there is arm-to-arm confound, not kernel"
+            "both arms (they are outside candidate_scope, whichever of "
+            + " / ".join(ACCEPTED_CANDIDATE_SCOPES)
+            + " the engagement declared), so any delta there is arm-to-arm "
+            "confound, not kernel"
         ),
         "min_control_steps_for_did": 100,
     }
@@ -536,7 +554,7 @@ def validate_pair_engagement(
         or e.get("total_query_rows") != 128
         or e.get("candidate_served") is not True
         or e.get("fallback_allowed") is not False
-        or e.get("candidate_scope") != "final_fixed32_b4_full_graph_only"
+        or e.get("candidate_scope") not in ACCEPTED_CANDIDATE_SCOPES
     ):
         raise PairError(
             "the candidate arm did not serve the GQA-pair kernel on every target "
@@ -731,7 +749,12 @@ def build_payload(
             "bias_operand": "2d_broadcast_tile -> 4_plane_batch_strided",
             "overhead_charged_to": "candidate",
             "bias_direction": "conservative_against_candidate",
-            "candidate_scope": "final_fixed32_b4_full_graph_only",
+            "candidate_scope": (
+                (provenance.get("candidate_engagement") or {}).get(
+                    "candidate_scope"
+                )
+            ),
+            "candidate_scope_accepted": list(ACCEPTED_CANDIDATE_SCOPES),
             "regression_verdict_is_confounded_by_harness": True,
             "exact4_measured_overhead_ms_per_step": (
                 EXACT4_RETAG_OVERHEAD_MS_PER_STEP
