@@ -1,0 +1,1633 @@
+{
+  "admissibility": {
+    "arm_level_depth_floor_applied": false,
+    "census_gate": "exact equality between counter delta and census, no tolerance",
+    "floor_did_work": false,
+    "floor_note": "on this campaign the floor excluded nothing -- the shortest window is 4152 steps, 4.15x the floor. It is a guard for future short-window arms, not a filter that shaped this result",
+    "min_window_steps": 1000,
+    "min_window_steps_basis": "pinned as a constant, not fitted: at the ~385 ms/step this stack measures it is ~6.4 minutes of sustained full-width serving and leaves ~880 wall-chain-retained samples behind the step mean",
+    "observed_max_window_steps": 5860,
+    "observed_min_window_steps": 4152
+  },
+  "analysis_valid": true,
+  "arms": [
+    {
+      "arm": "tail6_fixed32_pool0",
+      "arm_level_blended": {
+        "events_per_step": 3.0040490143846563,
+        "measured_tps_fullstep_wall": 48.419562235539765,
+        "per_request_step_tps": 16.118099939011127,
+        "prefill_frac": 0.17166894032393334,
+        "retained_wall_fraction": 0.9106020245071923,
+        "role": "context only -- the mixture this class decomposes",
+        "step_wall_ms": 364.6183666079164
+      },
+      "bracket_reduction": {
+        "basis": "the ENVELOPE max(post)-min(pre) over the per-task /metrics snapshots bounding the depth window: pre from the tasks admitted at or before depth reached slots, post from the tasks completed at or before the refill phase ended. Engine-global monotone counters, so in-flight tasks' work inside the window is included",
+        "distinct_bracket_origins": 1,
+        "post_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13453",
+          "astropy__astropy-13579",
+          "astropy__astropy-13977",
+          "astropy__astropy-14096",
+          "astropy__astropy-14182",
+          "astropy__astropy-14309",
+          "astropy__astropy-14365",
+          "astropy__astropy-14508",
+          "astropy__astropy-14539",
+          "astropy__astropy-14995"
+        ],
+        "pre_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398"
+        ],
+        "topology": "staggered",
+        "work_census_gate": {
+          "basis": "exact equality, no tolerance",
+          "census_event_counts_by_batch": {
+            "1": 2,
+            "2": 139,
+            "3": 1728,
+            "4": 3676
+          },
+          "census_events": 20168,
+          "census_events_per_step": 3.637150586113616,
+          "census_first_forward_step": 0,
+          "census_last_forward_step": 5544,
+          "census_path": "output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_00/tail6_fixed32_pool0/logs/fr13_fixed32_work_census.jsonl",
+          "census_steps": 5545,
+          "status": "pass"
+        }
+      },
+      "exclusion_reason": null,
+      "included": true,
+      "mode": "tail6_fixed32",
+      "pass_index": 0,
+      "phase_breakdown": {
+        "cfwd_gpu_ms_per_step": 65.99395872482431,
+        "dfwd_gpu_ms_per_step": 46.44708308571612,
+        "events_per_step": 3.637150586113616,
+        "gpu_component_ms_per_step": 379.9992199353422,
+        "measured_tps_fullstep_wall": 56.98137204889146,
+        "other_wall_ms_per_step": 14.823940077504119,
+        "per_request_step_tps": 15.666486910506901,
+        "sfwd_gpu_ms_per_event": 73.56257921965616,
+        "sfwd_gpu_ms_per_step": 267.5581781248017,
+        "wall_ms_per_event": 108.5528769472051
+      },
+      "pool_ledger": {
+        "arm_level_depth_floor_applied": false,
+        "arm_level_depth_floor_note": "the 3.2 time-weighted depth floor is NOT applied: it gates the mixture weight, which this class removes by construction. Structural pool invariants ARE gated",
+        "recomputed": {
+          "arm_wall_s": 5306.411177,
+          "full_width_fraction": 0.7130704487056373,
+          "time_weighted_mean_depth": 3.5126121529726304
+        },
+        "recorded_full_width_fraction": 0.7130704487056373,
+        "recorded_time_weighted_mean_depth": 3.5126121529726304
+      },
+      "raw_counter_delta_window": {
+        "vllm:fr13_committer_gpu_seconds_total": 365.9365011291508,
+        "vllm:fr13_committer_gpu_spans_total": 5545.0,
+        "vllm:fr13_decode_forward_gpu_drafts_total": 20168.0,
+        "vllm:fr13_decode_forward_gpu_seconds_total": 1483.6100977020253,
+        "vllm:fr13_decode_forward_gpu_steps_total": 5545.0,
+        "vllm:fr13_decode_step_wall_drafts_total": 17982.0,
+        "vllm:fr13_decode_step_wall_seconds_total": 1951.9978332646424,
+        "vllm:fr13_decode_step_wall_steps_total": 4868.0,
+        "vllm:fr13_drafter_gpu_seconds_total": 257.5490757102959,
+        "vllm:fr13_drafter_gpu_spans_total": 5545.0,
+        "vllm:generation_tokens_total": 128329.0,
+        "vllm:request_decode_time_seconds_sum": 10851.17144356668,
+        "vllm:request_prefill_time_seconds_sum": 2181.411424673628,
+        "vllm:request_time_per_output_token_seconds_count": 406.0,
+        "vllm:request_time_per_output_token_seconds_sum": 34.512888366633675,
+        "vllm:spec_decode_num_accepted_tokens_total": 104581.0,
+        "vllm:spec_decode_num_draft_tokens_total": 625208.0,
+        "vllm:spec_decode_num_drafts_total": 20168.0
+      },
+      "slots": 4,
+      "task_count": 16,
+      "window": {
+        "arm_wall_s_from_events": 5306.411177,
+        "close_event": {
+          "depth": 3,
+          "event": "complete",
+          "instance_id": "astropy__astropy-14995",
+          "pending": 0,
+          "t_s": 3783.846984,
+          "wall": "2026-08-12T13:06:54Z"
+        },
+        "close_index": 28,
+        "close_t_s": 3783.846984,
+        "closing_task": "astropy__astropy-14995",
+        "definition": "open = first event at depth == slots; close = first complete at pending == 0. Structural only: depth and pending, no measured rate.",
+        "depth_at_slots_fraction_within_window": 0.9999997716608888,
+        "drain_wall_fraction_excluded_by_construction": 0.2869293884724531,
+        "drain_wall_s_excluded_by_construction": 1522.565314,
+        "full_width_wall_s_inside_window": 3783.844998999999,
+        "full_width_wall_s_outside_window": 0.0,
+        "last_admit_index": 27,
+        "open_event": {
+          "depth": 4,
+          "event": "admit",
+          "instance_id": "astropy__astropy-13398",
+          "pending": 12,
+          "t_s": 0.001121,
+          "wall": "2026-08-12T12:03:50Z"
+        },
+        "open_index": 3,
+        "open_t_s": 0.001121,
+        "opening_task": "astropy__astropy-13398",
+        "window_wall_fraction_of_arm": 0.7130706115275469,
+        "window_wall_s": 3783.845863
+      },
+      "windowed": {
+        "accept_per_event": 5.185491868306228,
+        "committed_per_event": 6.185491868306228,
+        "events_per_step": 3.637150586113616,
+        "floor_ratio": 3.120784114417595,
+        "generation_tokens": 128329.0,
+        "measured_tps_fullstep_wall": 56.98137204889146,
+        "per_request_decode_tps": 11.763721299910445,
+        "per_request_step_tps": 15.666486910506901,
+        "prefill_frac": 0.20103003956931476,
+        "retained_wall_fraction": 0.8779080252479712,
+        "step_wall_ms": 394.8231600128463,
+        "window_step_fraction_of_arm": 0.5908364411294619,
+        "window_steps": 5545,
+        "window_wall_fraction_of_arm": 0.7130706115275469,
+        "window_wall_s": 3783.845863
+      }
+    },
+    {
+      "arm": "hydra27_fixed32_pool0",
+      "arm_level_blended": {
+        "events_per_step": 3.0384337523479266,
+        "measured_tps_fullstep_wall": 50.45658719058977,
+        "per_request_step_tps": 16.606117264067326,
+        "prefill_frac": 0.18850608016791526,
+        "retained_wall_fraction": 0.9062274237826904,
+        "role": "context only -- the mixture this class decomposes",
+        "step_wall_ms": 360.2216019316802
+      },
+      "bracket_reduction": {
+        "basis": "the ENVELOPE max(post)-min(pre) over the per-task /metrics snapshots bounding the depth window: pre from the tasks admitted at or before depth reached slots, post from the tasks completed at or before the refill phase ended. Engine-global monotone counters, so in-flight tasks' work inside the window is included",
+        "distinct_bracket_origins": 1,
+        "post_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398",
+          "astropy__astropy-13453",
+          "astropy__astropy-13579",
+          "astropy__astropy-13977",
+          "astropy__astropy-14096",
+          "astropy__astropy-14182",
+          "astropy__astropy-14309",
+          "astropy__astropy-14365",
+          "astropy__astropy-14508",
+          "astropy__astropy-14539"
+        ],
+        "pre_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398"
+        ],
+        "topology": "staggered",
+        "work_census_gate": {
+          "basis": "exact equality, no tolerance",
+          "census_event_counts_by_batch": {
+            "1": 8,
+            "2": 150,
+            "3": 1586,
+            "4": 3032
+          },
+          "census_events": 17194,
+          "census_events_per_step": 3.6000837520938025,
+          "census_first_forward_step": 0,
+          "census_last_forward_step": 4775,
+          "census_path": "output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_00/hydra27_fixed32_pool0/logs/fr13_fixed32_work_census.jsonl",
+          "census_steps": 4776,
+          "status": "pass"
+        }
+      },
+      "exclusion_reason": null,
+      "included": true,
+      "mode": "hydra27_fixed32",
+      "pass_index": 0,
+      "phase_breakdown": {
+        "cfwd_gpu_ms_per_step": 65.42638434157702,
+        "dfwd_gpu_ms_per_step": 45.67960448081367,
+        "events_per_step": 3.6000837520938025,
+        "gpu_component_ms_per_step": 374.53029299541106,
+        "measured_tps_fullstep_wall": 57.627485444082,
+        "other_wall_ms_per_step": 15.116330240752575,
+        "per_request_step_tps": 16.00726244509338,
+        "sfwd_gpu_ms_per_event": 73.17171552462169,
+        "sfwd_gpu_ms_per_step": 263.42430417302035,
+        "wall_ms_per_event": 108.23265514574372
+      },
+      "pool_ledger": {
+        "arm_level_depth_floor_applied": false,
+        "arm_level_depth_floor_note": "the 3.2 time-weighted depth floor is NOT applied: it gates the mixture weight, which this class removes by construction. Structural pool invariants ARE gated",
+        "recomputed": {
+          "arm_wall_s": 3972.5392229999998,
+          "full_width_fraction": 0.8185240760302493,
+          "time_weighted_mean_depth": 3.6290457792164634
+        },
+        "recorded_full_width_fraction": 0.8185240760302493,
+        "recorded_time_weighted_mean_depth": 3.6290457792164634
+      },
+      "raw_counter_delta_window": {
+        "vllm:fr13_committer_gpu_seconds_total": 312.47641161537183,
+        "vllm:fr13_committer_gpu_spans_total": 4776.0,
+        "vllm:fr13_decode_forward_gpu_drafts_total": 17194.0,
+        "vllm:fr13_decode_forward_gpu_seconds_total": 1258.1144767303454,
+        "vllm:fr13_decode_forward_gpu_steps_total": 4776.0,
+        "vllm:fr13_decode_step_wall_drafts_total": 15320.0,
+        "vllm:fr13_decode_step_wall_seconds_total": 1658.1242768327938,
+        "vllm:fr13_decode_step_wall_steps_total": 4194.0,
+        "vllm:fr13_drafter_gpu_seconds_total": 218.1657910003661,
+        "vllm:fr13_drafter_gpu_spans_total": 4776.0,
+        "vllm:generation_tokens_total": 110334.0,
+        "vllm:request_decode_time_seconds_sum": 9714.421814144822,
+        "vllm:request_prefill_time_seconds_sum": 1972.6222036442487,
+        "vllm:request_time_per_output_token_seconds_count": 342.0,
+        "vllm:request_time_per_output_token_seconds_sum": 28.84008957504773,
+        "vllm:spec_decode_num_accepted_tokens_total": 90048.0,
+        "vllm:spec_decode_num_draft_tokens_total": 533014.0,
+        "vllm:spec_decode_num_drafts_total": 17194.0
+      },
+      "slots": 4,
+      "task_count": 16,
+      "window": {
+        "arm_wall_s_from_events": 3972.5392229999998,
+        "close_event": {
+          "depth": 3,
+          "event": "complete",
+          "instance_id": "astropy__astropy-14539",
+          "pending": 0,
+          "t_s": 3251.620614,
+          "wall": "2026-08-12T14:33:57Z"
+        },
+        "close_index": 28,
+        "close_t_s": 3251.620614,
+        "closing_task": "astropy__astropy-14539",
+        "definition": "open = first event at depth == slots; close = first complete at pending == 0. Structural only: depth and pending, no measured rate.",
+        "depth_at_slots_fraction_within_window": 0.9999997684231066,
+        "drain_wall_fraction_excluded_by_construction": 0.18147573441844403,
+        "drain_wall_s_excluded_by_construction": 720.9194729999999,
+        "full_width_wall_s_inside_window": 3251.6189969999996,
+        "full_width_wall_s_outside_window": 0.0,
+        "last_admit_index": 27,
+        "open_event": {
+          "depth": 4,
+          "event": "admit",
+          "instance_id": "astropy__astropy-13398",
+          "pending": 12,
+          "t_s": 0.000864,
+          "wall": "2026-08-12T13:39:46Z"
+        },
+        "open_index": 3,
+        "open_t_s": 0.000864,
+        "opening_task": "astropy__astropy-13398",
+        "window_wall_fraction_of_arm": 0.818524265581556,
+        "window_wall_s": 3251.61975
+      },
+      "windowed": {
+        "accept_per_event": 5.237175758985693,
+        "committed_per_event": 6.237175758985693,
+        "events_per_step": 3.6000837520938025,
+        "floor_ratio": 3.0798674322760404,
+        "generation_tokens": 110334.0,
+        "measured_tps_fullstep_wall": 57.627485444082,
+        "per_request_decode_tps": 11.858492988034833,
+        "per_request_step_tps": 16.00726244509338,
+        "prefill_frac": 0.2030612054308764,
+        "retained_wall_fraction": 0.878140703517588,
+        "step_wall_ms": 389.64662323616363,
+        "window_step_fraction_of_arm": 0.6900736887732987,
+        "window_steps": 4776,
+        "window_wall_fraction_of_arm": 0.818524265581556,
+        "window_wall_s": 3251.61975
+      }
+    },
+    {
+      "arm": "tail6_fixed32_pool1",
+      "arm_level_blended": {
+        "events_per_step": 2.724755361232563,
+        "measured_tps_fullstep_wall": 51.127641927320866,
+        "per_request_step_tps": 18.764121966602133,
+        "prefill_frac": 0.18331082679936295,
+        "retained_wall_fraction": 0.932438059546117,
+        "role": "context only -- the mixture this class decomposes",
+        "step_wall_ms": 341.46411997541907
+      },
+      "bracket_reduction": {
+        "basis": "the ENVELOPE max(post)-min(pre) over the per-task /metrics snapshots bounding the depth window: pre from the tasks admitted at or before depth reached slots, post from the tasks completed at or before the refill phase ended. Engine-global monotone counters, so in-flight tasks' work inside the window is included",
+        "distinct_bracket_origins": 1,
+        "post_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398",
+          "astropy__astropy-13453",
+          "astropy__astropy-13579",
+          "astropy__astropy-13977",
+          "astropy__astropy-14096",
+          "astropy__astropy-14182",
+          "astropy__astropy-14309",
+          "astropy__astropy-14365",
+          "astropy__astropy-14508",
+          "astropy__astropy-14539"
+        ],
+        "pre_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398"
+        ],
+        "topology": "staggered",
+        "work_census_gate": {
+          "basis": "exact equality, no tolerance",
+          "census_event_counts_by_batch": {
+            "1": 29,
+            "2": 380,
+            "3": 1187,
+            "4": 3732
+          },
+          "census_events": 19278,
+          "census_events_per_step": 3.6182432432432434,
+          "census_first_forward_step": 0,
+          "census_last_forward_step": 5327,
+          "census_path": "output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_01/tail6_fixed32_pool1/logs/fr13_fixed32_work_census.jsonl",
+          "census_steps": 5328,
+          "status": "pass"
+        }
+      },
+      "exclusion_reason": null,
+      "included": true,
+      "mode": "tail6_fixed32",
+      "pass_index": 1,
+      "phase_breakdown": {
+        "cfwd_gpu_ms_per_step": 65.53701205153376,
+        "dfwd_gpu_ms_per_step": 46.119597223070045,
+        "events_per_step": 3.6182432432432434,
+        "gpu_component_ms_per_step": 374.852012479627,
+        "measured_tps_fullstep_wall": 58.543578796507795,
+        "other_wall_ms_per_step": 14.959242914743356,
+        "per_request_step_tps": 16.18011141341392,
+        "sfwd_gpu_ms_per_event": 72.74121321072533,
+        "sfwd_gpu_ms_per_step": 263.1954032050231,
+        "wall_ms_per_event": 107.73495013700618
+      },
+      "pool_ledger": {
+        "arm_level_depth_floor_applied": false,
+        "arm_level_depth_floor_note": "the 3.2 time-weighted depth floor is NOT applied: it gates the mixture weight, which this class removes by construction. Structural pool invariants ARE gated",
+        "recomputed": {
+          "arm_wall_s": 4828.859221,
+          "full_width_fraction": 0.7496573706802625,
+          "time_weighted_mean_depth": 3.4428218210836925
+        },
+        "recorded_full_width_fraction": 0.7496573706802625,
+        "recorded_time_weighted_mean_depth": 3.4428218210836925
+      },
+      "raw_counter_delta_window": {
+        "vllm:fr13_committer_gpu_seconds_total": 349.1812002105719,
+        "vllm:fr13_committer_gpu_spans_total": 5328.0,
+        "vllm:fr13_decode_forward_gpu_drafts_total": 19278.0,
+        "vllm:fr13_decode_forward_gpu_seconds_total": 1402.3051082763632,
+        "vllm:fr13_decode_forward_gpu_steps_total": 5328.0,
+        "vllm:fr13_decode_step_wall_drafts_total": 17404.0,
+        "vllm:fr13_decode_step_wall_seconds_total": 1875.0190721844556,
+        "vllm:fr13_decode_step_wall_steps_total": 4744.0,
+        "vllm:fr13_drafter_gpu_seconds_total": 245.72521400451723,
+        "vllm:fr13_drafter_gpu_spans_total": 5328.0,
+        "vllm:generation_tokens_total": 124755.0,
+        "vllm:request_decode_time_seconds_sum": 10016.772597388364,
+        "vllm:request_prefill_time_seconds_sum": 2274.7532474581385,
+        "vllm:request_time_per_output_token_seconds_count": 366.0,
+        "vllm:request_time_per_output_token_seconds_sum": 30.44942386536938,
+        "vllm:spec_decode_num_accepted_tokens_total": 102312.0,
+        "vllm:spec_decode_num_draft_tokens_total": 597618.0,
+        "vllm:spec_decode_num_drafts_total": 19278.0
+      },
+      "slots": 4,
+      "task_count": 16,
+      "window": {
+        "arm_wall_s_from_events": 4828.859221,
+        "close_event": {
+          "depth": 3,
+          "event": "complete",
+          "instance_id": "astropy__astropy-13398",
+          "pending": 0,
+          "t_s": 3619.991854,
+          "wall": "2026-08-12T17:12:34Z"
+        },
+        "close_index": 28,
+        "close_t_s": 3619.991854,
+        "closing_task": "astropy__astropy-13398",
+        "definition": "open = first event at depth == slots; close = first complete at pending == 0. Structural only: depth and pending, no measured rate.",
+        "depth_at_slots_fraction_within_window": 0.9999997450269786,
+        "drain_wall_fraction_excluded_by_construction": 0.25034243817728397,
+        "drain_wall_s_excluded_by_construction": 1208.868391,
+        "full_width_wall_s_inside_window": 3619.9899070000006,
+        "full_width_wall_s_outside_window": 0.0,
+        "last_admit_index": 27,
+        "open_event": {
+          "depth": 4,
+          "event": "admit",
+          "instance_id": "astropy__astropy-13398",
+          "pending": 12,
+          "t_s": 0.001024,
+          "wall": "2026-08-12T16:12:14Z"
+        },
+        "open_index": 3,
+        "open_t_s": 0.001024,
+        "opening_task": "astropy__astropy-13398",
+        "window_wall_fraction_of_arm": 0.749657561822716,
+        "window_wall_s": 3619.9908299999997
+      },
+      "windowed": {
+        "accept_per_event": 5.30718954248366,
+        "committed_per_event": 6.30718954248366,
+        "events_per_step": 3.6182432432432434,
+        "floor_ratio": 3.08116872732681,
+        "generation_tokens": 124755.0,
+        "measured_tps_fullstep_wall": 58.543578796507795,
+        "per_request_decode_tps": 12.019931858752102,
+        "per_request_step_tps": 16.18011141341392,
+        "prefill_frac": 0.22709442840413752,
+        "retained_wall_fraction": 0.8903903903903904,
+        "step_wall_ms": 389.81125539437033,
+        "window_step_fraction_of_arm": 0.5546533416614616,
+        "window_steps": 5328,
+        "window_wall_fraction_of_arm": 0.749657561822716,
+        "window_wall_s": 3619.9908299999997
+      }
+    },
+    {
+      "arm": "hydra27_fixed32_pool1",
+      "arm_level_blended": {
+        "events_per_step": 2.795165230808795,
+        "measured_tps_fullstep_wall": 48.56131778333444,
+        "per_request_step_tps": 17.373326359416318,
+        "prefill_frac": 0.20321791059154543,
+        "retained_wall_fraction": 0.9138485277099139,
+        "role": "context only -- the mixture this class decomposes",
+        "step_wall_ms": 343.49555144931065
+      },
+      "bracket_reduction": {
+        "basis": "the ENVELOPE max(post)-min(pre) over the per-task /metrics snapshots bounding the depth window: pre from the tasks admitted at or before depth reached slots, post from the tasks completed at or before the refill phase ended. Engine-global monotone counters, so in-flight tasks' work inside the window is included",
+        "distinct_bracket_origins": 1,
+        "post_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398",
+          "astropy__astropy-13453",
+          "astropy__astropy-13579",
+          "astropy__astropy-13977",
+          "astropy__astropy-14096",
+          "astropy__astropy-14182",
+          "astropy__astropy-14309",
+          "astropy__astropy-14365",
+          "astropy__astropy-14508",
+          "astropy__astropy-14539"
+        ],
+        "pre_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398"
+        ],
+        "topology": "staggered",
+        "work_census_gate": {
+          "basis": "exact equality, no tolerance",
+          "census_event_counts_by_batch": {
+            "1": 14,
+            "2": 294,
+            "3": 1406,
+            "4": 3059
+          },
+          "census_events": 17056,
+          "census_events_per_step": 3.5734338990152943,
+          "census_first_forward_step": 0,
+          "census_last_forward_step": 4772,
+          "census_path": "output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_01/hydra27_fixed32_pool1/logs/fr13_fixed32_work_census.jsonl",
+          "census_steps": 4773,
+          "status": "pass"
+        }
+      },
+      "exclusion_reason": null,
+      "included": true,
+      "mode": "hydra27_fixed32",
+      "pass_index": 1,
+      "phase_breakdown": {
+        "cfwd_gpu_ms_per_step": 64.6909946435256,
+        "dfwd_gpu_ms_per_step": 45.77537418335909,
+        "events_per_step": 3.5734338990152943,
+        "gpu_component_ms_per_step": 373.6624950938027,
+        "measured_tps_fullstep_wall": 58.31107327886755,
+        "other_wall_ms_per_step": 14.899177188629722,
+        "per_request_step_tps": 16.31793813086508,
+        "sfwd_gpu_ms_per_event": 73.65355949061912,
+        "sfwd_gpu_ms_per_step": 263.19612626691804,
+        "wall_ms_per_event": 108.73621375492789
+      },
+      "pool_ledger": {
+        "arm_level_depth_floor_applied": false,
+        "arm_level_depth_floor_note": "the 3.2 time-weighted depth floor is NOT applied: it gates the mixture weight, which this class removes by construction. Structural pool invariants ARE gated",
+        "recomputed": {
+          "arm_wall_s": 4278.540322,
+          "full_width_fraction": 0.7844380925294456,
+          "time_weighted_mean_depth": 3.5079473592489383
+        },
+        "recorded_full_width_fraction": 0.7844380925294456,
+        "recorded_time_weighted_mean_depth": 3.5079473592489383
+      },
+      "raw_counter_delta_window": {
+        "vllm:fr13_committer_gpu_seconds_total": 308.7701174335477,
+        "vllm:fr13_committer_gpu_spans_total": 4773.0,
+        "vllm:fr13_decode_forward_gpu_drafts_total": 17056.0,
+        "vllm:fr13_decode_forward_gpu_seconds_total": 1256.2351106719998,
+        "vllm:fr13_decode_forward_gpu_steps_total": 4773.0,
+        "vllm:fr13_decode_step_wall_drafts_total": 15180.0,
+        "vllm:fr13_decode_step_wall_seconds_total": 1650.6157247998053,
+        "vllm:fr13_decode_step_wall_steps_total": 4187.0,
+        "vllm:fr13_drafter_gpu_seconds_total": 218.48586097717293,
+        "vllm:fr13_drafter_gpu_spans_total": 4773.0,
+        "vllm:generation_tokens_total": 111273.0,
+        "vllm:request_decode_time_seconds_sum": 9880.770832258626,
+        "vllm:request_prefill_time_seconds_sum": 2112.2510533595923,
+        "vllm:request_time_per_output_token_seconds_count": 373.0,
+        "vllm:request_time_per_output_token_seconds_sum": 31.872463865260013,
+        "vllm:spec_decode_num_accepted_tokens_total": 91088.0,
+        "vllm:spec_decode_num_draft_tokens_total": 528736.0,
+        "vllm:spec_decode_num_drafts_total": 17056.0
+      },
+      "slots": 4,
+      "task_count": 16,
+      "window": {
+        "arm_wall_s_from_events": 4278.540322,
+        "close_event": {
+          "depth": 3,
+          "event": "complete",
+          "instance_id": "astropy__astropy-14539",
+          "pending": 0,
+          "t_s": 3356.252819,
+          "wall": "2026-08-12T15:49:47Z"
+        },
+        "close_index": 28,
+        "close_t_s": 3356.252819,
+        "closing_task": "astropy__astropy-14539",
+        "definition": "open = first event at depth == slots; close = first complete at pending == 0. Structural only: depth and pending, no measured rate.",
+        "depth_at_slots_fraction_within_window": 0.9999996928120133,
+        "drain_wall_fraction_excluded_by_construction": 0.21556166650052205,
+        "drain_wall_s_excluded_by_construction": 922.2892820000002,
+        "full_width_wall_s_inside_window": 3356.250009,
+        "full_width_wall_s_outside_window": 0.0,
+        "last_admit_index": 27,
+        "open_event": {
+          "depth": 4,
+          "event": "admit",
+          "instance_id": "astropy__astropy-13398",
+          "pending": 12,
+          "t_s": 0.001779,
+          "wall": "2026-08-12T14:53:51Z"
+        },
+        "open_index": 3,
+        "open_t_s": 0.001779,
+        "opening_task": "astropy__astropy-13398",
+        "window_wall_fraction_of_arm": 0.784438333499478,
+        "window_wall_s": 3356.2510399999996
+      },
+      "windowed": {
+        "accept_per_event": 5.340525328330206,
+        "committed_per_event": 6.340525328330206,
+        "events_per_step": 3.5734338990152943,
+        "floor_ratio": 3.0712917000388122,
+        "generation_tokens": 111273.0,
+        "measured_tps_fullstep_wall": 58.31107327886755,
+        "per_request_decode_tps": 11.702891925043746,
+        "per_request_step_tps": 16.31793813086508,
+        "prefill_frac": 0.21377391392011033,
+        "retained_wall_fraction": 0.8772260632725749,
+        "step_wall_ms": 388.5616722824324,
+        "window_step_fraction_of_arm": 0.6137328018516137,
+        "window_steps": 4773,
+        "window_wall_fraction_of_arm": 0.784438333499478,
+        "window_wall_s": 3356.2510399999996
+      }
+    },
+    {
+      "arm": "tail6_fixed32_pool2",
+      "arm_level_blended": {
+        "events_per_step": 2.496442299828249,
+        "measured_tps_fullstep_wall": 42.54066266281542,
+        "per_request_step_tps": 17.040515082500463,
+        "prefill_frac": 0.1785564995431303,
+        "retained_wall_fraction": 0.9370246176494643,
+        "role": "context only -- the mixture this class decomposes",
+        "step_wall_ms": 329.23531817531614
+      },
+      "bracket_reduction": {
+        "basis": "the ENVELOPE max(post)-min(pre) over the per-task /metrics snapshots bounding the depth window: pre from the tasks admitted at or before depth reached slots, post from the tasks completed at or before the refill phase ended. Engine-global monotone counters, so in-flight tasks' work inside the window is included",
+        "distinct_bracket_origins": 1,
+        "post_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13453",
+          "astropy__astropy-13579",
+          "astropy__astropy-13977",
+          "astropy__astropy-14096",
+          "astropy__astropy-14182",
+          "astropy__astropy-14309",
+          "astropy__astropy-14365",
+          "astropy__astropy-14508",
+          "astropy__astropy-14539",
+          "astropy__astropy-14995"
+        ],
+        "pre_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398"
+        ],
+        "topology": "staggered",
+        "work_census_gate": {
+          "basis": "exact equality, no tolerance",
+          "census_event_counts_by_batch": {
+            "1": 45,
+            "2": 238,
+            "3": 1279,
+            "4": 2924
+          },
+          "census_events": 16054,
+          "census_events_per_step": 3.578689255461436,
+          "census_first_forward_step": 0,
+          "census_last_forward_step": 4485,
+          "census_path": "output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_02/tail6_fixed32_pool2/logs/fr13_fixed32_work_census.jsonl",
+          "census_steps": 4486,
+          "status": "pass"
+        }
+      },
+      "exclusion_reason": null,
+      "included": true,
+      "mode": "tail6_fixed32",
+      "pass_index": 2,
+      "phase_breakdown": {
+        "cfwd_gpu_ms_per_step": 64.88697275858183,
+        "dfwd_gpu_ms_per_step": 44.836645349561365,
+        "events_per_step": 3.578689255461436,
+        "gpu_component_ms_per_step": 367.11897346200715,
+        "measured_tps_fullstep_wall": 59.23852125826714,
+        "other_wall_ms_per_step": 14.921627900468025,
+        "per_request_step_tps": 16.55313357198121,
+        "sfwd_gpu_ms_per_event": 71.92447764528676,
+        "sfwd_gpu_ms_per_step": 257.3953553538639,
+        "wall_ms_per_event": 106.75433771720839
+      },
+      "pool_ledger": {
+        "arm_level_depth_floor_applied": false,
+        "arm_level_depth_floor_note": "the 3.2 time-weighted depth floor is NOT applied: it gates the mixture weight, which this class removes by construction. Structural pool invariants ARE gated",
+        "recomputed": {
+          "arm_wall_s": 5858.097159,
+          "full_width_fraction": 0.5302786892544948,
+          "time_weighted_mean_depth": 3.106513052970005
+        },
+        "recorded_full_width_fraction": 0.5302786892544948,
+        "recorded_time_weighted_mean_depth": 3.106513052970005
+      },
+      "raw_counter_delta_window": {
+        "vllm:fr13_committer_gpu_seconds_total": 291.08295979499815,
+        "vllm:fr13_committer_gpu_spans_total": 4486.0,
+        "vllm:fr13_decode_forward_gpu_drafts_total": 16054.0,
+        "vllm:fr13_decode_forward_gpu_seconds_total": 1154.6755641174336,
+        "vllm:fr13_decode_forward_gpu_steps_total": 4486.0,
+        "vllm:fr13_decode_step_wall_drafts_total": 14329.0,
+        "vllm:fr13_decode_step_wall_seconds_total": 1529.682905149879,
+        "vllm:fr13_decode_step_wall_steps_total": 3953.0,
+        "vllm:fr13_drafter_gpu_seconds_total": 201.1371910381323,
+        "vllm:fr13_drafter_gpu_spans_total": 4486.0,
+        "vllm:generation_tokens_total": 104478.0,
+        "vllm:request_decode_time_seconds_sum": 7850.802161837928,
+        "vllm:request_prefill_time_seconds_sum": 2005.147337699309,
+        "vllm:request_time_per_output_token_seconds_count": 338.0,
+        "vllm:request_time_per_output_token_seconds_sum": 27.81784298845942,
+        "vllm:spec_decode_num_accepted_tokens_total": 85471.0,
+        "vllm:spec_decode_num_draft_tokens_total": 497674.0,
+        "vllm:spec_decode_num_drafts_total": 16054.0
+      },
+      "slots": 4,
+      "task_count": 16,
+      "window": {
+        "arm_wall_s_from_events": 5858.097159,
+        "close_event": {
+          "depth": 3,
+          "event": "complete",
+          "instance_id": "astropy__astropy-14995",
+          "pending": 0,
+          "t_s": 3106.426292,
+          "wall": "2026-08-12T18:32:29Z"
+        },
+        "close_index": 28,
+        "close_t_s": 3106.426292,
+        "closing_task": "astropy__astropy-14995",
+        "definition": "open = first event at depth == slots; close = first complete at pending == 0. Structural only: depth and pending, no measured rate.",
+        "depth_at_slots_fraction_within_window": 0.9999997147846772,
+        "drain_wall_fraction_excluded_by_construction": 0.4697211595018545,
+        "drain_wall_s_excluded_by_construction": 2751.67219,
+        "full_width_wall_s_inside_window": 3106.424083,
+        "full_width_wall_s_outside_window": 0.0,
+        "last_admit_index": 27,
+        "open_event": {
+          "depth": 4,
+          "event": "admit",
+          "instance_id": "astropy__astropy-13398",
+          "pending": 12,
+          "t_s": 0.001323,
+          "wall": "2026-08-12T17:40:43Z"
+        },
+        "open_index": 3,
+        "open_t_s": 0.001323,
+        "opening_task": "astropy__astropy-13398",
+        "window_wall_fraction_of_arm": 0.5302788404981454,
+        "window_wall_s": 3106.424969
+      },
+      "windowed": {
+        "accept_per_event": 5.323969104273078,
+        "committed_per_event": 6.323969104273078,
+        "events_per_step": 3.578689255461436,
+        "floor_ratio": 3.0197474731618197,
+        "generation_tokens": 104478.0,
+        "measured_tps_fullstep_wall": 59.23852125826714,
+        "per_request_decode_tps": 12.150474792032707,
+        "per_request_step_tps": 16.55313357198121,
+        "prefill_frac": 0.2554066828286869,
+        "retained_wall_fraction": 0.8811859117253679,
+        "step_wall_ms": 382.0406013624752,
+        "window_step_fraction_of_arm": 0.3668929418500041,
+        "window_steps": 4486,
+        "window_wall_fraction_of_arm": 0.5302788404981454,
+        "window_wall_s": 3106.424969
+      }
+    },
+    {
+      "arm": "hydra27_fixed32_pool2",
+      "arm_level_blended": {
+        "events_per_step": 2.404063205417607,
+        "measured_tps_fullstep_wall": 42.30937689928688,
+        "per_request_step_tps": 17.599111705524965,
+        "prefill_frac": 0.18135365677826915,
+        "retained_wall_fraction": 0.9350790067720091,
+        "role": "context only -- the mixture this class decomposes",
+        "step_wall_ms": 325.97249151380896
+      },
+      "bracket_reduction": {
+        "basis": "the ENVELOPE max(post)-min(pre) over the per-task /metrics snapshots bounding the depth window: pre from the tasks admitted at or before depth reached slots, post from the tasks completed at or before the refill phase ended. Engine-global monotone counters, so in-flight tasks' work inside the window is included",
+        "distinct_bracket_origins": 1,
+        "post_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13453",
+          "astropy__astropy-13579",
+          "astropy__astropy-13977",
+          "astropy__astropy-14096",
+          "astropy__astropy-14182",
+          "astropy__astropy-14309",
+          "astropy__astropy-14365",
+          "astropy__astropy-14369",
+          "astropy__astropy-14508",
+          "astropy__astropy-14539"
+        ],
+        "pre_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398"
+        ],
+        "topology": "staggered",
+        "work_census_gate": {
+          "basis": "exact equality, no tolerance",
+          "census_event_counts_by_batch": {
+            "1": 67,
+            "2": 310,
+            "3": 1363,
+            "4": 3870
+          },
+          "census_events": 20256,
+          "census_events_per_step": 3.6106951871657755,
+          "census_first_forward_step": 0,
+          "census_last_forward_step": 5609,
+          "census_path": "output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_02/hydra27_fixed32_pool2/logs/fr13_fixed32_work_census.jsonl",
+          "census_steps": 5610,
+          "status": "pass"
+        }
+      },
+      "exclusion_reason": null,
+      "included": true,
+      "mode": "hydra27_fixed32",
+      "pass_index": 2,
+      "phase_breakdown": {
+        "cfwd_gpu_ms_per_step": 64.96458032237456,
+        "dfwd_gpu_ms_per_step": 45.118852074770984,
+        "events_per_step": 3.6106951871657755,
+        "gpu_component_ms_per_step": 370.5806943556843,
+        "measured_tps_fullstep_wall": 56.89840940324212,
+        "other_wall_ms_per_step": 14.83274680557821,
+        "per_request_step_tps": 15.758297627971382,
+        "sfwd_gpu_ms_per_event": 72.1460130128062,
+        "sfwd_gpu_ms_per_step": 260.49726195853873,
+        "wall_ms_per_event": 106.74217046379752
+      },
+      "pool_ledger": {
+        "arm_level_depth_floor_applied": false,
+        "arm_level_depth_floor_note": "the 3.2 time-weighted depth floor is NOT applied: it gates the mixture weight, which this class removes by construction. Structural pool invariants ARE gated",
+        "recomputed": {
+          "arm_wall_s": 5246.756237,
+          "full_width_fraction": 0.6980933454027359,
+          "time_weighted_mean_depth": 3.1799826865103125
+        },
+        "recorded_full_width_fraction": 0.6980933454027359,
+        "recorded_time_weighted_mean_depth": 3.1799826865103125
+      },
+      "raw_counter_delta_window": {
+        "vllm:fr13_committer_gpu_seconds_total": 364.4512956085213,
+        "vllm:fr13_committer_gpu_spans_total": 5610.0,
+        "vllm:fr13_decode_forward_gpu_drafts_total": 20256.0,
+        "vllm:fr13_decode_forward_gpu_seconds_total": 1461.3896395874024,
+        "vllm:fr13_decode_forward_gpu_steps_total": 5610.0,
+        "vllm:fr13_decode_step_wall_drafts_total": 18182.0,
+        "vllm:fr13_decode_step_wall_seconds_total": 1940.7861433727667,
+        "vllm:fr13_decode_step_wall_steps_total": 4970.0,
+        "vllm:fr13_drafter_gpu_seconds_total": 253.1167601394652,
+        "vllm:fr13_drafter_gpu_spans_total": 5610.0,
+        "vllm:generation_tokens_total": 126389.0,
+        "vllm:request_decode_time_seconds_sum": 11014.613994856598,
+        "vllm:request_prefill_time_seconds_sum": 2165.8836199466605,
+        "vllm:request_time_per_output_token_seconds_count": 389.0,
+        "vllm:request_time_per_output_token_seconds_sum": 32.59822163339536,
+        "vllm:spec_decode_num_accepted_tokens_total": 102768.0,
+        "vllm:spec_decode_num_draft_tokens_total": 627936.0,
+        "vllm:spec_decode_num_drafts_total": 20256.0
+      },
+      "slots": 4,
+      "task_count": 16,
+      "window": {
+        "arm_wall_s_from_events": 5246.756237,
+        "close_event": {
+          "depth": 3,
+          "event": "complete",
+          "instance_id": "astropy__astropy-14369",
+          "pending": 0,
+          "t_s": 3662.727758,
+          "wall": "2026-08-12T20:26:53Z"
+        },
+        "close_index": 28,
+        "close_t_s": 3662.727758,
+        "closing_task": "astropy__astropy-14369",
+        "definition": "open = first event at depth == slots; close = first complete at pending == 0. Structural only: depth and pending, no measured rate.",
+        "depth_at_slots_fraction_within_window": 0.9999997802183651,
+        "drain_wall_fraction_excluded_by_construction": 0.30190650116913365,
+        "drain_wall_s_excluded_by_construction": 1584.0298179999995,
+        "full_width_wall_s_inside_window": 3662.7256139999995,
+        "full_width_wall_s_outside_window": 0.0,
+        "last_admit_index": 27,
+        "open_event": {
+          "depth": 4,
+          "event": "admit",
+          "instance_id": "astropy__astropy-13398",
+          "pending": 12,
+          "t_s": 0.001339,
+          "wall": "2026-08-12T19:25:51Z"
+        },
+        "open_index": 3,
+        "open_t_s": 0.001339,
+        "opening_task": "astropy__astropy-13398",
+        "window_wall_fraction_of_arm": 0.6980934988308664,
+        "window_wall_s": 3662.726419
+      },
+      "windowed": {
+        "accept_per_event": 5.07345971563981,
+        "committed_per_event": 6.07345971563981,
+        "events_per_step": 3.6106951871657755,
+        "floor_ratio": 3.0464072690668735,
+        "generation_tokens": 126389.0,
+        "measured_tps_fullstep_wall": 56.89840940324212,
+        "per_request_decode_tps": 11.93316630504431,
+        "per_request_step_tps": 15.758297627971382,
+        "prefill_frac": 0.19663726944566964,
+        "retained_wall_fraction": 0.8859180035650623,
+        "step_wall_ms": 385.4134411612625,
+        "window_step_fraction_of_arm": 0.5065462753950338,
+        "window_steps": 5610,
+        "window_wall_fraction_of_arm": 0.6980934988308664,
+        "window_wall_s": 3662.726419
+      }
+    },
+    {
+      "arm": "tail6_fixed32_pool3",
+      "arm_level_blended": {
+        "events_per_step": 1.667413263065437,
+        "measured_tps_fullstep_wall": 29.488307788213632,
+        "per_request_step_tps": 17.685062510538742,
+        "prefill_frac": 0.15503143778465334,
+        "retained_wall_fraction": 0.9721563460693895,
+        "role": "context only -- the mixture this class decomposes",
+        "step_wall_ms": 275.9778686597026
+      },
+      "bracket_reduction": {
+        "basis": "the ENVELOPE max(post)-min(pre) over the per-task /metrics snapshots bounding the depth window: pre from the tasks admitted at or before depth reached slots, post from the tasks completed at or before the refill phase ended. Engine-global monotone counters, so in-flight tasks' work inside the window is included",
+        "distinct_bracket_origins": 1,
+        "post_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398",
+          "astropy__astropy-13453",
+          "astropy__astropy-13579",
+          "astropy__astropy-13977",
+          "astropy__astropy-14096",
+          "astropy__astropy-14182",
+          "astropy__astropy-14309",
+          "astropy__astropy-14365",
+          "astropy__astropy-14508",
+          "astropy__astropy-14539"
+        ],
+        "pre_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398"
+        ],
+        "topology": "staggered",
+        "work_census_gate": {
+          "basis": "exact equality, no tolerance",
+          "census_event_counts_by_batch": {
+            "1": 22,
+            "2": 193,
+            "3": 1344,
+            "4": 2593
+          },
+          "census_events": 14812,
+          "census_events_per_step": 3.567437379576108,
+          "census_first_forward_step": 0,
+          "census_last_forward_step": 4151,
+          "census_path": "output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_03/tail6_fixed32_pool3/logs/fr13_fixed32_work_census.jsonl",
+          "census_steps": 4152,
+          "status": "pass"
+        }
+      },
+      "exclusion_reason": null,
+      "included": true,
+      "mode": "tail6_fixed32",
+      "pass_index": 3,
+      "phase_breakdown": {
+        "cfwd_gpu_ms_per_step": 64.36660997716007,
+        "dfwd_gpu_ms_per_step": 44.732776871535975,
+        "events_per_step": 3.567437379576108,
+        "gpu_component_ms_per_step": 368.57193612914585,
+        "measured_tps_fullstep_wall": 56.9904553218318,
+        "other_wall_ms_per_step": 15.103675176666172,
+        "per_request_step_tps": 15.975180292752205,
+        "sfwd_gpu_ms_per_event": 72.73359604458734,
+        "sfwd_gpu_ms_per_step": 259.4725492804498,
+        "wall_ms_per_event": 107.54936120319549
+      },
+      "pool_ledger": {
+        "arm_level_depth_floor_applied": false,
+        "arm_level_depth_floor_note": "the 3.2 time-weighted depth floor is NOT applied: it gates the mixture weight, which this class removes by construction. Structural pool invariants ARE gated",
+        "recomputed": {
+          "arm_wall_s": 7820.417605000001,
+          "full_width_fraction": 0.3523925810864675,
+          "time_weighted_mean_depth": 2.266314528353118
+        },
+        "recorded_full_width_fraction": 0.3523925810864675,
+        "recorded_time_weighted_mean_depth": 2.266314528353118
+      },
+      "raw_counter_delta_window": {
+        "vllm:fr13_committer_gpu_seconds_total": 267.2501646251686,
+        "vllm:fr13_committer_gpu_spans_total": 4152.0,
+        "vllm:fr13_decode_forward_gpu_drafts_total": 14812.0,
+        "vllm:fr13_decode_forward_gpu_seconds_total": 1077.3300246124277,
+        "vllm:fr13_decode_forward_gpu_steps_total": 4152.0,
+        "vllm:fr13_decode_step_wall_drafts_total": 13335.0,
+        "vllm:fr13_decode_step_wall_seconds_total": 1434.1707316446118,
+        "vllm:fr13_decode_step_wall_steps_total": 3688.0,
+        "vllm:fr13_drafter_gpu_seconds_total": 185.73048957061738,
+        "vllm:fr13_drafter_gpu_spans_total": 4152.0,
+        "vllm:generation_tokens_total": 93190.0,
+        "vllm:request_decode_time_seconds_sum": 7894.194574678317,
+        "vllm:request_prefill_time_seconds_sum": 1747.5298375677085,
+        "vllm:request_time_per_output_token_seconds_count": 284.0,
+        "vllm:request_time_per_output_token_seconds_sum": 23.550087138947855,
+        "vllm:spec_decode_num_accepted_tokens_total": 75975.0,
+        "vllm:spec_decode_num_draft_tokens_total": 459172.0,
+        "vllm:spec_decode_num_drafts_total": 14812.0
+      },
+      "slots": 4,
+      "task_count": 16,
+      "window": {
+        "arm_wall_s_from_events": 7820.417605000001,
+        "close_event": {
+          "depth": 3,
+          "event": "complete",
+          "instance_id": "astropy__astropy-14508",
+          "pending": 0,
+          "t_s": 2755.859388,
+          "wall": "2026-08-13T00:32:51Z"
+        },
+        "close_index": 28,
+        "close_t_s": 2755.859388,
+        "closing_task": "astropy__astropy-14508",
+        "definition": "open = first event at depth == slots; close = first complete at pending == 0. Structural only: depth and pending, no measured rate.",
+        "depth_at_slots_fraction_within_window": 0.9999995816185469,
+        "drain_wall_fraction_excluded_by_construction": 0.6476072714789508,
+        "drain_wall_s_excluded_by_construction": 5064.559307000001,
+        "full_width_wall_s_inside_window": 2755.8571450000004,
+        "full_width_wall_s_outside_window": 0.0,
+        "last_admit_index": 27,
+        "open_event": {
+          "depth": 4,
+          "event": "admit",
+          "instance_id": "astropy__astropy-13398",
+          "pending": 12,
+          "t_s": 0.00109,
+          "wall": "2026-08-12T23:46:55Z"
+        },
+        "open_index": 3,
+        "open_t_s": 0.00109,
+        "opening_task": "astropy__astropy-13398",
+        "window_wall_fraction_of_arm": 0.3523927285210493,
+        "window_wall_s": 2755.8582979999996
+      },
+      "windowed": {
+        "accept_per_event": 5.129287064542263,
+        "committed_per_event": 6.129287064542263,
+        "events_per_step": 3.567437379576108,
+        "floor_ratio": 3.0326710135587773,
+        "generation_tokens": 93190.0,
+        "measured_tps_fullstep_wall": 56.9904553218318,
+        "per_request_decode_tps": 12.059403361200822,
+        "per_request_step_tps": 15.975180292752205,
+        "prefill_frac": 0.22136898464260607,
+        "retained_wall_fraction": 0.8882466281310212,
+        "step_wall_ms": 383.675611305812,
+        "window_step_fraction_of_arm": 0.1823451910408432,
+        "window_steps": 4152,
+        "window_wall_fraction_of_arm": 0.3523927285210493,
+        "window_wall_s": 2755.8582979999996
+      }
+    },
+    {
+      "arm": "hydra27_fixed32_pool3",
+      "arm_level_blended": {
+        "events_per_step": 1.7884986036266373,
+        "measured_tps_fullstep_wall": 32.35467455536647,
+        "per_request_step_tps": 18.090410856211527,
+        "prefill_frac": 0.1425496299988424,
+        "retained_wall_fraction": 0.9674310663572355,
+        "role": "context only -- the mixture this class decomposes",
+        "step_wall_ms": 296.2216808189551
+      },
+      "bracket_reduction": {
+        "basis": "the ENVELOPE max(post)-min(pre) over the per-task /metrics snapshots bounding the depth window: pre from the tasks admitted at or before depth reached slots, post from the tasks completed at or before the refill phase ended. Engine-global monotone counters, so in-flight tasks' work inside the window is included",
+        "distinct_bracket_origins": 1,
+        "post_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13453",
+          "astropy__astropy-13579",
+          "astropy__astropy-13977",
+          "astropy__astropy-14096",
+          "astropy__astropy-14182",
+          "astropy__astropy-14309",
+          "astropy__astropy-14365",
+          "astropy__astropy-14508",
+          "astropy__astropy-14539",
+          "astropy__astropy-14995"
+        ],
+        "pre_tasks": [
+          "astropy__astropy-12907",
+          "astropy__astropy-13033",
+          "astropy__astropy-13236",
+          "astropy__astropy-13398"
+        ],
+        "topology": "staggered",
+        "work_census_gate": {
+          "basis": "exact equality, no tolerance",
+          "census_event_counts_by_batch": {
+            "1": 1,
+            "2": 121,
+            "3": 1641,
+            "4": 4097
+          },
+          "census_events": 21554,
+          "census_events_per_step": 3.6781569965870307,
+          "census_first_forward_step": 0,
+          "census_last_forward_step": 5859,
+          "census_path": "output/fr13_b4_pool16_refill_gate_20260812T115625Z/pass_03/hydra27_fixed32_pool3/logs/fr13_fixed32_work_census.jsonl",
+          "census_steps": 5860,
+          "status": "pass"
+        }
+      },
+      "exclusion_reason": null,
+      "included": true,
+      "mode": "hydra27_fixed32",
+      "pass_index": 3,
+      "phase_breakdown": {
+        "cfwd_gpu_ms_per_step": 66.25344057408616,
+        "dfwd_gpu_ms_per_step": 45.882213809954024,
+        "events_per_step": 3.6781569965870307,
+        "gpu_component_ms_per_step": 379.4638305504576,
+        "measured_tps_fullstep_wall": 53.81914178879637,
+        "other_wall_ms_per_step": 15.354904094884716,
+        "per_request_step_tps": 14.632094779732151,
+        "sfwd_gpu_ms_per_event": 72.67992541223005,
+        "sfwd_gpu_ms_per_step": 267.32817616641745,
+        "wall_ms_per_event": 107.34145796704584
+      },
+      "pool_ledger": {
+        "arm_level_depth_floor_applied": false,
+        "arm_level_depth_floor_note": "the 3.2 time-weighted depth floor is NOT applied: it gates the mixture weight, which this class removes by construction. Structural pool invariants ARE gated",
+        "recomputed": {
+          "arm_wall_s": 9492.765543999998,
+          "full_width_fraction": 0.3889912867735314,
+          "time_weighted_mean_depth": 2.408293163044542
+        },
+        "recorded_full_width_fraction": 0.3889912867735314,
+        "recorded_time_weighted_mean_depth": 2.408293163044542
+      },
+      "raw_counter_delta_window": {
+        "vllm:fr13_committer_gpu_seconds_total": 388.2451617641448,
+        "vllm:fr13_committer_gpu_spans_total": 5860.0,
+        "vllm:fr13_decode_forward_gpu_drafts_total": 21554.0,
+        "vllm:fr13_decode_forward_gpu_seconds_total": 1566.5431123352064,
+        "vllm:fr13_decode_forward_gpu_steps_total": 5860.0,
+        "vllm:fr13_decode_step_wall_drafts_total": 19564.0,
+        "vllm:fr13_decode_step_wall_seconds_total": 2100.028283667285,
+        "vllm:fr13_decode_step_wall_steps_total": 5250.0,
+        "vllm:fr13_drafter_gpu_seconds_total": 268.8697729263306,
+        "vllm:fr13_drafter_gpu_spans_total": 5860.0,
+        "vllm:generation_tokens_total": 127572.0,
+        "vllm:request_decode_time_seconds_sum": 10542.769744785037,
+        "vllm:request_prefill_time_seconds_sum": 1919.230722440756,
+        "vllm:request_time_per_output_token_seconds_count": 363.0,
+        "vllm:request_time_per_output_token_seconds_sum": 29.515662391055283,
+        "vllm:spec_decode_num_accepted_tokens_total": 102964.0,
+        "vllm:spec_decode_num_draft_tokens_total": 668174.0,
+        "vllm:spec_decode_num_drafts_total": 21554.0
+      },
+      "slots": 4,
+      "task_count": 16,
+      "window": {
+        "arm_wall_s_from_events": 9492.765543999998,
+        "close_event": {
+          "depth": 3,
+          "event": "complete",
+          "instance_id": "astropy__astropy-14995",
+          "pending": 0,
+          "t_s": 3692.605676,
+          "wall": "2026-08-12T22:02:52Z"
+        },
+        "close_index": 28,
+        "close_t_s": 3692.605676,
+        "closing_task": "astropy__astropy-14995",
+        "definition": "open = first event at depth == slots; close = first complete at pending == 0. Structural only: depth and pending, no measured rate.",
+        "depth_at_slots_fraction_within_window": 0.9999997578944277,
+        "drain_wall_fraction_excluded_by_construction": 0.6110086190494878,
+        "drain_wall_s_excluded_by_construction": 5800.161565999998,
+        "full_width_wall_s_inside_window": 3692.6030840000008,
+        "full_width_wall_s_outside_window": 0.0,
+        "last_admit_index": 27,
+        "open_event": {
+          "depth": 4,
+          "event": "admit",
+          "instance_id": "astropy__astropy-13398",
+          "pending": 12,
+          "t_s": 0.001698,
+          "wall": "2026-08-12T21:01:20Z"
+        },
+        "open_index": 3,
+        "open_t_s": 0.001698,
+        "opening_task": "astropy__astropy-13398",
+        "window_wall_fraction_of_arm": 0.3889913809505123,
+        "window_wall_s": 3692.603978
+      },
+      "windowed": {
+        "accept_per_event": 4.777025146144567,
+        "committed_per_event": 5.777025146144567,
+        "events_per_step": 3.6781569965870307,
+        "floor_ratio": 3.120749135171174,
+        "generation_tokens": 127572.0,
+        "measured_tps_fullstep_wall": 53.81914178879637,
+        "per_request_decode_tps": 12.298555092228154,
+        "per_request_step_tps": 14.632094779732151,
+        "prefill_frac": 0.1820423635250215,
+        "retained_wall_fraction": 0.8959044368600683,
+        "step_wall_ms": 394.8187346453423,
+        "window_step_fraction_of_arm": 0.23049994099830862,
+        "window_steps": 5860,
+        "window_wall_fraction_of_arm": 0.3889913809505123,
+        "window_wall_s": 3692.603978
+      }
+    }
+  ],
+  "b4_cap_applicable": false,
+  "b4_cap_reason": "35-38k contexts imply 42-49 GB mandatory bytes and a 155-179 ms floor, above the 137.607 ms one-sided cap",
+  "citable": false,
+  "citable_reason": "this class is an instrument for the step-wall levers, not a sealed claim. It reports intervals so a lever can be judged against them; it does not itself promote anything",
+  "claims": [
+    "the per-request step TPS, aggregate step TPS, events/step and step wall delivered by the shipped fixed32 B4 stack DURING the phase in which a 16-task pool holds its full slot width with backfill still available, bracketed by real Prometheus snapshots at ledger admission events and cross-checked step-for-step against the work census"
+  ],
+  "classification": "real_swe_verified_b4_width4_operating_point",
+  "does_not_claim": [
+    "whole-arm throughput. This is the operating point of ONE PHASE of an arm. The drain phase -- which begins when the last task is admitted and nothing remains behind the running four -- is excluded BY CONSTRUCTION, and on this campaign it was 18% to 65% of arm wall. Multiplying a windowed rate by an arm wall would overstate delivered work, in one case by nearly 3x. The arm-level blended numbers remain the only answer to 'what did the arm deliver', and they are carried alongside every windowed value here",
+    "exact4 comparability. Different task set (16 vs its first 4), different bracket estimator (envelope vs widest-nested), and -- newly and most importantly -- a different WINDOW: the exact4 arms are reduced whole, drain included, because at pool == slots the drain IS the arm. Comparing a windowed pool16 number against a whole-arm exact4 number compares a phase to a mixture. Any such contrast is descriptive and must say so",
+    "that the window is a per-step engine-batch filter. It is a POOL-DEPTH window: it selects the wall during which four tasks were admitted and unfinished. Inside it the ENGINE batch was still width 4 on only 63-70% of steps, width 3 on 24-33%, and narrower on the rest, because an admitted task is repeatedly between requests while the agent runs tools locally. That residual is published per arm as census_event_counts_by_batch. A true batch==4 filter is NOT derivable from this evidence: the census resolves batch width per step but carries no per-step wall, so no wall statistic can be conditioned on it",
+    "a cap verdict. b4_cap_applicable is false at B4 context sizes and nothing here changes that: 35-38k contexts imply 42-49 GB mandatory bytes and a 155-179 ms floor, above the 137.607 ms one-sided cap",
+    "an agent-quality verdict. Resolve rate is neither read nor recorded by this tool. exact16 as QUALITY CONTROL at batched milestones (Mark, 2026-08-10) is a separate gate over the same subset and is untouched",
+    "that step_wall_ms and events_per_step share one basis. Inherited unchanged from the arm-level class: the wall mean is over wall-chain-bracketed steps, the event rate over all census steps. retained_wall_fraction is published per window and is LOWER inside the window (0.877-0.896) than over the whole arm (0.906-0.932), because continuous admission resets the wall chain more often and admission is densest exactly here. The first step after a reset carries no wall sample by construction, so whether those steps are slower in wall terms is NOT measurable from this evidence",
+    "that prefill_frac and per_request_decode_tps are windowed on the same footing as the step-keyed statistics. Those two derive from request_*_seconds_sum counters that increment only when a REQUEST COMPLETES, so requests in flight at the window close contribute their wall to the denominator of nothing and their tokens to neither side. The step-keyed statistics -- step_wall_ms, events_per_step, aggregate and per-request step TPS -- have no such boundary bias. Both are emitted; only the step-keyed ones carry intervals",
+    "a promotion, a floor-acceptance verdict, or a citable seal. This class exists to give the step-wall levers a stable target to be judged against. It is an INSTRUMENT, and formal_floor_acceptance_eligible is false by construction"
+  ],
+  "formal_floor_acceptance_eligible": false,
+  "gate_root": "output/fr13_b4_pool16_refill_gate_20260812T115625Z",
+  "pooled": {
+    "draw_count": 8,
+    "independence_note": "the two arms inside a pass share host conditions and one task-difficulty draw, so the independent unit is the PASS. Per topology that is n=4 (df=3), which the repo pins. Pooled across both topologies it is n=8 (df=7), which the repo does NOT pin",
+    "statistics": {
+      "events_per_step": {
+        "cluster_count": 8,
+        "cv": 0.010288615349498095,
+        "df": 7,
+        "point_estimate": 3.607986287407038,
+        "reason": "no pinned one-sided t critical for df=7; the gate admits exactly 4 or 16 included passes",
+        "sample_sd_across_draws": 0.0371211830973947,
+        "status": "no_pinned_critical",
+        "values": [
+          3.637150586113616,
+          3.6000837520938025,
+          3.6182432432432434,
+          3.5734338990152943,
+          3.578689255461436,
+          3.6106951871657755,
+          3.567437379576108,
+          3.6781569965870307
+        ]
+      },
+      "measured_tps_fullstep_wall": {
+        "cluster_count": 8,
+        "cv": 0.02868265636102014,
+        "df": 7,
+        "point_estimate": 57.301254667560784,
+        "reason": "no pinned one-sided t critical for df=7; the gate admits exactly 4 or 16 included passes",
+        "sample_sd_across_draws": 1.6435521966849473,
+        "status": "no_pinned_critical",
+        "values": [
+          56.98137204889146,
+          57.627485444082,
+          58.543578796507795,
+          58.31107327886755,
+          59.23852125826714,
+          56.89840940324212,
+          56.9904553218318,
+          53.81914178879637
+        ]
+      },
+      "per_request_step_tps": {
+        "cluster_count": 8,
+        "cv": 0.03668549387010476,
+        "df": 7,
+        "point_estimate": 15.886313146539528,
+        "reason": "no pinned one-sided t critical for df=7; the gate admits exactly 4 or 16 included passes",
+        "sample_sd_across_draws": 0.5827972435559405,
+        "status": "no_pinned_critical",
+        "values": [
+          15.666486910506901,
+          16.00726244509338,
+          16.18011141341392,
+          16.31793813086508,
+          16.55313357198121,
+          15.758297627971382,
+          15.975180292752205,
+          14.632094779732151
+        ]
+      },
+      "step_wall_ms": {
+        "cluster_count": 8,
+        "cv": 0.01220234603513852,
+        "df": 7,
+        "point_estimate": 388.5988874250881,
+        "reason": "no pinned one-sided t critical for df=7; the gate admits exactly 4 or 16 included passes",
+        "sample_sd_across_draws": 4.741818093230764,
+        "status": "no_pinned_critical",
+        "values": [
+          394.8231600128463,
+          389.64662323616363,
+          389.81125539437033,
+          388.5616722824324,
+          382.0406013624752,
+          385.4134411612625,
+          383.675611305812,
+          394.8187346453423
+        ]
+      }
+    }
+  },
+  "primary_statistic": "per_request_step_tps",
+  "primary_statistic_reason": "Mark's pinned-effective-batch ruling (2026-08-12): pin an effective batch and optimize per-request TPS under it. The window IS the pin -- it holds the served width at slots -- so the aggregate is no longer a free parameter the schedule can inflate, and what remains to optimize is the rate one request experiences. This inverts the pool16 class, which made the aggregate primary because co-residency was exactly what it was measuring; here co-residency is held fixed by the window instead of measured, so the 3c6d663d6 lesson applies in full force and per_request_step_tps is primary.",
+  "run_class": "b4_width4_operating_point",
+  "schema": "fr13.b4_width4_operating_point.v1",
+  "source_commit": "090f11bc04d1cbac51257c29c0f554892c87eda6",
+  "title": "B4 WIDTH-4 OPERATING POINT (depth window)",
+  "topologies": {
+    "hydra27_fixed32": {
+      "arms": [
+        {
+          "arm": "hydra27_fixed32_pool0",
+          "events_per_step": 3.6000837520938025,
+          "measured_tps_fullstep_wall": 57.627485444082,
+          "mode": "hydra27_fixed32",
+          "pass_index": 0,
+          "per_request_step_tps": 16.00726244509338,
+          "step_wall_ms": 389.64662323616363,
+          "window_steps": 4776,
+          "window_wall_fraction_of_arm": 0.818524265581556
+        },
+        {
+          "arm": "hydra27_fixed32_pool1",
+          "events_per_step": 3.5734338990152943,
+          "measured_tps_fullstep_wall": 58.31107327886755,
+          "mode": "hydra27_fixed32",
+          "pass_index": 1,
+          "per_request_step_tps": 16.31793813086508,
+          "step_wall_ms": 388.5616722824324,
+          "window_steps": 4773,
+          "window_wall_fraction_of_arm": 0.784438333499478
+        },
+        {
+          "arm": "hydra27_fixed32_pool2",
+          "events_per_step": 3.6106951871657755,
+          "measured_tps_fullstep_wall": 56.89840940324212,
+          "mode": "hydra27_fixed32",
+          "pass_index": 2,
+          "per_request_step_tps": 15.758297627971382,
+          "step_wall_ms": 385.4134411612625,
+          "window_steps": 5610,
+          "window_wall_fraction_of_arm": 0.6980934988308664
+        },
+        {
+          "arm": "hydra27_fixed32_pool3",
+          "events_per_step": 3.6781569965870307,
+          "measured_tps_fullstep_wall": 53.81914178879637,
+          "mode": "hydra27_fixed32",
+          "pass_index": 3,
+          "per_request_step_tps": 14.632094779732151,
+          "step_wall_ms": 394.8187346453423,
+          "window_steps": 5860,
+          "window_wall_fraction_of_arm": 0.3889913809505123
+        }
+      ],
+      "draw_count": 4,
+      "excluded": [],
+      "label": "hydra27_fixed32",
+      "statistics": {
+        "events_per_step": {
+          "cluster_count": 4,
+          "cv": 0.012323764754850702,
+          "df": 3,
+          "l95": 3.563162214917712,
+          "point_estimate": 3.6155924587154757,
+          "role": "reported",
+          "sample_sd_across_passes": 0.04455771091062177,
+          "standard_error": 0.022278855455310886,
+          "status": "evaluated",
+          "t_0_95_one_sided": 2.3533634348018264,
+          "u95": 3.6680227025132397,
+          "values": [
+            3.6000837520938025,
+            3.5734338990152943,
+            3.6106951871657755,
+            3.6781569965870307
+          ]
+        },
+        "measured_tps_fullstep_wall": {
+          "cluster_count": 4,
+          "cv": 0.03498455242917189,
+          "df": 3,
+          "l95": 54.33141407274549,
+          "point_estimate": 56.66402747874701,
+          "role": "reported",
+          "sample_sd_across_passes": 1.9823656401782612,
+          "standard_error": 0.9911828200891306,
+          "status": "evaluated",
+          "t_0_95_one_sided": 2.3533634348018264,
+          "u95": 58.99664088474853,
+          "values": [
+            57.627485444082,
+            58.31107327886755,
+            56.89840940324212,
+            53.81914178879637
+          ]
+        },
+        "per_request_step_tps": {
+          "cluster_count": 4,
+          "cv": 0.046843886075965166,
+          "df": 3,
+          "l95": 14.81467197608003,
+          "point_estimate": 15.678898245915498,
+          "role": "primary",
+          "sample_sd_across_passes": 0.7344605232283157,
+          "standard_error": 0.36723026161415784,
+          "status": "evaluated",
+          "t_0_95_one_sided": 2.3533634348018264,
+          "u95": 16.543124515750964,
+          "values": [
+            16.00726244509338,
+            16.31793813086508,
+            15.758297627971382,
+            14.632094779732151
+          ]
+        },
+        "step_wall_ms": {
+          "cluster_count": 4,
+          "cv": 0.010033272451084941,
+          "df": 3,
+          "l95": 385.01039314684,
+          "point_estimate": 389.6101178313002,
+          "role": "reported",
+          "sample_sd_across_passes": 3.909064461900742,
+          "standard_error": 1.954532230950371,
+          "status": "evaluated",
+          "t_0_95_one_sided": 2.3533634348018264,
+          "u95": 394.20984251576044,
+          "values": [
+            389.64662323616363,
+            388.5616722824324,
+            385.4134411612625,
+            394.8187346453423
+          ]
+        }
+      }
+    },
+    "tail6_fixed32": {
+      "arms": [
+        {
+          "arm": "tail6_fixed32_pool0",
+          "events_per_step": 3.637150586113616,
+          "measured_tps_fullstep_wall": 56.98137204889146,
+          "mode": "tail6_fixed32",
+          "pass_index": 0,
+          "per_request_step_tps": 15.666486910506901,
+          "step_wall_ms": 394.8231600128463,
+          "window_steps": 5545,
+          "window_wall_fraction_of_arm": 0.7130706115275469
+        },
+        {
+          "arm": "tail6_fixed32_pool1",
+          "events_per_step": 3.6182432432432434,
+          "measured_tps_fullstep_wall": 58.543578796507795,
+          "mode": "tail6_fixed32",
+          "pass_index": 1,
+          "per_request_step_tps": 16.18011141341392,
+          "step_wall_ms": 389.81125539437033,
+          "window_steps": 5328,
+          "window_wall_fraction_of_arm": 0.749657561822716
+        },
+        {
+          "arm": "tail6_fixed32_pool2",
+          "events_per_step": 3.578689255461436,
+          "measured_tps_fullstep_wall": 59.23852125826714,
+          "mode": "tail6_fixed32",
+          "pass_index": 2,
+          "per_request_step_tps": 16.55313357198121,
+          "step_wall_ms": 382.0406013624752,
+          "window_steps": 4486,
+          "window_wall_fraction_of_arm": 0.5302788404981454
+        },
+        {
+          "arm": "tail6_fixed32_pool3",
+          "events_per_step": 3.567437379576108,
+          "measured_tps_fullstep_wall": 56.9904553218318,
+          "mode": "tail6_fixed32",
+          "pass_index": 3,
+          "per_request_step_tps": 15.975180292752205,
+          "step_wall_ms": 383.675611305812,
+          "window_steps": 4152,
+          "window_wall_fraction_of_arm": 0.3523927285210493
+        }
+      ],
+      "draw_count": 4,
+      "excluded": [],
+      "label": "tail6_fixed32",
+      "statistics": {
+        "events_per_step": {
+          "cluster_count": 4,
+          "cv": 0.009109240395777554,
+          "df": 3,
+          "l95": 3.5617888058778204,
+          "point_estimate": 3.600380116098601,
+          "role": "reported",
+          "sample_sd_across_passes": 0.03279672799371965,
+          "standard_error": 0.016398363996859826,
+          "status": "evaluated",
+          "t_0_95_one_sided": 2.3533634348018264,
+          "u95": 3.6389714263193813,
+          "values": [
+            3.637150586113616,
+            3.6182432432432434,
+            3.578689255461436,
+            3.567437379576108
+          ]
+        },
+        "measured_tps_fullstep_wall": {
+          "cluster_count": 4,
+          "cv": 0.019605914950975033,
+          "df": 3,
+          "l95": 56.601845617937315,
+          "point_estimate": 57.93848185637455,
+          "role": "reported",
+          "sample_sd_across_passes": 1.1359369476646894,
+          "standard_error": 0.5679684738323447,
+          "status": "evaluated",
+          "t_0_95_one_sided": 2.3533634348018264,
+          "u95": 59.27511809481179,
+          "values": [
+            56.98137204889146,
+            58.543578796507795,
+            59.23852125826714,
+            56.9904553218318
+          ]
+        },
+        "per_request_step_tps": {
+          "cluster_count": 4,
+          "cv": 0.02311326059819668,
+          "df": 3,
+          "l95": 15.65602771123435,
+          "point_estimate": 16.09372804716356,
+          "role": "primary",
+          "sample_sd_across_passes": 0.3719785303505983,
+          "standard_error": 0.18598926517529915,
+          "status": "evaluated",
+          "t_0_95_one_sided": 2.3533634348018264,
+          "u95": 16.53142838309277,
+          "values": [
+            15.666486910506901,
+            16.18011141341392,
+            16.55313357198121,
+            15.975180292752205
+          ]
+        },
+        "step_wall_ms": {
+          "cluster_count": 4,
+          "cv": 0.015144970025195947,
+          "df": 3,
+          "l95": 380.6805312809026,
+          "point_estimate": 387.587657018876,
+          "role": "reported",
+          "sample_sd_across_passes": 5.870003447686804,
+          "standard_error": 2.935001723843402,
+          "status": "evaluated",
+          "t_0_95_one_sided": 2.3533634348018264,
+          "u95": 394.49478275684936,
+          "values": [
+            394.8231600128463,
+            389.81125539437033,
+            382.0406013624752,
+            383.675611305812
+          ]
+        }
+      }
+    }
+  },
+  "uncertainty_model": {
+    "admissible_n": "exactly 4 or 16 included draws per cluster",
+    "criticals": {
+      "15": 1.7530503556925547,
+      "3": 2.3533634348018264
+    },
+    "interval": "one-sided 95% Student-t on between-pass variation",
+    "note": "no critical is invented for an unpinned df; a cluster that does not fit reports status no_pinned_critical with its point estimate and CV and no bounds"
+  },
+  "verdict": "WINDOWED",
+  "window_definition": {
+    "bracket": "real Prometheus snapshots at both edges; nothing interpolated",
+    "census_cross_check": "counter step delta indexes the census range; step count and event sum must match with exact equality",
+    "close": "first `complete` ledger event carrying pending == 0",
+    "drain_exclusion": "by construction. _window_occupancy PROVES that zero full-width wall lies outside the window, by exact comparison against 0.0",
+    "inputs": "depth and pending only; no measured rate participates",
+    "open": "first ledger event at which depth == slots"
+  }
+}

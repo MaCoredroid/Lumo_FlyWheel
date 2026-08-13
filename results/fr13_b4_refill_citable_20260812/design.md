@@ -611,3 +611,27 @@ costs proportionally more GPU and is blocked by `EVIDENCE_SETS` pinning 16.
 **The width-3 nsys attribution should profile inside the full-width window specifically**;
 profiling a wall-blended arm would attribute the drain phase as if it were the operating
 point.
+
+---
+
+## 10. THAT RECOMMENDATION IS NOW BUILT AND RUN — see `width4_window.md`
+
+The windowed reduction §9 asked for exists: `scripts/fr13_b4_width4_window_reduce.py`,
+run class `b4_width4_operating_point`, over **all 8 served arms** including the two passes
+this campaign's depth floor excluded. It needed no new instrumentation — the ledger's
+admission events, the per-task Prometheus snapshots and the work census already line up
+exactly, so both window edges are real snapshots and the census cross-check is an identity
+rather than an estimate.
+
+Headline: arm-level `events_per_step` **1.67–3.04** (CV 21.8%/23.3%) becomes windowed
+**3.567–3.678** (CV 1.23%/0.91%), a 17.6×/25.6× tightening, and `step_wall_ms` CV falls
+8.28%/11.45% → **1.00%/1.51%**. The mixture weight is gone; what remains is a rate.
+
+The correction is unwelcome and is the point: at true width 4 per-request service is
+**15.68 / 16.09**, not the 16.99 / 17.44 the blended two-pass mean suggested — the blend
+flattered it by 8.4% on both topologies, because drain steps are narrow and each surviving
+request takes a larger share of them. Against exact4 that is **−26.0% / −28.1%**, worse
+than the −19.9% / −22.1% recorded above.
+
+This class is an INSTRUMENT and is `citable: false` by construction. It does not revise any
+verdict in §9; the campaign remains `NOT_EVALUATED_INSUFFICIENT_PASSES`.
