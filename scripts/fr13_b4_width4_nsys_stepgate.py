@@ -259,12 +259,26 @@ def _nsys(
     action: str,
     session: str,
     timeout_s: int,
+    expect_state: str | None = None,
 ) -> str:
     """Run `nsys start|stop` INSIDE the container that owns the session.
 
     The session is created by the nsys frontend running as the container's PID 1,
     so it lives in that container's namespace and is not addressable from the
     host.
+
+    THE EXIT CODE IS NOT THE OUTCOME. `nsys start` on a deferred session both
+    begins collection AND attempts a configure pass; on this build the configure
+    pass reports "Configuring is not allowed in this state." and the process
+    exits 1 even though the session has already transitioned to Collection.
+    Trusting rc alone aborted a capture that was, in fact, running -- and left
+    it running unattended with nothing scheduled to stop it.
+
+    So when rc is nonzero and the caller named the state it wanted, the SESSION
+    is asked. Observed state wins over exit code; if the state did not reach the
+    target the error is raised as before. This makes the control path idempotent
+    (re-issuing `start` on an already-collecting session is a no-op, not a
+    failure) rather than merely tolerant.
     """
     command = [
         "docker",
@@ -282,6 +296,20 @@ def _nsys(
         check=False,
     )
     output = (completed.stdout or "") + (completed.stderr or "")
+    if completed.returncode != 0 and expect_state is not None:
+        observed = _session_state(
+            nsys_bin=nsys_bin,
+            container_id=container_id,
+            session=session,
+            timeout_s=timeout_s,
+        )
+        if observed == expect_state:
+            _log(
+                f"nsys {action} exited {completed.returncode} but the session "
+                f"is in {observed!r} as intended; trusting observed state. "
+                f"nsys said: {output.strip()[:200]}"
+            )
+            return output
     if completed.returncode != 0:
         raise GateError(
             f"nsys {action} failed rc={completed.returncode}: {output.strip()[:2000]}"
@@ -492,6 +520,7 @@ def main() -> int:
         action="start",
         session=args.session,
         timeout_s=args.exec_timeout_s,
+        expect_state="Collection",
     )
 
     open_hi_text = _scrape_retry(args.metrics_url, timeout_s=15.0)
@@ -550,6 +579,10 @@ def main() -> int:
         action="stop",
         session=args.session,
         timeout_s=max(args.exec_timeout_s, 600),
+        # A stopped session returns to Launched: the wrapped server keeps
+        # running, which is what lets the arm complete and produce the census
+        # and ledger the capture is validated against.
+        expect_state="Launched",
     )
 
     close_hi_text = _scrape_retry(args.metrics_url, timeout_s=15.0)
