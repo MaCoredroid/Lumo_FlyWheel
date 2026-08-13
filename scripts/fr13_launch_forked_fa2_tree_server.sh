@@ -5000,6 +5000,22 @@ LUMO_NSYS_WRAP_VLLM=${LUMO_NSYS_WRAP_VLLM:-0}
 LUMO_NSYS_BIN=${LUMO_NSYS_BIN:-/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys}
 LUMO_NSYS_DELAY_S=${LUMO_NSYS_DELAY_S:-600}
 LUMO_NSYS_DURATION_S=${LUMO_NSYS_DURATION_S:-150}
+# DEFAULT-OFF deferred collection. When 1, the wrapped session is created with
+# --start-later=true and collects NOTHING until an external `nsys start
+# --session=<name>` arrives; --delay/--duration are then not passed at all
+# (nsys documents --start-later as overriding --delay, and a --duration paired
+# with a deferred start would re-impose a WALL bound on a step-gated capture).
+#
+# WHY THIS EXISTS: wall-time gating cannot address a forward-step window. The
+# B4 width-4 operating point is defined in ABSOLUTE forward-step indices, and
+# the admit->first-step hydration lag is ~118 steps (~43 s), so any fixed
+# --delay drifts off the window it claims to profile. With this flag the gate
+# is an external poller on vllm:fr13_decode_forward_gpu_steps_total -- the same
+# counter that indexes the work census.
+#
+# 0 reproduces the pre-existing delay/duration prefix byte-for-byte, so the
+# citable B1 attribution path is unchanged.
+LUMO_NSYS_START_LATER=${LUMO_NSYS_START_LATER:-0}
 # Periodic CUPTI buffer flush (ms). Without it, per-kernel records (incl. graph
 # node-level kernels) are dropped as "incomplete" at the delayed-duration session
 # stop on GB10 (fr13_b1_profile_bind: 55k/78k events dropped, zero kernel rows).
@@ -5163,6 +5179,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e LUMO_NSYS_BIN="$LUMO_NSYS_BIN" \
   -e LUMO_NSYS_DELAY_S="$LUMO_NSYS_DELAY_S" \
   -e LUMO_NSYS_DURATION_S="$LUMO_NSYS_DURATION_S" \
+  -e LUMO_NSYS_START_LATER="$LUMO_NSYS_START_LATER" \
   -e LUMO_NSYS_FLUSH_MS="$LUMO_NSYS_FLUSH_MS" \
   -e LUMO_NSYS_CONFIG_DIRECTIVES="$LUMO_NSYS_CONFIG_DIRECTIVES" \
   -e LUMO_NSYS_TRACE="$LUMO_NSYS_TRACE" \
@@ -6071,8 +6088,19 @@ case \"\${LUMO_NSYS_WRAP_VLLM,,}\" in
       \"\$LUMO_NSYS_BIN\"
       profile
       \"--session-new=%q{LUMO_NSYS_SESSION_NAME}\"
-      --delay \"\$LUMO_NSYS_DELAY_S\"
-      --duration \"\$LUMO_NSYS_DURATION_S\"
+    )
+    case \"\${LUMO_NSYS_START_LATER,,}\" in
+      1|true|yes|on)
+        NSYS_PREFIX+=( --start-later=true )
+        ;;
+      *)
+        NSYS_PREFIX+=(
+          --delay \"\$LUMO_NSYS_DELAY_S\"
+          --duration \"\$LUMO_NSYS_DURATION_S\"
+        )
+        ;;
+    esac
+    NSYS_PREFIX+=(
       --trace=\"\$LUMO_NSYS_TRACE\"
       --cuda-graph-trace=node
       --cuda-flush-interval \"\$LUMO_NSYS_FLUSH_MS\"
