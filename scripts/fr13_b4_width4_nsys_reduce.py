@@ -39,8 +39,6 @@ is bounded from the launch count in that window only.
 from __future__ import annotations
 
 import argparse
-import csv
-import io
 import json
 import math
 import os
@@ -163,20 +161,6 @@ def _export_sqlite(nsys_bin: str, report: Path, sqlite_path: Path,
     if not sqlite_path.exists():
         raise ReduceError(f"sqlite export produced nothing at {sqlite_path}")
     return sqlite_path
-
-
-def _stats_csv(nsys_bin: str, report: Path, name: str, timeout: int,
-               sqlite_path: Path) -> list[dict[str, str]]:
-    out = _run([nsys_bin, "stats", "--report", name, "--format", "csv",
-                "--timeunit", "nsec", "--force-export", "false",
-                "--sqlite", str(sqlite_path), str(report)], timeout)
-    # nsys prints a banner before the CSV; find the header line.
-    lines = out.splitlines()
-    start = next((i for i, ln in enumerate(lines) if "," in ln and
-                  not ln.startswith("**") and not ln.startswith("Processing")), None)
-    if start is None:
-        raise ReduceError(f"no CSV body in {name} output")
-    return list(csv.DictReader(io.StringIO("\n".join(lines[start:]))))
 
 
 def _norm_range(value: str | None) -> str | None:
