@@ -131,7 +131,39 @@ RUNROOT_ABS=$(realpath -m "$RUNROOT")
 # The sealed width-4 window reducer discovers arms as <root>/pass_NN/<mode>_*, so
 # serving both arms into pass_00 lets that reducer run over this pair UNMODIFIED
 # as an independent second read of the same bytes.
-PASS_DIR="$RUNROOT_ABS/pass_00"
+#
+# CAMPAIGN SUPPORT. The defaults below reproduce that single-pair behaviour
+# byte-for-byte: PASS_ROOT=$RUNROOT_ABS and PASS_INDEX=0 give the historical
+# "$RUNROOT_ABS/pass_00". A multi-pass campaign instead passes its own gate root
+# and a per-pass index, so every pass lands in ONE root as pass_00..pass_NN and
+# that same sealed reducer reads the whole campaign with no change to it -- which
+# is the shape it wanted in the first place (it asks for four passes).
+PASS_INDEX=${PASS_INDEX:-0}
+PASS_ROOT=${PASS_ROOT:-$RUNROOT_ABS}
+[[ "$PASS_INDEX" =~ ^[0-9]+$ ]] \
+  || { echo "PASS_INDEX must be a non-negative integer" >&2; exit 2; }
+PASS_ROOT=$(realpath -m "$PASS_ROOT")
+[[ "$PASS_ROOT" == "$REPO/output/"* ]] \
+  || { echo "PASS_ROOT must resolve below $REPO/output" >&2; exit 2; }
+PASS_DIR="$PASS_ROOT/pass_$(printf '%02d' "$PASS_INDEX")"
+
+# ARM ORDER -- the reason the campaign needs a runner change at all.
+#
+# The second arm of a pass inherits a warmer page cache and a differently-aged
+# host. In fr13_b4_formal_floor_gate.sh that bias is balanced across passes
+# because the two arms of a pass are TOPOLOGIES, and arm position is a pure
+# nuisance variable. Here the two arms are STOCK and CANDIDATE, so arm position
+# aliases DIRECTLY into the very contrast being sealed: serving stock first in
+# every pass would hand the candidate the warmer host every time, a systematic
+# bias in the candidate's favour that no amount of repetition removes.
+#
+# So a campaign alternates SC/CS on pass parity, and a lone pair keeps the
+# historical stock-first default.
+ARM_ORDER=${ARM_ORDER:-SC}
+case "$ARM_ORDER" in
+  SC|CS) ;;
+  *) echo "ARM_ORDER must be SC (stock first) or CS (candidate first)" >&2; exit 2 ;;
+esac
 
 case "$FIXED32_MODE" in
   tail6_fixed32)
@@ -240,7 +272,7 @@ unset -f run_variant
 "$PYTHON_BIN" scripts/fr13_fixed32_contract.py external-manifest \
   --repo "$PWD" --output "$RUNROOT_ABS/external_manifest.at_launch.json"
 
-printf 'classification=%s\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=%s\ncandidate_arm_selector=gqa_pair\nselector_sentinel=%s\ntopology=%s\nlogical_topology=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nbatch_size=4\nconcurrency=4\nslots=%s\ntask_pool=%s\ntask_refill=1\nagent_wall=none\nfixed_rows=128\ntask_ids=%s\nsubset=%s\nsubset_sha256=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\npass_dir=%s\nstock_arm=%s\ncandidate_arm=%s\nsource_commit=%s\ncandidate_so_sha256=%s\ncandidate_so_size=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\ndual_gate_sha256=%s\ndual_gate_binding_sha256=%s\nrunner_sha256=%s\ngate_sha256=%s\nsidecar_sha256=%s\npatch_source_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=%s\ntiming_eligible=1\nformal_floor_acceptance_eligible=0\nonly_arm_delta=%s\ncandidate_arm_selector=gqa_pair\nselector_sentinel=%s\ntopology=%s\nlogical_topology=%s\nactive_drafts=%s\nvalid_mask=%s\nphysical_drafts=31\nphysical_rows_root_inclusive=32\nbatch_size=4\nconcurrency=4\nslots=%s\ntask_pool=%s\ntask_refill=1\nagent_wall=none\nfixed_rows=128\ntask_ids=%s\nsubset=%s\nsubset_sha256=%s\ndraft_vocab_root=%s\ndraft_vocab_k=%s\ndraft_vocab_blocks=%s\ndraft_vocab_blocks_sha256=%s\nmandatory_weight_bytes=%s\nmandatory_weight_floor_ms=%s\none_sided_u95_cap_ms=%s\nlauncher_pid=%s\nrunroot=%s\npass_dir=%s\npass_index=%s\narm_order=%s\nstock_arm=%s\ncandidate_arm=%s\nsource_commit=%s\ncandidate_so_sha256=%s\ncandidate_so_size=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\ndual_gate_sha256=%s\ndual_gate_binding_sha256=%s\nrunner_sha256=%s\ngate_sha256=%s\nsidecar_sha256=%s\npatch_source_sha256=%s\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$LAUNCH_CLASSIFICATION" "$ONLY_ARM_DELTA" "$SELECTOR_SENTINEL" \
   "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" "$ACTIVE_DRAFTS" "$VALID_MASK" \
   "$SLOTS" "$TASK_COUNT" \
@@ -248,6 +280,7 @@ printf 'classification=%s\ntiming_eligible=1\nformal_floor_acceptance_eligible=0
   "$DRAFT_VOCAB_BLOCKS_CONTAINER" "$DRAFT_VOCAB_BLOCKS_SHA256" \
   "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS" \
   "$ONE_SIDED_U95_CAP_MS" "$$" "$RUNROOT_ABS" "$PASS_DIR" \
+  "$PASS_INDEX" "$ARM_ORDER" \
   "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$SOURCE_COMMIT" "$CANDIDATE_SHA256" "$CANDIDATE_BYTES" "$FA2_HEAD" \
   "$SOURCE_CLOSURE_SHA256" "$QROW32_GQA_PAIR_DUAL_GATE_SHA256" \
@@ -433,10 +466,20 @@ run_arm() {
     "$(date -u +%FT%TZ)" >> "$RUNROOT_ABS/launcher_meta.txt"
 }
 
-run_arm "$STOCK_ARM" stock_dispatch ""
-[[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
-  || { echo "Docker state was not clean after the stock reference" >&2; exit 2; }
-run_arm "$CANDIDATE_ARM" gqa_pair gqa_pair
+# Both orders run the SAME two arms with the SAME single-variable delta; only
+# which one boots first changes, and launcher_meta.txt records it so a reader
+# can never have to infer it from timestamps.
+if [[ "$ARM_ORDER" == "SC" ]]; then
+  run_arm "$STOCK_ARM" stock_dispatch ""
+  [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
+    || { echo "Docker state was not clean between the paired arms" >&2; exit 2; }
+  run_arm "$CANDIDATE_ARM" gqa_pair gqa_pair
+else
+  run_arm "$CANDIDATE_ARM" gqa_pair gqa_pair
+  [[ "$(docker ps -aq | wc -l)" -eq 0 ]] \
+    || { echo "Docker state was not clean between the paired arms" >&2; exit 2; }
+  run_arm "$STOCK_ARM" stock_dispatch ""
+fi
 
 CANDIDATE_SIDECAR="$PASS_DIR/$CANDIDATE_ARM/logs/fr13_fa2_qrow32_b4_production_pass.json"
 CANDIDATE_SIDECAR_SHA256=$(sha256sum "$CANDIDATE_SIDECAR" | awk '{print $1}')
