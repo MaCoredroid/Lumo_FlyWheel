@@ -55,29 +55,77 @@ IMAGE_OS = "linux"
 IMAGE_ARCHITECTURE = "arm64"
 VLLM_VERSION = "0.19.2rc1.dev134+gfe9c3d6c5"
 
+class ContractError(RuntimeError):
+    """Raised when a fixed-32 contract value is not exact."""
+
+
 NSYS_PROFILE_BINARY = Path(
     "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys"
 )
 NSYS_PROFILE_OUTPUT = Path("/logs/fr13_fixed32_b1_real_swe")
-NSYS_PROFILE_PREFIX = (
-    str(NSYS_PROFILE_BINARY),
-    "profile",
-    "--session-new=%q{LUMO_NSYS_SESSION_NAME}",
-    "--delay",
-    "1200",
-    "--duration",
-    "300",
-    "--trace=cuda,cuda-sw,nvtx",
-    "--cuda-graph-trace=node",
-    "--cuda-flush-interval",
-    "100",
-    "--discard-environment=true",
-    "--sample=none",
-    "--cpuctxsw=none",
-    "--force-overwrite=true",
-    "-o",
-    str(NSYS_PROFILE_OUTPUT),
-)
+# The B4 width-4 attribution writes its own report so a width-4 capture can
+# never be mistaken for, or overwrite, the B1 one.
+NSYS_PROFILE_OUTPUT_WIDTH4 = Path("/logs/fr13_b4_width4_real_swe")
+NSYS_PROFILE_OUTPUTS = (NSYS_PROFILE_OUTPUT, NSYS_PROFILE_OUTPUT_WIDTH4)
+
+
+def nsys_profile_prefix(
+    *,
+    deferred_capture: bool = False,
+    capture_output: Path | str | None = None,
+) -> tuple[str, ...]:
+    """The exact PID1 profiler argv a wrapped fixed32 server must present.
+
+    Two capture gates exist and they are mutually exclusive:
+
+    * WALL-GATED (default) -- `--delay 1200 --duration 300`, the canonical B1
+      attribution window. Unchanged, and what every existing caller gets.
+    * STEP-GATED (`deferred_capture=True`) -- `--start-later=true`, collecting
+      nothing until an external `nsys start` arrives. Required by the B4
+      width-4 profile, whose window is defined in absolute forward-step
+      indices: the admit->first-step hydration lag is ~118 steps, so a fixed
+      wall delay cannot name the step range it lands on
+      (results/fr13_b4_refill_citable_20260812/width4_window.md §6).
+
+    `--delay`/`--duration` are OMITTED entirely in the deferred shape rather
+    than set alongside `--start-later`: nsys documents `--start-later` as
+    overriding `--delay`, and a surviving `--duration` would silently re-impose
+    a wall bound on a step-gated capture.
+
+    The attestation stays exact in both shapes -- this returns one specific
+    argv, never a pattern -- so a wrapped PID1 is still matched element by
+    element and an unexpected profiler invocation is still refused.
+    """
+    if capture_output is None:
+        capture_output = NSYS_PROFILE_OUTPUT
+    output = Path(capture_output)
+    if output not in NSYS_PROFILE_OUTPUTS:
+        raise ContractError(f"fixed32 nsys capture output is not pinned: {output}")
+    gate: tuple[str, ...] = (
+        ("--start-later=true",)
+        if deferred_capture
+        else ("--delay", "1200", "--duration", "300")
+    )
+    return (
+        str(NSYS_PROFILE_BINARY),
+        "profile",
+        "--session-new=%q{LUMO_NSYS_SESSION_NAME}",
+        *gate,
+        "--trace=cuda,cuda-sw,nvtx",
+        "--cuda-graph-trace=node",
+        "--cuda-flush-interval",
+        "100",
+        "--discard-environment=true",
+        "--sample=none",
+        "--cpuctxsw=none",
+        "--force-overwrite=true",
+        "-o",
+        str(output),
+    )
+
+# The canonical wall-gated B1 prefix, unchanged. Kept as a module constant
+# because callers and tests pin it by identity.
+NSYS_PROFILE_PREFIX = nsys_profile_prefix()
 
 FA2_REPO_RELATIVE = (
     "output/auto_research/"
@@ -620,10 +668,6 @@ ARCTIC_PINNED_REQUIREMENT = (
 )
 
 
-class ContractError(RuntimeError):
-    """Raised when a fixed-32 contract value is not exact."""
-
-
 def canonical_bytes(payload: object) -> bytes:
     return json.dumps(
         payload,
@@ -738,6 +782,8 @@ def expected_process_pid1_argv(
     graph_diagnostic: bool = False,
     streamk_eager_diagnostic: bool = False,
     sfwd_byte_diagnostic: bool = False,
+    deferred_capture: bool = False,
+    capture_output: object = None,
 ) -> list[str]:
     if type(attribution_only) is not bool:
         raise ContractError("fixed32 attribution-only selector must be boolean")
@@ -798,8 +844,19 @@ def expected_process_pid1_argv(
     if eager_diagnostic or streamk_eager_diagnostic or sfwd_byte_diagnostic:
         vllm_argv = [*vllm_argv, "--enforce-eager"]
     if not attribution_only:
+        # An unwrapped server has no profiler prefix at all, so asking for a
+        # capture shape here is a caller bug, not a no-op. Refuse BEFORE the
+        # early return -- placing this after it silently accepted the
+        # contradiction.
+        if deferred_capture or capture_output is not None:
+            raise ContractError(
+                "fixed32 capture shape requires attribution-only mode"
+            )
         return vllm_argv
-    return [*NSYS_PROFILE_PREFIX, "vllm", *vllm_argv[2:]]
+    prefix = nsys_profile_prefix(
+        deferred_capture=deferred_capture, capture_output=capture_output
+    )
+    return [*prefix, "vllm", *vllm_argv[2:]]
 
 
 def validate_process_pid1_argv(
@@ -811,6 +868,8 @@ def validate_process_pid1_argv(
     graph_diagnostic: bool = False,
     streamk_eager_diagnostic: bool = False,
     sfwd_byte_diagnostic: bool = False,
+    deferred_capture: bool = False,
+    capture_output: object = None,
 ) -> list[str]:
     expected = expected_process_pid1_argv(
         concurrency,
@@ -819,6 +878,8 @@ def validate_process_pid1_argv(
         graph_diagnostic=graph_diagnostic,
         streamk_eager_diagnostic=streamk_eager_diagnostic,
         sfwd_byte_diagnostic=sfwd_byte_diagnostic,
+        deferred_capture=deferred_capture,
+        capture_output=capture_output,
     )
     if argv != expected:
         raise ContractError(f"fixed32 PID1 argv mismatch: {argv!r}")
