@@ -1,0 +1,195 @@
+{
+  "schema": "fr13.b4_causal_gqa_scope.v1",
+  "date": "2026-08-13",
+  "classification": "offline_source_analysis_only",
+  "cpu_only": true,
+  "gpu_touched": false,
+  "docker_launched": false,
+  "acceptance_valid": false,
+  "citable": false,
+  "diagnostic_only": true,
+  "question": "Does the byte-proven gqa_pair FA2 mapping (2 GQA heads per CTA, halved KV re-staging) transfer to the Is_causal=1 instantiation that carries the 24.66 s prefill/MTP block on the FR13 B4 width-4 board?",
+
+  "verdict": {
+    "structural": "DOES_NOT_TRANSFER",
+    "reason_class": "economically_null_not_numerically_unsafe",
+    "one_line": "The mapping is accumulation-order preserving under Is_causal=1 (Tier-A-compatible in principle) but delivers EXACTLY ZERO work reduction there: head-pairing halves the CTA count and simultaneously doubles the per-head M-block count, and the two cancel identically. The decode gain came from seqlen_q=32 < kBlockM=64 (a half-empty M tile), not from GQA sharing.",
+    "recommendation": "DO NOT BUILD the causal gqa_pair variant. Retire 'Is_causal=1 reach' from the FR13 B4 board. The 24.66 s prefill FA2 block is restated as a workload constant alongside prefill GEMM.",
+    "residual_target_flagged": "fr13.fixed32.dfwd draft-head causal FA2: grid (1,B,24), 1 launch/step, 4.300 ms/step, 2.326 s of window (0.65%). This is the ONLY causal call whose M tile is (inferred) half-empty, i.e. the only place the gqa_pair premise holds outside the sealed decode call. Ceiling there is ~0.33-0.49% of window wall -- decide separately, on its own evidence."
+  },
+
+  "q1_instantiation_identification": {
+    "method": "demangled kernel name x grid dims x NVTX step/dfwd containment, queried directly from the width-4 nsys sqlite",
+    "source_sqlite": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_width4_nsys_20260813T030940Z/fr13_b4_width4_real_swe.sqlite",
+    "two_and_only_two_fa2_instantiations_in_the_capture": true,
+    "causal_kernel_demangled": "void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<(int)256, (int)64, (int)64, (int)4, (bool)0, (bool)0, cutlass::bfloat16_t, Flash_kernel_traits<(int)256, (int)64, (int)64, (int)4, cutlass::bfloat16_t>>, (bool)1, (bool)0, (bool)0, (bool)0, (bool)1, (bool)0, (bool)0, (bool)0>(flash::Flash_fwd_params)",
+    "tree_kernel_demangled": "void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<(int)256, (int)64, (int)64, (int)4, (bool)0, (bool)0, cutlass::bfloat16_t, Flash_kernel_traits<(int)256, (int)64, (int)64, (int)4, cutlass::bfloat16_t>>, (bool)0, (bool)0, (bool)0, (bool)0, (bool)1, (bool)0, (bool)0, (bool)0>(flash::Flash_fwd_params)",
+    "template_bool_order": ["Is_causal", "Is_local", "Has_alibi", "Is_even_MN", "Is_even_K", "Is_softcap", "Split", "Append_KV"],
+    "confirmed_single_bool_difference": true,
+    "grid_semantics": "dim3(ceil_div(max_seqlen_q, kBlockM=64), batch, num_query_heads=24); blockDim 128; dynamic smem 98304 B; 255 regs/thread (stock)",
+    "time_split_s": {
+      "causal_out_of_step": 24.664,
+      "causal_in_step": 2.326,
+      "tree_noncausal_out_of_step": 7.069,
+      "tree_noncausal_in_step": 37.696
+    },
+    "causal_out_of_step_by_gridX": [
+      {"bucket": "gx=16", "instances": 1904, "s": 20.090, "pct": 81.5, "implied_max_seqlen_q": "961..1024"},
+      {"bucket": "gx=10..15", "instances": 272, "s": 3.415, "pct": 13.8, "implied_max_seqlen_q": "577..960"},
+      {"bucket": "gx=6..9", "instances": 119, "s": 0.716, "pct": 2.9, "implied_max_seqlen_q": "321..576"},
+      {"bucket": "gx=2..5", "instances": 119, "s": 0.417, "pct": 1.7, "implied_max_seqlen_q": "65..320"},
+      {"bucket": "gx=1", "instances": 18, "s": 0.027, "pct": 0.1, "implied_max_seqlen_q": "1..64"}
+    ],
+    "causal_out_of_step_full_M_tile_share_pct": 98.2,
+    "causal_in_step_is_entirely_dfwd": true,
+    "causal_in_step_grids": [
+      {"grid": "(1,4,24)", "instances": 225, "s": 1.113},
+      {"grid": "(1,3,24)", "instances": 237, "s": 1.018}
+    ],
+    "dispatch_route_prefill": [
+      "vllm/v1/attention/backends/tree_attn.py :: forward(), prefill_meta branch",
+      "FR13_FA2_PREFILL_NATIVE=1 -> flash_attn_varlen_func(causal=True, tree_bias absent, block_table=prefill_meta.block_table)",
+      "torch op varlen_fwd -> mha_varlen_fwd -> mha_varlen_fwd_impl (tree_bias_ = nullopt, so params.tree_bias_batch_stride = 0)",
+      "run_mha_fwd(params, stream, force_split_kernel = paged_KV = true) -- sentinel branch NOT taken because tree_bias_batch_stride != 131092",
+      "FP16_SWITCH/HEADDIM_SWITCH/BOOL_SWITCH(is_causal=true) -> run_mha_fwd_splitkv_dispatch<bfloat16_t, 256, true>",
+      "flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<256,64,64,4,...>, Is_causal=1, ...>"
+    ],
+    "dispatch_route_decode_tree": [
+      "vllm/v1/attention/backends/tree_attn.py :: forward(), decode_meta branch",
+      "FR13_FA2_TREE_BIAS=1 -> flash_attn_varlen_func(causal=False, tree_bias=decode_meta.tree_attn_bias)",
+      "torch op varlen_fwd_tree_bias -> mha_varlen_fwd_tree_bias -> mha_varlen_fwd_impl (params.tree_bias_batch_stride = tree_bias.stride(0))",
+      "run_mha_fwd: if tree_bias_batch_stride == 131092 (0x20014) -> 33-clause TORCH_CHECK -> fr13_run_mha_fwd_fixed32_qrow32_gqa_pair (sealed candidate), else stock splitkv dispatch Is_causal=0"
+    ],
+    "mixed_pass_structure": "Per attention layer per mixed pass there are TWO back-to-back FA2 launches, not one: causal grid (16,1,24) ~15.8-16.6 ms (the chunked-prefill rows), then non-causal grid (1,2,24) ~2.4 ms (the co-resident spec-decode tree rows). The prefill and decode rows are never in the same flash call, so the causal instantiation is 100% prefill/MTP and carries no decode rows.",
+    "params_that_distinguish_them": ["is_causal", "tree_bias_ptr / tree_bias_batch_stride", "seqlen_q (1024-ish vs 32)", "b (prefill seq count vs decode slot count)", "total_q"]
+  },
+
+  "q2_structural_transfer": {
+    "answer": "order-preserving but work-neutral",
+    "gain_mechanism_of_the_sealed_decode_candidate": {
+      "statement": "The gain is a HALF-EMPTY-TILE gain, not a GQA-sharing gain.",
+      "detail": "Tree decode has seqlen_q = 32 physical rows but kBlockM = 64. Stock grid (1,B,24) = 96 CTAs/layer at B=4, each staging the full K/V range for one query head, with half of every 64x64 QK MMA tile being padding. gqa_pair packs two query heads of the same KV group into the one 64-row M tile: grid (3,B,4) = 48 CTAs/layer, exactly half the K/V tile loads, and the padding half of the MMA becomes useful work. Confirmed in the TU comment: '3 head pairs * B4 * 4 KV heads = 48 CTAs/layer'."
+    },
+    "causal_prefill_regime": {
+      "statement": "seqlen_q >= 320 for 98.2% of the 24.66 s (1024 for 81.5%), so the 64-row M tile is FULL of real query rows. Pairing two heads forces 32 rows per head, which doubles the number of M blocks each head needs, exactly cancelling the halved CTA count.",
+      "exact_identity": {
+        "notation": "C = context length in tokens (multiple of kBlockN=64), S = 1024 query rows per sequence, H_q = 24, kBlockM = kBlockN = 64, heads_per_CTA = 2",
+        "baseline_K_tile_loads": "sum over 24 heads of sum_{m=0}^{15} (C/64 + m + 1) = 384*(C/64) + 3264",
+        "gqa_pair_K_tile_loads": "sum over 12 pairs of sum_{m'=0}^{31} (C/64 + ceil((m'+1)/2)) = 384*(C/64) + 3264",
+        "delta": 0,
+        "cta_count_baseline": "16 * B * 24 = 384B",
+        "cta_count_gqa_pair": "32 * B * 12 = 384B",
+        "q_rows_loaded_both": "384B * 64",
+        "qk_mma_tiles_both": "identical (one 64x64 MMA per staged K tile)",
+        "conclusion": "A pure relabeling. Every resource -- K/V tile loads, Q loads, CTA count, MMA tile count, masked-out work -- is bit-for-bit unchanged."
+      }
+    },
+    "accumulation_order_analysis": {
+      "question": "Does causal masking break the Tier-A argument (pairing changes only which CTA stages the K/V tile, never accumulation order)?",
+      "answer": "No -- and this is the surprising part. Under the 64->32 row retiling the per-row n_block set is INVARIANT.",
+      "proof_sketch": "n_block_max(row q) baseline = ceil_div((floor(q/64)+1)*64 + C, 64) = C/64 + floor(q/64) + 1. Under 32-row-per-head tiling, q lands in m' = floor(q/32) and n_block_max = ceil_div((m'+1)*32 + C, 64) = C/64 + ceil((floor(q/32)+1)/2), which equals C/64 + floor(q/64) + 1 for BOTH the lower and upper half of every 64-row block (kBlockN = 2 * 32 exactly). n_block_min = 0 in both. So every query row visits the identical ordered sequence of K blocks, sees the identical mask values, and drives the identical softmax running-max / rescale sequence. Rows keep private row_max/row_sum and private acc_o rows; Allreduce<4> is within the MMA row quad and is head-agnostic; the PV MMA is row-independent.",
+      "tier_verdict": "Tier-A COMPATIBLE in principle. The exact-math byte rule is not what stops this.",
+      "code_edits_that_would_be_required_for_correctness": [
+        "mask.h Mask::apply_mask with Causal_mask=true: remap row_idx -> m_block*(kBlockM/kHeadsPerCTA) + (row_idx & (kBlockM/kHeadsPerCTA - 1)), i.e. the same 'logical_row & 31' fix the tree-bias path already carries at flash_fwd_kernel.h:176-180",
+        "n_block_max in compute_attn_1rowblock_splitkv (flash_fwd_kernel.h:755-758): use (query_m_block+1)*(kBlockM/kHeadsPerCTA), not (query_m_block+1)*kBlockM",
+        "n_masking_steps (flash_fwd_kernel.h:1247-1249): recompute against the per-head M extent",
+        "O / LSE epilogue: the paired (row, head) strided layout already exists for the decode variant and generalises"
+      ]
+    },
+    "hard_compile_time_barriers_today": [
+      {"site": "flash_fwd_kernel.h:1304", "assert": "static_assert(!Is_causal && !Is_local);", "context": "static paged-KV advance in the masking-step loop"},
+      {"site": "flash_fwd_kernel.h:1359", "assert": "static_assert(!Is_causal && !Is_local);", "context": "static paged-KV advance in the main n_block loop"},
+      {"site": "flash_fwd_kernel.h:1392", "assert": "static_assert(!Is_causal && !Is_local);", "context": "static paged-KV V-advance"},
+      {"site": "flash_fwd_kernel.h:76-83", "assert": "StaticPagedQueryBlockInfo hard-codes actual_seqlen_q = StaticQueryRows = 32 and sequences in {1,4}", "context": "the whole static query-tile machinery the head pack is defined against"},
+      {"site": "flash_fwd_kernel.h:737-740", "assert": "kStaticQueryTile := kStaticQueryRows(32) * kHeadsPerCTA(2) == kBlockM(64)", "context": "the head pack only exists inside the 32-row static tile"}
+    ],
+    "barrier_note": "'Flip one bool' is not available. The pack is defined only inside the static 32-query-row tile, and the static paged-KV fast path the candidate depends on is compile-time forbidden for Is_causal. A causal variant is a NEW kernel, not a re-instantiation.",
+    "register_ceiling": {
+      "measured_regs_per_thread_candidate": 243,
+      "cap": 255,
+      "acc_o_registers_at_kBlockM_64": "64*256/128 = 128 floats/thread",
+      "acc_o_registers_at_kBlockM_128": "256 floats/thread -- exceeds the register file",
+      "smem_bytes": 98304,
+      "implication": "The only variant that WOULD recover the 6x GQA KV redundancy in prefill -- two heads x 64 real rows each, kBlockM=128 -- is register-infeasible at kHeadDim=256 in this traits family. This is the structural reason the transform cannot be made to pay, not an implementation shortcut."
+    }
+  },
+
+  "q3_dispatch_surface": {
+    "can_a_separate_fail_closed_causal_selector_exist_at_source_level": true,
+    "can_it_leave_the_sealed_decode_artifact_untouched": false,
+    "why_not": "The sealed candidate is pinned by artifact identity, not by source region: .so sha256 af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb, size 299813360, source-closure sha256 9c3f9e751da7b783e9d07d8e40d5bc2234b99e719a1048668bd6c82244ed2d81. A new TU + a new dispatch clause + a new torch op changes the .so, so scripts/fr13_fa2_qrow32_gqa_pair_gate.py raises GateError on the candidate sha. Only one _vllm_fa2*.so is loaded at a time, so the decode candidate must be RE-SEALED on the new binary (full dual real-B4 gate + live paged A/B replay) before any causal arm may run alongside it. That re-seal is mandatory and is the single largest hidden cost item.",
+    "sentinel_channel_problem": "The existing selector keys on params.tree_bias_batch_stride == 131092 (0x20014). That field is only settable through varlen_fwd_tree_bias. The prefill branch calls plain varlen_fwd, which forces tree_bias_ = nullopt and tree_bias_batch_stride = 0. So a prefill sentinel needs either (a) routing the prefill branch through varlen_fwd_tree_bias with a dummy bias tensor whose stride(0) carries the sentinel plus a new inertness guard in apply_tree_bias, or (b) a new torch op varlen_fwd_fr13_causal with its own def/impl in flash_api_torch_lib.cpp and its own python wrapper arg. (b) is cleaner and is the only one that stays fail-closed by construction; both change the .so.",
+    "byte_gate_for_prefill_outputs": {
+      "what_it_would_compare": [
+        "output slice output[num_decode_tokens:num_actual_tokens], shape (n_prefill_tokens, 24, 256) bf16",
+        "softmax_lse from return_softmax_lse=True, shape (24, n_prefill_tokens) fp32, unpadded_lse stride (total_q, 1)",
+        "per target layer language_model.model.layers.{3,7,...,63}.self_attn.attn -- 16 layers -- per captured mixed pass"
+      ],
+      "does_existing_live_ab_machinery_support_it": "PARTIALLY",
+      "reusable_as_is": [
+        "_fr13_fa2_qrow32_live_ab_call capture-and-replay pattern (capture the full argument bundle of a real served call, replay stock then candidate into scratch buffers, byte-compare)",
+        "_fr13_fa2_qrow32_byte_summary is already shape-agnostic (dtype/shape/bytes/mismatches/stock_sha256/candidate_sha256)",
+        "replay safety: prefill attention is a pure read of key_cache/value_cache/block_table (reshape_and_cache runs before it), so double replay is idempotent exactly as in decode"
+      ],
+      "needs_new_plumbing": [
+        "Registration is keyed on cudagraph graph_id with runtime_mode == FULL. Mixed passes dispatch PIECEWISE/NONE, so there is no graph_id -- the capture key must become (forward_pass_index, layer_name) plus a mixed-pass predicate.",
+        "Every admission check around the comparator hard-codes exact4 decode geometry: cu_seqlens_q.shape == (5,), seqused_k.shape == (4,), max_seqlen_q == 32, causal == False, tree_bias present with shape (32,32)/(4,32,32), block_table.shape[0] == 4. A prefill predicate set must be written from scratch: causal == True, tree_bias is None, cu_seqlens_q.shape == (n_prefill_seqs+1,), max_seqlen_q == prefill chunk length, and a pinned upper bound on n_prefill_tokens so the gate stays fail-closed on unqualified shapes.",
+        "The mismatch counter is a pure-python sum(l != r for l,r in zip(stock_bytes, candidate_bytes)). At 1024 x 24 x 256 x 2 = 12.6 MB per layer x 16 layers x 2 tensors that is ~400 MB of python-level byte comparison per gate pass; must be vectorised (numpy/torch) before it is usable. Trivial code, but it edits the pinned patch script and therefore moves every downstream pin.",
+        "Prefill shapes vary per pass, so 'raw_byte_mismatches == 0' can only be asserted against a SHAPE-PINNED evidence set (a fixed task subset + fixed chunk boundary), the prefill analogue of the exact4 subset pin. That pin does not exist yet."
+      ]
+    },
+    "candidate_scope_note": "candidate_scope final_fixed32_b4_full_graph_only is enforced at three independent levels -- the python production selector (FULL graph + pinned evidence set), the C++ 33-clause TORCH_CHECK (b == 4, total_q == 128, seqlen_q == 32, !is_causal), and the kernel's own static_asserts. A causal arm cannot widen candidate_scope; it needs its own scope token, its own sentinel, and its own evidence-set pin. That is a design property, not an obstacle -- the obstacle is that there is nothing to win."
+  },
+
+  "q4_cost_if_built_anyway": {
+    "agent_hours": {
+      "kernel_authoring_causal_paired_tile_in_the_patch_generator": "12-20",
+      "dispatch_op_and_python_plumbing_new_sentinel_or_new_torch_op": "4-6",
+      "prefill_comparator_plumbing_capture_key_predicates_vectorised_compare_shape_pin": "4-8",
+      "gate_script_pins_and_MANDATORY_RE_SEAL_of_the_decode_candidate_on_the_new_so": "6-10",
+      "results_and_prose": "2-3",
+      "total": "28-47"
+    },
+    "gpu_hours": {
+      "note": "FA2 hdim256 TU compiles CPU-only in the pinned container (compile_env.txt: NVIDIA_VISIBLE_DEVICES=void, network=none, cpus=1) -- the build itself costs no GPU time, only wall.",
+      "build_wall_hours_serial_single_cpu": "1.5-3 per full relink (55 reference objects + flash_api + the new TU)",
+      "decode_candidate_re_seal_dual_gate_plus_live_paged_ab": "1.5-2.5",
+      "prefill_byte_gate_bring_up_and_first_clean_pass": "2-4",
+      "paired_timing_arm_read_on_window_wall_aggregate_tok_s": "6-10 (falsification threshold is 10% of 24.66 s = 0.69% of window wall; a prefill-side gain cannot appear in pure-decode step wall, so it needs the aggregate basis over several 360 s+ windows, and the arm is 4431 s)",
+      "total": "11-19 GPU-hours plus 1.5-3 build wall"
+    },
+    "expected_return": "0.00% of window wall. The identity in q2 is exact, not an estimate.",
+    "honest_framing": "This costs 28-47 agent-hours and 11-19 GPU-hours to measure a quantity that source analysis already proves is zero. The only way it is not zero is if the identity is wrong, and the identity is four lines of arithmetic over the same loop bounds the kernel actually uses."
+  },
+
+  "what_this_does_not_claim": [
+    "No live measurement of any kind was taken; this is offline source + existing-capture analysis on CPU only.",
+    "The draft-head (dfwd) causal call is proven to have max_seqlen_q <= 64 from gridX == 1; the specific value 32 is INFERRED from the fixed32 tree topology (physical_rows_root_inclusive=32 in scripts/fr13_run_b4_draft_head_m32_timing.sh), not measured. If it is 33..64 the M tile is full and even that residual target dies.",
+    "The K-tile-load identity assumes C is a multiple of kBlockN=64 and n_block_min == 0 (Is_local=0, num_splits=1, both true for the observed instantiation). Boundary terms shift by at most one tile per CTA and do not change the sign.",
+    "No claim about whether the causal prefill kernel is compute- or bandwidth-bound; no roofline was established. The verdict does not depend on it -- the transform is a relabeling either way.",
+    "Sealed denominators, the gqa_pair decode seal, and the width-4 attribution stand unchanged."
+  ],
+
+  "board_effect": {
+    "before": "FA2 splitkv causal (prefill + MTP) 26.99 s window, 7.5% of window, transfer 11.60, D 6.885 -- listed as the largest unreached block at 24.66 s out-of-step.",
+    "after": "RETIRED as a gqa_pair target. 24.66 s reclassified as workload constant (full-M-tile causal prefill), alongside prefill GEMM ~59 s. The 2.33 s in-step dfwd causal sliver is split out as a separate, much smaller, independently-decided target.",
+    "largest_remaining_unreached_block": "the 7.07 s out-of-step FA2 tree (non-causal) headroom in mixed passes -- same kernel the sealed candidate already handles, blocked only by candidate_scope (mixed-pass tree calls run at b=2..3, total_q=64..96, PIECEWISE/NONE, so the 33-clause C++ gate refuses them by design). Widening THAT is a scope/geometry question with a real 7.07 s behind it and no new kernel -- strictly better next move than the causal build."
+  },
+
+  "evidence_paths": {
+    "attribution_prose": "results/fr13_b4_prefill_gaps_20260813/analysis.md",
+    "attribution_data": "results/fr13_b4_prefill_gaps_20260813/gaps.json",
+    "nsys_window": "results/fr13_b4_width4_nsys_20260813/",
+    "nsys_sqlite": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_width4_nsys_20260813T030940Z/fr13_b4_width4_real_swe.sqlite",
+    "candidate_build": "/home/mark/fr13_fa2_qrow32_gqa_pair_ilkv_sm121a_20260810/",
+    "candidate_source_closure": "/home/mark/fr13_fa2_qrow32_gqa_pair_ilkv_sm121a_20260810/source/",
+    "gqa_pair_tu": "csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu",
+    "kernel_body": "csrc/flash_attn/src/flash_fwd_kernel.h",
+    "mask": "csrc/flash_attn/src/mask.h",
+    "softmax": "csrc/flash_attn/src/softmax.h",
+    "api_dispatch": "csrc/flash_attn/flash_api.cpp:242-315",
+    "patch_generator": "scripts/fr13_patch_fa2_tree_bias.py",
+    "prefill_route_patch": "scripts/fr13_patch_fa2_tree_bias.py FR13_FA2_PREFILL_NATIVE block (~line 6875)",
+    "gate_script": "scripts/fr13_fa2_qrow32_gqa_pair_gate.py"
+  }
+}
