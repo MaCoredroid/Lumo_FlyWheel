@@ -173,6 +173,34 @@ def render(doc: dict[str, Any]) -> str:
               f"{_fmt(p.get('idle_ms_per_step'), '10.3f')}{p.get('ops', 0):>10,}")
         w("")
 
+    m = doc.get("nvtx_vs_counter_phase_mapping")
+    if m:
+        w(_bar())
+        w("3b. NVTX PHASE  vs  COUNTER PHASE  (two different partitions)")
+        w(_bar())
+        w(f"  {'phase':<14}{'nvtx busy':>12}{'counter':>12}{'delta':>10}{'ratio':>9}")
+        for k in ("sfwd", "dfwd", "cfwd"):
+            if k in m:
+                r = m[k]
+                w(f"  {k:<14}{_fmt(r['nvtx_projected_busy_ms_per_step'], '12.3f')}"
+                  f"{_fmt(r['counter_ms_per_step'], '12.3f')}"
+                  f"{_fmt(r['delta_ms_per_step'], '10.3f')}"
+                  f"{_fmt(r['ratio'], '9.3f')}")
+        pp = m.get("postprocess")
+        if pp:
+            w("")
+            w(f"  postprocess (NVTX, absent from the counter split): "
+              f"{_fmt(pp['nvtx_projected_busy_ms_per_step'], '.3f')} ms/step")
+            w(f"  counter 'other' (wall residual):                   "
+              f"{_fmt(pp['counter_other_wall_ms_per_step'], '.3f')} ms/step")
+            w(f"  postprocess as fraction of 'other':               "
+              f"{_fmt(100 * (pp['postprocess_as_fraction_of_other'] or 0), '.1f')}%")
+            w(f"  'other' MINUS postprocess:                        "
+              f"{_fmt(pp['other_minus_postprocess_ms_per_step'], '.3f')} ms/step")
+            w("    -> host-bookkeeping levers aimed at 'other' are priced")
+            w("       against THIS remainder, not against the whole bucket.")
+        w("")
+
     # ---- within-phase kernel groups -------------------------------------
     kern = doc.get("phase_kernels", {})
     for phase in ("sfwd", "cfwd", "dfwd", "postprocess"):

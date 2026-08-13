@@ -536,6 +536,46 @@ def main() -> int:
                         "(a wall residual) and NOT gpu idle (span-busy).",
             }
 
+        # ---- NVTX phase <-> counter phase mapping -----------------------
+        # The two splits are NOT the same partition and must be paired
+        # explicitly. The counters carry three GPU phases (sfwd/dfwd/cfwd) plus
+        # a WALL residual; the NVTX instrumentation carries four disjoint GPU
+        # ranges, the extra one being `postprocess` (the LM head at B1:
+        # 12.348 ms/step, one nvjet GEMM instance per step).
+        #
+        # Where postprocess lands decides how the ~15 ms `other` bucket is
+        # priced. If postprocess is NOT inside the sfwd counter, then `other`
+        # is mostly a GPU phase -- the LM head -- and not host gap, and any
+        # lever aimed at host bookkeeping in `other` is aimed at a few ms, not
+        # at 15. This is computed, not assumed.
+        mapping = {}
+        for phase in ("sfwd", "dfwd", "cfwd"):
+            if phase in proj:
+                nvtx_ms = proj[phase]["ms_per_step"]
+                ctr_ms = inner[f"{phase}_gpu_ms_per_step"]
+                mapping[phase] = {
+                    "nvtx_projected_busy_ms_per_step": nvtx_ms,
+                    "counter_ms_per_step": ctr_ms,
+                    "delta_ms_per_step": nvtx_ms - ctr_ms,
+                    "ratio": (nvtx_ms / ctr_ms) if ctr_ms else None,
+                }
+        if "postprocess" in proj:
+            pp = proj["postprocess"]["ms_per_step"]
+            other = inner["other_wall_ms_per_step"]
+            mapping["postprocess"] = {
+                "nvtx_projected_busy_ms_per_step": pp,
+                "counter_other_wall_ms_per_step": other,
+                "postprocess_as_fraction_of_other": (pp / other) if other else None,
+                "other_minus_postprocess_ms_per_step": other - pp,
+                "reading": (
+                    "If postprocess ~= other, the counter `other` bucket is "
+                    "dominated by a GPU phase (the LM head), NOT by host gap, "
+                    "and host-bookkeeping levers aimed at `other` are priced "
+                    "against the remainder, not against the whole bucket."
+                ),
+            }
+        out["nvtx_vs_counter_phase_mapping"] = mapping
+
         # per-phase kernel tables + group carve-up
         kern: dict[str, Any] = {}
         for phase, rng in PHASE_RANGES.items():
