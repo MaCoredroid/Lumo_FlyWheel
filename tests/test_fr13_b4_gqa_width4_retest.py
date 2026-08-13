@@ -350,8 +350,9 @@ def test_placebo_is_clean_when_the_gain_is_localised_to_the_treated_width() -> N
     module = _reducer()
     stock = _bc({2: (100, 285.0), 3: (1000, 362.0), 4: (3000, 411.0)})
     cand = _bc({2: (100, 302.0), 3: (1000, 370.0), 4: (3000, 382.0)})
-    p = module.per_width_placebo(stock, cand)
+    p = module.per_width_placebo(stock, cand, (4,))
     assert p["treated_width"] == 4
+    assert p["treated_widths"] == [4]
     roles = {r["width"]: r["role"] for r in p["rows"]}
     assert roles == {2: "placebo", 3: "placebo", 4: "treated"}
     did = p["difference_in_differences"]
@@ -368,7 +369,7 @@ def test_placebo_detects_a_leak_when_an_untreated_width_also_gains() -> None:
     module = _reducer()
     stock = _bc({3: (1000, 362.0), 4: (3000, 411.0)})
     cand = _bc({3: (1000, 342.0), 4: (3000, 391.0)})  # both widths 20ms faster
-    p = module.per_width_placebo(stock, cand)
+    p = module.per_width_placebo(stock, cand, (4,))
     did = p["difference_in_differences"]
     # an arm-wide shift must leave ~zero after differencing
     assert did["additive_effect_ms"] == pytest.approx(0.0, abs=0.5)
@@ -379,7 +380,7 @@ def test_width_scaling_cost_is_reported_against_the_nsys_attribution() -> None:
     module = _reducer()
     stock = _bc({3: (1000, 362.08), 4: (3000, 411.26)})
     cand = _bc({3: (1000, 369.79), 4: (3000, 381.75)})
-    ws = module.per_width_placebo(stock, cand)["width_scaling_cost"]
+    ws = module.per_width_placebo(stock, cand, (4,))["width_scaling_cost"]
     assert ws["stock_ms"] == pytest.approx(49.18, abs=0.05)
     assert ws["nsys_attributed_fa2_width4_cost_ms"] == 48.4
     assert ws["removed_ms"] == pytest.approx(37.21, abs=0.05)
@@ -390,7 +391,7 @@ def test_a_thin_control_width_is_refused_as_a_did_basis() -> None:
     module = _reducer()
     stock = _bc({1: (1, 272.0), 4: (3000, 411.0)})
     cand = _bc({1: (6, 253.0), 4: (3000, 382.0)})
-    p = module.per_width_placebo(stock, cand)
+    p = module.per_width_placebo(stock, cand, (4,))
     assert p["difference_in_differences"]["available"] is False
 
 

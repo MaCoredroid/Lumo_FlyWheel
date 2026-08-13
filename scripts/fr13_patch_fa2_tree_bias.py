@@ -6199,6 +6199,68 @@ _FR13_FA2_QROW32_B34_PRECAPTURE = {
     "allocations": [],
     "graphs": {},
 }
+# The widths this RUN is licensed to serve, resolved once from the credential.
+_FR13_FA2_QROW32_B34_AUTHORISED = {}
+
+
+def _fr13_fa2_qrow32_b34_authorised_widths():
+    """The served widths the PASS SIDECAR authorises -- not the ones the code
+    can do.
+
+    _FR13_FA2_QROW32_B34_WIDTHS is a CAPABILITY: it says the padded path
+    exists and what geometries it knows how to build. It is NOT a licence. The
+    licence is the credential, and the credential authorises exactly the
+    widths its dual raw-byte gate carries evidence for: the sealed width-4
+    dual gate proves width 4 and nothing else, so a run holding it must serve
+    width 4 and nothing else, however capable the code has become. Otherwise
+    the widening turns padded width-3 traffic on for every timing run that
+    reuses the banked width-4 credential, with the shadow doctrine never once
+    byte-checked on that machine.
+
+    So the widths are read from the credential BODY, whose bytes are pinned by
+    the digest the launcher already validated on the host. A credential that
+    predates the widening carries no `production_widths` and means (4,) --
+    which is exactly the reading that keeps the banked lineage honest.
+    """
+    import hashlib as _hashlib
+    import json as _json
+    from pathlib import Path as _Path
+
+    path = os.environ.get("FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR", "")
+    digest = _fr13_fa2_qrow32_b4_digest(
+        "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256", "pass sidecar"
+    )
+    cached = _FR13_FA2_QROW32_B34_AUTHORISED.get(digest)
+    if cached is not None:
+        return cached
+    if not path:
+        raise RuntimeError(
+            "FR13 qrow32 B4 production has no pass sidecar path to resolve "
+            "its authorised widths from"
+        )
+    raw = _Path(path).read_bytes()
+    if _hashlib.sha256(raw).hexdigest() != digest:
+        raise RuntimeError("FR13 qrow32 B4 pass sidecar bytes drifted")
+    payload = _json.loads(raw)
+    if not isinstance(payload, dict):
+        raise RuntimeError("FR13 qrow32 B4 pass sidecar root is not an object")
+    widths = payload.get(
+        "production_widths", [_FR13_FA2_QROW32_B34_CANONICAL_WIDTH]
+    )
+    if (
+        not isinstance(widths, list)
+        or not widths
+        or not all(isinstance(width, int) for width in widths)
+        or _FR13_FA2_QROW32_B34_CANONICAL_WIDTH not in widths
+        or any(width not in _FR13_FA2_QROW32_B34_WIDTHS for width in widths)
+    ):
+        raise RuntimeError(
+            "FR13 qrow32 B4 pass sidecar production widths are not a "
+            "qualified scope: " + repr(widths)
+        )
+    resolved = tuple(sorted(int(width) for width in widths))
+    _FR13_FA2_QROW32_B34_AUTHORISED[digest] = resolved
+    return resolved
 
 
 def _fr13_fa2_qrow32_b4_bypass(arm, tree_bias, num_splits, reason):
@@ -6318,9 +6380,12 @@ def _fr13_fa2_qrow32_b4_geometry_mismatches(
     original exact4 predicate, clause for clause. At width 3 it qualifies the
     UNPADDED call; the padded operands that actually reach the .so are
     qualified separately and additionally by
-    _fr13_fa2_qrow32_b34_shadow_mismatches, which is the only place the shadow
-    slot is ever inspected -- neither the 33-clause C++ TORCH_CHECK nor this
-    predicate reads a single seqused_k or block_table VALUE.
+    _fr13_fa2_qrow32_b34_staged_metadata_mismatches in the serving path, and
+    by _fr13_fa2_qrow32_b34_shadow_mismatches -- the only place the shadow
+    slot's VALUES are ever read -- in the pre-capture hook. Neither the
+    33-clause C++ TORCH_CHECK nor this predicate reads a single seqused_k or
+    block_table value, and neither does anything the padded branch runs INSIDE
+    capture, where a device-to-host read would kill the graph.
     """
     if int(batch_size) not in _FR13_FA2_QROW32_B34_WIDTHS:
         return (f"batch_size={int(batch_size)!r}",)
@@ -6581,7 +6646,11 @@ def _fr13_fa2_qrow32_b34_precapture_staging(graph_id, runtime_mode, num_reqs):
         return None
     width = int(num_reqs)
     if (
-        width not in _FR13_FA2_QROW32_B34_WIDTHS
+        # AUTHORISED, not merely qualified: a run whose credential licenses
+        # width 4 only must not even allocate the padded staging, because the
+        # selector will bypass width 3 and the 3.0 MiB would be a silent,
+        # unexplained charge against the KV cache.
+        width not in _fr13_fa2_qrow32_b34_authorised_widths()
         or width == _FR13_FA2_QROW32_B34_CANONICAL_WIDTH
     ):
         return None
@@ -6631,13 +6700,31 @@ def _fr13_fa2_qrow32_b34_precapture_staging(graph_id, runtime_mode, num_reqs):
     return staged
 
 
-def _fr13_fa2_qrow32_b34_shadow_mismatches(staged, batch_size):
-    """Qualify the OUTBOUND padded operands, shadow slot included."""
+def _fr13_fa2_qrow32_b34_staged_metadata_mismatches(staged, batch_size):
+    """Qualify the OUTBOUND padded operands WITHOUT reading one device value.
+
+    CAPTURE-SAFE, and it is the only one of the two staging predicates the
+    serving path may call. Every clause is tensor METADATA -- dtype, shape,
+    stride, contiguity -- plus the pre-capture proof record deposited by
+    _fr13_fa2_qrow32_b34_shadow_mismatches. Tensor.item() and Tensor.tolist()
+    on a CUDA tensor lower to cudaMemcpyAsync D2H followed by
+    cudaStreamSynchronize; cudaStreamSynchronize on a CAPTURING stream returns
+    cudaErrorStreamCaptureUnsupported and invalidates the capture. This
+    campaign has already lost boots 2-5 to exactly that class of call
+    (fr10_phase4_patch_vllm_tree_gdn.py: a single async_copy_ready_event
+    .synchronize() was the sole capture-killer), and the padded branch runs
+    ONLY inside capture, so a value read here is unconditionally fatal.
+
+    The shadow VALUES are not skipped, they are proven earlier: the
+    pre-capture hook runs the value predicate outside capture and records what
+    it proved, and slot `shadow` of seqused_k/block_table is never written
+    again -- the per-step stage-in copies are bounded to [:batch_size].
+    """
     width = _FR13_FA2_QROW32_B34_CANONICAL_WIDTH
-    rows = _FR13_FA2_QROW32_B34_ROWS
     canonical = _FR13_FA2_QROW32_B34_CANONICAL_ROWS
     shadow = int(batch_size)
-    expected_cu = tuple(range(0, canonical + rows, rows))
+    proof = staged.get("precapture_proof")
+    proof = proof.get(shadow) if isinstance(proof, dict) else None
     checks = (
         (
             "shadow_slot",
@@ -6667,29 +6754,134 @@ def _fr13_fa2_qrow32_b34_shadow_mismatches(staged, batch_size):
             ),
         ),
         (
-            "staged_cu_seqlens_q",
-            tuple(int(v) for v in staged["cu_seqlens_q"].tolist())
-            == expected_cu,
-            tuple(int(v) for v in staged["cu_seqlens_q"].tolist()),
-        ),
-        (
-            "shadow_seqused_k",
-            int(staged["seqused_k"][shadow].item()) == 0,
-            int(staged["seqused_k"][shadow].item()),
-        ),
-        (
-            "shadow_block_table_row",
-            bool(
-                (
-                    staged["block_table"][shadow]
-                    == _FR13_FA2_QROW32_B34_NULL_BLOCK_ID
-                ).all().item()
+            "staged_cu_seqlens_q(dtype,shape)",
+            staged["cu_seqlens_q"].dtype == torch.int32
+            and tuple(staged["cu_seqlens_q"].shape) == (width + 1,),
+            (
+                str(staged["cu_seqlens_q"].dtype),
+                tuple(staged["cu_seqlens_q"].shape),
             ),
-            int(staged["block_table"][shadow][0].item()),
+        ),
+        (
+            "staged_seqused_k(dtype,shape)",
+            staged["seqused_k"].dtype == torch.int32
+            and tuple(staged["seqused_k"].shape) == (width,),
+            (
+                str(staged["seqused_k"].dtype),
+                tuple(staged["seqused_k"].shape),
+            ),
+        ),
+        (
+            "staged_block_table(dtype,shape)",
+            staged["block_table"].dtype == torch.int32
+            and staged["block_table"].ndim == 2
+            and int(staged["block_table"].shape[0]) == width,
+            (
+                str(staged["block_table"].dtype),
+                tuple(staged["block_table"].shape),
+            ),
+        ),
+        (
+            # The shadow VALUES, carried forward from the pre-capture proof
+            # rather than re-read. A missing or malformed record means the
+            # hook did not qualify this width, and the padded call must not
+            # run.
+            "shadow_precapture_proof",
+            proof
+            == {
+                "cu_seqlens_q": tuple(
+                    range(
+                        0,
+                        canonical + _FR13_FA2_QROW32_B34_ROWS,
+                        _FR13_FA2_QROW32_B34_ROWS,
+                    )
+                ),
+                "shadow_seqused_k": 0,
+                "shadow_block_table_page": (
+                    _FR13_FA2_QROW32_B34_NULL_BLOCK_ID
+                ),
+                "shadow_block_table_row_all_null": True,
+            },
+            proof,
         ),
     )
     return tuple(
         f"{name}={actual!r}" for name, valid, actual in checks if not valid
+    )
+
+
+def _fr13_fa2_qrow32_b34_shadow_mismatches(staged, batch_size):
+    """Qualify the OUTBOUND padded operands, shadow VALUES included.
+
+    PRE-CAPTURE ONLY, and it refuses to run otherwise. It reads device values
+    (.tolist()/.item()), which is capture-illegal -- see the capture-safe twin
+    _fr13_fa2_qrow32_b34_staged_metadata_mismatches, which is what the serving
+    path calls. On success this deposits what it proved into
+    staged["precapture_proof"][shadow], so the in-capture predicate can
+    require the proof without repeating the reads.
+    """
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 qrow32 B34 shadow VALUE check ran inside CUDA capture; "
+            ".item()/.tolist() on a capturing stream is capture-illegal"
+        )
+    metadata = _fr13_fa2_qrow32_b34_staged_metadata_mismatches_shape_only(
+        staged, batch_size
+    )
+    if metadata:
+        return metadata
+    rows = _FR13_FA2_QROW32_B34_ROWS
+    canonical = _FR13_FA2_QROW32_B34_CANONICAL_ROWS
+    shadow = int(batch_size)
+    expected_cu = tuple(range(0, canonical + rows, rows))
+    # Read each device value EXACTLY ONCE; the tuple below is built eagerly.
+    actual_cu = tuple(int(v) for v in staged["cu_seqlens_q"].tolist())
+    actual_seqused = int(staged["seqused_k"][shadow].item())
+    shadow_row_all_null = bool(
+        (
+            staged["block_table"][shadow]
+            == _FR13_FA2_QROW32_B34_NULL_BLOCK_ID
+        ).all().item()
+    )
+    actual_page = int(staged["block_table"][shadow][0].item())
+    checks = (
+        ("staged_cu_seqlens_q", actual_cu == expected_cu, actual_cu),
+        ("shadow_seqused_k", actual_seqused == 0, actual_seqused),
+        (
+            "shadow_block_table_row",
+            shadow_row_all_null
+            and actual_page == _FR13_FA2_QROW32_B34_NULL_BLOCK_ID,
+            actual_page,
+        ),
+    )
+    mismatches = tuple(
+        f"{name}={actual!r}" for name, valid, actual in checks if not valid
+    )
+    if not mismatches:
+        staged.setdefault("precapture_proof", {})[shadow] = {
+            "cu_seqlens_q": actual_cu,
+            "shadow_seqused_k": actual_seqused,
+            "shadow_block_table_page": actual_page,
+            "shadow_block_table_row_all_null": shadow_row_all_null,
+        }
+    return mismatches
+
+
+def _fr13_fa2_qrow32_b34_staged_metadata_mismatches_shape_only(
+    staged, batch_size
+):
+    """The metadata predicate minus its proof clause, for the prover itself.
+
+    The pre-capture value check must qualify shapes and dtypes BEFORE it
+    indexes the shadow slot, but it cannot require the proof record it is
+    about to write. Same clauses, one dropped.
+    """
+    return tuple(
+        mismatch
+        for mismatch in _fr13_fa2_qrow32_b34_staged_metadata_mismatches(
+            staged, batch_size
+        )
+        if not mismatch.startswith("shadow_precapture_proof=")
     )
 
 
@@ -6701,17 +6893,40 @@ def _fr13_fa2_qrow32_b4_candidate_tree_bias(tree_bias, arm):
     that stride -- and only such a mask -- selects the GQA-pair kernel.
     """
     sentinel = int(_FR13_FA2_QROW32_B4_ARMS[arm]["sentinel"])
+    canonical = _FR13_FA2_QROW32_B34_CANONICAL_WIDTH
     if tree_bias.dtype != torch.float32:
         raise RuntimeError("FR13 qrow32 B4 tree bias is not FP32")
-    if tuple(tree_bias.shape) not in ((32, 32), (4, 32, 32)):
+    # The accepted set MUST match what the geometry predicate admits: it
+    # qualifies (32,32) and (batch_size,32,32) at every qualified width, so a
+    # per-slot width-3 mask reaches here and rejecting it would kill the
+    # width-3 FULL capture on a shape this arm declared legal. Mirrors the
+    # gate-side twin _fr13_fa2_qrow32_candidate_tree_bias clause for clause.
+    if tuple(tree_bias.shape) not in ((32, 32),) + tuple(
+        (int(width), 32, 32) for width in _FR13_FA2_QROW32_B34_WIDTHS
+    ):
         raise RuntimeError("FR13 qrow32 B4 tree bias shape drifted")
     if int(tree_bias.stride(-1)) != 1:
         raise RuntimeError("FR13 qrow32 B4 tree bias columns are not contiguous")
-    source = (
-        tree_bias.unsqueeze(0).expand(4, -1, -1)
-        if tree_bias.ndim == 2
-        else tree_bias
-    )
+    if tree_bias.ndim == 2:
+        source = tree_bias.unsqueeze(0).expand(canonical, -1, -1)
+    elif int(tree_bias.shape[0]) == canonical:
+        source = tree_bias
+    else:
+        # Always four planes, because the tagged batch stride IS the dispatch
+        # key and the C++ side checks tree_bias.size(0) == batch_size == 4.
+        # The shadow's plane is filled from plane 0: the shadow never reads it
+        # (seqused_k == 0 exits before the mask is touched), and filling it
+        # deterministically rather than leaving it uninitialised is the
+        # fail-closed choice.
+        source = torch.cat(
+            (
+                tree_bias,
+                tree_bias[:1].expand(
+                    canonical - int(tree_bias.shape[0]), -1, -1
+                ),
+            ),
+            dim=0,
+        )
     tagged = torch.empty_strided(
         (4, 32, 32),
         (sentinel, 32, 1),
@@ -6867,16 +7082,17 @@ def _fr13_fa2_qrow32_b4_production_begin(
         capture_num_reqs = int(descriptor.get("num_reqs", -1))
         if capture_num_reqs not in (1, 2, 3, 4):
             raise RuntimeError("FR13 qrow32 B4 production capture batch drifted")
-        if capture_num_reqs not in _FR13_FA2_QROW32_B34_WIDTHS:
+        if capture_num_reqs not in _fr13_fa2_qrow32_b34_authorised_widths():
             # The fixed32 runtime MANDATES a FULL graph for every batch in
             # 1..capacity (fr10 freeze check), and every one of those captures
-            # runs all 16 tree layers. Widths 3 and 4 are the qualified
-            # operating points -- 4 natively, 3 via the padded canonical call
-            # -- so the width-1 and width-2 captures keep stock and are
-            # counted. Widths 1 and 2 are excluded on ECONOMICS, not on
+            # runs all 16 tree layers. Width 4 is always an authorised
+            # operating point; width 3 is one only when the credential carries
+            # the width-3 padded byte evidence, so a run holding the sealed
+            # width-4 dual gate bypasses width 3 here exactly as it bypasses
+            # widths 1 and 2. Widths 1 and 2 are excluded on ECONOMICS, not on
             # safety: stock already fits one wave there (24b <= 48 CTAs), so
             # the paired kernel cannot pay. The capture-end hook still fails
-            # the run if a qualified graph does not engage the candidate on
+            # the run if an authorised graph does not engage the candidate on
             # all 16 target layers.
             return _fr13_fa2_qrow32_b4_bypass(
                 arm, tree_bias, num_splits, "non_b34_capture"
@@ -6921,13 +7137,17 @@ def _fr13_fa2_qrow32_b4_production_begin(
         staged = _fr13_fa2_qrow32_b34_require_staging(
             query.device, int(block_table.shape[1])
         )
-        shadow_mismatches = _fr13_fa2_qrow32_b34_shadow_mismatches(
+        # METADATA ONLY. This runs inside CUDA capture, where .item()/
+        # .tolist() are capture-illegal; the shadow VALUES were proven by the
+        # pre-capture hook and are carried in staged["precapture_proof"],
+        # which the clause below requires.
+        staged_mismatches = _fr13_fa2_qrow32_b34_staged_metadata_mismatches(
             staged, batch_size
         )
-        if shadow_mismatches:
+        if staged_mismatches:
             raise RuntimeError(
-                "FR13 qrow32 B34 shadow slot drifted: "
-                + "; ".join(shadow_mismatches)
+                "FR13 qrow32 B34 staged operands drifted: "
+                + "; ".join(staged_mismatches)
             )
     layer_name = str(getattr(layer, "layer_name", ""))
     if layer_name not in _FR13_FA2_QROW32_B4_TARGET_LAYERS:
@@ -7035,9 +7255,10 @@ def _fr13_fa2_qrow32_b4_production_record(
     config = _FR13_FA2_QROW32_B4_ARMS[arm]
     task_ids, subset_sha256 = _fr13_fa2_qrow32_b4_require_canonical_task_set()
     width = int(batch_size)
-    if width not in _FR13_FA2_QROW32_B34_WIDTHS:
+    authorised = _fr13_fa2_qrow32_b34_authorised_widths()
+    if width not in authorised:
         raise RuntimeError(
-            "FR13 qrow32 B34 engagement record width is not qualified: "
+            "FR13 qrow32 B34 engagement record width is not authorised: "
             + repr(width)
         )
     if bool(padded) != (width != _FR13_FA2_QROW32_B34_CANONICAL_WIDTH):
@@ -7090,13 +7311,22 @@ def _fr13_fa2_qrow32_b4_production_record(
         "task_count": len(task_ids),
         "draft_vocab_root": 1, "draft_vocab_k": 65536,
         "candidate_served": True, "fallback_allowed": False,
-        # MARK'S RULING 2026-08-13: the scope token moves off
+        # MARK'S RULING 2026-08-13: the scope token MAY move off
         # final_fixed32_b4_full_graph_only to the b3-inclusive token. The .so,
         # its six source digests and the C++ 33-clause TORCH_CHECK are
         # UNCHANGED -- the widening is python-side only, and the kernel still
         # only ever sees the canonical (b == 4, total_q == 128) geometry.
-        "candidate_scope": _FR13_FA2_QROW32_B34_CANDIDATE_SCOPE,
-        "candidate_scope_widths": list(_FR13_FA2_QROW32_B34_WIDTHS),
+        #
+        # The token reports what this run was AUTHORISED to serve, not what
+        # the code can do: a run holding the sealed width-4 credential serves
+        # width 4 only and says so, so the reducer that keys its treated set
+        # off candidate_scope_widths cannot be told the wrong story.
+        "candidate_scope": (
+            _FR13_FA2_QROW32_B34_CANDIDATE_SCOPE
+            if len(authorised) > 1
+            else _FR13_FA2_QROW32_B34_SEALED_B4_SCOPE
+        ),
+        "candidate_scope_widths": list(authorised),
         "bypass_counts": dict(sorted(_FR13_FA2_QROW32_B4_BYPASS_COUNTS.items())),
         "dispatch": config["candidate_dispatch"],
     }
@@ -7110,7 +7340,7 @@ def _fr13_fa2_qrow32_b4_production_capture_end(
         return
     if (
         str(runtime_mode).upper() != "FULL"
-        or int(batch_size) not in _FR13_FA2_QROW32_B34_WIDTHS
+        or int(batch_size) not in _fr13_fa2_qrow32_b34_authorised_widths()
     ):
         # The runtime captures a FULL graph for every batch in 1..capacity and
         # signs all of them; only the B3 and B4 graphs are qualified operating

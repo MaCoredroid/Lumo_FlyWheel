@@ -303,29 +303,73 @@ def batch_conditioned(
     return {"available": True, **result}
 
 
+def treated_widths(candidate_engagement: dict[str, Any] | None) -> tuple[int, ...]:
+    """Which widths the CANDIDATE ARM actually served, read off its own record.
+
+    This must never be inferred from the shape of the timing data. Before
+    Mark's 2026-08-13 ruling the candidate was served at exactly one operating
+    point and `max(width)` happened to name it; after the ruling a run whose
+    credential carries the width-3 padded byte evidence serves widths 3 AND 4,
+    and `max(width)` would classify a TREATED width as a placebo and then hand
+    it to difference-in-differences as the control. That does not fail loudly
+    -- it silently subtracts the effect from itself and prints "placebo clean"
+    over contaminated rows.
+
+    So the treated set comes from `candidate_scope_widths`, which the runtime
+    emits as the widths that run was AUTHORISED to serve. An engagement
+    predating the field carries only the scope token; the sealed
+    width-4 token means (4,), and the b3-inclusive token without the field is
+    ambiguous and is refused rather than guessed.
+    """
+    if not candidate_engagement:
+        return ()
+    declared = candidate_engagement.get("candidate_scope_widths")
+    if declared is not None:
+        if (
+            not isinstance(declared, list)
+            or not declared
+            or not all(isinstance(width, int) for width in declared)
+        ):
+            raise PairError("candidate engagement scope widths drifted")
+        return tuple(sorted(declared))
+    scope = candidate_engagement.get("candidate_scope")
+    if scope == SEALED_B4_CANDIDATE_SCOPE:
+        return (4,)
+    raise PairError(
+        "candidate engagement declares scope "
+        + repr(scope)
+        + " without candidate_scope_widths; the treated widths cannot be "
+        "resolved and must not be guessed"
+    )
+
+
 def per_width_placebo(
-    stock_bc: dict[str, Any], candidate_bc: dict[str, Any]
+    stock_bc: dict[str, Any],
+    candidate_bc: dict[str, Any],
+    treated: tuple[int, ...],
 ) -> dict[str, Any]:
     """The strongest causal evidence this design produces, and it is free.
 
-    The candidate kernel is served at EXACTLY ONE operating point -- the final
-    fixed32 B4 FULL graph, i.e. served batch width == slots. Every narrower step
+    The candidate kernel is served at a DECLARED set of operating points --
+    the final fixed32 FULL graphs at the authorised widths. Every other width
     inside the same window runs the IDENTICAL stock dispatch on BOTH arms,
-    because the candidate's scope excludes them. Until 2026-08-13 that scope
-    was `final_fixed32_b4_full_graph_only` and the untreated widths were 1..3;
-    under Mark's ruling it is `final_fixed32_b34_full_graph_only` and width 3
-    is TREATED, so the placebo set shrinks to widths 1 and 2. The placebo
+    because the candidate's scope excludes it. Until 2026-08-13 that scope was
+    `final_fixed32_b4_full_graph_only` and the untreated widths were 1..3;
+    under Mark's ruling a run whose credential carries the width-3 padded byte
+    evidence declares `final_fixed32_b34_full_graph_only` and width 3 is
+    TREATED, so the placebo set shrinks to widths 1 and 2. The placebo
     argument is unchanged in kind -- only the boundary moved -- and the
-    treated width is still read off the data, not assumed.
+    treated set is READ OFF THE ENGAGEMENT RECORD, never inferred from the
+    widths present in the data.
 
-    So the narrow widths are a NATURAL PLACEBO, drawn from the same arms, the
-    same hosts, the same window and the same wall chain as the treated width.
-    If a step-wall gain shows up at widths where the code is identical, the
-    contrast is measuring arm-to-arm confound rather than the kernel, and the
-    headline delta must not be believed. If the gain appears only at the treated
-    width, the effect is localised to the intervention.
+    So the untreated widths are a NATURAL PLACEBO, drawn from the same arms,
+    the same hosts, the same window and the same wall chain as the treated
+    width. If a step-wall gain shows up at widths where the code is identical,
+    the contrast is measuring arm-to-arm confound rather than the kernel, and
+    the headline delta must not be believed. If the gain appears only at the
+    treated widths, the effect is localised to the intervention.
 
-    DIFFERENCE-IN-DIFFERENCES. The widest untreated width is the control: its
+    DIFFERENCE-IN-DIFFERENCES. The widest UNTREATED width is the control: its
     arm-to-arm delta estimates the confound that also contaminates the treated
     width. Subtracting it (additive) or dividing it out (multiplicative) gives a
     confound-corrected effect. Both are reported because neither model is
@@ -336,7 +380,25 @@ def per_width_placebo(
     widths = sorted({int(w) for w in s_by} & {int(w) for w in c_by})
     if not widths:
         return {"available": False, "reason": "no shared served widths"}
-    treated = max(widths)
+    if not treated:
+        return {
+            "available": False,
+            "reason": "the candidate engagement declared no treated widths",
+        }
+    engaged = [w for w in widths if w in treated]
+    if not engaged:
+        return {
+            "available": False,
+            "reason": (
+                "no treated width "
+                + repr(list(treated))
+                + " appears in both arms' batch-conditioned detail"
+            ),
+        }
+    # The headline row is the widest TREATED width -- the operating point the
+    # campaign is sized on. The narrower treated widths are reported as
+    # treated too, and are excluded from the control set below.
+    headline = max(engaged)
     rows = []
     for w in widths:
         s = s_by[str(w)]
@@ -344,8 +406,8 @@ def per_width_placebo(
         rows.append(
             {
                 "width": w,
-                "candidate_engaged": w == treated,
-                "role": "treated" if w == treated else "placebo",
+                "candidate_engaged": w in treated,
+                "role": "treated" if w in treated else "placebo",
                 "stock_mean_ms": s["mean_ms"],
                 "stock_steps": s["steps"],
                 "candidate_mean_ms": c["mean_ms"],
@@ -355,14 +417,16 @@ def per_width_placebo(
             }
         )
     controls = [r for r in rows if not r["candidate_engaged"] and r["stock_steps"] >= 100]
-    treated_row = next(r for r in rows if r["candidate_engaged"])
+    treated_row = next(r for r in rows if r["width"] == headline)
     out: dict[str, Any] = {
         "available": True,
-        "treated_width": treated,
+        "treated_width": headline,
+        "treated_widths": list(treated),
         "rows": rows,
         "placebo_note": (
-            "widths below the treated width run the IDENTICAL stock dispatch on "
-            "both arms (they are outside candidate_scope, whichever of "
+            "widths outside the declared treated set run the IDENTICAL stock "
+            "dispatch on both arms (they are outside candidate_scope, "
+            "whichever of "
             + " / ".join(ACCEPTED_CANDIDATE_SCOPES)
             + " the engagement declared), so any delta there is arm-to-arm "
             "confound, not kernel"
@@ -413,13 +477,17 @@ def per_width_placebo(
         ),
     }
     # Width scaling: the quantity the width-4 attribution said FA2 owns.
-    if len(widths) >= 2:
-        prev = max(w for w in widths if w < treated)
-        s_scale = s_by[str(treated)]["mean_ms"] - s_by[str(prev)]["mean_ms"]
-        c_scale = c_by[str(treated)]["mean_ms"] - c_by[str(prev)]["mean_ms"]
+    # Measured against the next width DOWN in the data, treated or not: this is
+    # a scaling cost, not a causal contrast, and the sealed width-4 lineage
+    # reads it as 3 -> 4.
+    narrower = [w for w in widths if w < headline]
+    if narrower:
+        prev = max(narrower)
+        s_scale = s_by[str(headline)]["mean_ms"] - s_by[str(prev)]["mean_ms"]
+        c_scale = c_by[str(headline)]["mean_ms"] - c_by[str(prev)]["mean_ms"]
         out["width_scaling_cost"] = {
             "from_width": prev,
-            "to_width": treated,
+            "to_width": headline,
             "stock_ms": s_scale,
             "candidate_ms": c_scale,
             "removed_ms": s_scale - c_scale,
@@ -522,6 +590,9 @@ def read_engagement(arm_dir: Path) -> dict[str, Any] | None:
         "subset_sha256": payload.get("subset_sha256"),
         "candidate_served": payload.get("candidate_served"),
         "candidate_scope": payload.get("candidate_scope"),
+        # Load-bearing, not decorative: this is what decides the treated set,
+        # and therefore which rows are eligible to be the DiD control.
+        "candidate_scope_widths": payload.get("candidate_scope_widths"),
         "fallback_allowed": payload.get("fallback_allowed"),
         "bypass_counts": payload.get("bypass_counts"),
         "artifact_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
@@ -679,7 +750,11 @@ def build_payload(
     verdict["basis_note"] = basis_note
 
     placebo = (
-        per_width_placebo(stock_bc, candidate_bc)
+        per_width_placebo(
+            stock_bc,
+            candidate_bc,
+            treated_widths(provenance.get("candidate_engagement")),
+        )
         if (stock_bc["available"] and candidate_bc["available"])
         else {"available": False, "reason": "no batch-conditioned detail"}
     )
@@ -839,7 +914,12 @@ def render(payload: dict[str, Any]) -> str:
     )
     pl = b.get("per_width_placebo") or {}
     if pl.get("available"):
-        lines += ["", "  PER-WIDTH PLACEBO (candidate serves ONLY the treated width)"]
+        lines += [
+            "",
+            "  PER-WIDTH PLACEBO (candidate serves ONLY widths "
+            + ", ".join(str(w) for w in pl.get("treated_widths", []))
+            + ")",
+        ]
         lines.append(
             f"    {'width':>5} {'stock ms':>10} {'cand ms':>10} {'impr ms':>9} {'role':>8}"
         )

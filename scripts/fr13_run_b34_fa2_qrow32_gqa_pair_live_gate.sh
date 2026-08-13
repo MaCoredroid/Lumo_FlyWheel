@@ -151,9 +151,18 @@ run_arm() {
 run_arm tail6_fixed32 tail23
 run_arm hydra27_fixed32 hydra27
 
+# The b3 verifications are folded IN, not merely written beside. Without this
+# the two ${label}_b3_verification.json files would be consumed by nothing --
+# not verify-dual, not the pass sidecar, not the launcher -- and the credential
+# issued from this gate would authorise padded width-3 serving on the strength
+# of width-4 evidence alone. Passing them here is what makes the dual gate
+# declare qualified_widths [3,4], which is the only thing that widens the
+# sidecar's production_widths and, in turn, the runtime's authorised widths.
 "$PYTHON_BIN" "$GATE" verify-dual \
   --tail-verification "$RUNROOT_ABS/tail23_verification.json" \
   --hydra-verification "$RUNROOT_ABS/hydra27_verification.json" \
+  --tail-b3-verification "$RUNROOT_ABS/tail23_b3_verification.json" \
+  --hydra-b3-verification "$RUNROOT_ABS/hydra27_b3_verification.json" \
   --candidate-so "$QROW32_GQA_PAIR_FA2_SO" \
   --fa2-source "$QROW32_GQA_PAIR_FA2_SOURCE" \
   --source-commit "$SOURCE_COMMIT" \

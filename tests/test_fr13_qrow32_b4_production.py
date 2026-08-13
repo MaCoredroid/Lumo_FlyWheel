@@ -485,7 +485,16 @@ def test_b4_helper_block_serves_the_gqa_pair_sentinel_fail_closed() -> None:
     # MARK'S RULING 2026-08-13: the qualified capture widths are (3, 4),
     # not 4 alone. Width 3 is served by padding to the canonical width-4
     # geometry; widths 1 and 2 are still declared bypasses.
-    assert "capture_num_reqs not in _FR13_FA2_QROW32_B34_WIDTHS" in helpers
+    #
+    # The CAPABILITY is (3, 4); the LICENCE is whatever the pass sidecar
+    # authorises, which is what the selector actually keys on. A run holding
+    # the sealed width-4 credential must bypass width 3, so the capture gate
+    # reads the authorised set and not the capability tuple.
+    assert (
+        "capture_num_reqs not in _fr13_fa2_qrow32_b34_authorised_widths()"
+        in helpers
+    )
+    assert "capture_num_reqs not in _FR13_FA2_QROW32_B34_WIDTHS" not in helpers
     assert "_FR13_FA2_QROW32_B34_WIDTHS = (3, 4)" in helpers
     assert "capture_num_reqs != 4" not in helpers
     assert "torch.empty_strided(" in helpers
@@ -622,7 +631,7 @@ class _FakeTorch:
 
 
 @pytest.fixture()
-def b4_selector(monkeypatch: pytest.MonkeyPatch):
+def b4_selector(monkeypatch: pytest.MonkeyPatch, tmp_path):
     """Execute the installed helper block against stub torch/vllm modules."""
     patcher = _module(PATCHER, "qrow32_b4_helpers_exec")
     state = {"capturing": False}
@@ -672,7 +681,6 @@ def b4_selector(monkeypatch: pytest.MonkeyPatch):
         ),
         ("FR13_FA2_QROW32_SOURCE_COMMIT", "c" * 40),
         ("FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256", "d" * 64),
-        ("FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256", "e" * 64),
         ("FR13_FA2_QROW32_B4_DUAL_GATE_SHA256", "f" * 64),
         (
             "FR13_FA2_QROW32_B4_EXACT4_TASK_IDS",
@@ -684,6 +692,25 @@ def b4_selector(monkeypatch: pytest.MonkeyPatch):
         ),
     ):
         monkeypatch.setenv(name, value)
+    # The runtime resolves its authorised served widths from the pass sidecar
+    # BODY, so the credential has to exist on disk with bytes matching the
+    # digest env. This file exercises the sealed width-4 lineage, so the
+    # licence it installs is the width-4 one.
+    sidecar = tmp_path / "fr13_fa2_qrow32_b4_production_pass.json"
+    raw = json.dumps(
+        {"production_widths": [4]},
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    sidecar.write_bytes(raw)
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR", str(sidecar)
+    )
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256",
+        hashlib.sha256(raw).hexdigest(),
+    )
     monkeypatch.delenv("ENFORCE_EAGER", raising=False)
     return namespace, gdn, state
 
@@ -828,10 +855,14 @@ def test_the_engagement_record_discloses_its_scope_and_bypasses(
         21, "c" * 64, "FULL", 4
     )
     record = json.loads(engagement.read_text(encoding="ascii"))
-    # Mark's ruling 2026-08-13 widened the scope token; the canonical width
-    # still writes the ORIGINAL filename, which the sealed timing lineage reads.
-    assert record["candidate_scope"] == "final_fixed32_b34_full_graph_only"
-    assert record["candidate_scope_widths"] == [3, 4]
+    # The scope token reports what this run was AUTHORISED to serve, not what
+    # the code can do. This fixture holds the sealed width-4 credential, so
+    # the record must say the sealed token and widths [4] -- otherwise the
+    # reducer would treat width 3 as treated and hand a genuinely untreated
+    # control to difference-in-differences. The canonical width also still
+    # writes the ORIGINAL filename, which the sealed timing lineage reads.
+    assert record["candidate_scope"] == "final_fixed32_b4_full_graph_only"
+    assert record["candidate_scope_widths"] == [4]
     assert record["batch_size"] == 4
     assert record["padded_to_canonical_width"] is False
     assert record["bypass_counts"]["outside_capture"] == 1

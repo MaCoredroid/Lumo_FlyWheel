@@ -25,6 +25,7 @@ These tests pin the four things that make that safe:
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import json
 import os
@@ -340,10 +341,37 @@ class _ShimTorch:
 
 
 @pytest.fixture()
-def b34(monkeypatch: pytest.MonkeyPatch):
+def b34(monkeypatch: pytest.MonkeyPatch, tmp_path):
     """The B4 production helper block, live, with the real geometry."""
     patcher = _module(PATCHER, "qrow32_b34_helpers")
     state = {"capturing": False}
+
+    def _authorise(*widths):
+        """Install a pass sidecar authorising exactly these served widths.
+
+        The runtime reads its authorised widths out of the credential BODY,
+        so every test that reaches the selector needs a real one on disk whose
+        bytes match the digest env. Rewriting it is how a test switches
+        between the sealed width-4 licence and the widened width-3+4 licence.
+        """
+        sidecar = tmp_path / "fr13_fa2_qrow32_b4_production_pass.json"
+        raw = json.dumps(
+            {"production_widths": sorted(int(w) for w in widths)},
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("ascii")
+        sidecar.write_bytes(raw)
+        monkeypatch.setenv(
+            "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR", str(sidecar)
+        )
+        monkeypatch.setenv(
+            "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256",
+            hashlib.sha256(raw).hexdigest(),
+        )
+        return sidecar
+
+    state["authorise"] = _authorise
     namespace: dict[str, object] = {
         "os": os,
         "torch": _ShimTorch(state),
@@ -391,7 +419,6 @@ def b34(monkeypatch: pytest.MonkeyPatch):
         ("FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256", arm["source_closure_sha256"]),
         ("FR13_FA2_QROW32_SOURCE_COMMIT", "c" * 40),
         ("FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256", "d" * 64),
-        ("FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256", "e" * 64),
         ("FR13_FA2_QROW32_B4_DUAL_GATE_SHA256", "f" * 64),
         (
             "FR13_FA2_QROW32_B4_EXACT4_TASK_IDS",
@@ -403,6 +430,10 @@ def b34(monkeypatch: pytest.MonkeyPatch):
         ),
     ):
         monkeypatch.setenv(name, value)
+    # The default licence is the WIDENED one, because most of this file
+    # exercises the padded width-3 path. The tests that care about the sealed
+    # width-4 licence call state["authorise"](4) explicitly.
+    _authorise(3, 4)
     monkeypatch.delenv("ENFORCE_EAGER", raising=False)
     return namespace, gdn, state, holder
 
@@ -967,7 +998,7 @@ def test_the_engagement_record_refuses_an_inconsistent_padding_claim(
             graph_signature="a" * 64, layers=list(TARGET_LAYERS), calls=16,
             batch_size=3, padded=False,
         )
-    with pytest.raises(RuntimeError, match="width is not qualified"):
+    with pytest.raises(RuntimeError, match="width is not authorised"):
         namespace["_fr13_fa2_qrow32_b4_production_record"](
             arm="gqa_pair", runtime_mode="FULL", graph_id=1,
             graph_signature="a" * 64, layers=list(TARGET_LAYERS), calls=16,
@@ -1058,8 +1089,19 @@ def test_the_pair_reducer_still_refuses_an_invented_scope() -> None:
 
 def test_the_credential_scope_widened_but_no_binary_pin_moved() -> None:
     sidecar = _module(SIDECAR, "b4_sidecar_scope")
-    assert "widths 3 and 4" in sidecar.PRODUCTION_SCOPE
-    assert "width 3 or 4" in sidecar.REQUIRED_RUNTIME
+    widened = sidecar.PRODUCTION_SCOPE_BY_WIDTHS[(3, 4)]
+    assert "widths 3 and 4" in widened
+    assert "width 3 or 4" in sidecar.REQUIRED_RUNTIME_BY_WIDTHS[(3, 4)]
+    # The sealed width-4 prose is preserved WORD FOR WORD, because a
+    # credential issued from the banked width-4 dual gate must re-verify
+    # against it byte for byte.
+    assert sidecar.PRODUCTION_SCOPE_BY_WIDTHS[(4,)] == (
+        "qrow32 GQA-pair B4 exact tree attention only"
+    )
+    assert sidecar.REQUIRED_RUNTIME_BY_WIDTHS[(4,)] == (
+        "fixed32 K64 ROOT=1 exact4 B4 physical32 FULL graph on Tail23 or "
+        "Hydra27"
+    )
     # Zero rebuild: every identity pin is exactly what the de-risk banked.
     assert sidecar.CANDIDATE_SHA256 == (
         "af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb"
@@ -1518,3 +1560,682 @@ def test_the_b34_runner_is_executable_and_parses() -> None:
     import subprocess
 
     subprocess.run(["bash", "-n", str(B34_RUNNER)], check=True)
+
+
+# --------------------------------------------------------------------------
+# 9. The in-capture path reads no device VALUES
+#
+# The single defect that made the padded arm unshippable: the serving path
+# called the shadow VALUE predicate from inside CUDA graph capture, and that
+# predicate does .item()/.tolist() on CUDA staging tensors. Tensor.item() and
+# Tensor.tolist() lower to cudaMemcpyAsync D2H + cudaStreamSynchronize;
+# cudaStreamSynchronize on a capturing stream returns
+# cudaErrorStreamCaptureUnsupported and invalidates the capture. It would have
+# fired on the FIRST target layer of the width-3 FULL capture -- i.e. at
+# server startup -- so the b3 byte gate and the width-3 timing arm could never
+# have run. The 78 original cases missed it because the shim's "CUDA" tensors
+# are host tensors, where .item() always succeeds.
+#
+# These tests close that: the shim's tensors now REFUSE device reads while the
+# fake stream is capturing, exactly as the real ones would.
+# --------------------------------------------------------------------------
+
+
+class _CaptureIllegalRead(RuntimeError):
+    """What the driver would raise: a D2H sync on a capturing stream."""
+
+
+@pytest.fixture()
+def capture_hostile(monkeypatch: pytest.MonkeyPatch, b34):
+    """Make .item()/.tolist() fatal while the fake stream is capturing."""
+    namespace, gdn, state, holder = b34
+    for name in ("item", "tolist"):
+        original = getattr(torch.Tensor, name)
+
+        def guarded(self, *args, _original=original, **kwargs):
+            if state["capturing"]:
+                raise _CaptureIllegalRead(
+                    "operation not permitted when stream is capturing"
+                )
+            return _original(self, *args, **kwargs)
+
+        monkeypatch.setattr(torch.Tensor, name, guarded, raising=True)
+    return namespace, gdn, state, holder
+
+
+def test_the_guard_itself_bites(capture_hostile) -> None:
+    """Without this, every test below would pass vacuously."""
+    _namespace, _gdn, state, _holder = capture_hostile
+    tensor = torch.zeros((2,), dtype=torch.int32)
+    assert tensor.tolist() == [0, 0]
+    state["capturing"] = True
+    with pytest.raises(_CaptureIllegalRead):
+        tensor.tolist()
+    with pytest.raises(_CaptureIllegalRead):
+        tensor[0].item()
+
+
+def test_a_width_three_capture_survives_a_capture_hostile_stream(
+    capture_hostile,
+) -> None:
+    """THE REGRESSION. This is the b=3 FULL capture, end to end."""
+    namespace, gdn, state, holder = capture_hostile
+    holder["context"] = _forward_context(
+        torch.zeros((4, BLOCK_COLUMNS), dtype=torch.int32)
+    )
+    # Pre-capture: value reads are legal here, and this is where they happen.
+    staged = namespace["_fr13_fa2_qrow32_b34_precapture_staging"](301, "FULL", 3)
+    assert staged is not None
+    state["capturing"] = True
+    _capture(gdn, 301, 3)
+    # Every one of the 16 target layers, because the failure was per-layer.
+    for layer_name in TARGET_LAYERS:
+        selection = _begin(namespace, 3, layer_name=layer_name)
+        assert selection["candidate_served"] is True
+        assert selection["staged"] is staged
+
+
+def test_the_canonical_width_also_survives_a_capture_hostile_stream(
+    capture_hostile,
+) -> None:
+    namespace, gdn, state, _holder = capture_hostile
+    state["capturing"] = True
+    _capture(gdn, 302, 4)
+    selection = _begin(namespace, 4)
+    assert selection["candidate_served"] is True
+    assert selection["staged"] is None
+
+
+def test_the_precapture_hook_still_proves_the_shadow_by_reading_it(
+    capture_hostile,
+) -> None:
+    """The values are not skipped, they are proven EARLIER. Show the reads."""
+    namespace, _gdn, state, holder = capture_hostile
+    holder["context"] = _forward_context(
+        torch.zeros((4, BLOCK_COLUMNS), dtype=torch.int32)
+    )
+    staged = namespace["_fr13_fa2_qrow32_b34_precapture_staging"](303, "FULL", 3)
+    assert staged["precapture_proof"][3] == {
+        "cu_seqlens_q": (0, 32, 64, 96, 128),
+        "shadow_seqused_k": 0,
+        "shadow_block_table_page": 0,
+        "shadow_block_table_row_all_null": True,
+    }
+    # And the hook genuinely could not have run under capture.
+    state["capturing"] = True
+    with pytest.raises(RuntimeError, match="inside CUDA capture"):
+        namespace["_fr13_fa2_qrow32_b34_shadow_mismatches"](staged, 3)
+
+
+def test_the_metadata_predicate_requires_the_precapture_proof(b34) -> None:
+    """Metadata alone is not enough: the shadow proof must be present."""
+    namespace, _gdn, _state, holder = b34
+    holder["context"] = _forward_context(
+        torch.zeros((4, BLOCK_COLUMNS), dtype=torch.int32)
+    )
+    staged = namespace["_fr13_fa2_qrow32_b34_precapture_staging"](304, "FULL", 3)
+    predicate = namespace["_fr13_fa2_qrow32_b34_staged_metadata_mismatches"]
+    assert predicate(staged, 3) == ()
+    staged.pop("precapture_proof")
+    assert any(
+        m.startswith("shadow_precapture_proof=") for m in predicate(staged, 3)
+    )
+
+
+def test_a_padded_capture_without_the_proof_refuses_to_serve(b34) -> None:
+    namespace, gdn, state, holder = b34
+    holder["context"] = _forward_context(
+        torch.zeros((4, BLOCK_COLUMNS), dtype=torch.int32)
+    )
+    staged = namespace["_fr13_fa2_qrow32_b34_precapture_staging"](305, "FULL", 3)
+    staged["precapture_proof"][3]["shadow_seqused_k"] = 4
+    state["capturing"] = True
+    _capture(gdn, 305, 3)
+    with pytest.raises(RuntimeError, match="staged operands drifted"):
+        _begin(namespace, 3)
+
+
+def test_a_drifted_staged_shape_is_caught_without_a_device_read(
+    capture_hostile,
+) -> None:
+    namespace, _gdn, state, holder = capture_hostile
+    holder["context"] = _forward_context(
+        torch.zeros((4, BLOCK_COLUMNS), dtype=torch.int32)
+    )
+    staged = namespace["_fr13_fa2_qrow32_b34_precapture_staging"](306, "FULL", 3)
+    staged["query"] = torch.zeros((127, 24, 256), dtype=torch.bfloat16)
+    state["capturing"] = True
+    predicate = namespace["_fr13_fa2_qrow32_b34_staged_metadata_mismatches"]
+    assert any(m.startswith("staged_query(") for m in predicate(staged, 3))
+
+
+def test_no_device_value_read_is_reachable_from_the_serving_path() -> None:
+    """A source-level audit, so the rule survives a future edit.
+
+    The serving entry point is _fr13_fa2_qrow32_b4_production_begin. Walk the
+    call graph of the helper block from it and assert that nothing it can
+    reach calls .item() or .tolist(). The two functions that legitimately do
+    -- the pre-capture value predicate and its sole caller, the pre-capture
+    hook -- must not be reachable from it.
+    """
+    patcher = _module(PATCHER, "qrow32_b34_capture_audit")
+    tree = ast.parse(patcher.FIXED32_QUERY_TILE32_B4_PRODUCTION_HELPERS)
+    functions = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+    }
+    calls = {
+        name: {
+            sub.func.id
+            for sub in ast.walk(node)
+            if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name)
+        }
+        for name, node in functions.items()
+    }
+    reads = {
+        name
+        for name, node in functions.items()
+        if any(
+            isinstance(sub, ast.Call)
+            and isinstance(sub.func, ast.Attribute)
+            and sub.func.attr in ("item", "tolist")
+            for sub in ast.walk(node)
+        )
+    }
+    # Exactly one function is allowed to read device values.
+    assert reads == {"_fr13_fa2_qrow32_b34_shadow_mismatches"}, reads
+    reachable: set[str] = set()
+    frontier = ["_fr13_fa2_qrow32_b4_production_begin"]
+    while frontier:
+        current = frontier.pop()
+        for callee in calls.get(current, ()):
+            if callee in functions and callee not in reachable:
+                reachable.add(callee)
+                frontier.append(callee)
+    assert "_fr13_fa2_qrow32_b34_shadow_mismatches" not in reachable
+    assert "_fr13_fa2_qrow32_b34_precapture_staging" not in reachable
+    assert not (reads & reachable), reads & reachable
+    # And the capture-safe twin IS the one the serving path uses.
+    assert (
+        "_fr13_fa2_qrow32_b34_staged_metadata_mismatches" in reachable
+    )
+
+
+# --------------------------------------------------------------------------
+# 10. The production tree-bias tagger and the geometry predicate agree
+#
+# The production tagger accepted only (32,32) and (4,32,32) while the
+# production geometry predicate accepts (batch_size,32,32) at every qualified
+# width and the gate-side twin goes out of its way to handle (3,32,32). A
+# per-slot width-3 mask therefore passed the predicate and then died in the
+# tagger with "tree bias shape drifted", during the width-3 FULL capture.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("shape", [(32, 32), (3, 32, 32), (4, 32, 32)])
+def test_every_shape_the_geometry_predicate_admits_is_taggable(
+    b34, shape
+) -> None:
+    namespace, _gdn, _state, _holder = b34
+    width = 3 if len(shape) == 2 or shape[0] == 3 else 4
+    bias = torch.zeros(shape, dtype=torch.float32)
+    geometry = namespace["_fr13_fa2_qrow32_b4_geometry_mismatches"]
+    operands = _operands(width)
+    operands["value_cache"] = operands["key_cache"]
+    operands["tree_bias"] = bias
+    assert geometry(batch_size=width, **operands) == ()
+    tagged = namespace["_fr13_fa2_qrow32_b4_candidate_tree_bias"](
+        bias, "gqa_pair"
+    )
+    assert tuple(tagged.shape) == (4, 32, 32)
+    assert int(tagged.stride(0)) == 0x20014
+
+
+def test_the_per_slot_width_three_mask_fills_the_shadow_plane_from_plane_zero(
+    b34,
+) -> None:
+    """Deterministic, not uninitialised -- the fail-closed choice.
+
+    The shadow never reads its plane (seqused_k == 0 exits before the mask is
+    touched), but the C++ side checks tree_bias.size(0) == batch_size == 4, so
+    a plane must exist and it must be defined.
+    """
+    namespace, _gdn, _state, _holder = b34
+    bias = torch.stack(
+        [torch.full((32, 32), float(slot)) for slot in range(3)]
+    ).to(torch.float32)
+    tagged = namespace["_fr13_fa2_qrow32_b4_candidate_tree_bias"](
+        bias, "gqa_pair"
+    )
+    for slot in range(3):
+        assert bool((tagged[slot] == float(slot)).all())
+    assert bool((tagged[3] == tagged[0]).all())
+
+
+def test_the_production_tagger_matches_the_gate_twin_shape_for_shape() -> None:
+    """The two blocks are mutually exclusive; they must not disagree."""
+    patcher = _module(PATCHER, "qrow32_b34_tagger_parity")
+    tree = ast.parse(patcher.FIXED32_QUERY_TILE32_B4_PRODUCTION_HELPERS)
+    production = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fa2_qrow32_b4_candidate_tree_bias"
+    )
+    source = ast.unparse(production)
+    # It no longer hard-codes the canonical widths, and it grew the same
+    # torch.cat shadow-plane fill the gate-side twin has.
+    assert "(32, 32), (4, 32, 32)" not in source
+    assert "_FR13_FA2_QROW32_B34_WIDTHS" in source
+    assert "torch.cat" in source
+
+
+@pytest.mark.parametrize("shape", [(2, 32, 32), (5, 32, 32), (4, 16, 32)])
+def test_a_mask_the_predicate_rejects_is_still_refused_by_the_tagger(
+    b34, shape
+) -> None:
+    namespace, _gdn, _state, _holder = b34
+    with pytest.raises(RuntimeError, match="tree bias shape drifted"):
+        namespace["_fr13_fa2_qrow32_b4_candidate_tree_bias"](
+            torch.zeros(shape, dtype=torch.float32), "gqa_pair"
+        )
+
+
+# --------------------------------------------------------------------------
+# 11. The credential authorises widths; the code does not authorise itself
+#
+# PRODUCTION_SCOPE was widened to say "widths 3 and 4" while the dual gate it
+# is issued from still bound only the two width-4 arm verifications, and the
+# selector served width 3 whenever the arm was set. A banked width-4 dual gate
+# would therefore have reissued a credential that turned padded width-3
+# serving on for every timing run, with the shadow doctrine never byte-checked
+# on that machine.
+# --------------------------------------------------------------------------
+
+
+def _dual_gate_payload(source_commit, *, with_b3):
+    sidecar = _module(SIDECAR, "b4_sidecar_widths")
+    payload = {
+        "schema": sidecar.DUAL_GATE_SCHEMA,
+        "status": "PASS",
+        "candidate_arm": sidecar.ARM,
+        "selector_sentinel": sidecar.SELECTOR_SENTINEL,
+        "candidate_so_sha256": sidecar.CANDIDATE_SHA256,
+        "candidate_so_size": sidecar.CANDIDATE_SIZE,
+        "fa2_head": sidecar.FA2_HEAD,
+        "fa2_source_closure_sha256": sidecar.SOURCE_CLOSURE_SHA256,
+        "task_ids": list(sidecar.EXACT4_TASK_IDS),
+        "subset_sha256": sidecar.EXACT4_SUBSET_SHA256,
+        "qualified_topologies": list(sidecar.QUALIFIED_TOPOLOGIES),
+        "layer_count_per_topology": 16,
+        "output_raw_byte_mismatches": 0,
+        "lse_raw_byte_mismatches": 0,
+        "fallback_allowed": False,
+        "performance_measurement": False,
+        "timing_eligible": False,
+        "production_eligible": False,
+        "source_commit": source_commit,
+        "tail23_verification_sha256": "1" * 64,
+        "hydra27_verification_sha256": "2" * 64,
+    }
+    if with_b3:
+        payload.update(
+            {
+                "qualified_widths": [3, 4],
+                "tail23_b3_verification_sha256": "3" * 64,
+                "hydra27_b3_verification_sha256": "4" * 64,
+                "b3_padded_to_canonical_width": True,
+                "b3_shadow_slot": 3,
+                "b3_output_raw_byte_mismatches": 0,
+                "b3_lse_raw_byte_mismatches": 0,
+                "b3_poisoned_shadow_output_raw_byte_mismatches": 0,
+                "b3_poisoned_shadow_lse_raw_byte_mismatches": 0,
+                "b3_shadow_contract_failures": [],
+            }
+        )
+    return payload
+
+
+def test_a_width_four_only_dual_gate_issues_the_sealed_width_four_scope() -> None:
+    sidecar = _module(SIDECAR, "b4_sidecar_widths")
+    commit = "a" * 40
+    summary = sidecar.validate_dual_gate(
+        _dual_gate_payload(commit, with_b3=False), source_commit=commit
+    )
+    assert summary["widths"] == (4,)
+    assert summary["b3"] == {}
+    texts = sidecar._scope_texts(summary["widths"])
+    assert texts["production_scope"] == (
+        "qrow32 GQA-pair B4 exact tree attention only"
+    )
+    assert texts["production_widths"] == [4]
+
+
+def test_only_a_b3_bearing_dual_gate_widens_the_credential() -> None:
+    sidecar = _module(SIDECAR, "b4_sidecar_widths")
+    commit = "a" * 40
+    summary = sidecar.validate_dual_gate(
+        _dual_gate_payload(commit, with_b3=True), source_commit=commit
+    )
+    assert summary["widths"] == (3, 4)
+    assert summary["b3"]["tail23_b3_verification_sha256"] == "3" * 64
+    texts = sidecar._scope_texts(summary["widths"])
+    assert "widths 3 and 4" in texts["production_scope"]
+    assert "poisoned shadow" in texts["credential_basis"]
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"tail23_b3_verification_sha256": None},
+        {"hydra27_b3_verification_sha256": None},
+        {"b3_output_raw_byte_mismatches": 1},
+        {"b3_lse_raw_byte_mismatches": 1},
+        {"b3_poisoned_shadow_output_raw_byte_mismatches": 1},
+        {"b3_poisoned_shadow_lse_raw_byte_mismatches": 1},
+        {"b3_shadow_contract_failures": ["slot 3 lse not +INF"]},
+        {"b3_padded_to_canonical_width": False},
+        {"b3_shadow_slot": 2},
+        {"qualified_widths": [3]},
+        {"qualified_widths": [2, 3, 4]},
+    ],
+)
+def test_a_widening_claim_without_its_evidence_is_refused(mutation) -> None:
+    """Declaring the width is not proving it."""
+    sidecar = _module(SIDECAR, "b4_sidecar_widths")
+    commit = "a" * 40
+    payload = _dual_gate_payload(commit, with_b3=True)
+    for key, value in mutation.items():
+        if value is None:
+            payload.pop(key)
+        else:
+            payload[key] = value
+    with pytest.raises(sidecar.SidecarError):
+        sidecar.validate_dual_gate(payload, source_commit=commit)
+
+
+def test_b3_evidence_outside_a_b3_scope_is_refused() -> None:
+    """A gate cannot smuggle b3 digests under a width-4 declaration."""
+    sidecar = _module(SIDECAR, "b4_sidecar_widths")
+    commit = "a" * 40
+    payload = _dual_gate_payload(commit, with_b3=True)
+    payload["qualified_widths"] = [4]
+    with pytest.raises(sidecar.SidecarError, match="outside its declared scope"):
+        sidecar.validate_dual_gate(payload, source_commit=commit)
+
+
+def test_the_b34_runner_feeds_its_b3_verifications_into_verify_dual() -> None:
+    """Otherwise the two b3 files are consumed by nothing at all."""
+    runner = B34_RUNNER.read_text(encoding="utf-8")
+    block = runner[runner.index("verify-dual") :]
+    block = block[: block.index("dual_gate_verification.json")]
+    assert "--tail-b3-verification" in block
+    assert "--hydra-b3-verification" in block
+    assert "tail23_b3_verification.json" in block
+    assert "hydra27_b3_verification.json" in block
+
+
+def test_verify_dual_declares_width_four_only_without_the_b3_arms() -> None:
+    gate = _module(GQA_GATE, "qrow32_gate_widths")
+    args = types.SimpleNamespace(
+        tail_b3_verification=None, hydra_b3_verification=None
+    )
+    assert gate._verify_dual_b3(args, {}, "a" * 40) == {
+        "qualified_widths": [4]
+    }
+
+
+def test_verify_dual_refuses_half_the_b3_evidence(tmp_path) -> None:
+    gate = _module(GQA_GATE, "qrow32_gate_widths")
+    args = types.SimpleNamespace(
+        tail_b3_verification=tmp_path / "tail.json",
+        hydra_b3_verification=None,
+    )
+    with pytest.raises(gate.GateError, match="BOTH topology verifications"):
+        gate._verify_dual_b3(args, {}, "a" * 40)
+
+
+@pytest.mark.parametrize("widths", [(3, 4), (4,)])
+def test_the_runtime_reads_its_authorised_widths_from_the_credential(
+    b34, widths
+) -> None:
+    namespace, _gdn, state, _holder = b34
+    state["authorise"](*widths)
+    assert namespace["_fr13_fa2_qrow32_b34_authorised_widths"]() == widths
+
+
+def test_the_sealed_width_four_credential_bypasses_width_three(b34) -> None:
+    """THE REGRESSION: a banked width-4 credential must not serve width 3."""
+    namespace, gdn, state, holder = b34
+    state["authorise"](4)
+    holder["context"] = _forward_context(
+        torch.zeros((4, BLOCK_COLUMNS), dtype=torch.int32)
+    )
+    # It does not even allocate the 3.0 MiB of staging.
+    assert namespace["_fr13_fa2_qrow32_b34_precapture_staging"](
+        401, "FULL", 3
+    ) is None
+    assert namespace["_FR13_FA2_QROW32_B34_STAGING"] == {}
+    state["capturing"] = True
+    _capture(gdn, 401, 3)
+    selection = _begin(namespace, 3)
+    assert selection["candidate_served"] is False
+    assert selection["bypass_reason"] == "non_b34_capture"
+    # ...while width 4 is served exactly as before.
+    _capture(gdn, 402, 4)
+    assert _begin(namespace, 4)["candidate_served"] is True
+
+
+@pytest.mark.parametrize("widths", [(2, 4), (3,), (4, 5), (1, 3, 4)])
+def test_an_unqualified_credential_width_is_fatal(b34, widths) -> None:
+    """Widths 1 and 2 are not qualified, and 4 is not optional."""
+    namespace, _gdn, state, _holder = b34
+    state["authorise"](*widths)
+    with pytest.raises(RuntimeError, match="not a qualified scope"):
+        namespace["_fr13_fa2_qrow32_b34_authorised_widths"]()
+
+
+def test_a_tampered_credential_body_is_fatal(b34, tmp_path) -> None:
+    """The digest is the binding; the body is only trusted through it."""
+    namespace, _gdn, state, _holder = b34
+    sidecar = state["authorise"](4)
+    sidecar.write_bytes(b'{"production_widths":[3,4]}')
+    with pytest.raises(RuntimeError, match="pass sidecar bytes drifted"):
+        namespace["_fr13_fa2_qrow32_b34_authorised_widths"]()
+
+
+# --------------------------------------------------------------------------
+# 12. The reducer's treated set comes from the engagement, not from max(width)
+#
+# `treated = max(widths)` classified width 3 -- now genuinely treated under a
+# widened credential -- as a placebo AND then chose it as the
+# difference-in-differences control, silently subtracting the effect from
+# itself while printing "placebo clean".
+# --------------------------------------------------------------------------
+
+
+def _reduce_module():
+    return _module(PAIR_REDUCE, "b4_pair_reduce_widths")
+
+
+def _by_width(rows):
+    return {
+        "available": True,
+        "by_width": {
+            str(width): {
+                "steps": steps,
+                "mean_ms": ms,
+                "fraction": 0.0,
+                "sd_ms": 0.0,
+            }
+            for width, (steps, ms) in rows.items()
+        },
+    }
+
+
+def test_the_treated_set_is_read_off_the_engagement_record() -> None:
+    module = _reduce_module()
+    assert module.treated_widths(
+        {"candidate_scope": B34_SCOPE, "candidate_scope_widths": [3, 4]}
+    ) == (3, 4)
+    assert module.treated_widths(
+        {"candidate_scope": SEALED_SCOPE, "candidate_scope_widths": [4]}
+    ) == (4,)
+    # The banked width-4 pair predates the field and must stay re-reducible.
+    assert module.treated_widths({"candidate_scope": SEALED_SCOPE}) == (4,)
+
+
+def test_an_unresolvable_treated_set_is_refused_rather_than_guessed() -> None:
+    module = _reduce_module()
+    with pytest.raises(module.PairError, match="must not be guessed"):
+        module.treated_widths({"candidate_scope": B34_SCOPE})
+
+
+def test_a_treated_width_three_is_never_the_did_control() -> None:
+    """THE REGRESSION, as arithmetic."""
+    module = _reduce_module()
+    stock = _by_width({2: (1000, 285.0), 3: (1000, 362.0), 4: (3000, 411.0)})
+    cand = _by_width({2: (1000, 302.0), 3: (1000, 340.0), 4: (3000, 382.0)})
+    placebo = module.per_width_placebo(stock, cand, (3, 4))
+    roles = {r["width"]: r["role"] for r in placebo["rows"]}
+    assert roles == {2: "placebo", 3: "treated", 4: "treated"}
+    assert placebo["treated_widths"] == [3, 4]
+    assert placebo["treated_width"] == 4
+    # Width 2 is the only untreated width, so it is the only control.
+    assert placebo["difference_in_differences"]["control_width"] == 2
+
+
+def test_the_same_data_under_the_sealed_scope_still_controls_on_width_three() -> None:
+    """The sealed lineage is unchanged: width 3 is a control there."""
+    module = _reduce_module()
+    stock = _by_width({2: (1000, 285.0), 3: (1000, 362.0), 4: (3000, 411.0)})
+    cand = _by_width({2: (1000, 302.0), 3: (1000, 340.0), 4: (3000, 382.0)})
+    placebo = module.per_width_placebo(stock, cand, (4,))
+    assert placebo["difference_in_differences"]["control_width"] == 3
+    assert placebo["treated_widths"] == [4]
+
+
+def test_a_placebo_leak_is_only_looked_for_at_untreated_widths() -> None:
+    module = _reduce_module()
+    stock = _by_width({2: (1000, 285.0), 3: (1000, 362.0), 4: (3000, 411.0)})
+    cand = _by_width({2: (1000, 302.0), 3: (1000, 340.0), 4: (3000, 382.0)})
+    placebo = module.per_width_placebo(stock, cand, (3, 4))
+    leaks = [
+        r
+        for r in placebo["rows"]
+        if not r["candidate_engaged"] and r["improvement_ms"] >= 4.2
+    ]
+    assert leaks == []
+
+
+def test_the_reducer_carries_the_scope_widths_off_the_engagement_file(
+    tmp_path,
+) -> None:
+    module = _reduce_module()
+    arm = tmp_path / "arm"
+    (arm / "logs").mkdir(parents=True)
+    (arm / "logs" / "fr13_fa2_qrow32_b4_production_engagement.json").write_text(
+        json.dumps(
+            {
+                "candidate_scope": B34_SCOPE,
+                "candidate_scope_widths": [3, 4],
+            }
+        ),
+        encoding="ascii",
+    )
+    engagement = module.read_engagement(arm)
+    assert engagement["candidate_scope_widths"] == [3, 4]
+    assert module.treated_widths(engagement) == (3, 4)
+
+
+def _issue_body(sidecar, widths):
+    """The credential body a gate qualifying `widths` would produce."""
+    summary = {
+        "source_commit": "a" * 40,
+        "tail23_verification_sha256": "1" * 64,
+        "hydra27_verification_sha256": "2" * 64,
+        "widths": widths,
+        "b3": (
+            {
+                "tail23_b3_verification_sha256": "3" * 64,
+                "hydra27_b3_verification_sha256": "4" * 64,
+            }
+            if 3 in widths
+            else {}
+        ),
+    }
+    return sidecar._body(
+        patch={"source_commit": "a" * 40, "patch_source_sha256": "b" * 64},
+        dual_gate_sha256="c" * 64,
+        dual_gate_canonical_sha256="d" * 64,
+        summary=summary,
+    )
+
+
+@pytest.mark.parametrize("widths", [(4,), (3, 4)])
+def test_a_credential_verifies_against_the_scope_it_was_issued_with(
+    widths, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sidecar = _module(SIDECAR, "b4_sidecar_roundtrip")
+    body = _issue_body(sidecar, widths)
+    assert body["production_widths"] == list(widths)
+    payload = dict(body)
+    payload["canonical_sha256"] = sidecar._digest(sidecar.canonical_bytes(body))
+    raw = sidecar.canonical_bytes(payload) + b"\n"
+    path = tmp_path / "pass.json"
+    path.write_bytes(raw)
+    monkeypatch.setattr(sidecar, "validate_candidate", lambda *a, **k: {})
+    monkeypatch.setattr(
+        sidecar,
+        "validate_patch_source_digest",
+        lambda *a, **k: {
+            "source_commit": "a" * 40,
+            "patch_source_sha256": "b" * 64,
+        },
+    )
+    verified = sidecar.verify_sidecar(
+        sidecar_path=path,
+        expected_sidecar_sha256=hashlib.sha256(raw).hexdigest(),
+        candidate_so=path,
+        expected_candidate_sha256=sidecar.CANDIDATE_SHA256,
+        arm=sidecar.ARM,
+        patch_source=path,
+        expected_source_commit="a" * 40,
+        expected_patch_source_sha256="b" * 64,
+    )
+    assert verified["production_widths"] == list(widths)
+
+
+def test_widened_prose_over_a_width_four_credential_is_refused(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The attack this exists to stop: edit the scope text, keep the widths."""
+    sidecar = _module(SIDECAR, "b4_sidecar_tamper")
+    body = _issue_body(sidecar, (4,))
+    body["production_scope"] = sidecar.PRODUCTION_SCOPE_BY_WIDTHS[(3, 4)]
+    payload = dict(body)
+    payload["canonical_sha256"] = sidecar._digest(sidecar.canonical_bytes(body))
+    raw = sidecar.canonical_bytes(payload) + b"\n"
+    path = tmp_path / "pass.json"
+    path.write_bytes(raw)
+    monkeypatch.setattr(sidecar, "validate_candidate", lambda *a, **k: {})
+    monkeypatch.setattr(
+        sidecar,
+        "validate_patch_source_digest",
+        lambda *a, **k: {
+            "source_commit": "a" * 40,
+            "patch_source_sha256": "b" * 64,
+        },
+    )
+    with pytest.raises(sidecar.SidecarError, match="contract drifted"):
+        sidecar.verify_sidecar(
+            sidecar_path=path,
+            expected_sidecar_sha256=hashlib.sha256(raw).hexdigest(),
+            candidate_so=path,
+            expected_candidate_sha256=sidecar.CANDIDATE_SHA256,
+            arm=sidecar.ARM,
+            patch_source=path,
+            expected_source_commit="a" * 40,
+            expected_patch_source_sha256="b" * 64,
+        )

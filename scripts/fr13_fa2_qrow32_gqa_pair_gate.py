@@ -488,6 +488,77 @@ def verify_arm_b3(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _verify_dual_b3(
+    args: argparse.Namespace, identity: dict[str, Any], source_commit: str
+) -> dict[str, Any]:
+    """Fold the two width-3 padded arm verifications into the dual gate.
+
+    THE CREDENTIAL'S WIDTH SCOPE IS DECIDED HERE AND NOWHERE ELSE. A dual gate
+    built without the b3 verifications qualifies width 4 ONLY, and the pass
+    sidecar issued from it authorises width 4 only; padded width-3 serving
+    needs the b3 evidence to exist, on BOTH topologies, at THIS commit, from
+    the same pinned binary. Supplying one of the two is a hard error rather
+    than a silent downgrade -- a half-gated widening is exactly the failure
+    this clause exists to prevent.
+    """
+    tail_path = getattr(args, "tail_b3_verification", None)
+    hydra_path = getattr(args, "hydra_b3_verification", None)
+    if tail_path is None and hydra_path is None:
+        return {"qualified_widths": [CANONICAL_WIDTH]}
+    if tail_path is None or hydra_path is None:
+        raise GateError(
+            "the b3 padded widening needs BOTH topology verifications"
+        )
+    tail, tail_raw = _load_json(tail_path, "Tail23 b3 verification")
+    hydra, hydra_raw = _load_json(hydra_path, "Hydra27 b3 verification")
+    for payload, mode, topology in (
+        (tail, "tail6_fixed32", "Tail23"),
+        (hydra, "hydra27_fixed32", "Hydra27"),
+    ):
+        live_result_sha256 = payload.get("live_result_sha256")
+        if (
+            payload.get("schema") != B3_ARM_SCHEMA
+            or payload.get("status") != "PASS"
+            or payload.get("fixed32_mode") != mode
+            or payload.get("logical_topology") != topology
+            or payload.get("source_commit") != source_commit
+            or payload.get("task_ids") != list(qrow32_gate.TASK_IDS)
+            or payload.get("subset_sha256") != qrow32_gate.EXACT4_SUBSET_SHA256
+            or payload.get("batch_size") != B3_WIDTH
+            or payload.get("padded_to_canonical_width") is not True
+            or payload.get("canonical_width") != CANONICAL_WIDTH
+            or payload.get("shadow_slot") != CANONICAL_WIDTH - 1
+            or payload.get("layer_count") != 16
+            or payload.get("slot_coverage") != list(range(B3_WIDTH))
+            or payload.get("output_raw_byte_mismatches") != 0
+            or payload.get("lse_raw_byte_mismatches") != 0
+            or payload.get("poisoned_shadow_output_raw_byte_mismatches") != 0
+            or payload.get("poisoned_shadow_lse_raw_byte_mismatches") != 0
+            or payload.get("shadow_contract_failures") != []
+            or payload.get("fallback_allowed") is not False
+            or payload.get("performance_measurement") is not False
+            or not isinstance(live_result_sha256, str)
+            or len(live_result_sha256) != 64
+            or any(char not in HEX for char in live_result_sha256)
+        ):
+            raise GateError(f"{topology} GQA-pair b3 verification drifted")
+        for key, value in identity.items():
+            if payload.get(key) != value:
+                raise GateError(f"{topology} GQA-pair b3 identity {key} drifted")
+    return {
+        "qualified_widths": [B3_WIDTH, CANONICAL_WIDTH],
+        "tail23_b3_verification_sha256": _sha256_bytes(tail_raw),
+        "hydra27_b3_verification_sha256": _sha256_bytes(hydra_raw),
+        "b3_padded_to_canonical_width": True,
+        "b3_shadow_slot": CANONICAL_WIDTH - 1,
+        "b3_output_raw_byte_mismatches": 0,
+        "b3_lse_raw_byte_mismatches": 0,
+        "b3_poisoned_shadow_output_raw_byte_mismatches": 0,
+        "b3_poisoned_shadow_lse_raw_byte_mismatches": 0,
+        "b3_shadow_contract_failures": [],
+    }
+
+
 def verify_dual(args: argparse.Namespace) -> dict[str, Any]:
     identity = validate_candidate(args.candidate_so, args.fa2_source)
     source_commit = _require_commit(args.source_commit, "source commit")
@@ -530,6 +601,7 @@ def verify_dual(args: argparse.Namespace) -> dict[str, Any]:
         "qualified_topologies": ["Tail23", "Hydra27"],
         "tail23_verification_sha256": _sha256_bytes(tail_raw),
         "hydra27_verification_sha256": _sha256_bytes(hydra_raw),
+        **_verify_dual_b3(args, identity, source_commit),
         "layer_count_per_topology": 16,
         "output_raw_byte_mismatches": 0,
         "lse_raw_byte_mismatches": 0,
@@ -574,6 +646,12 @@ def _parser() -> argparse.ArgumentParser:
     dual = commands.add_parser("verify-dual")
     dual.add_argument("--tail-verification", type=Path, required=True)
     dual.add_argument("--hydra-verification", type=Path, required=True)
+    # OPTIONAL, and both-or-neither. Present => the gate qualifies widths 3
+    # and 4 and the credential it feeds may authorise padded width-3 serving;
+    # absent => the gate qualifies width 4 only, exactly as the sealed
+    # width-4 lineage did.
+    dual.add_argument("--tail-b3-verification", type=Path, default=None)
+    dual.add_argument("--hydra-b3-verification", type=Path, default=None)
     dual.add_argument("--candidate-so", type=Path, required=True)
     dual.add_argument("--fa2-source", type=Path, required=True)
     dual.add_argument("--source-commit", required=True)
