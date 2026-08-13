@@ -4278,6 +4278,30 @@ FIXED32_QUERY_TILE32_LIVE_AB_HELPERS = r'''# FR13_FA2_QROW32_LIVE_PAGED_AB
 _FR13_FA2_QROW32_LIVE_AB_GRAPHS = {}
 _FR13_FA2_QROW32_LIVE_AB_ATTEMPTED = False
 _FR13_FA2_QROW32_LIVE_AB_PASSED = False
+# FR13_FA2_QROW32_B34_PADDED (Mark's ruling 2026-08-13). The gate qualifies
+# TWO operating points now: the native canonical width 4, and width 3 served
+# by PADDING to the canonical (b == 4, total_q == 128) geometry with one inert
+# shadow request in slot 3. These constants are declared here rather than
+# imported from the B4 production block because the two helper blocks are
+# installed into tree_attn.py by MUTUALLY EXCLUSIVE patcher flags -- the gate
+# build never has the production block, and a cross-block name would be a
+# NameError at the first width-3 replay.
+_FR13_FA2_QROW32_LIVE_AB_WIDTHS = (3, 4)
+_FR13_FA2_QROW32_LIVE_AB_CANONICAL_WIDTH = 4
+_FR13_FA2_QROW32_LIVE_AB_ROWS = 32
+_FR13_FA2_QROW32_LIVE_AB_CANONICAL_ROWS = 128
+_FR13_FA2_QROW32_LIVE_AB_NULL_BLOCK_ID = 0
+# A page index that CANNOT exist. If the kernel ever dereferences the shadow
+# row -- i.e. if the n_block_min >= n_block_max early exit at
+# flash_fwd_kernel.h:759 is not taken -- this faults instead of silently
+# reading somebody else's KV page. Loud is the entire point.
+_FR13_FA2_QROW32_LIVE_AB_POISON_BLOCK_ID = 0x7FFFFFF0
+_FR13_FA2_QROW32_LIVE_AB_STAGING = {}
+# Once per qualified width, not once per process: at concurrency 4 the width-4
+# graph replays first and the width-3 graph follows as tasks stall or finish,
+# and BOTH have to be gated.
+_FR13_FA2_QROW32_LIVE_AB_WIDTHS_ATTEMPTED = set()
+_FR13_FA2_QROW32_LIVE_AB_WIDTHS_PASSED = set()
 _FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL = 131092
 _FR13_FA2_QROW32_LIVE_AB_ARMS = {
     "qrow32": {
@@ -4346,16 +4370,42 @@ def _fr13_fa2_qrow32_live_ab_contract():
 
 
 def _fr13_fa2_qrow32_candidate_tree_bias(tree_bias):
-    """Copy the live mask into the private, semantically exact B4 layout."""
+    """Copy the live mask into the private, semantically exact B4 layout.
+
+    Always four planes, because the tagged batch stride IS the dispatch key
+    and the sealed .so serves exactly one grid. At width 3 the incoming mask
+    is either the (32,32) broadcast tile -- which expands to four identical
+    planes exactly as at width 4 -- or a (3,32,32) per-slot mask, whose fourth
+    plane is filled from plane 0. The shadow never reads it (seqused_k == 0
+    exits before the mask is touched); filling it deterministically rather
+    than leaving it uninitialised is the fail-closed choice.
+    """
     _, contract = _fr13_fa2_qrow32_live_ab_contract()
     sentinel = int(contract["sentinel"])
+    canonical = _FR13_FA2_QROW32_LIVE_AB_CANONICAL_WIDTH
     if tree_bias.dtype != torch.float32:
         raise RuntimeError("FR13 qrow32 tree bias is not FP32")
-    if tuple(tree_bias.shape) not in ((32, 32), (4, 32, 32)):
+    if tuple(tree_bias.shape) not in (
+        (32, 32),
+        (canonical, 32, 32),
+    ) + tuple((width, 32, 32) for width in _FR13_FA2_QROW32_LIVE_AB_WIDTHS):
         raise RuntimeError("FR13 qrow32 tree bias shape drifted")
     if int(tree_bias.stride(-1)) != 1:
         raise RuntimeError("FR13 qrow32 tree bias columns are not contiguous")
-    source = tree_bias.unsqueeze(0).expand(4, -1, -1) if tree_bias.ndim == 2 else tree_bias
+    if tree_bias.ndim == 2:
+        source = tree_bias.unsqueeze(0).expand(canonical, -1, -1)
+    elif int(tree_bias.shape[0]) == canonical:
+        source = tree_bias
+    else:
+        source = torch.cat(
+            (
+                tree_bias,
+                tree_bias[:1].expand(
+                    canonical - int(tree_bias.shape[0]), -1, -1
+                ),
+            ),
+            dim=0,
+        )
     tagged = torch.empty_strided(
         (4, 32, 32),
         (sentinel, 32, 1),
@@ -4391,7 +4441,13 @@ def _fr13_fa2_qrow32_live_ab_register(
     num_splits,
     tree_bias,
 ):
-    """Retain every target layer from the final exact4 B4 FULL graph."""
+    """Retain every target layer from a qualified exact4 FULL graph.
+
+    Qualified means width 4 (the canonical geometry) or width 3 (served by
+    padding to it). The registration is width-parameterised so the gate can
+    compare a NATIVE width-3 stock call against the PADDED width-4 candidate
+    call on exactly the operands the runtime captured.
+    """
     if os.environ.get("FR13_FA2_QROW32_LIVE_PAGED_AB", "0") != "1":
         return
     if not (
@@ -4406,8 +4462,12 @@ def _fr13_fa2_qrow32_live_ab_register(
         # Memory-profile graphs deliberately have no final capture context.
         return
     descriptor = context.get("descriptor")
-    if not isinstance(descriptor, dict) or int(descriptor.get("num_reqs", -1)) != 4:
+    if not isinstance(descriptor, dict):
         return
+    width = int(descriptor.get("num_reqs", -1))
+    if width not in _FR13_FA2_QROW32_LIVE_AB_WIDTHS:
+        return
+    rows = _FR13_FA2_QROW32_LIVE_AB_ROWS * width
     graph_id = int(context.get("graph_id", 0))
     if graph_id <= 0:
         raise RuntimeError("FR13 qrow32 live gate has no final graph identity")
@@ -4421,7 +4481,7 @@ def _fr13_fa2_qrow32_live_ab_register(
     # engine shape from a dummy-run tensor that merely has not been filled yet.
     _checks = (
         ("query.dtype", query.dtype == torch.bfloat16, query.dtype),
-        ("query.shape", tuple(query.shape) == (128, 24, 256), tuple(query.shape)),
+        ("query.shape", tuple(query.shape) == (rows, 24, 256), tuple(query.shape)),
         ("query.stride(-1)", int(query.stride(-1)) == 1, int(query.stride(-1))),
         ("query.stride(-2)", int(query.stride(-2)) == 256, int(query.stride(-2))),
         ("key_cache.dtype", key_cache.dtype == torch.bfloat16, key_cache.dtype),
@@ -4449,22 +4509,26 @@ def _fr13_fa2_qrow32_live_ab_register(
         ("cu_seqlens_q.dtype", cu_seqlens_q.dtype == torch.int32, cu_seqlens_q.dtype),
         (
             "cu_seqlens_q.shape",
-            tuple(cu_seqlens_q.shape) == (5,),
+            tuple(cu_seqlens_q.shape) == (width + 1,),
             tuple(cu_seqlens_q.shape),
         ),
         ("seqused_k.dtype", seqused_k.dtype == torch.int32, seqused_k.dtype),
-        ("seqused_k.shape", tuple(seqused_k.shape) == (4,), tuple(seqused_k.shape)),
+        (
+            "seqused_k.shape",
+            tuple(seqused_k.shape) == (width,),
+            tuple(seqused_k.shape),
+        ),
         ("block_table.dtype", block_table.dtype == torch.int32, block_table.dtype),
         ("block_table.ndim", block_table.ndim == 2, block_table.ndim),
         (
             "block_table.shape[0]",
-            int(block_table.shape[0]) == 4,
+            int(block_table.shape[0]) == width,
             tuple(block_table.shape),
         ),
         ("tree_bias.dtype", tree_bias.dtype == torch.float32, tree_bias.dtype),
         (
             "tree_bias.shape",
-            tuple(tree_bias.shape) in ((32, 32), (4, 32, 32)),
+            tuple(tree_bias.shape) in ((32, 32), (width, 32, 32)),
             tuple(tree_bias.shape),
         ),
         (
@@ -4495,6 +4559,7 @@ def _fr13_fa2_qrow32_live_ab_register(
     if layer_name in graph:
         raise RuntimeError("FR13 qrow32 target layer executed twice in capture")
     graph[layer_name] = {
+        "batch_size": width,
         "layer_name": layer_name,
         "flash_fn": flash_fn,
         "query": query,
@@ -4548,6 +4613,128 @@ def _fr13_fa2_qrow32_live_ab_call(bundle, out, *, candidate=False):
     )
 
 
+def _fr13_fa2_qrow32_live_ab_staging(device, block_columns):
+    """The gate's own copy of the production staging, same shapes, same rules.
+
+    The gate runs OUTSIDE capture (it asserts so before it starts), so this
+    allocation is unconditionally safe here. It is deliberately a separate
+    registry from the production one: the gate build does not install the
+    production helper block at all, and a gate that borrowed production state
+    would be testing its own bookkeeping instead of the kernel.
+    """
+    key = (str(device), int(block_columns))
+    staged = _FR13_FA2_QROW32_LIVE_AB_STAGING.get(key)
+    if staged is not None:
+        return staged
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13 qrow32 live gate staging must not be allocated in capture"
+        )
+    canonical = _FR13_FA2_QROW32_LIVE_AB_CANONICAL_ROWS
+    width = _FR13_FA2_QROW32_LIVE_AB_CANONICAL_WIDTH
+    rows = _FR13_FA2_QROW32_LIVE_AB_ROWS
+    staged = {
+        "query": torch.zeros(
+            (canonical, 24, 256), dtype=torch.bfloat16, device=device
+        ),
+        "out": torch.zeros(
+            (canonical, 24, 256), dtype=torch.bfloat16, device=device
+        ),
+        "cu_seqlens_q": torch.arange(
+            0, canonical + rows, rows, dtype=torch.int32, device=device
+        ),
+        "seqused_k": torch.zeros((width,), dtype=torch.int32, device=device),
+        "block_table": torch.full(
+            (width, int(block_columns)),
+            _FR13_FA2_QROW32_LIVE_AB_NULL_BLOCK_ID,
+            dtype=torch.int32,
+            device=device,
+        ),
+    }
+    _FR13_FA2_QROW32_LIVE_AB_STAGING[key] = staged
+    return staged
+
+
+def _fr13_fa2_qrow32_live_ab_padded_call(bundle, *, poison):
+    """Serve the width-3 bundle to the sealed .so as canonical width 4.
+
+    Returns (staged_out, staged_lse) at the FULL canonical extent, so the
+    caller can check BOTH halves: the real rows against the native stock call,
+    and the shadow rows against the kernel's early-return contract (zeros in
+    O, +INF in LSE).
+
+    With poison=True the shadow's Q rows are filled with a NaN/garbage bit
+    pattern AND the shadow block-table row is pointed at a page index that
+    cannot exist. Under seqused_k[shadow] == 0 the kernel reads neither, so
+    the real rows must come back BIT-IDENTICAL to the clean-shadow run. If the
+    early exit is ever not taken, this either faults on the impossible page or
+    poisons the output -- both loud, neither silent.
+    """
+    width = int(bundle["batch_size"])
+    canonical_width = _FR13_FA2_QROW32_LIVE_AB_CANONICAL_WIDTH
+    rows = _FR13_FA2_QROW32_LIVE_AB_ROWS
+    real_rows = width * rows
+    shadow = canonical_width - 1
+    if width == canonical_width:
+        raise RuntimeError("FR13 qrow32 live gate padded the canonical width")
+    block_table = bundle["block_table"]
+    staged = _fr13_fa2_qrow32_live_ab_staging(
+        bundle["query"].device, int(block_table.shape[1])
+    )
+    staged["query"].zero_()
+    staged["query"][:real_rows].copy_(bundle["query"])
+    staged["seqused_k"].zero_()
+    staged["seqused_k"][:width].copy_(bundle["seqused_k"])
+    staged["block_table"].fill_(_FR13_FA2_QROW32_LIVE_AB_NULL_BLOCK_ID)
+    staged["block_table"][:width].copy_(block_table)
+    if poison:
+        staged["query"][real_rows:] = float("nan")
+        staged["block_table"][shadow].fill_(
+            _FR13_FA2_QROW32_LIVE_AB_POISON_BLOCK_ID
+        )
+    if int(staged["seqused_k"][shadow].item()) != 0:
+        raise RuntimeError("FR13 qrow32 live gate shadow seqused_k is not zero")
+    staged["out"].zero_()
+    padded = dict(bundle)
+    padded["query"] = staged["query"]
+    padded["cu_seqlens_q"] = staged["cu_seqlens_q"]
+    padded["seqused_k"] = staged["seqused_k"]
+    padded["block_table"] = staged["block_table"]
+    out, lse = _fr13_fa2_qrow32_live_ab_call(
+        padded, staged["out"], candidate=True
+    )
+    if tuple(out.shape) != (
+        _FR13_FA2_QROW32_LIVE_AB_CANONICAL_ROWS,
+        24,
+        256,
+    ):
+        raise RuntimeError("FR13 qrow32 live gate padded output extent drifted")
+    return out, lse
+
+
+def _fr13_fa2_qrow32_live_ab_shadow_mismatches(out, lse, real_rows):
+    """The kernel's early-return contract, stated as bytes.
+
+    compute_attn_1rowblock_splitkv at n_block_min >= n_block_max writes ZERO
+    to every O element it owns and +INF to every LSE entry, then returns --
+    before Q is read and before the block table is formed. Anything else in
+    the shadow half means the shadow was not inert.
+    """
+    canonical = _FR13_FA2_QROW32_LIVE_AB_CANONICAL_ROWS
+    shadow_out = out[real_rows:canonical]
+    shadow_lse = lse[..., real_rows:canonical]
+    failures = []
+    if int(shadow_out.numel()) == 0 or int(shadow_lse.numel()) == 0:
+        failures.append("shadow_extent=empty")
+    if not bool((shadow_out.to(torch.float32) == 0.0).all().item()):
+        failures.append("shadow_output_not_zero")
+    if not bool(torch.isinf(shadow_lse).all().item()):
+        failures.append("shadow_lse_not_infinite")
+    elif not bool((shadow_lse > 0).all().item()):
+        failures.append("shadow_lse_not_positive_infinity")
+    return tuple(failures)
+
+
 def _fr13_fa2_qrow32_raw_bytes(tensor):
     return tensor.detach().contiguous().view(torch.uint8).cpu().numpy().tobytes()
 
@@ -4573,7 +4760,7 @@ def _fr13_fa2_qrow32_byte_summary(stock, candidate):
     }
 
 
-def _fr13_fa2_qrow32_live_ab_write(record):
+def _fr13_fa2_qrow32_live_ab_write(record, batch_size=None):
     import json as _json
     from pathlib import Path as _Path
 
@@ -4583,6 +4770,17 @@ def _fr13_fa2_qrow32_live_ab_write(record):
             "/logs/fr13_fa2_qrow32_live_paged_ab.json",
         )
     )
+    if (
+        batch_size is not None
+        and int(batch_size) != _FR13_FA2_QROW32_LIVE_AB_CANONICAL_WIDTH
+    ):
+        # The canonical width keeps the original filename -- every banked
+        # verifier reads exactly it. A padded width lands beside it, so the
+        # two gate results can never overwrite one another and no new
+        # environment name enters the runner contract.
+        path = path.with_name(
+            path.stem + "_b" + str(int(batch_size)) + path.suffix
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(
@@ -4593,18 +4791,33 @@ def _fr13_fa2_qrow32_live_ab_write(record):
 
 
 def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
-    """Run the all-layer byte gate after the first real stock exact4 replay."""
+    """Run the all-layer byte gate after the first real stock replay.
+
+    Once per QUALIFIED WIDTH. At width 4 this is the sealed exact4 comparison,
+    clause for clause as before. At width 3 the incumbent is the NATIVE
+    width-3 stock call and the candidate is the PADDED canonical width-4 call,
+    plus a poisoned-shadow repeat that must be bit-identical to the clean one.
+    """
     global _FR13_FA2_QROW32_LIVE_AB_ATTEMPTED
     global _FR13_FA2_QROW32_LIVE_AB_PASSED
 
     if os.environ.get("FR13_FA2_QROW32_LIVE_PAGED_AB", "0") != "1":
         return
-    if _FR13_FA2_QROW32_LIVE_AB_ATTEMPTED:
-        return
     if (
         str(runtime_mode).upper() != "FULL"
-        or int(batch_size) not in _FR13_FA2_QROW32_B34_WIDTHS
+        or int(batch_size) not in _FR13_FA2_QROW32_LIVE_AB_WIDTHS
     ):
+        return
+    width = int(batch_size)
+    if width in _FR13_FA2_QROW32_LIVE_AB_WIDTHS_ATTEMPTED:
+        return
+    padded = width != _FR13_FA2_QROW32_LIVE_AB_CANONICAL_WIDTH
+    if padded and os.environ.get(
+        "FR13_FA2_QROW32_LIVE_PAGED_AB_B3", "0"
+    ) != "1":
+        # The width-3 padded arm is default-off and separately declared: it
+        # presents a synthetic 4th request to a sealed kernel, and that is a
+        # thing a runner asks for explicitly or not at all.
         return
     from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_qrow_gdn
 
@@ -4679,11 +4892,18 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
     if torch.cuda.is_current_stream_capturing():
         raise RuntimeError("FR13 qrow32 live gate ran inside CUDA capture")
 
+    _FR13_FA2_QROW32_LIVE_AB_WIDTHS_ATTEMPTED.add(width)
     _FR13_FA2_QROW32_LIVE_AB_ATTEMPTED = True
     torch.cuda.synchronize()
+    rows = _FR13_FA2_QROW32_LIVE_AB_ROWS
+    real_rows = width * rows
+    expected_q_start = list(range(0, real_rows + rows, rows))
     layer_records = []
     total_output_mismatches = 0
     total_lse_mismatches = 0
+    total_poison_output_mismatches = 0
+    total_poison_lse_mismatches = 0
+    shadow_failures = []
     tree_bias_sha256 = set()
     shared_q_start = None
     shared_seq_lens = None
@@ -4692,12 +4912,16 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
 
     for layer_name in _FR13_FA2_QROW32_TARGET_LAYERS:
         bundle = graph[layer_name]
+        if int(bundle.get("batch_size", -1)) != width:
+            raise RuntimeError(
+                "FR13 qrow32 live gate registered width disagrees with replay"
+            )
         q_start = [int(x) for x in bundle["cu_seqlens_q"].cpu().tolist()]
         seq_lens = [int(x) for x in bundle["seqused_k"].cpu().tolist()]
-        if q_start != [0, 32, 64, 96, 128]:
+        if q_start != expected_q_start:
             raise RuntimeError("FR13 qrow32 live query segments drifted")
         if (
-            len(seq_lens) != 4
+            len(seq_lens) != width
             or any(length < 32 for length in seq_lens)
             or any(length > bundle["max_seqlen_k"] for length in seq_lens)
         ):
@@ -4712,12 +4936,69 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
         bias_sha256 = _hashlib.sha256(bias_bytes).hexdigest()
         tree_bias_sha256.add(bias_sha256)
         stock_buf = torch.empty_like(bundle["query"])
-        candidate_buf = torch.empty_like(bundle["query"])
         stock_out, stock_lse = _fr13_fa2_qrow32_live_ab_call(bundle, stock_buf)
-        candidate_out, candidate_lse = _fr13_fa2_qrow32_live_ab_call(
-            bundle, candidate_buf, candidate=True
-        )
-        torch.cuda.synchronize()
+        poison_summary = None
+        if padded:
+            # INCUMBENT: the NATIVE width-3 call, exactly as the runtime made
+            # it. CANDIDATE: the same operands PADDED to canonical width 4
+            # with an inert shadow in slot 3. The comparison is over the real
+            # rows only, because the shadow rows do not exist in the native
+            # call -- their contract is checked separately, below.
+            padded_out, padded_lse = _fr13_fa2_qrow32_live_ab_padded_call(
+                bundle, poison=False
+            )
+            torch.cuda.synchronize()
+            clean_out = padded_out[:real_rows].clone()
+            clean_lse = padded_lse[..., :real_rows].clone()
+            shadow_failures.extend(
+                layer_name + ":clean:" + failure
+                for failure in _fr13_fa2_qrow32_live_ab_shadow_mismatches(
+                    padded_out, padded_lse, real_rows
+                )
+            )
+            # THE POISONED-SHADOW VARIANT. NaN Q rows and an impossible page
+            # in the shadow block-table row. At seqused_k[3] == 0 the kernel
+            # reads neither, so the real rows must be BIT-IDENTICAL to the
+            # clean-shadow run -- a strictly sharper statement than "matches
+            # stock", because it fails loudly if the early exit is not taken.
+            poison_out, poison_lse = _fr13_fa2_qrow32_live_ab_padded_call(
+                bundle, poison=True
+            )
+            torch.cuda.synchronize()
+            shadow_failures.extend(
+                layer_name + ":poisoned:" + failure
+                for failure in _fr13_fa2_qrow32_live_ab_shadow_mismatches(
+                    poison_out, poison_lse, real_rows
+                )
+            )
+            poison_summary = {
+                "output": _fr13_fa2_qrow32_byte_summary(
+                    clean_out, poison_out[:real_rows]
+                ),
+                "lse": _fr13_fa2_qrow32_byte_summary(
+                    clean_lse, poison_lse[..., :real_rows]
+                ),
+                "shadow_rows": [real_rows, _FR13_FA2_QROW32_LIVE_AB_CANONICAL_ROWS],
+                "shadow_seqused_k": 0,
+                "shadow_block_table_page": (
+                    _FR13_FA2_QROW32_LIVE_AB_POISON_BLOCK_ID
+                ),
+                "shadow_query_fill": "nan",
+            }
+            total_poison_output_mismatches += int(
+                poison_summary["output"]["raw_byte_mismatches"]
+            )
+            total_poison_lse_mismatches += int(
+                poison_summary["lse"]["raw_byte_mismatches"]
+            )
+            candidate_out = clean_out
+            candidate_lse = clean_lse
+        else:
+            candidate_buf = torch.empty_like(bundle["query"])
+            candidate_out, candidate_lse = _fr13_fa2_qrow32_live_ab_call(
+                bundle, candidate_buf, candidate=True
+            )
+            torch.cuda.synchronize()
         if stock_out.dtype != torch.bfloat16 or candidate_out.dtype != torch.bfloat16:
             raise RuntimeError("FR13 qrow32 live gate output is not BF16")
         if stock_lse.dtype != torch.float32 or candidate_lse.dtype != torch.float32:
@@ -4726,9 +5007,9 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
         output_summary = _fr13_fa2_qrow32_byte_summary(stock_out, candidate_out)
         lse_summary = _fr13_fa2_qrow32_byte_summary(stock_lse, candidate_lse)
         slot_records = []
-        for slot in range(4):
-            begin = slot * 32
-            end = begin + 32
+        for slot in range(width):
+            begin = slot * rows
+            end = begin + rows
             slot_records.append(
                 {
                     "slot": slot,
@@ -4750,22 +5031,51 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
                 "output": output_summary,
                 "lse": lse_summary,
                 "slots": slot_records,
+                "poisoned_shadow": poison_summary,
             }
         )
 
     if len(tree_bias_sha256) != 1:
         raise RuntimeError("FR13 qrow32 physical32 mask differs across layers")
-    passed = total_output_mismatches == 0 and total_lse_mismatches == 0
+    passed = (
+        total_output_mismatches == 0
+        and total_lse_mismatches == 0
+        and total_poison_output_mismatches == 0
+        and total_poison_lse_mismatches == 0
+        and not shadow_failures
+    )
     record = {
         "schema": "fr13.fixed32.fa2_qrow32_live_paged_exact4_ab.v1",
         "status": "PASS" if passed else "FAIL",
         "suite": "SWE-Verified",
         "task_ids": list(task_ids),
         "subset_sha256": _FR13_FA2_QROW32_EXACT4_SUBSET_SHA256,
-        "concurrency": 4,
-        "batch_size": 4,
+        "concurrency": width,
+        "batch_size": width,
         "physical_rows_per_slot": 32,
-        "total_query_rows": 128,
+        "total_query_rows": real_rows,
+        # What the .SO actually saw, which at width 3 is not what the runtime
+        # served. Disclosing both is the whole point of the padded arm.
+        "padded_to_canonical_width": bool(padded),
+        "canonical_width": _FR13_FA2_QROW32_LIVE_AB_CANONICAL_WIDTH,
+        "canonical_query_rows": (
+            _FR13_FA2_QROW32_LIVE_AB_CANONICAL_ROWS if padded else real_rows
+        ),
+        "shadow_slot": (
+            _FR13_FA2_QROW32_LIVE_AB_CANONICAL_WIDTH - 1 if padded else None
+        ),
+        "shadow_seqused_k": 0 if padded else None,
+        "shadow_block_table_page": (
+            _FR13_FA2_QROW32_LIVE_AB_NULL_BLOCK_ID if padded else None
+        ),
+        "poisoned_shadow_arm": bool(padded),
+        "poisoned_shadow_output_raw_byte_mismatches": (
+            total_poison_output_mismatches if padded else None
+        ),
+        "poisoned_shadow_lse_raw_byte_mismatches": (
+            total_poison_lse_mismatches if padded else None
+        ),
+        "shadow_contract_failures": sorted(shadow_failures),
         "fixed32_mode": fixed32_mode,
         "candidate_arm": candidate_arm,
         "selector_sentinel": int(candidate_contract["sentinel"]),
@@ -4784,13 +5094,13 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
         "stock_calls": len(layer_records),
         "candidate_calls": len(layer_records),
         "operands": {
-            "query_shape": [128, 24, 256],
+            "query_shape": [real_rows, 24, 256],
             "query_start_loc": shared_q_start,
             "seq_lens": shared_seq_lens,
             "suffix_start_mod64": [
                 (length - 32) % 64 for length in shared_seq_lens
             ],
-            "slot_coverage": [0, 1, 2, 3],
+            "slot_coverage": list(range(width)),
             "key_cache_tail_shape": [1024, 4, 256],
             "tree_bias_shape": list(next(iter(graph.values()))["tree_bias"].shape),
             "tree_bias_sha256": next(iter(tree_bias_sha256)),
@@ -4798,24 +5108,42 @@ def _fr13_fa2_qrow32_live_ab_replay(graph_id, runtime_mode, batch_size):
         "output_raw_byte_mismatches": total_output_mismatches,
         "lse_raw_byte_mismatches": total_lse_mismatches,
         "layers": layer_records,
-        "incumbent_dispatch": "stock FA2 exact geometry; no fallback",
-        "candidate_dispatch": candidate_contract["candidate_dispatch"],
+        "incumbent_dispatch": (
+            "stock FA2 native width-%d geometry; no fallback" % width
+            if padded
+            else "stock FA2 exact geometry; no fallback"
+        ),
+        "candidate_dispatch": (
+            candidate_contract["candidate_dispatch"] + "; padded to canonical "
+            "width 4 with a zero-key shadow request in slot 3"
+            if padded
+            else candidate_contract["candidate_dispatch"]
+        ),
         "served_return": "stock captured graph output unchanged",
         "fallback_allowed": False,
         "performance_measurement": False,
     }
-    _fr13_fa2_qrow32_live_ab_write(record)
+    _fr13_fa2_qrow32_live_ab_write(record, batch_size=width)
     if not passed:
         raise RuntimeError(
             "FR13 qrow32 live paged exact4 byte A/B mismatch: "
+            f"width={width} "
             f"output_bytes={total_output_mismatches} "
-            f"lse_bytes={total_lse_mismatches}"
+            f"lse_bytes={total_lse_mismatches} "
+            f"poisoned_output_bytes={total_poison_output_mismatches} "
+            f"poisoned_lse_bytes={total_poison_lse_mismatches} "
+            f"shadow_failures={sorted(shadow_failures)!r}"
         )
+    _FR13_FA2_QROW32_LIVE_AB_WIDTHS_PASSED.add(width)
     _FR13_FA2_QROW32_LIVE_AB_PASSED = True
     logger.warning(
-        "[FR13_FA2_QROW32_LIVE_PAGED_AB] PASS mode=%s layers=16 slots=4 "
-        "output_byte_mismatches=0 lse_byte_mismatches=0 stock_served=1",
+        "[FR13_FA2_QROW32_LIVE_PAGED_AB] PASS mode=%s width=%d layers=16 "
+        "slots=%d output_byte_mismatches=0 lse_byte_mismatches=0 "
+        "poisoned_shadow_mismatches=%d stock_served=1",
         fixed32_mode,
+        width,
+        width,
+        total_poison_output_mismatches + total_poison_lse_mismatches,
     )
 
 

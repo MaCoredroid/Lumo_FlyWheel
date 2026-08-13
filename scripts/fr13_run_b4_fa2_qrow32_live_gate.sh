@@ -15,6 +15,13 @@ cd "$REPO"
 PYTHON_BIN=${PYTHON_BIN:-/home/mark/lumoFlyWheel-b4-compactionfix-rerun/.venv/bin/python}
 FIXED32_MODE=${FR13_QROW32_FIXED32_MODE:-hydra27_fixed32}
 LIVE_AB_ARM=${FR13_QROW32_LIVE_AB_ARM:-qrow32}
+# FR13_FA2_QROW32_B34_PADDED (Mark's ruling 2026-08-13). Default 0 keeps this
+# runner byte-for-byte the sealed width-4 gate. At 1 the same run ALSO gates
+# the width-3 FULL graph, served to the sealed .so by padding to the canonical
+# width-4 geometry with a zero-key shadow request, under a poisoned-shadow
+# variant. It writes a SECOND result file beside the width-4 one; the width-4
+# result and its verification are untouched.
+LIVE_AB_B3=${FR13_QROW32_LIVE_AB_B3:-0}
 FA2_HEAD=${FR13_QROW32_FA2_HEAD:-}
 SOURCE_CLOSURE_SHA256=${FR13_QROW32_SOURCE_CLOSURE_SHA256:-}
 FA2_SOURCE=${FR13_QROW32_FA2_SOURCE:-}
@@ -71,6 +78,17 @@ case "$LIVE_AB_ARM" in
     exit 2
     ;;
 esac
+case "$LIVE_AB_B3" in
+  0) ;;
+  1)
+    [[ "$LIVE_AB_ARM" == "gqa_pair" ]] \
+      || { echo "the b3 padded arm is only de-risked for gqa_pair" >&2; exit 2; }
+    ;;
+  *)
+    echo "FR13_QROW32_LIVE_AB_B3 must be 0 or 1" >&2
+    exit 2
+    ;;
+esac
 ARM="${FIXED32_MODE}_fa2_qrow32_gate_${TAG}"
 ARMDIR="$RUNROOT_ABS/$ARM"
 
@@ -111,9 +129,9 @@ source scripts/fr13_fixed32_floor_timers_seq.sh
 unset -f run_variant
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_exact4_b4_fa2_qrow32_byte_diagnostic\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nreference_always_served=1\ntopology=%s\nlogical_topology=%s\ntask_ids=%s\nsubset_sha256=%s\nbatch_size=4\nconcurrency=4\nphysical_rows_per_slot=32\ntotal_query_rows=128\ndraft_vocab_k=65536\ndraft_vocab_root=1\ncandidate_arm=%s\ncandidate_so_sha256=%s\ncandidate_so_size=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\nsource_commit=%s\nrunner_sha256=%s\nlauncher_pid=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b4_fa2_qrow32_byte_diagnostic\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nreference_always_served=1\ntopology=%s\nlogical_topology=%s\ntask_ids=%s\nsubset_sha256=%s\nbatch_size=4\nconcurrency=4\nphysical_rows_per_slot=32\ntotal_query_rows=128\ndraft_vocab_k=65536\ndraft_vocab_root=1\ncandidate_arm=%s\npadded_b3_arm=%s\ncandidate_so_sha256=%s\ncandidate_so_size=%s\nfa2_head=%s\nfa2_source_closure_sha256=%s\nsource_commit=%s\nrunner_sha256=%s\nlauncher_pid=%s\nstarted=%s\n' \
   "$FIXED32_MODE" "$LOGICAL_TOPOLOGY" "$TASK_IDS" "$SUBSET_SHA256" \
-  "$LIVE_AB_ARM" "$CANDIDATE_SHA256" "$CANDIDATE_BYTES" "$FA2_HEAD" \
+  "$LIVE_AB_ARM" "$LIVE_AB_B3" "$CANDIDATE_SHA256" "$CANDIDATE_BYTES" "$FA2_HEAD" \
   "$SOURCE_CLOSURE_SHA256" "$SOURCE_COMMIT" "$RUNNER_SHA256" "$$" \
   "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/launcher_meta.txt"
 
@@ -158,6 +176,7 @@ if env \
     FR13_FA2_QROW16_PRODUCTION=0 \
     FR13_FA2_QROW32_LIVE_PAGED_AB=1 \
     FR13_FA2_QROW32_LIVE_PAGED_AB_ARM="$LIVE_AB_ARM" \
+    FR13_FA2_QROW32_LIVE_PAGED_AB_B3="$LIVE_AB_B3" \
     FR13_FA2_QROW32_LIVE_PAGED_AB_TASK_IDS="$TASK_IDS" \
     FR13_FA2_QROW32_LIVE_PAGED_AB_SUBSET_SHA256="$SUBSET_SHA256" \
     FR13_FA2_QROW32_LIVE_PAGED_AB_JSON=/logs/fr13_fa2_qrow32_live_paged_ab.json \

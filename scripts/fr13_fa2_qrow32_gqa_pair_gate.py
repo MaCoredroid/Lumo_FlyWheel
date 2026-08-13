@@ -65,7 +65,19 @@ SOURCE_CLOSURE_SHA256 = (
 )
 ARM_SCHEMA = "fr13.fixed32.fa2_qrow32_gqa_pair_b4_live_verification.v1"
 DUAL_SCHEMA = "fr13.fixed32.fa2_qrow32_gqa_pair_b4_dual_gate.v1"
+B3_ARM_SCHEMA = (
+    "fr13.fixed32.fa2_qrow32_gqa_pair_b3_padded_live_verification.v1"
+)
 HEX = frozenset("0123456789abcdef")
+
+# FR13_FA2_QROW32_B34_PADDED (Mark's ruling 2026-08-13). The width-3 arm's
+# numbers, in one place so the verifier and the record cannot disagree.
+B3_WIDTH = 3
+CANONICAL_WIDTH = 4
+ROWS_PER_SLOT = 32
+B3_REAL_ROWS = B3_WIDTH * ROWS_PER_SLOT           # 96
+CANONICAL_ROWS = CANONICAL_WIDTH * ROWS_PER_SLOT  # 128
+NULL_BLOCK_ID = 0
 
 
 class GateError(ValueError):
@@ -300,6 +312,182 @@ def verify_arm(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _require_identical_summary(value: Any, *, label: str) -> None:
+    """A raw-byte summary whose two sides are the SAME bytes, whatever they are.
+
+    Used for the poisoned-vs-clean shadow comparison, where the requirement is
+    bit-identity between two candidate runs rather than agreement with a
+    pinned stock digest.
+    """
+    if not isinstance(value, dict) or value.get("raw_byte_mismatches") != 0:
+        raise GateError(f"{label} is not bit-identical")
+    left = value.get("stock_sha256")
+    right = value.get("candidate_sha256")
+    if (
+        not isinstance(left, str)
+        or len(left) != 64
+        or any(char not in HEX for char in left)
+        or right != left
+    ):
+        raise GateError(f"{label} digest identity drifted")
+
+
+def verify_arm_b3(args: argparse.Namespace) -> dict[str, Any]:
+    """The width-3 PADDED arm: real rows equal, shadow provably inert.
+
+    Three independent claims, all of which must hold:
+
+      1. output[0:96] and softmax_lse[:, 0:96] are byte-identical between the
+         NATIVE width-3 stock call and the PADDED canonical width-4 candidate
+         call, on all 16 target layers.
+      2. The same real rows are byte-identical between the clean-shadow and
+         POISONED-shadow candidate runs. The poisoned run fills the shadow's Q
+         rows with NaN and points its block-table row at a page index that
+         cannot exist; under seqused_k[3] == 0 the kernel reads neither, so
+         any difference means the early exit was not taken.
+      3. The shadow half is exactly what the early return writes: zeros in the
+         32 O rows, +INF in the 32 LSE entries. The runtime asserts this on
+         device and reports the failures; an empty failure list is required.
+
+    The .so identity, the FA2 source closure and the C++ dispatch are checked
+    by validate_candidate exactly as for width 4 -- the widening is python-side
+    only and this verifier must not pretend otherwise.
+    """
+    identity = validate_candidate(args.candidate_so, args.fa2_source)
+    source_commit = _require_commit(args.source_commit, "source commit")
+    result, result_raw = _load_json(args.result, "GQA-pair b3 padded result")
+    expected = {
+        "schema": "fr13.fixed32.fa2_qrow32_live_paged_exact4_ab.v1",
+        "status": "PASS",
+        "batch_size": B3_WIDTH,
+        "concurrency": B3_WIDTH,
+        "physical_rows_per_slot": ROWS_PER_SLOT,
+        "total_query_rows": B3_REAL_ROWS,
+        "padded_to_canonical_width": True,
+        "canonical_width": CANONICAL_WIDTH,
+        "canonical_query_rows": CANONICAL_ROWS,
+        "shadow_slot": CANONICAL_WIDTH - 1,
+        "shadow_seqused_k": 0,
+        "shadow_block_table_page": NULL_BLOCK_ID,
+        "poisoned_shadow_arm": True,
+        "poisoned_shadow_output_raw_byte_mismatches": 0,
+        "poisoned_shadow_lse_raw_byte_mismatches": 0,
+        "shadow_contract_failures": [],
+        "candidate_arm": CANDIDATE_ARM,
+        "candidate_so_sha256": CANDIDATE_SHA256,
+        "candidate_so_size": CANDIDATE_SIZE,
+        "draft_vocab_k": 65536,
+        "draft_vocab_root": 1,
+        "fa2_head": FA2_HEAD,
+        "fa2_source_closure_sha256": SOURCE_CLOSURE_SHA256,
+        "fixed32_mode": args.fixed32_mode,
+        "runtime_mode": "FULL",
+        "layer_count": 16,
+        "output_raw_byte_mismatches": 0,
+        "lse_raw_byte_mismatches": 0,
+        "selector_sentinel": FIXED32_QUERY_GQA_PAIR32_BATCH_STRIDE_SENTINEL,
+        "source_commit": source_commit,
+        "fallback_allowed": False,
+        "performance_measurement": False,
+        "served_return": "stock captured graph output unchanged",
+        "task_ids": list(qrow32_gate.TASK_IDS),
+        "subset_sha256": qrow32_gate.EXACT4_SUBSET_SHA256,
+    }
+    for key, value in expected.items():
+        if result.get(key) != value:
+            raise GateError(f"GQA-pair b3 padded result {key} drifted")
+    operands = result.get("operands")
+    if not isinstance(operands, dict) or (
+        operands.get("query_shape") != [B3_REAL_ROWS, 24, 256]
+        or operands.get("slot_coverage") != list(range(B3_WIDTH))
+        or operands.get("query_start_loc")
+        != list(range(0, B3_REAL_ROWS + ROWS_PER_SLOT, ROWS_PER_SLOT))
+    ):
+        raise GateError("GQA-pair b3 padded operand geometry drifted")
+    layers = result.get("layers")
+    if not isinstance(layers, list) or len(layers) != 16:
+        raise GateError("GQA-pair b3 padded layer coverage drifted")
+    for layer in layers:
+        layer_name = layer["layer_name"]
+        _require_summary(
+            layer.get("output"),
+            label=f"{layer_name} b3 output",
+            dtype="torch.bfloat16",
+            shape=[B3_REAL_ROWS, 24, 256],
+            byte_count=B3_REAL_ROWS * 24 * 256 * 2,
+        )
+        _require_summary(
+            layer.get("lse"),
+            label=f"{layer_name} b3 LSE",
+            dtype="torch.float32",
+            shape=[24, B3_REAL_ROWS],
+            byte_count=24 * B3_REAL_ROWS * 4,
+        )
+        slots = layer.get("slots")
+        if not isinstance(slots, list) or len(slots) != B3_WIDTH:
+            raise GateError(f"{layer_name} b3 slot coverage drifted")
+        for slot in slots:
+            slot_id = slot["slot"]
+            _require_summary(
+                slot.get("output"),
+                label=f"{layer_name} b3 slot {slot_id} output",
+                dtype="torch.bfloat16",
+                shape=[ROWS_PER_SLOT, 24, 256],
+                byte_count=ROWS_PER_SLOT * 24 * 256 * 2,
+            )
+            _require_summary(
+                slot.get("lse"),
+                label=f"{layer_name} b3 slot {slot_id} LSE",
+                dtype="torch.float32",
+                shape=[24, ROWS_PER_SLOT],
+                byte_count=24 * ROWS_PER_SLOT * 4,
+            )
+        poisoned = layer.get("poisoned_shadow")
+        if not isinstance(poisoned, dict) or (
+            poisoned.get("shadow_rows") != [B3_REAL_ROWS, CANONICAL_ROWS]
+            or poisoned.get("shadow_seqused_k") != 0
+            or poisoned.get("shadow_query_fill") != "nan"
+            or not isinstance(poisoned.get("shadow_block_table_page"), int)
+            or int(poisoned["shadow_block_table_page"]) == NULL_BLOCK_ID
+        ):
+            raise GateError(f"{layer_name} poisoned-shadow declaration drifted")
+        _require_identical_summary(
+            poisoned.get("output"),
+            label=f"{layer_name} poisoned-shadow output",
+        )
+        _require_identical_summary(
+            poisoned.get("lse"), label=f"{layer_name} poisoned-shadow LSE"
+        )
+    logical_topology = {
+        "tail6_fixed32": "Tail23",
+        "hydra27_fixed32": "Hydra27",
+    }[args.fixed32_mode]
+    return {
+        "schema": B3_ARM_SCHEMA,
+        "status": "PASS",
+        "fixed32_mode": args.fixed32_mode,
+        "logical_topology": logical_topology,
+        **identity,
+        "source_commit": source_commit,
+        "task_ids": list(qrow32_gate.TASK_IDS),
+        "subset_sha256": qrow32_gate.EXACT4_SUBSET_SHA256,
+        "batch_size": B3_WIDTH,
+        "padded_to_canonical_width": True,
+        "canonical_width": CANONICAL_WIDTH,
+        "shadow_slot": CANONICAL_WIDTH - 1,
+        "layer_count": 16,
+        "slot_coverage": list(range(B3_WIDTH)),
+        "output_raw_byte_mismatches": 0,
+        "lse_raw_byte_mismatches": 0,
+        "poisoned_shadow_output_raw_byte_mismatches": 0,
+        "poisoned_shadow_lse_raw_byte_mismatches": 0,
+        "shadow_contract_failures": [],
+        "live_result_sha256": _sha256_bytes(result_raw),
+        "fallback_allowed": False,
+        "performance_measurement": False,
+    }
+
+
 def verify_dual(args: argparse.Namespace) -> dict[str, Any]:
     identity = validate_candidate(args.candidate_so, args.fa2_source)
     source_commit = _require_commit(args.source_commit, "source commit")
@@ -372,6 +560,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     arm.add_argument("--source-commit", required=True)
 
+    arm_b3 = commands.add_parser("verify-arm-b3")
+    arm_b3.add_argument("--result", type=Path, required=True)
+    arm_b3.add_argument("--candidate-so", type=Path, required=True)
+    arm_b3.add_argument("--fa2-source", type=Path, required=True)
+    arm_b3.add_argument(
+        "--fixed32-mode",
+        choices=("tail6_fixed32", "hydra27_fixed32"),
+        required=True,
+    )
+    arm_b3.add_argument("--source-commit", required=True)
+
     dual = commands.add_parser("verify-dual")
     dual.add_argument("--tail-verification", type=Path, required=True)
     dual.add_argument("--hydra-verification", type=Path, required=True)
@@ -387,6 +586,8 @@ def main() -> int:
         result = validate_candidate(args.candidate_so, args.fa2_source)
     elif args.command == "verify-arm":
         result = verify_arm(args)
+    elif args.command == "verify-arm-b3":
+        result = verify_arm_b3(args)
     else:
         result = verify_dual(args)
     print(json.dumps(result, ensure_ascii=True, sort_keys=True))
