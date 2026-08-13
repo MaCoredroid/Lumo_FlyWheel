@@ -73,7 +73,12 @@ START_STEP=${START_STEP:-1000}
 CAPTURE_STEPS=${CAPTURE_STEPS:-400}
 MIN_EVENTS_PER_STEP=${MIN_EVENTS_PER_STEP:-3.4}
 
-NSYS_SESSION_NAME="fr13-b4w4-${STAMP}-p$$"
+# The launcher pins this shape for run-uniqueness
+# (fr13_launch_forked_fa2_tree_server.sh:5040) and the pin is honoured rather
+# than widened: the stamp+pid pair is already unique per run, and relaxing a
+# uniqueness guard so a diagnostic can use a prettier name would weaken the
+# citable attribution path for no gain.
+NSYS_SESSION_NAME="fr13-fixed32-${STAMP}-p$$"
 NSYS_BIN=/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys
 METRICS_URL=${METRICS_URL:-http://127.0.0.1:9950/metrics}
 
