@@ -1,0 +1,361 @@
+{
+  "schema": "fr13.b4_padded_b4_derisk.v1",
+  "date": "2026-08-13",
+  "classification": "offline_source_and_banked_capture_analysis_only",
+  "cpu_only": true,
+  "gpu_touched": false,
+  "docker_launched": false,
+  "acceptance_valid": false,
+  "citable": false,
+  "diagnostic_only": true,
+  "branch": "codex/fr13-b4-prefill-gaps-20260813",
+  "parent": "results/fr13_b4_scope_widening_20260813/scope.json",
+  "grandparent": "results/fr13_b4_causal_gqa_scope_20260813/scope.json",
+  "question": "Four CPU-only de-risk verifications that can kill or clear the +25.6 ms/step width-3 FA2 lever (padded-B4) before any build, plus the dfwd rider.",
+
+  "headline": {
+    "verdict_padded_b4": "GO-WITH-CAVEATS",
+    "verdict_dfwd_rider": "GO-WITH-CAVEATS (rider only, never standalone)",
+    "one_line": "The plan survives, but ONE of its two load-bearing assumptions is FALSE and one is REPLACED BY SOMETHING BETTER. (1) The scope's hope that 'q and out are already slices of persistent buffers, so a zero-copy widen to [:128] may be available' is REFUTED at source: the b=3 FULL graph allocates query and output at exactly 96 rows per forward, so rows [96:128) do not exist and staging is MANDATORY -- measured cost 0.14-0.28 ms/step against a 25.59 ms/step gain. (2) The proposed shadow (seqused_k=64 + a pinned valid page) is strictly DOMINATED by seqused_k=0: at zero key rows the kernel takes an early exit that returns BEFORE the block table is ever formed and BEFORE Q is ever read, so the shadow reads NOTHING and writes deterministic zeros -- the NaN-poisoning risk and the pinned-page requirement both disappear.",
+    "second_order": "The wave model does NOT generalise to GDN -- but the reason it fails there is exactly the reason it holds for FA2, so the b<=2 zero-gain prediction survives for the FA2 launch specifically and for nothing else. The 0.3682 recovery fraction should be quoted as ~0.37 +/- 0.05, not to four figures."
+  },
+
+  "verification_1_buffer_extents": {
+    "question": "In the b=3 FULL graph, what are the actual backing allocations for query/output passed to the FA2 call? Do rows [96:128) exist?",
+    "answer": "EXACTLY-SIZED AT 96 ROWS. They are NOT slices of a 128-row persistent buffer. Rows [96:128) do not exist in either tensor; a zero-copy widen to [:128] is an out-of-bounds read of 393,216 B and an out-of-bounds WRITE of 393,216 B into the cudagraph's private memory pool. PADDING REQUIRES STAGING BUFFERS.",
+    "verdict": "THE SCOPE'S ZERO-COPY HOPE IS REFUTED",
+    "chain_of_custody": [
+      {
+        "step": 1,
+        "claim": "There are four separate FULL decode cudagraphs, one per width, and the width-3 graph runs at 96 tokens (not padded to 128).",
+        "source_evidence": "vllm/config/vllm.py:1473-1487 -- max_cudagraph_capture_size = min(max_num_seqs * decode_query_len * 2, 512) = min(4*32*2, 512) = 256, then min(max_num_batched_tokens=8192, 256) = 256. vllm/config/compilation.py:1426-1471 adjust_cudagraph_sizes_for_spec_decode rounds every default capture size UP to a multiple of uniform_decode_query_len = 1 + num_speculative_tokens = 32. vllm/v1/cudagraph_dispatcher.py:206-230 then restricts the FULL decode keys to sizes <= uniform_decode_query_len * max_num_seqs = 128, leaving exactly [32, 64, 96, 128]. vllm/v1/cudagraph_dispatcher.py:140-155 _create_padded_batch_descriptor: num_tokens_padded = _bs_to_padded_graph_size[num_tokens] (96 -> 96, an exact capture size), num_reqs = num_tokens_padded // 32 = 3.",
+        "measured_corroboration": "In the banked width-4 nsys sqlite, vllm::reshape_and_cache_flash_kernel (StringIds 219) inside fr13.fixed32.step but OUTSIDE fr13.fixed32.dfwd has gridX in {32, 64, 96, 128} with counts {64, 1184, 3792, 3600} = 16 target layers x {4, 74, 237, 225} steps. reshape_and_cache_flash's gridX is literally slot_mapping.size(0) = num_input_tokens (csrc/cache_kernels.cu). Width-3 steps run at 96 tokens. If they were padded into the 128-token graph the FA2 tree gridY would read 4; it reads 3 (grid (1,3,24), 3792 launches).",
+        "cited_paths": [
+          "/tmp/vllm_pristine_019/extracted/vllm/config/vllm.py:1473-1487",
+          "/tmp/vllm_pristine_019/extracted/vllm/config/compilation.py:1426-1471",
+          "/tmp/vllm_pristine_019/extracted/vllm/v1/cudagraph_dispatcher.py:140-155, 206-230",
+          "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_width4_nsys_20260813T030940Z/fr13_b4_width4_real_swe.sqlite"
+        ]
+      },
+      {
+        "step": 2,
+        "claim": "query and output are allocated fresh per attention layer per forward at exactly num_input_tokens rows. Neither is a slice of anything larger.",
+        "source_evidence": "vllm/model_executor/layers/attention/attention.py:493-508 -- 'num_tokens = query.shape[0]; output_shape = torch.Size((num_tokens, self.num_heads * self.head_size_v)); output = torch.empty(output_shape, ...); query = query.view(-1, self.num_heads, self.head_size); output = output.view(-1, self.num_heads, self.head_size_v)'. The producer of query is vllm/model_executor/models/qwen3_next.py:279-302 (Qwen3NextAttention.forward): qkv_proj -> split -> q_norm(...) -> rotary_emb -> self.attn(q, k, v). q is the q_norm output, a fresh [T, 24*256] tensor. T = num_input_tokens = 96 in the width-3 graph.",
+        "implication": "query is (96,24,256) bf16 contiguous (1,179,648 B), stride (6144,256,1). output is the same. Reading query rows [96:128) reads 393,216 B past the end of the allocation; writing output rows [96:128) writes 393,216 B past the end. Both allocations come from the cudagraph's private pool during capture (opaque_attention_op() is True on CUDA -- vllm/platforms/cuda.py:451 -- so the attention is an opaque custom op and the buffers are Inductor/allocator-managed and packed), so an OOB write silently corrupts a neighbouring tensor rather than faulting."
+      },
+      {
+        "step": 3,
+        "claim": "The C++ side independently forces the padded out= to be 128 rows.",
+        "source_evidence": "flash_api.cpp mha_varlen_fwd_impl: CHECK_SHAPE(q, total_q, num_heads, head_size) and CHECK_SHAPE(out, sizes[0], sizes[1], head_size) where sizes = q.sizes(). A 128-row q therefore REQUIRES a 128-row out; there is no way to pass a 128-row q with a 96-row out.",
+        "cited_paths": ["/home/mark/fr13_fa2_qrow32_gqa_pair_ilkv_sm121a_20260810/source/csrc/flash_attn/flash_api.cpp:712, 733-742"]
+      },
+      {
+        "step": 4,
+        "claim": "The rest of the padded operand set CAN be widened cheaply, because those ARE slices of persistent buffers.",
+        "source_evidence": "vllm/v1/worker/gpu_model_runner.py:2170-2172 -- query_start_loc = self.query_start_loc.gpu[:num_reqs_padded+1] and seq_lens = self.seq_lens[:num_reqs_padded] are slices of persistent CpuGpuBuffers sized max_num_reqs+1 and max_num_reqs. vllm/v1/worker/block_table.py:68-71, 203-205 -- self.block_table.gpu is a persistent (max_num_reqs, max_num_blocks_per_req) int32 tensor and get_device_tensor(n) returns [:n], so block_table.shape[1] is a run-constant. Only q and out have to be staged.",
+        "note": "gpu_model_runner.py:1990-1993 additionally guarantees self.seq_lens[num_reqs:].fill_(0) on every step, so a zero-copy torch.as_strided widen of seqused_k to (4,) would already carry a zero shadow entry. That is an EXTERNAL invariant; the reviewable patch pins its own (4,) buffer instead and copies [0:3], which is fail-closed and costs 12 bytes."
+      }
+    ],
+    "cost_model_correction": {
+      "scope_estimate": "~0.2-0.4 ms/step, '<1.6% overhead' -- offered as a fallback if the zero-copy widen were unavailable",
+      "measured_basis": "96 x 24 x 256 x 2 = 1,179,648 B per tensor. Per target layer: q-in copy (read+write) + out-back copy (read+write) = 4,718,592 B moved. 16 target layers = 75,497,472 B = 72 MiB per width-3 step.",
+      "wall": "0.28 ms/step at the banked measured 273 GB/s LPDDR5X (results/fr13_attack_ladder_analysis_20260808/README.md:14); 0.14 ms/step at the 546 GB/s the capture's TARGET_INFO_GPU reports. Take 0.14-0.28 ms/step.",
+      "graph_nodes": "4 extra copy nodes per layer (q, seqused_k, block_table, out) = 64 per step; the seqused_k and block_table copies can be hoisted to the first target layer only (the branch resolves at capture time), reducing this to 34.",
+      "staging_footprint": "2 x (128,24,256) bf16 = 3,145,728 B = 3.0 MiB total, shared across all 16 layers and both widths, plus a (4,K) int32 block table (~2 KB) and two tiny int32 vectors.",
+      "net": "+25.59 ms/step gross - 0.14 to 0.28 ms/step staging - 0.023 ms/step shadow stores = +25.3 to +25.4 ms/step net. Overhead is 0.6-1.2% of the gain. The scope's economics survive.",
+      "cross_layer_reuse_is_safe": "The 16 target layers run serially on one stream inside the FULL graph, so cudagraph capture records a linear dependency chain: stage-in -> FA2 -> copy-out -> next layer's stage-in. One shared pair of staging buffers is correct."
+    },
+    "implementation_hazard_found": {
+      "what": "The staging buffers MUST be allocated before any capture, but the selector never reaches a non-capturing width-3 decode: outside capture it takes the 'outside_capture' bypass (patcher line ~6146-6152), and inside capture an allocation would come from the graph's PRIVATE POOL and its address would be invalid once another graph owns that memory.",
+      "consequence": "A lazy allocate-on-first-use implementation is silently wrong. The reviewable patch fails closed (raises if asked to allocate while capturing) rather than allocating in the pool.",
+      "required_fix": "Allocate the staging from an explicit pre-capture hook. The fr10 patch already owns the capture lifecycle (_FR13_FIXED32_CAPTURE_CONTEXT is set/cleared around capture in scripts/fr10_phase4_patch_vllm_tree_gdn.py:5138-5191, 5507); the allocation belongs immediately before that, keyed on (device, block_columns).",
+      "severity": "implementation-blocking, not design-blocking"
+    },
+    "route_b_considered_and_rejected": {
+      "idea": "Delete 96 from the FULL decode capture sizes so width-3 steps dispatch into the existing 128-token graph. vLLM's own num_reqs padding would then supply everything for free: query/output at 128 rows, cu_seqlens_q of shape (5,), seqused_k of shape (4,) with seq_lens[3]=0 (gpu_model_runner.py:1993), block_table of shape (4,K) with row 3 = NULL_BLOCK_ID (gpu_model_runner.py:2138-2140), and descriptor.num_reqs == 4 so the existing selector engages with ZERO python changes.",
+      "why_rejected": "The whole step would then run at 128 tokens instead of 96 -- every GEMM, MoE, GDN scan and norm grows by 33%. The banked width-4 step wall is 411.26 ms against a ~362-369 ms width-3 step; the FA2 tree difference accounts for only 80.20 - 69.51 = 10.7 ms of that ~46 ms gap. Route B pays ~35 ms/step to save 25.6. STRICTLY DOMINATED.",
+      "why_it_is_still_useful": "It establishes vLLM's OWN padding convention as the reference for inertness -- seqused_k = 0, block_table row = NULL_BLOCK_ID = 0, query_start_loc entries repeated -- and it is that convention (seqused_k = 0) that verification 2 adopts in place of the scope's seqused_k = 64."
+    }
+  },
+
+  "verification_2_shadow_request_kv_geometry": {
+    "question": "Does the shadow request satisfy every relevant clause of _fr13_fa2_qrow32_b4_geometry_mismatches and the C++ TORCH_CHECKs as written? Which clauses see the shadow? What is a safe pinned page? Is the shadow observationally inert?",
+    "answer": "NO CLAUSE ANYWHERE SEES THE SHADOW. Neither the 33-clause C++ TORCH_CHECK nor the python geometry predicate dereferences a single seqused_k or block_table VALUE -- both inspect only pointers, dtypes, shapes and strides. The only code that can observe a malformed shadow is the kernel body. That is the fail-closed hazard, and it is why explicit shadow clauses are mandatory rather than optional.",
+    "verdict": "CLEARED, AND HARDENED: use seqused_k[shadow] = 0, NOT 64",
+    "clause_audit": {
+      "cpp_33_clause_check_flash_api_cpp_250_301": {
+        "clauses_the_shadow_touches": [
+          "params.b == 4 -- b is cu_seqlens_q.numel()-1; the padded cu_seqlens_q is (5,) so b = 4. SATISFIED by construction.",
+          "params.total_q == 128 -- total_q is q.size(0); the staged q is (128,24,256). SATISFIED.",
+          "params.seqlen_q == 32 and params.seqlen_q_rounded == 128 -- max_seqlen_q is passed as decode_meta.max_query_len = 32; round_multiple(32,128) = 128. SATISFIED, unchanged from b=4.",
+          "params.block_table != nullptr && params.block_table_batch_stride > 0 -- pointer and stride only. SATISFIED.",
+          "params.seqused_k != nullptr -- pointer only. SATISFIED.",
+          "params.cu_seqlens_k != nullptr -- the python wrapper synthesises dummy_cu_seqlens_k = torch.empty_like(cu_seqlens_q), so it follows the padded (5,) shape automatically (vllm_flash_attn/flash_attn_interface.py:240, 259). SATISFIED.",
+          "params.q_head_stride == 256, o_head_stride == 256 -- the staged buffers are contiguous (128,24,256). SATISFIED.",
+          "num_splits == 0 && force_split_kernel -- unchanged; force_split_kernel = paged_KV = true at flash_api.cpp:845. SATISFIED."
+        ],
+        "clauses_that_would_catch_a_malformed_shadow": "NONE. There is no value-level check on seqused_k or block_table anywhere in the 33 conjuncts.",
+        "shape_checks_in_mha_varlen_fwd_impl_that_the_padding_must_satisfy": [
+          "CHECK_SHAPE(block_table, batch_size, max_num_blocks_per_seq) -- so block_table MUST be widened to (4,K); a (3,K) table with b=4 raises. flash_api.cpp:720",
+          "CHECK_SHAPE(cu_seqlens_q, batch_size + 1) and CHECK_SHAPE(cu_seqlens_k, batch_size + 1) -- both (5,). flash_api.cpp:722-724",
+          "CHECK_SHAPE(seqused_k_, batch_size) -- (4,). flash_api.cpp:730",
+          "CHECK_SHAPE(out, sizes[0], sizes[1], head_size) -- out must be 128 rows. flash_api.cpp:739"
+        ]
+      },
+      "python_predicate_fr13_fa2_qrow32_b4_geometry_mismatches_patcher_5908_6003": {
+        "five_b_dependent_clauses": [
+          "query.shape == (128,24,256) -- SATISFIED by the staged buffer with NO change, on the padded route.",
+          "cu_seqlens_q.shape == (5,) -- SATISFIED by the padded vector with NO change.",
+          "seqused_k.shape == (4,) -- SATISFIED by the padded vector with NO change.",
+          "block_table.shape[0] == 4 -- SATISFIED by the padded table with NO change.",
+          "tree_bias.shape in ((32,32),(4,32,32)) -- ALREADY SATISFIED AT b=3 WITH NO CHANGE AT ALL: TreeAttentionMetadata.tree_attn_bias is a single 2-D (32,32) mask shared by every request (vllm/v1/attention/backends/tree_attn.py:171-179, 146, 214), and _fr13_fa2_qrow32_b4_candidate_tree_bias already does tree_bias.unsqueeze(0).expand(4,-1,-1) for the 2-D case (patcher 6024-6035). The mask is b-INDEPENDENT."
+        ],
+        "consequence": "On the PADDED route the five clauses need no b-parameterisation to admit the call -- the padded operands are canonical b=4 by construction. What they need is (a) b-parameterisation to validate the INBOUND width-3 operands before padding, and (b) a NEW predicate over the OUTBOUND padded operands, because that is the only place the shadow can be inspected at all. The reviewable patch does both.",
+        "note": "The scope's framing ('five b-dependent clauses become b-parameterised') is correct for the NATIVE C++ widening route, where b=3 shapes reach the .so. On the padded route it is the inbound half of the job."
+      },
+      "kernel_body": {
+        "what_reads_the_shadow": "StaticPagedQueryBlockInfo ctor reads params.seqused_k[bidb] (flash_fwd_kernel.h:78). That is the ONLY read of shadow metadata that happens unconditionally.",
+        "early_exit": "compute_attn_1rowblock_splitkv, flash_fwd_kernel.h:750-855. With num_splits=1: n_blocks_per_split = ceil_div(seqlen_k,64); n_block_min = 0; n_block_max = min(ceil_div(seqlen_k,64), n_blocks_per_split). At seqused_k = 0 both are 0, so 'if (n_block_min >= n_block_max)' at :759 fires. NOTE this branch is NOT guarded by (Is_causal || Is_local || !Is_even_MN) in the splitkv path, unlike the non-splitkv path at :249 -- it fires unconditionally.",
+        "what_the_early_exit_does": "Builds gO from static_query_offset (rows [96:128), heads bidh and bidh+1, via the kHeadsPerCTA==2 layout at :769-803) and gLSE at softmax_lse_ptr + bidh*total_q + bidb*32 (:804-829); clears the register tile; copies zeros out with the M-bounds check disabled (kStaticQueryTile is true, :846); writes +INFINITY to the 32 LSE entries (:850-853); RETURNS at :854.",
+        "what_the_early_exit_never_touches": "block_table is first FORMED at flash_fwd_kernel.h:862-875 and gQ at :898-919 -- both AFTER the return. So at seqused_k = 0 the shadow reads NO query rows, NO K page, NO V page, NO block table entry and NO tree_bias entry.",
+        "consequences": [
+          "The scope's risk 'Stale Q rows 96:128 may contain NaN/Inf' is ELIMINATED, not mitigated: Q is never read for the shadow.",
+          "The scope's requirement 'block_table[3][0] must be a valid page index' is ELIMINATED: the block table row is never dereferenced.",
+          "The shadow's output is deterministic (exact zeros in O, +INF in LSE), not garbage."
+        ]
+      }
+    },
+    "recommended_shadow_vs_scope_shadow": {
+      "scope_proposal": "seqused_k[3] = 64 (one K block), block_table row 3 = a pinned valid page",
+      "recommendation": "seqused_k[3] = 0, block_table row 3 = NULL_BLOCK_ID anyway (pinned, never read)",
+      "why_zero_dominates": [
+        "Reads nothing, so no NaN/Inf exposure and no dependence on page contents.",
+        "Never dereferences the block table, so the pinned-page requirement becomes belt-and-braces rather than load-bearing.",
+        "Cheaper: the 12 shadow CTAs store 32,768 B each (32 rows x 2 heads x 256 x 2 B) = 393,216 B per launch = 23 us per step across 16 layers at 273 GB/s, then retire. At seqused_k=64 they would additionally stage a full 64-row K and V tile and run a masking step.",
+        "It is vLLM's OWN convention for cudagraph padding slots (gpu_model_runner.py:1993 seq_lens[num_reqs:].fill_(0)), so the design does not invent a new inertness contract."
+      ],
+      "wave_arithmetic_is_unchanged": "grid is compile-time (3,4,4) = 48 CTAs = exactly one 48-CTA wave (flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu:90-93). At width 3, 36 CTAs do real work and 12 retire immediately; with 1 CTA/SM each real CTA still owns its own SM, so the critical path equals a hypothetical native (3,3,4) launch. The padding is wall-neutral."
+    },
+    "safe_pinned_page_source": {
+      "answer": "NULL_BLOCK_ID = 0 -- vLLM's reserved null block.",
+      "why_it_is_always_allocated": "vllm/v1/core/block_pool.py:173-177: 'self.null_block = self.free_block_queue.popleft(); self.null_block.is_null = True' -- block index 0 is popped out of the free queue at BlockPool construction and is never handed to a request. vllm/v1/core/kv_cache_utils.py:1111 guarantees num_blocks >= 1 for exactly this reason. It is a real page inside the allocated kv_cache tensor, so naming it is always an in-bounds address.",
+      "vllm_uses_it_for_the_same_purpose": "vllm/v1/worker/gpu_model_runner.py:2138-2140 -- 'Fill unused block table entries with NULL_BLOCK_ID (null block) for CUDAGraph padding. Block 0 is reserved for padding.' blk_table_tensor[num_reqs:num_reqs_padded].fill_(NULL_BLOCK_ID).",
+      "constant": "/tmp/vllm_pristine_019/extracted/vllm/v1/attention/backends/utils.py:45 -- NULL_BLOCK_ID = 0",
+      "residual_caveat": "Its CONTENTS are unspecified (padded tokens carry PAD_SLOT_ID = -1 and are skipped by reshape_and_cache, so the attention KV at page 0 is whatever the cache allocation left there). Irrelevant under the seqused_k=0 design because it is never read; under seqused_k=64 it would be read, and even NaN there would stay confined to the shadow's own rows because there is no cross-CTA reduction (Split=false, no combine launch)."
+    },
+    "downstream_consumer_trace": {
+      "question": "Does anything in the b=3 step read output rows [96:128)?",
+      "answer": "NO -- twice over.",
+      "argument_1_by_construction": "On the staging design, FA2 writes rows [96:128) of a PRIVATE buffer that only the FR13 helper holds a reference to. The copy-back is output[:96].copy_(staged_out[:96]). Rows [96:128) of the staging buffer are dead on every path.",
+      "argument_2_the_rows_do_not_exist_in_the_real_tensor": "The full consumer chain in the width-3 FULL graph is: (i) flash_attn_varlen_func writes out=output[:96] (patcher production_replacement, emitted into TreeAttentionImpl.forward); (ii) Attention.forward returns output.view(-1, hidden_size), a (96, 6144) view (vllm/model_executor/layers/attention/attention.py:549); (iii) Qwen3NextAttention.forward does attn_output = attn_output * gate with gate of shape (96,6144), then output[:], _ = self.o_proj(attn_output) (vllm/model_executor/models/qwen3_next.py:302-308). Every tensor in the chain has exactly 96 rows. There is no row 96..127 anywhere for a consumer to read.",
+      "lse": "softmax_lse is allocated INSIDE the op as torch::empty({num_heads, total_q}) = (24,128) fp32 (flash_api.cpp:756) and the patched decode call discards the return value. The shadow's LSE entries are indices bidh*128 + 96..127; the real entries are bidh*128 + 0..95. No aliasing, no consumer.",
+      "no_cross_cta_hazard": "The candidate launches a plain kernel<<<grid,...>>> with cluster (1,1,1), Split=false and no combine launch (flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu:90-102). Shadow CTAs exiting early cannot desynchronise anything because there is no grid-wide barrier and no reduction across bidb."
+    },
+    "what_the_byte_gate_must_still_prove": [
+      "output[0:96] and softmax_lse[:, 0:96] are byte-identical between a native-b3 stock replay and the padded-b4 candidate replay, on all 16 target layers, on the pinned evidence set.",
+      "The poisoned-shadow variant is now CHEAPER to state: fill the staging query rows [96:128) with NaN AND set staged block_table row 3 to a deliberately absurd page index. Under seqused_k=0 both are unread, so the byte result must be bit-identical to the clean-shadow run. That is a much sharper test than the scope's version, because it fails loudly if the early exit is ever not taken.",
+      "The staging copy-back must be shown to be captured INTO the width-3 graph (a graph-node count assertion at capture end), not executed eagerly."
+    ]
+  },
+
+  "verification_3_mtp_dfwd_geometry": {
+    "question": "Does the draft head's FA2 call geometry satisfy the sealed kernel's TORCH_CHECK set if handed a lower-triangular tagged mask? If any clause fails structurally, the rider dies free.",
+    "answer": "NO CLAUSE FAILS STRUCTURALLY. All 49 conjuncts plus the interface precondition are SATISFIED (34) or SATISFIABLE-BY-PYTHON (15). The crux -- the MTP head's KV cache geometry -- is RESOLVED and is BIT-IDENTICAL to the 16 target layers, because the draft head shares their single full-attention KV cache group.",
+    "verdict": "RIDER_ALIVE_WITH_CAVEATS",
+    "most_binding_constraint": "params.b == 4 && params.total_q == 128 (reinforced by set_params_tree_bias's own tree_bias.size(0) == batch_size at flash_api.cpp:433). The dfwd b distribution over the 540 in-step draft passes is {4: 225, 3: 237, 2: 74, 1: 4} -- b=4 is native in only 41.7% of steps, so the rider needs the SAME padded-B4 staging the decode lever needs.",
+    "crux_mtp_kv_cache_geometry": {
+      "result": "IDENTICAL TO THE TARGET LAYERS -- h=24, h_k=4, d=256, bf16, page_block_size=1024, k/v strides (2*1024*4*256, 4*256, 256, 1). The rider does NOT die here.",
+      "model": "Qwen/Qwen3.6-27B-FP8 (model_registry.yaml:13-22; launcher scripts/fr13_launch_forked_fa2_tree_server.sh:6292), snapshot /home/mark/shared/models/qwen3.6-27b-fp8. text_config: 64 layers = 48 linear_attention (GDN) + 16 full_attention at 3,7,...,63; num_attention_heads 24; num_key_value_heads 4; head_dim 256 (EXPLICIT -- 5120/24 is not an integer, so it is not derived); attn_output_gate true; mtp_num_hidden_layers 1.",
+      "the_draft_head_is_a_full_transformer_layer_of_the_same_architecture": [
+        "SOURCE: Qwen3_5MultiTokenPredictor builds Qwen3_5DecoderLayer(vllm_config, layer_type='full_attention') -- vllm/model_executor/models/qwen3_5_mtp.py:98-104 -- which dispatches to Qwen3NextAttention(config, ...) -- vllm/model_executor/models/qwen3_5.py:143-150 -- reading the SAME config object as the target's full-attention layers (vllm/model_executor/models/qwen3_next.py:207-256).",
+        "CHECKPOINT: /home/mark/shared/models/qwen3.6-27b-fp8/mtp.safetensors carries mtp.layers.0.self_attn.q_proj [12288,5120] (= 2*24*256, output-gated), k_proj [1024,5120] (= 4*256), v_proj [1024,5120], o_proj [5120,6144] (= 24*256), q_norm/k_norm [256]. No conv1d and no linear_attn weights, so it is NOT a GDN layer.",
+        "CAPTURE: all 540 dfwd FA2 launches have gridZ = 24 = params.h."
+      ],
+      "same_kv_cache_group_not_a_separate_one": {
+        "repo_assertion": "scripts/fr10_phase4_patch_vllm_tree_gdn.py:933 pins _FR13_FIXED32_DRAFTER_TREE_LAYER = 'mtp.layers.0.self_attn.attn'; :934-937 pins the 16 target names; :1720-1741 raises 'FR13 fixed32 KV16 full-attention layer ownership drift' unless exactly 17 layers are captured; :39389-39392 raises unless there is exactly ONE full-attention group.",
+        "independent_arithmetic_reproduction": "_get_kv_cache_groups_uniform_page_size (vllm/v1/core/kv_cache_utils.py:1038-1090) buckets {FullAttentionSpec: 17, MambaSpec: 48}; min = 17; 48 >= 17*1.5 so group_size = 17; mamba padding = 17 - 48%17 = 3, reproducing the boot log 'Add 3 padding layers, may waste at most 6.25%' (3/48). Page = 1024*2*4*256*2 = 4 MiB; 49,392,123,904 // 4 MiB // 17 = 692 blocks; 692//4 * 1024 = 177,152, reproducing the boot log 'GPU KV cache size: 177,152 tokens' TO THE TOKEN. Only group_size = 17 reproduces both lines.",
+        "drafter_uses_that_group": "EagleProposer.initialize_attn_backend selects the group containing the draft layers and takes that group's kv_cache_spec and block_size (vllm/v1/spec_decode/eagle.py:1643-1688), with validate_same_kv_cache_group asserting a single group (:1605-1626).",
+        "engine_flags": "--block-size 1024 --mamba-block-size 1024, no --kv-cache-dtype => auto => bf16 KV.",
+        "residual_uncertainty": "No boot line prints kv_cache_groups verbatim. The 17-in-1 conclusion rests on the repo's own fail-loud assertion plus exact numeric reproduction of both logged KV lines. A VLLM_LOGGING_LEVEL=DEBUG boot or the kv_cache_groups debug export (tests/test_vllm_debug_export_patch.py:255) would give a byte-level citation. FLAGGED, not blocking."
+      }
+    },
+    "clause_audit_summary": {
+      "total_conjuncts_audited": "49 plus one interface precondition",
+      "structurally_fails": "NONE",
+      "satisfied_as_is": "34 -- including every one of the k/v cache strides, page_block_size == 1024, h/h_k/d, q_head_stride and o_head_stride (row slicing query[a:b] preserves stride(-2) and stride(-1)), seqlen_q == 32 and seqlen_q_rounded == 128, is_seqlens_k_cumulative (hardcoded true, flash_api.cpp:150), unpadded_lse (hardcoded true for varlen, flash_api.cpp:792), !seqlenq_ngroups_swapped (requires max_seqlen_q == 1; it is 32), leftpad_k/cache_batch_idx/knew/vnew/p_ptr all null, p_dropout == 1.0f, softcap == 0.0f, force_split_kernel (paged_KV = true, flash_api.cpp:658 and :845).",
+      "satisfiable_by_python": "15 -- the tree_bias family (route through varlen_fwd_tree_bias with a tagged torch.empty_strided((4,32,32),(131092,32,1)) lower-triangular mask; rows/cols/strides/offsets are copied verbatim from the tensor at flash_api.cpp:437-444, and q_offset/k_offset are 0 because max_seqlen_q(32) > rows(32) is false), causal=False, and the b==4/total_q==128 pair.",
+      "two_findings_that_matter_most": [
+        "num_splits == 0 is STRUCTURALLY satisfied, not merely satisfied by luck: set_params_splitkv is called ONLY inside 'if (seqlenq_ngroups_swapped)' (flash_api.cpp:805-811), which is false here, so params.num_splits stays at its zero-initialised value. The python num_splits= argument is DEAD on this path -- even VLLM_BATCH_INVARIANT=1 would not break the clause. Corroborated by the capture: Split=false and ZERO combine kernels anywhere in the database.",
+        "window_size_right < 0 is COUPLED to causal: flash_api.cpp:687 sets window_size_right = 0 when is_causal. So causal=True fails clause 40 outright, and causal=False (which the rider requires anyway) fixes it. The two changes are the same change."
+      ]
+    },
+    "kernel_side_beyond_the_torch_check": {
+      "tree_bias_anchor_is_exactly_right": "apply_tree_bias computes context_len = binfo.actual_seqlen_k - 32 with the static 32-row tile (flash_fwd_kernel.h:146-156), and actual_seqlen_k = params.seqused_k[bidb] verbatim (flash_fwd_kernel.h:72-90). For the dfwd first pass seqused_k = ctx + 32: the drafter's first-pass common_attn_metadata is passed through UNMODIFIED (set_inputs_first_pass returns it untouched, eagle.py:656-678; the seq_lens -= num_rejected_tokens adjustment happens only AFTER the first forward, eagle.py:536-540), and the MTP layer writes its own 32 K/V at positions ctx..ctx+31 immediately before attending (one eager reshape_and_cache_flash at gridX = 32*b per dfwd, 540/540 in the capture). So context_len = ctx and the bias window is exactly the 32 self-columns.",
+      "n_masking_steps_difference_is_benign": "With Is_even_MN = false, Check_inf = Is_causal || Is_local || !Is_even_MN is TRUE in both instantiations, and the boundary mask still kills columns >= actual_seqlen_k. Work-wise, for Is_causal=true n_block_max = min(ceil_div(sk,64), ceil_div(64 + sk - 32, 64)) = ceil_div(sk,64) -- identical to the non-causal bound at seqlen_q = 32, m_block = 0. Causal pruning buys nothing here, so dropping it costs nothing. No row of tril(32,32) is all -inf, so no NaN.",
+      "static_traits_match": "StaticPagedKVBlockSize = 1024; StaticPagedKVStrides = {page 2*1024*4*256, row 4*256, head 256}; StaticQueryRows = 32; StaticQueryBatchLayout = {sequences 4, query_heads 24, kv_heads 4, per_kv 6}; StaticQueryHeadsPerCTA = 2 -- all exactly the MTP layer's geometry (flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu:7-40).",
+      "the_two_calls_are_indistinguishable_to_the_kernel": "At the params level the rider call differs from the already-sealed target call ONLY in pointer values and in the contents of seqused_k / block_table / tree_bias. Every shape, stride and flag is identical."
+    },
+    "capture_corroboration": {
+      "method": "NVTX -> cudaLaunch -> correlationId -> kernel (NOT timeline containment: 1.98 M of 3.58 M kernel rows are graph replays, so overlap attribution would have been wrong).",
+      "dfwd_fa2": "540 launches, exactly 1 per fr13.fixed32.dfwd range, 540/540, issued by EAGER cudaLaunchKernel. gridX = 1 (all 540), gridZ = 24 (all 540), gridY = b in {4: 225, 3: 237, 2: 74, 1: 4}. 128 threads / 98,304 B dynamic smem / 0 static / 255 regs.",
+      "target_fa2": "16 launches per fr13.fixed32.step range, issued by cudaGraphLaunch, grid (1, b, 24), IDENTICAL 128/98304/0/255. Same Flash_fwd_kernel_traits<256,64,64,4,false,false,bfloat16_t>. The only differing template bool is Is_causal.",
+      "max_seqlen_q_independently_re_verified": "gridX == 1 gives max_seqlen_q <= kBlockM = 64; reshape_and_cache_flash inside the dfwd has gridX == 32*b for 540/540 (its gridX is literally num_tokens). Together: max_seqlen_q == 32. The parent scope's measured claim is confirmed by an independent attribution method.",
+      "correction_to_the_parent_scope": "The parent listed only dfwd grids (1,4,24) and (1,3,24). b=2 (74 launches) and b=1 (4) also occur."
+    },
+    "cudagraph_status_of_the_rider_call": {
+      "finding": "The drafter is PIECEWISE and the dfwd FA2 call is EAGER. EagleProposer.initialize_cudagraph_keys forces CUDAGraphMode.PIECEWISE regardless of --compilation-config {'cudagraph_mode':'FULL_AND_PIECEWISE'} (vllm/v1/spec_decode/eagle.py:380-396); the capture confirms cudaLaunchKernel rather than cudaGraphLaunch.",
+      "why_this_is_good_news": "The call site is python-visible on every step, b varies per step, and staging buffers can be allocated lazily -- none of the capture-ordering hazard that verification 1 found for the decode lever applies here.",
+      "why_this_is_bad_news": "There is no graph_id, so the rider's byte gate cannot key on (graph_id, layer_name) the way the decode gate does. It needs a (forward_pass_index, layer_name) key -- the same plumbing the parent scope priced at 4-8 agent-hours for the mixed-pass target, though here it is ONE layer and ONE call per pass rather than 16 across a variable b."
+    },
+    "shadow_design_for_the_rider": {
+      "recommendation": "Use the SAME seqused_k[shadow] = 0 shadow that verification 2 establishes for the decode lever, not a clone of request 0.",
+      "why": "At zero key rows the kernel takes the early exit at flash_fwd_kernel.h:759 and returns before Q, K, V, the block table and the tree bias are ever touched. Cloning request 0's block_table row and seqused_k (the alternative considered) would make the shadow do a full real attention over ctx keys -- 1/4 of the launch's CTAs doing full work, which is NOT free and would eat a visible fraction of the rider's already-marginal return.",
+      "staging": "q_pad (128,24,256) bf16 and out_pad (128,24,256) bf16, copy in [0:32b] and copy out [0:32b]. At b=4 no staging is needed at all; at b=3 the copies are 2 x 1.18 MB against a ~5 ms kernel, i.e. under 0.2%.",
+      "also_needed": "a static cu_seqlens_q = [0,32,64,96,128] int32 (5,), a (4,) seqused_k with the shadow slot pinned at 0, a (4,K) block_table with the shadow row pinned at NULL_BLOCK_ID = 0, and fa_version pinned to 2 (the interface only reaches _vllm_fa2_C at fa_version == 2 -- flash_attn_interface.py:298; the capture proves get_flash_attn_version resolves to 2 today, but the rider should not depend on that)."
+    },
+    "economics": {
+      "calls_per_dfwd": "EXACTLY 1 (mtp_num_hidden_layers = 1), 540/540 -- against 16 per decode step for the target layers. The drafter's other attention is 4 graph-replayed Triton kernel_unified_attention_2d calls (the propose_tree levels), untouched by this rider.",
+      "gpu_time": "dfwd causal FA2 = 2.33 s of the window; the 16 target tree layers = 37.73 s. The rider is ~1/17 of the decode lever.",
+      "wave_eligible_share": "dfwd grids are (1,b,24) = 24b CTAs, so 2 waves at b=4 (96 CTAs, 225 launches, 1.113 s) and b=3 (72 CTAs, 237 launches, 1.018 s), and 1 wave at b=2 (48 CTAs) and b=1 (24 CTAs). Only b in {3,4} can pay.",
+      "expected_return": "(1.113 + 1.018) x 0.37 +/- 0.05 = 0.79 +/- 0.11 s = 0.219% +/- 0.030% of the 360.19 s window. 1.82 ms/step at width 4, 1.58 ms/step at width 3. This reproduces the parent scope's 0.218% on an independent reduction.",
+      "measurability": "NOT INDIVIDUALLY MEASURABLE. 1.82 ms/step is well below the sealed four-pass MDE of 4.20 ms (hydra27) / 6.42 ms (tail6). Rider only, never standalone -- unchanged from the parent scope's verdict."
+    },
+    "what_the_rider_still_costs": [
+      "Its own admission predicate at the PREFILL call site. The existing _fr13_fa2_qrow32_b4_production_begin precheck (scripts/fr13_patch_fa2_tree_bias.py:5908-6003) hooks only the decode branch and asserts query.shape == (128,24,256); the rider needs an equivalent at the prefill site with its own layer pin (mtp.layers.0.self_attn.attn).",
+      "Its own padded-B4 staging at the prefill site (b=4 native in only 225/540 dfwd passes).",
+      "A (forward_pass_index, layer_name) byte gate, because the dfwd is PIECEWISE and carries no graph_id.",
+      "It inherits the target pin wholesale: the rider is only ever live when the target's B4 geometry is live, because it uses the same sentinel on the same sealed kernel."
+    ],
+    "what_the_rider_does_NOT_cost": [
+      "No C++ change. The dispatch is purely data-driven on params.tree_bias_batch_stride == 0x20014 (flash_api.cpp:249-303).",
+      "No new kernel, no new TU, no rebuild, no re-seal.",
+      "No second sentinel and no second arm identity -- it is a 17th consumer of the identical (4,32,32)/(131092,32,1) tagged operand on the same kernel, and does not perturb the 16 target launches."
+    ]
+  },
+
+  "verification_4_gdn_wave_model_control": {
+    "question": "Does the GDN tree-scan family show a clean ~2.00x at its wave boundary, as FA2 does? If yes the wave model generalises and the b<=2 zero-gain prediction hardens.",
+    "answer": "NO. DOES_NOT_GENERALISE -- but the mechanism that makes it fail for GDN is exactly the mechanism that makes it hold for FA2, so the FA2-specific prediction survives and is better supported than before.",
+    "verdict": "GENERALISATION FAILS; FA2-CONFINED CLAIM HARDENS; THE 0.3682 FIGURE MUST LOSE THREE SIGNIFICANT DIGITS",
+    "pipeline_validation": "The subagent's independent reduction reproduces the banked FA2 per-launch means to 4 decimal places (out_of_step 1.94483 / 2.45296 / 3.90103 / 5.02365 vs the scope's 1.9449 / 2.4529 / 3.9011 / 5.0250; in_step 2.01175 / 2.57615 / 4.34405 / 5.01224 vs 2.0125 / 2.5762 / 4.3441 / 5.0123). The b-binning and step attribution in the parent scope are confirmed.",
+    "hardware_now_CERTIFIED_not_assumed": {
+      "source": "TARGET_INFO_GPU table in the capture itself",
+      "values": "smCount = 48, maxShmemPerSm = 102400 B, maxShmemPerBlockOptin = 101376 B, maxRegistersPerSm = 65536, maxWarpsPerSm = 48, maxBlocksPerSm = 24, cc 12.1, 2.418 GHz",
+      "fa2_occupancy_is_measured_not_modelled": "CUPTI_ACTIVITY_KIND_KERNEL.sharedMemoryExecuted = 102400 and sharedMemoryLimitConfig = 1 (opt-in max) for the FA2 tree kernel. One CTA consumes the ENTIRE per-SM carveout. Wave = 48 CTAs. The parent scope's occupancy premise is now certified by the capture rather than inferred."
+    },
+    "gdn_result": {
+      "structural_finding": "The deployed FR13 tree scan (_tree_gdn_path_kernel, src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:10021 def, :16350 launch) has grid (48, 16, {1,11}) with NO BATCH AXIS -- batch is expressed as 48b LAUNCHES per step per level, not as a larger grid. Its per-launch time is flat to +/-2% across b and its per-step total is exactly linear in b (1.00 / 2.02 / 3.06 / 4.04). It therefore cannot exhibit a wave boundary at all in b=1..4, and the batched variant _tree_gdn_path_kernel_fixed32_batch is not deployed.",
+      "decisive_test": "The GDN prefill chunk kernels sweep CTAs in exact steps of 48 at PROVABLY CONSTANT per-CTA work (grid=(NT, 48), one 64-token chunk per CTA -- fla/ops/chunk_scaled_dot_kkt.py:145). Within a single wave (144 CTAs at 3 CTA/SM) time rises 2.05x (chunk_scaled_dot_kkt, 48->144 CTAs), 2.85x (recompute_w_u), 2.08x (_causal_conv1d, 120->560 within its 576-CTA wave) and 1.49x (chunk_local_cumsum). The wave model predicts 1.00x.",
+      "sharpest_statistic": "Marginal cost of +48 CTAs, split by whether it crosses a wave boundary: chunk_scaled_dot_kkt +11.0% within (n=13) vs +13.6% across (n=5); recompute_w_u +13.9% within (n=13) vs +15.5% across (n=5). Crossing a wave boundary is statistically indistinguishable from not crossing one. Linear-in-CTAs fits R^2 = 0.9962/0.9960/0.9977; linear-in-waves fits are WORSE (0.9891/0.9906/0.9951) despite waves being a coarsening of CTAs.",
+      "robustness": "Holds under any assumed occupancy from 2 to 6 CTAs/SM."
+    },
+    "the_mechanism_that_reconciles_it": "FA2 tree is the ONLY kernel in the capture pinned to exactly 1 CTA/SM. At 1 CTA/SM, 'wave' and 'SM-occupancy round' coincide, so CTAs 25..48 land on physically idle SMs and are free. Every GDN kernel has occupancy 2-12 CTAs/SM, so its co-resident CTAs time-share issue slots and there is no free region past the first CTA per SM. The wave model is a property of THIS KERNEL'S 98,304 B shared-memory footprint against a 102,400 B per-SM limit, not of GB10 and not of the workload.",
+    "controls": {
+      "negative_controls_behave_as_expected": "Bandwidth-bound kernels are linear in b with no steps: aten compare_scalar 1.00/1.88/2.76/3.60; silu_and_mul_per_block_quant 1.00/1.84/2.77/3.65. Kernels with 1-wave grids across all four widths (triton rms_norm_2, aten direct_copy, _fused_post_conv) are NOT flat -- they are linear in CTAs, falsifying the wave model where it makes its strongest prediction.",
+      "positive_control_found": "reshape_and_cache_flash (2 CTA/SM, grids 32/64/96/128) is flat at 1.00/1.09/1.13 through wave 1 and then steps to 1.84 at b=4 when it crosses into wave 2. The step behaviour is real, but it is a property of UNSATURATED, latency-bound kernels."
+    },
+    "independent_corroboration_of_the_FA2_step": {
+      "method": "b correlates with context length in this window, so the subagent matched on the low tail of the FA2 duration distribution (both b=1 and b=2 are bimodal with a short-context mode near 0.97 ms).",
+      "result": "At matched context the FA2 wave step is CLEANER than the parent scope's means suggest: min 0.9673 (b=1) / 0.9773 (b=2, 1.010x) / 1.9883 (b=3, 2.055x); p1 1.019x and 2.148x.",
+      "so": "24 -> 48 CTAs (both 1 wave) costs 1.0-2.5% at matched context, and 48 -> 72 CTAs (1 -> 2 waves) costs 2.05-2.15x. This is direct support for the b<=2 zero-gain prediction AS APPLIED TO KERNEL 221."
+    },
+    "residuals_that_must_be_carried_forward": [
+      "Two in-family violations of 'same wave => same time': b=1 -> b=2 (both 1 wave) is +9.8% on medians and +28.1% on means; b=3 -> b=4 (both 2 waves) is +9.9% on medians and +15.4% on per-step totals (69.50 -> 80.20 ms).",
+      "At fixed b (hence fixed wave count) per-launch time spans 3.3x (b=1: 0.967-3.200 ms) to 4.0x (b=2). Wave count explains the central tendency, not the variance.",
+      "The b=1 anchor rests on 4 steps / 64 in-step launches. It is the weakest link in the chain.",
+      "No clock or thermal drift: the b-invariant _tree_gdn_path_kernel (100,776 launches, identical grid and work) has p50 of 0.17357-0.17453 ms across all ten wall-clock deciles of the 360 s window, i.e. +/-0.3%."
+    ],
+    "implications": {
+      "b_le_2_zero_gain": "SURVIVES, BUT ONLY BECAUSE THE SAVING IS CONFINED TO KERNEL 221. FA2 tree is 13.9% (b=2) / 19.1% (b=3) / 19.5% (b=4) of in-step GPU busy time; the GDN family is 11.6-16.2% and is strictly linear in b; 'other' (cutlass FP8 GEMMs) is 63-79%. Padded-B4 changes ONLY the FA2 splitkv launch, so the confinement holds by construction -- but the general claim 'nothing pays at b<=2' does not, and must not be reused for any other lever.",
+      "recovery_fraction_transfer": "MODERATELY CREDIBLE ON COMPOSITION, DEGRADED ON PRECISION. b=3 and b=4 have near-identical in-step composition (FA2 tree 19.1% vs 19.5%, GDN tree scan 10.4% vs 12.1%, other 65.8% vs 63.1%) and both sit at 2 FA2 waves, which is what makes the FRACTIONAL transfer sound: 0.3682 = 1 - (candidate 1 wave)/(stock 2 waves) is a wave RATIO, so applying it to b=3's own stock 4.3441 ms/launch is dimensionally correct and does not assume equal absolute times. But the model's own assertion that b=3 and b=4 cost the same at 2 waves is already 10-15% wrong. QUOTE 0.37 +/- 0.05, NOT 0.3682.",
+      "restated_expected_return": "25.59 ms/step becomes 25.6 ms/step +/- 3.5 ms/step (16 layers x 4.3441 ms/launch x 0.37 +/- 0.05). Even the pessimistic end (22.1 ms/step gross, ~21.9 net) is far above the sealed four-pass MDE of 4.20 ms (hydra27) / 6.42 ms (tail6). The lever does not become unmeasurable under the wider band."
+    }
+  },
+
+  "deliverables": {
+    "reviewable_diff": "results/fr13_b4_padded_b4_derisk_20260813/b34_padded_python_side.patch",
+    "diff_status": "NOT APPLIED. Verified with `patch --dry-run -p1` against the worktree: applies cleanly. The patched generator compiles (py_compile) and both emitted code blobs parse (ast.parse of FIXED32_QUERY_TILE32_B4_PRODUCTION_HELPERS, 768 lines, and of the emitted decode-call replacement, 107 lines).",
+    "diff_contents": [
+      "EDIT 1/6 -- bypass reason table: non_b4_capture -> non_b34_capture, plus the width/shadow constants and the staging registry.",
+      "EDIT 2/6 -- the FIVE b-dependent geometry clauses parameterised on batch_size (query rows, cu_seqlens_q length, seqused_k length, block_table rows, tree_bias batch extent), with an explicit width guard.",
+      "EDIT 3/6 -- _fr13_fa2_qrow32_b34_staging (persistent, refuses to allocate during capture) and _fr13_fa2_qrow32_b34_shadow_mismatches (the ONLY code anywhere that inspects a seqused_k or block_table VALUE).",
+      "EDIT 4/6 -- the capture bypass: capture_num_reqs not in (3,4) instead of != 4, plus the call-site wiring that derives batch_size, cross-checks it against the capture descriptor, and builds/validates the padded operands.",
+      "EDIT 5/6 -- the THREE batch_size guards: _fr13_fa2_qrow32_live_ab_replay's runtime_mode/batch_size guard, its observed-event batch_size cross-check, and _fr13_fa2_qrow32_b4_production_capture_end's guard.",
+      "EDIT 6/6 -- the served decode call: the padded branch (stage-in, canonical b=4 flash call, copy-back), emitted inside the existing try/except so the production_end accounting is untouched."
+    ],
+    "what_the_diff_deliberately_does_NOT_do": [
+      "It does not allocate the staging from a pre-capture hook -- it fails closed instead (see verification_1.implementation_hazard_found). That hook is the first item of real build work.",
+      "It does not touch candidate_scope, patch_source_sha256 or pass_sidecar_sha256; those reissues are a separate, deliberate credential action.",
+      "It does not add the b=3 live paged A/B byte gate. The gate design is in verification_2.what_the_byte_gate_must_still_prove."
+    ]
+  },
+
+  "what_survives_untouched": {
+    "so_credential": "The candidate .so sha256 af9e9f24..., size 299813360, and the six per-file source digests in scripts/fr13_fa2_qrow32_gqa_pair_gate.py are NOT touched by anything in this de-risk. Every change is python-side.",
+    "sealed_width4_result": "The +29.50 ms/step width-4 result (commit c6ae967f6) is measured on this binary and transfers unchanged.",
+    "kernel": "No C++ or CUDA edit is proposed or required."
+  },
+
+  "final_call": {
+    "padded_b4": {
+      "verdict": "GO-WITH-CAVEATS",
+      "nothing_killed_it": "All four verifications cleared. No structural blocker was found in the kernel, the C++ gate, the python selector, the vLLM capture machinery or the output consumer path.",
+      "the_four_caveats_that_must_be_honoured": [
+        "1. STAGING IS MANDATORY, NOT OPTIONAL. The scope's zero-copy widen is refuted: the b=3 FULL graph allocates query and output at exactly 96 rows. Budget 0.14-0.28 ms/step and 3.0 MiB, and treat any implementation that omits staging as an out-of-bounds write into the cudagraph pool.",
+        "2. THE STAGING MUST BE ALLOCATED FROM A PRE-CAPTURE HOOK. Lazy allocation is unreachable (the selector bypasses outside capture) and allocation during capture is silently wrong (private pool). The reviewable patch fails closed here rather than papering over it.",
+        "3. USE seqused_k[shadow] = 0, NOT 64. It is strictly safer (the kernel reads nothing and writes deterministic zeros), strictly cheaper, and it is vLLM's own padding convention. It also makes the poisoned-shadow byte gate sharper: poison BOTH the Q rows and the block-table row and require bit-identity.",
+        "4. THE 0.3682 RECOVERY FRACTION LOSES THREE SIGNIFICANT DIGITS. The wave model has a measured 10-15% in-family residual (b=3 vs b=4 at equal wave count). Carry 0.37 +/- 0.05, i.e. 25.6 +/- 3.5 ms/step gross. Even the pessimistic end clears the sealed four-pass MDE by 3-5x."
+      ],
+      "what_changed_about_the_gate_design": "The shadow is invisible to BOTH existing gates -- the 33-clause C++ check and the python geometry predicate inspect only pointers, dtypes, shapes and strides, never a seqused_k or block_table VALUE. A malformed shadow would sail through both and be caught only by the kernel, i.e. by wrong bytes. New explicit shadow clauses are therefore load-bearing, not decoration. They are EDIT 3/6 of the reviewable diff.",
+      "what_is_unchanged": "Zero rebuild, zero re-seal, .so credential intact, sealed +29.50 ms width-4 result transfers.",
+      "still_needs_mark": [
+        "Approval to move candidate_scope off a SEALED credential (final_fixed32_b4_full_graph_only -> a b3-inclusive token).",
+        "Acceptance of a deliberately synthetic 4th request presented to a sealed kernel, under a poisoned-shadow byte gate. Verification 2 strengthens the case: at seqused_k = 0 the shadow is a PROVABLE no-op at source level, not merely an empirically inert one.",
+        "The methodological call on spending the width-3 placebo.",
+        "GPU time for the b=3 byte gate and the width-3 timing arm."
+      ]
+    },
+    "dfwd_rider": {
+      "verdict": "GO-WITH-CAVEATS -- RIDER ONLY, NEVER STANDALONE",
+      "it_did_not_die_free": "The clause that could have killed it offline -- the MTP head's KV cache geometry -- is bit-identical to the target layers, because the draft head is a full transformer layer of the same architecture sharing the same single 17-layer full-attention KV cache group. Nothing in the 49-conjunct TORCH_CHECK fails structurally.",
+      "caveats": [
+        "It inherits the padded-B4 problem in full: b=4 is native in only 225 of 540 dfwd passes, so the rider needs its own staging at the prefill call site.",
+        "The dfwd is PIECEWISE and eager, so there is no graph_id: the rider's byte gate needs a (forward_pass_index, layer_name) key that does not exist yet.",
+        "It needs its own admission predicate and its own layer pin (mtp.layers.0.self_attn.attn) at the prefill site; the existing precheck hooks only the decode branch.",
+        "Its return (0.219% +/- 0.030% of window, 1.82 ms/step at width 4) is below MDE and can only be asserted inside a combined reading with the decode lever."
+      ],
+      "recommended_sequencing": "Do NOT build the rider until the padded-B4 decode lever has landed AND its staging + shadow machinery is byte-gated. The rider then reuses that machinery at a second call site for a seventeenth of the prize. Building it first would pay the full plumbing cost for an unmeasurable effect.",
+      "one_correction_to_the_parent_scope": "The parent listed dfwd grids (1,4,24) and (1,3,24) only; b=2 (74 passes) and b=1 (4 passes) also occur. They are single-wave and pay nothing, which does not change the arithmetic."
+    },
+    "ranked_next_actions_all_cpu_only_and_autonomous": [
+      "Write the pre-capture staging-allocation hook alongside the fr10 capture lifecycle and re-issue the diff with EDIT 3's fail-closed guard satisfied rather than tripped.",
+      "Design the b=3 live paged A/B byte gate: compare output[0:96] and softmax_lse[:,0:96] between native-b3 stock and padded-b4 candidate on the 16 target layers, with a poisoned-shadow variant that poisons BOTH the staged Q rows [96:128) and the shadow block-table row.",
+      "Add a capture-end assertion that the two staging copies per target layer are graph NODES in the width-3 graph, not eager calls.",
+      "Only then: price the rider's (forward_pass_index, layer_name) gate against its 0.22%-of-window ceiling."
+    ]
+  },
+
+  "what_this_does_not_claim": [
+    "No live measurement of any kind was taken. CPU-only, offline, over already-banked captures and source.",
+    "The staging cost model (0.14-0.28 ms/step) is arithmetic over tensor sizes and a banked bandwidth figure, not a measurement. It ignores any L2 residency benefit, which would only make it cheaper.",
+    "The early-exit inertness argument is a source-level reading of flash_fwd_kernel.h:750-855 and of the launcher. It predicts that the shadow reads nothing and writes deterministic zeros; it does not establish it. The poisoned-shadow byte gate is mandatory.",
+    "The 0.37 +/- 0.05 band is a judgement about how much of the wave model's measured 10-15% in-family residual should be carried into the transfer. It is not a confidence interval from a fitted model.",
+    "The width-3 context-length distribution is assumed similar enough to width-4's that the fractional recovery transfers. The banked composition figures support this; nothing measures it at b=3.",
+    "Sealed denominators, the gqa_pair decode seal, the width-4 attribution, and the causal-transfer kill in results/fr13_b4_causal_gqa_scope_20260813/scope.json all stand unchanged."
+  ],
+
+  "evidence_paths": {
+    "worktree": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813",
+    "pristine_vllm": "/tmp/vllm_pristine_019/extracted/vllm",
+    "candidate_build": "/home/mark/fr13_fa2_qrow32_gqa_pair_ilkv_sm121a_20260810/",
+    "candidate_source_closure": "/home/mark/fr13_fa2_qrow32_gqa_pair_ilkv_sm121a_20260810/source/",
+    "kernel_body": "/home/mark/fr13_fa2_qrow32_gqa_pair_ilkv_sm121a_20260810/source/csrc/flash_attn/src/flash_fwd_kernel.h",
+    "gqa_pair_tu": "/home/mark/fr13_fa2_qrow32_gqa_pair_ilkv_sm121a_20260810/source/csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu",
+    "api_dispatch": "/home/mark/fr13_fa2_qrow32_gqa_pair_ilkv_sm121a_20260810/source/csrc/flash_attn/flash_api.cpp",
+    "patch_generator": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/scripts/fr13_patch_fa2_tree_bias.py",
+    "fr10_runtime_patch": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/scripts/fr10_phase4_patch_vllm_tree_gdn.py",
+    "gdn_tree_kernel": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py",
+    "nsys_sqlite": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_width4_nsys_20260813T030940Z/fr13_b4_width4_real_swe.sqlite",
+    "occupancy_and_sm_count": "/home/mark/shared/lumoFlyWheel-b4-gqa-width4-20260813/results/fr13_attack_ladder_analysis_20260808/README.md"
+  }
+}
