@@ -1136,8 +1136,31 @@ def _fixed32_qwen_metric_labels(
 # algebra was validated on never drew one.  The count is published in the metric
 # evidence so a reader can see how much truncated traffic a campaign contained
 # rather than having it silently absorbed into a "non_stop" bucket.
+#
+#   abort   ADDED 2026-08-13 as a CONDITIONAL class, for the FR13 campaign
+#           per-task budget cap only.  Killing a capped agent kills its
+#           in-flight logical request, and vLLM finishes that request with
+#           finished_reason="abort".  The class is legal ONLY when the campaign
+#           declares exactly how many tasks it capped, and then the counter must
+#           equal that number EXACTLY -- it is an accounted category with
+#           corroborating evidence from a different source (the per-task runner
+#           records), not a tolerance.  With no declared cap it stays pinned at
+#           zero exactly as before, so every pre-2026-08-13 arm reconciles
+#           byte-for-byte identically.
+#
+#           An aborted request is NOT a completion: the agent never received a
+#           response, so it appears in no trace and is in no `completed` count.
+#           It IS a finished request, so it occupies a max_tokens histogram
+#           bucket like any other -- which is why the histogram identity gains
+#           the capped term while the completion identity does not.
+#
+#   error / repetition  DEFECTS.  Still pinned at zero, unconditionally.  An
+#           errored request means the engine failed to serve what was asked, and
+#           a repetition stop means vLLM's degenerate-output detector fired.
+#           Neither is ever legal, capped campaign or not.
 QWEN_TERMINAL_COMPLETION_REASONS = ("stop", "length")
-QWEN_FORBIDDEN_COMPLETION_REASONS = ("abort", "error", "repetition")
+QWEN_CAPPED_COMPLETION_REASON = "abort"
+QWEN_FORBIDDEN_COMPLETION_REASONS = ("error", "repetition")
 
 
 def _fixed32_qwen_completion_classes(
@@ -1145,6 +1168,7 @@ def _fixed32_qwen_completion_classes(
     *,
     completed: int,
     scope: str,
+    capped_requests: int = 0,
 ) -> dict[str, int]:
     """Split completed engine requests into terminal classes, or fail loud.
 
@@ -1152,10 +1176,26 @@ def _fixed32_qwen_completion_classes(
     they had the identical clause and drifting them apart is how a class ends up
     legal in one and forbidden in the other.
 
+    ``capped_requests`` is the number of logical requests the FR13 campaign
+    budget cap is DECLARED to have aborted -- one per capped task, corroborated
+    by that task's own runner record.  It defaults to 0, which is the pre-cap
+    behaviour exactly: abort pinned at zero and the histogram equal to the
+    completion count.
+
     Every failure names the measured numbers.  A gate that only says "do not
     reconcile" makes the next run guess -- which is exactly what the first
     pool16 pass had to do.
     """
+    if isinstance(capped_requests, bool) or type(capped_requests) is not int:
+        raise ContractError(
+            f"fixed32 qwen {scope} capped request count must be an int, "
+            f"got {capped_requests!r}"
+        )
+    if capped_requests < 0:
+        raise ContractError(
+            f"fixed32 qwen {scope} capped request count must not be negative, "
+            f"got {capped_requests}"
+        )
     counts = {
         reason: deltas[f"request_success_{reason}"]
         for reason in QWEN_TERMINAL_COMPLETION_REASONS
@@ -1170,15 +1210,36 @@ def _fixed32_qwen_completion_classes(
             f"fixed32 qwen {scope} engine completion metrics do not reconcile: "
             "forbidden completion reasons present ("
             + ", ".join(f"{k}={v}" for k, v in sorted(forbidden.items()))
-            + "); abort/error/repetition mean the engine did not serve what was "
+            + "); error/repetition mean the engine did not serve what was "
             "asked and may never appear in evidence-grade traffic"
         )
-    terminal_total = sum(counts.values())
+    aborted = deltas[f"request_success_{QWEN_CAPPED_COMPLETION_REASON}"]
+    if aborted != capped_requests:
+        raise ContractError(
+            f"fixed32 qwen {scope} engine completion metrics do not reconcile: "
+            f"abort={aborted} but the campaign declares capped_requests="
+            f"{capped_requests}"
+            + (
+                "; an abort with no declared budget cap means the engine did not"
+                " serve what was asked"
+                if capped_requests == 0
+                else "; every budget-capped task must abort exactly one logical"
+                " request, and every abort must be a declared cap"
+            )
+        )
+    counts[QWEN_CAPPED_COMPLETION_REASON] = aborted
+    terminal_total = sum(
+        counts[reason] for reason in QWEN_TERMINAL_COMPLETION_REASONS
+    )
+    # Finished requests, not completions: a capped abort never reaches the agent
+    # and so is in no trace, but vLLM still finished it and still histogrammed
+    # its max_tokens.
+    expected_histogram = completed + capped_requests
     histogram = {
         key: deltas[key]
         for key in ("max_tokens_count", "max_tokens_le_inf", "max_tokens_le_50000")
     }
-    mismatched = {k: v for k, v in histogram.items() if v != completed}
+    mismatched = {k: v for k, v in histogram.items() if v != expected_histogram}
     if mismatched or terminal_total != completed:
         raise ContractError(
             f"fixed32 qwen {scope} engine completion metrics do not reconcile: "
@@ -1189,7 +1250,10 @@ def _fixed32_qwen_completion_classes(
             )
             + f" (terminal total {terminal_total})"
             + (
-                "; histogram " + ", ".join(f"{k}={v}" for k, v in sorted(mismatched.items()))
+                "; histogram "
+                + ", ".join(f"{k}={v}" for k, v in sorted(mismatched.items()))
+                + f" against expected {expected_histogram} "
+                f"(completed {completed} + capped {capped_requests})"
                 if mismatched
                 else ""
             )
@@ -2589,9 +2653,16 @@ def validate_fixed32_qwen_campaign_metrics(
         "expected_session_id",
         "expected_completed_logical_model_requests",
         "events",
+        # ADDED 2026-08-13. Required, not optional: the completion algebra now
+        # has a conditional class whose legality depends on this declaration, so
+        # a caller that forgets it must fail loud rather than silently declare
+        # zero caps and turn a real abort into a refusal nobody can explain.
+        "budget_capped",
     }
     task_inputs: list[dict[str, Any]] = []
     seen_instance_ids: set[str] = set()
+    capped_requests = 0
+    capped_instance_ids: list[str] = []
     for task in tasks:
         if not isinstance(task, dict) or set(task) != expected_task_keys:
             raise ContractError(
@@ -2601,6 +2672,7 @@ def validate_fixed32_qwen_campaign_metrics(
         expected_session_id = task["expected_session_id"]
         completed = task["expected_completed_logical_model_requests"]
         events = task["events"]
+        budget_capped = task["budget_capped"]
         if (
             not isinstance(instance_id, str)
             or not instance_id
@@ -2609,11 +2681,15 @@ def validate_fixed32_qwen_campaign_metrics(
             or type(completed) is not int
             or completed <= 0
             or not isinstance(events, list)
+            or not isinstance(budget_capped, bool)
         ):
             raise ContractError(
                 "fixed32 qwen campaign task identity or count is invalid"
             )
         seen_instance_ids.add(instance_id)
+        if budget_capped:
+            capped_requests += 1
+            capped_instance_ids.append(instance_id)
         task_inputs.append(task)
     task_inputs.sort(key=lambda task: task["instance_id"])
 
@@ -2785,23 +2861,43 @@ def validate_fixed32_qwen_campaign_metrics(
         successful_compaction_total + failed_compaction_total
     )
     completion_classes = _fixed32_qwen_completion_classes(
-        deltas, completed=completed_total, scope="campaign"
+        deltas,
+        completed=completed_total,
+        scope="campaign",
+        capped_requests=capped_requests,
     )
     if deltas["max_tokens_le_10000"] != 0:
         raise ContractError(
             "fixed32 qwen campaign max-token histogram has an unpinned low request"
         )
+    # A budget-capped abort was admitted with one of the two pinned max_tokens
+    # values, and which one is not knowable from the task record -- the agent was
+    # killed mid-request and never reported. It is knowable from the meters:
+    # the le_20000 bucket over-counts by exactly the number of capped requests
+    # that were compactions. Solve for that split and then require the token SUM
+    # to reconcile exactly against it. No slack: a split that does not close the
+    # sum identity to the token is refused.
+    capped_compaction = deltas["max_tokens_le_20000"] - total_compactions
+    capped_visible = capped_requests - capped_compaction
     if (
-        deltas["max_tokens_le_20000"] != total_compactions
+        capped_compaction < 0
+        or capped_visible < 0
         or normal_total + total_compactions != completed_total
         or deltas["max_tokens_sum"]
         != (
-            normal_total * QWEN_VISIBLE_MAX_OUTPUT_TOKENS
-            + total_compactions * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+            (normal_total + capped_visible) * QWEN_VISIBLE_MAX_OUTPUT_TOKENS
+            + (total_compactions + capped_compaction)
+            * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
         )
     ):
         raise ContractError(
-            "fixed32 qwen campaign 32768/20000 max-token algebra does not reconcile"
+            "fixed32 qwen campaign 32768/20000 max-token algebra does not "
+            f"reconcile: normal={normal_total} compactions={total_compactions} "
+            f"completed={completed_total} capped={capped_requests} "
+            f"le_20000={deltas['max_tokens_le_20000']} "
+            f"sum={deltas['max_tokens_sum']} "
+            f"(capped split visible={capped_visible} "
+            f"compaction={capped_compaction})"
         )
     if (
         deltas["prompt_tokens"] != result_prompt_total
@@ -2833,11 +2929,26 @@ def validate_fixed32_qwen_campaign_metrics(
         "request_success_stop": completion_classes["stop"],
         # Truncated-at-max_tokens completions, counted rather than absorbed.
         # Published so a reader can see how much of a campaign's traffic ran to
-        # its output cap; forbidden reasons are proven zero by
-        # _fixed32_qwen_completion_classes, so this IS the whole non-stop
-        # remainder and request_success_non_stop stays exact.
+        # its output cap; error/repetition are proven zero by
+        # _fixed32_qwen_completion_classes, so length + abort IS the whole
+        # non-stop remainder and request_success_non_stop stays exact.
         "request_success_length": completion_classes["length"],
-        "request_success_non_stop": completion_classes["length"],
+        # Budget-capped aborts. Zero unless the campaign declared a cap, and
+        # then exactly one per capped task -- the count is cross-checked against
+        # the per-task runner records, not merely tolerated.
+        "request_success_abort": completion_classes[
+            QWEN_CAPPED_COMPLETION_REASON
+        ],
+        "request_success_non_stop": (
+            completion_classes["length"]
+            + completion_classes[QWEN_CAPPED_COMPLETION_REASON]
+        ),
+        "budget_capped_tasks": capped_requests,
+        "budget_capped_task_ids": sorted(capped_instance_ids),
+        # How each capped abort's max_tokens was admitted, solved from the
+        # le_20000 bucket and then required to close the token sum exactly.
+        "budget_capped_visible_requests": capped_visible,
+        "budget_capped_compaction_requests": capped_compaction,
         "prompt_tokens": deltas["prompt_tokens"],
         "generation_tokens": deltas["generation_tokens"],
         "visible_prompt_tokens": visible_prompt_total,

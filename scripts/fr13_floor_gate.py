@@ -3508,22 +3508,37 @@ def _fixed32_replay_qwen_campaign_proof(
     for expected_task_id, task in zip(expected_task_ids, tasks, strict=True):
         if not isinstance(task, dict):
             raise GateError(f"{proof_path}: campaign task record is malformed")
-        exact_keys(
-            task,
-            {
-                "instance_id",
-                "task_key_id",
-                "expected_completed_logical_model_requests",
-                "trace",
-            },
-            f"{proof_path}:task {expected_task_id}",
-        )
+        # Two shapes are legal, and exactly two. Proofs sealed before the
+        # 2026-08-13 campaign budget cap carry four keys and, by construction,
+        # declared no caps; proofs sealed after carry the declaration. Accepting
+        # both keeps every banked proof replayable without letting a post-cap
+        # proof drop the field it must carry -- which is why this is an
+        # either/or over exact key sets and not an optional key.
+        legacy_keys = {
+            "instance_id",
+            "task_key_id",
+            "expected_completed_logical_model_requests",
+            "trace",
+        }
+        capped_aware_keys = legacy_keys | {"budget_capped"}
+        if set(task) == capped_aware_keys:
+            budget_capped = task["budget_capped"]
+        elif set(task) == legacy_keys:
+            budget_capped = False
+        else:
+            exact_keys(
+                task,
+                capped_aware_keys,
+                f"{proof_path}:task {expected_task_id}",
+            )
+            budget_capped = False
         completed = task["expected_completed_logical_model_requests"]
         if (
             task["instance_id"] != expected_task_id
             or task["task_key_id"] != fixed32_task_key_id(expected_task_id)
             or type(completed) is not int
             or completed <= 0
+            or not isinstance(budget_capped, bool)
         ):
             raise GateError(
                 f"{proof_path}: campaign task identity/count differs"
@@ -3597,6 +3612,7 @@ def _fixed32_replay_qwen_campaign_proof(
                 ),
                 "expected_completed_logical_model_requests": completed,
                 "events": trace_events,
+                "budget_capped": budget_capped,
             }
         )
 

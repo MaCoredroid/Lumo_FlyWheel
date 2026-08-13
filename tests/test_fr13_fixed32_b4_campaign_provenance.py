@@ -303,6 +303,7 @@ def _real_count_shape_campaign(
                     instance_id
                 ),
                 "expected_completed_logical_model_requests": task_auth_count,
+                "budget_capped": False,
                 "events": _qwen_trace_with_request_count(
                     instance_id,
                     trace_count,
@@ -661,6 +662,7 @@ def test_b4_campaign_union_finalizes_only_after_global_proof(
             "expected_session_id": contract.fixed32_trace_session_id(task_id),
             "expected_completed_logical_model_requests": 2,
             "events": _qwen_trace(task_id),
+            "budget_capped": False,
         }
         for task_id in TASK_IDS
     ]

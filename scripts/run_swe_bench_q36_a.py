@@ -3732,7 +3732,40 @@ def _fixed32_real_task_provenance(
             f"fixed32 real-task provenance {instance_id}: "
             f"agent timed_out must be boolean, got {agent_meta.get('timed_out')!r}"
         )
-    if exit_code != 0 or agent_meta["timed_out"]:
+    # A campaign budget cap is the ONE incomplete terminal that is legal, and
+    # only when the record corroborates it end to end: the cap must have been
+    # armed and binding, the runner's wallclock kill must be what fired, and the
+    # measured wall must actually have reached the budget. Everything else --
+    # a legacy per-attempt wall timeout, a nonzero exit with no cap -- still
+    # refuses, because those mean the harness cut a run it did not intend to.
+    budget_capped = agent_meta.get("budget_capped")
+    if budget_capped is not None and not isinstance(budget_capped, bool):
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            f"agent budget_capped must be boolean, got {budget_capped!r}"
+        )
+    budget_s = agent_meta.get("campaign_budget_s")
+    elapsed_s = agent_meta.get("elapsed_s")
+    budget_capped_corroborated = (
+        budget_capped is True
+        and agent_meta["timed_out"] is True
+        and agent_meta.get("campaign_budget_was_the_binding_limit") is True
+        and not isinstance(budget_s, bool)
+        and isinstance(budget_s, (int, float))
+        and budget_s > 0
+        and not isinstance(elapsed_s, bool)
+        and isinstance(elapsed_s, (int, float))
+        and float(elapsed_s) >= float(budget_s)
+    )
+    if budget_capped is True and not budget_capped_corroborated:
+        raise Fixed32BoundaryError(
+            f"fixed32 real-task provenance {instance_id}: "
+            "agent claims a campaign budget cap but the record does not "
+            f"corroborate it: timed_out={agent_meta['timed_out']!r} "
+            f"binding={agent_meta.get('campaign_budget_was_the_binding_limit')!r} "
+            f"campaign_budget_s={budget_s!r} elapsed_s={elapsed_s!r}"
+        )
+    if not budget_capped_corroborated and (exit_code != 0 or agent_meta["timed_out"]):
         raise Fixed32BoundaryError(
             f"fixed32 real-task provenance {instance_id}: "
             f"agent terminal state is incomplete: exit_code={exit_code} "
@@ -8245,20 +8278,155 @@ def _run_agent_instance(
     return result
 
 
+# ---- FR13 campaign per-task budget cap --------------------------------------
+# WHAT THIS BOUNDS. astropy__astropy-13398 has an unbounded-search-shaped
+# trajectory. Its qwen-code TURN_TOOL_CALL_CAP guard counts TOP-LEVEL session
+# tool calls in one turn (sub-agent sessions, i.e. blocks carrying a non-null
+# parent_tool_use_id, are counted separately and never trip it). Raising the cap
+# 100 -> 256 (scripts/fr13_derive_qwen_agent_bundle_cap256.py) therefore did not
+# make the task safe; it moved the wall. Banked proof, all three read directly:
+#   2026-07-31 quarantined trip  top-level 100 (= cap 100), subs 29, total 129
+#   2026-08-13 tail23 trip       top-level 256 (= cap 256), subs 28, total 284
+#   2026-08-10 tail23 SUCCESS    top-level  60,             subs 394, total 454
+# The 454-call success did not trip because only 60 of its calls were top level;
+# whether a draw survives is therefore a sampling accident (did the model
+# delegate the long tail to a sub-agent?), not a bound. The 08-13 trip burned
+# 9324 s and voided a whole gate arm at campaign finalize.
+#
+# So the wall must be bounded by the HARNESS, deterministically, and a capped
+# task must terminate with an accounted terminal instead of poisoning the arm.
+#
+# DEFAULT OFF. Quality/QC arms (Mark's exact16 QC) must see uncapped agent
+# behaviour -- capping changes what the agent does, so a capped arm is not a
+# behavioural observation. Timing and gate arms, where wall determinism is the
+# point and the resolve verdict is not, set the env.
+CAMPAIGN_TASK_BUDGET_ENV = "FR13_CAMPAIGN_TASK_BUDGET_S"
+# 5400 s (90 min) is the recommended value for timing/gate arms; the choice is
+# justified from the banked per-task wall distribution in the commit body. It is
+# NOT a default -- nothing is capped unless a campaign asks for it by name.
+CAMPAIGN_TASK_BUDGET_RECOMMENDED_S = 5400
+# A budget below this is refused rather than honoured. `--agent-wall-s 0` already
+# taught this lesson the expensive way (0 means "instant timeout", not "no
+# limit"); a fat-fingered FR13_CAMPAIGN_TASK_BUDGET_S=60 would cap every task in
+# the campaign and produce an arm of nothing but capped terminals, which is a
+# silent, plausible-looking result. The floor is above the p90 of every non-13398
+# exact4 task by a wide margin, so it cannot mask a real cap either.
+CAMPAIGN_TASK_BUDGET_MIN_S = 1800
+
+
+def _campaign_task_budget_s() -> float:
+    """FR13_CAMPAIGN_TASK_BUDGET_S seconds; unset/empty/0 => 0.0 (cap OFF).
+
+    Fail-closed on anything else: a budget that cannot be read is a budget that
+    silently is not there, and the whole point of the cap is that an arm's wall
+    is knowable before it runs.
+    """
+    raw = os.environ.get(CAMPAIGN_TASK_BUDGET_ENV, "").strip()
+    if not raw:
+        return 0.0
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise Fixed32BoundaryError(
+            f"{CAMPAIGN_TASK_BUDGET_ENV} must be a number of seconds "
+            f"(0 = cap OFF), got {raw!r}"
+        ) from None
+    if value != value or value in (float("inf"), float("-inf")):
+        raise Fixed32BoundaryError(
+            f"{CAMPAIGN_TASK_BUDGET_ENV} must be finite, got {raw!r}"
+        )
+    if value == 0:
+        return 0.0
+    if value < 0:
+        raise Fixed32BoundaryError(
+            f"{CAMPAIGN_TASK_BUDGET_ENV} must not be negative, got {raw!r}"
+        )
+    if value < CAMPAIGN_TASK_BUDGET_MIN_S:
+        raise Fixed32BoundaryError(
+            f"{CAMPAIGN_TASK_BUDGET_ENV}={raw} is below the "
+            f"{CAMPAIGN_TASK_BUDGET_MIN_S}s floor; a budget that short would cap "
+            "ordinary tasks and produce an arm of capped terminals that looks "
+            "like a real run"
+        )
+    return value
+
+
+def _campaign_budget_effective_timeout_s(wall_s: int, budget_s: float) -> int:
+    """The timeout actually handed to the runner: the tighter of wall and budget."""
+    budget = int(budget_s)
+    if wall_s is None or wall_s <= 0:
+        return budget
+    return min(int(wall_s), budget)
+
+
+def _attribute_campaign_budget_cap(
+    meta: dict[str, Any],
+    *,
+    budget_s: float,
+    requested_wall_s: int,
+) -> dict[str, Any]:
+    """Name the terminal a campaign budget produced, without rewriting evidence.
+
+    The runners already own exactly one wallclock kill path and set
+    ``timed_out``. When the campaign budget is what that path enforced, the
+    terminal is a BUDGET CAP -- a deliberate, declared, deterministic stop -- and
+    not the legacy per-attempt agent wall, which is provenance-fatal because it
+    means the harness cut a run it did not intend to cut.
+
+    ``timed_out`` is a MEASURED flag and is left exactly as measured. This adds
+    the attribution alongside it, with the corroborating evidence attached, so a
+    reader can always recompute the classification from the record itself.
+    """
+    meta = dict(meta)
+    meta["campaign_budget_s"] = budget_s if budget_s > 0 else None
+    if budget_s <= 0:
+        meta["budget_capped"] = False
+        return meta
+    effective = _campaign_budget_effective_timeout_s(requested_wall_s, budget_s)
+    elapsed = meta.get("elapsed_s")
+    meta["campaign_budget_was_the_binding_limit"] = effective == int(budget_s)
+    meta["budget_capped"] = bool(
+        meta.get("timed_out") is True
+        and effective == int(budget_s)
+        and isinstance(elapsed, (int, float))
+        and not isinstance(elapsed, bool)
+        and float(elapsed) >= float(budget_s)
+    )
+    return meta
+
+
 def _run_agent_dispatch(**kwargs: Any) -> dict[str, Any]:
     """Route the codex run to alienware (AGENT_HOST set) or local (GB10).
 
     On the offload path the codex docker on alienware must hit the alienware-
     LOCAL proxy, so the GB10-side `--endpoint` is overridden with AGENT_ENDPOINT.
+
+    This is also the ONE choke point where the FR13 campaign per-task budget is
+    applied. There are four agent-runner bodies (remote, local, instance-image
+    local, instance-image remote) and each owns its own kill path; lowering the
+    timeout here bounds all four with the code that already exists, and the
+    attribution pass below is what turns the resulting kill into a named
+    terminal instead of a generic wall timeout.
     """
     if kwargs.get("task_bearer") is not None:
         _validate_fixed32_agent_runtime_mode(remote_host=AGENT_HOST)
+    budget_s = _campaign_task_budget_s()
+    requested_wall_s = int(kwargs.get("timeout_s") or 0)
+    if budget_s > 0:
+        kwargs = dict(kwargs)
+        kwargs["timeout_s"] = _campaign_budget_effective_timeout_s(
+            requested_wall_s, budget_s
+        )
     if AGENT_HOST:
         kwargs = dict(kwargs)
         if AGENT_ENDPOINT:
             kwargs["endpoint"] = AGENT_ENDPOINT
-        return _run_agent_remote(host=AGENT_HOST, **kwargs)
-    return _run_agent_local(**kwargs)
+        meta = _run_agent_remote(host=AGENT_HOST, **kwargs)
+    else:
+        meta = _run_agent_local(**kwargs)
+    return _attribute_campaign_budget_cap(
+        meta, budget_s=budget_s, requested_wall_s=requested_wall_s
+    )
 
 
 # ---- no-patch terminal ------------------------------------------------------
@@ -8345,6 +8513,91 @@ def _synthetic_no_patch_eval_report(
         "arch": worker_report["arch"],
         "eval_host": worker_report["eval_host"],
         "worker_report": dict(worker_report),
+    }
+
+
+# ---- budget-capped terminal -------------------------------------------------
+# A capped task did not finish and did not fail on the merits: the harness took
+# its wall away at a declared budget. It therefore gets its OWN terminal class,
+# not one of the existing three.
+#
+# It is NOT `resolved`/`failed`: those mean the SWE-bench harness ran and
+# returned a verdict about a submission the agent chose to make. A capped task's
+# working tree is whatever the agent happened to have on disk when it was
+# killed, so evaluating it would manufacture a verdict about a truncated
+# trajectory and bank it next to real ones.
+#
+# It is NOT the synthetic no-patch terminal either, even when the capped task
+# left no patch. `empty_patch` means the agent CLOSED ITS TURN without
+# submitting -- a real, legal, model-side outcome. A cap is a harness-side
+# outcome. Collapsing the two would silently move harness decisions into the
+# model's column, which is exactly the masquerade the completion algebra exists
+# to prevent (f8f8a1d16).
+#
+# The record therefore states plainly that the harness was never invoked, names
+# the budget and the measured wall that hit it, and carries the patch size it
+# is DECLINING to evaluate so the decision is auditable.
+SYNTHETIC_BUDGET_CAPPED_EVAL_SCHEMA = (
+    "lumo.swe_bench_q36_a.synthetic_budget_capped_eval.v1"
+)
+BUDGET_CAPPED_VERDICT = "capped"
+BUDGET_CAPPED_FAILURE_MODE = "campaign_budget_capped"
+
+
+def _synthetic_budget_capped_eval_report(
+    *,
+    instance_id: str,
+    dataset_name: str,
+    model_name: str,
+    agent_meta: dict[str, Any],
+    patch_text: str,
+) -> dict[str, Any] | None:
+    """Return the honest terminal for a task the campaign budget cut short.
+
+    Returns None -- leaving the normal eval path alone -- unless the agent
+    record actually corroborates a cap: the budget was armed and binding, the
+    runner's own wallclock kill fired, and the measured wall reached the budget.
+    A record that merely says "capped" without the numbers behind it is not
+    accepted, because a terminal nobody can recompute is not evidence.
+    """
+    if agent_meta.get("budget_capped") is not True:
+        return None
+    budget_s = agent_meta.get("campaign_budget_s")
+    elapsed_s = agent_meta.get("elapsed_s")
+    if (
+        isinstance(budget_s, bool)
+        or not isinstance(budget_s, (int, float))
+        or budget_s <= 0
+        or isinstance(elapsed_s, bool)
+        or not isinstance(elapsed_s, (int, float))
+        or float(elapsed_s) < float(budget_s)
+        or agent_meta.get("timed_out") is not True
+        or agent_meta.get("campaign_budget_was_the_binding_limit") is not True
+    ):
+        return None
+    return {
+        "schema": SYNTHETIC_BUDGET_CAPPED_EVAL_SCHEMA,
+        "track": "swe_bench",
+        "instance_id": instance_id,
+        "model_id": model_name,
+        "dataset_name": dataset_name,
+        "verdict": BUDGET_CAPPED_VERDICT,
+        "passed": False,
+        "failure_mode": BUDGET_CAPPED_FAILURE_MODE,
+        "error": "campaign_budget_capped",
+        "budget_capped": True,
+        "harness_invoked": False,
+        "harness_exit_code": None,
+        "campaign_budget_s": float(budget_s),
+        "agent_elapsed_s": float(elapsed_s),
+        "patch_bytes_not_evaluated": len(patch_text),
+        "eval_wall_clock_seconds": 0.0,
+        "agent_terminal": {
+            "exit_code": agent_meta.get("exit_code"),
+            "timed_out": agent_meta.get("timed_out"),
+            "stall_killed": agent_meta.get("stall_killed"),
+            "network_drop": agent_meta.get("network_drop"),
+        },
     }
 
 
@@ -8613,7 +8866,21 @@ def _process_one(
     # Bundle B #2/#3/#8: if the first attempt left no patch, classify why and
     # re-launch codex ONCE with a state-conditional directive prompt. Bounded
     # to a single retry to cap the wall-time premium.
-    if not patch_text.strip():
+    budget_capped = codex_meta.get("budget_capped") is True
+    if budget_capped:
+        # A capped attempt gets no second attempt. The nudge retry exists to
+        # recover an agent that CHOSE to stop without submitting; re-driving one
+        # the harness cut would hand the very task the budget is bounding a
+        # second full budget, which is the opposite of a deterministic bound.
+        summary["budget_capped"] = True
+        summary["campaign_budget_s"] = codex_meta.get("campaign_budget_s")
+        summary["empty_patch_retry"] = {
+            "cause": "campaign_budget_capped",
+            "attempted": False,
+            "max_retries": 0,
+            "recovered_patch_bytes": 0,
+        }
+    if not budget_capped and not patch_text.strip():
         cause = _classify_empty_patch_cause(qwen_trace)
         # Bundle B #2/#3/#8 -> in-context continuation: an agent_gave_up attempt EXPLORED
         # then emitted a tool-call-free terminal reply (general temp-0.6 codex flake). Re-drive
@@ -8813,39 +9080,63 @@ def _process_one(
     patch_path.write_text(patch_text, encoding="utf-8")
     summary["patch_bytes"] = len(patch_text)
 
-    # Always run the evaluator -- the CLI handles empty-patch -> exit 1.
-    eval_meta = _run_eval(
+    capped_terminal = _synthetic_budget_capped_eval_report(
         instance_id=instance_id,
-        patch_path=patch_path,
-        output_dir=eval_output,
         dataset_name=dataset_name,
         model_name=model_name,
-        timeout_s=eval_timeout_s,
-        eval_log_path=eval_log,
+        agent_meta=codex_meta,
+        patch_text=patch_text,
     )
-    summary["eval"] = eval_meta
-
     eval_report_path = eval_output / "eval_report.json"
-    if eval_report_path.is_file():
-        try:
-            eval_report = json.loads(eval_report_path.read_text())
-        except Exception:  # noqa: BLE001
-            eval_report = None
-        if isinstance(eval_report, dict):
-            no_patch_terminal = _synthetic_no_patch_eval_report(
-                eval_report,
-                instance_id=instance_id,
-                dataset_name=dataset_name,
-                model_name=model_name,
-                patch_text=patch_text,
-            )
-            if no_patch_terminal is not None:
-                eval_report_path.write_text(
-                    json.dumps(no_patch_terminal, indent=2),
-                    encoding="utf-8",
+    if capped_terminal is not None:
+        # The harness is NOT invoked on a truncated trajectory. Writing the
+        # terminal here, rather than letting the evaluator produce a verdict
+        # about whatever happened to be on disk, is what keeps a capped task out
+        # of the resolved/failed columns entirely.
+        eval_output.mkdir(parents=True, exist_ok=True)
+        eval_report_path.write_text(
+            json.dumps(capped_terminal, indent=2), encoding="utf-8"
+        )
+        summary["eval"] = {
+            "exit_code": None,
+            "elapsed_s": 0.0,
+            "skipped": True,
+            "skipped_reason": "campaign_budget_capped",
+        }
+        summary["eval_report"] = capped_terminal
+    else:
+        # Always run the evaluator -- the CLI handles empty-patch -> exit 1.
+        eval_meta = _run_eval(
+            instance_id=instance_id,
+            patch_path=patch_path,
+            output_dir=eval_output,
+            dataset_name=dataset_name,
+            model_name=model_name,
+            timeout_s=eval_timeout_s,
+            eval_log_path=eval_log,
+        )
+        summary["eval"] = eval_meta
+
+        if eval_report_path.is_file():
+            try:
+                eval_report = json.loads(eval_report_path.read_text())
+            except Exception:  # noqa: BLE001
+                eval_report = None
+            if isinstance(eval_report, dict):
+                no_patch_terminal = _synthetic_no_patch_eval_report(
+                    eval_report,
+                    instance_id=instance_id,
+                    dataset_name=dataset_name,
+                    model_name=model_name,
+                    patch_text=patch_text,
                 )
-                eval_report = no_patch_terminal
-            summary["eval_report"] = eval_report
+                if no_patch_terminal is not None:
+                    eval_report_path.write_text(
+                        json.dumps(no_patch_terminal, indent=2),
+                        encoding="utf-8",
+                    )
+                    eval_report = no_patch_terminal
+                summary["eval_report"] = eval_report
 
     # Tear down the worktree to free disk; preserve patch and artifacts.
     _remove_workspace(cache_path, workspace_path)
@@ -9068,6 +9359,16 @@ def _finalize_fixed32_qwen_campaign_provenance(
                 "post_generation": post_generation,
                 "task_key_id": task_key_id,
                 "completed": completed_after - completed_before,
+                # Declared from the task's OWN runner record, which the per-task
+                # provenance gate already refused to accept unless the cap was
+                # corroborated end to end. The completion algebra's abort class
+                # is legal only against this declaration.
+                "budget_capped": (
+                    (summary.get("agent") or summary.get("codex") or {}).get(
+                        "budget_capped"
+                    )
+                    is True
+                ),
                 "trace_path": trace_path,
                 "trace_raw": raw_trace,
                 "events": events,
@@ -9130,6 +9431,7 @@ def _finalize_fixed32_qwen_campaign_provenance(
             ),
             "expected_completed_logical_model_requests": record["completed"],
             "events": record["events"],
+            "budget_capped": record["budget_capped"],
         }
         for record in records
     ]
@@ -9174,6 +9476,11 @@ def _finalize_fixed32_qwen_campaign_provenance(
                 "expected_completed_logical_model_requests": record[
                     "completed"
                 ],
+                # Sealed into the proof so an offline replay declares the same
+                # caps the live campaign did. Without it a capped arm's proof
+                # could never be re-verified: the meters would show aborts the
+                # replay had no way to account for.
+                "budget_capped": record["budget_capped"],
                 "trace": _fixed32_artifact_identity(
                     record["trace_path"],
                     record["trace_raw"],
@@ -9262,6 +9569,7 @@ def _aggregate(per_task_root: Path, summary_path: Path, predictions_path: Path,
     repo_pass_counter: Counter = Counter()
     eval_wall: list[float] = []
     codex_wall: list[float] = []
+    capped_task_ids: list[str] = []
     predictions_lines: list[str] = []
     for task_dir in sorted(p for p in per_task_root.iterdir() if p.is_dir()):
         meta_path = task_dir / "runner_metadata.json"
@@ -9282,6 +9590,21 @@ def _aggregate(per_task_root: Path, summary_path: Path, predictions_path: Path,
         _agent_block = meta.get("agent") or meta.get("codex") or {}
         if _agent_block.get("elapsed_s") is not None:
             codex_wall.append(float(_agent_block["elapsed_s"]))
+        # A capped task is counted BY NAME, from both sides of its own record:
+        # the agent block's attribution and the terminal the runner wrote. They
+        # must agree, or the campaign summary would report a cap count that no
+        # verdict backs (or verdicts that no agent record backs).
+        _capped_agent = _agent_block.get("budget_capped") is True
+        _capped_verdict = verdict == BUDGET_CAPPED_VERDICT
+        if _capped_agent != _capped_verdict:
+            raise Fixed32BoundaryError(
+                "campaign budget-cap accounting does not reconcile for "
+                f"{meta.get('instance_id') or task_dir.name}: "
+                f"agent.budget_capped={_capped_agent} but "
+                f"eval verdict={verdict!r}"
+            )
+        if _capped_agent:
+            capped_task_ids.append(meta.get("instance_id") or task_dir.name)
         pred_file = task_dir / "eval" / "predictions.jsonl"
         if pred_file.is_file():
             predictions_lines.extend(
@@ -9309,6 +9632,15 @@ def _aggregate(per_task_root: Path, summary_path: Path, predictions_path: Path,
         "per_repo_resolved": dict(repo_pass_counter),
         "eval_wall_seconds": _percentiles(eval_wall),
         "codex_wall_seconds": _percentiles(codex_wall),
+        # Published unconditionally, including as 0/[] when the cap was OFF, so
+        # a reader never has to infer from an absent key whether an arm could
+        # have been capped. A capped task is NOT in resolved_rate's numerator
+        # and IS in its denominator: it was attempted and did not resolve.
+        "budget_capped_tasks": len(capped_task_ids),
+        "budget_capped_task_ids": sorted(capped_task_ids),
+        "campaign_task_budget_s": (
+            _campaign_task_budget_s() or None
+        ),
         "resolved_rate": (
             round(verdict_counter["resolved"] / len(instance_summaries), 4)
             if instance_summaries else None

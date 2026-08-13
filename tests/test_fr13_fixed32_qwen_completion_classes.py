@@ -151,6 +151,7 @@ def _pool16_campaign_tasks(
                 ),
                 "expected_completed_logical_model_requests": expected,
                 "events": events,
+                "budget_capped": False,
             }
         )
     return tasks
@@ -263,13 +264,28 @@ def test_any_number_of_length_terminations_reconciles(
 # --------------------------------------------------------------------------- #
 # what stays forbidden                                                         #
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("reason", ["abort", "error", "repetition"])
+@pytest.mark.parametrize("reason", ["error", "repetition"])
 def test_defect_completion_reasons_are_still_refused(reason: str) -> None:
     with pytest.raises(contract.ContractError) as excinfo:
         _validate(length_terminated=REAL_LENGTH, **{reason: 1})
     message = str(excinfo.value)
     assert "forbidden completion reasons present" in message
     assert f"{reason}=1" in message  # names the measured value
+
+
+def test_an_abort_with_no_declared_budget_cap_is_still_refused() -> None:
+    """The abort class is CONDITIONAL, and the condition is a declaration.
+
+    Every campaign that ran before 2026-08-13 declares zero capped tasks, so
+    abort stays pinned at zero for all of them -- an abort nobody asked for
+    still means the engine did not serve what was asked.
+    """
+    with pytest.raises(contract.ContractError) as excinfo:
+        _validate(length_terminated=REAL_LENGTH, abort=1)
+    message = str(excinfo.value)
+    assert "abort=1" in message
+    assert "capped_requests=0" in message
+    assert "no declared budget cap" in message
 
 
 def test_a_short_stop_count_is_still_refused_and_names_the_numbers() -> None:
@@ -321,8 +337,11 @@ def test_the_class_lists_are_exhaustive_over_the_metric_family() -> None:
     """Every finished_reason the snapshot parses is in exactly one list."""
     classes = set(contract.QWEN_TERMINAL_COMPLETION_REASONS)
     forbidden = set(contract.QWEN_FORBIDDEN_COMPLETION_REASONS)
+    capped = {contract.QWEN_CAPPED_COMPLETION_REASON}
     assert classes.isdisjoint(forbidden)
-    assert classes | forbidden == {
+    assert classes.isdisjoint(capped)
+    assert forbidden.isdisjoint(capped)
+    assert classes | forbidden | capped == {
         "stop",
         "length",
         "abort",
@@ -357,7 +376,7 @@ def test_the_shared_helper_accepts_length_and_refuses_defects(
     counts = contract._fixed32_qwen_completion_classes(
         deltas, completed=390, scope=scope
     )
-    assert counts == {"stop": 389, "length": 1}
+    assert counts == {"stop": 389, "length": 1, "abort": 0}
     broken = dict(deltas, request_success_error=1)
     with pytest.raises(contract.ContractError, match=f"qwen {scope} engine"):
         contract._fixed32_qwen_completion_classes(
