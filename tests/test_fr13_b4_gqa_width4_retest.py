@@ -273,6 +273,9 @@ def _good_engagement(**overrides):
         "task_count": 16,
         "candidate_served": True,
         "fallback_allowed": False,
+        # The SEALED token. Mark's ruling 2026-08-13 widened it, and readers
+        # must keep accepting the old one or the banked +29.50 ms/step
+        # width-4 pair stops being re-reducible.
         "candidate_scope": "final_fixed32_b4_full_graph_only",
     }
     record.update(overrides)

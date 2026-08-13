@@ -482,7 +482,12 @@ def test_b4_helper_block_serves_the_gqa_pair_sentinel_fail_closed() -> None:
     assert "astropy__astropy-14995" in helpers
     assert "FR13 qrow32 B4 production silently fell back" in helpers
     assert "FR13 qrow32 B4 production geometry drifted" in helpers
-    assert "capture_num_reqs != 4" in helpers
+    # MARK'S RULING 2026-08-13: the qualified capture widths are (3, 4),
+    # not 4 alone. Width 3 is served by padding to the canonical width-4
+    # geometry; widths 1 and 2 are still declared bypasses.
+    assert "capture_num_reqs not in _FR13_FA2_QROW32_B34_WIDTHS" in helpers
+    assert "_FR13_FA2_QROW32_B34_WIDTHS = (3, 4)" in helpers
+    assert "capture_num_reqs != 4" not in helpers
     assert "torch.empty_strided(" in helpers
     assert '"candidate_served": True' in helpers
     # The sub-B4 FULL captures the fixed32 runtime mandates, and any
@@ -701,22 +706,26 @@ def test_sub_b4_full_captures_bypass_instead_of_killing_the_server(
     # it is startup on the candidate arm.
     state["capturing"] = True
     bias = object()
-    for batch in (1, 2, 3):
+    # Widths 1 and 2 are excluded on ECONOMICS, not safety: stock already fits
+    # one 48-CTA wave there, so the paired kernel cannot pay. Width 3 became a
+    # QUALIFIED operating point under Mark's ruling 2026-08-13 and is covered
+    # by tests/test_fr13_qrow32_b34_padded.py.
+    for batch in (1, 2):
         gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
             "graph_id": 100 + batch,
             "descriptor": {"num_reqs": batch, "runtime_mode": "FULL"},
         }
         selection = _begin(namespace, bias)
         assert selection["candidate_served"] is False
-        assert selection["bypass_reason"] == "non_b4_capture"
+        assert selection["bypass_reason"] == "non_b34_capture"
         # The untagged operand and the caller's num_splits: stock dispatch.
         assert selection["tree_bias"] is bias
         assert selection["num_splits"] == 0
         namespace["_fr13_fa2_qrow32_b4_production_end"](
             selection, completed=True
         )
-    assert namespace["_FR13_FA2_QROW32_B4_BYPASS_COUNTS"]["non_b4_capture"] == 3
-    # No sub-B4 graph engaged the candidate.
+    assert namespace["_FR13_FA2_QROW32_B4_BYPASS_COUNTS"]["non_b34_capture"] == 2
+    # No sub-qualified graph engaged the candidate.
     assert namespace["_FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS"] == {}
 
 
@@ -785,6 +794,8 @@ def test_capture_end_tolerates_sub_b4_graphs_but_not_a_sentinel_leak(
     namespace["_FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS"][11] = {
         "layers": {"language_model.model.layers.3.self_attn.attn"},
         "arm": "gqa_pair",
+        "staged_layers": set(),
+        "batch_size": 1,
     }
     with pytest.raises(RuntimeError, match="engaged outside FULL B4"):
         capture_end(11, "a" * 64, "FULL", 1)
@@ -810,12 +821,19 @@ def test_the_engagement_record_discloses_its_scope_and_bypasses(
     namespace["_FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS"][21] = {
         "layers": set(layers),
         "arm": "gqa_pair",
+        "staged_layers": set(),
+        "batch_size": 4,
     }
     namespace["_fr13_fa2_qrow32_b4_production_capture_end"](
         21, "c" * 64, "FULL", 4
     )
     record = json.loads(engagement.read_text(encoding="ascii"))
-    assert record["candidate_scope"] == "final_fixed32_b4_full_graph_only"
+    # Mark's ruling 2026-08-13 widened the scope token; the canonical width
+    # still writes the ORIGINAL filename, which the sealed timing lineage reads.
+    assert record["candidate_scope"] == "final_fixed32_b34_full_graph_only"
+    assert record["candidate_scope_widths"] == [3, 4]
+    assert record["batch_size"] == 4
+    assert record["padded_to_canonical_width"] is False
     assert record["bypass_counts"]["outside_capture"] == 1
     assert record["layer_count"] == 16
     assert record["candidate_served"] is True
