@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 import hashlib
 import importlib.util
 import json
@@ -3439,6 +3440,101 @@ def test_fixed32_runtime_manifest_includes_qwen_settings() -> None:
         ),
         "size": 37,
     }
+
+
+def _closure_cardinality_fixture_spec() -> Any:
+    return runtime_manifest.ProfileSpec(
+        host_script_source=("scripts/driver.sh",),
+        python_package_source=(
+            "src/fixture_pkg/__init__.py",
+            "src/fixture_pkg/helper.py",
+        ),
+        runtime_data_and_config=(".secret.env", "config/runtime.json"),
+        required_absence=("output/fallback/corpus_active.jsonl",),
+        verdict_tools=("scripts/verdict.py",),
+        package_dir="src/fixture_pkg",
+        package_name="fixture_pkg",
+        package_file_count=2,
+    )
+
+
+def test_runtime_closure_cardinality_matches_a_real_built_manifest(
+    tmp_path: Path,
+) -> None:
+    """The gate's derivation must reproduce build_manifest's own summary.
+
+    This is the cross-check that stops the two from drifting apart again.  It
+    builds a REAL manifest from a fixture profile and compares, so a change to
+    how build_manifest counts a closure fails here rather than silently making
+    the per-pass gate unsatisfiable in the middle of a campaign.  It is
+    deliberately hermetic -- a temp repo, not the checkout -- so it states the
+    invariant even where the shipped closure is not fully materialised.
+    """
+    spec = _closure_cardinality_fixture_spec()
+    sequence = "scripts/fixture_seq.sh"
+    fixture_files = {
+        "scripts/driver.sh": b"#!/usr/bin/env bash\nset -eu\n",
+        sequence: b"run_variant tail fixed32 31 1\n",
+        "scripts/verdict.py": b"print('verdict')\n",
+        "src/fixture_pkg/__init__.py": b"from .helper import VALUE\n",
+        "src/fixture_pkg/helper.py": b"VALUE = 32\n",
+        ".secret.env": b"API_TOKEN=do-not-emit-this-value\n",
+        "config/runtime.json": b'{"rows":32}\n',
+    }
+    for relative_path, content in fixture_files.items():
+        target = tmp_path / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+    manifest = runtime_manifest.build_manifest(
+        tmp_path,
+        profile="fixed32",
+        sequence=sequence,
+        spec_override=spec,
+    )
+    summary = manifest["summary"]
+    assert floor_gate.runtime_closure_cardinality(spec, sequence=sequence) == (
+        summary["file_count"],
+        summary["python_package_file_count"],
+    )
+
+
+def test_runtime_closure_cardinality_follows_the_shipped_fixed32_profile() -> None:
+    """The shipped cardinality is derived from the profile, never transcribed.
+
+    The literals this replaced (62 files / 25 Python package files) went stale
+    twice -- the profile grew to 90/26 and then to 151/30 -- and because the gate
+    demanded the stale numbers, every fixed32 pass exited rc=2 on a closure that
+    was perfectly healthy.  Recompute independently here so a future closure
+    change fails this test instead of a campaign.
+    """
+    spec = runtime_manifest.PROFILES[floor_gate.RUNTIME_MANIFEST_PROFILE]
+    # build_manifest appends the sequence to host_script_source, and counts it.
+    assert floor_gate.RUNTIME_MANIFEST_SEQUENCE not in spec.host_script_source
+    expected_file_count = (
+        len(spec.host_script_source)
+        + 1
+        + len(spec.python_package_source)
+        + len(spec.runtime_data_and_config)
+        + len(spec.verdict_tools)
+    )
+    assert len(spec.python_package_source) == spec.package_file_count
+    assert floor_gate.runtime_closure_cardinality() == (
+        expected_file_count,
+        spec.package_file_count,
+    )
+
+
+def test_runtime_closure_cardinality_rejects_a_self_inconsistent_profile() -> None:
+    """A profile contradicting its own package tuple fails closed.
+
+    This is the exact contradiction the old literal encoded: the gate demanded 25
+    Python package files while the profile declared 26, so no tree whatsoever
+    could satisfy both halves.
+    """
+    spec = _closure_cardinality_fixture_spec()
+    contradictory = dataclasses.replace(spec, package_file_count=3)
+    with pytest.raises(floor_gate.GateError, match="self-inconsistent"):
+        floor_gate.runtime_closure_cardinality(contradictory)
 
 
 def test_fixed32_retry_policy_is_exactly_zero(

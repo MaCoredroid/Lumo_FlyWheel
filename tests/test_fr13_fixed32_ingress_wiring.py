@@ -133,6 +133,108 @@ def test_fixed32_offload_uses_stdin_secret_and_disables_raw_dumps() -> None:
     assert "fixed32 requires OFFLOAD_AGENT=1" in serve
 
 
+OFFLOAD_PREFLIGHT_START = 'OFFLOAD_PREFLIGHT_ATTEMPTS="${OFFLOAD_PREFLIGHT_ATTEMPTS:-3}"'
+OFFLOAD_PREFLIGHT_END = (
+    'echo "[offload] alienware -> GB10 vLLM $GB10_TS_IP:$PORT/health OK"'
+)
+
+
+def _offload_preflight_fragment() -> str:
+    serve = source(SERVE)
+    start = serve.index(OFFLOAD_PREFLIGHT_START)
+    end = serve.index(OFFLOAD_PREFLIGHT_END, start) + len(OFFLOAD_PREFLIGHT_END)
+    return serve[start:end]
+
+
+def _run_offload_preflight(
+    tmp_path: Path, *, succeed_on: int | None
+) -> subprocess.CompletedProcess[str]:
+    """Drive the REAL preflight fragment with ssh and sleep stubbed out.
+
+    ``succeed_on`` is the 1-based attempt from which the link starts answering;
+    ``None`` means it never does.
+    """
+    counter = tmp_path / "attempts"
+    counter.write_text("0", encoding="utf-8")
+    harness = f"""
+set -uo pipefail
+OFFLOAD_HOST=alienware
+GB10_TS_IP=10.0.0.1
+PORT=8000
+COUNTER={counter}
+SUCCEED_ON="{'' if succeed_on is None else succeed_on}"
+ssh() {{
+  local n
+  n=$(( $(cat "$COUNTER") + 1 ))
+  echo "$n" > "$COUNTER"
+  if [[ -n "$SUCCEED_ON" && "$n" -ge "$SUCCEED_ON" ]]; then echo ok; fi
+}}
+sleep() {{ echo "SLEPT $1"; }}
+{_offload_preflight_fragment()}
+"""
+    return subprocess.run(
+        ["bash", "-c", harness], capture_output=True, text=True, timeout=60
+    )
+
+
+def test_offload_preflight_survives_a_transient_link_blip(tmp_path: Path) -> None:
+    """A blip must not kill the arm at boot.
+
+    This was one ssh+curl with zero retry, so an arm's entire boot rode on a
+    single packet -- the leading edge of the 2026-08-11 alienware outage killed
+    an arm over a link that was serving again seconds later.
+    """
+    result = _run_offload_preflight(tmp_path, succeed_on=3)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "preflight attempt 1/3: alienware cannot reach" in result.stdout
+    assert "preflight attempt 2/3: alienware cannot reach" in result.stdout
+    assert "preflight attempt 3/3: link OK" in result.stdout
+    assert "alienware -> GB10 vLLM" in result.stdout
+    # Bounded, and it actually waits between attempts rather than spinning.
+    assert result.stdout.count("SLEPT 25") == 2
+
+
+def test_offload_preflight_still_fails_closed_when_the_link_stays_down(
+    tmp_path: Path,
+) -> None:
+    """Retry buys tolerance for a blip, never for a down link.
+
+    Same rc and same message as the single-shot version -- only the number of
+    chances changed.
+    """
+    result = _run_offload_preflight(tmp_path, succeed_on=None)
+    assert result.returncode == 5, result.stdout + result.stderr
+    assert "FAIL: alienware cannot reach GB10 vLLM" in result.stdout
+    assert "set OFFLOAD_AGENT=0 to fall back" in result.stdout
+    assert "alienware -> GB10 vLLM" not in result.stdout
+    # Every attempt is on the record, and the window is bounded.
+    for attempt in (1, 2, 3):
+        assert f"preflight attempt {attempt}/3: alienware cannot reach" in result.stdout
+    assert result.stdout.count("SLEPT 25") == 2
+
+
+def test_offload_preflight_does_not_wait_when_the_link_is_already_up(
+    tmp_path: Path,
+) -> None:
+    result = _run_offload_preflight(tmp_path, succeed_on=1)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "preflight attempt 1/3: link OK" in result.stdout
+    assert "SLEPT" not in result.stdout
+
+
+def test_offload_preflight_retry_window_is_about_a_minute() -> None:
+    """3 attempts with 25s between them, plus the per-attempt ssh/curl timeouts.
+
+    Pinned so the window cannot be widened into something that silently delays a
+    campaign's failure, nor narrowed back into a single shot.
+    """
+    fragment = _offload_preflight_fragment()
+    assert 'OFFLOAD_PREFLIGHT_ATTEMPTS="${OFFLOAD_PREFLIGHT_ATTEMPTS:-3}"' in fragment
+    assert 'OFFLOAD_PREFLIGHT_SLEEP_S="${OFFLOAD_PREFLIGHT_SLEEP_S:-25}"' in fragment
+    assert "-o ConnectTimeout=15" in fragment
+    assert "curl -fsS -m 6" in fragment
+
+
 def test_fixed32_preflight_covers_deny_default_alternate_routes() -> None:
     proxy = source(OFFLOAD)
     engine = source(SERVE)
