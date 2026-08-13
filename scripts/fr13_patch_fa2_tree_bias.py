@@ -5754,6 +5754,49 @@ _FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS = (
 _FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256 = (
     "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
 )
+# The 16-task pool, byte-pinned identically to fr13_floor_gate.EVIDENCE_SETS[16].
+# exact4 is literally its first four entries, so this is the SAME traffic
+# generator run against a deeper admission pool -- not a new workload.
+_FR13_FA2_QROW32_B4_POOL16_TASK_IDS = _FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS + (
+    "astropy__astropy-13453",
+    "astropy__astropy-13579",
+    "astropy__astropy-13977",
+    "astropy__astropy-14096",
+    "astropy__astropy-14182",
+    "astropy__astropy-14309",
+    "astropy__astropy-14365",
+    "astropy__astropy-14369",
+    "astropy__astropy-14508",
+    "astropy__astropy-14539",
+    "astropy__astropy-14598",
+    "astropy__astropy-14995",
+)
+_FR13_FA2_QROW32_B4_POOL16_SUBSET_SHA256 = (
+    "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"
+)
+# WHY TWO SETS ARE LEGAL AND A THIRD IS NOT.
+#
+# The dual raw-byte gate qualified a GEOMETRY, not a task list: the final fixed32
+# B4 FULL graph at 4 slots x 32 physical rows = 128 query rows, 16 target layers,
+# batch stride 0x20014.  A 16-task pool at 4 slots serves that IDENTICAL geometry
+# -- MAX_NUM_SEQS is still 4, SWE_CONCURRENCY is still 4, total_query_rows is
+# still 128.  What changes is only which tasks occupy the four slots and how
+# often a finishing task is replaced rather than leaving the width to decay.
+#
+# So the binding is widened to exactly the two byte-pinned evidence sets the
+# campaign already owns, and NOT to "any subset": an unpinned task list would
+# let an arm serve traffic whose shape was never qualified, and the whole point
+# of this predicate is that the candidate is served only where it is qualified.
+_FR13_FA2_QROW32_B4_EVIDENCE_SETS = {
+    4: (
+        _FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS,
+        _FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256,
+    ),
+    16: (
+        _FR13_FA2_QROW32_B4_POOL16_TASK_IDS,
+        _FR13_FA2_QROW32_B4_POOL16_SUBSET_SHA256,
+    ),
+}
 # The candidate is qualified for exactly one operating point: the final fixed32
 # B4 FULL graph. Every other tree-attention decode the runtime is REQUIRED to
 # execute -- the memory-profile bootstrap graph, the mandatory FULL captures for
@@ -5839,7 +5882,13 @@ def _fr13_fa2_qrow32_b4_require_identity(arm):
     return candidate_digest, source_commit, patch_source
 
 
-def _fr13_fa2_qrow32_b4_require_exact4():
+def _fr13_fa2_qrow32_b4_require_canonical_task_set():
+    """Resolve the served evidence set, refusing anything not byte-pinned.
+
+    Returns (task_ids, subset_sha256).  The pair must match one of the two
+    campaign evidence sets ENTIRELY -- task list AND subset digest -- so a run
+    cannot mix the exact4 digest with a 16-task list or vice versa.
+    """
     task_ids = tuple(
         value
         for value in os.environ.get(
@@ -5848,12 +5897,12 @@ def _fr13_fa2_qrow32_b4_require_exact4():
         if value
     )
     subset = os.environ.get("FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256", "")
-    if (
-        task_ids != _FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS
-        or subset != _FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256
-    ):
-        raise RuntimeError("FR13 qrow32 B4 production exact4 identity drifted")
-    return task_ids
+    expected = _FR13_FA2_QROW32_B4_EVIDENCE_SETS.get(len(task_ids))
+    if expected is None or (task_ids, subset) != expected:
+        raise RuntimeError(
+            "FR13 qrow32 B4 production canonical task-set identity drifted"
+        )
+    return task_ids, subset
 
 
 def _fr13_fa2_qrow32_b4_geometry_mismatches(
@@ -6050,7 +6099,7 @@ def _fr13_fa2_qrow32_b4_production_begin(
         raise RuntimeError("FR13 qrow32 B4 production has no launcher attestation")
     _fr13_fa2_qrow32_b4_require_k64()
     fixed32_mode = _fr13_fa2_qrow32_b4_require_topology()
-    task_ids = _fr13_fa2_qrow32_b4_require_exact4()
+    task_ids, _subset_sha256 = _fr13_fa2_qrow32_b4_require_canonical_task_set()
     candidate_digest, source_commit, patch_source_digest = (
         _fr13_fa2_qrow32_b4_require_identity(arm)
     )
@@ -6191,6 +6240,7 @@ def _fr13_fa2_qrow32_b4_production_record(
     *, arm, runtime_mode, graph_id, graph_signature, layers, calls,
 ):
     config = _FR13_FA2_QROW32_B4_ARMS[arm]
+    task_ids, subset_sha256 = _fr13_fa2_qrow32_b4_require_canonical_task_set()
     return {
         "schema": "fr13.fixed32.fa2_qrow32_b4_production_engagement.v1",
         "status": "ENGAGED", "runtime_mode": runtime_mode,
@@ -6213,8 +6263,9 @@ def _fr13_fa2_qrow32_b4_production_record(
             "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256"
         ],
         "dual_gate_sha256": os.environ["FR13_FA2_QROW32_B4_DUAL_GATE_SHA256"],
-        "task_ids": list(_FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS),
-        "subset_sha256": _FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256,
+        "task_ids": list(task_ids),
+        "subset_sha256": subset_sha256,
+        "task_count": len(task_ids),
         "draft_vocab_root": 1, "draft_vocab_k": 65536,
         "candidate_served": True, "fallback_allowed": False,
         "candidate_scope": "final_fixed32_b4_full_graph_only",

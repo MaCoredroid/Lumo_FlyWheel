@@ -1690,6 +1690,27 @@ if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" ]]; then
   # served kernel selector alone. So the binary/source/commit provenance is
   # required identically on the stock-dispatch arm and the candidate arm.
   _FR13_FA2_QROW32_B4_CANDIDATE_MODE=1
+  # THE QUALIFIED THING IS A GEOMETRY, NOT A TASK LIST.  The dual raw-byte gate
+  # qualified the final fixed32 B4 FULL graph: 4 slots x 32 physical rows = 128
+  # query rows, 16 target layers, batch stride 0x20014.  A 16-task pool at 4
+  # slots serves that IDENTICAL geometry -- MAX_NUM_SEQS and SWE_CONCURRENCY are
+  # still pinned to 4 below -- and exact4 is literally the first four entries of
+  # that pool.  What differs is only how often a finishing task is replaced
+  # instead of letting the served width decay.
+  #
+  # So this predicate admits exactly the two byte-pinned campaign evidence sets
+  # (fr13_floor_gate.EVIDENCE_SETS 4 and 16) and NOTHING else: an unpinned task
+  # list would let an arm serve traffic whose shape was never qualified, which
+  # is the precise failure this check exists to prevent.  The pair must match a
+  # set ENTIRELY -- ids AND digest -- so an exact4 digest cannot be paired with a
+  # 16-task list.
+  _FR13_FA2_QROW32_B4_TASK_SET=
+  case "${FR13_FA2_QROW32_B4_EXACT4_TASK_IDS}|${FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256}" in
+    "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398|0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5")
+      _FR13_FA2_QROW32_B4_TASK_SET=exact4 ;;
+    "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995|47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c")
+      _FR13_FA2_QROW32_B4_TASK_SET=pool16 ;;
+  esac
   [[ ( "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" \
        || "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ) \
      && "$MAX_NUM_SEQS" == "4" \
@@ -1709,11 +1730,11 @@ if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" ]]; then
      && "$FR13_FA2_QROW32_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ \
      && "$FR13_FA2_QROW32_SOURCE_COMMIT" == "$(git rev-parse HEAD)" \
      && "$FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)" \
-     && "$FR13_FA2_QROW32_B4_EXACT4_TASK_IDS" == "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398" \
-     && "$FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256" == "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5" ]] || {
-    echo "FR13 qrow32 B4 GQA-pair timing requires canonical exact4 B4 K64/root1 identity and pinned binary/source provenance" >&2
+     && -n "$_FR13_FA2_QROW32_B4_TASK_SET" ]] || {
+    echo "FR13 qrow32 B4 GQA-pair timing requires a byte-pinned canonical B4 evidence set (exact4 or pool16) with K64/root1 identity and pinned binary/source provenance" >&2
     exit 2
   }
+  echo "FR13 qrow32 B4 timing evidence set: $_FR13_FA2_QROW32_B4_TASK_SET" >&2
 fi
 if [[ -n "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" ]]; then
   [[ -f "$FR13_FA2_QROW32_B4_DUAL_GATE_JSON" \

@@ -463,7 +463,23 @@ def test_b4_helper_block_serves_the_gqa_pair_sentinel_fail_closed() -> None:
     assert "299813360" in helpers
     assert "FR13 qrow32 B4 production has no launcher attestation" in helpers
     assert "FR13 qrow32 B4 pinned identity drifted" in helpers
-    assert "FR13 qrow32 B4 production exact4 identity drifted" in helpers
+    assert (
+        "FR13 qrow32 B4 production canonical task-set identity drifted" in helpers
+    )
+    # The served EVIDENCE SET is byte-pinned to exactly the two campaign sets --
+    # exact4 and the 16-task pool -- and to nothing else. The dual raw-byte gate
+    # qualified a GEOMETRY (128 query rows, 16 target layers), which pool16 at 4
+    # slots serves identically; an UNPINNED task list must still be refused.
+    assert (
+        "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+        in helpers
+    )
+    assert (
+        "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"
+        in helpers
+    )
+    assert "_FR13_FA2_QROW32_B4_EVIDENCE_SETS" in helpers
+    assert "astropy__astropy-14995" in helpers
     assert "FR13 qrow32 B4 production silently fell back" in helpers
     assert "FR13 qrow32 B4 production geometry drifted" in helpers
     assert "capture_num_reqs != 4" in helpers
@@ -475,6 +491,106 @@ def test_b4_helper_block_serves_the_gqa_pair_sentinel_fail_closed() -> None:
     assert "FR13 qrow32 B4 production ran outside capture or eager" not in helpers
     assert "FR13 qrow32 B4 production captured outside FULL B4" not in helpers
     assert "FR13 qrow32 B4 production engaged outside FULL B4" in helpers
+
+
+def _b4_task_set_resolver():
+    """Execute just enough of the helper block to call the task-set resolver."""
+    patcher = _module(PATCHER, "qrow32_b4_task_set_exec")
+    namespace: dict[str, object] = {"os": os, "__name__": "fr13_b4_task_set"}
+    exec(  # noqa: S102 - the helper block is repo source, executed on purpose
+        compile(
+            patcher.FIXED32_QUERY_TILE32_B4_PRODUCTION_HELPERS,
+            "<b4_helpers>",
+            "exec",
+        ),
+        namespace,
+    )
+    return namespace["_fr13_fa2_qrow32_b4_require_canonical_task_set"], namespace
+
+
+EXACT4_IDS = (
+    "astropy__astropy-12907,astropy__astropy-13033,"
+    "astropy__astropy-13236,astropy__astropy-13398"
+)
+EXACT4_SHA = "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+POOL16_SHA = "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"
+
+
+def _pool16_ids() -> str:
+    _resolver, namespace = _b4_task_set_resolver()
+    return ",".join(namespace["_FR13_FA2_QROW32_B4_POOL16_TASK_IDS"])
+
+
+@pytest.mark.parametrize(
+    "ids,sha,expected_count",
+    [
+        (EXACT4_IDS, EXACT4_SHA, 4),
+        (None, POOL16_SHA, 16),  # None -> the pinned 16-task pool, resolved below
+    ],
+)
+def test_b4_task_set_admits_exactly_the_two_pinned_evidence_sets(
+    monkeypatch: pytest.MonkeyPatch, ids, sha, expected_count
+) -> None:
+    """Both campaign evidence sets are legal; both are resolved intact."""
+    resolver, _ = _b4_task_set_resolver()
+    task_ids = ids if ids is not None else _pool16_ids()
+    monkeypatch.setenv("FR13_FA2_QROW32_B4_EXACT4_TASK_IDS", task_ids)
+    monkeypatch.setenv("FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256", sha)
+    resolved_ids, resolved_sha = resolver()
+    assert len(resolved_ids) == expected_count
+    assert resolved_sha == sha
+    assert ",".join(resolved_ids) == task_ids
+
+
+@pytest.mark.parametrize(
+    "ids,sha,reason",
+    [
+        # A digest from one set paired with the id list of the other: the pair
+        # must match a set ENTIRELY, so a mixed pairing is refused.
+        (EXACT4_IDS, POOL16_SHA, "exact4 ids with the pool16 digest"),
+        (None, EXACT4_SHA, "pool16 ids with the exact4 digest"),
+        # An unpinned subset of a legal set is NOT legal: the candidate must
+        # never serve traffic whose shape was not qualified.
+        (
+            "astropy__astropy-12907,astropy__astropy-13033",
+            EXACT4_SHA,
+            "an unpinned 2-task list",
+        ),
+        ("", EXACT4_SHA, "an empty task list"),
+        (EXACT4_IDS, "", "no digest at all"),
+        (
+            EXACT4_IDS + ",astropy__astropy-13453",
+            EXACT4_SHA,
+            "exact4 plus one extra task",
+        ),
+    ],
+)
+def test_b4_task_set_refuses_anything_not_byte_pinned(
+    monkeypatch: pytest.MonkeyPatch, ids, sha, reason
+) -> None:
+    resolver, _ = _b4_task_set_resolver()
+    task_ids = ids if ids is not None else _pool16_ids()
+    monkeypatch.setenv("FR13_FA2_QROW32_B4_EXACT4_TASK_IDS", task_ids)
+    monkeypatch.setenv("FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256", sha)
+    with pytest.raises(RuntimeError, match="canonical task-set identity drifted"):
+        resolver()
+
+
+def test_b4_pool16_set_is_exact4_plus_twelve_and_matches_the_repo_subset() -> None:
+    """The pinned pool must BE the repo's byte-pinned EVIDENCE_SETS[16]."""
+    import hashlib
+    import json
+
+    _resolver, namespace = _b4_task_set_resolver()
+    pool = namespace["_FR13_FA2_QROW32_B4_POOL16_TASK_IDS"]
+    exact4 = namespace["_FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS"]
+    assert len(pool) == 16
+    assert pool[:4] == exact4, "exact4 must be the first four of the pool"
+
+    subset = PATCHER.parent.parent / "config/fr13_fixed32/subset_b4_sixteen.json"
+    raw = subset.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == POOL16_SHA
+    assert sorted(json.loads(raw)["instance_ids"]) == sorted(pool)
 
 
 # --------------------------------------------------------------------------
