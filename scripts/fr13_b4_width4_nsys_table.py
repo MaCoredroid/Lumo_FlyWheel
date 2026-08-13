@@ -173,6 +173,30 @@ def render(doc: dict[str, Any]) -> str:
               f"{_fmt(p.get('idle_ms_per_step'), '10.3f')}{p.get('ops', 0):>10,}")
         w("")
 
+    bc = doc.get("capture_batch_conditioned_wall")
+    if bc:
+        w(_bar())
+        w("2b. BATCH-CONDITIONED WALL INSIDE THE CAPTURE, AND MEASURED CUPTI COST")
+        w(_bar())
+        w(f"  {'width':<10}{'steps':>9}{'frac':>9}{'mean ms':>11}")
+        for k, v in sorted(bc.get("by_width", {}).items()):
+            w(f"  {k:<10}{v['steps']:>9,}"
+              f"{_fmt(100 * (v['fraction'] or 0), '8.1f')}%{_fmt(v['mean_ms'], '11.2f')}")
+        w(f"  {'blend':<10}{bc.get('wall_samples_in_capture', 0):>9,}"
+          f"{'':>9}{_fmt(bc.get('direct_blend_step_wall_ms'), '11.2f')}")
+        if bc.get("width4_step_wall_ms_profiled") is not None:
+            w("")
+            w(f"  width-4 wall, THIS capture (profiled)  : "
+              f"{_fmt(bc['width4_step_wall_ms_profiled'], '.2f')} ms/step")
+            w(f"  width-4 wall, sealed (UNPROFILED)      : "
+              f"{_fmt(bc['sealed_width4_step_wall_ms_unprofiled'], '.2f')} ms/step")
+            w(f"  => CUPTI inflation                     : "
+              f"{_fmt(bc['cupti_inflation_ms_per_step'], '+.2f')} ms/step "
+              f"({_fmt(bc['cupti_inflation_pct'], '+.1f')}%)")
+            w("     Measured on a like-for-like width-4 population.")
+            w("     REPORTED, NEVER SUBTRACTED.")
+        w("")
+
     m = doc.get("nvtx_vs_counter_phase_mapping")
     if m:
         w(_bar())

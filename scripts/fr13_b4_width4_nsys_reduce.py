@@ -64,6 +64,10 @@ HOST_TAIL_RANGES = {
     "kv_bookkeep": "fr13.fixed32.kv_bookkeep",
 }
 
+# Sealed UNPROFILED batch==4 step wall for tail6_fixed32, from
+# scripts/fr13_b4_batch_conditioned_wall.py over the 4 banked Tail23 arms.
+SEALED_WIDTH4_MS = 411.05
+
 C_STEPS = "vllm:fr13_decode_forward_gpu_steps_total"
 C_DRAFTS = "vllm:fr13_decode_forward_gpu_drafts_total"
 C_SFWD_S = "vllm:fr13_decode_forward_gpu_seconds_total"
@@ -436,6 +440,64 @@ def main() -> int:
         }
     else:
         out["census_cross_check"] = {"status": "census_absent"}
+
+    # ---- 3b. the capture's OWN batch-conditioned wall -------------------
+    # The attribution denominator should be the wall of a WIDTH-4 step, not a
+    # width blend. The SFWD per-step samples sidecar carries per-step wall and
+    # per-step width keyed by absolute forward-step index, so the captured step
+    # range can be conditioned directly (see
+    # scripts/fr13_b4_batch_conditioned_wall.py, which establishes that the
+    # sealed unprofiled width-4 wall is 411.05 ms Tail23 / 413.14 ms Hydra27).
+    #
+    # Comparing the capture's width-4 wall against that unprofiled width-4 wall
+    # MEASURES the CUPTI inflation on a like-for-like population, instead of
+    # leaving it as an unquantified caveat. Nothing is subtracted anywhere on
+    # the strength of it.
+    import glob as _glob
+    sc = sorted(_glob.glob(str(
+        runroot.parent / "fr13_sfwd_sidecar" / f"{args.arm}.json.samples.*")))
+    if sc:
+        doc_s = json.loads(Path(sc[-1]).read_text())
+        lo = int(out["capture"]["inner_first_step"])
+        hi = int(out["capture"]["inner_last_step_exclusive"])
+        byw: dict[int, list[float]] = {}
+        for i, msv, wv in zip(doc_s.get("wall_fwd_indices", []),
+                              doc_s.get("wall_ms", []),
+                              doc_s.get("wall_drafts", [])):
+            if lo <= i < hi:
+                byw.setdefault(int(wv), []).append(float(msv))
+        allv = [v for vs in byw.values() for v in vs]
+        rec: dict[str, Any] = {
+            "samples_path": sc[-1],
+            "samples_capped": bool(doc_s.get("samples_capped")),
+            "wall_samples_in_capture": len(allv),
+            "direct_blend_step_wall_ms": (sum(allv) / len(allv)) if allv else None,
+            "by_width": {
+                str(w): {
+                    "steps": len(v),
+                    "fraction": len(v) / len(allv) if allv else None,
+                    "mean_ms": sum(v) / len(v),
+                }
+                for w, v in sorted(byw.items())
+            },
+        }
+        full = byw.get(4, [])
+        if full:
+            rec["width4_step_wall_ms_profiled"] = sum(full) / len(full)
+            rec["width4_steps"] = len(full)
+            rec["sealed_width4_step_wall_ms_unprofiled"] = SEALED_WIDTH4_MS
+            rec["cupti_inflation_ms_per_step"] = (
+                rec["width4_step_wall_ms_profiled"] - SEALED_WIDTH4_MS
+            )
+            rec["cupti_inflation_pct"] = (
+                100.0 * rec["cupti_inflation_ms_per_step"] / SEALED_WIDTH4_MS
+            )
+            rec["note"] = (
+                "CUPTI inflation MEASURED on a like-for-like width-4 "
+                "population. It is reported, never subtracted: no GPU total in "
+                "this artifact has any profiler cost netted out of it."
+            )
+        out["capture_batch_conditioned_wall"] = rec
 
     # ---- 4. pool ledger: prove the capture sat inside the window ---------
     ledger = arm_dir / "swe_out" / "verified" / "fr13_task_refill_ledger.jsonl"
