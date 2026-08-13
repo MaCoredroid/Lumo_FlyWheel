@@ -379,7 +379,12 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     assert '"${FR13_FIXED32_CUTLASS_WAVE:-stock}" \\' in serve
     assert '"$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \\' in serve
     assert '"$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB" \\' in serve
-    assert '"$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" <<\'PY\'' in serve
+    assert '"$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" \\' in serve
+    # The capture SHAPE is a selector too, and is passed by the same explicit
+    # discipline. Default-off: unset LUMO_NSYS_START_LATER attests the
+    # canonical wall-gated B1 prefix byte for byte.
+    assert '"${LUMO_NSYS_START_LATER:-0}" \\' in serve
+    assert '"${LUMO_NSYS_OUTPUT:-}" <<\'PY\'' in serve
     assert "attribution_only_text = sys.argv[7]" in serve
     assert "batch_gdn_byte_ab_text = sys.argv[8]" in serve
     assert "batch_gdn_graph_byte_ab_text = sys.argv[9]" in serve
@@ -387,6 +392,11 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     assert "sfwd_b4_byte_ab_text = sys.argv[11]" in serve
     assert "sfwd_conv_postprep_byte_ab_text = sys.argv[12]" in serve
     assert "sfwd_prior_reuse_byte_ab_text = sys.argv[13]" in serve
+    assert "nsys_start_later_text = sys.argv[14]" in serve
+    assert "nsys_capture_output = sys.argv[15] or None" in serve
+    assert "deferred_capture=nsys_start_later_text == \"1\"," in serve
+    assert "nsys_start_later_text = os.environ" not in serve
+    assert "nsys_capture_output = os.environ" not in serve
     assert "attribution_only_text = os.environ" not in serve
     assert "batch_gdn_byte_ab_text = os.environ" not in serve
     assert "batch_gdn_graph_byte_ab_text = os.environ" not in serve

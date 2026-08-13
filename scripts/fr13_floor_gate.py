@@ -211,10 +211,28 @@ ARM_HEADER_RE = re.compile(
 )
 ENGINE_CORE_PID_RE = re.compile(r"^PID (?P<pid>\d+) cmd=\[VLLM::EngineCore(?:\s|\])")
 FIXED32_TREE = fixed32_tree_text()
+# The preseed line the engine actually prints.  fr10_gdn_tree_kernel.py:5514.
+#
+# `single_launch=0` was added to the emitted line by 3b3351cf1 (2026-08-02,
+# "add fixed32 ordered GDN single launch") and this constant was never updated,
+# so from that commit onward EVERY fixed32 in-pass floor gate has failed with
+# "expected exactly one current runtime needle" -- B1 and B4, exact4 and pool16
+# alike.  It went unnoticed because the campaign verdicts come from the offline
+# reducers (fr13_b4_floor_gate_reduce.py et al), which read arm evidence rather
+# than the in-pass gate: the citable exact4 ON gate
+# output/fr13_b4_formal_floor_gate_20260811T041931Z is PASS/citable=true while
+# all five of its passes recorded NOT_EVALUATED_INVALID_INPUT in-pass and rc=2.
+# There it was masked one layer earlier by the closure-cardinality drift that
+# f962c089f fixed; with that gone the stale needle is the only blocker left.
+#
+# single_launch is pinned at 0 deliberately, exactly like route_armed=1 and
+# selfcheck_armed=0: the needle attests the runtime SHAPE, and the shipped stack
+# does not engage the single-launch scan.  Promoting it is a contract change that
+# must update this line, not something the gate should silently accept.
 FIXED32_PRESEED = (
     "[FR13_SUBTREE_PARALLEL] preseeded: n=32 schedule=fixed32 "
     "levels=[1, 11] lens=[5, 7] critical=12 (monolith 32) "
-    "route_armed=1 selfcheck_armed=0"
+    "single_launch=0 route_armed=1 selfcheck_armed=0"
 )
 FIXED32_ENGAGED = (
     "[FR13_SUBTREE_PARALLEL ENGAGED] n_actual=32 schedule=fixed32 critical=12"

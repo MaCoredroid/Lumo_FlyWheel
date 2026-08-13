@@ -2013,7 +2013,9 @@ PY
     "${FR13_FIXED32_CUTLASS_WAVE:-stock}" \
     "$FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB" \
     "$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB" \
-    "$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" <<'PY'
+    "$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" \
+    "${LUMO_NSYS_START_LATER:-0}" \
+    "${LUMO_NSYS_OUTPUT:-}" <<'PY'
 import json
 import subprocess
 import sys
@@ -2035,6 +2037,11 @@ cutlass_wave = sys.argv[10]
 sfwd_b4_byte_ab_text = sys.argv[11]
 sfwd_conv_postprep_byte_ab_text = sys.argv[12]
 sfwd_prior_reuse_byte_ab_text = sys.argv[13]
+# Capture SHAPE for a wrapped (attribution-only) server. Default-off: with
+# LUMO_NSYS_START_LATER unset the expected PID1 argv is the canonical
+# wall-gated B1 prefix, byte for byte.
+nsys_start_later_text = sys.argv[14]
+nsys_capture_output = sys.argv[15] or None
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -2112,6 +2119,12 @@ try:
         pid1.get("argv"),
         concurrency,
         attribution_only=attribution_only_text == "1",
+        deferred_capture=nsys_start_later_text == "1",
+        capture_output=(
+            nsys_capture_output
+            if attribution_only_text == "1" and nsys_capture_output
+            else None
+        ),
         eager_diagnostic=(
             batch_gdn_byte_ab_text == "1"
             or cutlass_wave in {

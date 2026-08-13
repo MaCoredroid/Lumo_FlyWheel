@@ -1,0 +1,82 @@
+{
+  "acceptance_valid": false,
+  "arm_condition": {
+    "armed_at_steps": 1790,
+    "trailing_events_per_step": 3.824,
+    "trailing_step_span": 200
+  },
+  "bracket": {
+    "ambiguity_fraction_of_inner": 0.0,
+    "close_edge_ambiguity_steps": 0,
+    "definition": "inner = [open_hi, close_lo] steps the capture certainly contains; outer = [open_lo, close_hi] steps the capture is certainly contained by.",
+    "inner_first_step": 1790,
+    "inner_last_step_exclusive": 2329,
+    "inner_steps": 539,
+    "open_edge_ambiguity_steps": 0,
+    "outer_first_step": 1790,
+    "outer_last_step_exclusive": 2329,
+    "outer_steps": 539,
+    "total_ambiguity_steps": 0
+  },
+  "citable": false,
+  "close_hi_steps": 2329,
+  "close_lo_steps": 2329,
+  "container_id": "(see profile_meta.txt)",
+  "counters_close_hi": {
+    "vllm:fr13_committer_gpu_seconds_total": 150.744778759,
+    "vllm:fr13_decode_forward_gpu_drafts_total": 8328.0,
+    "vllm:fr13_decode_forward_gpu_seconds_total": 607.472806793,
+    "vllm:fr13_decode_forward_gpu_steps_total": 2329.0,
+    "vllm:fr13_decode_step_wall_drafts_total": 7282.0,
+    "vllm:fr13_decode_step_wall_seconds_total": 786.064314849,
+    "vllm:fr13_decode_step_wall_steps_total": 2004.0,
+    "vllm:fr13_drafter_gpu_seconds_total": 106.546089394
+  },
+  "counters_close_lo": {
+    "vllm:fr13_committer_gpu_seconds_total": 150.744778759,
+    "vllm:fr13_decode_forward_gpu_drafts_total": 8328.0,
+    "vllm:fr13_decode_forward_gpu_seconds_total": 607.472806793,
+    "vllm:fr13_decode_forward_gpu_steps_total": 2329.0,
+    "vllm:fr13_decode_step_wall_drafts_total": 7282.0,
+    "vllm:fr13_decode_step_wall_seconds_total": 786.064314849,
+    "vllm:fr13_decode_step_wall_steps_total": 2004.0,
+    "vllm:fr13_drafter_gpu_seconds_total": 106.546089394
+  },
+  "counters_open_hi": {
+    "vllm:fr13_committer_gpu_seconds_total": 117.304095684,
+    "vllm:fr13_decode_forward_gpu_drafts_total": 6568.0,
+    "vllm:fr13_decode_forward_gpu_seconds_total": 467.287132919,
+    "vllm:fr13_decode_forward_gpu_steps_total": 1790.0,
+    "vllm:fr13_decode_step_wall_drafts_total": 5724.0,
+    "vllm:fr13_decode_step_wall_seconds_total": 601.645136395,
+    "vllm:fr13_decode_step_wall_steps_total": 1533.0,
+    "vllm:fr13_drafter_gpu_seconds_total": 79.48731834
+  },
+  "counters_open_lo": {
+    "vllm:fr13_committer_gpu_seconds_total": 117.304095684,
+    "vllm:fr13_decode_forward_gpu_drafts_total": 6568.0,
+    "vllm:fr13_decode_forward_gpu_seconds_total": 467.287132919,
+    "vllm:fr13_decode_forward_gpu_steps_total": 1790.0,
+    "vllm:fr13_decode_step_wall_drafts_total": 5724.0,
+    "vllm:fr13_decode_step_wall_seconds_total": 601.645136395,
+    "vllm:fr13_decode_step_wall_steps_total": 1533.0,
+    "vllm:fr13_drafter_gpu_seconds_total": 79.48731834
+  },
+  "diagnostic_only": true,
+  "ok": true,
+  "open_hi_steps": 1790,
+  "open_lo_steps": 1790,
+  "recovery_note": "The open edge was driven by the step gate, which then aborted on a misread exit code: `nsys start` returned rc=1 ('Configuring is not allowed in this state.') AFTER the session had already entered Collection. The close edge was therefore driven manually against the same sidecar counter source and the same session. Both edges recorded an ambiguity of 0 steps because the counter did not advance between the pre- and post-call scrapes -- the engine was inside a prefill burst at the open edge and the poll interval is shorter than a step at the close edge. The gate has since been fixed to trust observed session state over exit code.",
+  "requested": {
+    "capture_steps": 400,
+    "max_edge_ambiguity_steps": 25,
+    "min_events_per_step": 3.0,
+    "start_step": 1000,
+    "trailing_steps": 200
+  },
+  "schema": "fr13.b4_width4_nsys_capture.v1",
+  "session": "fr13-fixed32-20260813T030940Z-p2154934",
+  "session_state_after_stop": "Launched",
+  "session_state_before_start": "DelayedCollection",
+  "session_state_during_capture": "Collection"
+}

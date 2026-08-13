@@ -187,10 +187,26 @@ reduce() {  # arm label expect bsize
   local np
   np=$(find "$RUNROOT/$arm/swe_out" -name vllm_metrics_post.txt 2>/dev/null | wc -l)
   echo "[$arm] post-brackets=$np"
+  # The work census, when the arm wrote one. MANDATORY for a STAGGERED bracket
+  # topology (a refilled pool): the envelope max(post)-min(pre) keeps no
+  # independent per-task check, so fr13_measure fail-louds without it -- which is
+  # why every pool16 arm's in-pass reduce died at fr13_measure.py:1744 while its
+  # evidence was perfectly good. Passing it makes this artifact CENSUS-GATED for
+  # nested arms too, which is strictly better than the ungated one it replaces.
+  # Absent census: unchanged behaviour, so no existing campaign shape moves.
+  local census_args=()
+  local census_path="$RUNROOT/$arm/logs/fr13_fixed32_work_census.jsonl"
+  if [ -f "$census_path" ] && [ ! -L "$census_path" ]; then
+    census_args=(--work-census "$census_path")
+    echo "[$arm] work census: $census_path"
+  else
+    echo "[$arm] NO work census — reduce stays ungated"
+  fi
   if [ "$np" -ge 1 ]; then
     .venv/bin/python scripts/fr13_measure.py deploy-speed \
       --arm "$label" --out-root "$RUNROOT/$arm/swe_out" \
       --expected-tok-per-draft "$expect" --batch-size "$bsize" \
+      "${census_args[@]}" \
       --out "$RUNROOT/$arm/deploy_speed_${TAG}.json" 2>&1 | tail -14 \
       || echo "[$arm] deploy-speed reduce FAILED"
   else
