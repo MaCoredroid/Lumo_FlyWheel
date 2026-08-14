@@ -54,6 +54,27 @@ export FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT="${FR13_FA2_QROW32_B1_PRODUCTIO
 # files and compares, exactly as the mamba-narrowing promotion is pinned).
 # A caller that NAMES FR13_FA2_QROW32_B1_PRODUCTION_ARM -- including naming it
 # empty -- is always obeyed; the default applies only when it is unset.
+export FR13_FA2_QROW32_B4_PRODUCTION_ARM_DEFAULT="${FR13_FA2_QROW32_B4_PRODUCTION_ARM_DEFAULT:-gqa_pair}"  # PROMOTED 2026-08-14 (Mark's B4 production default flip ruling, the B4 analogue of the B1 flip 99a511319). The arm B4 SERVING takes when a credentialed launch does not name one. The unit is the sealed PADDED GQA-pair kernel: .so af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb, 299813360 B, closure 9c3f9e751da7b783e9d07d8e40d5bc2234b99e719a1048668bd6c82244ed2d81, candidate_scope final_fixed32_b34_full_graph_only, production_widths 3,4. Evidence: four-pass Hydra27 sealing campaign output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z verdict SEALED_HYDRA27_GAIN -- batch-conditioned width-4 improvement mean 27.03 ms/step, one-sided 95% lower bound 10.82 ms/step, n=4 with balanced SC/CS arm order, placebo width clean in every pass, sealed MDE 4.20 ms; the padded pair output/fr13_b4_width4_timing_padded_20260813T201426Z, width-3 treated 25.16 ms/step against the pre-registered 25.6 +/- 3.5 ms/step; the b34 dual raw-byte gates 0/0 output+LSE mismatches clean AND poisoned-shadow at widths 3 and 4 at two successive commits (output/fr13_fa2_gqa_pair_b34_dual_byte_gate_20260813T173106Z and ...T234051Z); exact16 agent QC PASS results/fr13_b4_exact16_qc_20260814 -- 9/16 resolved = the 21-arm historical median, band 8-11, zero giveups, zero always-resolves regressions.
+# WHY THIS IS *_DEFAULT AND NOT FR13_FA2_QROW32_B4_PRODUCTION_ARM ITSELF: the same
+# reason as the B1 entry above, from the other side. This registry is sourced by
+# fr13_b4_campaign_driver.sh before BSIZE is read, so it cannot see whether the
+# launch about to happen is a B4 serve at all -- and the B4 production selector is
+# a CREDENTIALED selector: exporting it here would hand every arm the registry
+# reaches (including the B=1 arms the same driver runs) a selector the launcher
+# must then refuse at boot for want of a sealed dual gate. So the registry owns
+# the VALUE and the launcher applies it in the one shape where it is legal:
+# fixed32 B=4 / concurrency 4 serving that PRESENTS the sealed b34 dual byte gate.
+# That last clause is the B4-specific part of the scope and it is load-bearing.
+# B=1/concurrency 1 is a rare shape, so the B1 promotion could key on batch alone;
+# B=4/concurrency 4 fixed32 is the shape of the ENTIRE campaign, so batch alone
+# would retarget every floor gate, timing pair and live gate in the tree. The
+# credential is what separates a production serve from a campaign arm: only a
+# launch holding the sealed gate can serve this kernel at all, so only such a
+# launch is promoted. Everything else is left exactly where it was.
+# A caller that NAMES FR13_FA2_QROW32_B4_PRODUCTION_ARM -- including naming it
+# empty -- is always obeyed; the default applies only when it is unset. The two
+# files must never disagree (tests/test_fr13_qrow32_b4_production_default.py
+# parses both and compares, exactly as the B1 flip and the mamba narrowing are).
 # BAKED 2026-07-27 (cleanup+bake, launcher defaults now 1): FR13_COMMITTER_GRAPH,
 # FR13_TAW, FR13_DRAFTER_GRAPH, FR13_PARENT_GATHER (all ran clean in every S1/A-B arm).
 # EXPERIMENT-ONLY (default off): FR13_STEP_GRAPH (=1/=2/=3 capture modes; A/B verdict:

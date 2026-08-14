@@ -969,6 +969,16 @@ def test_env_contract_pins_the_b4_timing_binary_and_arm_agreement() -> None:
             "FR13_FA2_QROW32_SO_SHA256": pinned[1],
         }
     ) == pinned
+    # PROMOTION 2026-08-14 (Mark's B4 default flip): production SERVING carries
+    # no timing arm, so the unpaired production arm is now legal -- and still
+    # bound to the same pinned binary, which is the half of the pairing rule
+    # that had to survive the relaxation.
+    assert identity(
+        {
+            "FR13_FA2_QROW32_B4_PRODUCTION_ARM": "gqa_pair",
+            "FR13_FA2_QROW32_SO_SHA256": pinned[1],
+        }
+    ) == pinned
 
     for env, message in (
         (
@@ -979,8 +989,27 @@ def test_env_contract_pins_the_b4_timing_binary_and_arm_agreement() -> None:
             "must agree on the served kernel",
         ),
         (
-            {"FR13_FA2_QROW32_B4_PRODUCTION_ARM": "gqa_pair"},
+            # a NAMED disagreeing timing arm is still fatal, in both directions
+            {
+                "FR13_FA2_QROW32_B4_TIMING_ARM": "stock_dispatch",
+                "FR13_FA2_QROW32_B4_PRODUCTION_ARM": "gqa_pair",
+                "FR13_FA2_QROW32_SO_SHA256": pinned[1],
+            },
             "must agree on the served kernel",
+        ),
+        (
+            # the promoted arm without the pinned binary declaration
+            {"FR13_FA2_QROW32_B4_PRODUCTION_ARM": "gqa_pair"},
+            "not the pinned",
+        ),
+        (
+            # ... and it stays mutually exclusive with the sibling selectors
+            {
+                "FR13_FA2_QROW32_B4_PRODUCTION_ARM": "gqa_pair",
+                "FR13_FA2_QROW32_SO_SHA256": pinned[1],
+                "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+            },
+            "mutually exclusive",
         ),
         ({"FR13_FA2_QROW32_B4_TIMING_ARM": "bogus"}, "must be empty, stock_dispatch"),
         (

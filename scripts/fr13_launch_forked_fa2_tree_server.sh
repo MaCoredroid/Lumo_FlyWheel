@@ -278,12 +278,19 @@ if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
   set +a
   _FR13_LOCAL_ENV_SOURCED=1
 fi
-# The last clause is the 2026-08-13 B1 promotion's protection. Every other clause
-# arms the guard because the caller NAMED a credentialed selector; the promoted B1
-# production arm is credentialed without being named, so an unnamed fixed32 B1
-# launch is now exactly as credential-bearing as a named one and .lumo.local.env
-# must not be able to move its pins underneath it. Arming is the fail-closed
-# direction: it only ever adds the "local env must not override" comparison.
+# The last TWO clauses are the promotions' protection -- 2026-08-14 for B4,
+# 2026-08-13 for B1. Every other clause arms the guard because the caller NAMED a
+# credentialed selector; a promoted production arm is credentialed WITHOUT being
+# named, so an unnamed fixed32 B1 launch, and an unnamed fixed32 B4 launch that
+# presents the sealed b34 dual gate, are now exactly as credential-bearing as a
+# named one and .lumo.local.env must not be able to move their pins underneath
+# them. The B4 clause keys on the presented dual gate for the same reason the
+# promotion itself does: at B=4/concurrency 4 the batch shape alone is every
+# campaign arm in the tree, and the credential is what marks a production serve.
+# Arming is the fail-closed direction: it only ever adds the "local env must not
+# override" comparison, and FR13_FA2_QROW32_B4_DUAL_GATE_JSON is itself one of
+# the guarded names, so a local env that INTRODUCES the gate arms the guard and
+# is then caught by that same comparison.
 [[ "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
@@ -312,6 +319,10 @@ fi
    || "${FR13_CFWD_LOGIT_DIRECT_PRODUCTION:-0}" == "1" \
    || "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" != "0" \
    || -n "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO:-}" \
+   || ( -n "${FR13_FIXED32_MODE:-}" \
+        && "${MAX_NUM_SEQS:-4}" == "4" \
+        && "${SWE_CONCURRENCY:-}" == "4" \
+        && -n "${FR13_FA2_QROW32_B4_DUAL_GATE_JSON:-}" ) \
    || ( "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
         && "${MAX_NUM_SEQS:-4}" == "1" \
         && "${SWE_CONCURRENCY:-}" == "1" ) ]] \
@@ -695,6 +706,16 @@ FR13_FA2_QROW32_FA2_HEAD=${FR13_FA2_QROW32_FA2_HEAD:-}
 FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256=${FR13_FA2_QROW32_SOURCE_CLOSURE_SHA256:-}
 FR13_FA2_QROW32_SOURCE_COMMIT=${FR13_FA2_QROW32_SOURCE_COMMIT:-}
 FR13_FA2_QROW32_B4_TIMING_ARM=${FR13_FA2_QROW32_B4_TIMING_ARM:-}
+# NAMED vs UNSET must survive the normalisation, exactly as for the B1 arm below:
+# the 2026-08-14 B4 promotion gives an UNNAMED B4 production arm the shipped
+# default, and a caller that names it -- INCLUDING naming it empty, which is how
+# the stock side of the width-4 timing pair declares "serve stock" -- is obeyed
+# verbatim. `${VAR:-}` cannot tell those apart, so record the distinction before
+# it is erased. The default itself is applied further down, once MAX_NUM_SEQS,
+# the presented credential and the sibling FA2 selectors are all known.
+_FR13_FA2_QROW32_B4_PRODUCTION_ARM_NAMED=0
+[[ -v FR13_FA2_QROW32_B4_PRODUCTION_ARM ]] \
+  && _FR13_FA2_QROW32_B4_PRODUCTION_ARM_NAMED=1
 FR13_FA2_QROW32_B4_PRODUCTION_ARM=${FR13_FA2_QROW32_B4_PRODUCTION_ARM:-}
 FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR=${FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR:-}
 FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256=${FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256:-}
@@ -1140,6 +1161,72 @@ case "$FR13_FA2_QROW32_B4_TIMING_ARM" in
   ""|stock_dispatch|gqa_pair) ;;
   *) echo "FR13_FA2_QROW32_B4_TIMING_ARM must be empty, stock_dispatch, or gqa_pair" >&2; exit 2 ;;
 esac
+# ---- B4 PRODUCTION ARM PROMOTION (2026-08-14, Mark's B4 default flip ruling) ----
+# The PADDED GQA-pair FA2 unit is the shipped B4 production kernel. It is sealed
+# at candidate_scope final_fixed32_b34_full_graph_only with production_widths 3
+# and 4, and it is timing-proven on real SWE-Verified traffic: the four-pass
+# Hydra27 sealing campaign (output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z)
+# returned SEALED_HYDRA27_GAIN -- batch-conditioned width-4 improvement mean
+# 27.03 ms/step with a one-sided 95% lower bound of 10.82 ms/step over n=4 passes
+# of balanced SC/CS arm order, placebo width clean in every pass -- and the padded
+# pair (output/fr13_b4_width4_timing_padded_20260813T201426Z) put width 3 at
+# 25.16 ms/step against a pre-registered 25.6 +/- 3.5. Agent behaviour was held
+# by the exact16 QC PASS (results/fr13_b4_exact16_qc_20260814, 9/16 = the
+# historical median, zero giveups).
+#
+# fr13_canonical_env.sh owns the VALUE -- it is the single source of truth for
+# what this branch ships -- and the fallback below must never contradict it
+# (tests/test_fr13_qrow32_b4_production_default.py parses both files and
+# compares). The registry cannot export the selector itself: it is sourced before
+# BSIZE is known, and the B4 production selector is a CREDENTIALED selector that
+# the launcher must refuse wherever no sealed dual gate was presented.
+#
+# So the default is applied HERE, and only in the shape where the B4 production
+# selector is legal AND unambiguous:
+#   * the caller did not NAME the arm (naming it empty is a deliberate opt-out
+#     and is obeyed -- it is how the stock side of the width-4 timing pair says
+#     "load the candidate binary, serve the stock dispatch");
+#   * fixed32 at batch 4 / concurrency 4, the only shape in which
+#     _FR13_FA2_QROW32_B4_CANDIDATE_MODE is admitted at all, and not the B1
+#     diagnostic shape;
+#   * the launch PRESENTED the sealed b34 dual raw-byte gate. This clause is the
+#     B4-specific half of the scope and it is what keeps the promotion honest.
+#     B=1/concurrency 1 is a rare shape, so the B1 promotion at 99a511319 could
+#     key on batch alone and excluded its handful of siblings by diagnostic flag
+#     or by an explicit opt-out. B=4/concurrency 4 fixed32 is the shape of the
+#     ENTIRE campaign -- every floor gate, GDN/CUTLASS/SFWD timing pair, live
+#     gate and nsys profile in this tree runs it -- and none of them can serve
+#     this kernel, because none of them holds its credential. Promoting on batch
+#     alone would hand all of them a selector the credential chain must then
+#     refuse at boot. The sealed gate is the thing that distinguishes a
+#     production serve from a campaign arm, so it is what the promotion keys on;
+#   * no sibling FA2 private selector is engaged -- qrow16 live/production,
+#     qrow32 live A/B (which is how the b34 byte gate itself runs), any B1 live
+#     A/B, timing or production arm, or a B4 timing arm. Those launches already
+#     name the kernel they serve, and the mutual-exclusion refusals below stay
+#     reachable.
+# Everything downstream is unchanged and still fail-closed: the promoted arm must
+# still clear the pinned binary/source identity, the byte-pinned canonical
+# evidence set, and its bound dual raw-byte gate, or the launch is refused.
+if (( _FR13_FA2_QROW32_B4_PRODUCTION_ARM_NAMED == 0 )) \
+   && [[ ( "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" \
+           || "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ) \
+         && "$MAX_NUM_SEQS" == "4" \
+         && "${SWE_CONCURRENCY:-}" == "4" \
+         && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+         && -n "$FR13_FA2_QROW32_B4_DUAL_GATE_JSON" \
+         && -n "$FR13_FA2_QROW32_B4_DUAL_GATE_SHA256" \
+         && "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" == "0" \
+         && "${FR13_FA2_QROW16_PRODUCTION:-0}" == "0" \
+         && "${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" == "0" \
+         && -z "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" \
+         && -z "$FR13_FA2_QROW32_B1_TIMING_ARM" \
+         && -z "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" \
+         && -z "$FR13_FA2_QROW32_B4_TIMING_ARM" ]]; then
+  FR13_FA2_QROW32_B4_PRODUCTION_ARM=${FR13_FA2_QROW32_B4_PRODUCTION_ARM_DEFAULT:-gqa_pair}
+  echo "[fr13] B4 production arm unnamed; serving the promoted default" \
+       "FR13_FA2_QROW32_B4_PRODUCTION_ARM=$FR13_FA2_QROW32_B4_PRODUCTION_ARM" >&2
+fi
 case "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" in
   ""|gqa_pair) ;;
   *) echo "FR13_FA2_QROW32_B4_PRODUCTION_ARM must be empty or gqa_pair" >&2; exit 2 ;;
@@ -1153,7 +1240,18 @@ if [[ "$FR13_FA2_QROW32_B4_TIMING_ARM" == "gqa_pair" \
   echo "FR13 qrow32 B4 gqa_pair timing arm must serve the candidate" >&2
   exit 2
 fi
+# PROMOTION 2026-08-14 relaxed this clause, and only this clause. It used to read
+# `!= "gqa_pair"`, which made the GQA-pair production arm reachable ONLY from
+# inside the timing pair -- correct while the arm was a candidate, and fatal the
+# moment it becomes the shipped default, because production serving carries no
+# timing arm at all. The pairing invariant it protected is untouched: a NAMED
+# timing arm must still agree with the served kernel (the `gqa_pair timing arm
+# must serve the candidate` clause above), and the binary is pinned independently
+# by the candidate-mode preflight, which the promotion extends to cover a
+# production launch that carries no timing arm. What is now allowed is exactly
+# the empty timing arm: a plain B4 production serve.
 if [[ "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" == "gqa_pair" \
+      && -n "$FR13_FA2_QROW32_B4_TIMING_ARM" \
       && "$FR13_FA2_QROW32_B4_TIMING_ARM" != "gqa_pair" ]]; then
   echo "FR13 qrow32 B4 production requires the gqa_pair timing arm" >&2
   exit 2
@@ -1199,7 +1297,16 @@ fi
 # The patched tree_attn decode call can host exactly one private FA2 selector,
 # so the launcher refuses the combination rather than letting the patcher
 # install a first-one-wins call site.
-if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" ]] && {
+#
+# THE PRODUCTION ARM IS NAMED HERE AS OF THE 2026-08-14 PROMOTION. Until the
+# flip, a B4 production arm could not exist without a gqa_pair TIMING arm, so
+# keying this on the timing arm covered it transitively. Relaxing that pairing
+# would otherwise have opened the one combination this check exists to prevent:
+# a lone `FR13_FA2_QROW32_B4_PRODUCTION_ARM=gqa_pair` beside qrow16 production
+# or a qrow32/B1 selector, two selectors racing for one call site with
+# first-one-wins deciding the served kernel.
+if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" \
+      || -n "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" ]] && {
      (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )) \
      || [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" ]] \
      || [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]] \
@@ -1776,10 +1883,27 @@ if [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" ]]; then
   fi
 fi
 _FR13_FA2_QROW32_B4_CANDIDATE_MODE=0
-if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" ]]; then
+if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" \
+      || -n "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" ]]; then
   # Both timing arms load the SAME pinned GQA-pair binary; the delta is the
   # served kernel selector alone. So the binary/source/commit provenance is
   # required identically on the stock-dispatch arm and the candidate arm.
+  #
+  # THE PRODUCTION ARM IS ADMITTED HERE TOO, AS OF THE 2026-08-14 PROMOTION, AND
+  # THAT IS NOT COSMETIC. Until the flip, the only way to reach the B4 production
+  # arm was from inside the timing pair, so keying this preflight on the timing
+  # arm alone covered every launch that could serve the kernel. The flip creates
+  # a launch that serves it with NO timing arm, and that launch would otherwise
+  # have skipped -- silently -- the .so digest and size pins, the FA2 head and
+  # source-closure pins, the on-disk re-hash of $FORKED_FA2_SO, SOURCE_COMMIT ==
+  # git rev-parse HEAD, the patcher digest, the batch-4/concurrency-4 and
+  # FULL_AND_PIECEWISE runtime shape, the K64/root1 DVK identity, and the
+  # byte-pinned evidence-set predicate. Every one of those is a precondition of
+  # the credential the launch is about to be issued: the issuance below signs
+  # $FR13_FA2_QROW32_SO_SHA256 and $FR13_FA2_QROW32_SOURCE_COMMIT, which are
+  # caller-supplied and, without this block, caller-CHECKED by nothing. Promotion
+  # must not turn a gated candidate into an ungated default, so the gate moves
+  # with it.
   _FR13_FA2_QROW32_B4_CANDIDATE_MODE=1
   # THE QUALIFIED THING IS A GEOMETRY, NOT A TASK LIST.  The dual raw-byte gate
   # qualified the final fixed32 B4 FULL graph: 4 slots x 32 physical rows = 128
@@ -1822,10 +1946,10 @@ if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" ]]; then
      && "$FR13_FA2_QROW32_SOURCE_COMMIT" == "$(git rev-parse HEAD)" \
      && "$FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)" \
      && -n "$_FR13_FA2_QROW32_B4_TASK_SET" ]] || {
-    echo "FR13 qrow32 B4 GQA-pair timing requires a byte-pinned canonical B4 evidence set (exact4 or pool16) with K64/root1 identity and pinned binary/source provenance" >&2
+    echo "FR13 qrow32 B4 GQA-pair timing or production requires a byte-pinned canonical B4 evidence set (exact4 or pool16) with K64/root1 identity and pinned binary/source provenance" >&2
     exit 2
   }
-  echo "FR13 qrow32 B4 timing evidence set: $_FR13_FA2_QROW32_B4_TASK_SET" >&2
+  echo "FR13 qrow32 B4 evidence set: $_FR13_FA2_QROW32_B4_TASK_SET" >&2
 fi
 if [[ -n "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" ]]; then
   [[ -f "$FR13_FA2_QROW32_B4_DUAL_GATE_JSON" \

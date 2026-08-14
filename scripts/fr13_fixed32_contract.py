@@ -3335,12 +3335,25 @@ def _expected_runtime_fa2_identity(
         )
     # The timing pair is a single-variable delta: both arms load the identical
     # pinned GQA-pair binary and differ only in whether the served decode call
-    # carries the sentinel. The two declarations must therefore agree exactly.
-    if (qrow32_b4_timing == "gqa_pair") != (qrow32_b4_production == "gqa_pair"):
+    # carries the sentinel. A NAMED timing arm must therefore agree exactly
+    # with the served kernel.
+    #
+    # PROMOTION 2026-08-14 (Mark's B4 default flip, the B4 analogue of the B1
+    # flip 99a511319) introduced the one configuration that is not a pair:
+    # production SERVING carries no timing arm at all. So the disagreement is
+    # checked only when a timing arm was named. `stock_dispatch` beside a
+    # gqa_pair serve is still refused and a gqa_pair timing arm beside a stock
+    # serve is still refused; what is now legal is exactly the empty timing arm
+    # beside the promoted production arm. This mirrors, byte for byte in
+    # intent, the launcher clause it backs up -- the two must not drift, or the
+    # host would admit a serve the in-container attestation then rejects.
+    if qrow32_b4_timing and (
+        (qrow32_b4_timing == "gqa_pair") != (qrow32_b4_production == "gqa_pair")
+    ):
         raise ContractError(
             "qrow32 B4 timing and production arms must agree on the served kernel"
         )
-    if qrow32_b4_timing and (
+    if (qrow32_b4_timing or qrow32_b4_production) and (
         live == "1"
         or production == "1"
         or qrow32_b4_live == "1"
@@ -3350,10 +3363,14 @@ def _expected_runtime_fa2_identity(
         raise ContractError(
             "qrow32 B4 timing and other private FA2 selectors are mutually exclusive"
         )
-    if qrow32_b4_timing:
+    # The binary pin follows the ARM, not the pair. A promoted production serve
+    # loads the same sealed .so the timing pair loaded, so it must declare the
+    # same identity -- otherwise the flip would have created a serving shape
+    # that reaches the credential with an unpinned binary.
+    if qrow32_b4_timing or qrow32_b4_production:
         if env.get("FR13_FA2_QROW32_SO_SHA256", "") != QROW32_B4_GQA_PAIR_FA2_SHA256:
             raise ContractError(
-                "qrow32 B4 timing runtime FA2 declaration is not the pinned "
+                "qrow32 B4 runtime FA2 declaration is not the pinned "
                 "GQA-pair candidate"
             )
         return QROW32_B4_GQA_PAIR_FA2_SIZE, QROW32_B4_GQA_PAIR_FA2_SHA256
