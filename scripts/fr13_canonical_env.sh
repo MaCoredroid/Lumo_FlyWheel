@@ -75,6 +75,43 @@ export FR13_FA2_QROW32_B4_PRODUCTION_ARM_DEFAULT="${FR13_FA2_QROW32_B4_PRODUCTIO
 # empty -- is always obeyed; the default applies only when it is unset. The two
 # files must never disagree (tests/test_fr13_qrow32_b4_production_default.py
 # parses both and compares, exactly as the B1 flip and the mamba narrowing are).
+export FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_DEFAULT="${FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_DEFAULT:-0}"  # BUILT 2026-08-14, DELIBERATELY OFF. Whether a credentialed fixed32 serve that does not name the GDN single-launch arm gets it. The unit is the folded GDN scan kernel fixed32_gdn_single_launch_tree_v2 -- one physical launch per layer for the whole batch against the deployed two-launch reference's two per request-layer, eliminating the L0->L1 state export/parent-read handoff entirely (state_export_writes 0, state_parent_reads 0).
+# WHY THIS SHIPS AS 0 WHILE THE TWO FA2 ENTRIES ABOVE SHIP AS gqa_pair: those two
+# were promoted on SEALED gain. This one is not sealed. What it has is legality
+# and a price, and those are different things:
+#   * LEGALITY (phase 1, output/fr13_gdn_single_launch_b4_gate_20260814T191621Z):
+#     the b4 Hydra27 live byte gate returned PASS on real SWE-Verified traffic --
+#     1,584 records (33 comparator events x 48 GDN layers) compared across all 7
+#     surfaces (output, ring_k, ring_v, ring_a, ring_b, flags, counter) with
+#     raw_byte_equal true, every event at request-tuple width 4. The B1 arm was
+#     sealed earlier at hydra27:b1. So the kernel is byte-identical to the
+#     incumbent at the width-4 operating point. That is a licence to SERVE, not a
+#     reason to serve by DEFAULT.
+#   * PRICE (phase 0, results/fr13_gdn_scan_b4_probe_20260814): directly measured
+#     at b=4, not transferred -- two_launch 861.504 us/layer-batch vs
+#     single_launch 674.336, a saving of 8.984 ms/step over 48 layers = 2.14x the
+#     4.20 ms sealed MDE. Super-linear in width: 4.668x the b=1 saving.
+# What is MISSING is the thing the FA2 entries have and this one does not: a
+# sealing campaign -- paired passes at the Hydra27 width-4 operating point with a
+# one-sided 95% lower bound on the pre-registered batch-conditioned width-4
+# improvement, balanced arm order and a clean placebo width. Phase 3's n=1 screen
+# is a SCREEN; it can halt the lever but it cannot seal it. Until that campaign
+# runs and Mark rules on it, an unsealed kernel must not become what the tree
+# serves when nobody asked. Flipping this value to 1 is the whole of the
+# promotion: every guard, pin, credential check and engagement needle below is
+# already built and already exercised by the tests, so the flip is a one-token
+# change to this line and nothing else.
+# WHY THIS IS *_DEFAULT AND NOT FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION ITSELF:
+# the same reason as the two entries above. This registry is sourced before BSIZE
+# is known, and the GDN single-launch production selector is a CREDENTIALED
+# selector the launcher must refuse wherever no HEAD-bound gate credential was
+# presented. So the registry owns the VALUE and the launcher applies it in the one
+# shape where it is legal: fixed32 B1/B4 at matching concurrency, K64/root1, BV=8,
+# FULL_AND_PIECEWISE, presenting a PASS credential bound to the exact serving
+# HEAD. A caller that NAMES FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION -- including
+# naming it 0 -- is always obeyed; the default applies only when it is unset. The
+# two files must never disagree (tests/test_fr13_gdn_single_launch_production_default.py
+# parses both and compares, exactly as the two FA2 flips are).
 # BAKED 2026-07-27 (cleanup+bake, launcher defaults now 1): FR13_COMMITTER_GRAPH,
 # FR13_TAW, FR13_DRAFTER_GRAPH, FR13_PARENT_GATHER (all ran clean in every S1/A-B arm).
 # EXPERIMENT-ONLY (default off): FR13_STEP_GRAPH (=1/=2/=3 capture modes; A/B verdict:

@@ -872,6 +872,23 @@ _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH_SIDECARS = (
 _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_gdn_gqa_group3.production_credential.json"
 )
+# The folded single-launch arm reaches production through the same door as its
+# grouped-GQA sibling above, so it is refused at that door by the same rules and
+# therefore carries the same shape of sources. The names differ only in the arm
+# they belong to; the /logs entry is the in-container path the launcher binds and
+# the /tmp entry is the worker-visible fallback when EngineCore is handed a
+# curated environment.
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_single_launch.production.arm",
+    "/tmp/fr13_fixed32_gdn_single_launch.production.arm",
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH_SIDECARS = (
+    "/logs/fr13_fixed32_gdn_single_launch.production_batch.flag",
+    "/tmp/fr13_fixed32_gdn_single_launch.production_batch.flag",
+)
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_PASS = (
+    "/logs/fr13_fixed32_gdn_single_launch.production_credential.json"
+)
 _FR13_FIXED32_GDN_PRESCALED_PATH_BASE_SIDECARS = (
     "/logs/fr13_fixed32_gdn_prescaled_path_base.arm",
     "/tmp/fr13_fixed32_gdn_prescaled_path_base.arm",
@@ -1505,6 +1522,205 @@ def _fr13_resolve_fixed32_gdn_gqa_group3_production(
     return credential
 
 
+def _fr13_resolve_fixed32_gdn_single_launch_production(
+    fixed32_mode: str | None,
+    *,
+    environ=None,
+    arm_sidecars=None,
+    batch_sidecars=None,
+    geom_override=None,
+    pass_path: str | None = None,
+) -> dict[str, object] | None:
+    """Resolve the source-bound folded single-launch arm after its byte gate.
+
+    WHY THIS EXISTS ALONGSIDE ``_FR13_FIXED32_GDN_SINGLE_LAUNCH``. That bool is a
+    CAMPAIGN instrument: it puts the folded kernel on the decode path from source
+    and env alone so a live gate can observe it, and it is deliberately
+    credential-free because the credential is the thing the gate is producing. A
+    PRODUCTION serve is the opposite situation -- the gate has already run, so
+    the arm must be refused unless the exact PASS artifact that gate issued is
+    present, matches this source, this mode and this batch, and was issued
+    without production already enabled. Both arms end at the identical folded
+    kernel and identical telemetry; only the authority to reach it differs.
+
+    Fail-closed at every step. An absent arm is not an error -- the registry
+    default ships OFF and every fixed32 campaign process in this tree would trip
+    an import-time raise otherwise -- but an arm that is present and not exactly
+    satisfied is. Structurally this is the twin of
+    ``_fr13_resolve_fixed32_gdn_gqa_group3_production``; the one real divergence
+    is the source pin, commented at its clause below.
+    """
+    env = os.environ if environ is None else environ
+    arm_paths = (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_SIDECARS
+        if arm_sidecars is None
+        else tuple(arm_sidecars)
+    )
+    batch_paths = (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH_SIDECARS
+        if batch_sidecars is None
+        else tuple(batch_sidecars)
+    )
+    arm_sources: list[tuple[str, str]] = []
+    raw_arm = env.get("FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION")
+    if raw_arm is not None and str(raw_arm).strip():
+        arm_sources.append(
+            (
+                "env:FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION",
+                str(raw_arm).strip(),
+            )
+        )
+    for path in arm_paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(4)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13 GDN single-launch production cannot read arm sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(value) >= 4:
+            raise RuntimeError(
+                "FR13 GDN single-launch production arm sidecar exceeds 3 bytes"
+            )
+        arm_sources.append((f"sidecar:{path}", value.strip()))
+    if not arm_sources:
+        return None
+    arm_values = {value for _source, value in arm_sources}
+    # A caller that NAMES the arm 0 and writes no sidecar is declining it, which
+    # is the default-OFF path and must never raise. Anything else disagreeing is
+    # a configuration error, never permission to serve.
+    if arm_values == {"0"} and all(
+        source == "env:FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION"
+        for source, _value in arm_sources
+    ):
+        return None
+    if arm_values != {"1"}:
+        raise RuntimeError(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION must be exactly 1 from "
+            "agreeing sources"
+        )
+
+    batch_sources: list[tuple[str, str]] = []
+    raw_batch = env.get("FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH")
+    if raw_batch is not None and str(raw_batch).strip():
+        batch_sources.append(
+            (
+                "env:FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH",
+                str(raw_batch).strip(),
+            )
+        )
+    for path in batch_paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, encoding="ascii") as handle:
+                value = handle.read(4)
+        except (OSError, UnicodeError) as error:
+            raise RuntimeError(
+                "FR13 GDN single-launch production cannot read batch sidecar "
+                f"{path}: {error}"
+            ) from error
+        if len(value) >= 4:
+            raise RuntimeError(
+                "FR13 GDN single-launch production batch sidecar exceeds "
+                "3 bytes"
+            )
+        batch_sources.append((f"sidecar:{path}", value.strip()))
+    batch_values = {value for _source, value in batch_sources}
+    if not batch_sources or len(batch_values) != 1 or batch_values.difference(
+        {"1", "4"}
+    ):
+        raise RuntimeError(
+            "FR13 GDN single-launch production requires one exact batch, 1 or 4"
+        )
+    batch = int(batch_values.pop())
+    if (
+        fixed32_mode not in _FR13_FIXED32_MODES
+        or geom_override != {"BV": 8}
+        or str(env.get("FR13_DRAFT_VOCAB_ROOT", "")).strip() != "1"
+        or str(env.get("FR13_DRAFT_VOCAB_K", "")).strip() != "65536"
+    ):
+        raise RuntimeError(
+            "FR13 GDN single-launch production requires exact fixed32 "
+            "physical32 BV8 K64/root1"
+        )
+    resolved_pass = pass_path or env.get(
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_PASS_PATH",
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_PASS,
+    )
+    if os.path.islink(resolved_pass) or not os.path.isfile(resolved_pass):
+        raise RuntimeError(
+            "FR13 GDN single-launch production requires a regular live-gate "
+            f"credential: {resolved_pass}"
+        )
+    try:
+        with open(resolved_pass, encoding="ascii") as handle:
+            credential = json.load(handle)
+        # The folded candidate has no source unit of its own: it is compiled
+        # from this closure, so the candidate digest and the kernel digest are
+        # re-derived from the SAME bytes and must both match. Any edit to this
+        # file -- including one that cannot touch the kernel -- invalidates the
+        # credential and forces a re-gate. That is the intended cost.
+        kernel_sha256 = hashlib.sha256(
+            Path(__file__).resolve().read_bytes()
+        ).hexdigest()
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "FR13 GDN single-launch production credential is unreadable: "
+            f"{error}"
+        ) from error
+    source_commit = credential.get("source_commit") if isinstance(
+        credential, dict
+    ) else None
+    if (
+        not isinstance(credential, dict)
+        or credential.get("schema")
+        != "fr13.fixed32.gdn_single_launch.real_task_credential.v3"
+        or credential.get("status") != "PASS"
+        # The literal candidate id, not the module constant: this resolver runs
+        # while the module body is still executing, well before
+        # _FR13_FIXED32_GDN_SINGLE_LAUNCH_CANDIDATE_ID is bound. The sibling
+        # spells its candidate out for exactly the same reason.
+        or credential.get("candidate") != "fixed32_gdn_single_launch_tree_v2"
+        or credential.get("reference")
+        != "fixed32_gdn_two_launch_reference_v1"
+        or credential.get("mode") != fixed32_mode
+        or credential.get("batch_size") != batch
+        or credential.get("expected_batch") != batch
+        or credential.get("physical_rows") != 32
+        or credential.get("draft_vocab_k") != 65536
+        or credential.get("draft_vocab_root") != 1
+        or credential.get("raw_byte_equal") is not True
+        or credential.get("reference_served") is not True
+        or credential.get("state_restored") is not True
+        # The gate is a LEGALITY instrument: it shadows the candidate while the
+        # reference is served, so a credential claiming production was already
+        # enabled did not come from the gate this promotion rests on.
+        or credential.get("production_enabled") is not False
+        or credential.get("kernel_source_sha256") != kernel_sha256
+        # DIVERGENCE FROM THE GQA-GROUP3 TWIN. That arm pins a second source
+        # unit (fr13_gdn_gqa_group3.py) and requires its digest; this arm has no
+        # such unit and the gate emits the key as JSON null. Requiring null is
+        # the mirror image of the twin's requirement, and together the two
+        # clauses make the arms mutually exclusive by construction -- neither
+        # credential can satisfy the other's source pin. The default sentinel
+        # also refuses a credential that simply omits the key.
+        or credential.get("gqa_group3_source_sha256", "absent") is not None
+        or credential.get("candidate_source_sha256") != kernel_sha256
+        or not isinstance(source_commit, str)
+        or len(source_commit) != 40
+        or any(character not in "0123456789abcdef" for character in source_commit)
+    ):
+        raise RuntimeError(
+            "FR13 GDN single-launch production credential is invalid, stale, "
+            "or belongs to another source/mode/batch"
+        )
+    return credential
+
+
 def _fr13_resolve_fixed32_gdn_path_bv_production(
     fixed32_mode: str | None,
     *,
@@ -1913,10 +2129,44 @@ _FR13_FIXED32_GDN_SINGLE_LAUNCH = (
         geom_override=_read_tree_gdn_geom_override(),
     )
 )
+# Resolved AFTER the diagnostic bool rather than beside the GQA-group3 sibling
+# above, because the availability predicate immediately below has to see both
+# forms of the same route in one expression. Dict-or-None, never a bool: the
+# credential itself is what the narrowing helper and the guards interrogate.
+_FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION = (
+    _fr13_resolve_fixed32_gdn_single_launch_production(
+        _FR13_FIXED32_MODE,
+        geom_override=_read_tree_gdn_geom_override(),
+    )
+)
+
+
+def _fr13_fixed32_gdn_single_launch_production_for_batch(
+    batch_size: int,
+) -> bool:
+    """Return the exact credentialed batch; never widen B1/B4 authority.
+
+    The credential proves ONE batch. B1 and B4 fold through the same kernel, so
+    nothing structural would stop a B1 credential from authorizing B4 -- this is
+    what stops it.
+    """
+    credential = _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION
+    if credential is None:
+        return False
+    batch = int(batch_size)
+    credential_batch = credential.get("batch_size")
+    if type(credential_batch) is not int or credential_batch not in (1, 4):
+        raise RuntimeError(
+            "FR13 GDN single-launch production credential batch drifted"
+        )
+    return credential_batch == batch
+
+
 _FR13_FIXED32_GDN_PRESCALED_PATH_BASE = (
     _fr13_resolve_fixed32_gdn_prescaled_path_base(
         bool(
             _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            or _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION is not None
             or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
             or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
             in ("single_launch", "gqa_group3", "gqa_group3_bv16")
@@ -1949,6 +2199,24 @@ if _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None and (
     raise RuntimeError(
         "FR13 fixed32 GDN GQA-group3 production cannot inherit another GDN "
         "production selector"
+    )
+# The patched GDN call site hosts exactly ONE candidate. If the credentialed
+# single-launch arm could co-exist with a sibling selector the refusals further
+# down would stop being reachable -- whichever selector resolved first would
+# simply win -- so the arm is refused here instead. The path-BV candidate is
+# included because its "single_launch" value is the LIVE-GATE form of this same
+# route: serving the gate arm and the promoted arm in one process would make the
+# gate observe its own promotion. The diagnostic bool is deliberately NOT
+# excluded; it is the campaign instrument that produced the credential, and the
+# B4 selector and B1 call site below admit either one on its own terms.
+if _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION is not None and (
+    _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
+    or _FR13_FIXED32_GDN_PATH_BV_PRODUCTION is not None
+    or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE is not None
+):
+    raise RuntimeError(
+        "FR13 fixed32 GDN single-launch production cannot inherit another GDN "
+        "production or path-BV selector"
     )
 _FR13_FIXED32_GDN_BV_CAPTURE_CONTEXT = None
 _FR13_FIXED32_GDN_BV_CAPTURES: dict[tuple[int, int, str], dict] = {}
@@ -2516,6 +2784,7 @@ if _FR13_SUBTREE_SELFCHECK_REQUESTED and not _FR13_SUBTREE_ROUTE_REQUESTED:
     )
 if (
     _FR13_FIXED32_GDN_SINGLE_LAUNCH
+    or _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION is not None
     or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
 ) and _FR13_SUBTREE_SELFCHECK_REQUESTED:
     raise RuntimeError(
@@ -3047,6 +3316,7 @@ if (
     )
 if (
     _FR13_FIXED32_GDN_SINGLE_LAUNCH
+    or _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION is not None
     or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
 ) and (
     _FR13_FIXED32_BATCH_GDN_BV_CANDIDATE is not None
@@ -3488,7 +3758,10 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
             and _fr13_fixed32_gdn_gqa_group3_production_for_batch(4)
             else None
         )
-    if _FR13_FIXED32_GDN_SINGLE_LAUNCH:
+    if (
+        _FR13_FIXED32_GDN_SINGLE_LAUNCH
+        or _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION is not None
+    ):
         for env_name in (
             "FR13_FIXED32_BATCH_GDN_BYTE_AB",
             "FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB",
@@ -3511,7 +3784,24 @@ def fixed32_batch_gdn_selector(batch_size: int) -> str | None:
             )
         # Only the requested B4 folded launch is exposed. B2/B3 retain their
         # established per-request dispatch and therefore exercise the B1 arm.
-        return "single_launch" if batch == 4 else None
+        #
+        # Both arms below reach the IDENTICAL folded kernel, grid and telemetry;
+        # only the authority to reach it differs. The diagnostic bool is
+        # source-and-env only, so it stays as unconditional at B4 as it was
+        # before this arm existed -- it is the campaign instrument the live gate
+        # observes, and narrowing it would invalidate the gate it feeds. The
+        # production arm is credential-bound and therefore narrows to the ONE
+        # batch its live gate actually proved, so a B1 credential can never
+        # authorize B4.
+        return (
+            "single_launch"
+            if batch == 4
+            and (
+                _FR13_FIXED32_GDN_SINGLE_LAUNCH
+                or _fr13_fixed32_gdn_single_launch_production_for_batch(4)
+            )
+            else None
+        )
     diagnostic, _marker = _fr13_fixed32_batch_gdn_byte_ab_control()
     graph_diagnostic = _fr13_fixed32_batch_gdn_graph_byte_ab_control()
     production = _fr13_fixed32_batch_gdn_production_control()
@@ -5409,6 +5699,11 @@ def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
             )
         if (
             _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            # The credentialed arm reaches the same folded kernel as the
+            # diagnostic bool, so it needs the same preseeded descriptor. Without
+            # this the B1/B4 contract guards would refuse a perfectly valid
+            # production serve for a missing descriptor.
+            or _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION is not None
             or _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION is not None
             or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
             in ("single_launch", "gqa_group3", "gqa_group3_bv16")
@@ -16079,8 +16374,14 @@ def launch_tree_gdn_prepared(
                 "validated fixed32 schedule"
             )
         _single_launch = st.get("fixed32_single_launch")
+        # Same folded kernel, two authorities. The diagnostic bool is unchanged
+        # and still unconditional at B1; the production arm is credential-bound
+        # and admits B1 only when the credential it holds was issued FOR B1.
         _single_launch_enabled = (
-            _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            (
+                _FR13_FIXED32_GDN_SINGLE_LAUNCH
+                or _fr13_fixed32_gdn_single_launch_production_for_batch(1)
+            )
             if _single_launch_override is None
             else bool(_single_launch_override)
         )
@@ -16099,6 +16400,11 @@ def launch_tree_gdn_prepared(
             == _FR13_FIXED32_GDN_GQA_GROUP3_BV16_GATE_VALUE
             else 8
         )
+        # _single_launch_enabled now folds in the credentialed arm, so this one
+        # raise covers BOTH single-launch authorities against GQA-group3
+        # production. The module-level exclusion already refuses that pairing at
+        # import; this is the per-request backstop for an override-injected or
+        # otherwise drifted call.
         if _single_launch_enabled and _gqa_group3_enabled:
             raise RuntimeError(
                 "FR13 fixed32 ordered GDN launch selectors overlapped"
@@ -17137,6 +17443,11 @@ def launch_tree_gdn_prepared_fixed32_batch(
     if selector in ("single_launch", "single_launch_gate", "gqa_group3") and (
         not (
             _FR13_FIXED32_GDN_SINGLE_LAUNCH
+            # The credentialed arm is the fourth way "single_launch" can be
+            # selected at B4, and it must be admitted here for the same reason
+            # it was admitted in the selector: it reaches the same kernel under
+            # the same descriptor, only with the live gate's PASS behind it.
+            or _fr13_fixed32_gdn_single_launch_production_for_batch(4)
             or _fr13_fixed32_gdn_gqa_group3_production_for_batch(4)
             or _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
             in ("single_launch", "gqa_group3", "gqa_group3_bv16")

@@ -260,7 +260,28 @@ def test_b1_b4_dispatch_is_single_launch_and_fail_closed() -> None:
     assert "exact K64/root1 B4 descriptor" in b4
     assert '"physical_grid_z": (batch,)' in b4
     assert 'elif selector == "single_launch":' in b4
-    assert 'return "single_launch" if batch == 4 else None' in selector
+    # 2026-08-14: this used to pin the literal
+    # `return "single_launch" if batch == 4 else None`. The B4 selector now has
+    # TWO authorities for the same folded kernel, so the literal is gone while
+    # the invariant it protected is not. Pin the invariant instead.
+    #
+    # WIDTH IS STILL THE GATE. Only B4 is ever folded; B2/B3 keep their
+    # established per-request dispatch and therefore exercise the B1 arm. That
+    # is the property the old literal actually guarded, and it is unchanged.
+    assert 'if batch == 4' in selector
+    # THE DIAGNOSTIC BOOL REMAINS UNCONDITIONAL AT B4. It is source-and-env
+    # only and it is the campaign instrument the live byte gate observes;
+    # narrowing it would silently invalidate the gate that feeds the credential
+    # the production arm depends on. So it must sit on the permissive side of
+    # the `or`, exactly as it did when it was the only authority.
+    assert "_FR13_FIXED32_GDN_SINGLE_LAUNCH\n" in selector
+    # THE PRODUCTION ARM IS CREDENTIAL-BOUND AND BATCH-NARROWED. It resolves
+    # through the per-batch helper with an explicit 4, so a B1 credential can
+    # never authorize a B4 serve -- the b1-shaped-literal failure mode this
+    # campaign has already paid for once.
+    assert (
+        "_fr13_fixed32_gdn_single_launch_production_for_batch(4)" in selector
+    )
     assert "cannot inherit a batched GDN" in selector
     assert '"fixed32_single_launch_contract"' in preseed
     assert '"fixed32_single_launch_contract"' in patcher
