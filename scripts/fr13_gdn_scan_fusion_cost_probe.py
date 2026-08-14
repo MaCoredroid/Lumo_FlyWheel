@@ -18,8 +18,16 @@ CPU-launched.
 It is NOT a step-envelope measurement and NOT acceptance-valid. It carries no
 TPS, floor, or acceptance claim.
 
+``--batch`` widens the probe to the batched geometry the B4 single-launch
+route actually dispatches at: the candidate is launched ONCE at grid z =
+batch over ``batch * N_ACTUAL`` rows, and the deployed two-launch arm loops
+the per-request level pair exactly as the served route does (and exactly as
+the batch launcher's ``_launch_reference`` does). ``--batch 1`` is the banked
+default and reproduces the 20260811 measurement unchanged.
+
 Usage (inside the pinned image, GPU visible):
     python3 scripts/fr13_gdn_scan_fusion_cost_probe.py --out results/....json
+    python3 scripts/fr13_gdn_scan_fusion_cost_probe.py --batch 4 --out ...
 """
 from __future__ import annotations
 
@@ -51,6 +59,13 @@ SCAN_ALIGN = False
 
 STATE_TILE_BYTES = NUM_VH * DIM_V * DIM_K * 4  # one node's fp32 state export
 
+# Surfaces the folded kernel strides by ``pid_batch * N_ACTUAL`` and that the
+# deployed per-request route therefore sees as a 32-row slice.
+ROW_TENSORS = (
+    "q", "k", "v", "g", "beta", "raw_a", "raw_b",
+    "ring_k", "ring_v", "ring_a", "ring_b",
+)
+
 
 def _dev() -> torch.device:
     if not torch.cuda.is_available():
@@ -58,51 +73,85 @@ def _dev() -> torch.device:
     return torch.device("cuda")
 
 
-def build_inputs(device, seed: int = 20260811):
+def build_inputs(device, seed: int = 20260811, batch: int = 1):
     g = torch.Generator(device="cpu").manual_seed(seed)
+    rows = N_ACTUAL * int(batch)
 
     def r(*shape, dtype=torch.bfloat16, scale=1.0):
         t = torch.randn(*shape, generator=g, dtype=torch.float32) * scale
         return t.to(device=device, dtype=dtype)
 
     return {
-        "q": r(N_ACTUAL, NUM_KH, DIM_K),
-        "k": r(N_ACTUAL, NUM_KH, DIM_K),
-        "v": r(N_ACTUAL, NUM_VH, DIM_V),
+        "q": r(rows, NUM_KH, DIM_K),
+        "k": r(rows, NUM_KH, DIM_K),
+        "v": r(rows, NUM_VH, DIM_V),
         # gating scalars: keep decay in a sane range so the scan does not
         # under/overflow across a 12-deep chain.
-        "g": r(N_ACTUAL, NUM_VH, dtype=torch.float32, scale=0.1),
-        "beta": r(N_ACTUAL, NUM_VH, dtype=torch.float32, scale=0.1),
-        "raw_a": r(N_ACTUAL, NUM_VH, dtype=torch.float32, scale=0.5),
-        "raw_b": r(N_ACTUAL, NUM_VH, dtype=torch.float32, scale=0.5),
+        "g": r(rows, NUM_VH, dtype=torch.float32, scale=0.1),
+        "beta": r(rows, NUM_VH, dtype=torch.float32, scale=0.1),
+        "raw_a": r(rows, NUM_VH, dtype=torch.float32, scale=0.5),
+        "raw_b": r(rows, NUM_VH, dtype=torch.float32, scale=0.5),
         "A_log": r(NUM_VH, dtype=torch.float32, scale=0.5),
         "dt_bias": r(NUM_VH, dtype=torch.float32, scale=0.5),
+        # h0 is NOT batch-strided here: H0_IS_BANK=False, so every batch
+        # element of the folded kernel and every request of the reference
+        # loop reads the SAME root state. Both arms see identical bytes.
         "h0": r(NUM_VH, DIM_V, DIM_K, dtype=torch.float32, scale=0.05),
     }
 
 
-def build_outputs(device):
+def build_outputs(device, batch: int = 1):
+    rows = N_ACTUAL * int(batch)
     return {
         "out": torch.zeros(
-            N_ACTUAL, NUM_VH, DIM_V, dtype=torch.bfloat16, device=device
+            rows, NUM_VH, DIM_V, dtype=torch.bfloat16, device=device
         ),
         "ring_k": torch.zeros(
-            N_ACTUAL, NUM_KH, DIM_K, dtype=torch.bfloat16, device=device
+            rows, NUM_KH, DIM_K, dtype=torch.bfloat16, device=device
         ),
         "ring_v": torch.zeros(
-            N_ACTUAL, NUM_VH, DIM_V, dtype=torch.bfloat16, device=device
+            rows, NUM_VH, DIM_V, dtype=torch.bfloat16, device=device
         ),
         "ring_a": torch.zeros(
-            N_ACTUAL, NUM_VH, dtype=torch.float32, device=device
+            rows, NUM_VH, dtype=torch.float32, device=device
         ),
         "ring_b": torch.zeros(
-            N_ACTUAL, NUM_VH, dtype=torch.float32, device=device
+            rows, NUM_VH, dtype=torch.float32, device=device
         ),
         "flags": torch.zeros(4, dtype=torch.int32, device=device),
         "counter": torch.zeros(1, dtype=torch.int32, device=device),
         "dummy_idx": torch.zeros(1, 1, dtype=torch.int32, device=device),
         "dummy_acc": torch.zeros(1, 1, dtype=torch.int32, device=device),
     }
+
+
+def request_views(io, out_t, batch: int):
+    """Per-request 32-row views, built ONCE outside any timed region.
+
+    At ``batch == 1`` the original objects are handed back untouched, so the
+    banked single-request call shape is preserved exactly.
+    """
+    if int(batch) == 1:
+        return ((io, out_t),)
+    views = []
+    for request in range(int(batch)):
+        start = request * N_ACTUAL
+        end = start + N_ACTUAL
+        rio = dict(io)
+        for name in ROW_TENSORS:
+            rio[name] = io[name][start:end]
+        views.append((rio, out_t[start:end]))
+    return tuple(views)
+
+
+def per_request(views, fn):
+    """Wrap a per-request launch closure into a whole-batch callable."""
+
+    def run():
+        for rio, rout in views:
+            fn(rio, rout)
+
+    return run
 
 
 def preseed(device):
@@ -146,12 +195,19 @@ def launch_level(st, io, out_t, level_idx, *, lengths=None, export_mode=None,
     )
 
 
-def launch_two_launch(st, io, out_t, ring_export=False):
-    launch_level(st, io, out_t, 0, ring_export=ring_export)
-    launch_level(st, io, out_t, 1, ring_export=ring_export)
+def launch_two_launch(st, views, ring_export=False):
+    """The deployed schedule: per request, level 0 then level 1.
+
+    This is the reference loop shape of ``launch_tree_gdn_prepared_fixed32_
+    batch._launch_reference`` and the strictly alternating L0/L1 gridZ
+    sequence measured in the width-4 nsys capture.
+    """
+    for rio, rout in views:
+        launch_level(st, rio, rout, 0, ring_export=ring_export)
+        launch_level(st, rio, rout, 1, ring_export=ring_export)
 
 
-def launch_single(st, io, out_t, ring_export=False):
+def launch_single(st, io, out_t, ring_export=False, batch=1):
     sl = st["fixed32_single_launch"]
     contract = sl["contract"]
     root_nodes = st["levels"][0][0]
@@ -164,7 +220,7 @@ def launch_single(st, io, out_t, ring_export=False):
         )
     )
     G._tree_gdn_kernel_fixed32_single_launch[
-        (NUM_VH, triton.cdiv(DIM_V, BLOCK_V), 1)
+        (NUM_VH, triton.cdiv(DIM_V, BLOCK_V), int(batch))
     ](
         io["q"], io["k"], io["v"], io["g"], io["beta"],
         io["raw_a"], io["raw_b"], io["A_log"], io["dt_bias"],
@@ -230,22 +286,34 @@ def main() -> int:
     ap.add_argument("--reps", type=int, default=200)
     ap.add_argument("--layers", type=int, default=48)
     ap.add_argument("--byte-seeds", type=int, default=4)
+    ap.add_argument(
+        "--batch", type=int, default=1,
+        help=(
+            "requests folded into the candidate launch (grid z). 1 is the "
+            "banked default; 4 is the only batch the deployed B4 single-"
+            "launch selector accepts."
+        ),
+    )
     args = ap.parse_args()
+
+    batch = int(args.batch)
+    if batch < 1:
+        raise SystemExit("--batch must be >= 1")
 
     device = _dev()
     props = torch.cuda.get_device_properties(0)
     st = preseed(device)
-    io = build_inputs(device)
-    io.update(build_outputs(device))
+    io = build_inputs(device, batch=batch)
+    io.update(build_outputs(device, batch=batch))
 
     out_two = torch.zeros_like(io["out"])
     out_one = torch.zeros_like(io["out"])
 
     # ---- correctness: does the parked one-launch kernel reproduce bytes? ----
-    launch_two_launch(st, io, out_two)
+    launch_two_launch(st, request_views(io, out_two, batch))
     torch.cuda.synchronize()
     export_after_two = st["export"].clone()
-    launch_single(st, io, out_one)
+    launch_single(st, io, out_one, batch=batch)
     torch.cuda.synchronize()
 
     out_equal = byte_equal(out_two, out_one)
@@ -264,8 +332,9 @@ def main() -> int:
     }
     for seed in range(args.byte_seeds):
         for rname, opts in regimes.items():
-            probe_io = build_inputs(device, seed=20260811 + 1000 * seed)
-            probe_io.update(build_outputs(device))
+            probe_io = build_inputs(
+                device, seed=20260811 + 1000 * seed, batch=batch)
+            probe_io.update(build_outputs(device, batch=batch))
             if opts.get("h0_zero"):
                 probe_io["h0"].zero_()
             if opts.get("zero_all"):
@@ -278,13 +347,14 @@ def main() -> int:
             a = torch.zeros_like(probe_io["out"])
             b = torch.zeros_like(probe_io["out"])
             st["export"].zero_()
-            launch_two_launch(st, probe_io, a, ring_export=True)
+            launch_two_launch(
+                st, request_views(probe_io, a, batch), ring_export=True)
             torch.cuda.synchronize()
             ring_a_ref = [probe_io[r].clone() for r in
                           ("ring_k", "ring_v", "ring_a", "ring_b")]
             for r in ("ring_k", "ring_v", "ring_a", "ring_b"):
                 probe_io[r].zero_()
-            launch_single(st, probe_io, b, ring_export=True)
+            launch_single(st, probe_io, b, ring_export=True, batch=batch)
             torch.cuda.synchronize()
             rings_equal = all(
                 byte_equal(ref, probe_io[r])
@@ -310,37 +380,46 @@ def main() -> int:
     ones1 = torch.ones_like(lens1)
     full1 = torch.full_like(lens1, int(st["levels"][1][2]))
     scratch = torch.zeros_like(io["out"])
+    views = request_views(io, scratch, batch)
 
+    # Every two-launch-arm bench is the WHOLE batch (per-request loop), so it
+    # is directly comparable to the one folded candidate launch.
     bench = {}
     bench["L0_deployed"] = timeit(
-        lambda: launch_level(st, io, scratch, 0), reps=args.reps)
+        per_request(views, lambda rio, rout: launch_level(st, rio, rout, 0)),
+        reps=args.reps)
     bench["L0_no_export"] = timeit(
-        lambda: launch_level(st, io, scratch, 0, export_mode=2),
+        per_request(views, lambda rio, rout: launch_level(
+            st, rio, rout, 0, export_mode=2)),
         reps=args.reps)
     bench["L0_len1"] = timeit(
-        lambda: launch_level(
-            st, io, scratch, 0, lengths=torch.ones_like(lens0)),
+        per_request(views, lambda rio, rout: launch_level(
+            st, rio, rout, 0, lengths=torch.ones_like(lens0))),
         reps=args.reps)
     bench["L0_len1_no_export"] = timeit(
-        lambda: launch_level(
-            st, io, scratch, 0, lengths=torch.ones_like(lens0),
-            export_mode=2),
+        per_request(views, lambda rio, rout: launch_level(
+            st, rio, rout, 0, lengths=torch.ones_like(lens0),
+            export_mode=2)),
         reps=args.reps)
     bench["L1_deployed"] = timeit(
-        lambda: launch_level(st, io, scratch, 1), reps=args.reps)
+        per_request(views, lambda rio, rout: launch_level(st, rio, rout, 1)),
+        reps=args.reps)
     bench["L1_len1"] = timeit(
-        lambda: launch_level(st, io, scratch, 1, lengths=ones1),
+        per_request(views, lambda rio, rout: launch_level(
+            st, rio, rout, 1, lengths=ones1)),
         reps=args.reps)
     bench["L1_len_full_padded"] = timeit(
-        lambda: launch_level(st, io, scratch, 1, lengths=full1),
+        per_request(views, lambda rio, rout: launch_level(
+            st, rio, rout, 1, lengths=full1)),
         reps=args.reps)
     bench["L1_from_h0"] = timeit(
-        lambda: launch_level(st, io, scratch, 1, state_source=1),
+        per_request(views, lambda rio, rout: launch_level(
+            st, rio, rout, 1, state_source=1)),
         reps=args.reps)
     bench["two_launch_total"] = timeit(
-        lambda: launch_two_launch(st, io, scratch), reps=args.reps)
+        lambda: launch_two_launch(st, views), reps=args.reps)
     bench["single_launch"] = timeit(
-        lambda: launch_single(st, io, scratch), reps=args.reps)
+        lambda: launch_single(st, io, scratch, batch=batch), reps=args.reps)
 
     # ---- derived model ----------------------------------------------------
     L0 = bench["L0_deployed"]["us_p50"]
@@ -376,8 +455,13 @@ def main() -> int:
             "n_actual": N_ACTUAL, "num_vh": NUM_VH, "num_kh": NUM_KH,
             "dim_k": DIM_K, "dim_v": DIM_V, "block_v": BLOCK_V,
             "num_warps": NUM_WARPS,
+            "batch": batch,
+            "rows": N_ACTUAL * batch,
             "grid_l0": [NUM_VH, DIM_V // BLOCK_V, 1],
             "grid_l1": [NUM_VH, DIM_V // BLOCK_V, 11],
+            "grid_single_launch": [NUM_VH, DIM_V // BLOCK_V, batch],
+            "two_launch_physical_launches_per_layer": 2 * batch,
+            "single_launch_physical_launches_per_layer": 1,
             "state_tile_bytes": STATE_TILE_BYTES,
         },
         "topology": {
@@ -420,6 +504,18 @@ def main() -> int:
                 one * layers / 1000.0
             ),
             "single_minus_two_ms_step": (one - two) * layers / 1000.0,
+            # Batch-normalised views. At batch 1 these equal the figures
+            # above and the ratio is 1.0 by construction.
+            "batch": batch,
+            "two_launch_us_per_request": two / batch,
+            "single_launch_us_per_request": one / batch,
+            "saving_ms_step": (two - one) * layers / 1000.0,
+            "saving_ms_step_per_request": (
+                (two - one) * layers / 1000.0 / batch
+            ),
+            "saving_fraction_of_two_launch": (
+                (two - one) / two if two else None
+            ),
         },
         "export_untouched_by_single_launch": bool(
             byte_equal(export_after_two, st["export"])
@@ -429,6 +525,9 @@ def main() -> int:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(result, indent=2) + "\n")
+    print("batch:", batch, "rows:", N_ACTUAL * batch,
+          "grid_single_launch:",
+          result["geometry"]["grid_single_launch"])
     print(json.dumps(result["derived"], indent=2))
     print("byte_ab:", json.dumps(result["byte_ab_single_vs_two"]))
     print("byte_ab_sweep_all_pass:", sweep_pass, "cases:", len(sweep))
