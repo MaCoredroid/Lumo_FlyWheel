@@ -467,6 +467,60 @@ def test_nonmatching_b1_cannot_inherit_global_b4_pass_state() -> None:
     assert namespace["_FR13_FIXED32_GDN_BV_LIVE_STATE"]["status"] == "passed"
 
 
+def _observed_runtime_namespace() -> dict[str, object]:
+    spec = importlib.util.spec_from_file_location(
+        "fr13_gdn_single_launch_patcher_runtime", PATCHER
+    )
+    assert spec is not None and spec.loader is not None
+    patcher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(patcher)
+    namespace: dict[str, object] = {}
+    exec(patcher._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE, namespace)
+    return namespace
+
+
+def test_folded_candidates_normalise_the_scan_census_to_one_launch() -> None:
+    """The observer must not hand the live gate a per-request census.
+
+    The work census counts SERVED per-request GDN scans (48 * batch, pinned
+    by scripts/fr13_fixed32_work_census.py). The folded candidates issue one
+    physical launch per GDN layer for the whole batch and therefore emit 48
+    capture records, which is exactly what both live-gate validators demand
+    (fr10_gdn_tree_kernel.py:2094 capture end, :2344 replay). Feeding the raw
+    census killed the first b4 gate boot inside CUDA-graph capture with
+    "capture end drift: (..., 4, 192, 48)". Batch 1 is unchanged.
+    """
+    namespace = _observed_runtime_namespace()
+    expected_records = namespace["_fr13_fixed32_gdn_bv_expected_records"]
+
+    for candidate in ("single_launch", "gqa_group3", "gqa_group3_bv16"):
+        for batch in (1, 2, 3, 4):
+            assert expected_records(candidate, batch, 48 * batch) == 48
+        with pytest.raises(RuntimeError, match="whole multiple of the batch"):
+            expected_records(candidate, 4, 190)
+        with pytest.raises(RuntimeError, match="whole multiple of the batch"):
+            expected_records(candidate, 0, 48)
+
+    # Per-request candidates keep the raw census on both arms.
+    for candidate in ("8", "16", "64", "128"):
+        for batch in (1, 4):
+            assert expected_records(candidate, batch, 48 * batch) == 48 * batch
+
+
+def test_live_gate_call_sites_use_the_normalised_record_count() -> None:
+    """Both GDN BV live-gate entries must route through the normaliser."""
+    source = PATCHER.read_text(encoding="utf-8")
+    for call in (
+        "tree_kernel.fixed32_gdn_bv_live_capture_end(",
+        "tree_kernel.fixed32_gdn_bv_live_gate_on_replay(",
+    ):
+        start = source.index(call)
+        window = source[start : start + 600]
+        assert "_fr13_fixed32_gdn_bv_expected_records(" in window, call
+        assert 'int(work["gdn_scan_calls"]),' not in window, call
+        assert 'int(gdn["scan_calls"]),' not in window, call
+
+
 def test_patch_validation_requires_baked_expected_batch_before_launch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

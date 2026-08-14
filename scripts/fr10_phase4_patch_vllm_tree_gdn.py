@@ -5261,6 +5261,30 @@ def _fr13_fixed32_capture_begin(
         )
 
 
+def _fr13_fixed32_gdn_bv_expected_records(candidate, batch_size, scan_calls):
+    """Per-launch record count the GDN BV live gate must see.
+
+    The work census counts SERVED per-request GDN scans, which is 48 * batch.
+    The folded candidates (single_launch, gqa_group3, gqa_group3_bv16) issue
+    one physical launch per GDN layer for the whole batch, so they emit 48
+    capture records regardless of width, and the live-gate validators demand
+    exactly 48 for them. Every other candidate is per-request and keeps the
+    raw census. At batch 1 both branches agree, so the sealed B1 arm is
+    unchanged. Fail-closed on any census that is not a whole multiple of the
+    batch.
+    """
+    batch = int(batch_size)
+    calls = int(scan_calls)
+    if candidate not in ("single_launch", "gqa_group3", "gqa_group3_bv16"):
+        return calls
+    if batch < 1 or calls % batch != 0:
+        raise RuntimeError(
+            "FR13 fixed32 GDN BV live-gate scan census is not a whole "
+            "multiple of the batch: " + repr((calls, batch))
+        )
+    return calls // batch
+
+
 def _fr13_fixed32_capture_end(
     graph_id,
     runtime_mode,
@@ -5447,7 +5471,11 @@ def _fr13_fixed32_capture_end(
             identity,
             signature,
             int(work["batch_size"]),
-            int(work["gdn_scan_calls"]),
+            _fr13_fixed32_gdn_bv_expected_records(
+                _FR13_FIXED32_GDN_PATH_BV_CANDIDATE,
+                work["batch_size"],
+                work["gdn_scan_calls"],
+            ),
         )
     if _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB and int(work["batch_size"]) == 4:
         tree_kernel = __import__(
@@ -5733,7 +5761,11 @@ def _fr13_fixed32_observed_graph_replay(
             expected_signature,
             census_graph_signature,
             int(event["batch_size"]),
-            int(gdn["scan_calls"]),
+            _fr13_fixed32_gdn_bv_expected_records(
+                _FR13_FIXED32_GDN_PATH_BV_CANDIDATE,
+                event["batch_size"],
+                gdn["scan_calls"],
+            ),
             len(globals().get("_FR13_FIXED32_CENSUS_EVENTS", ())),
             int(event["forward_step_index"]),
             tuple(
