@@ -1,0 +1,237 @@
+{
+  "acceptance_valid": false,
+  "analysis_only": true,
+  "bandwidth_bytes_per_s": 273000000000,
+  "citable": false,
+  "context_sensitivity": [
+    {
+      "b1_honest_floor_ms": 124.87472902564103,
+      "b1_honest_ratio": 1.8607447784914801,
+      "b4_honest_floor_ms": 140.52486986080586,
+      "b4_honest_ratio": 2.7132823357915283,
+      "ctx_tokens_per_request": 12000,
+      "label": "low band",
+      "ratio_of_ratios": 1.4581700656396344
+    },
+    {
+      "b1_honest_floor_ms": 126.77495794871795,
+      "b1_honest_ratio": 1.8328540885337348,
+      "b4_honest_floor_ms": 148.12578555311356,
+      "b4_honest_ratio": 2.574053165078478,
+      "ctx_tokens_per_request": 18031,
+      "label": "B1-measured anchor (central)",
+      "ratio_of_ratios": 1.4043961170622672
+    },
+    {
+      "b1_honest_floor_ms": 128.82295794871794,
+      "b1_honest_ratio": 1.803715763866393,
+      "b4_honest_floor_ms": 156.31778555311357,
+      "b4_honest_ratio": 2.4391571680957287,
+      "ctx_tokens_per_request": 24531,
+      "label": "token-flow estimate: 137,128 prefill + 10,058 decode tokens entered KV in the 360.19 s window at ~3 admissions/completions => ~49.1 k terminal context/task, mean resident ~24.5 k",
+      "ratio_of_ratios": 1.3522957535544413
+    },
+    {
+      "b1_honest_floor_ms": 135.04793271794873,
+      "b1_honest_ratio": 1.7205742829495227,
+      "b4_honest_floor_ms": 181.21768463003664,
+      "b4_honest_ratio": 2.1040090425563824,
+      "ctx_tokens_per_request": 44288,
+      "label": "hard cap: KV pool 177,152 tokens / 4 slots",
+      "ratio_of_ratios": 1.222852778520873
+    }
+  ],
+  "conv_state_basis_sensitivity": {
+    "carry_only_ms": 148.12578555311356,
+    "delta_ms": 0.8930180219780084,
+    "note": "Baseline counts only the true recurrent conv carry (conv_kernel-1 = 3 rows). The shipped runtime carries 34 rows (3 + 31 speculative). The extra 31 rows are the tree's own conv inputs, which an ideal implementation reads from the activation stream, not from a state buffer.",
+    "shipped_34_row_staging_ms": 149.01880357509157
+  },
+  "denominator_defect": {
+    "b1_weight_only_ratio": 1.9418674060075867,
+    "b4_prelever_weight_only_ratio_on_b1_basis": 3.4352065641221317,
+    "b4_weight_only_ratio_as_published_126_514": 3.013764311650295,
+    "b4_weight_only_ratio_on_b1_basis_119_658": 3.1864446841570935,
+    "evidence": [
+      "output/fr13_b4_hydra27_sealing_campaign_20260814T011514Z/run_00/launcher_meta.txt: draft_vocab_root=1 draft_vocab_k=65536 mandatory_weight_floor_ms=119.658015414",
+      "tests/test_fr13_b4_width4_window.py:60 FLOOR_MS = 126.514089260"
+    ],
+    "finding": "The published width-4 floor_ratio divides by 126.51408926 ms (scenario current_one_full_plus_four_64k_draft_heads, 34.538 GB) while the sealed B4 arms launch with FR13_DRAFT_VOCAB_ROOT=1 / FR13_DRAFT_VOCAB_K=65536, i.e. the 32.667 GB root_64k scenario whose floor is 119.658015414 ms -- the SAME scenario B1's 1.9419 uses.",
+    "note": "On one basis the published gap 3.01 vs 1.94 (1.55x) is really 3.19 vs 1.94 (1.64x). Correcting the basis makes B4 look WORSE, not better -- the honest floor below is what makes it look better."
+  },
+  "does_not_claim": [
+    "No timing claim. No arm was run; no GPU was touched.",
+    "The floor is a LOWER BOUND on time, not an achievable target: it assumes every mandatory byte moves once at 273 GB/s with zero latency, zero launch cost, zero recompute and perfect overlap.",
+    "ctx=18,031 tokens/request is imported from the B1 attack ladder, not re-measured at width 4; the capture rejects proportionality between FA2 time and context, so no width-4 context could be inverted out of it. The sensitivity table is the honest bound.",
+    "Width-4 component ms/step are CUPTI-profiled and are upper bounds."
+  ],
+  "fa2_context_insensitivity": {
+    "dram_floor_ns_per_token_per_launch": 15.003663003663004,
+    "grid_semantics_proof": "no flash_fwd_splitkv_combine_kernel exists in the trace => num_splits == 1 => grid=(m_blocks, batch, heads); and the gridY=4 population is exactly 3616 = 226 x 16 launches, matching the 225(+1 boundary) width-4 steps x 16 attn layers.",
+    "isolated_gaps": 12,
+    "kv_tokens_admitted": 79859,
+    "method": "For each >1 s prefill gap with 5 clean width-4 step-groups on each side, regress the change in mean flash_fwd_splitkv_kernel(grid=(1,4,24)) launch time on the KV tokens the gap admitted (tokens read off silu_and_mul_per_block_quant_kernel gridX, the same source gaps.json uses).",
+    "net_launch_time_change_ms": -0.1315,
+    "slope_95ci_ns_per_token_per_launch": [
+      -7.3568,
+      0.3202
+    ],
+    "slope_ns_per_token_per_launch": -3.5183,
+    "verdict": "The marginal KV token costs <= 0.32 ns of FA2 launch time (95% one-sided) against a 15.0 ns DRAM floor. 'FA2 time is proportional to KV bytes' is REJECTED at width 4. The kernel is 96 CTAs at 1 CTA/SM (102400 B smem, derisk.json) = 2 waves, and each wave finishes with its LONGEST request: the cost is set by max(ctx) and by cross-request load imbalance, not by sum(ctx). That is why the ~59 ms of FA2 headroom is real but is NOT a bandwidth-efficiency problem."
+  },
+  "geometry": {
+    "attn_layers": 16,
+    "conv_carry_bytes_per_request_per_layer": 61440,
+    "conv_staged_bytes_per_request_per_layer": 696320,
+    "draft_vocab_k": 65536,
+    "gdn_layers": 48,
+    "hidden": 5120,
+    "kv_bytes_per_token_per_layer": 4096,
+    "kv_cache_tensors": 17,
+    "kv_pool_tokens": 177152,
+    "model_layers": 64,
+    "mtp_passes_per_step": 5,
+    "physical_drafts": 31,
+    "physical_rows_root_inclusive": 32,
+    "ssm_state_bytes_per_request_per_layer": 3145728,
+    "vocab": 248320
+  },
+  "geometry_check": {
+    "b1_fa2_floor_ms_reproduced": 4.328496761904762,
+    "topology_module": "scripts/fr13_fixed32_topology.py"
+  },
+  "gpu_touched": false,
+  "honest_floor": {
+    "b1": {
+      "batch": 1,
+      "ctx_tokens_per_request": 18031,
+      "honest_floor_ms": 126.77495794871795,
+      "mandatory_bytes_total": 34609563520,
+      "nonweight_bytes": 1942925312,
+      "nonweight_bytes_per_request": {
+        "draft_head_logits_rw": 8126464,
+        "gdn_state_rw": 307888128,
+        "kv_read_mtp": 369274880,
+        "kv_read_target": 1181679616,
+        "kv_write_tree_rows": 2228224,
+        "lm_head_logits_rw": 31784960,
+        "residual_stream_rw": 41943040,
+        "total": 1942925312
+      },
+      "nonweight_floor_ms": 7.116942534798535,
+      "weight_bytes": 32666638208,
+      "weight_floor_ms": 119.65801541391941
+    },
+    "b1_excess_ms": 105.58504205128206,
+    "b1_excess_ms_per_request": 105.58504205128206,
+    "b1_honest_ratio": 1.8328540885337348,
+    "b1_step_wall_ms": 232.36,
+    "b4": {
+      "batch": 4,
+      "ctx_tokens_per_request": 18031,
+      "honest_floor_ms": 148.12578555311356,
+      "mandatory_bytes_total": 40438339456,
+      "nonweight_bytes": 7771701248,
+      "nonweight_bytes_per_request": {
+        "draft_head_logits_rw": 8126464,
+        "gdn_state_rw": 307888128,
+        "kv_read_mtp": 369274880,
+        "kv_read_target": 1181679616,
+        "kv_write_tree_rows": 2228224,
+        "lm_head_logits_rw": 31784960,
+        "residual_stream_rw": 41943040,
+        "total": 1942925312
+      },
+      "nonweight_floor_ms": 28.46777013919414,
+      "weight_bytes": 32666638208,
+      "weight_floor_ms": 119.65801541391941
+    },
+    "b4_excess_ms": 233.15786157961432,
+    "b4_excess_ms_per_request": 58.28946539490358,
+    "b4_honest_ratio": 2.574053165078478,
+    "b4_honest_ratio_alt_wall": 2.5925303860231783,
+    "b4_honest_ratio_stock_prelever": 2.7565291787869524,
+    "b4_step_wall_alt_ms": 384.0206,
+    "b4_step_wall_ms": 381.2836471327279,
+    "context_basis": "18,031 tokens/request -- the attack-ladder implied context measured on the SAME SWE-Verified agent workload (results/fr13_attack_ladder_analysis_20260808). Using one context for both batches is what makes the comparison apples-to-apples."
+  },
+  "schema": "fr13.b4_honest_floor.v1",
+  "ssm_dtype_sensitivity": {
+    "bf16_counterfactual_ms_step_b4": 2.212380131868132,
+    "fp32_ssm_state_ms_step_b4": 4.424760263736264,
+    "note": "mamba_ssm_dtype=float32 is a PARKED losslessness choice (fr13_canonical_env.sh:43)."
+  },
+  "width4_component_ledger": {
+    "basis": "in-step plain-sum kernel ms/step over the 225 width-4 steps of output/fr13_b4_width4_nsys_20260813T030940Z (PROFILED, CUPTI-attached). Plain sum == union on this trace (gaps.json: 140.01 vs 139.89 s).",
+    "components": [
+      {
+        "component": "GEMM fp8 blockwise (target + MTP)",
+        "floor_ms_step": 94.72,
+        "headroom_ms_step": 38.287000000000006,
+        "measured_ms_step_w4": 133.007,
+        "note": "B1 attack-ladder all-traffic GEMM floor; batch-invariant (w4/w1 = 1.08)",
+        "ratio_to_floor": 1.4042124155405407
+      },
+      {
+        "component": "other bucket (elementwise/copies/sampling)",
+        "floor_ms_step": 0.0,
+        "headroom_ms_step": 83.923,
+        "measured_ms_step_w4": 83.923,
+        "note": "no separate mandatory tensor: this is plumbing around traffic already counted",
+        "ratio_to_floor": null
+      },
+      {
+        "component": "FA2 tree attention",
+        "floor_ms_step": 17.313987047619047,
+        "headroom_ms_step": 62.88201295238095,
+        "measured_ms_step_w4": 80.196,
+        "note": "4 requests x 16 layers x ctx x 4096 B",
+        "ratio_to_floor": 4.631862076564753
+      },
+      {
+        "component": "GDN scan + delta rule",
+        "floor_ms_step": 4.5111813626373625,
+        "headroom_ms_step": 58.51381863736265,
+        "measured_ms_step_w4": 63.025000000000006,
+        "note": "4 requests x 48 layers x (3 MiB ssm + 60 KiB conv carry) read+write",
+        "ratio_to_floor": 13.97084154540704
+      },
+      {
+        "component": "bf16 GEMM (LM head + draft heads)",
+        "floor_ms_step": 22.070988424908425,
+        "headroom_ms_step": 8.294011575091574,
+        "measured_ms_step_w4": 30.365,
+        "note": "head weights are inside the 32.67 GB; shown here for the component ratio",
+        "ratio_to_floor": 1.3757879536437656
+      },
+      {
+        "component": "unified attention (MTP layer)",
+        "floor_ms_step": 5.4106209523809525,
+        "headroom_ms_step": 11.130379047619048,
+        "measured_ms_step_w4": 16.541,
+        "note": "4 requests x 5 MTP passes x ctx x 4096 B",
+        "ratio_to_floor": 3.0571352429929703
+      },
+      {
+        "component": "FA2 causal (prefill spill inside decode steps)",
+        "floor_ms_step": 0.0,
+        "headroom_ms_step": 4.947,
+        "measured_ms_step_w4": 4.947,
+        "note": "not decode work",
+        "ratio_to_floor": null
+      },
+      {
+        "component": "GPU idle / host residual inside the step",
+        "floor_ms_step": 0.0,
+        "headroom_ms_step": 17.329000000000008,
+        "measured_ms_step_w4": 17.329000000000008,
+        "note": "step wall 429.333 - in-step kernel plain sum 412.004, PROFILED",
+        "ratio_to_floor": null
+      }
+    ],
+    "floor_total_ms_step": 144.0267777875458,
+    "measured_total_ms_step": 429.333,
+    "width4_step_wall_profiled_ms": 429.333,
+    "width4_step_wall_sealed_unprofiled_ms": 411.05
+  }
+}
