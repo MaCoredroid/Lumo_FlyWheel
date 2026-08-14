@@ -116,12 +116,42 @@ def test_runner_requires_the_admission_ledger_before_reducing() -> None:
 
 
 def test_runner_lays_arms_out_for_the_sealed_window_reducer() -> None:
-    """pass_00/<mode>_* is what fr13_b4_width4_window_reduce.discover_arms globs."""
+    """pass_00/<mode>_* is what fr13_b4_width4_window_reduce.discover_arms globs.
+
+    a55df8dd2 parameterised PASS_DIR for the multi-pass campaign, so the literal
+    this used to grep for no longer appears.  The INVARIANT is unchanged and is
+    what is checked here: with nothing set, the derivation must still resolve to
+    the historical "$RUNROOT_ABS/pass_00".  Asserting the derivation rather than
+    one rendering of it also catches a future edit that keeps the old default
+    while breaking the campaign's per-pass indexing.
+    """
     text = RUNNER.read_text(encoding="utf-8")
-    assert 'PASS_DIR="$RUNROOT_ABS/pass_00"' in text
+    assert "PASS_INDEX=${PASS_INDEX:-0}" in text
+    assert "PASS_ROOT=${PASS_ROOT:-$RUNROOT_ABS}" in text
+    assert "PASS_DIR=\"$PASS_ROOT/pass_$(printf '%02d' \"$PASS_INDEX\")\"" in text
     assert 'RUNROOT="$PASS_DIR"' in text
     assert "fr13_b4_width4_window_reduce.py" in text
     assert "fr13_b4_gqa_width4_pair_reduce.py" in text
+
+    # And execute the derivation, so "the default is still pass_00" is proven
+    # rather than pattern-matched.
+    derived = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'RUNROOT_ABS=/repo/output/RUN\n'
+            + "\n".join(
+                line
+                for line in text.splitlines()
+                if line.startswith(("PASS_INDEX=", "PASS_ROOT=${", "PASS_DIR="))
+            )
+            + '\necho "$PASS_DIR"',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert derived == "/repo/output/RUN/pass_00", derived
 
 
 def test_runner_rebinds_the_credential_to_this_commit() -> None:
