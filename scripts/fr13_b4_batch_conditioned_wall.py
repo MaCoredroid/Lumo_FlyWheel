@@ -86,9 +86,20 @@ def _arm_dir_name(mode: str, pass_index: int) -> str:
     return f"{prefix}_pool{pass_index}"
 
 
-def analyse_arm(arm_record: dict[str, Any], sidecar_dir: Path) -> dict[str, Any]:
+def analyse_arm(
+    arm_record: dict[str, Any],
+    sidecar_dir: Path,
+    arm_name: str | None = None,
+) -> dict[str, Any]:
+    """Condition an arm's windowed wall on the served batch width.
+
+    `arm_name` overrides the pool16 campaign's `<mode>_pool<N>` naming so other
+    run classes -- the GQA-pair width-4 timing pair, whose arms carry the served
+    dispatch in their names -- can reuse this analysis unchanged. Defaulting it
+    keeps every existing caller byte-identical in behaviour.
+    """
     mode = arm_record["mode"]
-    arm = _arm_dir_name(mode, arm_record["pass_index"])
+    arm = arm_name or _arm_dir_name(mode, arm_record["pass_index"])
     doc = json.loads(_samples_for(sidecar_dir, arm).read_text())
     if doc.get("schema") != "fr13.sfwd_per_step_samples.v2":
         raise WallError(f"{arm}: unexpected samples schema {doc.get('schema')!r}")

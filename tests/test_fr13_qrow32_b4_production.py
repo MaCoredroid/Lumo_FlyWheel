@@ -463,10 +463,40 @@ def test_b4_helper_block_serves_the_gqa_pair_sentinel_fail_closed() -> None:
     assert "299813360" in helpers
     assert "FR13 qrow32 B4 production has no launcher attestation" in helpers
     assert "FR13 qrow32 B4 pinned identity drifted" in helpers
-    assert "FR13 qrow32 B4 production exact4 identity drifted" in helpers
+    assert (
+        "FR13 qrow32 B4 production canonical task-set identity drifted" in helpers
+    )
+    # The served EVIDENCE SET is byte-pinned to exactly the two campaign sets --
+    # exact4 and the 16-task pool -- and to nothing else. The dual raw-byte gate
+    # qualified a GEOMETRY (128 query rows, 16 target layers), which pool16 at 4
+    # slots serves identically; an UNPINNED task list must still be refused.
+    assert (
+        "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+        in helpers
+    )
+    assert (
+        "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"
+        in helpers
+    )
+    assert "_FR13_FA2_QROW32_B4_EVIDENCE_SETS" in helpers
+    assert "astropy__astropy-14995" in helpers
     assert "FR13 qrow32 B4 production silently fell back" in helpers
     assert "FR13 qrow32 B4 production geometry drifted" in helpers
-    assert "capture_num_reqs != 4" in helpers
+    # MARK'S RULING 2026-08-13: the qualified capture widths are (3, 4),
+    # not 4 alone. Width 3 is served by padding to the canonical width-4
+    # geometry; widths 1 and 2 are still declared bypasses.
+    #
+    # The CAPABILITY is (3, 4); the LICENCE is whatever the pass sidecar
+    # authorises, which is what the selector actually keys on. A run holding
+    # the sealed width-4 credential must bypass width 3, so the capture gate
+    # reads the authorised set and not the capability tuple.
+    assert (
+        "capture_num_reqs not in _fr13_fa2_qrow32_b34_authorised_widths()"
+        in helpers
+    )
+    assert "capture_num_reqs not in _FR13_FA2_QROW32_B34_WIDTHS" not in helpers
+    assert "_FR13_FA2_QROW32_B34_WIDTHS = (3, 4)" in helpers
+    assert "capture_num_reqs != 4" not in helpers
     assert "torch.empty_strided(" in helpers
     assert '"candidate_served": True' in helpers
     # The sub-B4 FULL captures the fixed32 runtime mandates, and any
@@ -475,6 +505,106 @@ def test_b4_helper_block_serves_the_gqa_pair_sentinel_fail_closed() -> None:
     assert "FR13 qrow32 B4 production ran outside capture or eager" not in helpers
     assert "FR13 qrow32 B4 production captured outside FULL B4" not in helpers
     assert "FR13 qrow32 B4 production engaged outside FULL B4" in helpers
+
+
+def _b4_task_set_resolver():
+    """Execute just enough of the helper block to call the task-set resolver."""
+    patcher = _module(PATCHER, "qrow32_b4_task_set_exec")
+    namespace: dict[str, object] = {"os": os, "__name__": "fr13_b4_task_set"}
+    exec(  # noqa: S102 - the helper block is repo source, executed on purpose
+        compile(
+            patcher.FIXED32_QUERY_TILE32_B4_PRODUCTION_HELPERS,
+            "<b4_helpers>",
+            "exec",
+        ),
+        namespace,
+    )
+    return namespace["_fr13_fa2_qrow32_b4_require_canonical_task_set"], namespace
+
+
+EXACT4_IDS = (
+    "astropy__astropy-12907,astropy__astropy-13033,"
+    "astropy__astropy-13236,astropy__astropy-13398"
+)
+EXACT4_SHA = "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+POOL16_SHA = "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"
+
+
+def _pool16_ids() -> str:
+    _resolver, namespace = _b4_task_set_resolver()
+    return ",".join(namespace["_FR13_FA2_QROW32_B4_POOL16_TASK_IDS"])
+
+
+@pytest.mark.parametrize(
+    "ids,sha,expected_count",
+    [
+        (EXACT4_IDS, EXACT4_SHA, 4),
+        (None, POOL16_SHA, 16),  # None -> the pinned 16-task pool, resolved below
+    ],
+)
+def test_b4_task_set_admits_exactly_the_two_pinned_evidence_sets(
+    monkeypatch: pytest.MonkeyPatch, ids, sha, expected_count
+) -> None:
+    """Both campaign evidence sets are legal; both are resolved intact."""
+    resolver, _ = _b4_task_set_resolver()
+    task_ids = ids if ids is not None else _pool16_ids()
+    monkeypatch.setenv("FR13_FA2_QROW32_B4_EXACT4_TASK_IDS", task_ids)
+    monkeypatch.setenv("FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256", sha)
+    resolved_ids, resolved_sha = resolver()
+    assert len(resolved_ids) == expected_count
+    assert resolved_sha == sha
+    assert ",".join(resolved_ids) == task_ids
+
+
+@pytest.mark.parametrize(
+    "ids,sha,reason",
+    [
+        # A digest from one set paired with the id list of the other: the pair
+        # must match a set ENTIRELY, so a mixed pairing is refused.
+        (EXACT4_IDS, POOL16_SHA, "exact4 ids with the pool16 digest"),
+        (None, EXACT4_SHA, "pool16 ids with the exact4 digest"),
+        # An unpinned subset of a legal set is NOT legal: the candidate must
+        # never serve traffic whose shape was not qualified.
+        (
+            "astropy__astropy-12907,astropy__astropy-13033",
+            EXACT4_SHA,
+            "an unpinned 2-task list",
+        ),
+        ("", EXACT4_SHA, "an empty task list"),
+        (EXACT4_IDS, "", "no digest at all"),
+        (
+            EXACT4_IDS + ",astropy__astropy-13453",
+            EXACT4_SHA,
+            "exact4 plus one extra task",
+        ),
+    ],
+)
+def test_b4_task_set_refuses_anything_not_byte_pinned(
+    monkeypatch: pytest.MonkeyPatch, ids, sha, reason
+) -> None:
+    resolver, _ = _b4_task_set_resolver()
+    task_ids = ids if ids is not None else _pool16_ids()
+    monkeypatch.setenv("FR13_FA2_QROW32_B4_EXACT4_TASK_IDS", task_ids)
+    monkeypatch.setenv("FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256", sha)
+    with pytest.raises(RuntimeError, match="canonical task-set identity drifted"):
+        resolver()
+
+
+def test_b4_pool16_set_is_exact4_plus_twelve_and_matches_the_repo_subset() -> None:
+    """The pinned pool must BE the repo's byte-pinned EVIDENCE_SETS[16]."""
+    import hashlib
+    import json
+
+    _resolver, namespace = _b4_task_set_resolver()
+    pool = namespace["_FR13_FA2_QROW32_B4_POOL16_TASK_IDS"]
+    exact4 = namespace["_FR13_FA2_QROW32_B4_CANONICAL_TASK_IDS"]
+    assert len(pool) == 16
+    assert pool[:4] == exact4, "exact4 must be the first four of the pool"
+
+    subset = PATCHER.parent.parent / "config/fr13_fixed32/subset_b4_sixteen.json"
+    raw = subset.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == POOL16_SHA
+    assert sorted(json.loads(raw)["instance_ids"]) == sorted(pool)
 
 
 # --------------------------------------------------------------------------
@@ -501,7 +631,7 @@ class _FakeTorch:
 
 
 @pytest.fixture()
-def b4_selector(monkeypatch: pytest.MonkeyPatch):
+def b4_selector(monkeypatch: pytest.MonkeyPatch, tmp_path):
     """Execute the installed helper block against stub torch/vllm modules."""
     patcher = _module(PATCHER, "qrow32_b4_helpers_exec")
     state = {"capturing": False}
@@ -551,7 +681,6 @@ def b4_selector(monkeypatch: pytest.MonkeyPatch):
         ),
         ("FR13_FA2_QROW32_SOURCE_COMMIT", "c" * 40),
         ("FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256", "d" * 64),
-        ("FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256", "e" * 64),
         ("FR13_FA2_QROW32_B4_DUAL_GATE_SHA256", "f" * 64),
         (
             "FR13_FA2_QROW32_B4_EXACT4_TASK_IDS",
@@ -563,6 +692,25 @@ def b4_selector(monkeypatch: pytest.MonkeyPatch):
         ),
     ):
         monkeypatch.setenv(name, value)
+    # The runtime resolves its authorised served widths from the pass sidecar
+    # BODY, so the credential has to exist on disk with bytes matching the
+    # digest env. This file exercises the sealed width-4 lineage, so the
+    # licence it installs is the width-4 one.
+    sidecar = tmp_path / "fr13_fa2_qrow32_b4_production_pass.json"
+    raw = json.dumps(
+        {"production_widths": [4]},
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    sidecar.write_bytes(raw)
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR", str(sidecar)
+    )
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR_SHA256",
+        hashlib.sha256(raw).hexdigest(),
+    )
     monkeypatch.delenv("ENFORCE_EAGER", raising=False)
     return namespace, gdn, state
 
@@ -585,22 +733,26 @@ def test_sub_b4_full_captures_bypass_instead_of_killing_the_server(
     # it is startup on the candidate arm.
     state["capturing"] = True
     bias = object()
-    for batch in (1, 2, 3):
+    # Widths 1 and 2 are excluded on ECONOMICS, not safety: stock already fits
+    # one 48-CTA wave there, so the paired kernel cannot pay. Width 3 became a
+    # QUALIFIED operating point under Mark's ruling 2026-08-13 and is covered
+    # by tests/test_fr13_qrow32_b34_padded.py.
+    for batch in (1, 2):
         gdn._FR13_FIXED32_CAPTURE_CONTEXT = {
             "graph_id": 100 + batch,
             "descriptor": {"num_reqs": batch, "runtime_mode": "FULL"},
         }
         selection = _begin(namespace, bias)
         assert selection["candidate_served"] is False
-        assert selection["bypass_reason"] == "non_b4_capture"
+        assert selection["bypass_reason"] == "non_b34_capture"
         # The untagged operand and the caller's num_splits: stock dispatch.
         assert selection["tree_bias"] is bias
         assert selection["num_splits"] == 0
         namespace["_fr13_fa2_qrow32_b4_production_end"](
             selection, completed=True
         )
-    assert namespace["_FR13_FA2_QROW32_B4_BYPASS_COUNTS"]["non_b4_capture"] == 3
-    # No sub-B4 graph engaged the candidate.
+    assert namespace["_FR13_FA2_QROW32_B4_BYPASS_COUNTS"]["non_b34_capture"] == 2
+    # No sub-qualified graph engaged the candidate.
     assert namespace["_FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS"] == {}
 
 
@@ -669,6 +821,8 @@ def test_capture_end_tolerates_sub_b4_graphs_but_not_a_sentinel_leak(
     namespace["_FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS"][11] = {
         "layers": {"language_model.model.layers.3.self_attn.attn"},
         "arm": "gqa_pair",
+        "staged_layers": set(),
+        "batch_size": 1,
     }
     with pytest.raises(RuntimeError, match="engaged outside FULL B4"):
         capture_end(11, "a" * 64, "FULL", 1)
@@ -694,12 +848,23 @@ def test_the_engagement_record_discloses_its_scope_and_bypasses(
     namespace["_FR13_FA2_QROW32_B4_PRODUCTION_GRAPHS"][21] = {
         "layers": set(layers),
         "arm": "gqa_pair",
+        "staged_layers": set(),
+        "batch_size": 4,
     }
     namespace["_fr13_fa2_qrow32_b4_production_capture_end"](
         21, "c" * 64, "FULL", 4
     )
     record = json.loads(engagement.read_text(encoding="ascii"))
+    # The scope token reports what this run was AUTHORISED to serve, not what
+    # the code can do. This fixture holds the sealed width-4 credential, so
+    # the record must say the sealed token and widths [4] -- otherwise the
+    # reducer would treat width 3 as treated and hand a genuinely untreated
+    # control to difference-in-differences. The canonical width also still
+    # writes the ORIGINAL filename, which the sealed timing lineage reads.
     assert record["candidate_scope"] == "final_fixed32_b4_full_graph_only"
+    assert record["candidate_scope_widths"] == [4]
+    assert record["batch_size"] == 4
+    assert record["padded_to_canonical_width"] is False
     assert record["bypass_counts"]["outside_capture"] == 1
     assert record["layer_count"] == 16
     assert record["candidate_served"] is True

@@ -946,7 +946,10 @@ template<typename Kernel_traits, bool Is_dropout
     assert "if (k_rel >= 0 && k_rel < tree_bias_cols)" in helper
     assert "mask.template apply_mask" not in helper
     assert "StaticQueryRows" not in module.FIXED32_QUERY_TILE16_TRANSLATION_UNIT
-    assert "q_start != [0, 32, 64, 96, 128]" in Path(
+    # The live gate still pins the query segmentation exactly; since Mark's
+    # ruling 2026-08-13 it does so at the CAPTURED width rather than only at
+    # width 4, so the segments are derived instead of hard-coded.
+    assert "q_start != expected_q_start" in Path(
         "scripts/fr13_patch_fa2_tree_bias.py"
     ).read_text()
 
@@ -2103,16 +2106,33 @@ def test_qrow32_live_gate_is_exact4_all_layer_and_stock_served() -> None:
     gate = patcher.index("_fr13_fa2_qrow32_live_ab_replay(", replay)
     assert replay < gate
     assert "range(3, 64, 4)" in patcher
-    assert 'int(descriptor.get("num_reqs", -1)) != 4' in patcher
-    assert 'tuple(query.shape) == (128, 24, 256)' in patcher
-    assert 'tuple(cu_seqlens_q.shape) == (5,)' in patcher
-    assert 'tuple(seqused_k.shape) == (4,)' in patcher
-    assert 'int(block_table.shape[0]) == 4' in patcher
+    # MARK'S RULING 2026-08-13 widened the gate from "width 4 only" to the two
+    # qualified widths, so the b-dependent clauses are now PARAMETERISED on the
+    # captured width rather than written as width-4 literals. The KV-cache
+    # clause is not b-dependent and is still a literal. Each old literal is
+    # asserted GONE, so a partial revert cannot pass this test.
+    assert "width not in _FR13_FA2_QROW32_LIVE_AB_WIDTHS" in patcher
+    assert "_FR13_FA2_QROW32_LIVE_AB_WIDTHS = (3, 4)" in patcher
+    assert "rows = _FR13_FA2_QROW32_LIVE_AB_ROWS * width" in patcher
+    assert "tuple(query.shape) == (rows, 24, 256)" in patcher
+    assert "tuple(cu_seqlens_q.shape) == (width + 1,)" in patcher
+    assert "tuple(seqused_k.shape) == (width,)" in patcher
+    assert "int(block_table.shape[0]) == width" in patcher
     assert 'tuple(key_cache.shape[1:]) == (1024, 4, 256)' in patcher
+    for gone in (
+        'int(descriptor.get("num_reqs", -1)) != 4',
+        "tuple(query.shape) == (128, 24, 256)",
+        "tuple(cu_seqlens_q.shape) == (5,)",
+        "tuple(seqused_k.shape) == (4,)",
+        "int(block_table.shape[0]) == 4",
+        "q_start != [0, 32, 64, 96, 128]",
+    ):
+        assert gone not in patcher, gone
     assert "torch.empty_strided(" in patcher
     assert "_FR13_FA2_QROW32_BATCH_STRIDE_SENTINEL" in patcher
-    assert 'q_start != [0, 32, 64, 96, 128]' in patcher
-    assert '"slot_coverage": [0, 1, 2, 3]' in patcher
+    assert "q_start != expected_q_start" in patcher
+    assert "expected_q_start = list(range(0, real_rows + rows, rows))" in patcher
+    assert '"slot_coverage": list(range(width))' in patcher
     assert '"layer_count": len(layer_records)' in patcher
     assert '"stock_calls": len(layer_records)' in patcher
     assert '"candidate_calls": len(layer_records)' in patcher

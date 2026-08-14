@@ -60,19 +60,72 @@ EXACT4_SUBSET_SHA256 = (
     "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
 )
 PATCH_SOURCE_RELATIVE = "scripts/fr13_patch_fa2_tree_bias.py"
-REQUIRED_RUNTIME = (
-    "fixed32 K64 ROOT=1 exact4 B4 physical32 FULL graph on Tail23 or Hydra27"
-)
-PRODUCTION_SCOPE = "qrow32 GQA-pair B4 exact tree attention only"
-CREDENTIAL_BASIS = (
-    "dual-topology raw-byte output/LSE equality between the stock and "
-    "GQA-pair dispatches of the pinned binary at this source commit"
-)
+CANONICAL_WIDTH = 4
+PADDED_WIDTH = 3
+# MARK'S RULING 2026-08-13. The credential's scope MAY widen from the width-4
+# FULL graph to the width-3 and width-4 FULL graphs. Width 3 reaches the SAME
+# sealed binary by padding to the canonical (b == 4, total_q == 128) geometry
+# with an inert zero-key shadow request in slot 3 -- the kernel is never
+# handed a geometry it was not qualified for, and CANDIDATE_SHA256,
+# CANDIDATE_SIZE, FA2_HEAD and SOURCE_CLOSURE_SHA256 above are UNCHANGED.
+# Zero rebuild, zero re-seal.
+#
+# THE WIDENING IS NOT UNCONDITIONAL. A credential authorises exactly the
+# widths its dual gate carries BYTE EVIDENCE for. A dual gate holding only the
+# two width-4 arm verifications issues the sealed width-4 scope, word for word
+# as before; the b3-inclusive scope requires the gate to also carry the two
+# width-3 padded verifications (real rows equal, poisoned shadow inert, shadow
+# half zeros/+INF) at the same commit from the same binary. Widening the TEXT
+# without widening the EVIDENCE is what this split prevents.
+REQUIRED_RUNTIME_BY_WIDTHS = {
+    (CANONICAL_WIDTH,): (
+        "fixed32 K64 ROOT=1 exact4 B4 physical32 FULL graph on Tail23 or "
+        "Hydra27"
+    ),
+    (PADDED_WIDTH, CANONICAL_WIDTH): (
+        "fixed32 K64 ROOT=1 exact4 physical32 FULL graph at width 3 or 4 on "
+        "Tail23 or Hydra27"
+    ),
+}
+PRODUCTION_SCOPE_BY_WIDTHS = {
+    (CANONICAL_WIDTH,): "qrow32 GQA-pair B4 exact tree attention only",
+    (PADDED_WIDTH, CANONICAL_WIDTH): (
+        "qrow32 GQA-pair exact tree attention at FULL-graph widths 3 and 4 "
+        "only; width 3 padded to the canonical width-4 geometry with a "
+        "zero-key shadow request in slot 3"
+    ),
+}
+CREDENTIAL_BASIS_BY_WIDTHS = {
+    (CANONICAL_WIDTH,): (
+        "dual-topology raw-byte output/LSE equality between the stock and "
+        "GQA-pair dispatches of the pinned binary at this source commit"
+    ),
+    (PADDED_WIDTH, CANONICAL_WIDTH): (
+        "dual-topology raw-byte output/LSE equality between the stock and "
+        "GQA-pair dispatches of the pinned binary at this source commit, at "
+        "width 4 natively and at width 3 padded, the padded arm additionally "
+        "proving the shadow inert under a poisoned shadow"
+    ),
+}
+SUPPORTED_WIDTHS = tuple(sorted(PRODUCTION_SCOPE_BY_WIDTHS))
 HEX = frozenset("0123456789abcdef")
 
 
 class SidecarError(ValueError):
     """The credential inputs are not the bound, pinned, exact4 evidence."""
+
+
+def _scope_texts(widths: tuple[int, ...]) -> dict[str, Any]:
+    """The credential's prose, DERIVED from the widths the gate proved."""
+    key = tuple(sorted(int(width) for width in widths))
+    if key not in PRODUCTION_SCOPE_BY_WIDTHS:
+        raise SidecarError(f"unsupported production width scope: {key!r}")
+    return {
+        "production_widths": list(key),
+        "required_runtime": REQUIRED_RUNTIME_BY_WIDTHS[key],
+        "production_scope": PRODUCTION_SCOPE_BY_WIDTHS[key],
+        "credential_basis": CREDENTIAL_BASIS_BY_WIDTHS[key],
+    }
 
 
 def _digest(raw: bytes) -> str:
@@ -271,7 +324,7 @@ def validate_dual_gate(
         raise SidecarError(
             "dual gate was not produced at the production plumbing commit"
         )
-    return {
+    summary = {
         "source_commit": gate_commit,
         "tail23_verification_sha256": _sha256(
             payload.get("tail23_verification_sha256"), "Tail23 verification"
@@ -279,6 +332,65 @@ def validate_dual_gate(
         "hydra27_verification_sha256": _sha256(
             payload.get("hydra27_verification_sha256"), "Hydra27 verification"
         ),
+    }
+    summary.update(_dual_gate_widths(payload))
+    return summary
+
+
+def _dual_gate_widths(payload: dict[str, Any]) -> dict[str, Any]:
+    """Which served widths this gate actually carries BYTE evidence for.
+
+    A gate that does not declare `qualified_widths` predates the widening and
+    qualifies the canonical width only -- the sealed width-4 dual gate must
+    stay re-usable byte for byte, so its absence is a valid state, not an
+    error. A gate that DOES declare the padded width must also carry the two
+    width-3 verification digests and the width-3 raw-byte, poisoned-shadow and
+    shadow-contract results; declaring the width without the evidence is
+    rejected, which is the whole point of reading this rather than trusting
+    the sidecar's own prose.
+    """
+    declared = payload.get("qualified_widths")
+    if declared is None:
+        return {"widths": (CANONICAL_WIDTH,), "b3": {}}
+    if (
+        not isinstance(declared, list)
+        or not all(isinstance(width, int) for width in declared)
+        or tuple(declared) not in SUPPORTED_WIDTHS
+    ):
+        raise SidecarError("dual gate qualified widths drifted")
+    widths = tuple(declared)
+    if widths == (CANONICAL_WIDTH,):
+        for key in (
+            "tail23_b3_verification_sha256",
+            "hydra27_b3_verification_sha256",
+        ):
+            if key in payload:
+                raise SidecarError(
+                    "dual gate carries b3 evidence outside its declared scope"
+                )
+        return {"widths": widths, "b3": {}}
+    if (
+        payload.get("b3_padded_to_canonical_width") is not True
+        or payload.get("b3_shadow_slot") != CANONICAL_WIDTH - 1
+        or payload.get("b3_output_raw_byte_mismatches") != 0
+        or payload.get("b3_lse_raw_byte_mismatches") != 0
+        or payload.get("b3_poisoned_shadow_output_raw_byte_mismatches") != 0
+        or payload.get("b3_poisoned_shadow_lse_raw_byte_mismatches") != 0
+        or payload.get("b3_shadow_contract_failures") != []
+    ):
+        raise SidecarError("dual gate b3 padded evidence drifted")
+    return {
+        "widths": widths,
+        "b3": {
+            "tail23_b3_verification_sha256": _sha256(
+                payload.get("tail23_b3_verification_sha256"),
+                "Tail23 b3 verification",
+            ),
+            "hydra27_b3_verification_sha256": _sha256(
+                payload.get("hydra27_b3_verification_sha256"),
+                "Hydra27 b3 verification",
+            ),
+        },
     }
 
 
@@ -309,12 +421,14 @@ def _body(
         "dual_gate_production_eligible": False,
         "tail23_verification_sha256": summary["tail23_verification_sha256"],
         "hydra27_verification_sha256": summary["hydra27_verification_sha256"],
+        **summary["b3"],
         "qualified_topologies": list(QUALIFIED_TOPOLOGIES),
         "task_ids": list(EXACT4_TASK_IDS),
         "subset_sha256": EXACT4_SUBSET_SHA256,
-        "credential_basis": CREDENTIAL_BASIS,
-        "required_runtime": REQUIRED_RUNTIME,
-        "production_scope": PRODUCTION_SCOPE,
+        # production_widths / required_runtime / production_scope /
+        # credential_basis are DERIVED from the widths the gate proved, never
+        # asserted independently of it.
+        **_scope_texts(summary["widths"]),
         "fallback_allowed": False,
     }
 
@@ -428,12 +542,34 @@ def verify_sidecar(
         or payload.get("qualified_topologies") != list(QUALIFIED_TOPOLOGIES)
         or payload.get("task_ids") != list(EXACT4_TASK_IDS)
         or payload.get("subset_sha256") != EXACT4_SUBSET_SHA256
-        or payload.get("credential_basis") != CREDENTIAL_BASIS
-        or payload.get("required_runtime") != REQUIRED_RUNTIME
-        or payload.get("production_scope") != PRODUCTION_SCOPE
         or payload.get("fallback_allowed") is not False
     ):
         raise SidecarError("pass sidecar contract drifted")
+    # The four scope fields are re-derived, never merely compared: a
+    # credential whose prose claims widths its own production_widths does not
+    # list is rejected here, and so is one whose production_widths is not a
+    # scope this issuer knows how to authorise. A credential that predates the
+    # widening carries no production_widths and means the canonical width.
+    widths = payload.get("production_widths", [CANONICAL_WIDTH])
+    if not isinstance(widths, list) or not all(
+        isinstance(width, int) for width in widths
+    ):
+        raise SidecarError("pass sidecar production widths drifted")
+    scope = _scope_texts(tuple(widths))
+    for key, value in scope.items():
+        if payload.get(key, value if key == "production_widths" else None) != value:
+            raise SidecarError("pass sidecar contract drifted")
+    b3_keys = (
+        "tail23_b3_verification_sha256",
+        "hydra27_b3_verification_sha256",
+    )
+    if PADDED_WIDTH in widths:
+        for key in b3_keys:
+            _sha256(payload.get(key), key)
+    elif any(key in payload for key in b3_keys):
+        raise SidecarError(
+            "pass sidecar carries b3 evidence outside its declared widths"
+        )
     for key in (
         "dual_gate_sha256",
         "dual_gate_canonical_sha256",
