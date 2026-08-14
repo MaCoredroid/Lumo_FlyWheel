@@ -1,0 +1,416 @@
+{
+  "schema": "fr13.gdn_scan_fusion_cost_probe.v1",
+  "analysis_only": true,
+  "acceptance_valid": false,
+  "performance_measurement": "kernel_microbenchmark_synthetic",
+  "step_envelope_claim": false,
+  "stamp": "20260814T181059Z",
+  "device": {
+    "name": "NVIDIA GB10",
+    "sms": 48,
+    "l2_bytes": 25165824
+  },
+  "geometry": {
+    "n_actual": 32,
+    "num_vh": 48,
+    "num_kh": 16,
+    "dim_k": 128,
+    "dim_v": 128,
+    "block_v": 8,
+    "num_warps": 8,
+    "batch": 1,
+    "rows": 32,
+    "grid_l0": [
+      48,
+      16,
+      1
+    ],
+    "grid_l1": [
+      48,
+      16,
+      11
+    ],
+    "grid_single_launch": [
+      48,
+      16,
+      1
+    ],
+    "two_launch_physical_launches_per_layer": 2,
+    "single_launch_physical_launches_per_layer": 1,
+    "state_tile_bytes": 3145728
+  },
+  "topology": {
+    "levels": [
+      [
+        [
+          [
+            0,
+            1,
+            4,
+            9,
+            14
+          ],
+          -1
+        ]
+      ],
+      [
+        [
+          [
+            19,
+            24,
+            26,
+            28,
+            29,
+            30,
+            31
+          ],
+          14
+        ],
+        [
+          [
+            2,
+            7,
+            12,
+            17,
+            22
+          ],
+          0
+        ],
+        [
+          [
+            3,
+            8,
+            13,
+            18,
+            23,
+            25,
+            27
+          ],
+          0
+        ],
+        [
+          [
+            5
+          ],
+          1
+        ],
+        [
+          [
+            6
+          ],
+          1
+        ],
+        [
+          [
+            10
+          ],
+          4
+        ],
+        [
+          [
+            11
+          ],
+          4
+        ],
+        [
+          [
+            15
+          ],
+          9
+        ],
+        [
+          [
+            16
+          ],
+          9
+        ],
+        [
+          [
+            20
+          ],
+          14
+        ],
+        [
+          [
+            21
+          ],
+          14
+        ]
+      ]
+    ],
+    "tree_critical_path_nodes": 12,
+    "two_launch_waves": 12,
+    "single_launch_critical_node_steps": 32
+  },
+  "byte_ab_single_vs_two": {
+    "out_byte_equal": true,
+    "out_max_abs_diff": 0.0,
+    "out_elements_differing": 0,
+    "note": "synthetic-tensor kernel A/B; not the campaign byte gate"
+  },
+  "byte_ab_sweep": {
+    "all_pass": true,
+    "cases": [
+      {
+        "seed": 20260811,
+        "regime": "nominal",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20260811,
+        "regime": "zero_state",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20260811,
+        "regime": "large_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20260811,
+        "regime": "tiny_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20260811,
+        "regime": "zero_inputs",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20261811,
+        "regime": "nominal",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20261811,
+        "regime": "zero_state",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20261811,
+        "regime": "large_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20261811,
+        "regime": "tiny_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20261811,
+        "regime": "zero_inputs",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20262811,
+        "regime": "nominal",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20262811,
+        "regime": "zero_state",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20262811,
+        "regime": "large_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20262811,
+        "regime": "tiny_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20262811,
+        "regime": "zero_inputs",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20263811,
+        "regime": "nominal",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20263811,
+        "regime": "zero_state",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20263811,
+        "regime": "large_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20263811,
+        "regime": "tiny_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20263811,
+        "regime": "zero_inputs",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      }
+    ],
+    "surfaces": [
+      "out",
+      "ring_k",
+      "ring_v",
+      "ring_a",
+      "ring_b"
+    ]
+  },
+  "bench_us": {
+    "L0_deployed": {
+      "us_min": 89.4400030374527,
+      "us_p05": 90.33600240945816,
+      "us_p50": 92.47999638319016,
+      "us_mean": 93.0265595515569,
+      "reps": 150
+    },
+    "L0_no_export": {
+      "us_min": 36.959998309612274,
+      "us_p05": 45.152001082897186,
+      "us_p50": 45.40799930691719,
+      "us_mean": 45.51701297362646,
+      "reps": 150
+    },
+    "L0_len1": {
+      "us_min": 28.64000014960766,
+      "us_p05": 28.863999992609024,
+      "us_p50": 29.08799983561039,
+      "us_mean": 29.660586565732956,
+      "reps": 150
+    },
+    "L0_len1_no_export": {
+      "us_min": 26.75200067460537,
+      "us_p05": 28.00000086426735,
+      "us_p50": 29.023999348282814,
+      "us_mean": 29.02399993191163,
+      "reps": 150
+    },
+    "L1_deployed": {
+      "us_min": 142.97600090503693,
+      "us_p05": 157.9200029373169,
+      "us_p50": 159.8079949617386,
+      "us_mean": 161.41034692525864,
+      "reps": 150
+    },
+    "L1_len1": {
+      "us_min": 77.56800204515457,
+      "us_p05": 81.69600367546082,
+      "us_p50": 82.2720006108284,
+      "us_mean": 83.32672024766605,
+      "reps": 150
+    },
+    "L1_len_full_padded": {
+      "us_min": 399.83999729156494,
+      "us_p05": 400.92799067497253,
+      "us_p50": 401.8239974975586,
+      "us_mean": 402.7214938402176,
+      "reps": 150
+    },
+    "L1_from_h0": {
+      "us_min": 146.2399959564209,
+      "us_p05": 156.25600516796112,
+      "us_p50": 157.95199573040009,
+      "us_mean": 158.94314656654993,
+      "reps": 150
+    },
+    "two_launch_total": {
+      "us_min": 226.33600234985352,
+      "us_p05": 226.68799757957458,
+      "us_p50": 228.7359982728958,
+      "us_mean": 231.2983482082685,
+      "reps": 150
+    },
+    "single_launch": {
+      "us_min": 186.68800592422485,
+      "us_p05": 186.8479996919632,
+      "us_p50": 188.63999843597412,
+      "us_mean": 188.39637319246927,
+      "reps": 150
+    }
+  },
+  "derived": {
+    "l0_us": 92.47999638319016,
+    "l1_us": 159.8079949617386,
+    "two_launch_us": 228.7359982728958,
+    "single_launch_us": 188.63999843597412,
+    "per_node_step_us": 12.922665725151697,
+    "l0_export_write_us": 47.071997076272964,
+    "l1_parent_read_plus_one_step_us": 82.2720006108284,
+    "handoff_us_per_layer": 129.34399768710136,
+    "handoff_fraction_of_two_launch": 0.5654728536991637,
+    "two_launch_ms_step_at_48_layers": 10.979327917098999,
+    "single_launch_ms_step_at_48_layers": 9.054719924926758,
+    "single_minus_two_ms_step": -1.9246079921722412,
+    "batch": 1,
+    "two_launch_us_per_request": 228.7359982728958,
+    "single_launch_us_per_request": 188.63999843597412,
+    "saving_ms_step": 1.9246079921722412,
+    "saving_ms_step_per_request": 1.9246079921722412,
+    "saving_fraction_of_two_launch": 0.17529378908292673
+  },
+  "export_untouched_by_single_launch": true
+}
