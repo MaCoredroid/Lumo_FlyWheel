@@ -42,6 +42,18 @@ export MAMBA_BLOCK_SIZE="${MAMBA_BLOCK_SIZE:-1024}"
 export APC_BLOCK_SIZE="${APC_BLOCK_SIZE:-1024}"
 export MAMBA_SSM_CACHE_DTYPE="${MAMBA_SSM_CACHE_DTYPE:-float32}"  # LOSSLESSNESS choice; change = behavior gate (PARKED)
 export FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-1}"  # PROMOTED 2026-08-10 (Mark: "just flip it"), default ON, fixed32-only (fail-loud guard 4b3c7f8d4; 2-slot floor preflight). Evidence: within-run only-arm-delta pair output/fr13_mamba_narrow_withinrun_abc49506a_20260810T002124Z (+9.7pp APC, per-request TPS 15.07->18.00, KV peak 74->18%). B4 mamba page lever. ONE flag arms BOTH halves: MambaSpec num_speculative_blocks -> cdiv(num_spec_tokens, MAMBA_BLOCK_SIZE) (2 physical pages/group/request, not 32) AND the gdn_attn scratch-window rehome that keeps the logical spec window num_spec+1 wide over those 2 pages. Preflight now enforces the 2-slot floor (col0 + one real scratch page) instead of refusing; see fr13_required_tree_flags.sh
+export FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT="${FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT:-gqa_pair}"  # PROMOTED 2026-08-13 (Mark: "B1 flip Yes"). The arm B1 SERVING takes when a launch does not name one. Evidence: Tier-A byte gate PASS + re-seals for the GQA-pair B1 unit (.so 3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae, 299815552 B, closure 172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4, pinned by 3120b3765) and the exact4 real-traffic timing pair output/fr13_fa2_qrow32_gqa_pair_b1_timing_20260812T073429Z: step_wall 232.360 ms vs the qrow16 incumbent 236.765 ms (-4.405 ms, -1.86%), per-request TPS 22.769 -> 23.155, promotion_eligible=true.
+# WHY THIS IS *_DEFAULT AND NOT FR13_FA2_QROW32_B1_PRODUCTION_ARM ITSELF: the B1
+# production selector is batch-1-only -- the launcher refuses ANY B1 selector
+# unless MAX_NUM_SEQS==1 && SWE_CONCURRENCY==1 (_FR13_FA2_QROW32_B1_CANDIDATE_MODE)
+# -- and this registry is sourced by fr13_b4_campaign_driver.sh at line 29, seven
+# lines BEFORE BSIZE is read. Exporting the selector here would hand every B=4
+# campaign arm a B1 selector it must then refuse at boot. So the registry owns the
+# VALUE and the launcher applies it in the one shape where it is legal; the two
+# must never disagree (tests/test_fr13_qrow32_b1_production_default.py parses both
+# files and compares, exactly as the mamba-narrowing promotion is pinned).
+# A caller that NAMES FR13_FA2_QROW32_B1_PRODUCTION_ARM -- including naming it
+# empty -- is always obeyed; the default applies only when it is unset.
 # BAKED 2026-07-27 (cleanup+bake, launcher defaults now 1): FR13_COMMITTER_GRAPH,
 # FR13_TAW, FR13_DRAFTER_GRAPH, FR13_PARENT_GATHER (all ran clean in every S1/A-B arm).
 # EXPERIMENT-ONLY (default off): FR13_STEP_GRAPH (=1/=2/=3 capture modes; A/B verdict:

@@ -786,6 +786,7 @@ def _make_fixture(tmp_path: Path, *, batch: int) -> dict[str, Any]:
                 "expected_session_id": contract.fixed32_trace_session_id(task),
                 "expected_completed_logical_model_requests": 1,
                 "events": trace,
+                "budget_capped": False,
             }
         )
 

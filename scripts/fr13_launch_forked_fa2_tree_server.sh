@@ -278,6 +278,12 @@ if [[ -n "${FR13_FIXED32_MODE:-}" && -f "$REPO/.lumo.local.env" ]]; then
   set +a
   _FR13_LOCAL_ENV_SOURCED=1
 fi
+# The last clause is the 2026-08-13 B1 promotion's protection. Every other clause
+# arms the guard because the caller NAMED a credentialed selector; the promoted B1
+# production arm is credentialed without being named, so an unnamed fixed32 B1
+# launch is now exactly as credential-bearing as a named one and .lumo.local.env
+# must not be able to move its pins underneath it. Arming is the fail-closed
+# direction: it only ever adds the "local env must not override" comparison.
 [[ "${FR13_DRAFT_HEAD_M32_LIVE_AB:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_PRODUCTION:-0}" == "1" \
    || "${FR13_DRAFT_HEAD_M32_TIMING_ARM:-0}" == "1" \
@@ -305,7 +311,10 @@ fi
    || "${FR13_FIXED32_SFWD_NODEGROUP8_DIRECT:-0}" == "1" \
    || "${FR13_CFWD_LOGIT_DIRECT_PRODUCTION:-0}" == "1" \
    || "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" != "0" \
-   || -n "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO:-}" ]] \
+   || -n "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO:-}" \
+   || ( "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
+        && "${MAX_NUM_SEQS:-4}" == "1" \
+        && "${SWE_CONCURRENCY:-}" == "1" ) ]] \
   && _FR13_M32_GUARD_ACTIVE=1
 if (( _FR13_M32_GUARD_ACTIVE == 1 )); then
   for _fr13_guard_name in "${_FR13_M32_GUARD_NAMES[@]}"; do
@@ -699,6 +708,16 @@ FR13_FA2_QROW32_B1_LIVE_AB_ARM=${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}
 FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID=${FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID:-}
 FR13_FA2_QROW32_B1_LIVE_AB_JSON=${FR13_FA2_QROW32_B1_LIVE_AB_JSON:-/logs/fr13_fa2_qrow32_b1_live_paged_ab.json}
 FR13_FA2_QROW32_B1_TIMING_ARM=${FR13_FA2_QROW32_B1_TIMING_ARM:-}
+# NAMED vs UNSET must survive the normalisation below: the 2026-08-13 promotion
+# (Mark: "B1 flip Yes") gives an UNNAMED B1 production arm the shipped default,
+# and a caller that names it -- INCLUDING naming it empty, which is how every
+# non-B1-selector arm in this repo declares "no B1 selector" -- is obeyed
+# verbatim. `${VAR:-...}` cannot tell those apart, so record the distinction
+# before it is erased. The default itself is applied further down, once
+# MAX_NUM_SEQS and the sibling FA2 selectors are known.
+_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED=0
+[[ -v FR13_FA2_QROW32_B1_PRODUCTION_ARM ]] \
+  && _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED=1
 FR13_FA2_QROW32_B1_PRODUCTION_ARM=${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}
 FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON=${FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON:-}
 FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256=${FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256:-}
@@ -1017,6 +1036,50 @@ case "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" in
   ""|nosplit|split2|visibility|gqa_pair) ;;
   *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, visibility, or gqa_pair" >&2; exit 2 ;;
 esac
+# ---- B1 PRODUCTION ARM PROMOTION (2026-08-13, Mark's ruling "B1 flip Yes") ----
+# The B1 GQA-pair FA2 unit is the shipped B1 production kernel. It is Tier-A
+# sealed (byte gate PASS + re-seals, binary pinned by 3120b3765) and timing-proven
+# on real exact4 SWE-Verified traffic: step_wall 232.360 ms vs the qrow16
+# incumbent 236.765 ms (-4.405 ms, -1.86%), per-request TPS 22.769 -> 23.155,
+# promotion_eligible=true (output/fr13_fa2_qrow32_gqa_pair_b1_timing_20260812T073429Z).
+#
+# fr13_canonical_env.sh owns the VALUE -- it is the single source of truth for
+# what this branch ships -- and the fallback below must never contradict it
+# (tests/test_fr13_qrow32_b1_production_default.py parses both files and
+# compares). The registry cannot export the selector itself: it is sourced by
+# fr13_b4_campaign_driver.sh before BSIZE is known, and a B1 selector is illegal
+# at B>1.
+#
+# So the default is applied HERE, and only in the shape where the B1 production
+# selector is legal AND unambiguous:
+#   * the caller did not NAME the arm (naming it empty is a deliberate opt-out
+#     and is obeyed -- that is how every non-B1 arm in this tree declares itself);
+#   * fixed32 Hydra27 at batch 1 / concurrency 1, the only shape in which
+#     _FR13_FA2_QROW32_B1_CANDIDATE_MODE is admitted at all;
+#   * not the B1 diagnostic shape (live A/B and byte work must stay explicit);
+#   * no sibling FA2 private selector is engaged -- qrow16 live/production,
+#     qrow32 B4 live, any B1 live A/B or timing arm, any B4 timing/production arm.
+#     Those launches already name the kernel they serve; the promotion must not
+#     retarget them, and the mutual-exclusion refusals below stay reachable.
+# Everything downstream is unchanged and still fail-closed: the promoted arm must
+# still clear the GQA-pair binary/source pins and present its sealed byte gate
+# plus bound live result, or the launch is refused.
+if (( _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0 )) \
+   && [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
+         && "$MAX_NUM_SEQS" == "1" \
+         && "${SWE_CONCURRENCY:-}" == "1" \
+         && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+         && "${FR13_FA2_QROW16_LIVE_PAGED_AB:-0}" == "0" \
+         && "${FR13_FA2_QROW16_PRODUCTION:-0}" == "0" \
+         && "${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" == "0" \
+         && -z "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" \
+         && -z "$FR13_FA2_QROW32_B1_TIMING_ARM" \
+         && -z "$FR13_FA2_QROW32_B4_TIMING_ARM" \
+         && -z "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" ]]; then
+  FR13_FA2_QROW32_B1_PRODUCTION_ARM=${FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT:-gqa_pair}
+  echo "[fr13] B1 production arm unnamed; serving the promoted default" \
+       "FR13_FA2_QROW32_B1_PRODUCTION_ARM=$FR13_FA2_QROW32_B1_PRODUCTION_ARM" >&2
+fi
 case "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" in
   ""|nosplit|gqa_pair) ;;
   *) echo "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty, nosplit, or gqa_pair" >&2; exit 2 ;;
@@ -1048,7 +1111,18 @@ if [[ "$FR13_FA2_QROW32_B1_TIMING_ARM" == "qrow16_stock" ]]; then
     exit 2
   fi
 fi
+# PROMOTION 2026-08-13 relaxed this clause, and only this clause. It used to read
+# `!= "gqa_pair"`, which made the GQA-pair production arm reachable ONLY from
+# inside the timing pair -- correct while the arm was a candidate, and fatal the
+# moment it becomes the shipped default, because production serving carries no
+# timing arm at all. The pairing invariant it protected is untouched: a NAMED
+# timing arm must still agree with the served kernel (the `gqa_pair timing arm
+# must serve the candidate` clause above, and `qrow16_stock` refusing any B1
+# selector), and the binary is pinned independently by _FR13_FA2_QROW32_B1_PIN_ARM,
+# which resolves the .so from the production arm when no live arm is set. What is
+# now allowed is exactly the empty timing arm: a plain B1 production serve.
 if [[ "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" == "gqa_pair" \
+      && -n "$FR13_FA2_QROW32_B1_TIMING_ARM" \
       && "$FR13_FA2_QROW32_B1_TIMING_ARM" != "gqa_pair" ]]; then
   echo "FR13 qrow32 B1 GQA-pair production requires the gqa_pair timing arm" >&2
   exit 2

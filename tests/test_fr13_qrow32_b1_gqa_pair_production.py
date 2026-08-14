@@ -689,6 +689,40 @@ def test_launcher_pairs_the_timing_arm_with_the_selector() -> None:
         assert message in text
 
 
+def test_gqa_pair_production_no_longer_needs_a_timing_arm_to_exist() -> None:
+    """PROMOTED 2026-08-13: production serving carries no timing arm at all.
+
+    While the GQA-pair arm was a candidate, the only way to serve it was inside
+    the timing pair, so the launcher demanded ``TIMING_ARM == gqa_pair``
+    unconditionally. That clause makes the promoted default unreachable: a plain
+    B1 production serve has an EMPTY timing arm and would have been refused at
+    boot with "requires the gqa_pair timing arm".
+
+    The relaxation is exactly one value wide -- empty. A NAMED timing arm must
+    still agree with the served kernel, which is what keeps the pair a pair.
+    """
+    text = LAUNCHER.read_text(encoding="utf-8")
+    clause = re.search(
+        r'if \[\[ "\$FR13_FA2_QROW32_B1_PRODUCTION_ARM" == "gqa_pair" \\\n'
+        r'\s*&& -n "\$FR13_FA2_QROW32_B1_TIMING_ARM" \\\n'
+        r'\s*&& "\$FR13_FA2_QROW32_B1_TIMING_ARM" != "gqa_pair" \]\]; then\n'
+        r'\s*echo "FR13 qrow32 B1 GQA-pair production requires the gqa_pair '
+        r'timing arm"',
+        text,
+    )
+    assert clause is not None, (
+        "the GQA-pair production/timing coupling must admit an empty timing "
+        "arm, or the promoted B1 production default cannot boot"
+    )
+    # The other half of the pairing invariant is untouched: a gqa_pair timing
+    # arm still cannot run against a different served kernel.
+    assert (
+        'if [[ "$FR13_FA2_QROW32_B1_TIMING_ARM" == "gqa_pair" \\\n'
+        '      && "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" != "gqa_pair" ]]; then'
+        in text
+    )
+
+
 def test_launcher_issues_and_verifies_the_gqa_pair_credential() -> None:
     text = LAUNCHER.read_text(encoding="utf-8")
     assert "fr13_qrow32_b1_pass_sidecar.py issue-gqa-pair" in text

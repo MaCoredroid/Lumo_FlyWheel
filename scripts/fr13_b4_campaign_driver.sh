@@ -32,6 +32,21 @@ WALL=${WALL:-1800}   # codex wall per task = deployment-faithful 30min (retries 
 # pass --agent-wall-s 0 = 0s = instant timeout). Hang protection = the 600s stall-watchdog.
 # Matches the cachefirst header's "NO wall (WALL=0)" intent + the no-AGENT_WALL_S gate policy.
 WALL_ENV="$WALL"; [[ "$WALL" == "0" ]] && WALL_ENV=""
+# FR13_CAMPAIGN_TASK_BUDGET_S: per-task wall budget, DEFAULT OFF (empty => the
+# runner sees no env and caps nothing). This is NOT the WALL above: WALL is the
+# legacy per-attempt agent wall whose timeout is provenance-FATAL, and this is a
+# declared budget whose terminal is accounted (verdict "capped", counted in the
+# campaign summary and in the qwen completion algebra's abort class).
+#
+# OFF for quality/QC arms -- capping changes what the agent does, so a capped
+# arm is not a behavioural observation and Mark's exact16 QC must see the agent
+# uncapped. ON for timing and gate arms, where wall determinism is the point and
+# the resolve verdict is not:
+#   FR13_CAMPAIGN_TASK_BUDGET_S=5400 bash scripts/fr13_b4_campaign_driver.sh
+# 5400 s is the recommended value; see run_swe_bench_q36_a.py for the floor and
+# the commit that derived it from the banked per-task wall distribution.
+FR13_CAMPAIGN_TASK_BUDGET_S=${FR13_CAMPAIGN_TASK_BUDGET_S:-}
+export FR13_CAMPAIGN_TASK_BUDGET_S
 BSIZE=${BSIZE:-4}    # vLLM max_num_seqs (B). B=1 = single-stream, no co-residency.
 CONC=${CONC:-4}      # codex task concurrency. B=1 clean => CONC=1 (one task at a time).
 TAG=${TAG:-b4}       # arm-name / sidecar / deploy-json suffix (keeps B=1 + B=4 separate).

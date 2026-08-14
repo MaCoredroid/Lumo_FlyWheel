@@ -4380,6 +4380,7 @@ def write_floor_gate_fixture(
                         ]
                     ),
                     "events": fixture_task_records[task_id]["trace_events"],
+                    "budget_capped": False,
                 }
                 for task_id in task_ids
             ]
@@ -4446,6 +4447,7 @@ def write_floor_gate_fixture(
                                 "completed_logical_model_requests"
                             ]
                         ),
+                        "budget_capped": False,
                         "trace": fixture_task_records[task_id][
                             "trace_identity"
                         ],
