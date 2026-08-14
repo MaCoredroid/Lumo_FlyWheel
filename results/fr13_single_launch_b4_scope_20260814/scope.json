@@ -1,0 +1,281 @@
+{
+ "schema": "fr13.gdn_single_launch_b4_route_scope.v1",
+ "stamp": "20260814T190000Z",
+ "code_commit": "2a82a7e97",
+ "branch": "codex/fr13-single-launch-b4-scope-20260814",
+ "acceptance_valid": false,
+ "citable": false,
+ "analysis_only": true,
+ "step_envelope_claim": false,
+ "gpu_used": false,
+ "docker_used": false,
+ "verdict": "BUILD_WITH_CAVEATS",
+
+ "premise_corrections": {
+  "note": "Three premises carried into this scoping are stale at 2a82a7e97. They are corrected here from source, not from memory.",
+  "the_b4_route_rejects_batch_4_by_contract": {
+   "status": "FALSE",
+   "evidence": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:3491-3514 fixed32_batch_gdn_selector returns 'single_launch' when batch == 4; :17137-17157 the descriptor guard fails closed on batch != 4, i.e. it REQUIRES 4. What the route rejects is batch 2 and batch 3 ('B2/B3 retain their established per-request dispatch', :3512-3514) and batch 1 (:3452-3456, B1 keeps launch_tree_gdn_prepared).",
+   "correction": "Batch 4 is the ONLY batch the folded single-launch route accepts."
+  },
+  "the_gate_entrypoint_had_no_batch_4_key": {
+   "status": "FALSE",
+   "evidence": "scripts/fr13_gdn_single_launch_gate.py:61-79 ENTRYPOINT carries six keys of shape (mode, batch, candidate), FOUR of them batch 4: (tail6_fixed32,4,single_launch), (tail6_fixed32,4,gqa_group3), (hydra27_fixed32,4,single_launch), (hydra27_fixed32,4,gqa_group3). Added by commit 42de2fa60 dated 2026-08-03, an ancestor of HEAD and PREDATING the 2026-08-12 B1 seal.",
+   "correction": "The B1 gate's recorded scope limit was 'ENTRYPOINT has no tail6 B1 key' -- a missing TAIL6:B1 key, not a missing B4 key. The B4 keys have existed since 08-03; the B4 gate has simply never been executed."
+  },
+  "batch_as_48b_launches_implies_a_b_agnostic_kernel_body": {
+   "status": "TRUE_OF_THE_DEPLOYED_KERNEL_ONLY",
+   "evidence": "The DEPLOYED two-launch kernel _tree_gdn_path_kernel is per-request: measured 96*width launches per decode step, gridZ in {1,11} = level-0 chains / level-1 chains, batch never in its grid. The CANDIDATE _tree_gdn_kernel_fixed32_single_launch (fr10_gdn_tree_kernel.py:10662) is DIFFERENT: it takes batch as grid z (:10720-10722 pid_batch = tl.program_id(2)) and strides every surface by global_node = pid_batch * N_ACTUAL + node_c (:10527).",
+   "correction": "The candidate is not b-agnostic-by-ignorance like the FA2 unit. It is explicitly batch-indexed, with per-batch-element independence and no cross-batch reduction. That is a STRONGER Tier-A position, not a weaker one -- byte invariance in b holds by construction rather than by restriction."
+  }
+ },
+
+ "part_1_pricing": {
+  "derived_artifact": "results/fr13_single_launch_b4_scope_20260814/width_bins.json",
+  "reducer": "scripts/fr13_gdn_single_launch_b4_width_bin.py",
+  "evidence_sqlite": "/home/mark/shared/lumoFlyWheel-b4-refill-citable-20260812/output/fr13_b4_width4_nsys_20260813T030940Z/fr13_b4_width4_real_swe.sqlite",
+
+  "width_is_self_identifying": {
+   "finding": "Every decode step in the capture carries EXACTLY 96*width GDN launches (48 layers x {L0,L1} x width). Measured histogram: 96->4 steps, 192->74, 288->237, 384->225. The reducer raises if any step's count is not a multiple of 96.",
+   "consequence": "Binning by width needs no census join; the launch count IS the width. Cross-checked against the census batch_size histogram {1:4, 2:74, 3:236, 4:225}."
+  },
+
+  "cross_checks_passed": {
+   "attribution_gdn_ms_per_step": "this binning 41.018 vs attribution_final.json gdn_scan 40.978",
+   "gaps_in_step_s": "this binning 22.1498 vs gaps.json 22.149822117",
+   "gaps_out_of_step_s": "this binning 4.2791 vs gaps.json 4.27909517",
+   "note": "All three are fail-closed assertions in the reducer, not prints. Two prior independent reductions of this capture are reproduced."
+  },
+
+  "does_the_56_1_pct_handoff_share_hold_at_width_4": {
+   "answer": "YES -- it is width-invariant to within 0.04 percentage points. But the 56.1% figure itself is the probe's inflated rendering.",
+   "denominator_defect_in_the_published_figure": "cost_probe.json computed handoff_fraction = 128.256 / two_launch_total(228.736) = 0.5607. The 128.256 numerator is assembled from ISOLATED ablations (L0_deployed - L0_no_export = 45.984; L1_len1 = 82.272) whose parent launches sum to 249.920 in isolation, not to the 228.736 back-to-back pair. Against a consistent denominator the B1 handoff fraction is 128.256/249.920 = 0.5132.",
+   "width_transfer_method": "The handoff lives inside each launch at shares alpha = export_write/L0 = 0.50192 and beta = (parent_read+1 step)/L1 = 0.51971. In-situ handoff fraction at width w = alpha*s0(w) + beta*s1(w) with s0,s1 the measured L0/L1 time shares of the pair.",
+   "measured_in_situ_handoff_fraction": {"width_1": 0.51395, "width_2": 0.51412, "width_3": 0.51422, "width_4": 0.51428},
+   "why_it_is_flat": "The mix DOES shift -- L1's share of the pair rises from 67.64% at width 1 to 69.47% at width 4 (L0 -4.7% per launch, L1 +3.8% per launch). It moves the handoff fraction by +0.033 pp only because L0 and L1 happen to carry nearly identical handoff shares (0.502 vs 0.520). The invariance is arithmetic luck, not a deep law -- but it is measured, not assumed."
+  },
+
+  "the_load_bearing_structural_measurement": {
+   "finding": "The gridZ sequence within every step is strictly alternating 0,1,0,1,... and the measured L0->L1 gap is median -0.13 us (adjacent, zero intervening kernels on the stream) at EVERY width. Zero kernels of any name execute between an export write and its parent read.",
+   "consequence": "The handoff's L2 regime is identical at width 1 and width 4: only ONE request's 3 MiB state tile is ever live in the 24 MiB L2 at a time; co-resident requests never evict each other's handoff. This is why per-launch cost is width-invariant (width-4 pair / width-1 pair = 1.0105) and why the B1 ratio transfers.",
+   "corroborates": "results/fr13_b4_padded_b4_derisk_20260813 section 4 -- GDN is 2-12 CTA/SM, LINEAR in CTAs (R^2=.996), no wave staircase. Measured here end-to-end: the lever is handoff-BYTES-based at width 4 exactly as at B1."
+  },
+
+  "overlap_check": {
+   "finding": "Union vs plain sum of GDN kernel intervals differs by 0.09-0.12% at every width (single stream, serialized).",
+   "consequence": "Kernel time removed IS wall removed. The reducer raises above 1% overlap."
+  },
+
+  "width_4_price": {
+   "pairs_per_step": 192,
+   "in_situ_gdn_ms_per_step_profiled": 50.042,
+   "floor_absolute_transfer_ms_per_step": 7.698,
+   "central_ratio_transfer_ms_per_step": 8.772,
+   "upper_if_single_launch_insensitive_ms_per_step": 13.823,
+   "recommended_carry": "7.7 to 8.8 ms/step, central 8.8",
+   "mde_ms": 4.20,
+   "multiples_of_mde": {"floor": 1.83, "central": 2.09},
+   "pct_of_sealed_unprofiled_width4_wall_411_05ms": {"floor": 1.87, "central": 2.13},
+   "which_model_is_right": "The floor applies the probe's ABSOLUTE per-pair saving (40.096 us) unchanged. The central applies the probe's RATIO (0.17529) to the measured in-situ pair cost (260.64 us). They differ because the trace's pair costs 13.9% more than the probe's back-to-back two_launch_total. That gap is NOT mostly CUPTI: the trace's width-1 pair (257.92 us) sits only +3.2% above the probe's ISOLATED L0+L1 sum (249.92 us) while sitting +12.8% above its L2-warm fused pair (228.74 us). Reading: the probe's 21.2 us of L0->L1 L2-reuse benefit is largely NOT realised in production, because the layer's own 48 MiB export/parent working set overflows a 24 MiB L2 regardless of adjacency. The handoff is therefore MORE DRAM-resident in production than in the probe -- which is exactly the probe's self-declared understatement, now quantified. The ratio model is the honest central; the floor is genuinely a floor.",
+   "upper_bound_caveat": "The 13.8 ms upper assumes single_launch itself is completely insensitive to the production memory environment. It still reads q/k/v/g/beta and writes out + 4 rings, so that is too strong. Reported as unpriced upside, not carried."
+  },
+
+  "width_3_price": {
+   "steps_in_window": 237,
+   "share_of_decode_steps": 0.439,
+   "note": "Width 3 is the MODAL width of the operating point.",
+   "as_built_saving_ms_per_step": 0.0,
+   "as_built_reason": "fixed32_batch_gdn_selector returns None for batch 3 (fr10_gdn_tree_kernel.py:3512-3514) and the descriptor guard raises unless batch == 4 (:17143). The route does not run at width 3 at all.",
+   "if_extended_to_b3_pairs_per_step": 144,
+   "if_extended_floor_ms_per_step": 5.774,
+   "if_extended_central_ms_per_step": 6.647,
+   "if_extended_pct_of_profiled_width3_wall_384_58ms": 1.73,
+   "if_extended_multiples_of_mde": {"floor": 1.37, "central": 1.58}
+  },
+
+  "width_2_price_if_extended": {"steps_in_window": 74, "central_ms_per_step": 4.391},
+
+  "window_level_value": {
+   "window_s": 360.1935,
+   "as_built_b4_only_s": 1.9737,
+   "as_built_pct_of_window_wall": 0.548,
+   "if_extended_to_b2_b3_b4_s": 3.8740,
+   "if_extended_pct_of_window_wall": 1.076,
+   "comparison_fa2_gqa_pair_realised": 1.92,
+   "reading": "As built the lever is worth 0.55% of window wall -- about 29% of what the sealed FA2 gqa_pair lever realised. Widening to b2/b3 roughly doubles it to 1.08%, still just over half the FA2 lever. Licensed by gaps.json: the GPU is ~95% busy and effectively serial in this window (plain kernel sum / window = 0.949), so kernel time removed is window wall removed."
+  },
+
+  "out_of_step_headroom_is_structurally_unreachable": {
+   "out_of_step_gdn_s": 4.2791,
+   "pct_of_window": 1.19,
+   "measured_burst_width_histogram": {"1_request": 864, "2_requests": 2928, "3_requests": 3144, "4_requests": 0},
+   "method": "32,304 out-of-step launches (99.6% eager, not graph-captured) cluster into 6,936 bursts separated by >2 ms. Burst sizes are exactly 2, 4 and 6 launches = 1, 2 and 3 co-resident requests. 6936/48 layers = 144.5, matching the 144 mixed passes in results/fr13_b4_prefill_gaps_20260813.",
+   "finding": "NO mixed pass ever runs GDN at batch 4. A batch==4-only route can never reach this 4.28 s.",
+   "parallel": "Same shape as the FA2 gqa_pair candidate's unreached 7.07 s out-of-step tree headroom (candidate_scope final_fixed32_b34_full_graph_only)."
+  }
+ },
+
+ "part_2_route_scope": {
+  "headline": "The B4 single_launch route is ALREADY BUILT END-TO-END and passes its offline test suite. This is not a route-extension project; it is an un-executed gate plus a missing productionisation.",
+
+  "what_exists": {
+   "kernel": "fr10_gdn_tree_kernel.py:10662 _tree_gdn_kernel_fixed32_single_launch, batch as grid z",
+   "batched_launcher": "fr10_gdn_tree_kernel.py:16881 launch_tree_gdn_prepared_fixed32_batch, accepts batch in [2,4] at function level (:16927), launches the folded kernel at grid (num_vh, cdiv(dim_v,BV), batch) (:17357)",
+   "selector": "fr10_gdn_tree_kernel.py:3447 fixed32_batch_gdn_selector -> 'single_launch' at b=4 when _FR13_FIXED32_GDN_SINGLE_LAUNCH is armed; 'single_launch_gate' at b=4 under a gate candidate",
+   "gate_entrypoints": "scripts/fr13_gdn_single_launch_gate.py:61-79, four b4 keys",
+   "gate_wrappers": "scripts/fr13_run_b4_hydra27_gdn_single_launch_live_gate.sh and scripts/fr13_run_b4_tail23_gdn_single_launch_live_gate.sh, both present and executable; both exec the common runner scripts/fr13_run_gdn_single_launch_live_gate.sh",
+   "b4_traffic_config": "config/fr13_fixed32/subset_b4_four.json wired in the common runner with B1_DIAGNOSTIC=0; EXACT4_TASK_IDS selected at gate.py:751; concurrency = batch at :762",
+   "offline_test_status": "54 passed in 2.35s -- tests/test_fr13_fixed32_gdn_single_launch_ordered.py, tests/test_fr13_gdn_single_launch_campaign_gate.py, tests/test_fr13_fixed32_gdn_batch_byte_ab.py, tests/test_fr13_fixed32_gdn_batch_graph_gate.py (CPU-only, CUDA_VISIBLE_DEVICES='')"
+  },
+
+  "what_is_missing": {
+   "1_the_b4_gate_has_never_been_run": "No fr13_gdn_single_launch b4 runroot exists on disk and credential 427d8cba... is B1-scoped (hydra27:b1). The b4 machinery is cold-untested on hardware, exactly as the B1 machinery was before 2026-08-12.",
+   "2_no_production_credential_validator": "scripts/ has fr13_gdn_gqa_group3_production_credential.py and the two dfwd validators, but NO fr13_gdn_single_launch_production_credential.py. The single_launch credential licenses legality only (production/timing all False in the B1 seal). Turning it into a served route is the same productionisation gap FA2 had, and is the bulk of the agent-h.",
+   "3_widths_2_and_3_are_out_of_route": "Two literals: fr10_gdn_tree_kernel.py:3514 'if batch == 4 else None' and :17143 'or batch != 4'. Everything else on the path is already batch-parametric (export rows batch*5 at :17158, h0 strides at :17034/:17041, rows = batch*n_actual at :16957, flags_rows == batch at :17214)."
+  },
+
+  "is_the_kernel_body_b_agnostic": {
+   "answer": "It is batch-INDEXED, not batch-agnostic -- and that is the stronger position.",
+   "mechanism": "pid_batch = tl.program_id(2) (:10720-10722); every surface (q,k,v,beta,g,raw_a,raw_b,out,ring_k,ring_v,ring_a,ring_b,ring_k_norm,ring_gate) addressed through global_node = pid_batch * N_ACTUAL + node_c (:10527); h0 bank indexing batch-aware at :10741/:10748 via H0_ACCEPTED_BATCH_STRIDE and H0_INDEX_BATCH_STRIDE.",
+   "tier_a_argument": "There is no cross-batch reduction anywhere in the body: each pid_batch slice reads and writes only its own N_ACTUAL rows. Accumulation order within a slice is identical to the b=1 case. Byte invariance in b therefore holds BY CONSTRUCTION, not by the restriction argument the FA2 unit needed. The residual risk is codegen only (Triton may schedule differently at gridZ=4), which is precisely why this is a gate and not an assert -- the same disposition the B1 seal took, where the codegen risk did not materialise.",
+   "static_asserts": "None. This is Triton/Python; every check is a Python raise. The padded-B4 lesson ('check every static_assert and hardcoded batch') resolves here to the two batch literals in part_2.what_is_missing.3 plus the two verified-consistent surfaces below."
+  },
+
+  "the_two_surfaces_the_padded_b4_lesson_demanded_be_checked": {
+   "invocation_counter": {
+    "concern": "The single_launch kernel's counter guard (:10723-10729) is mask=(pid_vh==0)&(pid_v==0) with NO pid_batch term, unlike the sibling path kernel (:10309-10315) which carries &(pid_path==0). At gridZ=batch this yields `batch` increments, not 1.",
+    "resolution": "NOT A DEFECT -- it is what makes the surfaces agree. The gate's reference at b=4 is _launch_reference (:17509), which loops `for request in range(batch)` calling the SERVED per-request launch_tree_gdn_prepared, each contributing 1 increment (COUNT_INVOCATION gated to level 0 at :16395) = `batch` increments total. Candidate `batch`, reference `batch`. They match at b=4 and at b=1.",
+    "verified_by": "source read at both call sites; not yet by hardware."
+   },
+   "flags": {
+    "concern": "flags are written only by pid_batch==0 (:10872-10874) while the wrapper enforces flags_rows == batch (:17214).",
+    "resolution": "CONSISTENT. Both arms store flags[0]=1 and flags[1]=FLAGS_ROWS; the reference loop passes the SAME staging_rows=flags_rows to every per-request call (:17551-17552), so both write the literal 4. The per-request writes are idempotent to identical bytes."
+   },
+   "physical_grid_z": {
+    "finding": "The static descriptor is pinned to (1,) and validated as (1,) by BOTH launch paths (:16112 B1, :17149 B4), while the EXECUTED record reports (batch,) (:17425-17431). This split is intentional -- the descriptor describes one batch element's shape -- and is test-pinned (tests/test_fr13_fixed32_gdn_single_launch_ordered.py:121 and :261).",
+    "consequence": "No change needed for b=4. It IS the b1-shaped literal one would otherwise trip over."
+   }
+  },
+
+  "gate_reference_is_the_served_route": {
+   "finding": "The b4 gate does not compare the folded kernel against a batched two-launch stand-in. _launch_reference (:17509) drives the real served per-request launch_tree_gdn_prepared once per request over slices q[start:end] etc., sharing the SAME out/ring/flags/counter buffers the candidate writes.",
+   "consequence": "A b4 PASS proves single_launch == the route actually in the nsys trace, with no intermediate reference needing its own qualification. This closes the gate-scope question before it is asked."
+  },
+
+  "no_regression_risk_at_untreated_widths": {
+   "finding": "Arming _FR13_FIXED32_GDN_SINGLE_LAUNCH changes dispatch ONLY at batch 4; widths 1-3 fall through to the identical unchanged per-request route in both arms.",
+   "consequence": "The NATURAL PLACEBO the padded-B4 FA2 design had to be engineered for is here for free: widths 1,2,3 are byte-identical stock code on both sides of a timing pair, so the per-width strata + DiD instrument (scripts/fr13_b4_gqa_width4_pair_reduce.py, results/fr13_b4_width4_nsys_20260813) applies directly with no new measurement design."
+  }
+ },
+
+ "part_3_what_a_b4_byte_gate_needs": {
+  "answer": "Nothing new. The comparator, credential schema, observation schema, task set, subset, capture keying and record accounting are all already batch-parametric. The gate needs to be RUN, not built.",
+  "comparator": "fr10_gdn_tree_kernel.py:2201 _fr13_fixed32_gdn_single_launch_compare_records -- snapshot / run(reference) / restore / run(candidate) / byte-compare over 7 surfaces (output, ring_k, ring_v, ring_a, ring_b, flags, counter; :901-909), plus an 8th 'export' surface used for restore verification. Fail-closed: raises on mismatch, so a clean artifact is the only artifact that can exist. Launch-identity assertion reference.physical_launches==2 / candidate==1 (:2237-2240) holds at b=4 (the labels are per-request; set at :17649/:17657).",
+  "live_observation_machinery": "YES, the same one. Producer _fr13_fixed32_gdn_single_launch_observation_emit (:1776) emits schema fr13.fixed32.gdn_single_launch.live_observation.v2 (:1811); validator scripts/fr13_gdn_single_launch_gate.py:31 with an exhaustive expected-dict comparison at :683-728.",
+  "already_batch_parametric": [
+   "capture keying key = (batch, identity, signature) (:2327) with a clean not_expected_batch early-out (:2303-2311)",
+   "observation payload carries batch_size, expected_batch, covered_batches:[batch] (:1815-1817)",
+   "request-tuple width validated as len(request_tuple) == batch (gate.py:643-650) -- 4 authenticated request digests per comparator event",
+   "expected_tasks = B1_TASK_IDS if batch == 1 else EXACT4_TASK_IDS (gate.py:751); concurrency = batch (:762); SUBSET_PATH[4] (:111-114)",
+   "records_per_comparator_event = 48 (GDN layers) is fixed; the B1 seal's 720 records = 15 events x 48 is emergent from event count, so a b4 run will land whatever event count the traffic produces",
+   "runroot ARM string already carries b${BATCH} (fr13_run_gdn_single_launch_live_gate.sh:113-115)"
+  ],
+  "expected_b4_record_shape": "48 records per comparator event, 7 byte-compared surfaces per record, 4 request digests per event -- the B1 seal's shape with the request tuple widened from 1 to 4.",
+  "residual_hardware_unknowns": [
+   "Triton codegen at gridZ=4 (the B1 seal's codegen risk, re-opened at a new grid). Gate, do not assert.",
+   "The counter and flags agreement in part_2 is verified from source at both call sites but has never executed at b=4.",
+   "Export scratch capacity: needed_export_rows = 4*5 = 20 of the 32 fp32 export rows (:17158-17162). Fits, but unexercised on hardware at b=4 under the single_launch selector."
+  ]
+ },
+
+ "part_4_cost": {
+  "phase_0_measure_the_transfer_instead_of_arguing_it": {
+   "work": "scripts/fr13_gdn_scan_fusion_cost_probe.py is hardcoded to one batch element (grid z 1/11, 32 rows). Add a --batch flag: build_inputs allocates batch*32 rows, launch_single uses grid z=batch, launch_two_launch loops requests. No credentials, no offload, no docker.",
+   "agent_h": [1, 2],
+   "gpu_h": [0.3, 0.5],
+   "value": "Replaces the width-transfer ARGUMENT in part_1 with a direct b=4 measurement of single vs two at the deployed geometry. Highest value per GPU-hour on this board. Do this first.",
+   "needs_mark": false
+  },
+  "phase_1_run_the_existing_b4_byte_gate": {
+   "work": "setsid the existing scripts/fr13_run_b4_hydra27_gdn_single_launch_live_gate.sh at HEAD. No source change, so the sealed B1 credential (HEAD-bound) is not disturbed.",
+   "agent_h": [1, 2],
+   "gpu_h": [2, 3],
+   "basis": "The b34 FA2 dual gate ran 17:31->19:50Z = 2.3 GPU-h on comparable real-task traffic.",
+   "needs_mark": false
+  },
+  "phase_2_productionisation": {
+   "work": "Write the missing fr13_gdn_single_launch_production_credential.py; arm the served path; port the counted-bypass / engagement-needle plumbing that FA2 needed (non_b4_capture accounting, candidate_scope token, .so-equivalent source pins). Then a MANDATORY re-gate at the new HEAD, since the credential is strictly HEAD-bound.",
+   "agent_h": [8, 14],
+   "gpu_h": [2, 3],
+   "basis": "FA2's equivalent step was 'BUILT+adversarially verified, 8/8 real findings incl. 3 boot-crash blockers'. Expect defects.",
+   "needs_mark": false
+  },
+  "phase_3_n1_timing_screen_at_the_width_4_operating_point": {
+   "work": "Reuse the width-4 windowed reducer + per-width strata + placebo/DiD built for padded-B4. The natural placebo (widths 1-3 untreated) is free here.",
+   "agent_h": [2, 3],
+   "gpu_h": [3, 4],
+   "stop_rule_recommended": "width-4 stratum improvement < 5.5 ms/step halts (below the floor estimate 7.7 less one MDE).",
+   "needs_mark": false
+  },
+  "phase_4_sealing_campaign": {
+   "work": "Paired passes on the Hydra27 width-4 operating point, one-sided 95% lower bound on the pre-registered batch-conditioned width-4 improvement.",
+   "power_analysis": {
+    "effect_ms": 8.772,
+    "if_variance_is_proportional_cv_0_509": {"passes": 4, "sd_ms": 4.47, "lower_bound_ms": 3.52, "gpu_h": [12, 16]},
+    "if_variance_is_additive_sd_13_77": {"passes": 9, "sd_ms": 13.77, "lower_bound_ms": 0.24, "gpu_h": [27, 33]},
+    "note": "The FA2 seal measured mean 27.03, SD 13.77 at n=4 (raw per-pass 7.54/39.62/32.33/28.6). If that SD is ADDITIVE in wall it exceeds this entire effect and n=4 cannot seal. If the CV (0.509) is the invariant -- which is what 'variance = per-pass trajectory composition' implies, since composition scales the effect multiplicatively -- then n=4 seals comfortably. THIS IS THE PRINCIPAL MEASUREMENT RISK ON THE LEVER."
+   },
+   "mitigation": "The free natural placebo lets the DiD estimator strip trajectory composition, which is the mechanism that would make the variance proportional. Phase 3's n=1 screen plus the width-1/2/3 control spread will settle which variance model holds BEFORE the campaign is funded.",
+   "needs_mark": true,
+   "mark_reason": "GPU budget of campaign scale (12-33 GPU-h)."
+  },
+  "totals_to_a_citable_claim": {
+   "agent_h": [12, 21],
+   "gpu_h_proportional_variance_case": [19, 26],
+   "gpu_h_additive_variance_case": [34, 42]
+  },
+  "optional_phase_5_widen_to_b2_b3": {
+   "work": "Two literals (:3514, :17143) plus a byte gate at b=3 (and b=2). Doubles the window-level value from 0.55% to 1.08%, and captures the MODAL width.",
+   "agent_h": [4, 7],
+   "gpu_h": [5, 9],
+   "needs_mark": true,
+   "mark_reason": "This is a qualified-scope widening on a sealed credential -- the same class of decision as the FA2 candidate_scope move. It also forces a B1 re-gate, because the single_launch credential is strictly HEAD-bound and the edit touches the shared source."
+  }
+ },
+
+ "part_5_verdict": {
+  "verdict": "BUILD_WITH_CAVEATS",
+  "build_because": [
+   "The route is already built end-to-end and green offline (54 tests). Phases 0-1 are 'run what exists', not 'write a route'.",
+   "The Tier-A legality argument is structural and strong: explicit per-batch-element indexing with no cross-batch reduction, gate reference = the actual served per-request route sharing the same buffers, counter and flags semantics verified consistent at b=4 from source.",
+   "The saving clears the 4.20 ms MDE at 1.83x (floor) to 2.09x (central) at width 4.",
+   "The handoff share is MEASURED width-invariant (51.40% -> 51.43%), and the mechanism is measured not assumed: zero-gap L0->L1 adjacency at every width means the L2 handoff regime at width 4 is the B1 regime.",
+   "The natural placebo is free -- widths 1-3 are identical stock code in both arms -- so the padded-B4 measurement instrument applies with no new design.",
+   "The probe understates: production's handoff is more DRAM-resident than the L2-warm probe (trace width-1 pair sits +12.8% above the probe's fused pair), so the floor is a genuine floor."
+  ],
+  "caveats": [
+   "It is a 2.1% lever. As built it reaches only the 225/540 width-4 steps = 0.55% of window wall, roughly 29% of what the sealed FA2 gqa_pair lever realised.",
+   "WIDTH 3 -- the modal width, 43.9% of steps -- pays EXACTLY ZERO as built. The single largest scoping fact in this document.",
+   "The 4.28 s out-of-step GDN is measurably unreachable: mixed passes run GDN at 1, 2 or 3 requests and NEVER at 4.",
+   "Productionisation is genuinely missing (no production credential validator) and, on FA2 precedent, will surface boot-class defects.",
+   "Sealing power is the principal risk: if pass-to-pass SD is additive in wall (13.77 ms as observed for FA2) it exceeds the whole effect and needs ~9 passes.",
+   "The width transfer is argued from trace-measured per-launch costs, not measured at b=4 geometry. Phase 0 retires this caveat for ~0.4 GPU-h."
+  ],
+  "recommended_sequence": "Phase 0 (b=4 probe) -> Phase 1 (existing b4 gate) -> Phase 2 (productionisation + re-gate) -> Phase 3 (n=1 screen, settles the variance model) -> then take the Phase 4 budget decision to Mark with a measured effect and a measured SD in hand.",
+  "needs_mark": [
+   {"item": "GPU budget for the Phase 4 sealing campaign (12-33 GPU-h depending on the variance model)", "blocking_from": "phase_4", "note": "Phases 0-3 need ~5-9 GPU-h total and no ruling."},
+   {"item": "Widening the qualified scope to b=2/b=3 (optional phase 5) -- a candidate_scope move on a sealed, HEAD-bound credential, forcing a B1 re-gate", "blocking_from": "phase_5"},
+   {"item": "Promotion of single_launch to B4 production default, if the seal lands", "blocking_from": "post_phase_4", "note": "Same class as the pending gqa_pair-padded B4 default flip; a promotion decision, not a build decision."}
+  ],
+  "needs_mark_for_phases_0_to_3": false
+ },
+
+ "does_not_claim": [
+  "No acceptance, regression or step-envelope reading. The capture is CUPTI-attached for its whole lifetime; every absolute time here is profiler-perturbed and is reported, never subtracted.",
+  "The 7.7-8.8 ms/step width-4 figure is a PRICED EXPECTATION from a synthetic B1 kernel probe transferred through trace-measured per-launch costs. It is not a measured step-wall delta and must not be quoted as one.",
+  "No claim that single_launch is byte-identical at b=4. The B1 seal (427d8cba..., hydra27:b1) licenses b=1 only. The b=4 counter and flags agreement is verified from source at both call sites and has never executed on hardware.",
+  "The width-3 'if extended' prices assume the b2/b3 widening behaves like b4. That widening is unbuilt and ungated.",
+  "The out-of-step burst-width finding characterises THIS 360 s prefill-heavy window; the analysis.md honesty note (window overstates prefill share by ~8 pp vs the 4,431 s arm) applies unchanged.",
+  "The 0.509 CV variance model is an inference from the FA2 seal's decomposition, not a measurement of this lever's variance."
+ ]
+}
