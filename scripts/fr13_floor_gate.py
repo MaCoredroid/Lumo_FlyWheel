@@ -2146,11 +2146,52 @@ def parse_orchestrator(arm_dir: Path, task_count: int) -> dict[str, Any]:
     }
 
 
+def fixed32_runner_metadata(
+    task_dir: Path, *, allow_unpromoted: bool
+) -> tuple[dict[str, Any], Path, bool]:
+    """Load a task's runner metadata, optionally accepting the unpromoted form.
+
+    THE AUDIT-ORDERING DEFECT THIS EXISTS TO FIX. A task's metadata is written
+    first as ``runner_metadata.pending.json`` and promoted to
+    ``runner_metadata.json`` by the end-of-campaign finalizer. The chat-task
+    traffic audit required the PROMOTED file. But the finalizer promotes nothing
+    until it has reconciled the campaign's token accounting, and it raises on the
+    first task if that reconciliation fails -- so a campaign whose accounting is
+    wrong leaves EVERY task unpromoted, and the audit that exists to diagnose
+    exactly that failure cannot run at all. It demanded the artifact whose
+    absence is the symptom.
+
+    Observed on both arms of the 2026-08-15 width-4 screen: 16 of 16 tasks
+    pending, zero promoted, audit dead on the alphabetically-first task, six
+    hours of clean serving undiagnosable by its own instrument.
+
+    So the audit may read the pending form. Nothing else may: `allow_unpromoted`
+    defaults to False at every existing call site, which keeps promoted-metadata
+    gates bit-unchanged. The returned `promoted` flag is not decoration -- the
+    caller is expected to carry it into its evidence so that an audit run on
+    unpromoted metadata can never be mistaken for one run on published metadata.
+    """
+    promoted_path = task_dir / "runner_metadata.json"
+    if promoted_path.is_file():
+        return exact_json(promoted_path, label=str(promoted_path)), promoted_path, True
+    pending_path = task_dir / "runner_metadata.pending.json"
+    if allow_unpromoted and pending_path.is_file():
+        return (
+            exact_json(pending_path, label=str(pending_path)),
+            pending_path,
+            False,
+        )
+    # Unchanged failure for every non-audit caller: name the promoted path, so
+    # the error reads exactly as it always did.
+    return exact_json(promoted_path, label=str(promoted_path)), promoted_path, True
+
+
 def task_directories(
     arm_dir: Path,
     task_count: int,
     *,
     expected_task_ids: list[str] | None = None,
+    allow_unpromoted_metadata: bool = False,
 ) -> list[Path]:
     root = arm_dir / "swe_out" / "verified" / "per_task"
     if not root.is_dir():
@@ -2169,8 +2210,9 @@ def task_directories(
             f"{root}: task directories are not the exact canonical completed set"
         )
     for task_dir in directories:
-        metadata_path = task_dir / "runner_metadata.json"
-        metadata = exact_json(metadata_path, label=str(metadata_path))
+        metadata, metadata_path, _promoted = fixed32_runner_metadata(
+            task_dir, allow_unpromoted=allow_unpromoted_metadata
+        )
         if metadata.get("instance_id") != task_dir.name or not metadata.get("ended_at"):
             raise GateError(f"{metadata_path}: task is not recorded as completed")
         for name in ("vllm_metrics_pre.txt", "vllm_metrics_post.txt"):
@@ -4089,17 +4131,25 @@ def build_fixed32_chat_traffic_audit(
     task_ids = list(subset["task_ids"])
     if concurrency not in (1, 4):
         raise GateError(f"{arm_dir}: fixed32 provenance concurrency is invalid")
+    # The audit is the ONE reader allowed the unpromoted form, because it is the
+    # instrument that diagnoses the failure which prevents promotion. See
+    # fixed32_runner_metadata.
     task_dirs = task_directories(
         arm_dir,
         len(task_ids),
         expected_task_ids=task_ids,
+        allow_unpromoted_metadata=True,
     )
     task_bindings: dict[str, dict[str, Any]] = {}
     audit_tasks: dict[str, dict[str, Any]] = {}
+    unpromoted_metadata_task_ids: list[str] = []
     for task_dir in task_dirs:
         task_id = task_dir.name
-        metadata_path = task_dir / "runner_metadata.json"
-        metadata = exact_json(metadata_path, label=str(metadata_path))
+        metadata, metadata_path, metadata_promoted = fixed32_runner_metadata(
+            task_dir, allow_unpromoted=True
+        )
+        if not metadata_promoted:
+            unpromoted_metadata_task_ids.append(task_id)
         if (
             metadata.get("instance_id") != task_id
             or metadata.get("dataset_name") != SWE_VERIFIED_DATASET
@@ -4633,6 +4683,22 @@ def build_fixed32_chat_traffic_audit(
             "no_campaign_rejections_or_aborted_requests": True,
             "no_fixed32_traffic_outside_task_brackets": True,
             "raw_proxy_request_and_response_dumps_disabled": True,
+        },
+        # WHAT THE AUDIT READ, not merely what it concluded. An audit that ran on
+        # unpromoted metadata is weaker evidence than one that ran on published
+        # metadata, and the difference must be legible in the artifact rather
+        # than inferable from a runroot's file listing months later. Empty list
+        # is the normal, fully-promoted case.
+        "metadata_promotion": {
+            "unpromoted_metadata_task_ids": sorted(unpromoted_metadata_task_ids),
+            "all_task_metadata_promoted": not unpromoted_metadata_task_ids,
+            "note": (
+                "Tasks listed here were audited from runner_metadata.pending.json "
+                "because the end-of-campaign finalizer never promoted them. That "
+                "is expected when the finalizer itself failed -- the audit is the "
+                "instrument for diagnosing that failure and must not require the "
+                "artifact whose absence is the symptom."
+            ),
         },
         "offload_fetch_status": _fixed32_artifact_identity(fetch_status),
         "proxy_runtime": proxy_runtime,
