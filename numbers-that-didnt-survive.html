@@ -1,0 +1,1896 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Numbers That Didn't Survive: Auditing Our Own Ladder at Batch Four - Lumo FlyWheel Vol. X</title>
+<meta name="description" content="Volume IX published a ranked ladder of what was left to optimise in a speculative decode step. This volume is what happened when the top three items were built: all three returned null. Plus the batch-four work that reframed the denominator - an honest floor wrong in three separate directions, an unnamed kernel family larger than attention, a per-width placebo that reversed a null, and the instrument that had been recording nothing for months.">
+<meta property="og:title" content="The Numbers That Didn't Survive: Auditing Our Own Ladder at Batch Four">
+<meta property="og:description" content="Three refuted levers, a hardware floor that was wrong in three directions at once, and a placebo design that reversed a null result. The series closes at an honest 1.83x / 2.57x.">
+<meta name="author" content="Mark Ma">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Cpath d='M12 20 h40' stroke='%23d88989' stroke-width='3.5' stroke-linecap='round'/%3E%3Cpath d='M12 32 h40' stroke='%23d88989' stroke-width='3.5' stroke-linecap='round'/%3E%3Cpath d='M12 44 h26' stroke='%23a7d98d' stroke-width='3.5' stroke-linecap='round'/%3E%3Cpath d='M8 16 L56 24' stroke='%238bd3dd' stroke-width='2.5'/%3E%3Cpath d='M8 28 L56 36' stroke='%238bd3dd' stroke-width='2.5'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #111111;
+    --paper: #171717;
+    --paper-2: #202020;
+    --paper-3: #292929;
+    --ink: #f2efe7;
+    --text: #d8d3c8;
+    --muted: #a8a196;
+    --quiet: #7f776d;
+    --rule: #3b3934;
+    --rule-2: #565147;
+    --cyan: #8bd3dd;
+    --green: #a7d98d;
+    --amber: #e7c76f;
+    --rose: #d88989;
+    --cyan-soft: #193235;
+    --green-soft: #233320;
+    --amber-soft: #3b3018;
+    --rose-soft: #3a2323;
+    --grid-major: rgba(255, 255, 255, 0.025);
+    --grid-minor: rgba(255, 255, 255, 0.018);
+    --grid-opacity: 0.42;
+    --link-underline: rgba(139, 211, 221, 0.36);
+    --soft-panel: rgba(255, 255, 255, 0.018);
+    --soft-panel-2: rgba(255, 255, 255, 0.012);
+    --soft-panel-3: rgba(255, 255, 255, 0.026);
+    --flow-wash: rgba(139, 211, 221, 0.035);
+    --flow-bg: #0c0c0c;
+    --flow-card-bg: #101010;
+    --control-bg: #121212;
+    --green-wash: rgba(167, 217, 141, 0.045);
+    --bias-on-fill: rgba(231, 199, 111, 0.5);
+    --bias-off-fill: rgba(255, 255, 255, 0.03);
+    --bias-off-stroke: rgba(255, 255, 255, 0.08);
+    --callout-fill: rgba(255, 255, 255, 0.02);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f7;
+      --paper: #ffffff;
+      --paper-2: #eef1f0;
+      --paper-3: #dde3e1;
+      --ink: #151715;
+      --text: #303431;
+      --muted: #626a64;
+      --quiet: #7a827d;
+      --rule: #d8ddd9;
+      --rule-2: #b7c0bb;
+      --cyan: #1c7380;
+      --green: #3f7b3a;
+      --amber: #876812;
+      --rose: #a54444;
+      --cyan-soft: #e3f3f5;
+      --green-soft: #e4f2df;
+      --amber-soft: #f3ead2;
+      --rose-soft: #f5dfdf;
+      --grid-major: rgba(18, 24, 22, 0.055);
+      --grid-minor: rgba(18, 24, 22, 0.038);
+      --grid-opacity: 0.55;
+      --link-underline: rgba(28, 115, 128, 0.34);
+      --soft-panel: rgba(18, 24, 22, 0.028);
+      --soft-panel-2: rgba(18, 24, 22, 0.018);
+      --soft-panel-3: rgba(18, 24, 22, 0.038);
+      --flow-wash: rgba(28, 115, 128, 0.075);
+      --flow-bg: #fbfbfa;
+      --flow-card-bg: #ffffff;
+      --control-bg: #f8faf9;
+      --green-wash: rgba(63, 123, 58, 0.08);
+      --bias-on-fill: rgba(135, 104, 18, 0.22);
+      --bias-off-fill: rgba(18, 24, 22, 0.035);
+      --bias-off-stroke: rgba(18, 24, 22, 0.12);
+      --callout-fill: rgba(18, 24, 22, 0.025);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-minor) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: var(--grid-opacity);
+  }
+  ::selection { background: var(--cyan-soft); color: var(--ink); }
+  a {
+    color: var(--cyan);
+    text-decoration: none;
+    border-bottom: 1px solid var(--link-underline);
+  }
+  a:hover { border-bottom-color: currentColor; }
+  a:focus-visible {
+    outline: 3px solid var(--cyan);
+    outline-offset: 3px;
+  }
+  strong { color: var(--ink); font-weight: 720; }
+  code, .mono {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    color: var(--cyan);
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 28px 92px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .brandmark {
+    color: var(--ink);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .topbar nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px 16px;
+  }
+  .topbar a {
+    color: var(--muted);
+    border-bottom-color: transparent;
+  }
+  .topbar a:hover { color: var(--cyan); }
+
+  header.hero {
+    min-height: 88vh;
+    display: grid;
+    align-content: center;
+    padding: 52px 0 42px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .kicker {
+    margin: 0 0 18px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h1 {
+    max-width: 980px;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: clamp(42px, 7vw, 82px);
+    line-height: 1.02;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .title-subtitle {
+    max-width: 820px;
+    margin: 14px 0 0;
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+  .subhead {
+    max-width: 900px;
+    margin: 18px 0 0;
+    color: var(--text);
+    font-size: 21px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .hero-tldr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.46fr);
+    gap: 22px;
+    align-items: end;
+    max-width: 980px;
+    margin: 26px 0 0;
+    padding: 18px 0 20px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero-tldr p {
+    margin: 0;
+    color: var(--text);
+  }
+  .hero-tldr .tldr-copy {
+    max-width: 68ch;
+    font-size: 18px;
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+  .hero-result {
+    justify-self: end;
+    width: min(100%, 330px);
+  }
+  .hero-number {
+    display: block;
+    color: var(--green);
+    font-family: var(--serif);
+    font-size: clamp(40px, 4.3vw, 62px);
+    line-height: 0.96;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .hero-result p {
+    margin-top: 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: 28px 0 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .byline span:not(:first-child)::before {
+    content: "/";
+    color: var(--rule-2);
+    margin-right: 14px;
+  }
+  .paper-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 34px 0 0;
+  }
+  .paper-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .paper-nav a:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+
+  .section {
+    margin: 74px 0;
+  }
+  .section h2 {
+    max-width: 780px;
+    margin: 0 0 16px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1.12;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .section h3 {
+    margin: 0 0 8px;
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1.3;
+  }
+  .section > p,
+  .main-col > p {
+    max-width: 74ch;
+    margin: 0 0 18px;
+    text-wrap: pretty;
+  }
+  .main-col > p:last-child,
+  .section > p:last-child { margin-bottom: 0; }
+
+  .abstract-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    margin-top: 34px;
+  }
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 22px;
+  }
+  .panel h2,
+  .panel h3 {
+    margin: 0 0 12px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .panel p {
+    margin: 0 0 14px;
+  }
+  .panel p:last-child { margin-bottom: 0; }
+  .claim-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .claim {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .claim:last-child { border-bottom: 0; padding-bottom: 0; }
+  .claim .state {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    color: var(--muted);
+  }
+  .claim p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .state.pass { color: var(--green); }
+  .state.warn { color: var(--amber); }
+  .state.info { color: var(--cyan); }
+
+  .sidenote {
+    color: var(--muted);
+    border-left: 1px solid var(--rule-2);
+    padding-left: 13px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .sidenote::before {
+    content: "plain explanation";
+    display: block;
+    margin-bottom: 7px;
+    color: var(--amber);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .sidenote p {
+    margin: 0 0 10px;
+  }
+  .sidenote p:last-child { margin-bottom: 0; }
+
+  .figure {
+    margin: 28px 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px;
+    overflow: hidden;
+  }
+  .figure-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .figure-head strong { color: var(--cyan); }
+  .caption {
+    max-width: 78ch;
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .diagram text {
+    font-family: var(--mono);
+    fill: var(--text);
+    font-size: 13px;
+  }
+  .diagram .label {
+    fill: var(--ink);
+    font-weight: 800;
+  }
+  .diagram .tiny {
+    fill: var(--muted);
+    font-size: 11px;
+  }
+  .diagram .node {
+    fill: var(--paper-2);
+    stroke: var(--rule-2);
+    stroke-width: 1.2;
+  }
+  .diagram .node-cyan { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .diagram .node-green { fill: var(--green-soft); stroke: var(--green); }
+  .diagram .node-amber { fill: var(--amber-soft); stroke: var(--amber); }
+  .diagram .node-rose { fill: var(--rose-soft); stroke: var(--rose); }
+  .diagram .edge {
+    stroke: var(--rule-2);
+    stroke-width: 1.6;
+    fill: none;
+  }
+  .diagram .arrow {
+    stroke: var(--cyan);
+    stroke-width: 1.6;
+    fill: none;
+    marker-end: url(#arrow);
+  }
+  .diagram .dash {
+    stroke-dasharray: 6 5;
+  }
+
+  .flow-figure {
+    clear: both;
+    background:
+      linear-gradient(180deg, var(--flow-wash), transparent 36%),
+      var(--flow-bg);
+    overflow-x: auto;
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  .flow-figure.is-paused .flow-edge,
+  .flow-figure.is-paused .flow-node,
+  .flow-figure.is-paused .bias-on,
+  .flow-figure.is-paused .scan-window,
+  .flow-figure.is-paused .cache-cursor {
+    animation-play-state: paused;
+  }
+  .flow-control {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--control-bg);
+    color: var(--text);
+    font: 800 12px var(--mono);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1), color 160ms cubic-bezier(0.25, 1, 0.5, 1), background 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .flow-control:hover,
+  .flow-control:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-why {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 16px 0 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--rule);
+  }
+  .flow-why div {
+    background: var(--flow-card-bg);
+    padding: 13px 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .flow-why strong {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .code-grounding {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .code-grounding a {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 7px 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .code-grounding a:hover,
+  .code-grounding a:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-svg .lane {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-title {
+    fill: var(--ink);
+    font: 800 16px var(--mono);
+  }
+  .flow-svg .flow-sub {
+    fill: var(--muted);
+    font: 12px var(--mono);
+  }
+  .flow-svg .math {
+    fill: var(--text);
+    font: 13px var(--mono);
+  }
+  .flow-svg .native-fill { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .flow-svg .tree-fill { fill: var(--green-soft); stroke: var(--green); }
+  .flow-svg .fa-fill { fill: var(--amber-soft); stroke: var(--amber); }
+  .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .bad-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .meta-fill {
+    fill: var(--soft-panel-3);
+    stroke: var(--rule-2);
+  }
+  .flow-svg .kernel-card {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-node {
+    stroke-width: 1.4;
+    animation: nodePulse 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .flow-svg .flow-node.s2 { animation-delay: 0.35s; }
+  .flow-svg .flow-node.s3 { animation-delay: 0.7s; }
+  .flow-svg .flow-edge {
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 10 9;
+    animation: flowDash 2.4s linear infinite;
+  }
+  .flow-svg .native-edge { stroke: var(--cyan); }
+  .flow-svg .tree-edge { stroke: var(--green); animation-duration: 2.9s; }
+  .flow-svg .fa-edge { stroke: var(--amber); animation-duration: 2.1s; }
+  .flow-svg .warn-edge { stroke: var(--amber); animation-duration: 3s; }
+  .flow-svg .commit-edge { stroke: var(--rose); animation-duration: 3.2s; }
+  .flow-svg .bad-edge {
+    stroke: var(--rose);
+    stroke-dasharray: 7 8;
+    animation-duration: 3.8s;
+  }
+  .flow-svg .quiet-edge {
+    stroke: var(--rule-2);
+    stroke-dasharray: 2 8;
+    animation-duration: 4.4s;
+  }
+  .flow-svg .bias-on {
+    fill: var(--bias-on-fill);
+    animation: biasGlow 2.6s ease-in-out infinite;
+  }
+  .flow-svg .bias-off {
+    fill: var(--bias-off-fill);
+    stroke: var(--bias-off-stroke);
+  }
+  .flow-svg .code-label {
+    fill: var(--cyan);
+    font: 11px var(--mono);
+  }
+  .flow-svg .callout {
+    fill: var(--callout-fill);
+    stroke: var(--rule-2);
+    stroke-width: 1;
+  }
+  .flow-svg .scan-window {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    animation: scanWindow 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .flow-svg .cache-cursor {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+  }
+  .flow-svg .legend-dot { stroke: none; }
+  @keyframes flowDash {
+    to { stroke-dashoffset: -38; }
+  }
+  @keyframes nodePulse {
+    0%, 100% { opacity: 0.82; }
+    45%, 55% { opacity: 1; stroke-width: 2.7; }
+  }
+  @keyframes biasGlow {
+    0%, 100% { opacity: 0.48; }
+    50% { opacity: 1; }
+  }
+  @keyframes scanWindow {
+    0%, 100% { transform: translateX(0); opacity: 0.65; }
+    50% { transform: translateX(96px); opacity: 1; }
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.52fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .mini-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .mini-card p {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .mini-card p:last-child { margin-bottom: 0; }
+
+  .definition-box,
+  .glossary-strip {
+    margin: 22px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel);
+  }
+  .definition-box {
+    max-width: 900px;
+    padding: 16px 18px;
+  }
+  .definition-box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .glossary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+  }
+  .glossary-strip div {
+    padding: 14px 16px;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .glossary-strip div:nth-child(3n) { border-right: 0; }
+  .glossary-strip div:nth-last-child(-n + 3) { border-bottom: 0; }
+  .glossary-strip dfn {
+    display: block;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .glossary-strip span {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .confidence-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 14px;
+    align-items: start;
+    margin: 20px 0 24px;
+    padding: 15px 17px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--green-wash);
+  }
+  .confidence-row strong {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .confidence-row p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .fold {
+    margin: 26px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel-2);
+    overflow: hidden;
+  }
+  .fold > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    min-height: 58px;
+    padding: 15px 18px;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 850;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary::after {
+    content: "+";
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--cyan);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .fold[open] > summary {
+    border-bottom: 1px solid var(--rule);
+    background: var(--soft-panel);
+  }
+  .fold[open] > summary::after { content: "-"; }
+  .fold > summary small {
+    display: block;
+    grid-column: 1;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .fold-body {
+    padding: 18px;
+  }
+  .fold-body > :first-child { margin-top: 0; }
+  .fold-body > :last-child { margin-bottom: 0; }
+
+  .equation {
+    margin: 22px 0;
+    padding: 18px 20px;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .equation .muted { color: var(--muted); }
+  .equation .hl { color: var(--amber); }
+  .equation .ok { color: var(--green); }
+
+  .source-exhibit {
+    margin: 24px 0;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .source-exhibit .source-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .source-exhibit .source-head strong {
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .source-exhibit pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .source-exhibit code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .source-exhibit .source-note {
+    margin: 0;
+    padding: 0 16px 16px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .source-exhibit > .grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin: 16px;
+  }
+
+  .compare-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin: 24px 0;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--rule);
+  }
+  .compare-strip article {
+    min-height: 100%;
+    padding: 18px;
+    background: var(--paper);
+  }
+  .compare-strip h3 {
+    margin-bottom: 9px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .compare-strip p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .box {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .box .tag {
+    display: inline-flex;
+    margin-bottom: 10px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 760;
+  }
+  .box.good .tag { color: var(--green); background: var(--green-soft); }
+  .box.warn .tag { color: var(--amber); background: var(--amber-soft); }
+  .box.bad .tag { color: var(--rose); background: var(--rose-soft); }
+  .box.info .tag { color: var(--cyan); background: var(--cyan-soft); }
+  .box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--paper);
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  table {
+    border-collapse: collapse;
+    min-width: 760px;
+    width: 100%;
+    font-size: 14px;
+  }
+  caption {
+    caption-side: top;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+    text-align: left;
+  }
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--rule);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--paper-2);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num {
+    font-family: var(--mono);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .pill {
+    display: inline-flex;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .pill.good { color: var(--green); background: var(--green-soft); }
+  .pill.warn { color: var(--amber); background: var(--amber-soft); }
+  .pill.info { color: var(--cyan); background: var(--cyan-soft); }
+  .pill.bad { color: var(--rose); background: var(--rose-soft); }
+
+  .failure-note {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-ledger {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .failure-card {
+    min-width: 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .failure-card.contaminated { border-color: var(--rose); }
+  .failure-card.superseded { border-color: var(--amber); }
+  .failure-card.settled { border-color: var(--rule-2); }
+  .failure-card.open { border-color: var(--cyan); }
+  .failure-card header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .failure-card h3 {
+    margin: 0;
+    min-width: 0;
+    max-width: 58ch;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.25;
+  }
+  .failure-card p {
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-card p:last-child { margin-bottom: 0; }
+  .failure-card ul {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 12px;
+    padding-left: 18px;
+    color: var(--text);
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .failure-card .conclusion {
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    color: var(--text);
+  }
+  .failure-card code { overflow-wrap: anywhere; }
+
+  .shape-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .shape {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .shape h3 {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .shape h3 span {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .path-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .path-list li {
+    padding: 3px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .receipt-list {
+    columns: 2 330px;
+    column-gap: 34px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .receipt-list li {
+    break-inside: avoid;
+    margin: 0 0 12px;
+    font-size: 15px;
+  }
+
+  footer {
+    margin-top: 86px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  @media (min-width: 1040px) {
+    header.hero > .sidenote,
+    .section > .sidenote {
+      float: right;
+      clear: right;
+      width: 282px;
+      margin: 6px 0 20px 34px;
+    }
+  }
+  @media (max-width: 960px) {
+    .page { padding: 0 18px 72px; }
+    .topbar { flex-direction: column; align-items: flex-start; }
+    .topbar nav { justify-content: flex-start; }
+    header.hero { min-height: auto; padding: 26px 0 20px; }
+    h1 { font-size: 40px; }
+    .subhead {
+      margin-top: 18px;
+      font-size: 17px;
+      line-height: 1.48;
+    }
+    .title-subtitle {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .byline span:not(:first-child)::before { content: none; }
+    .abstract-grid, .two-col, .shape-grid, .hero-tldr, .confidence-row { grid-template-columns: 1fr; }
+    .glossary-strip { grid-template-columns: 1fr; }
+    .glossary-strip div,
+    .glossary-strip div:nth-child(3n),
+    .glossary-strip div:nth-last-child(-n + 3) {
+      border-right: 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .glossary-strip div:last-child { border-bottom: 0; }
+    .compare-strip { grid-template-columns: 1fr; }
+    .table-wrap::before,
+    .flow-figure::before {
+      display: inline-flex;
+      position: sticky;
+      left: 8px;
+      z-index: 1;
+      margin: 8px 8px 0;
+      padding: 4px 7px;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      background: var(--paper);
+      color: var(--muted);
+      font: 800 11px var(--mono);
+    }
+    .table-wrap::before { content: "wide table: scroll sideways"; }
+    .flow-figure::before { content: "wide figure: scroll sideways"; }
+    .section { margin: 56px 0; }
+    .section h2 { font-size: 30px; }
+    .hero-result {
+      justify-self: start;
+      width: 100%;
+    }
+    .hero-tldr {
+      gap: 14px;
+      margin-top: 16px;
+      padding: 12px 0 14px;
+    }
+    .hero-tldr .tldr-copy {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .hero-number { font-size: 36px; }
+    .byline { margin-top: 16px; }
+    .paper-nav {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin-top: 18px;
+      padding-bottom: 6px;
+      scrollbar-color: var(--rule-2) transparent;
+    }
+    .paper-nav a {
+      flex: 0 0 auto;
+    }
+    .sidenote {
+      display: block;
+      margin: 18px 0 22px;
+      padding: 13px 16px 13px 14px;
+      background: var(--paper-2);
+      border: 1px solid var(--rule);
+      border-left: 1px solid var(--rule-2);
+      border-radius: 7px;
+    }
+    .claim { grid-template-columns: 1fr; gap: 4px; }
+    .flow-figure .flow-svg {
+      width: 960px;
+      max-width: none;
+    }
+    .flow-why { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    .flow-svg .flow-edge,
+    .flow-svg .flow-node,
+    .flow-svg .bias-on,
+    .flow-svg .scan-window,
+    .flow-svg .cache-cursor {
+      animation: none !important;
+    }
+    .flow-svg .flow-edge { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brandmark">Lumo FlyWheel / Serving Lab</div>
+    <nav aria-label="Site navigation">
+      <a href="index.html">Vol. I</a>
+      <a href="round-f.html">Vol. II</a>
+      <a href="gdn-tree-scan.html">Vol. III</a>
+      <a href="gdn-prefix-cache.html">Vol. IV</a>
+      <a href="stateless-tree.html">Vol. V</a>
+      <a href="spine-reorder.html">Vol. VI</a>
+      <a href="keep-or-replay.html">Vol. VII</a>
+      <a href="every-lever.html">Vol. VIII</a>
+      <a href="where-the-milliseconds-went.html">Vol. IX</a>
+      <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Repository</a>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <p class="kicker">Volume X / illustrated systems paper / series close-out</p>
+    <h1>The Numbers That Didn't Survive</h1>
+    <p class="title-subtitle">Auditing Our Own Ladder at Batch Four &mdash; Three Refuted Levers, a Hardware Floor Wrong in Three Directions at Once, and the Placebo Design That Reversed a Null</p>
+    <p class="subhead"><a href="where-the-milliseconds-went.html">Vol.&nbsp;IX</a> published a ranked ladder of everything left to optimise in a speculative decode step, priced against the machine's own memory floor, and concluded that the sum of it could not close the gap. This volume is what happened when we built the top of that ladder. <strong>All three of its largest legal items returned null</strong> &mdash; not "smaller than hoped," but refuted, each by a specific defect in how the original number was derived. Then the work moved to four concurrent requests, where almost every conclusion changed shape: the floor those ratios were divided by was wrong in three separate directions, an entire kernel family larger than attention had never been named, the biggest attention lever was ranked on a premise that turned out to be false, and a result that measured null at one batch width reversed at another. The series closes here, at an honest <strong>1.83&times;</strong> and <strong>2.57&times;</strong> the floor, with two levers banked and every refutation on the record.</p>
+    <div class="hero-tldr" aria-label="TLDR and headline result">
+      <p class="tldr-copy"><strong>TL;DR:</strong> <strong>The ladder audited.</strong> Item 1, the 10.08&nbsp;ms host tail &mdash; a mean-versus-median artifact. Fifteen steps out of 1146 had a chunked-prefill forward land inside the measurement window; the median tail is <strong>3.59&nbsp;ms</strong>, and what is in it is a <em>precondition</em> for the next forward, not deferrable bookkeeping, so the lever's mechanism dies outright. Item 2, the 3.45&nbsp;ms scan fusion &mdash; the deployed two-launch schedule is <strong>already critical-path-optimal</strong> (dependency depth 12, makespan 5&nbsp;+&nbsp;7&nbsp;=&nbsp;12), and the model that priced it divided real time by <em>phantom work</em>: its 82 padded slots never execute. Item 3, the conv plumbing &mdash; costed against a number that predated its own fix; the real figure is 0.542&nbsp;ms/step, 0.2% of the envelope. One lever did survive, found where nobody was looking: the scan is bandwidth-bound on an fp32 state handoff worth <strong>56.1% of the kernel</strong>, and removing it is <strong>&minus;8.98&nbsp;ms/step at width four</strong>. <strong>The denominator.</strong> "B4 sits at 3.0&times; the floor, B1 at 1.94&times;" was wrong three ways: B4 was divided by a floor for weights it never reads (which makes it look <em>worse</em>, 3.19&times;), and a weights-only floor is structurally unfair to a wide batch because weights are batch-invariant while every other mandatory byte is per-request. Honest: <strong>1.833&times; and 2.574&times;</strong>, a gap of 1.40&times; not 1.55&times; &mdash; and <strong>per request, B4 is already 1.81&times; closer to the floor than B1 is</strong>. <strong>Where width costs.</strong> Not the GEMM: it is batch-invariant and grows 6% from one request to four. It is attention (3.26&times;) and the recurrent scan (3.32&times;). And attention is <em>not KV-bandwidth-bound</em> at width four &mdash; the marginal KV token costs &le;0.32&nbsp;ns against a 15.0&nbsp;ns DRAM floor, 47&times; cheaper than physics allows. Its real cost is <strong>load imbalance</strong>: a wave holds all four requests and finishes when the longest one does. <strong>The placebo.</strong> A candidate that measured null at four tasks came back <strong>&minus;29.50&nbsp;ms/step</strong> at width four, and because it is served at exactly one operating point, every narrower step in the same window is a natural control &mdash; both of which ran <em>against</em> it, so the raw delta understates.</p>
+      <div class="hero-result">
+        <span class="hero-number">3 of 3</span>
+        <p><strong>of Volume IX's largest legal levers, refuted on measurement</strong> &mdash; each with the specific defect named: a mean over a bimodal population, a cost model built on work that never executes, and a brief costed against a pre-fix number. Their combined published value was <strong>16.5&nbsp;ms/step</strong> of a 19.4&nbsp;ms ladder. What replaced them came from re-measuring the denominator rather than the numerator, and it moved more: the honest floor puts the two operating points at <strong>1.83&times;</strong> and <strong>2.57&times;</strong>, and the largest unaddressed item in the step turned out to be a kernel family nobody had ever named.</p>
+      </div>
+    </div>
+    <div class="byline">
+      <span><strong>Mark Ma</strong></span>
+      <span>ML systems / inference</span>
+      <span>Qwen 3.6-27B FP8 / GB10</span>
+      <span>August 2026</span>
+    </div>
+    <div class="paper-nav">
+      <a href="#abstract">Abstract</a>
+      <a href="#reader-map">Reader map</a>
+      <a href="#audit">The ladder, audited</a>
+      <a href="#denominator">The denominator</a>
+      <a href="#width">What width costs</a>
+      <a href="#bucket">The other bucket</a>
+      <a href="#imbalance">The FA2 reversal</a>
+      <a href="#placebo">The per-width placebo</a>
+      <a href="#meter">The meter</a>
+      <a href="#band">What n=16 can see</a>
+      <a href="#closeout">Close-out</a>
+      <a href="#limitations">Limits</a>
+      <a href="#receipts">Source trail</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="abstract">
+      <h2>Abstract</h2>
+      <p>This is a volume about being wrong in public, and about the specific mechanisms that made us wrong. <a href="where-the-milliseconds-went.html">Vol.&nbsp;IX</a> ended with a ranked ladder: thirteen mechanisms priced against a 237&nbsp;ms decode step, each labelled legal, blocked, or dead, summing to a 19.4&nbsp;ms/step ceiling that could not close the gap to the campaign's target. The three largest legal items on it were worth 16.5&nbsp;ms between them. We built all three. <strong>All three returned null</strong>, and none of them failed for the reason a lever usually fails.</p>
+      <p>The host tail &mdash; the ladder's largest item at 10.08&nbsp;ms of GPU idle &mdash; was a <em>mean over a bimodal population</em>. The profiling markers wrap only the speculative-decode path, so on the 1.3% of steps where a chunked-prefill forward happened to land between one decode step's drafter and the next one's verify, that entire forward was counted as tail. Fifteen steps out of 1146, one of them 3.06 seconds long, carried a mean of 11.98&nbsp;ms over a median of 3.59. Worse for the lever: re-reading what is actually inside the window shows it is the next step's input preparation and attention-metadata build &mdash; a <em>precondition</em> for the following forward, not deferrable bookkeeping. The prescribed mechanism, "move it off the critical path," has nothing it can move. The same re-derivation caught a second error of our own making: 1.945&nbsp;ms/step of idle attributed to graph launch is a profiler artifact. Measured directly on the same machine, launching the 1894-node verify graph costs <strong>3.15 microseconds</strong>. The capture's figure was 617&times; the truth.</p>
+      <p>The scan fusion &mdash; 3.45&nbsp;ms &mdash; failed differently and more instructively. The deployed two-launch schedule is already critical-path-optimal: the tree's dependency depth is 12 and the makespan is 5&nbsp;+&nbsp;7&nbsp;=&nbsp;12, because the deepest second-level path hangs off the <em>last</em> first-level export node, so the barrier between levels delays nothing. And the cost model that produced 3.45 had normalised by padded slots that <em>never execute</em> &mdash; the kernel's trip count is a per-path device-loaded length, not the padded maximum, so the model was dividing real time by phantom work. Forcing the phantom work to be real costs 401.89&nbsp;&micro;s against 158.30 deployed. But the same probe found a lever that was never on the ladder: the scan is bandwidth-bound on an fp32 state handoff worth <strong>56.1% of the kernel's cost</strong>, and a parked, never-timed single-launch variant removes it &mdash; byte-identical across four seeds and five input regimes, worth &minus;1.92&nbsp;ms/step at batch one and <strong>&minus;8.98&nbsp;ms/step at width four</strong>.</p>
+      <p>Then the subject changed. Almost everything above is batch-one work, and the deployment regime is four concurrent requests. At width four the conclusions do not merely scale &mdash; several of them invert. The floor the ratios were divided by was wrong in three separate directions at once: the wide arms were being divided by a weight scenario for a drafter head they do not launch (which makes them look <em>worse</em>, not better), and a weights-only floor is structurally unfair to a wide batch, because weight traffic is batch-invariant while every other mandatory byte &mdash; attention KV, recurrent state carry, logits, residual stream &mdash; is per-request and therefore four times larger. Building the floor honestly, by the same rule the batch-one roofline used, gives <strong>1.833&times;</strong> and <strong>2.574&times;</strong>, a gap of 1.40&times; rather than the published 1.55&times;. Per request, the wide operating point is already <strong>1.81&times; closer to the floor</strong> than the narrow one.</p>
+      <p>Three more findings came out of the width-four capture, and each retires an assumption. <strong>The cost of concurrency is not the GEMM</strong> &mdash; Vol.&nbsp;IX's central negative result survives and strengthens, because the GEMM re-reads the same weights at any width and grows only 6% from one request to four. The cost is attention (3.26&times;) and the recurrent scan (3.32&times;). <strong>An entire kernel family, 83.9&nbsp;ms/step and larger than attention, had never been named</strong> &mdash; 184 distinct kernels firing 4,777 times per step, of which 9.2&nbsp;ms is sampler math running on a padded fixed-width buffer regardless of how many requests are resident, and which later turned out to be our own tree-accept walk rather than the framework's. And <strong>attention is not KV-bandwidth-bound at width four</strong>: the marginal KV token costs at most 0.32&nbsp;ns of attention time against a 15.0&nbsp;ns DRAM floor, 47&times; cheaper than physics permits if it were reading that KV from memory. Attention's real cost is cross-request load imbalance &mdash; a wave holds all four requests and finishes when the longest finishes &mdash; which retires the byte-traffic premise the leading attention lever had been ranked on.</p>
+      <p>The volume closes with three pieces of measurement hygiene that are the most portable things in it: a <strong>per-width placebo</strong> that turns a single-arm speed claim into a difference-in-differences design and reversed a null; an instrument that had been <strong>recording nothing for months</strong> while a downstream reconciliation passed on it; and a quality-control pass over 21 banked arms showing that of a 16-task evidence set, <strong>eleven tasks are constants</strong> &mdash; seven always resolve and four never do &mdash; so the band's real discriminating power rests on five.</p>
+
+      <div class="definition-box" aria-label="How to read a refutation in this paper">
+        <p><strong>How every refutation here is reported:</strong> the <em>original claim</em> and where it was published; the <em>defect</em> in how the number was derived, named precisely; the <em>corrected quantity</em>; and what, if anything, survives. Every refutation first <em>reproduces the original reduction exactly</em> before disagreeing with it &mdash; the host-tail re-derivation reproduces Vol.&nbsp;IX's step, verify, committer, drafter and boundary figures to the millisecond, so the disagreement is demonstrably about framing rather than arithmetic. A refutation that cannot reproduce what it refutes is a different measurement, not a correction.</p>
+      </div>
+
+      <h3>Names in this paper</h3>
+      <div class="glossary-strip" aria-label="Names in this paper">
+        <div><dfn>width</dfn><span>how many requests are resident in a step. Width 4 is the deployment regime; width 1 is where most of the campaign's kernel work was designed.</span></div>
+        <div><dfn>the honest floor</dfn><span>mandatory unique bytes &divide; 273&nbsp;GB/s applied to <em>every</em> term, not just weights. 126.775&nbsp;ms at width 1, 148.126 at width 4.</span></div>
+        <div><dfn>batch-invariant</dfn><span>a cost that does not grow with width. Weight reads are; KV, recurrent state, logits and residual traffic are not.</span></div>
+        <div><dfn>the other bucket</dfn><span>184 kernels, 4,777 launches/step, 83.9&nbsp;ms &mdash; the second-largest item in the width-4 step and unnamed until this volume.</span></div>
+        <div><dfn>per-width placebo</dfn><span>a control built from steps in the same window that the candidate provably never touched. The design that made the width-4 result credible.</span></div>
+        <div><dfn>MDE</dfn><span>minimum detectable effect &mdash; the sealed four-pass between-pass spread a claimed delta must clear. 4.20&nbsp;ms/step at width 4.</span></div>
+        <div><dfn>DiD</dfn><span>difference-in-differences: the treated width's change minus an untreated width's change over the same window.</span></div>
+        <div><dfn>single_launch</dfn><span>the parked scan variant that removes the fp32 state handoff. The one lever this audit found rather than killed.</span></div>
+        <div><dfn>TAW</dfn><span>the tree-accept walk &mdash; our own committer-side softmax and cumsum over the full vocabulary, which the other bucket mistook for the framework's sampler.</span></div>
+        <div><dfn>sealed / citable</dfn><span>a measurement that cleared its provenance chain. Several artifacts here are explicitly marked NOT CITABLE by their own authors.</span></div>
+        <div><dfn>always / never / sometimes</dfn><span>the three classes a task falls into across 21 banked arms. Eleven of sixteen are the first two, and carry no signal.</span></div>
+        <div><dfn>authoritative zero</dfn><span>doctrine banked this series: an explicit zero must veto a sidecar, or a dead instrument reads as a clean result.</span></div>
+      </div>
+
+      <div class="abstract-grid">
+        <div class="panel">
+          <h2>Contribution</h2>
+          <p>A published post-mortem on a published ladder. Three refuted levers with the derivation defect named in each case, a hardware floor rebuilt honestly and shown to have been wrong in three directions simultaneously, an unnamed kernel family opened, a false premise retired from underneath the leading attention lever, and a placebo design that converts a single-arm speed number into something with a control.</p>
+          <p>This page is the sequel to <a href="where-the-milliseconds-went.html">Vol.&nbsp;IX</a> and closes the series. It exists because the alternative &mdash; quietly not mentioning that the ladder we published did not survive being built &mdash; would make the previous volume worse rather than better. The refutation of a number is a result, and it belongs at the same address as the number.</p>
+        </div>
+        <aside class="panel">
+          <h2>Status</h2>
+          <div class="claim-list">
+            <div class="claim"><span class="state warn">LADDER REFUTED</span><p>Three largest legal items, 16.5&nbsp;ms of a 19.4&nbsp;ms ceiling, all null. Each defect named: a bimodal mean, phantom work in a cost model, a pre-fix baseline.</p></div>
+            <div class="claim"><span class="state pass">FLOOR CORRECTED</span><p>1.833&times; and 2.574&times; honest, against 1.94&times; and 3.0&times; published. Two independent constructions agree to 2.8%.</p></div>
+            <div class="claim"><span class="state pass">TWO LEVERS BANKED</span><p>Padded GQA-pair sealed at <strong>+27.03&nbsp;ms/step</strong> (one-sided 95% LB +10.82) and now the width-4 default; single-launch scan legality PASS on 11,088 byte comparisons, priced at 8.98&nbsp;ms/step.</p></div>
+            <div class="claim"><span class="state warn">SERIES CLOSED</span><p>Five open items documented, production re-gate required before the next serve, and a doctrine bank. The remaining room is mapped, not claimed.</p></div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="source-exhibit" aria-label="Falsification checks">
+        <div class="source-head">
+          <strong>What would falsify this?</strong>
+          <span>Skeptic checks before trusting the corrections</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">The refutations</span><p>Building the host-tail deferral anyway and finding that GPU idle in the window <em>does</em> fall &mdash; which would mean the "precondition, not bookkeeping" reading of the window contents is wrong.</p></div>
+          <div class="box bad"><span class="tag">The honest floor</span><p>A context length materially outside the 12k&ndash;44k band the sensitivity table covers, or a per-request byte term the geometry check missed. C could not be re-measured at width 4 and is imported from the batch-one ladder.</p></div>
+          <div class="box bad"><span class="tag">The width-4 result</span><p>A second paired draw failing to reproduce &minus;29.50&nbsp;ms. This is n=1 paired, and the width-3 control shows 7.71&nbsp;ms of arm-to-arm variation on its own.</p></div>
+          <div class="box bad"><span class="tag">The load-imbalance finding</span><p>An L2 or DRAM counter run showing attention KV traffic actually hitting memory at width 4 &mdash; the regression here infers it from twelve isolated prefill gaps, not from counters.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="reader-map">
+      <h2>Five-Minute Reader Map</h2>
+      <aside class="sidenote">
+        <p><strong>Read path:</strong> the three refutations first, because they are why the rest of the volume exists; then the denominator, which is the largest single correction; then the width-4 findings; then the three pieces of measurement hygiene, which are the most portable content here.</p>
+      </aside>
+      <p>The shortest version: we published a ladder, built the top of it, and it wasn't there. Each item failed for a different reason, and all three reasons are about how a number was derived rather than about the hardware. Moving to four concurrent requests then changed the denominator, the ranking, and the diagnosis of the largest remaining item. The series ends at 1.83&times; and 2.57&times; the floor with two levers banked and a map of what is left.</p>
+
+      <div class="source-exhibit" aria-label="Five-minute reading path">
+        <div class="source-head">
+          <strong>Read in this order</strong>
+          <span>The blog path before the full paper path</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Three nulls</span><p>A mean over a bimodal population (10.08 &rarr; 3.59&nbsp;ms), a cost model normalised by work that never executes (3.45 &rarr; 0), and a brief costed against a pre-fix number (340 launches &rarr; 1).</p></div>
+          <div class="box good"><span class="tag">The denominator</span><p>Wrong scenario, wrong scope, wrong direction of correction. Honest: 1.833&times; and 2.574&times;. Per request the wide point is 1.81&times; <em>closer</em> to the floor.</p></div>
+          <div class="box info"><span class="tag">What width costs</span><p>Not the GEMM (+6% from one request to four). Attention 3.26&times;, recurrent scan 3.32&times;. And a family of 184 kernels bigger than attention that nobody had named.</p></div>
+          <div class="box warn"><span class="tag">The reversal</span><p>Attention isn't KV-bandwidth-bound at width 4 &mdash; a marginal KV token costs 47&times; less than DRAM allows. It's load imbalance: a wave ends when its longest request ends.</p></div>
+          <div class="box good"><span class="tag">Three hygiene wins</span><p>A per-width placebo that gives a speed claim a control; a meter that recorded nothing for months while its audit passed; and 11 of 16 evaluation tasks shown to be constants.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="audit">
+      <h2>The Ladder, Audited</h2>
+      <aside class="sidenote">
+        <p><strong>Ground rule:</strong> each refutation reproduces the original reduction exactly before disagreeing with it. The host-tail re-derivation reproduces Vol.&nbsp;IX's step (237.248), verify (155.829), committer (20.705), drafter (35.131) and boundary (1.224) figures to the millisecond off the same 218,692,330-byte capture. The disagreement is the framing, not the arithmetic.</p>
+      </aside>
+      <p>Vol.&nbsp;IX ranked thirteen mechanisms. Its top three legal items were worth 16.5 of the 19.4&nbsp;ms/step ceiling. This is what each one turned out to be.</p>
+
+      <h3>Item 1 &mdash; the host tail: a mean over a bimodal population</h3>
+      <p>The ladder called this "the single largest addressable block in the trace": 11.969&nbsp;ms of boundary, 10.080&nbsp;ms of GPU idle, ~7.8&nbsp;ms of pure Python outside any CUDA call.</p>
+      <p>The tail is <strong>3.46&nbsp;ms, not 10.08</strong>. The median of the GPU-projected tail is 3.588&nbsp;ms; the 11.977&nbsp;ms mean is carried by <strong>15 steps out of 1146</strong> &mdash; 1.3% &mdash; whose "tail" is not a tail at all but a chunked-prefill forward, up to <strong>3.06 seconds</strong> long with 3608 eager launches. The cause is a marker-scope bug rather than a scheduling one: the profiling markers wrap only the speculative-decode path, so a prefill forward lands <em>between</em> one decode step's drafter and the next decode step's verify, and the reduction attributes all of it to the boundary. On decode-cadence steps the honest figures are 3.667&nbsp;ms of host wall, 3.458&nbsp;ms of GPU idle, and 2.857&nbsp;ms of host CPU inside no CUDA call.</p>
+      <p>The mechanism dies for a second and independent reason. Reading what is actually inside the window &mdash; 154 CUDA operations buying 0.209&nbsp;ms of GPU work, plus around 45 Python blocks and one stream synchronisation &mdash; identifies it as step N+1's state update, input preparation, and attention-metadata build. That is a <strong>precondition for the next forward</strong>, not deferrable bookkeeping. Vol.&nbsp;IX's prescription was "move it off the critical path"; there is nothing in it that can move. Only its cost is attackable, and its cost is a third of what was published.</p>
+
+      <div class="source-exhibit" aria-label="The 617x profiler artifact">
+        <div class="source-head">
+          <strong>And a second error, ours</strong>
+          <span>The graph-launch idle that wasn't there</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Published</span><p>1.945&nbsp;ms/step of GPU idle attributed to launching the 1894-node verify graph &mdash; a figure that also implicitly priced every future graph-node-count reduction.</p></div>
+          <div class="box good"><span class="tag">Measured directly</span><p>Launching that graph on the same GB10 costs <strong>3.15 microseconds</strong> &mdash; 0.443&nbsp;ns per node plus 2.31&nbsp;&micro;s fixed, maximum residual 0.04&nbsp;&micro;s. Interleaving a second graph adds 0.16&nbsp;&micro;s, so there is no re-upload effect either.</p></div>
+          <div class="box bad"><span class="tag">The ratio</span><p><strong>617&times;.</strong> The capture's figure was a CUPTI artifact, and Vol.&nbsp;IX carried it into a threats-to-validity box that said profiler inflation "should not be quoted" without noticing it was already inside a headline.</p></div>
+          <div class="box info"><span class="tag">What it prices</span><p>Graph node count is not a host lever at all. The parked verify-side fusion that removes 192 nodes per step is worth <strong>0.085 microseconds</strong> of host time.</p></div>
+        </div>
+      </div>
+
+      <h3>Item 2 &mdash; the scan fusion: a cost model built on work that never runs</h3>
+      <p>The ladder priced fusing the two-level recurrent scan into a single ready-flag launch at 3.45&nbsp;ms/step, and was emphatic about the design detail: per-node ready flags rather than a grid barrier, because "that distinction <em>is</em> the 3.45&nbsp;ms."</p>
+      <p>The distinction is worth zero, because <strong>the deployed schedule is already critical-path-optimal</strong>. The tree's dependency depth is 12. The deployed makespan is the length of level 0 plus the longest level-1 path: 5&nbsp;+&nbsp;7&nbsp;=&nbsp;12. The barrier between the levels delays nothing, because the deepest level-1 path hangs off node 14 &mdash; the <em>last</em> level-0 export node. Waves, executed node-steps, thread-block-steps and handoff bytes are all invariant under the fusion. Ready flags let a consumer start earlier; they do not remove a producer's store or a consumer's load between different thread blocks.</p>
+      <p>Why the 3.45 looked real is the more useful half. The model normalised by "82 padded slots" &mdash; and those slots <strong>never execute</strong>. The path kernel's trip count is a per-path length loaded from the device, not the padded maximum. So the model divided real time by phantom work, producing a 2.944&nbsp;ns/unit rate that was never achievable; the true rate is 7.63&nbsp;ns per thread-block-step. This was tested rather than argued: forcing all eleven level-1 paths to genuinely run seven slots costs <strong>401.89&nbsp;&micro;s against 158.30&nbsp;&micro;s deployed</strong>.</p>
+
+      <div class="figure" aria-labelledby="fig1-title">
+        <div class="figure-head"><strong id="fig1-title">Figure 1</strong><span>Why the barrier costs nothing: the deepest second-level path hangs off the last first-level node</span></div>
+        <svg class="diagram" viewBox="0 0 1120 300" role="img" aria-label="A diagram of the scan dependency graph. Level 0 is a chain of five nodes ending at node 14. Eleven level-1 paths branch from the level-0 export nodes; the longest, seven nodes, branches from node 14 which is the last level-0 node. A barrier drawn after level 0 therefore delays nothing, because the critical path already passes through the end of level 0.">
+          <text x="60" y="34" class="tiny">LEVEL 0 &mdash; five nodes, serial</text>
+          <text x="640" y="34" class="tiny">LEVEL 1 &mdash; eleven independent paths</text>
+          <!-- level 0 chain -->
+          <line x1="80" y1="90" x2="470" y2="90" class="edge"></line>
+          <circle cx="80" cy="90" r="13" class="node node-cyan"></circle>
+          <circle cx="177" cy="90" r="13" class="node node-cyan"></circle>
+          <circle cx="274" cy="90" r="13" class="node node-cyan"></circle>
+          <circle cx="371" cy="90" r="13" class="node node-cyan"></circle>
+          <circle cx="470" cy="90" r="13" class="node node-amber"></circle>
+          <text x="66" y="120" class="tiny">0</text><text x="163" y="120" class="tiny">1</text><text x="260" y="120" class="tiny">4</text><text x="357" y="120" class="tiny">9</text><text x="458" y="120" class="tiny">14</text>
+          <text x="404" y="146" class="tiny" fill="#e7c76f">last export node</text>
+          <!-- barrier -->
+          <line x1="530" y1="46" x2="530" y2="250" stroke="#d88989" stroke-width="2" stroke-dasharray="5 4"></line>
+          <text x="500" y="272" class="tiny" fill="#d88989">the level barrier</text>
+          <!-- level 1: short paths from early nodes -->
+          <line x1="177" y1="90" x2="620" y2="196" class="edge dash"></line>
+          <line x1="274" y1="90" x2="620" y2="222" class="edge dash"></line>
+          <circle cx="620" cy="196" r="10" class="node node-cyan"></circle><circle cx="668" cy="196" r="10" class="node node-cyan"></circle>
+          <circle cx="620" cy="222" r="10" class="node node-cyan"></circle><circle cx="668" cy="222" r="10" class="node node-cyan"></circle>
+          <text x="700" y="200" class="tiny">short paths &mdash; slack to spare</text>
+          <text x="700" y="226" class="tiny">(ready flags would help these)</text>
+          <!-- the critical level-1 path from node 14 -->
+          <line x1="470" y1="90" x2="620" y2="90" class="edge"></line>
+          <circle cx="620" cy="90" r="11" class="node node-green"></circle>
+          <circle cx="668" cy="90" r="11" class="node node-green"></circle>
+          <circle cx="716" cy="90" r="11" class="node node-green"></circle>
+          <circle cx="764" cy="90" r="11" class="node node-green"></circle>
+          <circle cx="812" cy="90" r="11" class="node node-green"></circle>
+          <circle cx="860" cy="90" r="11" class="node node-green"></circle>
+          <circle cx="908" cy="90" r="11" class="node node-green"></circle>
+          <line x1="620" y1="90" x2="908" y2="90" class="edge"></line>
+          <text x="640" y="66" class="tiny" fill="#a7d98d">the seven-node critical path &mdash; starts at node 14 anyway</text>
+          <!-- makespan bracket -->
+          <line x1="80" y1="262" x2="908" y2="262" stroke="#8bd3dd" stroke-width="2"></line>
+          <text x="380" y="256" class="tiny" fill="#8bd3dd">makespan = 5 + 7 = 12 = the dependency depth. Already optimal.</text>
+        </svg>
+        <p class="caption">Figure 1 is why the lever was worth nothing. Ready flags help a consumer start before the whole producer level finishes &mdash; but the schedule's critical path runs through the <em>last</em> node of level 0 and then through the longest level-1 path, so the barrier sits at a point where the critical path was going to be anyway. The short level-1 paths (dashed) do gain slack, and they already had it. The published 3.45&nbsp;ms came from a cost model that measured this schedule against an idealised one that could not be faster.</p>
+      </div>
+
+      <h3>Item 3 &mdash; the conv plumbing: a brief costed against a pre-fix number</h3>
+      <p>The rung brief costed roughly 340 per-step launches in the convolution commit path. Against the merged stack, the convolution commit is <strong>one launch per event</strong> &mdash; corroborated at 1.00 instances per step in the banked attribution &mdash; and the whole thing is <strong>0.542&nbsp;ms/step, 0.2% of the envelope</strong>. The 48-layer Python committer the brief named is not on the served path at all, and a wiring test already pinned that. The lever was unsatisfiable by construction.</p>
+      <p>The 340 launches are real but live elsewhere: 528.3 launches per step of per-layer verify plumbing. Those are graph nodes, where the measured floor is 213&nbsp;ns, so collapsing <em>all</em> of them recovers at most <strong>0.112&nbsp;ms/step</strong>. What shipped instead is a batched slot publish worth 0.016&nbsp;ms/step at width four &mdash; and the commit message is worth quoting for its honesty: it is "400&times; below the measured B4 noise floor and is documented as such &mdash; it ships because it is free and provable, not because it moves a gate."</p>
+
+      <h3>The one lever this audit found</h3>
+      <p>The same probe that killed the fusion found something the ladder never listed. The scan is <strong>bandwidth-bound on its fp32 state handoff</strong>: export writes of 46.0&nbsp;&micro;s plus parent reads of 82.3&nbsp;&micro;s out of 228.74&nbsp;&micro;s per layer &mdash; <strong>56.1% of the two-launch kernel's cost</strong> is moving state between the levels, not computing. A parked, never-timed single-launch variant removes the handoff entirely and measures 188.64&nbsp;&micro;s per layer.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The single-launch scan fold. Byte-identical on the output and all four ring surfaces across 4 seeds &times; 5 input regimes (20/20).</caption>
+          <thead><tr><th>Quantity</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>Two-launch cost per layer</td><td class="num">228.74&nbsp;&micro;s</td></tr>
+            <tr><td>Single-launch cost per layer</td><td class="num">188.64&nbsp;&micro;s</td></tr>
+            <tr><td>Saving at batch-one probe scale</td><td class="num">&minus;1.92&nbsp;ms/step</td></tr>
+            <tr><td><strong>Saving measured directly at width 4</strong></td><td class="num"><strong>&minus;8.98&nbsp;ms/step</strong> (41.35 &rarr; 32.37)</td></tr>
+            <tr><td>Against the sealed width-4 MDE</td><td class="num">2.14&times;</td></tr>
+            <tr><td>Legality</td><td class="num">PASS on 11,088 byte comparisons</td></tr>
+            <tr><td>Production default</td><td class="num">0 &mdash; a one-token change gated on sealing</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Note the shape of that: the saving is <strong>super-linear in width</strong>, 4.7&times; larger at four requests than at one. This is the pattern the rest of the volume is about &mdash; a lever designed and priced at batch one was worth almost nothing there and is worth real time at the width we actually deploy at. Which raises the obvious question about everything else on the ladder.</p>
+
+      <div class="source-exhibit" aria-label="Three failure modes, generalised">
+        <div class="source-head">
+          <strong>The three derivation defects, stated generally</strong>
+          <span>Each is easy to reproduce in any performance study</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Defect 1</span><h3>A mean over a bimodal population</h3><p>1.3% of samples were a different <em>kind</em> of event, and they carried a 3.3&times; inflation of the mean. Report a median alongside any per-step mean, and check what the extreme tail of the distribution actually <em>is</em> before optimising against its average.</p></div>
+          <div class="box bad"><span class="tag">Defect 2</span><h3>Normalising by work that never executes</h3><p>Padded capacity is not executed work. A rate computed as real-time-over-padded-units is not a rate, and any model built on it will over-promise by exactly the padding factor.</p></div>
+          <div class="box bad"><span class="tag">Defect 3</span><h3>Costing against a superseded baseline</h3><p>The number in the brief was true when written and false when acted on. A lever brief should carry the commit its measurement was taken at, and be re-derived against the merged stack before anyone builds.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="denominator">
+      <h2>The Denominator Was Wrong in Three Directions</h2>
+      <aside class="sidenote">
+        <p><strong>Order matters here:</strong> the correction that makes the wide batch look <em>worse</em> is applied first. A paper that only applies the flattering correction is not doing an audit.</p>
+        <p><strong>Status:</strong> the source artifact marks itself <code>NOT CITABLE</code>, <code>gpu_touched=false</code>. It changes no measured wall &mdash; only the number those walls are divided by.</p>
+      </aside>
+      <p>The published comparison was: batch one sits at 1.94&times; its hardware floor, width four sits at 3.0&times;, so the wide operating point has much more room. Three separate things are wrong with that, and they do not all point the same way.</p>
+
+      <h3>Correction 1 &mdash; the wrong floor scenario (makes width four look worse)</h3>
+      <p>The floor ledger publishes several weight-only scenarios. Batch one divides by <strong>119.658&nbsp;ms</strong> &mdash; the scenario with five 64K-subset draft heads. The width-four artifacts divide by <strong>126.514&nbsp;ms</strong>, the scenario with one full-vocabulary root head. But the sealed wide arms launch with the root drafter head set to the 64K subset; the launcher's own metadata records <code>draft_vocab_root=1</code>, <code>draft_vocab_k=65536</code> and <code>mandatory_weight_floor_ms=119.658015414</code>. <strong>The wide arms were being divided by a floor for 1.87&nbsp;GB of weights they never read.</strong></p>
+      <p>On the same basis, width four is at <strong>3.19&times;</strong>, not 3.01. Fixing the basis makes it look 6% worse &mdash; and that correction has to be taken before the one that makes it look better, or the second is not credible.</p>
+
+      <h3>Correction 2 &mdash; a weights-only floor is structurally unfair to a wide batch</h3>
+      <p>The ledger says so about itself: non-weight costs are excluded. And weight traffic is <strong>batch-invariant</strong> &mdash; the same 32.667&nbsp;GB moves whether the step serves one request or four. That is confirmed by the capture rather than assumed: the FP8 GEMM grows 1.08&times; from width one to width four and the output-head GEMM is flat above width two. Meanwhile <em>every other mandatory byte is per-request</em>, and therefore four times larger at width four: attention KV re-reads, drafter KV re-reads, KV writes, the recurrent state carry, logits materialisation, the residual stream round trip.</p>
+      <p>A denominator built only from the invariant term flatters the narrow batch and penalises the wide one by construction. So the honest floor applies the same rule the attention roofline used &mdash; mandatory unique bytes over 273&nbsp;GB/s &mdash; to <em>every</em> term, with the same per-request context for both. The geometry is asserted against the served config and the tool raises rather than emitting if anything mismatches; the check that matters is that the same geometry re-derives the published attention floor to 4.3285&nbsp;ms against the ledger's 4.33.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The honest floor at C = 18,031 tokens per request &mdash; the context measured on the same agent workload, used for both batches so the comparison is apples to apples.</caption>
+          <thead><tr><th></th><th>weights</th><th>non-weight</th><th>honest floor</th><th>wall</th><th>honest ratio</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Batch one</strong> (sealed, GQA-pair default)</td><td class="num">119.658</td><td class="num">7.117</td><td class="num"><strong>126.775</strong></td><td class="num">232.360</td><td class="num"><strong>1.8329</strong></td></tr>
+            <tr><td><strong>Width four</strong> (sealed, post-lever)</td><td class="num">119.658</td><td class="num">28.468</td><td class="num"><strong>148.126</strong></td><td class="num">381.284</td><td class="num"><strong>2.5741</strong></td></tr>
+            <tr><td>Width four, stock (pre-lever)</td><td class="num">119.658</td><td class="num">28.468</td><td class="num">148.126</td><td class="num">408.313</td><td class="num">2.7565</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Correction 3 &mdash; and then read it per request</h3>
+      <p>The honest gap between the two operating points is <strong>1.40&times;</strong>, not the 1.55&times; the published pair implies and not the 1.64&times; the basis correction alone would give. But the sharper reading is the per-request one. Width four's excess over its floor is 233&nbsp;ms across four requests &mdash; <strong>58.3&nbsp;ms per request</strong>, against batch one's <strong>105.6&nbsp;ms</strong>.</p>
+
+      <div class="equation">
+        <p><span class="muted">excess per request &mdash;</span> &nbsp; width 4: <span class="ok">58.3&nbsp;ms</span> &nbsp;&nbsp; width 1: <span class="hl">105.6&nbsp;ms</span></p>
+        <p><span class="muted">so the wide operating point is</span> &nbsp; <span class="ok">1.81&times; closer to the floor</span> <span class="muted">than the narrow one</span></p>
+      </div>
+
+      <p>The step wall looks 1.4&times; worse only because one step now does four requests' worth of mandatory work. The entire framing that width four "has lots of room left" was an artifact of dividing a four-request step by a one-request denominator.</p>
+
+      <div class="source-exhibit" aria-label="Cross-checks on the honest floor">
+        <div class="source-head">
+          <strong>Two independent constructions, 2.8% apart</strong>
+          <span>The load-bearing check</span>
+        </div>
+        <div class="grid">
+          <div class="box info"><span class="tag">Analytic</span><p>Summing mandatory per-request byte terms from the served geometry: <strong>148.13&nbsp;ms</strong> at width four.</p></div>
+          <div class="box info"><span class="tag">Empirical</span><p>Summing per-component floors from the width-four kernel attribution: <strong>144.03&nbsp;ms</strong>.</p></div>
+          <div class="box good"><span class="tag">Agreement</span><p><strong>2.8%</strong>, from two constructions that share no inputs. This is the reason to trust the correction rather than the arithmetic.</p></div>
+          <div class="box warn"><span class="tag">The sensitivity</span><p>Context could not be re-measured at width four, so it is bounded instead: 12k, 18k, 24.5k, and a hard cap of 44.3k from the KV pool. <strong>Every honest choice shrinks the apparent penalty</strong> &mdash; the gap runs 1.458, 1.404, 1.352, 1.223. The published 3.0-vs-1.94 was the <em>most</em> pessimistic reading available.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="width">
+      <h2>What Concurrency Actually Costs</h2>
+      <aside class="sidenote">
+        <p><strong>Capture validity was established before any kernel was named:</strong> the reducer withholds every kernel table unless the census identity holds. 539 census records against 539 counter steps; 1760 census events against 1760 counter events. Both exact equalities, re-verified after the arm finished rather than mid-flight.</p>
+      </aside>
+      <p>A 539-step width-four capture, gated on an absolute forward-step counter rather than wall time, against the batch-one attribution from Vol.&nbsp;IX:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Per-component cost of going from one resident request to four. The two batch-invariant items are at the top.</caption>
+          <thead><tr><th>Component</th><th>Batch 1</th><th>Width 4</th><th>&Delta;</th><th>Ratio</th><th>% of 411&nbsp;ms wall</th></tr></thead>
+          <tbody>
+            <tr><td>Target GEMM (FP8)</td><td class="num">114.81</td><td class="num">122.15</td><td class="num">+7.34</td><td class="num"><strong>1.06&times;</strong></td><td class="num">29.7%</td></tr>
+            <tr><td>Output head</td><td class="num">12.35</td><td class="num">12.67</td><td class="num">+0.32</td><td class="num"><strong>1.03&times;</strong></td><td class="num">3.1%</td></tr>
+            <tr><td><strong>FA2 tree attention</strong></td><td class="num">21.37</td><td class="num"><strong>69.75</strong></td><td class="num"><strong>+48.38</strong></td><td class="num"><strong>3.26&times;</strong></td><td class="num"><strong>17.0%</strong></td></tr>
+            <tr><td><strong>GDN tree scan</strong></td><td class="num">12.36</td><td class="num"><strong>40.98</strong></td><td class="num"><strong>+28.62</strong></td><td class="num"><strong>3.32&times;</strong></td><td class="num"><strong>10.0%</strong></td></tr>
+            <tr><td>GDN delta rule</td><td class="num">4.03</td><td class="num">10.93</td><td class="num">+6.90</td><td class="num">2.71&times;</td><td class="num">2.7%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>Vol.&nbsp;IX's central negative result survives, and gets stronger.</strong> The GEMM is untouchable at batch one because it is already at 85.8% of the memory roofline with no scheduler lever against it &mdash; and at width four it is also, and separately, <em>not the thing concurrency costs</em>. It re-reads the same weights whichever width the batch is, so quadrupling the requests costs it 6%. Every millisecond that concurrency actually charges you is in per-request work, and there are exactly two items with enough mass to matter: attention and the recurrent scan.</p>
+      <p>One correction to the operating point came free with the capture and revised the denominator every width-four lever is measured against: the published sealed number of 387.59&nbsp;ms/step is a <em>width blend</em>. The true width-four operating point is <strong>411.05&nbsp;ms/step</strong>. The captured step-width distribution is {1: 4, 2: 74, 3: 236, 4: 225} &mdash; 85.7% at width three or four &mdash; so quoting a single "batch four" number without conditioning on realised width mixes four different regimes into one average.</p>
+    </section>
+
+    <section class="section" id="bucket">
+      <h2>The Kernel Family Nobody Had Named</h2>
+      <aside class="sidenote">
+        <p><strong>Why it stayed invisible:</strong> every reduction in this series ranked kernels by name. A family of 184 distinct small kernels, none individually large, sums to more than attention and appears in no ranking that sorts by single-kernel cost.</p>
+      </aside>
+      <p>The gap analysis had been leaving 17.9% of the window in a residual family called "other" and not opening it. Opened, it is <strong>184 distinct kernels, roughly 3.06 million instances, 83.92&nbsp;ms/step at width four</strong> &mdash; 19.5% of the profiled step, the <strong>second-largest item after the GEMM, and larger than attention</strong>.</p>
+      <p>Because the bucket is where three million tiny launches live, it is also where per-launch profiler cost concentrates, so it is bounded rather than point-quoted: total width-four inflation is 18.28&nbsp;ms/step, putting the bucket at <strong>65.6&ndash;83.9&nbsp;ms/step</strong>, central 80.2.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The other bucket by class. Reducible bands are per-class engineering judgement, stated per class so they can be argued with &mdash; they are not measurements.</caption>
+          <thead><tr><th>Class</th><th>ms/step</th><th>w4/w2</th><th>Scaling</th><th>Inst/step</th><th>Reducible</th></tr></thead>
+          <tbody>
+            <tr><td>Elementwise math</td><td class="num">29.30</td><td class="num">1.89</td><td>width-scaling</td><td class="num">2,066</td><td class="num">13.2&ndash;23.4</td></tr>
+            <tr><td><strong>Sampling &amp; verification</strong></td><td class="num">16.20</td><td class="num"><strong>1.22</strong></td><td><strong>width-invariant</strong></td><td class="num">83</td><td class="num">5.7&ndash;11.3</td></tr>
+            <tr><td>Copies / fills / concatenations</td><td class="num">15.94</td><td class="num">1.89</td><td>width-scaling</td><td class="num">907</td><td class="num">8.8&ndash;14.3</td></tr>
+            <tr><td>Gather / scatter / index</td><td class="num">11.45</td><td class="num">2.12</td><td>width-scaling</td><td class="num">629</td><td class="num">4.6&ndash;8.6</td></tr>
+            <tr><td>Mandatory fused pipeline</td><td class="num">6.61</td><td class="num">1.92</td><td>width-scaling</td><td class="num">585</td><td class="num">0.0&ndash;1.7</td></tr>
+            <tr><td>Conv staging, reductions, unclassified</td><td class="num">4.42</td><td class="num">1.9</td><td>mixed</td><td class="num">507</td><td class="num">0.9&ndash;2.6</td></tr>
+            <tr><td><strong>total</strong></td><td class="num"><strong>83.92</strong></td><td class="num"><strong>1.73</strong></td><td></td><td class="num"><strong>4,777</strong></td><td class="num"><strong>33.1&ndash;62.0</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Two findings inside it, and the second one has a twist.</p>
+
+      <h3>(a) The sampler runs on a padded buffer, whatever the width</h3>
+      <p>One kernel &mdash; torch's generic cumulative sum &mdash; costs <strong>6.93&nbsp;ms/step at width two and 6.93&nbsp;ms/step at width four</strong>. Bit-identical width-invariance, and it does not appear at width one at all. The generic softmax alongside it goes 2.27&nbsp;&rarr;&nbsp;2.29. Together, <strong>9.2&nbsp;ms/step of sampler math is being done on a fixed four-by-thirty-two-row buffer regardless of how many requests are actually resident.</strong> At width three &mdash; 44% of captured steps &mdash; a quarter of it is provably wasted. And it sits <em>beside</em> the framework's already-fused top-k/top-p kernel, which costs 4.66&nbsp;ms for the same population: a generic route running in parallel with the fused route that exists to replace it.</p>
+      <p>That was the reading, and the recommended action was to delete the generic path. Then the follow-up work went looking for it and found something better and more embarrassing: <strong>the 9.2&nbsp;ms is not the framework's sampler at all. It is ours.</strong> It is the tree-accept walk &mdash; our own committer-side softmax and cumulative sum over the full vocabulary, 24 of them per step, running on <strong>4 of 48 SMs</strong>. The bucket was mislabelled because the kernels are torch generics and the natural assumption was that torch had launched them.</p>
+
+      <h3>(b) 4,777 launches per step</h3>
+      <p>One 5.5-microsecond elementwise kernel fires <strong>768 times per step</strong> for 4.21&nbsp;ms. Add the gathers (226), direct copies (278), batched concatenations (192) and index selects (196), and the bucket launches 4,777 kernels per step at width four. This is structurally the same problem the single-launch scan fold was built to solve, and the scan gives the measured precedent: 41.35&nbsp;&rarr;&nbsp;32.37&nbsp;ms for a launch-count consolidation. Consolidation is worth roughly what it looks like it is worth.</p>
+
+      <div class="source-exhibit" aria-label="What the bucket does to the ladder">
+        <div class="source-head">
+          <strong>The bucket against the ladder that missed it</strong>
+          <span>Reducible 33&ndash;62 ms/step, central ~47</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Size</span><p>8.0%&ndash;15.1% of the 411&nbsp;ms width-four wall, central 11.5%. Diluted to whole-window wall, 4.8%&ndash;9.0%.</p></div>
+          <div class="box warn"><span class="tag">Comparison</span><p><strong>Two to four times the entire ranked lever ladder</strong> in the width-four attribution (14&ndash;21&nbsp;ms/step, 3.4&ndash;5.1%) &mdash; which had itself been built without opening the bucket.</p></div>
+          <div class="box bad"><span class="tag">Honest status</span><p>No candidate has been built. The bands are judgement, not measurement, and they are published per class specifically so a reader can disagree with one without discarding the rest.</p></div>
+          <div class="box info"><span class="tag">The lesson</span><p>A residual bucket is not a rounding error. Rank kernels by <em>family</em> as well as by name, or a family of small kernels larger than your second-biggest named item will sit in the residual for a year.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="imbalance">
+      <h2>Attention Is Not Bandwidth-Bound at Width Four</h2>
+      <aside class="sidenote">
+        <p><strong>What this retires:</strong> the leading attention lever was ranked on a byte-traffic argument. The premise of that argument is tested here directly, and rejected.</p>
+      </aside>
+      <p>Both this series' attention floors &mdash; the batch-one roofline and the width-four extrapolation &mdash; rest on an antecedent that was never tested: <em>if</em> KV traffic scales with batch, <em>then</em> the floor is such-and-such. The width-four capture can test the antecedent, because a chunked-prefill gap admits a known number of KV tokens and the steps on either side are clean.</p>
+      <p>Regressing the change in mean attention launch time on the KV tokens each gap admitted, across twelve isolated gaps and 79,859 admitted tokens:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Marginal cost of a KV token to attention at width four.</caption>
+          <thead><tr><th>Quantity</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>Isolated gaps</td><td class="num">12</td></tr>
+            <tr><td>KV tokens admitted</td><td class="num">79,859</td></tr>
+            <tr><td>Net change in launch time</td><td class="num">&minus;0.1315&nbsp;ms</td></tr>
+            <tr><td>Slope</td><td class="num">&minus;3.52&nbsp;ns / token / launch</td></tr>
+            <tr><td>Slope 95% CI</td><td class="num">[&minus;7.36, <strong>+0.32</strong>]</td></tr>
+            <tr><td><strong>DRAM floor for one KV token</strong></td><td class="num"><strong>15.01&nbsp;ns</strong> (4096&nbsp;B / 273&nbsp;GB/s)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>The marginal KV token costs at most 0.32&nbsp;ns of attention time against a 15.0&nbsp;ns DRAM floor &mdash; 47&times; cheaper than physics allows if the kernel were reading that KV from memory.</strong> Proportionality between attention time and KV bytes is rejected at width four.</p>
+      <p>The grid semantics behind that are proven rather than assumed: there is no split-combine kernel anywhere in the trace, so the split count is one and the grid is (row blocks, batch, heads); and the batch-dimension population is exactly 3,616 = 226 &times; 16 launches against 225 width-four steps &times; 16 attention layers.</p>
+
+      <h3>The mechanism</h3>
+      <p>Attention uses 102,400 bytes of shared memory &mdash; the opt-in maximum &mdash; so <strong>one thread block per SM, and a wave is 48 blocks</strong>. At width four the launch is 96 blocks: exactly two waves, and <em>each wave contains all four requests</em>. A wave finishes when its longest request finishes.</p>
+
+      <div class="equation">
+        <p><span class="muted">attention cost &asymp;</span> &nbsp; <span class="hl">max(context)</span> &nbsp; <span class="muted">and cross-request imbalance</span></p>
+        <p><span class="muted">not</span> &nbsp; <span class="ok">&Sigma; context</span></p>
+      </div>
+
+      <p>So the ~63&nbsp;ms of attention headroom is real, but it is <strong>not a bandwidth-efficiency problem</strong> and it will not yield to a layout change. It is a <em>scheduling</em> problem: request-balanced work assignment, or split-KV at width four &mdash; a lever that has never been on any ladder in this series. And it means the leading layout-based candidate should be expected to move <em>less</em> than a byte-traffic argument predicts.</p>
+      <p>Which makes the next section more interesting, not less: that candidate was re-tested at width four anyway, and it moved a great deal.</p>
+    </section>
+
+    <section class="section" id="placebo">
+      <h2>The Per-Width Placebo</h2>
+      <aside class="sidenote">
+        <p><strong>The problem this solves:</strong> a paired arm-versus-arm speed delta on an agentic workload is one draw, contaminated by acceptance drift and co-residency luck. Vol.&nbsp;IX's promotion criterion caught one of those. This design catches the rest.</p>
+      </aside>
+      <p>A query-head pairing candidate for attention had measured <strong>null</strong> on the four-task screen on 2026-08-11. Re-tested at the width-four operating point it is <strong>faster by 29.50&nbsp;ms/step</strong> &mdash; 411.26&nbsp;&rarr;&nbsp;381.75, &minus;7.17% &mdash; against a sealed four-pass minimum detectable effect of 4.20&nbsp;ms and a pre-registered target of 6.97. Per-request throughput +6.04%, aggregate +5.35%.</p>
+      <p>That is exactly the kind of reversal that should not be believed on its own. Here is the design that makes it credible.</p>
+
+      <h3>The candidate serves at exactly one width</h3>
+      <p>The candidate's scope token restricts it to the full-graph width-four dispatch. Every narrower step inside the same window runs the <strong>identical stock dispatch on both arms</strong>. So the narrow widths are a natural placebo &mdash; drawn from the same arms, the same hosts, the same window, the same wall chain, with no separate control run to schedule and no cross-session comparison to defend.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The per-width placebo. Only width four is treated; widths two and three run identical code on both arms.</caption>
+          <thead><tr><th>Width</th><th>Stock ms</th><th>Candidate ms</th><th>Improvement</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td>2</td><td class="num">285.83</td><td class="num">302.71</td><td class="num">&minus;16.88</td><td><span class="pill info">placebo</span></td></tr>
+            <tr><td>3</td><td class="num">362.08</td><td class="num">369.79</td><td class="num">&minus;7.71</td><td><span class="pill info">placebo</span></td></tr>
+            <tr><td><strong>4</strong></td><td class="num">411.26</td><td class="num">381.75</td><td class="num"><strong>+29.50</strong></td><td><span class="pill good">treated</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>No untreated width shows a gain at or above the MDE, so the effect is localised to the one place the kernel engages. And note the sign on the controls: both untreated widths run slightly <em>against</em> the candidate. <strong>The confound works against the result, so the raw delta understates it.</strong> Difference-in-differences against width three &mdash; the widest untreated control &mdash; gives &minus;37.21&nbsp;ms additive.</p>
+
+      <div class="source-exhibit" aria-label="Corroboration and honesty">
+        <div class="source-head">
+          <strong>Two instruments agreeing, and one caveat that stands</strong>
+          <span>Why this is believable, and how far</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Independent corroboration</span><p>The stock arm's own width 3&rarr;4 cost is <strong>+49.17&nbsp;ms</strong>. The Nsight attribution independently put attention's width-four cost at <strong>+48.4&nbsp;ms</strong> &mdash; a different instrument on a different basis, agreeing to <strong>1.6%</strong>.</p></div>
+          <div class="box good"><span class="tag">Physically bounded</span><p>The candidate removes 76% of the width-scaling cost, and the 37&nbsp;ms sits inside the ~52&nbsp;ms of structural headroom the attribution measured above attention's floor. The result is bounded rather than impossible.</p></div>
+          <div class="box good"><span class="tag">Both old confounds absent</span><p>The 2026-08-11 null decomposed into +77.3% acceptance drift and 26.5% lower co-residency. Here acceptance is flat (+1.16%) and events per step are matched (3.633 vs 3.610, &minus;0.65%) &mdash; neither mechanism can generate this delta.</p></div>
+          <div class="box bad"><span class="tag">Stated honestly</span><p><strong>n=1 paired draw.</strong> The MDE is a four-pass between-pass quantity, not the uncertainty of a single paired difference &mdash; and the width-three control shows 7.71&nbsp;ms of arm-to-arm variation all by itself.</p></div>
+        </div>
+      </div>
+
+      <p>The reducer now computes the placebo automatically and writes its verdict into the payload: if any untreated width gains at or above the MDE, the verdict says so loudly rather than leaving a reader to notice. A control width needs at least 100 steps to drive the correction, so a one-step width cannot move it. This was also where a review caught the design's own footgun &mdash; an earlier revision let a <em>treated</em> width serve as its own placebo control, which would have laundered the effect into its own baseline.</p>
+      <p>Sealed separately and independently, the padded candidate is worth <strong>+27.03&nbsp;ms/step</strong> (standard deviation 13.77, one-sided 95% lower bound <strong>+10.82</strong>), dual-gated at three successive commits, and is now the width-four production default.</p>
+    </section>
+    <section class="section" id="meter">
+      <h2>The Meter That Had Been Recording Nothing</h2>
+      <aside class="sidenote">
+        <p><strong>Companion to Vol.&nbsp;IX's trap flags:</strong> that volume documented a deleted lever whose wiring survived, so setting it was accepted and silently ignored. This is the same class, one layer up &mdash; an instrument whose output file was empty in every arm ever recorded.</p>
+      </aside>
+      <p>The campaign's token reconciliation closed with no slack against the agent's self-reported usage, and had done so for months. On the width-four screen it stopped closing: a gap of <strong>189,780 prompt tokens and 5,654 generation tokens</strong> appeared and was provisionally filed as unattributed traffic &mdash; the sort of thing that suggests requests leaking outside the ledger.</p>
+      <p>Request-level diagnosis proved the opposite: <strong>639 of 639 engine requests were ledger-attributed, with zero retries and zero preemptions.</strong> There was no unattributed traffic. There was a bad meter.</p>
+      <p>The reconciliation had been comparing against a third-party agent's own accounting of itself, and that accounting under-credits its own hidden requests in at least three ways &mdash; a context compaction the engine served and billed whose summary the agent then discarded, retried-and-discarded first turns, and delegated sub-agent turns that self-report zero-on-zero on every record. One task alone carried an uncredited 1,550-token request against a 712-token hidden credit. The distortion is concentrated in 3 of 32 instances, which is why it <strong>fails a sixteen-task arm deterministically and lets a four-task gate pass by luck</strong> &mdash; the gates had been reconciling at probability roughly 0.7, not by structure.</p>
+
+      <div class="source-exhibit" aria-label="The dead instrument">
+        <div class="source-head">
+          <strong>Why nobody noticed for months</strong>
+          <span>The failure mode worth stealing</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">The dead file</span><p>A per-request metrics file was <strong>0 bytes in every arm ever recorded</strong>, because its writer only runs on an API route this traffic never takes. A file that is always empty and a meter that measured nothing look identical from downstream.</p></div>
+          <div class="box bad"><span class="tag">Why it passed</span><p>The reconciliation fell back to the agent's self-report whenever the engine fields were absent &mdash; and they were <em>always</em> absent. A fallback that fires 100% of the time is not a fallback; it is the implementation.</p></div>
+          <div class="box good"><span class="tag">The fix</span><p>Meter at the hop that terminates every completion &mdash; the proxy sees the engine's own count. The counts join the tamper-evident hash chain, so editing one invalidates the chain from that row on.</p></div>
+          <div class="box good"><span class="tag">The doctrine</span><p>The fields are <strong>optional keys, not optional values</strong>. A ledger predating them carries them on no row; one written now carries them on every row. A new-schema ledger that metered nothing <em>raises</em> rather than falling back &mdash; because a meter recording nothing must fail its own audit. That indistinguishability is precisely what hid the dead meter.</p></div>
+        </div>
+      </div>
+
+      <p>This is the second instrument-shaped failure this series has published and the more dangerous one, because the trap flag of Vol.&nbsp;IX would at least have produced a wrong <em>measurement</em>. This produced a passing <em>audit</em>. Twenty-one tests now pin it, nineteen of which fail at the parent commit; the two that do not are the pair asserting the old meter is broken.</p>
+    </section>
+
+    <section class="section" id="band">
+      <h2>What a Sixteen-Task Band Can Actually See</h2>
+      <aside class="sidenote">
+        <p><strong>Extends Vol.&nbsp;IX's Tier-B limit:</strong> that volume said the behavioural band "detects a broken agent, not a costly one," citing a Wilson interval. This quantifies it against 21 banked arms, and the answer is worse than the interval implies.</p>
+      </aside>
+      <p>The quality-control pass over the width-four levers passed all three gates &mdash; 9 of 16 resolved, in band; no garble regression; zero give-ups. What makes it worth publishing is the reference distribution it was scored against, because that distribution says something uncomfortable about the instrument.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Twenty-one banked reference arms on the byte-pinned sixteen-task evidence set.</caption>
+          <thead><tr><th>Quantity</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>Reference arms</td><td class="num">21</td></tr>
+            <tr><td>Resolve counts</td><td class="num">min 7 / median 9 / max 10</td></tr>
+            <tr><td>Mean, standard deviation</td><td class="num">8.67, 0.91</td></tr>
+            <tr><td>Arms below the policy floor of 8</td><td class="num"><strong>2 of 21</strong></td></tr>
+            <tr><td>Give-ups across all 21 arms</td><td class="num">4 total</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Two of twenty-one reference arms sit <em>below</em> the policy floor. So a floor miss by one is inside the banked spread and must be read as a signal to replicate, not as proof of damage &mdash; which is a materially different reading of the gate than the policy's own text implies.</p>
+      <p>The sharper finding is what happens when the sixteen tasks are classified by how often they resolve across those 21 arms:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Per-task behaviour across 21 arms. Eleven of sixteen tasks are constants.</caption>
+          <thead><tr><th>Class</th><th>Tasks</th><th>Which</th><th>Information carried</th></tr></thead>
+          <tbody>
+            <tr><td><span class="pill good">always</span> resolves 21/21</td><td class="num"><strong>7</strong></td><td>12907, 13453, 13579, 14309, 14508, 14539, 14995</td><td>None &mdash; a constant</td></tr>
+            <tr><td><span class="pill bad">never</span> resolves 0/21</td><td class="num"><strong>4</strong></td><td>13033, 13398, 13977, 14598</td><td>None &mdash; a constant</td></tr>
+            <tr><td><span class="pill warn">sometimes</span></td><td class="num"><strong>5</strong></td><td>13236 (11/21), 14096 (19/21), 14182 (2/21), 14365 (1/21), 14369 (2/21)</td><td>All of it</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>Eleven of sixteen tasks carry no signal at all.</strong> They resolve, or fail to resolve, under every configuration ever run. The entire discriminating power of the evidence set rests on five tasks &mdash; and three of those five sit at 1, 2 and 2 resolves out of 21, so they are nearly-constants too. In practice the band is being driven by roughly two tasks with real variance.</p>
+      <p>That is the honest resolution of the instrument, and it is the strongest available argument for the two gates Vol.&nbsp;IX insisted on keeping alongside it: a logit-deviation bound, which has tight resolution, and acceptance parity, which is the only measurement that reads a perturbation <em>through the sampler</em>. A behavioural band built on sixteen tasks of which eleven are constants can tell you that the agent still works. It cannot tell you what a change cost.</p>
+      <p>It also puts a useful floor under a claim this series has made repeatedly. When Vol.&nbsp;IX reported "zero give-ups across four arms," the reference distribution now says four give-ups across twenty-one arms is the background rate &mdash; so zero-across-four is consistent with background rather than being strong evidence on its own. The give-up regression of Volumes V and VI was five give-ups in a single arm, which remains far outside this distribution; the claim that it closed survives, but it survives with a wider error bar than it was originally stated with.</p>
+    </section>
+
+    <section class="section" id="closeout">
+      <h2>Close-Out</h2>
+      <aside class="sidenote">
+        <p><strong>War cry at series start:</strong> 1.945&times; the floor, 40.9% left to cut. The series ends without hitting that, and with a better understanding of why than the target itself would have produced.</p>
+      </aside>
+      <p>The series closes at an honest <strong>1.833&times;</strong> at batch one and <strong>2.574&times;</strong> at width four, with two levers banked and the remaining room mapped rather than claimed.</p>
+
+      <h3>What shipped, credentialed</h3>
+      <div class="grid">
+        <div class="box good"><span class="tag">Batch-one default</span><h3>GQA-pair attention</h3><p>Registry flip with a line-level credential chain. Honest floor ratio <strong>1.833&times;</strong> against a floor of 126.775&nbsp;ms including per-request KV re-reads.</p></div>
+        <div class="box good"><span class="tag">Width-four default</span><h3>Sealed padded GQA-pair</h3><p><strong>+27.03&nbsp;ms/step</strong> sealed (SD 13.77, one-sided 95% LB +10.82), padded-shadow doctrine proven at source and on hardware with zero real-byte drift, dual-gated at three successive commits.</p></div>
+        <div class="box good"><span class="tag">Built, not armed</span><h3>Single-launch scan fold</h3><p>Legality PASS on 11,088 byte comparisons; price measured directly at width four at <strong>8.98&nbsp;ms/step</strong>, 2.14&times; the MDE and super-linear in width. Registry default 0 &mdash; promotion is a one-token change gated on sealing.</p></div>
+        <div class="box good"><span class="tag">Instrumentation</span><h3>Token metering, and a defused disk bomb</h3><p>Per-request usage moved onto our own tamper-evident ledger. Separately, a bare repository copy that was materialising 700&nbsp;GiB apparent was cut to 0.385&nbsp;GiB.</p></div>
+      </div>
+
+      <h3>The map of what is left</h3>
+      <div class="table-wrap">
+        <table>
+          <caption>Remaining room at the width-four step, on the honest accounting.</caption>
+          <thead><tr><th>Where</th><th>ms/step</th><th>Verdict</th></tr></thead>
+          <tbody>
+            <tr><td>The "other" bucket (83.9 total)</td><td class="num">33&ndash;62 reducible</td><td>Largest unaddressed item. The tree-accept walk is the first bite, ~7 expected.</td></tr>
+            <tr><td>GDN scan + delta rule</td><td class="num">63.0 vs a 4.5 floor</td><td><strong>13.97&times;</strong> &mdash; the worst ratio on the board. Single-launch takes ~9; more is theoretically there.</td></tr>
+            <tr><td>FA2 remaining headroom</td><td class="num">62.9</td><td><strong>Load imbalance</strong>, not bandwidth. Needs scheduling, not layout.</td></tr>
+            <tr><td>GEMM DRAM efficiency</td><td class="num">38.3</td><td>Known-hard. Vol.&nbsp;IX's verdict stands.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Five open items, documented rather than closed</h3>
+      <ol class="path-list">
+        <li><strong>A production re-gate at current head is required before the next production serve.</strong> The merge train staled the head-bound flip credential and the launcher fail-closes until the live gate re-passes &mdash; roughly 1.5 GPU-hours, known-clean. This is the design working: a credential bound to a commit expires when the commit moves.</li>
+        <li><strong>The tree-accept walk is byte-proven but unpriced.</strong> Zero-ULP by construction at widths two through four, with a widened gate covering post-normalisation rows, cumulative-sum thresholds and accept decisions. The screen was cut at close-out; central expectation is ~7&nbsp;ms/step at width four, above the sealed 4.20&nbsp;ms MDE.</li>
+        <li><strong>The single-launch fold needs its phase-four seal</strong>, which doubles as its workload-matched timing verdict.</li>
+        <li>A per-task tool cap stays off, pending a validator that has not been built.</li>
+        <li><strong>A caveat on the record:</strong> single-row fp32 cumulative sum is run-to-run non-deterministic on this hardware. The historical batch-one byte credential's zero-mismatch therefore rests on a non-reproducible operation &mdash; mitigated in practice by top-k masking, and batching is structurally impossible at batch one and refused in four places. Publishing that is the point; it would have been easy not to.</li>
+      </ol>
+
+      <h3>The doctrine bank</h3>
+      <p>What a campaign leaves behind is not usually its numbers. These are the rules this series paid for:</p>
+
+      <div class="grid">
+        <div class="box info"><span class="tag">Provenance</span><p><strong>Head-bound credentials</strong> &mdash; every commit forces a re-gate, so batch merges into trains. <strong>Manifest binding is settledness</strong>, not the working tree's status.</p></div>
+        <div class="box info"><span class="tag">Failure</span><p><strong>Refuse at the right layer:</strong> qualification refuses, serving degrades. A fail-closed check placed one layer too low took down an engine this series. <strong>Boot-refusal probes mirror the runner, not the arm.</strong></p></div>
+        <div class="box info"><span class="tag">Measurement</span><p><strong>Workload-matching, not same-pool</strong> &mdash; paired passes absorb trajectory drift. <strong>Meter on your own instrument, never a third party's self-report.</strong></p></div>
+        <div class="box info"><span class="tag">Instruments</span><p><strong>Authoritative zero:</strong> an explicit zero must veto a sidecar. <strong>A gate that can only see the bit-stable operation is blind by construction</strong> &mdash; widen it before you trust it.</p></div>
+      </div>
+
+      <p>And the one this volume adds: <strong>audit your own ladder before you climb it.</strong> Three of the three largest items we published did not survive being built, and every one of them failed on a defect in the derivation rather than in the hardware. The cost of finding that out was small; the cost of not finding out would have been the entire next campaign.</p>
+    </section>
+
+    <section class="section" id="limitations">
+      <h2>Threats to Validity</h2>
+      <aside class="sidenote">
+        <p><strong>Note the asymmetry:</strong> the refutations in this volume are better-evidenced than the claims. Killing a number needs only one demonstrated defect; the replacement numbers carry the usual uncertainty.</p>
+      </aside>
+      <div class="grid">
+        <div class="box warn">
+          <span class="tag">The honest floor</span>
+          <h3>Not citable, by its own authors</h3>
+          <p>The floor artifact marks itself <code>NOT CITABLE</code>, <code>gpu_touched=false</code>. It changes no measured wall &mdash; only the denominator. And the floor is a <em>lower bound on time</em>, not an achievable target: it assumes every mandatory byte moves once at full bandwidth with zero latency, launch cost, recompute or imperfect overlap. Nothing reaches it.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Context length</span>
+          <h3>Imported, not re-measured</h3>
+          <p>The per-request context is taken from the batch-one ladder because the width-four capture actively rejects the inversion that would re-measure it &mdash; that rejection <em>is</em> the load-imbalance finding. The sensitivity table bounds it across 12k to a 44.3k hard cap, and every entry moves the conclusion the same way, but the central value is borrowed.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">The width-four result</span>
+          <h3>One paired draw</h3>
+          <p>&minus;29.50&nbsp;ms is a single paired difference. The MDE it clears is a four-pass between-pass quantity, which is not the uncertainty of one draw &mdash; and the width-three control shows 7.71&nbsp;ms of arm-to-arm variation on its own. The placebo constrains <em>where</em> the effect is, not how precisely it is known.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Profiled numbers</span>
+          <h3>Upper bounds, with the correction stated</h3>
+          <p>Width-four component costs are CUPTI-profiled and inflated by 18.28&nbsp;ms/step in total. The other-bucket band carries that correction explicitly; other per-component figures do not, and are upper bounds. No profiled number may be compared as a regression against an unprofiled wall.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Reducibility bands</span>
+          <h3>Judgement, published as judgement</h3>
+          <p>The 33&ndash;62&nbsp;ms in the other bucket is per-class engineering estimate, not measurement, and no candidate has been built against any of it. It is published per class so a reader can reject one class without discarding the rest.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Load imbalance</span>
+          <h3>Inferred from gaps, not counters</h3>
+          <p>The KV-bandwidth rejection comes from regressing across twelve isolated prefill gaps, not from DRAM or L2 counters. The confidence interval's upper edge is +0.32&nbsp;ns, comfortably under the 15.0&nbsp;ns floor, but a counter run remains the decisive test and has not been done.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">The refutations themselves</span>
+          <h3>Two are analysis, one is measured</h3>
+          <p>The scan-fusion refutation is measured &mdash; the phantom-work claim was tested by forcing the phantom work to be real. The host-tail refutation is a re-reduction of the same capture plus a direct graph-launch measurement. The conv-plumbing refutation is a source and census reading. None required a new campaign, which is a strength for cost and a weakness for independence.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Series scope</span>
+          <h3>One model, one machine</h3>
+          <p>Everything here is a 27B FP8 GDN hybrid on a 48-SM unified-memory GB10 at 273&nbsp;GB/s. The <em>method</em> generalises; the wave arithmetic, the batch-invariance boundary and every millisecond do not.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="config">
+      <h2>Canonical Config Appendix</h2>
+      <details class="fold">
+        <summary>
+          <span>What changed since Volume IX</span>
+          <small>Defaults, denominators, and the two numbers that were retired.</small>
+        </summary>
+        <div class="fold-body">
+          <div class="table-wrap">
+            <table>
+              <caption>Deltas against the Volume IX appendix.</caption>
+              <thead><tr><th>Surface</th><th>Vol. IX</th><th>Now</th></tr></thead>
+              <tbody>
+                <tr><td>Batch-one production default</td><td>qrow16 composed stack</td><td><strong>FA2 GQA-pair</strong>, registry flip with line-level credential chain</td></tr>
+                <tr><td>Width-four production default</td><td>stock</td><td><strong>Sealed padded GQA-pair</strong>, +27.03&nbsp;ms/step, dual-gated at three heads</td></tr>
+                <tr><td>The floor used for ratios</td><td>119.658&nbsp;ms, weights only</td><td><strong>126.775 (B1) / 148.126 (width 4)</strong>, honest &mdash; weights plus every per-request mandatory byte</td></tr>
+                <tr><td>Width-four operating point</td><td>&mdash;</td><td><strong>411.05&nbsp;ms/step</strong>; the previously published 387.59 is a width blend and is retired</td></tr>
+                <tr><td>Width-four floor denominator in tests</td><td>literal 126.514</td><td>Should read the launcher's own <code>mandatory_weight_floor_ms</code>. Recommended, not yet done.</td></tr>
+                <tr><td>Token metering</td><td>agent self-report</td><td><strong>Proxy-terminated engine counts</strong> on the tamper-evident ledger; new-schema ledgers that meter nothing raise rather than fall back</td></tr>
+                <tr><td>Scan fold</td><td>ladder item #2, 3.45&nbsp;ms modelled</td><td><strong>Refuted as modelled</strong>; single-launch handoff removal built instead, 8.98&nbsp;ms at width four, default 0</td></tr>
+                <tr><td>Host tail</td><td>ladder item #1, 10.08&nbsp;ms</td><td><strong>Refuted</strong> &mdash; 3.46&nbsp;ms median, and a precondition rather than deferrable work</td></tr>
+                <tr><td>Hardware / model</td><td colspan="2">Unchanged &mdash; GB10, 48 SMs, 273&nbsp;GB/s unified LPDDR5X; Qwen 3.6-27B-FP8 GDN hybrid; Tier-A exact-byte rule; real SWE-bench-Verified traffic throughout</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="section" id="receipts">
+      <h2>Source Trail</h2>
+      <p>Every refutation below is a committed artifact that names what it refutes and reproduces it before disagreeing. Several mark themselves not citable; that marking is theirs, not ours.</p>
+      <details class="fold">
+        <summary>
+          <span>Full source trail</span>
+          <small>The close-out, the three refutations, the width-four work, and the prior volumes.</small>
+        </summary>
+        <div class="fold-body">
+          <ul class="receipt-list">
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr13_series_closeout_20260815/README.md">The series close-out</a> - what shipped, the map of remaining room, the five open items, and the doctrine bank.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr13_b4_honest_floor_20260814/README.md">The honest width-four floor</a> - the three-direction denominator correction, the per-request reading, the context sensitivity table, and the load-imbalance finding that rejects KV-bandwidth proportionality.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr13_b4_width4_nsys_20260813/README.md">The width-four attribution</a> - capture validity established before any kernel is named; the batch-invariance of the GEMM; the 411.05 operating point.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/results/fr13_gdn_scan_20260811/design.md">The scan-fusion refutation</a> - the critical-path argument, the phantom-work defect in the original model, and the handoff lever found in its place.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/results/fr13_host_residual_20260811">The host-residual refutation</a> - the bimodal mean, the 617x graph-launch artifact, and what the window actually contains.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/results/fr13_conv_plumbing_20260811">The conv-plumbing closure</a> - one launch per event, 0.2% of the envelope, and a lever that ships because it is free rather than because it moves a gate.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/results/fr13_single_launch_b4_scope_20260814">The single-launch width-four scope</a> - the 8.98 ms/step price and the super-linear width scaling.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/results/fr13_b4_exact16_qc_20260814">The exact16 quality-control pass</a> - 21 banked arms, and the always / never / sometimes classification that shows eleven of sixteen tasks are constants.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/results/fr13_b4_padded_b4_derisk_20260813">The padded-B4 de-risk</a> - zero-copy refuted, the shadow better than the proposal, and the wave model behind the load-imbalance mechanism.</li>
+            <li><a href="where-the-milliseconds-went.html">Vol. IX</a> - the ladder this volume audits, and the accounting that produced it.</li>
+            <li><a href="every-lever.html">Vol. VIII</a> - the sixteen-lever inventory and the fixed-versus-marginal reframing.</li>
+            <li><a href="keep-or-replay.html">Vol. VII</a> - the committer asymmetry and the break-even model.</li>
+            <li><a href="spine-reorder.html">Vol. VI</a> - the one-ULP superset violation and the contiguous-spine reorder.</li>
+            <li><a href="stateless-tree.html">Vol. V</a> - the stateless-tree lifecycle and the attention-KV garble fix.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Volume X, and the close of the series. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a>, <a href="round-f.html">Vol. II</a>, <a href="gdn-tree-scan.html">Vol. III</a>, <a href="gdn-prefix-cache.html">Vol. IV</a>, <a href="stateless-tree.html">Vol. V</a>, <a href="spine-reorder.html">Vol. VI</a>, <a href="keep-or-replay.html">Vol. VII</a>, <a href="every-lever.html">Vol. VIII</a>, and <a href="where-the-milliseconds-went.html">Vol. IX</a>, but this page does not require them. Last updated 2026-08-15.</p>
+  </footer>
+</div>
+</body>
+</html>
