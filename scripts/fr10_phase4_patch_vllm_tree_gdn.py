@@ -39062,6 +39062,14 @@ def _fr13_f32_flush_one(request):
                 taw_module.fr13_fixed32_cfwd_logit_direct_live_finalize(
                     events, flush_binding
                 )
+                # Observer accounting for the TAW native production selector:
+                # served-candidate counts per batch, so a paired timing run can
+                # PROVE the candidate arm served and the stock arm did not. It
+                # writes nothing when the selector is off, which is precisely
+                # what makes its absence attestable.
+                taw_module.fr13_fixed32_taw_native_production_engagement_finalize(
+                    events, flush_binding
+                )
             # Counters/snapshot describe the closed interval ending here. Break
             # only after persistence so the next wall sample cannot name a
             # predecessor from before this task boundary.

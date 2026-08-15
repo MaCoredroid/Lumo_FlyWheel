@@ -1542,6 +1542,25 @@ _FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
 _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
 )
+# The three work-census routes the TAW commit can publish. They are named here
+# rather than spelled inline at the publish site because the production one is
+# now READ BACK as engagement evidence, and a route string that exists in two
+# places is a route string that can drift into meaning two different things.
+_FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE = (
+    "fixed32_pytorch_exact_float_triton_integer_commit"
+)
+_FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_ROUTE = (
+    "fixed32_native_precompute_byte_ab_reference_return"
+)
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_ROUTE = (
+    "fixed32_native_precompute_production_candidate_return"
+)
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_ENGAGEMENT = (
+    "/logs/fr13_fixed32_taw_native_precompute.production_engagement.json"
+)
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_ENGAGEMENT_SCHEMA = (
+    "fr13.fixed32.taw_native_precompute.production_engagement.v1"
+)
 _FR13_CFWD_LOGIT_DIRECT_CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
 _FR13_CFWD_LOGIT_DIRECT_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
 _FR13_CFWD_LOGIT_DIRECT_SOURCE_SHA256 = (
@@ -1588,7 +1607,7 @@ _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS: dict[str, Any] | None = None
 _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256: str | None = None
 _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "c8e32edf98453234bbf870c878d9f452930515b185061c6b9840282618ede9c3"
+    "484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1609,6 +1628,10 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "fr13_fixed32_taw_native_live_gate_begin",
     "fr13_fixed32_taw_native_live_gate_on_replay",
     "fr13_fixed32_taw_candidate_acceptance_census",
+    # Observer accounting, but it decides which arm of a paired timing run is
+    # allowed to claim it served the candidate. Evidence that decides a verdict
+    # belongs under the source contract like the math does.
+    "fr13_fixed32_taw_native_production_engagement_finalize",
     "_fr13_fixed32_taw_tensor_call_census",
     "_fr13_fixed32_taw_source_contract",
     "_fr13_fixed32_runtime_contract",
@@ -1890,6 +1913,31 @@ def _fr13_fixed32_taw_topology_binding(topology) -> dict[str, Any]:
 def _fr13_fixed32_taw_native_arm_sources(
     *, environ, name: str, sidecars,
 ) -> list[str]:
+    """Resolve every source that could arm one TAW native selector.
+
+    AUTHORITATIVE ZERO. An explicit ``0`` is a REFUSAL, not an absence. Three
+    states, and they are not the same state:
+
+      * ``1``   -- arm, whatever the sidecars say;
+      * ``0``   -- do NOT arm, whatever the sidecars say;
+      * unset   -- the caller expressed nothing, so the sidecars decide.
+
+    Before this, ``0`` and unset were the same value and a sidecar could arm an
+    arm whose launcher had explicitly turned it off. That is not hypothetical
+    bookkeeping: the container log directory is where the launcher WRITES these
+    sidecars, both arms of a timing pair mount a directory of that shape, and
+    the launcher's own cleanup for the off case removes the two ``.arm`` files
+    but not every artifact beside them. A single stale sidecar was therefore
+    enough to make a declared-stock arm serve the candidate while its recorded
+    environment still read ``...PRODUCTION=0`` -- i.e. to silently destroy the
+    single-variable delta a timing pair exists to measure, in the direction
+    that manufactures a null. The paired runner attests on the recorded
+    environment, so the recorded environment must be the authority.
+
+    Sidecars are still PARSED and validated under ``0``: a malformed sidecar is
+    a corrupted arm directory and stays fail-loud. What ``0`` removes is only
+    its power to ARM, never the report that it was wrong.
+    """
     raw = environ.get(name, "")
     if raw not in ("", "0", "1"):
         raise RuntimeError(f"{name} must be unset, 0, or 1")
@@ -1904,6 +1952,8 @@ def _fr13_fixed32_taw_native_arm_sources(
             raise RuntimeError(f"{name} cannot read sidecar {path}: {error}") from error
         if len(value) >= 16 or value.strip() != "1":
             raise RuntimeError(f"{name} sidecar must contain exactly 1: {path}")
+        if raw == "0":
+            continue
         sources.append(f"sidecar:{path}")
     return sources
 
@@ -2588,6 +2638,214 @@ def fr13_fixed32_taw_candidate_acceptance_census(
         raise RuntimeError(
             "FR13 candidate-token TAW final census mismatch: " + repr(record)
         )
+    return record
+
+
+def fr13_fixed32_taw_native_production_engagement_finalize(
+    events,
+    flush_binding,
+):
+    """Publish served-candidate accounting for a TAW production arm at flush.
+
+    WHY THIS EXISTS. Every other credentialed selector in this tree emits an
+    engagement artifact when it serves -- FA2 qrow32 B4, the CFWD logit-direct
+    producer, the draft-head units -- and a paired timing runner attests on it:
+    the candidate arm must SHOW the artifact, the stock arm must NOT. The TAW
+    native production selector was the exception. It published its route into
+    the work census and nothing else, so "did this arm actually serve the
+    candidate?" could only be answered by re-reading thousands of census rows,
+    and "did the stock arm accidentally serve it?" could not be answered by the
+    presence or absence of any file at all. A pair whose treatment cannot be
+    proven absent on the control arm is not a pair.
+
+    WHAT IT IS AND IS NOT. This is OBSERVER ACCOUNTING and nothing more. It
+    reads the work-census events the flush already holds, counts them by route
+    and by served batch, and writes the counts. It samples nothing, times
+    nothing, decides nothing about numerics, and touches no device state. It
+    cannot change what was served, because everything it reads was already
+    served and already published before it ran.
+
+    THE COUNTS ARE PER BATCH ON PURPOSE. The production selector serves the
+    candidate only at the batches its PASS bundle qualified and only at or
+    above the pinned minimum, falling back to the exact reference elsewhere.
+    A per-batch count is therefore the evidence that the scope was honoured,
+    and it is also what a width-stratified reducer needs to say which served
+    widths are TREATED and which are a natural placebo.
+
+    FAIL-CLOSED IN BOTH DIRECTIONS:
+      * selector off, but a production route appears in the census -> raise.
+        That is the candidate serving an arm that declared it off, which is
+        exactly the corruption the authoritative-zero rule above prevents, and
+        this is the independent check that it stayed prevented;
+      * selector on, but no production route appears -> raise. An armed
+        production arm that never served has nothing to time, and publishing a
+        zero-count engagement would read like evidence that it did.
+
+    Returns the record it wrote, or ``None`` when the selector is off and the
+    census agrees -- the stock arm's correct behaviour is to leave no file.
+    """
+    event_rows = list(events) if isinstance(events, (list, tuple)) else []
+    selector = _fr13_fixed32_taw_native_selector()
+    hex_chars = frozenset("0123456789abcdef")
+    counts: dict[str, dict[int, int]] = {
+        _FR13_FIXED32_TAW_NATIVE_PRODUCTION_ROUTE: {},
+        _FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_ROUTE: {},
+        _FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE: {},
+    }
+    modes = set()
+    for index, row in enumerate(event_rows):
+        taw = row.get("taw") if isinstance(row, dict) else None
+        batch = row.get("batch_size") if isinstance(row, dict) else None
+        route = taw.get("route") if isinstance(taw, dict) else None
+        if (
+            not isinstance(row, dict)
+            or row.get("schema") != "fr13-fixed32-work-census-v12"
+            or row.get("event_complete") is not True
+            or row.get("event_index") != index
+            or type(batch) is not int
+            or batch not in _FR13_FIXED32_BATCHES
+            or route not in counts
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 TAW production engagement work-event binding "
+                "drift at " + str(index)
+            )
+        counts[route][batch] = counts[route].get(batch, 0) + 1
+        modes.add(row.get("mode"))
+    served = counts[_FR13_FIXED32_TAW_NATIVE_PRODUCTION_ROUTE]
+    if selector != "production":
+        if served:
+            raise RuntimeError(
+                "FR13 fixed32 TAW served the production candidate while the "
+                "production selector is off: " + repr(sorted(served))
+            )
+        return None
+    if not served:
+        raise RuntimeError(
+            "FR13 fixed32 TAW production is armed but never served the "
+            "candidate: there is nothing to attest"
+        )
+    if counts[_FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_ROUTE]:
+        raise RuntimeError(
+            "FR13 fixed32 TAW production arm also published diagnostic "
+            "byte-A/B events; the selectors are mutually exclusive"
+        )
+    if len(modes) != 1:
+        raise RuntimeError("FR13 fixed32 TAW production task mixed fixed32 modes")
+    mode = next(iter(modes))
+    binding = flush_binding if isinstance(flush_binding, dict) else {}
+    expected_binding = {
+        "action",
+        "boundary_snapshot_sha256",
+        "complete_work_census_events",
+        "events_sha256",
+        "generation",
+        "nonce",
+        "producer_pid",
+    }
+    canonical_events = json.dumps(
+        event_rows, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    if (
+        set(binding) != expected_binding
+        or binding.get("action") != "final"
+        or type(binding.get("generation")) is not int
+        or int(binding["generation"]) < 1
+        or type(binding.get("producer_pid")) is not int
+        or int(binding["producer_pid"]) < 1
+        or binding.get("complete_work_census_events") != len(event_rows)
+        or hashlib.sha256(canonical_events).hexdigest()
+        != binding.get("events_sha256")
+        or any(
+            not isinstance(binding.get(name), str)
+            or len(binding[name]) != 64
+            or any(character not in hex_chars for character in binding[name])
+            for name in ("boundary_snapshot_sha256", "events_sha256", "nonce")
+        )
+        or any(
+            row.get("producer_pid") != binding["producer_pid"]
+            for row in event_rows
+        )
+    ):
+        raise RuntimeError("FR13 fixed32 TAW production engagement flush drift")
+    resolved_path = os.environ.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH",
+        _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS,
+    )
+    bundle = _fr13_fixed32_taw_native_production_pass(expected_mode=mode)
+    with open(resolved_path, "rb") as handle:
+        bundle_sha256 = hashlib.sha256(handle.read()).hexdigest()
+    qualified = list(bundle["qualified_batches"])
+    out_of_scope = sorted(
+        batch
+        for batch in served
+        if batch not in qualified or batch < _FR13_FIXED32_TAW_PINNED_MIN_BATCH
+    )
+    if out_of_scope:
+        raise RuntimeError(
+            "FR13 fixed32 TAW production served batches outside the qualified "
+            "scope: " + repr(out_of_scope)
+        )
+    topology = _fr13_fixed32_topology()
+    record = {
+        "schema": _FR13_FIXED32_TAW_NATIVE_PRODUCTION_ENGAGEMENT_SCHEMA,
+        "status": "ENGAGED",
+        "candidate": _FR13_FIXED32_TAW_NATIVE_CANDIDATE,
+        "candidate_returned": True,
+        "reference_returned": False,
+        "mode": mode,
+        "route": _FR13_FIXED32_TAW_NATIVE_PRODUCTION_ROUTE,
+        "source_contract_schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
+        "source_contract_sha256": _FR13_FIXED32_TAW_SOURCE_SHA256,
+        "topology_binding": _fr13_fixed32_taw_topology_binding(topology),
+        "production_bundle_path": resolved_path,
+        "production_bundle_sha256": bundle_sha256,
+        "qualified_batches": qualified,
+        "required_production_batches": list(
+            _FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES
+        ),
+        "pinned_min_batch": int(_FR13_FIXED32_TAW_PINNED_MIN_BATCH),
+        "served_candidate_calls_by_batch": {
+            str(batch): served[batch] for batch in sorted(served)
+        },
+        "served_candidate_calls": sum(served.values()),
+        "reference_calls_by_batch": {
+            str(batch): counts[_FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE][batch]
+            for batch in sorted(counts[_FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE])
+        },
+        "reference_calls": sum(
+            counts[_FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE].values()
+        ),
+        "complete_work_census_events": len(event_rows),
+        "events_sha256": binding["events_sha256"],
+        "flush_generation": binding["generation"],
+        "flush_nonce": binding["nonce"],
+        "producer_pid": binding["producer_pid"],
+        "boundary_snapshot_sha256": binding["boundary_snapshot_sha256"],
+        "served_return": "native all-parent precompute candidate products",
+        "observer_accounting_only": True,
+        "performance_measurement": False,
+        "finalized_by_fixed32_flush": True,
+        "flush_action": "final",
+    }
+    path = Path(
+        os.environ.get(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION_ENGAGEMENT_JSON",
+            _FR13_FIXED32_TAW_NATIVE_PRODUCTION_ENGAGEMENT,
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp." + str(os.getpid()))
+    with open(temporary, "w", encoding="ascii") as handle:
+        handle.write(
+            json.dumps(
+                record, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+            )
+            + "\n"
+        )
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
     return record
 
 
@@ -5485,12 +5743,12 @@ def _fr13_fixed32_publish_work(
         product_write_multiplier = 1
     taw = {
         "route": (
-            "fixed32_native_precompute_byte_ab_reference_return"
+            _FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_ROUTE
             if native_selector == "diagnostic"
             else (
-                "fixed32_native_precompute_production_candidate_return"
+                _FR13_FIXED32_TAW_NATIVE_PRODUCTION_ROUTE
                 if native_selector == "production"
-                else "fixed32_pytorch_exact_float_triton_integer_commit"
+                else _FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE
             )
         ),
         "preseeded_batches": list(_FR13_FIXED32_BATCHES),

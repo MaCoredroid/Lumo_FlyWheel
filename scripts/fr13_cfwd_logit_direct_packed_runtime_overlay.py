@@ -11,7 +11,7 @@ from types import ModuleType
 from typing import Any
 
 
-BASE_SOURCE_SHA256 = "6e1f09f55327428a8a4b9cfdb885dcdba4c7457f58fb2b7d8b5169083dba6cf2"
+BASE_SOURCE_SHA256 = "8dbb0bd07d6431ad99e70ca0c2e09dd2b36e72883eedb21143e0813819141d14"
 CANDIDATE = "fixed32_cfwd_logit_direct_packed_physical_slots_v3"
 CANDIDATE_SCHEMA = "fr13.fixed32.cfwd_logit_direct_packed_physical_slots.v3"
 CANDIDATE_SOURCE_SHA256 = "a7a7b6582cdc11e930916f5e65583195fd31a3b664e8f567bb33a24ea1a64ee0"
