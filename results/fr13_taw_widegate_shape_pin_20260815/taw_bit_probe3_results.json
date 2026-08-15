@@ -1,0 +1,88 @@
+{
+  "eager_universality": {
+    "1": {
+      "fraction": 1.0,
+      "inputs_tested": 32,
+      "inputs_with_nondeterministic_cumsum": 32,
+      "max_abs_ulp": 3
+    },
+    "2": {
+      "fraction": 0.0,
+      "inputs_tested": 32,
+      "inputs_with_nondeterministic_cumsum": 0,
+      "max_abs_ulp": 0
+    },
+    "4": {
+      "fraction": 0.0,
+      "inputs_tested": 32,
+      "inputs_with_nondeterministic_cumsum": 0,
+      "max_abs_ulp": 0
+    }
+  },
+  "env": {
+    "cuda": "13.1",
+    "device": "NVIDIA GB10",
+    "torch": "2.10.0a0+a36e1d39eb.nv26.01.42222806"
+  },
+  "graph_replay": {
+    "1": {
+      "eager_reruns_with_differing_cumsum": 25,
+      "graph_replay_cumsum_deterministic": false,
+      "graph_replay_max_abs_ulp": 2,
+      "graph_replays_with_differing_cumsum": 25,
+      "graph_replays_with_differing_inv_cdf_index": 0,
+      "graph_vs_eager_cumsum_bit_identical": false,
+      "graph_vs_eager_max_abs_ulp": 2,
+      "replays": 25,
+      "rows": 1
+    },
+    "13": {
+      "eager_reruns_with_differing_cumsum": 0,
+      "graph_replay_cumsum_deterministic": true,
+      "graph_replay_max_abs_ulp": 0,
+      "graph_replays_with_differing_cumsum": 0,
+      "graph_replays_with_differing_inv_cdf_index": 0,
+      "graph_vs_eager_cumsum_bit_identical": true,
+      "graph_vs_eager_max_abs_ulp": 0,
+      "replays": 25,
+      "rows": 13
+    },
+    "2": {
+      "eager_reruns_with_differing_cumsum": 0,
+      "graph_replay_cumsum_deterministic": true,
+      "graph_replay_max_abs_ulp": 0,
+      "graph_replays_with_differing_cumsum": 0,
+      "graph_replays_with_differing_inv_cdf_index": 0,
+      "graph_vs_eager_cumsum_bit_identical": true,
+      "graph_vs_eager_max_abs_ulp": 0,
+      "replays": 25,
+      "rows": 2
+    },
+    "4": {
+      "eager_reruns_with_differing_cumsum": 0,
+      "graph_replay_cumsum_deterministic": true,
+      "graph_replay_max_abs_ulp": 0,
+      "graph_replays_with_differing_cumsum": 0,
+      "graph_replays_with_differing_inv_cdf_index": 0,
+      "graph_vs_eager_cumsum_bit_identical": true,
+      "graph_vs_eager_max_abs_ulp": 0,
+      "replays": 25,
+      "rows": 4
+    },
+    "52": {
+      "eager_reruns_with_differing_cumsum": 0,
+      "graph_replay_cumsum_deterministic": true,
+      "graph_replay_max_abs_ulp": 0,
+      "graph_replays_with_differing_cumsum": 0,
+      "graph_replays_with_differing_inv_cdf_index": 0,
+      "graph_vs_eager_cumsum_bit_identical": true,
+      "graph_vs_eager_max_abs_ulp": 0,
+      "replays": 25,
+      "rows": 52
+    }
+  },
+  "model_loaded": false,
+  "schema": "fr13.taw.sampler_lever.phase1_bit_probe3.v1",
+  "serving_performed": false,
+  "vocab_size": 248320
+}

@@ -704,7 +704,7 @@ def test_cfwd_integration_source_contract_is_separate_and_fail_closed(
         ),
     }
     assert device._FR13_FIXED32_TAW_SOURCE_SHA256 == (
-        "2b1cc55c6ec3d45c2d6ad0a21be4dc76685df4c974ae7fcfa421d5824a5c1ffb"
+        "654503f8e35cb1778688d0b1d09b7a85001cd84922d32f9f866bcd32a5a946cb"
     )
     assert device._FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS == (
         "_fr13_fixed32_taw_exact_commit_kernel",
@@ -752,7 +752,7 @@ def test_packed_cfwd_keeps_taw_b1_b4_source_identity_exact() -> None:
             "fr13-fixed32-taw-all-parent-v7"
         )
         assert contract["source_contract_sha256"] == (
-            "2b1cc55c6ec3d45c2d6ad0a21be4dc76685df4c974ae7fcfa421d5824a5c1ffb"
+            "654503f8e35cb1778688d0b1d09b7a85001cd84922d32f9f866bcd32a5a946cb"
         )
 
 
@@ -825,7 +825,7 @@ def test_cfwd_overlay_preserves_credential_bound_device_bytes() -> None:
     import hashlib
 
     assert hashlib.sha256(BASE_PATH.read_bytes()).hexdigest() == (
-        "fdc01d2293cabdf0c43754611ed85b0d7a67ecdd6da1d57daa6d11f557ac360a"
+        "f50dd60d2e0f92fb194b3d184450444fa25ed4f60e42ad5c73d8a58db956c753"
     )
 
 

@@ -11,9 +11,9 @@ import sys
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 BASE_PATH = SCRIPT_DIR / "fr13_device_multidraft_kernel.py"
-BASE_SHA256 = "fdc01d2293cabdf0c43754611ed85b0d7a67ecdd6da1d57daa6d11f557ac360a"
+BASE_SHA256 = "f50dd60d2e0f92fb194b3d184450444fa25ed4f60e42ad5c73d8a58db956c753"
 OVERLAY_PATH = SCRIPT_DIR / "fr13_cfwd_logit_direct_packed_runtime_overlay.py"
-OVERLAY_SHA256 = "d755b3bb285abe424d8df3a6847f370b89ddc60c0f41a535e3201f8922ff0153"
+OVERLAY_SHA256 = "8cfd04559e31e5e937788b7c83ed06e78b7ca45b1e0a25dfcb675fe7e65645e2"
 NODE_TRUST_OVERLAY_PATH = (
     SCRIPT_DIR / "fr13_cfwd_packed_walk_node_trust_runtime_overlay.py"
 )

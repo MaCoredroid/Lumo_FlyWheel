@@ -46,13 +46,26 @@ def _launched_kernel_name(call: ast.Call) -> str | None:
     return value.id if isinstance(value, ast.Name) else None
 
 
+def _binds_name(target: ast.expr, name: str) -> bool:
+    if isinstance(target, ast.Name):
+        return target.id == name
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return any(_binds_name(element, name) for element in target.elts)
+    return False
+
+
 def _assignment_values(function: ast.FunctionDef, name: str) -> list[str]:
     values = []
     for node in ast.walk(function):
         if not isinstance(node, ast.Assign):
             continue
-        if any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
-            values.append(ast.dump(node.value, include_attributes=False))
+        if any(_binds_name(target, name) for target in node.targets):
+            values.append(
+                ast.dump(
+                    ast.Assign(targets=node.targets, value=node.value),
+                    include_attributes=False,
+                )
+            )
     return values
 
 

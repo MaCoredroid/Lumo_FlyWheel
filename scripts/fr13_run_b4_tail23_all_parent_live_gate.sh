@@ -20,7 +20,7 @@ BLOCK_MAP=scripts/fr13_dvk_subset_blocks.json
 BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
 TAW_SOURCE=scripts/fr13_device_multidraft_kernel.py
 TAW_SOURCE_SCHEMA=fr13-fixed32-taw-all-parent-v7
-TAW_SOURCE_SHA256=2b1cc55c6ec3d45c2d6ad0a21be4dc76685df4c974ae7fcfa421d5824a5c1ffb
+TAW_SOURCE_SHA256=654503f8e35cb1778688d0b1d09b7a85001cd84922d32f9f866bcd32a5a946cb
 TAIL_VALID_MASK=0x7a9ce7ff
 TAIL_ACTIVE_DRAFTS=23
 HYDRA_VALID_MASK=0x7abdffff
@@ -277,8 +277,8 @@ bundle = module._fr13_fixed32_taw_native_production_pass(
 )
 if (
     bundle.get("status") != "production_ready"
-    or bundle.get("qualified_batches") != [1, 2, 3, 4]
-    or bundle.get("required_production_batches") != [1, 4]
+    or bundle.get("qualified_batches") != [2, 3, 4]
+    or bundle.get("required_production_batches") != [4]
     or bundle.get("source_contract_schema") != source_schema
     or bundle.get("source_contract_sha256") != source_contract_sha256
     or bundle.get("valid_mask") != valid_mask
@@ -287,7 +287,7 @@ if (
     or int(topology.PHYSICAL_ROWS) != 32
 ):
     raise SystemExit("fixed32 all-parent source-v7 production bundle is incomplete or drifted")
-for batch in (1, 2, 3, 4):
+for batch in (2, 3, 4):
     record = bundle["batch_passes"][str(batch)]
     if (
         record.get("batch_size") != batch
@@ -448,9 +448,9 @@ verdict = {
     "valid_mask": hex(valid_mask),
     "physical_drafts": 31,
     "physical_rows_root_inclusive": 32,
-    "qualified_batches": [1, 2, 3, 4],
-    "required_production_batches": [1, 4],
-    "independent_b1_record": True,
+    "qualified_batches": [2, 3, 4],
+    "required_production_batches": [4],
+    "independent_b1_record": False,
     "independent_b4_record": True,
     "draft_vocab_k": 65536,
     "draft_vocab_root": 1,
