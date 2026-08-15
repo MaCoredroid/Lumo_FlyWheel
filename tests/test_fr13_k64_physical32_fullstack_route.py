@@ -64,7 +64,9 @@ def _partial_bundle(module, topology, *, mode: str) -> dict[str, object]:
         "mode": mode,
         "valid_mask": int(topology.VALID_MASK_BY_MODE[mode]),
         "topology_binding": module._fr13_fixed32_taw_topology_binding(topology),
-        "required_production_batches": [1, 4],
+        "required_production_batches": list(
+            module._FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES
+        ),
         "qualified_batches": [1],
         "batch_passes": {"1": _record(module, topology, mode=mode, batch=1)},
     }
@@ -153,7 +155,9 @@ def _b4_verdict(*, mode: str, source_sha256: str, production_sha256: str):
         "physical_drafts": 31,
         "physical_rows_root_inclusive": 32,
         "qualified_batches": [1, 2, 3, 4],
-        "required_production_batches": [1, 4],
+        "required_production_batches": list(
+            _source_module()[0]._FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES
+        ),
         "independent_b1_record": True,
         "independent_b4_record": True,
         "draft_vocab_k": 65536,

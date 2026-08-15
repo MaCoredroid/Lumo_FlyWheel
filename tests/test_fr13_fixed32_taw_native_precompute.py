@@ -79,11 +79,7 @@ def _fixture(topology, mode: str, batch_size: int, seed: int):
 
 def _pass_record(*, mode: str, batch_size: int) -> dict:
     topology = taw._fr13_fixed32_topology()
-    task_marker = (
-        "swe_verified:django__django-12345"
-        if batch_size == 1
-        else "swe_verified:campaign4_" + "a" * 64
-    )
+    task_marker = "swe_verified:campaign4_" + "a" * 64
     return {
         "schema": "fr13.fixed32.taw_native_precompute.live_pass.v2",
         "status": "pass",
@@ -109,7 +105,7 @@ def _write_pass_bundle(
     path: Path,
     *,
     mode: str,
-    batches: tuple[int, ...] = (1, 4),
+    batches: tuple[int, ...] = (4,),
 ) -> None:
     topology = taw._fr13_fixed32_topology()
     qualified = sorted(set(batches))
@@ -123,7 +119,9 @@ def _write_pass_bundle(
                 "schema": "fr13.fixed32.taw_native_precompute.pass_bundle.v1",
                 "status": (
                     "production_ready"
-                    if {1, 4}.issubset(qualified)
+                    if set(
+                        taw._FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES
+                    ).issubset(qualified)
                     else "partial"
                 ),
                 "candidate": taw._FR13_FIXED32_TAW_NATIVE_CANDIDATE,
@@ -134,7 +132,9 @@ def _write_pass_bundle(
                 "topology_binding": taw._fr13_fixed32_taw_topology_binding(
                     topology
                 ),
-                "required_production_batches": [1, 4],
+                "required_production_batches": list(
+                    taw._FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES
+                ),
                 "qualified_batches": qualified,
                 "batch_passes": records,
             }
@@ -144,7 +144,7 @@ def _write_pass_bundle(
 
 
 @pytest.mark.parametrize("mode", ("tail6_fixed32", "hydra27_fixed32"))
-@pytest.mark.parametrize("batch_size", (1, 4))
+@pytest.mark.parametrize("batch_size", (2, 3, 4))
 def test_native_precompute_is_full_byte_equivalent_on_cpu(
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
@@ -184,6 +184,7 @@ def test_native_precompute_is_full_byte_equivalent_on_cpu(
         entry = taw._FR13_FIXED32_TAW_CACHE[key]
         assert entry["native_ab_probability_mismatches"].item() == 0
         assert entry["native_ab_product_mismatches"].item() == 0
+        assert entry["native_ab_accept_decision_mismatches"].item() == 0
         monkeypatch.setenv("FR13_FIXED32_TAW_NATIVE_PRECOMPUTE", "0")
 
     baseline_work, candidate_work = callback_rows[-2:]
@@ -336,7 +337,7 @@ def test_all_parent_schedule_and_integer_kernel_are_fixed() -> None:
 
 
 @pytest.mark.parametrize("mode", ("tail6_fixed32", "hydra27_fixed32"))
-@pytest.mark.parametrize("batch_size", (1, 4))
+@pytest.mark.parametrize("batch_size", (2, 4))
 def test_all_parent_matches_zero_overlap_and_duplicate_siblings(
     monkeypatch: pytest.MonkeyPatch,
     mode: str,
@@ -439,7 +440,7 @@ def test_native_production_is_default_off_source_bound_and_exclusive(
 @pytest.mark.parametrize(
     ("batch_size", "expected_route", "expected_softmax_calls"),
     (
-        (1, "fixed32_native_precompute_production_candidate_return", 2),
+        (1, "fixed32_pytorch_exact_float_triton_integer_commit", 24),
         (2, "fixed32_pytorch_exact_float_triton_integer_commit", 24),
         (3, "fixed32_pytorch_exact_float_triton_integer_commit", 24),
         (4, "fixed32_native_precompute_production_candidate_return", 2),
@@ -517,14 +518,14 @@ def test_native_production_bundle_warms_all_batches_with_reference_fallback(
     payload = taw._fr13_fixed32_taw_native_production_pass(
         path=str(live_pass), expected_mode=mode, expected_batch=4
     )
-    assert payload["qualified_batches"] == [1, 4]
+    assert payload["qualified_batches"] == [4]
     monkeypatch.setenv(
         "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION", "1"
     )
     monkeypatch.setenv(
         "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH", str(live_pass)
     )
-    assert taw._fr13_fixed32_taw_native_selector(batch_size=1) == "production"
+    assert taw._fr13_fixed32_taw_native_selector(batch_size=1) == "reference"
     assert taw._fr13_fixed32_taw_native_selector(batch_size=2) == "reference"
     assert taw._fr13_fixed32_taw_native_selector(batch_size=3) == "reference"
     assert taw._fr13_fixed32_taw_native_selector(batch_size=4) == "production"
@@ -550,7 +551,7 @@ def test_native_production_bundle_warms_all_batches_with_reference_fallback(
     assert evidence["executions"] == 4
     assert evidence["staging_state_restored"] is True
 
-    _write_pass_bundle(live_pass, mode=mode, batches=(4,))
+    _write_pass_bundle(live_pass, mode=mode, batches=(2, 3))
     with pytest.raises(RuntimeError, match="PASS bundle is invalid"):
         taw._fr13_fixed32_taw_native_production_pass(
             path=str(live_pass), expected_mode=mode, expected_batch=4
@@ -623,21 +624,30 @@ def test_native_live_pass_emitter_binds_source_and_real_task(
             taw._fr13_fixed32_topology()
         )
     )
-    assert payload["status"] == "partial"
+    assert payload["status"] == "production_ready"
     assert payload["qualified_batches"] == [4]
     assert payload["batch_passes"]["4"]["covered_batches"] == [4]
+    assert payload["required_production_batches"] == [4]
 
     taw._fr13_fixed32_taw_native_live_pass_emit(
         mode="hydra27_fixed32",
-        batch_size=1,
-        task_marker="swe_verified:astropy__astropy-13033",
+        batch_size=2,
+        task_marker="swe_verified:campaign4_" + "c" * 64,
         evidence_route="full_graph_replay",
     )
     payload = json.loads(path.read_text(encoding="ascii"))
     assert payload["status"] == "production_ready"
-    assert payload["qualified_batches"] == [1, 4]
-    assert payload["batch_passes"]["1"]["covered_batches"] == [1]
+    assert payload["qualified_batches"] == [2, 4]
+    assert payload["batch_passes"]["2"]["covered_batches"] == [2]
     assert payload["batch_passes"]["4"]["covered_batches"] == [4]
+
+    with pytest.raises(RuntimeError, match="refuses to serve below B=2"):
+        taw._fr13_fixed32_taw_native_live_pass_emit(
+            mode="hydra27_fixed32",
+            batch_size=1,
+            task_marker="swe_verified:astropy__astropy-13033",
+            evidence_route="full_graph_replay",
+        )
 
 
 def test_native_live_gate_binds_and_checks_one_graph_replay(
@@ -798,7 +808,10 @@ def test_tail23_exact4_b4_runner_pins_k64_and_requires_all_real_batches() -> Non
     assert "FR13_FIXED32_ALL_PARENT_MODE" in runner
     assert "HYDRA_VALID_MASK=0x7abdffff" in runner
     assert "HYDRA_ACTIVE_DRAFTS=27" in runner
-    assert 'bundle.get("qualified_batches") != [1, 2, 3, 4]' in runner
+    # The shape-pinned candidate refuses B=1, so the reachable closure is
+    # B2/B3/B4 and production qualification narrows to the served B4.
+    assert 'bundle.get("qualified_batches") != [2, 3, 4]' in runner
+    assert 'bundle.get("required_production_batches") != [4]' in runner
     assert 'record.get("covered_batches") != [batch]' in runner
     assert 'record.get("reference_returned") is not True' in runner
     assert 'record.get("candidate_returned") is not False' in runner

@@ -3237,6 +3237,10 @@ def _fr13_fixed32_taw_full_graph_begin(taw_module, mode, batch_size):
         entry = taw_module._fr13_fixed32_taw_native_live_entry(
             mode=key[0], batch_size=key[1]
         )
+        if entry is None:
+            # Untreated width: the gate declines, the engine serves the stock
+            # reference and nothing is captured or recorded for this step.
+            return {"status": "no_gate", "batch_size": key[1]}
         if entry.get("native_ab_live_gate_pending") is True:
             raise RuntimeError(
                 "FR13 fixed32 TAW full-graph gate was already pending"
@@ -3261,6 +3265,10 @@ def _fr13_fixed32_taw_full_graph_on_replay(taw_module, mode, batch_size):
     gate_report = taw_module.fr13_fixed32_taw_native_live_gate_on_replay(
         mode=key[0], batch_size=key[1]
     )
+    if gate_report.get("status") == "no_gate":
+        # Declined at begin for an untreated width; nothing was armed, so there
+        # is no replay evidence to read and no pass to record.
+        return gate_report
     if gate_report.get("status") != "passed":
         raise RuntimeError(
             "FR13 fixed32 TAW native live gate did not pass on the first "
@@ -39052,6 +39060,14 @@ def _fr13_f32_flush_one(request):
                         "FR13 fixed32 final flush is missing the TAW module"
                     )
                 taw_module.fr13_fixed32_cfwd_logit_direct_live_finalize(
+                    events, flush_binding
+                )
+                # Observer accounting for the TAW native production selector:
+                # served-candidate counts per batch, so a paired timing run can
+                # PROVE the candidate arm served and the stock arm did not. It
+                # writes nothing when the selector is off, which is precisely
+                # what makes its absence attestable.
+                taw_module.fr13_fixed32_taw_native_production_engagement_finalize(
                     events, flush_binding
                 )
             # Counters/snapshot describe the closed interval ending here. Break

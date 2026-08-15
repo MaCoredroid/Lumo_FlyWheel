@@ -18,7 +18,7 @@ CREDENTIAL_SCHEMA = "fr13.fixed32.taw_source_v7.b1_credential.v1"
 PAIR_SCHEMA = "fr13.fixed32.k64_physical32_fullstack.b1_pair.v1"
 SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 SOURCE_CONTRACT_SHA256 = (
-    "2b1cc55c6ec3d45c2d6ad0a21be4dc76685df4c974ae7fcfa421d5824a5c1ffb"
+    "484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93"
 )
 CANDIDATE = "fixed32_all_parent_commit_v2"
 TASK_ID = "astropy__astropy-12907"
@@ -160,7 +160,7 @@ def _validate_live_bundle(
         or payload.get("source_contract_sha256") != SOURCE_CONTRACT_SHA256
         or payload.get("mode") != mode
         or payload.get("valid_mask") != contract["valid_mask"]
-        or payload.get("required_production_batches") != [1, 4]
+        or payload.get("required_production_batches") != list(module._FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES)
         or payload.get("qualified_batches") != [1]
         or not isinstance(batch_passes, dict)
         or set(batch_passes) != {"1"}
@@ -577,7 +577,7 @@ def _validate_reviewed_b4_gate(
         "physical_drafts": 31,
         "physical_rows_root_inclusive": 32,
         "qualified_batches": [1, 2, 3, 4],
-        "required_production_batches": [1, 4],
+        "required_production_batches": list(module._FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES),
         "independent_b1_record": True,
         "independent_b4_record": True,
         "draft_vocab_k": 65536,

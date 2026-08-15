@@ -1511,7 +1511,18 @@ _FR13_FIXED32_TAW_LAST_WORK: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_WARMUPS: dict[tuple[Any, ...], dict[str, Any]] = {}
 _FR13_FIXED32_WORK_ANNOUNCED = False
 _FR13_FIXED32_BATCHES = (1, 2, 3, 4)
-_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES = (1, 4)
+# The shape-pinned all-parent candidate reproduces the reference walk bitwise
+# only when every full-vocab reduction runs at exactly the served batch width.
+# At B=1 the reference operator itself is not reproducible (cumsum over a
+# single [1, V] row is run-to-run non-deterministic on this device), so no
+# byte-exact batched candidate can exist there and the walk stays unbatched.
+_FR13_FIXED32_TAW_PINNED_MIN_BATCH = 2
+# The fixed32 B4 campaign is the only consumer that serves the candidate:
+# B=1 is refused outright, and B=2/B=3 only appear as transient partial
+# batches which fall back to the reference route through the existing
+# per-batch qualification check. Requiring qualification at exactly the
+# batches the candidate will serve keeps the PASS bundle honest.
+_FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES = (4,)
 _FR13_FIXED32_INTEGER_DTYPES = None
 _FR13_FIXED32_TAW_NATIVE_CANDIDATE = "fixed32_all_parent_commit_v2"
 _FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_SIDECARS = (
@@ -1530,6 +1541,25 @@ _FR13_FIXED32_TAW_NATIVE_LIVE_PASS = (
 )
 _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
+)
+# The three work-census routes the TAW commit can publish. They are named here
+# rather than spelled inline at the publish site because the production one is
+# now READ BACK as engagement evidence, and a route string that exists in two
+# places is a route string that can drift into meaning two different things.
+_FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE = (
+    "fixed32_pytorch_exact_float_triton_integer_commit"
+)
+_FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_ROUTE = (
+    "fixed32_native_precompute_byte_ab_reference_return"
+)
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_ROUTE = (
+    "fixed32_native_precompute_production_candidate_return"
+)
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_ENGAGEMENT = (
+    "/logs/fr13_fixed32_taw_native_precompute.production_engagement.json"
+)
+_FR13_FIXED32_TAW_NATIVE_PRODUCTION_ENGAGEMENT_SCHEMA = (
+    "fr13.fixed32.taw_native_precompute.production_engagement.v1"
 )
 _FR13_CFWD_LOGIT_DIRECT_CANDIDATE = "fixed32_cfwd_logit_direct_physical_slots_v2"
 _FR13_CFWD_LOGIT_DIRECT_SCHEMA = "fr13.fixed32.cfwd_logit_direct_physical_slots.v2"
@@ -1577,7 +1607,7 @@ _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS: dict[str, Any] | None = None
 _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256: str | None = None
 _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "2b1cc55c6ec3d45c2d6ad0a21be4dc76685df4c974ae7fcfa421d5824a5c1ffb"
+    "484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1598,6 +1628,10 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "fr13_fixed32_taw_native_live_gate_begin",
     "fr13_fixed32_taw_native_live_gate_on_replay",
     "fr13_fixed32_taw_candidate_acceptance_census",
+    # Observer accounting, but it decides which arm of a paired timing run is
+    # allowed to claim it served the candidate. Evidence that decides a verdict
+    # belongs under the source contract like the math does.
+    "fr13_fixed32_taw_native_production_engagement_finalize",
     "_fr13_fixed32_taw_tensor_call_census",
     "_fr13_fixed32_taw_source_contract",
     "_fr13_fixed32_runtime_contract",
@@ -1624,7 +1658,10 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_taw_execute",
     "_fr13_fixed32_publish_work",
     "fr13_fixed32_taw_commit",
+    "_fr13_taw_inv_cdf_parts",
     "_fr13_taw_inv_cdf",
+    "_fr13_fixed32_taw_pinned_row_sum",
+    "_fr13_fixed32_taw_pinned_normalized_caches",
 )
 _FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_taw_exact_commit_kernel",
@@ -1876,6 +1913,31 @@ def _fr13_fixed32_taw_topology_binding(topology) -> dict[str, Any]:
 def _fr13_fixed32_taw_native_arm_sources(
     *, environ, name: str, sidecars,
 ) -> list[str]:
+    """Resolve every source that could arm one TAW native selector.
+
+    AUTHORITATIVE ZERO. An explicit ``0`` is a REFUSAL, not an absence. Three
+    states, and they are not the same state:
+
+      * ``1``   -- arm, whatever the sidecars say;
+      * ``0``   -- do NOT arm, whatever the sidecars say;
+      * unset   -- the caller expressed nothing, so the sidecars decide.
+
+    Before this, ``0`` and unset were the same value and a sidecar could arm an
+    arm whose launcher had explicitly turned it off. That is not hypothetical
+    bookkeeping: the container log directory is where the launcher WRITES these
+    sidecars, both arms of a timing pair mount a directory of that shape, and
+    the launcher's own cleanup for the off case removes the two ``.arm`` files
+    but not every artifact beside them. A single stale sidecar was therefore
+    enough to make a declared-stock arm serve the candidate while its recorded
+    environment still read ``...PRODUCTION=0`` -- i.e. to silently destroy the
+    single-variable delta a timing pair exists to measure, in the direction
+    that manufactures a null. The paired runner attests on the recorded
+    environment, so the recorded environment must be the authority.
+
+    Sidecars are still PARSED and validated under ``0``: a malformed sidecar is
+    a corrupted arm directory and stays fail-loud. What ``0`` removes is only
+    its power to ARM, never the report that it was wrong.
+    """
     raw = environ.get(name, "")
     if raw not in ("", "0", "1"):
         raise RuntimeError(f"{name} must be unset, 0, or 1")
@@ -1890,6 +1952,8 @@ def _fr13_fixed32_taw_native_arm_sources(
             raise RuntimeError(f"{name} cannot read sidecar {path}: {error}") from error
         if len(value) >= 16 or value.strip() != "1":
             raise RuntimeError(f"{name} sidecar must contain exactly 1: {path}")
+        if raw == "0":
+            continue
         sources.append(f"sidecar:{path}")
     return sources
 
@@ -2146,10 +2210,20 @@ def _fr13_fixed32_taw_native_selector(
                 raise RuntimeError(
                     f"FR13 fixed32 batch must be 1..4, got {batch_size}"
                 )
-            if batch_size not in bundle["qualified_batches"]:
+            if (
+                batch_size < _FR13_FIXED32_TAW_PINNED_MIN_BATCH
+                or batch_size not in bundle["qualified_batches"]
+            ):
                 return "reference"
         return "production"
     if diagnostic:
+        if batch_size is not None:
+            if batch_size not in _FR13_FIXED32_BATCHES:
+                raise RuntimeError(
+                    f"FR13 fixed32 batch must be 1..4, got {batch_size}"
+                )
+            if batch_size < _FR13_FIXED32_TAW_PINNED_MIN_BATCH:
+                return "reference"
         return "diagnostic"
     return "reference"
 
@@ -2194,6 +2268,12 @@ def _fr13_fixed32_taw_native_real_event_marker() -> str | None:
 def _fr13_fixed32_taw_native_live_pass_emit(
     *, mode: str, batch_size: int, task_marker: str, evidence_route: str,
 ) -> None:
+    if int(batch_size) < _FR13_FIXED32_TAW_PINNED_MIN_BATCH:
+        raise RuntimeError(
+            "FR13 fixed32 TAW native live PASS cannot cover batch "
+            f"{int(batch_size)}: the shape-pinned candidate refuses to serve "
+            f"below B={_FR13_FIXED32_TAW_PINNED_MIN_BATCH}"
+        )
     path = os.environ.get(
         "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON",
         _FR13_FIXED32_TAW_NATIVE_LIVE_PASS,
@@ -2286,7 +2366,9 @@ def _fr13_fixed32_taw_native_live_pass_emit(
             or previous.get("status") != expected_status
             or not isinstance(previous_qualified, list)
             or any(
-                type(batch) is not int or batch not in _FR13_FIXED32_BATCHES
+                type(batch) is not int
+                or batch not in _FR13_FIXED32_BATCHES
+                or batch < _FR13_FIXED32_TAW_PINNED_MIN_BATCH
                 for batch in previous_qualified
             )
             or previous_qualified != sorted(set(previous_qualified))
@@ -2331,9 +2413,27 @@ def _fr13_fixed32_taw_native_live_pass_emit(
 
 def _fr13_fixed32_taw_native_live_entry(
     *, mode: str, batch_size: int,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
+    """Resolve the diagnostic cache entry, or decline to gate an untreated width.
+
+    ``None`` is the reference-passthrough sentinel: the width is one the
+    shape-pinned candidate never serves, so there is nothing to compare, nothing
+    to capture and nothing to record -- the engine simply keeps running the
+    stock reference, exactly as the FA2 dual gate treats its untreated widths.
+
+    This hook is called by the runtime overlay on EVERY measured forward, before
+    any per-batch selector is consulted. Raising here therefore kills the engine
+    the moment the campaign drains below the qualifiable set, which is a routine
+    scheduling event (a task finishing) and not a defect in the candidate. The
+    hard refusals stay where a real violation would occur: the selector's
+    production route, the all-parent decision/execute path (the candidate must
+    never SERVE below the pinned minimum) and the pass-record emitter (it must
+    never RECORD below it).
+    """
     topology, valid_mask = _fr13_fixed32_runtime_contract(mode)
     del topology
+    if int(batch_size) < _FR13_FIXED32_TAW_PINNED_MIN_BATCH:
+        return None
     matches = [
         entry
         for key, entry in _FR13_FIXED32_TAW_CACHE.items()
@@ -2364,6 +2464,8 @@ def fr13_fixed32_taw_native_live_gate_begin(
     entry = _fr13_fixed32_taw_native_live_entry(
         mode=mode, batch_size=batch_size
     )
+    if entry is None:
+        return {"status": "no_gate", "batch_size": int(batch_size)}
     if entry.get("native_ab_live_pass_emitted", False):
         return {"status": "passed", "batch_size": int(batch_size)}
     task_marker = _fr13_fixed32_taw_native_real_event_marker()
@@ -2395,6 +2497,8 @@ def fr13_fixed32_taw_native_live_gate_on_replay(
     entry = _fr13_fixed32_taw_native_live_entry(
         mode=mode, batch_size=batch_size
     )
+    if entry is None:
+        return {"status": "no_gate", "batch_size": int(batch_size)}
     if entry.get("native_ab_live_pass_emitted", False):
         return {"status": "passed", "batch_size": int(batch_size)}
     if entry.get("native_ab_live_gate_pending") is not True:
@@ -2483,6 +2587,16 @@ def fr13_fixed32_taw_candidate_acceptance_census(
     entry = _fr13_fixed32_taw_native_live_entry(
         mode=mode, batch_size=batch_size
     )
+    if entry is None:
+        # The final census is a verdict path: it is only ever asked to reduce a
+        # width the gate actually qualified. Being asked for an ungated width
+        # means the caller lost track of what was gated, so this stays a hard
+        # refusal rather than a passthrough.
+        raise RuntimeError(
+            "FR13 candidate-token TAW census cannot reduce batch "
+            f"{int(batch_size)}: the shape-pinned candidate never gates below "
+            f"B={_FR13_FIXED32_TAW_PINNED_MIN_BATCH}"
+        )
     comparisons = int(entry["native_ab_candidate_census_events"].item())
     probability_bad = int(entry["native_ab_probability_mismatches"].item())
     product_bad = int(entry["native_ab_product_mismatches"].item())
@@ -2524,6 +2638,214 @@ def fr13_fixed32_taw_candidate_acceptance_census(
         raise RuntimeError(
             "FR13 candidate-token TAW final census mismatch: " + repr(record)
         )
+    return record
+
+
+def fr13_fixed32_taw_native_production_engagement_finalize(
+    events,
+    flush_binding,
+):
+    """Publish served-candidate accounting for a TAW production arm at flush.
+
+    WHY THIS EXISTS. Every other credentialed selector in this tree emits an
+    engagement artifact when it serves -- FA2 qrow32 B4, the CFWD logit-direct
+    producer, the draft-head units -- and a paired timing runner attests on it:
+    the candidate arm must SHOW the artifact, the stock arm must NOT. The TAW
+    native production selector was the exception. It published its route into
+    the work census and nothing else, so "did this arm actually serve the
+    candidate?" could only be answered by re-reading thousands of census rows,
+    and "did the stock arm accidentally serve it?" could not be answered by the
+    presence or absence of any file at all. A pair whose treatment cannot be
+    proven absent on the control arm is not a pair.
+
+    WHAT IT IS AND IS NOT. This is OBSERVER ACCOUNTING and nothing more. It
+    reads the work-census events the flush already holds, counts them by route
+    and by served batch, and writes the counts. It samples nothing, times
+    nothing, decides nothing about numerics, and touches no device state. It
+    cannot change what was served, because everything it reads was already
+    served and already published before it ran.
+
+    THE COUNTS ARE PER BATCH ON PURPOSE. The production selector serves the
+    candidate only at the batches its PASS bundle qualified and only at or
+    above the pinned minimum, falling back to the exact reference elsewhere.
+    A per-batch count is therefore the evidence that the scope was honoured,
+    and it is also what a width-stratified reducer needs to say which served
+    widths are TREATED and which are a natural placebo.
+
+    FAIL-CLOSED IN BOTH DIRECTIONS:
+      * selector off, but a production route appears in the census -> raise.
+        That is the candidate serving an arm that declared it off, which is
+        exactly the corruption the authoritative-zero rule above prevents, and
+        this is the independent check that it stayed prevented;
+      * selector on, but no production route appears -> raise. An armed
+        production arm that never served has nothing to time, and publishing a
+        zero-count engagement would read like evidence that it did.
+
+    Returns the record it wrote, or ``None`` when the selector is off and the
+    census agrees -- the stock arm's correct behaviour is to leave no file.
+    """
+    event_rows = list(events) if isinstance(events, (list, tuple)) else []
+    selector = _fr13_fixed32_taw_native_selector()
+    hex_chars = frozenset("0123456789abcdef")
+    counts: dict[str, dict[int, int]] = {
+        _FR13_FIXED32_TAW_NATIVE_PRODUCTION_ROUTE: {},
+        _FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_ROUTE: {},
+        _FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE: {},
+    }
+    modes = set()
+    for index, row in enumerate(event_rows):
+        taw = row.get("taw") if isinstance(row, dict) else None
+        batch = row.get("batch_size") if isinstance(row, dict) else None
+        route = taw.get("route") if isinstance(taw, dict) else None
+        if (
+            not isinstance(row, dict)
+            or row.get("schema") != "fr13-fixed32-work-census-v12"
+            or row.get("event_complete") is not True
+            or row.get("event_index") != index
+            or type(batch) is not int
+            or batch not in _FR13_FIXED32_BATCHES
+            or route not in counts
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 TAW production engagement work-event binding "
+                "drift at " + str(index)
+            )
+        counts[route][batch] = counts[route].get(batch, 0) + 1
+        modes.add(row.get("mode"))
+    served = counts[_FR13_FIXED32_TAW_NATIVE_PRODUCTION_ROUTE]
+    if selector != "production":
+        if served:
+            raise RuntimeError(
+                "FR13 fixed32 TAW served the production candidate while the "
+                "production selector is off: " + repr(sorted(served))
+            )
+        return None
+    if not served:
+        raise RuntimeError(
+            "FR13 fixed32 TAW production is armed but never served the "
+            "candidate: there is nothing to attest"
+        )
+    if counts[_FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_ROUTE]:
+        raise RuntimeError(
+            "FR13 fixed32 TAW production arm also published diagnostic "
+            "byte-A/B events; the selectors are mutually exclusive"
+        )
+    if len(modes) != 1:
+        raise RuntimeError("FR13 fixed32 TAW production task mixed fixed32 modes")
+    mode = next(iter(modes))
+    binding = flush_binding if isinstance(flush_binding, dict) else {}
+    expected_binding = {
+        "action",
+        "boundary_snapshot_sha256",
+        "complete_work_census_events",
+        "events_sha256",
+        "generation",
+        "nonce",
+        "producer_pid",
+    }
+    canonical_events = json.dumps(
+        event_rows, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+    if (
+        set(binding) != expected_binding
+        or binding.get("action") != "final"
+        or type(binding.get("generation")) is not int
+        or int(binding["generation"]) < 1
+        or type(binding.get("producer_pid")) is not int
+        or int(binding["producer_pid"]) < 1
+        or binding.get("complete_work_census_events") != len(event_rows)
+        or hashlib.sha256(canonical_events).hexdigest()
+        != binding.get("events_sha256")
+        or any(
+            not isinstance(binding.get(name), str)
+            or len(binding[name]) != 64
+            or any(character not in hex_chars for character in binding[name])
+            for name in ("boundary_snapshot_sha256", "events_sha256", "nonce")
+        )
+        or any(
+            row.get("producer_pid") != binding["producer_pid"]
+            for row in event_rows
+        )
+    ):
+        raise RuntimeError("FR13 fixed32 TAW production engagement flush drift")
+    resolved_path = os.environ.get(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PASS_PATH",
+        _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS,
+    )
+    bundle = _fr13_fixed32_taw_native_production_pass(expected_mode=mode)
+    with open(resolved_path, "rb") as handle:
+        bundle_sha256 = hashlib.sha256(handle.read()).hexdigest()
+    qualified = list(bundle["qualified_batches"])
+    out_of_scope = sorted(
+        batch
+        for batch in served
+        if batch not in qualified or batch < _FR13_FIXED32_TAW_PINNED_MIN_BATCH
+    )
+    if out_of_scope:
+        raise RuntimeError(
+            "FR13 fixed32 TAW production served batches outside the qualified "
+            "scope: " + repr(out_of_scope)
+        )
+    topology = _fr13_fixed32_topology()
+    record = {
+        "schema": _FR13_FIXED32_TAW_NATIVE_PRODUCTION_ENGAGEMENT_SCHEMA,
+        "status": "ENGAGED",
+        "candidate": _FR13_FIXED32_TAW_NATIVE_CANDIDATE,
+        "candidate_returned": True,
+        "reference_returned": False,
+        "mode": mode,
+        "route": _FR13_FIXED32_TAW_NATIVE_PRODUCTION_ROUTE,
+        "source_contract_schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
+        "source_contract_sha256": _FR13_FIXED32_TAW_SOURCE_SHA256,
+        "topology_binding": _fr13_fixed32_taw_topology_binding(topology),
+        "production_bundle_path": resolved_path,
+        "production_bundle_sha256": bundle_sha256,
+        "qualified_batches": qualified,
+        "required_production_batches": list(
+            _FR13_FIXED32_TAW_REQUIRED_PRODUCTION_BATCHES
+        ),
+        "pinned_min_batch": int(_FR13_FIXED32_TAW_PINNED_MIN_BATCH),
+        "served_candidate_calls_by_batch": {
+            str(batch): served[batch] for batch in sorted(served)
+        },
+        "served_candidate_calls": sum(served.values()),
+        "reference_calls_by_batch": {
+            str(batch): counts[_FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE][batch]
+            for batch in sorted(counts[_FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE])
+        },
+        "reference_calls": sum(
+            counts[_FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE].values()
+        ),
+        "complete_work_census_events": len(event_rows),
+        "events_sha256": binding["events_sha256"],
+        "flush_generation": binding["generation"],
+        "flush_nonce": binding["nonce"],
+        "producer_pid": binding["producer_pid"],
+        "boundary_snapshot_sha256": binding["boundary_snapshot_sha256"],
+        "served_return": "native all-parent precompute candidate products",
+        "observer_accounting_only": True,
+        "performance_measurement": False,
+        "finalized_by_fixed32_flush": True,
+        "flush_action": "final",
+    }
+    path = Path(
+        os.environ.get(
+            "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_PRODUCTION_ENGAGEMENT_JSON",
+            _FR13_FIXED32_TAW_NATIVE_PRODUCTION_ENGAGEMENT,
+        )
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp." + str(os.getpid()))
+    with open(temporary, "w", encoding="ascii") as handle:
+        handle.write(
+            json.dumps(
+                record, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+            )
+            + "\n"
+        )
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
     return record
 
 
@@ -3980,6 +4302,53 @@ def _fr13_fixed32_layout_contract(
     }
 
 
+def _fr13_fixed32_taw_pinned_row_sum(rows, *, width: int):
+    """Reduce ``[N, V]`` rows in fixed ``[width, V]`` launches.
+
+    The reference walk normalizes ``[B, V]`` rows once per level, so the
+    batched candidate can only be byte-identical when every full-vocab
+    reduction is launched at exactly the served batch width. A single fused
+    ``[N, V]`` reduction is not: the reduction schedule depends on the row
+    count and drifts by up to 2 ULP, which flips emitted tokens.
+    """
+    if not isinstance(rows, torch.Tensor) or rows.dim() != 2:
+        raise RuntimeError("FR13 fixed32 pinned row sum requires a [N, V] tensor")
+    total = int(rows.shape[0])
+    if (
+        type(width) is not int
+        or width < _FR13_FIXED32_TAW_PINNED_MIN_BATCH
+        or total < width
+        or total % width
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 pinned row sum needs a served batch width that "
+            f"divides the row count: rows={total} width={width!r}"
+        )
+    return torch.cat(
+        [rows[start:start + width].sum(dim=-1) for start in range(0, total, width)]
+    )
+
+
+def _fr13_fixed32_taw_pinned_normalized_caches(
+    probability_caches: tuple[Any, Any],
+    *,
+    batch_size: int,
+) -> tuple[Any, Any]:
+    """Normalize both cached row unions at the served batch width."""
+    self_prob_cache, target_prob_cache = probability_caches
+    if self_prob_cache is None or target_prob_cache is None:
+        raise RuntimeError("FR13 fixed32 pinned normalization needs both caches")
+    self_norm = self_prob_cache / _fr13_fixed32_taw_pinned_row_sum(
+        self_prob_cache,
+        width=batch_size,
+    ).unsqueeze(1)
+    target_norm = target_prob_cache / _fr13_fixed32_taw_pinned_row_sum(
+        target_prob_cache,
+        width=batch_size,
+    ).unsqueeze(1)
+    return self_norm, target_norm
+
+
 def _fr13_fixed32_taw_probability_caches(
     entry: dict[str, Any],
     target_logits,
@@ -4032,9 +4401,19 @@ def _fr13_fixed32_taw_all_parent_decisions(
     drafts,
     uniforms,
     probability_caches: tuple[Any, Any],
+    *,
+    normalized_probability_caches: tuple[Any, Any] | None = None,
+    gate_capture: dict[str, Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, Any]:
     """Decide every fixed parent in parallel with native PyTorch math."""
     batch_size = int(entry["batch_size"])
+    if batch_size < _FR13_FIXED32_TAW_PINNED_MIN_BATCH:
+        raise RuntimeError(
+            "FR13 fixed32 all-parent candidate refuses batch "
+            f"{batch_size}: the shape-pinned reduction needs a served width "
+            f">= {_FR13_FIXED32_TAW_PINNED_MIN_BATCH} and the reference walk "
+            "is not reproducible at B=1"
+        )
     physical_drafts = int(topology.PHYSICAL_DRAFTS)
     fanout = int(topology.SAMPLER_MAX_FANOUT)
     self_rows = int(entry["native_self_rows_per_request"])
@@ -4081,19 +4460,45 @@ def _fr13_fixed32_taw_all_parent_decisions(
     if tuple(drafts.shape) != (batch_size, physical_drafts):
         raise RuntimeError("FR13 fixed32 all-parent draft layout drift")
 
-    self_prob = self_prob_cache.reshape(batch_size, self_rows, vocab_size)
-    self_prob = self_prob / self_prob.sum(dim=-1, keepdim=True)
+    if normalized_probability_caches is None:
+        normalized_probability_caches = (
+            _fr13_fixed32_taw_pinned_normalized_caches(
+                probability_caches,
+                batch_size=batch_size,
+            )
+        )
+    self_norm_cache, target_norm_cache = normalized_probability_caches
+    for name, value in (
+        ("self_normalized_cache", self_norm_cache),
+        ("target_normalized_cache", target_norm_cache),
+    ):
+        expected_rows = (
+            batch_size * self_rows
+            if name == "self_normalized_cache"
+            else batch_size * target_rows
+        )
+        if (
+            not isinstance(value, torch.Tensor)
+            or tuple(value.shape) != (expected_rows, vocab_size)
+            or value.dtype != torch.float32
+            or value.device != drafts.device
+        ):
+            raise RuntimeError(
+                f"FR13 fixed32 all-parent decision layout drift: {name}"
+            )
+
+    self_prob = self_norm_cache.reshape(batch_size, self_rows, vocab_size)
     self_levels = entry["all_parent_self_uniform_levels"]
     self_uniforms = uniforms[:, self_levels, 2]
-    self_token = _fr13_taw_inv_cdf(
+    self_token, self_total, self_thresh = _fr13_taw_inv_cdf_parts(
         self_prob.reshape(batch_size * self_rows, vocab_size),
         self_uniforms.reshape(batch_size * self_rows),
-    ).reshape(batch_size, self_rows)
+    )
+    self_token = self_token.reshape(batch_size, self_rows)
 
-    target_prob = target_prob_cache.reshape(
+    target_prob = target_norm_cache.reshape(
         batch_size, target_rows, vocab_size
     )
-    target_prob = target_prob / target_prob.sum(dim=-1, keepdim=True)
     parent_slots = entry["all_parent_target_parent_slots"]
     kids = entry["child_table"].index_select(1, parent_slots)
     child_count = entry["child_counts"].index_select(1, parent_slots)
@@ -4114,10 +4519,11 @@ def _fr13_fixed32_taw_all_parent_decisions(
     has_kids = child_count > 0
     zero_mass = has_kids & (overlap_mass <= 0)
     target_levels = entry["all_parent_target_uniform_levels"]
-    source = _fr13_taw_inv_cdf(
+    source, source_total, source_thresh = _fr13_taw_inv_cdf_parts(
         overlaps.reshape(batch_size * target_rows, fanout),
         uniforms[:, target_levels, 0].reshape(batch_size * target_rows),
-    ).reshape(batch_size, target_rows)
+    )
+    source = source.reshape(batch_size, target_rows)
     selected_token = torch.gather(
         kid_tokens,
         2,
@@ -4149,7 +4555,10 @@ def _fr13_fixed32_taw_all_parent_decisions(
         weights * kid_mask,
     )
     residual = (target_prob - q_mix_vocab).clamp(min=0)
-    residual_mass = residual.sum(dim=-1, keepdim=True)
+    residual_mass = _fr13_fixed32_taw_pinned_row_sum(
+        residual.reshape(batch_size * target_rows, vocab_size),
+        width=batch_size,
+    ).reshape(batch_size, target_rows, 1)
     residual = torch.where(
         residual_mass > 0,
         residual / residual_mass.clamp(min=1e-30),
@@ -4160,10 +4569,39 @@ def _fr13_fixed32_taw_all_parent_decisions(
         target_prob,
         residual,
     )
-    rejected_token = _fr13_taw_inv_cdf(
+    rejected_token, residual_total, residual_thresh = _fr13_taw_inv_cdf_parts(
         residual.reshape(batch_size * target_rows, vocab_size),
         uniforms[:, target_levels, 2].reshape(batch_size * target_rows),
-    ).reshape(batch_size, target_rows)
+    )
+    rejected_token = rejected_token.reshape(batch_size, target_rows)
+    if gate_capture is not None:
+        gate_capture.update(
+            {
+                "self_normalized": self_norm_cache,
+                "target_normalized": target_norm_cache,
+                "residual": residual.reshape(
+                    batch_size * target_rows, vocab_size
+                ),
+                "self_total": self_total.reshape(batch_size, self_rows),
+                "self_thresh": self_thresh.reshape(batch_size, self_rows),
+                "source_total": source_total.reshape(batch_size, target_rows),
+                "source_thresh": source_thresh.reshape(
+                    batch_size, target_rows
+                ),
+                "residual_total": residual_total.reshape(
+                    batch_size, target_rows
+                ),
+                "residual_thresh": residual_thresh.reshape(
+                    batch_size, target_rows
+                ),
+                "overlaps": overlaps,
+                "self_token": self_token,
+                "source": source,
+                "selected_token": selected_token,
+                "rejected_token": rejected_token,
+                "accepted": accepted,
+            }
+        )
     return self_token, source, selected_token, rejected_token, accepted
 
 
@@ -4294,14 +4732,16 @@ def _fr13_fixed32_taw_execute_all_parent_torch(
     *,
     walk_cap: int,
     probability_caches: tuple[Any, Any],
+    decisions: tuple[Any, Any, Any, Any, Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, Any, int]:
-    decisions = _fr13_fixed32_taw_all_parent_decisions(
-        topology,
-        entry,
-        drafts,
-        uniforms,
-        probability_caches,
-    )
+    if decisions is None:
+        decisions = _fr13_fixed32_taw_all_parent_decisions(
+            topology,
+            entry,
+            drafts,
+            uniforms,
+            probability_caches,
+        )
     return _fr13_fixed32_taw_all_parent_walk_torch(
         topology,
         entry,
@@ -4320,6 +4760,7 @@ def _fr13_fixed32_taw_execute_all_parent_cuda(
     *,
     walk_cap: int,
     probability_caches: tuple[Any, Any],
+    decisions: tuple[Any, Any, Any, Any, Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, Any, int]:
     """Launch one integer walk after all fixed-parent float decisions."""
     if triton is None or tl is None:
@@ -4327,13 +4768,14 @@ def _fr13_fixed32_taw_execute_all_parent_cuda(
     batch_size = int(entry["batch_size"])
     self_rows = int(entry["native_self_rows_per_request"])
     target_rows = int(entry["native_target_rows_per_request"])
-    decisions = _fr13_fixed32_taw_all_parent_decisions(
-        topology,
-        entry,
-        drafts,
-        uniforms,
-        probability_caches,
-    )
+    if decisions is None:
+        decisions = _fr13_fixed32_taw_all_parent_decisions(
+            topology,
+            entry,
+            drafts,
+            uniforms,
+            probability_caches,
+        )
     self_token, source, selected_token, rejected_token, accepted = decisions
     expected_decisions = (
         ("self_token", self_token, (batch_size, self_rows), torch.long),
@@ -4415,7 +4857,14 @@ def _fr13_fixed32_taw_execute_all_parent(
     *,
     walk_cap: int,
     probability_caches: tuple[Any, Any],
+    decisions: tuple[Any, Any, Any, Any, Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, Any, int]:
+    if int(entry["batch_size"]) < _FR13_FIXED32_TAW_PINNED_MIN_BATCH:
+        raise RuntimeError(
+            "FR13 fixed32 all-parent candidate refuses batch "
+            f"{int(entry['batch_size'])}: the shape-pinned reduction needs a "
+            f"served width >= {_FR13_FIXED32_TAW_PINNED_MIN_BATCH}"
+        )
     if drafts.is_cuda:
         return _fr13_fixed32_taw_execute_all_parent_cuda(
             topology,
@@ -4425,6 +4874,7 @@ def _fr13_fixed32_taw_execute_all_parent(
             uniforms,
             walk_cap=walk_cap,
             probability_caches=probability_caches,
+            decisions=decisions,
         )
     return _fr13_fixed32_taw_execute_all_parent_torch(
         topology,
@@ -4434,7 +4884,166 @@ def _fr13_fixed32_taw_execute_all_parent(
         uniforms,
         walk_cap=walk_cap,
         probability_caches=probability_caches,
+        decisions=decisions,
     )
+
+
+def _fr13_fixed32_taw_gate_bytes(reference, candidate, mask):
+    """Count int-view byte differences over the rows the walk actually reads."""
+    if reference.dtype != candidate.dtype:
+        raise RuntimeError(
+            "FR13 fixed32 byte gate dtype drift: "
+            f"{reference.dtype} != {candidate.dtype}"
+        )
+    if tuple(reference.shape) != tuple(candidate.shape):
+        raise RuntimeError(
+            "FR13 fixed32 byte gate shape drift: "
+            f"{tuple(reference.shape)} != {tuple(candidate.shape)}"
+        )
+    if reference.dtype == torch.float32:
+        differing = reference.view(torch.int32) != candidate.view(torch.int32)
+    else:
+        differing = reference != candidate
+    return torch.count_nonzero(differing & mask)
+
+
+def _fr13_fixed32_taw_gate_level(
+    entry: dict[str, Any],
+    gate: dict[str, Any],
+    *,
+    request_rows,
+    self_slots,
+    target_slots,
+    leaf,
+    has_kids,
+    reference_self: dict[str, Any],
+    reference_target: dict[str, Any],
+    probability_mismatches,
+    accept_decision_mismatches,
+) -> None:
+    """Compare every value the reference walk reads against the candidate.
+
+    The narrow gate only saw pre-normalization softmax rows, so a batched
+    candidate whose normalization sum drifted by 2 ULP passed it while still
+    flipping emitted tokens. This walks the whole chain: pre-normalization
+    rows, post-normalization rows, the residual rows, the post-cumsum
+    threshold inputs, and finally the accept decisions and emitted tokens.
+    """
+    self_indices = entry["native_self_request_offsets"] + self_slots
+    target_indices = entry["native_target_request_offsets"] + target_slots
+    leaf_rows = leaf.unsqueeze(1)
+    kid_rows = has_kids.unsqueeze(1)
+    for reference_value, candidate_value, mask in (
+        (
+            reference_self["pre_normalization"],
+            gate["self_raw"][self_indices],
+            leaf_rows,
+        ),
+        (
+            reference_self["post_normalization"],
+            gate["self_normalized"][self_indices],
+            leaf_rows,
+        ),
+        (
+            reference_target["pre_normalization"],
+            gate["target_raw"][target_indices],
+            kid_rows,
+        ),
+        (
+            reference_target["post_normalization"],
+            gate["target_normalized"][target_indices],
+            kid_rows,
+        ),
+        (
+            reference_target["residual"],
+            gate["residual"][target_indices],
+            kid_rows,
+        ),
+        (
+            reference_target["overlaps"],
+            gate["overlaps"][request_rows, target_slots],
+            kid_rows,
+        ),
+        (
+            reference_self["cdf_total"],
+            gate["self_total"][request_rows, self_slots],
+            leaf,
+        ),
+        (
+            reference_self["cdf_threshold"],
+            gate["self_thresh"][request_rows, self_slots],
+            leaf,
+        ),
+        (
+            reference_target["source_total"],
+            gate["source_total"][request_rows, target_slots],
+            has_kids,
+        ),
+        (
+            reference_target["source_threshold"],
+            gate["source_thresh"][request_rows, target_slots],
+            has_kids,
+        ),
+        (
+            reference_target["residual_total"],
+            gate["residual_total"][request_rows, target_slots],
+            has_kids,
+        ),
+        (
+            reference_target["residual_threshold"],
+            gate["residual_thresh"][request_rows, target_slots],
+            has_kids,
+        ),
+    ):
+        probability_mismatches.add_(
+            _fr13_fixed32_taw_gate_bytes(reference_value, candidate_value, mask)
+        )
+
+    candidate_accepted = gate["accepted"][request_rows, target_slots]
+    candidate_selected = gate["selected_token"][request_rows, target_slots]
+    candidate_rejected = gate["rejected_token"][request_rows, target_slots]
+    for reference_value, candidate_value, mask in (
+        (
+            reference_self["token"],
+            gate["self_token"][request_rows, self_slots],
+            leaf,
+        ),
+        (
+            reference_target["source"],
+            gate["source"][request_rows, target_slots],
+            has_kids,
+        ),
+        (reference_target["selected_token"], candidate_selected, has_kids),
+        (reference_target["rejected_token"], candidate_rejected, has_kids),
+        (reference_target["accepted"], candidate_accepted, has_kids),
+        (
+            reference_target["emitted_token"],
+            torch.where(candidate_accepted, candidate_selected, candidate_rejected),
+            has_kids,
+        ),
+    ):
+        accept_decision_mismatches.add_(
+            _fr13_fixed32_taw_gate_bytes(reference_value, candidate_value, mask)
+        )
+
+
+def _fr13_fixed32_taw_gate_is_complete(
+    comparison_probability_caches,
+    comparison_gate,
+    probability_mismatches,
+    accept_decision_mismatches,
+) -> bool:
+    """Refuse a half-wired byte gate; either all four parts or none."""
+    parts = (
+        comparison_probability_caches,
+        comparison_gate,
+        probability_mismatches,
+        accept_decision_mismatches,
+    )
+    present = [part is not None for part in parts]
+    if any(present) and not all(present):
+        raise RuntimeError("FR13 fixed32 probability byte gate is incomplete")
+    return all(present)
 
 
 def _fr13_fixed32_taw_execute_torch(
@@ -4450,7 +5059,9 @@ def _fr13_fixed32_taw_execute_torch(
     native_precompute: bool | None = None,
     probability_caches: tuple[Any, Any] | None = None,
     comparison_probability_caches: tuple[Any, Any] | None = None,
+    comparison_gate: dict[str, Any] | None = None,
     probability_mismatches=None,
+    accept_decision_mismatches=None,
 ) -> tuple[Any, Any, Any, Any, Any, int]:
     """Run the exact PyTorch oracle; every loop body has the same B/V shapes."""
     batch_size = entry["batch_size"]
@@ -4530,8 +5141,12 @@ def _fr13_fixed32_taw_execute_torch(
         self_prob_cache, target_prob_cache = probability_caches
     else:
         self_prob_cache, target_prob_cache = None, None
-    if (comparison_probability_caches is None) != (probability_mismatches is None):
-        raise RuntimeError("FR13 fixed32 probability byte gate is incomplete")
+    gating = _fr13_fixed32_taw_gate_is_complete(
+        comparison_probability_caches,
+        comparison_gate,
+        probability_mismatches,
+        accept_decision_mismatches,
+    )
     loop_iterations = 0
 
     for level in range(walk_cap):
@@ -4553,33 +5168,15 @@ def _fr13_fixed32_taw_execute_torch(
                 tree_self_logits[self_indices].to(torch.float32),
                 dim=-1,
             )
-            if comparison_probability_caches is not None:
-                self_slots = entry["native_self_slot_by_node"][
-                    current.clamp(min=0, max=physical_drafts - 1)
-                ]
-                comparison_indices = (
-                    entry["native_self_request_offsets"] + self_slots
-                )
-                comparison_prob = comparison_probability_caches[0][
-                    comparison_indices
-                ]
-                probability_mismatches.add_(
-                    torch.count_nonzero(
-                        (
-                            self_prob.view(torch.int32)
-                            != comparison_prob.view(torch.int32)
-                        )
-                        & leaf.unsqueeze(1)
-                    )
-                )
         else:
             self_slots = entry["native_self_slot_by_node"][
                 current.clamp(min=0, max=physical_drafts - 1)
             ]
             self_indices = entry["native_self_request_offsets"] + self_slots
             self_prob = self_prob_cache[self_indices]
+        self_prob_pre = self_prob
         self_prob = self_prob / self_prob.sum(dim=-1, keepdim=True)
-        self_token = _fr13_taw_inv_cdf(
+        self_token, self_cdf_total, self_cdf_threshold = _fr13_taw_inv_cdf_parts(
             self_prob,
             uniforms[:, level, 2],
         )
@@ -4601,34 +5198,18 @@ def _fr13_fixed32_taw_execute_torch(
                 target_logits[target_indices].to(torch.float32),
                 dim=-1,
             )
-            if comparison_probability_caches is not None:
-                target_slots = entry["native_target_slot_by_parent"][parent_slots]
-                comparison_indices = (
-                    entry["native_target_request_offsets"] + target_slots
-                )
-                comparison_prob = comparison_probability_caches[1][
-                    comparison_indices
-                ]
-                probability_mismatches.add_(
-                    torch.count_nonzero(
-                        (
-                            target_prob.view(torch.int32)
-                            != comparison_prob.view(torch.int32)
-                        )
-                        & has_kids.unsqueeze(1)
-                    )
-                )
         else:
             target_slots = entry["native_target_slot_by_parent"][parent_slots]
             target_indices = entry["native_target_request_offsets"] + target_slots
             target_prob = target_prob_cache[target_indices]
+        target_prob_pre = target_prob
         target_prob = target_prob / target_prob.sum(dim=-1, keepdim=True)
         kid_tokens = drafts.gather(1, kids.clamp(min=0))
         kid_mask = kids >= 0
         overlaps = torch.gather(target_prob, 1, kid_tokens.clamp(min=0)) * kid_mask
         overlap_mass = overlaps.sum(dim=-1)
         zero_mass = has_kids & (overlap_mass <= 0)
-        source = _fr13_taw_inv_cdf(
+        source, source_total, source_threshold = _fr13_taw_inv_cdf_parts(
             overlaps,
             uniforms[:, level, 0],
         )
@@ -4667,7 +5248,11 @@ def _fr13_fixed32_taw_execute_torch(
             target_prob,
             residual,
         )
-        rejected_token = _fr13_taw_inv_cdf(
+        (
+            rejected_token,
+            residual_total,
+            residual_threshold,
+        ) = _fr13_taw_inv_cdf_parts(
             residual,
             uniforms[:, level, 2],
         )
@@ -4676,6 +5261,42 @@ def _fr13_fixed32_taw_execute_torch(
             rejected_token,
             selected_token,
         )
+        if gating:
+            _fr13_fixed32_taw_gate_level(
+                entry,
+                comparison_gate,
+                request_rows=request_rows,
+                self_slots=entry["native_self_slot_by_node"][
+                    current.clamp(min=0, max=physical_drafts - 1)
+                ],
+                target_slots=entry["native_target_slot_by_parent"][parent_slots],
+                leaf=leaf,
+                has_kids=has_kids,
+                reference_self={
+                    "pre_normalization": self_prob_pre,
+                    "post_normalization": self_prob,
+                    "cdf_total": self_cdf_total.squeeze(1),
+                    "cdf_threshold": self_cdf_threshold.squeeze(1),
+                    "token": self_token,
+                },
+                reference_target={
+                    "pre_normalization": target_prob_pre,
+                    "post_normalization": target_prob,
+                    "residual": residual,
+                    "overlaps": overlaps,
+                    "source_total": source_total.squeeze(1),
+                    "source_threshold": source_threshold.squeeze(1),
+                    "residual_total": residual_total.squeeze(1),
+                    "residual_threshold": residual_threshold.squeeze(1),
+                    "source": source,
+                    "selected_token": selected_token,
+                    "rejected_token": rejected_token,
+                    "accepted": accepted,
+                    "emitted_token": emitted_token,
+                },
+                probability_mismatches=probability_mismatches,
+                accept_decision_mismatches=accept_decision_mismatches,
+            )
         output_tokens.scatter_(
             1,
             torch.where(has_kids, output_lens, output_trash).unsqueeze(1),
@@ -4765,7 +5386,9 @@ def _fr13_fixed32_taw_execute_exact_cuda(
     native_precompute: bool | None = None,
     probability_caches: tuple[Any, Any] | None = None,
     comparison_probability_caches: tuple[Any, Any] | None = None,
+    comparison_gate: dict[str, Any] | None = None,
     probability_mismatches=None,
+    accept_decision_mismatches=None,
 ) -> tuple[Any, Any, Any, Any, Any, int]:
     """Preserve PyTorch sampling math and fuse only integer product commits."""
     if triton is None or tl is None:
@@ -4841,8 +5464,12 @@ def _fr13_fixed32_taw_execute_exact_cuda(
         self_prob_cache, target_prob_cache = probability_caches
     else:
         self_prob_cache, target_prob_cache = None, None
-    if (comparison_probability_caches is None) != (probability_mismatches is None):
-        raise RuntimeError("FR13 fixed32 probability byte gate is incomplete")
+    gating = _fr13_fixed32_taw_gate_is_complete(
+        comparison_probability_caches,
+        comparison_gate,
+        probability_mismatches,
+        accept_decision_mismatches,
+    )
 
     for level in range(walk_cap):
         current = initial_current if level == 0 else current_state
@@ -4863,33 +5490,15 @@ def _fr13_fixed32_taw_execute_exact_cuda(
                 tree_self_logits[self_indices].to(torch.float32),
                 dim=-1,
             )
-            if comparison_probability_caches is not None:
-                self_slots = entry["native_self_slot_by_node"][
-                    current.clamp(min=0, max=physical_drafts - 1)
-                ]
-                comparison_indices = (
-                    entry["native_self_request_offsets"] + self_slots
-                )
-                comparison_prob = comparison_probability_caches[0][
-                    comparison_indices
-                ]
-                probability_mismatches.add_(
-                    torch.count_nonzero(
-                        (
-                            self_prob.view(torch.int32)
-                            != comparison_prob.view(torch.int32)
-                        )
-                        & leaf.unsqueeze(1)
-                    )
-                )
         else:
             self_slots = entry["native_self_slot_by_node"][
                 current.clamp(min=0, max=physical_drafts - 1)
             ]
             self_indices = entry["native_self_request_offsets"] + self_slots
             self_prob = self_prob_cache[self_indices]
+        self_prob_pre = self_prob
         self_prob = self_prob / self_prob.sum(dim=-1, keepdim=True)
-        self_token = _fr13_taw_inv_cdf(
+        self_token, self_cdf_total, self_cdf_threshold = _fr13_taw_inv_cdf_parts(
             self_prob,
             uniforms[:, level, 2],
         )
@@ -4901,34 +5510,18 @@ def _fr13_fixed32_taw_execute_exact_cuda(
                 target_logits[target_indices].to(torch.float32),
                 dim=-1,
             )
-            if comparison_probability_caches is not None:
-                target_slots = entry["native_target_slot_by_parent"][parent_slots]
-                comparison_indices = (
-                    entry["native_target_request_offsets"] + target_slots
-                )
-                comparison_prob = comparison_probability_caches[1][
-                    comparison_indices
-                ]
-                probability_mismatches.add_(
-                    torch.count_nonzero(
-                        (
-                            target_prob.view(torch.int32)
-                            != comparison_prob.view(torch.int32)
-                        )
-                        & has_kids.unsqueeze(1)
-                    )
-                )
         else:
             target_slots = entry["native_target_slot_by_parent"][parent_slots]
             target_indices = entry["native_target_request_offsets"] + target_slots
             target_prob = target_prob_cache[target_indices]
+        target_prob_pre = target_prob
         target_prob = target_prob / target_prob.sum(dim=-1, keepdim=True)
         kid_tokens = drafts.gather(1, kids.clamp(min=0))
         kid_mask = kids >= 0
         overlaps = torch.gather(target_prob, 1, kid_tokens.clamp(min=0)) * kid_mask
         overlap_mass = overlaps.sum(dim=-1)
         zero_mass = has_kids & (overlap_mass <= 0)
-        source = _fr13_taw_inv_cdf(
+        source, source_total, source_threshold = _fr13_taw_inv_cdf_parts(
             overlaps,
             uniforms[:, level, 0],
         )
@@ -4966,10 +5559,54 @@ def _fr13_fixed32_taw_execute_exact_cuda(
             target_prob,
             residual,
         )
-        rejected_token = _fr13_taw_inv_cdf(
+        (
+            rejected_token,
+            residual_total,
+            residual_threshold,
+        ) = _fr13_taw_inv_cdf_parts(
             residual,
             uniforms[:, level, 2],
         )
+        if gating:
+            _fr13_fixed32_taw_gate_level(
+                entry,
+                comparison_gate,
+                request_rows=request_rows,
+                self_slots=entry["native_self_slot_by_node"][
+                    current.clamp(min=0, max=physical_drafts - 1)
+                ],
+                target_slots=entry["native_target_slot_by_parent"][parent_slots],
+                leaf=leaf,
+                has_kids=has_kids,
+                reference_self={
+                    "pre_normalization": self_prob_pre,
+                    "post_normalization": self_prob,
+                    "cdf_total": self_cdf_total.squeeze(1),
+                    "cdf_threshold": self_cdf_threshold.squeeze(1),
+                    "token": self_token,
+                },
+                reference_target={
+                    "pre_normalization": target_prob_pre,
+                    "post_normalization": target_prob,
+                    "residual": residual,
+                    "overlaps": overlaps,
+                    "source_total": source_total.squeeze(1),
+                    "source_threshold": source_threshold.squeeze(1),
+                    "residual_total": residual_total.squeeze(1),
+                    "residual_threshold": residual_threshold.squeeze(1),
+                    "source": source,
+                    "selected_token": selected_token,
+                    "rejected_token": rejected_token,
+                    "accepted": accepted,
+                    "emitted_token": torch.where(
+                        has_kids & ~accepted,
+                        rejected_token,
+                        selected_token,
+                    ),
+                },
+                probability_mismatches=probability_mismatches,
+                accept_decision_mismatches=accept_decision_mismatches,
+            )
 
         _fr13_fixed32_taw_exact_commit_kernel[(batch_size,)](
             child_table,
@@ -5029,7 +5666,9 @@ def _fr13_fixed32_taw_execute(
     native_precompute: bool | None = None,
     probability_caches: tuple[Any, Any] | None = None,
     comparison_probability_caches: tuple[Any, Any] | None = None,
+    comparison_gate: dict[str, Any] | None = None,
     probability_mismatches=None,
+    accept_decision_mismatches=None,
 ) -> tuple[Any, Any, Any, Any, Any, int]:
     """Dispatch CUDA to exact integer commit fusion and retain the CPU oracle."""
     if target_logits.is_cuda:
@@ -5045,7 +5684,9 @@ def _fr13_fixed32_taw_execute(
             native_precompute=native_precompute,
             probability_caches=probability_caches,
             comparison_probability_caches=comparison_probability_caches,
+            comparison_gate=comparison_gate,
             probability_mismatches=probability_mismatches,
+            accept_decision_mismatches=accept_decision_mismatches,
         )
     return _fr13_fixed32_taw_execute_torch(
         topology,
@@ -5059,7 +5700,9 @@ def _fr13_fixed32_taw_execute(
         native_precompute=native_precompute,
         probability_caches=probability_caches,
         comparison_probability_caches=comparison_probability_caches,
+        comparison_gate=comparison_gate,
         probability_mismatches=probability_mismatches,
+        accept_decision_mismatches=accept_decision_mismatches,
     )
 
 
@@ -5100,12 +5743,12 @@ def _fr13_fixed32_publish_work(
         product_write_multiplier = 1
     taw = {
         "route": (
-            "fixed32_native_precompute_byte_ab_reference_return"
+            _FR13_FIXED32_TAW_NATIVE_DIAGNOSTIC_ROUTE
             if native_selector == "diagnostic"
             else (
-                "fixed32_native_precompute_production_candidate_return"
+                _FR13_FIXED32_TAW_NATIVE_PRODUCTION_ROUTE
                 if native_selector == "production"
-                else "fixed32_pytorch_exact_float_triton_integer_commit"
+                else _FR13_FIXED32_TAW_NATIVE_REFERENCE_ROUTE
             )
         ),
         "preseeded_batches": list(_FR13_FIXED32_BATCHES),
@@ -5326,10 +5969,12 @@ def fr13_fixed32_taw_commit(
             if root_checks:
                 probability_bad = int(probability_mismatches.item())
                 product_bad = int(product_mismatches.item())
-                if probability_bad or product_bad:
+                decision_bad = int(accept_decision_mismatches.item())
+                if probability_bad or product_bad or decision_bad:
                     raise AssertionError(
                         "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE byte mismatch: "
-                        f"probabilities={probability_bad} products={product_bad}"
+                        f"probabilities={probability_bad} products={product_bad} "
+                        f"accept_decisions={decision_bad}"
                     )
                 if (
                     task_marker is not None
@@ -5357,6 +6002,23 @@ def fr13_fixed32_taw_commit(
             tree_self_logits,
             native_precompute=True,
         )
+        normalized_caches = _fr13_fixed32_taw_pinned_normalized_caches(
+            probability_caches,
+            batch_size=batch_size,
+        )
+        comparison_gate: dict[str, Any] = {
+            "self_raw": probability_caches[0],
+            "target_raw": probability_caches[1],
+        }
+        decisions = _fr13_fixed32_taw_all_parent_decisions(
+            topology,
+            entry["native_ab_entry"],
+            drafts,
+            fixed_uniforms,
+            probability_caches,
+            normalized_probability_caches=normalized_caches,
+            gate_capture=comparison_gate,
+        )
         reference = _fr13_fixed32_taw_execute(
             topology,
             entry,
@@ -5368,7 +6030,9 @@ def fr13_fixed32_taw_commit(
             walk_cap=int(topology.WALK_CAP),
             native_precompute=False,
             comparison_probability_caches=probability_caches,
+            comparison_gate=comparison_gate,
             probability_mismatches=probability_mismatches,
+            accept_decision_mismatches=accept_decision_mismatches,
         )
         candidate = _fr13_fixed32_taw_execute_all_parent(
             topology,
@@ -5378,6 +6042,7 @@ def fr13_fixed32_taw_commit(
             fixed_uniforms,
             walk_cap=int(topology.WALK_CAP),
             probability_caches=probability_caches,
+            decisions=decisions,
         )
         candidate_census_events.add_(1)
         for reference_product, candidate_product in zip(
@@ -5385,11 +6050,9 @@ def fr13_fixed32_taw_commit(
             candidate[:5],
             strict=True,
         ):
-            mismatches = torch.count_nonzero(
-                reference_product != candidate_product
+            product_mismatches.add_(
+                torch.count_nonzero(reference_product != candidate_product)
             )
-            product_mismatches.add_(mismatches)
-            accept_decision_mismatches.add_(mismatches)
         (
             output_tokens,
             output_lens,
@@ -6814,13 +7477,25 @@ def _fr13_taw_topology(parents_key, parents_cpu, counts, max_spec_len, device):
     return out
 
 
-def _fr13_taw_inv_cdf(weights, u):
-    """source = inverse-CDF draw: first index where cumsum(weights) > u*mass.
-    weights [B, W] (>=0, rows may be all-zero), u [B] in [0,1)."""
+def _fr13_taw_inv_cdf_parts(weights, u):
+    """Return the inverse-CDF index together with its post-cumsum inputs.
+
+    ``total`` and ``thresh`` are the only values the threshold comparison
+    reads out of the cumulative sum, so they are the separable post-cumsum
+    surface the byte gate compares between reference and candidate.
+    """
     cs = torch.cumsum(weights, dim=-1)
     total = cs[:, -1:]
     thresh = u.unsqueeze(-1).to(weights.dtype) * total
-    return (cs <= thresh).sum(dim=-1).clamp(max=weights.shape[-1] - 1)
+    index = (cs <= thresh).sum(dim=-1).clamp(max=weights.shape[-1] - 1)
+    return index, total, thresh
+
+
+def _fr13_taw_inv_cdf(weights, u):
+    """source = inverse-CDF draw: first index where cumsum(weights) > u*mass.
+    weights [B, W] (>=0, rows may be all-zero), u [B] in [0,1)."""
+    index, _total, _thresh = _fr13_taw_inv_cdf_parts(weights, u)
+    return index
 
 
 def fr13_taw_commit(
