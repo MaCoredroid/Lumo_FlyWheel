@@ -222,6 +222,8 @@ def _arm(tmp: Path, name: str, env: dict[str, str], credential: dict | None) -> 
     return d
 
 
+TIMING_CONTROL = "FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL"
+
 SHARED = {
     "FR13_FIXED32_MODE": "hydra27_fixed32",
     "MAX_NUM_SEQS": "4",
@@ -250,12 +252,17 @@ CREDENTIAL = {
 
 
 def _pair(tmp: Path, *, control_extra=None, candidate_extra=None, credential=None):
-    control_env = dict(SHARED, FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION="0")
+    control_env = dict(
+        SHARED,
+        FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION="0",
+        **{TIMING_CONTROL: "1"},
+    )
     control_env.update(control_extra or {})
     candidate_env = dict(
         SHARED,
         FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION="1",
         FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH="4",
+        **{TIMING_CONTROL: "0"},
     )
     candidate_env.update(candidate_extra or {})
     control = _arm(tmp, "control", control_env, None)
@@ -276,11 +283,12 @@ def test_reducer_accepts_a_clean_single_variable_pair(tmp_path) -> None:
 
 
 def test_control_must_name_the_arm_zero_not_leave_it_unset(tmp_path) -> None:
-    control_env = dict(SHARED)  # selector absent entirely
+    control_env = dict(SHARED, **{TIMING_CONTROL: "1"})  # selector absent
     candidate_env = dict(
         SHARED,
         FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION="1",
         FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH="4",
+        **{TIMING_CONTROL: "0"},
     )
     control = _arm(tmp_path, "control", control_env, None)
     candidate = _arm(tmp_path, "candidate", candidate_env, CREDENTIAL)
@@ -363,3 +371,101 @@ def test_the_reducer_never_claims_to_seal() -> None:
     text = REDUCER.read_text(encoding="utf-8")
     assert "instrument, not a citable seal" in text
     assert "cannot seal" in text or "only phase 4" in text.lower()
+
+
+# ------------------------------------------- the metrics-matched control flag
+
+
+def test_the_flag_changes_the_metrics_class_and_only_that() -> None:
+    """OPTION A, pinned. The flag must move the metrics expectation and nothing else.
+
+    The defect it repairs: the 2026-08-14 production arm was added to the
+    BYTE-DIAGNOSTIC metrics class, which mandates the invocation counter, while a
+    plain fixed32 arm mandates the counter OFF. A timing pair needs both arms at
+    the same counter state, so the pair was unrunnable at any setting. The fix
+    equalises the control UPWARD, because the counter is what powers the
+    engagement needle -- stripping the candidate would have bought a runnable
+    pair by discarding the proof that makes it worth running.
+    """
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    # (a) it participates in the metrics classification
+    block_start = launcher.index("_fixed32_expected_metrics=0")
+    block = launcher[block_start : block_start + 1400]
+    assert f'"$_fr13_gdn_single_launch_timing_control" == "1"' in block
+    assert "_fixed32_expected_metrics=1" in block
+    # (b) it is refused beside ANY serving selector, so it can never be a
+    #     second, unlabelled treatment
+    guard = launcher.index("timing control must serve the incumbent alone")
+    guard_block = launcher[guard - 1500 : guard]
+    for refused in (
+        '"$_fr13_gdn_single_launch_production" == "0"',
+        '"$_fr13_gdn_gqa_group3_production" == "0"',
+        '-z "$_fr13_gdn_path_bv_candidate"',
+        '-z "$_fr13_gdn_path_bv_production"',
+        '-z "$_fr13_gdn_single_launch_pass_json"',
+    ):
+        assert refused in guard_block, refused
+
+
+def test_the_flag_cannot_reach_any_kernel_selection() -> None:
+    """PROVABLY untouched: the selection layers never see the name at all."""
+    for path in (
+        SCRIPTS / "fr10_phase4_patch_vllm_tree_gdn.py",
+        REPO / "src" / "lumo_flywheel_serving" / "fr10_gdn_tree_kernel.py",
+    ):
+        assert TIMING_CONTROL not in path.read_text(encoding="utf-8"), (
+            f"{path.name} can see the control flag; it is supposed to be "
+            "invisible to everything that decides what is served"
+        )
+
+
+def test_the_launcher_mentions_the_flag_only_in_non_selection_roles() -> None:
+    launcher = LAUNCHER.read_text(encoding="utf-8")
+    lines = [
+        line for line in launcher.splitlines()
+        if "_fr13_gdn_single_launch_timing_control" in line
+        or TIMING_CONTROL in line
+    ]
+    assert lines, "flag vanished from the launcher"
+    # declaration, shape case, exclusion guard, metrics class, container export.
+    # No line may assign a GDN selector from it.
+    for line in lines:
+        for selector in (
+            "_fr13_gdn_single_launch_production=",
+            "_fr13_gdn_gqa_group3_production=",
+            "_fr13_gdn_path_bv_candidate=",
+            "_fr13_gdn_path_bv_production=",
+        ):
+            assert selector not in line, f"flag feeds a selector: {line}"
+
+
+def test_runner_gives_the_control_arm_the_flag_and_the_candidate_none() -> None:
+    text = RUNNER.read_text(encoding="utf-8")
+    assert "local timing_control=1" in text
+    assert "timing_control=0" in text
+    assert f'{TIMING_CONTROL}="$timing_control"' in text
+    # derived inside run_arm from the production flag, never passed in, so the
+    # two can never disagree
+    assert "run_arm \"$CONTROL_ARM\" 0".replace("\\", "") in text or 'run_arm "$CONTROL_ARM" 0' in text
+
+
+def test_reducer_requires_the_control_to_be_metrics_matched(tmp_path) -> None:
+    control, candidate = _pair(tmp_path, control_extra={TIMING_CONTROL: "0"})
+    with pytest.raises(pr.PairError, match="not the metrics-matched control"):
+        pr.verify_single_variable_delta(control, candidate, source_commit="a" * 40)
+
+
+def test_reducer_refuses_a_candidate_that_is_also_a_control(tmp_path) -> None:
+    control, candidate = _pair(tmp_path, candidate_extra={TIMING_CONTROL: "1"})
+    with pytest.raises(pr.PairError, match="control-only metrics flag"):
+        pr.verify_single_variable_delta(control, candidate, source_commit="a" * 40)
+
+
+def test_reducer_refuses_a_pair_that_ran_without_the_counter(tmp_path) -> None:
+    control, candidate = _pair(
+        tmp_path,
+        control_extra={"FR10_METRICS": "0"},
+        candidate_extra={"FR10_METRICS": "0"},
+    )
+    with pytest.raises(pr.PairError, match="invocation counter"):
+        pr.verify_single_variable_delta(control, candidate, source_commit="a" * 40)

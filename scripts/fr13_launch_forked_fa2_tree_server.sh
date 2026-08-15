@@ -2917,6 +2917,25 @@ _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_NAMED=0
 _fr13_gdn_single_launch_production=${FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION:-0}
 _fr13_gdn_single_launch_production_batch=${FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH:-}
 _fr13_gdn_single_launch_pass_json=${FR13_FIXED32_GDN_SINGLE_LAUNCH_PASS_JSON:-}
+# THE METRICS-MATCHED CONTROL OF A GDN TIMING PAIR. This flag selects NO kernel.
+# Its entire effect is to move a plain fixed32 arm into the FR10_METRICS=1
+# expectation class, and it exists because of a real defect in the 2026-08-14
+# production arm above: that arm was added to the byte-diagnostic metrics class,
+# which mandates the invocation counter, while a plain fixed32 arm mandates the
+# counter OFF. A timing pair needs both arms at the SAME counter state, so the
+# two contracts made the pair unrunnable at any setting -- the candidate could
+# not go to 0 and the control could not go to 1.
+#
+# The fix equalises UPWARD rather than stripping the candidate, because the
+# counter is what powers the engagement needle that proves the fold actually
+# replaced the incumbent launch, and that proof is the whole reason the timing
+# pair is trustworthy. FR13_FIXED32_BATCH_GDN_BV8_TIMING is the precedent that a
+# metrics=1 timing arm is a legal class.
+#
+# It must remain incapable of changing what is served. It is refused below beside
+# ANY serving selector, it is never read by the patcher or the kernel, and a test
+# pins both of those properties.
+_fr13_gdn_single_launch_timing_control=${FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL:-0}
 case "$_fr13_gdn_gqa_group3_production" in
   0|1) ;;
   *)
@@ -2931,6 +2950,38 @@ case "$_fr13_gdn_single_launch_production" in
     exit 2
     ;;
 esac
+case "$_fr13_gdn_single_launch_timing_control" in
+  0|1) ;;
+  *)
+    echo "FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL must be exactly 0 or 1" >&2
+    exit 2
+    ;;
+esac
+# A CONTROL ARM SERVES THE INCUMBENT AND NOTHING ELSE. If this flag could sit
+# beside a serving selector it would stop being a control and become an
+# unlabelled second treatment, so every selector that can change the served
+# kernel is refused here. That is also what keeps the flag honest as "metrics
+# classification only": there is no configuration in which it accompanies a
+# candidate.
+if [[ "$_fr13_gdn_single_launch_timing_control" == "1" ]]; then
+  [[ -n "${FR13_FIXED32_MODE:-}" \
+     && "$_fr13_gdn_single_launch_production" == "0" \
+     && "$_fr13_gdn_gqa_group3_production" == "0" \
+     && -z "$_fr13_gdn_single_launch_production_batch" \
+     && -z "$_fr13_gdn_single_launch_pass_json" \
+     && -z "$_fr13_gdn_path_bv_candidate" \
+     && -z "$_fr13_gdn_path_bv_production" \
+     && -z "$_fr13_gdn_single_launch_expected_batch" \
+     && "${FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" \
+     && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
+     && -z "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" ]] || {
+    echo "FR13 GDN single-launch timing control must serve the incumbent alone" >&2
+    exit 2
+  }
+fi
 if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
   [[ -n "${FR13_FIXED32_MODE:-}" ]] || {
     echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE requires FR13_FIXED32_MODE" >&2
@@ -3700,6 +3751,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
         || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" \
         || "$_fr13_gdn_gqa_group3_production" == "1" \
         || "$_fr13_gdn_single_launch_production" == "1" \
+        || "$_fr13_gdn_single_launch_timing_control" == "1" \
         || ( "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "1" \
              && "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" == "8" ) ]]; then
     # This is a real exact4 byte diagnostic, never an acceptance/timing arm.
@@ -5834,6 +5886,7 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION="$_fr13_gdn_single_launch_production" \
   -e FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH="$_fr13_gdn_single_launch_production_batch" \
   -e FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_PASS_PATH=/logs/fr13_fixed32_gdn_single_launch.production_credential.json \
+  -e FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL="$_fr13_gdn_single_launch_timing_control" \
   -e FR13_FIXED32_GDN_PATH_BV_LIVE_JSON=/logs/fr13_fixed32_gdn_path_bv.live_pass.json \
   -e FR13_FIXED32_BATCH_GDN_BV_CANDIDATE="${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
   -e FR13_FIXED32_BATCH_GDN_BV_PRODUCTION="${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" \

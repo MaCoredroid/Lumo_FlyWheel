@@ -172,6 +172,30 @@ def verify_single_variable_delta(
     if candidate.get("FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION") != "1":
         raise PairError("candidate arm did not serve the GDN single-launch arm")
 
+    # THE METRICS-MATCHED CONTROL FLAG. The production arm sits in the
+    # FR10_METRICS=1 expectation class while a plain fixed32 arm mandates the
+    # counter OFF, so without this flag the pair is unrunnable at any setting --
+    # the candidate cannot go to 0 and the control cannot go to 1. The flag
+    # equalises the control upward and selects no kernel. It is the ONE field
+    # allowed to differ between the arms besides the selector, so it is checked
+    # explicitly in both directions rather than left out of the drift comparison
+    # and forgotten.
+    if control.get("FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL") != "1":
+        raise PairError(
+            "control arm is not the metrics-matched control; its counter state "
+            "does not match the candidate and the contrast is not comparable"
+        )
+    if candidate.get("FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL") != "0":
+        raise PairError(
+            "candidate arm carries the control-only metrics flag; the production "
+            "arm is already in the metrics=1 class and must not also be a control"
+        )
+    if control.get("FR10_METRICS") != "1":
+        raise PairError(
+            "the pair did not run with the invocation counter on; the candidate "
+            "engagement needle cannot have proven the fold engaged"
+        )
+
     # Everything that must be IDENTICAL. If any of these differ the pair is not
     # single-variable and no amount of windowing repairs it.
     shared = (
@@ -236,6 +260,7 @@ def verify_single_variable_delta(
         "mode": control.get("FR13_FIXED32_MODE"),
         "slots": int(control.get("MAX_NUM_SEQS", "0") or 0),
         "metrics_on_both_arms": control.get("FR10_METRICS"),
+        "control_is_metrics_matched": True,
         "credential_scope": credential.get("credential_scope"),
         "credential_expected_batch": credential.get("expected_batch"),
         "credential_source_commit": credential.get("source_commit"),

@@ -314,9 +314,17 @@ run_arm() {
   local production=$2
   local batch=""
   local credential=""
+  # The control arm carries the metrics-matched control flag; the candidate does
+  # not, because the production arm already puts itself in the metrics=1 class.
+  # This is the ONE field that differs between the arms besides the selector
+  # itself, and it selects no kernel -- it only equalises the counter state so
+  # the pair is comparable. Deriving it here rather than passing it means the two
+  # can never be set inconsistently by a caller.
+  local timing_control=1
   if [[ "$production" == "1" ]]; then
     batch=$PRODUCTION_BATCH
     credential=$GDN_SL_CREDENTIAL
+    timing_control=0
   fi
   echo "===== $arm: pool16 B${PRODUCTION_BATCH} GDN single_launch_production=$production ====="
   # AGENT_WALL_S is EMPTY on purpose: the width-4 baseline was measured with no
@@ -344,6 +352,7 @@ run_arm() {
       FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION="$production" \
       FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH="$batch" \
       FR13_FIXED32_GDN_SINGLE_LAUNCH_PASS_JSON="$credential" \
+      FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL="$timing_control" \
       FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=0 \
       FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH= \
       FR13_FIXED32_GDN_GQA_GROUP3_PASS_JSON= \
@@ -392,6 +401,7 @@ run_arm() {
      && "$(grep -Fxc "FR10_METRICS=1" "$container_env")" -eq 1 \
      && "$(grep -Fxc "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION=$production" "$container_env")" -eq 1 \
      && "$(grep -Fxc "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_BATCH=$batch" "$container_env")" -eq 1 \
+     && "$(grep -Fxc "FR13_FIXED32_GDN_SINGLE_LAUNCH_TIMING_CONTROL=$timing_control" "$container_env")" -eq 1 \
      && "$(grep -Fxc "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION=0" "$container_env")" -eq 1 ]] \
     || { echo "$arm did not run the declared single-variable B4 pool16 selector" >&2; return 4; }
   local credential_sidecar="$arm_dir/logs/fr13_fixed32_gdn_single_launch.production_credential.json"
