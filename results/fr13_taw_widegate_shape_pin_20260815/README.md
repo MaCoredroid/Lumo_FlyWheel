@@ -79,7 +79,9 @@ places:
   **both** the diagnostic and production arms
 * `_fr13_fixed32_taw_all_parent_decisions` and
   `_fr13_fixed32_taw_execute_all_parent` raise
-* `_fr13_fixed32_taw_native_live_entry` refuses to gate B=1
+* `_fr13_fixed32_taw_native_live_entry` **declines to gate** B=1 — it returns
+  the reference-passthrough sentinel (`None`), it does not raise. See the
+  correction below; the original build raised here and that was a defect.
 * `_fr13_fixed32_taw_native_live_pass_emit` refuses to record B=1
 
 ### 4. Required production batches: `(1, 4)` -> `(4,)`
@@ -140,3 +142,49 @@ same fixture, same injected 2-ULP normalization-sum drift, both gate widths:
 
 GPU-dependent bitwise reduction claims are marked and skip without CUDA; the
 shape semantics are asserted on CPU.
+
+## Correction — the B=1 refusal was applied at the wrong layer (2026-08-15)
+
+The first phase-2 live gate run
+(`output/fr13_taw_widegate_b4_gate_20260815T162842Z`, superseded) killed the
+engine 19 minutes in. Not a byte mismatch — the instrument.
+
+`_fr13_fixed32_taw_native_live_entry` is called by the runtime overlay
+(`_fr13_fixed32_observed_begin` -> `_fr13_fixed32_taw_full_graph_begin`) on
+**every measured forward**, before any per-batch selector runs. The build had
+it RAISE below the pinned minimum. So when `astropy__astropy-12907` finished at
+16:45:38 and the campaign drained from four running requests to one, the next
+engine step hit the entry hook at B=1 and took EngineCore down with
+`FR13 fixed32 device row-map failed`. Draining to a partial batch is ordinary
+scheduling, not a defect, and a diagnostic must never be able to kill the
+engine it is only supposed to observe.
+
+The fix is refuse-at-the-right-layer, matching how the FA2 dual gate treats its
+untreated widths:
+
+* `_fr13_fixed32_taw_native_live_entry` returns `None` — no gate, no capture,
+  no record, the engine keeps serving the stock reference.
+* `fr13_fixed32_taw_native_live_gate_begin` / `..._on_replay` and the overlay's
+  `_fr13_fixed32_taw_full_graph_begin` / `..._on_replay` propagate a `no_gate`
+  status instead of arming or reading counters.
+* Every refusal that guards a real violation still RAISES: the all-parent
+  decision and execute paths (the candidate must never SERVE below B=2), the
+  pass-record emitter (must never RECORD below B=2), and the final acceptance
+  census (a B=1 census means the caller lost track of what was gated).
+
+Tests: `test_live_entry_declines_to_gate_batch_one_instead_of_raising` (entry
+returns the sentinel, both hooks report `no_gate`, no live-pass file is
+written), plus `test_pass_emitter_still_refuses_to_record_batch_one` and
+`test_final_census_still_refuses_an_ungated_batch_one` holding the raises. The
+superseded `test_live_gate_and_pass_emitter_refuse_batch_one` asserted the
+defect and was replaced.
+
+Changing the entry re-pinned the identity chain to a fixpoint: TAW source
+contract `654503f8...` -> `c8e32edf...`, kernel file `f50dd60d...` ->
+`6e1f09f5...`, packed CFWD overlay `8cfd0455...` -> `65be6890...` (regenerated,
+byte-identical across two emissions).
+
+What the wrecked run did prove: its live bundle reached `status=production_ready`
+at 16:38 with `qualified_batches [2,3,4]` and **zero probability and zero product
+mismatches on every widened surface for all three batches**. The shape-pinned
+math held; only the untreated-width path was defective.

@@ -401,9 +401,58 @@ def test_batch_one_serves_the_reference_walk_in_both_arms(
         )
 
 
-def test_live_gate_and_pass_emitter_refuse_batch_one(
+def test_live_entry_declines_to_gate_batch_one_instead_of_raising(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The live entry hook must DECLINE at an untreated width, not raise.
+
+    Regression test for the 2026-08-15 engine kill: the entry hook is invoked by
+    the runtime overlay on every measured forward, before any per-batch selector
+    runs.  Raising there took the engine down the moment the campaign drained to
+    one running request -- a routine scheduling event.  The correct behaviour is
+    the same reference-passthrough the FA2 dual gate gives its untreated widths:
+    no gate, no capture, no record, engine keeps serving the stock reference.
+    """
+    topology = taw._fr13_fixed32_topology()
+    mode = "tail6_fixed32"
+    _set_fixed_env(monkeypatch, topology, mode)
+    monkeypatch.setattr(
+        taw, "_fr13_fixed32_taw_native_selector", lambda **_kwargs: "diagnostic"
+    )
+    live_json = tmp_path / "live_pass.json"
+    monkeypatch.setenv(
+        "FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_LIVE_JSON", str(live_json)
+    )
+
+    # The sentinel itself: no exception, and explicitly not an entry.
+    assert (
+        taw._fr13_fixed32_taw_native_live_entry(mode=mode, batch_size=1) is None
+    )
+
+    # Both live-gate hooks decline rather than arming or reading counters.
+    begin = taw.fr13_fixed32_taw_native_live_gate_begin(mode=mode, batch_size=1)
+    assert begin == {"status": "no_gate", "batch_size": 1}
+    replay = taw.fr13_fixed32_taw_native_live_gate_on_replay(
+        mode=mode, batch_size=1
+    )
+    assert replay == {"status": "no_gate", "batch_size": 1}
+
+    # Nothing was captured and nothing was recorded.
+    assert not live_json.exists()
+
+    # The treated widths are untouched by the decline.
+    for batch_size in (2, 3, 4):
+        assert (
+            taw._fr13_fixed32_taw_native_selector(batch_size=batch_size)
+            == "diagnostic"
+        )
+
+
+def test_pass_emitter_still_refuses_to_record_batch_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Declining to GATE B=1 must not soften the refusal to RECORD it."""
     topology = taw._fr13_fixed32_topology()
     mode = "tail6_fixed32"
     _set_fixed_env(monkeypatch, topology, mode)
@@ -411,13 +460,36 @@ def test_live_gate_and_pass_emitter_refuse_batch_one(
         taw, "_fr13_fixed32_taw_native_selector", lambda **_kwargs: "diagnostic"
     )
     with pytest.raises(RuntimeError, match="refuses to serve below B=2"):
-        taw.fr13_fixed32_taw_native_live_gate_begin(mode=mode, batch_size=1)
-    with pytest.raises(RuntimeError, match="refuses to serve below B=2"):
         taw._fr13_fixed32_taw_native_live_pass_emit(
             mode=mode,
             batch_size=1,
             task_marker="swe_verified:campaign4_" + "a" * 64,
             evidence_route="full_graph_replay",
+        )
+
+
+def test_final_census_still_refuses_an_ungated_batch_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The verdict path stays fail-closed: a B=1 census is a contract violation."""
+    topology = taw._fr13_fixed32_topology()
+    mode = "tail6_fixed32"
+    _set_fixed_env(monkeypatch, topology, mode)
+    monkeypatch.setattr(
+        taw, "_fr13_fixed32_taw_native_selector", lambda **_kwargs: "diagnostic"
+    )
+    with pytest.raises(RuntimeError, match="never gates below B=2"):
+        taw.fr13_fixed32_taw_candidate_acceptance_census(
+            mode=mode,
+            batch_size=1,
+            completed_events=1,
+            events_sha256="a" * 64,
+            candidate_binding={
+                "operation": "fixed32_all_parent_commit_v2",
+                "candidate_so_sha256": "b" * 64,
+                "candidate_source_sha256": "c" * 64,
+                "task_ids": ["astropy__astropy-12907"],
+            },
         )
 
 

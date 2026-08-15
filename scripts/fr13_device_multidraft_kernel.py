@@ -1588,7 +1588,7 @@ _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS: dict[str, Any] | None = None
 _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256: str | None = None
 _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "654503f8e35cb1778688d0b1d09b7a85001cd84922d32f9f866bcd32a5a946cb"
+    "c8e32edf98453234bbf870c878d9f452930515b185061c6b9840282618ede9c3"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -2363,15 +2363,27 @@ def _fr13_fixed32_taw_native_live_pass_emit(
 
 def _fr13_fixed32_taw_native_live_entry(
     *, mode: str, batch_size: int,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
+    """Resolve the diagnostic cache entry, or decline to gate an untreated width.
+
+    ``None`` is the reference-passthrough sentinel: the width is one the
+    shape-pinned candidate never serves, so there is nothing to compare, nothing
+    to capture and nothing to record -- the engine simply keeps running the
+    stock reference, exactly as the FA2 dual gate treats its untreated widths.
+
+    This hook is called by the runtime overlay on EVERY measured forward, before
+    any per-batch selector is consulted. Raising here therefore kills the engine
+    the moment the campaign drains below the qualifiable set, which is a routine
+    scheduling event (a task finishing) and not a defect in the candidate. The
+    hard refusals stay where a real violation would occur: the selector's
+    production route, the all-parent decision/execute path (the candidate must
+    never SERVE below the pinned minimum) and the pass-record emitter (it must
+    never RECORD below it).
+    """
     topology, valid_mask = _fr13_fixed32_runtime_contract(mode)
     del topology
     if int(batch_size) < _FR13_FIXED32_TAW_PINNED_MIN_BATCH:
-        raise RuntimeError(
-            "FR13 fixed32 TAW native live gate cannot qualify batch "
-            f"{int(batch_size)}: the shape-pinned candidate refuses to serve "
-            f"below B={_FR13_FIXED32_TAW_PINNED_MIN_BATCH}"
-        )
+        return None
     matches = [
         entry
         for key, entry in _FR13_FIXED32_TAW_CACHE.items()
@@ -2402,6 +2414,8 @@ def fr13_fixed32_taw_native_live_gate_begin(
     entry = _fr13_fixed32_taw_native_live_entry(
         mode=mode, batch_size=batch_size
     )
+    if entry is None:
+        return {"status": "no_gate", "batch_size": int(batch_size)}
     if entry.get("native_ab_live_pass_emitted", False):
         return {"status": "passed", "batch_size": int(batch_size)}
     task_marker = _fr13_fixed32_taw_native_real_event_marker()
@@ -2433,6 +2447,8 @@ def fr13_fixed32_taw_native_live_gate_on_replay(
     entry = _fr13_fixed32_taw_native_live_entry(
         mode=mode, batch_size=batch_size
     )
+    if entry is None:
+        return {"status": "no_gate", "batch_size": int(batch_size)}
     if entry.get("native_ab_live_pass_emitted", False):
         return {"status": "passed", "batch_size": int(batch_size)}
     if entry.get("native_ab_live_gate_pending") is not True:
@@ -2521,6 +2537,16 @@ def fr13_fixed32_taw_candidate_acceptance_census(
     entry = _fr13_fixed32_taw_native_live_entry(
         mode=mode, batch_size=batch_size
     )
+    if entry is None:
+        # The final census is a verdict path: it is only ever asked to reduce a
+        # width the gate actually qualified. Being asked for an ungated width
+        # means the caller lost track of what was gated, so this stays a hard
+        # refusal rather than a passthrough.
+        raise RuntimeError(
+            "FR13 candidate-token TAW census cannot reduce batch "
+            f"{int(batch_size)}: the shape-pinned candidate never gates below "
+            f"B={_FR13_FIXED32_TAW_PINNED_MIN_BATCH}"
+        )
     comparisons = int(entry["native_ab_candidate_census_events"].item())
     probability_bad = int(entry["native_ab_probability_mismatches"].item())
     product_bad = int(entry["native_ab_product_mismatches"].item())
