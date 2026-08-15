@@ -138,7 +138,15 @@ def _prepare_attempt_workspace(source_workspace: Path, task_dir: Path) -> Path:
     shutil.copytree(
         source_workspace,
         attempt_workspace,
-        ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache"),
+        ignore=shutil.ignore_patterns(
+            ".git",
+            "__pycache__",
+            ".pytest_cache",
+            ".venv",
+            "output",
+            "results",
+            ".cache",
+        ),
     )
     return attempt_workspace
 

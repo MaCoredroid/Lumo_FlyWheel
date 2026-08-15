@@ -20,6 +20,31 @@ from lumo_flywheel_serving.task_orchestrator import get_variant_quality_contract
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+# Directories that are irrelevant to authored-pack validation but dominate the
+# repo on disk (.venv ~1.4G, output/ ~497M, results/ ~1.1G). Copying them once
+# per test multiplied by 24 call sites and pytest's retained basetemps is what
+# filled the host disk; validate_authored_asset_pack only ever reads
+# scenario_families/, verifiers/, verifier_data/ and two top-level manifests.
+_REPO_COPY_IGNORE = shutil.ignore_patterns(
+    ".venv",
+    "output",
+    "results",
+    ".git",
+    ".pytest_cache",
+    "__pycache__",
+    ".cache",
+    "node_modules",
+)
+
+
+def _copy_repo(src: Path, dst: Path) -> None:
+    """Copy the repo root for validation tests without the heavyweight dirs.
+
+    symlinks=True keeps the .venv symlink from being dereferenced on checkouts
+    where it points at a shared virtualenv.
+    """
+    shutil.copytree(src, dst, symlinks=True, ignore=_REPO_COPY_IGNORE)
+
 
 def test_validate_authored_codex_long_asset_pack() -> None:
     summary = validate_authored_asset_pack(REPO_ROOT)
@@ -957,7 +982,7 @@ def test_search_gate_visible_task_files_surface_selector_stability_without_hidde
 
 def test_validate_authored_pack_detects_checksum_drift(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     drifted_test = (
         repo_copy
@@ -977,7 +1002,7 @@ def test_validate_authored_pack_detects_checksum_drift(tmp_path: Path) -> None:
 
 def test_validate_authored_pack_rejects_untrusted_pytest_bootstrap(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     family_yaml = (
         repo_copy
@@ -1037,7 +1062,7 @@ def test_hidden_test_node_to_path_rejects_path_traversal(tmp_path: Path) -> None
 
 def test_validate_authored_pack_rejects_untrusted_ci_runner(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     ci_runner = (
         repo_copy
@@ -1063,7 +1088,7 @@ def test_validate_authored_pack_rejects_untrusted_ci_runner(tmp_path: Path) -> N
 
 def test_validate_authored_pack_rejects_ci_runner_early_success_shortcut(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     ci_runner = (
         repo_copy
@@ -1092,7 +1117,7 @@ def test_validate_authored_pack_rejects_ci_runner_early_success_shortcut(tmp_pat
 
 def test_validate_authored_pack_allows_verify_sh_to_execute_milestone_helpers(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
@@ -1115,7 +1140,7 @@ def test_validate_authored_pack_allows_verify_sh_to_execute_milestone_helpers(tm
 
 def test_validate_authored_pack_rejects_comment_only_milestone_source(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
@@ -1132,7 +1157,7 @@ def test_validate_authored_pack_rejects_comment_only_milestone_source(tmp_path: 
 
 def test_validate_authored_pack_rejects_comment_only_milestone_invocation(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
@@ -1149,7 +1174,7 @@ def test_validate_authored_pack_rejects_comment_only_milestone_invocation(tmp_pa
 
 def test_validate_authored_pack_rejects_shadowed_milestone_helper(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
@@ -1169,7 +1194,7 @@ def test_validate_authored_pack_rejects_shadowed_milestone_helper(tmp_path: Path
 
 def test_validate_authored_pack_rejects_milestone_helper_called_without_gating_result(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
@@ -1191,7 +1216,7 @@ def test_validate_authored_pack_rejects_milestone_helper_called_without_gating_r
 
 def test_validate_authored_pack_rejects_missing_functional_check_result_consumption(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
@@ -1217,7 +1242,7 @@ def test_validate_authored_pack_rejects_missing_functional_check_result_consumpt
 
 def test_validate_authored_pack_rejects_comment_only_functional_check_consumption(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
@@ -1239,7 +1264,7 @@ def test_validate_authored_pack_rejects_comment_only_functional_check_consumptio
 
 def test_validate_authored_pack_rejects_dead_string_functional_check_reference(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
@@ -1261,7 +1286,7 @@ def test_validate_authored_pack_rejects_dead_string_functional_check_reference(t
 
 def test_validate_authored_pack_rejects_unused_functional_check_reader(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     verify_path = repo_copy / "verifiers" / "report-cli-markdown-evolution" / "verify.sh"
     verify_text = verify_path.read_text(encoding="utf-8")
@@ -1285,7 +1310,7 @@ def test_validate_authored_pack_rejects_unused_functional_check_reader(tmp_path:
 
 def test_validate_authored_pack_requires_multi_step_milestones(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     family_yaml = repo_copy / "scenario_families" / "owner-field-cross-layer" / "family.yaml"
     payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
@@ -1298,7 +1323,7 @@ def test_validate_authored_pack_requires_multi_step_milestones(tmp_path: Path) -
 
 def test_validate_authored_pack_requires_multiple_breakage_surfaces(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     family_yaml = repo_copy / "scenario_families" / "owner-field-cross-layer" / "family.yaml"
     payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
@@ -1311,7 +1336,7 @@ def test_validate_authored_pack_requires_multiple_breakage_surfaces(tmp_path: Pa
 
 def test_validate_authored_pack_rejects_shallow_cross_layer_variant_layout(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     docs_path = (
         repo_copy
@@ -1331,7 +1356,7 @@ def test_validate_authored_pack_rejects_shallow_cross_layer_variant_layout(tmp_p
 
 def test_validate_authored_pack_rejects_shallow_ci_variant_layout(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     workflow_path = (
         repo_copy
@@ -1352,7 +1377,7 @@ def test_validate_authored_pack_rejects_shallow_ci_variant_layout(tmp_path: Path
 
 def test_validate_authored_pack_accepts_modern_variant_quality_assets(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     family_yaml = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "family.yaml"
     payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
@@ -1449,7 +1474,7 @@ def test_validate_authored_pack_accepts_modern_variant_quality_assets(tmp_path: 
 
 def test_validate_authored_pack_accepts_family_level_template_quality_assets(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     family_yaml = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "family.yaml"
     payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
@@ -1551,7 +1576,7 @@ def test_validate_authored_pack_accepts_family_level_template_quality_assets(tmp
 
 def test_validate_authored_pack_accepts_family_level_template_oracle_assets(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     family_yaml = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "family.yaml"
     payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
@@ -1654,7 +1679,7 @@ def test_validate_authored_pack_accepts_family_level_template_oracle_assets(tmp_
 
 def test_validate_authored_pack_rejects_missing_interactive_repo_brief_source(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     family_yaml = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "family.yaml"
     payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
@@ -1772,7 +1797,7 @@ def test_validate_authored_pack_rejects_missing_interactive_repo_brief_source(tm
 
 def test_validate_authored_pack_rejects_missing_declared_template_evidence_asset(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     family_yaml = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "family.yaml"
     payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
@@ -1867,7 +1892,7 @@ def test_validate_authored_pack_rejects_missing_declared_template_evidence_asset
 
 def test_validate_authored_pack_rejects_directory_calibration_asset(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     family_yaml = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "family.yaml"
     payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))
@@ -1968,7 +1993,7 @@ def test_validate_authored_pack_rejects_directory_calibration_asset(tmp_path: Pa
 
 def test_validate_authored_pack_rejects_family_level_template_path_traversal(tmp_path: Path) -> None:
     repo_copy = tmp_path / "repo"
-    shutil.copytree(REPO_ROOT, repo_copy)
+    _copy_repo(REPO_ROOT, repo_copy)
 
     family_yaml = repo_copy / "scenario_families" / "report-cli-markdown-evolution" / "family.yaml"
     payload = yaml.safe_load(family_yaml.read_text(encoding="utf-8"))

@@ -102,7 +102,21 @@ def _prepare_build_context(variant_dir: Path, repo_override: Path | None) -> tup
     if smoke_block in dockerfile_text:
         dockerfile_text = dockerfile_text.split("RUN set -eux; \\\n", 1)[0].rstrip() + "\n\nRUN true\n"
     (temp_dir / "Dockerfile").write_text(dockerfile_text, encoding="utf-8")
-    shutil.copytree(repo_override, temp_dir / "repo")
+    shutil.copytree(
+        repo_override,
+        temp_dir / "repo",
+        symlinks=True,
+        ignore=shutil.ignore_patterns(
+            ".venv",
+            "output",
+            "results",
+            ".git",
+            ".pytest_cache",
+            "__pycache__",
+            ".cache",
+            "node_modules",
+        ),
+    )
     return temp_dir, True
 
 

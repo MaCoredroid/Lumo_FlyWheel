@@ -28,3 +28,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Repo-copying tests leave multi-GB basetemps behind; pytest keeps 3 numbered
+# runs by default. Keep only the last failing run so a green suite reclaims
+# its scratch space immediately.
+tmp_path_retention_policy = "failed"
+tmp_path_retention_count = 1

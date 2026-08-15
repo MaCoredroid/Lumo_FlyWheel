@@ -9285,7 +9285,7 @@ class L0cKernelMutationRunner:
             except PermissionError:
                 cls._docker_chmod_tree_writable(workspace_source)
                 shutil.rmtree(workspace_source)
-        shutil.copytree(base_source, workspace_source)
+        shutil.copytree(base_source, workspace_source, symlinks=True)
 
     @staticmethod
     def _clip_preflight_output(stdout: str, stderr: str, *, limit: int = 12000) -> str:
@@ -10055,7 +10055,7 @@ class L0cKernelMutationRunner:
             raise RuntimeError(f"cutlass_python_source_missing_after_stage: {base_python_source}")
         if not base_cxx_source.exists():
             raise RuntimeError(f"cutlass_cxx_source_missing_after_stage: {base_cxx_source}")
-        shutil.copytree(base_source, workspace_source)
+        shutil.copytree(base_source, workspace_source, symlinks=True)
         python_source = workspace_source / L0C_FP8_GEMM_CUTLASS_PYTHON_SOURCE_RELATIVE
         cxx_source = workspace_source / L0C_FP8_GEMM_CUTLASS_CXX_SOURCE_RELATIVE
 
