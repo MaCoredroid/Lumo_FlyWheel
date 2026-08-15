@@ -621,6 +621,20 @@ FIXED32_INGRESS_LEDGER_KEYS = frozenset(
         "record_sha256",
     }
 )
+# Optional per-request token usage (FR13 token reconciliation). Absent on every
+# row of a ledger written before the fields existed, present on every row of one
+# written after -- which is what tells "old schema" from "new schema that
+# metered nothing". They are inside record_sha256, so the counts are tamper
+# evident on the same chain as the request identities.
+FIXED32_INGRESS_LEDGER_USAGE_KEYS = frozenset(
+    {"prompt_tokens", "completion_tokens"}
+)
+FIXED32_INGRESS_LEDGER_KEYS_WITH_USAGE = (
+    FIXED32_INGRESS_LEDGER_KEYS | FIXED32_INGRESS_LEDGER_USAGE_KEYS
+)
+FIXED32_INGRESS_LEDGER_USAGE_EVENTS = frozenset(
+    {"request_complete", "logical_complete"}
+)
 SWE_VERIFIED_DATASET = "princeton-nlp/SWE-bench_Verified"
 FIXED32_COUNTER_KEYS = frozenset(
     {
@@ -2268,6 +2282,14 @@ def _fixed32_ingress_record_contract(
         raise GateError(f"{label}: invalid ingress route")
     if task_key_id is not None and task_key_id not in canonical_task_keys:
         raise GateError(f"{label}: noncanonical task key")
+    for key in sorted(FIXED32_INGRESS_LEDGER_USAGE_KEYS):
+        value = row.get(key)
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise GateError(f"{label}: invalid ingress token usage")
+        if event not in FIXED32_INGRESS_LEDGER_USAGE_EVENTS:
+            raise GateError(f"{label}: token usage on a non-completion event")
     if status_code is not None and (
         isinstance(status_code, bool)
         or not isinstance(status_code, int)
@@ -2458,10 +2480,18 @@ def load_fixed32_ingress_ledger(
     active_engine: dict[str, tuple[str, str, str, str]] = {}
     began = False
     finalized = False
+    # One ledger, one schema, decided by its first row. Rows that disagree
+    # about whether the usage keys exist were not written by any proxy.
+    first_row = exact_json_text(lines[0], label=f"{path}:1")
+    expected_keys = (
+        FIXED32_INGRESS_LEDGER_KEYS_WITH_USAGE
+        if FIXED32_INGRESS_LEDGER_USAGE_KEYS <= set(first_row)
+        else FIXED32_INGRESS_LEDGER_KEYS
+    )
     for sequence, line in enumerate(lines):
         label = f"{path}:{sequence + 1}"
         row = exact_json_text(line, label=label)
-        exact_keys(row, FIXED32_INGRESS_LEDGER_KEYS, label)
+        exact_keys(row, expected_keys, label)
         if (
             row["schema"] != FIXED32_INGRESS_LEDGER_SCHEMA
             or type(row["seq"]) is not int

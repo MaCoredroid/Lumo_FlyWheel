@@ -125,6 +125,23 @@ _FIXED32_LEDGER_KEYS = frozenset(
         "record_sha256",
     }
 )
+# Per-request token usage on the ingress ledger (FR13 token reconciliation).
+#
+# These are OPTIONAL KEYS, not optional values. A ledger written by a proxy that
+# predates them carries none of them on any row; a ledger written by this proxy
+# carries both on EVERY row (null wherever usage is not legal). That is what lets
+# a reader tell "old schema" from "new schema that recorded nothing" -- the
+# distinction the whole loud-failure guard rests on. Do not make them
+# per-row-optional.
+#
+# They live in the row dict, so they join `record_sha256` automatically: the
+# token counts are tamper-evident on the same chain as the request identities.
+_FIXED32_LEDGER_USAGE_KEYS = frozenset({"prompt_tokens", "completion_tokens"})
+_FIXED32_LEDGER_KEYS_WITH_USAGE = _FIXED32_LEDGER_KEYS | _FIXED32_LEDGER_USAGE_KEYS
+# Usage is legal only where a response has actually been metered: the engine's
+# request completion and the proxy's logical completion. Everywhere else it is
+# null, and a non-null value there is a forged row.
+_FIXED32_LEDGER_USAGE_EVENTS = frozenset({"request_complete", "logical_complete"})
 _FIXED32_PROXY_EVENTS = frozenset(
     {
         "request_rejected",
@@ -521,10 +538,29 @@ class Fixed32DigestLedger:
         outcome: str | None = None,
         reason: str | None = None,
         evidence_sha256: str | None = None,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
     ) -> dict[str, Any]:
         with self._lock:
             if self._poisoned:
                 raise Fixed32IngressError("fixed32 ingress ledger is poisoned")
+            for value in (prompt_tokens, completion_tokens):
+                # bool is an int in Python; this codebase refuses that
+                # substitution everywhere a count is meant.
+                if value is not None and (
+                    isinstance(value, bool)
+                    or not isinstance(value, int)
+                    or value < 0
+                ):
+                    raise Fixed32IngressError(
+                        "fixed32 ingress ledger token usage is invalid"
+                    )
+            if event not in _FIXED32_LEDGER_USAGE_EVENTS and (
+                prompt_tokens is not None or completion_tokens is not None
+            ):
+                raise Fixed32IngressError(
+                    "fixed32 ingress ledger token usage event is invalid"
+                )
             row: dict[str, Any] = {
                 "schema": FIXED32_INGRESS_LEDGER_SCHEMA,
                 "seq": self._records,
@@ -540,6 +576,8 @@ class Fixed32DigestLedger:
                 "outcome": outcome,
                 "reason": reason,
                 "evidence_sha256": evidence_sha256,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
                 "prev_sha256": self._head,
             }
             digest = hashlib.sha256(_fixed32_canonical_bytes(row)).hexdigest()
@@ -569,6 +607,22 @@ def _validate_fixed32_ledger_row(row: dict[str, Any], *, role: str) -> None:
     route = row["route"]
     if row["phase"] not in {"preflight", "campaign"}:
         raise Fixed32IngressError("fixed32 ingress ledger phase is invalid")
+    for key in _FIXED32_LEDGER_USAGE_KEYS:
+        value = row.get(key)
+        if value is None:
+            continue
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < 0
+        ):
+            raise Fixed32IngressError(
+                "fixed32 ingress ledger token usage is invalid"
+            )
+        if event not in _FIXED32_LEDGER_USAGE_EVENTS:
+            raise Fixed32IngressError(
+                "fixed32 ingress ledger token usage event is invalid"
+            )
     if route is not None and route not in {"chat", "responses"}:
         raise Fixed32IngressError("fixed32 ingress ledger route is invalid")
     status_code = row["status_code"]
@@ -777,8 +831,15 @@ def verify_fixed32_ingress_ledger(
     zero_attempt_logical_requests = 0
     failed_attempts = 0
     failed_engine_requests = 0
+    # One ledger, one schema. Rows that disagree about whether the usage keys
+    # exist are not a mixed-version ledger -- there is no writer that produces
+    # that -- they are a spliced one.
+    usage_schema = _FIXED32_LEDGER_USAGE_KEYS <= set(rows[0])
+    expected_keys = (
+        _FIXED32_LEDGER_KEYS_WITH_USAGE if usage_schema else _FIXED32_LEDGER_KEYS
+    )
     for seq, row in enumerate(rows):
-        if set(row) != _FIXED32_LEDGER_KEYS:
+        if set(row) != expected_keys:
             raise Fixed32IngressError("fixed32 ingress ledger row keys mismatch")
         if (
             row["schema"] != FIXED32_INGRESS_LEDGER_SCHEMA
@@ -1170,6 +1231,8 @@ class Fixed32ProxyIngress:
         logical: Fixed32LogicalRequest,
         *,
         aborted: bool,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
     ) -> None:
         with self._lock:
             if self._active.get(logical.logical_id) != logical:
@@ -1197,6 +1260,8 @@ class Fixed32ProxyIngress:
                         else None
                     )
                 ),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
             )
             del self._active[logical.logical_id]
             del self._logical_attempt_counts[logical.logical_id]
@@ -1984,7 +2049,14 @@ class Fixed32EngineIngress:
             self._task_counts[task_key_id]["accepted_engine_requests"] += 1
             return context
 
-    def complete(self, context: Fixed32EngineRequest, *, exception: bool) -> None:
+    def complete(
+        self,
+        context: Fixed32EngineRequest,
+        *,
+        exception: bool,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+    ) -> None:
         with self._lock:
             if self._active.get(context.engine_request_id_sha256) != context:
                 raise Fixed32IngressError("fixed32 engine completion has no acceptance")
@@ -1998,6 +2070,8 @@ class Fixed32EngineIngress:
                 outcome="exception" if exception else "completed",
                 reason="app_error" if exception else None,
                 evidence_sha256=context.evidence_sha256,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
             )
             del self._active[context.engine_request_id_sha256]
             if not exception:
@@ -3233,6 +3307,59 @@ def _responses_sse_payload_type(block: bytes) -> str | None:
     return None
 
 
+def _fixed32_usage_counts(usage: Any) -> tuple[int | None, int | None]:
+    """Read (prompt, completion) from either OpenAI usage spelling."""
+    if not isinstance(usage, dict):
+        return None, None
+
+    def pick(*names: str) -> int | None:
+        for name in names:
+            value = usage.get(name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 0
+            ):
+                continue
+            return value
+        return None
+
+    return (
+        pick("prompt_tokens", "input_tokens"),
+        pick("completion_tokens", "output_tokens"),
+    )
+
+
+def _fixed32_block_may_carry_usage(block: bytes) -> bool:
+    """Cheap prefilter so the streaming hot path parses only usage blocks."""
+    return b'"usage":{' in block or b'"usage": {' in block
+
+
+def _fixed32_absorb_usage(sink: dict[str, Any] | None, payload: Any) -> None:
+    """Record the last complete usage report one response emitted.
+
+    Chat completions with ``stream_options.include_usage`` -- which is what
+    qwen-code sends -- put usage on a trailing chunk with an empty ``choices``
+    array; the Responses API puts it on ``response.usage`` of
+    ``response.completed``; a non-streaming reply puts it at the top level.
+    All three are the ENGINE's count for this one request, which is the number
+    the ingress ledger must carry. The agent's own later self-report is a
+    different, lossier number and is not consulted here.
+    """
+    if sink is None or not isinstance(payload, dict):
+        return
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        response = payload.get("response")
+        usage = response.get("usage") if isinstance(response, dict) else None
+    prompt_tokens, completion_tokens = _fixed32_usage_counts(usage)
+    if prompt_tokens is None or completion_tokens is None:
+        return
+    sink["prompt_tokens"] = prompt_tokens
+    sink["completion_tokens"] = completion_tokens
+    sink["usage_reports"] = int(sink.get("usage_reports", 0)) + 1
+
+
 def _update_synthetic_response_context(context: dict[str, Any], block: bytes) -> None:
     for payload in _responses_sse_payloads(block):
         response = payload.get("response")
@@ -4232,6 +4359,7 @@ def _write_chunked_stream(
     *,
     capture_state: dict[str, Any] | None = None,
     request_path: str | None = None,
+    usage_sink: dict[str, Any] | None = None,
 ) -> None:
     def write_chunk(chunk: bytes) -> None:
         handler.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
@@ -4373,6 +4501,11 @@ def _write_chunked_stream(
                 if capture_state is not None:
                     for payload in _responses_sse_payloads(normalized):
                         _extract_response_metadata(payload, capture_state)
+                if usage_sink is not None and _fixed32_block_may_carry_usage(
+                    normalized
+                ):
+                    for payload in _responses_sse_payloads(normalized):
+                        _fixed32_absorb_usage(usage_sink, payload)
                 # If this is response.completed and the upstream skipped emitting
                 # output_item.added for function_call items present in the final
                 # output array, synthesize them now BEFORE forwarding the
@@ -4453,6 +4586,9 @@ def _write_chunked_stream(
             if capture_state is not None:
                 for payload in _responses_sse_payloads(normalized):
                     _extract_response_metadata(payload, capture_state)
+            if usage_sink is not None and _fixed32_block_may_carry_usage(normalized):
+                for payload in _responses_sse_payloads(normalized):
+                    _fixed32_absorb_usage(usage_sink, payload)
             write_chunk(normalized)
         if saw_event and not saw_completed:
             write_chunk(_synthetic_response_completed_block(synthetic_response_context))
@@ -4824,6 +4960,10 @@ def build_proxy_handler(
                 return
 
         def do_POST(self) -> None:  # noqa: N802
+            # Reset per request: one handler instance serves a whole keep-alive
+            # connection, and a stale sink would credit this request's tokens to
+            # the previous one.
+            self._fixed32_usage_sink = None
             if ingress is not None and self.path in {
                 "/admin/load_tuned_config",
                 "/admin/invalidate",
@@ -4889,6 +5029,14 @@ def build_proxy_handler(
                 )
                 return
             self._fixed32_logical_request = logical
+            # The proxy terminates this completion, so it is the one hop that
+            # sees the engine's own usage report for it. Collect it here and
+            # stamp it on the logical_complete row, where it joins the digest
+            # chain. Sourced from the live response -- NOT from
+            # vllm_request_metrics.jsonl, which is written on a path fixed32
+            # traffic never takes.
+            usage_sink: dict[str, Any] = {}
+            self._fixed32_usage_sink = usage_sink
             aborted = False
             try:
                 self._do_POST_inner()
@@ -4896,7 +5044,13 @@ def build_proxy_handler(
                 aborted = True
                 raise
             finally:
-                ingress.finish_logical(logical, aborted=aborted)
+                self._fixed32_usage_sink = None
+                ingress.finish_logical(
+                    logical,
+                    aborted=aborted,
+                    prompt_tokens=usage_sink.get("prompt_tokens"),
+                    completion_tokens=usage_sink.get("completion_tokens"),
+                )
 
         def _do_POST_inner(self) -> None:
             if self.path in ADMIN_PATHS:
@@ -5450,8 +5604,13 @@ def build_proxy_handler(
                 if capture_active
                 else None
             )
+            # Present only under fixed32 exclusive ingress; do_POST owns it.
+            fixed32_usage_sink: dict[str, Any] | None = getattr(
+                self, "_fixed32_usage_sink", None
+            )
 
             if nonstream_bypass_active and isinstance(non_streaming_parsed, dict):
+                _fixed32_absorb_usage(fixed32_usage_sink, non_streaming_parsed)
                 try:
                     _synthesize_sse_stream_from_non_streaming_json(
                         self,
@@ -5474,7 +5633,13 @@ def build_proxy_handler(
 
             if response_headers.get("Transfer-Encoding") == "chunked":
                 try:
-                    _write_chunked_stream(self, upstream, capture_state=capture_state, request_path=self.path)
+                    _write_chunked_stream(
+                        self,
+                        upstream,
+                        capture_state=capture_state,
+                        request_path=self.path,
+                        usage_sink=fixed32_usage_sink,
+                    )
                 finally:
                     admission.release(ticket)
                 if capture_active and capture_state is not None:
@@ -5489,6 +5654,19 @@ def build_proxy_handler(
                     )
                 return
 
+            if fixed32_usage_sink is not None:
+                if isinstance(non_streaming_parsed, dict):
+                    _fixed32_absorb_usage(fixed32_usage_sink, non_streaming_parsed)
+                else:
+                    # Non-streaming chat: nothing upstream of here parsed the
+                    # body, so read the engine's usage block off it directly.
+                    try:
+                        _fixed32_absorb_usage(
+                            fixed32_usage_sink,
+                            json.loads(response_content.decode("utf-8")),
+                        )
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        pass
             try:
                 self.wfile.write(response_content)
                 self.wfile.flush()

@@ -135,6 +135,12 @@ FIXED32_INGRESS_LEDGER_KEYS = frozenset(
         "record_sha256",
     }
 )
+FIXED32_INGRESS_LEDGER_USAGE_KEYS = frozenset(
+    {"prompt_tokens", "completion_tokens"}
+)
+FIXED32_INGRESS_LEDGER_KEYS_WITH_USAGE = (
+    FIXED32_INGRESS_LEDGER_KEYS | FIXED32_INGRESS_LEDGER_USAGE_KEYS
+)
 FIXED32_SLO_GATES = frozenset(
     {
         "tail6_fixed32_legacy_slo",
@@ -2488,10 +2494,18 @@ def validate_real_task_artifacts(
         rows: list[dict[str, Any]] = []
         previous = "0" * 64
         phase = "preflight"
+        # One ledger, one schema: either every row carries the optional
+        # per-request token usage keys or no row does.
+        expected_ledger_keys = (
+            FIXED32_INGRESS_LEDGER_KEYS_WITH_USAGE
+            if FIXED32_INGRESS_LEDGER_USAGE_KEYS
+            <= set(strict_json_text(lines[0], label=f"{ledger_path}:1"))
+            else FIXED32_INGRESS_LEDGER_KEYS
+        )
         for sequence, line in enumerate(lines):
             row = require_exact_keys(
                 strict_json_text(line, label=f"{ledger_path}:{sequence + 1}"),
-                FIXED32_INGRESS_LEDGER_KEYS,
+                expected_ledger_keys,
                 f"{ledger_path}:{sequence + 1}",
             )
             claimed = row["record_sha256"]

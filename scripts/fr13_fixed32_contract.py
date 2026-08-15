@@ -37,6 +37,25 @@ QWEN_CAMPAIGN_METRIC_SCHEMA = (
 QWEN_CAMPAIGN_TASK_METRIC_SCHEMA = (
     "fr13-fixed32-qwen-campaign-task-metrics-v1"
 )
+QWEN_CAMPAIGN_TOKEN_LEDGER_SCHEMA = (
+    "fr13-fixed32-ingress-ledger-token-usage-v1"
+)
+FIXED32_INGRESS_LEDGER_RECORD_SCHEMA = "fr13.fixed32.ingress-ledger-record.v1"
+_FIXED32_LEDGER_USAGE_KEYS = ("prompt_tokens", "completion_tokens")
+_FIXED32_LEDGER_USAGE_EVENTS = frozenset(
+    {"request_complete", "logical_complete"}
+)
+_FIXED32_LEDGER_COMPLETION_EVENTS = {
+    "proxy": "logical_complete",
+    "engine": "request_complete",
+}
+# What the two reconciliation bases are called in published evidence. The
+# ledger basis is the engine's own per-request count, joined to the digest
+# chain; the trace basis is qwen-code's self-report, which under-credits its
+# own hidden requests (rejected compactions, discarded first turns, delegated
+# sub-agents reporting 0/0) and is therefore a structural witness only.
+QWEN_TOKEN_BASIS_LEDGER = "fixed32_ingress_ledger_usage"
+QWEN_TOKEN_BASIS_TRACE = "qwen_trace_result_usage"
 
 _QWEN_COMPACTION_FAILURE_TEXT_RE = re.compile(
     r"\[API Error: Context is too large to send safely after automatic "
@@ -2637,11 +2656,176 @@ def validate_fixed32_trace_model_requests(
     }
 
 
+def fixed32_ingress_ledger_token_usage(
+    raw: bytes,
+    *,
+    role: str = "proxy",
+) -> dict[str, Any]:
+    """Sum tamper-evident per-request token usage off a fixed32 ingress ledger.
+
+    THE METER THIS REPLACES. Campaign token reconciliation used to close
+    against qwen-code's self-reported ``result.usage``. That is a third-party
+    agent's own accounting and it under-credits its own hidden requests: a
+    rejected compaction the engine billed and the agent discarded, a retried
+    first turn, a delegated sub-agent that reports ``0/0`` on every record.
+    On the 2026-08-15 width-4 screen that cost 189,780 prompt and 5,654
+    generation tokens across 3 of 32 task-instances -- deterministic failure
+    at n=16, and pure luck at n=4.
+
+    The ledger is the other meter: the proxy terminates every completion, so
+    it records the ENGINE's own count per request, on the same SHA-256 chain
+    that carries the request identities. Editing a token count invalidates
+    the chain from that row onward.
+
+    FAIL-CLOSED ON EMPTINESS. ``vllm_request_metrics.jsonl`` recorded nothing
+    for months and no gate noticed, because "absent" and "empty" were
+    indistinguishable from "fine". Here they are not: a ledger written before
+    the usage fields existed carries the keys on NO row (``absent``, and the
+    caller may fall back); a ledger written by a proxy that has them carries
+    them on EVERY row (``present``), and if none of its completions is metered
+    that is a raised ContractError, never a silent fallback.
+    """
+    if role not in _FIXED32_LEDGER_COMPLETION_EVENTS:
+        raise ContractError("fixed32 ingress ledger role is invalid")
+    if not isinstance(raw, bytes) or not raw or not raw.endswith(b"\n"):
+        raise ContractError(
+            "fixed32 ingress ledger is empty or truncated"
+        )
+    completion_event = _FIXED32_LEDGER_COMPLETION_EVENTS[role]
+
+    def reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ContractError(
+                    f"fixed32 ingress ledger row has duplicate key {key!r}"
+                )
+            result[key] = value
+        return result
+
+    rows: list[dict[str, Any]] = []
+    try:
+        for line in raw.decode("utf-8").splitlines():
+            row = json.loads(line, object_pairs_hook=reject_duplicate_pairs)
+            if not isinstance(row, dict):
+                raise ContractError("fixed32 ingress ledger row is not an object")
+            rows.append(row)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ContractError(
+            f"fixed32 ingress ledger JSONL is invalid: {error}"
+        ) from error
+    if not rows:
+        raise ContractError("fixed32 ingress ledger is empty or truncated")
+
+    usage_present = all(key in rows[0] for key in _FIXED32_LEDGER_USAGE_KEYS)
+    previous = "0" * 64
+    prompt_tokens = 0
+    completion_tokens = 0
+    usage_rows = 0
+    completion_rows = 0
+    unmetered_completions = 0
+    for sequence, row in enumerate(rows):
+        present = [key in row for key in _FIXED32_LEDGER_USAGE_KEYS]
+        if any(present) != all(present) or all(present) is not usage_present:
+            # No writer produces a ledger whose rows disagree about the
+            # schema. One that does was assembled, not recorded.
+            raise ContractError(
+                "fixed32 ingress ledger mixes token usage schemas"
+            )
+        claimed = row.get("record_sha256")
+        unsigned = {
+            key: value for key, value in row.items() if key != "record_sha256"
+        }
+        if (
+            row.get("schema") != FIXED32_INGRESS_LEDGER_RECORD_SCHEMA
+            or type(row.get("seq")) is not int
+            or row["seq"] != sequence
+            or row.get("role") != role
+            or row.get("prev_sha256") != previous
+            or not isinstance(claimed, str)
+            or hashlib.sha256(
+                json.dumps(
+                    unsigned,
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+            != claimed
+        ):
+            raise ContractError(
+                f"fixed32 ingress ledger chain differs at record {sequence}"
+            )
+        previous = claimed
+        event = row.get("event")
+        is_completion = event == completion_event
+        if is_completion:
+            completion_rows += 1
+        if not usage_present:
+            continue
+        values = [row[key] for key in _FIXED32_LEDGER_USAGE_KEYS]
+        metered = [value is not None for value in values]
+        if any(
+            value is not None
+            and (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 0
+            )
+            for value in values
+        ):
+            raise ContractError(
+                f"fixed32 ingress ledger token usage is invalid at record "
+                f"{sequence}"
+            )
+        if any(metered) and not is_completion:
+            raise ContractError(
+                f"fixed32 ingress ledger meters a non-completion event at "
+                f"record {sequence}"
+            )
+        if any(metered) != all(metered):
+            raise ContractError(
+                f"fixed32 ingress ledger token usage is half-recorded at "
+                f"record {sequence}"
+            )
+        if all(metered):
+            usage_rows += 1
+            prompt_tokens += values[0]
+            completion_tokens += values[1]
+        elif is_completion and row.get("outcome") == "completed":
+            unmetered_completions += 1
+
+    if usage_present and completion_rows and not usage_rows:
+        raise ContractError(
+            "fixed32 ingress ledger records no token usage: the meter wrote "
+            f"{completion_rows} completions and metered none of them"
+        )
+    if usage_present and unmetered_completions:
+        raise ContractError(
+            "fixed32 ingress ledger token usage is incomplete: "
+            f"{unmetered_completions} of {completion_rows} completions carry "
+            "no token counts"
+        )
+    return {
+        "schema": QWEN_CAMPAIGN_TOKEN_LEDGER_SCHEMA,
+        "role": role,
+        "records": len(rows),
+        "chain_head_sha256": previous,
+        "token_usage_schema": "present" if usage_present else "absent",
+        "completion_records": completion_rows,
+        "token_usage_records": usage_rows,
+        "prompt_tokens": prompt_tokens,
+        "generation_tokens": completion_tokens,
+    }
+
+
 def validate_fixed32_qwen_campaign_metrics(
     tasks: list[dict[str, Any]],
     *,
     metrics_pre: bytes,
     metrics_post: bytes,
+    ingress_ledger: bytes | None = None,
+    ingress_ledger_role: str = "proxy",
 ) -> dict[str, Any]:
     """Reconcile one global Prometheus window across concurrent Qwen tasks."""
     if not isinstance(tasks, list) or len(tasks) < 2:
@@ -2899,7 +3083,38 @@ def validate_fixed32_qwen_campaign_metrics(
             f"(capped split visible={capped_visible} "
             f"compaction={capped_compaction})"
         )
-    if (
+    # ---------------------------------------------------------------- #
+    # Which meter closes the token identity                             #
+    # ---------------------------------------------------------------- #
+    # The branch is decided by FIELD PRESENCE in the ingress ledger, never by
+    # task count. A ledger written before the usage fields existed takes the
+    # qwen-trace path so every historical artifact still validates, byte for
+    # byte. A ledger written by a proxy that has them takes the ledger-sum
+    # path -- and if that ledger metered nothing, the reader above has already
+    # raised, because a meter recording nothing must fail the audit rather
+    # than fall back to the meter it was built to replace.
+    ledger_usage: dict[str, Any] | None = None
+    if ingress_ledger is not None:
+        ledger_usage = fixed32_ingress_ledger_token_usage(
+            ingress_ledger,
+            role=ingress_ledger_role,
+        )
+        if ledger_usage["token_usage_schema"] != "present":
+            ledger_usage = None
+    if ledger_usage is not None:
+        if (
+            deltas["prompt_tokens"] != ledger_usage["prompt_tokens"]
+            or deltas["generation_tokens"] != ledger_usage["generation_tokens"]
+        ):
+            raise ContractError(
+                "fixed32 qwen campaign ingress ledger and vLLM token usage do "
+                "not reconcile: vLLM "
+                f"{deltas['prompt_tokens']}/{deltas['generation_tokens']} vs "
+                f"ledger {ledger_usage['prompt_tokens']}/"
+                f"{ledger_usage['generation_tokens']} over "
+                f"{ledger_usage['token_usage_records']} metered requests"
+            )
+    elif (
         deltas["prompt_tokens"] != result_prompt_total
         or deltas["generation_tokens"] != result_generation_total
     ):
@@ -2959,6 +3174,44 @@ def validate_fixed32_qwen_campaign_metrics(
         ),
         "tasks": task_rows,
     }
+    # Which meter closed the identity is part of the claim, so it is published
+    # INSIDE the hashed evidence -- and with it the gap the agent's own report
+    # would have left, so the under-crediting is on the record rather than
+    # merely absorbed. Added only on the ledger path: on the compatibility
+    # path the evidence, and therefore its digest, stays byte-exact with every
+    # proof written before this existed.
+    token_reconciliation: dict[str, Any] = {
+        "basis": QWEN_TOKEN_BASIS_TRACE,
+        "vllm_prompt_tokens": deltas["prompt_tokens"],
+        "vllm_generation_tokens": deltas["generation_tokens"],
+        "qwen_trace_prompt_tokens": result_prompt_total,
+        "qwen_trace_generation_tokens": result_generation_total,
+        "qwen_trace_prompt_token_gap": (
+            deltas["prompt_tokens"] - result_prompt_total
+        ),
+        "qwen_trace_generation_token_gap": (
+            deltas["generation_tokens"] - result_generation_total
+        ),
+    }
+    if ledger_usage is not None:
+        token_reconciliation.update(
+            {
+                "basis": QWEN_TOKEN_BASIS_LEDGER,
+                "ledger_schema": ledger_usage["schema"],
+                "ledger_role": ledger_usage["role"],
+                "ledger_records": ledger_usage["records"],
+                "ledger_chain_head_sha256": ledger_usage["chain_head_sha256"],
+                "ledger_completion_records": ledger_usage[
+                    "completion_records"
+                ],
+                "ledger_token_usage_records": ledger_usage[
+                    "token_usage_records"
+                ],
+                "ledger_prompt_tokens": ledger_usage["prompt_tokens"],
+                "ledger_generation_tokens": ledger_usage["generation_tokens"],
+            }
+        )
+        metric_evidence["token_reconciliation"] = dict(token_reconciliation)
     metric_evidence_sha256 = hashlib.sha256(
         json.dumps(
             metric_evidence,
@@ -3025,6 +3278,9 @@ def validate_fixed32_qwen_campaign_metrics(
         "metric_evidence": metric_evidence,
         "metric_evidence_sha256": metric_evidence_sha256,
         "tasks": task_results,
+        # Always returned, on both paths, so a caller can see which meter ran
+        # without reaching into the hashed evidence to find out.
+        "token_reconciliation": token_reconciliation,
     }
 
 
