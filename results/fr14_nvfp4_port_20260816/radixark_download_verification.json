@@ -1,0 +1,164 @@
+{
+ "repo": "RadixArk/Qwen3.8-27B-NVFP4",
+ "revision": "554ebba9b5f1b79dc11246341960360e6ef05ef4",
+ "local_dir": "/home/mark/shared/models/qwen3.8-27b-nvfp4-radixark",
+ "hf_tree_entry_count": 22,
+ "local_incomplete_files": 0,
+ "all_present": true,
+ "all_sizes_match": true,
+ "all_lfs_sha_match": true,
+ "note": "config.json and hf_quant_config.json sizes/shas move after radixark_kv_surgery.py; this record was taken BEFORE the surgery and the .pre_kv_surgery.bak files reproduce these bytes exactly",
+ "files": {
+  ".gitattributes": {
+   "hf_size": 1570,
+   "present": true,
+   "local_size": 1570,
+   "size_match": true
+  },
+  ".quant_summary.txt": {
+   "hf_size": 314291,
+   "present": true,
+   "local_size": 314291,
+   "size_match": true
+  },
+  "LICENSE": {
+   "hf_size": 11544,
+   "present": true,
+   "local_size": 11544,
+   "size_match": true
+  },
+  "README.md": {
+   "hf_size": 4574,
+   "present": true,
+   "local_size": 4574,
+   "size_match": true
+  },
+  "chat_template.jinja": {
+   "hf_size": 8952,
+   "present": true,
+   "local_size": 8952,
+   "size_match": true
+  },
+  "config.json": {
+   "hf_size": 73003,
+   "present": true,
+   "local_size": 73003,
+   "size_match": true,
+   "local_size_postsurgery": 72904,
+   "compared_against": "config.json.pre_kv_surgery.bak",
+   "presurgery_sha256": "7ff41ec6f96ad50efea3c92751cd261b63839d39936eb6e6ffc9066db8672740"
+  },
+  "conversion-manifest.json": {
+   "hf_size": 23587,
+   "present": true,
+   "local_size": 23587,
+   "size_match": true
+  },
+  "generation_config.json": {
+   "hf_size": 214,
+   "present": true,
+   "local_size": 214,
+   "size_match": true
+  },
+  "hf_quant_config.json": {
+   "hf_size": 53749,
+   "present": true,
+   "local_size": 53749,
+   "size_match": true,
+   "local_size_postsurgery": 53711,
+   "compared_against": "hf_quant_config.json.pre_kv_surgery.bak",
+   "presurgery_sha256": "0f39e8cd23abdfb79adc89ac1b19acad990aa6ac32973f9ab0a67d1e3449535c"
+  },
+  "merges.txt": {
+   "hf_size": 3353259,
+   "present": true,
+   "local_size": 3353259,
+   "size_match": true
+  },
+  "model-00001-of-00003.safetensors": {
+   "hf_size": 9965652544,
+   "present": true,
+   "local_size": 9965652544,
+   "size_match": true,
+   "hf_lfs_oid": "fbcdb5ba1cdda462b5f38592d071e772c4d398afea61a0aa9188b32d1a239a79",
+   "local_sha256": "fbcdb5ba1cdda462b5f38592d071e772c4d398afea61a0aa9188b32d1a239a79",
+   "sha_match": true
+  },
+  "model-00002-of-00003.safetensors": {
+   "hf_size": 9985757064,
+   "present": true,
+   "local_size": 9985757064,
+   "size_match": true,
+   "hf_lfs_oid": "db6146a5464fb0a891181b93c81593f0ca65c602eb14120a1c2b1b09bca11f85",
+   "local_sha256": "db6146a5464fb0a891181b93c81593f0ca65c602eb14120a1c2b1b09bca11f85",
+   "sha_match": true
+  },
+  "model-00003-of-00003.safetensors": {
+   "hf_size": 1970287672,
+   "present": true,
+   "local_size": 1970287672,
+   "size_match": true,
+   "hf_lfs_oid": "d3cfb92742e30c8b46564665791dbe0a86ed64cfc02b1275081530793c0c9581",
+   "local_sha256": "d3cfb92742e30c8b46564665791dbe0a86ed64cfc02b1275081530793c0c9581",
+   "sha_match": true
+  },
+  "model.safetensors.index.json": {
+   "hf_size": 214866,
+   "present": true,
+   "local_size": 214866,
+   "size_match": true
+  },
+  "preprocessor_config.json": {
+   "hf_size": 390,
+   "present": true,
+   "local_size": 390,
+   "size_match": true
+  },
+  "qualification-criteria.json": {
+   "hf_size": 1145,
+   "present": true,
+   "local_size": 1145,
+   "size_match": true
+  },
+  "qualification.json": {
+   "hf_size": 2717,
+   "present": true,
+   "local_size": 2717,
+   "size_match": true
+  },
+  "tensor-audit.json": {
+   "hf_size": 539,
+   "present": true,
+   "local_size": 539,
+   "size_match": true
+  },
+  "tokenizer.json": {
+   "hf_size": 12809320,
+   "present": true,
+   "local_size": 12809320,
+   "size_match": true,
+   "hf_lfs_oid": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+   "local_sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+   "sha_match": true
+  },
+  "tokenizer_config.json": {
+   "hf_size": 1121,
+   "present": true,
+   "local_size": 1121,
+   "size_match": true
+  },
+  "video_preprocessor_config.json": {
+   "hf_size": 385,
+   "present": true,
+   "local_size": 385,
+   "size_match": true
+  },
+  "vocab.json": {
+   "hf_size": 6722759,
+   "present": true,
+   "local_size": 6722759,
+   "size_match": true
+  }
+ },
+ "verdict": "COMPLETE"
+}
