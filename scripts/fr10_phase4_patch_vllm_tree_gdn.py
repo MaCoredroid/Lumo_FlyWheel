@@ -26705,6 +26705,236 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             f"[FR13_DRAFT_VOCAB] DISABLED (shim build failed): {_fr13_dvk_e!r}",
                             flush=True,
                         )
+                # FR14 ARM B -- DVK PHASE 1: dequantise the sliced NVFP4 rows
+                # to BF16 at boot.
+                #
+                # Under the RadixArk aggressive checkpoint lm_head is a 4-tensor
+                # ModelOpt NVFP4 set, so the shim above walks a QUANTIZED head
+                # for the first time. Two facts make the slice itself correct
+                # as-is, and they are worth stating because they are not
+                # obvious:
+                #
+                #  1. The scales on disk are [out, in/16], so a row slice picks
+                #     consistent rows of weight AND scale. But that is NOT the
+                #     tensor we walk: FlashInferCutlassNvFp4LinearKernel
+                #     .process_weights_after_loading replaces weight_scale with
+                #     swizzle_blockscale(...), which keeps the logical shape
+                #     [248320, 320] and interleaves rows via
+                #     reshape(M/128,4,32,K/4,4).permute(0,1,4,3,2,5).
+                #  2. That permutation never crosses a 128-ROW TILE BOUNDARY,
+                #     and it is identical within every tile. The FR13 DVK block
+                #     map's 128-id granularity -- chosen years earlier for fp8
+                #     block-scale alignment -- is therefore exactly what makes
+                #     the swizzled scale sliceable. Proven numerically at the
+                #     real [248320, 320] shape, with a non-128-aligned control
+                #     slice that correctly FAILS, in
+                #     results/fr14_nvfp4_port_20260816/
+                #     radixark_dvk_swizzle_check.py.
+                #
+                # So the index_select above is correct and no de-swizzle /
+                # re-swizzle step is needed. What remains is that the FIVE K64
+                # draft-head reads then feed BF16 GEMV units and a 128-block
+                # map that are SEALED FR13 artifacts. Phase 1 keeps them
+                # byte-identical by dequantising the 65,536 sliced rows once,
+                # here, at boot: 671,088,640 B of BF16, exactly the number
+                # scripts/fr13_hardware_floor_ledger.py pins as
+                # SUBSET_HEAD_BYTES. (PHASE 2 -- reading those slices AS NVFP4
+                # at 188,743,680 B, worth 8.834 ms -- needs an FP4 GEMV unit
+                # and carries its own byte gate. It is NOT this.)
+                #
+                # FAIL-CLOSED ON PURPOSE, no _fr13_dvk_dead fallback: if this
+                # cannot be done, the run would quietly fall back to reading
+                # the FULL head five times, which is a different byte profile
+                # from the pinned floor. A wrong number is worse than no boot.
+                if (
+                    not getattr(self, "_fr13_dvk_dead", False)
+                    and getattr(self, "_fr13_dvk_shim", None) is not None
+                    and not getattr(self, "_fr13_dvk_dequantised", False)
+                    and hasattr(self._fr13_dvk_shim, "weight_scale")
+                ):
+                    _fr13_dvkq_sh = self._fr13_dvk_shim
+                    # self.model.lm_head, not the local _fr13_dvk_lm: that
+                    # name only exists on the branch that just BUILT the shim.
+                    _fr13_dvkq_lm = self.model.lm_head
+                    _fr13_dvkq_qm = type(
+                        _fr13_dvkq_lm.quant_method
+                    ).__name__
+                    if _fr13_dvkq_qm != "ModelOptNvFp4LinearMethod":
+                        raise RuntimeError(
+                            "FR14 DVK dequant-at-slice is qualified only for "
+                            "ModelOptNvFp4LinearMethod; the head resolved to "
+                            f"{_fr13_dvkq_qm}"
+                        )
+                    _fr13_dvkq_w = _fr13_dvkq_sh.weight
+                    _fr13_dvkq_s = _fr13_dvkq_sh.weight_scale
+                    _fr13_dvkq_pad = int(
+                        getattr(_fr13_dvkq_lm, "weights_padding_cols", 0)
+                    )
+                    # Every one of these is load-bearing for the arithmetic
+                    # below, so none of them is allowed to be "probably fine".
+                    # 248320 % 32 == 0 and 5120 % 32 == 0, so CUTLASS asks for
+                    # no padding; a non-zero pad would silently add K columns
+                    # the dequant would then materialise as real weights.
+                    if (
+                        _fr13_dvkq_pad != 0
+                        or _fr13_dvkq_w.dtype != torch.uint8
+                        or _fr13_dvkq_w.dim() != 2
+                        or _fr13_dvkq_w.shape[0] != _fr13_dvk_configured
+                        or _fr13_dvkq_w.shape[1] * 2 != 5120
+                        or _fr13_dvkq_s.dim() != 2
+                        or _fr13_dvkq_s.shape[0] != _fr13_dvk_configured
+                        or _fr13_dvkq_s.shape[1] != 5120 // 16
+                        or _fr13_dvk_configured % 128 != 0
+                    ):
+                        raise RuntimeError(
+                            "FR14 DVK dequant-at-slice geometry contract "
+                            f"failed: weight={tuple(_fr13_dvkq_w.shape)}"
+                            f"/{_fr13_dvkq_w.dtype} "
+                            f"scale={tuple(_fr13_dvkq_s.shape)}"
+                            f"/{_fr13_dvkq_s.dtype} "
+                            f"padding_cols={_fr13_dvkq_pad} "
+                            f"K={_fr13_dvk_configured}"
+                        )
+                    _fr13_dvkq_gs = getattr(
+                        _fr13_dvkq_lm, "weight_global_scale", None
+                    )
+                    if (
+                        _fr13_dvkq_gs is None
+                        or _fr13_dvkq_gs.numel() != 1
+                    ):
+                        raise RuntimeError(
+                            "FR14 DVK dequant-at-slice needs the head's "
+                            "weight_global_scale (ModelOpt renames "
+                            "weight_scale_2 to it in "
+                            "process_weights_after_loading)"
+                        )
+                    # vLLM's OWN dequant, not a reimplementation: this is the
+                    # exact call EmulationNvFp4LinearKernel.apply_weights makes
+                    # (nvfp4_emulation_utils.run_nvfp4_emulations), so the
+                    # BF16 rows we produce are by construction the same numbers
+                    # the NVFP4 GEMM is computing against. swizzle=True because
+                    # the FlashInfer kernel swizzled the scale; the emulation
+                    # kernel passes False only because it never swizzles.
+                    from vllm.model_executor.layers.quantization.utils.nvfp4_emulation_utils import (  # noqa: E501
+                        dequantize_to_dtype as _fr13_dvkq_dequant,
+                    )
+
+                    # CHUNKED over 8192-row groups. break_fp4_bytes expands
+                    # every packed byte into two int64 indices before the
+                    # lookup, so a whole-head pass would peak at several GB of
+                    # transient int64/float32 on a unified-memory pool that
+                    # already holds the 46 GiB KV reservation. 8192 is a whole
+                    # number of the 128-row tiles the swizzle inversion needs,
+                    # so each chunk is independently de-swizzlable -- the same
+                    # property that makes the row slice legal at all.
+                    _fr13_dvkq_chunk = 8192
+                    if _fr13_dvk_configured % _fr13_dvkq_chunk != 0:
+                        raise RuntimeError(
+                            "FR14 DVK dequant chunk size must divide K: "
+                            f"K={_fr13_dvk_configured} "
+                            f"chunk={_fr13_dvkq_chunk}"
+                        )
+                    _fr13_dvkq_bf16 = torch.empty(
+                        (_fr13_dvk_configured, 5120),
+                        dtype=torch.bfloat16,
+                        device=_fr13_dvkq_w.device,
+                    )
+                    for _fr13_dvkq_lo in range(
+                        0, _fr13_dvk_configured, _fr13_dvkq_chunk
+                    ):
+                        _fr13_dvkq_hi = _fr13_dvkq_lo + _fr13_dvkq_chunk
+                        _fr13_dvkq_bf16[_fr13_dvkq_lo:_fr13_dvkq_hi] = (
+                            _fr13_dvkq_dequant(
+                                _fr13_dvkq_w.data[
+                                    _fr13_dvkq_lo:_fr13_dvkq_hi
+                                ].view(torch.uint8),
+                                _fr13_dvkq_s.data[
+                                    _fr13_dvkq_lo:_fr13_dvkq_hi
+                                ],
+                                _fr13_dvkq_gs,
+                                torch.bfloat16,
+                                16,
+                                swizzle=True,
+                            )
+                        )
+                    _fr13_dvkq_bf16 = _fr13_dvkq_bf16.contiguous()
+                    if (
+                        tuple(_fr13_dvkq_bf16.shape)
+                        != (_fr13_dvk_configured, 5120)
+                        or _fr13_dvkq_bf16.dtype != torch.bfloat16
+                        or tuple(_fr13_dvkq_bf16.stride()) != (5120, 1)
+                        or not _fr13_dvkq_bf16.is_contiguous()
+                    ):
+                        raise RuntimeError(
+                            "FR14 DVK dequant produced "
+                            f"{tuple(_fr13_dvkq_bf16.shape)}"
+                            f"/{_fr13_dvkq_bf16.dtype}"
+                            f"/{tuple(_fr13_dvkq_bf16.stride())}, not a "
+                            f"contiguous BF16 [{_fr13_dvk_configured}, 5120]"
+                        )
+                    _fr13_dvkq_sh.weight = _fr13_dvkq_bf16
+                    # Drop every quantisation-only attribute the shim inherited.
+                    # Leaving a stale swizzled scale or an alpha next to a BF16
+                    # weight is how a downstream reader silently applies a
+                    # scale twice.
+                    for _fr13_dvkq_a in (
+                        "weight_scale",
+                        "weight_scale_2",
+                        "weight_global_scale",
+                        "input_scale",
+                        "input_global_scale",
+                        "input_global_scale_inv",
+                        "alpha",
+                        "weights_padding_cols",
+                        "marlin_input_dtype",
+                    ):
+                        if hasattr(_fr13_dvkq_sh, _fr13_dvkq_a):
+                            delattr(_fr13_dvkq_sh, _fr13_dvkq_a)
+                    # The shim is now a K64 BF16 head, so its declared widths
+                    # must say so. output_size_per_partition and logical_widths
+                    # were copied verbatim from the full head (248320) and are
+                    # what a quant method would size its output by.
+                    _fr13_dvkq_sh.output_size_per_partition = (
+                        _fr13_dvk_configured
+                    )
+                    _fr13_dvkq_sh.logical_widths = [_fr13_dvk_configured]
+                    _fr13_dvkq_sh.input_size_per_partition = 5120
+                    if (
+                        list(_fr13_dvkq_sh.logical_widths)
+                        != [_fr13_dvkq_sh.output_size_per_partition]
+                        or sum(_fr13_dvkq_sh.logical_widths)
+                        != _fr13_dvkq_sh.weight.shape[0]
+                    ):
+                        raise RuntimeError(
+                            "FR14 DVK shim widths are inconsistent with the "
+                            "dequantised weight: "
+                            f"logical_widths={_fr13_dvkq_sh.logical_widths} "
+                            "output_size_per_partition="
+                            f"{_fr13_dvkq_sh.output_size_per_partition} "
+                            f"rows={_fr13_dvkq_sh.weight.shape[0]}"
+                        )
+                    # Hand the shim the unquantized method so
+                    # `_sh.quant_method.apply(_sh, h, bias=None)` is a plain
+                    # BF16 GEMM against the dequantised rows -- the same call
+                    # the sealed FR13 sub-arms assert on by class NAME.
+                    from vllm.model_executor.layers.vocab_parallel_embedding import (  # noqa: E501
+                        UnquantizedEmbeddingMethod as _fr13_dvkq_um,
+                    )
+
+                    _fr13_dvkq_sh.quant_method = _fr13_dvkq_um()
+                    self._fr13_dvk_dequantised = True
+                    print(
+                        "[FR14_DVK_DEQUANT] phase1 nvfp4->bf16 at slice "
+                        f"K={_fr13_dvk_configured} "
+                        f"packed_in={_fr13_dvkq_w.shape} "
+                        f"swizzled_scale_in={_fr13_dvkq_s.shape} "
+                        f"bf16_out={tuple(_fr13_dvkq_bf16.shape)} "
+                        f"bytes={_fr13_dvkq_bf16.numel() * 2} "
+                        f"logical_widths={_fr13_dvkq_sh.logical_widths} "
+                        f"output_size_per_partition={_fr13_dvkq_sh.output_size_per_partition} "
+                        "quant_method=UnquantizedEmbeddingMethod",
+                        flush=True,
+                    )
                 if (
                     _fr13_dh_fp8
                     and not getattr(self, "_fr13_dh_fp8_ready", False)
