@@ -81,6 +81,7 @@ FIXED32_HOST_SCRIPT_SOURCE = (
     "scripts/fr13_merged_fill.py",
     "scripts/fr13_patch_cutlass_fixed32_wave.py",
     "scripts/fr13_patch_fa2_tree_bias.py",
+    "scripts/fr14_patch_nvfp4_lmhead.py",
     "scripts/fr13_qrow16_pass_sidecar.py",
     "scripts/fr13_qrow32_b1_pass_sidecar.py",
     "scripts/fr13_qrow32_b4_pass_sidecar.py",

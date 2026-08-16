@@ -4,7 +4,7 @@
 # Mirrors boot_smoke_nvfp4.sh (the proven unsloth idiom) with four deltas:
 #   1. model dir / container name / served name are the RadixArk arm's;
 #   2. the FR14 lm_head patch is applied INSIDE the container before `vllm serve`
-#      (fr14_patch_nvfp4_lmhead.py -- see its docstring for the four gaps it
+#      (scripts/fr14_patch_nvfp4_lmhead.py -- see its docstring for the four gaps it
 #      closes), with FR14_REQUIRE_NVFP4_LMHEAD=1 so a head that does not resolve
 #      to ModelOptNvFp4LinearMethod kills the boot instead of serving silently;
 #   3. the FR14 unified-memory preflight from
@@ -19,6 +19,10 @@
 set -u
 OUT=/home/mark/shared/tmp-scratch/nvfp4_port
 RES_DIR=/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/results/fr14_nvfp4_port_20260816
+# The lm_head patcher moved into scripts/ when it was promoted to the
+# production boot flow; mount that instead so the smoke and the launcher
+# exercise the SAME file rather than two copies that can drift.
+SCRIPTS_DIR=/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/scripts
 MODEL_DIR=/home/mark/shared/models/qwen3.8-27b-nvfp4-radixark
 CTR_MODEL=/models/qwen3.8-27b-nvfp4-radixark
 IMAGE=vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776
@@ -102,10 +106,11 @@ docker rm -f $NAME >/dev/null 2>&1
 docker run -d --name $NAME --gpus all --network host \
   -v /models:/models \
   -v "$RES_DIR":/ovl:ro \
+  -v "$SCRIPTS_DIR":/ovl_scripts:ro \
   -e FR14_REQUIRE_NVFP4_LMHEAD=1 \
   --entrypoint bash $IMAGE -c "
     set -e
-    python3 /ovl/fr14_patch_nvfp4_lmhead.py
+    python3 /ovl_scripts/fr14_patch_nvfp4_lmhead.py
     exec vllm serve $CTR_MODEL \
       --served-model-name $SERVED \
       --host 127.0.0.1 --port $PORT \

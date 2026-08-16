@@ -117,20 +117,63 @@ of each fix is the same one taken here:
   ``input_scale``. (Note the packed-weight param is named ``weight`` on the
   ModelOpt path; ``weight_packed`` is the compressed-tensors spelling.)
 
-FAIL-CLOSED: with ``FR14_REQUIRE_NVFP4_LMHEAD=1`` in the environment, a head
-that does NOT resolve to ``ModelOptNvFp4LinearMethod`` raises at construction
-instead of silently serving an unquantized/half-loaded head.  Every anchor is
-required to be present exactly once; a missing or duplicated anchor aborts the
-patch (and therefore the boot) rather than half-applying.
+FAIL-CLOSED, AND WORKER-ENV-DROP-PROOF (FR14 arm B, production promotion).
+``FR14_REQUIRE_NVFP4_LMHEAD=1`` makes a head that does NOT resolve to
+``ModelOptNvFp4LinearMethod`` raise at construction instead of silently serving
+an unquantized/half-loaded head.  The requirement is read HERE, at patch time,
+and BAKED into the emitted source as an unconditional ``raise`` -- it is not
+re-read from ``os.environ`` in the process that builds the model.
 
-Idempotent: each edit is guarded by its own sentinel.
+That distinction is the whole point.  vLLM v1 builds the model in a separate
+EngineCore/worker process whose environment is CURATED, and this repo has been
+bitten by that class repeatedly (see fr13_launch_forked_fa2_tree_server.sh's
+"worker-env-drop-proof" sidecars: only 14 of 66 FR13_* vars survive into the
+worker).  A runtime ``os.environ.get("FR14_REQUIRE_NVFP4_LMHEAD") == "1"``
+guard inside the model file would therefore be fail-OPEN exactly when the env
+is dropped -- the banner would still print, the assertion would silently not
+fire, and the arm would serve a BF16 head against a floor that assumes 4-bit,
+i.e. 6.7 ms of the pinned floor would be fiction.  Baking the decision into the
+source removes the environment from the runtime path entirely.
+
+The banner is emitted either way, so a permissive boot is still observable.
+
+Every anchor is required to be present exactly once; a missing or duplicated
+anchor aborts the patch (and therefore the boot) rather than half-applying.
+
+Idempotent: each edit is guarded by its own sentinel.  Because the emitted text
+DIFFERS between required and permissive mode, re-running with a different
+FR14_REQUIRE_NVFP4_LMHEAD against an already-patched tree is refused rather
+than silently leaving the first mode in place.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
+
+# Read the requirement HERE, in the container's own shell, where the launcher's
+# env sweeper has definitely delivered it -- not in the curated worker process.
+_REQUIRE_RAW = os.environ.get("FR14_REQUIRE_NVFP4_LMHEAD", "")
+if _REQUIRE_RAW not in ("0", "1", ""):
+    raise SystemExit(
+        "FR14_REQUIRE_NVFP4_LMHEAD must be exactly '0' or '1' (or unset); "
+        f"got {_REQUIRE_RAW!r}"
+    )
+REQUIRE_NVFP4_LMHEAD = _REQUIRE_RAW == "1"
+# The sentinel encodes the MODE, so an already-patched tree cannot be silently
+# reused under the other mode.
+SENTINEL = (
+    "FR14_LMHEAD_QUANT_ROUTE_REQUIRED"
+    if REQUIRE_NVFP4_LMHEAD
+    else "FR14_LMHEAD_QUANT_ROUTE_PERMISSIVE"
+)
+OTHER_SENTINEL = (
+    "FR14_LMHEAD_QUANT_ROUTE_PERMISSIVE"
+    if REQUIRE_NVFP4_LMHEAD
+    else "FR14_LMHEAD_QUANT_ROUTE_REQUIRED"
+)
 
 SP = Path("/usr/local/lib/python3.12/dist-packages/vllm")
 QWEN3_5_PATH = SP / "model_executor/models/qwen3_5.py"
@@ -167,7 +210,20 @@ LMHEAD_NEEDLE = """                self.lm_head = ParallelLMHead(
                 )
 """
 
-LMHEAD_REPLACEMENT = """                # FR14_LMHEAD_QUANT_ROUTE: upstream omits quant_config here, which
+_LMHEAD_ENFORCEMENT_REQUIRED = """                if _fr14_qm != "ModelOptNvFp4LinearMethod":
+                    raise RuntimeError(
+                        "FR14_REQUIRE_NVFP4_LMHEAD=1 (baked at patch time) but "
+                        f"lm_head resolved to {_fr14_qm}; refusing to serve a "
+                        "head that did not route through NVFP4"
+                    )
+"""
+
+_LMHEAD_ENFORCEMENT_PERMISSIVE = """                # FR14_REQUIRE_NVFP4_LMHEAD was not 1 at patch time, so an
+                # unquantized head is allowed through. The banner above is the
+                # only evidence of what actually loaded -- read it.
+"""
+
+LMHEAD_REPLACEMENT = """                # {sentinel}: upstream omits quant_config here, which
                 # pins the head to UnquantizedEmbeddingMethod for EVERY quant
                 # scheme (vocab_parallel_embedding.py:270-274).
                 self.lm_head = ParallelLMHead(
@@ -178,24 +234,27 @@ LMHEAD_REPLACEMENT = """                # FR14_LMHEAD_QUANT_ROUTE: upstream omit
                 )
                 _fr14_qm = type(self.lm_head.quant_method).__name__
                 logger.info("FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=%s", _fr14_qm)
-                if (
-                    os.environ.get("FR14_REQUIRE_NVFP4_LMHEAD") == "1"
-                    and _fr14_qm != "ModelOptNvFp4LinearMethod"
-                ):
-                    raise RuntimeError(
-                        "FR14_REQUIRE_NVFP4_LMHEAD=1 but lm_head resolved to "
-                        f"{_fr14_qm}; refusing to serve a head that did not "
-                        "route through NVFP4"
-                    )
-"""
+{enforcement}""".format(
+    sentinel=SENTINEL,
+    enforcement=(
+        _LMHEAD_ENFORCEMENT_REQUIRED
+        if REQUIRE_NVFP4_LMHEAD
+        else _LMHEAD_ENFORCEMENT_PERMISSIVE
+    ),
+)
 
 for _p, _key in ((QWEN3_5_PATH, "qwen3_5"), (QWEN3_5_MTP_PATH, "qwen3_5_mtp")):
     _t = _p.read_text()
-    if "FR14_LMHEAD_QUANT_ROUTE" in _t:
+    if OTHER_SENTINEL in _t:
+        raise RuntimeError(
+            f"FR14 lm_head patch: {_p} is already patched in the OTHER "
+            f"enforcement mode ({OTHER_SENTINEL}); re-running under "
+            f"FR14_REQUIRE_NVFP4_LMHEAD={_REQUIRE_RAW!r} would leave the first "
+            "mode live. Recreate the container instead of re-patching."
+        )
+    if SENTINEL in _t:
         applied[_key] = "already-patched"
         continue
-    if "\nimport os\n" not in _t:
-        _replace_once(_p, "import typing\n", "import os\nimport typing\n", f"{_key}:import os")
     applied[_key] = _replace_once(_p, LMHEAD_NEEDLE, LMHEAD_REPLACEMENT, f"{_key}:lm_head")
 
 

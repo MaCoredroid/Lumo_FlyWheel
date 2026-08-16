@@ -529,6 +529,19 @@ IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870
 SERVED_MODEL_PATH=/models/qwen3.8-27b-nvfp4-radixark
 SERVED_MODEL_NAME=qwen3.8-27b-nvfp4-radixark
 readonly SERVED_MODEL_PATH SERVED_MODEL_NAME
+# FR14 ARM B: the NVFP4 lm_head is the arm. 1.83 of the 2.77 GB this arm's
+# floor drops is the head alone (2.543 GB BF16 -> 0.715 GB NVFP4, 6.695 ms), so
+# a boot that quietly fell back to an unquantized head would measure a wall
+# against a floor 6.7 ms of which is fiction. The loader patch below is
+# therefore mandatory and fail-closed, not optional.
+#
+# This is an FR14_* name on purpose: the env sweeper forwards ^(FR[0-9]+_|LUMO_|
+# VLLM_) into the container, which is where the patcher reads it. It is read at
+# PATCH time and baked into the emitted source, so the EngineCore worker's
+# curated environment cannot silently disarm it.
+export FR14_REQUIRE_NVFP4_LMHEAD=${FR14_REQUIRE_NVFP4_LMHEAD:-1}
+[[ "$FR14_REQUIRE_NVFP4_LMHEAD" == "0" || "$FR14_REQUIRE_NVFP4_LMHEAD" == "1" ]] \
+  || { echo "FR14_REQUIRE_NVFP4_LMHEAD must be exactly 0 or 1" >&2; exit 2; }
 [[ -d "$SERVED_MODEL_PATH" && ! -L "$SERVED_MODEL_PATH" ]] \
   || { echo "served checkpoint directory is missing or symlinked: $SERVED_MODEL_PATH" >&2; exit 2; }
 CONTAINER=${CONTAINER:-fr13-forked-fa2-tree}
@@ -6588,6 +6601,16 @@ if [[ "$FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION" == "1" ]]; then
   export FR13_DRAFT_HEAD_M4_R64_U8_INTERNAL_PRODUCTION_ATTESTED=1
 fi
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+# FR14 ARM B lm_head loader patch. A SECOND patch script rather than four more
+# anchors inside fr10_phase4_patch_vllm_tree_gdn.py: that file is 42k lines,
+# its sha is consumed by the M32/M1-U8/M4-U8 production credentials and the
+# retired fp8 draft-head selector, and its anchors are all tree/GDN concerns --
+# these four are loader/quantization concerns in different upstream files
+# (qwen3_5.py, qwen3_5_mtp.py, modelopt.py, vocab_parallel_embedding.py).
+# Invoked right after it, in the same container shell, before the FA2 patcher,
+# so every downstream verifier still sees a fully patched tree. Pinned in the
+# runtime-manifest closure (fr13_runtime_manifest.FIXED32_HOST_SCRIPT_SOURCE).
+python3 /workspace/scripts/fr14_patch_nvfp4_lmhead.py
 if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
   python3 /workspace/scripts/fr13_bm8_pass_sidecar.py verify \
     --sidecar "$FR13_DFWD_UNIFIED_BM8_PRODUCTION_PASS_SIDECAR" \
