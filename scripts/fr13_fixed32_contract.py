@@ -293,7 +293,7 @@ MODEL_AUXILIARY_FILES = (
 )
 MODEL_FILES = tuple(sorted(MODEL_AUXILIARY_FILES))
 MODEL_CANONICAL_SHA256 = (
-    "a95cb7227fcccb335f5549b7df7264a332b03bdd906da69aeec3fc29e22a0fa8"
+    "a913ebd431b016825118e4fed910c68c29981028d76aa5709d74ec24be1f53ca"
 )
 MODEL_TEXT_CONFIG_VOCAB_SIZE = 248_320
 # FR14 tokenizer-identity pin. vocab_size alone cannot catch a vocabulary
@@ -337,8 +337,8 @@ MODEL_FILE_RECORDS = (
     ),
     (
         "chat_template.jinja",
-        9993,
-        "12827f24b742ea4e80cdc12dbcf9622227056b9f797252a3149263d4f9aaadce",
+        8952,
+        "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041",
     ),
     (
         "config.json",
@@ -377,13 +377,13 @@ MODEL_FILE_RECORDS = (
     ),
     (
         "tokenizer.json",
-        19989325,
-        "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+        12809320,
+        "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
     ),
     (
         "tokenizer_config.json",
-        1047,
-        "529f30018c36dca5387c99b5edf368287f386f2c32d3790aa7141956bc5119fa",
+        17928,
+        "b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27",
     ),
     (
         "video_preprocessor_config.json",
