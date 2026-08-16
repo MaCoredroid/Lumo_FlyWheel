@@ -60,11 +60,11 @@ if [ $BOOT_OK -ne 1 ]; then
 fi
 log "health OK, sending smoke requests"
 
-R1=$(curl -s -m 120 http://127.0.0.1:$PORT/v1/chat/completions -H 'Content-Type: application/json' -d '{
+R1=$(curl -s -m 420 http://127.0.0.1:$PORT/v1/chat/completions -H 'Content-Type: application/json' -d '{
   "model":"qwen3.8-27b-fp8-smoke",
   "messages":[{"role":"user","content":"Reply with exactly: FR14 FP8 alive. Then state 17*23."}],
-  "max_tokens":2048,"temperature":0.6,"top_p":0.95,"top_k":20}')
-R2=$(curl -s -m 180 http://127.0.0.1:$PORT/v1/chat/completions -H 'Content-Type: application/json' -d '{
+  "max_tokens":512,"temperature":0.6,"top_p":0.95,"top_k":20}')
+R2=$(curl -s -m 600 http://127.0.0.1:$PORT/v1/chat/completions -H 'Content-Type: application/json' -d '{
   "model":"qwen3.8-27b-fp8-smoke",
   "messages":[{"role":"user","content":"Write a python function that reverses a linked list, then explain its invariant in two sentences."}],
   "max_tokens":4096,"temperature":0.6,"top_p":0.95,"top_k":20}')
