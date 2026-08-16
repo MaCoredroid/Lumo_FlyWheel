@@ -243,9 +243,9 @@ for index, (mode, logical, active, mask) in enumerate(expected):
         or timing.get("draft_vocab_k") != 65536
         or timing.get("draft_vocab_blocks_sha256")
         != "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff"
-        or timing.get("mandatory_weight_bytes") != 27977022848
-        or not math.isclose(timing.get("mandatory_weight_floor_ms", math.nan), 102.479937172, abs_tol=1e-9)
-        or not math.isclose(timing.get("one_sided_u95_cap_ms", math.nan), 117.8519277478, abs_tol=1e-9)
+        or timing.get("mandatory_weight_bytes") != 25210209416
+        or not math.isclose(timing.get("mandatory_weight_floor_ms", math.nan), 92.345089436, abs_tol=1e-9)
+        or not math.isclose(timing.get("one_sided_u95_cap_ms", math.nan), 106.1968528514, abs_tol=1e-9)
     ):
         raise SystemExit(f"{logical} B4 stack evidence is incomplete")
     if timing.get("candidate", {}).get("live_result_sha256") != m128_sha256:
@@ -340,8 +340,8 @@ summary = {
     ],
     "physical_rows_per_request": 32,
     "sfwd_projection_rows": 128,
-    "mandatory_weight_floor_ms": 102.479937172,
-    "one_sided_u95_cap_ms": 117.8519277478,
+    "mandatory_weight_floor_ms": 92.345089436,
+    "one_sided_u95_cap_ms": 106.1968528514,
     "physical32_work_census": {
         "schema": physical_work["schema"],
         "status": physical_work["status"],

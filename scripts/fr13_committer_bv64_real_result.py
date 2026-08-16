@@ -429,7 +429,7 @@ def reduce_result(
         or measurement.get("draft_head_fp8") is not False
         or not isinstance(measurement.get("engagement"), dict)
         or measurement["engagement"].get("engaged") is not True
-        or measurement.get("mandatory_weight_bytes") != 27977022848
+        or measurement.get("mandatory_weight_bytes") != 25210209416
         or measurement.get("floor_is_full_step_hardware_floor") is not False
     ):
         raise ResultError("deploy-speed measurement binding drifted")
@@ -437,7 +437,7 @@ def reduce_result(
         measurement.get("weight_floor_ms"), "weight floor", positive=True
     )
     if not math.isclose(
-        weight_floor_ms, 102.479937172, rel_tol=0.0, abs_tol=1e-9
+        weight_floor_ms, 92.345089436, rel_tol=0.0, abs_tol=1e-9
     ):
         raise ResultError("deploy-speed weight floor drifted")
 

@@ -206,7 +206,7 @@ CONTAINER_FA2_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so"
 )
 
-MODEL_ROOT = Path("/models/qwen3.8-27b-nvfp4")
+MODEL_ROOT = Path("/models/qwen3.8-27b-nvfp4-radixark")
 # FR14 served-model-name. The FR13 name was "qwen3.6-27b" (bare, no quant
 # suffix). FR14 keeps the quantisation IN the name on purpose: the FP8-3.8
 # baseline arm (/models/qwen3.8-27b-fp8) is a structurally identical serve of
@@ -214,7 +214,7 @@ MODEL_ROOT = Path("/models/qwen3.8-27b-nvfp4")
 # every Prometheus/trace comparison meant for the NVFP4 arm. With the suffix
 # a mis-pointed serve 404s on the very first request instead of quietly
 # producing a decomposition-proof QC readout.
-MODEL_SERVED_NAME = "qwen3.8-27b-nvfp4"
+MODEL_SERVED_NAME = "qwen3.8-27b-nvfp4-radixark"
 # The canonical exact4 prompts need enough live KV capacity to admit four
 # concurrent real requests; 20 GiB capped the scheduler at physical B2.
 #
@@ -259,61 +259,89 @@ MODEL_SERVED_NAME = "qwen3.8-27b-nvfp4"
 # "Initial free memory 104.25 GiB", so 46 GiB leaves ~58 GiB for weights and
 # activations, and the B4 container cap stays at 112g.
 FIXED32_B4_KV_CACHE_MEMORY_BYTES = 46 * 1024**3
-# FR14 (2026-08-16) MODEL BLOCK -- regenerated wholesale, not edited.
+# FR14 ARM B (2026-08-16) MODEL BLOCK -- regenerated wholesale, not edited.
 #
-# The served checkpoint is the post-lm_head-surgery Qwen3.8-27B-NVFP4 repack
-# (unsloth/Qwen3.8-27B-NVFP4 @ 16b6615af3548b88e2d8e382457bc705b00479cf, whose
-# FP8 per-channel lm_head was dequantised to BF16 so this vLLM's unquantized
-# ParallelLMHead can load it -- results/fr14_nvfp4_port_20260816/REDTEAM
-# pass 6). Unlike the 3.6 FP8 dir this checkpoint is NOT sharded per layer:
-# there are no layers-{0..63}.safetensors, so MODEL_FILES is a flat 16-name
-# set and MODEL_AUXILIARY_FILES IS the whole file set.
+# The served checkpoint is RadixArk/Qwen3.8-27B-NVFP4 @
+# 554ebba9b5f1b79dc11246341960360e6ef05ef4, the AGGRESSIVE side of the FR14
+# bytes ablation: NVFP4 W4A4-g16 across the MLP stack, FP8 attention/GDN
+# projections, BF16 GDN conv/in_proj + norms, and -- the term that actually
+# pays -- an NVFP4 lm_head (0.715 GB against the 2.543 GB BF16 head arm A was
+# forced into). Arm A (unsloth, /models/qwen3.8-27b-nvfp4) is still on disk;
+# re-serving it is a REVERT of this constant-train commit, because the floor
+# literals it needs are spread across ~50 timing instruments.
 #
-# File-set semantics are unchanged from FR13 and are worth stating because the
-# names moved: _pinned_model_files walks
+# LAYOUT DIFFERENCES from arm A that this block encodes:
+#   * THREE shards, model-0000{1,2,3}-of-00003.safetensors, not one
+#     model.safetensors -- and the 15 `mtp.*` drafter tensors live INSIDE
+#     shard 3, not in a separate model_mtp.safetensors. Anything that located
+#     the drafter by FILENAME had to be re-keyed to locate it BY TENSOR NAME
+#     (scripts/fr13_hardware_floor_ledger.py._classify_tensor).
+#   * 26 pinned names: 22 upstream files + ".lumo_pinned_revision" + the KV
+#     surgery sidecar + its two ".bak" files. No layers-{0..63}.safetensors.
+#
+# File-set semantics are unchanged from FR13/arm A: _pinned_model_files walks
 #   sorted(path.name for path in model_root.iterdir() if path.is_file())
 # so a metadata DIRECTORY such as .cache/huggingface is excluded by
-# construction (the served 3.6 dir carries one too and never appeared in the
-# pinned set), while dot-FILES are members -- FR13 already pinned
+# construction, while dot-FILES are members -- FR13 already pinned
 # ".gitattributes" on exactly that rule.
 #
-# The FOUR surgery sidecars are pinned DELIBERATELY. They are the complete,
-# ordered provenance of every mutation this checkpoint carries over its pinned
-# upstream revision, and deleting any one of them must fail the contract, not
-# pass quietly:
-#   1. ".lumo_lmhead_surgery.json" + "config.json.pre_lmhead_surgery.bak" --
-#      the FP8-per-channel lm_head dequantised to BF16 (this vLLM builds
-#      lm_head as an unquantized ParallelLMHead and fail-closed on
-#      lm_head.weight_scale). The .bak holds the upstream quantization_config
-#      with lm_head still in group_0.
-#   2. ".lumo_kv_scheme_surgery.json" + "config.json.pre_kv_scheme_surgery.bak"
-#      -- quantization_config.kv_cache_scheme removed. Its mere presence makes
-#      vLLM force kv_cache_dtype="fp8" for every Attention layer
-#      (attention.py: "llm-compressor mdls need to set cache_dtype to fp8
-#      manually"), which TREE_ATTN does not support -- the fixed32 stack's
-#      mandatory backend was refused before a weight was read. The sidecar
-#      records the removed block verbatim, so it is reversible; the surgery
-#      script is results/fr14_nvfp4_port_20260816/kv_scheme_surgery.py.
+# THE THREE MUTATIONS this checkpoint carries over its pinned upstream
+# revision, each with in-dir provenance that the contract pins DELIBERATELY so
+# a silent deletion fails rather than passes:
+#   1. ".lumo_radixark_kv_surgery.json" + "config.json.pre_kv_surgery.bak" +
+#      "hf_quant_config.json.pre_kv_surgery.bak" -- quantization_config
+#      .kv_cache_scheme (and hf_quant_config's kv_cache_quant_algo, so the two
+#      files cannot disagree) removed. RadixArk is forced to FP8 KV one layer
+#      EARLIER than the unsloth arm was: arg_utils.py:1616 -> torch_utils.py
+#      :279 maps the raw HF key to cache_dtype "fp8_e4m3" even under
+#      --kv-cache-dtype auto, and TREE_ATTN accepts only auto/float16/bfloat16.
+#      Nothing is stranded -- their own qualification.json admits
+#      scales_calibrated=false and there are ZERO k_scale/v_scale tensors in
+#      all 2,194 headers. Script: results/fr14_nvfp4_port_20260816/
+#      radixark_kv_surgery.py.
+#   2. "tokenizer_config.json" normalised to the official 3.8 file. RadixArk
+#      ships a 1,121-byte conversion-tool stub with no added_tokens_decoder, no
+#      chat_template, and pad_token="<|im_end|>" -- the chat format's STOP
+#      token. The original is archived OUTSIDE the model dir at
+#      /home/mark/shared/models/_fr14_orig_nvfp4_fp8head/
+#      tokenizer_config.json.radixark.bak so the pinned name set stays at the
+#      26 the checkpoint ships; script + record are in
+#      results/fr14_nvfp4_port_20260816/radixark_tokenizer_normalize.py.
+#      tokenizer.json / vocab.json / merges.txt / chat_template.jinja were
+#      already byte-identical to official 3.8 and were NOT touched.
+#   3. NO lm_head surgery. Arm A needed one; arm B does not -- the NVFP4 head
+#      loads and generates through the boot-time loader patch
+#      (scripts/fr14_patch_nvfp4_lmhead.py, fail-closed under
+#      FR14_REQUIRE_NVFP4_LMHEAD=1). Its absence from this file set is the
+#      evidence that the 4-bit head is served as shipped.
 #
 # Regenerate with:
 #   python3 scripts/fr14_gen_model_manifest.py \
-#     --model-root /models/qwen3.8-27b-nvfp4 --emit-python <path>
+#     --model-root /models/qwen3.8-27b-nvfp4-radixark --emit-python <path>
 # and verify an existing pin with the same script's --check.
 MODEL_AUXILIARY_FILES = (
     ".gitattributes",
-    ".lumo_kv_scheme_surgery.json",
-    ".lumo_lmhead_surgery.json",
     ".lumo_pinned_revision",
+    ".lumo_radixark_kv_surgery.json",
+    ".quant_summary.txt",
+    "LICENSE",
     "README.md",
     "chat_template.jinja",
     "config.json",
-    "config.json.pre_kv_scheme_surgery.bak",
-    "config.json.pre_lmhead_surgery.bak",
+    "config.json.pre_kv_surgery.bak",
+    "conversion-manifest.json",
     "generation_config.json",
-    "model.safetensors",
+    "hf_quant_config.json",
+    "hf_quant_config.json.pre_kv_surgery.bak",
+    "merges.txt",
+    "model-00001-of-00003.safetensors",
+    "model-00002-of-00003.safetensors",
+    "model-00003-of-00003.safetensors",
     "model.safetensors.index.json",
-    "model_mtp.safetensors",
     "preprocessor_config.json",
+    "qualification-criteria.json",
+    "qualification.json",
+    "tensor-audit.json",
     "tokenizer.json",
     "tokenizer_config.json",
     "video_preprocessor_config.json",
@@ -321,7 +349,7 @@ MODEL_AUXILIARY_FILES = (
 )
 MODEL_FILES = tuple(sorted(MODEL_AUXILIARY_FILES))
 MODEL_CANONICAL_SHA256 = (
-    "f2897975af6037872a75796a6884dc3c877f285b644c6aabb78e0085f8e46fa6"
+    "7e89afacd7351493508a358b7d83e43f141111736d19142bf89c5698033fe84f"
 )
 MODEL_TEXT_CONFIG_VOCAB_SIZE = 248_320
 # FR14 tokenizer-identity pin. vocab_size alone cannot catch a vocabulary
@@ -336,7 +364,7 @@ MODEL_TEXT_CONFIG_VOCAB_SIZE = 248_320
 # ["\u0120","t"] lists) and 3.8 adds 7 audio/TTS special tokens inside the
 # reserved 248044->248320 padding range plus a pre_tokenizer regex tweak. But
 # vocab.json IS byte-identical across qwen3.6-27b-fp8, qwen3.8-27b-fp8 and
-# qwen3.8-27b-nvfp4 (verified 2026-08-16), so its sha256 is the robust
+# qwen3.8-27b-nvfp4-radixark (verified 2026-08-16), so its sha256 is the robust
 # id-mapping pin and it is the same sha FR13 pinned for the 3.6 dir. Asserting
 # it here is what carries the DVK block map across the model swap.
 MODEL_VOCAB_JSON_SHA256 = (
@@ -349,24 +377,29 @@ MODEL_FILE_RECORDS = (
         "34448b82c17d60fec9b65b1f093c115ddbaadc04beb1b0140b6bfed2e012a930",
     ),
     (
-        ".lumo_kv_scheme_surgery.json",
-        1130,
-        "af93a79f195af05423a372b179ade30f8c5a141d573ce1f696a92cc4d18295e2",
-    ),
-    (
-        ".lumo_lmhead_surgery.json",
-        304,
-        "12f554d69f9998d45470f99c4a73175b297c7381f444e91a8134f9a84adc990c",
-    ),
-    (
         ".lumo_pinned_revision",
         41,
-        "7271cd52ee0c85994eb88ec80cc36b39baff7aa89addcd29af48380aae623988",
+        "4d8d0f1fb6eabdbf5527798d2ae245254d67c92bfe9124dd4ecca6f547850f53",
+    ),
+    (
+        ".lumo_radixark_kv_surgery.json",
+        1651,
+        "fc35f2510d54ca3a5cad9312b4b29683ccc0157f7e8cee9bdc568ef92b65b5bd",
+    ),
+    (
+        ".quant_summary.txt",
+        314291,
+        "5920198f1770fc91c0f8032108e6d861ce7e0ef196eca140c9681231d8d99967",
+    ),
+    (
+        "LICENSE",
+        11544,
+        "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a",
     ),
     (
         "README.md",
-        6603,
-        "8fb1abd46d01ca3eba96b1711cb0f8ff5eaa0922834e30fac6e424d946871c7f",
+        4574,
+        "3cfd18e07422e6eff20fcdf8dcdb3c864976dcef0e1e0f2c3f8bf788603203c2",
     ),
     (
         "chat_template.jinja",
@@ -375,43 +408,78 @@ MODEL_FILE_RECORDS = (
     ),
     (
         "config.json",
-        22207,
-        "27a7d80f4bc0ef39162bedd20c87da97321525615e15be3588f4505bdce4d96d",
+        72904,
+        "08abd8e204ecae324108f41acc1bac10549a3cd0728737ecfa0fc94b21bbac73",
     ),
     (
-        "config.json.pre_kv_scheme_surgery.bak",
-        22555,
-        "50193e31248a327030f9c040e0b3dec62e8a1afa492ca128f21a17d4317c6fdd",
+        "config.json.pre_kv_surgery.bak",
+        73003,
+        "7ff41ec6f96ad50efea3c92751cd261b63839d39936eb6e6ffc9066db8672740",
     ),
     (
-        "config.json.pre_lmhead_surgery.bak",
-        22564,
-        "1b3c71868d1299e52df6fc907deb202d5132b1ef0f72aae0ef6d15185dd53a5c",
+        "conversion-manifest.json",
+        23587,
+        "c71e938cadabd25b2d6ec6b1bd15afecb618674cd8004cf1ecf04e28badbbf55",
     ),
     (
         "generation_config.json",
         214,
-        "d0d0ed2e37cdfafef4a5067d5ea2407b05f4fb50526e47c008a5b235d50240fb",
+        "a4cef85934ea1fdcb207944dbc6eee70dbbf16806874428556ae33023336c0a4",
     ),
     (
-        "model.safetensors",
-        23839093880,
-        "bbf67537522e139aacfc9c980c80bb38d9905e4f147494e6b9a1f15045501733",
+        "hf_quant_config.json",
+        53711,
+        "f1ac5f2c91c307559544c17d2435fc845e6fa5d4f8828a4707c89f446fd6eb78",
+    ),
+    (
+        "hf_quant_config.json.pre_kv_surgery.bak",
+        53749,
+        "0f39e8cd23abdfb79adc89ac1b19acad990aa6ac32973f9ab0a67d1e3449535c",
+    ),
+    (
+        "merges.txt",
+        3353259,
+        "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+    ),
+    (
+        "model-00001-of-00003.safetensors",
+        9965652544,
+        "fbcdb5ba1cdda462b5f38592d071e772c4d398afea61a0aa9188b32d1a239a79",
+    ),
+    (
+        "model-00002-of-00003.safetensors",
+        9985757064,
+        "db6146a5464fb0a891181b93c81593f0ca65c602eb14120a1c2b1b09bca11f85",
+    ),
+    (
+        "model-00003-of-00003.safetensors",
+        1970287672,
+        "d3cfb92742e30c8b46564665791dbe0a86ed64cfc02b1275081530793c0c9581",
     ),
     (
         "model.safetensors.index.json",
-        164371,
-        "429430e1b9e65b2cb98eff8cd10a06e70a09cee89c48487a3914684aeb6df57f",
-    ),
-    (
-        "model_mtp.safetensors",
-        849400392,
-        "1d8268aa85ace093a561e3e7b63b9d390dac1cd55a90cd55b5ec509c3c9da9fe",
+        214866,
+        "7aa103a2582b7d26631988de33dea19e8a308ee9c239e8e14feb374af30905e2",
     ),
     (
         "preprocessor_config.json",
         390,
         "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+    ),
+    (
+        "qualification-criteria.json",
+        1145,
+        "8e3b57367245354acb040a133e63df8eb1f4aef787e036156b944dfda217352a",
+    ),
+    (
+        "qualification.json",
+        2717,
+        "7be9d60606fc9590ca7b5717018e12050deaa6d7d93abb5e8cad0845240983a8",
+    ),
+    (
+        "tensor-audit.json",
+        539,
+        "8a7801e2b46298432a129689879c9e4f8c69444e0b71b4c971470c2747794679",
     ),
     (
         "tokenizer.json",

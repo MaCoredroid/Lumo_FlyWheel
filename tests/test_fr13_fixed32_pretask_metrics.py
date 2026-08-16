@@ -20,8 +20,8 @@ GATE_SPEC.loader.exec_module(gate)
 
 
 STOCK_ZERO_METRICS = """\
-vllm:spec_decode_num_drafts_total{engine="0",model_name="qwen3.8-27b-nvfp4"} 0
-vllm:spec_decode_num_draft_tokens_total{engine="0",model_name="qwen3.8-27b-nvfp4"} 0
+vllm:spec_decode_num_drafts_total{engine="0",model_name="qwen3.8-27b-nvfp4-radixark"} 0
+vllm:spec_decode_num_draft_tokens_total{engine="0",model_name="qwen3.8-27b-nvfp4-radixark"} 0
 """
 
 
@@ -33,8 +33,8 @@ def test_pretask_allows_lazy_worker_metrics_to_be_absent() -> None:
 
     assert values == {"spec_drafts": 0.0, "spec_tokens": 0.0}
     assert labels == {
-        "spec_drafts": 'engine="0",model_name="qwen3.8-27b-nvfp4"',
-        "spec_tokens": 'engine="0",model_name="qwen3.8-27b-nvfp4"',
+        "spec_drafts": 'engine="0",model_name="qwen3.8-27b-nvfp4-radixark"',
+        "spec_tokens": 'engine="0",model_name="qwen3.8-27b-nvfp4-radixark"',
     }
 
 
@@ -53,13 +53,13 @@ def test_pretask_accepts_present_zero_worker_metric() -> None:
     (
         (
             "vllm:spec_decode_num_drafts_total"
-            '{engine="0",model_name="qwen3.8-27b-nvfp4"} 0\n',
+            '{engine="0",model_name="qwen3.8-27b-nvfp4-radixark"} 0\n',
             "missing required pretask metrics",
         ),
         (
             STOCK_ZERO_METRICS
             + "vllm:spec_decode_num_drafts_total"
-            '{engine="0",model_name="qwen3.8-27b-nvfp4"} 0\n',
+            '{engine="0",model_name="qwen3.8-27b-nvfp4-radixark"} 0\n',
             "duplicate metric series",
         ),
         (
@@ -69,8 +69,8 @@ def test_pretask_accepts_present_zero_worker_metric() -> None:
         ),
         (
             STOCK_ZERO_METRICS.replace(
-                'engine="0",model_name="qwen3.8-27b-nvfp4"',
-                'engine="1",model_name="qwen3.8-27b-nvfp4"',
+                'engine="0",model_name="qwen3.8-27b-nvfp4-radixark"',
+                'engine="1",model_name="qwen3.8-27b-nvfp4-radixark"',
                 1,
             ),
             "pretask metric labels differ from the contract",

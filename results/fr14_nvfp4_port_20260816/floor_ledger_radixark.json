@@ -1,0 +1,86 @@
+{
+  "bandwidth_bytes_per_s": 273000000000,
+  "campaign": "fr14_nvfp4_port_20260816",
+  "components": {
+    "draft_64k_bf16_head": {
+      "bytes": 671088640,
+      "element_bytes": 2,
+      "hidden_size": 5120,
+      "rows": 65536,
+      "source": "PHASE 1: the 65536 NVFP4 rows sliced out of the head are dequantised to BF16 at boot, so the K64 read stays BF16"
+    },
+    "mtp_forward": {
+      "bytes": 4246993920,
+      "bytes_per_pass": 849398784,
+      "initial_passes": 1,
+      "passes": 5,
+      "post_root_graph_passes": 4,
+      "source": "summed tensor spans of the 15 mtp.* tensors (BF16), located BY NAME -- they live inside model-00003-of-00003.safetensors, not a separate shard"
+    },
+    "nvfp4_head": {
+      "bf16_head_reference_bytes": 2542796800,
+      "bytes": 715161608,
+      "hidden_size": 5120,
+      "rows": 248320,
+      "source": "summed tensor spans of the 4 shipped lm_head.* tensors (U8 [248320,2560] packed + F8_E4M3 [248320,320] per-16 block scales + 2 F32 global scalars)",
+      "tensors": 4
+    },
+    "target_model": {
+      "bytes": 16892610688,
+      "source": "summed tensor spans of model.language_model.* minus embed_tokens (64 decoder layers + final norm)"
+    }
+  },
+  "derivation": "every byte term is a SUM of real safetensors tensor spans in /models/qwen3.8-27b-nvfp4-radixark; no FR13 constant was scaled",
+  "formula": "floor_ms = mandatory_weight_bytes * 1000 / bandwidth_bytes_per_s",
+  "model_root": "/models/qwen3.8-27b-nvfp4-radixark",
+  "production_invariants": {
+    "drafter_head_passes_per_event": 5,
+    "initial_mtp_forward_passes_per_event": 1,
+    "post_root_graph_mtp_forward_passes_per_event": 4,
+    "total_mtp_forward_passes_per_event": 5
+  },
+  "projected_scenarios": {
+    "root_64k_five_nvfp4_draft_heads": {
+      "component_formula": "target_model + nvfp4_head + mtp_forward + 5 * draft_64k_nvfp4_head",
+      "draft_64k_nvfp4_head_bytes": 188743680,
+      "mandatory_weight_bytes": 22798484616,
+      "mandatory_weight_floor_ms": 83.510932659,
+      "nonweight_costs_included": false,
+      "status": "PROJECTION, NOT PINNED. Needs an FP4 draft-head GEMV unit; it is a byte lever with its own gate, and no instrument may quote it as a floor until that lands."
+    }
+  },
+  "retired_scenarios": {
+    "draft_head_fp8": "FR13_DRAFT_HEAD_FP8 is DEAD under both FR14 arms. It re-read the five K64 draft heads as FP8 qweight + FP32 scales (1_678_131_200 B instead of 3_355_443_200 B). Arm A serves a BF16 head (unsloth's FP8 per-channel head was dequantised to make the checkpoint loadable); arm B serves an NVFP4 head whose sliced rows PHASE 1 dequantises to BF16 at boot. Neither leaves an FP8 head to read, so the arm would pin a floor the hardware cannot realise. The launcher and the floor-timer sequence refuse it. The live successor is the NVFP4 draft-head read below, which is a real 8.834 ms and needs an FP4 GEMV unit, not a requant."
+  },
+  "scenarios": {
+    "current_one_full_plus_four_64k_draft_heads": {
+      "component_formula": "target_model + nvfp4_head + mtp_forward + nvfp4_head + 4 * draft_64k_bf16_head",
+      "drafter_head_bytes": 3399516168,
+      "mandatory_weight_bytes": 25254282384,
+      "mandatory_weight_floor_ms": 92.506528879,
+      "nonweight_costs_included": false
+    },
+    "full_vocab_five_full_draft_heads": {
+      "component_formula": "target_model + nvfp4_head + mtp_forward + 5 * nvfp4_head",
+      "drafter_head_bytes": 3575808040,
+      "mandatory_weight_bytes": 25430574256,
+      "mandatory_weight_floor_ms": 93.15228665201465,
+      "nonweight_costs_included": false
+    },
+    "legacy_target_plus_verifier_head": {
+      "component_formula": "target_model + nvfp4_head",
+      "is_full_speculative_step_floor": false,
+      "mandatory_weight_bytes": 17607772296,
+      "mandatory_weight_floor_ms": 64.497334418
+    },
+    "root_64k_five_64k_draft_heads": {
+      "component_formula": "target_model + nvfp4_head + mtp_forward + 5 * draft_64k_bf16_head",
+      "drafter_head_bytes": 3355443200,
+      "mandatory_weight_bytes": 25210209416,
+      "mandatory_weight_floor_ms": 92.345089436,
+      "nonweight_costs_included": false
+    }
+  },
+  "schema": "fr13.speculative_step_weight_ledger.v3",
+  "slo_cap_provisional": true
+}

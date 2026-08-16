@@ -174,12 +174,12 @@ from fr13_hardware_floor_ledger import (  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_ENDPOINT = "http://127.0.0.1:9950"
-DEFAULT_MODEL = "qwen3.8-27b-nvfp4"
+DEFAULT_MODEL = "qwen3.8-27b-nvfp4-radixark"
 CANONICAL_PROMPTS = str(REPO / "output" / "fr13_acceptance_ladder" / "prompts_swe4.json")
 CANONICAL_SEED = 1313
 CANONICAL_MAX_TOKENS = 128
 # the tokenizer behind the served model (id<->decoded-string re-key for GAP-1).
-CANONICAL_TOKENIZER = "/models/qwen3.8-27b-nvfp4"
+CANONICAL_TOKENIZER = "/models/qwen3.8-27b-nvfp4-radixark"
 
 # raw /metrics counters (the ONLY allowed speed basis)
 M_DECODE_S = "vllm:request_decode_time_seconds_sum"
@@ -1989,7 +1989,7 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # (shared); compute = 2*params*rows / peak ~ 0.54 ms/row on GB10 (override
     # FR13_COMPUTE_MS_PER_ROW). rows/step = events_per_step x (tok_per_draft
     # + 1 committed/bonus row). Fixed32 is 32 rows/event: B1 is 17.28 ms and
-    # B4 is 69.12 ms, both below the corrected 102.479937172 ms weight term.
+    # B4 is 69.12 ms, both below the corrected 92.345089436 ms weight term.
     # KV/state reads (context-dependent, cache-ON keeps contexts long) are
     # NOT modeled - they live in the measured step wall.
     _compute_ms_row = float(os.environ.get("FR13_COMPUTE_MS_PER_ROW", "0.54"))

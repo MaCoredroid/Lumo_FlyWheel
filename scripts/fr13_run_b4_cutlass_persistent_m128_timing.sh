@@ -99,9 +99,9 @@ case "$QUALIFICATION_PROFILE" in
     DRAFT_VOCAB_ROOT=0
     DRAFT_VOCAB_K=0
     NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0
-    MANDATORY_WEIGHT_BYTES=37335563648
-    MANDATORY_WEIGHT_FLOOR_MS=136.7603064029304
-    ONE_SIDED_U95_CAP_MS=157.27435236336996
+    MANDATORY_WEIGHT_BYTES=25430574256
+    MANDATORY_WEIGHT_FLOOR_MS=93.15228665201465
+    ONE_SIDED_U95_CAP_MS=107.12512964981684
     ARM_PROFILE_SUFFIX=
     ;;
   k64_root)
@@ -125,9 +125,9 @@ case "$QUALIFICATION_PROFILE" in
     DRAFT_VOCAB_ROOT=1
     DRAFT_VOCAB_K=65536
     NEEDS_ALLOW=
-    MANDATORY_WEIGHT_BYTES=27977022848
-    MANDATORY_WEIGHT_FLOOR_MS=102.479937172
-    ONE_SIDED_U95_CAP_MS=117.8519277478
+    MANDATORY_WEIGHT_BYTES=25210209416
+    MANDATORY_WEIGHT_FLOOR_MS=92.345089436
+    ONE_SIDED_U95_CAP_MS=106.1968528514
     ARM_PROFILE_SUFFIX=_k64_root
     ;;
   *)
@@ -288,9 +288,9 @@ if (
     or verdict.get("draft_vocab_blocks")
     != "/workspace/scripts/fr13_dvk_subset_blocks.json"
     or verdict.get("draft_vocab_blocks_sha256") != block_map_sha256
-    or verdict.get("mandatory_weight_bytes") != 27977022848
-    or verdict.get("mandatory_weight_floor_ms") != 102.479937172
-    or verdict.get("one_sided_u95_cap_ms") != 117.8519277478
+    or verdict.get("mandatory_weight_bytes") != 25210209416
+    or verdict.get("mandatory_weight_floor_ms") != 92.345089436
+    or verdict.get("one_sided_u95_cap_ms") != 106.1968528514
     or verdict.get("subset_sha256") != subset_sha256
     or verdict.get("task_ids") != expected_tasks
     or verdict.get("task_marker") != f"swe_verified:campaign4_{subset_sha256}"

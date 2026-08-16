@@ -47,10 +47,11 @@ def _inputs(tmp_path: Path):
         # Synthetic step wall placed just ABOVE the weight floor and well
         # BELOW the U95 cap, which is what makes the eligibility assertion
         # below informative. FR13 used 120-123 ms against a 119.658 floor /
-        # 137.607 cap; FR14's floor is 102.480 and its cap 117.852, so the
-        # fixture moves with them (a fixed 120 ms would now sit ABOVE the cap
-        # and the test would only be asserting that the cap works).
-        wall_ms = 103.0 + index
+        # 137.607 cap; FR14 arm A used 103-106 against 102.480 / 117.852; arm
+        # B's floor is 92.345 and its cap 106.197, so the fixture moves again
+        # to 93-96. A fixed 120 -- or arm A's 106 -- would now sit at or above
+        # the cap and the test would only be asserting that the cap works.
+        wall_ms = 93.0 + index
         rows.append(
             {
                 "instance_id": task_id,
@@ -71,7 +72,7 @@ def _inputs(tmp_path: Path):
         "task_instance_ids": list(module.EXACT4_TASK_IDS),
         "draft_vocab_root": 1,
         "draft_vocab_k": 65536,
-        "mandatory_weight_bytes": 27977022848,
+        "mandatory_weight_bytes": 25210209416,
         "per_task": rows,
     }
     engagement = {
@@ -136,8 +137,8 @@ def test_exact4_u95_controls_exact16_eligibility(tmp_path: Path) -> None:
         pass_sidecar_sha256=sidecar,
         runner_sha256="5" * 64,
         block_map_sha256="6" * 64,
-        floor_ms=102.479937172,
-        cap_ms=117.8519277478,
+        floor_ms=92.345089436,
+        cap_ms=106.1968528514,
         arm=arm,
         **paths,
     )
@@ -165,8 +166,8 @@ def test_incomplete_wall_retention_is_rejected(tmp_path: Path) -> None:
             pass_sidecar_sha256=sidecar,
             runner_sha256="5" * 64,
             block_map_sha256="6" * 64,
-            floor_ms=102.479937172,
-            cap_ms=117.8519277478,
+            floor_ms=92.345089436,
+            cap_ms=106.1968528514,
             arm=arm,
             **paths,
         )

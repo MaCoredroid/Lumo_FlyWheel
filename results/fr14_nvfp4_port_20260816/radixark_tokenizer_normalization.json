@@ -1,0 +1,24 @@
+{
+ "archive_root": "/home/mark/shared/models/_fr14_orig_nvfp4_fp8head",
+ "model_root": "/models/qwen3.8-27b-nvfp4-radixark",
+ "normalised": {
+  "tokenizer_config.json": {
+   "action": "copied-from-official-3.8",
+   "archived_sha256": "e5d078b00e6c1223b32444db8c1001dc71d86ceef8ee706b5bf084c3a43a1f9c",
+   "archived_to": "/home/mark/shared/models/_fr14_orig_nvfp4_fp8head/tokenizer_config.json.radixark.bak",
+   "observed_sha256": "e5d078b00e6c1223b32444db8c1001dc71d86ceef8ee706b5bf084c3a43a1f9c",
+   "observed_size": 1121,
+   "official_sha256": "b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27",
+   "official_size": 17928
+  }
+ },
+ "official_source": "/home/mark/shared/models/qwen3.8-27b-fp8",
+ "pinned_file_count_unchanged": 26,
+ "schema": "fr14.radixark_tokenizer_normalize.v1",
+ "verified_identical": {
+  "chat_template.jinja": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041",
+  "merges.txt": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+  "tokenizer.json": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3",
+  "vocab.json": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+ }
+}

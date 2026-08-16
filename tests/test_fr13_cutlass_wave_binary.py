@@ -707,9 +707,9 @@ def test_onen_b1_direct_install_binds_k64_profile(
         "container_env_sha256": "e" * 64,
         "qualified_draft_vocab_root": 1,
         "qualified_draft_vocab_k": 65_536,
-        "mandatory_weight_bytes": 27_977_022_848,
-        "mandatory_weight_floor_ms": 102.479937172,
-        "one_sided_u95_cap_ms": 117.8519277478,
+        "mandatory_weight_bytes": 25_210_209_416,
+        "mandatory_weight_floor_ms": 92.345089436,
+        "one_sided_u95_cap_ms": 106.1968528514,
         "qualification_profile": "k64_root",
         "qualified_draft_vocab_blocks": (
             "/workspace/scripts/fr13_dvk_subset_blocks.json"
@@ -958,9 +958,9 @@ def test_direct_selector_requires_and_binds_production_qualification(
         "container_env_sha256": "f" * 64,
         "qualified_draft_vocab_root": 0,
         "qualified_draft_vocab_k": 0,
-        "mandatory_weight_bytes": 37_335_563_648,
-        "mandatory_weight_floor_ms": 136.7603064029304,
-        "one_sided_u95_cap_ms": 157.27435236336996,
+        "mandatory_weight_bytes": 25_430_574_256,
+        "mandatory_weight_floor_ms": 93.15228665201465,
+        "one_sided_u95_cap_ms": 107.12512964981684,
     }
     monkeypatch.setattr(
         module,

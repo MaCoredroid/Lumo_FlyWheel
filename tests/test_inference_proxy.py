@@ -84,7 +84,7 @@ def test_normalize_responses_request_payload_forces_fr10_decode_mode(
 ) -> None:
     monkeypatch.setenv("LUMO_PROXY_FR10_DECODE_MODE", "tree_mtp")
     payload = {
-        "model": "qwen3.8-27b-nvfp4",
+        "model": "qwen3.8-27b-nvfp4-radixark",
         "vllm_xargs": {"trace_id": "keep-me"},
     }
 
@@ -117,7 +117,7 @@ def test_normalize_responses_request_payload_adds_reasoning_status() -> None:
 
 def test_normalize_responses_request_payload_maps_developer_role_to_system() -> None:
     payload = {
-        "model": "qwen3.8-27b-nvfp4",
+        "model": "qwen3.8-27b-nvfp4-radixark",
         "input": [
             {
                 "role": "developer",
@@ -139,7 +139,7 @@ def test_normalize_responses_request_payload_maps_developer_role_to_system() -> 
 
 def test_normalize_responses_request_payload_merges_developer_role_into_instructions() -> None:
     payload = {
-        "model": "qwen3.8-27b-nvfp4",
+        "model": "qwen3.8-27b-nvfp4-radixark",
         "instructions": "Base instructions.",
         "input": [
             {
@@ -1312,7 +1312,7 @@ def test_build_request_metrics_row_emits_concurrency_gauges_and_run_anchor() -> 
         metrics_before=before,
         metrics_after=after,
         deltas={"engine_iterations": 50.0, "iteration_tokens": 96.0},
-        response_observed={"model": "qwen3.8-27b-nvfp4", "usage": {}},
+        response_observed={"model": "qwen3.8-27b-nvfp4-radixark", "usage": {}},
         ts_request_received=0.0,
         ts_first_byte=0.1,
         ts_completed=1.0,
@@ -1338,7 +1338,7 @@ def test_build_request_metrics_row_emits_normalized_sampling() -> None:
         metrics_after={},
         deltas={},
         response_observed={
-            "model": "qwen3.8-27b-nvfp4",
+            "model": "qwen3.8-27b-nvfp4-radixark",
             "usage": {},
             "request_sampling": {
                 "temperature": 0.6,

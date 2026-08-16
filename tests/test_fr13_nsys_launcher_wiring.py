@@ -85,8 +85,8 @@ def test_fixed32_launcher_serves_the_fr14_checkpoint_through_one_variable() -> N
     """
     text = (REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh").read_text()
 
-    assert "SERVED_MODEL_PATH=/models/qwen3.8-27b-nvfp4\n" in text
-    assert "SERVED_MODEL_NAME=qwen3.8-27b-nvfp4\n" in text
+    assert "SERVED_MODEL_PATH=/models/qwen3.8-27b-nvfp4-radixark\n" in text
+    assert "SERVED_MODEL_NAME=qwen3.8-27b-nvfp4-radixark\n" in text
     assert "readonly SERVED_MODEL_PATH SERVED_MODEL_NAME\n" in text
     assert (
         'exec \\"\\${NSYS_PREFIX[@]}\\" vllm serve '

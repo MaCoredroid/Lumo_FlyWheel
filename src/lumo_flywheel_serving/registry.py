@@ -29,7 +29,16 @@ _MODELS_ROOT = PurePosixPath("/models")
 # fire. The fixed32 serving path does not read this table at all -- the
 # launcher builds its own serve line -- so this only gates the proxy and the
 # credential-free smoke-test CLI.
-_SUPPORTED_QUANTIZATIONS = frozenset({"fp8", "compressed-tensors"})
+#
+# FR14 arm B (2026-08-16) adds "modelopt" for the RadixArk aggressive NVFP4
+# checkpoint (qwen3.8-27b-nvfp4-radixark). It is NOT the compressed-tensors
+# path: that checkpoint ships a ModelOpt hf_quant_config.json and vLLM builds
+# ModelOptMixedPrecisionConfig for it. Both NVFP4 entries sit in the table at
+# once because the registry validates EVERY row at import time -- the offload
+# proxy loads it on alienware at startup -- so an unlisted value kills the
+# proxy AFTER the GB10 engine has already burned a ~5-minute model load, which
+# is exactly how the compressed-tensors gap surfaced.
+_SUPPORTED_QUANTIZATIONS = frozenset({"fp8", "compressed-tensors", "modelopt"})
 
 
 @dataclass(frozen=True)

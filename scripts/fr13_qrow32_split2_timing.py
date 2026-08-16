@@ -118,7 +118,7 @@ def reduce_timing(
         or sorted(measure.get("task_instance_ids", [])) != task_ids
         or measure.get("draft_vocab_root") != 1
         or measure.get("draft_vocab_k") != 65536
-        or measure.get("mandatory_weight_bytes") != 27977022848
+        or measure.get("mandatory_weight_bytes") != 25210209416
     ):
         raise ValueError("candidate measure is not exact4 K64 ROOT=1 B1")
     rows = measure.get("per_task")

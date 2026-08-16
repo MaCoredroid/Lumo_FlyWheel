@@ -295,7 +295,7 @@ QUALIFICATION_PROFILES: dict[str, dict[str, object]] = {
         "draft_vocab_k": 65_536,
         "mandatory_weight_bytes": floor.FIXED32_MANDATORY_WEIGHT_BYTES,
         "mandatory_weight_floor_ms": floor.FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
-        "one_sided_u95_cap_ms": 117.8519277478,
+        "one_sided_u95_cap_ms": 106.1968528514,
         "requires_block_map": True,
     },
 }

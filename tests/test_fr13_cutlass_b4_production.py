@@ -260,9 +260,9 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert "DRAFT_VOCAB_ROOT=0" in gate
     assert "DRAFT_VOCAB_K=0" in gate
     assert "NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0" in gate
-    assert "37335563648" in gate
-    assert "136.7603064029304" in gate
-    assert "157.27435236336996" in gate
+    assert "25430574256" in gate
+    assert "93.15228665201465" in gate
+    assert "107.12512964981684" in gate
     assert "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d" in gate
     assert "STOCK_FA2_BYTES=299183936" in gate
     assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in gate
@@ -284,9 +284,9 @@ def test_b4_gate_and_timing_are_closed_over_by_runtime_manifest() -> None:
     assert "DRAFT_VOCAB_ROOT=0" in timing
     assert "DRAFT_VOCAB_K=0" in timing
     assert "NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0" in timing
-    assert "37335563648" in timing
-    assert "136.7603064029304" in timing
-    assert "157.27435236336996" in timing
+    assert "25430574256" in timing
+    assert "93.15228665201465" in timing
+    assert "107.12512964981684" in timing
     assert "STOCK_FA2_BYTES=299183936" in timing
     assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in timing
     assert "AGENT_WALL_S=5400" in timing

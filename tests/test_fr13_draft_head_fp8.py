@@ -375,7 +375,7 @@ printf '%s %s' "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS"
 
     allowed = _source("0")
     assert allowed.returncode == 0
-    assert allowed.stdout == "27977022848 102.479937172"
+    assert allowed.stdout == "25210209416 92.345089436"
 
 
 def test_deploy_speed_reducer_refuses_the_retired_fp8_head_arm() -> None:
@@ -645,8 +645,8 @@ def test_timing_runner_is_real_exact4_and_uses_distinct_arm_floors() -> None:
     assert "--expected-gate-sha256 \"$GATE_RESULT_SHA256\"" in runner
     assert "30989326208" in runner
     assert "113.514015414" in runner
-    assert "27977022848" in runner
-    assert "102.479937172" in runner
+    assert "25210209416" in runner
+    assert "92.345089436" in runner
     assert "synthetic" not in runner.lower()
     assert "probe-only" not in runner.lower()
     assert 'QROW16_FA2_SO:?set QROW16_FA2_SO' in runner

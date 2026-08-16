@@ -58,8 +58,8 @@ TARGET_PASS_SHA256=169704fac7c544600437e7785f5d810c9df8ffaf5f9ce70d96d83b21de462
 TARGET_QUALIFICATION_SOURCE_COMMIT=a8a904ed6c27a6338d43151038c155ebb76e3656
 TARGET_QUALIFICATION_PATCH_SHA256=ae9591a0c255c54bd8b5fed8576105013fce7f5f0834dbfb51ca1d455441f976
 SFWD_PROFILE_PRESEED_COMMIT=ff067115c547a39bad706c10f91552896a87d264
-WEIGHT_FLOOR_MS=102.479937172
-ONE_SIDED_U95_CAP_MS=117.8519277478
+WEIGHT_FLOOR_MS=92.345089436
+ONE_SIDED_U95_CAP_MS=106.1968528514
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
@@ -633,7 +633,7 @@ def validate_measure(payload, raw, arm):
         or payload.get("task_instance_ids") != task_ids
         or payload.get("draft_vocab_root") != 1
         or payload.get("draft_vocab_k") != 65536
-        or payload.get("mandatory_weight_bytes") != 27977022848
+        or payload.get("mandatory_weight_bytes") != 25210209416
         or payload.get("weight_floor_ms") != floor_ms
         or payload.get("floor_ms") != floor_ms
         or payload.get("floor_is_full_step_hardware_floor") is not False

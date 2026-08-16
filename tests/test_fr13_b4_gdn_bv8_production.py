@@ -55,9 +55,9 @@ def test_b4_timing_runner_requires_full_draft_vocabulary() -> None:
     assert "export FR13_DRAFT_VOCAB_ROOT=0" in runner
     assert "export FR13_DRAFT_VOCAB_K=0" in runner
     assert 'export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"' in runner
-    assert 'FR13_MANDATORY_WEIGHT_BYTES" == "37335563648"' in runner
-    assert 'FR13_WEIGHT_FLOOR_MS" == "136.760306403"' in runner
-    assert 'record.get("mandatory_weight_bytes") != 37_335_563_648' in runner
+    assert 'FR13_MANDATORY_WEIGHT_BYTES" == "25430574256"' in runner
+    assert 'FR13_WEIGHT_FLOOR_MS" == "93.152286652"' in runner
+    assert 'record.get("mandatory_weight_bytes") != 25_430_574_256' in runner
 
 
 def _write_payload(path: Path, payload: dict[str, object]) -> str:

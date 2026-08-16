@@ -4124,7 +4124,7 @@ def write_floor_gate_fixture(
             completed = task_count * concurrency * step // complete_fixture_steps
             prompt_tokens = completed * 128
             generation_tokens = completed * 32
-            base_labels = 'engine="0",model_name="qwen3.8-27b-nvfp4"'
+            base_labels = 'engine="0",model_name="qwen3.8-27b-nvfp4-radixark"'
             original_lines = metric_path.read_text(encoding="utf-8").splitlines()
             retained = [
                 line
@@ -4150,7 +4150,7 @@ def write_floor_gate_fixture(
             for reason in ("stop", "length", "abort", "error", "repetition"):
                 labels = (
                     f'engine="0",finished_reason="{reason}",'
-                    'model_name="qwen3.8-27b-nvfp4"'
+                    'model_name="qwen3.8-27b-nvfp4-radixark"'
                 )
                 value = completed if reason == "stop" else 0
                 qwen_lines.append(
@@ -4162,7 +4162,7 @@ def write_floor_gate_fixture(
                 ("50000.0", completed),
                 ("+Inf", completed),
             ):
-                labels = f'engine="0",le="{le}",model_name="qwen3.8-27b-nvfp4"'
+                labels = f'engine="0",le="{le}",model_name="qwen3.8-27b-nvfp4-radixark"'
                 qwen_lines.append(
                     "vllm:request_params_max_tokens_bucket"
                     f"{{{labels}}} {value}"
@@ -4235,7 +4235,7 @@ def write_floor_gate_fixture(
                             "id": response_id,
                             "type": "message",
                             "role": "assistant",
-                            "model": "qwen3.8-27b-nvfp4",
+                            "model": "qwen3.8-27b-nvfp4-radixark",
                             "content": (
                                 [
                                     {

@@ -29,9 +29,9 @@ FIXED32_MODE=${FR13_FIXED32_ALL_PARENT_MODE:-tail6_fixed32}
 STOCK_FA2_SHA256=f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d
 STOCK_FA2_BYTES=299183936
 B4_KV_CACHE_MEMORY_BYTES=49392123904
-MANDATORY_WEIGHT_BYTES=27977022848
-MANDATORY_WEIGHT_FLOOR_MS=102.479937172
-ONE_SIDED_U95_CAP_MS=117.85192774780
+MANDATORY_WEIGHT_BYTES=25210209416
+MANDATORY_WEIGHT_FLOOR_MS=92.345089436
+ONE_SIDED_U95_CAP_MS=106.19685285140
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
@@ -456,9 +456,9 @@ verdict = {
     "draft_vocab_root": 1,
     "draft_vocab_blocks": "/workspace/scripts/fr13_dvk_subset_blocks.json",
     "draft_vocab_blocks_sha256": block_map_sha256,
-    "mandatory_weight_bytes": 27977022848,
-    "mandatory_weight_floor_ms": 102.479937172,
-    "one_sided_u95_cap_ms": 117.85192774780,
+    "mandatory_weight_bytes": 25210209416,
+    "mandatory_weight_floor_ms": 92.345089436,
+    "one_sided_u95_cap_ms": 106.19685285140,
     "subset_sha256": subset_sha256,
     "task_ids": expected_tasks,
     "task_marker": expected_marker,

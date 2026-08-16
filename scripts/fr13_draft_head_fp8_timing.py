@@ -40,9 +40,9 @@ MIN_RETAINED_WALL_FRACTION = 0.99
 MIN_TASK_COUNTER_STEPS = 64
 FLOORS = {
     False: {
-        "mandatory_weight_bytes": 27_977_022_848,
-        "weight_floor_ms": 102.479937172,
-        "one_sided_u95_cap_ms": 117.8519277478,
+        "mandatory_weight_bytes": 25_210_209_416,
+        "weight_floor_ms": 92.345089436,
+        "one_sided_u95_cap_ms": 106.1968528514,
     },
     True: {
         "mandatory_weight_bytes": 30_989_326_208,

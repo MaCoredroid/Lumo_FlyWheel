@@ -25,9 +25,9 @@ SFWD_PASS=$REPO/results/fr13_fixed32_sfwd_b1_real_task_byte_pass_20260801/run_ev
 SFWD_PASS_SHA256=7ccfaf5cc907909b0646b752b94027e250b234a3b98bf461de61e6ae70f31782
 BASELINE=$REPO/results/fr13_fixed32_qrow16_prod_exact4_b1_20260731T182827Z/hydra_valid/deploy_speed_qrow16_prod_exact4_b1_20260731T182827Z.json
 BASELINE_SHA256=0350e791bc825083bfc3635e11c875617fa1d3823eba5f93ebd7f392c50f18d0
-MANDATORY_WEIGHT_BYTES=27977022848
-MANDATORY_WEIGHT_FLOOR_MS=102.479937172
-ONE_SIDED_U95_CAP_MS=117.8519277478
+MANDATORY_WEIGHT_BYTES=25210209416
+MANDATORY_WEIGHT_FLOOR_MS=92.345089436
+ONE_SIDED_U95_CAP_MS=106.1968528514
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
@@ -275,7 +275,7 @@ if (
     or sorted(measure.get("task_instance_ids", [])) != task_ids
     or measure.get("draft_vocab_root") != 1
     or measure.get("draft_vocab_k") != 65536
-    or measure.get("mandatory_weight_bytes") != 27977022848
+    or measure.get("mandatory_weight_bytes") != 25210209416
 ):
     raise SystemExit("candidate measure is not exact4 K64 B1")
 for key in (

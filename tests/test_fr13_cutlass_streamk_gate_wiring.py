@@ -299,8 +299,8 @@ def test_real_b1_gate_disables_unrelated_candidates_and_requires_coverage() -> N
     assert 'export FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"' in gate
     assert '"draft_vocab_root": expected_draft_vocab_root' in gate
     assert '"draft_vocab_k": expected_draft_vocab_k' in gate
-    assert 'MANDATORY_WEIGHT_BYTES=37335563648' in gate
-    assert 'MANDATORY_WEIGHT_BYTES=27977022848' in gate
+    assert 'MANDATORY_WEIGHT_BYTES=25430574256' in gate
+    assert 'MANDATORY_WEIGHT_BYTES=25210209416' in gate
     assert 'MAX_COMPARISONS=320' in gate
     assert '"comparison_call_limit": expected_max_comparisons' in gate
     assert '"qualification_profile": expected_profile' in gate
@@ -467,12 +467,12 @@ def test_exact4_timing_is_real_full_wall_profile_bound() -> None:
     assert 'FR13_DRAFT_VOCAB_ROOT="$DRAFT_VOCAB_ROOT"' in timing
     assert 'FR13_DRAFT_VOCAB_K="$DRAFT_VOCAB_K"' in timing
     assert 'FR13_NEEDS_ALLOW="$NEEDS_ALLOW"' in timing
-    assert "MANDATORY_WEIGHT_BYTES=37335563648" in timing
-    assert "MANDATORY_WEIGHT_FLOOR_MS=136.7603064029304" in timing
-    assert "ONE_SIDED_U95_CAP_MS=157.27435236336996" in timing
-    assert "MANDATORY_WEIGHT_BYTES=27977022848" in timing
-    assert "MANDATORY_WEIGHT_FLOOR_MS=102.479937172" in timing
-    assert "ONE_SIDED_U95_CAP_MS=117.8519277478" in timing
+    assert "MANDATORY_WEIGHT_BYTES=25430574256" in timing
+    assert "MANDATORY_WEIGHT_FLOOR_MS=93.15228665201465" in timing
+    assert "ONE_SIDED_U95_CAP_MS=107.12512964981684" in timing
+    assert "MANDATORY_WEIGHT_BYTES=25210209416" in timing
+    assert "MANDATORY_WEIGHT_FLOOR_MS=92.345089436" in timing
+    assert "ONE_SIDED_U95_CAP_MS=106.1968528514" in timing
     assert (
         "STREAMK_SHA256="
         "f9bbbb8dc4ffc2227a71d2bc7b260e586ffbdc0fd946749e4f69e322c46a362d" in timing

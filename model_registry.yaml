@@ -53,6 +53,45 @@ models:
     max_num_batched_tokens: 8192
     max_num_seqs: 4
 
+  # FR14 ARM B (2026-08-16) -- the AGGRESSIVE side of the bytes ablation and
+  # the entry the fixed32 serving stack is now pinned to. Same stack, same
+  # workload as the unsloth entry above; the only variable is the bytes.
+  #
+  # Why this one is worth a second NVFP4 entry: RadixArk quantises the LM HEAD
+  # (NVFP4, 0.715 GB) where unsloth's had to be dequantised to BF16 (2.543 GB)
+  # to load at all. That single term is 1.83 of the 2.77 GB the fixed32 floor
+  # drops (102.480 -> 92.345 ms); the aggressive backbone alone is worth 3.4 ms.
+  #
+  # quantization: modelopt -- NOT compressed-tensors. This checkpoint carries a
+  # ModelOpt hf_quant_config.json (quant_algo MIXED_PRECISION, 401 quantized
+  # layers, lm_head keyed as bare "lm_head" with quant_algo NVFP4). vLLM routes
+  # it through ModelOptMixedPrecisionConfig, a different class from the
+  # compressed-tensors path the unsloth entry uses.
+  #
+  # The local checkpoint is NOT byte-equal to the upstream revision: the KV
+  # surgery removed quantization_config.kv_cache_scheme (uncalibrated FP8 KV
+  # that TREE_ATTN cannot accept, and for which the repo ships zero k/v_scale
+  # tensors) and tokenizer_config.json was normalised to official 3.8. Both are
+  # recorded in-dir / in results/fr14_nvfp4_port_20260816 and pinned by
+  # fr13_fixed32_contract.MODEL_FILE_RECORDS. The revision above is the SOURCE,
+  # not a digest of what is on disk.
+  #
+  # kv_cache_dtype auto = BF16 KV, deliberately: doctrine, TREE_ATTN legality,
+  # and strictly safer than uncalibrated FP8 KV. gpu_memory_utilization /
+  # max_model_len are the values the arm-B boot smoke actually passed at
+  # (results/fr14_nvfp4_port_20260816/radixark_smoke_serve_PASS.json).
+  qwen3.8-27b-nvfp4-radixark:
+    hf_repo: RadixArk/Qwen3.8-27B-NVFP4
+    hf_revision: 554ebba9b5f1b79dc11246341960360e6ef05ef4
+    local_path: /models/qwen3.8-27b-nvfp4-radixark
+    quantization: modelopt
+    dtype: auto
+    kv_cache_dtype: auto
+    max_model_len: 32768
+    gpu_memory_utilization: 0.70
+    max_num_batched_tokens: 8192
+    max_num_seqs: 4
+
   qwen3.8-27b-fp8:
     hf_repo: Qwen/Qwen3.8-27B-FP8
     hf_revision: 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a

@@ -96,11 +96,11 @@ source "$SEQUENCE"
 unset -f run_variant
 [[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
    && "$FR13_DRAFT_VOCAB_K" == "0" \
-   && "$FR13_MANDATORY_WEIGHT_BYTES" == "37335563648" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "136.760306403" ]] \
+   && "$FR13_MANDATORY_WEIGHT_BYTES" == "25430574256" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "93.152286652" ]] \
   || { echo "full-vocabulary fixed32 floor contract did not engage" >&2; exit 2; }
 
-printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\narm=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\nfixed32_mode=hydra27_fixed32\nphysical_drafts=31\nactive_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_k=0\ndraft_vocab_root=0\nmandatory_weight_bytes=37335563648\nweight_floor_ms=136.760306403\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\ngraph_pass_sha256=%s\ngraph_gate_verdict_sha256=%s\nruntime_manifest_sha256=%s\ngate_runner_sha256=%s\nfr10_metrics=1\nring_export=1\nflags_inkernel=1\ntree_gdn_geom_override=BV=8\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_exact4_b4_timing_candidate\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_default_enabled=0\narm=hydra27_fixed32\nlineage=successor_to_legacy_hydra23_not_same_topology\nfixed32_mode=hydra27_fixed32\nphysical_drafts=31\nactive_drafts=27\nvalid_mask=0x7abdffff\ndraft_vocab_k=0\ndraft_vocab_root=0\nmandatory_weight_bytes=25430574256\nweight_floor_ms=93.152286652\nlauncher_pid=%s\nrunroot=%s\nstock_arm=%s\ncandidate_arm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nstock_fa2_sha256=%s\ngraph_pass_sha256=%s\ngraph_gate_verdict_sha256=%s\nruntime_manifest_sha256=%s\ngate_runner_sha256=%s\nfr10_metrics=1\nring_export=1\nflags_inkernel=1\ntree_gdn_geom_override=BV=8\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$$" "$RUNROOT_ABS" "$STOCK_ARM" "$CANDIDATE_ARM" \
   "$(git rev-parse HEAD)" "$RUNNER_SHA256" "$SUBSET_SHA256" \
   "$STOCK_FA2_SHA256" "$GRAPH_PASS_SHA256" \
@@ -307,10 +307,10 @@ def validate(record, label):
         or record.get("n_tasks") != 4
         or sorted(record.get("task_instance_ids", [])) != task_ids
         or record.get("floor_is_full_step_hardware_floor") is not False
-        or record.get("mandatory_weight_bytes") != 37_335_563_648
+        or record.get("mandatory_weight_bytes") != 25_430_574_256
         or not math.isclose(
             float(record.get("weight_floor_ms", 0.0)),
-            136.760306403,
+            93.152286652,
             rel_tol=0.0,
             abs_tol=1e-9,
         )

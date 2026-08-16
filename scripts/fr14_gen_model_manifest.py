@@ -24,16 +24,24 @@ Semantics reproduced verbatim from ``_pinned_model_files`` (contract.py):
 * the canonical digest is ``sha256(canonical_bytes(records))`` where
   ``canonical_bytes`` is compact sorted-key ASCII JSON.
 
-The FR14 checkpoint deliberately keeps the surgery sidecars in the pinned set:
-``.lumo_lmhead_surgery.json`` and ``config.json.pre_lmhead_surgery.bak`` are the
-provenance of the dequantised BF16 lm_head that made this checkpoint bootable
-(REDTEAM_20260816.md pass 6), so they are evidence, not noise, and a silent
-deletion of either must fail the contract.
+Both FR14 checkpoints deliberately keep their surgery sidecars in the pinned
+set -- they are evidence, not noise, and a silent deletion of any of them must
+fail the contract:
+
+* arm A (``/models/qwen3.8-27b-nvfp4``, unsloth): ``.lumo_lmhead_surgery.json``
+  + ``config.json.pre_lmhead_surgery.bak`` (the FP8 lm_head dequantised to BF16
+  so the checkpoint could boot at all -- REDTEAM_20260816.md pass 6) and
+  ``.lumo_kv_scheme_surgery.json`` + its ``.bak``.
+* arm B (``/models/qwen3.8-27b-nvfp4-radixark``, RadixArk, LIVE):
+  ``.lumo_radixark_kv_surgery.json`` + ``config.json.pre_kv_surgery.bak`` +
+  ``hf_quant_config.json.pre_kv_surgery.bak``. There is deliberately NO lm_head
+  sidecar: arm B serves the NVFP4 head as shipped, through the boot-time loader
+  patch, and the absence of a surgery record is itself the evidence for that.
 
 Usage::
 
     python3 scripts/fr14_gen_model_manifest.py \
-        --model-root /models/qwen3.8-27b-nvfp4 \
+        --model-root /models/qwen3.8-27b-nvfp4-radixark \
         --emit-python /tmp/model_block.py \
         --output /tmp/fr14_model_manifest.json
 

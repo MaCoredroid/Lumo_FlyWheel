@@ -85,7 +85,7 @@ def _metrics(
         normal_requests * contract.QWEN_VISIBLE_MAX_OUTPUT_TOKENS
         + compactions * contract.QWEN_COMPACTION_MAX_OUTPUT_TOKENS
     )
-    base = 'engine="0",model_name="qwen3.8-27b-nvfp4"'
+    base = 'engine="0",model_name="qwen3.8-27b-nvfp4-radixark"'
     lines = [
         f"vllm:prompt_tokens_total{{{base}}} {prompt_tokens}",
         f"vllm:generation_tokens_total{{{base}}} {generation_tokens}",
@@ -101,7 +101,7 @@ def _metrics(
     }
     for reason, value in counts.items():
         labels = (
-            f'engine="0",finished_reason="{reason}",model_name="qwen3.8-27b-nvfp4"'
+            f'engine="0",finished_reason="{reason}",model_name="qwen3.8-27b-nvfp4-radixark"'
         )
         lines.append(f"vllm:request_success_total{{{labels}}} {value}")
     for le, value in (
@@ -110,7 +110,7 @@ def _metrics(
         ("50000.0", completed),
         ("+Inf", completed),
     ):
-        labels = f'engine="0",le="{le}",model_name="qwen3.8-27b-nvfp4"'
+        labels = f'engine="0",le="{le}",model_name="qwen3.8-27b-nvfp4-radixark"'
         lines.append(f"vllm:request_params_max_tokens_bucket{{{labels}}} {value}")
     return ("\n".join(lines) + "\n").encode("ascii")
 
@@ -293,8 +293,8 @@ def test_a_short_stop_count_is_still_refused_and_names_the_numbers() -> None:
     pre, post = _real_shape_metrics(length_terminated=REAL_LENGTH)
     # one completion vanishes from both terminal classes
     post = post.replace(
-        f'finished_reason="stop",model_name="qwen3.8-27b-nvfp4"}} {REAL_STOP}'.encode(),
-        f'finished_reason="stop",model_name="qwen3.8-27b-nvfp4"}} {REAL_STOP - 1}'.encode(),
+        f'finished_reason="stop",model_name="qwen3.8-27b-nvfp4-radixark"}} {REAL_STOP}'.encode(),
+        f'finished_reason="stop",model_name="qwen3.8-27b-nvfp4-radixark"}} {REAL_STOP - 1}'.encode(),
     )
     with pytest.raises(contract.ContractError) as excinfo:
         contract.validate_fixed32_qwen_campaign_metrics(
@@ -315,8 +315,8 @@ def test_a_short_stop_count_is_still_refused_and_names_the_numbers() -> None:
 def test_a_length_termination_does_not_excuse_a_broken_histogram() -> None:
     pre, post = _real_shape_metrics(length_terminated=REAL_LENGTH)
     post = post.replace(
-        f'le="+Inf",model_name="qwen3.8-27b-nvfp4"}} {REAL_COMPLETED_TOTAL}'.encode(),
-        f'le="+Inf",model_name="qwen3.8-27b-nvfp4"}} {REAL_COMPLETED_TOTAL - 1}'.encode(),
+        f'le="+Inf",model_name="qwen3.8-27b-nvfp4-radixark"}} {REAL_COMPLETED_TOTAL}'.encode(),
+        f'le="+Inf",model_name="qwen3.8-27b-nvfp4-radixark"}} {REAL_COMPLETED_TOTAL - 1}'.encode(),
     )
     with pytest.raises(contract.ContractError) as excinfo:
         contract.validate_fixed32_qwen_campaign_metrics(

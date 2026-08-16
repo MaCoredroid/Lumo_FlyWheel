@@ -29,9 +29,9 @@ BLOCK_MAP=scripts/fr13_dvk_subset_blocks.json
 BLOCK_MAP_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
 BLOCK_MAP_SHA256=85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
-MANDATORY_WEIGHT_BYTES=27977022848
-WEIGHT_FLOOR_MS=102.479937172
-ONE_SIDED_U95_CAP_MS=117.8519277478
+MANDATORY_WEIGHT_BYTES=25210209416
+WEIGHT_FLOOR_MS=92.345089436
+ONE_SIDED_U95_CAP_MS=106.1968528514
 
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
   || { echo "TAG contains unsafe characters" >&2; exit 2; }
@@ -248,7 +248,7 @@ def validate_measure(payload, arm):
         or sorted(payload.get("task_instance_ids", [])) != task_ids
         or payload.get("draft_vocab_root") != 1
         or payload.get("draft_vocab_k") != 65536
-        or payload.get("mandatory_weight_bytes") != 27977022848
+        or payload.get("mandatory_weight_bytes") != 25210209416
         or payload.get("weight_floor_ms") != floor_ms
     ):
         raise SystemExit(f"{arm} is not a canonical exact4 K64/root1 B1 measure")

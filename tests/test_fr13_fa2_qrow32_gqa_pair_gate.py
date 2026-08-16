@@ -189,7 +189,7 @@ def _arm_args(
         tmp_path / f"{mode}.arm.json",
         json.dumps(
             {
-                "model_name_or_path": "qwen3.8-27b-nvfp4::qwen-code-0.19.4::q38-a",
+                "model_name_or_path": "qwen3.8-27b-nvfp4-radixark::qwen-code-0.19.4::q38-a",
                 "started_at": "2026-08-10T05:42:06Z",
                 "ended_at": "2026-08-10T06:33:40Z",
                 "instances_total": 4,

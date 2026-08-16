@@ -13,7 +13,7 @@ const BASE = [
 '(pinned 3dbe092e, NEVER /tmp). int-view never atol. Pathspec commit on fr13-speedfix. NO GPU (OPT-1 wf w7vhfiwno',
 'holds the GPU; this is the CPU build, the B=4 sweep runs after). MAX 2 concurrent workflows.',
 '',
-'CONTEXT: the current full-vocabulary floor is 136.7603064029304ms with one-sided U95 acceptance cap 157.27435236336996ms; B=1 decode is HBM-bound so verify-forward',
+'CONTEXT: the current full-vocabulary floor is 93.15228665201465ms with one-sided U95 acceptance cap 107.12512964981684ms; B=1 decode is HBM-bound so verify-forward',
 'cost scales ~linearly with node count but is NOT the TPS lever - accept/event + the codex trajectory dominate;',
 'cat6root (pad8, fewer nodes) only shaved -1.7% s/fwd but LOST accept -> net -4.7% TPS. So the right direction is',
 'WIDER trees (MORE candidates -> MORE accept), and at B=4 (the deployable co-residency regime, where the FR13',

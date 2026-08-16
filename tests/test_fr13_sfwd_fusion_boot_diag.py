@@ -125,7 +125,7 @@ def test_route_preamble_exports_the_pin_the_launcher_validates(
     ).stdout.split()
     walk_cap, weight_bytes, autocommit = out
     assert walk_cap.isdigit() and int(walk_cap) > 0
-    assert weight_bytes == "27977022848"
+    assert weight_bytes == "25210209416"
     assert autocommit == "0"
 
 
@@ -567,7 +567,7 @@ def test_smoke_sampling_is_what_the_proxy_would_have_stamped() -> None:
         "LUMO_PROXY_FORCE_MIN_P": "0",
         "LUMO_PROXY_MAX_OUTPUT_TOKENS": "32768",
     }
-    base = {"model": "qwen3.8-27b-nvfp4", "messages": [], "max_tokens": 96, "stream": False}
+    base = {"model": "qwen3.8-27b-nvfp4-radixark", "messages": [], "max_tokens": 96, "stream": False}
     with mock.patch.dict(os.environ, campaign_env, clear=False):
         stamped = normalize_chat_completions_request_payload(base)
     sampling = _smoke_sampling()
@@ -743,7 +743,7 @@ def _run_smoke_driver(tmp_path: Path, chat_body: dict, count: int = 1):
         proc = subprocess.run(
             [
                 sys.executable, str(_smoke_driver(tmp_path)), str(secret),
-                str(subset), task_id, str(port), "qwen3.8-27b-nvfp4", str(count), "96",
+                str(subset), task_id, str(port), "qwen3.8-27b-nvfp4-radixark", str(count), "96",
                 str(record), str(evidence),
                 *[f"{key}={value}" for key, value in _smoke_sampling().items()],
             ],

@@ -590,15 +590,17 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
     base = {
         "schema": "fr13.fixed32.fa2_qrow32_nosplit.exact4_timing.v1",
         "run_classification": "real_swe_verified_exact4_qrow32_nosplit",
-        # FR14: the synthetic operating point moves with the floor. FR13 put
-        # this fixture at wall 130.0 / u95 135.0 against a 119.658 floor and a
-        # 137.607 cap -- just above the floor, just under the cap, which is the
-        # only placement where the screen assertions below carry information.
-        # The FR14 floor is 102.480 and the cap 117.852, so the fixture is
-        # re-placed at the same relative position (wall 111.0 / u95 115.0).
+        # The synthetic operating point moves with the floor, every time. FR13
+        # put this fixture at wall 130.0 / u95 135.0 against a 119.658 floor
+        # and a 137.607 cap -- just above the floor, just under the cap, which
+        # is the only placement where the screen assertions below carry
+        # information. FR14 arm A (102.480 / 117.852) moved it to 111.0 /
+        # 115.0; FR14 arm B's floor is 92.345 and its cap 106.197, so it moves
+        # again to 100.0 / 103.5. The RATIOS are what is held fixed:
+        # wall/floor 1.083, u95/floor 1.121, in every generation.
         "descriptive_equal_task_one_sided_u95": {
-            "mean_ms": 111.0,
-            "u95_ms": 115.0,
+            "mean_ms": 100.0,
+            "u95_ms": 103.5,
             "descriptive_screen_pass": True,
         },
         "exact16_eligible": True,
@@ -609,15 +611,15 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         (
             json.dumps(
                 {
-                    "step_wall_ms": 111.0,
+                    "step_wall_ms": 100.0,
                     "measured_tps_fullstep_wall": 40.0,
-                    "s_per_fwd_gpu": 0.068,
-                    "drafter_gpu_ms_per_step": 18.0,
-                    "committer_gpu_ms_per_step": 9.0,
-                    "overhead_other_ms_per_event": 16.0,
+                    "s_per_fwd_gpu": 0.061,
+                    "drafter_gpu_ms_per_step": 16.0,
+                    "committer_gpu_ms_per_step": 8.0,
+                    "overhead_other_ms_per_event": 15.0,
                     "accept_per_event": 4.0,
                     "committed_per_event": 5.0,
-                    "floor_ratio": 111.0 / 102.479937172,
+                    "floor_ratio": 100.0 / 92.345089436,
                     "derived_tps_fullstep_gpu": 45.0,
                 },
                 sort_keys=True,
@@ -738,8 +740,8 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
         pass_sidecar_sha256="4" * 64,
         runner_sha256="5" * 64,
         block_map_sha256="6" * 64,
-        floor_ms=102.479937172,
-        cap_ms=117.8519277478,
+        floor_ms=92.345089436,
+        cap_ms=106.1968528514,
         arm="composed",
         container_env=container,
         docker_log=docker,
@@ -773,12 +775,14 @@ def test_composed_reducer_emits_phase_tps_u95_and_evidence(
     assert result["run_classification"] == (
         "real_swe_verified_exact4_b1_composed_cfwd_kernel_stack"
     )
+    # The four phases still sum to the wall (61 + 16 + 8 + 15 = 100), which is
+    # what makes the breakdown a decomposition rather than four loose numbers.
     assert result["phase_breakdown_ms_per_event"] == {
-        "sfwd_verify_gpu": 68.0,
-        "dfwd_drafter_gpu": 18.0,
-        "cfwd_committer_gpu": 9.0,
-        "host_and_unattributed": 16.0,
-        "wall_full_step": 111.0,
+        "sfwd_verify_gpu": 61.0,
+        "dfwd_drafter_gpu": 16.0,
+        "cfwd_committer_gpu": 8.0,
+        "host_and_unattributed": 15.0,
+        "wall_full_step": 100.0,
     }
     assert result["full_step_tps"] == {"wall": 40.0, "gpu_components": 45.0}
     assert result["acceptance"]["descriptive_screen_pass"] is True

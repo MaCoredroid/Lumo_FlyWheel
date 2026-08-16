@@ -161,22 +161,61 @@ def test_historical_v2_correction_artifact_remains_immutable() -> None:
 
 
 def test_fr14_weight_ledger_matches_published_artifact() -> None:
-    """The LIVE ledger is the FR14 one and it is bound to its artifact."""
+    """The LIVE ledger is the FR14 ARM-B one and it is bound to its artifact.
+
+    Arm A's ledger (floor_ledger.json, conservative unsloth bytes) stays banked
+    in the same directory as the other half of the bytes ablation; the live
+    binding moved to floor_ledger_radixark.json when the constant train
+    re-pointed the stack, exactly as the FR13->FR14 train moved it off
+    results/fr13_hardware_floor_correction_20260731/floor_ledger.json.
+    """
     generated = build_ledger()
-    published = json.loads((FR14 / "floor_ledger.json").read_bytes())
+    published = json.loads((FR14 / "floor_ledger_radixark.json").read_bytes())
 
     assert published == generated
     assert generated["schema"] == "fr13.speculative_step_weight_ledger.v3"
-    assert generated["model_root"] == "/models/qwen3.8-27b-nvfp4"
+    assert generated["model_root"] == "/models/qwen3.8-27b-nvfp4-radixark"
     assert MTP_FORWARD_BYTES_PER_PASS == 849_398_784
 
     root_64k = generated["scenarios"]["root_64k_five_64k_draft_heads"]
-    assert root_64k["mandatory_weight_bytes"] == 27_977_022_848
-    assert root_64k["mandatory_weight_floor_ms"] == 102.479937172
-    # The floor fell to 0.856x, not to 0.5x: the BF16 lm_head did not move and
-    # the BF16 MTP shard grew. Pin the ratio so a future "NVFP4 halves it"
-    # edit cannot land quietly.
-    assert 0.85 < root_64k["mandatory_weight_floor_ms"] / 119.658015414 < 0.86
+    assert root_64k["mandatory_weight_bytes"] == 25_210_209_416
+    assert root_64k["mandatory_weight_floor_ms"] == 92.345089436
+    # Still not 0.5x of FR13 even with the aggressive recipe: 0.772x. The BF16
+    # MTP head grew and PHASE 1 keeps the five K64 draft-head reads in BF16.
+    # Pin the ratio so a future "NVFP4 halves it" edit cannot land quietly.
+    assert 0.77 < root_64k["mandatory_weight_floor_ms"] / 119.658015414 < 0.78
+
+    # THE ABLATION ITSELF: arm A is banked beside us and must remain the
+    # conservative-bytes record, so the delta this campaign measures cannot be
+    # rewritten by editing one file.
+    arm_a = json.loads((FR14 / "floor_ledger.json").read_bytes())
+    arm_a_root = arm_a["scenarios"]["root_64k_five_64k_draft_heads"]
+    assert arm_a["model_root"] == "/models/qwen3.8-27b-nvfp4"
+    assert arm_a_root["mandatory_weight_bytes"] == 27_977_022_848
+    assert arm_a_root["mandatory_weight_floor_ms"] == 102.479937172
+    assert (
+        arm_a_root["mandatory_weight_bytes"]
+        - root_64k["mandatory_weight_bytes"]
+    ) == 2_766_813_432
+
+    # Nearly the whole delta is the HEAD, not the backbone. Guard the claim.
+    head = generated["components"]["nvfp4_head"]
+    assert head["bytes"] == 715_161_608
+    assert head["bf16_head_reference_bytes"] == 248_320 * 5_120 * 2
+    assert head["bf16_head_reference_bytes"] - head["bytes"] == 1_827_635_192
+
+
+def test_fr14_phase2_projection_is_labelled_not_pinned() -> None:
+    """The FP4 draft-head read is a projection; nothing may quote it as a floor."""
+    generated = build_ledger()
+    phase2 = generated["projected_scenarios"]["root_64k_five_nvfp4_draft_heads"]
+
+    assert phase2["mandatory_weight_bytes"] == 22_798_484_616
+    assert phase2["mandatory_weight_floor_ms"] == 83.510932659
+    assert phase2["draft_64k_nvfp4_head_bytes"] == 65_536 * 2_560 + 65_536 * 320
+    assert "PROJECTION, NOT PINNED" in phase2["status"]
+    # It must NOT be reachable as a live scenario.
+    assert "root_64k_five_nvfp4_draft_heads" not in generated["scenarios"]
 
 
 def test_fr14_ledger_reproduces_by_summing_the_checkpoint() -> None:
@@ -191,11 +230,29 @@ def test_fr14_ledger_reproduces_by_summing_the_checkpoint() -> None:
     report = verify_pinned_constants(MODEL_ROOT)
     assert report["problems"] == []
     assert report["pass"] is True
-    assert report["target_model_bytes"] == 17_831_788_928
+    assert report["target_model_bytes"] == 16_892_610_688
     assert report["mtp_forward_bytes_per_pass"] == 849_398_784
-    # lm_head is BF16 after the FR14 surgery -- the whole reason the head
-    # bytes did not shrink and FR13_DRAFT_HEAD_FP8 is retired.
-    assert report["lm_head_bytes_on_disk"] == 248_320 * 5_120 * 2
+    # The verifier head is the 4-tensor NVFP4 set as shipped -- no lm_head
+    # surgery in arm B. If this ever equals the BF16 product the head silently
+    # got dequantised and 6.7 ms of the floor is fiction.
+    assert report["lm_head_bytes_on_disk"] == 715_161_608
+    assert report["lm_head_tensor_count"] == 4
+    assert report["lm_head_bytes_on_disk"] != 248_320 * 5_120 * 2
+
+    # The drafter is found BY NAME across the three shards: RadixArk puts the
+    # 15 mtp.* tensors inside model-00003-of-00003.safetensors, so a
+    # filename-keyed ledger would have missed them entirely.
+    assert report["mtp_tensor_count"] == 15
+    assert report["shards"] == [
+        "model-00001-of-00003.safetensors",
+        "model-00002-of-00003.safetensors",
+        "model-00003-of-00003.safetensors",
+    ]
+    # Whole-ledger cross-check against RadixArk's own qualification.json
+    # output_indexed_payload_bytes: catches a truncated shard that happens to
+    # leave one bucket intact.
+    assert report["checkpoint_total_tensor_bytes"] == 21_921_428_072
+    assert report["checkpoint_total_tensor_count"] == 2_194
 
 
 def test_curated_attribution_binds_source_and_historical_lifecycle() -> None:

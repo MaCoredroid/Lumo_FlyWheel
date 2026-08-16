@@ -10,9 +10,11 @@ Qwen3.6-27B-FP8 MEASUREMENTS. Re-pointing only the weight constants would
 produce a half-FR13/half-FR14 artifact -- worse than leaving it alone, because
 it would read as an FR14 result.
 
-The FR14 weight floor is 27_977_022_848 B / 102.479937172 ms
-(scripts/fr13_hardware_floor_ledger.py,
-results/fr14_nvfp4_port_20260816/floor_ledger.json). The FR14 HONEST floor
+The LIVE FR14 weight floor is arm B (RadixArk aggressive bytes),
+25_210_209_416 B / 92.345089436 ms (scripts/fr13_hardware_floor_ledger.py,
+results/fr14_nvfp4_port_20260816/floor_ledger_radixark.json); arm A
+(conservative bytes) was 27_977_022_848 B / 102.479937172 ms and is banked in
+the same directory's floor_ledger.json. The FR14 HONEST floor
 additionally needs per-request KV/state/logit terms measured on the new serve;
 the geometry is unchanged (same heads, head_dim, GDN dims, vocab), so the
 +7.117 ms/request term at C=18_031 carries, but nothing here should be quoted

@@ -104,44 +104,55 @@ export FR13_FLAGS_INKERNEL=1
 # Optimistic mandatory-weight-read floor only. Only the exact logical head-read
 # ledgers below are admitted; inherited byte/floor declarations are replaced.
 #
-# FR14 (2026-08-16): every byte below is re-derived by SUMMING the served
-# Qwen3.8-27B-NVFP4 checkpoint's real tensor spans -- see
+# FR14 ARM B (2026-08-16): every byte below is re-derived by SUMMING the served
+# RadixArk/Qwen3.8-27B-NVFP4 checkpoint's real tensor spans -- see
 # scripts/fr13_hardware_floor_ledger.py (--derive-from-checkpoint reproduces
-# the arithmetic) and results/fr14_nvfp4_port_20260816/floor_ledger.json.
-# Nothing here is an FR13 constant scaled by a quantisation ratio: the BF16
-# lm_head did not shrink at all and the BF16 MTP shard got BIGGER, so the
-# fixed32 floor fell only 119.658015414 -> 102.479937172 ms (0.856x), not the
-# ~0.5x a naive 4-bit argument predicts.
+# the arithmetic against the three shards) and
+# results/fr14_nvfp4_port_20260816/floor_ledger_radixark.json.
+# Nothing here is a constant scaled by a quantisation ratio. The floor still
+# does not halve: 119.658015414 (FR13 fp8-3.6) -> 102.479937172 (arm A,
+# conservative bytes) -> 92.345089436 (arm B, aggressive bytes) = 0.772x of
+# FR13, because the BF16 MTP head got BIGGER and PHASE 1 keeps the five K64
+# draft-head reads in BF16. What arm B buys over arm A is almost entirely the
+# HEAD: NVFP4 lm_head 0.715 GB vs BF16 2.543 GB. The same aggressive backbone
+# with a BF16 head lands at 99.040 ms -- 3.44 ms, i.e. nothing.
 # Every ONE_SIDED_U95_CAP_MS derived from these floors is 1.15 x floor and is
 # PROVISIONAL: the FR14 objective bar is Mark's open ruling
 # (results/fr14_nvfp4_port_20260816/README.md, "Correctness bar -- PROPOSED,
 # AWAITING MARK"). No FR13 acceptance number transfers across a lossy requant.
 case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
   0:0)
-    export FR13_MANDATORY_WEIGHT_BYTES=37335563648
-    export FR13_WEIGHT_FLOOR_MS=136.7603064029304
+    export FR13_MANDATORY_WEIGHT_BYTES=25430574256
+    export FR13_WEIGHT_FLOOR_MS=93.15228665201465
     ;;
   65536:0)
-    export FR13_MANDATORY_WEIGHT_BYTES=29848731008
-    export FR13_WEIGHT_FLOOR_MS=109.336011018
+    export FR13_MANDATORY_WEIGHT_BYTES=25254282384
+    export FR13_WEIGHT_FLOOR_MS=92.506528879
     ;;
   65536:1)
     if [[ "$FR13_DRAFT_HEAD_FP8" == "1" ]]; then
       # FR14 RETIRED ARM. The FR13 sub-arm re-read the five K64 draft heads
       # as FP8 qweight + FP32 scales (1,678,131,200 B instead of
-      # 3,355,443,200 B) and claimed a 113.514015414 ms floor for it. The
-      # FR14 served checkpoint's lm_head is BF16: unsloth shipped an FP8
-      # per-channel head, this vLLM's qwen3_5 builds lm_head as an
+      # 3,355,443,200 B) and claimed a 113.514015414 ms floor for it.
+      # Neither FR14 arm leaves an FP8 head to read. Arm A: unsloth shipped an
+      # FP8 per-channel head, this vLLM's qwen3_5 built lm_head as an
       # UNQUANTIZED ParallelLMHead and refused to load it, and the lm_head
       # surgery dequantised it to BF16 to make the checkpoint bootable
-      # (results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md pass 6).
-      # There is no FP8 head to read, so the arm would pin a floor the
-      # hardware cannot realise. Refuse rather than measure nothing.
-      echo "FR13_DRAFT_HEAD_FP8 is RETIRED under the FR14 NVFP4 checkpoint: the served lm_head is BF16 (see .lumo_lmhead_surgery.json), so the FP8 draft-head floor is unrealisable" >&2
+      # (results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md pass 6). Arm B
+      # (live): the head IS quantised -- NVFP4 -- but PHASE 1 of the DVK port
+      # dequantises the 65,536 sliced rows to BF16 at boot so the sealed BF16
+      # GEMV units and the 128-id block map stay byte-identical, so the five
+      # draft-head reads are BF16 all the same.
+      # Either way the arm would pin a floor the hardware cannot realise.
+      # Refuse rather than measure nothing. The live successor is PHASE 2 --
+      # reading those slices AS NVFP4, 188,743,680 B each instead of
+      # 671,088,640, worth 8.834 ms (92.345 -> 83.511) -- which needs an FP4
+      # GEMV unit and carries its own byte gate.
+      echo "FR13_DRAFT_HEAD_FP8 is RETIRED under the FR14 NVFP4 checkpoint: the served head is NVFP4 and its K64 slice is dequantised to BF16 at boot, so the FP8 draft-head floor is unrealisable" >&2
       exit 2
     fi
-    export FR13_MANDATORY_WEIGHT_BYTES=27977022848
-    export FR13_WEIGHT_FLOOR_MS=102.479937172
+    export FR13_MANDATORY_WEIGHT_BYTES=25210209416
+    export FR13_WEIGHT_FLOOR_MS=92.345089436
     ;;
   *)
     echo "unsupported fixed32 draft-vocab floor configuration: K=${FR13_DRAFT_VOCAB_K:-unset} ROOT=$FR13_DRAFT_VOCAB_ROOT" >&2

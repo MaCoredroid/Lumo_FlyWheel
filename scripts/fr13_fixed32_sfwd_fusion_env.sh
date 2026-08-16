@@ -182,7 +182,7 @@ fr13_fixed32_sfwd_fusion_route_preamble() {
   done
   [[ "${FR13_FIXED32_TAW_WALK_CAP:-}" =~ ^[0-9]+$ ]] \
     || { echo "fixed32 SFWD fusion preamble walk cap is not an integer" >&2; return 2; }
-  [[ "${FR13_MANDATORY_WEIGHT_BYTES:-}" == "27977022848" ]] \
+  [[ "${FR13_MANDATORY_WEIGHT_BYTES:-}" == "25210209416" ]] \
     || { echo "fixed32 SFWD fusion preamble weight contract drifted" >&2; return 2; }
   [[ "${LUMO_SWE_AUTOCOMMIT:-}" == "0" ]] \
     || { echo "fixed32 SFWD fusion preamble must not autocommit" >&2; return 2; }

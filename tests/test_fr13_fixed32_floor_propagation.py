@@ -29,10 +29,10 @@ GATE = REPO / "scripts" / "fr13_floor_gate.py"
 
 def test_canonical_fixed32_floor_math() -> None:
     assert BANDWIDTH_BYTES_PER_S == 273_000_000_000
-    assert FIXED32_MANDATORY_WEIGHT_BYTES == 27_977_022_848
-    assert FIXED32_MANDATORY_WEIGHT_FLOOR_MS == 102.479937172
+    assert FIXED32_MANDATORY_WEIGHT_BYTES == 25_210_209_416
+    assert FIXED32_MANDATORY_WEIGHT_FLOOR_MS == 92.345089436
     assert float(FIXED32_SLO_MULTIPLIER) == 1.15
-    assert FIXED32_SLO_CAP_MS == 117.851927748
+    assert FIXED32_SLO_CAP_MS == 106.196852851
 
     scenario = build_ledger()["scenarios"]["root_64k_five_64k_draft_heads"]
     assert scenario["mandatory_weight_bytes"] == FIXED32_MANDATORY_WEIGHT_BYTES
@@ -41,9 +41,9 @@ def test_canonical_fixed32_floor_math() -> None:
         == FIXED32_MANDATORY_WEIGHT_FLOOR_MS
     )
     assert scenario["nonweight_costs_included"] is False
-    assert FULL_VOCAB_MANDATORY_WEIGHT_BYTES == 37_335_563_648
-    assert FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS == 136.7603064029304
-    assert FULL_VOCAB_SLO_CAP_MS == 157.27435236336996
+    assert FULL_VOCAB_MANDATORY_WEIGHT_BYTES == 25_430_574_256
+    assert FULL_VOCAB_MANDATORY_WEIGHT_FLOOR_MS == 93.15228665201465
+    assert FULL_VOCAB_SLO_CAP_MS == 107.12512964981684
 
 
 def test_fixed32_gate_uses_corrected_weight_bound_and_exact_cap() -> None:
@@ -64,9 +64,9 @@ def test_fixed32_gate_uses_corrected_weight_bound_and_exact_cap() -> None:
 @pytest.mark.parametrize(
     ("draft_vocab_k", "draft_vocab_root", "expected_bytes", "expected_floor"),
     (
-        ("0", "0", "37335563648", "136.7603064029304"),
-        ("65536", "0", "29848731008", "109.336011018"),
-        ("65536", "1", "27977022848", "102.479937172"),
+        ("0", "0", "25430574256", "93.15228665201465"),
+        ("65536", "0", "25254282384", "92.506528879"),
+        ("65536", "1", "25210209416", "92.345089436"),
     ),
 )
 def test_fixed32_sequence_exports_exact_configured_floor(
@@ -113,7 +113,7 @@ def test_active_fixed32_paths_cannot_fall_back_to_legacy_floor() -> None:
         "FR13_MANDATORY_WEIGHT_BYTES|${FR13_MANDATORY_WEIGHT_BYTES:-}|"
         "$_fixed32_expected_mandatory_weight_bytes"
     ) in texts[LAUNCHER]
-    assert "_fixed32_expected_weight_floor_ms=136.7603064029304" in texts[LAUNCHER]
+    assert "_fixed32_expected_weight_floor_ms=93.15228665201465" in texts[LAUNCHER]
     assert "FIXED32_MANDATORY_WEIGHT_FLOOR_MS" in texts[MEASURE]
     assert "FIXED32_MANDATORY_WEIGHT_FLOOR_MS" in texts[GATE]
 
@@ -138,7 +138,7 @@ def test_launcher_whitelists_full_vocab_ledger_before_docker() -> None:
 
     assert whitelist < mandatory < docker
     assert "0:0)" in text[whitelist:mandatory]
-    assert "_fixed32_expected_mandatory_weight_bytes=37335563648" in text
+    assert "_fixed32_expected_mandatory_weight_bytes=25430574256" in text
     assert "FR13_NEEDS_ALLOW:-}" in text[whitelist:mandatory]
     assert '( "$MAX_NUM_SEQS" == "1" || "$MAX_NUM_SEQS" == "4" )' in text[
         whitelist:mandatory
@@ -154,5 +154,5 @@ def test_b4_workflows_use_full_vocab_floor_and_cap() -> None:
         text = (REPO / "scripts" / name).read_text(encoding="utf-8")
         assert "98.6ms weight-read floor" not in text
         assert "113.39" not in text
-        assert "136.7603064029304ms" in text
-        assert "157.27435236336996ms" in text
+        assert "93.15228665201465ms" in text
+        assert "107.12512964981684ms" in text
