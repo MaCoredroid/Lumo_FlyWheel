@@ -1,0 +1,171 @@
+{
+ "arm": "radixark_aggressive_nvfp4",
+ "bandwidth_bytes_per_s": 273000000000,
+ "campaign": "fr14_nvfp4_port_20260816",
+ "comparison": {
+  "deltas_ms_vs_unsloth": {
+   "root_64k_bf16_head_bf16_draft": 3.4402,
+   "root_64k_fp8_head_bf16_draft": 8.0955,
+   "root_64k_nvfp4_head_bf16_draft": 10.1348,
+   "root_64k_nvfp4_head_nvfp4_draft": 18.969,
+   "root_64k_nvfp4_head_nvfp4_draft_mtp_fp8": 26.745
+  },
+  "unsloth_conservative_root_64k_ms": 102.479937172
+ },
+ "components": {
+  "draft_64k_bf16_head": {
+   "bytes": 671088640,
+   "element_bytes": 2,
+   "hidden_size": 5120,
+   "rows": 65536
+  },
+  "draft_64k_fp8_head": {
+   "bytes": 335675392,
+   "hypothetical": true,
+   "rows": 65536
+  },
+  "draft_64k_nvfp4_head": {
+   "bytes": 188743680,
+   "rows": 65536,
+   "source": "65536-row slice of the NVFP4 head: 65536*2560 packed U8 + 65536*320 F8_E4M3 block scales (row-aligned by construction)"
+  },
+  "fp8_head": {
+   "bytes": 1271895040,
+   "hypothetical": true,
+   "source": "plan-B: lm_head dequantised to FP8 per-channel (weight F8_E4M3 [248320,5120] + weight_scale BF16 [248320,1]); corroborated by the unsloth lm_head surgery byte delta"
+  },
+  "full_bf16_head": {
+   "bytes": 2542796800,
+   "element_bytes": 2,
+   "hidden_size": 5120,
+   "hypothetical": true,
+   "rows": 248320,
+   "source": "the unsloth arm's served head, kept as the comparison baseline"
+  },
+  "mtp_forward": {
+   "bytes": 4246993920,
+   "bytes_per_pass": 849398784,
+   "initial_passes": 1,
+   "passes": 5,
+   "post_root_graph_passes": 4,
+   "source": "summed tensor spans of mtp.* (15 tensors, all BF16)"
+  },
+  "mtp_forward_fp8_requant": {
+   "bytes": 2124145920,
+   "bytes_per_pass": 424829184,
+   "hypothetical": true,
+   "passes": 5,
+   "source": "PROJECTION: 2-D mtp matrices at FP8 e4m3 + 128x128 F32 block scales, 1-D norms left BF16"
+  },
+  "nvfp4_head": {
+   "bytes": 715161608,
+   "source": "summed tensor spans of lm_head.* as shipped (ModelOpt NVFP4 4-tensor set)",
+   "tensors": {
+    "lm_head.input_scale": {
+     "bytes": 4,
+     "dtype": "F32",
+     "shape": []
+    },
+    "lm_head.weight": {
+     "bytes": 635699200,
+     "dtype": "U8",
+     "shape": [
+      248320,
+      2560
+     ]
+    },
+    "lm_head.weight_scale": {
+     "bytes": 79462400,
+     "dtype": "F8_E4M3",
+     "shape": [
+      248320,
+      320
+     ]
+    },
+    "lm_head.weight_scale_2": {
+     "bytes": 4,
+     "dtype": "F32",
+     "shape": []
+    }
+   }
+  },
+  "target_model": {
+   "bytes": 16892610688,
+   "source": "summed tensor spans of model.language_model.* minus embed_tokens (64 decoder layers + final norm)",
+   "tensors": 1841
+  }
+ },
+ "derivation": "every byte term is a SUM of real safetensors tensor spans in /models/qwen3.8-27b-nvfp4-radixark (2194 tensors, 21,921,428,072 B total, == the repo's own qualification.json output_indexed_payload_bytes); no FR13 or FR14 constant was scaled and the staged design-note estimate was not trusted",
+ "excluded_from_floor": {
+  "embed_tokens_bytes": 2542796800,
+  "vision_tower_bytes": 921460192,
+  "why": "neither is read on a decode step"
+ },
+ "formula": "floor_ms = mandatory_weight_bytes * 1000 / bandwidth_bytes_per_s",
+ "ledger_tensor_count": 2194,
+ "ledger_total_bytes": 21921428072,
+ "model_root": "/home/mark/shared/models/qwen3.8-27b-nvfp4-radixark",
+ "production_invariants": {
+  "drafter_head_passes_per_event": 5,
+  "initial_mtp_forward_passes_per_event": 1,
+  "post_root_graph_mtp_forward_passes_per_event": 4,
+  "total_mtp_forward_passes_per_event": 5
+ },
+ "revision": "554ebba9b5f1b79dc11246341960360e6ef05ef4",
+ "scenarios": {
+  "legacy_target_plus_verifier_head": {
+   "component_formula": "target_model + nvfp4_head",
+   "is_full_speculative_step_floor": false,
+   "mandatory_weight_bytes": 17607772296,
+   "mandatory_weight_floor_ms": 64.49733441758242,
+   "nonweight_costs_included": false
+  },
+  "root_64k_bf16_head_bf16_draft": {
+   "component_formula": "target_model + full_bf16_head + mtp_forward + 5 * draft_64k_bf16_head",
+   "drafter_head_bytes": 3355443200,
+   "mandatory_weight_bytes": 27037844608,
+   "mandatory_weight_floor_ms": 99.03972383882784,
+   "nonweight_costs_included": false,
+   "note": "WORST CASE -- the unsloth arm's head treatment applied to the aggressive backbone; shows how little the backbone alone buys.",
+   "shippable_now": false
+  },
+  "root_64k_fp8_head_bf16_draft": {
+   "component_formula": "target_model + fp8_head + mtp_forward + 5 * draft_64k_bf16_head",
+   "drafter_head_bytes": 3355443200,
+   "mandatory_weight_bytes": 25766942848,
+   "mandatory_weight_floor_ms": 94.38440603663004,
+   "nonweight_costs_included": false,
+   "note": "PLAN B -- if NVFP4 lm_head cannot serve, dequant the head to FP8 per-channel (NOT BF16).",
+   "shippable_now": false
+  },
+  "root_64k_nvfp4_head_bf16_draft": {
+   "component_formula": "target_model + nvfp4_head + mtp_forward + 5 * draft_64k_bf16_head",
+   "drafter_head_bytes": 3355443200,
+   "mandatory_weight_bytes": 25210209416,
+   "mandatory_weight_floor_ms": 92.34508943589744,
+   "nonweight_costs_included": false,
+   "note": "PHASE 1 -- what this arm can serve the moment the lm_head patch boots: DVK dequants the sliced rows to BF16, leaving the sealed BF16 GEMV units and the 128-block map untouched.",
+   "shippable_now": true
+  },
+  "root_64k_nvfp4_head_nvfp4_draft": {
+   "component_formula": "target_model + nvfp4_head + mtp_forward + 5 * draft_64k_nvfp4_head",
+   "drafter_head_bytes": 943718400,
+   "mandatory_weight_bytes": 22798484616,
+   "mandatory_weight_floor_ms": 83.51093265934065,
+   "nonweight_costs_included": false,
+   "note": "PHASE 2 -- needs an FP4 draft-head GEMV unit; its own byte gate.",
+   "shippable_now": false
+  },
+  "root_64k_nvfp4_head_nvfp4_draft_mtp_fp8": {
+   "component_formula": "target_model + nvfp4_head + mtp_forward_fp8_requant + 5 * draft_64k_nvfp4_head",
+   "drafter_head_bytes": 943718400,
+   "mandatory_weight_bytes": 20675636616,
+   "mandatory_weight_floor_ms": 75.73493265934066,
+   "nonweight_costs_included": false,
+   "note": "PHASE 2 + the MTP-FP8 local-requant lever stacked on top.",
+   "shippable_now": false
+  }
+ },
+ "schema": "fr13.speculative_step_weight_ledger.v3",
+ "slo_cap_provisional": true
+}
