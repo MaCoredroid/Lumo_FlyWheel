@@ -1,0 +1,100 @@
+{
+ "arm_b_matches_official_3_8": true,
+ "note": "Post-normalisation equivalence check. RadixArk shipped a 1121-byte conversion-tool tokenizer_config.json with no added_tokens_decoder, no chat_template and pad_token='<|im_end|>' (the chat format's STOP token). After the normalisation every field above matches official 3.8 exactly, including the encoding of a probe containing chat specials.",
+ "roots": {
+  "arm_a_unsloth": {
+   "added_tokens_decoder_len": 33,
+   "all_special_tokens": [
+    "<|audio_end|>",
+    "<|audio_pad|>",
+    "<|audio_start|>",
+    "<|endoftext|>",
+    "<|im_end|>",
+    "<|image_pad|>",
+    "<|video_pad|>",
+    "<|vision_end|>",
+    "<|vision_start|>"
+   ],
+   "eos_token": "<|im_end|>",
+   "eos_token_id": 248046,
+   "has_chat_template": true,
+   "len": 248077,
+   "pad_token": "<|endoftext|>",
+   "pad_token_id": 248044,
+   "path": "/models/qwen3.8-27b-nvfp4",
+   "probe_ids": [
+    14556,
+    220,
+    248045,
+    846,
+    198,
+    5834,
+    248046
+   ],
+   "vocab_size": 248044
+  },
+  "arm_b_radixark": {
+   "added_tokens_decoder_len": 33,
+   "all_special_tokens": [
+    "<|audio_end|>",
+    "<|audio_pad|>",
+    "<|audio_start|>",
+    "<|endoftext|>",
+    "<|im_end|>",
+    "<|image_pad|>",
+    "<|video_pad|>",
+    "<|vision_end|>",
+    "<|vision_start|>"
+   ],
+   "eos_token": "<|im_end|>",
+   "eos_token_id": 248046,
+   "has_chat_template": true,
+   "len": 248077,
+   "pad_token": "<|endoftext|>",
+   "pad_token_id": 248044,
+   "path": "/models/qwen3.8-27b-nvfp4-radixark",
+   "probe_ids": [
+    14556,
+    220,
+    248045,
+    846,
+    198,
+    5834,
+    248046
+   ],
+   "vocab_size": 248044
+  },
+  "official_3_8_fp8": {
+   "added_tokens_decoder_len": 33,
+   "all_special_tokens": [
+    "<|audio_end|>",
+    "<|audio_pad|>",
+    "<|audio_start|>",
+    "<|endoftext|>",
+    "<|im_end|>",
+    "<|image_pad|>",
+    "<|video_pad|>",
+    "<|vision_end|>",
+    "<|vision_start|>"
+   ],
+   "eos_token": "<|im_end|>",
+   "eos_token_id": 248046,
+   "has_chat_template": true,
+   "len": 248077,
+   "pad_token": "<|endoftext|>",
+   "pad_token_id": 248044,
+   "path": "/models/qwen3.8-27b-fp8",
+   "probe_ids": [
+    14556,
+    220,
+    248045,
+    846,
+    198,
+    5834,
+    248046
+   ],
+   "vocab_size": 248044
+  }
+ },
+ "schema": "fr14.radixark_tokenizer_equivalence.v1"
+}
