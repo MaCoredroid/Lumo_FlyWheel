@@ -1,0 +1,14 @@
+{
+ "verdict": "PASS",
+ "r1_len": 697,
+ "r2_len": 3551,
+ "r1_tail": "ate 17*23, likely state the result. To be safe: \"FR14 NVFP4 alive.\n17*23 = 391\". But \"exactly\" maybe only first exact, then state. Need no extra. Final concise.\n</think>\n\nFR14 NVFP4 alive.\n17*23 = 391",
+ "r1_has_391": true,
+ "r2_degenerate": false,
+ "usage_r2": {
+  "prompt_tokens": 71,
+  "total_tokens": 880,
+  "completion_tokens": 809,
+  "prompt_tokens_details": null
+ }
+}
