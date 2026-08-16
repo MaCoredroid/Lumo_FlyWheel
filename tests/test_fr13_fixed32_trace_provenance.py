@@ -3948,3 +3948,394 @@ def test_traffic_audit_only_relaxes_the_terminal_for_the_synthetic_schema(
         '                    f"{metadata_path}: fixed32 task has no terminal '
         'SWE verdict"'
     ) in source
+
+
+# --------------------------------------------------------------------------
+# FR14 regression: the web_fetch side query.
+#
+# Every number below is measured, not invented. They are the real values of
+# the first FR14 stock B1 serve of Qwen3.8-27B-NVFP4 (runroot
+# output/fr14_b1_stock_20260816T200746Z, arm tail6_fixed32_b1stock) on
+# astropy__astropy-13033 -- the task whose provenance validator killed the
+# arm. The per-turn usage pairs are the proxy ingress ledger's own
+# logical_complete records for that task's key (18 of them, seq 5..84); the
+# metric deltas are vllm_metrics_post.txt minus vllm_metrics_pre.txt from the
+# same task directory.
+#
+# The 9th ledger request -- 1123 prompt / 601 completion, wedged between the
+# web_fetch turn and the next agent turn -- is the qwen-code 0.19.4
+# WebFetchTool side query. It is served, billed, histogrammed at the ordinary
+# 32768 max_tokens and recorded in our ingress ledger, but qwen-code emits no
+# trace assistant record for it. Before the fix the algebra read 17 trace
+# requests against 18 engine requests and failed closed.
+# --------------------------------------------------------------------------
+
+_WEB_FETCH_URL_13033 = (
+    "https://raw.githubusercontent.com/astropy/astropy/main/"
+    "astropy/timeseries/core.py"
+)
+_WEB_FETCH_PROMPT_13033 = (
+    "Show the full source code of the _check_required_columns method and the "
+    "_delay_required_column_checks contextmanager exactly as written. Include "
+    "the exact error message strings."
+)
+_WEB_FETCH_TOOL_USE_ID_13033 = "chatcmpl-tool-a5f29906a5849a98"
+# (input_tokens, output_tokens) per trace-visible turn, in order. Index 7 is
+# the web_fetch turn; the hidden side query follows it.
+_VISIBLE_TURN_USAGE_13033 = [
+    (23_276, 108),
+    (27_007, 84),
+    (27_791, 484),
+    (28_477, 137),
+    (30_420, 91),
+    (31_249, 1_886),
+    (33_426, 74),
+    (34_453, 141),
+    (35_160, 1_409),
+    (36_798, 2_166),
+    (39_362, 212),
+    (39_782, 161),
+    (40_277, 308),
+    (40_911, 297),
+    (41_479, 227),
+    (41_893, 288),
+    (42_619, 743),
+]
+_WEB_FETCH_TURN_INDEX_13033 = 7
+_HIDDEN_SIDE_QUERY_USAGE_13033 = (1_123, 601)
+_ENGINE_COMPLETED_13033 = 18
+_ENGINE_PROMPT_TOKENS_13033 = 595_503
+_ENGINE_GENERATION_TOKENS_13033 = 9_417
+_ENGINE_MAX_TOKENS_SUM_13033 = 589_824
+
+
+def _qwen_web_fetch_trace_13033(
+    *,
+    tool_result_content: str | None = None,
+    tool_result_is_error: bool = False,
+    visible_turn_usage: list[tuple[int, int]] | None = None,
+) -> list[dict[str, Any]]:
+    """Rebuild the real 13033 trajectory: 17 visible turns, one web_fetch."""
+    session_id = contract.fixed32_trace_session_id(TASK_B)
+    usage = (
+        _VISIBLE_TURN_USAGE_13033
+        if visible_turn_usage is None
+        else visible_turn_usage
+    )
+    if tool_result_content is None:
+        tool_result_content = (
+            contract.QWEN_WEB_FETCH_SUCCESS_TEMPLATE.format(
+                url=_WEB_FETCH_URL_13033
+            )
+        )
+    events: list[dict[str, Any]] = [
+        _context_event(
+            event_type="system",
+            event_id="system",
+            session_id=session_id,
+        )
+    ]
+    for index, (input_tokens, output_tokens) in enumerate(usage[:-1]):
+        is_web_fetch = index == _WEB_FETCH_TURN_INDEX_13033
+        tool_use_id = (
+            _WEB_FETCH_TOOL_USE_ID_13033
+            if is_web_fetch
+            else f"chatcmpl-tool-{index:016x}"
+        )
+        turn = _assistant_event(
+            response_id=f"turn-{index}",
+            session_id=session_id,
+            content=[
+                {
+                    "type": "tool_use",
+                    "id": tool_use_id,
+                    "name": (
+                        contract.QWEN_WEB_FETCH_TOOL_NAME
+                        if is_web_fetch
+                        else "run_shell_command"
+                    ),
+                    "input": (
+                        {
+                            "url": _WEB_FETCH_URL_13033,
+                            "prompt": _WEB_FETCH_PROMPT_13033,
+                        }
+                        if is_web_fetch
+                        else {}
+                    ),
+                }
+            ],
+            stop_reason="tool_use",
+        )
+        turn["message"]["usage"] = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_read_input_tokens": 0,
+            "total_tokens": input_tokens + output_tokens,
+        }
+        events.append(turn)
+        events.append(
+            _user_event(
+                event_id=f"tool-result-{index}",
+                session_id=session_id,
+                content=[
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": (
+                            tool_result_content
+                            if is_web_fetch
+                            else "tool result"
+                        ),
+                        "is_error": (
+                            tool_result_is_error if is_web_fetch else False
+                        ),
+                    }
+                ],
+                parent_tool_use_id=None,
+            )
+        )
+    final_input, final_output = usage[-1]
+    final = _assistant_event(
+        response_id="final-text",
+        session_id=session_id,
+        content=[{"type": "text", "text": "The fix is complete."}],
+        stop_reason=None,
+    )
+    final["message"]["usage"] = {
+        "input_tokens": final_input,
+        "output_tokens": final_output,
+        "cache_read_input_tokens": 0,
+        "total_tokens": final_input + final_output,
+    }
+    events.append(final)
+    visible_input = sum(pair[0] for pair in usage)
+    visible_output = sum(pair[1] for pair in usage)
+    events.append(
+        {
+            "type": "result",
+            "subtype": "success",
+            "uuid": "result-uuid",
+            "session_id": session_id,
+            "is_error": False,
+            "duration_ms": 407_429,
+            "duration_api_ms": 389_862,
+            "num_turns": len(usage),
+            "result": "The fix is complete.",
+            "usage": {
+                "input_tokens": visible_input,
+                "output_tokens": visible_output,
+                "cache_read_input_tokens": 0,
+                "total_tokens": visible_input + visible_output,
+            },
+            "permission_denials": [],
+        }
+    )
+    return events
+
+
+def _add_hidden_side_query_usage(
+    events: list[dict[str, Any]],
+    *,
+    prompt_tokens: int,
+    completion_tokens: int,
+) -> None:
+    """Credit the side query to result.usage, exactly as qwen-code does.
+
+    The real 13033 result record reports 595503/9417 -- the ledger's own
+    totals, side query included -- even though no assistant record carries
+    those 1123/601 tokens. That is what makes hidden_prompt_tokens a real
+    measurement rather than a residue.
+    """
+    usage = events[-1]["usage"]
+    usage["input_tokens"] += prompt_tokens
+    usage["output_tokens"] += completion_tokens
+    usage["total_tokens"] = usage["input_tokens"] + usage["output_tokens"]
+
+
+def test_qwen_web_fetch_side_query_reconciles_the_real_13033_arithmetic(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    events = _qwen_web_fetch_trace_13033()
+    _add_hidden_side_query_usage(
+        events,
+        prompt_tokens=_HIDDEN_SIDE_QUERY_USAGE_13033[0],
+        completion_tokens=_HIDDEN_SIDE_QUERY_USAGE_13033[1],
+    )
+    assert events[-1]["usage"]["input_tokens"] == _ENGINE_PROMPT_TOKENS_13033
+    assert (
+        events[-1]["usage"]["output_tokens"]
+        == _ENGINE_GENERATION_TOKENS_13033
+    )
+
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=_ENGINE_COMPLETED_13033,
+        compactions=0,
+        normal_requests=_ENGINE_COMPLETED_13033,
+        prompt_tokens=_ENGINE_PROMPT_TOKENS_13033,
+        generation_tokens=_ENGINE_GENERATION_TOKENS_13033,
+    )
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_B),
+        expected_completed_logical_model_requests=_ENGINE_COMPLETED_13033,
+        metrics_pre=metrics_pre,
+        metrics_post=metrics_post,
+    )
+
+    assert trace_requests["hidden_web_fetch_model_requests"] == 1
+    assert (
+        trace_requests["completed_logical_model_requests"]
+        == _ENGINE_COMPLETED_13033
+    )
+    assert len(trace_requests["model_request_ids"]) == _ENGINE_COMPLETED_13033
+    web_fetch_ids = [
+        request_id
+        for request_id in trace_requests["model_request_ids"]
+        if request_id.startswith("qwen-hidden-web-fetch-sha256:")
+    ]
+    assert len(web_fetch_ids) == 1
+    evidence = trace_requests["qwen_compaction_metric_evidence"]
+    # The engine served 18 requests at 32768 and nothing at 20000: the whole
+    # gap was one untraced request, not a clamped max_tokens.
+    assert evidence["normal_requests"] == _ENGINE_COMPLETED_13033
+    assert evidence["total_compaction_requests"] == 0
+    assert evidence["max_tokens_sum"] == _ENGINE_MAX_TOKENS_SUM_13033
+    assert evidence["max_tokens_le_20000"] == 0
+    assert (
+        evidence["hidden_prompt_tokens"]
+        == _HIDDEN_SIDE_QUERY_USAGE_13033[0]
+    )
+    assert (
+        evidence["hidden_generation_tokens"]
+        == _HIDDEN_SIDE_QUERY_USAGE_13033[1]
+    )
+
+    # Identity is deterministic across replays, like every other request class.
+    assert trace_requests["model_request_ids"] == (
+        contract.validate_fixed32_trace_model_requests(
+            copy.deepcopy(events),
+            expected_session_id=contract.fixed32_trace_session_id(TASK_B),
+            expected_completed_logical_model_requests=(
+                _ENGINE_COMPLETED_13033
+            ),
+            metrics_pre=metrics_pre,
+            metrics_post=metrics_post,
+        )["model_request_ids"]
+    )
+
+    # And the whole provenance gate that killed the arm now closes.
+    trace_path = tmp_path / "qwen_trace.jsonl"
+    trace_path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events),
+        encoding="utf-8",
+    )
+    metrics_pre_path = tmp_path / "vllm_metrics_pre.txt"
+    metrics_post_path = tmp_path / "vllm_metrics_post.txt"
+    metrics_pre_path.write_bytes(metrics_pre)
+    metrics_post_path.write_bytes(metrics_post)
+    task_key_id = "c" * 64
+    provenance = runner._fixed32_real_task_provenance(
+        instance_id=TASK_B,
+        trace_path=trace_path,
+        agent_meta=_fixed32_agent_meta(runner, tmp_path, instance_id=TASK_B),
+        task_key_id=task_key_id,
+        task_auth_before=_task_evidence(task_key_id, 0, 1),
+        task_auth_after=_task_evidence(
+            task_key_id, _ENGINE_COMPLETED_13033, 73
+        ),
+        metrics_pre_path=metrics_pre_path,
+        metrics_post_path=metrics_post_path,
+    )
+    assert (
+        provenance["completed_logical_model_requests"]
+        == _ENGINE_COMPLETED_13033
+    )
+    assert (
+        provenance["trace_completed_logical_model_requests"]
+        == _ENGINE_COMPLETED_13033
+    )
+
+
+def test_qwen_failed_web_fetch_claims_no_hidden_request() -> None:
+    """The outer catch ran, so no completed engine request is owed."""
+    events = _qwen_web_fetch_trace_13033(
+        tool_result_content=(
+            f"{contract.QWEN_WEB_FETCH_ERROR_PREFIX}Error during fetch for "
+            f"{_WEB_FETCH_URL_13033}: Request failed with status code 404 "
+            "Not Found"
+        ),
+        tool_result_is_error=True,
+    )
+    visible = len(_VISIBLE_TURN_USAGE_13033)
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=visible,
+        compactions=0,
+        normal_requests=visible,
+        prompt_tokens=events[-1]["usage"]["input_tokens"],
+        generation_tokens=events[-1]["usage"]["output_tokens"],
+    )
+    trace_requests = contract.validate_fixed32_trace_model_requests(
+        events,
+        expected_session_id=contract.fixed32_trace_session_id(TASK_B),
+        expected_completed_logical_model_requests=visible,
+        metrics_pre=metrics_pre,
+        metrics_post=metrics_post,
+    )
+    assert trace_requests["hidden_web_fetch_model_requests"] == 0
+    assert trace_requests["completed_logical_model_requests"] == visible
+
+
+def test_qwen_web_fetch_stays_fail_closed_on_unaccountable_traffic() -> None:
+    """A credited side query still has to be earned by the exact display.
+
+    Two failures the fix must NOT have introduced: a web_fetch whose result
+    does not prove the side query ran cannot buy a request, and a successful
+    web_fetch cannot cover an 19th engine request that nothing accounts for.
+    """
+    # 1. The display is not the one executeDirectFetch emits after the side
+    #    query resolves -- so the trace cannot name the 18th request.
+    forged = _qwen_web_fetch_trace_13033(
+        tool_result_content=(
+            "Content from https://example.invalid/other processed "
+            "successfully."
+        ),
+    )
+    with pytest.raises(contract.ContractError) as forged_error:
+        contract.validate_fixed32_trace_model_requests(
+            forged,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_B),
+        )
+    assert "web_fetch closure" in str(forged_error.value)
+
+    # 2. One legitimate side query does not license a second unaccounted
+    #    request: the algebra still names the shortfall and fails closed.
+    events = _qwen_web_fetch_trace_13033()
+    _add_hidden_side_query_usage(
+        events,
+        prompt_tokens=_HIDDEN_SIDE_QUERY_USAGE_13033[0],
+        completion_tokens=_HIDDEN_SIDE_QUERY_USAGE_13033[1],
+    )
+    metrics_pre, metrics_post = _qwen_compaction_metrics(
+        completed=_ENGINE_COMPLETED_13033 + 1,
+        compactions=0,
+        normal_requests=_ENGINE_COMPLETED_13033 + 1,
+        prompt_tokens=_ENGINE_PROMPT_TOKENS_13033,
+        generation_tokens=_ENGINE_GENERATION_TOKENS_13033,
+    )
+    with pytest.raises(contract.ContractError) as extra_error:
+        contract.validate_fixed32_trace_model_requests(
+            events,
+            expected_session_id=contract.fixed32_trace_session_id(TASK_B),
+            expected_completed_logical_model_requests=(
+                _ENGINE_COMPLETED_13033 + 1
+            ),
+            metrics_pre=metrics_pre,
+            metrics_post=metrics_post,
+        )
+    message = str(extra_error.value)
+    assert "32768/20000 max-token algebra does not reconcile" in message
+    # The clause now names its numbers instead of making the next run guess.
+    assert f"trace normal={_ENGINE_COMPLETED_13033}" in message
+    assert f"completed={_ENGINE_COMPLETED_13033 + 1}" in message
+    assert "shortfall of 32768" in message

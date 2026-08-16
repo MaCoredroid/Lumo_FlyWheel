@@ -28,6 +28,21 @@ RUNTIME_ATTESTATION_MODE = 0o644
 
 QWEN_VISIBLE_MAX_OUTPUT_TOKENS = 32_768
 QWEN_COMPACTION_MAX_OUTPUT_TOKENS = 20_000
+# qwen-code's ``web_fetch`` is not a retrieval tool: after it fetches the URL
+# it runs a ``runSideQuery`` model call (purpose "web-fetch", maxAttempts 1,
+# the main model, the ordinary 32768 max_tokens) to extract the answer from the
+# fetched bytes, and returns only that call's text. The side query never enters
+# the agent's chat history, so it emits no trace assistant record -- but vLLM
+# serves, bills and histograms it and our own ingress ledger records it. These
+# are the two -- and in 0.19.4 the only two -- terminal displays of
+# ``executeDirectFetch``; the success one is reached only after the side query
+# resolves, so it is exactly one completed engine request, and the error one is
+# reached from the outer catch, so it is none.
+QWEN_WEB_FETCH_TOOL_NAME = "web_fetch"
+QWEN_WEB_FETCH_INPUT_FIELDS = frozenset({"url", "prompt", "format"})
+QWEN_WEB_FETCH_INPUT_REQUIRED_FIELDS = ("url", "prompt")
+QWEN_WEB_FETCH_SUCCESS_TEMPLATE = "Content from {url} processed successfully."
+QWEN_WEB_FETCH_ERROR_PREFIX = "Error: "
 QWEN_COMPACTION_METRIC_SCHEMA = (
     "fr13-fixed32-qwen-compaction-metrics-v1"
 )
@@ -804,6 +819,28 @@ def _fixed32_qwen_hidden_agent_terminal_request_id(
     )
 
 
+def _fixed32_qwen_hidden_web_fetch_request_id(
+    *,
+    web_fetch_tool_use_id: str,
+    tool_result_event_id: str,
+    url: str,
+) -> str:
+    payload = json.dumps(
+        {
+            "tool_result_event_id": tool_result_event_id,
+            "url": url,
+            "web_fetch_tool_use_id": web_fetch_tool_use_id,
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return (
+        "qwen-hidden-web-fetch-sha256:"
+        f"{hashlib.sha256(payload).hexdigest()}"
+    )
+
+
 def _fixed32_qwen_hidden_compaction_request_id(
     *,
     previous_group_event_ids: list[str],
@@ -1170,17 +1207,28 @@ def _fixed32_qwen_compaction_metric_evidence(
         )
 
     total_compactions = deltas["max_tokens_le_20000"]
+    expected_max_tokens_sum = (
+        normal_request_count * QWEN_VISIBLE_MAX_OUTPUT_TOKENS
+        + total_compactions * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+    )
     if (
         total_compactions < successful_compaction_count
         or normal_request_count + total_compactions != completed
-        or deltas["max_tokens_sum"]
-        != (
-            normal_request_count * QWEN_VISIBLE_MAX_OUTPUT_TOKENS
-            + total_compactions * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
-        )
+        or deltas["max_tokens_sum"] != expected_max_tokens_sum
     ):
+        # Name every measured number. The FR14 bring-up burned a full
+        # diagnosis pass on this clause because it said only "does not
+        # reconcile" -- the numbers below would have said "the trace is one
+        # 32768 request short" in one line.
         raise ContractError(
-            "fixed32 qwen 32768/20000 max-token algebra does not reconcile"
+            "fixed32 qwen 32768/20000 max-token algebra does not reconcile: "
+            f"trace normal={normal_request_count} + "
+            f"le_20000_compactions={total_compactions} against engine "
+            f"completed={completed} (trace-visible successful compactions "
+            f"{successful_compaction_count}); max_tokens_sum="
+            f"{deltas['max_tokens_sum']} against expected "
+            f"{expected_max_tokens_sum}, a shortfall of "
+            f"{deltas['max_tokens_sum'] - expected_max_tokens_sum}"
         )
 
     result_usage = result.get("usage")
@@ -1447,6 +1495,121 @@ def _fixed32_qwen_hidden_compaction_requests(
                 ),
             )
         )
+    return hidden_requests
+
+
+def _fixed32_qwen_hidden_web_fetch_requests(
+    events: list[dict[str, Any]],
+    *,
+    tool_use_records: dict[str, dict[str, Any]],
+) -> list[tuple[int, str]]:
+    """Count the ordinary model request each ``web_fetch`` hides.
+
+    THE HOLE THIS CLOSES. ``_fixed32_qwen_hidden_compaction_requests`` knows
+    the 20000-max_tokens compaction the agent hides, and
+    ``_fixed32_qwen_hidden_agent_terminal_requests`` knows the sub-agent's
+    final turn. Neither knows the third hidden class: a TOOL that calls the
+    model. qwen-code 0.19.4's ``web_fetch`` fetches the URL and then issues a
+    ``runSideQuery`` completion at the ordinary 32768 max_tokens to extract the
+    answer from the fetched bytes, returning only that call's text as the tool
+    result. FR13's 236 banked 3.6 traces never once called the tool, so the
+    32768/20000 algebra never had to account for it. The first 3.8 arm called
+    it on its second task (astropy__astropy-13033) and the validator did what
+    it is built to do: 17 trace-visible requests against 18 engine requests, so
+    it failed closed on traffic it could not see.
+
+    This does not skip that traffic -- it counts it, off evidence the trace
+    itself carries. ``executeDirectFetch`` has exactly two terminal returns.
+    The success display is emitted only on the line AFTER ``runSideQuery``
+    resolves, so it proves exactly one completed engine request; it embeds the
+    caller's own ``url`` parameter, so it cannot be forged by a tool result
+    that did not come from this invocation. The ``Error: `` display comes from
+    the outer catch, which is reached when the fetch or the side query fails,
+    and a failed side query is an error/abort completion that
+    ``_fixed32_qwen_completion_classes`` already proves is zero -- so it
+    accounts for no completed request. Any other closure is unaccountable and
+    fails closed, as does any ``web_fetch`` whose invocation or result is not
+    exactly one well-formed pair. The engine's own max-token histogram and our
+    ingress ledger remain the meters; this only lets the trace name the
+    request they already counted.
+    """
+    hidden_requests: list[tuple[int, str]] = []
+    for tool_use_id, origin in tool_use_records.items():
+        if origin["name"] != QWEN_WEB_FETCH_TOOL_NAME:
+            continue
+        params = origin["input"]
+        if not isinstance(params, dict):
+            raise ContractError("fixed32 qwen web_fetch input is not an object")
+        if not set(params) <= QWEN_WEB_FETCH_INPUT_FIELDS:
+            raise ContractError(
+                "fixed32 qwen web_fetch input contains unknown fields"
+            )
+        for field in QWEN_WEB_FETCH_INPUT_REQUIRED_FIELDS:
+            if (
+                not isinstance(params.get(field), str)
+                or not params[field].strip()
+            ):
+                raise ContractError(
+                    f"fixed32 qwen web_fetch {field} is empty or invalid"
+                )
+        if "format" in params and not isinstance(params["format"], str):
+            raise ContractError(
+                "fixed32 qwen web_fetch format selector is invalid"
+            )
+
+        result_indices = [
+            event_index
+            for event_index, event in enumerate(events[:-1])
+            if (_fixed32_qwen_user_tool_result(event) or (None,))[0]
+            == tool_use_id
+        ]
+        if len(result_indices) != 1:
+            raise ContractError(
+                "fixed32 qwen web_fetch has no unique owner tool result"
+            )
+        result_index = result_indices[0]
+        result_event = events[result_index]
+        if (
+            "parent_tool_use_id" not in result_event
+            or result_event["parent_tool_use_id"]
+            != origin["parent_tool_use_id"]
+            or result_index <= origin["event_index"]
+        ):
+            raise ContractError(
+                "fixed32 qwen web_fetch owner tool result is invalid"
+            )
+        _result_tool_use_id, is_error = _fixed32_qwen_user_tool_result(
+            result_event
+        )
+        content = result_event["message"]["content"][0].get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise ContractError(
+                "fixed32 qwen web_fetch tool result content is empty"
+            )
+        if is_error is True and content.startswith(
+            QWEN_WEB_FETCH_ERROR_PREFIX
+        ):
+            # The outer catch: the fetch or the side query failed, so no
+            # completed engine request is owed for this invocation.
+            continue
+        if is_error is not False or content != (
+            QWEN_WEB_FETCH_SUCCESS_TEMPLATE.format(url=params["url"])
+        ):
+            raise ContractError(
+                "fixed32 qwen web_fetch closure is neither the processed "
+                "display nor a fetch error"
+            )
+        hidden_requests.append(
+            (
+                result_index,
+                _fixed32_qwen_hidden_web_fetch_request_id(
+                    web_fetch_tool_use_id=tool_use_id,
+                    tool_result_event_id=result_event["uuid"],
+                    url=params["url"],
+                ),
+            )
+        )
+    hidden_requests.sort(key=lambda record: record[0])
     return hidden_requests
 
 
@@ -2303,6 +2466,14 @@ def validate_fixed32_trace_model_requests(
         ),
     )
     request_records.extend(hidden_requests)
+    # Tool-internal model calls. These are ORDINARY 32768-max_tokens requests,
+    # not compactions, so they join request_records before the compaction split
+    # below and land in normal_request_count where the algebra expects them.
+    hidden_web_fetch_requests = _fixed32_qwen_hidden_web_fetch_requests(
+        events,
+        tool_use_records=tool_use_records,
+    )
+    request_records.extend(hidden_web_fetch_requests)
     hidden_compaction_requests = _fixed32_qwen_hidden_compaction_requests(
         events,
         top_level_groups=top_level_groups,
@@ -2383,6 +2554,7 @@ def validate_fixed32_trace_model_requests(
         "completed_logical_model_requests": len(response_ids),
         "model_request_ids": response_ids,
         "hidden_terminal_model_requests": len(hidden_requests),
+        "hidden_web_fetch_model_requests": len(hidden_web_fetch_requests),
         "hidden_compaction_model_requests": (
             len(hidden_compaction_requests)
             + len(failed_compaction_requests)
