@@ -1,0 +1,1 @@
+{"stage": "done", "pass": true, "torch": "2.11.0+cu130", "cuda": "13.0", "device": "NVIDIA GB10", "capability": [12, 1], "vllm": "0.19.2rc1.dev134+gfe9c3d6c5", "cutlass_scaled_mm_supports_fp4": true, "a_q_shape": [32, 256], "a_sf_shape": [128, 32], "out_shape": [32, 256], "mean_rel_err": 0.13447505235671997}
