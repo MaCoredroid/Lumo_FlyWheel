@@ -1,0 +1,9 @@
+{
+ "baseline_rss_mb": 378.6,
+ "chunk_rows": 8192,
+ "chunked_peak_rss_mb": 1882.9,
+ "chunked_transient_mb": 1504.3,
+ "note": "CPU measurement with the real sliced shapes (uint8 [65536,2560] + f8e4m3 [65536,320] -> bf16 [65536,5120]). break_fp4_bytes expands every packed byte into two int64 lookup indices, which is the transient that chunking bounds: an unchunked pass multiplies it by K/CHUNK = 8.",
+ "output_bytes": 671088640,
+ "output_mb": 640.0
+}
