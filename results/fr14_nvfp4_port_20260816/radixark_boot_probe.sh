@@ -122,7 +122,9 @@ report = {
     "dvk_dequant_bytes_is_671088640": bytes_ok,
     "dvk_dequant_widths_are_k64": widths_ok,
     "dvk_dequant_method_is_unquantized": method_ok,
-    "kv_cache_dtype_lines": grab("kv_cache_dtype", limit=3),
+    # The engine's config banner is one ~4 kB line, so extract the VALUE
+    # rather than banking the line and drowning the verdict.
+    "kv_cache_dtype_values": sorted(set(re.findall(r"kv_cache_dtype=(\w+)", log))),
     "fp8_e4m3_present": "fp8_e4m3" in log,
     "gpu_kv_cache_lines": grab("GPU KV cache size", limit=2),
     "tracebacks": grab("Traceback (most recent call last)", limit=3),
