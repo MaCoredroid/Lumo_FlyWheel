@@ -1,0 +1,73 @@
+{
+  "bandwidth_bytes_per_s": 273000000000,
+  "campaign": "fr14_nvfp4_port_20260816",
+  "components": {
+    "draft_64k_bf16_head": {
+      "bytes": 671088640,
+      "element_bytes": 2,
+      "hidden_size": 5120,
+      "rows": 65536
+    },
+    "full_bf16_head": {
+      "bytes": 2542796800,
+      "element_bytes": 2,
+      "hidden_size": 5120,
+      "rows": 248320
+    },
+    "mtp_forward": {
+      "bytes": 4246993920,
+      "bytes_per_pass": 849398784,
+      "initial_passes": 1,
+      "passes": 5,
+      "post_root_graph_passes": 4,
+      "source": "summed tensor spans of model_mtp.safetensors (BF16)"
+    },
+    "target_model": {
+      "bytes": 17831788928,
+      "source": "summed tensor spans of model.language_model.* minus embed_tokens (64 decoder layers + final norm)"
+    }
+  },
+  "derivation": "every byte term is a SUM of real safetensors tensor spans in /models/qwen3.8-27b-nvfp4; no FR13 constant was scaled",
+  "formula": "floor_ms = mandatory_weight_bytes * 1000 / bandwidth_bytes_per_s",
+  "model_root": "/models/qwen3.8-27b-nvfp4",
+  "production_invariants": {
+    "drafter_head_passes_per_event": 5,
+    "initial_mtp_forward_passes_per_event": 1,
+    "post_root_graph_mtp_forward_passes_per_event": 4,
+    "total_mtp_forward_passes_per_event": 5
+  },
+  "retired_scenarios": {
+    "draft_head_fp8": "FR13_DRAFT_HEAD_FP8 is DEAD under the FR14 checkpoint. The arm re-read the five K64 draft heads as FP8 qweight + FP32 scales (1_678_131_200 B instead of 3_355_443_200 B). The served lm_head is BF16 -- unsloth's FP8 per-channel head was dequantised to BF16 by the lm_head surgery to make the checkpoint loadable at all -- so there is no FP8 head to read and the arm would measure a floor it cannot realise. The launcher and the floor-timer sequence now refuse it."
+  },
+  "scenarios": {
+    "current_one_full_plus_four_64k_draft_heads": {
+      "component_formula": "target_model + full_bf16_head + mtp_forward + full_bf16_head + 4 * draft_64k_bf16_head",
+      "drafter_head_bytes": 5227151360,
+      "mandatory_weight_bytes": 29848731008,
+      "mandatory_weight_floor_ms": 109.336011018,
+      "nonweight_costs_included": false
+    },
+    "full_vocab_five_full_draft_heads": {
+      "component_formula": "target_model + full_bf16_head + mtp_forward + 5 * full_bf16_head",
+      "drafter_head_bytes": 12713984000,
+      "mandatory_weight_bytes": 37335563648,
+      "mandatory_weight_floor_ms": 136.7603064029304,
+      "nonweight_costs_included": false
+    },
+    "legacy_target_plus_verifier_head": {
+      "component_formula": "target_model + full_bf16_head",
+      "is_full_speculative_step_floor": false,
+      "mandatory_weight_bytes": 20374585728,
+      "mandatory_weight_floor_ms": 74.632182154
+    },
+    "root_64k_five_64k_draft_heads": {
+      "component_formula": "target_model + full_bf16_head + mtp_forward + 5 * draft_64k_bf16_head",
+      "drafter_head_bytes": 3355443200,
+      "mandatory_weight_bytes": 27977022848,
+      "mandatory_weight_floor_ms": 102.479937172,
+      "nonweight_costs_included": false
+    }
+  },
+  "schema": "fr13.speculative_step_weight_ledger.v3",
+  "slo_cap_provisional": true
+}

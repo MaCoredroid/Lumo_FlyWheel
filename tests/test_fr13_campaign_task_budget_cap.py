@@ -218,7 +218,7 @@ def _capped_report(patch_text: str = "", **overrides: Any):
     return runner._synthetic_budget_capped_eval_report(
         instance_id="astropy__astropy-13398",
         dataset_name="princeton-nlp/SWE-bench_Verified",
-        model_name="qwen3.6-27b-fp8",
+        model_name="qwen3.8-27b-nvfp4",
         agent_meta=meta,
         patch_text=patch_text,
     )
@@ -285,7 +285,7 @@ def test_the_normal_path_is_untouched_when_nothing_was_capped() -> None:
         runner._synthetic_budget_capped_eval_report(
             instance_id="astropy__astropy-12907",
             dataset_name="princeton-nlp/SWE-bench_Verified",
-            model_name="qwen3.6-27b-fp8",
+            model_name="qwen3.8-27b-nvfp4",
             agent_meta={
                 "elapsed_s": 598.1,
                 "timed_out": False,

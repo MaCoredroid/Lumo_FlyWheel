@@ -103,8 +103,8 @@ TARGET_SELECTOR=identity_wide256_fullgrid_b1
 TARGET_SHA256=7d762dfa793671d75d1e353bd37d76fc07370cbe387ad1e315e32584d27927d4
 TARGET_BYTES=119781296
 CFWD_SOURCE_SHA256=a7a7b6582cdc11e930916f5e65583195fd31a3b664e8f567bb33a24ea1a64ee0
-WEIGHT_FLOOR_MS=119.658015414
-ONE_SIDED_U95_CAP_MS=137.6067177261
+WEIGHT_FLOOR_MS=102.479937172
+ONE_SIDED_U95_CAP_MS=117.8519277478
 SOURCE_COMMIT=$(git rev-parse HEAD)
 RUNNER_SHA256=$(sha256sum "$RUNNER_PATH" | awk '{print $1}')
 PATCH_SOURCE_SHA256=$(sha256sum "$PATCH_SOURCE" | awk '{print $1}')
@@ -300,7 +300,7 @@ source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
-[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "32666638208" \
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "27977022848" \
    && "$FR13_WEIGHT_FLOOR_MS" == "$WEIGHT_FLOOR_MS" \
    && "$LUMO_SWE_AUTOCOMMIT" == "0" ]] \
   || { echo "fixed K64/root1 B1 floor contract drifted" >&2; exit 2; }
@@ -836,7 +836,7 @@ def validate_measure(payload, raw, arm):
         or payload.get("task_instance_ids") != task_ids
         or payload.get("draft_vocab_root") != 1
         or payload.get("draft_vocab_k") != 65536
-        or payload.get("mandatory_weight_bytes") != 32666638208
+        or payload.get("mandatory_weight_bytes") != 27977022848
         or payload.get("weight_floor_ms") != floor_ms
         or payload.get("floor_ms") != floor_ms
         or payload.get("floor_is_full_step_hardware_floor") is not False

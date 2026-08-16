@@ -103,32 +103,57 @@ export FR13_TREE_RUNROW_INIT=1
 export FR13_FLAGS_INKERNEL=1
 # Optimistic mandatory-weight-read floor only. Only the exact logical head-read
 # ledgers below are admitted; inherited byte/floor declarations are replaced.
+#
+# FR14 (2026-08-16): every byte below is re-derived by SUMMING the served
+# Qwen3.8-27B-NVFP4 checkpoint's real tensor spans -- see
+# scripts/fr13_hardware_floor_ledger.py (--derive-from-checkpoint reproduces
+# the arithmetic) and results/fr14_nvfp4_port_20260816/floor_ledger.json.
+# Nothing here is an FR13 constant scaled by a quantisation ratio: the BF16
+# lm_head did not shrink at all and the BF16 MTP shard got BIGGER, so the
+# fixed32 floor fell only 119.658015414 -> 102.479937172 ms (0.856x), not the
+# ~0.5x a naive 4-bit argument predicts.
+# Every ONE_SIDED_U95_CAP_MS derived from these floors is 1.15 x floor and is
+# PROVISIONAL: the FR14 objective bar is Mark's open ruling
+# (results/fr14_nvfp4_port_20260816/README.md, "Correctness bar -- PROPOSED,
+# AWAITING MARK"). No FR13 acceptance number transfers across a lossy requant.
 case "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" in
   0:0)
-    export FR13_MANDATORY_WEIGHT_BYTES=42025179008
-    export FR13_WEIGHT_FLOOR_MS=153.9383846446886
+    export FR13_MANDATORY_WEIGHT_BYTES=37335563648
+    export FR13_WEIGHT_FLOOR_MS=136.7603064029304
     ;;
   65536:0)
-    export FR13_MANDATORY_WEIGHT_BYTES=34538346368
-    export FR13_WEIGHT_FLOOR_MS=126.514089260
+    export FR13_MANDATORY_WEIGHT_BYTES=29848731008
+    export FR13_WEIGHT_FLOOR_MS=109.336011018
     ;;
   65536:1)
     if [[ "$FR13_DRAFT_HEAD_FP8" == "1" ]]; then
-      # Five BF16 K64 head reads (3,355,443,200 B) become five FP8
-      # qweight+FP32-scale reads (1,678,131,200 B). The gathered BF16
-      # source remains resident but is not a mandatory per-event read.
-      export FR13_MANDATORY_WEIGHT_BYTES=30989326208
-      export FR13_WEIGHT_FLOOR_MS=113.514015414
-    else
-      export FR13_MANDATORY_WEIGHT_BYTES=32666638208
-      export FR13_WEIGHT_FLOOR_MS=119.658015414
+      # FR14 RETIRED ARM. The FR13 sub-arm re-read the five K64 draft heads
+      # as FP8 qweight + FP32 scales (1,678,131,200 B instead of
+      # 3,355,443,200 B) and claimed a 113.514015414 ms floor for it. The
+      # FR14 served checkpoint's lm_head is BF16: unsloth shipped an FP8
+      # per-channel head, this vLLM's qwen3_5 builds lm_head as an
+      # UNQUANTIZED ParallelLMHead and refused to load it, and the lm_head
+      # surgery dequantised it to BF16 to make the checkpoint bootable
+      # (results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md pass 6).
+      # There is no FP8 head to read, so the arm would pin a floor the
+      # hardware cannot realise. Refuse rather than measure nothing.
+      echo "FR13_DRAFT_HEAD_FP8 is RETIRED under the FR14 NVFP4 checkpoint: the served lm_head is BF16 (see .lumo_lmhead_surgery.json), so the FP8 draft-head floor is unrealisable" >&2
+      exit 2
     fi
+    export FR13_MANDATORY_WEIGHT_BYTES=27977022848
+    export FR13_WEIGHT_FLOOR_MS=102.479937172
     ;;
   *)
     echo "unsupported fixed32 draft-vocab floor configuration: K=${FR13_DRAFT_VOCAB_K:-unset} ROOT=$FR13_DRAFT_VOCAB_ROOT" >&2
     exit 2
     ;;
 esac
+# FR14: UNCHANGED at 0.54 on purpose. This is the fp8-era MEASURED per-row
+# compute cost (feeds floor_ms = max(weight_floor, compute_floor) in
+# fr13_measure.py). It is not re-derivable without a GPU, and under NVFP4 the
+# same GEMM shapes run on 4-bit tensor-core paths, so 0.54 ms/row is a
+# CONSERVATIVE (high) bound here -- it can only make the compute floor bind
+# earlier, never later. Re-measure it on the first FR14 B1 profile run.
 export FR13_COMPUTE_MS_PER_ROW=0.54
 export MAX_MODEL_LEN=131072
 export FR13_ENABLE_APC=1

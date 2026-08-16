@@ -50,12 +50,12 @@ run_variant() { :; }
 source scripts/fr13_fixed32_floor_timers_seq.sh
 [[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
    && "$FR13_DRAFT_VOCAB_K" == "0" \
-   && "$FR13_MANDATORY_WEIGHT_BYTES" == "42025179008" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "153.938384645" ]] \
+   && "$FR13_MANDATORY_WEIGHT_BYTES" == "37335563648" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "136.760306403" ]] \
   || { echo "full-vocabulary fixed32 floor contract did not engage" >&2; exit 2; }
 
 mkdir -p "$RUNROOT"
-printf 'classification=exact4_b4_graph_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_eligible=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\nreference_bv=8\ncandidate_bv=%s\nreference_kernel_structure=per_request_tree_gdn_path\ncandidate_kernel_structure=fixed32_batch_tree_gdn_path\nreference_physical_launches_per_layer=8\ncandidate_physical_launches_per_layer=2\ndraft_vocab_k=0\ndraft_vocab_root=0\nmandatory_weight_bytes=42025179008\nweight_floor_ms=153.938384645\nfr10_metrics=1\nring_export=1\nflags_inkernel=1\ntree_gdn_geom_override=BV=8\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
+printf 'classification=exact4_b4_graph_byte_diagnostic\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_eligible=%s\nlauncher_pid=%s\nrunroot=%s\narm=%s\nsource=%s\nrunner_sha256=%s\nsubset_sha256=%s\nfa2_sha256=%s\nreference_bv=8\ncandidate_bv=%s\nreference_kernel_structure=per_request_tree_gdn_path\ncandidate_kernel_structure=fixed32_batch_tree_gdn_path\nreference_physical_launches_per_layer=8\ncandidate_physical_launches_per_layer=2\ndraft_vocab_k=0\ndraft_vocab_root=0\nmandatory_weight_bytes=37335563648\nweight_floor_ms=136.760306403\nfr10_metrics=1\nring_export=1\nflags_inkernel=1\ntree_gdn_geom_override=BV=8\nenforce_eager=0\ncudagraph_mode=FULL_AND_PIECEWISE\nkv_cache_memory_bytes=%s\nstarted=%s\n' \
   "$GATE_PRODUCTION_ELIGIBLE" "$$" "$RUNROOT" "$ARM" "$(git rev-parse HEAD)" "$RUNNER_SHA256" \
   "$SUBSET_SHA256" "$FA2_SHA256" "$FR13_GATE_BATCH_GDN_BV" \
   "$B4_KV_CACHE_MEMORY_BYTES" \

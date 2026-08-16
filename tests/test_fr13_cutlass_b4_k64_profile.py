@@ -133,9 +133,9 @@ def test_k64_root_profile_issues_and_verifies_distinct_sidecar(
         issued["qualified_draft_vocab_blocks_sha256"]
         == module.DRAFT_VOCAB_BLOCKS_SHA256
     )
-    assert issued["mandatory_weight_bytes"] == 32_666_638_208
-    assert issued["mandatory_weight_floor_ms"] == 119.658015414
-    assert issued["one_sided_u95_cap_ms"] == 137.6067177261
+    assert issued["mandatory_weight_bytes"] == 27_977_022_848
+    assert issued["mandatory_weight_floor_ms"] == 102.479937172
+    assert issued["one_sided_u95_cap_ms"] == 117.8519277478
 
 
 @pytest.mark.parametrize(
@@ -146,9 +146,9 @@ def test_k64_root_profile_issues_and_verifies_distinct_sidecar(
         ("draft_vocab_k", 0),
         ("draft_vocab_blocks", "/tmp/unpinned.json"),
         ("draft_vocab_blocks_sha256", "0" * 64),
-        ("mandatory_weight_bytes", 42_025_179_008),
-        ("mandatory_weight_floor_ms", 153.9383846446886),
-        ("one_sided_u95_cap_ms", 177.0291423413919),
+        ("mandatory_weight_bytes", 37_335_563_648),
+        ("mandatory_weight_floor_ms", 136.7603064029304),
+        ("one_sided_u95_cap_ms", 157.27435236336996),
     ),
 )
 def test_k64_root_profile_rejects_workload_or_floor_drift(
@@ -298,9 +298,9 @@ def test_k64_root_profile_is_bound_through_gate_timing_and_launcher() -> None:
             "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242ff" in source
         )
     for source in (gate, timing):
-        assert "32666638208" in source
-        assert "119.658015414" in source
-        assert "137.6067177261" in source
+        assert "27977022848" in source
+        assert "102.479937172" in source
+        assert "117.8519277478" in source
         assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in source
         assert '"$ARM" "$FIXED32_MODE" "$SUBSET"' in source or (
             '"$arm" "$TIMING_KIND" "$SUBSET"' in source

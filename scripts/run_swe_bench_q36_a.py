@@ -67,7 +67,7 @@ PINNED_SWE_VERIFIED_PARQUET = (
 )
 DEFAULT_ENDPOINT = "http://127.0.0.1:8022/v1"
 DEFAULT_METRICS_URL = "http://127.0.0.1:9950/metrics"
-DEFAULT_MODEL = "qwen3.6-27b"
+DEFAULT_MODEL = "qwen3.8-27b-nvfp4"
 DEFAULT_AGENT_WALL_S = 0  # per-attempt codex wall. 0 = NO upper limit (user 2026-07-01):
 # hard tasks that genuinely need a long time were TIMED OUT mid-fix -> partial/wrong patch ->
 # tests_failed (e.g. chain5 astropy-13453: timed_out=True at 27min under the old 25-min cap). With
@@ -79,7 +79,7 @@ DEFAULT_AGENT_WALL_S = 0  # per-attempt codex wall. 0 = NO upper limit (user 202
 # reinstate a hard per-attempt wall of N seconds. NOTE: serial (concurrency=1) so a single stuck
 # task can stall the whole sweep; the codex idle timeout is the real backstop.
 DEFAULT_EVAL_TIMEOUT_S = 30 * 60
-DEFAULT_MODEL_NAME_TAG = "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a"
+DEFAULT_MODEL_NAME_TAG = "qwen3.8-27b-nvfp4::qwen-code-0.19.4::q38-a"
 # Same capture path used by launch_qwen36_ablation_point.py / Track B benches.
 DEFAULT_PROXY_CAPTURE = Path("/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl")
 DEFAULT_DCGM_SAMPLER = REPO_ROOT / "scripts" / "sample_dcgm_during_task.py"
@@ -5357,12 +5357,12 @@ def _fixed32_metrics_snapshot(
         (
             "vllm:spec_decode_num_drafts_total",
             fixed["spec_drafts"],
-            '{engine="0",model_name="qwen3.6-27b"}',
+            '{engine="0",model_name="qwen3.8-27b-nvfp4"}',
         ),
         (
             "vllm:spec_decode_num_draft_tokens_total",
             fixed["spec_tokens"],
-            '{engine="0",model_name="qwen3.6-27b"}',
+            '{engine="0",model_name="qwen3.8-27b-nvfp4"}',
         ),
         (
             "vllm:fr13_fixed32_pure_decode_forward_steps_total",

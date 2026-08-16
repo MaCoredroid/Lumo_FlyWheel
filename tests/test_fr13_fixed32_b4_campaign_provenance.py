@@ -58,7 +58,7 @@ def _qwen_trace(instance_id: str) -> list[dict[str, Any]]:
                 "id": first_id,
                 "type": "message",
                 "role": "assistant",
-                "model": "qwen3.6-27b",
+                "model": "qwen3.8-27b-nvfp4",
                 "content": [
                     {
                         "type": "tool_use",
@@ -97,7 +97,7 @@ def _qwen_trace(instance_id: str) -> list[dict[str, Any]]:
                 "id": final_id,
                 "type": "message",
                 "role": "assistant",
-                "model": "qwen3.6-27b",
+                "model": "qwen3.8-27b-nvfp4",
                 "content": [{"type": "text", "text": "complete"}],
                 "stop_reason": None,
                 "usage": {"input_tokens": 32, "output_tokens": 8},
@@ -155,7 +155,7 @@ def _qwen_trace_with_request_count(
                         "id": assistant_id,
                         "type": "message",
                         "role": "assistant",
-                        "model": "qwen3.6-27b",
+                        "model": "qwen3.8-27b-nvfp4",
                         "content": [
                             {
                                 "type": "tool_use",
@@ -198,7 +198,7 @@ def _qwen_trace_with_request_count(
                 "id": final_id,
                 "type": "message",
                 "role": "assistant",
-                "model": "qwen3.6-27b",
+                "model": "qwen3.8-27b-nvfp4",
                 "content": [{"type": "text", "text": "complete"}],
                 "stop_reason": None,
                 "usage": {"input_tokens": 32, "output_tokens": 8},
@@ -247,7 +247,7 @@ def _metrics(
         normal_requests * contract.QWEN_VISIBLE_MAX_OUTPUT_TOKENS
         + compactions * contract.QWEN_COMPACTION_MAX_OUTPUT_TOKENS
     )
-    base_labels = 'engine="0",model_name="qwen3.6-27b"'
+    base_labels = 'engine="0",model_name="qwen3.8-27b-nvfp4"'
     lines = [
         f"vllm:prompt_tokens_total{{{base_labels}}} {prompt_tokens}",
         f"vllm:generation_tokens_total{{{base_labels}}} {generation_tokens}",
@@ -263,7 +263,7 @@ def _metrics(
     for reason in ("stop", "length", "abort", "error", "repetition"):
         labels = (
             f'engine="0",finished_reason="{reason}",'
-            'model_name="qwen3.6-27b"'
+            'model_name="qwen3.8-27b-nvfp4"'
         )
         lines.append(
             f"vllm:request_success_total{{{labels}}} "
@@ -275,7 +275,7 @@ def _metrics(
         ("50000.0", completed),
         ("+Inf", completed),
     ):
-        labels = f'engine="0",le="{le}",model_name="qwen3.6-27b"'
+        labels = f'engine="0",le="{le}",model_name="qwen3.8-27b-nvfp4"'
         lines.append(
             f"vllm:request_params_max_tokens_bucket{{{labels}}} {value}"
         )
@@ -946,7 +946,7 @@ def _synthetic_compaction_failure_trace() -> list[dict[str, Any]]:
             "id": synthetic_id,
             "type": "message",
             "role": "assistant",
-            "model": "qwen3.6-27b",
+            "model": "qwen3.8-27b-nvfp4",
             "content": [{"type": "text", "text": text}],
             "stop_reason": None,
             "usage": {"input_tokens": 0, "output_tokens": 0},

@@ -136,7 +136,7 @@ BOOT_TIMEOUT_S=${BOOT_TIMEOUT_S:-1800}
 # (scripts/fr13_bigdenom_swe_serve_variant.sh PORT=9950) and the launcher serves
 # it under this name (vllm serve --served-model-name).
 SMOKE_PORT=9950
-SMOKE_MODEL=qwen3.6-27b
+SMOKE_MODEL=qwen3.8-27b-nvfp4
 # One canonical task key for every smoke request, deliberately not all four: the
 # engine publishes the SFWD real-event arm the moment every canonical task key
 # has authenticated, and a boot screen must not mint gate evidence.

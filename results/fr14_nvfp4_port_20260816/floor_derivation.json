@@ -1,0 +1,16 @@
+{
+  "embed_tokens_bytes_excluded": 2542796800,
+  "lm_head_bytes_on_disk": 2542796800,
+  "model_root": "/models/qwen3.8-27b-nvfp4",
+  "mtp_forward_bytes_per_pass": 849398784,
+  "mtp_shard": "model_mtp.safetensors",
+  "mtp_tensor_count": 15,
+  "pass": true,
+  "problems": [],
+  "target_decoder_layer_bytes": 17831778688,
+  "target_final_norm_bytes": 10240,
+  "target_model_bytes": 17831788928,
+  "target_shard": "model.safetensors",
+  "target_tensor_count": 1952,
+  "vision_tower_bytes_excluded": 921460192
+}

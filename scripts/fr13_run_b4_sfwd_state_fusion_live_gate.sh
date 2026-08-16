@@ -64,8 +64,8 @@ run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
 
-[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "42025179008" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "153.9383846446886" ]] \
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "37335563648" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "136.7603064029304" ]] \
   || { echo "canonical B4 full-vocabulary floor contract drifted" >&2; exit 2; }
 
 mkdir -p "$RUNROOT_ABS"

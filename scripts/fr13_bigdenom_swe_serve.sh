@@ -217,7 +217,7 @@ fi
 # ---- identical warmup probe (fires engagement needles before codex) ----
 curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_before_warmup.txt"
 .venv/bin/python scripts/fr10_quick_decode_tps_probe.py \
-  --endpoint "http://127.0.0.1:$PORT" --model qwen3.6-27b \
+  --endpoint "http://127.0.0.1:$PORT" --model qwen3.8-27b-nvfp4 \
   --prompts-file output/fr13_acceptance_ladder/prompts_swe4.json \
   --samples-per-prompt 1 --batch-size 1 --seed 1313 --top-p 1.0 \
   --wait-health 60 --request-timeout 900 --warmup-samples 0 \

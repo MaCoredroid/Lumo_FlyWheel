@@ -1,5 +1,13 @@
 """Pin the FR13 B4 honest-floor artifact and the arithmetic behind it.
 
+FR13-FROZEN AS OF FR14 (2026-08-16). The constants below are Qwen3.6-27B-FP8
+numbers on purpose: this file binds a HISTORICAL artifact
+(results/fr13_b4_honest_floor_20260814/) by sha256, exactly like the v1 floor
+ledger test does. The live FR14 floor lives in
+scripts/fr13_hardware_floor_ledger.py and is tested in
+tests/test_fr13_hardware_floor_ledger.py. Do not sweep these literals.
+
+
 The artifact is ANALYSIS ONLY. What is pinned here is (a) that it never claims
 otherwise, (b) that the floor arithmetic reproduces from the ledger geometry
 rather than from a copied literal, and (c) the two load-bearing findings, so a

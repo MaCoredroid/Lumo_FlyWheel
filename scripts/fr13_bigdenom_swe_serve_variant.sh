@@ -2362,7 +2362,7 @@ if [[ -z "$FIXED32_MODE" ]]; then
   curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_before_warmup.txt"
   WARMUP_TEMPERATURE=0.0
   .venv/bin/python scripts/fr10_quick_decode_tps_probe.py \
-    --endpoint "http://127.0.0.1:$PORT" --model qwen3.6-27b \
+    --endpoint "http://127.0.0.1:$PORT" --model qwen3.8-27b-nvfp4 \
     --prompts-file output/fr13_acceptance_ladder/prompts_swe4.json \
     --samples-per-prompt 1 --batch-size 1 --seed 1313 --top-p 1.0 \
     --wait-health 60 --request-timeout 900 --warmup-samples 0 \
@@ -2519,7 +2519,7 @@ if [[ "${PROBE_ONLY:-0}" == "1" ]]; then
   : "${PROBE_PROMPTS:?PROBE_ONLY needs PROBE_PROMPTS=<dir of chatreq_*.json>}"
   echo "[probe-only] carrier locator: cell=$ARM prompts=$PROBE_PROMPTS samples=${PROBE_SAMPLES:-20} limit=${PROBE_PROMPT_LIMIT:-20}"
   PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/python scripts/fr13_carrier_locator_probe.py \
-    --endpoint "http://127.0.0.1:$PORT/v1/chat/completions" --model qwen3.6-27b \
+    --endpoint "http://127.0.0.1:$PORT/v1/chat/completions" --model qwen3.8-27b-nvfp4 \
     --cell "$ARM" --prompts "$PROBE_PROMPTS" \
     --prompt-limit "${PROBE_PROMPT_LIMIT:-20}" --samples "${PROBE_SAMPLES:-20}" \
     ${PROBE_LOGPROBS:+--logprobs} \

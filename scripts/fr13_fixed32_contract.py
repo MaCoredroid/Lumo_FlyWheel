@@ -191,7 +191,15 @@ CONTAINER_FA2_DESTINATION = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so"
 )
 
-MODEL_ROOT = Path("/models/qwen3.6-27b-fp8")
+MODEL_ROOT = Path("/models/qwen3.8-27b-nvfp4")
+# FR14 served-model-name. The FR13 name was "qwen3.6-27b" (bare, no quant
+# suffix). FR14 keeps the quantisation IN the name on purpose: the FP8-3.8
+# baseline arm (/models/qwen3.8-27b-fp8) is a structurally identical serve of
+# the same base model, so a bare "qwen3.8-27b" would let an FP8 boot satisfy
+# every Prometheus/trace comparison meant for the NVFP4 arm. With the suffix
+# a mis-pointed serve 404s on the very first request instead of quietly
+# producing a decomposition-proof QC readout.
+MODEL_SERVED_NAME = "qwen3.8-27b-nvfp4"
 # The canonical exact4 prompts need enough live KV capacity to admit four
 # concurrent real requests; 20 GiB capped the scheduler at physical B2.
 #
@@ -236,37 +244,76 @@ MODEL_ROOT = Path("/models/qwen3.6-27b-fp8")
 # "Initial free memory 104.25 GiB", so 46 GiB leaves ~58 GiB for weights and
 # activations, and the B4 container cap stays at 112g.
 FIXED32_B4_KV_CACHE_MEMORY_BYTES = 46 * 1024**3
+# FR14 (2026-08-16) MODEL BLOCK -- regenerated wholesale, not edited.
+#
+# The served checkpoint is the post-lm_head-surgery Qwen3.8-27B-NVFP4 repack
+# (unsloth/Qwen3.8-27B-NVFP4 @ 16b6615af3548b88e2d8e382457bc705b00479cf, whose
+# FP8 per-channel lm_head was dequantised to BF16 so this vLLM's unquantized
+# ParallelLMHead can load it -- results/fr14_nvfp4_port_20260816/REDTEAM
+# pass 6). Unlike the 3.6 FP8 dir this checkpoint is NOT sharded per layer:
+# there are no layers-{0..63}.safetensors, so MODEL_FILES is a flat 16-name
+# set and MODEL_AUXILIARY_FILES IS the whole file set.
+#
+# File-set semantics are unchanged from FR13 and are worth stating because the
+# names moved: _pinned_model_files walks
+#   sorted(path.name for path in model_root.iterdir() if path.is_file())
+# so a metadata DIRECTORY such as .cache/huggingface is excluded by
+# construction (the served 3.6 dir carries one too and never appeared in the
+# pinned set), while dot-FILES are members -- FR13 already pinned
+# ".gitattributes" on exactly that rule.
+#
+# The two lm_head-surgery sidecars are pinned DELIBERATELY:
+# ".lumo_lmhead_surgery.json" (src/dst sha256 + sizes of the surgery) and
+# "config.json.pre_lmhead_surgery.bak" (the upstream quantization_config with
+# lm_head still in group_0) are the provenance of the only mutation this
+# checkpoint carries over its pinned upstream revision. Deleting either must
+# fail the contract, not pass quietly.
+#
+# Regenerate with:
+#   python3 scripts/fr14_gen_model_manifest.py \
+#     --model-root /models/qwen3.8-27b-nvfp4 --emit-python <path>
+# and verify an existing pin with the same script's --check.
 MODEL_AUXILIARY_FILES = (
     ".gitattributes",
-    "LICENSE",
+    ".lumo_lmhead_surgery.json",
+    ".lumo_pinned_revision",
     "README.md",
     "chat_template.jinja",
     "config.json",
-    "config.json.lumo_pre_fp8_fix.bak",
-    "configuration.json",
+    "config.json.pre_lmhead_surgery.bak",
     "generation_config.json",
-    "merges.txt",
+    "model.safetensors",
     "model.safetensors.index.json",
-    "mtp.safetensors",
-    "outside.safetensors",
+    "model_mtp.safetensors",
     "preprocessor_config.json",
     "tokenizer.json",
     "tokenizer_config.json",
     "video_preprocessor_config.json",
     "vocab.json",
 )
-MODEL_FILES = tuple(
-    sorted(
-        (
-            *MODEL_AUXILIARY_FILES,
-            *(f"layers-{index}.safetensors" for index in range(64)),
-        )
-    )
-)
+MODEL_FILES = tuple(sorted(MODEL_AUXILIARY_FILES))
 MODEL_CANONICAL_SHA256 = (
-    "95f8bdf8693e2b7581a27dd05494e3016d5b7d2e150de4d4e9beaead6253fc3d"
+    "a95cb7227fcccb335f5549b7df7264a332b03bdd906da69aeec3fc29e22a0fa8"
 )
 MODEL_TEXT_CONFIG_VOCAB_SIZE = 248_320
+# FR14 tokenizer-identity pin. vocab_size alone cannot catch a vocabulary
+# REORDERING, and the K64 draft-vocab block map
+# (scripts/fr13_dvk_subset_blocks.json, 512 measured 128-id blocks) indexes
+# lm_head rows by token id -- a remap would keep every boot assertion green and
+# only show up as a silently degraded accept rate, which this campaign would
+# then mis-attribute to NVFP4 quality loss.
+#
+# tokenizer.json is NOT comparable across 3.6/3.8 by file bytes: the tokenizers
+# library changed how merges serialise ("\u0120 t" strings became
+# ["\u0120","t"] lists) and 3.8 adds 7 audio/TTS special tokens inside the
+# reserved 248044->248320 padding range plus a pre_tokenizer regex tweak. But
+# vocab.json IS byte-identical across qwen3.6-27b-fp8, qwen3.8-27b-fp8 and
+# qwen3.8-27b-nvfp4 (verified 2026-08-16), so its sha256 is the robust
+# id-mapping pin and it is the same sha FR13 pinned for the 3.6 dir. Asserting
+# it here is what carries the DVK block map across the model swap.
+MODEL_VOCAB_JSON_SHA256 = (
+    "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+)
 MODEL_FILE_RECORDS = (
     (
         ".gitattributes",
@@ -274,379 +321,54 @@ MODEL_FILE_RECORDS = (
         "34448b82c17d60fec9b65b1f093c115ddbaadc04beb1b0140b6bfed2e012a930",
     ),
     (
-        "LICENSE",
-        11343,
-        "50cbab8a892c5f2993b8c7351a99182507472def3b1374558308605d99b86b32",
+        ".lumo_lmhead_surgery.json",
+        304,
+        "12f554d69f9998d45470f99c4a73175b297c7381f444e91a8134f9a84adc990c",
+    ),
+    (
+        ".lumo_pinned_revision",
+        41,
+        "7271cd52ee0c85994eb88ec80cc36b39baff7aa89addcd29af48380aae623988",
     ),
     (
         "README.md",
-        62868,
-        "1d812aa4505b65e4893130b61d8e60498f15f751ed180e60dab0650823f2dced",
+        6603,
+        "8fb1abd46d01ca3eba96b1711cb0f8ff5eaa0922834e30fac6e424d946871c7f",
     ),
     (
         "chat_template.jinja",
-        7764,
-        "e84f32a23fdda27689f868aa4a1a5621f41133e51a48d7f3efcbea2839574259",
+        9993,
+        "12827f24b742ea4e80cdc12dbcf9622227056b9f797252a3149263d4f9aaadce",
     ),
     (
         "config.json",
-        21854,
-        "f78c412bfdec65a88c8aa2a031d39c2fda32e3377ae48a77f971bc40a4f095df",
+        22555,
+        "50193e31248a327030f9c040e0b3dec62e8a1afa492ca128f21a17d4317c6fdd",
     ),
     (
-        "config.json.lumo_pre_fp8_fix.bak",
-        3662,
-        "b27522b99ab9fee733c48405687ca23ccdf49845f957c3b602e5322c3194fe3f",
-    ),
-    (
-        "configuration.json",
-        51,
-        "2d4464e2ead06bc9bc718c781309ad1e7baded626d66e8dcdc8b469ba185faf0",
+        "config.json.pre_lmhead_surgery.bak",
+        22564,
+        "1b3c71868d1299e52df6fc907deb202d5132b1ef0f72aae0ef6d15185dd53a5c",
     ),
     (
         "generation_config.json",
-        202,
-        "e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e",
+        214,
+        "d0d0ed2e37cdfafef4a5067d5ea2407b05f4fb50526e47c008a5b235d50240fb",
     ),
     (
-        "layers-0.safetensors",
-        383865448,
-        "5a6c052e37a754549e8f81c6fb32b050419f0fc2f71598817e08d0446b3f309d",
-    ),
-    (
-        "layers-1.safetensors",
-        383865448,
-        "9a2efd1048386e560c8241c7b972e213b516f0cbeafc4de6f486bd7faddb8c39",
-    ),
-    (
-        "layers-10.safetensors",
-        383865472,
-        "ebc4fd84671c2ac2d8d7b8da3707ed5d30738771a22eecc883d707521ed513a0",
-    ),
-    (
-        "layers-11.safetensors",
-        372313760,
-        "9daf0f0b763489c0869061669293f93213d6060b1b0c88061b53bb97f9082cd6",
-    ),
-    (
-        "layers-12.safetensors",
-        383865472,
-        "922729fcaedaece39e7b0fba137e3b900fbc3fe6bd8a85b16a215658be86938f",
-    ),
-    (
-        "layers-13.safetensors",
-        383865472,
-        "61c0a820b09d58e45e516c56532007155b0fd214c11fa8906640c9217da95c84",
-    ),
-    (
-        "layers-14.safetensors",
-        383865472,
-        "c2faab3a2ecddde0e762b3870c75f6fd83886edbabbd99ac40d641122d29e652",
-    ),
-    (
-        "layers-15.safetensors",
-        372313760,
-        "e75fbe4de60c0420912b91f379c29c95a49644feee6fe8a0bd3dd638ae07ea2b",
-    ),
-    (
-        "layers-16.safetensors",
-        383865472,
-        "84776e1d0a62c40730a4bc0f0e2c68242ba9a6150975d8992747fb6ecc0ebfcc",
-    ),
-    (
-        "layers-17.safetensors",
-        383865472,
-        "c7e32717b97f9553d62734f01bed4cc970dcf6bd3d5ba67c7704290656523d7e",
-    ),
-    (
-        "layers-18.safetensors",
-        383865472,
-        "1c6aed5f416dee34bb7ccfc322e0aa33f192b40afeab4b69fce784b2b349e253",
-    ),
-    (
-        "layers-19.safetensors",
-        372313760,
-        "63e1b8af41de9851ed279f9d4f42566febf81d13ae47e469ea1009a26c6b64e0",
-    ),
-    (
-        "layers-2.safetensors",
-        383865448,
-        "c2709097f77e8ec7204f908f54d7b84343139163e600815789124cbf15a709c6",
-    ),
-    (
-        "layers-20.safetensors",
-        383865472,
-        "c5945b2e40f3d97cb01d0cedcb60ea36f61ab585179ab0c02fdeec3d360f724d",
-    ),
-    (
-        "layers-21.safetensors",
-        383865472,
-        "c8a7696ad5cd1be016cfc553351ee4b588f3d972084dd47028db8dba9b113870",
-    ),
-    (
-        "layers-22.safetensors",
-        383865472,
-        "08481a6a46057d0bcdcd2598d4f67d5f821725fc483800cd360c2d7047907e08",
-    ),
-    (
-        "layers-23.safetensors",
-        372313760,
-        "13b2ba6536c77330fa1c40e91c4c707d5086803299e0f57dd03142bb28faaaa4",
-    ),
-    (
-        "layers-24.safetensors",
-        383865472,
-        "0f7855ee6b018e707d015f445f7e8b9542003104dbd0436e83e8c0dec73bdd17",
-    ),
-    (
-        "layers-25.safetensors",
-        383865472,
-        "fe49c034e095263e51b391895ccb5098741e06d75a6788769beb72fd50708846",
-    ),
-    (
-        "layers-26.safetensors",
-        383865472,
-        "14f086ff505e9df89c2fb938c947b0d023f6f19d3cecdc7f03a70caf36ea6ed4",
-    ),
-    (
-        "layers-27.safetensors",
-        372313760,
-        "4fa89a43e7196b18e6c67478aeedc1b3ab4853fa3bc4305d4ac73341b70e7e24",
-    ),
-    (
-        "layers-28.safetensors",
-        383865472,
-        "f10aecd4f9800052bbf1ad2cca939eb44dc205d42ff546096ce9212bd6eae411",
-    ),
-    (
-        "layers-29.safetensors",
-        383865472,
-        "633058fe6f1ec434c79e5c50d04c83b1955d52ca1889b1adca0e2db1cad9fa16",
-    ),
-    (
-        "layers-3.safetensors",
-        372313744,
-        "a874cf17d3480894aa13eb34568e1025f10c4d6b96f483cd93be583849312a0f",
-    ),
-    (
-        "layers-30.safetensors",
-        383865472,
-        "f9af47cefbdb300129c25eee1127c50629d9a2eba7f862a58a430a2cb378cf55",
-    ),
-    (
-        "layers-31.safetensors",
-        372313760,
-        "2a2e87f569b5da06a87b83df628cb27f491f3dbed55ca82054820cb382cffd2e",
-    ),
-    (
-        "layers-32.safetensors",
-        383865472,
-        "ca63c9dc522a1f0efd39e2cd7f5fb0efdb4274eabce5c15cc9aab11463cb3bb8",
-    ),
-    (
-        "layers-33.safetensors",
-        383865472,
-        "bb8eb220efa6a599a4ee29914d59ca26fe13fe64ec6f9a5ccff300432abc572b",
-    ),
-    (
-        "layers-34.safetensors",
-        383865472,
-        "6e08147ff5c8e0d5d7207d62ede78d6194f1453165cfab940743ff327bb0e6e5",
-    ),
-    (
-        "layers-35.safetensors",
-        372313760,
-        "f4391ffd8245e648eeaad69954721f106ea0423a56f9abee921d3d2880d98c03",
-    ),
-    (
-        "layers-36.safetensors",
-        383865472,
-        "5b077d63785d5c2b20ab5c0b8895b08941af08bb5685a1b6a5a3292c3eac638f",
-    ),
-    (
-        "layers-37.safetensors",
-        383865472,
-        "d38c28d8c86cc147e5edc1935dec46687a6b3a8bc0d712e829003dd9cd4fab7d",
-    ),
-    (
-        "layers-38.safetensors",
-        383865472,
-        "1628a41fa5d3dbcf2ffde423530a9e94e7228e247e922e2269bd348071a76365",
-    ),
-    (
-        "layers-39.safetensors",
-        372313760,
-        "889c827bbff3fa6b78558dcdfd24670894b8a450395ec418e7a4f3202789e0b1",
-    ),
-    (
-        "layers-4.safetensors",
-        383865448,
-        "9eb31d85023776894347a56101ee067f369d0d3c024f1331f5c7cba1f45b6df4",
-    ),
-    (
-        "layers-40.safetensors",
-        383865472,
-        "5f90d2b2d16e5c51a078f21eed843d80c22af71401669577d274ea7f2c1ce95f",
-    ),
-    (
-        "layers-41.safetensors",
-        383865472,
-        "80877a16835f7311a112ad0bbaf1d19997142ea3e1df95ffe446fd52ad1f80d8",
-    ),
-    (
-        "layers-42.safetensors",
-        383865472,
-        "c1bf34d1a3e4d36b342c5c680bb12c4ce74f02530dff33b735fad27470ef2594",
-    ),
-    (
-        "layers-43.safetensors",
-        372313760,
-        "10eceff499a24e0072a40b960671f00fc5012d7451f22cb6883f358e085ce276",
-    ),
-    (
-        "layers-44.safetensors",
-        383865472,
-        "673543b94e59003265ae648bba11389c6735ee3264ec164108b6db99f1219587",
-    ),
-    (
-        "layers-45.safetensors",
-        383865472,
-        "77b8c7a9cc451a378ee8d6927ce1c4b9664adb83c4786440eec099591dc98f32",
-    ),
-    (
-        "layers-46.safetensors",
-        383865472,
-        "9ee06b8029b7812644bd5fb01b8bfea7b640353769d094ae59d8c82d986a8b7b",
-    ),
-    (
-        "layers-47.safetensors",
-        372313760,
-        "6a8e0ddb389485965cd30bd0a90d1be5e1acb65cb6311ce337199f268c3120f6",
-    ),
-    (
-        "layers-48.safetensors",
-        383865472,
-        "70bd74dcdf4ea8b09e1ae3463977a05aba73f2c02397491bb641a0a3ca6832a3",
-    ),
-    (
-        "layers-49.safetensors",
-        383865472,
-        "a3481f971433ecc9041f44a555e443ff124e037601b36eab0bb3057946e041e4",
-    ),
-    (
-        "layers-5.safetensors",
-        383865448,
-        "a8c9ea40638fd66bd8ab21940df215e7921b4af04646d758d74425be011a9b6f",
-    ),
-    (
-        "layers-50.safetensors",
-        383865472,
-        "1aa60d9cb7f867a2033be0b1ff053049f09a6623826dd0d37daed3281479b875",
-    ),
-    (
-        "layers-51.safetensors",
-        372313760,
-        "511f64772c1a5a15292eb1c48166b9d206088aed283185e10877fc43308097bd",
-    ),
-    (
-        "layers-52.safetensors",
-        383865472,
-        "92c35a4e850b4c0b87a1eab42c47996504e062a8a11699ada20fcea0b88f36c7",
-    ),
-    (
-        "layers-53.safetensors",
-        383865472,
-        "ab48cad204502ddbf17f5ee2d5e52457baac965300cc15e8a25f35c843b4d526",
-    ),
-    (
-        "layers-54.safetensors",
-        383865472,
-        "2804cee95e18e9e516b9490c36ea7f41553a3fcb4455cf44a361d6086ed214a3",
-    ),
-    (
-        "layers-55.safetensors",
-        372313760,
-        "543841981255fce51f0d84fe2db4de580594f6c6d6a590ae47ffbdbd01211571",
-    ),
-    (
-        "layers-56.safetensors",
-        383865472,
-        "9847da2610e67b1f0ff39d8d103c7814f95bb8ede4204d5ae3055a8589bb0313",
-    ),
-    (
-        "layers-57.safetensors",
-        383865472,
-        "32fe173c033e46648bc71bc8e5036565234c0c13ac66acb2ad84c9cbb426b90e",
-    ),
-    (
-        "layers-58.safetensors",
-        383865472,
-        "c9858a0c4bd8cb980829a45d3f9ca52a0bd506c6a0775eb179d3e5ebfaae7867",
-    ),
-    (
-        "layers-59.safetensors",
-        372313760,
-        "3c30fd14e883c15af50e2f647c2d0b8f3a2fca96904e4b37cc8bb1956a133606",
-    ),
-    (
-        "layers-6.safetensors",
-        383865448,
-        "ad8b704be0cde8a774c4a49af59336d2b48b574446c1eddff8ba35d20d05ae69",
-    ),
-    (
-        "layers-60.safetensors",
-        383865472,
-        "1f24aa7a99e72f658089462b258613b11d06d6e11733ff5d5f864c663a190f92",
-    ),
-    (
-        "layers-61.safetensors",
-        383865472,
-        "0b083f4afca3538f87545d4fc50817292fc80061a731a5f0235f5c406be87b45",
-    ),
-    (
-        "layers-62.safetensors",
-        383865472,
-        "b1e4c80f95241cc7d269d7cf6a35291c8b455f2d4f1381e4eafbfccb35add125",
-    ),
-    (
-        "layers-63.safetensors",
-        372313760,
-        "7e27ec71df803eb38ba93aead54daaf1110d3f7124416443a30a3c81abc1c805",
-    ),
-    (
-        "layers-7.safetensors",
-        372313744,
-        "2acb7e8d035d730a1c81c36c3b20ca15020b89d2bcd4462259f2ecb2a8dcb828",
-    ),
-    (
-        "layers-8.safetensors",
-        383865448,
-        "81ebe095241562b2e2ace8875e2771f0cdb68e76286a18506ea19a749b8de9b4",
-    ),
-    (
-        "layers-9.safetensors",
-        383865448,
-        "fdd926f3e8c335eb21a2b41cf635cb241f337a5d47310ef41ae3d43bf53410c3",
-    ),
-    (
-        "merges.txt",
-        3353259,
-        "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+        "model.safetensors",
+        23839093880,
+        "bbf67537522e139aacfc9c980c80bb38d9905e4f147494e6b9a1f15045501733",
     ),
     (
         "model.safetensors.index.json",
-        137335,
-        "6d19a4e607604c1ac631f810a56e6084c892b4cb0251c530c6a24fc877f9fb4b",
+        164371,
+        "429430e1b9e65b2cb98eff8cd10a06e70a09cee89c48487a3914684aeb6df57f",
     ),
     (
-        "mtp.safetensors",
-        477202224,
-        "9557770331f1f648eb96039f2a1e7cdc5742fe15c0f5777c43063b2c12a60f4c",
-    ),
-    (
-        "outside.safetensors",
-        6007102112,
-        "27a91100d904f6acc1c86d08675691199e1fe2da5da613106fb01ae4809b3ac1",
+        "model_mtp.safetensors",
+        849400392,
+        "1d8268aa85ace093a561e3e7b63b9d390dac1cd55a90cd55b5ec509c3c9da9fe",
     ),
     (
         "preprocessor_config.json",
@@ -655,13 +377,13 @@ MODEL_FILE_RECORDS = (
     ),
     (
         "tokenizer.json",
-        12807982,
-        "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+        19989325,
+        "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
     ),
     (
         "tokenizer_config.json",
-        16718,
-        "5186f0defcd7f232382c7f0aebcd2252d073bb921ab240e407b7ae8745d2b29b",
+        1047,
+        "529f30018c36dca5387c99b5edf368287f386f2c32d3790aa7141956bc5119fa",
     ),
     (
         "video_preprocessor_config.json",
@@ -736,7 +458,7 @@ def expected_pid1_argv(concurrency: int) -> list[str]:
         "serve",
         str(MODEL_ROOT),
         "--served-model-name",
-        "qwen3.6-27b",
+        MODEL_SERVED_NAME,
         "--host",
         "0.0.0.0",
         "--port",
@@ -999,7 +721,7 @@ def _fixed32_qwen_synthetic_compaction_failure(
         or message.get("id") != event_id
         or message.get("type") != "message"
         or message.get("role") != "assistant"
-        or message.get("model") != "qwen3.6-27b"
+        or message.get("model") != MODEL_SERVED_NAME
         or message.get("stop_reason") is not None
         or usage != {"input_tokens": 0, "output_tokens": 0}
         or not isinstance(content, list)
@@ -1119,7 +841,7 @@ def _fixed32_qwen_metric_labels(
         fields.append(f'finished_reason="{finished_reason}"')
     if le is not None:
         fields.append(f'le="{le}"')
-    fields.append('model_name="qwen3.6-27b"')
+    fields.append(f'model_name="{MODEL_SERVED_NAME}"')
     return ",".join(fields)
 
 
@@ -1356,7 +1078,7 @@ def _fixed32_qwen_metric_snapshot(
             if (
                 name == "vllm:request_params_max_tokens_bucket"
                 and labels.startswith('engine="0",le="')
-                and labels.endswith('",model_name="qwen3.6-27b"')
+                and labels.endswith(f'",model_name="{MODEL_SERVED_NAME}"')
             ):
                 continue
             raise ContractError(
@@ -3327,6 +3049,7 @@ def _pinned_model_files(
     expected_digest: str = MODEL_CANONICAL_SHA256,
     expected_vocab_size: int = MODEL_TEXT_CONFIG_VOCAB_SIZE,
     expected_records: tuple[tuple[str, int, str], ...] | None = MODEL_FILE_RECORDS,
+    expected_vocab_json_sha256: str = MODEL_VOCAB_JSON_SHA256,
 ) -> tuple[list[dict[str, Any]], str]:
     if not model_root.is_dir() or model_root.is_symlink():
         raise ContractError(f"model root is missing or symlinked: {model_root}")
@@ -3348,6 +3071,19 @@ def _pinned_model_files(
         raise ContractError(
             "model config text_config.vocab_size mismatch: "
             f"{vocab_size!r} != {expected_vocab_size}"
+        )
+    # FR14: vocab_size is a WIDTH check, not an IDENTITY check. The K64
+    # draft-vocab block map indexes lm_head rows by token id, so a reordered
+    # vocabulary of the same width would pass every boot assertion and only
+    # show up as a degraded accept rate. vocab.json is byte-identical across
+    # the 3.6 and 3.8 checkpoints, so pin its digest right here, beside the
+    # width check, where a model swap cannot route around it.
+    vocab_json_sha256 = sha256_file(model_root / "vocab.json")
+    if vocab_json_sha256 != expected_vocab_json_sha256:
+        raise ContractError(
+            "model tokenizer vocab.json digest mismatch (token id mapping "
+            "moved; the K64 draft-vocab block map is no longer valid): "
+            f"{vocab_json_sha256} != {expected_vocab_json_sha256}"
         )
 
     model_files = [

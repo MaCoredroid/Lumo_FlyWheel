@@ -285,7 +285,17 @@ def test_fp8_head_capture_classifier_uses_fixed32_mtp_lifecycle() -> None:
         classify(1)
 
 
-def test_exact_fp8_traffic_floor_and_cap_math() -> None:
+def test_exact_fp8_traffic_floor_and_cap_math_is_fr13_history() -> None:
+    """The fp8 draft-head ledger, pinned as HISTORY.
+
+    FR14 retired this arm: the served checkpoint's lm_head is BF16 (unsloth
+    shipped FP8 per-channel, this vLLM builds lm_head as an unquantized
+    ParallelLMHead and refused it, and the lm_head surgery dequantised it), so
+    there are no FP8 head bytes to read and no floor to re-derive. The
+    arithmetic below is therefore stated against the FR13 fp8-era base
+    (32_666_638_208) and pins what the patcher snippet still says, so the dead
+    arm cannot be silently re-animated with FR14 numbers.
+    """
     vocab = 65_536
     hidden = 5_120
     calls = 5
@@ -296,15 +306,15 @@ def test_exact_fp8_traffic_floor_and_cap_math() -> None:
     fp8_head_bytes = calls * vocab * hidden
     fp32_scale_bytes = calls * scale_rows * scale_cols * 4
     candidate_head_bytes = fp8_head_bytes + fp32_scale_bytes
-    candidate_full_step_bytes = 32_666_638_208 - bf16_head_bytes + candidate_head_bytes
-    floor_ms = candidate_full_step_bytes / 273_000_000
+    fr13_full_step_bytes = 32_666_638_208 - bf16_head_bytes + candidate_head_bytes
+    floor_ms = fr13_full_step_bytes / 273_000_000
     cap_ms = floor_ms * 1.15
 
     assert bf16_head_bytes == 3_355_443_200
     assert fp8_head_bytes == 1_677_721_600
     assert fp32_scale_bytes == 409_600
     assert candidate_head_bytes == 1_678_131_200
-    assert candidate_full_step_bytes == 30_989_326_208
+    assert fr13_full_step_bytes == 30_989_326_208
     assert abs(floor_ms - 113.514015414) < 1e-9
     assert abs(cap_ms - 130.541117726) < 1e-9
     snippet = _eagle_snippet()
@@ -317,44 +327,65 @@ def test_exact_fp8_traffic_floor_and_cap_math() -> None:
         assert value in snippet
 
 
-def test_floor_sequence_and_launcher_bind_fp8_candidate_ledger() -> None:
+def test_floor_sequence_and_launcher_refuse_the_retired_fp8_head_arm() -> None:
+    """FR14: both entry points must REFUSE FR13_DRAFT_HEAD_FP8=1, loudly.
+
+    The lever is not deleted -- its plumbing, its .so and its capture
+    classifier all survive for the day an FP8 head is served again -- but no
+    FR14 boot may pin a floor for bytes that are not read. Silent inertness is
+    the failure mode this campaign exists to prevent.
+    """
     sequence = SEQUENCE.read_text(encoding="utf-8")
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
     assert "FR13_DRAFT_HEAD_FP8=${FR13_DRAFT_HEAD_FP8:-0}" in sequence
-    assert "FR13_MANDATORY_WEIGHT_BYTES=30989326208" in sequence
-    assert "FR13_WEIGHT_FLOOR_MS=113.514015414" in sequence
-    assert "_fixed32_expected_mandatory_weight_bytes=30989326208" in launcher
-    assert "_fixed32_expected_weight_floor_ms=113.514015414" in launcher
+    assert "FR13_DRAFT_HEAD_FP8 is RETIRED" in sequence
+    assert "FR13_DRAFT_HEAD_FP8 is RETIRED" in launcher
+    assert "FR13_MANDATORY_WEIGHT_BYTES=30989326208" not in sequence
+    assert "FR13_WEIGHT_FLOOR_MS=113.514015414" not in sequence
+    assert "_fixed32_expected_mandatory_weight_bytes=30989326208" not in launcher
+    assert "_fixed32_expected_weight_floor_ms=113.514015414" not in launcher
+    # The lever plumbing itself stays wired.
     assert '-e FR13_DRAFT_HEAD_FP8="$FR13_DRAFT_HEAD_FP8" \\' in launcher
     assert "FR13_DRAFT_HEAD_FP8_SOURCE_SHA256" in launcher
     assert "FR13_DRAFT_HEAD_FP8_SOURCE_COMMIT" in launcher
 
-    command = f"""
+    def _source(fp8: str) -> subprocess.CompletedProcess:
+        command = f"""
 set -euo pipefail
 run_variant() {{ :; }}
 export BSIZE=1 CONC=1 TAG=fp8_floor_test
 export FR13_DRAFT_VOCAB_K=65536 FR13_DRAFT_VOCAB_ROOT=1
-export FR13_DRAFT_HEAD_FP8=1
+export FR13_DRAFT_HEAD_FP8={fp8}
 source {SEQUENCE}
 printf '%s %s' "$FR13_MANDATORY_WEIGHT_BYTES" "$FR13_WEIGHT_FLOOR_MS"
 """
-    result = subprocess.run(
-        ["bash", "-c", command],
-        check=True,
-        capture_output=True,
-        text=True,
-        cwd=REPO,
-    )
-    assert result.stdout == "30989326208 113.514015414"
+        return subprocess.run(
+            ["bash", "-c", command],
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=REPO,
+        )
+
+    refused = _source("1")
+    assert refused.returncode == 2
+    assert "FR13_DRAFT_HEAD_FP8 is RETIRED" in refused.stderr
+    assert refused.stdout == ""
+
+    allowed = _source("0")
+    assert allowed.returncode == 0
+    assert allowed.stdout == "27977022848 102.479937172"
 
 
-def test_deploy_speed_reducer_binds_fp8_to_exact_k64_root_ledger() -> None:
+def test_deploy_speed_reducer_refuses_the_retired_fp8_head_arm() -> None:
     measure = MEASURE.read_text(encoding="utf-8")
 
-    assert '(65_536, 1, 1): (' in measure
-    assert "30_989_326_208" in measure
-    assert "113.514015414" in measure
+    # The (K=65536, root=1, fp8=1) ledger row is GONE, and the reducer says
+    # why instead of falling through to a generic "unsupported" message.
+    assert '(65_536, 1, 1): (' not in measure
+    assert "FR13_DRAFT_HEAD_FP8 is RETIRED" in measure
+    assert 'if _draft_vocab_config[2] == 1:' in measure
     assert 'os.environ.get("FR13_DRAFT_HEAD_FP8", "0")' in measure
     assert '_draft_head_fp8_raw not in {"0", "1"}' in measure
     assert '_draft_head_fp8_static_io_raw not in {"0", "1"}' in measure
@@ -614,8 +645,8 @@ def test_timing_runner_is_real_exact4_and_uses_distinct_arm_floors() -> None:
     assert "--expected-gate-sha256 \"$GATE_RESULT_SHA256\"" in runner
     assert "30989326208" in runner
     assert "113.514015414" in runner
-    assert "32666638208" in runner
-    assert "119.658015414" in runner
+    assert "27977022848" in runner
+    assert "102.479937172" in runner
     assert "synthetic" not in runner.lower()
     assert "probe-only" not in runner.lower()
     assert 'QROW16_FA2_SO:?set QROW16_FA2_SO' in runner

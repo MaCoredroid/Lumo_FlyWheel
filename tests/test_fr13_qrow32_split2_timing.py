@@ -44,7 +44,13 @@ def _inputs(tmp_path: Path):
     sidecar = "3" * 64
     rows = []
     for index, task_id in enumerate(module.EXACT4_TASK_IDS):
-        wall_ms = 120.0 + index
+        # Synthetic step wall placed just ABOVE the weight floor and well
+        # BELOW the U95 cap, which is what makes the eligibility assertion
+        # below informative. FR13 used 120-123 ms against a 119.658 floor /
+        # 137.607 cap; FR14's floor is 102.480 and its cap 117.852, so the
+        # fixture moves with them (a fixed 120 ms would now sit ABOVE the cap
+        # and the test would only be asserting that the cap works).
+        wall_ms = 103.0 + index
         rows.append(
             {
                 "instance_id": task_id,
@@ -65,7 +71,7 @@ def _inputs(tmp_path: Path):
         "task_instance_ids": list(module.EXACT4_TASK_IDS),
         "draft_vocab_root": 1,
         "draft_vocab_k": 65536,
-        "mandatory_weight_bytes": 32666638208,
+        "mandatory_weight_bytes": 27977022848,
         "per_task": rows,
     }
     engagement = {
@@ -130,8 +136,8 @@ def test_exact4_u95_controls_exact16_eligibility(tmp_path: Path) -> None:
         pass_sidecar_sha256=sidecar,
         runner_sha256="5" * 64,
         block_map_sha256="6" * 64,
-        floor_ms=119.658015414,
-        cap_ms=137.6067177261,
+        floor_ms=102.479937172,
+        cap_ms=117.8519277478,
         arm=arm,
         **paths,
     )
@@ -159,8 +165,8 @@ def test_incomplete_wall_retention_is_rejected(tmp_path: Path) -> None:
             pass_sidecar_sha256=sidecar,
             runner_sha256="5" * 64,
             block_map_sha256="6" * 64,
-            floor_ms=119.658015414,
-            cap_ms=137.6067177261,
+            floor_ms=102.479937172,
+            cap_ms=117.8519277478,
             arm=arm,
             **paths,
         )

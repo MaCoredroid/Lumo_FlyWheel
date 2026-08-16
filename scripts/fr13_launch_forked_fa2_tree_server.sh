@@ -519,6 +519,18 @@ for _fr13_req in "${FR13_REQUIRED_TREE_FLAGS[@]}"; do
 done
 unset _fr13_req _fr13_req_k _fr13_req_v
 IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"}
+# FR14 SERVED CHECKPOINT -- the single point of truth for the serve line.
+# Deliberately NOT caller-overridable and deliberately NOT named FR13_*/LUMO_*/
+# VLLM_* (those prefixes are auto-forwarded into the container by the env
+# sweeper below, and this pair is host-side plumbing, not engine config).
+# fr13_fixed32_contract.py pins the resulting PID1 argv element-by-element
+# (MODEL_ROOT / MODEL_SERVED_NAME), so a divergence here fails closed at
+# attestation rather than serving the wrong weights quietly.
+SERVED_MODEL_PATH=/models/qwen3.8-27b-nvfp4
+SERVED_MODEL_NAME=qwen3.8-27b-nvfp4
+readonly SERVED_MODEL_PATH SERVED_MODEL_NAME
+[[ -d "$SERVED_MODEL_PATH" && ! -L "$SERVED_MODEL_PATH" ]] \
+  || { echo "served checkpoint directory is missing or symlinked: $SERVED_MODEL_PATH" >&2; exit 2; }
 CONTAINER=${CONTAINER:-fr13-forked-fa2-tree}
 PORT=${PORT:-9950}
 _FR13_GPU_UTIL_EXPLICIT=${GPU_UTIL+x}
@@ -2161,6 +2173,65 @@ case "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE" in
   0|byte_ab|1) ;;
   *) echo "FR13_FIXED32_B1_FP8_QUANT_REGCACHE must be 0, byte_ab, or 1" >&2; exit 2 ;;
 esac
+# ---------------------------------------------------------------------------
+# FR14 FP8-LEVER REFUSAL (2026-08-16)
+#
+# The whole fp8 GEMM lever portfolio targets vLLM's w8a8 BLOCKWISE-FP8
+# dispatcher: OPT-A / FR13_GB10_FP8_GEMV_CFG (whose guard requires
+# weight_block_size == [128,128] -- fr10_phase4_patch_vllm_tree_gdn.py:35582),
+# FR13_FIXED32_B1_FP8_QUANT_REGCACHE (per_token_group_quant.cu), and every
+# non-'stock' FR13_FIXED32_CUTLASS_WAVE variant
+# (scaled_mm_blockwise_sm120_fp8.cu). Under a non-fp8 checkpoint that
+# dispatcher is simply off-path.
+#
+# They do not crash -- which is WORSE. An arm named cat9-opta boots, passes
+# every flag assertion, writes a full evidence bundle, and measures NOTHING;
+# the result would then be quoted as a lever verdict. Refuse instead.
+#
+# The levers are NOT deleted: re-point them at the nvfp4 dispatch site
+# (nvfp4_scaled_mm_sm120_kernels.cu) or serve an fp8 checkpoint, and they arm
+# again with no further change here.
+_fr14_quant_probe='
+import json, sys
+try:
+    cfg = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    print("")
+    raise SystemExit(0)
+quant = cfg.get("quantization_config")
+print(quant.get("quant_method", "") if isinstance(quant, dict) else "")
+'
+_fr14_served_quant_method=$(
+  python3 -c "$_fr14_quant_probe" "$SERVED_MODEL_PATH/config.json" 2>/dev/null
+) || _fr14_served_quant_method=""
+_fr14_armed_fp8_levers=()
+if [[ "${FR13_GB10_FP8_GEMV_CFG:-0}" != "0" ]]; then
+  _fr14_armed_fp8_levers+=("FR13_GB10_FP8_GEMV_CFG=${FR13_GB10_FP8_GEMV_CFG}")
+fi
+if [[ "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE:-0}" != "0" ]]; then
+  _fr14_armed_fp8_levers+=("FR13_FIXED32_B1_FP8_QUANT_REGCACHE=${FR13_FIXED32_B1_FP8_QUANT_REGCACHE}")
+fi
+if [[ -n "${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO:-}" ]]; then
+  _fr14_armed_fp8_levers+=("FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO=${FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO}")
+fi
+if [[ "${FR13_FIXED32_CUTLASS_WAVE:-stock}" != "stock" ]]; then
+  _fr14_armed_fp8_levers+=("FR13_FIXED32_CUTLASS_WAVE=${FR13_FIXED32_CUTLASS_WAVE}")
+fi
+if [[ -n "${FR13_FIXED32_CUTLASS_WAVE_SO:-}" ]]; then
+  _fr14_armed_fp8_levers+=("FR13_FIXED32_CUTLASS_WAVE_SO=${FR13_FIXED32_CUTLASS_WAVE_SO}")
+fi
+if (( ${#_fr14_armed_fp8_levers[@]} > 0 )) && [[ "$_fr14_served_quant_method" != "fp8" ]]; then
+  echo "FR14 REFUSAL: fp8-only GEMM lever(s) armed against a non-fp8 checkpoint." >&2
+  echo "  served checkpoint : $SERVED_MODEL_PATH" >&2
+  echo "  quant_method      : ${_fr14_served_quant_method:-<absent>} (required: fp8)" >&2
+  printf '  armed lever       : %s\n' "${_fr14_armed_fp8_levers[@]}" >&2
+  echo "  These levers target the w8a8 blockwise-fp8 dispatcher, which this" >&2
+  echo "  checkpoint never enters. They would boot, assert clean and measure" >&2
+  echo "  nothing. Disarm them, or re-target them at the nvfp4 dispatch site." >&2
+  exit 2
+fi
+unset _fr14_served_quant_method _fr14_armed_fp8_levers _fr14_quant_probe
+# ---------------------------------------------------------------------------
 FR13_FP8_QUANT_REGCACHE_DOCKER_ARGS=()
 if [[ -n "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" ]]; then
   [[ "$FR13_FIXED32_B1_FP8_QUANT_REGCACHE_SO" == /* \
@@ -3797,23 +3868,26 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
         exit 2
       }
       _fixed32_expected_draft_vocab_k=0
-      _fixed32_expected_mandatory_weight_bytes=42025179008
-      _fixed32_expected_weight_floor_ms=153.9383846446886
+      _fixed32_expected_mandatory_weight_bytes=37335563648
+      _fixed32_expected_weight_floor_ms=136.7603064029304
       ;;
     65536:0)
       _fixed32_expected_draft_vocab_k=65536
-      _fixed32_expected_mandatory_weight_bytes=34538346368
-      _fixed32_expected_weight_floor_ms=126.514089260
+      _fixed32_expected_mandatory_weight_bytes=29848731008
+      _fixed32_expected_weight_floor_ms=109.336011018
       ;;
     65536:1)
       _fixed32_expected_draft_vocab_k=65536
+      # FR14 RETIRED ARM -- see scripts/fr13_fixed32_floor_timers_seq.sh for
+      # the full reasoning. The served lm_head is BF16 after the FR14 lm_head
+      # surgery, so an FP8 draft-head floor is unrealisable on this
+      # checkpoint; refuse instead of pinning a floor nothing can hit.
       if [[ "$FR13_DRAFT_HEAD_FP8" == "1" ]]; then
-        _fixed32_expected_mandatory_weight_bytes=30989326208
-        _fixed32_expected_weight_floor_ms=113.514015414
-      else
-        _fixed32_expected_mandatory_weight_bytes=32666638208
-        _fixed32_expected_weight_floor_ms=119.658015414
+        echo "FR13_DRAFT_HEAD_FP8 is RETIRED under the FR14 NVFP4 checkpoint: the served lm_head is BF16 (see /models/qwen3.8-27b-nvfp4/.lumo_lmhead_surgery.json), so the FP8 draft-head floor is unrealisable" >&2
+        exit 2
       fi
+      _fixed32_expected_mandatory_weight_bytes=27977022848
+      _fixed32_expected_weight_floor_ms=102.479937172
       ;;
     *)
       echo "fixed32 draft-vocab floor configuration is unsupported: K=${FR13_DRAFT_VOCAB_K:-unset} ROOT=$FR13_DRAFT_VOCAB_ROOT" >&2
@@ -5674,8 +5748,23 @@ from lumo_flywheel_serving.model_server import recover_host_memory
 recover_host_memory()
 PY
 
+# FR14 PAGE-CACHE DROP (2026-08-16). MemAvailable counts reclaimable page
+# cache as "available", but the GB10 unified-memory allocator does not: the
+# first NVFP4 boot attempt was REFUSED with 32 GiB free of a 117.5 GiB pool
+# purely because 54 GB of checkpoint downloads were still sitting in page cache
+# (results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md pass 6, doctrine (i)).
+# `sync` + drop_caches converts that cache back into genuinely free pages.
+#
+# `sudo -n` is SANCTIONED here and is deliberately non-interactive: this must
+# never block an unattended campaign on a password prompt. If the sudoers rule
+# is absent the drop is skipped (|| true) and the MemFree gate below still
+# fires -- loudly, and before ~8 minutes of engine boot are spent.
+sync
+sudo -n sysctl vm.drop_caches=3 >/dev/null 2>&1 || true
+
 free -h
-python3 - <<'PY'
+GPU_UTIL="$GPU_UTIL" python3 - <<'PY'
+import os
 from pathlib import Path
 
 fields = {}
@@ -5692,6 +5781,31 @@ if available_gib < 80 or swap_used_kib != 0:
         f"MemAvailable={available_gib:.2f}GiB "
         f"swap_used={swap_used_kib / 1024 / 1024:.2f}GiB"
     )
+
+# FR14 unified-memory gate. On GB10 the "GPU" pool IS host RAM, so the engine's
+# demand is gpu_memory_utilization x MemTotal and it is measured against
+# genuinely FREE pages, not MemAvailable. Reproduce that arithmetic here so a
+# doomed boot dies in one second instead of eight minutes.
+total_gib = fields.get("MemTotal", 0) / 1024 / 1024
+free_gib = fields.get("MemFree", 0) / 1024 / 1024
+gpu_util = float(os.environ["GPU_UTIL"])
+required_gib = gpu_util * total_gib
+if free_gib < required_gib:
+    raise SystemExit(
+        "FR14 launch aborted: unified-memory preflight. The engine will "
+        f"demand gpu_memory_utilization={gpu_util} x MemTotal={total_gib:.2f}"
+        f"GiB = {required_gib:.2f}GiB, but only MemFree={free_gib:.2f}GiB is "
+        "free (MemAvailable="
+        f"{available_gib:.2f}GiB includes reclaimable page cache, which the "
+        "unified-memory allocator will NOT reclaim for you). Free memory "
+        "first: `sync && sudo sysctl vm.drop_caches=3`, stop other "
+        "containers, or lower GPU_UTIL."
+    )
+print(
+    f"[launch] unified-memory preflight OK: MemFree={free_gib:.2f}GiB >= "
+    f"required={required_gib:.2f}GiB (GPU_UTIL={gpu_util}, "
+    f"MemTotal={total_gib:.2f}GiB)"
+)
 PY
 
 # FR13 §48 class-9 trap fix: auto-forward EVERY experiment flag set in this shell
@@ -6738,7 +6852,7 @@ case \"\${LUMO_NSYS_WRAP_VLLM,,}\" in
     )
     ;;
 esac
-exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
+exec \"\${NSYS_PREFIX[@]}\" vllm serve $SERVED_MODEL_PATH --served-model-name $SERVED_MODEL_NAME \
   --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
   --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' --seed '${SEED:-0}' \
   $(if [[ -n "$KV_CACHE_MEMORY_BYTES" ]]; then printf '%s %s' '--kv-cache-memory-bytes' "$KV_CACHE_MEMORY_BYTES"; fi) \

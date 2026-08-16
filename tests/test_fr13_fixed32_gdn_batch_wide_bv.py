@@ -461,8 +461,8 @@ def test_exact4_b4_live_gate_runner_is_non_timing_and_fail_closed() -> None:
     assert "export FR13_DRAFT_VOCAB_ROOT=0" in runner
     assert "export FR13_DRAFT_VOCAB_K=0" in runner
     assert 'export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"' in runner
-    assert 'FR13_MANDATORY_WEIGHT_BYTES" == "42025179008"' in runner
-    assert 'FR13_WEIGHT_FLOOR_MS" == "153.938384645"' in runner
+    assert 'FR13_MANDATORY_WEIGHT_BYTES" == "37335563648"' in runner
+    assert 'FR13_WEIGHT_FLOOR_MS" == "136.760306403"' in runner
     assert "MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4" in runner
     assert "B4_KV_CACHE_MEMORY_BYTES=49392123904" in runner
     assert 'KV_CACHE_MEMORY_BYTES="$B4_KV_CACHE_MEMORY_BYTES"' in runner

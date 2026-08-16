@@ -59,6 +59,46 @@ FR13_B4_TASK_REFILL=${FR13_B4_TASK_REFILL:-0}
   || { echo "FAIL: FR13_B4_TASK_REFILL must be exactly 0 or 1" >&2; exit 2; }
 mkdir -p "$RUNROOT" output/fr13_sfwd_sidecar
 
+# FR14 MEMORY PREFLIGHT (2026-08-16). Mark's directive after the first NVFP4
+# boot was refused at 32/117.5 GiB free: pay attention to disk and memory. On
+# GB10 the GPU pool IS host RAM, so page cache left over from a 54 GB download
+# (or from the previous arm) is charged against the engine's demand even though
+# MemAvailable says it is "available". Drop it here, at the top of the
+# campaign, before any arm has burned wall.
+#
+# `sudo -n` is SANCTIONED and deliberately non-interactive: an unattended
+# campaign must never stall on a password prompt. If the sudoers rule is
+# missing the drop is skipped and the check below still refuses loudly. The
+# launcher repeats both steps per arm (fr13_launch_forked_fa2_tree_server.sh);
+# this copy catches a doomed campaign one boot earlier.
+sync
+sudo -n sysctl vm.drop_caches=3 >/dev/null 2>&1 || true
+free -g
+GPU_UTIL="${GPU_UTIL:-0.70}" python3 - <<'PY' || exit 2
+import os
+from pathlib import Path
+
+fields = {}
+for line in Path("/proc/meminfo").read_text().splitlines():
+    key, value = line.split(":", 1)
+    fields[key] = int(value.strip().split()[0])
+total_gib = fields.get("MemTotal", 0) / 1024 / 1024
+free_gib = fields.get("MemFree", 0) / 1024 / 1024
+gpu_util = float(os.environ["GPU_UTIL"])
+required_gib = gpu_util * total_gib
+if free_gib < required_gib:
+    raise SystemExit(
+        "FAIL: FR14 campaign memory preflight. Engine demand "
+        f"{gpu_util} x {total_gib:.2f}GiB = {required_gib:.2f}GiB but only "
+        f"MemFree={free_gib:.2f}GiB is free. Stop other containers or run "
+        "`sync && sudo sysctl vm.drop_caches=3`."
+    )
+print(
+    f"[campaign] memory preflight OK: MemFree={free_gib:.2f}GiB >= "
+    f"required={required_gib:.2f}GiB"
+)
+PY
+
 FIXED32_MANIFEST_ACTIVE=0
 FIXED32_MANIFEST_FINALIZED=0
 FIXED32_TASK_COUNT=""

@@ -78,7 +78,7 @@ TRAFFIC = {
     "mandatory_bytes_per_call": 335_626_240,
     "mandatory_bytes_per_event": 1_678_131_200,
     "retained_candidate_bytes": 335_626_240,
-    "baseline_mandatory_bytes_per_event": 32_666_638_208,
+    "baseline_mandatory_bytes_per_event": 27_977_022_848,
     "candidate_mandatory_bytes_per_event": 30_989_326_208,
     "floor_bandwidth_gbps": 273,
     "candidate_weight_floor_ms": 113.514015414,

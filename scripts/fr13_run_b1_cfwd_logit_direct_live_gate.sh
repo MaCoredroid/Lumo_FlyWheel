@@ -129,8 +129,8 @@ source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
-[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "32666638208" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "119.658015414" \
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "27977022848" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "102.479937172" \
    && "$LUMO_SWE_AUTOCOMMIT" == "0" ]] \
   || { echo "fixed K64/root1 B1 floor contract drifted" >&2; exit 2; }
 

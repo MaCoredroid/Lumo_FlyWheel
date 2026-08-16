@@ -173,8 +173,8 @@ run_arm() {
     fp8_arm=$arm
     static_io=$FR13_DRAFT_HEAD_FP8_STATIC_IO
   else
-    expected_bytes=32666638208
-    expected_floor=119.658015414
+    expected_bytes=27977022848
+    expected_floor=102.479937172
     fp8_arm=
     static_io=0
   fi

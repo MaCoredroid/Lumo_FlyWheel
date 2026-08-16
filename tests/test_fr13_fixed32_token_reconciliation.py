@@ -366,7 +366,7 @@ def _delegated_subagent_trace(instance_id: str) -> list[dict[str, Any]]:
                 "id": uuid,
                 "type": "message",
                 "role": "assistant",
-                "model": "qwen3.6-27b",
+                "model": "qwen3.8-27b-nvfp4",
                 "content": content,
                 "stop_reason": stop_reason,
                 "usage": usage,

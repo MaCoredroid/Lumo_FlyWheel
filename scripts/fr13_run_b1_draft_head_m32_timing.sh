@@ -425,14 +425,14 @@ def validate(record, raw, label, expected_arm):
         )
     }
     if (
-        record.get("mandatory_weight_bytes") != 32666638208
+        record.get("mandatory_weight_bytes") != 27977022848
         or record.get("weight_floor_bandwidth_bytes_per_s") != 273000000000
     ):
         raise SystemExit(f"{label} corrected mandatory-weight floor identity drifted")
     close(values["events_per_step"], 1.0, f"{label} B1 events_per_step")
     close(values["rows_per_step"], 32.0, f"{label} fixed32 rows_per_step")
-    close(values["weight_floor_ms"], 119.658015414, f"{label} weight floor")
-    close(values["floor_ms"], 119.658015414, f"{label} active floor")
+    close(values["weight_floor_ms"], 102.479937172, f"{label} weight floor")
+    close(values["floor_ms"], 102.479937172, f"{label} active floor")
     close(values["compute_floor_ms"], 17.28, f"{label} compute floor")
     close(
         values["committed_per_event"],
@@ -587,10 +587,10 @@ summary = {
         "full_wall_tps": c["measured_tps_fullstep_wall"] - s["measured_tps_fullstep_wall"],
         "accept_per_event": c["accept_per_event"] - s["accept_per_event"],
     },
-    "mandatory_weight_floor_ms": 119.658015414,
-    "mandatory_weight_bytes": 32666638208,
+    "mandatory_weight_floor_ms": 102.479937172,
+    "mandatory_weight_bytes": 27977022848,
     "floor_bandwidth_bytes_per_s": 273000000000,
-    "acceptance_cap_ms": 137.6067177261,
+    "acceptance_cap_ms": 117.8519277478,
     "note": "One topology timing pair; not the formal Tail/Hydra U95 gate.",
 }
 temporary = out_path.with_name(out_path.name + f".tmp.{os.getpid()}")

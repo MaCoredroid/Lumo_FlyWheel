@@ -1467,7 +1467,7 @@ export LUMO_NSYS_WRAP_VLLM=1
 # defaults select. FR13_FA2_QROW16_PRODUCTION defaults to 0 in the launcher and
 # FR13_DRAFT_VOCAB_ROOT defaults to 0 in the floor sequence, so an unpinned
 # profile re-measures the pre-Qrow16 kernels and annotates them with the wrong
-# 126.514089260 ms floor. Pin both exactly as the production stack-timing runner
+# 109.336011018 ms floor. Pin both exactly as the production stack-timing runner
 # does (scripts/fr13_run_b1_k64_qrow16_sfwd_stack_timing.sh).
 QROW16_SO_SHA256=1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86
 QROW16_SO_BYTES=299507792

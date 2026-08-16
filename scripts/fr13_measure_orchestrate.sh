@@ -29,7 +29,7 @@ PROMPTS="$REPO/output/fr13_acceptance_ladder/prompts_swe4.json"
 SEED=1313
 PORT=9950
 ENDPOINT="http://127.0.0.1:$PORT"
-MODEL=qwen3.6-27b
+MODEL=qwen3.8-27b-nvfp4
 MEASURE="$REPO/scripts/fr13_measure.py"
 
 recover() { PYTHONPATH="$REPO/src" python3 -c 'from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()' >/dev/null 2>&1 || true; }
@@ -171,7 +171,7 @@ boot_tree_b4() {  # name TREE  -> B=4 co-residency smoke (MAX_NUM_SEQS=4)
 
 IMAGE="vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"
 ORACLE="$REPO/scripts/fr13_recurrent_decode_oracle.py"
-TOKENIZER=/models/qwen3.6-27b-fp8
+TOKENIZER=/models/qwen3.8-27b-nvfp4
 
 # GAP-1: recurrent oracle p over the FULL served stream of an arm's capture-q,
 # with full top-K on EVERY position, then the real id-aligned temp06-drift TV.

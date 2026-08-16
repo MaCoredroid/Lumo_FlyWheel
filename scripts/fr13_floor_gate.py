@@ -186,7 +186,7 @@ INTEGRAL_METRICS = {
 }
 EXPECTED_METRIC_LABELS = {
     key: (
-        'engine="0",model_name="qwen3.6-27b"'
+        'engine="0",model_name="qwen3.8-27b-nvfp4"'
         if key in {"spec_drafts", "spec_tokens"}
         else ""
     )
@@ -5649,7 +5649,7 @@ def load_windows(
         if pre_labels != EXPECTED_METRIC_LABELS:
             raise GateError(
                 f"{task_dir.name}: required metric labels do not match the "
-                "pinned qwen3.6-27b series"
+                "pinned qwen3.8-27b-nvfp4 series"
             )
         for snapshot_name, snapshot in (("pre", pre), ("post", post)):
             snapshot_steps = integral(
@@ -8566,7 +8566,7 @@ def fixture_metrics(
     lines = []
     for key, metric in METRICS.items():
         labels = (
-            '{engine="0",model_name="qwen3.6-27b"}'
+            '{engine="0",model_name="qwen3.8-27b-nvfp4"}'
             if key in {"spec_drafts", "spec_tokens"}
             else ""
         )
@@ -9188,7 +9188,7 @@ def write_fixture_arm(
         completed = total_requests * index // len(fwd_ms)
         prompt_tokens = completed * 128
         generation_tokens = completed * 32
-        base_labels = 'engine="0",model_name="qwen3.6-27b"'
+        base_labels = 'engine="0",model_name="qwen3.8-27b-nvfp4"'
         lines = [
             f"vllm:prompt_tokens_total{{{base_labels}}} {prompt_tokens}",
             f"vllm:generation_tokens_total{{{base_labels}}} {generation_tokens}",
@@ -9205,7 +9205,7 @@ def write_fixture_arm(
         for reason in ("stop", "length", "abort", "error", "repetition"):
             labels = (
                 f'engine="0",finished_reason="{reason}",'
-                'model_name="qwen3.6-27b"'
+                'model_name="qwen3.8-27b-nvfp4"'
             )
             value = completed if reason == "stop" else 0
             lines.append(
@@ -9218,7 +9218,7 @@ def write_fixture_arm(
             ("+Inf", completed),
         ):
             labels = (
-                f'engine="0",le="{le}",model_name="qwen3.6-27b"'
+                f'engine="0",le="{le}",model_name="qwen3.8-27b-nvfp4"'
             )
             lines.append(
                 "vllm:request_params_max_tokens_bucket"
@@ -9749,7 +9749,7 @@ def write_fixture_arm(
                         "id": response_id,
                         "type": "message",
                         "role": "assistant",
-                        "model": "qwen3.6-27b",
+                        "model": "qwen3.8-27b-nvfp4",
                         "content": (
                             [
                                 {
@@ -9980,7 +9980,7 @@ def write_fixture_arm(
         eval_report = {
             "track": "swe_bench",
             "instance_id": task_id,
-            "model_id": "qwen3.6-27b-fp8::fixture",
+            "model_id": "qwen3.8-27b-nvfp4::fixture",
             "dataset_name": SWE_VERIFIED_DATASET,
             "verdict": "resolved",
             "passed": True,
@@ -11441,7 +11441,7 @@ def self_test(repo: Path) -> None:
 
         post_path.write_text(
             good_post.replace(
-                'model_name="qwen3.6-27b"',
+                'model_name="qwen3.8-27b-nvfp4"',
                 'model_name="wrong-series"',
                 1,
             ),
@@ -11463,11 +11463,11 @@ def self_test(repo: Path) -> None:
         post_path.write_text(good_post, encoding="utf-8")
 
         wrong_series_pre = good_pre.replace(
-            'model_name="qwen3.6-27b"',
+            'model_name="qwen3.8-27b-nvfp4"',
             'model_name="wrong-series"',
         )
         wrong_series_post = good_post.replace(
-            'model_name="qwen3.6-27b"',
+            'model_name="qwen3.8-27b-nvfp4"',
             'model_name="wrong-series"',
         )
         pre_path.write_text(wrong_series_pre, encoding="utf-8")
@@ -11483,7 +11483,7 @@ def self_test(repo: Path) -> None:
                 BOOTSTRAP_REPS,
                 BOOTSTRAP_SEED,
             ),
-            "pinned qwen3.6-27b series",
+            "pinned qwen3.8-27b-nvfp4 series",
         )
         pre_path.write_text(good_pre, encoding="utf-8")
         post_path.write_text(good_post, encoding="utf-8")

@@ -174,12 +174,12 @@ from fr13_hardware_floor_ledger import (  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_ENDPOINT = "http://127.0.0.1:9950"
-DEFAULT_MODEL = "qwen3.6-27b"
+DEFAULT_MODEL = "qwen3.8-27b-nvfp4"
 CANONICAL_PROMPTS = str(REPO / "output" / "fr13_acceptance_ladder" / "prompts_swe4.json")
 CANONICAL_SEED = 1313
 CANONICAL_MAX_TOKENS = 128
 # the tokenizer behind the served model (id<->decoded-string re-key for GAP-1).
-CANONICAL_TOKENIZER = "/models/qwen3.6-27b-fp8"
+CANONICAL_TOKENIZER = "/models/qwen3.8-27b-nvfp4"
 
 # raw /metrics counters (the ONLY allowed speed basis)
 M_DECODE_S = "vllm:request_decode_time_seconds_sum"
@@ -1931,12 +1931,19 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
             FIXED32_MANDATORY_WEIGHT_FLOOR_MS,
             "five 64K drafter-head reads",
         ),
-        (65_536, 1, 1): (
-            30_989_326_208,
-            113.514015414,
-            "five 64K block-FP8 drafter-head qweight and FP32-scale reads",
-        ),
+        # (65_536, 1, 1) -- FR13_DRAFT_HEAD_FP8 -- is RETIRED as of FR14.
+        # Its ledger (30_989_326_208 B / 113.514015414 ms) assumed five FP8
+        # qweight + FP32-scale draft-head reads. The FR14 served checkpoint's
+        # lm_head is BF16 (dequantised by the lm_head surgery so this vLLM
+        # could load it at all), so those bytes do not exist. The entry is
+        # DELETED rather than re-derived: there is nothing to re-derive.
     }
+    if _draft_vocab_config[2] == 1:
+        raise RuntimeError(
+            "FR13_DRAFT_HEAD_FP8 is RETIRED under the FR14 NVFP4 checkpoint: "
+            "the served lm_head is BF16, so the FP8 draft-head byte ledger "
+            "describes reads that never happen. Unset FR13_DRAFT_HEAD_FP8."
+        )
     if _draft_vocab_config not in _known_weight_ledgers:
         raise RuntimeError(
             "unsupported fixed32 draft-vocabulary floor configuration: "
@@ -1982,7 +1989,7 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # (shared); compute = 2*params*rows / peak ~ 0.54 ms/row on GB10 (override
     # FR13_COMPUTE_MS_PER_ROW). rows/step = events_per_step x (tok_per_draft
     # + 1 committed/bonus row). Fixed32 is 32 rows/event: B1 is 17.28 ms and
-    # B4 is 69.12 ms, both below the corrected 119.658015414 ms weight term.
+    # B4 is 69.12 ms, both below the corrected 102.479937172 ms weight term.
     # KV/state reads (context-dependent, cache-ON keeps contexts long) are
     # NOT modeled - they live in the measured step wall.
     _compute_ms_row = float(os.environ.get("FR13_COMPUTE_MS_PER_ROW", "0.54"))

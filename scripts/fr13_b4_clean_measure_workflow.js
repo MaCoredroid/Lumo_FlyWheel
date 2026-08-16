@@ -8,7 +8,7 @@ export const meta = {
 }
 
 const BASE = [
-'FR13 on DGX Spark GB10 (gx10-edb9 aarch64, UNIFIED MEMORY 273 GB/s; full-vocabulary mandatory-weight floor 153.9383846446886ms; one-sided U95 acceptance cap 177.0291423413919ms;',
+'FR13 on DGX Spark GB10 (gx10-edb9 aarch64, UNIFIED MEMORY 273 GB/s; full-vocabulary mandatory-weight floor 136.7603064029304ms; one-sided U95 acceptance cap 157.27435236336996ms;',
 'accept-per-forward is the only speed lever - reference_decode_hbm_bound_accept_is_the_lever). Repo',
 '/home/mark/shared/lumoFlyWheel, BRANCH fr13-speedfix. Read code + git history + vLLM source via scripts/vllm_src.sh',
 '(pinned 3dbe092e, NEVER /tmp). int-view never atol. Pathspec commit on fr13-speedfix. GPU SERIALIZED + FREE; the',

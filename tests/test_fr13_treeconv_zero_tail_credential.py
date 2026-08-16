@@ -71,7 +71,7 @@ def _qwen_trace(instance_id: str) -> list[dict[str, Any]]:
                 "id": response_id,
                 "type": "message",
                 "role": "assistant",
-                "model": "qwen3.6-27b",
+                "model": "qwen3.8-27b-nvfp4",
                 "content": [{"type": "text", "text": "complete"}],
                 "stop_reason": None,
                 "usage": {"input_tokens": 32, "output_tokens": 8},
@@ -98,7 +98,7 @@ def _qwen_trace(instance_id: str) -> list[dict[str, Any]]:
 
 
 def _metrics(completed: int) -> bytes:
-    labels = 'engine="0",model_name="qwen3.6-27b"'
+    labels = 'engine="0",model_name="qwen3.8-27b-nvfp4"'
     lines = [
         f"vllm:prompt_tokens_total{{{labels}}} {completed * 32}",
         f"vllm:generation_tokens_total{{{labels}}} {completed * 8}",
@@ -111,7 +111,7 @@ def _metrics(completed: int) -> bytes:
     for reason in ("stop", "length", "abort", "error", "repetition"):
         reason_labels = (
             f'engine="0",finished_reason="{reason}",'
-            'model_name="qwen3.6-27b"'
+            'model_name="qwen3.8-27b-nvfp4"'
         )
         lines.append(
             f"vllm:request_success_total{{{reason_labels}}} "
@@ -123,7 +123,7 @@ def _metrics(completed: int) -> bytes:
         ("50000.0", completed),
         ("+Inf", completed),
     ):
-        bucket_labels = f'engine="0",le="{le}",model_name="qwen3.6-27b"'
+        bucket_labels = f'engine="0",le="{le}",model_name="qwen3.8-27b-nvfp4"'
         lines.append(
             f"vllm:request_params_max_tokens_bucket{{{bucket_labels}}} {count}"
         )

@@ -67,11 +67,32 @@ def test_nsys_wrapper_wraps_the_in_container_vllm_serve_exec() -> None:
         assert '-e LUMO_NSYS_TRACE="$LUMO_NSYS_TRACE"' in text
         assert '--trace=\\"\\$LUMO_NSYS_TRACE\\"' in text
         assert '-o \\"\\$LUMO_NSYS_OUTPUT\\"' in text
-        assert (
-            'exec \\"\\${NSYS_PREFIX[@]}\\" vllm serve '
-            "/models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b"
-        ) in text
-        assert "exec vllm serve /models/qwen3.6-27b-fp8" not in text
+        # The nsys prefix must wrap the exec in EVERY launcher, and no
+        # launcher may keep an unwrapped exec beside it. Stated
+        # model-agnostically: fr10_launch_speed_server.sh is an FR10-era
+        # vehicle that FR14 deliberately did not re-point, so pinning a model
+        # identity here would couple two unrelated things.
+        assert 'exec \\"\\${NSYS_PREFIX[@]}\\" vllm serve ' in text
+        assert "exec vllm serve " not in text
+
+
+def test_fixed32_launcher_serves_the_fr14_checkpoint_through_one_variable() -> None:
+    """FR14: the checkpoint is a single point of truth, not two buried literals.
+
+    Pin the definition AND the use, so neither can drift alone, and pin the
+    readonly so a caller cannot re-point the serve line from the environment
+    (fr13_fixed32_contract.expected_pid1_argv compares PID1 argv exactly).
+    """
+    text = (REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh").read_text()
+
+    assert "SERVED_MODEL_PATH=/models/qwen3.8-27b-nvfp4\n" in text
+    assert "SERVED_MODEL_NAME=qwen3.8-27b-nvfp4\n" in text
+    assert "readonly SERVED_MODEL_PATH SERVED_MODEL_NAME\n" in text
+    assert (
+        'exec \\"\\${NSYS_PREFIX[@]}\\" vllm serve '
+        "$SERVED_MODEL_PATH --served-model-name $SERVED_MODEL_NAME"
+    ) in text
+    assert "/models/qwen3.6-27b-fp8" not in text
 
 
 def test_fixed32_launcher_omits_environment_from_nsys_report() -> None:

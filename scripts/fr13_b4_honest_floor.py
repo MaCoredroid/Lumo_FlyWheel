@@ -1,6 +1,24 @@
 #!/usr/bin/env python3
 """FR13 B4 - the honest (all-mandatory-bytes) hardware floor at the width-4 point.
 
+FR13-FROZEN AS OF FR14 (2026-08-16). DO NOT SWEEP THE CONSTANTS BELOW.
+This script is the EMITTER of results/fr13_b4_honest_floor_20260814/, which
+tests/test_fr13_b4_honest_floor_artifact.py binds by sha256; its weight terms
+(32_666_638_208 / 119.658015414 / 126.51408926) and every measured anchor in it
+(the 232.360 ms B1 step wall, the 4.33 ms FA2 roofline, the sealed ratios) are
+Qwen3.6-27B-FP8 MEASUREMENTS. Re-pointing only the weight constants would
+produce a half-FR13/half-FR14 artifact -- worse than leaving it alone, because
+it would read as an FR14 result.
+
+The FR14 weight floor is 27_977_022_848 B / 102.479937172 ms
+(scripts/fr13_hardware_floor_ledger.py,
+results/fr14_nvfp4_port_20260816/floor_ledger.json). The FR14 HONEST floor
+additionally needs per-request KV/state/logit terms measured on the new serve;
+the geometry is unchanged (same heads, head_dim, GDN dims, vocab), so the
++7.117 ms/request term at C=18_031 carries, but nothing here should be quoted
+against an FR14 wall until this script is re-run and re-emitted to a NEW
+results dir.
+
 ANALYSIS ONLY. NO GPU. NOT CITABLE AS A TIMING CLAIM.
 This tool changes no measured wall. It changes the DENOMINATOR those walls are
 divided by, and it computes B1 and B4 on ONE accounting basis so the two

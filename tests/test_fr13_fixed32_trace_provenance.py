@@ -290,7 +290,7 @@ def _qwen_compaction_metrics(
         def value(key: str) -> int:
             return before_offset + (deltas[key] if post else 0)
 
-        base_labels = 'engine="0",model_name="qwen3.6-27b"'
+        base_labels = 'engine="0",model_name="qwen3.8-27b-nvfp4"'
         lines = [
             (
                 f"vllm:prompt_tokens_total{{{base_labels}}} "
@@ -312,7 +312,7 @@ def _qwen_compaction_metrics(
         for reason in ("stop", "length", "abort", "error", "repetition"):
             labels = (
                 f'engine="0",finished_reason="{reason}",'
-                'model_name="qwen3.6-27b"'
+                'model_name="qwen3.8-27b-nvfp4"'
             )
             lines.append(
                 f"vllm:request_success_total{{{labels}}} "
@@ -325,7 +325,7 @@ def _qwen_compaction_metrics(
             ("+Inf", "max_tokens_le_inf"),
         ):
             labels = (
-                f'engine="0",le="{le}",model_name="qwen3.6-27b"'
+                f'engine="0",le="{le}",model_name="qwen3.8-27b-nvfp4"'
             )
             lines.append(
                 "vllm:request_params_max_tokens_bucket"
@@ -371,7 +371,7 @@ def _qwen_failed_only_compaction_trace() -> list[dict[str, Any]]:
                 "id": synthetic_id,
                 "type": "message",
                 "role": "assistant",
-                "model": "qwen3.6-27b",
+                "model": "qwen3.8-27b-nvfp4",
                 "content": [{"type": "text", "text": text}],
                 "stop_reason": None,
                 "usage": {"input_tokens": 0, "output_tokens": 0},
@@ -1007,9 +1007,9 @@ def test_qwen_failed_compaction_metric_tamper_fails_closed(
         (
             lambda raw: raw.replace(
                 b"vllm:prompt_tokens_total"
-                b'{engine="0",model_name="qwen3.6-27b"} 8500',
+                b'{engine="0",model_name="qwen3.8-27b-nvfp4"} 8500',
                 b"vllm:prompt_tokens_total"
-                b'{engine="0",model_name="qwen3.6-27b"} -1',
+                b'{engine="0",model_name="qwen3.8-27b-nvfp4"} -1',
             ),
             "nonnegative integer",
         ),
@@ -3646,7 +3646,7 @@ def test_fixed32_provenance_rejects_trace_version_or_postrun_digest(
 # report no harness exit code; the runner writes an explicit synthetic terminal
 # instead and the traffic audit accepts exactly that record.
 
-_NO_PATCH_MODEL_ID = "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a"
+_NO_PATCH_MODEL_ID = "qwen3.8-27b-nvfp4::qwen-code-0.19.4::q38-a"
 _NO_PATCH_EVAL_HOST = "mark-Alienware-Aurora-ACT1250"
 
 
