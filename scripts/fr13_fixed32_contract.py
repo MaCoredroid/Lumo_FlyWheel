@@ -262,12 +262,23 @@ FIXED32_B4_KV_CACHE_MEMORY_BYTES = 46 * 1024**3
 # pinned set), while dot-FILES are members -- FR13 already pinned
 # ".gitattributes" on exactly that rule.
 #
-# The two lm_head-surgery sidecars are pinned DELIBERATELY:
-# ".lumo_lmhead_surgery.json" (src/dst sha256 + sizes of the surgery) and
-# "config.json.pre_lmhead_surgery.bak" (the upstream quantization_config with
-# lm_head still in group_0) are the provenance of the only mutation this
-# checkpoint carries over its pinned upstream revision. Deleting either must
-# fail the contract, not pass quietly.
+# The FOUR surgery sidecars are pinned DELIBERATELY. They are the complete,
+# ordered provenance of every mutation this checkpoint carries over its pinned
+# upstream revision, and deleting any one of them must fail the contract, not
+# pass quietly:
+#   1. ".lumo_lmhead_surgery.json" + "config.json.pre_lmhead_surgery.bak" --
+#      the FP8-per-channel lm_head dequantised to BF16 (this vLLM builds
+#      lm_head as an unquantized ParallelLMHead and fail-closed on
+#      lm_head.weight_scale). The .bak holds the upstream quantization_config
+#      with lm_head still in group_0.
+#   2. ".lumo_kv_scheme_surgery.json" + "config.json.pre_kv_scheme_surgery.bak"
+#      -- quantization_config.kv_cache_scheme removed. Its mere presence makes
+#      vLLM force kv_cache_dtype="fp8" for every Attention layer
+#      (attention.py: "llm-compressor mdls need to set cache_dtype to fp8
+#      manually"), which TREE_ATTN does not support -- the fixed32 stack's
+#      mandatory backend was refused before a weight was read. The sidecar
+#      records the removed block verbatim, so it is reversible; the surgery
+#      script is results/fr14_nvfp4_port_20260816/kv_scheme_surgery.py.
 #
 # Regenerate with:
 #   python3 scripts/fr14_gen_model_manifest.py \
@@ -275,11 +286,13 @@ FIXED32_B4_KV_CACHE_MEMORY_BYTES = 46 * 1024**3
 # and verify an existing pin with the same script's --check.
 MODEL_AUXILIARY_FILES = (
     ".gitattributes",
+    ".lumo_kv_scheme_surgery.json",
     ".lumo_lmhead_surgery.json",
     ".lumo_pinned_revision",
     "README.md",
     "chat_template.jinja",
     "config.json",
+    "config.json.pre_kv_scheme_surgery.bak",
     "config.json.pre_lmhead_surgery.bak",
     "generation_config.json",
     "model.safetensors",
@@ -293,7 +306,7 @@ MODEL_AUXILIARY_FILES = (
 )
 MODEL_FILES = tuple(sorted(MODEL_AUXILIARY_FILES))
 MODEL_CANONICAL_SHA256 = (
-    "a913ebd431b016825118e4fed910c68c29981028d76aa5709d74ec24be1f53ca"
+    "f2897975af6037872a75796a6884dc3c877f285b644c6aabb78e0085f8e46fa6"
 )
 MODEL_TEXT_CONFIG_VOCAB_SIZE = 248_320
 # FR14 tokenizer-identity pin. vocab_size alone cannot catch a vocabulary
@@ -321,6 +334,11 @@ MODEL_FILE_RECORDS = (
         "34448b82c17d60fec9b65b1f093c115ddbaadc04beb1b0140b6bfed2e012a930",
     ),
     (
+        ".lumo_kv_scheme_surgery.json",
+        1130,
+        "af93a79f195af05423a372b179ade30f8c5a141d573ce1f696a92cc4d18295e2",
+    ),
+    (
         ".lumo_lmhead_surgery.json",
         304,
         "12f554d69f9998d45470f99c4a73175b297c7381f444e91a8134f9a84adc990c",
@@ -342,6 +360,11 @@ MODEL_FILE_RECORDS = (
     ),
     (
         "config.json",
+        22207,
+        "27a7d80f4bc0ef39162bedd20c87da97321525615e15be3588f4505bdce4d96d",
+    ),
+    (
+        "config.json.pre_kv_scheme_surgery.bak",
         22555,
         "50193e31248a327030f9c040e0b3dec62e8a1afa492ca128f21a17d4317c6fdd",
     ),
