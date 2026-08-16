@@ -1,0 +1,28 @@
+{
+ "verdict": "PASS",
+ "lmhead_route_lines": [
+  "(EngineCore pid=106) INFO 08-16 22:23:09 [modelopt.py:2218] FR14_LMHEAD_NVFP4 ParallelLMHead prefix=language_model.lm_head resolved_algo=NVFP4",
+  "(EngineCore pid=106) INFO 08-16 22:23:09 [qwen3_5.py:512] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod"
+ ],
+ "lmhead_nvfp4_confirmed": true,
+ "kv_cache_tokens": "228,144",
+ "kv_cache_dtype_fp8_in_log": false,
+ "r1_len": 220,
+ "r2_len": 2456,
+ "r1_tail": "The user wants me to reply with exactly \"FR14 RadixArk NVFP4 alive.\" and then state 17*23.\n\n17 * 23 = 391\n\nLet me verify: 17 * 23 = 17 * 20 + 17 * 3 = 340 + 51 = 391. Yes.\n</think>\n\nFR14 RadixArk NVFP4 alive.\n17*23 = 391",
+ "r2_head": "We need answer user: \"Write a python function that reverses a linked list, then explain its invariant in two sentences.\" Need produce final with code and two sentences invariant. Need decide linked list representation. Likely Node class with next. Function reverse_linked_list(head). Could be iterati",
+ "r1_has_391": true,
+ "r2_degenerate": false,
+ "usage_r1": {
+  "prompt_tokens": 76,
+  "total_tokens": 188,
+  "completion_tokens": 112,
+  "prompt_tokens_details": null
+ },
+ "usage_r2": {
+  "prompt_tokens": 71,
+  "total_tokens": 618,
+  "completion_tokens": 547,
+  "prompt_tokens_details": null
+ }
+}

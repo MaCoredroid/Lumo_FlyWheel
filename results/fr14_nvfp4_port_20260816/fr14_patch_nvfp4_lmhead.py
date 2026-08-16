@@ -76,6 +76,47 @@ tiles exactly (248320 % 128 == 0, 320 % 4 == 0), so no pad path is taken.
 ``LogitsProcessor._get_logits`` calls ``lm_head.quant_method.apply(...)``
 (logits_processor.py:96), so the logits GEMM becomes the NVFP4 cutlass kernel.
 
+UPSTREAM CORROBORATION (SGLang, which serves this exact checkpoint as its
+blessed NVFP4 build; sparse clone at /home/mark/shared/tmp-scratch/sglang,
+citations verified locally). SGLang has none of these four gaps, and the shape
+of each fix is the same one taken here:
+
+* G1 -- ``python/sglang/srt/models/qwen3_5_text.py:77-83`` builds
+  ``ParallelLMHead(config.vocab_size, config.hidden_size,
+  quant_config=quant_config, org_num_embeddings=config.vocab_size,
+  prefix=add_prefix("lm_head", prefix), ...)``. The quant_config is passed
+  EXPLICITLY -- exactly the argument vLLM's qwen3_5.py omits.
+* G2 -- ``python/sglang/srt/layers/quantization/modelopt_quant.py:293`` (base)
+  and ``:933`` (mixed) both dispatch on
+  ``isinstance(layer, (LinearBase, ParallelLMHead))``: to their dispatcher the
+  LM head is simply another linear. We add a separate ParallelLMHead branch
+  rather than widening vLLM's ``isinstance(layer, LinearBase)`` tuple, because
+  vLLM's exclusion arm returns ``UnquantizedLinearMethod()`` for LinearBase and
+  ``None`` otherwise, and ``None`` -> ``UnquantizedEmbeddingMethod`` is the
+  behaviour the FP8-3.8 baseline arm depends on. Same routing, narrower blast
+  radius.
+* G3 -- ``modelopt_quant.py:903-906``,
+  ``_quantized_layer_prefix_candidates``::
+
+        if prefix.endswith(".lm_head"):
+            candidates.append("lm_head")
+
+  i.e. upstream ALSO has to reconcile the checkpoint's bare ``lm_head`` key with
+  the VL wrapper's dotted runtime prefix, and does it by adding a candidate key
+  -- not by renaming checkpoint tensors. Our fallback below is that rule.
+  (Their candidate list additionally carries a
+  ``language_model.model.`` <-> ``model.language_model.`` swap; vLLM's
+  WeightsMapper already handles the body keys correctly, so only the head
+  candidate is needed here.)
+* MTP -- ``python/sglang/srt/models/qwen3_5_mtp.py:132`` builds the drafter's
+  own ParallelLMHead the same way and then swaps in the target's whole
+  quantized module (``set_lm_head_from_target``). Our stack shares the target
+  head too, which is why the qwen3_5_mtp.py edit below is applied in the same
+  pass: whatever the DVK slice walks at boot must be the QUANTIZED head, i.e.
+  it must see ``weight`` + ``weight_scale`` + ``weight_scale_2`` +
+  ``input_scale``. (Note the packed-weight param is named ``weight`` on the
+  ModelOpt path; ``weight_packed`` is the compressed-tensors spelling.)
+
 FAIL-CLOSED: with ``FR14_REQUIRE_NVFP4_LMHEAD=1`` in the environment, a head
 that does NOT resolve to ``ModelOptNvFp4LinearMethod`` raises at construction
 instead of silently serving an unquantized/half-loaded head.  Every anchor is
@@ -191,14 +232,21 @@ MODELOPT_REPLACEMENT = """            if quant_algo == "NVFP4":
 
         if isinstance(layer, _FR14ParallelLMHead):
             _fr14_algo = quant_algo
-            if _fr14_algo is None:
+            if _fr14_algo is None and (
+                prefix == "lm_head" or prefix.endswith(".lm_head")
+            ):
                 # The checkpoint keys the head as the bare string "lm_head",
                 # but under the Qwen3.5-VL wrapper the runtime prefix is
                 # "language_model.lm_head".  WeightsMapper.orig_to_new_prefix
                 # carries "lm_head." (trailing dot), and
                 # "lm_head".startswith("lm_head.") is False, so apply_dict
-                # never remaps the key.  Retry on the basename.
-                _fr14_algo = self._resolve_quant_algo(prefix.rsplit(".", 1)[-1])
+                # never remaps the key.  Retry on the bare key.
+                #
+                # Guard mirrors SGLang's
+                # _quantized_layer_prefix_candidates (modelopt_quant.py:903-906):
+                #     if prefix.endswith(".lm_head"):
+                #         candidates.append("lm_head")
+                _fr14_algo = self._resolve_quant_algo("lm_head")
             logger.info(
                 "FR14_LMHEAD_NVFP4 ParallelLMHead prefix=%s resolved_algo=%s",
                 prefix,
