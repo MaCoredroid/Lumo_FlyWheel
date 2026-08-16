@@ -11,6 +11,26 @@ _HF_REVISION_RE = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
 _MODEL_SURFACE_ID_RE = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
 _MODELS_ROOT = PurePosixPath("/models")
 
+# Served weight formats this stack has actually booted. Deliberately an
+# ALLOWLIST, not a free string: an unrecognised value here has always meant a
+# checkpoint nobody validated, and the fail-loud is the point.
+#
+# FR14 (2026-08-16) adds "compressed-tensors" for the Qwen3.8-27B-NVFP4 arm.
+# The FR13-era `!= "fp8"` check predates the campaign's whole reason for
+# existing and killed the OFFLOAD PROXY -- which loads this registry on
+# alienware at startup -- with
+#   ValueError: Model qwen3.8-27b-nvfp4 quantization must be 'fp8';
+#               got 'compressed-tensors'
+# AFTER the GB10 engine had already booted healthy, i.e. it burned a full
+# ~5-minute model load before failing. Downstream consumers are unaffected:
+# model_server.py forwards the value verbatim as `--quantization` (vLLM
+# accepts "compressed-tensors"), and its one fp8-specific branch
+# (quantization == "fp8" and kv_cache_dtype == "fp8_e5m2") simply does not
+# fire. The fixed32 serving path does not read this table at all -- the
+# launcher builds its own serve line -- so this only gates the proxy and the
+# credential-free smoke-test CLI.
+_SUPPORTED_QUANTIZATIONS = frozenset({"fp8", "compressed-tensors"})
+
 
 @dataclass(frozen=True)
 class ModelConfig:
@@ -101,8 +121,11 @@ def _model_from_mapping(model_id: str, raw: dict[str, Any]) -> ModelConfig:
         field_name=f"Model {model_id} served_model_name",
     )
     quantization = raw["quantization"]
-    if quantization != "fp8":
-        raise ValueError(f"Model {model_id} quantization must be 'fp8'; got {quantization!r}")
+    if quantization not in _SUPPORTED_QUANTIZATIONS:
+        raise ValueError(
+            f"Model {model_id} quantization must be one of "
+            f"{sorted(_SUPPORTED_QUANTIZATIONS)}; got {quantization!r}"
+        )
     dtype = raw["dtype"]
     if dtype != "auto":
         raise ValueError(f"Model {model_id} dtype must be 'auto'; got {dtype!r}")

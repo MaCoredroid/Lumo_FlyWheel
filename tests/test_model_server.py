@@ -2457,7 +2457,7 @@ models:
 """
     )
 
-    with pytest.raises(ValueError, match="quantization must be 'fp8'"):
+    with pytest.raises(ValueError, match="quantization must be one of"):
         load_registry(registry)
 
 

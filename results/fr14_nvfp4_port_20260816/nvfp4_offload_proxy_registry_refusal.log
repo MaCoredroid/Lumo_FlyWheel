@@ -1,0 +1,21 @@
+FAIL: remote proxy not healthy on alienware:8023
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/mark/lumo_proxy_offload/repo/src/lumo_flywheel_serving/inference_proxy.py", line 5957, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/mark/lumo_proxy_offload/repo/src/lumo_flywheel_serving/inference_proxy.py", line 5945, in main
+    run_proxy_server(
+  File "/home/mark/lumo_proxy_offload/repo/src/lumo_flywheel_serving/inference_proxy.py", line 5913, in run_proxy_server
+    build_proxy_handler(upstream_base_url, state_root=state_root, registry_path=registry_path),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumo_proxy_offload/repo/src/lumo_flywheel_serving/inference_proxy.py", line 4875, in build_proxy_handler
+    registry = load_registry(registry_path) if registry_path is not None else {}
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumo_proxy_offload/repo/src/lumo_flywheel_serving/registry.py", line 194, in load_registry
+    registry = {model_id: _model_from_mapping(model_id, mapping) for model_id, mapping in models.items()}
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/lumo_proxy_offload/repo/src/lumo_flywheel_serving/registry.py", line 105, in _model_from_mapping
+    raise ValueError(f"Model {model_id} quantization must be 'fp8'; got {quantization!r}")
+ValueError: Model qwen3.8-27b-nvfp4 quantization must be 'fp8'; got 'compressed-tensors'
