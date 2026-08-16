@@ -21,7 +21,15 @@ Local dirs: `/home/mark/shared/models/qwen3.8-27b-fp8`, `/models/qwen3.8-27b-nvf
 
 ## Floor math directive (do NOT scale the old constant)
 
-The floor does not halve. Of the 32.667 GB mandatory bytes, ~5.9 GB (BF16 verifier head 2.543 + 5×K64 draft-head 3.355) never shrinks; GDN convs/in_proj_a/b are BF16 today and stay BF16; converted tensors go ×0.5625 (4-bit + e4m3 per-16 scales) — and unsloth converts only most MLPs to FP4 (attn/GDN stay FP8). **Re-derive `TARGET_MODEL_BYTES` and `MTP_FORWARD_BYTES_PER_PASS` by summing the actual NVFP4 tensor ledger** (weights + block scales + global scales), then re-emit `fr13_hardware_floor_ledger` arithmetic to a new results dir. Expected landing: high-70s to mid-80s ms for the K64/root1 arm (vs 119.658). The honest-floor per-request term (+7.117 ms at C=18k) is geometry-only and carries over unchanged.
+The floor does not halve, and two components move in OPPOSITE directions (red-team pass 2 correction — the original note assumed BF16 lm_head, wrong for both NVFP4 candidates):
+
+- Converted tensors ×0.5625 (4-bit + e4m3 per-16 scales); unsloth converts MLPs 0–55 to FP4 (56–63 stay FP8), attn/GDN projections FP8.
+- **lm_head IS quantized in both candidates** (unsloth: FP8 per-channel; RadixArk: NVFP4) → `FULL_HEAD_BYTES` (2.543 GB BF16 today) and the 5×K64 draft-head reads (3.355 GB) SHRINK ~2× under unsloth — but the K64 drafter's boot-time lm_head row-slice meets a quantized head for the first time (see port item below).
+- **MTP head goes the OTHER way**: today's served `mtp.safetensors` is FP8; every NVFP4 repack ships MTP in BF16 → `MTP_FORWARD_BYTES_PER_PASS` roughly DOUBLES (~0.477→~0.95 GB × 5 passes). Lever for Mark: local FP8 requant of the MTP shard restores today's byte profile (matches served-3.6 MTP precision).
+
+**Re-derive by summing the actual NVFP4 tensor ledger** (weights + block scales + global scales), re-emit `fr13_hardware_floor_ledger` arithmetic to a new results dir — do not scale any old constant. The honest-floor per-request term (+7.117 ms at C=18k) is geometry-only and carries over unchanged.
+
+**New port item (from SGLang recon T-map + quant config):** `_fr13_dvk_prepare` walks lm_head tensor attributes and index_selects rows assuming BF16 (or fp8-128×128 for the parked FP8-head arm). Under unsloth, lm_head arrives FP8 per-channel (`weight_scale` BF16 [out,1] — row-aligned, so the slice mechanics survive) but the default BF16 K64 GEMV units then read FP8 rows. Simplest port: dequant the sliced rows to BF16 at DVK prepare (boot-time, keeps the sealed BF16 GEMV units byte-identical). Decision recorded for the constant train.
 
 ## Correctness bar — PROPOSED, AWAITING MARK
 
@@ -44,6 +52,14 @@ FR13's Tier-A byte gates are *weight-relative* (candidate vs reference at the sa
 ## Dead on arrival under NVFP4 (from port-surface recon)
 
 The fp8 GEMM lever portfolio is inert with a non-fp8 checkpoint: OPT-A/`FR13_GB10_FP8_GEMV_CFG` (guard requires `weight_block_size==[128,128]`), `FR13_FIXED32_B1_FP8_QUANT_REGCACHE`, all ~18 `FR13_FIXED32_CUTLASS_WAVE` variants. They don't crash — they silently measure nothing. Step-3 train must add a fail-loud guard refusing fp8-only levers under a non-fp8 checkpoint.
+
+## SGLang reference verdicts (full report: `sglang_reference_recon.md`)
+
+- SGLang serves 3.8 entirely through the **qwen3_5 path** (no qwen3_8.py exists) — confirms zero-arch-diff independently. Its blessed NVFP4 checkpoint is **RadixArk** (ModelOpt); the recipe is chain MTP (`EAGLE steps 3 / topk 1 / draft 4`), **not tree** — their acceptance numbers are priors, not gates, for Hydra27.
+- **Acceptance prior: NVFP4 3.31 ≥ BF16 3.22 ≥ FP8 3.16** (GB300, cap 4) — an NVFP4 backbone + BF16 MTP head does not hurt acceptance. Local gate stays our own; if we measure far below ~3.1-equivalent, suspect wiring, not quantization.
+- **unsloth is broken on SGLang** (#34895: compressed-tensors lm_head `weight_scale` dropped → degenerate repetition) **but works on vLLM** — and we VERIFIED the pinned 0.19.2 image has the `ParallelLMHead → CompressedTensorsLinearMethod` dispatch (vllm#37291-equivalent present). Unsloth stays primary; the broken-on-SGLang fact is an inverted risk.
+- MTP under quant, mechanism to mirror: draft module constructed with `quant_config=None` (checkpoint ignore-list alone is insufficient — loader must allocate BF16 shapes); draft's single layer is **full-attention, not GDN** (already true of our 3.6 MTP); embed + whole lm_head module shared from target.
+- GB10 reality check: SGLang's only real Spark datapoint is FP8 at `--mem-fraction-static 0.70` (0.75 OOM'd during graph capture on unified memory); their shipped 0.95 Spark recipe is unvalidated. Informational for our own KV/graph sizing.
 
 ## Evidence files
 
