@@ -193,9 +193,14 @@ def test_converted_levers_no_longer_hard_code_the_draft_vocabulary() -> None:
 #      / node-trust production, draft-head U8, draft-head M4 U8, DFWD K64 top3,
 #      qrow16 live A/B, and two further predicate chains.
 #
-# None of the nine is on the B1 or B4 lever chain, so none blocks the K0 serve.
+# CORRECTION (found by running the gate): "none is on the B1/B4 chain" was
+# wrong for a DIFFERENT clause shape. The B1 live-A/B gate predicate bound the
+# K64 shape via a bare `-z FR13_NEEDS_ALLOW` rather than a K==65536 line, so
+# this line-count pin never saw it. It is now dropped as redundant -- the B1
+# selector predicate asserts the profile, and every live-A/B arm passes through
+# it. Shape-hardcoding can hide in a NEEDS_ALLOW clause too; grep for both.
 # Converting them is future work; the pin makes that a deliberate edit.
-_INLINE_K64_CLAUSE_LINES = 12
+_INLINE_K64_CLAUSE_LINES = 12  # unchanged: that clause was a bare NEEDS_ALLOW, not a K==65536 line
 
 
 def test_remaining_inline_k64_clauses_are_pinned() -> None:

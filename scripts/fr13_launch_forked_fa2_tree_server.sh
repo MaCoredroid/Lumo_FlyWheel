@@ -2139,11 +2139,16 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
   esac
 fi
 if [[ -n "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]]; then
+  # The draft-vocabulary identity for this arm -- INCLUDING FR13_NEEDS_ALLOW --
+  # is asserted by the B1 selector predicate above, which every live-A/B arm
+  # passes through (a non-empty LIVE_AB_ARM is what makes SELECTOR_COUNT > 0).
+  # A bare `-z FR13_NEEDS_ALLOW` here would hardcode the k64_root shape a second
+  # time and refuse the sanctioned K0 override, so it is dropped as redundant:
+  # the profile assert is strictly more specific in both directions.
   [[ "$FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID" == "astropy__astropy-12907" \
      && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "1" \
      && "${ENFORCE_EAGER:-0}" == "0" \
      && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" \
-     && -z "${FR13_NEEDS_ALLOW:-}" \
      && "$FR13_FIXED32_TAW_NATIVE_PRECOMPUTE" == "0" \
      && "${FR13_FIXED32_BATCH_GDN_BYTE_AB:-0}" == "0" \
      && "${FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB:-0}" == "0" \
@@ -2162,7 +2167,7 @@ if [[ -n "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]]; then
                && "${FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH:-}" == "1" \
                && "${FR13_DFWD_K64_TOP3:-0}" == "1" \
                && "$FR10_METRICS" == "1" ) ) ]] || {
-    echo "FR13 qrow32 B1 live gate requires the canonical K64/root1 real task and only the admitted GQA3/top3 graph tuple" >&2
+    echo "FR13 qrow32 B1 live gate requires the canonical real task and only the admitted GQA3/top3 graph tuple" >&2
     exit 2
   }
 fi
