@@ -1,0 +1,98 @@
+{
+  "schema": "fr14.ablation_a.step2.v1",
+  "lane": "DIAGNOSTIC — calibration-grade, NON-CITABLE",
+  "question": "Their stack runs OUR SWE agent: what does the sglang chain do on the exact traffic our 25.3 was measured on?",
+  "date_utc": "2026-08-17",
+  "git_head_at_launch": "236c89155a779f296b8ad129499f98527f8faf15",
+  "status": "PARTIAL — 3 of 4 tasks completed with verdicts; task 4 (astropy-13398) was stopped in flight at 40 min when the 2.5 h GPU budget ran out. Decode telemetry covers the whole window.",
+  "engine": {
+    "image": "lmsysorg/sglang:qwen38-27b",
+    "checkpoint": "/models/qwen3.8-27b-nvfp4-radixark-asshipped (RadixArk AS-SHIPPED: pre-surgery configs, auto-fp8 KV intact, aggressive bytes)",
+    "recipe": "their Spark recipe verbatim from sglang_calibration.sh: --attention-backend flashinfer --chunked-prefill-size 8192 --mem-fraction-static 0.70 --speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4",
+    "parsers": "--reasoning-parser qwen3 --tool-call-parser qwen3_coder (theirs, kept)",
+    "deltas_from_calibration": [
+      "--host 0.0.0.0 (was 127.0.0.1) so the alienware agent-offload proxy can reach it",
+      "--port 9950 (was 30000) so the harness's DEFAULT_METRICS_URL brackets it per task",
+      "--enable-metrics so per-task token counters exist",
+      "--served-model-name qwen3.8-27b-nvfp4-radixark so the harness model name matches"
+    ]
+  },
+  "harness": {
+    "runner": "scripts/run_swe_bench_q36_a.py, NON-fixed32 mode",
+    "agent": "SWE_AGENT=qwen_code, SWE_AGENT_ENV=instance_image (agent runs inside the official SWE-bench per-instance x86 eval image on alienware)",
+    "subset": "config/fr13_fixed32/subset_b4_four.json — the exact4 astropy ids",
+    "concurrency": 1,
+    "agent_wall_s": 5400,
+    "topology": "IDENTICAL to the stock B1 arm: agent + inference proxy on alienware, GB10 runs the engine ONLY, so decode TPS is uncontended",
+    "proxy": "the lumo offload proxy on alienware:8023 -> http://100.103.10.122:9950, forcing the deployment sampling profile (temp 0.6, top_p 0.95, top_k 20, presence_penalty 1.0, min_p 0) and LUMO_PROXY_MAX_OUTPUT_TOKENS=32768 — the SAME proxy pins the stock arm ran under",
+    "eval": "--eval-host alienware (offloaded x86 SWE-bench eval)"
+  },
+  "decode_telemetry": {
+    "source": "sglang's own 'Decode batch, ... accept len: X, ... gen throughput (token/s): Y' log lines",
+    "whole_window": {
+      "samples": 1017,
+      "accept_mean": 3.363,
+      "gen_tps_mean": 29.22,
+      "gen_tps_median": 28.32,
+      "gen_tps_p10": 21.81,
+      "gen_tps_p90": 33.92,
+      "window": "2026-08-16 23:42:21 -> 2026-08-17 01:10:35"
+    },
+    "three_completed_tasks_only": {
+      "samples": 563,
+      "accept_mean": 3.450,
+      "gen_tps_mean": 31.71,
+      "gen_tps_median": 32.30,
+      "gen_tps_p10": 22.66,
+      "gen_tps_p90": 45.02,
+      "window": "2026-08-16 23:42:21 -> 2026-08-17 00:30:32"
+    },
+    "implied_step_ms": "accept_mean / gen_tps_mean: 3.363/29.22 = 115.1 ms (whole window); 3.450/31.71 = 108.8 ms (3-task window)"
+  },
+  "sglang_counter_delta_whole_window": {
+    "generation_tokens_total_stream": 121312.0,
+    "generation_tokens_total_nostream": 23986.0,
+    "prompt_tokens_total_stream": 4971882.0,
+    "prompt_tokens_total_nostream": 97703.0,
+    "num_requests_total": 126.0,
+    "output_tokens_total": 145298.0,
+    "prompt_tokens_total": 5069585.0
+  },
+  "per_task": [
+    {"instance_id": "astropy__astropy-12907", "agent_wall_s": 238.715, "output_tokens": 5895, "prompt_tokens": 334288, "model_requests": 11, "e2e_output_tps": 24.695, "patch_bytes": 504, "verdict": "resolved", "eval_wall_s": 51.001},
+    {"instance_id": "astropy__astropy-13033", "agent_wall_s": 1363.453, "output_tokens": 41955, "prompt_tokens": 184398, "model_requests": 6, "e2e_output_tps": 30.771, "patch_bytes": 0, "verdict": "failed", "eval_wall_s": 0.0},
+    {"instance_id": "astropy__astropy-13236", "agent_wall_s": 1195.536, "output_tokens": 38737, "prompt_tokens": 1373989, "model_requests": 39, "e2e_output_tps": 32.401, "patch_bytes": 1273, "verdict": "resolved", "eval_wall_s": 51.633},
+    {"instance_id": "astropy__astropy-13398", "agent_wall_s": 2403, "output_tokens": 58711, "prompt_tokens": 3176910, "model_requests": 70, "e2e_output_tps": 24.43, "patch_bytes": null, "verdict": "STOPPED_IN_FLIGHT_AT_BUDGET", "eval_wall_s": null}
+  ],
+  "our_stock_reference": {
+    "source": "output/fr14_b1_stock_20260816T204931Z/tail6_fixed32_b1stock (pass 10)",
+    "decode_tps_fullstep_wall": 25.261,
+    "step_wall_ms": 218.764,
+    "accept_per_event": 4.526,
+    "committed_per_event": 5.526,
+    "per_task": [
+      {"instance_id": "astropy__astropy-12907", "agent_wall_s": 192.107, "output_tokens": 3572, "e2e_output_tps": 18.59, "verdict": "resolved"},
+      {"instance_id": "astropy__astropy-13033", "agent_wall_s": 326.938, "output_tokens": 7812, "e2e_output_tps": 23.89, "verdict": "failed"},
+      {"instance_id": "astropy__astropy-13236", "agent_wall_s": 515.705, "output_tokens": 10907, "e2e_output_tps": 21.15, "verdict": "resolved"},
+      {"instance_id": "astropy__astropy-13398", "agent_wall_s": 2313.599, "output_tokens": 49165, "e2e_output_tps": 21.25, "verdict": "failed"}
+    ],
+    "totals": {"agent_wall_s": 3348.3, "output_tokens": 71456, "e2e_output_tps": 21.34, "resolved": "2/4"}
+  },
+  "verdict": {
+    "their_decode_tps_on_our_workload": 29.22,
+    "our_decode_tps_on_our_workload": 25.26,
+    "their_accept_on_our_workload": 3.363,
+    "our_accept_on_our_workload": 4.526,
+    "reading": "On OUR workload their chain is FASTER: ~29.2 tok/s sustained decode vs our 25.3. Our tree does accept more per verify (4.526 vs 3.363 = 1.31x), but their step is 115 ms against our 219 ms — a 1.90x step-cost advantage that swamps the 1.31x acceptance edge. Their step advantage is part machinery (a 4-token EAGLE chain vs a 31-draft tree with a merged drafter, committer, and tree attention) and part BYTES (RadixArk aggressive-quant weights + fp8 KV vs our conservative NVFP4 + bf16 KV).",
+    "correction_to_pass_11": "Pass 11 stated 'Tree accepts 1.9x more per verify' from 4.53 (our SWE traffic) vs 2.90 (their random-1024 traffic). That was a CROSS-WORKLOAD comparison. Measured on the SAME workload the tree's acceptance premium is 1.31x, not 1.9x. Leg 3 completes the correction from the other side: on THEIR workload our accept is 2.358 vs their 2.90, i.e. the tree accepts LESS there.",
+    "quality": "verdict pattern matched ours exactly on the 3 completed tasks: 12907 resolved, 13033 failed, 13236 resolved (ours: resolved/failed/resolved/failed). Their chain is not trading correctness for speed on this subset."
+  },
+  "compromises": [
+    "PARTIAL: task 4 (astropy-13398) was stopped in flight at ~40 min (2403 s, 58711 output tokens) when the 2.5 h GPU budget expired. Our stock run took 2313.6 s on the same task, so theirs was already the slower trajectory. It has NO verdict. The 3-task totals and the decode telemetry are complete and unaffected.",
+    "TRAJECTORY LENGTH IS NOT MATCHED: their chain emitted far more tokens per task than ours (86,587 vs 22,291 over the 3 shared tasks). Wall-per-task is therefore NOT a like-for-like speed comparison — the decode-TPS and accept numbers are. 13033 in particular ran a single ~32k-token capped runaway turn (6 model requests, 41,955 output tokens, 0-byte patch).",
+    "CHECKPOINT IS NOT MATCHED: their arm serves RadixArk AS-SHIPPED (aggressive bytes + fp8 KV); ours serves the conservative NVFP4 with bf16 KV. This is deliberate — the point was 'their chain as they ship it' — but it means the 1.90x step-cost gap is machinery AND bytes, not machinery alone.",
+    "PROXY IS OURS: the agent talks to the lumo offload proxy (sampling pins, 32k output cap), which then talks to sglang. That is exactly the stock arm's topology, so the comparison is controlled, but it is not 'their chain end to end' — only their ENGINE, checkpoint and parsers.",
+    "PROXY START GATE: offload_codex_proxy.sh start exits 5 on a class-9 pin check that greps for a literal '~' path (REMOTE_PAIR_DUMPS) which the remote shell expands. The proxy was in fact up and correctly pinned (ablation_a_step2_proxy_env.txt) — the gate is a cosmetic bug on the non-fixed32 branch. The run continued past it deliberately.",
+    "running_req_max=3 appears in the decode telemetry although harness concurrency is 1: qwen-code issues occasional parallel sub-requests. The vast majority of samples are #running-req: 1."
+  ]
+}

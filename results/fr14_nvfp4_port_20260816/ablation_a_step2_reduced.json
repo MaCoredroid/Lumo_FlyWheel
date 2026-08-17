@@ -1,0 +1,72 @@
+{
+  "schema": "fr14.ablation_a.step2.v1",
+  "decode_samples": 1017,
+  "accept_mean": 3.3629,
+  "accept_min": 2.1,
+  "accept_max": 4.0,
+  "gen_tps_mean": 29.215,
+  "gen_tps_median": 28.32,
+  "gen_tps_p10": 21.81,
+  "gen_tps_p90": 33.92,
+  "running_req_max": 3,
+  "decode_window_first_ts": "2026-08-16 23:42:21",
+  "decode_window_last_ts": "2026-08-17 01:10:35",
+  "sglang_counter_delta": {
+    "sglang:generation_tokens_total|nostream": 23986.0,
+    "sglang:generation_tokens_total|stream": 121312.0,
+    "sglang:num_requests_total|nostream": 9.0,
+    "sglang:num_requests_total|stream": 117.0,
+    "sglang:prompt_tokens_total|nostream": 97703.0,
+    "sglang:prompt_tokens_total|stream": 4971882.0
+  },
+  "output_tokens_total": 145298.0,
+  "prompt_tokens_total": 5069585.0,
+  "per_task": [
+    {
+      "instance_id": "astropy__astropy-12907",
+      "agent_wall_s": 238.715,
+      "agent_exit_code": 0,
+      "timed_out": false,
+      "output_tokens": 5895.0,
+      "prompt_tokens": 334288.0,
+      "model_requests": 11.0,
+      "e2e_output_tps": 24.695,
+      "patch_bytes": 504,
+      "verdict": "resolved",
+      "eval_wall_s": 51.001
+    },
+    {
+      "instance_id": "astropy__astropy-13033",
+      "agent_wall_s": 1363.453,
+      "agent_exit_code": 0,
+      "timed_out": false,
+      "output_tokens": 41955.0,
+      "prompt_tokens": 184398.0,
+      "model_requests": 6.0,
+      "e2e_output_tps": 30.771,
+      "patch_bytes": 0,
+      "verdict": "failed",
+      "eval_wall_s": 0.0
+    },
+    {
+      "instance_id": "astropy__astropy-13236",
+      "agent_wall_s": 1195.536,
+      "agent_exit_code": 0,
+      "timed_out": false,
+      "output_tokens": 38737.0,
+      "prompt_tokens": 1373989.0,
+      "model_requests": 39.0,
+      "e2e_output_tps": 32.401,
+      "patch_bytes": 1273,
+      "verdict": "resolved",
+      "eval_wall_s": 51.633
+    }
+  ],
+  "agent_wall_total_s": 2797.7,
+  "output_tokens_task_sum": 86587.0,
+  "e2e_output_tps_overall": 30.949,
+  "resolved": 2,
+  "n_tasks": 3,
+  "started_at": "2026-08-16T23:42:02Z",
+  "ended_at": "2026-08-17T01:10:44Z"
+}
