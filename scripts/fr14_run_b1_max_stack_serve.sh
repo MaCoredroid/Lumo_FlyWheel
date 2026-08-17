@@ -102,6 +102,23 @@ unset -f run_variant
 #
 # gqa_pair is UNNAMED on purpose: the promoted default must arm it from the
 # run-local credential pointer, which is the path production takes.
+# FR13_HOST_TAIL_DEFER=0 -- CORRECTED GROUND.
+# 067093fea's message claims DEFER "has both the opportunity and the mechanism"
+# for the engine fatal 'FR13 fixed32 began a forward before prior KV completion'.
+# THAT CLAIM IS REFUTED. The attribution probe ran DEFER=1 with PREP_BAKE=0 and
+# SERVED a request cleanly; the composed probe ran PREP_BAKE=1 with DEFER=0 and
+# also served. Neither lever is convicted and the fatal is UNEXPLAINED -- most
+# likely a low-rate ordering race, which a one-request probe cannot sample and a
+# 2 h 20 m clean serve weakens but does not close.
+#
+# DEFER stays out on the ground that actually holds: it is UNPRICED -- no banked
+# measurement -- so it cannot be claimed as part of a stack verdict. That is the
+# same reasoning that deferred single_launch, and it does not depend on the
+# mechanism story.
+#
+# The lesson worth keeping: a mechanism that EXPLAINS a failure is not evidence
+# that it CAUSED it. I convicted DEFER by reading and exonerated PREP_BAKE by the
+# same style of argument; ten minutes of GPU refuted both.
 arm_env=(
   FR10_METRICS=0
   FR13_HOST_TAIL_PREP_BAKE=1
