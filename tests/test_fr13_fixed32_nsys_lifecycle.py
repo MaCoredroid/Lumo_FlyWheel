@@ -73,13 +73,19 @@ def _write_process_identity(
     injection: bool = True,
     session_name: str = SESSION_NAME,
 ) -> None:
-    """Write a process identity artifact.
+    """Write a process identity artifact AND the engine-side Nsight attestation.
 
-    ``session_id=None`` models the real runtime: vLLM renames its engine
-    subprocess with setproctitle("VLLM::EngineCore"), which overwrites the front
-    of that process's argv+environ block, so NSYS_PROFILING_SESSION_ID never
-    survives in /proc/<engine>/environ. Only the Nsight injection variables that
-    live in the surviving tail remain.
+    ``session_id=None`` models the pre-delay runtime: nsys sets
+    NSYS_PROFILING_SESSION_ID when the session actually starts, so before the
+    capture delay elapses the engine legitimately has no id yet. That is
+    tolerated; what is not tolerated is a missing/mismatched injection pair or a
+    session name from another run.
+
+    FR14: the Nsight variables are no longer read from /proc/<engine>/environ.
+    setproctitle("VLLM::EngineCore") NUL-fills that process's argv+environ block
+    -- measured 22 variables to zero in this image -- so the engine publishes its
+    own os.environ to a /logs artifact and the profiler attests THAT. The fixture
+    writes both, since both exist at runtime.
     """
     engine_environ = []
     if session_id is not None:
@@ -116,6 +122,24 @@ def _write_process_identity(
         encoding="utf-8",
     )
 
+
+    engine_env = {"LUMO_NSYS_SESSION_NAME": session_name}
+    if injection:
+        engine_env["NVTX_INJECTION64_PATH"] = INJECTION_LIB
+        engine_env["NSYSDK_INJECTION64_PATH"] = INJECTION_LIB
+    if session_id is not None:
+        engine_env["NSYS_PROFILING_SESSION_ID"] = session_id
+    Path(f"{path}.attestation.json").write_text(
+        json.dumps(
+            {
+                "schema": "fr13.fixed32.enginecore_nsight_attestation.v1",
+                "pid": 321,
+                "environ": engine_env,
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
 
 def _write_identity_docker(
     path: Path,
@@ -937,6 +961,7 @@ NSYS_EXPECTED_SESSION_NAME=$EXPECTED_SESSION_NAME
 PROFILE_CONTAINER_ID=''
 PROFILE_CONTAINER_CIDFILE=$9
 PROCESS_IDENTITY=${10}
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 RUN_BOUNDARY=$7
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_DRIVER_SCRIPT=$4
@@ -1082,6 +1107,7 @@ NSYS_LIFECYCLE_LOG=$2
 JQ_BIN=$(command -v jq)
 RUN_BOUNDARY=$3
 PROCESS_IDENTITY=$4
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 PROCESS_IDENTITY_STAT=$(stat -c '%d:%i:%h:%s:%Y:%Z' "$PROCESS_IDENTITY")
 CONTAINER=$CONTAINER_NAME
 PROFILE_CONTAINER_ID=$CONTAINER_ID
@@ -1217,6 +1243,7 @@ JQ_BIN=$(command -v jq)
 RUN_BOUNDARY=$4
 PROFILE_CONTAINER_CIDFILE=$5
 PROCESS_IDENTITY=$6
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_SESSION_NAME=$7
 LUMO_NSYS_STOP_TIMEOUT_S=1
@@ -1360,6 +1387,7 @@ JQ_BIN=$(command -v jq)
 RUN_BOUNDARY=$4
 PROFILE_CONTAINER_CIDFILE=$5
 PROCESS_IDENTITY=$6
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_SESSION_NAME=$7
 LUMO_NSYS_STOP_TIMEOUT_S=1
@@ -1418,16 +1446,24 @@ stop_exact_nsys_session
 
 
 @pytest.mark.parametrize(
-    ("identity_kwargs", "expected_evidence"),
+    ("identity_kwargs", "expected_evidence", "expected_message"),
     (
         pytest.param(
             {"injection": False},
             "engine_core.NVTX_INJECTION64_PATH=[]",
+            # FR14: an engine that is not under Nsight injection is now caught by
+            # the ENGINE-PUBLISHED attestation rather than by reading the
+            # engine's (setproctitle-destroyed) /proc environ, so the refusal
+            # names the binding that failed.
+            "does not bind this process to this run's session",
             id="engine-not-under-nsight-injection",
         ),
         pytest.param(
             {"session_name": "fr13-fixed32-20260730T120000Z-p9999"},
             "pid1.LUMO_NSYS_SESSION_NAME=[\"fr13-fixed32-20260730T120000Z-p9999\"]",
+            # pid1's environ is NOT setproctitle'd, so the frontend pin is still
+            # attested from the process identity and keeps its original refusal.
+            "does not attest the run-unique Nsight session",
             id="frontend-pinned-a-different-run",
         ),
     ),
@@ -1436,6 +1472,7 @@ def test_identity_without_nsight_evidence_fails_closed_and_self_diagnoses(
     tmp_path: Path,
     identity_kwargs: dict[str, object],
     expected_evidence: str,
+    expected_message: str,
 ) -> None:
     """A rejected attestation must name the evidence it actually found."""
     fake_bin = tmp_path / "bin"
@@ -1466,6 +1503,7 @@ JQ_BIN=$(command -v jq)
 RUN_BOUNDARY=$3
 PROFILE_CONTAINER_CIDFILE=$4
 PROCESS_IDENTITY=$5
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_SESSION_NAME=$6
 refresh_run_identity_evidence
@@ -1495,9 +1533,7 @@ printf '%s\n' "$NSYS_LIFECYCLE_ERROR"
     )
 
     assert completed.returncode == 0, completed.stderr
-    assert (
-        "does not attest the run-unique Nsight session" in completed.stdout
-    ), completed.stdout
+    assert expected_message in completed.stdout, completed.stdout
     lifecycle = lifecycle_log.read_text(encoding="utf-8")
     assert "process identity Nsight evidence:" in lifecycle
     assert expected_evidence in lifecycle
@@ -1575,6 +1611,7 @@ JQ_BIN=$(command -v jq)
 RUN_BOUNDARY=$4
 PROFILE_CONTAINER_CIDFILE=$5
 PROCESS_IDENTITY=$6
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_SESSION_NAME=$7
 refresh_run_nsys_session
@@ -1644,6 +1681,7 @@ JQ_BIN=$(command -v jq)
 RUN_BOUNDARY=$3
 PROFILE_CONTAINER_CIDFILE=$4
 PROCESS_IDENTITY=$5
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 CONTAINER=$6
 NSYS_EXPECTED_SESSION_NAME=$7
 refresh_run_nsys_session
@@ -1734,6 +1772,7 @@ JQ_BIN=$(command -v jq)
 RUN_BOUNDARY=$3
 PROFILE_CONTAINER_CIDFILE=$4
 PROCESS_IDENTITY=$5
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_SESSION_NAME=$EXPECTED_SESSION_NAME
 refresh_run_nsys_session
@@ -1849,6 +1888,7 @@ JQ_BIN=$(command -v jq)
 RUN_BOUNDARY=$3
 PROFILE_CONTAINER_CIDFILE=$4
 PROCESS_IDENTITY=$5
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_SESSION_NAME=$EXPECTED_SESSION_NAME
 refresh_run_nsys_session
@@ -1960,6 +2000,7 @@ source "$1"
 NSYS_LIFECYCLE_LOG=$2
 RUN_BOUNDARY=$3
 PROCESS_IDENTITY=$4
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 PROCESS_IDENTITY_STAT=$(stat -c '%d:%i:%h:%s:%Y:%Z' "$PROCESS_IDENTITY")
 CONTAINER=$CONTAINER_NAME
 PROFILE_CONTAINER_ID=$CONTAINER_ID
@@ -2088,6 +2129,7 @@ JQ_BIN=$(command -v jq)
 RUN_BOUNDARY=$4
 PROFILE_CONTAINER_CIDFILE=$5
 PROCESS_IDENTITY=$6
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 CONTAINER=$CONTAINER_NAME
 NSYS_EXPECTED_SESSION_NAME=$EXPECTED_SESSION_NAME
 LUMO_NSYS_STOP_TIMEOUT_S=1
@@ -2744,6 +2786,7 @@ NSYS_IDENTITY_ATTESTED=1
 NSYS_SESSION_NAME=$4
 NSYS_EXPECTED_SESSION_NAME=$4
 PROCESS_IDENTITY=$5
+NSIGHT_ATTESTATION="$PROCESS_IDENTITY.attestation.json"
 RUN_BOUNDARY=$6
 PROCESS_IDENTITY_STAT=$(stat -c '%d:%i:%h:%s:%Y:%Z' "$PROCESS_IDENTITY")
 ENGINE_CORE_PID=321

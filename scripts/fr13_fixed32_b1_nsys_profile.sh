@@ -17,6 +17,7 @@ PROFILE_CONTAINER_RUNNING=0
 PROFILE_CONTAINER_STATUS=""
 PROFILE_CONTAINER_EXIT_CODE=""
 PROCESS_IDENTITY=""
+NSIGHT_ATTESTATION=""
 PROCESS_IDENTITY_STAT=""
 ENGINE_CORE_PID=""
 ENGINE_CORE_START_TICKS=""
@@ -420,6 +421,13 @@ _log_process_identity_nsight_evidence() {
       "process identity Nsight evidence: <unreadable process identity at ${identity_path:-<unset>}>"
     return 0
   fi
+  if [[ -n "${NSIGHT_ATTESTATION:-}" && -r "${NSIGHT_ATTESTATION:-}" ]]; then
+    _lifecycle_log \
+      "EngineCore Nsight attestation: $("$JQ_BIN" -c . "$NSIGHT_ATTESTATION" 2>/dev/null || echo '<unparseable>')"
+  else
+    _lifecycle_log \
+      "EngineCore Nsight attestation: <absent at ${NSIGHT_ATTESTATION:-<unset>}>"
+  fi
   evidence=$(
     "$JQ_BIN" -r --arg name "${NSYS_EXPECTED_SESSION_NAME:-}" '
       def vals($rec; $key):
@@ -552,17 +560,34 @@ refresh_run_identity_evidence() {
 "run container identity changed before process-identity validation"
     return 2
   fi
-  # Nsight injects NSYS_PROFILING_SESSION_ID into the process it launches (the
-  # `vllm serve` root), not into every descendant. vLLM renames its engine
-  # subprocess with setproctitle("VLLM::EngineCore"), which overwrites the
-  # front of that process's contiguous argv+environ block: /proc/<engine>/environ
-  # begins with a NUL-filled hole and only the tail of the inherited environment
-  # survives. NSYS_PROFILING_SESSION_ID lives in the destroyed prefix, so the
-  # engine's environ can never carry it. Anchor the run instead on evidence the
-  # engine does retain -- the Nsight injection libraries it was started under --
-  # plus the run-unique session name pinned on the nsys frontend (PID 1), and
-  # resolve the numeric ID from `nsys sessions list` by that unique name.
-  injected_session_id=$(
+  # ATTEST FROM A SOURCE IMMUNE TO THE PROCESS BEING ATTESTED.
+  #
+  # This used to read the engine's Nsight environment out of
+  # /proc/<engine>/environ (via the process-identity capture). That source is
+  # destroyed by the very thing this check identifies the process BY:
+  # set_process_title() calls setproctitle("VLLM::EngineCore"), which reclaims
+  # the contiguous argv+environ block and NUL-fills it. So the check selected
+  # precisely the process whose environ it had wrecked, and then read the wreck.
+  #
+  # The previous mitigation knew about setproctitle and tried to anchor on the
+  # two injection-library variables, on the theory that they survive in the
+  # undestroyed TAIL. Whether any given variable survives is a function of the
+  # environ block's byte layout, which changes whenever the environment changes:
+  # the 2026-08-08 run passed on that basis, and the FR14 stack -- same image,
+  # same nsys pin -- fails it, because NSYSDK_INJECTION64_PATH now lands in the
+  # destroyed prefix while NVTX_INJECTION64_PATH does not. Verified directly:
+  # setproctitle("VLLM::EngineCore") in this image takes /proc/self/environ from
+  # 22 variables to ZERO while os.environ is untouched. Variables nsys injects
+  # with setenv() after exec never appear in that block at all.
+  #
+  # So the engine now publishes its OWN environment from inside itself, where
+  # os.environ is authoritative, and this attests that artifact. The asserted
+  # PROPERTY is unchanged -- this EngineCore ran under THIS run's unique Nsight
+  # session -- and is now strictly better evidenced: an exact process-id binding
+  # plus the run-unique session name, read from a source the process cannot
+  # corrupt. The artifact is emitted best-effort, so a missing one refuses HERE,
+  # fail-closed at the point of consumption.
+  engine_core_pid=$(
     "$JQ_BIN" -er --arg name "$NSYS_EXPECTED_SESSION_NAME" '
       def vals($rec; $key):
         [ $rec.environ[]
@@ -578,22 +603,9 @@ refresh_run_identity_evidence() {
         and (.engine_core.pid | type == "number")
         and (.engine_core.pid > 1)
         and .engine_core.argv == ["VLLM::EngineCore"]
-        and (.engine_core.environ | type == "array")
-        and all(.engine_core.environ[]; type == "string")
         and (vals(.pid1; "LUMO_NSYS_SESSION_NAME") == [$name])
-        and ((vals(.engine_core; "NVTX_INJECTION64_PATH") | length) == 1)
-        and (
-          vals(.engine_core; "NVTX_INJECTION64_PATH")
-          == vals(.engine_core; "NSYSDK_INJECTION64_PATH")
-        )
       ) then
-        (
-          vals(.engine_core; "NSYS_PROFILING_SESSION_ID")
-          | if length == 0 then ""
-            elif length == 1 and (.[0] | test("^[1-9][0-9]*$")) then .[0]
-            else error("ambiguous NSYS_PROFILING_SESSION_ID")
-            end
-        )
+        .engine_core.pid
       else
         empty
       end
@@ -604,11 +616,40 @@ refresh_run_identity_evidence() {
 "EngineCore process identity does not attest the run-unique Nsight session"
     return 2
   }
-  engine_core_pid=$(
-    "$JQ_BIN" -er '.engine_core.pid' "$PROCESS_IDENTITY" \
-      2>> "$NSYS_LIFECYCLE_LOG"
+  if [[ ! -f "$NSIGHT_ATTESTATION" || -L "$NSIGHT_ATTESTATION" ]]; then
+    _log_process_identity_nsight_evidence
+    NSYS_LIFECYCLE_ERROR=\
+"EngineCore published no Nsight attestation artifact"
+    return 2
+  fi
+  injected_session_id=$(
+    "$JQ_BIN" -er --arg name "$NSYS_EXPECTED_SESSION_NAME" \
+      --argjson epid "$engine_core_pid" '
+      if (
+        type == "object"
+        and .schema == "fr13.fixed32.enginecore_nsight_attestation.v1"
+        and (.pid | type == "number")
+        and (.pid == $epid)
+        and (.environ | type == "object")
+        and ((.environ["NVTX_INJECTION64_PATH"] // "") != "")
+        and (.environ["NVTX_INJECTION64_PATH"] == .environ["NSYSDK_INJECTION64_PATH"])
+        and ((.environ["LUMO_NSYS_SESSION_NAME"] // "") == $name)
+      ) then
+        (
+          .environ["NSYS_PROFILING_SESSION_ID"] // ""
+          | if . == "" then ""
+            elif test("^[1-9][0-9]*$") then .
+            else error("ambiguous NSYS_PROFILING_SESSION_ID")
+            end
+        )
+      else
+        empty
+      end
+    ' "$NSIGHT_ATTESTATION" 2>> "$NSYS_LIFECYCLE_LOG"
   ) || {
-    NSYS_LIFECYCLE_ERROR="unable to read EngineCore PID from process identity"
+    _log_process_identity_nsight_evidence
+    NSYS_LIFECYCLE_ERROR=\
+"EngineCore Nsight attestation does not bind this process to this run's session"
     return 2
   }
   process_identity_after=$(stat -c '%d:%i:%h:%s:%Y:%Z' "$PROCESS_IDENTITY") \
@@ -1613,6 +1654,10 @@ ENGINE_LEDGER_SNAPSHOT=\
 PROFILE_CONTAINER_CIDFILE=\
 "$RUNROOT_ABS/$ARM/logs/fr13_fixed32_container.cid"
 PROCESS_IDENTITY="$RUNROOT_ABS/$ARM/fixed32_process_identity.json"
+# Published by the engine itself from os.environ (see the emitter in
+# fr10_phase4_patch_vllm_tree_gdn.py). Immune to the setproctitle overwrite
+# that makes /proc/<engine>/environ unusable for this process.
+NSIGHT_ATTESTATION="$RUNROOT_ABS/$ARM/logs/fr13_fixed32_enginecore_nsight_attestation.json"
 case "$RUNROOT_ABS" in
   "$OUTPUT_ROOT"/*) ;;
   *)

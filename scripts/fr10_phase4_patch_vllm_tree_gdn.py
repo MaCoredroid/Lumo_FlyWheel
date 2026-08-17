@@ -531,6 +531,67 @@ _FR13_FIXED32_OBSERVED_RUNTIME_SOURCE = r'''
 # FR13_FIXED32_OBSERVED_RUNTIME: event-scoped, host-only accounting at the
 # successful runtime call sites. This deliberately records tensor geometry and
 # enqueue deltas without reading device values or synchronizing the stream.
+_FR13_NSIGHT_ATTESTATION_KEYS = (
+    "NVTX_INJECTION64_PATH",
+    "NSYSDK_INJECTION64_PATH",
+    "NSYS_PROFILING_SESSION_ID",
+    "LUMO_NSYS_SESSION_NAME",
+)
+
+
+def _fr13_fixed32_emit_nsight_attestation(
+    path="/logs/fr13_fixed32_enginecore_nsight_attestation.json",
+):
+    """Publish THIS process's REAL Nsight environment for the profiler.
+
+    WHY THIS EXISTS. /proc/<pid>/environ is not a usable source for this process.
+    set_process_title() calls setproctitle("VLLM::EngineCore"), which reclaims
+    the contiguous argv+environ block and NUL-fills it -- so an outside reader
+    sees a zeroed or partially overwritten environment for EXACTLY the process
+    whose argv the attestation requires to be "VLLM::EngineCore". The old check
+    selected precisely the process whose environ it had destroyed. Variables nsys
+    injects with setenv() after exec never appear in that block at all.
+    os.environ inside the process is authoritative; nothing outside it is.
+
+    The 2026-08-08 run passed the old check by byte-layout luck -- which
+    variables survive the overwrite depends on the block's contents, and the FR14
+    stack's differ. AN ATTESTATION SOURCE MUST BE IMMUNE TO THE PROCESS IT
+    ATTESTS.
+
+    BEST EFFORT BY DESIGN -- never raises. A missing or malformed artifact makes
+    the PROFILER refuse, which is fail-closed where the evidence is consumed; it
+    must never take down a serve nobody is profiling. Gated on
+    FR13_FIXED32_NVTX_PROFILE so an unprofiled run leaves no sidecar behind,
+    matching this tree's rule that an off lever leaves no artifact.
+    """
+    _json = __import__("json")
+    _os = __import__("os")
+    try:
+        if _os.environ.get("FR13_FIXED32_NVTX_PROFILE") != "1":
+            return None
+        record = {
+            "schema": "fr13.fixed32.enginecore_nsight_attestation.v1",
+            "pid": int(_os.getpid()),
+            "environ": {
+                key: _os.environ[key]
+                for key in _FR13_NSIGHT_ATTESTATION_KEYS
+                if key in _os.environ
+            },
+        }
+        tmp = path + ".tmp." + str(_os.getpid())
+        with open(tmp, "w", encoding="ascii") as handle:
+            handle.write(
+                _json.dumps(record, ensure_ascii=True, sort_keys=True) + "\n"
+            )
+        _os.replace(tmp, path)
+        return record
+    except Exception:
+        return None
+
+
+_FR13_FIXED32_NSIGHT_ATTESTATION = _fr13_fixed32_emit_nsight_attestation()
+
+
 _FR13_DRAFT_HEAD_U8_WORKER_ENV_KEYS = (
     "FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB",
     "FR13_DRAFT_HEAD_M1_R64_U8_QUALITY_GATE",
