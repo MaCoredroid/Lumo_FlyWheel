@@ -27,3 +27,6 @@ output/
 .lumo.local.env
 .codex/config.toml
 .claude/
+
+# probe-emitted, root-owned
+.triton-cache/
