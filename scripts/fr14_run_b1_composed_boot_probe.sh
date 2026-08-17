@@ -88,12 +88,18 @@ printf 'source_commit=%s\nstarted=%s\nlevers=gqa_pair(promoted),single_launch=%s
   "$PROBE_SINGLE_LAUNCH" "$PROBE_PREP_BAKE" "$PROBE_DEFER" \
   >> "$RUNROOT_ABS/probe_meta.txt"
 
+# FR10_METRICS IS NOT A FREE CHOICE. single_launch's production predicate
+# requires the metrics=1 class, but plain fixed32 REFUSES it: "fixed32 requires
+# FR10_METRICS=0, got 1". So metrics tracks single_launch exactly -- and that is
+# why a composed arm WITHOUT single_launch needs no metrics=1 control arm at all:
+# it runs at metrics=0, the banked anchor's own setting, and pairs against it
+# directly.
+if [[ "$PROBE_SINGLE_LAUNCH" == "1" ]]; then PROBE_METRICS=1; else PROBE_METRICS=0; fi
 lever_env=(
   # single_launch is NAMED because it is not promoted (its registry default is 0).
   FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION="$PROBE_SINGLE_LAUNCH"
   FR13_FIXED32_GDN_SINGLE_LAUNCH_PASS_JSON="$SINGLE_LAUNCH_PASS_JSON"
-  # single_launch production requires the metrics=1 class.
-  FR10_METRICS=1
+  FR10_METRICS="$PROBE_METRICS"
   FR13_HOST_TAIL_PREP_BAKE="$PROBE_PREP_BAKE"
   FR13_HOST_TAIL_DEFER="$PROBE_DEFER"
   FORKED_FA2_SO="$CANDIDATE_SO"
