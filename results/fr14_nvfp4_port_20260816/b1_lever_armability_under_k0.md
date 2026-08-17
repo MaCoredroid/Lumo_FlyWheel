@@ -114,3 +114,84 @@ measured with its levers. It is a config train plus a gate, not a serve.
 **Recommendation: run option 1 now** (it is the ruled production config and
 costs one serve), and schedule option 3 as the next config train rather than
 spending GPU on a parked shape.
+
+---
+
+# EXTENSION (2026-08-17): this is not a gqa_pair problem, it is portfolio-wide
+
+Prompted by the B4 max-stack chain, I enumerated every launcher predicate that
+requires the K64 draft vocabulary. **Twelve of them.** They gate essentially the
+whole FR13 credentialed-lever portfolio:
+
+| launcher line | lever it guards |
+|---:|---|
+| 885 | CUTLASS wave, `k64_root` qualification profile |
+| 970 / 986 / 1001 | packed-walk node trust, active depth, node-trust production |
+| 1481 | draft-head U8 (B1) |
+| 1609 | draft-head M4 U8 (B4) |
+| 1722 | DFWD K64 top3 |
+| 1806 | draft-head padding / direct M32 |
+| **1974** | **FA2 qrow32 B4 GQA-pair — timing AND production** |
+| **2007** | **FA2 qrow32 B1 selector — candidate AND production** |
+| 2120 | FA2 qrow16 live A/B |
+
+Every one of them tests `"${FR13_DRAFT_VOCAB_K:-65536}" == "65536"`, and most
+also test `FR13_DRAFT_VOCAB_ROOT == "1"` and/or `-z FR13_NEEDS_ALLOW`.
+
+**So Mark's K0 ruling parks more than the K64 drafter: it parks the arming path
+for every built lever simultaneously.** Neither the B1 composed serve
+(K0 + gqa_pair) nor the B4 max-stack serve (K0 + padded gqa_pair + single_launch
++ TAW) is constructible at this HEAD. The launcher refuses each one at its own
+fail-closed predicate — which is the gate working exactly as designed.
+
+Re-earning any of these gates first does not help: every gate runner hardcodes
+and asserts the same K64 identity and pins it into the credential binding, so it
+can only ever mint a K64-shaped credential — for a shape that is now parked.
+
+## The precedent that shows the way out — it already exists in-tree
+
+The CUTLASS wave lever already carries **two qualification profiles**
+(`:2386-2400`):
+
+```bash
+case "$FR13_FIXED32_CUTLASS_WAVE_QUALIFICATION_PROFILE" in
+  full_vocab)
+    [[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
+       && "${FR13_DRAFT_VOCAB_K:-65536}" == "0" \
+       && "${FR13_NEEDS_ALLOW:-}" == "FR13_DRAFT_VOCAB_K=0" ]] || {
+      echo "CUTLASS full_vocab B4 qualification requires the K0 workload" >&2
+  k64_root)
+    [[ -z "${FR13_NEEDS_ALLOW:-}" ]] || {
+      echo "CUTLASS k64_root B4 qualification forbids a K0 override" >&2
+```
+
+So the codebase **already models "this lever, qualified under the K0
+workload"** — for exactly one lever. That is the template.
+
+## What the max-stack chain actually costs
+
+Not "re-earn the gates, then arm them". It is:
+
+1. **A config train** giving each lever a `full_vocab` (K0) qualification
+   profile alongside its `k64_root` one, mirroring the CUTLASS pattern. This
+   widens credentialed safety predicates, so it is a deliberate, reviewed change
+   — not a knob.
+2. **A gate re-earn per lever UNDER K0**, because a credential earned on the
+   K64 workload does not describe a K0 serve. The K64-era runners cannot do this
+   as written (they assert the K64 identity and pin it into the binding), so
+   each needs a K0 variant.
+3. Only then the composed serves.
+
+The kernels themselves are quant-agnostic and the geometry is identical, as
+Mark says — no rebuilds. The blocker is entirely in the *arming predicates and
+the credential shapes*, not in the binaries.
+
+## Recommendation
+
+Serve **aggressive + K0, no levers** now — it is the ruled production config,
+costs one serve, and is the honest FR14 K0 anchor. Take the lever chain as its
+own config train (step 1 above) with Mark's explicit sign-off on widening the
+predicates, then re-earn gates in the K0 shape.
+
+Spending 4–6 GPU-h re-earning K64-shaped credentials before that decision would
+produce evidence no production serve can consume.
