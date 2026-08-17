@@ -58,9 +58,11 @@ can never drift from the repo copy.
 gateway `172.31.99.1`, created `--internal`, `enable_icc=false`,
 `enable_ip_masquerade=false`, no IPv6.
 
-**Rules** — 9, every one scoped to `-i/-o fr14agent0` and comment-tagged
-`fr14-agent-boundary`, so nothing can match `app_default`,
-`lumo_auto_alpha_default`, `docker0` or any host interface:
+**Rules** — 9, all comment-tagged `fr14-agent-boundary`. Eight are scoped to
+`-i/-o fr14agent0`; the ninth (the reply SNAT) is scoped to
+`-s 172.31.99.0/24 -d 127.0.0.1 -o lo --dport 8023`, i.e. it can only match
+traffic the DNAT already produced from this bridge. Nothing here can match
+`app_default`, `lumo_auto_alpha_default`, `docker0` or any host interface:
 
 ```
 -A INPUT -d 127.0.0.1/32 -i fr14agent0 -p tcp -m tcp --dport 8023 -m comment --comment fr14-agent-boundary-allow-proxy -j ACCEPT
@@ -329,7 +331,9 @@ escape via docker-in-docker has no handle here.
 path, or a tailnet peer (`100.103.10.122:9950`, the GB10's vLLM) — all
 `ENETUNREACH`. Forwarding out `tailscale0` is caught by DOCKER-USER regardless.
 
-**Scope blast radius.** Every rule matches `fr14agent0` by interface and carries
+**Scope blast radius.** Eight of nine rules match `fr14agent0` by interface; the
+ninth (reply SNAT) matches `-s 172.31.99.0/24 -d 127.0.0.1 -o lo --dport 8023`,
+which only exists as a consequence of the DNAT on this bridge. All nine carry
 the `fr14-agent-boundary` comment. After the ablation network was torn down,
 `grep -c fr14ctl0` across `iptables -S`, `iptables -t nat -S` and `ip6tables -S`
 returned **0** — teardown is complete, and `app_default` /
