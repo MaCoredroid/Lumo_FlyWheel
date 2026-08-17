@@ -52,6 +52,11 @@ cd "$REPO"
 : "${GATE_RUNROOT:?set GATE_RUNROOT to the K0 gate runroot that earned the credential}"
 TAG=${TAG:-leverpair}
 [[ "$TAG" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "TAG unsafe" >&2; exit 2; }
+# both (default) = the full pair. levered = salvage a levered arm against an
+# already-banked clean stock arm named by PAIR_STOCK_REF.
+PAIR_ARMS=${PAIR_ARMS:-both}
+PAIR_STOCK_REF=${PAIR_STOCK_REF:-}
+case "$PAIR_ARMS" in both|levered) ;; *) echo "PAIR_ARMS must be both|levered" >&2; exit 2 ;; esac
 
 PYTHON_BIN=${PYTHON_BIN:-.venv/bin/python}
 FA2_DIR=${FA2_DIR:-/home/mark/fr13_fa2_qrow32_gqa_pair_b1_sm121a_20260810}
@@ -62,6 +67,8 @@ SOURCE_CLOSURE_SHA256=172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a3
 FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
+# The launcher demands the exact4 identity verbatim for any B1 production arm.
+EXACT4_TASK_IDS=astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398
 MANDATORY_WEIGHT_BYTES=25430574256
 MANDATORY_WEIGHT_FLOOR_MS=93.15228665201465
 QUALIFICATION_PROFILE=full_vocab
@@ -96,17 +103,23 @@ GATE_SOURCE_COMMIT=$("$PYTHON_BIN" -c "import json,sys;print(json.load(open(sys.
 GATE_SHA256=$(sha256sum "$GATE_JSON" | awk '{print $1}')
 PATCH_SOURCE_SHA256=$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | awk '{print $1}')
 
-# ---- issue the production credential from that gate --------------------------
-SIDECAR="$RUNROOT_ABS/fr14_qrow32_b1_gqa_pair_k0_production_pass.json"
+# ---- PREFLIGHT ONLY: prove the gate can still mint a credential --------------
+# The launcher mints the SERVED credential itself and refuses a caller-supplied
+# one, so this sidecar is NEVER passed to the run. It is a cheap dry run of the
+# exact issuance the launcher will perform ~8 min into the boot, and it has
+# already caught three defects (a NameError in the validator, a missing
+# qualification_profile, a K64-shaped required_runtime) at zero GPU cost. Keep it
+# for that, and do not mistake its output for the credential.
+SIDECAR="$RUNROOT_ABS/fr14_qrow32_b1_gqa_pair_k0_production_pass.preflight.json"
 "$PYTHON_BIN" scripts/fr13_qrow32_b1_pass_sidecar.py issue-gqa-pair \
   --gate "$GATE_JSON" --expected-gate-sha256 "$GATE_SHA256" \
   --live-result "$LIVE_RESULT" \
   --candidate-so "$CANDIDATE_SO" --expected-candidate-sha256 "$CANDIDATE_SHA256" \
   --arm gqa_pair --patch-source scripts/fr13_patch_fa2_tree_bias.py \
   --expected-source-commit "$SOURCE_COMMIT" --out "$SIDECAR" \
-  || { echo "credential issuance FAILED" >&2; exit 2; }
+  || { echo "credential issuance PREFLIGHT FAILED" >&2; exit 2; }
 SIDECAR_SHA256=$(sha256sum "$SIDECAR" | awk '{print $1}')
-echo "[pair] credential issued: $SIDECAR ($SIDECAR_SHA256)"
+echo "[pair] credential preflight OK (launcher will mint the served one): $SIDECAR_SHA256"
 
 # ---- publish the fixed32 route pins ------------------------------------------
 # Identity FIRST, then the sequence: the sequence reads the draft-vocab config
@@ -166,10 +179,20 @@ run_arm() {  # label lever(0|1)
 
   local lever_env=()
   if [[ "$lever" == "1" ]]; then
+    # THE CREDENTIAL IS PRESENTED AS ITS GATE, NOT AS A MINTED SIDECAR.
+    # FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR{,_SHA256} are LAUNCHER-PRIVATE:
+    # the launcher mints the sidecar itself, inside the run, from the sealed gate
+    # plus the live A/B result the gate binds by digest, and it REFUSES outright
+    # ("FR13 qrow32 production sidecar credentials are launcher-private") if a
+    # caller sets them. Passing our own pre-minted sidecar is exactly what killed
+    # the first levered arm in 5 s. The caller's job is to hand over the gate BY
+    # PATH and let the launcher re-derive the whole chain at issue time.
     lever_env=(
       FR13_FA2_QROW32_B1_PRODUCTION_ARM=gqa_pair
-      FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR="$SIDECAR"
-      FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256="$SIDECAR_SHA256"
+      FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON="$GATE_JSON"
+      FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256="$GATE_SHA256"
+      FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON="$LIVE_RESULT"
+      FR13_FA2_QROW32_B1_EXACT4_TASK_IDS="$EXACT4_TASK_IDS"
       FR13_FA2_QROW32_B1_SO_SHA256="$CANDIDATE_SHA256"
       FR13_FA2_QROW32_B1_SO_SIZE="$CANDIDATE_BYTES"
       FR13_FA2_QROW32_B1_FA2_HEAD="$FA2_HEAD"
@@ -223,7 +246,19 @@ run_arm() {  # label lever(0|1)
 
 mkdir -p output/fr13_sfwd_sidecar
 LEVER_RC=""
-run_arm stock 0; STOCK_RC=$?
+STOCK_RC=0
+if [[ "$PAIR_ARMS" == "both" ]]; then
+  run_arm stock 0; STOCK_RC=$?
+else
+  # levered-only salvage. Legitimate ONLY when a clean stock arm already exists
+  # to pair against, and it must be disclosed with the commit delta between the
+  # two arms, because they will not have been served at the same HEAD.
+  echo "[pair] PAIR_ARMS=levered -- stock arm NOT run; pairing against $PAIR_STOCK_REF"
+  [[ -n "$PAIR_STOCK_REF" ]] \
+    || { echo "PAIR_ARMS=levered requires PAIR_STOCK_REF (the banked stock arm dir)" >&2; exit 2; }
+  [[ -f "$PAIR_STOCK_REF/deploy_speed_${TAG}.json" ]] \
+    || { echo "PAIR_STOCK_REF carries no deploy_speed_${TAG}.json: $PAIR_STOCK_REF" >&2; exit 2; }
+fi
 
 # A failed arm 1 ends the pair. Running arm 2 anyway cannot produce a pair, and
 # the first attempt showed it actively obscures the diagnosis: arm 1 failed its
