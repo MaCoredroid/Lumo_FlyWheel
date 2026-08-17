@@ -26,9 +26,20 @@
 #   ARM K0 : FR13_DRAFT_VOCAB_K=0     FR13_DRAFT_VOCAB_ROOT=0
 #            floor 25,430,574,256 B / 93.15228665201465 ms
 #            drafts through the STOCK fp4 GEMM on the full 248,320-row head.
-#            _fr13_dvk_prepare is never called (the call site is gated on
-#            _fr13_dvk_root), so the Phase-1 dequant is inert by construction --
-#            asserted below from the boot log, not assumed.
+#
+#            WHY THE SHIM IS INERT -- corrected after actually reading the
+#            patcher rather than reasoning from the root flag. There are TWO
+#            _fr13_dvk_prepare() call sites: one under `if _fr13_dvk_root`, and
+#            a SECOND under `if not _fr13_dvk_root` (which builds the loop
+#            subset after the unchanged full root head). So "ROOT=0 means the
+#            prepare is never called" is FALSE. What actually makes K0 inert is
+#            the function's own first statement:
+#                if _fr13_dvk_configured <= 0 or self._fr13_dvk_dead:
+#                    return 0, None
+#            K=0 takes that early return, so neither the shim nor the Phase-1
+#            dequant is reached. (The 65536:0 arm WOULD build the shim through
+#            the second site -- it is simply not one of these two arms.)
+#            Asserted below from the boot log, not assumed.
 #
 # ROOT must be 0 when K is 0: the patcher raises "FR13_DRAFT_VOCAB_ROOT=1
 # requires FR13_DRAFT_VOCAB_K>=128", and the floor sequence has no 0:1 arm.
