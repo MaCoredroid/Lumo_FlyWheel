@@ -54,6 +54,12 @@ boot_arm() {  # arm k root container
   chmod 700 "$armout" "$armout/logs"
 
   echo "[$arm] ==== memory preflight ===="
+  # On GB10 the GPU pool IS host RAM, so the previous arm's 20 GB of checkpoint
+  # page cache is charged against this arm's demand even though MemAvailable
+  # calls it available. Same sync + drop the launcher's own FR14 preflight does;
+  # `sudo -n` is deliberately non-interactive so an unattended run never stalls.
+  sync
+  sudo -n sysctl vm.drop_caches=3 >/dev/null 2>&1 || true
   free -g | tee "$armout/free_before_boot.txt"
   local memfree
   memfree=$(awk '/^MemFree:/{print $2/1048576}' /proc/meminfo)
