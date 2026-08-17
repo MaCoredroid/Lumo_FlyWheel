@@ -36,6 +36,8 @@ SUBSET=config/fr13_fixed32/subset_b4_four.json
 MANDATORY_WEIGHT_BYTES=25430574256
 MANDATORY_WEIGHT_FLOOR_MS=93.15228665201465
 BOOT_WAIT_S=${BOOT_WAIT_S:-1500}
+# How long to wait for ONE request to complete after the campaign begins.
+REQUEST_WAIT_S=${REQUEST_WAIT_S:-900}
 
 # Levers under test. gqa_pair arms itself from the run-local credential pointer
 # via the promoted default, so it is deliberately NOT named here -- naming it
@@ -128,7 +130,44 @@ while (( $(date +%s) < deadline )); do
 done
 echo "[probe] booted=$booted $(date -u +%H:%M:%SZ)"
 
+# ---- THE LAST NEEDLE: one request must SURVIVE ------------------------------
+# BOOTS CLEAN != SERVES CLEAN. The first version of this probe stopped at
+# "campaign begun" -- before any traffic -- and passed a configuration whose
+# engine then died on its FIRST real request with "FR13 fixed32 began a forward
+# before prior KV completion". Everything a boot can show was green; the
+# observable that mattered was a request completing.
+#
+# Evidence is the engine's own ingress ledger, which records request_complete
+# per request, cross-checked against the container still being alive. Polls
+# until one of: a completed request (PASS), the engine dying (FAIL, with the
+# fatal quoted), or the deadline.
+served=0
+if (( booted == 1 )); then
+  CID=$(docker ps -q --filter "name=$ARM" | head -1)
+  LEDGER="$ARMDIR/logs/fr13_fixed32_engine_ingress.jsonl"
+  req_deadline=$(( $(date +%s) + REQUEST_WAIT_S ))
+  while (( $(date +%s) < req_deadline )); do
+    if sudo -n grep -qs '"event":"request_complete"' "$LEDGER" 2>/dev/null \
+       || grep -qs '"event":"request_complete"' "$LEDGER" 2>/dev/null; then
+      served=1; break
+    fi
+    if [[ -z "$(docker ps -q --filter "name=$ARM")" ]]; then
+      echo "[probe] ENGINE DIED before completing a request:"
+      docker logs "$CID" 2>&1 | grep -E 'RuntimeError|EngineDeadError|FR13 fixed32' \
+        | tail -5 | sed 's/^/    /'
+      break
+    fi
+    sleep 10
+  done
+fi
+if (( served == 1 )); then
+  echo "[probe] SERVED   one request completed -- engine survived real traffic"
+else
+  echo "[probe] NOT SERVED  no request completed within ${REQUEST_WAIT_S}s"
+fi
+
 fail=0
+(( served == 1 )) || fail=1
 need_file() {  # path label
   if [[ -f "$1" && ! -L "$1" ]]; then
     echo "  ENGAGED  $2"
@@ -186,9 +225,9 @@ docker ps -aq | xargs -r docker rm -f >/dev/null 2>&1
 sync; sudo -n sysctl vm.drop_caches=3 >/dev/null 2>&1 || true
 awk '/^MemFree:/{printf "[probe] MemFree=%.2fGiB\n",$2/1048576}' /proc/meminfo
 
-printf 'booted=%s\nverdict=%s\nended=%s\n' \
-  "$booted" "$([[ $booted == 1 && $fail == 0 ]] && echo CLEAN || echo DEFECTS)" \
+printf 'booted=%s\nserved_one_request=%s\nverdict=%s\nended=%s\n' \
+  "$booted" "$served" "$([[ $booted == 1 && $fail == 0 ]] && echo CLEAN || echo DEFECTS)" \
   "$(date -u +%FT%TZ)" | tee -a "$RUNROOT_ABS/probe_meta.txt"
 echo "[probe] done -> $RUNROOT_ABS"
-(( booted == 1 && fail == 0 )) || exit 1
+(( booted == 1 && served == 1 && fail == 0 )) || exit 1
 exit 0
