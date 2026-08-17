@@ -4015,6 +4015,8 @@ def _qwen_web_fetch_trace_13033(
     tool_result_content: str | None = None,
     tool_result_is_error: bool = False,
     visible_turn_usage: list[tuple[int, int]] | None = None,
+    web_fetch_input: dict[str, Any] | None = None,
+    permission_denials: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Rebuild the real 13033 trajectory: 17 visible turns, one web_fetch."""
     session_id = contract.fixed32_trace_session_id(TASK_B)
@@ -4056,10 +4058,14 @@ def _qwen_web_fetch_trace_13033(
                         else "run_shell_command"
                     ),
                     "input": (
-                        {
-                            "url": _WEB_FETCH_URL_13033,
-                            "prompt": _WEB_FETCH_PROMPT_13033,
-                        }
+                        (
+                            {
+                                "url": _WEB_FETCH_URL_13033,
+                                "prompt": _WEB_FETCH_PROMPT_13033,
+                            }
+                            if web_fetch_input is None
+                            else web_fetch_input
+                        )
                         if is_web_fetch
                         else {}
                     ),
@@ -4128,7 +4134,9 @@ def _qwen_web_fetch_trace_13033(
                 "cache_read_input_tokens": 0,
                 "total_tokens": visible_input + visible_output,
             },
-            "permission_denials": [],
+            "permission_denials": (
+                [] if permission_denials is None else permission_denials
+            ),
         }
     )
     return events
@@ -4340,3 +4348,148 @@ def test_qwen_web_fetch_stays_fail_closed_on_unaccountable_traffic() -> None:
     assert f"trace normal={_ENGINE_COMPLETED_13033}" in message
     assert f"completed={_ENGINE_COMPLETED_13033 + 1}" in message
     assert "shortfall of 32768" in message
+
+
+# --------------------------------------------------------------------------
+# FR14 validator shape-closure (2026-08-17). Three arms died in three serves to
+# three shapes this validator did not model. Every value below is measured from
+# the real traces named in each test, not invented.
+#
+# The fail-closed purpose is unchanged: the METER is still the engine plus the
+# ingress ledger, and the trace is only allowed to NAME the requests they
+# already counted. These tests pin that each newly-modelled shape accounts for
+# the right NUMBER of requests, and that the unaccountable variant of the same
+# shape still raises.
+# --------------------------------------------------------------------------
+
+# fr14_b1_stock_20260817T020534Z / astropy__astropy-13236, trace line 159:
+# the model called web_fetch with a url and no prompt. qwen-code validates the
+# call against its JSON schema BEFORE executing it, so this one never reached
+# executeDirectFetch: it fetched nothing and issued no runSideQuery.
+_SCHEMA_REJECTION_RESULT = "params must have required property 'prompt'"
+
+
+def test_web_fetch_schema_rejection_hides_no_model_request() -> None:
+    """A call the schema rejected owes zero completed engine requests.
+
+    Killed the 2026-08-17T02:05Z arm as
+    "fixed32 qwen web_fetch prompt is empty or invalid": the validator treated
+    a malformed invocation as unaccountable traffic. It is the opposite -- the
+    tool never ran, so there is nothing to account for. The ledger for this
+    task therefore expects the VISIBLE turn count with NO hidden side query.
+    """
+    events = _qwen_web_fetch_trace_13033(
+        web_fetch_input={"url": _WEB_FETCH_URL_13033},
+        tool_result_content=_SCHEMA_REJECTION_RESULT,
+        tool_result_is_error=True,
+    )
+    summary = contract.validate_fixed32_trace_model_requests(events)
+
+    assert summary["hidden_web_fetch_model_requests"] == 0
+    assert summary["completed_logical_model_requests"] == len(
+        _VISIBLE_TURN_USAGE_13033
+    )
+
+
+def test_web_fetch_schema_rejection_still_raises_if_the_call_succeeded() -> None:
+    """The fail-closed half: malformed input + a SUCCESS closure is impossible.
+
+    If a call that the schema should have rejected comes back with the
+    processed display, the trace is describing traffic that cannot have
+    happened. That is exactly the unaccountable case the validator exists for,
+    so it must still refuse -- otherwise the fix above would be a hole.
+    """
+    events = _qwen_web_fetch_trace_13033(
+        web_fetch_input={"url": _WEB_FETCH_URL_13033},
+        tool_result_content=contract.QWEN_WEB_FETCH_SUCCESS_TEMPLATE.format(
+            url=_WEB_FETCH_URL_13033
+        ),
+        tool_result_is_error=False,
+    )
+    with pytest.raises(
+        contract.ContractError, match="web_fetch prompt is empty or invalid"
+    ):
+        contract.validate_fixed32_trace_model_requests(events)
+
+
+def test_valid_web_fetch_still_counts_its_hidden_side_query() -> None:
+    """Guard against fixing the rejection by weakening the counting."""
+    events = _qwen_web_fetch_trace_13033()
+    summary = contract.validate_fixed32_trace_model_requests(events)
+
+    assert summary["hidden_web_fetch_model_requests"] == 1
+    assert summary["completed_logical_model_requests"] == (
+        len(_VISIBLE_TURN_USAGE_13033) + 1
+    )
+
+
+# fr14_b1_stock_20260817T031507Z / astropy__astropy-13236 result record: under
+# the no-net agent settings qwen-code enforces the web_fetch deny rule against
+# equivalent shell commands, so the model's `curl https://...` came back
+# "denied by permission rules" and was recorded here.
+_REAL_PERMISSION_DENIAL = {
+    "tool_name": "run_shell_command",
+    "tool_use_id": "chatcmpl-tool-a41779fbb2de9484",
+}
+
+
+def test_permission_denials_do_not_break_request_accounting() -> None:
+    """A denied tool call is normal evidence, and costs the ledger nothing.
+
+    Killed the 2026-08-17T03:15Z arm as
+    "fixed32 qwen result evidence is incomplete" because the validator demanded
+    permission_denials == []. A denial hides no model request: the assistant's
+    tool_use is already counted in its own group and the denial arrives as an
+    ordinary paired tool_result. Unlike web_fetch, the denied tool never runs
+    and never calls the model.
+
+    Under the no-net settings denials are EXPECTED, so refusing them would have
+    made the fail-closed validator fail on its own safety feature.
+    """
+    events = _qwen_web_fetch_trace_13033(
+        permission_denials=[dict(_REAL_PERMISSION_DENIAL)]
+    )
+    summary = contract.validate_fixed32_trace_model_requests(events)
+
+    assert summary["completed_logical_model_requests"] == (
+        len(_VISIBLE_TURN_USAGE_13033) + 1
+    )
+
+
+@pytest.mark.parametrize(
+    "denial",
+    (
+        {"tool_use_id": "chatcmpl-tool-a41779fbb2de9484"},
+        {"tool_name": "run_shell_command"},
+        {"tool_name": "", "tool_use_id": "chatcmpl-tool-a41779fbb2de9484"},
+        {"tool_name": "run_shell_command", "tool_use_id": ""},
+        "run_shell_command",
+    ),
+    ids=("no-name", "no-id", "empty-name", "empty-id", "not-a-record"),
+)
+def test_malformed_permission_denial_still_raises(denial: object) -> None:
+    """Accepting denials must not mean accepting anything in that field."""
+    events = _qwen_web_fetch_trace_13033(permission_denials=[denial])
+    with pytest.raises(
+        contract.ContractError, match="permission denial record is invalid"
+    ):
+        contract.validate_fixed32_trace_model_requests(events)
+
+
+def test_permission_denials_must_be_a_list() -> None:
+    events = _qwen_web_fetch_trace_13033()
+    events[-1]["permission_denials"] = {"tool_name": "run_shell_command"}
+    with pytest.raises(
+        contract.ContractError, match="permission denials are invalid"
+    ):
+        contract.validate_fixed32_trace_model_requests(events)
+
+
+def test_result_usage_must_still_be_a_mapping() -> None:
+    """The half of the old predicate that was load-bearing stays."""
+    events = _qwen_web_fetch_trace_13033()
+    events[-1]["usage"] = None
+    with pytest.raises(
+        contract.ContractError, match="result evidence is incomplete"
+    ):
+        contract.validate_fixed32_trace_model_requests(events)

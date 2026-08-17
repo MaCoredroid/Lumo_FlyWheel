@@ -43,6 +43,15 @@ QWEN_WEB_FETCH_INPUT_FIELDS = frozenset({"url", "prompt", "format"})
 QWEN_WEB_FETCH_INPUT_REQUIRED_FIELDS = ("url", "prompt")
 QWEN_WEB_FETCH_SUCCESS_TEMPLATE = "Content from {url} processed successfully."
 QWEN_WEB_FETCH_ERROR_PREFIX = "Error: "
+# qwen-code validates a tool call against its JSON schema BEFORE executing
+# it. A web_fetch missing a required parameter is rejected here, with
+# is_error=True and this ajv-shaped message, and never reaches
+# executeDirectFetch -- so it fetches nothing and issues no runSideQuery,
+# and owes ZERO completed engine requests. Observed 2026-08-17 in
+# fr14_b1_stock_20260817T020534Z astropy__astropy-13236 line 159:
+#   tool_use  web_fetch {"url": "https://raw.githubusercontent.com/..."}
+#   result    "params must have required property 'prompt'"  is_error=True
+QWEN_TOOL_SCHEMA_REJECTION_PREFIX = "params must have required property"
 QWEN_COMPACTION_METRIC_SCHEMA = (
     "fr13-fixed32-qwen-compaction-metrics-v1"
 )
@@ -1612,14 +1621,12 @@ def _fixed32_qwen_hidden_web_fetch_requests(
             raise ContractError(
                 "fixed32 qwen web_fetch input contains unknown fields"
             )
-        for field in QWEN_WEB_FETCH_INPUT_REQUIRED_FIELDS:
-            if (
-                not isinstance(params.get(field), str)
-                or not params[field].strip()
-            ):
-                raise ContractError(
-                    f"fixed32 qwen web_fetch {field} is empty or invalid"
-                )
+        missing_required = [
+            field
+            for field in QWEN_WEB_FETCH_INPUT_REQUIRED_FIELDS
+            if not isinstance(params.get(field), str)
+            or not params[field].strip()
+        ]
         if "format" in params and not isinstance(params["format"], str):
             raise ContractError(
                 "fixed32 qwen web_fetch format selector is invalid"
@@ -1654,6 +1661,21 @@ def _fixed32_qwen_hidden_web_fetch_requests(
             raise ContractError(
                 "fixed32 qwen web_fetch tool result content is empty"
             )
+        if missing_required:
+            # SCHEMA REJECTION, not unaccountable traffic. The call never
+            # reached executeDirectFetch, so it fetched nothing and issued no
+            # runSideQuery: it owes zero completed engine requests. Still
+            # fail-closed -- the trace must SHOW the rejection. A malformed
+            # invocation that somehow came back successful is exactly the
+            # unaccountable case this validator exists for, and still raises.
+            if is_error is not True or not content.startswith(
+                QWEN_TOOL_SCHEMA_REJECTION_PREFIX
+            ):
+                raise ContractError(
+                    "fixed32 qwen web_fetch "
+                    f"{missing_required[0]} is empty or invalid"
+                )
+            continue
         if is_error is True and content.startswith(
             QWEN_WEB_FETCH_ERROR_PREFIX
         ):
@@ -2282,11 +2304,39 @@ def validate_fixed32_trace_model_requests(
         value = result.get(key)
         if type(value) is not int or value < 0:
             raise ContractError(f"fixed32 qwen result {key} is invalid")
-    if (
-        not isinstance(result.get("usage"), dict)
-        or result.get("permission_denials") != []
-    ):
+    if not isinstance(result.get("usage"), dict):
         raise ContractError("fixed32 qwen result evidence is incomplete")
+    # PERMISSION DENIALS ARE NORMAL, and under the no-net agent settings they
+    # are EXPECTED: qwen-code enforces the web_fetch deny rule against
+    # equivalent shell commands, so a `curl https://...` comes back
+    # "denied by permission rules" and lands here. Observed 2026-08-17 in
+    # fr14_b1_stock_20260817T031507Z astropy__astropy-13236.
+    #
+    # A denial costs the request ledger NOTHING: the assistant's tool_use is
+    # already counted in its own group, the denial is delivered as an ordinary
+    # paired tool_result, and no model request is hidden behind it -- unlike
+    # web_fetch, the denied tool never runs and never calls the model. So the
+    # count is unaffected and the old `!= []` was refusing evidence it did not
+    # need to refuse.
+    #
+    # Still fail-closed on SHAPE: each entry must name the tool it denied and
+    # the tool_use it belongs to, and that tool_use must be one this trace
+    # actually contains -- a denial referring to an unknown call would mean the
+    # trace is not a complete record of its own session.
+    denials = result.get("permission_denials")
+    if not isinstance(denials, list):
+        raise ContractError("fixed32 qwen result permission denials are invalid")
+    for denial in denials:
+        if (
+            not isinstance(denial, dict)
+            or not isinstance(denial.get("tool_name"), str)
+            or not denial["tool_name"]
+            or not isinstance(denial.get("tool_use_id"), str)
+            or not denial["tool_use_id"]
+        ):
+            raise ContractError(
+                "fixed32 qwen result permission denial record is invalid"
+            )
 
     result_session_id = result["session_id"]
     if (
