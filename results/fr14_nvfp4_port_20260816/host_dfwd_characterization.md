@@ -286,13 +286,19 @@ So the flag is unsatisfiable at any host-side setting — the same class of defe
 `FR13_HOST_TAIL_*` (read inside the worker whose curated env drops bare `FR13_*` masters),
 both of which this campaign has already had to find and fix.
 
-The repair is one forwarding line per launcher plus strict `0|1` validation, default `0`,
-byte-identical when off. `FR13_DFWD_SPLIT_JSON` needs nothing — it already defaults to
-`/logs/fr13_dfwd_split.json`, inside the bind-mounted logs dir. **This is the single
-highest-value change available to this rung**, because it converts the largest unexplained
-block in the 4-bit budget (dfwd's 20.6–24.4 ms above floor) from an argument into a
-measurement. It is deliberately NOT taken here: it edits launcher files during a live serve,
-which is a freeze-window decision, not a characterization one.
+**SHIPPED** (both launchers): `FR13_DFWD_SPLIT` is forwarded, strictly validated `0|1`,
+default `0`. It converts the largest unexplained block in the 4-bit budget (dfwd's
+20.6–24.4 ms above floor) from an argument into a measurement.
+
+One trap found while shipping it, recorded because it is not obvious:
+`FR13_DFWD_SPLIT_JSON` is forwarded with an explicit **non-empty** default
+(`${FR13_DFWD_SPLIT_JSON:-/logs/fr13_dfwd_split.json}`), unlike its `*_JSON` siblings.
+`_Fr13DfwdSplit.dump()` reads it as
+`os.environ.get("FR13_DFWD_SPLIT_JSON", "/logs/fr13_dfwd_split.json")`, and
+`os.environ.get` returns `""` — not the default — for a variable that is *set but empty*.
+Forwarding it as `:-` would have looked correct, passed every check, and silently written the
+sidecar to `".<pid>"` in the container's cwd. Pinned by
+`tests/test_fr14_host_instruments.py::test_dfwd_split_json_default_is_not_empty`.
 
 ---
 
@@ -333,7 +339,7 @@ ordering semantics are suspect and nothing here is built on it.
 2. **Both graph-capture levers in the brief are already shipped** — as *required* members of
    the fixed32 hardware-floor runtime, not as flags anyone can turn on. Re-implementing them
    would measure nothing.
-3. **Two instrument defects, both one-line fixes, both worth more than the levers.**
+3. **Two instrument defects, both now fixed and shipped, both worth more than the levers.**
    (a) §3: `overhead_other` is 43–73 % verifier-head GEMM (as executed) depending on
    checkpoint — the number the campaign has been reading as "host overhead" in every arm
    comparison. (b) §5.2: `FR13_DFWD_SPLIT`, the existing 3-way drafter split timer, is not
@@ -352,18 +358,27 @@ ordering semantics are suspect and nothing here is built on it.
   dispatch (0.60 ms, needs a `_prepare_inputs` capture that §2's invariance now makes
   shape-checkable). Combined ceiling ~0.63 ms = 0.3 % of step, ~12× below the noise floor.
   Worth shipping only on the `PREP_BAKE` precedent — provable and free — never as a gate mover.
-- **(4) DFWD scheduling consolidation → REFUTED as briefed.** ≥ 94 % of the gap is GPU. What
-  should replace it is **instrument plumbing**, and both halves are one-line changes with no
-  new machinery to design:
-  1. **Forward `FR13_DFWD_SPLIT` in both launchers** (§5.2) — an existing, default-off,
-     already-written 3-way drafter split timer that has never engaged in 35 runroots. Turns
-     dfwd's 20.6–24.4 ms into model / head / other.
-  2. **Bracket `compute_logits`** with a fourth span timer (§3) so the verifier head stops
-     being reported as host overhead.
+- **(4) DFWD scheduling consolidation → REFUTED as briefed.** ≥ 94 % of the gap is GPU. It was
+  replaced with **instrument plumbing**, and both halves are now **SHIPPED**, default-off and
+  byte-identical when off:
+  1. **`FR13_DFWD_SPLIT` forwarded in both launchers** (§5.2) — an existing, already-written
+     3-way drafter split timer that had never engaged in 35 runroots. Turns dfwd's
+     20.6–24.4 ms into model / head / other.
+  2. **`FR13_LFWD_GPU_TIMER`** (§3) — a fourth `_Fr13SpanTimer` bracketing `compute_logits`
+     (counter `vllm:fr13_lmhead_gpu_seconds`, sidecar schema `fr13.span_gpu_timer.v1`, the
+     same shape the drafter/committer twins emit), pure-decode-gated by the same
+     `_fr13_sfwd_is_pure_decode` predicate the sfwd timer uses.
 
-  Both are byte-identical when off, need no GPU to write, and are worth more than every
-  millisecond deliverables 2–4 were briefed to chase, because they are the difference between
-  a measured budget and an argued one.
+  Neither needed a GPU to write, and together they are worth more than every millisecond
+  deliverables 2–4 were briefed to chase, because they are the difference between a measured
+  budget and an argued one.
+
+  **Pre-registered prediction, so the first armed run is a test and not a readout:** on a
+  radixark `K=0` arm, `FR13_LFWD_GPU_TIMER` should read **≈ 3.2 ms/step**
+  (2.620 ms of pinned head floor ÷ the 81.6 % roofline measured in §3), and
+  `overhead_other − lfwd` should fall to **≈ 4.2 ms/step**, matching FR13's independently
+  measured 4.096 ms of nsys host windows. A materially different reading falsifies §3's
+  mechanism, and that is the point of shipping the instrument rather than the argument.
 
 ---
 
@@ -385,5 +400,6 @@ ordering semantics are suspect and nothing here is built on it.
 | MTP blocks byte-identical across both NVFP4 repacks | safetensors header sum, `/models/qwen3.8-27b-nvfp4{,-radixark}`: 15 BF16 tensors, 849 398 784 B each |
 | FP8-era host timeline + refutations | `results/fr13_host_residual_20260811/design.md`, `tail_attribution.json` |
 | ladder's 1111-eager-op CFWD pricing (superseded) | `results/fr13_attack_ladder_analysis_20260808/README.md:64,404` |
+| shipped instrument fixes + their tests | `scripts/fr10_phase4_patch_vllm_tree_gdn.py` (`_patch_gpu_model_runner_lfwd_gpu_timer`, `_fr13_lfwd_*`), both launchers' forwarding + `0\|1` validation, `tests/test_fr14_host_instruments.py` (21 tests) |
 | DEFER pulled, engine-fatal pair | `results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md` passes 27–28 |
-| `FR13_DFWD_SPLIT` exists / arms via flag file / never engaged | `scripts/fr10_phase4_patch_vllm_tree_gdn.py:36972,36993,42878`; launcher forwarding lists `fr13_launch_forked_fa2_tree_server.sh:3677,6288` and `fr14_armb_leg3_launch_nomiddleware.sh:3468,6085`; `logs/fr13_dfwd_split.flag` = `0` in 35/35 runroots; no `fr13_dfwd_split.json.*` anywhere |
+| `FR13_DFWD_SPLIT` exists / arms via flag file / never engaged (now forwarded) | `scripts/fr10_phase4_patch_vllm_tree_gdn.py:36972,36993,42878`; launcher forwarding lists `fr13_launch_forked_fa2_tree_server.sh:3677,6288` and `fr14_armb_leg3_launch_nomiddleware.sh:3468,6085`; `logs/fr13_dfwd_split.flag` = `0` in 35/35 runroots; no `fr13_dfwd_split.json.*` anywhere |

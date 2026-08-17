@@ -5784,6 +5784,31 @@ for _fr13_host_tail_flag in FR13_HOST_TAIL_NVTX FR13_HOST_TAIL_DEFER \
   esac
 done
 unset _fr13_host_tail_flag
+# FR14 host rung: the two measurement flags, both default 0=OFF, both
+# byte-identical when off (host_dfwd_characterization.md §3, §5.2).
+#   FR13_DFWD_SPLIT     -- the 3-way drafter split (model / head / other). The
+#     patcher's main() reads it at container pid 1 and writes
+#     /logs/fr13_dfwd_split.flag, which the EngineCore worker reads (the curated
+#     worker env drops bare FR13_* masters). It was NEVER forwarded here, only
+#     the unrelated FR13_DFWD_SPLIT_NEEDLE was, so the flag file read "0" in
+#     35/35 runroots and the timer never once engaged -- an unsatisfiable
+#     measurement precondition, the same class as fr13.fixed32.sched_next.
+#   FR13_LFWD_GPU_TIMER -- the verifier-head span around compute_logits, which
+#     sits outside sfwd/dfwd/cfwd and whose cost has therefore been landing in
+#     the reducer's overhead_other and being read as host overhead.
+# FR13_DFWD_SPLIT_JSON is forwarded with a NON-EMPTY default below, on
+# purpose: _Fr13DfwdSplit.dump() does os.environ.get(
+# "FR13_DFWD_SPLIT_JSON", "/logs/fr13_dfwd_split.json"), and
+# os.environ.get returns "" for a var that is SET-but-empty, so a ":-"
+# default here would clobber the code default and drop the sidecar into
+# ".<pid>" in the cwd instead of the bind-mounted /logs.
+for _fr13_instrument_flag in FR13_DFWD_SPLIT FR13_LFWD_GPU_TIMER; do
+  case "${!_fr13_instrument_flag:-0}" in
+    0|1) ;;
+    *) echo "$_fr13_instrument_flag must be 0 or 1" >&2; exit 2 ;;
+  esac
+done
+unset _fr13_instrument_flag
 if [[ ( "$_fr13_batch_gdn_byte_ab" == "1" \
         || "$_fr13_batch_gdn_graph_byte_ab" == "1" \
         || "$_fr13_batch_gdn_production" == "1" ) \
@@ -6181,6 +6206,8 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DFWD_GPU_TIMER_JSON="${FR13_DFWD_GPU_TIMER_JSON:-}" \
   -e FR13_CFWD_GPU_TIMER="${FR13_CFWD_GPU_TIMER:-0}" \
   -e FR13_CFWD_GPU_TIMER_JSON="${FR13_CFWD_GPU_TIMER_JSON:-}" \
+  -e FR13_LFWD_GPU_TIMER="${FR13_LFWD_GPU_TIMER:-0}" \
+  -e FR13_LFWD_GPU_TIMER_JSON="${FR13_LFWD_GPU_TIMER_JSON:-}" \
   -e FR13_FIXED32_NVTX_PROFILE="${FR13_FIXED32_NVTX_PROFILE:-0}" \
   -e FR13_MULTIDRAFT_GPU_TIMER="${FR13_MULTIDRAFT_GPU_TIMER:-0}" \
   -e FR13_MULTIDRAFT_GPU_TIMER_JSON="${FR13_MULTIDRAFT_GPU_TIMER_JSON:-}" \
@@ -6286,6 +6313,8 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-1}" \
   -e FR13_DRAFTER_GRAPH="${FR13_DRAFTER_GRAPH:-1}" \
   -e FR13_DFWD_SPLIT_NEEDLE="${FR13_DFWD_SPLIT_NEEDLE:-0}" \
+  -e FR13_DFWD_SPLIT="${FR13_DFWD_SPLIT:-0}" \
+  -e FR13_DFWD_SPLIT_JSON="${FR13_DFWD_SPLIT_JSON:-/logs/fr13_dfwd_split.json}" \
   -e FR13_DVK_DRAFTID_DUMP="${FR13_DVK_DRAFTID_DUMP:-}" \
   -e FR13_STEP_GRAPH="${FR13_STEP_GRAPH:-0}" \
   -e FR13_TEMP_LEGACY_DOUBLE="${FR13_TEMP_LEGACY_DOUBLE:-0}" \

@@ -35421,6 +35421,56 @@ def _fr13_cfwd_end(start_ev):
         _fr13_cfwd_timer().end(start_ev)
     except Exception:  # noqa: BLE001
         pass
+
+
+_FR13_LFWD_TIMER = None
+
+
+def _fr13_lfwd_timer():
+    global _FR13_LFWD_TIMER
+    if _FR13_LFWD_TIMER is None:
+        _FR13_LFWD_TIMER = _Fr13SpanTimer(
+            "FR13_LFWD_GPU_TIMER",
+            "vllm:fr13_lmhead_gpu_seconds",
+            "FR13_LFWD_GPU_TIMER_JSON",
+            "lmhead",
+        )
+    return _FR13_LFWD_TIMER
+
+
+def _fr13_lfwd_begin(max_num_scheduled_tokens, num_tokens, num_reqs,
+                     uniform_decode_query_len):
+    """Return a start event if FR13_LFWD_GPU_TIMER=1 AND this is a PURE-DECODE
+    step, else None (no event, no cost).
+
+    The pure-decode gate is the same `_fr13_sfwd_is_pure_decode` predicate the
+    sfwd timer uses, and it is not optional here: compute_logits runs on every
+    step, including chunked-prefill steps whose head read is over a different
+    row count entirely. Timing all of them would produce a checkpoint-dependent
+    prefill-mix average that could not be compared against the decode-cadence
+    budget the drafter/committer spans report."""
+    if __import__("os").environ.get("FR13_LFWD_GPU_TIMER", "0") != "1":
+        return None
+    if torch.cuda.is_current_stream_capturing():
+        return None  # boot-29i: event ops inside a capture invalidate it
+    if not _fr13_sfwd_is_pure_decode(
+        max_num_scheduled_tokens, num_tokens, num_reqs,
+        uniform_decode_query_len
+    ):
+        return None
+    try:
+        return _fr13_lfwd_timer().begin()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _fr13_lfwd_end(start_ev):
+    if start_ev is None:
+        return
+    try:
+        _fr13_lfwd_timer().end(start_ev)
+    except Exception:  # noqa: BLE001
+        pass
 '''
     text = text + module_block
 
@@ -35586,6 +35636,113 @@ def _patch_gpu_model_runner_cfwd_gpu_timer() -> bool:
         "        _fr13_fixed32_nvtx_end(_fr13_cfwd_nvtx)\n"
         "        _fr13_cfwd_end(_fr13_cfwd_ev)\n"
         "        return sampler_output\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_lfwd_gpu_timer() -> bool:
+    """FR13_LFWD_GPU_TIMER (DEFAULT-OFF): time the VERIFIER HEAD.
+
+    WHY. `results/fr14_nvfp4_port_20260816/host_dfwd_characterization.md` §3:
+    the reducer's `overhead_other_ms_per_event`
+    (= step_wall - sfwd - dfwd - cfwd, `fr13_measure.py:2009`) is reported as
+    "host glue, sampler, packer, scheduler gap" and is mostly none of those. It
+    splits by CHECKPOINT, not by arm or lever -- 7.424/7.443/7.458/7.497 ms on
+    the four radixark serves (96,299 decode steps, spread 0.073 ms) against
+    14.956/16.354 ms on the two unsloth serves -- because `_model_forward` is
+    the ONLY thing the sfwd timer brackets, and vLLM calls `compute_logits`
+    (the lm_head projection over the spec-verify rows) after it returns, inside
+    the NEXT `record_function_or_nullcontext` block. The head is therefore in
+    none of the three spans and its whole cost lands in `overhead_other`.
+
+    The pinned byte ledger prices the gap exactly: NVFP4 head 715_161_608 B =
+    2.620 ms vs BF16 head 2_542_796_800 B = 9.314 ms, delta 6.695 ms against a
+    measured 8.200 ms => the head GEMM runs at 81.6% of roofline, inside the
+    82-86% band this box gives every other weight-bound GEMM. Independently,
+    FR13's FP8-era nsys capture measured the enclosing `postprocess` range at
+    12.349 ms/step against 11.44 ms of as-executed BF16-head floor -- the same
+    quantity under a different name, in a different era, on a different
+    checkpoint. Three instruments agree; none of them was ever labelled "head".
+
+    WHAT. A fourth `_Fr13SpanTimer` around the `compute_logits` call itself
+    (counter vllm:fr13_lmhead_gpu_seconds, sidecar env FR13_LFWD_GPU_TIMER_JSON,
+    schema fr13.span_gpu_timer.v1 -- the same shape the drafter/committer twins
+    already emit and the same shape the deploy-speed reducer already reads).
+    With it armed, `overhead_other` decomposes into a pinned weight-bound term
+    and a genuine host remainder (predicted ~4.2 ms/step at 4-bit radixark)
+    instead of being quoted whole as host overhead.
+
+    PURE-DECODE GATE. `_fr13_lfwd_begin` applies the same
+    `_fr13_sfwd_is_pure_decode` predicate as the sfwd timer. compute_logits runs
+    on prefill steps too, over a different row count; timing those would make
+    the span a prefill-mix average and destroy the comparison with the
+    drafter/committer spans, which only ever fire on spec-decode steps.
+
+    ANCHOR. The non-broadcast, non-pooling, last-rank branch of `execute_model`
+    -- the only branch a TP=1/PP=1 decode takes. Verified unique in the pinned
+    image (vllm/vllm-openai@sha256:3dbe092e..., gpu_model_runner.py: the file
+    contains four `compute_logits` calls and exactly one occurrence of this
+    two-line pair). The rare `broadcast_pp_output` branch is deliberately NOT
+    timed: it cannot execute in this deployment, and an anchor there would be an
+    unsatisfiable measurement precondition of exactly the class this campaign
+    keeps finding.
+
+    FLAG-GATE: env FR13_LFWD_GPU_TIMER. DEFAULT OFF => _fr13_lfwd_begin returns
+    None and _fr13_lfwd_end no-ops => byte-identical to the unpatched path.
+
+    ORDER: must run AFTER _patch_gpu_model_runner_sfwd_gpu_timer, whose module
+    block defines _fr13_lfwd_begin/_fr13_lfwd_end, _fr13_sfwd_is_pure_decode and
+    the _fr13_fixed32_nvtx_* helpers; fails loud if absent.
+    """
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    # Idempotency sentinel = the injected CALL itself, not a comment: a bare
+    # "# FR13_LFWD_GPU_TIMER" marker would collide with the helper block the
+    # sfwd patch installs (the gpu_committer sentinel-collision lesson).
+    sentinel = "_fr13_lfwd_ev = _fr13_lfwd_begin("
+    if sentinel in text:
+        return False
+    if "def _fr13_lfwd_begin" not in text:
+        raise RuntimeError(
+            "FR13_LFWD_GPU_TIMER: _fr13_lfwd_begin helper missing from "
+            "gpu_model_runner.py -- _patch_gpu_model_runner_sfwd_gpu_timer "
+            "(which installs the span-timer module block) must run BEFORE "
+            "this patch."
+        )
+    anchor = (
+        "                sample_hidden_states = hidden_states[logits_indices]\n"
+        "                logits = self.model.compute_logits(sample_hidden_states)\n"
+        "            else:\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "FR13_LFWD_GPU_TIMER: expected exactly one verifier compute_logits "
+            "anchor (the non-broadcast last-rank branch of execute_model) in "
+            f"gpu_model_runner.py, found {text.count(anchor)}"
+        )
+    inject = (
+        "                sample_hidden_states = hidden_states[logits_indices]\n"
+        "                # FR13_LFWD_GPU_TIMER: time the VERIFIER HEAD\n"
+        "                # (compute_logits = the lm_head projection over the\n"
+        "                # spec-verify rows). This span sits OUTSIDE sfwd/dfwd/\n"
+        "                # cfwd, which is why its cost has been landing in the\n"
+        "                # reducer's overhead_other and being read as host time.\n"
+        "                # Async cuda events, pure-decode-gated; inert unless\n"
+        "                # FR13_LFWD_GPU_TIMER=1 => byte-identical when off.\n"
+        "                _fr13_lfwd_ev = _fr13_lfwd_begin(\n"
+        "                    max_num_scheduled_tokens,\n"
+        "                    num_tokens_unpadded,\n"
+        "                    num_reqs,\n"
+        "                    self.uniform_decode_query_len,\n"
+        "                )\n"
+        "                _fr13_lfwd_nvtx = _fr13_fixed32_nvtx_begin(\n"
+        "                    'lmhead', _fr13_lfwd_ev is not None\n"
+        "                )\n"
+        "                logits = self.model.compute_logits(sample_hidden_states)\n"
+        "                _fr13_fixed32_nvtx_end(_fr13_lfwd_nvtx)\n"
+        "                _fr13_lfwd_end(_fr13_lfwd_ev)\n"
+        "            else:\n"
     )
     text = text.replace(anchor, inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
@@ -42979,6 +43136,13 @@ def main() -> int:
         # are owned by another workstream). Must run AFTER the sfwd timer
         # patch, whose module block defines the _fr13_cfwd_* helpers.
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_cfwd_gpu_timer()),
+        # FR13_LFWD_GPU_TIMER: verifier-head span around compute_logits in
+        # execute_model. The head sits OUTSIDE sfwd/dfwd/cfwd, so its cost has
+        # been landing in the reducer's overhead_other and being read as host
+        # overhead (host_dfwd_characterization.md §3). Must run AFTER the sfwd
+        # timer patch, whose module block defines the _fr13_lfwd_* helpers and
+        # the _fr13_sfwd_is_pure_decode gate they share.
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_lfwd_gpu_timer()),
         # FR13_HOST_TAIL_NVTX / FR13_HOST_TAIL_DEFER: post-DFWD tail
         # attribution and retire-side census. Must run AFTER the sfwd timer
         # patch (NVTX helpers) and AFTER the replay-draft-reqkey patch, which

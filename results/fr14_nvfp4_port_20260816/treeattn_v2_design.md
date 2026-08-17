@@ -497,3 +497,66 @@ parent.
    it. Worth putting in front of him with the fitted numbers rather than assumed ones.
 7. **`.so` sha256 pinning is not rebuild-reproducible** (§1b). Recommend pinning the SASS
    digest as the reproducibility credential. Provenance-core machinery — Mark's call.
+
+---
+
+## 12. VERDICT — the §8 discriminator ran, and it refutes the head-merge
+
+Measured 2026-08-17 on the idle GPU from the sealed `.so 3560cdc0…`, no new build,
+no serve. Raw data: `fr14_treeattn_v2_offline_probe_result.json`; harness:
+`fr14_treeattn_v2_offline_probe.py`.
+
+**Byte probe: PASS.** 20/20 cases (4 context lengths × 5 seeds), **0 output and 0 LSE
+byte mismatches** between `qrow16` (BM16/W1/48 CTAs) and `gqa_pair` (BM64/W4/12 CTAs).
+§4's Tier-A invariance now reproduces offline, on demand, at real geometry.
+
+**Timing (ms per step, 16 full-attention layers):**
+
+| seq_len | `qrow16` 48 CTAs / 18.1 GB | `gqa_pair` 12 CTAs / 4.5 GB | Δ |
+|---|---|---|---|
+| 20 480 | 13.015 | 11.943 | −1.072 |
+| 23 000 | 14.554 | 13.444 | −1.110 |
+| 32 768 | 20.501 | 19.251 | −1.250 |
+| 40 960 | 25.966 | 23.798 | −2.167 |
+
+**A 4× cut in staged bytes bought 1.1 ms.** The fit is well conditioned — α is stable at
+**0.649–0.664 ms per staged GB across a 2× context range** (2.3% spread), so this is a
+validated model, not a two-point artifact.
+
+**Predictions (ms/step), identical verdict at every length:**
+
+| seq_len | α (ms/GB) | β (ms·CTA) | G=2 (today) | G=3 | G=6 |
+|---|---|---|---|---|---|
+| 20 480 | 0.6642 | 111.2 | 11.94 | 15.69 | 28.70 |
+| 23 000 | 0.6589 | 125.5 | 13.44 | **17.68** | **32.37** |
+| 32 768 | 0.6494 | 180.8 | 19.25 | 25.39 | 46.60 |
+| 40 960 | 0.6628 | 221.5 | 23.80 | 31.25 | 57.16 |
+
+**§8 STOP CONDITION FIRED — row 3: "fit predicts T(3) ≥ T(2) → STOP and report."**
+G=3 costs +31%, G=6 costs +141%. Model P was right and the byte-count model was wrong.
+
+**Decomposition at 23k, and the ceiling it sets:**
+
+| configuration | bytes term | parallelism term | total | vs today |
+|---|---|---|---|---|
+| G=2 (today) | 2.98 | 10.46 | **13.44** | — |
+| hypothetical zero-byte at 12 CTAs | 0.00 | 10.46 | 10.46 | −2.98 (**hard ceiling** for the whole head-merge family) |
+| **F2 cluster/DSMEM, 12 CTAs** | 0.99 | 10.46 | **11.45** | **−1.99** |
+| split-K, 48 CTAs (**Tier-B**) | 0.99 | 2.61 | **3.61** | **−9.83** |
+
+Today's attention is **78% parallelism-bound**. The implied staging bandwidth is
+**1.52 TB/s against 273 GB/s of DRAM**, which independently confirms §1b: the re-staged
+bytes are overwhelmingly L2 hits, so they were never costing what the −13 ms priced them at.
+
+**Conclusions.**
+
+1. **The briefed −13 ms is not reachable in Tier-A by any means.** Driving staged bytes to
+   *zero* at today's CTA count saves 2.98 ms. The lever was priced against DRAM traffic
+   that a 24 MB L2 is already absorbing.
+2. **G=3 and G=6 are refuted** — do not build them. This is the outcome the pre-registered
+   rule was written for, and it cost one 45-minute GPU window instead of a kernel-week.
+3. **F2 (cluster/DSMEM) is the only surviving Tier-A option**, predicted −1.99 ms — an
+   upper bound, since the staging CTA becomes its cluster's single issuer and remote-smem
+   reads are not free. Comparable in size to gqa_pair's own promoted −2.6 ms.
+4. **The −13 ms lives entirely in the CTA-count term, i.e. split-K**: 48 CTAs with
+   read-once staging predicts 3.61 ms, a −9.83 ms win. Tier-B, parked for Mark, not built.
