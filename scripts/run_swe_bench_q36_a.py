@@ -44,6 +44,7 @@ import sys
 import threading
 import time
 import traceback
+import urllib.parse
 from collections import Counter, deque
 from pathlib import Path
 from typing import Any
@@ -534,8 +535,185 @@ def _remote_agent_command(command: str) -> str:
         f"{command}"
     )
 
+
+# --- FR14 AGENT NETWORK BOUNDARY ---------------------------------------------
+# STOP FINDING 3231eeff7: the agent reached the internet through the shell and
+# always could. `tools.exclude:["web_fetch"]` migrates to permissions.deny and
+# qwen-code enforces it against *equivalent shell commands*, but that detector
+# is a heuristic: it caught `curl` and missed
+# `python -c "import urllib.request"`, which pulled astropy PR 13236's own gold
+# patch (6,375 B) into the workspace. No settings-level fix is closeable — the
+# next route is requests, socket, base64 or a here-doc.
+#
+# The boundary therefore lives in the network namespace, where the agent cannot
+# argue with it. Agent containers move off --network=host onto a dedicated
+# alienware bridge whose ONLY reachable destination is the offload proxy;
+# scripts/fr14_agent_network_boundary.sh owns the topology (see it for the rule
+# set and the red-team notes). This module owns three things:
+#   1. which docker network the agent containers join,
+#   2. the FAIL-CLOSED gate — fixed32 refuses to launch an agent unless the
+#      boundary verifies ACTIVE on the agent host,
+#   3. rewriting OPENAI_BASE_URL from the proxy's loopback bind to the bridge
+#      gateway, DERIVED from the created network rather than hardcoded.
+#
+# The rules are iptables rules and do NOT survive an alienware reboot. That is
+# deliberate (no persistence daemon, no surprise state on a shared box): the
+# gate below re-applies them, idempotently, before the first agent of a run.
+FR14_AGENT_NET_ENV = "FR14_AGENT_NET"
+_FR14_AGENT_NET_DEFAULT = "fr14-agent-isolated"
+_FR14_HOST_NETWORK = "host"
+_FR14_BOUNDARY_SCRIPT = SCRIPT_DIR / "fr14_agent_network_boundary.sh"
+_FR14_VERIFIED_PREFIX = "FR14_NET_BOUNDARY_VERIFIED"
+# {agent_host: observation}; a run re-verifies per task but only re-APPLIES once.
+_FR14_BOUNDARY_CACHE: dict[str, dict[str, Any]] = {}
+_FR14_BOUNDARY_APPLIED: set[str] = set()
+
+
+def _fr14_agent_network(agent_host: str | None = None) -> str:
+    """Docker network the agent containers join. 'host' means NO boundary.
+
+    Default is the boundary on the offload path (the only topology fixed32
+    permits) and legacy host networking for a local GB10 agent, which fixed32
+    refuses anyway and where the alienware-side bridge does not exist. Setting
+    FR14_AGENT_NET=host is an explicit, loud opt-out that fixed32 rejects.
+
+    `agent_host` defaults to the module-global AGENT_HOST; callers that already
+    know the host (the gate) pass it explicitly so the answer never depends on
+    when the global was assigned.
+    """
+    raw = os.environ.get(FR14_AGENT_NET_ENV)
+    if raw is None:
+        host = AGENT_HOST if agent_host is None else agent_host
+        return _FR14_AGENT_NET_DEFAULT if host else _FR14_HOST_NETWORK
+    raw = raw.strip()
+    if raw.lower() in ("", "0", "no", "off", "none", _FR14_HOST_NETWORK):
+        return _FR14_HOST_NETWORK
+    return raw
+
+
+def _fr14_boundary_enabled() -> bool:
+    return _fr14_agent_network() != _FR14_HOST_NETWORK
+
+
+def _fr14_parse_verified(line: str) -> dict[str, Any]:
+    """Parse the script's `FR14_NET_BOUNDARY_VERIFIED k=v ...` receipt."""
+    fields = dict(
+        token.split("=", 1) for token in line.split()[1:] if "=" in token
+    )
+    for key in ("net", "bridge", "gateway", "proxy_port", "fingerprint"):
+        if not fields.get(key):
+            raise Fixed32BoundaryError(
+                f"fr14 network boundary receipt is missing {key!r}: {line!r}"
+            )
+    if len(fields["fingerprint"]) != 64 or any(
+        char not in "0123456789abcdef" for char in fields["fingerprint"]
+    ):
+        raise Fixed32BoundaryError(
+            "fr14 network boundary fingerprint is not a sha256 digest"
+        )
+    return fields
+
+
+def _fr14_boundary_ssh(host: str, subcommand: str) -> subprocess.CompletedProcess:
+    """Run one boundary subcommand on the agent host, shipping the script over
+    stdin so the remote copy can never drift from the repo copy."""
+    return subprocess.run(
+        ["ssh", *_EVAL_SSH_OPTS, "-o", "ConnectTimeout=20", host,
+         f"bash -s -- {subcommand}"],
+        input=_FR14_BOUNDARY_SCRIPT.read_text(encoding="utf-8"),
+        text=True, capture_output=True, timeout=180, check=False,
+    )
+
+
+def _fr14_require_network_boundary(remote_host: str | None) -> dict[str, Any]:
+    """FAIL-CLOSED gate. Returns the verified boundary observation, or raises.
+
+    Called from _validate_fixed32_agent_runtime_mode, i.e. before every fixed32
+    agent launch. A run that cannot prove the boundary is active does not get
+    to produce quality verdicts — one gold-patch fetch silently manufactures a
+    resolve, which is precisely what the exact16 QC ladder cannot tolerate.
+    """
+    if not remote_host:
+        raise Fixed32BoundaryError(
+            "fixed32 requires the agent on the offload host; the FR14 network "
+            "boundary is an alienware-side facility"
+        )
+    network = _fr14_agent_network(remote_host)
+    if network == _FR14_HOST_NETWORK:
+        raise Fixed32BoundaryError(
+            "fixed32 requires the FR14 agent network boundary; "
+            f"{FR14_AGENT_NET_ENV}={os.environ.get(FR14_AGENT_NET_ENV)!r} "
+            "disables it. host networking gives the agent the offload host's "
+            "full egress (STOP FINDING 3231eeff7)"
+        )
+    if not _FR14_BOUNDARY_SCRIPT.is_file():
+        raise Fixed32BoundaryError(
+            f"fr14 network boundary script is absent: {_FR14_BOUNDARY_SCRIPT}"
+        )
+    if remote_host not in _FR14_BOUNDARY_APPLIED:
+        # Idempotent, and the ONLY thing that survives a reboot of the agent
+        # host. Failure here is not fatal on its own — `verify` below is the
+        # authority — but its stderr is the useful diagnostic.
+        applied = _fr14_boundary_ssh(remote_host, "apply")
+        _FR14_BOUNDARY_APPLIED.add(remote_host)
+        if applied.returncode == 0:
+            print(f"[fr14-net-boundary] {applied.stdout.strip()}", flush=True)
+    verified = _fr14_boundary_ssh(remote_host, "verify")
+    if verified.returncode != 0:
+        raise Fixed32BoundaryError(
+            "fr14 agent network boundary did not verify on "
+            f"{remote_host}: rc={verified.returncode} "
+            f"{(verified.stderr or verified.stdout).strip()[:400]}"
+        )
+    line = next(
+        (ln for ln in verified.stdout.splitlines()
+         if ln.startswith(_FR14_VERIFIED_PREFIX)),
+        None,
+    )
+    if line is None:
+        raise Fixed32BoundaryError(
+            "fr14 agent network boundary verify produced no receipt: "
+            f"{verified.stdout.strip()[:400]}"
+        )
+    observation = _fr14_parse_verified(line)
+    if observation["net"] != network:
+        raise Fixed32BoundaryError(
+            f"fr14 boundary verified network {observation['net']!r} but the "
+            f"agent would join {network!r}"
+        )
+    previous = _FR14_BOUNDARY_CACHE.get(remote_host)
+    if previous is not None and previous["fingerprint"] != observation["fingerprint"]:
+        raise Fixed32BoundaryError(
+            "fr14 agent network boundary CHANGED mid-run: "
+            f"{previous['fingerprint']} -> {observation['fingerprint']}"
+        )
+    _FR14_BOUNDARY_CACHE[remote_host] = observation
+    return observation
+
+
+def _fr14_rewrite_endpoint(endpoint: str, gateway: str) -> str:
+    """Point OPENAI_BASE_URL at the bridge gateway instead of the proxy's
+    loopback bind. The gateway is DERIVED from the verified network, never a
+    literal: change the subnet in the boundary script and this follows.
+
+    The proxy keeps binding 127.0.0.1 (widening it to 0.0.0.0 would publish the
+    model endpoint to alienware's LAN); the boundary DNATs the gateway address
+    onto that loopback bind, so the proxy still sees a 127.0.0.1 peer exactly as
+    it did under --network=host.
+    """
+    parsed = urllib.parse.urlsplit(endpoint)
+    if parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
+        return endpoint
+    netloc = gateway if parsed.port is None else f"{gateway}:{parsed.port}"
+    if parsed.username:
+        netloc = f"{parsed.username}@{netloc}"
+    return urllib.parse.urlunsplit(
+        (parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment)
+    )
+
+
 CODEX_TEMPLATE = (
-    "docker run --rm --name {container_name} --network=host -u 1000:1000 "
+    "docker run --rm --name {container_name} --network={agent_network} -u 1000:1000 "
     "-v {workspace}:/workspace:rw "
     "-e OPENAI_API_KEY -e OPENAI_BASE_URL={endpoint} -e HOME=/tmp "
     "-w /workspace codex-runner:v1 "
@@ -559,7 +737,7 @@ CODEX_TEMPLATE = (
 # all edits/shell; --max-session-turns bounds a task (no harness wall) so a stuck task can't
 # hang the serial queue. Sampling (temp 0.6) is forced proxy-side on /v1/chat/completions.
 QWEN_CODE_TEMPLATE = (
-    "docker run --rm --name {container_name} --network=host -u 1000:1000 "
+    "docker run --rm --name {container_name} --network={agent_network} -u 1000:1000 "
     "-v {workspace}:/workspace:rw "
     "-e OPENAI_API_KEY -e OPENAI_BASE_URL={endpoint} "
     "-e OPENAI_MODEL={model} -e QWEN_MODEL={model} -e HOME=/tmp "
@@ -595,9 +773,14 @@ def _agent_template() -> str:
     Codex has a built-in nudge/auto-continue that suppresses give-ups and CONFOUNDS the give-up
     gate; qwen-code is the honest agent (native XML tools, aligned with Qwen training)."""
     agent = _selected_swe_agent()
-    if agent in ("qwen_code", "qwen-code", "qwen"):
-        return QWEN_CODE_TEMPLATE
-    return CODEX_TEMPLATE
+    template = (
+        QWEN_CODE_TEMPLATE
+        if agent in ("qwen_code", "qwen-code", "qwen")
+        else CODEX_TEMPLATE
+    )
+    # {agent_network} is resolved HERE, not by the two .format() call sites, so
+    # the FR14 boundary cannot be lost by a caller that forgets to pass it.
+    return template.replace("{agent_network}", _fr14_agent_network())
 
 
 # --- FR13 §58: SWE_AGENT_ENV=instance_image (default unset='legacy') -----------
@@ -655,6 +838,10 @@ def _validate_fixed32_agent_runtime_mode(
             "and alternate host aliases cannot produce canonical runtime "
             "attestations"
         )
+    # FAIL-CLOSED: no verified network boundary, no agent. A fixed32 arm exists
+    # to produce quality verdicts, and a single gold-patch fetch manufactures a
+    # resolve (STOP FINDING 3231eeff7).
+    _fr14_require_network_boundary(remote_host)
     _validate_fixed32_retry_policy()
 
 
@@ -2297,7 +2484,15 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
     /opt/qwen, PATH is prepended, workdir is /testbed, and AGENTS.md/prompt are
     passed base64 (brace/quote-safe). Pure string builder — self-testable with no
     docker/GPU. Runs as -u 0:0 because /testbed + the conda env are root-owned in
-    the eval image."""
+    the eval image.
+
+    FR14: the network is _fr14_agent_network(), NOT --network=host. This is the
+    live fixed32 agent site (SWE_AGENT_ENV=instance_image), so it is the one
+    that carried the egress in the STOP finding. Nothing else in this command
+    needs the network — /testbed and its deps are baked into the image, /opt/qwen
+    and /out are bind mounts — so the offload proxy is the only destination and
+    OPENAI_BASE_URL is rewritten to the bridge gateway upstream in
+    _run_agent_dispatch."""
     system_settings_args = ""
     runtime_proof_environment = ""
     runtime_proof_wrapper = ""
@@ -2320,7 +2515,8 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
     )
     instance_wrapper = _instance_wrapper(trace_output_path=trace_output_path)
     return (
-        f"docker run --rm --name {container_name} --network=host -u 0:0 "
+        f"docker run --rm --name {container_name} "
+        f"--network={_fr14_agent_network()} -u 0:0 "
         f"-e OPENAI_API_KEY -e OPENAI_BASE_URL={endpoint} "
         f"-e OPENAI_MODEL={model} -e QWEN_MODEL={model} -e HOME=/tmp "
         f"-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 "
@@ -8412,8 +8608,17 @@ def _run_agent_dispatch(**kwargs: Any) -> dict[str, Any]:
     attribution pass below is what turns the resulting kill into a named
     terminal instead of a generic wall timeout.
     """
+    boundary: dict[str, Any] | None = None
     if kwargs.get("task_bearer") is not None:
         _validate_fixed32_agent_runtime_mode(remote_host=AGENT_HOST)
+        boundary = _FR14_BOUNDARY_CACHE.get(AGENT_HOST or "")
+    elif _fr14_boundary_enabled() and AGENT_HOST:
+        # Non-fixed32 offload runs still get the boundary, but a failure there
+        # is not a campaign-integrity failure, so it does not refuse the launch.
+        try:
+            boundary = _fr14_require_network_boundary(AGENT_HOST)
+        except Exception as error:  # noqa: BLE001 - diagnostic only
+            print(f"[fr14-net-boundary] WARNING: {error}", flush=True)
     budget_s = _campaign_task_budget_s()
     requested_wall_s = int(kwargs.get("timeout_s") or 0)
     if budget_s > 0:
@@ -8425,9 +8630,18 @@ def _run_agent_dispatch(**kwargs: Any) -> dict[str, Any]:
         kwargs = dict(kwargs)
         if AGENT_ENDPOINT:
             kwargs["endpoint"] = AGENT_ENDPOINT
+        if boundary is not None:
+            # The container no longer shares the host netns, so the proxy's
+            # loopback bind is not its loopback. Re-point at the bridge gateway
+            # DERIVED from the verified network.
+            kwargs["endpoint"] = _fr14_rewrite_endpoint(
+                kwargs["endpoint"], boundary["gateway"]
+            )
         meta = _run_agent_remote(host=AGENT_HOST, **kwargs)
     else:
         meta = _run_agent_local(**kwargs)
+    if boundary is not None and isinstance(meta, dict):
+        meta["fr14_network_boundary"] = dict(boundary)
     return _attribute_campaign_budget_cap(
         meta, budget_s=budget_s, requested_wall_s=requested_wall_s
     )

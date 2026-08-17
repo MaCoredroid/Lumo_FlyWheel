@@ -1,0 +1,8 @@
+######## network=bridge (gateway 172.17.0.1) ########
+proxy_via_gateway      URLError: <urlopen error [Errno 111] Connection refused>   0.0011s
+GOLD_PATCH_13236       6375 BYTES FETCHED                                         0.3524s
+astropy_CHANGES.rst    544305 BYTES FETCHED                                       0.3502s
+######## network=fr14-agent-isolated (gateway 172.31.99.1) ########
+proxy_via_gateway      HTTP 200                                                   0.0024s
+GOLD_PATCH_13236       URLError: <urlopen error [Errno -3] Temporary failure in name resolution> 0.0155s
+astropy_CHANGES.rst    URLError: <urlopen error [Errno -3] Temporary failure in name resolution> 0.0141s

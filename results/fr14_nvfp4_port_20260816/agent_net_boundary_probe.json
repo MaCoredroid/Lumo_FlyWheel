@@ -1,0 +1,735 @@
+{
+  "schema": "fr14-agent-net-boundary-evidence-v1",
+  "recorded_utc": "2026-08-17T05:39:57.968203+00:00",
+  "agent_host": "alienware (mark-Alienware-Aurora-ACT1250, x86_64)",
+  "network": {
+    "name": "fr14-agent-isolated",
+    "bridge": "fr14agent0",
+    "subnet": "172.31.99.0/24",
+    "gateway": "172.31.99.1",
+    "internal": true,
+    "icc": false,
+    "ip_masquerade": false,
+    "ipv6": false
+  },
+  "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4",
+  "proxy": {
+    "bind": "127.0.0.1:8023 (unchanged)",
+    "reached_via": "DNAT 172.31.99.1:8023 -> 127.0.0.1:8023 + SNAT to 127.0.0.1",
+    "positive_path_stand_in": "python3 -m http.server 8023 --bind 127.0.0.1 (LABELLED STAND-IN; the real offload proxy was down)"
+  },
+  "arms": {
+    "boundary_on": {
+      "schema": "fr14-agent-net-probe-v1",
+      "gateway": "172.31.99.1",
+      "proxy_port": 8023,
+      "checks": [
+        {
+          "check": "proxy_gateway_tcp",
+          "target": "172.31.99.1:8023",
+          "expect": "connected",
+          "outcome": "connected",
+          "detail": "tcp handshake completed",
+          "elapsed_s": 0.003
+        },
+        {
+          "check": "proxy_gateway_http",
+          "target": "http://172.31.99.1:8023/v1/models",
+          "expect": "fetched or http_status (proxy answers)",
+          "outcome": "http_status",
+          "status": 404,
+          "detail": "HTTP Error 404: File not found",
+          "elapsed_s": 0.014
+        },
+        {
+          "check": "gold_patch_fetch",
+          "target": "https://patch-diff.githubusercontent.com/raw/astropy/astropy/pull/13236.diff",
+          "expect": "failed (this is the 13236 gold patch the agent fetched)",
+          "outcome": "failed",
+          "error": "URLError",
+          "errno": null,
+          "detail": "<urlopen error [Errno -3] Temporary failure in name resolution>",
+          "elapsed_s": 0.013
+        },
+        {
+          "check": "github_https",
+          "target": "https://github.com/",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "URLError",
+          "errno": null,
+          "detail": "<urlopen error [Errno -3] Temporary failure in name resolution>",
+          "elapsed_s": 0.012
+        },
+        {
+          "check": "internet_ip_tcp",
+          "target": "1.1.1.1:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "OSError",
+          "errno": "ENETUNREACH",
+          "detail": "[Errno 101] Network is unreachable",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "internet_ip_tls",
+          "target": "1.1.1.1:443",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "OSError",
+          "errno": "ENETUNREACH",
+          "detail": "[Errno 101] Network is unreachable",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "dns_external",
+          "target": "github.com",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "gaierror",
+          "errno": null,
+          "detail": "[Errno -3] Temporary failure in name resolution",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "dns_docker_internal",
+          "target": "host.docker.internal",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "gaierror",
+          "errno": null,
+          "detail": "[Errno -3] Temporary failure in name resolution",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "metadata_endpoint",
+          "target": "169.254.169.254:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "OSError",
+          "errno": "ENETUNREACH",
+          "detail": "[Errno 101] Network is unreachable",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_ssh_via_gateway",
+          "target": "172.31.99.1:22",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_open_service_via_gateway",
+          "target": "172.31.99.1:8787",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_ssh_via_lan",
+          "target": "10.0.0.113:22",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "OSError",
+          "errno": "ENETUNREACH",
+          "detail": "[Errno 101] Network is unreachable",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_proxy_via_lan",
+          "target": "10.0.0.113:8023",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "OSError",
+          "errno": "ENETUNREACH",
+          "detail": "[Errno 101] Network is unreachable",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_open_service_via_lan",
+          "target": "10.0.0.113:8787",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "OSError",
+          "errno": "ENETUNREACH",
+          "detail": "[Errno 101] Network is unreachable",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_ssh_via_tailscale",
+          "target": "100.83.202.36:22",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "OSError",
+          "errno": "ENETUNREACH",
+          "detail": "[Errno 101] Network is unreachable",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "tailnet_peer_vllm",
+          "target": "100.103.10.122:9950",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "OSError",
+          "errno": "ENETUNREACH",
+          "detail": "[Errno 101] Network is unreachable",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "other_stack_bridge",
+          "target": "172.18.0.1:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "OSError",
+          "errno": "ENETUNREACH",
+          "detail": "[Errno 101] Network is unreachable",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "docker_default_bridge",
+          "target": "172.17.0.1:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "OSError",
+          "errno": "ENETUNREACH",
+          "detail": "[Errno 101] Network is unreachable",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "docker_socket_tcp",
+          "target": "172.31.99.1:2375",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_resolved_dns_loopback",
+          "target": "127.0.0.53:53",
+          "expect": "failed (own netns lo)",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "raw_socket_egress",
+          "target": "1.1.1.1",
+          "expect": "failed",
+          "outcome": "raw_send_accepted",
+          "detail": "kernel accepted the raw send; forwarding still gated by DOCKER-USER -i <bridge> REJECT",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_loopback_after_route_add",
+          "target": "127.0.0.53:53",
+          "expect": "failed (route add must be denied)",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_loopback_proxy_after_route_add",
+          "target": "127.0.0.1:8023",
+          "expect": "failed (own netns lo)",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        }
+      ],
+      "topology": {
+        "routes_proc_net_route": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \neth0\t00631FAC\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0",
+        "resolv_conf": "# Generated by Docker Engine.\n# This file can be edited; Docker Engine will not make further changes once it\n# has been modified.\n\nnameserver 127.0.0.11\nsearch hsd1.ca.comcast.net tail49abdd.ts.net\noptions edns0 trust-ad ndots:0\n\n# Based on host file: '/etc/resolv.conf' (internal resolver)\n# ExtServers: [host(127.0.0.53)]\n# Overrides: []\n# Option ndots from: internal",
+        "ipv6_addrs": "00000000000000000000000000000001 01 80 10 80       lo",
+        "cap_eff": "CapEff:\t00000000a80425fb",
+        "uid": "0",
+        "route_add_attempt": "/bin/sh: 1: ip: not found",
+        "default_route_present": "no"
+      }
+    },
+    "negative_control_default_bridge": {
+      "schema": "fr14-agent-net-probe-v1",
+      "gateway": "172.17.0.1",
+      "proxy_port": 8023,
+      "checks": [
+        {
+          "check": "proxy_gateway_tcp",
+          "target": "172.17.0.1:8023",
+          "expect": "connected",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.003
+        },
+        {
+          "check": "proxy_gateway_http",
+          "target": "http://172.17.0.1:8023/v1/models",
+          "expect": "fetched or http_status (proxy answers)",
+          "outcome": "failed",
+          "error": "URLError",
+          "errno": null,
+          "detail": "<urlopen error [Errno 111] Connection refused>",
+          "elapsed_s": 0.013
+        },
+        {
+          "check": "gold_patch_fetch",
+          "target": "https://patch-diff.githubusercontent.com/raw/astropy/astropy/pull/13236.diff",
+          "expect": "failed (this is the 13236 gold patch the agent fetched)",
+          "outcome": "fetched",
+          "bytes": 6375,
+          "detail": "diff --git a/astropy/table/table.py b/astropy/table/table.py\nindex 5afe2127a379..88830f5a2f43 100644\n--- a/astropy/table",
+          "elapsed_s": 0.384
+        },
+        {
+          "check": "github_https",
+          "target": "https://github.com/",
+          "expect": "failed",
+          "outcome": "fetched",
+          "bytes": 574505,
+          "detail": "\n\n\n\n\n\n\n\n<!DOCTYPE html>\n<html\n  lang=\"en\"\n  data-color-mode=\"dark\" data-dark-theme=\"dark\"\n  data-color-mode=\"light\" data",
+          "elapsed_s": 0.764
+        },
+        {
+          "check": "internet_ip_tcp",
+          "target": "1.1.1.1:80",
+          "expect": "failed",
+          "outcome": "connected",
+          "detail": "tcp handshake completed",
+          "elapsed_s": 0.028
+        },
+        {
+          "check": "internet_ip_tls",
+          "target": "1.1.1.1:443",
+          "expect": "failed",
+          "outcome": "connected",
+          "detail": "tcp handshake completed",
+          "elapsed_s": 0.035
+        },
+        {
+          "check": "dns_external",
+          "target": "github.com",
+          "expect": "failed",
+          "outcome": "resolved",
+          "detail": "[(<AddressFamily.AF_INET: 2>, <SocketKind.SOCK_STREAM: 1>, 6, '', ('172.182.252.133', 443))]",
+          "elapsed_s": 0.034
+        },
+        {
+          "check": "dns_docker_internal",
+          "target": "host.docker.internal",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "gaierror",
+          "errno": null,
+          "detail": "[Errno -2] Name or service not known",
+          "elapsed_s": 0.139
+        },
+        {
+          "check": "metadata_endpoint",
+          "target": "169.254.169.254:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "TimeoutError",
+          "errno": null,
+          "detail": "timed out",
+          "elapsed_s": 6.006
+        },
+        {
+          "check": "host_ssh_via_gateway",
+          "target": "172.17.0.1:22",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_open_service_via_gateway",
+          "target": "172.17.0.1:8787",
+          "expect": "failed",
+          "outcome": "connected",
+          "detail": "tcp handshake completed",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_ssh_via_lan",
+          "target": "10.0.0.113:22",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_proxy_via_lan",
+          "target": "10.0.0.113:8023",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_open_service_via_lan",
+          "target": "10.0.0.113:8787",
+          "expect": "failed",
+          "outcome": "connected",
+          "detail": "tcp handshake completed",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_ssh_via_tailscale",
+          "target": "100.83.202.36:22",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "tailnet_peer_vllm",
+          "target": "100.103.10.122:9950",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.012
+        },
+        {
+          "check": "other_stack_bridge",
+          "target": "172.18.0.1:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "docker_default_bridge",
+          "target": "172.17.0.1:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "docker_socket_tcp",
+          "target": "172.17.0.1:2375",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_resolved_dns_loopback",
+          "target": "127.0.0.53:53",
+          "expect": "failed (own netns lo)",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "raw_socket_egress",
+          "target": "1.1.1.1",
+          "expect": "failed",
+          "outcome": "raw_send_accepted",
+          "detail": "kernel accepted the raw send; forwarding still gated by DOCKER-USER -i <bridge> REJECT",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_loopback_after_route_add",
+          "target": "127.0.0.53:53",
+          "expect": "failed (route add must be denied)",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_loopback_proxy_after_route_add",
+          "target": "127.0.0.1:8023",
+          "expect": "failed (own netns lo)",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        }
+      ],
+      "topology": {
+        "routes_proc_net_route": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \neth0\t00000000\t010011AC\t0003\t0\t0\t0\t00000000\t0\t0\t0                                                                               \neth0\t000011AC\t00000000\t0001\t0\t0\t0\t0000FFFF\t0\t0\t0",
+        "resolv_conf": "# Generated by Docker Engine.\n# This file can be edited; Docker Engine will not make further changes once it\n# has been modified.\n\nnameserver 75.75.75.75\nnameserver 75.75.76.76\nsearch hsd1.ca.comcast.net tail49abdd.ts.net\n\n# Based on host file: '/run/systemd/resolve/resolv.conf' (legacy)\n# Overrides: []",
+        "ipv6_addrs": "00000000000000000000000000000001 01 80 10 80       lo",
+        "cap_eff": "CapEff:\t00000000a80425fb",
+        "uid": "0",
+        "route_add_attempt": "/bin/sh: 1: ip: not found",
+        "default_route_present": "yes"
+      }
+    },
+    "ablation_same_rules_without_internal": {
+      "schema": "fr14-agent-net-probe-v1",
+      "gateway": "172.31.98.1",
+      "proxy_port": 8023,
+      "checks": [
+        {
+          "check": "proxy_gateway_tcp",
+          "target": "172.31.98.1:8023",
+          "expect": "connected",
+          "outcome": "connected",
+          "detail": "tcp handshake completed",
+          "elapsed_s": 0.003
+        },
+        {
+          "check": "proxy_gateway_http",
+          "target": "http://172.31.98.1:8023/v1/models",
+          "expect": "fetched or http_status (proxy answers)",
+          "outcome": "http_status",
+          "status": 404,
+          "detail": "HTTP Error 404: File not found",
+          "elapsed_s": 0.014
+        },
+        {
+          "check": "gold_patch_fetch",
+          "target": "https://patch-diff.githubusercontent.com/raw/astropy/astropy/pull/13236.diff",
+          "expect": "failed (this is the 13236 gold patch the agent fetched)",
+          "outcome": "failed",
+          "error": "URLError",
+          "errno": null,
+          "detail": "<urlopen error [Errno 111] Connection refused>",
+          "elapsed_s": 0.063
+        },
+        {
+          "check": "github_https",
+          "target": "https://github.com/",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "URLError",
+          "errno": null,
+          "detail": "<urlopen error [Errno 111] Connection refused>",
+          "elapsed_s": 0.041
+        },
+        {
+          "check": "internet_ip_tcp",
+          "target": "1.1.1.1:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "internet_ip_tls",
+          "target": "1.1.1.1:443",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "dns_external",
+          "target": "github.com",
+          "expect": "failed",
+          "outcome": "resolved",
+          "detail": "[(<AddressFamily.AF_INET: 2>, <SocketKind.SOCK_STREAM: 1>, 6, '', ('140.82.116.3', 443))]",
+          "elapsed_s": 0.024
+        },
+        {
+          "check": "dns_docker_internal",
+          "target": "host.docker.internal",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "gaierror",
+          "errno": null,
+          "detail": "[Errno -2] Name or service not known",
+          "elapsed_s": 0.065
+        },
+        {
+          "check": "metadata_endpoint",
+          "target": "169.254.169.254:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_ssh_via_gateway",
+          "target": "172.31.98.1:22",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_open_service_via_gateway",
+          "target": "172.31.98.1:8787",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 1.036
+        },
+        {
+          "check": "host_ssh_via_lan",
+          "target": "10.0.0.113:22",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 1.024
+        },
+        {
+          "check": "host_proxy_via_lan",
+          "target": "10.0.0.113:8023",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 1.024
+        },
+        {
+          "check": "host_open_service_via_lan",
+          "target": "10.0.0.113:8787",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 1.024
+        },
+        {
+          "check": "host_ssh_via_tailscale",
+          "target": "100.83.202.36:22",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 1.024
+        },
+        {
+          "check": "tailnet_peer_vllm",
+          "target": "100.103.10.122:9950",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 1.024
+        },
+        {
+          "check": "other_stack_bridge",
+          "target": "172.18.0.1:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 1.024
+        },
+        {
+          "check": "docker_default_bridge",
+          "target": "172.17.0.1:80",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 1.024
+        },
+        {
+          "check": "docker_socket_tcp",
+          "target": "172.31.98.1:2375",
+          "expect": "failed",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 1.024
+        },
+        {
+          "check": "host_resolved_dns_loopback",
+          "target": "127.0.0.53:53",
+          "expect": "failed (own netns lo)",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "raw_socket_egress",
+          "target": "1.1.1.1",
+          "expect": "failed",
+          "outcome": "raw_send_accepted",
+          "detail": "kernel accepted the raw send; forwarding still gated by DOCKER-USER -i <bridge> REJECT",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_loopback_after_route_add",
+          "target": "127.0.0.53:53",
+          "expect": "failed (route add must be denied)",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        },
+        {
+          "check": "host_loopback_proxy_after_route_add",
+          "target": "127.0.0.1:8023",
+          "expect": "failed (own netns lo)",
+          "outcome": "failed",
+          "error": "ConnectionRefusedError",
+          "errno": "ECONNREFUSED",
+          "detail": "[Errno 111] Connection refused",
+          "elapsed_s": 0.0
+        }
+      ],
+      "topology": {
+        "routes_proc_net_route": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \neth0\t00000000\t01621FAC\t0003\t0\t0\t0\t00000000\t0\t0\t0                                                                               \neth0\t00621FAC\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0",
+        "resolv_conf": "# Generated by Docker Engine.\n# This file can be edited; Docker Engine will not make further changes once it\n# has been modified.\n\nnameserver 127.0.0.11\nsearch hsd1.ca.comcast.net tail49abdd.ts.net\noptions edns0 trust-ad ndots:0\n\n# Based on host file: '/etc/resolv.conf' (internal resolver)\n# ExtServers: [host(127.0.0.53)]\n# Overrides: []\n# Option ndots from: internal",
+        "ipv6_addrs": "00000000000000000000000000000001 01 80 10 80       lo",
+        "cap_eff": "CapEff:\t00000000a80425fb",
+        "uid": "0",
+        "route_add_attempt": "/bin/sh: 1: ip: not found",
+        "default_route_present": "yes"
+      }
+    }
+  }
+}
