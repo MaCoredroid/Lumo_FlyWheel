@@ -116,6 +116,22 @@ echo "[pair] credential issued: $SIDECAR ($SIDECAR_SHA256)"
 # canonical default and the launcher demands exactly that value, so production
 # carries it and so must this pair. Assert the whole identity survived sourcing.
 export BSIZE=1 CONC=1 WALL=5400
+# THE PER-TASK WALL MUST BE A DECLARED BUDGET, NOT THE LEGACY AGENT WALL.
+# WALL/AGENT_WALL_S is the legacy per-attempt wall, and run_swe_bench_q36_a.py
+# treats its timeout as PROVENANCE-FATAL on purpose: "those mean the harness cut
+# a run it did not intend to". The first stock arm proved the consequence --
+# astropy__astropy-13398 ran past 5400 s, raised Fixed32BoundaryError("agent
+# terminal state is incomplete: exit_code=-1 timed_out=True"), aborted the
+# orchestrator, left both ingress campaigns unfinalisable (HTTP 409), and so
+# voided an otherwise complete 2h25m arm including its three good tasks.
+# FR13_CAMPAIGN_TASK_BUDGET_S is the instrument the codebase built for exactly
+# this: a declared budget whose terminal is ACCOUNTED (verdict "capped") instead
+# of provenance-fatal. Its own docs say "ON for timing and gate arms, where wall
+# determinism is the point and the resolve verdict is not" -- which is this pair.
+# 5400 is the recommended value and equals WALL, so the effective timeout is the
+# budget and campaign_budget_was_the_binding_limit corroborates as true.
+# This weakens NO check: the fatal path stays fatal for undeclared cuts.
+export FR13_CAMPAIGN_TASK_BUDGET_S=5400
 export FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0
 export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"
 export FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE"
@@ -130,6 +146,7 @@ unset -f run_variant
    && "$FR13_DRAFT_VOCAB_BLOCKS" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
    && "$FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE" == "full_vocab" \
    && "$FR13_FIXED32_TAW_WALK_CAP" == "12" \
+   && "$FR13_CAMPAIGN_TASK_BUDGET_S" == "5400" \
    && "$FR13_MANDATORY_WEIGHT_BYTES" == "$MANDATORY_WEIGHT_BYTES" \
    && "$FR13_WEIGHT_FLOOR_MS" == "$MANDATORY_WEIGHT_FLOOR_MS" \
    && "$LUMO_SWE_AUTOCOMMIT" == "0" ]] \
@@ -205,8 +222,36 @@ run_arm() {  # label lever(0|1)
 }
 
 mkdir -p output/fr13_sfwd_sidecar
+LEVER_RC=""
 run_arm stock 0; STOCK_RC=$?
-run_arm levered 1; LEVER_RC=$?
+
+# A failed arm 1 ends the pair. Running arm 2 anyway cannot produce a pair, and
+# the first attempt showed it actively obscures the diagnosis: arm 1 failed its
+# terminal, the serve variant DELIBERATELY preserved its container (fail-closed
+# evidence retention after the engine-ledger snapshot could not be materialised),
+# and arm 2 then died on "unified-memory preflight" -- pointing at memory when
+# the actual cause was three steps upstream. Name the real cause here.
+if (( STOCK_RC != 0 )); then
+  echo "[pair] STOCK ARM FAILED rc=$STOCK_RC -- the pair is void; levered arm NOT run." >&2
+  leaked=$(docker ps -q)
+  if [[ -n "$leaked" ]]; then
+    echo "[pair] a serving container is still up: $(docker ps --format '{{.Names}}')" >&2
+    echo "[pair] this is DELIBERATE preservation, not a leak -- the arm's engine-ledger" >&2
+    echo "[pair] snapshot failed, so the container is held for manual evidence recovery." >&2
+    echo "[pair] Recover the ledger from its /logs bind mount BEFORE removing it." >&2
+  fi
+else
+  run_arm levered 1; LEVER_RC=$?
+  (( LEVER_RC == 0 )) || echo "[pair] LEVERED ARM FAILED rc=$LEVER_RC" >&2
+fi
+
 printf 'stock_rc=%s levered_rc=%s ended=%s\n' \
-  "$STOCK_RC" "$LEVER_RC" "$(date -u +%FT%TZ)" | tee "$RUNROOT_ABS/pair_meta.txt"
+  "$STOCK_RC" "${LEVER_RC:-not_run}" "$(date -u +%FT%TZ)" | tee "$RUNROOT_ABS/pair_meta.txt"
 echo "[pair] done -> $RUNROOT_ABS"
+# EXIT STATUS IS THE PAIR'S VERDICT. Without this the script's status was that of
+# its last command -- the `printf | tee` above -- so the first attempt reported
+# PAIR_EXIT=0 while carrying stock_rc=13 and levered_rc=2. A wrapper that chains
+# on success would have walked straight past a void pair.
+if (( STOCK_RC != 0 )); then exit "$STOCK_RC"; fi
+if [[ -n "$LEVER_RC" ]] && (( LEVER_RC != 0 )); then exit "$LEVER_RC"; fi
+exit 0
