@@ -260,8 +260,24 @@ export LUMO_IR_ALLOW_UNVERIFIED_SPINES2_MEASUREMENT=0
 
 if [[ "${FR13_FIXED32_ATTRIBUTION_ONLY:-0}" == "1" ]]; then
   # The bounded profiler wraps one server lifecycle. Never schedule a second
-  # arm after its report is finalized and the wrapped Tail target is stopped.
-  run_variant tail6_fixed32_${TAG} tail6_fixed32 31 1
+  # arm after its report is finalized and the wrapped target is stopped.
+  #
+  # FR14: the profiled TOPOLOGY is a parameter, because attribution must describe
+  # the config it claims to describe. It stays tail6 by default so every banked
+  # FR13 profile reproduces byte-for-byte; the promoted FR14 production config is
+  # hydra27, and profiling it under a hardcoded tail6 arm would have produced a
+  # table labelled with a topology it never ran.
+  _FR13_ATTRIBUTION_MODE=${FR13_FIXED32_ATTRIBUTION_MODE:-tail6_fixed32}
+  case "$_FR13_ATTRIBUTION_MODE" in
+    tail6_fixed32 | hydra27_fixed32) ;;
+    *)
+      echo "FR13_FIXED32_ATTRIBUTION_MODE must be tail6_fixed32 or hydra27_fixed32," \
+           "got: $_FR13_ATTRIBUTION_MODE" >&2
+      exit 2
+      ;;
+  esac
+  run_variant "${_FR13_ATTRIBUTION_MODE}_${TAG}" "$_FR13_ATTRIBUTION_MODE" 31 1
+  unset _FR13_ATTRIBUTION_MODE
 else
   case "${FR13_FLOOR_ORDER:-TH}" in
     TH)

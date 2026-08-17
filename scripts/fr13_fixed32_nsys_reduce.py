@@ -27,6 +27,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if os.fspath(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, os.fspath(SCRIPT_DIR))
 import fr13_fixed32_contract as fixed32_contract  # noqa: E402
+import fr13_fixed32_topology as fixed32_topology  # noqa: E402
 
 
 DEFAULT_NSYS_BIN = Path("/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys")
@@ -1519,6 +1520,71 @@ def _nsys_version(
     return lines[0]
 
 
+_VARIANT_XFLAGS_RE = re.compile(
+    r"FR13_FIXED32_MODE=(?P<mode>[A-Za-z0-9_]+)\s+"
+    r"FR13_FIXED32_VALID_MASK=(?P<mask>0[xX][0-9a-fA-F]+)\s+"
+    r"FR13_FIXED32_ACTIVE_NODES=(?P<active>\d+)"
+)
+
+_B1_PROFILER_MODES = ("tail6_fixed32", "hydra27_fixed32")
+
+
+def _verify_declared_topology(mode: str, variant_runlog: Path) -> dict[str, Any]:
+    """Verify the DECLARED topology against what the run actually served.
+
+    The mode used to be hardcoded to tail6_fixed32 here. That refused the wrong
+    thing: it did not verify anything about the run, it merely forbade one
+    parameter value, so a profile of any other topology was impossible while a
+    MISLABELLED tail6 profile was still perfectly acceptable. Attribution's whole
+    job is to describe the config it claims to describe, so the check is now the
+    one that matters -- the caller's declaration must agree with the xflags the
+    serve variant PRODUCED, and both must agree with the canonical topology
+    table. A profile whose label and geometry disagree is refused either way.
+    """
+    if mode not in _B1_PROFILER_MODES:
+        raise ReductionError(
+            f"B1 profiler mode must be one of {', '.join(_B1_PROFILER_MODES)}"
+        )
+    try:
+        text = variant_runlog.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise ReductionError(
+            f"B1 profiler variant runlog is unreadable: {exc}"
+        ) from exc
+    found = _VARIANT_XFLAGS_RE.search(text)
+    if found is None:
+        raise ReductionError(
+            "B1 profiler variant runlog carries no fixed32 topology xflags, so "
+            "the declared topology cannot be verified against the served one"
+        )
+    served_mode = found.group("mode")
+    served_mask = int(found.group("mask"), 16)
+    served_active = int(found.group("active"))
+    if served_mode != mode:
+        raise ReductionError(
+            f"attribution declares mode={mode} but the run served "
+            f"{served_mode}"
+        )
+    expected_mask = fixed32_topology.VALID_MASK_BY_MODE[mode]
+    expected_active = (
+        fixed32_topology.TAIL6_ACTIVE_DRAFTS
+        if mode == "tail6_fixed32"
+        else fixed32_topology.HYDRA27_ACTIVE_DRAFTS
+    )
+    if served_mask != expected_mask or served_active != expected_active:
+        raise ReductionError(
+            f"served {served_mode} geometry disagrees with the canonical "
+            f"topology: mask={served_mask:#x} active={served_active}, "
+            f"expected mask={expected_mask:#x} active={expected_active}"
+        )
+    return {
+        "mode": mode,
+        "valid_mask": f"{served_mask:#x}",
+        "active_nodes": served_active,
+        "verified_against": "serve-variant xflags + fr13_fixed32_topology",
+    }
+
+
 def _build_attribution_provenance(
     *,
     report: Path,
@@ -1534,6 +1600,7 @@ def _build_attribution_provenance(
     proxy_ledger: Path,
     engine_ledger: Path,
     mode: str,
+    variant_runlog: Path,
     batch_size: int,
     concurrency: int,
     driver_rc: int,
@@ -1545,8 +1612,7 @@ def _build_attribution_provenance(
     nsys_discard_environment: bool,
     nsys_bin: Path,
 ) -> dict[str, Any]:
-    if mode != "tail6_fixed32":
-        raise ReductionError("B1 profiler mode must be tail6_fixed32")
+    topology_identity = _verify_declared_topology(mode, variant_runlog)
     if batch_size != 1 or concurrency != 1:
         raise ReductionError("attribution provenance requires real-SWE B1")
     if isinstance(driver_rc, bool) or not 1 <= driver_rc <= 255:
@@ -1581,6 +1647,9 @@ def _build_attribution_provenance(
     return {
         "batch_size": 1,
         "bounded_capture": True,
+        # The topology this profile DESCRIBES, verified against what the
+        # run served rather than echoed from the caller's flag.
+        "topology_identity": topology_identity,
         "container_identity": _validate_container_identity(
             container_identity,
             arm_dir=arm_dir,
@@ -1718,6 +1787,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--proxy-ledger", type=Path)
     parser.add_argument("--engine-ledger", type=Path)
     parser.add_argument("--mode")
+    parser.add_argument("--variant-runlog", type=Path)
     parser.add_argument("--batch-size", type=_positive_int)
     parser.add_argument("--concurrency", type=_positive_int)
     parser.add_argument("--driver-rc", type=int)
@@ -1831,6 +1901,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             proxy_ledger=args.proxy_ledger,
             engine_ledger=args.engine_ledger,
             mode=args.mode,
+            variant_runlog=args.variant_runlog,
             batch_size=args.batch_size,
             concurrency=args.concurrency,
             driver_rc=args.driver_rc,

@@ -43,7 +43,38 @@ PRESERVE_RECOVERABLE_STATE=0
 PRESERVED_CONTAINER=""
 NSYS_EXPECTED_DRIVER_SCRIPT=scripts/fr13_b4_campaign_driver.sh
 NSYS_EXPECTED_VARIANT_SCRIPT=scripts/fr13_bigdenom_swe_serve_variant.sh
-NSYS_EXPECTED_VARIANT_KIND=tail6_fixed32
+# ---- the profiled identity (FR14 ruling A) ----------------------------------
+# A profile must describe the config it claims to describe. These three
+# parameters name that config; every one of them DEFAULTS TO THE FR13 VALUE, so
+# an unparameterised invocation reproduces every banked FR13 profile exactly.
+# The FR14 promoted production config is hydra27 + full_vocab + gqa_pair.
+#
+# These are re-pins, not relaxations: each selection still asserts its own binary
+# and provenance below, and the reducer independently verifies the declared
+# topology against what the run actually served.
+FIXED32_MODE=${FIXED32_MODE:-tail6_fixed32}
+case "$FIXED32_MODE" in
+  tail6_fixed32 | hydra27_fixed32) ;;
+  *) echo "FAIL: FIXED32_MODE must be tail6_fixed32 or hydra27_fixed32" >&2; exit 2 ;;
+esac
+FA2_SELECTOR=${FA2_SELECTOR:-qrow16}
+case "$FA2_SELECTOR" in
+  qrow16 | gqa_pair) ;;
+  *) echo "FAIL: FA2_SELECTOR must be qrow16 or gqa_pair" >&2; exit 2 ;;
+esac
+DRAFT_VOCAB_PROFILE=${DRAFT_VOCAB_PROFILE:-k64_root}
+case "$DRAFT_VOCAB_PROFILE" in
+  k64_root | full_vocab) ;;
+  *) echo "FAIL: DRAFT_VOCAB_PROFILE must be k64_root or full_vocab" >&2; exit 2 ;;
+esac
+# The gqa_pair B1 selector is legal only in hydra27 (its qrow32 B1 predicate
+# demands that topology), so refuse the incoherent pairing here rather than
+# discovering it ~8 minutes into a boot.
+[[ "$FA2_SELECTOR" != "gqa_pair" || "$FIXED32_MODE" == "hydra27_fixed32" ]] || {
+  echo "FAIL: FA2_SELECTOR=gqa_pair requires FIXED32_MODE=hydra27_fixed32" >&2
+  exit 2
+}
+NSYS_EXPECTED_VARIANT_KIND=$FIXED32_MODE
 NSYS_CONTAINER_BIN=/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys
 NSYS_CONTAINER_TIMEOUT_BIN=/usr/bin/timeout
 NSYS_CONTAINER_BASH_BIN=/bin/bash
@@ -1431,7 +1462,7 @@ TAG=${TAG:-b1_nsys_f32_${STAMP}}
 RUNROOT=${RUNROOT:-output/fr13_fixed32_b1_nsys_${STAMP}}
 SUBSET=config/fr13_fixed32/subset_b4_four.json
 SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
-ARM=tail6_fixed32_${TAG}
+ARM=${FIXED32_MODE}_${TAG}
 CONTAINER=fr13-bigdenom-${ARM}
 NSYS_EXPECTED_SESSION_NAME="fr13-fixed32-${STAMP}-p$$"
 REPORT="$RUNROOT/$ARM/logs/fr13_fixed32_b1_real_swe.nsys-rep"
@@ -1460,31 +1491,53 @@ unset running_containers same_name_containers
 
 export LUMO_SWE_AUTOCOMMIT=0
 export FR13_FIXED32_ATTRIBUTION_ONLY=1
+export FR13_FIXED32_ATTRIBUTION_MODE="$FIXED32_MODE"
 export FR13_FIXED32_NVTX_PROFILE=1
 export LUMO_NSYS_WRAP_VLLM=1
 
 # Attribution must capture the CURRENT production stack, not the stack the
 # defaults select. FR13_FA2_QROW16_PRODUCTION defaults to 0 in the launcher and
 # FR13_DRAFT_VOCAB_ROOT defaults to 0 in the floor sequence, so an unpinned
-# profile re-measures the pre-Qrow16 kernels and annotates them with the wrong
-# 92.506528879 ms floor. Pin both exactly as the production stack-timing runner
-# does (scripts/fr13_run_b1_k64_qrow16_sfwd_stack_timing.sh).
+# profile re-measures kernels it did not intend to and annotates them with a
+# floor that belongs to a different config. Pin both, per selection.
+#
+# FR14: which stack is "current" is now the caller's declaration. k64_root +
+# qrow16 is the FR13 production stack and stays the default, pinned exactly as
+# scripts/fr13_run_b1_k64_qrow16_sfwd_stack_timing.sh does. full_vocab +
+# gqa_pair is the FR14 promoted one. THE FLOOR IS NOT PINNED HERE ON PURPOSE:
+# fr13_fixed32_floor_timers_seq.sh derives it from
+# "${FR13_DRAFT_VOCAB_K}:${FR13_DRAFT_VOCAB_ROOT}", so exporting the identity
+# before the sequence is sourced makes the floor follow the config
+# automatically -- 92.506528879 ms for 65536:0, 93.15228665201465 ms for 0:0.
+# Hardcoding it here is how a profile ends up labelled with another arm's floor.
 QROW16_SO_SHA256=1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86
 QROW16_SO_BYTES=299507792
 QROW16_LIVE_PASS_JSON="$REPO/results/fr13_fixed32_qrow16_num_splits0_live_pass_20260731T173608Z/fr13_fa2_qrow16_live_paged_ab.json"
 QROW16_LIVE_PASS_SHA256=36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77
+# FR14 promoted GQA-pair B1 unit, same pins the byte gate and the lever pair use.
+GQA_PAIR_SO_SHA256=3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae
+GQA_PAIR_SO_BYTES=299815552
 DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
+if [[ "$FA2_SELECTOR" == "gqa_pair" ]]; then
+  EXPECTED_FA2_SO_SHA256=$GQA_PAIR_SO_SHA256
+  EXPECTED_FA2_SO_BYTES=$GQA_PAIR_SO_BYTES
+  EXPECTED_FA2_SO_LABEL="promoted gqa_pair B1"
+else
+  EXPECTED_FA2_SO_SHA256=$QROW16_SO_SHA256
+  EXPECTED_FA2_SO_BYTES=$QROW16_SO_BYTES
+  EXPECTED_FA2_SO_LABEL="pinned qrow16 production"
+fi
 [[ -n "${FORKED_FA2_SO:-}" ]] || {
-  echo "FAIL: set FORKED_FA2_SO to the pinned qrow16 production .so" >&2
+  echo "FAIL: set FORKED_FA2_SO to the $EXPECTED_FA2_SO_LABEL .so" >&2
   exit 2
 }
 [[ "$FORKED_FA2_SO" == /* && -f "$FORKED_FA2_SO" && ! -L "$FORKED_FA2_SO" ]] || {
   echo "FAIL: FORKED_FA2_SO must be an absolute regular file" >&2
   exit 2
 }
-[[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$QROW16_SO_BYTES" \
-   && "$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')" == "$QROW16_SO_SHA256" ]] || {
-  echo "FAIL: FORKED_FA2_SO is not the pinned qrow16 production binary" >&2
+[[ "$(stat -c '%s' "$FORKED_FA2_SO")" == "$EXPECTED_FA2_SO_BYTES" \
+   && "$(sha256sum "$FORKED_FA2_SO" | awk '{print $1}')" == "$EXPECTED_FA2_SO_SHA256" ]] || {
+  echo "FAIL: FORKED_FA2_SO is not the $EXPECTED_FA2_SO_LABEL binary" >&2
   exit 2
 }
 [[ -f "$QROW16_LIVE_PASS_JSON" && ! -L "$QROW16_LIVE_PASS_JSON" \
@@ -1494,13 +1547,32 @@ DRAFT_VOCAB_BLOCKS_CONTAINER=/workspace/scripts/fr13_dvk_subset_blocks.json
   exit 2
 }
 export FORKED_FA2_SO
-export FR13_FA2_QROW16_PRODUCTION=1
-export FR13_FA2_QROW16_SO_SHA256="$QROW16_SO_SHA256"
-export FR13_FA2_QROW16_LIVE_PASS_JSON="$QROW16_LIVE_PASS_JSON"
-export FR13_FA2_QROW16_LIVE_PASS_SHA256="$QROW16_LIVE_PASS_SHA256"
 export FR13_FA2_QROW16_LIVE_PAGED_AB=0
-export FR13_DRAFT_VOCAB_ROOT=1
-export FR13_DRAFT_VOCAB_K=65536
+if [[ "$FA2_SELECTOR" == "gqa_pair" ]]; then
+  # The promoted arm is credentialed, not merely selected. The launcher mints its
+  # own sidecar from the sealed gate, so we present NOTHING private here: the
+  # run-local credential pointer (or an explicit caller export) supplies the gate
+  # by path, and the promoted default arms gqa_pair from it. That path requires
+  # FR13_FA2_QROW16_PRODUCTION=0, which is why the incumbent pin is conditional.
+  export FR13_FA2_QROW16_PRODUCTION=0
+else
+  export FR13_FA2_QROW16_PRODUCTION=1
+  export FR13_FA2_QROW16_SO_SHA256="$QROW16_SO_SHA256"
+  export FR13_FA2_QROW16_LIVE_PASS_JSON="$QROW16_LIVE_PASS_JSON"
+  export FR13_FA2_QROW16_LIVE_PASS_SHA256="$QROW16_LIVE_PASS_SHA256"
+fi
+# Draft-vocabulary identity, profile-aware -- the same two shapes the launcher
+# train named. full_vocab needs the sanctioned 0:0 override, exactly as every
+# other K0 runner presents it.
+if [[ "$DRAFT_VOCAB_PROFILE" == "full_vocab" ]]; then
+  export FR13_DRAFT_VOCAB_ROOT=0
+  export FR13_DRAFT_VOCAB_K=0
+  export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"
+  export FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=full_vocab
+else
+  export FR13_DRAFT_VOCAB_ROOT=1
+  export FR13_DRAFT_VOCAB_K=65536
+fi
 export FR13_DRAFT_VOCAB_BLOCKS="$DRAFT_VOCAB_BLOCKS_CONTAINER"
 
 export LUMO_NSYS_SESSION_NAME="$NSYS_EXPECTED_SESSION_NAME"
@@ -1744,7 +1816,8 @@ if ! PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}" \
   --pretask-zero-traffic "$RUNROOT/$ARM/fixed32_pretask_zero_traffic.json" \
   --proxy-ledger "$RUNROOT/$ARM/logs/fr13_fixed32_proxy_ingress.jsonl" \
   --engine-ledger "$ENGINE_LEDGER_SNAPSHOT" \
-  --mode tail6_fixed32 \
+  --mode "$FIXED32_MODE" \
+  --variant-runlog "$RUNROOT/$ARM.runlog" \
   --batch-size 1 \
   --concurrency 1 \
   --driver-rc "$driver_rc" \
