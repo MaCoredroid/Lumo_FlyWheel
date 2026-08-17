@@ -105,7 +105,7 @@ unset -f run_variant
 arm_env=(
   FR10_METRICS=0
   FR13_HOST_TAIL_PREP_BAKE=1
-  FR13_HOST_TAIL_DEFER=1
+  FR13_HOST_TAIL_DEFER=0
 )
 printf 'arm_kind=%s\nsource_commit=%s\nbudget_s=9000\nverdict_instrument=step_wall_ms+s_per_fwd_gpu\nper_lever_attribution=forfeit_by_design\nstarted=%s\n' \
   "$ARM_KIND" "$SOURCE_COMMIT" "$(date -u +%FT%TZ)" > "$RUNROOT_ABS/arm_meta.txt"
