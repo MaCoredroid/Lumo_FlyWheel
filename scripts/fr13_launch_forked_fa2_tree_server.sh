@@ -518,6 +518,63 @@ for _fr13_req in "${FR13_REQUIRED_TREE_FLAGS[@]}"; do
   export "${_fr13_req_k}=${!_fr13_req_k:-$_fr13_req_v}"
 done
 unset _fr13_req _fr13_req_k _fr13_req_v
+
+# ---------------------------------------------------------------------------
+# FR14 DRAFT-VOCABULARY QUALIFICATION PROFILES (2026-08-17)
+#
+# Every credentialed lever used to hard-code the K64/root1 draft-vocabulary
+# identity into its own legality predicate. Mark's K0 ruling made full-vocab
+# drafting the production config, which parked the ARMING PATH for the whole
+# lever portfolio at once: twelve predicates tested K == 65536 and refused
+# anything else (results/fr14_nvfp4_port_20260816/b1_lever_armability_under_k0.md).
+#
+# The fix is the shape the CUTLASS wave lever already used (:2386-2400 in the
+# pre-change file): a lever declares WHICH draft-vocabulary shape its credential
+# was earned in, and the launcher checks the serving shape agrees. A credential
+# earned under K64 therefore still cannot authorize a K0 serve, and vice versa --
+# the safety property is preserved exactly, it is just no longer hard-coded to
+# one of the two shapes.
+#
+# FR13_NEEDS_ALLOW is part of the IDENTITY, not an escape hatch around it. Under
+# k64_root it must be absent (any diagnostic override means this is not the
+# canonical K64 workload). Under full_vocab it must be exactly the sanctioned
+# K0 override, because that override IS how the production K0 shape is selected
+# today -- the predicates' old bare `-z FR13_NEEDS_ALLOW` meant "no diagnostic
+# override in play", and under K0 that is expressed by this one exact value.
+#
+# Default is k64_root everywhere, so every existing caller and every banked K64
+# credential keeps its exact previous meaning.
+_fr13_assert_draft_vocab_profile() {
+  local profile=$1 label=$2
+  case "$profile" in
+    k64_root)
+      [[ "${FR13_DRAFT_VOCAB_ROOT:-}" == "1" \
+         && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+         && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+         && -z "${FR13_NEEDS_ALLOW:-}" ]] || {
+        echo "$label requires the k64_root draft-vocabulary identity: ROOT=1, K=65536, the pinned 128-id block map, and no diagnostic override" >&2
+        return 1
+      }
+      ;;
+    full_vocab)
+      [[ "${FR13_DRAFT_VOCAB_ROOT:-}" == "0" \
+         && "${FR13_DRAFT_VOCAB_K:-65536}" == "0" \
+         && "${FR13_NEEDS_ALLOW:-}" == "FR13_DRAFT_VOCAB_K=0" ]] || {
+        echo "$label requires the full_vocab draft-vocabulary identity: ROOT=0, K=0, and the sanctioned FR13_DRAFT_VOCAB_K=0 override" >&2
+        return 1
+      }
+      ;;
+    *)
+      echo "$label qualification profile must be exactly k64_root or full_vocab; got: ${profile:-<empty>}" >&2
+      return 1
+      ;;
+  esac
+  return 0
+}
+FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE:-k64_root}
+FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE:-k64_root}
+FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE:-k64_root}
+FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE:-k64_root}
 IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"}
 # FR14 SERVED CHECKPOINT -- the single point of truth for the serve line.
 # Deliberately NOT caller-overridable and deliberately NOT named FR13_*/LUMO_*/
@@ -1134,9 +1191,40 @@ if (( _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0 )) \
          && -z "$FR13_FA2_QROW32_B1_TIMING_ARM" \
          && -z "$FR13_FA2_QROW32_B4_TIMING_ARM" \
          && -z "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" ]]; then
-  FR13_FA2_QROW32_B1_PRODUCTION_ARM=${FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT:-gqa_pair}
-  echo "[fr13] B1 production arm unnamed; serving the promoted default" \
-       "FR13_FA2_QROW32_B1_PRODUCTION_ARM=$FR13_FA2_QROW32_B1_PRODUCTION_ARM" >&2
+  # FR14 2026-08-17: the promoted default must not arm a CREDENTIALED selector
+  # when no credential was presented.
+  #
+  # This block used to check only that no OTHER arm was named, then arm
+  # gqa_pair unconditionally on any Hydra27 B1 launch. The selector predicate
+  # below then demands, among other things,
+  #   FR13_FA2_QROW32_B1_SOURCE_COMMIT == $(git rev-parse HEAD)
+  # which is empty on an ordinary campaign launch -- so the arm the default
+  # armed was guaranteed to refuse, and the launcher exited 2.
+  #
+  # That is why arm 2 (hydra27_fixed32) of every fixed32 campaign has been
+  # dying at rc=2 while arm 1 (tail6_fixed32) served clean: the default is
+  # applied only in Hydra27 mode. It made the Hydra27 B1 arm STRUCTURALLY
+  # UNBOOTABLE at every HEAD since the credential was minted -- under K64 on the
+  # stale HEAD-bound provenance, and under K0 one clause earlier. Exactly the
+  # config drift fr13_required_tree_flags.sh's header was written about: a
+  # promoted default that quietly stops being serviceable when its evidence
+  # moves.
+  #
+  # A promotion is a statement about which arm to prefer WHEN IT IS AVAILABLE,
+  # never a reason to refuse the boot. With no credential we fall back to the
+  # incumbent (empty arm) and say so, which is what an unlevered arm 2 was
+  # always supposed to be.
+  if [[ -n "${FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR:-}" \
+        && -n "${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-}" ]]; then
+    FR13_FA2_QROW32_B1_PRODUCTION_ARM=${FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT:-gqa_pair}
+    echo "[fr13] B1 production arm unnamed; serving the promoted default" \
+         "FR13_FA2_QROW32_B1_PRODUCTION_ARM=$FR13_FA2_QROW32_B1_PRODUCTION_ARM" >&2
+  else
+    echo "[fr13] B1 production arm unnamed and no credential presented" \
+         "(FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR / _SOURCE_COMMIT empty);" \
+         "serving the INCUMBENT, not the promoted default" \
+         "${FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT:-gqa_pair}" >&2
+  fi
 fi
 case "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" in
   ""|nosplit|gqa_pair) ;;
@@ -1963,6 +2051,8 @@ if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" \
     "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995|47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c")
       _FR13_FA2_QROW32_B4_TASK_SET=pool16 ;;
   esac
+  _fr13_assert_draft_vocab_profile \
+    "$FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE" "FR13 qrow32 B4 GQA-pair" || exit 2
   [[ ( "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" \
        || "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ) \
      && "$MAX_NUM_SEQS" == "4" \
@@ -1970,9 +2060,6 @@ if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" \
      && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
      && "${ENFORCE_EAGER:-0}" == "0" \
      && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" \
-     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
-     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
-     && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
      && "$FR13_FA2_QROW32_SO_SHA256" == "af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb" \
      && "$FR13_FA2_QROW32_SO_SIZE" == "299813360" \
      && "$FR13_FA2_QROW32_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
@@ -1983,7 +2070,7 @@ if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" \
      && "$FR13_FA2_QROW32_SOURCE_COMMIT" == "$(git rev-parse HEAD)" \
      && "$FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)" \
      && -n "$_FR13_FA2_QROW32_B4_TASK_SET" ]] || {
-    echo "FR13 qrow32 B4 GQA-pair timing or production requires a byte-pinned canonical B4 evidence set (exact4 or pool16) with K64/root1 identity and pinned binary/source provenance" >&2
+    echo "FR13 qrow32 B4 GQA-pair timing or production requires a byte-pinned canonical B4 evidence set (exact4 or pool16) and pinned binary/source provenance" >&2
     exit 2
   }
   echo "FR13 qrow32 B4 evidence set: $_FR13_FA2_QROW32_B4_TASK_SET" >&2
@@ -2000,16 +2087,15 @@ fi
 _FR13_FA2_QROW32_B1_CANDIDATE_MODE=0
 if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
   _FR13_FA2_QROW32_B1_CANDIDATE_MODE=1
+  _fr13_assert_draft_vocab_profile \
+    "$FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE" "FR13 qrow32 B1 selector" || exit 2
   [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
      && "$MAX_NUM_SEQS" == "1" \
      && "${SWE_CONCURRENCY:-}" == "1" \
-     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
-     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
-     && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
      && "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" == "$(git rev-parse HEAD)" \
      && "$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)" \
      && "$(stat -c '%s' "$FORKED_FA2_SO")" == "$FR13_FA2_QROW32_B1_SO_SIZE" ]] || {
-    echo "FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance" >&2
+    echo "FR13 qrow32 B1 selector requires Hydra27 B1 and exact binary/source provenance" >&2
     exit 2
   }
   # Each B1 arm carries its own binary + source-closure pins. Resolve the arm
@@ -3145,13 +3231,13 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" \
   exit 2
 fi
 if [[ "$_fr13_gdn_gqa_group3_production" == "1" ]]; then
+  _fr13_assert_draft_vocab_profile \
+    "$FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE" "FR13 GDN GQA-group3 production" || exit 2
   [[ -n "${FR13_FIXED32_MODE:-}" \
      && ( "$_fr13_gdn_gqa_group3_production_batch" == "1" \
           || "$_fr13_gdn_gqa_group3_production_batch" == "4" ) \
      && "$MAX_NUM_SEQS" == "$_fr13_gdn_gqa_group3_production_batch" \
      && "${SWE_CONCURRENCY:-}" == "$MAX_NUM_SEQS" \
-     && "${FR13_DRAFT_VOCAB_K:-}" == "65536" \
-     && "${FR13_DRAFT_VOCAB_ROOT:-}" == "1" \
      && "${FR13_TREE_GDN_GEOM_OVERRIDE:-}" == "BV=8" \
      && "${FR13_SCAN_ALIGN:-0}" == "0" \
      && "${FR13_NPAD_INVARIANT:-0}" == "0" \
@@ -3171,7 +3257,7 @@ if [[ "$_fr13_gdn_gqa_group3_production" == "1" ]]; then
      && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
      && -z "${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
      && -z "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" ]] || {
-    echo "FR13 GDN GQA-group3 production requires exact credentialed B1/B4 K64/root1 physical32 FULL-graph pins" >&2
+    echo "FR13 GDN GQA-group3 production requires exact credentialed B1/B4 physical32 FULL-graph pins" >&2
     exit 2
   }
   [[ -f "$_fr13_gdn_gqa_group3_pass_json" \
@@ -3255,13 +3341,13 @@ if (( _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_NAMED == 0 )) \
   fi
 fi
 if [[ "$_fr13_gdn_single_launch_production" == "1" ]]; then
+  _fr13_assert_draft_vocab_profile \
+    "$FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE" "FR13 GDN single-launch production" || exit 2
   [[ -n "${FR13_FIXED32_MODE:-}" \
      && ( "$_fr13_gdn_single_launch_production_batch" == "1" \
           || "$_fr13_gdn_single_launch_production_batch" == "4" ) \
      && "$MAX_NUM_SEQS" == "$_fr13_gdn_single_launch_production_batch" \
      && "${SWE_CONCURRENCY:-}" == "$MAX_NUM_SEQS" \
-     && "${FR13_DRAFT_VOCAB_K:-}" == "65536" \
-     && "${FR13_DRAFT_VOCAB_ROOT:-}" == "1" \
      && "${FR13_TREE_GDN_GEOM_OVERRIDE:-}" == "BV=8" \
      && "${FR13_SCAN_ALIGN:-0}" == "0" \
      && "${FR13_NPAD_INVARIANT:-0}" == "0" \
@@ -3281,7 +3367,7 @@ if [[ "$_fr13_gdn_single_launch_production" == "1" ]]; then
      && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
      && -z "${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
      && -z "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" ]] || {
-    echo "FR13 GDN single-launch production requires exact credentialed B1/B4 K64/root1 physical32 FULL-graph pins" >&2
+    echo "FR13 GDN single-launch production requires exact credentialed B1/B4 physical32 FULL-graph pins" >&2
     exit 2
   }
   [[ -f "$_fr13_gdn_single_launch_pass_json" \
