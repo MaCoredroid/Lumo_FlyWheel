@@ -7,17 +7,39 @@
 # floor that follows from it -- which is the whole point of the ablation, so
 # nothing else may move.
 #
-#   arm A: /models/qwen3.8-27b-nvfp4          27,977,022,848 B / 102.479937172 ms
-#   arm B: /models/qwen3.8-27b-nvfp4-radixark 25,210,209,416 B /  92.345089436 ms
+#   arm A: /models/qwen3.8-27b-nvfp4          27,977,022,848 B / 102.479937172 ms (K64)
+#   arm B: /models/qwen3.8-27b-nvfp4-radixark 25,430,574,256 B /  93.15228665201465 ms (K0)
 #
-# K64-AS-BUILT ON PURPOSE. The K64-vs-K0 ablation runs separately and informs
-# the NEXT config train; mixing a K0 decision into this serve would confound the
-# bytes ablation with a drafting-strategy change.
+# K0 (FULL-VOCAB DRAFTING) -- MARK'S RULING, 2026-08-17. K64 is PARKED FOREVER;
+# full-vocab drafting through the NVFP4 head is the production config. This
+# supersedes the earlier "K64-as-built" staging of this script.
+#
+# The ablation that produced the ruling (armb_k64_ablation.md): under the NVFP4
+# head K64's byte advantage is only 0.807 ms of floor, while it costs 0.476
+# accepted tokens/event -- net -10.5% throughput on the 1024/1024 shape. K64's
+# remaining justification was ~3.0 ms/step of DFWD compute, smaller than the
+# acceptance it gives up. K0 also retires the DVK shim, the Phase-1 boot dequant
+# and the 128-id block map from the serving path.
+#
+# The DVK shim is INERT BY CONSTRUCTION here: _fr13_dvk_prepare returns at its
+# own `_fr13_dvk_configured <= 0` early return, so neither the shim nor the
+# Phase-1 dequant runs. Verified by needle -- ZERO [FR13_DRAFT_VOCAB] /
+# [FR14_DVK_DEQUANT] lines in the boot log (the same check the K64/K0 bench
+# used). NOTE it is the K-value that makes it inert, NOT the root flag: there
+# are two _fr13_dvk_prepare call sites and the second is taken when
+# `not _fr13_dvk_root`.
+#
+# FR13_NEEDS_ALLOW is the launcher's sanctioned override for the full-vocab arm
+# (it gates 0:0 behind an explicit opt-in so nobody drifts off K64 by accident).
+# FOLLOW-UP CONFIG TRAIN: promote K=0 to the canonical default and retire the
+# K64 machinery from the serving path, so this override is no longer needed.
+# The code stays -- git preserves it -- but the serving path should stop
+# carrying a subset head nothing selects.
 #
 # Reduction env (the campaign driver's reducer picks these up from the sequence
 # file, so they are stated here only for the record):
-#   FR13_MANDATORY_WEIGHT_BYTES=25210209416
-#   FR13_WEIGHT_FLOOR_MS=92.345089436
+#   FR13_MANDATORY_WEIGHT_BYTES=25430574256
+#   FR13_WEIGHT_FLOOR_MS=93.15228665201465
 #
 # Usage: bash armb_b1_stock_launch.sh   (launch detached; the parent monitors)
 set -uo pipefail
@@ -39,7 +61,8 @@ echo "[b1radix] runroot=$RUNROOT head=$(git rev-parse HEAD)"
 BSIZE=1 CONC=1 TAG=b1radix RUNROOT="$RUNROOT" WALL=5400 \
   SUBSET=config/fr13_fixed32/subset_b4_four.json \
   SEQUENCE_FILE=scripts/fr13_fixed32_floor_timers_seq.sh \
-  FR13_DRAFT_VOCAB_ROOT=1 \
+  FR13_DRAFT_VOCAB_K=0 FR13_DRAFT_VOCAB_ROOT=0 \
+  FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0" \
   TMPDIR=/home/mark/shared/tmp-scratch \
   bash scripts/fr13_b4_campaign_driver.sh > "$RUNROOT/driver.log" 2>&1
 echo "[b1radix] driver rc=$? $(date -u +%H:%M:%SZ)"
