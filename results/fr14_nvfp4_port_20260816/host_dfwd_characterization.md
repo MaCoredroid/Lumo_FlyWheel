@@ -14,12 +14,12 @@ claim is made or moved.
 
 The brief prices this rung at **≈ −6 ms** (DFWD per-pass host scheduling consolidation)
 **+ ≈ −5..7 ms** (post-DFWD Python tail + CFWD eager-launch graph capture). Measured at
-4-bit on the live serves:
+4-bit across six independent B1 serves:
 
 | briefed lever | briefed | measured status at HEAD / 4-bit | ceiling that actually remains |
 |---|---:|---|---:|
-| DFWD per-pass host scheduling ("5 MTP passes each with host round-trips") | −6 | **already consolidated.** 4 of the 5 MTP passes run inside **one** CUDA-graph replay per step (`drafter_runtime.graph_replays = 1`, `graph_captures = 0`, `mtp_observation = capture_manifest_bound_replay`, on **20 579/20 579** live steps). `FR13_DRAFTER_GRAPH` is a *required* member of the fixed32 hardware-floor runtime, not an optional lever. | ≤ **1.24 ms** (FR13's whole measured `dfwd` host-idle window, pre-graph) |
-| CFWD eager-launch graph capture | −3 | **already harvested.** The ladder's 2.99 ms came from *1111 eager ops/step* in the 2026‑07‑31 capture. `FR13_COMMITTER_GRAPH` + `FR13_COMMITTER_BATCHED` are now required-on (`committer.route = fixed16_device_fill_graph`, `graph_replays = 1`, `pointer_table_rebuilds = 0`, `host_flag_readbacks = 0` on all 20 579 steps), and the 2026‑08‑08 capture measures the surviving `cfwd` host-idle at **0.809 ms**. | ≈ **0.81 ms** |
+| DFWD per-pass host scheduling ("5 MTP passes each with host round-trips") | −6 | **already consolidated.** 4 of the 5 MTP passes run inside **one** CUDA-graph replay per step (`drafter_runtime.graph_replays = 1`, `graph_captures = 0`, `mtp_observation = capture_manifest_bound_replay`, on **20 579/20 579** consecutive decode steps (§2)). `FR13_DRAFTER_GRAPH` is a *required* member of the fixed32 hardware-floor runtime, not an optional lever. | ≤ **1.24 ms** (FR13's whole measured `dfwd` host-idle window, pre-graph) |
+| CFWD eager-launch graph capture | −3 | **already harvested.** The ladder's 2.99 ms came from *1111 eager ops/step* in the 2026‑07‑31 capture. `FR13_COMMITTER_GRAPH` + `FR13_COMMITTER_BATCHED` are now required-on (`committer.route = fixed16_device_fill_graph`, `graph_replays = 1`, `pointer_table_rebuilds = 0`, `host_flag_readbacks = 0` on all 20 579 of those steps), and the 2026‑08‑08 capture measures the surviving `cfwd` host-idle at **0.809 ms**. | ≈ **0.81 ms** |
 | post-DFWD Python tail | −5..7 | already refuted **once** by `c78b3ad41` (5–7 was the ladder's *realistic* band around a 10.08 ms ceiling; the decode-cadence median is 3.46 ms of GPU idle / 2.86 ms of pure Python), and 0.242 ms of it is already shipped as `FR13_HOST_TAIL_PREP_BAKE` — **armed in tonight's maxstack serve**. | ≈ **2.6 ms**, no single item > 1 ms |
 
 **The whole host-attributable, byte-safe envelope at 4-bit is ≈ 4.1–4.8 ms/step — about
@@ -77,7 +77,7 @@ FR13's 2026‑08‑08 nsys capture, GPU-projected first-to-last spans
 
 | phase | FP8 (3.6, nsys projection) | NVFP4 radixark (cuda events) | delta |
 |---|---:|---:|---:|
-| sfwd | 155.829 | 130.296 – 134.793 | **−21 to −25 ms** |
+| sfwd | 155.829 | 130.437 – 134.793 | **−21 to −25 ms** |
 | dfwd | 35.131 | 49.226 – 53.069 | **+14 to +18 ms** |
 | cfwd | 20.705 | 20.117 – 21.301 | **≈ 0** |
 
@@ -94,10 +94,12 @@ supports are robust to that caveat because they are sign-and-order arguments, no
 
 ---
 
-## 2. Every per-step work shape is invariant over 20 579 consecutive live decode steps
+## 2. Every per-step work shape is invariant over 20 579 consecutive decode steps
 
-Parsed the live maxstack `logs/fr13_fixed32_work_census.jsonl` (schema
-`fr13-fixed32-work-census-v12`), all 20 579 records. **Every** shape counter is single-valued:
+Parsed the maxstack arm's `logs/fr13_fixed32_work_census.jsonl` (schema
+`fr13-fixed32-work-census-v12`) mid-serve: **all 20 579 records present at read time**, a
+contiguous prefix of the arm's eventual 32 809 decode steps. **Every** shape counter is
+single-valued:
 
 | counter | value | distinct values in 20 579 steps |
 |---|---:|---:|
@@ -375,7 +377,7 @@ ordering semantics are suspect and nothing here is built on it.
 | dfwd span brackets `propose_draft_token_ids` | `scripts/fr10_phase4_patch_vllm_tree_gdn.py:23750` |
 | cfwd span brackets `rejection_sampler` dispatch | `scripts/fr10_phase4_patch_vllm_tree_gdn.py:35504` |
 | span timer = event-elapsed, not kernel-busy | `scripts/fr10_phase4_patch_vllm_tree_gdn.py:35127` (`_Fr13SpanTimer`) |
-| per-step shape invariance, 20 579 steps | `output/fr14_maxstack_20260817T210423Z/hydra27_fixed32_maxstack_maxstack/logs/fr13_fixed32_work_census.jsonl` |
+| per-step shape invariance, 20 579 consecutive steps (contiguous prefix of the arm's 32 809) | `output/fr14_maxstack_20260817T210423Z/hydra27_fixed32_maxstack_maxstack/logs/fr13_fixed32_work_census.jsonl` |
 | drafter graph = 4 MTP calls, 1 replay, manifest-bound | `scripts/fr10_phase4_patch_vllm_tree_gdn.py:6661` (`_fr13_fixed32_drafter_graph_replay`) |
 | committer graph/batched required-on | `scripts/fr10_phase4_patch_vllm_tree_gdn.py:10115` (`required_one`); arm files `logs/fr13_committer_{graph,batched}.arm` |
 | pinned head / MTP / target byte ledger | `scripts/fr13_hardware_floor_ledger.py:60,123,181,201` |
