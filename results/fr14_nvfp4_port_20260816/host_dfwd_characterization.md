@@ -403,3 +403,55 @@ ordering semantics are suspect and nothing here is built on it.
 | shipped instrument fixes + their tests | `scripts/fr10_phase4_patch_vllm_tree_gdn.py` (`_patch_gpu_model_runner_lfwd_gpu_timer`, `_fr13_lfwd_*`), both launchers' forwarding + `0\|1` validation, `tests/test_fr14_host_instruments.py` (21 tests) |
 | DEFER pulled, engine-fatal pair | `results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md` passes 27–28 |
 | `FR13_DFWD_SPLIT` exists / arms via flag file / never engaged (now forwarded) | `scripts/fr10_phase4_patch_vllm_tree_gdn.py:36972,36993,42878`; launcher forwarding lists `fr13_launch_forked_fa2_tree_server.sh:3677,6288` and `fr14_armb_leg3_launch_nomiddleware.sh:3468,6085`; `logs/fr13_dfwd_split.flag` = `0` in 35/35 runroots; no `fr13_dfwd_split.json.*` anywhere |
+
+---
+
+## 9. Provenance of the shipped instruments, and how to arm them
+
+**Provenance note.** The two instruments below were written and verified as one change, but
+they landed inside commit `4589b7c80` ("FR14 TreeAttn-v2 VERDICT…"), whose message describes
+a different workstream entirely: a concurrent blanket `git add` in the shared tree swept my
+staged files. The code is byte-correct and the tests pass at that commit — only the
+attribution is wrong. This section is the record, because a commit message that does not
+mention 164 lines of patcher and 331 lines of tests is not provenance. This is the **second**
+occurrence tonight of the pattern already banked as the blanket-add doctrine
+(`f592e86b9`), which is itself the argument for staging by explicit path.
+
+### 9.1 What shipped
+
+| flag | default | what it times | sidecar / counter |
+|---|---|---|---|
+| `FR13_LFWD_GPU_TIMER` | `0` | the verifier head: `compute_logits` in `execute_model`, pure-decode-gated | `FR13_LFWD_GPU_TIMER_JSON`, schema `fr13.span_gpu_timer.v1`; `vllm:fr13_lmhead_gpu_seconds` |
+| `FR13_DFWD_SPLIT` | `0` | the drafter, 3 ways: model / head / other (pre-existing; only the forwarding was missing) | `FR13_DFWD_SPLIT_JSON` → `/logs/fr13_dfwd_split.json.<pid>`, schema `fr13.dfwd_split.v1` |
+
+Both are strictly validated `0|1` by both launchers and are byte-identical when off — the
+env check precedes every other operation, so an unarmed serve does not even evaluate the
+pure-decode predicate.
+
+### 9.2 Arming them
+
+```
+FR13_LFWD_GPU_TIMER=1 \
+FR13_LFWD_GPU_TIMER_JSON=/logs/fr13_lfwd.json \
+FR13_DFWD_SPLIT=1 \
+  <the usual launcher invocation>
+```
+
+`FR13_DFWD_SPLIT_JSON` may be left unset; it defaults into the bind-mounted `/logs`. Do **not**
+set it to the empty string — see §5.2 for why that is not the same thing.
+
+### 9.3 The pre-registered reading
+
+Stated before any armed run, so the first one is a test rather than a readout. On a radixark
+`K=0` arm:
+
+| quantity | predicted | basis |
+|---|---:|---|
+| `FR13_LFWD_GPU_TIMER` span | **≈ 3.2 ms/step** | 2.620 ms pinned head floor ÷ 81.6 % roofline (§3) |
+| `overhead_other − lfwd` | **≈ 4.2 ms/step** | matches FR13's independently measured 4.096 ms of nsys host windows (§3) |
+| `FR13_DFWD_SPLIT` head term | **> model term** | §5.1: under `K=0` each of 5 passes emits 248 320 logits, not 65 536 |
+
+A materially different reading falsifies §3's mechanism or §5.1's hypothesis. That is the
+point of shipping instruments instead of arguments, and it is the whole content of this rung:
+**the host domain had no milliseconds left in it, so what it owed the campaign was the ability
+to see the two blocks that do.**

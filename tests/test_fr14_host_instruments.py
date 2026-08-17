@@ -329,3 +329,124 @@ def test_anchor_matches_the_pinned_image_shape():
     text = PATCHER.read_text()
     for line in PINNED_ANCHOR.splitlines():
         assert re.search(re.escape(line) + r"\\n", text), line
+
+
+# --------------------------------------------------------------------------- #
+# arm B leg3: the ordered-GDN gates must be draft-vocabulary-profile-aware      #
+# --------------------------------------------------------------------------- #
+
+REFERENCE_LAUNCHER = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
+LEG3_LAUNCHERS = (
+    REPO / "scripts" / "fr14_armb_leg3_launch_nomiddleware.sh",
+    REPO / "scripts" / "fr14_leg3_launch_nomiddleware.sh",
+)
+ALL_GATE_LAUNCHERS = LEG3_LAUNCHERS + (REFERENCE_LAUNCHER,)
+
+
+@pytest.mark.parametrize("launcher", ALL_GATE_LAUNCHERS, ids=lambda p: p.name)
+def test_ordered_gdn_gate_is_not_pinned_to_the_k64_era(launcher):
+    """The pre-train clause read `K != 65536 || ROOT != 1` and refused. Arm B's
+    profile chain runs on the promoted K0 config through these paths, so the
+    clause would have refused the credential the chain needs -- fail-closed, but
+    a blocked arm."""
+    text = launcher.read_text()
+    assert "FR13 ordered GDN live gate requires exact K64/root1" not in text
+    assert '"$FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE" \\' in text
+
+
+@pytest.mark.parametrize("launcher", ALL_GATE_LAUNCHERS, ids=lambda p: p.name)
+def test_both_credential_validators_receive_the_profile(launcher):
+    """Passing no --draft-vocab-profile is not neutral: the validators default to
+    k64_root, so an unqualified call silently asserts the K64 identity."""
+    text = launcher.read_text()
+    for var in (
+        "FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE",
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE",
+    ):
+        assert text.count(f'--draft-vocab-profile "${var}"') == 2, var
+    # Every invocation of either validator must carry it -- no unqualified call
+    # may survive anywhere in the file.
+    for validator in (
+        "fr13_gdn_gqa_group3_production_credential.py",
+        "fr13_gdn_single_launch_production_credential.py",
+    ):
+        assert text.count(validator) == 2, validator
+
+
+@pytest.mark.parametrize("launcher", ALL_GATE_LAUNCHERS, ids=lambda p: p.name)
+def test_profile_defaults_are_k64_root(launcher):
+    """Default must preserve every banked K64 credential's exact meaning."""
+    text = launcher.read_text()
+    for var in (
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE",
+        "FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE",
+        "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE",
+    ):
+        assert f"{var}=${{{var}:-k64_root}}" in text, var
+
+
+@pytest.mark.parametrize("launcher", LEG3_LAUNCHERS, ids=lambda p: p.name)
+def test_leg3_helper_is_byte_identical_to_the_reference(launcher):
+    """The leg3 launchers are a PORT, not a reimplementation. Drift between the
+    three copies of this predicate is how a gate ends up asserting a different
+    identity than the one it reports."""
+
+    def helper_body(text: str) -> str:
+        start = text.index("_fr13_assert_draft_vocab_profile() {")
+        end = text.index("\n}\n", start) + len("\n}\n")
+        return text[start:end]
+
+    assert helper_body(launcher.read_text()) == helper_body(
+        REFERENCE_LAUNCHER.read_text()
+    )
+
+
+@pytest.mark.parametrize("launcher", ALL_GATE_LAUNCHERS, ids=lambda p: p.name)
+@pytest.mark.parametrize(
+    "profile,env,expected_rc",
+    [
+        # k64_root accepts the full K64 identity and nothing less.
+        ("k64_root", {"FR13_DRAFT_VOCAB_ROOT": "1", "FR13_DRAFT_VOCAB_K": "65536",
+                      "FR13_DRAFT_VOCAB_BLOCKS":
+                          "/workspace/scripts/fr13_dvk_subset_blocks.json"}, 0),
+        ("k64_root", {"FR13_DRAFT_VOCAB_ROOT": "0", "FR13_DRAFT_VOCAB_K": "0",
+                      "FR13_NEEDS_ALLOW": "FR13_DRAFT_VOCAB_K=0"}, 1),
+        # a diagnostic override must disqualify k64_root even with K/ROOT right
+        ("k64_root", {"FR13_DRAFT_VOCAB_ROOT": "1", "FR13_DRAFT_VOCAB_K": "65536",
+                      "FR13_DRAFT_VOCAB_BLOCKS":
+                          "/workspace/scripts/fr13_dvk_subset_blocks.json",
+                      "FR13_NEEDS_ALLOW": "FR13_DRAFT_VOCAB_K=0"}, 1),
+        # full_vocab is the promoted K0 identity arm B's chain runs on
+        ("full_vocab", {"FR13_DRAFT_VOCAB_ROOT": "0", "FR13_DRAFT_VOCAB_K": "0",
+                        "FR13_NEEDS_ALLOW": "FR13_DRAFT_VOCAB_K=0"}, 0),
+        # ...and it is NOT satisfied by K0 without the sanctioned override
+        ("full_vocab", {"FR13_DRAFT_VOCAB_ROOT": "0",
+                        "FR13_DRAFT_VOCAB_K": "0"}, 1),
+        ("full_vocab", {"FR13_DRAFT_VOCAB_ROOT": "1",
+                        "FR13_DRAFT_VOCAB_K": "65536"}, 1),
+        # anything else is refused by name rather than defaulted
+        ("", {}, 1),
+        ("k64", {}, 1),
+    ],
+)
+def test_helper_accepts_and_refuses_the_right_identities(
+    launcher, profile, env, expected_rc, tmp_path
+):
+    """Behavioural, not textual: extract the helper and RUN it. A gate that
+    merely mentions the right variable can still assert the wrong thing."""
+    import subprocess
+
+    text = launcher.read_text()
+    start = text.index("_fr13_assert_draft_vocab_profile() {")
+    end = text.index("\n}\n", start) + len("\n}\n")
+    script = tmp_path / "helper.sh"
+    script.write_text(
+        text[start:end] + f'\n_fr13_assert_draft_vocab_profile "{profile}" LABEL\n'
+    )
+    proc = subprocess.run(
+        ["bash", str(script)],
+        capture_output=True,
+        text=True,
+        env={"PATH": "/usr/bin:/bin", **env},
+    )
+    assert proc.returncode == expected_rc, (profile, env, proc.stderr)

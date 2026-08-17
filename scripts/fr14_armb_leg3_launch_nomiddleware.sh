@@ -568,6 +568,50 @@ DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-105g}
 PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 GPU_OOM_GUARD=${GPU_OOM_GUARD:-1}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
+# FR14 ARM B: the ordered-GDN gates are DRAFT-VOCABULARY-PROFILE-AWARE.
+# Ported from scripts/fr13_launch_forked_fa2_tree_server.sh (the reference
+# implementation) because arm B's profile chain runs on the PROMOTED K0 config
+# through exactly these leg3 paths. Before this port they carried the pre-train
+# `K != 65536 || ROOT != 1` clause and passed no --draft-vocab-profile to either
+# credential validator, so they were fail-CLOSED but wrong for the shape they
+# now serve: a full_vocab credential is refused by name and k64_root is assumed
+# by the validators' own default, which would have REFUSED the K0 credential the
+# chain needs. No corruption was possible; the failure mode was a blocked arm.
+#
+# The pinning is KEPT, not removed. The caller must still DECLARE which identity
+# the gate is earned in, and this helper asserts the WHOLE identity (root, K,
+# block map, and the sanctioned override) rather than two of its fields. Default
+# stays k64_root, so every banked K64 credential reproduces unchanged.
+_fr13_assert_draft_vocab_profile() {
+  local profile=$1 label=$2
+  case "$profile" in
+    k64_root)
+      [[ "${FR13_DRAFT_VOCAB_ROOT:-}" == "1" \
+         && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+         && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+         && -z "${FR13_NEEDS_ALLOW:-}" ]] || {
+        echo "$label requires the k64_root draft-vocabulary identity: ROOT=1, K=65536, the pinned 128-id block map, and no diagnostic override" >&2
+        return 1
+      }
+      ;;
+    full_vocab)
+      [[ "${FR13_DRAFT_VOCAB_ROOT:-}" == "0" \
+         && "${FR13_DRAFT_VOCAB_K:-65536}" == "0" \
+         && "${FR13_NEEDS_ALLOW:-}" == "FR13_DRAFT_VOCAB_K=0" ]] || {
+        echo "$label requires the full_vocab draft-vocabulary identity: ROOT=0, K=0, and the sanctioned FR13_DRAFT_VOCAB_K=0 override" >&2
+        return 1
+      }
+      ;;
+    *)
+      echo "$label qualification profile must be exactly k64_root or full_vocab; got: ${profile:-<empty>}" >&2
+      return 1
+      ;;
+  esac
+  return 0
+}
+FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE:-k64_root}
+FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE:-k64_root}
+FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE:-k64_root}
 MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
 KV_CACHE_MEMORY_BYTES=${KV_CACHE_MEMORY_BYTES:-}
 # BATCH-AWARE MEMORY (user 2026-07-06): B>=4 co-residency needs more room for KV
@@ -3081,13 +3125,15 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
 	    echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be exactly 16, 32, 64, 128, single_launch, gqa_group3, or gqa_group3_bv16" >&2
 	    exit 2
 	  }
-	  if [[ ( "$_fr13_gdn_path_bv_candidate" == "single_launch" \
-	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
-	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ) \
-	        && ( "${FR13_DRAFT_VOCAB_K:-}" != "65536" \
-	             || "${FR13_DRAFT_VOCAB_ROOT:-}" != "1" ) ]]; then
-	    echo "FR13 ordered GDN live gate requires exact K64/root1" >&2
-	    exit 2
+	  # FR14 ARM B: profile-aware (see _fr13_assert_draft_vocab_profile). Was
+	  # `K != 65536 || ROOT != 1`, which pinned this gate to the K64 era and
+	  # would refuse the promoted K0 config arm B's profile chain runs on.
+	  if [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" \
+	        || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+	        || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ]]; then
+	    _fr13_assert_draft_vocab_profile \
+	      "$FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE" \
+	      "FR13 ordered GDN live gate" || exit 2
 	  fi
 	  if [[ ( "$_fr13_gdn_path_bv_candidate" == "single_launch" \
 	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
@@ -3190,7 +3236,8 @@ if [[ "$_fr13_gdn_gqa_group3_production" == "1" ]]; then
     --source-commit "$_fr13_gdn_gqa_group3_source_commit" \
     --profile fixed32 \
     --mode "$FR13_FIXED32_MODE" \
-    --batch "$_fr13_gdn_gqa_group3_production_batch"
+    --batch "$_fr13_gdn_gqa_group3_production_batch" \
+    --draft-vocab-profile "$FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE"
 elif [[ -n "$_fr13_gdn_gqa_group3_production_batch" \
         || -n "$_fr13_gdn_gqa_group3_pass_json" ]]; then
   echo "FR13 GDN GQA-group3 production batch/PASS is set without its arm" >&2
@@ -3300,7 +3347,8 @@ if [[ "$_fr13_gdn_single_launch_production" == "1" ]]; then
     --source-commit "$_fr13_gdn_single_launch_source_commit" \
     --profile fixed32 \
     --mode "$FR13_FIXED32_MODE" \
-    --batch "$_fr13_gdn_single_launch_production_batch"
+    --batch "$_fr13_gdn_single_launch_production_batch" \
+    --draft-vocab-profile "$FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE"
 elif [[ -n "$_fr13_gdn_single_launch_production_batch" \
         || -n "$_fr13_gdn_single_launch_pass_json" ]]; then
   echo "FR13 GDN single-launch production batch/PASS is set without its arm" >&2
@@ -4609,7 +4657,8 @@ PY
       --source-commit "$_fr13_gdn_gqa_group3_source_commit" \
       --profile fixed32 \
       --mode "$FR13_FIXED32_MODE" \
-      --batch "$_fr13_gdn_gqa_group3_production_batch"
+      --batch "$_fr13_gdn_gqa_group3_production_batch" \
+      --draft-vocab-profile "$FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE"
     printf '1\n' \
       > "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production.arm"
     printf '%s\n' "$_fr13_gdn_gqa_group3_production_batch" \
@@ -4636,7 +4685,8 @@ PY
       --source-commit "$_fr13_gdn_single_launch_source_commit" \
       --profile fixed32 \
       --mode "$FR13_FIXED32_MODE" \
-      --batch "$_fr13_gdn_single_launch_production_batch"
+      --batch "$_fr13_gdn_single_launch_production_batch" \
+      --draft-vocab-profile "$FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE"
     printf '1\n' \
       > "$LOG_DIR/fr13_fixed32_gdn_single_launch.production.arm"
     printf '%s\n' "$_fr13_gdn_single_launch_production_batch" \
