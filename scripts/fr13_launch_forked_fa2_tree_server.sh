@@ -575,6 +575,7 @@ FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B1_QUALIFICATION_PROF
 FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE:-k64_root}
 FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE:-k64_root}
 FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE:-k64_root}
+FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE:-k64_root}
 IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"}
 # FR14 SERVED CHECKPOINT -- the single point of truth for the serve line.
 # Deliberately NOT caller-overridable and deliberately NOT named FR13_*/LUMO_*/
@@ -3277,13 +3278,23 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" ]]; then
 	    echo "FR13_FIXED32_GDN_PATH_BV_CANDIDATE must be exactly 16, 32, 64, 128, single_launch, gqa_group3, or gqa_group3_bv16" >&2
 	    exit 2
 	  }
-	  if [[ ( "$_fr13_gdn_path_bv_candidate" == "single_launch" \
-	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
-	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ) \
-	        && ( "${FR13_DRAFT_VOCAB_K:-}" != "65536" \
-	             || "${FR13_DRAFT_VOCAB_ROOT:-}" != "1" ) ]]; then
-	    echo "FR13 ordered GDN live gate requires exact K64/root1" >&2
-	    exit 2
+	  # FR14: the ordered-GDN live gate is DRAFT-VOCABULARY-PROFILE-AWARE.
+	  # This clause used to read `K != 65536 || ROOT != 1` and refuse, which
+	  # pinned the gate to the K64 era. Under the K0 production ruling that made
+	  # a single_launch gate unearnable in the shape it would actually SERVE --
+	  # the gate would have had to run K64 while production runs K0, which is the
+	  # mislabelled-evidence class this campaign keeps closing. The pinning is
+	  # KEPT, not removed: the caller must still DECLARE which identity the gate
+	  # is earned in, and the same helper every other lever uses asserts the whole
+	  # identity (root, K, block map, and the sanctioned override) rather than two
+	  # of its fields. Default stays k64_root, so every banked ordered-GDN gate
+	  # reproduces unchanged.
+	  if [[ "$_fr13_gdn_path_bv_candidate" == "single_launch" \
+	        || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \
+	        || "$_fr13_gdn_path_bv_candidate" == "gqa_group3_bv16" ]]; then
+	    _fr13_assert_draft_vocab_profile \
+	      "$FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE" \
+	      "FR13 ordered GDN live gate" || exit 2
 	  fi
 	  if [[ ( "$_fr13_gdn_path_bv_candidate" == "single_launch" \
 	          || "$_fr13_gdn_path_bv_candidate" == "gqa_group3" \

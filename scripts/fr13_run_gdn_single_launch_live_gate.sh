@@ -175,24 +175,52 @@ REDUCER_SHA256=$(sha256sum "$REDUCER" | awk '{print $1}')
 export BSIZE=$BATCH
 export CONC=$BATCH
 export WALL=0
-export FR13_DRAFT_VOCAB_K=65536
-export FR13_DRAFT_VOCAB_ROOT=1
+# FR14: the gate's draft-vocabulary identity is DECLARED, not assumed.
+# Default k64_root, so all four banked entrypoints reproduce byte-for-byte. The
+# K0 production ruling makes full_vocab the shape a B1 single_launch credential
+# must be earned in -- a gate run in a shape production never serves is exactly
+# the mislabelled-evidence class this campaign keeps closing.
+FR13_GDN_GATE_DRAFT_VOCAB_PROFILE=${FR13_GDN_GATE_DRAFT_VOCAB_PROFILE:-k64_root}
+case "$FR13_GDN_GATE_DRAFT_VOCAB_PROFILE" in
+  k64_root)
+    export FR13_DRAFT_VOCAB_K=65536
+    export FR13_DRAFT_VOCAB_ROOT=1
+    GATE_EXPECTED_WEIGHT_BYTES=25210209416
+    GATE_EXPECTED_FLOOR_MS=92.345089436
+    ;;
+  full_vocab)
+    export FR13_DRAFT_VOCAB_K=0
+    export FR13_DRAFT_VOCAB_ROOT=0
+    export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"
+    # The arm-B full-vocab row of the ledger, same pair every K0 runner asserts.
+    GATE_EXPECTED_WEIGHT_BYTES=25430574256
+    GATE_EXPECTED_FLOOR_MS=93.15228665201465
+    ;;
+  *)
+    echo "FR13_GDN_GATE_DRAFT_VOCAB_PROFILE must be k64_root or full_vocab" >&2
+    exit 2
+    ;;
+esac
+# The block map stays the canonical default in BOTH profiles: production carries
+# it, so a gate that dropped it would not be earned in the production shape.
 export FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
+export FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE="$FR13_GDN_GATE_DRAFT_VOCAB_PROFILE"
+export FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE="$FR13_GDN_GATE_DRAFT_VOCAB_PROFILE"
 export FR13_FLOOR_ORDER=TH
 source scripts/fr13_canonical_env.sh
 run_variant() { :; }
 source "$SEQUENCE"
 unset -f run_variant
 
-[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "25210209416" \
-   && "$FR13_WEIGHT_FLOOR_MS" == "92.345089436" \
-   && "$FR13_DRAFT_VOCAB_K" == "65536" \
-   && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+[[ "$FR13_MANDATORY_WEIGHT_BYTES" == "$GATE_EXPECTED_WEIGHT_BYTES" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "$GATE_EXPECTED_FLOOR_MS" \
    && "$LUMO_SWE_AUTOCOMMIT" == "0" ]] \
-  || { echo "fixed K64/root1 floor contract drifted" >&2; exit 2; }
+  || { echo "$FR13_GDN_GATE_DRAFT_VOCAB_PROFILE floor contract drifted" >&2; exit 2; }
+# The identity itself is asserted by the same helper the launcher uses, so
+# the runner and the launcher cannot disagree about what a profile means.
 
 mkdir -p "$RUNROOT_ABS"
-printf 'classification=real_swe_verified_gdn_ordered_graph_byte_diagnostic\ncandidate_selector=%s\ncandidate=%s\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nreference_always_served=1\nmode=%s\nlogical_topology=%s\nexpected_batch=%s\ntask_count=%s\nconcurrency=%s\ndraft_vocab_k=65536\ndraft_vocab_root=1\nphysical_rows=32\nreference_launches_per_request_layer=2\ncandidate_launches_per_request_layer=1\ncombined_qrow32_gqa3_dfwd_top3=%s\nqrow32_live_arm=%s\nqrow32_so_sha256=%s\ndfwd_top3_so_sha256=%s\ndfwd_top3_source_sha256=%s\nsubset_sha256=%s\nsource_commit=%s\nentrypoint=%s\nentrypoint_sha256=%s\ncommon_runner_sha256=%s\nreducer_sha256=%s\nstarted=%s\n' \
+printf 'classification=real_swe_verified_gdn_ordered_graph_byte_diagnostic\ncandidate_selector=%s\ncandidate=%s\nacceptance_valid=0\ntiming_eligible=0\nfloor_acceptance_eligible=0\nproduction_enabled=0\nreference_always_served=1\nmode=%s\nlogical_topology=%s\nexpected_batch=%s\ntask_count=%s\nconcurrency=%s\ndraft_vocab_k='"$FR13_DRAFT_VOCAB_K"'\ndraft_vocab_root='"$FR13_DRAFT_VOCAB_ROOT"'\nphysical_rows=32\nreference_launches_per_request_layer=2\ncandidate_launches_per_request_layer=1\ncombined_qrow32_gqa3_dfwd_top3=%s\nqrow32_live_arm=%s\nqrow32_so_sha256=%s\ndfwd_top3_so_sha256=%s\ndfwd_top3_source_sha256=%s\nsubset_sha256=%s\nsource_commit=%s\nentrypoint=%s\nentrypoint_sha256=%s\ncommon_runner_sha256=%s\nreducer_sha256=%s\nstarted=%s\n' \
   "$FR13_GDN_GATE_CANDIDATE" "$GATE_CANDIDATE_ID" \
   "$FR13_GDN_GATE_MODE" "$LOGICAL_SLUG" "$BATCH" "$BATCH" "$BATCH" \
   "$COMBINED_GRAPH_GATE" "$QROW32_GATE_ARM" "$QROW32_B1_FA2_SHA256" \
@@ -243,7 +271,9 @@ if env \
     FR13_RING_EXPORT=1 FR13_FLAGS_INKERNEL=1 \
     FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 \
     FR13_SCAN_ALIGN=0 FR13_NPAD_INVARIANT=0 \
-    FR13_DRAFT_VOCAB_K=65536 FR13_DRAFT_VOCAB_ROOT=1 \
+    FR13_DRAFT_VOCAB_K="$FR13_DRAFT_VOCAB_K" FR13_DRAFT_VOCAB_ROOT="$FR13_DRAFT_VOCAB_ROOT" \
+    FR13_NEEDS_ALLOW="${FR13_NEEDS_ALLOW:-}" \
+    FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE="$FR13_GDN_GATE_DRAFT_VOCAB_PROFILE" \
     FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json \
     FR13_DEVICE_MULTIDRAFT=1 \
     FR13_FIXED32_TAW_NATIVE_PRECOMPUTE=0 \

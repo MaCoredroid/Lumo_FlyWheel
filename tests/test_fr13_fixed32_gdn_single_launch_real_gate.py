@@ -643,7 +643,14 @@ def test_route_is_stock_serving_and_production_cannot_accept_gate_value() -> Non
     )
     assert '"FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8"' in patcher
     assert '|| "$_fr13_gdn_path_bv_candidate" == "single_launch"' in launcher
-    assert "ordered GDN live gate requires exact K64/root1" in launcher
+    # FR14: the gate's draft-vocabulary identity became DECLARED rather than
+    # hardcoded to K64/root1, so a single_launch credential can be earned in the
+    # full_vocab shape production actually serves. The pinning is kept -- the
+    # caller declares a profile and the shared helper asserts the whole identity
+    # (root, K, block map, sanctioned override), which is strictly more than the
+    # two fields this message used to name. Default is still k64_root.
+    assert "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE" in launcher
+    assert '"FR13 ordered GDN live gate" || exit 2' in launcher
     assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH" in launcher
     assert "one baked expected batch" in launcher
     assert launcher.count("fr13_fixed32_gdn_single_launch_tree.arm") == 2
