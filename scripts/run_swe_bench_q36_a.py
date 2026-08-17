@@ -95,9 +95,12 @@ _FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH = (
 _FIXED32_QWEN_SETTINGS_PATH = (
     REPO_ROOT / "config" / "fr13_fixed32" / "qwen_system_settings.json"
 )
-_FIXED32_QWEN_SETTINGS_BYTES = b'{"memory":{"enableAutoSkill":false}}\n'
+_FIXED32_QWEN_SETTINGS_BYTES = (
+    b'{"memory":{"enableAutoSkill":false},'
+    b'"tools":{"exclude":["web_fetch","web_search","tool_search"]}}\n'
+)
 _FIXED32_QWEN_SETTINGS_SHA256 = (
-    "8a872a4f6f257f6d7a45f24f42500964f56e1500c5342218b71d02afe4d31fb6"
+    "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f"
 )
 _FIXED32_QWEN_SETTINGS_CONTAINER_PATH = "/run/fr13/qwen-system-settings.json"
 _FIXED32_QWEN_SETTINGS_ENV = "QWEN_CODE_SYSTEM_SETTINGS_PATH"
@@ -945,12 +948,13 @@ def _fixed32_qwen_settings_metadata(
     digest = hashlib.sha256(data).hexdigest()
     if (
         data != _FIXED32_QWEN_SETTINGS_BYTES
-        or len(data) != 37
+        or len(data) != len(_FIXED32_QWEN_SETTINGS_BYTES)
         or digest != _FIXED32_QWEN_SETTINGS_SHA256
     ):
         raise Fixed32BoundaryError(
             "fixed32 Qwen system settings differ from the canonical "
-            f"37-byte payload: path={path} bytes={len(data)} sha256={digest}"
+            f"{len(_FIXED32_QWEN_SETTINGS_BYTES)}-byte payload: path={path} "
+            f"bytes={len(data)} sha256={digest}"
         )
     return {
         "source": str(_FIXED32_QWEN_SETTINGS_PATH.relative_to(REPO_ROOT)),

@@ -2672,14 +2672,15 @@ def test_fixed32_qwen_settings_are_exact_and_auto_skill_only() -> None:
     metadata = runner._fixed32_qwen_settings_metadata()
 
     assert runner._FIXED32_QWEN_SETTINGS_PATH.read_bytes() == (
-        b'{"memory":{"enableAutoSkill":false}}\n'
+        b'{"memory":{"enableAutoSkill":false},'
+        b'"tools":{"exclude":["web_fetch","web_search","tool_search"]}}\n'
     )
     assert metadata == {
         "source": "config/fr13_fixed32/qwen_system_settings.json",
-        "bytes": 37,
+        "bytes": 98,
         "sha256": (
-            "8a872a4f6f257f6d7a45f24f42500964"
-            "f56e1500c5342218b71d02afe4d31fb6"
+            "d1c7e744e9febaa96b341e01de24cc6e"
+            "a07dd30bdf33352618b2c63de225ee9f"
         ),
         "container_path": "/run/fr13/qwen-system-settings.json",
         "mount_mode": "ro",
@@ -3435,10 +3436,10 @@ def test_fixed32_runtime_manifest_includes_qwen_settings() -> None:
     assert record == {
         "path": path,
         "sha256": (
-            "8a872a4f6f257f6d7a45f24f42500964"
-            "f56e1500c5342218b71d02afe4d31fb6"
+            "d1c7e744e9febaa96b341e01de24cc6e"
+            "a07dd30bdf33352618b2c63de225ee9f"
         ),
-        "size": 37,
+        "size": 98,
     }
 
 

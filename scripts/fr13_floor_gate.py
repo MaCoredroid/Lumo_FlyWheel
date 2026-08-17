@@ -389,7 +389,7 @@ FIXED32_QWEN_CAP_CHUNK_RELATIVE_PATH = (
     "npm/lib/node_modules/@qwen-code/qwen-code/chunks/chunk-BFG6OZN7.js"
 )
 FIXED32_QWEN_SYSTEM_SETTINGS_SHA256 = (
-    "8a872a4f6f257f6d7a45f24f42500964f56e1500c5342218b71d02afe4d31fb6"
+    "d1c7e744e9febaa96b341e01de24cc6ea07dd30bdf33352618b2c63de225ee9f"
 )
 FIXED32_QWEN_BUNDLE_TREE = {
     "schema": "fr13-qwen-agent-bundle-manifest-v1",
@@ -463,7 +463,7 @@ FIXED32_CLEARED_AGENT_ENVIRONMENT = [
     "NODE_PATH",
 ]
 FIXED32_QWEN_REMOTE_SETTINGS = {
-    "bytes": 37,
+    "bytes": 98,
     "sha256": FIXED32_QWEN_SYSTEM_SETTINGS_SHA256,
     "mode": "0444",
     "uid": 1000,
@@ -3369,7 +3369,7 @@ def _fixed32_qwen_runtime_attestation(
         raise GateError(f"{label}: Qwen injection environment is not cleared")
     expected_settings = {
         "source": "config/fr13_fixed32/qwen_system_settings.json",
-        "bytes": 37,
+        "bytes": 98,
         "sha256": FIXED32_QWEN_SYSTEM_SETTINGS_SHA256,
         "container_path": "/run/fr13/qwen-system-settings.json",
         "mount_mode": "ro",
@@ -8701,7 +8701,7 @@ def fixture_qwen_runtime_attestation() -> dict[str, Any]:
         ),
         "system_settings": {
             "source": "config/fr13_fixed32/qwen_system_settings.json",
-            "bytes": 37,
+            "bytes": 98,
             "sha256": FIXED32_QWEN_SYSTEM_SETTINGS_SHA256,
             "container_path": "/run/fr13/qwen-system-settings.json",
             "mount_mode": "ro",

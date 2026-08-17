@@ -1,1 +1,1 @@
-{"memory":{"enableAutoSkill":false}}
+{"memory":{"enableAutoSkill":false},"tools":{"exclude":["web_fetch","web_search","tool_search"]}}
