@@ -3507,7 +3507,8 @@ if [[ "$_fr13_gdn_single_launch_production" == "1" ]]; then
     --source-commit "$_fr13_gdn_single_launch_source_commit" \
     --profile fixed32 \
     --mode "$FR13_FIXED32_MODE" \
-    --batch "$_fr13_gdn_single_launch_production_batch"
+    --batch "$_fr13_gdn_single_launch_production_batch" \
+    --draft-vocab-profile "$FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE"
 elif [[ -n "$_fr13_gdn_single_launch_production_batch" \
         || -n "$_fr13_gdn_single_launch_pass_json" ]]; then
   echo "FR13 GDN single-launch production batch/PASS is set without its arm" >&2
@@ -4835,7 +4836,8 @@ PY
       --source-commit "$_fr13_gdn_single_launch_source_commit" \
       --profile fixed32 \
       --mode "$FR13_FIXED32_MODE" \
-      --batch "$_fr13_gdn_single_launch_production_batch"
+      --batch "$_fr13_gdn_single_launch_production_batch" \
+      --draft-vocab-profile "$FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE"
     printf '1\n' \
       > "$LOG_DIR/fr13_fixed32_gdn_single_launch.production.arm"
     printf '%s\n' "$_fr13_gdn_single_launch_production_batch" \

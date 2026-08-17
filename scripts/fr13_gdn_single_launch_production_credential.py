@@ -117,6 +117,18 @@ def _require_exact(
             )
 
 
+DRAFT_VOCAB_PROFILES: dict[str, dict[str, Any]] = {
+    # FR14. The credential must claim the draft-vocabulary identity the gate was
+    # EARNED in, and the launcher must spend it only in that same identity. This
+    # used to be hardcoded to K64/root1, so a credential earned under Mark's K0
+    # production ruling -- the shape B1 actually serves -- was rejected by its own
+    # validator. Same defect class as the qrow32 sidecar, which demanded K64 while
+    # the run served K0 and cost a re-run to discover.
+    "k64_root": {"draft_vocab_k": 65536, "draft_vocab_root": 1},
+    "full_vocab": {"draft_vocab_k": 0, "draft_vocab_root": 0},
+}
+
+
 def validate_credential(
     path: Path,
     *,
@@ -124,11 +136,17 @@ def validate_credential(
     profile: str,
     mode: str,
     batch: int,
+    draft_vocab_profile: str = "k64_root",
 ) -> dict[str, Any]:
     if HEX40.fullmatch(source_commit) is None:
         raise CredentialError("current HEAD is not a full lowercase Git object ID")
     if profile != RUNTIME_PROFILE:
         raise CredentialError(f"unsupported runtime profile: {profile!r}")
+    draft_vocab = DRAFT_VOCAB_PROFILES.get(draft_vocab_profile)
+    if draft_vocab is None:
+        raise CredentialError(
+            f"unsupported draft-vocabulary profile: {draft_vocab_profile!r}"
+        )
     contract = MODE.get(mode)
     if contract is None or type(batch) is not int or batch not in contract["batches"]:
         raise CredentialError(
@@ -165,8 +183,10 @@ def validate_credential(
             "concurrency": batch,
             "task_ids": B1_TASK_IDS if batch == 1 else EXACT4_TASK_IDS,
             "physical_rows": 32,
-            "draft_vocab_k": 65536,
-            "draft_vocab_root": 1,
+            "draft_vocab_k": draft_vocab["draft_vocab_k"],
+            "draft_vocab_root": draft_vocab["draft_vocab_root"],
+            # Canonical in BOTH profiles: production carries the block map, so a
+            # credential that dropped it was not earned in the production shape.
             "draft_vocab_blocks_sha256": BLOCK_MAP_SHA256,
             # The whole point of the arm: one physical launch per request-layer
             # against the reference's two. A credential that does not claim the
@@ -249,6 +269,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--profile", choices=(RUNTIME_PROFILE,), required=True)
     parser.add_argument("--mode", choices=tuple(MODE), required=True)
     parser.add_argument("--batch", type=int, choices=(1, 4), required=True)
+    parser.add_argument(
+        "--draft-vocab-profile",
+        choices=tuple(DRAFT_VOCAB_PROFILES),
+        default="k64_root",
+    )
     return parser
 
 
@@ -261,6 +286,7 @@ def main() -> int:
             profile=args.profile,
             mode=args.mode,
             batch=args.batch,
+            draft_vocab_profile=args.draft_vocab_profile,
         )
     except CredentialError as error:
         raise SystemExit(
