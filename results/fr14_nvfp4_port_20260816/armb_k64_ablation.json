@@ -1,0 +1,138 @@
+{
+ "arms": {
+  "k0": {
+   "client": {
+    "benchmark_duration_s": 319.06,
+    "mean_e2e_latency_ms": 39881.87,
+    "mean_tpot_ms": 38.3,
+    "median_e2e_latency_ms": 44717.02,
+    "median_itl_ms": 161.58,
+    "output_token_throughput_tps": 25.68,
+    "total_generated_tokens": 8192.0,
+    "total_token_throughput_tps": 51.35
+   },
+   "dvk": {
+    "dequant_lines": [],
+    "root_engaged_lines": [],
+    "shim_built_lines": []
+   },
+   "engine_bracket": {
+    "accept_per_event": 3.2143,
+    "committed_per_event": 4.2143,
+    "decode_only_tps": 26.033,
+    "floor_ratio": 1.7347,
+    "generation_tokens": 8224.0,
+    "prefill_frac": 0.0935,
+    "request_decode_time_seconds_sum": 315.9021,
+    "request_prefill_time_seconds_sum": 32.5721,
+    "spec_decode_num_accepted_tokens": 6284.0,
+    "spec_decode_num_draft_tokens": 60605.0,
+    "spec_decode_num_drafts": 1955.0,
+    "step_wall_ms": 161.587,
+    "tok_per_draft": 31.0
+   },
+   "floor": {
+    "mandatory_weight_bytes": 25430574256,
+    "weight_floor_ms": 93.15228665201465
+   },
+   "lmhead_route_lines": [
+    "(EngineCore pid=155) INFO 08-17 01:46:10 [qwen3_5.py:513] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod",
+    "(EngineCore pid=155) INFO 08-17 01:48:12 [qwen3_5_mtp.py:389] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod"
+   ],
+   "tracebacks": []
+  },
+  "k64": {
+   "client": {
+    "benchmark_duration_s": 352.59,
+    "mean_e2e_latency_ms": 44073.04,
+    "mean_tpot_ms": 42.36,
+    "median_e2e_latency_ms": 45664.09,
+    "median_itl_ms": 158.01,
+    "output_token_throughput_tps": 23.23,
+    "total_generated_tokens": 8192.0,
+    "total_token_throughput_tps": 46.47
+   },
+   "dvk": {
+    "dequant_lines": [
+     "(EngineCore pid=154) [FR14_DVK_DEQUANT] phase1 nvfp4->bf16 at slice K=65536 packed_in=torch.Size([65536, 2560]) swizzled_scale_in=torch.Size([65536, 320]) bf16_out=(65536, 5120) bytes=671088640 logical_widths=[65536] output_size_per_partition=65536 quant_method=UnquantizedEmbeddingMethod"
+    ],
+    "root_engaged_lines": [
+     "(EngineCore pid=154) [FR13_DRAFT_VOCAB_ROOT] engaged K=65536 mode=gather full_vocab=248320"
+    ],
+    "shim_built_lines": [
+     "(EngineCore pid=154) [FR13_DRAFT_VOCAB] shim built K=65536 (head rows 248320->65536) mode=gather"
+    ]
+   },
+   "engine_bracket": {
+    "accept_per_event": 2.7388,
+    "committed_per_event": 3.7388,
+    "decode_only_tps": 23.644,
+    "floor_ratio": 1.7082,
+    "generation_tokens": 8224.0,
+    "prefill_frac": 0.0932,
+    "request_decode_time_seconds_sum": 347.8249,
+    "request_prefill_time_seconds_sum": 35.7678,
+    "spec_decode_num_accepted_tokens": 6039.0,
+    "spec_decode_num_draft_tokens": 68355.0,
+    "spec_decode_num_drafts": 2205.0,
+    "step_wall_ms": 157.744,
+    "tok_per_draft": 31.0
+   },
+   "floor": {
+    "mandatory_weight_bytes": 25210209416,
+    "weight_floor_ms": 92.345089436
+   },
+   "lmhead_route_lines": [
+    "(EngineCore pid=154) INFO 08-17 01:33:47 [qwen3_5.py:513] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod",
+    "(EngineCore pid=154) INFO 08-17 01:35:48 [qwen3_5_mtp.py:389] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod"
+   ],
+   "tracebacks": []
+  }
+ },
+ "comparison": {
+  "accept_per_event": {
+   "delta_k0_minus_k64": 0.4755,
+   "k0": 3.2143,
+   "k64": 2.7388
+  },
+  "committed_per_event": {
+   "delta_k0_minus_k64": 0.4755,
+   "k0": 4.2143,
+   "k64": 3.7388
+  },
+  "decode_only_tps": {
+   "delta_k0_minus_k64": 2.389,
+   "k0": 26.033,
+   "k64": 23.644
+  },
+  "floor_ratio": {
+   "delta_k0_minus_k64": 0.0265,
+   "k0": 1.7347,
+   "k64": 1.7082
+  },
+  "mean_tpot_ms": {
+   "delta_k0_minus_k64": -4.06,
+   "k0": 38.3,
+   "k64": 42.36
+  },
+  "median_itl_ms": {
+   "delta_k0_minus_k64": 3.57,
+   "k0": 161.58,
+   "k64": 158.01
+  },
+  "output_token_throughput_tps": {
+   "delta_k0_minus_k64": 2.45,
+   "k0": 25.68,
+   "k64": 23.23
+  },
+  "step_wall_ms": {
+   "delta_k0_minus_k64": 3.843,
+   "k0": 161.587,
+   "k64": 157.744
+  }
+ },
+ "lane": "DIAGNOSTIC -- calibration-grade, NON-CITABLE",
+ "question": "Under the NVFP4 lm_head, full-vocab drafting costs only +0.807 ms of FLOOR over K64 (93.152 vs 92.345) against +34.3 ms in the fp8 era. Bytes say +-0; does the WALL agree? K64 also bought DFWD compute (65k vs 248k rows/GEMV) and pays a subset-miss acceptance penalty on out-of-corpus content.",
+ "schema": "fr14.armb.k64_ablation.v1",
+ "workload": "sglang bench_serving --backend vllm, random 1024/1024, 8 prompts, concurrency 1, seed 1, temp 0.6/top_p 0.95/top_k 20 -- identical content in both arms"
+}

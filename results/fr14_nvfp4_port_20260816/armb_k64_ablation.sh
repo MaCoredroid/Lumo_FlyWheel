@@ -193,8 +193,11 @@ PY
   echo "[$arm] boot=$boot after $((i*5))s"
   docker logs "$container" > "$armout/boot_container.log" 2>&1
   if (( boot != 1 )); then tail -80 "$armout/boot_container.log"; return 3; fi
-  tr '\0' '\n' < /proc/"$(docker inspect -f '{{.State.Pid}}' "$container")"/environ \
-    | sort > "$armout/container_env.txt" 2>/dev/null || true
+  # docker exec, NOT /proc/<pid>/environ on the host: the container runs as root
+  # and the host-side read is Permission denied (it was, on both arms of the
+  # 2026-08-17 run -- the envs had to be recaptured by hand afterwards).
+  docker exec "$container" bash -lc 'tr "\0" "\n" < /proc/1/environ | sort' \
+    > "$armout/container_env.txt" 2>/dev/null || true
   docker exec "$container" bash -lc 'tr "\0" " " < /proc/1/cmdline' \
     > "$armout/engine_cmdline.txt" 2>&1
   echo "[$arm] HEALTHY"

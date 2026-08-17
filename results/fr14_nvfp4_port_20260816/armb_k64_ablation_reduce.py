@@ -114,8 +114,16 @@ def reduce_arm(armdir: Path) -> dict[str, object]:
             (decode_s / drafts * 1000) / float(floor["weight_floor_ms"]), 4
         )
 
-    boot = (armdir / "boot_container.log")
-    boot_text = boot.read_text(errors="replace") if boot.is_file() else ""
+    # BOTH logs. boot_container.log is captured at health, which is BEFORE the
+    # first propose -- and _fr13_dvk_prepare (and therefore the Phase-1 dequant
+    # banner) fires on the first propose, i.e. only run_container.log has it.
+    # Reading just the boot log would report "no dequant" for an arm that did
+    # dequantise, and would make the K0 arm's inertness claim vacuous.
+    boot_text = ""
+    for name in ("boot_container.log", "run_container.log"):
+        path = armdir / name
+        if path.is_file():
+            boot_text += path.read_text(errors="replace")
     return {
         "client": scrape_client(armdir / "bench.log"),
         "engine_bracket": bracket,
