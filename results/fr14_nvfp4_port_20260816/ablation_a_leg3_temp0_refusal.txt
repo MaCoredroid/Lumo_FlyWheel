@@ -1,0 +1,123 @@
+# FR14 leg 3: greedy refusal excerpt from the fixed32 engine (temperature 0.0 = bench_serving default).
+# full container log had 429 lines; excerpt = the first refusal +/- context.
+
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131] EngineCore encountered a fatal error.
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131] Traceback (most recent call last):
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/executor/uniproc_executor.py", line 84, in collective_rpc
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     result = run_method(self.driver_worker, method, args, kwargs)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/serial_utils.py", line 510, in run_method
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return func(*args, **kwargs)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return func(*args, **kwargs)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_worker.py", line 750, in sample_tokens
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return self.model_runner.sample_tokens(grammar_output)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py", line 10996, in _fr13_fixed32_sample_tokens_guarded
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     result = _fr13_fixed32_orig_sample_tokens(self, *a, **k)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return func(*args, **kwargs)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py", line 6784, in sample_tokens
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     sampler_output = self._sample(logits, spec_decode_metadata)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py", line 5108, in _sample
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     sampler_output = self.rejection_sampler(
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]                      ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return self._call_impl(*args, **kwargs)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return forward_call(*args, **kwargs)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py", line 501, in forward
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     output_token_ids = rejection_sample(
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]                        ^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py", line 3763, in rejection_sample
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return _lumo_tree_canonical_multidraft_sample(
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py", line 2455, in _lumo_tree_canonical_multidraft_sample
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     raise RuntimeError(
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131] RuntimeError: FR13 fixed32 requires sampled temp>0, no draft_probs, and max_spec_len=31
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131] 
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131] The above exception was the direct cause of the following exception:
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131] 
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131] Traceback (most recent call last):
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 1122, in run_engine_core
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     engine_core.run_busy_loop()
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 1163, in run_busy_loop
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     self._process_engine_step()
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 1202, in _process_engine_step
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     outputs, model_executed = self.step_fn()
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]                               ^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/engine/core.py", line 472, in step_with_batch_queue
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     exec_future = self.model_executor.execute_model(
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/executor/uniproc_executor.py", line 114, in execute_model
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     output.result()
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return self.__get_result()
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     raise self._exception
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/executor/uniproc_executor.py", line 84, in collective_rpc
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     result = run_method(self.driver_worker, method, args, kwargs)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/serial_utils.py", line 510, in run_method
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return func(*args, **kwargs)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/worker_base.py", line 337, in execute_model
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return self.worker.execute_model(scheduler_output)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     return func(*args, **kwargs)
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_worker.py", line 813, in execute_model
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     output = self.model_runner.execute_model(
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py", line 10965, in _fr13_sg_execute_model_locked
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131]     raise failure_error from failure_cause
+(EngineCore pid=154) ERROR 08-16 23:06:51 [core.py:1131] RuntimeError: FR13 fixed32 prior sample failed: sample raised before fixed32 proposal seal: RuntimeError:FR13 fixed32 requires sampled temp>0, no draft_probs, and max_spec_len=31
+(EngineCore pid=154) Process EngineCore:
+(EngineCore pid=154) Traceback (most recent call last):
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/executor/uniproc_executor.py", line 84, in collective_rpc
+(EngineCore pid=154)     result = run_method(self.driver_worker, method, args, kwargs)
+(EngineCore pid=154)              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/serial_utils.py", line 510, in run_method
+(EngineCore pid=154)     return func(*args, **kwargs)
+(EngineCore pid=154)            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+(EngineCore pid=154)     return func(*args, **kwargs)
+(EngineCore pid=154)            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_worker.py", line 750, in sample_tokens
+(EngineCore pid=154)     return self.model_runner.sample_tokens(grammar_output)
+(EngineCore pid=154)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py", line 10996, in _fr13_fixed32_sample_tokens_guarded
+(EngineCore pid=154)     result = _fr13_fixed32_orig_sample_tokens(self, *a, **k)
+(EngineCore pid=154)              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+(EngineCore pid=154)     return func(*args, **kwargs)
+(EngineCore pid=154)            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py", line 6784, in sample_tokens
+(EngineCore pid=154)     sampler_output = self._sample(logits, spec_decode_metadata)
+(EngineCore pid=154)                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py", line 5108, in _sample
+(EngineCore pid=154)     sampler_output = self.rejection_sampler(
+(EngineCore pid=154)                      ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/torch/nn/modules/module.py", line 1779, in _wrapped_call_impl
+(EngineCore pid=154)     return self._call_impl(*args, **kwargs)
+(EngineCore pid=154)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/torch/nn/modules/module.py", line 1790, in _call_impl
+(EngineCore pid=154)     return forward_call(*args, **kwargs)
+(EngineCore pid=154)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py", line 501, in forward
+(EngineCore pid=154)     output_token_ids = rejection_sample(
+(EngineCore pid=154)                        ^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py", line 3763, in rejection_sample
+(EngineCore pid=154)     return _lumo_tree_canonical_multidraft_sample(
+(EngineCore pid=154)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=154)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py", line 2455, in _lumo_tree_canonical_multidraft_sample
+(EngineCore pid=154)     raise RuntimeError(

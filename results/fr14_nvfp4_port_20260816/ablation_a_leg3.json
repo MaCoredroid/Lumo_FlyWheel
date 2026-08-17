@@ -1,0 +1,87 @@
+{
+  "schema": "fr14.ablation_a.leg3.v1",
+  "lane": "DIAGNOSTIC — calibration-grade, NON-CITABLE",
+  "question": "Our tree on their bench shape: what does OUR fixed32 stock engine do under sglang's own bench_serving at ISL/OSL 1024/1024?",
+  "date_utc": "2026-08-16",
+  "git_head": "61e6b98a1c9022630ad77031604ba581db53d614",
+  "engine": {
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "checkpoint": "/models/qwen3.8-27b-nvfp4 (conservative arm, bf16 KV, NVFP4 body, BF16 lm_head)",
+    "arm": "tail6_fixed32 (FR13_FIXED32_MODE=tail6_fixed32, mask 0x7a9ce7ff, 23 active / 31 physical drafts)",
+    "max_num_seqs": 1,
+    "gpu_memory_utilization": 0.70,
+    "attention_backend": "TREE_ATTN",
+    "cudagraph_mode": "FULL_AND_PIECEWISE",
+    "reference_arm": "output/fr14_b1_stock_20260816T204931Z/tail6_fixed32_b1stock",
+    "cmdline_parity": "byte-identical to the reference arm's PID-1 argv EXCEPT the trailing --middleware flag (dropped, see compromises)",
+    "env_parity": "548-var container env diffed against the reference arm: every decode-path variable identical (FIXED32 mode/mask/active/physical, TAIL_MODE, DRAFT_SOURCE, GDN geom, MANDATORY_WEIGHT_BYTES 27977022848, WEIGHT_FLOOR_MS 102.479937172, DRAFT_VOCAB K/ROOT, MAX_NUM_SEQS, ATTENTION_BACKEND, CUDAGRAPH_MODE, ENABLE_APC, timers). Deltas are run-dir paths, container hostname, harness-only campaign/proxy vars, and the middleware flag."
+  },
+  "client": {
+    "image": "lmsysorg/sglang:qwen38-27b",
+    "command": "python3 -m sglang.bench_serving --backend vllm --host 127.0.0.1 --port 9950 --model qwen3.8-27b-nvfp4 --tokenizer /models/qwen3.8-27b-nvfp4 --dataset-name random --random-input-len 1024 --random-output-len 1024 --random-range-ratio 1 --disable-tqdm --extra-request-body '{\"temperature\":0.6,\"top_p\":0.95,\"top_k\":20}'",
+    "note": "identical dataset/shape to the pass-11 sglang calibration; ignore_eos on (bench default) so every request emits exactly 1024 tokens"
+  },
+  "bs1": {
+    "num_prompts": 8,
+    "max_concurrency": 1,
+    "benchmark_duration_s": 425.14,
+    "total_generated_tokens": 8192,
+    "output_token_throughput_tps": 19.27,
+    "total_token_throughput_tps": 38.54,
+    "mean_e2e_latency_ms": 53142.01,
+    "median_e2e_latency_ms": 54168.76,
+    "engine_bracket": {
+      "generation_tokens": 8224.0,
+      "spec_decode_num_drafts": 2451.0,
+      "spec_decode_num_draft_tokens": 75981.0,
+      "spec_decode_num_accepted_tokens": 5779.0,
+      "request_decode_time_seconds_sum": 420.5528,
+      "request_prefill_time_seconds_sum": 5.8398,
+      "tok_per_draft": 31.0,
+      "accept_per_event": 2.358,
+      "committed_per_event": 3.358,
+      "decode_only_tps": 19.56,
+      "step_wall_ms": 171.6,
+      "prefill_frac": 0.0139
+    }
+  },
+  "bs8_partial": {
+    "num_prompts_requested": 16,
+    "max_concurrency": 8,
+    "status": "PARTIAL — client stopped at ~5 min to protect the step-2 GPU budget; 4 of 16 requests had completed",
+    "engine_bracket": {
+      "generation_tokens": 4134.0,
+      "spec_decode_num_drafts": 1316.0,
+      "spec_decode_num_draft_tokens": 40796.0,
+      "spec_decode_num_accepted_tokens": 2830.0,
+      "request_decode_time_seconds_sum": 225.85,
+      "tok_per_draft": 31.0,
+      "accept_per_event": 2.15,
+      "committed_per_event": 3.15,
+      "decode_only_tps": 18.3
+    },
+    "structural_caveat": "our stock arm's admission width is max_num_seqs=1, so an 8-way OFFERED load is SERIALIZED (metrics showed running=1 / waiting=7, zero preemptions). This measures queueing, NOT 8-way batch amortization, and is therefore NOT comparable to sglang's 147.78 bs=8 aggregate."
+  },
+  "their_reference_pass11": {
+    "bs1_output_tps": 26.10,
+    "bs1_peak_output_tps": 37.00,
+    "bs1_accept_length": 2.90,
+    "bs8_output_tps": 147.78,
+    "bs8_accept_length": 3.18,
+    "note": "sglang container + RadixArk as-shipped + EAGLE 3/1/4, greedy (bench default temperature 0.0)"
+  },
+  "verdict": {
+    "our_bs1_tps": 19.27,
+    "their_bs1_tps": 26.1,
+    "ratio": 0.738,
+    "reading": "On THEIR workload our tree LOSES by ~26%. The mechanism is acceptance, not step cost: our accept/event falls from 4.526 (real SWE agent traffic, 35k contexts) to 2.358 on 1024-token random-token prompts, while our step wall stays ~172 ms. Their EAGLE chain barely notices the workload change (accept 2.90 on the same shape). The tree's 1.9x acceptance premium is a property of PREDICTABLE agentic code traffic; on unpredictable random-token traffic the premium evaporates and the tree's fixed 31-draft verify cost is dead weight.",
+    "triangle": "leg1 = their chain / their shape 26.1 · leg2 = our tree / our shape 25.3 · leg3 = our tree / their shape 19.3 · (step 2 = their chain / our shape)"
+  },
+  "compromises": [
+    "MIDDLEWARE DROPPED: the stock arm serves with --middleware lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware, an ASGI guard that authenticates a per-task HMAC header only the SWE harness mints. bench_serving cannot mint it, so leg 3 ran a one-line-patched COPY of the launcher (scripts/fr14_leg3_launch_nomiddleware.sh) with FR13_FIXED32_MIDDLEWARE_FLAGS=\"\". Nothing else changed; the middleware is an audit guard on ingress, not a decode-path component.",
+    "SAMPLING: bench_serving defaults to temperature 0.0. Our fixed32 committer HARD-REFUSES greedy ('FR13 fixed32 requires sampled temp>0, no draft_probs, and max_spec_len=31' — engine died on the first request, twice, logged in ablation_a_leg3_temp0_refusal.txt). Leg 3 therefore ran at OUR deployment sampling profile (temp 0.6 / top_p 0.95 / top_k 20), which is also what the 25.3 stock number was measured at. Their pass-11 26.1 was greedy. This is an unavoidable asymmetry: the two stacks cannot be run at the same temperature.",
+    "SEQUENCE FILE HEAD-PINNED: a concurrent agent is live-editing scripts/ on this branch (a floor re-derivation that moves FR13_MANDATORY_WEIGHT_BYTES 27977022848 -> 25210209416). Leg 3 sources a HEAD (61e6b98a1) copy of scripts/fr13_fixed32_floor_timers_seq.sh so it reproduces the committed b1-stock arm exactly. src/ was verified unmodified, so the engine's runtime code is HEAD-clean.",
+    "BS=8 PARTIAL: see bs8_partial.status. 16 prompts (not 32) were offered to halve the serialized cost, and the client was stopped early.",
+    "NO SWE RUNNER: leg 3 is engine-only (no harness, no proxy, no agent). The fixed32 ready-ack / work-census / boundary-flush handshakes the harness normally performs did not run, so the fr13_decode_step_wall_* and fr13_decode_forward_gpu_* counters stayed at 0 (they publish only through the explicit flush transaction). The vLLM-native spec_decode and request_decode counters used above are unaffected."
+  ]
+}
