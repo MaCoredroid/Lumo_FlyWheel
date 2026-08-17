@@ -58,6 +58,27 @@ NUM_PROMPTS=${NUM_PROMPTS:-8}
 CONCURRENCY=${CONCURRENCY:-1}
 mkdir -p "$OUT"
 
+# DRIFT GUARD. The nomiddleware launcher is a COPY, so it silently rots the
+# moment the real launcher moves. Assert the only difference is the middleware
+# block -- if anything else diverges, the ablation is measuring a different
+# engine from the stock arm and must not run.
+assert_launcher_parity() {
+  local diff_out
+  diff_out=$(diff scripts/fr13_launch_forked_fa2_tree_server.sh \
+                  scripts/fr14_armb_leg3_launch_nomiddleware.sh || true)
+  local bad
+  bad=$(printf '%s\n' "$diff_out" \
+        | grep -E '^[<>]' \
+        | grep -vE 'FR13_FIXED32_MIDDLEWARE_FLAGS=|^> *# ' || true)
+  if [[ -n "$bad" ]]; then
+    echo "FAIL: nomiddleware launcher has drifted beyond the middleware line:" >&2
+    printf '%s\n' "$bad" >&2
+    exit 2
+  fi
+  echo "[parity] nomiddleware launcher differs from the stock launcher ONLY by the middleware flag"
+}
+assert_launcher_parity
+
 boot_arm() {  # arm k root container
   local arm=$1 k=$2 root=$3 container=$4
   local armout="$OUT/$arm"
