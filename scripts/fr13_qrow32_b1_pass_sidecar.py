@@ -94,6 +94,23 @@ GQA_PAIR_CREDENTIAL_BASIS = (
 GQA_PAIR_REQUIRED_RUNTIME = (
     "Hydra27 fixed32 K64 ROOT=1 B1 physical32 FULL graph"
 )
+GQA_PAIR_REQUIRED_RUNTIME_K0 = (
+    "Hydra27 fixed32 full-vocab K0 ROOT=0 B1 physical32 FULL graph"
+)
+
+
+def _required_runtime_for(payload):
+    """The runtime this credential is valid for, in the shape it was earned in.
+
+    A full_vocab credential that says "K64 ROOT=1" in its own required_runtime
+    is the same misdescription class as the schema name and the draft_vocab_*
+    fields: a reader checking what a credential authorizes would be told the
+    wrong workload. Selected by the declared profile, and validated against the
+    same selection, so the string cannot drift from the identity beside it.
+    """
+    if payload.get("qualification_profile", "k64_root") == "full_vocab":
+        return GQA_PAIR_REQUIRED_RUNTIME_K0
+    return GQA_PAIR_REQUIRED_RUNTIME
 GQA_PAIR_PRODUCTION_SCOPE = "qrow32 B1 GQA-pair exact tree attention only"
 ARM = "nosplit"
 VISIBILITY_ARM = "visibility"
@@ -717,7 +734,13 @@ def validate_gqa_pair_binding(
         "fa2_source_closure_sha256": contract["source_closure_sha256"],
         "source_commit": patch["source_commit"],
         "patch_source_sha256": patch["patch_source_sha256"],
-        "gate_schema": _gate_schema_for(payload),
+        # The sidecar carries the profile so verify-time can resolve the
+        # same schema name the gate used. Without it, verification would
+        # default to k64_root and reject a full_vocab credential.
+        "qualification_profile": gate_payload.get(
+            "qualification_profile", "k64_root"
+        ),
+        "gate_schema": _gate_schema_for(gate_payload),
         "gate_sha256": expected_gate_sha256,
         "gate_canonical_sha256": _digest(canonical_bytes(gate_payload)),
         "gate_topology": GQA_PAIR_GATE_TOPOLOGY,
@@ -740,7 +763,7 @@ def validate_gqa_pair_binding(
         "output_raw_byte_mismatches": 0,
         "lse_raw_byte_mismatches": 0,
         "credential_basis": GQA_PAIR_CREDENTIAL_BASIS,
-        "required_runtime": GQA_PAIR_REQUIRED_RUNTIME,
+        "required_runtime": _required_runtime_for(gate_payload),
         "production_scope": GQA_PAIR_PRODUCTION_SCOPE,
         # Production serves exact4; the gate qualified one task. The selector's
         # exact-geometry hard-raise is what makes the wider scope safe, not any
@@ -844,7 +867,7 @@ def verify_gqa_pair_sidecar(
         or payload.get("output_raw_byte_mismatches") != 0
         or payload.get("lse_raw_byte_mismatches") != 0
         or payload.get("credential_basis") != GQA_PAIR_CREDENTIAL_BASIS
-        or payload.get("required_runtime") != GQA_PAIR_REQUIRED_RUNTIME
+        or payload.get("required_runtime") != _required_runtime_for(payload)
         or payload.get("production_scope") != GQA_PAIR_PRODUCTION_SCOPE
         or payload.get("production_task_ids") != list(EXACT4_TASK_IDS)
         or payload.get("production_subset_sha256") != EXACT4_SUBSET_SHA256
