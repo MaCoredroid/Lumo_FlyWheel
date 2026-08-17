@@ -85,6 +85,17 @@ MANDATORY_WEIGHT_BYTES=25430574256
 MANDATORY_WEIGHT_FLOOR_MS=93.15228665201465
 ONE_SIDED_U95_CAP_MS=107.12512964981684
 QUALIFICATION_PROFILE=full_vocab
+# The PRODUCTION identity this credential will be used under. Deliberately NOT
+# $SUBSET/$SUBSET_SHA256 above: the gate itself runs one diagnostic task
+# (subset_b1_diagnostic_one.json, cc0264db...), while the credential it mints is
+# presented by four-task production serves. The launcher demands these two values
+# verbatim for any B1 production arm, so the pointer must carry the production
+# pair, not the gate's own. Asserted against the checked-in subset below.
+EXACT4_TASK_IDS=astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398
+PRODUCTION_SUBSET=config/fr13_fixed32/subset_b4_four.json
+PRODUCTION_SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
+[[ "$(sha256sum "$PRODUCTION_SUBSET" | awk '{print $1}')" == "$PRODUCTION_SUBSET_SHA256" ]] \
+  || { echo "production exact4 subset hash drift: $PRODUCTION_SUBSET" >&2; exit 2; }
 SEQUENCE=scripts/fr13_fixed32_floor_timers_seq.sh
 SOURCE_COMMIT=$(git rev-parse HEAD)
 PATCH_SOURCE_SHA256=$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | awk '{print $1}')
@@ -419,3 +430,45 @@ Path(output_path).write_text(
 )
 print(json.dumps(payload, ensure_ascii=True, sort_keys=True))
 PY
+
+# ---- emit the run-local credential pointer (FR14 ruling C) -------------------
+# The gate just proved this credential at THIS commit, so it is the only thing
+# entitled to publish the pointer. UNTRACKED by construction: output/ is
+# git-ignored, and a tracked pointer recording SOURCE_COMMIT would invalidate
+# itself the moment it were committed.
+#
+# THIS SAVES TYPING, IT DOES NOT CONFER TRUST. Every value here is re-validated
+# at boot exactly as a hand-typed one is -- gate file present and hashing to the
+# declared sha, SOURCE_COMMIT == $(git rev-parse HEAD), binary pins matched. The
+# pointer going stale (any later commit) is therefore not a hazard: the unnamed
+# path degrades to the incumbent and says so.
+VERIFICATION_JSON="$ARMDIR/qrow32_${LIVE_ARM}_live_verification.json"
+if [[ "$LIVE_ARM" == "gqa_pair" && -f "$VERIFICATION_JSON" ]]; then
+  POINTER=${FR13_B1_CREDENTIAL_POINTER:-$PWD/output/fr13_b1_gqa_pair_credential.env}
+  git check-ignore -q "$POINTER" || {
+    echo "credential pointer destination is not Git-ignored: $POINTER" >&2
+    exit 2
+  }
+  VERIFICATION_SHA256=$(sha256sum "$VERIFICATION_JSON" | awk '{print $1}')
+  POINTER_TMP="$POINTER.tmp.$$"
+  {
+    printf '# fr13 B1 gqa_pair credential pointer -- written by %s\n' "$(basename "$0")"
+    printf '# gate runroot: %s\n' "$RUNROOT_ABS"
+    printf '# earned: %s\n' "$(date -u +%FT%TZ)"
+    printf '# STALE THE MOMENT HEAD MOVES; re-earn the gate to refresh.\n'
+    printf 'FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON=%s\n' "$VERIFICATION_JSON"
+    printf 'FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256=%s\n' "$VERIFICATION_SHA256"
+    printf 'FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON=%s\n' "$LIVE_RESULT"
+    printf 'FR13_FA2_QROW32_B1_SOURCE_COMMIT=%s\n' "$SOURCE_COMMIT"
+    printf 'FR13_FA2_QROW32_B1_SO_SHA256=%s\n' "$CANDIDATE_SHA256"
+    printf 'FR13_FA2_QROW32_B1_SO_SIZE=%s\n' "$CANDIDATE_BYTES"
+    printf 'FR13_FA2_QROW32_B1_FA2_HEAD=%s\n' "$FA2_HEAD"
+    printf 'FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256=%s\n' "$SOURCE_CLOSURE_SHA256"
+    printf 'FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=%s\n' "$PATCH_SOURCE_SHA256"
+    printf 'FR13_FA2_QROW32_B1_EXACT4_TASK_IDS=%s\n' "$EXACT4_TASK_IDS"
+    printf 'FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256=%s\n' "$PRODUCTION_SUBSET_SHA256"
+    printf 'FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=%s\n' "$QUALIFICATION_PROFILE"
+  } > "$POINTER_TMP"
+  mv -f "$POINTER_TMP" "$POINTER"
+  echo "credential pointer written: $POINTER (commit $SOURCE_COMMIT)"
+fi

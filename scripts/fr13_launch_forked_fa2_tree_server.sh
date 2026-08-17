@@ -834,6 +834,76 @@ _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED=0
 [[ -v FR13_FA2_QROW32_B1_PRODUCTION_ARM ]] \
   && _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED=1
 FR13_FA2_QROW32_B1_PRODUCTION_ARM=${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}
+
+# ---- routine credential presentation: the run-local pointer -----------------
+# FR14 ruling (C). Ordinary serves should be able to carry the promoted gqa_pair
+# arm without every caller hand-typing the whole credential. The pointer is a
+# convenience for TYPING ONLY -- it is never trusted. Everything it supplies is
+# re-validated downstream exactly as a hand-typed value is: the gate file must
+# exist, be a regular file, and hash to the declared sha; the source commit must
+# equal $(git rev-parse HEAD); the binary pins must match. A wrong, stale or
+# hostile pointer therefore cannot manufacture a credential -- it can only fail
+# those checks or, on the unnamed path, degrade to the incumbent loudly.
+#
+# WHY UNTRACKED. The credential binds SOURCE_COMMIT == HEAD, so a TRACKED
+# registry recording that commit would invalidate itself the instant it were
+# committed. House precedent for untracked manifest inputs: the auto_research
+# subset and the staged FA2 .so.
+#
+# WHITELIST, NOT PASSTHROUGH. The pointer may set only CALLER-FACING names. The
+# launcher-private sidecar variables are deliberately absent, and any unknown
+# name makes the whole pointer refuse: a pointer able to set
+# FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR would smuggle back exactly the
+# launcher-private trap this train just removed.
+FR13_B1_CREDENTIAL_POINTER=${FR13_B1_CREDENTIAL_POINTER:-$REPO/output/fr13_b1_gqa_pair_credential.env}
+_fr13_b1_load_credential_pointer() {
+  local pointer=$1 line name value
+  [[ -e "$pointer" ]] || return 0
+  if [[ -L "$pointer" || ! -f "$pointer" ]]; then
+    echo "FR13 B1 credential pointer must be a regular file: $pointer" >&2
+    return 1
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "${line//[[:space:]]/}" || "${line#"${line%%[![:space:]]*}"}" == \#* ]] && continue
+    [[ "$line" == *=* ]] || {
+      echo "FR13 B1 credential pointer has a non-assignment line: $line" >&2
+      return 1
+    }
+    name=${line%%=*}
+    value=${line#*=}
+    case "$name" in
+      FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON \
+      | FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256 \
+      | FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON \
+      | FR13_FA2_QROW32_B1_SOURCE_COMMIT \
+      | FR13_FA2_QROW32_B1_SO_SHA256 \
+      | FR13_FA2_QROW32_B1_SO_SIZE \
+      | FR13_FA2_QROW32_B1_FA2_HEAD \
+      | FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256 \
+      | FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256 \
+      | FR13_FA2_QROW32_B1_EXACT4_TASK_IDS \
+      | FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256 \
+      | FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE)
+        # The caller always wins: an explicit value is never overwritten.
+        if [[ -z "${!name:-}" ]]; then
+          printf -v "$name" '%s' "$value"
+          export "${name?}"
+        fi
+        ;;
+      *)
+        echo "FR13 B1 credential pointer may not set $name" >&2
+        return 1
+        ;;
+    esac
+  done < "$pointer"
+  return 0
+}
+_fr13_b1_load_credential_pointer "$FR13_B1_CREDENTIAL_POINTER" || {
+  echo "FR13 B1 credential pointer is malformed; refusing rather than serving an" \
+       "arm whose provenance cannot be read: $FR13_B1_CREDENTIAL_POINTER" >&2
+  exit 2
+}
+
 FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON=${FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON:-}
 FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256=${FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256:-}
 FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON=${FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON:-}
