@@ -110,11 +110,17 @@ unset required
    && "$(stat -c '%s' "$QROW32_B1_FA2_SO")" == "$CANDIDATE_BYTES" \
    && "$(sha256sum "$QROW32_B1_FA2_SO" | awk '{print $1}')" == "$CANDIDATE_SHA256" ]] \
   || { echo "QROW32_B1_FA2_SO is not the pinned qrow32 $LIVE_ARM binary" >&2; exit 2; }
-# The block map is still integrity-checked (it is a tracked repo input and a
-# silent edit would matter for every K64 arm), but under full_vocab it is NOT
-# part of this gate's identity and is deliberately not handed to the container:
-# _fr13_dvk_prepare returns at its own `_fr13_dvk_configured <= 0` early return,
-# so nothing reads it.
+# The block map is integrity-checked and IS handed to the container, exactly as
+# the production K0 serve does. Verified against the drained production arm
+# (fr14_b1_stock_20260817T054447Z container_env.txt):
+#   FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
+#   FR13_DRAFT_VOCAB_K=0
+#   FR13_DRAFT_VOCAB_ROOT=0
+# It is SET BUT UNREAD under K0 -- _fr13_dvk_prepare returns at its own
+# `_fr13_dvk_configured <= 0` early return -- and it is the canonical registry
+# default, so clearing it would have made this gate describe a shape production
+# does not serve. An earlier draft of this runner asserted it EMPTY and was
+# refused by the contract check below, which is the check doing its job.
 [[ -d "$QROW32_B1_FA2_SOURCE" \
    && "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" \
    && "$(sha256sum "$BLOCK_MAP" | awk '{print $1}')" == "$BLOCK_MAP_SHA256" ]] \
@@ -160,7 +166,7 @@ export CONC=1
 export WALL=0
 export FR13_DRAFT_VOCAB_ROOT=0
 export FR13_DRAFT_VOCAB_K=0
-export FR13_DRAFT_VOCAB_BLOCKS=
+export FR13_DRAFT_VOCAB_BLOCKS="$BLOCK_MAP_CONTAINER"
 export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"
 export FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE"
 export FR13_FLOOR_ORDER=TH
@@ -170,7 +176,7 @@ source "$SEQUENCE"
 unset -f run_variant
 [[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
    && "$FR13_DRAFT_VOCAB_K" == "0" \
-   && -z "$FR13_DRAFT_VOCAB_BLOCKS" \
+   && "$FR13_DRAFT_VOCAB_BLOCKS" == "$BLOCK_MAP_CONTAINER" \
    && "$FR13_NEEDS_ALLOW" == "FR13_DRAFT_VOCAB_K=0" \
    && "$FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE" == "full_vocab" \
    && "$FR13_MANDATORY_WEIGHT_BYTES" == "$MANDATORY_WEIGHT_BYTES" \
@@ -197,7 +203,7 @@ if env \
     LUMO_SWE_AUTOCOMMIT=0 FR13_FIXED32_B1_DIAGNOSTIC=1 \
     FR13_B1_DIAGNOSTIC_TASK_PROFILE="$B1_DIAGNOSTIC_PROFILE" \
     FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0 \
-    FR13_DRAFT_VOCAB_BLOCKS= FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0" \
+    FR13_DRAFT_VOCAB_BLOCKS="$BLOCK_MAP_CONTAINER" FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0" \
     FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE" \
     FR13_MANDATORY_WEIGHT_BYTES="$MANDATORY_WEIGHT_BYTES" \
     FR13_WEIGHT_FLOOR_MS="$MANDATORY_WEIGHT_FLOOR_MS" \
@@ -267,6 +273,7 @@ for expected in \
   'FR13_DRAFT_VOCAB_ROOT=0' \
   'FR13_DRAFT_VOCAB_K=0' \
   'FR13_NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0' \
+  "FR13_DRAFT_VOCAB_BLOCKS=$BLOCK_MAP_CONTAINER" \
   'FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=full_vocab' \
   'MAX_NUM_SEQS=1' \
   'SWE_CONCURRENCY=1' \
