@@ -1,0 +1,37 @@
+{
+ "schema": "fr14.radixark_boot_probe.v1",
+ "stop_reason": "dvk_banner",
+ "runroot": "output/fr14_b1_probe_20260817T012523Z",
+ "lmhead_nvfp4_lines": [
+  "(EngineCore pid=155) INFO 08-17 01:26:30 [modelopt.py:2225] FR14_LMHEAD_NVFP4 ParallelLMHead prefix=language_model.lm_head resolved_algo=NVFP4",
+  "(EngineCore pid=155) INFO 08-17 01:28:31 [modelopt.py:2225] FR14_LMHEAD_NVFP4 ParallelLMHead prefix=lm_head resolved_algo=NVFP4"
+ ],
+ "lmhead_route_lines": [
+  "(EngineCore pid=155) INFO 08-17 01:26:30 [qwen3_5.py:513] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod",
+  "(EngineCore pid=155) INFO 08-17 01:28:31 [qwen3_5_mtp.py:389] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod"
+ ],
+ "lmhead_routed_nvfp4": true,
+ "dvk_shim_lines": [
+  "(EngineCore pid=155) [FR13_DRAFT_VOCAB] shim built K=65536 (head rows 248320->65536) mode=gather"
+ ],
+ "dvk_root_engaged_lines": [
+  "(EngineCore pid=155) [FR13_DRAFT_VOCAB_ROOT] engaged K=65536 mode=gather full_vocab=248320"
+ ],
+ "dvk_dequant_lines": [
+  "(EngineCore pid=155) [FR14_DVK_DEQUANT] phase1 nvfp4->bf16 at slice K=65536 packed_in=torch.Size([65536, 2560]) swizzled_scale_in=torch.Size([65536, 320]) bf16_out=(65536, 5120) bytes=671088640 logical_widths=[65536] output_size_per_partition=65536 quant_method=UnquantizedEmbeddingMethod"
+ ],
+ "dvk_dequant_bytes_is_671088640": true,
+ "dvk_dequant_widths_are_k64": true,
+ "dvk_dequant_method_is_unquantized": true,
+ "kv_cache_dtype_values": [
+  "auto"
+ ],
+ "fp8_e4m3_present": false,
+ "gpu_kv_cache_lines": [
+  "(EngineCore pid=155) INFO 08-17 01:30:25 [kv_cache_utils.py:1337] GPU KV cache size: 196,608 tokens"
+ ],
+ "tracebacks": [],
+ "fr14_refusals": [],
+ "log_lines": 285,
+ "verdict": "PASS"
+}
