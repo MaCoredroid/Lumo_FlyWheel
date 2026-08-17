@@ -14,6 +14,15 @@ structural blockers that stop the stock traits at G=2, and — because the campa
 measured-never-derived — **pre-registers the one measurement that decides whether the
 kernel should be built at all**, using two kernels that already exist in a sealed binary.
 
+**Two measured findings have already moved the recommendation.** (1) GB10 supports thread
+block clusters and DSMEM *works* at cluster size 3 (functionally verified, §1b), so the
+cluster variant — which cuts staged bytes 3× while keeping all 12 CTAs and the compute
+floor, and touches no accumulation order at all — is now the **lead candidate**, ahead of
+the head-merge geometry the lever was briefed as. (2) L2 is 24 MB against a 256 KB
+in-flight tile working set, so today's 3× re-staging is probably already being absorbed by
+L2 — which means the −13 ms was priced against DRAM bytes that are not actually being
+moved. Read §8 before building anything.
+
 ---
 
 ## 1. Build-environment proof (deliverable 1) — source half PASS
@@ -49,14 +58,96 @@ the risk list — it is not an estimate, it is the incumbent's own report.
 Compile half: the sealed script `scripts/fr13_build_fa2_qrow32_gqa_pair_b1_sm121a.sh`
 refuses unless the tracked worktree is clean and `HEAD == @{upstream}`. This shared
 worktree carries other agents' in-flight changes, so the build was run from a clean local
-clone of the same pushed branch (`fr14_treeattn_build_repo_20260817`, HEAD `25d262790`,
-`dirty_tracked=0`), after verifying the three build-critical files
-(`fr13_patch_fa2_tree_bias.py`, `fr13_qrow32_b1_pass_sidecar.py`, and the build script
-itself) are byte-identical there. That preserves the script's semantics — the `.so` is
-still provably built from a clean, pushed commit — without weakening any precondition.
-Result recorded separately at the build milestone.
+clone of the same pushed branch (`fr14_treeattn_build_repo_20260817`, `dirty_tracked=0`),
+after verifying the three build-critical files (`fr13_patch_fa2_tree_bias.py`,
+`fr13_qrow32_b1_pass_sidecar.py`, and the build script itself) are byte-identical there.
+That preserves the script's semantics — the `.so` is still provably built from a clean,
+pushed commit — without weakening any precondition.
+
+**Result: PASS, byte-identical.** Total wall 37 s.
+
+| artifact | value |
+|---|---|
+| rebuilt `.so` sha256 | `3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae` |
+| pinned sha256 | **identical** |
+| size | 299 815 552 B = pin |
+| `REG` / `STACK` / `LOCAL` | 243 / 0 / 0 = sealed build |
+| SASS dump sha256 | `fa01f988…` |
+| `defined_dynamic` / `dt_needed` / `runtime_path` diffs | 0 / 0 / 0 bytes |
+| offline torch load in pinned image | `library_loaded: true, registered_required_ops: true` |
+
+**Two defects surfaced by running it, both now understood.**
+
+*(a) The ABI allowance was dead on arrival* (fixed, commit `bdd2c18e5`). The first run
+exited 94 at the `undefined_dynamic` clause even though the `.so` was byte-identical to
+the pin — which is what proved the guard wrong rather than the build. DT_NEEDED is
+captured from `readelf -W -d`, whose fifth field is the **bracketed** soname
+`[libstdc++.so.6]`; the guard tested `grep -qx 'libstdc++.so.6'`, a whole-line match on
+the *unbracketed* name, which can never succeed. The single legitimate cold-path import
+(`_ZNSoC2Ev@GLIBCXX_3.4` — the same symbol the 2026-08-10 build produced) was therefore
+rejected as "libstdc++ import without libstdc++ in DT_NEEDED" while the library sat in
+DT_NEEDED all along. It survived because the clause landed in `3120b3765`, the *same
+commit that pinned the candidate*: the sealed build predates it (its dir has no
+`dt_needed.diff`, `runtime_path.diff`, or `undefined_dynamic_allowed.txt`), so the
+allowance had never executed until this rebuild. A guard written after the only build that
+would have exercised it is a guard nothing has tested.
+
+*(b) The pinned `.so` sha256 is not reproducible across rebuilds — but the kernel is.*
+Re-running the fixed script produced `454135cef568626a…`, same size, **same SASS**. Cause,
+identified rather than assumed: nvcc stamps its own driver PID inside the build container
+into host-side symbol and name-table entries (`tmpxft_00000009_…` vs `tmpxft_0000000a_…`),
+which propagates into ~87 kB of symbol/relocation bytes. All three builds agree where it
+matters:
+
+| build | nvcc module id | SASS sha256 | `.so` sha256 |
+|---|---|---|---|
+| 2026-08-10 (sealed) | `tmpxft_00000009` | `fa01f988…` | `3560cdc0…` (the pin) |
+| FR14 run 1 | `tmpxft_00000009` | `fa01f988…` | `3560cdc0…` **= pin** |
+| FR14 run 2 | `tmpxft_0000000a` | `fa01f988…` | `454135ce…` |
+
+**Device code is fully deterministic; the `.so` hash is reproducible only up to a PID.**
+Run 1 matched the pin by landing the same container PID as the sealed build. This matters
+beyond this rebuild: the campaign pins the `.so` sha256 at six hard-fail comparison sites,
+so any future rebuild from byte-identical source has a coin-flip chance of being rejected
+as a different binary. **Recommendation: pin the SASS digest as the reproducibility
+credential** (deterministic, and it is what actually governs kernel behaviour), keeping the
+`.so` sha256 as the integrity check on the *staged artifact* it correctly is. Flagged for
+Mark — the six-site pin structure is campaign provenance machinery, not this agent's to
+restructure.
 
 ---
+
+## 1b. The hardware, measured from the driver (not from documentation)
+
+Queried on the idle GPU via `cuDeviceGetAttribute`
+(`results/.../fr14_sm121a_capability_probe.py`), plus a functional DSMEM kernel.
+
+| fact | measured | why the design cares |
+|---|---|---|
+| device / cc | **NVIDIA GB10, cc 12.1** (sm_121a) | — |
+| SMs | **48** | CTAs = SMs busy at 96 KB smem |
+| max dynamic smem / block (optin) | **101 376 B (99 KB)** | G=6 needs exactly 96 KB → **fits, 3 072 B headroom** |
+| smem / SM | 102 400 B | 1 CTA/SM at 96 KB, as today |
+| threads / block, threads / SM | 1024, **1536** | G=6's 384-thread CTA is legal |
+| L2 | **24 MB** | see below — reshapes the cost model |
+| DRAM | 256-bit @ 8533 MHz → **273 GB/s** | matches the brief's 273 exactly |
+| **`CU_DEVICE_ATTRIBUTE_CLUSTER_LAUNCH`** | **1 (supported)** | gates fallback F2 |
+| **DSMEM functional, cluster size 3** | **PASS, 0 mismatches** | F2 is real, not just advertised |
+
+The DSMEM probe is a functional test, not an attribute read: 12 CTAs launched as 4
+clusters of 3 (exactly the B1 grid regrouped), cluster rank 0 stages a 16 KB tile, ranks 1
+and 2 read it back through `cluster.map_shared_rank()` and verify every element. Zero
+mismatches at all three ranks. **A peer CTA on GB10 can read the tile its neighbour
+staged.**
+
+**The 24 MB L2 is the most consequential number here, and it cuts against the lever's
+premise.** One staged tile is 64 KB; the tiles in flight across all 12 B1 CTAs at any
+instant are ~4 KV heads × 64 KB = 256 KB — three orders of magnitude inside L2. The 3
+lanes sharing a KV head march through the same `n_block` sequence, so lanes 2 and 3 are
+very likely already being served from L2 rather than DRAM. If so, today's 3× "re-staging"
+costs L2 bandwidth and issue slots, **not** the DRAM bytes the −13 ms estimate was built
+from. This is the strongest a-priori evidence for Model P in §8, and it is exactly what
+the pre-registered fit will settle.
 
 ## 2. The incumbent, read from source (not from memory)
 
@@ -320,15 +411,26 @@ Sweeping context length across 20–40k in the same probe separates the α (∝ 
 128-of-192 staging sub-partition, same Tier-A argument. Compute floor ×1.5. The
 conservative pick if the fit is ambiguous.
 
-**F2 — cluster / distributed shared memory (Tier-A, keeps 12 CTAs).** Group the 3 CTAs
-that share a KV head into a thread-block cluster; one stages the tile, all three read it
-through DSMEM. **Byte traffic falls 3× with CTA count and the compute floor unchanged** —
-it is the only option that buys bytes without paying parallelism, and it needs no change
-to `kBlockM`, `kNWarps`, or any accumulation order. Contingent on a hardware fact that
-must be **measured, not assumed**: whether sm_121a supports cluster launch and remote-smem
-`mapa`/`ldmatrix` at useful bandwidth. Consumer Blackwell is not Hopper, and this is
-exactly the kind of capability that quietly is not there. Capability probe queued for the
-free-GPU window alongside the byte probe. If it lands, F2 likely dominates G=6.
+**F2 — cluster / distributed shared memory (Tier-A, keeps 12 CTAs). NOW THE LEAD
+CANDIDATE — hardware-verified.** Group the 3 CTAs that share a KV head into a thread-block
+cluster; one stages the tile, all three read it through DSMEM. **Staged byte traffic falls
+3× with CTA count *and* the compute floor unchanged** — it is the only option in the whole
+space that buys bytes without paying parallelism, and it requires **no change to
+`kBlockM`, `kNWarps`, `MMA_M`, or any accumulation order whatsoever**, which makes its
+Tier-A argument even shorter than §4's: the arithmetic is bit-for-bit the incumbent's, and
+only the provenance of the bytes in smem changes.
+
+This was written as speculative — consumer Blackwell is not Hopper, and cluster/DSMEM is
+exactly the sort of capability that quietly is not there. It is no longer speculative:
+`CLUSTER_LAUNCH = 1` and the functional probe (§1b) shows rank 1 and rank 2 correctly
+reading rank 0's staged tile at cluster size 3, zero mismatches, on the real device.
+
+Remaining unknown is **remote-smem bandwidth**, not capability: the staging CTA becomes
+the single issuer for its cluster, so F2 trades 3× fewer gmem→smem loads for 3× more
+readers on one smem port. That is the measurement to add to the §8 probe. On the current
+reading — 24 MB L2 already absorbing much of the re-staging, compute floor unchanged — F2
+dominates G=6 and probably G=3, and should be built first if the fit says anything is
+worth building.
 
 **F3 — split-K (Tier-B — STOP for Mark).** 4 KV heads × 12 context splits = 48 CTAs, each
 staging 1/12 of the context: **read-once *and* full occupancy**, 1.51 GB staged with the
@@ -374,11 +476,24 @@ parent.
 
 ## 11. Open items
 
-1. **Compile half of the build-env proof** — running; result reported at the build milestone.
-2. **sm_121a cluster/DSMEM capability** — measured in the free-GPU window; gates F2.
-3. **GB10 max dynamic smem per block** — 96 KB proven serviceable; exact cap to be read
-   from the device rather than assumed, since G=6 needs exactly 96 KB and any future
-   variant would need the true ceiling.
-4. **The §8 fit** — the gate on whether §6's kernel is built at all.
-5. **F3 (split-K) is a Mark decision**, and on the current reading of the numbers it is the
-   one worth putting in front of him.
+**Closed since first draft**
+
+1. ~~Compile half of the build-env proof~~ — **PASS**, `.so` byte-identical to the pin;
+   two defects found and one fixed (§1).
+2. ~~sm_121a cluster/DSMEM capability~~ — **supported and functional at cluster size 3**
+   (§1b). F2 promoted to lead candidate.
+3. ~~GB10 max dynamic smem per block~~ — **101 376 B measured**; G=6's 96 KB fits with
+   3 072 B to spare.
+
+**Open**
+
+4. **The §8 fit** — the gate on whether any of §6's kernel is built. Runs on a free GPU
+   from the already-sealed binary; no new build, no serve.
+5. **Remote-smem bandwidth for F2** — capability is proven, throughput is not. Add a
+   local-vs-remote smem read comparison to the §8 probe.
+6. **F3 (split-K) is a Mark decision.** On the current reading — 24 MB L2 absorbing much
+   of the re-staging, compute floor scaling as 1/CTAs — the greenlit −13 ms looks like a
+   split-K number wearing a head-merge label, and F3 is the option that actually delivers
+   it. Worth putting in front of him with the fitted numbers rather than assumed ones.
+7. **`.so` sha256 pinning is not rebuild-reproducible** (§1b). Recommend pinning the SASS
+   digest as the reproducibility credential. Provenance-core machinery — Mark's call.

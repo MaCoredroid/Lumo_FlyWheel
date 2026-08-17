@@ -1,0 +1,1 @@
+{"cluster_dims": 3, "grid": 12, "threads": 256, "tile_bytes": 16384, "launch": "no error", "sync": "no error", "mismatches_rank0": 0, "mismatches_rank1": 0, "mismatches_rank2": 0, "dsmem_functional": true}

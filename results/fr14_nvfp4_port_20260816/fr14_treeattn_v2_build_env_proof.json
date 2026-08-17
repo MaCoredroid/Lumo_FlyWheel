@@ -1,0 +1,41 @@
+{
+  "schema": "fr14.treeattn_v2.build_env_proof.v1",
+  "date": "2026-08-17",
+  "arm_rebuilt": "gqa_pair (B1 GQA-pair FA2 candidate)",
+  "source_closure_sha256": "172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4",
+  "source_closure_matches_pin": true,
+  "regenerated_source_vs_sealed_build_source": "byte-identical in all 6 closure files",
+  "fa2_head": "29210221863736a08f71a866459e368ad1ac4a95",
+  "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+  "wall_seconds": 37,
+  "builds": [
+    {"id": "sealed_20260810", "nvcc_module_id": "tmpxft_00000009_00000000",
+     "sass_sha256": "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470",
+     "so_sha256": "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae",
+     "so_bytes": 299815552, "is_pin": true},
+    {"id": "fr14_run1", "nvcc_module_id": "tmpxft_00000009_00000000",
+     "sass_sha256": "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470",
+     "so_sha256": "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae",
+     "so_bytes": 299815552, "matches_pin": true},
+    {"id": "fr14_run2", "nvcc_module_id": "tmpxft_0000000a_00000000",
+     "sass_sha256": "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470",
+     "so_sha256": "454135cef568626a0a0eb433220eb930838763e4448a6f2a8ca42c296110d652",
+     "so_bytes": 299815552, "matches_pin": false}
+  ],
+  "device_code_deterministic": true,
+  "so_sha256_deterministic": false,
+  "so_nondeterminism_cause": "nvcc stamps its build-container driver PID into host-side symbol/name-table entries (tmpxft_<pid>_<counter>), propagating into ~87kB of symbol and relocation bytes; SASS and resource usage are unaffected",
+  "resource_usage": {"REG": 243, "STACK": 0, "LOCAL": 0, "SHARED": 1024},
+  "abi_audit": {"defined_dynamic_diff_bytes": 0, "dt_needed_diff_bytes": 0,
+                "runtime_path_diff_bytes": 0,
+                "undefined_dynamic_added": ["_ZNSoC2Ev@GLIBCXX_3.4"],
+                "verdict": "ABI_AUDIT_PASS after the guard fix"},
+  "offline_torch_load": {"library_loaded": true, "registered_required_ops": true, "torch": "2.11.0+cu130"},
+  "defects_found": [
+    {"id": "abi_allowance_dead_on_arrival", "fixed_in": "bdd2c18e5",
+     "detail": "grep -qx 'libstdc++.so.6' against readelf's bracketed '[libstdc++.so.6]' can never match; clause landed in 3120b3765, the same commit that pinned the candidate, so it had never executed until this rebuild"},
+    {"id": "so_sha256_not_rebuild_reproducible", "fixed_in": null,
+     "detail": "six-site .so sha256 pinning cannot survive a rebuild from byte-identical source; recommend pinning the SASS digest as the reproducibility credential. Provenance-core: Mark's call"}
+  ],
+  "verdict": "BUILD_ENV_PROOF_PASS"
+}
