@@ -400,21 +400,46 @@ Third generation of the same move: FR13 130/135 → arm A 111/115 → arm B 100/
 
 ---
 
-## Must be verified on the next GPU boot
+## GPU verification — boot probe, 2026-08-17
 
-1. `[FR14_LMHEAD_NVFP4]` + `FR14_LMHEAD_QUANT_ROUTE lm_head
-   quant_method=ModelOptNvFp4LinearMethod` banners, under the **baked**
-   enforcement (the mode this train changed).
-2. `[FR14_DVK_DEQUANT] phase1 …` banner with `bytes=671088640`,
-   `logical_widths=[65536]`, `output_size_per_partition=65536`,
-   `quant_method=UnquantizedEmbeddingMethod` — the new risk, and the first time
-   the dequant path runs on a device.
-3. PID1 argv equality: `vllm serve /models/qwen3.8-27b-nvfp4-radixark
-   --served-model-name qwen3.8-27b-nvfp4-radixark …` vs `expected_pid1_argv`.
-4. `kv_cache_dtype=auto` in the engine log and no `fp8_e4m3` anywhere (the KV
-   surgery holding under the fixed32 serve line, not just the smoke's).
-5. Peak host memory across the chunked dequant at `GPU_UTIL=0.70` with the
-   46 GiB KV reservation live.
+`radixark_boot_probe_20260817T012523Z.json` — **verdict PASS**, stop_reason
+`dvk_banner`, zero tracebacks, zero FR14 refusals, 285 log lines.
+
+| # | item | result |
+|---|---|---|
+| 1 | `FR14_LMHEAD_NVFP4` + `FR14_LMHEAD_QUANT_ROUTE` under the **baked** enforcement | **PASS**, on BOTH heads — the target's (`modelopt.py:2225` `prefix=language_model.lm_head resolved_algo=NVFP4` → `qwen3_5.py:513`) and the MTP drafter's own (`prefix=lm_head` → `qwen3_5_mtp.py:389`), both `ModelOptNvFp4LinearMethod` |
+| 2 | `[FR14_DVK_DEQUANT] phase1 …` | **PASS** — `bytes=671088640` (exactly `SUBSET_HEAD_BYTES`), `logical_widths=[65536]`, `output_size_per_partition=65536`, `quant_method=UnquantizedEmbeddingMethod`; plus `[FR13_DRAFT_VOCAB] shim built K=65536 (head rows 248320->65536) mode=gather` and `[FR13_DRAFT_VOCAB_ROOT] engaged` |
+| 4 | `kv_cache_dtype=auto`, no `fp8_e4m3` | **PASS** — `kv_cache_dtype=auto`, zero `fp8_e4m3`, GPU KV cache 196,608 tokens |
+| 5 | dequant transient at `GPU_UTIL=0.70` | **PASS** by absence of failure; the CPU bound was 1.5 GB total / 0.86 GB scratch (`radixark_dvk_dequant_memory.json`) |
+
+Item 2 is the one that mattered: it converts the offline swizzle proof into a
+device result — a 512-block, 128-id gather out of a **swizzled** NVFP4 scale,
+dequantised in 8192-row chunks, producing a usable BF16 K64 head.
+
+### BOOT DEFECT 1, found by the probe and fixed
+
+The first attempt (`radixark_boot_probe_20260817T011303Z.*`) built the shim
+correctly and then died in the dequant:
+
+```
+File nvfp4_emulation_utils.py:38, in break_fp4_bytes
+  values = kE2M1[abs_vals] * torch.where(signs, -1.0, 1.0)
+RuntimeError: indices should be either on cpu or on the same device as the
+indexed tensor (cpu)
+```
+
+`kE2M1ToFloat_handle.val` ships on CPU and the ONLY thing in vLLM that moves it
+is `EmulationNvFp4LinearKernel.process_weights_after_loading` — which never runs
+under the FlashInfer kernel. Every in-tree caller of `dequantize_to_dtype`
+happens to be the emulation kernel itself, so the dependency is invisible until
+it is called from outside. Fixed by doing what the emulation kernel does, at
+prepare time, plus an explicit not-capturing assert (upstream's own comment says
+`.to(device)` is illegal during CUDA graph capture). Regression-tested.
+
+## Still to verify
+
+3. PID1 argv equality vs `expected_pid1_argv` (the probe is killed before the
+   contract's attestation runs; the stock B1 serve exercises it).
 6. `FR13_COMPUTE_MS_PER_ROW` — re-measure on the first arm-B B1 profile; 0.54 is
    the fp8-era value, retained as a conservative (high) bound.
 7. The provisional `ONE_SIDED_U95_CAP_MS = 1.15 x floor` — Mark's open ruling.
