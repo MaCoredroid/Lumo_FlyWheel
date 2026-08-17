@@ -195,3 +195,73 @@ predicates, then re-earn gates in the K0 shape.
 
 Spending 4–6 GPU-h re-earning K64-shaped credentials before that decision would
 produce evidence no production serve can consume.
+
+---
+
+# DIAGNOSIS (2026-08-17): the hydra27 arm-2 `rc=2` IS this blocker, not a separate one
+
+Arm 2 of every fixed32 campaign has been dying at `rc=2`. It was carried as a
+"pre-existing refusal, low priority". It is not separate — it is the lever
+predicate firing, and it sits directly on the critical path for the levered B1
+serve.
+
+From `output/fr14_b1_stock_20260817T054447Z/hydra27_fixed32_b1radix.runlog`:
+
+```
+[fr13] B1 production arm unnamed; serving the promoted default
+       FR13_FA2_QROW32_B1_PRODUCTION_ARM=gqa_pair
+FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance
+FAIL: launcher rc=2
+```
+
+## Why only arm 2
+
+The promoted-default block (`fr13_launch_forked_fa2_tree_server.sh:1125-1137`)
+arms `gqa_pair` when no B1 arm is named **and** `FR13_FIXED32_MODE ==
+hydra27_fixed32`. So:
+
+* **arm 1, `tail6_fixed32`** — mode does not match, the default is never applied,
+  the arm serves clean. This is why every FR14 headline came from tail6 and why
+  the K0 production serve drained `swerc=0`.
+* **arm 2, `hydra27_fixed32`** — mode matches, the default IS applied, and the
+  selector predicate at `:2003-2014` then refuses.
+
+## The design bug underneath
+
+`:1125-1137` checks only that no *other* arm is named. It does **not** check that
+a credential is present. It arms a credentialed selector unconditionally, and the
+predicate then demands, among other things:
+
+```bash
+"$FR13_FA2_QROW32_B1_SOURCE_COMMIT" == "$(git rev-parse HEAD)"
+```
+
+Those provenance variables are empty on an ordinary campaign launch. So the
+hydra27 B1 arm is **structurally unbootable at any HEAD where the credential is
+not presented** — i.e. at every HEAD since the credential was minted. Under K64
+it failed on the stale HEAD-bound provenance; under K0 it fails one clause
+earlier, on `K == 65536`. Two causes, same arm, same outcome.
+
+This is precisely the config-drift failure mode `fr13_required_tree_flags.sh`'s
+own header was written about: a promoted default that silently stops being
+serviceable when its evidence moves.
+
+## Consequence for the levered serve
+
+The FA2 B1 selector requires `hydra27_fixed32`, so **the levered B1 serve must be
+the hydra27 arm** — the one that cannot currently boot. Fixing this is therefore
+not optional cleanup; it is a prerequisite, and it is the same fix:
+
+1. give the selector a `full_vocab` qualification profile so the K0 shape is a
+   sanctioned identity rather than a refusal;
+2. accept the sanctioned K0 override where the predicate today demands
+   `-z FR13_NEEDS_ALLOW` (its intent is "no diagnostic override in play", and
+   under K0 that override *is* the production shape);
+3. make the promoted default **not arm a credentialed selector when no
+   credential is presented** — fall back to the incumbent instead of arming
+   something that is guaranteed to refuse. That alone un-breaks arm 2 for every
+   unlevered campaign, K64 or K0.
+
+Item 3 is independently valuable: it converts a campaign-terminating refusal
+into a clean unlevered boot, which is what arm 2 was always supposed to be when
+no lever is credentialed.
