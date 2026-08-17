@@ -153,3 +153,55 @@ against their greedy.
 - `armb_k64_ablation_reduce.py` — the reduction (self-tested: it reproduces arm
   A's banked leg-3 numbers from arm A's own metrics bracket)
 - `scripts/fr14_armb_leg3_launch_nomiddleware.sh` — the middleware-dropped launcher
+
+---
+
+# APPENDIX — partial SWE sighting from the killed b1radix arm (2026-08-17)
+
+**PARTIAL AND CONTAMINATED. NOT a stock B1 result. Do not cite.** Recorded
+because the GPU time was spent and the direction is informative, not because it
+is admissible.
+
+The first b1radix stock serve (`output/fr14_b1_stock_20260817T020534Z`) was
+killed at 03:01Z by the chat-traffic audit (`swerc=1`) on a `web_fetch`
+invocation shape the request counter cannot model — the failure that motivated
+the no-net workload change. Three of four tasks had completed, so the reducer
+emitted at `n_tasks=3`; deploy-speed is only citable at the contracted task
+count, so this is a sighting.
+
+| | arm A stock (banked, n=4) | **arm B partial (n=3)** |
+|---|---:|---:|
+| step wall | 218.764 ms | **199.403 ms** (−8.8%) |
+| measured TPS (full-step wall) | 25.261 | **25.277** (+0.06%) |
+| accept / event | 4.526 | **4.040** (−10.7%) |
+| committed / event | 5.526 | 5.040 |
+| s/fwd (wall) | — | 0.19797 |
+| s/fwd_gpu | — | 0.12581 |
+| prefill_frac | 0.152 | 0.110 |
+| weight floor | 102.480 ms | 92.345 ms |
+| floor ratio | 2.135 | 2.159 |
+
+**Why it is not admissible, in order of severity:**
+
+1. **n_tasks=3, not 4** — 13398 never ran. The missing task is not random: it is
+   the one the killed campaign never reached, so the three that did run are a
+   truncation, not a sample.
+2. **13033 is gold-patch contaminated** — `verdict=resolved` with 5 `web_fetch`
+   trace hits, including the astropy issue timeline and PR diff. The agent read
+   the answer off GitHub. Void for quality; its *timing* is also suspect because
+   fetch turns are not model-decode turns.
+3. **13236 fetched the PR diff too** (10 hits) and was the task that tripped the
+   audit.
+4. Different task mix from the banked arm-A four, so the accept comparison is
+   confounded by content as well as by checkpoint.
+
+**The direction, stated as a hypothesis for the rerun, not a result:** the
+aggressive bytes made the step ~8.8% cheaper on SWE traffic — consistent with
+the −10.135 ms of floor — but acceptance fell ~10.7%, leaving throughput flat.
+That is the OPPOSITE sign from the 1024/1024 bench above, where arm B's
+acceptance *rose* 16% over arm A. If it survives a clean n=4 no-net rerun, it
+says the aggressive quantisation costs drafter agreement specifically on long
+agentic context, which the short random-token shape cannot see. That is exactly
+the measurement the relaunched arm is for.
+
+Artifact: `armb_b1_partial_n3_deploy_speed.json` (the reducer's own output).
