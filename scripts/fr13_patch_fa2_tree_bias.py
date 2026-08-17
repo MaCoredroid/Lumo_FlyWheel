@@ -5276,6 +5276,24 @@ def _fr13_fa2_qrow32_b1_digest(env_name, label, *, length=64):
     return value
 
 
+def _fr13_fa2_qrow32_b1_draft_vocab_identity():
+    """The draft-vocabulary identity AS SERVED, for artifact emission.
+
+    Emitters used to hardcode draft_vocab_root=1 / draft_vocab_k=65536 into the
+    live gate JSON. Combined with a pass-sidecar validator that REQUIRED those
+    same literals, a K0 gate produced a green credential describing a K64 serve:
+    two hardcodings agreeing with each other while both disagreed with reality
+    (fr14 2026-08-17 red-team). An artifact must report what ran.
+    """
+    return (
+        int(os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0")),
+        int(os.environ.get("FR13_DRAFT_VOCAB_K", "0")),
+        os.environ.get(
+            "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE", "k64_root"
+        ),
+    )
+
+
 def _fr13_fa2_qrow32_b1_require_draft_vocab_profile():
     """Kernel-side defence-in-depth on the draft-vocabulary IDENTITY.
 
@@ -5799,7 +5817,11 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "status": "PASS" if passed else "FAIL", "suite": "SWE-Verified",
         "instance_id": _FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS[0],
         "concurrency": 1, "batch_size": 1, "physical_rows": 32,
-        "draft_vocab_root": 1, "draft_vocab_k": 65536,
+        "draft_vocab_root": _fr13_fa2_qrow32_b1_draft_vocab_identity()[0],
+        "draft_vocab_k": _fr13_fa2_qrow32_b1_draft_vocab_identity()[1],
+        "qualification_profile": (
+            _fr13_fa2_qrow32_b1_draft_vocab_identity()[2]
+        ),
         "arm": arm, "selector_sentinel": config["sentinel"],
         "candidate_num_splits": config["num_splits"],
         "split_scratch_allocation": config["split_scratch_allocation"],

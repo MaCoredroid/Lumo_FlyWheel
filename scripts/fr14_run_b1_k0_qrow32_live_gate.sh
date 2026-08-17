@@ -380,7 +380,11 @@ if (
 ):
     raise SystemExit("authenticated real-task traffic audit drifted")
 payload = {
-    "schema": f"fr13.fixed32.fa2_qrow32_{live_arm}_k64_b1_live_verification.v1",
+    # Shape-correct type name: this artifact was earned in the full_vocab
+    # workload and must not announce itself as a k64 one.
+    "schema": (
+        f"fr13.fixed32.fa2_qrow32_{live_arm}_full_vocab_b1_live_verification.v1"
+    ),
     "status": "PASS",
     "suite": "SWE-Verified",
     "task_ids": [summary["instance_id"]],
@@ -390,8 +394,10 @@ payload = {
     "concurrency": 1,
     "physical_rows": 32,
     "topology": "hydra27_fixed32",
-    "draft_vocab_root": 1,
-    "draft_vocab_k": 65536,
+    # Reported from the live result the container produced, never hardcoded.
+    "draft_vocab_root": live["draft_vocab_root"],
+    "draft_vocab_k": live["draft_vocab_k"],
+    "qualification_profile": live.get("qualification_profile"),
     "candidate_so_sha256": candidate["sha256"],
     "candidate_so_size": candidate["size"],
     "fa2_head": qrow.FA2_HEAD,

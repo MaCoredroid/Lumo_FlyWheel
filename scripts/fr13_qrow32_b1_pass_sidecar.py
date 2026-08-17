@@ -37,6 +37,43 @@ SIDECAR_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_production_pass.v2"
 # diagnostic bindings); the raw-byte evidence itself lives in the live A/B
 # result the gate binds by digest, which is why both are required to issue.
 GQA_PAIR_GATE_SCHEMA = "fr13.fixed32.fa2_qrow32_gqa_pair_k64_b1_live_verification.v1"
+GQA_PAIR_GATE_SCHEMA_K0 = (
+    "fr13.fixed32.fa2_qrow32_gqa_pair_full_vocab_b1_live_verification.v1"
+)
+
+
+def _gate_schema_for(payload):
+    """The artifact TYPE name for the shape this artifact was earned in.
+
+    The schema name carried a literal "k64", so a K0 credential would have
+    announced itself as a K64 one in its own type string. Both names are
+    pinned here and selected by the declared profile, so the name cannot
+    disagree with the identity fields beside it.
+    """
+    profile = payload.get("qualification_profile", "k64_root")
+    if profile == "full_vocab":
+        return GQA_PAIR_GATE_SCHEMA_K0
+    return GQA_PAIR_GATE_SCHEMA
+
+
+
+def _draft_vocab_identity_is_consistent(payload):
+    """A gate artifact must describe the shape it was actually earned in.
+
+    This replaced a pair of `!= 1` / `!= 65536` literals. Those made the
+    validator demand K64 -- so a K0 gate could only pass by MISREPORTING itself
+    as K64, which is exactly what happened once. The identity is now checked
+    for internal consistency against the profile the artifact declares, so both
+    shapes are expressible and neither can masquerade as the other.
+    """
+    profile = payload.get("qualification_profile", "k64_root")
+    root = payload.get("draft_vocab_root")
+    k = payload.get("draft_vocab_k")
+    if profile == "k64_root":
+        return root == 1 and k == 65536
+    if profile == "full_vocab":
+        return root == 0 and k == 0
+    return False
 GQA_PAIR_SIDECAR_SCHEMA = "fr13.fixed32.fa2_qrow32_b1_gqa_pair_production_pass.v1"
 GQA_PAIR_GATE_TOPOLOGY = "hydra27_fixed32"
 # The byte gate ran ONE authenticated real task. That is narrower than the
@@ -486,8 +523,7 @@ def validate_live_result(
         or payload.get("concurrency") != 1
         or payload.get("batch_size") != 1
         or payload.get("physical_rows") != 32
-        or payload.get("draft_vocab_root") != 1
-        or payload.get("draft_vocab_k") != 65536
+        or not _draft_vocab_identity_is_consistent(payload)
         or payload.get("runtime_mode") != "FULL"
         or payload.get("candidate_so_sha256") != candidate_contract["sha256"]
         or payload.get("candidate_so_size") != candidate_contract["size"]
@@ -573,7 +609,7 @@ def validate_gqa_pair_gate(
     ``validate_gqa_pair_binding`` follows that digest and re-validates the
     evidence directly.
     """
-    if payload.get("schema") != GQA_PAIR_GATE_SCHEMA:
+    if payload.get("schema") != _gate_schema_for(payload):
         raise ValueError("GQA-pair gate schema drifted")
     if payload.get("status") != "PASS":
         raise ValueError("GQA-pair gate result is not a PASS")
@@ -594,8 +630,7 @@ def validate_gqa_pair_gate(
         or payload.get("batch_size") != 1
         or payload.get("concurrency") != 1
         or payload.get("physical_rows") != 32
-        or payload.get("draft_vocab_root") != 1
-        or payload.get("draft_vocab_k") != 65536
+        or not _draft_vocab_identity_is_consistent(payload)
     ):
         raise ValueError("GQA-pair gate operating point drifted")
     # The byte gate served the incumbent and measured nothing. Those are
@@ -682,7 +717,7 @@ def validate_gqa_pair_binding(
         "fa2_source_closure_sha256": contract["source_closure_sha256"],
         "source_commit": patch["source_commit"],
         "patch_source_sha256": patch["patch_source_sha256"],
-        "gate_schema": GQA_PAIR_GATE_SCHEMA,
+        "gate_schema": _gate_schema_for(payload),
         "gate_sha256": expected_gate_sha256,
         "gate_canonical_sha256": _digest(canonical_bytes(gate_payload)),
         "gate_topology": GQA_PAIR_GATE_TOPOLOGY,
@@ -797,7 +832,7 @@ def verify_gqa_pair_sidecar(
         != contract["source_closure_sha256"]
         or payload.get("source_commit") != patch["source_commit"]
         or payload.get("patch_source_sha256") != patch["patch_source_sha256"]
-        or payload.get("gate_schema") != GQA_PAIR_GATE_SCHEMA
+        or payload.get("gate_schema") != _gate_schema_for(payload)
         or payload.get("gate_topology") != GQA_PAIR_GATE_TOPOLOGY
         or payload.get("gate_task_ids") != list(GQA_PAIR_GATE_TASK_IDS)
         or payload.get("gate_subset_sha256") != GQA_PAIR_GATE_SUBSET_SHA256
