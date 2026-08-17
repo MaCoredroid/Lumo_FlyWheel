@@ -205,3 +205,37 @@ agentic context, which the short random-token shape cannot see. That is exactly
 the measurement the relaunched arm is for.
 
 Artifact: `armb_b1_partial_n3_deploy_speed.json` (the reducer's own output).
+
+---
+
+# APPENDIX 2 — the first honest 13033 resolve (2026-08-17, no-net serve)
+
+The second b1radix serve (`output/fr14_b1_stock_20260817T031507Z`) ran under the
+no-net agent settings and was also killed by the provenance validator (a third
+edge, on 13236). Two tasks completed first, and both are clean **by
+measurement**:
+
+| task | verdict | wall | patch | web_fetch | shell net attempts | permission denials |
+|---|---|---:|---:|---:|---:|---:|
+| astropy__astropy-12907 | resolved | 540.05 s | 504 B | 0 | 0 | 0 |
+| **astropy__astropy-13033** | **resolved** | **857.67 s** | **1,515 B** | **0** | **0** | **0** |
+| astropy__astropy-13236 | (killed the arm) | — | — | 0 | 3 (2 reached net) | 1 |
+
+**`astropy__astropy-13033` resolved honestly for the first time in campaign
+history.** Every previous resolve of this task was obtained with the agent
+fetching the astropy issue timeline or the PR diff — see
+`agent_network_egress_finding.md`. The session-init tool registry for all three
+tasks is 59 tools with `web_fetch` and `tool_search` absent, exactly as the
+pre-flight probe predicted (61 → 59), so the no-net change is confirmed live.
+
+Verified with `scripts/fr14_agent_egress_scan.py`, which pairs every
+network-shaped `run_shell_command` with its result and only counts it as egress
+if the result did NOT come back "denied by permission rules". Campaign-wide it
+reports 14 traces scanned, 5 reached the network — tonight's 12907 and 13033
+among the clean.
+
+**This does not make the arm citable.** It was killed at n=2 completed tasks,
+and 13236 reached the network twice via `python urllib` before the arm died. It
+is recorded because the honest resolve is a first, and because it is the
+evidence that the settings change does real work even though it is not a
+boundary.
