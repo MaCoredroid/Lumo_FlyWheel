@@ -22,8 +22,8 @@ The brief prices this rung at **≈ −6 ms** (DFWD per-pass host scheduling con
 | CFWD eager-launch graph capture | −3 | **already harvested.** The ladder's 2.99 ms came from *1111 eager ops/step* in the 2026‑07‑31 capture. `FR13_COMMITTER_GRAPH` + `FR13_COMMITTER_BATCHED` are now required-on (`committer.route = fixed16_device_fill_graph`, `graph_replays = 1`, `pointer_table_rebuilds = 0`, `host_flag_readbacks = 0` on all 20 579 steps), and the 2026‑08‑08 capture measures the surviving `cfwd` host-idle at **0.809 ms**. | ≈ **0.81 ms** |
 | post-DFWD Python tail | −5..7 | already refuted **once** by `c78b3ad41` (5–7 was the ladder's *realistic* band around a 10.08 ms ceiling; the decode-cadence median is 3.46 ms of GPU idle / 2.86 ms of pure Python), and 0.242 ms of it is already shipped as `FR13_HOST_TAIL_PREP_BAKE` — **armed in tonight's maxstack serve**. | ≈ **2.6 ms**, no single item > 1 ms |
 
-**The whole host-attributable, byte-safe envelope at 4-bit is ≈ 4.1–4.7 ms/step — about
-2.0–2.2 % of the 210.5 ms step — and it is spread across ~45 Python blocks of 10 µs–1.45 ms.**
+**The whole host-attributable, byte-safe envelope at 4-bit is ≈ 4.1–4.8 ms/step — about
+1.9–2.3 % of the 210.7 ms step — and it is spread across ~45 Python blocks of 10 µs–1.45 ms.**
 The two multi-millisecond items adjacent to it are both out of bounds: the 2.91 ms blocking
 4-byte D2H committer→drafter handoff is Mark's call (it changes what the drafter is fed), and
 the 1.945 ms `cudaGraphLaunch` line is a CUPTI artifact worth 3.15 µs in reality
@@ -48,7 +48,7 @@ first-class residual, defined in `scripts/fr13_measure.py:2009` as
 |---|---|---:|---:|---:|---:|---:|---:|
 | `armb_b1_partial_n3` | arm B, `K=65536 ROOT=1` | 199.403 | 125.806 | 45.900 | 20.341 | **7.356** | 12 587 |
 | `b1_stock` 0816T200746Z | unsloth, `K=65536 ROOT=1` | 206.310 | 125.881 | 44.173 | 21.301 | **14.956** | 2 368 |
-| `maxstack` 0817T210423Z *(live)* | radixark, `K=0` | 210.463 | 130.296 | 52.175 | 20.656 | **7.336** | 20 481 |
+| `maxstack` 0817T210423Z *(banked, pass 30)* | radixark, `K=0` | 210.700 | 130.437 | 52.235 | 20.604 | **7.424** | 32 809 |
 | `b1radix` 0817T031507Z | radixark, `K=0` | 211.465 | 134.250 | 49.226 | 20.531 | **7.458** | 23 496 |
 | `b1radix` k0-aggressive n4 | radixark, `K=0` | 215.311 | 134.552 | 52.674 | 20.642 | **7.443** | 21 487 |
 | `stock_leverpair` 0817T130251Z | radixark, `K=0` | 215.899 | 134.793 | 53.069 | 20.541 | **7.497** | 18 507 |
@@ -62,13 +62,12 @@ reducer cross-checks against the pinned ledger and refuses to run on a mismatch
 = 25 430 574 256`, floor 93.152 ms). The unsloth arms serve the FR13 `K=65536 ROOT=1` ledger
 (27 977 022 848 B, floor 102.480 ms).
 
-Share of step on the live maxstack arm: **sfwd 61.9 % · dfwd 24.8 % · cfwd 9.8 % · other 3.5 %.**
+Share of step on the maxstack arm: **sfwd 61.9 % · dfwd 24.8 % · cfwd 9.8 % · other 3.5 %.**
 
 Sources: `output/fr13_sfwd_sidecar/*.json.{154,155,156}` (+ `_dfwd`/`_cfwd` twins, schema
-`fr13.span_gpu_timer.v1` / `fr13.sfwd_gpu_timer.v2`) and the banked reducer outputs
-`results/fr14_nvfp4_port_20260816/{b1_stock_tail6,b1_k0_aggressive_n4,armb_b1_partial_n3}_deploy_speed.json`.
-The maxstack row is read live off the running serve's sidecar and will move; it is quoted as
-the *shape* of the budget, not as a banked number.
+`fr13.span_gpu_timer.v1` / `fr13.sfwd_gpu_timer.v2`) and the reducer outputs
+`results/fr14_nvfp4_port_20260816/{b1_stock_tail6,b1_k0_aggressive_n4,armb_b1_partial_n3}_deploy_speed.json`
+plus `output/fr14_maxstack_20260817T210423Z/hydra27_fixed32_maxstack_maxstack/deploy_speed_maxstack.json`.
 
 ### 1.1 Cross-precision anchor (same instrument family, FP8 era)
 
@@ -126,9 +125,12 @@ symmetrically, any lever justified by "the shape varies" has no evidence behind 
 
 The `other` column in §1 splits cleanly by **checkpoint**, not by arm or lever:
 
-- radixark arms (n = 4, 83 971 decode steps): **7.336, 7.443, 7.458, 7.497** → mean **7.433 ms**
+- radixark arms (n = 4, 96 299 decode steps): **7.424, 7.443, 7.458, 7.497** → mean **7.456 ms**
 - unsloth arms (n = 2, 15 159 decode steps): **14.956, 16.354** → mean **15.655 ms**
-- difference: **8.222 ms/step**
+- difference: **8.200 ms/step**
+
+The four radixark values span **0.073 ms** across four independent serves and 96 299 decode
+steps. Whatever `other` is, it is not noise.
 
 The `FR13_*=1` lever sets of the two `tail6_fixed32_b1{stock,radix}` arms differ by exactly
 **one** entry (`FR13_DRAFT_VOCAB_ROOT`, a *drafter* flag, which cannot move a post-drafter
@@ -141,7 +143,7 @@ window), so the split is not a lever effect. The mechanism is byte-level and pin
 - Pinned head bytes (`scripts/fr13_hardware_floor_ledger.py:181`, derived from the shipped
   tensors): radixark NVFP4 head **715 161 608 B = 2.620 ms** of floor; unsloth's BF16 head
   **2 542 796 800 B = 9.314 ms**. Delta **1 827 635 192 B = 6.695 ms**.
-- Measured delta 8.222 ms ÷ floor delta 6.695 ms ⇒ the head GEMM is running at **81.4 % of
+- Measured delta 8.200 ms ÷ floor delta 6.695 ms ⇒ the head GEMM is running at **81.6 % of
   roofline** — squarely inside the 82–86 % band the campaign has measured for every other
   weight-bound GEMM on this box. The mechanism is confirmed by an independent efficiency
   cross-check, not asserted.
@@ -149,10 +151,10 @@ window), so the split is not a lever effect. The mechanism is byte-level and pin
 **Consequence — the number every later host claim must be built on:**
 
 ```
-other (radixark, mean)                     7.433 ms
-  − lm_head floor                          2.620 ms   (81.4% roofline ⇒ ~3.22 ms as executed)
-  ------------------------------------------------
-  host-attributable remainder      4.21 – 4.81 ms/step
+other (radixark, mean of 4 arms / 96 299 steps)   7.456 ms
+  − lm_head    2.620 ms at floor / 3.209 ms as executed (81.6% roofline)
+  ---------------------------------------------------------------------
+  host-attributable remainder              4.25 – 4.84 ms/step
 ```
 
 That is an **upper bound** — it still contains any other off-span GPU work — and it agrees
@@ -165,7 +167,7 @@ Two immediate consequences beyond this rung, flagged, not claimed:
 
 1. **`other` must stop being reported as host overhead.** `overhead_other_note` in
    `fr13_measure.py` calls it "host glue, sampler, packer, scheduler gap". At floor prices the
-   verifier head is **35 %** of radixark's `other` and **59 %** of unsloth's; at the 81.4 %
+   verifier head is **35 %** of radixark's `other` and **59 %** of unsloth's; at the 81.6 %
    roofline measured above, **43 %** and **73 %**. Any arm-vs-arm comparison that reads `other`
    as host cost across checkpoints with different heads is reading a GEMM.
 2. **The 6.695 ms head-byte saving is real and already banked in arm B's floor** — it is the
