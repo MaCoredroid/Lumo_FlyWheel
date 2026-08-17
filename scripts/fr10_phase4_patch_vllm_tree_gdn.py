@@ -9487,9 +9487,25 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         # the same call site and differ only in which fold they perform. Any
         # divergence here would be a claim that one of them tolerates a geometry
         # the other does not, and no such claim has been measured.
+        # FR14: draft-vocabulary identity DECLARED, as at the gate contract
+        # above. This is the PRODUCTION arm's pin set and is a separate site from
+        # the gate's -- re-pointing the gate alone would earn a K0 credential the
+        # production path then refused. Default k64_root keeps every banked
+        # single_launch production arm unchanged.
+        _sl_profile = os.environ.get(
+            "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE", "k64_root"
+        )
+        _sl_vocab = {
+            "k64_root": {"FR13_DRAFT_VOCAB_ROOT": "1", "FR13_DRAFT_VOCAB_K": "65536"},
+            "full_vocab": {"FR13_DRAFT_VOCAB_ROOT": "0", "FR13_DRAFT_VOCAB_K": "0"},
+        }.get(_sl_profile)
+        if _sl_vocab is None:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE must be "
+                f"k64_root or full_vocab; got {_sl_profile!r}"
+            )
         exact_single_launch_production = {
-            "FR13_DRAFT_VOCAB_ROOT": "1",
-            "FR13_DRAFT_VOCAB_K": "65536",
+            **_sl_vocab,
             "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
             "FR13_SCAN_ALIGN": "0",
             "FR13_NPAD_INVARIANT": "0",
@@ -9547,9 +9563,26 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
                 "FR13 GDN single-launch patch requires exactly one expected "
                 "batch, 1 or 4"
             )
+        # FR14: the ordered-GDN gate's draft-vocabulary identity is DECLARED.
+        # This dict used to hardcode K64/root1, which made a single_launch gate
+        # unearnable in the full_vocab shape B1 actually serves under Mark's K0
+        # ruling. Fourth and last site of that train (launcher clause, gate
+        # runner, credential validator, and here -- the in-container patcher).
+        # Default stays k64_root so every banked ordered-GDN gate is unchanged.
+        _gate_profile = os.environ.get(
+            "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE", "k64_root"
+        )
+        _gate_vocab = {
+            "k64_root": {"FR13_DRAFT_VOCAB_ROOT": "1", "FR13_DRAFT_VOCAB_K": "65536"},
+            "full_vocab": {"FR13_DRAFT_VOCAB_ROOT": "0", "FR13_DRAFT_VOCAB_K": "0"},
+        }.get(_gate_profile)
+        if _gate_vocab is None:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE must be "
+                f"k64_root or full_vocab; got {_gate_profile!r}"
+            )
         exact_single_launch = {
-            "FR13_DRAFT_VOCAB_ROOT": "1",
-            "FR13_DRAFT_VOCAB_K": "65536",
+            **_gate_vocab,
             "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
             "FR10_METRICS": "1",
             "FR13_RING_EXPORT": "1",
@@ -9571,8 +9604,9 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             or single_launch_drift
         ):
             raise RuntimeError(
-                "FR13 fixed32 GDN single-launch gate requires exact "
-                "stock-serving expected-B1-or-B4 K64/root1 FULL-graph contract: "
+                "FR13 fixed32 GDN single-launch gate requires the exact "
+                "stock-serving expected-B1-or-B4 FULL-graph contract for "
+                f"draft-vocabulary profile {_gate_profile!r}: "
                 + repr(single_launch_drift)
             )
     if sfwd_production not in ("0", "1"):

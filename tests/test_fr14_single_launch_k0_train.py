@@ -180,3 +180,73 @@ def test_both_scripts_parse() -> None:
             ).returncode
             == 0
         ), f"{script.name} does not parse"
+
+
+# --------------------------------------------------------------------------
+# the fourth site: the in-container patcher's env contract
+# --------------------------------------------------------------------------
+
+PATCHER = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
+PATCHER_TEXT = PATCHER.read_text(encoding="utf-8")
+
+
+def test_the_patcher_gate_contract_no_longer_hardcodes_k64() -> None:
+    """The fourth site, found by a 70-second boot refusal rather than by reading.
+
+    The launcher clause, the gate runner and the credential validator all carried
+    the declared identity, and the gate STILL refused -- inside the container, at
+    the patcher's own env contract, which pinned ROOT=1/K=65536 for every
+    ordered-GDN candidate. Every layer of this stack checks the identity
+    independently, which is why re-pointing one is never finished until a real
+    boot says so.
+    """
+    # Both single_launch contracts -- the GATE's and the PRODUCTION arm's -- are
+    # separate sites and both had to move. Other levers' K64 pin sets
+    # (gqa_group3, SFWD fusion, the draft-head U8 bridge) are deliberately left
+    # alone: they are correct for their own arms.
+    for marker in ("exact_single_launch = {", "exact_single_launch_production = {"):
+        idx = PATCHER_TEXT.index(marker)
+        block = PATCHER_TEXT[idx : idx + 400]
+        assert '"FR13_DRAFT_VOCAB_K": "65536"' not in block, (
+            f"{marker} still hardcodes K64"
+        )
+        assert "**_" in block, f"{marker} does not splice a declared profile"
+    assert "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE" in PATCHER_TEXT
+    assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE" in PATCHER_TEXT
+
+
+def test_the_patcher_gate_contract_offers_both_profiles_and_refuses_others() -> None:
+    assert '"k64_root": {"FR13_DRAFT_VOCAB_ROOT": "1", "FR13_DRAFT_VOCAB_K": "65536"}' in (
+        PATCHER_TEXT
+    )
+    assert '"full_vocab": {"FR13_DRAFT_VOCAB_ROOT": "0", "FR13_DRAFT_VOCAB_K": "0"}' in (
+        PATCHER_TEXT
+    )
+    assert "must be \\nk64_root or full_vocab" in PATCHER_TEXT.replace(
+        '"\n                f"', "\\n"
+    ) or "k64_root or full_vocab" in PATCHER_TEXT
+
+
+def test_the_patcher_gate_contract_defaults_to_k64_root() -> None:
+    """Banked ordered-GDN gates must be unaffected."""
+    assert (
+        'os.environ.get(\n            "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE", "k64_root"\n        )'
+        in PATCHER_TEXT
+    )
+
+
+def test_all_four_sites_are_covered() -> None:
+    """One list, so the next person can see the whole train at once."""
+    sites = {
+        "launcher gate clause": "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE"
+        in LAUNCHER_TEXT,
+        "shared gate runner": "FR13_GDN_GATE_DRAFT_VOCAB_PROFILE" in RUNNER_TEXT,
+        "credential validator": "DRAFT_VOCAB_PROFILES"
+        in (REPO / "scripts" / "fr13_gdn_single_launch_production_credential.py").read_text(
+            encoding="utf-8"
+        ),
+        "in-container patcher": "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE"
+        in PATCHER_TEXT,
+    }
+    missing = [name for name, ok in sites.items() if not ok]
+    assert not missing, f"draft-vocabulary profile missing from: {missing}"
