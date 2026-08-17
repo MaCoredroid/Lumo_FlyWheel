@@ -249,6 +249,94 @@ def launch_single(st, io, out_t, ring_export=False, batch=1):
     )
 
 
+# --------------------------------------------------------------------------
+# FR14 stage-0: the ROOT-PATH REPLICATION schedule, priced with the DEPLOYED
+# kernel and no new kernel at all.
+#
+# The replication design (results/fr14_nvfp4_port_20260816/gdn_replication_
+# design.md) gives every program a root-path PREFIX to replay from h0 so no
+# program reads or writes a state tile. Its cost is exactly a path-kernel
+# launch with (a) replicated path descriptors, (b) STATE_SOURCE=1 (start from
+# h0, no parent read) and (c) EXPORT_MODE=2 (no export) -- all three already
+# exist as specialisations. So the design's WALL COST is measurable today.
+#
+# The `out` VALUES from this arm are deliberately wrong: several programs
+# replay the same prefix node and race to store identical bytes to the same
+# row. That is fine and it is the point -- this arm answers the cost question
+# only, and cost is what the verdict turns on. The value question needs the
+# REPLAY_STEPS store-suppression kernel, which is stage 1 and is only built if
+# stage 0 says the design is worth building.
+# --------------------------------------------------------------------------
+
+
+def replicated_chains(levels=None):
+    """The exact R-A schedule: (replayed prefix, own nodes) per program."""
+    levels = levels if levels is not None else G._FR13_FIXED32_SUBTREE_LEVELS
+    root = tuple(int(n) for n in levels[0][0][0])
+    chains = [((), root)]
+    for nodes, parent in levels[1]:
+        parent = int(parent)
+        if parent < 0:
+            raise SystemExit("level-1 path has no parent; topology drift")
+        if parent not in root:
+            raise SystemExit(
+                f"level-1 parent {parent} is not on the root path {root}"
+            )
+        prefix = root[: root.index(parent) + 1]
+        chains.append((prefix, tuple(int(n) for n in nodes)))
+    return chains
+
+
+def replicated_descriptor(device, chains):
+    """Path descriptors for a replicated schedule: every path starts at h0."""
+    paths = [prefix + own for prefix, own in chains]
+    max_len = max(len(p) for p in paths)
+    nodes = torch.full((len(paths), max_len), -1, dtype=torch.int32)
+    for row, path in enumerate(paths):
+        nodes[row, : len(path)] = torch.tensor(path, dtype=torch.int32)
+    return {
+        "nodes": nodes.to(device),
+        # -1 everywhere: no program has a parent slot to read. STATE_SOURCE=1
+        # makes the kernel ignore this, but a wrong value here would be a
+        # silent trap for anyone who flips STATE_SOURCE back.
+        "pars": torch.full((len(paths),), -1, dtype=torch.int32, device=device),
+        "lens": torch.tensor(
+            [len(p) for p in paths], dtype=torch.int32, device=device),
+        "max_len": max_len,
+        "n_paths": len(paths),
+        "node_steps": sum(len(p) for p in paths),
+        "makespan": max_len,
+        "paths": [list(p) for p in paths],
+        "replay_steps": [len(prefix) for prefix, _own in chains],
+    }
+
+
+def launch_descriptor(desc, io, out_t, *, state_source=1, export_mode=2,
+                      lengths=None, n_paths=None, ring_export=False):
+    """Launch the deployed path kernel over an arbitrary path descriptor."""
+    npaths = desc["n_paths"] if n_paths is None else int(n_paths)
+    G._tree_gdn_path_kernel[(NUM_VH, triton.cdiv(DIM_V, BLOCK_V), npaths)](
+        io["q"], io["k"], io["v"], io["g"], io["beta"],
+        io["raw_a"], io["raw_b"], io["A_log"], io["dt_bias"],
+        io["h0"], io["dummy_idx"], io["dummy_acc"], io["counter"],
+        desc["nodes"], desc["pars"],
+        desc["lens"] if lengths is None else lengths,
+        desc["export"], desc["emask"], out_t,
+        io["ring_k"], io["ring_v"], io["ring_a"], io["ring_b"], io["flags"],
+        N_ACTUAL=N_ACTUAL, NUM_KH=NUM_KH, NUM_VH=NUM_VH,
+        DIM_K=DIM_K, DIM_V=DIM_V, BLOCK_V=BLOCK_V,
+        OUTPUT_SCALE=OUTPUT_SCALE,
+        USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM,
+        H0_IS_BANK=False, H0_INDEX_ROW=0, H0_BATCH_INDEX=0,
+        H0_BANK_STRIDE=0, H0_USE_ACCEPTED_COLUMN=False,
+        RAW_GATING=RAW_GATING, COUNT_INVOCATION=False,
+        SCAN_ALIGN=SCAN_ALIGN, MAX_PATH_LEN=desc["max_len"],
+        STATE_SOURCE=state_source, EXPORT_MODE=export_mode,
+        RING_EXPORT=ring_export, FLAGS_EXPORT=False, FLAGS_ROWS=0,
+        num_warps=NUM_WARPS,
+    )
+
+
 def timeit(fn, warmup=20, reps=200):
     for _ in range(warmup):
         fn()
@@ -421,6 +509,39 @@ def main() -> int:
     bench["single_launch"] = timeit(
         lambda: launch_single(st, io, scratch, batch=batch), reps=args.reps)
 
+    # ---- FR14 stage 0: price the replication design, build no kernel -------
+    chains = replicated_chains()
+    rep = replicated_descriptor(device, chains)
+    rep["export"], rep["emask"] = st["export"], st["emask"]
+    bench["replicated_R_A"] = timeit(
+        per_request(views, lambda rio, rout: launch_descriptor(
+            rep, rio, rout)),
+        reps=args.reps)
+    # Control: the same 12 programs at the DEPLOYED node-step count (every
+    # chain truncated to 1). Isolates "12 programs exist" from "the prefixes
+    # are replayed", so a width effect cannot be misread as a recompute cost.
+    bench["replicated_R_A_len1"] = timeit(
+        per_request(views, lambda rio, rout: launch_descriptor(
+            rep, rio, rout, lengths=torch.ones_like(rep["lens"]))),
+        reps=args.reps)
+
+    # Width sweep: ONE node-step at grid z in {1,2,3,6,11,12}. This is the
+    # decisive test of the model's load-bearing assumption -- if a width-12
+    # wave costs about one width-1 wave, waves are latency-bound and the
+    # replication design's extra node-steps are nearly free; if it costs ~12x,
+    # the machine is saturated and they are not. Nothing else in this probe
+    # separates those two worlds.
+    width_ones = torch.ones_like(rep["lens"])
+    width_sweep = {}
+    for width in (1, 2, 3, 6, 11, 12):
+        if width > rep["n_paths"]:
+            continue
+        width_sweep[str(width)] = timeit(
+            per_request(views, lambda rio, rout, w=width: launch_descriptor(
+                rep, rio, rout, lengths=width_ones, n_paths=w)),
+            reps=args.reps)
+    bench["width_sweep_one_node_step"] = width_sweep
+
     # ---- derived model ----------------------------------------------------
     L0 = bench["L0_deployed"]["us_p50"]
     L1 = bench["L1_deployed"]["us_p50"]
@@ -437,6 +558,47 @@ def main() -> int:
         bench["L0_deployed"]["us_p50"] - bench["L0_no_export"]["us_p50"]
     )
     parent_read_us = bench["L1_len1"]["us_p50"]
+
+    # FR14 stage-0 verdict, PRE-REGISTERED in gdn_replication_design.md §7
+    # before this arm existed: the replication design is refuted unless it
+    # beats the already-built, already-byte-gated single_launch kernel by more
+    # than the run-to-run spread. Beating the two-launch route is NOT enough --
+    # single_launch already does that, at 32 node-steps instead of 67.
+    rep_us = bench["replicated_R_A"]["us_p50"]
+    # Run-to-run spread, from the samples this probe already keeps. A "win"
+    # inside the spread is not a win.
+    spread = max(
+        bench["single_launch"]["us_p50"] - bench["single_launch"]["us_p05"],
+        bench["replicated_R_A"]["us_p50"] - bench["replicated_R_A"]["us_p05"],
+    )
+    replication_verdict = (
+        "BUILD" if rep_us < bench["single_launch"]["us_p50"] - spread
+        else "REFUTED"
+    )
+    # Independent marginals for the node-step cost, at three wave widths. If
+    # these agree, cost tracks node-steps and waves are nearly free; if the
+    # width-11/12 figure is far lower, waves are the cost and the design lives.
+    # NB these are per NODE-STEP. The pre-existing `node_step_us` above is a
+    # different quantity (per critical WAVE, /6) and the two must not be
+    # conflated -- that conflation is exactly how the ladder's 3.45 ms was
+    # produced.
+    marginals = {
+        "width_1_from_L0": (
+            (bench["L0_no_export"]["us_p50"]
+             - bench["L0_len1_no_export"]["us_p50"]) / 4.0
+        ),
+        "width_2_3_from_L1": (
+            (bench["L1_deployed"]["us_p50"] - bench["L1_len1"]["us_p50"]) / 16.0
+        ),
+        "width_11_from_L1_padded": (
+            (bench["L1_len_full_padded"]["us_p50"]
+             - bench["L1_len1"]["us_p50"]) / 66.0
+        ),
+        "width_12_from_replicated": (
+            (rep_us - bench["replicated_R_A_len1"]["us_p50"])
+            / float(rep["node_steps"] - rep["n_paths"])
+        ),
+    }
 
     layers = args.layers
     result = {
@@ -520,6 +682,48 @@ def main() -> int:
         "export_untouched_by_single_launch": bool(
             byte_equal(export_after_two, st["export"])
         ),
+        # ---- FR14 stage 0: the replication design, priced not built --------
+        "fr14_replication_stage0": {
+            "design": (
+                "results/fr14_nvfp4_port_20260816/gdn_replication_design.md"
+            ),
+            "schedule": [
+                {"z": z, "replay_prefix": list(prefix), "own": list(own),
+                 "chain": len(prefix) + len(own)}
+                for z, (prefix, own) in enumerate(chains)
+            ],
+            "node_steps": rep["node_steps"],
+            "deployed_node_steps": 32,
+            "makespan": rep["makespan"],
+            "deployed_makespan": 12,
+            "handoff_bytes_per_layer": 0,
+            "deployed_handoff_bytes_per_layer": 16 * STATE_TILE_BYTES,
+            "replicated_us": rep_us,
+            "single_launch_us": one,
+            "two_launch_us": two,
+            "vs_single_launch_us": rep_us - one,
+            "vs_two_launch_us": rep_us - two,
+            "vs_single_launch_ms_step": (rep_us - one) * layers / 1000.0,
+            "vs_two_launch_ms_step": (rep_us - two) * layers / 1000.0,
+            "per_node_step_us_by_wave_width": marginals,
+            "run_to_run_spread_us": spread,
+            "verdict": replication_verdict,
+            "verdict_rule": (
+                "PRE-REGISTERED in the design note before this arm existed: "
+                "BUILD only if the replicated schedule beats single_launch by "
+                "more than the run-to-run spread. Beating the two-launch route "
+                "is NOT sufficient -- single_launch already does that, at 32 "
+                "node-steps instead of %d." % rep["node_steps"]
+            ),
+            "out_values_are_meaningless_by_design": True,
+            "why": (
+                "Several programs replay the same prefix node and race to "
+                "store identical bytes to the same out row. This arm answers "
+                "the COST question only; the value question needs the "
+                "REPLAY_STEPS store-suppression kernel, which is stage 1 and "
+                "is built only if this verdict says BUILD."
+            ),
+        },
     }
 
     out_path = Path(args.out)
@@ -530,6 +734,10 @@ def main() -> int:
           result["geometry"]["grid_single_launch"])
     print(json.dumps(result["derived"], indent=2))
     print("byte_ab:", json.dumps(result["byte_ab_single_vs_two"]))
+    print("fr14_replication_stage0:", json.dumps(
+        {k: v for k, v in result["fr14_replication_stage0"].items()
+         if k not in ("schedule", "why", "verdict_rule", "design")},
+        indent=2))
     print("byte_ab_sweep_all_pass:", sweep_pass, "cases:", len(sweep))
     for s in sweep:
         if not (s["out_byte_equal"] and s["rings_byte_equal"]):
