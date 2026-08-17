@@ -1,0 +1,37 @@
+{
+ "schema": "fr14.radixark_boot_probe.v1",
+ "stop_reason": "container_exited",
+ "runroot": "output/fr14_b1_probe_20260817T011303Z",
+ "lmhead_nvfp4_lines": [
+  "(EngineCore pid=241) INFO 08-17 01:14:18 [modelopt.py:2225] FR14_LMHEAD_NVFP4 ParallelLMHead prefix=language_model.lm_head resolved_algo=NVFP4",
+  "(EngineCore pid=241) INFO 08-17 01:16:18 [modelopt.py:2225] FR14_LMHEAD_NVFP4 ParallelLMHead prefix=lm_head resolved_algo=NVFP4"
+ ],
+ "lmhead_route_lines": [
+  "(EngineCore pid=241) INFO 08-17 01:14:18 [qwen3_5.py:513] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod",
+  "(EngineCore pid=241) INFO 08-17 01:16:18 [qwen3_5_mtp.py:389] FR14_LMHEAD_QUANT_ROUTE lm_head quant_method=ModelOptNvFp4LinearMethod"
+ ],
+ "lmhead_routed_nvfp4": true,
+ "dvk_shim_lines": [
+  "(EngineCore pid=241) [FR13_DRAFT_VOCAB] shim built K=65536 (head rows 248320->65536) mode=gather"
+ ],
+ "dvk_root_engaged_lines": [],
+ "dvk_dequant_lines": [],
+ "dvk_dequant_bytes_is_671088640": null,
+ "dvk_dequant_widths_are_k64": null,
+ "dvk_dequant_method_is_unquantized": null,
+ "kv_cache_dtype_values": [
+  "auto"
+ ],
+ "fp8_e4m3_present": false,
+ "gpu_kv_cache_lines": [
+  "(EngineCore pid=241) INFO 08-17 01:18:56 [kv_cache_utils.py:1337] GPU KV cache size: 198,656 tokens"
+ ],
+ "tracebacks": [
+  "(EngineCore pid=241) ERROR 08-17 01:20:01 [core.py:1131] Traceback (most recent call last):",
+  "(EngineCore pid=241) Traceback (most recent call last):",
+  "(APIServer pid=1) ERROR 08-17 01:20:01 [async_llm.py:699] Traceback (most recent call last):"
+ ],
+ "fr14_refusals": [],
+ "log_lines": 436,
+ "verdict": "FAIL"
+}

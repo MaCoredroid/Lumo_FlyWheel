@@ -126,6 +126,36 @@ def test_dequant_is_fail_closed_not_a_silent_fallback() -> None:
     assert "_fr13_dvkq_pad != 0" in block
 
 
+def test_lookup_table_is_moved_to_the_device_before_the_dequant() -> None:
+    """BIRTH DEFECT, first device run (boot probe 20260817T011303Z).
+
+    ``break_fp4_bytes`` indexes a MODULE-LEVEL ``kE2M1`` tensor that ships on
+    CPU. The only thing that ever moves it is
+    ``EmulationNvFp4LinearKernel.process_weights_after_loading`` -- and this arm
+    runs the FlashInfer kernel, so that hook never fires and the table stays on
+    CPU while the indices are on CUDA:
+
+        RuntimeError: indices should be either on cpu or on the same device as
+        the indexed tensor (cpu)
+
+    The shim now does what the emulation kernel does. Upstream's own comment
+    says why it must happen at prepare time and not inside the dequant:
+    ``.to(device)`` is illegal during CUDA graph capture -- hence the explicit
+    capture assert, which turns a confusing capture-time failure into a named
+    one.
+    """
+    fragment = _injected_fragment()
+    assert "kE2M1ToFloat_handle as _fr13_dvkq_lut" in fragment
+    assert "_fr13_dvkq_lut.val.device != _fr13_dvkq_w.device" in fragment
+    assert "_fr13_dvkq_lut.val.to(" in fragment
+    assert "torch.cuda.is_current_stream_capturing()" in fragment
+
+    # The move must precede the first dequant call, or it fixes nothing.
+    assert fragment.index("_fr13_dvkq_lut.val.to(") < fragment.index(
+        "_fr13_dvkq_bf16[_fr13_dvkq_lo:_fr13_dvkq_hi] = ("
+    )
+
+
 def test_chunking_respects_the_128_row_tile_the_slice_depends_on() -> None:
     fragment = _injected_fragment()
     assert "_fr13_dvkq_chunk = 8192" in fragment

@@ -26817,7 +26817,36 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # kernel passes False only because it never swizzles.
                     from vllm.model_executor.layers.quantization.utils.nvfp4_emulation_utils import (  # noqa: E501
                         dequantize_to_dtype as _fr13_dvkq_dequant,
+                        kE2M1ToFloat_handle as _fr13_dvkq_lut,
                     )
+
+                    # BIRTH DEFECT, first device run (boot probe
+                    # 20260817T011303Z): break_fp4_bytes does
+                    # `kE2M1[abs_vals]` where kE2M1 is a MODULE-LEVEL tensor
+                    # that ships on CPU. The only thing that ever moves it is
+                    # EmulationNvFp4LinearKernel.process_weights_after_loading
+                    # -- and we run the FlashInfer kernel, so that hook never
+                    # fires and the lookup table stays on CPU while the indices
+                    # are on CUDA:
+                    #   RuntimeError: indices should be either on cpu or on the
+                    #   same device as the indexed tensor (cpu)
+                    # Do exactly what the emulation kernel does, for the same
+                    # reason it does it. Upstream's own comment says why it has
+                    # to happen HERE and not inside the dequant: `.to(device)`
+                    # is illegal during CUDA graph capture. _fr13_dvk_prepare
+                    # runs at the first real propose, after capture finished --
+                    # assert that rather than trust it, because a capture-time
+                    # first call would fail in a much more confusing way.
+                    if torch.cuda.is_current_stream_capturing():
+                        raise RuntimeError(
+                            "FR14 DVK dequant-at-slice reached during CUDA "
+                            "graph capture; the NVFP4 lookup table cannot be "
+                            "moved to the device there"
+                        )
+                    if _fr13_dvkq_lut.val.device != _fr13_dvkq_w.device:
+                        _fr13_dvkq_lut.val = _fr13_dvkq_lut.val.to(
+                            _fr13_dvkq_w.device
+                        )
 
                     # CHUNKED over 8192-row groups. break_fp4_bytes expands
                     # every packed byte into two int64 indices before the
