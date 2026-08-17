@@ -43,6 +43,20 @@ QWEN_WEB_FETCH_INPUT_FIELDS = frozenset({"url", "prompt", "format"})
 QWEN_WEB_FETCH_INPUT_REQUIRED_FIELDS = ("url", "prompt")
 QWEN_WEB_FETCH_SUCCESS_TEMPLATE = "Content from {url} processed successfully."
 QWEN_WEB_FETCH_ERROR_PREFIX = "Error: "
+# qwen-code renders a client-side failure as an ordinary assistant TEXT
+# record carrying this banner, with all-zero usage, and then closes the
+# session with subtype="success" / is_error=false / num_turns=1. Nothing
+# in that shape distinguishes it from a served turn, so the validator used
+# to count it as ONE completed model request when the engine served ZERO --
+# it manufactured evidence of traffic that never happened, which is the one
+# direction a fail-closed counter must never fail in. Observed 2026-08-17 in
+# both fr14_b1_probe_* traces:
+#   "[API Error: EngineCore encountered an issue. See stack trace ...]"
+#   "[API Error: Connection error. (cause: fetch failed)]"   <- never left
+#                                                               the client
+# We cannot tell from the trace alone whether the engine served it, so we
+# REFUSE rather than guess a number in either direction.
+QWEN_API_ERROR_TEXT_PREFIX = "[API Error:"
 # qwen-code validates a tool call against its JSON schema BEFORE executing
 # it. A web_fetch missing a required parameter is rejected here, with
 # is_error=True and this ajv-shaped message, and never reaches
@@ -779,6 +793,36 @@ def _fixed32_qwen_reasoning_only_record(message: dict[str, Any]) -> bool:
         isinstance(item, dict) and item.get("type") == "thinking"
         for item in content
     )
+
+
+def _fixed32_qwen_api_error_record(message: dict[str, Any]) -> bool:
+    """True when an assistant record is a client-side ``[API Error: ...]`` banner.
+
+    See QWEN_API_ERROR_TEXT_PREFIX. Such a record is qwen-code narrating its own
+    failure, not a model response: the engine may have served nothing at all.
+    """
+    content = message.get("content")
+    if not isinstance(content, list) or not content:
+        return False
+    for item in content:
+        if (
+            not isinstance(item, dict)
+            or item.get("type") != "text"
+            or not isinstance(item.get("text"), str)
+        ):
+            continue
+        text = item["text"].lstrip()
+        if not text.startswith(QWEN_API_ERROR_TEXT_PREFIX):
+            continue
+        # The local compression-failure terminal is ALSO an [API Error: ...]
+        # banner, but it is a fully modelled shape with its own accounting
+        # (_fixed32_qwen_synthetic_compaction_failure + the failed-compaction
+        # split): it names its own token counts and is matched exactly. It is
+        # evidence, not an unaccountable failure, so it is not refused here.
+        if _QWEN_COMPACTION_FAILURE_TEXT_RE.fullmatch(item["text"]) is not None:
+            continue
+        return True
+    return False
 
 
 def _fixed32_qwen_blank_text_record(message: dict[str, Any]) -> bool:
@@ -2326,6 +2370,7 @@ def validate_fixed32_trace_model_requests(
     denials = result.get("permission_denials")
     if not isinstance(denials, list):
         raise ContractError("fixed32 qwen result permission denials are invalid")
+    denied_tool_use_ids: list[str] = []
     for denial in denials:
         if (
             not isinstance(denial, dict)
@@ -2337,6 +2382,7 @@ def validate_fixed32_trace_model_requests(
             raise ContractError(
                 "fixed32 qwen result permission denial record is invalid"
             )
+        denied_tool_use_ids.append(denial["tool_use_id"])
 
     result_session_id = result["session_id"]
     if (
@@ -2428,6 +2474,11 @@ def validate_fixed32_trace_model_requests(
         if not isinstance(content, list) or not content:
             raise ContractError(
                 "fixed32 qwen assistant content is empty or invalid"
+            )
+        if _fixed32_qwen_api_error_record(message):
+            raise ContractError(
+                "fixed32 qwen assistant record is a client-side API error "
+                "banner, so the trace cannot say whether the engine served it"
             )
         event_tool_ids: list[str] = []
         event_tool_id_set: set[str] = set()
@@ -2567,6 +2618,19 @@ def validate_fixed32_trace_model_requests(
                         [record[2] for record in group]
                     ),
                 )
+            )
+
+    # PERMISSION-DENIAL JOIN. Deferred to here because tool_use_ids is only
+    # complete after the collection loop above. A denial that names a tool_use
+    # this trace does not contain would mean the trace is not a complete record
+    # of its own session -- exactly the condition that makes an independent
+    # count meaningless -- so it fails closed even though a denial costs the
+    # ledger nothing.
+    for denied_tool_use_id in denied_tool_use_ids:
+        if denied_tool_use_id not in tool_use_ids:
+            raise ContractError(
+                "fixed32 qwen result permission denial names an unknown "
+                "tool use"
             )
 
     if len(top_level_groups) != num_turns:

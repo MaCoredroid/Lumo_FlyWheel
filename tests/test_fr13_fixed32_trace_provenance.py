@@ -4427,9 +4427,13 @@ def test_valid_web_fetch_still_counts_its_hidden_side_query() -> None:
 # the no-net agent settings qwen-code enforces the web_fetch deny rule against
 # equivalent shell commands, so the model's `curl https://...` came back
 # "denied by permission rules" and was recorded here.
+# The real record names tool_use chatcmpl-tool-a41779fbb2de9484, which that
+# trace also contains (its tool_use is at line 260, its denial tool_result at
+# 261). The fixture's own ids are synthetic, so the denial below points at the
+# fixture's first tool_use -- the JOIN is the thing under test, not the string.
 _REAL_PERMISSION_DENIAL = {
     "tool_name": "run_shell_command",
-    "tool_use_id": "chatcmpl-tool-a41779fbb2de9484",
+    "tool_use_id": "chatcmpl-tool-0000000000000000",
 }
 
 
@@ -4493,3 +4497,77 @@ def test_result_usage_must_still_be_a_mapping() -> None:
         contract.ContractError, match="result evidence is incomplete"
     ):
         contract.validate_fixed32_trace_model_requests(events)
+
+
+def test_permission_denial_naming_an_unknown_tool_use_raises() -> None:
+    """A denial must belong to a call the trace actually contains.
+
+    If it names a tool_use this trace has never seen, the trace is not a
+    complete record of its own session -- and an independent request count off
+    an incomplete record is worthless. Costs the ledger nothing, still refused.
+    """
+    events = _qwen_web_fetch_trace_13033(
+        permission_denials=[
+            {
+                "tool_name": "run_shell_command",
+                "tool_use_id": "chatcmpl-tool-neverseen",
+            }
+        ]
+    )
+    with pytest.raises(
+        contract.ContractError, match="permission denial names an unknown tool use"
+    ):
+        contract.validate_fixed32_trace_model_requests(events)
+
+
+# fr14_b1_probe_20260817T011303Z and T012523Z, trace line 2: qwen-code renders a
+# client-side failure as an ordinary assistant text record with all-zero usage,
+# then closes with subtype="success" / is_error=false / num_turns=1.
+_API_ERROR_ENGINE = (
+    "[API Error: EngineCore encountered an issue. See stack trace (above) "
+    "for the root cause.]"
+)
+_API_ERROR_CONNECTION = "[API Error: Connection error. (cause: fetch failed)]"
+
+
+@pytest.mark.parametrize(
+    "banner", (_API_ERROR_ENGINE, _API_ERROR_CONNECTION),
+    ids=("enginecore-died", "never-left-the-client"),
+)
+def test_api_error_banner_is_refused_not_counted_as_a_served_request(
+    banner: str,
+) -> None:
+    """The silent-overcount class: counting traffic that never happened.
+
+    Both probe traces close cleanly -- success, not-an-error, one turn -- around
+    a single assistant record that is qwen-code narrating its own failure. The
+    validator used to return completed_logical_model_requests = 1 for a request
+    the engine served ZERO of. A fail-closed counter may under-claim and refuse;
+    it must never invent a request, because that silently absolves a real gap
+    somewhere else in the ledger.
+
+    The trace cannot distinguish "EngineCore died after serving" from "the fetch
+    never left the client", so the honest answer is refusal, not a guess.
+    """
+    events = _qwen_web_fetch_trace_13033()
+    events[-2]["message"]["content"] = [{"type": "text", "text": banner}]
+    with pytest.raises(
+        contract.ContractError, match="client-side API error banner"
+    ):
+        contract.validate_fixed32_trace_model_requests(events)
+
+
+def test_ordinary_text_that_merely_mentions_an_api_error_is_not_refused() -> None:
+    """The refusal keys on the banner PREFIX, not on the words appearing anywhere.
+
+    An agent discussing an API error in its final answer is an ordinary served
+    turn and must still count.
+    """
+    events = _qwen_web_fetch_trace_13033()
+    events[-2]["message"]["content"] = [
+        {"type": "text", "text": "I fixed the handler that logged [API Error: ...] lines."}
+    ]
+    summary = contract.validate_fixed32_trace_model_requests(events)
+    assert summary["completed_logical_model_requests"] == (
+        len(_VISIBLE_TURN_USAGE_13033) + 1
+    )
