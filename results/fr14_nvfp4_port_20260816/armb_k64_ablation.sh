@@ -73,6 +73,16 @@ boot_arm() {  # arm k root container
     run_variant(){ :; }
     export BSIZE=1 CONC=1 TAG=armbk64ab
     export FR13_DRAFT_VOCAB_K="$k" FR13_DRAFT_VOCAB_ROOT="$root" FR13_DRAFT_HEAD_FP8=0
+    # The launcher gates the full-vocabulary arm behind a SANCTIONED OVERRIDE:
+    #   [[ (MAX_NUM_SEQS==1||4) && FR13_NEEDS_ALLOW == "FR13_DRAFT_VOCAB_K=0" ]]
+    #   || "fixed32 full-vocabulary mode requires exact B1/B4 and its
+    #      sanctioned override"; exit 2
+    # It exists so nobody drifts off K64 by accident. This ablation IS the
+    # sanctioned use -- Mark's pass-12 directive, B1, diagnostic lane -- so the
+    # override is set for the K0 arm and ONLY the K0 arm.
+    if [[ "$k" == "0" ]]; then
+      export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"
+    fi
     # The COMMITTED arm-B sequence file -- no HEAD pin needed, the constant
     # train is HEAD now.
     source scripts/fr13_fixed32_floor_timers_seq.sh
