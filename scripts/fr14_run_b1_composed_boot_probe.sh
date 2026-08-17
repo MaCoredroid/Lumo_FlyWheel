@@ -168,9 +168,17 @@ if [[ -n "$CID" ]]; then
     | sed 's/^/  /' | tee "$RUNROOT_ABS/forwarded_lever_flags.txt"
 else
   echo "  (container gone; cannot read forwarded flags)"; fail=1
+  CID=$(docker ps -aq | head -1)   # may be an exited container; logs still readable
 fi
 
 echo "[probe] ---- teardown ----"
+# CAPTURE BEFORE DESTROYING. A previous cycle removed a failed container before
+# reading its docker logs and cost an extra reproduction boot to recover the
+# error. The container is the only place the engine's own stdout lives.
+if [[ -n "$CID" ]]; then
+  docker logs "$CID" > "$RUNROOT_ABS/container_docker_logs.txt" 2>&1 || true
+  echo "  captured container logs: $(wc -l < "$RUNROOT_ABS/container_docker_logs.txt" 2>/dev/null || echo 0) lines"
+fi
 kill "$SERVE_PID" 2>/dev/null || true
 wait "$SERVE_PID" 2>/dev/null
 [[ -n "$CID" ]] && docker rm -f "$CID" >/dev/null 2>&1
