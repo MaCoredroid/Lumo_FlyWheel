@@ -227,11 +227,23 @@ def test_promoted_default_requires_a_presented_credential() -> None:
 
     A promotion says which arm to prefer WHEN AVAILABLE; it is never a reason to
     refuse the boot.
+
+    SECOND PASS (FR14, after the levered arm's 5 s refusal). The first fix
+    predicated on FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR, which is
+    LAUNCHER-PRIVATE -- the launcher mints it and refuses a caller who sets it.
+    That made the guard unsatisfiable from outside, so the promotion could never
+    fire and, had it fired, the launch would have been rejected anyway. The
+    credential a caller actually presents is the sealed gate BY PATH, so the
+    guard now predicates on the gate, its bound live result, and a source commit
+    that is SERVICEABLE (equal to HEAD) rather than merely present.
     """
     text = LAUNCHER.read_text(encoding="utf-8")
     guard = (
-        'if [[ -n "${FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR:-}" \\\n'
-        '        && -n "${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-}" ]]; then'
+        'if [[ -n "${FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON:-}" \\\n'
+        '        && -n "${FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON:-}" \\\n'
+        '        && -n "${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-}" \\\n'
+        '        && -n "$_fr13_b1_promo_head" \\\n'
+        '        && "${FR13_FA2_QROW32_B1_SOURCE_COMMIT}" == "$_fr13_b1_promo_head" ]]; then'
     )
     assert guard in text
 

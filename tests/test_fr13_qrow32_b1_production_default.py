@@ -178,6 +178,59 @@ def test_the_promoted_default_only_applies_in_the_b1_serving_shape() -> None:
         assert guard in block, f"promotion is missing its {guard!r} scope guard"
 
 
+def test_the_promotion_predicates_on_caller_facing_credentials_only() -> None:
+    """The arming predicate must never read a launcher-private variable.
+
+    FR14 regression. The first promoted-default fix predicated on
+    FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR, which the launcher MINTS itself
+    and refuses if a caller sets ("FR13 qrow32 production sidecar credentials are
+    launcher-private"). The predicate could therefore only be satisfied by a
+    configuration the launcher then rejected: dead code guarding a trap. The arm
+    is credentialed by the sealed gate presented BY PATH, so predicate on that.
+    """
+    # Comments SHOULD name the private variables -- explaining why they are not
+    # used is the point of the comment. Assert on executable lines only.
+    block = _promotion_block()
+    code = "\n".join(
+        line for line in block.splitlines() if not line.lstrip().startswith("#")
+    )
+    for private in (
+        "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR",
+        "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256",
+        "FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR",
+    ):
+        assert private not in code, (
+            f"promotion predicates on the launcher-private {private!r}; a caller "
+            "that satisfies it is refused later in the same launch"
+        )
+    for caller_facing in (
+        "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON",
+        "FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON",
+        "FR13_FA2_QROW32_B1_SOURCE_COMMIT",
+    ):
+        assert caller_facing in code, (
+            f"promotion must predicate on the caller-facing {caller_facing!r}"
+        )
+
+
+def test_a_stale_credential_degrades_to_the_incumbent_and_never_refuses() -> None:
+    """Presence is not serviceability.
+
+    The selector demands SOURCE_COMMIT == $(git rev-parse HEAD), so a credential
+    earned at an older HEAD is present but unusable. Arming on presence alone
+    would make the launch refuse -- which is exactly what a promotion must never
+    do, and what made the Hydra27 B1 arm structurally unbootable before. A stale
+    credential must fall back to the incumbent, loudly.
+    """
+    block = _promotion_block()
+    assert "git rev-parse HEAD" in block, "promotion does not test serviceability"
+    assert (
+        '"${FR13_FA2_QROW32_B1_SOURCE_COMMIT}" == "$_fr13_b1_promo_head"' in block
+    ), "promotion does not compare the credential's commit against HEAD"
+    assert "STALE" in block, "a stale credential must announce itself"
+    assert "serving the INCUMBENT" in block, "a stale credential must not refuse"
+
+
 def test_the_promotion_announces_itself_on_stderr() -> None:
     """A default that changes what is SERVED must never be silent."""
     block = _promotion_block()
@@ -251,8 +304,11 @@ def test_the_promoted_arm_still_has_to_prove_everything_it_proved_before() -> No
         "FR13 qrow32 B1 production requires the canonical exact4 FULL-graph identity",
         # sealed byte gate + the live result that gate binds by digest
         "FR13 qrow32 B1 GQA-pair production requires its sealed byte gate and bound live result",
-        # the batch-1 K64/root1 shape that admits any B1 selector at all
-        "FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance",
+        # The batch-1 shape that admits any B1 selector at all. FR14 K0 train:
+        # this refusal is no longer K64/root1-specific -- the draft-vocabulary
+        # shape moved into the per-lever qualification profile, so the message
+        # names the topology and provenance only.
+        "FR13 qrow32 B1 selector requires Hydra27 B1 and exact binary/source provenance",
         # credentials stay launcher-issued
         "FR13 qrow32 production sidecar credentials are launcher-private",
     ):

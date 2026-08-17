@@ -1214,17 +1214,52 @@ if (( _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0 )) \
   # never a reason to refuse the boot. With no credential we fall back to the
   # incumbent (empty arm) and say so, which is what an unlevered arm 2 was
   # always supposed to be.
-  if [[ -n "${FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR:-}" \
-        && -n "${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-}" ]]; then
+  # FR14 2026-08-17 (second pass): predicate on the CALLER-FACING credential,
+  # not on the launcher-private sidecar.
+  #
+  # The first pass tested FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR, which is
+  # LAUNCHER-PRIVATE: the launcher mints it itself further down, and a caller who
+  # sets it is refused outright ~170 lines below ("FR13 qrow32 production sidecar
+  # credentials are launcher-private"). So that predicate could only ever be true
+  # in a configuration that was then rejected -- the promoted default was dead
+  # code guarding a trap, which is the very failure mode the block above was
+  # written to remove, merely relocated.
+  #
+  # What a caller actually presents for the gqa_pair arm is the sealed byte gate
+  # BY PATH plus the live A/B result it binds, and the source commit that gate was
+  # earned at. Predicate on exactly those.
+  #
+  # SERVICEABILITY, NOT MERE PRESENCE. The selector below demands
+  # SOURCE_COMMIT == $(git rev-parse HEAD), so a credential earned at an older
+  # HEAD is present but NOT serviceable. Arming on presence alone would refuse
+  # the boot, which is precisely what a promotion must never do. A stale
+  # credential therefore degrades to the incumbent and says so. An EXPLICITLY
+  # named arm is untouched by this and still fails loud -- this whole block runs
+  # only when _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0.
+  _fr13_b1_promo_head=$(git rev-parse HEAD 2>/dev/null || echo "")
+  if [[ -n "${FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON:-}" \
+        && -n "${FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON:-}" \
+        && -n "${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-}" \
+        && -n "$_fr13_b1_promo_head" \
+        && "${FR13_FA2_QROW32_B1_SOURCE_COMMIT}" == "$_fr13_b1_promo_head" ]]; then
     FR13_FA2_QROW32_B1_PRODUCTION_ARM=${FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT:-gqa_pair}
     echo "[fr13] B1 production arm unnamed; serving the promoted default" \
-         "FR13_FA2_QROW32_B1_PRODUCTION_ARM=$FR13_FA2_QROW32_B1_PRODUCTION_ARM" >&2
-  else
-    echo "[fr13] B1 production arm unnamed and no credential presented" \
-         "(FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR / _SOURCE_COMMIT empty);" \
+         "FR13_FA2_QROW32_B1_PRODUCTION_ARM=$FR13_FA2_QROW32_B1_PRODUCTION_ARM" \
+         "(credential presented and serviceable at $_fr13_b1_promo_head)" >&2
+  elif [[ -n "${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-}" \
+          && -n "$_fr13_b1_promo_head" \
+          && "${FR13_FA2_QROW32_B1_SOURCE_COMMIT}" != "$_fr13_b1_promo_head" ]]; then
+    echo "[fr13] B1 production arm unnamed and the presented credential is STALE" \
+         "(earned at ${FR13_FA2_QROW32_B1_SOURCE_COMMIT}, HEAD is $_fr13_b1_promo_head);" \
          "serving the INCUMBENT, not the promoted default" \
          "${FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT:-gqa_pair}" >&2
+  else
+    echo "[fr13] B1 production arm unnamed and no credential presented" \
+         "(FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON / _GQA_PAIR_LIVE_RESULT_JSON /" \
+         "_SOURCE_COMMIT empty); serving the INCUMBENT, not the promoted default" \
+         "${FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT:-gqa_pair}" >&2
   fi
+  unset _fr13_b1_promo_head
 fi
 case "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" in
   ""|nosplit|gqa_pair) ;;
