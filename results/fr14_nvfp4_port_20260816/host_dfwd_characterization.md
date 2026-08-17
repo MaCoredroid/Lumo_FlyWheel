@@ -253,6 +253,43 @@ Confounded by checkpoint ⊗ flag, so this is **not a claim** — it is a one-pa
 (`FR13_DRAFT_VOCAB_K` 0 vs 65536 on radixark, same checkpoint, same everything else) that
 would settle a ~4 ms/step question, and it belongs to the drafter/DVK domain, not this rung.
 
+### 5.2 DEFECT: the instrument that would settle §5.1 is unreachable in deployment
+
+`FR13_DFWD_SPLIT` (`fr10_phase4_patch_vllm_tree_gdn.py:36972`) already exists and does exactly
+the needed job: a 3-way cuda-event split of the drafter into **model** (draft forward),
+**head** (`compute_logits` + top-k, i.e. the full-vocab lm_head read per level) and **other**
+(metadata rebuild, repeat/cat, slot math, buffer copies), dumped to a
+`fr13.dfwd_split.v1` sidecar. Its docstring says it exists to decide
+"FR-Spec-vocab vs level-fusion vs shape-depth as the drafter attack" — the §5.1 question,
+verbatim.
+
+**It has never engaged.** The arming path is the proven worker-env-drop-proof pattern: the
+patcher's `main()` runs at container pid 1, reads `FR13_DFWD_SPLIT` and writes
+`/logs/fr13_dfwd_split.flag`, which the EngineCore worker reads
+(`fr10_phase4_patch_vllm_tree_gdn.py:42878`, `:36993`). But **neither launcher forwards
+`FR13_DFWD_SPLIT` into the container** — `scripts/fr13_launch_forked_fa2_tree_server.sh` and
+`scripts/fr14_armb_leg3_launch_nomiddleware.sh` forward only `FR13_DFWD_SPLIT_NEEDLE`
+(a *different*, unrelated host-wall probe at `:29522`). Verified end to end:
+
+- the live serve's `container_env.txt` contains `FR13_DFWD_SPLIT_NEEDLE=0` and **no**
+  `FR13_DFWD_SPLIT` entry at all;
+- `logs/fr13_dfwd_split.flag` reads `0` in **35 of 35** runroots on this box;
+- **zero** `fr13_dfwd_split.json.*` sidecars and zero `fr13_dfwd_split.err` files exist
+  anywhere in `output/` or `results/`.
+
+So the flag is unsatisfiable at any host-side setting — the same class of defect as
+`fr13.fixed32.sched_next` (injected definition, no call site) and the pre-`c78b3ad41`
+`FR13_HOST_TAIL_*` (read inside the worker whose curated env drops bare `FR13_*` masters),
+both of which this campaign has already had to find and fix.
+
+The repair is one forwarding line per launcher plus strict `0|1` validation, default `0`,
+byte-identical when off. `FR13_DFWD_SPLIT_JSON` needs nothing — it already defaults to
+`/logs/fr13_dfwd_split.json`, inside the bind-mounted logs dir. **This is the single
+highest-value change available to this rung**, because it converts the largest unexplained
+block in the 4-bit budget (dfwd's 20.6–24.4 ms above floor) from an argument into a
+measurement. It is deliberately NOT taken here: it edits launcher files during a live serve,
+which is a freeze-window decision, not a characterization one.
+
 ---
 
 ## 6. The host tail, carried forward and re-priced at 4-bit
@@ -292,11 +329,12 @@ ordering semantics are suspect and nothing here is built on it.
 2. **Both graph-capture levers in the brief are already shipped** — as *required* members of
    the fixed32 hardware-floor runtime, not as flags anyone can turn on. Re-implementing them
    would measure nothing.
-3. **The one structurally new fact is §3**: `overhead_other` is 43–73 % verifier-head GEMM
-   (as executed) depending on checkpoint. That is a *reporting* defect with a one-line fix
-   (bracket `compute_logits` with a fourth span timer, or subtract the pinned head term), and
-   it matters immediately: it is the number the campaign has been reading as "host overhead"
-   in every arm comparison.
+3. **Two instrument defects, both one-line fixes, both worth more than the levers.**
+   (a) §3: `overhead_other` is 43–73 % verifier-head GEMM (as executed) depending on
+   checkpoint — the number the campaign has been reading as "host overhead" in every arm
+   comparison. (b) §5.2: `FR13_DFWD_SPLIT`, the existing 3-way drafter split timer, is not
+   forwarded by either launcher and has engaged **zero** times in 35 runroots, so the largest
+   unexplained block at 4-bit has an instrument written for it that nobody can turn on.
 4. The largest addressable objects the 4-bit budget exposes are **not** host: cfwd's 4–5 GB of
    full-vocab logits traffic (§4, arithmetic-changing), dfwd's 20.6–24.4 ms above its byte
    floor (§5, kernel-domain), and the `K=0` output-width question in §5.1 (~4 ms, one A/B).
@@ -310,10 +348,18 @@ ordering semantics are suspect and nothing here is built on it.
   dispatch (0.60 ms, needs a `_prepare_inputs` capture that §2's invariance now makes
   shape-checkable). Combined ceiling ~0.63 ms = 0.3 % of step, ~12× below the noise floor.
   Worth shipping only on the `PREP_BAKE` precedent — provable and free — never as a gate mover.
-- **(4) DFWD scheduling consolidation → REFUTED as briefed.** ≥ 95 % of the gap is GPU. The
-  offline probe is still worth building, but as an *instrument*: a span timer around
-  `compute_logits` so §3's term stops hiding in `other`, which is the highest-value change
-  this rung can make.
+- **(4) DFWD scheduling consolidation → REFUTED as briefed.** ≥ 94 % of the gap is GPU. What
+  should replace it is **instrument plumbing**, and both halves are one-line changes with no
+  new machinery to design:
+  1. **Forward `FR13_DFWD_SPLIT` in both launchers** (§5.2) — an existing, default-off,
+     already-written 3-way drafter split timer that has never engaged in 35 runroots. Turns
+     dfwd's 20.6–24.4 ms into model / head / other.
+  2. **Bracket `compute_logits`** with a fourth span timer (§3) so the verifier head stops
+     being reported as host overhead.
+
+  Both are byte-identical when off, need no GPU to write, and are worth more than every
+  millisecond deliverables 2–4 were briefed to chase, because they are the difference between
+  a measured budget and an argued one.
 
 ---
 
@@ -336,3 +382,4 @@ ordering semantics are suspect and nothing here is built on it.
 | FP8-era host timeline + refutations | `results/fr13_host_residual_20260811/design.md`, `tail_attribution.json` |
 | ladder's 1111-eager-op CFWD pricing (superseded) | `results/fr13_attack_ladder_analysis_20260808/README.md:64,404` |
 | DEFER pulled, engine-fatal pair | `results/fr14_nvfp4_port_20260816/REDTEAM_20260816.md` passes 27–28 |
+| `FR13_DFWD_SPLIT` exists / arms via flag file / never engaged | `scripts/fr10_phase4_patch_vllm_tree_gdn.py:36972,36993,42878`; launcher forwarding lists `fr13_launch_forked_fa2_tree_server.sh:3677,6288` and `fr14_armb_leg3_launch_nomiddleware.sh:3468,6085`; `logs/fr13_dfwd_split.flag` = `0` in 35/35 runroots; no `fr13_dfwd_split.json.*` anywhere |
