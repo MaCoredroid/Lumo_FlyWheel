@@ -241,7 +241,17 @@ if [[ -n "$added" ]]; then
     [[ "$symbol" == *@GLIBCXX_* ]] || {
       echo "ABI DRIFT in undefined_dynamic: not a versioned libstdc++ import: $symbol" >&2
       exit 94; }
-    grep -qx 'libstdc++.so.6' "$BUILD/candidate_dt_needed.txt" || {
+    # DT_NEEDED entries are captured from `readelf -W -d`, whose fifth field is
+    # the BRACKETED soname ("[libstdc++.so.6]"). The original whole-line match
+    # on the unbracketed name therefore could never succeed, which made this
+    # allowance dead on arrival: any build that legitimately reached it was
+    # rejected with "libstdc++ import without libstdc++ in DT_NEEDED" even
+    # though the library was present in DT_NEEDED all along. The clause landed
+    # in 3120b3765, the same commit that PINNED the candidate, so the sealed
+    # 2026-08-10 build predates it and never exercised this path -- the defect
+    # survived because nothing had run it until the FR14 rebuild. Match the
+    # captured form literally (-F: the name contains '+' characters).
+    grep -qxF '[libstdc++.so.6]' "$BUILD/candidate_dt_needed.txt" || {
       echo "ABI DRIFT: libstdc++ import without libstdc++ in DT_NEEDED: $symbol" >&2
       exit 94; }
   done <<< "$added"
