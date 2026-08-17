@@ -1,0 +1,665 @@
+{
+  "schema": "fr13.gdn_scan_fusion_cost_probe.v1",
+  "analysis_only": true,
+  "acceptance_valid": false,
+  "performance_measurement": "kernel_microbenchmark_synthetic",
+  "step_envelope_claim": false,
+  "stamp": "20260817T234728Z",
+  "device": {
+    "name": "NVIDIA GB10",
+    "sms": 48,
+    "l2_bytes": 25165824
+  },
+  "geometry": {
+    "n_actual": 32,
+    "num_vh": 48,
+    "num_kh": 16,
+    "dim_k": 128,
+    "dim_v": 128,
+    "block_v": 8,
+    "num_warps": 8,
+    "batch": 1,
+    "rows": 32,
+    "grid_l0": [
+      48,
+      16,
+      1
+    ],
+    "grid_l1": [
+      48,
+      16,
+      11
+    ],
+    "grid_single_launch": [
+      48,
+      16,
+      1
+    ],
+    "two_launch_physical_launches_per_layer": 2,
+    "single_launch_physical_launches_per_layer": 1,
+    "state_tile_bytes": 3145728
+  },
+  "topology": {
+    "levels": [
+      [
+        [
+          [
+            0,
+            1,
+            4,
+            9,
+            14
+          ],
+          -1
+        ]
+      ],
+      [
+        [
+          [
+            19,
+            24,
+            26,
+            28,
+            29,
+            30,
+            31
+          ],
+          14
+        ],
+        [
+          [
+            2,
+            7,
+            12,
+            17,
+            22
+          ],
+          0
+        ],
+        [
+          [
+            3,
+            8,
+            13,
+            18,
+            23,
+            25,
+            27
+          ],
+          0
+        ],
+        [
+          [
+            5
+          ],
+          1
+        ],
+        [
+          [
+            6
+          ],
+          1
+        ],
+        [
+          [
+            10
+          ],
+          4
+        ],
+        [
+          [
+            11
+          ],
+          4
+        ],
+        [
+          [
+            15
+          ],
+          9
+        ],
+        [
+          [
+            16
+          ],
+          9
+        ],
+        [
+          [
+            20
+          ],
+          14
+        ],
+        [
+          [
+            21
+          ],
+          14
+        ]
+      ]
+    ],
+    "tree_critical_path_nodes": 12,
+    "two_launch_waves": 12,
+    "single_launch_critical_node_steps": 32
+  },
+  "byte_ab_single_vs_two": {
+    "out_byte_equal": true,
+    "out_max_abs_diff": 0.0,
+    "out_elements_differing": 0,
+    "note": "synthetic-tensor kernel A/B; not the campaign byte gate"
+  },
+  "byte_ab_sweep": {
+    "all_pass": true,
+    "cases": [
+      {
+        "seed": 20260811,
+        "regime": "nominal",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20260811,
+        "regime": "zero_state",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20260811,
+        "regime": "large_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20260811,
+        "regime": "tiny_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20260811,
+        "regime": "zero_inputs",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20261811,
+        "regime": "nominal",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20261811,
+        "regime": "zero_state",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20261811,
+        "regime": "large_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20261811,
+        "regime": "tiny_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20261811,
+        "regime": "zero_inputs",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20262811,
+        "regime": "nominal",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20262811,
+        "regime": "zero_state",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20262811,
+        "regime": "large_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20262811,
+        "regime": "tiny_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20262811,
+        "regime": "zero_inputs",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20263811,
+        "regime": "nominal",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20263811,
+        "regime": "zero_state",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20263811,
+        "regime": "large_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20263811,
+        "regime": "tiny_gating",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      },
+      {
+        "seed": 20263811,
+        "regime": "zero_inputs",
+        "out_byte_equal": true,
+        "rings_byte_equal": true,
+        "max_abs": 0.0,
+        "out_all_finite": true
+      }
+    ],
+    "surfaces": [
+      "out",
+      "ring_k",
+      "ring_v",
+      "ring_a",
+      "ring_b"
+    ]
+  },
+  "bench_us": {
+    "L0_deployed": {
+      "us_min": 89.63199704885483,
+      "us_p05": 90.43200314044952,
+      "us_p50": 92.38400310277939,
+      "us_mean": 92.28693256775539,
+      "reps": 150
+    },
+    "L0_no_export": {
+      "us_min": 34.20799970626831,
+      "us_p05": 45.152001082897186,
+      "us_p50": 45.43999955058098,
+      "us_mean": 45.62026644746462,
+      "reps": 150
+    },
+    "L0_len1": {
+      "us_min": 28.00000086426735,
+      "us_p05": 28.704000636935234,
+      "us_p50": 29.08799983561039,
+      "us_mean": 29.259520024061203,
+      "reps": 150
+    },
+    "L0_len1_no_export": {
+      "us_min": 27.03999914228916,
+      "us_p05": 27.807999402284622,
+      "us_p50": 28.991999104619026,
+      "us_mean": 28.76437318821748,
+      "reps": 150
+    },
+    "L1_deployed": {
+      "us_min": 151.61600708961487,
+      "us_p05": 157.27999806404114,
+      "us_p50": 159.04000401496887,
+      "us_mean": 161.71328028043112,
+      "reps": 150
+    },
+    "L1_len1": {
+      "us_min": 80.44800162315369,
+      "us_p05": 81.34400099515915,
+      "us_p50": 82.2720006108284,
+      "us_mean": 82.32746745149295,
+      "reps": 150
+    },
+    "L1_len_full_padded": {
+      "us_min": 393.0560052394867,
+      "us_p05": 400.89601278305054,
+      "us_p50": 401.8239974975586,
+      "us_mean": 402.7654395500819,
+      "reps": 150
+    },
+    "L1_from_h0": {
+      "us_min": 145.63199877738953,
+      "us_p05": 156.00000321865082,
+      "us_p50": 157.9200029373169,
+      "us_mean": 161.11701289812723,
+      "reps": 150
+    },
+    "two_launch_total": {
+      "us_min": 224.38399493694305,
+      "us_p05": 226.23999416828156,
+      "us_p50": 228.7359982728958,
+      "us_mean": 234.3274673819542,
+      "reps": 150
+    },
+    "single_launch": {
+      "us_min": 186.3359957933426,
+      "us_p05": 187.16800212860107,
+      "us_p50": 188.1919950246811,
+      "us_mean": 189.22645221153894,
+      "reps": 150
+    },
+    "replicated_R_A": {
+      "us_min": 343.32799911499023,
+      "us_p05": 351.6480028629303,
+      "us_p50": 353.7600040435791,
+      "us_mean": 356.5674678484599,
+      "reps": 150
+    },
+    "replicated_R_A_len1": {
+      "us_min": 89.05600011348724,
+      "us_p05": 89.4400030374527,
+      "us_p50": 90.46400338411331,
+      "us_mean": 90.71914648016293,
+      "reps": 150
+    },
+    "width_sweep_one_node_step": {
+      "1": {
+        "us_min": 17.08799973130226,
+        "us_p05": 24.320000782608986,
+        "us_p50": 25.95200017094612,
+        "us_mean": 27.69258671750625,
+        "reps": 150
+      },
+      "2": {
+        "us_min": 20.287999883294106,
+        "us_p05": 30.112000182271004,
+        "us_p50": 30.271999537944794,
+        "us_mean": 30.340266699592274,
+        "reps": 150
+      },
+      "3": {
+        "us_min": 34.623999148607254,
+        "us_p05": 35.392001271247864,
+        "us_p50": 36.38400137424469,
+        "us_mean": 36.41920059919357,
+        "reps": 150
+      },
+      "6": {
+        "us_min": 38.07999938726425,
+        "us_p05": 51.16799846291542,
+        "us_p50": 52.73599922657013,
+        "us_mean": 54.59455966949463,
+        "reps": 150
+      },
+      "11": {
+        "us_min": 65.98400324583054,
+        "us_p05": 79.48800176382065,
+        "us_p50": 80.86399734020233,
+        "us_mean": 81.31477360924085,
+        "reps": 150
+      },
+      "12": {
+        "us_min": 81.95199817419052,
+        "us_p05": 85.28000116348267,
+        "us_p50": 85.53600311279297,
+        "us_mean": 85.90485547979672,
+        "reps": 150
+      }
+    }
+  },
+  "derived": {
+    "l0_us": 92.38400310277939,
+    "l1_us": 159.04000401496887,
+    "two_launch_us": 228.7359982728958,
+    "single_launch_us": 188.1919950246811,
+    "per_node_step_us": 12.794667234023413,
+    "l0_export_write_us": 46.94400355219841,
+    "l1_parent_read_plus_one_step_us": 82.2720006108284,
+    "handoff_us_per_layer": 129.2160041630268,
+    "handoff_fraction_of_two_launch": 0.5649132849166327,
+    "two_launch_ms_step_at_48_layers": 10.979327917098999,
+    "single_launch_ms_step_at_48_layers": 9.033215761184692,
+    "single_minus_two_ms_step": -1.9461121559143066,
+    "batch": 1,
+    "two_launch_us_per_request": 228.7359982728958,
+    "single_launch_us_per_request": 188.1919950246811,
+    "saving_ms_step": 1.9461121559143066,
+    "saving_ms_step_per_request": 1.9461121559143066,
+    "saving_fraction_of_two_launch": 0.1772523938267176
+  },
+  "export_untouched_by_single_launch": true,
+  "fr14_replication_stage0": {
+    "design": "results/fr14_nvfp4_port_20260816/gdn_replication_design.md",
+    "schedule": [
+      {
+        "z": 0,
+        "replay_prefix": [],
+        "own": [
+          0,
+          1,
+          4,
+          9,
+          14
+        ],
+        "chain": 5
+      },
+      {
+        "z": 1,
+        "replay_prefix": [
+          0,
+          1,
+          4,
+          9,
+          14
+        ],
+        "own": [
+          19,
+          24,
+          26,
+          28,
+          29,
+          30,
+          31
+        ],
+        "chain": 12
+      },
+      {
+        "z": 2,
+        "replay_prefix": [
+          0
+        ],
+        "own": [
+          2,
+          7,
+          12,
+          17,
+          22
+        ],
+        "chain": 6
+      },
+      {
+        "z": 3,
+        "replay_prefix": [
+          0
+        ],
+        "own": [
+          3,
+          8,
+          13,
+          18,
+          23,
+          25,
+          27
+        ],
+        "chain": 8
+      },
+      {
+        "z": 4,
+        "replay_prefix": [
+          0,
+          1
+        ],
+        "own": [
+          5
+        ],
+        "chain": 3
+      },
+      {
+        "z": 5,
+        "replay_prefix": [
+          0,
+          1
+        ],
+        "own": [
+          6
+        ],
+        "chain": 3
+      },
+      {
+        "z": 6,
+        "replay_prefix": [
+          0,
+          1,
+          4
+        ],
+        "own": [
+          10
+        ],
+        "chain": 4
+      },
+      {
+        "z": 7,
+        "replay_prefix": [
+          0,
+          1,
+          4
+        ],
+        "own": [
+          11
+        ],
+        "chain": 4
+      },
+      {
+        "z": 8,
+        "replay_prefix": [
+          0,
+          1,
+          4,
+          9
+        ],
+        "own": [
+          15
+        ],
+        "chain": 5
+      },
+      {
+        "z": 9,
+        "replay_prefix": [
+          0,
+          1,
+          4,
+          9
+        ],
+        "own": [
+          16
+        ],
+        "chain": 5
+      },
+      {
+        "z": 10,
+        "replay_prefix": [
+          0,
+          1,
+          4,
+          9,
+          14
+        ],
+        "own": [
+          20
+        ],
+        "chain": 6
+      },
+      {
+        "z": 11,
+        "replay_prefix": [
+          0,
+          1,
+          4,
+          9,
+          14
+        ],
+        "own": [
+          21
+        ],
+        "chain": 6
+      }
+    ],
+    "node_steps": 67,
+    "deployed_node_steps": 32,
+    "makespan": 12,
+    "deployed_makespan": 12,
+    "handoff_bytes_per_layer": 0,
+    "deployed_handoff_bytes_per_layer": 50331648,
+    "replicated_us": 353.7600040435791,
+    "single_launch_us": 188.1919950246811,
+    "two_launch_us": 228.7359982728958,
+    "vs_single_launch_us": 165.568009018898,
+    "vs_two_launch_us": 125.02400577068329,
+    "vs_single_launch_ms_step": 7.9472644329071045,
+    "vs_two_launch_ms_step": 6.001152276992798,
+    "per_node_step_us_by_wave_width": {
+      "width_1_from_L0": 4.112000111490488,
+      "width_2_3_from_L1": 4.7980002127587795,
+      "width_11_from_L1_padded": 4.841696922526215,
+      "width_12_from_replicated": 4.787200011990287
+    },
+    "run_to_run_spread_us": 2.1120011806488037,
+    "verdict": "REFUTED",
+    "verdict_rule": "PRE-REGISTERED in the design note before this arm existed: BUILD only if the replicated schedule beats single_launch by more than the run-to-run spread. Beating the two-launch route is NOT sufficient -- single_launch already does that, at 32 node-steps instead of 67.",
+    "out_values_are_meaningless_by_design": true,
+    "why": "Several programs replay the same prefix node and race to store identical bytes to the same out row. This arm answers the COST question only; the value question needs the REPLAY_STEPS store-suppression kernel, which is stage 1 and is built only if this verdict says BUILD."
+  }
+}

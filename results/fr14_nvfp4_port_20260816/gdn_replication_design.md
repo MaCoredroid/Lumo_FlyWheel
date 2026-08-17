@@ -1,4 +1,4 @@
-# FR14 — GDN root-path replication: design note, and why it is probably already dead
+# FR14 — GDN root-path replication: design note, and the measurement that killed it
 
 **Rung:** the under-210 plan's kernel lane, *"GDN replication ~−7 ms"*
 (`REDTEAM_20260816.md` pass 29). The design is FR13's own successor
@@ -9,18 +9,18 @@ recommendation, `results/fr13_gdn_scan_20260811/design.md` §6.3 @ `9d65d6ea8`:
 > state in registers instead of through HBM. […] a **modelled −6.2 to −7.6
 > ms/step**. Bit-identity is plausible […] but **unproven**.
 
-**Status: DESIGNED, NOT BUILT, AND MODELLED NEGATIVE.** Re-deriving the payoff
-from the FR13 probe's *own six measurements* gives **+7 to +8 ms/step of
-recompute against 2.2 to 3.7 ms/step of handoff removed** — the opposite sign,
-by a factor of three. Worse, the design is **dominated by a kernel that already
-exists and is already byte-gated**: `single_launch` reaches zero handoff at 32
-node-steps; replication reaches the same zero at 67.
+**Status: MEASURED AND REFUTED — DO NOT BUILD.** Stage 0 ran 2026-08-17 on a
+free GPU (`gdn_replication_stage0_b1.json`). The replicated schedule costs
+**353.76 µs/layer** against `single_launch`'s **188.19** — **+165.57 µs/layer =
++7.95 ms/step**, which is **78× the run-to-run spread**. The pre-registered rule
+in §7 says **REFUTED**, and the probe emits that verdict itself.
 
-This note states the design precisely enough to build, states the arithmetic
-that says not to, and specifies the **one cheap measurement that settles it —
-which needs no new kernel at all**. Nothing here is measured by me yet: it is a
-re-analysis of banked numbers, and it is written to be refuted by the probe in
-§7, not to stand in place of it.
+The sections below are kept as written *before* the run, with the measured
+outcome added in **§9**. The prediction they make is +134..170 µs/layer worse
+than `single_launch`; the measurement is +165.57, inside that range. The
+load-bearing assumption — that a node-step costs the same wherever it sits, so
+waves are nearly free and replication trades a free resource for an expensive
+one — was tested directly and holds across a **12× width change**.
 
 ---
 
@@ -303,3 +303,91 @@ arithmetic does not touch.
 
 I have not measured this. §7 stage 0 is ~10 GPU-minutes and either confirms the
 null or refutes me with a number; either outcome is worth more than the note.
+
+---
+
+## 9. STAGE-0 RESULT — measured 2026-08-17, verdict REFUTED
+
+`gdn_replication_stage0_b1.json`, GB10, B1, 150 reps, synthetic, eager, one
+container, no credential. `analysis_only=true`, `acceptance_valid=false`.
+
+### 9.1 The verdict
+
+| arm | µs/layer (p50) | node-steps | handoff |
+|---|---:|---:|---:|
+| `two_launch_total` (deployed) | 228.74 | 32 | 48.0 MiB |
+| `single_launch` (built, gated) | **188.19** | 32 | 0 |
+| `replicated_R_A` | **353.76** | 67 | 0 |
+
+- **vs `single_launch`: +165.57 µs/layer = +7.95 ms/step**
+- vs the deployed two-launch route: +125.02 µs/layer = +6.00 ms/step
+- run-to-run spread: **2.11 µs** — the gap is **78×** it.
+
+**Pre-registered rule (§7): BUILD only if the replicated schedule beats
+`single_launch` by more than the spread. It loses by 78 spreads. → REFUTED.**
+Stage 1 (the `REPLAY_STEPS` store-suppression kernel) is **not built**, which
+was the entire point of pricing before building.
+
+### 9.2 The load-bearing assumption, tested directly
+
+Marginal cost of one node-step, now at **four** wave widths:
+
+| width | µs/node-step | source |
+|---:|---:|---|
+| 1 | 4.112 | `L0` length sweep |
+| 2–3 | 4.798 | `L1` length sweep |
+| 11 | 4.842 | `L1_len_full_padded` |
+| **12** | **4.787** | **`replicated_R_A` − `replicated_R_A_len1`** |
+
+Flat to within 17% across a 12× width change. **A node-step costs ~4.1–4.8 µs
+wherever it sits**, so cost tracks node-steps and the design's 2.09× node-step
+multiplier is paid in full.
+
+The width control separates the two effects cleanly: 12 programs running **one**
+step each cost 90.46 µs; the same 12 programs replaying their prefixes cost
+353.76. **+55 node-steps ⇒ +263.30 µs.** The cost is the recompute, not the
+program count.
+
+*Nuance, stated because the raw sweep looks like the opposite at first glance:* a
+single-node-step launch at grid-z 12 costs 85.54 µs vs 25.95 at z=1 — only 3.30×
+for 12× the programs, which reads as "width is cheap". It is not: ~20.5 µs of
+that 25.95 is a fixed launch/`h0` floor, and the marginal is
+`(85.54 − 25.95)/11 = 5.42 µs per added program-step` — the same ~5 µs a node-step
+costs anywhere. Sublinear *totals*, linear *marginals*. Pricing a design off the
+totals is how the ladder's 3.45 ms was produced.
+
+### 9.3 The two banked-number corrections, confirmed on this run
+
+1. **The handoff is 33.4%, not 56.5%.** Export writes A/B cleanly at 46.94 µs.
+   `L1_len1` = 82.27 µs contains the launch floor *and* 11 real node-steps; at
+   the measured marginal, floor+reads together are **29.49 µs**. So handoff
+   ≤ **76.44 µs = 33.4%** of `two_launch_total`. The 56.5% figure the probe still
+   prints in its legacy `derived` block charges 11 node-steps and a launch floor
+   to parent reads; it should be read as an upper bound only.
+2. **Launch overlap is real.** `L0_deployed + L1_deployed` = 251.42 but
+   `two_launch_total` = 228.74 — the two launches overlap by 22.68 µs, so every
+   per-part attribution (FR13's, mine, and this note's) is an upper bound.
+
+### 9.4 Probe integrity
+
+- Reproduces the banked 20260811 run: `two_launch_total` **228.74** vs banked
+  228.74; `single_launch` **188.19** vs banked 188.64.
+- `single_launch` vs two-launch byte A/B: **20/20 pass**, `max_abs = 0.0`, on
+  `out` and all four ring surfaces — the parked kernel is still byte-clean at
+  this HEAD, which is worth knowing independently of this rung.
+- Zero containers left after the run.
+
+### 9.5 What this does NOT close
+
+§6.2 stands unrefuted and is the only surviving way the verdict could be wrong:
+the probe's exported state tiles stay hot in GB10's 24 MiB L2, while a real step
+interleaves 48 layers of other traffic. If the in-serving handoff were ~3× the
+probe's, the arithmetic would move — but it would have to move **165.57 µs/layer**
+to reach parity with `single_launch`, i.e. the true handoff would need to be
+~2.2× the *entire* deployed kernel cost. That is not a live hypothesis.
+
+**Recommendation to Mark, now measured rather than modelled: close the GDN
+replication rung as a verified null and keep the "−7 ms" line at ~0.** The lever
+that actually banks the handoff is `single_launch`, which is already built,
+already byte-clean at this HEAD (§9.4), and whose K0 arming path this campaign
+just finished porting — its −2.2 ms is the real version of this rung's promise.
