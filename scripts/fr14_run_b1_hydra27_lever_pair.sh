@@ -21,6 +21,17 @@
 # reduces with the driver's OWN deploy-speed invocation, so the numbers are
 # produced exactly as every banked arm's were.
 #
+# BUT THE SEQUENCE STILL HAS TO BE SOURCED. Bypassing the driver does NOT mean
+# bypassing fr13_fixed32_floor_timers_seq.sh: that file is the only place
+# FR13_FIXED32_TAW_WALK_CAP and ~50 other fixed32 route/committer/census pins
+# are exported, and the launcher reads them from the PROCESS environment as
+# "${NAME:-}", not from any env-prefix array. The first launch of this pair
+# skipped it and both arms died in 6 s with the opaque "fixed32 integer route
+# pin is malformed" -- an unset walk cap arriving as "" and failing int("")
+# deep inside the launcher. So publish the sequence with run_variant stubbed
+# (the gate runner's idiom), which yields the driver's exact environment
+# without the driver's arm schedule.
+#
 # CREDENTIAL. The levered arm needs a production sidecar issued from a gate
 # earned AT THE SERVING COMMIT. fr13_qrow32_b1_pass_sidecar.py says so in its own
 # words: "By PATH, never by runroot: the credential must be issued against a gate
@@ -96,6 +107,35 @@ SIDECAR="$RUNROOT_ABS/fr14_qrow32_b1_gqa_pair_k0_production_pass.json"
   || { echo "credential issuance FAILED" >&2; exit 2; }
 SIDECAR_SHA256=$(sha256sum "$SIDECAR" | awk '{print $1}')
 echo "[pair] credential issued: $SIDECAR ($SIDECAR_SHA256)"
+
+# ---- publish the fixed32 route pins ------------------------------------------
+# Identity FIRST, then the sequence: the sequence reads the draft-vocab config
+# as "${FR13_DRAFT_VOCAB_K:-65536}:$FR13_DRAFT_VOCAB_ROOT" and derives the floor
+# from it, so exporting K0 up front makes it publish the K0 floor itself. The
+# block map is deliberately NOT set here -- fr13_canonical_env.sh supplies the
+# canonical default and the launcher demands exactly that value, so production
+# carries it and so must this pair. Assert the whole identity survived sourcing.
+export BSIZE=1 CONC=1 WALL=5400
+export FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0
+export FR13_NEEDS_ALLOW="FR13_DRAFT_VOCAB_K=0"
+export FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE="$QUALIFICATION_PROFILE"
+export FR13_FLOOR_ORDER=TH
+source scripts/fr13_canonical_env.sh
+run_variant() { :; }
+source scripts/fr13_fixed32_floor_timers_seq.sh
+unset -f run_variant
+[[ "$FR13_DRAFT_VOCAB_ROOT" == "0" \
+   && "$FR13_DRAFT_VOCAB_K" == "0" \
+   && "$FR13_NEEDS_ALLOW" == "FR13_DRAFT_VOCAB_K=0" \
+   && "$FR13_DRAFT_VOCAB_BLOCKS" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+   && "$FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE" == "full_vocab" \
+   && "$FR13_FIXED32_TAW_WALK_CAP" == "12" \
+   && "$FR13_MANDATORY_WEIGHT_BYTES" == "$MANDATORY_WEIGHT_BYTES" \
+   && "$FR13_WEIGHT_FLOOR_MS" == "$MANDATORY_WEIGHT_FLOOR_MS" \
+   && "$LUMO_SWE_AUTOCOMMIT" == "0" ]] \
+  || { echo "K0 hydra27 pair floor contract drifted" >&2; exit 2; }
+echo "[pair] route pins published: walk_cap=$FR13_FIXED32_TAW_WALK_CAP" \
+     "floor=${FR13_MANDATORY_WEIGHT_BYTES}B/${FR13_WEIGHT_FLOOR_MS}ms K=0 ROOT=0"
 
 run_arm() {  # label lever(0|1)
   local label=$1 lever=$2
