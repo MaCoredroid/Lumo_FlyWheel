@@ -5276,11 +5276,46 @@ def _fr13_fa2_qrow32_b1_digest(env_name, label, *, length=64):
     return value
 
 
-def _fr13_fa2_qrow32_b1_require_k64():
+def _fr13_fa2_qrow32_b1_require_draft_vocab_profile():
+    """Kernel-side defence-in-depth on the draft-vocabulary IDENTITY.
+
+    This is a workload-identity assertion, not a kernel-geometry constraint: it
+    reads two environment variables and never inspects a tensor. The real shape
+    guard is _fr13_fa2_qrow32_b1_geometry_mismatches(), which checks query rows,
+    caches, cu_seqlens and the tree bias, and has nothing to do with the draft
+    vocabulary. The qrow32 B1 kernel is therefore NOT K64-dependent; what this
+    guard encodes is "the credential authorizing this selector was earned in
+    workload shape X", enforced here as well as in the launcher so that
+    bypassing the launcher cannot bypass it.
+
+    It used to hard-code K64/root1, which is why it refused a K0 serve even
+    after the launcher predicates were made profile-aware -- a third, deeper
+    layer of the same binding (fr14 2026-08-17). It now honours the same
+    qualification profile the launcher does, so a credential still cannot be
+    used outside the shape it was earned in, in either direction.
+    """
+    profile = os.environ.get(
+        "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE", "k64_root"
+    )
     root = int(os.environ.get("FR13_DRAFT_VOCAB_ROOT", "0"))
     k = int(os.environ.get("FR13_DRAFT_VOCAB_K", "0"))
-    if root != 1 or k != 65536:
-        raise RuntimeError("FR13 qrow32 B1 selectors require K64 ROOT=1")
+    if profile == "k64_root":
+        if root != 1 or k != 65536:
+            raise RuntimeError(
+                "FR13 qrow32 B1 selectors under the k64_root profile require "
+                "K64 ROOT=1"
+            )
+    elif profile == "full_vocab":
+        if root != 0 or k != 0:
+            raise RuntimeError(
+                "FR13 qrow32 B1 selectors under the full_vocab profile require "
+                "K0 ROOT=0"
+            )
+    else:
+        raise RuntimeError(
+            "FR13 qrow32 B1 qualification profile must be exactly k64_root or "
+            f"full_vocab; got: {profile!r}"
+        )
 
 
 def _fr13_fa2_qrow32_b1_identity(arm=None):
@@ -5567,7 +5602,7 @@ def _fr13_fa2_qrow32_b1_live_register(
     arm = _fr13_fa2_qrow32_b1_arm("FR13_FA2_QROW32_B1_LIVE_AB_ARM")
     if arm is None or _FR13_FA2_QROW32_B1_LIVE_ATTEMPTED:
         return tree_bias
-    _fr13_fa2_qrow32_b1_require_k64()
+    _fr13_fa2_qrow32_b1_require_draft_vocab_profile()
     _fr13_fa2_qrow32_b1_require_identity(arm)
     if _fr13_fa2_qrow32_b1_profile_capture_active():
         return _fr13_fa2_qrow32_b1_reference_tree_bias(tree_bias)
@@ -5702,7 +5737,7 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "tail6_fixed32", "hydra27_fixed32"
     ):
         raise RuntimeError("FR13 qrow32 B1 live topology drifted")
-    _fr13_fa2_qrow32_b1_require_k64()
+    _fr13_fa2_qrow32_b1_require_draft_vocab_profile()
     candidate_digest, source_commit, patch_source_digest = (
         _fr13_fa2_qrow32_b1_require_identity(arm)
     )
@@ -5841,7 +5876,7 @@ def _fr13_fa2_qrow32_b1_production_begin(
         return None
     if os.environ.get("FR13_FA2_QROW32_B1_INTERNAL_ATTESTED") != "1":
         raise RuntimeError("FR13 qrow32 B1 production has no launcher attestation")
-    _fr13_fa2_qrow32_b1_require_k64()
+    _fr13_fa2_qrow32_b1_require_draft_vocab_profile()
     task_ids = _fr13_fa2_qrow32_b1_require_exact4()
     # Bind the identity of THIS arm's binary. Each production arm ships in its
     # own .so with its own source closure, so an arm-blind check would let the
