@@ -3397,7 +3397,8 @@ if [[ "$_fr13_gdn_gqa_group3_production" == "1" ]]; then
     --source-commit "$_fr13_gdn_gqa_group3_source_commit" \
     --profile fixed32 \
     --mode "$FR13_FIXED32_MODE" \
-    --batch "$_fr13_gdn_gqa_group3_production_batch"
+    --batch "$_fr13_gdn_gqa_group3_production_batch" \
+    --draft-vocab-profile "$FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE"
 elif [[ -n "$_fr13_gdn_gqa_group3_production_batch" \
         || -n "$_fr13_gdn_gqa_group3_pass_json" ]]; then
   echo "FR13 GDN GQA-group3 production batch/PASS is set without its arm" >&2
@@ -4809,7 +4810,8 @@ PY
       --source-commit "$_fr13_gdn_gqa_group3_source_commit" \
       --profile fixed32 \
       --mode "$FR13_FIXED32_MODE" \
-      --batch "$_fr13_gdn_gqa_group3_production_batch"
+      --batch "$_fr13_gdn_gqa_group3_production_batch" \
+      --draft-vocab-profile "$FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE"
     printf '1\n' \
       > "$LOG_DIR/fr13_fixed32_gdn_gqa_group3.production.arm"
     printf '%s\n' "$_fr13_gdn_gqa_group3_production_batch" \

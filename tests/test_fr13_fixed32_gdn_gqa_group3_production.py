@@ -42,6 +42,9 @@ def _resolver_namespace() -> dict[str, object]:
         "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_SIDECARS",
         "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH_SIDECARS",
         "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS",
+        "_FR13_DRAFT_VOCAB_PROFILES",
+        "_FR13_DRAFT_VOCAB_CREDENTIAL_FIELDS",
+        "_FR13_GDN_ORDERED_CANDIDATES",
     }
     nodes = [
         node
@@ -56,7 +59,13 @@ def _resolver_namespace() -> dict[str, object]:
         or (
             isinstance(node, ast.FunctionDef)
             and node.name
-            == "_fr13_resolve_fixed32_gdn_gqa_group3_production"
+            in (
+                "_fr13_resolve_fixed32_gdn_gqa_group3_production",
+                # FR14 declared draft-vocabulary identity helpers.
+                "_fr13_draft_vocab_profile",
+                "_fr13_draft_vocab_env_matches",
+                "_fr13_draft_vocab_credential_matches",
+            )
         )
     ]
     namespace: dict[str, object] = {
@@ -104,7 +113,7 @@ def _host_credential_module():
 def _credential(mode: str = "hydra27_fixed32", batch: int = 1) -> dict[str, object]:
     is_hydra = mode == "hydra27_fixed32"
     return {
-        "schema": "fr13.fixed32.gdn_single_launch.real_task_credential.v3",
+        "schema": "fr13.fixed32.gdn_single_launch.real_task_credential.v4",
         "status": "PASS",
         "credential_scope": f"{'hydra27' if is_hydra else 'tail23'}:b{batch}",
         "run_classification": (
@@ -134,6 +143,8 @@ def _credential(mode: str = "hydra27_fixed32", batch: int = 1) -> dict[str, obje
             ]
         ),
         "physical_rows": 32,
+        # FR14: the credential NAMES the shape it was earned in.
+        "qualification_profile": "k64_root",
         "draft_vocab_k": 65536,
         "draft_vocab_root": 1,
         "draft_vocab_blocks_sha256": (
@@ -414,8 +425,15 @@ def test_patcher_launcher_and_manifest_bind_production_credential() -> None:
     manifest = MANIFEST.read_text(encoding="utf-8")
 
     assert "_FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_BATCH" in patcher
-    assert "GDN GQA-group3 production requires exact credentialed" in patcher
-    assert "B1-or-B4 K64/root1 physical32 FULL-graph contract" in patcher
+    assert "GDN GQA-group3 production requires the exact credentialed" in patcher
+    # FR14: the message names the DECLARED profile instead of a baked K64
+    # literal -- a refusal that misreports the identity it enforced is the
+    # same self-misdescription class as a credential that does.
+    assert (
+        "B1-or-B4 physical32 FULL-graph contract for draft-vocabulary"
+        in patcher
+    )
+    assert "FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE" in patcher
     assert "production did not replace the captured" in patcher
     assert '"incumbent launch: " + repr(executed_gdn)' in patcher
     assert "fr13_fixed32_gdn_gqa_group3.production_credential.json" in launcher

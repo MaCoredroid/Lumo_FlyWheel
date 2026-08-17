@@ -27,8 +27,23 @@ import fr13_floor_gate as floor_gate  # noqa: E402
 import fr13_runtime_manifest as runtime_manifest  # noqa: E402
 
 
-SCHEMA = "fr13.fixed32.gdn_single_launch.real_task_credential.v3"
-LIVE_SCHEMA = "fr13.fixed32.gdn_single_launch.live_observation.v2"
+# FR14 SCHEMA BUMP (v3 -> v4, live_observation v2 -> v3). Both records gained a
+# required `qualification_profile` field, so the shape genuinely changed and the
+# version says so. Nothing is lost by the bump: every credential this gate ever
+# issued is HEAD-bound, so the source change that added the field had already
+# invalidated all of them. What the bump BUYS is that an older validator, in
+# another worktree or branch, cannot silently accept a v4 credential while
+# ignoring the profile it declares.
+SCHEMA = "fr13.fixed32.gdn_single_launch.real_task_credential.v4"
+LIVE_SCHEMA = "fr13.fixed32.gdn_single_launch.live_observation.v3"
+# FR14. The two draft-vocabulary shapes a gate can be EARNED in. The caller
+# declares one; the kernel emitted the same one into the live observation; this
+# reducer refuses any disagreement and stamps the declaration into the
+# credential so the launcher can refuse to spend it anywhere else.
+DRAFT_VOCAB_PROFILES: dict[str, dict[str, int]] = {
+    "k64_root": {"draft_vocab_k": 65536, "draft_vocab_root": 1},
+    "full_vocab": {"draft_vocab_k": 0, "draft_vocab_root": 0},
+}
 CANDIDATE = "fixed32_gdn_single_launch_tree_v2"
 GQA_GROUP3_CANDIDATE = "fixed32_gdn_single_launch_gqa_group3_v1"
 CANDIDATES = {
@@ -608,8 +623,14 @@ def _validate_live_pass(
     graph_signature: str,
     census_events: list[dict[str, Any]],
     request_task_map: dict[str, str],
+    draft_vocab_profile: str = "k64_root",
 ) -> dict[str, Any]:
     contract = MODE[mode]
+    draft_vocab = DRAFT_VOCAB_PROFILES.get(draft_vocab_profile)
+    if draft_vocab is None:
+        raise GateError(
+            f"unsupported draft-vocabulary profile: {draft_vocab_profile!r}"
+        )
     if candidate_source_sha256 is None:
         candidate_source_sha256 = kernel_sha256
     if candidate_source_sha256 is None:
@@ -715,8 +736,14 @@ def _validate_live_pass(
         "logical_topology": contract["topology"],
         "logical_drafts": contract["logical_drafts"],
         "valid_mask": contract["valid_mask"],
-        "draft_vocab_k": 65536,
-        "draft_vocab_root": 1,
+        # FR14. The observation must DECLARE the draft-vocabulary shape it was
+        # taken in, and carry the K/root pair that declaration implies. The
+        # kernel emits both from one resolved profile; requiring both here is
+        # what stops either shape masquerading as the other in the record the
+        # credential is minted from.
+        "qualification_profile": draft_vocab_profile,
+        "draft_vocab_k": draft_vocab["draft_vocab_k"],
+        "draft_vocab_root": draft_vocab["draft_vocab_root"],
         "gate_mode": "post_measured_replay_distinct_request_tuple",
         "coverage_authority": "authenticated_proxy_engine_request_join",
         "diagnostic_identity": diagnostic_identity,
@@ -906,9 +933,11 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
             if isinstance(record, dict)
         ],
         request_task_map=request_task_map,
+        draft_vocab_profile=args.draft_vocab_profile,
     )
 
     contract = MODE[mode]
+    credential_draft_vocab = DRAFT_VOCAB_PROFILES[args.draft_vocab_profile]
     credential = {
         "schema": SCHEMA,
         "status": "PASS",
@@ -934,8 +963,13 @@ def reduce(args: argparse.Namespace) -> dict[str, Any]:
         "candidate": candidate_id,
         "reference": REFERENCE,
         "physical_rows": 32,
-        "draft_vocab_k": 65536,
-        "draft_vocab_root": 1,
+        # FR14. The credential carries the shape it was EARNED in -- name and
+        # implied pair together -- so the launcher can refuse to spend it in any
+        # other. The block map stays canonical in BOTH profiles because
+        # production carries it in both.
+        "qualification_profile": args.draft_vocab_profile,
+        "draft_vocab_k": credential_draft_vocab["draft_vocab_k"],
+        "draft_vocab_root": credential_draft_vocab["draft_vocab_root"],
         "draft_vocab_blocks_sha256": BLOCK_MAP_SHA256,
         "reference_physical_launches_per_request_layer": 2,
         "candidate_physical_launches_per_request_layer": 1,
@@ -1009,6 +1043,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--external-end", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    # FR14. Declared by the runner from FR13_GDN_GATE_DRAFT_VOCAB_PROFILE -- the
+    # SAME variable that set the serve env -- so the reduction and the serve
+    # cannot disagree about which shape was gated. Default k64_root reproduces
+    # every banked reduction byte-for-byte.
+    parser.add_argument(
+        "--draft-vocab-profile",
+        choices=tuple(DRAFT_VOCAB_PROFILES),
+        default="k64_root",
+    )
     return parser
 
 

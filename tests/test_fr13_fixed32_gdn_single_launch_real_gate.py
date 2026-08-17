@@ -31,6 +31,11 @@ def _namespace(*function_names: str) -> dict[str, object]:
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_STATE_SURFACES",
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_COMPARATOR_EVENTS",
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_REQUEST_TUPLES",
+        # FR14 declared draft-vocabulary identity, shared by every ordered
+        # resolver and by both PASS emitters.
+        "_FR13_DRAFT_VOCAB_PROFILES",
+        "_FR13_DRAFT_VOCAB_CREDENTIAL_FIELDS",
+        "_FR13_GDN_ORDERED_CANDIDATES",
     }
     assignments = [
         node
@@ -41,12 +46,28 @@ def _namespace(*function_names: str) -> dict[str, object]:
             for target in node.targets
         )
     ]
+    # FR14: the draft-vocabulary profile helpers are pulled in unconditionally
+    # -- every ordered resolver and both PASS emitters now call them -- and are
+    # deliberately NOT part of the requested-name assertion below, which still
+    # proves the test asked for exactly the units it means to exercise.
+    helper_names = {
+        "_fr13_draft_vocab_profile",
+        "_fr13_draft_vocab_env_matches",
+        "_fr13_draft_vocab_credential_matches",
+    }
+    helpers = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name in helper_names
+    ]
+    assert {node.name for node in helpers} == helper_names
     definitions = [
         node
         for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name in function_names
     ]
     assert {node.name for node in definitions} == set(function_names)
+    definitions = [*helpers, *definitions]
     namespace: dict[str, object] = {"json": json, "os": os}
     exec(
         compile(
@@ -337,13 +358,56 @@ def test_gate_resolver_is_exact_physical32_bv8_k64_root1(mode: str) -> None:
     ):
         tampered = dict(exact)
         tampered[field] = value
-        with pytest.raises(RuntimeError, match="K64/root1"):
+        with pytest.raises(RuntimeError, match="k64_root drafter contract"):
             resolve(
                 mode,
                 environ=tampered,
                 sidecars=(),
                 geom_override={"BV": 8},
             )
+    # FR14: the identity is DECLARED, so the full_vocab shape is expressible and
+    # the two shapes cannot masquerade as one another -- a full_vocab
+    # declaration served with K64 values is refused exactly as the reverse is.
+    full_vocab = {
+        "FR13_FIXED32_GDN_PATH_BV_CANDIDATE": "single_launch",
+        "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE": "full_vocab",
+        "FR13_DRAFT_VOCAB_K": "0",
+        "FR13_DRAFT_VOCAB_ROOT": "0",
+    }
+    assert resolve(
+        mode, environ=full_vocab, sidecars=(), geom_override={"BV": 8}
+    ) == "single_launch"
+    with pytest.raises(RuntimeError, match="full_vocab drafter contract"):
+        resolve(
+            mode,
+            environ={**full_vocab, **{
+                "FR13_DRAFT_VOCAB_K": "65536",
+                "FR13_DRAFT_VOCAB_ROOT": "1",
+            }},
+            sidecars=(),
+            geom_override={"BV": 8},
+        )
+    with pytest.raises(RuntimeError, match="k64_root drafter contract"):
+        resolve(
+            mode,
+            environ={
+                "FR13_FIXED32_GDN_PATH_BV_CANDIDATE": "single_launch",
+                "FR13_DRAFT_VOCAB_K": "0",
+                "FR13_DRAFT_VOCAB_ROOT": "0",
+            },
+            sidecars=(),
+            geom_override={"BV": 8},
+        )
+    with pytest.raises(RuntimeError, match="must be exactly k64_root or full_vocab"):
+        resolve(
+            mode,
+            environ={
+                **exact,
+                "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE": "k64",
+            },
+            sidecars=(),
+            geom_override={"BV": 8},
+        )
     with pytest.raises(RuntimeError, match="pinned exactly"):
         resolve(mode, environ=exact, sidecars=(), geom_override={"BV": 16})
     with pytest.raises(RuntimeError, match="exact fixed32 mode"):
@@ -586,9 +650,14 @@ def test_live_pass_is_source_mode_batch_and_reference_bound(
     )
     namespace["_FR13_FIXED32_MODE"] = mode
     namespace["_FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH"] = batch
+    # FR14: the PASS declares the shape the gate ran in, and the emitter
+    # re-checks it against the served env rather than trusting the constant.
+    namespace["_FR13_FIXED32_GDN_ORDERED_QUALIFICATION_PROFILE"] = "k64_root"
     namespace["_fr13_fixed32_gdn_path_bv_source_sha256"] = lambda: "a" * 64
     output = tmp_path / "single-launch-pass.json"
     monkeypatch.setenv("FR13_FIXED32_GDN_PATH_BV_LIVE_JSON", os.fspath(output))
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_K", "65536")
+    monkeypatch.setenv("FR13_DRAFT_VOCAB_ROOT", "1")
 
     namespace["_fr13_fixed32_gdn_bv_live_pass_emit"](
         task_marker="swe_verified:astropy__astropy-12907",
@@ -604,7 +673,7 @@ def test_live_pass_is_source_mode_batch_and_reference_bound(
         },
     )
     payload = json.loads(output.read_text(encoding="ascii"))
-    assert payload["schema"] == "fr13.fixed32.gdn_single_launch.live_pass.v1"
+    assert payload["schema"] == "fr13.fixed32.gdn_single_launch.live_pass.v2"
     assert payload["candidate"] == "fixed32_gdn_single_launch_tree_v2"
     assert payload["source_sha256"] == "a" * 64
     assert payload["mode"] == mode
@@ -615,6 +684,7 @@ def test_live_pass_is_source_mode_batch_and_reference_bound(
     assert "graph_id" not in payload
     assert payload["graph_signature"] == "d" * 64
     assert payload["physical_rows"] == 32
+    assert payload["qualification_profile"] == "k64_root"
     assert payload["draft_vocab_k"] == 65536
     assert payload["draft_vocab_root"] == 1
     assert payload["reference_served"] is True

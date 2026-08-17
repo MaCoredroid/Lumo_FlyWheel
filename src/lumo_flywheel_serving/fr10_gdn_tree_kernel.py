@@ -1007,6 +1007,103 @@ def _fr13_resolve_fixed32_mode() -> str | None:
 _FR13_FIXED32_MODE = _fr13_resolve_fixed32_mode()
 
 
+# ---------------------------------------------------------------------------
+# FR14 DRAFT-VOCABULARY QUALIFICATION PROFILES (2026-08-17)
+#
+# Every ordered-GDN predicate in this module used to hard-code the K64/root1
+# draft-vocabulary identity into its own legality check. Mark's K0 ruling made
+# full-vocab drafting the production config, which parked the ARMING PATH for
+# the whole ordered-GDN lever family at once: a credential could only be earned
+# in a shape production never serves.
+#
+# The fix is the shape the launcher, the shared gate runner, the credential
+# validator and the in-container patcher already carry
+# (scripts/fr13_launch_forked_fa2_tree_server.sh:547 _fr13_assert_draft_vocab_profile):
+# a lever DECLARES which draft-vocabulary shape it is earned in, and every
+# independent layer checks the served shape agrees. The pinning is KEPT, not
+# removed -- a k64_root credential still cannot authorize a full_vocab serve and
+# vice versa; the identity is simply no longer welded to one of the two shapes.
+#
+# Three variables, one per lever, exactly the names the launcher validates and
+# forwards, so a credential is earned and spent under ONE declared identity:
+#   FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE   -- the ordered live gate
+#   FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE -- single_launch prod
+#   FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE  -- GQA-group3 production
+# All default to k64_root, so every banked arm keeps its exact previous meaning
+# and an unknown profile is refused BY NAME rather than silently defaulted.
+_FR13_DRAFT_VOCAB_PROFILES = {
+    "k64_root": {"FR13_DRAFT_VOCAB_ROOT": "1", "FR13_DRAFT_VOCAB_K": "65536"},
+    "full_vocab": {"FR13_DRAFT_VOCAB_ROOT": "0", "FR13_DRAFT_VOCAB_K": "0"},
+}
+# The same two shapes as they appear INSIDE a credential/live-PASS artifact.
+# Kept as a separate table on purpose: the env pair is strings and the
+# credential pair is ints, and a JSON "65536" must never satisfy an int check.
+_FR13_DRAFT_VOCAB_CREDENTIAL_FIELDS = {
+    "k64_root": {"draft_vocab_k": 65536, "draft_vocab_root": 1},
+    "full_vocab": {"draft_vocab_k": 0, "draft_vocab_root": 0},
+}
+_FR13_GDN_ORDERED_CANDIDATES = (
+    "single_launch",
+    "gqa_group3",
+    "gqa_group3_bv16",
+)
+
+
+def _fr13_draft_vocab_profile(variable: str, *, environ=None) -> str:
+    """Return the DECLARED draft-vocabulary profile for one lever.
+
+    Empty is treated as unset -> k64_root, matching the launcher's
+    ``${VAR:-k64_root}`` semantics exactly, so an env sweeper that forwards the
+    name with an empty value cannot turn a banked arm into an import-time raise.
+    A non-empty value that is not a known profile is ALWAYS refused: silently
+    defaulting an unrecognised declaration is how a lever ends up serving one
+    identity while claiming another.
+    """
+    env = os.environ if environ is None else environ
+    raw = env.get(variable)
+    profile = "k64_root" if raw is None or not str(raw).strip() else str(raw).strip()
+    if profile not in _FR13_DRAFT_VOCAB_PROFILES:
+        raise RuntimeError(
+            f"{variable} must be exactly k64_root or full_vocab; "
+            f"got {profile!r}"
+        )
+    return profile
+
+
+def _fr13_draft_vocab_env_matches(profile: str, *, environ=None) -> bool:
+    """Does the SERVED drafter env match the declared profile exactly?
+
+    Same strictness as the literals this replaced: the value must be present and
+    exact, an absent variable is not a match in either profile.
+    """
+    env = os.environ if environ is None else environ
+    return all(
+        str(env.get(name, "")).strip() == value
+        for name, value in _FR13_DRAFT_VOCAB_PROFILES[profile].items()
+    )
+
+
+def _fr13_draft_vocab_credential_matches(
+    credential: dict[str, object], profile: str
+) -> bool:
+    """Does a credential's SELF-DESCRIBED identity match the declared profile?
+
+    Three fields, all required to agree: the profile the credential claims it
+    was earned under, plus the K/root pair that claim implies. Requiring the
+    pair as well as the name is what stops either shape from masquerading as the
+    other -- a credential cannot say ``full_vocab`` while carrying K64 values,
+    and a pre-FR14 credential that carries the pair but names no profile is
+    refused rather than assumed to be k64_root.
+    """
+    if credential.get("qualification_profile") != profile:
+        return False
+    for key, value in _FR13_DRAFT_VOCAB_CREDENTIAL_FIELDS[profile].items():
+        actual = credential.get(key)
+        if type(actual) is not int or actual != value:
+            return False
+    return True
+
+
 def _fr13_resolve_fixed32_gdn_single_launch(
     fixed32_mode: str | None,
     *,
@@ -1075,12 +1172,17 @@ def _fr13_resolve_fixed32_gdn_single_launch(
             "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE requires geometry pinned "
             "exactly to FR13_TREE_GDN_GEOM_OVERRIDE=BV=8"
         )
-    if str(env.get("FR13_DRAFT_VOCAB_ROOT", "")).strip() != "1" or str(
-        env.get("FR13_DRAFT_VOCAB_K", "")
-    ).strip() != "65536":
+    # FR14. This bool is the CAMPAIGN instrument the ordered live gate observes,
+    # so it keys on the gate's variable -- the same one the launcher clause and
+    # the in-container patcher's exact_single_launch contract read. Declared,
+    # never assumed; default k64_root leaves every banked arming unchanged.
+    profile = _fr13_draft_vocab_profile(
+        "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE", environ=env
+    )
+    if not _fr13_draft_vocab_env_matches(profile, environ=env):
         raise RuntimeError(
             "FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE requires the exact "
-            "K64/root1 drafter contract"
+            f"{profile} drafter contract"
         )
     return True
 
@@ -1228,13 +1330,18 @@ def _fr13_resolve_fixed32_gdn_path_bv_candidate(
             "to be pinned exactly to FR13_TREE_GDN_GEOM_OVERRIDE=BV=8"
         )
     value = values.pop()
-    if value in ("single_launch", "gqa_group3", "gqa_group3_bv16"):
-        if str(env.get("FR13_DRAFT_VOCAB_ROOT", "")).strip() != "1" or str(
-            env.get("FR13_DRAFT_VOCAB_K", "")
-        ).strip() != "65536":
+    if value in _FR13_GDN_ORDERED_CANDIDATES:
+        # FR14. The exact mirror of the launcher's ordered-GDN live-gate clause
+        # (fr13_launch_forked_fa2_tree_server.sh:3295): ALL three ordered
+        # candidates qualify under the one declared gate identity, because the
+        # gate they feed is one gate. Default k64_root.
+        profile = _fr13_draft_vocab_profile(
+            "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE", environ=env
+        )
+        if not _fr13_draft_vocab_env_matches(profile, environ=env):
             raise RuntimeError(
                 "FR13 fixed32 GDN ordered live gate requires the exact "
-                "K64/root1 drafter contract"
+                f"{profile} drafter contract"
             )
         return value
     return int(value)
@@ -1453,15 +1560,21 @@ def _fr13_resolve_fixed32_gdn_gqa_group3_production(
             "FR13 GDN GQA-group3 production requires one exact batch, 1 or 4"
         )
     batch = int(batch_values.pop())
+    # FR14. The GQA-group3 PRODUCTION arm's own declared identity -- a separate
+    # pin set from the gate's, and separately declared, so a credential earned
+    # under one shape can never be spent under another. Mirrors the launcher's
+    # clause at fr13_launch_forked_fa2_tree_server.sh:3355. Default k64_root.
+    draft_vocab_profile = _fr13_draft_vocab_profile(
+        "FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE", environ=env
+    )
     if (
         fixed32_mode not in _FR13_FIXED32_MODES
         or geom_override != {"BV": 8}
-        or str(env.get("FR13_DRAFT_VOCAB_ROOT", "")).strip() != "1"
-        or str(env.get("FR13_DRAFT_VOCAB_K", "")).strip() != "65536"
+        or not _fr13_draft_vocab_env_matches(draft_vocab_profile, environ=env)
     ):
         raise RuntimeError(
             "FR13 GDN GQA-group3 production requires exact fixed32 physical32 "
-            "BV8 K64/root1"
+            f"BV8 {draft_vocab_profile}"
         )
     resolved_pass = pass_path or env.get(
         "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION_PASS_PATH",
@@ -1491,7 +1604,7 @@ def _fr13_resolve_fixed32_gdn_gqa_group3_production(
     if (
         not isinstance(credential, dict)
         or credential.get("schema")
-        != "fr13.fixed32.gdn_single_launch.real_task_credential.v3"
+        != "fr13.fixed32.gdn_single_launch.real_task_credential.v4"
         or credential.get("status") != "PASS"
         or credential.get("candidate")
         != "fixed32_gdn_single_launch_gqa_group3_v1"
@@ -1501,8 +1614,14 @@ def _fr13_resolve_fixed32_gdn_gqa_group3_production(
         or credential.get("batch_size") != batch
         or credential.get("expected_batch") != batch
         or credential.get("physical_rows") != 32
-        or credential.get("draft_vocab_k") != 65536
-        or credential.get("draft_vocab_root") != 1
+        # FR14. The credential must CARRY the draft-vocabulary shape it was
+        # earned in, and it must be the shape this process declared. Name and
+        # K/root pair are checked together, so neither shape can masquerade as
+        # the other and a pre-FR14 credential (pair present, profile absent) is
+        # refused rather than assumed.
+        or not _fr13_draft_vocab_credential_matches(
+            credential, draft_vocab_profile
+        )
         or credential.get("raw_byte_equal") is not True
         or credential.get("reference_served") is not True
         or credential.get("state_restored") is not True
@@ -1637,15 +1756,21 @@ def _fr13_resolve_fixed32_gdn_single_launch_production(
             "FR13 GDN single-launch production requires one exact batch, 1 or 4"
         )
     batch = int(batch_values.pop())
+    # FR14. The single_launch PRODUCTION arm's declared identity. This is a
+    # SEPARATE site from the gate's on purpose (the same split the in-container
+    # patcher carries): re-pointing only the gate would earn a credential the
+    # production path then refuses, post-gate. Default k64_root.
+    draft_vocab_profile = _fr13_draft_vocab_profile(
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE", environ=env
+    )
     if (
         fixed32_mode not in _FR13_FIXED32_MODES
         or geom_override != {"BV": 8}
-        or str(env.get("FR13_DRAFT_VOCAB_ROOT", "")).strip() != "1"
-        or str(env.get("FR13_DRAFT_VOCAB_K", "")).strip() != "65536"
+        or not _fr13_draft_vocab_env_matches(draft_vocab_profile, environ=env)
     ):
         raise RuntimeError(
             "FR13 GDN single-launch production requires exact fixed32 "
-            "physical32 BV8 K64/root1"
+            f"physical32 BV8 {draft_vocab_profile}"
         )
     resolved_pass = pass_path or env.get(
         "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_PASS_PATH",
@@ -1678,7 +1803,7 @@ def _fr13_resolve_fixed32_gdn_single_launch_production(
     if (
         not isinstance(credential, dict)
         or credential.get("schema")
-        != "fr13.fixed32.gdn_single_launch.real_task_credential.v3"
+        != "fr13.fixed32.gdn_single_launch.real_task_credential.v4"
         or credential.get("status") != "PASS"
         # The literal candidate id, not the module constant: this resolver runs
         # while the module body is still executing, well before
@@ -1691,8 +1816,13 @@ def _fr13_resolve_fixed32_gdn_single_launch_production(
         or credential.get("batch_size") != batch
         or credential.get("expected_batch") != batch
         or credential.get("physical_rows") != 32
-        or credential.get("draft_vocab_k") != 65536
-        or credential.get("draft_vocab_root") != 1
+        # FR14. Same clause as the GQA-group3 twin, and for the same reason: the
+        # credential names the draft-vocabulary shape it was earned in and
+        # carries the K/root pair that name implies, and BOTH must equal what
+        # this production process declared.
+        or not _fr13_draft_vocab_credential_matches(
+            credential, draft_vocab_profile
+        )
         or credential.get("raw_byte_equal") is not True
         or credential.get("reference_served") is not True
         or credential.get("state_restored") is not True
@@ -1912,9 +2042,18 @@ def _fr13_fixed32_gdn_bv_live_pass_emit(
             "FR13 fixed32 GDN single-launch PASS batch differs from the baked "
             "diagnostic identity"
         )
+    draft_vocab_profile = _FR13_FIXED32_GDN_ORDERED_QUALIFICATION_PROFILE
+    if ordered_launch and (
+        draft_vocab_profile is None
+        or not _fr13_draft_vocab_env_matches(draft_vocab_profile)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 GDN single-launch PASS has no served draft-vocabulary "
+            "identity to declare"
+        )
     payload = {
         "schema": (
-            "fr13.fixed32.gdn_single_launch.live_pass.v1"
+            "fr13.fixed32.gdn_single_launch.live_pass.v2"
             if ordered_launch
             else "fr13.fixed32.gdn_path_bv.live_pass.v1"
         ),
@@ -1959,12 +2098,13 @@ def _fr13_fixed32_gdn_bv_live_pass_emit(
     }
     if ordered_launch:
         assert topology is not None
+        assert draft_vocab_profile is not None
         payload.update(
             logical_topology=topology[0],
             logical_drafts=topology[1],
             valid_mask=topology[2],
-            draft_vocab_k=65536,
-            draft_vocab_root=1,
+            qualification_profile=draft_vocab_profile,
+            **_FR13_DRAFT_VOCAB_CREDENTIAL_FIELDS[draft_vocab_profile],
             gate_mode="post_first_measured_full_graph_replay",
             expected_batch=int(batch_size),
             diagnostic_identity=(
@@ -2007,11 +2147,18 @@ def _fr13_fixed32_gdn_single_launch_observation_emit(
         "hydra27_fixed32": ("Hydra27", 27, 0x7ABDFFFF),
     }.get(_FR13_FIXED32_MODE)
     batch = int(batch_size)
+    # FR14: the observation declares the draft-vocabulary shape it was OBSERVED
+    # in. Resolved beside the candidate at import and re-checked against the
+    # served env here, so the record cannot describe an identity this process
+    # did not run.
+    draft_vocab_profile = _FR13_FIXED32_GDN_ORDERED_QUALIFICATION_PROFILE
     if (
         topology is None
         or batch != _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH
         or not comparator_events
         or any(not isinstance(event, dict) for event in comparator_events)
+        or draft_vocab_profile is None
+        or not _fr13_draft_vocab_env_matches(draft_vocab_profile)
     ):
         raise RuntimeError(
             "FR13 fixed32 GDN single-launch observation scope drift"
@@ -2023,7 +2170,7 @@ def _fr13_fixed32_gdn_single_launch_observation_emit(
         sort_keys=True,
     ).encode("ascii")
     payload = {
-        "schema": "fr13.fixed32.gdn_single_launch.live_observation.v2",
+        "schema": "fr13.fixed32.gdn_single_launch.live_observation.v3",
         "status": "observed_pending_authenticated_coverage_join",
         "candidate": comparator_events[-1]["candidate"],
         "source_sha256": _fr13_fixed32_gdn_path_bv_source_sha256(),
@@ -2058,8 +2205,8 @@ def _fr13_fixed32_gdn_single_launch_observation_emit(
         "logical_topology": topology[0],
         "logical_drafts": topology[1],
         "valid_mask": topology[2],
-        "draft_vocab_k": 65536,
-        "draft_vocab_root": 1,
+        "qualification_profile": draft_vocab_profile,
+        **_FR13_DRAFT_VOCAB_CREDENTIAL_FIELDS[draft_vocab_profile],
         "gate_mode": "post_measured_replay_distinct_request_tuple",
         "coverage_authority": "authenticated_proxy_engine_request_join",
         "diagnostic_identity": (
@@ -2087,6 +2234,20 @@ _FR13_FIXED32_GDN_SINGLE_LAUNCH_EXPECTED_BATCH = (
     _fr13_resolve_fixed32_gdn_single_launch_expected_batch(
         _FR13_FIXED32_GDN_PATH_BV_CANDIDATE
     )
+)
+# FR14. The ordered live gate's declared identity, bound ONCE beside the
+# candidate the resolver above already validated it against, so the PASS
+# artifacts below report the shape the gate actually ran in rather than a baked
+# literal. A gate that announced K64 while serving K0 is the credential
+# self-misdescription that already cost the qrow32 chain a full re-run. None
+# when no ordered candidate is selected -- the non-ordered BV live PASS carries
+# no draft-vocabulary claim at all, and must not start making one.
+_FR13_FIXED32_GDN_ORDERED_QUALIFICATION_PROFILE = (
+    _fr13_draft_vocab_profile(
+        "FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE"
+    )
+    if _FR13_FIXED32_GDN_PATH_BV_CANDIDATE in _FR13_GDN_ORDERED_CANDIDATES
+    else None
 )
 _FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION = (
     _fr13_resolve_fixed32_gdn_gqa_group3_production(

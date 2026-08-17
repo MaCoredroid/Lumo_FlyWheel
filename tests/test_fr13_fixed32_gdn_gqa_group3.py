@@ -454,8 +454,14 @@ def test_candidate_is_default_off_and_gate_wired_without_serving() -> None:
     assert '"gqa_group3_bv16"' in patcher
     assert '"gqa_group3"' in launcher
     assert '"gqa_group3_bv16"' in launcher
-    assert '"FR13_DRAFT_VOCAB_K", ""' in served
-    assert '= "65536"' in served
+    # FR14: the drafter identity is DECLARED, not read field-by-field at each
+    # site. The helper still reads the same two variables and still demands the
+    # same exact values -- it is the shared predicate that does it now, so the
+    # ordered candidate and the launcher cannot disagree about what a profile
+    # means.
+    assert '_fr13_draft_vocab_env_matches' in served
+    assert '"FR13_DRAFT_VOCAB_K": "65536"' in served
+    assert 'FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE' in served
     assert '"candidate_served": False' in served
 
 

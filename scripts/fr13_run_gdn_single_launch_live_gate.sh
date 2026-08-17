@@ -359,6 +359,7 @@ CREDENTIAL="$ARMDIR/${LOGICAL_SLUG}_gdn_${GATE_CANDIDATE_SLUG}_b${BATCH}_credent
   --external-launch "$RUNROOT_ABS/external_manifest.at_launch.json" \
   --external-end "$RUNROOT_ABS/external_manifest.at_end.json" \
   --source-commit "$SOURCE_COMMIT" \
+  --draft-vocab-profile "$FR13_GDN_GATE_DRAFT_VOCAB_PROFILE" \
   --output "$CREDENTIAL" \
   > "$ARMDIR/gdn_single_launch_reduction.json"
 

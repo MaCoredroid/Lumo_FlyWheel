@@ -184,7 +184,7 @@ def _live_payload(
         sort_keys=True,
     ).encode("ascii")
     return {
-        "schema": "fr13.fixed32.gdn_single_launch.live_observation.v2",
+        "schema": "fr13.fixed32.gdn_single_launch.live_observation.v3",
         "status": "observed_pending_authenticated_coverage_join",
         "candidate": "fixed32_gdn_single_launch_tree_v2",
         "source_sha256": "a" * 64,
@@ -218,6 +218,8 @@ def _live_payload(
         "logical_topology": topology,
         "logical_drafts": drafts,
         "valid_mask": mask,
+        # FR14: the observation DECLARES the shape it was taken in.
+        "qualification_profile": "k64_root",
         "draft_vocab_k": 65536,
         "draft_vocab_root": 1,
         "gate_mode": "post_measured_replay_distinct_request_tuple",

@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA = "fr13.fixed32.gdn_single_launch.real_task_credential.v3"
+# FR14: v3 -> v4 with the required `qualification_profile` field. The twin
+# validator (fr13_gdn_single_launch_production_credential.py) bumped for the
+# same reason and the two must stay on one schema: both arms are minted by
+# scripts/fr13_gdn_single_launch_gate.py and refused at the same door.
+SCHEMA = "fr13.fixed32.gdn_single_launch.real_task_credential.v4"
 CANDIDATE = "fixed32_gdn_single_launch_gqa_group3_v1"
 REFERENCE = "fixed32_gdn_two_launch_reference_v1"
 RUNTIME_PROFILE = "fixed32"
@@ -41,6 +45,12 @@ MODE = {
         "valid_mask": 0x7ABDFFFF,
         "batches": frozenset({1, 4}),
     },
+}
+# FR14. The two draft-vocabulary shapes a grouped-GQA credential can be earned
+# in, identical to the single_launch twin's table because one gate mints both.
+DRAFT_VOCAB_PROFILES: dict[str, dict[str, Any]] = {
+    "k64_root": {"draft_vocab_k": 65536, "draft_vocab_root": 1},
+    "full_vocab": {"draft_vocab_k": 0, "draft_vocab_root": 0},
 }
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -111,11 +121,17 @@ def validate_credential(
     profile: str,
     mode: str,
     batch: int,
+    draft_vocab_profile: str = "k64_root",
 ) -> dict[str, Any]:
     if HEX40.fullmatch(source_commit) is None:
         raise CredentialError("current HEAD is not a full lowercase Git object ID")
     if profile != RUNTIME_PROFILE:
         raise CredentialError(f"unsupported runtime profile: {profile!r}")
+    draft_vocab = DRAFT_VOCAB_PROFILES.get(draft_vocab_profile)
+    if draft_vocab is None:
+        raise CredentialError(
+            f"unsupported draft-vocabulary profile: {draft_vocab_profile!r}"
+        )
     contract = MODE.get(mode)
     if contract is None or type(batch) is not int or batch not in contract["batches"]:
         raise CredentialError(
@@ -147,8 +163,14 @@ def validate_credential(
             "concurrency": batch,
             "task_ids": B1_TASK_IDS if batch == 1 else EXACT4_TASK_IDS,
             "physical_rows": 32,
-            "draft_vocab_k": 65536,
-            "draft_vocab_root": 1,
+            # FR14. Same clause as the single_launch twin: the credential names
+            # the draft-vocabulary shape it was earned in and carries the pair
+            # that name implies, and both must equal what this production
+            # process declared. The block map is canonical in BOTH profiles
+            # because production carries it in both.
+            "qualification_profile": draft_vocab_profile,
+            "draft_vocab_k": draft_vocab["draft_vocab_k"],
+            "draft_vocab_root": draft_vocab["draft_vocab_root"],
             "draft_vocab_blocks_sha256": BLOCK_MAP_SHA256,
             "reference_physical_launches_per_request_layer": 2,
             "candidate_physical_launches_per_request_layer": 1,
@@ -195,6 +217,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--profile", choices=(RUNTIME_PROFILE,), required=True)
     parser.add_argument("--mode", choices=tuple(MODE), required=True)
     parser.add_argument("--batch", type=int, choices=(1, 4), required=True)
+    parser.add_argument(
+        "--draft-vocab-profile",
+        choices=tuple(DRAFT_VOCAB_PROFILES),
+        default="k64_root",
+    )
     return parser
 
 
@@ -207,6 +234,7 @@ def main() -> int:
             profile=args.profile,
             mode=args.mode,
             batch=args.batch,
+            draft_vocab_profile=args.draft_vocab_profile,
         )
     except CredentialError as error:
         raise SystemExit(f"GDN GQA-group3 production credential rejected: {error}")

@@ -326,7 +326,7 @@ def test_the_twin_validators_are_structural_mirrors() -> None:
     mine = _read(VALIDATOR)
     twin = _read(TWIN)
     for shared in (
-        "fr13.fixed32.gdn_single_launch.real_task_credential.v3",
+        "fr13.fixed32.gdn_single_launch.real_task_credential.v4",
         "fixed32_gdn_two_launch_reference_v1",
         "scripts/fr13_fixed32_floor_timers_seq.sh",
         "_duplicate_checked",
@@ -404,10 +404,14 @@ def test_the_engagement_needle_proves_the_fold_and_is_not_b1_shaped() -> None:
 
 def test_the_patcher_pins_the_production_shape() -> None:
     patcher = _read(PATCHER)
+    # FR14: the refusal names the DECLARED draft-vocabulary profile instead of
+    # a baked K64 literal. A refusal that misreports the identity it enforced is
+    # the same self-misdescription class as a credential that does.
+    assert '"FR13 GDN single-launch production requires the exact "' in patcher
     assert (
-        "FR13 GDN single-launch production requires exact credentialed "
-        in patcher
+        "B1-or-B4 physical32 FULL-graph contract for " in patcher
     )
+    assert "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE" in patcher
     assert "exact_single_launch_production" in patcher
     assert (
         "FR13 GDN single-launch production batch is set without its arm"

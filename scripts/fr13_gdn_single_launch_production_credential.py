@@ -24,7 +24,11 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA = "fr13.fixed32.gdn_single_launch.real_task_credential.v3"
+# FR14: v3 -> v4 with the required `qualification_profile` field. Every prior
+# credential is HEAD-bound and was already invalidated by the source change that
+# added it, so the bump costs nothing and stops an older validator from
+# accepting a v4 credential while ignoring the profile it declares.
+SCHEMA = "fr13.fixed32.gdn_single_launch.real_task_credential.v4"
 CANDIDATE = "fixed32_gdn_single_launch_tree_v2"
 REFERENCE = "fixed32_gdn_two_launch_reference_v1"
 RUNTIME_PROFILE = "fixed32"
@@ -183,6 +187,12 @@ def validate_credential(
             "concurrency": batch,
             "task_ids": B1_TASK_IDS if batch == 1 else EXACT4_TASK_IDS,
             "physical_rows": 32,
+            # FR14. The credential must NAME the shape it was earned in, not
+            # merely carry values consistent with one. Requiring the name AND
+            # the pair is what makes the two shapes mutually unmasqueradable,
+            # and refuses a pre-FR14 credential that carries the pair but
+            # declares nothing.
+            "qualification_profile": draft_vocab_profile,
             "draft_vocab_k": draft_vocab["draft_vocab_k"],
             "draft_vocab_root": draft_vocab["draft_vocab_root"],
             # Canonical in BOTH profiles: production carries the block map, so a

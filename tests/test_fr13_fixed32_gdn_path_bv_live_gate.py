@@ -33,6 +33,9 @@ def _kernel_gate_namespace() -> dict[str, object]:
                 "_FR13_FIXED32_GDN_PATH_BV_PRODUCTION_SIDECARS",
                 "_FR13_FIXED32_GDN_BV_SURFACES",
                 "_FR13_FIXED32_GDN_PATH_BV_CANDIDATE_ID",
+                "_FR13_DRAFT_VOCAB_PROFILES",
+                "_FR13_DRAFT_VOCAB_CREDENTIAL_FIELDS",
+                "_FR13_GDN_ORDERED_CANDIDATES",
             }
             for target in node.targets
         )
@@ -43,6 +46,10 @@ def _kernel_gate_namespace() -> dict[str, object]:
         "_fr13_resolve_fixed32_gdn_path_bv_production",
         "_fr13_fixed32_gdn_bv_compare_records",
         "fixed32_gdn_bv_live_gate_on_replay",
+        # FR14 declared draft-vocabulary identity.
+        "_fr13_draft_vocab_profile",
+        "_fr13_draft_vocab_env_matches",
+        "_fr13_draft_vocab_credential_matches",
     }
     definitions = [
         node

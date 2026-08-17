@@ -74,8 +74,17 @@ def _load_resolver_namespace() -> dict[str, object]:
     constants = {
         "_FR13_FIXED32_MODES",
         "_FR13_FIXED32_GDN_SINGLE_LAUNCH_SIDECARS",
+        "_FR13_DRAFT_VOCAB_PROFILES",
+        "_FR13_DRAFT_VOCAB_CREDENTIAL_FIELDS",
+        "_FR13_GDN_ORDERED_CANDIDATES",
     }
-    function = "_fr13_resolve_fixed32_gdn_single_launch"
+    functions = {
+        "_fr13_resolve_fixed32_gdn_single_launch",
+        # FR14 declared draft-vocabulary identity helpers.
+        "_fr13_draft_vocab_profile",
+        "_fr13_draft_vocab_env_matches",
+        "_fr13_draft_vocab_credential_matches",
+    }
     tree, _source = _tree_and_source()
     body = [
         node
@@ -87,7 +96,7 @@ def _load_resolver_namespace() -> dict[str, object]:
                 for target in node.targets
             )
         )
-        or (isinstance(node, ast.FunctionDef) and node.name == function)
+        or (isinstance(node, ast.FunctionDef) and node.name in functions)
     ]
     namespace = {"os": os}
     exec(
@@ -176,8 +185,8 @@ def test_selector_is_default_off_and_exact_k64_root1_only() -> None:
         geom_override={"BV": 8},
     )
     for key, value, message in (
-        ("FR13_DRAFT_VOCAB_K", "32768", "K64/root1"),
-        ("FR13_DRAFT_VOCAB_ROOT", "0", "K64/root1"),
+        ("FR13_DRAFT_VOCAB_K", "32768", "k64_root drafter contract"),
+        ("FR13_DRAFT_VOCAB_ROOT", "0", "k64_root drafter contract"),
         ("FR13_FIXED32_GDN_SINGLE_LAUNCH_TREE", "true", "exactly 1"),
     ):
         drift = dict(exact)

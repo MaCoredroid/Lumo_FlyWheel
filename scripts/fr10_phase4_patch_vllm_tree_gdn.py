@@ -9423,9 +9423,25 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION must be exactly 0 or 1"
         )
     if gqa_group3_production == "1":
+        # FR14: the GQA-group3 production arm's draft-vocabulary identity is
+        # DECLARED, exactly as the single_launch arm's is below. This is the
+        # last of that lever's four independent checks (launcher clause, kernel
+        # env clause, credential validator, and here). Default k64_root keeps
+        # every banked grouped-GQA production arm unchanged.
+        _gqa3_profile = os.environ.get(
+            "FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE", "k64_root"
+        )
+        _gqa3_vocab = {
+            "k64_root": {"FR13_DRAFT_VOCAB_ROOT": "1", "FR13_DRAFT_VOCAB_K": "65536"},
+            "full_vocab": {"FR13_DRAFT_VOCAB_ROOT": "0", "FR13_DRAFT_VOCAB_K": "0"},
+        }.get(_gqa3_profile)
+        if _gqa3_vocab is None:
+            raise RuntimeError(
+                "FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE must be "
+                f"k64_root or full_vocab; got {_gqa3_profile!r}"
+            )
         exact_gqa_group3 = {
-            "FR13_DRAFT_VOCAB_ROOT": "1",
-            "FR13_DRAFT_VOCAB_K": "65536",
+            **_gqa3_vocab,
             "FR13_TREE_GDN_GEOM_OVERRIDE": "BV=8",
             "FR13_SCAN_ALIGN": "0",
             "FR13_NPAD_INVARIANT": "0",
@@ -9469,9 +9485,9 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             or gqa_group3_drift
         ):
             raise RuntimeError(
-                "FR13 GDN GQA-group3 production requires exact credentialed "
-                "B1-or-B4 K64/root1 physical32 FULL-graph contract: "
-                + repr(gqa_group3_drift)
+                "FR13 GDN GQA-group3 production requires the exact credentialed "
+                "B1-or-B4 physical32 FULL-graph contract for draft-vocabulary "
+                f"profile {_gqa3_profile!r}: " + repr(gqa_group3_drift)
             )
     elif gqa_group3_production_batch:
         raise RuntimeError(
@@ -9549,8 +9565,9 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
             or single_launch_production_drift
         ):
             raise RuntimeError(
-                "FR13 GDN single-launch production requires exact credentialed "
-                "B1-or-B4 K64/root1 physical32 FULL-graph contract: "
+                "FR13 GDN single-launch production requires the exact "
+                "credentialed B1-or-B4 physical32 FULL-graph contract for "
+                f"draft-vocabulary profile {_sl_profile!r}: "
                 + repr(single_launch_production_drift)
             )
     elif single_launch_production_batch:
