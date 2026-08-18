@@ -1,0 +1,109 @@
+{
+ "schema": "fr14.lane5a.head_gemm_microbench.v1",
+ "torch": "2.11.0+cu130",
+ "device": "NVIDIA GB10",
+ "pinned": {
+  "nvfp4_head_bytes": 715161608,
+  "bf16_head_bytes": 2542796800,
+  "assumed_bandwidth_GBps": 273.0,
+  "nvfp4_floor_ms": 2.6196395897435893,
+  "bf16_floor_ms": 9.314273992673993,
+  "floor_delta_ms": 6.6946344029304035
+ },
+ "iters": 30,
+ "bf16_weight_bytes_resident": 2542796800,
+ "nvfp4_on_disk": {
+  "weight": [
+   [
+    248320,
+    2560
+   ],
+   "torch.uint8"
+  ],
+  "weight_scale": [
+   [
+    248320,
+    320
+   ],
+   "torch.float8_e4m3fn"
+  ],
+  "weight_scale_2": 0.00012715657067019492,
+  "input_scale": 0.02167038805782795
+ },
+ "nvfp4_kernel": "FlashInferCutlassNvFp4LinearKernel",
+ "nvfp4_resident_bytes": 715161616,
+ "sanity": {
+  "bf16_logit_std": 0.04845328629016876,
+  "nvfp4_logit_std": 0.04850074276328087,
+  "argmax_agreement_on_random_input": 0.875,
+  "note": "random input, not real hidden states -- shape/scale check only"
+ },
+ "sweep": [
+  {
+   "M": 1,
+   "bf16_ms": 15.613023998836676,
+   "nvfp4_ms": 3.499641502276063,
+   "delta_ms": 12.113382496560613,
+   "bf16_achieved_GBps": 162.86382447048462,
+   "nvfp4_achieved_GBps": 204.3528194344707,
+   "bf16_pct_of_pinned_bw": 0.5965707856061707,
+   "nvfp4_pct_of_pinned_bw": 0.7485451261335923,
+   "speedup": 4.461320963499384
+  },
+  {
+   "M": 4,
+   "bf16_ms": 10.916042661604783,
+   "nvfp4_ms": 3.4874105360358953,
+   "delta_ms": 7.428632125568887,
+   "bf16_achieved_GBps": 232.9412662469551,
+   "nvfp4_achieved_GBps": 205.06952095548723,
+   "bf16_pct_of_pinned_bw": 0.8532647115273081,
+   "nvfp4_pct_of_pinned_bw": 0.7511704064303562,
+   "speedup": 3.130128371411339
+  },
+  {
+   "M": 8,
+   "bf16_ms": 11.002684532043835,
+   "nvfp4_ms": 3.6311309707040587,
+   "delta_ms": 7.371553561339777,
+   "bf16_achieved_GBps": 231.10694418207186,
+   "nvfp4_achieved_GBps": 196.952854019841,
+   "bf16_pct_of_pinned_bw": 0.8465455830845123,
+   "nvfp4_pct_of_pinned_bw": 0.7214390257137033,
+   "speedup": 3.0300985067224024
+  },
+  {
+   "M": 16,
+   "bf16_ms": 10.882905467102924,
+   "nvfp4_ms": 3.5140725007901588,
+   "delta_ms": 7.368832966312766,
+   "bf16_achieved_GBps": 233.65054559064393,
+   "nvfp4_achieved_GBps": 203.51361784345428,
+   "bf16_pct_of_pinned_bw": 0.8558628043613331,
+   "nvfp4_pct_of_pinned_bw": 0.7454711276317006,
+   "speedup": 3.0969496117840034
+  },
+  {
+   "M": 32,
+   "bf16_ms": 12.178871703023711,
+   "nvfp4_ms": 3.591000164548556,
+   "delta_ms": 8.587871538475156,
+   "bf16_achieved_GBps": 208.78755126131156,
+   "nvfp4_achieved_GBps": 199.1538778138449,
+   "bf16_pct_of_pinned_bw": 0.7647895650597493,
+   "nvfp4_pct_of_pinned_bw": 0.7295013839334978,
+   "speedup": 3.391498508760103
+  },
+  {
+   "M": 64,
+   "bf16_ms": 12.35647383145988,
+   "nvfp4_ms": 3.6626142992948494,
+   "delta_ms": 8.69385953216503,
+   "bf16_achieved_GBps": 205.78660503662283,
+   "nvfp4_achieved_GBps": 195.25987438472228,
+   "bf16_pct_of_pinned_bw": 0.7537970880462375,
+   "nvfp4_pct_of_pinned_bw": 0.7152376351088728,
+   "speedup": 3.3736759652357686
+  }
+ ]
+}

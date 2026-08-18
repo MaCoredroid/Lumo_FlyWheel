@@ -1,0 +1,77 @@
+{
+ "schema": "fr14.lane5a.lmhead_weight_characterization.v1",
+ "nvfp4": {
+  "shard": "model-00003-of-00003.safetensors",
+  "packed_shape": [
+   248320,
+   2560
+  ],
+  "scale_shape": [
+   248320,
+   320
+  ],
+  "weight_scale_2": 0.00012715657067019492,
+  "input_scale": 0.02167038805782795,
+  "dequant": "w = e2m1(nibble) * e4m3(block_scale) * weight_scale_2"
+ },
+ "distinct_magnitudes_per_row": {
+  "probe_rows": [
+   12216,
+   76857,
+   79917,
+   99396,
+   101104,
+   112992,
+   138004,
+   172038
+  ],
+  "reference_bf16_head": [
+   880,
+   878,
+   908,
+   869,
+   886,
+   889,
+   882,
+   895
+  ],
+  "arm_a_fp8_derived_head": [
+   91,
+   88,
+   95,
+   90,
+   91,
+   90,
+   88,
+   94
+  ],
+  "note": "<=256 means an fp8-per-channel grid; thousands means native BF16"
+ },
+ "amax": {
+  "reference_bf16_head": 0.341796875,
+  "nvfp4_dequantised": 0.341796875,
+  "ratio": 1.0,
+  "divide_form_would_give": 21139293.77280009
+ },
+ "nvfp4_vs_reference": {
+  "relative_frobenius_error": 0.09483427548712911,
+  "rmse": 0.0013036202565184115,
+  "max_abs_weight_delta": 0.019205734133720398,
+  "max_abs_delta_row": 71851,
+  "max_relative_row_error": 0.09954850375652313,
+  "min_row_cosine": 0.9950343370437622,
+  "min_row_cosine_row": 173071,
+  "elements": 1271398400
+ },
+ "arm_a_fp8_vs_reference_CONTROL": {
+  "relative_frobenius_error": 0.026616579651107163,
+  "rmse": 0.00036587944827108675,
+  "max_abs_weight_delta": 0.0078125,
+  "max_abs_delta_row": 73004,
+  "max_relative_row_error": 0.028500018641352654,
+  "min_row_cosine": 0.9995965957641602,
+  "min_row_cosine_row": 248294
+ },
+ "nvfp4_over_fp8_error_ratio": 3.5629775399478993,
+ "verdict": "PASS"
+}
