@@ -223,13 +223,37 @@ def _monotone_bits(t: torch.Tensor) -> torch.Tensor:
     """
     if t.dtype == torch.bfloat16:
         bits = t.contiguous().view(torch.int16).to(torch.int64)
-        sign_floor = 1 << 15
+        min_int = -(1 << 15)
     elif t.dtype == torch.float32:
         bits = t.contiguous().view(torch.int32).to(torch.int64)
-        sign_floor = 1 << 31
+        min_int = -(1 << 31)
     else:
         raise RuntimeError(f"no ULP ordering defined for {t.dtype}")
-    return torch.where(bits < 0, sign_floor - bits, bits)
+    # min_int - bits, NOT (+2^(n-1)) - bits. Both are monotone WITHIN a sign,
+    # so the constant cancels for same-sign pairs and the two agree there --
+    # which is exactly why the wrong one is easy to ship. It shows up only when
+    # a pair straddles zero, where the wrong constant reports a distance
+    # inflated by 2^n and turns a 1-ulp disagreement about a near-zero value
+    # into a five-figure "max ulp". Sanity: bf16 -1.0 has bits -16512, so this
+    # keys it at -16256, one step below +1.0's +16256, and 0 sits between them.
+    return torch.where(bits < 0, min_int - bits, bits)
+
+
+def _check_monotone_bits() -> None:
+    """The ULP ordering must be strictly increasing over the float grid."""
+    for dtype in (torch.bfloat16, torch.float32):
+        probe = torch.tensor(
+            [-3.0, -1.0, -0.5, -1e-30, -0.0, 0.0, 1e-30, 0.5, 1.0, 3.0],
+            dtype=dtype)
+        keys = _monotone_bits(probe)
+        assert bool((keys[1:] >= keys[:-1]).all()), f"ULP ordering broke: {dtype}"
+        # Adjacent representable values must be exactly one apart.
+        one = torch.tensor([1.0], dtype=dtype)
+        nxt = torch.nextafter(one, torch.tensor([2.0], dtype=dtype))
+        assert int((_monotone_bits(nxt) - _monotone_bits(one)).item()) == 1
+        # And the smallest positive/negative pair must be 2 apart (via +-0).
+        tiny = torch.tensor([1e-30, -1e-30], dtype=dtype)
+        assert int((_monotone_bits(tiny)[0] - _monotone_bits(tiny)[1]).item()) > 0
 
 
 def ulp_stats(a: torch.Tensor, b: torch.Tensor) -> dict:
@@ -244,6 +268,23 @@ def ulp_stats(a: torch.Tensor, b: torch.Tensor) -> dict:
     for k in (0, 1, 2, 3, 4):
         hist[str(k)] = int((d_finite == k).sum())
     hist[">4"] = int((d_finite > 4).sum())
+    # A ULP count is a step count on the float GRID, so two values that
+    # straddle zero are legitimately thousands of steps apart even when they
+    # differ by 1e-30 -- every denormal lies between them. That is a true
+    # statement about representability and a useless one about accuracy, so
+    # the ULP distance is also reported restricted to elements the output
+    # actually depends on: those within 2^-10 of the tensor's own maximum.
+    significant = ref_mag >= (ref_mag.max() * 2.0 ** -10 if ref_mag.numel()
+                              else 0.0)
+    d_significant = d_finite[significant]
+    # And the same trap has to be MEASURED, not asserted: how much of the >4
+    # tail is a sign disagreement about a value near zero rather than a real
+    # disagreement about a value that matters?
+    af = a.float()[finite]
+    bf = b.float()[finite]
+    same_sign = (af >= 0) == (bf >= 0)
+    tail = d_finite > 4
+    d_clean = d_finite[same_sign & significant]
     return {
         "elements": int(finite.numel()),
         "finite_elements": int(finite.sum()),
@@ -251,6 +292,18 @@ def ulp_stats(a: torch.Tensor, b: torch.Tensor) -> dict:
             (torch.isfinite(a.float()) != torch.isfinite(b.float())).sum()),
         "byte_mismatches": byte_mismatches(a, b),
         "max_ulp": int(d_finite.max()) if d_finite.numel() else 0,
+        "significant_elements": int(significant.sum()),
+        "max_ulp_significant": (int(d_significant.max())
+                                if d_significant.numel() else 0),
+        "mean_ulp_significant": (float(d_significant.double().mean())
+                                 if d_significant.numel() else 0.0),
+        "ulp_gt4_total": int(tail.sum()),
+        "ulp_gt4_sign_disagreements": int((tail & ~same_sign).sum()),
+        "same_sign_significant_elements": int((same_sign & significant).sum()),
+        "max_ulp_same_sign_significant": (int(d_clean.max())
+                                          if d_clean.numel() else 0),
+        "mean_ulp_same_sign_significant": (float(d_clean.double().mean())
+                                           if d_clean.numel() else 0.0),
         "mean_ulp": float(d_finite.double().mean()) if d_finite.numel() else 0.0,
         "p99_ulp": (int(torch.quantile(d_finite.double(), 0.99).item())
                     if d_finite.numel() else 0),
@@ -417,6 +470,7 @@ def main() -> int:
                          "recorded digests to test across processes")
     args = ap.parse_args()
 
+    _check_monotone_bits()
     torch.ops.load_library(args.so)
     sha = hashlib.sha256(open(args.so, "rb").read()).hexdigest()
     report = {
@@ -476,7 +530,11 @@ def main() -> int:
     # --- 2. ULP CHARACTERIZATION vs the served arm ---------------------
     per_scale = {}
     for scale in scales:
-      worst = {"output_max_ulp": 0, "lse_max_ulp": 0,
+      worst = {"output_max_ulp": 0, "output_max_ulp_significant": 0,
+               "output_max_ulp_same_sign_significant": 0,
+               "output_ulp_gt4_total": 0,
+               "output_ulp_gt4_sign_disagreements": 0,
+               "lse_max_ulp": 0,
                "output_max_abs_delta": 0.0, "lse_max_abs_delta": 0.0}
       flips_total = flip_rows_total = 0
       for seq_len in seq_lens:
@@ -493,6 +551,18 @@ def main() -> int:
             report["characterization"].append(row)
             worst["output_max_ulp"] = max(worst["output_max_ulp"],
                                           row["output"]["max_ulp"])
+            worst["output_max_ulp_significant"] = max(
+                worst.get("output_max_ulp_significant", 0),
+                row["output"]["max_ulp_significant"])
+            worst["output_max_ulp_same_sign_significant"] = max(
+                worst.get("output_max_ulp_same_sign_significant", 0),
+                row["output"]["max_ulp_same_sign_significant"])
+            worst["output_ulp_gt4_total"] = (
+                worst.get("output_ulp_gt4_total", 0)
+                + row["output"]["ulp_gt4_total"])
+            worst["output_ulp_gt4_sign_disagreements"] = (
+                worst.get("output_ulp_gt4_sign_disagreements", 0)
+                + row["output"]["ulp_gt4_sign_disagreements"])
             worst["lse_max_ulp"] = max(worst["lse_max_ulp"],
                                        row["lse"]["max_ulp"])
             worst["output_max_abs_delta"] = max(
@@ -503,8 +573,17 @@ def main() -> int:
             flip_rows_total += row["argmax"]["rows"]
             del case, o_r, l_r, o_c, l_c
             torch.cuda.empty_cache()
+      merged = {"0": 0, "1": 0, "2": 0, "3": 0, "4": 0, ">4": 0}
+      for row in report["characterization"]:
+          if row["scale"] != scale:
+              continue
+          for k, n in row["output"]["ulp_histogram"].items():
+              merged[k] += n
+      total = sum(merged.values()) or 1
       per_scale[scale] = dict(
           worst,
+          output_ulp_histogram=merged,
+          output_ulp_fraction_above_4=merged[">4"] / total,
           argmax_flip_rows=flips_total,
           argmax_total_rows=flip_rows_total,
           argmax_flip_rate=(flips_total / flip_rows_total
@@ -523,11 +602,22 @@ def main() -> int:
             for seed in range(args.exact_seeds):
                 case = build_case(seq_len, seed, scale=scale)
                 ex_o, ex_l = exact_attention(case)
+                # The argmax-flip rate between the two arms is only
+                # interpretable against this: how often does EACH arm's argmax
+                # differ from the one the exact attention would have produced?
+                # If the served kernel flips at the same rate, split-K's flips
+                # are a different draw from the same bf16 noise, not a
+                # degradation introduced by reassociating the softmax.
+                ex_argmax = logits_of(ex_o.to(torch.bfloat16), proj).argmax(-1)
                 row = {"scale": scale, "seq_len": seq_len, "seed": seed}
                 for name in (args.reference, args.candidate):
                     o, l = run_arm(case, name)
                     row[name] = error_vs_exact(o, l, ex_o, ex_l)
-                    del o, l
+                    arm_argmax = logits_of(o, proj).argmax(-1)
+                    row[name]["argmax_flips_vs_exact"] = int(
+                        (arm_argmax != ex_argmax).sum())
+                    row[name]["argmax_rows"] = int(ex_argmax.numel())
+                    del o, l, arm_argmax
                 row["candidate_closer_output"] = bool(
                     row[args.candidate]["output_rms_error"]
                     <= row[args.reference]["output_rms_error"])
@@ -597,7 +687,17 @@ def main() -> int:
     print(f"  determinism_pass      : {report['determinism_pass']}")
     for scale, summary in report["characterization_summary"].items():
         print(f"  -- operand scale: {scale} --")
-        print(f"     output max/mean ulp : {summary['output_max_ulp']}")
+        print(f"     output max ulp      : {summary['output_max_ulp']}")
+        print(f"     output ulp histogram: {summary['output_ulp_histogram']}")
+        gt4 = summary["output_ulp_gt4_total"] or 1
+        print(f"     output max ulp (|x| >= max/1024): "
+              f"{summary['output_max_ulp_significant']}")
+        print(f"     output max ulp (same sign, |x| >= max/1024): "
+              f"{summary['output_max_ulp_same_sign_significant']}")
+        print(f"     of the >4-ulp tail, sign disagreements: "
+              f"{summary['output_ulp_gt4_sign_disagreements']}/"
+              f"{summary['output_ulp_gt4_total']} "
+              f"({summary['output_ulp_gt4_sign_disagreements'] / gt4:.1%})")
         print(f"     lse    max ulp      : {summary['lse_max_ulp']}")
         print(f"     output max abs delta: {summary['output_max_abs_delta']:.3e}")
         print(f"     lse    max abs delta: {summary['lse_max_abs_delta']:.3e}")
@@ -609,8 +709,9 @@ def main() -> int:
         print(f"  exact  scale={row['scale']:<10s} L={row['seq_len']} "
               f"seed={row['seed']}  rms_err {args.reference}="
               f"{r['output_rms_error']:.3e}  {args.candidate}="
-              f"{c['output_rms_error']:.3e}  "
-              f"candidate_closer={row['candidate_closer_output']}")
+              f"{c['output_rms_error']:.3e}  closer={row['candidate_closer_output']}"
+              f"  argmax-vs-exact {r['argmax_flips_vs_exact']}"
+              f"/{c['argmax_flips_vs_exact']} of {r['argmax_rows']}")
     for row in report["timing"]:
         f = row.get("fit", {})
         print(f"  L={row['seq_len']:6d}  qrow16="

@@ -98,8 +98,8 @@ SASS_DIGEST_SHA256=3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80
 # scripts/fr13_qrow32_b1_pass_sidecar.py (SPLITK_CANDIDATE_SHA256 / _SIZE)
 # together; FR14_SPLITK_ALLOW_SO_REPIN=1 permits one build whose sha differs so
 # the new value can be read off.
-CANDIDATE_SO_SHA256=__SO_SHA_PIN__
-CANDIDATE_SO_SIZE=__SO_SIZE_PIN__
+CANDIDATE_SO_SHA256=28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857
+CANDIDATE_SO_SIZE=300123792
 
 Q=${Q:-/home/mark/shared/lumoFlyWheel-qrow16-thin/output/fr13_fa2_qrow16_num_splits0_build_20260731}
 FA2_ORIGIN=${FA2_ORIGIN:-$Q/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src}
