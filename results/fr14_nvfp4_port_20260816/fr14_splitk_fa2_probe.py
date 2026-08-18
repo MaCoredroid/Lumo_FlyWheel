@@ -94,18 +94,52 @@ PROJ_VOCAB = 32768
 PROJ_SEED = 20260818
 
 
-def build_case(seq_len: int, seed: int, device: str = "cuda"):
+# OPERAND SCALE. The banked byte probe drew q, k and v as randn * 0.1. For a
+# BYTE gate that is fine -- byte identity does not care what the numbers are.
+# For a Tier-B characterization it is the wrong regime and a badly lenient one:
+# at 0.1 the pre-softmax logits have std ~0.01, i.e. an essentially UNIFORM
+# attention distribution, which is the easiest possible case for a split-K
+# rescale because every split's running max is nearly the same.
+#
+# Real attention is peaked. Measured from 16 banked FR13_TREE_ATTN_OP_CAPTURE
+# artifacts of the served model (fr13_wy_gateA_20260608T163915Z, layer 7 among
+# others; same softmax scale 1/sqrt(256) = 0.0625 this probe uses):
+#
+#     query std  1.234  (1.145 .. 1.291)
+#     key   std  1.404  (1.185 .. 1.570)
+#     value std  1.731  (0.685 .. 5.740)
+#     pre-softmax logit std ~3.6, max ~+13, min ~-8
+#
+# In that regime one split routinely holds the global max and the others are
+# rescaled by exp(-10) or smaller -- the case where a reassociated softmax can
+# actually lose bits. Both regimes are run and reported separately, so the
+# 0.1 numbers remain comparable with the banked byte probe and the "real"
+# numbers are the ones the verdict rests on.
+OPERAND_SCALES = {
+    "legacy0p1": {"q": 0.1, "k": 0.1, "v": 0.1,
+                  "note": "the banked byte probe's scale; near-uniform softmax"},
+    "captured": {"q": 1.234, "k": 1.404, "v": 1.731,
+                 "note": "measured from banked TREE_ATTN op captures of the "
+                         "served model"},
+}
+
+
+def build_case(seq_len: int, seed: int, device: str = "cuda",
+               scale: str = "captured"):
     """One decode step's worth of real operands at the canonical B1 geometry."""
     gen = torch.Generator(device=device).manual_seed(seed)
     num_blocks = math.ceil(seq_len / PAGE) + 1
+    s = OPERAND_SCALES[scale]
 
     q = torch.randn(TREE_ROWS, Q_HEADS, HEAD_DIM, generator=gen,
-                    device=device, dtype=torch.bfloat16) * 0.1
+                    device=device, dtype=torch.bfloat16) * s["q"]
 
     # ILKV layout: [num_blocks, 2, PAGE, KV_HEADS, HEAD_DIM]. Slicing dim 1
     # gives k/v the (2*PAGE*KV*D, KV*D, D, 1) strides the gate demands.
     kv = torch.randn(num_blocks, 2, PAGE, KV_HEADS, HEAD_DIM, generator=gen,
-                     device=device, dtype=torch.bfloat16) * 0.1
+                     device=device, dtype=torch.bfloat16)
+    kv[:, 0] *= s["k"]
+    kv[:, 1] *= s["v"]
     k_cache, v_cache = kv[:, 0], kv[:, 1]
     assert tuple(k_cache.stride()) == (2 * PAGE * KV_HEADS * HEAD_DIM,
                                        KV_HEADS * HEAD_DIM, HEAD_DIM, 1), \
@@ -231,6 +265,66 @@ def ulp_stats(a: torch.Tensor, b: torch.Tensor) -> dict:
     }
 
 
+def exact_attention(case, device: str = "cuda"):
+    """A float64 dense reference for the SAME operands the kernels see.
+
+    This is the number that decides whether a Tier-B reassociation is a
+    degradation or an improvement. "Split-K differs from the served kernel" is
+    not by itself a finding -- the served kernel is not exact either. What
+    matters is which one is CLOSER to the attention both are approximating, and
+    for that a reference outside both is required.
+
+    Built to the kernel's own contract, not to a textbook: the tree bias lands
+    on columns [seqlen_k - 32, seqlen_k), which is exactly the window
+    apply_tree_bias() computes from `context_len = actual_seqlen_k -
+    query_rows`, and the scale is the same 1/sqrt(256).
+    """
+    seq_len = case["seq_len"]
+    k = case["k"].reshape(-1, KV_HEADS, HEAD_DIM)[:seq_len].double()
+    v = case["v"].reshape(-1, KV_HEADS, HEAD_DIM)[:seq_len].double()
+    q = case["q"].double()
+    bias = case["tree_bias"].double()
+    scale = 1.0 / math.sqrt(HEAD_DIM)
+    context_len = seq_len - TREE_ROWS
+    out = torch.empty(TREE_ROWS, Q_HEADS, HEAD_DIM, device=device,
+                      dtype=torch.float64)
+    lse = torch.empty(Q_HEADS, TREE_ROWS, device=device, dtype=torch.float64)
+    for h in range(Q_HEADS):
+        kv = h // (Q_HEADS // KV_HEADS)
+        s = (q[:, h, :] @ k[:, kv, :].T) * scale        # (32, seq_len)
+        s[:, context_len:context_len + TREE_ROWS] += bias
+        m = s.max(dim=-1, keepdim=True).values
+        e = (s - m).exp()
+        denom = e.sum(dim=-1, keepdim=True)
+        out[:, h, :] = (e / denom) @ v[:, kv, :]
+        lse[h, :] = (m.squeeze(-1) + denom.squeeze(-1).log())
+        del s, e
+    return out, lse
+
+
+def error_vs_exact(arm_out, arm_lse, exact_out, exact_lse) -> dict:
+    """How far an arm's bf16/fp32 result sits from the float64 truth.
+
+    The bf16 quantization floor is reported beside it, because an output error
+    at or below the floor means the arm is as close to exact as a bf16 tensor
+    can represent, and the remaining difference between two such arms is not a
+    difference in accuracy at all.
+    """
+    a = arm_out.double()
+    d = (a - exact_out).abs()
+    floor = (exact_out.to(torch.bfloat16).double() - exact_out).abs()
+    dl = (arm_lse.double() - exact_lse).abs()
+    return {
+        "output_max_abs_error": float(d.max()),
+        "output_rms_error": float(d.pow(2).mean().sqrt()),
+        "output_bf16_quantization_floor_max": float(floor.max()),
+        "output_errors_at_or_below_floor": float(
+            (d <= floor + 1e-30).double().mean()),
+        "lse_max_abs_error": float(dl.max()),
+        "lse_rms_error": float(dl.pow(2).mean().sqrt()),
+    }
+
+
 def make_projection(device: str = "cuda"):
     """A fixed logit-like projection: (heads*d) -> hidden -> vocab.
 
@@ -311,6 +405,13 @@ def main() -> int:
     ap.add_argument("--seq-lens", default="20480,23000,32768,40960")
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--determinism-reps", type=int, default=8)
+    ap.add_argument("--exact-seq-lens", default="20480",
+                    help="context lengths at which to build the float64 dense "
+                         "reference; empty disables it")
+    ap.add_argument("--exact-seeds", type=int, default=2)
+    ap.add_argument("--scales", default="captured,legacy0p1",
+                    help="comma-separated operand-scale regimes to "
+                         "characterize; the first is used for timing")
     ap.add_argument("--process-tag", default="p0",
                     help="label for this process; run twice and diff the "
                          "recorded digests to test across processes")
@@ -330,9 +431,14 @@ def main() -> int:
                      "full_attn_layers": FULL_ATTN_LAYERS},
         "projection": {"hidden": PROJ_HIDDEN, "vocab": PROJ_VOCAB,
                        "seed": PROJ_SEED},
+        "operand_scales": OPERAND_SCALES,
         "determinism": [], "characterization": [], "timing": [],
     }
     seq_lens = [int(s) for s in args.seq_lens.split(",")]
+    scales = [s for s in args.scales.split(",") if s]
+    for s in scales:
+        if s not in OPERAND_SCALES:
+            raise SystemExit(f"unknown operand scale {s!r}")
     proj = make_projection()
 
     # --- 1. DETERMINISM GATE (hard) ------------------------------------
@@ -340,9 +446,10 @@ def main() -> int:
     # addresses differ between repeats; a reduction that depended on
     # allocation order or on atomics would diverge here.
     determinism_pass = True
-    for seq_len in seq_lens:
+    for scale in scales:
+      for seq_len in seq_lens:
         for seed in range(min(args.seeds, 2)):
-            case = build_case(seq_len, seed)
+            case = build_case(seq_len, seed, scale=scale)
             o_digests, l_digests = [], []
             for rep in range(args.determinism_reps):
                 o, l = run_arm(case, args.candidate)
@@ -355,7 +462,7 @@ def main() -> int:
             ok = (len(set(o_digests)) == 1 and len(set(l_digests)) == 1)
             determinism_pass = determinism_pass and ok
             report["determinism"].append({
-                "seq_len": seq_len, "seed": seed,
+                "scale": scale, "seq_len": seq_len, "seed": seed,
                 "reps": args.determinism_reps,
                 "output_sha16": o_digests[0], "lse_sha16": l_digests[0],
                 "distinct_output_digests": len(set(o_digests)),
@@ -367,16 +474,18 @@ def main() -> int:
     report["determinism_pass"] = determinism_pass
 
     # --- 2. ULP CHARACTERIZATION vs the served arm ---------------------
-    worst = {"output_max_ulp": 0, "lse_max_ulp": 0,
-             "output_max_abs_delta": 0.0, "lse_max_abs_delta": 0.0}
-    flips_total = flip_rows_total = 0
-    for seq_len in seq_lens:
+    per_scale = {}
+    for scale in scales:
+      worst = {"output_max_ulp": 0, "lse_max_ulp": 0,
+               "output_max_abs_delta": 0.0, "lse_max_abs_delta": 0.0}
+      flips_total = flip_rows_total = 0
+      for seq_len in seq_lens:
         for seed in range(args.seeds):
-            case = build_case(seq_len, seed)
+            case = build_case(seq_len, seed, scale=scale)
             o_r, l_r = run_arm(case, args.reference)
             o_c, l_c = run_arm(case, args.candidate)
             row = {
-                "seq_len": seq_len, "seed": seed,
+                "scale": scale, "seq_len": seq_len, "seed": seed,
                 "output": ulp_stats(o_r, o_c),
                 "lse": ulp_stats(l_r, l_c),
                 "argmax": argmax_flips(o_r, o_c, proj),
@@ -394,17 +503,46 @@ def main() -> int:
             flip_rows_total += row["argmax"]["rows"]
             del case, o_r, l_r, o_c, l_c
             torch.cuda.empty_cache()
-    report["characterization_summary"] = dict(
-        worst,
-        argmax_flip_rows=flips_total,
-        argmax_total_rows=flip_rows_total,
-        argmax_flip_rate=(flips_total / flip_rows_total
-                          if flip_rows_total else 0.0),
-    )
+      per_scale[scale] = dict(
+          worst,
+          argmax_flip_rows=flips_total,
+          argmax_total_rows=flip_rows_total,
+          argmax_flip_rate=(flips_total / flip_rows_total
+                            if flip_rows_total else 0.0),
+      )
+    report["characterization_summary"] = per_scale
+
+    # --- 2b. WHICH ARM IS CLOSER TO EXACT? -----------------------------
+    # The decisive comparison, and the one a byte gate can never make: both
+    # arms approximate the same attention, so the question is not whether they
+    # differ from each other but which sits closer to the float64 truth.
+    report["exact_reference"] = []
+    exact_lens = [int(s) for s in args.exact_seq_lens.split(",") if s.strip()]
+    for scale in scales:
+        for seq_len in exact_lens:
+            for seed in range(args.exact_seeds):
+                case = build_case(seq_len, seed, scale=scale)
+                ex_o, ex_l = exact_attention(case)
+                row = {"scale": scale, "seq_len": seq_len, "seed": seed}
+                for name in (args.reference, args.candidate):
+                    o, l = run_arm(case, name)
+                    row[name] = error_vs_exact(o, l, ex_o, ex_l)
+                    del o, l
+                row["candidate_closer_output"] = bool(
+                    row[args.candidate]["output_rms_error"]
+                    <= row[args.reference]["output_rms_error"])
+                row["candidate_closer_lse"] = bool(
+                    row[args.candidate]["lse_rms_error"]
+                    <= row[args.reference]["lse_rms_error"])
+                report["exact_reference"].append(row)
+                del case, ex_o, ex_l
+                torch.cuda.empty_cache()
 
     # --- 3. TIMING vs the served arm and the qrow16 reference ----------
+    timing_scale = scales[0]
+    report["timing_scale"] = timing_scale
     for seq_len in seq_lens:
-        case = build_case(seq_len, 0)
+        case = build_case(seq_len, 0, scale=timing_scale)
         row = {"seq_len": seq_len}
         for name in ("qrow16", args.reference, args.candidate):
             a = ARMS[name]
@@ -455,16 +593,24 @@ def main() -> int:
     text = json.dumps(report, indent=2, sort_keys=True)
     if args.json:
         open(args.json, "w").write(text + "\n")
-    summary = report["characterization_summary"]
     print("== FR14 split-K FA2 probe ==")
     print(f"  determinism_pass      : {report['determinism_pass']}")
-    print(f"  output max ulp        : {summary['output_max_ulp']}")
-    print(f"  lse    max ulp        : {summary['lse_max_ulp']}")
-    print(f"  output max abs delta  : {summary['output_max_abs_delta']:.3e}")
-    print(f"  lse    max abs delta  : {summary['lse_max_abs_delta']:.3e}")
-    print(f"  argmax flips          : {summary['argmax_flip_rows']}"
-          f"/{summary['argmax_total_rows']}"
-          f" ({summary['argmax_flip_rate']:.4%})")
+    for scale, summary in report["characterization_summary"].items():
+        print(f"  -- operand scale: {scale} --")
+        print(f"     output max/mean ulp : {summary['output_max_ulp']}")
+        print(f"     lse    max ulp      : {summary['lse_max_ulp']}")
+        print(f"     output max abs delta: {summary['output_max_abs_delta']:.3e}")
+        print(f"     lse    max abs delta: {summary['lse_max_abs_delta']:.3e}")
+        print(f"     argmax flips        : {summary['argmax_flip_rows']}"
+              f"/{summary['argmax_total_rows']}"
+              f" ({summary['argmax_flip_rate']:.4%})")
+    for row in report["exact_reference"]:
+        r, c = row[args.reference], row[args.candidate]
+        print(f"  exact  scale={row['scale']:<10s} L={row['seq_len']} "
+              f"seed={row['seed']}  rms_err {args.reference}="
+              f"{r['output_rms_error']:.3e}  {args.candidate}="
+              f"{c['output_rms_error']:.3e}  "
+              f"candidate_closer={row['candidate_closer_output']}")
     for row in report["timing"]:
         f = row.get("fit", {})
         print(f"  L={row['seq_len']:6d}  qrow16="
