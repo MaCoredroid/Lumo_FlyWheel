@@ -263,6 +263,17 @@ qualified the promoted arm.
 | ABI diffs (defined / dt_needed / runtime_path / undefined) | 0 / 0 / 0 / 0 bytes | after the link |
 | forbidden SASS (LDL/STL/CALL) | 0 bytes | before the link |
 
+The staged binary is at
+`/home/mark/fr14_splitk_build_20260818/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so`,
+built from a clean sparse clone of the pushed branch at
+`/home/mark/fr14_splitk_build_repo_20260818` (the shared worktree carries four other
+lanes' in-flight changes, so the builder's clean-tree preflight was satisfied the way
+the FR14 build-environment proof did it, not weakened). Rebuild:
+`FR14_BUILD_B1_GQA_PAIR_SPLITK=1 PYTHON_BIN=<repo>/.venv/bin/python BUILD=<new dir>
+bash scripts/fr14_build_fa2_qrow32_gqa_pair_splitk_b1_sm121a.sh` — expect exit 97 on the
+`.so` sha unless the container lands the same nvcc PID; the SASS digests are what tell
+you the kernel reproduced.
+
 **Bootstrap without a half-credentialed artifact.** A brand-new arm has no pin to assert
 against, and minting one after a link would mean a linked artifact existed before it was
 credentialed. So the first build stops *before* the link (exit 97), prints the digest,
