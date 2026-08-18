@@ -115,8 +115,15 @@ GQA_PAIR_PRODUCTION_SCOPE = "qrow32 B1 GQA-pair exact tree attention only"
 ARM = "nosplit"
 VISIBILITY_ARM = "visibility"
 GQA_PAIR_ARM = "gqa_pair"
+# FR14 Tier-B. Same GQA-pair traits, context walk split four ways and
+# re-reduced by FA2's combine kernel. Gate-only, and structurally so: no byte
+# gate can ever qualify it, because its reduction topology differs from the
+# reference's by design.
+SPLITK_ARM = "gqa_pair_splitk"
 SELECTOR_SENTINEL = 1179791668
 GQA_PAIR_SELECTOR_SENTINEL = 1179791670
+SPLITK_SELECTOR_SENTINEL = 1179791671
+SPLITK_NUM_SPLITS = 4
 QROW16_REFERENCE_SENTINEL = 1179791667
 NUM_SPLITS = 0
 PATCH_SOURCE_RELATIVE = "scripts/fr13_patch_fa2_tree_bias.py"
@@ -148,6 +155,16 @@ LIVE_ARMS = {
         "num_splits": NUM_SPLITS,
         "split_scratch_allocation": "not used; num_splits=0",
         "candidate_dispatch": "qrow32 B1 GQA-pair exact geometry; no fallback",
+    },
+    SPLITK_ARM: {
+        "selector_sentinel": SPLITK_SELECTOR_SENTINEL,
+        "num_splits": SPLITK_NUM_SPLITS,
+        "split_scratch_allocation": (
+            f"stock FA2 set_params_splitkv via num_splits={SPLITK_NUM_SPLITS}"
+        ),
+        "candidate_dispatch": (
+            "qrow32 B1 GQA-pair split-K exact geometry; no fallback"
+        ),
     },
 }
 CANDIDATE_SHA256 = (
@@ -262,6 +279,44 @@ GQA_PAIR_CANDIDATE_SHA256 = (
     "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae"
 )
 GQA_PAIR_CANDIDATE_SIZE = 299_815_552
+# The FR14 split-K closure. flash_api_torch_lib.cpp, flash.h and utils.h are
+# byte-identical to the GQA-pair closure above; flash_api.cpp and
+# flash_fwd_kernel.h differ ONLY by the split-K dispatch, its split-scratch
+# allocation, and the paired O/LSE tensors learning to address the stock split
+# accumulators. The candidate .so is pinned from the qualified build.
+SPLITK_SOURCE_STATUS = (
+    " M csrc/flash_attn/flash_api.cpp",
+    " M csrc/flash_attn/flash_api_torch_lib.cpp",
+    " M csrc/flash_attn/src/flash.h",
+    " M csrc/flash_attn/src/flash_fwd_kernel.h",
+    " M csrc/flash_attn/src/utils.h",
+    "?? csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_splitk_b1_hdim256_bf16_sm80.cu",
+)
+SPLITK_SOURCE_FILES = {
+    "csrc/flash_attn/flash_api.cpp": (
+        "5799e231fcf0a9c926523e9e77abee876f00f78a84502e3612842529bd06851c"
+    ),
+    "csrc/flash_attn/flash_api_torch_lib.cpp": (
+        "c575d9f02ba44bf7022c77b80fdf12173da0ecae8a4d7599934c2cc9fa52e121"
+    ),
+    "csrc/flash_attn/src/flash.h": (
+        "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a"
+    ),
+    "csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_splitk_b1_hdim256_bf16_sm80.cu": (
+        "c526c4d42b1d1c6601fde785f6881c11dfeab4f3b1fa7167bde3b2ab866dd126"
+    ),
+    "csrc/flash_attn/src/flash_fwd_kernel.h": (
+        "f9c313437e972b27081a8bd4ae523aa845bffdaa368e1a36d0c1b979e96d7558"
+    ),
+    "csrc/flash_attn/src/utils.h": (
+        "5887df63c79a3e42fb9ddad93f64fe3c0625dbee4c547af68b6f2108b7beeb5f"
+    ),
+}
+SPLITK_SOURCE_CLOSURE_SHA256 = (
+    "54287f754b8581d445196edcaa71356acb70860e6f6247ae5dd96094f116865b"
+)
+SPLITK_CANDIDATE_SHA256 = ""
+SPLITK_CANDIDATE_SIZE = 0
 EXACT4_TASK_IDS = (
     "astropy__astropy-12907",
     "astropy__astropy-13033",
@@ -361,6 +416,19 @@ def _candidate_contract(arm: str) -> dict[str, Any]:
             "source_files": GQA_PAIR_SOURCE_FILES,
             "source_closure_sha256": GQA_PAIR_SOURCE_CLOSURE_SHA256,
         }
+    if arm == SPLITK_ARM:
+        if not SPLITK_CANDIDATE_SHA256 or not SPLITK_CANDIDATE_SIZE:
+            raise ValueError(
+                "qrow32 B1 GQA-pair split-K binary is not pinned: fill "
+                "SPLITK_CANDIDATE_SHA256 and SPLITK_CANDIDATE_SIZE from the "
+                "build attestation before gating this arm"
+            )
+        return {
+            "sha256": SPLITK_CANDIDATE_SHA256,
+            "size": SPLITK_CANDIDATE_SIZE,
+            "source_files": SPLITK_SOURCE_FILES,
+            "source_closure_sha256": SPLITK_SOURCE_CLOSURE_SHA256,
+        }
     if arm == VISIBILITY_ARM:
         return {
             "sha256": VISIBILITY_CANDIDATE_SHA256,
@@ -370,7 +438,8 @@ def _candidate_contract(arm: str) -> dict[str, Any]:
         }
     if arm not in {ARM, "split2"}:
         raise ValueError(
-            "qrow32 live arm must be nosplit, split2, visibility, or gqa_pair"
+            "qrow32 live arm must be nosplit, split2, visibility, gqa_pair, "
+            "or gqa_pair_splitk"
         )
     return {
         "sha256": CANDIDATE_SHA256,
@@ -382,7 +451,20 @@ def _candidate_contract(arm: str) -> dict[str, Any]:
 
 def _source_status(arm: str) -> tuple[str, ...]:
     """The modified-source set the codegen produces for this arm."""
-    return GQA_PAIR_SOURCE_STATUS if arm == GQA_PAIR_ARM else SOURCE_STATUS
+    if arm == GQA_PAIR_ARM:
+        return GQA_PAIR_SOURCE_STATUS
+    if arm == SPLITK_ARM:
+        return SPLITK_SOURCE_STATUS
+    return SOURCE_STATUS
+
+
+def splitk_source_contract() -> dict[str, Any]:
+    """The split-K source closure, pinnable before the binary exists."""
+    return {
+        "source_files": SPLITK_SOURCE_FILES,
+        "source_closure_sha256": SPLITK_SOURCE_CLOSURE_SHA256,
+        "source_status": SPLITK_SOURCE_STATUS,
+    }
 
 
 def gqa_pair_source_contract() -> dict[str, Any]:
@@ -414,11 +496,12 @@ def validate_candidate(
 def validate_source_closure(source_root: Path, *, arm: str = ARM) -> dict[str, Any]:
     # The GQA-pair source closure is pinned before its binary exists, so source
     # qualification must not depend on the .so identity.
-    contract = (
-        gqa_pair_source_contract()
-        if arm == GQA_PAIR_ARM
-        else _candidate_contract(arm)
-    )
+    if arm == GQA_PAIR_ARM:
+        contract = gqa_pair_source_contract()
+    elif arm == SPLITK_ARM:
+        contract = splitk_source_contract()
+    else:
+        contract = _candidate_contract(arm)
     if not source_root.is_dir() or source_root.is_symlink():
         raise ValueError("FA2 source root must be a non-symlink directory")
     head = _git(source_root, "rev-parse", "HEAD")
@@ -1020,7 +1103,7 @@ def main() -> int:
     source.add_argument("--source-root", required=True, type=Path)
     source.add_argument(
         "--arm",
-        choices=(ARM, "split2", VISIBILITY_ARM, GQA_PAIR_ARM),
+        choices=(ARM, "split2", VISIBILITY_ARM, GQA_PAIR_ARM, SPLITK_ARM),
         default=ARM,
     )
     for name in ("issue", "verify"):

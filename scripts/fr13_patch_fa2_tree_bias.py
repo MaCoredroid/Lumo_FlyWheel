@@ -351,6 +351,16 @@ FIXED32_QUERY_TILE32_B1_SPLIT2_BATCH_STRIDE_SENTINEL = 0x46523135
 # The B1 family tags its private dispatches with a four-byte ASCII run
 # ("FR13", "FR14", "FR15", ...). The GQA-pair B1 arm takes the next tag.
 FIXED32_QUERY_GQA_PAIR32_B1_BATCH_STRIDE_SENTINEL = 0x46523136
+# FR14 split-K (Tier-B). Same GQA-pair traits, same K-block order per split,
+# but the context walk is partitioned across blockIdx.y and re-reduced by
+# FA2's own combine kernel -- so this arm is deliberately NOT byte-identical
+# to 0x46523136 and carries its own sentinel so it can never be reached by an
+# operand tagged for a byte-qualified arm.
+FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_BATCH_STRIDE_SENTINEL = 0x46523137
+# 4 context splits x 3 head pairs x 4 KV heads = 48 CTAs at B1, one per SM on
+# GB10. The value is a compile-time constant in the launcher, in the API gate
+# and in the scratch allocation, so a drift in any one of them fails closed.
+FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_CONTEXT_SPLITS = 4
 
 
 # Unlike B1, B4 dereferences the tree-bias batch stride. Keep this sentinel
@@ -367,6 +377,7 @@ _FIXED32_BATCH_STRIDE_SENTINELS = (
     FIXED32_QUERY_TILE32_B1_BATCH_STRIDE_SENTINEL,
     FIXED32_QUERY_TILE32_B1_SPLIT2_BATCH_STRIDE_SENTINEL,
     FIXED32_QUERY_GQA_PAIR32_B1_BATCH_STRIDE_SENTINEL,
+    FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_BATCH_STRIDE_SENTINEL,
     FIXED32_QUERY_TILE32_BATCH_STRIDE_SENTINEL,
     FIXED32_QUERY_GQA_PAIR32_BATCH_STRIDE_SENTINEL,
 )
@@ -1520,6 +1531,199 @@ FIXED32_QUERY_GQA_PAIR32_B1_TRANSLATION_UNIT = (
 )
 
 
+# The FR14 split-K unit is derived mechanically from the promoted B1 GQA-pair
+# unit, on the same discipline that derived that unit from B4: every trait the
+# two share -- kBlockM=64 / kBlockN=64 / kNWarps=4, two query heads per CTA, the
+# 1024-row fused paged-KV layout, 32 static query rows, 96 KiB smem, REG budget
+# -- therefore stays byte-identical to the arm that carries the byte gate, and
+# the only deltas are the ones split-K actually forces: Split=true, a
+# blockIdx.y context partition, and the combine launch. Each substitution is
+# anchored and counted, so a drift in the promoted unit fails HERE rather than
+# silently forking the two kernels apart.
+#
+# THIS IS A TIER-B ARM. Splitting the context walk changes the order in which a
+# row's softmax denominator and weighted sum are accumulated: each split keeps
+# its own running max and partial sums, and the combine rescales by
+# exp(m_split - m_global) before summing. The per-row arithmetic is therefore
+# NOT bit-identical to the promoted arm and no byte gate can qualify it -- see
+# _fr13_fa2_qrow32_b1_require_same_reduction, which refuses to compare arms of
+# differing reduction topology at all.
+_FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_LAUNCH_TAIL = rf'''    // SPLIT-K (Tier-B). 3 head pairs * {FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_CONTEXT_SPLITS} context splits * 4 KV heads
+    // = 48 CTAs/layer at B1 -- one per SM on this device -- against the 12 the
+    // promoted GQA-pair arm launches. Each CTA still stages one K/V tile for
+    // both of its query heads and still walks its own tiles in the same reverse
+    // order; what changes is that it walks only 1/{FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_CONTEXT_SPLITS} of them and writes a PARTIAL
+    // attention -- running max, partial denominator, partial weighted sum --
+    // into the stock split accumulators. FA2's own combine kernel then rescales
+    // each split by exp(m_split - m_global), sums, and blends.
+    TORCH_CHECK(
+        params.tree_bias_batch_stride == {FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_BATCH_STRIDE_SENTINEL}
+        && params.num_splits == kContextSplits
+        && params.oaccum_ptr != nullptr
+        && params.softmax_lseaccum_ptr != nullptr
+        && params.b == 1
+        && params.total_q == 32
+        && params.h == 24
+        && params.h_k == 4
+        && params.seqlen_q == 32
+        && params.d_rounded == 256
+        && params.unpadded_lse,
+        "FR14 B1 qrow32 GQA-pair split-K launcher geometry or scratch drifted");
+    dim3 grid(
+        StaticLayout::query_heads_per_kv / kHeadsPerCTA,
+        kContextSplits,
+        StaticLayout::kv_heads);
+    auto kernel = &fr13_flash_fwd_fixed32_qrow32_gqa_pair_b1_kernel;
+    if (smem_size >= 48 * 1024) {{
+        C10_CUDA_CHECK(cudaFuncSetAttribute(
+            kernel,
+            cudaFuncAttributeMaxDynamicSharedMemorySize,
+            smem_size));
+    }}
+    kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>(params);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+    // Reuse FA2's exact combine implementation, exactly as the qualified
+    // qrow32 B1 split2 unit does. The combine asserts 128 threads; the promoted
+    // GQA-pair traits already ARE four-warp / 128-thread, so the same traits
+    // carry both launches and no second trait instantiation is introduced.
+    //
+    // DETERMINISM. The combine is a fixed reduction: every row's splits are
+    // visited in index order 0..num_splits-1 by one thread, the cross-split max
+    // and sum go through Allreduce<>'s fixed butterfly of __shfl_xor_sync, and
+    // nothing is accumulated with an atomic. Same inputs therefore give bitwise
+    // the same outputs on every run.
+    using CombineTraits = TreeKernelTraits;
+    static_assert(CombineTraits::kNThreads == 128);
+    constexpr int kCombineBlockM = 4;
+    constexpr int kLogMaxSplits = 2;
+    static_assert((1 << kLogMaxSplits) == kContextSplits);
+    constexpr bool kEvenK = true;
+    dim3 combine_grid(
+        (StaticLayout::sequences * StaticLayout::query_heads * 32
+         + kCombineBlockM - 1) / kCombineBlockM);
+    flash_fwd_splitkv_combine_kernel<
+        CombineTraits, kCombineBlockM, kLogMaxSplits, kEvenK>
+        <<<combine_grid, CombineTraits::kNThreads, 0, stream>>>(params);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+}}
+'''
+
+
+_FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_TRANSLATION_UNIT_SUBSTITUTIONS = (
+    (
+        "// FR13 fixed32 B1 qrow32 GQA-pair gate candidate.",
+        "// FR14 fixed32 B1 qrow32 GQA-pair SPLIT-K gate candidate (Tier-B).",
+        1,
+    ),
+    (
+        "    // 3 head pairs * B1 * 4 KV heads = 12 CTAs/layer. There is no "
+        "split-K or\n"
+        "    // combine launch, and each CTA stages one K/V tile for both "
+        "query heads.\n"
+        "    // The incumbent B1 qrow16 kernel spends 48 single-warp CTAs "
+        "re-staging the\n"
+        "    // same KV; pairing the GQA heads removes half of that redundant "
+        "staging\n"
+        "    // at sequences=1.\n"
+        "    dim3 grid(\n"
+        "        StaticLayout::query_heads_per_kv / kHeadsPerCTA,\n"
+        "        StaticLayout::sequences,\n"
+        "        StaticLayout::kv_heads);\n"
+        "    auto kernel = &fr13_flash_fwd_fixed32_qrow32_gqa_pair_b1_kernel;\n"
+        "    if (smem_size >= 48 * 1024) {\n"
+        "        C10_CUDA_CHECK(cudaFuncSetAttribute(\n"
+        "            kernel,\n"
+        "            cudaFuncAttributeMaxDynamicSharedMemorySize,\n"
+        "            smem_size));\n"
+        "    }\n"
+        "    kernel<<<grid, TreeKernelTraits::kNThreads, smem_size, stream>>>"
+        "(params);\n"
+        "    C10_CUDA_KERNEL_LAUNCH_CHECK();\n"
+        "}\n",
+        _FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_LAUNCH_TAIL,
+        1,
+    ),
+    (
+        "    constexpr static int kHeadsPerCTA = 2;\n",
+        "    constexpr static int kHeadsPerCTA = 2;\n"
+        "    constexpr static int kContextSplits = "
+        f"{FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_CONTEXT_SPLITS};\n",
+        1,
+    ),
+    (
+        "        false,  // Split\n",
+        "        true,   // Split: blockIdx.y partitions the context walk\n",
+        1,
+    ),
+    (
+        "Fr13Fixed32Qrow32GqaPairB1KernelTraits",
+        "Fr13Fixed32Qrow32GqaPairSplitKB1KernelTraits",
+        8,
+    ),
+    (
+        "fr13_flash_fwd_fixed32_qrow32_gqa_pair_b1_kernel",
+        "fr13_flash_fwd_fixed32_qrow32_gqa_pair_splitk_b1_kernel",
+        2,
+    ),
+    (
+        "fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_b1(",
+        "fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_splitk_b1(",
+        1,
+    ),
+)
+
+
+def _fixed32_query_gqa_pair32_splitk_b1_translation_unit() -> str:
+    unit = FIXED32_QUERY_GQA_PAIR32_B1_TRANSLATION_UNIT
+    for anchor, replacement, expected in (
+        _FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_TRANSLATION_UNIT_SUBSTITUTIONS
+    ):
+        if unit.count(anchor) != expected:
+            raise RuntimeError(
+                "B1 GQA-pair translation unit drifted at the split-K "
+                f"derivation anchor {anchor!r}: expected {expected}, found "
+                f"{unit.count(anchor)}"
+            )
+        unit = unit.replace(anchor, replacement)
+    # The split-K unit must actually BE split-K, and must not still carry the
+    # promoted arm's private symbols (which would collide at link time) or its
+    # sentinel (which would let a byte-gated operand reach this kernel).
+    for required in (
+        "        true,   // Split: blockIdx.y partitions the context walk\n",
+        "        kContextSplits,\n",
+        "    flash_fwd_splitkv_combine_kernel<\n",
+        f"        params.tree_bias_batch_stride == "
+        f"{FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_BATCH_STRIDE_SENTINEL}\n",
+        "        && params.num_splits == kContextSplits\n",
+        "        && params.oaccum_ptr != nullptr\n",
+        "        && params.softmax_lseaccum_ptr != nullptr\n",
+        "    static_assert(smem_size == 96 * 1024);\n",
+    ):
+        if unit.count(required) != 1:
+            raise RuntimeError(
+                f"B1 GQA-pair split-K unit lost a required line: {required!r}"
+            )
+    for survivor in (
+        "Fr13Fixed32Qrow32GqaPairB1KernelTraits",
+        "fr13_flash_fwd_fixed32_qrow32_gqa_pair_b1_kernel",
+        "fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_b1(",
+        "false,  // Split",
+        "There is no split-K",
+    ):
+        if survivor in unit:
+            raise RuntimeError(
+                "B1 GQA-pair split-K unit still carries the promoted arm's "
+                f"text: {survivor!r}"
+            )
+    return unit
+
+
+FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_TRANSLATION_UNIT = (
+    _fixed32_query_gqa_pair32_splitk_b1_translation_unit()
+)
+
+
 RUN_MHA_FWD_SIGNATURE = (
     "void run_mha_fwd(Flash_fwd_params &params, cudaStream_t stream, "
     "bool force_split_kernel=false) {\n"
@@ -1743,6 +1947,116 @@ def _fixed32_query_gqa_pair32_b1_api_gate() -> str:
 
 
 FIXED32_QUERY_GQA_PAIR32_B1_API_GATE = _fixed32_query_gqa_pair32_b1_api_gate()
+
+
+FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_API_DECLARATION = rf'''constexpr int64_t kFr14Qrow32GqaPairSplitKB1BatchStrideSentinel =
+    {FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_BATCH_STRIDE_SENTINEL};
+
+__attribute__((visibility("hidden")))
+void fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_splitk_b1(
+    Flash_fwd_params &params, cudaStream_t stream);
+
+'''
+
+
+# The split-K gate is the promoted B1 GQA-pair gate with the three operands
+# split-K actually changes -- the sentinel, the split count, and the two stock
+# accumulators the combine reads -- and NOTHING else. Every other operand,
+# including `unpadded_lse` (which the paired LSE layout depends on because it
+# addresses softmax_lse as [head, total_q]) and `is_seqlens_k_cumulative`, is
+# inherited verbatim from the operand set the promoted arm's byte gate
+# exercised, by counted substitution, so a drift in that gate fails here
+# instead of silently forking the two.
+_FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_API_GATE_SUBSTITUTIONS = (
+    (
+        "kFr13Qrow32GqaPairB1BatchStrideSentinel",
+        "kFr14Qrow32GqaPairSplitKB1BatchStrideSentinel",
+        1,
+    ),
+    (
+        "            && params.num_splits == 0\n",
+        "            && params.num_splits == "
+        f"{FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_CONTEXT_SPLITS}\n"
+        "            && params.oaccum_ptr != nullptr\n"
+        "            && params.softmax_lseaccum_ptr != nullptr\n",
+        1,
+    ),
+    (
+        "        fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_b1(params, stream);",
+        "        fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_splitk_b1("
+        "params, stream);",
+        1,
+    ),
+    (
+        '"FR13 qrow32 GQA-pair gate reached non-canonical B1 geometry"',
+        '"FR14 qrow32 GQA-pair split-K gate reached non-canonical B1 geometry"',
+        1,
+    ),
+)
+
+
+def _fixed32_query_gqa_pair32_splitk_b1_api_gate() -> str:
+    gate = FIXED32_QUERY_GQA_PAIR32_B1_API_GATE
+    for anchor, replacement, expected in (
+        _FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_API_GATE_SUBSTITUTIONS
+    ):
+        if gate.count(anchor) != expected:
+            raise RuntimeError(
+                "B1 GQA-pair API gate drifted at the split-K derivation anchor "
+                f"{anchor!r}: expected {expected}, found {gate.count(anchor)}"
+            )
+        gate = gate.replace(anchor, replacement)
+    for required in (
+        "            && params.b == 1\n",
+        "            && params.total_q == 32\n",
+        "            && params.seqlen_q == 32\n",
+        "            && params.unpadded_lse\n",
+        "            && params.is_seqlens_k_cumulative\n",
+        "            && params.page_block_size == 1024\n",
+        "            && params.num_splits == "
+        f"{FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_CONTEXT_SPLITS}\n",
+        "            && params.oaccum_ptr != nullptr\n",
+        "            && params.softmax_lseaccum_ptr != nullptr\n",
+    ):
+        if gate.count(required) != 1:
+            raise RuntimeError(
+                f"B1 GQA-pair split-K API gate lost a required operand: "
+                f"{required!r}"
+            )
+    for forbidden in (
+        "params.num_splits == 0",
+        "kFr13Qrow32GqaPairB1BatchStrideSentinel",
+    ):
+        if forbidden in gate:
+            raise RuntimeError(
+                "B1 GQA-pair split-K API gate still carries the promoted arm's "
+                f"contract: {forbidden!r}"
+            )
+    return gate
+
+
+FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_API_GATE = (
+    _fixed32_query_gqa_pair32_splitk_b1_api_gate()
+)
+
+
+# Same shape as the qualified split2 scratch patch: the private fixed32 route
+# is not `seqlenq_ngroups_swapped`, so stock would never allocate the split
+# accumulators for it. num_splits is pinned to the launcher's compile-time
+# kContextSplits here as well, so a mismatch fails in the API before a kernel
+# is reached rather than reading uninitialised accumulators.
+FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_ALLOCATION = rf'''    const bool fr14_qrow32_gqa_pair_splitk_b1 =
+        params.tree_bias_batch_stride ==
+        kFr14Qrow32GqaPairSplitKB1BatchStrideSentinel;
+    TORCH_CHECK(
+        !fr14_qrow32_gqa_pair_splitk_b1
+        || num_splits == {FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_CONTEXT_SPLITS},
+        "FR14 B1 qrow32 GQA-pair split-K scratch setup requires num_splits="
+        "{FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_CONTEXT_SPLITS}");
+    if (seqlenq_ngroups_swapped || fr14_qrow32_gqa_pair_splitk_b1) {{
+        // Stock applies split-K only to decoding. The private fixed32 route
+        // also needs the stock-owned accumulation buffers for qlen 32.
+'''
 
 
 FIXED32_QUERY_TILE32_B1_API_DECLARATION = rf'''constexpr int64_t kFr13Qrow32B1BatchStrideSentinel =
@@ -3021,6 +3335,9 @@ def _patch_fixed32_query_gqa_pair_layout(
     )
     function = text[function_start:function_end]
     marker = "// FR13_FA2_QROW32_GQA_PAIR_LAYOUT: two heads share the M tile."
+    splitk_marker = (
+        "// FR14_FA2_QROW32_GQA_PAIR_SPLITK_LAYOUT: the same paired"
+    )
     if marker in function:
         required_counts = {
             marker: 3,
@@ -3028,12 +3345,23 @@ def _patch_fixed32_query_gqa_pair_layout(
             "Int<kStaticHeadGroupSize>{})": 5,
             "params.q_row_stride,\n                            "
             "params.q_head_stride)": 1,
-            "params.o_row_stride,\n                                "
-            "params.o_head_stride)": 1,
-            "params.o_row_stride,\n                            "
-            "params.o_head_stride)": 1,
-            "make_stride(_1{}, params.total_q)": 2,
         }
+        if splitk_marker in function:
+            # The split-K arm rewrites the paired O/LSE addressing of BOTH
+            # output sites to reach the stock split accumulators. The paired
+            # Q tile and the M-tile shape above are untouched by that rewrite,
+            # so they are still checked; the four rewritten expressions are
+            # checked in their split-K form by
+            # _patch_fixed32_query_gqa_pair_splitk_layout's own guard.
+            required_counts[splitk_marker] = 4
+        else:
+            required_counts.update({
+                "params.o_row_stride,\n                                "
+                "params.o_head_stride)": 1,
+                "params.o_row_stride,\n                            "
+                "params.o_head_stride)": 1,
+                "make_stride(_1{}, params.total_q)": 2,
+            })
         for snippet, expected in required_counts.items():
             if function.count(snippet) != expected:
                 raise RuntimeError("qrow32 GQA-pair address layout drifted")
@@ -3242,6 +3570,165 @@ def _patch_fixed32_query_gqa_pair_layout(
     return True
 
 
+def _reindent(block: str, pad: str) -> str:
+    """Re-indent a whole block, leaving blank lines untouched."""
+    return "".join(
+        (pad + line) if line.strip() else line
+        for line in block.splitlines(keepends=True)
+    )
+
+
+# The paired ((query_row, head_in_pair), column) O/LSE tensors are written at
+# two sites -- the empty-split early-out and the epilogue -- whose bodies are
+# identical apart from four spaces of indentation. Both are pinned to
+# `static_assert(!Split)` by the promoted arm, because the promoted arm has no
+# split. Split-K needs exactly the same paired M tile addressed into the stock
+# split accumulators instead, and nothing else: same shape, same head pairing,
+# same 32 rows. The offsets it uses (`row_offset_oaccum`, `row_offset_lseaccum`)
+# are the STOCK ones already computed a few lines above each site, so the
+# accumulator layout the combine kernel reads is stock by construction and not
+# a re-derived equivalent.
+_GQA_PAIR_SPLITK_LAYOUT_SUBSTITUTIONS = (
+    (
+        """            static_assert(!Split);
+            auto o_ptr = make_gmem_ptr(
+                reinterpret_cast<ElementO *>(params.o_ptr)
+                + static_query_offset<Kernel_traits>(
+                    binfo,
+                    params.o_batch_stride,
+                    params.o_row_stride,
+                    bidb)
+                + bidh * params.o_head_stride);
+""",
+        """            // FR14_FA2_QROW32_GQA_PAIR_SPLITK_LAYOUT: the same paired
+            // M tile, addressed into the stock split accumulator when Split.
+            auto o_ptr = make_gmem_ptr(
+                reinterpret_cast<ElementO *>(
+                    Split ? params.oaccum_ptr : params.o_ptr)
+                + (Split
+                    ? row_offset_oaccum
+                    : static_query_offset<Kernel_traits>(
+                          binfo,
+                          params.o_batch_stride,
+                          params.o_row_stride,
+                          bidb)
+                      + bidh * params.o_head_stride));
+""",
+    ),
+    (
+        """                    make_stride(
+                        make_stride(
+                            params.o_row_stride,
+                            params.o_head_stride),
+                        _1{})));
+""",
+        """                    make_stride(
+                        make_stride(
+                            Split ? static_cast<index_t>(params.d_rounded)
+                                  : params.o_row_stride,
+                            Split ? static_cast<index_t>(params.seqlen_q)
+                                        * params.d_rounded
+                                  : params.o_head_stride),
+                        _1{})));
+""",
+    ),
+    (
+        """            static_assert(!Split);
+            auto lse_ptr = make_gmem_ptr(
+                reinterpret_cast<ElementAccum *>(params.softmax_lse_ptr)
+                + bidh * params.total_q
+                + static_query_offset<Kernel_traits>(
+                    binfo, params.seqlen_q, 1, bidb));
+""",
+        """            // FR14_FA2_QROW32_GQA_PAIR_SPLITK_LAYOUT: the same paired
+            // M tile, addressed into the stock split accumulator when Split.
+            auto lse_ptr = make_gmem_ptr(
+                reinterpret_cast<ElementAccum *>(
+                    Split ? params.softmax_lseaccum_ptr
+                          : params.softmax_lse_ptr)
+                + (Split
+                    ? row_offset_lseaccum
+                    : bidh * params.total_q
+                      + static_query_offset<Kernel_traits>(
+                            binfo, params.seqlen_q, 1, bidb)));
+""",
+    ),
+    (
+        """                    make_stride(_1{}, params.total_q)));
+""",
+        """                    make_stride(
+                        _1{},
+                        Split ? params.seqlen_q : params.total_q)));
+""",
+    ),
+)
+
+
+def _patch_fixed32_query_gqa_pair_splitk_layout(
+    path: Path,
+    *,
+    fixed32_query_gqa_pair32_splitk_b1: bool = False,
+) -> bool:
+    """Let the paired M tile address the stock split accumulators.
+
+    Runs AFTER _patch_fixed32_query_gqa_pair_layout and only for the split-K
+    arm, so the promoted GQA-pair source closure is untouched: with the flag
+    off this function writes nothing at all.
+    """
+    if not fixed32_query_gqa_pair32_splitk_b1:
+        return False
+    text = path.read_text()
+    function_signature = (
+        "template<typename Kernel_traits, bool Is_causal, bool Is_local, "
+        "bool Has_alibi, bool Is_even_MN, bool Is_even_K, bool Is_softcap, "
+        "bool Split, bool Append_KV, typename Params>\n"
+        "inline __device__ void compute_attn_1rowblock_splitkv"
+    )
+    function_start = text.index(function_signature)
+    function_end = text.index(
+        "\n////////////////////////////////////////////////////////////////////////////////////////////////////\n\n"
+        "template<typename Kernel_traits, bool Is_dropout",
+        function_start,
+    )
+    function = text[function_start:function_end]
+    marker = (
+        "// FR14_FA2_QROW32_GQA_PAIR_SPLITK_LAYOUT: the same paired"
+    )
+    if marker in function:
+        if function.count(marker) != 4 or "static_assert(!Split);" in function:
+            raise RuntimeError("qrow32 GQA-pair split-K address layout drifted")
+        return False
+    if "FR13_FA2_QROW32_GQA_PAIR_LAYOUT: two heads share the M tile." not in function:
+        raise RuntimeError(
+            "qrow32 GQA-pair split-K layout requires the paired address layout"
+        )
+    # Both sites, in one pass each: the epilogue at its own indentation and the
+    # early-out four spaces deeper. Counted, so a drift in either one fails.
+    for anchor, replacement in _GQA_PAIR_SPLITK_LAYOUT_SUBSTITUTIONS:
+        # The leading newline makes every anchor line-anchored, so the
+        # epilogue's pattern cannot match mid-line inside the deeper-indented
+        # early-out block.
+        anchor, replacement = "\n" + anchor, "\n" + replacement
+        for pad in ("", "    "):
+            padded_anchor = _reindent(anchor, pad)
+            if function.count(padded_anchor) != 1:
+                raise RuntimeError(
+                    "qrow32 GQA-pair split-K layout anchor drifted at "
+                    f"indent {len(pad)}: expected one, found "
+                    f"{function.count(padded_anchor)}"
+                )
+            function = function.replace(
+                padded_anchor, _reindent(replacement, pad), 1
+            )
+    if "static_assert(!Split);" in function:
+        raise RuntimeError(
+            "qrow32 GQA-pair split-K layout left a !Split assertion behind"
+        )
+    text = text[:function_start] + function + text[function_end:]
+    path.write_text(text)
+    return True
+
+
 def _patch_fixed32_query_translation_unit(
     path: Path,
     *,
@@ -3369,6 +3856,35 @@ def _patch_fixed32_query_gqa_pair32_b1_translation_unit(
     return True
 
 
+def _patch_fixed32_query_gqa_pair32_splitk_b1_translation_unit(
+    path: Path,
+    *,
+    fixed32_query_gqa_pair32_splitk_b1: bool = False,
+) -> bool:
+    if not fixed32_query_gqa_pair32_splitk_b1:
+        return False
+    stock_text = path.read_text()
+    if STOCK_FIXED32_QUERY_INSTANTIATION not in stock_text:
+        raise RuntimeError("stock fixed32 FA2 explicit instantiation drifted")
+    if "FR13_FA2_FIXED32_QUERY_GQA_PAIR32" in stock_text:
+        raise RuntimeError(
+            "qrow32 B1 GQA pair split-K must not share the stock "
+            "instantiation TU"
+        )
+    pair_path = path.with_name(
+        "flash_fwd_fr13_qrow32_gqa_pair_splitk_b1_hdim256_bf16_sm80.cu"
+    )
+    expected = FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_TRANSLATION_UNIT
+    if pair_path.exists():
+        if pair_path.read_text() != expected:
+            raise RuntimeError(
+                "existing qrow32 B1 GQA-pair split-K translation unit drifted"
+            )
+        return False
+    pair_path.write_text(expected)
+    return True
+
+
 def _patch_fixed32_query_tile32_b1_translation_unit(
     path: Path,
     *,
@@ -3425,6 +3941,7 @@ def _patch_flash_api_cpp(
     fixed32_query_gqa_pair32: bool = False,
     fixed32_query_tile32_b1: bool = False,
     fixed32_query_gqa_pair32_b1: bool = False,
+    fixed32_query_gqa_pair32_splitk_b1: bool = False,
 ) -> bool:
     text = path.read_text()
     changed = False
@@ -3648,6 +4165,40 @@ mha_varlen_fwd_tree_bias(at::Tensor &q,
             label="fixed32 FA2 qrow32 B1 GQA-pair gate-only API dispatch",
         )
         changed = changed or did
+    if fixed32_query_gqa_pair32_splitk_b1:
+        # The split-K arm cannot be byte-gated against qrow16 (it is Tier-B by
+        # construction), but the characterization harness still needs both the
+        # qrow16 incumbent and the promoted GQA-pair arm in the same binary to
+        # measure against, so all three dispatches are installed here.
+        text, did = _install_qrow16_api_dispatch(
+            text,
+            FIXED32_QUERY_TILE16_B1_REFERENCE_API_DISPATCH,
+            label="fixed32 FA2 query tile16 B1 reference hidden API dispatch",
+        )
+        changed = changed or did
+        text, did = _install_hidden_api_gate(
+            text,
+            declaration=FIXED32_QUERY_GQA_PAIR32_B1_API_DECLARATION,
+            gate=FIXED32_QUERY_GQA_PAIR32_B1_API_GATE,
+            label="fixed32 FA2 qrow32 B1 GQA-pair gate-only API dispatch",
+        )
+        changed = changed or did
+        text, did = _install_hidden_api_gate(
+            text,
+            declaration=FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_API_DECLARATION,
+            gate=FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_API_GATE,
+            label=(
+                "fixed32 FA2 qrow32 B1 GQA-pair split-K gate-only API dispatch"
+            ),
+        )
+        changed = changed or did
+        text, did = _replace_once(
+            text,
+            STOCK_VARLEN_SPLITKV_ALLOCATION,
+            FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_ALLOCATION,
+            "fixed32 FA2 qrow32 B1 GQA-pair split-K scratch allocation",
+        )
+        changed = changed or did
     if changed:
         path.write_text(text)
     return changed
@@ -3721,11 +4272,16 @@ def patch_fa2_source(
     fixed32_query_gqa_pair32: bool = False,
     fixed32_query_tile32_b1: bool = False,
     fixed32_query_gqa_pair32_b1: bool = False,
+    fixed32_query_gqa_pair32_splitk_b1: bool = False,
     fixed32_tree_visibility_mask: bool = False,
 ) -> dict[str, bool]:
     if fixed32_query_tile16_static_strides and not fixed32_query_tile16:
         raise ValueError(
             "fixed32 qrow16 static strides require --fixed32-query-tile16"
+        )
+    if fixed32_query_gqa_pair32_splitk_b1 and fixed32_tree_visibility_mask:
+        raise ValueError(
+            "the split-K arm has no tree-visibility variant"
         )
     qrow32_builds = sum(
         bool(value)
@@ -3734,11 +4290,16 @@ def patch_fa2_source(
             fixed32_query_gqa_pair32,
             fixed32_query_tile32_b1,
             fixed32_query_gqa_pair32_b1,
+            fixed32_query_gqa_pair32_splitk_b1,
         )
     )
-    # Both GQA-pair candidates need the paired ((row, head), column) address
+    # Every GQA-pair candidate needs the paired ((row, head), column) address
     # layout in the shared kernel header; only the trait geometry differs.
-    gqa_pair_layout = bool(fixed32_query_gqa_pair32 or fixed32_query_gqa_pair32_b1)
+    gqa_pair_layout = bool(
+        fixed32_query_gqa_pair32
+        or fixed32_query_gqa_pair32_b1
+        or fixed32_query_gqa_pair32_splitk_b1
+    )
     if qrow32_builds > 1:
         raise ValueError("fixed32 qrow32 source builds are mutually exclusive")
     fixed32_query_tile32_any = bool(qrow32_builds)
@@ -3834,6 +4395,15 @@ def patch_fa2_source(
         )
         or flash_fwd_kernel_changed
     )
+    flash_fwd_kernel_changed = (
+        _patch_fixed32_query_gqa_pair_splitk_layout(
+            files["flash_fwd_kernel.h"],
+            fixed32_query_gqa_pair32_splitk_b1=(
+                fixed32_query_gqa_pair32_splitk_b1
+            ),
+        )
+        or flash_fwd_kernel_changed
+    )
     b1_translation_units_changed = (
         _patch_fixed32_query_tile32_b1_translation_unit(
             files["flash_fwd_split_hdim256_bf16_sm80.cu"],
@@ -3881,6 +4451,14 @@ def patch_fa2_source(
                 fixed32_tree_visibility_mask=fixed32_tree_visibility_mask,
             )
         ),
+        "flash_fwd_fr13_qrow32_gqa_pair_splitk_b1_hdim256_bf16_sm80.cu": (
+            _patch_fixed32_query_gqa_pair32_splitk_b1_translation_unit(
+                files["flash_fwd_split_hdim256_bf16_sm80.cu"],
+                fixed32_query_gqa_pair32_splitk_b1=(
+                    fixed32_query_gqa_pair32_splitk_b1
+                ),
+            )
+        ),
         "flash_api.cpp": _patch_flash_api_cpp(
             files["flash_api.cpp"],
             fixed32_query_tile16=fixed32_query_tile16,
@@ -3891,20 +4469,38 @@ def patch_fa2_source(
             fixed32_query_gqa_pair32=fixed32_query_gqa_pair32,
             fixed32_query_tile32_b1=fixed32_query_tile32_b1,
             fixed32_query_gqa_pair32_b1=fixed32_query_gqa_pair32_b1,
+            fixed32_query_gqa_pair32_splitk_b1=(
+                fixed32_query_gqa_pair32_splitk_b1
+            ),
         ),
         "flash_api_torch_lib.cpp": _patch_torch_lib(files["flash_api_torch_lib.cpp"]),
     }
 
 
 FR13_FA2_QROW32_B1_SPLIT2_INTERFACE_HELPER = r'''# FR13_FA2_QROW32_B1_SPLIT2_INTERFACE
+# The private B1 routes that legitimately carry num_splits > 1, as
+# (num_splits, tree-bias batch-stride tag) pairs. 1179791669 is the qrow32 B1
+# split2 gate instrument; 1179791671 is the FR14 GQA-pair split-K arm, whose
+# launcher and API gate both require exactly 4. Neither is in
+# _FR13_FA2_QROW32_B1_PRODUCTION_ARMS, so neither can answer real traffic; this
+# only stops the stock interface from refusing a split the fork does implement.
+# The pairing matters: a sentinel is not enough on its own, because a split
+# count the kernel was not compiled for would read the wrong accumulators.
+_FR13_FA2_QROW32_B1_SPLIT_ROUTES = ((2, 1179791669), (4, 1179791671))
+
+
 def _fr13_fa2_qrow32_b1_split2_interface_allowed(num_splits, tree_bias):
+    if (
+        tree_bias is None
+        or not tree_bias.is_cuda
+        or tree_bias.dtype != torch.float32
+        or tuple(tree_bias.shape) != (1, 32, 32)
+    ):
+        return False
+    stride = tuple(tree_bias.stride())
     return (
-        num_splits == 2
-        and tree_bias is not None
-        and tree_bias.is_cuda
-        and tree_bias.dtype == torch.float32
-        and tuple(tree_bias.shape) == (1, 32, 32)
-        and tuple(tree_bias.stride()) == (1179791669, 32, 1)
+        stride[1:] == (32, 1)
+        and (int(num_splits), int(stride[0])) in _FR13_FA2_QROW32_B1_SPLIT_ROUTES
     )
 
 
@@ -5180,6 +5776,22 @@ _FR13_FA2_QROW32_B1_ARMS = {
         "split_scratch_allocation": "not used; num_splits=0",
         "candidate_dispatch": (
             "qrow32 B1 GQA-pair exact geometry; no fallback"
+        ),
+    },
+    # FR14 Tier-B. Same GQA-pair traits and the same per-split K-block order,
+    # but the context walk is partitioned four ways across blockIdx.y and
+    # re-reduced by FA2's combine kernel, so per-row output is NOT
+    # bit-identical to gqa_pair and no byte gate can qualify it --
+    # _fr13_fa2_qrow32_b1_require_same_reduction refuses the comparison
+    # outright. Gate-only: absent from _FR13_FA2_QROW32_B1_PRODUCTION_ARMS.
+    "gqa_pair_splitk": {
+        "sentinel": 1179791671,
+        "num_splits": 4,
+        "split_scratch_allocation": (
+            "stock FA2 set_params_splitkv via num_splits=4"
+        ),
+        "candidate_dispatch": (
+            "qrow32 B1 GQA-pair split-K exact geometry; no fallback"
         ),
     },
 }
@@ -9119,6 +9731,14 @@ def main() -> int:
         help="build the gate-only B1 FA2 two-query-head GQA-pair candidate",
     )
     parser.add_argument(
+        "--fixed32-query-gqa-pair32-splitk-b1",
+        action="store_true",
+        help=(
+            "build the gate-only B1 FA2 GQA-pair SPLIT-K candidate (Tier-B: "
+            "changes per-row accumulation order by design)"
+        ),
+    )
+    parser.add_argument(
         "--fixed32-query-tile16-live-ab",
         action="store_true",
         help="install the one-shot live paged B1 stock/qrow16 byte gate",
@@ -9192,6 +9812,14 @@ def main() -> int:
             "--fixed32-query-gqa-pair32-b1 requires --tree-bias-tile-earlyout "
             "in the same source-build invocation"
         )
+    if (
+        args.fixed32_query_gqa_pair32_splitk_b1
+        and not args.tree_bias_tile_earlyout
+    ):
+        parser.error(
+            "--fixed32-query-gqa-pair32-splitk-b1 requires "
+            "--tree-bias-tile-earlyout in the same source-build invocation"
+        )
     qrow32_source_builds = sum(
         bool(value)
         for value in (
@@ -9199,6 +9827,7 @@ def main() -> int:
             args.fixed32_query_gqa_pair32,
             args.fixed32_query_tile32_b1,
             args.fixed32_query_gqa_pair32_b1,
+            args.fixed32_query_gqa_pair32_splitk_b1,
         )
     )
     if qrow32_source_builds > 1:
@@ -9267,6 +9896,9 @@ def main() -> int:
         "fixed32_query_gqa_pair32": args.fixed32_query_gqa_pair32,
         "fixed32_query_tile32_b1": args.fixed32_query_tile32_b1,
         "fixed32_query_gqa_pair32_b1": args.fixed32_query_gqa_pair32_b1,
+        "fixed32_query_gqa_pair32_splitk_b1": (
+            args.fixed32_query_gqa_pair32_splitk_b1
+        ),
         "fixed32_query_tile16_live_ab": args.fixed32_query_tile16_live_ab,
         "fixed32_query_tile32_live_ab": args.fixed32_query_tile32_live_ab,
         "fixed32_query_tile32_b1_live_ab": (
@@ -9295,6 +9927,9 @@ def main() -> int:
             fixed32_query_gqa_pair32=args.fixed32_query_gqa_pair32,
             fixed32_query_tile32_b1=args.fixed32_query_tile32_b1,
             fixed32_query_gqa_pair32_b1=args.fixed32_query_gqa_pair32_b1,
+            fixed32_query_gqa_pair32_splitk_b1=(
+                args.fixed32_query_gqa_pair32_splitk_b1
+            ),
             fixed32_tree_visibility_mask=(
                 args.fixed32_tree_visibility_mask
             ),
