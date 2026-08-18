@@ -62,13 +62,12 @@ def capture(ns, graph_id, batch, passes, segment=0):
     ns["_fr13_fixed32_drafter_graph_capture_begin"](
         graph_id, batch, passes, segment
     )
-    ctx = ns["_FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT"]
     for _ in range(passes):
-        # the tree-attention call is what authenticates each MTP forward
-        ctx["tree_attn_calls"] += 1
-        ctx["tree_attn_rows"] += batch
-        ctx["tree_attn_layer"] = TREE_LAYER
-        ctx["tree_attn_bias_shape"] = (1, 1)
+        # Drive the REAL tree-attention observer, exactly as tree_attn.py does.
+        # Hand-incrementing these counters is what let the Arm G defect through:
+        # the harness simulated the observer instead of executing it, so the
+        # observer's own per-step assumptions were never under test.
+        ns["_fr13_fixed32_observed_tree_attn"](TREE_LAYER, batch, (1, 1), True)
         ns["_fr13_fixed32_drafter_mtp_forward"](batch, True)
     return ns["_fr13_fixed32_drafter_graph_capture_end"](
         graph_id, batch, passes, segment
@@ -311,3 +310,75 @@ def test_every_other_shape_is_fatal(calls, replays, main_tail):
     begin_proposal(ns)
     with pytest.raises(RuntimeError, match="proposal work drift"):
         _finish(ns, calls, replays, main_tail)
+
+
+# ---------------------------------------------------------------------------
+# The tree-attention observer -- the 11th integration site, and the one that
+# refused Arm G (runroot output/fr14_promoab_Giso_20260818T074147Z).
+#
+# The harness reaches it now because `capture()` drives the REAL observer
+# instead of hand-incrementing its counters. Simulating it is precisely why the
+# defect shipped: the observer's own per-step assumptions were never under test.
+# ---------------------------------------------------------------------------
+
+def test_observer_accepts_each_segment_of_a_split_capture():
+    """This is the exact sequence Arm G died on."""
+    ns = new_runtime()
+    begin_proposal(ns)
+    capture(ns, 101, 1, 2, 0)
+    capture(ns, 102, 1, 2, 1)  # <- raised "tree-attention work drift" before
+    assert ns["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"]["graph_captures"] == 2
+
+
+def test_observer_still_requires_exactly_one_capture_when_ungated():
+    """segment 0 => graph_captures must be 1, byte-identical to the old literal."""
+    ns = new_runtime()
+    proposal = begin_proposal(ns)
+    ns["_fr13_fixed32_drafter_graph_capture_begin"](55, 1, 4, 0)
+    proposal["graph_captures"] = 2  # forge a second capture on a 4-pass graph
+    with pytest.raises(RuntimeError, match="tree-attention work drift"):
+        ns["_fr13_fixed32_observed_tree_attn"](TREE_LAYER, 1, (1, 1), True)
+
+
+def test_observer_refuses_hi_without_lo():
+    """A `hi` capture that is not preceded by `lo` is unrepresentable."""
+    ns = new_runtime()
+    begin_proposal(ns)
+    # jump straight to segment 1: graph_captures becomes 1, but segment says 2
+    ns["_fr13_fixed32_drafter_graph_capture_begin"](102, 1, 2, 1)
+    with pytest.raises(RuntimeError, match="tree-attention work drift"):
+        ns["_fr13_fixed32_observed_tree_attn"](TREE_LAYER, 1, (1, 1), True)
+
+
+def test_observer_bounds_forwards_by_this_segments_pass_count():
+    """A 2-pass segment may not receive a third forward."""
+    ns = new_runtime()
+    begin_proposal(ns)
+    ns["_fr13_fixed32_drafter_graph_capture_begin"](101, 1, 2, 0)
+    for _ in range(2):
+        ns["_fr13_fixed32_observed_tree_attn"](TREE_LAYER, 1, (1, 1), True)
+        ns["_fr13_fixed32_drafter_mtp_forward"](1, True)
+    with pytest.raises(RuntimeError, match="tree-attention work drift"):
+        ns["_fr13_fixed32_observed_tree_attn"](TREE_LAYER, 1, (1, 1), True)
+
+
+def test_observer_still_bounds_a_four_pass_graph_at_four():
+    ns = new_runtime()
+    begin_proposal(ns)
+    ns["_fr13_fixed32_drafter_graph_capture_begin"](55, 1, 4, 0)
+    for _ in range(4):
+        ns["_fr13_fixed32_observed_tree_attn"](TREE_LAYER, 1, (1, 1), True)
+        ns["_fr13_fixed32_drafter_mtp_forward"](1, True)
+    with pytest.raises(RuntimeError, match="tree-attention work drift"):
+        ns["_fr13_fixed32_observed_tree_attn"](TREE_LAYER, 1, (1, 1), True)
+
+
+def test_observer_still_refuses_a_foreign_layer_and_shape():
+    """The parts of the contract the split did not touch are untouched."""
+    ns = new_runtime()
+    begin_proposal(ns)
+    ns["_fr13_fixed32_drafter_graph_capture_begin"](101, 1, 2, 0)
+    with pytest.raises(RuntimeError, match="tree-attention work drift"):
+        ns["_fr13_fixed32_observed_tree_attn"]("some.other.attn", 1, (1, 1), True)
+    with pytest.raises(RuntimeError, match="tree-attention work drift"):
+        ns["_fr13_fixed32_observed_tree_attn"](TREE_LAYER, 1, (32, 32), True)

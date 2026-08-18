@@ -580,3 +580,122 @@ inside the proposer, and a banked serve proves that path live (`FR13_DRAFTER_GRA
 forwarding is correct and no `/logs` sidecar is needed. `FR14_FUSED_DRAFT_TOPK_SO` is
 forwarded with a **non-empty** default, because `os.environ.get` returns `""` for a
 set-but-empty variable — the same trap `FR13_DFWD_SPLIT_JSON` was shipped against.
+
+
+---
+
+# 12. ARM G: the first armed boot, and the 11th integration site (2026-08-18)
+
+Runroot `output/fr14_promoab_Giso_20260818T074147Z`. The gate armed
+(`fr14_suffix_pass_gate.cfg` = `8 0.75 256`), the drafter reached its first capture, and the
+engine **refused fail-closed before any decode step completed** — `fr13_fixed32_work_census.jsonl`
+is 0 bytes. That is the machinery working: a shape it had not been taught died at a guard
+rather than reaching the verifier.
+
+## 12.1 The defect, precisely
+
+§9.2 enumerated ten integration sites. There was an eleventh:
+`_fr13_fixed32_observed_tree_attn`, the observer that authenticates **every** drafter MTP
+forward from inside the capture scope. It carried
+
+```
+or proposal.get("graph_captures") != 1
+```
+
+`graph_captures` is per-**proposal**; a split capture records `lo` then `hi` inside one
+proposal, so it reads 2 while recording `hi`. The engine log is unambiguous:
+
+```
+RuntimeError: FR13 fixed32 drafter tree-attention work drift:
+  proposal={... 'graph_captures': 2, 'captured_graph_id': 246660545021520, ...}
+  context ={'graph_id': 246660545025744, 'passes': 2, 'segment': 1,
+            'capturing': True, 'tree_attn_calls': 0, ...}
+```
+
+One correction to the dispatched attribution, since it changes what to fix: the failing
+clause is `graph_captures`, **not** `captured_graph_id`. That field is written at every
+capture-end (last-write-wins across segments, which is why the traceback shows segment 0's id
+beside segment 1's context) but it is **read nowhere** — `grep` finds two writes and no
+consumers. It is a cosmetic artifact of the split, not a validated field, and it is left
+alone. The described *effect* — segment 1 validated against a proposal shaped by segment 0 —
+is exactly right; the *clause* is the capture counter.
+
+**Fix.** `graph_captures` is now required to equal the recording context's own
+`segment + 1`, and the per-segment forward bound is `range(passes)` rather than the literal
+`(0,1,2,3)`. Both reduce to the previous literals for the ungated context (segment 0,
+passes 4), so the shipped arm is untouched. Tying the counter to the segment is *stricter*
+than a membership test: it makes "the `hi` capture ran without the `lo` capture"
+unrepresentable, which `test_observer_refuses_hi_without_lo` pins.
+
+## 12.2 Why the harness missed it, and what changed
+
+`tests/test_fr14_gated_drafter_graph_manifest.py` drove capture / forward / capture-end /
+replay / proposal-end — but its `capture()` helper **hand-incremented** `tree_attn_calls`
+and `tree_attn_rows` instead of calling the observer that owns them. It simulated the one
+component that had the bug.
+
+The helper now calls the real `_fr13_fixed32_observed_tree_attn`. With that single change and
+the fix reverted, the harness reproduces Arm G **exactly** on CPU — same clause, same
+`graph_captures: 2`, same `segment: 1`, and even the same
+`captured_graph_signature 2da8c56a…` the live GB10 run produced. Six tests now cover the
+observer directly.
+
+The generalisable lesson, which cost a boot: **a harness that mocks a collaborator cannot
+test that collaborator's assumptions.** The blob is executable; execute it.
+
+I also swept for the same class of defect rather than waiting for the next boot. Of the
+seventeen functions in the injected runtime that read the drafter capture context, exactly
+one references `graph_captures` — the one fixed here. The two draft-head selection observers
+count into per-segment fields already parameterised at capture-end.
+
+## 12.3 The `FR13_DFWD_SPLIT` sync error: reconciled as SECONDARY
+
+`logs/fr13_dfwd_split.err` records a `cudaErrorStreamCaptureUnsupported` from
+`torch.cuda.synchronize()`. Ordering in `docker_after_tasks.log` settles it:
+
+| time | event |
+|---|---|
+| 07:47:27 | the tree-attention refusal, then `EngineDeadError` |
+| 07:47:28 | `CUDAGraph.cpp:275 … reset` ×2 — both graph objects destroyed with the capture still open |
+| teardown | **one** atexit `dump()`, whose device-wide sync could not run |
+
+Exactly one entry in the file, and **zero** periodic-dump entries during the run. The primary
+refusal escaped mid-capture, left the stream capturing, and the instrument's sync failed
+downstream of a process that was already dying.
+
+**But the hazard is real independently, so it gets its own guard.** The periodic dump fires
+from inside the drafter's instrumented model span (`end('model')`, every 25 levels), and the
+drafter graph capture *executes* that span — so whether a 25-boundary lands inside a capture
+window is a race on the pre-capture forward count. A device-wide sync there is not merely
+refused: it can **invalidate the in-flight capture**, i.e. the instrument would break the
+thing it measures. `dump()` now checks `is_current_stream_capturing()` before syncing, and
+classifies a capture-scoping failure on *another* stream (which that predicate cannot see) as
+a **deferral** rather than a fault — written as a one-line `DEFERRED:` marker instead of a
+traceback that looks like a crash. In this incident that one change would have left the log
+naming only the real defect.
+
+## 12.4 Also closed: an incompatibility that was documented but not enforced
+
+§9.2 recorded that the armed gate is incompatible with the draft-head production levers,
+because the split re-issues the drafter graph manifest signature those attestations pin as
+hardcoded literals — and `FR13_DFWD_UNIFIED_BM8_*` is scoped begin/end per capture, of which
+a split has two. That was written down and never enforced, which is the same class of gap as
+the eleventh site. Both launchers now refuse the combination at launch.
+
+## 12.5 The economics, updated by Arm C
+
+Arm C measured the **unconditional** MTP survivals at draft positions 3 and 4 as
+**m3 = 0.783 / m4 = 0.794**, against the 0.8083 / 0.8169 §7 assumed from the K0 serve.
+
+Direction: **favourable, and the selected threshold is unaffected.** A lower unconditional
+survival lowers the bar the handoff must clear (the selected `L*=8, a*=0.75` gives
+`q1_gated = 0.8202`, now clearing by +0.037 instead of +0.012), and it makes the
+counterfactual's break-even — MTP survival **0.931** on strong-match steps — a longer reach
+from a weaker prior, which strengthens the accept-positive case.
+
+**The threshold is not re-tuned.** Re-selecting after seeing new outcome data is precisely
+what the §3.3 pre-registration forbids; `L*=8, a*=0.75` was chosen against the then-measured
+0.8083 and stands. And the *conditional* question — MTP's survival on the gated subset — is
+still exactly as open as §7 left it. Only the prior moved.
+
+**The gate stays default-OFF pending the Arm G re-run.**

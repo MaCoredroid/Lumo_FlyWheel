@@ -348,3 +348,25 @@ def test_fused_topk_armed_requires_its_credential(launcher):
         "(64 lowercase hex)" in launcher
     )
     assert "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SO" in launcher
+
+
+def test_launcher_refuses_the_draft_head_credential_levers(launcher):
+    """The split re-issues the drafter graph signature those levers pin as literals.
+
+    Documented as an incompatibility when the split landed, but not enforced --
+    which is the same class of gap that produced the Arm G refusal. Enforced now.
+    """
+    for name in (
+        "FR13_DRAFT_HEAD_M32_PRODUCTION",
+        "FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION",
+        "FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION",
+        "FR13_DRAFT_HEAD_FP8",
+        "FR13_DFWD_UNIFIED_BM8_PRODUCTION",
+        "FR13_DFWD_UNIFIED_BM8_LIVE_AB",
+        "FR13_DRAFT_HEAD_M32_LIVE_AB",
+    ):
+        assert name in launcher
+    assert (
+        "is incompatible with $_fr14_gate_incompat "
+        "(drafter graph credential is per-capture)" in launcher
+    )

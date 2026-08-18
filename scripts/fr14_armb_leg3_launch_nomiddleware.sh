@@ -5832,6 +5832,27 @@ if [[ "${FR14_SUFFIX_PASS_GATE:-0}" == "1" ]]; then
     echo "FR14_SUFFIX_PASS_GATE=1 is incompatible with FR13_TAIL_BRANCHES" >&2
     exit 2
   fi
+  # FR14 lever 2 x draft-head production levers: the split capture re-issues the
+  # drafter graph manifest signature, and the M32/U8/FP8 head attestations bind a
+  # HARDCODED signature literal for the single 4-pass graph. Arming both would
+  # present a half-graph to a credential minted for a whole one. The BM8
+  # production attestation is a second case: it is scoped begin/end per capture,
+  # and a split capture opens two. Refused here rather than discovered on a boot
+  # -- which is exactly how Arm G was found (suffix_pass_gating.md 11).
+  for _fr14_gate_incompat in \
+    FR13_DRAFT_HEAD_M32_PRODUCTION \
+    FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION \
+    FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION \
+    FR13_DRAFT_HEAD_FP8 \
+    FR13_DFWD_UNIFIED_BM8_PRODUCTION \
+    FR13_DFWD_UNIFIED_BM8_LIVE_AB \
+    FR13_DRAFT_HEAD_M32_LIVE_AB; do
+    if [[ "${!_fr14_gate_incompat:-0}" != "0" ]]; then
+      echo "FR14_SUFFIX_PASS_GATE=1 is incompatible with $_fr14_gate_incompat (drafter graph credential is per-capture)" >&2
+      exit 2
+    fi
+  done
+  unset _fr14_gate_incompat
   if ! grep -q "FR14_GATE_SPLIT_GRAPH" "$REPO/scripts/fr10_phase4_patch_vllm_tree_gdn.py"; then
     echo "FR14_SUFFIX_PASS_GATE=1 refused: the drafter split-graph half is NOT landed." >&2
     echo "  The gate would hand decide_fixed32 a 3-depth MTP head while the drafter" >&2

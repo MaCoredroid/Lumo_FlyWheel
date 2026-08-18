@@ -3609,7 +3609,15 @@ def _fr13_fixed32_observed_tree_attn(
             or batch != proposal.get("batch_size")
             or proposal.get("mode") != _FR13_FIXED32_MODE
             or proposal.get("mtp_execution_basis") != "unbound"
-            or proposal.get("graph_captures") != 1
+            # FR14_GATE_SPLIT_GRAPH: a split capture records `lo` then `hi`
+            # inside ONE proposal, so graph_captures is the 1-BASED INDEX of the
+            # segment being recorded, not a constant. Tying it to the context's
+            # own segment is stricter than a membership test: it makes "the hi
+            # capture ran without the lo capture" unrepresentable, and it is
+            # byte-identical to the old literal for the ungated context, whose
+            # segment is 0. This is the site that refused Arm G.
+            or proposal.get("graph_captures")
+            != int(drafter_capture.get("segment", 0)) + 1
             or proposal.get("graph_replays") != 0
             or proposal.get("mtp_forward_calls") != 0
             or proposal.get("mtp_forward_rows") != 0
@@ -3617,7 +3625,12 @@ def _fr13_fixed32_observed_tree_attn(
             or type(tree_rows) is not int
             or type(mtp_calls) is not int
             or type(mtp_rows) is not int
-            or tree_calls not in (0, 1, 2, 3)
+            # each segment counts its OWN forwards from zero, so the bound is
+            # this segment's pass count (4 ungated, 2 per half) -- again
+            # identical to the old literal when passes == 4
+            or tree_calls not in tuple(
+                range(int(drafter_capture.get("passes", 4)))
+            )
             or tree_rows != tree_calls * batch
             or mtp_calls != tree_calls
             or mtp_rows != tree_rows
@@ -37688,12 +37701,36 @@ class _Fr13DfwdSplit:
             self.dump()
             self.done = False
 
+    def _defer(self, why):
+        # Record the deferral WITHOUT a traceback. During a fatal mid-capture
+        # teardown this is the difference between a log that names the real
+        # defect and one that points at the instrument -- see Arm G,
+        # output/fr14_promoab_Giso_20260818T074147Z, where a secondary
+        # cudaErrorStreamCaptureUnsupported here outranked the primary refusal
+        # in the diagnosis.
+        try:
+            with open("/logs/fr13_dfwd_split.err", "a") as fh:
+                fh.write("DEFERRED: " + str(why) + chr(10))
+        except Exception:  # noqa: BLE001
+            pass
+
     def dump(self):
         if not self.on:
             return
         self.done = True
         import json as _j, os as _os, torch as _t
         try:
+            # NEVER synchronize inside a capture window. cudaDeviceSynchronize is
+            # cudaErrorStreamCaptureUnsupported there, and worse it can
+            # INVALIDATE an in-flight capture: an instrument must not be able to
+            # break the thing it is measuring. This window is reachable in normal
+            # operation, not just on the failure path -- the periodic dump fires
+            # from inside the drafter's instrumented model span, and the drafter
+            # graph capture executes exactly that span.
+            if _t.cuda.is_current_stream_capturing():
+                self.done = False
+                self._defer("current stream is capturing")
+                return
             _t.cuda.synchronize()
             out = {"schema": "fr13.dfwd_split.v1"}
             for k, ps in self.pairs.items():
@@ -37710,6 +37747,14 @@ class _Fr13DfwdSplit:
             with open(p, "w") as fh:
                 _j.dump(out, fh, indent=1)
         except Exception as _e:  # noqa: BLE001
+            # A capture on ANOTHER stream still fails a device-wide sync, and
+            # is_current_stream_capturing() cannot see it. Treat that as a
+            # deferral too, so the instrument never presents a capture-scoping
+            # artifact as its own failure.
+            if "stream is capturing" in str(_e):
+                self.done = False
+                self._defer("a stream is capturing (not the current one)")
+                return
             try:
                 import traceback as _tb
                 with open("/logs/fr13_dfwd_split.err", "a") as fh:
