@@ -5785,16 +5785,22 @@ fi
 # fatal rather than a silent arm/disarm, and it refuses to arm without the tail
 # seam it hands off to. Predicate, pre-registration and offline evidence:
 # results/fr14_nvfp4_port_20260816/suffix_pass_gating.md
-# FR14 lane 1: fused draft top-k (FR14_FUSED_DRAFT_TOPK). The lane landed the
-# patcher-side guards and left the launcher forwarding to launcher territory.
-# Unlike the merged drafter's own module-level reads (which is why decide_tail
-# uses /logs sidecars), the proposer reads os.environ directly and that path is
-# proven live: FR13_DRAFTER_GRAPH=1 appears in container_env.txt AND the census
-# shows graph_replays=1 on every step of the same serve. So -e forwarding is the
-# right mechanism here, not a sidecar.
-# Default OFF and byte-identical when off -- the patcher raises unless the value
-# is exactly "0" or "1", so validate here too and fail at launch, not mid-serve.
-case "${FR14_FUSED_DRAFT_TOPK:-0}" in
+# FR14 lane 1: fused draft top-k (FR14_FUSED_DRAFT_TOPK).
+# PROMOTED 2026-08-18 by Mark's ruling (pass 57): live byte-proof 268 paths /
+# 0 diffs / 96 215 steps, -0.071 ms bracket, accept flat, eyeball clean. Evidence
+# and kernel contract: results/fr14_nvfp4_port_20260816/fused_draft_topk.md.
+# Default is now ON, and the .so + its sha256 default to the promoted artifact so
+# a plain launch actually serves the promoted kernel.
+# NOTHING RELAXES. A promoted default that silently fell back to the unfused path
+# on a missing binary would be a silent no-op, so a missing, symlinked or
+# mismatched .so is a REFUSAL. Explicit FR14_FUSED_DRAFT_TOPK=0 remains the
+# opt-out the paired A/Bs need.
+# The proposer reads os.environ directly and that path is proven live
+# (FR13_DRAFTER_GRAPH=1 in container_env.txt with graph_replays=1 in the same
+# steps' census), so -e forwarding is the right mechanism -- no sidecar needed.
+_fr14_fused_topk_so_default=/workspace/output/fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so
+_fr14_fused_topk_sha_default=8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e
+case "${FR14_FUSED_DRAFT_TOPK:-1}" in
   0|1) ;;
   *) echo "FR14_FUSED_DRAFT_TOPK must be exactly 0 or 1" >&2; exit 2 ;;
 esac
@@ -5805,19 +5811,39 @@ if (( ${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64} < 1 || ${FR14_FUSED_DRAFT_TOPK_BLOCKS:
   echo "FR14_FUSED_DRAFT_TOPK_BLOCKS must be an integer in 1..121" >&2
   exit 2
 fi
-if [[ "${FR14_FUSED_DRAFT_TOPK:-0}" == "1" ]]; then
-  # The kernel is loaded from a .so pinned by sha256. Refuse at launch if the
-  # credential is missing rather than letting the serve boot and die at the
-  # first head read.
-  if [[ ! "${FR14_FUSED_DRAFT_TOPK_SHA256:-}" =~ ^[0-9a-f]{64}$ ]]; then
+if [[ "${FR14_FUSED_DRAFT_TOPK:-1}" == "1" ]]; then
+  _fr14_fused_topk_sha=${FR14_FUSED_DRAFT_TOPK_SHA256:-$_fr14_fused_topk_sha_default}
+  _fr14_fused_topk_so=${FR14_FUSED_DRAFT_TOPK_SO:-$_fr14_fused_topk_so_default}
+  if [[ ! "$_fr14_fused_topk_sha" =~ ^[0-9a-f]{64}$ ]]; then
     echo "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SHA256 (64 lowercase hex)" >&2
     exit 2
   fi
-  if [[ -z "${FR14_FUSED_DRAFT_TOPK_SO:-}" ]]; then
+  if [[ -z "$_fr14_fused_topk_so" ]]; then
     echo "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SO" >&2
     exit 2
   fi
-  echo "[launch] FUSED DRAFT TOP-K ON (blocks=${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64} so=${FR14_FUSED_DRAFT_TOPK_SO})"
+  # Prove the artifact HOST-side, before the container starts. The patcher
+  # re-hashes it inside the container too; this makes the failure a launch
+  # refusal with a readable message instead of an engine death mid-boot.
+  _fr14_fused_topk_host=$_fr14_fused_topk_so
+  if [[ "$_fr14_fused_topk_host" == /workspace/* ]]; then
+    _fr14_fused_topk_host="$REPO/${_fr14_fused_topk_host#/workspace/}"
+  fi
+  if [[ ! -f "$_fr14_fused_topk_host" || -L "$_fr14_fused_topk_host" ]]; then
+    echo "FR14_FUSED_DRAFT_TOPK is PROMOTED-ON but its pinned .so is missing: $_fr14_fused_topk_host" >&2
+    echo "  the artifact lives under output/ (gitignored), so a fresh tree must rebuild it:" >&2
+    echo "    python3 scripts/fr14_build_dfwd_full_topk.py" >&2
+    echo "  or set FR14_FUSED_DRAFT_TOPK=0 to opt out. Refusing rather than silently" >&2
+    echo "  serving the unfused path." >&2
+    exit 2
+  fi
+  if [[ "$(sha256sum "$_fr14_fused_topk_host" | cut -d' ' -f1)" != "$_fr14_fused_topk_sha" ]]; then
+    echo "FR14_FUSED_DRAFT_TOPK pinned .so sha256 mismatch: $_fr14_fused_topk_host" >&2
+    exit 2
+  fi
+  echo "[launch] FUSED DRAFT TOP-K ON (promoted default; blocks=${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64} so=$_fr14_fused_topk_so)"
+else
+  echo "[launch] FUSED DRAFT TOP-K OFF (explicit opt-out of the promoted default)"
 fi
 case "${FR14_SUFFIX_PASS_GATE:-0}" in
   0|1) ;;
@@ -6297,10 +6323,10 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DFWD_SPLIT_NEEDLE="${FR13_DFWD_SPLIT_NEEDLE:-0}" \
   -e FR13_DFWD_SPLIT="${FR13_DFWD_SPLIT:-0}" \
   -e FR13_DFWD_SPLIT_JSON="${FR13_DFWD_SPLIT_JSON:-/logs/fr13_dfwd_split.json}" \
-  -e FR14_FUSED_DRAFT_TOPK="${FR14_FUSED_DRAFT_TOPK:-0}" \
+  -e FR14_FUSED_DRAFT_TOPK="${FR14_FUSED_DRAFT_TOPK:-1}" \
   -e FR14_FUSED_DRAFT_TOPK_BLOCKS="${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64}" \
-  -e FR14_FUSED_DRAFT_TOPK_SO="${FR14_FUSED_DRAFT_TOPK_SO:-/tmp/fr14_dfwd_full_topk.abi3.so}" \
-  -e FR14_FUSED_DRAFT_TOPK_SHA256="${FR14_FUSED_DRAFT_TOPK_SHA256:-}" \
+  -e FR14_FUSED_DRAFT_TOPK_SO="${FR14_FUSED_DRAFT_TOPK_SO:-$_fr14_fused_topk_so_default}" \
+  -e FR14_FUSED_DRAFT_TOPK_SHA256="${FR14_FUSED_DRAFT_TOPK_SHA256:-$_fr14_fused_topk_sha_default}" \
   -e FR14_SUFFIX_PASS_GATE="${FR14_SUFFIX_PASS_GATE:-0}" \
   -e FR14_SUFFIX_PASS_GATE_NGRAM="${FR14_SUFFIX_PASS_GATE_NGRAM:-8}" \
   -e FR14_SUFFIX_PASS_GATE_MIN_AGREE="${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75}" \

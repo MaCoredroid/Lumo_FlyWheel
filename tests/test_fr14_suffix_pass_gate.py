@@ -204,6 +204,8 @@ def test_indexing_is_incremental_and_order_independent():
 # Launcher wiring: the sidecar is how the value reaches the worker at all.
 # ---------------------------------------------------------------------------
 
+REPO = Path(__file__).resolve().parents[1]
+
 LAUNCHERS = (
     "scripts/fr13_launch_forked_fa2_tree_server.sh",
     "scripts/fr14_armb_leg3_launch_nomiddleware.sh",
@@ -304,16 +306,50 @@ def test_interlock_is_currently_closed():
 
 
 def test_fused_topk_flag_is_validated_strictly(launcher):
-    assert 'case "${FR14_FUSED_DRAFT_TOPK:-0}" in' in launcher
+    assert 'case "${FR14_FUSED_DRAFT_TOPK:-1}" in' in launcher
     assert 'echo "FR14_FUSED_DRAFT_TOPK must be exactly 0 or 1" >&2; exit 2' in launcher
 
 
-def test_fused_topk_defaults_off_everywhere(launcher):
-    assert '-e FR14_FUSED_DRAFT_TOPK="${FR14_FUSED_DRAFT_TOPK:-0}"' in launcher
+def test_fused_topk_is_promoted_on_by_default(launcher):
+    """PROMOTED 2026-08-18 (pass 57). Every default reads 1, not 0."""
+    assert '-e FR14_FUSED_DRAFT_TOPK="${FR14_FUSED_DRAFT_TOPK:-1}"' in launcher
+    assert '-e FR14_FUSED_DRAFT_TOPK="${FR14_FUSED_DRAFT_TOPK:-0}"' not in launcher
+    assert 'if [[ "${FR14_FUSED_DRAFT_TOPK:-1}" == "1" ]]; then' in launcher
+
+
+def test_promoted_defaults_carry_the_pinned_artifact(launcher):
+    """A default that still demanded a caller-supplied credential is not a default."""
+    assert (
+        "_fr14_fused_topk_sha_default="
+        "8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e"
+        in launcher
+    )
+    assert (
+        "_fr14_fused_topk_so_default=/workspace/output/"
+        "fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so"
+        in launcher
+    )
+    assert (
+        '-e FR14_FUSED_DRAFT_TOPK_SO="${FR14_FUSED_DRAFT_TOPK_SO:-'
+        '$_fr14_fused_topk_so_default}"' in launcher
+    )
+    assert (
+        '-e FR14_FUSED_DRAFT_TOPK_SHA256="${FR14_FUSED_DRAFT_TOPK_SHA256:-'
+        '$_fr14_fused_topk_sha_default}"' in launcher
+    )
+
+
+def test_promoted_default_still_refuses_a_missing_or_wrong_binary(launcher):
+    """Promotion relaxes nothing: refusal, never a silent fallback."""
+    assert "PROMOTED-ON but its pinned .so is missing" in launcher
+    assert "pinned .so sha256 mismatch" in launcher
+    assert "Refusing rather than silently" in launcher
+    # host-side, before the container starts
+    assert 'sha256sum "$_fr14_fused_topk_host"' in launcher
+    assert '-L "$_fr14_fused_topk_host"' in launcher
 
 
 def test_fused_topk_blocks_range_is_enforced_at_launch(launcher):
-    """The patcher raises on out-of-range; catch it before the serve boots."""
     assert "FR14_FUSED_DRAFT_TOPK_BLOCKS must be an integer in 1..121" in launcher
     assert (
         '-e FR14_FUSED_DRAFT_TOPK_BLOCKS="${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64}"'
@@ -321,33 +357,80 @@ def test_fused_topk_blocks_range_is_enforced_at_launch(launcher):
     )
 
 
-def test_fused_topk_so_default_is_not_empty(launcher):
-    """The set-but-empty trap: os.environ.get returns "" not the code default.
+def test_promoted_so_default_matches_the_artifact_on_disk():
+    """The launcher literal must be the artifact lane 1 actually qualified."""
+    import hashlib
 
-    Same defect FR13_DFWD_SPLIT_JSON was shipped against; forwarding the .so path
-    with a bare ':-' would silently clobber the patcher's default.
-    """
-    assert '-e FR14_FUSED_DRAFT_TOPK_SO="${FR14_FUSED_DRAFT_TOPK_SO:-}"' not in launcher
-    assert (
-        '-e FR14_FUSED_DRAFT_TOPK_SO='
-        '"${FR14_FUSED_DRAFT_TOPK_SO:-/tmp/fr14_dfwd_full_topk.abi3.so}"'
-    ) in launcher
-    patcher = (
-        Path(__file__).resolve().parents[1]
-        / "scripts"
-        / "fr10_phase4_patch_vllm_tree_gdn.py"
-    ).read_text()
-    assert '"/tmp/fr14_dfwd_full_topk.abi3.so"' in patcher, (
-        "launcher default must track the patcher default"
+    so = REPO / "output/fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so"
+    if not so.exists():
+        pytest.skip("promoted .so not built on this host")
+    assert hashlib.sha256(so.read_bytes()).hexdigest() == (
+        "8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e"
+    )
+    assert so.stat().st_size == 181328
+
+
+# --- the default-ON path, executed (no dry-run mode exists in either launcher) --
+
+def _fused_block(launcher_text):
+    i = launcher_text.index("# FR14 lane 1: fused draft top-k")
+    j = launcher_text.index('  echo "[launch] FUSED DRAFT TOP-K OFF', i)
+    j = launcher_text.index("fi\n", j) + 3
+    return launcher_text[i:j]
+
+
+def _run_fused(launcher_text, env_overrides):
+    import os
+    import subprocess
+    import tempfile
+
+    script = Path(tempfile.mkdtemp()) / "fused.sh"
+    script.write_text(
+        'set -uo pipefail\nREPO="%s"\n%s' % (REPO, _fused_block(launcher_text))
+    )
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith("FR14_FUSED_DRAFT_TOPK")}
+    env.update(env_overrides)
+    return subprocess.run(
+        ["bash", str(script)], capture_output=True, text=True, env=env
     )
 
 
-def test_fused_topk_armed_requires_its_credential(launcher):
-    assert (
-        "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SHA256 "
-        "(64 lowercase hex)" in launcher
-    )
-    assert "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SO" in launcher
+def test_promoted_default_arms_end_to_end(launcher):
+    """Nothing set -> the promoted kernel arms. This is the promotion working."""
+    so = REPO / "output/fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so"
+    if not so.exists():
+        pytest.skip("promoted .so not built on this host")
+    r = _run_fused(launcher, {})
+    assert r.returncode == 0, r.stderr
+    assert "FUSED DRAFT TOP-K ON (promoted default" in r.stdout
+
+
+def test_explicit_zero_still_opts_out(launcher):
+    """Paired A/Bs need this to keep working after promotion."""
+    r = _run_fused(launcher, {"FR14_FUSED_DRAFT_TOPK": "0"})
+    assert r.returncode == 0, r.stderr
+    assert "FUSED DRAFT TOP-K OFF" in r.stdout
+
+
+@pytest.mark.parametrize(
+    "override,expect",
+    [
+        ({"FR14_FUSED_DRAFT_TOPK_SO": "/workspace/output/nope.so"},
+         "pinned .so is missing"),
+        ({"FR14_FUSED_DRAFT_TOPK_SHA256": "0" * 64}, "sha256 mismatch"),
+        ({"FR14_FUSED_DRAFT_TOPK": "true"}, "must be exactly 0 or 1"),
+        ({"FR14_FUSED_DRAFT_TOPK_BLOCKS": "200"}, "1..121"),
+        ({"FR14_FUSED_DRAFT_TOPK_SHA256": "abc"}, "64 lowercase hex"),
+    ],
+)
+def test_promoted_default_refuses_every_bad_arming(launcher, override, expect):
+    so = REPO / "output/fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so"
+    if not so.exists():
+        pytest.skip("promoted .so not built on this host")
+    r = _run_fused(launcher, override)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert expect in r.stderr
 
 
 def test_launcher_refuses_the_draft_head_credential_levers(launcher):

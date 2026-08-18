@@ -347,7 +347,10 @@ first-class credential. Handing it to whoever owns that item.
 
 ## 8. What remains before serve-promotion
 
-1. **Launcher forwarding — NOT DONE, deliberately.** The three env vars
+1. **Launcher forwarding — DONE 2026-08-18, and now PROMOTED-ON. See §10.**
+   (original text preserved below)
+
+1. ~~**Launcher forwarding — NOT DONE, deliberately.**~~ The three env vars
    (`FR14_FUSED_DRAFT_TOPK`, `_SO`, `_SHA256`, optionally `_BLOCKS`) are not yet in the
    `-e` block of `scripts/fr13_launch_forked_fa2_tree_server.sh`,
    `scripts/fr14_leg3_launch_nomiddleware.sh`,
@@ -380,3 +383,74 @@ fixed32** (`... and not _fr13_is_fixed32`). Fixing it — e.g. sourcing the rank
 and the sibling ranks from one consistent selection, which this kernel already
 computes for free — would change proposals, hence acceptance, hence it is **Tier-B and
 Mark's call**. It is recorded here rather than taken.
+
+
+---
+
+# 10. PROMOTED (2026-08-18, Mark's ruling — pass 57)
+
+`FR14_FUSED_DRAFT_TOPK` now defaults to **1** in both launcher families
+(`fr13_launch_forked_fa2_tree_server.sh`, `fr14_armb_leg3_launch_nomiddleware.sh`).
+
+**Evidence the ruling rests on (pass 57):** live byte-proof **268 paths / 0 diffs /
+96 215 steps**, bracket **−0.071 ms**, accept **flat**, eyeball **clean**. §8's blocking
+item — launcher forwarding — was closed first (strict `0|1`, default OFF); this promotion
+flips that default.
+
+## 10.1 What "promoted default" means here
+
+The flag alone is not enough: a default that still required the caller to supply a credential
+would not be a default. So the **artifact and its credential are launcher literals** now:
+
+| variable | promoted default |
+|---|---|
+| `FR14_FUSED_DRAFT_TOPK` | `1` |
+| `FR14_FUSED_DRAFT_TOPK_SO` | `/workspace/output/fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so` |
+| `FR14_FUSED_DRAFT_TOPK_SHA256` | `8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e` |
+| `FR14_FUSED_DRAFT_TOPK_BLOCKS` | `64` (unchanged) |
+
+That sha is the **`.so`** sha256 — which is what the patcher actually hashes before
+`torch.ops.load_library` — and §7.1's named-namespace fix is what makes it a legitimate
+credential: three independent builds produced one `.so` sha at 181 328 bytes. Verified
+against the artifact on disk, and pinned by a test.
+
+## 10.2 Nothing relaxed
+
+**A promoted default that silently fell back to the unfused path on a missing binary would be
+a silent no-op**, so a missing, symlinked or mismatched `.so` is a **refusal**, not a
+fallback. The launcher now proves the artifact **host-side, before the container starts** —
+the patcher re-hashes it inside the container as well, so the host check exists to turn an
+engine death mid-boot into a readable launch refusal.
+
+Executed, not asserted (neither launcher has a dry-run mode, so the validation block is
+extracted and run):
+
+| case | result |
+|---|---|
+| plain launch, nothing set | **arms the promoted kernel**, rc 0 |
+| `FR14_FUSED_DRAFT_TOPK=0` | opts out, rc 0 |
+| `.so` missing | refuse, rc 2 |
+| `.so` sha mismatch | refuse, rc 2 |
+| flag not `0`/`1` | refuse, rc 2 |
+| `_BLOCKS` out of 1..121 | refuse, rc 2 |
+
+`FR14_FUSED_DRAFT_TOPK=0` remains the opt-out the paired A/Bs need.
+
+## 10.3 One consequence to flag
+
+The promoted artifact lives at `output/fr14_fused_draft_topk_build/…`, and `output/` is
+**gitignored** — the `.so` is untracked and exists only on the box that built it. With a
+promoted default plus hard refusal, **a fresh clone cannot launch until the kernel is
+rebuilt**. That is the ruling's intent (refusal over silent no-op), and the refusal message
+says so explicitly and names the rebuild:
+
+```
+FR14_FUSED_DRAFT_TOPK is PROMOTED-ON but its pinned .so is missing: <path>
+  the artifact lives under output/ (gitignored), so a fresh tree must rebuild it:
+    python3 scripts/fr14_build_dfwd_full_topk.py
+  or set FR14_FUSED_DRAFT_TOPK=0 to opt out. Refusing rather than silently
+  serving the unfused path.
+```
+
+If the intent is instead that any box can serve without a rebuild, the artifact needs a
+tracked home or a build step in the launch path — flagged, not decided here.
