@@ -2274,7 +2274,11 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
         exit 2
       }
       ;;
-    *)
+    nosplit|split2|"")
+      # nosplit and split2 genuinely share one binary. They are NAMED here
+      # rather than left to a default, because the default is what made the
+      # 17th site possible: a `*)` that asserts an arm's pins answers for every
+      # arm nobody wrote a branch for, and answers with the WRONG identity.
       [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a" \
          && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300154616" \
          && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
@@ -2282,6 +2286,12 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
         echo "FR13 qrow32 B1 incumbent candidate provenance drifted" >&2
         exit 2
       }
+      ;;
+    *)
+      # An arm with no branch here has no pinned identity, and an unpinned
+      # identity must REFUSE rather than inherit one.
+      echo "FR13 qrow32 B1 pin arm has no pinned identity: $_FR13_FA2_QROW32_B1_PIN_ARM" >&2
+      exit 2
       ;;
   esac
 fi
@@ -4296,7 +4306,7 @@ elif qrow32_b1_candidate == "1":
     b1_pin_arm = os.environ.get(
         "FR13_FA2_QROW32_B1_LIVE_AB_ARM", ""
     ) or os.environ.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
-    expected_sha256, expected_size = {
+    expected = {
         "visibility": (
             contract.QROW32_B1_VISIBILITY_FA2_SHA256,
             contract.QROW32_B1_VISIBILITY_FA2_SIZE,
@@ -4316,13 +4326,29 @@ elif qrow32_b1_candidate == "1":
             contract.QROW32_B1_SPLITK_FA2_SHA256,
             contract.QROW32_B1_SPLITK_FA2_SIZE,
         ),
-    }.get(
-        b1_pin_arm,
-        (
+        # nosplit and split2 share one binary, and they are NAMED rather than
+        # defaulted. The .get() default this replaced answered for every arm
+        # nobody had written a key for -- with split2's identity -- which is
+        # the 17th site's defect shape exactly.
+        "nosplit": (
             contract.QROW32_B1_SPLIT2_FA2_SHA256,
             contract.QROW32_B1_SPLIT2_FA2_SIZE,
         ),
-    )
+        "split2": (
+            contract.QROW32_B1_SPLIT2_FA2_SHA256,
+            contract.QROW32_B1_SPLIT2_FA2_SIZE,
+        ),
+        "": (
+            contract.QROW32_B1_SPLIT2_FA2_SHA256,
+            contract.QROW32_B1_SPLIT2_FA2_SIZE,
+        ),
+    }.get(b1_pin_arm)
+    if expected is None:
+        raise SystemExit(
+            "fixed32 qrow32 B1 arm has no pinned binary identity: "
+            f"{b1_pin_arm!r}"
+        )
+    expected_sha256, expected_size = expected
     if b1_pin_arm in contract.QROW32_B1_TIER_B_ARMS and (
         expected_sha256 != contract.QROW32_B1_SPLITK_FA2_SHA256
     ):

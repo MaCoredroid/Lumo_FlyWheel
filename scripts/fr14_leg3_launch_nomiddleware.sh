@@ -254,6 +254,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:split2" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:visibility" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:gqa_pair" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:gqa_pair_splitk" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:nosplit" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:gqa_pair" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_TIMING_ARM]}" == "set:qrow16_stock" \
@@ -1122,8 +1123,8 @@ else
     || { echo "FR13 qrow32 live A/B arm requires the live gate" >&2; exit 2; }
 fi
 case "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" in
-  ""|nosplit|split2|visibility|gqa_pair) ;;
-  *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, visibility, or gqa_pair" >&2; exit 2 ;;
+  ""|nosplit|split2|visibility|gqa_pair|gqa_pair_splitk) ;;
+  *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, visibility, gqa_pair, or gqa_pair_splitk" >&2; exit 2 ;;
 esac
 # ---- B1 PRODUCTION ARM PROMOTION (2026-08-13, Mark's ruling "B1 flip Yes") ----
 # The B1 GQA-pair FA2 unit is the shipped B1 production kernel. It is Tier-A
@@ -2072,7 +2073,49 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
         exit 2
       }
       ;;
-    *)
+    gqa_pair_splitk)
+      # ---- FR14 lane 4 split-K (Tier-B, GATE-ONLY, never a production arm) ----
+      # Splitting the context walk four ways changes per-row accumulation order,
+      # so this arm is structurally refused by the raw-byte gate
+      # (_fr13_fa2_qrow32_b1_require_same_reduction) -- correctly. It is reachable
+      # only as a LIVE arm, for the generation probe and eyeball Mark's condition
+      # requires, and it is deliberately absent from the production-arm case below.
+      # Identity from results/fr14_nvfp4_port_20260816/splitk_fa2.md 8 and
+      # fr14_splitk_fa2_build_attestation.json.
+      [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857" \
+         && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300123792" \
+         && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
+         && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878" ]] || {
+        echo "FR13 qrow32 B1 split-K binary/source provenance drifted" >&2
+        exit 2
+      }
+      # The .so sha is NOT rebuild-reproducible for this arm: four links from one
+      # closure produced two .so hashes at an identical 300123792 bytes (the nvcc
+      # container-PID stamp). The SASS digests are what attest that the KERNEL
+      # reproduced, so they are pinned here alongside the artifact -- including the
+      # BASELINE digest, which is what makes "the split-K header edits are inert at
+      # Split=false" a measurement rather than a claim.
+      [[ "$FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST" == "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e" \
+         && "$FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST" == "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470" ]] || {
+        echo "FR13 qrow32 B1 split-K SASS credential drifted (kernel and/or sealed baseline)" >&2
+        exit 2
+      }
+      # Re-hash the binary actually being mounted. The B1 selector above only
+      # compares its SIZE, and this arm's two known links differ in sha at
+      # identical size -- exactly the case a size check cannot separate. Symlinks
+      # are refused for the same reason the gate-JSON credentials refuse them.
+      [[ -f "$FORKED_FA2_SO" \
+         && ! -L "$FORKED_FA2_SO" \
+         && "$(sha256sum "$FORKED_FA2_SO" | cut -d' ' -f1)" == "$FR13_FA2_QROW32_B1_SO_SHA256" ]] || {
+        echo "FR13 qrow32 B1 split-K requires the pinned .so present and byte-identical: $FORKED_FA2_SO" >&2
+        exit 2
+      }
+      ;;
+    nosplit|split2|"")
+      # nosplit and split2 genuinely share one binary. They are NAMED here
+      # rather than left to a default, because the default is what made the
+      # 17th site possible: a `*)` that asserts an arm's pins answers for every
+      # arm nobody wrote a branch for, and answers with the WRONG identity.
       [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a" \
          && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300154616" \
          && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
@@ -2080,6 +2123,12 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
         echo "FR13 qrow32 B1 incumbent candidate provenance drifted" >&2
         exit 2
       }
+      ;;
+    *)
+      # An arm with no branch here has no pinned identity, and an unpinned
+      # identity must REFUSE rather than inherit one.
+      echo "FR13 qrow32 B1 pin arm has no pinned identity: $_FR13_FA2_QROW32_B1_PIN_ARM" >&2
+      exit 2
       ;;
   esac
 fi
@@ -4078,7 +4127,7 @@ elif qrow32_b1_candidate == "1":
     b1_pin_arm = os.environ.get(
         "FR13_FA2_QROW32_B1_LIVE_AB_ARM", ""
     ) or os.environ.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
-    expected_sha256, expected_size = {
+    expected = {
         "visibility": (
             contract.QROW32_B1_VISIBILITY_FA2_SHA256,
             contract.QROW32_B1_VISIBILITY_FA2_SIZE,
@@ -4087,13 +4136,39 @@ elif qrow32_b1_candidate == "1":
             contract.QROW32_B1_GQA_PAIR_FA2_SHA256,
             contract.QROW32_B1_GQA_PAIR_FA2_SIZE,
         ),
-    }.get(
-        b1_pin_arm,
-        (
+        "gqa_pair_splitk": (
+            contract.QROW32_B1_SPLITK_FA2_SHA256,
+            contract.QROW32_B1_SPLITK_FA2_SIZE,
+        ),
+        # nosplit and split2 share one binary, and they are NAMED rather than
+        # defaulted. The .get() default this replaced answered for every arm
+        # nobody had written a key for -- with split2's identity -- which is
+        # the 17th site's defect shape exactly.
+        "nosplit": (
             contract.QROW32_B1_SPLIT2_FA2_SHA256,
             contract.QROW32_B1_SPLIT2_FA2_SIZE,
         ),
-    )
+        "split2": (
+            contract.QROW32_B1_SPLIT2_FA2_SHA256,
+            contract.QROW32_B1_SPLIT2_FA2_SIZE,
+        ),
+        "": (
+            contract.QROW32_B1_SPLIT2_FA2_SHA256,
+            contract.QROW32_B1_SPLIT2_FA2_SIZE,
+        ),
+    }.get(b1_pin_arm)
+    if expected is None:
+        raise SystemExit(
+            "fixed32 qrow32 B1 arm has no pinned binary identity: "
+            f"{b1_pin_arm!r}"
+        )
+    expected_sha256, expected_size = expected
+    if b1_pin_arm in contract.QROW32_B1_TIER_B_ARMS and (
+        expected_sha256 != contract.QROW32_B1_SPLITK_FA2_SHA256
+    ):
+        raise SystemExit(
+            "fixed32 qrow32 B1 tier-b arm resolved a non-tier-b binary"
+        )
     if not expected_sha256 or not expected_size:
         raise SystemExit(
             f"fixed32 qrow32 B1 arm {b1_pin_arm!r} has no pinned binary identity"

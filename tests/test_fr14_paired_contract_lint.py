@@ -44,12 +44,17 @@ def test_inventory_covers_every_pair_kind():
     """Each defect-shape family that has bitten this campaign must be covered."""
     kinds = {r["kind"] for r in sweep.sweep()}
     assert {"contract/consumer", "half/half", "emitter/validator",
-            "twin/twin", "bash/python"} <= kinds
+            "twin/twin", "bash/python",
+            # Arm S's 17th refusal: an arm-identity resolver that DEFAULTS
+            # instead of refusing. Its own family, because the campaign fixed
+            # this shape three times as three unrelated instances before
+            # anyone named it.
+            "fallback-pattern"} <= kinds
 
 
 def test_inventory_size_is_recorded():
     """Adding a pair without updating the count is itself a one-sided update."""
-    assert len(sweep.PAIRS) == 13, (
+    assert len(sweep.PAIRS) == 15, (
         "pair count changed -- update the sweep note in "
         "results/fr14_nvfp4_port_20260816/suffix_pass_gating.md 13"
     )
@@ -464,3 +469,113 @@ def test_boundary_path_is_covered_in_all_three_dimensions():
         key[1].startswith("_fr13_f32_flush")
         for key in sweep.ADJUDICATED_REPLAY_POSITIONS
     ), "the boundary path must appear in the replay adjudications"
+
+
+# ---------------------------------------------------------------------------
+# 3. The 17th-site detector -- a lint that cannot fail is worse than no lint.
+# ---------------------------------------------------------------------------
+
+_IDENTITY_REFUSAL_NEEDLE = (
+    "    identity = _FR13_FA2_QROW32_B1_IDENTITIES.get(resolved)\n"
+    "    if identity is None:\n"
+    "        raise RuntimeError("
+)
+_IDENTITY_FALLTHROUGH = (
+    "    identity = _FR13_FA2_QROW32_B1_IDENTITIES.get(resolved)\n"
+    "    if identity is None:\n"
+    '        identity = _FR13_FA2_QROW32_B1_IDENTITIES["split2"]\n'
+    "    if False:\n"
+    "        raise RuntimeError("
+)
+_SPLITK_ENTRY = '    "gqa_pair_splitk": {\n        "candidate_sha256"'
+_SPLITK_ENTRY_RENAMED = '    "SOMETHING_ELSE": {\n        "candidate_sha256"'
+
+
+def test_arm_identity_detector_passes_on_the_real_tree():
+    ok, detail = sweep.arm_identity_resolvers_refuse_unknown_arms()
+    assert ok, detail
+    ok, detail = sweep.launcher_pin_cases_refuse_unknown_arms()
+    assert ok, detail
+
+
+def test_arm_identity_detector_catches_a_restored_fall_through(monkeypatch, tmp):
+    """Put the 17th site BACK and the detector must find it.
+
+    This is the exact defect Arm S hit on its fifth boot: the identity table's
+    unknown-arm refusal replaced by a silent handout of the incumbent's pins.
+    The detector is behavioural, so it catches this by CALLING the resolver --
+    a comment that still says "refuses" cannot save it.
+    """
+    src = sweep.FA2_PATCHER.read_text()
+    assert _IDENTITY_REFUSAL_NEEDLE in src, "anchor moved in FA2_PATCHER"
+    out = Path(tmp) / "fa2_patcher_fallthrough.py"
+    out.write_text(src.replace(_IDENTITY_REFUSAL_NEEDLE, _IDENTITY_FALLTHROUGH, 1))
+    monkeypatch.setattr(sweep, "FA2_PATCHER", out)
+    ok, detail = sweep.arm_identity_resolvers_refuse_unknown_arms()
+    assert not ok
+    assert "did NOT refuse an unknown arm" in detail
+
+
+def test_arm_identity_detector_catches_a_missing_arm_branch(monkeypatch, tmp):
+    """Drop split-K from the identity table and the detector must find it."""
+    src = sweep.FA2_PATCHER.read_text()
+    assert _SPLITK_ENTRY in src, "split-K identity entry moved"
+    out = Path(tmp) / "fa2_patcher_no_splitk.py"
+    out.write_text(src.replace(_SPLITK_ENTRY, _SPLITK_ENTRY_RENAMED, 1))
+    monkeypatch.setattr(sweep, "FA2_PATCHER", out)
+    ok, detail = sweep.arm_identity_resolvers_refuse_unknown_arms()
+    assert not ok
+    assert "gqa_pair_splitk" in detail
+
+
+@pytest.mark.parametrize(
+    "needle,replacement,expect",
+    [
+        # a bash `*)` that asserts pins instead of refusing
+        ('      echo "FR13 qrow32 B1 pin arm has no pinned identity',
+         '      echo "FR13 qrow32 B1 incumbent provenance drifted',
+         "does not refuse"),
+        # an arm losing its branch
+        ("    gqa_pair_splitk)", "    gqa_pair_splitk_disabled)",
+         "no gqa_pair_splitk) branch"),
+        # the incumbent arms going back to a bare default
+        ('    nosplit|split2|"")', "    nosplit_only)",
+         "not named explicitly"),
+    ],
+)
+def test_launcher_pin_case_detector_can_fail(
+    monkeypatch, tmp, needle, replacement, expect
+):
+    """Every launcher twin is mutated, one at a time, in the same way.
+
+    Mutating only the first would have passed while the third twin drifted a
+    whole arm behind -- which is precisely what happened.
+    """
+    real = sweep.LAUNCHERS
+    for index in range(len(real)):
+        src = real[index].read_text()
+        assert needle in src, f"anchor moved in {real[index].name}"
+        out = Path(tmp) / f"launcher_{index}_{abs(hash(needle))}.sh"
+        out.write_text(src.replace(needle, replacement, 1))
+        monkeypatch.setattr(
+            sweep, "LAUNCHERS", real[:index] + (out,) + real[index + 1:]
+        )
+        ok, detail = sweep.launcher_pin_cases_refuse_unknown_arms()
+        assert not ok, f"{real[index].name} mutation went undetected"
+        assert expect in detail
+        monkeypatch.setattr(sweep, "LAUNCHERS", real)
+
+
+def test_all_three_launcher_twins_are_covered():
+    """The third twin was outside this tuple, which is how it drifted."""
+    assert {p.name for p in sweep.LAUNCHERS} == {
+        "fr13_launch_forked_fa2_tree_server.sh",
+        "fr14_armb_leg3_launch_nomiddleware.sh",
+        "fr14_leg3_launch_nomiddleware.sh",
+    }
+
+
+def test_the_fa2_patcher_is_in_scope_at_all():
+    """It was scanned by nothing in this family until the 17th site."""
+    assert sweep.FA2_PATCHER.name == "fr13_patch_fa2_tree_bias.py"
+    assert sweep.FA2_PATCHER.is_file()

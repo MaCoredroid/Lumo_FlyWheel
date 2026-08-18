@@ -516,3 +516,83 @@ FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256=<file sha256, re-earned at serving H
 is what §11 wrongly claimed already. Whether those tokens are *good* is a question only
 reading them answers, and Mark's degenerate eyeball on the served generations remains
 mandatory and undone.
+
+---
+
+## 13. The 17th site — an identity resolver that defaulted, and the sweep for its shape
+
+Arm S's fifth boot got further than any before it: launcher, qualification map, allowlist,
+`TIER_B_SERVE=1`, and a fresh credential all passed. It then refused at
+`_fr13_fa2_qrow32_b1_identity` — and **the refusal prevented identity fraud.**
+
+That resolver branched on `gqa_pair` and `visibility`, then returned **split2's pins**
+bare to everything else. Selected arm `gqa_pair_splitk` → the incumbent's identity. The
+run stopped only because the environment declared split-K's sha and split2's pin did not
+match it. **That is an accident, not a guard.** Had the two happened to agree — or had the
+environment been permissive — the boot would have **served split-K while attesting the
+incumbent**, and every artifact downstream would have named the wrong kernel.
+
+It is the same shape as §12.3's refusal (1), one layer deeper: I fixed the *pin-arm*
+resolver by naming every arm, and left the *identity* resolver it feeds still defaulting.
+
+### 13.1 Sweep inventory — the pattern, not the instance
+
+| | site | before | after |
+|---|---|---|---|
+| **A1** | `fr13_patch_fa2_tree_bias.py` `_fr13_fa2_qrow32_b1_identity` (injected blob) | 2 branches, **bare return of split2's pins**; blob carried **no split-K pins and no SASS digests at all** | `_FR13_FA2_QROW32_B1_IDENTITIES`, 5 arms, unknown arm **raises** |
+| **A2** | `fr14_leg3_launch_nomiddleware.sh` bash pin case | no split-K branch; `*)` asserts split2's pins | split-K branch added, arm admitted, `*)` **refuses** |
+| **A3** | same file, in-container python map | **unfixed twin** of §12.3(1): no split-K key, no tier-b guard | keyed, guarded, **refuses** |
+| **B1** | both other launchers' bash `*)` | asserts split2's pins for any new arm | `nosplit\|split2\|""` named; `*)` **refuses** |
+| **B2** | all three launchers' `.get(…, split2 pins)` | tier-b guard caught only tier-b arms; a new **non**-tier-b arm still landed on split2 | `.get(arm)` + `if expected is None: raise` |
+| **B3** | `fr13_fixed32_contract.py` `_expected_runtime_fa2_identity` | `else:` → visibility ternary → split2; **and** *every* member of `QROW32_B1_TIER_B_ARMS` mapped onto split-K's pins | explicit 6-entry table, unknown arm **raises** |
+| **B4** | `fr13_qrow32_b1_pass_sidecar.py` `_source_status` | bare `return SOURCE_STATUS` | `_SOURCE_STATUS_BY_ARM`, unknown arm **raises** |
+
+**Resolvers found: 7. Bare fallbacks converted to refusals: 7. Split-K branches added: 4**
+(A1 identity table, A2 bash case, A3 python map, plus the stale twin's allowlist and
+caller-guard entry). Verified clean and left alone: the B4 family's `[arm]` subscript, the
+qrow16 flag-selectors (no arm dispatch), `_fr13_fa2_qrow32_live_ab_contract`,
+`_candidate_contract`, and ~180 other launcher `*)` defaults that are already validators.
+
+### 13.2 Why it hid: two coverage gaps in the lint family
+
+- **`fr14_paired_contract_sweep.PATCHER` was only the GDN patcher.** Nothing in the
+  paired-contract family ever walked `fr13_patch_fa2_tree_bias.py`'s blobs. A1 sat there
+  for the whole campaign.
+- **`LAUNCHERS` was a 2-tuple.** `pair_launcher_twins` already listed `gqa_pair_splitk`
+  among its required markers and simply never looked at the third twin — which is exactly
+  how A2/A3 drifted a whole arm behind.
+
+Both closed. The family gains a **`fallback-pattern`** kind and two detectors:
+`arm_identity_resolvers_refuse_unknown_arms` and
+`launcher_pin_cases_refuse_unknown_arms`. **15 pairs enumerated, 0 stale.**
+
+### 13.3 The detector is behavioural, because my first one wasn't
+
+The first version asked whether each arm name appeared *anywhere in the file*. Every arm
+does — the registry names them all — so renaming a key in the identity table still passed.
+And the launcher check matched the phrase `has no pinned identity`, which **the refusal's
+own comment contained**, so deleting the executable `echo … >&2; exit 2` left the check
+green. Both were caught by this family's own non-negotiable rule: write a mutation test
+that restores the defect and prove the detector fails.
+
+So the detector now **calls** each resolver with an unknown arm and requires it to raise,
+compares the identity table's keys against the arm registry's, and strips comments before
+looking for an executable refusal. A detector a comment can satisfy documents a guard
+instead of finding one — the same text-keying mistake `ADJUDICATED_REPLAY_POSITIONS` was
+written to stop.
+
+### 13.4 Consequences
+
+- **Both C++ source closures are unchanged** — `172b5e71…` and `4ed00909…`. This fix
+  touched the injected python and the shell/validator layers only, so **the staged
+  `.so` is still the characterized kernel** and needs no rebuild.
+- **The banked credential is now stale by construction.** It binds
+  `patch_source_sha256`, and the patcher changed. That is the binding doing its job.
+  Re-earn with `scripts/fr14_gate_fa2_qrow32_splitk_tierb.sh` at the serving HEAD;
+  the stale one cannot be used, because the serve path requires both digests to match.
+- **The in-container identity now carries both SASS digests** and checks them, which the
+  bash pin case had done all along and the container half had not.
+
+**Five attempts, zero split-K tokens served.** Four of the five refusals were correct
+guards doing their job on a route that was genuinely incomplete; the fifth was a guard
+that fired by luck. The sweep — not a sixth boot — is what should end the series.

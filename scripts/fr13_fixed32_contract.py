@@ -3786,31 +3786,55 @@ def _expected_runtime_fa2_identity(
         # a GQA-pair production run against the split2/incumbent pins and
         # demand the wrong .so.
         qrow32_b1_pin_arm = qrow32_b1_live or qrow32_b1_production
-        if qrow32_b1_pin_arm == "gqa_pair":
-            if not QROW32_B1_GQA_PAIR_FA2_SHA256 or not QROW32_B1_GQA_PAIR_FA2_SIZE:
-                raise ContractError(
-                    "qrow32 B1 GQA-pair binary is not pinned: fill "
-                    "QROW32_B1_GQA_PAIR_FA2_SHA256 and "
-                    "QROW32_B1_GQA_PAIR_FA2_SIZE from the build attestation "
-                    "before running this arm"
-                )
-            expected = (
+        # EVERY arm names its own binary; there is no fall-through.
+        #
+        # Arm S's 17th refusal (2026-08-18) came from the same shape one layer
+        # deeper -- an identity resolver whose default handed out split2's pins
+        # to an arm it had no branch for. The fix there and here is the same,
+        # and it is not "add the missing arm": it is to make an unrecognised
+        # arm REFUSE, so the next arm added anywhere fails loudly at selection
+        # instead of quietly attesting somebody else's artifact. The previous
+        # `in QROW32_B1_TIER_B_ARMS` branch was itself a fall-through in
+        # miniature: it mapped every member of that tuple onto split-K's pins,
+        # so a second tier-b arm would have inherited split-K's identity.
+        _B1_IDENTITIES = {
+            "": (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256),
+            "nosplit": (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256),
+            "split2": (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256),
+            "visibility": (
+                QROW32_B1_VISIBILITY_FA2_SIZE,
+                QROW32_B1_VISIBILITY_FA2_SHA256,
+            ),
+            "gqa_pair": (
                 QROW32_B1_GQA_PAIR_FA2_SIZE,
                 QROW32_B1_GQA_PAIR_FA2_SHA256,
+            ),
+            "gqa_pair_splitk": (
+                QROW32_B1_SPLITK_FA2_SIZE,
+                QROW32_B1_SPLITK_FA2_SHA256,
+            ),
+        }
+        if qrow32_b1_pin_arm == "gqa_pair" and (
+            not QROW32_B1_GQA_PAIR_FA2_SHA256
+            or not QROW32_B1_GQA_PAIR_FA2_SIZE
+        ):
+            raise ContractError(
+                "qrow32 B1 GQA-pair binary is not pinned: fill "
+                "QROW32_B1_GQA_PAIR_FA2_SHA256 and "
+                "QROW32_B1_GQA_PAIR_FA2_SIZE from the build attestation "
+                "before running this arm"
             )
-        elif qrow32_b1_pin_arm in QROW32_B1_TIER_B_ARMS:
-            # Arm S (promotion A/B, 2026-08-18) refused here: the split-K pins
-            # landed in the launcher's bash pin case but this resolver had no
-            # entry, so a split-K launch fell through to split2's identity and
-            # died at "binary identity is not qualified". A fall-through
-            # default that silently answers for an arm it was not written for
-            # is the defect; naming every arm is the fix.
-            expected = (QROW32_B1_SPLITK_FA2_SIZE, QROW32_B1_SPLITK_FA2_SHA256)
-        else:
-            expected = (
-                (QROW32_B1_VISIBILITY_FA2_SIZE, QROW32_B1_VISIBILITY_FA2_SHA256)
-                if qrow32_b1_pin_arm == "visibility"
-                else (QROW32_B1_SPLIT2_FA2_SIZE, QROW32_B1_SPLIT2_FA2_SHA256)
+        expected = _B1_IDENTITIES.get(qrow32_b1_pin_arm)
+        if expected is None:
+            raise ContractError(
+                "qrow32 B1 arm has no pinned binary identity: "
+                f"{qrow32_b1_pin_arm!r}"
+            )
+        if qrow32_b1_pin_arm in QROW32_B1_TIER_B_ARMS and expected[1] != (
+            QROW32_B1_SPLITK_FA2_SHA256
+        ):
+            raise ContractError(
+                "qrow32 B1 tier-b arm resolved a non-tier-b binary"
             )
         if declared_sha256 != expected[1]:
             raise ContractError(

@@ -50,12 +50,21 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 PATCHER = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
+# The OTHER patcher. Nothing in this family scanned it, which is why the FA2
+# arm-identity resolver could carry a fall-through through an entire campaign:
+# every check here walked the GDN patcher's blobs and none walked these.
+FA2_PATCHER = REPO / "scripts" / "fr13_patch_fa2_tree_bias.py"
 CENSUS = REPO / "scripts" / "fr13_fixed32_work_census.py"
 TOPOLOGY = REPO / "scripts" / "fr13_fixed32_topology.py"
 DRAFTER = REPO / "scripts" / "fr13_merged_drafter.py"
 LAUNCHERS = (
     REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh",
     REPO / "scripts" / "fr14_armb_leg3_launch_nomiddleware.sh",
+    # The third twin. It was outside this tuple, so its pin case drifted a
+    # whole arm behind its siblings and nothing said so -- pair_launcher_twins
+    # already listed "gqa_pair_splitk" among its required markers and simply
+    # never looked at this file.
+    REPO / "scripts" / "fr14_leg3_launch_nomiddleware.sh",
 )
 
 
@@ -643,6 +652,226 @@ def replay_literal_scan():
     )
 
 
+# The arm-identity resolvers this family is responsible for. Each entry names
+# the file, a human label, and the arm names that MUST appear as explicit
+# branches. The detector's real job is the last part of the rule: after the
+# explicit branches, an unrecognised arm must REFUSE.
+ARM_IDENTITY_RESOLVERS = (
+    (FA2_PATCHER, "_FR13_FA2_QROW32_B1_IDENTITIES (injected blob)",
+     ("nosplit", "split2", "visibility", "gqa_pair", "gqa_pair_splitk")),
+    (REPO / "scripts" / "fr13_fixed32_contract.py",
+     "_expected_runtime_fa2_identity B1 table",
+     ("nosplit", "split2", "visibility", "gqa_pair", "gqa_pair_splitk")),
+    (REPO / "scripts" / "fr13_qrow32_b1_pass_sidecar.py",
+     "_SOURCE_STATUS_BY_ARM",
+     ("nosplit", "split2", "visibility", "gqa_pair", "gqa_pair_splitk")),
+)
+
+# The refusal each resolver must contain. Keyed by phrase rather than by line,
+# for the reason ADJUDICATED_REPLAY_POSITIONS spells out: text-keying on the
+# thing being checked reproduces the blind spot. These are phrases the RESOLVER
+# emits, so a resolver that stopped refusing loses its phrase.
+ARM_IDENTITY_REFUSALS = (
+    "has no pinned identity for arm",
+    "has no pinned binary identity",
+    "has no pinned modified-source set",
+)
+
+# A textual detector can be fooled by a comment that mentions the right words.
+# So the core of this check is BEHAVIOURAL: every resolver is actually called
+# with an arm name nobody wrote a branch for, and must raise. Text is used only
+# for the half a call cannot see -- that each registry arm is branched
+# EXPLICITLY rather than reached through a neighbour's entry.
+UNKNOWN_ARM = "__fr14_unknown_arm__"
+
+
+def _fa2_selector_namespace():
+    """The B1 selector helpers, as injected into the served container."""
+    import os
+
+    src = FA2_PATCHER.read_text()
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and "_fr13_fa2_qrow32_b1_identity" in node.value
+            and "_FR13_FA2_QROW32_B1_IDENTITIES" in node.value
+        ):
+            namespace = {"os": os}
+            exec(compile("import os\n" + node.value, "<fa2_sel>", "exec"),
+                 namespace)
+            return namespace
+    raise SystemExit("FA2 B1 selector blob not found")
+
+
+def _strip_comments(text: str, suffix: str) -> str:
+    """Drop comment lines before looking for an executable guard.
+
+    Found by this family's own mutation test: the launcher check matched the
+    phrase "has no pinned identity", the refusal's COMMENT contained that
+    phrase, and deleting the actual `echo ... >&2; exit 2` left the check
+    passing. A detector that a comment can satisfy is a detector that documents
+    a guard instead of finding one -- the same text-keying mistake
+    ADJUDICATED_REPLAY_POSITIONS was written to stop.
+    """
+    marker = "#" if suffix in (".sh", ".py") else "#"
+    out = []
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith(marker):
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def _sidecar_status_table():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "fr14_sweep_sidecar_status",
+        REPO / "scripts" / "fr13_qrow32_b1_pass_sidecar.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault("fr14_sweep_sidecar_status", module)
+    spec.loader.exec_module(module)
+    return module._SOURCE_STATUS_BY_ARM
+
+
+def _resolver_probes():
+    """(label, callable) pairs, each of which must RAISE on an unknown arm."""
+    import importlib.util
+
+    def _load(path, name):
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules.setdefault(name, module)
+        spec.loader.exec_module(module)
+        return module
+
+    sys.path.insert(0, str(REPO / "scripts"))
+    contract = _load(REPO / "scripts" / "fr13_fixed32_contract.py",
+                     "fr13_fixed32_contract")
+    sidecar = _load(REPO / "scripts" / "fr13_qrow32_b1_pass_sidecar.py",
+                    "fr14_sweep_sidecar")
+    selectors = _fa2_selector_namespace()
+    return (
+        ("_fr13_fa2_qrow32_b1_identity (injected blob)",
+         lambda: selectors["_fr13_fa2_qrow32_b1_identity"](UNKNOWN_ARM)),
+        ("_expected_runtime_fa2_identity (contract)",
+         lambda: contract._expected_runtime_fa2_identity({
+             "FR13_FA2_QROW32_B1_LIVE_AB_ARM": UNKNOWN_ARM,
+             "FR13_FA2_QROW32_B1_SO_SHA256": "0" * 64,
+         })),
+        ("_source_status (sidecar)",
+         lambda: sidecar._source_status(UNKNOWN_ARM)),
+    )
+
+
+def arm_identity_resolvers_refuse_unknown_arms():
+    """THE 17th-SITE DETECTOR: an identity resolver must refuse, never default.
+
+    Arm S's fifth boot reached _fr13_fa2_qrow32_b1_identity with an arm that
+    had no branch, and the function returned split2's pins. Nothing served,
+    because the environment's declared sha happened not to match what it handed
+    back -- an accident, not a guard. Had it matched, the run would have SERVED
+    split-K while ATTESTING the incumbent.
+
+    The rule is not "the split-K arm is present". It is: every arm the registry
+    knows has an explicit branch, AND an arm nobody wrote a branch for refuses.
+    The first half alone is what the campaign fixed instance by instance for
+    seventeen sites; the second half is what makes an eighteenth impossible.
+    """
+    problems = []
+    # Structural, not textual. The first version of this check asked whether
+    # each arm name appeared ANYWHERE in the file, which every arm does -- the
+    # registry names them all. Renaming a key in the identity TABLE therefore
+    # passed. So: read the table's actual keys and compare them with the
+    # registry's, which is the invariant that matters.
+    selectors = _fa2_selector_namespace()
+    registry = set(selectors["_FR13_FA2_QROW32_B1_ARMS"])
+    identities = set(selectors["_FR13_FA2_QROW32_B1_IDENTITIES"])
+    for arm in sorted(registry - identities):
+        problems.append(
+            f"fr13_patch_fa2_tree_bias.py: the injected identity table has no "
+            f"branch for {arm!r}, which the arm registry knows"
+        )
+    for arm in sorted(identities - registry):
+        problems.append(
+            f"fr13_patch_fa2_tree_bias.py: the injected identity table pins "
+            f"{arm!r}, which is not a registered arm"
+        )
+    sidecar_status = _sidecar_status_table()
+    for arm in sorted(registry - set(sidecar_status)):
+        problems.append(
+            f"fr13_qrow32_b1_pass_sidecar.py: _SOURCE_STATUS_BY_ARM has no "
+            f"entry for {arm!r}"
+        )
+    for path, label, required in ARM_IDENTITY_RESOLVERS:
+        text = _strip_comments(path.read_text(), path.suffix)
+        for arm in required:
+            if f'"{arm}"' not in text:
+                problems.append(
+                    f"{path.name}: {label} has no branch for {arm!r}"
+                )
+    for label, probe in _resolver_probes():
+        try:
+            result = probe()
+        except Exception:
+            continue
+        problems.append(
+            f"{label} did NOT refuse an unknown arm; it answered with "
+            f"{result!r} -- an identity resolver that defaults attests the "
+            "wrong artifact"
+        )
+    if problems:
+        return False, "; ".join(problems)
+    return True, (
+        f"{len(ARM_IDENTITY_RESOLVERS)} arm-identity resolvers: every registry "
+        "arm branched explicitly, unknown arms refused by call"
+    )
+
+
+def launcher_pin_cases_refuse_unknown_arms():
+    """The bash half of the same rule, across ALL THREE launcher twins.
+
+    A `*)` that asserts an arm's pins is the shell spelling of the same defect,
+    and it is worse in one respect: the arm has already passed the allowlist by
+    the time it gets here, so the fall-through is the last thing between a
+    selected arm and a mounted binary.
+    """
+    bad = []
+    for launcher in LAUNCHERS:
+        text = launcher.read_text()
+        if 'case "$_FR13_FA2_QROW32_B1_PIN_ARM" in' not in text:
+            bad.append(f"{launcher.name}: no B1 pin case at all")
+            continue
+        case = text[text.index('case "$_FR13_FA2_QROW32_B1_PIN_ARM" in'):]
+        case = case[: case.index("\n  esac")]
+        case = _strip_comments(case, launcher.suffix)
+        for arm in ("visibility", "gqa_pair", "gqa_pair_splitk"):
+            if f"    {arm})" not in case:
+                bad.append(f"{launcher.name}: pin case has no {arm}) branch")
+        if 'nosplit|split2|""' not in case:
+            bad.append(
+                f"{launcher.name}: the incumbent arms are not named explicitly"
+            )
+        # The refusal has to be EXECUTABLE: an echo to stderr and a non-zero
+        # exit, in the default branch. Comments were stripped above.
+        default = case[case.rindex("    *)"):]
+        if "has no pinned identity" not in default or "exit 2" not in default:
+            bad.append(
+                f"{launcher.name}: pin case default does not refuse an "
+                "unrecognised arm"
+            )
+    if bad:
+        return False, "; ".join(bad)
+    return True, (
+        f"{len(LAUNCHERS)} launcher pin cases: every arm branched, "
+        "unrecognised arms refused"
+    )
+
+
 PAIRS = (
     ("contract <-> injected blob (step shapes)", "contract/consumer",
      lambda blob, topo: pair_contract_vs_blob(blob, topo)),
@@ -670,6 +899,10 @@ PAIRS = (
      lambda blob, topo: shape_literal_scan()),
     ("replay-count literals across ALL injected blobs", "shape-literal",
      lambda blob, topo: replay_literal_scan()),
+    ("arm-identity resolvers <-> unknown-arm refusal", "fallback-pattern",
+     lambda blob, topo: arm_identity_resolvers_refuse_unknown_arms()),
+    ("launcher pin cases <-> unknown-arm refusal", "fallback-pattern",
+     lambda blob, topo: launcher_pin_cases_refuse_unknown_arms()),
 )
 
 

@@ -490,8 +490,15 @@ def test_in_container_qualification_map_names_the_tier_b_arm(launcher) -> None:
     # serve someone else's kernel under this arm's name.
     assert "contract.QROW32_B1_TIER_B_ARMS" in text
     assert "tier-b arm resolved a non-tier-b binary" in text
-    # The entry must sit BEFORE the fall-through default it was missing from.
-    assert text.index('"gqa_pair_splitk": (') < text.index("}.get(\n        b1_pin_arm")
+    # And the fall-through this entry was missing from is GONE: the map now
+    # has no pins-valued default at all, so an arm nobody wrote a key for
+    # refuses instead of inheriting split2's identity (Arm S, 17th site).
+    assert "}.get(b1_pin_arm)" in text
+    assert "if expected is None:" in text
+    assert "has no pinned binary identity" in text
+    assert "QROW32_B1_SPLIT2_FA2_SIZE,\n        ),\n    )" not in text
+    # nosplit and split2 are NAMED rather than defaulted.
+    assert '"nosplit": (' in text and '"split2": (' in text
 
 
 @pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
@@ -567,3 +574,160 @@ def test_earned_credential_is_present_and_validates() -> None:
             ],
             bounds_path=BOUNDS,
         )
+
+
+# --------------------------------------- the 17th site: identity resolution
+
+
+def _identities():
+    namespace = _selectors()
+    return (
+        namespace["_fr13_fa2_qrow32_b1_identity"],
+        namespace["_FR13_FA2_QROW32_B1_IDENTITIES"],
+        namespace["_FR13_FA2_QROW32_B1_ARMS"],
+    )
+
+
+def test_every_registered_arm_has_its_own_pinned_identity() -> None:
+    """The invariant the 17th site broke.
+
+    Arm S's fifth boot selected gqa_pair_splitk, reached
+    _fr13_fa2_qrow32_b1_identity, and got SPLIT2's pins back -- because the
+    resolver branched on two arm names and then returned the incumbent's
+    identity to everything else. Nothing served only because the environment's
+    declared sha happened not to match what came back. That is an accident, not
+    a guard.
+    """
+    identity, table, arms = _identities()
+    assert set(table) == set(arms), (
+        "the identity table and the arm registry must cover each other exactly"
+    )
+    # No two arms may share pins unless they genuinely share a binary.
+    by_sha: dict[str, list[str]] = {}
+    for arm in sorted(table):
+        by_sha.setdefault(identity(arm)["candidate_sha256"], []).append(arm)
+    assert by_sha[
+        "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857"
+    ] == [SPLITK_ARM], "split-K's binary must belong to split-K alone"
+    assert by_sha[
+        "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae"
+    ] == ["gqa_pair"]
+    # nosplit and split2 genuinely ship in one .so; that is the only sharing.
+    assert sorted(
+        by_sha["a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a"]
+    ) == ["nosplit", "split2"]
+
+
+@pytest.mark.parametrize(
+    "unknown",
+    ["gqa_pair_splitk2", "splitk", "gqa_pair ", "GQA_PAIR", "", "nosplit2",
+     "gqa_pair_splitk_disabled"],
+)
+def test_an_unknown_arm_refuses_instead_of_inheriting_pins(unknown) -> None:
+    """The half that makes an eighteenth site impossible.
+
+    Adding an arm to the registry without adding it here must fail LOUDLY at
+    selection, not quietly attest somebody else's artifact.
+    """
+    identity, _table, _arms = _identities()
+    with pytest.raises(RuntimeError, match="has no pinned identity for arm"):
+        identity(unknown)
+
+
+def test_the_splitk_identity_carries_both_sass_digests() -> None:
+    """This arm's .so sha is not rebuild-reproducible, so the sha is not enough.
+
+    Two links from one closure produced two .so hashes at an identical size.
+    The SASS digests are what attest that the KERNEL is the characterized one,
+    and the baseline digest is what keeps "the split-K header edits are inert
+    at Split=false" a measurement. The in-container resolver carried neither
+    until the 17th site; the launcher's bash pin case had both all along.
+    """
+    identity, _table, _arms = _identities()
+    splitk = identity(SPLITK_ARM)
+    assert splitk["sass_digest_sha256"] == (
+        "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e"
+    )
+    assert splitk["baseline_sass_digest_sha256"] == (
+        "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470"
+    )
+    # And no other arm claims them.
+    for arm in ("nosplit", "split2", "visibility", "gqa_pair"):
+        assert "sass_digest_sha256" not in identity(arm)
+
+
+def test_require_identity_checks_the_sass_digests_container_side(
+    monkeypatch,
+) -> None:
+    """The bash pin case checks these on the host; this is the other half."""
+    namespace = _selectors()
+    require = namespace["_fr13_fa2_qrow32_b1_require_identity"]
+    env = {
+        "FR13_FA2_QROW32_B1_SO_SHA256": SPLITK_SO_SHA256,
+        "FR13_FA2_QROW32_B1_SO_SIZE": "300123792",
+        "FR13_FA2_QROW32_B1_FA2_HEAD": (
+            "29210221863736a08f71a866459e368ad1ac4a95"
+        ),
+        "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256": (
+            "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878"
+        ),
+        "FR13_FA2_QROW32_B1_SOURCE_COMMIT": "b" * 40,
+        "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256": "c" * 64,
+        "FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST": (
+            "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e"
+        ),
+        "FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST": (
+            "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470"
+        ),
+    }
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    assert require(SPLITK_ARM)[0] == SPLITK_SO_SHA256
+
+    # Each digest is load-bearing on its own.
+    for key in (
+        "FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST",
+        "FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST",
+    ):
+        monkeypatch.setenv(key, "9" * 64)
+        with pytest.raises(RuntimeError, match="drifted for this arm"):
+            require(SPLITK_ARM)
+        monkeypatch.setenv(key, env[key])
+
+    # And the identity itself still refuses a mismatched artifact.
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_SO_SHA256", "d" * 64)
+    with pytest.raises(RuntimeError, match="pinned identity drifted"):
+        require(SPLITK_ARM)
+
+
+def test_identity_fraud_is_impossible_for_a_selected_but_unpinned_arm(
+    monkeypatch,
+) -> None:
+    """The fraud the 17th refusal prevented, reproduced as a test.
+
+    Serve arm X while attesting arm Y. Previously reachable by selecting any
+    arm the resolver had no branch for and declaring the incumbent's identity;
+    now the resolver refuses before any comparison happens.
+    """
+    namespace = _selectors()
+    require = namespace["_fr13_fa2_qrow32_b1_require_identity"]
+    # The incumbent's identity, declared in full and self-consistent.
+    for key, value in (
+        ("FR13_FA2_QROW32_B1_SO_SHA256",
+         "a9d8a6887b8b27b3a83af60bba7945eb66caff174ba710c2ee2aea92b8e7081a"),
+        ("FR13_FA2_QROW32_B1_SO_SIZE", "300154616"),
+        ("FR13_FA2_QROW32_B1_FA2_HEAD",
+         "29210221863736a08f71a866459e368ad1ac4a95"),
+        ("FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256",
+         "22b8c2016443a151bf50f62166f7cc3b9ce45137138d948b76fdfded74c395ff"),
+        ("FR13_FA2_QROW32_B1_SOURCE_COMMIT", "b" * 40),
+        ("FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256", "c" * 64),
+    ):
+        monkeypatch.setenv(key, value)
+    # A registered arm still resolves its own identity, so this is a real
+    # environment and not a broken one.
+    assert require("nosplit")[0].startswith("a9d8a688")
+    # An arm with no pinned identity refuses -- it does NOT inherit the
+    # incumbent's and go on to serve.
+    with pytest.raises(RuntimeError, match="has no pinned identity for arm"):
+        require("gqa_pair_splitk_v2")

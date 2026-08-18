@@ -767,13 +767,27 @@ def _candidate_contract(arm: str) -> dict[str, Any]:
     }
 
 
+# The modified-source set each arm's codegen produces. A table, not a chain
+# with a default: a status set IS source-closure identity, and the 17th site
+# (Arm S, 2026-08-18) is what a defaulting identity resolver costs -- it
+# answers for arms nobody wrote a branch for, with the wrong answer.
+_SOURCE_STATUS_BY_ARM = {
+    ARM: SOURCE_STATUS,
+    "split2": SOURCE_STATUS,
+    VISIBILITY_ARM: SOURCE_STATUS,
+    GQA_PAIR_ARM: GQA_PAIR_SOURCE_STATUS,
+    SPLITK_ARM: SPLITK_SOURCE_STATUS,
+}
+
+
 def _source_status(arm: str) -> tuple[str, ...]:
     """The modified-source set the codegen produces for this arm."""
-    if arm == GQA_PAIR_ARM:
-        return GQA_PAIR_SOURCE_STATUS
-    if arm == SPLITK_ARM:
-        return SPLITK_SOURCE_STATUS
-    return SOURCE_STATUS
+    status = _SOURCE_STATUS_BY_ARM.get(arm)
+    if status is None:
+        raise ValueError(
+            f"qrow32 B1 arm {arm!r} has no pinned modified-source set"
+        )
+    return status
 
 
 def splitk_source_contract() -> dict[str, Any]:

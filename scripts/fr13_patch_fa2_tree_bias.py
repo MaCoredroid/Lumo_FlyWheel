@@ -5952,6 +5952,26 @@ _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SIZE = 299815552
 _FR13_FA2_QROW32_B1_GQA_PAIR_SOURCE_CLOSURE_SHA256 = (
     "172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4"
 )
+# FR14 split-K (tier-b). These did not exist in this blob at all until Arm S's
+# 17th refusal: the launcher, the contract and the sidecar each carried the
+# split-K pins, and the in-container identity resolver -- the last thing
+# between a selected arm and a served token -- carried none of them, so it
+# answered with split2's. Both SASS digests are here for the same reason they
+# are in the bash pin case: this arm's .so sha is not rebuild-reproducible, so
+# the digests are what attest that the KERNEL is the characterized one.
+_FR13_FA2_QROW32_B1_SPLITK_CANDIDATE_SHA256 = (
+    "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857"
+)
+_FR13_FA2_QROW32_B1_SPLITK_CANDIDATE_SIZE = 300123792
+_FR13_FA2_QROW32_B1_SPLITK_SOURCE_CLOSURE_SHA256 = (
+    "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878"
+)
+_FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST_SHA256 = (
+    "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e"
+)
+_FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST_SHA256 = (
+    "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470"
+)
 _FR13_FA2_QROW32_B1_TARGET_LAYERS = tuple(
     f"language_model.model.layers.{index}.self_attn.attn"
     for index in range(3, 64, 4)
@@ -6235,41 +6255,88 @@ def _fr13_fa2_qrow32_b1_require_draft_vocab_profile():
         )
 
 
-def _fr13_fa2_qrow32_b1_identity(arm=None):
-    if arm == "gqa_pair":
-        if (
-            not _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SHA256
-            or not _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SIZE
-        ):
-            raise RuntimeError(
-                "FR13 qrow32 B1 GQA-pair binary is not pinned: fill "
-                "_FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SHA256 and "
-                "_FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SIZE from the build "
-                "attestation before selecting this arm"
-            )
-        return {
-            "candidate_sha256": _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SHA256,
-            "candidate_size": _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SIZE,
-            "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
-            "source_closure_sha256": (
-                _FR13_FA2_QROW32_B1_GQA_PAIR_SOURCE_CLOSURE_SHA256
-            ),
-        }
-    if arm == "visibility":
-        return {
-            "candidate_sha256": _FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SHA256,
-            "candidate_size": _FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SIZE,
-            "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
-            "source_closure_sha256": (
-                _FR13_FA2_QROW32_B1_VISIBILITY_SOURCE_CLOSURE_SHA256
-            ),
-        }
-    return {
+# THE IDENTITY TABLE. Every arm names its own pins; there is no default.
+#
+# This used to be an if/if/bare-return chain whose fall-through handed out
+# split2's pins to anything it did not recognise. Arm S's fifth boot reached it
+# with arm="gqa_pair_splitk" -- everything upstream having passed for the first
+# time -- and was saved only by an accident: the environment declared split-K's
+# sha, split2's pin did not match it, and the mismatch raised. Had the
+# environment been permissive, or had the two binaries happened to share a
+# size, the run would have SERVED split-K while ATTESTING split2. A fall-through
+# in an identity resolver is not a convenience; it is a licence to attest the
+# wrong artifact.
+#
+# So: a table, and an unknown arm REFUSES. Adding an arm to
+# _FR13_FA2_QROW32_B1_ARMS without adding it here now fails loudly at selection
+# instead of silently inheriting somebody else's identity.
+_FR13_FA2_QROW32_B1_IDENTITIES = {
+    "nosplit": {
         "candidate_sha256": _FR13_FA2_QROW32_B1_CANDIDATE_SHA256,
         "candidate_size": _FR13_FA2_QROW32_B1_CANDIDATE_SIZE,
         "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
         "source_closure_sha256": _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256,
-    }
+    },
+    "split2": {
+        "candidate_sha256": _FR13_FA2_QROW32_B1_CANDIDATE_SHA256,
+        "candidate_size": _FR13_FA2_QROW32_B1_CANDIDATE_SIZE,
+        "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
+        "source_closure_sha256": _FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256,
+    },
+    "visibility": {
+        "candidate_sha256": _FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SHA256,
+        "candidate_size": _FR13_FA2_QROW32_B1_VISIBILITY_CANDIDATE_SIZE,
+        "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
+        "source_closure_sha256": (
+            _FR13_FA2_QROW32_B1_VISIBILITY_SOURCE_CLOSURE_SHA256
+        ),
+    },
+    "gqa_pair": {
+        "candidate_sha256": _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SHA256,
+        "candidate_size": _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SIZE,
+        "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
+        "source_closure_sha256": (
+            _FR13_FA2_QROW32_B1_GQA_PAIR_SOURCE_CLOSURE_SHA256
+        ),
+    },
+    "gqa_pair_splitk": {
+        "candidate_sha256": _FR13_FA2_QROW32_B1_SPLITK_CANDIDATE_SHA256,
+        "candidate_size": _FR13_FA2_QROW32_B1_SPLITK_CANDIDATE_SIZE,
+        "fa2_head": _FR13_FA2_QROW32_B1_FA2_HEAD,
+        "source_closure_sha256": (
+            _FR13_FA2_QROW32_B1_SPLITK_SOURCE_CLOSURE_SHA256
+        ),
+        # Only this arm carries SASS digests, and only this arm needs them:
+        # its .so sha is not rebuild-reproducible (two links, one size), so the
+        # artifact hash alone cannot say the kernel reproduced.
+        "sass_digest_sha256": _FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST_SHA256,
+        "baseline_sass_digest_sha256": (
+            _FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST_SHA256
+        ),
+    },
+}
+
+
+def _fr13_fa2_qrow32_b1_identity(arm=None):
+    # arm=None is the historical no-arm call for the incumbent selector. It is
+    # spelled explicitly rather than left to a default so that "no arm" and
+    # "an arm nobody wrote a branch for" cannot be the same code path -- which
+    # is exactly how the 17th site hid.
+    resolved = "nosplit" if arm is None else arm
+    identity = _FR13_FA2_QROW32_B1_IDENTITIES.get(resolved)
+    if identity is None:
+        raise RuntimeError(
+            "FR13 qrow32 B1 has no pinned identity for arm "
+            f"{arm!r}; every arm must name its own binary here -- there is no "
+            "fall-through, because a fall-through attests the wrong artifact"
+        )
+    if not identity["candidate_sha256"] or not identity["candidate_size"]:
+        raise RuntimeError(
+            f"FR13 qrow32 B1 arm {resolved!r} binary is not pinned: fill its "
+            "candidate sha256 and size from the build attestation before "
+            "selecting this arm"
+        )
+    return dict(identity)
 
 
 def _fr13_fa2_qrow32_b1_require_identity(arm=None):
@@ -6293,6 +6360,24 @@ def _fr13_fa2_qrow32_b1_require_identity(arm=None):
         != identity["source_closure_sha256"]
     ):
         raise RuntimeError("FR13 qrow32 B1 pinned identity drifted")
+    # An arm whose identity carries SASS digests must present them too. The
+    # bash pin case checks these on the host; this is the container-side half,
+    # and it exists because the container-side half of the ARTIFACT check is
+    # exactly what was missing when Arm S reached the 17th site.
+    for field, env_name in (
+        ("sass_digest_sha256", "FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST"),
+        (
+            "baseline_sass_digest_sha256",
+            "FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST",
+        ),
+    ):
+        expected = identity.get(field)
+        if expected is None:
+            continue
+        if os.environ.get(env_name, "") != expected:
+            raise RuntimeError(
+                f"FR13 qrow32 B1 pinned {field} drifted for this arm"
+            )
     return candidate_digest, source_commit, patch_source
 
 
