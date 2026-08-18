@@ -35,6 +35,38 @@ FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
 # GQA_PAIR_SOURCE_CLOSURE_SHA256.
 SOURCE_CLOSURE_SHA256=172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4
 
+# THE REPRODUCIBILITY CREDENTIAL (Mark's ruling, 2026-08-18). This is the digest
+# of the disassembled device code, and it answers the question the .so sha256
+# cannot: "did a rebuild from the pinned source reproduce THE KERNEL?"
+#
+# It exists because the .so sha256 is NOT rebuild-reproducible. nvcc stamps its
+# own driver PID inside the build container into host-side symbol and name-table
+# entries (tmpxft_<pid>_<counter>), which propagates into ~87 kB of symbol and
+# relocation bytes. Measured over three builds of byte-identical source:
+#
+#   build                 nvcc module id      SASS digest   .so sha256
+#   2026-08-10 (sealed)   tmpxft_00000009     fa01f988...   3560cdc0...  (the pin)
+#   FR14 rebuild run 1    tmpxft_00000009     fa01f988...   3560cdc0...  == pin
+#   FR14 rebuild run 2    tmpxft_0000000a     fa01f988...   454135ce...  != pin
+#
+# Device code is fully deterministic; the .so hash is reproducible only up to a
+# PID. Run 1 matched the pin by landing the same container PID as the sealed
+# build -- a coin flip, not a proof. So the two credentials are now split by what
+# they can actually attest:
+#
+#   SASS digest (HERE, asserted at build time) -- reproducibility. A rebuild that
+#     does not reproduce the sealed kernel fails RIGHT HERE, before anything is
+#     linked into a servable artifact.
+#   .so sha256 + size (the six pin sites below) -- staged-artifact integrity.
+#     UNCHANGED and still hard-fail: a staged .so whose sha does not match what
+#     was gated must never serve, and nothing here makes that easier to pass.
+#
+# The SASS dump is environment-independent by inspection: it carries arch, code
+# version, host OS class and the disassembly, and no host path, timestamp, BUILD
+# directory or tmpxft module id. It is bound to the pinned IMAGE above, which
+# fixes the cuobjdump/nvdisasm that produce it.
+SASS_DIGEST_SHA256=fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470
+
 Q=${Q:-/home/mark/shared/lumoFlyWheel-qrow16-thin/output/fr13_fa2_qrow16_num_splits0_build_20260731}
 FA2_ORIGIN=${FA2_ORIGIN:-$Q/vllm-source/build/lumo_cutlass_research/_deps/vllm-flash-attn-src}
 CUTLASS=${CUTLASS:-$FA2_ORIGIN/csrc/cutlass}
@@ -174,6 +206,25 @@ if grep -E '[[:space:]](LDL|STL|CALL)(\.|[[:space:]])' /build/$OBJ.sm121a.sass >
   cat /build/forbidden_sass.txt >&2; exit 92; else : > /build/forbidden_sass.txt; fi
 echo SASS_CLEAN"
 
+echo "== reproducibility credential: the SASS digest must be the pinned kernel =="
+# Asserted BEFORE the link, deliberately. If the rebuild did not reproduce the
+# sealed device code there is no reason to spend a link on it, and no
+# half-credentialed artifact is left lying around to be staged by mistake.
+# This is an ADDITIONAL hard-fail: it can only reject builds the old script
+# accepted, never admit one it rejected.
+BUILT_SASS_DIGEST=$(sha256sum "$BUILD/$OBJ.sm121a.sass" | awk '{print $1}')
+printf 'sass_digest_sha256=%s\nsass_digest_pinned=%s\n' \
+  "$BUILT_SASS_DIGEST" "$SASS_DIGEST_SHA256" > "$BUILD/sass_digest.txt"
+if [[ "$BUILT_SASS_DIGEST" != "$SASS_DIGEST_SHA256" ]]; then
+  echo "REBUILD DID NOT REPRODUCE THE PINNED KERNEL" >&2
+  echo "  built  SASS digest: $BUILT_SASS_DIGEST" >&2
+  echo "  pinned SASS digest: $SASS_DIGEST_SHA256" >&2
+  echo "The source closure matched, so this is a TOOLCHAIN or FLAG divergence," >&2
+  echo "not a source change -- compare compile_env.txt against the pinned image." >&2
+  exit 96
+fi
+echo "SASS_DIGEST_MATCHES_PIN $BUILT_SASS_DIGEST"
+
 echo "== Link: flash_api_pair_b1.o, 55 sorted reference objects, pinned TU =="
 "${DRUN[@]}" -v "$BUILD:/out" -v "$REF:/ref:ro" "$IMAGE" -lc "
 set -euo pipefail
@@ -293,13 +344,34 @@ grep -q '"library_loaded": true' "$BUILD/offline_torch_load.txt" \
   || { echo "offline torch load did not qualify the candidate" >&2; exit 95; }
 
 echo "== RESULT =="
+echo "-- reproducibility credential (the kernel) --"
+printf 'sass_digest_sha256=%s  MATCHES PIN\n' "$BUILT_SASS_DIGEST"
+echo "-- staged-artifact identity (the binary) --"
 sha256sum "$SO" | tee "$BUILD/candidate_so_sha256.txt"
 stat -c '%s bytes' "$SO"
 grep -E 'REG:|STACK:' "$BUILD/cuobjdump_resource_usage.txt" || true
 echo BUILD_COMPLETE
 echo
-echo "NEXT: pin candidate_so_sha256 + size into ALL SIX of these; every one is a"
-echo "hard-fail comparison, so a rebuild that updates only some is rejected at launch:"
+echo "TWO CREDENTIALS, TWO QUESTIONS -- do not conflate them:"
+echo "  SASS digest  = 'did this rebuild reproduce the sealed KERNEL?'"
+echo "                 Asserted above; already PASSED or you would not be here."
+echo "                 Deterministic across rebuilds. Nothing to re-pin."
+echo "  .so sha256   = 'is the artifact about to be staged the one that was gated?'"
+echo "                 NOT reproducible across rebuilds (nvcc stamps its container"
+echo "                 PID into host-side name tables). If the sha below differs"
+echo "                 from the pin, the SASS match above is what tells you the"
+echo "                 kernel is nonetheless identical -- and the six sites below"
+echo "                 must then be re-pinned to THIS binary, together, before it"
+echo "                 can serve. They remain hard-fail comparisons; a staged .so"
+echo "                 that does not match still refuses to serve, exactly as before."
+echo
+echo "NEXT -- ONLY IF the .so sha256 above differs from the one currently pinned."
+echo "A rebuild whose SASS digest matched but whose .so sha did not is the EXPECTED"
+echo "outcome of a PID-shifted rebuild, not an error; it means the kernel is the"
+echo "sealed one and the staged binary is a new container for it. Re-pin all six"
+echo "sites to THIS binary. Every one is a hard-fail comparison, so a rebuild that"
+echo "updates only some is rejected at launch -- which is the property that keeps a"
+echo "half-re-pinned tree from ever serving:"
 echo "  scripts/fr13_qrow32_b1_pass_sidecar.py    GQA_PAIR_CANDIDATE_SHA256 / _SIZE"
 echo "  scripts/fr13_fixed32_contract.py          QROW32_B1_GQA_PAIR_FA2_SHA256 / _SIZE"
 echo "  scripts/fr13_patch_fa2_tree_bias.py       _FR13_FA2_QROW32_B1_GQA_PAIR_CANDIDATE_SHA256 / _SIZE"
@@ -319,3 +391,7 @@ echo "                                            the registry cite a binary not
 echo "                                            can load."
 echo "then add the gqa_pair arm case to scripts/fr13_run_b1_k64_qrow32_split2_live_gate.sh."
 echo "Verify none were missed: grep -rn \"\$(sha256sum \"\$SO\" | cut -d' ' -f1)\" scripts/"
+echo
+echo "Do NOT re-pin SASS_DIGEST_SHA256 in this script to make a build pass. It is"
+echo "the pinned source's expected device code; if it moved, the toolchain or the"
+echo "flags moved, and that is the finding -- not a value to refresh."
