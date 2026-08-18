@@ -12,7 +12,8 @@ READ for degeneration at every stage that produces text.
 **Sub-lever A is not a lever to build. It shipped on 2026-08-16 and its −6.7 ms
 is already inside the pinned floor.** The four loader gaps are closed, the patch
 is in the production boot flow fail-closed by default, and the NVFP4 head has
-now routed correctly on four independent boots (two today). The standing
+now routed correctly on five independent boots (two of them today, both by this
+lane: 01:42:57Z and 02:06:32Z). The standing
 question "does the modelopt NVFP4 lm_head load?" is **closed: yes.** What this
 lane adds is the evidence that was missing underneath that claim — a
 logit-space characterisation against the true BF16 head, a degeneration eyeball
