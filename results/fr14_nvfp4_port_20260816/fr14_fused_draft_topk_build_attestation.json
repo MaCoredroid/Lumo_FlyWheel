@@ -1,0 +1,49 @@
+{
+  "binary": {
+    "bytes": 181328,
+    "path": "output/fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so",
+    "sha256": "8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e",
+    "sha256_is_reproducibility_credential": false
+  },
+  "byte_equality_claim": false,
+  "cuda_arch": "12.1a",
+  "cuda_release": "13.0",
+  "device_code": {
+    "cubin_sha256": "194f1ef28781c6419db799549a2174ef96d077798730dc1593ff358bf1dcb1bd",
+    "detail": {
+      "cubin_bytes": 40280,
+      "cubin_name": "fr14_dfwd_full_topk_sm121a.abi3.1.sm_121a.cubin",
+      "from": "output/fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so",
+      "list_elf": [
+        "ELF file    1: fr14_dfwd_full_topk_sm121a.abi3.1.sm_121a.cubin"
+      ],
+      "resource_usage": [
+        "Fatbin elf code:",
+        "================",
+        "arch = sm_121a",
+        "code version = [1,8]",
+        "host = linux",
+        "compile_size = 64bit",
+        "Resource usage:",
+        "Common:",
+        "GLOBAL:28 CONSTANT[4]:224",
+        "Function _ZN26fr14_fused_draft_topk_impl28fr14_fused_draft_topk_kernelEPlS0_PK13__nv_bfloat16Pyii:",
+        "REG:40 STACK:0 SHARED:1217 LOCAL:0 CONSTANT[0]:936 TEXTURE:0 SURFACE:0 SAMPLER:0"
+      ],
+      "tool": "cuobjdump --extract-elf all"
+    },
+    "is_reproducibility_credential": true
+  },
+  "next_gate": "results/fr14_nvfp4_port_20260816/fr14_fused_draft_topk_probe.py --so <this binary>  (0 raw-byte mismatches required)",
+  "performance_measurement": false,
+  "production_default_enabled": false,
+  "real_task_correctness": false,
+  "schema": "fr14.fused_draft_topk.build.v1",
+  "source": {
+    "path": "csrc/fr14_dfwd_full_topk.cu",
+    "sha256": "dfdafaef6f7deca2458c8e09aa682cbb002f688896766145cea81ee2b9582e0c"
+  },
+  "status": "BUILT_UNQUALIFIED",
+  "strict_env_pins_enforced": true,
+  "torch_version": "2.11.0+cu130"
+}

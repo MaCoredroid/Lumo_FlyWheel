@@ -1,0 +1,61 @@
+{
+  "acceptance_valid": false,
+  "analysis_only": true,
+  "anonymous_namespace_builds": [
+    {
+      "cubin_sha256": "4b15efdcf09ec27a6ee3d227...",
+      "id": "anon_ns_build_1",
+      "mangled_kernel_symbol": "_ZN58_GLOBAL__N__0d861e1e_22_fr14_dfwd_full_topk_cu_66fa687e_4128fr14_fused_draft_topk_kernelE...",
+      "so_sha256": "eb1d4aefddd9f13d..."
+    },
+    {
+      "cubin_sha256": "f0679727dae9eaff363b690b...",
+      "id": "anon_ns_build_2",
+      "mangled_kernel_symbol": "_ZN58_GLOBAL__N__0d861e1e_22_fr14_dfwd_full_topk_cu_571272e3_4128fr14_fused_draft_topk_kernelE...",
+      "so_sha256": "335d61f3e1dade80..."
+    }
+  ],
+  "anonymous_namespace_verdict": "NOT reproducible: 2 builds, 2 cubin shas, 2 .so shas. nvcc mangles an anonymous-namespace kernel as _GLOBAL__N__<tu-hash>_<file>_<build-hash>_ and that build-hash sits inside the cubin symbol table.",
+  "distinct_cubin_sha256": [
+    "194f1ef28781c6419db799549a2174ef96d077798730dc1593ff358bf1dcb1bd"
+  ],
+  "distinct_so_sha256": [
+    "8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e"
+  ],
+  "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+  "lead_for_fa2": "UNTESTED against FA2. Different translation unit, different symbol population. Offered as a cheap thing to try for the standing non-reproducible .so credential, not as a claim about it.",
+  "named_namespace_builds": [
+    {
+      "cubin_sha256": "194f1ef28781c6419db799549a2174ef96d077798730dc1593ff358bf1dcb1bd",
+      "id": "build_1",
+      "mangled_kernel_symbol": "_ZN26fr14_fused_draft_topk_impl28fr14_fused_draft_topk_kernelEPlS0_PK13__nv_bfloat16Pyii",
+      "so_bytes": 181328,
+      "so_sha256": "8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e",
+      "source_sha256": "dfdafaef6f7deca2458c8e09aa682cbb002f688896766145cea81ee2b9582e0c"
+    },
+    {
+      "cubin_sha256": "194f1ef28781c6419db799549a2174ef96d077798730dc1593ff358bf1dcb1bd",
+      "id": "build_2",
+      "mangled_kernel_symbol": "_ZN26fr14_fused_draft_topk_impl28fr14_fused_draft_topk_kernelEPlS0_PK13__nv_bfloat16Pyii",
+      "so_bytes": 181328,
+      "so_sha256": "8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e",
+      "source_sha256": "dfdafaef6f7deca2458c8e09aa682cbb002f688896766145cea81ee2b9582e0c"
+    },
+    {
+      "cubin_sha256": "194f1ef28781c6419db799549a2174ef96d077798730dc1593ff358bf1dcb1bd",
+      "id": "build_3",
+      "mangled_kernel_symbol": "_ZN26fr14_fused_draft_topk_impl28fr14_fused_draft_topk_kernelEPlS0_PK13__nv_bfloat16Pyii",
+      "so_bytes": 181328,
+      "so_sha256": "8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e",
+      "source_sha256": "dfdafaef6f7deca2458c8e09aa682cbb002f688896766145cea81ee2b9582e0c"
+    }
+  ],
+  "named_namespace_verdict": "REPRODUCIBLE: 3 independent builds -> 1 cubin sha256 AND 1 .so sha256, identical byte count. Naming the namespace fixes the symbol.",
+  "performance_measurement": false,
+  "question": "Is a byte-identical-source rebuild of this kernel reproducible, and if not, what makes it not reproducible? (pass 32 FINDING 2, still open)",
+  "reproducible": true,
+  "sass_text_digest_available": false,
+  "sass_text_digest_note": "the pinned image ships cuobjdump but NOT nvdisasm, so `cuobjdump --dump-sass` fails outright; the pass-37 SASS credential cannot be computed in this image. `cuobjdump --extract-elf` needs no nvdisasm and yields the device code itself.",
+  "schema": "fr14.fused_draft_topk.build_reproducibility.v1",
+  "stamp": "20260818T020632Z"
+}

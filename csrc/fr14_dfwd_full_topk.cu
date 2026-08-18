@@ -66,7 +66,14 @@
 
 #include <cstdint>
 
-namespace {
+// NAMED namespace, deliberately. An anonymous namespace makes nvcc mangle the
+// kernel as `_GLOBAL__N__<tu-hash>_<file>_<build-hash>_...`, and that build-hash
+// lands inside the cubin's symbol table -- so two builds of byte-identical
+// source produce different device code digests, and the build has no
+// reproducibility credential at all. This is the device-code-level twin of the
+// `.so` sha nondeterminism banked in pass 37. Naming the namespace fixes the
+// symbol, and `build_attestation.json` records the cubin sha that results.
+namespace fr14_fused_draft_topk_impl {
 
 constexpr int kVocab = 248320;      // Qwen3.x text_config.vocab_size, pinned
 constexpr int kTopK = 3;            // fixed32 SAMPLER_MAX_FANOUT
@@ -393,7 +400,10 @@ int64_t fr14_fused_draft_topk_scratch_numel(int64_t rows,
   return fr14_fused_draft_topk_scratch_elements(rows, blocks_per_row);
 }
 
-}  // namespace
+}  // namespace fr14_fused_draft_topk_impl
+
+using fr14_fused_draft_topk_impl::fr14_fused_draft_topk_out;
+using fr14_fused_draft_topk_impl::fr14_fused_draft_topk_scratch_numel;
 
 TORCH_LIBRARY_FRAGMENT(fr14_fused_draft_topk, library) {
   library.def(

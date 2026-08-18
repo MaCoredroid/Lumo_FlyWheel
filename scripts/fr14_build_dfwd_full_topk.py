@@ -29,6 +29,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -67,44 +68,47 @@ def recorded_path(path: Path) -> str:
         return str(path)
 
 
-def sass_digest(binary: Path) -> tuple[str, dict]:
-    """SASS text digest + resource usage: the reproducibility credential.
+def device_code_digest(binary: Path) -> tuple[str, dict]:
+    """sha256 of the extracted sm_121a cubin: the reproducibility credential.
 
-    `cuobjdump --dump-sass` refuses the linked host `.so` on this toolchain but
-    reads the relocatable `.cuda.o` fine, so the object is preferred and the
-    shared object is the fallback.
+    NOT the `.so` sha256 -- nvcc stamps its build-container PID into ~87 kB of
+    host-side symbol/relocation bytes, so a byte-identical source can produce a
+    different `.so` with identical device code (pass 37,
+    `fr14_treeattn_v2_build_env_proof.json`). NOT a SASS-text digest either:
+    the pinned image ships `cuobjdump` but no `nvdisasm`, so `--dump-sass` fails
+    here. `cuobjdump --extract-elf` needs neither, and the extracted cubin is
+    the device code itself -- a strictly stronger attestation than disassembled
+    text, and verified here to be identical whether extracted from the linked
+    `.so` or from the relocatable `.cuda.o`.
     """
-    sass = None
-    for candidate in (binary,):
-        try:
-            sass = subprocess.run(
-                ["cuobjdump", "--dump-sass", str(candidate)],
+    info: dict = {"tool": "cuobjdump --extract-elf all", "from": recorded_path(binary)}
+    try:
+        listing = subprocess.run(
+            ["cuobjdump", "--list-elf", str(binary)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        info["list_elf"] = [line.strip() for line in listing.splitlines() if line.strip()]
+        if len(info["list_elf"]) != 1:
+            info["warning"] = "expected exactly one ELF in the fatbin"
+        with tempfile.TemporaryDirectory() as work:
+            subprocess.run(
+                ["cuobjdump", "--extract-elf", "all", str(binary)],
                 check=True,
                 capture_output=True,
                 text=True,
-            ).stdout
-            break
-        except (OSError, subprocess.CalledProcessError) as exc:
-            last = exc
-    if sass is None:
-        return f"UNAVAILABLE:{last}", {}
-    # Strip the address column so the digest attests instructions, not layout.
-    lines = []
-    for line in sass.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("/*") and "*/" in stripped:
-            stripped = stripped.split("*/", 1)[1].strip()
-        if stripped:
-            lines.append(stripped)
-    digest = hashlib.sha256("\n".join(lines).encode("ascii", "replace")).hexdigest()
-    body = "\n".join(lines)
+                cwd=work,
+            )
+            cubins = sorted(Path(work).glob("*.cubin"))
+            if len(cubins) != 1:
+                return f"UNAVAILABLE:extracted {len(cubins)} cubins", info
+            info["cubin_name"] = cubins[0].name
+            info["cubin_bytes"] = cubins[0].stat().st_size
+            digest = sha256_file(cubins[0])
+    except (OSError, subprocess.CalledProcessError) as exc:
+        return f"UNAVAILABLE:{type(exc).__name__}", info
 
-    usage: dict = {
-        "sass_lines": len(lines),
-        "ldl_count": body.count("LDL"),
-        "stl_count": body.count("STL"),
-        "call_count": body.count("CALL"),
-    }
     try:
         text = subprocess.run(
             ["cuobjdump", "--dump-resource-usage", str(binary)],
@@ -112,15 +116,12 @@ def sass_digest(binary: Path) -> tuple[str, dict]:
             capture_output=True,
             text=True,
         ).stdout
-        for token in ("REG", "STACK", "SHARED", "LOCAL", "CONSTANT"):
-            for line in text.splitlines():
-                if f"{token}:" in line:
-                    usage.setdefault(token, line.strip())
-                    break
-        usage["raw"] = text.strip().splitlines()
+        info["resource_usage"] = [
+            line.strip() for line in text.splitlines() if line.strip()
+        ]
     except (OSError, subprocess.CalledProcessError):
         pass
-    return digest, usage
+    return digest, info
 
 
 def build(output: Path, build_dir: Path, attestation: Path, strict: bool) -> dict:
@@ -177,11 +178,7 @@ def build(output: Path, build_dir: Path, attestation: Path, strict: bool) -> dic
     if namespace is None or not hasattr(namespace, "select_out"):
         raise RuntimeError("built library did not register the FR14 CUDA op")
 
-    sass_source = build_dir / f"{SOURCE.stem}.cuda.o"
-    if not sass_source.is_file():
-        sass_source = output
-    digest, usage = sass_digest(sass_source)
-    usage["source"] = recorded_path(sass_source)
+    digest, device_info = device_code_digest(output)
     payload = {
         "schema": "fr14.fused_draft_topk.build.v1",
         "status": "BUILT_UNQUALIFIED",
@@ -203,10 +200,10 @@ def build(output: Path, build_dir: Path, attestation: Path, strict: bool) -> dic
             "bytes": output.stat().st_size,
             "sha256_is_reproducibility_credential": False,
         },
-        "sass": {
-            "digest_sha256": digest,
+        "device_code": {
+            "cubin_sha256": digest,
             "is_reproducibility_credential": True,
-            "resource_usage": usage,
+            "detail": device_info,
         },
         "next_gate": (
             "results/fr14_nvfp4_port_20260816/fr14_fused_draft_topk_probe.py "

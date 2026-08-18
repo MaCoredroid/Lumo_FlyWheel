@@ -43,6 +43,18 @@ EVIDENCE = (
     / "fr14_fused_draft_topk_probe_result.json"
 )
 NOTE = REPO / "results" / "fr14_nvfp4_port_20260816" / "fused_draft_topk.md"
+ATTESTATION = (
+    REPO
+    / "results"
+    / "fr14_nvfp4_port_20260816"
+    / "fr14_fused_draft_topk_build_attestation.json"
+)
+REPRODUCIBILITY = (
+    REPO
+    / "results"
+    / "fr14_nvfp4_port_20260816"
+    / "fr14_fused_draft_topk_build_reproducibility.json"
+)
 
 
 def _cu_constant(name: str) -> int:
@@ -138,11 +150,40 @@ def test_builder_claims_nothing_it_has_not_measured():
     assert '"production_default_enabled": False' in text
 
 
-def test_builder_credential_is_the_sass_digest_not_the_so_sha():
+def test_builder_credential_is_the_cubin_not_the_so_sha():
     text = BUILDER.read_text()
     assert '"sha256_is_reproducibility_credential": False' in text
     assert '"is_reproducibility_credential": True' in text
+    assert '"cubin_sha256": digest' in text
+    assert "cuobjdump" in text and "--extract-elf" in text
     assert 'EXPECTED_ARCH = "12.1a"' in text
+
+
+def test_kernel_uses_a_named_namespace_so_the_build_is_reproducible():
+    """An anonymous namespace puts a per-build hash inside the cubin symbols."""
+    text = KERNEL.read_text()
+    assert "namespace fr14_fused_draft_topk_impl {" in text
+    assert "\nnamespace {\n" not in text
+
+
+def test_banked_build_is_reproducible_and_is_the_gated_binary():
+    if not REPRODUCIBILITY.is_file() or not ATTESTATION.is_file():
+        import pytest
+
+        pytest.skip("build evidence not yet banked")
+    repro = json.loads(REPRODUCIBILITY.read_text())
+    assert repro["reproducible"] is True
+    assert len(repro["distinct_cubin_sha256"]) == 1
+    assert len(repro["distinct_so_sha256"]) == 1
+    assert len(repro["named_namespace_builds"]) >= 3
+    attestation = json.loads(ATTESTATION.read_text())
+    assert attestation["device_code"]["cubin_sha256"] == repro["distinct_cubin_sha256"][0]
+    assert attestation["status"] == "BUILT_UNQUALIFIED"
+    if EVIDENCE.is_file():
+        # the gate must have run against THAT binary, not some other build
+        assert json.loads(EVIDENCE.read_text())["so_sha256"] == (
+            attestation["binary"]["sha256"]
+        )
 
 
 # --------------------------------------------------------------------------
