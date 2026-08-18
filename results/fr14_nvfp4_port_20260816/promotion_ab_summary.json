@@ -198,6 +198,89 @@
   "recommendation": "REFUSE unchanged; fix the 14th site then run the WIDENED shape-literal sweep before a fourth boot \u2014 3 of 4 sites were live-only and each boot costs a GPU window plus a gate re-earn",
   "window_utc": "2026-08-18T15:17Z..15:40Z"
  },
+ "round4": {
+  "acceptance_sighting_12907": {
+   "basis": "/metrics counter deltas, same instance, both arms",
+   "break_even_context": "section 7 break-even is 0.931; C-prime unconditional m3/m4 = 0.769/0.769 here, 0.783/0.794 arm-level in round 2 -- three measurements all far below",
+   "conditional_survival_gate_off": {
+    "m0": 0.93,
+    "m1": 0.811,
+    "m2": 0.762,
+    "m3": 0.769,
+    "m4": 0.769,
+    "m5": 0.484
+   },
+   "conditional_survival_gate_on": {
+    "m0": 0.951,
+    "m1": 0.857,
+    "m2": 0.808,
+    "m3": 0.718,
+    "m4": 0.643,
+    "m5": 0.469
+   },
+   "delta_accept_per_event": 0.1058,
+   "delta_pct": 2.9,
+   "gate_off_C_prime": {
+    "accept_per_event": 3.6442,
+    "accepted": 5131,
+    "draft_tokens": 43648,
+    "drafts": 1408,
+    "tok_per_draft": 31.0
+   },
+   "gate_on": {
+    "accept_per_event": 3.75,
+    "accepted": 6015,
+    "draft_tokens": 49724,
+    "drafts": 1604,
+    "tok_per_draft": 31.0
+   },
+   "inside_10pct_variance": true,
+   "inside_band": true,
+   "pack_width_unchanged": true,
+   "pre_registered_band": "[-0.02,+0.15] tokens/step (suffix_pass_gating.md 7)",
+   "status": "MATCHED-BASIS SIGHTING, not citable (n=1 task, 13.9% draft-count drift)"
+  },
+  "arm_g_prime": {
+   "census_materialised": false,
+   "driver_state": "DEAD at 16:19:01Z (serve rc=1); container was PRESERVED by the engine-ledger failure policy, not a running serve; torn down explicitly",
+   "outcome": "FAIL_CLOSED_15TH_SITE_AT_TASK_BOUNDARY_FLUSH",
+   "refusal": "fixed32 drafter replay evidence did not attest event (fr10_phase4_patch_vllm_tree_gdn.py:39694, fixed_flush blob _fr13_f32_flush_reconcile)",
+   "refused_event_shape": {
+    "active_nodes": 27,
+    "graph_replays": 2,
+    "main_tail_length": 6,
+    "matching_replays": 2,
+    "mtp_forward_calls": 4,
+    "note": "an armed UNGATED step -- the legal shape per section 11.1",
+    "verify_rows": 32
+   },
+   "runroot": "output/fr14_promoab_Gp4_20260818T160635Z",
+   "served": "astropy__astropy-12907 COMPLETED under the armed gate; swe orchestrator wall 430s; 1604 draft events",
+   "warm_step_rate": "UNMEASURED (the flush writes the census)"
+  },
+  "deliverable": {
+   "blobs_scanned": 65,
+   "candidates": 40,
+   "for_review": 38,
+   "result": "results/fr14_nvfp4_port_20260816/promotion_ab_replay_literal_scan.json",
+   "scan": "results/fr14_nvfp4_port_20260816/promotion_ab_replay_literal_scan.py",
+   "self_finding": "the first draft of this scan keyed its allowlist on literal TEXT and marked BOTH twins OK, reproducing the defect it was built to expose; it is now keyed on (blob, line)",
+   "twin_finding": "blob@39286 lines 379 and 409 are character-identical with OPPOSITE verdicts (forward graph correct / drafter stale)"
+  },
+  "gate_reearn": {
+   "minutes": 12.6,
+   "outcome": "PASS",
+   "rc": 0
+  },
+  "head": "7ac3bde9bd330d5db005ad083a6bc4561fa5a3f2",
+  "recommendation": "REFUSE unchanged. Fix :39694 only (:39664 is correct), work the 38-row replay list, and re-key adjudication on positions not literals. The frontier is now the BOUNDARY path (flush/reconcile/materialisation), a much smaller surface than the per-step drafter.",
+  "root_cause_of_the_miss": {
+   "enumeration_ok": "all_injected_blobs() returns 65 blobs; the fixed_flush blob is enumerated and parses",
+   "gap": "shape_literal_scan() magnitudes {15,6,10,5,4,12,16,8,14,18} cover the COLUMN dimension; the gate also moves the REPLAY dimension 1->2 and neither 1 nor 2 is a candidate",
+   "verified_by": "read the sweep source and ran shape_literal_scan() at HEAD: 0 unreviewed, 18 adjudicated, none of them the value 1"
+  },
+  "window_utc": "2026-08-18T15:53Z..16:19Z"
+ },
  "schema": "fr14.promotion_ab.campaign_summary.v1",
  "step0_regate": {
   "cause": "fr13_fixed32_work_census.py:157 TAW_SOURCE_CONTRACT_SHA256 stale at 484babd7 vs emitter 68b289ae",

@@ -946,3 +946,213 @@ Before a fourth boot: fix the 14th site, then run the **widened** sweep of
 evidence is that one more boot buys one more site, and each boot costs a GPU
 window plus a gate re-earn. Three of four sites were live-only, so the sweep is
 the cheaper instrument by a wide margin.
+
+---
+---
+
+# ROUND 4 (2026-08-18 15:53Z–16:19Z) — the gate SERVES A WHOLE TASK, then a 15th site at the flush
+
+HEAD: **`7ac3bde9bd330d5db005ad083a6bc4561fa5a3f2`** (pass 60).
+
+| window | outcome |
+|---|---|
+| **1. gate re-earn** | **PASS**, rc=0, **12.6 min** |
+| **2. ARM G'** | **served task 12907 to completion**, then **FAIL-CLOSED at the task-boundary flush** |
+
+## R4.1 First: the coordinator's status question — the driver was DEAD, not slow
+
+The serve looked alive at 16:50Z because a container was up. It was an **orphan
+held open by policy, not a running serve**:
+
+```
+[hydra27_fixed32_promoab_Gp4] serve rc=1 2026-08-18T16:19:01Z
+FAIL: fixed32 terminal flush rc=2
+fixed32 exact container preserved after engine-ledger materialization failure: 26954c65…
+```
+
+The driver exited at **16:19:01Z** — 12.5 min after boot — and the teardown
+*deliberately preserved* the container because the engine ledger never
+materialised. Nothing was hung: no orchestrator, no eval, no submitter was
+running (`ps` clean), and `swe orchestrator rc=1 wall=430s`. The second task
+directory never appeared because the campaign had already ended. Container torn
+down explicitly; host memory returned 94 GiB → 12 GiB used, zero containers.
+
+## R4.2 How far it got — the furthest yet, by a wide margin
+
+| §11.7 check | R2 | R3 | **R4** |
+|---|---|---|---|
+| gate armed line + cfg sidecar | PASS | PASS | **PASS** |
+| 11th site (tree-attn binding) | PASS | PASS | **PASS** |
+| 12th site (`proposal_end` evidence) | REFUSED | PASS | **PASS** |
+| 14th site (drafter work invariant) | — | REFUSED | **PASS** |
+| gate fires on real traffic | — | reached, then refused | **PASS — sustained** |
+| **a whole SWE task served under the armed gate** | — | — | **PASS — 12907 completed, 1 604 draft events** |
+| task-boundary flush | — | — | **REFUSED (15th site)** |
+| census / registry / replays / warm rate | — | — | **NOT MATERIALISED** (the flush is what writes them) |
+
+Round 3 died ~6 min in on its first gated step. **Round 4 ran gated steps for
+430 seconds of real agent traffic and finished the task** — `12907` completed and
+finalised at 16:18:53 with the gate armed throughout. Everything the drafter does
+per-step now survives under the gate. What does not survive is the **boundary**.
+
+## R4.3 The 15th site — validator-side, at the flush
+
+```
+[FR13_FIXED32_FLUSH] failed generation 2:
+RuntimeError("fixed32 drafter replay evidence did not attest event: …")
+→ Fixed32BoundaryError: fixed32 post bracket failed:
+  snapshot=FlushRuntimeError: runtime returned non-ok flush status 'error:RuntimeError'
+```
+
+The refused event, from the payload — an armed but **ungated** step, i.e. §11.1's
+legal shape:
+
+```
+mtp_forward_calls: 4 · main_tail_length: 6 · graph_replays: 2 · matching_replays: 2
+active_nodes: 27 · verify_rows: 32 · graph_signature: 7fa7d56d…a031c6
+```
+
+Raise site, `fr10_phase4_patch_vllm_tree_gdn.py:39694`, inside the `fixed_flush`
+blob's `_fr13_f32_flush_reconcile()`:
+
+```python
+or evidence.get("matching_replays") != 1
+```
+
+An armed ungated step replays `lo` then `hi` — **2** replays — so the flush-time
+attestation refuses a legal step. This runs **once per task boundary**, not per
+step, which is exactly why the arm served 430 s of gated traffic before dying.
+
+## R4.4 Why the sweep did not catch it — verified in the tooling, not guessed
+
+I read pass 60's sweep rather than speculate. Two facts:
+
+**(a) Enumeration is fine.** `all_injected_blobs()` returns **65** blobs and the
+`fixed_flush` blob (patcher line 39286) is among them and parses. The blob-hole
+that hid the 14th site is genuinely closed.
+
+**(b) The candidate set has a missing dimension.** `shape_literal_scan()` reports
+`41 blobs scanned (24 unparseable, textually checked), 18 literals adjudicated,
+0 unreviewed` — and its candidates are
+
+```python
+magnitudes = {15, 6, 10, 5, 4, 12, 16, 8, 14, 18}
+```
+
+Every one of the 18 adjudicated literals is a **column/pass** magnitude
+(`4`, `6`, `10`, `16`, `5`, `3`, `2`). The split graph moves **three** independent
+dimensions:
+
+| dimension | change under the gate | in the scan? |
+|---|---|---|
+| columns | 15 native / 6 tail / 10 rescue → redistributed | **yes** |
+| passes | 5 → 3 (post-root 4 → 2) | partly (`4`, `5` present) |
+| **replays** | **1 → 2** | **NO — neither `1` nor `2` is a magnitude** |
+
+The 15th site's stale literal is the number **`1`**. It was scanned and could not
+be flagged, because `1` is not in the candidate set. The scan was right to report
+`0 unreviewed`; its universe simply excluded the value the gate most directly
+changes.
+
+## R4.5 I ran the missing dimension — 38 candidates, banked
+
+Rather than recommend the scan again, I wrote and ran it:
+`promotion_ab_replay_literal_scan.py` → `promotion_ab_replay_literal_scan.json`.
+Every literal `1` or `2` in a **replay-counting position** across all 65 blobs:
+
+```
+blobs scanned: 65
+replay-position 1/2 literals: 40 (38 for review)
+  OK     blob@39286+379  or evidence.get("matching_replays") != 1
+  STALE! blob@39286+409  or evidence.get("matching_replays") != 1
+```
+
+**The two lines are character-identical and have opposite verdicts.** At blob line
+379 the check guards the **forward** graph, which really is replayed once per step
+whatever the drafter does — correct, must not change. At line 409 it guards the
+**drafter** — the 15th site. The other 38 are a short review list (a `1` beside
+"replay" is often right, which is why the value cannot simply be banned).
+
+**A finding about my own tool, reported because it is the sharpest evidence of the
+class.** The first draft of that scan keyed its allowlist on the literal's *text*
+— and immediately marked **both** twins OK, hiding the very site it was written to
+expose. I had reproduced the defect, in a tool built to catch the defect, within
+ten minutes of describing the defect. It is now keyed on `(blob, line)`. The
+lesson generalises to the campaign's own adjudication list: **adjudicate
+positions, never literals** — otherwise one correct instance vouches for a stale
+twin.
+
+## R4.6 The first acceptance evidence for lever 2 — a matched-basis SIGHTING
+
+The census never materialised (the flush is what writes it), so warm-step rate,
+registry rows and per-step replay counts are **unmeasured**. But the arm left
+`metrics_before_swe.txt` / `metrics_after_swe.txt`, and its whole serve was task
+`12907` — which has a matched twin in round-2 C'. Same instance, same
+`/metrics` counter basis, both arms:
+
+| | ARM G' (gate **ON**) | ARM C' (gate **OFF**) | delta |
+|---|---|---|---|
+| draft events | 1 604 | 1 408 | +13.9 % |
+| draft tokens | 49 724 | 43 648 | |
+| **tok per draft** | **31.0** | **31.0** | **0 — pack width unchanged** |
+| accepted tokens | 6 015 | 5 131 | |
+| **accept / event** | **3.7500** | **3.6442** | **+0.1058 (+2.90 %)** |
+
+Cumulative survival, same instance:
+
+```
+G' ON : 0.951 0.815 0.659 0.473 0.304 0.143 0.110 0.089 0.075 0.067 0.064
+C' OFF: 0.930 0.755 0.575 0.442 0.340 0.165 0.125 0.101 0.085 0.066 0.059
+```
+
+conditional:
+
+```
+G' ON : m0 .951  m1 .857  m2 .808  m3 .718  m4 .643  m5 .469
+C' OFF: m0 .930  m1 .811  m2 .762  m3 .769  m4 .769  m5 .484
+```
+
+**Read carefully, because this is a sighting and not a verdict.**
+
+* **+0.106 tokens/event lands inside the pre-registered band** `[-0.02, +0.15]`
+  from `suffix_pass_gating.md` §7 — the first live datum against that
+  pre-registration, and it is favourable.
+* **The pack width did not move**: 31.0 draft tokens per event in both arms. The
+  gate is a fill-source change, not a shape change, confirmed on served traffic.
+* The shape of the win is what the design predicted: G' survives **better through
+  positions 0–3** and **worse at 4–5** (m3 .718 vs .769, m4 .643 vs .769), which
+  is what trading MTP passes for the Arctic suffix chain looks like — and the net
+  is positive because the gate fires where the suffix is strong.
+* **±10 % doctrine: +2.90 % is INSIDE variance.** One instance, one run, and the
+  trajectories differ by 13.9 % in draft events. Pass 23's word for this is the
+  right one: a **matched-basis sighting**, not a citable result.
+* C's ungated m3/m4 here are **0.769 / 0.769**, far below §7's **0.931**
+  break-even, and consistent with round 2's arm-level 0.783 / 0.794. Three
+  independent measurements now agree that the unconditional survivals sit well
+  under break-even. The **conditional-on-strong-match** number — the actual
+  question — still requires a census, and therefore still requires a drained arm.
+
+## R4.7 Verdict — lever 2: **REFUSE**, and the first evidence that it may be worth it
+
+Four armed boots, four fail-closed refusals at four distinct sites (11th, 12th,
+14th, 15th), each strictly further into the run than the last: capture → first
+ungated step → first gated step → **a complete task**. The interlocks have refused
+a malformed drafter every single time and never served one.
+
+What is now proven live: the gate arms, fires, sustains gated decoding across a
+whole SWE task, leaves the pack width untouched, and — on a matched-basis sighting
+— *gains* acceptance inside its pre-registered band.
+
+What remains unmeasured: everything the census carries — warm-step rate vs the
+pre-registered 0.15–0.25, the −20.6 ms gated `dfwd`, the −4.0 ms `step_wall`,
+registry rows, per-step replay counts — because the flush that writes the census
+is the thing that refuses.
+
+**Before a fifth boot:** fix `:39694` (and only `:39694` — `:39664` is correct),
+then work the 38-row replay-dimension list in
+`promotion_ab_replay_literal_scan.json`, and re-key the campaign's adjudication
+list on positions rather than literals. The boundary path is now the frontier:
+every per-step interlock has been satisfied, so the remaining sites are
+concentrated in flush/reconcile/materialisation code that only a task boundary
+exercises — a much smaller surface than the per-step drafter, and one this scan
+now covers.

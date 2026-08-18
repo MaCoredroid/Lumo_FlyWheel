@@ -1,0 +1,380 @@
+{
+ "schema": "fr14.promotion_ab.replay_literal_scan.v1",
+ "rationale": "shape_literal_scan()'s magnitudes {15,6,10,5,4,12,16,8,14,18} cover the COLUMN dimension of the gate. The split graph also moves the REPLAY dimension 1->2, and neither 1 nor 2 is in that set, so the 15th site (matching_replays != 1 in the fixed_flush blob) was scanned without being flagged.",
+ "blobs_scanned": 65,
+ "candidates": 40,
+ "for_review": 38,
+ "known_stale": [
+  {
+   "blob_lineno": 39286,
+   "line_in_blob": 409,
+   "value": 1,
+   "source": "or evidence.get(\"matching_replays\") != 1",
+   "parses": true,
+   "verdict": "STALE",
+   "why": "THE 15TH SITE, found by the round-4 boot. Drafter evidence: an armed UNGATED step replays lo then hi (2 replays, section 11.1), so this flush-time attestation refuses a legal step. Textual twin of line 379, opposite verdict."
+  }
+ ],
+ "rows": [
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 1933,
+   "value": 1,
+   "source": "or int(committer.get(\"replays\", -1)) != capacity",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 4450,
+   "value": 1,
+   "source": "and int(row.get(\"matching_replays\", -1)) == 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 5562,
+   "value": 1,
+   "source": "\"matching_replays\": 1,",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 5864,
+   "value": 1,
+   "source": "or int(lifecycle.get(\"measured_replays\", -1)) != 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 5865,
+   "value": 1,
+   "source": "or int(lifecycle.get(\"unmeasured_replays\", -1)) != 0",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 5870,
+   "value": 1,
+   "source": "or int(proposal.get(\"graph_replays\", -1)) != 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 5927,
+   "value": 1,
+   "source": "or int(proposal.get(\"graph_replays\", -1)) != 0",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 5930,
+   "value": 1,
+   "source": "or int(proposal.get(\"graph_captures\", -1)) not in (",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 5965,
+   "value": 1,
+   "source": "proposal[\"graph_captures\"] = int(proposal.get(\"graph_captures\", 0)) + 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 6250,
+   "value": 1,
+   "source": "proposal[\"graph_replays\"] = _fr13_prior_replays + 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 6271,
+   "value": 1,
+   "source": "or int(evidence.get(\"matching_replays\", -1))",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 6280,
+   "value": 1,
+   "source": "evidence[\"matching_replays\"] = _fr13_prior_replays + 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 6593,
+   "value": 1,
+   "source": "or int(evidence.get(\"matching_replays\", -1))",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 6595,
+   "value": 1,
+   "source": "or int(evidence.get(\"graph_captures\", -1))",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 6696,
+   "value": 1,
+   "source": "replay_delta != 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 6697,
+   "value": 1,
+   "source": "or replay_batch_delta != 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 6747,
+   "value": 1,
+   "source": "committer_contract.get(\"graph_replays_per_event\", -1)",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 6798,
+   "value": 1,
+   "source": "or normalized_committer[\"graph_replays_per_event\"] != 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 7088,
+   "value": 1,
+   "source": "or int(event[\"conv_stage_replays\"]) != 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 7460,
+   "value": 1,
+   "source": "or int(event[\"forward_graph_replays\"]) != 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 7807,
+   "value": 1,
+   "source": "+ int(observed[\"committer\"].get(\"graph_replays\") != 1)",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 7969,
+   "value": 1,
+   "source": "_FR13_FIXED32_GRAPH_REPLAY_EVIDENCE[-1]",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 7985,
+   "value": 1,
+   "source": "or int(evidence.get(\"matching_replays\", -1)) != 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 7986,
+   "value": 1,
+   "source": "or int(provenance.get(\"matching_replays\", -1)) != 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 8010,
+   "value": 1,
+   "source": "_FR13_FIXED32_DRAFTER_REPLAY_EVIDENCE[-1]",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 8038,
+   "value": 1,
+   "source": "or int(drafter_evidence.get(\"matching_replays\", -1))",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 530,
+   "line_in_blob": 8039,
+   "value": 1,
+   "source": "!= int(runtime.get(\"graph_replays\", -1))",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 10528,
+   "line_in_blob": 229,
+   "value": 1,
+   "source": "_fr13_spec_cols = int(self.num_spec) + 1  # replay ssi stack width; must match the ssi width or the per-step copy_ shape-mismatches. FR13_SPEC_BLOCKS_CAP was the only narrower and it was deleted 2026-",
+   "parses": false,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 18421,
+   "line_in_blob": 2676,
+   "value": 2,
+   "source": "_fr13_replay_layers[_p]._fr13_replay_flags[:2]",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 26056,
+   "line_in_blob": 2529,
+   "value": 1,
+   "source": "or int(_fr13_dh_proposal.get(\"graph_replays\", -1)) != 1",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 26056,
+   "line_in_blob": 2618,
+   "value": 1,
+   "source": "\"observed_measured_replays_at_least\": 1,",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 26056,
+   "line_in_blob": 2691,
+   "value": 1,
+   "source": "or int(_fr13_dh_u8_proposal.get(\"graph_replays\", -1))",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 26056,
+   "line_in_blob": 2801,
+   "value": 1,
+   "source": "\"observed_measured_replays_at_least\": 1,",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 26056,
+   "line_in_blob": 2879,
+   "value": 1,
+   "source": "_fr13_dh_fp8_proposal.get(\"graph_replays\", -1)",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 26056,
+   "line_in_blob": 3024,
+   "value": 1,
+   "source": "\"observed_measured_replays_at_least\": 1,",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 35034,
+   "line_in_blob": 75,
+   "value": 1,
+   "source": "self._fwd_samples_host = []  # FR13_SUBSPAN begin\u2192pre-replay ms (-1 = no mark)",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 39286,
+   "line_in_blob": 203,
+   "value": 1,
+   "source": "or int(evidence.get(\"committer_replays\", -1)) != capacity",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 39286,
+   "line_in_blob": 217,
+   "value": 1,
+   "source": "or int(committer.get(\"replays\", -1)) != capacity",
+   "parses": true,
+   "verdict": "REVIEW",
+   "why": null
+  },
+  {
+   "blob_lineno": 39286,
+   "line_in_blob": 379,
+   "value": 1,
+   "source": "or evidence.get(\"matching_replays\") != 1",
+   "parses": true,
+   "verdict": "OK",
+   "why": "FORWARD-graph evidence: the forward CUDA graph really is replayed once per step regardless of the drafter's pass split. Correct; do not touch."
+  },
+  {
+   "blob_lineno": 39286,
+   "line_in_blob": 409,
+   "value": 1,
+   "source": "or evidence.get(\"matching_replays\") != 1",
+   "parses": true,
+   "verdict": "STALE",
+   "why": "THE 15TH SITE, found by the round-4 boot. Drafter evidence: an armed UNGATED step replays lo then hi (2 replays, section 11.1), so this flush-time attestation refuses a legal step. Textual twin of line 379, opposite verdict."
+  }
+ ]
+}
