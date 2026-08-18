@@ -1058,6 +1058,7 @@ def decide_fixed32(
     vocab_size=None,
     max_spec_factor=4.0,
     min_token_prob=0.0,
+    gated=False,
 ):
     """Build the common 31-draft payload for both fixed-32 logical arms.
 
@@ -1067,28 +1068,54 @@ def decide_fixed32(
     with the native 15-node MTP head this always publishes 31 draft columns.
     Logical Tail6 versus Hydra27 selection happens later through the sampler
     validity mask and cannot alter drafter work.
+
+    ``gated`` (FR14 lever 2, default False) selects the suffix-aware short step:
+    the caller ran only 2 post-root MTP forwards, so ``mtp_head_per_depth`` holds
+    3 depths instead of 5 and Arctic is asked for an 8-token main chain covering
+    absolute depths 3..10.  The first two of those eight columns replace the MTP
+    spine at head depths 4 and 5; the remaining six are the tail exactly as
+    before, so the published pack is still 15 head + 6 tail + 10 rescue = 31 and
+    the validity mask is untouched.  Everything about the ungated path -- work
+    counters, Arctic call count, pack width -- is bit-for-bit what it was.
     """
     from fr13_fixed32_topology import (
         ARCTIC_LOOKUP_CHAINS,
         ARCTIC_LOOKUP_CALLS_PER_REQUEST,
         ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
         ARCTIC_MAIN_TAIL_LENGTH,
+        GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
+        GATED_ARCTIC_MAIN_TAIL_LENGTH,
+        GATED_MTP_K,
+        GATED_SUFFIX_SPINE_DRAFT_IDS,
         PHYSICAL_BRANCH_CHAINS,
         PHYSICAL_DRAFTS,
         RESCUE_CARRY_SLOTS_PER_REQUEST,
         branch_paths,
         validate_contract,
+        validate_gate_contract,
     )
 
     validate_contract()
+    if gated:
+        validate_gate_contract()
+        head_depth = GATED_MTP_K
+        main_len = GATED_ARCTIC_MAIN_TAIL_LENGTH
+        requested_tokens = GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+        # the leading columns that land in head depths 4 and 5 instead of the tail
+        head_fill_columns = len(GATED_SUFFIX_SPINE_DRAFT_IDS)
+    else:
+        head_depth = N_DEPTH
+        main_len = ARCTIC_MAIN_TAIL_LENGTH
+        requested_tokens = ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+        head_fill_columns = 0
     B = len(spec_row_req_ids)
     if not 1 <= B <= 4:
         raise RuntimeError(f"fixed32 drafter requires B in [1,4], got {B}")
     if cache is None:
         raise RuntimeError("fixed32 drafter requires a live Arctic cache")
-    if len(mtp_head_per_depth) != N_DEPTH:
+    if len(mtp_head_per_depth) != head_depth:
         raise RuntimeError(
-            f"fixed32 drafter requires exactly {N_DEPTH} MTP head depths, "
+            f"fixed32 drafter requires exactly {head_depth} MTP head depths, "
             f"got {len(mtp_head_per_depth)}"
         )
     if set(hydra_seed_per_rank or {}) != {
@@ -1112,11 +1139,11 @@ def decide_fixed32(
         cache,
         spec_row_req_ids,
         mtp_head_per_depth,
-        head_depth=N_DEPTH,
-        tail_len=ARCTIC_MAIN_TAIL_LENGTH,
+        head_depth=head_depth,
+        tail_len=main_len,
         device=device,
         pad_token=pad_token,
-        max_spec_tokens=ARCTIC_MAIN_TAIL_LENGTH,
+        max_spec_tokens=main_len,
         max_spec_factor=max_spec_factor,
         min_token_prob=min_token_prob,
         vocab_size=vocab_size,
@@ -1129,14 +1156,19 @@ def decide_fixed32(
     )
     paths = get_tail_path_tokens()
     expected_paths = set(branch_paths(PHYSICAL_BRANCH_CHAINS))
-    if tail is None or len(tail) != ARCTIC_MAIN_TAIL_LENGTH:
-        raise RuntimeError("fixed32 main tail did not produce exactly six columns")
+    if tail is None or len(tail) != main_len:
+        raise RuntimeError(
+            f"fixed32 main tail did not produce exactly {main_len} columns"
+        )
     if set(paths) != expected_paths:
         raise RuntimeError(
             "fixed32 rescue pack path mismatch: "
             f"expected={sorted(expected_paths)} actual={sorted(paths)}"
         )
-    if N_DEPTH * 3 + len(tail) + len(paths) != PHYSICAL_DRAFTS:
+    # On a gated step the first `head_fill_columns` Arctic columns are consumed
+    # by head depths 4 and 5, so they are NOT tail columns; the pack width check
+    # is therefore identical arithmetic in both shapes.
+    if N_DEPTH * 3 + (len(tail) - head_fill_columns) + len(paths) != PHYSICAL_DRAFTS:
         raise RuntimeError("fixed32 drafter pack is not exactly 31 columns")
     work.update(
         {
@@ -1160,26 +1192,22 @@ def decide_fixed32(
     expected_work = {
         "batch_size": B,
         "main_lookup_calls": B,
-        "main_lookup_tokens": ARCTIC_MAIN_TAIL_LENGTH * B,
+        "main_lookup_tokens": main_len * B,
         "rank1_lookup_calls": B,
         "rank1_lookup_tokens": ARCTIC_LOOKUP_CHAINS[0][1] * B,
         "rank2_lookup_calls": B,
         "rank2_lookup_tokens": ARCTIC_LOOKUP_CHAINS[1][1] * B,
         "rescue_carry_slots": RESCUE_CARRY_SLOTS_PER_REQUEST * B,
         "arctic_lookup_calls": ARCTIC_LOOKUP_CALLS_PER_REQUEST * B,
-        "arctic_requested_tokens": ARCTIC_LOOKUP_TOKENS_PER_REQUEST * B,
-        "main_tail_columns": ARCTIC_MAIN_TAIL_LENGTH,
+        "arctic_requested_tokens": requested_tokens * B,
+        "main_tail_columns": main_len,
         "rescue_path_columns": sum(length for _rank, length in PHYSICAL_BRANCH_CHAINS),
         "merge_fill_calls": 1,
         "merge_fill_columns": (
-            ARCTIC_MAIN_TAIL_LENGTH
-            + sum(length for _rank, length in PHYSICAL_BRANCH_CHAINS)
+            main_len + sum(length for _rank, length in PHYSICAL_BRANCH_CHAINS)
         ),
         "merge_fill_rows": B
-        * (
-            ARCTIC_MAIN_TAIL_LENGTH
-            + sum(length for _rank, length in PHYSICAL_BRANCH_CHAINS)
-        ),
+        * (main_len + sum(length for _rank, length in PHYSICAL_BRANCH_CHAINS)),
     }
     if work != expected_work:
         raise RuntimeError(
@@ -1194,6 +1222,8 @@ def decide_fixed32(
     _FIXED32_WORK_SERIAL += 1
     _FIXED32_LAST_WORK = {
         "serial": _FIXED32_WORK_SERIAL,
+        "gated": bool(gated),
+        "head_fill_columns": head_fill_columns,
         **work,
     }
     return tail

@@ -243,6 +243,39 @@ SUBTREE_LEVELS: tuple[tuple[tuple[tuple[int, ...], int], ...], ...] = (
     ),
 )
 
+# --- FR14 lever 2: suffix-aware MTP pass gating -----------------------------
+# On a GATED step the drafter runs 2 post-root MTP forwards instead of 4, so
+# head depths 4 and 5 (0-indexed draft positions 3 and 4) have no MTP token.
+# The two SPINE nodes at those depths are Arctic-filled -- they must be, because
+# the whole depth-6..11 tail hangs off the depth-5 spine node and padding it
+# would orphan six live suffix nodes.  The four RUNNER-UP nodes at those depths
+# are duplicate-sibling padded (repeat the parent's spine token), which is the
+# already-deployed last-resort pad of fr13_mtp_suffix_assembly and whose
+# committer tie convention is proven on device by fr13_greedy_pointmass_dup_gate.
+#
+# Consequences that keep the blast radius small, all asserted in
+# validate_gate_contract():
+#   * the validity MASK does not change -- a gated step is still hydra27/27
+#     active nodes, so no sampler child table is rebuilt and no committer graph
+#     is invalidated;
+#   * the 31-column pack does not change -- 15 head + 6 tail + 10 rescue -- only
+#     the FILL SOURCE of 6 head columns changes;
+#   * both shapes reach the same maximum draft position (11 = MAX_PHYSICAL_DEPTH).
+N_MTP_HEAD_DEPTHS = 5
+BRANCHES_PER_HEAD_DEPTH = 2
+GATED_MTP_K = 3
+GATED_MTP_FORWARD_CALLS = GATED_MTP_K - 1
+GATED_ARCTIC_MAIN_TAIL_LENGTH = 8
+GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST = GATED_ARCTIC_MAIN_TAIL_LENGTH + sum(
+    length for _rank, length in ARCTIC_LOOKUP_CHAINS
+)
+# head depths (1-indexed, as in the path length) whose spine is Arctic-filled
+GATED_SUFFIX_HEAD_DEPTHS = (4, 5)
+# draft ids of the runner-up nodes those depths lose -- duplicate-sibling padded
+GATED_PADDED_DRAFT_IDS = (14, 15, 19, 20)
+# draft ids of the spine nodes those depths keep -- Arctic-filled, never padded
+GATED_SUFFIX_SPINE_DRAFT_IDS = (13, 18)
+
 PHYSICAL_DRAFTS = 31
 PHYSICAL_ROWS = 32
 TAIL6_ACTIVE_DRAFTS = 23
@@ -679,8 +712,88 @@ def validate_contract() -> None:
         raise AssertionError("physical topology digest drifted")
 
 
+def validate_gate_contract() -> None:
+    """Contract for a GATED step (FR14_SUFFIX_PASS_GATE).
+
+    Kept separate from validate_contract() on purpose: the ungated contract and
+    its pinned literals must remain byte-identical whether or not the gate
+    exists, so nothing here may weaken anything there.
+    """
+    # both shapes reach the same deepest draft position
+    if GATED_MTP_K + GATED_ARCTIC_MAIN_TAIL_LENGTH != MAX_PHYSICAL_DEPTH:
+        raise AssertionError("gated shape does not reach the physical tree depth")
+    if N_MTP_HEAD_DEPTHS + ARCTIC_MAIN_TAIL_LENGTH != MAX_PHYSICAL_DEPTH:
+        raise AssertionError("ungated shape does not reach the physical tree depth")
+    if GATED_MTP_FORWARD_CALLS != GATED_MTP_K - 1:
+        raise AssertionError("gated post-root forward count drifted")
+    if GATED_MTP_FORWARD_CALLS * 2 != MTP_FORWARD_CALLS:
+        raise AssertionError(
+            "the gated graph must be exactly half the ungated one -- the split "
+            "capture depends on lo and hi holding the same number of passes"
+        )
+    if GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST != 14:
+        raise AssertionError("gated Arctic request width drifted")
+
+    # the head columns the gate re-sources: depths 4 and 5, spine + 2 runner-ups
+    expected_padded = tuple(
+        node
+        for node, path in enumerate(FIXED32_CHOICES)
+        if len(path) in GATED_SUFFIX_HEAD_DEPTHS and path[0] == 0 and path[-1] != 0
+    )
+    if expected_padded != GATED_PADDED_DRAFT_IDS:
+        raise AssertionError(
+            f"gated padded draft ids drifted: {expected_padded!r}"
+        )
+    expected_spine = tuple(
+        node
+        for node, path in enumerate(FIXED32_CHOICES)
+        if len(path) in GATED_SUFFIX_HEAD_DEPTHS and set(path) == {0}
+    )
+    if expected_spine != GATED_SUFFIX_SPINE_DRAFT_IDS:
+        raise AssertionError(
+            f"gated suffix spine draft ids drifted: {expected_spine!r}"
+        )
+
+    # THE well-formedness invariant: every node the gate stops MTP-feeding is
+    # either Arctic-filled or duplicate-padded, and no node is orphaned.  A
+    # padded node must have no valid descendants; a spine node must keep them.
+    child_of = {}
+    for node, parent in enumerate(DRAFT_PARENT):
+        child_of.setdefault(parent, []).append(node)
+    for node in GATED_PADDED_DRAFT_IDS:
+        if child_of.get(node):
+            raise AssertionError(
+                f"padded draft {node} has children {child_of[node]} -- padding it "
+                "would orphan live nodes; it must be Arctic-filled instead"
+            )
+    for node in GATED_SUFFIX_SPINE_DRAFT_IDS:
+        if not child_of.get(node):
+            raise AssertionError(f"spine draft {node} lost its subtree")
+        if not HYDRA27_VALID[node]:
+            raise AssertionError(f"spine draft {node} is not active in hydra27")
+
+    # the mask is NOT changed by gating: same active set, same committer tables
+    for node in GATED_PADDED_DRAFT_IDS:
+        if not HYDRA27_VALID[node]:
+            raise AssertionError(
+                f"draft {node} is already inactive -- the gate pads FILLED nodes"
+            )
+
+    # the 31-column pack is unchanged: 15 head + 6 tail + 10 rescue
+    gated_tail_columns = GATED_ARCTIC_MAIN_TAIL_LENGTH - len(
+        GATED_SUFFIX_SPINE_DRAFT_IDS
+    )
+    if gated_tail_columns != ARCTIC_MAIN_TAIL_LENGTH:
+        raise AssertionError("gated tail column count drifted from the pack width")
+    head_columns = N_MTP_HEAD_DEPTHS * (1 + BRANCHES_PER_HEAD_DEPTH)
+    rescue_columns = sum(length for _rank, length in PHYSICAL_BRANCH_CHAINS)
+    if head_columns + gated_tail_columns + rescue_columns != PHYSICAL_DRAFTS:
+        raise AssertionError("gated pack is not exactly 31 columns")
+
+
 if __name__ == "__main__":
     validate_contract()
+    validate_gate_contract()
     print(
         "PASS fixed32 topology: physical=31/32 active=23/27 "
         f"masks={TAIL6_VALID_MASK:#x}/{HYDRA27_VALID_MASK:#x} "
