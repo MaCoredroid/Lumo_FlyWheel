@@ -174,19 +174,32 @@ unset -f run_variant
 # them rather than to their combination. "A mechanism that EXPLAINS a failure is
 # not evidence that it CAUSED it" (pass 30) -- so the attribution gets its own
 # boot instead of an argument. Never used for a reported A/B arm.
-PROMOAB_TOPK=${PROMOAB_TOPK:-1}
-case "$PROMOAB_TOPK" in 0|1) ;; *) echo "PROMOAB_TOPK must be 0 or 1" >&2; exit 2 ;; esac
+#
+# PROMOAB_TOPK=promoted (default since the 2026-08-18 promotion) names NOTHING:
+# the launcher's own default arms the lever from its launcher-literal credential,
+# which is the path production takes. Naming it explicitly would still work --
+# the defaults resolve to the same .so and sha -- but it would test the operator's
+# literals instead of the promoted ones, and a promoted default that only works
+# when the caller repeats it is not promoted.
+#   =1  force ON  with this campaign's own pins (pre-promotion behaviour)
+#   =0  force OFF -- the opt-out the paired 0-vs-1 A/B needs
+PROMOAB_TOPK=${PROMOAB_TOPK:-promoted}
+case "$PROMOAB_TOPK" in 0|1|promoted) ;; *) echo "PROMOAB_TOPK must be 0, 1 or promoted" >&2; exit 2 ;; esac
 arm_env=(
   FR10_METRICS=0
   FR13_HOST_TAIL_PREP_BAKE=1
   FR13_HOST_TAIL_DEFER=0
   FR13_DFWD_SPLIT=1
   FR13_LFWD_GPU_TIMER=1
-  "FR14_FUSED_DRAFT_TOPK=$PROMOAB_TOPK"
-  FR14_FUSED_DRAFT_TOPK_BLOCKS=64
-  "FR14_FUSED_DRAFT_TOPK_SO=$TOPK_SO_CONTAINER"
-  "FR14_FUSED_DRAFT_TOPK_SHA256=$TOPK_SHA256"
 )
+if [[ "$PROMOAB_TOPK" != "promoted" ]]; then
+  arm_env+=(
+    "FR14_FUSED_DRAFT_TOPK=$PROMOAB_TOPK"
+    FR14_FUSED_DRAFT_TOPK_BLOCKS=64
+    "FR14_FUSED_DRAFT_TOPK_SO=$TOPK_SO_CONTAINER"
+    "FR14_FUSED_DRAFT_TOPK_SHA256=$TOPK_SHA256"
+  )
+fi
 if [[ "$ARM_KIND" == "G" ]]; then
   arm_env+=(
     FR14_SUFFIX_PASS_GATE=1
