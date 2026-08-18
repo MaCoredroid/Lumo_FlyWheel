@@ -1,0 +1,442 @@
+[
+ {
+  "basis": "K0 definitive serve (21611 steps, 92439 accepted)",
+  "today": {
+   "accept": 4.277899413456694,
+   "committed": 5.277899413456694,
+   "step_ms": 207.87,
+   "tps": 25.39038540172557
+  },
+  "seam3": {
+   "pessimistic q1=0.4729 (sim, no selection credit) | tail6 (max pos 8)": {
+    "accept": 3.5736,
+    "committed": 4.5736,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 24.139,
+      "delta_pct": -4.93
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 24.475,
+      "delta_pct": -3.61
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 25.189,
+      "delta_pct": -0.79
+     }
+    }
+   },
+   "pessimistic q1=0.4729 (sim, no selection credit) | tail8 (max pos 10)": {
+    "accept": 3.8341,
+    "committed": 4.8341,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 25.514,
+      "delta_pct": 0.49
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 25.869,
+      "delta_pct": 1.88
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 26.624,
+      "delta_pct": 4.86
+     }
+    }
+   },
+   "pessimistic q1=0.4729 (sim, no selection credit) | tail12 (max pos 14)": {
+    "accept": 4.268,
+    "committed": 5.268,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 27.804,
+      "delta_pct": 9.5
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 28.19,
+      "delta_pct": 11.03
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 29.013,
+      "delta_pct": 14.27
+     }
+    }
+   },
+   "central    q1=0.5475 (linear selection interp) | tail6 (max pos 8)": {
+    "accept": 3.7644,
+    "committed": 4.7644,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 25.146,
+      "delta_pct": -0.96
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 25.496,
+      "delta_pct": 0.42
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 26.24,
+      "delta_pct": 3.35
+     }
+    }
+   },
+   "central    q1=0.5475 (linear selection interp) | tail8 (max pos 10)": {
+    "accept": 4.066,
+    "committed": 5.066,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 26.738,
+      "delta_pct": 5.31
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 27.11,
+      "delta_pct": 6.77
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 27.901,
+      "delta_pct": 9.89
+     }
+    }
+   },
+   "central    q1=0.5475 (linear selection interp) | tail12 (max pos 14)": {
+    "accept": 4.5683,
+    "committed": 5.5683,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 29.389,
+      "delta_pct": 15.75
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 29.798,
+      "delta_pct": 17.36
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 30.668,
+      "delta_pct": 20.78
+     }
+    }
+   },
+   "optimistic q1=0.5972 (full depth-5 selection credit) | tail6 (max pos 8)": {
+    "accept": 3.8916,
+    "committed": 4.8916,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 25.817,
+      "delta_pct": 1.68
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 26.177,
+      "delta_pct": 3.1
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 26.941,
+      "delta_pct": 6.11
+     }
+    }
+   },
+   "optimistic q1=0.5972 (full depth-5 selection credit) | tail8 (max pos 10)": {
+    "accept": 4.2206,
+    "committed": 5.2206,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 27.554,
+      "delta_pct": 8.52
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 27.937,
+      "delta_pct": 10.03
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 28.753,
+      "delta_pct": 13.24
+     }
+    }
+   },
+   "optimistic q1=0.5972 (full depth-5 selection credit) | tail12 (max pos 14)": {
+    "accept": 4.7685,
+    "committed": 5.7685,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 30.446,
+      "delta_pct": 19.91
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 30.869,
+      "delta_pct": 21.58
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 31.77,
+      "delta_pct": 25.13
+     }
+    }
+   }
+  },
+  "tail_extension_at_current_seam": {
+   "tail8 (max pos 12)": {
+    "accept": 4.4951,
+    "committed": 5.4951,
+    "tps_same_step": 26.435,
+    "delta_pct": 4.12
+   },
+   "tail10 (max pos 14)": {
+    "accept": 4.6861,
+    "committed": 5.6861,
+    "tps_same_step": 27.354,
+    "delta_pct": 7.73
+   },
+   "tail12 (max pos 16)": {
+    "accept": 4.8569,
+    "committed": 5.8569,
+    "tps_same_step": 28.176,
+    "delta_pct": 10.97
+   }
+  }
+ },
+ {
+  "basis": "pooled 22 banked runs (228036 steps, 936372 accepted)",
+  "today": {
+   "accept": 4.106061744402123,
+   "committed": 5.106061744402123,
+   "step_ms": 207.87,
+   "tps": 24.563726099976535
+  },
+  "seam3": {
+   "pessimistic q1=0.4729 (sim, no selection credit) | tail6 (max pos 8)": {
+    "accept": 3.5228,
+    "committed": 4.5228,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 23.871,
+      "delta_pct": -2.82
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 24.203,
+      "delta_pct": -1.47
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 24.909,
+      "delta_pct": 1.41
+     }
+    }
+   },
+   "pessimistic q1=0.4729 (sim, no selection credit) | tail8 (max pos 10)": {
+    "accept": 3.7725,
+    "committed": 4.7725,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 25.188,
+      "delta_pct": 2.54
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 25.539,
+      "delta_pct": 3.97
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 26.284,
+      "delta_pct": 7.0
+     }
+    }
+   },
+   "pessimistic q1=0.4729 (sim, no selection credit) | tail12 (max pos 14)": {
+    "accept": 4.1883,
+    "committed": 5.1883,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 27.383,
+      "delta_pct": 11.48
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 27.764,
+      "delta_pct": 13.03
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 28.575,
+      "delta_pct": 16.33
+     }
+    }
+   },
+   "central    q1=0.5329 (linear selection interp) | tail6 (max pos 8)": {
+    "accept": 3.672,
+    "committed": 4.672,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 24.658,
+      "delta_pct": 0.38
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 25.001,
+      "delta_pct": 1.78
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 25.731,
+      "delta_pct": 4.75
+     }
+    }
+   },
+   "central    q1=0.5329 (linear selection interp) | tail8 (max pos 10)": {
+    "accept": 3.9533,
+    "committed": 4.9533,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 26.143,
+      "delta_pct": 6.43
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 26.507,
+      "delta_pct": 7.91
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 27.281,
+      "delta_pct": 11.06
+     }
+    }
+   },
+   "central    q1=0.5329 (linear selection interp) | tail12 (max pos 14)": {
+    "accept": 4.422,
+    "committed": 5.422,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 28.617,
+      "delta_pct": 16.5
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 29.015,
+      "delta_pct": 18.12
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 29.862,
+      "delta_pct": 21.57
+     }
+    }
+   },
+   "optimistic q1=0.5729 (full depth-5 selection credit) | tail6 (max pos 8)": {
+    "accept": 3.7715,
+    "committed": 4.7715,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 25.183,
+      "delta_pct": 2.52
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 25.534,
+      "delta_pct": 3.95
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 26.279,
+      "delta_pct": 6.98
+     }
+    }
+   },
+   "optimistic q1=0.5729 (full depth-5 selection credit) | tail8 (max pos 10)": {
+    "accept": 4.0739,
+    "committed": 5.0739,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 26.78,
+      "delta_pct": 9.02
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 27.152,
+      "delta_pct": 10.54
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 27.945,
+      "delta_pct": 13.76
+     }
+    }
+   },
+   "optimistic q1=0.5729 (full depth-5 selection credit) | tail12 (max pos 14)": {
+    "accept": 4.5777,
+    "committed": 5.5777,
+    "cost": {
+     "D=18.4 (conservative)": {
+      "step_ms": 189.47,
+      "tps": 29.439,
+      "delta_pct": 19.85
+     },
+     "D=21.0 (central)": {
+      "step_ms": 186.87,
+      "tps": 29.848,
+      "delta_pct": 21.51
+     },
+     "D=26.3 (optimistic)": {
+      "step_ms": 181.57,
+      "tps": 30.72,
+      "delta_pct": 25.06
+     }
+    }
+   }
+  },
+  "tail_extension_at_current_seam": {
+   "tail8 (max pos 12)": {
+    "accept": 4.2963,
+    "committed": 5.2963,
+    "tps_same_step": 25.479,
+    "delta_pct": 3.73
+   },
+   "tail10 (max pos 14)": {
+    "accept": 4.4635,
+    "committed": 5.4635,
+    "tps_same_step": 26.283,
+    "delta_pct": 7.0
+   },
+   "tail12 (max pos 16)": {
+    "accept": 4.6131,
+    "committed": 5.6131,
+    "tps_same_step": 27.003,
+    "delta_pct": 9.93
+   }
+  }
+ }
+]
