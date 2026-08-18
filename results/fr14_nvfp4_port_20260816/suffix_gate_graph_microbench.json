@@ -1,0 +1,32 @@
+{
+ "schema": "fr14.gate_graph_microbench.v1",
+ "device": "NVIDIA GB10",
+ "torch": "2.10.0a0+a36e1d39eb.nv26.01.42222806",
+ "hidden": 4096,
+ "target_bytes_per_pass": 1564560392,
+ "actual_bytes_per_pass": 1577058304,
+ "pass_byte_floor_ms": 5.776770344322345,
+ "eager_4pass_ms": 30.504256207495928,
+ "single_graph": {
+  "capture_ms": 3.2581789419054985,
+  "pool_growth_bytes": 25165824,
+  "replay_ms": 29.478902323171496,
+  "matches_eager": true
+ },
+ "split_graph": {
+  "capture_ms_lo": 1.8317459616810083,
+  "capture_ms_hi": 1.7015221528708935,
+  "capture_ms_total": 3.533268114551902,
+  "extra_capture_ms_vs_single": 0.2750891726464033,
+  "pool_growth_bytes_lo": 23068672,
+  "pool_growth_bytes_hi": 23068672,
+  "pool_growth_bytes_total": 46137344,
+  "replay_ms_ungated_lo_plus_hi": 29.409491078695282,
+  "replay_ms_gated_lo_only": 14.625145052559674,
+  "ungated_matches_single_graph": true,
+  "gated_fills_only_first_two_passes": true,
+  "launch_overhead_ms": -0.06941124447621405,
+  "saving_ms_on_gated_steps": 14.784346026135609,
+  "measured_per_pass_ms": 7.392173013067804
+ }
+}

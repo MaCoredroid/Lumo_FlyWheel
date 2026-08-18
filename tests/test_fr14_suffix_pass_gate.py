@@ -1,0 +1,199 @@
+"""Tests for the FR14 suffix-aware MTP pass gate (lever 2).
+
+The load-bearing test is `test_online_matches_offline_predicate`: it proves the
+gate that ships makes bit-identical decisions to the predicate that was
+calibrated offline in `scripts/fr14_suffix_gate_calibration.py`.  Without that,
+the measured warm rate and the measured q1_gated describe a different function
+from the one in the serving path.
+"""
+
+from __future__ import annotations
+
+import os
+import random
+import sys
+from pathlib import Path
+
+import pytest
+
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+from fr14_suffix_pass_gate import (  # noqa: E402
+    DEFAULT_MIN_AGREE,
+    DEFAULT_NGRAM,
+    SuffixPassGate,
+    gate_from_env,
+)
+from fr14_suffix_gate_calibration import SuffixIndex  # noqa: E402
+
+
+def _synthetic_stream(n=6000, seed=7):
+    """A stream with real recurrence: repeated phrases inside random filler."""
+    rng = random.Random(seed)
+    phrases = [[rng.randrange(1000) for _ in range(rng.randrange(9, 25))]
+               for _ in range(24)]
+    out = []
+    while len(out) < n:
+        if rng.random() < 0.45:
+            out.extend(rng.choice(phrases))
+        else:
+            out.extend(rng.randrange(1000) for _ in range(rng.randrange(1, 6)))
+    return out[:n]
+
+
+def test_online_matches_offline_predicate():
+    """The shipped gate and the calibrated offline predicate are one function."""
+    tokens = _synthetic_stream()
+    offline = SuffixIndex(tokens)
+    gate = SuffixPassGate(
+        enabled=True, ngram=DEFAULT_NGRAM, min_agree=DEFAULT_MIN_AGREE,
+        min_history=0,
+    )
+    gate.start_request("r", [])
+
+    compared = 0
+    fired = 0
+    for j in range(len(tokens)):
+        if j >= DEFAULT_NGRAM:
+            seen, agree = offline.stats_at(tokens[max(0, j - 32): j], j, DEFAULT_NGRAM)
+            want = bool(seen and agree >= DEFAULT_MIN_AGREE)
+            got = gate.decide("r")
+            assert got.fired == want, (
+                f"divergence at j={j}: offline={want} "
+                f"(seen={seen}, agree={agree:.4f}) online={got!r}"
+            )
+            if seen:
+                assert got.agreement == pytest.approx(agree), f"agreement at j={j}"
+            compared += 1
+            fired += int(want)
+        gate.observe("r", [tokens[j]])
+
+    assert compared > 5000, "test stream too short to be meaningful"
+    # a stream with recurrence must exercise BOTH outcomes, or the test is vacuous
+    assert 0 < fired < compared, f"degenerate predicate: fired {fired}/{compared}"
+
+
+def test_disabled_gate_never_fires_and_keeps_no_state():
+    gate = SuffixPassGate(enabled=False, min_history=0)
+    gate.start_request("r", list(range(500)))
+    gate.observe("r", list(range(500)))
+    assert gate.active_requests() == set()
+    for _ in range(50):
+        assert gate.decide("r").fired is False
+    # a disabled gate must not even count steps -- it is not in the path
+    assert gate.stats["steps"] == 0
+
+
+def test_fails_closed_on_unknown_request_and_short_history():
+    gate = SuffixPassGate(enabled=True, min_history=256)
+    assert gate.decide("never-started").reason == "unknown_request"
+    gate.start_request("r", list(range(100)))
+    d = gate.decide("r")
+    assert d.fired is False and d.reason == "short_history"
+
+
+def test_fails_closed_on_corrupt_state():
+    gate = SuffixPassGate(enabled=True, min_history=0)
+    gate.start_request("r", [1, 2, 3] * 40)
+    gate._state["r"]["index"] = None  # corrupt it
+    d = gate.decide("r")
+    assert d.fired is False and d.reason.startswith("error:")
+    assert gate.stats["errors"] == 1
+
+
+def test_low_agreement_blocks_even_on_a_match():
+    # one 8-gram with maximally split continuations -> agreement 0.5
+    ctx = [9] * 8
+    tokens = []
+    for k in range(20):
+        tokens.extend(ctx + [100 + (k % 2)])
+    gate = SuffixPassGate(enabled=True, ngram=8, min_agree=0.75, min_history=0)
+    gate.start_request("r", tokens + ctx)
+    d = gate.decide("r")
+    assert d.match is True
+    assert d.fired is False and d.reason == "low_agreement"
+    assert d.agreement < 0.75
+
+    loose = SuffixPassGate(enabled=True, ngram=8, min_agree=0.4, min_history=0)
+    loose.start_request("r", tokens + ctx)
+    assert loose.decide("r").fired is True
+
+
+def test_step_shape_is_the_topology_contract():
+    # gated: MTP over head depths 0..2, Arctic main chain of 8 (positions 3..10)
+    assert SuffixPassGate.step_shape(True) == (3, 8, 2)
+    # ungated: today's shape -- MTP 0..4, Arctic chain of 6 (positions 5..10)
+    assert SuffixPassGate.step_shape(False) == (5, 6, 4)
+    # both reach the same maximum draft position
+    for fired in (True, False):
+        mtp_k, tail, _ = SuffixPassGate.step_shape(fired)
+        assert mtp_k + tail == 11
+
+
+def test_stop_request_releases_state():
+    gate = SuffixPassGate(enabled=True, min_history=0)
+    gate.start_request("r", list(range(300)))
+    assert "r" in gate.active_requests()
+    gate.stop_request("r")
+    assert gate.active_requests() == set()
+    assert gate.decide("r").reason == "unknown_request"
+
+
+def test_env_defaults_off_and_rejects_garbage(monkeypatch):
+    monkeypatch.delenv("FR14_SUFFIX_PASS_GATE", raising=False)
+    assert gate_from_env().enabled is False
+
+    monkeypatch.setenv("FR14_SUFFIX_PASS_GATE", "1")
+    g = gate_from_env()
+    assert g.enabled is True
+    assert g.ngram == DEFAULT_NGRAM
+    assert g.min_agree == DEFAULT_MIN_AGREE
+
+    # a typo must be fatal, not a silent arm/disarm of an acceptance lever
+    for bad in ("true", "TRUE", "yes", "", " ", "2", "01"):
+        monkeypatch.setenv("FR14_SUFFIX_PASS_GATE", bad)
+        with pytest.raises(ValueError):
+            gate_from_env()
+
+
+def test_env_overrides_are_validated(monkeypatch):
+    monkeypatch.setenv("FR14_SUFFIX_PASS_GATE", "1")
+    monkeypatch.setenv("FR14_SUFFIX_PASS_GATE_NGRAM", "12")
+    monkeypatch.setenv("FR14_SUFFIX_PASS_GATE_MIN_AGREE", "0.9")
+    g = gate_from_env()
+    assert g.ngram == 12 and g.min_agree == 0.9
+
+    monkeypatch.setenv("FR14_SUFFIX_PASS_GATE_NGRAM", "eight")
+    with pytest.raises(ValueError):
+        gate_from_env()
+
+
+def test_summary_reports_warm_rate():
+    tokens = _synthetic_stream(n=3000, seed=3)
+    gate = SuffixPassGate(enabled=True, min_history=0)
+    gate.start_request("r", [])
+    for tok in tokens:
+        gate.decide("r")
+        gate.observe("r", [tok])
+    s = gate.summary()
+    assert s["steps"] == len(tokens)
+    assert 0.0 < s["warm_rate"] < 1.0
+    assert s["fired"] + s["no_match"] + s["low_agreement"] + s["short_history"] == s["steps"]
+
+
+def test_indexing_is_incremental_and_order_independent():
+    """observe() in one batch or token-by-token must build the same index."""
+    tokens = _synthetic_stream(n=2000, seed=11)
+    a = SuffixPassGate(enabled=True, min_history=0)
+    a.start_request("r", tokens)
+    b = SuffixPassGate(enabled=True, min_history=0)
+    b.start_request("r", [])
+    for tok in tokens:
+        b.observe("r", [tok])
+    da, db = a.decide("r"), b.decide("r")
+    assert (da.fired, da.agreement, da.occurrences) == (
+        db.fired, db.agreement, db.occurrences
+    )
+    assert a._state["r"]["index"] == b._state["r"]["index"]
