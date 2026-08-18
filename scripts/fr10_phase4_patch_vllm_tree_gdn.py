@@ -6408,13 +6408,31 @@ def _fr13_dfwd_unified_bm8_production_replay_installed(
     del _FR13_DFWD_UNIFIED_BM8_PRODUCTION_PENDING[identity]
 
 
-def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
+def _fr13_fixed32_drafter_graph_capture_begin(
+    graph_id, batch_size, passes=4, segment=0
+):
+    # FR14_GATE_SPLIT_GRAPH: `passes` is the number of post-root MTP forwards
+    # this graph records. It is 4 for the single shipped graph and 2 for each
+    # half of the split capture; the registry is keyed by (batch, passes) so the
+    # two halves coexist. Every existing call site omits it and is unchanged.
     global _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
     if not _FR13_FIXED32_MODE:
         return
     proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
     batch = int(batch_size)
     identity = int(graph_id)
+    passes = int(passes)
+    segment = int(segment)
+    # `segment` orders the halves of a split capture: 0 = `lo`, 1 = `hi`. It is
+    # part of both the registry key and the manifest payload, so the two halves
+    # are distinguishable artifacts rather than two graphs sharing one signature.
+    if passes not in (2, 4) or segment not in (0, 1) or (
+        passes == 4 and segment != 0
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 drafter graph shape must be 4x1 or 2x2: "
+            + repr((passes, segment))
+        )
     if (
         not isinstance(proposal, dict)
         or batch != int(proposal["batch_size"])
@@ -6423,7 +6441,11 @@ def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
         or int(proposal.get("mtp_forward_calls", -1)) != 0
         or int(proposal.get("mtp_forward_rows", -1)) != 0
         or int(proposal.get("graph_replays", -1)) != 0
-        or int(proposal.get("graph_captures", -1)) != 0
+        # a split capture records `lo` then `hi` inside ONE proposal, so the
+        # second capture legitimately sees graph_captures == 1
+        or int(proposal.get("graph_captures", -1)) not in (
+            (0,) if passes == 4 else (0, 1)
+        )
         or identity <= 0
         or _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT is not None
         or _FR13_FIXED32_OBSERVED_CURRENT is not None
@@ -6431,7 +6453,7 @@ def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
         or _FR13_FIXED32_PROFILE_CAPTURE_SCOPE is not None
         or _FR13_FIXED32_PROFILE_MEMORY_SCOPE is not False
         or identity in _FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS
-        or batch in _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH
+        or (batch, passes, segment) in _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH
     ):
         raise RuntimeError(
             "FR13 fixed32 lazy/duplicate drafter graph capture: "
@@ -6441,6 +6463,8 @@ def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
         "graph_id": identity,
         "mode": proposal["mode"],
         "batch_size": batch,
+        "passes": passes,
+        "segment": segment,
         "request_ids": proposal["request_ids"],
         "capturing": True,
         "mtp_forward_calls": 0,
@@ -6454,7 +6478,7 @@ def _fr13_fixed32_drafter_graph_capture_begin(graph_id, batch_size):
         "tree_attn_layer": None,
         "tree_attn_bias_shape": None,
     }
-    proposal["graph_captures"] = 1
+    proposal["graph_captures"] = int(proposal.get("graph_captures", 0)) + 1
     _fr13_dfwd_unified_bm8_production_begin(identity, batch)
 
 
@@ -6565,13 +6589,17 @@ def _fr13_fixed32_drafter_u8_head_selection(batch_size):
     return True
 
 
-def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
+def _fr13_fixed32_drafter_graph_capture_end(
+    graph_id, batch_size, passes=4, segment=0
+):
     global _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
     if not _FR13_FIXED32_MODE:
         return None
     context = _FR13_FIXED32_DRAFTER_GRAPH_CAPTURE_CONTEXT
     identity = int(graph_id)
     batch = int(batch_size)
+    passes = int(passes)
+    segment = int(segment)
     u8_enabled = any(
         __import__("os").environ.get(key, "0") == "1"
         for key in (
@@ -6584,17 +6612,19 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
         not isinstance(context, dict)
         or identity != int(context["graph_id"])
         or batch != int(context["batch_size"])
-        or int(context["mtp_forward_calls"]) != 4
-        or int(context["mtp_forward_rows"]) != 4 * batch
-        or int(context.get("tree_attn_calls", -1)) != 4
-        or int(context.get("tree_attn_rows", -1)) != 4 * batch
+        or int(context.get("passes", -1)) != passes
+        or int(context.get("segment", -1)) != segment
+        or int(context["mtp_forward_calls"]) != passes
+        or int(context["mtp_forward_rows"]) != passes * batch
+        or int(context.get("tree_attn_calls", -1)) != passes
+        or int(context.get("tree_attn_rows", -1)) != passes * batch
         or context.get("tree_attn_layer")
         != _FR13_FIXED32_DRAFTER_TREE_LAYER
         or context.get("tree_attn_bias_shape") != (1, 1)
         or int(context.get("draft_head_u8_calls", -1))
-        != (4 if u8_enabled else 0)
+        != (passes if u8_enabled else 0)
         or int(context.get("draft_head_u8_rows", -1))
-        != (4 * batch if u8_enabled else 0)
+        != (passes * batch if u8_enabled else 0)
         or context.get("capturing") is not True
     ):
         raise RuntimeError(
@@ -6604,13 +6634,19 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
     payload = {
         "schema": "fr13-fixed32-drafter-graph-manifest-v2",
         "batch_size": batch,
-        "mtp_forward_calls": 4,
-        "mtp_forward_rows": 4 * batch,
-        "tree_attn_calls": 4,
-        "tree_attn_rows": 4 * batch,
+        "mtp_forward_calls": passes,
+        "mtp_forward_rows": passes * batch,
+        "tree_attn_calls": passes,
+        "tree_attn_rows": passes * batch,
         "tree_attn_layer": _FR13_FIXED32_DRAFTER_TREE_LAYER,
         "tree_attn_bias_shape": [1, 1],
     }
+    if passes != 4:
+        # FR14_GATE_SPLIT_GRAPH: a half-graph is a DIFFERENT artifact from the
+        # shipped 4-pass one and must never be able to present its signature.
+        payload["schema"] = "fr13-fixed32-drafter-graph-manifest-v3-split"
+        payload["split_passes"] = passes
+        payload["split_segment"] = segment
     canonical = __import__("json").dumps(
         payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
     )
@@ -6621,7 +6657,7 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
         signature,
         canonical,
     )
-    _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH[batch] = identity
+    _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH[(batch, passes, segment)] = identity
     proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
     if not isinstance(proposal, dict):
         raise RuntimeError(
@@ -6629,6 +6665,8 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
         )
     _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE[identity] = {
         "batch_size": batch,
+        "passes": passes,
+        "segment": segment,
         "graph_signature": signature,
         "captures": 1,
         "mtp_forward_calls": int(context["mtp_forward_calls"]),
@@ -6659,11 +6697,13 @@ def _fr13_fixed32_drafter_graph_capture_end(graph_id, batch_size):
 
 
 def _fr13_fixed32_drafter_graph_replay(
-    graph_id, graph_signature, batch_size
+    graph_id, graph_signature, batch_size, passes=4, segment=0
 ):
     proposal = _FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT
     identity = int(graph_id)
     batch = int(batch_size)
+    passes = int(passes)
+    segment = int(segment)
     if not isinstance(proposal, dict):
         raise RuntimeError("FR13 fixed32 drafter replay has no proposal")
     expected_signature, canonical = _fr13_fixed32_manifest_entry(
@@ -6671,23 +6711,40 @@ def _fr13_fixed32_drafter_graph_replay(
         "drafter graph " + str(identity),
     )
     manifest = __import__("json").loads(canonical)
+    # FR14_GATE_SPLIT_GRAPH: an ungated step replays `lo` then `hi`, so the
+    # second call legitimately arrives with the basis already bound and a
+    # non-zero running count. The totals are still pinned -- proposal_end
+    # requires exactly (4 calls, 2 replays) split / (4, 1) single / (2, 1) gated
+    # -- so accumulation cannot hide a missing or extra forward.
+    _fr13_prior_replays = int(proposal["graph_replays"])
+    _fr13_prior_calls = int(proposal["mtp_forward_calls"])
     if (
         graph_signature != expected_signature
-        or _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH.get(batch) != identity
+        or _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH.get((batch, passes, segment))
+        != identity
         or manifest.get("schema")
-        != "fr13-fixed32-drafter-graph-manifest-v2"
+        != (
+            "fr13-fixed32-drafter-graph-manifest-v2"
+            if passes == 4
+            else "fr13-fixed32-drafter-graph-manifest-v3-split"
+        )
         or int(manifest.get("batch_size", -1)) != batch
-        or int(manifest.get("mtp_forward_calls", -1)) != 4
-        or int(manifest.get("mtp_forward_rows", -1)) != 4 * batch
-        or int(manifest.get("tree_attn_calls", -1)) != 4
-        or int(manifest.get("tree_attn_rows", -1)) != 4 * batch
+        or int(manifest.get("mtp_forward_calls", -1)) != passes
+        or int(manifest.get("mtp_forward_rows", -1)) != passes * batch
+        or int(manifest.get("tree_attn_calls", -1)) != passes
+        or int(manifest.get("tree_attn_rows", -1)) != passes * batch
         or manifest.get("tree_attn_layer")
         != _FR13_FIXED32_DRAFTER_TREE_LAYER
         or manifest.get("tree_attn_bias_shape") != [1, 1]
+        or int(manifest.get("split_segment", 0)) != segment
         or batch != int(proposal["batch_size"])
-        or proposal["mtp_execution_basis"] != "unbound"
-        or int(proposal["mtp_forward_calls"]) != 0
-        or int(proposal["graph_replays"]) != 0
+        or proposal["mtp_execution_basis"] != (
+            "unbound" if _fr13_prior_replays == 0 else "cudagraph_replay"
+        )
+        or _fr13_prior_calls != _fr13_prior_replays * passes
+        # segment ordering IS the replay-count invariant: `lo` must be replayed
+        # before `hi`, and each exactly once
+        or _fr13_prior_replays != segment
     ):
         raise RuntimeError(
             "FR13 fixed32 drafter graph replay drift: "
@@ -6702,16 +6759,18 @@ def _fr13_fixed32_drafter_graph_replay(
             )
         )
     proposal["mtp_execution_basis"] = "cudagraph_replay"
-    proposal["mtp_forward_calls"] = 4
-    proposal["mtp_forward_rows"] = 4 * batch
+    proposal["mtp_forward_calls"] = _fr13_prior_calls + passes
+    proposal["mtp_forward_rows"] = (_fr13_prior_calls + passes) * batch
     proposal["graph_id"] = identity
     proposal["graph_signature"] = expected_signature
-    proposal["graph_replays"] = 1
+    proposal["graph_replays"] = _fr13_prior_replays + 1
     lifecycle = _FR13_FIXED32_DRAFTER_GRAPH_LIFECYCLE.get(identity)
     if (
         not isinstance(lifecycle, dict)
         or int(lifecycle.get("captures", -1)) != 1
         or int(lifecycle.get("batch_size", -1)) != batch
+        or int(lifecycle.get("passes", -1)) != passes
+        or int(lifecycle.get("segment", -1)) != segment
         or lifecycle.get("graph_signature") != expected_signature
     ):
         raise RuntimeError(
@@ -6725,7 +6784,8 @@ def _fr13_fixed32_drafter_graph_replay(
         if (
             not isinstance(evidence, dict)
             or int(evidence.get("proposal_begins", -1)) != 1
-            or int(evidence.get("matching_replays", -1)) != 0
+            or int(evidence.get("matching_replays", -1))
+            != _fr13_prior_replays
         ):
             raise RuntimeError(
                 "FR13 fixed32 drafter replay evidence is missing"
@@ -6733,13 +6793,14 @@ def _fr13_fixed32_drafter_graph_replay(
         evidence["graph_id"] = identity
         evidence["graph_signature"] = expected_signature
         evidence["graph_captures"] = int(proposal["graph_captures"])
-        evidence["matching_replays"] = 1
+        evidence["matching_replays"] = _fr13_prior_replays + 1
 
 
 def _fr13_fixed32_drafter_graph_registry():
     rows = []
-    for batch in sorted(_FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH):
-        graph_id = _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH[batch]
+    for _key in sorted(_FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH):
+        batch, _key_passes, _key_segment = _key
+        graph_id = _FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH[_key]
         signature, _canonical = _fr13_fixed32_manifest_entry(
             _FR13_FIXED32_DRAFTER_GRAPH_MANIFESTS.get(graph_id),
             "drafter graph " + str(graph_id),
@@ -6748,6 +6809,8 @@ def _fr13_fixed32_drafter_graph_registry():
         if (
             not isinstance(lifecycle, dict)
             or int(lifecycle.get("batch_size", -1)) != int(batch)
+            or int(lifecycle.get("passes", -1)) != int(_key_passes)
+            or int(lifecycle.get("segment", -1)) != int(_key_segment)
             or lifecycle.get("graph_signature") != signature
             or int(lifecycle.get("captures", -1)) != 1
             or lifecycle.get("capture_origin")
@@ -6759,6 +6822,8 @@ def _fr13_fixed32_drafter_graph_registry():
         rows.append(
             {
                 "batch_size": int(batch),
+                "passes": int(_key_passes),
+                "segment": int(_key_segment),
                 "graph_signature": signature,
                 "captures": 1,
                 "capture_origin": lifecycle["capture_origin"],
@@ -6797,22 +6862,29 @@ def _fr13_fixed32_drafter_observed_arctic(work):
         "merge_fill_columns": int(work.get("merge_fill_columns", -1)),
         "merge_fill_rows": int(work.get("merge_fill_rows", -1)),
     }
+    # FR14_GATE_SPLIT_GRAPH: a gated step hands off at draft position 3, so the
+    # main Arctic chain is 8 tokens instead of 6. The rescue chains, the call
+    # count and the 31-column pack are identical in both shapes -- only the main
+    # chain's length moves, and proposal_end cross-checks it against the pass
+    # count so an 8 can never appear on a step that ran four forwards.
+    _fr14_gated = bool(work.get("gated", False))
+    _fr14_main = 8 if _fr14_gated else 6
     expected = {
         "batch_size": batch,
         "main_lookup_calls": batch,
-        "main_lookup_tokens": 6 * batch,
+        "main_lookup_tokens": _fr14_main * batch,
         "rank1_lookup_calls": batch,
         "rank1_lookup_tokens": 4 * batch,
         "rank2_lookup_calls": batch,
         "rank2_lookup_tokens": 2 * batch,
         "rescue_carry_slots": 4 * batch,
         "arctic_lookup_calls": 3 * batch,
-        "arctic_requested_tokens": 12 * batch,
-        "main_tail_columns": 6,
+        "arctic_requested_tokens": (_fr14_main + 6) * batch,
+        "main_tail_columns": _fr14_main,
         "rescue_path_columns": 10,
         "merge_fill_calls": 1,
-        "merge_fill_columns": 16,
-        "merge_fill_rows": 16 * batch,
+        "merge_fill_columns": _fr14_main + 10,
+        "merge_fill_rows": (_fr14_main + 10) * batch,
     }
     if proposal["arctic"] is not None or actual != expected:
         raise RuntimeError(
@@ -6903,14 +6975,26 @@ def _fr13_fixed32_drafter_proposal_end(
         or str(output_device_type) != "cuda"
         or outer_handoff_completed is not True
         or proposal["mtp_execution_basis"] != "cudagraph_replay"
-        or int(proposal["mtp_forward_calls"]) != 4
-        or int(proposal["mtp_forward_rows"]) != 4 * batch
-        or int(proposal["graph_replays"]) != 1
-        or int(proposal["graph_captures"]) not in (0, 1)
+        # FR14_GATE_SPLIT_GRAPH: exactly three shapes are legal per step and
+        # nothing else -- (4 forwards, 1 replay) single shipped graph,
+        # (4, 2) split ungated, (2, 1) split gated. A missing or extra forward
+        # cannot present as any of them.
+        or (
+            int(proposal["mtp_forward_calls"]),
+            int(proposal["graph_replays"]),
+        ) not in ((4, 1), (4, 2), (2, 1))
+        or int(proposal["mtp_forward_rows"])
+        != int(proposal["mtp_forward_calls"]) * batch
+        or int(proposal["graph_captures"]) not in (0, 1, 2)
         or not isinstance(proposal["graph_id"], int)
         or not isinstance(proposal["graph_signature"], str)
         or not isinstance(proposal["arctic"], dict)
         or not isinstance(proposal["publish"], dict)
+        # THE well-formedness interlock: a 2-forward step MUST have handed off
+        # to an 8-token Arctic chain, and a 4-forward step MUST NOT have. Either
+        # mismatch is a malformed tree, so it is fatal here, before the verifier.
+        or int(proposal["arctic"].get("main_tail_columns", -1))
+        != (8 if int(proposal["mtp_forward_calls"]) == 2 else 6)
     ):
         raise RuntimeError(
             "FR13 fixed32 completed drafter proposal work drift: "
@@ -6934,14 +7018,17 @@ def _fr13_fixed32_drafter_proposal_end(
             )
         arctic = proposal["arctic"]
         publish = proposal["publish"]
+        _fr14_calls = int(proposal["mtp_forward_calls"])
         observed["drafter"] = {
-            "mtp_forward_calls": 4,
-            "mtp_forward_rows": 4 * batch,
+            "mtp_forward_calls": _fr14_calls,
+            "mtp_forward_rows": _fr14_calls * batch,
             "arctic_lookup_calls": int(arctic["arctic_lookup_calls"]),
             "arctic_requested_tokens": int(
                 arctic["arctic_requested_tokens"]
             ),
-            "main_tail_length": 6,
+            # a gated step hands off at draft position 3, so Arctic's main
+            # chain is 8 long instead of 6; the pack is 31 columns either way
+            "main_tail_length": int(arctic.get("main_tail_columns", 6)),
             "rescue_chains": [[1, 4], [2, 2]],
             "carry_fill_slots": int(arctic["rescue_carry_slots"]),
             "pack_columns": 31,
@@ -29729,6 +29816,37 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # Replay path: copy root+hidden into static buffers, replay,
             # append static output views (final torch.cat COPIES them out),
             # then apply the loop's host post-conditions (+4 shadows).
+            # FR14_GATE_SPLIT_GRAPH (lever 2, default OFF). The drafter's four
+            # post-root MTP forwards are captured as TWO 2-pass graphs, `lo` and
+            # `hi`, sharing one memory pool and the SAME static buffers. An
+            # ungated step replays lo then hi -- still exactly four forwards, so
+            # every per-step invariant that counts four is untouched -- and a
+            # gated step replays lo alone, leaving Arctic to fill draft
+            # positions 3..10 instead of 5..10. Measured on GB10
+            # (results/fr14_nvfp4_port_20260816/suffix_gate_graph_microbench.json):
+            # the split is BIT-EXACT against the single graph, the second
+            # capture costs 0.275 ms once and 23 MB of pool, and the extra
+            # launch costs nothing measurable.
+            # The decision was staged before this forward by
+            # fr13_merged_drafter.stage_fixed32_step, so nothing here reads
+            # device memory, syncs, or looks at a draft token.
+            _fr14_gate_fired = False
+            _fr14_split_on = False
+            if _fr13_is_fixed32:
+                import sys as _fr14_gate_sys
+                if "/workspace/scripts" not in _fr14_gate_sys.path:
+                    _fr14_gate_sys.path.insert(0, "/workspace/scripts")
+                import fr13_merged_drafter as _fr14_gate_md
+                _fr14_split_on = bool(_fr14_gate_md.fr14_gate().enabled)
+                if _fr14_split_on:
+                    _fr14_gate_fired, _fr14_gate_decisions = (
+                        _fr14_gate_md.fr14_gate_pending()
+                    )
+                    if len(_fr14_gate_decisions) != int(batch_size):
+                        raise RuntimeError(
+                            "FR14 suffix pass gate decision count != batch"
+                        )
+            _fr14_seg_passes = 2 if _fr14_split_on else 4
             _fr13_dg_on = (
                 os.environ.get("FR13_DRAFTER_GRAPH", "0") == "1"
                 and int(_fr10_spine_steps) == 4
@@ -29790,36 +29908,51 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # the graph): positions + adjusted seq_lens.
                 _dg["pos"].copy_(positions)
                 _dg["slen"].copy_(common_attn_metadata.seq_lens)
-                _dg["graph"].replay()
-                if _fr13_is_fixed32:
-                    _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_replay(
-                        id(_dg["graph"]),
-                        _dg.get("fixed32_signature"),
-                        _fr13_dg_key,
-                    )
-                    _fr13_dh_m32_note_production_replay(
-                        id(_dg["graph"]),
-                        _dg.get("fixed32_signature"),
-                        _fr13_dg_key,
-                    )
-                    _fr13_dh_u8_note_production_replay(
-                        id(_dg["graph"]),
-                        _dg.get("fixed32_signature"),
-                        _fr13_dg_key,
-                    )
-                    _fr13_dh_fp8_note_replay(
-                        id(_dg["graph"]),
-                        _dg.get("fixed32_signature"),
-                        _fr13_dg_key,
-                    )
-                    from vllm.v1.attention.ops.triton_unified_attention import (
-                        _fr13_dfwd_unified_bm8_live_replay,
-                    )
-                    _fr13_dfwd_unified_bm8_live_replay(
-                        id(_dg["graph"]),
-                        _fr13_dg_key,
-                    )
-                for _dg_i in range(4):
+                # Segments: [(graph, signature, passes)]. One 4-pass segment
+                # when the gate is off (byte-identical to the shipped path);
+                # two 2-pass segments when it is armed. A gated step stops
+                # after the first.
+                _fr14_segs = _dg["segments"]
+                _fr14_run = (
+                    1 if (_fr14_gate_fired and len(_fr14_segs) > 1)
+                    else len(_fr14_segs)
+                )
+                _fr14_done = 0
+                for _fr14_si in range(_fr14_run):
+                    _fr14_g, _fr14_sig, _fr14_np = _fr14_segs[_fr14_si]
+                    _fr14_g.replay()
+                    if _fr13_is_fixed32:
+                        _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_replay(
+                            id(_fr14_g),
+                            _fr14_sig,
+                            _fr13_dg_key,
+                            _fr14_np,
+                            _fr14_si,
+                        )
+                        _fr13_dh_m32_note_production_replay(
+                            id(_fr14_g),
+                            _fr14_sig,
+                            _fr13_dg_key,
+                        )
+                        _fr13_dh_u8_note_production_replay(
+                            id(_fr14_g),
+                            _fr14_sig,
+                            _fr13_dg_key,
+                        )
+                        _fr13_dh_fp8_note_replay(
+                            id(_fr14_g),
+                            _fr14_sig,
+                            _fr13_dg_key,
+                        )
+                        from vllm.v1.attention.ops.triton_unified_attention import (
+                            _fr13_dfwd_unified_bm8_live_replay,
+                        )
+                        _fr13_dfwd_unified_bm8_live_replay(
+                            id(_fr14_g),
+                            _fr13_dg_key,
+                        )
+                    _fr14_done += _fr14_np
+                for _dg_i in range(_fr14_done):
                     _fr10_spine_tokens.append(_dg["spine"][_dg_i])
                     if (_dg_i + 1) in _fr10_leaf_steps:
                         _fr10_leaf_tokens.append(_dg["leaf"][_dg_i])
@@ -29835,12 +29968,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 int(_dg["wide"].shape[2]),
                             )]
                 common_attn_metadata.max_seq_len = min(
-                    common_attn_metadata.max_seq_len + 4, self.max_model_len
+                    common_attn_metadata.max_seq_len + _fr14_done,
+                    self.max_model_len,
                 )
                 if common_attn_metadata._seq_lens_cpu is not None:
-                    common_attn_metadata._seq_lens_cpu += 4
+                    common_attn_metadata._seq_lens_cpu += _fr14_done
                 if common_attn_metadata._num_computed_tokens_cpu is not None:
-                    common_attn_metadata._num_computed_tokens_cpu += 4
+                    common_attn_metadata._num_computed_tokens_cpu += _fr14_done
                 self._fr13_dg_calls[_fr13_dg_key] = (
                     self._fr13_dg_calls.get(_fr13_dg_key, 0) + 1
                 )
@@ -29896,6 +30030,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     self._fr13_dg_pool = torch.cuda.graph_pool_handle()
                 if getattr(self, "_fr13_dg_stream", None) is None:
                     self._fr13_dg_stream = torch.cuda.Stream()
+                # FR14_GATE_SPLIT_GRAPH: the capture step is NEVER gated -- it
+                # records every segment and then replays all of them, so this
+                # call's outputs and KV mutations stay eager-equivalent.
+                _fr14_gate_fired = False
+                _fr14_segs = []
                 _fr13_dg_g = torch.cuda.CUDAGraph()
                 torch.cuda.synchronize()
                 # capture must run on a NON-default stream (raw begin/end
@@ -29906,6 +30045,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_capture_begin(
                         id(_fr13_dg_g),
                         _fr13_dg_key,
+                        _fr14_seg_passes,
+                        len(_fr14_segs),
                     )
                 _fr13_dg_g.capture_begin(pool=self._fr13_dg_pool)
             # FR13_RESHAPE_DEPTH3: cat9/chain5 keep range(4) (depth-5 spine);
@@ -29913,6 +30054,36 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # extra spine forward mutates seq_lens/slot_mapping/KV, so the step
             # count MUST match the committed tree depth -- do not over-run.
             for token_index in range(_fr10_spine_steps):
+                if _fr13_dg_cap and _fr14_split_on and token_index == 2:
+                    # close `lo`, open `hi`. Both halves record into the SAME
+                    # static buffers and share one pool, which is what makes
+                    # replay(lo)+replay(hi) bit-identical to one 4-pass graph.
+                    _fr13_dg_g.capture_end()
+                    torch.cuda.set_stream(_fr13_dg_prev_stream)
+                    _fr14_seg_sig = None
+                    if _fr13_is_fixed32:
+                        _fr14_seg_sig = (
+                            _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_capture_end(
+                                id(_fr13_dg_g),
+                                _fr13_dg_key,
+                                _fr14_seg_passes,
+                                len(_fr14_segs),
+                            )
+                        )
+                    _fr14_segs.append(
+                        (_fr13_dg_g, _fr14_seg_sig, _fr14_seg_passes)
+                    )
+                    _fr13_dg_g = torch.cuda.CUDAGraph()
+                    _fr13_dg_prev_stream = torch.cuda.current_stream()
+                    torch.cuda.set_stream(self._fr13_dg_stream)
+                    if _fr13_is_fixed32:
+                        _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_capture_begin(
+                            id(_fr13_dg_g),
+                            _fr13_dg_key,
+                            _fr14_seg_passes,
+                            len(_fr14_segs),
+                        )
+                    _fr13_dg_g.capture_begin(pool=self._fr13_dg_pool)
                 input_ids = _fr10_spine_tokens[-1].int()
                 positions_1d = positions[0] if self.uses_mrope else positions
                 if self.uses_mrope:
@@ -30181,42 +30352,70 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # call's outputs + KV/seq_lens mutations are eager-equivalent.
                 _fr13_dg_g.capture_end()
                 torch.cuda.set_stream(_fr13_dg_prev_stream)
+                _fr14_seg_sig = None
                 if _fr13_is_fixed32:
-                    _dg["fixed32_signature"] = (
+                    _fr14_seg_sig = (
                         _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_capture_end(
                             id(_fr13_dg_g),
                             _fr13_dg_key,
+                            _fr14_seg_passes,
+                            len(_fr14_segs),
                         )
                     )
-                _fr13_dg_g.replay()
-                if _fr13_is_fixed32:
-                    _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_replay(
-                        id(_fr13_dg_g),
-                        _dg["fixed32_signature"],
-                        _fr13_dg_key,
+                _fr14_segs.append((_fr13_dg_g, _fr14_seg_sig, _fr14_seg_passes))
+                if len(_fr14_segs) != (2 if _fr14_split_on else 1):
+                    raise RuntimeError(
+                        "FR14 drafter split capture produced "
+                        + repr(len(_fr14_segs))
+                        + " segments"
                     )
-                    _fr13_dh_m32_note_production_replay(
-                        id(_fr13_dg_g),
-                        _dg["fixed32_signature"],
-                        _fr13_dg_key,
+                if sum(_seg[2] for _seg in _fr14_segs) != 4:
+                    raise RuntimeError(
+                        "FR14 drafter capture segments do not sum to four "
+                        "post-root MTP forwards"
                     )
-                    _fr13_dh_u8_note_production_replay(
-                        id(_fr13_dg_g),
-                        _dg["fixed32_signature"],
-                        _fr13_dg_key,
-                    )
-                    _fr13_dh_fp8_note_replay(
-                        id(_fr13_dg_g),
-                        _dg["fixed32_signature"],
-                        _fr13_dg_key,
-                    )
-                    from vllm.v1.attention.ops.triton_unified_attention import (
-                        _fr13_dfwd_unified_bm8_live_replay,
-                    )
-                    _fr13_dfwd_unified_bm8_live_replay(
-                        id(_fr13_dg_g),
-                        _fr13_dg_key,
-                    )
+                # replay every recorded segment: capture itself executes
+                # nothing, so this is what makes the capture call's outputs and
+                # KV/seq_lens mutations eager-equivalent.
+                for _fr14_si, (_fr14_g, _fr14_sig, _fr14_np) in enumerate(
+                    _fr14_segs
+                ):
+                    _fr14_g.replay()
+                    if _fr13_is_fixed32:
+                        _fr13_f32_dg_gdn._fr13_fixed32_drafter_graph_replay(
+                            id(_fr14_g),
+                            _fr14_sig,
+                            _fr13_dg_key,
+                            _fr14_np,
+                            _fr14_si,
+                        )
+                        _fr13_dh_m32_note_production_replay(
+                            id(_fr14_g),
+                            _fr14_sig,
+                            _fr13_dg_key,
+                        )
+                        _fr13_dh_u8_note_production_replay(
+                            id(_fr14_g),
+                            _fr14_sig,
+                            _fr13_dg_key,
+                        )
+                        _fr13_dh_fp8_note_replay(
+                            id(_fr14_g),
+                            _fr14_sig,
+                            _fr13_dg_key,
+                        )
+                        from vllm.v1.attention.ops.triton_unified_attention import (
+                            _fr13_dfwd_unified_bm8_live_replay,
+                        )
+                        _fr13_dfwd_unified_bm8_live_replay(
+                            id(_fr14_g),
+                            _fr13_dg_key,
+                        )
+                # `lo` is the segment every step replays, so the single-graph
+                # handles stay bound to it.
+                _fr13_dg_g = _fr14_segs[0][0]
+                _dg["fixed32_signature"] = _fr14_segs[0][1]
+                _dg["segments"] = _fr14_segs
                 _dg["graph"] = _fr13_dg_g
                 _fr13_dg_all[_fr13_dg_key] = _dg
                 if _fr13_dfwd_top3:
@@ -30270,7 +30469,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     if "/workspace/scripts" not in _fr13_t_sys.path:
                         _fr13_t_sys.path.insert(0, "/workspace/scripts")
                     import fr13_merged_drafter as _fr13_t
-                    _fr13_t_hd = int(getattr(_fr13_t, "TAIL_HEAD_DEPTH", 5))
+                    # FR14_GATE_SPLIT_GRAPH: on a gated step only two post-root
+                    # forwards ran, so the MTP head is 3 deep and Arctic owns
+                    # draft positions 3..10 -- an 8-token main chain. Everything
+                    # else in this block is already parametric in _fr13_t_hd,
+                    # including the rank-1/rank-2 root seeds at
+                    # _fr13_t_stack[_fr13_t_hd (+1)], so the seam moves with it.
+                    _fr13_t_hd = (
+                        3 if _fr14_gate_fired
+                        else int(getattr(_fr13_t, "TAIL_HEAD_DEPTH", 5))
+                    )
                     _fr13_t_len = int(_fr10_wide_D) - _fr13_t_hd
                     if not _fr13_t.merged_on():
                         _fr13_t_skip = "merged_off"
@@ -30609,6 +30817,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                     _fr10_spine_tokens[0].device,
                                     _fr13_t_pad,
                                     vocab_size=_fr13_t_vocab,
+                                    gated=_fr14_gate_fired,
                                 )
                                 _fr13_t_work = (
                                     _fr13_t.get_fixed32_drafter_last_work()
@@ -30633,6 +30842,36 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                     hydra_branch_chains=((1, 4),))
                             if _fr13_t_cols is not None:
                                 _fr10_spine_tokens.extend(_fr13_t_cols)
+                                if _fr14_gate_fired:
+                                    # The four depth-4/5 runner-up columns have
+                                    # no MTP logits behind them any more. Fill
+                                    # them by repeating their own spine token --
+                                    # the last-resort pad this drafter already
+                                    # deploys, whose committer tie convention is
+                                    # proven on device by
+                                    # scripts/fr13_greedy_pointmass_dup_gate.py.
+                                    # A repeat can never match a DISTINCT model
+                                    # token, so the tree stays monotone-lossless
+                                    # and the validity mask never changes.
+                                    for _fr14_pd in (3, 4):
+                                        _fr14_pw = int(
+                                            _fr10_wide_width.get(_fr14_pd, 1)
+                                        )
+                                        if _fr14_pw > 1:
+                                            _fr10_wide_topk[_fr14_pd] = (
+                                                _fr10_spine_tokens[_fr14_pd]
+                                                .reshape(-1, 1)
+                                                .repeat(1, _fr14_pw)
+                                            )
+                                    if len(_fr10_spine_tokens) != int(
+                                        _fr10_wide_D
+                                    ):
+                                        raise RuntimeError(
+                                            "FR14 gated step published "
+                                            + repr(len(_fr10_spine_tokens))
+                                            + " spine columns, expected "
+                                            + repr(int(_fr10_wide_D))
+                                        )
                                 if _fr13_is_hydra23:
                                     _fr13_hydra_contract_error = True
                                     _fr13_t_paths = dict(
@@ -41675,7 +41914,7 @@ def _fr13_fixed32_observed_runtime_self_test() -> dict[str, object]:
         pending["drafter_kv_complete"] = True
         pending["kv_complete"] = True
         graph_by_batch = namespace["_FR13_FIXED32_DRAFTER_GRAPH_BY_BATCH"]
-        if batch not in graph_by_batch:
+        if (batch, 4, 0) not in graph_by_batch:
             drafter_graph_id = 30_000 + batch
             namespace["_fr13_fixed32_drafter_graph_capture_begin"](
                 drafter_graph_id,

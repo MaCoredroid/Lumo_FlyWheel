@@ -158,3 +158,78 @@ def test_padded_nodes_are_leaves_and_spine_nodes_are_not():
         assert HYDRA27_VALID[node], "the gate pads FILLED nodes, it does not mask"
     for node in GATED_SUFFIX_SPINE_DRAFT_IDS:
         assert children.get(node), f"spine node {node} must keep its subtree"
+
+
+# ---------------------------------------------------------------------------
+# The offline work census must accept a gated step and no third shape.
+# ---------------------------------------------------------------------------
+
+def _banked_event():
+    import json
+
+    p = (
+        Path(__file__).resolve().parents[1]
+        / "output/fr14_b1_stock_20260817T054447Z/tail6_fixed32_b1radix"
+        / "logs/fr13_fixed32_work_census.jsonl"
+    )
+    if not p.exists():
+        pytest.skip("banked census not present")
+    with p.open() as fh:
+        return json.loads(fh.readline())
+
+
+def test_banked_events_still_validate_unchanged():
+    import fr13_fixed32_work_census as census
+
+    census.validate_event(_banked_event(), source="banked")
+
+
+def test_a_gated_event_validates():
+    import fr13_fixed32_work_census as census
+
+    ev = _banked_event()
+    b = ev["batch_size"]
+    ev["drafter"]["mtp_forward_calls"] = 2
+    ev["drafter"]["mtp_forward_rows"] = 2 * b
+    ev["drafter"]["main_tail_length"] = 8
+    ev["drafter"]["arctic_requested_tokens"] = 14 * b
+    rt = ev["drafter_runtime"]
+    rt["mtp_forward_calls"] = 2
+    rt["mtp_forward_rows"] = 2 * b
+    rt["arctic_requested_tokens"] = 14 * b
+    rt["merge_fill_columns"] = 18
+    rt["merge_fill_rows"] = 18 * b
+    rt["arctic_ledger"] = [
+        dict(row, tokens=8) if row["kind"] == "main" else row
+        for row in rt["arctic_ledger"]
+    ]
+    census.validate_event(ev, source="gated")
+
+
+@pytest.mark.parametrize(
+    "calls,tail",
+    [(2, 6), (4, 8), (3, 7), (2, 7), (0, 6), (5, 6)],
+)
+def test_no_other_drafter_shape_validates(calls, tail):
+    import fr13_fixed32_work_census as census
+
+    ev = _banked_event()
+    b = ev["batch_size"]
+    ev["drafter"]["mtp_forward_calls"] = calls
+    ev["drafter"]["mtp_forward_rows"] = calls * b
+    ev["drafter"]["main_tail_length"] = tail
+    with pytest.raises(census.CensusError):
+        census.validate_event(ev, source="bad")
+
+
+def test_gated_arctic_token_count_is_checked_too():
+    import fr13_fixed32_work_census as census
+
+    ev = _banked_event()
+    b = ev["batch_size"]
+    ev["drafter"]["mtp_forward_calls"] = 2
+    ev["drafter"]["mtp_forward_rows"] = 2 * b
+    ev["drafter"]["main_tail_length"] = 8
+    ev["drafter"]["arctic_requested_tokens"] = 12 * b  # stale ungated width
+    with pytest.raises(census.CensusError):
+        census.validate_event(ev, source="bad")

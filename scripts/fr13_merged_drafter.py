@@ -90,6 +90,57 @@ def set_cache_for_test(mock):
     _CACHE_INIT_FAILED = False
 
 
+# ---- FR14 lever 2: suffix-aware MTP pass gate -------------------------------
+# The gate rides the SAME lifecycle hooks as the Arctic cache (start / ingest
+# delta / retire), so it can never see a different token stream than the
+# proposer it gates. Its index update is O(delta) per step, which is the same
+# PERF-CRITICAL contract ingest_from_sequence documents for itself.
+_FR14_GATE = None
+_FR14_GATE_INIT_FAILED = False
+
+
+def fr14_gate():
+    """The process-wide gate, built once from the launcher sidecar. OFF if absent.
+
+    Never raises into the serving path: a gate that cannot be built is a gate
+    that never fires, which is exactly today's behaviour.
+    """
+    global _FR14_GATE, _FR14_GATE_INIT_FAILED
+    if _FR14_GATE is None and not _FR14_GATE_INIT_FAILED:
+        try:
+            from fr14_suffix_pass_gate import gate_from_sidecar
+
+            _FR14_GATE = gate_from_sidecar()
+            if _FR14_GATE.enabled:
+                print(
+                    "[FR14_SUFFIX_PASS_GATE] armed ngram="
+                    f"{_FR14_GATE.ngram} min_agree={_FR14_GATE.min_agree} "
+                    f"min_history={_FR14_GATE.min_history}",
+                    flush=True,
+                )
+        except Exception as exc:
+            _FR14_GATE_INIT_FAILED = True
+            print(f"[FR14_SUFFIX_PASS_GATE] disabled: {exc!r}", flush=True)
+            from fr14_suffix_pass_gate import SuffixPassGate
+
+            _FR14_GATE = SuffixPassGate(enabled=False)
+    return _FR14_GATE
+
+
+def fr14_gate_decide(req_ids):
+    """One decision for the whole batch.
+
+    The drafter graph is per-batch, so a step is gated only if EVERY row's
+    predicate fires -- one cold row forces all five passes. Conservative by
+    construction, and at the deployed B=1 it is just that row's decision.
+    """
+    gate = fr14_gate()
+    if gate is None or not gate.enabled:
+        return False, ()
+    decisions = tuple(gate.decide(str(rid)) for rid in req_ids)
+    return (bool(decisions) and all(d.fired for d in decisions)), decisions
+
+
 def reset_for_test():
     global _CACHE, _CACHE_INIT_FAILED, _COMMITTED, _INGESTED_LEN, _PREWARMED
     global _TAIL_WIDE_TOPK, _TAIL_PATH_TOKENS
@@ -106,6 +157,9 @@ def reset_for_test():
     _FIXED32_LAST_WORK = None
     _FIXED32_PENDING_STEP = None
     _FIXED32_LIFECYCLE_POISON = None
+    global _FR14_GATE, _FR14_GATE_INIT_FAILED
+    _FR14_GATE = None
+    _FR14_GATE_INIT_FAILED = False
     for k in STATS:
         STATS[k] = 0
 
@@ -253,9 +307,10 @@ def note_new_requests(cache, req_id_to_prompt, *, strict=False):
         except Exception:
             _fixed32_poison("note_new_requests")
             raise
-        for req_id, _prompt, prompt_len, is_active, _is_cached, _prior in plans:
+        for req_id, prompt, prompt_len, is_active, _is_cached, _prior in plans:
             if not is_active:
                 _INGESTED_LEN[req_id] = prompt_len
+                fr14_gate().start_request(req_id, prompt)
                 STATS["started"] += 1
         return
     for req_id, prompt in req_id_to_prompt.items():
@@ -265,6 +320,7 @@ def note_new_requests(cache, req_id_to_prompt, *, strict=False):
                     cache.evict_cached_response(req_id)
                 cache.start_request(req_id, prompt)
                 _INGESTED_LEN[req_id] = len(prompt)
+                fr14_gate().start_request(req_id, prompt)
                 STATS["started"] += 1
         except Exception:
             pass
@@ -331,6 +387,7 @@ def ingest_from_sequence(
                 _fixed32_poison("ingest_from_sequence")
                 raise
             _INGESTED_LEN[req_id] = num_tokens
+            fr14_gate().observe(req_id, new)
             STATS["ingested"] += 1
         _COMMITTED[req_id] = suffix
         return
@@ -345,6 +402,7 @@ def ingest_from_sequence(
             except Exception:
                 pass
         _INGESTED_LEN[req_id] = num_tokens
+        fr14_gate().observe(req_id, new)
     start = max(0, num_tokens - max_tree_depth)
     _COMMITTED[req_id] = [int(x) for x in seq_list[start:num_tokens]]   # recent suffix only
 
@@ -375,6 +433,7 @@ def retire_requests(cache, gone_req_ids, *, strict=False):
         for req_id in gone_req_ids:
             _COMMITTED.pop(req_id, None)
             _INGESTED_LEN.pop(req_id, None)
+            fr14_gate().stop_request(req_id)
             STATS["retired"] += 1
         return
     for req_id in gone_req_ids:
@@ -385,6 +444,7 @@ def retire_requests(cache, gone_req_ids, *, strict=False):
                 pass
         _COMMITTED.pop(req_id, None)
         _INGESTED_LEN.pop(req_id, None)
+        fr14_gate().stop_request(req_id)
         STATS["retired"] += 1
 
 
@@ -656,11 +716,28 @@ def stage_fixed32_step(
             _INGESTED_LEN[req_id] = int(row["safe_end"])
             STATS["ingested"] += 1
         _COMMITTED[req_id] = list(row["suffix"])
+    # FR14 lever 2: the gate rides this same staging frame, so it sees exactly
+    # the token stream Arctic saw -- prompt at start, delta at ingest, drop at
+    # retire. The decision is taken HERE, before the forward, so the drafter
+    # never has to sync a draft token back to the host to know its pass count.
+    _fr14 = fr14_gate()
+    for req_id in retired:
+        _fr14.stop_request(req_id)
+    for row in rows:
+        req_id = row["request_id"]
+        if row["prompt"] is not None:
+            # covers restarts too: start_request re-initialises the index
+            _fr14.start_request(req_id, row["prompt"])
+        if row["delta"]:
+            _fr14.observe(req_id, row["delta"])
+    _fr14_fired, _fr14_decisions = fr14_gate_decide(request_ids)
     _FIXED32_PENDING_STEP = {
         "step_seq": step_seq,
         "request_ids": request_ids,
         "rows": tuple(rows),
         "max_tree_depth": int(max_tree_depth),
+        "gate_fired": bool(_fr14_fired),
+        "gate_decisions": _fr14_decisions,
     }
 
 
@@ -1227,6 +1304,21 @@ def decide_fixed32(
         **work,
     }
     return tail
+
+
+def fr14_gate_pending():
+    """(fired, decisions) staged for the current fixed32 step.
+
+    Returns (False, ()) when nothing is staged, so the drafter's default is
+    always the full five-pass step.
+    """
+    pending = _FIXED32_PENDING_STEP
+    if not isinstance(pending, dict):
+        return False, ()
+    return (
+        bool(pending.get("gate_fired", False)),
+        tuple(pending.get("gate_decisions", ())),
+    )
 
 
 def get_fixed32_drafter_last_work():

@@ -389,7 +389,7 @@ by nsys attribution.) An incidental corroboration: eager 4-pass 30.50 ms vs grap
 | `fr13_merged_drafter.decide_fixed32(gated=True)` — 8-token Arctic ask | **landed, 8 tests** |
 | launcher arming: validated flag, /logs sidecar, refusals | **landed** |
 | graph-split microbench | **landed, measured** |
-| **drafter split-graph (`lo`/`hi`) in the patcher** | **NOT landed — interlocked** |
+| **drafter split-graph (`lo`/`hi`) in the patcher** | **LANDED 2026-08-18 — interlock cleared (§11)** |
 
 ### 9.1 Why the drafter graph half was not landed blind
 
@@ -465,3 +465,118 @@ runs, ±10%):
 
 The single question the serve exists to answer: **is MTP's survival at draft positions 3-4, on
 strong-match steps, below 0.931?** Everything else is already measured.
+
+
+---
+
+# 11. INTEGRATION LANDED (2026-08-18)
+
+The coordinator sanctioned the graph-manifest credential re-issue flagged in §9.1, on the
+same precedent as the night's TAW re-attestation. All ten sites in §9.2 are in, plus two the
+spec did not anticipate. `FR14_SUFFIX_PASS_GATE=1` is now armable; both launchers' interlocks
+clear themselves because the patcher carries `FR14_GATE_SPLIT_GRAPH`.
+
+## 11.1 The shape that shipped
+
+Segments, not twins. The drafter's four post-root MTP forwards are captured as
+`[(graph, signature, passes)]`: **one 4-pass segment when the gate is off** — which is
+byte-identical to the shipped path — and **two 2-pass segments when it is armed**. An ungated
+armed step replays `lo` then `hi` (4 forwards, 2 replays); a gated step replays `lo` alone
+(2 forwards, 1 replay). The `if/else` the spec imagined collapsed into a loop over segments,
+which is why the off-path could stay literally unchanged rather than merely equivalent.
+
+## 11.2 Two things the spec got wrong, both found by tests that then pinned them
+
+**(a) The registry key was insufficient.** §9.2 said key the registry `(batch, passes)`. Both
+halves are `(1, 2)`, so the second capture was rejected as a duplicate — and, worse, the two
+halves would have produced the **same manifest signature**, since their payloads were
+identical. Fixed by threading a **segment index** through capture/replay, into the registry
+key *and* into the manifest payload, so `lo` and `hi` are distinguishable artifacts. Pinned by
+`test_two_half_graphs_coexist_for_one_batch_size`, which asserts `sig_lo != sig_hi`.
+
+**(b) Replay ordering needed an invariant, and the segment index supplies it for free.**
+Rather than "at most two replays", the check is now `prior_replays == segment`: `lo` must be
+replayed before `hi`, and each exactly once. Replaying `lo` twice, replaying `hi` first, or a
+third replay are all fatal — `test_replaying_the_same_half_twice_is_refused`,
+`test_a_third_replay_is_refused`, `test_four_pass_graph_may_never_be_replayed_twice`.
+
+## 11.3 The credential did not move
+
+The re-issue was sanctioned, but it turned out not to be needed for the ungated arm. The
+4-pass manifest keeps schema `v2` and its literals, so it still hashes to
+
+```
+d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c
+```
+
+— the exact `drafter_runtime.graph_signature` the banked K0 serve carries. That is asserted
+directly in `test_ungated_capture_is_unchanged_schema_and_literals`, against the value read
+out of `output/fr14_b1_stock_20260817T054447Z/.../fr13_fixed32_work_census.jsonl`. Half-graphs
+carry schema `v3-split` plus their pass count and segment, so **a half can never present as
+the shipped 4-pass graph**.
+
+## 11.4 How this was validated without a GPU
+
+The drafter graph machinery lives inside `_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE`, a source
+blob the patcher injects into `gdn_linear_attn`. It is real Python, so it can be `exec`'d into
+a namespace and driven on CPU. `tests/test_fr14_gated_drafter_graph_manifest.py` does exactly
+that and drives the full state machine — capture, forward counting, capture-end, replay,
+proposal-end — for all three legal shapes and eleven illegal ones.
+
+Worth recording as a method note: the patcher file's own `ast.parse` does **not** cover that
+blob, because it is string content. A syntax error inside it would have surfaced only at
+container boot. Both the file and the extracted blob are now parsed separately.
+
+The census reducer was regression-checked against **1 000 banked events**, which validate
+unchanged.
+
+## 11.5 The well-formedness interlock, stated once
+
+A gated step is only well-formed if the pass count and the handoff depth agree. Two
+independent places now make disagreement fatal **before** anything reaches the verifier:
+
+- `_fr13_fixed32_drafter_proposal_end` accepts exactly `(4 forwards, 1 replay)`,
+  `(4, 2)` and `(2, 1)`, and additionally requires `main_tail_columns == 8` iff
+  `mtp_forward_calls == 2`;
+- `fr13_fixed32_work_census.validate_event` accepts the **pair**
+  `(mtp_forward_calls, main_tail_length)` in `{(4, 6), (2, 8)}` and nothing else, with the
+  `drafter_runtime` mirror and the Arctic ledger following the same width.
+
+Validating the pair rather than each literal is what lets all 35 banked runroots keep
+validating untouched — they are all `(4, 6)` — while making `(2, 6)` and `(4, 8)` impossible.
+
+## 11.6 Where the gate decision comes from
+
+`fr13_merged_drafter.stage_fixed32_step` — the pre-forward staging frame that already owns the
+Arctic lifecycle. The gate is fed the same prompt / delta / retire events Arctic gets, so it
+can never see a different token stream than the proposer it gates, and the decision is taken
+**before** the forward. The drafter therefore never syncs a draft token back to the host to
+learn its own pass count, which is what kept the 2.91 ms blocking-D2H tax out of this lever.
+
+## 11.7 What is still unproven
+
+The integration has **never executed on a GPU**. Every invariant above is enforced
+fail-closed, and the first armed boot is the test:
+
+| first-boot check | expectation |
+|---|---|
+| `[FR14_SUFFIX_PASS_GATE] armed ngram=8 min_agree=0.75` | printed once at the first staged step |
+| drafter graph registry | **two** rows at `passes=2`, `segment=0` and `1` |
+| `drafter_runtime.graph_replays` | 2 on cold steps, 1 on gated steps |
+| `drafter.mtp_forward_calls` | 4 on cold steps, 2 on gated, **no third value** |
+| `active_nodes` / `verify_rows` | 27 / 32 on every step, gated or not |
+| ungated-arm signature | unchanged `d9a4dd…6150c` |
+
+The gate stays **default OFF**; arming happens only at the paired A/B the coordinator
+schedules (§10).
+
+## 11.8 Also landed: lane 1's launcher forwarding
+
+`FR14_FUSED_DRAFT_TOPK` is forwarded by both launcher families, strict `0|1`, default OFF,
+with `_BLOCKS` range-checked at launch and arming refused without the `.so` path and its
+sha256. The mechanism was checked rather than assumed: lane 1's guards read `os.environ`
+inside the proposer, and a banked serve proves that path live (`FR13_DRAFTER_GRAPH=1` in
+`container_env.txt` with `graph_replays=1` in the census of the same steps), so `-e`
+forwarding is correct and no `/logs` sidecar is needed. `FR14_FUSED_DRAFT_TOPK_SO` is
+forwarded with a **non-empty** default, because `os.environ.get` returns `""` for a
+set-but-empty variable — the same trap `FR13_DFWD_SPLIT_JSON` was shipped against.

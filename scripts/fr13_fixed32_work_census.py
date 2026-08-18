@@ -44,6 +44,9 @@ from fr13_fixed32_topology import (
     ARCTIC_LOOKUP_CHAINS,
     ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
     ARCTIC_MAIN_TAIL_LENGTH,
+    GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
+    GATED_ARCTIC_MAIN_TAIL_LENGTH,
+    GATED_MTP_FORWARD_CALLS,
     COMMIT_PATH_CAP,
     COMMITTER_NEUTRALIZE_OPS,
     COMMITTER_RING_GATHERS,
@@ -1342,14 +1345,28 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     )
     pack_columns = _integer(drafter["pack_columns"], f"{source}.drafter.pack_columns")
     packed_rows = _integer(drafter["packed_rows"], f"{source}.drafter.packed_rows")
-    _expect(
-        mtp_forward_calls,
-        MTP_FORWARD_CALLS,
-        f"{source}.drafter.mtp_forward_calls",
-    )
+    # FR14 lever 2 (FR14_SUFFIX_PASS_GATE): a GATED step runs two post-root MTP
+    # forwards and hands off to an 8-token Arctic main chain; an ungated step is
+    # exactly what it always was. Validate the PAIR rather than each literal, so
+    # (a) every banked runroot still validates unchanged -- they are all (4, 6)
+    # -- and (b) no third shape, and no mismatched pair, can ever pass. A
+    # 2-forward step with a 6-token chain is a malformed tree and is rejected
+    # here just as it is at the drafter's own proposal_end.
+    _fr14_shape = (mtp_forward_calls, main_tail_length)
+    if _fr14_shape not in (
+        (MTP_FORWARD_CALLS, ARCTIC_MAIN_TAIL_LENGTH),
+        (GATED_MTP_FORWARD_CALLS, GATED_ARCTIC_MAIN_TAIL_LENGTH),
+    ):
+        raise CensusError(
+            f"{source}.drafter (mtp_forward_calls, main_tail_length) must be "
+            f"{(MTP_FORWARD_CALLS, ARCTIC_MAIN_TAIL_LENGTH)} ungated or "
+            f"{(GATED_MTP_FORWARD_CALLS, GATED_ARCTIC_MAIN_TAIL_LENGTH)} gated, "
+            f"got {_fr14_shape}"
+        )
+    _fr14_gated = mtp_forward_calls == GATED_MTP_FORWARD_CALLS
     _expect(
         mtp_forward_rows,
-        MTP_FORWARD_CALLS * batch_size,
+        mtp_forward_calls * batch_size,
         f"{source}.drafter.mtp_forward_rows",
     )
     _expect(
@@ -1359,13 +1376,13 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     )
     _expect(
         arctic_requested_tokens,
-        ARCTIC_LOOKUP_TOKENS_PER_REQUEST * batch_size,
+        (
+            GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+            if _fr14_gated
+            else ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+        )
+        * batch_size,
         f"{source}.drafter.arctic_requested_tokens",
-    )
-    _expect(
-        main_tail_length,
-        ARCTIC_MAIN_TAIL_LENGTH,
-        f"{source}.drafter.main_tail_length",
     )
     _expect(
         rescue_chains,
@@ -1597,17 +1614,29 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         drafter_runtime["mtp_forward_rows"],
         f"{runtime_label}.mtp_forward_rows",
     )
-    _expect(runtime_mtp_calls, MTP_FORWARD_CALLS, f"{runtime_label}.mtp_forward_calls")
+    # FR14 lever 2: the runtime mirror must project onto the drafter payload
+    # exactly, so it follows the same gated shape rather than a second literal.
+    _expect(
+        runtime_mtp_calls,
+        GATED_MTP_FORWARD_CALLS if _fr14_gated else MTP_FORWARD_CALLS,
+        f"{runtime_label}.mtp_forward_calls",
+    )
     _expect(
         runtime_mtp_rows,
-        MTP_FORWARD_CALLS * batch_size,
+        runtime_mtp_calls * batch_size,
         f"{runtime_label}.mtp_forward_rows",
+    )
+    _fr14_main = (
+        GATED_ARCTIC_MAIN_TAIL_LENGTH if _fr14_gated else ARCTIC_MAIN_TAIL_LENGTH
     )
     raw_ledger = drafter_runtime["arctic_ledger"]
     if not isinstance(raw_ledger, list) or len(raw_ledger) != 3:
         raise CensusError(f"{runtime_label}.arctic_ledger: expected three ordered rows")
+    # FR14 lever 2: only the MAIN chain widens on a gated step (6 -> 8); the
+    # rank-1 and rank-2 rescue chains hang off the ROOT runner-ups and are
+    # untouched by the skipped passes, so they are literals in both shapes.
     expected_ledger = (
-        ("main", batch_size, 6 * batch_size),
+        ("main", batch_size, _fr14_main * batch_size),
         ("rank1", batch_size, 4 * batch_size),
         ("rank2", batch_size, 2 * batch_size),
     )
@@ -1664,12 +1693,22 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         drafter_runtime["outer_handoff_calls"],
         f"{runtime_label}.outer_handoff_calls",
     )
+    _fr14_fill = _fr14_main + 10
     for actual, expected, field in (
         (runtime_arctic_calls, ARCTIC_LOOKUP_CALLS_PER_REQUEST * batch_size, "arctic_lookup_calls"),
-        (runtime_arctic_tokens, ARCTIC_LOOKUP_TOKENS_PER_REQUEST * batch_size, "arctic_requested_tokens"),
+        (
+            runtime_arctic_tokens,
+            (
+                GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+                if _fr14_gated
+                else ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+            )
+            * batch_size,
+            "arctic_requested_tokens",
+        ),
         (runtime_fill_calls, 1, "merge_fill_calls"),
-        (runtime_fill_columns, 16, "merge_fill_columns"),
-        (runtime_fill_rows, 16 * batch_size, "merge_fill_rows"),
+        (runtime_fill_columns, _fr14_fill, "merge_fill_columns"),
+        (runtime_fill_rows, _fr14_fill * batch_size, "merge_fill_rows"),
         (runtime_carry, RESCUE_CARRY_SLOTS_PER_REQUEST * batch_size, "rescue_carry_slots"),
         (runtime_publish_shape, (batch_size, PHYSICAL_DRAFTS), "publish_shape"),
         (runtime_parent_sha, PHYSICAL_PARENT_SHA256, "physical_parent_sha256"),
@@ -1681,7 +1720,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         "mtp_forward_rows": runtime_mtp_rows,
         "arctic_lookup_calls": runtime_arctic_calls,
         "arctic_requested_tokens": runtime_arctic_tokens,
-        "main_tail_length": ARCTIC_MAIN_TAIL_LENGTH,
+        "main_tail_length": _fr14_main,
         "rescue_chains": [list(chain) for chain in ARCTIC_LOOKUP_CHAINS],
         "carry_fill_slots": runtime_carry,
         "pack_columns": runtime_publish_shape[1],
