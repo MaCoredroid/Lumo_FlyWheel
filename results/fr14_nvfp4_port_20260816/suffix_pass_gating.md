@@ -984,3 +984,97 @@ Sites 11–14 were found by boots; **site 16 was found by the sweep.** That is t
 cost math asked for.
 
 Gate remains **default-OFF**.
+
+
+---
+
+# 16. ROUND 5: the gate latched per REQUEST, and that removed the only brake
+
+Mechanism confirmed at pre-registered size — **22.98 ms per gated step** against my −20.6 ms
+— and every §11.7 check passed. Then two things, one of them stop-grade.
+
+## 16.1 The latch, and its real cause
+
+98 requests: **11 fully gated, 87 fully ungated, zero mixed.** §3.1 specifies per-step
+evaluation. Reconstructed independently from the census: **11 transitions into the gated
+state and 11 out**, across 11 291 gated steps — runs averaging **~1026 consecutive steps**. A
+hard latch, not a soft bias.
+
+**Cause: a wiring bug, not a predicate bug.** The gate was fed from
+`stage_fixed32_step`'s `row["delta"]`. On every steady-state decode step that delta is
+**empty** — staging sets `safe_end = prior` when `drafts == 31`, with the comment "the prior
+exact finalization owns the committed boundary". Generated tokens reach the drafter through
+`finalize_fixed32_step`, which feeds Arctic (`cache.add_active_response(req_id, extra)`) and
+had **no gate hook**.
+
+So the gate's history was **the prompt, frozen, for the entire request**. `decide()` ran every
+step and re-read the same trailing 8-gram, returning the same answer. *Per-step evaluation
+existed in form and was a no-op in fact* — one decision per request, latched, which is exactly
+the 11 / 87 / zero-mixed signature. The 11 that latched ON are simply the requests whose
+prompt tail happened to be a recurring 8-gram with agreement ≥ 0.75.
+
+**Fix:** the gate is fed from `finalize_fixed32_step`'s `extra` — the authoritative per-step
+committed delta and the exact tokens Arctic gets — and the stage-time feed is removed (empty
+in steady state, and a double-count on the chunked-prefill path where `start_request` has
+already supplied the prompt).
+
+## 16.2 The degeneration, read directly
+
+`astropy-13236`, warm 0.993: a **117 739-char** thinking block, ttr **0.066**, one 12-gram
+(`# Structured ndarray gets viewed as a mixin unless already a valid`) repeated **71×**,
+ending mid-token in a truncated tool call. It opens with normal reasoning and then locks onto
+source text it had already seen. Healthy in all three ungated arms.
+
+**Mechanism, and why the latch is what made it fatal.** The suffix chain is a recurrence
+copier whose own firing predicate *is* recurrence — copying keeps the predicate true. Per-step
+re-evaluation is the brake; the frozen history removed it entirely. Nothing could turn the
+gate off, so nothing bounded the copy loop.
+
+Caught by Mark's mandatory trace read and **missed by every statistic I had**: accept was flat,
+the ladder was healthy, all shape interlocks green. Worth stating plainly — a lever that
+degrades *output quality* while leaving *acceptance* untouched is invisible to the entire
+instrument set this campaign built.
+
+## 16.3 The anti-runaway brake — PROPOSED AND PRE-REGISTERED
+
+The latch fix restores the brake but does **not** make the runaway impossible: a request that
+genuinely copies keeps the predicate true step after step. That is asserted, not argued —
+`test_a_copier_runaway_keeps_the_predicate_true` passes *with* per-step evaluation.
+
+**Brake: `FR14_SUFFIX_PASS_GATE_MAX_RUN`, default 32.** After 32 consecutive gated steps a
+request is forced ungated for one step, putting MTP back in the loop.
+
+Chosen **orthogonal to the predicate on purpose**: it does not touch the calibrated 8-gram /
+0.75 threshold, so `q1_gated = 0.8202` and the warm-rate calibration stand unchanged, and the
+cost is at most 1/33 of the saving. The counter follows the **batch** outcome, not a row's
+vote, and resets on any cold step.
+
+| pre-registered | value |
+|---|---|
+| cap | 32 consecutive gated steps per request |
+| expected cost | ≤ 3% of the gated-step saving |
+| expected engagement | `run_capped > 0` on any task that previously degenerated |
+| falsifier | 13236 still degenerates with the cap engaged ⇒ the cap is the wrong brake |
+
+**The principled alternative I did NOT silently adopt:** exclude matches whose earlier
+occurrence lies inside the copier's own recent output. That attacks the mechanism rather than
+bounding it, but it changes the calibrated predicate and would need the offline recalibration
+re-run first. Recorded as the follow-on, not slipped in.
+
+## 16.4 The harness gap this exposes
+
+Every test I had was **step-scoped**. A request-scoped test — "do mixed gated/ungated requests
+exist at all?" — would have caught zero-mixed instantly. Added, along with the structural
+invariant that would have caught the wiring bug directly:
+
+> **every fixed32 function that feeds Arctic must feed the gate in the same function.**
+
+That is `test_the_gate_is_fed_wherever_arctic_is_fed`, and it fails on the shipped round-5
+code. 16 tests total, including a reproduction of the latch from a frozen history and proof
+that feeding the committed delta restores per-step behaviour.
+
+## 16.5 Status
+
+**The gate remains REFUSED and default-OFF.** It is re-armable only after a re-serve shows
+both: `astropy-13236` healthy, and mixed gated/ungated requests existing. The mechanism and
+its 22.98 ms are confirmed; the lever is not.

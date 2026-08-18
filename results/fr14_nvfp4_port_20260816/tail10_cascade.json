@@ -1,0 +1,120 @@
+{
+ "moves": {
+  "PHYSICAL_PARENT_SHA256": [
+   "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd",
+   "101c590e580e122d14e29745d030f2783a6475a252033bb89a84cbf1b3e698e2",
+   "ids >=17 get new paths; the physical tree itself changes"
+  ],
+  "TREE_ANCESTRY_SHA256": [
+   "90873d81e83ce1644ee4701e043b7e9d26e83b7a7ca752d538a0e6eed1946dad",
+   "5b33c46a258678efb6ffe5afd34556b1d0d1f37ed70d8c10bd39c8bbe187b427",
+   "ancestry matrix follows the parent vector"
+  ],
+  "valid_mask": [
+   "0x7ABDFFFF / 0x7abdffff",
+   "0x7FFFFFFF",
+   "all 31 armed"
+  ],
+  "active_nodes": [
+   "27",
+   "31",
+   "4 disabled slots become spine"
+  ],
+  "ARCTIC_MAIN_TAIL_LENGTH": [
+   "6",
+   "10",
+   "tail6 -> tail10"
+  ],
+  "arctic_requested_tokens": [
+   "12",
+   "16",
+   "main 10 + rank1 4 + rank2 2"
+  ],
+  "RESCUE_CARRY_SLOTS": [
+   "4",
+   "0",
+   "physical rank2 chain 6 -> 2, so nothing to carry"
+  ],
+  "rescue_path_columns": [
+   "10",
+   "6",
+   "PHYSICAL_BRANCH_CHAINS ((1,4),(2,6)) -> ((1,4),(2,2))"
+  ],
+  "merge_fill_columns": [
+   "16",
+   "16",
+   "10 tail + 6 rescue -- COINCIDENTALLY UNCHANGED"
+  ],
+  "MAX_PHYSICAL_DEPTH": [
+   "11",
+   "15",
+   "spine to 0^15"
+  ],
+  "WALK_CAP / taw.loop_iterations / walk_levels": [
+   "12",
+   "16",
+   "max_depth+1"
+  ],
+  "gdn.critical_path": [
+   "12",
+   "16",
+   "follows walk depth"
+  ]
+ },
+ "sites": {
+  "physical_parent_sha256": {
+   "scripts/fr13_fixed32_topology.py": 1
+  },
+  "tree_ancestry_sha256": {
+   "scripts/fr13_fixed32_topology.py": 1
+  },
+  "valid_mask_hydra27": {
+   "scripts/fr13_fixed32_topology.py": 1,
+   "scripts/fr10_phase4_patch_vllm_tree_gdn.py": 3
+  },
+  "active_nodes_27": {
+   "scripts/fr13_fixed32_topology.py": 2,
+   "scripts/fr13_fixed32_work_census.py": 2,
+   "scripts/fr13_launch_forked_fa2_tree_server.sh": 1,
+   "scripts/fr14_armb_leg3_launch_nomiddleware.sh": 1
+  },
+  "main_tail_length_6": {
+   "scripts/fr13_fixed32_topology.py": 14,
+   "scripts/fr13_fixed32_work_census.py": 7,
+   "scripts/fr13_merged_drafter.py": 6,
+   "scripts/fr14_paired_contract_sweep.py": 8
+  },
+  "arctic_tokens_12": {
+   "scripts/fr13_fixed32_topology.py": 5,
+   "scripts/fr13_fixed32_work_census.py": 9,
+   "scripts/fr13_merged_drafter.py": 6,
+   "scripts/fr10_phase4_patch_vllm_tree_gdn.py": 3,
+   "scripts/fr14_paired_contract_sweep.py": 1
+  },
+  "carry_slots_4": {
+   "scripts/fr13_fixed32_topology.py": 3,
+   "scripts/fr13_fixed32_work_census.py": 6,
+   "scripts/fr13_merged_drafter.py": 5
+  },
+  "walk_12": {
+   "scripts/fr13_fixed32_topology.py": 8,
+   "scripts/fr13_fixed32_work_census.py": 15,
+   "scripts/fr10_phase4_patch_vllm_tree_gdn.py": 4,
+   "scripts/fr13_launch_forked_fa2_tree_server.sh": 4,
+   "scripts/fr14_armb_leg3_launch_nomiddleware.sh": 4,
+   "scripts/fr14_paired_contract_sweep.py": 1
+  },
+  "max_depth_11": {
+   "scripts/fr13_fixed32_topology.py": 6,
+   "scripts/fr14_paired_contract_sweep.py": 1
+  },
+  "mode_name_hydra27": {
+   "scripts/fr13_fixed32_topology.py": 3,
+   "scripts/fr13_fixed32_work_census.py": 1,
+   "scripts/fr10_phase4_patch_vllm_tree_gdn.py": 14,
+   "scripts/fr13_launch_forked_fa2_tree_server.sh": 30,
+   "scripts/fr14_armb_leg3_launch_nomiddleware.sh": 29
+  }
+ },
+ "total": 205
+}

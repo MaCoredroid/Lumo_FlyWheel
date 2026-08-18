@@ -827,9 +827,216 @@ def validate_gate_contract() -> None:
         raise AssertionError("gated pack is not exactly 31 columns")
 
 
+# ===========================================================================
+# TAIL10 / hydra31_fixed32 -- a SECOND PHYSICAL PROFILE, added beside hydra27.
+# ===========================================================================
+# tail10 spends the four slots hydra27 disarms. In hydra27 they are the deep
+# rank-2 side-branches (2,0,0,0) .. (2,0,0,0,0,0,0) at depths 4-7, masked off by
+# 0x7ABDFFFF. tail10 redefines them as SPINE continuations 0^12..0^15 and arms
+# them, so the Arctic tail runs 6 -> 10 and every one of the 31 physical drafts
+# is live.
+#
+# THIS IS NOT A MASK CHANGE. Sorting by (len, path) puts 0^12..0^15 at the end,
+# so draft ids >= 17 acquire different paths: the PHYSICAL TREE ITSELF differs,
+# and with it DRAFT_PARENT, PHYSICAL_PARENT and both digests. hydra27 therefore
+# cannot be edited in place without silently changing what every banked hydra27
+# credential attests. It is added as a NEW NAMED PROFILE, the K0-train
+# qualification-profile pattern, and every module-level constant above stays
+# bound to hydra27 so no existing consumer moves.
+#
+# What does NOT change, and is why this stays host-side: PHYSICAL_DRAFTS 31,
+# PHYSICAL_ROWS 32, SAMPLER_MAX_FANOUT 3, root fan-out 3. The kernels see the
+# same 32-row geometry; only the ancestry TABLE and the walk DEPTH differ.
+TAIL10_SPINE_MAX_DEPTH = 15
+TAIL10_BRANCH_CHAINS: tuple[tuple[int, int], ...] = ((1, 4), (2, 2))
+# physical == logical here, so nothing is carried into dead slots (hydra27
+# carries 4, because its physical rank-2 chain is 6 long and its logical one 2)
+TAIL10_PHYSICAL_BRANCH_CHAINS = TAIL10_BRANCH_CHAINS
+TAIL10_RESCUE_CARRY_SLOTS_PER_REQUEST = 0
+TAIL10_ARCTIC_MAIN_TAIL_LENGTH = TAIL10_SPINE_MAX_DEPTH - N_MTP_HEAD_DEPTHS
+TAIL10_ARCTIC_LOOKUP_CHAINS = TAIL10_BRANCH_CHAINS
+TAIL10_ARCTIC_LOOKUP_CALLS_PER_REQUEST = 1 + len(TAIL10_ARCTIC_LOOKUP_CHAINS)
+TAIL10_ARCTIC_LOOKUP_TOKENS_PER_REQUEST = TAIL10_ARCTIC_MAIN_TAIL_LENGTH + sum(
+    length for _rank, length in TAIL10_ARCTIC_LOOKUP_CHAINS
+)
+
+
+def _spine_head_choices(head_depth: int, branches: int, spine_max: int):
+    head = [
+        (0,) * (depth - 1) + (rank,)
+        for depth in range(1, head_depth + 1)
+        for rank in range(1 + branches)
+    ]
+    spine = [(0,) * depth for depth in range(head_depth + 1, spine_max + 1)]
+    return set(head) | set(spine)
+
+
+TAIL10_CHOICES: tuple[Path, ...] = tuple(
+    sorted(
+        _spine_head_choices(
+            N_MTP_HEAD_DEPTHS, BRANCHES_PER_HEAD_DEPTH, TAIL10_SPINE_MAX_DEPTH
+        )
+        | set(branch_paths(TAIL10_PHYSICAL_BRANCH_CHAINS)),
+        key=lambda path: (len(path), path),
+    )
+)
+TAIL10_DRAFT_PARENT: tuple[int, ...] = _draft_parents(TAIL10_CHOICES)
+TAIL10_PHYSICAL_PARENT: tuple[int, ...] = (-1,) + tuple(
+    0 if parent < 0 else parent + 1 for parent in TAIL10_DRAFT_PARENT
+)
+TAIL10_PHYSICAL_PARENT_SHA256 = _canonical_sha256(TAIL10_PHYSICAL_PARENT)
+TAIL10_TREE_ANCESTRY_SHA256 = _canonical_sha256(
+    _ancestor_matrix(TAIL10_PHYSICAL_PARENT)
+)
+HYDRA31_VALID: tuple[bool, ...] = (True,) * len(TAIL10_CHOICES)
+HYDRA31_VALID_MASK = bit_mask(HYDRA31_VALID)
+HYDRA31_ACTIVE_DRAFTS = len(TAIL10_CHOICES)
+HYDRA31_INACTIVE_DRAFT_IDS: tuple[int, ...] = ()
+TAIL10_MAX_PHYSICAL_DEPTH = TAIL10_SPINE_MAX_DEPTH
+TAIL10_WALK_CAP = TAIL10_MAX_PHYSICAL_DEPTH + 1
+
+# The gate (FR14_SUFFIX_PASS_GATE) composes: a gated step still hands off two
+# head depths earlier, so its Arctic chain is two longer than the ungated one.
+TAIL10_GATED_ARCTIC_MAIN_TAIL_LENGTH = (
+    TAIL10_SPINE_MAX_DEPTH - GATED_MTP_K
+)
+TAIL10_GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST = (
+    TAIL10_GATED_ARCTIC_MAIN_TAIL_LENGTH
+    + sum(length for _rank, length in TAIL10_ARCTIC_LOOKUP_CHAINS)
+)
+TAIL10_LEGAL_HANDOFF_SHAPES = (
+    (MTP_FORWARD_CALLS, TAIL10_ARCTIC_MAIN_TAIL_LENGTH),
+    (GATED_MTP_FORWARD_CALLS, TAIL10_GATED_ARCTIC_MAIN_TAIL_LENGTH),
+)
+
+PROFILE_HYDRA27 = "hydra27_fixed32"
+PROFILE_HYDRA31 = "hydra31_fixed32"
+PROFILES: dict[str, dict[str, object]] = {
+    PROFILE_HYDRA27: {
+        "choices": FIXED32_CHOICES,
+        "valid": HYDRA27_VALID,
+        "valid_mask": HYDRA27_VALID_MASK,
+        "active_drafts": HYDRA27_ACTIVE_DRAFTS,
+        "inactive_draft_ids": HYDRA27_INACTIVE_DRAFT_IDS,
+        "physical_parent": PHYSICAL_PARENT,
+        "physical_parent_sha256": PHYSICAL_PARENT_SHA256,
+        "tree_ancestry_sha256": TREE_ANCESTRY_SHA256,
+        "max_physical_depth": MAX_PHYSICAL_DEPTH,
+        "walk_cap": WALK_CAP,
+        "main_tail_length": ARCTIC_MAIN_TAIL_LENGTH,
+        "arctic_requested_tokens": ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
+        "gated_main_tail_length": GATED_ARCTIC_MAIN_TAIL_LENGTH,
+        "gated_arctic_requested_tokens": GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
+        "physical_branch_chains": PHYSICAL_BRANCH_CHAINS,
+        "rescue_carry_slots": RESCUE_CARRY_SLOTS_PER_REQUEST,
+    },
+    PROFILE_HYDRA31: {
+        "choices": TAIL10_CHOICES,
+        "valid": HYDRA31_VALID,
+        "valid_mask": HYDRA31_VALID_MASK,
+        "active_drafts": HYDRA31_ACTIVE_DRAFTS,
+        "inactive_draft_ids": HYDRA31_INACTIVE_DRAFT_IDS,
+        "physical_parent": TAIL10_PHYSICAL_PARENT,
+        "physical_parent_sha256": TAIL10_PHYSICAL_PARENT_SHA256,
+        "tree_ancestry_sha256": TAIL10_TREE_ANCESTRY_SHA256,
+        "max_physical_depth": TAIL10_MAX_PHYSICAL_DEPTH,
+        "walk_cap": TAIL10_WALK_CAP,
+        "main_tail_length": TAIL10_ARCTIC_MAIN_TAIL_LENGTH,
+        "arctic_requested_tokens": TAIL10_ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
+        "gated_main_tail_length": TAIL10_GATED_ARCTIC_MAIN_TAIL_LENGTH,
+        "gated_arctic_requested_tokens":
+            TAIL10_GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
+        "physical_branch_chains": TAIL10_PHYSICAL_BRANCH_CHAINS,
+        "rescue_carry_slots": TAIL10_RESCUE_CARRY_SLOTS_PER_REQUEST,
+    },
+}
+
+
+def profile(mode: str) -> dict[str, object]:
+    if mode not in PROFILES:
+        raise KeyError(f"unknown fixed32 profile: {mode!r}")
+    return PROFILES[mode]
+
+
+def validate_tail10_contract() -> None:
+    """The hydra31 contract, and the ways it must NOT disturb hydra27."""
+    # hydra27 is untouched by construction -- assert it, do not assume it
+    if PHYSICAL_PARENT_SHA256 != (
+        "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
+    ):
+        raise AssertionError("hydra27 parent digest moved -- tail10 must not")
+    if HYDRA27_VALID_MASK != 0x7ABDFFFF or HYDRA27_ACTIVE_DRAFTS != 27:
+        raise AssertionError("hydra27 identity moved -- tail10 must not")
+
+    # the four slots hydra27 disarms are exactly the ones tail10 respends
+    if len(HYDRA27_INACTIVE_DRAFT_IDS) != 4:
+        raise AssertionError("hydra27 does not have four spare slots")
+    respent = [
+        path for path in TAIL10_CHOICES if path not in set(FIXED32_CHOICES)
+    ]
+    if len(respent) != 4 or any(set(p) != {0} for p in respent):
+        raise AssertionError(f"tail10 must add four SPINE nodes, got {respent}")
+    if sorted(len(p) for p in respent) != [12, 13, 14, 15]:
+        raise AssertionError("tail10's new nodes must be 0^12..0^15")
+
+    # same physical budget -- this is what keeps it host-side
+    if len(TAIL10_CHOICES) != PHYSICAL_DRAFTS:
+        raise AssertionError("tail10 must still be exactly 31 physical drafts")
+    if HYDRA31_ACTIVE_DRAFTS != PHYSICAL_DRAFTS:
+        raise AssertionError("tail10 arms every physical draft")
+    if HYDRA31_VALID_MASK != (1 << PHYSICAL_DRAFTS) - 1:
+        raise AssertionError("tail10 mask must arm all 31 bits")
+
+    # a well-formed tree: parent-before-child, one root fan-out of three,
+    # fan-out never exceeds what the sampler tables hold
+    children: dict[int, list[int]] = {}
+    for node, parent in enumerate(TAIL10_DRAFT_PARENT):
+        children.setdefault(parent, []).append(node)
+    if children.get(-1) != [0, 1, 2]:
+        raise AssertionError("tail10 root fan-out drifted")
+    if max(len(v) for v in children.values()) != SAMPLER_MAX_FANOUT:
+        raise AssertionError("tail10 exceeds the sampler fan-out")
+    for node, (path, parent) in enumerate(
+        zip(TAIL10_CHOICES, TAIL10_DRAFT_PARENT, strict=True)
+    ):
+        if len(path) > 1 and parent >= node:
+            raise AssertionError(f"tail10 choice {node} is not parent-ordered")
+
+    # the committer must be able to walk it. tail10 sits EXACTLY at the cap.
+    if TAIL10_WALK_CAP > COMMIT_PATH_CAP:
+        raise AssertionError(
+            f"tail10 walk {TAIL10_WALK_CAP} exceeds commit path capacity "
+            f"{COMMIT_PATH_CAP}"
+        )
+
+    # the pack is still 15 head + tail + rescue = 31, ungated and gated
+    head_columns = N_MTP_HEAD_DEPTHS * (1 + BRANCHES_PER_HEAD_DEPTH)
+    rescue = sum(l for _r, l in TAIL10_PHYSICAL_BRANCH_CHAINS)
+    for hd, cols in (
+        (N_MTP_HEAD_DEPTHS, TAIL10_ARCTIC_MAIN_TAIL_LENGTH),
+        (GATED_MTP_K, TAIL10_GATED_ARCTIC_MAIN_TAIL_LENGTH),
+    ):
+        in_head = N_MTP_HEAD_DEPTHS - hd
+        if head_columns + (cols - in_head) + rescue != PHYSICAL_DRAFTS:
+            raise AssertionError("tail10 pack is not 31 columns")
+
+    # nothing is carried: physical and logical rescue chains are equal now
+    if TAIL10_PHYSICAL_BRANCH_CHAINS != TAIL10_BRANCH_CHAINS:
+        raise AssertionError("tail10 rescue chains diverged")
+    if TAIL10_RESCUE_CARRY_SLOTS_PER_REQUEST != 0:
+        raise AssertionError("tail10 carries nothing")
+
+    # the two profiles must not collide
+    if TAIL10_PHYSICAL_PARENT_SHA256 == PHYSICAL_PARENT_SHA256:
+        raise AssertionError("profiles must have distinct parent digests")
+    if set(PROFILES) != {PROFILE_HYDRA27, PROFILE_HYDRA31}:
+        raise AssertionError("profile table drifted")
+
+
 if __name__ == "__main__":
     validate_contract()
     validate_gate_contract()
+    validate_tail10_contract()
     print(
         "PASS fixed32 topology: physical=31/32 active=23/27 "
         f"masks={TAIL6_VALID_MASK:#x}/{HYDRA27_VALID_MASK:#x} "

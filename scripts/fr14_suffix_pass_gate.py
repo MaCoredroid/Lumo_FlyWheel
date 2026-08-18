@@ -68,6 +68,18 @@ DEFAULT_NGRAM = 8
 DEFAULT_MIN_AGREE = 0.75
 DEFAULT_VOTE_CAP = 64
 DEFAULT_MIN_HISTORY = 256
+# FR14 ANTI-RUNAWAY BRAKE (pre-registered 2026-08-18, round 5).
+# The suffix chain is a recurrence copier whose own firing predicate is
+# recurrence, so copying keeps the predicate true: per-step re-evaluation is a
+# necessary brake but not a sufficient one -- pinned by
+# tests/test_fr14_gate_per_step_reevaluation.py::
+# test_a_copier_runaway_keeps_the_predicate_true.
+# After MAX_RUN consecutive gated steps a request is forced ungated for one
+# step, which puts MTP back in the loop and breaks the copy->recurrence->copy
+# cycle. Chosen ORTHOGONAL to the predicate on purpose: it does not touch the
+# calibrated 8-gram/0.75 threshold, so q1_gated and the warm-rate calibration
+# stand unchanged and the brake costs at most 1/(MAX_RUN+1) of the saving.
+DEFAULT_MAX_RUN = 32
 DEFAULT_MAX_HISTORY = 131072
 
 # Shape of a gated step, from the topology contract.  A gated step runs MTP over
@@ -130,6 +142,7 @@ class SuffixPassGate:
         vote_cap=DEFAULT_VOTE_CAP,
         min_history=DEFAULT_MIN_HISTORY,
         max_history=DEFAULT_MAX_HISTORY,
+        max_run=DEFAULT_MAX_RUN,
     ):
         self.enabled = bool(enabled)
         self.ngram = int(ngram)
@@ -137,6 +150,9 @@ class SuffixPassGate:
         self.vote_cap = int(vote_cap)
         self.min_history = int(min_history)
         self.max_history = int(max_history)
+        self.max_run = int(max_run)
+        if self.max_run < 1:
+            raise ValueError("max_run must be >= 1")
         if self.ngram < 1:
             raise ValueError("ngram must be >= 1")
         if not 0.0 <= self.min_agree <= 1.0:
@@ -151,6 +167,7 @@ class SuffixPassGate:
             "no_match": 0,
             "low_agreement": 0,
             "short_history": 0,
+            "run_capped": 0,
             "errors": 0,
         }
 
@@ -159,7 +176,7 @@ class SuffixPassGate:
     def start_request(self, rid, prompt_token_ids=()):
         if not self.enabled:
             return
-        self._state[rid] = {"tokens": [], "index": {}}
+        self._state[rid] = {"tokens": [], "index": {}, "run": 0}
         self.observe(rid, prompt_token_ids)
 
     def stop_request(self, rid):
@@ -214,6 +231,11 @@ class SuffixPassGate:
             if state is None:
                 self.stats["short_history"] += 1
                 return GateDecision(False, "unknown_request")
+            if int(state.get("run", 0)) >= self.max_run:
+                # forced ungated step: MTP re-enters the loop and the copier's
+                # own output stops being able to justify the next gate
+                self.stats["run_capped"] += 1
+                return GateDecision(False, "run_cap")
             tokens = state["tokens"]
             n = len(tokens)
             if n < self.min_history or n < self.ngram or n > self.max_history:
@@ -240,6 +262,21 @@ class SuffixPassGate:
             self.stats["errors"] += 1
             return GateDecision(False, f"error:{type(exc).__name__}")
 
+    def note_step(self, rids, fired):
+        """Record what the step ACTUALLY did, so the cap counts real gating.
+
+        Called once per step with the batch-wide outcome. At B>1 a row can vote
+        to gate while the batch does not (the decision is unanimous-or-cold), and
+        counting that row's vote would cap a run that never happened.
+        """
+        if not self.enabled:
+            return
+        for rid in rids:
+            state = self._state.get(rid)
+            if state is None:
+                continue
+            state["run"] = int(state.get("run", 0)) + 1 if fired else 0
+
     # -- shape of the step the decision implies ----------------------------
 
     @staticmethod
@@ -258,6 +295,7 @@ class SuffixPassGate:
         out["enabled"] = self.enabled
         out["ngram"] = self.ngram
         out["min_agree"] = self.min_agree
+        out["max_run"] = self.max_run
         out["warm_rate"] = (
             self.stats["fired"] / self.stats["steps"] if self.stats["steps"] else 0.0
         )
@@ -303,6 +341,7 @@ def gate_from_env(env=None):
         min_agree=_env_float("FR14_SUFFIX_PASS_GATE_MIN_AGREE", DEFAULT_MIN_AGREE),
         vote_cap=_env_int("FR14_SUFFIX_PASS_GATE_VOTE_CAP", DEFAULT_VOTE_CAP),
         min_history=_env_int("FR14_SUFFIX_PASS_GATE_MIN_HISTORY", DEFAULT_MIN_HISTORY),
+        max_run=_env_int("FR14_SUFFIX_PASS_GATE_MAX_RUN", DEFAULT_MAX_RUN),
     )
 
 

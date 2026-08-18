@@ -137,8 +137,12 @@ def fr14_gate_decide(req_ids):
     gate = fr14_gate()
     if gate is None or not gate.enabled:
         return False, ()
-    decisions = tuple(gate.decide(str(rid)) for rid in req_ids)
-    return (bool(decisions) and all(d.fired for d in decisions)), decisions
+    rids = tuple(str(rid) for rid in req_ids)
+    decisions = tuple(gate.decide(rid) for rid in rids)
+    fired = bool(decisions) and all(d.fired for d in decisions)
+    # the anti-runaway cap counts the step that actually happened
+    gate.note_step(rids, fired)
+    return fired, decisions
 
 
 def reset_for_test():
@@ -728,8 +732,11 @@ def stage_fixed32_step(
         if row["prompt"] is not None:
             # covers restarts too: start_request re-initialises the index
             _fr14.start_request(req_id, row["prompt"])
-        if row["delta"]:
-            _fr14.observe(req_id, row["delta"])
+    # NOTE: row["delta"] is deliberately NOT fed here. In steady state it is
+    # always empty (safe_end = prior), and on the chunked-prefill path it is
+    # prompt tokens that start_request has already supplied -- feeding it would
+    # double-count. Generated tokens reach the gate from finalize_fixed32_step,
+    # the same call that feeds Arctic.
     _fr14_fired, _fr14_decisions = fr14_gate_decide(request_ids)
     _FIXED32_PENDING_STEP = {
         "step_seq": step_seq,
@@ -882,11 +889,26 @@ def finalize_fixed32_step(
         _fixed32_poison("finalize_fixed32_step", step_seq)
         raise
 
+    _fr14 = fr14_gate()
     for req_id, safe_end, extra in actions:
         _INGESTED_LEN[req_id] = safe_end + len(extra)
         _COMMITTED[req_id] = (
             list(_COMMITTED.get(req_id, ())) + extra
         )[-max_tree_depth:]
+        # FR14 lever 2 -- THE LATCH FIX. `extra` is the authoritative per-step
+        # committed delta and the exact thing Arctic is fed above, so the gate
+        # is fed here and nowhere else in this path.
+        #
+        # It used to be fed from stage_fixed32_step's row["delta"], which is
+        # EMPTY on every steady-state decode step: staging sets
+        # `safe_end = prior` when drafts == 31 because "the prior exact
+        # finalization owns the committed boundary". So the gate's history was
+        # the prompt, frozen, for the whole request -- decide() ran per step and
+        # re-read the SAME trailing 8-gram every time. Per-step evaluation
+        # existed in form and was a no-op in fact: one decision per request,
+        # latched, which is the 11-gated / 87-ungated / zero-mixed signature and
+        # the reason nothing could brake the copier.
+        _fr14.observe(req_id, extra)
         STATS["ingested"] += 1
     _FIXED32_PENDING_STEP = None
 
