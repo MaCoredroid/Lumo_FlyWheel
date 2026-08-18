@@ -241,6 +241,26 @@ class SuffixIndex:
             return token, L, len(window), best_n
         return None, 0, 0, 0
 
+    def stats_at(self, pattern: list[int], boundary: int, L: int):
+        """The IMPLEMENTABLE predicate's features: exactly-L-gram seen + agreement.
+
+        This is what `Fr14SuffixPassGate` computes online in O(1) per step from a
+        single fixed-length n-gram table -- no ladder search, no suffix tree.
+        """
+        if L > len(pattern):
+            return False, 0.0
+        positions = self.index[L].get(self._key(pattern[-L:]))
+        if not positions:
+            return False, 0.0
+        hi = bisect.bisect_left(positions, boundary)
+        if hi == 0:
+            return False, 0.0
+        window = positions[max(0, hi - VOTE_CAP): hi]
+        counts: dict[int, int] = {}
+        for p in window:
+            counts[self.tokens[p]] = counts.get(self.tokens[p], 0) + 1
+        return True, max(counts.values()) / len(window)
+
     def chain(self, pattern: list[int], boundary: int, truth: list[int], max_len: int):
         """Chained top-1 proposals scored against `truth`.
 
@@ -267,9 +287,8 @@ class SuffixIndex:
 # Per-task measurement
 # ---------------------------------------------------------------------------
 
-def measure_task(tokens, emitted, rng):
+def measure_task(tokens, emitted, rng, idx):
     n = len(tokens)
-    idx = SuffixIndex(tokens)
 
     # sampleable emitted positions: need 3 MTP tokens + up to 8 suffix slots
     horizon = 3 + 8
@@ -300,9 +319,15 @@ def measure_task(tokens, emitted, rng):
         hand_correct, _, _, _ = idx.chain(
             tokens[max(0, j + 5 - 32): j + 5], j, tokens[j + 5: j + 5 + 6], 6
         )
+        # (E) the IMPLEMENTABLE predicate's features at fixed lengths
+        fix = {}
+        for L in (6, 8, 12, 16):
+            seen, agree = idx.stats_at(tokens[max(0, j - 32): j], j, L)
+            fix[L] = (seen, agree)
         rows.append(
             {
                 "j": j,
+                "fix": fix,
                 "cold": cold_correct,
                 "cold_L": cold_L,
                 "gate_L": gate_L,
@@ -313,6 +338,85 @@ def measure_task(tokens, emitted, rng):
             }
         )
     return rows
+
+
+def renewal_simulate(tokens, emitted, idx, gate_len, gate_agree, seed, gate_on):
+    """Step-weighted simulation of the decode loop over one stream.
+
+    Position-uniform sampling over-represents easy regions: a renewal process
+    spends MORE steps in hard regions (short accepts) than in easy ones, so the
+    warm-step RATE a serve would see is not the warm-POSITION rate.  This walks
+    the stream the way the engine does -- advance by (accepted + 1) each step --
+    and reports step-weighted statistics.
+
+    MTP survivals at draft positions 0,1,2 are context-blind in this model and
+    drawn Bernoulli from the measured ladder; the suffix part is the real
+    simulated chain at the real context.  Positions 3,4 in the UNGATED arm are
+    drawn from the measured MTP ladder too.
+    """
+    rng = random.Random(seed)
+    n = len(tokens)
+    j = 64
+    steps = 0
+    warm = 0
+    accepted_total = 0
+    accept_hist = collections.Counter()
+    warm_accept = 0
+    warm_steps = 0
+    cold_accept = 0
+    while j < n - 16:
+        steps += 1
+        fired = False
+        if gate_on:
+            seen, agree = idx.stats_at(tokens[max(0, j - 32): j], j, gate_len)
+            fired = seen and (agree >= gate_agree)
+        if fired:
+            warm += 1
+        # draft positions 0,1,2 -- identical work in both arms
+        acc = 0
+        for s in MTP_SURVIVAL[:3]:
+            if rng.random() < s:
+                acc += 1
+            else:
+                break
+        if acc == 3:
+            if fired:
+                # suffix chain owns draft positions 3..10
+                extra, _, _, _ = idx.chain(
+                    tokens[max(0, j + 3 - 32): j + 3], j, tokens[j + 3: j + 11], 8
+                )
+                acc += extra
+            else:
+                # MTP owns 3,4; suffix chain owns 5..10
+                for s in MTP_SURVIVAL[3:5]:
+                    if rng.random() < s:
+                        acc += 1
+                    else:
+                        break
+                if acc == 5:
+                    extra, _, _, _ = idx.chain(
+                        tokens[max(0, j + 5 - 32): j + 5], j, tokens[j + 5: j + 11], 6
+                    )
+                    acc += extra
+        accepted_total += acc
+        accept_hist[acc] += 1
+        if fired:
+            warm_accept += acc
+            warm_steps += 1
+        else:
+            cold_accept += acc
+        j += acc + 1
+    return {
+        "steps": steps,
+        "warm_steps": warm,
+        "warm_rate": warm / steps if steps else 0.0,
+        "accept_per_step": accepted_total / steps if steps else 0.0,
+        "committed_per_step": (accepted_total / steps + 1.0) if steps else 0.0,
+        "warm_accept_per_step": (warm_accept / warm_steps) if warm_steps else None,
+        "cold_accept_per_step": (
+            cold_accept / (steps - warm_steps) if steps - warm_steps else None
+        ),
+    }
 
 
 def ladder_from(counts_geq):
@@ -349,14 +453,17 @@ def main():
     rng = random.Random(SEED)
     all_rows = []
     per_task = {}
+    streams = []
     for td in task_dirs:
         if not (td / "qwen_trace.jsonl").exists():
             continue
         tokens, emitted, stats = build_stream(td, tok)
         print(f"[stream] {td.name}: {stats}", flush=True)
-        rows = measure_task(tokens, emitted, rng)
+        idx = SuffixIndex(tokens)
+        rows = measure_task(tokens, emitted, rng, idx)
         if not rows:
             continue
+        streams.append((td.name, tokens, emitted, idx))
         per_task[td.name] = {
             **stats,
             "sampled": len(rows),
@@ -439,33 +546,158 @@ def main():
             )
     out["gate_sweep"] = sweep
 
-    # --- Mixed-population economics -------------------------------------------
-    econ = []
-    for row in sweep:
-        w = row["warm_rate"]
-        for premium in (0.0, OBSERVED_HANDOFF_S5 - hand_hit):
-            surv = list(row["seam_ladder_s3_s10"])
-            surv[0] = min(1.0, surv[0] + premium)
-            e_g = expected_accept(list(MTP_SURVIVAL[:3]) + surv)
-            mixed_accept = w * e_g + (1 - w) * MEASURED_ACCEPT_PER_STEP
-            mixed_ms = MEASURED_STEP_MS - w * 2 * MTP_PASS_MS
-            tps = (mixed_accept + 1.0) / (mixed_ms / 1000.0)
-            base = (MEASURED_ACCEPT_PER_STEP + 1.0) / (MEASURED_STEP_MS / 1000.0)
-            econ.append(
+    # --- The IMPLEMENTABLE predicate: fixed-L n-gram table, O(1) per step -----
+    impl = []
+    for L in (6, 8, 12, 16):
+        for astar in GATE_AGREEMENTS:
+            fired = [
+                r for r in all_rows
+                if r["fix"][L][0] and r["fix"][L][1] >= astar
+            ]
+            if not fired:
+                continue
+            k = len(fired)
+            geq = [sum(1 for r in fired if r["seam"] >= m) for m in range(0, 9)]
+            geq[0] = k
+            surv = [
+                (geq[m] / geq[m - 1]) if geq[m - 1] else 0.0 for m in range(1, 9)
+            ]
+            impl.append(
                 {
-                    "gate_len": row["gate_len"],
-                    "gate_agree": row["gate_agree"],
-                    "premium": premium,
-                    "warm_rate": w,
-                    "q1_gated_effective": surv[0],
-                    "E_accept_gated_step": e_g,
-                    "mixed_accept": mixed_accept,
-                    "mixed_step_ms": mixed_ms,
-                    "tps": tps,
-                    "vs_today_pct": 100.0 * (tps / base - 1.0),
+                    "ngram_len": L,
+                    "min_agree": astar,
+                    "warm_rate": k / N,
+                    "n_fired": k,
+                    "q1_gated": surv[0],
+                    "seam_ladder_s3_s10": surv,
+                    "E_accept_gated_step": expected_accept(
+                        list(MTP_SURVIVAL[:3]) + surv
+                    ),
                 }
             )
-    out["economics"] = econ
+    out["implementable_sweep"] = impl
+
+    # --- Threshold selection, by the PRE-REGISTERED rule -----------------------
+    # Selection runs on the IMPLEMENTABLE sweep -- that is what ships, so that is
+    # what must clear the bar.  ("longest match >= L" and "the L-gram was seen
+    # before" are the same event; only the agreement term's measurement point
+    # differs, and it is measured here at the shipped length.)
+    BAR = MTP_SURVIVAL[3]
+    cand = [
+        {"gate_len": r["ngram_len"], "gate_agree": r["min_agree"], **r}
+        for r in impl
+    ]
+    clearing = [r for r in cand if r["q1_gated"] >= BAR and r["warm_rate"] >= 0.20]
+    if clearing:
+        # smallest gate_len, then smallest agreement that clears
+        clearing.sort(key=lambda r: (r["gate_len"], r["gate_agree"]))
+        chosen = clearing[0]
+        verdict = "FAVORABLE"
+    else:
+        soft = [
+            r for r in cand
+            if r["q1_gated"] >= BAR - (OBSERVED_HANDOFF_S5 - hand_hit)
+            and r["warm_rate"] >= 0.20
+        ]
+        soft.sort(key=lambda r: (r["gate_len"], r["gate_agree"]))
+        chosen = soft[0] if soft else None
+        verdict = "MARGINAL" if soft else "UNFAVORABLE"
+    out["selection"] = {
+        "bar_q1_gated": BAR,
+        "verdict": verdict,
+        "chosen": chosen,
+    }
+
+    # --- The counterfactual on the SAME population ----------------------------
+    # E_gated vs the unconditional 4.2774 is not a fair comparison: a gated step
+    # is selected for being easy, and MTP would also have done better than its
+    # unconditional survival there.  Draft positions 0,1,2 are the SAME three MTP
+    # passes in both arms and cancel, so the whole comparison is what happens
+    # after position 2, conditional on reaching it.
+    if chosen is not None:
+        gl, ga = chosen["gate_len"], chosen["gate_agree"]
+        fired = [
+            r for r in all_rows if r["fix"][gl][0] and r["fix"][gl][1] >= ga
+        ]
+        k = len(fired)
+        # today's handoff-at-position-5 chain, measured on the GATED population
+        hgeq = [sum(1 for r in fired if r["hand"] >= m) for m in range(0, 7)]
+        hgeq[0] = k
+        hand_ladder = [
+            (hgeq[m] / hgeq[m - 1]) if hgeq[m - 1] else 0.0 for m in range(1, 7)
+        ]
+        u = chosen["seam_ladder_s3_s10"]
+        a_gated = expected_accept(u)  # slots at draft positions 3..10
+        sens = []
+        for m34 in (MTP_SURVIVAL[3], 0.88, 0.95):
+            # ungated counterfactual on the gated population:
+            # MTP at positions 3,4 then the suffix chain from position 5
+            a_ungated = expected_accept([m34, m34] + hand_ladder)
+            sens.append(
+                {
+                    "assumed_mtp_survival_on_gated_steps": m34,
+                    "A_gated_positions_3_to_10": a_gated,
+                    "A_ungated_positions_3_to_10": a_ungated,
+                    "delta_accept_given_reached_pos2": a_gated - a_ungated,
+                    "delta_accept_per_gated_step": (
+                        (a_gated - a_ungated)
+                        * MTP_SURVIVAL[0] * MTP_SURVIVAL[1] * MTP_SURVIVAL[2]
+                    ),
+                }
+            )
+        out["counterfactual"] = {
+            "gate_len": gl,
+            "gate_agree": ga,
+            "n_gated_positions": k,
+            "handoff_ladder_pos5_on_gated_population": hand_ladder,
+            "seam_ladder_pos3_on_gated_population": u,
+            "reach_pos2_prob": MTP_SURVIVAL[0] * MTP_SURVIVAL[1] * MTP_SURVIVAL[2],
+            "sensitivity": sens,
+        }
+
+    # --- Step-weighted renewal A/B (paired on identical streams) --------------
+    if chosen is not None:
+        gl, ga = chosen["gate_len"], chosen["gate_agree"]
+        arms = {}
+        for arm, gate_on in (("gate_off", False), ("gate_on", True)):
+            agg = collections.Counter()
+            per = {}
+            for rep_seed in (11, 22, 33):
+                for name, tk, em, ix in streams:
+                    res = renewal_simulate(tk, em, ix, gl, ga, rep_seed, gate_on)
+                    per.setdefault(name, []).append(res)
+                    agg["steps"] += res["steps"]
+                    agg["warm_steps"] += res["warm_steps"]
+                    agg["accepted"] += res["accept_per_step"] * res["steps"]
+            arms[arm] = {
+                "steps": agg["steps"],
+                "warm_rate": agg["warm_steps"] / agg["steps"],
+                "accept_per_step": agg["accepted"] / agg["steps"],
+            }
+        w = arms["gate_on"]["warm_rate"]
+        base_ms = MEASURED_STEP_MS
+        gate_ms = base_ms - w * 2 * MTP_PASS_MS
+        base_tps = (arms["gate_off"]["accept_per_step"] + 1.0) / (base_ms / 1000.0)
+        gate_tps = (arms["gate_on"]["accept_per_step"] + 1.0) / (gate_ms / 1000.0)
+        out["renewal_ab"] = {
+            "gate_len": gl,
+            "gate_agree": ga,
+            "arms": arms,
+            "calibration_check": {
+                "gate_off_accept_per_step": arms["gate_off"]["accept_per_step"],
+                "measured_accept_per_step": MEASURED_ACCEPT_PER_STEP,
+                "abs_delta": abs(
+                    arms["gate_off"]["accept_per_step"] - MEASURED_ACCEPT_PER_STEP
+                ),
+            },
+            "step_ms_gate_off": base_ms,
+            "step_ms_gate_on": gate_ms,
+            "saving_ms_per_step_avg": base_ms - gate_ms,
+            "saving_ms_on_gated_steps": 2 * MTP_PASS_MS,
+            "tps_gate_off": base_tps,
+            "tps_gate_on": gate_tps,
+            "vs_today_pct": 100.0 * (gate_tps / base_tps - 1.0),
+        }
     out["baseline_tps_fullstep_gpu"] = (
         (MEASURED_ACCEPT_PER_STEP + 1.0) / (MEASURED_STEP_MS / 1000.0)
     )
