@@ -1,0 +1,64 @@
+{
+ "arm": "hydra27_fixed32_promoab_Gp3",
+ "arm_meta": "arm_kind=G\narm=hydra27_fixed32_promoab_Gp3\nsource_commit=2925119b731498a954df73721e43fea06799a59a\nsubset=config/fr13_fixed32/subset_b4_four.json\nsubset_sha256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5\ntask_budget_s=9000\nagent_wall_s=9000\nverdict_instrument=step_wall_ms+s_per_fwd_gpu\nfa2_b1_arm=gqa_pair (promoted default, credential serviceable at 2925119b731498a954df73721e43fea06799a59a)\nstarted=2026-08-18T15:32:11Z\nserve_rc=15\nended=2026-08-18T15:38:54Z\n",
+ "census": {
+  "EMPTY": true,
+  "census_path": "output/fr14_promoab_Gp3_20260818T153209Z/hydra27_fixed32_promoab_Gp3/logs/fr13_fixed32_work_census.jsonl",
+  "records": 0,
+  "step_events": 0
+ },
+ "container_env": {
+  "FR10_METRICS": "0",
+  "FR13_CAMPAIGN_TASK_BUDGET_S": "9000",
+  "FR13_DFWD_SPLIT": "1",
+  "FR13_DRAFT_VOCAB_K": "0",
+  "FR13_DRAFT_VOCAB_ROOT": "0",
+  "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+  "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE": "full_vocab",
+  "FR13_FA2_QROW32_B1_SOURCE_COMMIT": "2925119b731498a954df73721e43fea06799a59a",
+  "FR13_FIXED32_ACTIVE_NODES": "27",
+  "FR13_FIXED32_MODE": "hydra27_fixed32",
+  "FR13_FIXED32_PHYSICAL_DRAFTS": "31",
+  "FR13_HOST_TAIL_PREP_BAKE": "1",
+  "FR13_LFWD_GPU_TIMER": "1",
+  "FR13_NEEDS_ALLOW": "FR13_DRAFT_VOCAB_K=0",
+  "FR14_FUSED_DRAFT_TOPK": "1",
+  "FR14_FUSED_DRAFT_TOPK_SHA256": "8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e",
+  "FR14_SUFFIX_PASS_GATE": "1",
+  "FR14_SUFFIX_PASS_GATE_MIN_AGREE": "0.75",
+  "FR14_SUFFIX_PASS_GATE_NGRAM": "8",
+  "MAX_NUM_SEQS": "1",
+  "SWE_CONCURRENCY": "1"
+ },
+ "deploy_speed": [],
+ "health": {
+  "swe_orchestrator_rc": 15,
+  "swe_window_wall_s": 74,
+  "tasks": []
+ },
+ "label": "ARM G' round 3 \u2014 REFUSED at the 14th site",
+ "runroot": "output/fr14_promoab_Gp3_20260818T153209Z",
+ "schema": "fr14.promotion_ab.arm_reduction.v1",
+ "spans": {
+  "cfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_Gp3_cfwd.json"
+  },
+  "dfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_Gp3_dfwd.json"
+  },
+  "dfwd_split": {
+   "MISSING": true,
+   "path": "output/fr14_promoab_Gp3_20260818T153209Z/hydra27_fixed32_promoab_Gp3/logs/fr13_dfwd_split.json"
+  },
+  "lfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_Gp3_lfwd.json"
+  },
+  "sfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_Gp3.json"
+  }
+ }
+}

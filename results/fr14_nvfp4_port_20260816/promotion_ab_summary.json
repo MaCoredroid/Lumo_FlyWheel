@@ -144,6 +144,60 @@
   },
   "window_utc": "2026-08-18T08:05Z..15:05Z"
  },
+ "round3": {
+  "arm_g_prime": {
+   "boot": "2026-08-18T15:32:11Z",
+   "census_steps": 0,
+   "mechanism": "the 15 native addend is the ungated 5-pass column count, a bare literal; a gated step correctly grows the Arctic main tail 6->8, so 15+8+10=33 != 31",
+   "milestone": "THE GATE FIRED for the first time in a live serve \u2014 the arm survived every armed UNGATED step (live proof the 12th-site fix works) and refused on the first GATED step",
+   "outcome": "FAIL_CLOSED_14TH_SITE",
+   "pairing_vs_round2_C_prime": "NOT PERFORMED \u2014 zero decode steps, no second population exists",
+   "post_brackets": 0,
+   "raise_site": "vllm/v1/spec_decode/eagle.py:5924 (fr10_phase4_patch_vllm_tree_gdn.py:30941-30949)",
+   "refusal": "2026-08-18T15:38:31Z",
+   "refusal_message": "FR13 fixed32 drafter work is not 15 native + 6 tail + 10 rescue = 31",
+   "runroot": "output/fr14_promoab_Gp3_20260818T153209Z",
+   "sites_confirmed_fixed_live": [
+    "11th tree-attention work binding",
+    "12th proposal_end runtime evidence"
+   ]
+  },
+  "blocker_ledger": [
+   {
+    "found_by": "live boot (round 1)",
+    "n": 11,
+    "site": "_fr13_fixed32_observed_tree_attn captured_graph_id"
+   },
+   {
+    "found_by": "live boot (round 2)",
+    "n": 12,
+    "site": "proposal_end runtime-evidence half"
+   },
+   {
+    "found_by": "sweep, no boot",
+    "n": 13,
+    "site": "observed_build_record"
+   },
+   {
+    "found_by": "live boot (round 3)",
+    "n": 14,
+    "site": "drafter work invariant 15 + tail + rescue == 31"
+   }
+  ],
+  "defect_class_refinement": {
+   "recommended_invariant": "no literal may encode the ungated 5-pass shape \u2014 including addends inside invariants, comparison constants and default arguments",
+   "recommended_lint": "grep the drafter blob for shape constants 15/6/10/31/5/4/2 in arithmetic or comparison position and ask of each: does this change when the drafter runs 3 post-root passes instead of 5?",
+   "why_sweep_missed_it": "pass 58 swept for MIRRORED STRUCTURES (9 pairs / 0 stale); this is a single arithmetic invariant with the ungated shape baked in as an ADDEND, so it has no mirror to compare against"
+  },
+  "gate_reearn": {
+   "minutes": 14.2,
+   "outcome": "PASS",
+   "rc": 0
+  },
+  "head": "2925119b731498a954df73721e43fea06799a59a",
+  "recommendation": "REFUSE unchanged; fix the 14th site then run the WIDENED shape-literal sweep before a fourth boot \u2014 3 of 4 sites were live-only and each boot costs a GPU window plus a gate re-earn",
+  "window_utc": "2026-08-18T15:17Z..15:40Z"
+ },
  "schema": "fr14.promotion_ab.campaign_summary.v1",
  "step0_regate": {
   "cause": "fr13_fixed32_work_census.py:157 TAW_SOURCE_CONTRACT_SHA256 stale at 484babd7 vs emitter 68b289ae",

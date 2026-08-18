@@ -786,3 +786,163 @@ shape — a paired structure updated on one side only (TAW digest × 12 mirrors;
 launcher bash pin case vs its in-container Python twin; `proposal_end`'s census
 half vs its runtime-evidence half). Two of the three were reachable *only* from a
 live serve. The class deserves a sweep and a lint, not three more boots.
+
+---
+---
+
+# ROUND 3 (2026-08-18 15:17Z–15:40Z) — ARM G' at the swept HEAD: a 14th site, and the gate FIRED
+
+HEAD: **`2925119b731498a954df73721e43fea06799a59a`** (pass 58). Two windows, same
+discipline. The coordinator's honest bound — *"a 14th site in an unenumerated
+structure would still reach the boot"* — is exactly what happened.
+
+| window | outcome |
+|---|---|
+| **1. gate re-earn** | **PASS**, rc=0, **14.2 min** (15:17:43Z → 15:31:53Z) |
+| **2. ARM G'** gqa_pair + top-k + gate | **FAIL-CLOSED at a 14th site**, 0 census events, 6 min |
+
+## R3.1 The boot verdict — §11.7, and the milestone in it
+
+`output/fr14_promoab_Gp3_20260818T153209Z`, boot 15:32:11Z, refusal 15:38:31Z.
+Tail: `promotion_ab_arm_g_round3_container_tail.log`.
+Arm attested in `container_env.txt`: `FR14_SUFFIX_PASS_GATE=1`,
+`FR14_FUSED_DRAFT_TOPK=1`, `FR13_FA2_QROW32_B1_PRODUCTION_ARM=gqa_pair`,
+`FR13_DFWD_SPLIT=1`.
+
+| §11.7 check | round 2 | **round 3** |
+|---|---|---|
+| gate armed line printed once | PASS | **PASS** |
+| `/logs/fr14_suffix_pass_gate.cfg` written | PASS | **PASS** (`8 0.75 256`) |
+| 11th site — tree-attention work binding | PASS (fixed) | **PASS** |
+| 12th site — `proposal_end` runtime evidence | **REFUSED** | **PASS — survived every armed UNGATED step** |
+| **the gate actually firing** | not reached | **REACHED — see below** |
+| registry two rows `passes=2` segment 0/1 | not reached | not reached |
+| `graph_replays` 2 cold / 1 gated | not reached | not reached |
+| `mtp_forward_calls` only {4,2} | not reached | not reached |
+| 27/32 every step · warm rate 0.15–0.25 | not reached | not reached |
+
+**The milestone, and it is a real one: the suffix pass gate fired for the first
+time in a live serve.** Round 2 died on the first *ungated* armed step. Round 3
+ran ungated armed steps successfully — which is the live proof that the 12th-site
+fix works — and then refused on the first step **where the gate itself fired**.
+Getting there means the gate accumulated its 256 tokens of history, found a
+recurring 8-gram, measured continuation agreement ≥ 0.75, and decided to hand off
+early. The predicate works on real traffic. Nothing downstream of it does yet.
+
+## R3.2 The 14th site, attributed
+
+```
+File ".../vllm/v1/spec_decode/eagle.py", line 5924, in propose
+    raise RuntimeError(
+RuntimeError: FR13 fixed32 drafter work is not 15 native + 6 tail + 10 rescue = 31
+```
+
+Source, `fr10_phase4_patch_vllm_tree_gdn.py:30941-30949`:
+
+```python
+if (15 + len(_fr13_t_cols) + len(_fr13_t_paths) != 31):
+    raise RuntimeError(
+        "FR13 fixed32 drafter work is not 15 native + 6 tail + 10 rescue = 31"
+    )
+```
+
+`_fr13_t_cols` is the Arctic **main tail** and `_fr13_t_paths` the **rescue**
+paths. §11.5 is explicit that a gated step lengthens the main tail from 6 to 8
+(*"a gated step hands off at draft position 3, so Arctic's main chain is 8 long
+instead of 6"*), and that change **has** landed — it is read dynamically two
+hundred lines away as `int(arctic.get("main_tail_columns", 6))`. But the
+**`15`** in this invariant is the *native* (MTP-produced) column count for the
+**ungated 5-pass** shape, and it is a bare literal. So on the first gated step:
+
+```
+15 (native, hardcoded for 5 passes) + 8 (tail, correctly grown) + 10 (rescue) = 33 ≠ 31
+```
+
+and the drafter refuses. One side of the sum was made gate-aware; the other was
+not.
+
+## R3.3 Why the sweep did not catch it — the defect class needs widening
+
+This is the **fourth consecutive blocker of the same family**, and it is the one
+that says the most, because pass 58's sweep was already looking for the family
+and reported **9 pairs / 0 stale**. It missed this because the sweep's notion of
+the defect is a **mirrored structure** — two dicts, two constants, two halves of a
+credential — and this is not one. It is a **single arithmetic invariant with the
+ungated shape baked in as an addend**:
+
+> `15 + tail + rescue == 31`
+
+There is no mirror to compare against. The stale value is an operand inside a
+sum, and the only thing that makes it wrong is a semantic fact about what `15`
+means under a 3-pass drafter.
+
+**Recommended refinement of the class, offered as the actionable finding of this
+round:** the invariant is not *"paired structures must agree"* but *"**no literal
+may encode the ungated 5-pass shape**"* — including addends inside invariants,
+default arguments (`arctic.get(..., 6)` is a benign instance, but only because
+its call sites now always pass a value), comparison constants, and assertion
+messages. The candidate set is enumerable by grepping the drafter blob for the
+shape constants **15, 6, 10, 31, 5, 4, 2** in arithmetic or comparison position
+and asking of each: *does this number change when the drafter runs 3 post-root
+passes instead of 5?* The existing lint tests structure equality; this needs a
+lint on **shape literals**.
+
+The four blockers in one line each:
+
+| # | site | shape |
+|---|---|---|
+| 11 | `_fr13_fixed32_observed_tree_attn` `captured_graph_id` | per-step binding vs per-segment reality |
+| 12 | `proposal_end` runtime-evidence half | census half pass-aware, evidence half hardcoded `4 / 1` |
+| 13 | `observed_build_record` (found by sweep, no boot) | mirrored structure, one side stale |
+| **14** | **drafter work invariant `15 + tail + rescue == 31`** | **ungated shape as a literal addend inside a sum** |
+
+Three of the four were reachable **only** from a live serve.
+
+## R3.4 The pairing against round-2 C' — not performed, and why
+
+The coordinator asked for G' paired against round-2 ARM C' (52 507 steps) on
+step_wall / dfwd / accept under the ±10 % doctrine, with a note on how to account
+C's capped 13398.
+
+**No pairing is reported, because ARM G' produced zero decode steps** — no census
+events, no `/metrics` post-brackets (`post-brackets=0`, deploy-speed VACUOUS), no
+drafts, no accepted tokens. The ±10 % doctrine compares two populations; this
+round produced one.
+
+For the record, the accounting I *would* have used had G' drained, so the next
+attempt does not have to re-derive it:
+
+* **Arm level:** C' must be quoted as its **ungated** reduce (class-9 fired on a
+  7-event bracket/census gap created by 13398's truncated capped bracket), and
+  that caveat travels with every number taken from it.
+* **Per-task matched basis:** pair only on instances that ran to a *complete*
+  terminal in **both** arms. In C' that is `12907`, `13033`, `13236`; `13398` is
+  capped and its bracket truncated, so it is excluded from the paired reduction
+  and reported separately — the same matched-basis method pass 23 used for its
+  three-task sighting.
+* **dfwd under the gate:** the sidecar is a cumulative per-step timer and cannot
+  be split by gated/cold directly, so the pre-registered *"−20.6 ms on gated
+  steps"* is recovered arithmetically from the arm mean and the census warm-step
+  rate `w`: `saving_per_gated_step = (dfwd_C' − dfwd_G') / w`, with `w` read as
+  the census fraction of steps at `mtp_forward_calls == 2`. Both terms come from
+  instruments this campaign already collects.
+
+## R3.5 Verdict — lever 2 unchanged: **REFUSE**, with the ledger moved forward
+
+Three armed boots, three fail-closed refusals, three distinct sites — 11th, 12th,
+14th — each further into the step than the last. The integration is converging,
+and the interlocks are doing exactly what they were built to do: every one of
+these refused a malformed drafter rather than serving one.
+
+What is now **proven live**: the gate arms, writes its sidecar, survives armed
+ungated steps under the fixed 11th and 12th sites, and **fires on real traffic**.
+What is still **entirely unmeasured**: every quantity §10.1 pre-registered — warm
+rate, the −20.6 ms gated dfwd, the −4.0 ms step_wall, the accept delta — and
+therefore the one question the serve exists to answer, whether MTP survival at
+draft positions 3–4 on strong-match steps is below 0.931.
+
+Before a fourth boot: fix the 14th site, then run the **widened** sweep of
+§R3.3 — shape literals, not just mirrored structures — because the current
+evidence is that one more boot buys one more site, and each boot costs a GPU
+window plus a gate re-earn. Three of four sites were live-only, so the sweep is
+the cheaper instrument by a wide margin.
