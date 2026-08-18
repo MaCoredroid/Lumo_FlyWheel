@@ -1,0 +1,132 @@
+{
+ "UNEXPECTED_DIFFERENT": [],
+ "control_census": "output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/logs/fr13_fixed32_work_census.jsonl",
+ "control_steps": 52507,
+ "expected_different": [
+  {
+   "control": [
+    12
+   ],
+   "path": "drafter.arctic_requested_tokens",
+   "treated": [
+    12,
+    14
+   ]
+  },
+  {
+   "control": [
+    6
+   ],
+   "path": "drafter.main_tail_length",
+   "treated": [
+    6,
+    8
+   ]
+  },
+  {
+   "control": [
+    4
+   ],
+   "path": "drafter.mtp_forward_calls",
+   "treated": [
+    2,
+    4
+   ]
+  },
+  {
+   "control": [
+    4
+   ],
+   "path": "drafter.mtp_forward_rows",
+   "treated": [
+    2,
+    4
+   ]
+  },
+  {
+   "control": [
+    "[{\"calls\": 1, \"kind\": \"main\", \"tokens\": 6}, {\"calls\": 1, \"kind\": \"rank1\", \"tokens\": 4}, {\"calls\": 1, \"kind\": \"rank2\", \"tokens\": 2}]"
+   ],
+   "path": "drafter_runtime.arctic_ledger",
+   "treated": [
+    "[{\"calls\": 1, \"kind\": \"main\", \"tokens\": 6}, {\"calls\": 1, \"kind\": \"rank1\", \"tokens\": 4}, {\"calls\": 1, \"kind\": \"rank2\", \"tokens\": 2}]",
+    "[{\"calls\": 1, \"kind\": \"main\", \"tokens\": 8}, {\"calls\": 1, \"kind\": \"rank1\", \"tokens\": 4}, {\"calls\": 1, \"kind\": \"rank2\", \"tokens\": 2}]"
+   ]
+  },
+  {
+   "control": [
+    12
+   ],
+   "path": "drafter_runtime.arctic_requested_tokens",
+   "treated": [
+    12,
+    14
+   ]
+  },
+  {
+   "control": [
+    1
+   ],
+   "path": "drafter_runtime.graph_replays",
+   "treated": [
+    1,
+    2
+   ]
+  },
+  {
+   "control": [
+    "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c"
+   ],
+   "path": "drafter_runtime.graph_signature",
+   "treated": [
+    "2da8c56a0c7da5ea9262b0020a30c925138c18eba95ab2b01ef2a4f1ff22da42",
+    "7fa7d56d3cf52bae6287b71e511fa6c0a2cd6ea5c0aa98ba4edf2d6868a031c6"
+   ]
+  },
+  {
+   "control": [
+    16
+   ],
+   "path": "drafter_runtime.merge_fill_columns",
+   "treated": [
+    16,
+    18
+   ]
+  },
+  {
+   "control": [
+    16
+   ],
+   "path": "drafter_runtime.merge_fill_rows",
+   "treated": [
+    16,
+    18
+   ]
+  },
+  {
+   "control": [
+    4
+   ],
+   "path": "drafter_runtime.mtp_forward_calls",
+   "treated": [
+    2,
+    4
+   ]
+  },
+  {
+   "control": [
+    4
+   ],
+   "path": "drafter_runtime.mtp_forward_rows",
+   "treated": [
+    2,
+    4
+   ]
+  }
+ ],
+ "identical_counter_paths": 256,
+ "present_in_one_arm_only": [],
+ "schema": "fr14.promotion_ab.workshape.v1",
+ "treated_census": "output/fr14_promoab_Gp5_20260818T174541Z/hydra27_fixed32_promoab_Gp5/logs/fr13_fixed32_work_census.jsonl",
+ "treated_steps": 32656
+}

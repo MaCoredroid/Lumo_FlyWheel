@@ -326,6 +326,162 @@
   ],
   "window_utc": "2026-08-18T17:09Z..17:19Z"
  },
+ "round5_extended": {
+  "DEGENERATION_SIGNATURE": {
+   "arm": "G prime (gate ON)",
+   "claim_limits": "n=1 arm, n=1 instance, stochastic agent \u2014 association plus mechanism, NOT a controlled result",
+   "dose_response_tailrep_vs_warm": {
+    "0.107": 0.14,
+    "0.328": 0.451,
+    "0.500": 0.256,
+    "0.993": 0.991
+   },
+   "instance": "astropy__astropy-13236",
+   "instrument_limitation": "the eyeball table reported malformed=0 because the runner never parsed that block as a tool_use; the human read caught it",
+   "largest_assistant_block_chars": 117739,
+   "mechanism": "the gate hands off to the Arctic suffix chain (a recurrence copier) whose own predicate is 8-gram recurrence >=0.75; copying makes text more repetitive which keeps the predicate true. Per-step re-evaluation was the brake; the latch removes it.",
+   "patch_bytes": 0,
+   "same_instance_healthy_in_all_ungated_arms": {
+    "C_dprime": {
+     "patch": 808,
+     "tailrep": 0.0,
+     "ttr": 0.244
+    },
+    "C_prime": {
+     "patch": 1809,
+     "tailrep": 0.217,
+     "ttr": 0.219
+    },
+    "C_round1": {
+     "patch": 4534,
+     "tailrep": 0.201,
+     "ttr": 0.193
+    }
+   },
+   "tail_repeat_fraction": 0.991,
+   "tool_calls": 2,
+   "top_12gram_repeats": 71,
+   "truncated_tool_call_at_end": true,
+   "turns": 7,
+   "type_token_ratio": 0.067,
+   "verdict": "STOP under Mark standing condition",
+   "warm_rate": 0.993,
+   "words": 16211
+  },
+  "head": "71ab122d2d0c059c19a8b8d3735309b638c2c3ba",
+  "latch_defect": {
+   "MIXED": 0,
+   "conclusion": "the gate decision is taken once per REQUEST and never re-evaluated; section 11.6 specifies per-step",
+   "consequence": "warm_step_rate 0.3458 is a length-weighted artifact, not a renewal rate; it does not falsify the 0.15-0.25 pre-registration, it measures a different quantity",
+   "fully_gated": 11,
+   "fully_ungated": 87,
+   "mechanism_confirmed_at_size": {
+    "note": "step_wall -3.24% is LARGER than the -4.0ms pre-registration ONLY because w is inflated; at w=0.195 the same 22.98 gives -4.48ms",
+    "per_gated_step_dfwd_saving_ms": 22.98,
+    "pre_registered_ms": -20.6
+   },
+   "per_task_warm_rate": {
+    "12907": 0.5,
+    "13033": 0.328,
+    "13236": 0.993,
+    "13398": 0.107
+   },
+   "requests": 98
+  },
+  "nothing_relaxed": true,
+  "phase1_gate": {
+   "minutes": 16.1,
+   "outcome": "PASS",
+   "rc": 0
+  },
+  "phase2_arm_g_prime": {
+   "accept_per_event": 3.853717540421362,
+   "census_steps": 32656,
+   "drafter_gpu_ms_per_step": 47.50143913402683,
+   "first_task_boundary_survived": true,
+   "outcome": "DRAINED",
+   "rc": 0,
+   "runroot": "output/fr14_promoab_Gp5_20260818T174541Z",
+   "s_per_fwd_gpu": 0.13211413948329173,
+   "section_11_7": {
+    "active_nodes_27_verify_32": "PASS",
+    "gate_armed_line": "PASS",
+    "graph_replays_2cold_1gated": "PASS",
+    "mtp_forward_calls_only_4_or_2": "PASS",
+    "pairs_legal": "PASS",
+    "registry_two_rows": "PASS",
+    "ungated_signature": "FALSE ALARM \u2014 my reducer applied a gate-OFF claim to the armed arm",
+    "warm_rate_0.15_0.25": "FAIL (0.3458)"
+   },
+   "step_wall_ms": 207.7943900150448,
+   "tasks": 4,
+   "vs_C_prime": {
+    "accept_delta": -0.03175,
+    "accept_delta_pct": -0.82,
+    "accept_inside_10pct_variance": true,
+    "committer_delta_pct": 0.55,
+    "drafter_delta_ms": -7.94571,
+    "drafter_delta_pct": -14.33,
+    "overhead_delta_pct": 0.23,
+    "s_per_fwd_gpu_delta_pct": 0.65,
+    "step_wall_delta_ms": -6.96433,
+    "step_wall_delta_pct": -3.24
+   },
+   "workshape_vs_C_prime": {
+    "expected_different": 12,
+    "identical_paths": 256,
+    "unexpected_different": 0
+   }
+  },
+  "phase3_tierb_credential": {
+   "bounds": "9/9",
+   "earned_at": "71ab122d2",
+   "highlights": {
+    "B7_output_rms_vs_exact_ratio": 0.9608,
+    "B8_lse_rms_vs_exact_ratio": 0.8386,
+    "note": "both below 1.0 \u2014 split-K is closer to exact attention than the shipped kernel"
+   },
+   "outcome": "PASS",
+   "path": "output/fr14_splitk_tierb_credential_71ab122d2.json",
+   "sha256": "fd77c3501d91b6bbb3017b7b587caadfcac0f808a8136d2d6c9504b0dbbb6af4"
+  },
+  "phase4_arm_s": {
+   "eyeball_discharged": false,
+   "outcome": "REFUSED_17TH_SITE",
+   "refusal": "FR13 qrow32 B1 pinned identity drifted (engine init)",
+   "refusal_was_correct": "a permissive fallback would have loaded the split-K .so while attesting the incumbent identity",
+   "resolver_returned_vs_truth": {
+    "candidate_sha256": [
+     "a9d8a688(split2)",
+     "28570f83"
+    ],
+    "candidate_size": [
+     300154616,
+     300123792
+    ],
+    "source_closure_sha256": [
+     "22b8c201",
+     "4ed00909"
+    ]
+   },
+   "served_tokens": 0,
+   "shape": "identical to round-1 section 2.1 (.get(arm, split2 default) in the launcher qualification map), now in the sibling identity resolver",
+   "site": "fr13_patch_fa2_tree_bias.py:6238 _fr13_fa2_qrow32_b1_identity \u2014 branches for gqa_pair and visibility, bare fallback to split2 pins, NO gqa_pair_splitk branch",
+   "upstream_all_passed": [
+    "launcher host checks",
+    "in-container qualification map",
+    "TIER_B_SERVE=1",
+    "fresh Tier-B credential"
+   ]
+  },
+  "quiet_tree_held": true,
+  "verdicts": {
+   "fused_draft_topk": "PROMOTED \u2014 holds; served via the promoted default in both arms, 0 unexpected census differences",
+   "splitk_fa2": "REFUSE \u2014 Tier-B numerics excellent (9/9, closer to exact); serving path still blocked, eyeball undischarged after five attempts",
+   "suffix_pass_gate": "REFUSE \u2014 now on QUALITY not plumbing; fix the per-request latch FIRST, then re-test and read 13236 specifically"
+  },
+  "window_utc": "2026-08-18T17:29Z..20:12Z"
+ },
  "schema": "fr14.promotion_ab.campaign_summary.v1",
  "step0_regate": {
   "cause": "fr13_fixed32_work_census.py:157 TAW_SOURCE_CONTRACT_SHA256 stale at 484babd7 vs emitter 68b289ae",

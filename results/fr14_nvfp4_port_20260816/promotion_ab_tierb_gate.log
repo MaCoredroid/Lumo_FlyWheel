@@ -1,0 +1,118 @@
+== two independent probe processes ==
+== FR14 split-K FA2 probe ==
+  determinism_pass      : True
+  -- operand scale: captured --
+     output max ulp      : 29200
+     output ulp histogram: {'0': 2422866, '1': 1064114, '2': 181984, '3': 75619, '4': 42312, '>4': 145265}
+     output max ulp (|x| >= max/1024): 126
+     output max ulp (same sign, |x| >= max/1024): 126
+     of the >4-ulp tail, sign disagreements: 1650/145265 (1.1%)
+     lse    max ulp      : 4
+     output max abs delta: 3.906e-03
+     lse    max abs delta: 3.815e-06
+     argmax flips        : 8/640 (1.2500%)
+  -- operand scale: legacy0p1 --
+     output max ulp      : 27582
+     output ulp histogram: {'0': 2512521, '1': 1021308, '2': 165037, '3': 68036, '4': 37380, '>4': 127878}
+     output max ulp (|x| >= max/1024): 27351
+     output max ulp (same sign, |x| >= max/1024): 662
+     of the >4-ulp tail, sign disagreements: 1515/127878 (1.2%)
+     lse    max ulp      : 5
+     output max abs delta: 1.526e-05
+     lse    max abs delta: 4.768e-06
+     argmax flips        : 3/640 (0.4688%)
+  exact  scale=captured   L=20480 seed=0  rms_err gqa_pair=1.172e-04  gqa_pair_splitk=1.121e-04  closer=True  argmax-vs-exact 1/0 of 32
+  exact  scale=captured   L=20480 seed=1  rms_err gqa_pair=1.146e-04  gqa_pair_splitk=1.101e-04  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=captured   L=20480 seed=2  rms_err gqa_pair=1.122e-04  gqa_pair_splitk=1.075e-04  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=captured   L=40960 seed=0  rms_err gqa_pair=8.384e-05  gqa_pair_splitk=8.055e-05  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=captured   L=40960 seed=1  rms_err gqa_pair=8.261e-05  gqa_pair_splitk=7.931e-05  closer=True  argmax-vs-exact 1/1 of 32
+  exact  scale=captured   L=40960 seed=2  rms_err gqa_pair=8.148e-05  gqa_pair_splitk=7.805e-05  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=20480 seed=0  rms_err gqa_pair=1.419e-06  gqa_pair_splitk=1.417e-06  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=20480 seed=1  rms_err gqa_pair=1.410e-06  gqa_pair_splitk=1.408e-06  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=20480 seed=2  rms_err gqa_pair=1.355e-06  gqa_pair_splitk=1.352e-06  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=40960 seed=0  rms_err gqa_pair=9.985e-07  gqa_pair_splitk=9.986e-07  closer=False  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=40960 seed=1  rms_err gqa_pair=1.002e-06  gqa_pair_splitk=9.993e-07  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=40960 seed=2  rms_err gqa_pair=1.007e-06  gqa_pair_splitk=1.005e-06  closer=True  argmax-vs-exact 0/0 of 32
+  L= 20480  qrow16= 13.094  gqa_pair= 12.006  gqa_pair_splitk=  5.901  predicted=5.02  delta=-6.105
+  L= 23000  qrow16= 15.003  gqa_pair= 13.433  gqa_pair_splitk=  7.040  predicted=5.687  delta=-6.393
+  L= 32768  qrow16= 21.123  gqa_pair= 18.772  gqa_pair_splitk=  9.288  predicted=7.979  delta=-9.484
+  L= 40960  qrow16= 25.747  gqa_pair= 23.834  gqa_pair_splitk= 11.729  predicted=9.916  delta=-12.105
+  json -> /out/probe_p0.json
+== FR14 split-K FA2 probe ==
+  determinism_pass      : True
+  -- operand scale: captured --
+     output max ulp      : 29200
+     output ulp histogram: {'0': 2422866, '1': 1064114, '2': 181984, '3': 75619, '4': 42312, '>4': 145265}
+     output max ulp (|x| >= max/1024): 126
+     output max ulp (same sign, |x| >= max/1024): 126
+     of the >4-ulp tail, sign disagreements: 1650/145265 (1.1%)
+     lse    max ulp      : 4
+     output max abs delta: 3.906e-03
+     lse    max abs delta: 3.815e-06
+     argmax flips        : 8/640 (1.2500%)
+  -- operand scale: legacy0p1 --
+     output max ulp      : 27582
+     output ulp histogram: {'0': 2512521, '1': 1021308, '2': 165037, '3': 68036, '4': 37380, '>4': 127878}
+     output max ulp (|x| >= max/1024): 27351
+     output max ulp (same sign, |x| >= max/1024): 662
+     of the >4-ulp tail, sign disagreements: 1515/127878 (1.2%)
+     lse    max ulp      : 5
+     output max abs delta: 1.526e-05
+     lse    max abs delta: 4.768e-06
+     argmax flips        : 3/640 (0.4688%)
+  exact  scale=captured   L=20480 seed=0  rms_err gqa_pair=1.172e-04  gqa_pair_splitk=1.121e-04  closer=True  argmax-vs-exact 1/0 of 32
+  exact  scale=captured   L=20480 seed=1  rms_err gqa_pair=1.146e-04  gqa_pair_splitk=1.101e-04  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=captured   L=20480 seed=2  rms_err gqa_pair=1.122e-04  gqa_pair_splitk=1.075e-04  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=captured   L=40960 seed=0  rms_err gqa_pair=8.384e-05  gqa_pair_splitk=8.055e-05  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=captured   L=40960 seed=1  rms_err gqa_pair=8.261e-05  gqa_pair_splitk=7.931e-05  closer=True  argmax-vs-exact 1/1 of 32
+  exact  scale=captured   L=40960 seed=2  rms_err gqa_pair=8.148e-05  gqa_pair_splitk=7.805e-05  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=20480 seed=0  rms_err gqa_pair=1.419e-06  gqa_pair_splitk=1.417e-06  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=20480 seed=1  rms_err gqa_pair=1.410e-06  gqa_pair_splitk=1.408e-06  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=20480 seed=2  rms_err gqa_pair=1.355e-06  gqa_pair_splitk=1.352e-06  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=40960 seed=0  rms_err gqa_pair=9.985e-07  gqa_pair_splitk=9.986e-07  closer=False  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=40960 seed=1  rms_err gqa_pair=1.002e-06  gqa_pair_splitk=9.993e-07  closer=True  argmax-vs-exact 0/0 of 32
+  exact  scale=legacy0p1  L=40960 seed=2  rms_err gqa_pair=1.007e-06  gqa_pair_splitk=1.005e-06  closer=True  argmax-vs-exact 0/0 of 32
+  L= 20480  qrow16= 12.942  gqa_pair= 11.979  gqa_pair_splitk=  6.408  predicted=4.985  delta=-5.571
+  L= 23000  qrow16= 14.900  gqa_pair= 13.801  gqa_pair_splitk=  6.562  predicted=5.74  delta=-7.239
+  L= 32768  qrow16= 21.135  gqa_pair= 19.102  gqa_pair_splitk=  9.485  predicted=8.047  delta=-9.617
+  L= 40960  qrow16= 25.979  gqa_pair= 23.757  gqa_pair_splitk= 11.233  predicted=9.947  delta=-12.524
+  json -> /out/probe_p1.json
+== reduce into the Tier-B credential, then re-validate it ==
+{
+  "arm": "gqa_pair_splitk",
+  "bounds_passed": true,
+  "credential": "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_splitk_tierb_credential_71ab122d2.json",
+  "credential_sha256": "1284f0dc15bb8b49551315c4b3653f5c2de8f82b652c08a874f15d24c8f861a8",
+  "determinism": {
+    "all_cases_bitwise_identical": true,
+    "cases": 16,
+    "cross_process_digests_identical": true,
+    "processes": 2,
+    "reps_per_case": 8
+  },
+  "probe_strength_passed": true,
+  "validated": "live-A/B serving only; promoted-default remains ungranted"
+}
+  B1 PASS determinism_bitwise                              measured={'all_cases_bitwise_identical': True, 'cross_process_digests_identical': True} bound=True
+  B2 PASS output_ulp_concentration                         measured=0.9330657958984375 bound=0.9
+  B3 PASS output_max_abs_delta                             measured=1.3837837837837839 bound=4.0
+  B4 PASS lse_max_ulp                                      measured=4 bound=8
+  B5 PASS lse_max_abs_delta                                measured=3.814697265625e-06 bound=0.0001
+  B6 PASS argmax_flips_vs_exact_no_worse_than_incumbent    measured=1 bound=2
+  B7 PASS output_rms_vs_exact_ratio                        measured=0.9608395953312465 bound=1.1
+  B8 PASS lse_rms_vs_exact_ratio                           measured=0.8386085577670528 bound=1.1
+  B9 PASS nonfinite_agreement                              measured=0 bound=0
+
+credential: /home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_splitk_tierb_credential_71ab122d2.json
+fd77c3501d91b6bbb3017b7b587caadfcac0f808a8136d2d6c9504b0dbbb6af4  /home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_splitk_tierb_credential_71ab122d2.json
+
+To SERVE under it, both are required and neither implies the other:
+  FR13_FA2_QROW32_B1_LIVE_AB_ARM=gqa_pair_splitk
+  FR13_FA2_QROW32_B1_TIER_B_SERVE=1
+  FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL=<path in container>
+  FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256=<sha above>
+
+This credential grants LIVE-A/B SERVING ONLY. Promoted-default is Mark's
+separate decision after exact16 QC parity, and the production allowlist
+still refuses this arm. The mandatory degenerate eyeball on the served
+generations is NOT discharged by anything here.

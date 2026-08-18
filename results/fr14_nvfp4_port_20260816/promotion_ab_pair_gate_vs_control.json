@@ -1,0 +1,420 @@
+{
+ "arm_level": {
+  "accept_per_event": {
+   "control": 3.885466666666667,
+   "delta": -0.031749126245304904,
+   "delta_pct": -0.8171251736034686,
+   "inside_10pct_variance": true,
+   "treated": 3.853717540421362
+  },
+  "committed_per_event": {
+   "control": 4.885466666666667,
+   "delta": -0.03174912624530446,
+   "delta_pct": -0.6498688541245693,
+   "inside_10pct_variance": true,
+   "treated": 4.853717540421362
+  },
+  "committer_gpu_ms_per_step": {
+   "control": 20.46450117834171,
+   "delta": 0.11209885624204219,
+   "delta_pct": 0.5477722386934126,
+   "treated": 20.576600034583752
+  },
+  "drafter_gpu_ms_per_step": {
+   "control": 55.44714690479062,
+   "delta": -7.945707770763789,
+   "delta_pct": -14.330237377961971,
+   "treated": 47.50143913402683
+  },
+  "floor_ratio": {
+   "control": 2.3215520148782147,
+   "delta": -0.09085647874721081,
+   "delta_pct": -3.9136094373477572,
+   "treated": 2.230695536131004
+  },
+  "overhead_other_ms_per_event": {
+   "control": 7.585113523666697,
+   "delta": 0.017097839475788135,
+   "delta_pct": 0.22541309925606648,
+   "treated": 7.6022113631424855
+  },
+  "per_request_decode_tps": {
+   "control": 24.391721432942017,
+   "delta": 0.6226195882873427,
+   "delta_pct": 2.5525856795267816,
+   "inside_10pct_variance": true,
+   "treated": 25.01434102122936
+  },
+  "prefill_frac": {
+   "control": 0.07233637211913059,
+   "delta": 0.0005693086529165448,
+   "delta_pct": 0.7870295900089539,
+   "treated": 0.07290568077204714
+  },
+  "s_per_fwd": {
+   "control": 0.21196444766707717,
+   "delta": -0.004790198813937774,
+   "delta_pct": -2.2599067280667366,
+   "treated": 0.2071742488531394
+  },
+  "s_per_fwd_gpu": {
+   "control": 0.1312619569019138,
+   "delta": 0.0008521825813779249,
+   "delta_pct": 0.6492228224318817,
+   "treated": 0.13211413948329173
+  },
+  "step_wall_ms": {
+   "control": 214.75871850871283,
+   "delta": -6.9643284936680345,
+   "delta_pct": -3.242861822806737,
+   "treated": 207.7943900150448
+  },
+  "wall_steps_measured": {
+   "control": 52304.0,
+   "delta": -19747.0,
+   "delta_pct": -37.75428265524625,
+   "treated": 32557.0
+  }
+ },
+ "census": {
+  "control": {
+   "active_nodes": {
+    "27": 52507
+   },
+   "drafter_graph_registry": [
+    {
+     "batch_size": 1,
+     "capture_origin": "unmeasured",
+     "captures": 1,
+     "graph_signature": "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c",
+     "measured_replays": 52507,
+     "passes": 4,
+     "segment": 0,
+     "unmeasured_replays": 1187
+    }
+   ],
+   "graph_replays": {
+    "1": 52507
+   },
+   "graph_signatures": {
+    "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c": 52507
+   },
+   "mtp_forward_calls": {
+    "4": 52507
+   },
+   "section_11_7_all_pass": true,
+   "section_11_7_checks": {
+    "active_nodes_27_every_step": true,
+    "graph_replays_only_1": true,
+    "mtp_forward_calls_only_4_or_2": true,
+    "mtp_tail_pairs_legal": true,
+    "ungated_signature_present": true,
+    "verify_rows_32_every_step": true
+   },
+   "step_events": 52507,
+   "verify_rows": {
+    "32": 52507
+   },
+   "warm_step_rate": 0.0
+  },
+  "treated": {
+   "active_nodes": {
+    "27": 32656
+   },
+   "drafter_graph_registry": [
+    {
+     "batch_size": 1,
+     "capture_origin": "unmeasured",
+     "captures": 1,
+     "graph_signature": "2da8c56a0c7da5ea9262b0020a30c925138c18eba95ab2b01ef2a4f1ff22da42",
+     "measured_replays": 32656,
+     "passes": 2,
+     "segment": 0,
+     "unmeasured_replays": 699
+    },
+    {
+     "batch_size": 1,
+     "capture_origin": "unmeasured",
+     "captures": 1,
+     "graph_signature": "7fa7d56d3cf52bae6287b71e511fa6c0a2cd6ea5c0aa98ba4edf2d6868a031c6",
+     "measured_replays": 21365,
+     "passes": 2,
+     "segment": 1,
+     "unmeasured_replays": 513
+    }
+   ],
+   "graph_replays": {
+    "1": 11291,
+    "2": 21365
+   },
+   "graph_signatures": {
+    "2da8c56a0c7da5ea9262b0020a30c925138c18eba95ab2b01ef2a4f1ff22da42": 11291,
+    "7fa7d56d3cf52bae6287b71e511fa6c0a2cd6ea5c0aa98ba4edf2d6868a031c6": 21365
+   },
+   "mtp_forward_calls": {
+    "2": 11291,
+    "4": 21365
+   },
+   "section_11_7_all_pass": false,
+   "section_11_7_checks": {
+    "active_nodes_27_every_step": true,
+    "graph_replays_only_1_or_2": true,
+    "mtp_forward_calls_only_4_or_2": true,
+    "mtp_tail_pairs_legal": true,
+    "registry_two_rows_passes2_segment_0_and_1": true,
+    "ungated_signature_present": false,
+    "verify_rows_32_every_step": true,
+    "warm_step_rate_in_0.15_0.25": false
+   },
+   "step_events": 32656,
+   "verify_rows": {
+    "32": 32656
+   },
+   "warm_step_rate": 0.3457557569818716
+  }
+ },
+ "control": {
+  "arm": "hydra27_fixed32_promoab_Cp1",
+  "label": "ARM C' \u2014 gqa_pair + fused top-k ON"
+ },
+ "control_only_instances": [],
+ "paired_instances": [
+  "astropy__astropy-12907",
+  "astropy__astropy-13033",
+  "astropy__astropy-13236",
+  "astropy__astropy-13398"
+ ],
+ "per_task": {
+  "astropy__astropy-12907": {
+   "accept_per_event": {
+    "control": 3.6441761363636362,
+    "delta": -0.03806926613462869,
+    "delta_pct": -1.044660431057439,
+    "treated": 3.6061068702290076
+   },
+   "committer_gpu_ms_per_step": {
+    "control": 22.563160197301308,
+    "delta": 0.17727503170163672,
+    "delta_pct": 0.785683521951149,
+    "treated": 22.740435229002944
+   },
+   "drafter_gpu_ms_per_step": {
+    "control": 50.43958113681184,
+    "delta": -9.893643888407148,
+    "delta_pct": -19.614841490399616,
+    "treated": 40.54593724840469
+   },
+   "drafts": {
+    "control": 1408.0,
+    "delta": -98.0,
+    "delta_pct": -6.9602272727272725,
+    "treated": 1310.0
+   },
+   "per_request_decode_tps": {
+    "control": 26.182199929924543,
+    "delta": 0.6419709047826458,
+    "delta_pct": 2.451936454923007,
+    "treated": 26.82417083470719
+   },
+   "s_per_fwd": {
+    "control": 0.20232065655578813,
+    "delta": -0.009659773375844144,
+    "delta_pct": -4.7744869655365845,
+    "treated": 0.19266088317994398
+   },
+   "s_per_fwd_gpu": {
+    "control": 0.12589834612607953,
+    "delta": 3.629792946893695e-05,
+    "delta_pct": 0.028831140825779224,
+    "treated": 0.12593464405554847
+   },
+   "step_wall_ms": {
+    "control": 204.21090772558523,
+    "delta": -10.070616212877297,
+    "delta_pct": -4.931478110077255,
+    "treated": 194.14029151270793
+   },
+   "wall_steps": {
+    "control": 1394.0,
+    "delta": -95.0,
+    "delta_pct": -6.814921090387374,
+    "treated": 1299.0
+   }
+  },
+  "astropy__astropy-13033": {
+   "accept_per_event": {
+    "control": 4.314115308151093,
+    "delta": -0.6299543607685067,
+    "delta_pct": -14.602167901684743,
+    "treated": 3.6841609473825865
+   },
+   "committer_gpu_ms_per_step": {
+    "control": 20.37690303236446,
+    "delta": 0.043941725502090634,
+    "delta_pct": 0.21564476914032704,
+    "treated": 20.42084475786655
+   },
+   "drafter_gpu_ms_per_step": {
+    "control": 52.56721067126963,
+    "delta": -5.8918231405327575,
+    "delta_pct": -11.208171529924654,
+    "treated": 46.67538753073687
+   },
+   "drafts": {
+    "control": 5533.0,
+    "delta": 1898.0,
+    "delta_pct": 34.303271281402495,
+    "treated": 7431.0
+   },
+   "per_request_decode_tps": {
+    "control": 25.84453020926493,
+    "delta": -1.9206302287450754,
+    "delta_pct": -7.43147665364238,
+    "treated": 23.923899980519856
+   },
+   "s_per_fwd": {
+    "control": 0.21010386219938126,
+    "delta": -0.004152254695848678,
+    "delta_pct": -1.9762867052431112,
+    "treated": 0.20595160750353259
+   },
+   "s_per_fwd_gpu": {
+    "control": 0.13036465659004495,
+    "delta": 0.0013643347309385545,
+    "delta_pct": 1.0465526214125274,
+    "treated": 0.1317289913209835
+   },
+   "step_wall_ms": {
+    "control": 210.94606082352945,
+    "delta": -4.468723552803397,
+    "delta_pct": -2.118420005264656,
+    "treated": 206.47733727072605
+   },
+   "wall_steps": {
+    "control": 5511.0,
+    "delta": 1901.0,
+    "delta_pct": 34.49464706949737,
+    "treated": 7412.0
+   }
+  },
+  "astropy__astropy-13236": {
+   "accept_per_event": {
+    "control": 4.161334240980259,
+    "delta": -0.2872578378989825,
+    "delta_pct": -6.903022474621386,
+    "treated": 3.8740764030812764
+   },
+   "committer_gpu_ms_per_step": {
+    "control": 20.3829401505083,
+    "delta": 0.18735957076532728,
+    "delta_pct": 0.9191979635021151,
+    "treated": 20.570299721273628
+   },
+   "drafter_gpu_ms_per_step": {
+    "control": 53.425082611177466,
+    "delta": -20.040789819732403,
+    "delta_pct": -37.511949144912535,
+    "treated": 33.38429279144506
+   },
+   "drafts": {
+    "control": 5876.0,
+    "delta": 485.0,
+    "delta_pct": 8.253914227365556,
+    "treated": 6361.0
+   },
+   "per_request_decode_tps": {
+    "control": 25.643490261371053,
+    "delta": 4.14468509194014,
+    "delta_pct": 16.162718294957017,
+    "treated": 29.788175353311193
+   },
+   "s_per_fwd": {
+    "control": 0.210599433850103,
+    "delta": -0.01692971568425869,
+    "delta_pct": -8.03882298007916,
+    "treated": 0.1936697181658443
+   },
+   "s_per_fwd_gpu": {
+    "control": 0.13094420463816536,
+    "delta": 0.0009442222530300359,
+    "delta_pct": 0.721087470529284,
+    "treated": 0.1318884268911954
+   },
+   "step_wall_ms": {
+    "control": 212.29419545792163,
+    "delta": -18.53659044329288,
+    "delta_pct": -8.731557828658097,
+    "treated": 193.75760501462875
+   },
+   "wall_steps": {
+    "control": 5829.0,
+    "delta": 529.0,
+    "delta_pct": 9.075313089723796,
+    "treated": 6358.0
+   }
+  },
+  "astropy__astropy-13398": {
+   "accept_per_event": {
+    "control": 3.7934127964115616,
+    "delta": 0.14318285130405872,
+    "delta_pct": 3.7745127933217493,
+    "treated": 3.9365956477156203
+   },
+   "committer_gpu_ms_per_step": {
+    "control": 20.414329095650032,
+    "delta": 0.06900841469776964,
+    "delta_pct": 0.3380391017232804,
+    "treated": 20.483337510347802
+   },
+   "drafter_gpu_ms_per_step": {
+    "control": 56.325784849771004,
+    "delta": -2.8399965748432194,
+    "delta_pct": -5.042089661809241,
+    "treated": 53.485788274927785
+   },
+   "drafts": {
+    "control": 39683.0,
+    "delta": -22129.0,
+    "delta_pct": -55.76443313257566,
+    "treated": 17554.0
+   },
+   "per_request_decode_tps": {
+    "control": 23.46567058200117,
+    "delta": 1.439439855291102,
+    "delta_pct": 6.134237034739561,
+    "treated": 24.905110437292272
+   },
+   "s_per_fwd": {
+    "control": 0.21276816458530406,
+    "delta": 0.0009003463507052389,
+    "delta_pct": 0.42315839517629883,
+    "treated": 0.2136685109360093
+   },
+   "s_per_fwd_gpu": {
+    "control": 0.13162442543755204,
+    "delta": 0.001195703153793748,
+    "delta_pct": 0.9084204165138317,
+    "treated": 0.1328201285913458
+   },
+   "step_wall_ms": {
+    "control": 216.02434675227582,
+    "delta": -1.554262093585578,
+    "delta_pct": -0.7194846863108053,
+    "treated": 214.47008465869024
+   },
+   "wall_steps": {
+    "control": 39570.0,
+    "delta": -22082.0,
+    "delta_pct": -55.80490270406874,
+    "treated": 17488.0
+   }
+  }
+ },
+ "schema": "fr14.promotion_ab.pair.v1",
+ "treated": {
+  "arm": "hydra27_fixed32_promoab_Gp5",
+  "label": "ARM G' (round 5) \u2014 gqa_pair + promoted top-k + suffix pass gate"
+ },
+ "treated_only_instances": [],
+ "variance_doctrine": "seam_move_economics.md 9.4: the same arm banked accept 3.81/4.04/4.28 across three runs. An accept delta inside +/-10% is INSIDE VARIANCE on the arm level; only the paired per-task brackets can resolve smaller moves, and even those carry trajectory drift."
+}

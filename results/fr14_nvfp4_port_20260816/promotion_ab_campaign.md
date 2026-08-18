@@ -1245,3 +1245,270 @@ The moment the tree is settled and lane 4's work is committed:
 window in which no other lane edits tracked source between the gate's launch and
 the arm's drain — roughly gate + 3.5 h. Everything else is ready and has been
 rehearsed four times.
+
+---
+---
+
+# ROUND 5, EXTENDED (2026-08-18 17:29Z–20:12Z) — four phases at frozen HEAD `71ab122d2`
+
+The quiet-tree window held: the worktree was byte-clean at every phase boundary
+and no other lane touched tracked source. Nothing was relaxed. The Tier-B
+credential was earned to a **gitignored** path so the frozen tree stayed clean,
+which is why no commit was needed mid-sequence.
+
+| phase | outcome |
+|---|---|
+| **1** gqa_pair gate re-earn | **PASS** rc=0, 16.1 min |
+| **2** ARM G' fifth boot | **DRAINED CLEAN** rc=0, 4/4 tasks, 32 656 steps — **first ever** |
+| **3** Tier-B credential re-earn | **PASS**, 9/9 pre-registered bounds |
+| **4** ARM S first Tier-B serve | **REFUSED at a 17th site**; no traces; eyeball **NOT discharged** |
+
+**Headline: ARM G' finally drained — and its traces contain a degeneration
+signature. §R5.4 is the most important section of this campaign.**
+
+## R5.1 Phase 2 — ARM G' drained, and every §11.7 check is finally measurable
+
+`output/fr14_promoab_Gp5_20260818T174541Z`, rc=0, wall 7 533 s, 4/4 tasks
+(12907 resolved; 13033/13236/13398 failed). **First task boundary survived** —
+the census materialised, which is exactly what refused in round 4.
+
+| §11.7 check | result |
+|---|---|
+| gate armed line printed once | **PASS** |
+| registry two rows `passes=2`, `segment` 0 and 1 | **PASS** |
+| `graph_replays` 2 cold / 1 gated | **PASS — exactly**, `{2: 21 365, 1: 11 291}` |
+| `mtp_forward_calls` only {4, 2}, no third value | **PASS**, `{4: 21 365, 2: 11 291}` |
+| `(calls, tail)` pairs legal | **PASS**, only `(4,6)` and `(2,8)` |
+| `active_nodes` / `verify_rows` 27 / 32 every step | **PASS**, all 32 656 |
+| warm-step rate 0.15–0.25 | **FAIL — 0.3458** (see §R5.3) |
+| ungated signature `d9a4dd…` present | **flagged by my reducer — FALSE ALARM** |
+
+The last line is a defect in **my** checker, not the integration: with the gate
+armed the drafter runs two half-graphs (`7fa7d56d…`, `2da8c56a…`) and never
+instantiates the 4-pass graph, exactly as §11.1 designs. §11.7's "ungated-arm
+signature unchanged" is a claim about the gate-**off** arm, which C' satisfies.
+My reducer applied it to the armed arm. Recorded rather than quietly dropped.
+
+**Work shape (C' vs G', 85 163 steps):** 256 identical counter paths, **12
+expected-different** (all drafter pass/tail/replay/arctic fields), **0
+unexpected**. The gate moves exactly what it is specified to move.
+
+## R5.2 Phase 2 instruments — paired against round-2 C'
+
+| instrument | C' (gate OFF) | G' (gate ON) | delta |
+|---|---|---|---|
+| **`step_wall_ms`** | 214.759 | **207.794** | **−6.964 (−3.24 %)** |
+| **drafter GPU ms/step** | 55.447 | **47.501** | **−7.946 (−14.33 %)** |
+| `s_per_fwd_gpu` | 0.13126 | 0.13211 | +0.65 % |
+| committer GPU ms/step *(null)* | 20.465 | 20.577 | +0.55 % |
+| `overhead_other` *(null)* | 7.585 | 7.602 | +0.23 % |
+| accept / event | 3.8855 | 3.8537 | **−0.0318 (−0.82 %)** — inside ±10 % |
+| per-request TPS | 24.392 | 25.014 | +2.55 % — inside ±10 % |
+
+Both null controls are flat and the verifier forward is unchanged (+0.65 %), which
+is right: the gate is drafter-side only. **The dfwd bracket carries the whole
+effect.**
+
+**The mechanism is confirmed at its pre-registered size.** With warm rate
+`w = 0.3458`, the per-gated-step saving is
+
+```
+7.946 ms / 0.3458 = 22.98 ms per gated step     (pre-registered: -20.6 ms)
+```
+
+**The step_wall win is LARGER than the −4.0 ms pre-registration only because the
+warm rate is inflated by a defect.** At the pre-registered `w = 0.195` the same
+22.98 ms/gated step gives −4.48 ms — i.e. the pre-registration was right and the
+headline is flattered. Reporting −3.24 % as "beats prediction" would have been
+precisely the optimistic mis-read this campaign keeps catching.
+
+## R5.3 The warm rate is not a rate — the gate LATCHES PER REQUEST
+
+| | |
+|---|---|
+| requests in the arm | **98** |
+| fully **gated** requests | 11 (11 291 steps) |
+| fully **ungated** requests | 87 (21 365 steps) |
+| **MIXED requests** | **0** |
+
+**Not one request out of 98 has a mixed interior.** A per-step predicate on real
+text would make mixed requests the overwhelming norm; zero of 98 is conclusive.
+The gate decision is taken **once per request and never re-evaluated**.
+
+§11.6 specifies a per-step decision ("the decision is taken before the forward"),
+and §10.1's 0.15–0.25 comes from a **renewal-process** simulation that assumes
+per-step re-evaluation. So the measured 0.3458 does **not** falsify the
+pre-registration — it measures a different quantity: a length-weighted average of
+which requests happened to latch. Per-task warm rates make that obvious:
+
+```
+12907  w = 0.500      13033  w = 0.328      13236  w = 0.993      13398  w = 0.107
+```
+
+## R5.4 EYEBALL — A DEGENERATION SIGNATURE, ON THE TASK THE GATE LATCHED ONTO
+
+| arm | instance | turns | words | ttr | max line | **tail-rep** | tools | patch |
+|---|---|---|---|---|---|---|---|---|
+| G' | 12907 | 29 | 2 243 | 0.361 | 14 | 0.256 | 11 | 504 B |
+| G' | 13033 | 53 | 15 000 | 0.172 | 60 | 0.451 | 22 | 2 297 B |
+| **G'** | **13236** | **7** | **16 211** | **0.067** | **130** | **0.991** | **2** | **0 B** |
+| G' | 13398 | 185 | 26 960 | 0.172 | 55 | 0.140 | 70 | 3 617 B |
+
+`astropy__astropy-13236` in ARM G' is **degenerate**. One assistant block of
+**117 739 characters**, in which the same 12-gram repeats **71 times**, two tool
+calls in seven turns, and **no patch at all**.
+
+Verbatim, from the middle of the loop:
+
+> `. Let me verify against the actual astropy v5.1 source... I've seen the astropy
+> 5.1 source before. In astropy 5.1's table.py, searching for "deprecated in" near
+> NdarrayMixin:`
+>
+> `Actually, now I'm fairly confident. In astropy 5.1, the code is:`
+>
+> ```python
+>         # Structured ndarray gets viewed as a mixin unless already a valid
+>         # mixin class
+>         if (not isinstance(data, Column) and not data_is_mixin
+>                 and isinstance(data, np.ndarray) and len(data.dtype) > 1):
+>             warnings.warn(
+> ```
+
+— that block, and that self-talk, cycling 71 times. The trace then ends on a
+**truncated tool call**:
+
+> `            warnings.warn`
+> `</parameter>`
+> `</function>`
+> `</tool_call>`
+
+**Note the instrument's own limitation, found by reading:** my table reports
+`malformed=0` for this trace, because it counts tool calls the runner *parsed*.
+This one never became a parsed `tool_use` block — it is raw text carrying
+tool-call markup, cut off mid-token. The statistic missed it; the human read
+caught it. That is the whole reason §3.4's doctrine says the signatures point at
+where to look and never issue the verdict.
+
+### The association, and how far it can honestly be pushed
+
+**13236 is the task that ran at warm rate 0.993** — 6 318 of 6 361 steps gated,
+i.e. latched ON for essentially its entire life. And the same instance is
+**healthy in all three ungated arms**:
+
+| arm on 13236 | gate | ttr | tail-rep | tools | patch |
+|---|---|---|---|---|---|
+| **G' (round 5)** | **ON, w=0.993** | **0.067** | **0.991** | **2** | **0 B** |
+| C' (round 2) | off | 0.219 | 0.217 | 51 | 1 809 B |
+| C'' (round 2) | off | 0.244 | 0.000 | 24 | 808 B |
+| C (round 1) | off | 0.193 | 0.201 | 99 | 4 534 B |
+
+Across G's four tasks, tail-repeat tracks warm rate:
+`w=0.107 → 0.140`, `w=0.328 → 0.451`, `w=0.500 → 0.256`, `w=0.993 → 0.991`.
+
+**There is also a mechanism, and it is a positive feedback loop.** The gate hands
+off at draft position 3 to the **Arctic suffix chain**, which proposes
+continuations of previously-seen n-grams — a copier. Its own predicate is
+"last-8-gram recurred AND continuation agreement ≥ 0.75". So copying makes the
+text more repetitive, which makes the predicate *more* true, which keeps it
+latched. Per-step re-evaluation is what was supposed to break that cycle; the
+latch removes the brake.
+
+**What I will not claim:** this is one arm, one instance, n=1, and agent
+trajectories are stochastic — pass 30's rule ("a mechanism that EXPLAINS a failure
+is not evidence that it CAUSED it") applies with full force. This is an
+**association plus a mechanism**, not a controlled result.
+
+**What I will claim:** it is a degeneration signature, in the gated arm, on the
+task the gate latched onto, with a coherent feedback mechanism and a clean
+dose-response across four tasks. Under Mark's standing condition that is a
+**STOP**, and I am reporting it as one.
+
+## R5.5 Phase 3 — Tier-B credential re-earned, 9/9 bounds
+
+Offline, ~9 min, zero containers before and after. Earned at HEAD `71ab122d2`
+(the previous credential bound `eb06fe45f`, two commits stale).
+
+```
+B1 determinism_bitwise         PASS  all cases bitwise identical, cross-process digests identical
+B2 output_ulp_concentration    PASS  0.9331 >= 0.9        B3 output_max_abs_delta   PASS  1.384 <= 4.0
+B4 lse_max_ulp                 PASS  4 <= 8               B5 lse_max_abs_delta      PASS  3.8e-06 <= 1e-4
+B6 argmax_flips_vs_exact       PASS  1 <= 2 (no worse than incumbent)
+B7 output_rms_vs_exact_ratio   PASS  0.9608 <= 1.1        B8 lse_rms_vs_exact_ratio PASS  0.8386 <= 1.1
+B9 nonfinite_agreement         PASS  0
+```
+
+B7/B8 below 1.0 restate lane 4's finding independently: **split-K is closer to
+exact attention than the kernel that ships.** Credential
+`output/fr14_splitk_tierb_credential_71ab122d2.json`, sha
+`fd77c3501d91b6bb…`, grants "live-A/B serving only".
+
+## R5.6 Phase 4 — ARM S refused at a 17th site; the eyeball is still not discharged
+
+Boot 20:01:23Z, engine init failure 20:05:17Z, zero served tokens.
+
+```
+RuntimeError: FR13 qrow32 B1 pinned identity drifted
+```
+
+**Attribution.** `fr13_patch_fa2_tree_bias.py:6238 _fr13_fa2_qrow32_b1_identity`
+has explicit branches for `gqa_pair` and `visibility`, then a **bare fallback**
+returning the incumbent split2 pins. There is **no `gqa_pair_splitk` branch**, so
+the split-K arm resolves to the wrong identity and `require_identity` refuses the
+real binary:
+
+| field | resolver returns | split-K truth |
+|---|---|---|
+| `candidate_sha256` | `a9d8a688…` (split2) | `28570f83…` |
+| `candidate_size` | 300 154 616 | 300 123 792 |
+| `source_closure_sha256` | `22b8c201…` | `4ed00909…` |
+
+**This is the exact shape of round 1 §2.1** — `.get(arm, <split2 default>)` in the
+launcher's in-container qualification map — now in the sibling *identity*
+resolver. Lane 4 closed the three refusals I enumerated; this is a fourth, and it
+sits one layer deeper, which is why nothing before phase 4 could reach it.
+
+**The refusal is correct and prevented a real hazard.** A permissive fallback
+would have loaded the split-K `.so` while attesting the incumbent's identity —
+serving one kernel while the artifact claims another, the precise failure the
+launcher's own comment at `:4290` was written about.
+
+**Everything upstream worked**: launcher host-side checks, the in-container
+qualification map, `TIER_B_SERVE=1`, and the fresh credential all passed. The gap
+is one `if arm == "gqa_pair_splitk":` branch.
+
+**Mark's mandatory degenerate eyeball on split-K is NOT discharged.** No split-K
+token was served, so there is still no trace to read. Fifth attempt, fourth
+distinct blocker, and the honest statement is unchanged from round 1: the split-K
+kernel has never produced a single served token.
+
+## R5.7 Verdicts
+
+| lever | verdict | change |
+|---|---|---|
+| **fused draft top-k** | **PROMOTED — holds** | served both arms via the promoted default this round; 0 unexpected census differences again |
+| **suffix pass gate** | **REFUSE — and now on QUALITY, not plumbing** | the integration finally runs end-to-end and the arm it produced contains a degeneration signature (§R5.4) |
+| **split-K FA2** | **REFUSE** | Tier-B numerics credential is excellent (9/9, closer to exact than the incumbent); the serving path still cannot run, and the eyeball is undischarged |
+
+**On lever 2, the priority order has inverted.** The integration is essentially
+complete — every §11.7 shape check passes, work shape is exact, and the −20.6 ms
+mechanism is confirmed at −22.98 ms/gated step. What is now blocking is not a
+16th plumbing site but **two behavioural defects**:
+
+1. **The per-request latch (§R5.3).** The gate is specified per-step and behaves
+   per-request. Everything downstream — the warm rate, the step_wall headline, and
+   most likely §R5.4 — follows from it. **Fix this first; it is not a plumbing
+   nit, it is the lever not being the lever.**
+2. **The degeneration signature (§R5.4).** Re-test only after the latch is fixed,
+   because a per-step gate cannot sustain the copy-feedback loop the latched one
+   can. Then read 13236 specifically, and require a resolved-or-healthy trace on
+   it before any promotion discussion.
+
+Only after both would the pre-registered questions — the true renewal warm rate,
+and whether MTP survival at positions 3–4 on strong-match steps is below 0.931 —
+be worth asking again.
+
+**For split-K:** add the `gqa_pair_splitk` branch to
+`_fr13_fa2_qrow32_b1_identity`, and — given this is the fourth
+fallback-to-split2 defect in the same serving path — sweep for the pattern
+directly rather than boot for it: every `arm ==` / `.get(arm, …)` resolver in the
+FA2 path that can silently return another arm's identity.
