@@ -359,6 +359,95 @@ constant is re-attested here; the artifacts are not.
 
 ---
 
+## 4.1 Mirror inventory — the re-attestation missed eleven more sites
+
+The promotion campaign's gate re-earn was refused by
+`scripts/fr13_fixed32_work_census.py:157`, which still carried `484babd7…` while the
+emitter published `68b289ae…`. The census **self-asserts on every boot**, so serves
+completed and their *terminal audits* died; every fixed32 credential re-earn at this HEAD
+was refused and arms ran the qrow16 incumbent.
+
+A sweep found the campaign had hit **the mirror that fires first, not the only one.**
+
+### Class A — `_FR13_FIXED32_TAW_SOURCE_SHA256` retyped (12 literals, 11 files) — **FIXED**
+
+Every one is bound to the live `scripts/fr13_device_multidraft_kernel.py`, not to a banked
+artifact, so every one must track HEAD. All updated to `68b289ae…`:
+
+| file | symbol |
+|---|---|
+| `scripts/fr13_fixed32_work_census.py:157` | `TAW_SOURCE_CONTRACT_SHA256` *(the blocker)* |
+| `scripts/fr13_taw_b1_credential.py:21` | `SOURCE_CONTRACT_SHA256` (compares `module._FR13_FIXED32_TAW_SOURCE_SHA256`) |
+| `scripts/fr13_dfwd_k64_m4_r64_u8_gate.py:39` | `TAW_SOURCE_CONTRACT_SHA256` |
+| `scripts/fr13_dfwd_k64_m1_r64_u8_gate.py:46` | `EXPECTED_TAW_SOURCE_CONTRACT_SHA256` |
+| `scripts/fr13_run_b1_k64_taw_source_v7_gate.sh:25` | `TAW_SOURCE_CONTRACT_SHA256` |
+| `scripts/fr13_run_b4_tail23_all_parent_live_gate.sh:23` | `TAW_SOURCE_SHA256` |
+| `scripts/fr13_run_b1_k64_physical32_fullstack_pair.sh:36` | `TAW_SOURCE_CONTRACT_SHA256` |
+| `scripts/fr13_run_b4_taw_width4_timing.sh:103` | `TAW_SOURCE_SHA256` |
+| `tests/test_fr13_fixed32_cfwd_logit_direct_runners.py:155` | inline literal |
+| `tests/test_fr13_fixed32_cfwd_logit_direct_decision.py:707,755` | inline literals |
+| `tests/test_fr13_fixed32_cfwd_logit_direct_live_gate.py:224` | inline literal |
+
+Deliberately **not** changed: `fr13_device_multidraft_kernel.py:1662`, which is prose
+recording the prior value, and the historical records in `results/` and the refusal log.
+
+### Class B — whole-file SHA of the kernel (4 sites) — **NOT FIXED, NOT OURS**
+
+| file | symbol | pinned |
+|---|---|---|
+| `scripts/fr13_device_multidraft_cfwd_packed_v3.py:14` | `BASE_SHA256` | `8dbb0bd0…` |
+| `scripts/fr13_cfwd_logit_direct_packed_runtime_overlay.py:14` | `BASE_SOURCE_SHA256` | `8dbb0bd0…` |
+| `scripts/fr13_generate_cfwd_packed_runtime_overlay.py:156` | `BASE_SOURCE_SHA256` | `8dbb0bd0…` |
+| `tests/test_fr13_fixed32_cfwd_logit_direct_decision.py:828` | inline literal | `8dbb0bd0…` |
+
+`8dbb0bd0…` was the kernel's file SHA at **`0adbfb6e4` (2026‑08‑15)**. The file SHA at
+lane 3's parent `263a12f79` was already `deb5c9da…` — **so these were stale before this
+lane touched anything**, broken by whichever commit changed the kernel after `0adbfb6e4`.
+Lane 3 compounds it (now `4dd05fbd…`) but did not cause it. They break 10
+`cfwd_logit_direct` tests with `credential-bound device module identity drifted` and would
+refuse the packed CFWD runtime; **none of the 10 failures is digest-related** (verified
+individually).
+
+**Left for the `cfwd_logit_direct` owner deliberately.** Re-pointing `BASE_SHA256` is not
+mechanical: the pin's meaning is *"the overlay was reviewed against this base"*, and the
+overlay installs over the very walk functions this lane changed. Re-pinning would assert a
+compatibility this lane has not established — which is precisely the "don't launder one
+drift under another" discipline the census defect illustrates.
+
+### Class C — the armed-lever census route — **latent, must fix before the live A/B**
+
+`fr13_fixed32_work_census.py` mirrors the tensor-call census too, and dispatches expected
+counts by `taw.route`. With `FR13_FIXED32_TAW_SOFTMAX_CACHE` armed the emitter publishes
+`full_vocab_softmax_calls: 2` / `row_gathers: 26` under the **unchanged** default route
+string, so the validator would compare against `TAW_TENSOR_CALL_CENSUS` (24/24) and refuse.
+Blocks nothing today — the flag is default-OFF — but it **will** kill the live A/B
+recommended in §6. The fix is a distinct route name plus a matching validator arm, which
+re-attests the emitter a third time; deliberately not done under time pressure while gate
+re-earns were blocked.
+
+### The structural fix
+
+Per the test-the-contract doctrine, retyping twelve literals correctly once is not a fix for
+a defect class. `tests/test_fr14_cfwd_softmax_cache.py` now carries
+`test_every_taw_source_digest_mirror_matches_the_emitter`, which scans every `.py`/`.sh`
+under `scripts/` and `tests/` for `*TAW_SOURCE[_CONTRACT]_SHA256` assignments and requires
+each to equal what the emitter publishes, plus
+`test_work_census_mirror_tracks_the_emitter`, which asserts the boot-critical mirror against
+the emitter's constant directly rather than a retyped literal. The scan self-checks that it
+matched at least 8 files, so a regex that silently stops matching cannot make it a no-op.
+
+**Verified by reintroducing the exact reported defect:** reverting only
+`fr13_fixed32_work_census.py` to `484babd7…` makes both tests fail; restoring it makes them
+pass. A future re-attestation that misses a mirror now fails in a unit test rather than in a
+terminal audit after a completed serve.
+
+Importing the digest from the emitter instead of retyping it was considered and rejected for
+the census: it is a standalone fail-closed validator that runs without torch/triton, and
+importing the kernel would drag the whole CUDA stack into offline census validation. The
+contract test gets the same guarantee at no runtime cost.
+
+---
+
 ## 5. Sub-lever B — spine-state checkpointing: **STOP**
 
 ### 5.1 The replay is state-traffic-bound, not token-bound
@@ -429,6 +518,9 @@ inequality as the falsifiable condition under which it could be reopened.
 | softmax cache — unarmed safety | **asserted**: resolver reduces to the pre-lane-3 expression in both selector states | — |
 | softmax cache — live A/B | **not run** | arm the sidecar, then `cfwd` span A/B at B=1 with `s_per_fwd_gpu` held flat; engagement needle is work-census `full_vocab_softmax_calls` 24 → 2 |
 | TAW banked PASS artifacts | **owed** — re-attestation covered the constant, not the live artifacts | fold into the next TAW gate re-earn (needs a serve) |
+| class-A digest mirrors (§4.1) | **fixed**, 12 literals / 11 files, guarded by a contract test | — |
+| class-B whole-file SHA pins (§4.1) | **stale since before this lane**, 4 sites, 10 tests red | `cfwd_logit_direct` owner: re-pin `8dbb0bd0…` → `4dd05fbd…` **only** with an overlay-compatibility judgement |
+| class-C armed-route census (§4.1) | **latent** — default-OFF so blocks nothing today | needs a route name + validator arm **before** the live A/B, or the A/B serve's audit dies |
 | stale 2026-07-31 fixture (§3.4) | attributed to `a5110fe71`, **not fixed** | adopt §3.4's recommended test fix, or regenerate `current_*` on every re-attestation |
 | B=1 cumsum non-determinism (§3.3.1) | **measured**, 20/20 at width 1, 0/20 at widths 2–31 | TAW credential owner: no end-to-end byte gate at B=1 is achievable |
 | sub-lever A | closed | — |

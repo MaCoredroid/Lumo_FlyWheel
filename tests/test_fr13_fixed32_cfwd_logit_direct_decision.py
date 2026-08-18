@@ -704,7 +704,7 @@ def test_cfwd_integration_source_contract_is_separate_and_fail_closed(
         ),
     }
     assert device._FR13_FIXED32_TAW_SOURCE_SHA256 == (
-        "484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93"
+        "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d"
     )
     assert device._FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS == (
         "_fr13_fixed32_taw_exact_commit_kernel",
@@ -752,7 +752,7 @@ def test_packed_cfwd_keeps_taw_b1_b4_source_identity_exact() -> None:
             "fr13-fixed32-taw-all-parent-v7"
         )
         assert contract["source_contract_sha256"] == (
-            "484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93"
+            "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d"
         )
 
 

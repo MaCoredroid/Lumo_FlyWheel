@@ -197,3 +197,103 @@ def test_source_digest_is_re_attested_to_the_wired_source() -> None:
     assert taw._FR13_FIXED32_TAW_SOURCE_SHA256 == (
         "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d"
     )
+
+
+# ---------------------------------------------------------------------------
+# Inventory guard for the mirror-miss defect class.
+#
+# Pass 44 re-attested _FR13_FIXED32_TAW_SOURCE_SHA256 in the emitter and missed
+# scripts/fr13_fixed32_work_census.py, which self-asserts on every boot: serves
+# completed but their terminal audits died, and every fixed32 credential re-earn
+# at that HEAD was refused. The campaign found the mirror that fired first; a
+# sweep found ELEVEN more files carrying the same retyped literal.
+#
+# The fix for a defect class is not to retype twelve literals correctly once. It
+# is to make the twelfth impossible to get wrong silently -- so this scans the
+# tree for every retyped TAW source digest and requires it to equal the value the
+# emitter actually publishes. A future re-attestation that misses a mirror fails
+# here, in a unit test, instead of in a terminal audit after a serve.
+# ---------------------------------------------------------------------------
+
+import re
+
+_TAW_DIGEST_ASSIGNMENT = re.compile(
+    r"""(?P<name>[A-Za-z_]*TAW_SOURCE(?:_CONTRACT)?_SHA256)"""
+    r"""\s*(?:=|:)\s*\(?\s*["']?(?P<digest>[0-9a-f]{64})["']?""",
+    re.MULTILINE,
+)
+
+_MIRROR_SCAN_DIRS = ("scripts", "tests")
+_MIRROR_SCAN_SUFFIXES = (".py", ".sh")
+
+
+def _taw_digest_mirrors() -> dict[str, list[tuple[int, str, str]]]:
+    """Every retyped TAW source digest under scripts/ and tests/."""
+    root = MODULE_PATH.parent.parent
+    found: dict[str, list[tuple[int, str, str]]] = {}
+    for directory in _MIRROR_SCAN_DIRS:
+        for path in sorted((root / directory).rglob("*")):
+            if path.suffix not in _MIRROR_SCAN_SUFFIXES or not path.is_file():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            hits = []
+            for match in _TAW_DIGEST_ASSIGNMENT.finditer(text):
+                line = text.count("\n", 0, match.start()) + 1
+                hits.append((line, match.group("name"), match.group("digest")))
+            if hits:
+                found[str(path.relative_to(root))] = hits
+    return found
+
+
+def test_every_taw_source_digest_mirror_matches_the_emitter() -> None:
+    """No retyped TAW digest may disagree with the value the emitter publishes."""
+    current = taw._FR13_FIXED32_TAW_SOURCE_SHA256
+    mirrors = _taw_digest_mirrors()
+
+    # The scan must actually be finding things; a regex that silently matches
+    # nothing would make this test a no-op that passes forever.
+    assert len(mirrors) >= 8, f"mirror scan found too few files: {sorted(mirrors)}"
+
+    stale = {
+        path: [hit for hit in hits if hit[2] != current]
+        for path, hits in mirrors.items()
+    }
+    stale = {path: hits for path, hits in stale.items() if hits}
+    assert not stale, (
+        "stale TAW source digest mirror(s) -- these refuse serves and credential "
+        f"re-earns at HEAD. Emitter publishes {current}. Stale: {stale}"
+    )
+
+
+def test_work_census_mirror_tracks_the_emitter() -> None:
+    """The mirror whose staleness blocked the promotion gate re-earn.
+
+    Named separately from the scan above because this one is load-bearing on
+    every boot: the census self-asserts, so a stale value here does not fail a
+    test, it fails a completed serve's terminal audit.
+    """
+    import importlib.util as _ilu
+    import sys
+
+    census_path = MODULE_PATH.parent / "fr13_fixed32_work_census.py"
+    # The census imports its sibling topology contract by bare module name.
+    scripts_dir = str(census_path.parent.resolve())
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    spec = _ilu.spec_from_file_location("fr14_lane3_census_mirror", census_path)
+    assert spec is not None and spec.loader is not None
+    census = _ilu.module_from_spec(spec)
+    # Register before exec: the census defines dataclasses, and dataclasses
+    # resolves cls.__module__ through sys.modules during class creation.
+    sys.modules[spec.name] = census
+    try:
+        spec.loader.exec_module(census)
+    except Exception:
+        sys.modules.pop(spec.name, None)
+        raise
+
+    assert census.TAW_SOURCE_CONTRACT_SHA256 == taw._FR13_FIXED32_TAW_SOURCE_SHA256
+    assert census.TAW_SOURCE_CONTRACT_SCHEMA == taw._FR13_FIXED32_TAW_SOURCE_SCHEMA
