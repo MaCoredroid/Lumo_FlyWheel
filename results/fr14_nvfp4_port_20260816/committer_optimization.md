@@ -26,9 +26,15 @@ full-vocabulary softmaxes per step, each over a single row**, and ATen's
 runs at **35.8 GB/s**, ~8× off the ~273 GB/s the rest of `cfwd` achieves.
 
 Batching them into one softmax per family is **bitwise identical** (measured, 400
-comparisons, zero differing elements) and worth **−1.16 to −1.22 ms/step**. It is
-implemented as a flag, gated, and **held one three-line diff short of wired** by a
-campaign credential — see §4.
+comparisons, zero differing elements) and worth **−1.01 to −1.05 ms/step**. It is
+implemented, gated, **wired and default-OFF** — see §4, including the coordinator-sanctioned
+`_FR13_FIXED32_TAW_SOURCE_SHA256` re-attestation and the attribution (§3.4) that had to
+precede it.
+
+A second measured result, incidental to the lever but larger in consequence than it
+(§3.5): **at the served B=1 the walk's own `cumsum` is run-to-run non-deterministic** —
+20/20 repeats differ, up to 2 ULP — while **every batched width 2/4/12/31 is perfectly
+deterministic, 0/20**. The deployed width is the only non-reproducible one.
 
 ---
 
@@ -130,15 +136,21 @@ At the served **B = 1** the softmax input is `[1, 248320]`. ATen dispatches
 `cunn_SoftMaxForward` with **grid = one block per row**, so a one-row softmax is a
 **one-block, one-SM** kernel. nsys confirms grid `(1,1,1)` on every instance.
 
+Best-controlled run (GPU verified **empty immediately before and after**, atomically):
+
 | | measured |
 |---|---:|
-| single-row softmax, clean microbench | **55.4 µs** |
+| single-row softmax | **55.5 µs** |
 | …effective bandwidth | **35.8 GB/s** |
-| 24 of them, per step | **1.726 ms** |
-| the same rows, one batched call | **0.570 ms** (all 31 rows) / **0.505 ms** (24 gathered) |
-| **saving** | **1.156 – 1.222 ms/step** |
+| 24 of them, per step | **1.546 ms** |
+| the same rows, one batched call | **0.541 ms** (all 31 rows) / **0.498 ms** (24 gathered) |
+| **saving** | **1.006 – 1.048 ms/step** |
 
-That is **5.6–5.9 % of the 20.604 ms `cfwd`** and **0.55–0.58 % of the 210.700 ms step**.
+That is **4.9–5.1 % of the 20.604 ms `cfwd`** and **0.48–0.50 % of the 210.700 ms step**.
+Two earlier runs read a larger incumbent (1.726 / 2.260 ms) and hence a larger saving
+(1.16–1.22 / 1.67–1.72); the run quoted here is the only one with a verified-empty GPU on
+both sides, so **−1.0 ms is the floor of the claim, not its centre**. Full three-run table
+in §6.
 It is a reduction in GPU-**busy** time, not in launch overhead, so it is not subject to the
 0.809 ms host-idle ceiling that closes sub-lever A.
 
@@ -170,27 +182,126 @@ correct for the all-parent candidate and over-broad for the softmax alone.**
 
 ### 3.3 What landed
 
-In `scripts/fr13_device_multidraft_kernel.py` (digest-neutral — see §4):
+In `scripts/fr13_device_multidraft_kernel.py` (the re-attestation this required is §4):
 
 * `FR13_FIXED32_TAW_SOFTMAX_CACHE`, strict `0`/`1`, **default OFF**, env or sidecar
   (`/logs/fr13_fixed32_taw_softmax_cache.arm`), malformed values raise;
 * `_fr13_fixed32_taw_softmax_cache_requested()` — deliberately *not* routed through
   `_fr13_fixed32_taw_native_selector`, so it cannot re-impose the all-parent B≥2 floor and
   the two levers can ship and be reverted independently;
-* `_FR13_FIXED32_TAW_SOFTMAX_CACHE_TENSOR_CALL_CENSUS` — the census the wired lever would
-  publish. It records that row gathers **rise** 24 → 26 (the per-level lookups still
+* `_FR13_FIXED32_TAW_SOFTMAX_CACHE_TENSOR_CALL_CENSUS` — the census published when the
+  lever is armed. It records that row gathers **rise** 24 → 26 (the per-level lookups still
   happen, they just read the cache; building the cache costs one more full-vocab gather per
   family). The lever is a trade and the census says so;
-* `assert_softmax_cache_not_armed()` — **raises** if the flag is armed, because the walk is
-  not wired and a lever that arms into a no-op is worse than one that refuses.
+* `_fr13_fixed32_taw_probability_cache_requested()` — the shared resolver now read by all
+  three walk arm points. `OR`, not `AND`: either the native selector or this flag is
+  sufficient to want the cache, and with the flag clear it reduces to exactly the
+  pre-lane-3 expression.
 
 Tests: `tests/test_fr14_cfwd_softmax_cache.py`, 18 cases, all pass — strictness, sidecar
-precedence, default-OFF, the refusal message, census honesty, and that the native selector
-is unmoved at every batch width.
+precedence, default-OFF, unarmed reduction to the incumbent expression in **both** states of
+the native selector, census-follows-the-arm, all three arm points wired, the re-attested
+digest matching what the wired module computes, and the native selector unmoved at every
+batch width.
 
 ---
 
-## 4. Why it is not wired, and the exact diff that wires it
+### 3.3.1 G5 — the deployed B=1 walk is the only non-deterministic width
+
+`fr13_device_multidraft_kernel.py` justifies `_FR13_FIXED32_TAW_PINNED_MIN_BATCH = 2` with:
+
+> At B=1 the reference operator itself is not reproducible (cumsum over a single [1, V] row
+> is run-to-run non-deterministic on this device), so no byte-exact batched candidate can
+> exist there and the walk stays unbatched.
+
+Measured — same `cumsum` run 20× on identical input, bit-compared:
+
+| width | non-deterministic repeats | max ULP |
+|---:|---:|---:|
+| **1 (the served width)** | **20 / 20** | **2** |
+| 2 | 0 / 20 | 0 |
+| 4 | 0 / 20 | 0 |
+| 12 | 0 / 20 | 0 |
+| 31 | 0 / 20 | 0 |
+
+**The claim is correct, and sharper than stated: B=1 is not merely "not reproducible", it is
+the *only* width that is not.** Every batched width is bit-stable across repeats. (Plausibly
+a dispatch change — a decoupled-lookback / multi-block scan for a single long row versus a
+block-per-row scan once there are rows to spread — but the mechanism is not established
+here, only the behaviour.)
+
+Three consequences, in order of importance:
+
+1. **The deployed hydra27_fixed32 B=1 serve runs a sampler whose CDF inversion is not
+   run-to-run reproducible, at up to 2 ULP.** No end-to-end byte gate of the B=1 walk can
+   exist — not for this lever, not for any other. Anything in TAW territory that claims
+   end-to-end byte identity at B=1 is claiming something the operator cannot deliver. This
+   is for whoever owns the TAW credential; it is flagged, not acted on, by this lane.
+2. **It does not touch this lever.** The softmax cache does not go near the `cumsum`, which
+   stays at the same `[B, V]` shape and the same call site in both arms. The correct gate is
+   the stage-wise one (G1/G3/G4), which is what was run.
+3. Worth noting for calibration: the shape-pinning discipline that produced
+   `_FR13_FIXED32_TAW_PINNED_MIN_BATCH = 2` guards against a **2 ULP** batched-reduction
+   difference (G2), while the deployed path already carries **2 ULP** of run-to-run noise
+   from its own `cumsum`. These are not the same thing — a deterministic candidate is worth
+   having even against a noisy reference, and a candidate must not *add* error — but the
+   comparison is the right one to have in hand when pricing how much the B≥2 floor is
+   buying.
+
+---
+
+### 3.4 Attribution of the pre-existing HEAD credential drift
+
+Ordered ahead of the wiring by the coordinator, so that a sanctioned digest drift could not
+launder an unexplained one. **Both failures trace to a single FR13-era commit; none of
+tonight's five lanes are implicated, and no code landed without its re-gate.**
+
+Failing tests, in `tests/test_fr13_taw_b1_diagnostic_pass_artifact.py`, both reading the
+banked artifact `results/fr13_fixed32_taw_b1_diagnostic_pass_20260731T162536Z/`
+(published once, in `c8d8bda91`, 2026‑07‑31, **never refreshed since**):
+
+| # | test | assertion | expected (banked) | observed (HEAD, pre-lane-3) |
+|---|---|---|---|---|
+| 1 | `test_diagnostic_pass_cannot_arm_current_production` (:110) | `current_production_requirement.json → required_payload.source_contract_sha256` == `_FR13_FIXED32_TAW_SOURCE_SHA256` | `42b92d872d2324bf618b35fdd71c22d0e68e5c00e25ad2a43ae553c8ab1f92da` | `484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93` |
+| 2 | `test_candidate_math_projection_is_identical_but_control_source_is_not` (:134) | AST projection of HEAD's TAW source == `source_equivalence.json → candidate_math_projection.current_sha256` | `56c51ada155df8bea5d67a2af4d4a9744b999068f15bb27e0ca0c81327993763` | `7a67a3b0a8a732e04fdd9099993282ee5fee60e00c4172de6a49e83132bfcaed` |
+
+**Culprit: `a5110fe71` — 2026‑08‑01, "FR13: fuse fixed32 all-parent committer walk".**
+Verified by recomputing both quantities at every commit touching the TAW source since the
+artifact's own reference tip (`1f5b63c16`):
+
+* **Failure 1.** `a5110fe71` re-attested `_FR13_FIXED32_TAW_SOURCE_SHA256`
+  `42b92d87… → 51541928…` without refreshing the banked
+  `current_production_requirement.json`, which is still frozen at `42b92d87…`. The constant
+  has since been legitimately re-attested **seven more times**
+  (`0c91a7503`, `f989ad3b2`, `c83b9639a` 08‑01; `87344abdc` 08‑05; `b48dfe124`, `4a3e55851`,
+  `0adbfb6e4` 08‑15), each carrying the stale fixture forward.
+* **Failure 2.** The projection was `56c51ada…` at `a5110fe71~1` and `e50bea3e…` at
+  `a5110fe71` — the same commit — via `_fr13_fixed32_layout_contract` and
+  `_FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS`, both inside the pinned
+  projection set. It moved once more, to `7a67a3b0…`, at `b48dfe124` (2026‑08‑15,
+  "widen the TAW byte gate and shape-pin the batched candidate") via
+  `_fr13_fixed32_taw_execute{_torch,_exact_cuda}`, `_fr13_fixed32_taw_execute` and
+  `_fr13_taw_inv_cdf`.
+
+**This is a stale-fixture failure, not an ungated landing.** The re-attestation mechanism
+ran correctly on all eight commits — the constant was updated every time. What was never
+updated is one banked 2026‑07‑31 artifact that the test compares against **HEAD**.
+
+Design comment, since it will recur: `source_equivalence.json`'s `current_source` block and
+`current_production_requirement.json` are **snapshots of the tip as it stood on 2026‑07‑31**.
+Asserting them against live HEAD guarantees a failure the next time anything in the
+projection set legitimately changes — which is exactly what happened, twice. Either the
+artifact's `current_*` fields should be regenerated as part of every TAW re-attestation, or
+the test should assert the historical *relationship* the artifact was banked to prove
+(`run_sha256 == current_sha256` at bank time, plus `diagnostic_pass ≠ current requirement`)
+rather than re-deriving `current` from today's source. `run_projection == run_sha256` still
+passes, so the historical half of the credential is intact. **Recommend the second fix**;
+it keeps the credential meaningful without requiring a fixture rewrite on every legitimate
+source change.
+
+---
+
+## 4. The wiring, and the sanctioned re-attestation
 
 The walk chain — `_fr13_fixed32_taw_execute{,_torch,_exact_cuda}`,
 `_fr13_fixed32_taw_probability_caches`, `fr13_fixed32_taw_commit`,
@@ -213,20 +324,38 @@ at the three sites in `_fr13_fixed32_taw_probability_caches`,
 `_fr13_fixed32_taw_execute_torch` and `_fr13_fixed32_taw_execute_exact_cuda`, plus routing
 `_fr13_fixed32_taw_tensor_call_census` to the recorded census when armed.
 
-**This was applied and reverted.** Applied, it drifts the TAW source digest and fails **24
-existing tests whose entire job is to notice exactly that** (verified: 19 failed + 7 errors
-with the diff, against a 2-failure pre-existing baseline). There is no wiring point outside
-the digest set — every caller in the chain is itself pinned.
+There is no wiring point outside the digest set — every caller in the chain is itself
+pinned — so wiring necessarily re-attests the constant. Applied without re-attestation it
+fails **24 tests whose entire job is to notice exactly that** (19 failed + 7 errors, against
+the 2-failure baseline of §3.4).
 
-Re-attesting `_FR13_FIXED32_TAW_SOURCE_SHA256` invalidates banked TAW PASS credentials.
-That is a campaign decision, not a lane decision, and it is not one to take unilaterally in
-a shared tree mid-campaign. **The lever is measured, gated and staged; promoting it is one
-credential decision away.**
+**Sanctioned and landed 2026‑08‑18**, after §3.4's attribution, so that a sanctioned drift
+could not launder an unexplained one:
 
-> Noted in passing, not fixed by this lane: two digest assertions in
-> `tests/test_fr13_taw_b1_diagnostic_pass_artifact.py` **already fail at HEAD** before any
-> lane-3 change (`42b92d87… ≠ 484babd7…`, `7a67a3b0… ≠ 56c51ada…`). Whoever owns the TAW
-> credential should know the baseline is not clean.
+| | value |
+|---|---|
+| prior `_FR13_FIXED32_TAW_SOURCE_SHA256` | `484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93` |
+| re-attested to | `68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d` |
+| candidate-math projection | `7a67a3b0…` → `319ca0bd61fc0ca9ecc314bcc22a5c968ac638907e155e58263daf8f491ad63a` |
+
+The prior value is the digest the **2026‑08‑18 B1 nsys serve actually ran under**
+(`taw.source_contract_sha256` in that run's work census), which is what makes it the right
+thing to name as the predecessor.
+
+**The only source change under this re-attestation is how `native_precompute` resolves at
+the three arm points.** No sampler arithmetic moved. With the flag clear,
+`_fr13_fixed32_taw_probability_cache_requested()` reduces exactly to
+`_fr13_fixed32_taw_native_precompute_enabled()` — the pre-lane-3 expression — which is
+asserted directly, in both states of the native selector, by
+`test_unarmed_resolution_is_identical_to_the_pre_lane3_expression`.
+
+Post-landing test state: **78 passed, 3 skipped, 2 failed** — the two failures being exactly
+the §3.4 stale-fixture pair, unchanged in kind and now showing this lane's digests as the
+observed side. All 24 digest-drift failures cleared.
+
+**Deferred, and owed:** re-earning the banked *live* TAW PASS artifacts (which need a serve,
+not a unit test) is folded into the next TAW gate re-earn per the coordinator's ruling. The
+constant is re-attested here; the artifacts are not.
 
 ---
 
@@ -294,41 +423,35 @@ inequality as the falsifiable condition under which it could be reopened.
 
 | item | state | next step |
 |---|---|---|
-| softmax cache — arithmetic | **gates G1/G3/G4 PASS**, 400 bitwise comparisons | none |
-| softmax cache — saving | **−1.16 to −1.22 ms/step**, isolated microbench | confirm in-walk (the microbench models softmax + gather, not the full level) |
-| softmax cache — wiring | staged, three-line diff in §4 | **needs `_FR13_FIXED32_TAW_SOURCE_SHA256` re-attestation — Mark's call** |
-| softmax cache — live A/B | not run | after wiring: `cfwd` span A/B at B=1, `s_per_fwd_gpu` flat, work-census `full_vocab_softmax_calls` 24→2 as the engagement needle |
+| softmax cache — arithmetic | **gates G1/G3/G4 PASS**, 460 bitwise comparisons, 0 differing elements | none |
+| softmax cache — saving | **−1.01 to −1.05 ms/step** (best-controlled run), isolated microbench | confirm in-walk — the microbench models softmax + gather, not the whole level |
+| softmax cache — wiring | **landed**, default OFF, digest re-attested `484babd7…` → `68b289ae…` | — |
+| softmax cache — unarmed safety | **asserted**: resolver reduces to the pre-lane-3 expression in both selector states | — |
+| softmax cache — live A/B | **not run** | arm the sidecar, then `cfwd` span A/B at B=1 with `s_per_fwd_gpu` held flat; engagement needle is work-census `full_vocab_softmax_calls` 24 → 2 |
+| TAW banked PASS artifacts | **owed** — re-attestation covered the constant, not the live artifacts | fold into the next TAW gate re-earn (needs a serve) |
+| stale 2026-07-31 fixture (§3.4) | attributed to `a5110fe71`, **not fixed** | adopt §3.4's recommended test fix, or regenerate `current_*` on every re-attestation |
+| B=1 cumsum non-determinism (§3.3.1) | **measured**, 20/20 at width 1, 0/20 at widths 2–31 | TAW credential owner: no end-to-end byte gate at B=1 is achievable |
 | sub-lever A | closed | — |
 | sub-lever B | stopped | reopen only if `P(spine ∧ len == d) > 12.2 %` for some fixed `d` is measured |
 
-**Caveat on the timing numbers, and on what is banked.** The probe was run twice. Run 1
-was taken against a verified **zero-container** GPU and is the source of every timing
-quoted in this note:
+**Caveat on the timing numbers, and on what is banked.** The probe was run three times. The
+banked `committer_softmax_probe.json` holds **run 3**, the only one with the GPU verified
+empty *both before and after* (the check and the launch were made atomic after run 2 lost a
+race to another lane). Every timing quoted in this note is run 3.
 
-| | run 1 (uncontended) | run 2 (one foreign container up) |
-|---|---:|---:|
-| incumbent, 24 single-row softmax | **1.726 ms** | 2.260 ms |
-| batched, all 31 rows | **0.570 ms** | 0.588 ms |
-| batched, 24 gathered rows | **0.505 ms** | 0.537 ms |
-| single row | **55.4 µs** (35.8 GB/s) | 66.6 µs (29.8 GB/s) |
+| | run 1 (0 containers at check) | run 2 (**one foreign container**) | **run 3 (verified empty both sides)** |
+|---|---:|---:|---:|
+| incumbent, 24 single-row softmax | 1.726 ms | 2.260 ms | **1.546 ms** |
+| batched, all 31 rows | 0.570 ms | 0.588 ms | **0.541 ms** |
+| batched, 24 gathered rows | 0.505 ms | 0.537 ms | **0.498 ms** |
+| single row | 55.4 µs (35.8 GB/s) | 66.6 µs (29.8 GB/s) | **55.5 µs (35.8 GB/s)** |
+| implied saving | 1.16–1.22 ms | 1.67–1.72 ms | **1.01–1.05 ms** |
 
-`committer_softmax_probe.json` holds **run 2** (it overwrote run 1 at the same path) plus
-the composite gates G3/G4, which were added between the runs. Read its `G1`/`G3`/`G4`
-verdicts and its `B1` copy floor; read its `T1` as the **contended** column above. Gates
-are bitwise and unaffected by contention — G1 passed identically in both runs (160 and 120
-cases).
-
-**G5 is implemented but has not been run.** It tests the module's own stated justification
-for `_FR13_FIXED32_TAW_PINNED_MIN_BATCH = 2` — *"cumsum over a single [1, V] row is
-run-to-run non-deterministic on this device"* — which, if true, would mean the **deployed
-B=1 walk is already non-reproducible step to step**. That is worth knowing independently of
-this lane. It was not run because two foreign containers held the GPU at the end of this
-lane's window and a third process could have contaminated another lane's measurement.
-Nothing in this note depends on its outcome: the softmax lever does not touch the cumsum,
-which stays at the same `[B, V]` shape in both branches. Run it with
-`--skip-bench` (~2 s, ~250 MB) on an empty GPU.
-
----
+The spread across runs is in the *incumbent* leg, not the batched one — 24 sequential
+one-block kernels are exactly the shape most sensitive to any other work on the device.
+**Treat −1.0 ms/step as the floor of the claim rather than its centre**, and note that all
+three runs agree the lever is worth ≥1 ms. G1 passed identically in every run (160/160,
+160/160, 120/120 by trial count); gates are bitwise and contention cannot move them.
 
 ## 7. Evidence index
 
@@ -336,8 +459,9 @@ which stays at the same `[B, V]` shape in both branches. Run it with
 |---|---|
 | `scripts/fr14_cfwd_softmax_batching_probe.py` | gates G1–G5, benches T1/B1 |
 | `results/fr14_nvfp4_port_20260816/committer_softmax_probe.json` | banked probe output |
-| `tests/test_fr14_cfwd_softmax_cache.py` | 18 cases: flag strictness, refusal, census honesty |
-| `scripts/fr13_device_multidraft_kernel.py` | flag, resolver, recorded census, arm guard |
+| `tests/test_fr14_cfwd_softmax_cache.py` | 18 cases: strictness, unarmed-reduction, census-follows-arm, arm points wired, digest re-attested |
+| `scripts/fr13_device_multidraft_kernel.py` | flag, shared resolver, census, three wired arm points, re-attested `_FR13_FIXED32_TAW_SOURCE_SHA256` |
+| `tests/test_fr13_taw_b1_diagnostic_pass_artifact.py` + `results/fr13_fixed32_taw_b1_diagnostic_pass_20260731T162536Z/` | the §3.4 stale fixture, attributed to `a5110fe71` |
 | `output/fr13_fixed32_b1_nsys_20260818T001018Z/…/fr13_fixed32_b1_real_swe.sqlite` | the span/busy/gap re-derivation of §2 |
 | `output/…/logs/fr13_fixed32_work_census.jsonl` | `taw.*`, `committer.*` live route identity |
 | `results/fr14_nvfp4_port_20260816/host_dfwd_characterization.md` | §1 phase budget, §4 prior cfwd ceiling |

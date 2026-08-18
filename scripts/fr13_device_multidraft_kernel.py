@@ -1543,7 +1543,7 @@ _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
     "/logs/fr13_fixed32_taw_native_precompute.production_pass.json"
 )
 # ---------------------------------------------------------------------------
-# FR14 lane 3: TAW SOFTMAX CACHE -- measured, byte-identical, NOT WIRED.
+# FR14 lane 3: TAW SOFTMAX CACHE -- measured, byte-identical, default OFF.
 # ---------------------------------------------------------------------------
 # WHAT THE LEVER IS. The reference walk issues one torch.softmax per level per
 # family over a [B, V] slice. At the served B=1 that is a [1, 248320] softmax,
@@ -1554,7 +1554,9 @@ _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
 # the ~273 GB/s the rest of cfwd achieves. It is the ONLY op class in cfwd that
 # is occupancy-bound rather than bandwidth-bound. Feeding the same walk from one
 # batched softmax per family collapses 24 one-block launches to 2, measured at
-# -1.16 to -1.22 ms/step.
+# -1.01 to -1.05 ms/step (best-controlled run, GPU verified empty before and
+# after; two earlier runs read -1.16..-1.22, so treat -1.0 as the floor of the
+# claim, not the centre).
 #
 # WHY IT IS BYTE-SAFE, AND WHY THE B>=2 FLOOR DOES NOT APPLY.
 # _FR13_FIXED32_TAW_PINNED_MIN_BATCH = 2 exists because the all-parent candidate
@@ -1570,20 +1572,22 @@ _FR13_FIXED32_TAW_NATIVE_PRODUCTION_PASS = (
 # _fr13_dm_depthsync_walk's byte-identity contract that "a stacked [A,V] softmax
 # could shift p by 1 ULP".
 #
-# WHY IT IS NOT WIRED HERE. The walk chain -- _fr13_fixed32_taw_execute{,_torch,
+# WIRING AND THE DIGEST. The walk chain -- _fr13_fixed32_taw_execute{,_torch,
 # _exact_cuda}, _fr13_fixed32_taw_probability_caches, fr13_fixed32_taw_commit --
-# is SOURCE-DIGEST PINNED (_FR13_FIXED32_TAW_SOURCE_SHA256 and the banked B1/B4
-# PASS artifacts under results/). The cache branch those functions already carry
-# is reached by resolving `native_precompute` inside them, so arming it edits
-# digest-covered source: doing so drifts the digest and fails 24 existing tests
-# whose whole job is to notice exactly that. Re-attesting is a campaign
-# credential decision (it invalidates banked TAW PASS artifacts), not a lane
-# decision, so this module ships the resolver and the census and REFUSES to arm.
+# is SOURCE-DIGEST PINNED (_FR13_FIXED32_TAW_SOURCE_SHA256). The cache branch
+# those functions already carry is reached by resolving `native_precompute`
+# inside them, so wiring this lever necessarily edits digest-covered source and
+# re-attests the constant. That re-attestation was SANCTIONED by the coordinator
+# on 2026-08-18 after the pre-existing HEAD drift was attributed to a5110fe71
+# (2026-08-01), so that a sanctioned drift could not launder an unexplained one.
+# Re-earning the banked live TAW PASS artifacts is folded into the next TAW gate
+# re-earn; the constant below is re-attested here.
 #
-# The flag therefore FAILS LOUD rather than becoming a silent no-op: a lever
-# that declines to arm quietly is how a campaign ends up A/B-ing the stock path
-# against itself. See results/fr14_nvfp4_port_20260816/committer_optimization.md
-# for the three-line wiring diff this guard is holding back.
+# DEFAULT OFF, and unarmed behaviour is byte-for-byte the incumbent: with the
+# flag clear _fr13_fixed32_taw_probability_cache_requested reduces exactly to
+# _fr13_fixed32_taw_native_precompute_enabled, which is what the three arm
+# points resolved before this lane. See
+# results/fr14_nvfp4_port_20260816/committer_optimization.md.
 _FR13_FIXED32_TAW_SOFTMAX_CACHE_FLAG = "FR13_FIXED32_TAW_SOFTMAX_CACHE"
 _FR13_FIXED32_TAW_SOFTMAX_CACHE_SIDECARS = (
     "/logs/fr13_fixed32_taw_softmax_cache.arm",
@@ -1653,8 +1657,15 @@ _FR13_CFWD_LOGIT_DIRECT_REPLAY_ACTIVE: dict[tuple[str, int], bool] = {}
 _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS: dict[str, Any] | None = None
 _FR13_CFWD_LOGIT_DIRECT_PRODUCTION_PASS_SHA256: str | None = None
 _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
+# Re-attested 2026-08-18 by FR14 lane 3, coordinator-sanctioned, when the
+# batched-softmax cache was wired into the three walk arm points. Prior value
+# 484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93 (0adbfb6e4,
+# 2026-08-15), which is the digest the 2026-08-18 B1 nsys serve ran under.
+# The ONLY source change under this re-attestation is how `native_precompute`
+# resolves at the three arm points; no sampler arithmetic moved, and with the
+# flag clear the resolution is identical to the prior expression.
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93"
+    "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -2308,8 +2319,8 @@ def _fr13_fixed32_taw_softmax_cache_requested(*, environ=None) -> bool:
     a floor that does not apply and would couple two levers that must be able to
     ship, and be reverted, independently.
 
-    "requested", not "enabled": resolving true does not make the walk use a
-    cache. See assert_softmax_cache_not_armed.
+    Wired at the three walk arm points through
+    _fr13_fixed32_taw_probability_cache_requested.
     """
     env = os.environ if environ is None else environ
     raw = str(env.get(_FR13_FIXED32_TAW_SOFTMAX_CACHE_FLAG, "0")).strip()
@@ -2326,27 +2337,25 @@ def _fr13_fixed32_taw_softmax_cache_requested(*, environ=None) -> bool:
     )
 
 
-def assert_softmax_cache_not_armed(*, environ=None) -> None:
-    """FAIL LOUD if the lane-3 softmax cache is armed. It is not wired.
+def _fr13_fixed32_taw_probability_cache_requested() -> bool:
+    """True when the walk should read probabilities from a batched cache.
 
-    The lever is measured and byte-proven (probe gates G1/G3/G4) but wiring it
-    edits source covered by the TAW source digest, which is a campaign
-    credential. Until that is re-attested, arming the flag would change nothing
-    while looking like it changed something -- and a serve that believes it is
-    running a candidate arm when it is running the stock path produces a
-    measurement that is worse than no measurement.
+    Two independent arms build the same cache object and differ in what ELSE
+    they turn on:
+
+      * the native selector (diagnostic / production) additionally arms the
+        all-parent A/B or candidate, and is refused below
+        _FR13_FIXED32_TAW_PINNED_MIN_BATCH because that candidate batches
+        REDUCTIONS, which are shape-sensitive (probe gate G2, up to 2 ULP);
+      * FR13_FIXED32_TAW_SOFTMAX_CACHE arms only the batched softmax, which is
+        shape-invariant (probe gates G1/G3/G4, 460 bitwise comparisons, zero
+        differing elements), and is therefore legal at the served B=1.
+
+    OR, not AND: either arm alone is sufficient to want the cache.
     """
-    if not _fr13_fixed32_taw_softmax_cache_requested(environ=environ):
-        return
-    raise RuntimeError(
-        f"{_FR13_FIXED32_TAW_SOFTMAX_CACHE_FLAG} is armed but the TAW softmax "
-        "cache is NOT WIRED, so arming it would be a silent no-op. The walk "
-        "chain (_fr13_fixed32_taw_execute{,_torch,_exact_cuda}) is source-digest "
-        "pinned; resolving the existing `native_precompute` cache branch inside "
-        "it drifts _FR13_FIXED32_TAW_SOURCE_SHA256 and invalidates the banked "
-        "TAW PASS artifacts. Re-attesting that digest is a campaign decision. "
-        "See results/fr14_nvfp4_port_20260816/committer_optimization.md for the "
-        "wiring diff, the measured -1.16..-1.22 ms/step, and the gate evidence."
+    return (
+        _fr13_fixed32_taw_native_precompute_enabled()
+        or _fr13_fixed32_taw_softmax_cache_requested()
     )
 
 
@@ -2975,6 +2984,12 @@ def _fr13_fixed32_taw_tensor_call_census(
         census = _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
     elif selector == "production":
         census = _FR13_FIXED32_TAW_NATIVE_PRODUCTION_TENSOR_CALL_CENSUS
+    elif _fr13_fixed32_taw_softmax_cache_requested():
+        # The reference walk fed from a batched softmax cache. The census must
+        # report what the step actually launches, not what the unarmed route
+        # would have: a census that lies about an armed lever is worse than no
+        # census, because later passes reason from the census.
+        census = _FR13_FIXED32_TAW_SOFTMAX_CACHE_TENSOR_CALL_CENSUS
     else:
         census = _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
     return dict(census)
@@ -4476,7 +4491,7 @@ def _fr13_fixed32_taw_probability_caches(
 ) -> tuple[Any | None, Any | None]:
     """Batch immutable reachable rows with the native PyTorch softmax operator."""
     if native_precompute is None:
-        native_precompute = _fr13_fixed32_taw_native_precompute_enabled()
+        native_precompute = _fr13_fixed32_taw_probability_cache_requested()
     if not native_precompute:
         return None, None
 
@@ -5247,7 +5262,7 @@ def _fr13_fixed32_taw_execute_torch(
         device=device,
     )
     if native_precompute is None:
-        native_precompute = _fr13_fixed32_taw_native_precompute_enabled()
+        native_precompute = _fr13_fixed32_taw_probability_cache_requested()
     if native_precompute:
         if probability_caches is None:
             probability_caches = _fr13_fixed32_taw_probability_caches(
@@ -5570,7 +5585,7 @@ def _fr13_fixed32_taw_execute_exact_cuda(
     accepted_lens = entry["accepted_lens"]
     last_row = entry["last_row"]
     if native_precompute is None:
-        native_precompute = _fr13_fixed32_taw_native_precompute_enabled()
+        native_precompute = _fr13_fixed32_taw_probability_cache_requested()
     if native_precompute:
         if probability_caches is None:
             probability_caches = _fr13_fixed32_taw_probability_caches(

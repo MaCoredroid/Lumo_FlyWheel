@@ -4,9 +4,9 @@
     "layers": 48,
     "measured_replay_ms_per_step_nsys": 4.42,
     "note": "one_copy_ms is the FLOOR for any checkpoint-commit that must move the state; the checkpoint WRITE during sfwd costs at least the same again per checkpointed spine node.",
-    "one_copy_gbps": 233.47114996647377,
-    "one_copy_ms": 1.2934783935546874,
-    "per_layer_48_copies_ms": 1.5314892578125,
+    "one_copy_gbps": 241.17269913908797,
+    "one_copy_ms": 1.2521727752685547,
+    "per_layer_48_copies_ms": 1.3725509643554688,
     "state_bytes_total": 150994944,
     "state_mib_total": 144.0
   },
@@ -50,15 +50,48 @@
     "mismatches": 0,
     "verdict": "PASS"
   },
+  "G5": {
+    "b1_nondeterministic": true,
+    "by_width": {
+      "width_1": {
+        "max_ulp": 2,
+        "nondeterministic_repeats": 20,
+        "repeats": 20
+      },
+      "width_12": {
+        "max_ulp": 0,
+        "nondeterministic_repeats": 0,
+        "repeats": 20
+      },
+      "width_2": {
+        "max_ulp": 0,
+        "nondeterministic_repeats": 0,
+        "repeats": 20
+      },
+      "width_31": {
+        "max_ulp": 0,
+        "nondeterministic_repeats": 0,
+        "repeats": 20
+      },
+      "width_4": {
+        "max_ulp": 0,
+        "nondeterministic_repeats": 0,
+        "repeats": 20
+      }
+    },
+    "claim_supported": true,
+    "claim_under_test": "cumsum over a single [1, V] row is run-to-run non-deterministic on this device (fr13_device_multidraft_kernel.py, the stated reason for _FR13_FIXED32_TAW_PINNED_MIN_BATCH = 2)",
+    "gate": "G5_cumsum_run_to_run_determinism"
+  },
   "T1": {
-    "batched_24_gathered_ms": 0.5373881530761718,
-    "batched_all31_ms": 0.5882976150512695,
+    "batched_24_gathered_ms": 0.4981286239624023,
+    "batched_all31_ms": 0.5406719970703125,
     "bench": "T1_softmax_batching",
-    "incumbent_24_single_rows_ms": 2.2597702026367186,
-    "saving_vs_batched_24_ms": 1.7223820495605469,
-    "saving_vs_batched_all31_ms": 1.671472587585449,
-    "single_row_effective_gbps": 29.843859134966703,
-    "single_row_ms": 0.06656511783599854,
+    "incumbent_24_single_rows_ms": 1.5460794067382813,
+    "saving_vs_batched_24_ms": 1.047950782775879,
+    "saving_vs_batched_all31_ms": 1.0054074096679688,
+    "single_row_effective_gbps": 35.8185534591779,
+    "single_row_ms": 0.055461759567260745,
     "softmax_calls_per_step": 24,
     "vocab": 248320
   },
@@ -71,7 +104,7 @@
     "vocab_size": 248320,
     "walk_levels": 12
   },
-  "elapsed_s": 1.48,
+  "elapsed_s": 1.31,
   "environment": {
     "capability": [
       12,

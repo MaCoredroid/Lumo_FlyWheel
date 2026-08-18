@@ -8,8 +8,8 @@ pins is the part a GPU probe cannot see:
     serve it is today;
   * arming it does NOT drag in the all-parent candidate's B>=2 floor, which
     belongs to a different lever;
-  * arming it RAISES rather than doing nothing, because the walk is not wired
-    (the wiring is held behind a TAW source-digest re-attestation);
+  * arming it routes the walk to the batched cache at all three arm points,
+    and leaves the all-parent candidate's B>=2 selector exactly where it was;
   * the census that the wired lever would publish is recorded and honest --
     including the two extra row gathers the lever costs.
 """
@@ -79,21 +79,33 @@ def test_explicit_zero_does_not_defeat_an_armed_sidecar(
     assert taw._fr13_fixed32_taw_softmax_cache_requested(environ={FLAG: "0"}) is True
 
 
-def test_unarmed_guard_is_a_no_op() -> None:
-    """The guard must not fire on the deployed (unarmed) configuration."""
-    taw.assert_softmax_cache_not_armed(environ={})
-    taw.assert_softmax_cache_not_armed(environ={FLAG: "0"})
+def test_unarmed_resolution_is_identical_to_the_pre_lane3_expression(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default OFF must be byte-for-byte the incumbent resolution.
+
+    With the flag clear the shared resolver has to reduce EXACTLY to
+    _fr13_fixed32_taw_native_precompute_enabled(), which is what the three walk
+    arm points evaluated before this lane. Checked in both states of the native
+    selector so the reduction is proven, not sampled once.
+    """
+    monkeypatch.setenv(FLAG, "0")
+    for native in (False, True):
+        monkeypatch.setattr(
+            taw, "_fr13_fixed32_taw_native_precompute_enabled", lambda n=native: n
+        )
+        assert taw._fr13_fixed32_taw_probability_cache_requested() is native
 
 
-def test_arming_raises_because_the_walk_is_not_wired() -> None:
-    """A lever that arms into a no-op is worse than one that refuses."""
-    with pytest.raises(RuntimeError) as excinfo:
-        taw.assert_softmax_cache_not_armed(environ={FLAG: "1"})
-    message = str(excinfo.value)
-    # The refusal has to say WHY and WHERE, or the next reader re-derives it.
-    assert "NOT WIRED" in message
-    assert "_FR13_FIXED32_TAW_SOURCE_SHA256" in message
-    assert "committer_optimization.md" in message
+def test_arming_requests_the_cache_without_the_native_selector(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The lever must reach the walk on its own, with the candidate unarmed."""
+    monkeypatch.setenv(FLAG, "1")
+    monkeypatch.setattr(
+        taw, "_fr13_fixed32_taw_native_precompute_enabled", lambda: False
+    )
+    assert taw._fr13_fixed32_taw_probability_cache_requested() is True
 
 
 def test_recorded_census_for_the_wired_lever_is_honest() -> None:
@@ -141,27 +153,47 @@ def test_lever_does_not_move_the_all_parent_candidate(
     assert taw._FR13_FIXED32_TAW_PINNED_MIN_BATCH == 2
 
 
-def test_published_census_is_unchanged_while_unwired(
+def test_published_census_follows_the_arm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Until the walk is wired the published census must stay the stock one."""
+    """Unarmed publishes the stock census; armed publishes the cache census."""
     monkeypatch.setenv(FLAG, "0")
     published = taw._fr13_fixed32_taw_tensor_call_census(batch_size=1)
     assert published == dict(taw._FR13_FIXED32_TAW_TENSOR_CALL_CENSUS)
     assert published["full_vocab_softmax_calls"] == 24
 
+    monkeypatch.setenv(FLAG, "1")
+    published = taw._fr13_fixed32_taw_tensor_call_census(batch_size=1)
+    assert published == dict(taw._FR13_FIXED32_TAW_SOFTMAX_CACHE_TENSOR_CALL_CENSUS)
+    assert published["full_vocab_softmax_calls"] == 2
 
-def test_walk_chain_source_is_untouched_by_this_lane() -> None:
-    """Lane 3 must not have edited digest-covered walk source.
 
-    This is the invariant that let the lever land at all: the module gains a
-    resolver, a guard and a recorded census, and the walk itself is byte-for-byte
-    what the banked TAW PASS artifacts attest.
-    """
+def test_all_three_walk_arm_points_are_wired() -> None:
+    """A walk left on the old resolver would silently ignore the flag."""
     source = MODULE_PATH.read_text(encoding="utf-8")
-    assert (
-        source.count(
-            "native_precompute = _fr13_fixed32_taw_native_precompute_enabled()"
-        )
-        == 3
-    ), "a walk arm point was rewritten; that drifts the TAW source digest"
+    wired = source.count(
+        "native_precompute = _fr13_fixed32_taw_probability_cache_requested()"
+    )
+    stale = source.count(
+        "native_precompute = _fr13_fixed32_taw_native_precompute_enabled()"
+    )
+    assert wired == 3, f"expected 3 wired arm points, found {wired}"
+    assert stale == 0, "a walk still resolves through the pre-lane-3 helper"
+
+
+def test_source_digest_is_re_attested_to_the_wired_source() -> None:
+    """The pinned digest must match what the wired module actually computes.
+
+    A stale pin here is exactly the failure mode this lane spent its first hour
+    attributing (a5110fe71, 2026-08-01): the credential silently describing a
+    source that no longer exists.
+    """
+    import importlib
+
+    topology_path = MODULE_PATH.parent / "fr13_fixed32_topology.py"
+    assert topology_path.is_file()
+    contract = taw._fr13_fixed32_taw_source_contract(taw._fr13_fixed32_topology())
+    assert contract["source_contract_sha256"] == taw._FR13_FIXED32_TAW_SOURCE_SHA256
+    assert taw._FR13_FIXED32_TAW_SOURCE_SHA256 == (
+        "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d"
+    )
