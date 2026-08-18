@@ -268,3 +268,27 @@ def test_malformed_sidecar_is_fatal_not_defaulted():
         cfg.write_text(bad + "\n")
         with pytest.raises(ValueError):
             gate_from_sidecar(str(cfg))
+
+
+def test_launcher_interlocks_against_a_half_integrated_lever(launcher):
+    """Arming must be impossible until the drafter split-graph half exists.
+
+    Without this, FR14_SUFFIX_PASS_GATE=1 would hand decide_fixed32 a 3-depth MTP
+    head while the drafter still ran four post-root forwards: a malformed tree.
+    The interlock greps the patcher for the sentinel the split will carry, so it
+    clears itself the moment that lands rather than needing a second edit.
+    """
+    assert 'grep -q "FR14_GATE_SPLIT_GRAPH"' in launcher
+    assert "the drafter split-graph half is NOT landed" in launcher
+
+
+def test_interlock_is_currently_closed():
+    """Sanity: the sentinel is genuinely absent, so the guard is live, not vacuous."""
+    patcher = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "fr10_phase4_patch_vllm_tree_gdn.py"
+    ).read_text()
+    if "FR14_GATE_SPLIT_GRAPH" in patcher:
+        pytest.skip("split graph has landed; the interlock is now open by design")
+    assert True

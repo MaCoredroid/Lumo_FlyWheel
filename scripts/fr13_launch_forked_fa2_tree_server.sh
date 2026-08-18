@@ -5910,6 +5910,14 @@ if [[ "${FR14_SUFFIX_PASS_GATE:-0}" == "1" ]]; then
     echo "FR14_SUFFIX_PASS_GATE=1 is incompatible with FR13_TAIL_BRANCHES" >&2
     exit 2
   fi
+  if ! grep -q "FR14_GATE_SPLIT_GRAPH" "$REPO/scripts/fr10_phase4_patch_vllm_tree_gdn.py"; then
+    echo "FR14_SUFFIX_PASS_GATE=1 refused: the drafter split-graph half is NOT landed." >&2
+    echo "  The gate would hand decide_fixed32 a 3-depth MTP head while the drafter" >&2
+    echo "  still runs all four post-root forwards -- a malformed tree at the verifier." >&2
+    echo "  The interlock clears itself when the split lands (sentinel FR14_GATE_SPLIT_GRAPH)." >&2
+    echo "  see results/fr14_nvfp4_port_20260816/suffix_pass_gating.md" >&2
+    exit 2
+  fi
   echo "${FR14_SUFFIX_PASS_GATE_NGRAM:-8} ${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75} ${FR14_SUFFIX_PASS_GATE_MIN_HISTORY:-256}" > "$LOG_DIR/fr14_suffix_pass_gate.cfg"
   echo "[launch] SUFFIX PASS GATE ON -> /logs/fr14_suffix_pass_gate.cfg (ngram=${FR14_SUFFIX_PASS_GATE_NGRAM:-8} min_agree=${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75} min_history=${FR14_SUFFIX_PASS_GATE_MIN_HISTORY:-256})"
 else
