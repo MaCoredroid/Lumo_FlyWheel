@@ -3664,6 +3664,118 @@ _GQA_PAIR_SPLITK_LAYOUT_SUBSTITUTIONS = (
 )
 
 
+def _patch_fixed32_combine_static_geometry(
+    path: Path,
+    *,
+    fixed32_query_gqa_pair32_splitk_b1: bool = False,
+) -> bool:
+    """Give FA2's combine kernel the static geometry it is already pinned to.
+
+    FOUND BY THE GUARD, NOT AROUND IT. The promoted build script's SASS contract
+    forbids LDL/STL/CALL, and the split-K TU's first compile tripped it with
+    seven CALL.REL.NOINC into a 64-bit integer-division helper -- all of them
+    inside FA2's own combine kernel, which the promoted arm never instantiates
+    because it has no combine. STACK and LOCAL were both 0, so nothing had
+    spilled; the calls were runtime division, and the honest fix is to remove
+    the division rather than to widen the contract that caught it.
+
+    Two sources, both pure ADDRESSING -- no arithmetic on any accumulated value
+    changes, and no store moves to a different element:
+
+    1. The unpadded-LSE tensor is built by composing three CuTe layouts whose
+       flat extent is an index_t, so every store evaluates an int64 div/mod. At
+       sequences == 1 that composition reduces exactly to the identity: the
+       composed offset is q + h*seqlen_q*b + b_idx*seqlen_q, which at b == 1 is
+       q + h*seqlen_q, and the flat index being stored IS h*seqlen_q + q. The
+       two branches therefore address the SAME element, and the padded branch
+       needs no division at all.
+
+    2. The output epilogue decomposes the flat index with two runtime
+       divisions. At sequences == 1 the batch index is 0, and kStaticQueryRows
+       is a power of two, so the head and row fall out of a shift and a mask.
+
+    Neither reduction is an assumption: the split-K launcher TORCH_CHECKs
+    b == 1, h == 24 and seqlen_q == 32 before it launches anything, so a
+    geometry that broke the reduction cannot reach this kernel.
+    """
+    if not fixed32_query_gqa_pair32_splitk_b1:
+        return False
+    text = path.read_text()
+    marker = "// FR14_FA2_COMBINE_STATIC_GEOMETRY"
+    if marker in text:
+        if text.count(marker) != 2:
+            raise RuntimeError("combine static geometry drifted")
+        return False
+
+    traits = r'''    static_assert(kNThreads == 128, "We assume that each block has 128 threads");
+'''
+    static_traits = r'''    static_assert(kNThreads == 128, "We assume that each block has 128 threads");
+    // FR14_FA2_COMBINE_STATIC_GEOMETRY: the split-K arm's traits carry the
+    // exact served geometry, and its launcher refuses to run at any other.
+    constexpr int kStaticCombineRows = StaticQueryRows<Kernel_traits>::value;
+    constexpr int kStaticCombineSequences =
+        StaticQueryBatchLayout<Kernel_traits>::sequences;
+    constexpr bool kStaticCombineBatch =
+        kStaticCombineSequences == 1 && kStaticCombineRows != 0;
+    static_assert(
+        !kStaticCombineBatch
+        || (kStaticCombineRows & (kStaticCombineRows - 1)) == 0,
+        "static combine geometry requires a power-of-two query-row count");
+'''
+    if text.count(traits) != 1:
+        raise RuntimeError("combine trait anchor drifted")
+    text = text.replace(traits, static_traits, 1)
+
+    lse_store = r'''        if (params.unpadded_lse) {
+            const index_t lse_offset = row_offset_lse + tidx / kRowsPerLoadTranspose;
+            if (lse_offset < lse_size) {
+                gLSE_unpadded(lse_offset) = lse_logsum;
+            }
+        } else {
+'''
+    static_lse_store = r'''        if constexpr (kStaticCombineBatch) {
+            // FR14_FA2_COMBINE_STATIC_GEOMETRY: at b == 1 the composed
+            // unpadded layout and the flat layout name the same element, so
+            // the store is the same store without the int64 division.
+            const index_t lse_offset = row_offset_lse + tidx / kRowsPerLoadTranspose;
+            if (lse_offset < lse_size) {
+                gLSE(tidx / kRowsPerLoadTranspose) = lse_logsum;
+            }
+        } else if (params.unpadded_lse) {
+            const index_t lse_offset = row_offset_lse + tidx / kRowsPerLoadTranspose;
+            if (lse_offset < lse_size) {
+                gLSE_unpadded(lse_offset) = lse_logsum;
+            }
+        } else {
+'''
+    if text.count(lse_store) != 1:
+        raise RuntimeError("combine unpadded-LSE store anchor drifted")
+    text = text.replace(lse_store, static_lse_store, 1)
+
+    decompose = r'''            const int batch_idx = idx / (params.h * params.seqlen_q);
+            const int head_idx = (idx - batch_idx * (params.h * params.seqlen_q)) / params.seqlen_q;
+            // The index to the rows of Q
+            const int row = idx - batch_idx * (params.h * params.seqlen_q) - head_idx * params.seqlen_q;
+'''
+    static_decompose = r'''            int batch_idx, head_idx, row;
+            if constexpr (kStaticCombineBatch) {
+                batch_idx = 0;
+                head_idx = idx / kStaticCombineRows;
+                row = idx & (kStaticCombineRows - 1);
+            } else {
+                batch_idx = idx / (params.h * params.seqlen_q);
+                head_idx = (idx - batch_idx * (params.h * params.seqlen_q)) / params.seqlen_q;
+                // The index to the rows of Q
+                row = idx - batch_idx * (params.h * params.seqlen_q) - head_idx * params.seqlen_q;
+            }
+'''
+    if text.count(decompose) != 1:
+        raise RuntimeError("combine index-decomposition anchor drifted")
+    text = text.replace(decompose, static_decompose, 1)
+    path.write_text(text)
+    return True
+
+
 def _patch_fixed32_query_gqa_pair_splitk_layout(
     path: Path,
     *,
@@ -4397,6 +4509,15 @@ def patch_fa2_source(
     )
     flash_fwd_kernel_changed = (
         _patch_fixed32_query_gqa_pair_splitk_layout(
+            files["flash_fwd_kernel.h"],
+            fixed32_query_gqa_pair32_splitk_b1=(
+                fixed32_query_gqa_pair32_splitk_b1
+            ),
+        )
+        or flash_fwd_kernel_changed
+    )
+    flash_fwd_kernel_changed = (
+        _patch_fixed32_combine_static_geometry(
             files["flash_fwd_kernel.h"],
             fixed32_query_gqa_pair32_splitk_b1=(
                 fixed32_query_gqa_pair32_splitk_b1

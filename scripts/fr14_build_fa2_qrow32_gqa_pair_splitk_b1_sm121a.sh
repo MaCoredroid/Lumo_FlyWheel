@@ -50,7 +50,7 @@ IMAGE='vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada
 FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
 # Pinned by the codegen, ahead of the build: scripts/fr13_qrow32_b1_pass_sidecar.py
 # SPLITK_SOURCE_CLOSURE_SHA256.
-SOURCE_CLOSURE_SHA256=54287f754b8581d445196edcaa71356acb70860e6f6247ae5dd96094f116865b
+SOURCE_CLOSURE_SHA256=c88a767e97e29dd84054450b67aa4266c3462c2b6ceed2c85ee4721bb593dc13
 
 # THE REPRODUCIBILITY CREDENTIAL (Mark's ruling, 2026-08-18). This is the digest
 # of the disassembled device code, and it answers the question the .so sha256

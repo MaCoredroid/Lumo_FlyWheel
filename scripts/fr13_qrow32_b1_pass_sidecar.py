@@ -306,14 +306,14 @@ SPLITK_SOURCE_FILES = {
         "c526c4d42b1d1c6601fde785f6881c11dfeab4f3b1fa7167bde3b2ab866dd126"
     ),
     "csrc/flash_attn/src/flash_fwd_kernel.h": (
-        "f9c313437e972b27081a8bd4ae523aa845bffdaa368e1a36d0c1b979e96d7558"
+        "d7100fc4bd829705d5b122989dc5dbc9f7e14f54bb1c7fe2c2f34c23afecaae8"
     ),
     "csrc/flash_attn/src/utils.h": (
         "5887df63c79a3e42fb9ddad93f64fe3c0625dbee4c547af68b6f2108b7beeb5f"
     ),
 }
 SPLITK_SOURCE_CLOSURE_SHA256 = (
-    "54287f754b8581d445196edcaa71356acb70860e6f6247ae5dd96094f116865b"
+    "c88a767e97e29dd84054450b67aa4266c3462c2b6ceed2c85ee4721bb593dc13"
 )
 SPLITK_CANDIDATE_SHA256 = ""
 SPLITK_CANDIDATE_SIZE = 0
