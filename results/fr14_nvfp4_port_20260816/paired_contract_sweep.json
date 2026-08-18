@@ -72,8 +72,14 @@
    "kind": "shape-literal",
    "ok": true,
    "detail": "41 blobs scanned (24 unparseable, textually checked), 18 literals adjudicated, 0 unreviewed"
+  },
+  {
+   "pair": "replay-count literals across ALL injected blobs",
+   "kind": "shape-literal",
+   "ok": true,
+   "detail": "1 per-ordinal + 18 per-function adjudications, 0 unreviewed"
   }
  ],
- "n_pairs": 12,
+ "n_pairs": 13,
  "n_stale": 0
 }

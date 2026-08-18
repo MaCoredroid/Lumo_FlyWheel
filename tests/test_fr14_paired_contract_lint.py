@@ -15,6 +15,7 @@ things with it:
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -48,7 +49,7 @@ def test_inventory_covers_every_pair_kind():
 
 def test_inventory_size_is_recorded():
     """Adding a pair without updating the count is itself a one-sided update."""
-    assert len(sweep.PAIRS) == 12, (
+    assert len(sweep.PAIRS) == 13, (
         "pair count changed -- update the sweep note in "
         "results/fr14_nvfp4_port_20260816/suffix_pass_gating.md 13"
     )
@@ -364,3 +365,102 @@ def test_unparseable_blobs_are_checked_not_skipped():
     assert ok
     assert "unparseable, textually checked" in detail
     assert sweep.ADJUDICATED_TEXTUAL, "textual adjudications must exist"
+
+
+# ---------------------------------------------------------------------------
+# The REPLAY dimension (15th site) and why it must be keyed on position.
+# ---------------------------------------------------------------------------
+
+def test_replay_literal_scan_is_clean():
+    ok, detail = sweep.replay_literal_scan()
+    assert ok, f"unadjudicated replay-position literals: {detail}"
+
+
+def test_replay_scan_can_actually_fail(monkeypatch):
+    monkeypatch.setattr(
+        sweep, "ADJUDICATED_REPLAY_FUNCTIONS",
+        {k: v for k, v in sweep.ADJUDICATED_REPLAY_FUNCTIONS.items()
+         if k != "_fr13_fixed32_observed_take"},
+    )
+    ok, detail = sweep.replay_literal_scan()
+    assert not ok and any("observed_take" in d for d in detail), detail
+
+
+def test_the_flush_twins_are_character_identical_and_mean_opposite_things():
+    """The sharpest statement of the class this campaign kept hitting.
+
+    `evidence.get("matching_replays") != 1` appears at TWO positions in the
+    fixed_flush blob's reconcile. One guards the TARGET forward graph, which
+    really is replayed once per step -- correct, must not change. The other
+    guarded the DRAFTER, where an armed ungated step replays twice: the 15th
+    site. Byte-for-byte identical, opposite verdicts.
+
+    A text-keyed allowlist marks both OK and hides the real one. The runner's own
+    first draft did exactly that. So the adjudication is keyed on POSITION, and
+    this test asserts the two remain distinguishable only that way.
+    """
+    for lineno, text, _tree in sweep.all_injected_blobs():
+        if lineno != 39286:
+            continue
+        lines = text.split("\n")
+        target = [
+            i + 1 for i, l in enumerate(lines)
+            if l.strip() == 'or evidence.get("matching_replays") != 1'
+        ]
+        drafter = [
+            i + 1 for i, l in enumerate(lines)
+            if l.strip() == 'or evidence.get("matching_replays")'
+        ]
+        assert len(target) == 1, (
+            "the TARGET twin must still be there and untouched: " + str(target)
+        )
+        assert drafter, "the DRAFTER site must now be the derived form"
+        # and they are in the same function -- function name alone cannot separate
+        assert min(drafter) > max(target), (
+            "the drafter site follows the target site in the same reconcile"
+        )
+        return
+    pytest.skip("fixed_flush blob not present")
+
+
+def test_text_keying_would_have_hidden_the_15th_site():
+    """Demonstrate the failure mode, rather than asserting it in prose."""
+    for lineno, text, _tree in sweep.all_injected_blobs():
+        if lineno != 39286:
+            continue
+        stale_text = 'or evidence.get("matching_replays") != 1'
+        # restore the pre-fix source: both twins identical again
+        pre_fix = re.sub(
+            r'or evidence\.get\("matching_replays"\)\s*\n\s*'
+            r'!= runtime\.get\("graph_replays"\)',
+            stale_text,
+            text,
+        )
+        occurrences = [
+            i + 1 for i, l in enumerate(pre_fix.split("\n"))
+            if l.strip() == stale_text
+        ]
+        assert len(occurrences) == 2, occurrences
+        # a text-keyed allowlist has ONE entry and suppresses BOTH
+        assert len({stale_text}) == 1
+        # a position-keyed allowlist has to name each, so one stays visible
+        assert len(set(occurrences)) == 2
+        return
+    pytest.skip("fixed_flush blob not present")
+
+
+def test_boundary_path_is_covered_in_all_three_dimensions():
+    """columns / passes / replays -- the flush blob is scanned by each."""
+    assert any(
+        lineno == 39286 for lineno, _t, tree in sweep.all_injected_blobs()
+        if tree is not None
+    ), "the flush blob must be parseable and scanned"
+    ok_shape, _ = sweep.shape_literal_scan()
+    ok_replay, _ = sweep.replay_literal_scan()
+    assert ok_shape and ok_replay
+    assert any(
+        "_fr13_f32_flush" in fn for fn in sweep.ADJUDICATED_REPLAY_FUNCTIONS
+    ) or any(
+        key[1].startswith("_fr13_f32_flush")
+        for key in sweep.ADJUDICATED_REPLAY_POSITIONS
+    ), "the boundary path must appear in the replay adjudications"

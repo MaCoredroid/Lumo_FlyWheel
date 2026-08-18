@@ -535,3 +535,164 @@ def _banked_event_or_skip():
             pytest.skip(f"banked fixture stale outside this lane: {exc}")
         raise
     return ev
+
+
+# ---------------------------------------------------------------------------
+# The TASK-BOUNDARY FLUSH path (15th and 16th sites).
+#
+# `_fr13_f32_flush_reconcile` runs once per task boundary, which is why four
+# boots never reached it -- and why it must be reachable here. The function pulls
+# its whole world from the gdn module, so the two invariants that carry the
+# drafter's shape are extracted BY POSITION and executed standalone.
+# ---------------------------------------------------------------------------
+
+FLUSH_BLOB = 39286
+
+
+def _flush_source(first_line, last_line):
+    """Extract a span of _fr13_f32_flush_reconcile by position, dedented."""
+    import textwrap
+
+    import fr14_paired_contract_sweep as sweep
+
+    for lineno, text, _tree in sweep.all_injected_blobs():
+        if lineno == FLUSH_BLOB:
+            body = "\n".join(text.split("\n")[first_line - 1:last_line])
+            return textwrap.dedent(body)
+    pytest.skip("flush blob not found")
+
+
+def _drafter_reconcile_loop():
+    src = _flush_source(397, 428)
+    assert "zip(events, drafter_evidence" in src, "extracted the wrong span"
+    assert "matching_replays" in src
+    return src
+
+
+def _registry_reconcile_block():
+    import fr14_paired_contract_sweep as sweep
+
+    for lineno, text, _tree in sweep.all_injected_blobs():
+        if lineno == FLUSH_BLOB:
+            lines = text.split("\n")
+            start = next(
+                i for i, l in enumerate(lines)
+                if "measured_by_batch = {}" in l
+            )
+            end = next(
+                i for i, l in enumerate(lines[start:], start)
+                if l.strip() == "if any("
+            )
+            import textwrap
+
+            return textwrap.dedent("\n".join(lines[start:end]))
+    pytest.skip("flush blob not found")
+
+
+def _event(replays, calls, index=0):
+    return {
+        "mode": MODE,
+        "batch_size": 1,
+        "event_index": index,
+        "forward_step_index": index,
+        "drafter_runtime": {
+            "graph_id": 7,
+            "graph_signature": "s" * 64,
+            "graph_captures": 0,
+            "graph_replays": replays,
+            "mtp_forward_calls": calls,
+        },
+    }
+
+
+def _evidence(replays, index=0):
+    return {
+        "mode": MODE,
+        "batch_size": 1,
+        "event_index": index,
+        "forward_step_index": index,
+        "event_complete": True,
+        "proposal_begins": 1,
+        "proposal_ends": 1,
+        "matching_replays": replays,
+        "graph_id": 7,
+        "graph_signature": "s" * 64,
+        "graph_captures": 0,
+    }
+
+
+def _run_reconcile(events, evidences):
+    ns = {"events": events, "drafter_evidence": evidences}
+    exec(compile(_drafter_reconcile_loop(), "<flush>", "exec"), ns)
+
+
+@pytest.mark.parametrize("replays,calls", [(1, 4), (2, 4), (1, 2)])
+def test_boundary_flush_accepts_every_legal_step(replays, calls):
+    """(4,1) unsplit, (4,2) armed ungated -- the 15th site -- and (2,1) gated."""
+    _run_reconcile([_event(replays, calls)], [_evidence(replays)])
+
+
+def test_boundary_flush_refuses_a_replay_count_that_disagrees():
+    with pytest.raises(RuntimeError, match="did not attest event"):
+        _run_reconcile([_event(2, 4)], [_evidence(1)])
+
+
+def test_the_15th_site_regression_is_caught_here(monkeypatch):
+    """Restore the literal and the armed UNGATED step must be refused again."""
+    import re
+
+    src, n = re.subn(
+        r'or evidence\.get\("matching_replays"\)\s*\n\s*'
+        r'!= runtime\.get\("graph_replays"\)',
+        'or evidence.get("matching_replays") != 1',
+        _drafter_reconcile_loop(),
+    )
+    assert n == 1, "regression anchor moved"
+    ns = {"events": [_event(2, 4)], "drafter_evidence": [_evidence(2)]}
+    with pytest.raises(RuntimeError, match="did not attest event"):
+        exec(compile(src, "<flush-stale>", "exec"), ns)
+
+
+def _run_registry(events, registry):
+    ns = {"events": events, "drafter_registry": registry}
+    src = _registry_reconcile_block() + (
+        "\nif any(\n"
+        "    int(row['measured_replays'])\n"
+        "    != measured_by_batch[(int(row['batch_size']), int(row.get('segment', 0)))]\n"
+        "    for row in drafter_registry\n"
+        "):\n"
+        "    raise RuntimeError('registry/event counts diverged')\n"
+    )
+    exec(compile(src, "<flush-registry>", "exec"), ns)
+
+
+def _row(segment, measured):
+    return {"batch_size": 1, "segment": segment, "measured_replays": measured}
+
+
+def test_boundary_registry_accepts_a_mixed_gated_serve():
+    """THE 16th SITE: `hi` replays only on ungated steps, `lo` on every step."""
+    events = [_event(2, 4, 0), _event(1, 2, 1), _event(2, 4, 2), _event(1, 2, 3)]
+    _run_registry(events, [_row(0, 4), _row(1, 2)])
+
+
+def test_boundary_registry_accepts_an_unsplit_serve():
+    events = [_event(1, 4, i) for i in range(3)]
+    _run_registry(events, [_row(0, 3)])
+
+
+def test_boundary_registry_refuses_a_miscounted_segment():
+    events = [_event(2, 4, 0), _event(1, 2, 1)]
+    with pytest.raises(RuntimeError, match="diverged"):
+        _run_registry(events, [_row(0, 2), _row(1, 2)])  # hi should be 1
+
+
+def test_the_16th_site_regression_is_caught_here():
+    """The old form attested BOTH rows against one event count."""
+    events = [_event(2, 4, 0), _event(1, 2, 1)]
+    registry = [_row(0, 2), _row(1, 1)]
+    _run_registry(events, registry)          # derived form accepts it
+    old = {1: len(events)}                   # the shipped (broken) form
+    assert any(
+        int(r["measured_replays"]) != old[int(r["batch_size"])] for r in registry
+    ), "the old per-batch count would have accepted a gated serve"

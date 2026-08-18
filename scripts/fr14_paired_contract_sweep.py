@@ -526,6 +526,123 @@ def shape_literal_scan():
     )
 
 
+# ---------------------------------------------------------------------------
+# The REPLAY dimension. shape_literal_scan()'s magnitudes cover COLUMNS (15/6/10)
+# and PASSES (4/5). The split also moves REPLAYS 1 -> 2, and neither 1 nor 2 is a
+# shape magnitude, so the 15th site was scanned without being flagged.
+#
+# Adjudication is keyed STRUCTURALLY -- (blob, enclosing function, ordinal) --
+# never on the literal's text, and never on the raw line number.
+#
+#   * not text: `evidence.get("matching_replays") != 1` occurs TWICE in the
+#     fixed_flush blob and means OPPOSITE things. At the forward-graph site one
+#     replay per step is correct; at the drafter site an armed ungated step
+#     replays twice and the literal was the 15th site. The runner's own first
+#     draft keyed on text and marked both OK -- reproducing, to the character,
+#     the blind spot it was written to expose.
+#   * not line numbers: fixing the drafter site added lines and moved every
+#     position after it. An allowlist that drifts on every edit trains people to
+#     refresh it without reading, which is the same failure one step removed.
+REPLAY_NAMES = (
+    "replay", "replays", "graph_captures", "capture_count", "prior_replays",
+    "matching_replays", "measured_replays", "unmeasured_replays",
+)
+REPLAY_LITERAL = re.compile(
+    r"(?:[=!<>]=|[-+*]|\breturn\b|:)\s*(?:\w+\s*[-+*]\s*)?\b([12])\b"
+)
+# (blob_lineno, enclosing function, ordinal within that function) -> rationale
+ADJUDICATED_REPLAY_POSITIONS = {
+    (39286, "_fr13_f32_flush_reconcile", 1):
+        "FORWARD-graph evidence: the forward CUDA graph is replayed once per "
+        "step regardless of the drafter's pass split. Correct; do not touch. "
+        "Its character-identical twin in this same function was the 15th site.",
+}
+
+
+# Category adjudications keyed on the ENCLOSING FUNCTION -- structural identity,
+# not the literal's text. Each states why its replay count cannot move with the
+# drafter's pass split. A function that holds twins with OPPOSITE verdicts is
+# excluded here and adjudicated per-ordinal above.
+ADJUDICATED_REPLAY_FUNCTIONS = {
+    # --- drafter chain: already derived from the proposal/evidence ---
+    "_fr13_fixed32_drafter_graph_replay":
+        "derived: prior_replays + 1, and the evidence check is tied to it",
+    "_fr13_fixed32_drafter_proposal_end":
+        "derived from proposal['graph_replays'] (12th-site fix)",
+    "_fr13_fixed32_drafter_graph_capture_begin":
+        "graph_replays must be 0 at capture begin in EVERY shape; the capture "
+        "counter is derived from the segment",
+    "_fr13_fixed32_observed_build_record":
+        "holds BOTH chains: the target/provenance pair legitimately replays once "
+        "per step, and the drafter pair was tied to runtime['graph_replays'] by "
+        "the 13th-site fix",
+    # --- target forward graph: one replay per step in every shape ---
+    "_fr13_fixed32_forward_graph_registry": "forward graph, once per step",
+    "_fr13_fixed32_observed_graph_replay": "forward graph emitter, once per step",
+    "_fr13_fixed32_observed_take": "forward graph replay count, once per step",
+    # --- committer graph: unaffected by the drafter's pass count ---
+    "_fr13_fixed32_observed_commit": "committer graph, once per event",
+    "_fr13_fixed32_failure_counts": "committer graph, once per event",
+    "_fr13_f32_flush_boot_warm_metrics": "committer replays vs boot capacity",
+    "_fr13_fixed32_warm_final_full_postprocess": "committer replays vs capacity",
+    # --- draft-head / BM8 levers: gate-variant, but refused with the gate ---
+    "_fr13_dh_fp8_note_replay": "draft-head FP8 lever, refused with the gate",
+    "_fr13_dh_m32_note_production_replay": "M32 lever, refused with the gate",
+    "_fr13_dh_u8_note_production_replay": "U8 lever, refused with the gate",
+    "_fr13_dfwd_unified_bm8_production_replay_installed":
+        "BM8 production, refused with the gate",
+    # --- name collisions: not replay COUNTS at all ---
+    "_lumo_tree_canonical_multidraft_sample": "a [:2] slice of replay flags",
+    "__init__": "a comment mentioning pre-replay timing",
+    "<module>": "a comment mentioning replay stack width",
+}
+
+
+def _enclosing_functions(tree):
+    spans = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.FunctionDef):
+            spans.append((n.lineno, n.end_lineno or n.lineno, n.name))
+    spans.sort(key=lambda s: (s[0], -s[1]))
+    return spans
+
+
+def replay_literal_scan():
+    """Every literal 1 or 2 in a replay-counting position, in every blob."""
+    unreviewed = []
+    for lineno, text, tree in all_injected_blobs():
+        spans = _enclosing_functions(tree) if tree is not None else []
+        ordinals = {}
+        for offset, raw in enumerate(text.split("\n"), start=1):
+            low = raw.lower()
+            if not any(n in low for n in REPLAY_NAMES):
+                continue
+            if raw.lstrip().startswith("#"):
+                continue
+            if REPLAY_LITERAL.search(raw) is None:
+                continue
+            fn = "<module>"
+            for a, b, name in spans:
+                if a <= offset <= b:
+                    fn = name
+            ordinals[fn] = ordinals.get(fn, 0) + 1
+            key = (lineno, fn, ordinals[fn])
+            if key in ADJUDICATED_REPLAY_POSITIONS:
+                continue
+            if fn in ADJUDICATED_REPLAY_FUNCTIONS:
+                continue
+            unreviewed.append(
+                f"blob@{lineno} {fn}#{ordinals[fn]}: {raw.strip()[:80]}"
+            )
+    if unreviewed:
+        return False, sorted(unreviewed)
+    return True, (
+        f"{len(ADJUDICATED_REPLAY_POSITIONS)} per-ordinal + "
+        f"{len(ADJUDICATED_REPLAY_FUNCTIONS)} per-function adjudications, "
+        "0 unreviewed"
+    )
+
+
 PAIRS = (
     ("contract <-> injected blob (step shapes)", "contract/consumer",
      lambda blob, topo: pair_contract_vs_blob(blob, topo)),
@@ -551,6 +668,8 @@ PAIRS = (
      lambda blob, topo: pair_pack_identity_under_both_shapes(topo)),
     ("shape literals across ALL injected blobs", "shape-literal",
      lambda blob, topo: shape_literal_scan()),
+    ("replay-count literals across ALL injected blobs", "shape-literal",
+     lambda blob, topo: replay_literal_scan()),
 )
 
 

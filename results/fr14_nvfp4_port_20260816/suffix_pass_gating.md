@@ -884,3 +884,103 @@ classes now fail in a unit test, and the blob-enumeration hole that hid this one
 the root rather than per-instance.
 
 Gate remains **default-OFF**.
+
+
+---
+
+# 15. ROUND 4: the gate served a task to completion, then two boundary-path sites
+
+**The lever worked.** Task 12907 ran to completion under arm — 430 s of gated traffic, every
+per-step interlock green, and the matched-twin acceptance came in **+2.90%**, inside the
+pre-registered band, with the conditional survivals showing exactly the designed trade. The
+refusal moved off the per-step path entirely and onto the **task-boundary flush**.
+
+## 15.1 The 15th site, and the sharpest statement of the class yet
+
+`_fr13_f32_flush_reconcile` demanded `evidence.get("matching_replays") != 1 -> refuse` against
+a legal armed ungated event (2 replays). Same shape as the 12th: a drafter-chain replay count
+pinned to the single-graph value.
+
+What makes it the sharpest case in the series is the runner's precision finding: **that
+fragment occurs TWICE in the same function, character-identical, meaning opposite things.**
+
+| position | guards | verdict |
+|---|---|---|
+| `blob@39286 +379` | the **TARGET** forward graph | correct — really is one replay per step |
+| `blob@39286 +409` | the **DRAFTER** | the 15th site |
+
+Byte-for-byte the same line; one must never change and the other had to. The runner's own
+first-draft scan keyed on text and marked **both** OK — reproducing, to the character, the
+blind spot it was written to expose. I fixed **+409 only, by position**, and the target twin
+is asserted still present and untouched.
+
+## 15.2 A 16th site, found by sweeping the boundary path instead of booting it
+
+Thirty lines further on, the same function reconciles the drafter graph registry:
+
+```
+measured_by_batch = {batch: <count of events at that batch>}
+if any(row["measured_replays"] != measured_by_batch[row["batch_size"]] ...)
+```
+
+Under a split capture `lo` is replayed on **every** step and `hi` **only on ungated** ones, so
+one per-batch event count cannot attest both rows. The moment the gate fires even once,
+`hi`'s `measured_replays` falls below the event count and the flush refuses a legal serve.
+
+Now derived per **segment**: segment 0 once per event, segment 1 once per event that actually
+replayed twice. With no split every row is segment 0 and the expression is exactly the
+previous count.
+
+```
+all ungated (armed): 4 events -> lo 4, hi 4
+mixed gated:         4 events -> lo 4, hi 2
+unsplit:             3 events -> lo 3, hi 0
+```
+
+**This one cost no boot.** It is the first site in the series found by looking rather than by
+serving.
+
+## 15.3 The boundary path is now reachable in tests
+
+The once-per-boundary path is why four boots never reached it. `_fr13_f32_flush_reconcile`
+pulls its whole world from the gdn module, so the two invariants that carry the drafter's
+shape are **extracted by position and executed standalone**: the drafter reconciliation loop
+across all three legal step shapes, and the registry reconciliation across mixed-gated,
+all-ungated and unsplit serves — plus a regression for each that restores the shipped literal
+and asserts the refusal returns.
+
+## 15.4 The replay dimension, folded into the lint
+
+The runner's `promotion_ab_replay_literal_scan.py` named the gap exactly: `shape_literal_scan`
+covers **columns** (15/6/10) and **passes** (4/5), but the split also moves **replays 1 → 2**,
+and neither 1 nor 2 is a shape magnitude. The 15th site was scanned and not flagged.
+
+Folded in as pair 13, with two deliberate departures from the runner's draft:
+
+* keyed on **(blob, enclosing function, ordinal)** — structural identity — rather than raw
+  line numbers, because fixing the drafter site *added lines and moved every position after
+  it*. An allowlist that drifts on every edit trains people to refresh it without reading,
+  which is the same failure one step removed.
+* the one function holding twins with opposite verdicts is adjudicated **per ordinal**;
+  everything else is adjudicated **per function**, each with the argument for why its replay
+  count cannot move with the pass split.
+
+**38 replay-position candidates, all adjudicated, 0 unreviewed:** the drafter chain (already
+derived), the target forward graph (once per step in every shape), the committer graph
+(unaffected), the draft-head/BM8 levers (gate-variant but refused with the gate), and four
+name collisions that are not replay counts at all.
+
+## 15.5 Inventory
+
+**13 pairs, 0 stale**, now covering all three dimensions the split moves:
+
+| dimension | detector | state |
+|---|---|---|
+| columns (15/6/10/31) | `shape_literal_scan` + pack-identity evaluation | clean |
+| passes (5→3, post-root 4→2) | shape magnitudes + contract pairs | clean |
+| **replays (1→2)** | **`replay_literal_scan`, position-keyed** | **clean** |
+
+Sites 11–14 were found by boots; **site 16 was found by the sweep.** That is the trend the
+cost math asked for.
+
+Gate remains **default-OFF**.

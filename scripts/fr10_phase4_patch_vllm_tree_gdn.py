@@ -39691,7 +39691,16 @@ def _fr13_f32_flush_reconcile():
             or evidence.get("event_complete") is not True
             or evidence.get("proposal_begins") != 1
             or evidence.get("proposal_ends") != 1
-            or evidence.get("matching_replays") != 1
+            # FR14_GATE_SPLIT_GRAPH (15th site, task-boundary flush). The
+            # DRAFTER chain records one matching replay per segment, so an
+            # armed ungated event carries 2. Tie it to the runtime evidence
+            # this event is being reconciled against.
+            # DO NOT copy this to the character-identical line ~30 above:
+            # that one validates the TARGET forward graph, which really does
+            # replay exactly once per step. The two lines are byte-for-byte
+            # the same and mean opposite things -- the lint keys on POSITION.
+            or evidence.get("matching_replays")
+            != runtime.get("graph_replays")
             or evidence.get("graph_id") != runtime.get("graph_id")
             or evidence.get("graph_signature")
             != runtime.get("graph_signature")
@@ -39703,15 +39712,32 @@ def _fr13_f32_flush_reconcile():
                 + repr((event, evidence))
             )
     drafter_registry = gdn._fr13_fixed32_drafter_graph_registry()
-    measured_by_batch = {
-        batch: sum(
-            int(event["batch_size"]) == batch for event in events
+    # FR14_GATE_SPLIT_GRAPH (16th site, same task-boundary path as the 15th,
+    # found by the sweep rather than by a boot). Under a split capture `lo` is
+    # replayed on EVERY step and `hi` only on ungated ones, so ONE per-batch
+    # event count cannot attest both rows -- the moment the gate fires even once,
+    # `hi`'s measured_replays falls below the event count and this refuses a
+    # legal serve. Derive each SEGMENT's expectation from the events themselves:
+    # segment 0 once per event, segment 1 once per event that actually replayed
+    # twice. With no split every row is segment 0 and this is exactly the
+    # previous count.
+    measured_by_batch = {}
+    for batch in (1, 2, 3, 4):
+        events_at_batch = [
+            event for event in events if int(event["batch_size"]) == batch
+        ]
+        measured_by_batch[(batch, 0)] = len(events_at_batch)
+        measured_by_batch[(batch, 1)] = sum(
+            int(
+                (event.get("drafter_runtime") or {}).get("graph_replays", 1)
+            ) > 1
+            for event in events_at_batch
         )
-        for batch in (1, 2, 3, 4)
-    }
     if any(
         int(row["measured_replays"])
-        != measured_by_batch[int(row["batch_size"])]
+        != measured_by_batch[
+            (int(row["batch_size"]), int(row.get("segment", 0)))
+        ]
         for row in drafter_registry
     ):
         raise RuntimeError(
