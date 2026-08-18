@@ -77,7 +77,10 @@ def test_b1_gqa_pair_sentinel_extends_the_b1_ascii_run_and_stays_distinct() -> N
     assert sentinel != module.FIXED32_QUERY_TILE32_BATCH_STRIDE_SENTINEL
     sentinels = module._FIXED32_BATCH_STRIDE_SENTINELS
     assert sentinel in sentinels
-    assert len(set(sentinels)) == len(sentinels) == 6
+    # FR17 (the FR14 split-K arm) extends the run; the invariant that matters
+    # is pairwise distinctness, since a shared tag would route one arm's
+    # traffic into another arm's kernel.
+    assert len(set(sentinels)) == len(sentinels) == 7
 
 
 # -------------------------------------------------------- translation unit
@@ -535,7 +538,11 @@ def test_b1_gqa_pair_audit_allowance_is_narrow_and_additive_only() -> None:
     assert "imports removed:" in recipe
     assert '[[ "$symbol" == *@GLIBCXX_* ]]' in recipe
     assert "not a versioned libstdc++ import" in recipe
-    assert "grep -qx 'libstdc++.so.6' \"$BUILD/candidate_dt_needed.txt\"" in recipe
+    # DT_NEEDED is captured from `readelf -W -d`, whose fifth field is the
+    # BRACKETED soname. The original whole-line match on the unbracketed name
+    # could never succeed, which made the allowance dead on arrival; bdd2c18e5
+    # fixed the recipe and this assertion was left describing the defect.
+    assert "grep -qxF '[libstdc++.so.6]' \"$BUILD/candidate_dt_needed.txt\"" in recipe
     # Resolvability is proven by the mandatory load, not asserted textually.
     assert "MANDATORY" in recipe
     assert "set -o pipefail" in recipe

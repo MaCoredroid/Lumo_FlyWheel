@@ -1,0 +1,89 @@
+{
+  "abi_diffs_bytes": {
+    "defined_dynamic": 0,
+    "dt_needed": 0,
+    "runtime_path": 0,
+    "undefined_dynamic": 0
+  },
+  "baseline_sass_digest": {
+    "baseline_sass_digest_pinned": "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470",
+    "baseline_sass_digest_sha256": "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470"
+  },
+  "build_dir": "/home/mark/fr14_splitk_build_20260818",
+  "candidate_so_identity": {
+    "note": "this build ran before the pins were written into the builder, so its candidate_so_identity.txt records the placeholders; the values here are the file's measured sha256 and size, and they are what the builder and the sidecar now pin",
+    "so_sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+    "so_size": "300123792"
+  },
+  "compile_env": {
+    "CUDA_CACHE_DISABLE": "1",
+    "CUDA_VISIBLE_DEVICES": "",
+    "NVIDIA_VISIBLE_DEVICES": "void",
+    "cpus": "1",
+    "image": "sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "network": "none",
+    "source_commit": "29210221863736a08f71a866459e368ad1ac4a95"
+  },
+  "forbidden_sass_bytes": 0,
+  "link_manifest": "reference_objects_without_flash_api=55",
+  "links": {
+    "builds": [
+      {
+        "baseline_sass": null,
+        "label": "bootstrap",
+        "outcome": "exit 97 before the link, by design: minted the SASS pin",
+        "so_sha256": null,
+        "so_size": null,
+        "splitk_sass": "3f24d70d"
+      },
+      {
+        "baseline_sass": "fa01f988",
+        "label": "pinned artifact (the one all evidence names)",
+        "outcome": "exit 98: staged-artifact pins were still unset",
+        "so_sha256": "28570f83",
+        "so_size": 300123792,
+        "splitk_sass": "3f24d70d"
+      },
+      {
+        "baseline_sass": "fa01f988",
+        "label": "confirm 1",
+        "outcome": "exit 98: pins not yet committed",
+        "so_sha256": "3714e21b",
+        "so_size": 300123792,
+        "splitk_sass": "3f24d70d"
+      },
+      {
+        "baseline_sass": "fa01f988",
+        "label": "confirm 2 (pins live)",
+        "outcome": "exit 97: the staged-artifact guard REFUSED a PID-shifted rebuild whose kernel was identical -- the guard's first live execution, and it fired correctly",
+        "so_sha256": "3714e21b",
+        "so_size": 300123792,
+        "splitk_sass": "3f24d70d"
+      }
+    ],
+    "note": "Three links from the same pinned source closure. One SASS digest for the split-K kernel and one for the baseline across all of them; two distinct .so hashes at an identical size. This is the nvcc container-PID stamp the SASS-digest credential note documents, observed again on a second arm -- and it is why the reproducibility credential is the SASS digest while the .so sha256 is only the staged-artifact identity."
+  },
+  "offline_torch_load": "{\"library_loaded\": true, \"registered_required_ops\": true, \"torch\": \"2.11.0+cu130\"}",
+  "provenance": {
+    "repo_commit": "398a8c24016f8ac95dc2073df5b00e28671beea8",
+    "runner_sha256": "acba6693715a71afd340eab92e3bf9ed1e584c89b083f21d176edc258b165751",
+    "source_closure_sha256": "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878",
+    "started": "2026-08-18T02:18:54Z"
+  },
+  "resource_usage_baseline": [
+    "Function _ZN5flash48fr13_flash_fwd_fixed32_qrow32_gqa_pair_b1_kernelENS_16Flash_fwd_paramsE:",
+    "REG:243 STACK:0 SHARED:1024 LOCAL:0 CONSTANT[0]:1416 TEXTURE:0 SURFACE:0 SAMPLER:0"
+  ],
+  "resource_usage_splitk": [
+    "Function _ZN5flash32flash_fwd_splitkv_combine_kernelI23Flash_fwd_kernel_traitsILi256ELi64ELi64ELi4ELb0ELb0EN7cutlass10bfloat16_tE19Flash_kernel_traitsILi256ELi64ELi64ELi4ES3_EELi4ELi2ELb1EEEvNS_16Flash_fwd_paramsE:",
+    "REG:36 STACK:0 SHARED:1104 LOCAL:0 CONSTANT[0]:1416 TEXTURE:0 SURFACE:0 SAMPLER:0",
+    "Function _ZN5flash55fr13_flash_fwd_fixed32_qrow32_gqa_pair_splitk_b1_kernelENS_16Flash_fwd_paramsE:",
+    "REG:246 STACK:0 SHARED:1024 LOCAL:0 CONSTANT[0]:1416 TEXTURE:0 SURFACE:0 SAMPLER:0"
+  ],
+  "sass_digest": {
+    "sass_digest_pinned": "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e",
+    "sass_digest_sha256": "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e"
+  },
+  "schema": "fr14.splitk_fa2.build_attestation.v1",
+  "source_closure_sha256": "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878"
+}
