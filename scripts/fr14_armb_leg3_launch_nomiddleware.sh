@@ -5744,6 +5744,40 @@ fi
 # fatal rather than a silent arm/disarm, and it refuses to arm without the tail
 # seam it hands off to. Predicate, pre-registration and offline evidence:
 # results/fr14_nvfp4_port_20260816/suffix_pass_gating.md
+# FR14 lane 1: fused draft top-k (FR14_FUSED_DRAFT_TOPK). The lane landed the
+# patcher-side guards and left the launcher forwarding to launcher territory.
+# Unlike the merged drafter's own module-level reads (which is why decide_tail
+# uses /logs sidecars), the proposer reads os.environ directly and that path is
+# proven live: FR13_DRAFTER_GRAPH=1 appears in container_env.txt AND the census
+# shows graph_replays=1 on every step of the same serve. So -e forwarding is the
+# right mechanism here, not a sidecar.
+# Default OFF and byte-identical when off -- the patcher raises unless the value
+# is exactly "0" or "1", so validate here too and fail at launch, not mid-serve.
+case "${FR14_FUSED_DRAFT_TOPK:-0}" in
+  0|1) ;;
+  *) echo "FR14_FUSED_DRAFT_TOPK must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+case "${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64}" in
+  ''|*[!0-9]*) echo "FR14_FUSED_DRAFT_TOPK_BLOCKS must be an integer in 1..121" >&2; exit 2 ;;
+esac
+if (( ${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64} < 1 || ${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64} > 121 )); then
+  echo "FR14_FUSED_DRAFT_TOPK_BLOCKS must be an integer in 1..121" >&2
+  exit 2
+fi
+if [[ "${FR14_FUSED_DRAFT_TOPK:-0}" == "1" ]]; then
+  # The kernel is loaded from a .so pinned by sha256. Refuse at launch if the
+  # credential is missing rather than letting the serve boot and die at the
+  # first head read.
+  if [[ ! "${FR14_FUSED_DRAFT_TOPK_SHA256:-}" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SHA256 (64 lowercase hex)" >&2
+    exit 2
+  fi
+  if [[ -z "${FR14_FUSED_DRAFT_TOPK_SO:-}" ]]; then
+    echo "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SO" >&2
+    exit 2
+  fi
+  echo "[launch] FUSED DRAFT TOP-K ON (blocks=${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64} so=${FR14_FUSED_DRAFT_TOPK_SO})"
+fi
 case "${FR14_SUFFIX_PASS_GATE:-0}" in
   0|1) ;;
   *) echo "FR14_SUFFIX_PASS_GATE must be 0 or 1" >&2; exit 2 ;;
@@ -6199,6 +6233,10 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DFWD_SPLIT_NEEDLE="${FR13_DFWD_SPLIT_NEEDLE:-0}" \
   -e FR13_DFWD_SPLIT="${FR13_DFWD_SPLIT:-0}" \
   -e FR13_DFWD_SPLIT_JSON="${FR13_DFWD_SPLIT_JSON:-/logs/fr13_dfwd_split.json}" \
+  -e FR14_FUSED_DRAFT_TOPK="${FR14_FUSED_DRAFT_TOPK:-0}" \
+  -e FR14_FUSED_DRAFT_TOPK_BLOCKS="${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64}" \
+  -e FR14_FUSED_DRAFT_TOPK_SO="${FR14_FUSED_DRAFT_TOPK_SO:-/tmp/fr14_dfwd_full_topk.abi3.so}" \
+  -e FR14_FUSED_DRAFT_TOPK_SHA256="${FR14_FUSED_DRAFT_TOPK_SHA256:-}" \
   -e FR14_SUFFIX_PASS_GATE="${FR14_SUFFIX_PASS_GATE:-0}" \
   -e FR14_SUFFIX_PASS_GATE_NGRAM="${FR14_SUFFIX_PASS_GATE_NGRAM:-8}" \
   -e FR14_SUFFIX_PASS_GATE_MIN_AGREE="${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75}" \

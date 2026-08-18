@@ -292,3 +292,59 @@ def test_interlock_is_currently_closed():
     if "FR14_GATE_SPLIT_GRAPH" in patcher:
         pytest.skip("split graph has landed; the interlock is now open by design")
     assert True
+
+
+# ---------------------------------------------------------------------------
+# Lane 1 (fused draft top-k) launcher forwarding -- landed here because the lane
+# deliberately left launcher territory to this owner. Its patcher-side guards
+# read os.environ inside the proposer, and that path is proven live (a banked
+# serve carries FR13_DRAFTER_GRAPH=1 in container_env.txt AND graph_replays=1 in
+# the census), so -e forwarding is the correct mechanism -- no sidecar needed.
+# ---------------------------------------------------------------------------
+
+
+def test_fused_topk_flag_is_validated_strictly(launcher):
+    assert 'case "${FR14_FUSED_DRAFT_TOPK:-0}" in' in launcher
+    assert 'echo "FR14_FUSED_DRAFT_TOPK must be exactly 0 or 1" >&2; exit 2' in launcher
+
+
+def test_fused_topk_defaults_off_everywhere(launcher):
+    assert '-e FR14_FUSED_DRAFT_TOPK="${FR14_FUSED_DRAFT_TOPK:-0}"' in launcher
+
+
+def test_fused_topk_blocks_range_is_enforced_at_launch(launcher):
+    """The patcher raises on out-of-range; catch it before the serve boots."""
+    assert "FR14_FUSED_DRAFT_TOPK_BLOCKS must be an integer in 1..121" in launcher
+    assert (
+        '-e FR14_FUSED_DRAFT_TOPK_BLOCKS="${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64}"'
+        in launcher
+    )
+
+
+def test_fused_topk_so_default_is_not_empty(launcher):
+    """The set-but-empty trap: os.environ.get returns "" not the code default.
+
+    Same defect FR13_DFWD_SPLIT_JSON was shipped against; forwarding the .so path
+    with a bare ':-' would silently clobber the patcher's default.
+    """
+    assert '-e FR14_FUSED_DRAFT_TOPK_SO="${FR14_FUSED_DRAFT_TOPK_SO:-}"' not in launcher
+    assert (
+        '-e FR14_FUSED_DRAFT_TOPK_SO='
+        '"${FR14_FUSED_DRAFT_TOPK_SO:-/tmp/fr14_dfwd_full_topk.abi3.so}"'
+    ) in launcher
+    patcher = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "fr10_phase4_patch_vllm_tree_gdn.py"
+    ).read_text()
+    assert '"/tmp/fr14_dfwd_full_topk.abi3.so"' in patcher, (
+        "launcher default must track the patcher default"
+    )
+
+
+def test_fused_topk_armed_requires_its_credential(launcher):
+    assert (
+        "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SHA256 "
+        "(64 lowercase hex)" in launcher
+    )
+    assert "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SO" in launcher
