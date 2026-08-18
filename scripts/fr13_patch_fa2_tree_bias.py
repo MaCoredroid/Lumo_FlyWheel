@@ -6022,6 +6022,159 @@ def _fr13_fa2_qrow32_b1_digest(env_name, label, *, length=64):
     return value
 
 
+# ------------------------------------------------------------------ TIER B
+#
+# Mark, FR14 pass 64: an arm that cannot be byte-identical to the incumbent BY
+# CONSTRUCTION may serve on a Tier-B credential -- determinism proven, ULP
+# characterised against pre-registered bounds, and no worse than the incumbent
+# against a float64 reference. Live-A/B serving only; promoted-default remains
+# a separate, later, Mark-gated decision.
+#
+# NOTHING BYTE-GATED BECOMES EASIER. _FR13_FA2_QROW32_B1_PRODUCTION_ARMS is
+# unchanged and still refuses this arm; the raw-byte gate's
+# _fr13_fa2_qrow32_b1_require_same_reduction is unchanged and still refuses to
+# compare differing reduction topologies. What is added is a SECOND door that
+# only a tier-b-marked arm can walk through, and only while carrying a
+# credential bound to its exact binary, source closure, SASS digests, HEAD and
+# patcher.
+_FR13_FA2_QROW32_B1_TIER_B_ARMS = ("gqa_pair_splitk",)
+_FR13_FA2_QROW32_B1_TIER_B_SCHEMA = "fr13.fixed32.fa2_tierb_qualification.v1"
+_FR13_FA2_QROW32_B1_TIER_B_STATE = {}
+
+
+def _fr13_fa2_qrow32_b1_tier_b_credential(arm, identity):
+    """Load and check the Tier-B credential authorising THIS arm to serve.
+
+    Container-side, so it validates by DIGEST and by BINDING rather than by
+    re-deriving the bounds: the pinned image ships no git and the full
+    re-evaluation already happened twice on the host -- once in the gate runner
+    that wrote the credential, once in the launcher preflight that validated it
+    through scripts/fr13_qrow32_b1_pass_sidecar.py. What has to be established
+    here is narrower and, for the risk that matters, stricter: that the bytes
+    on disk ARE the credential those validations were made against, and that it
+    names THIS binary at THIS commit.
+    """
+    import hashlib as _hashlib
+    import json as _json
+
+    cached = _FR13_FA2_QROW32_B1_TIER_B_STATE.get(arm)
+    if cached is not None:
+        return cached
+    path = os.environ.get("FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL", "")
+    if not path:
+        raise RuntimeError(
+            "FR13 qrow32 B1 tier-b serving requires "
+            "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL"
+        )
+    expected_digest = _fr13_fa2_qrow32_b1_digest(
+        "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256", "tier-b credential"
+    )
+    raw = open(path, "rb").read()
+    if _hashlib.sha256(raw).hexdigest() != expected_digest:
+        raise RuntimeError("FR13 qrow32 B1 tier-b credential digest drifted")
+    payload = _json.loads(raw.decode("ascii"))
+    if payload.get("schema") != _FR13_FA2_QROW32_B1_TIER_B_SCHEMA:
+        raise RuntimeError("FR13 qrow32 B1 tier-b credential schema drifted")
+    if payload.get("tier") != "B" or payload.get("arm") != arm:
+        raise RuntimeError("FR13 qrow32 B1 tier-b credential names another arm")
+    candidate_digest, source_commit, patch_source_digest = identity
+    bound = payload.get("identity")
+    if not isinstance(bound, dict):
+        raise RuntimeError("FR13 qrow32 B1 tier-b credential is unbound")
+    config = _FR13_FA2_QROW32_B1_ARMS[arm]
+    for field, expected in (
+        ("arm", arm),
+        ("so_sha256", candidate_digest),
+        ("source_commit", source_commit),
+        ("patch_source_sha256", patch_source_digest),
+    ):
+        if bound.get(field) != expected:
+            raise RuntimeError(
+                f"FR13 qrow32 B1 tier-b credential {field} does not bind this "
+                "serve"
+            )
+    selector = payload.get("selector")
+    if not isinstance(selector, dict) or (
+        int(selector.get("sentinel", -1)) != int(config["sentinel"])
+        or int(selector.get("num_splits", -1)) != int(config["num_splits"])
+    ):
+        raise RuntimeError(
+            "FR13 qrow32 B1 tier-b credential selector does not match the arm"
+        )
+    determinism = payload.get("determinism")
+    if not isinstance(determinism, dict) or (
+        determinism.get("all_cases_bitwise_identical") is not True
+        or determinism.get("cross_process_digests_identical") is not True
+    ):
+        raise RuntimeError(
+            "FR13 qrow32 B1 tier-b credential does not carry a passed "
+            "determinism gate"
+        )
+    evaluation = payload.get("bounds_evaluation")
+    if not isinstance(evaluation, dict) or evaluation.get(
+        "bounds_passed"
+    ) is not True:
+        raise RuntimeError(
+            "FR13 qrow32 B1 tier-b credential did not clear its bounds"
+        )
+    strength = payload.get("probe_strength")
+    if not isinstance(strength, dict) or strength.get(
+        "probe_strength_passed"
+    ) is not True:
+        raise RuntimeError(
+            "FR13 qrow32 B1 tier-b credential probe is below the "
+            "pre-registered strength floor"
+        )
+    record = {
+        "credential_sha256": expected_digest,
+        "bounds_sha256": bound.get("bounds_sha256"),
+        "path": path,
+    }
+    _FR13_FA2_QROW32_B1_TIER_B_STATE[arm] = record
+    return record
+
+
+def _fr13_fa2_qrow32_b1_tier_b_arm():
+    """The tier-b arm authorised to SERVE, or None.
+
+    Naming a tier-b arm as the live-A/B arm is not enough on its own: that is
+    still the shadow-comparison route it always was. Serving its output
+    requires FR13_FA2_QROW32_B1_TIER_B_SERVE=1 as well, so a run cannot start
+    serving Tier-B numerics because someone reused a live-A/B invocation.
+    """
+    arm = os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
+    if not arm or arm not in _FR13_FA2_QROW32_B1_TIER_B_ARMS:
+        return None
+    serve = os.environ.get("FR13_FA2_QROW32_B1_TIER_B_SERVE", "0")
+    if serve == "0":
+        return None
+    if serve != "1":
+        raise RuntimeError(
+            "FR13_FA2_QROW32_B1_TIER_B_SERVE must be exactly 0 or 1"
+        )
+    if arm in _FR13_FA2_QROW32_B1_PRODUCTION_ARMS:
+        raise RuntimeError(
+            "a tier-b arm must not also be a production arm: tier-b grants "
+            "live-A/B serving, not promoted-default"
+        )
+    return arm
+
+
+def _fr13_fa2_qrow32_b1_serving_arm():
+    """(arm, tier) for the arm whose output actually reaches the model.
+
+    Tier A is resolved FIRST and unchanged, so a launch that names no tier-b
+    arm cannot reach one line of the tier-b path.
+    """
+    arm = _fr13_fa2_qrow32_b1_arm("FR13_FA2_QROW32_B1_PRODUCTION_ARM")
+    if arm is not None:
+        return arm, "A"
+    arm = _fr13_fa2_qrow32_b1_tier_b_arm()
+    if arm is not None:
+        return arm, "B"
+    return None, None
+
+
 def _fr13_fa2_qrow32_b1_draft_vocab_identity():
     """The draft-vocabulary identity AS SERVED, for artifact emission.
 
@@ -6464,6 +6617,54 @@ def _fr13_fa2_qrow32_b1_byte_summary(reference, candidate):
     }
 
 
+def _fr13_fa2_qrow32_b1_tierb_summary(reference, candidate):
+    """What a Tier-B arm's live A/B records INSTEAD of byte equality.
+
+    A byte comparison against an arm with a different reduction topology can
+    only ever say "they differ", which is known before the run. This says HOW
+    they differ, on the real served operands the offline probe cannot reach:
+    the ULP distribution, the worst absolute disagreement expressed in bf16
+    steps of the tensor's own maximum (so it is comparable with bound B3), and
+    whether either arm produced a non-finite the other did not.
+    """
+    if reference.dtype != candidate.dtype or tuple(reference.shape) != tuple(
+        candidate.shape
+    ):
+        raise RuntimeError("FR13 qrow32 B1 tier-b comparison contract drifted")
+    ref = reference.detach().float()
+    cand = candidate.detach().float()
+    finite = torch.isfinite(ref) & torch.isfinite(cand)
+    nonfinite_disagreements = int(
+        (torch.isfinite(ref) != torch.isfinite(cand)).sum()
+    )
+    if reference.dtype == torch.bfloat16:
+        bits_ref = reference.detach().contiguous().view(torch.int16).to(torch.int64)
+        bits_cand = candidate.detach().contiguous().view(torch.int16).to(torch.int64)
+        min_int = -(1 << 15)
+    else:
+        bits_ref = reference.detach().contiguous().view(torch.int32).to(torch.int64)
+        bits_cand = candidate.detach().contiguous().view(torch.int32).to(torch.int64)
+        min_int = -(1 << 31)
+    key_ref = torch.where(bits_ref < 0, min_int - bits_ref, bits_ref)
+    key_cand = torch.where(bits_cand < 0, min_int - bits_cand, bits_cand)
+    ulp = (key_ref - key_cand).abs()[finite]
+    delta = (ref - cand).abs()[finite]
+    ref_max = float(ref.abs()[finite].max()) if int(finite.sum()) else 0.0
+    max_abs = float(delta.max()) if delta.numel() else 0.0
+    return {
+        "elements": int(finite.numel()),
+        "finite_elements": int(finite.sum()),
+        "nonfinite_disagreements": nonfinite_disagreements,
+        "ulp_le_2": int((ulp <= 2).sum()),
+        "ulp_eq_0": int((ulp == 0).sum()),
+        "max_abs_delta": max_abs,
+        "reference_max_abs": ref_max,
+        "max_abs_delta_in_bf16_eps_of_reference_max": (
+            max_abs / (ref_max * (2.0 ** -8)) if ref_max > 0 else 0.0
+        ),
+    }
+
+
 def _fr13_fa2_qrow32_b1_write(path_env, default_path, record):
     import json as _json
     from pathlib import Path as _Path
@@ -6516,11 +6717,14 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
     torch.cuda.synchronize()
     pending = []
     shared_seq_len = None
+    tier_b = arm in _FR13_FA2_QROW32_B1_TIER_B_ARMS
     for layer_name in _FR13_FA2_QROW32_B1_TARGET_LAYERS:
         bundle = graph[layer_name]
-        _fr13_fa2_qrow32_b1_require_same_reduction(
-            arm, bundle["num_splits"]
-        )
+        if not tier_b:
+            # Unchanged for every byte-gated arm.
+            _fr13_fa2_qrow32_b1_require_same_reduction(
+                arm, bundle["num_splits"]
+            )
         q_start = [int(x) for x in bundle["cu_seqlens_q"].cpu().tolist()]
         seq_lens = [int(x) for x in bundle["seqused_k"].cpu().tolist()]
         if q_start != [0, 32] or len(seq_lens) != 1 or seq_lens[0] < 32:
@@ -6537,25 +6741,101 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         candidate_out, candidate_lse = _fr13_fa2_qrow32_b1_live_call(
             bundle, torch.empty_like(bundle["query"]), arm=arm
         )
+        repeat_out = repeat_lse = None
+        if tier_b:
+            # THE hard gate, measured where it actually matters: on the real
+            # served operands, in the real process, with fresh split
+            # accumulators. The offline probe cannot reach these tensors.
+            repeat_out, repeat_lse = _fr13_fa2_qrow32_b1_live_call(
+                bundle, torch.empty_like(bundle["query"]), arm=arm
+            )
         pending.append(
             (
                 layer_name, reference_out, reference_lse,
-                candidate_out, candidate_lse,
+                candidate_out, candidate_lse, repeat_out, repeat_lse,
             )
         )
     torch.cuda.synchronize()
     layers = []
     output_mismatches = 0
     lse_mismatches = 0
+    tierb_layers = []
+    tierb_determinism_mismatches = 0
+    tierb_nonfinite = 0
     for (
         layer_name, reference_out, reference_lse, candidate_out, candidate_lse,
+        repeat_out, repeat_lse,
     ) in pending:
         output = _fr13_fa2_qrow32_b1_byte_summary(reference_out, candidate_out)
         lse = _fr13_fa2_qrow32_b1_byte_summary(reference_lse, candidate_lse)
         output_mismatches += int(output["raw_byte_mismatches"])
         lse_mismatches += int(lse["raw_byte_mismatches"])
         layers.append({"layer_name": layer_name, "output": output, "lse": lse})
-    passed = output_mismatches == 0 and lse_mismatches == 0
+        if tier_b:
+            repeat_output = _fr13_fa2_qrow32_b1_byte_summary(
+                candidate_out, repeat_out
+            )
+            repeat_lse_summary = _fr13_fa2_qrow32_b1_byte_summary(
+                candidate_lse, repeat_lse
+            )
+            repeats = int(repeat_output["raw_byte_mismatches"]) + int(
+                repeat_lse_summary["raw_byte_mismatches"]
+            )
+            tierb_determinism_mismatches += repeats
+            summary_out = _fr13_fa2_qrow32_b1_tierb_summary(
+                reference_out, candidate_out
+            )
+            summary_lse = _fr13_fa2_qrow32_b1_tierb_summary(
+                reference_lse, candidate_lse
+            )
+            tierb_nonfinite += int(
+                summary_out["nonfinite_disagreements"]
+            ) + int(summary_lse["nonfinite_disagreements"])
+            tierb_layers.append({
+                "layer_name": layer_name,
+                "output": summary_out,
+                "lse": summary_lse,
+                "repeat_byte_mismatches": repeats,
+            })
+    tierb_record = None
+    if tier_b:
+        # A Tier-B arm CANNOT pass a byte comparison and is not asked to. Its
+        # live verdict is the pair of things that would actually indict it:
+        # the same inputs must give the same bits twice in this very process,
+        # and neither arm may produce a non-finite the other did not. The
+        # magnitude of the disagreement is recorded for the note and checked
+        # against bound B3's scale, not re-gated here -- the bounds were
+        # cleared offline, on a probe far wider than one served step.
+        elements = sum(int(x["output"]["elements"]) for x in tierb_layers)
+        ulp_le_2 = sum(int(x["output"]["ulp_le_2"]) for x in tierb_layers)
+        ulp_eq_0 = sum(int(x["output"]["ulp_eq_0"]) for x in tierb_layers)
+        tierb_record = {
+            "layers": tierb_layers,
+            "determinism_repeat_byte_mismatches": tierb_determinism_mismatches,
+            "determinism_bitwise": tierb_determinism_mismatches == 0,
+            "nonfinite_disagreements": tierb_nonfinite,
+            "output_elements": elements,
+            "output_ulp_le_2_fraction": (
+                ulp_le_2 / elements if elements else 0.0
+            ),
+            "output_ulp_eq_0_fraction": (
+                ulp_eq_0 / elements if elements else 0.0
+            ),
+            "output_max_abs_delta_in_bf16_eps_of_reference_max": max(
+                (float(x["output"][
+                    "max_abs_delta_in_bf16_eps_of_reference_max"
+                ]) for x in tierb_layers), default=0.0
+            ),
+            "lse_max_abs_delta": max(
+                (float(x["lse"]["max_abs_delta"]) for x in tierb_layers),
+                default=0.0,
+            ),
+        }
+        passed = (
+            tierb_determinism_mismatches == 0 and tierb_nonfinite == 0
+        )
+    else:
+        passed = output_mismatches == 0 and lse_mismatches == 0
     config = _FR13_FA2_QROW32_B1_ARMS[arm]
     identity = _fr13_fa2_qrow32_b1_identity(arm)
     record = {
@@ -6589,7 +6869,16 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "output_raw_byte_mismatches": output_mismatches,
         "lse_raw_byte_mismatches": lse_mismatches,
         "candidate_dispatch": config["candidate_dispatch"],
-        "served_return": "qrow16 captured graph output unchanged",
+        "tier": "B" if tier_b else "A",
+        "tier_b_characterization": tierb_record,
+        "tier_b_serving": (
+            tier_b and _fr13_fa2_qrow32_b1_tier_b_arm() == arm
+        ),
+        "served_return": (
+            "candidate output served (tier-b)"
+            if tier_b and _fr13_fa2_qrow32_b1_tier_b_arm() == arm
+            else "qrow16 captured graph output unchanged"
+        ),
         "fallback_allowed": False, "performance_measurement": False,
     }
     _fr13_fa2_qrow32_b1_write(
@@ -6597,6 +6886,12 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "/logs/fr13_fa2_qrow32_b1_live_paged_ab.json", record,
     )
     if not passed:
+        if tier_b:
+            raise RuntimeError(
+                "FR13 qrow32 B1 tier-b live gate failed: repeat_byte_"
+                f"mismatches={tierb_determinism_mismatches} "
+                f"nonfinite_disagreements={tierb_nonfinite}"
+            )
         raise RuntimeError(
             "FR13 qrow32 B1 live byte mismatch: "
             f"output={output_mismatches} lse={lse_mismatches}"
@@ -6639,7 +6934,7 @@ def _fr13_fa2_qrow32_b1_production_begin(
     seqused_k, max_seqlen_k, causal, window_size, block_table, softcap,
     num_splits, tree_bias,
 ):
-    arm = _fr13_fa2_qrow32_b1_arm("FR13_FA2_QROW32_B1_PRODUCTION_ARM")
+    arm, tier = _fr13_fa2_qrow32_b1_serving_arm()
     if arm is None:
         return None
     if os.environ.get("FR13_FA2_QROW32_B1_INTERNAL_ATTESTED") != "1":
@@ -6651,12 +6946,18 @@ def _fr13_fa2_qrow32_b1_production_begin(
     # GQA-pair selector run against the no-split binary (whose dispatch has no
     # GQA-pair gate at all, so the sentinel would be silently ignored and the
     # run would time the incumbent kernel while claiming the candidate).
-    candidate_digest, source_commit, patch_source_digest = (
-        _fr13_fa2_qrow32_b1_require_identity(arm)
-    )
-    pass_digest = _fr13_fa2_qrow32_b1_digest(
-        "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256", "pass sidecar"
-    )
+    identity = _fr13_fa2_qrow32_b1_require_identity(arm)
+    candidate_digest, source_commit, patch_source_digest = identity
+    tier_b_credential = None
+    if tier == "B":
+        # The Tier-B credential is what authorises this arm's OUTPUT to reach
+        # the model. It is checked before the first served token, not after.
+        tier_b_credential = _fr13_fa2_qrow32_b1_tier_b_credential(arm, identity)
+        pass_digest = None
+    else:
+        pass_digest = _fr13_fa2_qrow32_b1_digest(
+            "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256", "pass sidecar"
+        )
     if _fr13_fa2_qrow32_b1_profile_capture_active():
         # Unchanged operand: the profile capture keeps serving the qrow16
         # incumbent geometry it always served. Only the accounting is new.
@@ -6699,13 +7000,19 @@ def _fr13_fa2_qrow32_b1_production_begin(
             "FR13 qrow32 B1 production geometry drifted: "
             + "; ".join(geometry_mismatches)
         )
-    _fr13_fa2_qrow32_b1_require_same_reduction(arm, num_splits)
+    if tier == "A":
+        # Unchanged for every byte-qualified arm: a Tier-A serve still refuses
+        # a reduction topology that differs from the reference's. Tier B is
+        # exempt because differing topology is the whole point of it, and its
+        # numerics are established by the credential instead -- not waived.
+        _fr13_fa2_qrow32_b1_require_same_reduction(arm, num_splits)
     layer_name = str(getattr(layer, "layer_name", ""))
     if layer_name not in _FR13_FA2_QROW32_B1_TARGET_LAYERS:
         raise RuntimeError("FR13 qrow32 B1 production layer identity drifted")
     config = _FR13_FA2_QROW32_B1_ARMS[arm]
     return {
-        "arm": arm, "candidate_served": True, "profile_capture_bypass": False,
+        "arm": arm, "tier": tier, "tier_b_credential": tier_b_credential,
+        "candidate_served": True, "profile_capture_bypass": False,
         "tree_bias": _fr13_fa2_qrow32_b1_candidate_tree_bias(tree_bias, arm),
         "num_splits": config["num_splits"], "sentinel": config["sentinel"],
         "layer_name": layer_name, "capturing": capturing,
@@ -6718,7 +7025,7 @@ def _fr13_fa2_qrow32_b1_production_begin(
 
 
 def _fr13_fa2_qrow32_b1_production_end(selection, *, completed):
-    arm = _fr13_fa2_qrow32_b1_arm("FR13_FA2_QROW32_B1_PRODUCTION_ARM")
+    arm, _tier = _fr13_fa2_qrow32_b1_serving_arm()
     if selection is None:
         if arm is not None:
             raise RuntimeError("FR13 qrow32 B1 production silently fell back")
@@ -6821,7 +7128,7 @@ def _fr13_fa2_qrow32_b1_production_record(
 def _fr13_fa2_qrow32_b1_production_capture_end(
     graph_id, graph_signature, runtime_mode, batch_size,
 ):
-    arm = _fr13_fa2_qrow32_b1_arm("FR13_FA2_QROW32_B1_PRODUCTION_ARM")
+    arm, _tier = _fr13_fa2_qrow32_b1_serving_arm()
     if arm is None or graph_signature is None:
         return
     if str(runtime_mode).upper() != "FULL" or int(batch_size) != 1:

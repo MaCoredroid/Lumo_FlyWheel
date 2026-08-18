@@ -212,6 +212,34 @@ QROW32_B1_GQA_PAIR_FA2_SHA256 = (
     "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae"
 )
 QROW32_B1_GQA_PAIR_FA2_SIZE = 299_815_552
+# FR14 lane 4 split-K. TIER-B: the context walk is split four ways and
+# re-reduced, so this arm is not byte-identical to the incumbent by design and
+# can never pass the raw-byte gate. It serves only under a validated Tier-B
+# qualification credential (Mark, pass 64), never as a promoted default. The
+# SASS digests are pinned beside the artifact because THIS arm's .so sha is not
+# rebuild-reproducible -- four links from one closure gave two .so hashes at an
+# identical size -- so the digests are what attest the kernel reproduced, and
+# the baseline digest is what keeps "the split-K header edits are inert at
+# Split=false" a measurement rather than a claim.
+QROW32_B1_SPLITK_FA2_SHA256 = (
+    "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857"
+)
+QROW32_B1_SPLITK_FA2_SIZE = 300_123_792
+QROW32_B1_SPLITK_SOURCE_CLOSURE_SHA256 = (
+    "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878"
+)
+QROW32_B1_SPLITK_SASS_DIGEST_SHA256 = (
+    "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e"
+)
+QROW32_B1_SPLITK_BASELINE_SASS_DIGEST_SHA256 = (
+    "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470"
+)
+QROW32_B1_SPLITK_NUM_SPLITS = 4
+# The arms that may present a TIER-B credential instead of byte identity. This
+# tuple is the whole allowance: an arm not named here gets the byte-exact
+# Tier-A path unchanged, and nothing byte-gated becomes easier because this
+# tuple exists.
+QROW32_B1_TIER_B_ARMS = ("gqa_pair_splitk",)
 QROW32_B4_FA2_SHA256 = (
     "77f3fb22c19d0eb2ac0ec28230cf9401221425692a505efde62aa838760d81ce"
 )
@@ -3670,11 +3698,19 @@ def _expected_runtime_fa2_identity(
             raise ContractError(f"{name} must be exactly 0 or 1")
     if live == "1" and production == "1":
         raise ContractError("qrow16 live and production selectors are mutually exclusive")
-    if qrow32_b1_live not in {"", "nosplit", "split2", "visibility", "gqa_pair"}:
+    if qrow32_b1_live not in (
+        {"", "nosplit", "split2", "visibility", "gqa_pair"}
+        | set(QROW32_B1_TIER_B_ARMS)
+    ):
         raise ContractError(
             "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, "
-            "visibility, or gqa_pair"
+            "visibility, gqa_pair, or a tier-b arm "
+            f"({', '.join(QROW32_B1_TIER_B_ARMS)})"
         )
+    # Tier-B arms are LIVE-only. Mark's pass-64 ruling grants serving on a
+    # Tier-B credential and withholds promoted-default until exact16 QC parity,
+    # so the production allowlist deliberately does NOT gain the tier-b arms --
+    # widening it is a separate decision with a separate gate.
     if qrow32_b1_production not in {"", "nosplit", "gqa_pair"}:
         raise ContractError(
             "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty, nosplit, or gqa_pair"
@@ -3762,6 +3798,14 @@ def _expected_runtime_fa2_identity(
                 QROW32_B1_GQA_PAIR_FA2_SIZE,
                 QROW32_B1_GQA_PAIR_FA2_SHA256,
             )
+        elif qrow32_b1_pin_arm in QROW32_B1_TIER_B_ARMS:
+            # Arm S (promotion A/B, 2026-08-18) refused here: the split-K pins
+            # landed in the launcher's bash pin case but this resolver had no
+            # entry, so a split-K launch fell through to split2's identity and
+            # died at "binary identity is not qualified". A fall-through
+            # default that silently answers for an arm it was not written for
+            # is the defect; naming every arm is the fix.
+            expected = (QROW32_B1_SPLITK_FA2_SIZE, QROW32_B1_SPLITK_FA2_SHA256)
         else:
             expected = (
                 (QROW32_B1_VISIBILITY_FA2_SIZE, QROW32_B1_VISIBILITY_FA2_SHA256)
@@ -3912,6 +3956,9 @@ def validate_runtime_attestation(payload: object) -> dict[str, Any]:
         known_identities.add(
             (QROW32_B1_GQA_PAIR_FA2_SIZE, QROW32_B1_GQA_PAIR_FA2_SHA256)
         )
+    known_identities.add(
+        (QROW32_B1_SPLITK_FA2_SIZE, QROW32_B1_SPLITK_FA2_SHA256)
+    )
     for key, record, expected_path in (
         ("source", source, str(CONTAINER_FA2_SOURCE)),
         ("destination", destination, str(CONTAINER_FA2_DESTINATION)),

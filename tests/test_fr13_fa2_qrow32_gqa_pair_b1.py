@@ -477,11 +477,14 @@ def test_b1_gqa_pair_is_admitted_by_the_runtime_contract_and_launcher() -> None:
         contract._expected_runtime_fa2_identity(env)
 
     launcher = LAUNCHER.read_text()
-    assert '""|nosplit|split2|visibility|gqa_pair) ;;' in launcher
-    assert (
-        "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, "
-        "visibility, or gqa_pair" in launcher
-    )
+    # The LIVE allowlist gained the FR14 tier-b arm (pass 50 in the launcher,
+    # FR14 lane 4 in the contract). What this test guards is that the arms it
+    # already admitted are still admitted and that gqa_pair still resolves to
+    # its own binary -- not that the list stopped growing.
+    assert '""|nosplit|split2|visibility|gqa_pair' in launcher
+    assert "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty" in launcher
+    assert "nosplit, split2" in launcher
+    assert "visibility" in launcher
     # Production admits the byte-qualified GQA-pair arm alongside no-split,
     # and each arm is pinned to its own binary via the resolved pin arm.
     assert '""|nosplit|gqa_pair) ;;' in launcher

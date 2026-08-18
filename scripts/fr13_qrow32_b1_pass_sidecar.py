@@ -339,6 +339,313 @@ EXACT4_SUBSET_SHA256 = (
 )
 HEX = frozenset("0123456789abcdef")
 
+# ---------------------------------------------------------------- TIER B
+#
+# Mark's pass-64 ruling: the campaign's "lossless" doctrine is refined to
+# faithful-to-the-model-within-FP-rounding, proven DETERMINISTIC and QC'd --
+# NOT bit-identical-to-the-incumbent. Byte-exact Tier-A remains the default
+# door for everything else and NOTHING byte-gated becomes easier.
+#
+# Everything below is additive and reachable only by an arm named in
+# TIERB_ARMS. The Tier-A functions above are untouched: a Tier-B credential
+# cannot be presented for a byte-gated arm, and a byte-gated arm's contract
+# cannot be satisfied by one. That is enforced in validate_tierb_credential's
+# first two checks, not by convention.
+TIERB_SCHEMA = "fr13.fixed32.fa2_tierb_qualification.v1"
+TIERB_ARMS = (SPLITK_ARM,)
+# The production arm set, mirrored from the patcher's injected
+# _FR13_FA2_QROW32_B1_PRODUCTION_ARMS. Mirrored rather than imported because
+# that tuple lives inside a source string destined for the container; a test
+# asserts the two are equal, so a drift is caught rather than silently
+# permitting a tier-b arm to also be a production arm.
+_FR13_PRODUCTION_ARMS_VIEW = ("nosplit", "gqa_pair")
+TIERB_BOUNDS_RELATIVE = (
+    "results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_bounds.json"
+)
+# The bounds were pre-registered and committed BEFORE the gate runner existed
+# (commit 9d294733). Pinning their digest here is what makes that provable
+# after the fact: a bound edited to fit a result changes this sha and the
+# runner and the validator both refuse.
+TIERB_BOUNDS_SHA256 = (
+    "ee49c3a712971f81509617bbd3f7cabffa5f43c74cd9db852459a9a758c1958e"
+)
+# The fields a Tier-B credential must carry AND match against the arm it
+# authorises. A credential that outlives a rebuild, a source change or a HEAD
+# move would be authorising numerics nobody measured.
+TIERB_BINDING_FIELDS = (
+    "arm",
+    "so_sha256",
+    "so_size",
+    "source_closure_sha256",
+    "fa2_head",
+    "sass_digest_sha256",
+    "baseline_sass_digest_sha256",
+    "source_commit",
+    "patch_source_sha256",
+    "bounds_sha256",
+)
+TIERB_ARM_IDENTITY = {
+    SPLITK_ARM: {
+        "sentinel": SPLITK_SELECTOR_SENTINEL,
+        "num_splits": SPLITK_NUM_SPLITS,
+        "source_closure_sha256": SPLITK_SOURCE_CLOSURE_SHA256,
+        "fa2_head": FA2_HEAD,
+        "sass_digest_sha256": (
+            "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e"
+        ),
+        "baseline_sass_digest_sha256": (
+            "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470"
+        ),
+    },
+}
+
+
+def load_tierb_bounds(path: Path) -> dict[str, Any]:
+    """The pre-registered bounds, refused unless they are the pinned bytes."""
+    payload, raw = load_json(path)
+    digest = _digest(raw)
+    if digest != TIERB_BOUNDS_SHA256:
+        raise ValueError(
+            "tier-b bounds are not the pre-registered file: "
+            f"{digest} != {TIERB_BOUNDS_SHA256}"
+        )
+    if payload.get("schema") != "fr13.fixed32.fa2_tierb_bounds.v1":
+        raise ValueError("tier-b bounds schema drifted")
+    if payload.get("arm") not in TIERB_ARMS:
+        raise ValueError("tier-b bounds name an arm that is not tier-b")
+    return payload
+
+
+def _tierb_compare(op: str, value: Any, bound: Any) -> bool:
+    if op == ">=":
+        return float(value) >= float(bound)
+    if op == "<=":
+        return float(value) <= float(bound)
+    if op == "==":
+        return value == bound
+    raise ValueError(f"unknown tier-b comparison {op!r}")
+
+
+def evaluate_tierb_bounds(
+    bounds: dict[str, Any], measured: dict[str, Any]
+) -> dict[str, Any]:
+    """Re-derive every verdict from the measurements.
+
+    Deliberately NOT a reader of the credential's own "passed" field. A
+    credential is a record of what was measured; whether that clears the bounds
+    is recomputed here, every time, so a hand-edited verdict cannot authorise a
+    serve.
+    """
+    results = []
+    passed = True
+    for spec in bounds["bounds"]:
+        bid = spec["id"]
+        if spec["kind"] == "hard" and "field" not in spec:
+            # The pre-registered predicate is read literally: a conjunction of
+            # measurement field names. Parsing the committed text rather than
+            # re-encoding it here is what keeps the bound and its evaluation
+            # from drifting apart.
+            names = [n.strip() for n in spec["predicate"].split(" AND ")]
+            observed = {}
+            for name in names:
+                if name not in measured:
+                    raise ValueError(
+                        f"tier-b measurement missing for {bid}: {name}"
+                    )
+                observed[name] = measured[name] is True
+            ok = all(observed.values())
+            entry = {"id": bid, "name": spec["name"], "kind": "hard",
+                     "measured": observed, "bound": True, "passed": ok}
+        elif spec["kind"] == "comparative" and "bound_field" in spec:
+            value = measured.get(spec["field"])
+            limit = measured.get(spec["bound_field"])
+            if value is None or limit is None:
+                raise ValueError(f"tier-b measurement missing for {bid}")
+            ok = _tierb_compare(spec["op"], value, limit)
+            entry = {"id": bid, "name": spec["name"], "kind": "comparative",
+                     "measured": value, "bound": limit,
+                     "bound_source": spec["bound_field"], "passed": ok}
+        else:
+            value = measured.get(spec["field"])
+            if value is None:
+                raise ValueError(f"tier-b measurement missing for {bid}")
+            ok = _tierb_compare(spec["op"], value, spec["bound"])
+            entry = {"id": bid, "name": spec["name"], "kind": spec["kind"],
+                     "measured": value, "bound": spec["bound"], "passed": ok}
+        entry["statement"] = spec["statement"]
+        results.append(entry)
+        passed = passed and entry["passed"]
+    return {"bounds_passed": passed, "bounds": results}
+
+
+def evaluate_tierb_probe_strength(
+    bounds: dict[str, Any], probe: dict[str, Any]
+) -> dict[str, Any]:
+    """A bound is only as strong as the probe that tested it."""
+    floor = bounds["probe_strength_floor"]
+    checks = [
+        ("operand_scale", probe.get("operand_scale"),
+         floor["required_operand_scale"],
+         probe.get("operand_scale") == floor["required_operand_scale"]),
+        ("context_lengths", len(probe.get("seq_lens", [])),
+         floor["min_context_lengths"],
+         len(probe.get("seq_lens", [])) >= floor["min_context_lengths"]),
+        ("shortest_context", min(probe.get("seq_lens", [10**9])),
+         floor["max_shortest_context_length"],
+         min(probe.get("seq_lens", [10**9]))
+         <= floor["max_shortest_context_length"]),
+        ("longest_context", max(probe.get("seq_lens", [0])),
+         floor["min_longest_context_length"],
+         max(probe.get("seq_lens", [0]))
+         >= floor["min_longest_context_length"]),
+        ("seeds", probe.get("seeds", 0), floor["min_seeds_per_length"],
+         probe.get("seeds", 0) >= floor["min_seeds_per_length"]),
+        ("output_elements", probe.get("output_elements", 0),
+         floor["min_output_elements_characterized"],
+         probe.get("output_elements", 0)
+         >= floor["min_output_elements_characterized"]),
+        ("determinism_reps", probe.get("determinism_reps", 0),
+         floor["min_determinism_reps"],
+         probe.get("determinism_reps", 0) >= floor["min_determinism_reps"]),
+        ("determinism_processes", probe.get("determinism_processes", 0),
+         floor["min_determinism_processes"],
+         probe.get("determinism_processes", 0)
+         >= floor["min_determinism_processes"]),
+        ("exact_context_lengths", len(probe.get("exact_seq_lens", [])),
+         floor["min_exact_reference_context_lengths"],
+         len(probe.get("exact_seq_lens", []))
+         >= floor["min_exact_reference_context_lengths"]),
+        ("exact_seeds", probe.get("exact_seeds", 0),
+         floor["min_exact_reference_seeds_per_length"],
+         probe.get("exact_seeds", 0)
+         >= floor["min_exact_reference_seeds_per_length"]),
+    ]
+    return {
+        "probe_strength_passed": all(c[3] for c in checks),
+        "checks": [
+            {"name": n, "measured": m, "floor": f, "passed": ok}
+            for n, m, f, ok in checks
+        ],
+    }
+
+
+def tierb_credential_digest(payload: dict[str, Any]) -> str:
+    body = {k: v for k, v in payload.items() if k != "credential_sha256"}
+    return _digest(canonical_bytes(body))
+
+
+def validate_tierb_credential(
+    credential_path: Path,
+    *,
+    arm: str,
+    expected_candidate_sha256: str,
+    expected_source_commit: str,
+    expected_patch_source_sha256: str,
+    bounds_path: Path,
+) -> dict[str, Any]:
+    """Accept a Tier-B credential -- for a tier-b arm, and for nothing else.
+
+    Refusal order matters. The arm check is FIRST so that presenting this
+    credential for a byte-gated arm fails on the fact that the arm is not
+    tier-b, before any measurement is examined and regardless of how good the
+    numbers are. The Tier-A path is not reachable from here at all.
+    """
+    if arm not in TIERB_ARMS:
+        raise ValueError(
+            f"tier-b credentials are not accepted for arm {arm!r}; the "
+            "byte-exact Tier-A path is unchanged and is the only door for it"
+        )
+    if arm not in LIVE_ARMS:
+        raise ValueError(f"unknown qrow32 B1 arm: {arm!r}")
+    if arm in _FR13_PRODUCTION_ARMS_VIEW:
+        raise ValueError(
+            "a tier-b arm must not also be a production arm: tier-b authorises "
+            "live-A/B serving only, and promoted-default is a separate gate"
+        )
+
+    payload, raw = load_json(credential_path)
+    if payload.get("schema") != TIERB_SCHEMA:
+        raise ValueError("tier-b credential schema drifted")
+    recorded_digest = payload.get("credential_sha256")
+    if not isinstance(recorded_digest, str):
+        raise ValueError("tier-b credential carries no digest")
+    if tierb_credential_digest(payload) != recorded_digest:
+        raise ValueError("tier-b credential digest does not cover its body")
+
+    bounds = load_tierb_bounds(bounds_path)
+
+    identity = payload.get("identity")
+    if not isinstance(identity, dict):
+        raise ValueError("tier-b credential carries no identity")
+    for field in TIERB_BINDING_FIELDS:
+        if field not in identity:
+            raise ValueError(f"tier-b credential is not bound on {field}")
+    pinned = TIERB_ARM_IDENTITY[arm]
+    contract = _candidate_contract(arm)
+    expected_identity = {
+        "arm": arm,
+        "so_sha256": _sha256(expected_candidate_sha256, "candidate SO"),
+        "so_size": contract["size"],
+        "source_closure_sha256": pinned["source_closure_sha256"],
+        "fa2_head": pinned["fa2_head"],
+        "sass_digest_sha256": pinned["sass_digest_sha256"],
+        "baseline_sass_digest_sha256": pinned["baseline_sass_digest_sha256"],
+        "source_commit": _commit(expected_source_commit, "source commit"),
+        "patch_source_sha256": _sha256(
+            expected_patch_source_sha256, "patch source"
+        ),
+        "bounds_sha256": TIERB_BOUNDS_SHA256,
+    }
+    for field, expected in expected_identity.items():
+        if identity.get(field) != expected:
+            raise ValueError(
+                f"tier-b credential {field} does not bind this arm: "
+                f"{identity.get(field)!r} != {expected!r}"
+            )
+    if identity["so_sha256"] != contract["sha256"]:
+        raise ValueError("tier-b credential names a binary that is not pinned")
+
+    determinism = payload.get("determinism")
+    if not isinstance(determinism, dict):
+        raise ValueError("tier-b credential carries no determinism record")
+    if determinism.get("all_cases_bitwise_identical") is not True:
+        raise ValueError("tier-b determinism gate did not pass in-process")
+    if determinism.get("cross_process_digests_identical") is not True:
+        raise ValueError("tier-b determinism gate did not pass across processes")
+
+    measured = payload.get("measurements")
+    probe = payload.get("probe")
+    if not isinstance(measured, dict) or not isinstance(probe, dict):
+        raise ValueError("tier-b credential carries no measurements")
+    strength = evaluate_tierb_probe_strength(bounds, probe)
+    if not strength["probe_strength_passed"]:
+        failed = [c["name"] for c in strength["checks"] if not c["passed"]]
+        raise ValueError(
+            "tier-b probe is weaker than the pre-registered floor: "
+            + ", ".join(failed)
+        )
+    verdict = evaluate_tierb_bounds(bounds, measured)
+    if not verdict["bounds_passed"]:
+        failed = [b["id"] for b in verdict["bounds"] if not b["passed"]]
+        raise ValueError(
+            "tier-b credential does not clear its pre-registered bounds: "
+            + ", ".join(failed)
+        )
+    return {
+        "arm": arm,
+        "tier": "B",
+        "schema": TIERB_SCHEMA,
+        "credential_sha256": recorded_digest,
+        "bounds_sha256": TIERB_BOUNDS_SHA256,
+        "identity": expected_identity,
+        "determinism": determinism,
+        "probe_strength": strength,
+        "bounds": verdict,
+        "grants": "live-A/B serving only; promoted-default remains ungranted",
+    }
+
+
+
 
 def _digest(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
