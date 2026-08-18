@@ -1,0 +1,92 @@
+{
+  "B1": {
+    "bench": "B1_gdn_state_copy_floor",
+    "layers": 48,
+    "measured_replay_ms_per_step_nsys": 4.42,
+    "note": "one_copy_ms is the FLOOR for any checkpoint-commit that must move the state; the checkpoint WRITE during sfwd costs at least the same again per checkpointed spine node.",
+    "one_copy_gbps": 233.47114996647377,
+    "one_copy_ms": 1.2934783935546874,
+    "per_layer_48_copies_ms": 1.5314892578125,
+    "state_bytes_total": 150994944,
+    "state_mib_total": 144.0
+  },
+  "G1": {
+    "cases_failed": 0,
+    "cases_run": 160,
+    "failures": [],
+    "gate": "G1_batched_softmax_bitwise_equals_single_row",
+    "trials_per_cell": 4,
+    "verdict": "PASS",
+    "vocab": 248320,
+    "widths": [
+      2,
+      3,
+      4,
+      8,
+      12,
+      16,
+      24,
+      31
+    ]
+  },
+  "G2": {
+    "batched_rowsum_differs": true,
+    "cases_differing": 77,
+    "cases_run": 160,
+    "gate": "G2_batched_rowsum_vs_per_row_sum",
+    "max_ulp_observed": 2
+  },
+  "G3": {
+    "batch_size": 1,
+    "comparisons": 240,
+    "failures": [],
+    "gate": "G3_composite_per_level_expression_at_B1",
+    "reachable_rows": 12,
+    "verdict": "PASS"
+  },
+  "G4": {
+    "comparisons": 60,
+    "gate": "G4_softmax_rank1_vs_rank2_dispatch",
+    "mismatches": 0,
+    "verdict": "PASS"
+  },
+  "T1": {
+    "batched_24_gathered_ms": 0.5373881530761718,
+    "batched_all31_ms": 0.5882976150512695,
+    "bench": "T1_softmax_batching",
+    "incumbent_24_single_rows_ms": 2.2597702026367186,
+    "saving_vs_batched_24_ms": 1.7223820495605469,
+    "saving_vs_batched_all31_ms": 1.671472587585449,
+    "single_row_effective_gbps": 29.843859134966703,
+    "single_row_ms": 0.06656511783599854,
+    "softmax_calls_per_step": 24,
+    "vocab": 248320
+  },
+  "acceptance_valid": false,
+  "analysis_only": true,
+  "deployed_geometry": {
+    "full_vocab_softmax_calls_per_step": 24,
+    "physical_drafts": 31,
+    "source": "output/fr13_fixed32_b1_nsys_20260818T001018Z/hydra27_fixed32_b1_nsys_f32_20260818T001018Z/logs/fr13_fixed32_work_census.jsonl (taw.*)",
+    "vocab_size": 248320,
+    "walk_levels": 12
+  },
+  "elapsed_s": 1.48,
+  "environment": {
+    "capability": [
+      12,
+      1
+    ],
+    "cuda": "13.0",
+    "device_name": "NVIDIA GB10",
+    "platform": "Linux-6.14.0-1015-nvidia-aarch64-with-glibc2.35",
+    "torch": "2.11.0+cu130"
+  },
+  "gate_verdicts": {
+    "G1": "PASS",
+    "G3": "PASS",
+    "G4": "PASS"
+  },
+  "overall": "PASS",
+  "schema": "fr14.cfwd_softmax_batching_probe.v1"
+}
