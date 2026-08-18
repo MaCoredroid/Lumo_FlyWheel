@@ -1,0 +1,9 @@
+[regate] 2026-08-18T17:09:22Z HEAD=a1aceef05a15c7d87c9f39df88b990bc0a12a56d
+               total        used        free      shared  buff/cache   available
+Mem:             117          12         105           0           0         105
+Swap:             15           0          15
+[regate] rc=14 2026-08-18T17:18:46Z
+[regate] containers after: 0
+6ce9e47f1bb4c2db98e21b0e355f13937611c0e9a68bfcfb87084fe19e58d0be
+6ce9e47f1bb4c2db98e21b0e355f13937611c0e9a68bfcfb87084fe19e58d0be
+runtime/source manifest changed during qrow32 gate

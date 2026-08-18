@@ -281,6 +281,51 @@
   },
   "window_utc": "2026-08-18T15:53Z..16:19Z"
  },
+ "round5": {
+  "actions_taken": [
+   "yielded (the standing foreign-container rule, applied to the source tree)",
+   "touched nothing of lane 4 \u2014 not stashed, not reverted, not committed",
+   "committed results/ paths only, by pathspec",
+   "GPU released, zero containers"
+  ],
+  "cause": {
+   "commit_landed_during_gate": "9d294733b FR14 lane 4 PRE-REGISTRATION",
+   "files_changed_mid_gate": {
+    "scripts/fr13_fixed32_contract.py": {
+     "end": 168732,
+     "launch": 166151
+    },
+    "scripts/fr13_patch_fa2_tree_bias.py": {
+     "end": 447449,
+     "grew_again_after": 453943,
+     "launch": 440309
+    },
+    "scripts/fr13_qrow32_b1_pass_sidecar.py": {
+     "end": 65558,
+     "launch": 52215
+    }
+   },
+   "kind": "concurrent editor of tracked source during a HEAD-bound credential run",
+   "worktree_state_at_report": "dirty \u2014 the same three files modified but uncommitted"
+  },
+  "gate_reearn": {
+   "credential_minted": false,
+   "pointer_still_at": "7ac3bde9bd330d5db005ad083a6bc4561fa5a3f2",
+   "refusal": "runtime/source manifest changed during qrow32 gate",
+   "runner_rc": 14,
+   "serve": "PASS (swerc=0, astropy__astropy-12907 resolved)"
+  },
+  "head_at_launch": "a1aceef05a15c7d87c9f39df88b990bc0a12a56d",
+  "ready": "gate re-earn (4 consecutive PASSes), ARM G via the promoted top-k default, 11.7 checklist, pairing accounting per round-3 section R3.4",
+  "status": "BLOCKED \u2014 no arm run, no credential minted, standing by",
+  "unblock_condition": "a window with no other lane editing tracked source from the gate launch through the arm drain, roughly gate + 3.5 h",
+  "why_not_retried": [
+   "the gate asserts the manifest is byte-equal at start and end, so a concurrent editor fails it by definition",
+   "the gate preflight requires a clean tracked worktree and the tree is not clean",
+   "the dangerous case is silent: edits landing BETWEEN a passing gate and the arm boot would have the arm serve a stack whose source differs from its credential \u2014 the interlock just prevented exactly that"
+  ],
+  "window_utc": "2026-08-18T17:09Z..17:19Z"
+ },
  "schema": "fr14.promotion_ab.campaign_summary.v1",
  "step0_regate": {
   "cause": "fr13_fixed32_work_census.py:157 TAW_SOURCE_CONTRACT_SHA256 stale at 484babd7 vs emitter 68b289ae",

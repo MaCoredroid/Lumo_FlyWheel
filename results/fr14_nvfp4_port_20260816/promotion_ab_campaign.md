@@ -1156,3 +1156,92 @@ every per-step interlock has been satisfied, so the remaining sites are
 concentrated in flush/reconcile/materialisation code that only a task boundary
 exercises — a much smaller surface than the per-step drafter, and one this scan
 now covers.
+
+---
+---
+
+# ROUND 5 (2026-08-18 17:09Z–17:19Z) — BLOCKED: the repo moved under the gate
+
+**No arm was run. No GPU was spent beyond one gate window. Standing by.**
+
+## R5.1 What happened
+
+Gate re-earn launched at HEAD `a1aceef05`. **The serve itself passed** —
+`ARM_DONE … swerc=0`, `astropy__astropy-12907` resolved, container torn down,
+zero containers after. The gate runner then refused at its manifest interlock:
+
+```
+[regate] rc=14
+runtime/source manifest changed during qrow32 gate
+```
+
+The manifest diff names the cause exactly — **three tracked source files changed
+between the gate's launch and its end**:
+
+| file | at launch | at end |
+|---|---|---|
+| `scripts/fr13_fixed32_contract.py` | 166 151 B `85a185d6…` | 168 732 B `9bab69d3…` |
+| `scripts/fr13_patch_fa2_tree_bias.py` | 440 309 B `1e978032…` | 447 449 B `b5b715e1…` |
+| `scripts/fr13_qrow32_b1_pass_sidecar.py` | 52 215 B `5404be89…` | 65 558 B `45094311…` |
+
+All three are the FA2 / split-K provenance surface, and a commit landed on top of
+mine while my gate was running:
+
+```
+9d294733b  FR14 lane 4 PRE-REGISTRATION: the Tier-B bounds, written before the gate runner exists
+a1aceef05  (mine, the round-5 preparation)
+```
+
+At the time of writing the worktree is **still dirty** with those same three files
+modified-but-uncommitted, and `fr13_patch_fa2_tree_bias.py` has grown again since
+the gate ended (447 449 → 453 943 B). Lane 4 is mid-edit on the split-K serving
+route Mark approved in pass 64.
+
+## R5.2 Why this stops round 5 rather than being retried
+
+**No credential was minted.** rc=14 fires before the verification JSON is written,
+so `output/fr13_b1_gqa_pair_credential.env` still points at `7ac3bde9b` — two
+HEADs stale. Without a serviceable credential the arm would serve the qrow16
+incumbent, which is not the arm this round is for.
+
+**And the gate cannot even be restarted right now**: its preflight requires a
+clean tracked worktree, and the tree is not clean. That refusal is correct.
+
+**The deeper reason is not the retry cost.** A HEAD-bound credential campaign and
+a concurrent editor of tracked source are mutually exclusive by construction:
+
+* the gate asserts the manifest is byte-equal at start and end — a concurrent
+  editor makes that assertion fail **by definition**, however many times it is
+  retried;
+* worse is the case that does *not* fail loudly: if lane 4's edits land in the
+  window **between** a successful gate and the arm's boot, the arm serves a stack
+  whose source no longer matches the credential it presents. The interlock is
+  what prevents that, and it just prevented it.
+
+So the honest move is to **yield**, exactly as the standing rule says for a
+foreign container on the GPU. The same principle applies to the source tree: this
+campaign does not own it, and it must not race an owner who does.
+
+**Nothing of lane 4's was touched** — not stashed, not reverted, not committed.
+Only `results/` paths are committed here, by pathspec, as always.
+
+## R5.3 What round 5 still needs, unchanged
+
+The moment the tree is settled and lane 4's work is committed:
+
+1. gate re-earn at whatever HEAD is then current (~13 min, four consecutive
+   PASSes at this point);
+2. ARM G' — gqa_pair + fused top-k **via the promoted default** (the round-5
+   preparation in `a1aceef05` makes the runner name nothing, so it exercises the
+   promoted launcher literals rather than this campaign's own);
+3. §11.7 checklist at boot, then first task-boundary survival — which is the new
+   frontier, since round 4 died there after a complete task and the 16th-site fix
+   makes the reconciliation per-segment;
+4. drain report with warm rate vs the pre-registered 0.15–0.25 and the paired
+   accept / dfwd / step_wall against round-2 C', using the accounting already
+   recorded in §R3.4.
+
+**One coordination request, and it is the only thing blocking:** round 5 needs a
+window in which no other lane edits tracked source between the gate's launch and
+the arm's drain — roughly gate + 3.5 h. Everything else is ready and has been
+rehearsed four times.
