@@ -208,6 +208,10 @@ def test_live_verifier_requires_all_layers_slots_and_real_exact4(tmp_path: Path)
                 "batch_size": 4,
                 "concurrency": 4,
                 "task_count": 4,
+                "instances_total": 4,
+                "started_at": "2026-08-10T00:00:00Z",
+                "ended_at": "2026-08-10T01:00:00Z",
+                "verdict_counts": {"resolved": 3, "unresolved": 1},
                 "subset_sha256": module.EXACT4_SUBSET_SHA256,
                 "task_ids": list(module.TASK_IDS),
                 "marker": (
@@ -263,13 +267,17 @@ def test_live_verifier_requires_all_layers_slots_and_real_exact4(tmp_path: Path)
         encoding="ascii",
     )
     arm_payload = json.loads(campaign_arm.read_text(encoding="ascii"))
-    arm_payload["task_count"] = 4.0
+    arm_payload["instances_total"] = 4.0
     campaign_arm.write_text(json.dumps(arm_payload), encoding="ascii")
-    with pytest.raises(module.GateError, match="canonical exact4 arm"):
+    with pytest.raises(
+        module.GateError, match="completed canonical exact4 campaign"
+    ):
         module.verify_live(args)
 
-    arm_payload["task_count"] = 4
-    arm_payload["subset_sha256"] = "0" * 64
+    arm_payload["instances_total"] = 4
+    arm_payload["verdict_counts"] = {"resolved": 2, "unresolved": 1}
     campaign_arm.write_text(json.dumps(arm_payload), encoding="ascii")
-    with pytest.raises(module.GateError, match="canonical exact4 arm"):
+    with pytest.raises(
+        module.GateError, match="completed canonical exact4 campaign"
+    ):
         module.verify_live(args)
