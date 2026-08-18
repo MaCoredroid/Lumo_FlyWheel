@@ -86,7 +86,7 @@ SOURCE_CLOSURE_SHA256=c88a767e97e29dd84054450b67aa4266c3462c2b6ceed2c85ee4721bb5
 # THIS ARM'S PIN was taken from its first qualified build (FR14 split-K lane,
 # 2026-08-18) via the bootstrap mode below, which stops BEFORE the link so no
 # uncredentialed artifact can exist. Do NOT re-pin it to make a build pass.
-SASS_DIGEST_SHA256=__SASS_PIN__
+SASS_DIGEST_SHA256=3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e
 
 # THE STAGED-ARTIFACT CREDENTIAL. The .so sha256 is NOT rebuild-reproducible
 # (nvcc stamps its container PID into host-side name tables), so it answers a
