@@ -68,8 +68,8 @@ Verification performed by this lane, today:
   — **18 passed** (anchor-exactly-once, fail-closed baked not env-read,
   idempotent within a mode, refuses to cross modes, launcher ordering, runtime
   manifest closure).
-* **Live boot, 02:42:57Z equivalent (`01:42:57` container clock), fresh
-  container, production patcher, `FR14_REQUIRE_NVFP4_LMHEAD=1`:**
+* **Live boot 2026-08-18 01:42:57Z**, fresh container, production patcher,
+  `FR14_REQUIRE_NVFP4_LMHEAD=1`:
 
   ```
   INFO 08-18 01:42:57 [modelopt.py:2225] FR14_LMHEAD_NVFP4 ParallelLMHead prefix=language_model.lm_head resolved_algo=NVFP4
@@ -277,10 +277,9 @@ the quantity that bounds the distributional shift a paired A/B would see.
 ## A.5 GENERATION PROBE + EYEBALL VERDICT
 
 Two GPU windows, NVFP4 head live and fail-closed, `--enforce-eager`, seed
-20260818. Phase 2 re-ran the tool path under the **production** parser flags
-(`--enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser
-qwen3`, matching `fr13_launch_forked_fa2_tree_server.sh:7168`) after phase 1's
-tool request 400'd — a probe defect, recorded rather than hidden.
+20260818. Eight traces total across greedy (T=0) and the campaign's serving
+sampler (T=0.6 / top_p 0.95 / top_k 20), including a deliberate 2,560-token
+repetition trap and the tool-call path under the production parser.
 
 ### VERDICT: **NO DEGENERATION SIGNATURE. PASS. Lane may proceed.**
 
@@ -379,6 +378,9 @@ pass every column):
 | greedy_exactness | greedy | 60 | 0.667 | 2 | 1 | — | 0.00000 | 0/0/0/0 | **stop** |
 | sampled_long_code | sampled | 1040 | 0.445 | 3 | 1 | 0.031 | 0.00000 | 0/0/0/0 | length |
 | sampled_repetition_trap | sampled | 1640 | 0.460 | 2 | 1 | 0.000 | 0.00000 | 0/0/0/0 | length |
+| p2_greedy_bugfix_to_completion | greedy | 118 | 0.822 | 1 | 1 | 0.000 | 0.00000 | 0/0/0/0 | **stop** |
+| p2_greedy_tool_call | greedy | — | — | — | — | — | — | — | **tool_calls** |
+| p2_sampled_tool_call | sampled | — | — | — | — | — | — | — | **tool_calls** |
 
 **The one thing that looked like a signature, and what it actually was.** The
 two greedy long traces show `tail_repeat_fraction ≈ 0.5`. Reading them: this is
@@ -388,14 +390,65 @@ repeated 8-gram occurs 3 times in ~840 words; a genuine loop pins that counter
 into the tens or hundreds. Zero non-ASCII characters across every trace, zero
 delimiter imbalance, zero mid-word breaks on reading.
 
-**A real limitation, disclosed.** Four of five phase-1 traces ended with
-`finish_reason: length` *inside* the reasoning block, so phase 1 read the
-model's deliberation but never its final answer. Phase 2 raised one to 6,144
-tokens for exactly that reason. Temperature-0 over-deliberation on a reasoning
-model is a known artifact of greedy decoding, not a precision symptom — the
-campaign serves at 0.6/0.95/20 — but a probe that never sees a completed answer
-cannot claim to have checked the answer, and this one only saw completed answers
-where noted.
+**Phase 1's disclosed limitation, and how phase 2 closed it.** Four of five
+phase-1 traces ended with `finish_reason: length` *inside* the reasoning block,
+so phase 1 read the model's deliberation but never its final answer — and the
+answer is where truncated code, unbalanced delimiters and mid-word breaks would
+show. Phase 2 re-ran one at 6,144 tokens. It finished (`finish_reason: stop`,
+2,259 completion tokens) with a complete, correct, cleanly formatted answer:
+
+```
+**Boundary bug:**
+`start < last[1]` fails to merge intervals that touch at an endpoint, e.g. `[1, 2]`
+and `[2, 3]`. For closed `[start, end]` intervals, this should be `start <= last[1]`.
+
+**Mutation bug:**
+The function mutates the input:
+
+- `intervals.sort(...)` sorts the caller's list in place.
+- `out = [intervals[0]]` stores a reference to the original interval.
+- `last[1] = ...` then mutates the original interval object.
+```
+
+followed by a balanced, correct fenced code block. Both planted bugs named
+precisely; markdown well-formed; type-token ratio 0.822; max line repeat 1.
+
+### Tool calls — Mark's named "malformed tool call" signature
+
+Phase 1's tool request returned **HTTP 400** because the probe had booted
+*without* the production serve line's parser flags. That is a probe defect, not
+a model result, and it is recorded rather than hidden. Phase 2 re-ran under
+`--enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3`
+— the same flags as `fr13_launch_forked_fa2_tree_server.sh:7168` — so a tool
+call this probe rejects is one the real serve would also reject.
+
+**Both regimes emitted well-formed calls. `finish_reason: tool_calls`.**
+
+Greedy, verbatim from the artifact:
+
+```json
+{"name": "run_tests",
+ "arguments": "{\"path\": \"tests/test_loader.py\", \"keyword\": \"shard_rank\", \"verbose\": true}"}
+```
+
+Sampled — two calls, and in the order the prompt asked for ("Before changing
+anything, read … and then run …"):
+
+```json
+{"name": "read_file",
+ "arguments": "{\"path\": \"pipeline/loader.py\", \"start_line\": 180, \"end_line\": 220}"}
+{"name": "run_tests",
+ "arguments": "{\"path\": \"pipeline\", \"keyword\": \"rank\"}"}
+```
+
+Every call: JSON parses, function name is one of the two declared, **zero**
+unknown parameters, types correct (`verbose` a real boolean, line numbers real
+integers). No malformation of any kind.
+
+Temperature-0 over-deliberation on a reasoning model is a known artifact of
+greedy decoding, not a precision symptom — the campaign serves at 0.6/0.95/20 —
+but a probe that never sees a completed answer cannot claim to have checked one,
+which is why phase 2 exists.
 
 **External corroboration.** RadixArk's own `qualification.json` for this exact
 checkpoint records gsm8k 1319/1319 attempted, **97.27%** correct, `stop_rate
@@ -565,5 +618,26 @@ Results:
 * `lane5a_lmhead_weight_characterization.json`
 * `lane5a_logit_characterization.json`
 * `lane5a_head_gemm_microbench.json`
-* `lane5a_capture_meta.json`
-* `lane5a_generations_eyeball.json` (traces, verbatim)
+* `lane5a_capture_meta.json` (phase 1, 7,827 rows) /
+  `lane5a_capture_meta_p2.json` (phase 2, 2,517 rows)
+* `lane5a_generations_eyeball.json` (phase 1 traces, verbatim) /
+  `lane5a_generations_eyeball_p2.json` (phase 2, incl. tool calls)
+
+Reproduce:
+
+```bash
+# offline, CPU only
+python3 results/fr14_nvfp4_port_20260816/nvfp4_lmhead_characterization.py \
+    --phase weights --chunk 8192 --out <out>.json
+python3 results/fr14_nvfp4_port_20260816/nvfp4_lmhead_characterization.py \
+    --phase logits --hidden <capture>.f32 --max-rows 1024 --chunk 8192 --out <out>.json
+
+# GPU, docker-empty required, container removed on exit
+bash results/fr14_nvfp4_port_20260816/fr14_lane5a_run_microbench.sh --iters 30
+bash results/fr14_nvfp4_port_20260816/fr14_lane5a_generation_probe.sh
+SUFFIX=_p2 PROMPT_SET=--phase2 bash results/fr14_nvfp4_port_20260816/fr14_lane5a_generation_probe.sh
+```
+
+GPU discipline for this lane: three bounded windows (23 min, 2 min, 9 min), each
+preceded by a docker-empty check and a unified-memory gate, each tearing its
+container down unconditionally on exit. Zero containers left at every boundary.

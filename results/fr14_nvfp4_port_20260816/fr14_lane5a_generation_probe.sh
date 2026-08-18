@@ -172,7 +172,7 @@ json.dump(results, open(OUT + "/generations.json", "w"), indent=1)
 PY
 
 docker logs $NAME > "$CLOG" 2>&1
-cp -f "$OUT/hidden.f32.meta.json" "$RES_DIR/lane5a_capture_meta.json" 2>/dev/null
+cp -f "$OUT/hidden.f32.meta.json" "$RES_DIR/lane5a_capture_meta${SUFFIX}.json" 2>/dev/null
 log "capture meta:"; cat "$OUT/hidden.f32.meta.json" 2>/dev/null | tee -a "$LOG"
 cleanup
 log "teardown complete; containers now: $(docker ps -aq | wc -l)"

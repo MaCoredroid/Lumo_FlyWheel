@@ -1,0 +1,178 @@
+{
+ "schema": "fr14.lane5a.eyeball.v1",
+ "traces": [
+  {
+   "id": "p2_greedy_tool_call",
+   "regime": "greedy",
+   "max_tokens": 1536,
+   "sampling": {
+    "temperature": 0.0
+   },
+   "wall_s": 55.354151010513306,
+   "error": null,
+   "usage": {
+    "prompt_tokens": 454,
+    "total_tokens": 550,
+    "completion_tokens": 96,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "tool_calls",
+   "signatures": {
+    "chars": 0,
+    "words": 0,
+    "lines": 0,
+    "type_token_ratio": 0.0,
+    "max_line_repeat": 0,
+    "most_repeated_line": "",
+    "longest_ngram_loop": {
+     "ngram": "",
+     "count": 0
+    },
+    "tail_repeat_fraction": 0.0,
+    "mid_word_break_candidates": 0,
+    "nonascii_chars": 0,
+    "nonascii_fraction": 0.0,
+    "unbalanced_delims": {
+     "{}": 0,
+     "[]": 0,
+     "()": 0,
+     "```": 0
+    }
+   },
+   "tool_calls": {
+    "n_tool_calls": 1,
+    "calls": [
+     {
+      "name": "run_tests",
+      "raw_arguments": "{\"path\": \"tests/test_loader.py\", \"keyword\": \"shard_rank\", \"verbose\": true}",
+      "known_function": true,
+      "json_parses": true,
+      "args": {
+       "path": "tests/test_loader.py",
+       "keyword": "shard_rank",
+       "verbose": true
+      },
+      "unknown_params": []
+     }
+    ]
+   },
+   "head_excerpt": "",
+   "tail_excerpt": "",
+   "full_text": ""
+  },
+  {
+   "id": "p2_sampled_tool_call",
+   "regime": "sampled",
+   "max_tokens": 1536,
+   "sampling": {
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20
+   },
+   "wall_s": 14.408884286880493,
+   "error": null,
+   "usage": {
+    "prompt_tokens": 449,
+    "total_tokens": 600,
+    "completion_tokens": 151,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "tool_calls",
+   "signatures": {
+    "chars": 0,
+    "words": 0,
+    "lines": 0,
+    "type_token_ratio": 0.0,
+    "max_line_repeat": 0,
+    "most_repeated_line": "",
+    "longest_ngram_loop": {
+     "ngram": "",
+     "count": 0
+    },
+    "tail_repeat_fraction": 0.0,
+    "mid_word_break_candidates": 0,
+    "nonascii_chars": 0,
+    "nonascii_fraction": 0.0,
+    "unbalanced_delims": {
+     "{}": 0,
+     "[]": 0,
+     "()": 0,
+     "```": 0
+    }
+   },
+   "tool_calls": {
+    "n_tool_calls": 2,
+    "calls": [
+     {
+      "name": "read_file",
+      "raw_arguments": "{\"path\": \"pipeline/loader.py\", \"start_line\": 180, \"end_line\": 220}",
+      "known_function": true,
+      "json_parses": true,
+      "args": {
+       "path": "pipeline/loader.py",
+       "start_line": 180,
+       "end_line": 220
+      },
+      "unknown_params": []
+     },
+     {
+      "name": "run_tests",
+      "raw_arguments": "{\"path\": \"pipeline\", \"keyword\": \"rank\"}",
+      "known_function": true,
+      "json_parses": true,
+      "args": {
+       "path": "pipeline",
+       "keyword": "rank"
+      },
+      "unknown_params": []
+     }
+    ]
+   },
+   "head_excerpt": "",
+   "tail_excerpt": "",
+   "full_text": ""
+  },
+  {
+   "id": "p2_greedy_bugfix_to_completion",
+   "regime": "greedy",
+   "max_tokens": 6144,
+   "sampling": {
+    "temperature": 0.0
+   },
+   "wall_s": 211.82617139816284,
+   "error": null,
+   "usage": {
+    "prompt_tokens": 194,
+    "total_tokens": 2453,
+    "completion_tokens": 2259,
+    "prompt_tokens_details": null
+   },
+   "finish_reason": "stop",
+   "signatures": {
+    "chars": 925,
+    "words": 118,
+    "lines": 23,
+    "type_token_ratio": 0.8220338983050848,
+    "max_line_repeat": 1,
+    "most_repeated_line": "**Boundary bug:**",
+    "longest_ngram_loop": {
+     "ngram": "**Boundary bug:** `start < last[1]` fails to merge",
+     "count": 1
+    },
+    "tail_repeat_fraction": 0.0,
+    "mid_word_break_candidates": 16,
+    "nonascii_chars": 0,
+    "nonascii_fraction": 0.0,
+    "unbalanced_delims": {
+     "{}": 0,
+     "[]": 0,
+     "()": 0,
+     "```": 0
+    }
+   },
+   "head_excerpt": "\n\n**Boundary bug:**  \n`start < last[1]` fails to merge intervals that touch at an endpoint, e.g. `[1, 2]` and `[2, 3]`. For closed `[start, end]` intervals, this should be `start <= last[1]`.\n\n**Mutation bug:**  \nThe function mutates the input:\n\n- `intervals.sort(...)` sorts the caller\u2019s list in place.\n- `out = [intervals[0]]` stores a reference to the original interval.\n- `last[1] = ...` then mutates the original interval object.\n\nCorrected function:\n\n```python\ndef merge_intervals(intervals):\n    \"\"\"Merge overlapping [start, end] intervals. Returns a new sorted list.\"\"\"\n    if not intervals:\n        return []\n\n    sorted_intervals = sorted(intervals, key=lambda x: x[0])\n    out = [list(sorted_intervals[0])]\n\n    for start, end in sorted_intervals[1:]:\n        last = out[-1]\n        if start <= last[1]:\n            last[1] = max(last[1], end)\n        else:\n            out.append([start, end])\n\n    return out\n```",
+   "tail_excerpt": "\n\n**Boundary bug:**  \n`start < last[1]` fails to merge intervals that touch at an endpoint, e.g. `[1, 2]` and `[2, 3]`. For closed `[start, end]` intervals, this should be `start <= last[1]`.\n\n**Mutation bug:**  \nThe function mutates the input:\n\n- `intervals.sort(...)` sorts the caller\u2019s list in place.\n- `out = [intervals[0]]` stores a reference to the original interval.\n- `last[1] = ...` then mutates the original interval object.\n\nCorrected function:\n\n```python\ndef merge_intervals(intervals):\n    \"\"\"Merge overlapping [start, end] intervals. Returns a new sorted list.\"\"\"\n    if not intervals:\n        return []\n\n    sorted_intervals = sorted(intervals, key=lambda x: x[0])\n    out = [list(sorted_intervals[0])]\n\n    for start, end in sorted_intervals[1:]:\n        last = out[-1]\n        if start <= last[1]:\n            last[1] = max(last[1], end)\n        else:\n            out.append([start, end])\n\n    return out\n```",
+   "full_text": "\n\n**Boundary bug:**  \n`start < last[1]` fails to merge intervals that touch at an endpoint, e.g. `[1, 2]` and `[2, 3]`. For closed `[start, end]` intervals, this should be `start <= last[1]`.\n\n**Mutation bug:**  \nThe function mutates the input:\n\n- `intervals.sort(...)` sorts the caller\u2019s list in place.\n- `out = [intervals[0]]` stores a reference to the original interval.\n- `last[1] = ...` then mutates the original interval object.\n\nCorrected function:\n\n```python\ndef merge_intervals(intervals):\n    \"\"\"Merge overlapping [start, end] intervals. Returns a new sorted list.\"\"\"\n    if not intervals:\n        return []\n\n    sorted_intervals = sorted(intervals, key=lambda x: x[0])\n    out = [list(sorted_intervals[0])]\n\n    for start, end in sorted_intervals[1:]:\n        last = out[-1]\n        if start <= last[1]:\n            last[1] = max(last[1], end)\n        else:\n            out.append([start, end])\n\n    return out\n```"
+  }
+ ]
+}

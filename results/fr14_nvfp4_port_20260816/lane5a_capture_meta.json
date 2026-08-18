@@ -1,0 +1,1 @@
+{"rows": 7827, "hidden": 5120, "hidden_dtype": "float32", "top_record": "int32 argmax then float32 top1, float32 top2", "calls": 7821, "logit_widths": {"248320": 7821}, "quant_method": "ModelOptNvFp4LinearMethod"}
