@@ -1,0 +1,149 @@
+{
+ "acceptance_is_not_a_reading": "byte-exact selection, 6840 configs / 0 raw-byte mismatches; any accept delta here is trajectory divergence, printed to keep the byte-exactness claim falsifiable.",
+ "deltas": {
+  "cfwd_ms_per_step": {
+   "delta_on_minus_off_ms": -0.007646210082132399,
+   "delta_pct": -0.037349306822591744,
+   "topk_off": 20.47216061720155,
+   "topk_on": 20.464514407119417
+  },
+  "dfwd_ms_per_step": {
+   "delta_on_minus_off_ms": 0.30740324740001057,
+   "delta_pct": 0.5575023039006752,
+   "topk_off": 55.1393680795941,
+   "topk_on": 55.44677132699411
+  },
+  "lmhead_ms_per_unit": {
+   "delta_on_minus_off_ms": -0.07098819750461649,
+   "delta_pct": -2.001938159646054,
+   "topk_off": 3.5459735438165243,
+   "topk_on": 3.474985346311908
+  },
+  "model_ms_per_unit": {
+   "delta_on_minus_off_ms": 0.021230578819339208,
+   "delta_pct": 0.32295039403152864,
+   "topk_off": 6.573944237784869,
+   "topk_on": 6.595174816604208
+  }
+ },
+ "instrument": "dfwd_split.lmhead (pre-registered in fused_draft_topk.md 8.2)",
+ "predicted_ms_per_step": -0.3078,
+ "predicted_note": "fused_draft_topk.md 6: -0.308 ms/step measured offline (8.6x on the selection stage), NOT the briefed -4.5; the surface was mislabeled and >=4.1 ms of it lives in the head GEMM projection.",
+ "schema": "fr14.promotion_ab.dfwd_span_verdict.v1",
+ "topk_off": {
+  "arm": "hydra27_fixed32_promoab_Cp0",
+  "cfwd_span": {
+   "gpu_seconds": 894.7971962566453,
+   "label": "committer",
+   "n_spans": 43708,
+   "schema": "fr13.span_gpu_timer.v1"
+  },
+  "derived_ms": {
+   "cfwd_ms_per_step": 20.47216061720155,
+   "dfwd_ms_per_step": 55.1393680795941,
+   "lmhead_ms_per_unit": 3.5459735438165243,
+   "model_ms_per_unit": 6.573944237784869
+  },
+  "dfwd_span": {
+   "gpu_seconds": 2410.031500022899,
+   "label": "drafter",
+   "n_spans": 43708,
+   "schema": "fr13.span_gpu_timer.v1"
+  },
+  "dfwd_split": {
+   "lmhead_seconds": 158.324172757864,
+   "model_seconds": 293.5266102170944,
+   "n_lmhead": 44649,
+   "n_model": 44650,
+   "n_sample": 0,
+   "other_seconds": 0.0,
+   "sample_seconds": 0.0,
+   "schema": "fr13.dfwd_split.v1"
+  },
+  "lfwd_span": null,
+  "runroot": "output/fr14_promoab_Cp0_20260818T120217Z",
+  "sfwd_span": {
+   "decode_forward_gpu_seconds": 5752.037970123248,
+   "decode_step_wall_seconds": 9353.734173498582,
+   "final": true,
+   "metric_name": "vllm:fr13_decode_forward_gpu_seconds_total",
+   "n_drafts_in_timed_steps": 43708,
+   "n_drafts_in_wall_steps": 43556,
+   "n_forward_dropped": 0,
+   "n_forward_pending": 0,
+   "n_forward_starts": 43708,
+   "n_pure_decode_steps_timed": 43708,
+   "n_wall_bookkeeping_errors": 0,
+   "n_wall_chain_resets": 151,
+   "n_wall_invalid_request_ids": 0,
+   "n_wall_rejected": 1,
+   "n_wall_request_set_resets": 0,
+   "n_wall_steps": 43556,
+   "note": "pure-decode (uniform_decode) model-forward GPU seconds; prefill + mixed + idle EXCLUDED; async cuda events, single synchronize at teardown. Cumulative running total; the reducer takes a delta across a request window.",
+   "pid": 156,
+   "schema": "fr13.sfwd_gpu_timer.v2",
+   "wall_cap_s": 1.5,
+   "wall_chain_open": false,
+   "wall_open_drafts": 0,
+   "wall_open_fwd_index": null
+  }
+ },
+ "topk_on": {
+  "arm": "hydra27_fixed32_promoab_Cp1",
+  "cfwd_span": {
+   "gpu_seconds": 1074.5302579746192,
+   "label": "committer",
+   "n_spans": 52507,
+   "schema": "fr13.span_gpu_timer.v1"
+  },
+  "derived_ms": {
+   "cfwd_ms_per_step": 20.464514407119417,
+   "dfwd_ms_per_step": 55.44677132699411,
+   "lmhead_ms_per_unit": 3.474985346311908,
+   "model_ms_per_unit": 6.595174816604208
+  },
+  "dfwd_span": {
+   "gpu_seconds": 2911.34362206648,
+   "label": "drafter",
+   "n_spans": 52507,
+   "schema": "fr13.span_gpu_timer.v1"
+  },
+  "dfwd_split": {
+   "lmhead_seconds": 186.51636347794533,
+   "model_seconds": 353.9960082812309,
+   "n_lmhead": 53674,
+   "n_model": 53675,
+   "n_sample": 0,
+   "other_seconds": 0.0,
+   "sample_seconds": 0.0,
+   "schema": "fr13.dfwd_split.v1"
+  },
+  "lfwd_span": null,
+  "runroot": "output/fr14_promoab_Cp1_20260818T081918Z",
+  "sfwd_span": {
+   "decode_forward_gpu_seconds": 6892.541462677014,
+   "decode_step_wall_seconds": 11234.013498384738,
+   "final": true,
+   "metric_name": "vllm:fr13_decode_forward_gpu_seconds_total",
+   "n_drafts_in_timed_steps": 52507,
+   "n_drafts_in_wall_steps": 52310,
+   "n_forward_dropped": 0,
+   "n_forward_pending": 0,
+   "n_forward_starts": 52507,
+   "n_pure_decode_steps_timed": 52507,
+   "n_wall_bookkeeping_errors": 0,
+   "n_wall_chain_resets": 196,
+   "n_wall_invalid_request_ids": 0,
+   "n_wall_rejected": 1,
+   "n_wall_request_set_resets": 0,
+   "n_wall_steps": 52310,
+   "note": "pure-decode (uniform_decode) model-forward GPU seconds; prefill + mixed + idle EXCLUDED; async cuda events, single synchronize at teardown. Cumulative running total; the reducer takes a delta across a request window.",
+   "pid": 156,
+   "schema": "fr13.sfwd_gpu_timer.v2",
+   "wall_cap_s": 1.5,
+   "wall_chain_open": false,
+   "wall_open_drafts": 0,
+   "wall_open_fwd_index": null
+  }
+ }
+}

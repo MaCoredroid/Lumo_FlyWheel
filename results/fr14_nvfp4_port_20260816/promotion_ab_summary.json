@@ -73,6 +73,77 @@
   "suffix_pass_gate": "REFUSE for now \u2014 integration fails closed at an 11th, GPU-only site"
  },
  "relaxed_any_guard": false,
+ "round2": {
+  "arms": {
+   "C'": {
+    "accept_per_event": 3.885466666666667,
+    "cap": "astropy__astropy-13398 exceeded the 9000s budget",
+    "census_steps": 52507,
+    "fa2_b1_arm": "gqa_pair",
+    "gate": 0,
+    "reduce": "UNGATED (class-9 fired: bracket 52500 vs census 52507 from the truncated capped bracket)",
+    "runroot": "output/fr14_promoab_Cp1_20260818T081918Z",
+    "s_per_fwd_gpu": 0.1312619569019138,
+    "serve_rc": 13,
+    "step_wall_ms": 214.75871850871283,
+    "topk": 1
+   },
+   "C''": {
+    "accept_per_event": 3.90136817058662,
+    "census_steps": 43708,
+    "fa2_b1_arm": "gqa_pair",
+    "gate": 0,
+    "runroot": "output/fr14_promoab_Cp0_20260818T120217Z",
+    "s_per_fwd_gpu": 0.13160149103420993,
+    "serve_rc": 0,
+    "step_wall_ms": 214.75190957614524,
+    "topk": 0
+   },
+   "G'": {
+    "acceptance_vs_C_prime": "NONE \u2014 zero decode steps, no paired population exists",
+    "census_steps": 0,
+    "mechanism": "proposal_end runtime-evidence half hardcodes graph_replays=1 / mtp_forward_calls=4 and requires matching_replays==1; an armed UNGATED step is 4 forwards / 2 replays per section 11.1",
+    "outcome": "FAIL_CLOSED_12TH_SITE",
+    "refusal": "FR13 fixed32 drafter proposal evidence drifted (gdn_linear_attn.py:6689)",
+    "runroot": "output/fr14_promoab_Gp_20260818T115449Z",
+    "site_11_fixed": true
+   }
+  },
+  "fused_topk_verdict": {
+   "accept_delta_pct": -0.41,
+   "accept_inside_10pct_variance": true,
+   "containing_dfwd_bracket_delta_pct": 0.56,
+   "delta_ms": -0.070984,
+   "delta_pct": -2.0,
+   "fraction_of_prediction": 0.23,
+   "instrument": "dfwd_split.lmhead ms (pre-registered fused_draft_topk.md 8.2)",
+   "null_controls": {
+    "cfwd_ms_delta_pct": -0.04,
+    "model_ms_delta_pct": 0.32
+   },
+   "predicted_ms": -0.3078,
+   "step_wall_delta_pct": 0.003,
+   "topk_off_ms": 3.545975,
+   "topk_on_ms": 3.474991,
+   "workshape_counter_paths_identical": 268,
+   "workshape_steps_compared": 96215,
+   "workshape_unexpected_differences": 0
+  },
+  "gate_reearn": {
+   "minutes": 12.8,
+   "outcome": "PASS",
+   "rc": 0,
+   "verifies": "census twelve-mirror fix, end-to-end"
+  },
+  "head": "f7fde8e1b455c4baafc477e3699ad69e59e3265c",
+  "process_finding": "three blockers in two rounds were all one shape: a paired structure updated on one side only; two were reachable only from a live serve",
+  "recommendations": {
+   "fused_draft_topk": "PROMOTE (hygiene; win is 23% of briefed and ~0.03% of a step)",
+   "splitk_fa2": "REFUSE \u2014 unchanged, eyeball not dischargeable",
+   "suffix_pass_gate": "REFUSE \u2014 12th site, same one-sided-mirror class"
+  },
+  "window_utc": "2026-08-18T08:05Z..15:05Z"
+ },
  "schema": "fr14.promotion_ab.campaign_summary.v1",
  "step0_regate": {
   "cause": "fr13_fixed32_work_census.py:157 TAW_SOURCE_CONTRACT_SHA256 stale at 484babd7 vs emitter 68b289ae",

@@ -1,0 +1,291 @@
+{
+ "arm": "hydra27_fixed32_promoab_Cp1",
+ "arm_meta": "arm_kind=C\narm=hydra27_fixed32_promoab_Cp1\nsource_commit=f7fde8e1b455c4baafc477e3699ad69e59e3265c\nsubset=config/fr13_fixed32/subset_b4_four.json\nsubset_sha256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5\ntask_budget_s=9000\nagent_wall_s=9000\nverdict_instrument=step_wall_ms+s_per_fwd_gpu\nfa2_b1_arm=gqa_pair (promoted default, credential serviceable at f7fde8e1b455c4baafc477e3699ad69e59e3265c)\nstarted=2026-08-18T08:19:19Z\nserve_rc=13\nended=2026-08-18T11:51:08Z\n",
+ "census": {
+  "active_nodes": {
+   "27": 52507
+  },
+  "census_path": "output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/logs/fr13_fixed32_work_census.jsonl",
+  "drafter_graph_registry": [
+   {
+    "batch_size": 1,
+    "capture_origin": "unmeasured",
+    "captures": 1,
+    "graph_signature": "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c",
+    "measured_replays": 52507,
+    "passes": 4,
+    "segment": 0,
+    "unmeasured_replays": 1187
+   }
+  ],
+  "forward_graph_registry": [
+   {
+    "batch_size": 1,
+    "capture_origin": "final_full",
+    "captures": 1,
+    "consume_calls": 48,
+    "consume_fallbacks": 0,
+    "consume_hits": 48,
+    "conv_layout_sha256": "2877533da181425259e6fbb00ad50f1c8160632e54449f88a97225581c4953f5",
+    "freshness_matches": 48,
+    "fused_calls": 0,
+    "fused_layers": 0,
+    "graph_signature": "2373bfbd2ac6ab7a6fd67af5570385f2aea2a16a1e80b804bdf12e092f319423",
+    "kernel_shape": "unfused_conv_pregather",
+    "layers": 48,
+    "measured_replays": 52507,
+    "programs": 16320,
+    "requests": 1,
+    "row_elems": 348160,
+    "source_validations": 48,
+    "ssi_groups": 3,
+    "ssi_pointer_entries": 48,
+    "stage_before_all_consumes": true,
+    "stage_calls": 1,
+    "staged_rows": 48
+   }
+  ],
+  "gated_steps": 0,
+  "graph_replays": {
+   "1": 52507
+  },
+  "graph_signatures": {
+   "d9a4ddece41d146e9949b9f8ff7c2603b8948d157b28ef69244e44469b36150c": 52507
+  },
+  "main_tail_length": {
+   "6": 52507
+  },
+  "mtp_forward_calls": {
+   "4": 52507
+  },
+  "mtp_tail_pairs": {
+   "4,6": 52507
+  },
+  "physical_drafts": {
+   "31": 52507
+  },
+  "records": 52508,
+  "section_11_7_all_pass": true,
+  "section_11_7_checks": {
+   "active_nodes_27_every_step": true,
+   "graph_replays_only_1": true,
+   "mtp_forward_calls_only_4_or_2": true,
+   "mtp_tail_pairs_legal": true,
+   "ungated_signature_present": true,
+   "verify_rows_32_every_step": true
+  },
+  "step_events": 52507,
+  "verify_rows": {
+   "32": 52507
+  },
+  "warm_step_rate": 0.0
+ },
+ "container_env": {
+  "FR10_METRICS": "0",
+  "FR13_CAMPAIGN_TASK_BUDGET_S": "9000",
+  "FR13_DFWD_SPLIT": "1",
+  "FR13_DRAFT_VOCAB_K": "0",
+  "FR13_DRAFT_VOCAB_ROOT": "0",
+  "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+  "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE": "full_vocab",
+  "FR13_FA2_QROW32_B1_SOURCE_COMMIT": "f7fde8e1b455c4baafc477e3699ad69e59e3265c",
+  "FR13_FIXED32_ACTIVE_NODES": "27",
+  "FR13_FIXED32_MODE": "hydra27_fixed32",
+  "FR13_FIXED32_PHYSICAL_DRAFTS": "31",
+  "FR13_HOST_TAIL_PREP_BAKE": "1",
+  "FR13_LFWD_GPU_TIMER": "1",
+  "FR13_NEEDS_ALLOW": "FR13_DRAFT_VOCAB_K=0",
+  "FR14_FUSED_DRAFT_TOPK": "1",
+  "FR14_FUSED_DRAFT_TOPK_SHA256": "8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e",
+  "FR14_SUFFIX_PASS_GATE": "0",
+  "FR14_SUFFIX_PASS_GATE_MIN_AGREE": "0.75",
+  "FR14_SUFFIX_PASS_GATE_NGRAM": "8",
+  "MAX_NUM_SEQS": "1",
+  "SWE_CONCURRENCY": "1"
+ },
+ "deploy_speed": [
+  {
+   "accept_per_event": 3.885466666666667,
+   "aggregate_decode_tps": 20.69571828519238,
+   "aggregate_window_wall_s": 12368.935277938843,
+   "arm": "hydra27_fixed32_promoab_Cp1",
+   "batch_size": 1,
+   "bracket_reduction": {
+    "basis": "sum of the disjoint per-task bracket deltas",
+    "closing_task": null,
+    "distinct_bracket_origins": 4,
+    "note": "Nested brackets all open on one counter origin, so their sum multiply-counts the shared prefix (1.7-2.6x on the recorded B4 runroots; see scripts/fr13_b4_alignment_reduce.py). Staggered brackets (a refilled pool) open on different origins but still overlap, so their sum multiply-counts too (1.87-4.00x on the recorded 16-task refill runroot) and the envelope is taken instead. Topology is classified from the recorded pre-snapshot counter vectors, not assumed from --batch-size.",
+    "topology": "disjoint",
+    "work_census_gate": {
+     "status": "absent"
+    }
+   },
+   "committed_per_event": 4.885466666666667,
+   "committer_gpu_ms_per_step": 20.46450117834171,
+   "committer_gpu_seconds": 1074.3863118629397,
+   "deploy_speed_path": "output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/deploy_speed_promoab_C_ungated.json",
+   "derived_tps": 23.04851931744726,
+   "derived_tps_fullstep_gpu": 23.58151110523612,
+   "derived_tps_gpu": 37.21921249671264,
+   "draft_vocab_k": 65536,
+   "draft_vocab_root": 0,
+   "drafter_gpu_ms_per_step": 55.44714690479062,
+   "drafter_gpu_seconds": 2910.9752125015075,
+   "effective_concurrency": 0.8996840271587178,
+   "events_per_step": 1.0,
+   "floor_ms": 92.50652887912088,
+   "floor_ratio": 2.3215520148782147,
+   "instrument": "OFF",
+   "n_tasks": 4,
+   "overhead_other_ms_per_event": 7.585113523666697,
+   "per_request_decode_tps": 24.391721432942017,
+   "per_task": [
+    {
+     "accept_per_event": 3.6441761363636362,
+     "accepted_tokens": 5131.0,
+     "committer_gpu_seconds": 31.768929557800238,
+     "committer_gpu_spans": 1408.0,
+     "drafter_gpu_seconds": 71.01893024063106,
+     "drafter_gpu_spans": 1408.0,
+     "drafts": 1408.0,
+     "fwd_gpu_drafts": 1408.0,
+     "fwd_gpu_seconds": 177.26487134551996,
+     "fwd_gpu_steps": 1408.0,
+     "instance_id": "astropy__astropy-12907",
+     "per_request_decode_tps": 26.182199929924543,
+     "s_per_fwd": 0.20232065655578813,
+     "s_per_fwd_gpu": 0.12589834612607953,
+     "tok_per_draft": 31.0,
+     "wall_drafts": 1394.0,
+     "wall_seconds": 284.6700053694658,
+     "wall_steps": 1394.0
+    },
+    {
+     "accept_per_event": 4.314115308151093,
+     "accepted_tokens": 23870.0,
+     "committer_gpu_seconds": 112.74540447807256,
+     "committer_gpu_spans": 5533.0,
+     "drafter_gpu_seconds": 290.85437664413485,
+     "drafter_gpu_spans": 5533.0,
+     "drafts": 5533.0,
+     "fwd_gpu_drafts": 5533.0,
+     "fwd_gpu_seconds": 721.3076449127187,
+     "fwd_gpu_steps": 5533.0,
+     "instance_id": "astropy__astropy-13033",
+     "per_request_decode_tps": 25.84453020926493,
+     "s_per_fwd": 0.21010386219938126,
+     "s_per_fwd_gpu": 0.13036465659004495,
+     "tok_per_draft": 31.0,
+     "wall_drafts": 5511.0,
+     "wall_seconds": 1162.5237411984708,
+     "wall_steps": 5511.0
+    },
+    {
+     "accept_per_event": 4.161334240980259,
+     "accepted_tokens": 24452.0,
+     "committer_gpu_seconds": 119.77015632438676,
+     "committer_gpu_spans": 5876.0,
+     "drafter_gpu_seconds": 313.9257854232788,
+     "drafter_gpu_spans": 5876.0,
+     "drafts": 5876.0,
+     "fwd_gpu_drafts": 5876.0,
+     "fwd_gpu_seconds": 769.4281464538597,
+     "fwd_gpu_steps": 5876.0,
+     "instance_id": "astropy__astropy-13236",
+     "per_request_decode_tps": 25.643490261371053,
+     "s_per_fwd": 0.210599433850103,
+     "s_per_fwd_gpu": 0.13094420463816536,
+     "tok_per_draft": 31.0,
+     "wall_drafts": 5829.0,
+     "wall_seconds": 1237.4628653242253,
+     "wall_steps": 5829.0
+    },
+    {
+     "accept_per_event": 3.7934127964115616,
+     "accepted_tokens": 150534.0,
+     "committer_gpu_seconds": 810.1018215026802,
+     "committer_gpu_spans": 39683.0,
+     "drafter_gpu_seconds": 2235.176120193463,
+     "drafter_gpu_spans": 39683.0,
+     "drafts": 39683.0,
+     "fwd_gpu_drafts": 39683.0,
+     "fwd_gpu_seconds": 5223.252074638377,
+     "fwd_gpu_steps": 39683.0,
+     "instance_id": "astropy__astropy-13398",
+     "per_request_decode_tps": 23.46567058200117,
+     "s_per_fwd": 0.21276816458530406,
+     "s_per_fwd_gpu": 0.13162442543755204,
+     "tok_per_draft": 31.0,
+     "wall_drafts": 39570.0,
+     "wall_seconds": 8548.083400987554,
+     "wall_steps": 39570.0
+    }
+   ],
+   "prefill_frac": 0.07233637211913059,
+   "rows_per_step": 32.0,
+   "s_per_fwd": 0.21196444766707717,
+   "s_per_fwd_gpu": 0.1312619569019138,
+   "s_per_fwd_gpu_per_forward": 0.1312619569019138,
+   "step_wall_ms": 214.75871850871283,
+   "task_instance_ids": [
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398"
+   ],
+   "wall_steps_measured": 52304.0
+  }
+ ],
+ "health": {
+  "swe_orchestrator_rc": 13,
+  "swe_window_wall_s": 12372,
+  "tasks": [
+   {
+    "codex_elapsed_s": 365.058,
+    "codex_timed_out": false,
+    "instance_id": "astropy__astropy-12907",
+    "patch_bytes": 504,
+    "verdict": "resolved"
+   },
+   {
+    "codex_elapsed_s": 1267.008,
+    "codex_timed_out": false,
+    "instance_id": "astropy__astropy-13033",
+    "patch_bytes": 1092,
+    "verdict": "failed"
+   },
+   {
+    "codex_elapsed_s": 1431.243,
+    "codex_timed_out": false,
+    "instance_id": "astropy__astropy-13236",
+    "patch_bytes": 1809,
+    "verdict": "failed"
+   }
+  ]
+ },
+ "label": "ARM C' \u2014 gqa_pair + fused top-k ON",
+ "runroot": "output/fr14_promoab_Cp1_20260818T081918Z",
+ "schema": "fr14.promotion_ab.arm_reduction.v1",
+ "spans": {
+  "cfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_Cp1_cfwd.json"
+  },
+  "dfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_Cp1_dfwd.json"
+  },
+  "dfwd_split": {
+   "MISSING": true,
+   "path": "output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/logs/fr13_dfwd_split.json"
+  },
+  "lfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_Cp1_lfwd.json"
+  },
+  "sfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_Cp1.json"
+  }
+ }
+}

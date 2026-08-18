@@ -526,3 +526,263 @@ until someone does.
 * **Nothing was relaxed.** Two blocking defects (§0.4, §2.1) were attributed and
   reported, not patched, even though patching either would have unblocked this
   campaign's own measurements.
+
+---
+---
+
+# ROUND 2 (2026-08-18 08:05Z–15:05Z) — the re-run on the fixed HEAD
+
+Coordinator fixed both round-1 blockers and asked for a four-window re-run.
+HEAD throughout: **`f7fde8e1b455c4baafc477e3699ad69e59e3265c`** (pass 56). Same
+discipline: **no commit between the first boot and the final drain**, budgets
+9000, identical canonical exact4 set, `FR13_DFWD_SPLIT=1` everywhere.
+
+| window | outcome |
+|---|---|
+| **1. gate re-earn** | **PASS, rc=0, 12.8 min** — the census fix verified end-to-end |
+| **2. ARM C'** gqa_pair + top-k **ON** | drained 4/4 tasks, 52 507 steps; `swerc=13` (13398 capped at the 9000 s budget) |
+| **3. ARM G'** + suffix gate | **FAIL-CLOSED AGAIN — at a NEW, 12th site** |
+| **4. ARM C''** gqa_pair + top-k **OFF** | drained clean, `swerc=0`, 4/4 tasks, 43 708 steps |
+
+## R1. The census fix is verified end-to-end
+
+The gate that failed in round 1 now passes at HEAD:
+
+```
+status PASS · schema fr13.fixed32.fa2_qrow32_gqa_pair_full_vocab_b1_live_verification.v1
+source_commit f7fde8e1b455c4baafc477e3699ad69e59e3265c · qualification_profile full_vocab
+credential pointer written: output/fr13_b1_gqa_pair_credential.env
+```
+
+That is the strongest possible check on the twelve-mirror sweep: the failure mode
+was *only* reachable through a live serve's terminal audit, and the live serve's
+terminal audit now completes. **Both C' and C'' then ran with
+`FR13_FA2_QROW32_B1_PRODUCTION_ARM=gqa_pair` armed from that credential** — the
+production kernel, which round 1 could not reach.
+
+## R2. THE FUSED TOP-K VERDICT — the 0-vs-1 span pair
+
+Instrument, pre-registered in `fused_draft_topk.md` §8.2: *"a stack-level dfwd
+delta of 0.3078 ms is small against a 49–53 ms span, so the serve A/B needs the
+span timer, not the step total."* The bracket the lever moves is the drafter
+split's **`lmhead`** term. `promotion_ab_fused_topk_verdict.json`:
+
+| term | top-k ON (C') | top-k OFF (C'') | delta | delta % |
+|---|---|---|---|---|
+| **`lmhead` ms** (the lever's bracket) | **3.47499** | **3.54597** | **−0.07099** | **−2.00 %** |
+| `model` ms (null control) | 6.59517 | 6.57394 | +0.02123 | +0.32 % |
+| `cfwd` ms/step (null control) | 20.46451 | 20.47216 | −0.00765 | −0.04 % |
+| `dfwd` ms/step (containing bracket) | 55.44677 | 55.13937 | +0.30740 | +0.56 % |
+| `step_wall_ms` | 214.75872 | 214.75191 | +0.00681 | **+0.00 %** |
+
+**Read it in this order.**
+
+1. **The two null controls are flat** (+0.32 %, −0.04 %). The MTP model forward
+   and the committer are terms the lever cannot touch, and they did not move.
+   That is the internal control that makes the third line worth reading.
+2. **The targeted bracket moved, in the predicted direction, by −0.071 ms/step
+   (−2.00 %).** The lever works in a live serve.
+3. **It is 23 % of the −0.3078 ms predicted.** The campaign's oldest pattern
+   holds again: *every miss is optimistic*. This is now the tenth.
+4. **`step_wall` moved +0.003 % — indistinguishable**, and the *containing* dfwd
+   bracket moved +0.56 %, i.e. the **wrong way by four times the lever's size**.
+   That is not a contradiction; it is the pre-registration being vindicated. A
+   0.07 ms effect cannot be seen in a 55 ms bracket, let alone a 215 ms step, and
+   anyone reading `dfwd` totals or TPS here would have "measured" a regression.
+
+**Acceptance — the byte-exactness claim, kept falsifiable.** Paired on the
+identical task set: **3.88547 (ON) vs 3.90137 (OFF) = −0.41 %**, far inside the
+±10 % band (`seam_move_economics` §9.4: the same arm banked 3.81 / 4.04 / 4.28).
+`per_request_decode_tps` −5.54 %, also inside the band and also not a reading.
+
+**Work shape — the strongest single result of the round.** The C'-vs-C'' census
+diff over **96 215 steps** (`promotion_ab_workshape_topk.json`):
+
+```
+identical counter paths: 268
+expected-different paths:   0
+UNEXPECTED-different:       0
+```
+
+**Zero.** Not one of 268 per-step counters differs between top-k ON and top-k
+OFF. Byte-exact selection, asserted offline over 6 840 configurations, now holds
+across two full production-shape serves. Both arms also carry `active_nodes` 27,
+`verify_rows` 32, `mtp_forward_calls` 4, `graph_replays` 1 and drafter signature
+`d9a4dd…6150c` on **every** step.
+
+### Verdict on lever 1: **PROMOTE-ELIGIBLE on the evidence; my recommendation is PROMOTE**
+
+Byte-exact by gate and now by a 268-counter live census diff; acceptance-neutral
+inside variance; the targeted bracket improves −0.071 ms/step with both null
+controls flat; two clean multi-hour serves with clean traces. The honest caveat
+to carry into any promotion note is that **the win is 23 % of what was briefed**
+— −0.071 ms/step, roughly 0.03 % of a 215 ms step. It is real, it is safe, and it
+is very small. Promote it for correctness-preserving hygiene (one launch instead
+of a multi-kernel ATen radix chain), not for the number.
+
+## R3. ARM G' — fail-closed AGAIN, at a NEW 12th site
+
+`output/fr14_promoab_Gp_20260818T115449Z`, 11:54:49Z → 12:00:55Z, zero census
+events. Tail: `promotion_ab_arm_g_prime_container_tail.log`.
+
+**The 11th site is genuinely fixed** — the boot got *past* the tree-attention work
+drift that killed round 1, and further into the step. It then refused at:
+
+```
+File ".../mamba/gdn_linear_attn.py", line 6689, in _fr13_fixed32_drafter_proposal_end
+    raise RuntimeError(
+RuntimeError: FR13 fixed32 drafter proposal evidence drifted
+→ FR13 fixed32 prior sample failed: sample raised before fixed32 proposal seal
+```
+
+**Attribution, from the deployed source** (`fr10_phase4_patch_vllm_tree_gdn.py`,
+the `_fr13_fixed32_drafter_proposal_end` blob). The function was made pass-aware
+in its **census half** — §11.5's work is visible at :7034-7048, which reads
+`_fr14_calls = int(proposal["mtp_forward_calls"])` and
+`int(arctic.get("main_tail_columns", 6))` dynamically. Twenty lines later its
+**runtime-evidence half** is still hardcoded to the single-4-pass-graph world:
+
+```python
+observed["drafter_runtime"] = {
+    …
+    "graph_replays": 1,          # :7074
+    "mtp_forward_calls": 4,      # :7076
+}
+…
+if (… or int(evidence.get("matching_replays", -1)) != 1 …):   # :7114
+    raise RuntimeError("FR13 fixed32 drafter proposal evidence drifted")
+```
+
+§11.1 states the armed shape plainly: *"an ungated armed step replays `lo` then
+`hi` (4 forwards, **2 replays**)"*. So the first armed **ungated** step reports
+`matching_replays = 2`, the check demands exactly 1, and the engine dies. Since
+the gate cannot fire until 256 tokens of history exist (`min_history=256`), every
+early step is ungated — which is why it died ~5 minutes in, on the first real
+request.
+
+**This is a 12th site, and it is inside the very function §11.5 says was
+updated.** One half of a paired structure made pass-aware, its mirror left
+4-pass-hardcoded.
+
+**That is now three consecutive findings of the same shape:** the TAW census
+mirror (round 1 §0.4, which turned out to be twelve mirrors), the launcher's
+in-container qualification mirror (round 1 §2.1), and now `proposal_end`'s
+runtime-evidence mirror. **The recurring defect in this integration is not any
+one site — it is that paired structures are being updated on one side only.** A
+targeted sweep for "expected-value dicts that hardcode `graph_replays`/
+`mtp_forward_calls`/pass counts anywhere in the drafter blob" is likely to find
+the 13th before the next boot does.
+
+No GPU was spent on an isolation twin this time: the mechanism is legible in the
+deployed source, the raise site is exact, and the quantity in dispute
+(`matching_replays` 2-vs-1) has nothing to do with lever 1 — which round 1
+already exonerated on a dedicated boot.
+
+### §11.7 checks reached this round
+
+| check | result |
+|---|---|
+| gate armed line printed once | **PASS** (`armed ngram=8 min_agree=0.75 min_history=256`) |
+| `/logs/fr14_suffix_pass_gate.cfg` written | **PASS** (`8 0.75 256`) |
+| tree-attention work binding (round 1's 11th site) | **PASS — fixed, boot proceeded past it** |
+| registry two rows `passes=2` segment 0/1 | **NOT REACHED** |
+| `graph_replays` 2 cold / 1 gated | **NOT REACHED** (refused *on* the 2-replay step) |
+| `mtp_forward_calls` only {4,2} | **NOT REACHED** |
+| 27/32 every step · warm-step rate 0.15–0.25 | **NOT REACHED** — zero steps |
+
+### G' acceptance vs C' under the ±10 % doctrine
+
+**There is none, and there cannot be.** ARM G' produced **zero decode steps** —
+no drafts, no accepted tokens, no census events, no `/metrics` bracket. The
+±10 % doctrine needs two paired populations; this round has one. Any number
+placed against C' here would be fabricated, so none is.
+
+### Verdict on lever 2: **REFUSE — unchanged, and for a new reason**
+
+The economics are still untested. Required, in order: fix the 12th site; sweep
+the drafter blob for the same one-sided-mirror class rather than waiting for the
+13th boot to find it; add a test that reaches `proposal_end`'s runtime-evidence
+half with a 2-replay step; **then** re-run §11.7 in full, and only then is the
+break-even question (MTP survival at positions 3–4 on strong-match steps vs
+0.931) reachable.
+
+## R4. ARM C' and C'' — the arms themselves
+
+| | ARM C' (top-k ON) | ARM C'' (top-k OFF) |
+|---|---|---|
+| runroot | `fr14_promoab_Cp1_20260818T081918Z` | `fr14_promoab_Cp0_20260818T120217Z` |
+| serve rc | 13 (13398 capped at 9000 s) | **0** |
+| tasks in health record | 3 of 4 (+1 capped) | **4 of 4** |
+| census steps | 52 507 | 43 708 |
+| `step_wall_ms` | 214.759 *(ungated reduce)* | 214.752 *(census-gated)* |
+| `s_per_fwd_gpu` | 0.131262 | 0.131601 |
+| accept/event | 3.8855 | 3.9014 |
+| eyeball | clean | clean |
+
+**ARM C' is `swerc=13` and the reason is worth recording:** `13398` exceeded even
+the 9000 s budget (round 1 it took 5 784 s; C'' completed it in 8 920 s — a
+1.5× spread on one instance across three runs). Its capped terminal then hit the
+same never-built truncated-trace validator union that pass 23 met at 5400, so the
+task dropped out of the health record and the census-gated reduce fired class-9
+(bracket 52 500 steps vs census 52 507 — a 7-event gap from the truncated
+bracket). **C' was therefore reduced ungated**, which is disclosed everywhere it
+is quoted.
+
+None of that touches the round's deliverable: **the fused-top-k verdict is read
+from the dfwd span sidecars, which are cumulative per-step GPU timers and are
+completely independent of the bracket reduction.** That is why §R2 stands at full
+strength while C's aggregate carries a caveat.
+
+**Budget note, now measured three times:** 13398 ran 5 784 s / >9 000 s / 8 920 s.
+The briefed-5400 correction from round 1 was right, and 9000 is itself not
+comfortably above this instance's spread. Anyone scheduling this arm shape should
+either accept an occasional capped terminal or finally build the truncated-trace
+union.
+
+## R5. EYEBALL — both arms clean, including the capped trajectory
+
+`promotion_ab_eyeball_arm_c_prime.json`, `..._c_dprime.json`.
+
+| arm | instance | turns | words | ttr | max line | tail-rep | non-ASCII | tools | malformed |
+|---|---|---|---|---|---|---|---|---|---|
+| C' | 12907 | 38 | 2 580 | 0.375 | 6 | 0.000 | 0 | 14 | **0** |
+| C' | 13033 | 62 | 11 585 | 0.189 | 52 | 0.317 | 0 | 25 | **0** |
+| C' | 13236 | 137 | 9 599 | 0.219 | 43 | 0.217 | 0 | 51 | **0** |
+| C' | 13398 *(capped)* | 312 | 46 104 | 0.178 | 81 | 0.097 | 0 | 113 | **0** |
+| C'' | 12907 | 47 | 5 936 | 0.303 | 32 | 0.377 | 0 | 16 | **0** |
+| C'' | 13033 | 32 | 2 618 | 0.275 | 10 | 0.304 | 0 | 11 | **0** |
+| C'' | 13236 | 74 | 2 066 | 0.244 | 2 | 0.000 | 0 | 24 | **0** |
+| C'' | 13398 | 272 | 60 325 | 0.136 | 88 | 0.059 | 0 | 101 | **0** |
+
+**355 tool calls across the two arms, zero malformed. Zero non-ASCII in ~140 000
+words. No degeneration signature in either arm.**
+
+The one trace that most needed reading is **C's capped 13398** — a task killed at
+a 9000 s wall is exactly where a decode loop would hide. It is not one. Its
+tail-repeat fraction is **0.097, the lowest of C's four traces**, and the final
+text before the kill is coherent, methodical debugging:
+
+> Reproduced under pytest: `viaitrs` is wrong but inputs (SUN ITRS, LOC ITRS) are
+> identical to the passing plain-Python case. The transform body itself must
+> behave differently. Let me instrument the exact transform steps in the diag:
+
+Its top repeated 8-gram is a rotation-matrix expression (`'φ cos λ, -sin φ sin λ,
+cos'`) from the coordinate transform under test. **The cap fired on genuine
+difficulty, not on degeneration** — which is the distinction that decides whether
+a capped terminal is an instrument problem or a model problem. It is an
+instrument problem.
+
+## R6. Consolidated recommendations after two rounds
+
+| lever | verdict | why |
+|---|---|---|
+| **`FR14_FUSED_DRAFT_TOPK`** | **PROMOTE** | −0.071 ms/step on its own pre-registered bracket with both null controls flat; 268/268 census counters identical over 96 215 steps; accept −0.41 % (inside ±10 %); clean traces in two multi-hour serves. Promote for hygiene, and state plainly that the win is 23 % of briefed and ~0.03 % of a step. |
+| **`FR14_SUFFIX_PASS_GATE`** | **REFUSE** | Second consecutive fail-closed first boot, now at a 12th site inside the function §11.5 says was updated. Economics still untested; break-even question still unreachable. |
+| **split-K FA2** | **REFUSE** | Unchanged from round 1: the eyeball condition is not dischargeable — the arm cannot serve a token. Needs a launcher/contract identity fix *and* a Tier-B serving policy decision from Mark. |
+
+**Process finding for the integration owner, offered as the most useful thing
+this campaign produced:** three separate blockers in two rounds were all the same
+shape — a paired structure updated on one side only (TAW digest × 12 mirrors;
+launcher bash pin case vs its in-container Python twin; `proposal_end`'s census
+half vs its runtime-evidence half). Two of the three were reachable *only* from a
+live serve. The class deserves a sweep and a lint, not three more boots.
