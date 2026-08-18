@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import random
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -197,3 +198,73 @@ def test_indexing_is_incremental_and_order_independent():
         db.fired, db.agreement, db.occurrences
     )
     assert a._state["r"]["index"] == b._state["r"]["index"]
+
+
+# ---------------------------------------------------------------------------
+# Launcher wiring: the sidecar is how the value reaches the worker at all.
+# ---------------------------------------------------------------------------
+
+LAUNCHERS = (
+    "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "scripts/fr14_armb_leg3_launch_nomiddleware.sh",
+)
+
+
+@pytest.fixture(params=LAUNCHERS)
+def launcher(request):
+    return (Path(__file__).resolve().parents[1] / request.param).read_text()
+
+
+def test_launcher_validates_the_flag_strictly(launcher):
+    assert 'case "${FR14_SUFFIX_PASS_GATE:-0}" in' in launcher
+    assert 'echo "FR14_SUFFIX_PASS_GATE must be 0 or 1" >&2; exit 2' in launcher
+
+
+def test_launcher_writes_the_value_carrying_sidecar(launcher):
+    """The worker drops bare FR14_* masters, so an -e alone would never arrive."""
+    assert '"$LOG_DIR/fr14_suffix_pass_gate.cfg"' in launcher
+    assert (
+        '${FR14_SUFFIX_PASS_GATE_NGRAM:-8} ${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75}'
+        in launcher
+    )
+    # and removes it when disarmed, so a stale file cannot arm a later serve
+    assert 'rm -f "$LOG_DIR/fr14_suffix_pass_gate.cfg"' in launcher
+
+
+def test_launcher_refuses_to_arm_without_the_seam_it_hands_off_to(launcher):
+    assert (
+        "FR14_SUFFIX_PASS_GATE=1 requires FR13_TAIL_MODE=1 and "
+        "FR13_DRAFT_SOURCE=merged" in launcher
+    )
+    assert "FR14_SUFFIX_PASS_GATE=1 is incompatible with FR13_TAIL_BRANCHES" in launcher
+
+
+def test_launcher_forwards_env_for_attestation(launcher):
+    assert '-e FR14_SUFFIX_PASS_GATE="${FR14_SUFFIX_PASS_GATE:-0}"' in launcher
+    assert '-e FR14_SUFFIX_PASS_GATE_NGRAM="${FR14_SUFFIX_PASS_GATE_NGRAM:-8}"' in launcher
+
+
+def test_sidecar_absent_means_off():
+    from fr14_suffix_pass_gate import gate_from_sidecar
+
+    tmp = Path(tempfile.mkdtemp())
+    assert gate_from_sidecar(str(tmp / "nope.cfg")).enabled is False
+
+
+def test_sidecar_round_trips_the_launcher_format():
+    from fr14_suffix_pass_gate import gate_from_sidecar
+
+    cfg = Path(tempfile.mkdtemp()) / "fr14_suffix_pass_gate.cfg"
+    cfg.write_text("8 0.75 256\n")
+    g = gate_from_sidecar(str(cfg))
+    assert (g.enabled, g.ngram, g.min_agree, g.min_history) == (True, 8, 0.75, 256)
+
+
+def test_malformed_sidecar_is_fatal_not_defaulted():
+    from fr14_suffix_pass_gate import gate_from_sidecar
+
+    cfg = Path(tempfile.mkdtemp()) / "fr14_suffix_pass_gate.cfg"
+    for bad in ("8 0.75", "8 0.75 256 9", "", "8 2.0 256", "0 0.75 256", "65 0.5 1"):
+        cfg.write_text(bad + "\n")
+        with pytest.raises(ValueError):
+            gate_from_sidecar(str(cfg))

@@ -5886,6 +5886,35 @@ if [[ -n "${FR13_TAIL_BRANCHES:-}" && "${FR13_TAIL_BRANCHES:-0}" != "0" ]]; then
 else
   rm -f "$LOG_DIR/fr13_tail_branches.cfg" 2>/dev/null || true
 fi
+# FR14 lever 2: suffix-aware MTP pass gating sidecar (same worker-env-drop
+# workaround, value-carrying like fr13_tail_branches.cfg above). When armed, the
+# drafter may run TWO post-root MTP forwards instead of four on steps whose
+# committed context has a strong suffix recurrence, and Arctic fills draft
+# positions 3..10 instead of 5..10. The four depth-4/5 runner-up columns are
+# duplicate-sibling padded; the mask, the 31-column pack and the verify rows are
+# unchanged, so a gated step is a fill-source change, not a shape change.
+# This is ACCEPTANCE-AFFECTING on the steps it fires, so: default OFF, a typo is
+# fatal rather than a silent arm/disarm, and it refuses to arm without the tail
+# seam it hands off to. Predicate, pre-registration and offline evidence:
+# results/fr14_nvfp4_port_20260816/suffix_pass_gating.md
+case "${FR14_SUFFIX_PASS_GATE:-0}" in
+  0|1) ;;
+  *) echo "FR14_SUFFIX_PASS_GATE must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "${FR14_SUFFIX_PASS_GATE:-0}" == "1" ]]; then
+  if [[ "${FR13_TAIL_MODE:-0}" != "1" || "${FR13_DRAFT_SOURCE:-mtp}" != "merged" ]]; then
+    echo "FR14_SUFFIX_PASS_GATE=1 requires FR13_TAIL_MODE=1 and FR13_DRAFT_SOURCE=merged" >&2
+    exit 2
+  fi
+  if [[ -n "${FR13_TAIL_BRANCHES:-}" && "${FR13_TAIL_BRANCHES:-0}" != "0" ]]; then
+    echo "FR14_SUFFIX_PASS_GATE=1 is incompatible with FR13_TAIL_BRANCHES" >&2
+    exit 2
+  fi
+  echo "${FR14_SUFFIX_PASS_GATE_NGRAM:-8} ${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75} ${FR14_SUFFIX_PASS_GATE_MIN_HISTORY:-256}" > "$LOG_DIR/fr14_suffix_pass_gate.cfg"
+  echo "[launch] SUFFIX PASS GATE ON -> /logs/fr14_suffix_pass_gate.cfg (ngram=${FR14_SUFFIX_PASS_GATE_NGRAM:-8} min_agree=${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75} min_history=${FR14_SUFFIX_PASS_GATE_MIN_HISTORY:-256})"
+else
+  rm -f "$LOG_DIR/fr14_suffix_pass_gate.cfg" 2>/dev/null || true
+fi
 # PRE-WARM corpus sidecar (design §6b): worker drops FR13_* env, so copy the host corpus into /logs (mounted)
 # and maybe_prewarm() reads the fixed /logs/fr13_prewarm_corpus.jsonl. Absent => cold trie (never-regress).
 if [[ -n "${FR13_PREWARM_TRIE:-}" && -f "${FR13_PREWARM_TRIE}" ]]; then
@@ -6315,6 +6344,10 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_DFWD_SPLIT_NEEDLE="${FR13_DFWD_SPLIT_NEEDLE:-0}" \
   -e FR13_DFWD_SPLIT="${FR13_DFWD_SPLIT:-0}" \
   -e FR13_DFWD_SPLIT_JSON="${FR13_DFWD_SPLIT_JSON:-/logs/fr13_dfwd_split.json}" \
+  -e FR14_SUFFIX_PASS_GATE="${FR14_SUFFIX_PASS_GATE:-0}" \
+  -e FR14_SUFFIX_PASS_GATE_NGRAM="${FR14_SUFFIX_PASS_GATE_NGRAM:-8}" \
+  -e FR14_SUFFIX_PASS_GATE_MIN_AGREE="${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75}" \
+  -e FR14_SUFFIX_PASS_GATE_MIN_HISTORY="${FR14_SUFFIX_PASS_GATE_MIN_HISTORY:-256}" \
   -e FR13_DVK_DRAFTID_DUMP="${FR13_DVK_DRAFTID_DUMP:-}" \
   -e FR13_STEP_GRAPH="${FR13_STEP_GRAPH:-0}" \
   -e FR13_TEMP_LEGACY_DOUBLE="${FR13_TEMP_LEGACY_DOUBLE:-0}" \

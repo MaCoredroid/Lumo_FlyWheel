@@ -51,9 +51,18 @@ __all__ = [
     "SuffixPassGate",
     "GateDecision",
     "gate_from_env",
+    "gate_from_sidecar",
+    "SIDECAR_PATH",
     "DEFAULT_NGRAM",
     "DEFAULT_MIN_AGREE",
 ]
+
+# The EngineCore worker's curated env drops bare FR13_*/FR14_* masters, which is
+# the defect class this campaign has already had to find twice (fr13_dfwd_split,
+# FR13_HOST_TAIL_*).  So the serving path reads the launcher-written /logs
+# sidecar -- the same value-carrying pattern as fr13_tail_branches.cfg -- and the
+# env vars exist only so container_env.txt attests the arm.
+SIDECAR_PATH = "/logs/fr14_suffix_pass_gate.cfg"
 
 DEFAULT_NGRAM = 8
 DEFAULT_MIN_AGREE = 0.75
@@ -294,4 +303,39 @@ def gate_from_env(env=None):
         min_agree=_env_float("FR14_SUFFIX_PASS_GATE_MIN_AGREE", DEFAULT_MIN_AGREE),
         vote_cap=_env_int("FR14_SUFFIX_PASS_GATE_VOTE_CAP", DEFAULT_VOTE_CAP),
         min_history=_env_int("FR14_SUFFIX_PASS_GATE_MIN_HISTORY", DEFAULT_MIN_HISTORY),
+    )
+
+
+def gate_from_sidecar(path=SIDECAR_PATH):
+    """Build the gate from the launcher-written sidecar.  Absent file => OFF.
+
+    Format, one line: ``<ngram> <min_agree> <min_history>``.  A present but
+    malformed sidecar is FATAL: an acceptance-affecting lever must never run on
+    a silently defaulted threshold.
+    """
+    try:
+        with open(path) as fh:
+            raw = fh.read().split()
+    except FileNotFoundError:
+        return SuffixPassGate(enabled=False)
+    except OSError:
+        return SuffixPassGate(enabled=False)
+    if len(raw) != 3:
+        raise ValueError(
+            f"{path} must hold '<ngram> <min_agree> <min_history>', got {raw!r}"
+        )
+    ngram = int(raw[0])
+    min_agree = float(raw[1])
+    min_history = int(raw[2])
+    if not 1 <= ngram <= 64:
+        raise ValueError(f"{path}: ngram out of range: {ngram}")
+    if not 0.0 <= min_agree <= 1.0:
+        raise ValueError(f"{path}: min_agree out of range: {min_agree}")
+    if min_history < 0:
+        raise ValueError(f"{path}: min_history out of range: {min_history}")
+    return SuffixPassGate(
+        enabled=True,
+        ngram=ngram,
+        min_agree=min_agree,
+        min_history=min_history,
     )
