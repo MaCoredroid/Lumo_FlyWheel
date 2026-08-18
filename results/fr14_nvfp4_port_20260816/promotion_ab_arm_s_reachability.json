@@ -1,0 +1,44 @@
+{
+  "arms_known": [
+    "gqa_pair",
+    "gqa_pair_splitk",
+    "nosplit",
+    "split2",
+    "visibility"
+  ],
+  "control_gqa_pair_ref0": {
+    "refused": false
+  },
+  "head": "4a59ca2b46ec76a9f8c0690a954e03c737d2970b",
+  "production_arms": [
+    "nosplit",
+    "gqa_pair"
+  ],
+  "route_live_name_accepted": {
+    "arm": "gqa_pair_splitk",
+    "refused": false
+  },
+  "route_live_same_reduction_ref0": {
+    "error": "FR13 qrow32 B1 raw-byte qualification requires identical reduction topology: reference_partitions=1 candidate_partitions=4",
+    "refused": true
+  },
+  "route_live_same_reduction_ref1": {
+    "error": "FR13 qrow32 B1 raw-byte qualification requires identical reduction topology: reference_partitions=1 candidate_partitions=4",
+    "refused": true
+  },
+  "route_live_same_reduction_ref2": {
+    "error": "FR13 qrow32 B1 raw-byte qualification requires identical reduction topology: reference_partitions=2 candidate_partitions=4",
+    "refused": true
+  },
+  "route_live_same_reduction_ref4": {
+    "refused": false
+  },
+  "route_production": {
+    "error": "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty or one of nosplit, gqa_pair; got 'gqa_pair_splitk'",
+    "refused": true
+  },
+  "schema": "fr14.promotion_ab.arm_s_reachability.v1",
+  "splitk_is_a_production_arm": false,
+  "splitk_num_splits": 4,
+  "verdict": "UNREACHABLE: split-K is refused as a production arm (the only candidate_served=True route) and is refused by the live-A/B route's reduction-topology check against the served qrow16 reference. No served token at this HEAD can carry split-K attention."
+}

@@ -1,0 +1,33 @@
+{
+ "arm": "hydra27_fixed32_promoab_S_splitk",
+ "arm_meta": "arm=hydra27_fixed32_promoab_S_splitk\nkind=splitk_live_ab_probe\nsource_commit=4a59ca2b46ec76a9f8c0690a954e03c737d2970b\npatch_source_sha256=1e9780322e88d2ba5212f2a1128612c6d2e71124ac45fca1a3cd6e8154c6f90d\nsplitk_so_sha256=28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857\nexpectation=REFUSAL (see promotion_ab_arm_s_reachability.json)\nstarted=2026-08-18T07:49:08Z\nserve_rc=2\nended=2026-08-18T07:49:13Z\n",
+ "census": {
+  "MISSING": true
+ },
+ "deploy_speed": [],
+ "label": "arm_s \u2014 REFUSED (see container tail)",
+ "runroot": "output/fr14_promoab_S_20260818T074907Z",
+ "schema": "fr14.promotion_ab.arm_reduction.v1",
+ "spans": {
+  "cfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_S_splitk_cfwd.json"
+  },
+  "dfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_S_splitk_dfwd.json"
+  },
+  "dfwd_split": {
+   "MISSING": true,
+   "path": "output/fr14_promoab_S_20260818T074907Z/hydra27_fixed32_promoab_S_splitk/logs/fr13_dfwd_split.json"
+  },
+  "lfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_S_splitk_lfwd.json"
+  },
+  "sfwd": {
+   "MISSING": true,
+   "path": "output/fr13_sfwd_sidecar/hydra27_fixed32_promoab_S_splitk.json"
+  }
+ }
+}

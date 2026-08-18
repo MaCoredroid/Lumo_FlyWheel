@@ -1,0 +1,116 @@
+fixed32 SWE-Verified subset OK: tasks=1 diagnostic=1
+=== BIGDENOM-VARIANT SWEServe ARM hydra27_fixed32_fa2_qrow32_gqa_pair_k0_b1_gate_promoab kind=hydra27_fixed32 launcher=forked expect=31 xflags=[FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0 FR13_FIXED32_MODE=hydra27_fixed32 FR13_FIXED32_VALID_MASK=0x7abdffff FR13_FIXED32_ACTIVE_NODES=27 FR13_FIXED32_PHYSICAL_DRAFTS=31] subset=config/fr13_fixed32/subset_b1_diagnostic_one.json ===
+2026-08-18T03:33:04Z
+4a59ca2b46ec76a9f8c0690a954e03c737d2970b
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=105.4GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117          12         105           0           0         105
+Swap:             15           0          15
+fixed32 container identity promoted: id=ff6f383ca2bcff0f95cdf1479834724707f2201ffbabd8e2f9b32e0f45a5332c name=fr13-bigdenom-hydra27_fixed32_fa2_qrow32_gqa_pair_k0_b1_gate_promoab started_at=2026-08-18T03:33:26.04426989Z pid=2961127 restart_count=0
+healthy after 267s
+fixed32 runtime identity OK: runtime=8a2cc3ae1d2912321b766ca910c98e0e670841748c7020d5341832837efb8e7d pid1_args=47
+fixed32 runtime ready: mode=hydra27_fixed32 producer_pid=154
+NEEDS-OVERRIDE (diagnostic arm): expecting FR13_DRAFT_VOCAB_K=0 instead of FR13_DRAFT_VOCAB_K=65536
+container env OK (hydra27_fixed32)
+PID 1 cmd=[/usr/bin/python3 /usr/local/bin/vllm serve /models/qwen3.8-27b-nvfp4-radixark --served-model-name qwen3.8-27b-nvfp4-radixark --host 0.0.0.0 --port 9950 --max-num-seqs 1 --gpu-memory-utilization 0.70 --max-model-len 131072 --seed 0 --attention-backend TREE_ATTN --gdn-prefill-backend triton --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config {"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"} --enable-prefix-caching --enable-chunked-prefill --mamba-block-size 1024 --mamba-ssm-cache-dtype float32 --max-num-batched-tokens 4096 --block-size 1024 --long-prefill-token-threshold 1024 --compilation-config {"cudagraph_mode":"FULL_AND_PIECEWISE"} --middleware lumo_flywheel_serving.inference_proxy.Fixed32EngineIngressMiddleware ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 153 cmd=[/usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(51) ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 154 cmd=[VLLM::EngineCore                                                                                                                   ]
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 575 cmd=[bash -lc 
+hit=""; pids=""
+for p in $(ls /proc | grep -E "^[0-9]+$"); do
+  e="/proc/$p/environ"; [ -r "$e" ] || continue
+  cmd="$(tr "\0" " " < /proc/$p/cmdline 2>/dev/null || true)"
+  case "$cmd" in *vllm*|*VllmWorker*|*EngineCore*|*python*) ;; *) continue ;; esac
+  dm="$(tr "\0" "\n" < "$e" | grep -E "^FR10_DECODE_MODE_DEFAULT=" || true)"
+  if [ -n "$dm" ]; then
+    pids="$pids $p"
+    echo "PID $p cmd=[$cmd]"
+    tr "\0" "\n" < "$e" | grep -E "^(FR10_DECODE_MODE_DEFAULT|LUMO_FB_KERNEL_ROWS|FR13_GB10_FP8_GEMV_CFG|FR13_GPU_COMMITTER|FR13_COMMITTER_SYNCKILL|SPEC_CONFIG|FR13_REPLAY_ROUTE)=" | sed "s/^/   /"
+    hit="1"
+  fi
+done
+echo "SUMMARY worker_env_seen=[$hit] pids=[$pids]"
+ ]
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":31,"speculative_token_tree":"[(0,), (1,), (2,), (0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0), (2, 0, 0, 0), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2), (1, 0, 0, 0, 0), (2, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)]"}
+   FR13_REPLAY_ROUTE=1
+   FR13_GB10_FP8_GEMV_CFG=0
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   LUMO_FB_KERNEL_ROWS=1
+SUMMARY worker_env_seen=[1] pids=[ 1 153 154 575]
+worker environ needle OK (hydra27_fixed32)
+(EngineCore pid=154) INFO 08-18 03:37:48 [gpu_model_runner.py:9485] Graph capturing finished in 5 secs, took 0.27 GiB
+fixed32 pretask generation warmup SKIPPED: canonical SWE traffic only
+fixed32 pretask prefix-cache reset SKIPPED: fresh container
+[offload] OFFLOAD_AGENT=1 — proxy+agent on alienware, GB10 stays vLLM-only
+[offload] preflight attempt 1/3: link OK
+[offload] alienware -> GB10 vLLM 100.103.10.122:9950/health OK
+OFFLOAD_PROXY_OK host=alienware upstream=http://100.103.10.122:9950 (forced temp 0.6, raw_dumps_disabled=1, NUDGE OFF)
+proxy OK (OFFLOADED to alienware:8023)
+fixed32 ingress auth preflight OK: engine=4 rejects proxy=4 rejects
+eval offload: configured evaluator reachable
+[offload] link watchdog pid=2965900 (threshold 300s)
+fixed32 pretask zero-traffic baseline OK
+fixed32 ingress campaign begun after zero-work baseline
+swe orchestrator rc=0 wall=497s
+[codex-offload] codex docker -> alienware (x86); endpoint=http://127.0.0.1:8023/v1 (GB10 stays vLLM-only — uncontended deploy-speed)
+=== [2026-08-18T03:38:02Z] dataset=princeton-nlp/SWE-bench_Verified tag=verified n=1 concurrency=1 ===
+[2026-08-18T03:38:02Z] -> astropy__astropy-12907
+[2026-08-18T03:46:18Z] <- astropy__astropy-12907 verdict=resolved elapsed_total=495.3s
+=== [2026-08-18T03:46:18Z] DONE n=1 resolved_rate=1.0 verdicts={'resolved': 1} ===
+OFFLOAD_FETCH_OK host=alienware raw_dumps=disabled
+canonical-task spec engagement OK: drafts delta=1387.0 draft_tokens/drafts=31.0
+{
+  "swe_orchestrator_rc": 0,
+  "swe_window_wall_s": 497,
+  "tasks": [
+    {
+      "instance_id": "astropy__astropy-12907",
+      "codex_elapsed_s": 439.098,
+      "codex_timed_out": false,
+      "patch_bytes": 504,
+      "verdict": "resolved"
+    }
+  ]
+}
+raw proxy dumps: disabled
+ARM_DONE hydra27_fixed32_fa2_qrow32_gqa_pair_k0_b1_gate_promoab kind=hydra27_fixed32 swerc=0
+[teardown] kill proxy + attest/remove run container + recover_host_memory
+FAIL: fixed32 chat-task traffic audit rc=1
+Traceback (most recent call last):
+  File "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/scripts/fr13_floor_gate.py", line 3225, in validate_fixed32_ingress_and_census
+    event = validate_work_census_event(raw_event, source=source)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/scripts/fr13_fixed32_work_census.py", line 2013, in validate_event
+    _expect(
+  File "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/scripts/fr13_fixed32_work_census.py", line 926, in _expect
+    raise CensusError(f"{label}: expected {expected!r}, got {actual!r}")
+fr13_fixed32_work_census.CensusError: /home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_gate_20260818T033233Z/hydra27_fixed32_fa2_qrow32_gqa_pair_k0_b1_gate_promoab/logs/fr13_fixed32_work_census.jsonl:1.taw.source_contract_sha256: expected '484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93', got '68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<stdin>", line 31, in <module>
+  File "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/scripts/fr13_floor_gate.py", line 4664, in build_fixed32_chat_traffic_audit
+    ingress = validate_fixed32_ingress_and_census(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/scripts/fr13_floor_gate.py", line 3227, in validate_fixed32_ingress_and_census
+    raise GateError(f"{source}: {error}") from error
+fr13_floor_gate.GateError: /home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_gate_20260818T033233Z/hydra27_fixed32_fa2_qrow32_gqa_pair_k0_b1_gate_promoab/logs/fr13_fixed32_work_census.jsonl:1: /home/mark/shared/lumoFlyWheel-nvfp4-port-20260816/output/fr14_promoab_gate_20260818T033233Z/hydra27_fixed32_fa2_qrow32_gqa_pair_k0_b1_gate_promoab/logs/fr13_fixed32_work_census.jsonl:1.taw.source_contract_sha256: expected '484babd7a883c81c7317ef23862940143c248dcbc1b66c9d4ac6775ff5a0fa93', got '68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d'
+               total        used        free      shared  buff/cache   available
+Mem:             117          12         106           0           1         105
+Swap:             15           0          15
+2026-08-18T03:46:32Z

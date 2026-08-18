@@ -1,0 +1,85 @@
+{
+ "arm_c_conditional_survival": {
+  "m0": 0.942,
+  "m1": 0.837,
+  "m2": 0.772,
+  "m3": 0.783,
+  "m4": 0.794,
+  "m5": 0.579
+ },
+ "arm_c_per_position_cumulative_survival": {
+  "p0": 0.942,
+  "p1": 0.788,
+  "p10": 0.11,
+  "p2": 0.608,
+  "p3": 0.476,
+  "p4": 0.378,
+  "p5": 0.219,
+  "p6": 0.175,
+  "p7": 0.149,
+  "p8": 0.133,
+  "p9": 0.12
+ },
+ "arms": {
+  "C": {
+   "accept_per_event": 4.098435804363283,
+   "census_steps": 53446,
+   "committer_gpu_ms_per_step": 20.55203659259741,
+   "drafter_gpu_ms_per_step": 56.082122652061955,
+   "eyeball": "CLEAN \u2014 0 malformed tool calls in 228, 0 non-ASCII in ~86k words, all stop_reason=tool_use",
+   "fa2_b1_arm": "incumbent qrow16 (production arm NAMED EMPTY; gqa_pair credential unserviceable at HEAD)",
+   "floor_ratio": 2.3591972079972514,
+   "outcome": "DRAINED",
+   "overhead_other_ms_per_event": 7.611063553970842,
+   "runroot": "output/fr14_promoab_C_20260818T035118Z",
+   "s_per_fwd_gpu": 0.13551939178936234,
+   "serve_rc": 16,
+   "serve_rc_cause": "pre-existing stale census TAW mirror (campaign 0.4); the serve itself completed",
+   "step_wall_ms": 219.76461458799258,
+   "swe_orchestrator_rc": 0,
+   "tasks": 4
+  },
+  "G": {
+   "census_steps": 0,
+   "outcome": "FAIL_CLOSED_AT_FIRST_ARMED_BOOT",
+   "refusal": "FR13 fixed32 drafter tree-attention work drift (gdn_linear_attn.py:3201) during segment-1 half-graph capture",
+   "runroot": "output/fr14_promoab_G_20260818T073427Z",
+   "serve_rc": 15
+  },
+  "G_iso": {
+   "attributes_refusal_to": "split-graph integration alone; FR14_FUSED_DRAFT_TOPK exonerated",
+   "outcome": "SAME_REFUSAL_WITH_TOPK_OFF",
+   "runroot": "output/fr14_promoab_Giso_20260818T074147Z"
+  },
+  "S": {
+   "eyeball_obtainable": false,
+   "outcome": "REFUSED_AT_LAUNCHER",
+   "refusal": "fixed32 qrow32 B1 binary identity is not qualified (launcher :4319 in-container qualification map has no gqa_pair_splitk entry; falls through to split2 pins)",
+   "runroot": "output/fr14_promoab_S_20260818T074907Z",
+   "serve_rc": 2
+  }
+ },
+ "blocking_defects_reported_not_fixed": [
+  "fr13_fixed32_work_census.py:157 stale TAW mirror \u2014 blocks every fixed32 credential at HEAD",
+  "fr13_launch_forked_fa2_tree_server.sh:4296-4319 + fr13_fixed32_contract.py \u2014 no gqa_pair_splitk identity",
+  "gdn_linear_attn.py:3201 captured_graph_id binding is not segment-aware"
+ ],
+ "commits_between_boot_and_drain": 0,
+ "head": "4a59ca2b46ec76a9f8c0690a954e03c737d2970b",
+ "promotes_anything": false,
+ "recommendations": {
+  "fused_draft_topk": "MORE EVIDENCE \u2014 needs one paired dfwd-span serve, top-k 0 vs 1",
+  "splitk_fa2": "REFUSE \u2014 eyeball condition NOT dischargeable from this HEAD",
+  "suffix_pass_gate": "REFUSE for now \u2014 integration fails closed at an 11th, GPU-only site"
+ },
+ "relaxed_any_guard": false,
+ "schema": "fr14.promotion_ab.campaign_summary.v1",
+ "step0_regate": {
+  "cause": "fr13_fixed32_work_census.py:157 TAW_SOURCE_CONTRACT_SHA256 stale at 484babd7 vs emitter 68b289ae",
+  "outcome": "REFUSED",
+  "rc": 16,
+  "runroot": "output/fr14_promoab_gate_20260818T033233Z",
+  "swe_orchestrator_rc": 0
+ },
+ "window_utc": "2026-08-18T03:32Z..07:50Z"
+}
