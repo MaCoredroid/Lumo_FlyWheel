@@ -4565,10 +4565,23 @@ def patch_fa2_source(
         "flash_fwd_fr13_qrow32_b1_split2_hdim256_bf16_sm80.cu": (
             b1_translation_units_changed
         ),
+        # The split-K binary carries the PROMOTED unit too, and deliberately.
+        # Its API gate installs the promoted arm's dispatch so the
+        # characterization can measure against it, which means the promoted
+        # launcher must resolve at link time -- but the deeper reason is
+        # evidential: a reference arm compiled from the same source with the
+        # same flags into the same binary is the only way to know the baseline
+        # is the served kernel and not a rebuild of it. The build script
+        # asserts that unit's SASS digest against the SEALED kernel's pin, so
+        # a baseline that drifted fails the build instead of quietly becoming
+        # the thing every ULP number is measured from.
         "flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu": (
             _patch_fixed32_query_gqa_pair32_b1_translation_unit(
                 files["flash_fwd_split_hdim256_bf16_sm80.cu"],
-                fixed32_query_gqa_pair32_b1=fixed32_query_gqa_pair32_b1,
+                fixed32_query_gqa_pair32_b1=(
+                    fixed32_query_gqa_pair32_b1
+                    or fixed32_query_gqa_pair32_splitk_b1
+                ),
                 fixed32_tree_visibility_mask=fixed32_tree_visibility_mask,
             )
         ),

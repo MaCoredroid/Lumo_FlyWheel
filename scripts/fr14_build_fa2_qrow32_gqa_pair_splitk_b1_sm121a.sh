@@ -50,7 +50,7 @@ IMAGE='vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada
 FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
 # Pinned by the codegen, ahead of the build: scripts/fr13_qrow32_b1_pass_sidecar.py
 # SPLITK_SOURCE_CLOSURE_SHA256.
-SOURCE_CLOSURE_SHA256=c88a767e97e29dd84054450b67aa4266c3462c2b6ceed2c85ee4721bb593dc13
+SOURCE_CLOSURE_SHA256=4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878
 
 # THE REPRODUCIBILITY CREDENTIAL (Mark's ruling, 2026-08-18). This is the digest
 # of the disassembled device code, and it answers the question the .so sha256
@@ -112,6 +112,18 @@ TU=flash_fwd_fr13_qrow32_gqa_pair_splitk_b1_hdim256_bf16_sm80.cu
 OBJ=qrow32_gqa_pair_splitk_b1
 SO="$BUILD/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so"
 LAUNCHER_SYMBOL=fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_splitk_b1
+
+# THE BASELINE ARM, COMPILED INTO THE SAME BINARY. Every ULP, argmax-flip and
+# timing number this lane produces is measured against the promoted gqa_pair
+# kernel, so the baseline has to BE that kernel rather than a rebuild that
+# resembles it. Its unit is emitted by the same codegen, compiled with the same
+# flags, and its SASS digest is asserted against the SEALED 2026-08-10 kernel's
+# pin below. If the baseline ever stops being the served kernel, the build
+# fails instead of quietly re-basing the evidence.
+REF_TU=flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu
+REF_OBJ=qrow32_gqa_pair_b1_baseline
+REF_LAUNCHER_SYMBOL=fr13_run_mha_fwd_fixed32_qrow32_gqa_pair_b1
+REF_SASS_DIGEST_SHA256=fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470
 PYTHON_BIN=${PYTHON_BIN:-$REPO/.venv/bin/python}
 
 # -------------------------------------------------------------- preflight
@@ -176,7 +188,7 @@ CUDA_FLAGS="-DONNX_NAMESPACE=onnx_c2 -Xcudafe --diag_suppress=cc_clobber_ignored
 if compgen -G "/dev/nvidia*" >/dev/null; then echo unexpected_gpu_device >&2; exit 91; fi
 '
 
-echo "== Step B: compile the B1 GQA-pair TU =="
+echo "== Step B: compile the B1 GQA-pair split-K TU and the baseline TU =="
 "${DRUN[@]}" -v "$SOURCE:/src:ro" -v "$CUTLASS:/cutlass:ro" -v "$BUILD:/build" "$IMAGE" -lc "
 set -euo pipefail
 $FLAGS
@@ -187,6 +199,9 @@ printf 'image=%s\nsource_commit=%s\nnetwork=none\ncpus=1\nNVIDIA_VISIBLE_DEVICES
 nice -n 19 ionice -c 3 nvcc \$DEFINES \$INCLUDES \$CUDA_FLAGS -c \
   /src/csrc/flash_attn/src/$TU \
   -o /build/$OBJ.raw.sm121a.o 2>&1 | tee /build/compile.log >/dev/null
+nice -n 19 ionice -c 3 nvcc \$DEFINES \$INCLUDES \$CUDA_FLAGS -c \
+  /src/csrc/flash_attn/src/$REF_TU \
+  -o /build/$REF_OBJ.raw.sm121a.o 2>&1 | tee /build/compile_baseline.log >/dev/null
 echo TU_COMPILED
 "
 
@@ -203,15 +218,18 @@ echo FLASH_API_COMPILED
 echo "== pin the Thrust arch-mangled ABI namespace (host objcopy) =="
 OLD='_ZN6thrust24THRUST_300001_SM_1210_NS6system6detail10sequential3seqE'
 NEW='_ZN6thrust23THRUST_300001_SM_800_NS6system6detail10sequential3seqE'
+for _obj in "$OBJ" "$REF_OBJ"; do
 objcopy --redefine-sym "$OLD=$NEW" \
-  "$BUILD/$OBJ.raw.sm121a.o" "$BUILD/$OBJ.pinnedabi.sm121a.o"
+  "$BUILD/$_obj.raw.sm121a.o" "$BUILD/$_obj.pinnedabi.sm121a.o"
 # Compare the SYMBOL NAME field only. objcopy --redefine-sym renames symbols, not
 # section names, so the inert .rodata.<mangled> section keeps the sm_121a string.
-if nm -a "$BUILD/$OBJ.pinnedabi.sm121a.o" | awk -v s="$OLD" '$3 == s {found=1} END {exit !found}'; then
+if nm -a "$BUILD/$_obj.pinnedabi.sm121a.o" | awk -v s="$OLD" '$3 == s {found=1} END {exit !found}'; then
   echo old_thrust_namespace_survived >&2; exit 93; fi
-if ! nm -a "$BUILD/$OBJ.pinnedabi.sm121a.o" | awk -v s="$NEW" '$3 == s {found=1} END {exit !found}'; then
+if ! nm -a "$BUILD/$_obj.pinnedabi.sm121a.o" | awk -v s="$NEW" '$3 == s {found=1} END {exit !found}'; then
   echo pinned_thrust_namespace_missing >&2; exit 93; fi
-nm -a "$BUILD/$OBJ.pinnedabi.sm121a.o" | grep -F "$NEW" > "$BUILD/pinnedabi_thrust_symbol.txt"
+nm -a "$BUILD/$_obj.pinnedabi.sm121a.o" | grep -F "$NEW" >> "$BUILD/pinnedabi_thrust_symbol.txt"
+done
+unset _obj
 echo ABI_PINNED
 
 echo "== resource contract (1 cubin, STACK:0, no spills, no LDL/STL/CALL) =="
@@ -238,11 +256,27 @@ cuobjdump --dump-resource-usage /build/$OBJ.raw.sm121a.o | tee /build/cuobjdump_
 [[ "$(grep -c 'LOCAL:0' "$BUILD/cuobjdump_resource_usage.txt")" -eq 2 ]] \
   || { echo "a kernel in this TU uses local memory" >&2; exit 92; }
 
+# The baseline unit: one cubin, one kernel, and the SEALED build's own numbers.
+# REG:243 is not an estimate here -- it is what the 2026-08-10 build reported
+# for this exact translation unit, so it can be asserted rather than recorded.
+"${DRUN[@]}" -v "$BUILD:/build" "$IMAGE" -lc "
+set -euo pipefail
+cuobjdump --list-elf /build/$REF_OBJ.raw.sm121a.o | tee /build/cuobjdump_list_elf_baseline.txt
+cuobjdump --dump-resource-usage /build/$REF_OBJ.raw.sm121a.o | tee /build/cuobjdump_resource_usage_baseline.txt
+"
+[[ "$(grep -c 'ELF file' "$BUILD/cuobjdump_list_elf_baseline.txt")" -eq 1 ]] \
+  || { echo "baseline: expected exactly one cubin" >&2; exit 92; }
+[[ "$(grep -c 'REG:' "$BUILD/cuobjdump_resource_usage_baseline.txt")" -eq 1 ]] \
+  || { echo "baseline: expected exactly one kernel" >&2; exit 92; }
+grep -q 'REG:243 STACK:0 SHARED:1024 LOCAL:0' "$BUILD/cuobjdump_resource_usage_baseline.txt" \
+  || { echo "baseline resource usage is not the sealed build's REG:243 STACK:0 LOCAL:0" >&2; exit 92; }
+
 "${DRUN[@]}" -v "$BUILD:/build" -v /usr/local/cuda/bin/nvdisasm:/usr/local/bin/nvdisasm:ro \
   --env NVDISASM_PATH=/usr/local/bin/nvdisasm "$IMAGE" -lc "
 set -euo pipefail
 cuobjdump --dump-sass /build/$OBJ.raw.sm121a.o > /build/$OBJ.sm121a.sass
-if grep -E '[[:space:]](LDL|STL|CALL)(\.|[[:space:]])' /build/$OBJ.sm121a.sass > /build/forbidden_sass.txt; then
+cuobjdump --dump-sass /build/$REF_OBJ.raw.sm121a.o > /build/$REF_OBJ.sm121a.sass
+if grep -E '[[:space:]](LDL|STL|CALL)(\.|[[:space:]])' /build/$OBJ.sm121a.sass /build/$REF_OBJ.sm121a.sass > /build/forbidden_sass.txt; then
   cat /build/forbidden_sass.txt >&2; exit 92; else : > /build/forbidden_sass.txt; fi
 echo SASS_CLEAN"
 
@@ -278,6 +312,30 @@ if [[ "$BUILT_SASS_DIGEST" != "$SASS_DIGEST_SHA256" ]]; then
 fi
 echo "SASS_DIGEST_MATCHES_PIN $BUILT_SASS_DIGEST"
 
+echo "== baseline credential: the reference arm must BE the sealed kernel =="
+# The one that decides whether this lane's numbers mean anything. Every ULP,
+# argmax-flip and timing figure is measured against the gqa_pair kernel in THIS
+# binary, so if that kernel is not bit-for-bit the promoted one, the evidence is
+# measured from the wrong baseline and silently so. Note what this also proves:
+# the split-K header edits -- the paired O/LSE tensors learning to address the
+# stock split accumulators, and the combine's static geometry -- leave the
+# Split=false instantiation's device code untouched, which is the invariance
+# claim those edits rest on. A drift fails here, before the link.
+BUILT_REF_SASS_DIGEST=$(sha256sum "$BUILD/$REF_OBJ.sm121a.sass" | awk '{print $1}')
+printf 'baseline_sass_digest_sha256=%s\nbaseline_sass_digest_pinned=%s\n' \
+  "$BUILT_REF_SASS_DIGEST" "$REF_SASS_DIGEST_SHA256" > "$BUILD/baseline_sass_digest.txt"
+if [[ "$BUILT_REF_SASS_DIGEST" != "$REF_SASS_DIGEST_SHA256" ]]; then
+  echo "THE BASELINE ARM IN THIS BINARY IS NOT THE SEALED KERNEL" >&2
+  echo "  built  baseline SASS digest: $BUILT_REF_SASS_DIGEST" >&2
+  echo "  sealed baseline SASS digest: $REF_SASS_DIGEST_SHA256" >&2
+  echo "The split-K header edits are supposed to be inert at Split=false. If" >&2
+  echo "they are not, every number measured against this baseline is measured" >&2
+  echo "against a kernel that does not serve -- that is the finding, and it is" >&2
+  echo "not a pin to refresh." >&2
+  exit 96
+fi
+echo "BASELINE_SASS_MATCHES_SEALED_KERNEL $BUILT_REF_SASS_DIGEST"
+
 echo "== Link: flash_api_splitk_b1.o, 55 sorted reference objects, pinned TU =="
 "${DRUN[@]}" -v "$BUILD:/out" -v "$REF:/ref:ro" "$IMAGE" -lc "
 set -euo pipefail
@@ -287,7 +345,7 @@ printf 'reference_objects_without_flash_api=%s\n' \"\${#objects[@]}\" | tee /out
 test \"\${#objects[@]}\" -eq 55
 nice -n 19 ionice -c 3 /usr/bin/c++ -fPIC -I/usr/local/cuda/include -I/usr/local/cuda/include/cccl -O2 -g -DNDEBUG -shared \
   -o /out/$(basename "$SO") \
-  /out/flash_api_splitk_b1.o \"\${objects[@]}\" /out/$OBJ.pinnedabi.sm121a.o \
+  /out/flash_api_splitk_b1.o \"\${objects[@]}\" /out/$OBJ.pinnedabi.sm121a.o /out/$REF_OBJ.pinnedabi.sm121a.o \
   -L/usr/local/cuda/targets/sbsa-linux/lib/stubs -L/usr/local/cuda/targets/sbsa-linux/lib \
   -Wl,-rpath,/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/cuda/lib64: \
   /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch.so \
@@ -368,12 +426,16 @@ fi
 unset removed added symbol
 # The private launcher must stay LOCAL: a dynamic export would let anything but
 # the in-binary sentinel gate reach the candidate kernel.
-if readelf -W --dyn-syms "$CAND" | c++filt | grep -qF "$LAUNCHER_SYMBOL"; then
-  echo private_launcher_leaked >&2; exit 94; fi
-readelf -Ws "$CAND" | c++filt | grep -F "$LAUNCHER_SYMBOL" \
-  > "$BUILD/candidate_private_launcher_symbol.txt"
-grep -q ' LOCAL ' "$BUILD/candidate_private_launcher_symbol.txt" \
-  || { echo "private launcher is not LOCAL" >&2; exit 94; }
+: > "$BUILD/candidate_private_launcher_symbol.txt"
+for _sym in "$LAUNCHER_SYMBOL" "$REF_LAUNCHER_SYMBOL"; do
+  if readelf -W --dyn-syms "$CAND" | c++filt | grep -qF "$_sym"; then
+    echo "private_launcher_leaked: $_sym" >&2; exit 94; fi
+  readelf -Ws "$CAND" | c++filt | grep -F "$_sym" \
+    >> "$BUILD/candidate_private_launcher_symbol.txt"
+  readelf -Ws "$CAND" | c++filt | grep -F "$_sym" | grep -q ' LOCAL ' \
+    || { echo "private launcher is not LOCAL: $_sym" >&2; exit 94; }
+done
+unset _sym
 echo ABI_AUDIT_PASS
 
 echo "== offline torch load (no GPU) -- MANDATORY =="
@@ -436,7 +498,10 @@ echo "-- reproducibility credential (the kernel) --"
 printf 'sass_digest_sha256=%s  MATCHES PIN\n' "$BUILT_SASS_DIGEST"
 echo "-- staged-artifact identity (the binary) --"
 printf 'so_sha256=%s\nso_size=%s\n' "$BUILT_SO_SHA256" "$BUILT_SO_SIZE"
+echo "-- split-K kernels --"
 grep -E 'REG:|STACK:|LOCAL:' "$BUILD/cuobjdump_resource_usage.txt" || true
+echo "-- baseline (gqa_pair) kernel, SASS == sealed --"
+grep -E 'REG:|STACK:|LOCAL:' "$BUILD/cuobjdump_resource_usage_baseline.txt" || true
 echo BUILD_COMPLETE
 echo
 echo "TIER-B ARM. This binary is NOT byte-equivalent to the promoted gqa_pair"

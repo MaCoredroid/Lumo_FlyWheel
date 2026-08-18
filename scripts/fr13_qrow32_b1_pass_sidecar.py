@@ -290,9 +290,15 @@ SPLITK_SOURCE_STATUS = (
     " M csrc/flash_attn/src/flash.h",
     " M csrc/flash_attn/src/flash_fwd_kernel.h",
     " M csrc/flash_attn/src/utils.h",
+    "?? csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu",
     "?? csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_splitk_b1_hdim256_bf16_sm80.cu",
 )
 SPLITK_SOURCE_FILES = {
+    # The PROMOTED unit, byte-identical to GQA_PAIR_SOURCE_FILES' copy of it.
+    # It is in this closure because the split-K binary compiles it too: the
+    # baseline every ULP and timing number is measured against has to be the
+    # served kernel itself, not a rebuild that resembles it, and the build
+    # script asserts its SASS digest against the sealed 2026-08-10 pin.
     "csrc/flash_attn/flash_api.cpp": (
         "5799e231fcf0a9c926523e9e77abee876f00f78a84502e3612842529bd06851c"
     ),
@@ -301,6 +307,9 @@ SPLITK_SOURCE_FILES = {
     ),
     "csrc/flash_attn/src/flash.h": (
         "e4c7875a72c0bc5f8ed3e0661ef956ca24b38c8f4758ae2a89f5e58b88671c5a"
+    ),
+    "csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu": (
+        "edc5e2a9116142a5efd6f4e21ee80c2da3caf823a476595d7a72877e50cfb105"
     ),
     "csrc/flash_attn/src/flash_fwd_fr13_qrow32_gqa_pair_splitk_b1_hdim256_bf16_sm80.cu": (
         "c526c4d42b1d1c6601fde785f6881c11dfeab4f3b1fa7167bde3b2ab866dd126"
@@ -313,7 +322,7 @@ SPLITK_SOURCE_FILES = {
     ),
 }
 SPLITK_SOURCE_CLOSURE_SHA256 = (
-    "c88a767e97e29dd84054450b67aa4266c3462c2b6ceed2c85ee4721bb593dc13"
+    "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878"
 )
 SPLITK_CANDIDATE_SHA256 = ""
 SPLITK_CANDIDATE_SIZE = 0

@@ -325,6 +325,17 @@ def test_splitk_builder_carries_both_credentials() -> None:
     assert "--arm gqa_pair_splitk" in recipe
     assert "--fixed32-query-gqa-pair32-splitk-b1" in recipe
 
+    # The baseline credential: the reference arm in this binary must be the
+    # SEALED gqa_pair kernel, asserted before the link like the arm's own.
+    assert (
+        "REF_SASS_DIGEST_SHA256=fa01f98840420b9c0177d06297aacabb0ed5e00c674511f"
+        "daa4aa618c3473470" in recipe
+    )
+    assert "THE BASELINE ARM IN THIS BINARY IS NOT THE SEALED KERNEL" in recipe
+    assert "grep -q 'REG:243 STACK:0 SHARED:1024 LOCAL:0'" in recipe
+    baseline_at = recipe.index("BASELINE_SASS_MATCHES_SEALED_KERNEL")
+    assert baseline_at < recipe.index('echo "== Link:')
+
     # This TU emits two kernels; a single grep -q would pass one clean kernel
     # beside one that spilled, so the contract counts them.
     assert "-eq 2 ]]" in recipe
@@ -358,9 +369,21 @@ def test_splitk_sidecar_pins_its_own_closure_and_status() -> None:
     )
     # Its emitted source set is its own -- one TU, not the promoted arm's.
     status = sidecar._source_status(sidecar.SPLITK_ARM)
-    assert any("gqa_pair_splitk" in line for line in status)
-    assert not any("gqa_pair_b1_hdim256" in line for line in status)
+    assert any("gqa_pair_splitk_b1_hdim256" in line for line in status)
+    # The promoted unit is in this closure too -- the baseline is compiled into
+    # the same binary -- but the promoted arm's own closure must NOT have
+    # acquired the split-K unit in return.
+    assert any("gqa_pair_b1_hdim256" in line for line in status)
     assert sidecar._source_status("gqa_pair") == sidecar.GQA_PAIR_SOURCE_STATUS
+    assert not any(
+        "splitk" in line for line in sidecar.GQA_PAIR_SOURCE_STATUS
+    )
+    assert not any("splitk" in f for f in sidecar.GQA_PAIR_SOURCE_FILES)
+    # The shared unit is byte-identical in both closures.
+    shared = ("csrc/flash_attn/src/"
+              "flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu")
+    assert (sidecar.SPLITK_SOURCE_FILES[shared]
+            == sidecar.GQA_PAIR_SOURCE_FILES[shared])
     # The source closure is pinnable before the binary exists, exactly as the
     # promoted arm's was; the binary pins fail closed until they are filled.
     contract = sidecar.splitk_source_contract()
@@ -428,9 +451,17 @@ def test_splitk_codegen_reproduces_its_pinned_source_closure(tmp_path: Path) -> 
     assert changed[tu] is True
     assert changed["flash_api.cpp"] is True
     assert changed["flash_fwd_kernel.h"] is True
-    # Only this arm's unit is emitted.
-    assert changed["flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu"] is False
+    # The PROMOTED unit is emitted too, and deliberately: the baseline every
+    # number is measured against must be the served kernel compiled into the
+    # same binary, not a rebuild that resembles it.
+    assert changed["flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu"] is True
+    assert (root / "csrc/flash_attn/src"
+            / "flash_fwd_fr13_qrow32_gqa_pair_b1_hdim256_bf16_sm80.cu").read_text() == (
+        module.FIXED32_QUERY_GQA_PAIR32_B1_TRANSLATION_UNIT
+    )
+    # But no OTHER arm's unit is.
     assert changed["flash_fwd_fr13_qrow32_b1_hdim256_bf16_sm80.cu"] is False
+    assert changed["flash_fwd_fr13_qrow32_gqa_pair_hdim256_bf16_sm80.cu"] is False
     assert (root / "csrc/flash_attn/src" / tu).read_text() == (
         module.FIXED32_QUERY_GQA_PAIR32_SPLITK_B1_TRANSLATION_UNIT
     )
