@@ -26451,6 +26451,50 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "FR13 DFWD K64 top3 requires B1 exact fixed32, root1, "
                     "K64 single logits, and width3 at all five head depths"
                 )
+            # FR14_FUSED_DRAFT_TOPK (default OFF): the K0 analogue of the K64
+            # top3 op. Under the served full-vocabulary drafter profile every
+            # one of the five head reads runs argmax(248320) AND
+            # topk(248320, 3) as two separate ATen calls -- an ATen multi-block
+            # radix select is a chain of kernels, and the pair measures
+            # ~68 us/head read at this geometry against ~8 us for one fused
+            # launch. Selection is byte-identical (ids AND order, including the
+            # tie-break, which argmax and topk do NOT agree on -- see
+            # results/fr14_nvfp4_port_20260816/fused_draft_topk.md).
+            _fr14_fused_topk_raw = os.environ.get(
+                "FR14_FUSED_DRAFT_TOPK", "0"
+            )
+            if _fr14_fused_topk_raw not in ("0", "1"):
+                raise RuntimeError(
+                    "FR14_FUSED_DRAFT_TOPK must be exactly 0 or 1"
+                )
+            _fr14_fused_topk = _fr14_fused_topk_raw == "1"
+            if _fr14_fused_topk and (
+                not _fr13_is_fixed32
+                or _fr13_dvk_root
+                or _fr13_dvk_configured != 0
+                or not _fr13_single_logits
+                or _fr13_dfwd_top3
+                or not _fr10_is_wide
+                or int(batch_size) not in (1, 2, 3, 4)
+                or tuple(
+                    int(_fr10_wide_width.get(_fr14_fused_depth, 0))
+                    for _fr14_fused_depth in range(5)
+                )
+                != (3, 3, 3, 3, 3)
+            ):
+                raise RuntimeError(
+                    "FR14 fused draft top-k requires exact fixed32 at the K0 "
+                    "full-vocabulary profile (ROOT=0, K=0), single logits, no "
+                    "K64 top3, no sibling-dedup slack, and width3 at all five "
+                    "head depths"
+                )
+            _fr14_fused_topk_blocks = int(
+                os.environ.get("FR14_FUSED_DRAFT_TOPK_BLOCKS", "64") or 64
+            )
+            if _fr14_fused_topk and not (1 <= _fr14_fused_topk_blocks <= 121):
+                raise RuntimeError(
+                    "FR14_FUSED_DRAFT_TOPK_BLOCKS must be in 1..121"
+                )
             _fr13_dh_rows_raw = os.environ.get(
                 "FR13_DRAFT_HEAD_PAD_ROWS", "0"
             )
@@ -27927,6 +27971,156 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                 return _spine_output, _top3_output
 
+            # ---- FR14_FUSED_DRAFT_TOPK (K0 full-vocabulary fused select) ----
+            # One launch replaces `logits.argmax(-1)` + `torch.topk(logits, 3)`
+            # on the SAME materialised logits row. Byte-exact by gate, not by
+            # argument: results/fr14_nvfp4_port_20260816/
+            # fr14_fused_draft_topk_probe.py runs 6 840 configurations at the
+            # real geometry (V=248320, k=3, rows 1..4, five CTA counts),
+            # including 320 planted exact-tie plateaus, and requires zero
+            # raw-byte mismatches with a powered negative control.
+            def _fr14_fused_topk_prepare(_vocab):
+                if not _fr14_fused_topk:
+                    return
+                _fr14_ft_rows = int(batch_size)
+                if _fr14_ft_rows in getattr(
+                    self, "_fr14_fused_topk_buffers", {}
+                ):
+                    return
+                import hashlib as _fr14_ft_hashlib
+                import pathlib as _fr14_ft_pathlib
+
+                _fr14_ft_so = _fr14_ft_pathlib.Path(
+                    os.environ.get(
+                        "FR14_FUSED_DRAFT_TOPK_SO",
+                        "/tmp/fr14_dfwd_full_topk.abi3.so",
+                    )
+                )
+                _fr14_ft_expected = os.environ.get(
+                    "FR14_FUSED_DRAFT_TOPK_SHA256", ""
+                )
+                if (
+                    len(_fr14_ft_expected) != 64
+                    or any(
+                        _fr14_ft_char not in "0123456789abcdef"
+                        for _fr14_ft_char in _fr14_ft_expected
+                    )
+                    or not _fr14_ft_so.is_file()
+                    or _fr14_ft_so.is_symlink()
+                ):
+                    raise RuntimeError(
+                        "FR14 fused draft top-k binary identity is missing"
+                    )
+                _fr14_ft_digest = _fr14_ft_hashlib.sha256()
+                with _fr14_ft_so.open("rb") as _fr14_ft_handle:
+                    for _fr14_ft_chunk in iter(
+                        lambda: _fr14_ft_handle.read(1024 * 1024), b""
+                    ):
+                        _fr14_ft_digest.update(_fr14_ft_chunk)
+                if _fr14_ft_digest.hexdigest() != _fr14_ft_expected:
+                    raise RuntimeError(
+                        "FR14 fused draft top-k binary identity mismatch"
+                    )
+                if int(_vocab) != 248320:
+                    raise RuntimeError(
+                        "FR14 fused draft top-k is compiled for the pinned "
+                        "248320 vocabulary only"
+                    )
+                if not getattr(self, "_fr14_fused_topk_ready", False):
+                    torch.ops.load_library(str(_fr14_ft_so))
+                    self._fr14_fused_topk_op = (
+                        torch.ops.fr14_fused_draft_topk.select_out
+                    )
+                    self._fr14_fused_topk_buffers = {}
+                    self._fr14_fused_topk_root_calls = 0
+                    self._fr14_fused_topk_capture_calls = 0
+                    self._fr14_fused_topk_ready = True
+                _fr14_ft_dev = self.model.lm_head.weight.device
+                # Static per-batch homes: the drafter graph bakes these
+                # addresses, so they are allocated once per batch size and
+                # never reallocated.
+                self._fr14_fused_topk_buffers[_fr14_ft_rows] = (
+                    torch.zeros(
+                        int(
+                            torch.ops.fr14_fused_draft_topk.scratch_numel(
+                                _fr14_ft_rows, _fr14_fused_topk_blocks
+                            )
+                        ),
+                        dtype=torch.int64,
+                        device=_fr14_ft_dev,
+                    ),
+                    torch.empty(
+                        (_fr14_ft_rows,),
+                        dtype=torch.int64,
+                        device=_fr14_ft_dev,
+                    ),
+                    torch.empty(
+                        (_fr14_ft_rows, 3),
+                        dtype=torch.int64,
+                        device=_fr14_ft_dev,
+                    ),
+                )
+                print(
+                    "[FR14_FUSED_DRAFT_TOPK] ready K0 full-vocab width3 "
+                    f"rows={_fr14_ft_rows} "
+                    f"blocks={_fr14_fused_topk_blocks} "
+                    "launches_per_head=1 stock_argmax_topk=0",
+                    flush=True,
+                )
+
+            def _fr14_fused_topk_select(
+                _logits, _spine_output, _wide_output, _site
+            ):
+                if not getattr(self, "_fr14_fused_topk_ready", False):
+                    raise RuntimeError(
+                        "FR14 fused draft top-k selected before static "
+                        "preparation"
+                    )
+                _fr14_ft_rows = int(batch_size)
+                _fr14_ft_scratch = self._fr14_fused_topk_buffers[
+                    _fr14_ft_rows
+                ][0]
+                _fr14_ft_capturing = torch.cuda.is_current_stream_capturing()
+                if (
+                    tuple(_logits.shape) != (_fr14_ft_rows, 248320)
+                    or tuple(_logits.stride()) != (248320, 1)
+                    or _logits.dtype != torch.bfloat16
+                    or tuple(_spine_output.shape) != (_fr14_ft_rows,)
+                    or tuple(_spine_output.stride()) != (1,)
+                    or _spine_output.dtype != torch.int64
+                    or tuple(_wide_output.shape) != (_fr14_ft_rows, 3)
+                    or tuple(_wide_output.stride()) != (3, 1)
+                    or _wide_output.dtype != torch.int64
+                    or _spine_output.device != _logits.device
+                    or _wide_output.device != _logits.device
+                    or _fr14_ft_scratch.device != _logits.device
+                    or (_site == "root" and _fr14_ft_capturing)
+                    or (_site == "loop" and not _fr14_ft_capturing)
+                ):
+                    raise RuntimeError(
+                        "FR14 fused draft top-k runtime geometry/lifecycle "
+                        "drifted"
+                    )
+                self._fr14_fused_topk_op(
+                    _spine_output,
+                    _wide_output,
+                    _logits,
+                    _fr14_ft_scratch,
+                    _fr14_fused_topk_blocks,
+                )
+                if _site == "root":
+                    self._fr14_fused_topk_root_calls += 1
+                else:
+                    self._fr14_fused_topk_capture_calls += 1
+                if not getattr(self, "_fr14_fused_topk_engaged", False):
+                    self._fr14_fused_topk_engaged = True
+                    print(
+                        "[FR14_FUSED_DRAFT_TOPK] engaged "
+                        "stock_argmax_topk=0",
+                        flush=True,
+                    )
+                return _spine_output, _wide_output
+
             def _fr13_dh_pad_logits(_sh, _h, _rows):
                 _fr13_dh_batch = int(_h.shape[0]) if _h.ndim == 2 else 0
                 if (
@@ -29312,6 +29506,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 _fr13_dvk = 0
                 _fr13_full_vocab_size = None
             _fr13_dfwd_top3_prepare()
+            _fr14_fused_topk_prepare(
+                int(self.model.lm_head.weight.shape[0])
+                if _fr14_fused_topk
+                else 0
+            )
 
             # FR13_RESHAPE_DEPTH3: cat3w consumes the root runner-up as its
             # (1,) root-sibling leaf. cat9/chain5/chain3 never consume the
@@ -29337,6 +29536,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr10_root_topk_k = 3 if _fr10_consumes_root_leaf2 else 2
             _fr10_root_map = None
             _fr13_root_top3 = None
+            _fr14_root_wide = None
             if _fr13_single_logits:
                 # Root top-2 is verified unused for cat9/chain5/chain3 (no
                 # tree node consumes the root runner-up: every choice starts
@@ -29378,6 +29578,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             self._fr13_dfwd_top3_root_wide,
                             "root",
                         )
+                    )
+                elif _fr14_fused_topk:
+                    # ONE launch for BOTH the root spine argmax and the root
+                    # width-3 leaves; _fr14_root_wide is consumed by the wide
+                    # capture below instead of a second full-vocab topk.
+                    _fr14_root_bufs = self._fr14_fused_topk_buffers[
+                        int(batch_size)
+                    ]
+                    draft_token_ids, _fr14_root_wide = _fr14_fused_topk_select(
+                        _fr10_logits,
+                        _fr14_root_bufs[1],
+                        _fr14_root_bufs[2],
+                        "root",
                     )
                 else:
                     draft_token_ids = _fr10_logits.argmax(dim=-1)
@@ -29444,6 +29657,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 "FR13 DFWD K64 root top3 width drifted"
                             )
                         _fr10_wide_topk[0] = _fr13_root_top3
+                    elif _fr14_fused_topk:
+                        if (
+                            _fr10_w_root != 3
+                            or _fr13_dedup_slack != 0
+                            or _fr14_root_wide is None
+                        ):
+                            raise RuntimeError(
+                                "FR14 fused draft top-k root width drifted"
+                            )
+                        _fr10_wide_topk[0] = _fr14_root_wide
                     else:
                         _fr10_wide_topk[0] = torch.topk(
                             _fr10_logits,
@@ -29774,6 +29997,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
 
                 hidden_states = hidden_states[:batch_size]
                 _fr13_step_top3 = None
+                _fr14_step_wide = None
                 if _fr13_single_logits:
                     # Single lm-head read: spine token = argmax of the SAME
                     # logits tensor _greedy_sample would have recomputed.
@@ -29804,6 +30028,23 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 "loop",
                             )
                         )
+                    elif _fr14_fused_topk:
+                        if not _fr13_dg_cap:
+                            raise RuntimeError(
+                                "FR14 fused draft top-k loop select requires "
+                                "graph capture"
+                            )
+                        # Writes STRAIGHT into the drafter graph's static
+                        # spine/wide buffers: one launch replaces argmax, the
+                        # multi-kernel topk, and both buffer copies.
+                        draft_token_ids, _fr14_step_wide = (
+                            _fr14_fused_topk_select(
+                                _fr10_step_logits,
+                                _dg["spine"][token_index],
+                                _dg["wide"][token_index, :, :3],
+                                "loop",
+                            )
+                        )
                     else:
                         draft_token_ids = _fr10_step_logits.argmax(dim=-1)
                         draft_token_ids = _fr13_dvk_real_ids(
@@ -29815,7 +30056,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             draft_token_ids,
                             self._greedy_sample(last_hidden_states[:batch_size]),
                         )
-                    if _fr13_dg_cap and not _fr13_dfwd_top3:
+                    if _fr13_dg_cap and not (
+                        _fr13_dfwd_top3 or _fr14_fused_topk
+                    ):
                         # FR13_DRAFTER_GRAPH: route through the static out
                         # buffer so replay reproduces the token chain.
                         _dg["spine"][token_index].copy_(draft_token_ids)
@@ -29902,6 +30145,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                     "FR13 DFWD K64 loop top3 width drifted"
                                 )
                             _fr13_dg_wt = _fr13_step_top3
+                        elif _fr14_fused_topk:
+                            if (
+                                _fr10_w_p != 3
+                                or _fr13_dedup_slack != 0
+                                or _fr14_step_wide is None
+                            ):
+                                raise RuntimeError(
+                                    "FR14 fused draft top-k loop width drifted"
+                                )
+                            _fr13_dg_wt = _fr14_step_wide
                         else:
                             # FR13_DEDUP_SIBLINGS: +slack spare ranks (see root capture)
                             _fr13_dg_wt = torch.topk(
