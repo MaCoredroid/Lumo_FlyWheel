@@ -276,6 +276,28 @@ GATED_PADDED_DRAFT_IDS = (14, 15, 19, 20)
 # draft ids of the spine nodes those depths keep -- Arctic-filled, never padded
 GATED_SUFFIX_SPINE_DRAFT_IDS = (13, 18)
 
+# ---- THE per-step shape contract, in ONE place -----------------------------
+# Every consumer of a decode step's drafter shape must agree on these, and the
+# three campaign blockers to date were all one defect: a paired structure
+# updated on one side only. So the pair members import this rather than each
+# carrying its own literal, and tests/test_fr14_paired_contract_lint.py fails
+# when any side drifts -- including the patcher's injected blob, which cannot
+# import and therefore has its literal compared textually.
+#
+#   (mtp_forward_calls, graph_replays) per step:
+#     (4, 1)  the single shipped 4-pass graph, replayed once   [gate OFF]
+#     (4, 2)  split capture, UNGATED step: lo then hi          [gate ON]
+#     (2, 1)  split capture, GATED step: lo alone              [gate ON]
+LEGAL_STEP_SHAPES = ((4, 1), (4, 2), (2, 1))
+# a split capture opens two capture scopes inside one proposal
+LEGAL_GRAPH_CAPTURES = (0, 1, 2)
+# (mtp_forward_calls, main_tail_length): a 2-forward step MUST have handed off
+# to an 8-token Arctic chain and a 4-forward step MUST NOT have
+LEGAL_HANDOFF_SHAPES = (
+    (MTP_FORWARD_CALLS, ARCTIC_MAIN_TAIL_LENGTH),
+    (GATED_MTP_FORWARD_CALLS, GATED_ARCTIC_MAIN_TAIL_LENGTH),
+)
+
 PHYSICAL_DRAFTS = 31
 PHYSICAL_ROWS = 32
 TAIL6_ACTIVE_DRAFTS = 23
@@ -778,6 +800,20 @@ def validate_gate_contract() -> None:
             raise AssertionError(
                 f"draft {node} is already inactive -- the gate pads FILLED nodes"
             )
+
+    # the shape contract must stay internally consistent
+    if set(LEGAL_HANDOFF_SHAPES) != {
+        (MTP_FORWARD_CALLS, ARCTIC_MAIN_TAIL_LENGTH),
+        (GATED_MTP_FORWARD_CALLS, GATED_ARCTIC_MAIN_TAIL_LENGTH),
+    }:
+        raise AssertionError("handoff shape contract drifted")
+    for _calls, _replays in LEGAL_STEP_SHAPES:
+        if _calls not in (MTP_FORWARD_CALLS, GATED_MTP_FORWARD_CALLS):
+            raise AssertionError(f"illegal forward count in contract: {_calls}")
+        if _calls != _replays * (_calls // _replays) or _replays < 1:
+            raise AssertionError("step shape is not a whole number of replays")
+    if max(_r for _c, _r in LEGAL_STEP_SHAPES) + 1 != len(LEGAL_GRAPH_CAPTURES):
+        raise AssertionError("capture count contract disagrees with replays")
 
     # the 31-column pack is unchanged: 15 head + 6 tail + 10 rescue
     gated_tail_columns = GATED_ARCTIC_MAIN_TAIL_LENGTH - len(

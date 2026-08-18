@@ -1,0 +1,61 @@
+{
+ "schema": "fr14.paired_contract_sweep.v1",
+ "pairs": [
+  {
+   "pair": "contract <-> injected blob (step shapes)",
+   "kind": "contract/consumer",
+   "ok": true,
+   "detail": "agree on ((4, 1), (4, 2), (2, 1))"
+  },
+  {
+   "pair": "contract <-> injected blob (graph_captures)",
+   "kind": "contract/consumer",
+   "ok": true,
+   "detail": "agree on (0, 1, 2)"
+  },
+  {
+   "pair": "contract <-> census validator",
+   "kind": "contract/consumer",
+   "ok": true,
+   "detail": "census imports all three contract tuples"
+  },
+  {
+   "pair": "census drafter <-> census drafter_runtime",
+   "kind": "half/half",
+   "ok": true,
+   "detail": "both halves derive from the observed shape"
+  },
+  {
+   "pair": "proposal_end census half <-> runtime half",
+   "kind": "half/half",
+   "ok": true,
+   "detail": "both emitter halves derive from the proposal"
+  },
+  {
+   "pair": "tree-attn observer <-> capture context",
+   "kind": "emitter/validator",
+   "ok": true,
+   "detail": "observer is segment- and pass-aware"
+  },
+  {
+   "pair": "launcher family A <-> launcher family B",
+   "kind": "twin/twin",
+   "ok": true,
+   "detail": "6 FR14 blocks identical across both families"
+  },
+  {
+   "pair": "launcher sidecar <-> gate parser",
+   "kind": "bash/python",
+   "ok": true,
+   "detail": "3 fields written, 3 fields required"
+  },
+  {
+   "pair": "topology contract <-> decide_fixed32",
+   "kind": "contract/consumer",
+   "ok": true,
+   "detail": "drafter consumes the topology constants"
+  }
+ ],
+ "n_pairs": 9,
+ "n_stale": 0
+}

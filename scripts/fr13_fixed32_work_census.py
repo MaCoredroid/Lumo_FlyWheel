@@ -47,6 +47,9 @@ from fr13_fixed32_topology import (
     GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
     GATED_ARCTIC_MAIN_TAIL_LENGTH,
     GATED_MTP_FORWARD_CALLS,
+    LEGAL_GRAPH_CAPTURES,
+    LEGAL_HANDOFF_SHAPES,
+    LEGAL_STEP_SHAPES,
     COMMIT_PATH_CAP,
     COMMITTER_NEUTRALIZE_OPS,
     COMMITTER_RING_GATHERS,
@@ -1353,10 +1356,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     # 2-forward step with a 6-token chain is a malformed tree and is rejected
     # here just as it is at the drafter's own proposal_end.
     _fr14_shape = (mtp_forward_calls, main_tail_length)
-    if _fr14_shape not in (
-        (MTP_FORWARD_CALLS, ARCTIC_MAIN_TAIL_LENGTH),
-        (GATED_MTP_FORWARD_CALLS, GATED_ARCTIC_MAIN_TAIL_LENGTH),
-    ):
+    if _fr14_shape not in LEGAL_HANDOFF_SHAPES:
         raise CensusError(
             f"{source}.drafter (mtp_forward_calls, main_tail_length) must be "
             f"{(MTP_FORWARD_CALLS, ARCTIC_MAIN_TAIL_LENGTH)} ungated or "
@@ -1572,12 +1572,21 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             raise CensusError(
                 f"{comparator_label}.observed_task_marker: invalid marker"
             )
-    for field in ("proposal_begins", "proposal_ends", "graph_replays"):
+    for field in ("proposal_begins", "proposal_ends"):
         _expect(
             _integer(drafter_runtime[field], f"{runtime_label}.{field}"),
             1,
             f"{runtime_label}.{field}",
         )
+    # FR14 lever 2: an armed UNGATED step replays lo then hi, so graph_replays
+    # is 2 there and 1 everywhere else. Validate the (forwards, replays) PAIR
+    # against the shared contract rather than either field alone -- the same
+    # discipline as the (forwards, main_tail_length) pair above, and for the
+    # same reason: a single-field literal is what let the runtime half drift
+    # away from the census half.
+    runtime_graph_replays = _integer(
+        drafter_runtime["graph_replays"], f"{runtime_label}.graph_replays"
+    )
     _integer(
         drafter_runtime["graph_id"], f"{runtime_label}.graph_id", minimum=1
     )
@@ -1594,9 +1603,10 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         drafter_runtime["graph_captures"],
         f"{runtime_label}.graph_captures",
     )
-    if graph_captures not in (0, 1):
+    if graph_captures not in LEGAL_GRAPH_CAPTURES:
         raise CensusError(
-            f"{runtime_label}.graph_captures: expected 0 or 1, got {graph_captures}"
+            f"{runtime_label}.graph_captures: expected one of "
+            f"{LEGAL_GRAPH_CAPTURES}, got {graph_captures}"
         )
     _expect(
         _string(
@@ -1626,6 +1636,12 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         runtime_mtp_calls * batch_size,
         f"{runtime_label}.mtp_forward_rows",
     )
+    if (runtime_mtp_calls, runtime_graph_replays) not in LEGAL_STEP_SHAPES:
+        raise CensusError(
+            f"{runtime_label} (mtp_forward_calls, graph_replays) must be one of "
+            f"{LEGAL_STEP_SHAPES}, got "
+            f"{(runtime_mtp_calls, runtime_graph_replays)}"
+        )
     _fr14_main = (
         GATED_ARCTIC_MAIN_TAIL_LENGTH if _fr14_gated else ARCTIC_MAIN_TAIL_LENGTH
     )

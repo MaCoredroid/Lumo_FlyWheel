@@ -19,6 +19,7 @@ What these tests pin:
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -47,6 +48,8 @@ def new_runtime():
     }
     exec(patcher._FR13_FIXED32_OBSERVED_RUNTIME_SOURCE, ns)
     ns["_FR13_FIXED32_DRAFTER_TREE_LAYER"] = TREE_LAYER
+    ns["_FR13_FIXED32_CENSUS_EVENTS"] = []
+    ns["_FR13_FIXED32_COMPLETE_EVENTS"] = 0
     return ns
 
 
@@ -266,7 +269,16 @@ def test_registry_reports_the_pass_count():
 # proposal_end: the three legal per-step shapes, and the handoff interlock.
 # ---------------------------------------------------------------------------
 
-def _finish(ns, calls, replays, main_tail):
+def _finish(ns, calls, replays, main_tail, measured=False, sync_evidence=True):
+    """Drive proposal_end.
+
+    `measured=True` is the half that matters: it executes the CENSUS emitter AND
+    the RUNTIME-EVIDENCE emitter. The harness previously only ever ran
+    measured=False, which returns before both -- so the runtime half's
+    "graph_replays: 1 / mtp_forward_calls: 4" literals were never executed by a
+    test, and shipped stale into the round-2 boot. Same mock-to-real lesson as
+    the 11th site: the half you do not execute is the half that breaks.
+    """
     proposal = ns["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"]
     proposal["mtp_execution_basis"] = "cudagraph_replay"
     proposal["mtp_forward_calls"] = calls
@@ -275,12 +287,74 @@ def _finish(ns, calls, replays, main_tail):
     proposal["graph_captures"] = 0
     proposal["graph_id"] = 1
     proposal["graph_signature"] = "s" * 64
-    proposal["arctic"] = {"main_tail_columns": main_tail}
-    proposal["publish"] = {}
-    proposal["measured"] = False
-    return ns["_fr13_fixed32_drafter_proposal_end"](
-        MODE, ("r0",), (1, 31), "torch.int64", "cuda", True
+    proposal["arctic"] = {
+        "main_tail_columns": main_tail,
+        "main_lookup_calls": 1,
+        "main_lookup_tokens": main_tail,
+        "rank1_lookup_calls": 1,
+        "rank1_lookup_tokens": 4,
+        "rank2_lookup_calls": 1,
+        "rank2_lookup_tokens": 2,
+        "arctic_lookup_calls": 3,
+        "arctic_requested_tokens": main_tail + 6,
+        "merge_fill_calls": 1,
+        "merge_fill_columns": main_tail + 10,
+        "merge_fill_rows": main_tail + 10,
+        "rescue_carry_slots": 4,
+    }
+    proposal["publish"] = {
+        "publish_shape": (1, 31),
+        "physical_parent_sha256": "p" * 64,
+    }
+    proposal["measured"] = measured
+    if measured and sync_evidence:
+        ev = proposal["replay_evidence"]
+        ev["matching_replays"] = replays
+        ev["graph_captures"] = proposal["graph_captures"]
+    try:
+        return ns["_fr13_fixed32_drafter_proposal_end"](
+            MODE, ("r0",), (1, 31), "torch.int64", "cuda", True
+        )
+    except RuntimeError as exc:
+        # Sealing the event needs a TAW record -- the committer's collaborator,
+        # not the drafter's, and lane 3 owns it. Both drafter emitters have
+        # already written into observed_work by then, which is what these tests
+        # assert. Only the TAW stage is tolerated: any DRAFTER-stage failure
+        # still propagates, so this cannot hide the class of bug it exists for.
+        if "TAW" not in str(exc):
+            raise
+        return None
+
+
+def begin_measured(ns, batch=1):
+    """A proposal bound to a pending measured event, so the emitters run."""
+    req_ids = tuple(f"r{i}" for i in range(batch))
+    observed = {
+        "drafter": None,
+        "request_ids": req_ids,
+        "mode": MODE,
+        "batch_size": batch,
+        "forward_step_index": 0,
+    }
+    ns["_FR13_FIXED32_PENDING_EVENT"] = {
+        "mode": MODE,
+        "batch_size": batch,
+        "request_ids": req_ids,
+        "forward_step_index": 0,
+        "target_kv_complete": True,
+        "event_index": 0,
+        "observed_work": observed,
+    }
+    ns["_fr13_fixed32_drafter_proposal_begin"](
+        MODE, req_ids, batch, batch, batch
     )
+    # the drafter's KV completes AFTER the proposal begins -- proposal_begin
+    # refuses a proposal that starts with the split KV lifecycle already closed
+    ns["_FR13_FIXED32_PENDING_EVENT"]["drafter_kv_complete"] = True
+    ns["_FR13_FIXED32_PENDING_EVENT"]["kv_complete"] = True
+    # hold the emitted dict directly: completion clears the pending event
+    ns["_TEST_OBSERVED"] = observed
+    return ns["_FR13_FIXED32_DRAFTER_PROPOSAL_CURRENT"]
 
 
 @pytest.mark.parametrize(
@@ -382,3 +456,82 @@ def test_observer_still_refuses_a_foreign_layer_and_shape():
         ns["_fr13_fixed32_observed_tree_attn"]("some.other.attn", 1, (1, 1), True)
     with pytest.raises(RuntimeError, match="tree-attention work drift"):
         ns["_fr13_fixed32_observed_tree_attn"](TREE_LAYER, 1, (32, 32), True)
+
+
+# ---------------------------------------------------------------------------
+# The 12th site: proposal_end's RUNTIME-EVIDENCE half.
+#
+# The census half was made pass-aware when the split landed; this half, ~20
+# lines later, still hardcoded graph_replays:1 / mtp_forward_calls:4 and demanded
+# matching_replays==1. An armed UNGATED step is 4 forwards over 2 replays, and
+# every early step is ungated (min_history=256), so it refused immediately.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("calls,replays,tail", [(4, 1, 6), (4, 2, 6), (2, 1, 8)])
+def test_measured_emitter_reports_what_the_step_actually_did(calls, replays, tail):
+    ns = new_runtime()
+    begin_measured(ns)
+    _finish(ns, calls, replays, tail, measured=True)
+    rt = ns["_TEST_OBSERVED"]["drafter_runtime"]
+    assert rt["graph_replays"] == replays
+    assert rt["mtp_forward_calls"] == calls
+    assert rt["mtp_forward_rows"] == calls * 1
+    drafter = ns["_TEST_OBSERVED"]["drafter"]
+    assert drafter["mtp_forward_calls"] == calls
+    assert drafter["main_tail_length"] == tail
+
+
+def test_measured_emitter_requires_evidence_to_match_the_replay_count():
+    ns = new_runtime()
+    proposal = begin_measured(ns)
+    proposal["replay_evidence"]["matching_replays"] = 1  # stale single-graph value
+    with pytest.raises(RuntimeError, match="proposal evidence drifted"):
+        _finish(ns, 4, 2, 6, measured=True, sync_evidence=False)
+
+
+def test_emitted_event_round_trips_through_the_census():
+    """Emitter and validator are a PAIR: what one writes, the other must accept.
+
+    This is the test shape that makes a one-sided update impossible to ship --
+    it fails if either half moves without the other.
+    """
+    census = pytest.importorskip("fr13_fixed32_work_census")
+    banked = _banked_event_or_skip()
+    for calls, replays, tail in ((4, 1, 6), (4, 2, 6), (2, 1, 8)):
+        ns = new_runtime()
+        begin_measured(ns)
+        _finish(ns, calls, replays, tail, measured=True)
+        emitted = ns["_TEST_OBSERVED"]
+        ev = json.loads(json.dumps(banked))
+        for key in ("mtp_forward_calls", "mtp_forward_rows", "main_tail_length",
+                    "arctic_requested_tokens"):
+            ev["drafter"][key] = emitted["drafter"][key]
+        for key in ("mtp_forward_calls", "mtp_forward_rows", "graph_replays",
+                    "graph_captures", "arctic_requested_tokens",
+                    "merge_fill_columns", "merge_fill_rows"):
+            ev["drafter_runtime"][key] = emitted["drafter_runtime"][key]
+        ev["drafter_runtime"]["arctic_ledger"] = [
+            dict(row, tokens=tail) if row["kind"] == "main" else row
+            for row in ev["drafter_runtime"]["arctic_ledger"]
+        ]
+        census.validate_event(ev, source=f"emitted-{calls}x{replays}")
+
+
+def _banked_event_or_skip():
+    path = (
+        REPO
+        / "output/fr14_b1_stock_20260817T054447Z/tail6_fixed32_b1radix"
+        / "logs/fr13_fixed32_work_census.jsonl"
+    )
+    if not path.exists():
+        pytest.skip("banked census fixture not present")
+    census = pytest.importorskip("fr13_fixed32_work_census")
+    with path.open() as fh:
+        ev = json.loads(fh.readline())
+    try:
+        census.validate_event(ev, source="fixture")
+    except census.CensusError as exc:
+        if ".drafter" not in str(exc):
+            pytest.skip(f"banked fixture stale outside this lane: {exc}")
+        raise
+    return ev

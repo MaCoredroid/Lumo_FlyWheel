@@ -699,3 +699,90 @@ what the §3.3 pre-registration forbids; `L*=8, a*=0.75` was chosen against the 
 still exactly as open as §7 left it. Only the prior moved.
 
 **The gate stays default-OFF pending the Arm G re-run.**
+
+
+---
+
+# 13. ROUND 2: the 12th site, a 13th found without a boot, and the sweep
+
+## 13.1 The 12th site
+
+`_fr13_fixed32_drafter_proposal_end` has two emitter halves. The **census** half was
+made pass-aware when the split landed; the **runtime-evidence** half twenty lines later
+still wrote `graph_replays: 1`, `mtp_forward_calls: 4`, `mtp_forward_rows: 4 * batch`, and
+demanded `matching_replays == 1`. An armed **ungated** step is 4 forwards over 2 replays —
+and every early step is ungated (`min_history=256`) — so it refused at once.
+
+All four now derive from the proposal, with `matching_replays` tied to
+`proposal["graph_replays"]` rather than to a literal.
+
+**Why the harness missed it, again.** `_finish()` set `measured=False`, and `proposal_end`
+returns *before* both emitters in that case. The harness executed the function and never
+executed either half of the thing under test. It now builds a pending measured event so both
+emitters run; with the fix reverted the tests fail `assert 1 == 2` and `assert 4 == 2`.
+
+That is the same lesson as the 11th site in a second costume: **the 11th was a mocked
+collaborator, the 12th was an unexecuted branch.** Both are "the code under test never ran".
+
+## 13.2 A 13th site, found by the sweep instead of by a boot
+
+`_fr13_fixed32_observed_build_record` seals the event and checked
+`drafter_evidence["matching_replays"] != 1`. On an armed ungated step that is 2, so the
+**next** boot would have died there, one step further on.
+
+It is now tied to `runtime["graph_replays"]` — the dict the 12th-site fix just made
+truthful, so the two must agree.
+
+Worth recording because it nearly produced a false positive: the *same function* validates a
+**target** forward-graph evidence chain that legitimately replays exactly once per step. The
+sweep scopes by variable name (`drafter_evidence` vs `evidence`), not by function, because a
+function-level scope would have flagged the target chain and a careless fix would have
+broken the verifier.
+
+## 13.3 The one-shape sweep
+
+All three blockers were one defect: **a paired structure updated on one side only.**
+`scripts/fr14_paired_contract_sweep.py` enumerates the pairs and checks both sides.
+
+| # | pair | kind | state |
+|---|---|---|---|
+| 1 | shape contract ↔ injected blob (step shapes) | contract/consumer | OK |
+| 2 | shape contract ↔ injected blob (`graph_captures`) | contract/consumer | OK |
+| 3 | shape contract ↔ census validator | contract/consumer | OK |
+| 4 | census `drafter` ↔ census `drafter_runtime` | half/half | OK |
+| 5 | `proposal_end` census half ↔ runtime half | half/half | **was stale (12th)** |
+| 6 | tree-attn observer ↔ capture context | emitter/validator | **was stale (11th)** |
+| 7 | launcher family A ↔ launcher family B | twin/twin | OK |
+| 8 | launcher sidecar ↔ gate parser | bash/python | OK |
+| 9 | topology contract ↔ `decide_fixed32` | contract/consumer | OK |
+
+**9 pairs enumerated, 0 stale at HEAD.** Raw: `paired_contract_sweep.json`.
+
+The durable half of this is that the split-sensitive quantities now live in **one** place —
+`LEGAL_STEP_SHAPES`, `LEGAL_GRAPH_CAPTURES`, `LEGAL_HANDOFF_SHAPES` in
+`fr13_fixed32_topology.py` — which the census *imports*. Pairs 1 and 2 exist because the
+injected blob **cannot** import: it is string content exec'd inside vLLM, so its literal is
+compared textually instead. That asymmetry is the reason this defect shape keeps recurring
+in this codebase, and naming it is most of the fix.
+
+## 13.4 The lint
+
+`tests/test_fr14_paired_contract_lint.py` (19 cases) asserts the inventory is clean **and
+that every detector can actually fail**: each pair is mutated to its known stale form and the
+detector must catch it — including the exact 11th-, 12th- and 13th-site regressions, one
+literal at a time. A lint that cannot fail is worse than no lint, because it reads like
+coverage.
+
+It also pins the pair count, so adding a pair without recording it is itself caught as a
+one-sided update.
+
+## 13.5 What this does and does not buy
+
+It buys: no *known* pair is stale, and the three blocker shapes are now unit-testable.
+
+It does not buy certainty. The sweep covers pairs I could enumerate; a 14th site in a
+structure I did not think to pair would still reach a boot. The honest claim is that the
+enumerated inventory is clean and the enumeration is written down where the next person can
+extend it — not that the surface is exhausted.
+
+Gate remains **default-OFF**.

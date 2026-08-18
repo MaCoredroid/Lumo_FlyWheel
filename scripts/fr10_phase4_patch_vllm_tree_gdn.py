@@ -7071,10 +7071,15 @@ def _fr13_fixed32_drafter_proposal_end(
             "graph_id": int(proposal["graph_id"]),
             "graph_signature": proposal["graph_signature"],
             "graph_captures": int(proposal["graph_captures"]),
-            "graph_replays": 1,
+            # FR14_GATE_SPLIT_GRAPH: the runtime-evidence half must report what
+            # the step ACTUALLY did, not the single-graph shape. An armed but
+            # ungated step is 4 forwards over 2 replays; a gated step is 2 over
+            # 1. These were the last three literals that still said "4 / 1", and
+            # they are why the round-2 boot refused on its first ungated step.
+            "graph_replays": int(proposal["graph_replays"]),
             "mtp_observation": "capture_manifest_bound_replay",
-            "mtp_forward_calls": 4,
-            "mtp_forward_rows": 4 * batch,
+            "mtp_forward_calls": _fr14_calls,
+            "mtp_forward_rows": _fr14_calls * batch,
             "arctic_ledger": [
                 {
                     "kind": "main",
@@ -7111,7 +7116,11 @@ def _fr13_fixed32_drafter_proposal_end(
             not isinstance(evidence, dict)
             or int(evidence.get("proposal_begins", -1)) != 1
             or int(evidence.get("proposal_ends", -1)) != 0
-            or int(evidence.get("matching_replays", -1)) != 1
+            # one matching replay per segment actually replayed -- tied to the
+            # proposal's own count, the same way the 11th-site fix ties the
+            # capture counter to its segment
+            or int(evidence.get("matching_replays", -1))
+            != int(proposal["graph_replays"])
             or int(evidence.get("graph_captures", -1))
             != int(proposal["graph_captures"])
         ):
@@ -8548,7 +8557,15 @@ def _fr13_fixed32_observed_build_record(
         != runtime.get("graph_signature")
         or int(drafter_evidence.get("proposal_begins", -1)) != 1
         or int(drafter_evidence.get("proposal_ends", -1)) != 1
-        or int(drafter_evidence.get("matching_replays", -1)) != 1
+        # FR14_GATE_SPLIT_GRAPH (13th site, found by the paired-contract sweep
+        # rather than by a boot): the DRAFTER evidence chain counts one matching
+        # replay per segment replayed, so an armed ungated step carries 2. Tie it
+        # to the runtime-evidence half this record is being sealed against --
+        # the two must agree, which is strictly stronger than either literal.
+        # NOTE the TARGET forward-graph chain a few checks up is unrelated and
+        # still legitimately replays exactly once per step.
+        or int(drafter_evidence.get("matching_replays", -1))
+        != int(runtime.get("graph_replays", -1))
     ):
         raise RuntimeError(
             "FR13 fixed32 drafter evidence did not bind completed event: "
