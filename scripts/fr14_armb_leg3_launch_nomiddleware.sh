@@ -4144,6 +4144,17 @@ elif qrow32_b1_candidate == "1":
             contract.QROW32_B1_GQA_PAIR_FA2_SHA256,
             contract.QROW32_B1_GQA_PAIR_FA2_SIZE,
         ),
+        # FR14 lane 4 split-K (tier-b). Arm S's live boot died right here at
+        # "binary identity is not qualified": the split-K pins had landed in
+        # the bash pin case twenty lines of comment away, but this map had no
+        # entry, so the arm fell through to split2's identity. A fall-through
+        # default that silently answers for an arm it was not written for is
+        # the defect; naming every arm is the fix, and the assertion below
+        # turns any future unnamed arm into a refusal instead of a wrong pin.
+        "gqa_pair_splitk": (
+            contract.QROW32_B1_SPLITK_FA2_SHA256,
+            contract.QROW32_B1_SPLITK_FA2_SIZE,
+        ),
     }.get(
         b1_pin_arm,
         (
@@ -4151,6 +4162,12 @@ elif qrow32_b1_candidate == "1":
             contract.QROW32_B1_SPLIT2_FA2_SIZE,
         ),
     )
+    if b1_pin_arm in contract.QROW32_B1_TIER_B_ARMS and (
+        expected_sha256 != contract.QROW32_B1_SPLITK_FA2_SHA256
+    ):
+        raise SystemExit(
+            "fixed32 qrow32 B1 tier-b arm resolved a non-tier-b binary"
+        )
     if not expected_sha256 or not expected_size:
         raise SystemExit(
             f"fixed32 qrow32 B1 arm {b1_pin_arm!r} has no pinned binary identity"

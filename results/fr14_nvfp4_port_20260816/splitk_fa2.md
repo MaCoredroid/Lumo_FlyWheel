@@ -341,7 +341,7 @@ off, and it must not serve until someone has read its generations.
 
 ---
 
-## 10. Launcher plumbing — LANDED 2026-08-18 (launcher territory)
+## 11. Launcher plumbing — landed 2026-08-18, and what it did NOT do
 
 §9.1 asked for a `gqa_pair_splitk` branch in `_FR13_FA2_QROW32_B1_PIN_ARM` carrying this
 binary's pins, plus a live-arm route that does not go through the raw-byte gate. Both are in,
@@ -395,5 +395,124 @@ instance `astropy__astropy-12907`, `FR13_FIXED32_B1_DIAGNOSTIC=1`, hydra27 at
 `MAX_NUM_SEQS=1 / SWE_CONCURRENCY=1`, `CUDAGRAPH_MODE=FULL_AND_PIECEWISE`,
 `FR13_FA2_QROW32_B1_SOURCE_COMMIT == git rev-parse HEAD`, and the patcher source hash.
 
-**Still not discharged:** §7's degenerate-eyeball condition. The plumbing removes the reason
-the probe could not be run; it does not substitute for reading the text.
+**CORRECTION (Arm S, promotion A/B 2026-08-18, commit `550e201cc`).** This section
+originally closed with "the plumbing removes the reason the probe could not be run". That
+was wrong, and the promotion-A/B runner proved it wrong by trying — three separate
+refusals, none of which the bash pin case above could have fixed:
+
+1. **The live boot refused at the launcher.** The split-K pins landed in the bash pin case
+   but *not* in the in-container Python qualification map twenty lines of comment away,
+   which fell through to `split2`'s pins; and `fr13_fixed32_contract.py` carried no split-K
+   constants at all. `fixed32 qrow32 B1 binary identity is not qualified`.
+2. **The live-A/B route refused `num_splits=4` by construction** — its
+   `_fr13_fa2_qrow32_b1_require_same_reduction` check compares reduction topologies, and
+   split-K's differs from the served reference's by design.
+3. **That route never returned candidate output anyway** (`qrow16_reference_served=1`,
+   `candidate_returned=0`). It is a *shadow* byte gate: it re-calls both arms on captured
+   bundles and compares. No served token could have carried split-K attention.
+
+The lesson is the one worth writing down: **I checked that the arm could be NAMED, not
+that it could be REACHED.** A pin case that admits an arm is not a serving route, and the
+distance between the two was three defects wide. All three are closed in §12.
+
+---
+
+## 12. The Tier-B qualification route — BUILT, and the credential is EARNED
+
+Mark, FR14 pass 64: the Tier-B route is approved in full. Live-A/B serving on a Tier-B
+credential now; promoted-default only after exact16 QC parity. The campaign's "lossless"
+doctrine is refined to **faithful-to-the-model-within-FP-rounding, proven deterministic
+and QC'd** — not bit-identical-to-the-incumbent. Byte-exact Tier-A remains the default
+door for everything else.
+
+### 12.1 Bounds, pre-registered before the runner existed
+
+`fr14_splitk_tierb_bounds.json`, committed at `9d294733` — *before* the gate runner was
+written — with the margin stated for every bound. Its sha256 is pinned in the sidecar, so
+a bound edited to fit a result changes the digest and both the runner and the validator
+refuse. A bound chosen after seeing the number it judges is not a bound.
+
+| | bound | measured | margin |
+|---|---|---|---|
+| **B1** determinism, in-process **and** cross-process | bitwise, all cases | 16/16 × 8 reps, 2 processes | HARD |
+| **B2** output within 2 ULP | ≥ 90 % | **93.31 %** | 3.31 pp |
+| **B3** max abs delta, in bf16 steps of the tensor max | ≤ 4.0 | **1.384** | 2.89× |
+| **B4** LSE max ULP | ≤ 8 | **4** | 2× |
+| **B5** LSE max abs delta | ≤ 1e−4 | **3.81e−06** | 26× |
+| **B6** argmax-vs-float64-exact | ≤ **the incumbent's** | **1 vs 2** | equal-or-better |
+| **B7** output RMS-vs-exact ratio | ≤ 1.10 | **0.961** | 1.14× |
+| **B8** LSE RMS-vs-exact ratio | ≤ 1.10 | **0.839** | 1.31× |
+| **B9** non-finite disagreements | = 0 | **0** | HARD |
+
+B6–B8 are the bounds a byte gate cannot express and the ones that decide the question:
+two approximations disagreeing is not a defect unless the candidate is the *worse*
+approximation. B7 exists because a ULP histogram cannot see a systematic bias — a kernel
+can be uniformly slightly wrong and still sit within 2 ULP everywhere. A **probe-strength
+floor** is pre-registered alongside them (≥ 4 context lengths spanning 20 480–40 960, ≥ 5
+seeds, captured operand scale, ≥ 8 determinism repeats, ≥ 2 processes, ≥ 3.5 M elements),
+because every bound above gets easier under a weaker probe.
+
+### 12.2 The credential — EARNED
+
+`scripts/fr14_gate_fa2_qrow32_splitk_tierb.sh` → `fr14_splitk_tierb_credential.json`.
+**All nine bounds PASS. Determinism PASS in-process and across two independent processes.
+Probe strength PASS.** Body digest `d04b65ec…`; file sha256 `2146654f…`.
+
+It binds ten fields — arm, `.so` sha256 + size, source closure, FA2 head, **both** SASS
+digests, HEAD, patcher digest, bounds digest — each individually tested, because a
+credential that outlives a rebuild authorises numerics nobody measured. Its verdict is
+**recomputed** from the recorded measurements at every validation rather than read out of
+the file: a test forges `bounds_passed: true` over a measurement that fails B2, and the
+validator still refuses.
+
+**It must be re-earned when HEAD moves.** The credential binds `source_commit`, and the
+launcher already requires `FR13_FA2_QROW32_B1_SOURCE_COMMIT == git rev-parse HEAD`. That
+is the campaign's existing doctrine, not a wrinkle in this one; the gate is offline
+kernel work and re-runs in about ten minutes.
+
+### 12.3 Arm S's three refusals, closed
+
+1. **Binary identity.** `fr13_fixed32_contract.py` gains the split-K constants
+   (`QROW32_B1_SPLITK_*`, including both SASS digests) and a **named branch** in the
+   pin-arm resolver; both launcher families gain the matching entry in the in-container
+   Python qualification map, plus an assertion that a tier-b arm resolving a non-tier-b
+   binary is a refusal. The defect was a fall-through default silently answering for an
+   arm it was not written for; naming every arm is the fix.
+2. **`num_splits=4` refused.** The byte gate's `require_same_reduction` is **unchanged**
+   and still refuses split-K — correctly. The live route now *routes around* it for a
+   tier-b arm and records a characterization instead: ULP distribution, worst
+   disagreement in bf16 steps of the tensor's own maximum (comparable with B3), non-finite
+   disagreements — on the **real served operands** the offline probe cannot reach. It also
+   gains the live determinism gate that matters most: the candidate is called **twice per
+   layer in-process**, with fresh split accumulators, and must return the same bits.
+3. **Candidate output not returned.** `_fr13_fa2_qrow32_b1_serving_arm()` resolves Tier A
+   first and unchanged, so a launch naming no tier-b arm cannot reach one line of the new
+   path. Naming a tier-b live arm is still the shadow route it always was; **serving**
+   additionally requires `FR13_FA2_QROW32_B1_TIER_B_SERVE=1` *and* a credential validated
+   before the first served token — two independent things, so a reused live-A/B invocation
+   cannot start serving Tier-B numerics by accident.
+
+### 12.4 Nothing byte-gated became easier
+
+The validator's **first** check is that the arm is tier-b marked — before a single
+measurement is read, and regardless of how good the numbers are. Presenting this
+credential for `nosplit`, `split2`, `visibility` or `gqa_pair` fails on the fact that
+those arms have a byte-exact door, and the message says so.
+`_FR13_FA2_QROW32_B1_PRODUCTION_ARMS` is unchanged. The contract's **production**
+allowlist is unchanged and still refuses split-K. `require_same_reduction` is unchanged.
+34 tests cover exactly these properties.
+
+### 12.5 Arming recipe
+
+```
+FR13_FA2_QROW32_B1_LIVE_AB_ARM=gqa_pair_splitk \
+FR13_FA2_QROW32_B1_TIER_B_SERVE=1 \
+FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL=<credential path in container> \
+FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256=<file sha256, re-earned at serving HEAD> \
+  <plus the §11 binary/SASS pins and the usual live-arm gate>
+```
+
+**§7 is still not discharged.** The route now reaches the kernel with served tokens, which
+is what §11 wrongly claimed already. Whether those tokens are *good* is a question only
+reading them answers, and Mark's degenerate eyeball on the served generations remains
+mandatory and undone.

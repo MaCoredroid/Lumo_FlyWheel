@@ -462,3 +462,108 @@ def test_reduced_measurements_match_the_banked_probe() -> None:
     assert measured["argmax_flips_vs_exact_incumbent"] == sum(
         r["gqa_pair"]["argmax_flips_vs_exact"] for r in exact
     )
+
+
+# ----------------------------------------------- Arm S refusal (1), closed
+
+
+LAUNCHERS = (
+    REPO / "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    REPO / "scripts/fr14_armb_leg3_launch_nomiddleware.sh",
+)
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_in_container_qualification_map_names_the_tier_b_arm(launcher) -> None:
+    """Arm S died here: the bash pin case admitted the arm, this map did not.
+
+    The map is executed inside the container, where the bash case has already
+    passed, so a missing entry does not refuse -- it answers with ANOTHER
+    arm's pins and the boot dies at "binary identity is not qualified" with
+    nothing pointing at the cause.
+    """
+    text = launcher.read_text()
+    assert '"gqa_pair_splitk": (' in text
+    assert "contract.QROW32_B1_SPLITK_FA2_SHA256," in text
+    assert "contract.QROW32_B1_SPLITK_FA2_SIZE," in text
+    # A tier-b arm that resolved a non-tier-b binary must refuse rather than
+    # serve someone else's kernel under this arm's name.
+    assert "contract.QROW32_B1_TIER_B_ARMS" in text
+    assert "tier-b arm resolved a non-tier-b binary" in text
+    # The entry must sit BEFORE the fall-through default it was missing from.
+    assert text.index('"gqa_pair_splitk": (') < text.index("}.get(\n        b1_pin_arm")
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_launcher_embedded_python_still_parses(launcher) -> None:
+    """The map lives inside a heredoc, so bash -n cannot see a syntax error."""
+    import ast
+    import re
+
+    lines = launcher.read_text().splitlines(keepends=True)
+    target = next(
+        i for i, line in enumerate(lines)
+        if "binary identity is not qualified" in line and "B1" in line
+    )
+    opener = re.compile(r"<<\s*'?([A-Z]+)'?\s*$")
+    start = max(i for i in range(target) if opener.search(lines[i]))
+    tag = opener.search(lines[start]).group(1)
+    end = next(i for i in range(target, len(lines)) if lines[i].strip() == tag)
+    ast.parse("".join(lines[start + 1:end]))
+
+
+def test_earned_credential_is_present_and_validates() -> None:
+    """The banked credential must still clear its own bounds on demand.
+
+    Not a re-run of the gate -- the measurements are fixed. This is the check
+    that the artifact in the tree is a credential the validator accepts, so a
+    later edit to the bounds, the schema or the binding fields cannot leave a
+    stale PASS sitting in results/ looking authoritative.
+    """
+    sidecar = _sidecar()
+    path = (
+        REPO
+        / "results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_credential.json"
+    )
+    if not path.is_file():
+        pytest.skip("credential not yet earned at this HEAD")
+    payload = json.loads(path.read_text())
+    assert payload["schema"] == sidecar.TIERB_SCHEMA
+    assert payload["arm"] == SPLITK_ARM and payload["tier"] == "B"
+    assert payload["bounds_evaluation"]["bounds_passed"] is True
+    assert payload["probe_strength"]["probe_strength_passed"] is True
+    assert payload["determinism"]["cross_process_digests_identical"] is True
+    assert payload["determinism"]["processes"] >= 2
+    assert (
+        sidecar.tierb_credential_digest(payload)
+        == payload["credential_sha256"]
+    )
+    assert payload["identity"]["bounds_sha256"] == sidecar.TIERB_BOUNDS_SHA256
+    # It authorises the pinned binary and nothing else.
+    contract = _contract()
+    assert payload["identity"]["so_sha256"] == (
+        contract.QROW32_B1_SPLITK_FA2_SHA256
+    )
+    assert payload["identity"]["so_size"] == contract.QROW32_B1_SPLITK_FA2_SIZE
+    # Re-validating requires the commit it was earned at, which is the
+    # property that makes it expire when HEAD moves.
+    verdict = sidecar.validate_tierb_credential(
+        path,
+        arm=SPLITK_ARM,
+        expected_candidate_sha256=contract.QROW32_B1_SPLITK_FA2_SHA256,
+        expected_source_commit=payload["identity"]["source_commit"],
+        expected_patch_source_sha256=payload["identity"]["patch_source_sha256"],
+        bounds_path=BOUNDS,
+    )
+    assert verdict["grants"].startswith("live-A/B serving only")
+    with pytest.raises(ValueError, match="does not bind this arm"):
+        sidecar.validate_tierb_credential(
+            path,
+            arm=SPLITK_ARM,
+            expected_candidate_sha256=contract.QROW32_B1_SPLITK_FA2_SHA256,
+            expected_source_commit="a" * 40,
+            expected_patch_source_sha256=payload["identity"][
+                "patch_source_sha256"
+            ],
+            bounds_path=BOUNDS,
+        )
