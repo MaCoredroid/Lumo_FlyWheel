@@ -35,6 +35,13 @@ TWO JOBS, ONE HARNESS -- the campaign's standard offline shape.
      deliberately corrupted candidate that MUST mismatch.  If it does not, the
      comparison is not looking at anything and the run is void.
 
+  1b. THE CUDA-GRAPH REPLAY GATE.  The deployed drafter captures its four
+     post-root head reads as ONE graph, so the kernel runs from a replay with
+     its scratch address baked in and its atomic ticket reused.  Four captured
+     selects are replayed with fresh logits every time and every replay is
+     compared against the eager ATen reference, then the ticket is checked back
+     at zero.  This is the integration risk the case sweep cannot see.
+
   2. THE MICROBENCH (old vs new, real geometry).  CUDA-event timing of the
      deployed two-ATen-op selection versus the single fused launch, plus the
      pure write cost of materialising the logits row, so the "materialisation"
@@ -364,6 +371,84 @@ def run_gate(device: torch.device, seeds: int) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# CUDA-graph replay gate
+# ---------------------------------------------------------------------------
+def run_graph_gate(device: torch.device, replays: int = 24) -> dict:
+    """Four captured selects, replayed many times, must stay byte-exact.
+
+    This is the integration risk the case sweep cannot see.  The deployed
+    drafter captures its four post-root head reads as ONE CUDA graph, so the
+    kernel runs from a replay with its scratch buffer's address baked in.  The
+    multi-CTA path uses an atomic ticket in that scratch to elect a final
+    merging block, and the elected block resets the ticket to zero on its way
+    out -- if that self-clean were wrong, replay 1 would pass and replay 2 would
+    hang or produce a stale answer.  So: capture, then replay with fresh logits
+    every time, and compare every replay against the eager ATen reference.
+    """
+    rows = ROWS_SERVED
+    blocks = BLOCKS_DEFAULT
+    static_logits = torch.zeros(rows, VOCAB, dtype=LOGITS_DTYPE, device=device)
+    static_spine = torch.zeros(4, rows, dtype=torch.int64, device=device)
+    static_wide = torch.zeros(4, rows, TOPK, dtype=torch.int64, device=device)
+    scratch = scratch_for(rows, blocks, device)
+
+    def four_selects():
+        for level in range(4):
+            torch.ops.fr14_fused_draft_topk.select_out(
+                static_spine[level], static_wide[level], static_logits, scratch, blocks
+            )
+
+    # warm up on a side stream, exactly as the drafter graph does
+    side = torch.cuda.Stream()
+    side.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(side):
+        four_selects()
+    torch.cuda.current_stream().wait_stream(side)
+    torch.cuda.synchronize()
+
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        four_selects()
+
+    mismatches = 0
+    per_replay = []
+    for replay in range(replays):
+        source = make_case(
+            "coarse_quantised" if replay % 2 else "random_realistic",
+            rows,
+            77_000 + replay,
+            device,
+        )
+        static_logits.copy_(source)
+        graph.replay()
+        torch.cuda.synchronize()
+        ref_spine, ref_wide = reference(static_logits)
+        ok = True
+        for level in range(4):
+            if raw(static_spine[level]) != raw(ref_spine) or raw(
+                static_wide[level]
+            ) != raw(ref_wide):
+                ok = False
+        if not ok:
+            mismatches += 1
+        per_replay.append({"replay": replay, "byte_equal_all_four_levels": ok})
+
+    # the ticket must be back at zero for the next launch
+    ticket_tail = scratch[rows * blocks * TOPK :].tolist()
+    return {
+        "replays": replays,
+        "levels_per_replay": 4,
+        "blocks_per_row": blocks,
+        "mismatching_replays": mismatches,
+        "scratch_ticket_tail_after_run": ticket_tail,
+        "ticket_self_cleaned": all(int(v) == 0 for v in ticket_tail),
+        "per_replay": per_replay,
+        "graph_gate_pass": mismatches == 0
+        and all(int(v) == 0 for v in ticket_tail),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Bench
 # ---------------------------------------------------------------------------
 def time_us(fn, reps: int = BENCH_REPS, warmup: int = BENCH_WARMUP) -> dict:
@@ -437,101 +522,6 @@ def run_bench(device: torch.device) -> dict:
     return out
 
 
-HIDDEN = 5120           # Qwen3.x text hidden_size
-DRAFT_VOCAB_K64 = 65_536  # the retired FR13 subset-head width
-
-
-def run_head_gemm(device: torch.device) -> dict:
-    """Price the OTHER half of the head read: the projection itself.
-
-    The +4.5 ms/step that flagged this surface is a CONFOUNDED one-pair
-    observation (unsloth K64 vs radixark K0: checkpoint (x) flag, host_dfwd_
-    characterization.md 5.1) and was banked as "not a claim".  Its stated
-    candidate mechanism was output width -- "3.79x the write traffic and 3.79x
-    the reduction".  The selection bench above prices the reduction.  This
-    prices the projection, at synthetic weights but at BOTH real geometries:
-
-        K0  : NVFP4  [248320, 5120] through vLLM's OWN dispatch
-        K64 : BF16   [ 65536, 5120] torch.mm (what _fr13_dvk_logits ran)
-
-    Synthetic weights, so this is a SHAPE measurement, not an A/B of the two
-    served checkpoints.  Recorded as unavailable rather than guessed if the
-    quantisation dispatch cannot be constructed offline.
-    """
-    result: dict = {"available": False}
-    x = torch.randn(1, HIDDEN, dtype=LOGITS_DTYPE, device=device)
-
-    subset = torch.randn(
-        DRAFT_VOCAB_K64, HIDDEN, dtype=LOGITS_DTYPE, device=device
-    )
-    subset_out = torch.empty(1, DRAFT_VOCAB_K64, dtype=LOGITS_DTYPE, device=device)
-    result["k64_bf16_subset_mm_us"] = time_us(
-        lambda: torch.mm(x, subset.t(), out=subset_out), reps=60, warmup=10
-    )
-    del subset, subset_out
-    torch.cuda.empty_cache()
-
-    try:
-        from vllm.model_executor.layers.quantization.utils.nvfp4_utils import (
-            apply_nvfp4_linear,
-            convert_to_nvfp4_linear_kernel_format,
-            select_nvfp4_linear_backend,
-        )
-
-        backend = select_nvfp4_linear_backend()
-
-        class _Layer(torch.nn.Module):
-            pass
-
-        layer = _Layer()
-        layer.weight = torch.nn.Parameter(
-            torch.randint(
-                0, 255, (VOCAB, HIDDEN // 2), dtype=torch.uint8, device=device
-            ),
-            requires_grad=False,
-        )
-        layer.weight_scale = torch.nn.Parameter(
-            (torch.rand(VOCAB, HIDDEN // 16, device=device) + 0.5).to(
-                torch.float8_e4m3fn
-            ),
-            requires_grad=False,
-        )
-        one = torch.tensor(1.0, dtype=torch.float32, device=device)
-        layer.weight_global_scale = torch.nn.Parameter(one.clone(), False)
-        layer.input_global_scale = torch.nn.Parameter(one.clone(), False)
-        layer.input_global_scale_inv = torch.nn.Parameter(one.clone(), False)
-        layer.alpha = torch.nn.Parameter(one.clone(), False)
-        layer.output_size_per_partition = VOCAB
-        layer.input_size_per_partition = HIDDEN
-        convert_to_nvfp4_linear_kernel_format(backend, layer)
-        out = apply_nvfp4_linear(backend=backend, layer=layer, x=x, bias=None)
-        torch.cuda.synchronize()
-        result["k0_nvfp4_backend"] = str(backend)
-        result["k0_nvfp4_out_shape"] = list(out.shape)
-        result["k0_nvfp4_out_dtype"] = str(out.dtype)
-        result["k0_nvfp4_head_us"] = time_us(
-            lambda: apply_nvfp4_linear(backend=backend, layer=layer, x=x, bias=None),
-            reps=60,
-            warmup=10,
-        )
-        result["available"] = True
-    except Exception as exc:  # noqa: BLE001 - report, never guess
-        result["k0_nvfp4_error"] = f"{type(exc).__name__}: {exc}"
-
-    if result["available"]:
-        k0 = result["k0_nvfp4_head_us"]["us_p50"]
-        k64 = result["k64_bf16_subset_mm_us"]["us_p50"]
-        result["k0_minus_k64_us_per_head_read_p50"] = round(k0 - k64, 3)
-        result["k0_minus_k64_ms_per_step_p50"] = round(
-            (k0 - k64) * HEAD_READS_PER_STEP / 1000.0, 4
-        )
-    result["note"] = (
-        "synthetic weights; a SHAPE comparison of the two head geometries, "
-        "NOT an A/B of the two served checkpoints and NOT acceptance-valid"
-    )
-    return result
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--so", required=True, help="built fr14 fused top-k .so")
@@ -539,7 +529,6 @@ def main() -> int:
     parser.add_argument("--seeds", type=int, default=8)
     parser.add_argument("--skip-bench", action="store_true")
     parser.add_argument("--skip-gate", action="store_true")
-    parser.add_argument("--head-gemm", action="store_true")
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
@@ -584,10 +573,9 @@ def main() -> int:
 
     if not args.skip_gate:
         report["gate"] = run_gate(device, args.seeds)
+        report["graph_gate"] = run_graph_gate(device)
     if not args.skip_bench:
         report["bench_us"] = run_bench(device)
-    if args.head_gemm:
-        report["head_gemm_repricing"] = run_head_gemm(device)
 
     text = json.dumps(report, indent=2, sort_keys=True)
     print(text)
@@ -596,7 +584,8 @@ def main() -> int:
             handle.write(text + "\n")
     if args.skip_gate:
         return 0
-    return 0 if report["gate"]["gate_pass"] else 3
+    passed = report["gate"]["gate_pass"] and report["graph_gate"]["graph_gate_pass"]
+    return 0 if passed else 3
 
 
 if __name__ == "__main__":

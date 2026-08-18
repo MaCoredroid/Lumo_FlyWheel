@@ -236,7 +236,8 @@ def test_probe_compares_raw_bytes_and_has_a_powered_negative_control():
     assert "POWERED NEGATIVE CONTROL" in text
     assert "negative_control_all_fire" in text
     assert "torch_self_disagreements" in text
-    assert "return 0 if report[\"gate\"][\"gate_pass\"] else 3" in text
+    assert "report[\"gate\"][\"gate_pass\"]" in text
+    assert "return 0 if passed else 3" in text
 
 
 def test_probe_reference_is_exactly_what_ships():
@@ -274,6 +275,26 @@ def test_banked_gate_evidence_is_a_zero_mismatch_pass():
     assert gate["total_configs"] >= 5000
     assert report["geometry"]["vocab"] == 248320
     assert report["geometry"]["topk"] == 3
+
+
+def test_probe_gates_the_cuda_graph_replay_path():
+    text = PROBE.read_text()
+    assert "def run_graph_gate(" in text
+    assert "graph.replay()" in text
+    assert "ticket_self_cleaned" in text
+    assert 'report["graph_gate"]["graph_gate_pass"]' in text
+
+
+def test_banked_graph_gate_is_a_pass():
+    if not EVIDENCE.is_file():
+        import pytest
+
+        pytest.skip("gate evidence not yet banked (flag is default OFF)")
+    graph_gate = json.loads(EVIDENCE.read_text())["graph_gate"]
+    assert graph_gate["graph_gate_pass"] is True
+    assert graph_gate["mismatching_replays"] == 0
+    assert graph_gate["ticket_self_cleaned"] is True
+    assert graph_gate["replays"] >= 16
 
 
 def test_design_note_exists_and_states_the_measured_saving():
