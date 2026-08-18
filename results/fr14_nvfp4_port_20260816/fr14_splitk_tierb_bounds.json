@@ -1,0 +1,159 @@
+{
+  "schema": "fr13.fixed32.fa2_tierb_bounds.v1",
+  "arm": "gqa_pair_splitk",
+  "tier": "B",
+  "pre_registered": "2026-08-18, BEFORE the gate run, by the FR14 split-K lane",
+  "authority": "Mark, FR14 pass 64 (REDTEAM_20260816.md): the Tier-B qualification route is approved in full -- live-A/B serving on a Tier-B credential now, promoted-default only after exact16 QC parity.",
+  "doctrine": "Faithful-to-the-model-within-FP-rounding, proven DETERMINISTIC and QC'd -- NOT bit-identical-to-the-incumbent. Byte-exact Tier-A remains the default door for everything else and nothing byte-gated becomes easier.",
+  "why_this_file_exists": "A bound chosen after seeing the number it judges is not a bound. These were written down and committed before the gate runner existed, from the pass-49 measurements in fr14_splitk_fa2_probe_result.json, with the margin stated for every one. The runner refuses to run unless this file's sha256 matches the value pinned in scripts/fr13_qrow32_b1_pass_sidecar.py, so the bounds cannot be edited to fit a result and the credential records both digests.",
+  "baseline_measurements": {
+    "source": "results/fr14_nvfp4_port_20260816/fr14_splitk_fa2_probe_result.json",
+    "note": "pass 49, captured operand scale, 4 context lengths x 5 seeds, 3.93M output elements",
+    "output_ulp_le_2_fraction": 0.93307,
+    "output_max_abs_delta_in_bf16_eps_of_reference_max": 1.3838,
+    "lse_max_ulp": 4,
+    "lse_max_abs_delta": 3.814697265625e-06,
+    "argmax_flips_vs_exact_candidate": 1,
+    "argmax_flips_vs_exact_incumbent": 2,
+    "argmax_rows_compared": 192,
+    "output_rms_vs_exact_ratio_worst": 0.9608,
+    "lse_rms_vs_exact_ratio_worst": 0.8386,
+    "nonfinite_disagreements": 0
+  },
+  "probe_strength_floor": {
+    "why": "A bound is only as strong as the probe that tests it. These stop a weak probe from earning the credential: fewer seeds, a shorter context sweep or the lenient operand scale would all make every bound below easier to pass.",
+    "required_operand_scale": "captured",
+    "min_context_lengths": 4,
+    "max_shortest_context_length": 20480,
+    "min_longest_context_length": 40960,
+    "min_seeds_per_length": 5,
+    "min_output_elements_characterized": 3500000,
+    "min_determinism_reps": 8,
+    "min_determinism_processes": 2,
+    "min_exact_reference_context_lengths": 2,
+    "min_exact_reference_seeds_per_length": 3
+  },
+  "bounds": [
+    {
+      "id": "B1",
+      "name": "determinism_bitwise",
+      "kind": "hard",
+      "statement": "Every determinism case must be bitwise identical across all repeats within a process, AND the per-case output/LSE digests must be identical across independent processes.",
+      "predicate": "all_cases_bitwise_identical AND cross_process_digests_identical",
+      "measured_pass_49": "16/16 cases, 8 repeats each, digests identical across 3 processes",
+      "margin": "NONE. This is the hard gate. A single non-deterministic case is a refusal, not a margin to spend."
+    },
+    {
+      "id": "B2",
+      "name": "output_ulp_concentration",
+      "kind": "threshold",
+      "statement": "At least 90% of characterized output elements must agree with the incumbent within 2 ULP.",
+      "field": "output_ulp_le_2_fraction",
+      "op": ">=",
+      "bound": 0.90,
+      "measured_pass_49": 0.93307,
+      "margin": "3.31 percentage points"
+    },
+    {
+      "id": "B3",
+      "name": "output_max_abs_delta",
+      "kind": "threshold",
+      "statement": "The largest output disagreement with the incumbent must be at most 4 bf16 steps at the scale of the tensor's own maximum. Expressed scale-free as max_abs_delta <= 4 * 2^-8 * reference_max_abs, evaluated per case and taken at its worst.",
+      "field": "output_max_abs_delta_in_bf16_eps_of_reference_max",
+      "op": "<=",
+      "bound": 4.0,
+      "measured_pass_49": 1.3838,
+      "margin": "2.89x"
+    },
+    {
+      "id": "B4",
+      "name": "lse_max_ulp",
+      "kind": "threshold",
+      "statement": "The fp32 log-sum-exp must agree with the incumbent within 8 ULP everywhere. LSE feeds the acceptance/rejection arithmetic, so it is held tighter than the bf16 output in relative terms.",
+      "field": "lse_max_ulp",
+      "op": "<=",
+      "bound": 8,
+      "measured_pass_49": 4,
+      "margin": "2x"
+    },
+    {
+      "id": "B5",
+      "name": "lse_max_abs_delta",
+      "kind": "threshold",
+      "statement": "Absolute LSE agreement, as a second check that does not depend on the ULP grid.",
+      "field": "lse_max_abs_delta",
+      "op": "<=",
+      "bound": 1.0e-04,
+      "measured_pass_49": 3.814697265625e-06,
+      "margin": "26x"
+    },
+    {
+      "id": "B6",
+      "name": "argmax_flips_vs_exact_no_worse_than_incumbent",
+      "kind": "comparative",
+      "statement": "Against a float64 dense reference on the SAME probe cases, the candidate must disagree with the exact argmax no more often than the incumbent does. This is the bound that makes the arm-versus-arm flip rate interpretable: a disagreement between two approximations is not a defect unless the candidate is the worse approximation.",
+      "field": "argmax_flips_vs_exact_candidate",
+      "op": "<=",
+      "bound_field": "argmax_flips_vs_exact_incumbent",
+      "measured_pass_49": "candidate 1, incumbent 2, of 192 rows",
+      "margin": "equal-or-better rule; pass 49 had one flip of headroom"
+    },
+    {
+      "id": "B7",
+      "name": "output_rms_vs_exact_ratio",
+      "kind": "comparative",
+      "statement": "Candidate output RMS error against the float64 reference, divided by the incumbent's on the same case, at its worst. Catches a systematic bias that a ULP histogram would not: a kernel can be uniformly slightly wrong and still sit within 2 ULP everywhere.",
+      "field": "output_rms_vs_exact_ratio_worst",
+      "op": "<=",
+      "bound": 1.10,
+      "measured_pass_49": 0.9608,
+      "margin": "1.14x, and the measured value is BELOW 1.0 -- the candidate is closer to exact than the incumbent"
+    },
+    {
+      "id": "B8",
+      "name": "lse_rms_vs_exact_ratio",
+      "kind": "comparative",
+      "statement": "The same test on the log-sum-exp.",
+      "field": "lse_rms_vs_exact_ratio_worst",
+      "op": "<=",
+      "bound": 1.10,
+      "measured_pass_49": 0.8386,
+      "margin": "1.31x, measured below 1.0"
+    },
+    {
+      "id": "B9",
+      "name": "nonfinite_agreement",
+      "kind": "hard",
+      "statement": "No element may be finite in one arm and non-finite in the other, in output or LSE. A NaN or Inf that appears only under split-K is a defect, not a rounding difference, at any magnitude.",
+      "field": "nonfinite_disagreements",
+      "op": "==",
+      "bound": 0,
+      "measured_pass_49": 0,
+      "margin": "NONE. Hard."
+    }
+  ],
+  "binding": {
+    "why": "A Tier-B credential authorises a specific KERNEL to serve. It must not survive a rebuild, a source change, or a HEAD move, because none of those preserve the numerics it attests.",
+    "must_record_and_match": [
+      "arm",
+      "so_sha256",
+      "so_size",
+      "source_closure_sha256",
+      "fa2_head",
+      "sass_digest_sha256",
+      "baseline_sass_digest_sha256",
+      "source_commit",
+      "patch_source_sha256",
+      "bounds_sha256"
+    ]
+  },
+  "scope": {
+    "grants": "The arm may be named as a LIVE-A/B serving arm and its output may reach the model, under a validated credential.",
+    "does_not_grant": [
+      "promoted-default status (Mark: only after exact16 QC parity)",
+      "any relaxation of the byte-exact Tier-A path, for this or any other arm",
+      "acceptance of a Tier-B credential for an arm not explicitly marked tier-b",
+      "a substitute for the mandatory degenerate eyeball on the served generations"
+    ]
+  }
+}
