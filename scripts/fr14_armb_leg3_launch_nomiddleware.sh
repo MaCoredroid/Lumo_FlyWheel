@@ -186,6 +186,8 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256
   FR13_FA2_QROW32_B1_SOURCE_COMMIT
   FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256
+  FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST
+  FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST
   FR13_DFWD_UNIFIED_BM8_LIVE_AB
   FR13_DFWD_UNIFIED_BM8_PRODUCTION
   FR13_FIXED32_GDN_PATH_BV_CANDIDATE
@@ -254,6 +256,7 @@ _FR13_M32_GUARD_ACTIVE=0
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:split2" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:visibility" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:gqa_pair" \
+   || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_LIVE_AB_ARM]}" == "set:gqa_pair_splitk" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:nosplit" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_PRODUCTION_ARM]}" == "set:gqa_pair" \
    || "${_FR13_CALLER_M32_GUARD[FR13_FA2_QROW32_B1_TIMING_ARM]}" == "set:qrow16_stock" \
@@ -1135,8 +1138,8 @@ else
     || { echo "FR13 qrow32 live A/B arm requires the live gate" >&2; exit 2; }
 fi
 case "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" in
-  ""|nosplit|split2|visibility|gqa_pair) ;;
-  *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, visibility, or gqa_pair" >&2; exit 2 ;;
+  ""|nosplit|split2|visibility|gqa_pair|gqa_pair_splitk) ;;
+  *) echo "FR13_FA2_QROW32_B1_LIVE_AB_ARM must be empty, nosplit, split2, visibility, gqa_pair, or gqa_pair_splitk" >&2; exit 2 ;;
 esac
 # ---- B1 PRODUCTION ARM PROMOTION (2026-08-13, Mark's ruling "B1 flip Yes") ----
 # The B1 GQA-pair FA2 unit is the shipped B1 production kernel. It is Tier-A
@@ -2082,6 +2085,44 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
          && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
          && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4" ]] || {
         echo "FR13 qrow32 B1 GQA-pair binary/source provenance drifted" >&2
+        exit 2
+      }
+      ;;
+    gqa_pair_splitk)
+      # ---- FR14 lane 4 split-K (Tier-B, GATE-ONLY, never a production arm) ----
+      # Splitting the context walk four ways changes per-row accumulation order,
+      # so this arm is structurally refused by the raw-byte gate
+      # (_fr13_fa2_qrow32_b1_require_same_reduction) -- correctly. It is reachable
+      # only as a LIVE arm, for the generation probe and eyeball Mark's condition
+      # requires, and it is deliberately absent from the production-arm case below.
+      # Identity from results/fr14_nvfp4_port_20260816/splitk_fa2.md 8 and
+      # fr14_splitk_fa2_build_attestation.json.
+      [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857" \
+         && "$FR13_FA2_QROW32_B1_SO_SIZE" == "300123792" \
+         && "$FR13_FA2_QROW32_B1_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
+         && "$FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256" == "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878" ]] || {
+        echo "FR13 qrow32 B1 split-K binary/source provenance drifted" >&2
+        exit 2
+      }
+      # The .so sha is NOT rebuild-reproducible for this arm: four links from one
+      # closure produced two .so hashes at an identical 300123792 bytes (the nvcc
+      # container-PID stamp). The SASS digests are what attest that the KERNEL
+      # reproduced, so they are pinned here alongside the artifact -- including the
+      # BASELINE digest, which is what makes "the split-K header edits are inert at
+      # Split=false" a measurement rather than a claim.
+      [[ "$FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST" == "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e" \
+         && "$FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST" == "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470" ]] || {
+        echo "FR13 qrow32 B1 split-K SASS credential drifted (kernel and/or sealed baseline)" >&2
+        exit 2
+      }
+      # Re-hash the binary actually being mounted. The B1 selector above only
+      # compares its SIZE, and this arm's two known links differ in sha at
+      # identical size -- exactly the case a size check cannot separate. Symlinks
+      # are refused for the same reason the gate-JSON credentials refuse them.
+      [[ -f "$FORKED_FA2_SO" \
+         && ! -L "$FORKED_FA2_SO" \
+         && "$(sha256sum "$FORKED_FA2_SO" | cut -d' ' -f1)" == "$FR13_FA2_QROW32_B1_SO_SHA256" ]] || {
+        echo "FR13 qrow32 B1 split-K requires the pinned .so present and byte-identical: $FORKED_FA2_SO" >&2
         exit 2
       }
       ;;

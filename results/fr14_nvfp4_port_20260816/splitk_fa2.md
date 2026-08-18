@@ -337,3 +337,63 @@ to exact attention than the kernel that ships; the speedup is 1.9–2.0×, worth
 offline at 23k. There is no degenerate trace to report because **there is no trace** —
 §7. The arm stays out of `_FR13_FA2_QROW32_B1_PRODUCTION_ARMS`, env-flagged and default
 off, and it must not serve until someone has read its generations.
+
+
+---
+
+## 10. Launcher plumbing — LANDED 2026-08-18 (launcher territory)
+
+§9.1 asked for a `gqa_pair_splitk` branch in `_FR13_FA2_QROW32_B1_PIN_ARM` carrying this
+binary's pins, plus a live-arm route that does not go through the raw-byte gate. Both are in,
+in **both** launcher families (`fr13_launch_forked_fa2_tree_server.sh`,
+`fr14_armb_leg3_launch_nomiddleware.sh`).
+
+**Reachable as a LIVE arm only.** `FR13_FA2_QROW32_B1_LIVE_AB_ARM` now accepts
+`gqa_pair_splitk`; `FR13_FA2_QROW32_B1_PRODUCTION_ARM` deliberately does **not**, so the arm
+stays gate-only exactly as §1 requires, and the promoted `gqa_pair` production default is
+untouched. A launch that never names the arm cannot reach one line of the new code.
+
+**What the branch asserts**, beyond the four fields the `gqa_pair` arm checks:
+
+- the two **SASS digests** — this kernel's `3f24d70d…` and the **sealed baseline's**
+  `fa01f988…`. §8 is explicit that the `.so` sha is not rebuild-reproducible and the SASS
+  digest is what attests the kernel, so pinning only the artifact would have pinned the
+  weaker of the two credentials. Pinning the baseline digest is also what keeps
+  "the split-K header edits are inert at `Split=false`" a measurement.
+- the binary **on disk**: present, **not a symlink**, and **re-hashed** to the pinned sha.
+  The generic B1 selector only compares `stat -c '%s'`, and this arm's two known links differ
+  in sha at an identical 300 123 792 bytes — precisely the case a size check cannot separate,
+  so without the re-hash the PID-shifted twin would have armed silently.
+
+**Guard hygiene.** A named split-K live arm arms `_FR13_M32_GUARD_ACTIVE` like every other B1
+live arm, and the two new pin variables are in `_FR13_M32_GUARD_NAMES`, so `.lumo.local.env`
+cannot move them underneath a run.
+
+**Tests.** `tests/test_fr14_splitk_arm_launcher_wiring.py`, 39 cases. The two that matter:
+the launcher literals are checked **against `fr14_splitk_fa2_build_attestation.json`** rather
+than being retyped constants that could drift from the artifact; and the branch is
+**extracted and executed** rather than merely grepped — it accepts the real staged binary and
+refuses a missing one, a wrong one at the right path, a symlink to the right one, a drifted
+kernel digest, a drifted baseline digest, another arm's sha, and another arm's size.
+
+**Arming recipe** (for the §7 generation probe — *not run here*, and the arm stays unarmed):
+
+```
+FR13_FA2_QROW32_B1_LIVE_AB_ARM=gqa_pair_splitk \
+FORKED_FA2_SO=/home/mark/fr14_splitk_build_20260818/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so \
+FR13_FA2_QROW32_B1_SO_SHA256=28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857 \
+FR13_FA2_QROW32_B1_SO_SIZE=300123792 \
+FR13_FA2_QROW32_B1_FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95 \
+FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256=4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878 \
+FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST=3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e \
+FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST=fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470 \
+  <the usual live-A/B invocation>
+```
+
+The launcher's existing live-arm gate still applies on top and is unchanged: the canonical
+instance `astropy__astropy-12907`, `FR13_FIXED32_B1_DIAGNOSTIC=1`, hydra27 at
+`MAX_NUM_SEQS=1 / SWE_CONCURRENCY=1`, `CUDAGRAPH_MODE=FULL_AND_PIECEWISE`,
+`FR13_FA2_QROW32_B1_SOURCE_COMMIT == git rev-parse HEAD`, and the patcher source hash.
+
+**Still not discharged:** §7's degenerate-eyeball condition. The plumbing removes the reason
+the probe could not be run; it does not substitute for reading the text.
