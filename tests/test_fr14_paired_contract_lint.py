@@ -48,7 +48,7 @@ def test_inventory_covers_every_pair_kind():
 
 def test_inventory_size_is_recorded():
     """Adding a pair without updating the count is itself a one-sided update."""
-    assert len(sweep.PAIRS) == 9, (
+    assert len(sweep.PAIRS) == 12, (
         "pair count changed -- update the sweep note in "
         "results/fr14_nvfp4_port_20260816/suffix_pass_gating.md 13"
     )
@@ -236,3 +236,131 @@ def test_detector_catches_the_python_parser_relaxing(monkeypatch, tmp):
                                              "fr13_launch_forked_fa2_tree_server.sh",))
     ok, detail = sweep.pair_bash_cfg_vs_python_parser()
     assert not ok and "3 fields" in str(detail)
+
+
+# ---------------------------------------------------------------------------
+# The 14th site's class: a LONE arithmetic invariant with the ungated shape
+# baked in as an addend.  Not a pair -- which is why the pair sweep could not
+# see it.  Restated class: no literal may encode the ungated 5-pass shape.
+# ---------------------------------------------------------------------------
+
+def test_every_injected_blob_is_enumerated():
+    """The 14th site sat in the blob nobody extracted.
+
+    `injected_blob()` returns the ONE blob bound to a named global. The eagle
+    proposer is an anonymous local, so for three boots nothing scanned it.
+    """
+    blobs = sweep.all_injected_blobs()
+    assert len(blobs) > 10, f"only {len(blobs)} blobs found -- extractor broke"
+    texts = [b[1] for b in blobs]
+    assert any("_fr13_t_cols" in x for x in texts), "eagle proposer not enumerated"
+    assert any("_fr13_fixed32_drafter_graph_replay" in x for x in texts), (
+        "gdn runtime not enumerated"
+    )
+
+
+def test_pack_identity_is_evaluated_not_read():
+    ok, detail = sweep.pair_pack_identity_under_both_shapes(sweep._topology())
+    assert ok, detail
+
+
+def test_detector_catches_the_14th_site_regression(monkeypatch, tmp):
+    """Put the bare 15 back and the identity must fail under the GATED shape."""
+    real = sweep.eagle_blob()
+    assert "_fr14_head_cols" in real, "14th-site fix anchor moved"
+    monkeypatch.setattr(
+        sweep, "eagle_blob", lambda: real.replace("_fr14_head_cols", "15")
+    )
+    ok, detail = sweep.pair_pack_identity_under_both_shapes(sweep._topology())
+    assert not ok and "derived form" in str(detail)
+
+
+def test_pack_identity_arithmetic_rejects_the_ungated_addend():
+    """Independently of the source form: 15 + 8 + 10 is 33, and must not be 31."""
+    topo = sweep._topology()
+    hd_full = topo.N_MTP_HEAD_DEPTHS
+    head = hd_full * (1 + topo.BRANCHES_PER_HEAD_DEPTH)
+    rescue = sum(length for _r, length in topo.PHYSICAL_BRANCH_CHAINS)
+    # the shipped (broken) form, under the gated shape
+    broken = head + topo.GATED_ARCTIC_MAIN_TAIL_LENGTH + rescue
+    assert broken == 33, broken
+    assert broken != topo.PHYSICAL_DRAFTS
+    # the derived form, under both
+    for hd, cols in (
+        (hd_full, topo.ARCTIC_MAIN_TAIL_LENGTH),
+        (topo.GATED_MTP_K, topo.GATED_ARCTIC_MAIN_TAIL_LENGTH),
+    ):
+        assert head + (cols - (hd_full - hd)) + rescue == topo.PHYSICAL_DRAFTS
+
+
+def test_shape_literal_scan_is_clean():
+    ok, detail = sweep.shape_literal_scan()
+    assert ok, f"unadjudicated shape literals: {detail}"
+
+
+def test_shape_literal_scan_can_actually_fail_on_a_rule(monkeypatch):
+    """Drop the walk-depth rule and every 12 must resurface for adjudication."""
+    trimmed = tuple(
+        r for r in sweep.ADJUDICATED_RULES if 12 not in r[1]
+    )
+    assert len(trimmed) < len(sweep.ADJUDICATED_RULES)
+    monkeypatch.setattr(sweep, "ADJUDICATED_RULES", trimmed)
+    ok, detail = sweep.shape_literal_scan()
+    assert not ok, "scanner is inert: removing a rule surfaced nothing"
+    assert any("12 in" in d for d in detail), detail
+
+
+def test_shape_literal_scan_can_actually_fail_on_a_specific_entry(monkeypatch):
+    """`rows + 4` is covered ONLY by the specific list, so it discriminates."""
+    trimmed = tuple(
+        row for row in sweep.ADJUDICATED_SHAPE_LITERALS if row[1] != "rows + 4"
+    )
+    assert len(trimmed) == len(sweep.ADJUDICATED_SHAPE_LITERALS) - 1
+    monkeypatch.setattr(sweep, "ADJUDICATED_SHAPE_LITERALS", trimmed)
+    ok, detail = sweep.shape_literal_scan()
+    assert not ok and any("rows + 4" in d for d in detail), detail
+
+
+def test_relevance_is_function_scoped_not_line_scoped(monkeypatch):
+    """Regression on the detector's own hole.
+
+    Filtering relevance on line text alone dropped drafter-internal lines like
+    `"rescue_carry_slots": 4 * batch`; its own mutation test found that. If the
+    scan ever goes back to line-scoping, dropping the batch rule stops surfacing
+    those lines and this fails.
+    """
+    monkeypatch.setattr(
+        sweep,
+        "ADJUDICATED_RULES",
+        tuple(r for r in sweep.ADJUDICATED_RULES if 4 not in r[1]),
+    )
+    monkeypatch.setattr(
+        sweep,
+        "ADJUDICATED_SHAPE_LITERALS",
+        tuple(
+            row for row in sweep.ADJUDICATED_SHAPE_LITERALS
+            if "rescue_carry_slots" not in row[1]
+        ),
+    )
+    ok, detail = sweep.shape_literal_scan()
+    assert not ok
+    assert any("rescue_carry_slots" in d for d in detail), (
+        "function-scoped relevance regressed to line-scoped: " + str(detail)
+    )
+
+
+def test_handoff_contract_detector_can_fail(monkeypatch):
+    blob = sweep.injected_blob().replace(
+        '!= (8 if int(proposal["mtp_forward_calls"]) == 2 else 6)',
+        '!= (6 if int(proposal["mtp_forward_calls"]) == 2 else 6)',
+    )
+    ok, detail = sweep.pair_handoff_contract_vs_blob(blob, sweep._topology())
+    assert not ok and "!=" in str(detail)
+
+
+def test_unparseable_blobs_are_checked_not_skipped():
+    """24 blobs do not parse; one of them could hold the next 14th site."""
+    ok, detail = sweep.shape_literal_scan()
+    assert ok
+    assert "unparseable, textually checked" in detail
+    assert sweep.ADJUDICATED_TEXTUAL, "textual adjudications must exist"

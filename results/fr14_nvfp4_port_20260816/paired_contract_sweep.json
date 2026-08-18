@@ -54,8 +54,26 @@
    "kind": "contract/consumer",
    "ok": true,
    "detail": "drafter consumes the topology constants"
+  },
+  {
+   "pair": "handoff contract <-> injected blob",
+   "kind": "contract/consumer",
+   "ok": true,
+   "detail": "agree on [(2, 8), (4, 6)]"
+  },
+  {
+   "pair": "pack identity <-> both step shapes",
+   "kind": "shape-literal",
+   "ok": true,
+   "detail": "identity holds at 31 under both shapes"
+  },
+  {
+   "pair": "shape literals across ALL injected blobs",
+   "kind": "shape-literal",
+   "ok": true,
+   "detail": "41 blobs scanned (24 unparseable, textually checked), 18 literals adjudicated, 0 unreviewed"
   }
  ],
- "n_pairs": 9,
+ "n_pairs": 12,
  "n_stale": 0
 }

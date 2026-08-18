@@ -59,6 +59,52 @@ LAUNCHERS = (
 )
 
 
+def all_injected_blobs():
+    """EVERY large source string the patcher injects, not just the gdn one.
+
+    This is the correction the 14th site forced. `injected_blob()` below returns
+    the ONE blob bound to a named global; the eagle proposer -- where the pack
+    identity lives -- is an anonymous `new = \'\'\'...\'\'\'` local, so nothing
+    enumerated it and a shape literal sat there through three boots.
+
+    Returns [(lineno, text, parsed_or_None)]. Blobs that will not parse even
+    after dedent/wrapping are returned with None so callers can report coverage
+    honestly instead of silently skipping them.
+    """
+    import textwrap
+
+    src = PATCHER.read_text()
+    out = []
+    for node in ast.walk(ast.parse(src)):
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and len(node.value) > 2000
+        ):
+            parsed = None
+            for attempt in (
+                lambda s: s,
+                textwrap.dedent,
+                lambda s: "if True:\n" + s,
+            ):
+                try:
+                    parsed = ast.parse(attempt(node.value))
+                    break
+                except SyntaxError:
+                    continue
+            out.append((node.lineno, node.value, parsed))
+    out.sort(key=lambda r: r[0])
+    return out
+
+
+def eagle_blob() -> str:
+    """The proposer blob: the one that carries the drafter pack identity."""
+    for _lineno, text, _parsed in all_injected_blobs():
+        if "_fr13_t_cols" in text and "_fr13_t_paths" in text:
+            return text
+    raise SystemExit("eagle proposer blob not found")
+
+
 def injected_blob() -> str:
     """The runtime source the patcher execs into gdn_linear_attn.
 
@@ -241,6 +287,58 @@ def pair_bash_cfg_vs_python_parser():
     return True, "3 fields written, 3 fields required"
 
 
+def pair_handoff_contract_vs_blob(blob, topo):
+    """The handoff interlock restates LEGAL_HANDOFF_SHAPES as a two-branch."""
+    m = re.search(
+        r'!= \((\d+) if int\(proposal\["mtp_forward_calls"\]\) == (\d+) '
+        r'else (\d+)\)',
+        blob,
+    )
+    if m is None:
+        return False, "blob no longer carries the handoff interlock"
+    gated_tail, gated_calls, ungated_tail = (int(x) for x in m.groups())
+    literal = {(gated_calls, gated_tail),
+               (topo.MTP_FORWARD_CALLS, ungated_tail)}
+    if literal != set(topo.LEGAL_HANDOFF_SHAPES):
+        return False, (
+            f"contract {set(topo.LEGAL_HANDOFF_SHAPES)} != blob {literal}"
+        )
+    return True, f"agree on {sorted(literal)}"
+
+
+def pair_pack_identity_under_both_shapes(topo):
+    """THE 14th-site check: evaluate the pack identity, do not read it.
+
+    The identity is `head + (arctic - arctic_in_head) + rescue == 31`. It is
+    extracted from the eagle blob and EVALUATED under the ungated and the gated
+    bindings, which is what a literal `15` cannot survive.
+    """
+    blob = eagle_blob()
+    m = re.search(
+        r"_fr14_head_cols\s*\n\s*\+ \(\s*\n\s*len\(_fr13_t_cols\)\s*\n"
+        r"\s*- _fr14_arctic_in_head\s*\n\s*\)\s*\n\s*"
+        r"\+ len\(_fr13_t_paths\)\s*\n\s*!= (\d+)",
+        blob,
+    )
+    if m is None:
+        return False, "pack identity is no longer the derived form"
+    width = int(m.group(1))
+    if width != topo.PHYSICAL_DRAFTS:
+        return False, f"pack width {width} != {topo.PHYSICAL_DRAFTS}"
+    hd_full = topo.N_MTP_HEAD_DEPTHS
+    rescue = sum(length for _r, length in topo.PHYSICAL_BRANCH_CHAINS)
+    for label, hd, cols in (
+        ("ungated", hd_full, topo.ARCTIC_MAIN_TAIL_LENGTH),
+        ("gated", topo.GATED_MTP_K, topo.GATED_ARCTIC_MAIN_TAIL_LENGTH),
+    ):
+        head = hd_full * (1 + topo.BRANCHES_PER_HEAD_DEPTH)
+        in_head = hd_full - hd
+        total = head + (cols - in_head) + rescue
+        if total != topo.PHYSICAL_DRAFTS:
+            return False, f"{label}: {total} != {topo.PHYSICAL_DRAFTS}"
+    return True, "identity holds at 31 under both shapes"
+
+
 def pair_topology_vs_drafter():
     """decide_fixed32's gated widths vs the topology contract."""
     topo = _topology()
@@ -255,6 +353,177 @@ def pair_topology_vs_drafter():
     if topo.GATED_MTP_K + topo.GATED_ARCTIC_MAIN_TAIL_LENGTH != 11:
         return False, "gated shape does not reach draft position 10"
     return True, "drafter consumes the topology constants"
+
+
+# Shape literals adjudicated once, by asking of each: "does this value change
+# under 3 post-root passes instead of 5?"  Anything NOT here that lands in a
+# drafter-relevant arithmetic/comparison position is reported for adjudication.
+#   value, context substring, verdict
+ADJUDICATED_SHAPE_LITERALS = (
+    (4, "len(num_draft_tokens) <= 4", "batch bound, not a pass count"),
+    (4, "batch == 4", "batch size"),
+    (4, 'int(work["batch_size"]) == 4', "batch size"),
+    (4, 'context.get("batch_size", -1) != 4', "batch size"),
+    (4, "rows + 4", "batch size (this lever is B4-only)"),
+    (4, "int(_fr10_spine_steps) == 4", "loop still has 4 iterations; the split "
+        "changes CAPTURE, not the loop count"),
+    (4, "num_kv_heads == 4", "attention geometry"),
+    (4, "passes=4", "default arg = the ungated value; every split call site "
+        "passes it explicitly"),
+    (4, "passes == 4", "derived from the pass count, not a restatement"),
+    (4, "passes != 4", "derived from the pass count"),
+    (4, '"rank1_lookup_tokens": 4 * batch', "rank-1 chain hangs off the ROOT "
+        "runner-up; unaffected by skipped passes"),
+    (2, '"rank2_lookup_tokens": 2 * batch', "rank-2 chain, same reason"),
+    (4, '"rescue_carry_slots": 4 * batch', "4 permanently inactive rank-2 slots"),
+    (3, '"arctic_lookup_calls": 3 * batch', "always main+rank1+rank2"),
+    (6, "(_fr14_main + 6)", "6 = rank1(4)+rank2(2); main is derived"),
+    (10, "_fr14_main + 10", "10 = rescue path columns, topology-fixed"),
+    (16, '"drafter_pair_slots": 16 * batch', "KV remap path capacity "
+        "(COMMIT_PATH_CAP), per tree path not per pass"),
+    (5, "draft_events * 5", "GATE-VARIANT (5 head reads/step) but structurally "
+        "unreachable: FR13_DRAFT_HEAD_M32_LIVE_AB is refused with the gate"),
+)
+
+
+# Lines in the UNPARSEABLE blobs adjudicated the same way. These are string
+# fragments the patcher assembles, so they carry the shape of generated code
+# rather than of executed code.
+ADJUDICATED_TEXTUAL = (
+    (31, "num_decode_draft_tokens", "verify row count, topology-fixed"),
+    (32, "tree_n=32", "verify rows"),
+    (4, "num_kv_heads", "attention geometry"),
+    (16, "path_capacity", "KV remap capacity"),
+    (4, "1 <= _fr13_mtp_B <= 4", "batch bound"),
+    (4, "1 <= _fr13_mtp_batch_rows <= 4", "batch bound"),
+    (4, "FR13_SLOT_REORDER (edits 1+4 of 5)", "docstring prose: the 5 EDITS of "
+        "the slot-reorder patch, not MTP passes"),
+)
+
+
+# Category rules, each a stated ARGUMENT for why the magnitude cannot vary with
+# the post-root pass count. A rule suppresses only literals whose line matches
+# it; anything unmatched is reported for adjudication, so "0 unreviewed" stays
+# meaningful.
+ADJUDICATED_RULES = (
+    (r"batch", {4, 2},
+     "batch-size bound or per-batch multiplier; B is orthogonal to pass count"),
+    (r"\b12\b", {12},
+     "committer/TAW walk depth (WALK_CAP = MAX_PHYSICAL_DEPTH + 1). Gating "
+     "does not change the tree's reach -- both shapes end at draft position 10"),
+    (r"path_cap|path_capacity|paths\.shape|path_shape|alias_|row_guard|"
+     r"pair_rows|pair_slots|slots_written|target_names|caches !=|tree_q_rows|"
+     r"_ep_ptr_list", {16},
+     "COMMIT_PATH_CAP / KV-remap capacities, fixed by the topology"),
+    (r"48 \*|kernel_warps|production_bv", {6, 8},
+     "GDN layer geometry and block-vector width"),
+    (r"compares|products|nonfinite|mismatches|compared_", {5, 4, 2},
+     "M32 draft-head lever tuple arities. GATE-VARIANT where they encode 5 head "
+     "reads, but the lever is refused with the gate by both launchers"),
+    (r"\(\"cuda\",\) \* 4|\(\"torch\.int32\",\) \* 4|len\(_fr13_dm_ret\) == 4|"
+     r"len\(bank_shape\) != 4|direct_ring_inputs", {4},
+     "tuple arity / fixed kernel inputs, not a pass count"),
+)
+
+
+def shape_literal_scan():
+    """Every shape-magnitude literal in a drafter-relevant arithmetic position.
+
+    Restated class: **no literal may encode the ungated 5-pass shape.** This
+    walks ALL injected blobs -- the 14th site was in the one nobody enumerated.
+    """
+    import textwrap
+
+    magnitudes = {15, 6, 10, 5, 4, 12, 16, 8, 14, 18}
+    relevant = ("mtp", "drafter", "tail", "spine", "arctic", "pack",
+                "tree_attn", "head", "draft", "wide", "fixed32")
+    unadjudicated = []
+    parsed = unparsed = 0
+    # A blob that will not parse is not a blob we may ignore: 24 of them do not,
+    # and one of those could hold the next 14th site. They get a line-oriented
+    # check for the same magnitudes in the same contexts.
+    textual = re.compile(
+        r"(?:[=!<>]=|[-+*]|\breturn\b)\s*(?:\w+\s*[-+*]\s*)?"
+        r"\b(15|12|14|16|18|10|8|6|5|4)\b"
+    )
+    for _lineno, text, tree in all_injected_blobs():
+        if tree is None:
+            unparsed += 1
+            for raw in text.split("\n"):
+                low = raw.lower()
+                if not any(k in low for k in relevant):
+                    continue
+                # a comment cannot encode a runtime shape
+                if raw.lstrip().startswith("#"):
+                    continue
+                m = textual.search(raw)
+                if m is None:
+                    continue
+                value = int(m.group(1))
+                if any(
+                    value == v and frag in raw
+                    for v, frag, _why in ADJUDICATED_SHAPE_LITERALS
+                ):
+                    continue
+                if any(
+                    frag in raw for _v, frag, _why in ADJUDICATED_TEXTUAL
+                ):
+                    continue
+                unadjudicated.append(
+                    f"{value} in unparseable blob `{raw.strip()[:70]}`"
+                )
+            continue
+        parsed += 1
+        lines = text.split("\n")
+        # Relevance is a property of the ENCLOSING FUNCTION, not of the line.
+        # Filtering on line text alone silently dropped drafter-internal lines
+        # like `"rescue_carry_slots": 4 * batch` -- a hole in this detector that
+        # its own mutation test found.
+        scopes = []
+        for fn in ast.walk(tree):
+            if isinstance(fn, ast.FunctionDef) and any(
+                k in fn.name.lower() for k in relevant
+            ):
+                scopes.append((fn.lineno, fn.end_lineno or fn.lineno))
+        for node in ast.walk(tree):
+            ctxs = []
+            if isinstance(node, ast.BinOp):
+                ctxs = [node.left, node.right]
+            elif isinstance(node, ast.Compare):
+                ctxs = [node.left] + list(node.comparators)
+            elif isinstance(node, ast.arguments):
+                ctxs = list(node.defaults) + [d for d in node.kw_defaults if d]
+            for c in ctxs:
+                if not (
+                    isinstance(c, ast.Constant)
+                    and isinstance(c.value, int)
+                    and c.value in magnitudes
+                ):
+                    continue
+                ln = getattr(c, "lineno", 1)
+                ctx = lines[ln - 1] if ln - 1 < len(lines) else ""
+                in_scope = any(a <= ln <= b for a, b in scopes)
+                if not in_scope and not any(
+                    k in ctx.lower() for k in relevant
+                ):
+                    continue
+                if any(
+                    c.value == v and frag in ctx
+                    for v, frag, _why in ADJUDICATED_SHAPE_LITERALS
+                ):
+                    continue
+                if any(
+                    c.value in mags and re.search(pat, ctx)
+                    for pat, mags, _why in ADJUDICATED_RULES
+                ):
+                    continue
+                unadjudicated.append(f"{c.value} in `{ctx.strip()[:70]}`")
+    if unadjudicated:
+        return False, sorted(set(unadjudicated))
+    return True, (
+        f"{parsed} blobs scanned ({unparsed} unparseable, textually checked), "
+        f"{len(ADJUDICATED_SHAPE_LITERALS)} literals adjudicated, 0 unreviewed"
+    )
 
 
 PAIRS = (
@@ -276,6 +545,12 @@ PAIRS = (
      lambda blob, topo: pair_bash_cfg_vs_python_parser()),
     ("topology contract <-> decide_fixed32", "contract/consumer",
      lambda blob, topo: pair_topology_vs_drafter()),
+    ("handoff contract <-> injected blob", "contract/consumer",
+     lambda blob, topo: pair_handoff_contract_vs_blob(blob, topo)),
+    ("pack identity <-> both step shapes", "shape-literal",
+     lambda blob, topo: pair_pack_identity_under_both_shapes(topo)),
+    ("shape literals across ALL injected blobs", "shape-literal",
+     lambda blob, topo: shape_literal_scan()),
 )
 
 

@@ -5999,7 +5999,9 @@ if [[ "${FR14_SUFFIX_PASS_GATE:-0}" == "1" ]]; then
     FR13_DRAFT_HEAD_FP8 \
     FR13_DFWD_UNIFIED_BM8_PRODUCTION \
     FR13_DFWD_UNIFIED_BM8_LIVE_AB \
-    FR13_DRAFT_HEAD_M32_LIVE_AB; do
+    FR13_DRAFT_HEAD_M32_LIVE_AB \
+    FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB \
+    FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB; do
     if [[ "${!_fr14_gate_incompat:-0}" != "0" ]]; then
       echo "FR14_SUFFIX_PASS_GATE=1 is incompatible with $_fr14_gate_incompat (drafter graph credential is per-capture)" >&2
       exit 2

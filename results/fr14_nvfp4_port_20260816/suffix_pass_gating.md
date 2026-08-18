@@ -786,3 +786,101 @@ enumerated inventory is clean and the enumeration is written down where the next
 extend it — not that the surface is exhausted.
 
 Gate remains **default-OFF**.
+
+
+---
+
+# 14. ROUND 3: the gate fired live, then a 14th site of a NEW class
+
+The 11th and 12th fixes proved live — every armed ungated step ran clean — and the predicate
+**fired on real traffic for the first time**: 256-token history, 8-gram match, agreement,
+handoff. The first *gated* step then died at a 14th site.
+
+## 14.1 The defect, and why the pair sweep could not see it
+
+`eagle.py:5924` asserted `15 + len(_fr13_t_cols) + len(_fr13_t_paths) != 31`. The tail grew
+6 → 8 on gated steps as designed, and the **15 is the ungated native column count as a bare
+addend**: `15 + 8 + 10 = 33`.
+
+This is not a mirrored pair. It is a **single arithmetic invariant with the ungated shape
+baked into it** — a class §13's sweep was structurally blind to, because that sweep looks for
+two sides that disagree and here there is only one side.
+
+**Fix, derived not restated:** the head is `_fr13_t_hd_full * 3` physical columns *however
+they are filled*; on a gated step `(_fr13_t_hd_full - _fr13_t_hd)` of the Arctic columns land
+in the head as spine tokens and must not be counted twice.
+
+```
+ungated:  15 + (6 - 0) + 10 = 31
+gated:    15 + (8 - 2) + 10 = 31
+```
+
+The `31` stays a literal — asked of it directly, the pack width does **not** vary with the
+pass count. The `15` did, and no longer appears.
+
+## 14.2 The finding that actually matters: there are THIRTEEN injected blobs
+
+`injected_blob()` returned the one string bound to a named global
+(`_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE`). The eagle proposer — where the pack identity lives
+— is an **anonymous local** (`new = '''...'''`), so nothing enumerated it.
+
+The patcher carries **41 injected source strings**; my method had been scanning one. That is
+the real reason this series ran to four boots, and it is now closed: `all_injected_blobs()`
+enumerates every large string constant, parses each (raw → dedent → `if True:` wrap), and
+reports the **24 that will not parse** rather than silently skipping them — those get a
+line-oriented check for the same magnitudes.
+
+## 14.3 The shape-literal sweep
+
+Restated class: **no literal may encode the ungated 5-pass shape.** Every shape-magnitude
+integer (15, 12, 16, 10, 8, 6, 5, 4, 2) in arithmetic, comparison or default-argument
+position inside a drafter-relevant scope, asked one question: *does this change under 3
+post-root passes instead of 5?*
+
+| verdict | count | examples |
+|---|---|---|
+| **gate-variant and WRONG** | **1** | the `15` addend — the 14th site |
+| gate-variant, structurally unreachable | 2 | M32-lever `draft_events * 5` and its tuple arities; the lever is refused with the gate by both launchers |
+| invariant — batch bounds / arities | ~20 | `1 <= B <= 4`, `rows + 4` (B4-only lever), dtype tuples |
+| invariant — committer/TAW walk depth (12) | 5 | `taw_loop_iterations != 12`; gating does not change the tree's reach |
+| invariant — path/bank capacity (16) | ~15 | `COMMIT_PATH_CAP`, KV-remap pair slots |
+| invariant — GDN geometry | 4 | `48 * 6`, `kernel_warps != 8` |
+| invariant — rescue chains | 5 | rank-1 = 4, rank-2 = 2; they hang off the ROOT runner-ups |
+
+**One live defect found, one fixed.** Two guard-gaps were closed on the way:
+`FR13_DRAFT_HEAD_M1/M4_R64_U8_LIVE_AB` were missing from the gate incompatibility list, so
+the levers whose `* 5` arithmetic is gate-variant are now all refused together.
+
+## 14.4 The lint, and two holes it found in itself
+
+`scripts/fr14_paired_contract_sweep.py` is now **12 pairs, 0 stale**, adding:
+
+* **handoff contract ↔ blob** — the `(8 if calls == 2 else 6)` interlock restates
+  `LEGAL_HANDOFF_SHAPES`;
+* **pack identity under both shapes** — the identity is *extracted and evaluated* under the
+  ungated and gated bindings, not read. This is the 0.5 s version of boot 3;
+* **shape literals across ALL injected blobs.**
+
+The mutation tests found two holes in the detectors themselves, which is the point of having
+them:
+
+1. relevance was filtered on **line text**, so drafter-internal lines like
+   `"rescue_carry_slots": 4 * batch` were silently dropped — the scan looked clean because it
+   was not looking. Relevance is now a property of the **enclosing function**, which took the
+   surfaced population from 10 to 51;
+2. two mutation tests stopped discriminating once category rules subsumed their targets, and
+   were retargeted rather than deleted.
+
+Adjudication is by **stated category rule**, not blanket suppression: each rule carries the
+argument for why its magnitude cannot vary with the pass count, and anything unmatched is
+reported, so "0 unreviewed" keeps its meaning.
+
+## 14.5 Honest bound, restated
+
+The enumeration now covers every injected blob and every shape magnitude in a drafter-relevant
+scope. What it cannot promise is that no *fifteenth* class exists — §13 said the same about
+pairs and a lone-invariant class appeared the next boot. What has changed is that both known
+classes now fail in a unit test, and the blob-enumeration hole that hid this one is closed at
+the root rather than per-instance.
+
+Gate remains **default-OFF**.

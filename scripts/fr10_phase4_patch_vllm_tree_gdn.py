@@ -29862,6 +29862,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # device memory, syncs, or looks at a draft token.
             _fr14_gate_fired = False
             _fr14_split_on = False
+            # the MTP head depth a GATED step leaves behind, taken from the one
+            # place that defines it, so no arithmetic downstream restates it
+            _fr14_gate_mtp_k = None
             if _fr13_is_fixed32:
                 import sys as _fr14_gate_sys
                 if "/workspace/scripts" not in _fr14_gate_sys.path:
@@ -29876,6 +29879,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         raise RuntimeError(
                             "FR14 suffix pass gate decision count != batch"
                         )
+                    from fr14_suffix_pass_gate import (
+                        SuffixPassGate as _fr14_gate_shape_cls,
+                    )
+                    _fr14_gate_mtp_k = int(
+                        _fr14_gate_shape_cls.step_shape(True)[0]
+                    )
             _fr14_seg_passes = 2 if _fr14_split_on else 4
             _fr13_dg_on = (
                 os.environ.get("FR13_DRAFTER_GRAPH", "0") == "1"
@@ -30505,9 +30514,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # else in this block is already parametric in _fr13_t_hd,
                     # including the rank-1/rank-2 root seeds at
                     # _fr13_t_stack[_fr13_t_hd (+1)], so the seam moves with it.
+                    # the head is ALWAYS this many depths of physical
+                    # columns; _fr13_t_hd is how many of them MTP actually
+                    # filled this step. Every identity below derives from the
+                    # pair -- none of them may restate either as a literal.
+                    _fr13_t_hd_full = int(
+                        getattr(_fr13_t, "TAIL_HEAD_DEPTH", 5)
+                    )
                     _fr13_t_hd = (
-                        3 if _fr14_gate_fired
-                        else int(getattr(_fr13_t, "TAIL_HEAD_DEPTH", 5))
+                        _fr14_gate_mtp_k if _fr14_gate_fired
+                        else _fr13_t_hd_full
                     )
                     _fr13_t_len = int(_fr10_wide_D) - _fr13_t_hd
                     if not _fr13_t.merged_on():
@@ -30939,14 +30955,40 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                             "FR13 fixed32 Arctic path set mismatch: "
                                             + repr(sorted(_fr13_t_paths))
                                         )
+                                    # FR14_GATE_SPLIT_GRAPH (14th site). The
+                                    # head is _fr13_t_hd_full*3 physical columns
+                                    # HOWEVER they are filled; on a gated step
+                                    # (_fr13_t_hd_full - _fr13_t_hd) of the
+                                    # Arctic columns land in the head as spine
+                                    # tokens, so counting them again as tail
+                                    # columns double-counts and the identity
+                                    # reads 33. The 31 does NOT vary with the
+                                    # pass count -- the pack width is fixed by
+                                    # the topology -- so it stays a literal;
+                                    # the 15 did vary, and no longer appears.
+                                    _fr14_head_cols = _fr13_t_hd_full * 3
+                                    _fr14_arctic_in_head = (
+                                        _fr13_t_hd_full - _fr13_t_hd
+                                    )
                                     if (
-                                        15 + len(_fr13_t_cols)
+                                        _fr14_head_cols
+                                        + (
+                                            len(_fr13_t_cols)
+                                            - _fr14_arctic_in_head
+                                        )
                                         + len(_fr13_t_paths)
                                         != 31
                                     ):
                                         raise RuntimeError(
-                                            "FR13 fixed32 drafter work is not "
-                                            "15 native + 6 tail + 10 rescue = 31"
+                                            "FR13 fixed32 drafter pack is not "
+                                            "31 columns: head="
+                                            + repr(_fr14_head_cols)
+                                            + " arctic="
+                                            + repr(len(_fr13_t_cols))
+                                            + " in_head="
+                                            + repr(_fr14_arctic_in_head)
+                                            + " rescue="
+                                            + repr(len(_fr13_t_paths))
                                         )
                                     _fr13_fixed32_path_tokens = _fr13_t_paths
                                 # Direction-2 d6-branch: merge the tail-branch wide_topk (free packer keys
