@@ -2686,3 +2686,313 @@ def test_reintroducing_the_b1_hardcode_kills_the_k0_boot(launcher, staged_boot):
     out = _run_full_boot(mutated, {}, so, credential, size, profile="full_vocab")
     assert out.returncode == 2, "the hardcode came back and the K0 boot survived"
     assert "exact binary/source provenance" in out.stderr
+
+
+# ===========================================================================
+# THE TIER-B CANONICAL WORKLOAD TABLE (site: exact16 blocked by the promotion's
+# own gate).
+#
+# Pass 74 ruled that a tier-B serve carries the canonical campaign identity,
+# and the gate encoded that as the exact4 pins, hard-coded. So exact16 -- the
+# QC that verifies the split-K promotion -- could not be declared at all.
+#
+# Extended, not bypassed: the identity is still mandatory and still exact,
+# there is now more than one canonical workload, and the caller must NAME the
+# one it is running. Default stays exact4, so every existing caller keeps its
+# previous meaning exactly.
+# ===========================================================================
+
+WORKLOADS = {
+    "exact4": (4, "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"),
+    "exact16": (16, "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"),
+    "random1024_calibration": (0, ""),
+}
+
+
+def _workload_gate(launcher_text):
+    """The tier-B serve gate, executable, with the table it resolves from."""
+    start = launcher_text.index(
+        "# ---------------------------------------- tier-B CANONICAL WORKLOAD"
+    )
+    end = launcher_text.index("\n}\n", start) + len("\n}\n")
+    table = launcher_text[start:end]
+    gate_start = launcher_text.index(
+        "  # SPELLING (runner's dry-read, before this ever booted)."
+    )
+    gate_end = launcher_text.index("<none: synthetic shape", gate_start)
+    gate_end = launcher_text.index("\n", gate_end) + 1
+    return table, launcher_text[gate_start:gate_end]
+
+
+def _run_workload_gate(launcher, workload, ids, sha, legacy=("", ""), spelling="new"):
+    """Drive the gate. `spelling` picks which variable names carry the pins."""
+    import subprocess
+
+    fresh_ids, fresh_sha = (ids, sha) if spelling == "new" else ("", "")
+    old_ids, old_sha = (ids, sha) if spelling == "legacy" else legacy
+    table, gate = _workload_gate(launcher.read_text())
+    script = (
+        "set -u\n"
+        f'FR13_FA2_QROW32_B1_TIERB_WORKLOAD="{workload}"\n'
+        f'FR13_FA2_QROW32_B1_TIERB_TASK_IDS="{fresh_ids}"\n'
+        f'FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256="{fresh_sha}"\n'
+        f'FR13_FA2_QROW32_B1_EXACT4_TASK_IDS="{old_ids}"\n'
+        f'FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256="{old_sha}"\n'
+        'FR13_FIXED32_B1_DIAGNOSTIC=0\nENFORCE_EAGER=0\n'
+        'CUDAGRAPH_MODE=FULL_AND_PIECEWISE\n'
+        + table.replace(
+            "FR13_FA2_QROW32_B1_TIERB_WORKLOAD=${FR13_FA2_QROW32_B1_TIERB_WORKLOAD:-exact4}",
+            "",
+        )
+        + gate
+    )
+    return subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True, cwd=str(REPO)
+    )
+
+
+def _subset_ids(name):
+    return ",".join(
+        json.loads((REPO / "config/fr13_fixed32" / name).read_text())["instance_ids"]
+    )
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_workload_table_admits_every_canonical_workload(launcher):
+    """exact4 (unchanged), exact16 (the point), random1024 (the honest one)."""
+    for workload, (count, sha) in WORKLOADS.items():
+        if workload == "exact4":
+            ids = _subset_ids("subset_b4_four.json")
+        elif workload == "exact16":
+            ids = _subset_ids("subset_b4_sixteen.json")
+        else:
+            ids = ""
+        assert len([t for t in ids.split(",") if t]) == count
+        out = _run_workload_gate(launcher, workload, ids, sha)
+        assert out.returncode == 0, f"{workload}: {out.stderr}"
+        assert f"workload={workload}" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_default_workload_is_still_exact4(launcher):
+    """Compatibility: a caller that names nothing means exactly what it did."""
+    text = launcher.read_text()
+    assert (
+        "FR13_FA2_QROW32_B1_TIERB_WORKLOAD=${FR13_FA2_QROW32_B1_TIERB_WORKLOAD:-exact4}"
+        in text
+    )
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_claiming_exact16_with_exact4_pins_refuses(launcher):
+    """Mutation proof, direction one."""
+    out = _run_workload_gate(
+        launcher, "exact16",
+        _subset_ids("subset_b4_four.json"), WORKLOADS["exact4"][1],
+    )
+    assert out.returncode == 2
+    assert "FULL-graph identity of its DECLARED workload" in out.stderr
+    assert "TIERB_WORKLOAD=exact16" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_claiming_exact4_with_exact16_pins_refuses(launcher):
+    """Mutation proof, direction two."""
+    out = _run_workload_gate(
+        launcher, "exact4",
+        _subset_ids("subset_b4_sixteen.json"), WORKLOADS["exact16"][1],
+    )
+    assert out.returncode == 2
+    assert "FULL-graph identity of its DECLARED workload" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_an_unknown_workload_refuses(launcher):
+    """No default-on-unknown: site 23's lesson, in a new table."""
+    for bogus in ("exact8", "", "EXACT4", "random1024"):
+        out = _run_workload_gate(
+            launcher, bogus, _subset_ids("subset_b4_four.json"),
+            WORKLOADS["exact4"][1],
+        )
+        assert out.returncode != 0, bogus
+        if bogus:
+            assert "must be one of" in out.stderr, bogus
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_random1024_may_not_borrow_a_subset_identity(launcher):
+    """The pins-as-fiction finding, closed.
+
+    Measurement 1 declared the exact4 pins while driving sglang's random
+    1024/1024 shape, because the gate could not be satisfied otherwise. A gate
+    satisfiable only by a false declaration manufactures false provenance.
+    """
+    out = _run_workload_gate(
+        launcher, "random1024_calibration",
+        _subset_ids("subset_b4_four.json"), WORKLOADS["exact4"][1],
+    )
+    assert out.returncode == 2
+    assert "TIERB_WORKLOAD=random1024_calibration" in out.stderr
+    # ... and declared honestly it passes, naming itself as no subset
+    out = _run_workload_gate(launcher, "random1024_calibration", "", "")
+    assert out.returncode == 0, out.stderr
+    assert "no SWE subset" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_each_subset_row_is_bound_to_the_file_it_names(launcher):
+    """The table cannot drift from config/ the way site 14's drifted."""
+    text = launcher.read_text()
+    for name, (_count, sha) in (
+        ("subset_b4_four.json", WORKLOADS["exact4"]),
+        ("subset_b4_sixteen.json", WORKLOADS["exact16"]),
+    ):
+        assert f"config/fr13_fixed32/{name}" in text
+        import hashlib
+
+        on_disk = hashlib.sha256(
+            (REPO / "config/fr13_fixed32" / name).read_bytes()
+        ).hexdigest()
+        assert on_disk == sha, f"{name} no longer hashes to the pinned {sha}"
+    assert 'sha256sum "$_fr13_tierb_subset_file"' in text, (
+        "the table names its subset files but never re-hashes them, so it can "
+        "drift from config/ exactly as the floor table drifted from the ledger"
+    )
+
+
+def test_the_container_side_table_agrees_with_the_launchers():
+    """Two halves, one workload. A serve whose halves disagree is mislabelled."""
+    namespace = _selectors()
+    table = namespace["_FR13_FA2_QROW32_B1_TIER_B_WORKLOADS"]
+    assert set(table) == set(WORKLOADS)
+    assert namespace["_FR13_FA2_QROW32_B1_TIER_B_DEFAULT_WORKLOAD"] == "exact4"
+    for workload, (count, sha) in WORKLOADS.items():
+        ids, got_sha = table[workload]
+        assert got_sha == sha, workload
+        assert len([t for t in ids.split(",") if t]) == count, workload
+    for launcher in LAUNCHERS:
+        text = launcher.read_text()
+        for workload, (_count, sha) in WORKLOADS.items():
+            assert workload in text
+            if sha:
+                assert sha in text
+
+
+def test_the_container_side_records_and_cross_checks_the_workload(monkeypatch):
+    namespace = _selectors()
+    resolve = namespace["_fr13_fa2_qrow32_b1_tier_b_workload"]
+    ids16 = _subset_ids("subset_b4_sixteen.json")
+
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_TIERB_WORKLOAD", "exact16")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_EXACT4_TASK_IDS", ids16)
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256", WORKLOADS["exact16"][1]
+    )
+    record = resolve()
+    assert record["declared"] == "exact16"
+    assert record["task_count"] == 16
+    assert record["is_swe_subset"] is True
+
+    # the cross-check: name one workload, carry another's pins
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_TIERB_WORKLOAD", "exact4")
+    with pytest.raises(RuntimeError, match="declares workload 'exact4'"):
+        resolve()
+
+    # and the honest synthetic row
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_TIERB_WORKLOAD", "random1024_calibration"
+    )
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_EXACT4_TASK_IDS", "")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256", "")
+    record = resolve()
+    assert record["is_swe_subset"] is False and record["task_count"] == 0
+
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_TIERB_WORKLOAD", "exact8")
+    with pytest.raises(RuntimeError, match="must be one of"):
+        resolve()
+
+
+def test_the_serve_record_carries_the_workload():
+    """The declared workload is recorded as THE workload of the serve."""
+    source = PATCHER.read_text()
+    assert '"tier_b_workload": (' in source
+    assert "_fr13_fa2_qrow32_b1_tier_b_workload() if tier_b else None" in source
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_legacy_spelling_still_works_alone(launcher):
+    """Banked vehicles set FR13_FA2_QROW32_B1_EXACT4_*; they keep working."""
+    out = _run_workload_gate(
+        launcher, "exact4", _subset_ids("subset_b4_four.json"),
+        WORKLOADS["exact4"][1], spelling="legacy",
+    )
+    assert out.returncode == 0, out.stderr
+    assert "workload=exact4" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_two_spellings_must_agree_when_both_are_set(launcher):
+    """The operator mistake the rename exists to name.
+
+    Declaring exact16 in the new spelling while the legacy variable still
+    holds the four exact4 ids is exactly what a copied boot script produces.
+    Before the rename it refused with a message about ids that said nothing
+    about the naming; now it says which two variables disagree.
+    """
+    out = _run_workload_gate(
+        launcher, "exact16", _subset_ids("subset_b4_sixteen.json"),
+        WORKLOADS["exact16"][1],
+        legacy=(_subset_ids("subset_b4_four.json"), WORKLOADS["exact4"][1]),
+    )
+    assert out.returncode == 2
+    assert "are both set and disagree" in out.stderr
+    assert "FR13_FA2_QROW32_B1_TIERB_TASK_IDS" in out.stderr
+    assert "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS" in out.stderr
+
+    # agreeing duplicates are fine -- a vehicle that sets both correctly boots
+    ids4 = _subset_ids("subset_b4_four.json")
+    out = _run_workload_gate(
+        launcher, "exact4", ids4, WORKLOADS["exact4"][1],
+        legacy=(ids4, WORKLOADS["exact4"][1]),
+    )
+    assert out.returncode == 0, out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_tierb_gate_no_longer_reads_the_exact4_names_directly(launcher):
+    """The self-contradiction is gone from the predicate itself."""
+    text = launcher.read_text()
+    start = text.index("  # SPELLING (runner's dry-read")
+    end = text.index("<none: synthetic shape", start)
+    gate = text[start:end]
+    predicate = gate[gate.index("_fr13_b1_tierb_workload_pins"):]
+    assert "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS" not in predicate, (
+        "the workload-keyed predicate still reads a variable named exact4"
+    )
+    assert '"$_fr13_tierb_declared_ids" == "$_fr13_tierb_task_ids"' in predicate
+
+
+def test_the_container_side_alias_refuses_a_disagreement(monkeypatch):
+    namespace = _selectors()
+    resolve = namespace["_fr13_fa2_qrow32_b1_tier_b_workload"]
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_TIERB_WORKLOAD", "exact16")
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_TIERB_TASK_IDS", _subset_ids("subset_b4_sixteen.json")
+    )
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256", WORKLOADS["exact16"][1]
+    )
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS", _subset_ids("subset_b4_four.json")
+    )
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256", WORKLOADS["exact4"][1]
+    )
+    with pytest.raises(RuntimeError, match="are both set and disagree"):
+        resolve()
+
+    # legacy alone still resolves, for banked vehicles
+    monkeypatch.delenv("FR13_FA2_QROW32_B1_TIERB_TASK_IDS")
+    monkeypatch.delenv("FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_TIERB_WORKLOAD", "exact4")
+    assert resolve()["declared"] == "exact4"

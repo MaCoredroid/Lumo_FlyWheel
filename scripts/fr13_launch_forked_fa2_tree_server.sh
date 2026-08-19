@@ -180,6 +180,9 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON
   FR13_FA2_QROW32_B1_EXACT4_TASK_IDS
   FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256
+  FR13_FA2_QROW32_B1_TIERB_WORKLOAD
+  FR13_FA2_QROW32_B1_TIERB_TASK_IDS
+  FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256
   FR13_FA2_QROW32_B1_SO_SHA256
   FR13_FA2_QROW32_B1_SO_SIZE
   FR13_FA2_QROW32_B1_FA2_HEAD
@@ -954,6 +957,68 @@ FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL
 FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL:-}
 FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256:-}
 FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256=${FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256:-}
+FR13_FA2_QROW32_B1_TIERB_TASK_IDS=${FR13_FA2_QROW32_B1_TIERB_TASK_IDS:-}
+FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=${FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256:-}
+
+# ---------------------------------------- tier-B CANONICAL WORKLOAD IDENTITY
+# Pass 74 ruled that a tier-B serve carries the canonical campaign identity
+# like any other campaign serve, and the gate below encoded that as the exact4
+# pins, hard-coded. exact16 cannot be declared at all, so the QC that is meant
+# to verify the split-K promotion is blocked by the promotion's own gate.
+#
+# EXTENDED, NOT BYPASSED. The identity is still mandatory and still exact; what
+# changes is that there is now more than one canonical workload and the caller
+# must NAME the one it is running. Default stays exact4, so every existing
+# caller keeps its exact previous meaning.
+#
+# The third row is the one that matters most. Measurement 1 drives sglang's
+# random-1024/1024 bs=1 shape and declares the exact4 pins to get past this
+# gate (results/fr14_nvfp4_port_20260816/sglang_calibration/ours_random_bench_boot.sh
+# lines 79-80). Those pins are FICTION there: no SWE task in that run. A gate
+# that can only be satisfied by a false declaration manufactures false
+# provenance, so random1024_calibration is admitted as itself and REQUIRES the
+# subset pins to be EMPTY -- it is not a subset run, and saying so is the
+# whole point.
+#
+# Each subset row is bound to the file it names, so this table cannot drift
+# from config/ the way the floor table drifted from the ledger (site 14).
+_FR13_B1_TIERB_WORKLOADS="exact4 exact16 random1024_calibration"
+FR13_FA2_QROW32_B1_TIERB_WORKLOAD=${FR13_FA2_QROW32_B1_TIERB_WORKLOAD:-exact4}
+_fr13_b1_tierb_workload_pins() {
+  local workload=$1
+  case "$workload" in
+    exact4)
+      _fr13_tierb_task_ids="astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398"
+      _fr13_tierb_subset_sha256="0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+      _fr13_tierb_subset_file="config/fr13_fixed32/subset_b4_four.json"
+      ;;
+    exact16)
+      _fr13_tierb_task_ids="astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995"
+      _fr13_tierb_subset_sha256="47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"
+      _fr13_tierb_subset_file="config/fr13_fixed32/subset_b4_sixteen.json"
+      ;;
+    random1024_calibration)
+      # Synthetic prompt shape, not a SWE subset. The launcher cannot verify
+      # the shape (an external bench drives it), so what it enforces is that
+      # no SWE identity is CLAIMED for it.
+      _fr13_tierb_task_ids=""
+      _fr13_tierb_subset_sha256=""
+      _fr13_tierb_subset_file=""
+      ;;
+    *)
+      echo "FR13_FA2_QROW32_B1_TIERB_WORKLOAD must be one of: $_FR13_B1_TIERB_WORKLOADS; got: ${workload:-<empty>}" >&2
+      return 1
+      ;;
+  esac
+  [[ -z "$_fr13_tierb_subset_file" ]] || {
+    [[ -f "$_fr13_tierb_subset_file" \
+       && "$(sha256sum "$_fr13_tierb_subset_file" | cut -d' ' -f1)" == "$_fr13_tierb_subset_sha256" ]] || {
+      echo "FR13 tier-b workload $workload names $_fr13_tierb_subset_file but that file is missing or does not hash to $_fr13_tierb_subset_sha256" >&2
+      return 1
+    }
+  }
+  return 0
+}
 FR13_FA2_QROW32_B1_SO_SHA256=${FR13_FA2_QROW32_B1_SO_SHA256:-}
 FR13_FA2_QROW32_B1_SO_SIZE=${FR13_FA2_QROW32_B1_SO_SIZE:-}
 FR13_FA2_QROW32_B1_FA2_HEAD=${FR13_FA2_QROW32_B1_FA2_HEAD:-}
@@ -2504,14 +2569,50 @@ if [[ -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then
   # that differs is the qualifying evidence -- a Tier-B credential instead of a
   # byte gate -- which is verified in the container, tied to the attestation
   # export.
+  # SPELLING (runner's dry-read, before this ever booted). The workload-keyed
+  # gate below used to read FR13_FA2_QROW32_B1_EXACT4_*, so under
+  # TIERB_WORKLOAD=exact16 the variable named EXACT4 had to contain SIXTEEN
+  # ids -- correct, self-contradictory to read, and the obvious operator
+  # mistake (leaving the four exact4 ids in a variable named exact4) refused
+  # with a message about ids that said nothing about the naming.
+  #
+  # The tier-B route now has its own spelling. The old one is still accepted
+  # because banked vehicles set it (promotion_ab_arm*.sh, the k0 live gate
+  # runner, the gqa-pair timing runner), and the production and live-A/B gates
+  # still read it on their own account -- this alias is tier-B only.
+  #
+  # When BOTH are present they must AGREE. An alias that silently prefers one
+  # spelling is a second way to declare a workload, and two declarations that
+  # can disagree is the shape of every mislabelled artifact in this campaign.
+  if [[ -n "$FR13_FA2_QROW32_B1_TIERB_TASK_IDS" \
+        && -n "$FR13_FA2_QROW32_B1_EXACT4_TASK_IDS" \
+        && "$FR13_FA2_QROW32_B1_TIERB_TASK_IDS" != "$FR13_FA2_QROW32_B1_EXACT4_TASK_IDS" ]]; then
+    echo "FR13 qrow32 B1 tier-b serve: FR13_FA2_QROW32_B1_TIERB_TASK_IDS and the legacy" \
+         "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS are both set and disagree; set one" >&2
+    exit 2
+  fi
+  if [[ -n "$FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256" \
+        && -n "$FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256" \
+        && "$FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256" != "$FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256" ]]; then
+    echo "FR13 qrow32 B1 tier-b serve: FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256 and the legacy" \
+         "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256 are both set and disagree; set one" >&2
+    exit 2
+  fi
+  _fr13_tierb_declared_ids=${FR13_FA2_QROW32_B1_TIERB_TASK_IDS:-$FR13_FA2_QROW32_B1_EXACT4_TASK_IDS}
+  _fr13_tierb_declared_sha=${FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256:-$FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256}
+  _fr13_b1_tierb_workload_pins "$FR13_FA2_QROW32_B1_TIERB_WORKLOAD" || exit 2
   [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
      && "${ENFORCE_EAGER:-0}" == "0" \
      && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" \
-     && "$FR13_FA2_QROW32_B1_EXACT4_TASK_IDS" == "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398" \
-     && "$FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256" == "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5" ]] || {
-    echo "FR13 qrow32 B1 tier-b serve requires the canonical exact4 FULL-graph identity" >&2
+     && "$_fr13_tierb_declared_ids" == "$_fr13_tierb_task_ids" \
+     && "$_fr13_tierb_declared_sha" == "$_fr13_tierb_subset_sha256" ]] || {
+    echo "FR13 qrow32 B1 tier-b serve requires the FULL-graph identity of its DECLARED workload" \
+         "FR13_FA2_QROW32_B1_TIERB_WORKLOAD=$FR13_FA2_QROW32_B1_TIERB_WORKLOAD" \
+         "(expected task ids '$_fr13_tierb_task_ids' sha '$_fr13_tierb_subset_sha256')" >&2
     exit 2
   }
+  echo "[fr13] B1 tier-b serve workload=$FR13_FA2_QROW32_B1_TIERB_WORKLOAD" \
+       "subset=${_fr13_tierb_subset_file:-<none: synthetic shape, no SWE subset>}" >&2
   # THE CREDENTIAL PATH, SETTLED BY MEASUREMENT (2026-08-19). The host check
   # below and the in-container verify-tier-b consume the same file from two
   # different filesystems. Measured with the launcher's own mounts: the repo is
@@ -6986,6 +7087,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON="$FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON" \
   -e FR13_FA2_QROW32_B1_EXACT4_TASK_IDS="$FR13_FA2_QROW32_B1_EXACT4_TASK_IDS" \
   -e FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256="$FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256" \
+  -e FR13_FA2_QROW32_B1_TIERB_WORKLOAD="$FR13_FA2_QROW32_B1_TIERB_WORKLOAD" \
+  -e FR13_FA2_QROW32_B1_TIERB_TASK_IDS="$FR13_FA2_QROW32_B1_TIERB_TASK_IDS" \
+  -e FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256="$FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256" \
   -e FR13_FA2_QROW32_B1_SO_SHA256="$FR13_FA2_QROW32_B1_SO_SHA256" \
   -e FR13_FA2_QROW32_B1_SO_SIZE="$FR13_FA2_QROW32_B1_SO_SIZE" \
   -e FR13_FA2_QROW32_B1_FA2_HEAD="$FR13_FA2_QROW32_B1_FA2_HEAD" \

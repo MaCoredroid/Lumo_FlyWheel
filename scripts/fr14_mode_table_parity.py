@@ -115,6 +115,22 @@ FAMILY_PARITY_MARKERS = (
     # the calls above would expand to the empty string and refuse everything.
     "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE:-k64_root}",
     "FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE:-k64_root}",
+    # The tier-B canonical WORKLOAD table. exact16 is the QC that verifies the
+    # split-K promotion, and until this table existed the promotion's own gate
+    # could not admit it. Keyed on the resolver's call and on each row's name,
+    # not on the pins -- the pins are what the rows differ BY.
+    '_fr13_b1_tierb_workload_pins "$FR13_FA2_QROW32_B1_TIERB_WORKLOAD" || exit 2',
+    "FR13_FA2_QROW32_B1_TIERB_WORKLOAD=${FR13_FA2_QROW32_B1_TIERB_WORKLOAD:-exact4}",
+    "_FR13_B1_TIERB_WORKLOADS=\"exact4 exact16 random1024_calibration\"",
+    "config/fr13_fixed32/subset_b4_sixteen.json",
+    "config/fr13_fixed32/subset_b4_four.json",
+    # The tier-B spelling and its refusing alias. The alias is the load-bearing
+    # half: it is what lets a banked vehicle keep the legacy name while making
+    # a boot that carries BOTH and disagrees refuse instead of picking one.
+    "FR13_FA2_QROW32_B1_TIERB_TASK_IDS=${FR13_FA2_QROW32_B1_TIERB_TASK_IDS:-}",
+    "FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=${FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256:-}",
+    "are both set and disagree; set one",
+    '"$_fr13_tierb_declared_ids" == "$_fr13_tierb_task_ids"',
 )
 
 

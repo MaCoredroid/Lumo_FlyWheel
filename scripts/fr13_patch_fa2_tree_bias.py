@@ -6058,6 +6058,94 @@ def _fr13_fa2_qrow32_b1_digest(env_name, label, *, length=64):
 # credential bound to its exact binary, source closure, SASS digests, HEAD and
 # patcher.
 _FR13_FA2_QROW32_B1_TIER_B_ARMS = ("gqa_pair_splitk",)
+
+# ---------------------------------------- tier-B CANONICAL WORKLOAD IDENTITY
+#
+# The launcher gate ruled at pass 74 admitted exactly one canonical workload,
+# hard-coded: the exact4 pins. exact16 -- the QC that verifies the split-K
+# promotion -- could not be DECLARED, so the promotion's own gate blocked its
+# verification.
+#
+# This is the container-side half of the keyed table the launcher now carries.
+# Duplicated deliberately, like _FR13_FA2_QROW32_B1_TIER_B_ARMS is: the host
+# decides whether to boot, this decides what the RECORD says ran, and a serve
+# whose two halves disagree about its own workload is exactly the mislabelled
+# artifact this campaign keeps finding.
+#
+# random1024_calibration carries NO subset. Measurement 1 drives sglang's
+# random-1024/1024 shape and declared the exact4 pins to satisfy the old gate;
+# those pins were fiction, and a gate satisfiable only by a false declaration
+# manufactures false provenance. Here the empty pins are the correct answer
+# and any non-empty pin under that workload is a refusal.
+_FR13_FA2_QROW32_B1_TIER_B_WORKLOADS = {
+    "exact4": (
+        "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398",
+        "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5",
+    ),
+    "exact16": (
+        "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995",
+        "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c",
+    ),
+    "random1024_calibration": ("", ""),
+}
+_FR13_FA2_QROW32_B1_TIER_B_DEFAULT_WORKLOAD = "exact4"
+
+
+def _fr13_fa2_qrow32_b1_tier_b_workload():
+    """The DECLARED workload, cross-checked against the pins that arrived.
+
+    Returns the record fragment. Refuses rather than defaulting when the two
+    disagree: an artifact that names exact16 while carrying exact4's subset
+    digest is worse than no artifact, because it reads as evidence.
+    """
+    declared = os.environ.get(
+        "FR13_FA2_QROW32_B1_TIERB_WORKLOAD",
+        _FR13_FA2_QROW32_B1_TIER_B_DEFAULT_WORKLOAD,
+    ) or _FR13_FA2_QROW32_B1_TIER_B_DEFAULT_WORKLOAD
+    if declared not in _FR13_FA2_QROW32_B1_TIER_B_WORKLOADS:
+        raise RuntimeError(
+            "FR13_FA2_QROW32_B1_TIERB_WORKLOAD must be one of "
+            f"{', '.join(sorted(_FR13_FA2_QROW32_B1_TIER_B_WORKLOADS))}; "
+            f"got {declared!r}"
+        )
+    expected_ids, expected_sha = _FR13_FA2_QROW32_B1_TIER_B_WORKLOADS[declared]
+    # SPELLING: the tier-B route has its own names. The legacy EXACT4_* pair
+    # is still read because banked vehicles set it, and the two must AGREE
+    # when both are present -- an alias that silently prefers one spelling is
+    # a second way to declare a workload.
+    got_ids, got_sha = "", ""
+    for new_name, old_name in (
+        ("FR13_FA2_QROW32_B1_TIERB_TASK_IDS",
+         "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS"),
+        ("FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256",
+         "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256"),
+    ):
+        fresh = os.environ.get(new_name, "")
+        legacy = os.environ.get(old_name, "")
+        if fresh and legacy and fresh != legacy:
+            raise RuntimeError(
+                f"{new_name} and the legacy {old_name} are both set and "
+                f"disagree ({fresh!r} vs {legacy!r}); set one"
+            )
+        resolved = fresh or legacy
+        if new_name.endswith("TASK_IDS"):
+            got_ids = resolved
+        else:
+            got_sha = resolved
+    if (got_ids, got_sha) != (expected_ids, expected_sha):
+        raise RuntimeError(
+            f"FR13 qrow32 B1 tier-b serve declares workload {declared!r} but "
+            f"carries task ids {got_ids!r} / subset sha {got_sha!r}; the "
+            f"declared workload requires {expected_ids!r} / {expected_sha!r}"
+        )
+    return {
+        "declared": declared,
+        "task_ids": [t for t in expected_ids.split(",") if t],
+        "task_count": len([t for t in expected_ids.split(",") if t]),
+        "subset_sha256": expected_sha,
+        "is_swe_subset": bool(expected_sha),
+    }
+
 _FR13_FA2_QROW32_B1_TIER_B_SCHEMA = "fr13.fixed32.fa2_tierb_qualification.v1"
 _FR13_FA2_QROW32_B1_TIER_B_STATE = {}
 # WHAT ACTUALLY RAN, as opposed to what the environment asked for.
@@ -7020,6 +7108,12 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "candidate_dispatch": config["candidate_dispatch"],
         "tier": "B" if tier_b else "A",
         "tier_b_characterization": tierb_record,
+        # THE WORKLOAD THIS SERVE ACTUALLY RAN, declared and cross-checked.
+        # Recorded for tier-B serves only, where it decides what the artifact
+        # is evidence OF.
+        "tier_b_workload": (
+            _fr13_fa2_qrow32_b1_tier_b_workload() if tier_b else None
+        ),
         # ARMED is what the environment asked for; ENGAGED is what the serving
         # hook actually did. They are reported separately and on purpose,
         # because round 6 had the first without the second and the record said
