@@ -4046,3 +4046,138 @@ which is a weaker binding and should be a ruling rather than a convenience.
 Eighteen sites. Container `adabaea96a6a` preserved. GPU idle, free 105 GiB. No retry.
 Re-seal 2 stands (coupling test green, 218/218 tier-B suite green). H27n baseline and
 standing verdicts unchanged. The promoted split-K default has still never served.
+
+# EXACT16 QC, ATTEMPT 6 (2026-08-19 22:24Z–23:10Z) — IT SERVED. Then task 3 DEGENERATED.
+
+## IT SERVED — the promoted split-K default, for the first time
+
+46 minutes, not 27. `serve_rc=1`, `swerc=1`. **This was not a mid-drain death**: the arm
+ran two tasks to verdict, and terminated on task 3.
+
+ENGAGEMENT, observed at the retag rather than read from env:
+
+```
+status = ENGAGED                     candidate_served = True
+tier_b_engagement.candidate_retag_calls = 16     layers_engaged = 16
+candidate_so_sha256 = 28570f83...    candidate_so_size = 300123792
+selector_sentinel = 1179791671       num_splits = 4
+dispatch = "qrow32 B1 GQA-pair split-K exact geometry; no fallback"
+workload = exact16   subset_sha256 = 47b0a3c9...   task_ids: n=16
+qualification_profile = full_vocab   draft_vocab_k = 0   draft_vocab_root = 0
+```
+
+All three post-boot asserts PASS, including `commit_binding = recorded`: the credential
+was sealed at `e00c805ad` and the serve ran at `78a29d339` — **they differ and it was
+accepted**, which is the pass-131 ruling working end to end.
+
+## THE VERDICTS, AGAINST THE PRE-REGISTERED COMPARATOR
+
+Comparator is this port's banked exact4 run (H27n: incumbent qrow16, stock FA2,
+topk 0, gate off, PREP_BAKE 0), which drained 4/4 at `swerc=0`.
+
+| task | H27n (incumbent) | attempt 6 (promoted split-K) | |
+|---|---|---|---|
+| 12907 | **resolved** 410.0s 504B | **resolved** 291.4s **504B** | PARITY, byte-identical patch |
+| 13033 | **failed** 1548.8s 1327B | **failed** 791.9s 1092B | PARITY on verdict |
+| 13236 | failed 5436.4s **2379B** | **DEGENERATED** 1234.5s **0B** | **REGRESSION** |
+| 13398 | failed 8992.6s 547B | not reached | — |
+
+Two tasks completed and **both match the comparator's verdict**. 12907's patch is
+byte-identical at 504B and it resolved in 71% of the incumbent's time.
+
+## WHY IT STOPPED — a degeneration, and the validator was right to refuse
+
+```
+Fixed32BoundaryError: fixed32 real-task provenance astropy__astropy-13236: trace cannot
+independently count completed model requests: 32768/20000 max-token algebra does not
+reconcile: trace normal=1 + le_20000_compactions=0 against engine completed=2;
+max_tokens_sum=65536 against expected 32768, a shortfall of 32768
+```
+
+The validator could not reconcile the trace because **the task really did make two
+capped requests**. The cause is in the generation, not the harness:
+
+    13236: turns=1  words=4199  tools=0  patch=0B  tailrep=0.538
+           output_tokens=33313 against a 32768 cap   duration=20.6 minutes
+           content = ONE block, type "thinking"      stop_reason = None
+
+**33,313 output tokens, one turn, zero tool calls, twenty-six minutes, no patch.** The
+model never left the thinking block. It begins coherently:
+
+> Let's start by reading the task prompt and understanding what needs to be done.
+> Task: astropy issue #13236 - "Consider removing auto-transform of structured columns
+> into NdarrayMixin" ... Wait, but this is a SWE-bench task. The version is 5.0.
+
+and ends in a runaway arithmetic enumeration of **fabricated instance ids**, incrementing
+by five until the cap truncated it mid-token:
+
+> ...astropy__astropy-26882, astropy__astropy-26887, astropy__astropy-26892,
+> astropy__astropy-26897, astropy__astropy-26902, astropy__astropy-26907,
+> astropy__astropy-26912, astropy__astropy-26917, astropy__astropy-26922,
+> astropy__astropy-26927, astropy__astropy-26932, astropy__astropy-2
+
+That is a degeneration signature by any reading, on **the exact task round 6 made a
+release question**. Under Mark's standing condition this arm's case STOPS here and is
+reported rather than continued.
+
+## EYEBALL, ALL THREE
+
+    12907   turns=44  ttr=0.354  maxline= 8  8gram= 3  tailrep=0.000  tools=16  malformed=0   CLEAN
+    13033   turns=59  ttr=0.193  maxline=47  8gram=22  tailrep=0.385  tools=24  malformed=0   ELEVATED
+    13236   turns= 1  ttr=0.729  maxline= 6  8gram= 4  tailrep=0.538  tools= 0  malformed=0   DEGENERATE
+
+No malformed tool calls and no non-ASCII anywhere. 12907 is as clean as round 12's
+split-K trace. 13033's `ttr=0.193` with 47 repeated lines is elevated but it still drove
+24 tool calls to a verdict.
+
+## ATTRIBUTION — NOT ESTABLISHED, AND I WILL NOT CLAIM IT
+
+The comparator shows 13236 *failing but functioning* under the incumbent (90 minutes,
+2379B patch) and *degenerating* here. That is a real behavioural difference against the
+banked run. But the promoted stack differs from H27n in at least three levers —
+split-K kernel, fused draft top-k (promoted ON vs 0), and HOST_TAIL_PREP_BAKE (1 vs 0) —
+so **n=1 cannot attribute it to split-K.** Settling it needs 13236 re-run with the
+levers separated.
+
+## THE LADDER — first real data, and INADMISSIBLE under its own pre-registered rule
+
+Seven sidecars were written. The final one (hydra27, the promoted topology):
+
+    ladder = [410, 1029, 1583, 1495, 1234, 2798, 398, 376, 319, 171, 101, 1006, 0,0,0,0]
+    rows = 10920   accepted_tokens = 48793   overflow_rows = 0
+
+Internally self-consistent (rows and tokens both recompute exactly). But against the
+aggregate it fails the pre-registered self-proof:
+
+    ladder rows   10920  vs  spec_decode_num_drafts_total          10916   (+4)
+    ladder tokens 48793  vs  spec_decode_num_accepted_tokens_total 48732   (+61)
+
+**The harness refused it, which is what it was sealed to do.** I am not reporting ladder
+numbers as evidence.
+
+DIAGNOSIS, offered as hypothesis not conclusion: the ladder accumulates from engine
+warmup while the aggregate is a delta over the bracket window. Generation 1's sidecar
+recorded exactly `rows=4, tokens=0` — which is precisely the +4 row discrepancy. The
+census independently counted 10917. Three counters within 4 rows of each other is window
+misalignment, not a counter bug. What would settle it: a sidecar drained at the same
+instant as the aggregate scrape, or an aggregate taken over the ladder's whole lifetime.
+
+Worth noting for the tail10 case even though it cannot be cited as a measurement:
+hydra27's ladder is non-zero at **every** position through 11 and zero from 12 up, and
+11 is exactly `walk_cap - 1`. The distribution has a second spike at its own ceiling
+(1006 rows at position 11).
+
+## VEHICLE NOTE — evidence was NOT lost this time
+
+The container did auto-remove on exit, but nothing was lost: the runroot kept the full
+111-line runlog with the fatal error, all three traces, seven ladder sidecars, the
+engagement record, the census (10,917 rows) and three post-brackets. The round-20
+40-line-window gap did not recur. A post-mortem container copy is still worth having for
+deaths that happen *before* the runroot is populated, but this death was fully
+reconstructable without it.
+
+## STATUS
+
+Attempt 6 SERVED and produced real evidence. Two tasks at verdict parity with the
+comparator; the third degenerated and stopped the case per Mark's condition. Sixteen of
+sixteen not attempted. `containers=0`, GPU idle, free 105 GiB.
