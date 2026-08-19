@@ -84,7 +84,18 @@ FP8_UTILS_PATH = Path(
 )
 
 
-_FR13_FIXED32_CHOICES: tuple[tuple[int, ...], ...] = (
+# TOPOLOGY PROFILES. Round 17: this patcher BAKES the tree into the drafter
+# source it emits -- the three injection sites that assign _ltree_src /
+# _fr10_tree_src / spec_token_tree OVERWRITE whatever tree the server was
+# configured with and then compare the parse against the same baked literal.
+# That self-comparison cannot fail, so before this change a hydra31 arm would
+# have booted a drafter built from hydra27's 31 paths: same width, same (4, 6)
+# branch pairs, mask and active-count checks all satisfied, and the serve would
+# have produced numbers that read as a tail10 result. The tree is therefore
+# keyed on the served mode, and _fr13_fixed32_validate_patch_env binds the
+# constructed tree to the profile's pinned ancestry digest before any source is
+# emitted -- an independent authority, not a literal compared with itself.
+_FR13_HYDRA27_CHOICES: tuple[tuple[int, ...], ...] = (
     (0,),
     (1,),
     (2,),
@@ -117,7 +128,7 @@ _FR13_FIXED32_CHOICES: tuple[tuple[int, ...], ...] = (
     (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
     (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
 )
-_FR13_FIXED32_PARENT = (
+_FR13_HYDRA27_PARENT = (
     -1,
     0,
     0,
@@ -151,6 +162,73 @@ _FR13_FIXED32_PARENT = (
     29,
     30,
 )
+_FR13_HYDRA31_CHOICES: tuple[tuple[int, ...], ...] = (
+    (0,),
+    (1,),
+    (2,),
+    (0, 0),
+    (0, 1),
+    (0, 2),
+    (1, 0),
+    (2, 0),
+    (0, 0, 0),
+    (0, 0, 1),
+    (0, 0, 2),
+    (1, 0, 0),
+    (2, 0, 0),
+    (0, 0, 0, 0),
+    (0, 0, 0, 1),
+    (0, 0, 0, 2),
+    (1, 0, 0, 0),
+    (0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 1),
+    (0, 0, 0, 0, 2),
+    (1, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+)
+_FR13_HYDRA31_PARENT = (
+    -1,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    2,
+    3,
+    4,
+    4,
+    4,
+    7,
+    8,
+    9,
+    9,
+    9,
+    12,
+    14,
+    14,
+    14,
+    17,
+    18,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+)
 _FR13_FIXED32_MODES = {
     "tail6_fixed32": (0x7A9CE7FF, 23),
     "hydra27_fixed32": (0x7ABDFFFF, 27),
@@ -163,6 +241,51 @@ _FR13_FIXED32_MODES = {
     "hydra31_fixed32": (0x7FFFFFFF, 31),
 }
 _FR13_FIXED32_MODE = os.environ.get("FR13_FIXED32_MODE", "").strip()
+
+# The served profile decides the baked tree. tail6_fixed32 dispatches hydra27's
+# 31 physical paths under a narrower sampler mask, and an unset mode is the
+# non-fixed32 path, so both bind hydra27 exactly as before this change. Kept in
+# sync with fr13_fixed32_contract.TREE_PROFILE_BY_MODE by the signature lint.
+_FR13_FIXED32_TREE_PROFILE_BY_MODE = {
+    "": "hydra27_fixed32",
+    "tail6_fixed32": "hydra27_fixed32",
+    "hydra27_fixed32": "hydra27_fixed32",
+    "hydra31_fixed32": "hydra31_fixed32",
+}
+# (choices, parent, walk cap, ancestry sha256, parent sha256) per profile.
+# The digests are fr13_fixed32_topology's TREE_ANCESTRY_SHA256 /
+# PHYSICAL_PARENT_SHA256; they are what makes a wrong-tree drafter refuse
+# instead of serve, so they are pinned here rather than recomputed from the
+# same literal they are meant to police.
+_FR13_FIXED32_TREE_PROFILES = {
+    "hydra27_fixed32": (
+        _FR13_HYDRA27_CHOICES,
+        _FR13_HYDRA27_PARENT,
+        12,
+        "90873d81e83ce1644ee4701e043b7e9d26e83b7a7ca752d538a0e6eed1946dad",
+        "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd",
+    ),
+    "hydra31_fixed32": (
+        _FR13_HYDRA31_CHOICES,
+        _FR13_HYDRA31_PARENT,
+        16,
+        "5b33c46a258678efb6ffe5afd34556b1d0d1f37ed70d8c10bd39c8bbe187b427",
+        "101c590e580e122d14e29745d030f2783a6475a252033bb89a84cbf1b3e698e2",
+    ),
+}
+_FR13_FIXED32_TREE_PROFILE = _FR13_FIXED32_TREE_PROFILES.get(
+    _FR13_FIXED32_TREE_PROFILE_BY_MODE.get(
+        _FR13_FIXED32_MODE, "hydra27_fixed32"
+    ),
+    _FR13_FIXED32_TREE_PROFILES["hydra27_fixed32"],
+)
+(
+    _FR13_FIXED32_CHOICES,
+    _FR13_FIXED32_PARENT,
+    _FR13_FIXED32_WALK_CAP,
+    _FR13_FIXED32_TREE_ANCESTRY_SHA256,
+    _FR13_FIXED32_PHYSICAL_PARENT_SHA256,
+) = _FR13_FIXED32_TREE_PROFILE
 _FR13_FIXED32_GDN_PATH_BV_CANDIDATE = os.environ.get(
     "FR13_FIXED32_GDN_PATH_BV_CANDIDATE", ""
 ).strip()
@@ -9510,6 +9633,74 @@ def _fr13_fixed32_require_sfwd_conv_postprep_pass() -> dict[str, object]:
     return dict(payload)
 
 
+def _fr13_fixed32_canonical_sha256(value: object) -> str:
+    """Byte-for-byte the digest fr13_fixed32_topology pins."""
+    payload = json.dumps(
+        value,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _fr13_fixed32_ancestor_matrix(
+    parent: tuple[int, ...],
+) -> tuple[tuple[int, ...], ...]:
+    rows = []
+    for node in range(len(parent)):
+        visible = [0] * len(parent)
+        cursor = node
+        while cursor >= 0:
+            visible[cursor] = 1
+            cursor = parent[cursor]
+        rows.append(tuple(visible))
+    return tuple(rows)
+
+
+def _fr13_fixed32_bind_tree_to_profile(
+    mode: str,
+    parent: tuple[int, ...],
+) -> str:
+    """THE OBSERVABLE BINDING: refuse a drafter built from the wrong tree.
+
+    Every shape check this patcher already performs is satisfied by BOTH
+    profiles -- 31 physical drafts, a 32-entry parent vector, (4, 6) branch
+    chains -- and the three tree bake sites compare the parse against the same
+    literal they just assigned, so nothing downstream can tell hydra27's tree
+    from hydra31's. Only the ANCESTRY distinguishes them: which rows each row
+    can see. So the tree actually constructed here is reduced to its ancestry
+    digest and compared against the digest the profile pins independently
+    (hydra27 90873d81..., hydra31 5b33c46a...). A wrong-tree drafter refuses at
+    boot instead of serving numbers that would read as a tail10 result.
+    """
+    profile = _FR13_FIXED32_TREE_PROFILE_BY_MODE.get(mode)
+    if profile is None:
+        raise RuntimeError(
+            f"fixed32 mode {mode!r} has no tree profile; known modes: "
+            + repr(sorted(_FR13_FIXED32_TREE_PROFILE_BY_MODE))
+        )
+    _, _, _, expected_ancestry, expected_parent_digest = (
+        _FR13_FIXED32_TREE_PROFILES[profile]
+    )
+    parent_digest = _fr13_fixed32_canonical_sha256(list(parent))
+    ancestry_digest = _fr13_fixed32_canonical_sha256(
+        [list(row) for row in _fr13_fixed32_ancestor_matrix(parent)]
+    )
+    if parent_digest != expected_parent_digest:
+        raise RuntimeError(
+            "fixed32 drafter tree is not the served profile's: "
+            f"mode={mode or '(unset)'} profile={profile} "
+            f"parent={parent_digest} expected={expected_parent_digest}"
+        )
+    if ancestry_digest != expected_ancestry:
+        raise RuntimeError(
+            "fixed32 drafter tree ancestry is not the served profile's: "
+            f"mode={mode or '(unset)'} profile={profile} "
+            f"ancestry={ancestry_digest} expected={expected_ancestry}"
+        )
+    return ancestry_digest
+
+
 def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
     """Validate the fixed-work campaign before emitting any runtime source."""
     mode = _FR13_FIXED32_MODE
@@ -10298,8 +10489,17 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         )
     if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "0":
         raise RuntimeError("fixed32 forbids FR10_ALLOW_LINEAR_FALLBACK")
-    if int(os.environ.get("FR13_FIXED32_TAW_WALK_CAP", "0")) != 12:
-        raise RuntimeError("fixed32 requires FR13_FIXED32_TAW_WALK_CAP=12")
+    # The walk cap is the served profile's, not a constant: hydra27 walks 12,
+    # hydra31's spine reaches depth 15 and walks 16. Hardcoding 12 refused the
+    # vehicle's correctly-derived 16, and "fix the literal" alone would have let
+    # the wrong-tree drafter through, which is what the binding below prevents.
+    configured_walk_cap = int(os.environ.get("FR13_FIXED32_TAW_WALK_CAP", "0"))
+    if configured_walk_cap != _FR13_FIXED32_WALK_CAP:
+        raise RuntimeError(
+            "fixed32 requires FR13_FIXED32_TAW_WALK_CAP="
+            f"{_FR13_FIXED32_WALK_CAP} for mode={mode or '(unset)'} "
+            f"(got {configured_walk_cap})"
+        )
     if len(_FR13_FIXED32_CHOICES) != 31:
         raise RuntimeError("fixed32 physical topology must contain 31 drafts")
     index = {choice: i + 1 for i, choice in enumerate(_FR13_FIXED32_CHOICES)}
@@ -10308,6 +10508,7 @@ def _fr13_fixed32_validate_patch_env() -> tuple[int, int] | None:
         parent.append(0 if len(choice) == 1 else index[choice[:-1]])
     if tuple(parent) != _FR13_FIXED32_PARENT:
         raise RuntimeError("fixed32 physical parent vector drifted")
+    _fr13_fixed32_bind_tree_to_profile(mode, tuple(parent))
     return expected_mask, expected_active
 
 

@@ -65,8 +65,11 @@ def test_fixed32_visibility_masks_cover_the_full_physical_tree() -> None:
 def test_visibility_parent_is_bound_to_the_served_physical32_tree() -> None:
     module = _module()
     phase4 = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py")
-    served_parent = tuple(_literal_assignment(phase4, "_FR13_FIXED32_PARENT"))
-    choices = tuple(_literal_assignment(phase4, "_FR13_FIXED32_CHOICES"))
+    # Round 17: the drafter patcher now carries BOTH profiles' trees and binds
+    # one of them to the served mode, so this comparison must name the profile
+    # the FA2 masks were actually built from rather than "the" tree.
+    served_parent = tuple(_literal_assignment(phase4, "_FR13_HYDRA27_PARENT"))
+    choices = tuple(_literal_assignment(phase4, "_FR13_HYDRA27_CHOICES"))
 
     index = {choice: position + 1 for position, choice in enumerate(choices)}
     reconstructed = [-1]
@@ -75,6 +78,24 @@ def test_visibility_parent_is_bound_to_the_served_physical32_tree() -> None:
 
     assert tuple(reconstructed) == served_parent
     assert served_parent == module.FIXED32_PHYSICAL_PARENT
+
+    # ...and it is hydra27's ONLY. _fixed32_visibility_masks() compiles a
+    # 32-entry self-plus-ancestor table into the FA2 CUDA source; 12 of those
+    # entries (rows 18 and 21..31) are wrong for hydra31, whose spine reaches
+    # depth 15. The specialization is unreachable today -- every
+    # fixed32_tree_visibility_mask parameter defaults False and no shell path
+    # arms it -- so the qualified binaries do not carry it. If that changes,
+    # hydra31 needs a rebuilt and re-qualified FA2 before it can serve, and
+    # test_the_fa2_visibility_specialization_stays_dormant is the tripwire.
+    hydra31_parent = tuple(_literal_assignment(phase4, "_FR13_HYDRA31_PARENT"))
+    assert hydra31_parent != served_parent
+    assert module.FIXED32_PHYSICAL_PARENT != hydra31_parent
+    differing = [
+        row
+        for row in range(len(served_parent))
+        if served_parent[row] != hydra31_parent[row]
+    ]
+    assert differing and min(differing) == 18
 
 
 def test_visibility_helper_is_opt_in_and_keeps_dense_fallback() -> None:

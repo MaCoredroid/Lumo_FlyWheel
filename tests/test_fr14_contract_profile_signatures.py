@@ -35,6 +35,7 @@ This module closes discovery as a LIST instead of boot-by-boot:
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import inspect
 import re
@@ -709,3 +710,370 @@ def test_the_known_hydra27_only_list_has_not_gone_stale() -> None:
     blind = call_site_census()
     stale = [k for k in KNOWN_HYDRA27_ONLY_CALL_SITES if k not in blind]
     assert not stale, f"pinned hydra27-only call sites no longer exist: {stale}"
+
+
+# ---------------------------------------------------------------------------
+# 6. ROUND 17 -- THE PATCHERS
+# ---------------------------------------------------------------------------
+# Round 17's site is the drafter patcher, and it is the dangerous one. The
+# patcher BAKES the tree into the drafter source it emits: three injection
+# sites assign the baked literal over whatever tree the server was configured
+# with, then compare the parse against that same literal. A self-comparison
+# cannot fail, so a hydra31 arm would have booted a drafter built from
+# hydra27's 31 paths -- same width, same (4, 6) branch pairs, mask and
+# active-count checks all satisfied -- and served numbers that read as a tail10
+# result. Round-6's configuration-as-observation, at the topology level.
+PATCHER = SCRIPTS / "fr10_phase4_patch_vllm_tree_gdn.py"
+PATCHER_BASELINE_BLOB = "036049d3c54bcec4c0fad3fd0894a1373903aa76"
+
+
+def _load_patcher(mode: str, source: str | None = None) -> types.ModuleType:
+    import os
+
+    saved = os.environ.get("FR13_FIXED32_MODE")
+    os.environ["FR13_FIXED32_MODE"] = mode
+    try:
+        module = types.ModuleType(f"patcher__{mode or 'unset'}")
+        module.__file__ = str(PATCHER)
+        exec(
+            compile(source if source is not None else PATCHER.read_text(),
+                    str(PATCHER), "exec"),
+            module.__dict__,
+        )
+        return module
+    finally:
+        if saved is None:
+            os.environ.pop("FR13_FIXED32_MODE", None)
+        else:
+            os.environ["FR13_FIXED32_MODE"] = saved
+
+
+@pytest.mark.parametrize(
+    "mode,expected",
+    [
+        ("", PROFILE_HYDRA27),
+        ("tail6_fixed32", PROFILE_HYDRA27),
+        (PROFILE_HYDRA27, PROFILE_HYDRA27),
+        (PROFILE_HYDRA31, PROFILE_HYDRA31),
+    ],
+)
+def test_patcher_bakes_the_served_profiles_tree(mode: str, expected: str) -> None:
+    module = _load_patcher(mode)
+    want = topology_profile(expected)
+    assert module._FR13_FIXED32_CHOICES == tuple(want["choices"])
+    assert module._FR13_FIXED32_PARENT == tuple(want["physical_parent"])
+    assert module._FR13_FIXED32_WALK_CAP == want["walk_cap"]
+    assert module._FR13_FIXED32_TREE_ANCESTRY_SHA256 == want["tree_ancestry_sha256"]
+    # the derived bakes follow, which is the point of binding in ONE place
+    assert module._FR13_FIXED32_TREE_SOURCE == repr(list(want["choices"]))
+
+
+def test_patcher_and_contract_agree_on_mode_to_profile() -> None:
+    """Two rosters is two things to forget; assert they cannot diverge."""
+    module = _load_patcher(PROFILE_HYDRA27)
+    patcher_map = dict(module._FR13_FIXED32_TREE_PROFILE_BY_MODE)
+    assert patcher_map.pop("") == PROFILE_HYDRA27, "unset mode must be hydra27"
+    assert patcher_map == dict(contract.TREE_PROFILE_BY_MODE)
+
+
+def test_patcher_digest_helpers_match_the_topology_authority() -> None:
+    """The binding is worthless if it computes a different digest."""
+    module = _load_patcher(PROFILE_HYDRA27)
+    for name in (PROFILE_HYDRA27, PROFILE_HYDRA31):
+        want = topology_profile(name)
+        parent = tuple(want["physical_parent"])
+        assert (
+            module._fr13_fixed32_canonical_sha256(list(parent))
+            == want["physical_parent_sha256"]
+        )
+        ancestry = module._fr13_fixed32_ancestor_matrix(parent)
+        assert (
+            module._fr13_fixed32_canonical_sha256([list(r) for r in ancestry])
+            == want["tree_ancestry_sha256"]
+        )
+
+
+def test_observable_binding_accepts_the_matching_tree() -> None:
+    for mode, name in (
+        ("", PROFILE_HYDRA27),
+        ("tail6_fixed32", PROFILE_HYDRA27),
+        (PROFILE_HYDRA27, PROFILE_HYDRA27),
+        (PROFILE_HYDRA31, PROFILE_HYDRA31),
+    ):
+        module = _load_patcher(mode)
+        want = topology_profile(name)
+        assert module._fr13_fixed32_bind_tree_to_profile(
+            mode, tuple(want["physical_parent"])
+        ) == want["tree_ancestry_sha256"]
+
+
+def test_observable_binding_refuses_the_wrong_tree() -> None:
+    """MUTATION PROOF: hydra31 mode + hydra27 tree must REFUSE, and vice versa.
+
+    Shape equality cannot see this -- both trees are 31 physical drafts with a
+    32-entry parent vector -- so the binding is to the profile's independently
+    pinned ancestry digest (90873d81... vs 5b33c46a...).
+    """
+    p27, p31 = topology_profile(PROFILE_HYDRA27), topology_profile(PROFILE_HYDRA31)
+    assert len(p27["physical_parent"]) == len(p31["physical_parent"]) == 32
+    assert len(p27["choices"]) == len(p31["choices"]) == 31
+
+    module31 = _load_patcher(PROFILE_HYDRA31)
+    with pytest.raises(RuntimeError) as wrong:
+        module31._fr13_fixed32_bind_tree_to_profile(
+            PROFILE_HYDRA31, tuple(p27["physical_parent"])
+        )
+    assert "not the served profile" in str(wrong.value)
+
+    module27 = _load_patcher(PROFILE_HYDRA27)
+    with pytest.raises(RuntimeError):
+        module27._fr13_fixed32_bind_tree_to_profile(
+            PROFILE_HYDRA27, tuple(p31["physical_parent"])
+        )
+    with pytest.raises(RuntimeError):
+        module27._fr13_fixed32_bind_tree_to_profile(
+            "nope_fixed32", tuple(p27["physical_parent"])
+        )
+
+
+def test_observable_binding_catches_an_ancestry_only_difference() -> None:
+    """Not shape equality: a same-shape, same-width tree with one edge moved.
+
+    This is the case a parent-vector length or draft-count check waves through.
+    """
+    module = _load_patcher(PROFILE_HYDRA27)
+    parent = list(topology_profile(PROFILE_HYDRA27)["physical_parent"])
+    moved = parent[:]
+    for node in range(2, len(moved)):
+        if moved[node] != parent[node - 1] and moved[node] > 0:
+            moved[node] = moved[node] - 1
+            break
+    assert moved != parent and len(moved) == len(parent)
+    with pytest.raises(RuntimeError):
+        module._fr13_fixed32_bind_tree_to_profile(PROFILE_HYDRA27, tuple(moved))
+
+
+def test_walk_cap_is_the_profiles_not_a_literal() -> None:
+    """The hardcoded 12 refused the vehicle's correctly-derived 16."""
+    text = PATCHER.read_text()
+    assert 'FR13_FIXED32_TAW_WALK_CAP=12"' not in text
+    assert "_FR13_FIXED32_WALK_CAP" in text
+    assert _load_patcher(PROFILE_HYDRA27)._FR13_FIXED32_WALK_CAP == 12
+    assert _load_patcher(PROFILE_HYDRA31)._FR13_FIXED32_WALK_CAP == 16
+
+
+# --- THE PATCHER SIGNATURE SCAN (round 17 task 3) --------------------------
+# Round 16 asked whether an ACCESSOR can be told which profile to answer for.
+# The same question for a PATCHER is whether its baked literals can. A patcher
+# that carries exactly one profile's tree is hydra27-only by construction, and
+# no call-site edit can fix that either.
+KNOWN_SINGLE_PROFILE_PATCHERS = {
+    "fr13_patch_fa2_tree_bias.py": (
+        "FIXED32_PHYSICAL_PARENT feeds _fixed32_visibility_masks(), which bakes "
+        "a 32-entry __device__ __constant__ self-plus-ancestor table into the "
+        "FA2 CUDA source -- 12 of those 32 masks are wrong for hydra31 (rows 18 "
+        "and 21..31). It is DORMANT: fixed32_tree_visibility_mask defaults False "
+        "at all seven definitions, no argparse flag arms it, and no shell path "
+        "passes it, so the qualified .so binaries do not carry it. NOT edited "
+        "here on purpose: the launchers pin sha256 of this file as "
+        "FR13_FA2_QROW32_B{1,4}_PATCH_SOURCE_SHA256, so touching it re-attests "
+        "every FA2 arm. test_the_fa2_visibility_specialization_stays_dormant "
+        "fires the moment it is armed."
+    ),
+}
+
+
+def profile_literal_scan() -> dict[str, dict[str, list[int]]]:
+    """{patcher: {profile: [line numbers of module-level tree/parent literals]}}"""
+    signatures = {
+        name: {
+            "choices": tuple(topology_profile(name)["choices"]),
+            "parent": tuple(topology_profile(name)["physical_parent"]),
+        }
+        for name in (PROFILE_HYDRA27, PROFILE_HYDRA31)
+    }
+    found: dict[str, dict[str, list[int]]] = {}
+    for path in sorted(SCRIPTS.glob("*patch*.py")):
+        try:
+            tree = ast.parse(path.read_text())
+        except SyntaxError:  # pragma: no cover
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Tuple, ast.List)):
+                continue
+            try:
+                value = ast.literal_eval(node)
+            except (ValueError, TypeError, SyntaxError, MemoryError):
+                continue
+            for name, sig in signatures.items():
+                if tuple(value) in (sig["choices"], sig["parent"]):
+                    found.setdefault(path.name, {}).setdefault(name, []).append(
+                        node.lineno
+                    )
+    return found
+
+
+def test_no_patcher_knows_only_one_profiles_tree() -> None:
+    scan = profile_literal_scan()
+    assert scan, "the scan found no topology literals at all -- it cannot fail"
+    single = {
+        patcher: sorted(profiles)
+        for patcher, profiles in scan.items()
+        if len(profiles) < 2
+    }
+    unexpected = {
+        k: v for k, v in single.items() if k not in KNOWN_SINGLE_PROFILE_PATCHERS
+    }
+    assert not unexpected, (
+        "these patchers bake exactly one profile's topology, so they answer for "
+        f"hydra27 whatever the served mode is: {unexpected}"
+    )
+    assert PATCHER.name in scan and len(scan[PATCHER.name]) == 2, (
+        "the drafter patcher must carry both profiles' trees"
+    )
+
+
+def test_the_known_single_profile_patcher_list_has_not_gone_stale() -> None:
+    scan = profile_literal_scan()
+    stale = [
+        name
+        for name in KNOWN_SINGLE_PROFILE_PATCHERS
+        if name not in scan or len(scan.get(name, {})) >= 2
+    ]
+    assert not stale, f"pinned single-profile patchers are now fixed: {stale}"
+
+
+def test_the_fa2_visibility_specialization_stays_dormant() -> None:
+    """The dormant hazard's tripwire.
+
+    The FA2 tree-visibility masks are hydra27's, compiled into the kernel. They
+    are unreachable today. If anyone arms them, this fires -- because the moment
+    they are live, a hydra31 serve computes tree attention with hydra27's
+    ancestry on 12 of 32 rows, and nothing downstream can see it.
+    """
+    fa2 = SCRIPTS / "fr13_patch_fa2_tree_bias.py"
+    text = fa2.read_text()
+    assert text.count("fixed32_tree_visibility_mask: bool = False") == 7
+    assert "fixed32_tree_visibility_mask=True" not in text
+    armed = [
+        path.name
+        for path in sorted(SCRIPTS.glob("*.sh"))
+        if "tree_visibility_mask" in path.read_text()
+        or "tree-visibility-mask" in path.read_text()
+    ]
+    assert not armed, (
+        "a shell path now arms the FA2 tree-visibility specialization: "
+        f"{armed}. Those masks are hydra27's ancestry, baked into the kernel; "
+        "hydra31 needs a rebuilt and re-qualified FA2 before it can serve."
+    )
+
+
+# --- PAIRING EVIDENCE (round 17 task 5) ------------------------------------
+def _patcher_baseline_source() -> str:
+    try:
+        return subprocess.run(
+            ["git", "cat-file", "blob", PATCHER_BASELINE_BLOB],
+            cwd=REPO,
+            capture_output=True,
+            check=True,
+        ).stdout.decode()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        pytest.skip(f"pre-round-17 patcher blob unavailable: {exc}")
+
+
+def _module_bound_names(source: str) -> list[str]:
+    """EVERY module-level binding, public or private.
+
+    Tuple-unpacking and annotated targets count: the round-17 binding assigns
+    five names at once, and a collector that only understood `name = value`
+    reported them as deletions from the patcher surface.
+    """
+    names: list[str] = []
+
+    def walk_target(node: ast.expr) -> None:
+        if isinstance(node, ast.Name):
+            names.append(node.id)
+        elif isinstance(node, (ast.Tuple, ast.List)):
+            for element in node.elts:
+                walk_target(element)
+
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                walk_target(target)
+        elif isinstance(node, ast.AnnAssign):
+            walk_target(node.target)
+    return sorted(set(names))
+
+
+def _emitted_surface(module: types.ModuleType, source: str) -> dict[str, object]:
+    """Everything the patcher can bake: module constants + injected blobs."""
+    surface: dict[str, object] = {}
+    for name in _module_bound_names(source):
+        if hasattr(module, name):
+            value = getattr(module, name)
+            if not callable(value) and not isinstance(value, types.ModuleType):
+                surface[f"const:{name}"] = value
+    # Content-addressed, never position-keyed: adding code above a blob shifts
+    # every walk index, and a position-keyed ledger then reports the whole
+    # corpus as "removed" while a genuinely edited blob hides in the noise.
+    for node in ast.walk(ast.parse(source)):
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and len(node.value) > 2000
+        ):
+            digest = hashlib.sha256(node.value.encode()).hexdigest()
+            surface[f"blob:{digest}"] = len(node.value)
+    return surface
+
+
+@pytest.mark.parametrize("mode", ["", "tail6_fixed32", PROFILE_HYDRA27])
+def test_hydra27_patcher_output_is_byte_identical_to_the_baseline(mode: str) -> None:
+    """Required for the banked runs: the parameterisation moves nothing on hydra27.
+
+    Every module-level constant the patcher can interpolate, and every injected
+    source blob over 2000 chars, compared against the pre-round-17 source.
+    """
+    source = _patcher_baseline_source()
+    old = _emitted_surface(_load_patcher(mode, source), source)
+    new_source = PATCHER.read_text()
+    new = _emitted_surface(_load_patcher(mode, new_source), new_source)
+
+    drift = {
+        key: (old[key], new[key])
+        for key in set(old) & set(new)
+        if old[key] != new[key]
+    }
+    assert not drift, f"hydra27 patcher output CHANGED: {sorted(drift)}"
+
+    removed = sorted(set(old) - set(new))
+    assert not removed, f"removed from the patcher surface: {removed}"
+    assert len(old) > 100, f"the surface ledger collapsed to {len(old)} entries"
+    module = _load_patcher(mode, new_source)
+    baseline = _load_patcher(mode, source)
+    assert module._FR13_FIXED32_CHOICES == baseline._FR13_FIXED32_CHOICES
+    assert module._FR13_FIXED32_PARENT == baseline._FR13_FIXED32_PARENT
+    assert module._FR13_HYDRA27_CHOICES == baseline._FR13_FIXED32_CHOICES
+    assert module._FR13_HYDRA27_PARENT == baseline._FR13_FIXED32_PARENT
+
+
+def test_every_injected_blob_is_unchanged_for_hydra27() -> None:
+    """The drafter blob digest the banked runs pin, stated as a digest."""
+    source = _patcher_baseline_source()
+
+    def blob_digests(text: str) -> list[str]:
+        return sorted(
+            hashlib.sha256(node.value.encode()).hexdigest()
+            for node in ast.walk(ast.parse(text))
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and len(node.value) > 2000
+        )
+
+    old, new = blob_digests(source), blob_digests(PATCHER.read_text())
+    assert len(old) >= 40, f"blob enumeration collapsed to {len(old)}"
+    assert old == new, (
+        "an injected source blob changed -- if this is intended it is a "
+        "RE-ATTESTATION EVENT for every banked hydra27 run, not a silent edit"
+    )
