@@ -2778,7 +2778,18 @@ def test_reintroducing_the_b1_hardcode_kills_the_k0_boot(launcher, staged_boot):
 WORKLOADS = {
     "exact4": (4, "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"),
     "exact16": (16, "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"),
+    # The resume set: exact16 minus astropy__astropy-13236, which degenerated
+    # and is verdicted. --skip-existing is forbidden by design, so the fifteen
+    # that remain are declared as themselves rather than as exact16.
+    "exact16_minus_13236": (
+        15, "24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a"
+    ),
     "random1024_calibration": (0, ""),
+}
+WORKLOAD_SUBSETS = {
+    "exact4": "subset_b4_four.json",
+    "exact16": "subset_b4_sixteen.json",
+    "exact16_minus_13236": "subset_b4_sixteen_minus_13236.json",
 }
 
 
@@ -2834,12 +2845,8 @@ def _subset_ids(name):
 def test_the_workload_table_admits_every_canonical_workload(launcher):
     """exact4 (unchanged), exact16 (the point), random1024 (the honest one)."""
     for workload, (count, sha) in WORKLOADS.items():
-        if workload == "exact4":
-            ids = _subset_ids("subset_b4_four.json")
-        elif workload == "exact16":
-            ids = _subset_ids("subset_b4_sixteen.json")
-        else:
-            ids = ""
+        subset = WORKLOAD_SUBSETS.get(workload)
+        ids = _subset_ids(subset) if subset else ""
         assert len([t for t in ids.split(",") if t]) == count
         out = _run_workload_gate(launcher, workload, ids, sha)
         assert out.returncode == 0, f"{workload}: {out.stderr}"
@@ -2916,10 +2923,8 @@ def test_random1024_may_not_borrow_a_subset_identity(launcher):
 def test_each_subset_row_is_bound_to_the_file_it_names(launcher):
     """The table cannot drift from config/ the way site 14's drifted."""
     text = launcher.read_text()
-    for name, (_count, sha) in (
-        ("subset_b4_four.json", WORKLOADS["exact4"]),
-        ("subset_b4_sixteen.json", WORKLOADS["exact16"]),
-    ):
+    for workload, name in WORKLOAD_SUBSETS.items():
+        sha = WORKLOADS[workload][1]
         assert f"config/fr13_fixed32/{name}" in text
         import hashlib
 
@@ -3311,10 +3316,7 @@ def _served_workload_env(monkeypatch, credential_path, workload, ids, sha):
     )
 
 
-@pytest.mark.parametrize(
-    "workload,subset",
-    [("exact4", "subset_b4_four.json"), ("exact16", "subset_b4_sixteen.json")],
-)
+@pytest.mark.parametrize("workload,subset", sorted(WORKLOAD_SUBSETS.items()))
 def test_the_serve_gate_admits_every_declared_workload(
     monkeypatch, tmp_path, workload, subset
 ):
@@ -3609,3 +3611,71 @@ def test_no_container_side_reader_compares_a_credential_commit_to_the_serve():
         "the commit comparison is not behind the tier-scoped predicate"
     )
     assert "_fr13_fa2_qrow32_b1_commit_binding(tier)" in body
+
+
+# ------------------------------------------- the exact16 resume set (15 tasks)
+#
+# The QC served 3 of 16 -- two parities plus astropy__astropy-13236, which
+# DEGENERATED and is verdicted. --skip-existing is forbidden by design, so
+# re-running all sixteen would put the degeneration-prone task back at
+# position 3 and orphan thirteen verdicts a second time. Declaring exact16
+# while serving fifteen is the pins-as-fiction move this table exists to
+# prevent, so the fifteen are a canonical workload of their own.
+
+
+def test_the_resume_set_is_exact16_minus_one_named_task():
+    """Derived, not hand-listed: order and content must match its parent."""
+    sixteen = _subset_ids("subset_b4_sixteen.json").split(",")
+    fifteen = _subset_ids("subset_b4_sixteen_minus_13236.json").split(",")
+    assert len(sixteen) == 16 and len(fifteen) == 15
+    assert set(sixteen) - set(fifteen) == {"astropy__astropy-13236"}
+    assert fifteen == [t for t in sixteen if t != "astropy__astropy-13236"], (
+        "the resume set reordered its parent; a QC resumed out of order is a "
+        "different measurement"
+    )
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_declaring_the_resume_set_with_sixteen_ids_refuses(launcher):
+    """Mutation proof: the fifteen may not be served as sixteen."""
+    out = _run_workload_gate(
+        launcher, "exact16_minus_13236",
+        _subset_ids("subset_b4_sixteen.json"), WORKLOADS["exact16"][1],
+    )
+    assert out.returncode == 2
+    assert "FULL-graph identity of its DECLARED workload" in out.stderr
+    assert "TIERB_WORKLOAD=exact16_minus_13236" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_declaring_exact16_with_fifteen_ids_refuses(launcher):
+    """Mutation proof, the direction that matters: the QC's own mistake.
+
+    This is the refusal that stops thirteen verdicts being orphaned under a
+    name that claims sixteen tasks ran.
+    """
+    out = _run_workload_gate(
+        launcher, "exact16",
+        _subset_ids("subset_b4_sixteen_minus_13236.json"),
+        WORKLOADS["exact16_minus_13236"][1],
+    )
+    assert out.returncode == 2
+    assert "TIERB_WORKLOAD=exact16" in out.stderr
+
+
+def test_the_resume_set_passes_the_container_side_half(monkeypatch, tmp_path):
+    """Both halves, or the record and the gate disagree about what ran."""
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    ids = _subset_ids("subset_b4_sixteen_minus_13236.json")
+    with _served_workload_env(
+        monkeypatch, path, "exact16_minus_13236",
+        ids, WORKLOADS["exact16_minus_13236"][1],
+    ):
+        begin(layer=_Layer(), **_served_operands())
+    record = namespace["_fr13_fa2_qrow32_b1_tier_b_workload"]()
+    assert record["declared"] == "exact16_minus_13236"
+    assert record["task_count"] == 15
+    assert "astropy__astropy-13236" not in record["task_ids"]

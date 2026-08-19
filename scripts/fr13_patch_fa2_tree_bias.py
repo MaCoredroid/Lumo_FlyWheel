@@ -6086,6 +6086,14 @@ _FR13_FA2_QROW32_B1_TIER_B_WORKLOADS = {
         "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995",
         "47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c",
     ),
+    # THE RESUME SET (see the launcher table for the full reasoning): the
+    # exact16 QC served 3 of 16, astropy__astropy-13236 degenerated and is
+    # verdicted, --skip-existing is forbidden, and declaring exact16 while
+    # serving fifteen would be the pins-as-fiction move this table prevents.
+    "exact16_minus_13236": (
+        "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995",
+        "24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a",
+    ),
     "random1024_calibration": ("", ""),
 }
 _FR13_FA2_QROW32_B1_TIER_B_DEFAULT_WORKLOAD = "exact4"

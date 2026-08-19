@@ -921,7 +921,7 @@ _FR13_B1_POINTER_IMPORTED=()
 #
 # Each subset row is bound to the file it names, so this table cannot drift
 # from config/ the way the floor table drifted from the ledger (site 14).
-_FR13_B1_TIERB_WORKLOADS="exact4 exact16 random1024_calibration"
+_FR13_B1_TIERB_WORKLOADS="exact4 exact16 exact16_minus_13236 random1024_calibration"
 FR13_FA2_QROW32_B1_TIERB_WORKLOAD=${FR13_FA2_QROW32_B1_TIERB_WORKLOAD:-exact4}
 _fr13_b1_tierb_workload_pins() {
   local workload=$1
@@ -930,6 +930,18 @@ _fr13_b1_tierb_workload_pins() {
       _fr13_tierb_task_ids="astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398"
       _fr13_tierb_subset_sha256="0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
       _fr13_tierb_subset_file="config/fr13_fixed32/subset_b4_four.json"
+      ;;
+    exact16_minus_13236)
+      # THE RESUME SET. The exact16 QC served 3 of 16 -- two parities plus
+      # astropy__astropy-13236, which DEGENERATED and is verdicted.
+      # --skip-existing is forbidden by design, so re-running all sixteen puts
+      # the degeneration-prone task back at position 3 and orphans thirteen
+      # verdicts a second time. Declaring exact16 while serving fifteen is the
+      # pins-as-fiction move this table exists to prevent, so the fifteen get
+      # their own canonical name and their own subset file.
+      _fr13_tierb_task_ids="astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995"
+      _fr13_tierb_subset_sha256="24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a"
+      _fr13_tierb_subset_file="config/fr13_fixed32/subset_b4_sixteen_minus_13236.json"
       ;;
     exact16)
       _fr13_tierb_task_ids="astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995"
