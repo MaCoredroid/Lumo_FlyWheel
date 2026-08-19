@@ -3886,3 +3886,84 @@ verification).
 
 Sixteen sites. Container preserved and banked; removing it is a one-liner when the slot
 is wanted. GPU idle. H27n baseline unchanged. Standing verdicts unchanged. No retry.
+
+# EXACT16 QC, ATTEMPT 3 (2026-08-19 21:24Z) — re-seal held, site 16 cleared, SITE 17 is the serve itself
+
+## BOOT VERDICT: REFUSED at 4m16s, inside EngineCore, on the per-forward serve path
+
+The re-seal worked. The launcher named my new credential by its digest —
+`tier-b credential a3f8fbf6b97bfcda…` — accepted the workload declaration, launched the
+container, and the container got all the way through model load into engine init
+before refusing. Attempt 2 died at 13s; attempt 3 ran **4m16s**. Site 16 is closed.
+
+```
+tree_attn.py:2913 forward -> :2375 _fr13_fa2_qrow32_b1_production_begin
+  -> :1708 _fr13_fa2_qrow32_b1_require_exact4
+RuntimeError: FR13 qrow32 B1 production exact4 identity drifted
+```
+
+Container `a1cb87dc2e9d` **preserved** per instruction; 373-line log banked.
+
+## SITE 17 — the record learned exact16; the GATE did not
+
+`_fr13_fa2_qrow32_b1_require_exact4` (patcher `:6536`):
+
+```python
+task_ids = tuple(... os.environ.get("FR13_FA2_QROW32_B1_EXACT4_TASK_IDS", "").split(",") ...)
+subset   = os.environ.get("FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256", "")
+if (task_ids != _FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS
+        or subset != _FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256):
+    raise RuntimeError("FR13 qrow32 B1 production exact4 identity drifted")
+```
+
+`_FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS` is the **hardcoded four**. Two defects, worth
+separating because they need different fixes:
+
+1. **It ignores the workload table entirely.** Pass 122 added
+   `_fr13_fa2_qrow32_b1_tier_b_workload()` — which reads the declared workload AND both
+   spellings — but wired it into the **record** at `:7114`. `require_exact4` is what
+   actually **gates** the serve, ~600 lines away in the same file, and was not
+   converted. The artifact learned to say exact16; the gate never did.
+2. **It reads only the legacy spelling.** Pass 122's aliasing ("the two must AGREE when
+   both are present") exists in the launcher and in the record accessor, not here.
+
+**No caller-side value can satisfy it for exact16**, which is why this is a site and not
+a mistake in my invocation: setting the legacy vars to the sixteen fails (sixteen ≠ the
+hardcoded four); leaving them unset fails (empty ≠ four). I verified both.
+
+It is on the tier-B path: `_fr13_fa2_qrow32_b1_production_begin` calls
+`_fr13_fa2_qrow32_b1_serving_arm()` and proceeds for tier B as well, consistent with
+pass 74's ruling that tier-B serving carries the production shape.
+
+The name is the whole problem: **a function called `require_exact4` cannot express
+exact16.** It needs to become a `require_declared_workload` that delegates to the same
+table the record already uses.
+
+The prediction was right — "the next stop should be the serve itself." This is the
+per-forward serve entry point.
+
+## RE-SEAL, AS BANKED
+
+    old credential file sha256   255267fc18fa4eb5...
+    new credential file sha256   a3f8fbf6b97bfcda...
+    identity.patch_source_sha256 e80ed4ea... -> bec74652...
+    reseal.superseded            [e80ed4ea..., bec74652...]
+    credential_sha256            88b7c54f44985b1d...
+    AUTHORITY TEXT               UNCHANGED (pass-118 re-mint not front-run)
+
+All nine bounds re-derived PASS from the banked probes; determinism bitwise in-process
+and cross-process; re-validated through the sidecar's own door. The 6146147c4..c90c09a60
+patcher diff is banked INSIDE the credential and verified PROVENANCE-ONLY.
+
+## THE STAND-DOWN LINE, AS DISCLOSED
+
+Present again, third boot running, and it is the arbitration evidence:
+
+```
+[fr13] gqa_pair promoted default STANDS DOWN: the split-K tier-b default is armed
+```
+
+## STATUS
+
+Seventeen sites. Container preserved. GPU idle. No retry. H27n baseline unchanged;
+standing verdicts unchanged. The promoted split-K default has still never served.
