@@ -961,3 +961,69 @@ class that produced site 25 now fails in milliseconds instead of minutes.
 **299 tests, 16 lint pairs, 0 stale, 3 arm modes swept. Both C++ closures unchanged — no
 rebuild.** Re-earn the credential at the serving HEAD; arm with `TIER_B_ARM` +
 `_CREDENTIAL_HOST`.
+
+---
+
+## 19. PROMOTED TO THE PRODUCTION DEFAULT
+
+**Mark's ruling, FR14 pass 100.** Split-K is the production default. He reviewed the
+degeneration evidence — clean — and **waived the exact16-QC-first ordering: the QC now runs
+after promotion, as verification rather than as a gate.**
+
+Evidence pointer: §3–§6 and §12 of this note, and the **round-12** promotion-A/B traces.
+Determinism bitwise in-process and cross-process; nine pre-registered bounds cleared with
+margin; **closer to a float64 reference than the incumbent** on both output and LSE RMS;
+argmax disagreements with exact 1-in-384 against the incumbent's 2; 1.9–2.0× faster.
+
+### 19.1 The shape
+
+The default boot arms `FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk` under
+**hydra27_fixed32** — the same mode gate the `gqa_pair` default used. hydra31 stays
+excluded topologically until its own qualification.
+
+**It is armed as a TIER-B serve, not as a production arm.**
+`_FR13_FA2_QROW32_B1_PRODUCTION_ARMS` is unchanged, the contract's production allowlist
+still refuses split-K, and the byte-exact Tier-A door is untouched. Promotion changed
+*when* the tier-B route is armed, not *what* it is. A test asserts precisely that.
+
+**Hard refusal, inverting the house pattern deliberately.** The `gqa_pair` default degrades
+to the incumbent on a stale credential, on the stated principle that *a promotion must
+never refuse a boot*. Split-K's does not: a promoted default that silently serves something
+else is an **unlabelled A/B**, and this campaign has already spent one whole round
+(round 6) measuring the incumbent while every artifact said split-K. Missing binary, wrong
+binary digest, or missing credential each exit 2 naming the cause.
+
+### 19.2 The credential re-scope — forced, and stated plainly
+
+The credential bound `source_commit`. Under a hard-refusal default that means **every
+commit breaks the default boot**, starting with the commit that lands the promotion. That
+is an availability bug wearing a safety property.
+
+So the binding is re-scoped to what determines the **numerics it attests**: binary sha and
+size, source closure, FA2 head, **both** SASS digests, the **patcher** (which decides
+dispatch), and the pre-registered bounds. `source_commit` becomes *recorded and
+well-formed* rather than matched. Change anything that can alter what the kernel computes
+and the credential still refuses — verified: a drifted patcher digest is refused, and a
+different HEAD is not. A commit touching none of those cannot alter the numerics, so
+refusing on it protected nothing.
+
+Same re-scope-and-re-attest shape pass 99 applied to the held TAW digest. **If
+commit-binding is wanted back, the default must degrade rather than refuse — the two
+cannot both hold**, and that is a coordinator call, not mine.
+
+Credential re-earned at the promotion commit: **9/9 bounds, file sha `255267fc…`**.
+
+### 19.3 What else is in
+
+- **Explicit opt-out preserved and tested** — naming an arm makes the default block a
+  no-op. Round 20's H31i A/B depends on this.
+- **Credential path** keeps the `_HOST`/container split measured in round 9; the launcher
+  computes the staged digest rather than carrying a literal that would need re-committing
+  on every re-earn.
+- **Family parity**: 11 new markers cover the default block, every literal it arms from,
+  and both halves of its refusal — identical across all three twins.
+- **CPU walk of the default boot**, executing the real bash: plain launch arms split-K;
+  missing binary refuses *without falling back*; missing credential refuses; opt-out is a
+  no-op; and the block is checked **structurally** to sit inside the hydra27 gate.
+
+**326 tests, 16 lint pairs, 0 stale, 3 arm modes swept, family parity clean.**
