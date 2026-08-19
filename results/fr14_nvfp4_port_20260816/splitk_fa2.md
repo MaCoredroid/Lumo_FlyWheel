@@ -1027,3 +1027,111 @@ Credential re-earned at the promotion commit: **9/9 bounds, file sha `255267fc�
   no-op; and the block is checked **structurally** to sit inside the hydra27 gate.
 
 **326 tests, 16 lint pairs, 0 stale, 3 arm modes swept, family parity clean.**
+
+## 20. The promotion did not boot — F1/F2, and the walk that could not see it
+
+The pass-100 promotion landed the default block in all three launcher twins,
+CPU-walked it under four environments, and shipped. A CPU read at pass 106
+found that **the promoted default had never once served.** Round 12's live run
+booted only because it named `FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk`
+explicitly — the one path that skips the default block entirely.
+
+**F1 — arming a selector is not surviving it.** The default block set
+`TIER_B_ARM` and nothing else. That makes `_FR13_FA2_QROW32_B1_SELECTOR_COUNT`
+1, which opens the B1 selector gate ~950 lines further down, and that gate
+demanded `FR13_FA2_QROW32_B1_SOURCE_COMMIT == $(git rev-parse HEAD)` and a
+`PATCH_SOURCE_SHA256`, both of which default to empty and which nothing in the
+default path ever set. Every plain hydra27 B1 launch exited 2 at
+`FR13 qrow32 B1 selector requires Hydra27 B1 and exact binary/source
+provenance`.
+
+The incumbent `gqa_pair` default answers this by requiring the CALLER to have
+presented provenance and standing down when it is stale. A **hard-refusal**
+default cannot stand down — that is the whole point of it — so it **mints**
+instead: there is no caller declaration to check, because the launcher itself
+is the thing arming, from its own literals. What guards the binary is the
+sha256/size/SASS check the block already runs and `verify-tier-b` on the
+credential, neither of which a minted commit can weaken.
+
+**The gate had to be reconciled, not just fed.** Pass 101 re-scoped the tier-B
+credential: `source_commit` moved from `TIERB_BINDING_FIELDS` to
+`TIERB_RECORDED_FIELDS`, because a credential that attests *numerics* must bind
+what can change them, and a commit that touches no kernel input cannot. The
+selector gate was still enforcing the binding the credential had dropped.
+Feeding it a minted HEAD would have satisfied it while leaving the rule alive
+one layer down, where nothing documents it — so the two were made to agree, in
+the credential's direction:
+
+* tier-B selector → `source_commit` must be a well-formed 40-hex commit
+  (recorded, not bound). A credential earned eight commits back now boots.
+* every other selector → unchanged, `== $(git rev-parse HEAD)`. Nothing was
+  dropped from the byte-exact route, whose credential *is* a byte identity
+  earned at a commit.
+* the **patcher digest** is still checked for every arm including tier-B. It
+  decides dispatch, so it can change what the kernel computes, and the
+  credential binds it too. Only the commit clause was scoped.
+
+**F2 — two promoted defaults, no arbitration.** Presenting a `gqa_pair`
+credential armed `TIER_B_ARM` from the split-K block *and* `PRODUCTION_ARM`
+from the gqa_pair block; `SELECTOR_COUNT` became 2 and the boot died at
+`live A/B and production arms are mutually exclusive`. Split-K's default
+**supersedes** gqa_pair's — it *is* the promotion — so when the tier-B default
+arms, the gqa_pair default block stands down with a logged reason. Naming
+`gqa_pair` explicitly is untouched: that path sets
+`_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED=1`, which skips the whole region.
+
+### The walk answered the wrong question
+
+The pass-100 walk executed the default block and asserted `ARM=gqa_pair_splitk`
+— *does the block arm?* The question was *does the boot survive the arming?*,
+and the defect was not in the block at all: it was in what the block hands to
+the rest of the boot. A four-environment walk that stops at the block's own
+`fi` is structurally incapable of seeing it.
+
+The replacement composes the regions an arming actually flows through and
+executes them back to back, sliced verbatim from each launcher by anchors that
+exist in all three twins:
+
+| region | what it is |
+|---|---|
+| 1 | the split-K default literals |
+| 2 | the mode-gated promoted-default region — **both** defaults, so F2's arbitration is exercised |
+| 3 | `SELECTOR_COUNT` accumulation + the mutual-exclusion refusal |
+| 4 | the B1 selector gate, including the reconciled commit clause |
+
+No paraphrase of launcher logic lives in the test, which is the only way a walk
+can still fail when the launcher changes underneath it. It asserts
+`CANDIDATE=1` — proof the gate actually opened — so a future slice that misses
+region 4 fails loudly instead of passing vacuously.
+
+Six behaviours, times three twins:
+
+* a plain hydra27 B1 boot reaches rc=0 with a minted 40-hex commit and 64-hex
+  patcher digest (the F1 regression proper)
+* a presented gqa_pair credential yields `COUNT=1`, not 2 (F2)
+* emptying `_FR13_SPLITK_DEFAULT_ARM` still reaches the gqa_pair default — the
+  arbitration must not *cost* the incumbent its own default
+* a stale patcher digest still dies at the gate
+* a byte-gated arm with a non-HEAD commit still dies at the gate
+* a tier-B boot with a malformed commit still dies — "recorded" is not "absent"
+
+…and five mutation proofs that remove exactly the fix each guards: drop the
+mint (with its guard, or the guard fires first and proves itself rather than
+the gate), drop the patcher-digest mint, drop the reconciliation (which only
+shows up on a credential from an *older* commit — at HEAD the mint hides it),
+and `if false` the arbitration. `scan_family_parity` gained six markers keyed
+on the halves of the fix, keyed on the mint's own assignment rather than the
+bare `git rev-parse` idiom, because the canonical launcher runs that idiom a
+second time for the gqa_pair serviceability probe the twins do not have.
+
+### Which boot path is canonical now
+
+**The fixed promotion default.** A plain `FR13_FIXED32_MODE=hydra27_fixed32`
+B1 launch, with no B1 arm named, now arms `gqa_pair_splitk` from the
+launcher's own literals, mints its own selector provenance, and survives to
+serve. The round-12 env route
+(`FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk`) remains valid and is now the
+**explicit-A/B path**, not the production path — it bypasses the default block,
+so a run that sets it is opting out of the promotion's own staging checks and
+must present its own binary and credential. Measurements should record the
+default path unless they are deliberately A/B-ing the arm.

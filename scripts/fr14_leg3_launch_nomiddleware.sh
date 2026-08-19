@@ -1250,13 +1250,44 @@ if (( _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0 )) \
       exit 2
     }
     FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256:-$(sha256sum "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" | cut -d' ' -f1)}
+    # F1 (severity-1, pass 106). Arming a selector is not the same as
+    # surviving it. This block set TIER_B_ARM and nothing else, so
+    # SELECTOR_COUNT became 1 and the selector gate below then demanded
+    # SOURCE_COMMIT and PATCH_SOURCE_SHA256 that nobody had set -- every plain
+    # hydra27 B1 launch exited 2, and the promoted default had never once
+    # served. Round 12 named the arm explicitly, which is why it booted.
+    #
+    # The gqa_pair default answers this by requiring the CALLER to have
+    # presented provenance and standing down when it is stale. A hard-refusal
+    # default cannot stand down, so it MINTS instead: there is no caller
+    # declaration to check here, because the launcher itself is the thing
+    # arming, from its own literals. What actually guards the binary is the
+    # sha/size/SASS check above and verify-tier-b on the credential -- neither
+    # of which a minted commit can weaken.
+    FR13_FA2_QROW32_B1_SOURCE_COMMIT=${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo "")}
+    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)}
+    [[ -n "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" ]] || {
+      echo "FR13 promoted split-K default: cannot mint the selector provenance (no git HEAD)" >&2
+      exit 2
+    }
     echo "[fr13] B1 arm unnamed; serving the PROMOTED DEFAULT" \
          "FR13_FA2_QROW32_B1_TIER_B_ARM=$FR13_FA2_QROW32_B1_TIER_B_ARM" \
          "(tier-b credential $FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256)" >&2
   fi
+  # F2 ARBITRATION (severity-1, pass 106). Two promoted defaults could arm at
+  # once -- a caller presenting a gqa_pair credential got TIER_B_ARM from the
+  # block above AND PRODUCTION_ARM here, SELECTOR_COUNT=2, and a refusal with
+  # no arbitration between them. Split-K's default SUPERSEDES gqa_pair's: it
+  # IS the promotion. Naming gqa_pair explicitly is untouched -- this whole
+  # region runs only when no arm was named.
+  if [[ -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then
+    echo "[fr13] gqa_pair promoted default STANDS DOWN: the split-K tier-b" \
+         "default is armed (split-K supersedes; name gqa_pair explicitly to opt out)" >&2
+  else
   FR13_FA2_QROW32_B1_PRODUCTION_ARM=${FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT:-gqa_pair}
   echo "[fr13] B1 production arm unnamed; serving the promoted default" \
        "FR13_FA2_QROW32_B1_PRODUCTION_ARM=$FR13_FA2_QROW32_B1_PRODUCTION_ARM" >&2
+  fi
 fi
 case "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" in
   ""|nosplit|gqa_pair) ;;
@@ -2135,18 +2166,39 @@ fi
 _FR13_FA2_QROW32_B1_CANDIDATE_MODE=0
 if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
   _FR13_FA2_QROW32_B1_CANDIDATE_MODE=1
+  # RECONCILED WITH PASS 101 (F1, pass 106). This gate demanded
+  # SOURCE_COMMIT == HEAD for every B1 selector -- the commit-binding the
+  # tier-B credential DROPPED when split-K was promoted. A credential that
+  # attests numerics must bind what can change them, and a commit that touches
+  # no kernel input cannot. Leaving the gate enforcing a rule the credential no
+  # longer makes would re-impose it one layer down where nothing documents it,
+  # so the two are made to agree, in the credential's direction. The PATCHER
+  # digest below is still checked for every arm including tier-B: it decides
+  # dispatch, and the credential binds it too. Only the commit clause is scoped.
+  _fr13_b1_commit_bound=1
+  [[ -z "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]] || _fr13_b1_commit_bound=0
   [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
      && "$MAX_NUM_SEQS" == "1" \
      && "${SWE_CONCURRENCY:-}" == "1" \
      && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
      && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
      && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
-     && "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" == "$(git rev-parse HEAD)" \
      && "$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)" \
      && "$(stat -c '%s' "$FORKED_FA2_SO")" == "$FR13_FA2_QROW32_B1_SO_SIZE" ]] || {
     echo "FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance" >&2
     exit 2
   }
+  if (( _fr13_b1_commit_bound == 1 )); then
+    [[ "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" == "$(git rev-parse HEAD)" ]] || {
+      echo "FR13 qrow32 B1 selector requires a credential earned at this HEAD" >&2
+      exit 2
+    }
+  else
+    [[ "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
+      echo "FR13 qrow32 B1 tier-b selector requires a well-formed source commit" >&2
+      exit 2
+    }
+  fi
   # Each B1 arm carries its own binary + source-closure pins. Resolve the arm
   # that actually decides which binary is loaded: a production launch has no
   # live arm, so keying on the live arm alone would silently check a GQA-pair

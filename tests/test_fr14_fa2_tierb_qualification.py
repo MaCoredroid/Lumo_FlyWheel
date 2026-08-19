@@ -19,6 +19,7 @@ import importlib.util
 import ast
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -556,7 +557,7 @@ def test_launcher_embedded_python_still_parses(launcher) -> None:
     ast.parse("".join(lines[start + 1:end]))
 
 
-def test_earned_credential_is_present_and_validates() -> None:
+def test_earned_credential_is_present_and_validates(tmp_path: Path) -> None:
     """The banked credential must still clear its own bounds on demand.
 
     Not a re-run of the gate -- the measurements are fixed. This is the check
@@ -630,7 +631,11 @@ def test_earned_credential_is_present_and_validates() -> None:
     body = json.loads(path.read_text())
     body["identity"]["source_commit"] = "not-a-commit"
     body["credential_sha256"] = sidecar.tierb_credential_digest(body)
-    broken = path.parent / "broken_commit.json"
+    # tmp_path, NOT path.parent: an earlier revision wrote this beside the
+    # earned credential in results/, leaving an untracked credential-shaped
+    # file with source_commit "not-a-commit" in the deliverable directory --
+    # a test artifact that reads as a provenance leak to anyone auditing it.
+    broken = tmp_path / "broken_commit.json"
     broken.write_text(json.dumps(body, sort_keys=True), encoding="ascii")
     with pytest.raises(ValueError, match="not a lowercase commit"):
         sidecar.validate_tierb_credential(
@@ -2128,3 +2133,416 @@ def test_promotion_did_not_widen_the_byte_gated_door():
             "FR13_FA2_QROW32_B1_PRODUCTION_ARM": SPLITK_ARM,
             "FR13_FA2_QROW32_B1_SO_SHA256": SPLITK_SO_SHA256,
         })
+
+
+# ===========================================================================
+# THE FULL-BOOT WALK (F1/F2, pass 106).
+#
+# The walk above answered "does the block arm?".  The question was "does the
+# boot SURVIVE the arming?" -- and the answer was no: arming set
+# SELECTOR_COUNT=1, which opened a selector gate 950 lines later that demanded
+# a SOURCE_COMMIT and a PATCH_SOURCE_SHA256 the block never set, so every
+# plain hydra27 B1 launch exited 2 and the promoted default had never served.
+# A four-environment walk that stops at the block's own `fi` cannot see that,
+# because the defect is not IN the block -- it is in what the block hands to
+# the rest of the boot.
+#
+# So this walk composes the three regions the arming actually flows through
+# and executes them together:
+#
+#   region 1  the split-K default literals
+#   region 2  the mode-gated promoted-default region (BOTH defaults, so F2's
+#             arbitration is exercised, not just split-K's block)
+#   region 3  SELECTOR_COUNT accumulation + the mutual-exclusion refusal
+#   region 4  the B1 selector gate, including the reconciled commit clause
+#
+# Regions are sliced by anchors that exist in all three twins and are
+# executed verbatim -- no paraphrase of the launcher's logic lives here, which
+# is the only way a walk can fail when the launcher changes underneath it.
+# ===========================================================================
+
+
+def _patcher_digest():
+    """sha256 of the patcher, the one provenance clause the gate still binds."""
+    import hashlib
+
+    return hashlib.sha256(PATCHER.read_bytes()).hexdigest()
+
+
+def _boot_regions(text):
+    """Slice the four regions a promoted-default boot flows through."""
+    lit_start = text.index(
+        "# ---------------------------------------------------------------- split-K"
+    )
+    lit_end = text.index("\n", text.index("_FR13_SPLITK_DEFAULT_CREDENTIAL=", lit_start)) + 1
+    region1 = text[lit_start:lit_end]
+
+    lines = text.splitlines(keepends=True)
+    opener = next(
+        i for i, line in enumerate(lines)
+        if line.startswith("if ((")
+        and "_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0" in line
+    )
+    closing = next(i for i in range(opener, len(lines)) if lines[i] == "fi\n")
+    region2 = "".join(lines[opener:closing + 1])
+
+    acc = text.index("_FR13_FA2_QROW32_B1_SELECTOR_COUNT=0\n")
+    excl = text.index(
+        'echo "FR13 qrow32 B1 live A/B and production arms are mutually exclusive" >&2\n'
+        "  exit 2\nfi\n", acc
+    )
+    region3 = text[acc:excl] + (
+        'echo "FR13 qrow32 B1 live A/B and production arms are mutually exclusive" >&2\n'
+        "  exit 2\nfi\n"
+    )
+
+    gate = text.index(
+        "if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then\n"
+        "  _FR13_FA2_QROW32_B1_CANDIDATE_MODE=1\n"
+    )
+    tail = (
+        '    [[ "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {\n'
+        '      echo "FR13 qrow32 B1 tier-b selector requires a well-formed source commit" >&2\n'
+        "      exit 2\n"
+        "    }\n"
+        "  fi\n"
+    )
+    region4 = text[gate:text.index(tail, gate) + len(tail)] + "fi\n"
+    return region1, region2, region3, region4
+
+
+_BOOT_STUBS = """set -u
+REPO=.
+FR13_FIXED32_MODE=hydra27_fixed32
+MAX_NUM_SEQS=1
+SWE_CONCURRENCY=1
+FR13_FIXED32_B1_DIAGNOSTIC=0
+FR13_FA2_QROW16_LIVE_PAGED_AB=0
+FR13_FA2_QROW16_PRODUCTION=0
+FR13_FA2_QROW32_LIVE_PAGED_AB=0
+FR13_DRAFT_VOCAB_ROOT=1
+FR13_DRAFT_VOCAB_K=65536
+FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
+FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=k64_root
+_fr13_assert_draft_vocab_profile() { return 0; }
+"""
+
+_BOOT_VARS = (
+    "_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED",
+    "FR13_FA2_QROW32_B1_LIVE_AB_ARM",
+    "FR13_FA2_QROW32_B1_PRODUCTION_ARM",
+    "FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT",
+    "FR13_FA2_QROW32_B1_TIER_B_ARM",
+    "FR13_FA2_QROW32_B1_TIER_B_SERVE",
+    "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST",
+    "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256",
+    "FR13_FA2_QROW32_B1_TIMING_ARM",
+    "FR13_FA2_QROW32_B4_TIMING_ARM",
+    "FR13_FA2_QROW32_B4_PRODUCTION_ARM",
+    "FR13_FA2_QROW32_B1_SOURCE_COMMIT",
+    "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256",
+    "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON",
+    "FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON",
+    "FORKED_FA2_SO",
+    "FR13_FA2_QROW32_B1_SO_SHA256",
+    "FR13_FA2_QROW32_B1_SO_SIZE",
+    "FR13_FA2_QROW32_B1_FA2_HEAD",
+    "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256",
+    "FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST",
+    "FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST",
+)
+
+
+def _run_full_boot(launcher_text, env, so_path, credential_path, so_size):
+    """Execute regions 1-4 back to back, as a real boot does."""
+    import subprocess
+
+    r1, r2, r3, r4 = _boot_regions(launcher_text)
+    script = _BOOT_STUBS
+    script += '_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED={}\n'.format(
+        env.get("_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED", "0")
+    )
+    for name in _BOOT_VARS[1:]:
+        script += '{}="{}"\n'.format(name, env.get(name, ""))
+    script += r1
+    # the literals honour caller overrides; re-assert the test's staging after
+    script += '_FR13_SPLITK_DEFAULT_SO="{}"\n'.format(so_path)
+    script += '_FR13_SPLITK_DEFAULT_CREDENTIAL="{}"\n'.format(credential_path)
+    script += '_FR13_SPLITK_DEFAULT_SO_SIZE={}\n'.format(so_size)
+    script += r2 + r3 + r4
+    script += (
+        'printf "TIER_B=%s\\nPRODUCTION=%s\\nCOUNT=%s\\nCANDIDATE=%s\\n'
+        'COMMIT=%s\\nPATCH=%s\\n" '
+        '"$FR13_FA2_QROW32_B1_TIER_B_ARM" '
+        '"$FR13_FA2_QROW32_B1_PRODUCTION_ARM" '
+        '"$_FR13_FA2_QROW32_B1_SELECTOR_COUNT" '
+        '"${_FR13_FA2_QROW32_B1_CANDIDATE_MODE:-0}" '
+        '"$FR13_FA2_QROW32_B1_SOURCE_COMMIT" '
+        '"$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256"\n'
+    )
+    return subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True, cwd=str(REPO)
+    )
+
+
+@pytest.fixture
+def staged_boot(tmp_path):
+    """A launcher copy whose split-K pins match a staged stub binary."""
+    import hashlib
+
+    so = tmp_path / "splitk.so"
+    so.write_bytes(b"not the real kernel, but a real file")
+    digest = hashlib.sha256(so.read_bytes()).hexdigest()
+    size = so.stat().st_size
+    credential = tmp_path / "credential.json"
+    credential.write_text(
+        (REPO / "results/fr14_nvfp4_port_20260816"
+         / "fr14_splitk_tierb_credential.json").read_text()
+    )
+
+    def stage(launcher):
+        text = launcher.read_text().replace(
+            f"_FR13_SPLITK_DEFAULT_SO_SHA256={SPLITK_DEFAULT_SO_SHA256}",
+            f"_FR13_SPLITK_DEFAULT_SO_SHA256={digest}", 1,
+        )
+        assert digest in text, "the split-K sha256 pin moved; restage the walk"
+        return text
+
+    return stage, so, credential, size
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_full_boot_survives_the_selector_gate(launcher, staged_boot):
+    """F1, the regression proper: a plain hydra27 B1 boot must reach rc=0.
+
+    Before the fix this exited 2 at the selector gate with "requires Hydra27
+    B1 and exact binary/source provenance", because the default block armed a
+    selector and minted none of the provenance the gate reads.
+    """
+    stage, so, credential, size = staged_boot
+    out = _run_full_boot(stage(launcher), {}, so, credential, size)
+    assert out.returncode == 0, out.stderr
+    assert f"TIER_B={SPLITK_ARM}" in out.stdout
+    assert "COUNT=1" in out.stdout
+    assert "CANDIDATE=1" in out.stdout, "the gate never opened; the walk missed it"
+    # the provenance the gate reads was MINTED, not left empty
+    commit = next(
+        l.split("=", 1)[1] for l in out.stdout.splitlines() if l.startswith("COMMIT=")
+    )
+    patch = next(
+        l.split("=", 1)[1] for l in out.stdout.splitlines() if l.startswith("PATCH=")
+    )
+    assert re.fullmatch(r"[0-9a-f]{40}", commit), f"commit not minted: {commit!r}"
+    assert re.fullmatch(r"[0-9a-f]{64}", patch), f"patcher digest not minted: {patch!r}"
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_full_boot_arbitrates_the_two_promoted_defaults(launcher, staged_boot):
+    """F2: presenting a gqa_pair credential must not arm BOTH defaults.
+
+    Before the fix this produced SELECTOR_COUNT=2 and "live A/B and production
+    arms are mutually exclusive" -- two promoted defaults with no arbitration.
+    """
+    stage, so, credential, size = staged_boot
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(REPO),
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    env = {
+        "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON": str(credential),
+        "FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON": str(credential),
+        "FR13_FA2_QROW32_B1_SOURCE_COMMIT": head,
+    }
+    out = _run_full_boot(stage(launcher), env, so, credential, size)
+    assert out.returncode == 0, out.stderr
+    assert "COUNT=1" in out.stdout, (
+        "both promoted defaults armed: split-K must supersede gqa_pair"
+    )
+    assert f"TIER_B={SPLITK_ARM}" in out.stdout
+    assert "PRODUCTION=\n" in out.stdout + "\n"
+    assert "STANDS DOWN" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_full_boot_opt_out_still_reaches_gqa_pair(launcher, staged_boot):
+    """The arbitration must not COST the incumbent its own default.
+
+    Naming split-K's opt-out (an explicit production arm) is what round 20's
+    A/B does; the incumbent default must still be reachable when the tier-B
+    default is suppressed.
+    """
+    stage, so, credential, size = staged_boot
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(REPO),
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    text = stage(launcher).replace(
+        "_FR13_SPLITK_DEFAULT_ARM=gqa_pair_splitk",
+        "_FR13_SPLITK_DEFAULT_ARM=", 1,
+    )
+    env = {
+        "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON": str(credential),
+        "FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON": str(credential),
+        "FR13_FA2_QROW32_B1_SOURCE_COMMIT": head,
+        "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256": _patcher_digest(),
+        "FORKED_FA2_SO": str(so),
+        "FR13_FA2_QROW32_B1_SO_SIZE": str(size),
+    }
+    out = _run_full_boot(text, env, so, credential, size)
+    assert out.returncode == 0, out.stderr
+    assert "PRODUCTION=gqa_pair" in out.stdout
+    assert "COUNT=1" in out.stdout
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_full_boot_gate_still_binds_the_patcher_digest(launcher, staged_boot):
+    """The reconciliation scoped the COMMIT clause only.
+
+    The patcher digest decides dispatch, so it can change what the kernel
+    computes and the credential binds it. A tier-B boot carrying a stale
+    patcher digest must still die at the gate.
+    """
+    stage, so, credential, size = staged_boot
+    env = {"FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256": "0" * 64}
+    out = _run_full_boot(stage(launcher), env, so, credential, size)
+    assert out.returncode == 2
+    assert "exact binary/source provenance" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_full_boot_gate_still_binds_the_commit_for_tier_a(launcher, staged_boot):
+    """The scoping is TIER-B ONLY: a byte-gated arm still needs HEAD.
+
+    Pass 101 dropped source_commit from the tier-B credential's BINDING fields
+    because numerics cannot depend on it. Nothing was dropped from the
+    byte-exact route, whose credential is a byte identity earned at a commit.
+    """
+    stage, so, credential, size = staged_boot
+    env = {
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+        "FR13_FA2_QROW32_B1_SOURCE_COMMIT": "b" * 40,
+        "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256": _patcher_digest(),
+        "FORKED_FA2_SO": str(so),
+        "FR13_FA2_QROW32_B1_SO_SIZE": str(size),
+    }
+    # PRODUCTION_ARM named -> the default region is skipped, count=1, tier-A
+    env["_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED"] = "1"
+    out = _run_full_boot(stage(launcher), env, so, credential, size)
+    assert out.returncode == 2
+    assert "requires a credential earned at this HEAD" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_full_boot_tier_b_rejects_a_malformed_commit(launcher, staged_boot):
+    """The tier-B branch is a WEAKER check, not an absent one."""
+    stage, so, credential, size = staged_boot
+    env = {"FR13_FA2_QROW32_B1_SOURCE_COMMIT": "not-a-commit"}
+    out = _run_full_boot(stage(launcher), env, so, credential, size)
+    assert out.returncode == 2
+    assert "well-formed source commit" in out.stderr
+
+
+# --------------------------------------------------- mutation proofs (F1/F2)
+#
+# Every assertion above is proved to be load-bearing by removing exactly the
+# fix it guards and requiring the test to fail. A gate that cannot fail is
+# worse than no gate -- this campaign has now written that sentence three
+# times, so the walk proves it about itself.
+
+
+_MUTATIONS = (
+    (
+        # The mint AND its guard together: removing the mint alone is caught by
+        # the guard inside the block, which proves the guard and not the gate.
+        # The mutation has to restore the PRE-FIX state exactly -- a selector
+        # armed with an empty SOURCE_COMMIT reaching the gate.
+        "F1: drop the mint",
+        'FR13_FA2_QROW32_B1_SOURCE_COMMIT=${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo "")}\n'
+        "    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)}\n"
+        '    [[ -n "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" ]] || {\n'
+        '      echo "FR13 promoted split-K default: cannot mint the selector provenance (no git HEAD)" >&2\n'
+        "      exit 2\n"
+        "    }\n",
+        "    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)}\n",
+        "well-formed source commit",
+    ),
+    (
+        "F1: drop the patcher-digest mint",
+        "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)}\n",
+        "",
+        "exact binary/source provenance",
+    ),
+)
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+@pytest.mark.parametrize("name,find,replace,expect", _MUTATIONS, ids=lambda v: str(v)[:24])
+def test_f1_mutations_break_the_boot(launcher, staged_boot, name, find, replace, expect):
+    """Remove the F1 fix -> the plain boot dies at the gate again."""
+    stage, so, credential, size = staged_boot
+    text = stage(launcher)
+    assert text.count(find) == 1, f"{name}: mutation anchor not unique in {launcher.name}"
+    out = _run_full_boot(text.replace(find, replace, 1), {}, so, credential, size)
+    assert out.returncode == 2, f"{name}: the boot survived without the fix"
+    if expect is not None:
+        assert expect in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_f2_mutation_re_arms_both_defaults(launcher, staged_boot):
+    """Remove the stand-down -> two promoted defaults, SELECTOR_COUNT=2."""
+    stage, so, credential, size = staged_boot
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(REPO),
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    text = stage(launcher)
+    find = '  if [[ -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then\n'
+    assert text.count(find) == 1, "the F2 arbitration anchor is not unique"
+    mutated = text.replace(find, '  if false; then\n', 1)
+    env = {
+        "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON": str(credential),
+        "FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON": str(credential),
+        "FR13_FA2_QROW32_B1_SOURCE_COMMIT": head,
+    }
+    out = _run_full_boot(mutated, env, so, credential, size)
+    assert out.returncode == 2, "without arbitration both defaults must collide"
+    assert "mutually exclusive" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_full_boot_tier_b_accepts_a_credential_from_an_older_commit(
+    launcher, staged_boot
+):
+    """The reconciliation's own proof, and the reason it exists.
+
+    Pass 101 re-scoped the tier-B credential's binding fields: source_commit
+    became RECORDED, not BINDING, because a commit that touches no kernel
+    input cannot change what the kernel computes. The selector gate was still
+    enforcing the binding the credential had dropped. This is the boot that
+    distinguishes the two -- a valid tier-B credential earned six commits ago,
+    which the credential accepts (verify-tier-b rc=0) and the gate refused.
+    """
+    stage, so, credential, size = staged_boot
+    older = subprocess.run(
+        ["git", "rev-list", "--max-count=8", "HEAD"], cwd=str(REPO),
+        capture_output=True, text=True, check=True,
+    ).stdout.split()[-1]
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(REPO),
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert older != head, "need history to distinguish the two rules"
+    env = {"FR13_FA2_QROW32_B1_SOURCE_COMMIT": older}
+    out = _run_full_boot(stage(launcher), env, so, credential, size)
+    assert out.returncode == 0, out.stderr
+    assert f"TIER_B={SPLITK_ARM}" in out.stdout
+    assert f"COMMIT={older}" in out.stdout, "the presented commit was overwritten"
+
+    # ... and removing the reconciliation puts the refusal back.
+    find = '  [[ -z "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]] || _fr13_b1_commit_bound=0\n'
+    text = stage(launcher)
+    assert text.count(find) == 1, "the reconciliation anchor is not unique"
+    out = _run_full_boot(text.replace(find, "", 1), env, so, credential, size)
+    assert out.returncode == 2, "the gate no longer enforces anything for tier-A"
+    assert "requires a credential earned at this HEAD" in out.stderr

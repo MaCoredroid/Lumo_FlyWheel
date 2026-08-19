@@ -282,7 +282,15 @@ def test_every_parity_marker_is_present_in_every_family(marker):
 
 @pytest.mark.parametrize(
     "marker",
-    ["FR14_FUSED_DRAFT_TOPK", "_fr14_gate_incompat", "FR14_GATE_SPLIT_GRAPH"],
+    [
+        "FR14_FUSED_DRAFT_TOPK", "_fr14_gate_incompat", "FR14_GATE_SPLIT_GRAPH",
+        # F1/F2 (pass 106). The fix landed in the canonical launcher one edit
+        # ahead of the twins -- literally the two-of-three window this roster
+        # exists to close -- so each half is proved to fire from a twin.
+        "cannot mint the selector provenance",
+        "_fr13_b1_commit_bound",
+        "STANDS DOWN",
+    ],
 )
 def test_detector_fires_when_one_family_omits_a_marker(monkeypatch, marker):
     """Exactly the defect that happened: two families promoted, one not."""
@@ -324,3 +332,34 @@ def test_the_refused_gate_is_guarded_in_every_family():
             "FR13_DRAFT_SOURCE=merged" in text
         )
         assert 'grep -q "FR14_GATE_SPLIT_GRAPH"' in text
+
+
+def test_f1_f2_are_present_in_every_family():
+    """The promotion's boot-survival fix, family by family.
+
+    Counting is not enough here: the mint has to be inside the arming branch
+    (a mint that runs when the default did NOT arm would forge provenance for
+    a caller's selector), and the gate's commit clause has to be SCOPED, not
+    deleted -- the byte-exact route still binds HEAD.
+    """
+    for rel in parity.LAUNCHER_FAMILIES:
+        text = (REPO / rel).read_text()
+        # F1: the mint, inside the branch that arms
+        arm = text.index("FR13_FA2_QROW32_B1_TIER_B_ARM=$_FR13_SPLITK_DEFAULT_ARM")
+        close = text.index("\n  fi\n", arm)
+        branch = text[arm:close]
+        assert "FR13_FA2_QROW32_B1_SOURCE_COMMIT:-$(git rev-parse HEAD" in branch, (
+            f"{Path(rel).name}: the mint is outside the arming branch"
+        )
+        assert "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum" in branch
+        assert "cannot mint the selector provenance" in branch
+        # F1: the gate is SCOPED, not disarmed
+        assert "requires a credential earned at this HEAD" in text
+        assert "tier-b selector requires a well-formed source commit" in text
+        assert '"$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" == "$(sha256sum' in text, (
+            f"{Path(rel).name}: the patcher digest stopped being bound"
+        )
+        # F2: the arbitration, and the opt-out it must not cost
+        assert "STANDS DOWN" in text
+        assert 'if [[ -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then' in text
+        assert '""|nosplit|gqa_pair) ;;' in text

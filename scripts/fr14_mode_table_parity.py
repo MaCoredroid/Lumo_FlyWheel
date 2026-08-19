@@ -83,6 +83,23 @@ FAMILY_PARITY_MARKERS = (
     "staged binary missing or not the pinned kernel",   # its hard refusal
     "must not silently serve the incumbent",            # and why it is hard
     "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST",        # the host/container split
+    # F1/F2 (severity-1, pass 106). Arming a selector is not surviving it: the
+    # promoted default set TIER_B_ARM and none of the provenance the selector
+    # gate 950 lines later reads, so every plain hydra27 B1 boot exited 2 and
+    # the default had never once served. Two of three is exactly how that gets
+    # re-introduced -- the fix landed in the canonical launcher first and the
+    # twins were a separate edit -- so each half is pinned here by count.
+    "cannot mint the selector provenance",              # F1: the mint's guard
+    # Keyed on the MINT's own assignment, not on the bare git idiom: the
+    # canonical launcher also runs it for the gqa_pair default's serviceability
+    # probe, which the twins do not have, and a marker that counts both would
+    # report a parity failure that is not one.
+    "FR13_FA2_QROW32_B1_SOURCE_COMMIT:-$(git rev-parse HEAD",   # F1: the mint
+    "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum",      # ... both halves
+    "_fr13_b1_commit_bound",                            # F1: the reconciliation
+    "requires a credential earned at this HEAD",        # ... tier-A keeps it
+    "tier-b selector requires a well-formed source commit",  # ... tier-B weaker
+    "STANDS DOWN",                                      # F2: the arbitration
 )
 
 
