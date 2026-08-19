@@ -1,0 +1,74 @@
+{
+ "schema": "fr14.measurement1.leg3_fork_divergence.v1",
+ "finding": "scripts/fr14_leg3_launch_nomiddleware.sh is SELECTIVELY STALE: it received every RECENT fix (site 12's vocab-profile conversion, F1 mint, F2 arbitration -- all verified present) but carries pre-NVFP4-port values for OLDER contract constants. Its armb twin agrees with production.",
+ "currency_check": {
+  "site_12_k64_clause_removed": {
+   "leg3": true,
+   "armb": true
+  },
+  "assert_draft_vocab_profile_callsites": {
+   "leg3": 7,
+   "armb": 7
+  },
+  "F1_mint_present": {
+   "leg3": true,
+   "armb": true
+  },
+  "F2_standdown_present": {
+   "leg3": true,
+   "armb": true
+  }
+ },
+ "why_patching_constant_by_constant_is_wrong": "each divergence costs one ~5-minute boot to discover and one round trip to land. The divergence set is bounded but unknown until enumerated; enumerate it once and reconcile in a single landing.",
+ "divergent_numeric_constants": [
+  {
+   "constant": "_fixed32_expected_mandatory_weight_bytes",
+   "production": [
+    "25210209416",
+    "25254282384",
+    "25430574256"
+   ],
+   "leg3_fork": [
+    "27977022848",
+    "29848731008",
+    "37335563648"
+   ],
+   "armb_twin": [
+    "25210209416",
+    "25254282384",
+    "25430574256"
+   ],
+   "armb_agrees_with_production": true,
+   "leg3_lines": [
+    4201,
+    4206,
+    4219
+   ]
+  },
+  {
+   "constant": "_fixed32_expected_weight_floor_ms",
+   "production": [
+    "92.345089436",
+    "92.506528879",
+    "93.15228665201465"
+   ],
+   "leg3_fork": [
+    "102.479937172",
+    "109.336011018",
+    "136.7603064029304"
+   ],
+   "armb_twin": [
+    "92.345089436",
+    "92.506528879",
+    "93.15228665201465"
+   ],
+   "armb_agrees_with_production": true,
+   "leg3_lines": [
+    4202,
+    4207,
+    4220
+   ]
+  }
+ ],
+ "divergence_count": 2
+}

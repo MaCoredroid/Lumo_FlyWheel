@@ -3623,3 +3623,73 @@ does not propagate the flag anyway — so the instrument arms by default.
 Thirteen sites. H27n baseline stands unchanged (69,389 steps; 218.702 / 0.133693 /
 3.8690 / 25.365). All four headlines remain unmeasured. Site 12 landed, so measurement
 1 is unblocked and is next. Standing verdicts unchanged.
+
+# MEASUREMENT 1, SECOND ATTEMPT (2026-08-19 20:12Z–20:18Z) — refused again by the same vehicle, a different stale constant
+
+## BOOT VERDICT: REFUSED — past site 12, on the weight contract
+
+Fired at HEAD `18392aebd`, clean tree, containers 0. The promoted default armed itself
+again (F1/F2 both firing correctly, third boot running):
+
+```
+[fr13] B1 arm unnamed; serving the PROMOTED DEFAULT FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk
+[fr13] gqa_pair promoted default STANDS DOWN: the split-K tier-b default is armed
+fixed32 requires FR13_MANDATORY_WEIGHT_BYTES=37335563648, got 25430574256
+```
+
+Site 12 is genuinely closed — the boot cleared it. It then refused on the next stale
+constant in the same file.
+
+## THE LEG3 FORK IS STALE ON A WHOLE TABLE, AND ITS TWIN IS NOT
+
+`_fixed32_expected_*` for the `K0:root0` (full_vocab) branch and its two siblings:
+
+| branch | production `fr13_launch_forked_fa2_tree_server.sh` | armb twin | **leg3 fork** |
+|---|---|---|---|
+| K0 full_vocab | 25430574256 / 93.15228665201465 | **identical** | **37335563648 / 136.7603064029304** |
+| 65536:0 | 25254282384 / 92.506528879 | **identical** | **29848731008 / 109.336011018** |
+| third | 25210209416 / 92.345089436 | **identical** | **27977022848 / 102.479937172** |
+
+Production and `scripts/fr14_armb_leg3_launch_nomiddleware.sh` agree **byte for byte on
+all six values**. `scripts/fr14_leg3_launch_nomiddleware.sh` disagrees on all six, and
+its numbers are the pre-NVFP4-port checkpoint (37.3 GB vs 25.4 GB — the FP8→NVFP4 size
+drop).
+
+## THE PATTERN IS NOW CONFIRMED, NOT SUSPECTED
+
+Both forks were checked for currency on everything recent:
+
+| | leg3 fork | armb twin |
+|---|---|---|
+| site 12 K64 clause removed | yes | yes |
+| `_fr13_assert_draft_vocab_profile` call sites | 7 | 7 |
+| F1 mint block | present | present |
+| F2 stand-down | present | present |
+
+**leg3 receives every new change and is stale only on things that predate them.** Site 12
+was one missed clause; this is a six-value table. Same file, same class, and it will keep
+surfacing one ~5-minute boot at a time.
+
+## RECOMMENDATION: STOP PATCHING IT CONSTANT BY CONSTANT
+
+A scan of every `NAME=<numeric literal>` assignment across the three files
+(`sglang_calibration/leg3_fork_divergence.json`, banked) finds the divergence is
+**exactly 2 constants / 6 values**, and the armb twin agrees with production on both —
+so a correct source already exists and the reconciliation is one landing, not a series.
+
+SCOPE LIMIT, STATED: that scan covers standalone numeric-literal assignments only.
+Divergences expressed inline, as strings, or in arrays would not be caught, so "2
+divergent constants" is a floor, not a proof of completeness. The durable fix is to
+regenerate leg3 from production the way armb evidently was — or to retire both forks by
+giving production a middleware-disable switch.
+
+## EXACT16 IS NOT BLOCKED BY THIS
+
+The B1 SWE serve path runs `fr13_bigdenom_swe_serve_variant.sh` ->
+`fr13_launch_forked_fa2_tree_server.sh`, the production launcher. It never touches the
+leg3 fork. Exact16 can proceed independently of this blocker.
+
+## STATUS
+
+Measurement 1 blocked a second time, same vehicle. GPU idle, containers 0, tree clean.
+H27n baseline unchanged. Standing verdicts unchanged.

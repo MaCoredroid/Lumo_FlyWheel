@@ -1,0 +1,10 @@
+[ours] seq env: GPU_UTIL=0.70 MAX_MODEL_LEN=131072 FLOOR_MS=93.15228665201465
+[ours] hydra27 mask=0x7abdffff active=27 walk_cap=12
+[ours] free before boot:
+               total        used        free      shared  buff/cache   available
+Mem:             117          12         105           0           1         105
+Swap:             15           0          15
+[ours] launcher rc=2
+[fr13] B1 arm unnamed; serving the PROMOTED DEFAULT FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk (tier-b credential 255267fc18fa4eb5209e381133d53a48410b3d362c6bc573065a9dd5be87e6d5)
+[fr13] gqa_pair promoted default STANDS DOWN: the split-K tier-b default is armed (split-K supersedes; name gqa_pair explicitly to opt out)
+fixed32 requires FR13_MANDATORY_WEIGHT_BYTES=37335563648, got 25430574256
