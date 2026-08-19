@@ -3022,3 +3022,130 @@ headline questions — **the ladder past position 10**, accept vs +4.3/+7.7 %, c
 
 Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
 recommended for the tier-B serving route on round 12's evidence.
+
+---
+---
+
+# ROUND 18 (2026-08-19 11:19Z–16:06Z) — two refusals in a NEW SOURCE ROOT; one was my own spec error, and the corrected baseline is banked
+
+**Boot verdict: H31i refused twice.** The first refusal was **mine, not a defect**. The
+second is a seventh profile-blind site, in `src/` rather than `scripts/` — a source root
+no sweep has covered.
+
+| arm | outcome |
+|---|---|
+| H31i (attempt 1) | **REFUSED** — `FR13_HOST_TAIL_PREP_BAKE=1` incompatible with hydra31 — **my arm spec** |
+| **H27n** (corrected baseline) | **PASS** — `swerc=0`, 4/4 tasks, **69 389 census steps** |
+| H31n (attempt 2) | **REFUSED** — `_FR13_FIXED32_MODES` allowlist in `src/lumo_flywheel_serving/` |
+
+## R18.1 Pre-flight, verified before GPU
+
+The observable ancestry binding is present (`TREE_ANCESTRY_SHA256` reduced at the bake
+point), and — the check my pairing standard rests on — **the current hydra27 default is
+still byte-identical to the tree ARM H27i executed**, re-verified against H27i's own
+`container_env.txt`. Your pairing claim holds.
+
+## R18.2 The first refusal was my error, and the guard was right
+
+```
+RuntimeError: FR13_HOST_TAIL_PREP_BAKE=1 requires fixed32 to be armed but
+FR13_FIXED32_MODE is 'hydra31_fixed32'. The lever bakes the tree depth-position
+plan as a literal … the baked plan would feed wrong RoPE depth offsets into
+positions[...] = base + depth_offsets and nothing downstream would catch it.
+```
+
+`src/lumo_flywheel_serving/fr13_host_tail_prep.py:81`, admitting only
+`('hydra27_fixed32','tail6_fixed32')`.
+
+**This is not a defect — it is round 17's demand already satisfied.** The lever
+genuinely bakes a hydra27 literal, and the guard refuses rather than serving a silently
+wrong topology, naming the exact mechanism ("nothing downstream would catch it").
+
+**The error was mine.** I had carried `FR13_HOST_TAIL_PREP_BAKE=1` since round 2 because
+it was part of the *composed/promoted* arm shape — and then carried it into a
+*topology-isolation* experiment, where it is both unnecessary and topology-bound by
+construction. H27i had run with it **on**, so pairing H31 (off) against H27i (on) would
+have been two variables.
+
+I fixed my spec rather than route around the guard: **`PREP_BAKE=0` on both arms**, and
+re-ran the baseline. Cost: one 4h 43m serve, charged to me.
+
+## R18.3 ARM H27n — the corrected baseline, and it is the strongest yet
+
+`swerc=0`, wall 16 633 s, 4/4 tasks, 1/4 resolved. Env attests exactly:
+`PRODUCTION_ARM=` (stock FA2), `FUSED_DRAFT_TOPK=0`, `SUFFIX_PASS_GATE=0`,
+**`HOST_TAIL_PREP_BAKE=0`**, `MODE=hydra27_fixed32`, walk cap 12.
+
+```
+step_wall_ms 218.702 · s_per_fwd_gpu 0.133693 · accept/event 3.8690
+drafter 56.642 · committer 20.569 · overhead_other 7.797 · per-request TPS 25.365
+69 389 census steps — 27/32 on every one, mtp_forward_calls 4, graph_replays 1
+```
+
+**69 389 steps is by far the largest census in the campaign** (3.3× C', 3.9× H27i), so
+this baseline has the tightest statistics of any arm banked so far. It supersedes H27i
+as the pairing basis, and unlike H27i it is single-variable-ready in *every* dimension:
+incumbent kernel, no top-k, no gate, no split-K, no baked host-tail literal.
+
+## R18.4 The seventh site — and the sweep's blind spot is a whole source root
+
+```
+RuntimeError: FR13_FIXED32_MODE: invalid fixed32 route source(s):
+  env:FR13_FIXED32_MODE='hydra31_fixed32',
+  sidecar:/logs/fr13_fixed32_mode.flag='hydra31_fixed32'
+```
+
+`src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:843`:
+
+```python
+_FR13_FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
+```
+
+used at `:982` (route-source validation) and `:1165`. **Zero hydra31 mentions in the
+entire file.** Note the refusal names *both* sources as invalid — env **and** sidecar —
+so the mode plumbing worked perfectly; the allowlist that receives it simply predates
+hydra31.
+
+**Every previous site was in `scripts/`. This is the first in `src/lumo_flywheel_serving/`
+— the serving package rather than the tooling.** That is why every sweep and lint so far
+has missed it: they enumerate the wrong root.
+
+I enumerated that root so the next fix can be complete rather than incremental:
+
+| file in `src/lumo_flywheel_serving/` | hydra27 refs | hydra31 refs |
+|---|---|---|
+| `fr10_gdn_tree_kernel.py` | 8 | **0** |
+| `fr13_sfwd_conv_postprep_fusion.py` | 7 | **0** |
+| `fr13_host_tail_prep.py` | 2 | **0** |
+| `fr13_gdn_gqa_group3.py` | 1 | **0** |
+| `fr13_fixed32_commit_slot_scatter.py` | 1 | **0** |
+
+Four distinct mode allowlists, all spelled `frozenset(("tail6_fixed32",
+"hydra27_fixed32"))` or the tuple equivalent:
+
+```
+fr10_gdn_tree_kernel.py:843          _FR13_FIXED32_MODES
+fr13_sfwd_conv_postprep_fusion.py:44 FIXED32_MODES
+fr13_gdn_gqa_group3.py:18            FIXED32_MODES
+fr13_fixed32_commit_slot_scatter.py:74 FIXED32_MODES
+```
+
+plus inline comparisons at `fr10_gdn_tree_kernel.py:3841`, `:4317` and
+`fr13_sfwd_conv_postprep_fusion.py:961`.
+
+**Not all of these should be widened.** `fr13_host_tail_prep.py` is correctly
+hydra27-only (§R18.2) — it bakes a literal. The others must each be adjudicated:
+*does this component's behaviour depend on the tree, and if so does it derive from the
+authority or assume hydra27?* That is the same adjudication the shape-literal sweep
+made in the patcher, applied to a root nobody has swept.
+
+## R18.5 Status
+
+**tail10 A/B: baseline banked at its strongest, treatment arm still unbootable.**
+Seven profile-blind sites across five layers — vehicle, preflight, contract accessors,
+drafter patcher, and now the serving package. The four headline questions — **the ladder
+past position 10**, accept vs +4.3/+7.7 %, cfwd vs +33 %, step_wall/TPS vs H27n's
+218.702 / 25.365 — remain open and still need one boot.
+
+Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
+recommended for the tier-B serving route on round 12's evidence.

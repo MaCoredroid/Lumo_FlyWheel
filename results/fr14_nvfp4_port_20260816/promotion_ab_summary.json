@@ -538,6 +538,80 @@
   "tail10_status": "baseline banked and re-verified; treatment arm still unbootable; all four headline questions open and all need the same single boot",
   "window_utc": "2026-08-19T10:35Z..10:41Z"
  },
+ "round18": {
+  "arm_h27n": {
+   "accept_per_event": 3.868970586115955,
+   "census_steps": 69389,
+   "committer_ms": 20.569270122331265,
+   "drafter_ms": 56.64230672332793,
+   "label": "corrected baseline",
+   "overhead_other": 7.797449968379555,
+   "per_request_tps": 25.365463866043303,
+   "rc": 0,
+   "resolved": 1,
+   "s_per_fwd_gpu": 0.13369312186431534,
+   "significance": "largest census in the campaign (3.3x C-prime, 3.9x H27i); supersedes H27i as the pairing basis and is single-variable-ready in every dimension \u2014 incumbent kernel, no top-k, no gate, no split-K, no baked host-tail literal",
+   "step_wall_ms": 218.7021486783541,
+   "tasks": 4,
+   "wall_s": 16633
+  },
+  "head": "1e0029424",
+  "preflight_verified": {
+   "baseline_byte_identity": "re-verified against H27i container_env \u2014 hydra27 default unchanged",
+   "observable_ancestry_binding": "present"
+  },
+  "refusal_1_MY_ERROR": {
+   "cost": "one 4h43m serve, charged to me",
+   "fix": "PREP_BAKE=0 on both arms and re-ran the baseline",
+   "my_error": "I carried FR13_HOST_TAIL_PREP_BAKE=1 from the composed/promoted arm shape since round 2 into a TOPOLOGY-ISOLATION experiment where it is unnecessary and topology-bound; H27i had run with it ON so pairing would have been two variables",
+   "refusal": "FR13_HOST_TAIL_PREP_BAKE=1 requires fixed32 armed but MODE is hydra31_fixed32",
+   "site": "src/lumo_flywheel_serving/fr13_host_tail_prep.py:81",
+   "verdict": "NOT A DEFECT \u2014 the lever bakes the tree depth-position plan as a literal and the guard admits only (hydra27,tail6); it refuses rather than serving a silently wrong topology, which is exactly round 17 demand already satisfied"
+  },
+  "site_7": {
+   "NEW_BLIND_SPOT": "every previous site was in scripts/; this is the first in src/lumo_flywheel_serving/, the serving package rather than the tooling \u2014 which is why every sweep and lint so far missed it",
+   "note": "the refusal names BOTH sources as invalid, so the mode plumbing worked perfectly \u2014 the allowlist receiving it simply predates hydra31",
+   "refusal": "FR13_FIXED32_MODE: invalid fixed32 route source(s): env AND sidecar both hydra31_fixed32",
+   "site": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:843 _FR13_FIXED32_MODES = frozenset((tail6_fixed32, hydra27_fixed32)); used at :982 and :1165; zero hydra31 mentions in the file"
+  },
+  "src_root_enumeration": {
+   "CAUTION": "not all should be widened \u2014 fr13_host_tail_prep is CORRECTLY hydra27-only because it bakes a literal; each must be adjudicated on whether its behaviour depends on the tree and whether it derives from the authority or assumes hydra27",
+   "four_mode_allowlists": [
+    "fr10_gdn_tree_kernel.py:843",
+    "fr13_sfwd_conv_postprep_fusion.py:44",
+    "fr13_gdn_gqa_group3.py:18",
+    "fr13_fixed32_commit_slot_scatter.py:74"
+   ],
+   "fr10_gdn_tree_kernel.py": {
+    "h27": 8,
+    "h31": 0
+   },
+   "fr13_fixed32_commit_slot_scatter.py": {
+    "h27": 1,
+    "h31": 0
+   },
+   "fr13_gdn_gqa_group3.py": {
+    "h27": 1,
+    "h31": 0
+   },
+   "fr13_host_tail_prep.py": {
+    "h27": 2,
+    "h31": 0
+   },
+   "fr13_sfwd_conv_postprep_fusion.py": {
+    "h27": 7,
+    "h31": 0
+   },
+   "inline_compares": [
+    "fr10_gdn_tree_kernel.py:3841",
+    "fr10_gdn_tree_kernel.py:4317",
+    "fr13_sfwd_conv_postprep_fusion.py:961"
+   ]
+  },
+  "tail10_status": "baseline banked at its strongest; treatment arm still unbootable; four headline questions open, one boot away",
+  "tally": "seven profile-blind sites across five layers \u2014 vehicle, preflight, contract accessors, drafter patcher, serving package",
+  "window_utc": "2026-08-19T11:19Z..16:06Z"
+ },
  "round2": {
   "arms": {
    "C'": {
