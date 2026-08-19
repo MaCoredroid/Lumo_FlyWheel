@@ -322,10 +322,15 @@ print(repr(list(_h31["choices"])))
 print(f"{_h31['valid_mask']:#x}")
 print(_h31["active_drafts"])
 print(t.PHYSICAL_DRAFTS)
+# the committer walk depth is profile-varying too (12 -> 16): the launcher's
+# in-container preflight compares it against the armed profile, so the arm has
+# to carry the right one or it refuses before the engine starts.
+print(t.profile(t.PROFILE_HYDRA27)["walk_cap"])
+print(_h31["walk_cap"])
 PY
 )
-(( ${#_FIXED32_CONTRACT[@]} == 9 )) \
-  || { echo "FAIL: fixed32 topology authority did not emit nine fields"; exit 2; }
+(( ${#_FIXED32_CONTRACT[@]} == 11 )) \
+  || { echo "FAIL: fixed32 topology authority did not emit eleven fields"; exit 2; }
 FIXED32_TREE=${_FIXED32_CONTRACT[0]}
 FIXED32_TAIL_MASK=${_FIXED32_CONTRACT[1]}
 FIXED32_HYDRA_MASK=${_FIXED32_CONTRACT[2]}
@@ -335,11 +340,14 @@ FIXED32_HYDRA31_TREE=${_FIXED32_CONTRACT[5]}
 FIXED32_HYDRA31_MASK=${_FIXED32_CONTRACT[6]}
 FIXED32_HYDRA31_ACTIVE=${_FIXED32_CONTRACT[7]}
 FIXED32_PHYSICAL_DRAFTS=${_FIXED32_CONTRACT[8]}
+FIXED32_HYDRA_WALK_CAP=${_FIXED32_CONTRACT[9]}
+FIXED32_HYDRA31_WALK_CAP=${_FIXED32_CONTRACT[10]}
 unset _FIXED32_CONTRACT
 # the runner's handover, asserted against the derivation rather than trusted
 [[ "$FIXED32_HYDRA31_MASK" == "0x7fffffff" \
    && "$FIXED32_HYDRA31_ACTIVE" == "31" \
-   && "$FIXED32_PHYSICAL_DRAFTS" == "31" ]] \
+   && "$FIXED32_PHYSICAL_DRAFTS" == "31" \
+   && "$FIXED32_HYDRA_WALK_CAP" == "12" && "$FIXED32_HYDRA31_WALK_CAP" == "16" ]] \
   || { echo "FAIL: hydra31 contract drifted: mask=$FIXED32_HYDRA31_MASK nodes=$FIXED32_HYDRA31_ACTIVE drafts=$FIXED32_PHYSICAL_DRAFTS"; exit 2; }
 # 333 = widths [3,3,3]: depth-3 spine (spine_steps=2) + 2 branches/depth (9 choices). SAME width
 # as t33333, differs ONLY in depth -> dfwd(t33333)-dfwd(t333) = 2 spine-steps' drafter cost.
@@ -455,6 +463,7 @@ case "$KIND" in
       FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged
       FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0
       FR13_FIXED32_MODE=tail6_fixed32
+      "FR13_FIXED32_TAW_WALK_CAP=$FIXED32_HYDRA_WALK_CAP"
       "FR13_FIXED32_VALID_MASK=$FIXED32_TAIL_MASK"
       "FR13_FIXED32_ACTIVE_NODES=$FIXED32_TAIL_ACTIVE"
       "FR13_FIXED32_PHYSICAL_DRAFTS=$FIXED32_PHYSICAL_DRAFTS"
@@ -469,6 +478,7 @@ case "$KIND" in
       FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged
       FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0
       FR13_FIXED32_MODE=hydra27_fixed32
+      "FR13_FIXED32_TAW_WALK_CAP=$FIXED32_HYDRA_WALK_CAP"
       "FR13_FIXED32_VALID_MASK=$FIXED32_HYDRA_MASK"
       "FR13_FIXED32_ACTIVE_NODES=$FIXED32_HYDRA_ACTIVE"
       "FR13_FIXED32_PHYSICAL_DRAFTS=$FIXED32_PHYSICAL_DRAFTS"
@@ -489,6 +499,7 @@ case "$KIND" in
       FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged
       FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0
       FR13_FIXED32_MODE=hydra31_fixed32
+      "FR13_FIXED32_TAW_WALK_CAP=$FIXED32_HYDRA31_WALK_CAP"
       "FR13_FIXED32_VALID_MASK=$FIXED32_HYDRA31_MASK"
       "FR13_FIXED32_ACTIVE_NODES=$FIXED32_HYDRA31_ACTIVE"
       "FR13_FIXED32_PHYSICAL_DRAFTS=$FIXED32_PHYSICAL_DRAFTS"

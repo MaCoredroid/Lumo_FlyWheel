@@ -1,0 +1,14 @@
+{
+ "schema": "fr14.mode_table_parity.v1",
+ "profiles": [
+  "hydra27_fixed32",
+  "hydra31_fixed32"
+ ],
+ "sites": [
+  "scripts/fr13_launch_forked_fa2_tree_server.sh",
+  "scripts/fr14_armb_leg3_launch_nomiddleware.sh",
+  "scripts/fr14_leg3_launch_nomiddleware.sh",
+  "scripts/fr13_bigdenom_swe_serve_variant.sh"
+ ],
+ "stale": []
+}

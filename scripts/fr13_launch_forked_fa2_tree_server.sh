@@ -3713,7 +3713,20 @@ sys.path.insert(0, "scripts")
 import fr13_fixed32_topology as topology
 
 topology.validate_contract()
+topology.validate_gate_contract()
+topology.validate_tail10_contract()
 mode = os.environ["FR13_FIXED32_MODE"]
+# PROFILE-AWARE. Three things in this block vary by profile, not one: the
+# mask/nodes table, the TREE this mode's paths must equal, and the walk cap.
+# tail6 and hydra27 share one physical tree and differ only in mask; hydra31 is
+# a DIFFERENT tree (14 of 31 draft ids carry different paths, ancestry
+# 90873d81 -> 5b33c46a), so keying only the table would move the refusal three
+# lines down to the TREE comparison, and then again to the walk cap.
+_shape_of = {
+    "tail6_fixed32": topology.PROFILE_HYDRA27,
+    "hydra27_fixed32": topology.PROFILE_HYDRA27,
+    "hydra31_fixed32": topology.PROFILE_HYDRA31,
+}
 expected = {
     "tail6_fixed32": (
         topology.TAIL6_VALID_MASK,
@@ -3723,12 +3736,17 @@ expected = {
         topology.HYDRA27_VALID_MASK,
         topology.HYDRA27_ACTIVE_DRAFTS,
     ),
+    "hydra31_fixed32": (
+        topology.HYDRA31_VALID_MASK,
+        topology.HYDRA31_ACTIVE_DRAFTS,
+    ),
 }
-if mode not in expected:
+if mode not in expected or mode not in _shape_of:
     raise SystemExit(f"unsupported fixed32 mode: {mode!r}")
+_profile = topology.profile(_shape_of[mode])
 tree = tuple(tuple(path) for path in ast.literal_eval(os.environ["TREE"]))
-if tree != topology.FIXED32_CHOICES:
-    raise SystemExit("fixed32 TREE differs from FIXED32_CHOICES")
+if tree != tuple(_profile["choices"]):
+    raise SystemExit(f"fixed32 TREE differs from the {mode} choices")
 mask_text = os.environ["FR13_FIXED32_VALID_MASK"]
 try:
     mask = int(mask_text, 0)
@@ -3747,7 +3765,7 @@ if (mask, active) != expected[mode]:
     )
 if (
     physical_drafts != topology.PHYSICAL_DRAFTS
-    or walk_cap != topology.WALK_CAP
+    or walk_cap != int(_profile["walk_cap"])
     or spec_tokens != topology.PHYSICAL_DRAFTS
 ):
     raise SystemExit(

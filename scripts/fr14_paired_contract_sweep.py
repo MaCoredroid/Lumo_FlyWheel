@@ -388,6 +388,20 @@ def pair_profiles_vs_census_modes(blob, topo):
     return True, "census consumes the profile table"
 
 
+def pair_mode_tables_admit_every_profile(blob, topo):
+    """Every mode table / whitelist / topology comparison reachable from a
+    launcher or the vehicle must admit every profile (round 13 and 14)."""
+    import fr14_mode_table_parity as parity
+
+    stale = parity.sweep()
+    if stale:
+        return False, [f"{r['kind']}: {r['detail']}" for r in stale]
+    return True, (
+        f"{len(parity.SHELL_SITES)} shell sites admit all "
+        f"{len(topo.PROFILES)} profiles"
+    )
+
+
 def pair_topology_vs_drafter():
     """decide_fixed32's gated widths vs the topology contract."""
     topo = _topology()

@@ -336,3 +336,71 @@ profile.
 
 346 tests, 16 pairs / 0 stale. Round 14 — hydra31 vs hydra27, both arms same HEAD, gate OFF
 both, paired exact4, ladder-past-position-10 as the headline instrument — can launch.
+
+
+---
+
+# 11. STAGE 2c — the in-container preflight (2026-08-19)
+
+Round 14: H27 banked clean, H31 refused at a **second** mode table — the launcher's own
+in-container preflight, distinct from the outer whitelist stage-2b fixed.
+
+## 11.1 Three profile-varying things in one twelve-line block, not one
+
+The runner named the table and, by **reading rather than booting**, the tree comparison three
+lines below it. Reading the rest of the block found a third:
+
+| line | compares | hydra27 | hydra31 |
+|---|---|---|---|
+| mode table | mask / active nodes | `0x7abdffff` / 27 | `0x7fffffff` / 31 |
+| `tree != topology.FIXED32_CHOICES` | the dispatched tree | ancestry `90873d81` | **`5b33c46a`** |
+| `walk_cap != topology.WALK_CAP` | committer walk depth | 12 | **16** |
+
+Teaching only the table moves the refusal three lines down; teaching table + tree moves it nine
+lines further. All three are now keyed on the mode through `topology.profile(...)`.
+
+**The block is mirrored in THREE launchers**, including `fr14_leg3_launch_nomiddleware.sh`,
+which has none of my earlier FR14 work — my "both launcher families" assumption was wrong by
+one. All three are fixed.
+
+## 11.2 The walk cap had to be *supplied*, not just checked
+
+H27's banked `container_env.txt` carries `FR13_FIXED32_TAW_WALK_CAP=12`, minted upstream by
+the runner env, not by the vehicle. Making the preflight expect 16 for hydra31 without
+supplying it would just relocate the refusal again. So every fixed32 kind block now exports its
+profile's walk cap, derived from the authority alongside mask and nodes — and `XFLAGS` are
+exported *after* the caller's environment, so the arm's value wins over the runner's 12.
+
+Verified by **executing the real preflight**: all three modes pass; hydra31 carrying hydra27's
+tree is refused (`TREE differs from the hydra31_fixed32 choices`); hydra31 with walk cap 12 is
+refused (`shape mismatch ... walk_cap=12`); an unknown mode is refused.
+
+## 11.3 The detector, in its closing form
+
+`scripts/fr14_mode_table_parity.py` answers the question wherever it is asked, from
+`PROFILES`:
+
+1. **every dict keyed by fixed32 mode** in any embedded python block across all four shell
+   sites → must have a row for every profile;
+2. **every comparison against a profile-varying topology constant** → must be keyed on the
+   mode, never made unconditionally (this is the half a table-only fix misses);
+3. **every bash whitelist naming two or more modes** → must name every profile. Single-mode
+   lever preconditions are left alone: hydra27-qualified levers legitimately refuse hydra31.
+
+Five mutations prove it fires — the missing table row, the unconditional tree compare, the
+unconditional walk-cap compare, and a dropped profile in either a launcher or the vehicle
+whitelist — with both unmodified sources clean. Folded into the paired-contract sweep as a
+17th pair.
+
+This is the third place the same question gets asked, and the detector now covers all three:
+consumers (contract pairs), vehicle dispatch (`test_fr14_vehicle_profile_parity`), preflight
+(`test_fr14_mode_table_parity`).
+
+## 11.4 Status
+
+362 tests, 16 pairs / 0 stale. H31 is launchable.
+
+One gap reported rather than silently widened: `fr14_leg3_launch_nomiddleware.sh` now has the
+profile-aware preflight but still lacks the suffix-gate guards and the **promoted** fused
+draft top-k default. If that twin is a live serving path, it would serve without the promoted
+kernel. Flagged for a decision rather than expanded into this change.
