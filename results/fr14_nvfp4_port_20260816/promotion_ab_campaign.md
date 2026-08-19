@@ -1717,3 +1717,56 @@ story and became a measurement, and the measurement says no. Split-K stopped bei
 unreachable and became measurable, and the first measurement says the offline win
 does not obviously transfer — which is exactly why the eyeball condition was
 attached to a *serve* and not to a probe.
+
+---
+---
+
+# CORRECTION TO ROUND 6 — ARM S NEVER SERVED SPLIT-K, AND I REPORTED THAT IT DID
+
+Lane 4 (`fd728e2b3`) found an **18th site**: the tier-B serving-hook installer was
+keyed to the *production* selector while tier-B is spelled as a **live** arm, so the
+`elif` chain installed nothing. Round 6's ARM S was **incumbent-vs-incumbent**.
+
+**I verified the correction against my own banked artifacts rather than accept it:**
+
+* the round-6 census carries `tree_attn.calls = 16` on **all 1 038 rows** — one call
+  per full-attention layer, i.e. a single un-retagged dispatch;
+* the served artifact has **no engagement counter at all** (`tier_b_engagement` did
+  not exist); the two fields I quoted, `served_return = "candidate output served
+  (tier-b)"` and `tier_b_serving = True`, are **derived from environment variables**;
+* the artifact's own body proves what it really was — a *shadow* comparison:
+  `reference_dispatch = qrow16 incumbent`, `reference_selector_sentinel = 1179791667`
+  vs `selector_sentinel = 1179791671`, and **176 915 output / 11 320 LSE raw-byte
+  mismatches**. Those mismatches are exactly what `splitk_fa2.md` §1 predicts for a
+  changed reduction topology — they were never a serving signal.
+
+## What this invalidates, precisely
+
+| round-6 claim | status |
+|---|---|
+| "SPLIT-K SERVED … first time in six attempts" | **WITHDRAWN** |
+| "Mark's mandatory degenerate eyeball: DISCHARGED, CLEAN" | **WITHDRAWN — the trace was the PROMOTED STACK's, not split-K's** |
+| verifier forward +3.101 ms (+2.46 %) vs C' | **not a split-K reading** |
+| Tier-B credential 9/9 bounds (phase 3) | stands — offline kernel probe, unaffected |
+| ARM G'' results (phases 1–2) | stand — different arm, unaffected |
+
+**Mark's split-K eyeball is NOT discharged. It never was.** Six attempts, and the
+honest count of served split-K tokens remains **zero**.
+
+## My share of this, stated plainly
+
+I checked a field named `served_return` and did not check whether the kernel had
+*run*. The evidence was already in my own hands: `tree_attn.calls` sat in the census
+I had reduced, and in round 1 I had written a probe specifically because
+`candidate_served` is the only field that means served — then in round 6 I trusted a
+string. **I verified configuration and reported it as observation**, which is the
+exact failure this campaign has named repeatedly ("an artifact must report what
+ran"). The lane's own confession does not transfer the reporting error: I published
+the discharge.
+
+**One thing worth keeping from the wreckage.** Because round 6's ARM S was the
+promoted stack measured against the promoted stack, its verifier-forward delta is an
+empirical **noise-floor estimate for a single unpaired 1-task diagnostic run**: the
+true value was 0 and it read **+3.101 ms (+2.46 %)**. My stated caveat — "this run
+cannot resolve anything smaller than ~±4 ms" — was right, and is now calibrated
+rather than asserted. Round 7 needs the full task set for exactly that reason.
