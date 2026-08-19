@@ -221,9 +221,35 @@ Run `boot.sh` **once with the default untouched** to record the refusal in
 finding 1 as an observation rather than a static read, then
 `RERUN_WITH_PROVENANCE=1 boot.sh` for the measurement.
 
+## Postscript — Ch31q crashed at 4 m 50 s, and the slot is held by its corpse
+
+Written after the bank above. The foreign arm did not run 4 h; it **died at
+`2026-08-19T18:24:12Z`, exit 1**, 4 m 50 s after starting:
+
+```
+FAIL: fixed32 terminal flush rc=1
+fixed32 container incarnation drifted after engine-ledger materialization failure: b13398ebe046…
+```
+
+That is round 20's own held blocker reproducing — not anything this measurement
+did, and it was diagnosed from `docker inspect` and their runlog without
+touching either.
+
+The GPU is now idle, **but the window was still not taken**, for one reason
+worth stating plainly: `docker ps -a` is **not empty** — Ch31q's exited
+container is still there, and it is round 20's forensic evidence for a failure
+they are actively chasing. Removing it to satisfy the launcher's own
+`docker ps -aq` emptiness assertion would destroy that evidence, and it is not
+this measurement's to remove. Ch31p → Ch31q also shows a fast relaunch cadence,
+so the slot should be assumed claimed.
+
+**Whoever picks this up next:** clear Ch31q only once round 20 has taken what it
+needs from it, then run the staged vehicle. Nothing else is in the way.
+
 ## GPU discipline
 
 Docker empty and zero compute processes at open. One foreign container
-(`fr13-bigdenom-hydra31_fixed32_promoab_Ch31q`, round 20) appeared mid-window
-and was **left running**. This measurement started nothing on the GPU: zero
-containers created, zero removed. Net container delta **0**.
+(`fr13-bigdenom-hydra31_fixed32_promoab_Ch31q`, round 20) appeared mid-window,
+was **left running**, and exited on its own. This measurement started nothing on
+the GPU and removed nothing: zero containers created, zero removed. Net
+container delta **0**. Zero compute processes at close.

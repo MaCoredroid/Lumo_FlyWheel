@@ -5,9 +5,15 @@
   "comparable_arm_wall": "Ch27n ran 4h43m (output/fr14_promoab_Ch27n_20260819T112147Z/arm_meta.txt)",
   "foreign_container": "fr13-bigdenom-hydra31_fixed32_promoab_Ch31q",
   "foreign_container_created_utc": "2026-08-19T18:19:22Z",
+  "foreign_container_exit_code": 1,
+  "foreign_container_finished_utc": "2026-08-19T18:24:12Z",
+  "foreign_container_wall_s": 290,
+  "foreign_failure": "FAIL: fixed32 terminal flush rc=1 / fixed32 container incarnation drifted after engine-ledger materialization failure (round 20's own held blocker reproducing)",
   "foreign_gpu_mib": 20625,
   "foreign_gpu_pid": 352261,
-  "kind": "gpu_contended"
+  "gpu_idle_at_close": true,
+  "kind": "gpu_contended",
+  "still_not_taken_why": "docker ps -a is not empty: Ch31q's exited container remains and is round 20's forensic evidence for a failure they are actively chasing; removing it to satisfy the launcher's own emptiness assertion is not this measurement's call. Ch31p->Ch31q also shows a fast relaunch cadence."
  },
  "citable": false,
  "date_utc": "2026-08-19",
@@ -66,10 +72,12 @@
   }
  ],
  "gpu_discipline": {
+  "compute_procs_at_close": 0,
   "compute_procs_at_open": 0,
   "containers_created": 0,
   "containers_removed": 0,
   "docker_empty_at_open": true,
+  "foreign_containers_removed": 0,
   "launcher_executed": false,
   "net_container_delta": 0
  },
@@ -148,6 +156,7 @@
   "seed": 42,
   "why_existing_nomiddleware_copies_unusable": "scripts/fr14_leg3_launch_nomiddleware.sh and scripts/fr14_armb_leg3_launch_nomiddleware.sh are behind HEAD: no FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE and their B1 selector still hard-codes K64/root1, so they refuse the promoted K0 config"
  },
+ "next_step": "clear Ch31q only once round 20 has taken what it needs from it, then run the staged vehicle: boot.sh once with the default untouched to observe F1, then RERUN_WITH_PROVENANCE=1 boot.sh for the measurement",
  "objective": "promoted production stack (hydra27_fixed32 + K0 full-vocab + split-K tier-B default + fused draft top-k default, RadixArk NVFP4) on sglang's random-1024/1024 bs=1 bench shape",
  "schema": "fr14.apples_to_apples.ours_random_bench.v1",
  "sglang_reference": {
