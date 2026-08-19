@@ -6907,7 +6907,7 @@ fi
 if [[ -n "\${FR13_FA2_QROW32_B1_TIER_B_ARM}" ]]; then
   # SITE 19. The attestation above is exported only inside the production-arm
   # block, so a tier-B serve reached _fr13_fa2_qrow32_b1_production_begin and
-  # died on "has no launcher attestation". A tier-B serve needs its own
+  # died on the has-no-launcher-attestation refusal. A tier-B serve needs its own
   # attestation, and per the pass-72 doctrine the export must be tied to an
   # OBSERVATION rather than to configuration: this re-hashes the credential
   # file and RECOMPUTES every pre-registered bound from the recorded
