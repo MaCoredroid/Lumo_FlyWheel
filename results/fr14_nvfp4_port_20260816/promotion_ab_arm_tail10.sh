@@ -51,8 +51,24 @@ ARM_KIND=${ARM_KIND:?set ARM_KIND to C or G}
 case "$ARM_KIND" in C|G) ;; *) echo "ARM_KIND must be C or G" >&2; exit 2 ;; esac
 
 PYTHON_BIN=.venv/bin/python
-SUBSET=config/fr13_fixed32/subset_b4_four.json
-SUBSET_SHA256=0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5
+# PROMOAB_SUBSET selects the served workload. exact4 stays the default so every
+# banked A/B in this campaign keeps its meaning; exact16 is the QC subset (pass
+# 118 ruling). The sha is RECOMPUTED from the file rather than carried as a
+# second literal -- two hardcoded copies of a digest is how a subset silently
+# stops matching its own identity.
+PROMOAB_SUBSET=${PROMOAB_SUBSET:-exact4}
+case "$PROMOAB_SUBSET" in
+  exact4)  SUBSET=config/fr13_fixed32/subset_b4_four.json ;;
+  exact16) SUBSET=config/fr13_fixed32/subset_b4_sixteen.json ;;
+  *) echo "PROMOAB_SUBSET must be exact4 or exact16" >&2; exit 2 ;;
+esac
+[[ -f "$SUBSET" && ! -L "$SUBSET" ]] || { echo "subset missing: $SUBSET" >&2; exit 2; }
+SUBSET_SHA256=$(sha256sum "$SUBSET" | cut -d' ' -f1)
+case "$PROMOAB_SUBSET:$SUBSET_SHA256" in
+  exact4:0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5) ;;
+  exact16:47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c) ;;
+  *) echo "subset $PROMOAB_SUBSET digest drifted: $SUBSET_SHA256" >&2; exit 2 ;;
+esac
 MANDATORY_WEIGHT_BYTES=25430574256
 MANDATORY_WEIGHT_FLOOR_MS=93.15228665201465
 EXPECT_TOK_PER_DRAFT=31
@@ -113,12 +129,31 @@ FA2_B1_ARM_NOTE=
 # FA2 mounted. Round 16 / option A needs BOTH arms on the incumbent kernel, because
 # the gqa_pair arm is excluded under hydra31 by a mode gate (round 15) and pairing a
 # gqa_pair arm against an incumbent one would measure kernel + topology at once.
-if [[ "${PROMOAB_FA2:-}" == "stock" ]]; then
+# PROMOAB_FA2=default (approved pass 118) QCs THE CANONICAL PATH: present nothing,
+# name nothing, and let the launcher's promoted split-K default arm itself. That is
+# the whole point of the exact16 QC -- the configuration under test is the one an
+# unnamed boot resolves to.
+#
+# THE TRAP THIS MODE HAS TO AVOID, stated because it is invisible: naming the B1
+# production arm EMPTY is NOT the same as leaving it unnamed. The launcher's
+# promoted-default block is guarded by _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0,
+# and that flag is set from `[[ -v FR13_FA2_QROW32_B1_PRODUCTION_ARM ]]` -- an
+# EXPORTED EMPTY STRING is "set". So `export ...=""`, which is exactly what the
+# stock/incumbent branch below does deliberately, would SUPPRESS the promoted
+# default and silently QC the incumbent instead. This branch therefore exports
+# nothing at all, presents no credential, and leaves FORKED_FA2_SO empty so the
+# launcher's own `${FORKED_FA2_SO:-$_FR13_SPLITK_DEFAULT_SO}` supplies the binary.
+if [[ "${PROMOAB_FA2:-}" == "default" ]]; then
+  : # present nothing; the launcher must arm the promoted default from its own literals
+elif [[ "${PROMOAB_FA2:-}" == "stock" ]]; then
   FR13_FA2_QROW32_B1_SOURCE_COMMIT=__forced_stock__
 elif [[ -f "$CREDENTIAL_POINTER" ]]; then
   set -a; . "$CREDENTIAL_POINTER"; set +a
 fi
-if [[ "${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-}" == "$SOURCE_COMMIT" \
+if [[ "${PROMOAB_FA2:-}" == "default" ]]; then
+  FA2_B1_ARM_NOTE="PROMOTED DEFAULT (B1 arm left UNNAMED; launcher arms split-K tier-B and mints its own provenance)"
+  FA2_SO_FOR_ARM=""
+elif [[ "${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-}" == "$SOURCE_COMMIT" \
       && "${FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE:-}" == "full_vocab" ]]; then
   FA2_B1_ARM_NOTE="gqa_pair (promoted default, credential serviceable at $SOURCE_COMMIT)"
   FA2_SO_FOR_ARM="$CANDIDATE_SO"
@@ -141,8 +176,15 @@ else
   # arm's binary is an explicit, attested choice.
   FA2_SO_FOR_ARM="$STOCK_FA2_SO"
 fi
-[[ -f "$FA2_SO_FOR_ARM" && ! -L "$FA2_SO_FOR_ARM" ]] \
-  || { echo "FA2 .so for this arm is missing or a symlink: $FA2_SO_FOR_ARM" >&2; exit 2; }
+# In default mode the binary is the launcher's to choose, so there is nothing to
+# validate here -- and validating an empty path would refuse the very mode that is
+# under test. Everything else must still name a real, non-symlink file.
+if [[ -n "$FA2_SO_FOR_ARM" ]]; then
+  [[ -f "$FA2_SO_FOR_ARM" && ! -L "$FA2_SO_FOR_ARM" ]] \
+    || { echo "FA2 .so for this arm is missing or a symlink: $FA2_SO_FOR_ARM" >&2; exit 2; }
+elif [[ "${PROMOAB_FA2:-}" != "default" ]]; then
+  echo "FA2 .so unset outside default mode" >&2; exit 2
+fi
 echo "[promoab] FA2 B1 arm: $FA2_B1_ARM_NOTE"
 echo "[promoab] FA2 .so:    $FA2_SO_FOR_ARM"
 
@@ -217,6 +259,21 @@ if [[ "$ARM_KIND" == "G" ]]; then
   )
 else
   arm_env+=(FR14_SUFFIX_PASS_GATE=0)
+fi
+# PROMOAB_EXTRA_ENV: newline-separated NAME=VALUE pairs appended verbatim.
+# Deliberately a passthrough rather than a named knob: the tier-B WORKLOAD
+# declaration (pass 119/120) is landing in another lane and its exact spelling is
+# theirs to choose. Reading the spelling off the landing and passing it here beats
+# guessing a variable name in this script and shipping a silent no-op if I guess
+# wrong -- a misspelled knob would leave the workload UNDECLARED while the arm
+# reported success, which is the failure mode this whole chain keeps finding.
+if [[ -n "${PROMOAB_EXTRA_ENV:-}" ]]; then
+  while IFS= read -r _kv; do
+    [[ -z "$_kv" ]] && continue
+    [[ "$_kv" == *=* ]] || { echo "PROMOAB_EXTRA_ENV entry not NAME=VALUE: $_kv" >&2; exit 2; }
+    arm_env+=("$_kv")
+    echo "[promoab] extra env: $_kv"
+  done <<< "$PROMOAB_EXTRA_ENV"
 fi
 
 printf 'arm_kind=%s\narm=%s\nsource_commit=%s\nsubset=%s\nsubset_sha256=%s\ntask_budget_s=9000\nagent_wall_s=9000\nverdict_instrument=step_wall_ms+s_per_fwd_gpu\nfa2_b1_arm=%s\nstarted=%s\n' \
