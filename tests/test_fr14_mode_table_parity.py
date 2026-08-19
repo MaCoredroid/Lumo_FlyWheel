@@ -595,10 +595,12 @@ def test_the_literal_projection_covers_every_family_completely():
     # tests/test_fr13_fixed32_floor_propagation.py, which is RED on purpose
     # until Mark rules on regenerating leg3. When it goes green, this
     # exception must be deleted, and this assertion is what makes that happen.
-    justified = {
-        ("default", "FR14_REQUIRE_NVFP4_LMHEAD", 1),
-        ("comparison", "FR14_REQUIRE_NVFP4_LMHEAD", 1),
-    }
+    # Empty since the leg3 stopgap: FR14_REQUIRE_NVFP4_LMHEAD was the last
+    # entry here, and it was not a fork being a fork -- it was the same
+    # selective staleness as site 14, tracked red until leg3 was aligned.
+    # The exception list is EXACT so a new entry has to be justified in
+    # writing rather than absorbed.
+    justified = set()
     assert lonely == justified, (
         "the set of literals that exist in some families and not others "
         f"changed: {sorted(lonely ^ justified)}. Cross-family equality is the "
