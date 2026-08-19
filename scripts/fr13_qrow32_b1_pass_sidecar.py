@@ -534,6 +534,47 @@ def tierb_credential_digest(payload: dict[str, Any]) -> str:
     return _digest(canonical_bytes(body))
 
 
+def verify_tierb_credential_file(
+    credential_path: Path,
+    *,
+    expected_credential_sha256: str,
+    arm: str,
+    expected_candidate_sha256: str,
+    expected_source_commit: str,
+    expected_patch_source_sha256: str,
+    bounds_path: Path,
+) -> dict[str, Any]:
+    """The container-side attestation: the bytes AND the verdict.
+
+    This is what a tier-B serve's INTERNAL_ATTESTED export is tied to. It is
+    deliberately an OBSERVATION and not a configuration check: the file is
+    re-hashed against the digest the launcher validated on the host, and then
+    every pre-registered bound is RECOMPUTED from the recorded measurements.
+    A credential that would not pass today does not authorise a serve today,
+    however green it looked when it was written.
+    """
+    _regular(credential_path, "tier-b credential")
+    expected_credential_sha256 = _sha256(
+        expected_credential_sha256, "tier-b credential file"
+    )
+    observed = sha256_file(credential_path)
+    if observed != expected_credential_sha256:
+        raise ValueError(
+            "tier-b credential file digest drifted: "
+            f"{observed} != {expected_credential_sha256}"
+        )
+    verdict = validate_tierb_credential(
+        credential_path,
+        arm=arm,
+        expected_candidate_sha256=expected_candidate_sha256,
+        expected_source_commit=expected_source_commit,
+        expected_patch_source_sha256=expected_patch_source_sha256,
+        bounds_path=bounds_path,
+    )
+    verdict["credential_file_sha256"] = observed
+    return verdict
+
+
 def validate_tierb_credential(
     credential_path: Path,
     *,
@@ -1438,6 +1479,17 @@ def main() -> int:
         choices=(ARM, "split2", VISIBILITY_ARM, GQA_PAIR_ARM, SPLITK_ARM),
         default=ARM,
     )
+    tierb = subparsers.add_parser("verify-tier-b")
+    tierb.add_argument("--credential", required=True, type=Path)
+    tierb.add_argument("--expected-credential-sha256", required=True)
+    tierb.add_argument("--bounds", required=True, type=Path)
+    tierb.add_argument("--candidate-so", required=True, type=Path)
+    tierb.add_argument("--expected-candidate-sha256", required=True)
+    tierb.add_argument("--arm", required=True, choices=TIERB_ARMS)
+    tierb.add_argument("--patch-source", required=True, type=Path)
+    tierb.add_argument("--expected-source-commit", required=True)
+    tierb.add_argument("--expected-patch-source-sha256", required=True)
+
     for name in ("issue", "verify"):
         command = subparsers.add_parser(name)
         if name == "issue":
@@ -1485,7 +1537,27 @@ def main() -> int:
         command.add_argument("--patch-source", required=True, type=Path)
         command.add_argument("--expected-source-commit", required=True)
     args = parser.parse_args()
-    if args.command == "validate-source":
+    if args.command == "verify-tier-b":
+        # The staged binary is checked here too: a credential naming the right
+        # sha is worthless if the .so on disk is a different file.
+        validate_candidate(
+            args.candidate_so, args.expected_candidate_sha256, arm=args.arm
+        )
+        validate_patch_source_digest(
+            args.patch_source,
+            expected_source_commit=args.expected_source_commit,
+            expected_patch_source_sha256=args.expected_patch_source_sha256,
+        )
+        result = verify_tierb_credential_file(
+            args.credential,
+            expected_credential_sha256=args.expected_credential_sha256,
+            arm=args.arm,
+            expected_candidate_sha256=args.expected_candidate_sha256,
+            expected_source_commit=args.expected_source_commit,
+            expected_patch_source_sha256=args.expected_patch_source_sha256,
+            bounds_path=args.bounds,
+        )
+    elif args.command == "validate-source":
         result = validate_source_closure(args.source_root, arm=args.arm)
     elif args.command in ("validate-gqa-pair", "issue-gqa-pair"):
         binding = dict(

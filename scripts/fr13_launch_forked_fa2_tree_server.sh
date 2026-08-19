@@ -192,7 +192,7 @@ _FR13_M32_GUARD_NAMES=(
   # the candidate's output reaches the model at all, so a .lumo.local.env that
   # could flip it underneath a run could turn a measured serve into a shadow
   # one -- which is round 6's failure with the polarity reversed.
-  FR13_FA2_QROW32_B1_TIER_B_SERVE
+  FR13_FA2_QROW32_B1_TIER_B_ARM
   FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL
   FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256
   FR13_DFWD_UNIFIED_BM8_LIVE_AB
@@ -924,6 +924,15 @@ FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR=${FR13_FA2_QROW32_B1_PRODUCTION_PASS_
 FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256=${FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256:-}
 FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON=${FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON:-/logs/fr13_fa2_qrow32_b1_production_engagement.json}
 FR13_FA2_QROW32_B1_EXACT4_TASK_IDS=${FR13_FA2_QROW32_B1_EXACT4_TASK_IDS:-}
+FR13_FA2_QROW32_B1_TIER_B_ARM=${FR13_FA2_QROW32_B1_TIER_B_ARM:-}
+# `set -u` is on, and these two have no default anywhere else: without them a
+# split-K pin arm that omits a digest dies with an unbound-variable trap rather
+# than the refusal the next block is written to give. A guard that crashes
+# instead of refusing still stops the run, but it stops it without saying why.
+FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST=${FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST:-}
+FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST=${FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST:-}
+FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL:-}
+FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256:-}
 FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256=${FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256:-}
 FR13_FA2_QROW32_B1_SO_SHA256=${FR13_FA2_QROW32_B1_SO_SHA256:-}
 FR13_FA2_QROW32_B1_SO_SIZE=${FR13_FA2_QROW32_B1_SO_SIZE:-}
@@ -1523,6 +1532,19 @@ fi
 _FR13_FA2_QROW32_B1_SELECTOR_COUNT=0
 [[ -z "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]] || ((_FR13_FA2_QROW32_B1_SELECTOR_COUNT+=1))
 [[ -z "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" ]] || ((_FR13_FA2_QROW32_B1_SELECTOR_COUNT+=1))
+# TIER-B SERVE: a first-class selector, not a modifier of the live-A/B one.
+# Sites 17-20 all trace to spelling it as LIVE_AB_ARM plus a flag: every gate
+# in the tree then had to be read twice, once as "shadow" and once as "serve",
+# and one of the two readings was missed each time.
+[[ -z "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]] || ((_FR13_FA2_QROW32_B1_SELECTOR_COUNT+=1))
+[[ "${FR13_FA2_QROW32_B1_TIER_B_SERVE:-0}" == "0" ]] || {
+  echo "FR13_FA2_QROW32_B1_TIER_B_SERVE is retired; use FR13_FA2_QROW32_B1_TIER_B_ARM=<arm>" >&2
+  exit 2
+}
+case "$FR13_FA2_QROW32_B1_TIER_B_ARM" in
+  ""|gqa_pair_splitk) ;;
+  *) echo "FR13_FA2_QROW32_B1_TIER_B_ARM must be empty or gqa_pair_splitk" >&2; exit 2 ;;
+esac
 if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 1 )); then
   echo "FR13 qrow32 B1 live A/B and production arms are mutually exclusive" >&2
   exit 2
@@ -2220,6 +2242,9 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
   # production run against the incumbent no-split pins.
   _FR13_FA2_QROW32_B1_PIN_ARM=$FR13_FA2_QROW32_B1_LIVE_AB_ARM
   if [[ -z "$_FR13_FA2_QROW32_B1_PIN_ARM" ]]; then
+    _FR13_FA2_QROW32_B1_PIN_ARM=$FR13_FA2_QROW32_B1_TIER_B_ARM
+  fi
+  if [[ -z "$_FR13_FA2_QROW32_B1_PIN_ARM" ]]; then
     _FR13_FA2_QROW32_B1_PIN_ARM=$FR13_FA2_QROW32_B1_PRODUCTION_ARM
   fi
   case "$_FR13_FA2_QROW32_B1_PIN_ARM" in
@@ -2332,6 +2357,34 @@ if [[ -n "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]]; then
                && "${FR13_DFWD_K64_TOP3:-0}" == "1" \
                && "$FR10_METRICS" == "1" ) ) ]] || {
     echo "FR13 qrow32 B1 live gate requires the canonical real task and only the admitted GQA3/top3 graph tuple" >&2
+    exit 2
+  }
+fi
+if [[ -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then
+  # SITE 20's CONTRADICTION, RULED (coordinator, pass 74): tier-B SERVING
+  # carries the CANONICAL EXACT4 CAMPAIGN IDENTITY like any campaign serve --
+  # the paired multi-task A/B is the route's purpose -- and the single-instance
+  # B1_DIAGNOSTIC constraint binds ONLY the shadow/live-compare mode. So this
+  # is deliberately the PRODUCTION shape, not the live-arm shape: same runtime
+  # geometry, same exact4 pins, same refusal of diagnostic mode. The one thing
+  # that differs is the qualifying evidence -- a Tier-B credential instead of a
+  # byte gate -- which is verified in the container, tied to the attestation
+  # export.
+  [[ "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
+     && "${ENFORCE_EAGER:-0}" == "0" \
+     && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" \
+     && "$FR13_FA2_QROW32_B1_EXACT4_TASK_IDS" == "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398" \
+     && "$FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256" == "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5" ]] || {
+    echo "FR13 qrow32 B1 tier-b serve requires the canonical exact4 FULL-graph identity" >&2
+    exit 2
+  }
+  # The credential must arrive by path AND by digest, both non-empty, before
+  # anything in the container is asked to trust it.
+  [[ -f "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL" \
+     && ! -L "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL" \
+     && "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256" =~ ^[0-9a-f]{64}$ \
+     && "$(sha256sum "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL" | cut -d' ' -f1)" == "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256" ]] || {
+    echo "FR13 qrow32 B1 tier-b serve requires its bound qualification credential" >&2
     exit 2
   }
 fi
@@ -6647,6 +6700,9 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256="$FR13_FA2_QROW32_B4_EXACT4_SUBSET_SHA256" \
   -e FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256="$FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256" \
   -e FR13_FA2_QROW32_B1_LIVE_AB_ARM="$FR13_FA2_QROW32_B1_LIVE_AB_ARM" \
+  -e FR13_FA2_QROW32_B1_TIER_B_ARM="$FR13_FA2_QROW32_B1_TIER_B_ARM" \
+  -e FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL="$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL" \
+  -e FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256="$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256" \
   -e FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID="$FR13_FA2_QROW32_B1_LIVE_AB_INSTANCE_ID" \
   -e FR13_FA2_QROW32_B1_LIVE_AB_JSON="$FR13_FA2_QROW32_B1_LIVE_AB_JSON" \
   -e FR13_FA2_QROW32_B1_TIMING_ARM="$FR13_FA2_QROW32_B1_TIMING_ARM" \
@@ -7001,6 +7057,28 @@ if [[ -n "\${FR13_FA2_QROW32_B1_PRODUCTION_ARM}" ]]; then
   unset _fr13_b1_verify_command
   export FR13_FA2_QROW32_B1_INTERNAL_ATTESTED=1
 fi
+if [[ -n "\${FR13_FA2_QROW32_B1_TIER_B_ARM}" ]]; then
+  # SITE 19. The attestation above is exported only inside the production-arm
+  # block, so a tier-B serve reached _fr13_fa2_qrow32_b1_production_begin and
+  # died on "has no launcher attestation". A tier-B serve needs its own
+  # attestation, and per the pass-72 doctrine the export must be tied to an
+  # OBSERVATION rather than to configuration: this re-hashes the credential
+  # file and RECOMPUTES every pre-registered bound from the recorded
+  # measurements before exporting anything. A credential that would not pass
+  # today does not authorise a serve today, however green it looked when it
+  # was written.
+  python3 /workspace/scripts/fr13_qrow32_b1_pass_sidecar.py verify-tier-b \
+    --credential "\$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL" \
+    --expected-credential-sha256 "\$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256" \
+    --bounds /workspace/results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_bounds.json \
+    --candidate-so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so \
+    --expected-candidate-sha256 "\$FR13_FA2_QROW32_B1_SO_SHA256" \
+    --arm "\$FR13_FA2_QROW32_B1_TIER_B_ARM" \
+    --patch-source /workspace/scripts/fr13_patch_fa2_tree_bias.py \
+    --expected-source-commit "\$FR13_FA2_QROW32_B1_SOURCE_COMMIT" \
+    --expected-patch-source-sha256 "\$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256"
+  export FR13_FA2_QROW32_B1_INTERNAL_ATTESTED=1
+fi
 if [[ -n "\${FR13_FA2_QROW32_B4_PRODUCTION_ARM}" ]]; then
   python3 /workspace/scripts/fr13_qrow32_b4_pass_sidecar.py verify \
     --sidecar "\$FR13_FA2_QROW32_B4_PRODUCTION_PASS_SIDECAR" \
@@ -7080,7 +7158,7 @@ if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
 fi
 python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source \
   $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; elif [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile32-live-ab'; elif [[ -n "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]]; then printf '%s' '--fixed32-query-tile32-b1-live-ab'; elif [[ -n "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" ]]; then printf '%s' '--fixed32-query-tile32-b1-production'; elif [[ -n "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" ]]; then printf '%s' '--fixed32-query-tile32-b4-production'; elif [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then printf '%s' '--fixed32-query-tile16-production'; fi) \
-  $(if [[ "${FR13_FA2_QROW32_B1_TIER_B_SERVE:-0}" == "1" ]]; then printf '%s' '--fixed32-query-tile32-b1-tier-b-serve'; fi) \
+  $(if [[ -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then printf '%s' '--fixed32-query-tile32-b1-tier-b-serve'; fi) \
   $(if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then printf '%s' '--dfwd-unified-bm8-production'; fi)
 python3 - <<'PY'
 import hashlib

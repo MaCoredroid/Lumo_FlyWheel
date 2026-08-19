@@ -688,3 +688,81 @@ Both C++ closures are unchanged (`172b5e71…`, `4ed00909…`), so **no rebuild*
 moved again, so the Tier-B credential must be **re-earned** at the serving HEAD — ten
 minutes, offline. Then arm with `TIER_B_SERVE=1`, and this time the run will either engage
 or refuse; it can no longer do neither and say it did.
+
+---
+
+## 15. The static walk — and a first-class name for tier-B
+
+Round 7's modifier fix worked: the hook installed. Then the **19th site** fired
+(`INTERNAL_ATTESTED`, exported only inside the production-arm block) and the **20th** was
+found by reading one line further (`require_exact4`, plus a real contradiction under it —
+tier-B *serving* demands the canonical exact4 identity while tier-B *arming*, spelled as a
+live arm, demands `B1_DIAGNOSTIC=1` single-instance).
+
+### 15.1 The decision: tier-B gets its own name (task 4)
+
+**Yes.** Four consecutive sites — 17, 18, 19, 20 — trace to one pun: tier-B serving was
+spelled `LIVE_AB_ARM=<arm>` + `TIER_B_SERVE=1`. Every gate in the tree then had to be read
+twice, once as "shadow" and once as "serve", and one of the two readings was missed each
+time. Gates written for the serving path key on `PRODUCTION_ARM` and never fired; gates
+written for the shadow path — a **single-instance diagnostic** — fired when they must not.
+
+`FR13_FA2_QROW32_B1_TIER_B_ARM` is now a first-class selector, sibling to
+`PRODUCTION_ARM` and `LIVE_AB_ARM`, mutually exclusive with both. `TIER_B_SERVE` is
+**retired and refuses loudly** in the launcher and in the blob — a stale invocation fails
+in seconds instead of silently degrading to a shadow run, which is what round 6 did for
+395 seconds. The patcher flag is a selector too, not a modifier, and is mutually exclusive
+with `--fixed32-query-tile32-b1-live-ab`.
+
+### 15.2 Walk inventory
+
+Full trace from launcher start to the first kernel invocation, across five layers.
+**Gates enumerated: ~110. TIER-A-ONLY on the served path: 6. Reverse-class (shadow-only
+gates that would block a multi-task serve): 10. Fixed this pass: 13.**
+
+| # | site | class | fix |
+|---|---|---|---|
+| 1 | `launcher` `INTERNAL_ATTESTED` exported only under `PRODUCTION_ARM` | tier-A-only | **site 19** — tier-B attestation block, export tied to `verify-tier-b` |
+| 2 | `require_exact4` vs the live-arm `B1_DIAGNOSTIC=1` block | contradiction | **site 20** — tier-B gate asserts the *production* shape per the ruling |
+| 3 | patcher CLI: tier-b flag *required* `--…-live-ab` | reverse | flag made first-class + mutually exclusive |
+| 4 | launcher spoke only `TIER_B_SERVE`, never set `TIER_B_ARM` | rename gap | selector, enum, retired-spelling refusal |
+| 5 | `_FR13_FA2_QROW32_B1_PIN_ARM` never saw a tier-B arm | tier-A-only | falls back to `TIER_B_ARM` |
+| 6 | tier-B vars reached the container only via the `compgen` sweeper | transport | explicit `-e` passthrough for all three |
+| 7 | `TIER_B_ARM` absent from `_FR13_M32_GUARD_NAMES` | hygiene | guarded (replaces `TIER_B_SERVE`) |
+| 8 | `SPLITK_SASS_DIGEST` / `_BASELINE_` had no `:-` default under `set -u` | crash-not-refuse | defaults added in all three twins |
+| 9 | cuda_graph elif chain had no tier-B branch | tier-A-only | tier-B takes the **serving** hook |
+| 10 | `production_record` read `PRODUCTION_PASS_SIDECAR_SHA256` bare | KeyError on tier B | tier-aware; credential digest instead |
+| 11 | `production_record` hardcoded `draft_vocab_root=1, k=65536` | honesty | reads the served identity — the red-team's own lesson |
+| 12 | EAGER emitter omitted `tier=`, defaulting to `"A"` | latent mislabel | carries the tier |
+| 13 | `serving_arm()` resolved production first, making tier-B's mutual-exclusion checks unreachable | silent wrong-tier serve | exclusion hoisted **before** resolution |
+
+Items 10–13 were found by **reading and by tests**, not by booting. Item 13 was found by a
+test I wrote for something else — a boot naming both selectors would have served tier A
+while its env, its operator and its artifacts all said tier B.
+
+**Correctly tier-A-only, left alone:** `require_same_reduction` under `if tier == "A"` (the
+one place the tier distinction was implemented as intended); the three independent
+allowlists that refuse `gqa_pair_splitk` as a *production* arm (that refusal is the
+ruling); and the batch-1 geometry welded into the kernel — B1 *means* `sequences=1`, and a
+paired multi-task A/B runs tasks sequentially at concurrency 1, which is what the exact4
+campaign already does.
+
+### 15.3 The CPU end-to-end serve (task 5)
+
+`tests/test_fr14_fa2_tierb_qualification.py` now **walks the served path on CPU**: real
+fixed32 operands, the real injected blob, the real precondition chain, through to the
+assertion that the returned operand carries sentinel **1179791671** and `num_splits=4`.
+Sites 19 and 20 both fail it in milliseconds; each precondition is removed one at a time
+and must refuse. Five boots bought sites 17–19 and cost hours each; this costs 0.9 s.
+
+**110 tests in the file, 240 across the suite.** The tier-A path is asserted unchanged in
+the same harness, and the byte-gate branch is asserted *not* to run for tier B.
+
+### 15.4 What round 8 needs
+
+Both C++ closures unchanged (`172b5e71…`, `4ed00909…`) — **no rebuild**. The patcher moved,
+so **re-earn the credential** at the serving HEAD (~10 min, offline), then arm with
+`FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk` (not the retired `TIER_B_SERVE`), the
+credential path/digest, `B1_DIAGNOSTIC=0`, `CUDAGRAPH_MODE=FULL_AND_PIECEWISE` and the
+canonical exact4 pins. The run will engage, refuse, or crash on a named precondition — it
+can no longer serve the incumbent while reporting the candidate.

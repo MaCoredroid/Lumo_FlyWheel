@@ -66,13 +66,23 @@ def _reducer():
 
 def _selectors():
     """The B1 selector helpers as they are injected into the served vLLM."""
+    import logging
     import os
 
+    import torch
+
     patcher = _module(PATCHER, "fr14_tierb_test_patcher")
-    namespace: dict = {"os": os}
+    # The blob runs inside vLLM, where os/torch/logger are already module
+    # globals. Providing them here is what lets the SERVED PATH be executed on
+    # CPU instead of merely grepped -- which is the difference between finding
+    # sites 18-20 in milliseconds and finding them in five GPU boots.
+    namespace: dict = {
+        "os": os, "torch": torch, "logger": logging.getLogger("fr14_tierb"),
+    }
     exec(  # noqa: S102 - the emitted source is the thing under test
         compile(
-            "import os\n" + patcher.FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS,
+            "import os\nimport torch\n"
+            + patcher.FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS,
             "<b1_selectors>",
             "exec",
         ),
@@ -220,24 +230,12 @@ def test_contract_keeps_tier_b_out_of_the_production_allowlist() -> None:
         ({}, (None, None)),
         ({"FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair"}, ("gqa_pair", "A")),
         ({"FR13_FA2_QROW32_B1_PRODUCTION_ARM": "nosplit"}, ("nosplit", "A")),
-        # Named as a live arm is the SHADOW route it always was; serving the
-        # candidate needs a second, explicit flag.
+        # The live-A/B selector is the SHADOW route and only that. It does not
+        # serve, with or without any modifier -- which is the pun that cost
+        # sites 17 through 20.
         ({"FR13_FA2_QROW32_B1_LIVE_AB_ARM": SPLITK_ARM}, (None, None)),
-        (
-            {
-                "FR13_FA2_QROW32_B1_LIVE_AB_ARM": SPLITK_ARM,
-                "FR13_FA2_QROW32_B1_TIER_B_SERVE": "1",
-            },
-            (SPLITK_ARM, "B"),
-        ),
-        # The serve flag does nothing for an arm that is not tier-b.
-        (
-            {
-                "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "gqa_pair",
-                "FR13_FA2_QROW32_B1_TIER_B_SERVE": "1",
-            },
-            (None, None),
-        ),
+        # Tier-B serving has its own first-class name.
+        ({"FR13_FA2_QROW32_B1_TIER_B_ARM": SPLITK_ARM}, (SPLITK_ARM, "B")),
     ],
 )
 def test_serving_arm_resolution(monkeypatch, env, expected) -> None:
@@ -245,6 +243,7 @@ def test_serving_arm_resolution(monkeypatch, env, expected) -> None:
     for key in (
         "FR13_FA2_QROW32_B1_PRODUCTION_ARM",
         "FR13_FA2_QROW32_B1_LIVE_AB_ARM",
+        "FR13_FA2_QROW32_B1_TIER_B_ARM",
         "FR13_FA2_QROW32_B1_TIER_B_SERVE",
     ):
         monkeypatch.delenv(key, raising=False)
@@ -253,11 +252,43 @@ def test_serving_arm_resolution(monkeypatch, env, expected) -> None:
     assert namespace["_fr13_fa2_qrow32_b1_serving_arm"]() == expected
 
 
-def test_serve_flag_must_be_exactly_zero_or_one(monkeypatch) -> None:
+def test_the_retired_piggyback_spelling_fails_loudly(monkeypatch) -> None:
+    """It must not degrade to a shadow run -- round 6 did that for 395 s."""
     namespace = _selectors()
+    monkeypatch.delenv("FR13_FA2_QROW32_B1_TIER_B_ARM", raising=False)
     monkeypatch.setenv("FR13_FA2_QROW32_B1_LIVE_AB_ARM", SPLITK_ARM)
-    monkeypatch.setenv("FR13_FA2_QROW32_B1_TIER_B_SERVE", "true")
-    with pytest.raises(RuntimeError, match="exactly 0 or 1"):
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_TIER_B_SERVE", "1")
+    with pytest.raises(RuntimeError, match="TIER_B_SERVE is retired"):
+        namespace["_fr13_fa2_qrow32_b1_serving_arm"]()
+
+
+@pytest.mark.parametrize(
+    "env,expect",
+    [
+        ({"FR13_FA2_QROW32_B1_TIER_B_ARM": "gqa_pair"},
+         "must be empty or one of"),
+        ({"FR13_FA2_QROW32_B1_TIER_B_ARM": SPLITK_ARM,
+          "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair"},
+         "mutually exclusive"),
+        # A serve and a single-instance diagnostic cannot be one boot. Letting
+        # them coexist is how the identity contradiction at site 20 arose.
+        ({"FR13_FA2_QROW32_B1_TIER_B_ARM": SPLITK_ARM,
+          "FR13_FA2_QROW32_B1_LIVE_AB_ARM": SPLITK_ARM},
+         "mutually exclusive"),
+    ],
+)
+def test_tier_b_selector_refuses_incoherent_modes(monkeypatch, env, expect):
+    namespace = _selectors()
+    for key in (
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM",
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM",
+        "FR13_FA2_QROW32_B1_TIER_B_ARM",
+        "FR13_FA2_QROW32_B1_TIER_B_SERVE",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    with pytest.raises(RuntimeError, match=expect):
         namespace["_fr13_fa2_qrow32_b1_serving_arm"]()
 
 
@@ -754,30 +785,56 @@ def test_serving_hook_installs_for_a_tier_b_serve_not_only_production() -> None:
         "a production arm"
     )
     # And the capture-end hook, which is what writes the engagement record.
-    assert "if fixed32_query_tile32_b1_tier_b_serve:" in patcher
-    assert "_patch_cuda_graph_qrow32_b1_production(\n                cuda_graph_path\n            )" in patcher
+    # A tier-B SERVE takes the SERVING hook -- the same branch a production arm
+    # takes, because it is a serve. It used to reach the chain as a modifier of
+    # the live-A/B branch, which is how it inherited the shadow mode's plumbing
+    # and none of the serving mode's.
+    assert "elif fixed32_query_tile32_b1_tier_b_serve:" in patcher
+    assert patcher.index("elif fixed32_query_tile32_b1_tier_b_serve:") < (
+        patcher.index("elif fixed32_query_tile32_b1_production:")
+    )
 
 
-def test_the_tier_b_serve_flag_is_a_modifier_not_a_selector() -> None:
-    """It composes with the live-A/B selector; it does not replace it."""
+def test_the_tier_b_serve_flag_is_a_first_class_selector() -> None:
+    """It stands alone, and it is mutually exclusive with the shadow selector.
+
+    THE DESIGN DECISION behind sites 17-20: tier-B serving was spelled as the
+    live-A/B selector plus a modifier, so every gate in the tree had to be read
+    twice -- once as "shadow", once as "serve" -- and one of the two readings
+    was missed four times running. A mode that is neither production nor shadow
+    needs its own name.
+    """
     import subprocess
 
-    out = subprocess.run(
+    alone = subprocess.run(
         [sys.executable, str(PATCHER), "--skip-source", "--skip-python",
          "--fixed32-query-tile32-b1-tier-b-serve"],
         capture_output=True, text=True,
     )
-    assert out.returncode != 0
-    assert "requires --fixed32-query-tile32-b1-live-ab" in out.stderr
+    assert alone.returncode == 0, alone.stderr
+    assert "'fixed32_query_tile32_b1_tier_b_serve': True" in alone.stdout
+
+    together = subprocess.run(
+        [sys.executable, str(PATCHER), "--skip-source", "--skip-python",
+         "--fixed32-query-tile32-b1-tier-b-serve",
+         "--fixed32-query-tile32-b1-live-ab"],
+        capture_output=True, text=True,
+    )
+    assert together.returncode != 0
+    assert "mutually exclusive" in together.stderr
 
 
 @pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
 def test_launcher_passes_the_serve_flag_when_armed(launcher) -> None:
     text = launcher.read_text()
     assert (
-        '$(if [[ "${FR13_FA2_QROW32_B1_TIER_B_SERVE:-0}" == "1" ]]; then '
+        '$(if [[ -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then '
         "printf '%s' '--fixed32-query-tile32-b1-tier-b-serve'; fi)" in text
     ), f"{launcher.name} never passes the serving flag"
+    # The retired spelling must fail loudly rather than degrade to a shadow run.
+    assert "FR13_FA2_QROW32_B1_TIER_B_SERVE is retired" in text
+    # And the tier-B arm must reach the pin-arm resolution.
+    assert "_FR13_FA2_QROW32_B1_PIN_ARM=$FR13_FA2_QROW32_B1_TIER_B_ARM" in text
     # It must be a SEPARATE expansion, not another arm of the elif chain that
     # already swallowed it once.
     start = text.index("--fixed32-query-tile16-live-ab")
@@ -787,7 +844,7 @@ def test_launcher_passes_the_serve_flag_when_armed(launcher) -> None:
         "chain -- that is the elif that hid the 18th site"
     )
     # And it must be guarded against .lumo.local.env.
-    assert "\n  FR13_FA2_QROW32_B1_TIER_B_SERVE\n" in text
+    assert "\n  FR13_FA2_QROW32_B1_TIER_B_ARM\n" in text
 
 
 def test_engagement_is_counted_at_the_retag_not_read_from_the_environment() -> None:
@@ -855,3 +912,341 @@ def test_round6_artifact_is_diagnosable_from_the_new_fields() -> None:
         "a production engagement record would mean the hook DID run and the "
         "diagnosis needs revisiting"
     )
+
+
+# ===========================================================================
+# 5. THE CPU END-TO-END SERVE. Every site 17-20 was found by booting a GPU
+#    server for minutes or hours. Every one of them is reachable from here in
+#    milliseconds: the served path's precondition chain is pure Python until
+#    the kernel launch, so it can be walked on CPU with fake tensors. What
+#    this cannot check is the kernel itself -- and the kernel was never the
+#    problem.
+# ===========================================================================
+
+import contextlib
+
+CANONICAL_TASK_IDS = (
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+)
+EXACT4_SUBSET_SHA256 = (
+    "0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
+)
+TARGET_LAYER = "language_model.model.layers.3.self_attn.attn"
+
+
+def _served_operands():
+    """The exact fixed32 B1 geometry the in-binary gate demands, on CPU."""
+    import torch
+
+    query = torch.zeros(32, 24, 256, dtype=torch.bfloat16)
+    kv = torch.zeros(3, 2, 1024, 4, 256, dtype=torch.bfloat16)
+    key_cache, value_cache = kv[:, 0], kv[:, 1]
+    tree_bias = torch.zeros(32, 32, dtype=torch.float32)
+    return dict(
+        query=query,
+        key_cache=key_cache,
+        value_cache=value_cache,
+        cu_seqlens_q=torch.tensor([0, 32], dtype=torch.int32),
+        max_seqlen_q=32,
+        seqused_k=torch.tensor([2048], dtype=torch.int32),
+        max_seqlen_k=2048,
+        causal=False,
+        window_size=None,
+        block_table=torch.zeros(1, 4, dtype=torch.int32),
+        softcap=0.0,
+        num_splits=0,
+        tree_bias=tree_bias,
+    )
+
+
+class _Layer:
+    def __init__(self, name=TARGET_LAYER):
+        self.layer_name = name
+
+
+@contextlib.contextmanager
+def _tier_b_env(monkeypatch, credential_path, **overrides):
+    """Everything a tier-B SERVE must have, and nothing a tier-A serve needs.
+
+    Deliberately assembled from scratch rather than copied from a tier-A
+    fixture: the point of the walk is that the two modes' preconditions are
+    different sets, and a fixture that inherited tier-A's would hide exactly
+    the gates this is meant to find.
+    """
+    env = {
+        "FR13_FA2_QROW32_B1_TIER_B_ARM": SPLITK_ARM,
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "",
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+        "FR13_FA2_QROW32_B1_INTERNAL_ATTESTED": "1",
+        "FR13_FA2_QROW32_B1_SO_SHA256": SPLITK_SO_SHA256,
+        "FR13_FA2_QROW32_B1_SO_SIZE": "300123792",
+        "FR13_FA2_QROW32_B1_FA2_HEAD": (
+            "29210221863736a08f71a866459e368ad1ac4a95"
+        ),
+        "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256": (
+            "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878"
+        ),
+        "FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST": (
+            "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e"
+        ),
+        "FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST": (
+            "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470"
+        ),
+        "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS": ",".join(CANONICAL_TASK_IDS),
+        "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256": EXACT4_SUBSET_SHA256,
+        "FR13_DRAFT_VOCAB_ROOT": "0",
+        "FR13_DRAFT_VOCAB_K": "0",
+        "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE": "full_vocab",
+        "ENFORCE_EAGER": "1",
+    }
+    payload = json.loads(Path(credential_path).read_text())
+    env["FR13_FA2_QROW32_B1_SOURCE_COMMIT"] = payload["identity"][
+        "source_commit"
+    ]
+    env["FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256"] = payload["identity"][
+        "patch_source_sha256"
+    ]
+    env["FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL"] = str(credential_path)
+    env["FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256"] = __import__(
+        "hashlib"
+    ).sha256(Path(credential_path).read_bytes()).hexdigest()
+    env.update(overrides)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    yield env
+
+
+def _install_fake_vllm(monkeypatch):
+    """The served path consults vLLM's gdn module for capture scope.
+
+    Stubbed rather than skipped: the point of the CPU walk is to execute the
+    real precondition chain, and a `pytest.skip` when vllm is absent would
+    have left sites 18-20 exactly as undetectable as they were.
+    """
+    import sys
+    import types
+
+    gdn = types.ModuleType("gdn_linear_attn")
+    gdn._FR13_FIXED32_PROFILE_CAPTURE_SCOPE = None
+    gdn._FR13_FIXED32_CAPTURE_CONTEXT = None
+    gdn._FR13_FIXED32_OBSERVED_CURRENT = None
+    gdn._fr13_fixed32_observed_event_active = lambda: False
+    mods = {
+        "vllm": types.ModuleType("vllm"),
+        "vllm.model_executor": types.ModuleType("vllm.model_executor"),
+        "vllm.model_executor.layers": types.ModuleType(
+            "vllm.model_executor.layers"),
+        "vllm.model_executor.layers.mamba": types.ModuleType(
+            "vllm.model_executor.layers.mamba"),
+    }
+    mods["vllm.model_executor.layers.mamba"].gdn_linear_attn = gdn
+    mods["vllm.model_executor.layers.mamba.gdn_linear_attn"] = gdn
+    for name, module in mods.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    return gdn
+
+
+def _fresh_selectors():
+    """A pristine namespace: the engagement counter must start at zero."""
+    namespace = _selectors()
+    namespace["_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT"]["calls"] = 0
+    namespace["_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT"]["layers"].clear()
+    namespace["_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT"]["graph_ids"].clear()
+    namespace["_FR13_FA2_QROW32_B1_TIER_B_STATE"].clear()
+    return namespace
+
+
+def test_cpu_end_to_end_tier_b_serve_reaches_the_retag(monkeypatch, tmp_path):
+    """Walk the whole served-path chain and assert the operand IS retagged.
+
+    Sites 18, 19 and 20 all live on this chain, and all three would have
+    failed this test in milliseconds. Site 18 (hook not installed) is the one
+    exception -- it is an INSTALL-time defect, covered separately -- which is
+    why that test exists too.
+    """
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    with _tier_b_env(monkeypatch, path):
+        selection = begin(layer=_Layer(), **_served_operands())
+
+    assert selection is not None, "the served path returned no selection"
+    assert selection["tier"] == "B"
+    assert selection["arm"] == SPLITK_ARM
+    assert selection["candidate_served"] is True
+    # THE POINT: the operand carries the split-K sentinel, so the kernel that
+    # runs is the candidate and not the incumbent.
+    assert int(selection["tree_bias"].stride(0)) == 1179791671
+    assert selection["num_splits"] == 4
+    assert selection["sentinel"] == 1179791671
+    # And the credential was validated on the way through, not assumed.
+    assert selection["tier_b_credential"] is not None
+    assert selection["tier_b_credential"]["credential_sha256"]
+    # Engagement is OBSERVED.
+    engagement = namespace["_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT"]
+    assert engagement["calls"] == 1
+    assert engagement["layers"] == {TARGET_LAYER}
+
+
+def test_cpu_end_to_end_tier_a_serve_is_unchanged(monkeypatch, tmp_path):
+    """The tier-A path must be exactly what it was; tier-B added a door."""
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    for key, value in {
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+        "FR13_FA2_QROW32_B1_TIER_B_ARM": "",
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM": "",
+        "FR13_FA2_QROW32_B1_INTERNAL_ATTESTED": "1",
+        "FR13_FA2_QROW32_B1_SO_SHA256": (
+            "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae"
+        ),
+        "FR13_FA2_QROW32_B1_SO_SIZE": "299815552",
+        "FR13_FA2_QROW32_B1_FA2_HEAD": (
+            "29210221863736a08f71a866459e368ad1ac4a95"
+        ),
+        "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256": (
+            "172b5e7131841ce45650bb8eea35f0b427ca660ce8f145bd39b55b00a336ebf4"
+        ),
+        "FR13_FA2_QROW32_B1_SOURCE_COMMIT": "b" * 40,
+        "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256": "c" * 64,
+        "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256": "d" * 64,
+        "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS": ",".join(CANONICAL_TASK_IDS),
+        "FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256": EXACT4_SUBSET_SHA256,
+        "FR13_DRAFT_VOCAB_ROOT": "0",
+        "FR13_DRAFT_VOCAB_K": "0",
+        "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE": "full_vocab",
+        "ENFORCE_EAGER": "1",
+    }.items():
+        monkeypatch.setenv(key, value)
+    selection = begin(layer=_Layer(), **_served_operands())
+    assert selection["tier"] == "A"
+    assert selection["arm"] == "gqa_pair"
+    assert int(selection["tree_bias"].stride(0)) == 1179791670
+    assert selection["tier_b_credential"] is None
+    # tier-A must not touch the tier-B counter
+    assert namespace["_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT"]["calls"] == 0
+
+
+@pytest.mark.parametrize(
+    "drop,expect",
+    [
+        # Site 19: the attestation the tier-A block exports and tier-B did not.
+        ("FR13_FA2_QROW32_B1_INTERNAL_ATTESTED", "launcher attestation"),
+        # Site 20: the canonical exact4 identity a serve must carry.
+        ("FR13_FA2_QROW32_B1_EXACT4_TASK_IDS", "exact4 identity drifted"),
+        ("FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256", "exact4 identity drifted"),
+        # The credential itself.
+        ("FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL", "TIER_B_CREDENTIAL"),
+        # Binary identity.
+        ("FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST", "drifted for this arm"),
+    ],
+)
+def test_each_served_path_precondition_is_load_bearing(
+    monkeypatch, tmp_path, drop, expect
+):
+    """Every gate on the chain, removed one at a time, must refuse.
+
+    This is the walk expressed as a test: it does not assert that the chain
+    has some particular length, it asserts that each link actually holds
+    weight. A precondition nothing tests is a precondition that will be
+    quietly dropped by the next mode that comes along -- which is the whole
+    history of sites 17 through 20.
+    """
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    with _tier_b_env(monkeypatch, path):
+        monkeypatch.setenv(drop, "")
+        with pytest.raises(RuntimeError, match=expect):
+            begin(layer=_Layer(), **_served_operands())
+
+
+def test_serving_a_tier_b_arm_never_takes_the_byte_gate_branch(
+    monkeypatch, tmp_path
+):
+    """require_same_reduction must not run for tier B, and must for tier A."""
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    calls = []
+    real = namespace["_fr13_fa2_qrow32_b1_require_same_reduction"]
+
+    def _spy(arm, reference_num_splits):
+        calls.append(arm)
+        return real(arm, reference_num_splits)
+
+    namespace["_fr13_fa2_qrow32_b1_require_same_reduction"] = _spy
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    with _tier_b_env(monkeypatch, path):
+        begin(layer=_Layer(), **_served_operands())
+    assert calls == [], (
+        "the raw-byte reduction check ran on a tier-B serve; it would refuse "
+        "num_splits=4 by construction and is not the tier-B contract"
+    )
+
+
+def test_a_non_target_layer_is_refused_on_the_served_path(
+    monkeypatch, tmp_path
+):
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    with _tier_b_env(monkeypatch, path):
+        with pytest.raises(RuntimeError, match="layer identity drifted"):
+            begin(layer=_Layer("language_model.model.layers.4.self_attn.attn"),
+                  **_served_operands())
+
+
+def test_drifted_geometry_is_refused_on_the_served_path(monkeypatch, tmp_path):
+    import torch
+
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    operands = _served_operands()
+    operands["query"] = torch.zeros(16, 24, 256, dtype=torch.bfloat16)
+    with _tier_b_env(monkeypatch, path):
+        with pytest.raises(RuntimeError, match="geometry drifted"):
+            begin(layer=_Layer(), **operands)
+
+
+def test_engagement_record_is_tier_aware_and_reports_what_ran(
+    monkeypatch, tmp_path
+):
+    """The emitter must not KeyError on tier B, and must not hardcode identity.
+
+    Both were live defects: pass_sidecar_sha256 was a bare os.environ[...]
+    that only a tier-A boot could satisfy, and draft_vocab_root/k were the
+    literals 1 / 65536 -- the same hardcoding the draft-vocabulary red-team
+    caught once already.
+    """
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    record_fn = namespace["_fr13_fa2_qrow32_b1_production_record"]
+    with _tier_b_env(monkeypatch, path):
+        record = record_fn(
+            arm=SPLITK_ARM, runtime_mode="FULL", graph_id=7,
+            graph_signature="sig", layers=[TARGET_LAYER], calls=16, tier="B",
+        )
+    assert record["tier"] == "B"
+    assert record["pass_sidecar_sha256"] is None
+    assert record["tier_b_credential_sha256"]
+    assert record["arm"] == SPLITK_ARM
+    assert record["num_splits"] == 4
+    assert record["selector_sentinel"] == 1179791671
+    # AS SERVED: this boot is full_vocab, so the record must not claim K64.
+    assert record["draft_vocab_root"] == 0
+    assert record["draft_vocab_k"] == 0
+    assert record["qualification_profile"] == "full_vocab"
+    # And the candidate identity is the split-K binary, not the incumbent's.
+    assert record["candidate_so_sha256"] == SPLITK_SO_SHA256
+    assert record["candidate_so_size"] == 300123792

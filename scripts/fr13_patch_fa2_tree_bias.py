@@ -6170,25 +6170,58 @@ def _fr13_fa2_qrow32_b1_tier_b_credential(arm, identity):
 def _fr13_fa2_qrow32_b1_tier_b_arm():
     """The tier-b arm authorised to SERVE, or None.
 
-    Naming a tier-b arm as the live-A/B arm is not enough on its own: that is
-    still the shadow-comparison route it always was. Serving its output
-    requires FR13_FA2_QROW32_B1_TIER_B_SERVE=1 as well, so a run cannot start
-    serving Tier-B numerics because someone reused a live-A/B invocation.
+    A FIRST-CLASS SELECTOR, and that is the whole point of it. Tier-B serving
+    used to be spelled as LIVE_AB_ARM plus a TIER_B_SERVE=1 modifier -- a pun
+    on the shadow-comparison selector -- and four consecutive integration
+    defects (sites 17, 18, 19, 20) trace to it:
+
+      * gates written for the SERVING path key on PRODUCTION_ARM and so never
+        fired (the installer, the INTERNAL_ATTESTED attestation);
+      * gates written for the SHADOW path -- which is a single-instance
+        DIAGNOSTIC mode -- fired when they should not, and one of them
+        contradicts serving outright (B1_DIAGNOSTIC=1 versus the canonical
+        exact4 campaign identity a serve must carry).
+
+    A mode that is neither production nor shadow needs its own name, or every
+    gate in the tree has to be read twice and one of the two readings will be
+    missed. FR13_FA2_QROW32_B1_TIER_B_ARM is that name.
     """
-    arm = os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
-    if not arm or arm not in _FR13_FA2_QROW32_B1_TIER_B_ARMS:
-        return None
-    serve = os.environ.get("FR13_FA2_QROW32_B1_TIER_B_SERVE", "0")
-    if serve == "0":
-        return None
-    if serve != "1":
+    arm = os.environ.get("FR13_FA2_QROW32_B1_TIER_B_ARM", "")
+    legacy = os.environ.get("FR13_FA2_QROW32_B1_TIER_B_SERVE", "")
+    if legacy not in ("", "0") and not arm:
+        # The retired spelling fails LOUDLY rather than silently degrading to
+        # a shadow run, which is exactly what round 6 did for 395 seconds.
         raise RuntimeError(
-            "FR13_FA2_QROW32_B1_TIER_B_SERVE must be exactly 0 or 1"
+            "FR13_FA2_QROW32_B1_TIER_B_SERVE is retired: name the arm with "
+            "FR13_FA2_QROW32_B1_TIER_B_ARM=<arm> instead. The old spelling "
+            "piggybacked on the live-A/B selector and could not be told apart "
+            "from a shadow run by any gate in the tree"
+        )
+    if not arm:
+        return None
+    if arm not in _FR13_FA2_QROW32_B1_TIER_B_ARMS:
+        raise RuntimeError(
+            "FR13_FA2_QROW32_B1_TIER_B_ARM must be empty or one of "
+            f"{', '.join(_FR13_FA2_QROW32_B1_TIER_B_ARMS)}; got {arm!r}"
         )
     if arm in _FR13_FA2_QROW32_B1_PRODUCTION_ARMS:
         raise RuntimeError(
             "a tier-b arm must not also be a production arm: tier-b grants "
-            "live-A/B serving, not promoted-default"
+            "serving under a credential, not promoted-default"
+        )
+    if os.environ.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", ""):
+        raise RuntimeError(
+            "the tier-b and production selectors are mutually exclusive"
+        )
+    if os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", ""):
+        # The shadow mode is a single-instance diagnostic; a tier-b SERVE
+        # carries the canonical campaign identity. They cannot both be true of
+        # one boot, and letting them coexist is how the identity contradiction
+        # at site 20 arose.
+        raise RuntimeError(
+            "the tier-b serve and live-A/B shadow selectors are mutually "
+            "exclusive: the shadow mode is single-instance diagnostic and a "
+            "tier-b serve carries the canonical exact4 campaign identity"
         )
     return arm
 
@@ -6199,6 +6232,24 @@ def _fr13_fa2_qrow32_b1_serving_arm():
     Tier A is resolved FIRST and unchanged, so a launch that names no tier-b
     arm cannot reach one line of the tier-b path.
     """
+    # Mode coherence is settled BEFORE either arm is resolved. Resolving
+    # production first and returning made the tier-b resolver's own
+    # mutual-exclusion checks unreachable whenever production was also set --
+    # so a boot naming both would have served tier A while its operator, its
+    # env and its artifacts all said tier B. Found by a test, not a boot.
+    named = [
+        name
+        for name in (
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM",
+            "FR13_FA2_QROW32_B1_TIER_B_ARM",
+        )
+        if os.environ.get(name, "")
+    ]
+    if len(named) > 1:
+        raise RuntimeError(
+            "the qrow32 B1 serving selectors are mutually exclusive; named: "
+            + ", ".join(named)
+        )
     arm = _fr13_fa2_qrow32_b1_arm("FR13_FA2_QROW32_B1_PRODUCTION_ARM")
     if arm is not None:
         return arm, "A"
@@ -7216,6 +7267,12 @@ def _fr13_fa2_qrow32_b1_production_end(selection, *, completed):
             arm=arm, runtime_mode="EAGER", graph_id=0,
             graph_signature=None, layers=sorted(state["layers"]),
             calls=int(state["calls"]),
+            # Without this the eager emitter defaults to tier="A" and reads the
+            # production pass sidecar, which a tier-B boot exports as empty --
+            # so an eager tier-B run would file a tier-A record naming an empty
+            # credential. Latent today (tier-B runs FULL graphs) and fixed
+            # anyway: "latent" is how sites 17-20 all started.
+            tier=_tier or "A",
         )
         _fr13_fa2_qrow32_b1_write(
             "FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON",
@@ -7225,7 +7282,7 @@ def _fr13_fa2_qrow32_b1_production_end(selection, *, completed):
 
 
 def _fr13_fa2_qrow32_b1_production_record(
-    *, arm, runtime_mode, graph_id, graph_signature, layers, calls,
+    *, arm, runtime_mode, graph_id, graph_signature, layers, calls, tier="A",
 ):
     config = _FR13_FA2_QROW32_B1_ARMS[arm]
     # Report the identity of the arm that actually ran, not the incumbent's.
@@ -7247,12 +7304,42 @@ def _fr13_fa2_qrow32_b1_production_record(
         "patch_source_sha256": os.environ[
             "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256"
         ],
-        "pass_sidecar_sha256": os.environ[
-            "FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256"
-        ],
+        # A tier-A serve is authorised by the pass sidecar; a tier-B serve by
+        # its qualification credential. The bare os.environ[...] this replaced
+        # was a KeyError on the tier-B path -- found by reading the emitter,
+        # not by booting it.
+        "tier": tier,
+        "pass_sidecar_sha256": (
+            os.environ["FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256"]
+            if tier == "A" else None
+        ),
+        "tier_b_credential_sha256": (
+            None if tier == "A"
+            else os.environ.get(
+                "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256", ""
+            )
+        ),
+        "tier_b_engagement": (
+            None if tier == "A" else {
+                "candidate_retag_calls": int(
+                    _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["calls"]
+                ),
+                "layers_engaged": sorted(
+                    _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["layers"]
+                ),
+            }
+        ),
         "task_ids": list(_FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS),
         "subset_sha256": _FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256,
-        "draft_vocab_root": 1, "draft_vocab_k": 65536,
+        # AS SERVED, not as assumed. These were the literals 1 / 65536, which
+        # is the same hardcoding the draft-vocabulary red-team already caught
+        # once: an emitter that states an identity instead of reading it will
+        # eventually describe a run that did not happen.
+        "draft_vocab_root": _fr13_fa2_qrow32_b1_draft_vocab_identity()[0],
+        "draft_vocab_k": _fr13_fa2_qrow32_b1_draft_vocab_identity()[1],
+        "qualification_profile": (
+            _fr13_fa2_qrow32_b1_draft_vocab_identity()[2]
+        ),
         "candidate_served": True, "fallback_allowed": False,
         "candidate_scope": "final_fixed32_b1_full_graph_only",
         "bypass_counts": dict(sorted(_FR13_FA2_QROW32_B1_BYPASS_COUNTS.items())),
@@ -7281,6 +7368,7 @@ def _fr13_fa2_qrow32_b1_production_capture_end(
     record = _fr13_fa2_qrow32_b1_production_record(
         arm=arm, runtime_mode="FULL", graph_id=int(graph_id),
         graph_signature=str(graph_signature), layers=layers, calls=len(layers),
+        tier=_tier or "A",
     )
     _fr13_fa2_qrow32_b1_write(
         "FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON",
@@ -10228,20 +10316,17 @@ def patch_installed_vllm(
             site_packages / "vllm/compilation/cuda_graph.py"
         )
     elif fixed32_query_tile32_b1_live_ab:
-        cuda_graph_path = site_packages / "vllm/compilation/cuda_graph.py"
         result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b1_live_ab(
-            cuda_graph_path
+            site_packages / "vllm/compilation/cuda_graph.py"
         )
-        if fixed32_query_tile32_b1_tier_b_serve:
-            # A tier-b serve needs the capture-end hook as well as the replay
-            # hook. The two patches anchor on DIFFERENT lines
-            # ("entry.cudagraph.replay()" and "entry.cudagraph = cudagraph"),
-            # so they compose; it was only this elif chain that made them
-            # exclusive, and that exclusivity is half of why round 6 produced
-            # no engagement record for a serve it believed it was running.
-            result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b1_production(
-                cuda_graph_path
-            ) or result["cuda_graph.py"]
+    elif fixed32_query_tile32_b1_tier_b_serve:
+        # A tier-B SERVE takes the SERVING hook, the same one a production arm
+        # takes -- because it is a serve. It used to reach this chain as a
+        # modifier of the live-A/B branch above, which is how it ended up with
+        # the shadow mode's plumbing and none of the serving mode's.
+        result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b1_production(
+            site_packages / "vllm/compilation/cuda_graph.py"
+        )
     elif fixed32_query_tile32_b1_production:
         result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b1_production(
             site_packages / "vllm/compilation/cuda_graph.py"
@@ -10399,18 +10484,26 @@ def main() -> int:
             args.fixed32_query_tile32_live_ab,
             args.fixed32_query_tile32_b1_live_ab,
             args.fixed32_query_tile32_b1_production,
+            args.fixed32_query_tile32_b1_tier_b_serve,
             args.fixed32_query_tile32_b4_production,
             args.fixed32_query_tile16_production,
         )
     )
     if private_selectors > 1:
         parser.error("qrow16/qrow32 private selectors are mutually exclusive")
-    if args.fixed32_query_tile32_b1_tier_b_serve and not (
-        args.fixed32_query_tile32_b1_live_ab
+    if (
+        args.fixed32_query_tile32_b1_tier_b_serve
+        and args.fixed32_query_tile32_b1_live_ab
     ):
+        # A tier-B SERVE and the live-A/B SHADOW are different runs: the shadow
+        # is a single-instance diagnostic and a serve carries the canonical
+        # campaign identity. Requiring them together is what made the tier-B
+        # flag a modifier of the shadow selector, and that pun is sites 17-20.
         parser.error(
-            "--fixed32-query-tile32-b1-tier-b-serve modifies the B1 live-A/B "
-            "selector and requires --fixed32-query-tile32-b1-live-ab"
+            "--fixed32-query-tile32-b1-tier-b-serve and "
+            "--fixed32-query-tile32-b1-live-ab are mutually exclusive: the "
+            "shadow mode is a single-instance diagnostic and a tier-b serve "
+            "carries the canonical exact4 campaign identity"
         )
     if args.fixed32_query_tile32 and not args.tree_bias_tile_earlyout:
         parser.error(
@@ -10476,7 +10569,8 @@ def main() -> int:
         )
     if (
         (args.fixed32_query_tile32_b1_live_ab
-         or args.fixed32_query_tile32_b1_production)
+         or args.fixed32_query_tile32_b1_production
+         or args.fixed32_query_tile32_b1_tier_b_serve)
         and not args.skip_source
         and not (
             args.fixed32_query_tile32_b1 or args.fixed32_query_gqa_pair32_b1
