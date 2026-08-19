@@ -33,6 +33,13 @@ _FR13_FIXED32_PHYSICAL_PARENT = (
     -1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 4, 4, 7, 8, 9, 9,
     9, 12, 13, 14, 14, 14, 17, 18, 19, 23, 24, 25, 26, 28, 29, 30,
 )
+# ROUND 18 ADJUDICATION -- KEPT hydra27/tail6. The tree-conv zero-tail
+# specialization is a DEFAULT-OFF byte-AB lever (FR13_FIXED32_CONV_COMMIT_ZERO_TAIL
+# defaults "0"). _FR13_FIXED32_PHYSICAL_PARENT above is hydra27's and feeds the
+# conv state-source map; the map derives correctly from any parent, but the
+# lever's byte-AB pass was measured on hydra27, so hydra31 must re-qualify it.
+# _fr13_fixed32_treeconv_topology_descriptor raises "unsupported fixed32
+# tree-conv mode" for hydra31, which is the intended refusal.
 _FR13_FIXED32_TREECONV_MODE_IDENTITY = {
     "tail6_fixed32": ("Tail23", 0x7A9CE7FF),
     "hydra27_fixed32": ("Hydra27", 0x7ABDFFFF),
@@ -840,6 +847,23 @@ def subtree_parallel_selfcheck_on() -> bool:
     )
 
 
+# Round 18 adjudication. TWO rosters, because these are two different
+# questions, and answering them with one frozenset is what made the seventh
+# site look like a one-line widen.
+#
+# _FR13_FIXED32_ROUTE_MODES is the VOCABULARY: which mode strings name a real
+# fixed32 route. _fr13_resolve_fixed32_mode consults only this, so hydra31
+# resolves instead of dying at "invalid fixed32 route source(s)" before the
+# serve begins.
+#
+# _FR13_FIXED32_MODES is the QUALIFICATION: which modes the twelve default-off
+# levers below were measured on. Every one of them was qualified on hydra27's
+# physical tree, so hydra31 must keep refusing them -- widening this set would
+# hand a hydra27 credential to a tree it never saw, silently, on a route that
+# would boot. It stays exactly as it was.
+_FR13_FIXED32_ROUTE_MODES = frozenset(
+    ("tail6_fixed32", "hydra27_fixed32", "hydra31_fixed32")
+)
 _FR13_FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
 _FR13_FIXED32_MODE_SIDECARS = (
     "/logs/fr13_fixed32_mode.flag",
@@ -979,7 +1003,7 @@ def _fr13_resolve_fixed32_mode() -> str | None:
             )
         return None
     invalid = [(source, value) for source, value in sources
-               if value not in _FR13_FIXED32_MODES]
+               if value not in _FR13_FIXED32_ROUTE_MODES]
     if invalid:
         raise RuntimeError(
             "FR13_FIXED32_MODE: invalid fixed32 route source(s): "
@@ -3021,6 +3045,63 @@ _FR13_FIXED32_SUBTREE_LEVELS = (
         ((21,), 14),
     ),
 )
+_FR13_HYDRA31_PARENT = (
+    -1, 0, 0, 0, 1, 1, 1, 2, 3, 4, 4, 4, 7, 8, 9, 9,
+    9, 12, 14, 14, 14, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+)
+_FR13_HYDRA31_SUBTREE_LEVELS = (
+    (
+        ((0, 1, 4, 9, 14), -1),
+    ),
+    (
+        ((18, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31), 14),
+        ((2, 7, 12, 17, 21), 0),
+        ((3, 8, 13), 0),
+        ((5,), 1),
+        ((6,), 1),
+        ((10,), 4),
+        ((11,), 4),
+        ((15,), 9),
+        ((16,), 9),
+        ((19,), 14),
+        ((20,), 14),
+    ),
+)
+
+# Round 18, the SEVENTH site. This root was never swept: every earlier site was
+# in scripts/. The comment above used to read "Both logical modes use these rows
+# and differ only in the sampler validity mask" -- true of tail6 and hydra27,
+# false of hydra31, whose spine reaches depth 15 and whose rows from 18 up carry
+# different parents. The schedule below is DERIVED from the parent vector, so it
+# is genuinely profile-parametric; only the binding was hydra27's. Keyed on the
+# served mode, hydra27 and tail6 resolve exactly as before.
+_FR13_FIXED32_TREE_PROFILE_BY_MODE = {
+    None: "hydra27_fixed32",
+    "tail6_fixed32": "hydra27_fixed32",
+    "hydra27_fixed32": "hydra27_fixed32",
+    "hydra31_fixed32": "hydra31_fixed32",
+}
+_FR13_FIXED32_TREE_PROFILES = {
+    "hydra27_fixed32": (_FR13_FIXED32_PARENT, _FR13_FIXED32_SUBTREE_LEVELS),
+    "hydra31_fixed32": (_FR13_HYDRA31_PARENT, _FR13_HYDRA31_SUBTREE_LEVELS),
+}
+_FR13_FIXED32_TREE_PROFILE = _FR13_FIXED32_TREE_PROFILE_BY_MODE.get(
+    _FR13_FIXED32_MODE, "hydra27_fixed32"
+)
+# REBOUND, not tuple-unpacked, and hydra27's literals above keep their original
+# names and their exact AST nodes. That is not cosmetic:
+# fr13_sfwd_state_fusion_production digests the ast.dump of
+# _FR13_FIXED32_PARENT and _FR13_FIXED32_MODES as a source-closure attestation
+# compared against a byte-qualified candidate, and several analyses lift those
+# assignments by Name target and exec them in an empty namespace. Rebinding
+# under an `if` leaves every one of those byte-identical for hydra27 while
+# still giving hydra31 its own tree -- changing the binding SHAPE would have
+# been a silent re-attestation of a lever nobody asked me to touch.
+if _FR13_FIXED32_TREE_PROFILE != "hydra27_fixed32":
+    (
+        _FR13_FIXED32_PARENT,
+        _FR13_FIXED32_SUBTREE_LEVELS,
+    ) = _FR13_FIXED32_TREE_PROFILES[_FR13_FIXED32_TREE_PROFILE]
 _FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)
 _FR13_FIXED32_EXPORT_SLOTS = len(_FR13_FIXED32_EXPORT_NODES)
 _FR13_FIXED32_MAX_BATCH = 4
@@ -3211,15 +3292,65 @@ _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_ENGAGEMENT = (
 _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURE_CONTEXT = None
 _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_CAPTURES: dict[int, dict] = {}
 _FR13_FIXED32_BATCH_GDN_BV8_PRODUCTION_PUBLISHED = False
-_FR13_FIXED32_PARENT_SHA256 = (
-    "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
-)
-_FR13_FIXED32_ANCESTRY_SHA256 = (
-    "90873d81e83ce1644ee4701e043b7e9d26e83b7a7ca752d538a0e6eed1946dad"
-)
-_FR13_FIXED32_LEVELS_SHA256 = (
-    "65d91ed364a87abd50d184d902c5d045c4eebf77d172610707fc419667099311"
-)
+# The schedule each profile must produce. Every entry is DERIVED from that
+# profile's parent vector -- the tests recompute all of it from
+# fr13_fixed32_topology and refuse a mismatch -- but it is pinned here so a
+# drifted derivation is caught against an independent authority rather than
+# against itself. hydra31 differs only where depth enters: the second level's
+# longest path runs 11 rows instead of 7, so the padded slot count is 126 and
+# the critical path is 16.
+_FR13_FIXED32_SCHEDULE_BY_PROFILE = {
+    "hydra27_fixed32": {
+        "path_counts": (1, 11),
+        "max_lengths": (5, 7),
+        "launches": 2,
+        "programs": 12,
+        "padded_slots": 82,
+        "critical": 12,
+        "export_or_mask": 16915,
+        "parent_sha256": (
+            "7abd25e38323d6c088eb627785b5c190b2e878b0a710bb349e2d690852a06ddd"
+        ),
+        "ancestry_sha256": (
+            "90873d81e83ce1644ee4701e043b7e9d26e83b7a7ca752d538a0e6eed1946dad"
+        ),
+        "levels_sha256": (
+            "65d91ed364a87abd50d184d902c5d045c4eebf77d172610707fc419667099311"
+        ),
+        "coverage_sha256": (
+            "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
+        ),
+    },
+    "hydra31_fixed32": {
+        "path_counts": (1, 11),
+        "max_lengths": (5, 11),
+        "launches": 2,
+        "programs": 12,
+        "padded_slots": 126,
+        "critical": 16,
+        "export_or_mask": 16915,
+        "parent_sha256": (
+            "101c590e580e122d14e29745d030f2783a6475a252033bb89a84cbf1b3e698e2"
+        ),
+        "ancestry_sha256": (
+            "5b33c46a258678efb6ffe5afd34556b1d0d1f37ed70d8c10bd39c8bbe187b427"
+        ),
+        "levels_sha256": (
+            "86942ed94c5514bff64f2652ff63cf407dc6226bc72e1d3ec833e7d005211917"
+        ),
+        "coverage_sha256": (
+            "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
+        ),
+    },
+}
+_FR13_FIXED32_SCHEDULE_EXPECTED = _FR13_FIXED32_SCHEDULE_BY_PROFILE[
+    _FR13_FIXED32_TREE_PROFILE
+]
+_FR13_FIXED32_PARENT_SHA256 = _FR13_FIXED32_SCHEDULE_EXPECTED["parent_sha256"]
+_FR13_FIXED32_ANCESTRY_SHA256 = _FR13_FIXED32_SCHEDULE_EXPECTED[
+    "ancestry_sha256"
+]
+_FR13_FIXED32_LEVELS_SHA256 = _FR13_FIXED32_SCHEDULE_EXPECTED["levels_sha256"]
 _FR13_FIXED32_COVERAGE_SHA256 = (
     "23b22df6bf551a4e788327db3b3d3d96e1eca49078d2c6bd0049da2d390eca8b"
 )
@@ -5443,19 +5574,11 @@ def _fr13_fixed32_schedule_contract(levels) -> dict[str, object]:
         "levels_sha256": _fr13_canonical_sha256(normalized),
         "coverage_sha256": _fr13_canonical_sha256(coverage),
     }
-    expected = {
-        "path_counts": (1, 11),
-        "max_lengths": (5, 7),
-        "launches": 2,
-        "programs": 12,
-        "padded_slots": 82,
-        "critical": 12,
-        "export_or_mask": 16915,
-        "parent_sha256": _FR13_FIXED32_PARENT_SHA256,
-        "ancestry_sha256": _FR13_FIXED32_ANCESTRY_SHA256,
-        "levels_sha256": _FR13_FIXED32_LEVELS_SHA256,
-        "coverage_sha256": _FR13_FIXED32_COVERAGE_SHA256,
-    }
+    # Round 18: the schedule the SERVED profile must produce. This used to be
+    # hydra27's numbers written out here, which is why the derivation being
+    # profile-parametric bought nothing -- the check it answered to was not.
+    expected = dict(_FR13_FIXED32_SCHEDULE_EXPECTED)
+    expected["coverage_sha256"] = _FR13_FIXED32_COVERAGE_SHA256
     if contract != expected or coverage != tuple(range(32)):
         raise RuntimeError(
             "FR13_FIXED32: exact GDN schedule contract mismatch "

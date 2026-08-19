@@ -27,8 +27,15 @@ DESIGN_PATH = (
 )
 
 
-def _kernel_constants() -> dict[str, object]:
-    wanted = {"_FR13_FIXED32_PARENT", "_FR13_FIXED32_SUBTREE_LEVELS"}
+def _kernel_constants(profile: str = "HYDRA27") -> dict[str, object]:
+    """Lift one profile's topology literals out of the kernel.
+
+    Round 18 keyed the kernel's tree on the served mode. hydra27 keeps the
+    original literal assignments, so the default path is unchanged; hydra31's
+    live beside them under their own names.
+    """
+    prefix = "_FR13_FIXED32" if profile == "HYDRA27" else f"_FR13_{profile}"
+    wanted = {f"{prefix}_PARENT", f"{prefix}_SUBTREE_LEVELS"}
     tree = ast.parse(KERNEL_PATH.read_text(encoding="utf-8"))
     body = [
         node
@@ -42,7 +49,10 @@ def _kernel_constants() -> dict[str, object]:
     exec(compile(ast.Module(body=body, type_ignores=[]), KERNEL_PATH, "exec"),
          namespace)
     assert wanted <= set(namespace), sorted(wanted - set(namespace))
-    return namespace
+    return {
+        "_FR13_FIXED32_PARENT": namespace[f"{prefix}_PARENT"],
+        "_FR13_FIXED32_SUBTREE_LEVELS": namespace[f"{prefix}_SUBTREE_LEVELS"],
+    }
 
 
 def _replicated_chains(levels):
@@ -195,3 +205,31 @@ def test_the_design_note_exists_and_states_the_counts_it_is_judged_on() -> None:
         assert needle in design, needle
     # the note must carry its own refutation conditions, not just its verdict
     assert "What would change this verdict" in design
+
+
+def test_the_replication_analysis_also_holds_for_hydra31() -> None:
+    """Round 18: the same builder, run on the other tree.
+
+    The counts differ -- hydra31's second level is 11 rows deep, not 7 -- and
+    that is the point: an analysis that produced identical numbers for both
+    trees would be reading something other than the topology.
+    """
+    kernel31 = _kernel_constants("HYDRA31")
+    levels31 = kernel31["_FR13_FIXED32_SUBTREE_LEVELS"]
+    parent31 = kernel31["_FR13_FIXED32_PARENT"]
+    assert parent31 != PARENT and levels31 != LEVELS
+
+    chains31 = _replicated_chains(levels31)
+    assert chains31, "the replication builder produced nothing for hydra31"
+
+    owned = sorted(
+        node
+        for level in levels31
+        for path, _parent in level
+        for node in path
+    )
+    assert owned == list(range(32)), (
+        "hydra31's decomposition must still compute every node exactly once"
+    )
+    assert max(len(path) for path, _p in levels31[1]) == 11
+    assert max(len(path) for path, _p in LEVELS[1]) == 7

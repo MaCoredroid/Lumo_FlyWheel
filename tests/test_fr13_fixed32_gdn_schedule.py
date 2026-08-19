@@ -19,6 +19,16 @@ CONSTANTS = {
     "_FR13_FIXED32_ANCESTRY_SHA256",
     "_FR13_FIXED32_LEVELS_SHA256",
     "_FR13_FIXED32_COVERAGE_SHA256",
+    # Round 18: the pinned schedule is now keyed on the served profile, so the
+    # digests above are looked up rather than written out. Lifting them without
+    # the table they read from leaves the exec with a NameError.
+    "_FR13_FIXED32_SCHEDULE_BY_PROFILE",
+    "_FR13_FIXED32_TREE_PROFILE_BY_MODE",
+    "_FR13_FIXED32_TREE_PROFILE",
+    "_FR13_FIXED32_SCHEDULE_EXPECTED",
+    "_FR13_HYDRA31_PARENT",
+    "_FR13_HYDRA31_SUBTREE_LEVELS",
+    "_FR13_FIXED32_TREE_PROFILES",
 }
 FUNCTIONS = {
     "_fr13_canonical_sha256",
@@ -64,7 +74,10 @@ def _load_schedule_contract():
         ],
         type_ignores=[],
     )
-    namespace = {"hashlib": hashlib, "json": json}
+    # The served mode is resolved from env/sidecars by a function this lift does
+    # not carry; None is the unset route, which resolves to hydra27 -- the
+    # schedule this analysis is about.
+    namespace = {"hashlib": hashlib, "json": json, "_FR13_FIXED32_MODE": None}
     exec(compile(ast.fix_missing_locations(module), KERNEL_PATH, "exec"), namespace)
     return namespace
 

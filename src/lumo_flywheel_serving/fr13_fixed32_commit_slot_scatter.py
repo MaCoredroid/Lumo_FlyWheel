@@ -71,6 +71,10 @@ import torch
 
 SCHEMA = "fr13.fixed32.conv_commit.batched_slots.v1"
 FLAG_ENV = "FR13_FIXED32_CONV_COMMIT_BATCHED_SLOTS"
+# ROUND 18 ADJUDICATION -- KEPT hydra27/tail6, deliberately not widened.
+# Default-off batched slot scatter for the conv-commit publish block, tied to
+# hydra27's commit-slot geometry. hydra31 arms four more drafts and a deeper
+# spine, so the scatter plan is a different plan. Kept refusing.
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
 
 # Bounded so a pathological request-rotation pattern cannot grow the cache

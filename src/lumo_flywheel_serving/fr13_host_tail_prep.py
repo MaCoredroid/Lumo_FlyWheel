@@ -33,6 +33,13 @@ from __future__ import annotations
 import ast
 from typing import Any
 
+# ROUND 18 ADJUDICATION -- KEPT hydra27/tail6, deliberately not widened.
+# CORRECTLY hydra27-only, and this guard is the one that fired first in round
+# 18's boot -- working exactly as designed. The lever replaces the depth-
+# position derivation with literals BAKED from one tree; on any other tree
+# those literals feed wrong RoPE depth offsets into the position rewrite and
+# every token in the step lands at the wrong position, silently. There is no
+# widening that is safe here: hydra31 needs its own bake, or the derivation.
 _FIXED32_MODES = ("hydra27_fixed32", "tail6_fixed32")
 
 

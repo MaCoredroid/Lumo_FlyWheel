@@ -48,6 +48,19 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO / "scripts"
+SERVING = REPO / "src" / "lumo_flywheel_serving"
+
+# Round 18: every site through round 17 lived in scripts/, so that is the only
+# root the detectors swept -- and the seventh site was in src/. A detector that
+# only looks where the last bug was found is a detector that finds the last bug.
+# Both roots, everywhere, from here on.
+PROFILE_ROOTS = (SCRIPTS, SERVING)
+
+
+def _root_python_files() -> list[Path]:
+    return sorted(
+        path for root in PROFILE_ROOTS for path in root.glob("*.py")
+    )
 CONTRACT_PATH = SCRIPTS / "fr13_fixed32_contract.py"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
@@ -659,7 +672,7 @@ def _call_argument_text(text: str, open_paren: int) -> str:
 def call_site_census() -> dict[tuple[str, str], list[int]]:
     """{(file, accessor): [line numbers of calls that name no profile]}."""
     blind: dict[tuple[str, str], list[int]] = {}
-    for path in sorted(SCRIPTS.glob("*.py")) + sorted(SCRIPTS.glob("*.sh")):
+    for path in _root_python_files() + sorted(SCRIPTS.glob("*.sh")):
         if path.name == CONTRACT_PATH.name:
             continue
         text = path.read_text()
@@ -868,6 +881,16 @@ def test_walk_cap_is_the_profiles_not_a_literal() -> None:
 # that carries exactly one profile's tree is hydra27-only by construction, and
 # no call-site edit can fix that either.
 KNOWN_SINGLE_PROFILE_PATCHERS = {
+    "fr13_sfwd_prior_reuse_descriptorless.py": (
+        "DEFAULT-OFF SFWD prior-reuse kernel; its fixed bases are derived from "
+        "hydra27's parent and the lever is byte-AB qualified on that tree. Found "
+        "by this scan rather than by the hydra-mention enumeration -- the file "
+        "never says 'hydra27', it just carries the tree."
+    ),
+    "fr13_sfwd_prior_reuse_i32_descriptor.py": (
+        "Offline-only int32-descriptor variant of the same default-off kernel; "
+        "same tree, same qualification, same refusal."
+    ),
     "fr13_patch_fa2_tree_bias.py": (
         "FIXED32_PHYSICAL_PARENT feeds _fixed32_visibility_masks(), which bakes "
         "a 32-entry __device__ __constant__ self-plus-ancestor table into the "
@@ -893,7 +916,7 @@ def profile_literal_scan() -> dict[str, dict[str, list[int]]]:
         for name in (PROFILE_HYDRA27, PROFILE_HYDRA31)
     }
     found: dict[str, dict[str, list[int]]] = {}
-    for path in sorted(SCRIPTS.glob("*patch*.py")):
+    for path in _root_python_files():
         try:
             tree = ast.parse(path.read_text())
         except SyntaxError:  # pragma: no cover
@@ -913,6 +936,22 @@ def profile_literal_scan() -> dict[str, dict[str, list[int]]]:
     return found
 
 
+def _defines_the_profile_table(path: Path) -> bool:
+    """The topology module is the AUTHORITY, not a consumer of it.
+
+    Its bare constants are hydra27's by definition and the other profiles live
+    in PROFILES, several of them constructed rather than written as literals, so
+    a literal scan cannot see them. Recognised structurally rather than pinned
+    by name: a file that publishes a PROFILES table of two or more profiles is
+    where topology is defined.
+    """
+    if path.name != "fr13_fixed32_topology.py":
+        return False
+    import fr13_fixed32_topology as authority
+
+    return len(getattr(authority, "PROFILES", {})) >= 2
+
+
 def test_no_patcher_knows_only_one_profiles_tree() -> None:
     scan = profile_literal_scan()
     assert scan, "the scan found no topology literals at all -- it cannot fail"
@@ -920,6 +959,13 @@ def test_no_patcher_knows_only_one_profiles_tree() -> None:
         patcher: sorted(profiles)
         for patcher, profiles in scan.items()
         if len(profiles) < 2
+        and not _defines_the_profile_table(
+            next(
+                (p for root in PROFILE_ROOTS
+                 for p in [root / patcher] if p.exists()),
+                Path(patcher),
+            )
+        )
     }
     unexpected = {
         k: v for k, v in single.items() if k not in KNOWN_SINGLE_PROFILE_PATCHERS
@@ -1076,4 +1122,416 @@ def test_every_injected_blob_is_unchanged_for_hydra27() -> None:
     assert old == new, (
         "an injected source blob changed -- if this is intended it is a "
         "RE-ATTESTATION EVENT for every banked hydra27 run, not a silent edit"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 7. ROUND 18 -- THE SEVENTH SITE AND THE SECOND ROOT
+# ---------------------------------------------------------------------------
+# Every site through round 17 was in scripts/. The seventh was in
+# src/lumo_flywheel_serving/, where the tree-GDN machinery lives, and the
+# route resolver there refused hydra31 as an "invalid fixed32 route source"
+# before a serve could begin. The adjudication was NOT a blanket widen: the
+# mode VOCABULARY was widened, the twelve default-off levers' QUALIFICATION
+# rosters were kept refusing, and the tree-GDN schedule -- which is genuinely
+# derived from the parent vector -- was keyed on the served profile.
+GDN_KERNEL = SERVING / "fr10_gdn_tree_kernel.py"
+GDN_KERNEL_BASELINE_BLOB = "f1d3b60d79c267bc46473d940adff00856b6421c"
+
+FIXED32_MODE_VOCABULARY = frozenset(
+    ("tail6_fixed32", "hydra27_fixed32", "hydra31_fixed32")
+)
+
+# Per-FILE counts of mode collections that name two profiles but not hydra31.
+# Counts, not line numbers: the line-keyed adjudications of round 3 went stale
+# the moment anything above them moved. A NEW hydra27-only allowlist in either
+# root changes a count (or adds a key) and fails, which is the point -- an
+# eighth site dies in tests instead of on a boot.
+MODE_ALLOWLIST_BASELINE = {
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": 1,
+    "scripts/fr13_b4_floor_gate_reduce.py": 1,
+    "scripts/fr13_b4_gqa_width4_pair_reduce.py": 1,
+    "scripts/fr13_b4_taw_width4_pair_reduce.py": 1,
+    "scripts/fr13_cfwd_logit_direct_decision_kernel.py": 3,
+    "scripts/fr13_cfwd_packed_walk_active_depth_kernel.py": 1,
+    "scripts/fr13_cfwd_packed_walk_node_trust_kernel.py": 1,
+    "scripts/fr13_cutlass_b4_pass.py": 3,
+    "scripts/fr13_cutlass_wave_binary.py": 1,
+    "scripts/fr13_depth_acceptance.py": 8,
+    "scripts/fr13_device_multidraft_kernel.py": 5,
+    "scripts/fr13_fa2_qrow32_gate.py": 2,
+    "scripts/fr13_fa2_qrow32_gqa_pair_gate.py": 4,
+    "scripts/fr13_fixed32_flush_protocol.py": 1,
+    "scripts/fr13_fixed32_nsys_reduce.py": 1,
+    "scripts/fr13_fixed32_semantics_test.py": 2,
+    "scripts/fr13_fixed32_topology.py": 2,
+    "scripts/fr13_floor_gate.py": 5,
+    "scripts/fr13_gdn_gqa_group3_production_credential.py": 1,
+    "scripts/fr13_gdn_single_launch_gate.py": 1,
+    "scripts/fr13_gdn_single_launch_production_credential.py": 1,
+    "scripts/fr13_taw_b1_credential.py": 2,
+    "scripts/fr13_treeconv_zero_tail_credential.py": 1,
+    "scripts/run_swe_bench_q36_a.py": 1,
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": 7,
+    "src/lumo_flywheel_serving/fr13_fixed32_commit_slot_scatter.py": 1,
+    "src/lumo_flywheel_serving/fr13_gdn_gqa_group3.py": 1,
+    "src/lumo_flywheel_serving/fr13_host_tail_prep.py": 1,
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py": 1,
+}
+
+
+def _mode_collections(source: str) -> list[tuple[int, frozenset[str]]]:
+    """Every literal collection whose strings are all fixed32 mode names."""
+    out: list[tuple[int, frozenset[str]]] = []
+    for node in ast.walk(ast.parse(source)):
+        names: set[str] | None = None
+        if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+            values = [
+                element.value
+                for element in node.elts
+                if isinstance(element, ast.Constant)
+                and isinstance(element.value, str)
+            ]
+            if values and len(values) == len(node.elts):
+                names = set(values)
+        elif isinstance(node, ast.Dict):
+            keys = [
+                key.value
+                for key in node.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
+            ]
+            if keys and len(keys) == len(node.keys):
+                names = set(keys)
+        if (
+            names
+            and len(names & FIXED32_MODE_VOCABULARY) >= 2
+            and names <= FIXED32_MODE_VOCABULARY
+        ):
+            out.append((node.lineno, frozenset(names)))
+    return out
+
+
+def mode_allowlist_census() -> dict[str, int]:
+    """{repo-relative file: count of allowlists that exclude hydra31}."""
+    census: dict[str, int] = {}
+    for path in _root_python_files():
+        try:
+            collections = _mode_collections(path.read_text())
+        except SyntaxError:  # pragma: no cover
+            continue
+        count = sum(
+            1 for _line, names in collections if "hydra31_fixed32" not in names
+        )
+        if count:
+            census[path.relative_to(REPO).as_posix()] = count
+    return census
+
+
+def test_mode_allowlist_inventory_is_the_pinned_baseline() -> None:
+    """An eighth site in EITHER root dies here instead of on a boot."""
+    census = mode_allowlist_census()
+    added = {k: v for k, v in census.items() if k not in MODE_ALLOWLIST_BASELINE}
+    grew = {
+        k: (MODE_ALLOWLIST_BASELINE[k], v)
+        for k, v in census.items()
+        if k in MODE_ALLOWLIST_BASELINE and v > MODE_ALLOWLIST_BASELINE[k]
+    }
+    shrank = {
+        k: (MODE_ALLOWLIST_BASELINE[k], census.get(k, 0))
+        for k in MODE_ALLOWLIST_BASELINE
+        if census.get(k, 0) < MODE_ALLOWLIST_BASELINE[k]
+    }
+    assert not added and not grew, (
+        "new hydra27-only mode allowlist(s) appeared -- ADJUDICATE each one "
+        "(widen if the code is profile-parametric, keep-and-document if it is "
+        f"bound to one tree like the qualified levers): added={added} grew={grew}"
+    )
+    assert not shrank, (
+        f"allowlists were widened without updating the baseline: {shrank}"
+    )
+
+
+def test_the_serve_path_vocabulary_admits_hydra31() -> None:
+    """The widen half of the adjudication, asserted where it matters."""
+    source = GDN_KERNEL.read_text()
+    vocabularies = [
+        names for _line, names in _mode_collections(source)
+        if names == FIXED32_MODE_VOCABULARY
+    ]
+    assert vocabularies, (
+        "fr10_gdn_tree_kernel has no full mode vocabulary, so the route "
+        "resolver still refuses hydra31 before the serve begins"
+    )
+    assert "_FR13_FIXED32_ROUTE_MODES" in source
+    assert "if value not in _FR13_FIXED32_ROUTE_MODES" in source
+
+
+def _triton_stub() -> None:
+    """The GDN kernel imports triton, which the host does not have."""
+    if "triton" in sys.modules:
+        return
+    try:
+        import triton  # noqa: F401
+    except ModuleNotFoundError:
+        stub = types.ModuleType("triton")
+        stub.jit = lambda fn=None, **_kw: (
+            (lambda decorated: decorated) if fn is None else fn
+        )
+        stub.cdiv = lambda left, right: (left + right - 1) // right
+        stub.next_power_of_2 = lambda value: 1 << (value - 1).bit_length()
+        language = types.ModuleType("triton.language")
+        stub.language = language
+        sys.modules["triton"] = stub
+        sys.modules["triton.language"] = language
+
+
+def _load_gdn_kernel(mode: str | None, source: str | None = None):
+    import os
+
+    _triton_stub()
+    saved = os.environ.get("FR13_FIXED32_MODE")
+    if mode is None:
+        os.environ.pop("FR13_FIXED32_MODE", None)
+    else:
+        os.environ["FR13_FIXED32_MODE"] = mode
+    name = f"gdn_kernel__{mode or 'unset'}"
+    module = types.ModuleType(name)
+    module.__file__ = str(GDN_KERNEL)
+    # dataclass() resolves __module__ through sys.modules, so the module has to
+    # be registered while it executes.
+    sys.modules[name] = module
+    try:
+        exec(
+            compile(
+                source if source is not None else GDN_KERNEL.read_text(),
+                str(GDN_KERNEL),
+                "exec",
+            ),
+            module.__dict__,
+        )
+        return module
+    finally:
+        sys.modules.pop(name, None)
+        if saved is None:
+            os.environ.pop("FR13_FIXED32_MODE", None)
+        else:
+            os.environ["FR13_FIXED32_MODE"] = saved
+
+
+@pytest.mark.parametrize(
+    "mode,expected",
+    [
+        (None, PROFILE_HYDRA27),
+        ("tail6_fixed32", PROFILE_HYDRA27),
+        (PROFILE_HYDRA27, PROFILE_HYDRA27),
+        (PROFILE_HYDRA31, PROFILE_HYDRA31),
+    ],
+)
+def test_gdn_kernel_binds_the_served_profiles_tree(
+    mode: str | None, expected: str
+) -> None:
+    module = _load_gdn_kernel(mode)
+    want = topology_profile(expected)
+    assert module._FR13_FIXED32_TREE_PROFILE == expected
+    assert module._FR13_FIXED32_PARENT == tuple(want["physical_parent"])
+    assert module._FR13_FIXED32_PARENT_SHA256 == want["physical_parent_sha256"]
+    assert module._FR13_FIXED32_ANCESTRY_SHA256 == want["tree_ancestry_sha256"]
+    assert module._FR13_FIXED32_SUBTREE_LEVELS == tuple(
+        tuple((tuple(path), parent) for path, parent in level)
+        for level in want["subtree_levels"]
+    )
+
+
+@pytest.mark.parametrize("mode", [PROFILE_HYDRA27, PROFILE_HYDRA31])
+def test_the_tree_gdn_schedule_derives_for_both_profiles(mode: str) -> None:
+    """The critical path: the stage-2 derivation must reach these consumers.
+
+    hydra31's second level runs 11 rows deep instead of 7, so the padded slot
+    count is 126 and the critical path 16. If the decomposition or the contract
+    could not produce that, hydra31 would refuse at subtree_preseed no matter
+    what the route resolver allowed.
+    """
+    module = _load_gdn_kernel(mode)
+    want = topology_profile(mode)
+    levels = module._subtree_decompose(module._FR13_FIXED32_PARENT)
+    module._validate_subtree_decomposition(module._FR13_FIXED32_PARENT, levels)
+    contract = module._fr13_fixed32_schedule_contract(levels)
+    assert contract["path_counts"] == tuple(want["gdn_level_path_counts"])
+    assert contract["max_lengths"] == tuple(want["gdn_level_max_lengths"])
+    assert contract["padded_slots"] == want["gdn_padded_slots"]
+    assert contract["launches"] == want["gdn_launches"]
+    assert contract["programs"] == want["gdn_path_programs"]
+    assert contract["critical"] == sum(want["gdn_level_max_lengths"])
+    assert contract["parent_sha256"] == want["physical_parent_sha256"]
+    assert contract["ancestry_sha256"] == want["tree_ancestry_sha256"]
+
+
+def test_hydra31_gdn_schedule_is_genuinely_different() -> None:
+    """A test that passes for both profiles proves nothing if they are equal."""
+    h27 = _load_gdn_kernel(PROFILE_HYDRA27)
+    h31 = _load_gdn_kernel(PROFILE_HYDRA31)
+    assert h27._FR13_FIXED32_PARENT != h31._FR13_FIXED32_PARENT
+    assert (
+        h27._FR13_FIXED32_SCHEDULE_EXPECTED["padded_slots"] == 82
+        and h31._FR13_FIXED32_SCHEDULE_EXPECTED["padded_slots"] == 126
+    )
+    assert (
+        h27._FR13_FIXED32_SCHEDULE_EXPECTED["max_lengths"] == (5, 7)
+        and h31._FR13_FIXED32_SCHEDULE_EXPECTED["max_lengths"] == (5, 11)
+    )
+
+
+def test_gdn_kernel_refuses_a_wrong_tree_for_the_served_mode() -> None:
+    """MUTATION PROOF: the runtime tree must match the served profile.
+
+    subtree_preseed already refused a non-fixed tree; the bug was that "fixed"
+    meant hydra27 whatever the mode said. Now each mode refuses the other's.
+    """
+    p27 = tuple(topology_profile(PROFILE_HYDRA27)["physical_parent"])
+    p31 = tuple(topology_profile(PROFILE_HYDRA31)["physical_parent"])
+    assert len(p27) == len(p31) == 32 and p27 != p31
+
+    module31 = _load_gdn_kernel(PROFILE_HYDRA31)
+    with pytest.raises(RuntimeError) as refusal:
+        module31.subtree_preseed(p27, 32, 1, 1, 1, "cpu")
+    assert "non-fixed physical tree" in str(refusal.value)
+
+    module27 = _load_gdn_kernel(PROFILE_HYDRA27)
+    with pytest.raises(RuntimeError):
+        module27.subtree_preseed(p31, 32, 1, 1, 1, "cpu")
+
+
+def test_the_kept_levers_still_refuse_hydra31() -> None:
+    """The keep half of the adjudication, enforced rather than only commented."""
+    module = _load_gdn_kernel(PROFILE_HYDRA31)
+    assert module._FR13_FIXED32_MODE == PROFILE_HYDRA31, (
+        "hydra31 must RESOLVE as a route -- that is the widen half"
+    )
+    assert PROFILE_HYDRA31 not in module._FR13_FIXED32_MODES, (
+        "the twelve default-off levers were qualified on hydra27's tree"
+    )
+    assert PROFILE_HYDRA31 in module._FR13_FIXED32_ROUTE_MODES
+    assert PROFILE_HYDRA31 not in module._FR13_FIXED32_TREECONV_MODE_IDENTITY
+    with pytest.raises(RuntimeError):
+        module._fr13_fixed32_treeconv_topology_descriptor(PROFILE_HYDRA31)
+
+    for name, attribute in (
+        ("fr13_sfwd_conv_postprep_fusion", "FIXED32_MODES"),
+        ("fr13_gdn_gqa_group3", "FIXED32_MODES"),
+        ("fr13_fixed32_commit_slot_scatter", "FIXED32_MODES"),
+        ("fr13_host_tail_prep", "_FIXED32_MODES"),
+    ):
+        source = (SERVING / f"{name}.py").read_text()
+        collections = [
+            names for _line, names in _mode_collections(source)
+        ]
+        assert collections, f"{name} lost its mode roster"
+        assert all(
+            PROFILE_HYDRA31 not in names for names in collections
+        ), f"{name} was widened to hydra31 without re-qualification"
+
+
+def test_hydra27_gdn_kernel_surface_is_byte_identical_to_the_baseline() -> None:
+    """PAIRING EVIDENCE: the hydra27 path is untouched by the widening."""
+    try:
+        baseline = subprocess.run(
+            ["git", "cat-file", "blob", GDN_KERNEL_BASELINE_BLOB],
+            cwd=REPO,
+            capture_output=True,
+            check=True,
+        ).stdout.decode()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        pytest.skip(f"pre-round-18 kernel blob unavailable: {exc}")
+
+    current = GDN_KERNEL.read_text()
+    for mode in (None, "tail6_fixed32", PROFILE_HYDRA27):
+        old = _load_gdn_kernel(mode, baseline)
+        new = _load_gdn_kernel(mode, current)
+        names = set(_module_bound_names(baseline)) & set(
+            _module_bound_names(current)
+        )
+        assert len(names) >= 150, f"surface ledger collapsed to {len(names)}"
+        # coverage guarantee stated as names, not only as a count: these are
+        # the bindings the widening actually touched.
+        assert {
+            "_FR13_FIXED32_PARENT",
+            "_FR13_FIXED32_SUBTREE_LEVELS",
+            "_FR13_FIXED32_PARENT_SHA256",
+            "_FR13_FIXED32_ANCESTRY_SHA256",
+            "_FR13_FIXED32_LEVELS_SHA256",
+            "_FR13_FIXED32_MODES",
+            "_FR13_FIXED32_EXPORT_NODES",
+            "_FR13_FIXED32_PHYSICAL_PARENT",
+            "_FR13_FIXED32_TREECONV_STATE_SRC",
+        } <= names
+        drift = {}
+        for name in sorted(names):
+            if not hasattr(old, name) or not hasattr(new, name):
+                continue
+            a, b = getattr(old, name), getattr(new, name)
+            if callable(a) or isinstance(a, types.ModuleType):
+                continue
+            if a != b:
+                drift[name] = (a, b)
+        assert not drift, f"hydra27 GDN kernel surface CHANGED at {mode}: {sorted(drift)}"
+        # the schedule the served profile must produce is unchanged too
+        assert (
+            new._FR13_FIXED32_SCHEDULE_EXPECTED["padded_slots"] == 82
+            and new._FR13_FIXED32_PARENT_SHA256
+            == old._FR13_FIXED32_PARENT_SHA256
+        )
+
+
+def test_the_sfwd_source_closure_attestation_is_unchanged() -> None:
+    """PAIRING EVIDENCE, in the form the banked runs actually pin.
+
+    fr13_sfwd_state_fusion_production digests the ast.dump of a fixed set of
+    kernel-module nodes -- including _FR13_FIXED32_PARENT and
+    _FR13_FIXED32_MODES -- and compares it against a byte-qualified candidate.
+    Binding the tree by tuple-unpacking changed those NODES and silently broke
+    the attestation, which is why the widening rebinds under an `if` instead.
+    A digest change here is a re-attestation event for a default-off lever, so
+    it must be deliberate and declared, never a side effect of a topology edit.
+    """
+    from lumo_flywheel_serving import fr13_sfwd_state_fusion_production as prod
+
+    try:
+        baseline = subprocess.run(
+            ["git", "cat-file", "blob", GDN_KERNEL_BASELINE_BLOB],
+            cwd=REPO,
+            capture_output=True,
+            check=True,
+        ).stdout.decode()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        pytest.skip(f"pre-round-18 kernel blob unavailable: {exc}")
+
+    def closure_digest(source: str) -> str:
+        members: dict[str, str] = {}
+        for node in ast.parse(source).body:
+            names: list[str] = []
+            if isinstance(node, ast.Assign):
+                names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            elif isinstance(node, ast.AnnAssign) and isinstance(
+                node.target, ast.Name
+            ):
+                names = [node.target.id]
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                names = [node.name]
+            for name in names:
+                if name in prod._CLOSURE_NAMES:
+                    assert name not in members, f"duplicate closure member {name}"
+                    members[name] = ast.dump(
+                        node, annotate_fields=True, include_attributes=False
+                    )
+        missing = tuple(n for n in prod._CLOSURE_NAMES if n not in members)
+        assert not missing, f"closure is missing {missing!r}"
+        return hashlib.sha256(
+            "".join(
+                f"{name}\0{members[name]}\0" for name in prod._CLOSURE_NAMES
+            ).encode("ascii")
+        ).hexdigest()
+
+    assert closure_digest(GDN_KERNEL.read_text()) == closure_digest(baseline), (
+        "the SFWD source-closure digest moved: the hydra27 lever would need "
+        "re-qualification, which is a decision to declare, not a side effect"
     )

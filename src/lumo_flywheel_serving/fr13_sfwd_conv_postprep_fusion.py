@@ -41,6 +41,11 @@ DIRECT_NODEGROUP8_EMBEDDED_GATE_CANDIDATE = (
     "fixed32_sfwd_conv_postprep_nodepair16_serial_direct_embedded_gate_v2"
 )
 CAPTURE_CACHE_SCHEMA = "fr13.fixed32.sfwd_conv_postprep.capture_cache.v1"
+# ROUND 18 ADJUDICATION -- KEPT hydra27/tail6, deliberately not widened.
+# This module is a DEFAULT-OFF fusion candidate (see the module docstring),
+# byte-AB qualified on hydra27's physical tree. Widening the set would present
+# a hydra27 credential for a tree the fusion was never measured on. hydra31
+# must re-qualify it before it can arm; until then this refusal IS the answer.
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
 QUALIFICATION_PROFILE = "k64_root"
 DRAFT_VOCAB_K = 65536

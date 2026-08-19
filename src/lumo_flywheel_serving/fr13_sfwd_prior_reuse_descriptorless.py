@@ -6,6 +6,13 @@ import triton
 import triton.language as tl
 
 
+# ROUND 18 ADJUDICATION -- KEPT hydra27-only, deliberately not widened.
+# This kernel is part of the DEFAULT-OFF SFWD prior-reuse family
+# (FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB), byte-AB qualified on hydra27's
+# physical tree; the bases below are derived from THIS parent vector.
+# hydra31 re-qualifies the lever or does not arm it. Found by the round-18
+# scan, not by the hydra-mention enumeration: this file never says
+# "hydra27" anywhere -- it just carries the tree.
 FIXED32_PARENT = (
     -1,
     0,

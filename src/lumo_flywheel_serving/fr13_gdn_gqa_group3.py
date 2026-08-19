@@ -15,6 +15,11 @@ import triton.language as tl
 
 CANDIDATE = "fixed32_gdn_single_launch_gqa_group3_v1"
 BV16_CANDIDATE = "fixed32_gdn_single_launch_gqa_group3_bv16_v1"
+# ROUND 18 ADJUDICATION -- KEPT hydra27/tail6, deliberately not widened.
+# The default-off gqa_group3 / single-launch candidate grouping. Its launch
+# schedule was qualified against hydra27's subtree decomposition; hydra31's
+# second level runs 11 rows deep instead of 7, so the grouping must be
+# re-measured, not assumed. Refuses for hydra31 by construction.
 FIXED32_MODES = frozenset(("tail6_fixed32", "hydra27_fixed32"))
 PHYSICAL_ROWS = 32
 NUM_K_HEADS = 16
