@@ -165,6 +165,21 @@ def main(argv: list[str]) -> int:
         return 1
 
     p = found[1]
+    # THE UNWIRED/DISABLED CASE emits enabled=False with ladder=None -- never zeros.
+    # Handle it before any arithmetic: a crash here would be fail-closed by accident
+    # rather than by design, and would not say WHY.
+    if p.get("ladder") is None or not p.get("enabled", False):
+        out["ADMISSIBLE"] = False
+        out["payload"] = {k: p.get(k) for k in ("schema", "enabled", "flag", "slots")}
+        out["VERDICT"] = (
+            "INSTRUMENT ABSENT: the drain reported enabled=%s with ladder=%s. This is "
+            "NOT a measured zero -- headline 1 is instrument-blocked for this run. Do "
+            "NOT substitute the aggregate accept for a distribution."
+            % (p.get("enabled"), p.get("ladder"))
+        )
+        print(json.dumps(out, indent=1))
+        return 1
+
     drafts = accepted = None
     for _, d in docs:
         drafts = drafts if drafts is not None else dig(d, "vllm:spec_decode_num_drafts_total")
