@@ -253,6 +253,12 @@ FR13_FA2_QROW32_B1_LIVE_AB_ARM=${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}
 FR13_FA2_QROW32_B1_TIMING_ARM=${FR13_FA2_QROW32_B1_TIMING_ARM:-}
 FR13_FA2_QROW32_B1_PRODUCTION_ARM=${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}
 FR13_FA2_QROW32_B4_TIMING_ARM=${FR13_FA2_QROW32_B4_TIMING_ARM:-}
+# Added when the B4 promotion block gained its `-z "$..._B1_TIER_B_ARM"`
+# clause: the launcher normalises this variable long before the block,
+# and a harness that does not mirror the normalisation dies on `set -u`
+# instead of testing the clause. That is this harness working as its own
+# comment above promises -- the fix is to mirror it, not to relax set -u.
+FR13_FA2_QROW32_B1_TIER_B_ARM=${FR13_FA2_QROW32_B1_TIER_B_ARM:-}
 _FR13_FA2_QROW32_B4_PRODUCTION_ARM_NAMED=0
 [[ -v FR13_FA2_QROW32_B4_PRODUCTION_ARM ]] \
   && _FR13_FA2_QROW32_B4_PRODUCTION_ARM_NAMED=1
