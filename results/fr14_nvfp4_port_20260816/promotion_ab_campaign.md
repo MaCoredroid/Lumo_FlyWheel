@@ -3967,3 +3967,82 @@ Present again, third boot running, and it is the arbitration evidence:
 
 Seventeen sites. Container preserved. GPU idle. No retry. H27n baseline unchanged;
 standing verdicts unchanged. The promoted split-K default has still never served.
+
+# EXACT16 QC, ATTEMPTS 4 AND 5 (2026-08-19 21:52Z / 22:01Z) — site 17 closed; one transient; SITE 18 is structural
+
+## ATTEMPT 4 — NOT A SITE. A unified-memory hygiene transient.
+
+Refused at 57s inside EngineCore:
+
+```
+ValueError: Free memory on device cuda:0 (74.37/117.51 GiB) on startup is less than
+desired GPU memory utilization (0.7, 82.26 GiB).
+```
+
+No compute apps held the GPU; nothing foreign was running. The cause is that on this
+unified-memory box the arm's hygiene gate and vLLM's startup assertion **measure
+different things**:
+
+    arm hygiene gate      asserts on MemAvailable   98.3 GiB  -> PASS
+    vLLM engine startup   asserts on FREE memory    74.37 GiB -> REFUSE
+
+`MemAvailable` counts reclaimable page cache; the engine's check does not. Attempt 4
+also began 7 GiB deeper than attempt 3 (`used` 19 vs 12 GiB), and loading the 20.42 GiB
+checkpoint converted most of the remaining headroom into cache during the load itself.
+
+Running the repo's own `recover_host_memory` took free from **74 -> 105 GiB** (cache
+31 -> 0), clearing the requirement with room to spare. Recorded as a finding: **the
+hygiene gate can pass while the engine's own check fails, because MemAvailable includes
+cache that the engine's free-memory assertion does not count.**
+
+Retried once, deliberately: the no-retry rule is scoped to a *site*, and this was an
+environmental transient with an identified cause and a verified fix.
+
+## ATTEMPT 5 — SITE 17 CLOSED, and the serve gate now passes exact16
+
+No more `exact4 identity drifted`. The re-seal held, the workload declaration was
+accepted, the boot ran 4m06s and reached the same serve entry point that refused before.
+Lane 4's `require_declared_workload` works.
+
+## SITE 18 — the credential binds SOURCE_COMMIT == HEAD but is staged at a TRACKED path
+
+```
+tree_attn.py:2933 forward -> :2401 _fr13_fa2_qrow32_b1_production_begin
+  -> :1372 _fr13_fa2_qrow32_b1_tier_b_credential
+RuntimeError: FR13 qrow32 B1 tier-b credential source_commit does not bind this serve
+```
+
+    credential identity.source_commit   f93a6a236   HEAD when the reducer ran
+    serve HEAD                          c9af775c1   HEAD after committing the re-seal
+    credential path                     TRACKED
+
+**There is no ordering available to me that satisfies this.** My arm's own gate requires
+a clean worktree, so the re-seal must be committed before the boot; committing moves HEAD
+past the commit the credential just recorded. Seal -> commit -> invalid, every time.
+
+This is not a regression in lane 4's work — it is that work succeeding. Site 16(a)
+replaced a mint derived from the patcher file (`x == x`, unfailable) with one derived
+from the credential's **sealed** identity. That made the check real for the first time,
+and the first real evaluation exposed a binding the staging location cannot satisfy.
+
+The launcher already states the rule, forty lines above the pointer it applies to:
+
+> WHY UNTRACKED. The credential binds SOURCE_COMMIT == HEAD, so a TRACKED registry
+> recording that commit would invalidate itself the instant it were committed. House
+> precedent for untracked manifest inputs: the auto_research subset and the staged FA2 .so.
+
+That reasoning was applied to the gqa_pair pointer, which lives untracked under
+`output/`. The split-K tier-B default credential binds source_commit the same way and is
+staged at `results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_credential.json` — tracked.
+**The house rule exists, is written down, and was not applied to this credential.**
+
+Fix (not mine): stage the tier-B default credential at an untracked path, as its own
+launcher comment prescribes — then sealing at HEAD works because no commit is required.
+Failing that, the check would have to accept a credential sealed at an ancestor of HEAD,
+which is a weaker binding and should be a ruling rather than a convenience.
+
+## STATUS
+
+Eighteen sites. Container `adabaea96a6a` preserved. GPU idle, free 105 GiB. No retry.
+Re-seal 2 stands (coupling test green, 218/218 tier-B suite green). H27n baseline and
+standing verdicts unchanged. The promoted split-K default has still never served.
