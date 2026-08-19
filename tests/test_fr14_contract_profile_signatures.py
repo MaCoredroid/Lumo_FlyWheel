@@ -2030,13 +2030,14 @@ def test_hydra27_topology_values_are_byte_identical_to_the_baseline() -> None:
 # re-attest the source-closure digest through the established machinery. Two of
 # the 47 digested functions changed, both BOOT-TIME VALIDATORS, and the
 # evidence below is what the pairing rests on.
-TAW_SOURCE_DIGEST = "6ffe57287e768bfee5e2e72f10de0dfea6fb3e6c0fa50f32b6c099c63fa916a2"
+TAW_SOURCE_DIGEST = "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
 # Every digest this pin has ever carried. A mirror holding ANY of them is a
 # mirror that was missed, so the sweep checks all of them rather than only the
 # immediately previous one.
 TAW_SOURCE_DIGEST_SUPERSEDED = (
     "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d",
     "491874e3ebbc53b83ce28a8cae505025fde36e56564da049ab0d582eaa4e7d5c",
+    "6ffe57287e768bfee5e2e72f10de0dfea6fb3e6c0fa50f32b6c099c63fa916a2",
 )
 # The lever's qualified scope and the payload it digests. Neither moved, which
 # is why no tensor shape or slot index on the hydra27 path could move.
@@ -2139,9 +2140,19 @@ def test_the_re_attestation_blast_radius_is_the_three_validators() -> None:
     # A SUBSET, because HEAD~1 moves as other lanes land: once the schedule work
     # is behind us the set is empty, and what must never happen is a digested
     # function changing that is not one of these three.
+    # Site 13 converted every walk-cap reader on the execution path, so the
+    # changed set is larger than the schedule work's three. What must never
+    # happen is a digested function changing that is not on this list.
     assert set(changed) <= {
         "_fr13_fixed32_bind_schedule_to_profile",
+        "_fr13_fixed32_publish_work",
+        "_fr13_fixed32_runtime_contract",
+        "_fr13_fixed32_taw_execute_exact_cuda",
+        "_fr13_fixed32_taw_execute_torch",
+        "_fr13_fixed32_taw_source_contract",
         "_fr13_fixed32_taw_topology_binding",
+        "_fr13_fixed32_topology",
+        "fr13_fixed32_taw_commit",
         "fr13_fixed32_taw_preseed",
     }, f"an unexpected digested function changed: {changed}"
 
@@ -2943,3 +2954,404 @@ def test_the_payload_carries_everything_the_sealed_harness_asserts() -> None:
     finally:
         module._FR13_FIXED32_COMMITTER.clear()
         module._FR13_FIXED32_COMMITTER.update(saved)
+
+
+# ---------------------------------------------------------------------------
+# 12. SITE 13 -- THE SCALAR THAT SHADOWED A PER-MODE AUTHORITY
+# ---------------------------------------------------------------------------
+# topology.WALK_CAP is MAX_PHYSICAL_DEPTH + 1 and has always been hydra27's 12.
+# It is a module-level SCALAR, so it never became per-mode when hydra31
+# arrived, and the guard that caught it interpolated {mode} into its message
+# while comparing that scalar -- it read mode-aware without being it. Rounds
+# 1-7 were this class at dict granularity and the key-set invariant covers
+# those; a scalar has no key set to be wrong about, so it escaped.
+MULTIDRAFT = SCRIPTS / "fr13_device_multidraft_kernel.py"
+# The revision that still had site 13, pinned so the mutation proof survives
+# HEAD moving under other lanes.
+SITE13_BASELINE = "161e73672c517067d5b2a405d18d6c24c0582cb6"
+CENSUS = SCRIPTS / "fr13_fixed32_work_census.py"
+
+# Curated topology-constant -> profile-key map, the same basis as SWAP_MAP:
+# equality alone is a coincidence detector (GDN_CONV_KERNEL_SIZE is 4 and so is
+# rescue_carry_slots), and a census built on coincidence lies about its subject.
+SHADOWING_SCALARS = {
+    "FIXED32_CHOICES": "choices",
+    "PHYSICAL_PARENT": "physical_parent",
+    "EXPECTED_PHYSICAL_PARENT": "physical_parent",
+    "PHYSICAL_PARENT_SHA256": "physical_parent_sha256",
+    "TREE_ANCESTRY_SHA256": "tree_ancestry_sha256",
+    "SUBTREE_LEVELS": "subtree_levels",
+    "MAX_PHYSICAL_DEPTH": "max_physical_depth",
+    "WALK_CAP": "walk_cap",
+    "TAW_PATH_SCATTER_SLOTS": "walk_cap",
+    "ARCTIC_MAIN_TAIL_LENGTH": "main_tail_length",
+    "ARCTIC_LOOKUP_TOKENS_PER_REQUEST": "arctic_requested_tokens",
+    "GATED_ARCTIC_MAIN_TAIL_LENGTH": "gated_main_tail_length",
+    "GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST": "gated_arctic_requested_tokens",
+    "RESCUE_CARRY_SLOTS_PER_REQUEST": "rescue_carry_slots",
+    "GDN_LEVEL_MAX_LENGTHS": "gdn_level_max_lengths",
+    "GDN_PADDED_SLOTS": "gdn_padded_slots",
+    "PHYSICAL_BRANCH_CHAINS": "physical_branch_chains",
+}
+
+# SITE 13 ADJUDICATION for the modules that carry their OWN WALK_CAP = 12.
+# Written here rather than as a comment in those files ON PURPOSE: all three
+# are credential-bound by sha256 ("credential-bound device module identity
+# drifted"), so even a documentation comment re-attests three byte-qualified
+# lever credentials. The adjudication is worth recording; it is not worth that.
+PINNED_PRIVATE_WALK_CAP_MODULES = {
+    "fr13_cfwd_logit_direct_decision_kernel.py": (
+        "DEFAULT-OFF CFWD logit-direct lever, byte-AB qualified on hydra27's "
+        "tree and already refused for hydra31 at the launcher "
+        "(FR13_CFWD_LOGIT_DIRECT_* in _fr14_h31_incompat)."
+    ),
+    "fr13_cfwd_packed_walk_active_depth_kernel.py": (
+        "DEFAULT-OFF packed-walk active-depth lever, same qualification and "
+        "the same launcher refusal."
+    ),
+    "fr13_cfwd_packed_walk_node_trust_kernel.py": (
+        "DEFAULT-OFF packed-walk node-trust lever, same qualification and the "
+        "same launcher refusal."
+    ),
+}
+
+# topology.WALK_CAP readers left in the execution-path kernel, each adjudicated.
+PINNED_WALK_CAP_READERS = {
+    1: (
+        "_fr13_fixed32_taw_topology_binding bounds the QUALIFIED SCOPE's "
+        "schedule (tail6 + hydra27), whose byte-AB pass measured that depth. A "
+        "mode outside the scope derives its own cap a few lines below."
+    ),
+    2: (
+        "_fr13_fixed32_walk_cap's own fallback: an unset mode is the "
+        "non-fixed32 route, which has always used hydra27's cap, so returning "
+        "it keeps that path byte-identical."
+    ),
+}
+
+
+def test_the_authority_carries_a_per_mode_walk_cap() -> None:
+    topology = _topology_module()
+    assert set(topology.WALK_CAP_BY_MODE) == set(topology.SERVING_MODES)
+    for mode in topology.SERVING_MODES:
+        expected = int(
+            topology.PROFILES[topology.TREE_PROFILE_BY_MODE[mode]]["walk_cap"]
+        )
+        assert topology.WALK_CAP_BY_MODE[mode] == expected
+        assert topology.walk_cap_for_mode(mode) == expected
+    assert topology.WALK_CAP_BY_MODE[PROFILE_HYDRA31] == 16
+    assert topology.WALK_CAP_BY_MODE[PROFILE_HYDRA27] == 12
+    # the bare scalar is unchanged, so nothing that legitimately means
+    # hydra27's 12 moved underneath it
+    assert topology.WALK_CAP == 12
+    with pytest.raises(KeyError):
+        topology.walk_cap_for_mode("nope_fixed32")
+
+
+def test_the_walk_cap_index_is_derived_not_retyped() -> None:
+    """A retyped cap is a cap that can disagree with its own tree."""
+    source = TOPOLOGY.read_text()
+    block = source[source.index("WALK_CAP_BY_MODE: dict[Mode, int] = {") :]
+    block = block[: block.index("}") + 1]
+    assert "PROFILES[TREE_PROFILE_BY_MODE[" in block, (
+        "the index must be built from PROFILES, not written out"
+    )
+    for literal in ("12", "16"):
+        assert literal not in block, f"the index retypes {literal}"
+
+
+def test_no_unadjudicated_walk_cap_reader_remains_in_the_kernel() -> None:
+    """Every reader is mode-keyed or pinned with a reason, per site."""
+    source = MULTIDRAFT.read_text()
+    # AST, not text: a docstring that NAMES the constant is not a reader, and a
+    # census that cannot tell prose from code will be tuned until it shuts up.
+    readers = [
+        node.lineno
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Attribute)
+        and node.attr == "WALK_CAP"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "topology"
+    ]
+    assert len(readers) == len(PINNED_WALK_CAP_READERS), (
+        f"{len(readers)} bare topology.WALK_CAP readers remain, "
+        f"{len(PINNED_WALK_CAP_READERS)} are adjudicated: {readers}"
+    )
+    # ...and the resolver every other site now goes through exists
+    assert "def _fr13_fixed32_walk_cap(" in source
+    assert source.count("_fr13_fixed32_walk_cap(topology") >= 15, (
+        "the conversion did not reach the sizers and provenance"
+    )
+    # the literal 12 that guarded the loaded authority is still an identity
+    # check, and now also requires the per-mode index to exist
+    assert "module.WALK_CAP != 12" in source
+    assert 'set(module.WALK_CAP_BY_MODE) != set(module.SERVING_MODES)' in source
+
+
+def test_the_provenance_records_the_served_walk_not_the_scalar() -> None:
+    """The silent site: a run executing 16 must not record walk_cap=12."""
+    source = MULTIDRAFT.read_text()
+    contract = source[source.index("def _fr13_fixed32_taw_source_contract(") :]
+    contract = contract[: contract.index("\ndef ", 1)]
+    assert '"walk_cap": _fr13_fixed32_walk_cap(topology),' in contract
+    assert '"walk_cap": int(topology.WALK_CAP),' not in contract
+
+
+# --- (4b) THE MESSAGE-LIE DETECTOR ------------------------------------------
+# Site 13's guard said "{mode}: TAW walk cap 16 != contract 12" while comparing
+# a constant that knows no modes. The message was mode-aware; the comparison
+# was not. A first attempt -- "a raise naming {mode} whose enclosing test reads
+# nothing mode-keyed" -- produced 95 candidates, nearly all honest (`if mode
+# not in FIXED32_MODES` legitimately names the mode), so it was dropped rather
+# than tuned into silence. The shipped form is narrow: a raise that names the
+# mode, guarded by a test that reads a scalar KNOWN to shadow a per-mode
+# authority. That fires on exactly site 13 in the pre-fix source and on nothing
+# else in either root.
+def message_lie_census(repo_root: Path) -> list[tuple[str, int, list[str]]]:
+    topology = _topology_module()
+    p27 = topology.profile(PROFILE_HYDRA27)
+    p31 = topology.profile(PROFILE_HYDRA31)
+    varying = {
+        name
+        for name, key in SHADOWING_SCALARS.items()
+        if p27[key] != p31[key]
+    }
+    out: list[tuple[str, int, list[str]]] = []
+    for sub in ("scripts", "src"):
+        root = repo_root / sub
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*.py")):
+            try:
+                tree = ast.parse(path.read_text(errors="replace"))
+            except SyntaxError:  # pragma: no cover
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.If):
+                    continue
+                raises = [
+                    r
+                    for r in ast.walk(node)
+                    if isinstance(r, ast.Raise) and r.exc is not None
+                ]
+                if not raises:
+                    continue
+                if "'mode'" not in " ".join(ast.dump(r.exc) for r in raises):
+                    continue
+                names = {
+                    n.attr for n in ast.walk(node.test) if isinstance(n, ast.Attribute)
+                } | {
+                    n.id for n in ast.walk(node.test) if isinstance(n, ast.Name)
+                }
+                shadow = names & varying
+                if shadow:
+                    out.append(
+                        (
+                            str(path.relative_to(repo_root)),
+                            raises[0].lineno,
+                            sorted(shadow),
+                        )
+                    )
+    return out
+
+
+def test_no_guard_names_the_mode_while_comparing_a_mode_blind_scalar() -> None:
+    found = message_lie_census(REPO)
+    assert not found, (
+        "a raise interpolates {mode} while its test reads a scalar that "
+        f"shadows a per-mode authority -- site 13's exact shape: {found}"
+    )
+
+
+def test_the_message_lie_detector_fires_on_the_pre_fix_source() -> None:
+    """MUTATION PROOF, and the over-firing check: exactly one hit, no others."""
+    import tempfile
+
+    try:
+        baseline = subprocess.run(
+            ["git", "show", f"{SITE13_BASELINE}:scripts/fr13_device_multidraft_kernel.py"],
+            cwd=REPO,
+            capture_output=True,
+            check=True,
+        ).stdout.decode()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        pytest.skip(f"pre-site-13 kernel unavailable: {exc}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "scripts").mkdir()
+        (root / "scripts" / "fr13_device_multidraft_kernel.py").write_text(baseline)
+        found = message_lie_census(root)
+    assert len(found) == 1, f"expected exactly site 13, got {found}"
+    path, _line, shadow = found[0]
+    assert path.endswith("fr13_device_multidraft_kernel.py")
+    assert shadow == ["WALK_CAP"]
+
+
+# --- (3)+(4a) THE SCALAR-AUTHORITY CENSUS -----------------------------------
+def test_every_shadowing_scalar_is_really_a_shadow() -> None:
+    """The curated map, validated -- coincidence is not evidence."""
+    topology = _topology_module()
+    p27 = topology.profile(PROFILE_HYDRA27)
+    for name, key in sorted(SHADOWING_SCALARS.items()):
+        assert hasattr(topology, name), f"topology lost {name}"
+        assert key in p27, f"PROFILES lost {key!r}"
+        assert getattr(topology, name) == p27[key], (
+            f"{name} is not hydra27's profile[{key!r}] -- the map is stale"
+        )
+
+
+def test_the_scalar_census_is_the_pinned_inventory() -> None:
+    """A new module scalar shadowing a per-mode authority must be adjudicated.
+
+    Pinned as a SET of names rather than a count: a scalar appearing and
+    another disappearing would leave a count unchanged, and that is exactly the
+    kind of silence this campaign keeps paying for.
+    """
+    topology = _topology_module()
+    p27 = topology.profile(PROFILE_HYDRA27)
+    p31 = topology.profile(PROFILE_HYDRA31)
+    varying = {
+        name for name, key in SHADOWING_SCALARS.items() if p27[key] != p31[key]
+    }
+    assert varying == {
+        "ARCTIC_LOOKUP_TOKENS_PER_REQUEST",
+        "ARCTIC_MAIN_TAIL_LENGTH",
+        "EXPECTED_PHYSICAL_PARENT",
+        "FIXED32_CHOICES",
+        "GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST",
+        "GATED_ARCTIC_MAIN_TAIL_LENGTH",
+        "GDN_LEVEL_MAX_LENGTHS",
+        "GDN_PADDED_SLOTS",
+        "MAX_PHYSICAL_DEPTH",
+        "PHYSICAL_BRANCH_CHAINS",
+        "PHYSICAL_PARENT",
+        "PHYSICAL_PARENT_SHA256",
+        "RESCUE_CARRY_SLOTS_PER_REQUEST",
+        "SUBTREE_LEVELS",
+        "TAW_PATH_SCATTER_SLOTS",
+        "TREE_ANCESTRY_SHA256",
+        "WALK_CAP",
+    }, f"the shadowing-scalar inventory moved: {sorted(varying)}"
+
+
+# --- (5) THE CPU WALK, EXTENDED TO THE WARM-EXECUTE CONTRACT ----------------
+# The walk built the pregather record (site 11) but never ran the contract that
+# CUDA-graph warm capture calls first. Site 13 lived there. The walk asks the
+# boot's question, and the boot's question now includes this one.
+def _runtime_contract_env(mode: str, **overrides) -> dict[str, str]:
+    topology = _topology_module()
+    env = {
+        "FR13_FIXED32_MODE": mode,
+        "FR13_FIXED32_VALID_MASK": hex(int(topology.VALID_MASK_BY_MODE[mode])),
+        "FR13_FIXED32_ACTIVE_NODES": str(
+            sum(1 for flag in topology.VALID_BY_MODE[mode] if flag)
+        ),
+        "FR13_FIXED32_TAW_WALK_CAP": str(topology.walk_cap_for_mode(mode)),
+        "FR13_TAW": "1",
+    }
+    env.update(overrides)
+    return env
+
+
+def _run_runtime_contract(mode: str, **overrides):
+    import os
+
+    kernel = _multidraft_kernel()
+    saved = dict(os.environ)
+    try:
+        os.environ.update(_runtime_contract_env(mode, **overrides))
+        return kernel._fr13_fixed32_runtime_contract(mode)
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
+
+
+@pytest.mark.parametrize(
+    "mode", ["tail6_fixed32", PROFILE_HYDRA27, PROFILE_HYDRA31]
+)
+def test_the_warm_execute_contract_passes_for_every_serving_mode(
+    mode: str,
+) -> None:
+    """The :3304 path -- where round 21 died at CUDA-graph warm capture."""
+    _run_runtime_contract(mode)
+
+
+@pytest.mark.parametrize(
+    "mode,wrong_cap",
+    [
+        (PROFILE_HYDRA31, "12"),
+        (PROFILE_HYDRA27, "16"),
+        ("tail6_fixed32", "16"),
+    ],
+)
+def test_the_warm_execute_contract_still_refuses_a_wrong_cap(
+    mode: str, wrong_cap: str
+) -> None:
+    """MUTATION PROOF, both directions.
+
+    Fixing the scalar must not soften the guard: hydra31 with 12 refuses (the
+    silent sizers would otherwise allocate 12 rows for a 16-deep walk), and
+    hydra27 with 16 refuses just as it always did.
+    """
+    with pytest.raises(RuntimeError) as refusal:
+        _run_runtime_contract(mode, FR13_FIXED32_TAW_WALK_CAP=wrong_cap)
+    message = str(refusal.value)
+    assert "TAW walk cap" in message and mode in message
+    # ...and the message now names the cap the SERVED mode actually requires
+    assert str(_topology_module().walk_cap_for_mode(mode)) in message
+
+
+def test_the_census_round_trips_at_every_modes_walk_depth() -> None:
+    """The provenance half: a hydra31 event is validated at 16, not at 12.
+
+    Before this, reference_event described hydra27's 12-deep walk for every
+    mode, so a correct hydra31 census was reported as a drifted hydra27 one --
+    the measurement blaming the run for the instrument's assumption.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("census_walk", CENSUS)
+    census = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = census
+    try:
+        spec.loader.exec_module(census)
+    except Exception as exc:  # pragma: no cover
+        pytest.skip(f"census unavailable: {exc}")
+    finally:
+        sys.modules.pop(spec.name, None)
+
+    topology = _topology_module()
+    for mode in topology.SERVING_MODES:
+        for batch in (1, 4):
+            event = census.reference_event(mode, batch, f"{mode}:1:0")
+            census.validate_event(event, source="walk")
+            walk = topology.walk_cap_for_mode(mode)
+            assert event["taw"]["loop_iterations"] == walk
+            assert event["taw"]["uniform_shape"] == [batch, walk, 3]
+            assert event["taw"]["tensor_call_census"]["walk_levels"] == walk
+            assert event["gdn"]["critical_path"] == walk
+    # the profiles must genuinely differ, or this proves nothing
+    assert topology.walk_cap_for_mode(PROFILE_HYDRA31) != topology.walk_cap_for_mode(
+        PROFILE_HYDRA27
+    )
+
+
+def test_the_private_walk_cap_modules_stay_pinned_and_untouched() -> None:
+    """Their 12 is hydra27's BY IDENTITY, and their bytes are credentials.
+
+    Each is a default-off lever whose byte-AB pass was measured on hydra27 and
+    which the launcher already refuses for hydra31. Converting them would let
+    an unqualified tree through a gate that never measured it; even commenting
+    them drifts a credential-bound module identity.
+    """
+    for name, reason in PINNED_PRIVATE_WALK_CAP_MODULES.items():
+        source = (SCRIPTS / name).read_text()
+        assert "WALK_CAP = 12" in source, f"{name} lost its pinned cap"
+        assert "WALK_CAP_BY_MODE" not in source, (
+            f"{name} was converted; it is credential-bound and hydra27-only: "
+            f"{reason}"
+        )
+        assert PROFILE_HYDRA31 not in source, (
+            f"{name} learned hydra31 without re-qualification"
+        )

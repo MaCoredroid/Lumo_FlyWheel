@@ -18,7 +18,7 @@ CREDENTIAL_SCHEMA = "fr13.fixed32.taw_source_v7.b1_credential.v1"
 PAIR_SCHEMA = "fr13.fixed32.k64_physical32_fullstack.b1_pair.v1"
 SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 SOURCE_CONTRACT_SHA256 = (
-    "6ffe57287e768bfee5e2e72f10de0dfea6fb3e6c0fa50f32b6c099c63fa916a2"
+    "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
 )
 CANDIDATE = "fixed32_all_parent_commit_v2"
 TASK_ID = "astropy__astropy-12907"

@@ -4990,6 +4990,11 @@ def fixed32_required_env(
         "FR13_FIXED32_REQKEY_DEVICE": "1",
         "FR13_FIXED32_KV_REMAP16": "1",
         "FR13_FIXED32_COMMIT_DEVICE_FILL": "1",
+        # SITE 13 ADJUDICATION -- PINNED. This gate has no hydra31 entry in
+        # FIXED32_MODE_SPECS, so every run it gates is tail6 or hydra27 and
+        # 12 is correct BY IDENTITY. Teaching the gate hydra31 means adding
+        # that spec first; deriving the cap here without it would produce a
+        # gate that sets 16 and then refuses the mode it set it for.
         "FR13_FIXED32_TAW_WALK_CAP": "12",
         "FR13_DEVICE_MULTIDRAFT": "1",
         "FR13_DRAFTER_GRAPH": "1",

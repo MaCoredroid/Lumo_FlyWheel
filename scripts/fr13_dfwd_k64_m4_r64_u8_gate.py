@@ -36,7 +36,7 @@ BLOCKS_SHA256 = "85dffa58703e42aaf7e248fe022c52c76b10364f67532ff724621ba3fce242f
 FA2_SHA256 = "f51e23c5c84f7256c99ccc36d7b049e464d5ef81b1ab095bf5629c28ad45f19d"
 FA2_BYTES = 299183936
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "6ffe57287e768bfee5e2e72f10de0dfea6fb3e6c0fa50f32b6c099c63fa916a2"
+    "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
 )
 DEPTHS = ("root", "mtp_depth_1", "mtp_depth_2", "mtp_depth_3", "mtp_depth_4")
 COMPARISON_SCOPE = (

@@ -1110,6 +1110,38 @@ PROFILES: dict[str, dict[str, object]] = {
     },
 }
 
+# --- SITE 13: the walk cap, mode-keyed ---------------------------------------
+# WALK_CAP below is MAX_PHYSICAL_DEPTH + 1 and has always been hydra27's 12. It
+# is a MODULE-LEVEL SCALAR, so it never became per-mode when hydra31 arrived,
+# and a guard that interpolated {mode} into its message while comparing that
+# scalar read as mode-aware without being it. The key-set invariant from round
+# 19 polices dicts; a scalar has no key set to be wrong about, so it escaped.
+#
+# This index is DERIVED from PROFILES through TREE_PROFILE_BY_MODE, so it
+# cannot disagree with the authority it summarises, and being a dict it falls
+# under the key-set invariant automatically -- the same detector that would
+# have caught this had the quantity been shaped this way to begin with.
+WALK_CAP_BY_MODE: dict[Mode, int] = {
+    serving_mode: int(PROFILES[TREE_PROFILE_BY_MODE[serving_mode]]["walk_cap"])
+    for serving_mode in SERVING_MODES
+}
+
+
+def walk_cap_for_mode(mode: Mode) -> int:
+    """The SERVED mode's TAW walk cap. Refuses an unknown mode.
+
+    Every execution-path reader goes through this. A reader that wants
+    hydra27's 12 specifically must say so at its own site and explain why,
+    because "the walk cap" without a mode is the bug this closes.
+    """
+    try:
+        return WALK_CAP_BY_MODE[mode]
+    except KeyError:
+        raise KeyError(
+            f"unknown fixed32 mode {mode!r} for walk cap; known modes are "
+            f"{list(SERVING_MODES)}"
+        ) from None
+
 
 def profile(mode: str) -> dict[str, object]:
     """Return a TOPOLOGY PROFILE. Not an index by serving mode -- see below.

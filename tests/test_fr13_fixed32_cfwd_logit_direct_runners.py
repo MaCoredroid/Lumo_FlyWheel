@@ -152,7 +152,7 @@ def test_cfwd_integration_contract_propagates_without_rekeying_taw() -> None:
     assert (
         device._FR13_FIXED32_TAW_SOURCE_SHA256
         == census.TAW_SOURCE_CONTRACT_SHA256
-        == "6ffe57287e768bfee5e2e72f10de0dfea6fb3e6c0fa50f32b6c099c63fa916a2"
+        == "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
     )
 
 

@@ -179,6 +179,13 @@ GDN_LAUNCHES_PER_SCAN = GDN_LAUNCHES
 GDN_PATH_PROGRAMS_PER_SCAN = GDN_PATH_PROGRAMS
 GDN_PADDED_SLOTS_PER_SCAN = GDN_PADDED_SLOTS
 GDN_NODES_PER_SCAN = PHYSICAL_ROWS
+# SITE 13, PINNED WITH REASON. These module constants are hydra27's by
+# declaration -- the shape_profile() docstring above already states that they
+# "stay bound to hydra27 so nothing that imports them moves", and other modules
+# import them expecting exactly that number. The VALIDATORS below no longer
+# read them: validate_event uses _walk and reference_event uses _event_walk,
+# both derived from the served mode. What remains here is a hydra27 default and
+# a name other modules can import, not an execution-path reader.
 GDN_CRITICAL_PATH = WALK_CAP
 GDN_GRID_Z = GDN_LEVEL_PATH_COUNTS
 GDN_MAX_PATH_LENGTHS = GDN_LEVEL_MAX_LENGTHS
@@ -204,7 +211,7 @@ TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST = 13
 TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST = 17
 TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "6ffe57287e768bfee5e2e72f10de0dfea6fb3e6c0fa50f32b6c099c63fa916a2"
+    "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
 )
 TAW_CFWD_LOGIT_DIRECT_SOURCE_SCHEMA = (
     "fr13.fixed32.cfwd_logit_direct.integration_source.v2"
@@ -1838,14 +1845,19 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         f"{source}.tree_attn.physical_parent_digest",
     )
     bias_digest = _sha256(tree["bias_digest"], f"{source}.tree_attn.bias_digest")
+    # SITE 13's class: these digests IDENTIFY THE TREE, so comparing them to
+    # the module scalars asserted every run served hydra27's tree. The bias
+    # digest in particular is the tree-attention mask -- the one quantity that
+    # distinguishes the profiles at all -- so pinning it to hydra27 made a
+    # correct hydra31 run look like a drifted hydra27 one.
     _expect(
         physical_parent_digest,
-        PHYSICAL_PARENT_SHA256,
+        str(shape["physical_parent_sha256"]),
         f"{source}.tree_attn.physical_parent_digest",
     )
     _expect(
         bias_digest,
-        TREE_ANCESTRY_SHA256,
+        str(shape["tree_ancestry_sha256"]),
         f"{source}.tree_attn.bias_digest",
     )
 
@@ -2200,9 +2212,9 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         "uniform": _tensor_layout(
             taw,
             prefix="uniform",
-            expected_shape=(batch_size, WALK_CAP, SAMPLER_MAX_FANOUT),
+            expected_shape=(batch_size, _walk, SAMPLER_MAX_FANOUT),
             expected_dtype="torch.float32",
-            expected_stride=(WALK_CAP * SAMPLER_MAX_FANOUT, SAMPLER_MAX_FANOUT, 1),
+            expected_stride=(_walk * SAMPLER_MAX_FANOUT, SAMPLER_MAX_FANOUT, 1),
             label=f"{source}.taw",
         ),
     }
@@ -2254,7 +2266,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             "requests": batch_size,
             "pack_launches": 2,
             "slots_written": ACCEPTED_PATH_CAPACITY * batch_size,
-            "source_walk_slots": WALK_CAP * batch_size,
+            "source_walk_slots": _walk * batch_size,
             "lens_written": batch_size,
             "host_path_items": 0,
             "overflow": 0,
@@ -3941,7 +3953,7 @@ def validate_campaign(
     }
 
 
-def _reference_taw(batch_size: int) -> dict[str, Any]:
+def _reference_taw(batch_size: int, walk: int = WALK_CAP) -> dict[str, Any]:
     rows = batch_size * PHYSICAL_DRAFTS
     return {
         "route": TAW_ROUTE,
@@ -3950,26 +3962,26 @@ def _reference_taw(batch_size: int) -> dict[str, Any]:
         "cache_misses": 0,
         "table_shape": [batch_size, PHYSICAL_ROWS, SAMPLER_MAX_FANOUT],
         "buffer_capacity": TAW_BUFFER_CAPACITY,
-        "loop_iterations": TAW_LOOP_ITERATIONS,
-        "uniform_slots": TAW_UNIFORM_SLOTS * batch_size,
-        "child_lanes": TAW_CHILD_LANES_PER_REQUEST * batch_size,
-        "target_rows": TAW_ROWS_PER_REQUEST * batch_size,
-        "self_rows": TAW_ROWS_PER_REQUEST * batch_size,
-        "self_cdf_rows": TAW_ROWS_PER_REQUEST * batch_size,
-        "source_cdf_rows": TAW_ROWS_PER_REQUEST * batch_size,
-        "residual_cdf_rows": TAW_ROWS_PER_REQUEST * batch_size,
-        "qmix_rows": TAW_ROWS_PER_REQUEST * batch_size,
-        "residual_rows": TAW_ROWS_PER_REQUEST * batch_size,
-        "row_scatter_slots": TAW_ROW_SCATTER_SLOTS * batch_size,
-        "path_scatter_slots": TAW_PATH_SCATTER_SLOTS * batch_size,
-        "exact_commit_launches": TAW_EXACT_COMMIT_LAUNCHES,
+        "loop_iterations": walk,
+        "uniform_slots": walk * SAMPLER_MAX_FANOUT * batch_size,
+        "child_lanes": walk * SAMPLER_MAX_FANOUT * batch_size,
+        "target_rows": walk * batch_size,
+        "self_rows": walk * batch_size,
+        "self_cdf_rows": walk * batch_size,
+        "source_cdf_rows": walk * batch_size,
+        "residual_cdf_rows": walk * batch_size,
+        "qmix_rows": walk * batch_size,
+        "residual_rows": walk * batch_size,
+        "row_scatter_slots": walk * 2 * batch_size,
+        "path_scatter_slots": walk * batch_size,
+        "exact_commit_launches": walk,
         "exact_commit_programs": (
-            TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST * batch_size
+            walk * batch_size
         ),
         "floating_sampling_reimplementation": False,
         "source_contract_schema": TAW_SOURCE_CONTRACT_SCHEMA,
         "source_contract_sha256": TAW_SOURCE_CONTRACT_SHA256,
-        "tensor_call_census": dict(TAW_TENSOR_CALL_CENSUS),
+        "tensor_call_census": taw_tensor_call_census(walk),
         "count_route": TAW_COUNT_ROUTE,
         "rng_route": TAW_RNG_ROUTE,
         "vocab_size": TAW_VOCAB_SIZE,
@@ -3997,10 +4009,10 @@ def _reference_taw(batch_size: int) -> dict[str, Any]:
         "self_dtype": "torch.float32",
         "self_stride": [TAW_VOCAB_SIZE, 1],
         "self_contiguous": True,
-        "uniform_shape": [batch_size, WALK_CAP, SAMPLER_MAX_FANOUT],
+        "uniform_shape": [batch_size, walk, SAMPLER_MAX_FANOUT],
         "uniform_dtype": "torch.float32",
         "uniform_stride": [
-            WALK_CAP * SAMPLER_MAX_FANOUT,
+            walk * SAMPLER_MAX_FANOUT,
             SAMPLER_MAX_FANOUT,
             1,
         ],
@@ -4089,6 +4101,32 @@ def reference_event(
         hashlib.sha256(request_id.encode("utf-8")).hexdigest()
         for request_id in request_ids
     ]
+    # SITE 13 and its siblings: the reference event is built from the SERVED
+    # mode's profile. Built from the module scalars it described hydra27's
+    # 12-deep walk and 6-token tail for every mode, so a hydra31 event was
+    # compared against hydra27's shapes and reported the mismatch as if the
+    # RUN were wrong. Every quantity below is derived, never retyped.
+    _event_shape = shape_profile(mode)
+    _event_walk = int(_event_shape["walk_cap"])
+    _event_main_tail = int(_event_shape["main_tail_length"])
+    _event_chains = [list(chain) for chain in _event_shape["arctic_lookup_chains"]]
+    _event_lookup_calls = int(_event_shape["arctic_lookup_calls"])
+    _event_req_tokens = int(_event_shape["arctic_requested_tokens"])
+    _event_carry = int(_event_shape["rescue_carry_slots"])
+    _event_parent_sha = str(_event_shape["physical_parent_sha256"])
+    _event_ancestry_sha = str(_event_shape["tree_ancestry_sha256"])
+    _event_ledger = [
+        {"kind": "main", "calls": batch_size, "tokens": _event_main_tail * batch_size}
+    ] + [
+        {
+            "kind": f"rank{index}",
+            "calls": batch_size,
+            "tokens": int(tokens) * batch_size,
+        }
+        for index, (_rank, tokens) in enumerate(
+            _event_shape["arctic_lookup_chains"], start=1
+        )
+    ]
     default_drafter_runtime = {
         "association": "same_runner_step",
         "forward_step_index": forward_step_index,
@@ -4104,24 +4142,20 @@ def reference_event(
         "mtp_observation": "capture_manifest_bound_replay",
         "mtp_forward_calls": MTP_FORWARD_CALLS,
         "mtp_forward_rows": MTP_FORWARD_CALLS * batch_size,
-        "arctic_ledger": [
-            {"kind": "main", "calls": batch_size, "tokens": 6 * batch_size},
-            {"kind": "rank1", "calls": batch_size, "tokens": 4 * batch_size},
-            {"kind": "rank2", "calls": batch_size, "tokens": 2 * batch_size},
-        ],
-        "arctic_lookup_calls": ARCTIC_LOOKUP_CALLS_PER_REQUEST * batch_size,
-        "arctic_requested_tokens": ARCTIC_LOOKUP_TOKENS_PER_REQUEST * batch_size,
+        "arctic_ledger": _event_ledger,
+        "arctic_lookup_calls": _event_lookup_calls * batch_size,
+        "arctic_requested_tokens": _event_req_tokens * batch_size,
         "merge_fill_calls": 1,
         "merge_fill_columns": 16,
         "merge_fill_rows": 16 * batch_size,
-        "rescue_carry_slots": RESCUE_CARRY_SLOTS_PER_REQUEST * batch_size,
+        "rescue_carry_slots": _event_carry * batch_size,
         "publish_shape": [batch_size, PHYSICAL_DRAFTS],
-        "physical_parent_sha256": PHYSICAL_PARENT_SHA256,
+        "physical_parent_sha256": _event_parent_sha,
         "outer_handoff_calls": 1,
     }
     if drafter_runtime is not None:
         default_drafter_runtime = dict(drafter_runtime)
-    default_taw = _reference_taw(batch_size) if taw is None else dict(taw)
+    default_taw = _reference_taw(batch_size, _event_walk) if taw is None else dict(taw)
     conv_pregather_programs = (
         CONV_PREGATHER_LAYERS
         * batch_size
@@ -4161,11 +4195,11 @@ def reference_event(
         "drafter": {
             "mtp_forward_calls": MTP_FORWARD_CALLS,
             "mtp_forward_rows": MTP_FORWARD_CALLS * batch_size,
-            "arctic_lookup_calls": (ARCTIC_LOOKUP_CALLS_PER_REQUEST * batch_size),
-            "arctic_requested_tokens": (ARCTIC_LOOKUP_TOKENS_PER_REQUEST * batch_size),
-            "main_tail_length": ARCTIC_MAIN_TAIL_LENGTH,
-            "rescue_chains": [list(chain) for chain in ARCTIC_LOOKUP_CHAINS],
-            "carry_fill_slots": RESCUE_CARRY_SLOTS_PER_REQUEST * batch_size,
+            "arctic_lookup_calls": (_event_lookup_calls * batch_size),
+            "arctic_requested_tokens": (_event_req_tokens * batch_size),
+            "main_tail_length": _event_main_tail,
+            "rescue_chains": _event_chains,
+            "carry_fill_slots": _event_carry * batch_size,
             "pack_columns": PHYSICAL_DRAFTS,
             "packed_rows": PHYSICAL_DRAFTS * batch_size,
         },
@@ -4174,18 +4208,18 @@ def reference_event(
             "calls": tree_calls,
             "q_rows": tree_calls * TREE_ROWS_PER_REQUEST * batch_size,
             "bias_shape": list(TREE_BIAS_SHAPE),
-            "physical_parent_digest": PHYSICAL_PARENT_SHA256,
-            "bias_digest": TREE_ANCESTRY_SHA256,
+            "physical_parent_digest": _event_parent_sha,
+            "bias_digest": _event_ancestry_sha,
         },
         "gdn": {
             "scan_calls": gdn_scan_calls,
-            "launches": gdn_scan_calls * GDN_LAUNCHES_PER_SCAN,
-            "path_programs": (gdn_scan_calls * GDN_PATH_PROGRAMS_PER_SCAN),
-            "padded_slots": gdn_scan_calls * GDN_PADDED_SLOTS_PER_SCAN,
+            "launches": gdn_scan_calls * int(_event_shape["gdn_launches"]),
+            "path_programs": (gdn_scan_calls * int(_event_shape["gdn_path_programs"])),
+            "padded_slots": gdn_scan_calls * int(_event_shape["gdn_padded_slots"]),
             "nodes": gdn_scan_calls * GDN_NODES_PER_SCAN,
-            "critical_path": GDN_CRITICAL_PATH,
-            "grid_z": list(GDN_GRID_Z),
-            "max_path_lengths": list(GDN_MAX_PATH_LENGTHS),
+            "critical_path": _event_walk,
+            "grid_z": list(_event_shape["gdn_level_path_counts"]),
+            "max_path_lengths": list(_event_shape["gdn_level_max_lengths"]),
             "export_or_mask": GDN_EXPORT_OR_MASK,
         },
         "taw": default_taw,
@@ -4208,7 +4242,7 @@ def reference_event(
             "requests": batch_size,
             "pack_launches": 2,
             "slots_written": ACCEPTED_PATH_CAPACITY * batch_size,
-            "source_walk_slots": WALK_CAP * batch_size,
+            "source_walk_slots": _event_walk * batch_size,
             "lens_written": batch_size,
             "host_path_items": 0,
             "overflow": 0,

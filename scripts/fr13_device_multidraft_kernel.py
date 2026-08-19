@@ -1665,7 +1665,7 @@ _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 # resolves at the three arm points; no sampler arithmetic moved, and with the
 # flag clear the resolution is identical to the prior expression.
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "6ffe57287e768bfee5e2e72f10de0dfea6fb3e6c0fa50f32b6c099c63fa916a2"
+    "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
 )
 # Per-mode source-row schedule digests. The observable binding compares the
 # schedule actually constructed at boot against these, so a mode that is handed
@@ -1839,7 +1839,15 @@ def _fr13_fixed32_topology():
     if (
         module.PHYSICAL_DRAFTS != 31
         or module.PHYSICAL_ROWS != 32
+        # WALK_CAP stays hydra27's 12 BY IDENTITY: it is MAX_PHYSICAL_DEPTH+1
+        # for that tree and several banked contracts mean exactly that number.
+        # What the authority must now also carry is the per-mode index, so a
+        # topology that has the scalar but not the index is refused here rather
+        # than silently feeding 12 to a 16-deep walk.
         or module.WALK_CAP != 12
+        or not isinstance(getattr(module, "WALK_CAP_BY_MODE", None), dict)
+        or set(module.WALK_CAP_BY_MODE) != set(module.SERVING_MODES)
+        or module.WALK_CAP_BY_MODE.get("hydra27_fixed32") != 12
         or module.COMMIT_PATH_CAP != 16
         or module.SAMPLER_MAX_FANOUT != 3
         or tuple(module.DRAFT_PARENT)
@@ -1984,6 +1992,11 @@ def _fr13_fixed32_taw_topology_binding(topology) -> dict[str, Any]:
         len(self_source_nodes) != 13
         or len(target_source_nodes) != 17
         or len(set(target_parent_slots)) != len(target_parent_slots)
+        # PINNED to hydra27's 12, deliberately. `modes` above is the
+        # QUALIFIED SCOPE (tail6 + hydra27), whose byte-AB pass measured this
+        # bound; a mode outside that scope derives its own cap a few lines
+        # down (mode_walk_cap). Routing this through the served mode would
+        # bound the qualified schedule by whatever hydra31 happens to need.
         or max(self_uniform_levels + target_uniform_levels)
         >= int(topology.WALK_CAP)
     ):
@@ -3156,7 +3169,9 @@ def _fr13_fixed32_taw_source_contract(
     geometry = {
         "physical_drafts": int(topology.PHYSICAL_DRAFTS),
         "physical_rows": int(topology.PHYSICAL_ROWS),
-        "walk_cap": int(topology.WALK_CAP),
+        # SITE 13's silent sibling: this field is PROVENANCE. Left as the
+        # module scalar it would record walk_cap=12 for a run executing 16.
+        "walk_cap": _fr13_fixed32_walk_cap(topology),
         "fanout": int(topology.SAMPLER_MAX_FANOUT),
         "output_capacity": int(topology.OUTPUT_PUBLISH_CAPACITY),
         "accepted_path_capacity": int(topology.ACCEPTED_PATH_CAPACITY),
@@ -3254,6 +3269,29 @@ def _fr13_fixed32_taw_source_contract(
     }
 
 
+def _fr13_fixed32_walk_cap(topology, mode: str | None = None) -> int:
+    """The SERVED mode's TAW walk cap.
+
+    SITE 13. topology.WALK_CAP is a module-level scalar frozen at hydra27's 12
+    that never became per-mode. Every guard, sizer and provenance field in this
+    module read it, so a hydra31 run compared 16 against 12 and -- had the
+    guard been silenced instead of fixed -- would have gone on to allocate
+    tensors of 12 rows for a 16-deep walk and then RECORD walk_cap=12 for a run
+    executing 16. The scalar is the defect; the raise was the only honest thing
+    in the chain.
+
+    An unset mode is the non-fixed32 route, which has always used hydra27's
+    cap; returning it here keeps that path byte-identical. A mode that is set
+    but unknown refuses, because guessing a walk depth is how the silent sites
+    get fed.
+    """
+    if mode is None:
+        mode = os.environ.get("FR13_FIXED32_MODE", "").strip()
+    if not mode:
+        return int(topology.WALK_CAP)
+    return int(topology.walk_cap_for_mode(mode))
+
+
 def _fr13_fixed32_runtime_contract(mode: str) -> tuple[Any, int]:
     """Validate all fixed-route pins without inspecting device values."""
     topology = _fr13_fixed32_topology()
@@ -3300,9 +3338,10 @@ def _fr13_fixed32_runtime_contract(mode: str) -> tuple[Any, int]:
         raise RuntimeError(
             f"{mode}: active nodes {active} != contract {expected_active}"
         )
-    if walk_cap != int(topology.WALK_CAP):
+    expected_walk_cap = _fr13_fixed32_walk_cap(topology, mode)
+    if walk_cap != expected_walk_cap:
         raise RuntimeError(
-            f"{mode}: TAW walk cap {walk_cap} != contract {topology.WALK_CAP}"
+            f"{mode}: TAW walk cap {walk_cap} != contract {expected_walk_cap}"
         )
     if os.environ.get("FR13_TAW") != "1":
         raise RuntimeError("FR13 fixed32 route requires FR13_TAW=1")
@@ -3598,7 +3637,7 @@ def fr13_fixed32_taw_preseed(
             "uniforms": torch.empty(
                 (
                     batch_size,
-                    int(topology.WALK_CAP),
+                    _fr13_fixed32_walk_cap(topology, mode),
                     3,
                 ),
                 dtype=torch.float32,
@@ -5381,8 +5420,11 @@ def _fr13_fixed32_taw_execute_torch(
     output_capacity = int(topology.OUTPUT_PUBLISH_CAPACITY)
     path_capacity = int(topology.ACCEPTED_PATH_CAPACITY)
     fanout = int(topology.SAMPLER_MAX_FANOUT)
-    if walk_cap != int(topology.WALK_CAP):
-        raise RuntimeError(f"FR13 fixed32 core walk {walk_cap} != {topology.WALK_CAP}")
+    expected_walk_cap = _fr13_fixed32_walk_cap(topology)
+    if walk_cap != expected_walk_cap:
+        raise RuntimeError(
+            f"FR13 fixed32 core walk {walk_cap} != {expected_walk_cap}"
+        )
     if walk_cap > path_capacity or walk_cap > output_capacity:
         raise RuntimeError("FR13 fixed32 walk can overflow fixed products")
     child_table = entry["child_table"]
@@ -5631,7 +5673,7 @@ def _fr13_fixed32_taw_execute_torch(
         current = torch.where(accepted, accepted_node, current)
         alive = alive & accepted
 
-    if loop_iterations != int(topology.WALK_CAP):
+    if loop_iterations != _fr13_fixed32_walk_cap(topology):
         raise RuntimeError(f"FR13 fixed32 executed {loop_iterations} walk iterations")
     _fr13_fixed32_device_assert(
         torch.all(output_lens <= output_capacity),
@@ -5714,8 +5756,11 @@ def _fr13_fixed32_taw_execute_exact_cuda(
     output_capacity = int(topology.OUTPUT_PUBLISH_CAPACITY)
     path_capacity = int(topology.ACCEPTED_PATH_CAPACITY)
     fanout = int(topology.SAMPLER_MAX_FANOUT)
-    if walk_cap != int(topology.WALK_CAP):
-        raise RuntimeError(f"FR13 fixed32 core walk {walk_cap} != {topology.WALK_CAP}")
+    expected_walk_cap = _fr13_fixed32_walk_cap(topology)
+    if walk_cap != expected_walk_cap:
+        raise RuntimeError(
+            f"FR13 fixed32 core walk {walk_cap} != {expected_walk_cap}"
+        )
     if walk_cap > path_capacity or walk_cap > output_capacity:
         raise RuntimeError("FR13 fixed32 walk can overflow fixed products")
 
@@ -6031,15 +6076,16 @@ def _fr13_fixed32_publish_work(
     native_selector = _fr13_fixed32_taw_native_selector(
         batch_size=batch_size
     )
-    base_target_rows = int(topology.WALK_CAP)
-    base_self_rows = int(topology.WALK_CAP)
+    published_walk_cap = _fr13_fixed32_walk_cap(topology, mode)
+    base_target_rows = published_walk_cap
+    base_self_rows = published_walk_cap
     candidate_target_rows = 17
     candidate_self_rows = 13
     if native_selector == "diagnostic":
         target_rows = base_target_rows + candidate_target_rows
         self_rows = base_self_rows + candidate_self_rows
-        exact_commit_launches = int(topology.WALK_CAP) + 1
-        exact_commit_programs_per_request = int(topology.WALK_CAP) + 1
+        exact_commit_launches = published_walk_cap + 1
+        exact_commit_programs_per_request = published_walk_cap + 1
         product_write_multiplier = 2
     elif native_selector == "production":
         target_rows = candidate_target_rows
@@ -6050,8 +6096,8 @@ def _fr13_fixed32_publish_work(
     else:
         target_rows = base_target_rows
         self_rows = base_self_rows
-        exact_commit_launches = int(topology.WALK_CAP)
-        exact_commit_programs_per_request = int(topology.WALK_CAP)
+        exact_commit_launches = published_walk_cap
+        exact_commit_programs_per_request = published_walk_cap
         product_write_multiplier = 1
     taw = {
         "route": (
@@ -6152,7 +6198,7 @@ def _fr13_fixed32_announce(topology) -> None:
         f"gdn_launches={topology.GDN_LAUNCHES} "
         f"gdn_programs={topology.GDN_PATH_PROGRAMS} "
         f"gdn_slots={topology.GDN_PADDED_SLOTS} "
-        f"taw_walk={topology.WALK_CAP} "
+        f"taw_walk={_fr13_fixed32_walk_cap(topology)} "
         f"taw_buffer={topology.OUTPUT_PUBLISH_CAPACITY} "
         f"output_slots={topology.OUTPUT_PUBLISH_CAPACITY} "
         f"path_slots={topology.ACCEPTED_PATH_CAPACITY} "
@@ -6339,7 +6385,7 @@ def fr13_fixed32_taw_commit(
             tree_self_logits,
             bonus_flat,
             fixed_uniforms,
-            walk_cap=int(topology.WALK_CAP),
+            walk_cap=_fr13_fixed32_walk_cap(topology, mode),
             native_precompute=False,
             comparison_probability_caches=probability_caches,
             comparison_gate=comparison_gate,
@@ -6352,7 +6398,7 @@ def fr13_fixed32_taw_commit(
             drafts,
             bonus_flat,
             fixed_uniforms,
-            walk_cap=int(topology.WALK_CAP),
+            walk_cap=_fr13_fixed32_walk_cap(topology, mode),
             probability_caches=probability_caches,
             decisions=decisions,
         )
@@ -6393,7 +6439,7 @@ def fr13_fixed32_taw_commit(
             drafts,
             bonus_flat,
             fixed_uniforms,
-            walk_cap=int(topology.WALK_CAP),
+            walk_cap=_fr13_fixed32_walk_cap(topology, mode),
             probability_caches=probability_caches,
         )
     else:
@@ -6412,7 +6458,7 @@ def fr13_fixed32_taw_commit(
             tree_self_logits,
             bonus_flat,
             fixed_uniforms,
-            walk_cap=int(topology.WALK_CAP),
+            walk_cap=_fr13_fixed32_walk_cap(topology, mode),
             native_precompute=False,
         )
     _fr13_fixed32_publish_work(
@@ -6929,7 +6975,7 @@ def _fr13_cfwd_logit_direct_walk_cuda(
         PHYSICAL_DRAFTS=physical_drafts,
         PHYSICAL_ROWS=physical_rows,
         FANOUT=int(topology.SAMPLER_MAX_FANOUT),
-        WALK_CAP=int(topology.WALK_CAP),
+        WALK_CAP=_fr13_fixed32_walk_cap(topology),
         OUTPUT_CAPACITY=int(topology.OUTPUT_PUBLISH_CAPACITY),
         PATH_CAPACITY=int(topology.ACCEPTED_PATH_CAPACITY),
         num_warps=1,
@@ -7036,7 +7082,7 @@ def _fr13_cfwd_logit_direct_publish_work(
             int(topology.SAMPLER_MAX_FANOUT),
         ],
         "buffer_capacity": int(topology.OUTPUT_PUBLISH_CAPACITY),
-        "loop_iterations": int(topology.WALK_CAP),
+        "loop_iterations": _fr13_fixed32_walk_cap(topology, mode),
         "uniform_slots": int(topology.TAW_UNIFORM_SLOTS) * batch_size,
         "child_lanes": (
             target_rows * int(topology.SAMPLER_MAX_FANOUT) * batch_size
@@ -7415,7 +7461,7 @@ def fr13_fixed32_cfwd_logit_direct_warm_execute(
             .repeat(batch, 1)
         )
         uniforms = torch.full(
-            (batch, int(topology.WALK_CAP), 3),
+            (batch, _fr13_fixed32_walk_cap(topology, mode), 3),
             0.1,
             dtype=torch.float32,
             device=normalized_device,
@@ -8419,7 +8465,9 @@ def _fr13_fixed32_test_set_env(topology, mode: str) -> None:
     os.environ["FR13_FIXED32_ACTIVE_NODES"] = str(
         _fr13_fixed32_expected_active(topology, mode)
     )
-    os.environ["FR13_FIXED32_TAW_WALK_CAP"] = str(topology.WALK_CAP)
+    os.environ["FR13_FIXED32_TAW_WALK_CAP"] = str(
+        _fr13_fixed32_walk_cap(topology, mode)
+    )
     os.environ["FR13_TAW"] = "1"
     os.environ["FR13_FIXED32_WORK_CENSUS"] = "1"
     os.environ.pop("LUMO_TREE_SAMPLER_DEBUG_LOG", None)
@@ -8473,7 +8521,7 @@ def _fr13_fixed32_test_fixture(
         "uniforms": torch.full(
             (
                 batch_size,
-                int(topology.WALK_CAP),
+                _fr13_fixed32_walk_cap(topology, mode),
                 3,
             ),
             0.1,
@@ -8781,7 +8829,7 @@ def _fr13_fixed32_test_bonus_core(topology) -> None:
         fixture["self"],
         bonus,
         fixture["uniforms"],
-        walk_cap=int(topology.WALK_CAP),
+        walk_cap=_fr13_fixed32_walk_cap(topology),
     )
     output, output_lens, _paths, path_lens, _last, loops = result
     if not torch.equal(output[0, :1], fixture["bonus"].reshape(-1)):

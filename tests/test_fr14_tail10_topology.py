@@ -267,6 +267,13 @@ def _morph(ev, mode):
         dict(r, tokens=p["main_tail_length"] * b) if r["kind"] == "main" else r
         for r in rt["arctic_ledger"]
     ]
+    # SITE 13's neighbour: the tree-attention digests IDENTIFY THE TREE. The
+    # validator used to compare them against the module scalars, so a hydra31
+    # event carrying hydra27's bias digest passed -- the one field that
+    # distinguishes the profiles was the one field nothing checked per mode.
+    ta = e["tree_attn"]
+    ta["physical_parent_digest"] = p["physical_parent_sha256"]
+    ta["bias_digest"] = p["tree_ancestry_sha256"]
     g = e["gdn"]
     g["critical_path"] = p["walk_cap"]
     g["grid_z"] = list(p["gdn_level_path_counts"])
@@ -286,6 +293,20 @@ def _morph(ev, mode):
     ):
         if key in taw and isinstance(taw[key], int) and not isinstance(taw[key], bool):
             taw[key] = taw[key] * new_walk // old_walk
+    # ...and the shapes that carry the walk in a dimension, not a count.
+    if isinstance(taw.get("uniform_shape"), list) and len(taw["uniform_shape"]) == 3:
+        taw["uniform_shape"] = [
+            taw["uniform_shape"][0], new_walk, taw["uniform_shape"][2]
+        ]
+    if isinstance(taw.get("uniform_stride"), list) and len(taw["uniform_stride"]) == 3:
+        taw["uniform_stride"] = [
+            new_walk * taw["uniform_shape"][2], taw["uniform_shape"][2], 1
+        ]
+    pack = e.get("accepted_path_pack")
+    if isinstance(pack, dict) and isinstance(pack.get("source_walk_slots"), int):
+        pack["source_walk_slots"] = (
+            pack["source_walk_slots"] * new_walk // old_walk
+        )
     calls = taw.get("tensor_call_census")
     if isinstance(calls, dict):
         taw["tensor_call_census"] = {

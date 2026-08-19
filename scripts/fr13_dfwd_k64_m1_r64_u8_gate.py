@@ -43,7 +43,7 @@ EXPECTED_FA2_SHA256 = (
 )
 EXPECTED_FA2_BYTES = 299183936
 EXPECTED_TAW_SOURCE_CONTRACT_SHA256 = (
-    "6ffe57287e768bfee5e2e72f10de0dfea6fb3e6c0fa50f32b6c099c63fa916a2"
+    "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
 )
 COMPARISON_SCOPE = (
     "all 65536 logits in the fixed K64/root1 draft head; "
