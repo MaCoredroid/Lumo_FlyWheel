@@ -4198,26 +4198,29 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
         exit 2
       }
       _fixed32_expected_draft_vocab_k=0
-      _fixed32_expected_mandatory_weight_bytes=37335563648
-      _fixed32_expected_weight_floor_ms=136.7603064029304
+      _fixed32_expected_mandatory_weight_bytes=25430574256
+      _fixed32_expected_weight_floor_ms=93.15228665201465
       ;;
     65536:0)
       _fixed32_expected_draft_vocab_k=65536
-      _fixed32_expected_mandatory_weight_bytes=29848731008
-      _fixed32_expected_weight_floor_ms=109.336011018
+      _fixed32_expected_mandatory_weight_bytes=25254282384
+      _fixed32_expected_weight_floor_ms=92.506528879
       ;;
     65536:1)
       _fixed32_expected_draft_vocab_k=65536
       # FR14 RETIRED ARM -- see scripts/fr13_fixed32_floor_timers_seq.sh for
-      # the full reasoning. The served lm_head is BF16 after the FR14 lm_head
-      # surgery, so an FP8 draft-head floor is unrealisable on this
-      # checkpoint; refuse instead of pinning a floor nothing can hit.
+      # the full reasoning. Arm B serves an NVFP4 lm_head and PHASE 1 of the
+      # DVK port dequantises the sliced K64 rows to BF16 at boot, so the five
+      # draft-head reads are BF16 and there is no FP8 head to price; refuse
+      # instead of pinning a floor nothing can hit. (The live successor is the
+      # PHASE-2 NVFP4 draft-head read, worth a real 8.834 ms, which needs an
+      # FP4 GEMV unit and its own byte gate -- not this arm.)
       if [[ "$FR13_DRAFT_HEAD_FP8" == "1" ]]; then
-        echo "FR13_DRAFT_HEAD_FP8 is RETIRED under the FR14 NVFP4 checkpoint: the served lm_head is BF16 (see /models/qwen3.8-27b-nvfp4/.lumo_lmhead_surgery.json), so the FP8 draft-head floor is unrealisable" >&2
+        echo "FR13_DRAFT_HEAD_FP8 is RETIRED under the FR14 NVFP4 checkpoint: the served head is NVFP4 and its K64 slice is dequantised to BF16 at boot, so the FP8 draft-head floor is unrealisable" >&2
         exit 2
       fi
-      _fixed32_expected_mandatory_weight_bytes=27977022848
-      _fixed32_expected_weight_floor_ms=102.479937172
+      _fixed32_expected_mandatory_weight_bytes=25210209416
+      _fixed32_expected_weight_floor_ms=92.345089436
       ;;
     *)
       echo "fixed32 draft-vocab floor configuration is unsupported: K=${FR13_DRAFT_VOCAB_K:-unset} ROOT=$FR13_DRAFT_VOCAB_ROOT" >&2

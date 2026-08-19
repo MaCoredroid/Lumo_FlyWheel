@@ -259,6 +259,111 @@ def scan_vocab_profile_parity():
         )
     return bad
 
+
+# ===========================================================================
+# SITE 14 (FR14 pass 118): the LITERAL-TABLE projection.
+#
+# Measurement 1 died a second time, past the site-12 fix, on
+#
+#   fixed32 requires FR13_MANDATORY_WEIGHT_BYTES=37335563648, got 25430574256
+#
+# fr14_leg3's mandatory-weight-bytes / weight-floor table still carried the
+# PRE-NVFP4-PORT checkpoint on all three vocabulary rows -- 37.3GB fp8-era
+# against the port's 25.4GB -- while production and the armb twin were
+# byte-identical and current. Same fork, same selective staleness, third boot
+# lost to it.
+#
+# Site 12's projection asked a POLICY question (does this region delegate the
+# identity or hard-code it?). This one asks a VALUE question: a constant that
+# must track a shared authority, carried as a literal in three places. Same
+# shape, different projection -- which is the point of projections: the next
+# class gets a new one, not a marker per site.
+#
+# The projection is exact rather than heuristic, and that is measured, not
+# assumed. Over the three families:
+#
+#   NAME=<number>                    65 keys, 0 single-family
+#   NAME=${NAME:-<number>}           76 keys, 0 single-family
+#   "$NAME" == "<number>"           594 keys, 0 single-family
+#   NAME=<64 hex chars>               7 keys, 0 single-family
+#
+# 742 shared keys, NOT ONE of which exists in only one family. The forks are
+# forks in their plumbing, not in their constants, so cross-family equality is
+# the right rule here and a divergence is always a defect -- unlike the
+# selector-gate predicates, where the forks legitimately differ and only a
+# shape projection is meaningful.
+#
+# Keyed on (name, ORDINAL) for the same reason as site 12: the floor table
+# assigns _fixed32_expected_mandatory_weight_bytes three times, once per
+# vocabulary row, and keying on the name alone would compare row 3 with row 3
+# and call the other two clean.
+#
+# WHAT THIS DOES NOT COVER, stated as a floor rather than implied as
+# completeness: literals inside arrays, `case` patterns, heredocs, and
+# multi-line `[[ ]]` continuations whose operand is not a bare quoted number.
+# ===========================================================================
+
+_LITERAL_PROJECTIONS = (
+    # (label, pattern, uses_search)
+    ("assignment",
+     re.compile(r"^\s*(?:export\s+)?([A-Za-z_]\w*)=(-?\d+(?:\.\d+)?)\s*$"),
+     False),
+    ("default",
+     re.compile(r"^\s*(?:export\s+)?([A-Za-z_]\w*)=\$\{\1:-(-?\d+(?:\.\d+)?)\}\s*$"),
+     False),
+    ("comparison",
+     re.compile(r'"\$\{?([A-Za-z_]\w*)(?::-[^}]*)?\}?"\s*==\s*"(-?\d+(?:\.\d+)?)"'),
+     True),
+    ("digest",
+     re.compile(r"\b([A-Za-z_]\w*)=([0-9a-f]{64})\b"),
+     True),
+)
+
+
+def _literal_table(text):
+    """(projection, name, ordinal) -> literal, for one launcher."""
+    table = {}
+    seen = {}
+    for line in text.split("\n"):
+        if line.lstrip().startswith("#"):
+            continue
+        for label, pattern, use_search in _LITERAL_PROJECTIONS:
+            match = pattern.search(line) if use_search else pattern.match(line)
+            if not match:
+                continue
+            name, value = match.group(1), match.group(2)
+            key = (label, name)
+            seen[key] = seen.get(key, 0) + 1
+            table[(label, name, seen[key])] = value
+    return table
+
+
+def scan_literal_table_parity():
+    """Constants that must track a shared authority but disagree by family."""
+    bad = []
+    tables = {
+        rel: _literal_table((REPO / rel).read_text())
+        for rel in LAUNCHER_FAMILIES
+    }
+    keys = set()
+    for table in tables.values():
+        keys |= set(table)
+    for key in sorted(keys):
+        present = {rel: t[key] for rel, t in tables.items() if key in t}
+        if len(present) < 2:
+            continue
+        if len(set(present.values())) == 1:
+            continue
+        label, name, ordinal = key
+        detail = ", ".join(
+            f"{Path(rel).name}={value}" for rel, value in sorted(present.items())
+        )
+        bad.append(
+            f"{name} [{label} #{ordinal}]: literal differs across families "
+            f"-- {detail}"
+        )
+    return bad
+
 # Topology names whose VALUE differs between profiles. Comparing one of these
 # unconditionally is the round-14 defect, whatever the mode table says.
 PROFILE_VARYING = frozenset({
@@ -404,6 +509,11 @@ def sweep():
     for problem in scan_vocab_profile_parity():
         rows.append(
             {"kind": "vocab-profile-parity", "file": "<launcher families>",
+             "detail": problem}
+        )
+    for problem in scan_literal_table_parity():
+        rows.append(
+            {"kind": "literal-table-parity", "file": "<launcher families>",
              "detail": problem}
         )
     return rows

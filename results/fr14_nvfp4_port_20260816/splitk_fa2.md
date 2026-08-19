@@ -1242,3 +1242,177 @@ for real, and the walk takes the vocabulary identity as an input:
 Also fixed: `test_fr13_qrow32_b4_production_default.py` had been asserting the
 pre-conversion wording of production's B4 refusal and failing since the
 generalization landed — the same miss, on the test side.
+
+## 22. Site 14 — the floor table, and what the fork actually is
+
+Measurement 1 died a second time, past the site-12 fix:
+
+```
+fixed32 requires FR13_MANDATORY_WEIGHT_BYTES=37335563648, got 25430574256
+```
+
+`fr14_leg3`'s vocabulary floor table carried the pre-NVFP4-port checkpoint on
+all three rows. Production and the armb twin were byte-identical and current.
+Third boot lost to this one fork.
+
+### The surgical fix moved fifteen lines, not six values
+
+The six numbers were the symptom. Production and armb agree over the **whole**
+`case` block byte for byte, so leg3 was aligned to that block wholesale — and
+that moved 15 lines. The extra nine are the retired-arm comment and its refusal
+message, which in leg3 still described the *pre-port* checkpoint ("the served
+lm_head is BF16 after the FR14 lm_head surgery") where production describes the
+live one ("the served head is NVFP4 and its K64 slice is dequantised to BF16 at
+boot"). Both refuse, so no boot would ever have found it. **Prose divergence is
+invisible to every gate**, and it is exactly how a fork's understanding drifts
+out from under its numbers.
+
+### Is there an authority? Two rows yes, one row no
+
+`scripts/fr13_hardware_floor_ledger.py` derives two of the three rows:
+
+| row | authority |
+|---|---|
+| `0:0` full vocabulary | `FULL_VOCAB_MANDATORY_WEIGHT_BYTES/_FLOOR_MS` |
+| `65536:1` root + K64 | `FIXED32_MANDATORY_WEIGHT_BYTES/_FLOOR_MS` |
+| `65536:0` K64, no root | **none** — its only homes are the three launchers and `fr13_fixed32_floor_timers_seq.sh` |
+
+The launchers cannot import it: the check runs on the host before docker and
+must not depend on Python. That is a fine reason to copy a value and no reason
+to leave the copy unbound — so the authority binds them **in the test**
+instead of at runtime. `test_fr13_fixed32_floor_propagation.py` already did
+exactly this; its `LAUNCHER` was a single path, so the ledger was bound into
+one of three families and the other two were on trust. Two happened to be
+right. It is now parametrized over all three, and the unauthored row is bound
+to the floor-timer sequence, with the asymmetry recorded rather than papered
+over by inventing an authority for it.
+
+### The literal-table projection
+
+Site 12's projection asks a *policy* question — does this region delegate or
+hard-code? This one asks a *value* question: a constant that must track a
+shared authority, carried as a literal in three places. Same machinery, new
+projection, which is the point — the next class gets a projection, not a marker
+per site.
+
+It is exact rather than heuristic, and that is **measured**:
+
+| projection | keys | single-family |
+|---|---|---|
+| `NAME=<number>` | 65 | 0 |
+| `NAME=${NAME:-<number>}` | 76 | 0 |
+| `"$NAME" == "<number>"` | 594 | 0 |
+| `NAME=<64 hex>` | 7 | 2 |
+
+742 shared keys. The forks are forks in their *plumbing*, not their
+*constants*, so cross-family **equality** is the right rule here — unlike the
+selector gates, where the forks legitimately differ and only a shape
+comparison is meaningful. Keyed on `(name, ordinal)`, because the floor table
+assigns the same name three times and name-only keying would compare row 3
+with row 3 and call the other two clean — site 12's lesson, applied before it
+could be re-learned. Comments are excluded: a superseded number named in prose
+is documentation, and `fr13_fixed32_floor_timers_seq.sh` quotes 102.479937172
+on purpose.
+
+Against the pre-fix tree it reports all six with file and value; the
+vocab-profile projection and the 33-marker roster are both blind. Six mutation
+proofs, one per value.
+
+### The half-fix that would have been worse than the bug
+
+Landing the table alone would have turned a **refused boot** into a **silently
+wrong measurement**. The ledger derives every constant in that table from one
+checkpoint — `MODEL_ROOT = /models/qwen3.8-27b-nvfp4-radixark`, arm B.
+Production and armb serve exactly that. `fr14_leg3` serves
+`/models/qwen3.8-27b-nvfp4` — arm A — never invokes
+`fr14_patch_nvfp4_lmhead.py`, and never sets the fail-closed
+`FR14_REQUIRE_NVFP4_LMHEAD` guard that both others do.
+
+Measured on disk, the two checkpoints differ by
+
+```
+24,688,494,272 - 21,921,697,280 = 2,766,796,992 B = 2.77 GB
+```
+
+which is exactly the arm A → arm B delta the launcher comment names ("1.83 of
+the 2.77 GB this arm's floor drops is the head alone"), priced by the ledger at
+102.479937172 → 92.345089436 ms. So with the table aligned and the checkpoint
+not, leg3 measures an **arm A wall against an arm B floor**, ~10.1 ms of which
+is then fiction. The launcher's own comment states the rule it is breaking: "a
+boot that quietly fell back to an unquantized head would measure a wall against
+a floor 6.7 ms of which is fiction. The loader patch below is therefore
+mandatory and fail-closed, not optional." On this fork that sentence is simply
+not true.
+
+Two tests are therefore **red on purpose** and measurement 1 must not run on
+`fr14_leg3` while they are:
+
+* `test_the_served_checkpoint_is_the_one_the_pinned_floor_was_derived_from`
+* `test_the_nvfp4_lmhead_guard_is_armed_in_every_family`
+
+Moving the checkpoint changes what leg3 *serves*. That is Mark's call.
+
+## 23. ASSESSMENT — regenerate leg3, or retire both forks
+
+Requested for Mark; not acted on.
+
+**What the forks are for.** leg3's own evidence note states its charter: "a
+one-line-patched copy of the launcher — diff vs HEAD is exactly
+`FR13_FIXED32_MIDDLEWARE_FLAGS=""` plus a comment." The middleware is an ASGI
+ingress HMAC guard only the SWE harness can mint, so `bench_serving` cannot
+talk to a middleware'd server. That is the entire functional purpose.
+
+**What they cost, measured:**
+
+| | lines | differing from production | of which middleware |
+|---|---|---|---|
+| `fr13_launch_forked_fa2_tree_server.sh` | 7743 | — | — |
+| `fr14_armb_leg3_launch_nomiddleware.sh` | 7587 | 296 | 3 |
+| `fr14_leg3_launch_nomiddleware.sh` | 7514 | 371 | **3** |
+
+**3 of 371 lines — 0.8% — are the fork's reason to exist. 99.2% is drift
+surface.** Sites 12 and 14 both live in that 99.2%, and each cost a ~5-minute
+boot plus a round trip to find.
+
+### Option A — regenerate leg3 from production, as armb evidently was
+
+* **Blast radius:** 368 lines converge; the served checkpoint changes arm A →
+  arm B; the NVFP4 lm_head patch and its fail-closed guard start running.
+* **Evidence binding:** 22 files reference `fr14_leg3_launch_nomiddleware`
+  (19 for armb). Anything measured on arm A does not transfer — the ablation-A
+  leg-3 numbers were taken against the arm A floor and stay bound to it.
+* **Cost:** one edit, one boot to re-verify. Cheap.
+* **Residual:** the fork still exists, so drift resumes the next day. armb is
+  proof the regeneration works and equal proof that it does not *hold* — armb
+  is 296 lines from production today.
+
+### Option B — retire both forks behind a switch on production
+
+Production sets the middleware at exactly one place —
+`fr13_launch_forked_fa2_tree_server.sh:5136`, a single assignment already
+inside a conditional, with `FR13_FIXED32_MIDDLEWARE_FLAGS=""` as the default at
+:5014.
+
+* **Cost:** guard that one assignment on an explicit opt-out
+  (`FR13_FIXED32_MIDDLEWARE=${FR13_FIXED32_MIDDLEWARE:-1}`), plus a refusal
+  making the disabled state loud so no serve is ever quietly unauthenticated.
+  Estimate ~15 lines and one boot each way.
+* **Blast radius:** 41 references across both forks need repointing at
+  production plus the flag. Mechanical, but it touches banked evidence vehicles
+  (`promotion_ab_*.sh`, `ablation_a_leg3_boot.sh`, the sglang calibration
+  scripts), so each needs its provenance line updated rather than silently
+  rewritten.
+* **Residual:** none of this class. There is no second file to drift.
+
+### Recommendation
+
+**Option B, with Option A as tonight's stopgap.** The numbers make the case on
+their own: 0.8% signal to 99.2% drift, three boots lost in one campaign to two
+separate instances of it, and a switch that costs ~15 lines against ~670 lines
+of permanently-diverging copy. Option A buys one clean night and re-arms the
+same trap; it is worth doing only because it is cheap and tonight is committed.
+
+The detectors are the honest hedge either way: the literal-table and
+vocab-profile projections now cover the classes both sites came from, and
+neither depends on anyone remembering to add a marker. But a detector that
+finds drift is a worse answer than a design that cannot drift.

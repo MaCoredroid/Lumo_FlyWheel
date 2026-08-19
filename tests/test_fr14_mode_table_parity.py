@@ -534,3 +534,120 @@ def test_the_region_key_carries_an_ordinal(monkeypatch):
     for prefix in collided:
         ordinals = sorted(k[1] for k in regions if k[0] == prefix)
         assert ordinals == list(range(1, len(ordinals) + 1)), prefix
+
+
+# ===========================================================================
+# SITE 14 (pass 118): the literal-table projection.
+#
+# Site 12's projection asks a POLICY question -- does this region delegate the
+# identity or hard-code it? Site 14's asks a VALUE question: a constant that
+# must track a shared authority, carried as a literal in three places. Same
+# machinery, different projection, which is the point: the next class gets a
+# new projection, not a marker per site.
+# ===========================================================================
+
+# The pre-NVFP4-port checkpoint fr14_leg3 was still carrying, and the current
+# values it now carries. Measurement 1 died on the first pair.
+SITE_14_STALE = {
+    "37335563648": "25430574256",
+    "29848731008": "25254282384",
+    "27977022848": "25210209416",
+    "136.7603064029304": "93.15228665201465",
+    "109.336011018": "92.506528879",
+    "102.479937172": "92.345089436",
+}
+
+
+def test_the_literal_table_is_clean_at_head():
+    assert parity.scan_literal_table_parity() == []
+
+
+def test_the_literal_projection_covers_every_family_completely():
+    """The projection is exact, not heuristic -- and that is measured.
+
+    Every key it extracts exists in all three families: the forks are forks in
+    their plumbing, not in their constants. That is what makes cross-family
+    EQUALITY the right rule here, where the selector-gate regions could only
+    support a shape comparison. If a future edit gives one family a constant
+    the others do not have, this test says so before the equality rule starts
+    reporting divergences that are not defects.
+    """
+    tables = {
+        rel: parity._literal_table((REPO / rel).read_text())
+        for rel in parity.LAUNCHER_FAMILIES
+    }
+    keys = set()
+    for table in tables.values():
+        keys |= set(table)
+    assert len(keys) > 500, f"the projection extracted only {len(keys)} keys"
+    lonely = {
+        key for key in keys
+        if sum(key in table for table in tables.values()) < len(tables)
+    }
+    # EXACT, not a floor: a new single-family literal must fail here rather
+    # than be absorbed. Each entry needs a reason, and this one has a bad one.
+    #
+    # FR14_REQUIRE_NVFP4_LMHEAD is the fail-closed guard that makes the arm B
+    # floor honest -- production and the armb twin arm it, fr14_leg3 has
+    # neither it nor the loader patch it guards. That is not a fork being a
+    # fork; it is the same selective staleness as site 14, and it is tracked
+    # by test_the_nvfp4_lmhead_guard_is_armed_in_every_family in
+    # tests/test_fr13_fixed32_floor_propagation.py, which is RED on purpose
+    # until Mark rules on regenerating leg3. When it goes green, this
+    # exception must be deleted, and this assertion is what makes that happen.
+    justified = {
+        ("default", "FR14_REQUIRE_NVFP4_LMHEAD", 1),
+        ("comparison", "FR14_REQUIRE_NVFP4_LMHEAD", 1),
+    }
+    assert lonely == justified, (
+        "the set of literals that exist in some families and not others "
+        f"changed: {sorted(lonely ^ justified)}. Cross-family equality is the "
+        "rule for every other key, so a new entry here is either a defect or "
+        "a deliberate divergence that needs writing down."
+    )
+
+
+@pytest.mark.parametrize("stale,current", sorted(SITE_14_STALE.items()))
+def test_re_staling_one_value_fires_the_scanner(monkeypatch, stale, current):
+    """The mutation proof: put ONE pre-port value back, the scanner fires."""
+    def mutate(text):
+        assert text.count(f"={current}\n") >= 1, current
+        return text.replace(f"={current}\n", f"={stale}\n", 1)
+
+    _scan_with_mutated_fork(monkeypatch, mutate)
+    bad = parity.scan_literal_table_parity()
+    assert bad, f"re-staling {current} -> {stale} went unnoticed"
+    assert any(stale in b for b in bad), bad
+    assert any("fr14_leg3" in b for b in bad), bad
+
+
+def test_the_ordinal_is_what_makes_the_table_visible(monkeypatch):
+    """Keyed on (name, ORDINAL), for the reason site 12 taught.
+
+    The floor table assigns _fixed32_expected_mandatory_weight_bytes three
+    times, once per vocabulary row. Keyed on the name alone, only one row
+    would ever be compared and the other two would be invisible -- which is
+    exactly the failure mode of the first vocab-profile detector.
+    """
+    table = parity._literal_table(
+        (REPO / parity.LAUNCHER_FAMILIES[0]).read_text()
+    )
+    ordinals = sorted(
+        key[2] for key in table
+        if key[1] == "_fixed32_expected_mandatory_weight_bytes"
+    )
+    assert ordinals == [1, 2, 3], ordinals
+    values = {
+        table[("assignment", "_fixed32_expected_mandatory_weight_bytes", n)]
+        for n in ordinals
+    }
+    assert len(values) == 3, "three rows, three distinct values, three keys"
+
+
+def test_the_projection_ignores_comments():
+    """A superseded number named in prose is documentation, not a defect."""
+    table = parity._literal_table(
+        "# _fixed32_expected_weight_floor_ms=102.479937172 was arm A\n"
+        "_fixed32_expected_weight_floor_ms=92.345089436\n"
+    )
+    assert list(table.values()) == ["92.345089436"]
