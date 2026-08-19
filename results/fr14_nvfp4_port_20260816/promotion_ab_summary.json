@@ -134,6 +134,54 @@
   },
   "window_utc": "2026-08-19T03:00Z..03:31Z"
  },
+ "round11": {
+  "convergence": "round 8 pre-container-script, 9 launcher map, 10 fixed32 contract inside the container, 11 vLLM module import \u2014 one layer deeper each round, all fail-closed; first blocker that is purely a PATCHING defect rather than identity/credential",
+  "engagement_observation": "NONE \u2014 refused at engine-core init, but deeper than any previous attempt",
+  "eyeball_discharged": false,
+  "families_now_closed": "identity and credential \u2014 nine resolvers answered correctly, the contract check passed, the credential staged and verified without complaint",
+  "head": "f147b8698b41fed56a8859a1c28f135f8b6f3208",
+  "phase1_tierb": {
+   "bound_to": "f147b8698",
+   "bounds": "9/9",
+   "outcome": "PASS"
+  },
+  "phase2_gate": {
+   "outcome": "PASS",
+   "rc": 0
+  },
+  "recommended_detector": "assert that for the tier-B parameter set, every symbol the patcher injects a CALL to also gets a DEFINITION injected \u2014 patch a scratch copy with tier-B params and resolve cross-file names statically. No GPU. Generalises: production_begin, production_end and capture_end are all in that blob.",
+  "refusal": {
+   "consumer": {
+    "condition": "elif fixed32_query_tile32_b1_tier_b_serve (:10322)",
+    "installs": "import + call of _production_capture_end",
+    "target": "vllm/compilation/cuda_graph.py",
+    "tier_b": true
+   },
+   "error": "ImportError: cannot import name '_fr13_fa2_qrow32_b1_production_capture_end' from 'vllm.v1.attention.backends.tree_attn'",
+   "mechanism": "producer/consumer split across two patch targets under two conditions",
+   "nothing_wrong_with": "kernel, credential, binary, identity \u2014 the two halves of one patch disagree about whether tier-B counts",
+   "producer": {
+    "condition": "if fixed32_query_tile32_b1_live_ab or fixed32_query_tile32_b1_production (:9271)",
+    "installs": "FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS which DEFINES the symbol",
+    "target": "vllm/v1/attention/backends/tree_attn.py",
+    "tier_b": false
+   },
+   "verified": "the helpers blob does define _production_capture_end, _production_begin and _tier_b_arm \u2014 checked, not assumed"
+  },
+  "served_splitk_tokens_to_date": 0,
+  "site_24_confirmed_fixed_on_cpu": {
+   "match": true,
+   "new_spelling_plus_pin": "size=300123792 sha=28570f83",
+   "splitk_truth": "size=300123792 sha=28570f83"
+  },
+  "why_sweep_missed_it": {
+   "but_swept": "readers of legacy selector env vars, and launcher selector-active/exclusion disjunctions",
+   "shape": "same as site 18 (installer keyed to the production selector) reappearing in a SECOND installer \u2014 the tree_attn helpers block rather than the serving-hook call site",
+   "sweep_did": "34 reads, 6 stranded, 6 fixed, including site 25 before it fired \u2014 it worked",
+   "this_is_neither": "not an env reader (condition is on the patcher own boolean params), not a resolver (nothing resolves an arm), but an INSTALLER DISJUNCTION INSIDE THE PATCHER where producer and consumer live in different patch targets under different conditions"
+  },
+  "window_utc": "2026-08-19T03:35Z..04:06Z"
+ },
  "round2": {
   "arms": {
    "C'": {

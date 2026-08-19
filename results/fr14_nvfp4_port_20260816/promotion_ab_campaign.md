@@ -2213,3 +2213,97 @@ existed, round 9 in the launcher's qualification map, round 10 **inside the cont
 after a successful prelaunch**. Each round the refusal moves later, and every refusal
 so far has been fail-closed — no run has served the incumbent while claiming the
 candidate since the observation-not-configuration doctrine landed.
+
+---
+---
+
+# ROUND 11 (2026-08-19 03:35Z–04:06Z) — six sites confirmed fixed; ARM S refused at an INSTALLER disjunction, in the patcher
+
+**Engagement observation: none.** ARM S refused during engine-core init — but again
+deeper than before: past every launcher check, past the fixed32 **contract** check that
+killed round 10, into vLLM's own module import.
+
+| phase | outcome |
+|---|---|
+| **1** Tier-B credential | **PASS**, 9/9, bound to `f147b8698` |
+| **2** gqa_pair gate | **PASS rc=0** |
+| **3** ARM S | **REFUSED** — `ImportError` at engine init |
+
+## R11.1 Site 24 confirmed fixed — on CPU, before spending GPU
+
+I executed the contract resolver with the canonical tier-B env before booting:
+
+```
+new spelling + pin -> size=300123792 sha=28570f835ea72c99
+split-K truth      -> size=300123792 sha=28570f835ea72c99      MATCH: True
+```
+
+Round 10's killer is gone, and the boot confirmed it behaviourally by getting past it.
+
+## R11.2 The refusal — a producer/consumer split inside the patcher
+
+```
+ImportError: cannot import name '_fr13_fa2_qrow32_b1_production_capture_end'
+             from 'vllm.v1.attention.backends.tree_attn'
+```
+
+Two patch targets, two conditions, and only one of them learned tier-B:
+
+| patch target | what it installs | condition | tier-B? |
+|---|---|---|---|
+| `vllm/compilation/cuda_graph.py` | the **import + call** of `…_production_capture_end` | `elif fixed32_query_tile32_b1_tier_b_serve:` (`:10322`) | **yes** |
+| `vllm/v1/attention/backends/tree_attn.py` | `FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS`, which **defines** that symbol | `if fixed32_query_tile32_b1_live_ab or fixed32_query_tile32_b1_production:` (`:9271`) | **NO** |
+
+I verified the blob really does carry the definition rather than assume it:
+
+```
+helpers blob defines _fr13_fa2_qrow32_b1_production_capture_end: True
+helpers blob defines _fr13_fa2_qrow32_b1_production_begin:       True
+helpers blob defines _fr13_fa2_qrow32_b1_tier_b_arm:             True
+```
+
+So under a pure tier-B arming the **consumer is installed and the producer is not**:
+`cuda_graph.py` imports a symbol that was never injected into `tree_attn.py`, and the
+engine dies at import. Nothing about the kernel, the credential, the binary or the
+identity is wrong — the two halves of one patch simply disagree about whether tier-B
+counts.
+
+## R11.3 Why the sweep did not catch it — a genuinely new class
+
+Pass 81's sweep was thorough and it worked: it found **34 reads, 6 stranded, 6 fixed**,
+including 25 *before it fired*. But it swept **readers of the legacy selector env vars**
+and **selector-active / exclusion disjunctions in the launcher**. This defect is neither:
+
+* it is not an env reader — the condition is on the patcher's own boolean parameters,
+  `fixed32_query_tile32_b1_live_ab or fixed32_query_tile32_b1_production`;
+* it is not a resolver — nothing resolves an arm here;
+* it is an **installer disjunction inside the patcher**, and specifically one where the
+  producer and the consumer of a symbol live in **different patch targets under
+  different conditions**.
+
+It is the same *shape* as site 18 ("the installer was keyed to the production
+selector") reappearing in a **second installer** — the tree_attn helpers block rather
+than the serving-hook call site. Site 18 was fixed by adding tier-B to one disjunction;
+this is the sibling disjunction eleven hundred lines earlier that nobody had reason to
+look at, because it installs *helpers*, not *hooks*.
+
+**The detector that fits this class** is not another env grep: it is an assertion that
+for the tier-B parameter set, **every symbol the patcher injects a call to is also
+injected a definition of**. That is checkable statically on the patcher's own output —
+patch a scratch copy of the two files with the tier-B parameters and `python -c
+"import ast"`-resolve the cross-file names. No GPU, and it generalises past this one
+symbol: `production_begin`, `production_end` and the capture-end hook are all in that
+blob, so the same gap would have bitten each of them in turn.
+
+## R11.4 Status
+
+**Mark's split-K eyeball is NOT discharged. Served split-K tokens after eleven rounds:
+zero.**
+
+The convergence continues to be real and monotone: round 8 died before the container
+script existed, 9 in the launcher's qualification map, 10 in the fixed32 contract check
+inside the container, **11 in vLLM's module import** — one layer further in each time,
+every refusal fail-closed, and this round's blocker is the first that is purely a
+*patching* defect rather than an *identity* or *credential* one. The identity and
+credential families now appear genuinely closed: nine resolvers answered correctly, the
+contract check passed, and the credential staged and verified without complaint.
