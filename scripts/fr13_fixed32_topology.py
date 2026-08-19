@@ -1035,36 +1035,15 @@ TAIL10_GDN_PADDED_SLOTS = sum(
 # Keyed by SERVING_MODES, built here because HYDRA31_VALID is only defined
 # above this point. Values are taken from the per-profile constants, never
 # retyped: a retyped mask is a mask that can disagree with its own tree.
-# INCOMPLETE ON PURPOSE, AND BLOCKED -- do not "just add hydra31" (round 19).
-#
-# hydra31_fixed32 belongs here: HYDRA31_VALID is defined above, the mode
-# functions now take their tree from the mode's profile, and with the entry
-# present active_choices/active_child_lists/sampler_child_table all produce
-# hydra31's correct tables (asserted in the contract tests by injecting the
-# entry). One consumer prevents it:
-#
-#   fr13_device_multidraft_kernel._fr13_fixed32_taw_topology_binding does
-#       modes = ("tail6_fixed32", "hydra27_fixed32")
-#       if set(topology.VALID_BY_MODE) != set(modes): raise
-#
-# an EQUALITY check on this key set -- the round-19 inversion in its purest
-# form, a consumer that vetoes the authority ever learning a third mode. The
-# one-line fix (equality -> coverage) is obvious and correct, but that function
-# is one of 47 under the TAW source-closure digest
-# _FR13_FIXED32_TAW_SOURCE_SHA256 = 68b289ae..., which is pinned in ELEVEN
-# source files AND recorded in the banked H27n work census. Moving it fails
-# every re-gate of that census exactly as
-# results/fr14_nvfp4_port_20260816/promotion_ab_regate_refusal.log shows the
-# last such move doing, which would cost the campaign its strongest baseline.
-#
-# So the entry is held, the reason is written down rather than rediscovered on
-# a boot, and the key-set invariant in the contract tests carries this as its
-# single declared exemption with the same text. Unblocking it is a scheduling
-# decision (re-attest the digest and re-run H27n, or re-scope the lever), not
-# an edit.
+# Complete as of round 19's ruling: the blocking equality check in
+# fr13_device_multidraft_kernel._fr13_fixed32_taw_topology_binding was
+# re-scoped to a coverage check and the TAW source-closure digest re-attested
+# through the established machinery. A consumer depends on the authority
+# COVERING what it needs, never on the authority knowing nothing more.
 VALID_BY_MODE: dict[Mode, tuple[bool, ...]] = {
     MODE_TAIL6: TAIL6_VALID,
     PROFILE_HYDRA27: HYDRA27_VALID,
+    PROFILE_HYDRA31: HYDRA31_VALID,
 }
 VALID_MASK_BY_MODE: dict[Mode, int] = {
     MODE_TAIL6: TAIL6_VALID_MASK,

@@ -195,7 +195,7 @@ def test_source_digest_is_re_attested_to_the_wired_source() -> None:
     contract = taw._fr13_fixed32_taw_source_contract(taw._fr13_fixed32_topology())
     assert contract["source_contract_sha256"] == taw._FR13_FIXED32_TAW_SOURCE_SHA256
     assert taw._FR13_FIXED32_TAW_SOURCE_SHA256 == (
-        "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d"
+        "491874e3ebbc53b83ce28a8cae505025fde36e56564da049ab0d582eaa4e7d5c"
     )
 
 

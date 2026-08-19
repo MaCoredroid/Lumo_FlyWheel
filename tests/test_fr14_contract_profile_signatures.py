@@ -1164,10 +1164,9 @@ MODE_ALLOWLIST_BASELINE = {
     "scripts/fr13_fixed32_flush_protocol.py": 1,
     "scripts/fr13_fixed32_nsys_reduce.py": 1,
     "scripts/fr13_fixed32_semantics_test.py": 2,
-    # Round 19: was 2 (VALID_BY_MODE + VALID_MASK_BY_MODE). VALID_MASK_BY_MODE
-    # now carries all three modes; VALID_BY_MODE is the one declared exemption,
-    # blocked by a frozen source-closure digest. See KEY_SET_EXEMPTIONS.
-    "scripts/fr13_fixed32_topology.py": 1,
+    # Round 19: was 2 (VALID_BY_MODE + VALID_MASK_BY_MODE), then 1, now 0 --
+    # both mode indices carry the full roster, so the authority contributes no
+    # hydra27-only allowlist at all. Absent from this table means zero.
     "scripts/fr13_floor_gate.py": 5,
     "scripts/fr13_gdn_gqa_group3_production_credential.py": 1,
     "scripts/fr13_gdn_single_launch_gate.py": 1,
@@ -1588,19 +1587,12 @@ def test_the_sfwd_source_closure_attestation_is_unchanged() -> None:
 # PROFILES -- PROFILES is one of the mappings that was wrong.
 TOPOLOGY = SCRIPTS / "fr13_fixed32_topology.py"
 
-# The single declared exemption. Same text as the module's own comment.
-KEY_SET_EXEMPTIONS = {
-    "VALID_BY_MODE": (
-        "hydra31 belongs here and the code is ready for it, but "
-        "fr13_device_multidraft_kernel._fr13_fixed32_taw_topology_binding does "
-        "`if set(topology.VALID_BY_MODE) != set(modes): raise` -- an EQUALITY "
-        "check that vetoes the authority learning a third mode. That function "
-        "is one of 47 under the TAW source-closure digest 68b289ae..., pinned "
-        "in eleven source files and recorded in the banked H27n work census; "
-        "moving it fails every re-gate of that census. Unblocking is a "
-        "scheduling decision, not an edit."
-    ),
-}
+# Round 19's ruling: the TAW binding check was re-scoped (equality -> coverage)
+# and the source digest re-attested through the established machinery, so
+# VALID_BY_MODE is complete and there are NO exemptions. The dict stays because
+# an empty exemption set is the assertion "nothing is exempt", and the test
+# below fails the moment something is added without a reason.
+KEY_SET_EXEMPTIONS: dict[str, str] = {}
 
 
 def _topology_module():
@@ -1681,24 +1673,19 @@ def test_every_by_mode_mapping_carries_the_whole_roster() -> None:
     assert set(topology.VALID_MASK_BY_MODE) == modes
 
 
-def test_the_key_set_exemptions_are_still_real_and_still_blocked() -> None:
-    """A pinned exemption that no longer applies is a lie; fail so it is removed."""
+def test_there_are_no_key_set_exemptions_left() -> None:
+    """The held entry was released; nothing may be exempt without a reason."""
     topology = _topology_module()
-    mappings = by_mode_mappings()
-    for name in KEY_SET_EXEMPTIONS:
-        assert name in mappings, f"exempted mapping {name} no longer exists"
-        assert set(mappings[name]) != set(topology.SERVING_MODES), (
-            f"{name} is complete now -- delete its exemption"
-        )
-    # ...and the blocker is still exactly what the exemption says it is.
-    kernel = (SCRIPTS / "fr13_device_multidraft_kernel.py").read_text()
-    assert "if set(topology.VALID_BY_MODE) != set(modes):" in kernel, (
-        "the equality check named in the exemption is gone -- if it was fixed, "
-        "complete VALID_BY_MODE and delete the exemption"
+    assert KEY_SET_EXEMPTIONS == {}, (
+        f"an exemption was added: {sorted(KEY_SET_EXEMPTIONS)} -- an index that "
+        "cannot carry the roster needs a written reason and a way out"
     )
-    assert "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d" in (
-        kernel
-    ), "the TAW source digest named in the exemption moved"
+    assert set(topology.VALID_BY_MODE) == set(topology.SERVING_MODES)
+    assert set(topology.VALID_MASK_BY_MODE) == set(topology.SERVING_MODES)
+    # the blocker really was re-scoped, not deleted
+    kernel = (SCRIPTS / "fr13_device_multidraft_kernel.py").read_text()
+    assert "if set(topology.VALID_BY_MODE) != set(modes):" not in kernel
+    assert "missing = tuple(mode for mode in modes if mode not in" in kernel
 
 
 def test_the_invariant_fires_on_a_divergent_key_set() -> None:
@@ -1741,23 +1728,20 @@ def test_mode_functions_take_their_tree_from_the_mode_not_from_hydra27() -> None
     )
     assert topology.TAIL10_CHOICES != topology.FIXED32_CHOICES
 
-    # with the held entry injected, the whole mode-indexed surface is correct
-    topology.VALID_BY_MODE[topology.PROFILE_HYDRA31] = topology.HYDRA31_VALID
-    try:
-        assert (
-            topology.active_choices(topology.PROFILE_HYDRA31)
-            == topology.TAIL10_CHOICES
-        )
-        children = topology.active_child_lists(topology.PROFILE_HYDRA31)
-        assert children[-1] == (0, 1, 2)
-        assert max(len(kids) for kids in children.values()) == (
-            topology.SAMPLER_MAX_FANOUT
-        )
-        table, counts = topology.sampler_child_table(topology.PROFILE_HYDRA31)
-        assert (len(table), len(table[0])) == topology.SAMPLER_TABLE_SHAPE
-        assert len(counts) == 32
-    finally:
-        topology.VALID_BY_MODE.pop(topology.PROFILE_HYDRA31, None)
+    # the entry is real now (round 19's ruling), so the whole mode-indexed
+    # surface must be correct without any injection. The earlier version of
+    # this test injected and then popped it in a finally -- which, once the
+    # index was completed for real, deleted a live entry and corrupted the
+    # authority for every test that ran after it.
+    assert (
+        topology.active_choices(topology.PROFILE_HYDRA31) == topology.TAIL10_CHOICES
+    )
+    children = topology.active_child_lists(topology.PROFILE_HYDRA31)
+    assert children[-1] == (0, 1, 2)
+    assert max(len(kids) for kids in children.values()) == topology.SAMPLER_MAX_FANOUT
+    table, counts = topology.sampler_child_table(topology.PROFILE_HYDRA31)
+    assert (len(table), len(table[0])) == topology.SAMPLER_TABLE_SHAPE
+    assert len(counts) == 32
 
 
 def test_profile_refuses_a_serving_mode_with_a_legible_message() -> None:
@@ -1808,29 +1792,50 @@ def test_the_real_preseed_still_runs_on_cpu_for_every_qualified_mode(
     )
 
 
-def test_the_preseed_reaches_the_mask_index_for_hydra31_and_stops_where_declared(
-) -> None:
-    """hydra31's preseed gets PAST the mask lookup and stops at the one gap.
+def test_the_preseed_runs_for_hydra31_up_to_the_levers_qualified_scope() -> None:
+    """Round 19's ruling closed the authority gap. What remains is not one.
 
-    Round 19 completed VALID_MASK_BY_MODE, so the lookup the coordinator named
-    now answers. The refusal has moved to valid_for_mode -- VALID_BY_MODE, the
-    single declared exemption. Asserting WHERE it stops is what keeps the
-    remaining gap a scheduled decision instead of a rediscovery.
+    hydra31 now resolves its route, its mask, its valid vector and its active
+    count from the authority, and the preseed runs until it reaches the TAW
+    all-parent SOURCE-ROW SCHEDULE -- which is unioned over exactly the two
+    modes the lever was byte-qualified on (13 self / 17 target rows, pinned and
+    tensor-shaping). hydra31's own union is 11/21 and the union of all three is
+    14/22, so widening it changes hydra27's tensor shapes and slot indices:
+    a numerical re-qualification of the commit route, not a validator edit and
+    not a re-attestation. Asserting exactly where it stops is what keeps that a
+    scheduled decision instead of a rediscovery.
     """
     pytest.importorskip("torch")
     kernel = _multidraft_kernel()
     topology = _topology_module()
 
+    # the authority now answers for hydra31 at every index the preseed consults
     assert PROFILE_HYDRA31 in topology.VALID_MASK_BY_MODE
+    assert PROFILE_HYDRA31 in topology.VALID_BY_MODE
     assert topology.VALID_MASK_BY_MODE[PROFILE_HYDRA31] == topology.HYDRA31_VALID_MASK
-    assert PROFILE_HYDRA31 not in topology.VALID_BY_MODE  # the exemption
+    assert kernel._fr13_fixed32_expected_active(topology, PROFILE_HYDRA31) == 31
 
-    with pytest.raises(ValueError) as refusal:
-        kernel.fr13_fixed32_taw_preseed("cpu", mode=PROFILE_HYDRA31)
-    assert "unknown fixed-32 mode" in str(refusal.value), (
-        "hydra31's preseed must stop at valid_for_mode, not earlier: if it now "
-        "fails somewhere else, a second gap opened"
+    def union(modes):
+        selves, targets = set(), set()
+        for mode in modes:
+            children = topology.active_child_lists(mode)
+            active = tuple(
+                node
+                for node, enabled in enumerate(topology.valid_for_mode(mode))
+                if enabled
+            )
+            selves.update(node for node in active if node not in children)
+            targets.update(kids[0] for kids in children.values())
+        return len(selves), len(targets)
+
+    assert union(("tail6_fixed32", PROFILE_HYDRA27)) == (13, 17), (
+        "the lever's qualified scope moved -- that is a re-qualification"
     )
+    assert union((PROFILE_HYDRA31,)) == (11, 21)
+    assert union(("tail6_fixed32", PROFILE_HYDRA27, PROFILE_HYDRA31)) == (14, 22)
+
+    with pytest.raises(KeyError):
+        kernel.fr13_fixed32_taw_preseed("cpu", mode=PROFILE_HYDRA31)
 
 
 def test_hydra27_topology_values_are_byte_identical_to_the_baseline() -> None:
@@ -1861,9 +1866,12 @@ def test_hydra27_topology_values_are_byte_identical_to_the_baseline() -> None:
         a, b = getattr(old, name), getattr(new, name)
         if callable(a) or isinstance(a, types.ModuleType):
             continue
-        if name == "VALID_MASK_BY_MODE":
-            # deliberately completed; its hydra27/tail6 entries must not move
-            assert all(b[mode] == mask for mode, mask in a.items())
+        if name in ("VALID_MASK_BY_MODE", "VALID_BY_MODE"):
+            # deliberately completed; every pre-existing entry must be identical
+            # and the only addition may be hydra31.
+            assert all(b[mode] == value for mode, value in a.items())
+            assert set(b) - set(a) <= {PROFILE_HYDRA31}
+            assert set(b) == set(_topology_module().SERVING_MODES)
             continue
         if a != b:
             drift[name] = (a, b)
@@ -1876,3 +1884,155 @@ def test_hydra27_topology_values_are_byte_identical_to_the_baseline() -> None:
         assert old.valid_for_mode(mode) == new.valid_for_mode(mode)
     assert old.PROFILES[PROFILE_HYDRA27] == new.PROFILES[PROFILE_HYDRA27]
     assert old.PROFILES[PROFILE_HYDRA31] == new.PROFILES[PROFILE_HYDRA31]
+
+
+# ---------------------------------------------------------------------------
+# 9. ROUND 20 -- THE TAW SOURCE-DIGEST RE-ATTESTATION
+# ---------------------------------------------------------------------------
+# Round 19's ruling: re-scope the TAW binding check (equality -> coverage) and
+# re-attest the source-closure digest through the established machinery. Two of
+# the 47 digested functions changed, both BOOT-TIME VALIDATORS, and the
+# evidence below is what the pairing rests on.
+TAW_SOURCE_DIGEST = "491874e3ebbc53b83ce28a8cae505025fde36e56564da049ab0d582eaa4e7d5c"
+TAW_SOURCE_DIGEST_SUPERSEDED = (
+    "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d"
+)
+# The lever's qualified scope and the payload it digests. Neither moved, which
+# is why no tensor shape or slot index on the hydra27 path could move.
+TAW_TOPOLOGY_DIGEST = (
+    "99b1255b1c1ffeda8bbbd7800e777cfa7184f48c1f13494537a01bc70bc9bf79"
+)
+TAW_QUALIFIED_SELF_ROWS = 13
+TAW_QUALIFIED_TARGET_ROWS = 17
+
+
+def _digest_mirror_files() -> list[Path]:
+    """Every tracked source file carrying a 64-hex TAW source digest literal."""
+    out: list[Path] = []
+    roots = [SCRIPTS, SERVING, REPO / "tests", REPO / "config"]
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*")):
+            if path.suffix not in (".py", ".sh", ".json"):
+                continue
+            try:
+                text = path.read_text()
+            except (OSError, UnicodeDecodeError):  # pragma: no cover
+                continue
+            if TAW_SOURCE_DIGEST in text or TAW_SOURCE_DIGEST_SUPERSEDED in text:
+                out.append(path)
+    return out
+
+
+def test_every_taw_digest_mirror_carries_the_re_attested_value() -> None:
+    """THE MIRROR SWEEP: the proof that none was missed.
+
+    A digest pinned in fourteen places is fourteen chances to update thirteen.
+    This enumerates them from the tree rather than from a list someone keeps.
+    """
+    mirrors = _digest_mirror_files()
+    assert len(mirrors) >= 13, (
+        f"the sweep found only {len(mirrors)} mirrors; it used to find 14"
+    )
+    stale = {
+        path.relative_to(REPO).as_posix(): path.read_text().count(
+            TAW_SOURCE_DIGEST_SUPERSEDED
+        )
+        for path in mirrors
+        if TAW_SOURCE_DIGEST_SUPERSEDED in path.read_text()
+        and path.name != Path(__file__).name
+    }
+    assert not stale, f"these mirrors still carry the superseded digest: {stale}"
+
+
+def test_the_kernel_and_the_census_agree_on_the_digest() -> None:
+    """The two authorities a run is gated against must not disagree."""
+    kernel = _multidraft_kernel()
+    census_path = SCRIPTS / "fr13_fixed32_work_census.py"
+    assert kernel._FR13_FIXED32_TAW_SOURCE_SHA256 == TAW_SOURCE_DIGEST
+    assert TAW_SOURCE_DIGEST in census_path.read_text()
+    assert TAW_SOURCE_DIGEST_SUPERSEDED not in census_path.read_text()
+
+
+def test_the_re_attestation_changed_exactly_two_of_the_47_functions() -> None:
+    """Blast radius, measured rather than asserted."""
+    kernel = _multidraft_kernel()
+    try:
+        baseline = subprocess.run(
+            ["git", "show", "HEAD~1:scripts/fr13_device_multidraft_kernel.py"],
+            cwd=REPO,
+            capture_output=True,
+            check=True,
+        ).stdout.decode()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        pytest.skip(f"previous kernel revision unavailable: {exc}")
+
+    names = set(kernel._FR13_FIXED32_TAW_SOURCE_FUNCTIONS)
+    assert len(names) == 47
+
+    def sources(text: str) -> dict[str, str]:
+        found: dict[str, str] = {}
+        for node in ast.walk(ast.parse(text)):
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name in names
+            ):
+                found[node.name] = ast.get_source_segment(text, node)
+        return found
+
+    old, new = sources(baseline), sources(
+        (SCRIPTS / "fr13_device_multidraft_kernel.py").read_text()
+    )
+    changed = sorted(n for n in names if old.get(n) != new.get(n))
+    assert changed == [
+        "_fr13_fixed32_expected_active",
+        "_fr13_fixed32_taw_topology_binding",
+    ], f"the re-attestation touched more than the two validators: {changed}"
+
+
+def test_neither_changed_validator_can_move_a_counter_or_a_served_byte() -> None:
+    """PAIRING EVIDENCE, enumerate-and-show.
+
+    The census counters H27n banked derive from EXECUTION. These two functions
+    are boot-time validations: one returns an integer that is only ever
+    compared, the other returns a binding whose every value is consumed as a
+    shape or a digest. Both are shown to return byte-identical results.
+
+    The decisive quantity is the lever's qualified scope: `modes` is unchanged,
+    so the union it digests is unchanged (13 self / 17 target), so
+    topology_sha256 is unchanged, so every tensor shape and slot index derived
+    from it is unchanged. Widening that tuple WOULD move hydra27 -- the union of
+    all three modes is 14/22 -- which is exactly why it was not widened.
+    """
+    kernel = _multidraft_kernel()
+    topology = _topology_module()
+
+    # (a) the integer: identical, and still only a comparison subject
+    assert kernel._fr13_fixed32_expected_active(topology, "tail6_fixed32") == (
+        topology.TAIL6_ACTIVE_DRAFTS
+    )
+    assert kernel._fr13_fixed32_expected_active(topology, PROFILE_HYDRA27) == (
+        topology.HYDRA27_ACTIVE_DRAFTS
+    )
+
+    # (b) the binding: qualified scope, payload digest and row counts unmoved
+    binding = kernel._fr13_fixed32_taw_topology_binding(topology)
+    assert binding["topology_sha256"] == TAW_TOPOLOGY_DIGEST
+    assert len(binding["all_parent_self_source_nodes"]) == TAW_QUALIFIED_SELF_ROWS
+    assert (
+        len(binding["all_parent_target_source_nodes"]) == TAW_QUALIFIED_TARGET_ROWS
+    )
+    assert binding["tail_valid_mask"] == topology.TAIL6_VALID_MASK
+    assert binding["hydra_valid_mask"] == topology.HYDRA27_VALID_MASK
+
+    # (c) the re-scoped check still refuses an authority that lost a mode
+    class _Missing:
+        def __getattr__(self, name):
+            return getattr(topology, name)
+
+        VALID_BY_MODE = {PROFILE_HYDRA27: topology.HYDRA27_VALID}
+
+    with pytest.raises(RuntimeError) as refusal:
+        kernel._fr13_fixed32_taw_topology_binding(_Missing())
+    assert "missing" in str(refusal.value)

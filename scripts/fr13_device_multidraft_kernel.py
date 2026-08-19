@@ -1665,7 +1665,7 @@ _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 # resolves at the three arm points; no sampler arithmetic moved, and with the
 # flag clear the resolution is identical to the prior expression.
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d"
+    "491874e3ebbc53b83ce28a8cae505025fde36e56564da049ab0d582eaa4e7d5c"
 )
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
@@ -1875,11 +1875,23 @@ def _fr13_fixed32_device_key(device) -> tuple[str, int | None]:
 
 
 def _fr13_fixed32_expected_active(topology, mode: str) -> int:
-    if mode == "tail6_fixed32":
-        return int(topology.TAIL6_ACTIVE_DRAFTS)
-    if mode == "hydra27_fixed32":
-        return int(topology.HYDRA27_ACTIVE_DRAFTS)
-    raise RuntimeError(f"unknown FR13_FIXED32_MODE {mode!r}")
+    """Active drafts for a mode, DERIVED from the authority's own index.
+
+    Round 19: an if-chain naming two modes raised for hydra31 even though the
+    authority describes it fully. Counting the mode's valid bits cannot go
+    stale when a mode is added and cannot disagree with the mask the same
+    index hands the preseed. The counts it returns for tail6 (23) and hydra27
+    (27) are unchanged -- asserted against TAIL6_ACTIVE_DRAFTS and
+    HYDRA27_ACTIVE_DRAFTS in the contract tests.
+    """
+    try:
+        valid = topology.VALID_BY_MODE[mode]
+    except KeyError:
+        raise RuntimeError(
+            f"unknown FR13_FIXED32_MODE {mode!r}; known modes are "
+            f"{sorted(topology.VALID_BY_MODE)}"
+        ) from None
+    return int(sum(1 for enabled in valid if enabled))
 
 
 def _fr13_fixed32_parse_int(raw: str, *, name: str) -> int:
@@ -1891,9 +1903,22 @@ def _fr13_fixed32_parse_int(raw: str, *, name: str) -> int:
 
 def _fr13_fixed32_taw_topology_binding(topology) -> dict[str, Any]:
     """Derive the exact logical topology and all-parent row schedule."""
+    # THE SCOPE OF THIS LEVER, not a copy of the authority's roster. The
+    # payload digested below unions the source rows of exactly these two modes
+    # and pins the result (13 self, 17 target) against a byte-qualified
+    # candidate, so widening this tuple is a re-qualification. It is unchanged.
+    #
+    # What changed is the COMPARISON. This asserted the authority's key set
+    # EQUALS this scope, which made every consumer a veto on the authority ever
+    # learning a third mode -- round 19's inversion. A consumer depends on the
+    # authority COVERING what it needs. The modes iterated, the payload built
+    # and the digest produced are all identical for hydra27 and tail6.
     modes = ("tail6_fixed32", "hydra27_fixed32")
-    if set(topology.VALID_BY_MODE) != set(modes):
-        raise RuntimeError("FR13 fixed32 TAW mode set drifted")
+    missing = tuple(mode for mode in modes if mode not in topology.VALID_BY_MODE)
+    if missing:
+        raise RuntimeError(
+            f"FR13 fixed32 TAW mode set drifted: authority is missing {missing!r}"
+        )
 
     self_source_union = set()
     target_source_union = set()

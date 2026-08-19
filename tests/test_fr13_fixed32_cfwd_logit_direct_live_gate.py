@@ -221,7 +221,7 @@ def test_final_flush_emits_only_zero_mismatch_real_task_record(
         module._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256
     )
     assert record["incumbent_source_sha256"] == (
-        "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d"
+        "491874e3ebbc53b83ce28a8cae505025fde36e56564da049ab0d582eaa4e7d5c"
     )
     assert record["counted_graph_replays"] == 2
     assert record["decision_values_compared"] == 162
