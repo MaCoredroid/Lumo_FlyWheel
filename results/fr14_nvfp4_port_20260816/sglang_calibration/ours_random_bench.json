@@ -1,0 +1,274 @@
+{
+ "blocker": {
+  "action": "left running; nothing was started on the GPU by this measurement",
+  "budget_min": 75,
+  "comparable_arm_wall": "Ch27n ran 4h43m (output/fr14_promoab_Ch27n_20260819T112147Z/arm_meta.txt)",
+  "foreign_container": "fr13-bigdenom-hydra31_fixed32_promoab_Ch31q",
+  "foreign_container_created_utc": "2026-08-19T18:19:22Z",
+  "foreign_gpu_mib": 20625,
+  "foreign_gpu_pid": 352261,
+  "kind": "gpu_contended"
+ },
+ "citable": false,
+ "date_utc": "2026-08-19",
+ "expected_framing": {
+  "banked_same_shape": [
+   {
+    "accept": 2.9,
+    "arm": "sglang EAGLE 3/1/4 greedy",
+    "output_tps": 26.15
+   },
+   {
+    "accept": 2.358,
+    "arm": "ours arm A conservative bytes (tail6 K64)",
+    "output_tps": 19.27
+   },
+   {
+    "accept": 2.739,
+    "arm": "ours arm B aggressive bytes (tail6 K64)",
+    "output_tps": 23.23
+   },
+   {
+    "accept": 3.214,
+    "arm": "ours arm B full-vocab (tail6 K0)",
+    "output_tps": 25.68
+   }
+  ],
+  "closest_banked_antecedent": "the tail6 K0 row, 25.68 TPS / accept 3.214 (no split-K, no fused top-k)",
+  "mechanism": "hydra27 spends 31 physical drafts every step; on unpredictable ShareGPT text the suffix tail earns close to nothing, so the deep spine positions are rejected while their verify cost is fixed and paid in full",
+  "swe_traffic_accept_same_stack": "~4.1-4.5",
+  "this_is_our_worst_case": true
+ },
+ "findings": [
+  {
+   "class": "same structural-unbootability class the :1305-1315 comment fixes for the gqa_pair default, relocated to the selector gate",
+   "corroboration": "most recent hydra27 arm's launch.log has no split-K arming line because that runner explicitly names the B1 production arm empty, skipping the default block",
+   "evidence": "static read of HEAD; not an observed refusal",
+   "fix_caveat": "leave the gqa_pair gate JSONs empty, or F2 fires",
+   "id": "F1",
+   "mechanism": "launcher :1373-1398 arms FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk but sets neither FR13_FA2_QROW32_B1_SOURCE_COMMIT nor _PATCH_SOURCE_SHA256 (both default empty at :961-962); :1611 makes SELECTOR_COUNT=1; :2298-2310 then demands SOURCE_COMMIT == $(git rev-parse HEAD) and exits 2",
+   "minimal_fix": [
+    "FR13_FA2_QROW32_B1_SOURCE_COMMIT=$(git rev-parse HEAD)",
+    "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=$(sha256sum scripts/fr13_patch_fa2_tree_bias.py)"
+   ],
+   "refusal_text": "FR13 qrow32 B1 selector requires Hydra27 B1 and exact binary/source provenance",
+   "severity": "blocking",
+   "title": "promoted split-K default hard-refuses every plain hydra27 B1 launch"
+  },
+  {
+   "consequence": "the credentialed route to satisfying F1's provenance gate trips a different refusal; only the two-variable route works",
+   "evidence": "static read of HEAD",
+   "id": "F2",
+   "mechanism": "presenting a serviceable gqa_pair credential (GATE_JSON + LIVE_RESULT_JSON + SOURCE_COMMIT==HEAD) arms the gqa_pair production default at :1400-1407 while split-K is already armed; :1606+:1611 count two selectors; :1620 exits 2",
+   "refusal_text": "FR13 qrow32 B1 live A/B and production arms are mutually exclusive",
+   "severity": "latent",
+   "title": "the two promoted defaults are mutually exclusive with each other"
+  }
+ ],
+ "gpu_discipline": {
+  "compute_procs_at_open": 0,
+  "containers_created": 0,
+  "containers_removed": 0,
+  "docker_empty_at_open": true,
+  "launcher_executed": false,
+  "net_container_delta": 0
+ },
+ "head_commit_at_close": "5efa41820dde43adac39c1adb6c4f5211bf06d1a",
+ "host": "GB10",
+ "lane": "DIAGNOSTIC",
+ "measured": {
+  "accept_per_event": null,
+  "median_tpot_ms": null,
+  "note": "no throughput number was produced; the GPU was taken by a foreign serve before boot",
+  "output_tps": null,
+  "step_wall_ms": null
+ },
+ "methodology_planned": {
+  "args": [
+   "--backend",
+   "vllm",
+   "--model",
+   "qwen3.8-27b-nvfp4-radixark",
+   "--tokenizer",
+   "/models/qwen3.8-27b-nvfp4-radixark",
+   "--dataset-name",
+   "random",
+   "--random-input-len",
+   "1024",
+   "--random-output-len",
+   "1024",
+   "--random-range-ratio",
+   "1",
+   "--num-prompts",
+   "8",
+   "--max-concurrency",
+   "1",
+   "--disable-tqdm",
+   "--extra-request-body",
+   "{\"temperature\":0.6,\"top_p\":0.95,\"top_k\":20}"
+  ],
+  "client": "sglang.bench_serving from lmsysorg/sglang:qwen38-27b, --network host, no GPU",
+  "divergences": [
+   {
+    "axis": "sampling",
+    "bias": "favours them; greedy accepts more",
+    "ours": "T=0.6 / top_p 0.95 / top_k 20",
+    "theirs": "greedy T=0",
+    "why": "the fixed32 committer hard-refuses greedy and killed the engine on the first request twice in leg 3"
+   },
+   {
+    "axis": "route",
+    "bias": "none known",
+    "ours": "/v1/completions via --backend vllm",
+    "theirs": "/generate",
+    "why": "same client and timing code, different backend adapter"
+   },
+   {
+    "axis": "ingress",
+    "bias": "none; ingress audit device, not a decode-path component",
+    "ours": "fixed32 ASGI middleware dropped",
+    "theirs": "none",
+    "why": "it admits only /v1/chat/completions and /v1/responses and authenticates a per-task HMAC only the SWE harness mints; /v1/completions returns 403 fixed32_route_not_allowed"
+   },
+   {
+    "axis": "harness",
+    "consequence": "fr13_decode_step_wall_* and fr13_decode_forward_gpu_* stay 0 (no flush transaction); step_wall must use d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total) and accept must come from /metrics, since bench_serving's accept_length is blank on the vllm backend",
+    "ours": "engine only, no SWE runner",
+    "theirs": "none",
+    "why": "same as leg 3 and the arm-B ablation"
+   },
+   {
+    "axis": "launcher",
+    "ours": "promoted launcher copy, diff is exactly one line",
+    "theirs": "n/a",
+    "why": "split-K arming, credential staging and in-container verify-tier-b are byte-identical to production"
+   }
+  ],
+  "replicates": "/home/mark/shared/tmp-scratch/nvfp4_port/sglang_calibration.sh",
+  "seed": 42,
+  "why_existing_nomiddleware_copies_unusable": "scripts/fr14_leg3_launch_nomiddleware.sh and scripts/fr14_armb_leg3_launch_nomiddleware.sh are behind HEAD: no FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE and their B1 selector still hard-codes K64/root1, so they refuse the promoted K0 config"
+ },
+ "objective": "promoted production stack (hydra27_fixed32 + K0 full-vocab + split-K tier-B default + fused draft top-k default, RadixArk NVFP4) on sglang's random-1024/1024 bs=1 bench shape",
+ "schema": "fr14.apples_to_apples.ours_random_bench.v1",
+ "sglang_reference": {
+  "accept_length": 2.901056338028169,
+  "completed": 8,
+  "duration_s": 313.86385970702395,
+  "engine": "sglang EAGLE 3/1/4, greedy, as-shipped RadixArk NVFP4",
+  "max_concurrency": 1,
+  "mean_tpot_ms": 37.854360106517454,
+  "median_e2e_ms": 37328.2358974684,
+  "median_tpot_ms": 36.03918074922889,
+  "output_tps": 26.100488306129982,
+  "random_input_len": 1024,
+  "random_output_len": 1024,
+  "random_range_ratio": 1.0,
+  "source": "results/fr14_nvfp4_port_20260816/sglang_calibration/bench_bs1.jsonl",
+  "total_output_tokens": 8192
+ },
+ "status": "NOT_MEASURED_GPU_CONTENDED",
+ "tier_b_credential_verification": {
+  "bounds": [
+   {
+    "bound": true,
+    "id": "B1",
+    "measured": {
+     "all_cases_bitwise_identical": true,
+     "cross_process_digests_identical": true
+    },
+    "name": "determinism_bitwise",
+    "passed": true
+   },
+   {
+    "bound": 0.9,
+    "id": "B2",
+    "measured": 0.9330657958984375,
+    "name": "output_ulp_concentration",
+    "passed": true
+   },
+   {
+    "bound": 4.0,
+    "id": "B3",
+    "measured": 1.3837837837837839,
+    "name": "output_max_abs_delta",
+    "passed": true
+   },
+   {
+    "bound": 8,
+    "id": "B4",
+    "measured": 4,
+    "name": "lse_max_ulp",
+    "passed": true
+   },
+   {
+    "bound": 0.0001,
+    "id": "B5",
+    "measured": 3.814697265625e-06,
+    "name": "lse_max_abs_delta",
+    "passed": true
+   },
+   {
+    "bound": 2,
+    "id": "B6",
+    "measured": 1,
+    "name": "argmax_flips_vs_exact_no_worse_than_incumbent",
+    "passed": true
+   },
+   {
+    "bound": 1.1,
+    "id": "B7",
+    "measured": 0.9608395953312465,
+    "name": "output_rms_vs_exact_ratio",
+    "passed": true
+   },
+   {
+    "bound": 1.1,
+    "id": "B8",
+    "measured": 0.8386085577670528,
+    "name": "lse_rms_vs_exact_ratio",
+    "passed": true
+   },
+   {
+    "bound": 0,
+    "id": "B9",
+    "measured": 0,
+    "name": "nonfinite_agreement",
+    "passed": true
+   }
+  ],
+  "bounds_passed": true,
+  "bounds_sha256": "ee49c3a712971f81509617bbd3f7cabffa5f43c74cd9db852459a9a758c1958e",
+  "credential_body_sha256": "908ea0780d70b1e11e985bec318659ac12608daccbe6289b6a2c435a28eab699",
+  "credential_earned_at_commit": "8dd868805b726e75813a01b3b97edfb9575ec73f",
+  "credential_file_sha256": "255267fc18fa4eb5209e381133d53a48410b3d362c6bc573065a9dd5be87e6d5",
+  "credential_path": "results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_credential.json",
+  "gpu_required": false,
+  "patch_source_sha256_matches_head": true,
+  "probe_strength_passed": true,
+  "rc": 0,
+  "reading": "the pass-101 re-scope works as designed: source_commit is in TIERB_RECORDED_FIELDS (recorded, not matched) while the nine numerics-determining fields are in TIERB_BINDING_FIELDS. HEAD moved at least six commits past the promotion commit (twice during this session) and the credential still validates. F1 is a launcher gate problem, not a credential problem.",
+  "staged_so": {
+   "path": "/home/mark/fr14_splitk_build_20260818/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so",
+   "present": true,
+   "sha256": "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
+   "size": 300123792,
+   "symlink": false
+  },
+  "verdict": "PASS",
+  "verified_at_head": "5efa41820dde43adac39c1adb6c4f5211bf06d1a"
+ },
+ "vehicle": {
+  "boot": "boot.sh",
+  "dir": "/home/mark/shared/tmp-scratch/nvfp4_port/ours_random_bench",
+  "estimated_window_min": {
+   "bench": 6,
+   "boot": 6,
+   "teardown": 2
+  },
+  "launcher_copy": "launch_nomiddleware.sh",
+  "launcher_diff": "FR13_FIXED32_MIDDLEWARE_FLAGS=\"\"",
+  "launcher_diff_lines": 1,
+  "sharegpt_bytes_approx": 673185792,
+  "sharegpt_prefetched": true
+ }
+}
