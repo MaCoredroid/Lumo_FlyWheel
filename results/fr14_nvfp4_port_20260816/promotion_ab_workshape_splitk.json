@@ -1,0 +1,11 @@
+{
+ "UNEXPECTED_DIFFERENT": [],
+ "control_census": "output/fr14_promoab_Cp1_20260818T081918Z/hydra27_fixed32_promoab_Cp1/logs/fr13_fixed32_work_census.jsonl",
+ "control_steps": 52507,
+ "expected_different": [],
+ "identical_counter_paths": 268,
+ "present_in_one_arm_only": [],
+ "schema": "fr14.promotion_ab.workshape.v1",
+ "treated_census": "output/fr14_promoab_Sr12_20260819T043506Z/hydra27_fixed32_promoab_Sr12/logs/fr13_fixed32_work_census.jsonl",
+ "treated_steps": 19901
+}

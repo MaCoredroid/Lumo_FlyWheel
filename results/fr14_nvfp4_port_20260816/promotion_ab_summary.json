@@ -69,7 +69,7 @@
  "promotes_anything": false,
  "recommendations": {
   "fused_draft_topk": "MORE EVIDENCE \u2014 needs one paired dfwd-span serve, top-k 0 vs 1",
-  "splitk_fa2": "REFUSE \u2014 eyeball undischarged after seven rounds, zero served split-K tokens; decide the tier-B identity question (site 20) before boot eight",
+  "splitk_fa2": "PROMOTE to the tier-B serving route \u2014 numerics 9/9, engagement observed 16/16 layers, -16.23 ms/step verifier forward (-12.36%) consistent across four instances at 5x the calibrated noise floor and better than the -14.3 ms projection, accept unchanged within variance, 268/268 work-shape counters identical, eyeball clean. Default promotion still gated on exact16 QC parity.",
   "suffix_pass_gate": "REFUSE for now \u2014 integration fails closed at an 11th, GPU-only site"
  },
  "relaxed_any_guard": false,
@@ -181,6 +181,147 @@
    "this_is_neither": "not an env reader (condition is on the patcher own boolean params), not a resolver (nothing resolves an arm), but an INSTALLER DISJUNCTION INSIDE THE PATCHER where producer and consumer live in different patch targets under different conditions"
   },
   "window_utc": "2026-08-19T03:35Z..04:06Z"
+ },
+ "round12": {
+  "ENGAGEMENT_OBSERVATION": {
+   "arm": "gqa_pair_splitk",
+   "calls_observed": 16,
+   "candidate_retag_calls": 16,
+   "candidate_served": true,
+   "candidate_so_sha256": "28570f83",
+   "fallback_allowed": false,
+   "layer_indices": [
+    3,
+    7,
+    11,
+    15,
+    19,
+    23,
+    27,
+    31,
+    35,
+    39,
+    43,
+    47,
+    51,
+    55,
+    59,
+    63
+   ],
+   "layers_engaged": 16,
+   "note": "counted AT THE RETAG \u2014 the observation rounds 6-11 could not produce and round 6 fabricated from env",
+   "num_splits": 4,
+   "selector_sentinel": 1179791671,
+   "status": "ENGAGED",
+   "tier": "B"
+  },
+  "EYEBALL": {
+   "malformed": 0,
+   "nonascii": 0,
+   "per_task": {
+    "12907": {
+     "patch": 504,
+     "tailrep": 0.196,
+     "ttr": 0.344,
+     "verdict": "resolved"
+    },
+    "13033": {
+     "patch": 1017,
+     "tailrep": 0.289,
+     "ttr": 0.202,
+     "verdict": "failed"
+    },
+    "13236": {
+     "patch": 819,
+     "tailrep": 0.0,
+     "ttr": 0.269,
+     "verdict": "resolved"
+    },
+    "13398": {
+     "patch": 3942,
+     "tailrep": 0.102,
+     "ttr": 0.158,
+     "verdict": "failed"
+    }
+   },
+   "resolved": "2/4 (same as the promoted control)",
+   "tool_calls": 130,
+   "verdict": "DISCHARGED \u2014 CLEAN, on split-K own traces with engagement verified first",
+   "words": 38279
+  },
+  "OUTCOME": "SPLIT-K SERVED \u2014 engagement verified, eyeball discharged, projection holds",
+  "arm_s": {
+   "accept_per_event": 4.139339731671775,
+   "census_steps": 19901,
+   "floor_ratio": 2.108620600920715,
+   "per_request_decode_tps": 28.818819632755332,
+   "rc": 0,
+   "resolved": 2,
+   "runroot": "output/fr14_promoab_Sr12_20260819T043507Z",
+   "s_per_fwd_gpu": 0.11503525808273171,
+   "step_wall_ms": 196.42283065730985,
+   "tasks": 4
+  },
+  "blocker_ledger_closed": {
+   "all_fail_closed": true,
+   "attempts": 10,
+   "distinct_blockers": 9,
+   "lesson": "the hard part of promoting a kernel was never the kernel",
+   "none_in_the_kernel": "the split-K binary that served is byte-identical to the 2026-08-18 build, sha 28570f83, both C++ closures unchanged throughout"
+  },
+  "caveats": "one paired serve not n>=2; trajectories differ (19901 vs 52304 steps, prefill_frac .105 vs .072) so arm-level accept/TPS carry ordinary drift \u2014 the prefill-independent s_per_fwd_gpu is the deciding instrument and moved most cleanly. Promotion to DEFAULT still gated on exact16 QC parity per pass-64; this supports the TIER-B SERVING ROUTE.",
+  "head": "bdca0bd50cbf5643205c87e4e3e2fe668895c364",
+  "noise_floor_check": {
+   "calibrated_floor_ms": 3.101,
+   "effect_ms": 16.23,
+   "ratio": 5.2,
+   "source": "round-6 promoted-vs-promoted run where the true value was 0"
+  },
+  "phase1_tierb": {
+   "bounds": "9/9",
+   "outcome": "PASS"
+  },
+  "phase2_gate": {
+   "outcome": "PASS",
+   "rc": 0
+  },
+  "projection_check": {
+   "held": true,
+   "lane4_projection_ms": -14.3,
+   "measured_ms": -16.23,
+   "note": "first prediction in the whole campaign ledger to come in BETTER than briefed"
+  },
+  "vs_C_prime": {
+   "accept_delta": 0.25387,
+   "accept_delta_pct": 6.53,
+   "accept_inside_10pct_variance": true,
+   "committer_null_delta_pct": -0.9,
+   "overhead_null_delta_pct": -2.29,
+   "per_request_tps_delta_pct": 18.15,
+   "per_task_s_per_fwd_gpu_pct": {
+    "12907": -10.44,
+    "13033": -12.17,
+    "13236": -14.12,
+    "13398": -12.21
+   },
+   "per_task_step_wall_pct": {
+    "12907": -6.51,
+    "13033": -7.73,
+    "13236": -10.16,
+    "13398": -8.47
+   },
+   "s_per_fwd_gpu_delta_ms": -16.23,
+   "s_per_fwd_gpu_delta_pct": -12.36,
+   "step_wall_delta_ms": -18.33589,
+   "step_wall_delta_pct": -8.54
+  },
+  "window_utc": "2026-08-19T04:25Z..05:58Z",
+  "workshape_vs_C_prime": {
+   "expected_different": 0,
+   "identical_paths": 268,
+   "steps_compared": 72408,
+   "unexpected_different": 0
+  }
  },
  "round2": {
   "arms": {

@@ -2307,3 +2307,160 @@ every refusal fail-closed, and this round's blocker is the first that is purely 
 *patching* defect rather than an *identity* or *credential* one. The identity and
 credential families now appear genuinely closed: nine resolvers answered correctly, the
 contract check passed, and the credential staged and verified without complaint.
+
+---
+---
+
+# ROUND 12 (2026-08-19 04:25Z–05:58Z) — **SPLIT-K SERVES, ENGAGEMENT VERIFIED, EYEBALL DISCHARGED, AND THE PROJECTION HOLDS**
+
+Twelve rounds, ten ARM S attempts. This one engaged.
+
+| phase | outcome |
+|---|---|
+| **1** Tier-B credential | **PASS**, 9/9, bound to `bdca0bd50` |
+| **2** gqa_pair gate | **PASS rc=0** |
+| **3** ARM S | **SERVED — 4/4 tasks, `swerc=0`, 19 901 census steps** |
+
+## R12.1 THE ENGAGEMENT OBSERVATION — leading, as asked
+
+From `fr13_fa2_qrow32_b1_production_engagement.json`, **counted at the retag**, not read
+from configuration:
+
+```
+status                = ENGAGED
+candidate_served      = True
+tier                  = B          arm = gqa_pair_splitk
+selector_sentinel     = 1179791671        num_splits = 4
+calls_observed        = 16
+tier_b_engagement.candidate_retag_calls = 16
+tier_b_engagement.layers_engaged        = 16 distinct
+   layer indices: 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63
+```
+
+Every one of the sixteen full-attention layers retagged to the split-K sentinel.
+`candidate_so_sha256 = 28570f83…`, `fallback_allowed = False`,
+`tier_b_credential_sha256 = 6b0e0161…`. **This is the observation rounds 6–11 could not
+produce, and the one round 6 fabricated from env vars.**
+
+## R12.2 Performance vs C' — the projection holds, and then some
+
+Paired on the identical exact4 set:
+
+| instrument | C' (gqa_pair) | **ARM S (split-K)** | delta |
+|---|---|---|---|
+| **`s_per_fwd_gpu`** (verifier fwd, contains FA2) | 0.131262 | **0.115035** | **−16.23 ms/step (−12.36 %)** |
+| **`step_wall_ms`** | 214.759 | **196.423** | **−18.34 ms (−8.54 %)** |
+| accept / event | 3.8855 | 4.1393 | +0.254 (+6.53 %) — inside ±10 % |
+| committer *(null)* | 20.465 | 20.279 | −0.90 % |
+| `overhead_other` *(null)* | 7.585 | 7.412 | −2.29 % |
+| per-request TPS | 24.392 | **28.819** | **+18.15 %** |
+| floor_ratio | 2.3216 | **2.1086** | −9.17 % |
+
+**Per-task, all four instances, same direction and tight:**
+
+| instance | `s_per_fwd_gpu` | `step_wall` |
+|---|---|---|
+| 12907 | **−10.44 %** | −6.51 % |
+| 13033 | **−12.17 %** | −7.73 % |
+| 13236 | **−14.12 %** | −10.16 % |
+| 13398 | **−12.21 %** | −8.47 % |
+
+**Read against my own calibrated noise floor.** Round 6's accidental
+promoted-vs-promoted run measured **+3.101 ms** on this instrument where the true value
+was 0. The effect here is **−16.23 ms — five times that floor — and it repeats on four
+independent instances with a spread of 3.7 pp.** This is not a single-task sighting; it
+is a paired multi-task result, and it is the first time in the campaign that split-K's
+offline win has been shown to transfer.
+
+Lane 4's in-serve projection was **~−14.3 ms** with the caveat "probably optimistic;
+MEASURE, DON'T BANK." Measured: **−16.23 ms.** For once in this campaign a prediction
+came in *better* than briefed — the first of the whole ledger.
+
+**Acceptance is unchanged within variance** (+6.53 %, inside the ±10 % band), which is
+what a numerics-faithful kernel should show, and consistent with the Tier-B bounds
+(B6–B8: split-K is *closer* to exact than the incumbent).
+
+**Work shape is identical.** C'-vs-ARM-S census diff over 72 408 steps:
+**268 identical counter paths, 0 expected-different, 0 unexpected.** The kernel swap
+changes timing and nothing else — 27 active nodes, 32 verify rows, 4 MTP forwards,
+1 graph replay, drafter signature `d9a4dd…6150c` on every one of 19 901 steps.
+
+## R12.3 MARK'S DEGENERATE EYEBALL — **DISCHARGED, CLEAN**
+
+On split-K's **own** traces this time, with engagement verified before reading them.
+
+| instance | turns | words | ttr | max line | 8-gram | tail-rep | non-ASCII | tools | malformed | patch | verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 12907 | 50 | 2 952 | 0.344 | 12 | 3 | 0.196 | 0 | 19 | **0** | 504 B | **resolved** |
+| 13033 | 71 | 7 804 | 0.202 | 41 | 20 | 0.289 | 0 | 25 | **0** | 1 017 B | failed |
+| 13236 | 74 | 1 947 | 0.269 | 5 | 3 | 0.000 | 0 | 24 | **0** | 819 B | **resolved** |
+| 13398 | 164 | 25 576 | 0.158 | 18 | 7 | 0.102 | 0 | 62 | **0** | 3 942 B | failed |
+
+**130 tool calls, zero malformed. Zero non-ASCII in ~38 000 words. No repetition loop,
+no gibberish, no mid-word break, no truncation.** 2/4 resolved — the same rate as the
+promoted control.
+
+Read verbatim, 13236:
+
+> The fix is complete. I removed the block in `astropy/table/table.py` that
+> automatically converted structured ndarrays to `NdarrayMixin` … Explicit
+> `NdarrayMixin` usage (e.g. `data.view(NdarrayMixin)`) still works as before.
+
+and 13033, which audits its own effect against the baseline:
+
+> the only failures are the 3 tests asserting the *old* message strings … exactly the
+> assertions the grader's test patch updates. All other failures … were confirmed
+> pre-existing environment issues (expired leap-second data, no internet) via
+> `git stash` comparison.
+
+Coherent, correct, self-auditing. **Mark's condition — attached to this lane since
+`splitk_fa2.md` §7 and undischarged through eleven rounds — is met.**
+
+## R12.4 Verdicts
+
+| lever | verdict |
+|---|---|
+| **fused draft top-k** | **PROMOTED — holds.** Served via the promoted default in every arm. |
+| **suffix pass gate** | **REFUSE.** Unchanged from round 6: integration correct, warm rate 0.1619 in band, but it misses its accept pre-registration by 10× and is net −3.21 % throughput. |
+| **split-K FA2** | **PROMOTE-ELIGIBLE — recommend PROMOTE to the tier-B serving route.** |
+
+**The split-K case, complete for the first time:**
+
+* **numerics** — 9/9 pre-registered bounds, twice re-earned at the serving HEAD;
+  deterministic in-process and cross-process; *closer to exact than the incumbent*
+  (B7 0.961, B8 0.839, B6 1 flip vs 2);
+* **engagement** — observed at the retag, 16/16 layers, not inferred;
+* **speed** — **−16.23 ms/step verifier forward (−12.36 %)**, **−18.34 ms step wall
+  (−8.54 %)**, consistent across four instances, five times my calibrated noise floor,
+  and *better* than the −14.3 ms projection;
+* **acceptance** — unchanged within variance;
+* **work shape** — 268/268 census counters identical;
+* **generations** — read, clean, 2/4 resolved, zero malformed tool calls.
+
+The honest caveats to carry into any promotion note: this is **one paired serve**, not
+n≥2; the trajectories differ (19 901 vs 52 304 steps, prefill_frac 0.105 vs 0.072), so
+the arm-level accept and TPS numbers carry ordinary trajectory drift — the
+prefill-independent `s_per_fwd_gpu` is the instrument that decides, and it is the one
+that moved most cleanly. Promotion to **default** remains gated on exact16 QC parity
+per Mark's pass-64 ruling; what this round supports is the **tier-B serving route**,
+which is exactly what the credential grants.
+
+## R12.5 The ledger, closed
+
+Ten ARM S attempts, nine distinct blockers, every one fail-closed:
+
+| # | site | class |
+|---|---|---|
+| 2.1 / 17 / 23 / 24 | four arm→identity resolvers | wrong-arm identity |
+| 18 / 25 | two installers | tier-B omitted from a disjunction |
+| 19 | tier-A attestation on a tier-B path | precondition |
+| 20 | `require_exact4` vs single-instance arming | contradiction (ruled) |
+| 21 | quotes in a comment | boot-script text assembly |
+| 22 | credential path host-vs-container | staging |
+
+**Not one of them was in the kernel.** The split-K binary that served today is
+byte-identical to the one built on 2026-08-18 — sha `28570f83…`, both C++ closures
+unchanged throughout. Every blocker was in the plumbing that decides *which* kernel is
+allowed to run and *how* it is attested. That is the campaign's closing lesson, and it
+is worth more than the −16 ms: **the hard part of promoting a kernel was never the
+kernel.**
