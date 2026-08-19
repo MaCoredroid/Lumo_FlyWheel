@@ -1019,6 +1019,22 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
     kernel_module.fixed32_conv_col0_pregather_counters = (
         lambda: copy.deepcopy(pregather_counters)
     )
+    # The flush boundary now also drains the per-position acceptance ladder
+    # into its own sidecar. The stub answers ABSENT -- what an unpreseeded
+    # runtime must report -- never a ladder of zeros, which would read as a
+    # measured zero.
+    kernel_module.fr13_fixed32_accept_ladder_snapshot = lambda: {
+        "schema": "fr13.fixed32.accept_ladder.v1",
+        "enabled": False,
+        "flag": "FR13_FIXED32_ACCEPT_LADDER",
+        "slots": 16,
+        "ladder": None,
+        "rows": None,
+        "accepted_tokens": None,
+        "overflow_rows": None,
+        "overflow_tokens": None,
+        "committer_states": 0,
+    }
     package = ModuleType("lumo_flywheel_serving")
     package.__path__ = []
     monkeypatch.setitem(sys.modules, "lumo_flywheel_serving", package)
@@ -1078,8 +1094,25 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
     }
     namespace["_fr13_f32_flush_write_boundary"](request, counters)
 
-    assert len(writes) == 1
+    # Two artifacts now: the boundary snapshot and the acceptance-ladder
+    # sidecar beside it. The ladder is a SEPARATE file on purpose -- the
+    # snapshot has an exact-key contract in both run_swe_bench_q36_a and
+    # fr13_floor_gate, so adding a required key would have made every BANKED
+    # snapshot unreadable.
+    assert len(writes) == 2
     snapshot_path, body = writes[0]
+    ladder_path, ladder_body = writes[1]
+    assert ladder_path == Path(f"{base_path}.7.accept_ladder.json")
+    ladder = json.loads(ladder_body)
+    assert ladder["schema"] == "fr13-fixed32-accept-ladder-sidecar-v1"
+    assert ladder["generation"] == 7
+    assert ladder["boundary_snapshot"] == Path(f"{base_path}.7.json").name
+    # the stub runtime preseeded nothing, so the ladder must report ABSENT
+    assert ladder["accept_ladder"]["enabled"] is False
+    assert ladder["accept_ladder"]["ladder"] is None
+    assert ladder["accept_ladder"]["schema"] == "fr13.fixed32.accept_ladder.v1"
+    # ...and the boundary snapshot itself is untouched by the instrument
+    assert "accept_ladder" not in json.loads(body)
     assert snapshot_path == Path(f"{base_path}.7.json")
     snapshot_path.write_text(body, encoding="ascii")
     snapshot = json.loads(body)

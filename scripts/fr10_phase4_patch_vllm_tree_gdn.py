@@ -40182,6 +40182,17 @@ def _fr13_f32_flush_write_boundary(request, counters):
         fixed32_committer_counters as commit_counters,
         fixed32_conv_col0_pregather_counters as pregather_counters,
     )
+    # PER-POSITION ACCEPTANCE LADDER. Drained here and nowhere else: this is
+    # the flush, which has already synchronized CUDA exactly once, so the
+    # host reads cost nothing measurable and the step path keeps its zero
+    # readbacks. Emitting from fixed32_committer_counters() would have been
+    # cheaper to write and wrong -- that function also runs per step inside
+    # _fr13_fixed32_device_commit_route, so it would have put a device-to-host
+    # sync on the path whose wall time is the thing being measured.
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        fr13_fixed32_accept_ladder_snapshot as accept_ladder_snapshot,
+    )
+    accept_ladder = accept_ladder_snapshot()
     batch_histogram = {str(batch): 0 for batch in (1, 2, 3, 4)}
     for event in events:
         batch_histogram[str(int(event["batch_size"]))] += 1
@@ -40306,6 +40317,39 @@ def _fr13_f32_flush_write_boundary(request, counters):
         boundary_path,
         _fr13_f32_flush_json.dumps(
             snapshot, sort_keys=True, separators=(",", ":")
+        ) + "\n",
+    )
+    # The acceptance ladder rides in its OWN artifact beside the boundary
+    # snapshot, generation-numbered the same way. It is deliberately NOT a key
+    # in the snapshot: that payload has an exact-key contract enforced by both
+    # run_swe_bench_q36_a and fr13_floor_gate, so a new required key would make
+    # every BANKED boundary snapshot unreadable -- evidence already on disk
+    # would start failing validation because of an instrument added afterwards.
+    # A sidecar adds a file instead of changing a contract, and readers that
+    # do not know about it are unaffected.
+    ladder_path = _Fr13F32FlushPath(
+        str(_FR13_FIXED32_FLUSH_BOUNDARY_PATH)
+        + "." + str(request["generation"]) + ".accept_ladder.json"
+    )
+    if ladder_path.exists():
+        raise RuntimeError(
+            "fixed32 immutable accept-ladder sidecar already exists: "
+            + str(ladder_path)
+        )
+    _fr13_f32_flush_atomic_text(
+        ladder_path,
+        _fr13_f32_flush_json.dumps(
+            {
+                "schema": "fr13-fixed32-accept-ladder-sidecar-v1",
+                "mode": _FR13_FIXED32_FLUSH_MODE,
+                "producer_pid": _FR13_FIXED32_FLUSH_PID,
+                "generation": request["generation"],
+                "nonce": request["nonce"],
+                "boundary_snapshot": boundary_path.name,
+                "accept_ladder": accept_ladder,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
         ) + "\n",
     )
 

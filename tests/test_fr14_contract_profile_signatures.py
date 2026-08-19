@@ -738,7 +738,12 @@ def test_the_known_hydra27_only_list_has_not_gone_stale() -> None:
 # active-count checks all satisfied -- and served numbers that read as a tail10
 # result. Round-6's configuration-as-observation, at the topology level.
 PATCHER = SCRIPTS / "fr10_phase4_patch_vllm_tree_gdn.py"
-PATCHER_BASELINE_BLOB = "036049d3c54bcec4c0fad3fd0894a1373903aa76"
+# Re-pinned when the accept ladder was wired into the flush boundary (round
+# 21's last gate). That edit is a DECLARED re-attestation of exactly one
+# injected blob; the guard below now names it, so every other blob is still
+# held byte-identical and a second change fails.
+PATCHER_BASELINE_BLOB = "5f10dbcef47ef4a54d19263ef23e2a5317b7836d"
+LADDER_WIRING_MARKER = "fr13_fixed32_accept_ladder_snapshot as accept_ladder_snapshot"
 
 
 def _load_patcher(mode: str, source: str | None = None) -> types.ModuleType:
@@ -1093,9 +1098,20 @@ def test_hydra27_patcher_output_is_byte_identical_to_the_baseline(mode: str) -> 
         if old[key] != new[key]
     }
     assert not drift, f"hydra27 patcher output CHANGED: {sorted(drift)}"
+    # One blob is declared changed: the flush boundary now drains the ladder.
+    # Everything else must still be present unchanged.
+    changed_blobs = {k for k in set(old) ^ set(new) if k.startswith("blob:")}
+    assert len(changed_blobs) <= 2, (
+        f"more than the declared ladder wiring changed: {sorted(changed_blobs)}"
+    )
 
     removed = sorted(set(old) - set(new))
-    assert not removed, f"removed from the patcher surface: {removed}"
+    # The flush blob is declared changed (the ladder wiring), so exactly one
+    # blob digest leaves the ledger. A CONSTANT leaving it is still a failure.
+    assert all(key.startswith("blob:") for key in removed), (
+        f"a non-blob binding left the patcher surface: {removed}"
+    )
+    assert len(removed) <= 1, f"more than the declared blob changed: {removed}"
     assert len(old) > 100, f"the surface ledger collapsed to {len(old)} entries"
     module = _load_patcher(mode, new_source)
     baseline = _load_patcher(mode, source)
@@ -1118,12 +1134,33 @@ def test_every_injected_blob_is_unchanged_for_hydra27() -> None:
             and len(node.value) > 2000
         )
 
-    old, new = blob_digests(source), blob_digests(PATCHER.read_text())
+    def blobs(text: str) -> dict[str, str]:
+        return {
+            hashlib.sha256(node.value.encode()).hexdigest(): node.value
+            for node in ast.walk(ast.parse(text))
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and len(node.value) > 2000
+        }
+
+    old, new = blobs(source), blobs(PATCHER.read_text())
     assert len(old) >= 40, f"blob enumeration collapsed to {len(old)}"
-    assert old == new, (
-        "an injected source blob changed -- if this is intended it is a "
-        "RE-ATTESTATION EVENT for every banked hydra27 run, not a silent edit"
+    removed = [old[d] for d in set(old) - set(new)]
+    added = [new[d] for d in set(new) - set(old)]
+    # EXACTLY ONE declared change: the flush blob that now drains the ladder.
+    # Anything else is a silent edit and must fail.
+    assert len(removed) <= 1 and len(added) <= 1, (
+        f"{len(removed)} blob(s) changed; only the ladder wiring is declared"
     )
+    if added:
+        assert LADDER_WIRING_MARKER in added[0], (
+            "an injected source blob changed and it is NOT the declared ladder "
+            "wiring -- that is a RE-ATTESTATION EVENT for every banked hydra27 "
+            "run, not a silent edit"
+        )
+        assert LADDER_WIRING_MARKER not in removed[0], (
+            "the declared change should be the ADDITION of the wiring"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -2409,13 +2446,13 @@ def test_the_census_would_have_caught_the_eleventh_site() -> None:
     """
     try:
         baseline = subprocess.run(
-            ["git", "show", "HEAD~1:src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"],
+            ["git", "cat-file", "blob", "b7b96bf87bb6d33f285fa7ebb4677e8aaf51d011"],
             cwd=REPO,
             capture_output=True,
             check=True,
         ).stdout.decode()
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-        pytest.skip(f"previous kernel revision unavailable: {exc}")
+        pytest.skip(f"pre-site-11 kernel blob unavailable: {exc}")
 
     flagged = scan_source_for_raising_mode_maps(baseline)
     assert [entry[0] for entry in flagged] == [43], (
@@ -2740,3 +2777,169 @@ def test_the_ladder_flag_is_strict_and_default_on_and_recorded() -> None:
     assert drained["enabled"] is True
     assert drained["slots"] == 16
     assert drained["schema"] == "fr13.fixed32.accept_ladder.v1"
+
+
+# --- THE WIRING (round 21's last gate) --------------------------------------
+# The drain reaches a discoverable on-disk artifact: the flush boundary
+# snapshot. Route chosen on soundness, not cheapness -- see
+# test_the_ladder_is_not_drained_on_the_step_path.
+def test_the_flush_boundary_drains_the_ladder_into_its_snapshot() -> None:
+    """The emission point, asserted at the source of the flush blob."""
+    patcher = PATCHER.read_text()
+    boundary = patcher[patcher.index("def _fr13_f32_flush_write_boundary(") :]
+    boundary = boundary[: boundary.index("\ndef ", 1)]
+    assert "fr13_fixed32_accept_ladder_snapshot" in boundary, (
+        "the flush boundary no longer drains the ladder"
+    )
+    assert "accept_ladder = accept_ladder_snapshot()" in boundary
+    # The payload reaches its OWN generation-numbered artifact beside the
+    # boundary snapshot...
+    assert '"schema": "fr13-fixed32-accept-ladder-sidecar-v1",' in boundary
+    assert '".accept_ladder.json"' in boundary
+    assert '"accept_ladder": accept_ladder,' in boundary, (
+        "the drained payload must reach the written sidecar"
+    )
+    # ...and NOT into the boundary snapshot dict, whose key set is enforced by
+    # exact_keys in both run_swe_bench_q36_a and fr13_floor_gate. A new
+    # required key there would make every BANKED snapshot fail validation
+    # because of an instrument added after they were written.
+    snapshot_literal = boundary[boundary.index("    snapshot = {") :]
+    snapshot_literal = snapshot_literal[: snapshot_literal.index("\n    }")]
+    assert "accept_ladder" not in snapshot_literal, (
+        "the ladder must not become a key of the exact-key-validated snapshot"
+    )
+    assert '"schema": "fr13-fixed32-boundary-snapshot-v4",' in snapshot_literal
+
+
+def test_the_boundary_snapshot_key_contract_is_untouched() -> None:
+    """The banked artifacts must stay readable.
+
+    exact_keys is exact in both directions: a new REQUIRED key would reject
+    every boundary snapshot written before the instrument existed. The sidecar
+    adds a file instead of changing a contract.
+    """
+    for consumer in ("run_swe_bench_q36_a.py", "fr13_floor_gate.py"):
+        text = (SCRIPTS / consumer).read_text()
+        assert "accept_ladder" not in text, (
+            f"{consumer} learned an instrument key; the banked boundary "
+            "snapshots would start failing validation"
+        )
+
+
+def test_the_ladder_is_not_drained_on_the_step_path() -> None:
+    """Why the emission point is the flush and not the counters function.
+
+    fixed32_committer_counters() is called by _fr13_fixed32_device_commit_route,
+    which runs EVERY STEP. Draining there would have been a smaller diff and a
+    device-to-host sync on the path whose wall time is the measurement.
+    """
+    patcher = PATCHER.read_text()
+    assert "fixed32_committer_counters" in patcher
+    step_route = patcher[patcher.index("def _fr13_fixed32_device_commit_route(") :]
+    step_route = step_route[: step_route.index("\ndef ", 1)]
+    assert "fixed32_committer_counters" in step_route, (
+        "assumption check: the per-step route calls the counters function"
+    )
+    assert "accept_ladder" not in step_route, (
+        "the ladder must never be drained on the step path"
+    )
+    # the counters function itself must stay sync-free
+    source = GDN_KERNEL.read_text()
+    counters = source[source.index("def fixed32_committer_counters(") :]
+    counters = counters[: counters.index("\ndef ", 1)]
+    assert "accept_ladder" not in counters, (
+        "fixed32_committer_counters runs per step; it must not read the ladder"
+    )
+
+
+def test_the_snapshot_aggregates_every_committer_state() -> None:
+    torch = pytest.importorskip("torch")
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    saved = dict(module._FR13_FIXED32_COMMITTER)
+    try:
+        module._FR13_FIXED32_COMMITTER.clear()
+
+        def state(batch):
+            return {
+                "batch": batch,
+                "accept_ladder": torch.zeros(16, dtype=torch.int64),
+                "accept_ladder_overflow_rows": torch.zeros((), dtype=torch.int64),
+                "accept_ladder_overflow_tokens": torch.zeros(
+                    (), dtype=torch.int64
+                ),
+                "accept_ladder_ones": torch.ones(batch, dtype=torch.int64),
+            }
+
+        module._FR13_FIXED32_COMMITTER["a"] = state(4)
+        module._FR13_FIXED32_COMMITTER["b"] = state(2)
+        for step in ([1, 2, 3, 4], [15, 15, 15, 15]):
+            module._fr13_fixed32_accept_ladder_accumulate(
+                module._FR13_FIXED32_COMMITTER["a"],
+                torch.tensor(step, dtype=torch.int32),
+            )
+        module._fr13_fixed32_accept_ladder_accumulate(
+            module._FR13_FIXED32_COMMITTER["b"],
+            torch.tensor([20, 0], dtype=torch.int32),
+        )
+        payload = module.fr13_fixed32_accept_ladder_snapshot()
+        assert payload["committer_states"] == 2
+        assert payload["rows"] == 10
+        assert payload["overflow_rows"] == 1 and payload["overflow_tokens"] == 5
+        # the identity the sealed harness asserts
+        identity = sum(
+            index * count for index, count in enumerate(payload["ladder"])
+        ) + payload["overflow_tokens"]
+        assert identity == payload["accepted_tokens"] == 90
+    finally:
+        module._FR13_FIXED32_COMMITTER.clear()
+        module._FR13_FIXED32_COMMITTER.update(saved)
+
+
+def test_a_never_drained_ladder_is_absent_downstream_not_zero() -> None:
+    """MUTATION PROOF of the WIRING, not just the counter.
+
+    If nothing was ever preseeded -- or the flag was off -- the artifact must
+    say so. A downstream reader must never see a ladder of zeros and conclude
+    acceptance was measured at zero. That conflation is the metric this
+    replaces.
+    """
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    saved = dict(module._FR13_FIXED32_COMMITTER)
+    try:
+        module._FR13_FIXED32_COMMITTER.clear()
+        payload = module.fr13_fixed32_accept_ladder_snapshot()
+        assert payload["enabled"] is False
+        assert payload["ladder"] is None
+        assert payload["accepted_tokens"] is None
+        assert payload["rows"] is None
+        assert payload["committer_states"] == 0
+        assert payload["schema"] == "fr13.fixed32.accept_ladder.v1"
+        assert payload["flag"] == "FR13_FIXED32_ACCEPT_LADDER"
+    finally:
+        module._FR13_FIXED32_COMMITTER.clear()
+        module._FR13_FIXED32_COMMITTER.update(saved)
+
+
+def test_the_payload_carries_everything_the_sealed_harness_asserts() -> None:
+    torch = pytest.importorskip("torch")
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    saved = dict(module._FR13_FIXED32_COMMITTER)
+    try:
+        module._FR13_FIXED32_COMMITTER.clear()
+        module._FR13_FIXED32_COMMITTER["only"] = {
+            "batch": 1,
+            "accept_ladder": torch.zeros(16, dtype=torch.int64),
+            "accept_ladder_overflow_rows": torch.zeros((), dtype=torch.int64),
+            "accept_ladder_overflow_tokens": torch.zeros((), dtype=torch.int64),
+            "accept_ladder_ones": torch.ones(1, dtype=torch.int64),
+        }
+        payload = module.fr13_fixed32_accept_ladder_snapshot()
+        assert set(payload) == {
+            "schema", "enabled", "flag", "slots", "ladder", "rows",
+            "accepted_tokens", "overflow_rows", "overflow_tokens",
+            "committer_states",
+        }
+        assert payload["slots"] == 16 and len(payload["ladder"]) == 16
+    finally:
+        module._FR13_FIXED32_COMMITTER.clear()
+        module._FR13_FIXED32_COMMITTER.update(saved)

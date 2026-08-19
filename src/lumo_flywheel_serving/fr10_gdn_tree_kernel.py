@@ -48,6 +48,68 @@ def _fr13_fixed32_accept_ladder_enabled() -> bool:
     return raw == "1"
 
 
+def fr13_fixed32_accept_ladder_snapshot() -> dict[str, object]:
+    """Aggregate the ladder across every committer state. FLUSH ONLY.
+
+    This reads device counters to the host, so it must never be called on the
+    step path -- the committed route does zero host readbacks over 6,308
+    sampled steps and that is a property worth keeping. The flush already
+    synchronizes CUDA exactly once before writing its boundary snapshot, which
+    is where this is called from.
+
+    ABSENCE IS A VALUE HERE. When no committer state carries a ladder -- the
+    flag was off, or nothing was preseeded -- this returns enabled=False with
+    ladder=None. It never returns a ladder of zeros, because "acceptance was
+    zero" and "the instrument was not running" are different claims and the
+    metric this replaces conflated them.
+    """
+    states = [
+        state
+        for state in _FR13_FIXED32_COMMITTER.values()
+        if isinstance(state, dict) and state.get("accept_ladder") is not None
+    ]
+    if not states:
+        return {
+            "schema": "fr13.fixed32.accept_ladder.v1",
+            "enabled": False,
+            "flag": _FR13_FIXED32_ACCEPT_LADDER_FLAG,
+            "slots": _FR13_FIXED32_ACCEPT_LADDER_SLOTS,
+            "ladder": None,
+            "rows": None,
+            "accepted_tokens": None,
+            "overflow_rows": None,
+            "overflow_tokens": None,
+            "committer_states": 0,
+        }
+    ladder = [0] * _FR13_FIXED32_ACCEPT_LADDER_SLOTS
+    overflow_rows = 0
+    overflow_tokens = 0
+    for state in states:
+        drained = fr13_fixed32_accept_ladder_drain(state)
+        if drained is None:  # pragma: no cover -- filtered above
+            continue
+        for index, count in enumerate(drained["ladder"]):
+            ladder[index] += count
+        overflow_rows += drained["overflow_rows"]
+        overflow_tokens += drained["overflow_tokens"]
+    tokens = sum(index * count for index, count in enumerate(ladder))
+    tokens += overflow_tokens
+    return {
+        "schema": "fr13.fixed32.accept_ladder.v1",
+        "enabled": True,
+        "flag": _FR13_FIXED32_ACCEPT_LADDER_FLAG,
+        "slots": _FR13_FIXED32_ACCEPT_LADDER_SLOTS,
+        "ladder": ladder,
+        "rows": sum(ladder),
+        # The identity the sealed harness asserts against the aggregate
+        # accepted-token delta: sum(i * ladder[i]) + overflow_tokens.
+        "accepted_tokens": tokens,
+        "overflow_rows": overflow_rows,
+        "overflow_tokens": overflow_tokens,
+        "committer_states": len(states),
+    }
+
+
 def fr13_fixed32_accept_ladder_drain(state) -> dict[str, object] | None:
     """Read the ladder to the host ONCE. Never call this on the step path.
 
