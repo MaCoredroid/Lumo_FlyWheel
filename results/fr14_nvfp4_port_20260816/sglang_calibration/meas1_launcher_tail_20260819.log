@@ -1,0 +1,3 @@
+[fr13] B1 arm unnamed; serving the PROMOTED DEFAULT FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk (tier-b credential 255267fc18fa4eb5209e381133d53a48410b3d362c6bc573065a9dd5be87e6d5)
+[fr13] gqa_pair promoted default STANDS DOWN: the split-K tier-b default is armed (split-K supersedes; name gqa_pair explicitly to opt out)
+FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance

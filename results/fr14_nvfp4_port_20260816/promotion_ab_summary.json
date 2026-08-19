@@ -66,6 +66,46 @@
  ],
  "commits_between_boot_and_drain": 0,
  "head": "4a59ca2b46ec76a9f8c0690a954e03c737d2970b",
+ "ladder_harness_sealed_pre_run": {
+  "covers_conditions": "2 (self-proof) and 4 (mutation/zero-case) enforced by the harness, not by judgement at reporting time; condition 1 (capture-safety) is covered by the same self-proof, since dropped or double-counted accumulation under graph replay would diverge the 16-slot sum from the aggregate delta",
+  "path": "results/fr14_nvfp4_port_20260816/promotion_ab_ladder.py",
+  "sealed": "written and tested BEFORE the counter landed, so the admissibility rule cannot be tuned to the result",
+  "tested_cases": {
+   "all-zero + aggregate NON-zero": "exit 1, 'INSTRUMENT ABSENT OR UNWIRED -- NOT a measured zero' (the round-6 trap)",
+   "healthy ladder": "exit 0, admissible",
+   "ladder sum != aggregate accept delta": "exit 1, inadmissible",
+   "real H27n artifact (no ladder)": "exit 1, instrument-blocked"
+  }
+ },
+ "measurement_1_attempt": {
+  "boot_head": "442cf69e1",
+  "boot_verdict": "REFUSED by the VEHICLE, not by the promoted stack",
+  "contention_judgement": "short-lived containers churned on our own image during the window; checked before treating it as contention -- no device requests, GPU util 0%, no compute apps (CPU-only image writes by another lane). Not GPU contention. The boot script's docker-empty assertion was NOT bypassed; waited for a stable-empty window and fired into it.",
+  "gpu_cost": "no model load reached; three short launcher attempts",
+  "positive_result": {
+   "f1_observed": "[fr13] B1 arm unnamed; serving the PROMOTED DEFAULT FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk (tier-b credential 255267fc18fa4eb5...)",
+   "f2_observed": "[fr13] gqa_pair promoted default STANDS DOWN: the split-K tier-b default is armed (split-K supersedes)",
+   "significance": "the promoted split-K default armed itself for the FIRST TIME EVER; before F1 it had never once served",
+   "what": "lane 4's F1/F2 fix is now proven by a real boot, not only by call (197 green)"
+  },
+  "site_12": {
+   "blocked_by_vehicle_not_stack": "measurement 1's env satisfies full_vocab exactly as production defines it (ROOT=0, K=0, FR13_NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0); on the production launcher this boot passes that gate",
+   "class": "a launcher FORK that is SELECTIVELY stale -- current on last night's F1/F2, stale on the earlier vocab-profile generalization. Every prior site was one artifact failing to know something; this is one artifact knowing the NEW thing and not the OLD one.",
+   "corroboration": "round 12 -- the arm that produced the entire split-K promotion evidence -- ran ROOT=0/K=0 full_vocab, identical to measurement 1, and served. Split-K has ONLY ever served in the K0 full-vocab shape the fork now calls illegal.",
+   "fix": "one-line conversion mirroring production; NOT made here (tracked source, another lane's file, fail-closed per brief); dispatched to lane 4 at pass 113",
+   "mechanism_present_conversion_missing": "the fork already contains _fr13_assert_draft_vocab_profile at 3 call sites; the B1 selector site simply never got converted",
+   "production_equivalent": "scripts/fr13_launch_forked_fa2_tree_server.sh:2329 calls _fr13_assert_draft_vocab_profile, so full_vocab is legal; the fork hard-codes ROOT==1 && K==65536 && BLOCKS==fr13_dvk_subset_blocks.json, making full_vocab unrepresentable",
+   "raise_site": "scripts/fr14_leg3_launch_nomiddleware.sh:2188",
+   "refusal": "FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance"
+  },
+  "staging_defects_caught": {
+   "pre_f1_staged_launcher": "the run dir's launch_nomiddleware.sh was staged 18:18Z, F1/F2 landed 18:52Z -- no mint block, no F2 arbitration; booting it would have silently reproduced the pass-106 exit 2 and measured nothing. 'A staged copy is a fork with a birthday.' Stale copy retained as launch_nomiddleware.PRE_F1.stale.sh; shas in sglang_calibration/meas1_launcher_provenance.md",
+   "shim": "copying the tracked launcher into the run dir broke sibling resolution (source $SCRIPT_DIR/fr13_required_tree_flags.sh); the run dir now holds a shim that execs the TRACKED launcher IN PLACE, as ablation_a_leg3_boot.sh has always invoked it -- the vehicle is the tracked file at boot HEAD, never a copy",
+   "tag_unbound": "the staged boot sources fr13_fixed32_floor_timers_seq.sh under set -u without setting TAG -- same defect class this campaign's own arm hit early on. run_variant is stubbed to a no-op first, so TAG's value is irrelevant; it only has to exist. Passed TAG=oursrandom in env rather than editing the staged script."
+  },
+  "status": "blocked pending the one-line fork conversion; refire on landing, same shim + TAG setup, binding at whatever HEAD it finds",
+  "window_utc": "2026-08-19T19:19Z..19:41Z"
+ },
  "promotes_anything": false,
  "recommendations": {
   "fused_draft_topk": "MORE EVIDENCE \u2014 needs one paired dfwd-span serve, top-k 0 vs 1",

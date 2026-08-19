@@ -3423,3 +3423,94 @@ unmeasured, one boot away.
 Standing verdicts unchanged: **fused draft top-k PROMOTED** (holds), **suffix pass
 gate REFUSE**, **split-K** recommended on round 12's evidence and since promoted to
 production default.
+
+# MEASUREMENT 1 (2026-08-19 19:19Z–19:41Z) — fired, refused by its VEHICLE; site 12
+
+## BOOT VERDICT: REFUSED — and the promoted default armed for the first time ever
+
+Fired at HEAD `442cf69e1` on the coordinator's reordered chain (round 21 gated behind
+the hydra31 lane's drain wiring, so measurement 1 went first). The boot refused, but
+**not before proving lane 4's F1/F2 fix works on a real boot** — it had only been
+verified by call (197 green) until now:
+
+```
+[fr13] B1 arm unnamed; serving the PROMOTED DEFAULT
+       FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk
+       (tier-b credential 255267fc18fa4eb5...)
+[fr13] gqa_pair promoted default STANDS DOWN: the split-K tier-b default is armed
+       (split-K supersedes; name gqa_pair explicitly to opt out)
+```
+
+The default minted its own provenance and armed itself; F2 arbitrated between the two
+promoted defaults. Then, one gate later:
+
+```
+FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance
+```
+
+## SITE 12 — a launcher fork that is SELECTIVELY stale
+
+That refusal text exists in exactly one file in the repo, and it is not the production
+launcher. The two have diverged at the same gate:
+
+| | production `fr13_launch_forked_fa2_tree_server.sh:2329` | fork `fr14_leg3_launch_nomiddleware.sh:2188` |
+|---|---|---|
+| vocab check | calls `_fr13_assert_draft_vocab_profile "$..._QUALIFICATION_PROFILE"` | **hard-codes** `ROOT==1 && K==65536 && BLOCKS==fr13_dvk_subset_blocks.json` |
+| `full_vocab` | **legal** | **unrepresentable** |
+| message | `requires Hydra27 B1 ...` | `requires Hydra27 K64/root1 B1 ...` |
+
+The fork **already contains** `_fr13_assert_draft_vocab_profile` (3 call sites) — the
+B1 selector site simply never got converted. So the mechanism is present and the
+conversion is missing at one site.
+
+The fork also **did** receive F1/F2, landed hours ago. It is therefore *selectively*
+stale: current on last night's fix, stale on the earlier vocab-profile generalization.
+That is the new class — every prior site was one artifact failing to know something;
+this is one artifact knowing the NEW thing and not the OLD one.
+
+Measurement 1's env satisfies `full_vocab` exactly as production defines it —
+`FR13_DRAFT_VOCAB_ROOT=0`, `FR13_DRAFT_VOCAB_K=0`,
+`FR13_NEEDS_ALLOW=FR13_DRAFT_VOCAB_K=0`. **On the production launcher this boot passes
+that gate.** Measurement 1 is blocked by its vehicle, not by the promoted stack.
+
+CORROBORATION: round 12 — the arm that produced the entire split-K promotion evidence —
+ran `FR13_DRAFT_VOCAB_ROOT=0 FR13_DRAFT_VOCAB_K=0` with `full_vocab`, identical to
+measurement 1, and served. Split-K has ONLY ever served in the K0 full-vocab shape the
+fork now calls illegal.
+
+Fix is a one-line conversion mirroring production. NOT made here — tracked source,
+another lane's file, fail-closed per the brief. Dispatched to lane 4 (pass 113).
+
+## TWO STAGING DEFECTS CAUGHT BEFORE THEY BECAME NUMBERS
+
+**1. The staged launcher copy was PRE-F1.** `$OUT/launch_nomiddleware.sh` was staged
+18:18Z; F1/F2 landed 18:52Z. The staged copy had neither the mint block nor the F2
+arbitration, so booting it would have silently reproduced the pass-106 exit 2 and
+measured nothing. A staged copy is a fork with a birthday. Provenance and both shas
+banked in `sglang_calibration/meas1_launcher_provenance.md`; the stale copy is retained
+as `launch_nomiddleware.PRE_F1.stale.sh`.
+
+Copying the tracked launcher into the run dir then broke its sibling resolution
+(`source "$SCRIPT_DIR/fr13_required_tree_flags.sh"` — only `scripts/` has that file), so
+the run dir now holds a SHIM that execs the tracked launcher IN PLACE, which is how
+`ablation_a_leg3_boot.sh` has always invoked it. The vehicle is the tracked file at boot
+HEAD, never a copy.
+
+**2. `TAG: unbound variable`.** The staged boot sources
+`fr13_fixed32_floor_timers_seq.sh` under `set -u` without setting `TAG` — the same
+defect class this campaign's own arm hit early on. `run_variant` is stubbed to a no-op
+before the source, so TAG's VALUE is irrelevant; it only has to exist. Passed
+`TAG=oursrandom` in env rather than editing the staged script.
+
+## CONTENTION JUDGEMENT
+
+Short-lived containers were churning on our own image during the window. Checked before
+treating it as contention: **no device requests, GPU util 0%, no compute apps** — CPU-only
+containers writing a module into the image (another lane). Not GPU contention, so the
+measurement's validity was never at risk. The boot script's docker-empty assertion was
+NOT bypassed; waited for a stable-empty window and fired into it.
+
+## STATUS
+
+Measurement 1 blocked pending the one-line fork conversion. Round 21 gated on drain
+wiring. Exact16 behind round 21. H27n baseline unchanged. Standing verdicts unchanged.
