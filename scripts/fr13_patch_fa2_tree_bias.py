@@ -6060,6 +6060,19 @@ def _fr13_fa2_qrow32_b1_digest(env_name, label, *, length=64):
 _FR13_FA2_QROW32_B1_TIER_B_ARMS = ("gqa_pair_splitk",)
 _FR13_FA2_QROW32_B1_TIER_B_SCHEMA = "fr13.fixed32.fa2_tierb_qualification.v1"
 _FR13_FA2_QROW32_B1_TIER_B_STATE = {}
+# WHAT ACTUALLY RAN, as opposed to what the environment asked for.
+#
+# Round 6's live-A/B record said "candidate output served (tier-b)" and
+# tier_b_serving: true. Both were computed from environment variables. The
+# serving hook had never been installed -- the launcher's elif chain passed the
+# live-A/B flag and not the production one -- so the candidate served nothing,
+# and the artifact asserted a serve that did not happen. The campaign has
+# already paid for this once (the draft-vocabulary identity, which two
+# hardcodings agreed on while both disagreed with reality). An artifact must
+# report what ran, so engagement is now COUNTED at the retag and the record
+# reads the counter.
+_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT = {"calls": 0, "layers": set(),
+                                         "graph_ids": set()}
 
 
 def _fr13_fa2_qrow32_b1_tier_b_credential(arm, identity):
@@ -6956,12 +6969,28 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "candidate_dispatch": config["candidate_dispatch"],
         "tier": "B" if tier_b else "A",
         "tier_b_characterization": tierb_record,
-        "tier_b_serving": (
-            tier_b and _fr13_fa2_qrow32_b1_tier_b_arm() == arm
+        # ARMED is what the environment asked for; ENGAGED is what the serving
+        # hook actually did. They are reported separately and on purpose,
+        # because round 6 had the first without the second and the record said
+        # only "served".
+        "tier_b_serve_armed": tier_b and _fr13_fa2_qrow32_b1_tier_b_arm() == arm,
+        "tier_b_engagement": {
+            "candidate_retag_calls": int(
+                _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["calls"]
+            ),
+            "layers_engaged": sorted(
+                _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["layers"]
+            ),
+            "graph_ids": sorted(
+                _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["graph_ids"]
+            ),
+        },
+        "tier_b_serving": bool(
+            tier_b and _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["calls"] > 0
         ),
         "served_return": (
             "candidate output served (tier-b)"
-            if tier_b and _fr13_fa2_qrow32_b1_tier_b_arm() == arm
+            if tier_b and _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["calls"] > 0
             else "qrow16 captured graph output unchanged"
         ),
         "fallback_allowed": False, "performance_measurement": False,
@@ -6970,6 +6999,20 @@ def _fr13_fa2_qrow32_b1_live_replay(graph_id, runtime_mode, batch_size):
         "FR13_FA2_QROW32_B1_LIVE_AB_JSON",
         "/logs/fr13_fa2_qrow32_b1_live_paged_ab.json", record,
     )
+    if tier_b and _fr13_fa2_qrow32_b1_tier_b_arm() == arm and (
+        _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["calls"] == 0
+    ):
+        # Armed to serve, and the serving hook never ran. Round 6 spent a
+        # 395-second task and a whole A/B arm on exactly this state and
+        # reported it as a successful serve. It is a refusal, not a footnote:
+        # every downstream number would describe the incumbent while naming
+        # the candidate.
+        raise RuntimeError(
+            "FR13 qrow32 B1 tier-b serve is ARMED but never ENGAGED: the "
+            "candidate retag ran 0 times, so the serving hook is not "
+            "installed. Pass --fixed32-query-tile32-b1-tier-b-serve to the "
+            "patcher; a tier-b live arm alone is shadow-only."
+        )
     if not passed:
         if tier_b:
             raise RuntimeError(
@@ -7095,6 +7138,13 @@ def _fr13_fa2_qrow32_b1_production_begin(
     if layer_name not in _FR13_FA2_QROW32_B1_TARGET_LAYERS:
         raise RuntimeError("FR13 qrow32 B1 production layer identity drifted")
     config = _FR13_FA2_QROW32_B1_ARMS[arm]
+    if tier == "B":
+        _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["calls"] += 1
+        _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["layers"].add(layer_name)
+        if capturing:
+            _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["graph_ids"].add(
+                int(context.get("graph_id", 0))
+            )
     return {
         "arm": arm, "tier": tier, "tier_b_credential": tier_b_credential,
         "candidate_served": True, "profile_capture_bypass": False,
@@ -8948,6 +8998,7 @@ def _patch_tree_attn(
     fixed32_query_tile32_live_ab: bool = False,
     fixed32_query_tile32_b1_live_ab: bool = False,
     fixed32_query_tile32_b1_production: bool = False,
+    fixed32_query_tile32_b1_tier_b_serve: bool = False,
     fixed32_query_tile32_b4_production: bool = False,
     fixed32_query_tile16_production: bool = False,
     dfwd_unified_bm8_production: bool = False,
@@ -9439,7 +9490,18 @@ def _fr13_sr_causal_flag():
             )
         text = text.replace(live_call_anchor, live_call_replacement, 1)
         changed = True
-    if fixed32_query_tile32_b1_production and (
+    # THE 18th SITE. This install used to be gated on the PRODUCTION flag
+    # alone. Round 6 armed a tier-b serve, which the launcher spells as a LIVE
+    # arm, so the launcher's elif chain passed --fixed32-query-tile32-b1-live-ab
+    # and never the production flag -- and this hook, the only thing that
+    # actually retags the operand on the served path, was never patched in.
+    # _fr13_fa2_qrow32_b1_serving_arm() had been taught about tier-b arms; the
+    # code that INSTALLS ITS CALLER had not. Same shape as the 17th site, one
+    # layer further out: the resolver knew the new arm, the installer did not.
+    if (
+        fixed32_query_tile32_b1_production
+        or fixed32_query_tile32_b1_tier_b_serve
+    ) and (
         "_fr13_fa2_qrow32_b1_production_begin(\n" not in text.split(
             "class TreeAttentionImpl", 1
         )[-1]
@@ -10124,6 +10186,7 @@ def patch_installed_vllm(
     fixed32_query_tile32_live_ab: bool = False,
     fixed32_query_tile32_b1_live_ab: bool = False,
     fixed32_query_tile32_b1_production: bool = False,
+    fixed32_query_tile32_b1_tier_b_serve: bool = False,
     fixed32_query_tile32_b4_production: bool = False,
     fixed32_query_tile16_production: bool = False,
     dfwd_unified_bm8_production: bool = False,
@@ -10139,6 +10202,9 @@ def patch_installed_vllm(
             fixed32_query_tile32_b1_live_ab=fixed32_query_tile32_b1_live_ab,
             fixed32_query_tile32_b1_production=(
                 fixed32_query_tile32_b1_production
+            ),
+            fixed32_query_tile32_b1_tier_b_serve=(
+                fixed32_query_tile32_b1_tier_b_serve
             ),
             fixed32_query_tile32_b4_production=(
                 fixed32_query_tile32_b4_production
@@ -10162,9 +10228,20 @@ def patch_installed_vllm(
             site_packages / "vllm/compilation/cuda_graph.py"
         )
     elif fixed32_query_tile32_b1_live_ab:
+        cuda_graph_path = site_packages / "vllm/compilation/cuda_graph.py"
         result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b1_live_ab(
-            site_packages / "vllm/compilation/cuda_graph.py"
+            cuda_graph_path
         )
+        if fixed32_query_tile32_b1_tier_b_serve:
+            # A tier-b serve needs the capture-end hook as well as the replay
+            # hook. The two patches anchor on DIFFERENT lines
+            # ("entry.cudagraph.replay()" and "entry.cudagraph = cudagraph"),
+            # so they compose; it was only this elif chain that made them
+            # exclusive, and that exclusivity is half of why round 6 produced
+            # no engagement record for a serve it believed it was running.
+            result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b1_production(
+                cuda_graph_path
+            ) or result["cuda_graph.py"]
     elif fixed32_query_tile32_b1_production:
         result["cuda_graph.py"] = _patch_cuda_graph_qrow32_b1_production(
             site_packages / "vllm/compilation/cuda_graph.py"
@@ -10275,6 +10352,16 @@ def main() -> int:
         help="install the all-layer live paged exact4 B4 stock/qrow32 byte gate",
     )
     parser.add_argument(
+        "--fixed32-query-tile32-b1-tier-b-serve",
+        action="store_true",
+        help=(
+            "install the SERVING hook alongside the B1 live-A/B shadow, so a "
+            "tier-b arm's output actually reaches the model. Without it a "
+            "tier-b live arm is shadow-only -- which is what round 6 ran "
+            "while believing it was serving"
+        ),
+    )
+    parser.add_argument(
         "--fixed32-query-tile32-b1-live-ab",
         action="store_true",
         help="install the all-layer real-B1 qrow32-vs-Qrow16 byte gate",
@@ -10318,6 +10405,13 @@ def main() -> int:
     )
     if private_selectors > 1:
         parser.error("qrow16/qrow32 private selectors are mutually exclusive")
+    if args.fixed32_query_tile32_b1_tier_b_serve and not (
+        args.fixed32_query_tile32_b1_live_ab
+    ):
+        parser.error(
+            "--fixed32-query-tile32-b1-tier-b-serve modifies the B1 live-A/B "
+            "selector and requires --fixed32-query-tile32-b1-live-ab"
+        )
     if args.fixed32_query_tile32 and not args.tree_bias_tile_earlyout:
         parser.error(
             "--fixed32-query-tile32 requires --tree-bias-tile-earlyout in "
@@ -10433,6 +10527,9 @@ def main() -> int:
         "fixed32_query_tile32_b1_production": (
             args.fixed32_query_tile32_b1_production
         ),
+        "fixed32_query_tile32_b1_tier_b_serve": (
+            args.fixed32_query_tile32_b1_tier_b_serve
+        ),
         "fixed32_query_tile32_b4_production": (
             args.fixed32_query_tile32_b4_production
         ),
@@ -10470,6 +10567,9 @@ def main() -> int:
             ),
             fixed32_query_tile32_b1_production=(
                 args.fixed32_query_tile32_b1_production
+            ),
+            fixed32_query_tile32_b1_tier_b_serve=(
+                args.fixed32_query_tile32_b1_tier_b_serve
             ),
             fixed32_query_tile32_b4_production=(
                 args.fixed32_query_tile32_b4_production

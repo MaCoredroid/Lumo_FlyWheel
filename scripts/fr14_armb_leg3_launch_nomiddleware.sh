@@ -188,6 +188,13 @@ _FR13_M32_GUARD_NAMES=(
   FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256
   FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST
   FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST
+  # The tier-b serving switch and its credential. TIER_B_SERVE decides whether
+  # the candidate's output reaches the model at all, so a .lumo.local.env that
+  # could flip it underneath a run could turn a measured serve into a shadow
+  # one -- which is round 6's failure with the polarity reversed.
+  FR13_FA2_QROW32_B1_TIER_B_SERVE
+  FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL
+  FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256
   FR13_DFWD_UNIFIED_BM8_LIVE_AB
   FR13_DFWD_UNIFIED_BM8_PRODUCTION
   FR13_FIXED32_GDN_PATH_BV_CANDIDATE
@@ -6920,6 +6927,7 @@ if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then
 fi
 python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source \
   $(if [[ "$FR13_FA2_QROW16_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile16-live-ab'; elif [[ "$FR13_FA2_QROW32_LIVE_PAGED_AB" == "1" ]]; then printf '%s' '--fixed32-query-tile32-live-ab'; elif [[ -n "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]]; then printf '%s' '--fixed32-query-tile32-b1-live-ab'; elif [[ -n "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" ]]; then printf '%s' '--fixed32-query-tile32-b1-production'; elif [[ -n "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" ]]; then printf '%s' '--fixed32-query-tile32-b4-production'; elif [[ "$FR13_FA2_QROW16_PRODUCTION" == "1" ]]; then printf '%s' '--fixed32-query-tile16-production'; fi) \
+  $(if [[ "${FR13_FA2_QROW32_B1_TIER_B_SERVE:-0}" == "1" ]]; then printf '%s' '--fixed32-query-tile32-b1-tier-b-serve'; fi) \
   $(if [[ "$FR13_DFWD_UNIFIED_BM8_PRODUCTION" == "1" ]]; then printf '%s' '--dfwd-unified-bm8-production'; fi)
 python3 - <<'PY'
 import hashlib

@@ -596,3 +596,95 @@ written to stop.
 **Five attempts, zero split-K tokens served.** Four of the five refusals were correct
 guards doing their job on a route that was genuinely incomplete; the fifth was a guard
 that fired by luck. The sweep — not a sixth boot — is what should end the series.
+
+---
+
+## 14. Round 6 did not measure this kernel — the 18th site, and it was mine
+
+Round 6 reported a clean eyeball, `swerc=0`, 12907 resolved, and a verifier forward of
+125.898 → **128.999 ms (+2.46%)** where −14 was projected. The double-call in my live
+determinism gate was named prime suspect. **It is not the mechanism, and the evidence
+says so before anything was built on it.**
+
+### 14.1 The suspect is refuted
+
+`logs/fr13_fixed32_work_census.jsonl`, 1038 rows: **`tree_attn.calls = 16` on every
+row.** Not 32. My double-call lives in `_fr13_fa2_qrow32_b1_live_replay`, which is guarded
+by `_FR13_FA2_QROW32_B1_LIVE_ATTEMPTED` and runs **once per boot**, off the served path —
+three calls × 16 layers, one time, against a 395-second task. It cannot double a per-step
+cost and it did not.
+
+### 14.2 What actually happened: the candidate never served
+
+| evidence | reading |
+|---|---|
+| `fr13_fa2_qrow32_b1_production_engagement.json` | **absent** from the run's `logs/` |
+| launcher line 7075 | `elif` chain: `LIVE_AB_ARM` is tested **before** `PRODUCTION_ARM` |
+| patcher line 9442 | the install of `_fr13_fa2_qrow32_b1_production_begin` was gated on `fixed32_query_tile32_b1_production` **alone** |
+| `container_env.txt` | `LIVE_AB_ARM=gqa_pair_splitk`, `PRODUCTION_ARM=` **empty**, `TIER_B_SERVE=1` |
+
+A tier-b serve is spelled as a **live** arm. So the launcher passed
+`--fixed32-query-tile32-b1-live-ab` and **never** the production flag — and the serving
+hook, the only thing that retags the operand on the served path, **was never patched into
+`TreeAttentionImpl`**. `_fr13_fa2_qrow32_b1_serving_arm()` had been taught about tier-b
+arms; **the code that installs its caller had not.**
+
+The steady-state decode ran the incumbent at both ends of the A/B. **+2.46% is
+incumbent-versus-incumbent noise on a ±4 ms floor.** The −14 projection did not fail —
+**it was never tested.**
+
+This is the same shape as §13's 17th site, one layer further out: resolver taught about
+the new arm, installer not. §13 swept resolvers; it did not sweep *installers*.
+
+### 14.3 The worse half: my artifact asserted a serve that never happened
+
+The round-6 record carried `"tier_b_serving": true` and
+`"served_return": "candidate output served (tier-b)"`. **Both were computed from
+environment variables** — `tier_b and _fr13_fa2_qrow32_b1_tier_b_arm() == arm` reads
+`FR13_FA2_QROW32_B1_TIER_B_SERVE` and nothing else. They reported what was *asked for*,
+not what *ran*, and the campaign reasonably believed them.
+
+The campaign had already paid for exactly this once — the draft-vocabulary identity, where
+"two hardcodings agreed with each other while both disagreed with reality" and a K0 gate
+minted a green credential describing a K64 serve. I reintroduced the shape one file away
+from the comment that documents it.
+
+Fixed so the claim is falsifiable:
+
+- **`_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT`** counts the retag *at the retag*, with the
+  layer names and graph ids it engaged on.
+- The record now reports **`tier_b_serve_armed`** (configuration) and
+  **`tier_b_engagement`** (observation) **separately**, and `tier_b_serving` is derived
+  from the counter.
+- **Armed-but-never-engaged is a REFUSAL**, raised before the pass/fail branch — so an
+  otherwise-clean shadow comparison can no longer report PASS for a serve that did not
+  happen. Round 6's exact state now fails the run in seconds instead of consuming an arm.
+
+### 14.4 The fix
+
+- New patcher flag **`--fixed32-query-tile32-b1-tier-b-serve`**: a *modifier* of the
+  live-A/B selector, not a member of the mutually-exclusive chain that hid this. It
+  installs the serving call site **and** the capture-end hook. The two `cuda_graph`
+  patches anchor on different lines (`entry.cudagraph.replay()` vs
+  `entry.cudagraph = cudagraph`), so they compose — only the `elif` chain made them
+  exclusive.
+- All three launcher twins pass it as a **separate expansion** when `TIER_B_SERVE=1`, and
+  a test asserts it is not inside the selector chain.
+- `TIER_B_SERVE` and both credential variables joined `_FR13_M32_GUARD_NAMES` in all three
+  twins: the switch that decides whether the candidate's output reaches the model must not
+  be movable by `.lumo.local.env`.
+
+### 14.5 The single-call mode was not built, deliberately
+
+It would have been building on a refuted mechanism, which the campaign's own rule forbids.
+The double-call is one-shot insurance costing 16 extra kernel invocations per **boot**;
+determinism is credentialed offline (9/9, twice) and now also checked live on real served
+operands (`repeat_byte_mismatches: 0`, `ulp ≤ 2` on **99.56%** of elements at seq_len
+35 369 — tighter than the synthetic 93.31% the bounds were set from). It stays.
+
+### 14.6 What the next serve needs
+
+Both C++ closures are unchanged (`172b5e71…`, `4ed00909…`), so **no rebuild**. The patcher
+moved again, so the Tier-B credential must be **re-earned** at the serving HEAD — ten
+minutes, offline. Then arm with `TIER_B_SERVE=1`, and this time the run will either engage
+or refuse; it can no longer do neither and say it did.

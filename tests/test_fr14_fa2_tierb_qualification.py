@@ -731,3 +731,127 @@ def test_identity_fraud_is_impossible_for_a_selected_but_unpinned_arm(
     # incumbent's and go on to serve.
     with pytest.raises(RuntimeError, match="has no pinned identity for arm"):
         require("gqa_pair_splitk_v2")
+
+
+# ------------------------- the 18th site: ARMED is not ENGAGED
+
+
+def test_serving_hook_installs_for_a_tier_b_serve_not_only_production() -> None:
+    """THE 18th SITE, and it was mine.
+
+    Round 6 armed a tier-b serve. The launcher spells that as a LIVE arm, so
+    its elif chain passed --fixed32-query-tile32-b1-live-ab and never the
+    production flag -- and the install of
+    _fr13_fa2_qrow32_b1_production_begin, the only thing that retags the
+    operand on the SERVED path, is gated on the production flag. The resolver
+    had been taught about tier-b arms; the code that installs its CALLER had
+    not. 395 seconds of task, a clean eyeball, and the incumbent kernel.
+    """
+    patcher = PATCHER.read_text()
+    marker = "if (\n        fixed32_query_tile32_b1_production\n        or fixed32_query_tile32_b1_tier_b_serve\n    ) and ("
+    assert marker in patcher, (
+        "the serving call site must install for a tier-b serve as well as for "
+        "a production arm"
+    )
+    # And the capture-end hook, which is what writes the engagement record.
+    assert "if fixed32_query_tile32_b1_tier_b_serve:" in patcher
+    assert "_patch_cuda_graph_qrow32_b1_production(\n                cuda_graph_path\n            )" in patcher
+
+
+def test_the_tier_b_serve_flag_is_a_modifier_not_a_selector() -> None:
+    """It composes with the live-A/B selector; it does not replace it."""
+    import subprocess
+
+    out = subprocess.run(
+        [sys.executable, str(PATCHER), "--skip-source", "--skip-python",
+         "--fixed32-query-tile32-b1-tier-b-serve"],
+        capture_output=True, text=True,
+    )
+    assert out.returncode != 0
+    assert "requires --fixed32-query-tile32-b1-live-ab" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_launcher_passes_the_serve_flag_when_armed(launcher) -> None:
+    text = launcher.read_text()
+    assert (
+        '$(if [[ "${FR13_FA2_QROW32_B1_TIER_B_SERVE:-0}" == "1" ]]; then '
+        "printf '%s' '--fixed32-query-tile32-b1-tier-b-serve'; fi)" in text
+    ), f"{launcher.name} never passes the serving flag"
+    # It must be a SEPARATE expansion, not another arm of the elif chain that
+    # already swallowed it once.
+    start = text.index("--fixed32-query-tile16-live-ab")
+    chain = text[text.rindex("\n", 0, start) + 1: text.index("\n", start)]
+    assert "tier-b-serve" not in chain, (
+        "the serve flag must not live inside the mutually-exclusive selector "
+        "chain -- that is the elif that hid the 18th site"
+    )
+    # And it must be guarded against .lumo.local.env.
+    assert "\n  FR13_FA2_QROW32_B1_TIER_B_SERVE\n" in text
+
+
+def test_engagement_is_counted_at_the_retag_not_read_from_the_environment() -> None:
+    """The record must report what RAN.
+
+    Round 6's artifact said tier_b_serving: true and "candidate output served
+    (tier-b)". Both were computed from environment variables, so they asserted
+    a serve that never happened and the campaign believed them. This is the
+    same defect the draft-vocabulary identity fix already named -- two
+    hardcodings agreeing with each other while both disagreed with reality.
+    """
+    blob = _module(PATCHER, "fr14_serve_patcher").FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS
+    assert "_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT" in blob
+    # counted where the retag happens
+    assert '_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["calls"] += 1' in blob
+    # the verdict reads the counter, not the environment
+    assert (
+        '"tier_b_serving": bool(\n            tier_b and '
+        '_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT["calls"] > 0\n        ),' in blob
+    )
+    # armed and engaged are reported separately
+    assert '"tier_b_serve_armed"' in blob
+    assert '"tier_b_engagement"' in blob
+
+
+def test_armed_but_never_engaged_is_a_refusal() -> None:
+    """Round 6's exact state must fail the run, not decorate it."""
+    blob = _module(PATCHER, "fr14_serve_patcher2").FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS
+    assert "tier-b serve is ARMED but never ENGAGED" in blob
+    assert "--fixed32-query-tile32-b1-tier-b-serve" in blob
+    # The refusal must come BEFORE the pass/fail branch, so an otherwise-clean
+    # shadow comparison cannot report PASS for a serve that did not happen.
+    assert blob.index("ARMED but never ENGAGED") < blob.index(
+        "FR13 qrow32 B1 tier-b live gate failed"
+    )
+
+
+def test_round6_artifact_is_diagnosable_from_the_new_fields() -> None:
+    """The banked round-6 record, read through the new schema.
+
+    It carries tier_b_serving: true from the OLD env-derived field. Under the
+    new fields the same run would have reported armed=true, engagement calls=0,
+    serving=false -- and refused. This test pins the diagnosis so the artifact
+    cannot be re-read as a successful serve later.
+    """
+    banked = (
+        REPO / "output/fr14_promoab_Sr6_20260819T005801Z"
+        / "hydra27_fixed32_promoab_S_r6/logs"
+        / "fr13_fa2_qrow32_b1_gqa_pair_splitk_live_paged_ab.json"
+    )
+    if not banked.is_file():
+        pytest.skip("round-6 run output not present")
+    payload = json.loads(banked.read_text())
+    # What it claimed.
+    assert payload["tier_b_serving"] is True
+    assert payload["served_return"] == "candidate output served (tier-b)"
+    # What it could not show, because the field did not exist: any observation
+    # of engagement. Its absence IS the finding.
+    assert "tier_b_engagement" not in payload
+    assert "tier_b_serve_armed" not in payload
+    # And the run wrote no production engagement record, which is the
+    # independent evidence that the serving hook never ran.
+    engagement = banked.parent / "fr13_fa2_qrow32_b1_production_engagement.json"
+    assert not engagement.exists(), (
+        "a production engagement record would mean the hook DID run and the "
+        "diagnosis needs revisiting"
+    )
