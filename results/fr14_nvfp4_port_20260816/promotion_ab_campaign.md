@@ -3717,3 +3717,85 @@ Note for the E2 lane: `capture_report.json` carries `tap_layers` but its top-lev
 `plane_meaning` is `None` — the per-doc metas carry it, which is what the prereg's
 mandatory assert reads, so the guard is satisfied. Pre-existing E1 behaviour, not
 introduced here. Recapture only; replay windows remain sequenced later.
+
+# EXACT16 QC, FIRST ATTEMPT (2026-08-19 20:56Z) — refused in 5 seconds; site 15
+
+## BOOT VERDICT: REFUSED pre-container
+
+Fired at HEAD `51f419b11` the moment both gates cleared — workload table landed
+(`c90c09a60`), site 13 landed, tree **completely clean**, verified stable across three
+samples. `serve rc=2` five seconds in; **no container was created**, so there is nothing
+to preserve. Per instruction: no retry.
+
+Everything I built worked. The whole launcher log is three lines:
+
+```
+[fr13] B1 arm unnamed; serving the PROMOTED DEFAULT FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk
+[fr13] gqa_pair promoted default STANDS DOWN: the split-K tier-b default is armed
+FR13 qrow32 B1 selector requires Hydra27 B1 and exact binary/source provenance
+```
+
+`PROMOAB_FA2=default` left the arm genuinely unnamed (the empty-vs-unset trap avoided),
+the workload declaration passed through, and the arm meta records
+`subset_sha256=47b0a3c9…` against a 16-task subset.
+
+## SITE 15 — STANDING DOWN IS NOT UN-DECLARING
+
+The refusing clause is the B1 selector gate:
+
+```python
+&& "$(stat -c '%s' "$FORKED_FA2_SO")" == "$FR13_FA2_QROW32_B1_SO_SIZE" ]] || refuse
+```
+
+Numerically:
+
+    FORKED_FA2_SO        the split-K binary, 300123792 bytes on disk
+    _FR13_SPLITK_DEFAULT_SO_SIZE                300123792   (what the default MEANT to set)
+    FR13_FA2_QROW32_B1_SO_SIZE at the gate      299815552   (the GQA-PAIR binary's size)
+
+Where 299815552 comes from: `FR13_B1_CREDENTIAL_POINTER` defaults to
+`output/fr13_b1_gqa_pair_credential.env`, and `_fr13_b1_load_credential_pointer`
+auto-imports it **whenever the file exists** — no arm need be named. It fills
+`SO_SIZE`, `SO_SHA256`, `SOURCE_COMMIT` and `QUALIFICATION_PROFILE` from the *gqa_pair*
+credential. That happens ~500 lines before the split-K default block, which then does:
+
+```bash
+FR13_FA2_QROW32_B1_SO_SIZE=${FR13_FA2_QROW32_B1_SO_SIZE:-$_FR13_SPLITK_DEFAULT_SO_SIZE}
+```
+
+`:-` only substitutes when the variable is EMPTY. It was already populated, so **the
+promoted default silently could not set its own binary pins**, and the gate then measured
+the split-K binary against the incumbent's declared size.
+
+This is F1/F2's family one level deeper. F1: arming a selector is not surviving it.
+F2: two defaults arming at once needs arbitration — and gqa_pair *does* stand down here,
+visibly, in the log. Site 15: **standing down as an ARM does not withdraw the PINS it
+already imported.** The stood-down credential still described the binary.
+
+Two corroborations that this is the mechanism and not a guess:
+
+* The split-K block's own binary check at `:1448` PASSED, because it compares against
+  the literal `$_FR13_SPLITK_DEFAULT_SO_SHA256` rather than the imported variable. Only
+  the gate, which reads the variable, failed.
+* The draft-vocab assert immediately above the gate passed — because
+  `QUALIFICATION_PROFILE=full_vocab` was imported from that same gqa_pair credential.
+  With no import it would have defaulted to `k64_root` and refused with a different
+  message. The import is demonstrably in effect.
+
+## THE HONEST WORKAROUND, PROPOSED NOT TAKEN
+
+`FR13_B1_CREDENTIAL_POINTER=/nonexistent` makes the auto-import a no-op, and it is not a
+hack: a QC of the promoted **split-K** default has no business presenting a **gqa_pair**
+credential at all. It states the truth of the configuration under test.
+
+Not taken unilaterally, because it changes what the boot presents and would suppress the
+F2 stand-down line — an observable this campaign has been using as evidence that the
+arbitration works. Ruling wanted before it runs overnight.
+
+The root fix is lane 4's: the stand-down should withdraw the pins it imported, or the
+default block should assign its literals unconditionally rather than with `:-`.
+
+## STATUS
+
+Fifteen sites. No container created, nothing to preserve, `containers=0`, GPU idle.
+H27n baseline unchanged. Standing verdicts unchanged.
