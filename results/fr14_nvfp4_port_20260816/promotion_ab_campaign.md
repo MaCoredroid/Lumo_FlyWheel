@@ -2799,3 +2799,122 @@ baseline, so under option A it would itself need re-running on the incumbent.
 
 Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
 recommended for the tier-B serving route on round 12's evidence.
+
+---
+---
+
+# ROUND 16 (2026-08-19 08:50Z–10:15Z) — option A: H27i drains clean; H31i refused at a FOURTH profile-varying compare, this one inside the CONTRACT API
+
+| arm | boot/validation verdict |
+|---|---|
+| **H27i** | **PASS** — `swerc=0`, 4/4 tasks, 2/4 resolved, 17 804 census steps |
+| **H31i** | **REFUSED in 5 s** — `fixed32 TREE text differs from canonical contract` |
+
+## R16.1 The fused-top-k decision, and why I opted out rather than confirmed
+
+You offered either "opt out on both" or "confirm both arms resolve identically". **I
+chose to opt out — `FR14_FUSED_DRAFT_TOPK=0` on both arms — because I could not confirm
+the alternative, and the failure mode of assuming is severe.**
+
+The lever's guard requires the drafter's wide widths to be exactly `(3,3,3,3,3)` at the
+five head depths, and it raises a hard `RuntimeError` **at the first `propose()`** if
+they are not. The two trees are demonstrably different in shape past depth 2:
+
+```
+hydra27 FIXED32_CHOICES depth-fanout: {0:3, 1:5, 2:5, 3:5, 4:5, 5:2}
+hydra31 TAIL10_CHOICES  depth-fanout: {0:3, 1:5, 2:5, 3:4, 4:4, 5:1}
+```
+
+The guard reads the MTP *head* widths rather than the tree fanout, so those numbers do
+not settle it — but they are enough to establish that I cannot settle it **statically**,
+and the only way to "confirm identical resolution" would have been to boot H31 with the
+lever armed and find out mid-serve. Opting out costs nothing here (this pair is a
+topology-isolation experiment, not a promoted-stack measurement) and removes a variable
+plus a crash risk. Stated as instructed.
+
+## R16.2 ARM H27i — the clean incumbent baseline
+
+Container env attests the intended arm exactly: `FR13_FA2_QROW32_B1_PRODUCTION_ARM=`
+(empty), stock `_vllm_fa2_C.abi3.so`, `FR14_FUSED_DRAFT_TOPK=0`,
+`FR14_SUFFIX_PASS_GATE=0`, `FR13_DFWD_SPLIT=1`, `FR13_FIXED32_MODE=hydra27_fixed32`,
+`ACTIVE_NODES=27`, `TAW_WALK_CAP=12`. Zero RuntimeErrors. `swerc=0`, wall 4 541 s.
+
+```
+step_wall_ms 215.498 · s_per_fwd_gpu 0.133974 · accept/event 4.2124
+drafter 53.640 · committer 20.515 · overhead_other 7.369 · per-request TPS 26.058
+27/32 on all 17 804 steps · mtp_forward_calls 4 · graph_replays 1 · walk cap 12
+```
+
+**This is the pairing basis option A needs**, and it is the first baseline in the
+campaign that is single-variable-ready against a topology arm: incumbent kernel, no
+top-k, no gate, no split-K.
+
+## R16.3 ARM H31i — a fourth profile-varying compare, and the API itself is the problem
+
+```
+FAIL: launcher rc=1
+fixed32 TREE text differs from canonical contract
+```
+
+H31i passed everything rounds 13–15 fixed — the vehicle's kind, the preflight's mode
+table, the tree-ancestry compare, the walk cap — and then stopped at
+`fr13_launch_forked_fa2_tree_server.sh:4531`, in a **different block** from round 14's
+(the contract-identity section, not the preflight):
+
+```python
+if tree != contract.fixed32_tree_text():
+    raise SystemExit("fixed32 TREE text differs from canonical contract")
+if spec_config != contract.speculative_config_text():
+    raise SystemExit("fixed32 SPEC_CONFIG differs from canonical contract")
+```
+
+**And this time the profile-blindness is in the API signature, not the call site:**
+
+```
+fixed32_tree_text()        -> str      # no profile parameter
+speculative_config_text()  -> str      # no profile parameter
+```
+
+Both are parameterless and both encode hydra27's tree — I verified `tree_text` carries
+hydra27's choices, and `speculative_config_text()` embeds a `speculative_token_tree`
+string, so it is profile-varying too.
+
+**Consequence, and it is the round-14 pattern repeating two lines apart:** fixing
+`fixed32_tree_text()` alone moves the refusal to the **very next line**. Both must
+become profile-aware in the same edit — either by taking a mode argument, or by the call
+sites passing one. Rounds 13–15 fixed *call sites*; this is the first blocker where the
+**contract API can only ever answer for one profile**, so no call-site edit can fix it.
+
+Sites: `:4531` and `:4533` in all **three** launcher families (the message exists at
+`fr13_launch_forked_fa2_tree_server.sh:4531`,
+`fr14_leg3_launch_nomiddleware.sh:4347`, `fr14_armb_leg3_launch_nomiddleware.sh:4370`),
+plus the two contract functions.
+
+## R16.4 The tally, and what it says about the detector
+
+| round | profile-blind consumer |
+|---|---|
+| 13 | serve vehicle (kind + XFLAGS) |
+| 14 | preflight mode table **and** tree-ancestry compare |
+| 15 | *(not a compare — the FA2 mode gate, by design)* |
+| **16** | **contract-identity compares — `fixed32_tree_text` / `speculative_config_text`** |
+
+Pass 90's mode-table parity lint (the 17th pair) covers **dicts keyed by fixed32 mode**.
+Neither of this round's sites is a dict — they are **equality compares against a
+parameterless contract accessor**, which no key-parity check can see.
+
+The detector that would have caught all four rounds in one shot: **enumerate every
+`contract.*` accessor and module constant that encodes a tree, mask, node count, walk
+cap or spec-config, and assert each either takes a profile argument or is proven
+profile-invariant.** That is a static scan of one module's public surface, and it turns
+"which consumer did we miss?" into a closed list rather than a boot-by-boot discovery.
+
+## R16.5 Status
+
+**tail10 A/B still not measured — but the baseline half is now banked and clean.**
+H27i is the correct single-variable control and needs no re-running when H31i boots,
+provided HEAD holds. The credential-scope question from round 15 remains parked and is
+*not* on the critical path under option A.
+
+Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
+recommended for the tier-B serving route on round 12's evidence.

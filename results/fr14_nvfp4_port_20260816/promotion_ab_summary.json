@@ -444,6 +444,73 @@
   "tail10_status": "still not measured; H27 round-14 baseline is formally pairing-valid at this HEAD but is a PROMOTED-STACK baseline, so under option A it would itself need re-running on the incumbent",
   "window_utc": "2026-08-19T08:29Z..08:48Z"
  },
+ "round16": {
+  "arm_h27i": {
+   "accept_per_event": 4.2124241743428446,
+   "active_nodes": 27,
+   "boot_verdict": "PASS",
+   "census_steps": 17804,
+   "committer_ms": 20.51521927114279,
+   "dfwd_split": 1,
+   "drafter_ms": 53.63992661407806,
+   "gate": 0,
+   "overhead_other": 7.369176468386779,
+   "per_request_tps": 26.057650680878538,
+   "production_arm": "(empty) \u2014 stock FA2",
+   "rc": 0,
+   "resolved": 2,
+   "s_per_fwd_gpu": 0.13397355081964898,
+   "significance": "first baseline in the campaign that is single-variable-ready against a topology arm \u2014 incumbent kernel, no top-k, no gate, no split-K",
+   "step_wall_ms": 215.4978731732566,
+   "tasks": 4,
+   "topk": 0,
+   "walk_cap": 12
+  },
+  "arm_h31i": {
+   "boot_verdict": "REFUSED in 5s",
+   "first_of_its_kind": "rounds 13-15 fixed CALL SITES; this is the first blocker where the contract API can only ever answer for one profile, so no call-site edit can fix it",
+   "next_line_too": "fixing tree_text alone moves the refusal to :4533 (SPEC_CONFIG), which embeds speculative_token_tree and is profile-varying as well \u2014 the round-14 pattern repeating two lines apart",
+   "passed_first": "the vehicle kind, the preflight mode table, the tree-ancestry compare and the walk cap \u2014 everything rounds 13-15 fixed",
+   "rc": 2,
+   "refusal": "fixed32 TREE text differs from canonical contract",
+   "root": "the profile-blindness is in the API SIGNATURE, not the call site: contract.fixed32_tree_text() and contract.speculative_config_text() are BOTH parameterless and both encode hydra27 tree",
+   "site": "fr13_launch_forked_fa2_tree_server.sh:4531, contract-identity section (a DIFFERENT block from round 14 preflight)",
+   "sites": "4531 and 4533 in all THREE launcher families (also fr14_leg3:4347, fr14_armb_leg3:4370) plus the two contract functions"
+  },
+  "credential_scope_question": "parked, and NOT on the critical path under option A",
+  "detector_gap": {
+   "misses": "equality compares against a PARAMETERLESS contract accessor \u2014 not a dict, so no key-parity check can see it",
+   "pass90_lint_covers": "dicts keyed by fixed32 mode",
+   "recommended": "enumerate every contract.* accessor and module constant encoding a tree, mask, node count, walk cap or spec-config, and assert each either takes a profile argument or is proven profile-invariant. Static scan of one module public surface; turns which-consumer-did-we-miss into a closed list."
+  },
+  "fused_topk_decision": {
+   "choice": "OPT OUT on both arms (FR14_FUSED_DRAFT_TOPK=0)",
+   "evidence": {
+    "hydra27_depth_fanout": {
+     "0": 3,
+     "1": 5,
+     "2": 5,
+     "3": 5,
+     "4": 5,
+     "5": 2
+    },
+    "hydra31_depth_fanout": {
+     "0": 3,
+     "1": 5,
+     "2": 5,
+     "3": 4,
+     "4": 4,
+     "5": 1
+    }
+   },
+   "note": "the guard reads MTP HEAD widths not tree fanout, so those numbers do not settle it \u2014 but they establish it cannot be settled statically, and the only confirmation route was booting with the lever armed and finding out mid-serve. Opting out costs nothing for a topology-isolation pair and removes a variable plus a crash risk.",
+   "why": "could not CONFIRM identical resolution statically; the guard requires wide widths exactly (3,3,3,3,3) and raises a hard RuntimeError at the first propose() if not"
+  },
+  "head": "c5d95275593941238b9a176f8e3b951416a4da63",
+  "option": "A \u2014 both arms on the incumbent FA2, measuring topology alone",
+  "tail10_status": "still not measured, but the baseline half is banked and clean; H27i needs no re-running when H31i boots provided HEAD holds",
+  "window_utc": "2026-08-19T08:50Z..10:15Z"
+ },
  "round2": {
   "arms": {
    "C'": {
