@@ -846,6 +846,58 @@
   "tally": "eleven sites, seven layers, three source roots -- the eleventh is the first found by EXECUTING a captured graph rather than by reading source",
   "window_utc": "2026-08-19T18:19Z..18:39Z"
  },
+ "round21": {
+  "arm": "hydra31_fixed32_promoab_Ch31s",
+  "bigger_than_a_site": {
+   "RECOMMENDATION": "fix the SCALAR, not the raise. Silencing :3303 alone marches the boot into :5384, :5717 and then the silent sizing sites, which do NOT refuse \u2014 they would PRODUCE NUMBERS at the wrong walk cap while :3159 filed provenance saying 12. The loud guard is the good outcome; the danger is downstream of it.",
+   "census": "results/fr14_nvfp4_port_20260816/promotion_ab_walkcap_census.json \u2014 35 read sites",
+   "guards_that_raise_SAFE": [
+    ":3303 (fired)",
+    ":5384",
+    ":5717",
+    ":5634",
+    ":1988",
+    ":1842 (compares against a HARDCODED literal 12)"
+   ],
+   "silent_consumers_DANGEROUS": {
+    ":3159": "geometry['walk_cap'] = int(topology.WALK_CAP) \u2014 the PROVENANCE RECORD would claim 12 for a run that executed 16",
+    ":3601": "torch.empty((batch, WALK_CAP, 3)) uniforms tensor \u2014 allocates 12 rows where hydra31 needs 16",
+    ":6034": "base_target_rows = base_self_rows = int(topology.WALK_CAP) \u2014 row schedule sized at 12"
+   }
+  },
+  "boot_head": "0b02b4ac4",
+  "boot_verdict": "REFUSED during CUDA-graph warm capture ~5 min in; serve rc=2. Deepest hydra31 has ever reached \u2014 cleared sites 11 and 12.",
+  "established_anyway": {
+   "ladder_never_exercised": "the refusal is upstream of any served step, so the sidecar was never written; headline 1 correctly reported BLOCKED, not zero",
+   "single_variable_holds": "fa2_b1_arm = INCUMBENT qrow16 (production arm NAMED EMPTY), stock .so, identical to H27n's resolution",
+   "sites_11_12_closed": "the boot cleared both and reached graph capture"
+  },
+  "no_retry": "per coordinator instruction; container preserved, fully captured (327 lines), then removed; containers=0",
+  "process_notes": {
+   "dirt_variant_built_then_discarded": "with lane 4 uncommitted I prepared a variant allowlisting out-of-path dirt and recording its diff sha; mid-preparation the dirty set grew 4->6 while I watched, invalidating any 'this is the dirt' statement. Re-sampled until stable; by then lane 4 had landed and the tree was COMPLETELY CLEAN, so the canonical runner ran with its strict gate intact. The variant was never used.",
+   "ladder_flag": "_fr13_fixed32_accept_ladder_enabled() is default-ON and strict (typo raises rather than reading as absent); the vehicle does not propagate the flag, so the instrument arms by default",
+   "my_gate_caught_my_own_edit": "first fire refused with 'dirty path INSIDE round-21 execution scope: results/.../promotion_ab_ladder.py' \u2014 I had fixed the harness a minute earlier and not committed it. The gate is mine (arm runner line 74) and was right. Committed, refired."
+  },
+  "runroot": "output/fr14_promoab_Ch31s_20260819T195925Z",
+  "site_13": {
+   "authority_not_at_fault": "profile(hydra31_fixed32)['walk_cap'] == 16 is correct and available; correct accessor topology.profile(topology.TREE_PROFILE_BY_MODE[mode])['walk_cap']",
+   "class": "sites-1-7 class (consumer not consulting the authority) but at SCALAR granularity",
+   "defect": "three sibling assertions in one function: expected_mask and expected_active are MODE-KEYED, walk_cap reads the MODULE-LEVEL SCALAR topology.WALK_CAP",
+   "raise_site": "scripts/fr13_device_multidraft_kernel.py:3304 _fr13_fixed32_runtime_contract",
+   "reached_via": "gpu_model_runner.py:9548 _warmup_and_capture -> gdn_linear_attn.py:1982 -> fr13_device_multidraft_kernel.py:3977 fr13_fixed32_taw_warm_execute",
+   "refusal": "RuntimeError: hydra31_fixed32: TAW walk cap 16 != contract 12",
+   "scalar_values": {
+    "hydra27": 12,
+    "hydra31": 16,
+    "module_WALK_CAP": 12,
+    "tail6": 12
+   },
+   "why_scans_missed_it": "the message interpolates {mode}, so it READS as mode-aware while comparing against a constant"
+  },
+  "status": "H27n baseline unchanged (69,389 steps; 218.702 / 0.133693 / 3.8690 / 25.365); all four headlines unmeasured; site 12 landed so MEASUREMENT 1 is unblocked and next",
+  "tally": "thirteen sites",
+  "window_utc": "2026-08-19T19:59Z..20:09Z"
+ },
  "round3": {
   "arm_g_prime": {
    "boot": "2026-08-18T15:32:11Z",

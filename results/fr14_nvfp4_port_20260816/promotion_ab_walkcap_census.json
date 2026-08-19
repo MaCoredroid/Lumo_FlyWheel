@@ -1,0 +1,190 @@
+{
+ "schema": "fr14.promotion_ab.walkcap_census.v1",
+ "finding": "topology.WALK_CAP is a MODULE-LEVEL SCALAR equal to hydra27/tail6's 12; it never became per-mode. Site 13 is the first guard hydra31 reaches, not the only consumer.",
+ "authority_has_the_right_value": {
+  "tail6_fixed32": 12,
+  "hydra27_fixed32": 12,
+  "hydra31_fixed32": 16
+ },
+ "module_scalar": 12,
+ "correct_accessor": "topology.profile(topology.TREE_PROFILE_BY_MODE[mode])['walk_cap']",
+ "why_fixing_only_the_raise_is_the_WORST_option": "the guards fail loud and are therefore safe; at least three consumers SIZE or DESCRIBE from the same scalar with no raise (uniforms tensor alloc, base_target/self_rows, and the geometry provenance record). Silencing the guard marches the boot into the silent ones, which would PRODUCE NUMBERS at the wrong walk cap.",
+ "sites": [
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 1842,
+   "text": "or module.WALK_CAP != 12"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 1988,
+   "text": ">= int(topology.WALK_CAP)"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 3159,
+   "text": "\"walk_cap\": int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 3303,
+   "text": "if walk_cap != int(topology.WALK_CAP):"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 3305,
+   "text": "f\"{mode}: TAW walk cap {walk_cap} != contract {topology.WALK_CAP}\""
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 3601,
+   "text": "int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 5384,
+   "text": "if walk_cap != int(topology.WALK_CAP):"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 5385,
+   "text": "raise RuntimeError(f\"FR13 fixed32 core walk {walk_cap} != {topology.WALK_CAP}\")"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 5634,
+   "text": "if loop_iterations != int(topology.WALK_CAP):"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 5717,
+   "text": "if walk_cap != int(topology.WALK_CAP):"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 5718,
+   "text": "raise RuntimeError(f\"FR13 fixed32 core walk {walk_cap} != {topology.WALK_CAP}\")"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6034,
+   "text": "base_target_rows = int(topology.WALK_CAP)"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6035,
+   "text": "base_self_rows = int(topology.WALK_CAP)"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6041,
+   "text": "exact_commit_launches = int(topology.WALK_CAP) + 1"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6042,
+   "text": "exact_commit_programs_per_request = int(topology.WALK_CAP) + 1"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6053,
+   "text": "exact_commit_launches = int(topology.WALK_CAP)"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6054,
+   "text": "exact_commit_programs_per_request = int(topology.WALK_CAP)"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6155,
+   "text": "f\"taw_walk={topology.WALK_CAP} \""
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6342,
+   "text": "walk_cap=int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6355,
+   "text": "walk_cap=int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6396,
+   "text": "walk_cap=int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6415,
+   "text": "walk_cap=int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 6932,
+   "text": "WALK_CAP=int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 7039,
+   "text": "\"loop_iterations\": int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 7418,
+   "text": "(batch, int(topology.WALK_CAP), 3),"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 8422,
+   "text": "os.environ[\"FR13_FIXED32_TAW_WALK_CAP\"] = str(topology.WALK_CAP)"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 8476,
+   "text": "int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_device_multidraft_kernel.py",
+   "line": 8784,
+   "text": "walk_cap=int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_fixed32_semantics_test.py",
+   "line": 167,
+   "text": "for level in range(topology.WALK_CAP)"
+  },
+  {
+   "file": "scripts/fr13_fixed32_semantics_test.py",
+   "line": 336,
+   "text": "topology.WALK_CAP,"
+  },
+  {
+   "file": "scripts/fr13_fixed32_semantics_test.py",
+   "line": 460,
+   "text": "((0.01, 0.0, 0.73),) * topology.WALK_CAP,"
+  },
+  {
+   "file": "scripts/fr13_cfwd_logit_direct_packed_runtime_overlay.py",
+   "line": 528,
+   "text": "WALK_CAP=int(topology.WALK_CAP),"
+  },
+  {
+   "file": "scripts/fr13_cfwd_logit_direct_packed_runtime_overlay.py",
+   "line": 645,
+   "text": "(batch, int(topology.WALK_CAP), 3),"
+  },
+  {
+   "file": "scripts/fr13_cfwd_packed_walk_node_trust_runtime_overlay.py",
+   "line": 128,
+   "text": "or int(topology.WALK_CAP) != WALK_CAP"
+  },
+  {
+   "file": "scripts/fr13_cfwd_packed_walk_active_depth_runtime_overlay.py",
+   "line": 114,
+   "text": "or int(topology.WALK_CAP) != WALK_CAP"
+  }
+ ],
+ "site_count": 35
+}

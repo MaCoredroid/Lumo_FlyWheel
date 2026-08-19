@@ -3514,3 +3514,112 @@ NOT bypassed; waited for a stable-empty window and fired into it.
 
 Measurement 1 blocked pending the one-line fork conversion. Round 21 gated on drain
 wiring. Exact16 behind round 21. H27n baseline unchanged. Standing verdicts unchanged.
+
+# ROUND 21 (2026-08-19 19:59Z–20:09Z) — the thirteenth site is not a missed parameterisation, it is an UNPARAMETERISED SCALAR
+
+## BOOT VERDICT: REFUSED during CUDA-graph capture, ~5 minutes in
+
+ARM H31i (`hydra31_fixed32_promoab_Ch31s`, runroot `output/fr14_promoab_Ch31s_20260819T195925Z`)
+booted at HEAD `0b02b4ac4` on a fully clean tree. `serve rc=2` at 20:04:43Z. It got
+past site 11 and site 12 and reached **CUDA-graph warm capture** — deeper than any
+previous hydra31 attempt — then:
+
+```
+gpu_model_runner.py:9454 capture_model -> :9640 _capture_cudagraphs -> :9548 _warmup_and_capture
+  gdn_linear_attn.py:1982 _fr13_fixed32_warm_final_full_postprocess
+  scripts/fr13_device_multidraft_kernel.py:3977 fr13_fixed32_taw_warm_execute
+  scripts/fr13_device_multidraft_kernel.py:3304 _fr13_fixed32_runtime_contract
+RuntimeError: hydra31_fixed32: TAW walk cap 16 != contract 12
+```
+
+Container preserved per the round-20 lesson, fully captured (327 lines) to
+`promotion_ab_round21_h31_container_tail.log`, then removed. `containers=0`.
+Per instruction: **no retry.**
+
+## THE DEFECT — three sibling assertions, two mode-keyed and one not
+
+```python
+expected_mask   = int(topology.VALID_MASK_BY_MODE[mode])          # per-mode
+expected_active = _fr13_fixed32_expected_active(topology, mode)   # per-mode
+...
+if walk_cap != int(topology.WALK_CAP):                            # MODULE-LEVEL SCALAR
+    raise RuntimeError(f"{mode}: TAW walk cap {walk_cap} != contract {topology.WALK_CAP}")
+```
+
+Same function, three consecutive checks. The first two are parameterised by mode; the
+third reads a module-level scalar. And the message interpolates `{mode}`, so it *reads*
+as mode-aware while comparing against a constant — which is why this survived every
+scan that looked for mode-blind text.
+
+**The authority is NOT at fault this time.** It has the right value:
+
+    topology.WALK_CAP (module scalar)                     = 12   <- what the check reads
+    profile(tail6_fixed32)['walk_cap']                    = 12
+    profile(hydra27_fixed32)['walk_cap']                  = 12
+    profile(hydra31_fixed32)['walk_cap']                  = 16
+
+The correct accessor exists and is already used elsewhere:
+`topology.profile(topology.TREE_PROFILE_BY_MODE[mode])['walk_cap']`. This is the
+sites-1-7 class — a consumer not consulting the authority — but at *scalar* granularity.
+
+## WHY THIS IS BIGGER THAN A SITE, AND WHY FIXING THE RAISE WOULD BE THE WORST OUTCOME
+
+`topology.WALK_CAP` is hydra27/tail6's 12 and **never became per-mode**. A census
+(`promotion_ab_walkcap_census.json`, banked) finds **35 read sites**. They split into
+two very different kinds:
+
+**Guards that raise — loud, therefore safe.** `:3303` (the one that fired), `:5384`,
+`:5717`, `:5634`, `:1988`; plus `:1842`, which compares `module.WALK_CAP != 12` against
+a **hardcoded literal 12**.
+
+**Consumers that SIZE or DESCRIBE from the same scalar, with no raise at all:**
+
+| site | use | consequence under hydra31 |
+|---|---|---|
+| `:3601` | `torch.empty((batch, WALK_CAP, 3))` — the `uniforms` tensor | allocates **12** rows where 16 are needed |
+| `:6034` | `base_target_rows = base_self_rows = int(topology.WALK_CAP)` | row schedule sized at **12** |
+| `:3159` | `geometry["walk_cap"] = int(topology.WALK_CAP)` | the provenance record would **claim 12** for a run that executed 16 |
+
+That last one is the campaign's own failure mode: an artifact describing a
+configuration the process did not run.
+
+**So the recommendation is explicit: fix the SCALAR, not the raise.** Silencing `:3303`
+alone marches the boot into `:5384`, then `:5717`, and ultimately into the silent
+sizing sites — which would not refuse. They would **produce numbers** at the wrong walk
+cap, and `:3159` would file provenance saying 12. A guard that fails loud is the good
+outcome here; the danger is everything downstream of it.
+
+## WHAT ROUND 21 ESTABLISHED ANYWAY
+
+- **Sites 11 and 12 are genuinely closed** — the boot cleared both and got all the way
+  to graph capture, the deepest hydra31 has ever reached.
+- **The ladder instrument was never exercised**: the refusal is upstream of any served
+  step, so the sidecar was never written. Headline 1 remains unmeasured — correctly
+  reported as blocked, not as a zero. The harness would have said exactly that.
+- Both arms' single-variable guarantee still holds: `fa2_b1_arm = INCUMBENT qrow16
+  (production arm NAMED EMPTY)`, stock `.so`, identical to H27n's resolution.
+
+## PROCESS NOTES
+
+**My own gate caught my own edit.** The first fire attempt refused with
+`dirty path INSIDE round-21 execution scope: results/.../promotion_ab_ladder.py` — I
+had fixed the harness one minute earlier and not committed it. The gate is mine (arm
+runner line 74) and it did exactly the right thing. Committed, then refired.
+
+**The dirt-recording variant was built and then discarded, correctly.** With lane 4's
+work uncommitted I had prepared a variant that allowlists out-of-path dirt and records
+its diff sha rather than blanket-refusing. Mid-preparation the dirty set grew 4 -> 6
+files while I watched, which invalidates any "this is the dirt" statement; I re-sampled
+until stable. By the time the harness fix was committed, lane 4 had landed too and the
+tree was **completely clean**, so the canonical runner ran with its strict gate intact
+and no compromise was needed. The variant was never used.
+
+**The ladder flag needs nothing.** `_fr13_fixed32_accept_ladder_enabled()` is
+default-ON and strict (a typo raises rather than reading as absent), and the vehicle
+does not propagate the flag anyway — so the instrument arms by default.
+
+## STATUS
+
+Thirteen sites. H27n baseline stands unchanged (69,389 steps; 218.702 / 0.133693 /
+3.8690 / 25.365). All four headlines remain unmeasured. Site 12 landed, so measurement
+1 is unblocked and is next. Standing verdicts unchanged.

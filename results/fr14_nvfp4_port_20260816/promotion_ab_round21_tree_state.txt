@@ -1,0 +1,12 @@
+# ROUND 21 BOOT-TIME TREE STATE
+boot_head=44db6e1d7ab28f9a8b58e62645b23c1786f66868
+captured_utc=2026-08-19T19:50:40Z
+# tracked dirty at boot — ALL verified outside round 21's execution path (3 launcher-fork/tool + 3 tests):
+ M scripts/fr14_armb_leg3_launch_nomiddleware.sh
+ M scripts/fr14_leg3_launch_nomiddleware.sh
+ M scripts/fr14_mode_table_parity.py
+ M tests/test_fr13_qrow32_b4_production_default.py
+ M tests/test_fr14_fa2_tierb_qualification.py
+ M tests/test_fr14_mode_table_parity.py
+# unified diff sha256:
+1cf5d80dc46cb993120647c55affbec798dd1cb11b8eb4ac81a0a717c97c5bbe
