@@ -384,7 +384,13 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     # discipline. Default-off: unset LUMO_NSYS_START_LATER attests the
     # canonical wall-gated B1 prefix byte for byte.
     assert '"${LUMO_NSYS_START_LATER:-0}" \\' in serve
-    assert '"${LUMO_NSYS_OUTPUT:-}" <<\'PY\'' in serve
+    assert '"${LUMO_NSYS_OUTPUT:-}" \\' in serve
+    # Round 16: the TOPOLOGY PROFILE is a selector too. The PID1 argv embeds
+    # --speculative-config, which embeds the tree, so attesting a hydra31 arm
+    # against hydra27's argv is a guaranteed refusal -- and the child cannot
+    # know the profile unless the parent hands it over, by the same explicit
+    # discipline as every other selector here.
+    assert '"$FIXED32_MODE" <<\'PY\'' in serve
     assert "attribution_only_text = sys.argv[7]" in serve
     assert "batch_gdn_byte_ab_text = sys.argv[8]" in serve
     assert "batch_gdn_graph_byte_ab_text = sys.argv[9]" in serve
@@ -394,6 +400,9 @@ def test_live_attestation_receives_the_selector_explicitly() -> None:
     assert "sfwd_prior_reuse_byte_ab_text = sys.argv[13]" in serve
     assert "nsys_start_later_text = sys.argv[14]" in serve
     assert "nsys_capture_output = sys.argv[15] or None" in serve
+    assert "fixed32_mode = sys.argv[16] or contract.PROFILE_HYDRA27" in serve
+    assert "profile=fixed32_mode," in serve
+    assert "fixed32_mode = os.environ" not in serve
     assert "deferred_capture=nsys_start_later_text == \"1\"," in serve
     assert "nsys_start_later_text = os.environ" not in serve
     assert "nsys_capture_output = os.environ" not in serve

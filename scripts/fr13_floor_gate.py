@@ -4890,7 +4890,10 @@ def resolve_subset_from_runlog(
     ):
         raise GateError(f"{process_path}: incomplete PID1/EngineCore identity")
     argv = pid1.get("argv")
-    expected_argv = expected_pid1_argv(concurrency)
+    # Round 16: the argv embeds --speculative-config, which embeds the tree, so
+    # this comparison is profile-varying. expected_kind is the arm's mode and is
+    # already validated against FIXED32_MODE_SPECS above.
+    expected_argv = expected_pid1_argv(concurrency, expected_kind)
     if argv != expected_argv:
         raise GateError(
             f"{process_path}: PID1 argv differs from the exact fixed32 contract"
@@ -8774,7 +8777,7 @@ def write_fixture_arm(
     tokens = PHYSICAL_DRAFTS
     subset = (repo / EVIDENCE_SETS[4]["relative_path"]).resolve()
     producer_pid = 100 + int(hydra)
-    pid1_argv = expected_pid1_argv(concurrency)
+    pid1_argv = expected_pid1_argv(concurrency, kind)
     (runroot / f"{arm}.runlog").write_text(
         f"=== BIGDENOM-VARIANT SWEServe ARM {arm} kind={kind} "
         f"launcher=forked expect={tokens} xflags=[] "

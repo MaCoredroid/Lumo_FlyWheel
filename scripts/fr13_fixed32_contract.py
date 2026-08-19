@@ -19,7 +19,29 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from fr13_fixed32_topology import FIXED32_CHOICES, PHYSICAL_DRAFTS
+from fr13_fixed32_topology import (
+    FIXED32_CHOICES,
+    PHYSICAL_DRAFTS,
+    PROFILE_HYDRA27,
+    PROFILE_HYDRA31,
+    PROFILES as _TOPOLOGY_PROFILES,
+    profile as _topology_profile,
+)
+
+# A serving MODE is not a topology PROFILE. tail6_fixed32 and hydra27_fixed32
+# dispatch the SAME 31 physical paths and differ only in the sampler mask, so
+# both compare against hydra27's tree; hydra31_fixed32 is a different physical
+# tree. Mapping mode -> tree profile in ONE place is what keeps the three
+# launchers from each growing their own (divergent) mode roster.
+TREE_PROFILE_BY_MODE: dict[str, str] = {
+    "tail6_fixed32": PROFILE_HYDRA27,
+    PROFILE_HYDRA27: PROFILE_HYDRA27,
+    PROFILE_HYDRA31: PROFILE_HYDRA31,
+}
+
+# The serving mode vocabulary. Consumers validate an arm's mode against this
+# rather than hardcoding a list of their own.
+FIXED32_MODES: tuple[str, ...] = tuple(sorted(TREE_PROFILE_BY_MODE))
 
 EXTERNAL_SCHEMA = "fr13-fixed32-external-manifest-v1"
 RUNTIME_SCHEMA = "fr13-fixed32-runtime-attestation-v1"
@@ -590,23 +612,49 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def fixed32_tree_text() -> str:
-    return repr(list(FIXED32_CHOICES))
+def tree_profile(mode: str) -> str:
+    """Resolve a serving mode (or a profile name) to its topology profile."""
+    try:
+        return TREE_PROFILE_BY_MODE[mode]
+    except KeyError:
+        raise ContractError(
+            f"fixed32 mode {mode!r} has no tree profile; "
+            f"known modes: {list(FIXED32_MODES)}"
+        ) from None
 
 
-def speculative_config_text() -> str:
+def fixed32_tree_text(profile: str = PROFILE_HYDRA27) -> str:
+    """The 31 draft paths of one fixed32 profile, as the launcher's TREE text.
+
+    PROFILE-PARAMETERISED (round 16). This used to be parameterless and encoded
+    hydra27's tree, so every equality check against it refused any other
+    profile -- and because the blindness was in the SIGNATURE, no call-site edit
+    could fix it. `profile` defaults to hydra27, so every existing caller is
+    byte-identical; `tests/test_fr14_contract_profile_signatures.py` asserts it.
+    """
+    resolved = tree_profile(profile)
+    if resolved == PROFILE_HYDRA27:
+        return repr(list(FIXED32_CHOICES))
+    return repr(list(_topology_profile(resolved)["choices"]))
+
+
+def speculative_config_text(profile: str = PROFILE_HYDRA27) -> str:
+    """The vLLM speculative config, which EMBEDS the tree text."""
     return json.dumps(
         {
             "method": "qwen3_5_mtp",
             "num_speculative_tokens": PHYSICAL_DRAFTS,
-            "speculative_token_tree": fixed32_tree_text(),
+            "speculative_token_tree": fixed32_tree_text(profile),
         },
         ensure_ascii=True,
         separators=(",", ":"),
     )
 
 
-def expected_pid1_argv(concurrency: int) -> list[str]:
+def expected_pid1_argv(
+    concurrency: int, profile: str = PROFILE_HYDRA27
+) -> list[str]:
+    # profile-parameterised because the argv embeds speculative_config_text
     if concurrency not in (1, 4):
         raise ContractError(f"fixed32 concurrency must be 1 or 4, got {concurrency}")
     argv = [
@@ -650,7 +698,7 @@ def expected_pid1_argv(concurrency: int) -> list[str]:
         "--reasoning-parser",
         "qwen3",
         "--speculative-config",
-        speculative_config_text(),
+        speculative_config_text(profile),
         "--enable-prefix-caching",
         "--enable-chunked-prefill",
         "--mamba-block-size",
@@ -675,6 +723,7 @@ def expected_pid1_argv(concurrency: int) -> list[str]:
 def expected_process_pid1_argv(
     concurrency: int,
     *,
+    profile: str = PROFILE_HYDRA27,
     attribution_only: bool,
     eager_diagnostic: bool = False,
     graph_diagnostic: bool = False,
@@ -738,7 +787,7 @@ def expected_process_pid1_argv(
         raise ContractError(
             "fixed32 Stream-K eager diagnostic requires concurrency 1"
         )
-    vllm_argv = expected_pid1_argv(concurrency)
+    vllm_argv = expected_pid1_argv(concurrency, profile)
     if eager_diagnostic or streamk_eager_diagnostic or sfwd_byte_diagnostic:
         vllm_argv = [*vllm_argv, "--enforce-eager"]
     if not attribution_only:
@@ -761,6 +810,7 @@ def validate_process_pid1_argv(
     argv: object,
     concurrency: int,
     *,
+    profile: str = PROFILE_HYDRA27,
     attribution_only: bool,
     eager_diagnostic: bool = False,
     graph_diagnostic: bool = False,
@@ -771,6 +821,7 @@ def validate_process_pid1_argv(
 ) -> list[str]:
     expected = expected_process_pid1_argv(
         concurrency,
+        profile=profile,
         attribution_only=attribution_only,
         eager_diagnostic=eager_diagnostic,
         graph_diagnostic=graph_diagnostic,

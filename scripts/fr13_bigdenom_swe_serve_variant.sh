@@ -2065,7 +2065,8 @@ PY
     "$FR13_FIXED32_SFWD_CONV_POSTPREP_BYTE_AB" \
     "$FR13_FIXED32_SFWD_PRIOR_REUSE_BYTE_AB" \
     "${LUMO_NSYS_START_LATER:-0}" \
-    "${LUMO_NSYS_OUTPUT:-}" <<'PY'
+    "${LUMO_NSYS_OUTPUT:-}" \
+    "$FIXED32_MODE" <<'PY'
 import json
 import subprocess
 import sys
@@ -2092,6 +2093,11 @@ sfwd_prior_reuse_byte_ab_text = sys.argv[13]
 # wall-gated B1 prefix, byte for byte.
 nsys_start_later_text = sys.argv[14]
 nsys_capture_output = sys.argv[15] or None
+# Round 16: the PID1 argv embeds --speculative-config, which embeds the tree, so
+# this attestation is profile-varying. It used to call a PARAMETERLESS accessor
+# and therefore attested every arm against hydra27's tree. Empty mode means the
+# caller named no fixed32 kind, which is hydra27 exactly as before.
+fixed32_mode = sys.argv[16] or contract.PROFILE_HYDRA27
 runtime = contract.validate_runtime_attestation(
     json.loads(runtime_path.read_text(encoding="utf-8"))
 )
@@ -2168,6 +2174,7 @@ try:
     contract.validate_process_pid1_argv(
         pid1.get("argv"),
         concurrency,
+        profile=fixed32_mode,
         attribution_only=attribution_only_text == "1",
         deferred_capture=nsys_start_later_text == "1",
         capture_output=(

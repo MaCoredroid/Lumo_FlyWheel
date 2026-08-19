@@ -4205,7 +4205,7 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     "$_FR13_FA2_QROW16_CANDIDATE_MODE" "$FR13_FA2_QROW16_SO_SHA256" \
     "$_FR13_FA2_QROW32_CANDIDATE_MODE" "$FR13_FA2_QROW32_SO_SHA256" \
     "$_FR13_FA2_QROW32_B1_CANDIDATE_MODE" "$FR13_FA2_QROW32_B1_SO_SHA256" \
-    "$_FR13_FA2_QROW32_B4_CANDIDATE_MODE" <<'PY'
+    "$_FR13_FA2_QROW32_B4_CANDIDATE_MODE" "${FR13_FIXED32_MODE:-}" <<'PY'
 import os
 import sys
 from pathlib import Path
@@ -4225,7 +4225,21 @@ import fr13_fixed32_contract as contract
     qrow32_b1_candidate,
     qrow32_b1_sha256,
     qrow32_b4_candidate,
+    fixed32_mode,
 ) = sys.argv[1:]
+# Round 16: this block used to compare the dispatched TREE/SPEC_CONFIG against
+# PARAMETERLESS contract accessors, which encoded hydra27's tree -- so a hydra31
+# arm was refused here no matter what it dispatched, and fixing one accessor
+# only moved the refusal to the next line. The arm's own mode now selects the
+# profile. Empty means "the caller named no profile", which is hydra27 exactly
+# as before (this is the pairing-evidence path); an unknown mode is refused
+# rather than silently answered for by hydra27's tree.
+if fixed32_mode == "":
+    fixed32_mode = contract.PROFILE_HYDRA27
+try:
+    contract.tree_profile(fixed32_mode)
+except contract.ContractError as exc:
+    raise SystemExit(str(exc)) from None
 fa2 = Path(fa2_raw).resolve(strict=True)
 expected_fa2 = Path(repo).resolve() / contract.FA2_REPO_RELATIVE
 if image != contract.IMAGE_REFERENCE:
@@ -4366,10 +4380,14 @@ else:
         raise SystemExit("fixed32 FA2 size mismatch")
     if actual_sha256 != contract.FA2_SHA256:
         raise SystemExit("fixed32 FA2 sha256 mismatch")
-if tree != contract.fixed32_tree_text():
-    raise SystemExit("fixed32 TREE text differs from canonical contract")
-if spec_config != contract.speculative_config_text():
-    raise SystemExit("fixed32 SPEC_CONFIG differs from canonical contract")
+if tree != contract.fixed32_tree_text(fixed32_mode):
+    raise SystemExit(
+        f"fixed32 TREE text differs from canonical contract for {fixed32_mode}"
+    )
+if spec_config != contract.speculative_config_text(fixed32_mode):
+    raise SystemExit(
+        f"fixed32 SPEC_CONFIG differs from canonical contract for {fixed32_mode}"
+    )
 PY
   unset _fixed32_actual _fixed32_exact_pairs _fixed32_expected
   unset _fixed32_expected_eager _fixed32_expected_mem

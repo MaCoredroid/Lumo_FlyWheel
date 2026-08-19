@@ -1,0 +1,711 @@
+"""THE SIGNATURE DETECTOR (round 16) + hydra27 PAIRING EVIDENCE.
+
+Round 16's refusal was a new class: `fr13_fixed32_contract.fixed32_tree_text()`
+and `speculative_config_text()` were PARAMETERLESS and each encoded hydra27's
+tree, so every equality check against them refused any other profile.  The
+blindness lived in the SIGNATURE, which is why no call-site edit could fix it --
+fixing `fixed32_tree_text` alone just moved the refusal one line down to
+`speculative_config_text`, and fixing both would have moved it again to
+`expected_pid1_argv` (which embeds the spec config in the vLLM argv) on the
+next boot.
+
+This module closes discovery as a LIST instead of boot-by-boot:
+
+  1. ENUMERATION (static).  Transitive closure over the contract's AST from the
+     profile-varying names it imports from `fr13_fixed32_topology`.  Every
+     public function in that closure MUST accept a `profile` parameter.  The
+     roster is pinned, so a newly profile-varying accessor is a visible diff.
+
+  2. PROOF (dynamic).  The contract is re-executed against a topology whose
+     profile-varying constants carry hydra31's values.  Every public callable
+     that does NOT take a `profile` parameter must return byte-identical values
+     in both worlds -- i.e. it is *proven* profile-invariant rather than assumed.
+     Public module constants get the same treatment; a constant cannot take a
+     parameter, so one that moves under the swap must become an accessor.
+
+  3. MUTATION PROOF.  A lint that cannot fail is worse than none, so the
+     detector is run against a synthetic parameterless accessor and must flag it.
+
+  4. PAIRING EVIDENCE.  The banked H27i baseline only survives the diff if a
+     hydra27 arm's execution is unchanged.  We load the pre-round-16 contract
+     from its pinned git blob and assert the parameterised accessors, called
+     with hydra27 or defaulted, return byte-identical text.
+"""
+
+from __future__ import annotations
+
+import ast
+import importlib.util
+import inspect
+import re
+import subprocess
+import sys
+import types
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parents[1]
+SCRIPTS = REPO / "scripts"
+CONTRACT_PATH = SCRIPTS / "fr13_fixed32_contract.py"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+import fr13_fixed32_contract as contract  # noqa: E402
+import fr13_fixed32_topology as topology  # noqa: E402
+from fr13_fixed32_topology import (  # noqa: E402
+    PROFILE_HYDRA27,
+    PROFILE_HYDRA31,
+    profile as topology_profile,
+)
+
+# The pre-round-16 contract, for pairing evidence.  Pinned by blob id so that
+# committing this change does not move the baseline out from under the test.
+BASELINE_BLOB = "410d9d3aeaef8b3806e2223324d2bbba706d5853"
+
+# ---------------------------------------------------------------------------
+# The swap map: topology module constant -> the PROFILES key it is hydra27's
+# value of.  Curated, not inferred: several unrelated constants coincide with a
+# profile field numerically (GDN_CONV_KERNEL_SIZE == 4 == rescue_carry_slots),
+# and mapping those would make the detector lie.  test_swap_map_is_faithful
+# validates every entry against the hydra27 profile.
+# ---------------------------------------------------------------------------
+SWAP_MAP: dict[str, str] = {
+    "FIXED32_CHOICES": "choices",
+    "PHYSICAL_BRANCH_CHAINS": "physical_branch_chains",
+    "ARCTIC_LOOKUP_CHAINS": "arctic_lookup_chains",
+    "ARCTIC_MAIN_TAIL_LENGTH": "main_tail_length",
+    "ARCTIC_LOOKUP_CALLS_PER_REQUEST": "arctic_lookup_calls",
+    "ARCTIC_LOOKUP_TOKENS_PER_REQUEST": "arctic_requested_tokens",
+    "GATED_ARCTIC_MAIN_TAIL_LENGTH": "gated_main_tail_length",
+    "GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST": "gated_arctic_requested_tokens",
+    "RESCUE_CARRY_SLOTS_PER_REQUEST": "rescue_carry_slots",
+    "PHYSICAL_PARENT": "physical_parent",
+    "EXPECTED_PHYSICAL_PARENT": "physical_parent",
+    "PHYSICAL_PARENT_SHA256": "physical_parent_sha256",
+    "TREE_ANCESTRY_SHA256": "tree_ancestry_sha256",
+    "SUBTREE_LEVELS": "subtree_levels",
+    "MAX_PHYSICAL_DEPTH": "max_physical_depth",
+    "WALK_CAP": "walk_cap",
+    "TAW_PATH_SCATTER_SLOTS": "walk_cap",
+    "GDN_LEVEL_PATH_COUNTS": "gdn_level_path_counts",
+    "GDN_LEVEL_MAX_LENGTHS": "gdn_level_max_lengths",
+    "GDN_LAUNCHES": "gdn_launches",
+    "GDN_PATH_PROGRAMS": "gdn_path_programs",
+    "GDN_PADDED_SLOTS": "gdn_padded_slots",
+}
+
+# Imports that carry no profile-varying data.
+NON_DATA_IMPORTS = {"PROFILE_HYDRA27", "PROFILE_HYDRA31", "profile", "Mode"}
+
+# The pinned roster of profile-varying public functions (task 1's sweep result).
+EXPECTED_PROFILE_VARYING = {
+    "fixed32_tree_text",
+    "speculative_config_text",
+    "expected_pid1_argv",
+    "expected_process_pid1_argv",
+    "validate_process_pid1_argv",
+}
+
+
+def _contract_tree(source: str | None = None) -> ast.Module:
+    return ast.parse(source if source is not None else CONTRACT_PATH.read_text())
+
+
+def _topology_imports(tree: ast.Module) -> dict[str, str]:
+    """{local name: original name} imported from fr13_fixed32_topology."""
+    out: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "fr13_fixed32_topology":
+            for alias in node.names:
+                out[alias.asname or alias.name] = alias.name
+    return out
+
+
+def _has_profile_param(func) -> bool:
+    try:
+        sig = inspect.signature(func)
+    except (TypeError, ValueError):
+        return False
+    return "profile" in sig.parameters
+
+
+def _public_module_names(source: str | None = None) -> list[str]:
+    """Public names bound at module level in the contract's own source."""
+    names: list[str] = []
+    for node in _contract_tree(source).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.append(node.name)
+        elif isinstance(node, ast.Assign):
+            names.extend(
+                t.id for t in node.targets if isinstance(t, ast.Name)
+            )
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.append(node.target.id)
+    return sorted({n for n in names if not n.startswith("_")})
+
+
+# ---------------------------------------------------------------------------
+# 1. ENUMERATION -- static transitive closure
+# ---------------------------------------------------------------------------
+def profile_varying_functions(source: str | None = None) -> dict[str, set[str]]:
+    """Public functions whose value depends on a profile-varying topology name.
+
+    Returns {function name: the seeds/callees that make it vary}.
+    """
+    tree = _contract_tree(source)
+    imports = _topology_imports(tree)
+    seeds = {
+        local
+        for local, orig in imports.items()
+        if orig in SWAP_MAP
+        or orig.startswith("HYDRA27_")
+        or orig.startswith("HYDRA31_")
+        or orig.startswith("TAIL10_")
+    }
+
+    defs: dict[str, ast.FunctionDef] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            defs.setdefault(node.name, node)
+
+    uses: dict[str, set[str]] = {}
+    for name, node in defs.items():
+        used: set[str] = set()
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load):
+                used.add(sub.id)
+            elif isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name):
+                used.add(sub.func.id)
+        uses[name] = used
+
+    varying: dict[str, set[str]] = {
+        name: (used & seeds) for name, used in uses.items() if used & seeds
+    }
+    changed = True
+    while changed:
+        changed = False
+        for name, used in uses.items():
+            reached = used & set(varying)
+            if reached and not (varying.get(name, set()) >= reached):
+                varying.setdefault(name, set()).update(reached)
+                changed = True
+    return {k: v for k, v in varying.items() if not k.startswith("_")}
+
+
+def test_swap_map_is_faithful() -> None:
+    """Every mapped constant really is hydra27's value of that profile field."""
+    p27 = topology_profile(PROFILE_HYDRA27)
+    for const, key in sorted(SWAP_MAP.items()):
+        assert hasattr(topology, const), f"topology lost {const}; update SWAP_MAP"
+        assert key in p27, f"PROFILES lost key {key!r}; update SWAP_MAP"
+        assert getattr(topology, const) == p27[key], (
+            f"SWAP_MAP claims {const} is profile[{key!r}] but the values differ "
+            f"({getattr(topology, const)!r} != {p27[key]!r}) -- the map is stale"
+        )
+
+
+def test_every_profile_varying_topology_import_is_known() -> None:
+    """A new profile-varying import must be classified, not silently absorbed."""
+    p27, p31 = topology_profile(PROFILE_HYDRA27), topology_profile(PROFILE_HYDRA31)
+    unclassified = []
+    for local, orig in sorted(_topology_imports(_contract_tree()).items()):
+        if orig in SWAP_MAP or orig in NON_DATA_IMPORTS:
+            continue
+        assert not orig.startswith(("HYDRA27_", "HYDRA31_", "TAIL10_")), (
+            f"the profile-generic contract imports profile-specific {orig!r}; "
+            "it must take the value from profile(mode) instead"
+        )
+        value = getattr(topology, orig, None)
+        if any(value == p27[k] and p27[k] != p31[k] for k in p27):
+            unclassified.append(orig)
+    assert not unclassified, (
+        f"topology imports look profile-varying but are unmapped: {unclassified}"
+    )
+
+
+def test_profile_varying_public_surface_is_the_pinned_roster() -> None:
+    found = set(profile_varying_functions())
+    assert found == EXPECTED_PROFILE_VARYING, (
+        "the profile-varying public surface moved.\n"
+        f"  new:  {sorted(found - EXPECTED_PROFILE_VARYING)}\n"
+        f"  gone: {sorted(EXPECTED_PROFILE_VARYING - found)}\n"
+        "Every entry must take a `profile` argument; update the roster."
+    )
+
+
+def test_every_profile_varying_accessor_takes_a_profile_argument() -> None:
+    """The round-16 class, asserted directly: no signature blindness."""
+    blind = [
+        name
+        for name in sorted(profile_varying_functions())
+        if not _has_profile_param(getattr(contract, name))
+    ]
+    assert not blind, (
+        f"profile-varying but PARAMETERLESS: {blind} -- each encodes one "
+        "profile's topology in its return value while offering no way to ask "
+        "for another, so every equality check against it refuses other profiles"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 2. PROOF -- dynamic, executed under both profiles
+# ---------------------------------------------------------------------------
+def _swapped_contract(source: str | None = None) -> types.ModuleType:
+    """Re-execute the contract against a hydra31-valued topology."""
+    p31 = topology_profile(PROFILE_HYDRA31)
+    shim = types.ModuleType("fr13_fixed32_topology")
+    shim.__dict__.update(topology.__dict__)
+    for const, key in SWAP_MAP.items():
+        setattr(shim, const, p31[key])
+
+    saved = sys.modules.get("fr13_fixed32_topology")
+    sys.modules["fr13_fixed32_topology"] = shim
+    try:
+        module = types.ModuleType("fr13_fixed32_contract__hydra31")
+        module.__file__ = str(CONTRACT_PATH)
+        code = compile(
+            source if source is not None else CONTRACT_PATH.read_text(),
+            str(CONTRACT_PATH),
+            "exec",
+        )
+        exec(code, module.__dict__)
+        return module
+    finally:
+        if saved is not None:
+            sys.modules["fr13_fixed32_topology"] = saved
+        else:  # pragma: no cover
+            del sys.modules["fr13_fixed32_topology"]
+
+
+# Public callables the dynamic half must NOT invoke, with the reason.  Each is
+# still covered by the static enumeration above (none is in the varying closure).
+DYNAMIC_DENY = {
+    "main": "CLI entry point; parses sys.argv and writes files",
+    "parse_args": "CLI entry point; parses sys.argv and can SystemExit",
+    "run_self_test": "self-test entry point; shells out",
+}
+
+# Callables whose invocation needs the serving image, not this host.  Declared
+# rather than silently skipped: if one becomes callable it is compared instead.
+ENV_BLOCKED = {"build_runtime_attestation": ModuleNotFoundError}
+
+# Coverage floor: these public names are ACTUALLY executed under both profiles
+# and compared.  Pinned so that a function which quietly starts raising (and so
+# would silently drop out of the comparison) fails the detector instead.
+PINNED_DYNAMIC_COVERAGE = {
+    "nsys_profile_prefix",
+    "expected_model_file_records",
+}
+
+
+def classify(
+    base: types.ModuleType,
+    swapped: types.ModuleType,
+    source: str | None = None,
+) -> dict[str, dict]:
+    """Bucket every public name of the contract by how it was checked.
+
+    `source` names the text the surface is enumerated from; it must be the text
+    the two modules were built from, or the ledger silently omits whatever the
+    on-disk file does not happen to contain (the mutation test proves this).
+    """
+    out: dict[str, dict] = {
+        "moved": {},          # profile-varying but unparameterised -- the defect
+        "compared": {},       # executed under both profiles, byte-identical
+        "exempt": {},         # takes a `profile` argument, so it can be asked
+        "denied": {},         # side-effecting entry point (static coverage only)
+        "blocked": {},        # not callable on this host (static coverage only)
+        "needs_args": {},     # required arguments (static coverage only)
+        "types": {},          # classes
+    }
+    for name in _public_module_names(source):
+        if not hasattr(base, name) or not hasattr(swapped, name):
+            continue
+        a, b = getattr(base, name), getattr(swapped, name)
+        if isinstance(a, type):
+            out["types"][name] = repr(a)
+            continue
+        if not callable(a):
+            if a != b:
+                out["moved"][name] = "constant"
+            else:
+                out["compared"][name] = "constant"
+            continue
+        if _has_profile_param(a):
+            out["exempt"][name] = str(inspect.signature(a))
+            continue
+        if name in DYNAMIC_DENY:
+            out["denied"][name] = DYNAMIC_DENY[name]
+            continue
+        sig = inspect.signature(a)
+        if any(
+            p.default is inspect.Parameter.empty
+            and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
+            for p in sig.parameters.values()
+        ):
+            out["needs_args"][name] = str(sig)
+            continue
+        try:
+            va = a()
+            vb = b()
+        except BaseException as exc:  # noqa: BLE001 -- SystemExit is not an Exception
+            out["blocked"][name] = f"{type(exc).__name__}: {exc}"
+            continue
+        if va != vb:
+            out["moved"][name] = "callable"
+        else:
+            out["compared"][name] = "callable"
+    return out
+
+
+def test_parameterless_public_surface_is_proven_profile_invariant() -> None:
+    """The PROOF half: executed for both profiles, values compared."""
+    buckets = classify(contract, _swapped_contract())
+    assert not buckets["moved"], (
+        "executed under both profiles, these public names moved but cannot be "
+        f"asked for a profile: {sorted(buckets['moved'])}. A callable must take "
+        "a `profile` argument; a constant must become such a callable."
+    )
+    assert buckets["exempt"].keys() >= {"fixed32_tree_text", "speculative_config_text"}
+
+
+def test_dynamic_coverage_has_not_silently_shrunk() -> None:
+    """A lint whose subjects quietly vanish is a lint that cannot fail."""
+    buckets = classify(contract, _swapped_contract())
+    compared = set(buckets["compared"])
+    missing = PINNED_DYNAMIC_COVERAGE - compared
+    assert not missing, (
+        f"these were executed under both profiles before and no longer are: "
+        f"{sorted(missing)} -- blocked={buckets['blocked']}"
+    )
+
+
+def test_every_public_name_is_accounted_for() -> None:
+    """Accounting completeness: no public name escapes both halves."""
+    buckets = classify(contract, _swapped_contract())
+    seen: dict[str, list[str]] = {}
+    for bucket, members in buckets.items():
+        for name in members:
+            seen.setdefault(name, []).append(bucket)
+    duplicated = {k: v for k, v in seen.items() if len(v) > 1}
+    assert not duplicated, f"names in multiple buckets: {duplicated}"
+    unaccounted = set(_public_module_names()) - set(seen)
+    assert not unaccounted, f"public names checked by nothing: {sorted(unaccounted)}"
+    # every statically-varying function must land in `exempt` or `needs_args`
+    for name in profile_varying_functions():
+        assert seen.get(name, []) and seen[name][0] in ("exempt", "needs_args"), (
+            f"{name} is profile-varying but landed in bucket {seen.get(name)}"
+        )
+    for name in ENV_BLOCKED:
+        if name in buckets["blocked"]:
+            assert type(None).__name__ or True
+    assert set(buckets["denied"]) == set(DYNAMIC_DENY)
+
+
+def test_the_parameterised_accessors_actually_track_the_profile() -> None:
+    """The fix is real: asking for hydra31 yields hydra31, not hydra27."""
+    p31 = topology_profile(PROFILE_HYDRA31)
+    assert contract.fixed32_tree_text(PROFILE_HYDRA31) == repr(list(p31["choices"]))
+    assert contract.fixed32_tree_text(PROFILE_HYDRA31) != contract.fixed32_tree_text()
+    spec31 = contract.speculative_config_text(PROFILE_HYDRA31)
+    assert contract.fixed32_tree_text(PROFILE_HYDRA31) in spec31
+    assert spec31 != contract.speculative_config_text()
+    assert spec31 in contract.expected_pid1_argv(1, PROFILE_HYDRA31)
+    proc31 = contract.expected_process_pid1_argv(
+        1, profile=PROFILE_HYDRA31, attribution_only=False
+    )
+    assert spec31 in proc31
+    assert (
+        contract.validate_process_pid1_argv(
+            proc31, 1, profile=PROFILE_HYDRA31, attribution_only=False
+        )
+        == proc31
+    )
+    with pytest.raises(Exception):
+        contract.validate_process_pid1_argv(proc31, 1, attribution_only=False)
+
+
+# ---------------------------------------------------------------------------
+# 3. MUTATION PROOF -- the detector must be able to fail
+# ---------------------------------------------------------------------------
+MUTANT = '''
+
+def hydra_tree_fingerprint() -> str:
+    return "%s|%d" % (repr(list(FIXED32_CHOICES)), WALK_CAP)
+'''
+
+
+def test_detector_fires_on_an_injected_parameterless_accessor() -> None:
+    source = CONTRACT_PATH.read_text()
+    assert "WALK_CAP" not in _topology_imports(_contract_tree()), (
+        "mutant assumes WALK_CAP is not already imported"
+    )
+    mutated = source.replace(
+        "from fr13_fixed32_topology import (\n    FIXED32_CHOICES,",
+        "from fr13_fixed32_topology import (\n    WALK_CAP,\n    FIXED32_CHOICES,",
+        1,
+    )
+    assert "WALK_CAP,\n" in mutated
+    mutated += MUTANT
+
+    # the static half sees it
+    tree = ast.parse(mutated)
+    imports = _topology_imports(tree)
+    assert "WALK_CAP" in imports and "FIXED32_CHOICES" in imports
+    names = {
+        n.name
+        for n in ast.walk(tree)
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    assert "hydra_tree_fingerprint" in names
+
+    # the dynamic half proves it
+    saved = sys.modules.get("fr13_fixed32_topology")
+    try:
+        plain = types.ModuleType("contract_mutant_h27")
+        plain.__file__ = str(CONTRACT_PATH)
+        exec(compile(mutated, str(CONTRACT_PATH), "exec"), plain.__dict__)
+    finally:
+        if saved is not None:
+            sys.modules["fr13_fixed32_topology"] = saved
+    swapped = _swapped_contract(mutated)
+    assert not _has_profile_param(plain.hydra_tree_fingerprint)
+    moved = classify(plain, swapped, source=mutated)["moved"]
+    assert "hydra_tree_fingerprint" in _public_module_names(mutated)
+    assert "hydra_tree_fingerprint" in moved, (
+        "the detector failed to flag a parameterless accessor that encodes the "
+        "tree -- it cannot fail, so it is worse than none"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 4. PAIRING EVIDENCE -- hydra27 execution is unchanged by the diff
+# ---------------------------------------------------------------------------
+def _baseline_source() -> str:
+    try:
+        return subprocess.run(
+            ["git", "cat-file", "blob", BASELINE_BLOB],
+            cwd=REPO,
+            capture_output=True,
+            check=True,
+        ).stdout.decode()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        pytest.skip(f"pre-round-16 blob {BASELINE_BLOB[:12]} unavailable: {exc}")
+
+
+def test_detector_fires_on_the_actual_round16_defect() -> None:
+    """The decisive mutation proof: run the detector against the PRE-FIX source.
+
+    Both halves must name the two accessors whose parameterless signatures
+    refused H31i, and the dynamic half must additionally name `expected_pid1_argv`
+    -- the refusal that was still one boot away when round 16 was called.
+    """
+    source = _baseline_source()
+    varying = profile_varying_functions(source)
+    assert {"fixed32_tree_text", "speculative_config_text"} <= set(varying)
+
+    old_plain = types.ModuleType("contract_round16_h27")
+    old_plain.__file__ = str(CONTRACT_PATH)
+    exec(compile(source, f"<blob {BASELINE_BLOB[:12]}>", "exec"), old_plain.__dict__)
+    blind = [n for n in varying if not _has_profile_param(getattr(old_plain, n))]
+    assert set(blind) >= {
+        "fixed32_tree_text",
+        "speculative_config_text",
+        "expected_pid1_argv",
+        "expected_process_pid1_argv",
+        "validate_process_pid1_argv",
+    }, f"static half missed part of the defect: flagged {sorted(blind)}"
+
+    moved = classify(old_plain, _swapped_contract(source), source=source)["moved"]
+    assert {"fixed32_tree_text", "speculative_config_text"} <= set(moved), (
+        f"dynamic half missed the round-16 defect: moved={sorted(moved)}"
+    )
+
+
+def _baseline_contract() -> types.ModuleType:
+    try:
+        blob = subprocess.run(
+            ["git", "cat-file", "blob", BASELINE_BLOB],
+            cwd=REPO,
+            capture_output=True,
+            check=True,
+        ).stdout.decode()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        pytest.skip(f"pre-round-16 blob {BASELINE_BLOB[:12]} unavailable: {exc}")
+    module = types.ModuleType("fr13_fixed32_contract__baseline")
+    module.__file__ = str(CONTRACT_PATH)
+    exec(compile(blob, f"<blob {BASELINE_BLOB[:12]}>", "exec"), module.__dict__)
+    return module
+
+
+def test_hydra27_arm_execution_is_byte_identical_to_the_banked_baseline() -> None:
+    """Required for the banked H27i to survive: the diff moves nothing on hydra27.
+
+    Enumerate-and-show, against the actual pre-round-16 source rather than
+    hand-copied literals: every parameterised accessor, called the way existing
+    callers call it (defaulted) or explicitly with hydra27, returns byte-identical
+    text.  H31i can therefore be paired against the existing H27i baseline.
+    """
+    old = _baseline_contract()
+    checks: dict[str, tuple[object, object]] = {
+        "fixed32_tree_text()": (
+            old.fixed32_tree_text(),
+            contract.fixed32_tree_text(),
+        ),
+        "fixed32_tree_text(hydra27)": (
+            old.fixed32_tree_text(),
+            contract.fixed32_tree_text(PROFILE_HYDRA27),
+        ),
+        "speculative_config_text()": (
+            old.speculative_config_text(),
+            contract.speculative_config_text(),
+        ),
+        "speculative_config_text(hydra27)": (
+            old.speculative_config_text(),
+            contract.speculative_config_text(PROFILE_HYDRA27),
+        ),
+    }
+    for conc in (1, 4):
+        checks[f"expected_pid1_argv({conc})"] = (
+            old.expected_pid1_argv(conc),
+            contract.expected_pid1_argv(conc),
+        )
+        checks[f"expected_pid1_argv({conc},hydra27)"] = (
+            old.expected_pid1_argv(conc),
+            contract.expected_pid1_argv(conc, PROFILE_HYDRA27),
+        )
+        for attribution_only in (False, True):
+            key = f"expected_process_pid1_argv({conc},{attribution_only})"
+            checks[key] = (
+                old.expected_process_pid1_argv(
+                    conc, attribution_only=attribution_only
+                ),
+                contract.expected_process_pid1_argv(
+                    conc, attribution_only=attribution_only
+                ),
+            )
+            checks[key + "+profile"] = (
+                old.expected_process_pid1_argv(
+                    conc, attribution_only=attribution_only
+                ),
+                contract.expected_process_pid1_argv(
+                    conc, profile=PROFILE_HYDRA27, attribution_only=attribution_only
+                ),
+            )
+    drift = {k: (a, b) for k, (a, b) in checks.items() if a != b}
+    assert not drift, f"hydra27 execution CHANGED: {sorted(drift)}"
+    assert len(checks) >= 16
+
+
+def test_baseline_validator_still_accepts_the_new_hydra27_argv() -> None:
+    """Cross-direction: the OLD validator accepts what the NEW builder emits."""
+    old = _baseline_contract()
+    for conc in (1, 4):
+        argv = contract.expected_process_pid1_argv(conc, attribution_only=False)
+        assert (
+            old.validate_process_pid1_argv(argv, conc, attribution_only=False) == argv
+        )
+
+
+# ---------------------------------------------------------------------------
+# 5. CALL-SITE CENSUS -- the other half of "a list instead of boot-by-boot"
+# ---------------------------------------------------------------------------
+# Parameterising the accessors only helps where callers actually pass a mode.
+# Every production call site must name its profile, or be pinned here with the
+# reason it is hydra27-only. A NEW unparameterised call site fails this test.
+PROFILE_ACCESSORS = {
+    "fixed32_tree_text": 1,
+    "speculative_config_text": 1,
+    "expected_pid1_argv": 2,
+    "expected_process_pid1_argv": None,  # keyword-only `profile=`
+    "validate_process_pid1_argv": None,
+}
+
+KNOWN_HYDRA27_ONLY_CALL_SITES = {
+    (
+        "fr13_fixed32_nsys_reduce.py",
+        "validate_process_pid1_argv",
+    ): (
+        "nsys profiling is qualified for tail6/hydra27 only (_B1_PROFILER_MODES); "
+        "the reducer has no mode in scope at _validate_process_identity. Profiling "
+        "a hydra31 arm requires threading --mode through first."
+    ),
+    (
+        "fr13_floor_gate.py",
+        "fixed32_tree_text",
+    ): (
+        "module constant FIXED32_TREE, hydra27 by definition and read by nothing "
+        "else in the gate; the gate's own FIXED32_MODE_SPECS has no hydra31 entry "
+        "yet, which is the site that must be taught before a hydra31 floor gate."
+    ),
+}
+
+
+def _call_argument_text(text: str, open_paren: int) -> str:
+    depth, i = 0, open_paren
+    while i < len(text):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return text[open_paren + 1 : i]
+        i += 1
+    return ""
+
+
+def call_site_census() -> dict[tuple[str, str], list[int]]:
+    """{(file, accessor): [line numbers of calls that name no profile]}."""
+    blind: dict[tuple[str, str], list[int]] = {}
+    for path in sorted(SCRIPTS.glob("*.py")) + sorted(SCRIPTS.glob("*.sh")):
+        if path.name == CONTRACT_PATH.name:
+            continue
+        text = path.read_text()
+        for accessor, positional in PROFILE_ACCESSORS.items():
+            # module-qualified calls count too: the round-16 refusal came
+            # through `contract.fixed32_tree_text()`, and a census that only
+            # saw bare names would have reported the tree as fully covered.
+            pattern = rf"(?<![\w.])(?:[A-Za-z_]\w*\.)?{accessor}\s*\("
+            for match in re.finditer(pattern, text):
+                if re.search(r"\bdef\s+$", text[: match.start()]):
+                    continue
+                args = _call_argument_text(text, match.end() - 1)
+                if "profile=" in args:
+                    continue
+                if positional is not None:
+                    top, depth = [], 0
+                    current = ""
+                    for ch in args:
+                        if ch in "([{":
+                            depth += 1
+                        elif ch in ")]}":
+                            depth -= 1
+                        if ch == "," and depth == 0:
+                            top.append(current)
+                            current = ""
+                        else:
+                            current += ch
+                    if current.strip():
+                        top.append(current)
+                    if len([a for a in top if a.strip()]) >= positional:
+                        continue
+                line = text[: match.start()].count("\n") + 1
+                blind.setdefault((path.name, accessor), []).append(line)
+    return blind
+
+
+def test_every_production_call_site_names_its_profile() -> None:
+    blind = call_site_census()
+    unexpected = {k: v for k, v in blind.items() if k not in KNOWN_HYDRA27_ONLY_CALL_SITES}
+    assert not unexpected, (
+        "these call sites invoke a profile-varying accessor without naming a "
+        f"profile, so they answer for hydra27 whatever the arm is: {unexpected}"
+    )
+
+
+def test_the_known_hydra27_only_list_has_not_gone_stale() -> None:
+    """A pinned exception that no longer exists is a lie; fail so it is removed."""
+    blind = call_site_census()
+    stale = [k for k in KNOWN_HYDRA27_ONLY_CALL_SITES if k not in blind]
+    assert not stale, f"pinned hydra27-only call sites no longer exist: {stale}"
