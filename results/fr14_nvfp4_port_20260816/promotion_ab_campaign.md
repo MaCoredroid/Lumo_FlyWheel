@@ -2006,3 +2006,116 @@ than by any amount of gate-reading. Different class, different detector.
 **GPU cost of this round: ~1 minute of a dead container, plus the offline credential.**
 Fail-closed did its job: nothing served, nothing mis-reported, and the blocker is
 named to the character.
+
+---
+---
+
+# ROUND 9 (2026-08-19 02:26Z–02:57Z) — site 21 is fixed and confirmed; ARM S refused at a 23rd site
+
+**Engagement observation, leading as asked: none.** ARM S refused twice before any
+forward ran — once on the credential path, once on binary identity. Total GPU cost
+this round: **about two minutes** across two fast refusals.
+
+| phase | outcome |
+|---|---|
+| **0** yield to E1 | `e1-dspark-replay` drained 02:38Z |
+| **1** Tier-B credential | **PASS**, 9/9 bounds, bound to `ac6e3ed87` |
+| **2** gqa_pair gate | **PASS rc=0** — **site 21 confirmed fixed end-to-end** |
+| **3** ARM S | **REFUSED**: credential path, then a **23rd site** |
+
+## R9.1 Site 21 is genuinely fixed — verified two ways
+
+Statically: zero quoted comments in the boot region of **all three** launcher twins.
+Behaviourally: the gate container lived past 58 s (round 8 died at 47 s) and the gate
+drained `rc=0`. **Every fixed32 boot works again.** That is also the first independent
+confirmation that the coordinator's mechanical fix was complete across the twins.
+
+## R9.2 The credential path — one half measured, one half still open
+
+I ran both spellings rather than argue about them.
+
+| `FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL` | result |
+|---|---|
+| **container** path (`/workspace/output/…`) | **REFUSED** by the launcher's *host-side* check — `-f`/`sha256sum` run on the host, where `/workspace` does not exist |
+| **host** path (`/home/mark/…/output/…`) | host check **PASSES**, run proceeds |
+
+The variable is host-validated at `:2383-2386`, forwarded **verbatim** at `:6704`, and
+consumed **inside the container** at `:7071`. The host path clears the first hurdle;
+whether the container can then read it is **untested**, because the run dies earlier
+(§R9.3). So I am *not* claiming "no value satisfies both" — that would be exactly the
+kind of read-not-measured claim this campaign keeps punishing. **Suspected, not
+established.**
+
+If it does turn out to need both, the launcher already carries the pattern:
+`FR13_FA2_QROW32_B1_GQA_PAIR_GATE_HOST` (host) alongside `…_GATE_JSON` (container).
+
+## R9.3 The 23rd site — the Python twin doesn't speak the new spelling
+
+```
+FAIL: launcher rc=1
+fixed32 qrow32 B1 binary identity is not qualified
+```
+
+The in-container qualification map resolves the pin arm at `:4366`:
+
+```python
+b1_pin_arm = os.environ.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "") \
+          or os.environ.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
+```
+
+It never consults the new first-class `FR13_FA2_QROW32_B1_TIER_B_ARM`. Lane 4 *did*
+add the `"gqa_pair_splitk"` entry to the map (`:4385`) **and** a tier-B cross-check
+("tier-b arm resolved a non-tier-b binary") — but the resolver feeding that map still
+speaks only the two old spellings, so `b1_pin_arm` comes out **`""`**, the map's `""`
+key returns **split2's** pins, and the mounted split-K binary is refused.
+
+**The bash pin-arm resolver, twenty-one hundred lines earlier, does know the new
+spelling** — `:2245` falls back to `TIER_B_ARM`. The Python twin's own comment four
+lines above the defect reads *"This mirrors the bash pin case"*. **It no longer does.**
+
+### The irony worth banking
+
+The `""` entry in that map was added *deliberately*, with a comment explaining it
+replaced a `.get()` default because "the `.get()` default this replaced answered for
+every arm nobody had written a key for — with split2's identity — which is the 17th
+site's defect shape exactly."
+
+But `""` is precisely what the un-updated resolver produces for a tier-B arm. So the
+named `""` entry now plays the exact role the old silent default played, and answers
+for the tier-B arm with split2's identity — **the 17th site's defect, reconstituted
+inside the fix written to prevent it.** Naming a default does not remove it; it renames
+it. The removal has to happen at the *resolver*, not the table.
+
+## R9.4 Process: HEAD moved inside the quiet window again
+
+Pass 77 (`c0d5550f4`) landed at **02:41:33Z**, between my Tier-B earn (02:38–02:40)
+and the ARM S attempts. Both credentials bind `ac6e3ed87` and are therefore **stale**
+— the container-side `verify-tier-b` would have caught it, but the run died earlier at
+§R9.3, so it cost nothing this time.
+
+Second occurrence in three rounds (pass 73 in round 7, pass 77 now). It has been
+harmless twice. The failure mode it invites is not harmless: a credential earned at
+one HEAD and a serve validated at another is exactly the drift the whole credential
+regime exists to prevent.
+
+## R9.5 Status
+
+**Mark's split-K eyeball is NOT discharged. Served split-K tokens after nine rounds:
+zero.** The serving-path ledger:
+
+| # | site | class | found by |
+|---|---|---|---|
+| 17 | identity resolver defaulted to split2 | tier-A default | round-5 boot |
+| 18 | installer keyed to the production selector | tier-A installer | lane 4 |
+| 19 | hook gates on a tier-A attestation | tier-A precondition | round-7 boot |
+| 20 | `require_exact4` vs single-instance arming | contradiction | round-7 read |
+| 21 | quotes in a comment truncate the boot script | text assembly | round-8 boot |
+| 22 | credential path host-vs-container | *suspected* | round-9 boot (half) |
+| **23** | **Python pin-arm resolver ignores `TIER_B_ARM`** | **bash/python twin drift** | **round-9 boot** |
+
+Sites 17, 18 and 23 are the **same defect in three different resolvers**, and 23 is
+the second time a bash/python twin pair has drifted apart in this exact file. The
+cheap detector is not another boot: it is a test that asserts **the bash pin-arm
+resolver and its Python twin return the same arm for every member of
+`QROW32_B1_TIER_B_ARMS`** — executable on CPU, no GPU, and it would have caught 2.1,
+17 and 23.

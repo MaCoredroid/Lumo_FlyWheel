@@ -710,6 +710,47 @@
   "status": "BLOCKED at a 21st site \u2014 total, affects every fixed32 boot at this HEAD",
   "window_utc": "2026-08-19T02:18Z..02:25Z"
  },
+ "round9": {
+  "engagement_observation": "NONE \u2014 ARM S refused twice before any forward ran",
+  "eyeball_discharged": false,
+  "gpu_cost": "~2 minutes across two fast refusals",
+  "head_at_start": "ac6e3ed87e4e18d9f8bfb84863ba205cc8697b16",
+  "phase0": "yielded to e1-dspark-replay until it drained 02:38Z",
+  "phase1_tierb": {
+   "bound_to": "ac6e3ed87",
+   "bounds": "9/9",
+   "outcome": "PASS"
+  },
+  "phase2_gate": {
+   "outcome": "PASS",
+   "rc": 0,
+   "significance": "SITE 21 CONFIRMED FIXED END-TO-END \u2014 container lived past 58s (round 8 died at 47s); every fixed32 boot works again"
+  },
+  "process_note": "pass 77 (c0d5550f4) landed 02:41:33Z inside the declared quiet window, between the Tier-B earn and the ARM S attempts; both credentials bind ac6e3ed87 and are stale. Harmless this time only because the run died earlier. Second occurrence in three rounds.",
+  "recommended_detector": "a CPU test asserting the bash pin-arm resolver and its Python twin return the same arm for every member of QROW32_B1_TIER_B_ARMS \u2014 would have caught sites 2.1, 17 and 23",
+  "served_splitk_tokens_to_date": 0,
+  "site_21_verification": {
+   "behavioural": "gate drained rc=0",
+   "static": "zero quoted comments in the boot region of all three launcher twins"
+  },
+  "site_22_credential_path": {
+   "existing_pattern_if_needed": "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_HOST alongside _GATE_JSON",
+   "measured_container_path": "REFUSED by the host-side check at :2383-2386 (/workspace does not exist on the host)",
+   "measured_host_path": "host check PASSES, run proceeds",
+   "note": "variable is host-validated at :2383, forwarded verbatim at :6704, consumed in-container at :7071",
+   "status": "SUSPECTED, NOT ESTABLISHED",
+   "untested": "whether the container can then read the host path \u2014 the run dies earlier at site 23"
+  },
+  "site_23": {
+   "asymmetry": "the BASH pin-arm resolver at :2245 DOES fall back to TIER_B_ARM; the Python twin does not, and its own comment four lines above reads \"This mirrors the bash pin case\"",
+   "class": "bash/python twin drift \u2014 same as round-1 site 2.1",
+   "consequence": "b1_pin_arm == \"\" -> the map's \"\" key returns SPLIT2 pins -> the mounted split-K binary is refused",
+   "irony": "the \"\" key was added deliberately to replace a .get() default because that default was \"the 17th site defect shape exactly\" \u2014 but \"\" is what the un-updated resolver produces for tier-B, so the named entry now plays the old default role and answers with split2 identity. Naming a default does not remove it; the removal has to happen at the RESOLVER.",
+   "refusal": "fixed32 qrow32 B1 binary identity is not qualified",
+   "site": "scripts/fr13_launch_forked_fa2_tree_server.sh:4366 \u2014 in-container qualification map resolves b1_pin_arm from LIVE_AB_ARM or PRODUCTION_ARM only, never TIER_B_ARM"
+  },
+  "window_utc": "2026-08-19T02:26Z..02:57Z"
+ },
  "schema": "fr14.promotion_ab.campaign_summary.v1",
  "step0_regate": {
   "cause": "fr13_fixed32_work_census.py:157 TAW_SOURCE_CONTRACT_SHA256 stale at 484babd7 vs emitter 68b289ae",
