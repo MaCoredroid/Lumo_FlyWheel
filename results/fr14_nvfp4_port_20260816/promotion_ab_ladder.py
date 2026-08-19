@@ -27,7 +27,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "fr13.fixed32.accept_ladder.v1"
+# The drain's schema is being bumped to v2 (warmup bracket + explicit accepted-token
+# DEFINITIONS, in response to this campaign's own +4-rows / +61-tokens finding). Match
+# the FAMILY, not one version: a harness pinned to v1 would meet a v2 payload, find no
+# match, and report "INSTRUMENT ABSENT" -- turning someone else's fix into a false
+# negative from mine. Anything outside the family is still not a ladder.
+SCHEMA_FAMILY = ("fr13.fixed32.accept_ladder.v1", "fr13.fixed32.accept_ladder.v2")
+SCHEMA = SCHEMA_FAMILY[0]
 CLAMP_SLOT = 15
 
 
@@ -45,7 +51,7 @@ def find_payload(*docs: tuple[str, Any]) -> tuple[str, dict] | None:
     """Find the drain payload by its SCHEMA, not by key-name guessing."""
     for label, doc in docs:
         for path, node in _walk(doc):
-            if isinstance(node, dict) and node.get("schema") == SCHEMA:
+            if isinstance(node, dict) and node.get("schema") in SCHEMA_FAMILY:
                 return f"{label}:{path or '<root>'}", node
     return None
 
@@ -158,7 +164,7 @@ def main(argv: list[str]) -> int:
     if not found:
         out["ADMISSIBLE"] = False
         out["VERDICT"] = (
-            f"NO {SCHEMA} PAYLOAD IN ARTIFACTS -- headline 1 is instrument-blocked. "
+            f"NO ACCEPT-LADDER PAYLOAD IN ARTIFACTS -- headline 1 is instrument-blocked. "
             "Report it blocked; do NOT substitute the aggregate accept for a distribution."
         )
         print(json.dumps(out, indent=1))
