@@ -60,13 +60,19 @@ PROMOAB_SUBSET=${PROMOAB_SUBSET:-exact4}
 case "$PROMOAB_SUBSET" in
   exact4)  SUBSET=config/fr13_fixed32/subset_b4_four.json ;;
   exact16) SUBSET=config/fr13_fixed32/subset_b4_sixteen.json ;;
-  *) echo "PROMOAB_SUBSET must be exact4 or exact16" >&2; exit 2 ;;
+  # THE RESUME SET. exact16 attempt 6 served 3 of 16; 13236 degenerated and is
+  # verdicted; --skip-existing is forbidden for fixed32 campaigns; and declaring
+  # exact16 while serving fifteen is the pins-as-fiction move pass 122 prevents.
+  # So the remainder is its own canonical set with its own declared workload.
+  exact16_minus_13236) SUBSET=config/fr13_fixed32/subset_b4_sixteen_minus_13236.json ;;
+  *) echo "PROMOAB_SUBSET must be exact4, exact16 or exact16_minus_13236" >&2; exit 2 ;;
 esac
 [[ -f "$SUBSET" && ! -L "$SUBSET" ]] || { echo "subset missing: $SUBSET" >&2; exit 2; }
 SUBSET_SHA256=$(sha256sum "$SUBSET" | cut -d' ' -f1)
 case "$PROMOAB_SUBSET:$SUBSET_SHA256" in
   exact4:0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5) ;;
   exact16:47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c) ;;
+  exact16_minus_13236:24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a) ;;
   *) echo "subset $PROMOAB_SUBSET digest drifted: $SUBSET_SHA256" >&2; exit 2 ;;
 esac
 MANDATORY_WEIGHT_BYTES=25430574256
