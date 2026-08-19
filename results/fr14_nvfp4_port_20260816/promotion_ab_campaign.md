@@ -2918,3 +2918,107 @@ provided HEAD holds. The credential-scope question from round 15 remains parked 
 
 Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
 recommended for the tier-B serving route on round 12's evidence.
+
+---
+---
+
+# ROUND 17 (2026-08-19 10:35Z–10:41Z) — H31i refused at a FIFTH site, and this one would have BOOTED into a silently wrong drafter
+
+**Boot verdict: REFUSED in 5 s.** GPU cost: one 5-second container. **The ladder past
+position 10 remains unmeasured.**
+
+## R17.1 Pre-flight checks I ran before spending GPU — all three passed
+
+Your pairing claim, verified independently rather than accepted:
+
+* both accessors are now profile-parameterised
+  (`fixed32_tree_text(profile='hydra27_fixed32')`, same for
+  `speculative_config_text`);
+* **the current hydra27 default is byte-identical to the tree ARM H27i actually
+  executed** — I extracted the `speculative_token_tree` from H27i's own
+  `container_env.txt` and compared. **My banked baseline stands.**
+* `fixed32_tree_text('hydra31_fixed32')` genuinely differs from the hydra27 default.
+
+And your floor-gate question, verified rather than assumed: `serve_variant` *does*
+import from `fr13_floor_gate` (three sites), but the imported helpers —
+`validate_fixed32_run_subset`, `build_fixed32_chat_traffic_audit`,
+`_validate_fixed32_ingress_reports`, `load_fixed32_ingress_ledger` — **none reference
+`FIXED32_MODE_SPECS`**, and my arm runner never calls the floor gate at all (0 refs).
+**The missing hydra31 spec did not bite, as you predicted.**
+
+## R17.2 The fifth site
+
+```
+File "/workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py", line 10302,
+  in _fr13_fixed32_validate_patch_env
+RuntimeError: fixed32 requires FR13_FIXED32_TAW_WALK_CAP=12
+```
+
+The drafter patcher's own env validator hardcodes the hydra27 walk cap:
+
+```python
+if int(os.environ.get("FR13_FIXED32_TAW_WALK_CAP", "0")) != 12:
+    raise RuntimeError("fixed32 requires FR13_FIXED32_TAW_WALK_CAP=12")
+```
+
+hydra31's walk cap is **16** (`topology.TAIL10_WALK_CAP`) — the exact quantity round
+14's fix taught the vehicle to supply per-profile, and the one the census expects to
+move 12 → 16 (**the +33 % cfwd this A/B was scheduled to measure**). The vehicle
+correctly supplied 16; the patcher refuses anything but 12.
+
+## R17.3 The part that matters more than the literal
+
+I checked whether this is one stale number or something deeper, and it is deeper.
+
+```
+patcher _FR13_FIXED32_CHOICES  == hydra27 FIXED32_CHOICES : True
+patcher _FR13_FIXED32_CHOICES  == hydra31 TAIL10_CHOICES  : False
+hydra31 mentions in the whole patcher                     : 2
+   (both are mask/active-count tables — :163 and :1786; neither is the tree)
+```
+
+**The drafter patcher is bound to hydra27's tree by a module-level constant, with no
+profile selection anywhere.** It builds the parent/ancestry index from
+`_FR13_FIXED32_CHOICES` immediately after the walk-cap check — the next line is
+`if len(_FR13_FIXED32_CHOICES) != 31`, which *passes* for both profiles because both
+trees have 31 drafts.
+
+So: **fixing the walk-cap literal alone would let H31i boot — and it would boot with a
+drafter whose ancestry was built from the wrong tree.** Both trees are 31 wide, so
+nothing downstream would catch it on shape; the census's `(4,6)` pair, 27/32 rows and
+31 physical drafts would all still validate. That is the "wrong fix that would have
+booted" hazard in its most dangerous form yet: not a refusal one line later, but a
+**silent** wrong-topology serve producing numbers that look like a tail10 result.
+
+It is the same failure family as round 6, when a serve reported a kernel it never ran —
+and the campaign's answer then is the answer now: **the fix must make the binding
+observable, not just permissive.** Whatever lands should assert that the drafter's tree
+matches the served profile at boot, so that a mismatch refuses rather than serves.
+
+## R17.4 The tally
+
+| round | profile-blind consumer | would a naive fix have booted? |
+|---|---|---|
+| 13 | serve vehicle | — |
+| 14 | preflight mode table **+** tree-ancestry compare | yes, refusal moved 3 lines |
+| 16 | contract accessors (`tree_text`, `spec_config`) | yes, refusal moved 2 lines |
+| **17** | **drafter patcher: walk-cap literal + hardcoded tree** | **yes — and it would have SERVED** |
+
+Four rounds, four different layers, and the detector proposed after round 16 —
+*enumerate every accessor/constant encoding a tree, mask, node count, walk cap or
+spec-config and assert it takes a profile argument or is proven profile-invariant* —
+would have caught **all four**, including this one: `_FR13_FIXED32_CHOICES` is exactly a
+tree-encoding module constant with no profile parameter, and the walk-cap literal is
+exactly a walk-cap constant. I recommend that scan cover `fr10_phase4_patch_vllm_tree_gdn.py`
+as well as the contract module, since this round proves the class is not confined to one file.
+
+## R17.5 Status
+
+**tail10 A/B: baseline banked, treatment arm still unbootable.** H27i
+(`step_wall 215.498`, `s_per_fwd_gpu 0.133974`, `accept 4.2124`, TPS 26.058, 17 804
+steps) remains valid and re-verified this round against the current contract. The four
+headline questions — **the ladder past position 10**, accept vs +4.3/+7.7 %, cfwd vs
++33 %, step_wall/TPS — are all still open, and all four need the same single boot.
+
+Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
+recommended for the tier-B serving route on round 12's evidence.

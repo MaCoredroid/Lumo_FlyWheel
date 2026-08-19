@@ -511,6 +511,33 @@
   "tail10_status": "still not measured, but the baseline half is banked and clean; H27i needs no re-running when H31i boots provided HEAD holds",
   "window_utc": "2026-08-19T08:50Z..10:15Z"
  },
+ "round17": {
+  "DEEPER_FINDING": {
+   "both_are": "mask/active-count tables at :163 and :1786 \u2014 neither is the tree",
+   "family": "same as round 6, when a serve reported a kernel it never ran",
+   "hazard": "fixing the walk-cap literal ALONE would let H31i BOOT with a drafter whose ancestry was built from the wrong tree; both trees are 31 wide so the next check (len != 31) passes, and the census (4,6) pair, 27/32 rows and 31 physical drafts would all still validate",
+   "hydra31_mentions_in_patcher": 2,
+   "patcher_tree_binding": "_FR13_FIXED32_CHOICES is a module-level constant equal to hydra27 FIXED32_CHOICES (verified True) and NOT hydra31 TAIL10_CHOICES (verified False); no profile selection anywhere",
+   "requirement": "the fix must make the binding OBSERVABLE, not just permissive \u2014 assert the drafter tree matches the served profile at boot so a mismatch refuses rather than serves",
+   "severity": "the wrong-fix-that-would-have-booted hazard in its most dangerous form \u2014 not a refusal one line later but a SILENT wrong-topology serve producing numbers that look like a tail10 result"
+  },
+  "detector": "the round-16 proposed scan would have caught all four rounds including this one (_FR13_FIXED32_CHOICES is a tree-encoding module constant with no profile parameter; the walk cap is a walk-cap constant). Recommend it cover fr10_phase4_patch_vllm_tree_gdn.py as well as the contract module \u2014 this round proves the class is not confined to one file.",
+  "gpu_cost": "one 5-second container",
+  "head": "65b92613a",
+  "preflight_checks_passed": {
+   "accessors_parameterised": true,
+   "baseline_byte_identity": "VERIFIED INDEPENDENTLY \u2014 current hydra27 default is byte-identical to the speculative_token_tree ARM H27i actually executed, extracted from its own container_env.txt",
+   "floor_gate": "serve_variant imports 4 floor_gate helpers; NONE reference FIXED32_MODE_SPECS, and the arm runner never calls the floor gate (0 refs) \u2014 the missing hydra31 spec did not bite",
+   "hydra31_differs": true
+  },
+  "site_5": {
+   "refusal": "RuntimeError: fixed32 requires FR13_FIXED32_TAW_WALK_CAP=12",
+   "site": "fr10_phase4_patch_vllm_tree_gdn.py:10302 _fr13_fixed32_validate_patch_env",
+   "why": "hydra31 walk cap is 16 (topology.TAIL10_WALK_CAP) \u2014 the quantity round 14 taught the vehicle to supply per-profile and the census expects to move 12->16, the +33% cfwd this A/B was scheduled to measure"
+  },
+  "tail10_status": "baseline banked and re-verified; treatment arm still unbootable; all four headline questions open and all need the same single boot",
+  "window_utc": "2026-08-19T10:35Z..10:41Z"
+ },
  "round2": {
   "arms": {
    "C'": {
