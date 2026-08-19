@@ -1,0 +1,14 @@
+28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857  /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so
+Traceback (most recent call last):
+  File "/workspace/scripts/fr13_qrow32_b1_pass_sidecar.py", line 1638, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/workspace/scripts/fr13_qrow32_b1_pass_sidecar.py", line 1574, in main
+    result = verify_tierb_credential_file(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scripts/fr13_qrow32_b1_pass_sidecar.py", line 587, in verify_tierb_credential_file
+    verdict = validate_tierb_credential(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scripts/fr13_qrow32_b1_pass_sidecar.py", line 665, in validate_tierb_credential
+    raise ValueError(
+ValueError: tier-b credential patch_source_sha256 does not bind this arm: 'e80ed4ea84f3259cbcde270d35898aa5c7a9f84b6b0da6343ac830b160f0e18b' != 'bec746526ade6c812f545d533560058376f8912a926ec25619297d002ed4eedc'

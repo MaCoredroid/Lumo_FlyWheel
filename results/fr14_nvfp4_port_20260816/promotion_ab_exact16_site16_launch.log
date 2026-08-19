@@ -1,0 +1,12 @@
+[fr13] B1 arm unnamed; serving the PROMOTED DEFAULT FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk (tier-b credential 255267fc18fa4eb5209e381133d53a48410b3d362c6bc573065a9dd5be87e6d5)
+[fr13] gqa_pair promoted default STANDS DOWN: the split-K tier-b default is armed (split-K supersedes; name gqa_pair explicitly to opt out)
+[fr13] B1 tier-b serve workload=exact16 subset=config/fr13_fixed32/subset_b4_sixteen.json
+[launch] TAIL mode ON -> /logs/fr13_tail_mode.arm (head_depth=5 + arctic chain to wide_D)
+[launch] FUSED DRAFT TOP-K ON (promoted default; blocks=64 so=/workspace/output/fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so)
+               total        used        free      shared  buff/cache   available
+Mem:           117Gi        12Gi       105Gi       660Mi       1.0Gi       105Gi
+Swap:           15Gi          0B        15Gi
+[launch] unified-memory preflight OK: MemFree=105.60GiB >= required=82.26GiB (GPU_UTIL=0.7, MemTotal=117.51GiB)
+deb945e0d5017457b9e0feb6bf193190a98062beed13b6ad246cd90e293003fc
+[launch] fixed32 container identity id=deb945e0d5017457b9e0feb6bf193190a98062beed13b6ad246cd90e293003fc name=fr13-bigdenom-hydra27_fixed32_promoab_Cqc16
+[launch] gpu_oom_guard armed for container=deb945e0d5017457b9e0feb6bf193190a98062beed13b6ad246cd90e293003fc (floor=9000MiB)

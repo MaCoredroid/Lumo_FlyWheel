@@ -3799,3 +3799,90 @@ default block should assign its literals unconditionally rather than with `:-`.
 
 Fifteen sites. No container created, nothing to preserve, `containers=0`, GPU idle.
 H27n baseline unchanged. Standing verdicts unchanged.
+
+# EXACT16 QC, SECOND ATTEMPT (2026-08-19 21:11Z) — site 15 cleared, site 16 found IN THE CONTAINER
+
+## BOOT VERDICT: REFUSED at 13s, inside the container. Container PRESERVED.
+
+The pass-124 ruling worked and carried the boot two whole gates further. Recorded in
+`arm_env.txt` as required, not applied invisibly:
+
+```
+[promoab] extra env: FR13_B1_CREDENTIAL_POINTER=/nonexistent
+[promoab] extra env: FR13_FA2_QROW32_B1_TIERB_WORKLOAD=exact16
+```
+
+The launcher then got past site 15 and **accepted the workload declaration**:
+
+```
+[fr13] B1 tier-b serve workload=exact16 subset=config/fr13_fixed32/subset_b4_sixteen.json
+[launch] FUSED DRAFT TOP-K ON (promoted default; blocks=64 ...)
+[launch] fixed32 container identity id=deb945e0d501... 
+```
+
+Container `fr13-bigdenom-hydra27_fixed32_promoab_Cqc16` (`deb945e0d501`) is **still on
+the box, exited(1), preserved per instruction**. Full 14-line log banked.
+
+## DISCLOSURE CORRECTION — the F2 stand-down line is PRESENT, not absent
+
+Disclosure (2) asked me to report the stand-down as absent by configuration. It is not:
+
+```
+[fr13] gqa_pair promoted default STANDS DOWN: the split-K tier-b default is armed
+```
+
+Suppressing the credential POINTER does not suppress the stand-down, because the
+stand-down is triggered by `TIER_B_ARM` being armed, not by the credential import. So
+the arbitration evidence is directly observable **in this boot** and needs no citation
+of the three earlier ones. Recording the correction rather than filing the disclosure I
+was asked for, because the disclosure would have been false.
+
+## SITE 16 — the mint made the host gate VACUOUS, and the credential caught what it hid
+
+In-container `verify-tier-b`:
+
+```
+fr13_qrow32_b1_pass_sidecar.py:665 validate_tierb_credential
+ValueError: tier-b credential patch_source_sha256 does not bind this arm:
+  'e80ed4ea84f3259cbcde270d35898aa5c7a9f84b6b0da6343ac830b160f0e18b'
+   != 'bec746526ade6c812f545d533560058376f8912a926ec25619297d002ed4eedc'
+```
+
+    credential identity.patch_source_sha256   e80ed4ea...   what it was SEALED against
+    scripts/fr13_patch_fa2_tree_bias.py now   bec74652...   what F1 MINTS
+
+**And the commit that moved it is `c90c09a60` — lane 4's tier-B workload table itself.**
+The patcher was `e80ed4ea` as of `6146147c4` and became `bec74652` at `c90c09a60`. The
+landing that unblocked exact16 is the same landing that invalidated the credential
+exact16 needs.
+
+Why nothing on the host could catch it. The host-side gate reads:
+
+```bash
+"$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)"
+```
+
+On the promoted-default path that variable is **minted from that exact command** (F1,
+`:1475`). So the comparison is a **tautology — it cannot fail**. F1's own comment says
+the patcher digest "is checked for every arm including tier-B: it decides dispatch...
+and the credential binds it too", and that is precisely right; but minting it defeats
+the host check and leaves the sealed credential as the only real one. That check did its
+job, 13 seconds in, inside the container.
+
+So the promoted split-K default **still has never served.** Round 12 served split-K by
+NAMING the arm with an explicitly supplied credential/patcher pair that matched.
+
+## WHAT THIS MEANS FOR THE FIX
+
+Not mine to make. But the shape is worth stating: re-sealing the credential against
+`bec74652` clears tonight's blocker and will break again at the next commit that touches
+the patcher — which is now demonstrably routine, since a *workload-table* change did it.
+The durable options are for the credential to bind the patcher's **semantic** surface
+rather than its file digest, or for the mint to refuse rather than manufacture a digest
+the credential cannot bind (a vacuous gate is worse than an absent one: it reads as
+verification).
+
+## STATUS
+
+Sixteen sites. Container preserved and banked; removing it is a one-liner when the slot
+is wanted. GPU idle. H27n baseline unchanged. Standing verdicts unchanged. No retry.
