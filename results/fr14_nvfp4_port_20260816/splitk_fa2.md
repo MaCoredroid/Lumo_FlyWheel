@@ -905,3 +905,59 @@ trusted from two files away. Round 10 died there with every other link already g
 
 **266 tests, 16 lint pairs, 0 stale. Both C++ closures unchanged — no rebuild.**
 Re-earn the credential at the serving HEAD; arm with `TIER_B_ARM` + `_CREDENTIAL_HOST`.
+
+---
+
+## 18. Site 25 — producer and consumer, and the detector that ends the patching family
+
+Site 25 is site 18's shape in a **second installer**. `cuda_graph.py` injects the import
+and call of `_fr13_fa2_qrow32_b1_production_capture_end` under `elif tier_b_serve`; the
+blob that **defines** that symbol was inserted under `live_ab or production` only.
+Consumer installed, producer not — so the boot cleared the launcher, the credentials, the
+gate and the contract, and died at vLLM module import.
+
+### 18.1 Symbols resolved / dangling found / fixed
+
+**204 symbol references resolved across three arm modes (68 / 68 / 66), 3 dangling found,
+3 fixed** — all three by one edit, because the same disjunction gates
+`production_begin`, `production_end` and `capture_end`. Reverting the fix makes the
+detector name exactly those three, which is what "each would have bitten in turn" means
+concretely.
+
+Plus one more, found by the symbol inventory rather than by a boot: `tier_b_serve` was
+**absent from `_patch_tree_attn`'s private-selector mutual-exclusion dict**, so
+`tier_b_serve + b1_live_ab` installed *both* the live-register wrapper and the production
+wrapper into one decode call while `cuda_graph.py` got only the live-replay hook — leaving
+`production_capture_end` defined, its state populated, and its verification never run.
+
+### 18.2 The detector
+
+`scripts/fr14_patch_symbol_resolution_sweep.py`. Builds a scratch engine tree carrying
+only the anchors the patcher binds to, runs the **real** `patch_installed_vllm` against it
+**once per arm mode**, then AST-walks every patched file and requires every `_fr13_*`
+symbol referenced to be defined where the patch actually put it. No GPU, no vLLM, 0.3 s.
+
+It is run for **tier-A production, tier-B serve and the live-A/B shadow** — because a
+detector that only knew the mode under repair would have passed on the day site 18
+shipped.
+
+**It had the site-25 blind spot itself, at first.** The initial `analyse()` counted an
+injected `from … import _fr13_x` as a *definition*, so it reported zero cross-file edges
+and would have called a missing producer "resolved". An import is an obligation, not a
+definition; recording it as one is precisely the bug being hunted. With that fixed the
+sweep reports the one real cross-file edge per mode — `cuda_graph.py → tree_attn.py` —
+and the mutation test fails as it should.
+
+Two adjudicated foreigners are named rather than ignored:
+`_fr13_fixed32_observed_event_active` and `_fr13_fixed32_capture_begin` belong to the GDN
+patcher. An unadjudicated dangling symbol stays a failure.
+
+### 18.3 Import resolution (task 3)
+
+The patched modules are now `py_compile`d in tests for all three modes, and the specific
+cross-file import is checked against `tree_attn.py`'s **top-level defs**. The ImportError
+class that produced site 25 now fails in milliseconds instead of minutes.
+
+**299 tests, 16 lint pairs, 0 stale, 3 arm modes swept. Both C++ closures unchanged — no
+rebuild.** Re-earn the credential at the serving HEAD; arm with `TIER_B_ARM` +
+`_CREDENTIAL_HOST`.

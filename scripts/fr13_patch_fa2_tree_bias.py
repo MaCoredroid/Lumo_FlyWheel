@@ -9101,6 +9101,16 @@ def _patch_tree_attn(
         "fixed32_query_tile32_live_ab": fixed32_query_tile32_live_ab,
         "fixed32_query_tile32_b1_live_ab": fixed32_query_tile32_b1_live_ab,
         "fixed32_query_tile32_b1_production": fixed32_query_tile32_b1_production,
+        # The tier-B serve was missing from this dict, so tier_b_serve plus
+        # b1_live_ab passed the check below and installed BOTH the live-register
+        # wrapper and the production wrapper into the same decode call -- while
+        # patch_installed_vllm's elif chain gave cuda_graph.py only the
+        # live-replay hook, leaving production_capture_end defined, its state
+        # populated, and its verification never run. Found by the symbol
+        # inventory, not by a boot.
+        "fixed32_query_tile32_b1_tier_b_serve": (
+            fixed32_query_tile32_b1_tier_b_serve
+        ),
         "fixed32_query_tile32_b4_production": fixed32_query_tile32_b4_production,
         "fixed32_query_tile16_production": fixed32_query_tile16_production,
     }
@@ -9268,12 +9278,25 @@ def _fr13_sr_causal_flag():
             "qrow32 live paged exact4 A/B helpers",
         )
         changed = changed or did
-    if fixed32_query_tile32_b1_live_ab or fixed32_query_tile32_b1_production:
+    if (
+        fixed32_query_tile32_b1_live_ab
+        or fixed32_query_tile32_b1_production
+        or fixed32_query_tile32_b1_tier_b_serve
+    ):
+        # SITE 25, and it is site 18's shape in a SECOND installer. cuda_graph.py
+        # injects the import and call of _fr13_fa2_qrow32_b1_production_capture_end
+        # under `elif tier_b_serve`; this blob DEFINES that symbol, and its
+        # condition omitted tier-B. Consumer installed, producer not -- so the
+        # boot got all the way to vLLM module import and died there.
+        #
+        # The same disjunction gates production_begin, production_end and
+        # capture_end, so each would have bitten in turn had the others been
+        # fixed one at a time.
         text, did = _insert_once(
             text,
             "def _get_depth_counts(",
             FIXED32_QUERY_TILE32_B1_SELECTOR_HELPERS,
-            "qrow32 B1 live and production selector helpers",
+            "qrow32 B1 live, tier-b and production selector helpers",
         )
         changed = changed or did
     if fixed32_query_tile32_b4_production:

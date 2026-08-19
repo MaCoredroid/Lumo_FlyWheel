@@ -16,6 +16,7 @@ RECOMPUTED from the measurements rather than read out of the file.
 from __future__ import annotations
 
 import importlib.util
+import ast
 import json
 import re
 import sys
@@ -1677,3 +1678,187 @@ def test_the_contract_resolver_can_see_the_selector_it_learned(launcher):
         "the child interpreter that runs _expected_runtime_fa2_identity never "
         "receives the tier-B selector"
     )
+
+
+# ===========================================================================
+# THE CROSS-FILE SYMBOL DETECTOR (sites 18 and 25).
+#
+# Both were producer/consumer installer splits: a fragment CALLING a symbol
+# injected under one condition, the blob DEFINING it injected under another.
+# Both were found by booting a GPU server and reading a traceback. Both are
+# static facts about the patcher's output.
+# ===========================================================================
+
+SYMBOL_SWEEP = REPO / "scripts/fr14_patch_symbol_resolution_sweep.py"
+
+
+def _symbol_sweep():
+    return _module(SYMBOL_SWEEP, "fr14_symbol_sweep")
+
+
+def test_every_injected_symbol_resolves_in_every_arm_mode():
+    """The test that ends the patching family.
+
+    Run for all three modes, because a detector that only knew the mode under
+    repair would have passed on the day site 18 shipped.
+    """
+    sweep = _symbol_sweep()
+    report = sweep.sweep()
+    assert {row["mode"] for row in report["modes"]} == {
+        "tier_a_production", "tier_b_serve", "live_ab_shadow"
+    }
+    for row in report["modes"]:
+        assert not row["dangling"], (
+            f"{row['mode']}: injected symbols with no definition:\n  "
+            + "\n  ".join(
+                f"{d['symbol']} in {d['referenced_in']} ({d['reason']})"
+                for d in row["dangling"]
+            )
+        )
+        # A sweep that resolved nothing would also report nothing dangling.
+        assert row["symbols_resolved"] >= 60, row["symbols_resolved"]
+        # And the cross-file edge is the one that actually bit twice.
+        assert len(row["cross_file_edges"]) == 1, row["cross_file_edges"]
+        edge = row["cross_file_edges"][0]
+        assert edge["referenced_in"].endswith("cuda_graph.py")
+        assert edge["defined_in"].endswith("tree_attn.py")
+
+
+def test_symbol_detector_catches_site_25(tmp_path):
+    """Revert site 25 and the detector must find it -- and find all three.
+
+    Site 25 was the helpers blob's install condition omitting tier-B while
+    cuda_graph.py's import of one of its symbols was installed for tier-B. The
+    same disjunction gates production_begin, production_end and capture_end, so
+    each would have bitten in turn had they been fixed one at a time. All three
+    must appear.
+    """
+    sweep = _symbol_sweep()
+    src = PATCHER.read_text()
+    current = (
+        "    if (\n"
+        "        fixed32_query_tile32_b1_live_ab\n"
+        "        or fixed32_query_tile32_b1_production\n"
+        "        or fixed32_query_tile32_b1_tier_b_serve\n"
+        "    ):"
+    )
+    reverted = (
+        "    if fixed32_query_tile32_b1_live_ab or "
+        "fixed32_query_tile32_b1_production:"
+    )
+    assert current in src, "the site-25 install condition moved"
+    mutant = tmp_path / "patcher_site25.py"
+    mutant.write_text(src.replace(current, reverted, 1))
+    sweep.PATCHER = mutant
+
+    report = sweep.sweep()
+    by_mode = {row["mode"]: row for row in report["modes"]}
+    # tier-A and the shadow are unaffected: the bug was tier-B-only.
+    assert not by_mode["tier_a_production"]["dangling"]
+    assert not by_mode["live_ab_shadow"]["dangling"]
+    dangling = {d["symbol"] for d in by_mode["tier_b_serve"]["dangling"]}
+    assert dangling == {
+        "_fr13_fa2_qrow32_b1_production_begin",
+        "_fr13_fa2_qrow32_b1_production_end",
+        "_fr13_fa2_qrow32_b1_production_capture_end",
+    }, dangling
+    # and the cross-file one is diagnosed as a cross-file failure, not a
+    # missing local name -- so the reader is pointed at the right installer.
+    cross = next(
+        d for d in by_mode["tier_b_serve"]["dangling"]
+        if d["symbol"].endswith("capture_end")
+    )
+    assert "does not define it" in cross["reason"]
+    assert cross["referenced_in"].endswith("cuda_graph.py")
+
+
+def test_symbol_detector_catches_a_reverted_site_18(tmp_path):
+    """The other installer, reverted: the serving call site without tier-B."""
+    sweep = _symbol_sweep()
+    src = PATCHER.read_text()
+    current = (
+        "    if (\n"
+        "        fixed32_query_tile32_b1_production\n"
+        "        or fixed32_query_tile32_b1_tier_b_serve\n"
+        "    ) and ("
+    )
+    assert current in src, "the site-18 install condition moved"
+    mutant = tmp_path / "patcher_site18.py"
+    mutant.write_text(
+        src.replace(current, "    if fixed32_query_tile32_b1_production and (", 1)
+    )
+    sweep.PATCHER = mutant
+    report = sweep.sweep()
+    by_mode = {row["mode"]: row for row in report["modes"]}
+    # The consumer in cuda_graph.py is still installed for tier-B; its producer
+    # is still installed; so nothing DANGLES -- but the call site is gone, and
+    # that is a different detector's job (the CPU end-to-end walk). Recorded
+    # here so the reach of this one is written down rather than assumed.
+    assert not by_mode["tier_b_serve"]["dangling"]
+
+
+def test_the_tier_b_serve_is_mutually_exclusive_with_the_shadow_at_the_patcher():
+    """Found by the symbol inventory, not by a boot.
+
+    tier_b_serve was absent from _patch_tree_attn's private-selector dict, so
+    it could be combined with b1_live_ab: both wrappers installed into one
+    decode call, while cuda_graph.py got only the live-replay hook -- leaving
+    production_capture_end defined, its state populated, and its verification
+    never run.
+    """
+    patcher = _module(PATCHER, "fr14_symbol_patcher")
+    sweep = _symbol_sweep()
+    import tempfile as _tempfile
+
+    root = Path(_tempfile.mkdtemp()) / "site-packages"
+    sweep.build_engine_tree(root)
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        patcher.patch_installed_vllm(
+            root,
+            fixed32_query_tile32_b1_tier_b_serve=True,
+            fixed32_query_tile32_b1_live_ab=True,
+        )
+
+
+def test_patched_modules_import_resolve(tmp_path):
+    """TASK 3: the ImportError class dies in tests.
+
+    Site 25 presented as an ImportError at vLLM module import, after the
+    launcher, the credentials and the gate had all passed. The patched modules
+    are compiled and their module-level bodies executed here against stub
+    packages, so an injected import that cannot resolve fails in
+    milliseconds instead of minutes.
+    """
+    import py_compile
+
+    sweep = _symbol_sweep()
+    patcher = _module(PATCHER, "fr14_symbol_patcher_import")
+    for mode, params in sweep.MODES.items():
+        root = tmp_path / mode / "site-packages"
+        sweep.build_engine_tree(root)
+        patcher.patch_installed_vllm(root, **params)
+        for relative in sweep.STUBS:
+            path = root / relative
+            # py_compile is what the patcher itself runs; assert it here too so
+            # a syntactically broken injection cannot reach a boot.
+            py_compile.compile(str(path), doraise=True)
+
+        # And the cross-file import specifically: the symbol cuda_graph.py
+        # imports must exist as a top-level def in the module it names.
+        cuda_graph = (root / "vllm/compilation/cuda_graph.py").read_text()
+        tree_attn = ast.parse(
+            (root / "vllm/v1/attention/backends/tree_attn.py").read_text()
+        )
+        defined = {
+            node.name for node in tree_attn.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        for line in cuda_graph.splitlines():
+            stripped = line.strip().rstrip(",")
+            if stripped.startswith("_fr13_fa2_qrow32_b1_") and stripped.endswith(
+                ("_replay", "_capture_end")
+            ):
+                assert stripped in defined, (
+                    f"{mode}: cuda_graph.py imports {stripped} but "
+                    "tree_attn.py does not define it"
+                )

@@ -1,0 +1,83 @@
+{
+  "modes": [
+    {
+      "cross_file_edges": [
+        {
+          "defined_in": "vllm/v1/attention/backends/tree_attn.py",
+          "referenced_in": "vllm/compilation/cuda_graph.py",
+          "symbol": "_fr13_fa2_qrow32_b1_production_capture_end"
+        }
+      ],
+      "dangling": [],
+      "files_patched": [
+        "vllm/compilation/cuda_graph.py",
+        "vllm/model_executor/layers/batch_invariant.py",
+        "vllm/v1/attention/backends/flash_attn.py",
+        "vllm/v1/attention/backends/tree_attn.py",
+        "vllm/vllm_flash_attn/flash_attn_interface.py"
+      ],
+      "foreign_adjudicated": [
+        "_fr13_fixed32_capture_begin",
+        "_fr13_fixed32_observed_event_active"
+      ],
+      "mode": "tier_a_production",
+      "params": {
+        "fixed32_query_tile32_b1_production": true
+      },
+      "symbols_resolved": 68
+    },
+    {
+      "cross_file_edges": [
+        {
+          "defined_in": "vllm/v1/attention/backends/tree_attn.py",
+          "referenced_in": "vllm/compilation/cuda_graph.py",
+          "symbol": "_fr13_fa2_qrow32_b1_production_capture_end"
+        }
+      ],
+      "dangling": [],
+      "files_patched": [
+        "vllm/compilation/cuda_graph.py",
+        "vllm/model_executor/layers/batch_invariant.py",
+        "vllm/v1/attention/backends/flash_attn.py",
+        "vllm/v1/attention/backends/tree_attn.py",
+        "vllm/vllm_flash_attn/flash_attn_interface.py"
+      ],
+      "foreign_adjudicated": [
+        "_fr13_fixed32_capture_begin",
+        "_fr13_fixed32_observed_event_active"
+      ],
+      "mode": "tier_b_serve",
+      "params": {
+        "fixed32_query_tile32_b1_tier_b_serve": true
+      },
+      "symbols_resolved": 68
+    },
+    {
+      "cross_file_edges": [
+        {
+          "defined_in": "vllm/v1/attention/backends/tree_attn.py",
+          "referenced_in": "vllm/compilation/cuda_graph.py",
+          "symbol": "_fr13_fa2_qrow32_b1_live_replay"
+        }
+      ],
+      "dangling": [],
+      "files_patched": [
+        "vllm/compilation/cuda_graph.py",
+        "vllm/model_executor/layers/batch_invariant.py",
+        "vllm/v1/attention/backends/flash_attn.py",
+        "vllm/v1/attention/backends/tree_attn.py",
+        "vllm/vllm_flash_attn/flash_attn_interface.py"
+      ],
+      "foreign_adjudicated": [
+        "_fr13_fixed32_capture_begin",
+        "_fr13_fixed32_observed_event_active"
+      ],
+      "mode": "live_ab_shadow",
+      "params": {
+        "fixed32_query_tile32_b1_live_ab": true
+      },
+      "symbols_resolved": 66
+    }
+  ],
+  "schema": "fr14.patch_symbol_resolution.v1"
+}
