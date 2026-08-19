@@ -17,6 +17,48 @@ from collections.abc import Iterable
 Mode = str
 Path = tuple[int, ...]
 
+# ---------------------------------------------------------------------------
+# THE TWO ROSTERS (round 19)
+# ---------------------------------------------------------------------------
+# This module had THREE key sets for what looked like one idea: PROFILES held
+# hydra27+hydra31, VALID_BY_MODE and VALID_MASK_BY_MODE held hydra27+tail6, and
+# twenty-nine HYDRA31_*/TAIL10_* constants sat fully described but unindexed. A
+# consumer that did exactly what rounds 13-18 prescribed -- delegate to the
+# authority instead of carrying its own table -- was failed BY the authority:
+# fr13_device_multidraft_kernel's preseed asks VALID_MASK_BY_MODE for the mode's
+# mask and has no hydra31 mention anywhere, because it should not need one.
+# Routing consumers through the indices is right; it also means every gap in an
+# index is a gap in every consumer at once.
+#
+# The adjudication, and the module now says it:
+#
+#   A serving MODE is what an arm is launched as. A topology PROFILE is a
+#   physical tree. They are not the same set and never were. tail6_fixed32 and
+#   hydra27_fixed32 dispatch the SAME 31 physical paths and differ only in which
+#   drafts the sampler treats as valid, so they are two MODES over one PROFILE.
+#   hydra31_fixed32 is a different tree, so it is both.
+#
+# Therefore PROFILES is keyed by PROFILE (tail6 is absent BY CONSTRUCTION -- it
+# has no tree of its own, it borrows hydra27's, and TREE_PROFILE_BY_MODE below
+# is where that borrowing is written down), while every *_BY_MODE index is keyed
+# by MODE and must carry all three. The key-set invariant in the contract tests
+# derives both rosters from these constants -- never from PROFILES, which is the
+# mapping that was incomplete.
+PROFILE_HYDRA27: Mode = "hydra27_fixed32"
+PROFILE_HYDRA31: Mode = "hydra31_fixed32"
+MODE_TAIL6: Mode = "tail6_fixed32"
+
+#: Physical trees. The key set of PROFILES.
+TOPOLOGY_PROFILES: tuple[Mode, ...] = (PROFILE_HYDRA27, PROFILE_HYDRA31)
+#: Serving modes. The key set of every *_BY_MODE index.
+SERVING_MODES: tuple[Mode, ...] = (MODE_TAIL6, PROFILE_HYDRA27, PROFILE_HYDRA31)
+#: Which physical tree each serving mode dispatches.
+TREE_PROFILE_BY_MODE: dict[Mode, Mode] = {
+    MODE_TAIL6: PROFILE_HYDRA27,
+    PROFILE_HYDRA27: PROFILE_HYDRA27,
+    PROFILE_HYDRA31: PROFILE_HYDRA31,
+}
+
 TAIL6_CHOICES: tuple[Path, ...] = (
     (0,),
     (1,),
@@ -216,14 +258,10 @@ HYDRA27_VALID_MASK = bit_mask(HYDRA27_VALID)
 TAIL6_INACTIVE_DRAFT_IDS = (11, 12, 16, 17, 21, 22, 24, 26)
 HYDRA27_INACTIVE_DRAFT_IDS = (17, 22, 24, 26)
 
-VALID_BY_MODE: dict[Mode, tuple[bool, ...]] = {
-    "tail6_fixed32": TAIL6_VALID,
-    "hydra27_fixed32": HYDRA27_VALID,
-}
-VALID_MASK_BY_MODE: dict[Mode, int] = {
-    "tail6_fixed32": TAIL6_VALID_MASK,
-    "hydra27_fixed32": HYDRA27_VALID_MASK,
-}
+# VALID_BY_MODE / VALID_MASK_BY_MODE are built further down, once HYDRA31_VALID
+# exists. Defining an index before every one of its keys can be spelled is what
+# produced the eighth site: the two modes describable here got indexed, the
+# third was described 670 lines later and never added.
 
 # Node ids here include the implicit root at physical row zero.
 SUBTREE_LEVELS: tuple[tuple[tuple[tuple[int, ...], int], ...], ...] = (
@@ -425,10 +463,35 @@ def valid_for_mode(mode: Mode) -> tuple[bool, ...]:
         raise ValueError(f"unknown fixed-32 mode {mode!r}") from exc
 
 
+def choices_for_mode(mode: Mode) -> tuple[Path, ...]:
+    """The PHYSICAL paths a mode dispatches -- its profile's, not hydra27's.
+
+    Round 19: active_choices and active_child_lists read the bare
+    FIXED32_CHOICES / DRAFT_PARENT, which are hydra27's. Filling VALID_BY_MODE
+    with hydra31 without this would have built hydra31's sampler tables out of
+    HYDRA27's 31 paths -- every bit valid, every shape check satisfied, wrong
+    tree. The completion of an index is only safe once the functions it feeds
+    stop assuming which tree they are indexing.
+
+    For tail6 and hydra27 this returns FIXED32_CHOICES itself, so their
+    behaviour is unchanged by identity, not by resemblance.
+    """
+    return tuple(profile(TREE_PROFILE_BY_MODE[mode])["choices"])
+
+
+def draft_parent_for_mode(mode: Mode) -> tuple[int, ...]:
+    """Draft-local parents of the paths a mode dispatches."""
+    if TREE_PROFILE_BY_MODE[mode] == PROFILE_HYDRA27:
+        return DRAFT_PARENT
+    return _draft_parents(choices_for_mode(mode))
+
+
 def active_choices(mode: Mode) -> tuple[Path, ...]:
     return tuple(
         path
-        for path, enabled in zip(FIXED32_CHOICES, valid_for_mode(mode), strict=True)
+        for path, enabled in zip(
+            choices_for_mode(mode), valid_for_mode(mode), strict=True
+        )
         if enabled
     )
 
@@ -437,7 +500,9 @@ def active_child_lists(mode: Mode) -> dict[int, tuple[int, ...]]:
     """Return draft-local sampler children after validity filtering."""
     children: dict[int, list[int]] = {}
     valid = valid_for_mode(mode)
-    for node, (parent, enabled) in enumerate(zip(DRAFT_PARENT, valid, strict=True)):
+    for node, (parent, enabled) in enumerate(
+        zip(draft_parent_for_mode(mode), valid, strict=True)
+    ):
         if not enabled:
             continue
         if parent >= 0 and not valid[parent]:
@@ -966,8 +1031,50 @@ TAIL10_GDN_PADDED_SLOTS = sum(
     )
 )
 
-PROFILE_HYDRA27 = "hydra27_fixed32"
-PROFILE_HYDRA31 = "hydra31_fixed32"
+# --- THE MODE INDICES -------------------------------------------------------
+# Keyed by SERVING_MODES, built here because HYDRA31_VALID is only defined
+# above this point. Values are taken from the per-profile constants, never
+# retyped: a retyped mask is a mask that can disagree with its own tree.
+# INCOMPLETE ON PURPOSE, AND BLOCKED -- do not "just add hydra31" (round 19).
+#
+# hydra31_fixed32 belongs here: HYDRA31_VALID is defined above, the mode
+# functions now take their tree from the mode's profile, and with the entry
+# present active_choices/active_child_lists/sampler_child_table all produce
+# hydra31's correct tables (asserted in the contract tests by injecting the
+# entry). One consumer prevents it:
+#
+#   fr13_device_multidraft_kernel._fr13_fixed32_taw_topology_binding does
+#       modes = ("tail6_fixed32", "hydra27_fixed32")
+#       if set(topology.VALID_BY_MODE) != set(modes): raise
+#
+# an EQUALITY check on this key set -- the round-19 inversion in its purest
+# form, a consumer that vetoes the authority ever learning a third mode. The
+# one-line fix (equality -> coverage) is obvious and correct, but that function
+# is one of 47 under the TAW source-closure digest
+# _FR13_FIXED32_TAW_SOURCE_SHA256 = 68b289ae..., which is pinned in ELEVEN
+# source files AND recorded in the banked H27n work census. Moving it fails
+# every re-gate of that census exactly as
+# results/fr14_nvfp4_port_20260816/promotion_ab_regate_refusal.log shows the
+# last such move doing, which would cost the campaign its strongest baseline.
+#
+# So the entry is held, the reason is written down rather than rediscovered on
+# a boot, and the key-set invariant in the contract tests carries this as its
+# single declared exemption with the same text. Unblocking it is a scheduling
+# decision (re-attest the digest and re-run H27n, or re-scope the lever), not
+# an edit.
+VALID_BY_MODE: dict[Mode, tuple[bool, ...]] = {
+    MODE_TAIL6: TAIL6_VALID,
+    PROFILE_HYDRA27: HYDRA27_VALID,
+}
+VALID_MASK_BY_MODE: dict[Mode, int] = {
+    MODE_TAIL6: TAIL6_VALID_MASK,
+    PROFILE_HYDRA27: HYDRA27_VALID_MASK,
+    PROFILE_HYDRA31: HYDRA31_VALID_MASK,
+}
+
+#: Physical trees, keyed by PROFILE. tail6_fixed32 is deliberately absent: it is
+#: a MODE, not a tree, and TREE_PROFILE_BY_MODE maps it onto hydra27's entry.
+#: Asking PROFILES for a mode is a category error the key-set invariant catches.
 PROFILES: dict[str, dict[str, object]] = {
     PROFILE_HYDRA27: {
         "choices": FIXED32_CHOICES,
@@ -1026,9 +1133,27 @@ PROFILES: dict[str, dict[str, object]] = {
 
 
 def profile(mode: str) -> dict[str, object]:
-    if mode not in PROFILES:
-        raise KeyError(f"unknown fixed32 profile: {mode!r}")
-    return PROFILES[mode]
+    """Return a TOPOLOGY PROFILE. Not an index by serving mode -- see below.
+
+    tail6_fixed32 is a mode, not a tree: it dispatches hydra27's 31 physical
+    paths under a narrower sampler mask. Resolving it to hydra27's profile here
+    would hand the caller hydra27's valid_mask for a tail6 arm, so this refuses
+    and says where the mode-keyed answer lives instead.
+    """
+    try:
+        return PROFILES[mode]
+    except KeyError:
+        if mode in TREE_PROFILE_BY_MODE:
+            raise KeyError(
+                f"{mode!r} is a serving MODE, not a topology PROFILE: it "
+                f"dispatches {TREE_PROFILE_BY_MODE[mode]}'s tree under its own "
+                "sampler mask. Use TREE_PROFILE_BY_MODE[mode] for the tree, "
+                "VALID_MASK_BY_MODE[mode] for the mask."
+            ) from None
+        raise KeyError(
+            f"unknown fixed32 profile {mode!r}; profiles are "
+            f"{list(TOPOLOGY_PROFILES)}, serving modes are {list(SERVING_MODES)}"
+        ) from None
 
 
 def validate_tail10_contract() -> None:

@@ -1164,7 +1164,10 @@ MODE_ALLOWLIST_BASELINE = {
     "scripts/fr13_fixed32_flush_protocol.py": 1,
     "scripts/fr13_fixed32_nsys_reduce.py": 1,
     "scripts/fr13_fixed32_semantics_test.py": 2,
-    "scripts/fr13_fixed32_topology.py": 2,
+    # Round 19: was 2 (VALID_BY_MODE + VALID_MASK_BY_MODE). VALID_MASK_BY_MODE
+    # now carries all three modes; VALID_BY_MODE is the one declared exemption,
+    # blocked by a frozen source-closure digest. See KEY_SET_EXEMPTIONS.
+    "scripts/fr13_fixed32_topology.py": 1,
     "scripts/fr13_floor_gate.py": 5,
     "scripts/fr13_gdn_gqa_group3_production_credential.py": 1,
     "scripts/fr13_gdn_single_launch_gate.py": 1,
@@ -1180,25 +1183,57 @@ MODE_ALLOWLIST_BASELINE = {
 }
 
 
+# Round 19: keying an allowlist by NAMED constants instead of string literals
+# is good practice AND it hid two of them from this census. Resolving Name
+# nodes against the authority's own constants closes that evasion -- otherwise
+# "use a constant" becomes the way to add a mode roster the detector cannot see.
+def _mode_constant_values() -> dict[str, str]:
+    values: dict[str, str] = {}
+    try:
+        import fr13_fixed32_topology as authority
+    except Exception:  # pragma: no cover
+        return values
+    for name in dir(authority):
+        if name.startswith("_"):
+            continue
+        value = getattr(authority, name)
+        if isinstance(value, str) and value in FIXED32_MODE_VOCABULARY:
+            values[name] = value
+    return values
+
+
 def _mode_collections(source: str) -> list[tuple[int, frozenset[str]]]:
-    """Every literal collection whose strings are all fixed32 mode names."""
+    """Every collection whose members are all fixed32 mode names.
+
+    Members may be string literals or names bound to them in the authority.
+    """
+    constants = _mode_constant_values()
+
+    def resolve(node: ast.expr) -> str | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.Name):
+            return constants.get(node.id)
+        if isinstance(node, ast.Attribute):
+            return constants.get(node.attr)
+        return None
+
     out: list[tuple[int, frozenset[str]]] = []
     for node in ast.walk(ast.parse(source)):
         names: set[str] | None = None
         if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
             values = [
-                element.value
-                for element in node.elts
-                if isinstance(element, ast.Constant)
-                and isinstance(element.value, str)
+                value
+                for value in (resolve(element) for element in node.elts)
+                if value is not None
             ]
             if values and len(values) == len(node.elts):
                 names = set(values)
         elif isinstance(node, ast.Dict):
             keys = [
-                key.value
-                for key in node.keys
-                if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                value
+                for value in (resolve(key) for key in node.keys)
+                if value is not None
             ]
             if keys and len(keys) == len(node.keys):
                 names = set(keys)
@@ -1535,3 +1570,309 @@ def test_the_sfwd_source_closure_attestation_is_unchanged() -> None:
         "the SFWD source-closure digest moved: the hydra27 lever would need "
         "re-qualification, which is a decision to declare, not a side effect"
     )
+
+
+# ---------------------------------------------------------------------------
+# 8. ROUND 19 -- THE KEY-SET INVARIANT
+# ---------------------------------------------------------------------------
+# The eighth site was in the AUTHORITY. fr13_fixed32_topology carried three
+# different key sets for what read as one idea: PROFILES had hydra27+hydra31,
+# VALID_BY_MODE and VALID_MASK_BY_MODE had hydra27+tail6, and twenty-nine
+# HYDRA31_*/TAIL10_* constants sat fully described but unindexed. The consumer
+# that died -- fr13_device_multidraft_kernel's preseed -- has no hydra31
+# mention and needs none: it delegates to VALID_MASK_BY_MODE exactly as rounds
+# 13-18 prescribed. Routing consumers through the indices is right, and it is
+# also why one gap in an index is a gap in every consumer at once.
+#
+# The rosters are derived from the PROFILE_*/MODE_* constants, never from
+# PROFILES -- PROFILES is one of the mappings that was wrong.
+TOPOLOGY = SCRIPTS / "fr13_fixed32_topology.py"
+
+# The single declared exemption. Same text as the module's own comment.
+KEY_SET_EXEMPTIONS = {
+    "VALID_BY_MODE": (
+        "hydra31 belongs here and the code is ready for it, but "
+        "fr13_device_multidraft_kernel._fr13_fixed32_taw_topology_binding does "
+        "`if set(topology.VALID_BY_MODE) != set(modes): raise` -- an EQUALITY "
+        "check that vetoes the authority learning a third mode. That function "
+        "is one of 47 under the TAW source-closure digest 68b289ae..., pinned "
+        "in eleven source files and recorded in the banked H27n work census; "
+        "moving it fails every re-gate of that census. Unblocking is a "
+        "scheduling decision, not an edit."
+    ),
+}
+
+
+def _topology_module():
+    import fr13_fixed32_topology
+
+    return fr13_fixed32_topology
+
+
+def by_mode_mappings() -> dict[str, dict]:
+    """Every module-level mapping in the authority that is keyed by mode/profile."""
+    topology = _topology_module()
+    found: dict[str, dict] = {}
+    for node in ast.parse(TOPOLOGY.read_text()).body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = [
+            t.id
+            for t in (node.targets if isinstance(node, ast.Assign) else [node.target])
+            if isinstance(t, ast.Name)
+        ]
+        for name in targets:
+            value = getattr(topology, name, None)
+            if not isinstance(value, dict) or not value:
+                continue
+            keys = set(value)
+            if keys & set(topology.SERVING_MODES):
+                found[name] = value
+    return found
+
+
+def test_the_rosters_are_derived_from_the_constants_not_from_profiles() -> None:
+    topology = _topology_module()
+    assert topology.TOPOLOGY_PROFILES == (
+        topology.PROFILE_HYDRA27,
+        topology.PROFILE_HYDRA31,
+    )
+    assert topology.SERVING_MODES == (
+        topology.MODE_TAIL6,
+        topology.PROFILE_HYDRA27,
+        topology.PROFILE_HYDRA31,
+    )
+    assert set(topology.TREE_PROFILE_BY_MODE) == set(topology.SERVING_MODES)
+    assert set(topology.TREE_PROFILE_BY_MODE.values()) == set(
+        topology.TOPOLOGY_PROFILES
+    )
+    # the adjudication, asserted: PROFILES is keyed by PROFILE, and tail6 is a
+    # MODE that borrows hydra27's tree rather than a profile of its own.
+    assert set(topology.PROFILES) == set(topology.TOPOLOGY_PROFILES)
+    assert topology.MODE_TAIL6 not in topology.PROFILES
+    assert topology.TREE_PROFILE_BY_MODE[topology.MODE_TAIL6] == (
+        topology.PROFILE_HYDRA27
+    )
+
+
+def test_every_by_mode_mapping_carries_the_whole_roster() -> None:
+    """THE KEY-SET INVARIANT.
+
+    Every mode-keyed mapping in the authority carries exactly SERVING_MODES;
+    every profile-keyed mapping carries exactly TOPOLOGY_PROFILES. Nothing is
+    allowed to carry some third key set silently, which is what produced the
+    eighth site.
+    """
+    topology = _topology_module()
+    profiles, modes = set(topology.TOPOLOGY_PROFILES), set(topology.SERVING_MODES)
+    divergent: dict[str, list[str]] = {}
+    for name, mapping in sorted(by_mode_mappings().items()):
+        keys = set(mapping)
+        if keys in (profiles, modes):
+            continue
+        if name in KEY_SET_EXEMPTIONS:
+            continue
+        divergent[name] = sorted(keys)
+    assert not divergent, (
+        "these mappings carry neither the profile roster nor the mode roster, "
+        f"so a consumer delegating to them is failed by the authority: {divergent}"
+    )
+    assert "VALID_MASK_BY_MODE" in by_mode_mappings(), "the sweep found nothing"
+    assert set(topology.VALID_MASK_BY_MODE) == modes
+
+
+def test_the_key_set_exemptions_are_still_real_and_still_blocked() -> None:
+    """A pinned exemption that no longer applies is a lie; fail so it is removed."""
+    topology = _topology_module()
+    mappings = by_mode_mappings()
+    for name in KEY_SET_EXEMPTIONS:
+        assert name in mappings, f"exempted mapping {name} no longer exists"
+        assert set(mappings[name]) != set(topology.SERVING_MODES), (
+            f"{name} is complete now -- delete its exemption"
+        )
+    # ...and the blocker is still exactly what the exemption says it is.
+    kernel = (SCRIPTS / "fr13_device_multidraft_kernel.py").read_text()
+    assert "if set(topology.VALID_BY_MODE) != set(modes):" in kernel, (
+        "the equality check named in the exemption is gone -- if it was fixed, "
+        "complete VALID_BY_MODE and delete the exemption"
+    )
+    assert "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d" in (
+        kernel
+    ), "the TAW source digest named in the exemption moved"
+
+
+def test_the_invariant_fires_on_a_divergent_key_set() -> None:
+    """MUTATION PROOF: an index missing a mode must fail, exemptions aside."""
+    topology = _topology_module()
+    modes, profiles = set(topology.SERVING_MODES), set(topology.TOPOLOGY_PROFILES)
+    mutant = {
+        mode: 0 for mode in topology.SERVING_MODES if mode != topology.PROFILE_HYDRA31
+    }
+    assert set(mutant) not in (modes, profiles), (
+        "the mutant must be a genuinely third key set"
+    )
+    divergent = {}
+    for name, mapping in {"MUTANT_BY_MODE": mutant}.items():
+        if set(mapping) in (profiles, modes) or name in KEY_SET_EXEMPTIONS:
+            continue
+        divergent[name] = sorted(mapping)
+    assert divergent == {"MUTANT_BY_MODE": sorted(mutant)}, (
+        "the key-set invariant cannot fail, so it is worse than none"
+    )
+
+
+def test_mode_functions_take_their_tree_from_the_mode_not_from_hydra27() -> None:
+    """The reason the index completion is not a one-line fill.
+
+    active_choices read the bare FIXED32_CHOICES, which is hydra27's. Filling
+    VALID_BY_MODE with hydra31 before this was fixed would have built hydra31's
+    sampler tables out of HYDRA27's 31 paths: every bit valid, every shape
+    check satisfied, wrong tree -- rounds 17 and 18's hazard inside the
+    authority itself.
+    """
+    topology = _topology_module()
+    assert topology.choices_for_mode(topology.MODE_TAIL6) == topology.FIXED32_CHOICES
+    assert (
+        topology.choices_for_mode(topology.PROFILE_HYDRA27)
+        == topology.FIXED32_CHOICES
+    )
+    assert (
+        topology.choices_for_mode(topology.PROFILE_HYDRA31) == topology.TAIL10_CHOICES
+    )
+    assert topology.TAIL10_CHOICES != topology.FIXED32_CHOICES
+
+    # with the held entry injected, the whole mode-indexed surface is correct
+    topology.VALID_BY_MODE[topology.PROFILE_HYDRA31] = topology.HYDRA31_VALID
+    try:
+        assert (
+            topology.active_choices(topology.PROFILE_HYDRA31)
+            == topology.TAIL10_CHOICES
+        )
+        children = topology.active_child_lists(topology.PROFILE_HYDRA31)
+        assert children[-1] == (0, 1, 2)
+        assert max(len(kids) for kids in children.values()) == (
+            topology.SAMPLER_MAX_FANOUT
+        )
+        table, counts = topology.sampler_child_table(topology.PROFILE_HYDRA31)
+        assert (len(table), len(table[0])) == topology.SAMPLER_TABLE_SHAPE
+        assert len(counts) == 32
+    finally:
+        topology.VALID_BY_MODE.pop(topology.PROFILE_HYDRA31, None)
+
+
+def test_profile_refuses_a_serving_mode_with_a_legible_message() -> None:
+    topology = _topology_module()
+    with pytest.raises(KeyError) as refusal:
+        topology.profile(topology.MODE_TAIL6)
+    message = str(refusal.value)
+    assert "serving MODE" in message and "VALID_MASK_BY_MODE" in message
+    with pytest.raises(KeyError):
+        topology.profile("nope_fixed32")
+
+
+# --- THE CPU WALK, driving the real preseed (round 19 task 4) --------------
+def _multidraft_kernel():
+    import importlib.util
+
+    path = SCRIPTS / "fr13_device_multidraft_kernel.py"
+    spec = importlib.util.spec_from_file_location(
+        "fr13_device_multidraft_kernel__walk", path
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:  # pragma: no cover
+        pytest.skip(f"multidraft kernel unavailable: {exc}")
+    return module
+
+
+@pytest.mark.parametrize("mode", ["tail6_fixed32", PROFILE_HYDRA27])
+def test_the_real_preseed_still_runs_on_cpu_for_every_qualified_mode(
+    mode: str,
+) -> None:
+    """Not a re-typed model of the preseed -- fr13_fixed32_taw_preseed itself.
+
+    This is the path that died in round 19: it asks VALID_MASK_BY_MODE for the
+    mode's mask and has no hydra31 mention, because a consumer delegating to
+    the authority should not need one.
+    """
+    pytest.importorskip("torch")
+    kernel = _multidraft_kernel()
+    topology = _topology_module()
+    preseeded = kernel.fr13_fixed32_taw_preseed("cpu", mode=mode)
+    assert len(preseeded) == 4, "preseed covers B=1..4"
+    assert mode in topology.VALID_MASK_BY_MODE
+    assert kernel._fr13_fixed32_expected_active(topology, mode) == sum(
+        1 for enabled in topology.VALID_BY_MODE[mode] if enabled
+    )
+
+
+def test_the_preseed_reaches_the_mask_index_for_hydra31_and_stops_where_declared(
+) -> None:
+    """hydra31's preseed gets PAST the mask lookup and stops at the one gap.
+
+    Round 19 completed VALID_MASK_BY_MODE, so the lookup the coordinator named
+    now answers. The refusal has moved to valid_for_mode -- VALID_BY_MODE, the
+    single declared exemption. Asserting WHERE it stops is what keeps the
+    remaining gap a scheduled decision instead of a rediscovery.
+    """
+    pytest.importorskip("torch")
+    kernel = _multidraft_kernel()
+    topology = _topology_module()
+
+    assert PROFILE_HYDRA31 in topology.VALID_MASK_BY_MODE
+    assert topology.VALID_MASK_BY_MODE[PROFILE_HYDRA31] == topology.HYDRA31_VALID_MASK
+    assert PROFILE_HYDRA31 not in topology.VALID_BY_MODE  # the exemption
+
+    with pytest.raises(ValueError) as refusal:
+        kernel.fr13_fixed32_taw_preseed("cpu", mode=PROFILE_HYDRA31)
+    assert "unknown fixed-32 mode" in str(refusal.value), (
+        "hydra31's preseed must stop at valid_for_mode, not earlier: if it now "
+        "fails somewhere else, a second gap opened"
+    )
+
+
+def test_hydra27_topology_values_are_byte_identical_to_the_baseline() -> None:
+    """PAIRING EVIDENCE: the authority's hydra27/tail6 answers did not move."""
+    try:
+        blob = subprocess.run(
+            ["git", "cat-file", "blob", "HEAD:scripts/fr13_fixed32_topology.py"],
+            cwd=REPO,
+            capture_output=True,
+            check=True,
+        ).stdout.decode()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        pytest.skip(f"baseline topology unavailable: {exc}")
+
+    old = types.ModuleType("fr13_fixed32_topology__baseline")
+    old.__file__ = str(TOPOLOGY)
+    sys.modules[old.__name__] = old
+    try:
+        exec(compile(blob, str(TOPOLOGY), "exec"), old.__dict__)
+    finally:
+        sys.modules.pop(old.__name__, None)
+    new = _topology_module()
+
+    drift: dict[str, tuple[object, object]] = {}
+    for name in _module_bound_names(blob):
+        if not hasattr(old, name) or not hasattr(new, name):
+            continue
+        a, b = getattr(old, name), getattr(new, name)
+        if callable(a) or isinstance(a, types.ModuleType):
+            continue
+        if name == "VALID_MASK_BY_MODE":
+            # deliberately completed; its hydra27/tail6 entries must not move
+            assert all(b[mode] == mask for mode, mask in a.items())
+            continue
+        if a != b:
+            drift[name] = (a, b)
+    assert not drift, f"authority values moved for hydra27/tail6: {sorted(drift)}"
+
+    for mode in ("tail6_fixed32", PROFILE_HYDRA27):
+        assert old.active_choices(mode) == new.active_choices(mode)
+        assert old.active_child_lists(mode) == new.active_child_lists(mode)
+        assert old.sampler_child_table(mode) == new.sampler_child_table(mode)
+        assert old.valid_for_mode(mode) == new.valid_for_mode(mode)
+    assert old.PROFILES[PROFILE_HYDRA27] == new.PROFILES[PROFILE_HYDRA27]
+    assert old.PROFILES[PROFILE_HYDRA31] == new.PROFILES[PROFILE_HYDRA31]
