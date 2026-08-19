@@ -18,11 +18,18 @@ import json
 import re
 from pathlib import Path
 
+import sys
+
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 # every launcher family, from the single roster -- never re-enumerated here,
 # because "both families" was wrong by one for six rounds
+# `scripts` is not a package, so this module only imported when some OTHER
+# test file had already inserted it on sys.path -- i.e. it passed in a full run
+# and failed when run alone. A test whose result depends on collection order is
+# a test that will eventually pass for the wrong reason.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import fr14_mode_table_parity as _parity  # noqa: E402
 
 LAUNCHERS = _parity.LAUNCHER_FAMILIES
@@ -169,11 +176,16 @@ def test_new_pin_names_cannot_be_moved_by_local_env(launcher):
 
 
 def test_off_path_is_untouched(launcher):
-    """Nothing outside the new arm changed shape.
+    """The incumbent pins are untouched by the promotion.
 
-    The incumbent and gqa_pair pins, and the promoted default, are exactly what
-    they were -- a launch that never names the split-K arm cannot reach any of
-    the new code.
+    THIS TEST'S PREMISE CHANGED WITH THE PROMOTION (Mark, pass 100), and the
+    change is the point rather than a regression: split-K is now the production
+    default under hydra27_fixed32, so a launch that names no arm DOES reach it.
+    What must still hold is that promotion did not disturb the arms it
+    displaced -- the incumbent and gqa_pair pins are byte-for-byte what they
+    were, and split-K's literals appear in exactly two places: the pin-arm
+    branch that validates a named arm, and the promoted-default block that
+    arms an unnamed one.
     """
     assert (
         "3560cdc0c1ebbe3d912858ea447b350edefc0d6749950d6353e5f763185da6ae"
@@ -186,13 +198,19 @@ def test_off_path_is_untouched(launcher):
     ), "incumbent .so pin"
     # the split-K literals appear ONLY inside the new branch
     branch = _splitk_branch(launcher)
+    default_block = launcher[
+        launcher.index("# ---------------------------------------------------------------- split-K"):
+    ]
+    default_block = default_block[: default_block.index("\n  fi\n")]
     for literal in (
         "28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857",
         "4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878",
         "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e",
     ):
-        assert launcher.count(literal) == 1
+        # Exactly two: the validating pin-arm branch, and the promoted default.
+        assert launcher.count(literal) == 2, literal
         assert literal in branch
+        assert literal in default_block
 
 
 def test_every_b1_pin_arm_has_a_distinct_binary(launcher):

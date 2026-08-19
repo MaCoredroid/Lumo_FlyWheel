@@ -830,6 +830,23 @@ FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR_SHA256=${FR13_FA2_QROW32_B1_PRODUCTIO
 FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON=${FR13_FA2_QROW32_B1_PRODUCTION_ENGAGEMENT_JSON:-/logs/fr13_fa2_qrow32_b1_production_engagement.json}
 FR13_FA2_QROW32_B1_EXACT4_TASK_IDS=${FR13_FA2_QROW32_B1_EXACT4_TASK_IDS:-}
 FR13_FA2_QROW32_B1_TIER_B_ARM=${FR13_FA2_QROW32_B1_TIER_B_ARM:-}
+# ---------------------------------------------------------------- split-K
+# The promoted default's staged artifacts, as launcher literals -- the same
+# shape the fused draft top-k promotion uses for its .so. The credential's
+# digest is deliberately NOT a literal: it is computed from the staged file and
+# then VALIDATED by verify-tier-b in the container, which re-derives every
+# pre-registered bound. A hardcoded credential digest would have to be
+# re-committed every time the credential is re-earned, and a literal that must
+# change on a schedule is a literal that goes stale.
+_FR13_SPLITK_DEFAULT_ARM=gqa_pair_splitk
+_FR13_SPLITK_DEFAULT_SO=${_FR13_SPLITK_DEFAULT_SO:-/home/mark/fr14_splitk_build_20260818/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so}
+_FR13_SPLITK_DEFAULT_SO_SHA256=28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857
+_FR13_SPLITK_DEFAULT_SO_SIZE=300123792
+_FR13_SPLITK_DEFAULT_FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
+_FR13_SPLITK_DEFAULT_CLOSURE=4ed00909cef7ea83849f897018ea4f6a14119b8d160927af426938920c170878
+_FR13_SPLITK_DEFAULT_SASS=3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e
+_FR13_SPLITK_DEFAULT_BASELINE_SASS=fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470
+_FR13_SPLITK_DEFAULT_CREDENTIAL=${_FR13_SPLITK_DEFAULT_CREDENTIAL:-$REPO/results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_credential.json}
 # `set -u` is on, and these two have no default anywhere else: without them a
 # split-K pin arm that omits a digest dies with an unbound-variable trap rather
 # than the refusal the next block is written to give. A guard that crashes
@@ -1188,6 +1205,55 @@ if (( _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0 )) \
          && -z "$FR13_FA2_QROW32_B1_TIMING_ARM" \
          && -z "$FR13_FA2_QROW32_B4_TIMING_ARM" \
          && -z "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" ]]; then
+  # ===================================================================
+  # SPLIT-K IS THE PROMOTED DEFAULT (Mark's ruling, FR14 pass 100).
+  #
+  # Evidence: results/fr14_nvfp4_port_20260816/splitk_fa2.md -- determinism
+  # bitwise in-process and cross-process, nine pre-registered bounds cleared,
+  # CLOSER to a float64 reference than the incumbent on output and LSE RMS,
+  # and a clean degeneration eyeball on the round-12 traces. The exact16 QC
+  # runs AFTER promotion as verification, not before it as a gate.
+  #
+  # Armed as a TIER-B serve, not as a production arm: the byte-exact Tier-A
+  # door stays shut and _FR13_FA2_QROW32_B1_PRODUCTION_ARMS is unchanged. What
+  # promotion changed is that the tier-B route is now armed BY DEFAULT.
+  #
+  # HARD REFUSAL, not degradation. The incumbent gqa_pair default above
+  # degrades to the incumbent when its credential is stale, on the principle
+  # that a promotion must never refuse a boot. That principle is inverted here
+  # deliberately: a promoted default that silently serves something else is an
+  # UNLABELLED A/B, and this campaign has already spent one whole round
+  # (round 6) measuring the incumbent while every artifact said split-K. A
+  # boot that cannot serve the promoted arm must say so and stop.
+  #
+  # hydra27_fixed32 only -- the same mode gate the gqa_pair default used.
+  # hydra31 stays excluded topologically until its own qualification.
+  if [[ -z "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then
+    FR13_FA2_QROW32_B1_TIER_B_ARM=$_FR13_SPLITK_DEFAULT_ARM
+    FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST:-$_FR13_SPLITK_DEFAULT_CREDENTIAL}
+    FORKED_FA2_SO=${FORKED_FA2_SO:-$_FR13_SPLITK_DEFAULT_SO}
+    FR13_FA2_QROW32_B1_SO_SHA256=${FR13_FA2_QROW32_B1_SO_SHA256:-$_FR13_SPLITK_DEFAULT_SO_SHA256}
+    FR13_FA2_QROW32_B1_SO_SIZE=${FR13_FA2_QROW32_B1_SO_SIZE:-$_FR13_SPLITK_DEFAULT_SO_SIZE}
+    FR13_FA2_QROW32_B1_FA2_HEAD=${FR13_FA2_QROW32_B1_FA2_HEAD:-$_FR13_SPLITK_DEFAULT_FA2_HEAD}
+    FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256=${FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256:-$_FR13_SPLITK_DEFAULT_CLOSURE}
+    FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST=${FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST:-$_FR13_SPLITK_DEFAULT_SASS}
+    FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST=${FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST:-$_FR13_SPLITK_DEFAULT_BASELINE_SASS}
+    [[ -f "$FORKED_FA2_SO" && ! -L "$FORKED_FA2_SO" \
+       && "$(sha256sum "$FORKED_FA2_SO" | cut -d' ' -f1)" == "$_FR13_SPLITK_DEFAULT_SO_SHA256" ]] || {
+      echo "FR13 promoted split-K default: staged binary missing or not the pinned kernel: $FORKED_FA2_SO" >&2
+      echo "  a promoted default must not silently serve the incumbent instead" >&2
+      exit 2
+    }
+    [[ -f "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" \
+       && ! -L "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" ]] || {
+      echo "FR13 promoted split-K default: tier-b credential missing: $FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" >&2
+      exit 2
+    }
+    FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256:-$(sha256sum "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" | cut -d' ' -f1)}
+    echo "[fr13] B1 arm unnamed; serving the PROMOTED DEFAULT" \
+         "FR13_FA2_QROW32_B1_TIER_B_ARM=$FR13_FA2_QROW32_B1_TIER_B_ARM" \
+         "(tier-b credential $FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256)" >&2
+  fi
   FR13_FA2_QROW32_B1_PRODUCTION_ARM=${FR13_FA2_QROW32_B1_PRODUCTION_ARM_DEFAULT:-gqa_pair}
   echo "[fr13] B1 production arm unnamed; serving the promoted default" \
        "FR13_FA2_QROW32_B1_PRODUCTION_ARM=$FR13_FA2_QROW32_B1_PRODUCTION_ARM" >&2

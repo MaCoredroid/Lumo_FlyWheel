@@ -348,7 +348,6 @@ def test_validator_refuses_a_body_the_digest_does_not_cover(
         ("fa2_head", "9" * 40),
         ("sass_digest_sha256", "9" * 64),
         ("baseline_sass_digest_sha256", "9" * 64),
-        ("source_commit", "9" * 40),
         ("patch_source_sha256", "9" * 64),
         ("bounds_sha256", "9" * 64),
         ("so_size", 1),
@@ -601,12 +600,44 @@ def test_earned_credential_is_present_and_validates() -> None:
         bounds_path=BOUNDS,
     )
     assert verdict["grants"].startswith("live-A/B serving only")
+    # SCOPE, post-promotion: the commit is RECORDED, not matched. A credential
+    # earned at an older HEAD stays valid as long as everything that
+    # determines the numerics is unchanged -- because under a promoted default
+    # with a hard refusal, commit-binding breaks the boot on every commit and
+    # protects nothing a digest does not already protect.
+    sidecar.validate_tierb_credential(
+        path,
+        arm=SPLITK_ARM,
+        expected_candidate_sha256=contract.QROW32_B1_SPLITK_FA2_SHA256,
+        expected_source_commit="a" * 40,
+        expected_patch_source_sha256=payload["identity"][
+            "patch_source_sha256"
+        ],
+        bounds_path=BOUNDS,
+    )
+    # But the PATCHER is still bound: it decides dispatch, so it can change
+    # what the kernel computes.
     with pytest.raises(ValueError, match="does not bind this arm"):
         sidecar.validate_tierb_credential(
             path,
             arm=SPLITK_ARM,
             expected_candidate_sha256=contract.QROW32_B1_SPLITK_FA2_SHA256,
-            expected_source_commit="a" * 40,
+            expected_source_commit=payload["identity"]["source_commit"],
+            expected_patch_source_sha256="a" * 64,
+            bounds_path=BOUNDS,
+        )
+    # And a malformed commit is still refused: "recorded" is not "absent".
+    body = json.loads(path.read_text())
+    body["identity"]["source_commit"] = "not-a-commit"
+    body["credential_sha256"] = sidecar.tierb_credential_digest(body)
+    broken = path.parent / "broken_commit.json"
+    broken.write_text(json.dumps(body, sort_keys=True), encoding="ascii")
+    with pytest.raises(ValueError, match="not a lowercase commit"):
+        sidecar.validate_tierb_credential(
+            broken,
+            arm=SPLITK_ARM,
+            expected_candidate_sha256=contract.QROW32_B1_SPLITK_FA2_SHA256,
+            expected_source_commit=payload["identity"]["source_commit"],
             expected_patch_source_sha256=payload["identity"][
                 "patch_source_sha256"
             ],
@@ -1862,3 +1893,238 @@ def test_patched_modules_import_resolve(tmp_path):
                     f"{mode}: cuda_graph.py imports {stripped} but "
                     "tree_attn.py does not define it"
                 )
+
+
+# ===========================================================================
+# THE PROMOTED DEFAULT (Mark, FR14 pass 100).
+#
+# Split-K is the production default. It is armed as a TIER-B serve, so the
+# byte-exact Tier-A door is untouched and _FR13_FA2_QROW32_B1_PRODUCTION_ARMS
+# is unchanged -- what promotion changed is that the tier-B route is armed by
+# default rather than by name.
+#
+# The default block is executed here, not grepped: the bash is extracted from
+# each launcher and run under four environments.
+# ===========================================================================
+
+SPLITK_DEFAULT_SO_SHA256 = SPLITK_SO_SHA256
+
+
+def _run_default_block(launcher, env, so_path, credential_path):
+    """Execute the launcher's OWN promoted-default block."""
+    import subprocess
+
+    text = launcher.read_text()
+    lit_start = text.index(
+        "# ---------------------------------------------------------------- split-K"
+    )
+    lit_end = text.index("\n", text.index("_FR13_SPLITK_DEFAULT_CREDENTIAL=", lit_start)) + 1
+    literals = text[lit_start:lit_end]
+    blk_start = text.index(
+        "  # ===================================================================\n"
+        "  # SPLIT-K IS THE PROMOTED DEFAULT"
+    )
+    blk_end = text.index("  fi\n", blk_start) + len("  fi\n")
+    block = text[blk_start:blk_end]
+
+    preamble = "set -u\nREPO=.\n"
+    preamble += f'_FR13_SPLITK_DEFAULT_SO="{so_path}"\n'
+    preamble += f'_FR13_SPLITK_DEFAULT_CREDENTIAL="{credential_path}"\n'
+    for name in (
+        "FR13_FA2_QROW32_B1_TIER_B_ARM",
+        "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST",
+        "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256",
+        "FORKED_FA2_SO",
+        "FR13_FA2_QROW32_B1_SO_SHA256",
+        "FR13_FA2_QROW32_B1_SO_SIZE",
+        "FR13_FA2_QROW32_B1_FA2_HEAD",
+        "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256",
+        "FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST",
+        "FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST",
+    ):
+        preamble += '{}="{}"\n'.format(name, env.get(name, ""))
+    script = (
+        preamble
+        + literals.replace("${_FR13_SPLITK_DEFAULT_SO:-", "${__unused_so:-")
+                 .replace("${_FR13_SPLITK_DEFAULT_CREDENTIAL:-", "${__unused_cred:-")
+        + block
+        + '\nprintf "ARM=%s\\nSO=%s\\n" '
+          '"$FR13_FA2_QROW32_B1_TIER_B_ARM" "$FORKED_FA2_SO"\n'
+    )
+    # the literal block re-assigns from its own defaults; keep the test's
+    # injected paths by re-asserting them after the literals
+    script = script.replace(
+        "\n  # ==============",
+        f'\n_FR13_SPLITK_DEFAULT_SO="{so_path}"\n'
+        f'_FR13_SPLITK_DEFAULT_CREDENTIAL="{credential_path}"\n  # ==============',
+        1,
+    )
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+
+
+@pytest.fixture
+def staged_default(tmp_path):
+    """A staged binary whose digest is the pinned one, and a credential."""
+    import hashlib
+
+    so = tmp_path / "splitk.so"
+    # Search for bytes hashing to the pin is impossible; the test instead
+    # asserts the REFUSAL path on a wrong digest and the ACCEPT path by
+    # pointing the pin at this file's real digest through the env override.
+    so.write_bytes(b"not the real kernel, but a real file")
+    credential = tmp_path / "credential.json"
+    credential.write_text(
+        (REPO / "results/fr14_nvfp4_port_20260816"
+         / "fr14_splitk_tierb_credential.json").read_text()
+    )
+    digest = hashlib.sha256(so.read_bytes()).hexdigest()
+    return so, credential, digest
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_default_boot_arms_split_k(launcher, staged_default):
+    """(a) A plain launch arms split-K."""
+    so, credential, digest = staged_default
+    env = {"FR13_FA2_QROW32_B1_SO_SHA256": digest}
+    # The block compares the staged file against the LITERAL pin, so point the
+    # literal at this file's digest for the accept path.
+    text = launcher.read_text()
+    assert f"_FR13_SPLITK_DEFAULT_SO_SHA256={SPLITK_DEFAULT_SO_SHA256}" in text, (
+        "the promoted default's binary pin is not the characterized kernel"
+    )
+    out = _run_default_block(
+        launcher, env, so, credential
+    )
+    # With the real pin and a stub file the digest cannot match, so this must
+    # REFUSE -- which is itself behaviour (b). The accept path is exercised by
+    # overriding the pin below.
+    assert out.returncode == 2
+    assert "staged binary missing or not the pinned kernel" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_default_boot_refuses_a_missing_binary(launcher, staged_default):
+    """(b) Missing or wrong binary REFUSES -- it does not fall back.
+
+    The incumbent gqa_pair default degrades to the incumbent on a stale
+    credential, on the principle that a promotion must never refuse a boot.
+    That principle is inverted here deliberately: a promoted default that
+    silently serves something else is an unlabelled A/B, and round 6 spent a
+    whole arm measuring the incumbent while every artifact said split-K.
+    """
+    _so, credential, _digest = staged_default
+    out = _run_default_block(
+        launcher, {}, "/nonexistent/splitk.so", credential
+    )
+    assert out.returncode == 2
+    assert "staged binary missing or not the pinned kernel" in out.stderr
+    assert "must not silently serve the incumbent" in out.stderr
+    # and it must NOT have quietly armed gqa_pair
+    assert "gqa_pair\n" not in out.stdout
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_default_boot_refuses_a_missing_credential(launcher, staged_default):
+    """The credential half of the same refusal."""
+    so, _credential, digest = staged_default
+    text = launcher.read_text()
+    patched = text.replace(
+        f"_FR13_SPLITK_DEFAULT_SO_SHA256={SPLITK_DEFAULT_SO_SHA256}",
+        f"_FR13_SPLITK_DEFAULT_SO_SHA256={digest}",
+        1,
+    )
+    import tempfile
+
+    scratch = Path(tempfile.mkdtemp()) / launcher.name
+    scratch.write_text(patched)
+    out = _run_default_block(scratch, {}, so, "/nonexistent/credential.json")
+    assert out.returncode == 2
+    assert "tier-b credential missing" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_default_boot_accepts_a_staged_pair(launcher, staged_default):
+    """(a), properly: with binary and credential present, split-K is armed."""
+    so, credential, digest = staged_default
+    text = launcher.read_text().replace(
+        f"_FR13_SPLITK_DEFAULT_SO_SHA256={SPLITK_DEFAULT_SO_SHA256}",
+        f"_FR13_SPLITK_DEFAULT_SO_SHA256={digest}",
+        1,
+    )
+    import tempfile
+
+    scratch = Path(tempfile.mkdtemp()) / launcher.name
+    scratch.write_text(text)
+    out = _run_default_block(scratch, {}, so, credential)
+    assert out.returncode == 0, out.stderr
+    assert f"ARM={SPLITK_ARM}" in out.stdout
+    assert "serving the PROMOTED DEFAULT" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_explicit_opt_out_is_preserved(launcher, staged_default):
+    """(c) Naming an arm explicitly must still work, for A/Bs.
+
+    Round 20's H31i topology A/B runs on stock FA2 by explicit opt-out, so
+    this is load-bearing right now and not a hypothetical.
+    """
+    so, credential, _digest = staged_default
+    out = _run_default_block(
+        launcher, {"FR13_FA2_QROW32_B1_TIER_B_ARM": "gqa_pair_splitk"},
+        so, credential,
+    )
+    # already named -> the block is a no-op and does not re-check the binary
+    assert out.returncode == 0, out.stderr
+    assert f"ARM={SPLITK_ARM}" in out.stdout
+    assert "serving the PROMOTED DEFAULT" not in out.stderr
+    # and the production opt-out door is still shut for split-K
+    text = launcher.read_text()
+    assert '""|nosplit|gqa_pair) ;;' in text, (
+        "the production allowlist must still refuse split-K -- promotion armed "
+        "the tier-B route, it did not widen the byte-gated one"
+    )
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_default_is_gated_on_hydra27(launcher):
+    """(d) hydra31 must NOT arm it -- excluded topologically."""
+    # Checked STRUCTURALLY: the block must lie between the mode-gated `if` and
+    # its closing `fi`. A first version of this test sliced backwards for the
+    # guard text and landed inside a COMMENT that quoted it -- the same
+    # text-keying mistake this campaign has now made three times.
+    lines = launcher.read_text().splitlines()
+    opener = next(
+        i for i, line in enumerate(lines)
+        if "_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0" in line
+        and line.startswith("if ((")
+    )
+    then = next(
+        i for i in range(opener, len(lines))
+        if lines[i].rstrip().endswith("]]; then")
+    )
+    closing = next(i for i in range(then, len(lines)) if lines[i] == "fi")
+    block = next(
+        i for i, line in enumerate(lines)
+        if "# SPLIT-K IS THE PROMOTED DEFAULT" in line
+    )
+    assert then < block < closing, (
+        "the promoted split-K default is not nested inside the mode-gated "
+        "block; hydra31 would arm it before its own qualification"
+    )
+    guard = "\n".join(lines[opener:then + 1])
+    assert '"${FR13_FIXED32_MODE:-}" == "hydra27_fixed32"' in guard
+    assert "hydra31" not in guard
+
+
+def test_promotion_did_not_widen_the_byte_gated_door():
+    """The invariant the whole tier-B architecture rests on."""
+    namespace = _selectors()
+    assert namespace["_FR13_FA2_QROW32_B1_PRODUCTION_ARMS"] == (
+        "nosplit", "gqa_pair",
+    )
+    contract = _contract()
+    with pytest.raises(contract.ContractError, match="must be empty, nosplit"):
+        contract._expected_runtime_fa2_identity({
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM": SPLITK_ARM,
+            "FR13_FA2_QROW32_B1_SO_SHA256": SPLITK_SO_SHA256,
+        })

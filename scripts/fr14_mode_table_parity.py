@@ -66,6 +66,23 @@ FAMILY_PARITY_MARKERS = (
     "_fr14_h31_incompat",               # hydra31 x hydra27-qualified levers
     "hydra31_fixed32",                  # the tail10 profile
     "gqa_pair_splitk",                  # lane 4's arm
+    # The PROMOTED DEFAULT (Mark, pass 100). Every literal the default boot
+    # arms itself from is checked identical across all three families, because
+    # the two-of-three lesson has now been paid for twice: fr14_leg3 drifted a
+    # whole arm behind in the paired-contract family, and this file's own
+    # LAUNCHER list was a 2-tuple when the universal resolver test counted its
+    # answers.
+    "_FR13_SPLITK_DEFAULT_ARM",         # the arm the default arms
+    "_FR13_SPLITK_DEFAULT_SO_SHA256",   # its pinned binary
+    "_FR13_SPLITK_DEFAULT_SO_SIZE",
+    "_FR13_SPLITK_DEFAULT_CLOSURE",     # its source closure
+    "_FR13_SPLITK_DEFAULT_SASS",        # the kernel digest ...
+    "_FR13_SPLITK_DEFAULT_BASELINE_SASS",   # ... and the sealed baseline
+    "_FR13_SPLITK_DEFAULT_CREDENTIAL",  # the staged tier-b credential
+    "SPLIT-K IS THE PROMOTED DEFAULT",  # the block itself
+    "staged binary missing or not the pinned kernel",   # its hard refusal
+    "must not silently serve the incumbent",            # and why it is hard
+    "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST",        # the host/container split
 )
 
 

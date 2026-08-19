@@ -372,6 +372,25 @@ TIERB_BOUNDS_SHA256 = (
 # The fields a Tier-B credential must carry AND match against the arm it
 # authorises. A credential that outlives a rebuild, a source change or a HEAD
 # move would be authorising numerics nobody measured.
+# WHAT THE CREDENTIAL MUST MATCH, and it is scoped to what determines the
+# NUMERICS it attests -- nothing wider, nothing narrower.
+#
+# `source_commit` moved out of this set when split-K was promoted to the
+# production default (Mark, pass 100). Under a promoted default with a HARD
+# REFUSAL on a stale credential, a commit-bound credential means EVERY commit
+# breaks the default boot -- including the commit that lands the promotion.
+# That is not a safety property; it is an availability bug wearing one.
+#
+# The fields below are the ones that can change what the kernel computes: the
+# binary, its size, the source closure it was built from, the FA2 head, both
+# SASS digests, the PATCHER (which decides dispatch), and the pre-registered
+# bounds. Change any of them and the credential refuses, which is the whole
+# job. A commit that touches none of them cannot change the numerics, so
+# refusing on it protects nothing and costs the default its availability.
+#
+# This is the same re-scope-and-re-attest shape pass 99 applied to the held
+# TAW digest, and it is a SCOPE change to a credential: narrower on the axis
+# that carried no signal, unchanged on every axis that does.
 TIERB_BINDING_FIELDS = (
     "arm",
     "so_sha256",
@@ -380,10 +399,12 @@ TIERB_BINDING_FIELDS = (
     "fa2_head",
     "sass_digest_sha256",
     "baseline_sass_digest_sha256",
-    "source_commit",
     "patch_source_sha256",
     "bounds_sha256",
 )
+# Recorded for provenance and required to be PRESENT and well-formed, but not
+# matched: the commit says where the credential was earned, not what it attests.
+TIERB_RECORDED_FIELDS = ("source_commit",)
 TIERB_ARM_IDENTITY = {
     SPLITK_ARM: {
         "sentinel": SPLITK_SELECTOR_SENTINEL,
@@ -618,9 +639,12 @@ def validate_tierb_credential(
     identity = payload.get("identity")
     if not isinstance(identity, dict):
         raise ValueError("tier-b credential carries no identity")
-    for field in TIERB_BINDING_FIELDS:
+    for field in TIERB_BINDING_FIELDS + TIERB_RECORDED_FIELDS:
         if field not in identity:
             raise ValueError(f"tier-b credential is not bound on {field}")
+    # Recorded-not-matched still has to be a real commit, or "recorded" would
+    # mean "absent with extra steps".
+    _commit(identity["source_commit"], "credential source commit")
     pinned = TIERB_ARM_IDENTITY[arm]
     contract = _candidate_contract(arm)
     expected_identity = {
@@ -631,7 +655,6 @@ def validate_tierb_credential(
         "fa2_head": pinned["fa2_head"],
         "sass_digest_sha256": pinned["sass_digest_sha256"],
         "baseline_sass_digest_sha256": pinned["baseline_sass_digest_sha256"],
-        "source_commit": _commit(expected_source_commit, "source commit"),
         "patch_source_sha256": _sha256(
             expected_patch_source_sha256, "patch source"
         ),
