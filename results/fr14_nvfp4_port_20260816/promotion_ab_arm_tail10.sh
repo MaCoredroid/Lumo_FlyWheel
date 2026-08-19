@@ -89,10 +89,36 @@ SOURCE_COMMIT=$(git rev-parse HEAD)
 [[ -z "$(git status --porcelain=v1 --untracked-files=no)" ]] \
   || { echo "tracked worktree must be clean" >&2; exit 2; }
 [[ -z "$(docker ps -aq)" ]] || { echo "docker must be empty before boot" >&2; exit 2; }
+# ---- unified-memory preflight -------------------------------------------
+# EXACT16 ATTEMPT 4 (2026-08-19) died 57s in on vLLM's own startup assertion --
+# "Free memory on device cuda:0 (74.37/117.51 GiB) ... less than ... (0.7, 82.26
+# GiB)" -- with NO other process holding the GPU. This gate had already asserted
+# MemFree >= 82.3 and passed, so the threshold, not the metric, was wrong.
+#
+# WHY. 82.26 GiB is the engine's requirement AFTER the checkpoint is resident.
+# This gate runs BEFORE the container starts, and the 20.42 GiB of weights land
+# in between. Measured across attempts: free at this gate minus free at the
+# engine's check is ~23 GiB, and 98 - 23 = 75, which is the 74.37 that refused.
+# Attempts 3 and 5 started at 105 GiB free and cleared it; attempt 4 started at
+# 98 and did not. The pre-boot floor must therefore carry the weights too.
+#
+# RECLAIM FIRST, and with the path that is PROVEN to work here. The Python
+# helper took free from 74 -> 105 GiB (cache 31 -> 0) by measurement; the sysctl
+# is kept because it also works on this box, but it is `|| true` and a silent
+# no-op elsewhere, which is exactly how a reclaim step stops reclaiming without
+# announcing it.
 sync
 sudo -n sysctl vm.drop_caches=3 >/dev/null 2>&1 || true
-awk '/^MemFree:/{exit ($2/1048576 < 82.3)}' /proc/meminfo \
-  || { echo "unified-memory preflight failed" >&2; exit 2; }
+PYTHONPATH="$PWD/src" .venv/bin/python -c \
+  "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" \
+  >/dev/null 2>&1 || true
+_mem_free_gib=$(awk '/^MemFree:/{printf "%.1f", $2/1048576}' /proc/meminfo)
+awk '/^MemFree:/{exit ($2/1048576 < 102.8)}' /proc/meminfo \
+  || { echo "unified-memory preflight failed: MemFree=${_mem_free_gib}GiB < 102.8GiB" >&2
+       echo "  (the engine needs 82.26GiB free AFTER the 20.42GiB checkpoint loads;" >&2
+       echo "   refusing here costs seconds, refusing at the engine costs ~5 minutes)" >&2
+       exit 2; }
+echo "[promoab] unified-memory preflight OK: MemFree=${_mem_free_gib}GiB >= 102.8GiB"
 [[ "$(sha256sum "$SUBSET" | awk '{print $1}')" == "$SUBSET_SHA256" ]] \
   || { echo "canonical exact4 subset drifted" >&2; exit 2; }
 [[ -f "$TOPK_SO_HOST" && ! -L "$TOPK_SO_HOST" \
