@@ -2680,3 +2680,122 @@ unanswered**.
 
 Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
 recommended for the tier-B serving route on round 12's evidence.
+
+---
+---
+
+# ROUND 15 (2026-08-19 08:29Z–08:48Z) — the preflight is fixed; H31 stopped at the credential tripwire, and the answer is NOT "the credential refused"
+
+| item | verdict |
+|---|---|
+| **pairing decision** | **(a) pair against round-14 H27** — measured, not asserted; see §R15.1 |
+| **gate re-earn** | **PASS rc=0** at `ba954f512` |
+| **preflight (rounds 13–14 blockers)** | **FIXED** — H31 got past both the mode table and the tree-ancestry compare |
+| **ARM H31** | **STOPPED at the credential tripwire**, 5 s, captured, no re-earn |
+
+GPU this round: one gate re-earn plus a 5-second refusal.
+
+## R15.1 The pairing decision, and why it is (a)
+
+You asked me to state the decision and the reasoning. I made it **measurable rather
+than editorial**:
+
+* **What changed between `7286065fb` (H27's HEAD) and now** — 17 files: results docs,
+  the serve vehicle, three launchers, one new lint + its test, the sweep, two tests.
+  **Untouched:** `fr13_patch_fa2_tree_bias.py`, `fr10_phase4_patch_vllm_tree_gdn.py`,
+  `fr13_fixed32_work_census.py`, `fr13_fixed32_topology.py`, `fr13_merged_drafter.py`,
+  `fr13_fixed32_contract.py`, and every binary.
+* **What a hydra27 arm executes under** — byte-identical across the diff:
+
+  | | round-14 H27 (observed in `container_env.txt`) | this HEAD (resolved from the authority) |
+  |---|---|---|
+  | `FR13_FIXED32_MODE` | `hydra27_fixed32` | `hydra27_fixed32` |
+  | `VALID_MASK` | `0x7abdffff` | `0x7abdffff` |
+  | `ACTIVE_NODES` | 27 | 27 |
+  | `PHYSICAL_DRAFTS` | 31 | 31 |
+  | **`TAW_WALK_CAP`** | **12** | **`topology.WALK_CAP` = 12** |
+
+The one change that touches the hydra27 path is the walk cap now being **supplied by
+the kind block** instead of inherited from the sequence file. **The provenance moved;
+the value did not.** So the diff is pairing-neutral for a hydra27 arm, and re-running
+H27 would have bought an identical baseline for 3.5 h of GPU.
+
+Recorded because it cuts against my own habit: I have refused to pair across HEADs
+repeatedly in this campaign. The difference here is that I could *enumerate* what a
+hydra27 arm executes and show it unchanged, rather than argue from the commit
+subjects — which is the same standard I have been holding lane 4 to.
+
+## R15.2 The preflight fix works
+
+H31 passed both round-13/14 blockers: no `unsupported fixed32 mode`, no
+`TREE differs from FIXED32_CHOICES`. The twelve-line block is genuinely profile-aware.
+
+## R15.3 THE CREDENTIAL TRIPWIRE — and the answer to your explicit question
+
+The refusal:
+
+```
+FAIL: launcher rc=1
+fixed32 FA2 realpath mismatch:
+  /home/mark/fr13_fa2_qrow32_gqa_pair_b1_sm121a_20260810/_vllm_fa2_qrow32_gqa_pair_b1_sm121a.abi3.so
+  != <repo>/output/auto_research/.../_vllm_fa2_C.abi3.so
+```
+
+**Read literally this looks like a path bug. It is the tripwire, and the mechanism is
+the answer you wanted.**
+
+> **Does a topology change invalidate the FA2 byte credential?**
+> **No — and the credential is never consulted.** The gqa_pair *arm* is excluded two
+> layers earlier, by a mode gate on the selector, so nothing ever reaches the
+> credential to refuse it.
+
+Verified in source, two independent gates, both keyed on the mode:
+
+1. **The promoted-default block** (`:1275-1276`) arms `gqa_pair` only when
+   `FR13_FIXED32_MODE == "hydra27_fixed32"`. Under hydra31 it does not fire, so
+   `FR13_FA2_QROW32_B1_PRODUCTION_ARM` stays **empty**.
+2. **The selector predicate** requires `FR13_FIXED32_MODE == "hydra27_fixed32"` too —
+   so even naming the arm explicitly would refuse, and refuse on the *mode*, not on the
+   credential.
+
+With no B1 selector active, the fixed32 contract then requires the **stock** FA2 at its
+canonical in-repo path — and my runner had mounted the gqa_pair candidate `.so` for an
+arm that never armed. Hence the realpath mismatch. It is a *downstream symptom* of an
+arm silently not arming, which is the same class as round 1 §0.1 (the stale credential
+degrading to the incumbent), except here the exclusion is topological rather than
+temporal.
+
+**No re-earn was attempted**, per your instruction.
+
+## R15.4 What this means for the A/B, and the choice it forces
+
+An H31 arm **is** runnable today — but only with the **incumbent** FA2 (production arm
+named empty, stock `.so`). That makes H31-vs-H27 a **two-variable** comparison:
+topology *and* FA2 kernel, with gqa_pair's banked ~−4.4 ms sitting entirely on H27's
+side. Any hydra31 win measured that way is understated by roughly that amount, and any
+loss is overstated.
+
+Three ways forward, and the choice is a design call, not an operator one:
+
+| option | what it measures | cost |
+|---|---|---|
+| **A. Both arms on the incumbent FA2** (name the production arm empty in H27 too) | topology alone, cleanly | one new H27 (~3.5 h) + H31 |
+| **B. Re-earn the FA2 byte credential under hydra31** | topology with the promoted kernel on both sides | a gate re-earn *and* the ruling that hydra31 may carry a hydra27-earned kernel qualification |
+| **C. Widen the selector's mode gate to admit hydra31** | same as B, without a re-earn | a credential-scope decision: does a byte gate earned on hydra27's tree describe hydra31's? |
+
+**My recommendation is A**, and only A, unless Mark rules otherwise. It is the only one
+that answers the question the A/B was scheduled to answer — *what does the tail10
+topology do?* — without first settling a separate and genuinely open question about
+credential scope. B and C both require deciding whether an FA2 byte qualification earned
+against hydra27's physical tree describes a different tree; the launcher's own comment
+on the twelve refused levers says it does not, and I would not route around that
+judgement to save a serve.
+
+## R15.5 Status
+
+**tail10 A/B still not measured.** H27's round-14 baseline stands and is now formally
+established as pairing-valid at this HEAD (§R15.1) — but it is a *promoted-stack*
+baseline, so under option A it would itself need re-running on the incumbent.
+
+Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
+recommended for the tier-B serving route on round 12's evidence.

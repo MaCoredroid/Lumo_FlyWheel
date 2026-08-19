@@ -395,6 +395,55 @@
   "tail10_status": "A/B still not measured; H27 banked as a clean same-HEAD baseline that will pair with H31 once it boots",
   "window_utc": "2026-08-19T06:29Z..08:15Z"
  },
+ "round15": {
+  "CREDENTIAL_QUESTION_ANSWERED": {
+   "answer": "NO \u2014 and the credential is never consulted. The gqa_pair ARM is excluded two layers earlier by a mode gate on the selector, so nothing reaches the credential to refuse it.",
+   "class": "same as round-1 section 0.1 (stale credential degrading to incumbent) except the exclusion is TOPOLOGICAL rather than temporal",
+   "gate_1": "promoted-default block :1275-1276 arms gqa_pair only when FR13_FIXED32_MODE == hydra27_fixed32; under hydra31 PRODUCTION_ARM stays empty",
+   "gate_2": "the selector predicate also requires FR13_FIXED32_MODE == hydra27_fixed32, so even naming the arm refuses on the MODE, not the credential",
+   "observed_symptom": "with no B1 selector active the fixed32 contract requires the STOCK FA2 at its canonical in-repo path; the runner had mounted the candidate .so, hence the realpath mismatch",
+   "question": "does a topology change invalidate the FA2 byte credential?"
+  },
+  "arm_h31": {
+   "no_reearn_attempted": true,
+   "outcome": "STOPPED at the credential tripwire",
+   "refusal": "fixed32 FA2 realpath mismatch \u2014 the gqa_pair candidate .so was mounted for an arm that never armed",
+   "seconds": 5
+  },
+  "consequence_for_the_AB": {
+   "confound": "H31-vs-H27 becomes a TWO-variable comparison (topology AND FA2 kernel) with gqa_pair banked ~-4.4 ms entirely on H27 side; a hydra31 win is understated by about that, a loss overstated",
+   "h31_runnable_today": "yes, but only with the INCUMBENT FA2 (production arm named empty, stock .so)",
+   "options": {
+    "A": "both arms on the incumbent FA2 \u2014 measures topology alone; cost one new H27 + H31",
+    "B": "re-earn the FA2 byte credential under hydra31 \u2014 needs a ruling that hydra31 may carry a hydra27-earned kernel qualification",
+    "C": "widen the selector mode gate to admit hydra31 \u2014 same credential-scope decision without a re-earn"
+   },
+   "recommendation": "A, and only A unless Mark rules otherwise \u2014 the only option that answers what the A/B was scheduled to answer without first settling a separate open question about credential scope. B and C both require deciding whether a byte gate earned on hydra27 physical tree describes hydra31; the launcher own comment on the twelve refused levers says it does not, and I would not route around that judgement to save a serve."
+  },
+  "gate_reearn": {
+   "outcome": "PASS",
+   "rc": 0
+  },
+  "gpu_cost": "one gate re-earn plus a 5-second refusal",
+  "head": "ba954f512e3616ccb850ef771809287547c3a8a7",
+  "pairing_decision": {
+   "basis": "measured, not asserted",
+   "choice": "(a) pair against round-14 H27",
+   "diff_scope": "17 files: results docs, serve vehicle, three launchers, one new lint + test, sweep, two tests. UNTOUCHED: fr13_patch_fa2_tree_bias.py, fr10_phase4_patch_vllm_tree_gdn.py, fr13_fixed32_work_census.py, fr13_fixed32_topology.py, fr13_merged_drafter.py, fr13_fixed32_contract.py, all binaries",
+   "executed_config_identical": {
+    "ACTIVE_NODES": 27,
+    "FR13_FIXED32_MODE": "hydra27_fixed32",
+    "PHYSICAL_DRAFTS": 31,
+    "TAW_WALK_CAP": 12,
+    "VALID_MASK": "0x7abdffff"
+   },
+   "only_change_on_hydra27_path": "the walk cap is now SUPPLIED by the kind block instead of inherited from the sequence file \u2014 provenance moved, value did not (topology.WALK_CAP = 12)",
+   "self_note": "cuts against my own habit of refusing cross-HEAD pairing; the difference is that I could ENUMERATE what a hydra27 arm executes and show it unchanged, rather than argue from commit subjects"
+  },
+  "preflight_fix": "WORKS \u2014 H31 passed both round-13/14 blockers (no unsupported-mode, no TREE-differs)",
+  "tail10_status": "still not measured; H27 round-14 baseline is formally pairing-valid at this HEAD but is a PROMOTED-STACK baseline, so under option A it would itself need re-running on the incumbent",
+  "window_utc": "2026-08-19T08:29Z..08:48Z"
+ },
  "round2": {
   "arms": {
    "C'": {
