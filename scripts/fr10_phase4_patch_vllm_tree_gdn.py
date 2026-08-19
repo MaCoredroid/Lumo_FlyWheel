@@ -154,6 +154,13 @@ _FR13_FIXED32_PARENT = (
 _FR13_FIXED32_MODES = {
     "tail6_fixed32": (0x7A9CE7FF, 23),
     "hydra27_fixed32": (0x7ABDFFFF, 27),
+    # TAIL10 (stage 2): the four slots hydra27 disarms respent as spine
+    # 0^12..0^15, so all 31 physical drafts are armed. A NEW profile, not an
+    # edit to hydra27 -- ids >= 17 carry different paths, so both topology
+    # digests differ and every banked hydra27 credential keeps its meaning.
+    # Kept in sync with fr13_fixed32_topology.PROFILES by the contract lint
+    # (this table is inside the injected blob, which cannot import).
+    "hydra31_fixed32": (0x7FFFFFFF, 31),
 }
 _FR13_FIXED32_MODE = os.environ.get("FR13_FIXED32_MODE", "").strip()
 _FR13_FIXED32_GDN_PATH_BV_CANDIDATE = os.environ.get(
@@ -1776,6 +1783,7 @@ def _fr13_fixed32_topology_needle():
     expected_masks = {
         "tail6_fixed32": 0x7A9CE7FF,
         "hydra27_fixed32": 0x7ABDFFFF,
+        "hydra31_fixed32": 0x7FFFFFFF,
     }
     if expected_masks.get(_FR13_FIXED32_MODE) != mask:
         raise RuntimeError(

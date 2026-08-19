@@ -909,6 +909,63 @@ TAIL10_LEGAL_HANDOFF_SHAPES = (
     (GATED_MTP_FORWARD_CALLS, TAIL10_GATED_ARCTIC_MAIN_TAIL_LENGTH),
 )
 
+
+# ---- GDN subtree schedule, DERIVED (stage 2) --------------------------------
+# hydra27 ships SUBTREE_LEVELS as a hand-written literal. hydra31 cannot reuse
+# it (different parents), and hand-writing a second one would be the same
+# hardcode twice. So the rule is written down instead, and
+# validate_tail10_contract() proves it reproduces the shipped hydra27 table
+# EXACTLY before trusting it for hydra31.
+#
+# The rule: level 0 is the spine prefix of N_MTP_HEAD_DEPTHS rows (root plus the
+# head spine); level 1 is, for every child of a level-0 node that is not itself
+# in level 0, the maximal descending chain from that child. The head runner-ups
+# force the level-0 length: a runner-up at depth d hangs off the spine at d-1,
+# and every level-1 chain root's parent must live in an earlier level.
+SUBTREE_LEVEL0_ROWS = N_MTP_HEAD_DEPTHS
+
+
+def derive_subtree_levels(physical_parent, level0_rows=SUBTREE_LEVEL0_ROWS):
+    children: dict[int, list[int]] = {}
+    for node, parent in enumerate(physical_parent):
+        children.setdefault(parent, []).append(node)
+
+    def chain_from(start: int) -> tuple[int, ...]:
+        out = [start]
+        while children.get(out[-1]):
+            out.append(min(children[out[-1]]))
+        return tuple(out)
+
+    spine = chain_from(0)
+    level0 = spine[:level0_rows]
+    level0_set = set(level0)
+    level1 = [
+        (chain_from(child), node)
+        for node in level0
+        for child in sorted(children.get(node, ()))
+        if child not in level0_set
+    ]
+    # longest first, then by root -- the shipped hydra27 ordering
+    level1.sort(key=lambda entry: (-len(entry[0]), entry[0][0]))
+    return ((level0, -1),), tuple(level1)
+
+
+TAIL10_SUBTREE_LEVELS = derive_subtree_levels(TAIL10_PHYSICAL_PARENT)
+TAIL10_GDN_LEVEL_PATH_COUNTS = tuple(
+    len(level) for level in TAIL10_SUBTREE_LEVELS
+)
+TAIL10_GDN_LEVEL_MAX_LENGTHS = tuple(
+    max(len(path) for path, _parent in level) for level in TAIL10_SUBTREE_LEVELS
+)
+TAIL10_GDN_LAUNCHES = len(TAIL10_GDN_LEVEL_PATH_COUNTS)
+TAIL10_GDN_PATH_PROGRAMS = sum(TAIL10_GDN_LEVEL_PATH_COUNTS)
+TAIL10_GDN_PADDED_SLOTS = sum(
+    paths * length
+    for paths, length in zip(
+        TAIL10_GDN_LEVEL_PATH_COUNTS, TAIL10_GDN_LEVEL_MAX_LENGTHS, strict=True
+    )
+)
+
 PROFILE_HYDRA27 = "hydra27_fixed32"
 PROFILE_HYDRA31 = "hydra31_fixed32"
 PROFILES: dict[str, dict[str, object]] = {
@@ -929,6 +986,14 @@ PROFILES: dict[str, dict[str, object]] = {
         "gated_arctic_requested_tokens": GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
         "physical_branch_chains": PHYSICAL_BRANCH_CHAINS,
         "rescue_carry_slots": RESCUE_CARRY_SLOTS_PER_REQUEST,
+        "arctic_lookup_chains": ARCTIC_LOOKUP_CHAINS,
+        "arctic_lookup_calls": ARCTIC_LOOKUP_CALLS_PER_REQUEST,
+        "subtree_levels": SUBTREE_LEVELS,
+        "gdn_level_path_counts": GDN_LEVEL_PATH_COUNTS,
+        "gdn_level_max_lengths": GDN_LEVEL_MAX_LENGTHS,
+        "gdn_launches": GDN_LAUNCHES,
+        "gdn_path_programs": GDN_PATH_PROGRAMS,
+        "gdn_padded_slots": GDN_PADDED_SLOTS,
     },
     PROFILE_HYDRA31: {
         "choices": TAIL10_CHOICES,
@@ -948,6 +1013,14 @@ PROFILES: dict[str, dict[str, object]] = {
             TAIL10_GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
         "physical_branch_chains": TAIL10_PHYSICAL_BRANCH_CHAINS,
         "rescue_carry_slots": TAIL10_RESCUE_CARRY_SLOTS_PER_REQUEST,
+        "arctic_lookup_chains": TAIL10_ARCTIC_LOOKUP_CHAINS,
+        "arctic_lookup_calls": TAIL10_ARCTIC_LOOKUP_CALLS_PER_REQUEST,
+        "subtree_levels": TAIL10_SUBTREE_LEVELS,
+        "gdn_level_path_counts": TAIL10_GDN_LEVEL_PATH_COUNTS,
+        "gdn_level_max_lengths": TAIL10_GDN_LEVEL_MAX_LENGTHS,
+        "gdn_launches": TAIL10_GDN_LAUNCHES,
+        "gdn_path_programs": TAIL10_GDN_PATH_PROGRAMS,
+        "gdn_padded_slots": TAIL10_GDN_PADDED_SLOTS,
     },
 }
 
@@ -1025,6 +1098,40 @@ def validate_tail10_contract() -> None:
         raise AssertionError("tail10 rescue chains diverged")
     if TAIL10_RESCUE_CARRY_SLOTS_PER_REQUEST != 0:
         raise AssertionError("tail10 carries nothing")
+
+    # the schedule RULE must reproduce the shipped hydra27 literal exactly --
+    # only then is it trustworthy for hydra31
+    rederived = derive_subtree_levels(PHYSICAL_PARENT)
+    if rederived[0] != SUBTREE_LEVELS[0] or set(rederived[1]) != set(
+        SUBTREE_LEVELS[1]
+    ):
+        raise AssertionError(
+            "derive_subtree_levels does not reproduce the shipped hydra27 "
+            "schedule -- do not trust it for hydra31"
+        )
+    # hydra31's schedule must satisfy the same contract validate_contract()
+    # applies to hydra27's
+    covered: set[int] = set()
+    earlier: set[int] = set()
+    for level in TAIL10_SUBTREE_LEVELS:
+        current: set[int] = set()
+        for path, parent in level:
+            if not path or TAIL10_PHYSICAL_PARENT[path[0]] != parent:
+                raise AssertionError(f"tail10 schedule root {path!r} misparented")
+            if parent >= 0 and parent not in earlier:
+                raise AssertionError("tail10 schedule parent is not earlier")
+            for previous, node in zip(path, path[1:]):
+                if TAIL10_PHYSICAL_PARENT[node] != previous:
+                    raise AssertionError("tail10 schedule edge is invalid")
+            if (covered | current).intersection(path):
+                raise AssertionError("tail10 schedule repeats nodes")
+            current.update(path)
+        covered.update(current)
+        earlier.update(current)
+    if covered != set(range(PHYSICAL_ROWS)):
+        raise AssertionError("tail10 schedule does not cover all physical rows")
+    if sum(TAIL10_GDN_LEVEL_MAX_LENGTHS) != TAIL10_WALK_CAP:
+        raise AssertionError("tail10 critical path must equal its walk cap")
 
     # the two profiles must not collide
     if TAIL10_PHYSICAL_PARENT_SHA256 == PHYSICAL_PARENT_SHA256:

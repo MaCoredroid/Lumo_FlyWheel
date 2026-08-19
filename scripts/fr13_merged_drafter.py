@@ -56,6 +56,32 @@ def merged_on() -> bool:
 # accept>5 TAIL mode: head_depth (default 5) = MTP-drafted head; the deep chain past it is Arctic.
 TAIL_HEAD_DEPTH = 5
 
+_FIXED32_MODE_CACHE = None
+
+
+def fixed32_mode() -> str:
+    """The armed fixed32 profile, from the launcher-written /logs sidecar.
+
+    The worker drops FR13_* env, so the mode arrives the same way merged/tail do:
+    a file the launcher writes at boot (`printf '%s' "$FR13_FIXED32_MODE"`).
+    Absent or unknown => hydra27_fixed32, the shipped profile, so nothing here
+    can silently promote a serve onto tail10.
+    """
+    global _FIXED32_MODE_CACHE
+    if _FIXED32_MODE_CACHE is None:
+        mode = "hydra27_fixed32"
+        try:
+            with open("/logs/fr13_fixed32_mode.flag") as handle:
+                candidate = handle.read().strip()
+            from fr13_fixed32_topology import PROFILES
+
+            if candidate in PROFILES:
+                mode = candidate
+        except Exception:  # noqa: BLE001
+            pass
+        _FIXED32_MODE_CACHE = mode
+    return _FIXED32_MODE_CACHE
+
 
 def tail_on() -> bool:
     """Sidecar-gated (worker drops FR13_* env): /logs/fr13_tail_mode.arm written by the launcher
@@ -161,9 +187,10 @@ def reset_for_test():
     _FIXED32_LAST_WORK = None
     _FIXED32_PENDING_STEP = None
     _FIXED32_LIFECYCLE_POISON = None
-    global _FR14_GATE, _FR14_GATE_INIT_FAILED
+    global _FR14_GATE, _FR14_GATE_INIT_FAILED, _FIXED32_MODE_CACHE
     _FR14_GATE = None
     _FR14_GATE_INIT_FAILED = False
+    _FIXED32_MODE_CACHE = None
     for k in STATS:
         STATS[k] = 0
 
@@ -1178,34 +1205,35 @@ def decide_fixed32(
     counters, Arctic call count, pack width -- is bit-for-bit what it was.
     """
     from fr13_fixed32_topology import (
-        ARCTIC_LOOKUP_CHAINS,
-        ARCTIC_LOOKUP_CALLS_PER_REQUEST,
-        ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
-        ARCTIC_MAIN_TAIL_LENGTH,
-        GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST,
-        GATED_ARCTIC_MAIN_TAIL_LENGTH,
         GATED_MTP_K,
         GATED_SUFFIX_SPINE_DRAFT_IDS,
-        PHYSICAL_BRANCH_CHAINS,
         PHYSICAL_DRAFTS,
-        RESCUE_CARRY_SLOTS_PER_REQUEST,
         branch_paths,
+        profile,
         validate_contract,
         validate_gate_contract,
     )
 
     validate_contract()
+    # STAGE 2: every shape quantity comes from the armed profile. Nothing below
+    # restates a tail length, a token width or a carry count -- hydra27 and
+    # hydra31 differ only in what `profile()` returns.
+    prof = profile(fixed32_mode())
+    ARCTIC_LOOKUP_CHAINS = prof["arctic_lookup_chains"]
+    ARCTIC_LOOKUP_CALLS_PER_REQUEST = prof["arctic_lookup_calls"]
+    PHYSICAL_BRANCH_CHAINS = prof["physical_branch_chains"]
+    RESCUE_CARRY_SLOTS_PER_REQUEST = prof["rescue_carry_slots"]
     if gated:
         validate_gate_contract()
         head_depth = GATED_MTP_K
-        main_len = GATED_ARCTIC_MAIN_TAIL_LENGTH
-        requested_tokens = GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+        main_len = prof["gated_main_tail_length"]
+        requested_tokens = prof["gated_arctic_requested_tokens"]
         # the leading columns that land in head depths 4 and 5 instead of the tail
         head_fill_columns = len(GATED_SUFFIX_SPINE_DRAFT_IDS)
     else:
         head_depth = N_DEPTH
-        main_len = ARCTIC_MAIN_TAIL_LENGTH
-        requested_tokens = ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+        main_len = prof["main_tail_length"]
+        requested_tokens = prof["arctic_requested_tokens"]
         head_fill_columns = 0
     B = len(spec_row_req_ids)
     if not 1 <= B <= 4:
@@ -1321,6 +1349,7 @@ def decide_fixed32(
     _FIXED32_WORK_SERIAL += 1
     _FIXED32_LAST_WORK = {
         "serial": _FIXED32_WORK_SERIAL,
+        "mode": fixed32_mode(),
         "gated": bool(gated),
         "head_fill_columns": head_fill_columns,
         **work,

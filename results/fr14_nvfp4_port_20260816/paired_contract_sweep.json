@@ -78,8 +78,26 @@
    "kind": "shape-literal",
    "ok": true,
    "detail": "1 per-ordinal + 18 per-function adjudications, 0 unreviewed"
+  },
+  {
+   "pair": "arm-identity resolvers <-> unknown-arm refusal",
+   "kind": "fallback-pattern",
+   "ok": true,
+   "detail": "3 arm-identity resolvers: every registry arm branched explicitly, unknown arms refused by call"
+  },
+  {
+   "pair": "launcher pin cases <-> unknown-arm refusal",
+   "kind": "fallback-pattern",
+   "ok": true,
+   "detail": "3 launcher pin cases: every arm branched, unrecognised arms refused"
+  },
+  {
+   "pair": "bash pin-arm resolver <-> python twin",
+   "kind": "twin/twin",
+   "ok": true,
+   "detail": "3 launchers x 9 selector environments: bash and python pin-arm resolvers agree, by execution"
   }
  ],
- "n_pairs": 13,
+ "n_pairs": 16,
  "n_stale": 0
 }

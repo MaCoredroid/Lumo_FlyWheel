@@ -6123,6 +6123,39 @@ fi
 # fatal rather than a silent arm/disarm, and it refuses to arm without the tail
 # seam it hands off to. Predicate, pre-registration and offline evidence:
 # results/fr14_nvfp4_port_20260816/suffix_pass_gating.md
+# TAIL10 / hydra31_fixed32 (stage 2). The mode reaches the worker through the
+# /logs sidecar the launcher already writes; nothing extra is forwarded. What is
+# added here is refusal: several levers were QUALIFIED ON HYDRA27's physical
+# tree, and hydra31 is a different tree (ids >= 17 carry different paths, both
+# topology digests differ). Combining them would present a hydra27 credential
+# for a tree it never saw. Refused at launch rather than discovered on a boot --
+# the same discipline the suffix-gate incompatibilities use.
+case "${FR13_FIXED32_MODE:-}" in
+  ""|tail6_fixed32|hydra27_fixed32|hydra31_fixed32) ;;
+  *) echo "FR13_FIXED32_MODE must be empty, tail6_fixed32, hydra27_fixed32 or hydra31_fixed32" >&2; exit 2 ;;
+esac
+if [[ "${FR13_FIXED32_MODE:-}" == "hydra31_fixed32" ]]; then
+  for _fr14_h31_incompat in \
+    FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB \
+    FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION \
+    FR13_CFWD_PACKED_WALK_ACTIVE_DEPTH_BYTE_AB \
+    FR13_CFWD_LOGIT_DIRECT_BYTE_AB \
+    FR13_CFWD_LOGIT_DIRECT_PRODUCTION \
+    FR13_DRAFT_HEAD_FP8 \
+    FR13_DRAFT_HEAD_M32_LIVE_AB \
+    FR13_DRAFT_HEAD_M32_PRODUCTION \
+    FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB \
+    FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION \
+    FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB \
+    FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION; do
+    if [[ "${!_fr14_h31_incompat:-0}" != "0" ]]; then
+      echo "FR13_FIXED32_MODE=hydra31_fixed32 is incompatible with $_fr14_h31_incompat (qualified on the hydra27 tree)" >&2
+      exit 2
+    fi
+  done
+  unset _fr14_h31_incompat
+  echo "[launch] TAIL10 profile hydra31_fixed32 (31 armed drafts, Arctic tail 10, walk cap 16)"
+fi
 # FR14 lane 1: fused draft top-k (FR14_FUSED_DRAFT_TOPK).
 # PROMOTED 2026-08-18 by Mark's ruling (pass 57): live byte-proof 268 paths /
 # 0 diffs / 96 215 steps, -0.071 ms bracket, accept flat, eyeball clean. Evidence

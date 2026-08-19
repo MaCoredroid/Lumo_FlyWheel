@@ -152,3 +152,213 @@ def test_gate_handoff_shapes_move_with_the_tail():
 def test_profile_lookup_rejects_an_unknown_mode():
     with pytest.raises(KeyError):
         topo.profile("hydra99_fixed32")
+
+
+# ===========================================================================
+# STAGE 2 -- the four consumers.
+# ===========================================================================
+
+import json  # noqa: E402
+
+import fr13_fixed32_work_census as census  # noqa: E402
+import fr13_merged_drafter as md  # noqa: E402
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+def test_derived_subtree_schedule_reproduces_the_shipped_hydra27_literal():
+    """The rule is only trustworthy for hydra31 if it rebuilds hydra27 exactly."""
+    rederived = topo.derive_subtree_levels(topo.PHYSICAL_PARENT)
+    assert rederived[0] == topo.SUBTREE_LEVELS[0]
+    assert set(rederived[1]) == set(topo.SUBTREE_LEVELS[1])
+
+
+def test_hydra31_gdn_schedule_is_well_formed():
+    p = topo.profile(topo.PROFILE_HYDRA31)
+    assert p["gdn_level_path_counts"] == (1, 11)
+    assert p["gdn_level_max_lengths"] == (5, 11)
+    assert sum(p["gdn_level_max_lengths"]) == p["walk_cap"] == 16
+    covered = set()
+    for level in p["subtree_levels"]:
+        for path, _parent in level:
+            covered |= set(path)
+    assert covered == set(range(topo.PHYSICAL_ROWS))
+    # hydra27's schedule is untouched
+    assert topo.GDN_LEVEL_MAX_LENGTHS == (5, 7)
+
+
+# --- consumer 1: decide_fixed32 ---------------------------------------------
+
+def test_drafter_defaults_to_hydra27_without_a_sidecar():
+    md._FIXED32_MODE_CACHE = None
+    assert md.fixed32_mode() == "hydra27_fixed32"
+
+
+def test_drafter_takes_every_width_from_the_profile():
+    src = (REPO / "scripts" / "fr13_merged_drafter.py").read_text()
+    body = src[src.index("def decide_fixed32"):src.index("def get_fixed32_drafter_last_work")]
+    for gone in (
+        "ARCTIC_MAIN_TAIL_LENGTH,",
+        "GATED_ARCTIC_MAIN_TAIL_LENGTH,",
+        "ARCTIC_LOOKUP_TOKENS_PER_REQUEST,",
+    ):
+        assert gone not in body, f"decide_fixed32 still imports {gone}"
+    assert 'profile(fixed32_mode())' in body
+
+
+# --- consumer 2: census ------------------------------------------------------
+
+def test_census_knows_the_profile_and_maps_tail6_to_hydra27():
+    assert "hydra31_fixed32" in census.MODE_SEMANTICS
+    assert census.MODE_SEMANTICS["hydra31_fixed32"]["active_nodes"] == 31
+    assert census.MODE_SEMANTICS["hydra31_fixed32"]["valid_mask"] == 0x7FFFFFFF
+    # tail6 and hydra27 are the same physical tree
+    assert (
+        census.shape_profile("tail6_fixed32")["physical_parent_sha256"]
+        == census.shape_profile("hydra27_fixed32")["physical_parent_sha256"]
+    )
+    assert (
+        census.shape_profile("hydra31_fixed32")["physical_parent_sha256"]
+        != census.shape_profile("hydra27_fixed32")["physical_parent_sha256"]
+    )
+
+
+def test_taw_call_table_is_derived_and_reproduces_the_shipped_literal():
+    assert census.taw_tensor_call_census(12) == census.TAW_TENSOR_CALL_CENSUS
+    at16 = census.taw_tensor_call_census(16)
+    assert at16["walk_levels"] == 16
+    assert at16["full_vocab_row_gathers"] == 32
+    assert at16["full_vocab_normalizations"] == 48
+
+
+def _banked_or_skip():
+    p = (
+        REPO / "output/fr14_b1_stock_20260817T054447Z/tail6_fixed32_b1radix"
+        / "logs/fr13_fixed32_work_census.jsonl"
+    )
+    if not p.exists():
+        pytest.skip("banked census not present")
+    with p.open() as fh:
+        ev = json.loads(fh.readline())
+    # isolate lane 3's in-flight TAW pin re-attestation, which is not this lane's
+    ev["taw"]["source_contract_sha256"] = census.TAW_SOURCE_CONTRACT_SHA256
+    return ev
+
+
+def _morph(ev, mode):
+    p = topo.profile(mode)
+    b = ev["batch_size"]
+    rescue = sum(l for _r, l in p["physical_branch_chains"])
+    e = json.loads(json.dumps(ev))
+    e["mode"] = mode
+    e["active_nodes"] = p["active_drafts"]
+    e["valid_mask"] = p["valid_mask"]
+    d = e["drafter"]
+    d["main_tail_length"] = p["main_tail_length"]
+    d["arctic_requested_tokens"] = p["arctic_requested_tokens"] * b
+    d["carry_fill_slots"] = p["rescue_carry_slots"] * b
+    rt = e["drafter_runtime"]
+    rt["arctic_requested_tokens"] = p["arctic_requested_tokens"] * b
+    rt["merge_fill_columns"] = p["main_tail_length"] + rescue
+    rt["merge_fill_rows"] = rt["merge_fill_columns"] * b
+    rt["rescue_carry_slots"] = p["rescue_carry_slots"] * b
+    rt["physical_parent_sha256"] = p["physical_parent_sha256"]
+    rt["arctic_ledger"] = [
+        dict(r, tokens=p["main_tail_length"] * b) if r["kind"] == "main" else r
+        for r in rt["arctic_ledger"]
+    ]
+    g = e["gdn"]
+    g["critical_path"] = p["walk_cap"]
+    g["grid_z"] = list(p["gdn_level_path_counts"])
+    g["max_path_lengths"] = list(p["gdn_level_max_lengths"])
+    g["path_programs"] = g["scan_calls"] * p["gdn_path_programs"]
+    g["padded_slots"] = g["scan_calls"] * p["gdn_padded_slots"]
+    # the TAW walk is level-proportional; scale every walk-derived field
+    old_walk = topo.WALK_CAP
+    new_walk = p["walk_cap"]
+    taw = e["taw"]
+    for key in (
+        "loop_iterations", "walk_levels", "uniform_slots", "child_lanes",
+        "target_rows", "self_rows", "self_cdf_rows", "source_cdf_rows",
+        "residual_cdf_rows", "qmix_rows", "residual_rows",
+        "row_scatter_slots", "path_scatter_slots",
+        "exact_commit_launches", "exact_commit_programs",
+    ):
+        if key in taw and isinstance(taw[key], int) and not isinstance(taw[key], bool):
+            taw[key] = taw[key] * new_walk // old_walk
+    calls = taw.get("tensor_call_census")
+    if isinstance(calls, dict):
+        taw["tensor_call_census"] = {
+            k: (
+                v * new_walk // old_walk
+                if isinstance(v, int) and not isinstance(v, bool)
+                else v
+            )
+            for k, v in calls.items()
+        }
+    return e
+
+
+def test_census_validates_a_hydra27_event_unchanged():
+    census.validate_event(_banked_or_skip(), source="h27")
+
+
+def test_census_validates_a_hydra31_event():
+    census.validate_event(_morph(_banked_or_skip(), "hydra31_fixed32"), source="h31")
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("active_nodes", 27),
+        ("valid_mask", 0x7ABDFFFF),
+    ],
+)
+def test_census_refuses_hydra27_shape_under_the_hydra31_mode(field, value):
+    e = _morph(_banked_or_skip(), "hydra31_fixed32")
+    e[field] = value
+    with pytest.raises(census.CensusError):
+        census.validate_event(e, source="bad")
+
+
+def test_census_refuses_a_hydra27_tail_under_hydra31():
+    e = _morph(_banked_or_skip(), "hydra31_fixed32")
+    e["drafter"]["main_tail_length"] = 6
+    with pytest.raises(census.CensusError, match="main_tail_length"):
+        census.validate_event(e, source="bad")
+
+
+# --- consumer 3: patcher mode table -----------------------------------------
+
+def test_patcher_mode_table_matches_the_profile_table():
+    src = (REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+    assert '"hydra31_fixed32": (0x7FFFFFFF, 31)' in src
+    assert '"hydra31_fixed32": 0x7FFFFFFF' in src, "topology needle mask map"
+    p = topo.profile(topo.PROFILE_HYDRA31)
+    assert p["valid_mask"] == 0x7FFFFFFF and p["active_drafts"] == 31
+
+
+# --- consumer 4: launcher ----------------------------------------------------
+
+@pytest.mark.parametrize(
+    "launcher",
+    [
+        "scripts/fr13_launch_forked_fa2_tree_server.sh",
+        "scripts/fr14_armb_leg3_launch_nomiddleware.sh",
+    ],
+)
+def test_launcher_accepts_hydra31_and_refuses_hydra27_qualified_levers(launcher):
+    text = (REPO / launcher).read_text()
+    assert '""|tail6_fixed32|hydra27_fixed32|hydra31_fixed32) ;;' in text
+    assert (
+        "FR13_FIXED32_MODE must be empty, tail6_fixed32, hydra27_fixed32 or "
+        "hydra31_fixed32" in text
+    )
+    assert "is incompatible with $_fr14_h31_incompat (qualified on the hydra27 tree)" in text
+    for lever in (
+        "FR13_CFWD_LOGIT_DIRECT_PRODUCTION",
+        "FR13_DRAFT_HEAD_FP8",
+        "FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION",
+    ):
+        block = text[text.index("_fr14_h31_incompat in"):text.index("unset _fr14_h31_incompat")]
+        assert lever in block, f"{lever} not refused under hydra31"

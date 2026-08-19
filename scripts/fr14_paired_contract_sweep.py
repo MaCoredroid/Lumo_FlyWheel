@@ -348,17 +348,66 @@ def pair_pack_identity_under_both_shapes(topo):
     return True, "identity holds at 31 under both shapes"
 
 
+def pair_profiles_vs_patcher_mode_table(blob, topo):
+    """The profile table vs the patcher's mode literal (the blob cannot import)."""
+    src = PATCHER.read_text()
+    m = re.search(r"_FR13_FIXED32_MODES = \{(.*?)\n\}", src, re.S)
+    if m is None:
+        return False, "patcher mode table not found"
+    body = m.group(1)
+    for mode in (topo.PROFILE_HYDRA27, topo.PROFILE_HYDRA31):
+        prof = topo.profile(mode)
+        want = f'"{mode}": ({prof["valid_mask"]:#010X}, {prof["active_drafts"]})'
+        want_lower = want.replace("0X", "0x")
+        if want not in body and want_lower not in body:
+            return False, f"patcher mode table missing/stale for {mode}: {want}"
+    return True, "patcher mode table matches every profile"
+
+
+def pair_profiles_vs_blob_needle(blob, topo):
+    """The live topology needle's mask map must know every profile."""
+    m = re.search(r"expected_masks = \{(.*?)\n\s*\}", blob, re.S)
+    if m is None:
+        return False, "topology needle mask map not found"
+    body = m.group(1)
+    for mode in (topo.PROFILE_HYDRA27, topo.PROFILE_HYDRA31):
+        mask = topo.profile(mode)["valid_mask"]
+        if f'"{mode}": {mask:#010X}' not in body.replace("0x", "0X").replace(
+            "ABDFFFF", "ABDFFFF"
+        ) and f'"{mode}": {mask:#010x}' not in body:
+            return False, f"needle mask map missing {mode}"
+    return True, "needle mask map matches every profile"
+
+
+def pair_profiles_vs_census_modes(blob, topo):
+    text = CENSUS.read_text()
+    if "HYDRA31_MODE" not in text or "shape_profile" not in text:
+        return False, "census does not know the hydra31 profile"
+    if "_SHAPE_PROFILE_BY_MODE" not in text:
+        return False, "census has no mode->profile mapping"
+    return True, "census consumes the profile table"
+
+
 def pair_topology_vs_drafter():
     """decide_fixed32's gated widths vs the topology contract."""
     topo = _topology()
     text = DRAFTER.read_text()
-    for name in (
-        "GATED_ARCTIC_MAIN_TAIL_LENGTH",
-        "GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST",
-        "GATED_MTP_K",
-    ):
+    # STAGE 2: the flat constants were replaced by the profile table, so the
+    # check is that decide_fixed32 takes its widths from `profile(mode)` and
+    # restates none of them.
+    for name in ("profile", "fixed32_mode()", "GATED_MTP_K"):
         if name not in text:
             return False, f"decide_fixed32 does not consume {name}"
+    for key in (
+        "gated_main_tail_length",
+        "gated_arctic_requested_tokens",
+        "main_tail_length",
+        "arctic_requested_tokens",
+        "rescue_carry_slots",
+        "physical_branch_chains",
+    ):
+        if f'prof["{key}"]' not in text and f'["{key}"]' not in text:
+            return False, f"decide_fixed32 does not take {key} from the profile"
     if topo.GATED_MTP_K + topo.GATED_ARCTIC_MAIN_TAIL_LENGTH != 11:
         return False, "gated shape does not reach draft position 10"
     return True, "drafter consumes the topology constants"
@@ -559,9 +608,13 @@ REPLAY_NAMES = (
 REPLAY_LITERAL = re.compile(
     r"(?:[=!<>]=|[-+*]|\breturn\b|:)\s*(?:\w+\s*[-+*]\s*)?\b([12])\b"
 )
-# (blob_lineno, enclosing function, ordinal within that function) -> rationale
+# (enclosing function, ordinal within that function) -> rationale.
+# NOT keyed on the blob's start line: round 5's own patcher edits shifted it from
+# 39286 to 39294 and turned this pair stale for no semantic reason. Function
+# names are unique across all injected blobs (asserted by the lint), so the
+# function is the stable half of the position.
 ADJUDICATED_REPLAY_POSITIONS = {
-    (39286, "_fr13_f32_flush_reconcile", 1):
+    ("_fr13_f32_flush_reconcile", 1):
         "FORWARD-graph evidence: the forward CUDA graph is replayed once per "
         "step regardless of the drafter's pass split. Correct; do not touch. "
         "Its character-identical twin in this same function was the 15th site.",
@@ -635,7 +688,7 @@ def replay_literal_scan():
                 if a <= offset <= b:
                     fn = name
             ordinals[fn] = ordinals.get(fn, 0) + 1
-            key = (lineno, fn, ordinals[fn])
+            key = (fn, ordinals[fn])
             if key in ADJUDICATED_REPLAY_POSITIONS:
                 continue
             if fn in ADJUDICATED_REPLAY_FUNCTIONS:

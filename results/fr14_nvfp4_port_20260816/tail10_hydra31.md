@@ -198,3 +198,76 @@ Stage 1 is inert and proven so. Stages 2–3 are where the 128 non-mode-name sit
 have not written them: the cascade shows they cluster in four consumers, but "clusters in four
 consumers" is a claim about a diff that does not exist yet. The A/B cannot run until stage 2
 lands, and stage 2 should be reviewed against the same lints before it does.
+
+
+---
+
+# 9. STAGE 2 — the four consumers (2026-08-19)
+
+Landed. The gate is refused-final and default-OFF; tail10 composes with it off, and the gate's
+constants are still read through the same profile so nothing diverged.
+
+## 9.1 What each consumer became
+
+| consumer | change |
+|---|---|
+| `decide_fixed32` | takes **every** width from `profile(fixed32_mode())` — main tail, gated tail, requested tokens, rescue chains, carry slots. It imports no flat tail constant any more. |
+| census | `MODE_SEMANTICS` += hydra31; `shape_profile(mode)` supplies every mode-varying expectation; tail6 maps to hydra27 (same physical tree, different mask). |
+| patcher | `_FR13_FIXED32_MODES` and the live `_fr13_fixed32_topology_needle` mask map both learn `hydra31_fixed32 -> (0x7FFFFFFF, 31)`. |
+| launchers | `FR13_FIXED32_MODE` is now whitelisted, and hydra31 **refuses** the twelve levers qualified on hydra27's tree. |
+
+The mode reaches the worker through the `/logs/fr13_fixed32_mode.flag` sidecar the launcher
+already writes — the worker-env-drop-proof pattern — defaulting to hydra27 when absent or
+unrecognised, so nothing can silently promote a serve onto tail10.
+
+## 9.2 Derive-don't-hardcode, applied to the two hard cases
+
+**The GDN subtree schedule.** hydra27 ships `SUBTREE_LEVELS` as a hand-written literal;
+hand-writing a second one would be the same hardcode twice. The *rule* is written down instead
+— level 0 is the spine prefix of `N_MTP_HEAD_DEPTHS` rows, level 1 is the maximal descending
+chain from every child of a level-0 node — and `validate_tail10_contract()` **proves it
+reproduces the shipped hydra27 table exactly** before it is trusted for hydra31. hydra31
+derives to `(1, 11)` paths, `(5, 11)` max lengths, sum 16 = its walk cap, all 32 rows covered.
+
+**The TAW call table.** `TAW_TENSOR_CALL_CENSUS` is entirely walk-proportional
+(`2×walk` gathers, `3×walk` normalizations, …). It is now derived, and
+`taw_tensor_call_census(12)` reproduces the shipped literal exactly. This mattered: the banked
+serve runs the **base** route (`fixed32_pytorch_exact_float_triton_integer_commit`,
+`walk_levels = 12`), so under hydra31 every one of those counts moves to walk 16.
+
+Also derived rather than restated: `merge_fill_columns` (main + rescue — 16 under **both**
+profiles, for opposite reasons: 6+10 and 10+6), `rescue_carry_slots` (4 → 0), `child_lanes`,
+`uniform_slots`, `row_scatter_slots`, `path_scatter_slots`, `loop_iterations`.
+
+## 9.3 Verification
+
+* **1 000 banked hydra27 events validate unchanged** (isolating lane 3's in-flight
+  `taw.source_contract_sha256` re-attestation, which is not this lane's).
+* A full **hydra31 event validates end-to-end** through the census, and hydra27 shapes are
+  **refused** under the hydra31 mode.
+* The launcher preconditions were **CPU-walked, not asserted**: hydra27 passes, hydra31 passes
+  and announces itself, an unknown mode is refused, hydra31 + a hydra27-qualified lever is
+  refused, and hydra27 + that same lever still works.
+* **Symbol-resolution sweep** on the patcher: both edited sites resolve, and the needle's mask
+  map is still defined before use.
+* Paired-contract + shape-literal lints: **16 pairs, 0 stale**, with three new pairs —
+  profile table ↔ patcher mode table, ↔ blob topology needle, ↔ census modes.
+
+## 9.4 Two line-number fragilities this round exposed
+
+My own patcher edits shifted the injected blobs, which turned two position-keyed things stale
+for no semantic reason: the replay adjudication key `(39286, fn, ordinal)` and a lint test
+asserting `lineno == 39286`.
+
+Both now key on **content**: the adjudication is `(function, ordinal)` — function names are
+unique across all injected blobs, asserted — and the test finds the flush blob by looking for
+`_fr13_f32_flush_reconcile` in it. Round 4 warned that an allowlist which drifts on every edit
+trains people to refresh it without reading; this is that warning arriving.
+
+## 9.5 Ready for the A/B
+
+`FR13_FIXED32_MODE=hydra31_fixed32` vs `hydra27_fixed32`, gate OFF on both, paired canonical
+exact4, ≥20 000 steps/arm. Headline instrument: the **per-position ladder past position 10** —
+counters must be non-zero through 14. Watch `cfwd`: §3.1 predicts +33% from the 12→16 walk,
+and that is now the census's expectation too, so a serve that disagrees fails validation rather
+than quietly reporting a wrong number.

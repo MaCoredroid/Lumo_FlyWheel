@@ -404,8 +404,8 @@ def test_the_flush_twins_are_character_identical_and_mean_opposite_things():
     first draft did exactly that. So the adjudication is keyed on POSITION, and
     this test asserts the two remain distinguishable only that way.
     """
-    for lineno, text, _tree in sweep.all_injected_blobs():
-        if lineno != 39286:
+    for _lineno, text, _tree in sweep.all_injected_blobs():
+        if "_fr13_f32_flush_reconcile" not in text:
             continue
         lines = text.split("\n")
         target = [
@@ -430,8 +430,8 @@ def test_the_flush_twins_are_character_identical_and_mean_opposite_things():
 
 def test_text_keying_would_have_hidden_the_15th_site():
     """Demonstrate the failure mode, rather than asserting it in prose."""
-    for lineno, text, _tree in sweep.all_injected_blobs():
-        if lineno != 39286:
+    for _lineno, text, _tree in sweep.all_injected_blobs():
+        if "_fr13_f32_flush_reconcile" not in text:
             continue
         stale_text = 'or evidence.get("matching_replays") != 1'
         # restore the pre-fix source: both twins identical again
@@ -457,7 +457,8 @@ def test_text_keying_would_have_hidden_the_15th_site():
 def test_boundary_path_is_covered_in_all_three_dimensions():
     """columns / passes / replays -- the flush blob is scanned by each."""
     assert any(
-        lineno == 39286 for lineno, _t, tree in sweep.all_injected_blobs()
+        "_fr13_f32_flush_reconcile" in text
+        for _lineno, text, tree in sweep.all_injected_blobs()
         if tree is not None
     ), "the flush blob must be parseable and scanned"
     ok_shape, _ = sweep.shape_literal_scan()
@@ -466,7 +467,7 @@ def test_boundary_path_is_covered_in_all_three_dimensions():
     assert any(
         "_fr13_f32_flush" in fn for fn in sweep.ADJUDICATED_REPLAY_FUNCTIONS
     ) or any(
-        key[1].startswith("_fr13_f32_flush")
+        key[0].startswith("_fr13_f32_flush")
         for key in sweep.ADJUDICATED_REPLAY_POSITIONS
     ), "the boundary path must appear in the replay adjudications"
 

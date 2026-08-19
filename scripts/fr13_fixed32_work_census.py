@@ -49,6 +49,10 @@ from fr13_fixed32_topology import (
     GATED_MTP_FORWARD_CALLS,
     LEGAL_GRAPH_CAPTURES,
     LEGAL_HANDOFF_SHAPES,
+    PROFILES,
+    PROFILE_HYDRA27,
+    PROFILE_HYDRA31,
+    profile as _topology_profile,
     LEGAL_STEP_SHAPES,
     COMMIT_PATH_CAP,
     COMMITTER_NEUTRALIZE_OPS,
@@ -109,6 +113,7 @@ SELF_TEST_SCHEMA = "fr13-fixed32-work-census-self-test-v13"
 
 TAIL_MODE = "tail6_fixed32"
 HYDRA_MODE = "hydra27_fixed32"
+HYDRA31_MODE = PROFILE_HYDRA31
 MODE_SEMANTICS = {
     TAIL_MODE: {
         "active_nodes": TAIL6_ACTIVE_DRAFTS,
@@ -118,7 +123,49 @@ MODE_SEMANTICS = {
         "active_nodes": HYDRA27_ACTIVE_DRAFTS,
         "valid_mask": HYDRA27_VALID_MASK,
     },
+    HYDRA31_MODE: {
+        "active_nodes": PROFILES[PROFILE_HYDRA31]["active_drafts"],
+        "valid_mask": PROFILES[PROFILE_HYDRA31]["valid_mask"],
+    },
 }
+# tail6 and hydra27 are the SAME physical tree with different masks, so they
+# share every shape quantity; hydra31 is a different tree.
+_SHAPE_PROFILE_BY_MODE = {
+    TAIL_MODE: PROFILE_HYDRA27,
+    HYDRA_MODE: PROFILE_HYDRA27,
+    HYDRA31_MODE: PROFILE_HYDRA31,
+}
+
+
+def shape_profile(mode):
+    """Every census expectation that varies by fixed32 profile, in one place.
+
+    STAGE 2: validators take their widths from here instead of restating a tail
+    length or a walk depth. The module-level constants below stay bound to
+    hydra27 so nothing that imports them moves.
+    """
+    return _topology_profile(_SHAPE_PROFILE_BY_MODE[mode])
+
+
+def taw_tensor_call_census(walk):
+    """The TAW call table is walk-proportional; derive it, do not retype it."""
+    return {
+        **TAW_TENSOR_CALL_CENSUS,
+        "walk_levels": walk,
+        "full_vocab_row_gathers": 2 * walk,
+        "full_vocab_fp32_casts": 2 * walk,
+        "full_vocab_softmax_calls": 2 * walk,
+        "full_vocab_normalizations": 3 * walk,
+        "full_vocab_cdf_calls": 2 * walk,
+        "source_cdf_calls": walk,
+        "qmix_zero_fills": walk,
+        "qmix_scatter_add_calls": walk,
+        "residual_subtract_calls": walk,
+        "residual_clamp_calls": walk,
+        "residual_where_calls": 2 * walk,
+        "exact_commit_launches": walk,
+        "exact_commit_programs_per_request": walk,
+    }
 SUPPORTED_BATCH_SIZES = (1, 2, 3, 4)
 SUPPORTED_CAMPAIGN_CAPACITIES = (1, 4)
 
@@ -1261,6 +1308,10 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     active_nodes = _integer(event["active_nodes"], f"{source}.active_nodes")
     valid_mask = _integer(event["valid_mask"], f"{source}.valid_mask")
     semantics = MODE_SEMANTICS[mode]
+    # STAGE 2: the shape quantities this event must satisfy, taken from its own
+    # declared profile rather than from module constants pinned to hydra27.
+    shape = shape_profile(mode)
+    _walk = int(shape["walk_cap"])
     _expect(
         physical_drafts,
         PHYSICAL_DRAFTS,
@@ -1341,7 +1392,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     rescue_chains = _integer_pairs(
         drafter["rescue_chains"],
         f"{source}.drafter.rescue_chains",
-        length=len(ARCTIC_LOOKUP_CHAINS),
+        length=len(shape["arctic_lookup_chains"]),
     )
     carry_fill_slots = _integer(
         drafter["carry_fill_slots"], f"{source}.drafter.carry_fill_slots"
@@ -1356,11 +1407,14 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     # 2-forward step with a 6-token chain is a malformed tree and is rejected
     # here just as it is at the drafter's own proposal_end.
     _fr14_shape = (mtp_forward_calls, main_tail_length)
-    if _fr14_shape not in LEGAL_HANDOFF_SHAPES:
+    _legal_handoff = (
+        (MTP_FORWARD_CALLS, shape["main_tail_length"]),
+        (GATED_MTP_FORWARD_CALLS, shape["gated_main_tail_length"]),
+    )
+    if _fr14_shape not in _legal_handoff:
         raise CensusError(
             f"{source}.drafter (mtp_forward_calls, main_tail_length) must be "
-            f"{(MTP_FORWARD_CALLS, ARCTIC_MAIN_TAIL_LENGTH)} ungated or "
-            f"{(GATED_MTP_FORWARD_CALLS, GATED_ARCTIC_MAIN_TAIL_LENGTH)} gated, "
+            f"{_legal_handoff[0]} ungated or {_legal_handoff[1]} gated, "
             f"got {_fr14_shape}"
         )
     _fr14_gated = mtp_forward_calls == GATED_MTP_FORWARD_CALLS
@@ -1377,21 +1431,21 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     _expect(
         arctic_requested_tokens,
         (
-            GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+            shape["gated_arctic_requested_tokens"]
             if _fr14_gated
-            else ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+            else shape["arctic_requested_tokens"]
         )
         * batch_size,
         f"{source}.drafter.arctic_requested_tokens",
     )
     _expect(
         rescue_chains,
-        ARCTIC_LOOKUP_CHAINS,
+        shape["arctic_lookup_chains"],
         f"{source}.drafter.rescue_chains",
     )
     _expect(
         carry_fill_slots,
-        RESCUE_CARRY_SLOTS_PER_REQUEST * batch_size,
+        int(shape["rescue_carry_slots"]) * batch_size,
         f"{source}.drafter.carry_fill_slots",
     )
     _expect(pack_columns, PHYSICAL_DRAFTS, f"{source}.drafter.pack_columns")
@@ -1643,7 +1697,8 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             f"{(runtime_mtp_calls, runtime_graph_replays)}"
         )
     _fr14_main = (
-        GATED_ARCTIC_MAIN_TAIL_LENGTH if _fr14_gated else ARCTIC_MAIN_TAIL_LENGTH
+        shape["gated_main_tail_length"] if _fr14_gated
+        else shape["main_tail_length"]
     )
     raw_ledger = drafter_runtime["arctic_ledger"]
     if not isinstance(raw_ledger, list) or len(raw_ledger) != 3:
@@ -1709,15 +1764,21 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         drafter_runtime["outer_handoff_calls"],
         f"{runtime_label}.outer_handoff_calls",
     )
-    _fr14_fill = _fr14_main + 10
+    # merge fill = the Arctic main chain plus the RESCUE columns. The rescue
+    # count is 10 under hydra27 and 6 under hydra31 (its deep rank-2 branches
+    # became spine), so 16 is the same number for opposite reasons -- derive it.
+    _fr14_rescue_cols = sum(
+        length for _rank, length in shape["physical_branch_chains"]
+    )
+    _fr14_fill = _fr14_main + _fr14_rescue_cols
     for actual, expected, field in (
         (runtime_arctic_calls, ARCTIC_LOOKUP_CALLS_PER_REQUEST * batch_size, "arctic_lookup_calls"),
         (
             runtime_arctic_tokens,
             (
-                GATED_ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+                shape["gated_arctic_requested_tokens"]
                 if _fr14_gated
-                else ARCTIC_LOOKUP_TOKENS_PER_REQUEST
+                else shape["arctic_requested_tokens"]
             )
             * batch_size,
             "arctic_requested_tokens",
@@ -1725,9 +1786,11 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         (runtime_fill_calls, 1, "merge_fill_calls"),
         (runtime_fill_columns, _fr14_fill, "merge_fill_columns"),
         (runtime_fill_rows, _fr14_fill * batch_size, "merge_fill_rows"),
-        (runtime_carry, RESCUE_CARRY_SLOTS_PER_REQUEST * batch_size, "rescue_carry_slots"),
+        (runtime_carry, int(shape["rescue_carry_slots"]) * batch_size,
+         "rescue_carry_slots"),
         (runtime_publish_shape, (batch_size, PHYSICAL_DRAFTS), "publish_shape"),
-        (runtime_parent_sha, PHYSICAL_PARENT_SHA256, "physical_parent_sha256"),
+        (runtime_parent_sha, shape["physical_parent_sha256"],
+         "physical_parent_sha256"),
         (runtime_handoff_calls, 1, "outer_handoff_calls"),
     ):
         _expect(actual, expected, f"{runtime_label}.{field}")
@@ -1813,12 +1876,12 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     )
     _expect(
         gdn_path_programs,
-        scan_calls * GDN_PATH_PROGRAMS_PER_SCAN,
+        scan_calls * int(shape["gdn_path_programs"]),
         f"{source}.gdn.path_programs",
     )
     _expect(
         gdn_padded_slots,
-        scan_calls * GDN_PADDED_SLOTS_PER_SCAN,
+        scan_calls * int(shape["gdn_padded_slots"]),
         f"{source}.gdn.padded_slots",
     )
     _expect(
@@ -1828,13 +1891,15 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     )
     _expect(
         gdn_critical_path,
-        GDN_CRITICAL_PATH,
+        _walk,
         f"{source}.gdn.critical_path",
     )
-    _expect(gdn_grid_z, GDN_GRID_Z, f"{source}.gdn.grid_z")
+    _expect(
+        gdn_grid_z, tuple(shape["gdn_level_path_counts"]), f"{source}.gdn.grid_z"
+    )
     _expect(
         gdn_max_path_lengths,
-        GDN_MAX_PATH_LENGTHS,
+        tuple(shape["gdn_level_max_lengths"]),
         f"{source}.gdn.max_path_lengths",
     )
     _expect(
@@ -1916,11 +1981,14 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         expected_exact_commit_launches = 1
         expected_exact_commit_programs = 1
     else:
-        expected_target_rows = TAW_ROWS_PER_REQUEST
-        expected_self_rows = TAW_ROWS_PER_REQUEST
+        # the base route walks the whole tree, so its counts follow the armed
+        # profile's walk cap (12 under hydra27, 16 under hydra31). The
+        # production routes above are route-specific, not walk-proportional.
+        expected_target_rows = _walk
+        expected_self_rows = _walk
         expected_product_write_multiplier = 1
-        expected_exact_commit_launches = TAW_EXACT_COMMIT_LAUNCHES
-        expected_exact_commit_programs = TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST
+        expected_exact_commit_launches = _walk
+        expected_exact_commit_programs = _walk
     taw_exact_commit_launches = _integer(
         taw["exact_commit_launches"],
         f"{source}.taw.exact_commit_launches",
@@ -1952,12 +2020,12 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
     )
     _expect(
         taw_loop_iterations,
-        TAW_LOOP_ITERATIONS,
+        _walk,
         f"{source}.taw.loop_iterations",
     )
     _expect(
         taw_uniform_slots,
-        TAW_UNIFORM_SLOTS * batch_size,
+        _walk * 3 * batch_size,
         f"{source}.taw.uniform_slots",
     )
     _expect(
@@ -1981,14 +2049,14 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         )
     _expect(
         taw_row_scatter_slots,
-        TAW_ROW_SCATTER_SLOTS
+        _walk * 2
         * batch_size
         * expected_product_write_multiplier,
         f"{source}.taw.row_scatter_slots",
     )
     _expect(
         taw_path_scatter_slots,
-        TAW_PATH_SCATTER_SLOTS
+        _walk
         * batch_size
         * expected_product_write_multiplier,
         f"{source}.taw.path_scatter_slots",
@@ -2060,7 +2128,7 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
             TAW_CFWD_LOGIT_DIRECT_PRODUCTION_TENSOR_CALL_CENSUS
         )
     else:
-        expected_tensor_calls = TAW_TENSOR_CALL_CENSUS
+        expected_tensor_calls = taw_tensor_call_census(_walk)
     _expect(
         taw_tensor_calls,
         {
