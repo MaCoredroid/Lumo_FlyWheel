@@ -440,9 +440,16 @@ def test_the_promoted_arm_still_has_to_prove_everything_it_proved_before() -> No
     """
     for message in (
         # binary/source identity, runtime shape and the byte-pinned task set
+        # "with K64/root1 identity" was dropped from this message when the
+        # lever was converted to _fr13_assert_draft_vocab_profile: the
+        # identity is still bound, one line above, and now admits full_vocab
+        # too. The test kept asserting the pre-conversion wording and has been
+        # failing ever since -- the same generalization that produced site 12.
         "FR13 qrow32 B4 GQA-pair timing or production requires a byte-pinned "
-        "canonical B4 evidence set (exact4 or pool16) with K64/root1 identity "
+        "canonical B4 evidence set (exact4 or pool16) "
         "and pinned binary/source provenance",
+        # the identity itself, where it now lives
+        '"$FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE" "FR13 qrow32 B4 GQA-pair"',
         # the sealed dual raw-byte gate, bound by digest
         "FR13 qrow32 B4 production requires its bound dual raw-byte gate PASS",
         # a named timing arm still cannot disagree with the served kernel

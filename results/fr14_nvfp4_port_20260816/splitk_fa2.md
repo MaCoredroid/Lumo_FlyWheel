@@ -1135,3 +1135,110 @@ serve. The round-12 env route
 so a run that sets it is opting out of the promotion's own staging checks and
 must present its own binary and credential. Measurements should record the
 default path unless they are deliberately A/B-ing the arm.
+
+## 21. Site 12 — the fork was current and stale at the same time
+
+F1/F2 proved out live: the runner's boot armed the promoted default for the
+first time ever, the mint and the F2 arbitration both fired — and it died one
+gate later, in `fr14_leg3_launch_nomiddleware.sh` only. The fork's B1 selector
+still hard-coded the draft-vocabulary identity:
+
+```
+&& "$FR13_DRAFT_VOCAB_ROOT" == "1" \
+&& "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
+&& "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
+```
+
+Production had converted that to `_fr13_assert_draft_vocab_profile`, which
+admits `full_vocab` as well as `k64_root`. **K0 full-vocab is the only shape
+split-K has ever served in** — round 12's promotion evidence ran the identical
+env — so in the fork the promoted default was structurally unbootable.
+
+The fork was **current on the previous night's F1/F2 work and stale on the
+earlier vocab generalization, at the same time.** Selective staleness is the
+shape that defeats "did this file get updated?" as a question.
+
+### The census says four, not one
+
+The coordinator's read found one site. Enumerating every
+`_fr13_assert_draft_vocab_profile` call site against every hard-coded vocab
+predicate, per family, found that production converted **five** levers and each
+fork took exactly **one**:
+
+| lever | production | armb_leg3 (before) | leg3 (before) |
+|---|---|---|---|
+| ordered GDN live gate | helper | **helper** | **helper** |
+| qrow32 B4 GQA-pair | helper | 3 hardcoded clauses | 3 hardcoded clauses |
+| qrow32 B1 selector | helper | 3 hardcoded clauses | 3 hardcoded clauses ← site 12 |
+| GDN GQA-group3 production | helper | 2 hardcoded clauses | 2 hardcoded clauses |
+| GDN single-launch production | helper | 2 hardcoded clauses | 2 hardcoded clauses |
+
+**Eight sites, not one.** All eight are converted. The forks also never gained
+`FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE` / `..._B4_...`, so the calls would
+have expanded to the empty string and refused everything — those are added too,
+and the four refusal messages now match production's word for word (the forks'
+said "K64/root1" where production's no longer did).
+
+Conversion *tightens* the default path as a side effect: the helper's
+`k64_root` branch also requires `-z FR13_NEEDS_ALLOW`, which the hardcodes did
+not check. That is production's behaviour, which is the point.
+
+### The detector: stop enumerating
+
+The 26-marker parity roster was **blind to all four**, and would have stayed
+blind — a generalization that predates its marker is invisible forever, and the
+roster only ever ratchets after a miss. This is the second selectively-stale-fork
+bug this campaign.
+
+So `scan_vocab_profile_parity()` is **structural, not enumerated**. It is told
+no lever's name. It walks each launcher for every
+`[[ … ]] || { echo "FR13 …" >&2; exit 2; }` refusal region and records two
+facts per region — how many inline draft-vocab identity clauses it hard-codes,
+and whether the profile helper is called immediately above it — then compares
+that *shape* across the three families. Levers present in only one family are
+ignored (the forks are forks); a lever present in two or more whose shape
+disagrees is reported.
+
+Two design points earned the hard way:
+
+* **Regions are keyed by a short prefix of the refusal message.** Keying on the
+  whole message is what let site 12 hide: the fork's message still said
+  "K64/root1" where production's no longer did, so the two regions did not look
+  like the same region at all. The prefix is the part that survives a predicate
+  change; the tail is the part that records it.
+* **Keyed on `(prefix, ordinal)`, never on prefix alone.** A 40-char prefix is
+  short enough to survive the change, therefore short enough to collide:
+  `"FR13 GDN GQA-group3 production requires "` prefixes both the lever's own
+  refusal and, twenty lines later, its live-PASS-JSON refusal. The first
+  version of this detector kept the last one per prefix and reported **two**
+  divergences where there were **four** — it found site 12 and missed two more
+  of exactly the same kind. Key on `(text, ordinal)`, never on text.
+
+Against the pre-fix tree it reports all four, naming file, line, and shape,
+while the enumerated roster reports nothing. That contrast is a test:
+`test_the_structural_scan_finds_what_no_marker_names` strips every
+conversion-related marker from the roster, asserts the roster is then blind,
+and requires the structural scan to find the divergence anyway.
+
+The enumerated markers were added too (seven, keyed on each *call's own shape*
+rather than the bare helper name — the forks carry a comment mentioning the
+helper, so a name-count marker would have read 7 against production's 6 and
+cried wolf, which is how a marker gets deleted).
+
+### The walk stubbed the thing that broke
+
+The full-boot walk from §20 could not have caught this: `_BOOT_STUBS` defined
+`_fr13_assert_draft_vocab_profile() { return 0; }`. **What a walk stubs, it
+cannot test.** The helper is now lifted from the launcher as region 0 and run
+for real, and the walk takes the vocabulary identity as an input:
+
+* every full-boot case runs under **both** `k64_root` and `full_vocab`
+* claiming one profile while carrying the other refuses, in both directions
+* an unknown profile is refused outright, not defaulted
+* re-introducing a single hardcoded clause is proved to leave `k64_root`
+  booting and kill `full_vocab` — the runner's failure, reproduced on CPU.
+  That asymmetry is why it survived so long: every gate that ran, ran under K64.
+
+Also fixed: `test_fr13_qrow32_b4_production_default.py` had been asserting the
+pre-conversion wording of production's B4 refusal and failing since the
+generalization landed — the same miss, on the test side.

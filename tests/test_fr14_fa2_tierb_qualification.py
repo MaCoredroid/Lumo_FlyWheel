@@ -2170,7 +2170,19 @@ def _patcher_digest():
 
 
 def _boot_regions(text):
-    """Slice the four regions a promoted-default boot flows through."""
+    """Slice the regions a promoted-default boot flows through.
+
+    Region 0 is the REAL _fr13_assert_draft_vocab_profile definition, lifted
+    from the launcher rather than stubbed. Site 12 (pass 113) was a defect in
+    whether that helper is CALLED at the B1 selector -- the forks hard-coded
+    K64/root1 instead, making full_vocab impossible -- and a walk that stubs
+    the helper to `return 0` cannot see it. What the walk stubs, it cannot
+    test.
+    """
+    helper_start = text.index("_fr13_assert_draft_vocab_profile() {")
+    helper_end = text.index("\n}\n", helper_start) + len("\n}\n")
+    region0 = text[helper_start:helper_end]
+
     lit_start = text.index(
         "# ---------------------------------------------------------------- split-K"
     )
@@ -2208,7 +2220,7 @@ def _boot_regions(text):
         "  fi\n"
     )
     region4 = text[gate:text.index(tail, gate) + len(tail)] + "fi\n"
-    return region1, region2, region3, region4
+    return region0, region1, region2, region3, region4
 
 
 _BOOT_STUBS = """set -u
@@ -2220,12 +2232,26 @@ FR13_FIXED32_B1_DIAGNOSTIC=0
 FR13_FA2_QROW16_LIVE_PAGED_AB=0
 FR13_FA2_QROW16_PRODUCTION=0
 FR13_FA2_QROW32_LIVE_PAGED_AB=0
-FR13_DRAFT_VOCAB_ROOT=1
-FR13_DRAFT_VOCAB_K=65536
-FR13_DRAFT_VOCAB_BLOCKS=/workspace/scripts/fr13_dvk_subset_blocks.json
-FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=k64_root
-_fr13_assert_draft_vocab_profile() { return 0; }
 """
+
+# The two draft-vocabulary identities the profile helper admits. full_vocab
+# is the shape split-K has actually served in -- round 12's promotion evidence
+# and measurement 1 both run K0 -- and it is the shape site 12 made impossible
+# in the forks, so it is a boot case here, not a footnote.
+_VOCAB_PROFILES = {
+    "k64_root": {
+        "FR13_DRAFT_VOCAB_ROOT": "1",
+        "FR13_DRAFT_VOCAB_K": "65536",
+        "FR13_DRAFT_VOCAB_BLOCKS": "/workspace/scripts/fr13_dvk_subset_blocks.json",
+        "FR13_NEEDS_ALLOW": "",
+    },
+    "full_vocab": {
+        "FR13_DRAFT_VOCAB_ROOT": "0",
+        "FR13_DRAFT_VOCAB_K": "0",
+        "FR13_DRAFT_VOCAB_BLOCKS": "",
+        "FR13_NEEDS_ALLOW": "FR13_DRAFT_VOCAB_K=0",
+    },
+}
 
 _BOOT_VARS = (
     "_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED",
@@ -2253,12 +2279,23 @@ _BOOT_VARS = (
 )
 
 
-def _run_full_boot(launcher_text, env, so_path, credential_path, so_size):
-    """Execute regions 1-4 back to back, as a real boot does."""
+def _run_full_boot(
+    launcher_text, env, so_path, credential_path, so_size,
+    profile="k64_root", claim=None,
+):
+    """Execute regions 0-4 back to back, as a real boot does."""
     import subprocess
 
-    r1, r2, r3, r4 = _boot_regions(launcher_text)
-    script = _BOOT_STUBS
+    r0, r1, r2, r3, r4 = _boot_regions(launcher_text)
+    script = _BOOT_STUBS + r0
+    for name, value in _VOCAB_PROFILES[profile].items():
+        script += '{}="{}"\n'.format(name, value)
+    # the IDENTITY (profile) and the CLAIM are separable on purpose: a boot
+    # that claims one and carries the other is the mislabelled serve the
+    # helper exists to refuse.
+    script += 'FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE="{}"\n'.format(
+        profile if claim is None else claim
+    )
     script += '_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED={}\n'.format(
         env.get("_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED", "0")
     )
@@ -2546,3 +2583,106 @@ def test_full_boot_tier_b_accepts_a_credential_from_an_older_commit(
     out = _run_full_boot(text.replace(find, "", 1), env, so, credential, size)
     assert out.returncode == 2, "the gate no longer enforces anything for tier-A"
     assert "requires a credential earned at this HEAD" in out.stderr
+
+
+# ---------------------------------------------------- site 12 (pass 113)
+#
+# The full-boot walk above ran only k64_root, because before pass 113 the
+# forks could not run anything else -- their B1 selector hard-coded
+# ROOT==1 && K==65536 && BLOCKS==<pinned> instead of calling the profile
+# helper, and K0 full-vocab is the shape split-K has actually served in.
+# The runner's boot armed the promoted default for the first time, mint and
+# arbitration both fired, and it died one gate later on this.
+
+
+@pytest.mark.parametrize("profile", sorted(_VOCAB_PROFILES))
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_full_boot_survives_under_either_vocab_profile(
+    launcher, profile, staged_boot
+):
+    """Site 12 proper: the promoted default must boot under K0 too."""
+    stage, so, credential, size = staged_boot
+    out = _run_full_boot(
+        stage(launcher), {}, so, credential, size, profile=profile
+    )
+    assert out.returncode == 0, out.stderr
+    assert f"TIER_B={SPLITK_ARM}" in out.stdout
+    assert "CANDIDATE=1" in out.stdout
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_vocab_profile_is_still_enforced_not_merely_delegated(
+    launcher, staged_boot
+):
+    """Delegating is not the same as dropping.
+
+    The conversion must keep the identity BOUND -- it widens which identity is
+    admissible, it does not stop asking. A boot that claims full_vocab while
+    carrying the K64 identity is exactly the mislabelled serve the tier-B
+    route exists to prevent.
+    """
+    stage, so, credential, size = staged_boot
+    r0, _r1, _r2, _r3, _r4 = _boot_regions(stage(launcher))
+    assert "_fr13_assert_draft_vocab_profile() {" in r0, (
+        "the walk lifted no helper; it would be testing a stub"
+    )
+    # claim full_vocab, present the k64_root identity
+    out = _run_full_boot(
+        stage(launcher), {}, so, credential, size,
+        profile="k64_root", claim="full_vocab",
+    )
+    assert out.returncode == 2
+    assert "requires the full_vocab draft-vocabulary identity" in out.stderr
+
+    # ... and the reverse
+    out = _run_full_boot(
+        stage(launcher), {}, so, credential, size,
+        profile="full_vocab", claim="k64_root",
+    )
+    assert out.returncode == 2
+    assert "requires the k64_root draft-vocabulary identity" in out.stderr
+
+    # and an unknown profile is refused outright, not defaulted
+    out = _run_full_boot(
+        stage(launcher), {}, so, credential, size, claim="k64",
+    )
+    assert out.returncode == 2
+    assert "must be exactly k64_root or full_vocab" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_reintroducing_the_b1_hardcode_kills_the_k0_boot(launcher, staged_boot):
+    """The mutation proof, run as a BOOT rather than as a scan.
+
+    The parity scan proves the detector sees the hardcode. This proves what
+    the hardcode costs: a K0 boot that refuses. It is the runner's failure,
+    reproduced on CPU.
+    """
+    stage, so, credential, size = staged_boot
+    text = stage(launcher)
+    call = (
+        '_fr13_assert_draft_vocab_profile \\\n'
+        '    "$FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE" '
+        '"FR13 qrow32 B1 selector" || exit 2\n'
+    )
+    assert text.count(call) == 1, "the B1 conversion moved; restage"
+    lines = text.replace(call, "", 1).split("\n")
+    err = next(
+        i for i, line in enumerate(lines)
+        if "FR13 qrow32 B1 selector requires Hydra27" in line
+    )
+    start = next(
+        i for i in range(err, err - 80, -1) if re.match(r"^\s*\[\[ ", lines[i])
+    )
+    mutated = "\n".join(
+        lines[:start + 1]
+        + ['     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \\']
+        + lines[start + 1:]
+    )
+    # k64_root still boots -- which is exactly why this survived so long
+    out = _run_full_boot(mutated, {}, so, credential, size, profile="k64_root")
+    assert out.returncode == 0, out.stderr
+    # ... and K0 does not
+    out = _run_full_boot(mutated, {}, so, credential, size, profile="full_vocab")
+    assert out.returncode == 2, "the hardcode came back and the K0 boot survived"
+    assert "exact binary/source provenance" in out.stderr

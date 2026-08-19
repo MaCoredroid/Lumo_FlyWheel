@@ -621,6 +621,8 @@ _fr13_assert_draft_vocab_profile() {
   esac
   return 0
 }
+FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE:-k64_root}
+FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE:-k64_root}
 FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE:-k64_root}
 FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE:-k64_root}
 FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE=${FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE:-k64_root}
@@ -2142,6 +2144,8 @@ if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" \
     "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995|47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c")
       _FR13_FA2_QROW32_B4_TASK_SET=pool16 ;;
   esac
+  _fr13_assert_draft_vocab_profile \
+    "$FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE" "FR13 qrow32 B4 GQA-pair" || exit 2
   [[ ( "${FR13_FIXED32_MODE:-}" == "tail6_fixed32" \
        || "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" ) \
      && "$MAX_NUM_SEQS" == "4" \
@@ -2149,9 +2153,6 @@ if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" \
      && "${FR13_FIXED32_B1_DIAGNOSTIC:-0}" == "0" \
      && "${ENFORCE_EAGER:-0}" == "0" \
      && "${CUDAGRAPH_MODE:-}" == "FULL_AND_PIECEWISE" \
-     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
-     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
-     && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
      && "$FR13_FA2_QROW32_SO_SHA256" == "af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb" \
      && "$FR13_FA2_QROW32_SO_SIZE" == "299813360" \
      && "$FR13_FA2_QROW32_FA2_HEAD" == "29210221863736a08f71a866459e368ad1ac4a95" \
@@ -2162,7 +2163,7 @@ if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" \
      && "$FR13_FA2_QROW32_SOURCE_COMMIT" == "$(git rev-parse HEAD)" \
      && "$FR13_FA2_QROW32_B4_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)" \
      && -n "$_FR13_FA2_QROW32_B4_TASK_SET" ]] || {
-    echo "FR13 qrow32 B4 GQA-pair timing or production requires a byte-pinned canonical B4 evidence set (exact4 or pool16) with K64/root1 identity and pinned binary/source provenance" >&2
+    echo "FR13 qrow32 B4 GQA-pair timing or production requires a byte-pinned canonical B4 evidence set (exact4 or pool16) and pinned binary/source provenance" >&2
     exit 2
   }
   echo "FR13 qrow32 B4 evidence set: $_FR13_FA2_QROW32_B4_TASK_SET" >&2
@@ -2190,15 +2191,14 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
   # dispatch, and the credential binds it too. Only the commit clause is scoped.
   _fr13_b1_commit_bound=1
   [[ -z "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]] || _fr13_b1_commit_bound=0
+  _fr13_assert_draft_vocab_profile \
+    "$FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE" "FR13 qrow32 B1 selector" || exit 2
   [[ "${FR13_FIXED32_MODE:-}" == "hydra27_fixed32" \
      && "$MAX_NUM_SEQS" == "1" \
      && "${SWE_CONCURRENCY:-}" == "1" \
-     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \
-     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \
-     && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == "/workspace/scripts/fr13_dvk_subset_blocks.json" \
      && "$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" == "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)" \
      && "$(stat -c '%s' "$FORKED_FA2_SO")" == "$FR13_FA2_QROW32_B1_SO_SIZE" ]] || {
-    echo "FR13 qrow32 B1 selector requires Hydra27 K64/root1 B1 and exact binary/source provenance" >&2
+    echo "FR13 qrow32 B1 selector requires Hydra27 B1 and exact binary/source provenance" >&2
     exit 2
   }
   if (( _fr13_b1_commit_bound == 1 )); then
@@ -3455,13 +3455,13 @@ if [[ -n "$_fr13_gdn_path_bv_candidate" \
   exit 2
 fi
 if [[ "$_fr13_gdn_gqa_group3_production" == "1" ]]; then
+  _fr13_assert_draft_vocab_profile \
+    "$FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE" "FR13 GDN GQA-group3 production" || exit 2
   [[ -n "${FR13_FIXED32_MODE:-}" \
      && ( "$_fr13_gdn_gqa_group3_production_batch" == "1" \
           || "$_fr13_gdn_gqa_group3_production_batch" == "4" ) \
      && "$MAX_NUM_SEQS" == "$_fr13_gdn_gqa_group3_production_batch" \
      && "${SWE_CONCURRENCY:-}" == "$MAX_NUM_SEQS" \
-     && "${FR13_DRAFT_VOCAB_K:-}" == "65536" \
-     && "${FR13_DRAFT_VOCAB_ROOT:-}" == "1" \
      && "${FR13_TREE_GDN_GEOM_OVERRIDE:-}" == "BV=8" \
      && "${FR13_SCAN_ALIGN:-0}" == "0" \
      && "${FR13_NPAD_INVARIANT:-0}" == "0" \
@@ -3481,7 +3481,7 @@ if [[ "$_fr13_gdn_gqa_group3_production" == "1" ]]; then
      && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
      && -z "${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
      && -z "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" ]] || {
-    echo "FR13 GDN GQA-group3 production requires exact credentialed B1/B4 K64/root1 physical32 FULL-graph pins" >&2
+    echo "FR13 GDN GQA-group3 production requires exact credentialed B1/B4 physical32 FULL-graph pins" >&2
     exit 2
   }
   [[ -f "$_fr13_gdn_gqa_group3_pass_json" \
@@ -3566,13 +3566,13 @@ if (( _FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION_NAMED == 0 )) \
   fi
 fi
 if [[ "$_fr13_gdn_single_launch_production" == "1" ]]; then
+  _fr13_assert_draft_vocab_profile \
+    "$FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE" "FR13 GDN single-launch production" || exit 2
   [[ -n "${FR13_FIXED32_MODE:-}" \
      && ( "$_fr13_gdn_single_launch_production_batch" == "1" \
           || "$_fr13_gdn_single_launch_production_batch" == "4" ) \
      && "$MAX_NUM_SEQS" == "$_fr13_gdn_single_launch_production_batch" \
      && "${SWE_CONCURRENCY:-}" == "$MAX_NUM_SEQS" \
-     && "${FR13_DRAFT_VOCAB_K:-}" == "65536" \
-     && "${FR13_DRAFT_VOCAB_ROOT:-}" == "1" \
      && "${FR13_TREE_GDN_GEOM_OVERRIDE:-}" == "BV=8" \
      && "${FR13_SCAN_ALIGN:-0}" == "0" \
      && "${FR13_NPAD_INVARIANT:-0}" == "0" \
@@ -3592,7 +3592,7 @@ if [[ "$_fr13_gdn_single_launch_production" == "1" ]]; then
      && "${FR13_FIXED32_BATCH_GDN_PRODUCTION:-0}" == "0" \
      && -z "${FR13_FIXED32_BATCH_GDN_BV_CANDIDATE:-}" \
      && -z "${FR13_FIXED32_BATCH_GDN_BV_PRODUCTION:-}" ]] || {
-    echo "FR13 GDN single-launch production requires exact credentialed B1/B4 K64/root1 physical32 FULL-graph pins" >&2
+    echo "FR13 GDN single-launch production requires exact credentialed B1/B4 physical32 FULL-graph pins" >&2
     exit 2
   }
   [[ -f "$_fr13_gdn_single_launch_pass_json" \

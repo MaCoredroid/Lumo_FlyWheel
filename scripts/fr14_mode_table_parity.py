@@ -100,6 +100,21 @@ FAMILY_PARITY_MARKERS = (
     "requires a credential earned at this HEAD",        # ... tier-A keeps it
     "tier-b selector requires a well-formed source commit",  # ... tier-B weaker
     "STANDS DOWN",                                      # F2: the arbitration
+    # SITE 12 (pass 113). The vocab-profile conversion, keyed on each CALL's
+    # own shape rather than on the bare helper name -- the forks carry a
+    # comment mentioning the helper, so a name-count marker would have read 7
+    # against production's 6 and reported a divergence that is not one, which
+    # is how a marker gets deleted for crying wolf. These are exact call
+    # sites; the structural detector below catches the ones nobody listed.
+    '"$FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE" "FR13 qrow32 B1 selector" || exit 2',
+    '"$FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE" "FR13 qrow32 B4 GQA-pair" || exit 2',
+    '"$FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE" "FR13 GDN GQA-group3 production" || exit 2',
+    '"$FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE" "FR13 GDN single-launch production" || exit 2',
+    '"$FR13_FIXED32_GDN_LIVE_GATE_QUALIFICATION_PROFILE" \\',
+    # ... and the two profile variables the forks never gained, without which
+    # the calls above would expand to the empty string and refuse everything.
+    "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE:-k64_root}",
+    "FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE:-k64_root}",
 )
 
 
@@ -115,6 +130,133 @@ def scan_family_parity():
                 f"{marker}: counts differ across families {counts}"
                 + (f" -- absent from {missing}" if missing else "")
             )
+    return bad
+
+
+# ===========================================================================
+# SITE 12 (FR14 pass 113): the STRUCTURAL twin check.
+#
+# The marker roster above is ENUMERATED: it sees only the divergences it was
+# told about, so a generalization that predates its marker is invisible
+# forever. Site 12 is what that costs. Production converted five levers from a
+# hard-coded `ROOT==1 && K==65536 && BLOCKS==<pinned>` predicate to
+# `_fr13_assert_draft_vocab_profile`, which admits full_vocab as well; the
+# no-middleware forks took ONE of the five and kept the hardcode on the other
+# four, making K0 full-vocab structurally impossible in the forks -- and K0
+# full-vocab is the only shape split-K has ever served in. The forks were
+# CURRENT on that night's F1/F2 work and STALE on the earlier generalization
+# at the same time. Selective staleness is not something a per-marker roster
+# can be relied on to find, because the roster is written after each miss.
+#
+# This detector is not told any lever's name. It discovers refusal regions by
+# walking the launchers -- every `[[ ... ]] || { echo "..."; exit 2; }` -- and
+# compares the SHAPE of each region across the three families:
+#
+#   * how many inline draft-vocab identity clauses it hard-codes, and
+#   * whether the profile helper is called immediately above it.
+#
+# Regions are keyed by a PREFIX of their refusal message, deliberately short.
+# Keying on the whole message is what let site 12 hide: the fork's message
+# still said "K64/root1" where production's no longer did, so the two regions
+# did not look like the same region at all. The prefix is the part that
+# survives a predicate change; the tail is the part that records it.
+#
+# Levers that exist in only one family are IGNORED (the forks are forks). Only
+# a lever present in two or more families, whose shape disagrees, is reported.
+# ===========================================================================
+
+# An inline draft-vocab identity clause: the thing the helper replaced.
+_VOCAB_CLAUSE = re.compile(
+    r'^\s*&&\s+"\$\{?FR13_DRAFT_VOCAB_(?:K|ROOT|BLOCKS)[^"]*"?\}?"\s*==\s*"[^"]*"\s*\\$'
+)
+_REFUSAL = re.compile(r'^\s*echo "(FR13[^"]{12,})" >&2\s*$')
+_PREDICATE = re.compile(r"^\s*\[\[ ")
+# Short enough to survive the predicate change that the divergence IS.
+_KEY_CHARS = 40
+
+
+def _vocab_regions(text):
+    """Every refusal region, keyed by (message prefix, ORDINAL) -> shape.
+
+    The ordinal is not decoration. A 40-char prefix is short enough to survive
+    the predicate change that the divergence IS, which means it is also short
+    enough to collide: "FR13 GDN GQA-group3 production requires " prefixes both
+    the lever's own refusal and, twenty lines later, its live-PASS-JSON
+    refusal. A plain dict silently kept the LAST one, and the first version of
+    this detector reported two divergences where there were four -- it found
+    site 12 and missed two more of exactly the same kind, which is the failure
+    mode it exists to prevent. Key on (text, ordinal), never on text.
+    """
+    lines = text.split("\n")
+    regions = {}
+    seen = {}
+    for i, line in enumerate(lines):
+        match = _REFUSAL.match(line)
+        if not match:
+            continue
+        if not any(lines[j].strip() == "exit 2" for j in (i + 1, i + 2)):
+            continue
+        start = None
+        for j in range(i, max(i - 80, -1), -1):
+            if _PREDICATE.match(lines[j]):
+                start = j
+                break
+        if start is None:
+            continue
+        prefix = match.group(1)[:_KEY_CHARS]
+        seen[prefix] = seen.get(prefix, 0) + 1
+        key = (prefix, seen[prefix])
+        above = "\n".join(lines[max(start - 4, 0):start])
+        regions[key] = {
+            "line": start + 1,
+            "hardcoded_vocab_clauses": sum(
+                1 for j in range(start, i) if _VOCAB_CLAUSE.match(lines[j])
+            ),
+            "calls_profile_helper": "_fr13_assert_draft_vocab_profile" in above,
+        }
+    return regions
+
+
+def scan_vocab_profile_parity():
+    """Refusal regions whose draft-vocab SHAPE disagrees across families.
+
+    Non-enumerated: nothing here names a lever. A lever converted in one
+    family and not another is reported whether or not anyone remembered to
+    add a marker for it.
+    """
+    bad = []
+    per_family = {
+        rel: _vocab_regions((REPO / rel).read_text())
+        for rel in LAUNCHER_FAMILIES
+    }
+    keys = set()
+    for regions in per_family.values():
+        keys |= set(regions)
+    for key in sorted(keys):
+        present = {
+            rel: regions[key]
+            for rel, regions in per_family.items()
+            if key in regions
+        }
+        if len(present) < 2:
+            continue  # a fork-only or production-only lever, not a divergence
+        shapes = {
+            (v["calls_profile_helper"], v["hardcoded_vocab_clauses"])
+            for v in present.values()
+        }
+        if len(shapes) == 1:
+            continue
+        detail = ", ".join(
+            f"{Path(rel).name}:{v['line']}"
+            f" helper={'Y' if v['calls_profile_helper'] else 'N'}"
+            f" hardcoded={v['hardcoded_vocab_clauses']}"
+            for rel, v in sorted(present.items())
+        )
+        prefix, ordinal = key
+        bad.append(
+            f"{prefix!r} (refusal #{ordinal}): draft-vocab shape differs "
+            f"across families -- {detail}"
+        )
     return bad
 
 # Topology names whose VALUE differs between profiles. Comparing one of these
@@ -257,6 +399,11 @@ def sweep():
     for problem in scan_family_parity():
         rows.append(
             {"kind": "family-parity", "file": "<launcher families>",
+             "detail": problem}
+        )
+    for problem in scan_vocab_profile_parity():
+        rows.append(
+            {"kind": "vocab-profile-parity", "file": "<launcher families>",
              "detail": problem}
         )
     return rows

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import re
 import tempfile
 from pathlib import Path
 
@@ -290,6 +291,10 @@ def test_every_parity_marker_is_present_in_every_family(marker):
         "cannot mint the selector provenance",
         "_fr13_b1_commit_bound",
         "STANDS DOWN",
+        # site 12 (pass 113)
+        '"$FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE" "FR13 qrow32 B1 selector" || exit 2',
+        '"$FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE" "FR13 qrow32 B4 GQA-pair" || exit 2',
+        "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE=${FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE:-k64_root}",
     ],
 )
 def test_detector_fires_when_one_family_omits_a_marker(monkeypatch, marker):
@@ -363,3 +368,169 @@ def test_f1_f2_are_present_in_every_family():
         assert "STANDS DOWN" in text
         assert 'if [[ -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then' in text
         assert '""|nosplit|gqa_pair) ;;' in text
+
+
+# ===========================================================================
+# SITE 12 (pass 113): the vocab-profile conversion, and the STRUCTURAL check.
+#
+# Production converted five levers from a hard-coded K64/root1 predicate to
+# _fr13_assert_draft_vocab_profile, which admits full_vocab as well. The
+# no-middleware forks took ONE of the five. The forks were current on that
+# night's F1/F2 work and stale on the earlier generalization at the same
+# time -- selective staleness, which an enumerated roster cannot be relied on
+# to find because the roster is written after each miss.
+# ===========================================================================
+
+VOCAB_LEVERS = (
+    ("FR13 qrow32 B4 GQA-pair timing or production requires",
+     "FR13_FA2_QROW32_B4_QUALIFICATION_PROFILE"),
+    ("FR13 qrow32 B1 selector requires Hydra27",
+     "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE"),
+    ("FR13 GDN GQA-group3 production requires exact credentialed",
+     "FR13_FIXED32_GDN_GQA_GROUP3_QUALIFICATION_PROFILE"),
+    ("FR13 GDN single-launch production requires exact credentialed",
+     "FR13_FIXED32_GDN_SINGLE_LAUNCH_QUALIFICATION_PROFILE"),
+)
+
+_INLINE_VOCAB = re.compile(
+    r'^\s*&&\s+"\$\{?FR13_DRAFT_VOCAB_(?:K|ROOT|BLOCKS)[^"]*"?\}?"\s*==\s*"[^"]*"\s*\\$'
+)
+
+
+def _lever_shape(text, message):
+    """(calls_helper, hardcoded_clause_count) for one lever's refusal region."""
+    lines = text.split("\n")
+    err = next(i for i, line in enumerate(lines) if message in line)
+    start = next(
+        i for i in range(err, err - 80, -1) if re.match(r"^\s*\[\[ ", lines[i])
+    )
+    above = "\n".join(lines[max(start - 4, 0):start])
+    return (
+        "_fr13_assert_draft_vocab_profile" in above,
+        sum(1 for i in range(start, err) if _INLINE_VOCAB.match(lines[i])),
+    )
+
+
+@pytest.mark.parametrize("message,var", VOCAB_LEVERS)
+def test_every_family_delegates_the_vocab_identity(message, var):
+    """Site 12 proper: full_vocab must be REACHABLE in every family.
+
+    A hard-coded `K == 65536` inside a lever predicate is a lever that cannot
+    be armed under K0 -- and K0 full-vocab is the only shape split-K has ever
+    served in, so this made the promoted default unbootable in the forks.
+    """
+    for rel in parity.LAUNCHER_FAMILIES:
+        text = (REPO / rel).read_text()
+        calls, hardcoded = _lever_shape(text, message)
+        assert calls, f"{Path(rel).name}: {message!r} does not call the helper"
+        assert hardcoded == 0, (
+            f"{Path(rel).name}: {message!r} still hard-codes {hardcoded} "
+            "draft-vocab clauses; full_vocab is impossible there"
+        )
+        assert f"{var}=${{{var}:-k64_root}}" in text, (
+            f"{Path(rel).name}: {var} is never defaulted, so the call above "
+            "would pass an empty profile and refuse everything"
+        )
+
+
+def test_the_vocab_profile_scan_is_clean_at_head():
+    assert parity.scan_vocab_profile_parity() == []
+
+
+def _reintroduce_the_hardcode(text):
+    """Put fr14_leg3's B1 selector back the way site 12 found it.
+
+    Located POSITIONALLY, by walking back from the lever's own refusal to its
+    predicate -- the opener line `[[ "${FR13_FIXED32_MODE:-}" == ...` occurs
+    five times in the file, so a text-unique anchor does not exist here. This
+    is the same walk the detector does, which keeps the mutation honest: it
+    puts the hardcode exactly where the detector looks.
+    """
+    call = (
+        '  _fr13_assert_draft_vocab_profile \\\n'
+        '    "$FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE" '
+        '"FR13 qrow32 B1 selector" || exit 2\n'
+    )
+    assert text.count(call) == 1, "the B1 conversion moved; restage the mutation"
+    lines = text.replace(call, "", 1).split("\n")
+    err = next(
+        i for i, line in enumerate(lines)
+        if "FR13 qrow32 B1 selector requires Hydra27" in line
+    )
+    start = next(
+        i for i in range(err, err - 80, -1) if re.match(r"^\s*\[\[ ", lines[i])
+    )
+    hardcode = [
+        '     && "$FR13_DRAFT_VOCAB_ROOT" == "1" \\',
+        '     && "${FR13_DRAFT_VOCAB_K:-65536}" == "65536" \\',
+        '     && "${FR13_DRAFT_VOCAB_BLOCKS:-}" == '
+        '"/workspace/scripts/fr13_dvk_subset_blocks.json" \\',
+    ]
+    return "\n".join(lines[:start + 1] + hardcode + lines[start + 1:])
+
+
+def _scan_with_mutated_fork(monkeypatch, mutate):
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "scripts").mkdir()
+    third = parity.LAUNCHER_FAMILIES[2]
+    for rel in parity.LAUNCHER_FAMILIES:
+        target = tmp / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        text = (REPO / rel).read_text()
+        target.write_text(mutate(text) if rel == third else text)
+    monkeypatch.setattr(parity, "REPO", tmp)
+
+
+def test_reintroducing_the_hardcode_fails_the_structural_scan(monkeypatch):
+    """The mutation proof site 12 asks for: put it back, the scan must fail."""
+    _scan_with_mutated_fork(monkeypatch, _reintroduce_the_hardcode)
+    bad = parity.scan_vocab_profile_parity()
+    assert bad, "the structural scan did not notice the hardcode coming back"
+    assert any("B1 selector" in b for b in bad), bad
+    assert any("fr14_leg3" in b and "hardcoded=3" in b for b in bad), bad
+
+
+def test_the_structural_scan_finds_what_no_marker_names(monkeypatch):
+    """The point of the detector, stated as a test.
+
+    An enumerated roster only ratchets after each miss. Here the roster is
+    emptied of everything relating to the conversion -- as it genuinely was
+    before pass 113 -- and the structural scan must still find the
+    divergence, because it is told no lever's name.
+    """
+    _scan_with_mutated_fork(monkeypatch, _reintroduce_the_hardcode)
+    monkeypatch.setattr(
+        parity, "FAMILY_PARITY_MARKERS",
+        tuple(m for m in parity.FAMILY_PARITY_MARKERS
+              if "QUALIFICATION_PROFILE" not in m),
+    )
+    assert parity.scan_family_parity() == [], (
+        "precondition: with its markers removed the roster must be blind"
+    )
+    assert parity.scan_vocab_profile_parity(), (
+        "the structural scan is only worth having if it sees what the roster "
+        "was never told about"
+    )
+
+
+def test_the_region_key_carries_an_ordinal(monkeypatch):
+    """Keyed on (text, ordinal), never on text.
+
+    "FR13 GDN GQA-group3 production requires " prefixes two different
+    refusals twenty lines apart. The first version of this detector kept the
+    LAST one per prefix and reported two divergences where there were four --
+    it missed two instances of the exact defect it was built for.
+    """
+    regions = parity._vocab_regions(
+        (REPO / parity.LAUNCHER_FAMILIES[0]).read_text()
+    )
+    assert all(isinstance(k, tuple) and len(k) == 2 for k in regions)
+    prefixes = [k[0] for k in regions]
+    collided = {p for p in prefixes if prefixes.count(p) > 1}
+    assert collided, (
+        "no prefix collides, so this test proves nothing -- re-check "
+        "_KEY_CHARS against the launcher's refusal messages"
+    )
+    for prefix in collided:
+        ordinals = sorted(k[1] for k in regions if k[0] == prefix)
+        assert ordinals == list(range(1, len(ordinals) + 1)), prefix
