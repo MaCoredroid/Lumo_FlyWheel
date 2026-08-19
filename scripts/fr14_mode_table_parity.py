@@ -95,7 +95,10 @@ FAMILY_PARITY_MARKERS = (
     # probe, which the twins do not have, and a marker that counts both would
     # report a parity failure that is not one.
     "FR13_FA2_QROW32_B1_SOURCE_COMMIT:-$(git rev-parse HEAD",   # F1: the mint
-    "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum",      # ... both halves
+    # SITE 16 moved this half: the digest is minted from the credential's
+    # sealed identity now, not by hashing the artifact the gate re-hashes.
+    '"patch_source_sha256"[[:space:]]*:[[:space:]]*"[0-9a-f]\\{64\\}"',
+    "patch_source_sha256 identity to mint from",
     "_fr13_b1_commit_bound",                            # F1: the reconciliation
     "requires a credential earned at this HEAD",        # ... tier-A keeps it
     "tier-b selector requires a well-formed source commit",  # ... tier-B weaker
@@ -419,8 +422,16 @@ def scan_literal_table_parity():
 
 _POINTER_WHITELIST_START = '    case "$name" in\n'
 _POINTER_WHITELIST_END = '      *)\n        echo "FR13 B1 credential pointer may not set $name" >&2\n'
+# Two spellings of the same thing. The second matters: site 16 turned the
+# patcher-digest mint into a MULTI-LINE `${VAR:-$(` ... `)}`, which the
+# single-line pattern stopped matching -- the detector quietly lost sight of
+# the very name it was written for. A projection that narrows when the code is
+# reformatted is worse than none, because nothing announces the loss.
 _OWNER_DEFAULT = re.compile(
     r"^\s*([A-Za-z_]\w*)=\$\{\1:-(?P<filler>.*)\}\s*$"
+)
+_OWNER_DEFAULT_MULTILINE = re.compile(
+    r"^\s*([A-Za-z_]\w*)=\$\{\1:-(?P<filler>\$\(\s*)$"
 )
 
 
@@ -473,7 +484,10 @@ def scan_import_precedes_owner():
         for lineno, line in enumerate(lines, 1):
             if lineno <= call_line or line.lstrip().startswith("#"):
                 continue
-            match = _OWNER_DEFAULT.match(line)
+            match = (
+                _OWNER_DEFAULT.match(line)
+                or _OWNER_DEFAULT_MULTILINE.match(line)
+            )
             if not match or match.group(1) not in names:
                 continue
             filler = match.group("filler")
@@ -490,6 +504,74 @@ def scan_import_precedes_owner():
                 f"credential pointer at line {call_line} and only ':-' "
                 f"defaulted here (to {filler!r}); the importer wins and the "
                 "owner does not own it"
+            )
+    return bad
+
+
+# ===========================================================================
+# SITE 16: MINT-BY-HASHING-THE-ARTIFACT.
+#
+# The promoted default minted FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256 by
+# hashing scripts/fr13_patch_fa2_tree_bias.py -- the same file the selector
+# gate then compares against disk. A value derived from an artifact cannot
+# test that artifact: the gate was `x == x` and could not fail however stale
+# the credential was. It is now minted from the credential's SEALED identity,
+# so the comparison is sealed-vs-disk.
+#
+# The shape is: `VAR=${VAR:-$(hash ARTIFACT)}` followed later by a gate
+# comparing "$VAR" against `$(hash ARTIFACT)` for the SAME artifact. Neither
+# line is wrong alone, which is why this needs a detector rather than a
+# reading.
+# ===========================================================================
+
+_MINT_FROM_HASH = re.compile(
+    r"^\s*(?:export\s+)?([A-Za-z_]\w*)=\$\{\1:-\$\("
+)
+_HASHES = re.compile(r"\$\((?:sha256sum|sha1sum|md5sum)\s+(\S+)")
+
+# Adjudicated: vacuous, but not load-bearing, and not fixable by re-sourcing.
+#
+# FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256 is minted by hashing the
+# credential file and later compared against a re-hash of that same file. On
+# the CALLER path (an operator supplies the digest) the check is real. On the
+# promoted-default path it is `x == x` -- and it cannot be otherwise, because a
+# file's own digest has no external source here short of a fourth literal pin
+# that would need re-pinning at every re-seal. What actually guards the default
+# path is the credential's internal binding: its canonical payload digest, and
+# verify-tier-b re-deriving the whole chain in the container against pinned
+# bounds. So this one is recorded, not repaired.
+_MINT_HASH_ADJUDICATED = frozenset({
+    "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256",
+})
+
+
+def scan_mint_hashes_its_own_gate():
+    """Values minted by hashing the artifact a later gate re-hashes."""
+    bad = []
+    for rel in LAUNCHER_FAMILIES:
+        lines = (REPO / rel).read_text().split("\n")
+        for i, line in enumerate(lines):
+            match = _MINT_FROM_HASH.match(line)
+            if not match:
+                continue
+            name = match.group(1)
+            hashed = _HASHES.search("\n".join(lines[i:i + 5]))
+            if not hashed:
+                continue
+            artifact = hashed.group(1).strip('"')
+            leaf = artifact.rsplit("/", 1)[-1]
+            gated = [
+                j + 1 for j, later in enumerate(lines[i + 1:], i + 1)
+                if f'"${name}"' in later
+                and "sha256sum" in later
+                and leaf in later
+            ]
+            if not gated or name in _MINT_HASH_ADJUDICATED:
+                continue
+            bad.append(
+                f"{Path(rel).name}:{i + 1} {name} is minted by hashing "
+                f"{artifact} and gated against a re-hash of it at line "
+                f"{gated[0]}; the gate cannot fail"
             )
     return bad
 
@@ -648,6 +730,11 @@ def sweep():
     for problem in scan_import_precedes_owner():
         rows.append(
             {"kind": "import-precedes-owner", "file": "<launcher families>",
+             "detail": problem}
+        )
+    for problem in scan_mint_hashes_its_own_gate():
+        rows.append(
+            {"kind": "mint-hashes-its-own-gate", "file": "<launcher families>",
              "detail": problem}
         )
     return rows

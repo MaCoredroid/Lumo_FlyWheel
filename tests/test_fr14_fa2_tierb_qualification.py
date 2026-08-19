@@ -1190,8 +1190,11 @@ def test_cpu_end_to_end_tier_a_serve_is_unchanged(monkeypatch, tmp_path):
         # Site 19: the attestation the tier-A block exports and tier-B did not.
         ("FR13_FA2_QROW32_B1_INTERNAL_ATTESTED", "launcher attestation"),
         # Site 20: the canonical exact4 identity a serve must carry.
-        ("FR13_FA2_QROW32_B1_EXACT4_TASK_IDS", "exact4 identity drifted"),
-        ("FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256", "exact4 identity drifted"),
+        # SITE 17: the serve gate now delegates to the workload accessor, so
+        # dropping either pin is caught as "the declared workload's identity
+        # is not what arrived" rather than as a bespoke exact4 comparison.
+        ("FR13_FA2_QROW32_B1_EXACT4_TASK_IDS", "declares workload 'exact4'"),
+        ("FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256", "declares workload 'exact4'"),
         # The credential itself.
         ("FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL", "TIER_B_CREDENTIAL"),
         # Binary identity.
@@ -1978,10 +1981,7 @@ def staged_default(tmp_path):
     # pointing the pin at this file's real digest through the env override.
     so.write_bytes(b"not the real kernel, but a real file")
     credential = tmp_path / "credential.json"
-    credential.write_text(
-        (REPO / "results/fr14_nvfp4_port_20260816"
-         / "fr14_splitk_tierb_credential.json").read_text()
-    )
+    credential.write_text(_credential_sealed_against(_patcher_digest()))
     digest = hashlib.sha256(so.read_bytes()).hexdigest()
     return so, credential, digest
 
@@ -2169,6 +2169,26 @@ def _patcher_digest():
     return hashlib.sha256(PATCHER.read_bytes()).hexdigest()
 
 
+def _credential_sealed_against(patch_digest):
+    """The staged credential, re-sealed against a given patcher digest.
+
+    SITE 16 (a): the launcher now MINTS the patcher digest from the
+    credential's sealed identity instead of by hashing the patcher, so the
+    selector gate is sealed-vs-disk rather than disk-vs-disk. That makes these
+    walks depend on the staged credential agreeing with the patcher in the
+    tree -- which it does not, and must not be assumed to, between an edit
+    that touches the patcher and the runner's re-seal. So the walk seals its
+    own copy. test_the_staged_credential_is_sealed_against_this_patcher is
+    what watches the REAL one.
+    """
+    body = json.loads(
+        (REPO / "results/fr14_nvfp4_port_20260816"
+         / "fr14_splitk_tierb_credential.json").read_text()
+    )
+    body["identity"]["patch_source_sha256"] = patch_digest
+    return json.dumps(body, indent=2, sort_keys=True)
+
+
 def _boot_regions(text):
     """Slice the regions a promoted-default boot flows through.
 
@@ -2353,10 +2373,7 @@ def staged_boot(tmp_path):
     digest = hashlib.sha256(so.read_bytes()).hexdigest()
     size = so.stat().st_size
     credential = tmp_path / "credential.json"
-    credential.write_text(
-        (REPO / "results/fr14_nvfp4_port_20260816"
-         / "fr14_splitk_tierb_credential.json").read_text()
-    )
+    credential.write_text(_credential_sealed_against(_patcher_digest()))
 
     def stage(launcher):
         text = launcher.read_text().replace(
@@ -2508,42 +2525,77 @@ def test_full_boot_tier_b_rejects_a_malformed_commit(launcher, staged_boot):
 # times, so the walk proves it about itself.
 
 
+def _drop_block(text, startswith, ends_when):
+    """Delete one contiguous block, located positionally.
+
+    The F1 mint blocks have gained comments and a second guard since these
+    mutations were first written as literal find/replace strings, and every
+    edit to them broke the mutation rather than the fix. A mutation proof that
+    breaks whenever the code is touched stops being run, so these locate by
+    first line and a closing rule instead.
+
+    Matched on the RAW line, indent included. Stripping first found the
+    top-level `VAR=${VAR:-}` normalisation 470 lines earlier instead of the
+    in-block mint, and deleted everything between them -- a mutation that
+    "worked" while testing nothing. The indent is what distinguishes the two.
+    """
+    lines = text.split("\n")
+    start = next(
+        i for i, line in enumerate(lines) if line.startswith(startswith)
+    )
+    end = next(
+        i for i in range(start, len(lines)) if ends_when(lines[i].strip())
+    )
+    return "\n".join(lines[:start] + lines[end + 1:])
+
+
+_CLOSING_BRACE = lambda line: line == "}"
+
+
+def _drop_the_commit_mint(text):
+    """Site 15/F1: the mint AND its guard, i.e. the pre-fix state exactly."""
+    text = _drop_block(
+        text,
+        "    FR13_FA2_QROW32_B1_SOURCE_COMMIT=${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-",
+        lambda line: line.endswith("}"),
+    )
+    return _drop_block(
+        text, '    [[ -n "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" ]] || {', _CLOSING_BRACE
+    )
+
+
+def _drop_the_patcher_mint(text):
+    """Site 16 (a): the sealed-identity mint AND its well-formedness guard."""
+    text = _drop_block(
+        text,
+        "    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-",
+        lambda line: line.endswith(")}"),
+    )
+    return _drop_block(
+        text,
+        '    [[ "$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" =~ ^[0-9a-f]{64}$ ]] || {',
+        _CLOSING_BRACE,
+    )
+
+
 _MUTATIONS = (
-    (
-        # The mint AND its guard together: removing the mint alone is caught by
-        # the guard inside the block, which proves the guard and not the gate.
-        # The mutation has to restore the PRE-FIX state exactly -- a selector
-        # armed with an empty SOURCE_COMMIT reaching the gate.
-        "F1: drop the mint",
-        'FR13_FA2_QROW32_B1_SOURCE_COMMIT=${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo "")}\n'
-        "    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)}\n"
-        '    [[ -n "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" ]] || {\n'
-        '      echo "FR13 promoted split-K default: cannot mint the selector provenance (no git HEAD)" >&2\n'
-        "      exit 2\n"
-        "    }\n",
-        "    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)}\n",
-        "well-formed source commit",
-    ),
-    (
-        "F1: drop the patcher-digest mint",
-        "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)}\n",
-        "",
-        "exact binary/source provenance",
-    ),
+    ("F1: drop the commit mint", _drop_the_commit_mint,
+     "well-formed source commit"),
+    ("F1: drop the patcher-digest mint", _drop_the_patcher_mint,
+     "exact binary/source provenance"),
 )
 
 
 @pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
-@pytest.mark.parametrize("name,find,replace,expect", _MUTATIONS, ids=lambda v: str(v)[:24])
-def test_f1_mutations_break_the_boot(launcher, staged_boot, name, find, replace, expect):
+@pytest.mark.parametrize("name,mutate,expect", _MUTATIONS, ids=lambda v: str(v)[:28])
+def test_f1_mutations_break_the_boot(launcher, staged_boot, name, mutate, expect):
     """Remove the F1 fix -> the plain boot dies at the gate again."""
     stage, so, credential, size = staged_boot
-    text = stage(launcher)
-    assert text.count(find) == 1, f"{name}: mutation anchor not unique in {launcher.name}"
-    out = _run_full_boot(text.replace(find, replace, 1), {}, so, credential, size)
+    mutated = mutate(stage(launcher))
+    assert mutated != stage(launcher), f"{name}: the mutation changed nothing"
+    out = _run_full_boot(mutated, {}, so, credential, size)
     assert out.returncode == 2, f"{name}: the boot survived without the fix"
-    if expect is not None:
-        assert expect in out.stderr
+    assert expect in out.stderr, f"{name}: {out.stderr}"
 
 
 @pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
@@ -3230,4 +3282,189 @@ def test_the_pointer_whitelist_entry_that_can_never_fire():
         "the QUALIFICATION_PROFILE default no longer precedes the pointer -- "
         "the whitelist entry may now be live, which changes what a pointer can "
         "decide about the served vocabulary"
+    )
+
+
+# ===========================================================================
+# SITE 17 -- the serve gate never learned the workload table.
+#
+# exact16 attempt 3 ran 4m16s to engine init and died at the first served
+# token: _fr13_fa2_qrow32_b1_require_exact4 read ONLY the legacy EXACT4_*
+# spelling and compared against the hardcoded canonical four. No caller value
+# could satisfy it -- sixteen ids are not four, and unset is not four either.
+#
+# The workload-table landing converted the RECORD accessor and never this
+# GATE, 600 lines away in the same file. The record learned exact16; the gate
+# did not. The fix is not to teach the gate the table: it is to stop the gate
+# knowing what a workload IS, and make it ask the one accessor that does.
+# ===========================================================================
+
+
+def _served_workload_env(monkeypatch, credential_path, workload, ids, sha):
+    return _tier_b_env(
+        monkeypatch, credential_path,
+        FR13_FA2_QROW32_B1_TIERB_WORKLOAD=workload,
+        FR13_FA2_QROW32_B1_TIERB_TASK_IDS=ids,
+        FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=sha,
+        FR13_FA2_QROW32_B1_EXACT4_TASK_IDS="",
+        FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256="",
+    )
+
+
+@pytest.mark.parametrize(
+    "workload,subset",
+    [("exact4", "subset_b4_four.json"), ("exact16", "subset_b4_sixteen.json")],
+)
+def test_the_serve_gate_admits_every_declared_workload(
+    monkeypatch, tmp_path, workload, subset
+):
+    """SITE 17 proper: exact16 must reach the serve gate and pass it."""
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    ids = _subset_ids(subset)
+    sha = WORKLOADS[workload][1]
+    with _served_workload_env(monkeypatch, path, workload, ids, sha):
+        begin(layer=_Layer(), **_served_operands())
+    record = namespace["_fr13_fa2_qrow32_b1_tier_b_workload"]()
+    assert record["declared"] == workload
+    assert record["task_count"] == WORKLOADS[workload][0]
+
+
+def test_the_serve_gate_admits_the_calibration_workload(monkeypatch, tmp_path):
+    """Measurement 1 rides this path: no subset, and that must be sayable."""
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    with _served_workload_env(
+        monkeypatch, path, "random1024_calibration", "", ""
+    ):
+        begin(layer=_Layer(), **_served_operands())
+
+
+def test_the_serve_gate_still_accepts_a_legacy_only_caller(monkeypatch, tmp_path):
+    """Banked vehicles set only EXACT4_*; nothing about them changes."""
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    with _tier_b_env(monkeypatch, path):  # exact4 pins, legacy spelling, no workload
+        begin(layer=_Layer(), **_served_operands())
+
+
+def test_the_serve_gate_refuses_a_workload_its_pins_do_not_match(
+    monkeypatch, tmp_path
+):
+    """The gate inherits the cross-check rather than restating it."""
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path)
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    with _served_workload_env(
+        monkeypatch, path, "exact16",
+        _subset_ids("subset_b4_four.json"), WORKLOADS["exact4"][1],
+    ):
+        with pytest.raises(RuntimeError, match="declares workload 'exact16'"):
+            begin(layer=_Layer(), **_served_operands())
+
+
+def test_tier_a_production_is_still_ruled_to_exact4(monkeypatch, tmp_path):
+    """Widening the tier-B route must not widen the byte-gated one.
+
+    The launcher's production gate pins the canonical four independently; this
+    is the patcher-side half of the same rule, so a tier-A serve cannot borrow
+    the tier-B workload table to serve sixteen tasks.
+    """
+    namespace = _fresh_selectors()
+    require = namespace["_fr13_fa2_qrow32_b1_require_declared_workload"]
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_TIERB_WORKLOAD", "exact16")
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_TIERB_TASK_IDS", _subset_ids("subset_b4_sixteen.json")
+    )
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256", WORKLOADS["exact16"][1]
+    )
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_EXACT4_TASK_IDS", "")
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256", "")
+    assert require("B")["declared"] == "exact16"
+    with pytest.raises(RuntimeError, match="tier A. serves the canonical exact4"):
+        require("A")
+
+
+def test_the_gate_and_the_record_share_one_accessor():
+    """The structural claim, so a second copy cannot reappear quietly."""
+    source = PATCHER.read_text()
+    # Keyed on the DEFINITION and on call sites, not on the bare name: the
+    # replacement's docstring names the function it replaced, and a check that
+    # a comment can satisfy is the mistake this campaign has now made twice.
+    assert "def _fr13_fa2_qrow32_b1_require_exact4(" not in source, (
+        "the bespoke exact4 gate is back"
+    )
+    assert "_fr13_fa2_qrow32_b1_require_exact4()" not in source, (
+        "something still calls the bespoke exact4 gate"
+    )
+    body = source[source.index("def _fr13_fa2_qrow32_b1_require_declared_workload"):]
+    body = body[:body.index("\ndef ")]
+    assert "_fr13_fa2_qrow32_b1_tier_b_workload()" in body
+    assert "_FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS" not in body, (
+        "the gate is comparing against a hardcoded task list again"
+    )
+    # and the record states what it served rather than a literal
+    record = source[source.index('"pass_sidecar_sha256"'):]
+    record = record[:record.index('"fallback_allowed"')]
+    assert '_fr13_fa2_qrow32_b1_tier_b_workload()["task_ids"]' in record
+
+
+# ------------------------------------------------- site 16: the sealed mint
+
+
+def test_the_launcher_mints_the_patcher_digest_from_the_sealed_identity():
+    """SITE 16 (a). A value derived from an artifact cannot test it.
+
+    The mint used to hash scripts/fr13_patch_fa2_tree_bias.py -- the same file
+    the selector gate then compares against disk. That made the gate
+    disk-vs-disk: `x == x`, unfailable however stale the credential was. It is
+    now minted from the credential's SEALED identity, so the gate asks the
+    question it looks like it is asking.
+    """
+    for launcher in LAUNCHERS:
+        text = launcher.read_text()
+        start = text.index(
+            "    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-"
+        )
+        mint = text[start:text.index("\n    [[", start)]
+        assert "sha256sum scripts/fr13_patch_fa2_tree_bias.py" not in mint, (
+            f"{launcher.name}: the mint still hashes the artifact the gate checks"
+        )
+        assert "patch_source_sha256" in mint and "CREDENTIAL_HOST" in mint
+        # the gate it feeds still compares against disk
+        assert (
+            '"$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" == "$(sha256sum '
+            "scripts/fr13_patch_fa2_tree_bias.py" in text
+        )
+
+
+def test_the_staged_credential_is_sealed_against_this_patcher():
+    """SITE 16 (b). The coupling, watched on the REAL credential.
+
+    This is the pair the promoted default boots on: results/.../
+    fr14_splitk_tierb_credential.json and scripts/fr13_patch_fa2_tree_bias.py.
+    Because the mint is now sealed-vs-disk, a patcher edit that lands without
+    a re-seal makes every promoted-default boot refuse -- correctly, and
+    silently until someone burns a GPU window on it. So it is asserted here,
+    on CPU, and it is expected to fail in exactly one window: between a patcher
+    edit landing and the runner re-sealing. That is not a flaky test; it is
+    the coupling being visible.
+    """
+    credential = json.loads(
+        (REPO / "results/fr14_nvfp4_port_20260816"
+         / "fr14_splitk_tierb_credential.json").read_text()
+    )
+    sealed = credential["identity"]["patch_source_sha256"]
+    assert sealed == _patcher_digest(), (
+        "the staged tier-B credential is sealed against patcher "
+        f"{sealed[:16]}... but the tree carries {_patcher_digest()[:16]}...; "
+        "the promoted default will refuse every boot until it is re-sealed"
     )

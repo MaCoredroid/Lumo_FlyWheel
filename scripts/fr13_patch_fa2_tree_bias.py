@@ -6533,21 +6533,34 @@ def _fr13_fa2_qrow32_b1_require_identity(arm=None):
     return candidate_digest, source_commit, patch_source
 
 
-def _fr13_fa2_qrow32_b1_require_exact4():
-    task_ids = tuple(
-        value
-        for value in os.environ.get(
-            "FR13_FA2_QROW32_B1_EXACT4_TASK_IDS", ""
-        ).split(",")
-        if value
-    )
-    subset = os.environ.get("FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256", "")
-    if (
-        task_ids != _FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS
-        or subset != _FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256
-    ):
-        raise RuntimeError("FR13 qrow32 B1 production exact4 identity drifted")
-    return task_ids
+def _fr13_fa2_qrow32_b1_require_declared_workload(tier):
+    """The SERVE gate, on the same workload truth the record uses.
+
+    SITE 17. This was _fr13_fa2_qrow32_b1_require_exact4: it read only the
+    legacy EXACT4_* spelling and compared against the hardcoded canonical
+    four, so no caller value could satisfy an exact16 serve -- sixteen ids are
+    not four, and unset is not four either. The workload table landing
+    converted the RECORD accessor 600 lines below and never this gate, which
+    is how exact16 ran four minutes to engine init and died at the first
+    served token.
+
+    One source of workload truth in this file. This function no longer knows
+    what a workload IS; it asks. Both spellings, both-must-agree, unknown
+    refuses -- all of it inherited rather than restated, because a second
+    statement of the same rule is exactly what site 17 was.
+
+    TIER A IS STILL EXACT4. The byte-gated production route is ruled to the
+    canonical four (the launcher's production gate pins them independently),
+    so a tier-A serve declaring anything else is refused here rather than
+    silently widened by a table written for the tier-B route.
+    """
+    workload = _fr13_fa2_qrow32_b1_tier_b_workload()
+    if tier != "B" and workload["declared"] != "exact4":
+        raise RuntimeError(
+            "FR13 qrow32 B1 production (tier A) serves the canonical exact4 "
+            f"workload; got {workload['declared']!r}"
+        )
+    return workload
 
 
 def _fr13_fa2_qrow32_b1_geometry_mismatches(
@@ -7213,7 +7226,8 @@ def _fr13_fa2_qrow32_b1_production_begin(
     if os.environ.get("FR13_FA2_QROW32_B1_INTERNAL_ATTESTED") != "1":
         raise RuntimeError("FR13 qrow32 B1 production has no launcher attestation")
     _fr13_fa2_qrow32_b1_require_draft_vocab_profile()
-    task_ids = _fr13_fa2_qrow32_b1_require_exact4()
+    served_workload = _fr13_fa2_qrow32_b1_require_declared_workload(tier)
+    task_ids = tuple(served_workload["task_ids"])
     # Bind the identity of THIS arm's binary. Each production arm ships in its
     # own .so with its own source closure, so an arm-blind check would let the
     # GQA-pair selector run against the no-split binary (whose dispatch has no
@@ -7423,8 +7437,14 @@ def _fr13_fa2_qrow32_b1_production_record(
                 ),
             }
         ),
-        "task_ids": list(_FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS),
-        "subset_sha256": _FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256,
+        # SITE 17, the same defect one field over. These were literals, so a
+        # record of an exact16 serve would have named the four exact4 tasks --
+        # and the comment immediately below already warned about exactly this
+        # ("an emitter that states an identity instead of reading it will
+        # eventually describe a run that did not happen"). It was right.
+        "task_ids": list(_fr13_fa2_qrow32_b1_tier_b_workload()["task_ids"]),
+        "subset_sha256": _fr13_fa2_qrow32_b1_tier_b_workload()["subset_sha256"],
+        "workload": _fr13_fa2_qrow32_b1_tier_b_workload()["declared"],
         # AS SERVED, not as assumed. These were the literals 1 / 65536, which
         # is the same hardcoding the draft-vocabulary red-team already caught
         # once: an emitter that states an identity instead of reading it will

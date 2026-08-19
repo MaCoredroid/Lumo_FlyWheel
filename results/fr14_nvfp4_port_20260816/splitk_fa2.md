@@ -1416,3 +1416,89 @@ The detectors are the honest hedge either way: the literal-table and
 vocab-profile projections now cover the classes both sites came from, and
 neither depends on anyone remembering to add a marker. But a detector that
 finds drift is a worse answer than a design that cannot drift.
+
+## 24. Site 17 — the record learned exact16, the gate did not
+
+exact16 attempt 3 ran 4m16s to engine init and died at the first served token.
+`_fr13_fa2_qrow32_b1_require_exact4` read only the legacy `EXACT4_*` spelling
+and compared against the hardcoded canonical four. **No caller value could
+satisfy it** — sixteen ids are not four, and unset is not four either.
+
+The workload-table landing converted the RECORD accessor and never this GATE,
+600 lines away in the same file.
+
+The fix is not to teach the gate the table. It is to stop the gate knowing
+what a workload *is*: `_fr13_fa2_qrow32_b1_require_declared_workload(tier)`
+asks `_fr13_fa2_qrow32_b1_tier_b_workload()`, the same accessor the record
+uses. Both spellings, both-must-agree, unknown refuses — all inherited rather
+than restated, because **a second statement of the same rule is exactly what
+site 17 was.** Tier A stays ruled to exact4 and refuses anything else, so
+widening the tier-B route does not widen the byte-gated one.
+
+### Census of legacy readers, both roots
+
+| reader | verdict |
+|---|---|
+| patcher `require_exact4` (:6536) | **site 17 — converted** |
+| patcher record `task_ids` / `subset_sha256` (:7426) | **also literals — converted** |
+| patcher `_fr13_fa2_qrow32_b1_tier_b_workload` | already the accessor |
+| launcher tier-B alias ×3 | already both-spellings |
+| launcher **production** gate ×3 (:2700) | adjudicated: tier A is ruled exact4 |
+| `-e` forwards ×3, banked vehicles | pass-through, unchanged |
+
+The record fields were the same defect one field over — and the comment
+directly below them already warned about it: *"an emitter that states an
+identity instead of reading it will eventually describe a run that did not
+happen."* It was right. A record of an exact16 serve would have named the four
+exact4 tasks.
+
+## 25. Site 16 — a value derived from an artifact cannot test that artifact
+
+The promoted default minted `FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256` by
+hashing `scripts/fr13_patch_fa2_tree_bias.py` — the same file the selector
+gate then compares against disk. The gate was **`x == x`**: unfailable however
+stale the credential was.
+
+It is now minted from the **credential's sealed identity**
+(`identity.patch_source_sha256`, read with grep so the host keeps no Python
+dependency before docker), so the gate is **sealed-vs-disk** and asks the
+question it looks like it is asking: *is the patcher on disk the one this
+credential was earned against?*
+
+### The census, and the second instance
+
+`scan_mint_hashes_its_own_gate()` looks for `VAR=${VAR:-$(hash ARTIFACT)}`
+followed by a gate comparing `"$VAR"` against a re-hash of the same artifact.
+Two instances across the three families:
+
+* `FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256` — **fixed**, above.
+* `FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256` — **recorded, not repaired.**
+  On the caller path (an operator supplies the digest) the check is real; on
+  the promoted-default path it is `x == x`, and it cannot be otherwise, because
+  a file's own digest has no external source here short of a fourth literal pin
+  needing re-pinning at every re-seal. What actually guards that path is the
+  credential's internal binding — its canonical payload digest, and
+  `verify-tier-b` re-deriving the whole chain in the container against pinned
+  bounds. The exception list is asserted **exactly**, with the reason next to
+  it, so it cannot grow silently.
+
+### The coupling is now visible, and it is red
+
+Because the mint is sealed-vs-disk, **a patcher edit landing without a re-seal
+makes every promoted-default boot refuse** — correctly, and silently until
+someone spends a GPU window discovering it. So
+`test_the_staged_credential_is_sealed_against_this_patcher` asserts the pair on
+CPU. It is **red right now**, by construction: this landing moved the patcher
+digest from `bec74652…` to `188c95aa…` while the staged credential is sealed at
+`bec74652…`. That is not a flaky test; it is the one-edit-one-reseal window
+made visible instead of discovered on GPU.
+
+### A detector that narrowed under reformatting
+
+Worth recording because it nearly went unnoticed: site 16's mint became a
+**multi-line** `${VAR:-$(` … `)}`, and site 15's `import-precedes-owner`
+projection — a single-line regex — silently stopped matching the very name it
+was written for. Caught only because a mutation test asserted the count was 2
+and got 1. **A projection that narrows when the code is reformatted is worse
+than none, because nothing announces the loss.** Both spellings are matched
+now, and the count assertion is what keeps that honest.

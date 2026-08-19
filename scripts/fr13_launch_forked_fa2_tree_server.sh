@@ -1518,7 +1518,29 @@ if (( _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0 )) \
     # sha/size/SASS check above and verify-tier-b on the credential -- neither
     # of which a minted commit can weaken.
     FR13_FA2_QROW32_B1_SOURCE_COMMIT=${FR13_FA2_QROW32_B1_SOURCE_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo "")}
-    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum scripts/fr13_patch_fa2_tree_bias.py | cut -d' ' -f1)}
+    # SITE 16. This used to mint the patcher digest BY HASHING THE PATCHER --
+    # the same file the selector gate then compares against disk. A value
+    # derived from an artifact cannot test that artifact: the gate was
+    # disk-vs-disk, i.e. `x == x`, and could not fail however stale the
+    # credential was. It is now minted from the CREDENTIAL'S SEALED IDENTITY,
+    # so the gate becomes sealed-vs-disk and actually asks the question it
+    # looks like it is asking: is the patcher on disk the one this credential
+    # was earned against?
+    #
+    # Read with grep rather than a JSON parser on purpose: this runs on the
+    # host before docker and must not acquire a Python dependency. The value
+    # is constrained to 64 hex chars by the pattern itself, and the credential
+    # file's own digest is verified at the tier-B serve gate below.
+    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256=${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(
+      grep -o '"patch_source_sha256"[[:space:]]*:[[:space:]]*"[0-9a-f]\{64\}"' \
+           "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" \
+        | head -n 1 | grep -o '[0-9a-f]\{64\}')}
+    [[ "$FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+      echo "FR13 promoted split-K default: the tier-b credential carries no" \
+           "patch_source_sha256 identity to mint from:" \
+           "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" >&2
+      exit 2
+    }
     [[ -n "$FR13_FA2_QROW32_B1_SOURCE_COMMIT" ]] || {
       echo "FR13 promoted split-K default: cannot mint the selector provenance (no git HEAD)" >&2
       exit 2

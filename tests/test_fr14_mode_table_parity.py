@@ -356,7 +356,10 @@ def test_f1_f2_are_present_in_every_family():
         assert "FR13_FA2_QROW32_B1_SOURCE_COMMIT:-$(git rev-parse HEAD" in branch, (
             f"{Path(rel).name}: the mint is outside the arming branch"
         )
-        assert "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-$(sha256sum" in branch
+        assert "patch_source_sha256 identity to mint from" in branch, (
+            f"{Path(rel).name}: the patcher-digest mint is outside the "
+            "arming branch"
+        )
         assert "cannot mint the selector provenance" in branch
         # F1: the gate is SCOPED, not disarmed
         assert "requires a credential earned at this HEAD" in text
@@ -770,3 +773,48 @@ def test_the_projection_is_intra_file_not_cross_family():
         if parity._pointer_imported_names((REPO / rel).read_text())[0]
     ]
     assert with_importer == [parity.LAUNCHER_FAMILIES[0]], with_importer
+
+
+# ===========================================================================
+# SITE 16: mint-by-hashing-the-artifact.
+# ===========================================================================
+
+
+def test_mint_hash_scan_is_clean_at_head():
+    assert parity.scan_mint_hashes_its_own_gate() == []
+
+
+def test_restoring_the_self_hashing_mint_fires_the_scan(monkeypatch):
+    """The tautology, put back."""
+    def mutate(text):
+        anchor = (
+            "    FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256="
+            "${FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256:-"
+        )
+        start = text.index(anchor)
+        end = text.index("')}", start) + 3
+        return text[:start] + (
+            anchor + "$(sha256sum scripts/fr13_patch_fa2_tree_bias.py "
+            "| cut -d' ' -f1)}"
+        ) + text[end:]
+
+    _scan_with_mutated_production(monkeypatch, mutate)
+    bad = parity.scan_mint_hashes_its_own_gate()
+    assert bad and "PATCH_SOURCE_SHA256" in bad[0], bad
+    assert "the gate cannot fail" in bad[0]
+
+
+def test_the_adjudicated_exception_is_exact_and_reasoned():
+    """One entry, and the reason is in the source next to it.
+
+    An exception list that grows silently is a detector being switched off one
+    line at a time, so the set is asserted exactly and the module is required
+    to explain it where a reader will meet it.
+    """
+    assert parity._MINT_HASH_ADJUDICATED == frozenset(
+        {"FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256"}
+    )
+    source = (REPO / "scripts" / "fr14_mode_table_parity.py").read_text()
+    reason = source[source.index("_MINT_HASH_ADJUDICATED") - 1200:
+                    source.index("_MINT_HASH_ADJUDICATED")]
+    assert "verify-tier-b" in reason and "recorded, not repaired" in reason
