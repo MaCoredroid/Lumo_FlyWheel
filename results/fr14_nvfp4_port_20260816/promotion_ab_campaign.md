@@ -1512,3 +1512,208 @@ be worth asking again.
 fallback-to-split2 defect in the same serving path — sweep for the pattern
 directly rather than boot for it: every `arm ==` / `.get(arm, …)` resolver in the
 FA2 path that can silently return another arm's identity.
+
+---
+---
+
+# ROUND 6 (2026-08-18 20:39Z – 2026-08-19 01:10Z) — the latch fix answers both release questions, and split-K FINALLY SERVES
+
+Frozen HEAD `c5d41e364`. Quiet window held; tree byte-clean throughout; the Tier-B
+credential again earned to a gitignored path so no mid-sequence commit was needed.
+
+| phase | outcome |
+|---|---|
+| **1** gate re-earn | **PASS** rc=0, 11.7 min |
+| **2** ARM G'' latch-fixed | **DRAINED**, 4/4 tasks, 61 497 steps, `swerc=13` (13398 capped) |
+| **3** Tier-B credential | **PASS**, 9/9 bounds, earned at this HEAD |
+| **4** ARM S sixth boot | **SERVED — split-K generated real tokens for the first time** |
+
+## R6.1 Release question (b): do MIXED requests exist? **YES — the latch is gone**
+
+| | round 5 (latched) | **round 6 (fixed)** |
+|---|---|---|
+| requests | 98 | **188** |
+| **MIXED** (gated *and* ungated inside one request) | **0** | **181** |
+| fully gated | 11 | **0** |
+| fully ungated | 87 | 7 (short requests) |
+| gated runs | — | **3 256**, mean **3.1** steps, longest **32** |
+| MAX_RUN=32 brake engagements | — | 53 |
+
+181 of 188 requests now transition per step. The gate is a per-step predicate
+again, exactly as §11.6 specifies. The brake fired 53 times, so it is load-bearing,
+but the mean gated run is 3.1 steps — the gate is self-limiting on its own.
+
+## R6.2 The first honest warm-step rate: **0.1619 — INSIDE the pre-registered 0.15–0.25**
+
+Round 5's 0.3458 was a length-weighted artifact of the latch. With per-step
+re-evaluation restored, the renewal-process prediction from §10.1 is **confirmed**:
+
+```
+warm_step_rate = 9 956 / 61 497 = 0.1619        pre-registered 0.15 - 0.25   INSIDE
+```
+
+**Every §11.7 check now passes** (registry two rows `passes=2` seg 0/1;
+`graph_replays` exactly {2 cold, 1 gated}; `mtp_forward_calls` only {4,2}; pairs
+only (4,6)/(2,8); 27/32 on all 61 497 steps; warm rate in band). The single
+"failure" my reducer reports is still its own known bug — the "ungated signature
+`d9a4dd…`" claim belongs to the gate-**off** arm, and I apply it to the armed arm.
+
+## R6.3 Release question (a): is `astropy-13236` HEALTHY? **YES — and it RESOLVED**
+
+| 13236 | round 5 (latched, w=0.993) | **round 6 (fixed)** |
+|---|---|---|
+| turns | 7 | **146** |
+| type-token ratio | **0.067** | **0.201** |
+| tail-repeat | **0.991** | **0.272** |
+| max line repeat | 130 | 62 |
+| top 8-gram | ×71 | ×21 |
+| tool calls | 2 | **51** |
+| malformed | truncated call at end | **0** |
+| patch | **0 B** | **1 924 B** |
+| verdict | failed | **resolved** |
+
+Read, not merely counted — its closing text:
+
+> **Changes** (2 files): `astropy/table/table.py`: removed the auto-transform
+> clause in `_convert_data_to_col` that viewed structured ndarrays as
+> `NdarrayMixin`… **Verification**: Structured arrays added via `Table([...])`,
+> setitem, or `add_column` now become `Column`s… All other failures (9) are
+> pre-existing environment issues (IERS leap-second staleness, numpy quirks),
+> unchanged by this fix.
+
+Coherent, correct, self-auditing. **The degeneration signature of §R5.4 is gone,
+and it disappeared exactly when the latch did** — which is the strongest available
+evidence that the latch caused it, without ever having claimed so from n=1.
+
+Second trace read as instructed — `13398` (243 turns, 41 773 words, tail-repeat
+0.210, 83 tool calls, patch 0 B). Zero-patch here is the **9000 s budget cap**,
+not a loop: it is mid-debugging when killed —
+
+> `Confirmed pre-existing failure (fails without my change too). Import restored.
+> Running the full file without -x:` … `The predicted test_gcrs_altaz_bothroutes
+> regression has materialized. To understand the magnitude of the difference…`
+
+All four G'' traces: **zero non-ASCII, zero malformed tool calls.**
+
+## R6.4 The measurement the whole campaign was for — and lever 2 fails it
+
+Paired against round-2 C' (both arms ungated-reduced with a capped 13398, per the
+accounting pre-registered in §R3.4):
+
+| instrument | C' (gate OFF) | G'' (gate ON) | delta |
+|---|---|---|---|
+| `step_wall_ms` | 214.759 | 212.388 | **−2.371 (−1.10 %)** |
+| drafter GPU ms/step | 55.447 | 52.645 | −2.802 (−5.05 %) |
+| `s_per_fwd_gpu` | 0.13126 | 0.13151 | +0.19 % |
+| committer *(null)* | 20.465 | 20.511 | +0.23 % |
+| **accept / event** | **3.8855** | **3.6832** | **−0.2023 (−5.21 %)** |
+| per-request TPS | 24.392 | 23.610 | **−3.21 %** |
+
+Derived per gated step (w = 0.1619):
+
+```
+dfwd saving  = 2.802 / 0.1619 = 17.31 ms/gated step   (pre-registered -20.6)   84% of prediction
+accept cost  = 0.2023 / 0.1619 = 1.249 tokens/gated step
+```
+
+**The time side of the pre-registration holds. The acceptance side fails by an
+order of magnitude.** §10.1 pre-registered the accept delta in
+**[−0.02, +0.15] tokens/step**; measured **−0.2023**, i.e. **10.1× the worst
+pre-registered case**, and on the wrong side.
+
+§7 stated the risk exactly: *"the gate is accept-positive iff MTP's survival at
+draft positions 3–4 on strong-match steps is below 0.931"*, and called that "the
+one question the A/B is for". **The A/B has now answered it: no.** On the steps
+the gate actually fires, MTP was doing better at positions 3–4 than the Arctic
+suffix chain that replaces it — the opposite of the modelled assumption.
+
+Net effect: −1.10 % step wall bought with −4.14 % committed tokens ⇒ **−3.21 %
+throughput. The lever is net negative.**
+
+**Variance discipline, stated plainly:** every one of those arm-level deltas sits
+*inside* the ±10 % band, so none is citable as a verdict from a single pair. What
+is not inside the band is the **pre-registered accept range**, which was written
+precisely so this comparison could be decided — and it is missed by 10×. The
+paired per-task accept deltas (−11.58 %, −10.12 %, −4.05 %, +1.52 %) point the
+same way in three of four.
+
+## R6.5 Phase 4 — SPLIT-K SERVES, AND MARK'S EYEBALL IS DISCHARGED
+
+Sixth boot. The identity resolver's new `gqa_pair_splitk` branch cleared the 17th
+site; boot healthy at 261 s; `swerc=0`; `astropy-12907` **resolved**.
+
+Served-arm artifact, `fr13_fa2_qrow32_b1_gqa_pair_splitk_live_paged_ab.json`:
+
+```
+arm = gqa_pair_splitk · tier = B · status = PASS
+served_return = "candidate output served (tier-b)"
+```
+
+**That line is the campaign's long pole falling.** For five attempts across two
+weeks the honest statement was "the split-K kernel has never produced one served
+token". It has now produced 1 027 draft events' worth.
+
+### THE EYEBALL — verdict: **CLEAN. No degeneration signature.**
+
+| | ARM S (split-K) | C' (gqa_pair) | best other arm |
+|---|---|---|---|
+| type-token ratio | **0.395** | 0.375 | 0.361 |
+| max line repeat | **4** | 6 | 14 |
+| top 8-gram | **2** | 2 | 3 |
+| **tail-repeat** | **0.000** | 0.000 | 0.256 |
+| non-ASCII | 0 | 0 | 0 |
+| malformed tool calls | **0** / 10 | 0 / 14 | 0 |
+
+**The cleanest trace in the entire campaign on every signature.** Read verbatim —
+it diagnoses the real bug:
+
+> The bug is in the `else` branch for `right`: when `right` is already a
+> coord_matrix (ndarray), instead of copying the matrix into the correct position, it
+> … fills its output block with all-1s (`= 1`) instead of copying the child's
+> separability matrix (`= right`), making nested models' inputs/outputs appear
+> mutually dependent.
+
+and produces the minimal correct patch:
+
+```diff
+-        cright[-right.shape[0]:, -right.shape[1]:] = 1
++        cright[-right.shape[0]:, -right.shape[1]:] = right
+```
+
+closing with a verification summary that distinguishes its own effect from
+pre-existing failures. **No repetition, no gibberish, no mid-word breaks, no
+malformed tool calls. Mark's condition is discharged on this trace.**
+
+### Performance — the projection does NOT hold
+
+| 12907, same instance | C' (gqa_pair) | ARM S (split-K) | delta |
+|---|---|---|---|
+| **verifier forward** (contains FA2) | 125.898 ms | **128.999 ms** | **+3.101 (+2.46 %)** |
+| drafter span *(null)* | 50.440 | 50.163 | −0.55 % |
+| committer span *(null)* | 22.563 | 23.294 | +3.24 % |
+| accept / event | 3.6442 | 3.7692 | +0.125 (+3.43 %) |
+
+**Expected ~−14 ms; measured +3.1 ms.** The offline 2× kernel win (13.38 → 7.00 ms
+at 23k) did not transfer. Two honest caveats: n=1 task, single run, no repeat; and
+the trajectories differ (1 038 vs 1 408 decode steps), though the *shorter* ARM S
+trajectory implies shorter KV contexts and therefore, if anything, a cheaper FA2 —
+which makes +3.1 ms the conservative direction. The null spans moving ±3 % on the
+same comparison is the noise floor of a single unpaired 1-task diagnostic run, and
+it is the same size as the effect, so the correct statement is: **the projected
+−14 ms is not visible, and this run cannot resolve anything smaller than ~±4 ms.**
+
+Measure, don't bank — banked as measured.
+
+## R6.6 Verdicts after six rounds
+
+| lever | verdict |
+|---|---|
+| **fused draft top-k** | **PROMOTED — holds.** Served via the promoted default in every round-6 arm; work shape unchanged. |
+| **suffix pass gate** | **REFUSE.** The integration is now correct and every §11.7 check passes, the warm rate lands in its pre-registered band, and the traces are clean — but it **fails its own accept pre-registration by 10×** and is **net −3.21 % throughput**. §7's break-even question is answered: MTP survival at positions 3–4 on strong-match steps is *above* 0.931. |
+| **split-K FA2** | **MORE EVIDENCE — for the first time, not REFUSE.** Numerics 9/9; it serves; **Mark's eyeball is discharged on a clean, resolving trace**. But the −14 ms projection did not appear (+3.1 ms measured on one task). It needs a *paired, multi-task* serve on the instruments before any promotion — the thing it has never had. |
+
+**What changed this round, in one line each.** Lever 2 stopped being a plumbing
+story and became a measurement, and the measurement says no. Split-K stopped being
+unreachable and became measurable, and the first measurement says the offline win
+does not obviously transfer — which is exactly why the eyeball condition was
+attached to a *serve* and not to a probe.

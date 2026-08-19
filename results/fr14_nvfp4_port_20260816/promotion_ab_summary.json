@@ -482,6 +482,132 @@
   },
   "window_utc": "2026-08-18T17:29Z..20:12Z"
  },
+ "round6": {
+  "head": "c5d41e36448411084c5ae2e6aefa8463854360fd",
+  "phase1_gate": {
+   "minutes": 11.7,
+   "outcome": "PASS",
+   "rc": 0
+  },
+  "phase2_arm_g_dprime": {
+   "PRE_REGISTRATION_RESULT": {
+    "accept_delta": "FAILED \u2014 measured -0.2023 vs band [-0.02,+0.15], 10.1x the worst case, wrong side",
+    "dfwd_per_gated_step": "CONFIRMED (17.31 vs -20.6, 84%)",
+    "net_throughput": "-3.21% \u2014 the lever is net negative",
+    "section_7_break_even": "ANSWERED NO \u2014 MTP survival at positions 3-4 on strong-match steps is ABOVE 0.931",
+    "warm_rate": "CONFIRMED (0.1619 in 0.15-0.25)"
+   },
+   "cap": "astropy-13398 hit the 9000s budget; class-9 fired (61484 vs 61497); reduced UNGATED per section R3.4",
+   "census_steps": 61497,
+   "derived_per_gated_step": {
+    "accept_cost_tokens": 1.249,
+    "dfwd_saving_ms": 17.31,
+    "fraction_of_prediction": 0.84,
+    "pre_registered_ms": -20.6
+   },
+   "outcome": "DRAINED",
+   "rc": 13,
+   "release_question_a_13236_healthy": {
+    "round5_latched": {
+     "patch": 0,
+     "tailrep": 0.991,
+     "tools": 2,
+     "ttr": 0.067,
+     "turns": 7,
+     "verdict": "failed"
+    },
+    "round6_fixed": {
+     "patch": 1924,
+     "tailrep": 0.272,
+     "tools": 51,
+     "ttr": 0.201,
+     "turns": 146,
+     "verdict": "resolved"
+    },
+    "verdict": "HEALTHY AND RESOLVED"
+   },
+   "release_question_b_mixed_requests": {
+    "MIXED": 181,
+    "brake_engagements": 53,
+    "fully_gated": 0,
+    "fully_ungated": 7,
+    "gated_runs": 3256,
+    "longest_run": 32,
+    "mean_run": 3.1,
+    "requests": 188,
+    "round5_latched_was": "98 requests / 0 MIXED / 11 fully-gated / 87 fully-ungated",
+    "verdict": "LATCH GONE"
+   },
+   "runroot": "output/fr14_promoab_Gp6_20260818T205129Z",
+   "section_11_7": "ALL PASS (the one flag is my reducer applying a gate-OFF claim to an armed arm)",
+   "vs_C_prime": {
+    "accept_delta": -0.20225,
+    "accept_delta_pct": -5.21,
+    "drafter_delta_ms": -2.80219,
+    "drafter_delta_pct": -5.05,
+    "per_request_tps_delta_pct": -3.21,
+    "s_per_fwd_gpu_delta_pct": 0.19,
+    "step_wall_delta_ms": -2.37107,
+    "step_wall_delta_pct": -1.1
+   },
+   "warm_rate_INSIDE": true,
+   "warm_rate_pre_registered": "0.15-0.25",
+   "warm_step_rate": 0.1619
+  },
+  "phase3_tierb": {
+   "bounds": "9/9",
+   "earned_at": "c5d41e364",
+   "outcome": "PASS",
+   "path": "output/fr14_splitk_tierb_credential_c5d41e364.json",
+   "sha256": "ab0d3f8f22e8f940cfaccc86b9f5098f6f63f65487cde3e577b9c2720d26e7d0"
+  },
+  "phase4_arm_s": {
+   "EYEBALL": {
+    "malformed_tool_calls": 0,
+    "max_line_repeat": 4,
+    "nonascii": 0,
+    "note": "cleanest trace of the entire campaign on every signature; diagnosed the real bug and produced the minimal correct one-line patch",
+    "patch_bytes": 504,
+    "tail_repeat": 0.0,
+    "tools": 10,
+    "top_8gram": 2,
+    "ttr": 0.395,
+    "verdict": "CLEAN \u2014 no degeneration signature; MARK CONDITION DISCHARGED"
+   },
+   "FIRST_SPLITK_SERVE_EVER": true,
+   "arm": "gqa_pair_splitk",
+   "artifact_status": "PASS",
+   "draft_events": 1027,
+   "outcome": "SERVED",
+   "performance_vs_C_prime_same_instance": {
+    "accept_delta": 0.125,
+    "accept_delta_pct": 3.43,
+    "caveats": "n=1 task, single unpaired diagnostic run, 1038 vs 1408 steps; null spans move +/-3% so the noise floor ~ the effect size; cannot resolve smaller than ~+/-4 ms",
+    "committer_span_delta_pct": 3.24,
+    "drafter_span_delta_pct": -0.55,
+    "verifier_forward_ms": {
+     "C_prime": 125.898,
+     "arm_S": 128.999,
+     "delta_ms": 3.101,
+     "delta_pct": 2.46,
+     "projected_ms": -14,
+     "projection_held": false
+    }
+   },
+   "pure_decode_steps": 1038,
+   "rc": 0,
+   "runroot": "output/fr14_promoab_Sr6_20260819T005801Z",
+   "served_return": "candidate output served (tier-b)",
+   "task": "astropy__astropy-12907 RESOLVED",
+   "tier": "B"
+  },
+  "verdicts": {
+   "fused_draft_topk": "PROMOTED \u2014 holds",
+   "splitk_fa2": "MORE EVIDENCE (upgraded from REFUSE) \u2014 serves, numerics 9/9, EYEBALL DISCHARGED clean; but the -14ms projection did not appear (+3.1 ms on one task); needs a paired multi-task serve",
+   "suffix_pass_gate": "REFUSE \u2014 integration correct and warm rate confirmed, but fails its own accept pre-registration by 10x and is net -3.21% throughput; section 7 break-even answered NO"
+  },
+  "window_utc": "2026-08-18T20:39Z..2026-08-19T01:10Z"
+ },
  "schema": "fr14.promotion_ab.campaign_summary.v1",
  "step0_regate": {
   "cause": "fr13_fixed32_work_census.py:157 TAW_SOURCE_CONTRACT_SHA256 stale at 484babd7 vs emitter 68b289ae",
