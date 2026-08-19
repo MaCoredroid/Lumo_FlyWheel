@@ -2568,3 +2568,115 @@ A/B was scheduled, and it generalises to the next profile.
 **Status:** tail10 A/B **not started**. Nothing about hydra31's merits is known or
 claimed. The three standing verdicts are unchanged — fused top-k PROMOTED, suffix pass
 gate REFUSE, split-K recommended for the tier-B serving route on round 12's evidence.
+
+---
+---
+
+# ROUND 14 (2026-08-19 06:29Z–08:15Z) — H27 drained; H31 refused at a SECOND mode table, before the credential question could be asked
+
+| arm | boot/validation verdict |
+|---|---|
+| **H27** | **PASS** — clean boot, `swerc=0`, 4/4 tasks, 21 269 census steps |
+| **H31** | **REFUSED in 5 s** — `unsupported fixed32 mode: 'hydra31_fixed32'` |
+
+## R14.1 ARM H27 — boot verdict PASS, baseline re-validated at this HEAD
+
+Container env attests the intended arm exactly: `FR13_FIXED32_MODE=hydra27_fixed32`,
+`FR13_FIXED32_ACTIVE_NODES=27`, `FR13_FA2_QROW32_B1_PRODUCTION_ARM=gqa_pair`,
+`FR14_FUSED_DRAFT_TOPK=1`, `FR14_SUFFIX_PASS_GATE=0`. Zero RuntimeErrors.
+`swerc=0`, wall 5 233 s, 1/4 resolved.
+
+Instruments (the pairing basis this round was meant to supply):
+
+```
+step_wall_ms 219.240 · s_per_fwd_gpu 0.135121 · accept/event 5.2715
+drafter 55.676 · committer 20.742 · overhead_other 7.700 · per-request TPS 28.912
+27/32 on all 21 269 steps · mtp_forward_calls 4 · graph_replays 1 · signature d9a4dd…6150c
+```
+
+**Note the accept: 5.2715/event, against C's 3.8855 and round-12 ARM S's 4.1393** — a
++35 % swing on the same arm shape and task set, driven by trajectory mix (1/4 resolved
+here vs 2/4 there). It is a fresh reminder of why the ±10 % doctrine exists and why
+`s_per_fwd_gpu` is the deciding instrument; this arm's own accept figure would be
+misread as a lever effect by anyone comparing across rounds rather than within a pair.
+
+## R14.2 ARM H31 — refused, and NOT at the check you asked about
+
+```
+FAIL: launcher rc=1
+unsupported fixed32 mode: 'hydra31_fixed32'
+```
+
+**The credential question is unanswered.** The run never reached the FA2 credential
+check, so I cannot yet tell you whether a topology change invalidates the gqa_pair byte
+credential. Per your instruction I captured and stopped rather than re-earning under
+hydra31 — but the reason it stopped is upstream of that question entirely.
+
+**The site:** `fr13_launch_forked_fa2_tree_server.sh:3718-3728`, a **second mode table**
+inside the launcher's own in-container preflight, distinct from the outer whitelist at
+`:6134` that stage 2 correctly updated:
+
+```python
+expected = {
+    "tail6_fixed32":   (topology.TAIL6_VALID_MASK,   topology.TAIL6_ACTIVE_DRAFTS),
+    "hydra27_fixed32": (topology.HYDRA27_VALID_MASK, topology.HYDRA27_ACTIVE_DRAFTS),
+}
+if mode not in expected:
+    raise SystemExit(f"unsupported fixed32 mode: {mode!r}")
+```
+
+It already imports the topology authority and already derives hydra27's constants from
+it — it simply has no hydra31 row. `topology.HYDRA31_VALID_MASK` (2147483647) and
+`topology.HYDRA31_ACTIVE_DRAFTS` (31) both exist.
+
+## R14.3 A second refusal three lines later — found without booting
+
+The very next check is:
+
+```python
+if tree != topology.FIXED32_CHOICES:
+    raise SystemExit("fixed32 TREE differs from FIXED32_CHOICES")
+```
+
+— an **unconditional** comparison against hydra27's tree. The vehicle correctly
+dispatches hydra31's own tree (`FIXED32_HYDRA31_TREE`), and I verified the two trees are
+genuinely different:
+
+```
+FIXED32_CHOICES (hydra27): 31 paths      TAIL10_CHOICES (hydra31): 31 paths
+trees identical? False
+ancestry sha: 90873d81e83c…  vs  5b33c46a2586…
+```
+
+So **fixing only the mode table moves the refusal three lines down.** Both must be made
+profile-aware in the same edit, and the authority already carries what they need:
+`TAIL10_CHOICES`, `TAIL10_TREE_ANCESTRY_SHA256`, `TAIL10_SUBTREE_LEVELS`.
+
+This is the "wrong fix that would have booted" hazard your pass-87 note names, arriving
+one layer lower: the mode-table fix alone is exactly the change that *looks* right,
+passes review, and fails on the next line.
+
+## R14.4 The shape, and the detector that keeps almost catching it
+
+| round | consumer that didn't learn hydra31 |
+|---|---|
+| 13 | the serve vehicle (kind + XFLAGS) |
+| **14** | **the launcher's in-container preflight — mode table AND tree comparison** |
+
+Stage 2b's parity detector covers *profiles vs the vehicle*. What it does not cover is
+**profile-keyed tables inside the launcher's in-container preflight**, which is a third
+place the same question is asked. The detector that would close it: **enumerate every
+`dict` keyed by fixed32 mode and every comparison against a topology constant reachable
+from the launcher, and assert each admits every profile in
+`fr13_fixed32_topology`.** Both of this round's sites are in one twelve-line block, so
+the enumeration is small and the check is static.
+
+## R14.5 Status
+
+**tail10 A/B still not measured.** H27 is banked as a clean, same-HEAD baseline and will
+pair with H31 whenever H31 can boot — provided no commit intervenes, which is the usual
+constraint. The credential-under-topology-change question stands **open and explicitly
+unanswered**.
+
+Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
+recommended for the tier-B serving route on round 12's evidence.

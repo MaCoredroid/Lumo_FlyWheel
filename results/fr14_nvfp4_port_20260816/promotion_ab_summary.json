@@ -360,6 +360,41 @@
   "tail10_status": "A/B NOT STARTED \u2014 nothing about hydra31 merits is known or claimed",
   "why_no_H27_alone": "a topology A/B needs both arms at the same HEAD; the commit that lands the vehicle kind moves HEAD, so an H27 taken now could not pair with H31 taken after and would be repeated. 3.5h to produce a baseline that must be re-taken is a rehearsal, not evidence; round-2 C prime (52507 steps) already covers comparisons that do not need same-HEAD pairing."
  },
+ "round14": {
+  "arm_h27": {
+   "accept_per_event": 5.271521933330199,
+   "boot_verdict": "PASS",
+   "census_steps": 21269,
+   "committer_ms": 20.74230883989012,
+   "drafter_ms": 55.676370337615786,
+   "note": "accept 5.2715 vs C-prime 3.8855 and round-12 ARM S 4.1393 \u2014 a +35% swing on the same arm shape and task set from trajectory mix (1/4 resolved vs 2/4); a fresh reminder why s_per_fwd_gpu is the deciding instrument and why cross-round accept comparisons mislead",
+   "overhead_other": 7.700100032881435,
+   "per_request_tps": 28.912231844224635,
+   "rc": 0,
+   "resolved": 1,
+   "s_per_fwd_gpu": 0.13512074666187063,
+   "step_wall_ms": 219.23952587225796,
+   "tasks": 4
+  },
+  "arm_h31": {
+   "boot_verdict": "REFUSED in 5s",
+   "credential_question": "UNANSWERED \u2014 the run never reached the FA2 credential check; captured and stopped per instruction rather than re-earning under hydra31",
+   "rc": 2,
+   "refusal": "unsupported fixed32 mode: 'hydra31_fixed32'",
+   "site": "fr13_launch_forked_fa2_tree_server.sh:3718-3728 \u2014 a SECOND mode table inside the launcher in-container preflight, distinct from the outer whitelist at :6134 that stage 2 updated; it already imports the topology authority and derives hydra27 from it but has no hydra31 row"
+  },
+  "head": "7286065fb7b98cdaf57518ce8f054f448bbb7022",
+  "recommended_detector": "enumerate every dict keyed by fixed32 mode and every comparison against a topology constant reachable from the launcher, and assert each admits every profile in fr13_fixed32_topology. Both sites are in one twelve-line block; the check is static.",
+  "second_refusal_found_without_booting": {
+   "authority_has": "TAIL10_CHOICES, TAIL10_TREE_ANCESTRY_SHA256, TAIL10_SUBTREE_LEVELS, HYDRA31_VALID_MASK=2147483647, HYDRA31_ACTIVE_DRAFTS=31",
+   "consequence": "fixing only the mode table moves the refusal three lines down; both must be profile-aware in the same edit",
+   "hazard": "this is the pass-87 wrong-fix-that-would-have-booted hazard one layer lower",
+   "site": "three lines later, :3730 \u2014 unconditional  if tree != topology.FIXED32_CHOICES",
+   "why": "the vehicle correctly dispatches hydra31 own tree; verified the trees genuinely differ \u2014 FIXED32_CHOICES vs TAIL10_CHOICES, identical=False, ancestry 90873d81 vs 5b33c46a"
+  },
+  "tail10_status": "A/B still not measured; H27 banked as a clean same-HEAD baseline that will pair with H31 once it boots",
+  "window_utc": "2026-08-19T06:29Z..08:15Z"
+ },
  "round2": {
   "arms": {
    "C'": {

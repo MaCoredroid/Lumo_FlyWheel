@@ -1,0 +1,18 @@
+fixed32 SWE-Verified subset OK: tasks=4 diagnostic=0
+=== BIGDENOM-VARIANT SWEServe ARM hydra31_fixed32_promoab_Ch31 kind=hydra31_fixed32 launcher=forked expect=31 xflags=[FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0 FR13_FIXED32_MODE=hydra31_fixed32 FR13_FIXED32_VALID_MASK=0x7fffffff FR13_FIXED32_ACTIVE_NODES=31 FR13_FIXED32_PHYSICAL_DRAFTS=31] subset=config/fr13_fixed32/subset_b4_four.json ===
+2026-08-19T08:14:52Z
+7286065fb7b98cdaf57518ce8f054f448bbb7022
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=105.2GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117          12         105           0           0         105
+Swap:             15           0          15
+FAIL: launcher rc=1
+unsupported fixed32 mode: 'hydra31_fixed32'
+[teardown] kill proxy + attest/remove run container + recover_host_memory
+FAIL: fixed32 terminal flush rc=1
+fixed32 container removal/preservation unproven after engine-ledger materialization failure: unavailable
+               total        used        free      shared  buff/cache   available
+Mem:             117          12         105           0           0         105
+Swap:             15           0          15
+2026-08-19T08:14:56Z
