@@ -612,6 +612,63 @@
   "tally": "seven profile-blind sites across five layers \u2014 vehicle, preflight, contract accessors, drafter patcher, serving package",
   "window_utc": "2026-08-19T11:19Z..16:06Z"
  },
+ "round19": {
+  "boot_verdict": "REFUSED \u2014 but deeper than ever: model loaded, all launcher/contract/patcher/serving-package checks passed, died inside EngineCore runtime during topology preseed",
+  "gpu_cost": "one ~6-minute container",
+  "head": "3eb9af8ad",
+  "preflight_verified": {
+   "baseline": "hydra27 default still byte-identical to the tree H27n executed \u2014 H27n stands",
+   "site7_fix": "fr10_gdn_tree_kernel.py:865 route vocabulary widened to include hydra31 while _FR13_FIXED32_MODES at :867 stays narrow for byte-qualified levers"
+  },
+  "recommended_detector": {
+   "assertion": "every *_BY_MODE mapping in fr13_fixed32_topology has exactly the same key set as the module profile roster",
+   "caveat": "derive the roster from the PROFILE_* constants, not from PROFILES, since PROFILES is itself incomplete",
+   "shape": "a SELF-CHECK inside the authority, not a scan of consumers",
+   "why_better": "three lines, no GPU, self-maintaining \u2014 needs no enumeration of consumers and no update when one is added; any future profile described but not indexed fails immediately in the authority before a boot"
+  },
+  "site_8": {
+   "NEW_CLASS": "sites 1-7 were consumers that failed to consult the authority; site 8 is a consumer that consulted it correctly and was failed BY it \u2014 which inverts the remediation, since routing more consumers through *_BY_MODE increases exposure rather than reducing it",
+   "authority_mappings": {
+    "PROFILES": {
+     "keys": [
+      "hydra27_fixed32",
+      "hydra31_fixed32"
+     ],
+     "missing": [
+      "tail6_fixed32"
+     ]
+    },
+    "VALID_BY_MODE": {
+     "keys": [
+      "hydra27_fixed32",
+      "tail6_fixed32"
+     ],
+     "missing": [
+      "hydra31_fixed32"
+     ]
+    },
+    "VALID_MASK_BY_MODE": {
+     "keys": [
+      "hydra27_fixed32",
+      "tail6_fixed32"
+     ],
+     "missing": [
+      "hydra31_fixed32"
+     ]
+    }
+   },
+   "bidirectional": "PROFILES is missing tail6_fixed32, so this is not merely late-added hydra31 \u2014 the three per-profile mappings have three different key sets with no invariant tying them",
+   "consumer_is_NOT_at_fault": "it delegates \u2014 `if mode not in topology.VALID_MASK_BY_MODE: raise` \u2014 with zero hardcoded mode literals; that is precisely the remediation pattern rounds 13-18 prescribed",
+   "raise_site": "scripts/fr13_device_multidraft_kernel.py:3228 fr13_fixed32_taw_preseed",
+   "refusal": "RuntimeError: unknown FR13 fixed32 preseed mode 'hydra31_fixed32'",
+   "root": "the AUTHORITY fr13_fixed32_topology.py is internally incomplete",
+   "standalone_hydra31_constants": 29,
+   "summary": "the profile is fully DESCRIBED and partially INDEXED"
+  },
+  "tail10_status": "baseline banked and re-verified; treatment arm still unbootable; four headline questions one boot away",
+  "tally": "eight sites, six layers, two source roots \u2014 the eighth is the first that is not a missing consumer update but a missing AUTHORITY ROW",
+  "window_utc": "2026-08-19T16:45Z..16:53Z"
+ },
  "round2": {
   "arms": {
    "C'": {

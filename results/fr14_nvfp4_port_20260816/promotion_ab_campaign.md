@@ -3149,3 +3149,99 @@ past position 10**, accept vs +4.3/+7.7 %, cfwd vs +33 %, step_wall/TPS vs H27n'
 
 Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
 recommended for the tier-B serving route on round 12's evidence.
+
+---
+---
+
+# ROUND 19 (2026-08-19 16:45Z–16:53Z) — the eighth site, and it is the inverse of the first seven: the AUTHORITY is incomplete
+
+**Boot verdict: REFUSED**, but deeper than ever — the engine loaded the model, passed
+every launcher, contract, patcher and serving-package check, and died inside
+**EngineCore runtime** during topology preseed. GPU cost: one ~6-minute container.
+
+## R19.1 Pre-flight, verified
+
+Site 7 is fixed in the shape described — `fr10_gdn_tree_kernel.py:865` now carries a
+**widened route vocabulary** `("tail6_fixed32","hydra27_fixed32","hydra31_fixed32")`
+while `_FR13_FIXED32_MODES` at `:867` stays narrow for the byte-qualified levers.
+"Vocabulary widened, qualification kept", exactly as stated.
+
+And my baseline: **the hydra27 default is still byte-identical to the tree H27n
+executed**, re-verified against H27n's own `container_env.txt`. H27n stands.
+
+## R19.2 The refusal
+
+```
+File ".../mamba/gdn_linear_attn.py", line 14170
+File "/workspace/scripts/fr13_device_multidraft_kernel.py", line 3228,
+  in fr13_fixed32_taw_preseed
+RuntimeError: unknown FR13 fixed32 preseed mode 'hydra31_fixed32'
+```
+
+## R19.3 Why this is a class no scan has named
+
+The consumer is **not** at fault. Read it:
+
+```python
+if mode not in topology.VALID_MASK_BY_MODE:
+    raise RuntimeError(f"unknown FR13 fixed32 preseed mode {mode!r}")
+expected_mask = int(topology.VALID_MASK_BY_MODE[mode])
+```
+
+`fr13_device_multidraft_kernel.py` contains **zero hardcoded mode literals** for this —
+it delegates to the authority's by-mode mapping, which is **precisely the remediation
+pattern rounds 13–18 kept prescribing**. It asked the authority and the authority did
+not know.
+
+I inspected the authority's own per-profile mappings:
+
+| mapping in `fr13_fixed32_topology.py` | keys | missing |
+|---|---|---|
+| `PROFILES` | hydra27, **hydra31** | tail6 |
+| `VALID_BY_MODE` | hydra27, tail6 | **hydra31** |
+| `VALID_MASK_BY_MODE` | hydra27, tail6 | **hydra31** |
+
+Meanwhile the authority exposes **29 standalone hydra31/TAIL10 constants** —
+`HYDRA31_VALID_MASK`, `TAIL10_CHOICES`, `TAIL10_WALK_CAP`, `TAIL10_TREE_ANCESTRY_SHA256`,
+`TAIL10_PHYSICAL_PARENT_SHA256`, and 24 more. **The profile is fully described and
+partially indexed.**
+
+**Sites 1–7 were consumers that failed to consult the authority. Site 8 is a consumer
+that consulted it correctly and was failed by it.** That inverts the remediation:
+routing more consumers through `*_BY_MODE` — the fix applied repeatedly in rounds
+13–18 — *increases* exposure to this defect rather than reducing it. Every consumer
+converted to "ask the authority" becomes a new way for an incomplete mapping to surface.
+
+Note also that the gap is **bidirectional**: `PROFILES` is missing `tail6_fixed32`. So
+this is not "hydra31 was added late" — the authority's three per-profile mappings have
+three different key sets, and no invariant ties them together.
+
+## R19.4 The detector — a self-check, not a scan
+
+Every detector proposed so far scans *consumers*. This one cannot be found that way,
+because the consumer is correct. The right check lives **inside the authority**:
+
+> **Assert that every `*_BY_MODE` mapping in `fr13_fixed32_topology` has exactly the
+> same key set as the module's profile roster.**
+
+Three lines, no GPU, and structurally better than every previous detector because it is
+**self-maintaining**: it needs no enumeration of consumers and no update when a
+consumer is added. Any future profile that is described but not indexed fails
+immediately, in the authority, before a boot.
+
+Given `PROFILES` is itself missing `tail6_fixed32`, the roster used for the comparison
+should be derived from the constants (the set of `PROFILE_*` names), not from
+`PROFILES`.
+
+## R19.5 Status
+
+Eight sites, six layers, two source roots — and the eighth is the first that is *not* a
+missing consumer update but a missing **authority row**.
+
+**tail10 A/B: baseline banked, treatment arm still unbootable.** H27n
+(218.702 / 0.133693 / accept 3.8690 / TPS 25.365, **69 389 steps**) stands, re-verified
+this round. **The ladder past position 10, accept vs +4.3/+7.7 %, cfwd vs +33 %, and
+step_wall/TPS remain open and still need one boot.**
+
+Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
+recommended for the tier-B serving route on round 12's evidence.
