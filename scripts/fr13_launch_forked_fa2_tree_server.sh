@@ -872,6 +872,21 @@ FR13_FA2_QROW32_B1_PRODUCTION_ARM=${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}
 # FR13_FA2_QROW32_B1_PRODUCTION_PASS_SIDECAR would smuggle back exactly the
 # launcher-private trap this train just removed.
 FR13_B1_CREDENTIAL_POINTER=${FR13_B1_CREDENTIAL_POINTER:-$REPO/output/fr13_b1_gqa_pair_credential.env}
+# SITE 15. The pointer auto-imports WHENEVER THE FILE EXISTS, with no arm
+# named, ~500 lines before the promoted split-K default block -- whose
+# ${VAR:-literal} fallbacks only fill EMPTY variables. So the incumbent's
+# binary pins were already in place when the split-K default armed, and the
+# selector gate measured split-K's 300,123,792-byte binary against the
+# incumbent's imported 299,815,552. The block's own literal-vs-disk check
+# passed (it reads the literal); the gate's variable-vs-disk check failed.
+#
+# THE LESSON THAT COMPLETES F1/F2: standing down as an arm does not withdraw
+# the pins it already imported. Arming is not the same as owning.
+#
+# This records exactly which names the POINTER set, so the withdrawal below
+# can take back its imports without touching anything the caller supplied --
+# a blanket unset would erase a legitimately hand-typed credential.
+_FR13_B1_POINTER_IMPORTED=()
 _fr13_b1_load_credential_pointer() {
   local pointer=$1 line name value
   [[ -e "$pointer" ]] || return 0
@@ -904,6 +919,7 @@ _fr13_b1_load_credential_pointer() {
         if [[ -z "${!name:-}" ]]; then
           printf -v "$name" '%s' "$value"
           export "${name?}"
+          _FR13_B1_POINTER_IMPORTED+=("$name")
         fi
         ;;
       *)
@@ -959,6 +975,26 @@ FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256=${FR13_FA2_QROW32_B1_TIER_B_CREDENTI
 FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256=${FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256:-}
 FR13_FA2_QROW32_B1_TIERB_TASK_IDS=${FR13_FA2_QROW32_B1_TIERB_TASK_IDS:-}
 FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=${FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256:-}
+# SITE 15, defense in depth. The owner below assigns its pins unconditionally,
+# which is the real fix; this makes the invariant true at the OTHER end too, so
+# neither half is load-bearing alone. Only names the pointer itself set are
+# withdrawn -- a caller's hand-typed credential is never touched.
+#
+# Inert where there is no pointer: the no-middleware twins have no credential
+# pointer at all, so the array is empty and this is a no-op. It is present in
+# all three families on purpose, because the invariant is not production's.
+_fr13_b1_withdraw_pointer_imports() {
+  local name
+  for name in ${_FR13_B1_POINTER_IMPORTED[@]+"${_FR13_B1_POINTER_IMPORTED[@]}"}; do
+    unset "$name"
+    printf -v "$name" '%s' ""
+  done
+  if (( ${#_FR13_B1_POINTER_IMPORTED[@]} > 0 )); then
+    echo "[fr13] B1 credential pointer imports WITHDRAWN before the promoted" \
+         "default takes ownership: ${_FR13_B1_POINTER_IMPORTED[*]}" >&2
+  fi
+  _FR13_B1_POINTER_IMPORTED=()
+}
 
 # ---------------------------------------- tier-B CANONICAL WORKLOAD IDENTITY
 # Pass 74 ruled that a tier-B serve carries the canonical campaign identity
@@ -1437,14 +1473,24 @@ if (( _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0 )) \
   # hydra31 stays excluded topologically until its own qualification.
   if [[ -z "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then
     FR13_FA2_QROW32_B1_TIER_B_ARM=$_FR13_SPLITK_DEFAULT_ARM
+    # SITE 15. Take back whatever the credential pointer imported before this
+    # block ever ran, THEN assign. Either half would do; both are here because
+    # the failure mode is silent and cost a boot.
+    _fr13_b1_withdraw_pointer_imports
     FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST:-$_FR13_SPLITK_DEFAULT_CREDENTIAL}
     FORKED_FA2_SO=${FORKED_FA2_SO:-$_FR13_SPLITK_DEFAULT_SO}
-    FR13_FA2_QROW32_B1_SO_SHA256=${FR13_FA2_QROW32_B1_SO_SHA256:-$_FR13_SPLITK_DEFAULT_SO_SHA256}
-    FR13_FA2_QROW32_B1_SO_SIZE=${FR13_FA2_QROW32_B1_SO_SIZE:-$_FR13_SPLITK_DEFAULT_SO_SIZE}
-    FR13_FA2_QROW32_B1_FA2_HEAD=${FR13_FA2_QROW32_B1_FA2_HEAD:-$_FR13_SPLITK_DEFAULT_FA2_HEAD}
-    FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256=${FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256:-$_FR13_SPLITK_DEFAULT_CLOSURE}
-    FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST=${FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST:-$_FR13_SPLITK_DEFAULT_SASS}
-    FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST=${FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST:-$_FR13_SPLITK_DEFAULT_BASELINE_SASS}
+    # THE BINARY PINS ARE OWNED, NOT DEFAULTED. These six describe the exact
+    # .so this default stages and verifies three lines below; a leftover value
+    # describing some other binary is never the right answer, so there is no
+    # ':-' here and there must never be one. FORKED_FA2_SO keeps its ':-'
+    # deliberately -- the path is where the operator staged the file, the pins
+    # are what the file must BE.
+    FR13_FA2_QROW32_B1_SO_SHA256=$_FR13_SPLITK_DEFAULT_SO_SHA256
+    FR13_FA2_QROW32_B1_SO_SIZE=$_FR13_SPLITK_DEFAULT_SO_SIZE
+    FR13_FA2_QROW32_B1_FA2_HEAD=$_FR13_SPLITK_DEFAULT_FA2_HEAD
+    FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256=$_FR13_SPLITK_DEFAULT_CLOSURE
+    FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST=$_FR13_SPLITK_DEFAULT_SASS
+    FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST=$_FR13_SPLITK_DEFAULT_BASELINE_SASS
     [[ -f "$FORKED_FA2_SO" && ! -L "$FORKED_FA2_SO" \
        && "$(sha256sum "$FORKED_FA2_SO" | cut -d' ' -f1)" == "$_FR13_SPLITK_DEFAULT_SO_SHA256" ]] || {
       echo "FR13 promoted split-K default: staged binary missing or not the pinned kernel: $FORKED_FA2_SO" >&2

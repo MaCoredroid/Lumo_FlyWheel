@@ -2183,6 +2183,21 @@ def _boot_regions(text):
     helper_end = text.index("\n}\n", helper_start) + len("\n}\n")
     region0 = text[helper_start:helper_end]
 
+    # SITE 15's region. The credential pointer auto-imports whenever the file
+    # exists, ~500 lines before the default block, and the walk could not see
+    # it because the walk started AFTER it. What a walk omits, it cannot test
+    # -- the same lesson site 12 taught about what a walk stubs.
+    region0 += "_FR13_B1_POINTER_IMPORTED=()\n"
+    if "_fr13_b1_load_credential_pointer() {" in text:
+        loader_start = text.index("_fr13_b1_load_credential_pointer() {")
+        loader_end = text.index("\n}\n", loader_start) + len("\n}\n")
+        region0 += text[loader_start:loader_end]
+    else:
+        region0 += "_fr13_b1_load_credential_pointer() { return 0; }\n"
+    withdraw_start = text.index("_fr13_b1_withdraw_pointer_imports() {")
+    withdraw_end = text.index("\n}\n", withdraw_start) + len("\n}\n")
+    region0 += text[withdraw_start:withdraw_end]
+
     lit_start = text.index(
         "# ---------------------------------------------------------------- split-K"
     )
@@ -2281,7 +2296,7 @@ _BOOT_VARS = (
 
 def _run_full_boot(
     launcher_text, env, so_path, credential_path, so_size,
-    profile="k64_root", claim=None,
+    profile="k64_root", claim=None, pointer=None,
 ):
     """Execute regions 0-4 back to back, as a real boot does."""
     import subprocess
@@ -2301,6 +2316,12 @@ def _run_full_boot(
     )
     for name in _BOOT_VARS[1:]:
         script += '{}="{}"\n'.format(name, env.get(name, ""))
+    if pointer is not None:
+        script += (
+            'FR13_B1_CREDENTIAL_POINTER="{}"\n'.format(pointer)
+            + '_fr13_b1_load_credential_pointer '
+              '"$FR13_B1_CREDENTIAL_POINTER" || exit 2\n'
+        )
     script += r1
     # the literals honour caller overrides; re-assert the test's staging after
     script += '_FR13_SPLITK_DEFAULT_SO="{}"\n'.format(so_path)
@@ -2996,3 +3017,217 @@ def test_the_container_side_alias_refuses_a_disagreement(monkeypatch):
     monkeypatch.delenv("FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256")
     monkeypatch.setenv("FR13_FA2_QROW32_B1_TIERB_WORKLOAD", "exact4")
     assert resolve()["declared"] == "exact4"
+
+
+# ===========================================================================
+# SITE 15 -- arming is not owning.
+#
+# exact16 refused in 5 seconds. The promoted default armed (F1's mint worked),
+# gqa_pair stood down (F2's arbitration worked, the log line printed) -- and
+# the selector gate then measured split-K's 300,123,792-byte binary against
+# the INCUMBENT's 299,815,552, because _fr13_b1_load_credential_pointer had
+# auto-imported the gqa_pair credential env ~500 lines earlier, whenever the
+# pointer file exists, with no arm named. The default block's
+# ${VAR:-literal} fallbacks only fill EMPTY variables, so the leftovers won.
+#
+# Corroborated by which checks passed: the block's own literal-vs-disk check
+# passed (it reads the literal), the gate's variable-vs-disk check failed.
+#
+# THE LESSON THAT COMPLETES F1/F2: standing down as an arm does not withdraw
+# the pins it already imported.
+# ===========================================================================
+
+INCUMBENT_SO_SIZE = "299815552"
+INCUMBENT_SO_SHA256 = (
+    "af9e9f24335db899468032f5b5a3eba100febe294932533cb9b87163ce2b3fdb"
+)
+
+
+@pytest.fixture
+def credential_pointer(tmp_path):
+    """A pointer file carrying the incumbent gqa_pair credential env."""
+    import subprocess
+
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(REPO),
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    pointer = tmp_path / "fr13_b1_gqa_pair_credential.env"
+    pointer.write_text(
+        "\n".join(
+            [
+                f"FR13_FA2_QROW32_B1_SO_SHA256={INCUMBENT_SO_SHA256}",
+                f"FR13_FA2_QROW32_B1_SO_SIZE={INCUMBENT_SO_SIZE}",
+                f"FR13_FA2_QROW32_B1_SOURCE_COMMIT={head}",
+                "FR13_FA2_QROW32_B1_FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95",
+                "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256=" + "9" * 64,
+                "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_JSON=/logs/gate.json",
+                "FR13_FA2_QROW32_B1_GQA_PAIR_GATE_SHA256=" + "a" * 64,
+                "FR13_FA2_QROW32_B1_GQA_PAIR_LIVE_RESULT_JSON=/logs/live.json",
+                "",
+            ]
+        )
+    )
+    return pointer
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_full_boot_with_a_pointer_present_and_no_arm_named(
+    launcher, staged_boot, credential_pointer
+):
+    """(c) THE EXACT SHAPE THAT BURNED: pointer present, arm unnamed, rc=0.
+
+    Before the fix this reached the selector gate carrying the incumbent's
+    299,815,552 and died comparing it to the staged split-K binary.
+    """
+    stage, so, credential, size = staged_boot
+    out = _run_full_boot(
+        stage(launcher), {}, so, credential, size,
+        pointer=credential_pointer,
+    )
+    assert out.returncode == 0, out.stderr
+    assert f"TIER_B={SPLITK_ARM}" in out.stdout
+    assert "COUNT=1" in out.stdout
+    assert "CANDIDATE=1" in out.stdout, "the gate never opened; the walk missed it"
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_default_owns_its_binary_pins_rather_than_defaulting_them(
+    launcher, staged_boot, credential_pointer
+):
+    """The root fix, asserted on the resolved values rather than the source.
+
+    Whatever the pointer imported, the pins the gate reads must be the
+    default's own. Under a stub binary the walk restages the sha pin, so the
+    SIZE pin is the one checked here against the incumbent's.
+    """
+    stage, so, credential, size = staged_boot
+    out = _run_full_boot(
+        stage(launcher), {}, so, credential, size,
+        pointer=credential_pointer,
+    )
+    assert out.returncode == 0, out.stderr
+    assert INCUMBENT_SO_SIZE not in out.stdout
+    assert INCUMBENT_SO_SHA256 not in out.stdout
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_pointer_absent_and_unnamed_is_unchanged(launcher, staged_boot):
+    """(c) The regression check on the path that already worked."""
+    stage, so, credential, size = staged_boot
+    out = _run_full_boot(stage(launcher), {}, so, credential, size, pointer=None)
+    assert out.returncode == 0, out.stderr
+    assert f"TIER_B={SPLITK_ARM}" in out.stdout
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_pointer_present_with_gqa_pair_named_is_unchanged(
+    launcher, staged_boot, credential_pointer
+):
+    """(c) Naming gqa_pair explicitly must still consume the pointer.
+
+    The withdrawal is scoped to the branch that ARMS the tier-B default. A
+    named production arm never enters it, so the pointer keeps doing the job
+    it was built for -- convenience for typing.
+    """
+    stage, so, credential, size = staged_boot
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(REPO),
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    env = {
+        "_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED": "1",
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+        "FR13_FA2_QROW32_B1_PATCH_SOURCE_SHA256": _patcher_digest(),
+        "FORKED_FA2_SO": str(so),
+        "FR13_FA2_QROW32_B1_SO_SIZE": str(size),
+        # production would get this from the pointer; the no-middleware twins
+        # have no pointer at all, so the caller supplies it. The test is about
+        # the withdrawal being SCOPED to the arming branch, not about plumbing.
+        "FR13_FA2_QROW32_B1_SOURCE_COMMIT": head,
+    }
+    out = _run_full_boot(
+        stage(launcher), env, so, credential, size, pointer=credential_pointer,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "PRODUCTION=gqa_pair" in out.stdout
+    assert "TIER_B=\n" in out.stdout + "\n"
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_restoring_the_defaulted_pins_reproduces_site_15(
+    launcher, staged_boot, credential_pointer
+):
+    """Mutation proof: put the ':-' back, the burning shape burns again."""
+    stage, so, credential, size = staged_boot
+    text = stage(launcher)
+    for name, literal in (
+        ("FR13_FA2_QROW32_B1_SO_SIZE", "$_FR13_SPLITK_DEFAULT_SO_SIZE"),
+        ("FR13_FA2_QROW32_B1_SO_SHA256", "$_FR13_SPLITK_DEFAULT_SO_SHA256"),
+    ):
+        owned = f"    {name}={literal}\n"
+        assert text.count(owned) == 1, f"{name} is no longer owned unconditionally"
+        text = text.replace(owned, f"    {name}=${{{name}:-{literal}}}\n", 1)
+    # ... and remove the withdrawal, so neither half of the fix is present
+    call = "    _fr13_b1_withdraw_pointer_imports\n"
+    assert text.count(call) == 1
+    text = text.replace(call, "", 1)
+    out = _run_full_boot(
+        text, {}, so, credential, size, pointer=credential_pointer,
+    )
+    if "_fr13_b1_load_credential_pointer() {" not in launcher.read_text():
+        # the no-middleware twins have no pointer at all: nothing to import,
+        # so the mutation cannot bite there and the boot still succeeds. That
+        # asymmetry is the finding, not a gap in the test.
+        assert out.returncode == 0, out.stderr
+        return
+    assert out.returncode == 2, "site 15 did not reproduce without the fix"
+    assert "exact binary/source provenance" in out.stderr
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_withdrawal_only_takes_back_what_the_pointer_set(
+    launcher, staged_boot, credential_pointer
+):
+    """A blanket unset would erase a hand-typed credential.
+
+    The loader records the names it actually assigned, so a caller value the
+    pointer skipped -- 'the caller always wins' -- survives the withdrawal.
+    """
+    text = launcher.read_text()
+    assert '_FR13_B1_POINTER_IMPORTED+=("$name")' in text or (
+        "_fr13_b1_load_credential_pointer() {" not in text
+    ), "the loader does not record what it imported"
+    stage, so, credential, size = staged_boot
+    # a caller-supplied credential path is never withdrawn
+    out = _run_full_boot(
+        stage(launcher),
+        {"FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST": str(credential)},
+        so, credential, size, pointer=credential_pointer,
+    )
+    assert out.returncode == 0, out.stderr
+
+
+def test_the_pointer_whitelist_entry_that_can_never_fire():
+    """A finding, recorded so it is not re-derived from a boot.
+
+    FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE is on the pointer's whitelist,
+    but the launcher defaults it to k64_root BEFORE the pointer runs, and the
+    pointer only fills EMPTY names ("the caller always wins"). So that entry
+    is unreachable: the pointer can never set the vocabulary profile. This is
+    asserted rather than fixed because removing a whitelist entry narrows what
+    a pointer may carry, and the pointer's contract is not mine to change.
+    """
+    text = (REPO / "scripts/fr13_launch_forked_fa2_tree_server.sh").read_text()
+    default_at = text.index(
+        "FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE="
+        "${FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE:-k64_root}"
+    )
+    loader_at = text.index(
+        '_fr13_b1_load_credential_pointer "$FR13_B1_CREDENTIAL_POINTER"'
+    )
+    assert default_at < loader_at, (
+        "the QUALIFICATION_PROFILE default no longer precedes the pointer -- "
+        "the whitelist entry may now be live, which changes what a pointer can "
+        "decide about the served vocabulary"
+    )

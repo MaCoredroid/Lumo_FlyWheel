@@ -653,3 +653,120 @@ def test_the_projection_ignores_comments():
         "_fixed32_expected_weight_floor_ms=92.345089436\n"
     )
     assert list(table.values()) == ["92.345089436"]
+
+
+# ===========================================================================
+# SITE 15: import-precedes-owner.
+#
+# The first projection whose question is INTRA-file. Sites 12 and 14 were both
+# "these three files disagree"; this one is "these two lines in ONE file
+# disagree about who owns a name", and all three families would have been
+# equally wrong, so no cross-family comparison could ever have seen it.
+# ===========================================================================
+
+
+def test_import_precedes_owner_is_clean_at_head():
+    assert parity.scan_import_precedes_owner() == []
+
+
+def test_the_pointer_whitelist_is_read_from_the_launcher_not_listed_here():
+    """The projection covers names added to the whitelist tomorrow.
+
+    A roster of the twelve current names would have to be edited every time
+    the pointer's contract widens -- which is the ratchet this campaign keeps
+    paying for. It reads the launcher's own `case` instead.
+    """
+    text = (REPO / parity.LAUNCHER_FAMILIES[0]).read_text()
+    names, call_line = parity._pointer_imported_names(text)
+    assert len(names) >= 12, names
+    assert "FR13_FA2_QROW32_B1_SO_SIZE" in names
+    assert call_line > 0
+    # a name invented here must be picked up without touching the detector
+    widened = text.replace(
+        "      | FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE)",
+        "      | FR13_FA2_QROW32_B1_INVENTED_TOMORROW \\\n"
+        "      | FR13_FA2_QROW32_B1_QUALIFICATION_PROFILE)",
+        1,
+    )
+    widened_names, _ = parity._pointer_imported_names(widened)
+    assert "FR13_FA2_QROW32_B1_INVENTED_TOMORROW" in widened_names
+
+
+def _scan_with_mutated_production(monkeypatch, mutate):
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "scripts").mkdir()
+    first = parity.LAUNCHER_FAMILIES[0]
+    for rel in parity.LAUNCHER_FAMILIES:
+        target = tmp / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        text = (REPO / rel).read_text()
+        target.write_text(mutate(text) if rel == first else text)
+    monkeypatch.setattr(parity, "REPO", tmp)
+
+
+def test_removing_the_withdrawal_fires_the_scan(monkeypatch):
+    """Recognising the withdrawal is not a rubber stamp.
+
+    Two names are still ':-' defaulted by the owner on purpose -- a caller may
+    legitimately present a credential earned at an older commit, which pass
+    101's re-scope made valid. What makes that safe is the withdrawal running
+    first. Delete it and the scan says so.
+    """
+    def mutate(text):
+        call = "    _fr13_b1_withdraw_pointer_imports\n"
+        assert text.count(call) == 1
+        return text.replace(call, "", 1)
+
+    _scan_with_mutated_production(monkeypatch, mutate)
+    bad = parity.scan_import_precedes_owner()
+    assert len(bad) == 2, bad
+    assert any("SOURCE_COMMIT" in b for b in bad)
+    assert any("PATCH_SOURCE_SHA256" in b for b in bad)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["FR13_FA2_QROW32_B1_SO_SIZE", "FR13_FA2_QROW32_B1_SO_SHA256",
+     "FR13_FA2_QROW32_B1_FA2_HEAD", "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256"],
+)
+def test_re_defaulting_an_owned_pin_fires_the_scan(monkeypatch, name):
+    """Site 15 itself, one pin at a time.
+
+    The mutation restores the ':-' AND puts the line back above the
+    withdrawal, which is exactly where site 15 had it. Both parts matter: the
+    invariant is not "no ':-' anywhere" but "the importer's values are gone by
+    the time the owner reads them", and ORDER is what decides that.
+    """
+    def mutate(text):
+        owned = f"    {name}=$_FR13_SPLITK_DEFAULT_"
+        idx = text.index(owned)
+        eol = text.index("\n", idx)
+        literal = text[idx + len(f"    {name}="):eol]
+        line = text[idx:eol + 1]
+        restored = f"    {name}=${{{name}:-{literal}}}\n"
+        text = text.replace(line, "", 1)
+        # put it back BEFORE the withdrawal, i.e. exactly where site 15 had it
+        call = "    _fr13_b1_withdraw_pointer_imports\n"
+        return text.replace(call, restored + call, 1)
+
+    _scan_with_mutated_production(monkeypatch, mutate)
+    bad = parity.scan_import_precedes_owner()
+    assert bad and any(name in b for b in bad), bad
+
+
+def test_the_projection_is_intra_file_not_cross_family():
+    """Stated as a test so the distinction is not lost.
+
+    Sites 12 and 14 were cross-family questions. Site 15 is not: all three
+    families would have been equally wrong, so the vocab-profile and
+    literal-table scans are structurally incapable of finding it.
+    """
+    assert parity.scan_vocab_profile_parity() == []
+    assert parity.scan_literal_table_parity() == []
+    assert parity.scan_family_parity() == []
+    # ... and only one family even has the importer
+    with_importer = [
+        rel for rel in parity.LAUNCHER_FAMILIES
+        if parity._pointer_imported_names((REPO / rel).read_text())[0]
+    ]
+    assert with_importer == [parity.LAUNCHER_FAMILIES[0]], with_importer

@@ -131,6 +131,14 @@ FAMILY_PARITY_MARKERS = (
     "FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256=${FR13_FA2_QROW32_B1_TIERB_SUBSET_SHA256:-}",
     "are both set and disagree; set one",
     '"$_fr13_tierb_declared_ids" == "$_fr13_tierb_task_ids"',
+    # SITE 15: arming is not owning. The withdrawal helper and the four owned
+    # binary pins, keyed on the OWNING form -- a marker keyed on the name
+    # alone would still match the ':-' spelling that burned.
+    "_fr13_b1_withdraw_pointer_imports",
+    "FR13_FA2_QROW32_B1_SO_SHA256=$_FR13_SPLITK_DEFAULT_SO_SHA256",
+    "FR13_FA2_QROW32_B1_SO_SIZE=$_FR13_SPLITK_DEFAULT_SO_SIZE",
+    "FR13_FA2_QROW32_B1_FA2_HEAD=$_FR13_SPLITK_DEFAULT_FA2_HEAD",
+    "FR13_FA2_QROW32_B1_SOURCE_CLOSURE_SHA256=$_FR13_SPLITK_DEFAULT_CLOSURE",
 )
 
 
@@ -380,6 +388,111 @@ def scan_literal_table_parity():
         )
     return bad
 
+
+# ===========================================================================
+# SITE 15: the IMPORT-PRECEDES-OWNER projection.
+#
+# _fr13_b1_load_credential_pointer auto-imports the gqa_pair credential env
+# whenever the pointer FILE EXISTS -- no arm named, no opt-in -- roughly 500
+# lines before the promoted split-K default block, whose ${VAR:-literal}
+# fallbacks only fill EMPTY variables. So exact16 armed the split-K default,
+# watched gqa_pair stand down, and then had its selector gate measure
+# split-K's 300,123,792-byte binary against the incumbent's imported
+# 299,815,552.
+#
+# The general shape: an IMPORTER runs early and fills names conditionally; an
+# OWNER runs later and fills the same names conditionally; whoever ran first
+# wins, which is the opposite of what "owner" means. Neither half looks wrong
+# on its own, and no cross-family comparison can see it -- all three families
+# would have been equally wrong.
+#
+# So this projection is intra-file, not cross-family: for each name an
+# importer may set, does a LATER owner try to claim it with a non-empty ':-'
+# default? If so the owner does not own it, and the earliest importer decides
+# what the boot serves.
+#
+# It is exact for the class it names: it reads the pointer's own whitelist, so
+# a name added to that whitelist tomorrow is covered without anyone adding a
+# marker. It is a floor for the general shape -- other importers with other
+# whitelists would each need naming here.
+# ===========================================================================
+
+_POINTER_WHITELIST_START = '    case "$name" in\n'
+_POINTER_WHITELIST_END = '      *)\n        echo "FR13 B1 credential pointer may not set $name" >&2\n'
+_OWNER_DEFAULT = re.compile(
+    r"^\s*([A-Za-z_]\w*)=\$\{\1:-(?P<filler>.*)\}\s*$"
+)
+
+
+def _pointer_imported_names(text):
+    """The names the credential pointer is allowed to set, from its own case."""
+    try:
+        start = text.index(_POINTER_WHITELIST_START)
+        end = text.index(_POINTER_WHITELIST_END, start)
+    except ValueError:
+        return set(), None
+    # Only the case PATTERNS, not every FR13_ token in the block: the body
+    # mentions _FR13_B1_POINTER_IMPORTED, and a whitelist that quietly
+    # contained the bookkeeping array would be a projection reading its own
+    # implementation.
+    names = set()
+    for line in text[start:end].split("\n"):
+        match = re.match(r"^\s*\|?\s*(FR13_[A-Z0-9_]+)\s*(?:\\|\))\s*$", line)
+        if match:
+            names.add(match.group(1))
+    call = text.index(
+        '_fr13_b1_load_credential_pointer "$FR13_B1_CREDENTIAL_POINTER"'
+    )
+    return names, text[:call].count("\n") + 1
+
+
+_WITHDRAWAL_CALL = "_fr13_b1_withdraw_pointer_imports\n"
+
+
+def scan_import_precedes_owner():
+    """Names an early importer fills that a later owner only ':-' defaults.
+
+    An owner has exactly two legal ways to actually own a name it shares with
+    an earlier importer:
+
+      1. assign it UNCONDITIONALLY (no ':-'), or
+      2. run after the imports have been WITHDRAWN.
+
+    Both are accepted; anything else means the importer decides. Recognising
+    the withdrawal is not a rubber stamp -- deleting the withdrawal call makes
+    this fire again, which is proved by mutation in
+    tests/test_fr14_mode_table_parity.py.
+    """
+    bad = []
+    for rel in LAUNCHER_FAMILIES:
+        text = (REPO / rel).read_text()
+        names, call_line = _pointer_imported_names(text)
+        if not names:
+            continue  # this family has no importer
+        lines = text.split("\n")
+        for lineno, line in enumerate(lines, 1):
+            if lineno <= call_line or line.lstrip().startswith("#"):
+                continue
+            match = _OWNER_DEFAULT.match(line)
+            if not match or match.group(1) not in names:
+                continue
+            filler = match.group("filler")
+            if not filler:
+                continue  # `${VAR:-}` is normalisation, not ownership
+            withdrawn = any(
+                l.strip() == _WITHDRAWAL_CALL.strip()
+                for l in lines[call_line:lineno - 1]
+            )
+            if withdrawn:
+                continue
+            bad.append(
+                f"{Path(rel).name}:{lineno} {match.group(1)} is filled by the "
+                f"credential pointer at line {call_line} and only ':-' "
+                f"defaulted here (to {filler!r}); the importer wins and the "
+                "owner does not own it"
+            )
+    return bad
+
 # Topology names whose VALUE differs between profiles. Comparing one of these
 # unconditionally is the round-14 defect, whatever the mode table says.
 PROFILE_VARYING = frozenset({
@@ -530,6 +643,11 @@ def sweep():
     for problem in scan_literal_table_parity():
         rows.append(
             {"kind": "literal-table-parity", "file": "<launcher families>",
+             "detail": problem}
+        )
+    for problem in scan_import_precedes_owner():
+        rows.append(
+            {"kind": "import-precedes-owner", "file": "<launcher families>",
              "detail": problem}
         )
     return rows
