@@ -54,7 +54,7 @@ def test_inventory_covers_every_pair_kind():
 
 def test_inventory_size_is_recorded():
     """Adding a pair without updating the count is itself a one-sided update."""
-    assert len(sweep.PAIRS) == 15, (
+    assert len(sweep.PAIRS) == 16, (
         "pair count changed -- update the sweep note in "
         "results/fr14_nvfp4_port_20260816/suffix_pass_gating.md 13"
     )
@@ -579,3 +579,115 @@ def test_the_fa2_patcher_is_in_scope_at_all():
     """It was scanned by nothing in this family until the 17th site."""
     assert sweep.FA2_PATCHER.name == "fr13_patch_fa2_tree_bias.py"
     assert sweep.FA2_PATCHER.is_file()
+
+
+# ---------------------------------------------------------------------------
+# 4. Twin equivalence by EXECUTION (site 23).
+# ---------------------------------------------------------------------------
+
+_PY_SELECTOR_TUPLE = (
+    "    _b1_pin_selectors = (\n"
+    '        "FR13_FA2_QROW32_B1_LIVE_AB_ARM",\n'
+    '        "FR13_FA2_QROW32_B1_TIER_B_ARM",\n'
+    '        "FR13_FA2_QROW32_B1_PRODUCTION_ARM",\n'
+    "    )"
+)
+_PY_SELECTOR_TUPLE_WITHOUT_TIER_B = (
+    "    _b1_pin_selectors = (\n"
+    '        "FR13_FA2_QROW32_B1_LIVE_AB_ARM",\n'
+    '        "FR13_FA2_QROW32_B1_PRODUCTION_ARM",\n'
+    "    )"
+)
+
+
+def test_pin_arm_resolver_twins_agree_on_the_real_tree():
+    ok, detail = sweep.pin_arm_resolver_twins()
+    assert ok, detail
+
+
+def test_twin_detector_catches_site_23_exactly(monkeypatch, tmp):
+    """Revert site 23 and the detector must find it.
+
+    Site 23 was the Python resolver not knowing FR13_FA2_QROW32_B1_TIER_B_ARM
+    while its bash twin did, so a tier-B boot resolved the empty string -- and
+    the "" key added at site 17 to REPLACE a .get() default handed back
+    split2's pins. Naming a default does not remove it; the removal has to
+    happen at the resolver.
+    """
+    real = sweep.LAUNCHERS[0]
+    src = real.read_text()
+    assert _PY_SELECTOR_TUPLE in src, "the python resolver's selector tuple moved"
+    out = Path(tmp) / "launcher_site23.sh"
+    out.write_text(
+        src.replace(_PY_SELECTOR_TUPLE, _PY_SELECTOR_TUPLE_WITHOUT_TIER_B, 1)
+    )
+    monkeypatch.setattr(sweep, "LAUNCHERS", (out,))
+    ok, detail = sweep.pin_arm_resolver_twins()
+    assert not ok
+    assert "TIER_B_ARM=gqa_pair_splitk" in detail
+    assert "bash='gqa_pair_splitk'" in detail
+    # AND NOTE WHAT THE PYTHON SIDE NOW DOES. Site 23's actual behaviour was
+    # to resolve "" and hand back split2's pins in silence. With the removal
+    # moved to the RESOLVER, deleting the selector no longer produces a wrong
+    # answer -- the environment sweep sees a set-but-unknown selector and
+    # REFUSES. The twin detector still catches the divergence, and the thing
+    # it catches is now a refusal rather than a mis-attested serve.
+    assert "python='REFUSED:" in detail
+    assert "does not know these selec" in detail
+
+
+def test_twin_detector_catches_a_bash_side_regression(monkeypatch, tmp):
+    """Divergence is caught from either side, not just the python one."""
+    real = sweep.LAUNCHERS[0]
+    src = real.read_text()
+    needle = (
+        '  if [[ -z "$_FR13_FA2_QROW32_B1_PIN_ARM" ]]; then\n'
+        "    _FR13_FA2_QROW32_B1_PIN_ARM=$FR13_FA2_QROW32_B1_TIER_B_ARM\n"
+        "  fi\n"
+    )
+    assert needle in src, "the bash tier-b fallback moved"
+    out = Path(tmp) / "launcher_bash_regression.sh"
+    out.write_text(src.replace(needle, "", 1))
+    monkeypatch.setattr(sweep, "LAUNCHERS", (out,))
+    ok, detail = sweep.pin_arm_resolver_twins()
+    assert not ok
+    assert "bash='nosplit'" in detail
+    assert "python='gqa_pair_splitk'" in detail
+
+
+def test_twin_detector_reach_is_recorded_not_assumed(monkeypatch, tmp):
+    """What the detector does NOT cover, written down.
+
+    Selector PRECEDENCE only becomes observable when two selectors are named
+    at once, and both resolvers refuse that outright. So a precedence swap is
+    invisible to the answer, and the detector correctly stays green. Recorded
+    here so the next reader knows the detector's reach rather than assuming it
+    is wider than it is -- the assumption that a check covers more than it does
+    is what let sites 17 and 23 share a resolver.
+    """
+    real = sweep.LAUNCHERS[0]
+    src = real.read_text()
+    swapped = (
+        "    _b1_pin_selectors = (\n"
+        '        "FR13_FA2_QROW32_B1_PRODUCTION_ARM",\n'
+        '        "FR13_FA2_QROW32_B1_TIER_B_ARM",\n'
+        '        "FR13_FA2_QROW32_B1_LIVE_AB_ARM",\n'
+        "    )"
+    )
+    out = Path(tmp) / "launcher_precedence.sh"
+    out.write_text(src.replace(_PY_SELECTOR_TUPLE, swapped, 1))
+    monkeypatch.setattr(sweep, "LAUNCHERS", (out,))
+    ok, _detail = sweep.pin_arm_resolver_twins()
+    assert ok, "precedence is unobservable while multi-selector boots refuse"
+
+
+def test_twin_detector_covers_every_arm_the_campaign_can_name():
+    named = {
+        value for env in sweep.TWIN_RESOLVER_ENVS for value in env.values()
+    }
+    assert "gqa_pair_splitk" in named, "the tier-b arm must be exercised"
+    assert {"nosplit", "gqa_pair", "split2", "visibility"} <= named
+    # and the no-selector case, which is where "" used to live
+    assert {} in [dict(env) for env in sweep.TWIN_RESOLVER_ENVS]
+    # every launcher twin is exercised, not just the canonical one
+    assert len(sweep.LAUNCHERS) == 3

@@ -193,6 +193,7 @@ _FR13_M32_GUARD_NAMES=(
   # could flip it underneath a run could turn a measured serve into a shadow
   # one -- which is round 6's failure with the polarity reversed.
   FR13_FA2_QROW32_B1_TIER_B_ARM
+  FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST
   FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL
   FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256
   FR13_DFWD_UNIFIED_BM8_LIVE_AB
@@ -931,6 +932,7 @@ FR13_FA2_QROW32_B1_TIER_B_ARM=${FR13_FA2_QROW32_B1_TIER_B_ARM:-}
 # instead of refusing still stops the run, but it stops it without saying why.
 FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST=${FR13_FA2_QROW32_B1_SPLITK_SASS_DIGEST:-}
 FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST=${FR13_FA2_QROW32_B1_SPLITK_BASELINE_SASS_DIGEST:-}
+FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST:-}
 FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL:-}
 FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256=${FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256:-}
 FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256=${FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256:-}
@@ -2247,6 +2249,13 @@ if (( _FR13_FA2_QROW32_B1_SELECTOR_COUNT > 0 )); then
   if [[ -z "$_FR13_FA2_QROW32_B1_PIN_ARM" ]]; then
     _FR13_FA2_QROW32_B1_PIN_ARM=$FR13_FA2_QROW32_B1_PRODUCTION_ARM
   fi
+  # Spelled OUT, like its Python twin. "" was both "no selector named" and
+  # "a resolver that failed to look", and site 23 is what happens when those
+  # two are the same value. They are now different: this is "nosplit", and a
+  # resolver that fails to look refuses.
+  if [[ -z "$_FR13_FA2_QROW32_B1_PIN_ARM" ]]; then
+    _FR13_FA2_QROW32_B1_PIN_ARM=nosplit
+  fi
   case "$_FR13_FA2_QROW32_B1_PIN_ARM" in
     visibility)
       [[ "$FR13_FA2_QROW32_B1_SO_SHA256" == "c5ab32a6ae4e615f1e77a4997db5429152053c549e761fb11d90b33bb3959a79" \
@@ -2378,15 +2387,37 @@ if [[ -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then
     echo "FR13 qrow32 B1 tier-b serve requires the canonical exact4 FULL-graph identity" >&2
     exit 2
   }
-  # The credential must arrive by path AND by digest, both non-empty, before
-  # anything in the container is asked to trust it.
-  [[ -f "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL" \
-     && ! -L "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL" \
+  # THE CREDENTIAL PATH, SETTLED BY MEASUREMENT (2026-08-19). The host check
+  # below and the in-container verify-tier-b consume the same file from two
+  # different filesystems. Measured with the launcher's own mounts: the repo is
+  # mounted at /workspace, so a host path like
+  # /home/mark/shared/<repo>/results/... is NOT visible inside the container --
+  # /home exists there but is the image's own, and the file is absent. One
+  # variable therefore cannot serve both, which is why the campaign already has
+  # the _HOST/container pattern; this adopts it.
+  #
+  # _HOST is what the operator supplies. The launcher verifies it, stages it
+  # into the log directory that IS mounted, and derives the container path
+  # itself -- so the two can never be supplied out of sync, and the container
+  # sees an immutable snapshot whose digest is re-checked on the far side.
+  [[ -f "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" \
+     && ! -L "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" \
      && "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256" =~ ^[0-9a-f]{64}$ \
-     && "$(sha256sum "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL" | cut -d' ' -f1)" == "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256" ]] || {
-    echo "FR13 qrow32 B1 tier-b serve requires its bound qualification credential" >&2
+     && "$(sha256sum "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" | cut -d' ' -f1)" == "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256" ]] || {
+    echo "FR13 qrow32 B1 tier-b serve requires its bound qualification credential at FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" >&2
     exit 2
   }
+  cp -- "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST" \
+        "$LOG_DIR/fr13_fa2_qrow32_b1_tier_b_credential.json" || {
+    echo "FR13 qrow32 B1 tier-b credential could not be staged into the log dir" >&2
+    exit 2
+  }
+  [[ "$(sha256sum "$LOG_DIR/fr13_fa2_qrow32_b1_tier_b_credential.json" | cut -d' ' -f1)" \
+     == "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256" ]] || {
+    echo "FR13 qrow32 B1 tier-b credential changed while being staged" >&2
+    exit 2
+  }
+  FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL=/logs/fr13_fa2_qrow32_b1_tier_b_credential.json
 fi
 if [[ -n "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" ]]; then
   # The runtime shape and the exact4 identity are required for every production
@@ -4358,14 +4389,59 @@ elif qrow32_b4_candidate == "1":
 elif qrow32_b1_candidate == "1":
     if actual_sha256 != qrow32_b1_sha256:
         raise SystemExit("fixed32 qrow32 B1 candidate FA2 sha256 mismatch")
-    # Every B1 arm has its own qualified binary. Resolve the arm that actually
-    # decides which binary is loaded: a production launch has no live arm, so
-    # keying on the live arm alone would check a GQA-pair production run
-    # against the incumbent no-split pins and refuse the candidate .so. This
-    # mirrors the bash pin case and fr13_fixed32_contract's pin-arm rule.
-    b1_pin_arm = os.environ.get(
-        "FR13_FA2_QROW32_B1_LIVE_AB_ARM", ""
-    ) or os.environ.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
+    # SITE 23, and it closes the loop on site 17. Site 17 replaced a
+    # `.get(arm, split2_pins)` with a table -- but the table kept an "" key,
+    # and this resolver never learned the tier-B spelling, so a tier-B boot
+    # resolved "" and the "" key handed back split2's pins. The runner's words
+    # are now doctrine: NAMING A DEFAULT DOES NOT REMOVE IT; THE REMOVAL HAS TO
+    # HAPPEN AT THE RESOLVER, NOT THE TABLE.
+    #
+    # So the resolver is made TOTAL, and it is made total against the
+    # ENVIRONMENT rather than against a list of keys somebody remembered to
+    # update. Any FR13_FA2_QROW32_B1_*_ARM variable that is set and that this
+    # resolver does not know about is a refusal -- which is the property that
+    # would have caught rounds 2.1, 17 and 23 before any of them booted, and
+    # which catches the 24th selector nobody has written yet.
+    #
+    # Precedence mirrors the bash pin case exactly: live, then tier-b, then
+    # production. That claim is no longer a comment -- a CPU twin-equivalence
+    # test executes both resolvers and compares them arm by arm.
+    _b1_pin_selectors = (
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM",
+        "FR13_FA2_QROW32_B1_TIER_B_ARM",
+        "FR13_FA2_QROW32_B1_PRODUCTION_ARM",
+    )
+    # Known to exist and deliberately NOT pin-deciding. Named so that the
+    # sweep below stays meaningful instead of being widened until it passes.
+    _b1_non_pin_selectors = ("FR13_FA2_QROW32_B1_TIMING_ARM",)
+    _b1_unknown = sorted(
+        name
+        for name, value in os.environ.items()
+        if name.startswith("FR13_FA2_QROW32_B1_")
+        and name.endswith("_ARM")
+        and value
+        and name not in _b1_pin_selectors
+        and name not in _b1_non_pin_selectors
+    )
+    if _b1_unknown:
+        raise SystemExit(
+            "fixed32 qrow32 B1 pin-arm resolver does not know these selectors, "
+            "so it cannot say which binary they authorise: "
+            + ", ".join(_b1_unknown)
+        )
+    _b1_named = [
+        os.environ.get(name, "") for name in _b1_pin_selectors
+    ]
+    _b1_named = [value for value in _b1_named if value]
+    if len(_b1_named) > 1:
+        raise SystemExit(
+            "fixed32 qrow32 B1 selectors are mutually exclusive; named: "
+            + ", ".join(_b1_named)
+        )
+    # No selector named at all is the incumbent, and it is spelled OUT rather
+    # than left as "" -- because "" was also what a resolver that failed to
+    # look produced, and the two must not be the same value.
+    b1_pin_arm = _b1_named[0] if _b1_named else "nosplit"
     expected = {
         "visibility": (
             contract.QROW32_B1_VISIBILITY_FA2_SHA256,
@@ -4395,10 +4471,6 @@ elif qrow32_b1_candidate == "1":
             contract.QROW32_B1_SPLIT2_FA2_SIZE,
         ),
         "split2": (
-            contract.QROW32_B1_SPLIT2_FA2_SHA256,
-            contract.QROW32_B1_SPLIT2_FA2_SIZE,
-        ),
-        "": (
             contract.QROW32_B1_SPLIT2_FA2_SHA256,
             contract.QROW32_B1_SPLIT2_FA2_SIZE,
         ),

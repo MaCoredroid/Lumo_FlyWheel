@@ -1250,3 +1250,111 @@ def test_engagement_record_is_tier_aware_and_reports_what_ran(
     # And the candidate identity is the split-K binary, not the incumbent's.
     assert record["candidate_so_sha256"] == SPLITK_SO_SHA256
     assert record["candidate_so_size"] == 300123792
+
+
+# --------------------------- site 23: the resolver, and the credential path
+
+
+def _launcher_python_resolver(launcher, env):
+    """Execute the launcher's OWN in-container pin-arm resolver."""
+    import re
+    import types
+
+    lines = launcher.read_text().splitlines(keepends=True)
+    target = next(
+        i for i, line in enumerate(lines)
+        if "binary identity is not qualified" in line and "B1" in line
+    )
+    opener = re.compile(r"<<\s*'?([A-Z]+)'?\s*$")
+    start = max(i for i in range(target) if opener.search(lines[i]))
+    tag = opener.search(lines[start]).group(1)
+    end = next(i for i in range(target, len(lines)) if lines[i].strip() == tag)
+    body = "".join(lines[start + 1:end])
+    fragment = body[
+        body.index("    _b1_pin_selectors = ("): body.index("    expected = {")
+    ]
+
+    class _Exit(Exception):
+        pass
+
+    namespace = {"os": types.SimpleNamespace(environ=dict(env)),
+                 "SystemExit": _Exit}
+    source = "if True:\n" + "\n".join(
+        "    " + line for line in fragment.splitlines()
+    )
+    try:
+        exec(compile(source, "<py_resolver>", "exec"), namespace)  # noqa: S102
+    except _Exit as exc:
+        raise RuntimeError(str(exc)) from None
+    return namespace["b1_pin_arm"]
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_python_resolver_knows_the_tier_b_spelling(launcher) -> None:
+    """SITE 23, which closed the loop on site 17.
+
+    Site 17 replaced a `.get(arm, split2_pins)` with a table -- and the table
+    kept an "" key. This resolver never learned TIER_B_ARM, so a tier-B boot
+    resolved "" and the "" key handed back split2's pins. Naming a default does
+    not remove it; the removal has to happen at the resolver.
+    """
+    assert _launcher_python_resolver(
+        launcher, {"FR13_FA2_QROW32_B1_TIER_B_ARM": SPLITK_ARM}
+    ) == SPLITK_ARM
+    # And "" can no longer be produced at all: the no-selector case is spelled.
+    assert _launcher_python_resolver(launcher, {}) == "nosplit"
+    assert '"": (' not in launcher.read_text(), (
+        "the empty key is back; it is the default this fix removed"
+    )
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_python_resolver_is_total_against_the_environment(launcher) -> None:
+    """The property that catches the 24th selector nobody has written yet.
+
+    The resolver is made total against the ENVIRONMENT, not against a list of
+    keys somebody remembered to update: any FR13_FA2_QROW32_B1_*_ARM that is
+    set and unknown to it is a refusal. Sites 2.1, 17 and 23 were all one
+    variable this resolver had not been told about.
+    """
+    with pytest.raises(RuntimeError, match="does not know these selectors"):
+        _launcher_python_resolver(
+            launcher, {"FR13_FA2_QROW32_B1_SOMETHING_NEW_ARM": "whatever"}
+        )
+    # A known non-pin selector must NOT trip it, or the sweep gets widened
+    # until it passes and stops meaning anything.
+    assert _launcher_python_resolver(
+        launcher, {"FR13_FA2_QROW32_B1_TIMING_ARM": "gqa_pair"}
+    ) == "nosplit"
+    with pytest.raises(RuntimeError, match="mutually exclusive"):
+        _launcher_python_resolver(launcher, {
+            "FR13_FA2_QROW32_B1_TIER_B_ARM": SPLITK_ARM,
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair",
+        })
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_credential_path_is_split_host_and_container(launcher) -> None:
+    """Settled by measurement, not by argument.
+
+    Measured 2026-08-19 with the launcher's own mounts: the repo mounts at
+    /workspace, so a host path is NOT readable in the container -- /home exists
+    there but is the image's own and the file is absent. One variable cannot
+    serve both consumers.
+    """
+    text = launcher.read_text()
+    # The host-side check reads the _HOST spelling...
+    assert 'sha256sum "$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST"' in text
+    # ...the container-side path is DERIVED, never supplied, so the two cannot
+    # be given out of sync.
+    assert (
+        "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL=/logs/"
+        "fr13_fa2_qrow32_b1_tier_b_credential.json" in text
+    )
+    # The staged copy is re-digested, so a copy that changed the file refuses.
+    assert "tier-b credential changed while being staged" in text
+    # And the container consumer reads the container spelling.
+    assert '--credential "\\$FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL"' in text
+    # Both spellings are guarded against .lumo.local.env.
+    assert "\n  FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST\n" in text
+    assert "\n  FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL\n" in text

@@ -766,3 +766,81 @@ so **re-earn the credential** at the serving HEAD (~10 min, offline), then arm w
 credential path/digest, `B1_DIAGNOSTIC=0`, `CUDAGRAPH_MODE=FULL_AND_PIECEWISE` and the
 canonical exact4 pins. The run will engage, refuse, or crash on a named precondition — it
 can no longer serve the incumbent while reporting the candidate.
+
+---
+
+## 16. Site 23 — the resolver, not the table
+
+Site 23 closes the loop on my own site-17 fix, and the runner's words are the right
+doctrine: **naming a default does not remove it; the removal has to happen at the
+resolver, not the table.**
+
+Site 17 replaced `.get(arm, split2_pins)` with an explicit table — and I kept an `""` key
+in it, for the legitimate "no selector named" case. The in-container Python resolver
+never learned `TIER_B_ARM`, so a tier-B boot resolved `""`, and the `""` key returned
+split2's pins. **The table looked exhaustive and the resolver was not.** The comment
+above it still said "This mirrors the bash pin case"; the bash twin at `:2245` *did* fall
+back to `TIER_B_ARM`.
+
+### 16.1 The fix, at the resolver
+
+1. The Python resolver learns `TIER_B_ARM`, at bash's precedence (live → tier-b →
+   production).
+2. **The `""` key is gone.** "No selector named" is now spelled `nosplit`, in *both*
+   twins — because `""` was also what a resolver that failed to look produced, and those
+   two must never be the same value.
+3. The resolver is made **total against the environment**, not against a list of keys
+   someone remembered to update: any `FR13_FA2_QROW32_B1_*_ARM` that is set and unknown
+   to it is a refusal, with the known-but-not-pin-deciding selectors (`TIMING_ARM`) named
+   explicitly so the sweep cannot be widened until it passes.
+
+That third point is the one that generalises. Sites 2.1, 17 and 23 were each *one
+variable this resolver had not been told about*; the 24th selector nobody has written yet
+now refuses instead of silently inheriting split2's identity. Verified: deleting
+`TIER_B_ARM` from the resolver no longer yields a wrong answer — it yields a **refusal**.
+
+### 16.2 The twin-equivalence detector (executed, not grepped)
+
+`pair_pin_arm_resolver_twins` extracts the bash resolver and the Python resolver **from
+the launcher files themselves** and *runs both* across 9 selector environments × 3
+launcher twins, comparing answers. A claim of equivalence asserted only in prose is what
+this family exists to delete.
+
+Mutation-tested from both sides: removing `TIER_B_ARM` from the Python tuple is caught
+(`bash='gqa_pair_splitk'` vs `python='REFUSED:…'`), and removing the bash fallback is
+caught too (`bash='nosplit'` vs `python='gqa_pair_splitk'`). **Its reach is also recorded
+rather than assumed**: selector *precedence* is unobservable while multi-selector boots
+refuse, so a precedence swap correctly leaves the detector green — written down so the
+next reader does not assume it covers more than it does. **16 pairs, 0 stale.**
+
+### 16.3 The credential path — settled by measurement
+
+Run with the launcher's own mounts (`-v $REPO:/workspace -v /models:/models`):
+
+```
+host path readable in container? NO
+container path readable?         YES
+is /home even present?           /home   (the image's own, and empty of the file)
+```
+
+**One variable cannot serve both consumers.** Split onto the campaign's existing pattern:
+`…_TIER_B_CREDENTIAL_HOST` is what the operator supplies; the launcher verifies it,
+stages it into `$LOG_DIR` (which *is* mounted), re-digests the staged copy, and **derives**
+`…_TIER_B_CREDENTIAL=/logs/fr13_fa2_qrow32_b1_tier_b_credential.json` itself — so the two
+can never be supplied out of sync, and the container sees an immutable snapshot whose
+digest `verify-tier-b` checks again on the far side. Both spellings are guarded against
+`.lumo.local.env`.
+
+### 16.4 Arming, corrected
+
+```
+FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk \
+FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST=<host path to the credential> \
+FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256=<its sha256> \
+  <plus the §11 binary/SASS pins, B1_DIAGNOSTIC=0, FULL_AND_PIECEWISE, exact4 pins>
+```
+
+The container path is **not** supplied. Re-earn the credential at the serving HEAD first
+(~10 min, offline) — the patcher moved again.
+
+**251 tests, 16 lint pairs, 0 stale. Both C++ closures unchanged — no rebuild.**

@@ -768,6 +768,117 @@ def _resolver_probes():
     )
 
 
+# THE TWIN-EQUIVALENCE DETECTOR (site 23). The bash pin-arm resolver and its
+# in-container Python twin decide the SAME question -- which arm's pins this
+# boot must satisfy -- in two languages, in two files, ~2000 lines apart. The
+# Python one carried a comment saying "This mirrors the bash pin case" while
+# not mirroring it, and three separate rounds (2.1, 17, 23) were bought by that
+# divergence.
+#
+# So the comment is replaced by an experiment: both resolvers are EXECUTED, on
+# the same environments, and their answers compared. A claim of equivalence
+# that is only asserted in prose is the thing this family exists to delete.
+TWIN_RESOLVER_ENVS = (
+    {},
+    {"FR13_FA2_QROW32_B1_PRODUCTION_ARM": "nosplit"},
+    {"FR13_FA2_QROW32_B1_PRODUCTION_ARM": "gqa_pair"},
+    {"FR13_FA2_QROW32_B1_LIVE_AB_ARM": "split2"},
+    {"FR13_FA2_QROW32_B1_LIVE_AB_ARM": "visibility"},
+    {"FR13_FA2_QROW32_B1_LIVE_AB_ARM": "gqa_pair"},
+    {"FR13_FA2_QROW32_B1_LIVE_AB_ARM": "gqa_pair_splitk"},
+    # The case that cost round 9.
+    {"FR13_FA2_QROW32_B1_TIER_B_ARM": "gqa_pair_splitk"},
+    {"FR13_FA2_QROW32_B1_TIMING_ARM": "gqa_pair"},
+)
+
+
+def _bash_pin_arm(launcher, env):
+    """Run the launcher's OWN bash resolver lines, unmodified."""
+    import subprocess
+
+    text = launcher.read_text()
+    start = text.index("  _FR13_FA2_QROW32_B1_PIN_ARM=$FR13_FA2_QROW32_B1_LIVE_AB_ARM")
+    end = text.index('  case "$_FR13_FA2_QROW32_B1_PIN_ARM" in', start)
+    fragment = text[start:end]
+    script = (
+        "set -u\n"
+        + "".join(
+            f'{name}={value!r}\n'.replace("'", '"')
+            for name, value in {
+                "FR13_FA2_QROW32_B1_LIVE_AB_ARM": env.get(
+                    "FR13_FA2_QROW32_B1_LIVE_AB_ARM", ""),
+                "FR13_FA2_QROW32_B1_TIER_B_ARM": env.get(
+                    "FR13_FA2_QROW32_B1_TIER_B_ARM", ""),
+                "FR13_FA2_QROW32_B1_PRODUCTION_ARM": env.get(
+                    "FR13_FA2_QROW32_B1_PRODUCTION_ARM", ""),
+            }.items()
+        )
+        + fragment
+        + '\nprintf "%s" "$_FR13_FA2_QROW32_B1_PIN_ARM"\n'
+    )
+    out = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    if out.returncode != 0:
+        return f"REFUSED:{out.stderr.strip()[:60]}"
+    return out.stdout
+
+
+def _python_pin_arm(launcher, env):
+    """Run the launcher's OWN in-container python resolver lines, unmodified."""
+    import re
+    import types
+
+    lines = launcher.read_text().splitlines(keepends=True)
+    target = next(
+        i for i, line in enumerate(lines)
+        if "binary identity is not qualified" in line and "B1" in line
+    )
+    opener = re.compile(r"<<\s*'?([A-Z]+)'?\s*$")
+    start = max(i for i in range(target) if opener.search(lines[i]))
+    tag = opener.search(lines[start]).group(1)
+    end = next(i for i in range(target, len(lines)) if lines[i].strip() == tag)
+    body = "".join(lines[start + 1:end])
+    fragment = body[
+        body.index("    _b1_pin_selectors = ("): body.index("    expected = {")
+    ]
+
+    class _Exit(Exception):
+        pass
+
+    namespace = {
+        "os": types.SimpleNamespace(environ=dict(env)),
+        "SystemExit": _Exit,
+    }
+    source = "if True:\n" + "\n".join(
+        "    " + line for line in fragment.splitlines()
+    )
+    try:
+        exec(compile(source, "<py_resolver>", "exec"), namespace)  # noqa: S102
+    except _Exit as exc:
+        return f"REFUSED:{str(exc)[:60]}"
+    return namespace["b1_pin_arm"]
+
+
+def pin_arm_resolver_twins():
+    """Both resolvers, executed, on every arm the campaign can name."""
+    disagreements = []
+    for launcher in LAUNCHERS:
+        for env in TWIN_RESOLVER_ENVS:
+            bash_answer = _bash_pin_arm(launcher, env)
+            python_answer = _python_pin_arm(launcher, env)
+            if bash_answer != python_answer:
+                named = ", ".join(f"{k}={v}" for k, v in env.items()) or "(none)"
+                disagreements.append(
+                    f"{launcher.name} [{named}]: bash={bash_answer!r} "
+                    f"python={python_answer!r}"
+                )
+    if disagreements:
+        return False, "; ".join(disagreements)
+    return True, (
+        f"{len(LAUNCHERS)} launchers x {len(TWIN_RESOLVER_ENVS)} selector "
+        "environments: bash and python pin-arm resolvers agree, by execution"
+    )
+
+
 def arm_identity_resolvers_refuse_unknown_arms():
     """THE 17th-SITE DETECTOR: an identity resolver must refuse, never default.
 
@@ -903,6 +1014,8 @@ PAIRS = (
      lambda blob, topo: arm_identity_resolvers_refuse_unknown_arms()),
     ("launcher pin cases <-> unknown-arm refusal", "fallback-pattern",
      lambda blob, topo: launcher_pin_cases_refuse_unknown_arms()),
+    ("bash pin-arm resolver <-> python twin", "twin/twin",
+     lambda blob, topo: pin_arm_resolver_twins()),
 )
 
 
