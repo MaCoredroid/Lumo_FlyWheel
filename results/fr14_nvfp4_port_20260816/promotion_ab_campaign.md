@@ -3693,3 +3693,27 @@ leg3 fork. Exact16 can proceed independently of this blocker.
 
 Measurement 1 blocked a second time, same vehicle. GPU idle, containers 0, tree clean.
 H27n baseline unchanged. Standing verdicts unchanged.
+
+# DFLASH2 E2 TAP RECAPTURE (2026-08-19 20:27Z–20:35Z) — DONE, verified
+
+Fired ahead of the exact16 boot per the pass-118 sequencing. **487.7 s**, against the
+prereg's ~8-minute budget. Ran as a copy (`e2_capture.py`) with only the tap constant
+changed — E1's `e1_capture.py` untouched, verified by diff — and wrote to `taps_e2`
+so E1's banked 11 GB was never at risk.
+
+The prereg's own warning is why this needed care: E1's taps are `(4,16,28,40,52)` and
+DFlash2's are `(5,19,33,47,61)`; `fc.in_features` is `5*5120=25600` either way, so
+feeding the wrong set **raises nothing**. `plane_meaning` is the only discriminator.
+
+VERIFIED AFTER CAPTURE:
+
+    tap_layers (capture_report)   [5, 19, 33, 47, 61]                     correct
+    plane_meaning, all 12 docs    post_layer_5/19/33/47/61 + final_norm    1 distinct value
+    G4 capture selfcheck          engine token 248046 == argmax 248046     MATCH
+    taps_e2                       11 GB written
+    taps (E1)                     11 GB, intact
+
+Note for the E2 lane: `capture_report.json` carries `tap_layers` but its top-level
+`plane_meaning` is `None` — the per-doc metas carry it, which is what the prereg's
+mandatory assert reads, so the guard is satisfied. Pre-existing E1 behaviour, not
+introduced here. Recapture only; replay windows remain sequenced later.
