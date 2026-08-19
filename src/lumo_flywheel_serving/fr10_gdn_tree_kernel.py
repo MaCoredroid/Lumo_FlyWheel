@@ -48,6 +48,20 @@ def _fr13_fixed32_accept_ladder_enabled() -> bool:
     return raw == "1"
 
 
+# THE WARMUP BRACKET. The ladder counts from process start, so the first drain
+# captures the engine's warmup drafts -- generation 1 of the exact16 serve was
+# exactly rows=4, tokens=0, which Prometheus never counts. That produced a
+# constant +4 row offset against every boundary.
+#
+# The scope is declared and the warmup is SUBTRACTABLE rather than discarded: a
+# reset would throw away the only record that those four drafts happened, and
+# "the instrument silently redefined its window" is the kind of thing this
+# campaign keeps paying for. The first drain establishes the baseline; every
+# payload carries both the lifetime totals and the since-warmup deltas, so the
+# harness subtracts like-for-like without knowing which drain was first.
+_FR13_FIXED32_ACCEPT_LADDER_WARMUP: dict[str, int] | None = None
+
+
 def fr13_fixed32_accept_ladder_snapshot() -> dict[str, object]:
     """Aggregate the ladder across every committer state. FLUSH ONLY.
 
@@ -70,13 +84,27 @@ def fr13_fixed32_accept_ladder_snapshot() -> dict[str, object]:
     ]
     if not states:
         return {
-            "schema": "fr13.fixed32.accept_ladder.v1",
+            "schema": "fr13.fixed32.accept_ladder.v2",
             "enabled": False,
             "flag": _FR13_FIXED32_ACCEPT_LADDER_FLAG,
             "slots": _FR13_FIXED32_ACCEPT_LADDER_SLOTS,
+            "definition": _FR13_FIXED32_ACCEPT_LADDER_DEFINITION,
+            "aggregate_definition": (
+                _FR13_FIXED32_ACCEPT_LADDER_AGGREGATE_DEFINITION
+            ),
+            "scope": "process_lifetime_totals_plus_since_warmup_deltas",
             "ladder": None,
             "rows": None,
             "accepted_tokens": None,
+            "accepted_draft_tokens": None,
+            "bonus_tokens": None,
+            "emitted_tokens": None,
+            "warmup_rows": None,
+            "warmup_accepted_draft_tokens": None,
+            "warmup_ladder": None,
+            "rows_since_warmup": None,
+            "accepted_draft_tokens_since_warmup": None,
+            "ladder_since_warmup": None,
             "overflow_rows": None,
             "overflow_tokens": None,
             "committer_states": 0,
@@ -94,20 +122,92 @@ def fr13_fixed32_accept_ladder_snapshot() -> dict[str, object]:
         overflow_tokens += drained["overflow_tokens"]
     tokens = sum(index * count for index, count in enumerate(ladder))
     tokens += overflow_tokens
+    rows = sum(ladder)
+
+    global _FR13_FIXED32_ACCEPT_LADDER_WARMUP
+    if _FR13_FIXED32_ACCEPT_LADDER_WARMUP is None:
+        _FR13_FIXED32_ACCEPT_LADDER_WARMUP = {
+            "rows": rows,
+            "accepted_draft_tokens": tokens,
+            "ladder": list(ladder),
+        }
+    warmup = _FR13_FIXED32_ACCEPT_LADDER_WARMUP
+    rows_since = rows - int(warmup["rows"])
+    tokens_since = tokens - int(warmup["accepted_draft_tokens"])
+    ladder_since = [
+        count - int(base)
+        for count, base in zip(ladder, warmup["ladder"], strict=True)
+    ]
     return {
-        "schema": "fr13.fixed32.accept_ladder.v1",
+        "schema": "fr13.fixed32.accept_ladder.v2",
         "enabled": True,
         "flag": _FR13_FIXED32_ACCEPT_LADDER_FLAG,
         "slots": _FR13_FIXED32_ACCEPT_LADDER_SLOTS,
         "ladder": ladder,
-        "rows": sum(ladder),
-        # The identity the sealed harness asserts against the aggregate
-        # accepted-token delta: sum(i * ladder[i]) + overflow_tokens.
+        "rows": rows,
+        "definition": _FR13_FIXED32_ACCEPT_LADDER_DEFINITION,
+        "aggregate_definition": (
+            _FR13_FIXED32_ACCEPT_LADDER_AGGREGATE_DEFINITION
+        ),
+        # SCOPE, stated rather than assumed. The totals run from process start;
+        # the since_warmup fields are what a Prometheus delta is comparable to.
+        "scope": "process_lifetime_totals_plus_since_warmup_deltas",
+        "warmup_rows": int(warmup["rows"]),
+        "warmup_accepted_draft_tokens": int(warmup["accepted_draft_tokens"]),
+        "warmup_ladder": list(warmup["ladder"]),
+        "rows_since_warmup": rows_since,
+        "accepted_draft_tokens_since_warmup": tokens_since,
+        "ladder_since_warmup": ladder_since,
+        # COMPONENTS: one bonus token per committed row, by construction.
+        "accepted_draft_tokens": tokens,
+        "bonus_tokens": rows,
+        "emitted_tokens": tokens + rows,
         "accepted_tokens": tokens,
         "overflow_rows": overflow_rows,
         "overflow_tokens": overflow_tokens,
         "committer_states": len(states),
     }
+
+
+# TWO DEFINITIONS OF "ACCEPTED TOKEN" EXIST, and the ladder's first live outing
+# was refused for comparing across them. Both are named here so the harness can
+# compare like-for-like BY CONSTRUCTION instead of by luck.
+#
+#   LADDER (this instrument) -- COMMIT SIDE.
+#       accepted_draft_tokens = sum(accepted_lens) over every committed row.
+#       accepted_lens is the length of the accepted DRAFT PATH through the tree;
+#       the committer adds the root internally and columns past the spine are
+#       storage padding (see _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH). The
+#       bonus token is NOT in it.
+#
+#   vllm:spec_decode_num_accepted_tokens_total -- OUTPUT SIDE.
+#       scheduler.update_from_output computes `len(generated_token_ids) - 1`,
+#       where generated_token_ids comes from RejectionSampler.parse_output,
+#       which keeps a slot only if it is not PLACEHOLDER_TOKEN_ID *and* is
+#       `< vocab_size`, and drops whole rows listed in discard_req_indices.
+#       Finished/aborted requests are `continue`d before the observation and
+#       zero-draft steps return early. So it is "tokens the sampler actually
+#       EMITTED, minus the bonus" -- the same quantity as ours whenever nothing
+#       is filtered, and strictly LOWER when something is.
+#
+# WHICH ONE IS THE CAMPAIGN DEFINITION: the committed one. TPS is computed from
+# committed tokens, so the committer's committed-token truth arbitrates, and
+# that is exactly what this ladder sums. The aggregate is an output-side proxy
+# for it, which is why it can sit below and never above.
+#
+# The live gap was +32/+52/+61 with row deltas matching EXACTLY, and the drift
+# rate FELL (3.03% -> 0.53% -> 0.15% per window), so it is neither per-row nor
+# per-full-acceptance -- full-acceptance rows were 119/710/1006, an order of
+# magnitude off. Two filter mechanisms above could produce a rare, data-
+# dependent shortfall (the `< vocab_size` mask and discard_req_indices). I could
+# not discriminate between them from banked artifacts, and I am not going to
+# name one as the cause without a run that shows it. What this payload does is
+# make the comparison unambiguous and the residual attributable.
+_FR13_FIXED32_ACCEPT_LADDER_DEFINITION = "committed_accepted_draft_path_length"
+_FR13_FIXED32_ACCEPT_LADDER_AGGREGATE_DEFINITION = (
+    "vllm:spec_decode_num_accepted_tokens_total == emitted sampler tokens minus "
+    "the bonus, after parse_output filtering; a lower bound on committed"
+)
 
 
 def fr13_fixed32_accept_ladder_drain(state) -> dict[str, object] | None:
@@ -127,15 +227,26 @@ def fr13_fixed32_accept_ladder_drain(state) -> dict[str, object] | None:
     tokens = sum(index * count for index, count in enumerate(counts))
     tokens += overflow_tokens
     return {
-        "schema": "fr13.fixed32.accept_ladder.v1",
+        "schema": "fr13.fixed32.accept_ladder.v2",
         "enabled": True,
         "flag": _FR13_FIXED32_ACCEPT_LADDER_FLAG,
         "slots": _FR13_FIXED32_ACCEPT_LADDER_SLOTS,
         "ladder": counts,
         "rows": rows,
-        # SELF-PROVING: this must equal the delta of the aggregate accepted
-        # token counter we already trust. A ladder that cannot fail that check
-        # is not evidence.
+        # THE DEFINITION, carried with the number so nothing has to infer it.
+        "definition": _FR13_FIXED32_ACCEPT_LADDER_DEFINITION,
+        "aggregate_definition": (
+            _FR13_FIXED32_ACCEPT_LADDER_AGGREGATE_DEFINITION
+        ),
+        # COMPONENTS, so a harness can form either side's quantity itself.
+        # Every committed row emits exactly one bonus token, so bonus_tokens is
+        # rows BY CONSTRUCTION -- it is not measured separately and must not be
+        # read as if it were.
+        "accepted_draft_tokens": tokens,
+        "bonus_tokens": rows,
+        "emitted_tokens": tokens + rows,
+        # Retained under its original name: same number, now explicitly the
+        # draft-side component rather than an unqualified "accepted".
         "accepted_tokens": tokens,
         "overflow_rows": overflow_rows,
         "overflow_tokens": overflow_tokens,

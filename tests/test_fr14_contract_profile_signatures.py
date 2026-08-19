@@ -2787,7 +2787,8 @@ def test_the_ladder_flag_is_strict_and_default_on_and_recorded() -> None:
     assert drained["flag"] == "FR13_FIXED32_ACCEPT_LADDER"
     assert drained["enabled"] is True
     assert drained["slots"] == 16
-    assert drained["schema"] == "fr13.fixed32.accept_ladder.v1"
+    assert drained["schema"] == "fr13.fixed32.accept_ladder.v2"
+    assert drained["definition"] == "committed_accepted_draft_path_length"
 
 
 # --- THE WIRING (round 21's last gate) --------------------------------------
@@ -2924,7 +2925,7 @@ def test_a_never_drained_ladder_is_absent_downstream_not_zero() -> None:
         assert payload["accepted_tokens"] is None
         assert payload["rows"] is None
         assert payload["committer_states"] == 0
-        assert payload["schema"] == "fr13.fixed32.accept_ladder.v1"
+        assert payload["schema"] == "fr13.fixed32.accept_ladder.v2"
         assert payload["flag"] == "FR13_FIXED32_ACCEPT_LADDER"
     finally:
         module._FR13_FIXED32_COMMITTER.clear()
@@ -2949,6 +2950,13 @@ def test_the_payload_carries_everything_the_sealed_harness_asserts() -> None:
             "schema", "enabled", "flag", "slots", "ladder", "rows",
             "accepted_tokens", "overflow_rows", "overflow_tokens",
             "committer_states",
+            # v2: the definition fork and the warmup bracket travel with the
+            # number, so the harness compares like-for-like by construction.
+            "definition", "aggregate_definition", "scope",
+            "accepted_draft_tokens", "bonus_tokens", "emitted_tokens",
+            "warmup_rows", "warmup_accepted_draft_tokens", "warmup_ladder",
+            "rows_since_warmup", "accepted_draft_tokens_since_warmup",
+            "ladder_since_warmup",
         }
         assert payload["slots"] == 16 and len(payload["ladder"]) == 16
     finally:
@@ -3355,3 +3363,175 @@ def test_the_private_walk_cap_modules_stay_pinned_and_untouched() -> None:
         assert PROFILE_HYDRA31 not in source, (
             f"{name} learned hydra31 without re-qualification"
         )
+
+
+# ---------------------------------------------------------------------------
+# 13. THE LADDER'S DEFINITION (first live outing, refused by the harness)
+# ---------------------------------------------------------------------------
+# The refusal decomposed into one scope artifact and one semantic fork:
+#   rows   +4, +4, +4     CONSTANT  -- generation 1's warmup drafts
+#   tokens +32, +52, +61  GROWING   -- two definitions of "accepted token"
+# The banked generations are replayed below, so these are the real numbers.
+BANKED_LADDERS = {
+    1: [4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    2: [53, 152, 154, 136, 97, 197, 57, 36, 24, 18, 12, 119, 0, 0, 0, 0],
+    4: [236, 734, 765, 598, 424, 768, 210, 145, 85, 65, 64, 710, 0, 0, 0, 0],
+    6: [410, 1029, 1583, 1495, 1234, 2798, 398, 376, 319, 171, 101, 1006, 0, 0, 0, 0],
+}
+BANKED_METRICS = {2: (1051, 4586), 4: (4800, 21532), 6: (10916, 48732)}
+
+
+def _vllm_accepted_for_row(accepted_len: int) -> int:
+    """vLLM's definition, modelled from its source rather than described.
+
+    scheduler.update_from_output: `num_accepted = len(generated_token_ids) - 1`,
+    and our publish writes the bonus into column 0 with the accepted path after
+    it, so an unfiltered row emits accepted_len + 1 tokens.
+    """
+    return (accepted_len + 1) - 1
+
+
+def _ladder_module_and_state(batch: int = 4):
+    torch = pytest.importorskip("torch")
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    module._FR13_FIXED32_ACCEPT_LADDER_WARMUP = None
+    state = {
+        "batch": batch,
+        "accept_ladder": torch.zeros(16, dtype=torch.int64),
+        "accept_ladder_overflow_rows": torch.zeros((), dtype=torch.int64),
+        "accept_ladder_overflow_tokens": torch.zeros((), dtype=torch.int64),
+        "accept_ladder_ones": torch.ones(batch, dtype=torch.int64),
+    }
+    module._FR13_FIXED32_COMMITTER.clear()
+    module._FR13_FIXED32_COMMITTER["only"] = state
+    return module, state
+
+
+def test_the_payload_names_both_definitions() -> None:
+    """The fork, stated in the artifact rather than inferred by the reader."""
+    module, _state = _ladder_module_and_state()
+    payload = module.fr13_fixed32_accept_ladder_snapshot()
+    assert payload["schema"] == "fr13.fixed32.accept_ladder.v2"
+    assert payload["definition"] == "committed_accepted_draft_path_length"
+    aggregate = payload["aggregate_definition"]
+    assert "spec_decode_num_accepted_tokens_total" in aggregate
+    assert "minus" in aggregate and "bonus" in aggregate
+    assert payload["scope"] == "process_lifetime_totals_plus_since_warmup_deltas"
+
+
+def test_a_full_acceptance_step_reconciles_under_the_stated_definition() -> None:
+    """MUTATION PROOF: the bonus convention, settled by construction.
+
+    A row that accepts the whole depth-11 spine contributes 11 draft tokens and
+    one bonus. Under the stated definition the ladder counts 11; vLLM's
+    len(generated) - 1 is also 11. They reconcile, which is why the live drift
+    was NOT the bonus token -- full-acceptance rows numbered 119/710/1006 while
+    the drift was 32/52/61.
+    """
+    torch = pytest.importorskip("torch")
+    module, state = _ladder_module_and_state(batch=2)
+    full = module._FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH
+    assert full == 11
+    for _step in range(5):
+        module._fr13_fixed32_accept_ladder_accumulate(
+            state, torch.tensor([full, full], dtype=torch.int32)
+        )
+    payload = module.fr13_fixed32_accept_ladder_snapshot()
+    rows = payload["rows"]
+    assert rows == 10 and payload["ladder"][full] == 10
+    assert payload["accepted_draft_tokens"] == rows * full
+    assert payload["accepted_draft_tokens"] == rows * _vllm_accepted_for_row(full)
+    assert payload["bonus_tokens"] == rows, "one bonus per committed row"
+    assert payload["emitted_tokens"] == rows * (full + 1)
+
+
+@pytest.mark.parametrize("accepted_len", [0, 1, 5, 11])
+def test_every_row_class_reconciles_with_the_aggregate_definition(
+    accepted_len: int,
+) -> None:
+    """The two definitions agree per row whenever nothing is filtered."""
+    torch = pytest.importorskip("torch")
+    module, state = _ladder_module_and_state(batch=1)
+    module._fr13_fixed32_accept_ladder_accumulate(
+        state, torch.tensor([accepted_len], dtype=torch.int32)
+    )
+    payload = module.fr13_fixed32_accept_ladder_snapshot()
+    assert payload["accepted_draft_tokens"] == _vllm_accepted_for_row(accepted_len)
+    assert payload["emitted_tokens"] == accepted_len + 1
+
+
+def test_the_warmup_bracket_makes_the_banked_rows_reconcile_exactly() -> None:
+    """The scope artifact, closed against the real serve's numbers.
+
+    Generation 1 recorded rows=4, tokens=0 before any task. With the warmup
+    labelled and subtractable, rows match the aggregate EXACTLY at all three
+    boundaries -- the +4 is gone by construction, not by an adjustment someone
+    remembered to apply.
+    """
+    torch = pytest.importorskip("torch")
+    module, state = _ladder_module_and_state()
+
+    def replay(generation: int):
+        state["accept_ladder"].copy_(
+            torch.tensor(BANKED_LADDERS[generation], dtype=torch.int64)
+        )
+        return module.fr13_fixed32_accept_ladder_snapshot()
+
+    warmup = replay(1)
+    assert warmup["warmup_rows"] == 4
+    assert warmup["warmup_accepted_draft_tokens"] == 0
+    assert warmup["rows_since_warmup"] == 0
+
+    for generation, (metric_rows, metric_tokens) in BANKED_METRICS.items():
+        payload = replay(generation)
+        assert payload["rows_since_warmup"] == metric_rows, (
+            f"gen {generation}: rows must reconcile exactly after the bracket"
+        )
+        # the token residual is REAL and is not silently absorbed
+        residual = payload["accepted_draft_tokens_since_warmup"] - metric_tokens
+        assert residual == {2: 32, 4: 52, 6: 61}[generation]
+        # ...and the ladder itself is internally exact at every boundary
+        recomputed = sum(
+            index * count for index, count in enumerate(payload["ladder"])
+        )
+        assert recomputed + payload["overflow_tokens"] == (
+            payload["accepted_draft_tokens"]
+        )
+
+
+def test_the_residual_is_not_the_bonus_and_not_per_row() -> None:
+    """Why the bonus hypothesis is refuted, kept as an assertion.
+
+    If the gap were the bonus token on full-acceptance rows it would equal the
+    slot-11 counts; if it were per-row it would scale with rows. It is neither:
+    the rate FALLS across windows.
+    """
+    full_acceptance = {gen: BANKED_LADDERS[gen][11] for gen in BANKED_METRICS}
+    residuals = {2: 32, 4: 52, 6: 61}
+    for generation, residual in residuals.items():
+        assert full_acceptance[generation] > residual * 3, (
+            "full-acceptance rows are an order of magnitude off the residual"
+        )
+    rows = {gen: sum(BANKED_LADDERS[gen]) - 4 for gen in BANKED_METRICS}
+    rates = [residuals[g] / rows[g] for g in (2, 4, 6)]
+    assert rates[0] > rates[1] > rates[2], (
+        "a per-row cause would hold the rate constant; it falls"
+    )
+
+
+def test_the_absent_payload_still_says_absent_under_v2() -> None:
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    saved = dict(module._FR13_FIXED32_COMMITTER)
+    try:
+        module._FR13_FIXED32_COMMITTER.clear()
+        payload = module.fr13_fixed32_accept_ladder_snapshot()
+        assert payload["enabled"] is False
+        assert payload["ladder"] is None
+        assert payload["accepted_draft_tokens"] is None
+        assert payload["rows_since_warmup"] is None
+        # the definition travels even when the measurement does not
+        assert payload["definition"] == "committed_accepted_draft_path_length"
+        assert payload["schema"] == "fr13.fixed32.accept_ladder.v2"
+    finally:
+        module._FR13_FIXED32_COMMITTER.clear()
+        module._FR13_FIXED32_COMMITTER.update(saved)

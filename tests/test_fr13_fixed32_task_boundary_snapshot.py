@@ -1024,13 +1024,21 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
     # runtime must report -- never a ladder of zeros, which would read as a
     # measured zero.
     kernel_module.fr13_fixed32_accept_ladder_snapshot = lambda: {
-        "schema": "fr13.fixed32.accept_ladder.v1",
+        "schema": "fr13.fixed32.accept_ladder.v2",
         "enabled": False,
         "flag": "FR13_FIXED32_ACCEPT_LADDER",
         "slots": 16,
+        "definition": "committed_accepted_draft_path_length",
+        "scope": "process_lifetime_totals_plus_since_warmup_deltas",
         "ladder": None,
         "rows": None,
         "accepted_tokens": None,
+        "accepted_draft_tokens": None,
+        "bonus_tokens": None,
+        "emitted_tokens": None,
+        "warmup_rows": None,
+        "rows_since_warmup": None,
+        "accepted_draft_tokens_since_warmup": None,
         "overflow_rows": None,
         "overflow_tokens": None,
         "committer_states": 0,
@@ -1110,7 +1118,11 @@ def test_runtime_writer_serializes_mixed_b4_v4_for_both_validators(
     # the stub runtime preseeded nothing, so the ladder must report ABSENT
     assert ladder["accept_ladder"]["enabled"] is False
     assert ladder["accept_ladder"]["ladder"] is None
-    assert ladder["accept_ladder"]["schema"] == "fr13.fixed32.accept_ladder.v1"
+    assert ladder["accept_ladder"]["schema"] == "fr13.fixed32.accept_ladder.v2"
+    # the definition travels with the artifact even when the ladder is absent
+    assert ladder["accept_ladder"]["definition"] == (
+        "committed_accepted_draft_path_length"
+    )
     # ...and the boundary snapshot itself is untouched by the instrument
     assert "accept_ladder" not in json.loads(body)
     assert snapshot_path == Path(f"{base_path}.7.json")
