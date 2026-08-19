@@ -1908,3 +1908,101 @@ would manufacture exactly the kind of green artifact that made round 6's report 
 carry** — exact4 (and then the live-arm predicate must admit the four-task subset), or
 the single diagnostic instance (and then `require_exact4` must not be on the tier-B
 path). Boots will keep finding one precondition at a time until that is decided.
+
+---
+---
+
+# ROUND 8 (2026-08-19 02:18Z–02:25Z) — BLOCKED at a 21st site: two quote characters in a comment truncate every fixed32 boot script
+
+**Engagement observation, leading as asked: none — and none was reachable.** ARM S
+never launched. The *gqa_pair gate* (phase 2) died first, and it died for a reason
+that blocks **every fixed32 serve at this HEAD**, not just tier-B.
+
+| phase | outcome |
+|---|---|
+| **0** yield to E1 | waited out `e1-dspark-capture`; a **second** E1 container (`e1-dspark-replay`) started at 02:22Z — yielded again |
+| **1** Tier-B credential re-earn | **PASS**, 9/9 bounds, bound to HEAD `731c91498`, patcher `ce6a64f5…` |
+| **2** gqa_pair gate re-earn | **FAILED, rc=2** — container died before health in 47 s |
+| **3** ARM S | **not attempted** |
+
+## R8.1 The 21st site, attributed to one line
+
+The container log said only:
+
+```
+sha256sum … _vllm_fa2_C.abi3.so
+no: -c: line 163: syntax error: unexpected end of file
+```
+
+I pulled the **exact script the container ran** out of `docker inspect …Config.Cmd`
+and syntax-checked it. It is **truncated at 162 lines**, and its final line is:
+
+```
+  # died on has
+```
+
+The source line, `fr13_launch_forked_fa2_tree_server.sh:7063`, reads:
+
+```bash
+  # died on "has no launcher attestation". A tier-B serve needs its own
+```
+
+That comment lives inside the **double-quoted host string** that builds the
+in-container boot script. Its embedded `"…"` closes the host string early, so
+everything after `# died on ` is lost, and the remaining words become positional
+arguments to `bash -lc` — which is why `$0` was `no` and the error printed as
+`no: -c: line 163`. That prefix was the clue, not noise.
+
+**The truncation removes the entire back half of the boot script.** Verified against
+the generated text:
+
+| the script still contains | the script has LOST |
+|---|---|
+| `fr13_patch_fa2_tree_bias` (earlier) | `verify-tier-b` (the site-19 fix itself) |
+| | `fr10_phase4_patch…` (the drafter patcher) |
+| | **`vllm serve`** — the serve command itself |
+
+So the container starts, patches the FA2 `.so`, hits the truncation, and exits.
+**Every fixed32 boot at `731c91498` dies the same way** — the gqa_pair gate, ARM C,
+ARM G and ARM S alike. It is a total blocker, and the gate found it in 47 seconds.
+
+It is also the **only** comment carrying double quotes in the new block
+(`7039-7085`), so it is a one-line fix: drop or escape the quotes at `:7063`, and
+add the obvious lint — *no unescaped `"` in a comment inside the in-container
+string*, which is checkable without a GPU on all three launcher twins.
+
+## R8.2 Two notes worth keeping
+
+**The bound held, and then moved.** Lane 4's honest bound was "a 21st site would live
+in vLLM's behaviour under capture, unreachable by reading". This one is neither: it is
+in the launcher's own generated text and is **reachable by `bash -n` on the
+generated script** — which is exactly the check nobody runs, because the script only
+exists at boot. The CPU harness walks the *served path*; nothing walks the *boot
+script*. That is the gap the 110-gate walk could not see, and it is cheap to close.
+
+**Phase 1 still passed, and that matters.** The Tier-B credential re-earned cleanly at
+this HEAD, 9/9 bounds, patcher digest matching — because it is offline kernel work
+that never builds a container boot script. The split-K *numerics* remain in good
+standing; only the *route* is broken.
+
+## R8.3 Status
+
+**Mark's split-K eyeball is NOT discharged. Served split-K tokens after eight rounds:
+zero.** The serving-path ledger gains one more, and its shape is new:
+
+| # | site | class | found by |
+|---|---|---|---|
+| 17 | identity resolver defaulted to split2 | tier-A-only default | round-5 boot |
+| 18 | installer keyed to the production selector | tier-A-only installer | lane 4 |
+| 19 | installed hook gates on a tier-A attestation | tier-A-only precondition | round-7 boot |
+| 20 | `require_exact4` vs single-instance arming | contradiction | round-7 **read** |
+| **21** | **quotes in a comment truncate the boot script** | **host/container quoting** | **round-8 boot, 47 s** |
+
+Sites 17–20 were all one shape — a production assumption on a path a second arm now
+takes. **21 is not that shape**: it is a text-assembly defect introduced *by the fix
+for 19*, and it would have been caught by syntax-checking the generated script rather
+than by any amount of gate-reading. Different class, different detector.
+
+**GPU cost of this round: ~1 minute of a dead container, plus the offline credential.**
+Fail-closed did its job: nothing served, nothing mis-reported, and the blocker is
+named to the character.

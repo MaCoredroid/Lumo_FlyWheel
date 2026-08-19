@@ -667,6 +667,49 @@
   "verdict_splitk": "REFUSE \u2014 reverts the round-6 MORE EVIDENCE upgrade, which rested on a serve that never happened. Numerics 9/9 stand; serving path has six distinct defects, five found only by booting.",
   "window_utc": "2026-08-19T01:26Z..01:58Z"
  },
+ "round8": {
+  "engagement_observation": "NONE \u2014 ARM S never launched; the gqa_pair gate died first",
+  "eyeball_discharged": false,
+  "gpu_cost": "~1 minute (dead container) plus the offline credential earn",
+  "head": "731c914987111876ae39cfa97fb75134e1473752",
+  "phase0": "yielded to e1-dspark-capture, then to a second E1 container (e1-dspark-replay) at 02:22Z",
+  "phase1_tierb": {
+   "bounds": "9/9",
+   "head_bound": "731c91498",
+   "outcome": "PASS",
+   "patch_source": "ce6a64f5",
+   "path": "output/fr14_splitk_tierb_credential_r8.json"
+  },
+  "phase2_gate": {
+   "died": "container died before health in 47s",
+   "outcome": "FAILED",
+   "rc": 2
+  },
+  "phase3_arm_s": "NOT ATTEMPTED",
+  "served_splitk_tokens_to_date": 0,
+  "site_21": {
+   "blast_radius": "EVERY fixed32 boot at this HEAD \u2014 gqa_pair gate, ARM C, ARM G, ARM S",
+   "class": "NEW \u2014 not the tier-A-assumption shape of sites 17-20; a host/container text-assembly defect introduced BY the fix for site 19",
+   "detector_gap": "the CPU harness walks the SERVED path; nothing syntax-checks the GENERATED BOOT SCRIPT, which only exists at boot. bash -n on it would have caught this without a GPU.",
+   "evidence": "pulled the exact script from docker inspect Config.Cmd and syntax-checked it: truncated at 162 lines, last line \"  # died on has\"",
+   "fix": "one line: drop or escape the quotes at :7063; add a lint for unescaped double quotes in comments inside the in-container string, on all three launcher twins",
+   "mechanism": "the comment sits inside the DOUBLE-QUOTED host string that builds the in-container boot script; its embedded quotes close the host string early, truncating the script and turning the remaining words into positional args to bash -lc \u2014 which is why /bin/bash was \"no\" and the error read \"no: -c: line 163\"",
+   "source_line": "scripts/fr13_launch_forked_fa2_tree_server.sh:7063",
+   "text": "# died on \"has no launcher attestation\". A tier-B serve needs its own",
+   "what_is_lost": {
+    "LOST": [
+     "verify-tier-b (the site-19 fix itself)",
+     "fr10_phase4_patch (drafter patcher)",
+     "vllm serve (the serve command)"
+    ],
+    "still_present": [
+     "fr13_patch_fa2_tree_bias"
+    ]
+   }
+  },
+  "status": "BLOCKED at a 21st site \u2014 total, affects every fixed32 boot at this HEAD",
+  "window_utc": "2026-08-19T02:18Z..02:25Z"
+ },
  "schema": "fr14.promotion_ab.campaign_summary.v1",
  "step0_regate": {
   "cause": "fr13_fixed32_work_census.py:157 TAW_SOURCE_CONTRACT_SHA256 stale at 484babd7 vs emitter 68b289ae",
