@@ -318,6 +318,7 @@ fi
    || "${FR13_FIXED32_SFWD_STATE_FUSION_BYTE_AB:-0}" == "1" \
    || "${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" == "1" \
    || -n "${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}" \
+   || -n "${FR13_FA2_QROW32_B1_TIER_B_ARM:-}" \
    || -n "${FR13_FA2_QROW32_B1_TIMING_ARM:-}" \
    || -n "${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}" \
    || -n "${FR13_FA2_QROW32_B4_TIMING_ARM:-}" \
@@ -1196,6 +1197,7 @@ if (( _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0 )) \
          && "${FR13_FA2_QROW16_PRODUCTION:-0}" == "0" \
          && "${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" == "0" \
          && -z "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" \
+         && -z "$FR13_FA2_QROW32_B1_TIER_B_ARM" \
          && -z "$FR13_FA2_QROW32_B1_TIMING_ARM" \
          && -z "$FR13_FA2_QROW32_B4_TIMING_ARM" \
          && -z "$FR13_FA2_QROW32_B4_PRODUCTION_ARM" ]]; then
@@ -1225,6 +1227,7 @@ if [[ "$FR13_FA2_QROW32_B1_TIMING_ARM" == "qrow16_stock" ]]; then
   # The stock reference must be the untouched qrow16 incumbent: no B1 selector
   # of any kind, or the "stock" side is not stock.
   if [[ -n "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" \
+        || -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" \
         || -n "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" ]]; then
     echo "FR13 qrow32 B1 qrow16_stock timing arm must carry no B1 selector" >&2
     exit 2
@@ -1322,6 +1325,7 @@ if (( _FR13_FA2_QROW32_B4_PRODUCTION_ARM_NAMED == 0 )) \
          && "${FR13_FA2_QROW16_PRODUCTION:-0}" == "0" \
          && "${FR13_FA2_QROW32_LIVE_PAGED_AB:-0}" == "0" \
          && -z "$FR13_FA2_QROW32_B1_LIVE_AB_ARM" \
+         && -z "$FR13_FA2_QROW32_B1_TIER_B_ARM" \
          && -z "$FR13_FA2_QROW32_B1_TIMING_ARM" \
          && -z "$FR13_FA2_QROW32_B1_PRODUCTION_ARM" \
          && -z "$FR13_FA2_QROW32_B4_TIMING_ARM" ]]; then
@@ -4172,7 +4176,12 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
   # The B1 binary-identity preflight below resolves its pin arm from these two
   # variables, so make them visible to the child interpreter regardless of how
   # the caller set them.
-  export FR13_FA2_QROW32_B1_LIVE_AB_ARM FR13_FA2_QROW32_B1_PRODUCTION_ARM
+  # Site 24's CONSUMER. This child interpreter runs
+  # fr13_fixed32_contract._expected_runtime_fa2_identity, so teaching that
+  # resolver TIER_B_ARM is worth nothing unless the variable actually reaches
+  # it. A resolver that knows a selector it cannot see is still stranded.
+  export FR13_FA2_QROW32_B1_LIVE_AB_ARM FR13_FA2_QROW32_B1_PRODUCTION_ARM \
+         FR13_FA2_QROW32_B1_TIER_B_ARM
   PYTHONPATH="$REPO/scripts" .venv/bin/python - \
     "$REPO" "$IMAGE" "$FORKED_FA2_SO" "$TREE" "$SPEC_CONFIG" \
     "$_FR13_FA2_QROW16_CANDIDATE_MODE" "$FR13_FA2_QROW16_SO_SHA256" \
@@ -5258,6 +5267,7 @@ if [[ "$_fr13_sfwd_conv_postprep" == "1" ]]; then
         && "${FR13_FA2_QROW16_SO_SHA256:-}" == "1649fbe9c6886147710dc9be97567bffcac36175c26742b752be9be50c2cbb86" \
         && "${FR13_FA2_QROW16_LIVE_PASS_SHA256:-}" == "36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d41057328737b77" \
         && -z "${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}" \
+        && -z "${FR13_FA2_QROW32_B1_TIER_B_ARM:-}" \
         && -z "${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}" ]]; then
     _fr13_sfwd_qrow16_production=1
   fi

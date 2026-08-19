@@ -3684,6 +3684,7 @@ def _expected_runtime_fa2_identity(
     live = env.get("FR13_FA2_QROW16_LIVE_PAGED_AB", "0")
     production = env.get("FR13_FA2_QROW16_PRODUCTION", "0")
     qrow32_b1_live = env.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM", "")
+    qrow32_b1_tier_b = env.get("FR13_FA2_QROW32_B1_TIER_B_ARM", "")
     qrow32_b1_production = env.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM", "")
     qrow32_b4_live = env.get("FR13_FA2_QROW32_LIVE_PAGED_AB", "0")
     qrow32_b4_arm = env.get("FR13_FA2_QROW32_LIVE_PAGED_AB_ARM", "")
@@ -3698,6 +3699,18 @@ def _expected_runtime_fa2_identity(
             raise ContractError(f"{name} must be exactly 0 or 1")
     if live == "1" and production == "1":
         raise ContractError("qrow16 live and production selectors are mutually exclusive")
+    # SITE 24. This resolver learned tier-B at the walk (B3) under the spelling
+    # then in use -- LIVE_AB_ARM plus a modifier -- and the pass-79 rename to a
+    # first-class FR13_FA2_QROW32_B1_TIER_B_ARM reached the bash resolver and
+    # the in-container map but not this one. Executed both ways by the runner:
+    # the new spelling resolved STOCK pins, the retired pun resolved the tier-B
+    # branch. A rename that reaches two of three resolvers leaves the third
+    # answering an old question correctly and the current one wrongly.
+    if qrow32_b1_tier_b and qrow32_b1_tier_b not in set(QROW32_B1_TIER_B_ARMS):
+        raise ContractError(
+            "FR13_FA2_QROW32_B1_TIER_B_ARM must be empty or one of "
+            f"{', '.join(QROW32_B1_TIER_B_ARMS)}"
+        )
     if qrow32_b1_live not in (
         {"", "nosplit", "split2", "visibility", "gqa_pair"}
         | set(QROW32_B1_TIER_B_ARMS)
@@ -3707,10 +3720,13 @@ def _expected_runtime_fa2_identity(
             "visibility, gqa_pair, or a tier-b arm "
             f"({', '.join(QROW32_B1_TIER_B_ARMS)})"
         )
-    # Tier-B arms are LIVE-only. Mark's pass-64 ruling grants serving on a
-    # Tier-B credential and withholds promoted-default until exact16 QC parity,
-    # so the production allowlist deliberately does NOT gain the tier-b arms --
-    # widening it is a separate decision with a separate gate.
+    # Tier-B arms serve under their OWN first-class selector
+    # (FR13_FA2_QROW32_B1_TIER_B_ARM), never as a production arm. Mark's
+    # pass-64 ruling grants serving on a Tier-B credential and withholds
+    # promoted-default until exact16 QC parity, so the production allowlist
+    # deliberately does NOT gain them -- widening it is a separate decision
+    # with a separate gate. (The former "LIVE-only" wording here described the
+    # retired piggyback spelling and outlived it; that staleness is site 24.)
     if qrow32_b1_production not in {"", "nosplit", "gqa_pair"}:
         raise ContractError(
             "FR13_FA2_QROW32_B1_PRODUCTION_ARM must be empty, nosplit, or gqa_pair"
@@ -3779,13 +3795,27 @@ def _expected_runtime_fa2_identity(
                 "GQA-pair candidate"
             )
         return QROW32_B4_GQA_PAIR_FA2_SIZE, QROW32_B4_GQA_PAIR_FA2_SHA256
-    if qrow32_b1_live or qrow32_b1_production:
+    if qrow32_b1_live and qrow32_b1_tier_b:
+        raise ContractError(
+            "the qrow32 B1 tier-b and live-A/B selectors are mutually exclusive"
+        )
+    if qrow32_b1_tier_b and qrow32_b1_production:
+        raise ContractError(
+            "the qrow32 B1 tier-b and production selectors are mutually "
+            "exclusive"
+        )
+    if qrow32_b1_live or qrow32_b1_tier_b or qrow32_b1_production:
         declared_sha256 = env.get("FR13_FA2_QROW32_B1_SO_SHA256", "")
         # Resolve the arm that decides which binary is loaded. A production
         # launch has no live arm, so keying on the live arm alone would check
         # a GQA-pair production run against the split2/incumbent pins and
         # demand the wrong .so.
-        qrow32_b1_pin_arm = qrow32_b1_live or qrow32_b1_production
+        # Precedence mirrors the bash pin case and the in-container map
+        # exactly: live, then tier-b, then production. That is no longer a
+        # comment -- the universal resolver test executes all of them.
+        qrow32_b1_pin_arm = (
+            qrow32_b1_live or qrow32_b1_tier_b or qrow32_b1_production
+        )
         # EVERY arm names its own binary; there is no fall-through.
         #
         # Arm S's 17th refusal (2026-08-18) came from the same shape one layer

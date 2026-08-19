@@ -844,3 +844,64 @@ The container path is **not** supplied. Re-earn the credential at the serving HE
 (~10 min, offline) — the patcher moved again.
 
 **251 tests, 16 lint pairs, 0 stale. Both C++ closures unchanged — no rebuild.**
+
+---
+
+## 17. Site 24, site 25, and the test that ends the class
+
+Site 24 is the rename's stranded survivor. My walk (§15, B3) taught
+`_expected_runtime_fa2_identity` about tier-B **under the spelling then in use** — the
+`LIVE_AB_ARM` + modifier pun — and the pass-79 rename to a first-class `TIER_B_ARM`
+reached the bash resolver and the in-container map but not this one. The runner executed
+it both ways: **new spelling → stock pins; the retired pun → the tier-B branch.** Its
+comment still said "Tier-B arms are LIVE-only", describing a spelling that no longer
+existed.
+
+### 17.1 Enumeration: 34 reads / 6 stranded / 6 fixed
+
+Grepping every read of `FR13_FA2_QROW32_B1_(LIVE_AB|PRODUCTION)_ARM` across the launchers,
+the patcher, the contract and the sidecar gives **34 sites**. Six were stranded by the
+rename, and all six are fixed in this pass rather than the next round:
+
+| # | site | what it would have done |
+|---|---|---|
+| **24** | `fr13_fixed32_contract.py` `_expected_runtime_fa2_identity` | resolved **stock** pins for a tier-B boot |
+| **25** | the promoted-default injection block | **armed `PRODUCTION_ARM=gqa_pair` underneath a tier-B boot** — its guard listed every other selector and not `TIER_B_ARM` |
+| 26 | `export LIVE_AB_ARM PRODUCTION_ARM` before the child interpreter | site 24's own consumer: the contract resolver would have learned `TIER_B_ARM` and **never seen it** |
+| 27 | the private-selector-active disjunction | a tier-B boot would not have counted as "a private selector is active" |
+| 28 | the `qrow16_stock` timing-arm exclusion | a timing arm could coexist with a tier-B serve |
+| 29 | the sfwd qrow16-production exclusion | same class |
+
+Site 25 is the one worth pausing on: it was found **by the enumeration, before it fired**,
+and it would have presented as yet another late-boot refusal. Site 26 is the sharpest
+lesson — *a resolver that knows a selector it cannot see is still stranded*, and fixing
+site 24 without it would have produced an identical round 11.
+
+### 17.2 The universal resolver test
+
+Nine independent resolvers, one question — *which binary does this boot authorise?* — all
+fed the canonical tier-B environment and required to answer split-K
+(`300123792` / `28570f83…`, plus both SASS digests where carried):
+
+3 × bash pin-arm resolver · 3 × in-container Python resolver · the runtime contract · the
+injected identity table · the sidecar candidate contract · the serving resolver.
+
+**The enumeration is grepped, not listed**, so it cannot rot: every read of a legacy
+selector is either an **exercised resolver** (8 minimum, asserted — a registry that
+adjudicates everything and exercises nothing would pass while testing nothing), or an
+**adjudicated non-resolver** with a written reason, or a **failure**. Sites 2.1, 17, 23
+and 24 were each a read nobody had enumerated.
+
+Counting its own answers is what caught the last one: the test expected six launcher
+resolvers and got four, because `LAUNCHERS` in this file was still a 2-tuple — the same
+one-twin-short mistake that let `fr14_leg3` drift a whole arm behind in the
+paired-contract family. Now three.
+
+### 17.3 The CPU walk now includes the link that killed round 10
+
+`_expected_runtime_fa2_identity` is executed **inside** the end-to-end serve test, not
+trusted from two files away. Round 10 died there with every other link already green.
+0.60 s.
+
+**266 tests, 16 lint pairs, 0 stale. Both C++ closures unchanged — no rebuild.**
+Re-earn the credential at the serving HEAD; arm with `TIER_B_ARM` + `_CREDENTIAL_HOST`.

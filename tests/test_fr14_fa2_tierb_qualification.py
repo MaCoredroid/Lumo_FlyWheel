@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -501,6 +502,11 @@ def test_reduced_measurements_match_the_banked_probe() -> None:
 LAUNCHERS = (
     REPO / "scripts/fr13_launch_forked_fa2_tree_server.sh",
     REPO / "scripts/fr14_armb_leg3_launch_nomiddleware.sh",
+    # The third twin. This list was a 2-tuple until the universal resolver
+    # test counted its own answers and found four where six were expected --
+    # the same one-twin-short mistake that let fr14_leg3 drift a whole arm
+    # behind in the paired-contract family.
+    REPO / "scripts/fr14_leg3_launch_nomiddleware.sh",
 )
 
 
@@ -1086,6 +1092,15 @@ def test_cpu_end_to_end_tier_b_serve_reaches_the_retag(monkeypatch, tmp_path):
     # And the credential was validated on the way through, not assumed.
     assert selection["tier_b_credential"] is not None
     assert selection["tier_b_credential"]["credential_sha256"]
+    # AND THE CONTRACT, in the same loop. Round 10 died at
+    # _expected_runtime_fa2_identity while every other link on this chain had
+    # already passed, so the walk now executes it here rather than trusting
+    # that a resolver two files away agrees.
+    contract = _contract()
+    assert contract._expected_runtime_fa2_identity({
+        "FR13_FA2_QROW32_B1_TIER_B_ARM": SPLITK_ARM,
+        "FR13_FA2_QROW32_B1_SO_SHA256": SPLITK_SO_SHA256,
+    }) == (300123792, SPLITK_SO_SHA256)
     # Engagement is OBSERVED.
     engagement = namespace["_FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT"]
     assert engagement["calls"] == 1
@@ -1358,3 +1373,307 @@ def test_credential_path_is_split_host_and_container(launcher) -> None:
     # Both spellings are guarded against .lumo.local.env.
     assert "\n  FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_HOST\n" in text
     assert "\n  FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL\n" in text
+
+
+def _bash_pin_arm_for(launcher, env):
+    """Execute the launcher's OWN bash pin-arm resolver lines, unmodified."""
+    import subprocess
+
+    text = launcher.read_text()
+    start = text.index(
+        '  _FR13_FA2_QROW32_B1_PIN_ARM=$FR13_FA2_QROW32_B1_LIVE_AB_ARM'
+    )
+    end = text.index('  case "$_FR13_FA2_QROW32_B1_PIN_ARM" in', start)
+    fragment = text[start:end]
+    preamble = "set -u\n" + "".join(
+        '{}="{}"\n'.format(name, env.get(name, ""))
+        for name in (
+            "FR13_FA2_QROW32_B1_LIVE_AB_ARM",
+            "FR13_FA2_QROW32_B1_TIER_B_ARM",
+            "FR13_FA2_QROW32_B1_PRODUCTION_ARM",
+        )
+    )
+    script = (
+        preamble
+        + fragment
+        + '\nprintf "%s" "$_FR13_FA2_QROW32_B1_PIN_ARM"\n'
+    )
+    out = subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True
+    )
+    assert out.returncode == 0, out.stderr
+    return out.stdout
+
+# ===========================================================================
+# THE UNIVERSAL RESOLVER TEST.
+#
+# Four resolvers have now answered the same question wrongly across ten
+# rounds -- sites 2.1, 17, 23 and 24 -- and each fix taught ONE of them. The
+# round-9 twin detector compared two; this supersedes it by enumerating ALL of
+# them, and by enumerating them from the SOURCE rather than from a list, so
+# the enumeration cannot rot the way every hand-maintained list in this
+# campaign has.
+#
+# Discovery: grep every read of the two legacy selectors across the launchers,
+# the patcher blobs, the contract and the sidecar. Every hit is either an
+# executable arm->identity resolver (exercised below against the canonical
+# tier-B environment, and required to answer split-K) or an adjudicated
+# non-resolver with a written reason. A new hit that is neither fails.
+# ===========================================================================
+
+LEGACY_SELECTOR_RE = re.compile(
+    r"FR13_FA2_QROW32_B1_(?:LIVE_AB|PRODUCTION)_ARM"
+)
+RESOLVER_SURFACE = (
+    REPO / "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    REPO / "scripts/fr14_armb_leg3_launch_nomiddleware.sh",
+    REPO / "scripts/fr14_leg3_launch_nomiddleware.sh",
+    REPO / "scripts/fr13_patch_fa2_tree_bias.py",
+    REPO / "scripts/fr13_fixed32_contract.py",
+    REPO / "scripts/fr13_qrow32_b1_pass_sidecar.py",
+)
+
+# Every line that reads a legacy selector and is NOT an arm->identity resolver,
+# with the reason. Keyed on a substring of the line, because line numbers rot
+# faster than code does. If a line here stops existing the registry is stale;
+# if a line appears that is not here and not a resolver, the test fails.
+# Reads that ARE arm->identity resolvers and ARE executed by the universal
+# test below. Listing them separately keeps the adjudication registry honest:
+# a resolver must be exercised, not excused.
+EXERCISED_RESOLVERS = (
+    ("_FR13_FA2_QROW32_B1_PIN_ARM=$FR13_FA2_QROW32_B1_LIVE_AB_ARM",
+     "bash pin-arm resolver (executed, all three twins)"),
+    ("_FR13_FA2_QROW32_B1_PIN_ARM=$FR13_FA2_QROW32_B1_PRODUCTION_ARM",
+     "bash pin-arm resolver, production leg (executed)"),
+    ('qrow32_b1_live = env.get("FR13_FA2_QROW32_B1_LIVE_AB_ARM"',
+     "contract _expected_runtime_fa2_identity (executed) -- site 24"),
+    ('qrow32_b1_production = env.get("FR13_FA2_QROW32_B1_PRODUCTION_ARM"',
+     "contract _expected_runtime_fa2_identity, production leg (executed)"),
+    ('"FR13_FA2_QROW32_B1_LIVE_AB_ARM",',
+     "python in-container resolver tuple (executed, all three twins)"),
+    ('"FR13_FA2_QROW32_B1_PRODUCTION_ARM",',
+     "python in-container resolver tuple, production leg (executed)"),
+)
+
+ADJUDICATED_NON_RESOLVERS = (
+    ("_FR13_M32_GUARD", "guard-name registry: protects the var, does not resolve it"),
+    ("_FR13_CALLER_M32_GUARD", "caller-guard equality checks, not resolution"),
+    ("=${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}", "set -u default"),
+    ("=${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}", "set -u default"),
+    ("-v FR13_FA2_QROW32_B1_PRODUCTION_ARM", "was-it-named probe, not resolution"),
+    ("_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED", "was-it-named flag"),
+    ("SELECTOR_COUNT", "mutual-exclusion counter"),
+    ("case \"$FR13_FA2_QROW32_B1_LIVE_AB_ARM\"", "arm allowlist"),
+    ("case \"$FR13_FA2_QROW32_B1_PRODUCTION_ARM\"", "arm allowlist"),
+    ("must be empty", "allowlist error text"),
+    ("-e FR13_FA2_QROW32_B1_LIVE_AB_ARM", "container transport"),
+    ("-e FR13_FA2_QROW32_B1_PRODUCTION_ARM", "container transport"),
+    ("export FR13_FA2_QROW32_B1_LIVE_AB_ARM", "child-interpreter transport"),
+    ("PRODUCTION_ARM_DEFAULT", "the promoted default's own name"),
+    ("_FR13_FA2_QROW32_B1_PRODUCTION_ARMS", "the production arm SET, not a resolver"),
+    ("FR13_FA2_QROW32_B1_LIVE_AB_ARM\"", "env read inside an adjudicated resolver"),
+    ("FR13_FA2_QROW32_B1_PRODUCTION_ARM\"", "env read inside an adjudicated resolver"),
+    ("FR13_FA2_QROW32_B1_LIVE_AB_ARM',", "env read inside an adjudicated resolver"),
+    ("FR13_FA2_QROW32_B1_PRODUCTION_ARM',", "env read inside an adjudicated resolver"),
+    ("-n \"$FR13_FA2_QROW32_B1_PRODUCTION_ARM\"", "mode predicate"),
+    ("-n \"${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}\"", "mode predicate"),
+    ("-n \"${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}\"", "mode predicate"),
+    ("-n \"$FR13_FA2_QROW32_B1_LIVE_AB_ARM\"", "mode predicate"),
+    ("-z \"$FR13_FA2_QROW32_B1_LIVE_AB_ARM\"", "mode predicate"),
+    ("-z \"$FR13_FA2_QROW32_B1_PRODUCTION_ARM\"", "mode predicate"),
+    ("-z \"${FR13_FA2_QROW32_B1_LIVE_AB_ARM:-}\"", "mode predicate"),
+    ("-z \"${FR13_FA2_QROW32_B1_PRODUCTION_ARM:-}\"", "mode predicate"),
+    ("!= \"gqa_pair\"", "mode predicate"),
+    ("== \"gqa_pair\"", "mode predicate"),
+    ("#", "comment"),
+    ('== "nosplit"', "mode predicate"),
+    ('-n "\\${FR13_FA2_QROW32_B1_PRODUCTION_ARM}"',
+     "tier-A attestation block predicate, inside a heredoc"),
+    ('-n "\\${FR13_FA2_QROW32_B1_TIER_B_ARM}"',
+     "tier-B attestation block predicate, inside a heredoc"),
+)
+
+# Bare variable names on their own line: the guard-name registry.
+BARE_NAME_LINES = (
+    "FR13_FA2_QROW32_B1_LIVE_AB_ARM",
+    "FR13_FA2_QROW32_B1_PRODUCTION_ARM",
+)
+
+# The canonical tier-B environment: exactly what a round-11 boot will set.
+CANONICAL_TIER_B_ENV = {
+    "FR13_FA2_QROW32_B1_TIER_B_ARM": SPLITK_ARM,
+    "FR13_FA2_QROW32_B1_SO_SHA256": SPLITK_SO_SHA256,
+    "FR13_FA2_QROW32_B1_SO_SIZE": "300123792",
+}
+SPLITK_SIZE = 300123792
+SPLITK_SASS = "3f24d70dce2ff70ad9209bad5af2a93cc39453df529cb298e4476cbfbfd80b9e"
+SPLITK_BASELINE_SASS = (
+    "fa01f98840420b9c0177d06297aacabb0ed5e00c674511fdaa4aa618c3473470"
+)
+
+
+def _legacy_selector_reads():
+    """Every line in the surface that reads a legacy selector."""
+    hits = []
+    for path in RESOLVER_SURFACE:
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            if LEGACY_SELECTOR_RE.search(line):
+                hits.append((path, number, line))
+    return hits
+
+
+def test_every_legacy_selector_read_is_a_resolver_or_adjudicated():
+    """The enumeration cannot rot, because it is not a list.
+
+    A new read of LIVE_AB_ARM or PRODUCTION_ARM anywhere in the resolver
+    surface is either exercised by the universal test below or written down
+    here with a reason. Sites 2.1, 17, 23 and 24 were each a read nobody had
+    enumerated.
+    """
+    unreviewed = []
+    exercised = 0
+    for path, number, line in _legacy_selector_reads():
+        stripped = line.strip()
+        if stripped in BARE_NAME_LINES:
+            continue
+        if any(needle in line for needle, _why in EXERCISED_RESOLVERS):
+            exercised += 1
+            continue
+        if any(needle in line for needle, _why in ADJUDICATED_NON_RESOLVERS):
+            continue
+        if stripped.startswith("#") or stripped.startswith("*"):
+            continue
+        unreviewed.append(f"{path.name}:{number}: {stripped[:100]}")
+    # A registry that adjudicates everything and exercises nothing would pass
+    # while testing nothing, so the count is asserted too.
+    assert exercised >= 8, (
+        f"only {exercised} resolver reads were exercised; the universal test "
+        "must actually run them"
+    )
+    assert not unreviewed, (
+        "unadjudicated reads of a legacy B1 selector -- each is either an "
+        "arm->identity resolver that must answer the canonical tier-B "
+        "environment, or a non-resolver needing a written reason:\n  "
+        + "\n  ".join(unreviewed)
+    )
+
+
+def test_universal_resolver_agreement_on_the_canonical_tier_b_environment():
+    """EVERY arm->identity resolver, fed the same environment, must agree.
+
+    This is the test that ends the class. Ten rounds, four resolvers, one
+    question: which binary does this boot authorise? They are executed here
+    side by side and required to say split-K.
+    """
+    answers = {}
+
+    # 1-3. the bash pin-arm resolver, in all three launcher twins
+    for launcher in LAUNCHERS:
+        answers[f"bash:{launcher.name}"] = _bash_pin_arm_for(
+            launcher, CANONICAL_TIER_B_ENV
+        )
+    # 4-6. the in-container python resolver, in all three twins
+    for launcher in LAUNCHERS:
+        answers[f"python:{launcher.name}"] = _launcher_python_resolver(
+            launcher, CANONICAL_TIER_B_ENV
+        )
+    for name, arm in answers.items():
+        assert arm == SPLITK_ARM, f"{name} resolved {arm!r}, not the tier-B arm"
+
+    # 7. the runtime contract -- SITE 24
+    contract = _contract()
+    size, sha = contract._expected_runtime_fa2_identity(
+        dict(CANONICAL_TIER_B_ENV)
+    )
+    assert (size, sha) == (SPLITK_SIZE, SPLITK_SO_SHA256), (
+        "the runtime contract resolved the wrong binary for a tier-B boot"
+    )
+
+    # 8. the injected blob's identity table, which also carries the SASS pins
+    selectors = _selectors()
+    identity = selectors["_fr13_fa2_qrow32_b1_identity"](SPLITK_ARM)
+    assert identity["candidate_sha256"] == SPLITK_SO_SHA256
+    assert identity["candidate_size"] == SPLITK_SIZE
+    assert identity["sass_digest_sha256"] == SPLITK_SASS
+    assert identity["baseline_sass_digest_sha256"] == SPLITK_BASELINE_SASS
+
+    # 9. the sidecar's candidate contract
+    sidecar = _sidecar()
+    candidate = sidecar._candidate_contract(SPLITK_ARM)
+    assert candidate["sha256"] == SPLITK_SO_SHA256
+    assert candidate["size"] == SPLITK_SIZE
+
+    # 10. and the serving resolver itself, which decides the tier
+    import os as _os
+
+    saved = {
+        k: _os.environ.get(k)
+        for k in ("FR13_FA2_QROW32_B1_TIER_B_ARM",
+                  "FR13_FA2_QROW32_B1_LIVE_AB_ARM",
+                  "FR13_FA2_QROW32_B1_PRODUCTION_ARM")
+    }
+    try:
+        for key in saved:
+            _os.environ.pop(key, None)
+        _os.environ["FR13_FA2_QROW32_B1_TIER_B_ARM"] = SPLITK_ARM
+        assert selectors["_fr13_fa2_qrow32_b1_serving_arm"]() == (
+            SPLITK_ARM, "B"
+        )
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                _os.environ.pop(key, None)
+            else:
+                _os.environ[key] = value
+
+    # Six executed launcher resolvers (3 bash + 3 python) plus the contract,
+    # the injected identity table, the sidecar contract and the serving
+    # resolver: nine independent answers to one question.
+    assert len(answers) == 6, sorted(answers)
+
+
+def test_the_retired_pun_no_longer_out_resolves_the_real_spelling():
+    """Site 24's signature: the pun worked and the real spelling did not."""
+    contract = _contract()
+    new_spelling = contract._expected_runtime_fa2_identity({
+        "FR13_FA2_QROW32_B1_TIER_B_ARM": SPLITK_ARM,
+        "FR13_FA2_QROW32_B1_SO_SHA256": SPLITK_SO_SHA256,
+    })
+    assert new_spelling == (SPLITK_SIZE, SPLITK_SO_SHA256)
+    # The pun still resolves the same binary (the live-A/B shadow arm is a real
+    # mode), but it is no longer the ONLY spelling that does.
+    pun = contract._expected_runtime_fa2_identity({
+        "FR13_FA2_QROW32_B1_LIVE_AB_ARM": SPLITK_ARM,
+        "FR13_FA2_QROW32_B1_SO_SHA256": SPLITK_SO_SHA256,
+    })
+    assert pun == new_spelling
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_production_default_does_not_fire_under_a_tier_b_boot(launcher):
+    """SITE 25, found by the enumeration before it fired.
+
+    A Hydra27 B1 launch that names no production arm DEFAULTS
+    FR13_FA2_QROW32_B1_PRODUCTION_ARM to gqa_pair. Its guard listed every other
+    selector and not TIER_B_ARM, so a tier-B boot would have had the promoted
+    arm armed underneath it -- caught downstream by the mutual-exclusion checks
+    added at sites 23/24, but caught as a crash rather than never happening.
+    """
+    text = launcher.read_text()
+    block_start = text.index("_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0")
+    block = text[block_start: text.index("]]; then", block_start)]
+    assert '-z "$FR13_FA2_QROW32_B1_TIER_B_ARM"' in block, (
+        "the promoted default's guard does not exclude a tier-B boot"
+    )
+
+
+@pytest.mark.parametrize("launcher", LAUNCHERS, ids=lambda p: p.name)
+def test_the_contract_resolver_can_see_the_selector_it_learned(launcher):
+    """A resolver that knows a selector it cannot see is still stranded."""
+    text = launcher.read_text()
+    export_at = text.index("export FR13_FA2_QROW32_B1_LIVE_AB_ARM")
+    exported = text[export_at: text.index("PYTHONPATH", export_at)]
+    assert "FR13_FA2_QROW32_B1_TIER_B_ARM" in exported, (
+        "the child interpreter that runs _expected_runtime_fa2_identity never "
+        "receives the tier-B selector"
+    )
