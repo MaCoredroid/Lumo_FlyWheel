@@ -212,19 +212,19 @@ OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}
 GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}
 OFFLOAD_HELPER=scripts/swe_x86_helpers/offload_codex_proxy.sh
 OFFLOAD_LINK_DOWN_MAX_S=${OFFLOAD_LINK_DOWN_MAX_S:-300}
-if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]]; then
+if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" || "$KIND" == "hydra31_fixed32" ]]; then
   [[ "$OFFLOAD_AGENT" == "1" ]] \
     || { echo "FAIL: fixed32 requires OFFLOAD_AGENT=1"; exit 2; }
   [[ ! -e "$ARMDIR" ]] \
     || { echo "FAIL: fixed32 arm directory already exists: $ARMDIR"; exit 2; }
 fi
 mkdir -p "$ARMDIR/logs"
-if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]]; then
+if [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" || "$KIND" == "hydra31_fixed32" ]]; then
   chmod 700 "$ARMDIR" "$ARMDIR/logs" \
     || { echo "FAIL: fixed32 arm directories could not be made private"; exit 2; }
 fi
 if [[ "$FR13_FIXED32_COMMITTER_LAYER_BATCH" == "1" ]]; then
-  [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" ]] \
+  [[ "$KIND" == "tail6_fixed32" || "$KIND" == "hydra27_fixed32" || "$KIND" == "hydra31_fixed32" ]] \
     || { echo "FAIL: committer layer-batch arm requires a fixed32 kind"; exit 2; }
   install -m 600 /dev/null \
     "$ARMDIR/logs/fr13_fixed32_committer_layer_batch.arm" \
@@ -307,21 +307,40 @@ import sys
 sys.path.insert(0, "scripts")
 import fr13_fixed32_topology as t
 t.validate_contract()
+t.validate_gate_contract()
+t.validate_tail10_contract()
 print(repr(list(t.FIXED32_CHOICES)))
 print(f"{t.TAIL6_VALID_MASK:#x}")
 print(f"{t.HYDRA27_VALID_MASK:#x}")
 print(t.TAIL6_ACTIVE_DRAFTS)
 print(t.HYDRA27_ACTIVE_DRAFTS)
+# TAIL10 / hydra31: a DIFFERENT physical tree, not just a different mask, so it
+# emits its own path list. Deriving it here is the point -- a third hand-copied
+# set of constants in shell is exactly the drift this block exists to prevent.
+_h31 = t.profile(t.PROFILE_HYDRA31)
+print(repr(list(_h31["choices"])))
+print(f"{_h31['valid_mask']:#x}")
+print(_h31["active_drafts"])
+print(t.PHYSICAL_DRAFTS)
 PY
 )
-(( ${#_FIXED32_CONTRACT[@]} == 5 )) \
-  || { echo "FAIL: fixed32 topology authority did not emit five fields"; exit 2; }
+(( ${#_FIXED32_CONTRACT[@]} == 9 )) \
+  || { echo "FAIL: fixed32 topology authority did not emit nine fields"; exit 2; }
 FIXED32_TREE=${_FIXED32_CONTRACT[0]}
 FIXED32_TAIL_MASK=${_FIXED32_CONTRACT[1]}
 FIXED32_HYDRA_MASK=${_FIXED32_CONTRACT[2]}
 FIXED32_TAIL_ACTIVE=${_FIXED32_CONTRACT[3]}
 FIXED32_HYDRA_ACTIVE=${_FIXED32_CONTRACT[4]}
+FIXED32_HYDRA31_TREE=${_FIXED32_CONTRACT[5]}
+FIXED32_HYDRA31_MASK=${_FIXED32_CONTRACT[6]}
+FIXED32_HYDRA31_ACTIVE=${_FIXED32_CONTRACT[7]}
+FIXED32_PHYSICAL_DRAFTS=${_FIXED32_CONTRACT[8]}
 unset _FIXED32_CONTRACT
+# the runner's handover, asserted against the derivation rather than trusted
+[[ "$FIXED32_HYDRA31_MASK" == "0x7fffffff" \
+   && "$FIXED32_HYDRA31_ACTIVE" == "31" \
+   && "$FIXED32_PHYSICAL_DRAFTS" == "31" ]] \
+  || { echo "FAIL: hydra31 contract drifted: mask=$FIXED32_HYDRA31_MASK nodes=$FIXED32_HYDRA31_ACTIVE drafts=$FIXED32_PHYSICAL_DRAFTS"; exit 2; }
 # 333 = widths [3,3,3]: depth-3 spine (spine_steps=2) + 2 branches/depth (9 choices). SAME width
 # as t33333, differs ONLY in depth -> dfwd(t33333)-dfwd(t333) = 2 spine-steps' drafter cost.
 T333_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2)]"
@@ -438,7 +457,7 @@ case "$KIND" in
       FR13_FIXED32_MODE=tail6_fixed32
       "FR13_FIXED32_VALID_MASK=$FIXED32_TAIL_MASK"
       "FR13_FIXED32_ACTIVE_NODES=$FIXED32_TAIL_ACTIVE"
-      FR13_FIXED32_PHYSICAL_DRAFTS=31
+      "FR13_FIXED32_PHYSICAL_DRAFTS=$FIXED32_PHYSICAL_DRAFTS"
     )
     ;;
   hydra27_fixed32)
@@ -452,7 +471,27 @@ case "$KIND" in
       FR13_FIXED32_MODE=hydra27_fixed32
       "FR13_FIXED32_VALID_MASK=$FIXED32_HYDRA_MASK"
       "FR13_FIXED32_ACTIVE_NODES=$FIXED32_HYDRA_ACTIVE"
-      FR13_FIXED32_PHYSICAL_DRAFTS=31
+      "FR13_FIXED32_PHYSICAL_DRAFTS=$FIXED32_PHYSICAL_DRAFTS"
+    )
+    ;;
+  # TAIL10. The four slots hydra27 disarms respent as spine 0^12..0^15, so all
+  # 31 physical drafts are armed and the Arctic tail runs 6 -> 10.
+  # NOTE the tree: hydra31 is a DIFFERENT physical tree, not hydra27 with a
+  # wider mask -- draft ids >= 17 carry different paths. Passing $FIXED32_TREE
+  # here would hand the server hydra27's 31 paths under hydra31's mask: a
+  # malformed arm that would boot.
+  hydra31_fixed32)
+    LAUNCHER=forked
+    TREEARG="$FIXED32_HYDRA31_TREE"
+    EXPECT_RATIO=31
+    FIXED32_MODE=hydra31_fixed32
+    declare -a XFLAGS=(
+      FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged
+      FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_HYDRA23=0
+      FR13_FIXED32_MODE=hydra31_fixed32
+      "FR13_FIXED32_VALID_MASK=$FIXED32_HYDRA31_MASK"
+      "FR13_FIXED32_ACTIVE_NODES=$FIXED32_HYDRA31_ACTIVE"
+      "FR13_FIXED32_PHYSICAL_DRAFTS=$FIXED32_PHYSICAL_DRAFTS"
     )
     ;;
   # REPLAY-TIMER probe: tail6 + FR13_REPLAY_GPU_TIMER=1 -> coarse GPU-time of the accepted-path GDN replay

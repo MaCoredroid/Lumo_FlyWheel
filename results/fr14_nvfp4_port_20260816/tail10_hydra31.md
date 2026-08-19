@@ -271,3 +271,68 @@ exact4, ≥20 000 steps/arm. Headline instrument: the **per-position ladder past
 counters must be non-zero through 14. Watch `cfwd`: §3.1 predicts +33% from the 12→16 walk,
 and that is now the census's expectation too, so a serve that disagrees fails validation rather
 than quietly reporting a wrong number.
+
+
+---
+
+# 10. STAGE 2b — the serve VEHICLE (2026-08-19)
+
+Round 13 refused **pre-boot at zero GPU**: stage 2 taught seven files and not
+`fr13_bigdenom_swe_serve_variant.sh`, which is what actually launches an arm. Env could not
+route around it either — the kind block bakes `FR13_FIXED32_MODE` into `XFLAGS`, which the
+vehicle exports *after* the caller's environment.
+
+Fifth instance of one shape: **consumers taught, selector not.** My stage-1 cascade enumerated
+205 sites across seven files and never enumerated the thing that starts the serve.
+
+## 10.1 What the vehicle already had right
+
+It does **not** hand-copy the topology. A `mapfile` block runs the topology module and emits
+the contract, under the comment *"Fixed-32 has one topology authority. Do not duplicate the 31
+paths or masks in shell."* So the clean shape existed; hydra31 just had to join it. The block
+now emits nine fields instead of five, calls all three validators before emitting, and the
+shell asserts the runner's handover (`0x7fffffff` / 31 / 31) against the derivation rather than
+trusting it.
+
+## 10.2 The catch that mattered: hydra31 needs its own TREE
+
+The obvious kind block would copy hydra27's and swap the mask. That would be wrong, and it
+would **boot**.
+
+`TREEARG` carries the 31 paths. hydra31 is a *different physical tree* — sorting by
+`(len, path)` moves **14 of 31 draft ids** (id 30 goes from `0^11` to `0^15`). Passing
+`$FIXED32_TREE` under mask `0x7fffffff` would arm four rank-2 side branches as if they were
+spine continuations. So the authority emits hydra31's own path list and the kind block passes
+`$FIXED32_HYDRA31_TREE`. A test asserts the two kinds dispatch different trees.
+
+## 10.3 Audit of the vehicle's other per-kind exports
+
+Of everything the cascade named as profile-varying — main tail length, arctic requested tokens,
+carry slots, rescue columns, walk cap, loop iterations, critical path, max depth, both digests,
+GDN geometry — **none appears in the vehicle at all**. They are derived downstream from the
+mode and the tree. The only profile-varying exports are the four now handled
+(`FR13_FIXED32_MODE`, `VALID_MASK`, `ACTIVE_NODES`, `PHYSICAL_DRAFTS`) plus `TREEARG`.
+`EXPECT_RATIO=31` is the *physical* draft count and is correct for every profile.
+
+Three generic fixed32 gates (OFFLOAD_AGENT, private arm dirs, committer layer-batch) now admit
+hydra31. The BV64/4-warp gate stays hydra27-only — it is a hydra27-qualified lever, and
+refusing hydra31 there is the same discipline the launcher guard applies.
+
+`FR13_FIXED32_PHYSICAL_DRAFTS=31` was the last hand-copied literal in the file; all three kinds
+now derive it. There are zero left.
+
+## 10.4 The parity detector
+
+`tests/test_fr14_vehicle_profile_parity.py`, 18 cases, pure source + local execution, no GPU.
+For **every** profile in `fr13_fixed32_topology.PROFILES` it asserts the vehicle has a dispatch
+kind whose exported mode / mask / active-nodes / drafts / tree match that profile — and it
+**executes** the vehicle's own authority and `case` to check, rather than reading them.
+
+It fails on the *next* profile anyone adds. Four mutations prove it can fail: an unknown
+profile, a re-literalised mask, a kind reusing the wrong tree, and a generic gate that forgot a
+profile.
+
+## 10.5 Status
+
+346 tests, 16 pairs / 0 stale. Round 14 — hydra31 vs hydra27, both arms same HEAD, gate OFF
+both, paired exact4, ladder-past-position-10 as the headline instrument — can launch.
