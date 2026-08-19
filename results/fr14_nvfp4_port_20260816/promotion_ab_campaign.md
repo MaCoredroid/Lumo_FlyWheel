@@ -3245,3 +3245,181 @@ step_wall/TPS remain open and still need one boot.**
 
 Standing verdicts unchanged: fused top-k PROMOTED, suffix pass gate REFUSE, split-K
 recommended for the tier-B serving route on round 12's evidence.
+
+# ROUND 20 (2026-08-19 18:19Z–18:39Z) — the eleventh site, and it is where you said it would be: vLLM under capture
+
+## BOOT VERDICT: REFUSED — inside the captured FX graph, on the serve path, five minutes in
+
+ARM H31i (`hydra31_fixed32_promoab_Ch31q`, runroot `output/fr14_promoab_Ch31q_20260819T181916Z`)
+booted at HEAD `5efa41820` and refused at 18:24:25Z, `serve rc=2`, 4m50s after boot.
+Ninth site confirmed closed on the way in — it got past every check that stopped
+round 19. GPU cost: two short containers (~11 min total).
+
+```
+(EngineCore pid=154)   File "<eval_with_key>.256", line 5, in forward
+(EngineCore pid=154)     gdn_attention_core = torch.ops.vllm.gdn_attention_core(...)
+(EngineCore pid=154)   File ".../vllm/model_executor/layers/mamba/gdn_linear_attn.py", line 15639
+(EngineCore pid=154)   File ".../vllm/model_executor/layers/mamba/gdn_linear_attn.py", line 14250, in _forward_core
+(EngineCore pid=154)     _fr13_f32_pregather(
+(EngineCore pid=154)   File "/workspace/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py", line 8043,
+(EngineCore pid=154)       in preseed_fixed32_conv_col0_pregather
+(EngineCore pid=154)     _fr13_fixed32_treeconv_topology_descriptor(_FR13_FIXED32_MODE)
+(EngineCore pid=154)   File "/workspace/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py", line 102
+(EngineCore pid=154)     raise RuntimeError(f"unsupported fixed32 tree-conv mode {mode!r}") from error
+(EngineCore pid=154) RuntimeError: unsupported fixed32 tree-conv mode 'hydra31_fixed32'
+(EngineCore pid=154) KeyError: 'hydra31_fixed32'
+```
+
+`<eval_with_key>.256, in forward` is a torch.fx-generated module. The brief called
+it: **"if an eleventh exists it is in vLLM-under-capture or nowhere."** It exists,
+and it is in vLLM under capture. Every prior site was reachable by reading a script
+before boot; this one is only reachable by running the captured graph.
+
+## THIS SITE IS NOT AN OVERSIGHT — IT IS A CORRECT REFUSAL IN THE WRONG PLACE
+
+The narrow map carries an explicit round-18 note saying the refusal is deliberate:
+
+```python
+# ROUND 18 ADJUDICATION -- KEPT hydra27/tail6. The tree-conv zero-tail
+# specialization is a DEFAULT-OFF byte-AB lever (FR13_FIXED32_CONV_COMMIT_ZERO_TAIL
+# defaults "0"). ... the lever's byte-AB pass was measured on hydra27, so hydra31
+# must re-qualify it. _fr13_fixed32_treeconv_topology_descriptor raises
+# "unsupported fixed32 tree-conv mode" for hydra31, which is the intended refusal.
+_FR13_FIXED32_TREECONV_MODE_IDENTITY = {
+    "tail6_fixed32":   ("Tail23",  0x7A9CE7FF),
+    "hydra27_fixed32": ("Hydra27", 0x7ABDFFFF),
+}
+```
+
+That adjudication is right and I am not asking for it to be relaxed. hydra31 has
+not re-qualified the zero-tail lever and must not silently inherit hydra27's
+byte-AB pass. **The defect is placement, not scope.**
+
+OBSERVED, from the executed container's own environment — not inferred from my
+spec, which is the round-6 mistake I do not intend to repeat:
+
+```
+FR13_FIXED32_CONV_COMMIT_ZERO_TAIL=0
+FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB=0
+FR13_FIXED32_MODE=hydra31_fixed32
+```
+
+**The lever was OFF and the guard fired anyway.** At `:8043` the descriptor is not
+consulted to decide anything — it is a *value in a dict literal* being assembled
+unconditionally, three keys away from `"commit_zero_tail": zero_tail`:
+
+```python
+"commit_zero_tail": zero_tail,
+...
+"treeconv_topology_descriptor": (
+    _fr13_fixed32_treeconv_topology_descriptor(_FR13_FIXED32_MODE)
+),
+```
+
+So the boot dies **while building the record that reports the lever is off**. A
+default-OFF lever's qualification guard is evaluated on the unconditional serve
+path. The CPU walk could not have caught it — the walk never builds this record.
+
+## THE FIX IS ALREADY IN THE SAME FILE, 1,600 LINES DOWN
+
+Not my change to make, but the pattern needs no invention. Three sibling maps in
+this same module are equally narrow and none of them blocks a boot:
+
+| site | access | refuses when |
+|---|---|---|
+| `:43` (fired) | `MAP[mode]` → KeyError → `raise` | **always** |
+| `:1471` | `{...}.get(mode)` → `None` | never |
+| `:2056` | `{...}.get(mode)`, then `if ordered_launch and topology is None: raise` | **only when the lever is armed** |
+| `:2169` | `{...}.get(mode)` → `None` | never |
+
+`:2056` is exactly the shape `:43` should have: same narrow scope, same refusal,
+conditioned on the lever rather than on the description. Gating the `:43` raise on
+`zero_tail or zero_tail_byte_ab` preserves round 18's adjudication verbatim while
+removing the boot block.
+
+## THE DETECTOR I PROPOSED IN ROUND 19 WOULD NOT HAVE CAUGHT THIS
+
+Round 19's site lived *in* the authority, and I proposed a self-consistency check
+inside `fr13_fixed32_topology`. Site 11 lives in a module that never imports the
+authority at all — it carries its own private mode index. My detector was scoped to
+the wrong module and I am recording that plainly.
+
+The repo-wide version (`promotion_ab_modemap_scan.py`, banked, AST, no GPU) finds
+**40 mappings keyed purely by fixed32 mode name, 35 of them incomplete.** But raw
+incompleteness is NOT the signal — most of those 35 are byte-qualification scopes
+where narrow is *correct*, the same doctrine as `_FR13_FIXED32_MODES` at `:867`.
+Firing on all 35 would be the "widen everything" move round 15 already ruled out.
+
+The signal is the conjunction: **incomplete AND raising AND reachable on the serve
+path with the lever off.** Of the 35, exactly one had all three, and it is the one
+that fired. The mechanical half (incomplete + `[mode]` subscript that raises rather
+than `.get`) is a three-line AST refinement; the reachability half is the part that
+still needs a human, or a boot.
+
+## DISCLOSURE — the split-K default flip does not touch this pairing
+
+Split-K became the production default at passes 100/101, which vindicates round 12's
+recommendation. It changed only the resolution of an **unnamed** arm. Enumerated,
+not assumed — H31i is excluded from that block by **two independent conditions**:
+
+1. `_FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0` (launcher `:1292`) — my arm names
+   the B1 production arm explicitly empty, so the entire promoted-default block,
+   split-K tier-B arming included, is skipped.
+2. `FR13_FIXED32_MODE == "hydra27_fixed32"` in the same predicate — H31i is hydra31.
+
+Both arms' resolved kernel, read back from their artifacts, is the same one:
+`fa2_b1_arm = INCUMBENT qrow16 (production arm NAMED EMPTY ...)`, stock
+`_vllm_fa2_C.abi3.so`. H27n predates the flip; H31i post-dates it; they resolve
+identically. **The A/B remains single-variable.**
+
+Also confirmed by direct execution rather than by reading: the credential at
+`output/fr13_b1_gqa_pair_credential.env` is bound to `ba954f512…`, HEAD is
+`5efa41820…` — stale, hence not serviceable, which is the branch both arms took.
+
+## PRE-FLIGHT, ALL VERIFIED BEFORE THE GPU
+
+- **Site 9 closed, independently re-derived.** `all_parent_schedule_by_mode`:
+  hydra27 `13 self/17 target` and tail6 `13/17`, both tagged
+  `scope=['tail6_fixed32','hydra27_fixed32']`; hydra31 derives its own **11/21**.
+  `topology_sha256 = 99b1255b…` unchanged. The qualified-scope union is preserved,
+  so H27n's route is untouched — exactly as the ruling described.
+- **CPU walk end-to-end, all three modes.** `fr13_fixed32_taw_preseed` returns for
+  tail6, hydra27 AND hydra31. Round 19's refusal site is genuinely closed.
+- **Site 8 closed.** All three `*_BY_MODE` mappings now index all three modes.
+  Residual, non-blocking: `PROFILES` still lacks `tail6_fixed32`.
+- **H27n still pairs.** The hydra27 default tree text (476 bytes) appears verbatim
+  in H27n's own `boot_log_snapshot.txt`. Byte-identical at this HEAD.
+
+## A CAPTURE GAP OF MY OWN, AND A SECOND REFUSAL THAT WAS CORRECT
+
+The vehicle's runlog preserves only ~40 lines around the failure, which caught the
+APIServer's `Engine core initialization failed. See root cause above.` and lost the
+root cause it points at. I re-booted to capture it live — and that second attempt
+refused at once with `tracked worktree must be clean`, because a concurrent lane was
+mid-edit. **That refusal is the HEAD-bound provenance discipline working**; I yielded
+and touched nothing of theirs. The root cause was recovered instead from the Ch31q
+container, which its own teardown had left in place
+(`fixed32 teardown skipped container operations: immutable incarnation attestation
+failed`) and which the measurement-1 lane deliberately declined to remove because it
+was round 20's evidence. Full 415-line log banked at
+`promotion_ab_round20_h31_container_tail.log`; container removed after capture,
+`containers=0`.
+
+Worth stating: the vehicle's tail window is a real evidence gap for any pre-health
+death, and the fix is one flag on the log capture, not a re-run.
+
+## STATUS
+
+Eleven sites, seven layers, three source roots — and the eleventh is the first
+found by executing a captured graph rather than by reading source.
+
+**H27n stands, unchanged and single-variable-ready**: 69,389 census steps,
+`step_wall 218.702`, `s_per_fwd_gpu 0.133693`, `accept 3.8690`, `TPS 25.365`.
+
+The four headline questions — the ladder past position 10 (non-zero through 14),
+accept vs +4.3/+7.7%, cfwd vs the census's +33%, and step_wall/TPS — remain
+unmeasured, one boot away.
+
+Standing verdicts unchanged: **fused draft top-k PROMOTED** (holds), **suffix pass
+gate REFUSE**, **split-K** recommended on round 12's evidence and since promoted to
+production default.

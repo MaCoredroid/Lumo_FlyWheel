@@ -740,6 +740,72 @@
   },
   "window_utc": "2026-08-18T08:05Z..15:05Z"
  },
+ "round20": {
+  "arm": "hydra31_fixed32_promoab_Ch31q",
+  "boot_verdict": "REFUSED at 4m50s inside the captured FX graph on the serve path; serve rc=2; got past every check that stopped round 19",
+  "capture_gap_of_my_own": {
+   "banked": "results/fr14_nvfp4_port_20260816/promotion_ab_round20_h31_container_tail.log (415 lines); container removed after capture, containers=0",
+   "problem": "the vehicle's runlog preserves only ~40 lines around the failure -- it caught the APIServer's 'See root cause above' and lost the root cause it points at",
+   "reboot_attempt": "Ch31r refused instantly with 'tracked worktree must be clean' because a concurrent lane was mid-edit -- that refusal is the HEAD-bound provenance discipline working; I yielded and touched nothing of theirs",
+   "recommendation": "the tail window is a real evidence gap for any pre-health death; one flag on the log capture, not a re-run",
+   "recovery": "root cause recovered from the Ch31q container, left in place by its own teardown (immutable incarnation attestation failed) and deliberately not removed by the measurement-1 lane because it was round 20's evidence"
+  },
+  "gpu_cost": "two short containers, ~11 min total",
+  "head": "5efa41820",
+  "my_round19_detector_was_insufficient": {
+   "admission": "round 19 proposed a self-consistency check INSIDE fr13_fixed32_topology; site 11 lives in a module that never imports the authority and carries its own private mode index, so that detector was scoped to the wrong module",
+   "mechanisable_half": "incomplete + [mode] subscript that raises, rather than .get -- a three-line AST refinement; the reachability half still needs a human or a boot",
+   "repo_wide_scan": "results/fr14_nvfp4_port_20260816/promotion_ab_modemap_scan.py (AST, no GPU)",
+   "scan_result": "40 mappings keyed purely by fixed32 mode name; 35 INCOMPLETE",
+   "the_real_signal": "incomplete AND raising AND reachable on the serve path with the lever off -- exactly one of the 35 had all three, and it is the one that fired",
+   "why_raw_incompleteness_is_the_wrong_signal": "most of the 35 are byte-qualification scopes where narrow is CORRECT (same doctrine as _FR13_FIXED32_MODES at :867); firing on all 35 is the widen-everything move round 15 already ruled out"
+  },
+  "preflight_verified_before_gpu": {
+   "cpu_walk": "fr13_fixed32_taw_preseed returns for tail6, hydra27 AND hydra31 -- round 19's site genuinely closed",
+   "h27n_pairs": "the hydra27 default tree text (476 bytes) appears verbatim in H27n's own boot_log_snapshot.txt -- byte-identical at this HEAD",
+   "site_8_closed": "all three *_BY_MODE mappings index all three modes; residual non-blocking: PROFILES still lacks tail6_fixed32",
+   "site_9_closed": "all_parent_schedule_by_mode -- hydra27 13/17 and tail6 13/17 both scope=[tail6,hydra27]; hydra31 derives its own 11/21; topology_sha256 99b1255b unchanged, so H27n's route is untouched"
+  },
+  "runroot": "output/fr14_promoab_Ch31q_20260819T181916Z",
+  "site_11": {
+   "adjudication_is_right": "the round-18 comment at :36-42 states the narrow map is intentional: the tree-conv zero-tail specialization is a default-OFF byte-AB lever qualified on hydra27, so hydra31 must re-qualify. Scope is correct; PLACEMENT is the defect.",
+   "call_site": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:8043 preseed_fixed32_conv_col0_pregather",
+   "fix_precedent_in_same_file": {
+    ":1471": ".get(mode) -> None, never raises",
+    ":2056": ".get(mode) then 'if ordered_launch and topology is None: raise' -- refuses ONLY when the lever is armed; this is the shape :43 should have",
+    ":2169": ".get(mode) -> None, never raises",
+    ":43 (fired)": "MAP[mode] -> KeyError -> raise, ALWAYS",
+    "recommendation": "gate the :43 raise on (zero_tail or zero_tail_byte_ab) -- preserves round 18's adjudication verbatim, removes the boot block"
+   },
+   "mechanism": "at :8043 the descriptor is a VALUE IN A DICT LITERAL built unconditionally, three keys from 'commit_zero_tail': zero_tail -- the boot dies while building the record that reports the lever is off",
+   "observed_lever_state": {
+    "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL": "0",
+    "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB": "0",
+    "FR13_FIXED32_MODE": "hydra31_fixed32",
+    "conclusion": "the lever was OFF and the guard fired anyway",
+    "source": "executed container Config.Env, not the arm spec"
+   },
+   "predicted": "the brief said 'if an eleventh exists it is in vLLM-under-capture or nowhere' -- it is in vLLM under capture",
+   "raise_site": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:102 _fr13_fixed32_treeconv_topology_descriptor",
+   "reached_via": "<eval_with_key>.256 forward -> torch.ops.vllm.gdn_attention_core -> gdn_linear_attn.py:15639 -> :14250 _forward_core -> _fr13_f32_pregather",
+   "refusal": "RuntimeError: unsupported fixed32 tree-conv mode 'hydra31_fixed32' (from KeyError)",
+   "why_cpu_walk_missed_it": "the walk never builds this record",
+   "why_new_class": "not a missing consumer update (sites 1-7) and not a missing authority row (site 8) -- a CORRECT, DELIBERATE refusal evaluated on an UNCONDITIONAL path"
+  },
+  "splitk_default_flip_disclosure": {
+   "credential_state_verified": "output/fr13_b1_gqa_pair_credential.env bound to ba954f512, HEAD 5efa41820 -> stale, not serviceable; both arms took that branch",
+   "effect_on_this_pairing": "NONE -- the flip changed only the resolution of an UNNAMED arm",
+   "exclusion_1": "launcher :1292 guard _FR13_FA2_QROW32_B1_PRODUCTION_ARM_NAMED == 0; my arm names the B1 production arm explicitly empty, so the whole promoted-default block including split-K tier-B arming is skipped",
+   "exclusion_2": "the same predicate requires FR13_FIXED32_MODE == hydra27_fixed32; H31i is hydra31",
+   "resolved_kernel_both_arms": "INCUMBENT qrow16, production arm NAMED EMPTY, stock _vllm_fa2_C.abi3.so -- H27n predates the flip, H31i post-dates it, they resolve identically",
+   "status": "passes 100/101 made split-K the production default, vindicating round 12's recommendation",
+   "verdict": "the A/B remains single-variable"
+  },
+  "standing_verdicts_unchanged": "fused draft top-k PROMOTED; suffix pass gate REFUSE; split-K recommended on round 12's evidence and since promoted to production default",
+  "tail10_status": "H27n baseline stands unchanged (69,389 steps; step_wall 218.702, s_per_fwd_gpu 0.133693, accept 3.8690, TPS 25.365); the four headline questions remain unmeasured, one boot away",
+  "tally": "eleven sites, seven layers, three source roots -- the eleventh is the first found by EXECUTING a captured graph rather than by reading source",
+  "window_utc": "2026-08-19T18:19Z..18:39Z"
+ },
  "round3": {
   "arm_g_prime": {
    "boot": "2026-08-18T15:32:11Z",
