@@ -69,7 +69,7 @@
  "promotes_anything": false,
  "recommendations": {
   "fused_draft_topk": "MORE EVIDENCE \u2014 needs one paired dfwd-span serve, top-k 0 vs 1",
-  "splitk_fa2": "REFUSE \u2014 eyeball condition NOT dischargeable from this HEAD",
+  "splitk_fa2": "REFUSE \u2014 eyeball undischarged after seven rounds, zero served split-K tokens; decide the tier-B identity question (site 20) before boot eight",
   "suffix_pass_gate": "REFUSE for now \u2014 integration fails closed at an 11th, GPU-only site"
  },
  "relaxed_any_guard": false,
@@ -607,6 +607,65 @@
    "suffix_pass_gate": "REFUSE \u2014 integration correct and warm rate confirmed, but fails its own accept pre-registration by 10x and is net -3.21% throughput; section 7 break-even answered NO"
   },
   "window_utc": "2026-08-18T20:39Z..2026-08-19T01:10Z"
+ },
+ "round6_CORRECTION": {
+  "cause": "18th site \u2014 tier-B serving-hook installer keyed to the production selector; round-6 ARM S was incumbent-vs-incumbent",
+  "kept": "round-6 ARM S was promoted-stack vs itself, so its +3.101 ms verifier-forward delta is a CALIBRATED noise floor for a single unpaired 1-task diagnostic run (true value 0)",
+  "my_share": "I checked a field named served_return and never checked whether the kernel ran; tree_attn.calls was already in the census I had reduced. Verified configuration, reported it as observation.",
+  "stands": [
+   "Tier-B 9/9 credential (offline)",
+   "all ARM G results"
+  ],
+  "verified_independently_by_me": {
+   "artifact_body_is_a_shadow_compare": {
+    "candidate_sentinel": 1179791671,
+    "lse_raw_byte_mismatches": 11320,
+    "output_raw_byte_mismatches": 176915,
+    "reference_dispatch": "qrow16 incumbent",
+    "reference_sentinel": 1179791667
+   },
+   "artifact_has_engagement_counter": false,
+   "tree_attn_calls": "16 on all 1038 census rows"
+  },
+  "withdrawn": [
+   "split-K served",
+   "Mark eyeball discharged",
+   "verifier forward +2.46% as a split-K reading"
+  ]
+ },
+ "round7": {
+  "eyeball_discharged": false,
+  "head": "6530b1f17d84714e8aaf98b1ea5431a403f1e3ea",
+  "phase0": "yielded to foreign container fr14_sglang_dspark_calib until it drained 01:32Z",
+  "phase1_tierb": {
+   "bounds": "9/9",
+   "outcome": "PASS",
+   "path": "output/fr14_splitk_tierb_credential_r7.json"
+  },
+  "phase2_gate": {
+   "outcome": "PASS",
+   "rc": 0
+  },
+  "phase3_arm_s": {
+   "engagements": 0,
+   "gpu_minutes": 4,
+   "outcome": "REFUSED_19TH_SITE",
+   "refusal": "FR13 qrow32 B1 production has no launcher attestation",
+   "served_tokens": 0,
+   "shape": "17th resolver did not know the arm; 18th installer did not install the caller; 19th installed caller gates on an attestation only tier A can hold",
+   "site": "tree_attn.py:2228 _fr13_fa2_qrow32_b1_production_begin \u2014 tier-aware resolver, then gates on FR13_FA2_QROW32_B1_INTERNAL_ATTESTED which the launcher exports ONLY in the production-arm attestation block; tier-B is a live arm so it is never set"
+  },
+  "process_note": "pass 73 (6530b1f17) committed 01:33:06Z INSIDE the declared quiet window during the Tier-B earn; benign results-only, and the credential read HEAD after it so both credentials bind 6530b1f17",
+  "served_splitk_tokens_to_date": 0,
+  "site_20_found_without_booting": {
+   "CONTRADICTION": "tier-B SERVING demands canonical exact4 while tier-B ARMING demands B1_DIAGNOSTIC=1 with a single instance forcing a one-task ingress; as written both cannot be satisfied",
+   "decision_needed": "which identity tier-B serving carries: exact4 (live-arm predicate must admit the 4-task subset) or the single diagnostic instance (require_exact4 must leave the tier-B path)",
+   "not_worked_around": "did not export the exact4 pins by hand \u2014 ingress would be one task while env asserted four, two attestations agreeing with each other and both disagreeing with what ran",
+   "site": "_fr13_fa2_qrow32_b1_require_exact4() at :6397, the line after the attestation",
+   "why": "reads FR13_FA2_QROW32_B1_EXACT4_TASK_IDS/_SUBSET_SHA256 which an ARM S run does not set \u2014 boot eight refuses here"
+  },
+  "verdict_splitk": "REFUSE \u2014 reverts the round-6 MORE EVIDENCE upgrade, which rested on a serve that never happened. Numerics 9/9 stand; serving path has six distinct defects, five found only by booting.",
+  "window_utc": "2026-08-19T01:26Z..01:58Z"
  },
  "schema": "fr14.promotion_ab.campaign_summary.v1",
  "step0_regate": {

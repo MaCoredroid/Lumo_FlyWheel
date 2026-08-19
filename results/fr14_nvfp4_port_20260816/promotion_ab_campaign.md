@@ -1770,3 +1770,141 @@ empirical **noise-floor estimate for a single unpaired 1-task diagnostic run**: 
 true value was 0 and it read **+3.101 ms (+2.46 %)**. My stated caveat — "this run
 cannot resolve anything smaller than ~±4 ms" — was right, and is now calibrated
 rather than asserted. Round 7 needs the full task set for exactly that reason.
+
+---
+---
+
+# ROUND 7 (2026-08-19 01:26Z–01:58Z) — a 19th site: the installer now installs, but installs the TIER-A entry point
+
+Lead with the engagement observation, as asked: **there is none.** The boot never
+reached the engagement counter — it refused three minutes earlier, at a
+production-only precondition.
+
+| phase | outcome |
+|---|---|
+| **0** yield to foreign container | `fr14_sglang_dspark_calib` drained 01:32Z; GPU released, waited |
+| **1** Tier-B credential re-earn | **PASS**, 9/9 bounds |
+| **2** gqa_pair gate re-earn | **PASS** rc=0 |
+| **3** ARM S round 7 | **REFUSED at a 19th site**, 0 served tokens, 0 engagements |
+
+## R7.1 A process note: a commit landed inside the declared quiet window
+
+Pass 73 (`6530b1f17`) committed at 01:33:06Z, **during** my Tier-B credential earn.
+It was benign — results-only (`REDTEAM_20260816.md` + two calibration `.jsonl`), no
+runtime source — and the timing was lucky: the gate read HEAD *after* the commit, so
+the credential binds `6530b1f17`, and phase 2's gate binds the same. Both credentials
+are consistent and the patcher digest `2d0df5f1…` matches the live file.
+
+Recording it because round 5 was lost to exactly this and the next one may not be
+results-only: **a credential earn reads HEAD at an unpredictable instant inside its
+window.**
+
+## R7.2 The 19th site
+
+```
+RuntimeError: FR13 qrow32 B1 production has no launcher attestation
+  tree_attn.py:2749 forward -> tree_attn.py:2228 _fr13_fa2_qrow32_b1_production_begin
+```
+
+Lane 4's 18th-site fix works as designed: the new
+`--fixed32-query-tile32-b1-tier-b-serve` modifier is a separate expansion outside the
+exclusive `elif` chain, and it **does** install the serving hook now
+(`fr13_patch_fa2_tree_bias.py:9498-9505` ORs it into the same installer). The hook it
+installs is `_fr13_fa2_qrow32_b1_production_begin`, and that function *is* tier-aware
+— it opens with `arm, tier = _fr13_fa2_qrow32_b1_serving_arm()` and handles
+`tier == "B"` with the credential further down.
+
+**The defect is the line between those two facts:**
+
+```python
+arm, tier = _fr13_fa2_qrow32_b1_serving_arm()      # tier-aware
+if arm is None: return None
+if os.environ.get("FR13_FA2_QROW32_B1_INTERNAL_ATTESTED") != "1":
+    raise RuntimeError("FR13 qrow32 B1 production has no launcher attestation")
+```
+
+`FR13_FA2_QROW32_B1_INTERNAL_ATTESTED` is exported by the launcher **only** inside the
+production-arm attestation block, which runs `--arm "$FR13_FA2_QROW32_B1_PRODUCTION_ARM"`
+(`fr13_launch_forked_fa2_tree_server.sh:6996-7002`). Tier-B is spelled as a **live**
+arm, so `FR13_FA2_QROW32_B1_PRODUCTION_ARM` is empty, that block never runs, and the
+variable is never set. **A tier-A-only precondition sits above the tier branch in a
+function both tiers now enter.**
+
+So the defect moved one layer inward rather than being eliminated: 17th = resolver
+didn't know the arm; 18th = installer didn't install the caller; **19th = the
+installed caller gates on an attestation only tier A can hold.**
+
+Two shapes of fix, for lane 4 to choose: export an equivalent tier-B attestation from
+the launcher's tier-B branch, or move the check below the tier resolution so tier B is
+validated by the credential it already carries (which the `tier == "B"` block does
+immediately afterwards) rather than by tier A's env flag.
+
+## R7.3 What did work, and is worth keeping
+
+* The **new engagement machinery exists and is honest** — `tier_b_engagement` is now
+  counted at the retag, and "armed but never engaged" refuses in seconds. This boot
+  simply died before reaching it, so it is still unexercised, but the observability
+  that would have caught round 6 is in place.
+* Both credentials re-earned cleanly at the same HEAD, 9/9 bounds again.
+* Fail-closed held: 4 minutes of GPU, zero served tokens, no silent wrong-kernel serve.
+
+## R7.4 Status — unchanged, and the count is now honest
+
+**Mark's split-K degenerate eyeball is NOT discharged. Served split-K tokens across
+seven rounds: zero.** The blocker ledger for the split-K *serving path* alone now
+reads:
+
+| # | site | found by |
+|---|---|---|
+| 2.1 | launcher in-container qualification map falls through to split2 | round 1 (read) |
+| 2.2 | live-A/B reduction-topology refusal | round 1 (executed probe) |
+| 2.3 | live-A/B never returns candidate output | round 1 (read) |
+| 17 | identity resolver defaulted to split2 pins | round 5 boot |
+| 18 | serving-hook installer keyed to the production selector | lane 4, after my round-6 mis-report |
+| **19** | **installed hook gates on a tier-A-only attestation** | **round 7 boot** |
+
+Six distinct defects in one serving path, five of them found only by booting. The
+pattern across all of them is identical and worth naming once more: **a
+production-shaped assumption sitting on a path that a second, differently-spelled
+arm now also takes.**
+
+**Recommendation, unchanged in substance from round 3 and stronger now:** before boot
+eight, sweep the tier-B serving path for *tier-A-only preconditions* the way the
+replay-dimension scan swept for shape literals — every `INTERNAL_ATTESTED`,
+`PRODUCTION_ARM`, `require_exact4` and production-allowlist reference reachable from
+`_fr13_fa2_qrow32_b1_production_begin` when `tier == "B"`.
+
+### And a 20th site, verified without booting — plus a contradiction under it
+
+I checked the next precondition rather than predict it.
+`_fr13_fa2_qrow32_b1_require_exact4()` (`:6397`) is the line immediately after the
+attestation, and it reads two env pins:
+
+```python
+task_ids != _FR13_FA2_QROW32_B1_CANONICAL_TASK_IDS
+or subset  != _FR13_FA2_QROW32_B1_EXACT4_SUBSET_SHA256
+    -> RuntimeError("FR13 qrow32 B1 production exact4 identity drifted")
+```
+
+An ARM S run sets neither, so **boot eight refuses here**, one line further in, unless
+it is fixed in the same pass. That is the 20th site and it cost no GPU to find.
+
+**The contradiction underneath it is the more important half, and it is a design
+question, not a bug.** The tier-B serving path demands the **canonical exact4**
+identity; the tier-B *live-arm* predicate in the launcher demands
+`FR13_FIXED32_B1_DIAGNOSTIC=1` with the **single** canonical instance
+(`fr13_launch_forked_fa2_tree_server.sh`, live-A/B block), and `B1_DIAGNOSTIC=1`
+forces the ingress task list to exactly one id. **As written, tier-B serving requires
+a four-task identity that tier-B arming forbids.** They cannot both be satisfied.
+
+I could have made this boot proceed by exporting the two exact4 pins by hand. **I did
+not, deliberately.** The ingress would still have been one task while the env asserted
+four — two attestations agreeing with each other and both disagreeing with what ran,
+which is precisely the failure this campaign already banked once (the K64-shaped
+credential minted by a K0 gate, pass-era red-team). Papering over it with env vars
+would manufacture exactly the kind of green artifact that made round 6's report wrong.
+
+**So the real question for lane 4 / Mark is which identity tier-B serving should
+carry** — exact4 (and then the live-arm predicate must admit the four-task subset), or
+the single diagnostic instance (and then `require_exact4` must not be on the tier-B
+path). Boots will keep finding one precondition at a time until that is decided.
