@@ -5926,6 +5926,148 @@ if [[ -n "${FR13_TAIL_BRANCHES:-}" && "${FR13_TAIL_BRANCHES:-0}" != "0" ]]; then
 else
   rm -f "$LOG_DIR/fr13_tail_branches.cfg" 2>/dev/null || true
 fi
+# TAIL10 / hydra31_fixed32 (stage 2). The mode reaches the worker through the
+# /logs sidecar the launcher already writes; nothing extra is forwarded. What is
+# added here is refusal: several levers were QUALIFIED ON HYDRA27's physical
+# tree, and hydra31 is a different tree (ids >= 17 carry different paths, both
+# topology digests differ). Combining them would present a hydra27 credential
+# for a tree it never saw. Refused at launch rather than discovered on a boot --
+# the same discipline the suffix-gate incompatibilities use.
+case "${FR13_FIXED32_MODE:-}" in
+  ""|tail6_fixed32|hydra27_fixed32|hydra31_fixed32) ;;
+  *) echo "FR13_FIXED32_MODE must be empty, tail6_fixed32, hydra27_fixed32 or hydra31_fixed32" >&2; exit 2 ;;
+esac
+if [[ "${FR13_FIXED32_MODE:-}" == "hydra31_fixed32" ]]; then
+  for _fr14_h31_incompat in \
+    FR13_CFWD_PACKED_WALK_NODE_TRUST_BYTE_AB \
+    FR13_CFWD_PACKED_WALK_NODE_TRUST_PRODUCTION \
+    FR13_CFWD_PACKED_WALK_ACTIVE_DEPTH_BYTE_AB \
+    FR13_CFWD_LOGIT_DIRECT_BYTE_AB \
+    FR13_CFWD_LOGIT_DIRECT_PRODUCTION \
+    FR13_DRAFT_HEAD_FP8 \
+    FR13_DRAFT_HEAD_M32_LIVE_AB \
+    FR13_DRAFT_HEAD_M32_PRODUCTION \
+    FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB \
+    FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION \
+    FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB \
+    FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION; do
+    if [[ "${!_fr14_h31_incompat:-0}" != "0" ]]; then
+      echo "FR13_FIXED32_MODE=hydra31_fixed32 is incompatible with $_fr14_h31_incompat (qualified on the hydra27 tree)" >&2
+      exit 2
+    fi
+  done
+  unset _fr14_h31_incompat
+  echo "[launch] TAIL10 profile hydra31_fixed32 (31 armed drafts, Arctic tail 10, walk cap 16)"
+fi
+# FR14 lane 1: fused draft top-k (FR14_FUSED_DRAFT_TOPK).
+# PROMOTED 2026-08-18 by Mark's ruling (pass 57): live byte-proof 268 paths /
+# 0 diffs / 96 215 steps, -0.071 ms bracket, accept flat, eyeball clean. Evidence
+# and kernel contract: results/fr14_nvfp4_port_20260816/fused_draft_topk.md.
+# Default is now ON, and the .so + its sha256 default to the promoted artifact so
+# a plain launch actually serves the promoted kernel.
+# NOTHING RELAXES. A promoted default that silently fell back to the unfused path
+# on a missing binary would be a silent no-op, so a missing, symlinked or
+# mismatched .so is a REFUSAL. Explicit FR14_FUSED_DRAFT_TOPK=0 remains the
+# opt-out the paired A/Bs need.
+# The proposer reads os.environ directly and that path is proven live
+# (FR13_DRAFTER_GRAPH=1 in container_env.txt with graph_replays=1 in the same
+# steps' census), so -e forwarding is the right mechanism -- no sidecar needed.
+_fr14_fused_topk_so_default=/workspace/output/fr14_fused_draft_topk_build/fr14_dfwd_full_topk_sm121a.abi3.so
+_fr14_fused_topk_sha_default=8f7a99e78c0898a4221f045aa8e15a8085883dbc41b08f609da0da71e66a449e
+case "${FR14_FUSED_DRAFT_TOPK:-1}" in
+  0|1) ;;
+  *) echo "FR14_FUSED_DRAFT_TOPK must be exactly 0 or 1" >&2; exit 2 ;;
+esac
+case "${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64}" in
+  ''|*[!0-9]*) echo "FR14_FUSED_DRAFT_TOPK_BLOCKS must be an integer in 1..121" >&2; exit 2 ;;
+esac
+if (( ${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64} < 1 || ${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64} > 121 )); then
+  echo "FR14_FUSED_DRAFT_TOPK_BLOCKS must be an integer in 1..121" >&2
+  exit 2
+fi
+if [[ "${FR14_FUSED_DRAFT_TOPK:-1}" == "1" ]]; then
+  _fr14_fused_topk_sha=${FR14_FUSED_DRAFT_TOPK_SHA256:-$_fr14_fused_topk_sha_default}
+  _fr14_fused_topk_so=${FR14_FUSED_DRAFT_TOPK_SO:-$_fr14_fused_topk_so_default}
+  if [[ ! "$_fr14_fused_topk_sha" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SHA256 (64 lowercase hex)" >&2
+    exit 2
+  fi
+  if [[ -z "$_fr14_fused_topk_so" ]]; then
+    echo "FR14_FUSED_DRAFT_TOPK=1 requires FR14_FUSED_DRAFT_TOPK_SO" >&2
+    exit 2
+  fi
+  # Prove the artifact HOST-side, before the container starts. The patcher
+  # re-hashes it inside the container too; this makes the failure a launch
+  # refusal with a readable message instead of an engine death mid-boot.
+  _fr14_fused_topk_host=$_fr14_fused_topk_so
+  if [[ "$_fr14_fused_topk_host" == /workspace/* ]]; then
+    _fr14_fused_topk_host="$REPO/${_fr14_fused_topk_host#/workspace/}"
+  fi
+  if [[ ! -f "$_fr14_fused_topk_host" || -L "$_fr14_fused_topk_host" ]]; then
+    echo "FR14_FUSED_DRAFT_TOPK is PROMOTED-ON but its pinned .so is missing: $_fr14_fused_topk_host" >&2
+    echo "  the artifact lives under output/ (gitignored), so a fresh tree must rebuild it:" >&2
+    echo "    python3 scripts/fr14_build_dfwd_full_topk.py" >&2
+    echo "  or set FR14_FUSED_DRAFT_TOPK=0 to opt out. Refusing rather than silently" >&2
+    echo "  serving the unfused path." >&2
+    exit 2
+  fi
+  if [[ "$(sha256sum "$_fr14_fused_topk_host" | cut -d' ' -f1)" != "$_fr14_fused_topk_sha" ]]; then
+    echo "FR14_FUSED_DRAFT_TOPK pinned .so sha256 mismatch: $_fr14_fused_topk_host" >&2
+    exit 2
+  fi
+  echo "[launch] FUSED DRAFT TOP-K ON (promoted default; blocks=${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64} so=$_fr14_fused_topk_so)"
+else
+  echo "[launch] FUSED DRAFT TOP-K OFF (explicit opt-out of the promoted default)"
+fi
+case "${FR14_SUFFIX_PASS_GATE:-0}" in
+  0|1) ;;
+  *) echo "FR14_SUFFIX_PASS_GATE must be 0 or 1" >&2; exit 2 ;;
+esac
+if [[ "${FR14_SUFFIX_PASS_GATE:-0}" == "1" ]]; then
+  if [[ "${FR13_TAIL_MODE:-0}" != "1" || "${FR13_DRAFT_SOURCE:-mtp}" != "merged" ]]; then
+    echo "FR14_SUFFIX_PASS_GATE=1 requires FR13_TAIL_MODE=1 and FR13_DRAFT_SOURCE=merged" >&2
+    exit 2
+  fi
+  if [[ -n "${FR13_TAIL_BRANCHES:-}" && "${FR13_TAIL_BRANCHES:-0}" != "0" ]]; then
+    echo "FR14_SUFFIX_PASS_GATE=1 is incompatible with FR13_TAIL_BRANCHES" >&2
+    exit 2
+  fi
+  # FR14 lever 2 x draft-head production levers: the split capture re-issues the
+  # drafter graph manifest signature, and the M32/U8/FP8 head attestations bind a
+  # HARDCODED signature literal for the single 4-pass graph. Arming both would
+  # present a half-graph to a credential minted for a whole one. The BM8
+  # production attestation is a second case: it is scoped begin/end per capture,
+  # and a split capture opens two. Refused here rather than discovered on a boot
+  # -- which is exactly how Arm G was found (suffix_pass_gating.md 11).
+  for _fr14_gate_incompat in \
+    FR13_DRAFT_HEAD_M32_PRODUCTION \
+    FR13_DRAFT_HEAD_M1_R64_U8_PRODUCTION \
+    FR13_DRAFT_HEAD_M4_R64_U8_PRODUCTION \
+    FR13_DRAFT_HEAD_FP8 \
+    FR13_DFWD_UNIFIED_BM8_PRODUCTION \
+    FR13_DFWD_UNIFIED_BM8_LIVE_AB \
+    FR13_DRAFT_HEAD_M32_LIVE_AB \
+    FR13_DRAFT_HEAD_M1_R64_U8_LIVE_AB \
+    FR13_DRAFT_HEAD_M4_R64_U8_LIVE_AB; do
+    if [[ "${!_fr14_gate_incompat:-0}" != "0" ]]; then
+      echo "FR14_SUFFIX_PASS_GATE=1 is incompatible with $_fr14_gate_incompat (drafter graph credential is per-capture)" >&2
+      exit 2
+    fi
+  done
+  unset _fr14_gate_incompat
+  if ! grep -q "FR14_GATE_SPLIT_GRAPH" "$REPO/scripts/fr10_phase4_patch_vllm_tree_gdn.py"; then
+    echo "FR14_SUFFIX_PASS_GATE=1 refused: the drafter split-graph half is NOT landed." >&2
+    echo "  The gate would hand decide_fixed32 a 3-depth MTP head while the drafter" >&2
+    echo "  still runs all four post-root forwards -- a malformed tree at the verifier." >&2
+    echo "  The interlock clears itself when the split lands (sentinel FR14_GATE_SPLIT_GRAPH)." >&2
+    echo "  see results/fr14_nvfp4_port_20260816/suffix_pass_gating.md" >&2
+    exit 2
+  fi
+  echo "${FR14_SUFFIX_PASS_GATE_NGRAM:-8} ${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75} ${FR14_SUFFIX_PASS_GATE_MIN_HISTORY:-256}" > "$LOG_DIR/fr14_suffix_pass_gate.cfg"
+  echo "[launch] SUFFIX PASS GATE ON -> /logs/fr14_suffix_pass_gate.cfg (ngram=${FR14_SUFFIX_PASS_GATE_NGRAM:-8} min_agree=${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75} min_history=${FR14_SUFFIX_PASS_GATE_MIN_HISTORY:-256})"
+else
+  rm -f "$LOG_DIR/fr14_suffix_pass_gate.cfg" 2>/dev/null || true
+fi
 # PRE-WARM corpus sidecar (design §6b): worker drops FR13_* env, so copy the host corpus into /logs (mounted)
 # and maybe_prewarm() reads the fixed /logs/fr13_prewarm_corpus.jsonl. Absent => cold trie (never-regress).
 if [[ -n "${FR13_PREWARM_TRIE:-}" && -f "${FR13_PREWARM_TRIE}" ]]; then
@@ -6351,6 +6493,14 @@ docker run -d --pull=never --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_MAMBA_SPEC_BLOCKS_CDIV="${FR13_MAMBA_SPEC_BLOCKS_CDIV:-1}" \
   -e FR13_DRAFTER_GRAPH="${FR13_DRAFTER_GRAPH:-1}" \
   -e FR13_DFWD_SPLIT_NEEDLE="${FR13_DFWD_SPLIT_NEEDLE:-0}" \
+  -e FR14_FUSED_DRAFT_TOPK="${FR14_FUSED_DRAFT_TOPK:-1}" \
+  -e FR14_FUSED_DRAFT_TOPK_BLOCKS="${FR14_FUSED_DRAFT_TOPK_BLOCKS:-64}" \
+  -e FR14_FUSED_DRAFT_TOPK_SO="${FR14_FUSED_DRAFT_TOPK_SO:-$_fr14_fused_topk_so_default}" \
+  -e FR14_FUSED_DRAFT_TOPK_SHA256="${FR14_FUSED_DRAFT_TOPK_SHA256:-$_fr14_fused_topk_sha_default}" \
+  -e FR14_SUFFIX_PASS_GATE="${FR14_SUFFIX_PASS_GATE:-0}" \
+  -e FR14_SUFFIX_PASS_GATE_NGRAM="${FR14_SUFFIX_PASS_GATE_NGRAM:-8}" \
+  -e FR14_SUFFIX_PASS_GATE_MIN_AGREE="${FR14_SUFFIX_PASS_GATE_MIN_AGREE:-0.75}" \
+  -e FR14_SUFFIX_PASS_GATE_MIN_HISTORY="${FR14_SUFFIX_PASS_GATE_MIN_HISTORY:-256}" \
   -e FR13_DVK_DRAFTID_DUMP="${FR13_DVK_DRAFTID_DUMP:-}" \
   -e FR13_STEP_GRAPH="${FR13_STEP_GRAPH:-0}" \
   -e FR13_TEMP_LEGACY_DOUBLE="${FR13_TEMP_LEGACY_DOUBLE:-0}" \

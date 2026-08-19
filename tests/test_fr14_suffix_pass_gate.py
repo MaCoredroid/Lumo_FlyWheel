@@ -206,10 +206,11 @@ def test_indexing_is_incremental_and_order_independent():
 
 REPO = Path(__file__).resolve().parents[1]
 
-LAUNCHERS = (
-    "scripts/fr13_launch_forked_fa2_tree_server.sh",
-    "scripts/fr14_armb_leg3_launch_nomiddleware.sh",
-)
+# every launcher family, from the single roster -- never re-enumerated here,
+# because "both families" was wrong by one for six rounds
+import fr14_mode_table_parity as _parity  # noqa: E402
+
+LAUNCHERS = _parity.LAUNCHER_FAMILIES
 
 
 @pytest.fixture(params=LAUNCHERS)

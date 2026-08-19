@@ -404,3 +404,58 @@ One gap reported rather than silently widened: `fr14_leg3_launch_nomiddleware.sh
 profile-aware preflight but still lacks the suffix-gate guards and the **promoted** fused
 draft top-k default. If that twin is a live serving path, it would serve without the promoted
 kernel. Flagged for a decision rather than expanded into this change.
+
+
+---
+
+# 12. STAGE 2d — the third launcher family (2026-08-19)
+
+`fr14_leg3_launch_nomiddleware.sh` is a live serving path (arm B's profile-chain legs) and
+carried **none** of the FR14 work. It now carries all of it, byte-identical to its siblings.
+
+## 12.1 What was missing, and why it mattered most for the promoted lever
+
+| | before | after |
+|---|---|---|
+| fused draft top-k (**PROMOTED**, default ON) | absent | default `1`, pinned `.so` + sha, host-side refusal |
+| suffix-gate guards (refused-final, but must be guarded) | absent | strict `0\|1`, sidecar, incompatibility refusals, split-graph interlock |
+| hydra31 lever refusals | absent | present |
+
+The fused top-k is the sharp one. It is **promoted**, so two families served the promoted
+kernel and the third would have served the unfused path — silently, with no flag anywhere
+saying so. A promoted default present in two of three families is not a promotion; it is an
+unlabelled A/B.
+
+The 142-line FR14 region was ported **verbatim** from a complete twin at the identical anchor,
+so the three files are now the same text rather than three independent transcriptions.
+
+## 12.2 CPU-walked in the third twin, not assumed
+
+Eight cases run against the ported blocks in `fr14_leg3` itself: plain launch arms the promoted
+kernel; `=0` opts out; a missing `.so` and a sha mismatch each refuse; a **stale env trying to
+arm the refused gate is refused** (it lacks the tail seam); a gate typo is fatal; the hydra31
+arm announces itself; and hydra31 + a hydra27-qualified lever refuses.
+
+## 12.3 The roster, in one place
+
+This is the sixth round in which "both launcher families" was wrong by one — and this time the
+one-short commit was **mine** (`8fe896720`, the promotion). So the enumeration now exists
+exactly once, as `fr14_mode_table_parity.LAUNCHER_FAMILIES`, and every consumer imports it:
+the paired-contract sweep, the gate wiring tests, the split-K arm tests. A test asserts no file
+re-enumerates the families by hand.
+
+`scan_family_parity()` checks eight FR14 markers — the promoted default and its credential,
+the gate guards and interlock, both incompatibility guards, the tail10 profile, lane 4's arm —
+and fails when any is not identical across all three. Mutation-proven on three of those markers
+by stripping each from the third family and asserting the detector names both the marker and
+the file.
+
+## 12.4 Status
+
+414 tests, 16 pairs / 0 stale, family parity clean. Round 15 can launch.
+
+Still absent from `fr14_leg3` and reported rather than folded in: `FR13_DFWD_SPLIT` /
+`FR13_LFWD_GPU_TIMER` forwarding, which the other two families have. That is an
+**instrument** gap, not a serving-state gap — an arm B leg would serve correctly but without
+the drafter split timer. Named here so the next A/B on that path knows before it needs the
+number.

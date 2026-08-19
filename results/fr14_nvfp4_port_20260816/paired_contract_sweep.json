@@ -41,7 +41,7 @@
    "pair": "launcher family A <-> launcher family B",
    "kind": "twin/twin",
    "ok": true,
-   "detail": "6 FR14 blocks identical across both families"
+   "detail": "6 FR14 blocks identical across 3 families"
   },
   {
    "pair": "launcher sidecar <-> gate parser",

@@ -238,3 +238,89 @@ def test_vehicle_supplies_the_walk_cap_the_preflight_demands():
         assert "FR13_FIXED32_TAW_WALK_CAP=$" in block, (
             f"{mode} kind block does not export a derived walk cap"
         )
+
+
+# ---------------------------------------------------------------------------
+# LAUNCHER-FAMILY PARITY.
+#
+# "both launcher families" was wrong by one for six rounds. fr14_leg3 is a live
+# serving path (arm B's profile-chain legs) and carried none of the FR14 work --
+# including the PROMOTED fused-topk default, so it would have served the unfused
+# kernel silently while the other two served the promoted one.
+#
+# The roster now lives in exactly one place and every detector imports it.
+# ---------------------------------------------------------------------------
+
+def test_the_roster_is_three_and_is_the_only_enumeration():
+    assert len(parity.LAUNCHER_FAMILIES) == 3
+    for rel in parity.LAUNCHER_FAMILIES:
+        assert (REPO / rel).exists(), rel
+    # nothing else may re-enumerate the families by hand
+    for rel in (
+        "scripts/fr14_paired_contract_sweep.py",
+        "tests/test_fr14_suffix_pass_gate.py",
+        "tests/test_fr14_splitk_arm_launcher_wiring.py",
+    ):
+        text = (REPO / rel).read_text()
+        assert "LAUNCHER_FAMILIES" in text, (
+            f"{rel} does not import the roster"
+        )
+        assert '"scripts/fr14_armb_leg3_launch_nomiddleware.sh",\n)' not in text
+
+
+def test_family_parity_is_clean_at_head():
+    assert parity.scan_family_parity() == []
+
+
+@pytest.mark.parametrize("marker", parity.FAMILY_PARITY_MARKERS)
+def test_every_parity_marker_is_present_in_every_family(marker):
+    for rel in parity.LAUNCHER_FAMILIES:
+        assert marker in (REPO / rel).read_text(), (
+            f"{marker} missing from {Path(rel).name}"
+        )
+
+
+@pytest.mark.parametrize(
+    "marker",
+    ["FR14_FUSED_DRAFT_TOPK", "_fr14_gate_incompat", "FR14_GATE_SPLIT_GRAPH"],
+)
+def test_detector_fires_when_one_family_omits_a_marker(monkeypatch, marker):
+    """Exactly the defect that happened: two families promoted, one not."""
+    third = parity.LAUNCHER_FAMILIES[2]
+    stripped = (REPO / third).read_text().replace(marker, "FR14_REMOVED")
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "scripts").mkdir()
+    for rel in parity.LAUNCHER_FAMILIES:
+        target = tmp / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            stripped if rel == third else (REPO / rel).read_text()
+        )
+    monkeypatch.setattr(parity, "REPO", tmp)
+    bad = parity.scan_family_parity()
+    assert bad and any(marker in b for b in bad), bad
+    assert any("fr14_leg3" in b for b in bad), bad
+
+
+def test_the_promoted_default_is_ON_in_every_family():
+    """A promoted default that is ON in two families and absent in a third is
+    not promoted -- it is a silent A/B."""
+    for rel in parity.LAUNCHER_FAMILIES:
+        text = (REPO / rel).read_text()
+        assert '-e FR14_FUSED_DRAFT_TOPK="${FR14_FUSED_DRAFT_TOPK:-1}"' in text
+        assert 'case "${FR14_FUSED_DRAFT_TOPK:-1}" in' in text
+        assert "PROMOTED-ON but its pinned .so is missing" in text
+
+
+def test_the_refused_gate_is_guarded_in_every_family():
+    """The gate is refused-final; the guards must still exist so a stale env
+    cannot arm it in a family that never learned about it."""
+    for rel in parity.LAUNCHER_FAMILIES:
+        text = (REPO / rel).read_text()
+        assert '-e FR14_SUFFIX_PASS_GATE="${FR14_SUFFIX_PASS_GATE:-0}"' in text
+        assert 'echo "FR14_SUFFIX_PASS_GATE must be 0 or 1" >&2; exit 2' in text
+        assert (
+            "FR14_SUFFIX_PASS_GATE=1 requires FR13_TAIL_MODE=1 and "
+            "FR13_DRAFT_SOURCE=merged" in text
+        )
+        assert 'grep -q "FR14_GATE_SPLIT_GRAPH"' in text

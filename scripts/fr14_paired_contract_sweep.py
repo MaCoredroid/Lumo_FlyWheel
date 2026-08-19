@@ -57,15 +57,16 @@ FA2_PATCHER = REPO / "scripts" / "fr13_patch_fa2_tree_bias.py"
 CENSUS = REPO / "scripts" / "fr13_fixed32_work_census.py"
 TOPOLOGY = REPO / "scripts" / "fr13_fixed32_topology.py"
 DRAFTER = REPO / "scripts" / "fr13_merged_drafter.py"
-LAUNCHERS = (
-    REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh",
-    REPO / "scripts" / "fr14_armb_leg3_launch_nomiddleware.sh",
-    # The third twin. It was outside this tuple, so its pin case drifted a
-    # whole arm behind its siblings and nothing said so -- pair_launcher_twins
-    # already listed "gqa_pair_splitk" among its required markers and simply
-    # never looked at this file.
-    REPO / "scripts" / "fr14_leg3_launch_nomiddleware.sh",
-)
+# The launcher-family roster lives in ONE place --
+# fr14_mode_table_parity.LAUNCHER_FAMILIES -- because every time it has been
+# re-enumerated by hand it has come out one short. Nothing here retypes it.
+def _launcher_families():
+    import fr14_mode_table_parity as _parity
+
+    return tuple(REPO / rel for rel in _parity.LAUNCHER_FAMILIES)
+
+
+LAUNCHERS = _launcher_families()
 
 
 def all_injected_blobs():
@@ -276,7 +277,7 @@ def pair_launcher_twins():
     skewed = {m: c for m, c in counts.items() if c[0] != c[1]}
     if skewed:
         return False, f"occurrence counts differ: {skewed}"
-    return True, f"{len(markers)} FR14 blocks identical across both families"
+    return True, f"{len(markers)} FR14 blocks identical across {len(texts)} families"
 
 
 def pair_bash_cfg_vs_python_parser():

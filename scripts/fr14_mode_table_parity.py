@@ -37,13 +37,51 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 import fr13_fixed32_topology as topology  # noqa: E402
 
-# Every shell file that can reach a fixed32 profile decision.
-SHELL_SITES = (
+# THE launcher-family roster, and the only place it is written down.
+#
+# "both launcher families" was wrong by one for six rounds: fr14_leg3 is a live
+# serving path (arm B's profile-chain legs) and had none of the FR14 work --
+# including the PROMOTED fused-topk default, so it would have served the unfused
+# kernel silently. Everything that iterates launchers imports this, so a fourth
+# family joins every detector at once.
+LAUNCHER_FAMILIES = (
     "scripts/fr13_launch_forked_fa2_tree_server.sh",
     "scripts/fr14_armb_leg3_launch_nomiddleware.sh",
     "scripts/fr14_leg3_launch_nomiddleware.sh",
+)
+# the serve vehicle asks the same profile question and is scanned with them
+SHELL_SITES = LAUNCHER_FAMILIES + (
     "scripts/fr13_bigdenom_swe_serve_variant.sh",
 )
+
+# Markers that must appear in EVERY launcher family, with the same count. A
+# promoted default or a safety guard present in two of three is the defect this
+# roster exists to catch.
+FAMILY_PARITY_MARKERS = (
+    "FR14_FUSED_DRAFT_TOPK",            # promoted default ON
+    "_fr14_fused_topk_sha_default",     # its pinned credential
+    "FR14_SUFFIX_PASS_GATE",            # refused-final, but guarded
+    "_fr14_gate_incompat",              # gate x draft-head refusals
+    "FR14_GATE_SPLIT_GRAPH",            # the split-graph interlock
+    "_fr14_h31_incompat",               # hydra31 x hydra27-qualified levers
+    "hydra31_fixed32",                  # the tail10 profile
+    "gqa_pair_splitk",                  # lane 4's arm
+)
+
+
+def scan_family_parity():
+    """Any FR14 marker that is not identical across every launcher family."""
+    bad = []
+    texts = {rel: (REPO / rel).read_text() for rel in LAUNCHER_FAMILIES}
+    for marker in FAMILY_PARITY_MARKERS:
+        counts = {rel: text.count(marker) for rel, text in texts.items()}
+        if len(set(counts.values())) != 1:
+            missing = [Path(r).name for r, c in counts.items() if c == 0]
+            bad.append(
+                f"{marker}: counts differ across families {counts}"
+                + (f" -- absent from {missing}" if missing else "")
+            )
+    return bad
 
 # Topology names whose VALUE differs between profiles. Comparing one of these
 # unconditionally is the round-14 defect, whatever the mode table says.
@@ -182,6 +220,11 @@ def sweep():
         ):
             for problem in finder(path):
                 rows.append({"kind": kind, "file": rel, "detail": problem})
+    for problem in scan_family_parity():
+        rows.append(
+            {"kind": "family-parity", "file": "<launcher families>",
+             "detail": problem}
+        )
     return rows
 
 
