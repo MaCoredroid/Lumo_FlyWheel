@@ -4181,3 +4181,76 @@ reconstructable without it.
 Attempt 6 SERVED and produced real evidence. Two tasks at verdict parity with the
 comparator; the third degenerated and stopped the case per Mark's condition. Sixteen of
 sixteen not attempted. `containers=0`, GPU idle, free 105 GiB.
+
+# QC RESUME PREP (2026-08-19 late) — two blockers, and I withdraw my own ladder hypothesis
+
+## LADDER: "drain at scrape time" is ALREADY satisfied. My window-misalignment diagnosis was WRONG.
+
+I proposed that the ladder/aggregate gap was window misalignment — the ladder accumulating
+from warmup against a bracket delta. The file mtimes refute it. The sidecars are drained
+at the task boundaries, within 0-1 s of the metrics scrapes, in duplicate pairs:
+
+    gen 1   rows=     4  tokens=    0   (pre-task warmup)
+    gen 2   rows=  1055  tokens= 4618   <-> 12907 metrics_post  1051 / 4586   (1 s apart)
+    gen 4   rows=  4804  tokens=21584   <-> 13033 metrics_post  4800 / 21532  (same second)
+    gen 6   rows= 10920  tokens=48793   <-> 13236 metrics_post 10916 / 48732  (same second)
+
+So the pairing the alignment was supposed to create already exists. What the paired
+numbers show is NOT a timing artifact:
+
+    ROWS:   +4, +4, +4        CONSTANT at every boundary
+    TOKENS: +32, +52, +61     GROWING
+
+**The rows are exactly explained**: generation 1 recorded `rows=4, tokens=0` before any
+task ran — four warmup drafts the ladder counts and Prometheus never does. Subtract them
+and rows match exactly at every boundary (1055-4=1051, 4804-4=4800, 10920-4=10916).
+
+**The tokens are NOT explained by scope.** Those 4 warmup rows contributed 0 tokens, so
+they cannot account for +32/+52/+61. And because ROWS are pinned at +4 while TOKENS drift,
+this cannot be steps landing between scrape and drain either — extra steps would move both.
+For the same drafts, the ladder attributes more accepted tokens than
+`spec_decode_num_accepted_tokens_total` does, by a slowly growing margin (61 over 10,916
+drafts = 0.56%).
+
+That is a semantic difference between two accepted-token definitions, not an alignment
+bug, and it is the drafter lane's to diagnose — most likely a bonus-token or
+partial-acceptance convention. **There is no vehicle-side change that closes it**, which
+is why I am not landing one: the sealed self-proof would still fail, and a "fix" that
+moves numbers without explaining them is worse than the refusal.
+
+The sealed harness keeps refusing until this is settled. It is doing its job.
+
+## QC RESUME: `--skip-existing` is FORBIDDEN for fixed32 campaigns, by design
+
+The resume cannot be run as specified. `scripts/run_swe_bench_q36_a.py:10308`:
+
+```python
+if args.limit is not None or args.skip_existing:
+    parser.error("fixed32 campaigns forbid --limit and --skip-existing")
+```
+
+That is deliberate and consistent with the teardown audit that fired tonight — a fixed32
+campaign requires *the exact canonical completed set*, which is why the run ended with
+`task directories are not the exact canonical completed set`.
+
+So the three options are:
+
+1. **Re-run the full exact16 subset.** Keeps the declaration truthful, but re-runs 13236 —
+   which is task 3 of 16. If it degenerates again it terminates the campaign again before
+   tasks 4-16, which is precisely the "must not orphan thirteen verdicts twice" outcome.
+2. **A canonical subset that excludes 13236**, with its own workload-table entry (both
+   halves: the launcher table and the patcher's `_FR13_FA2_QROW32_B1_TIER_B_WORKLOADS`).
+   Then the campaign's own completed-set audit passes on 15 (or 13) tasks and the
+   declaration is true. **This is the only option that both excludes 13236 and keeps
+   provenance honest.**
+3. Declare `exact16` while serving a shorter subset — the pins-as-fiction move that pass
+   122 exists to prevent. **Not doing this.**
+
+Option 2 needs a lane edit I will not make myself. My recommendation is a
+`exact16_minus_13236` workload: 15 ids, its own subset file and sha, so the QC's sixteen
+verdicts are the union of tonight's banked 13236 verdict and a clean 15-task run.
+
+## STATUS
+
+QC resume BLOCKED on the workload entry; ladder exactness BLOCKED on the token-definition
+question. Both are one small lane edit each. Nothing fired. `containers=0`, GPU idle.
