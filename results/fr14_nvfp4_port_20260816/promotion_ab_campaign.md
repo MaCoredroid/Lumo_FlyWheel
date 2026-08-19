@@ -2464,3 +2464,107 @@ unchanged throughout. Every blocker was in the plumbing that decides *which* ker
 allowed to run and *how* it is attested. That is the campaign's closing lesson, and it
 is worth more than the −16 ms: **the hard part of promoting a kernel was never the
 kernel.**
+
+---
+---
+
+# ROUND 13 (2026-08-19) — the tail10 A/B is NOT LAUNCHABLE: the serve vehicle cannot select hydra31
+
+**Boot/validation verdict, leading as asked: ARM H31 cannot be booted, and I stopped
+before spending GPU.** Stage 2 taught six consumers about `hydra31_fixed32`; it did not
+teach **`scripts/fr13_bigdenom_swe_serve_variant.sh`** — the arm vehicle every campaign
+serve goes through, including both arms of this A/B.
+
+**No GPU was spent this round.** The blocker is static and was found by reading the
+vehicle before booting it.
+
+## R13.1 The finding
+
+Stage 2 (`a08ceb088`) landed `hydra31` in seven files:
+
+```
+fr13_launch_forked_fa2_tree_server.sh   fr14_armb_leg3_launch_nomiddleware.sh
+fr10_phase4_patch_vllm_tree_gdn.py      fr13_merged_drafter.py
+fr13_fixed32_topology.py                fr13_fixed32_work_census.py
+fr14_paired_contract_sweep.py
+```
+
+`fr13_bigdenom_swe_serve_variant.sh` is **not** among them, and it is the vehicle the
+campaign driver and every arm runner call. Two independent consequences, both verified
+in source:
+
+1. **There is no `hydra31_fixed32` kind.** The vehicle dispatches on `$KIND`; an
+   unknown kind is refused. Its fixed32 whitelists at `:215`, `:222`, `:227`, `:234`
+   name only `tail6_fixed32` and `hydra27_fixed32`.
+2. **Setting the env from outside does not work — the vehicle overrides it.** The
+   `hydra27_fixed32` kind block hardcodes
+   `FR13_FIXED32_MODE=hydra27_fixed32` into its `XFLAGS`, and `:1714` does
+
+   ```bash
+   for kv in "${XFLAGS[@]:-}"; do [[ -n "$kv" ]] && export "$kv"; done
+   ```
+
+   — an unconditional `export` into the shell the launcher inherits, executed **after**
+   the caller's environment is already set. So a caller that exports
+   `FR13_FIXED32_MODE=hydra31_fixed32` has it silently replaced by `hydra27_fixed32`.
+
+The launcher's whitelist (`:6134`) and its twelve-lever hydra31 refusal block are both
+correct and in place. **The mode simply cannot reach them through the vehicle.**
+
+Worth noting *why* this is not a one-line pass-through: the kind block does not only
+set the mode string, it also supplies the **shape literals** —
+`FR13_FIXED32_VALID_MASK`, `FR13_FIXED32_ACTIVE_NODES`, `FR13_FIXED32_PHYSICAL_DRAFTS`
+— which differ between the profiles. Choosing them is design content, so this is lane
+territory, not something an operator should improvise at the call site.
+
+## R13.2 Handover — the constants, so it is one edit
+
+Pulled from the profile that stage 2 *did* land (`fr13_fixed32_topology.py`), so the
+vehicle can derive rather than retype:
+
+| | hydra27 | **hydra31** |
+|---|---|---|
+| `ACTIVE_NODES` | 27 | **31** (`HYDRA31_ACTIVE_DRAFTS = 31`) |
+| `VALID_MASK` | `0x7abdffff` | **`2147483647` = `0x7fffffff`** |
+| inactive draft ids | 4 | **none** (`HYDRA31_INACTIVE_DRAFT_IDS = ()`) |
+| `PHYSICAL_DRAFTS` | 31 | 31 (unchanged) |
+| profile name | `hydra27_fixed32` | `PROFILE_HYDRA31 = hydra31_fixed32` |
+
+And the census already encodes the two expectations this A/B was going to test —
+walk cap **12 → 16** (`:1985`, the +33 % cfwd the brief pre-registers) and rescue count
+**10 → 6** (`:1768`) — so a serve that disagrees will fail validation loudly, exactly as
+intended. **The validator is ready; only the vehicle is not.**
+
+Sites to touch: the four kind guards (`:215`, `:222`, `:227`, `:234`) plus one new
+`hydra31_fixed32)` dispatch block alongside the hydra27 one.
+
+## R13.3 Why I did not run ARM H27 alone
+
+H27 is ~3.5 h of GPU and would have booted fine. I stopped anyway, for one reason:
+**a topology A/B requires both arms at the same HEAD.** Whatever commit lands the
+vehicle's hydra31 kind moves HEAD, so an H27 run taken now could not pair with the H31
+run taken after the fix — it would have to be repeated. Spending 3.5 h to produce a
+baseline that must be re-taken is not evidence, it is a rehearsal, and I already hold a
+promoted-stack baseline of this exact shape (round-2 C', 52 507 steps) for any
+comparison that does not need same-HEAD pairing.
+
+## R13.4 The shape, one more time
+
+This is the **same class the campaign has now hit at every layer**: a new selector is
+taught to the components that *consume* it and not to the one that *selects* it.
+
+| round | the thing that didn't learn |
+|---|---|
+| 18, 25 | two patcher installers |
+| 23, 24 | two arm→identity resolvers |
+| **13 (this)** | **the serve vehicle** |
+
+The detector that fits this instance is the cheapest yet and needs no GPU: **for every
+profile in `fr13_fixed32_topology`, assert the serve vehicle has a dispatch kind whose
+exported `FR13_FIXED32_MODE`, `VALID_MASK` and `ACTIVE_NODES` match that profile's
+constants.** It is a pure source-and-import test, it would have caught this before the
+A/B was scheduled, and it generalises to the next profile.
+
+**Status:** tail10 A/B **not started**. Nothing about hydra31's merits is known or
+claimed. The three standing verdicts are unchanged — fused top-k PROMOTED, suffix pass
+gate REFUSE, split-K recommended for the tier-B serving route on round 12's evidence.

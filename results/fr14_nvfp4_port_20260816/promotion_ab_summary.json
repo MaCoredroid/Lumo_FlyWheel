@@ -323,6 +323,43 @@
    "unexpected_different": 0
   }
  },
+ "round13": {
+  "boot_verdict": "ARM H31 cannot be booted; stopped before spending GPU",
+  "date": "2026-08-19",
+  "finding": {
+   "consequence_1": "no hydra31_fixed32 KIND exists; the fixed32 whitelists at :215 :222 :227 :234 name only tail6_fixed32 and hydra27_fixed32",
+   "consequence_2": "setting FR13_FIXED32_MODE from outside does not work \u2014 the hydra27 kind block hardcodes FR13_FIXED32_MODE=hydra27_fixed32 into XFLAGS and :1714 unconditionally exports XFLAGS into the shell the launcher inherits, AFTER the caller env is set, silently replacing it",
+   "launcher_is_fine": "the whitelist at :6134 and the twelve-lever hydra31 refusal block are correct and in place; the mode cannot reach them through the vehicle",
+   "not_a_one_liner": "the kind block also supplies FR13_FIXED32_VALID_MASK, ACTIVE_NODES and PHYSICAL_DRAFTS, which differ per profile \u2014 design content, lane territory",
+   "what": "stage 2 (a08ceb088) taught hydra31 to seven files but NOT to scripts/fr13_bigdenom_swe_serve_variant.sh, the arm vehicle every campaign serve goes through"
+  },
+  "handover_constants": {
+   "census_already_encodes": {
+    "rescue_count": "10 -> 6 (:1768)",
+    "walk_cap": "12 -> 16 (:1985, the +33% cfwd the brief pre-registers)"
+   },
+   "hydra27": {
+    "active_nodes": 27,
+    "valid_mask": "0x7abdffff"
+   },
+   "hydra31": {
+    "active_nodes": 31,
+    "inactive_draft_ids": "none",
+    "physical_drafts": 31,
+    "profile": "hydra31_fixed32",
+    "valid_mask": 2147483647,
+    "valid_mask_hex": "0x7fffffff"
+   },
+   "sites_to_touch": "four kind guards (:215 :222 :227 :234) plus one new hydra31_fixed32 dispatch block",
+   "source": "fr13_fixed32_topology.py HYDRA31_* constants"
+  },
+  "head": "721f24785",
+  "recommended_detector": "for every profile in fr13_fixed32_topology, assert the serve vehicle has a dispatch kind whose exported FR13_FIXED32_MODE, VALID_MASK and ACTIVE_NODES match that profile constants. Pure source-and-import test, no GPU, generalises to the next profile.",
+  "shape": "same class as sites 18/25 (patcher installers) and 23/24 (identity resolvers): a new selector taught to the components that CONSUME it and not to the one that SELECTS it \u2014 this time the serve vehicle",
+  "status": "NOT LAUNCHABLE \u2014 no GPU spent",
+  "tail10_status": "A/B NOT STARTED \u2014 nothing about hydra31 merits is known or claimed",
+  "why_no_H27_alone": "a topology A/B needs both arms at the same HEAD; the commit that lands the vehicle kind moves HEAD, so an H27 taken now could not pair with H31 taken after and would be repeated. 3.5h to produce a baseline that must be re-taken is a rehearsal, not evidence; round-2 C prime (52507 steps) already covers comparisons that do not need same-HEAD pairing."
+ },
  "round2": {
   "arms": {
    "C'": {
