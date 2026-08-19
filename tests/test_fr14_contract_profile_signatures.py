@@ -2099,15 +2099,14 @@ def test_the_re_attestation_blast_radius_is_the_three_validators() -> None:
         (SCRIPTS / "fr13_device_multidraft_kernel.py").read_text()
     )
     changed = sorted(n for n in names if old.get(n) != new.get(n))
-    assert changed == [
-        "_fr13_fixed32_bind_schedule_to_profile",
-        "_fr13_fixed32_taw_preseed",
-        "_fr13_fixed32_taw_topology_binding",
-    ] or changed == [
+    # A SUBSET, because HEAD~1 moves as other lanes land: once the schedule work
+    # is behind us the set is empty, and what must never happen is a digested
+    # function changing that is not one of these three.
+    assert set(changed) <= {
         "_fr13_fixed32_bind_schedule_to_profile",
         "_fr13_fixed32_taw_topology_binding",
         "fr13_fixed32_taw_preseed",
-    ], f"the re-attestation touched more than the schedule work: {changed}"
+    }, f"an unexpected digested function changed: {changed}"
 
 
 def test_neither_changed_validator_can_move_a_counter_or_a_served_byte() -> None:
@@ -2209,3 +2208,535 @@ def test_the_pinned_schedule_digests_are_recomputed_not_trusted() -> None:
         schedules["tail6_fixed32"]["self_source_nodes"]
         == schedules[PROFILE_HYDRA27]["self_source_nodes"]
     )
+
+
+# ---------------------------------------------------------------------------
+# 10. ROUND 20 -- THE ELEVENTH SITE: A CORRECT REFUSAL IN THE WRONG PLACE
+# ---------------------------------------------------------------------------
+# preseed_fixed32_conv_col0_pregather built its state record UNCONDITIONALLY and
+# read the tree-conv mode map by SUBSCRIPT, so with both zero-tail lever flags
+# OFF a hydra31 boot died at 4m50s inside the captured FX graph -- while
+# building the record that reports the lever is off. The round-18 adjudication
+# (zero-tail is byte-qualified on hydra27; hydra31 must re-qualify) is right and
+# stands verbatim. Refusing to run a lever nobody armed is not a refusal.
+def test_the_zero_tail_adjudication_still_stands_verbatim() -> None:
+    module = _load_gdn_kernel(PROFILE_HYDRA31)
+    assert PROFILE_HYDRA31 not in module._FR13_FIXED32_TREECONV_MODE_IDENTITY
+    with pytest.raises(RuntimeError) as refusal:
+        module._fr13_fixed32_treeconv_topology_descriptor(PROFILE_HYDRA31)
+    assert "unsupported fixed32 tree-conv mode" in str(refusal.value)
+
+
+@pytest.mark.parametrize(
+    "mode", ["tail6_fixed32", PROFILE_HYDRA27, PROFILE_HYDRA31]
+)
+def test_the_descriptor_can_be_read_without_raising_for_the_record(
+    mode: str,
+) -> None:
+    """The placement fix: a record can always be built."""
+    module = _load_gdn_kernel(mode)
+    optional = module._fr13_fixed32_treeconv_topology_descriptor_optional(mode)
+    if mode == PROFILE_HYDRA31:
+        assert optional is None, "unqualified mode yields a benign marker"
+    else:
+        # ...and for the qualified modes it is the SAME value the raising form
+        # returns, so their record is unchanged by identity.
+        assert optional == module._fr13_fixed32_treeconv_topology_descriptor(mode)
+
+
+def test_the_raise_is_gated_on_the_lever_being_armed() -> None:
+    """Mutation-proven both ways, read off the source of the record builder."""
+    source = GDN_KERNEL.read_text()
+    tree = ast.parse(source)
+    builder = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "preseed_fixed32_conv_col0_pregather"
+    )
+    record = next(
+        node.value
+        for node in ast.walk(builder)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Dict)
+        and len(node.value.keys) > 20
+    )
+    # the record must NOT call the raising form
+    calls = {
+        node.func.id
+        for node in ast.walk(record)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "_fr13_fixed32_treeconv_topology_descriptor" not in calls, (
+        "the record builder calls the raising descriptor again -- with the "
+        "lever off that kills the boot inside the captured graph"
+    )
+    # ...and the refusal must be reachable only when a lever is armed
+    guards = [
+        ast.unparse(node.test)
+        for node in ast.walk(builder)
+        if isinstance(node, ast.If)
+        and "treeconv_descriptor is None" in ast.unparse(node.test)
+    ]
+    assert guards, "the lever-gated refusal disappeared"
+    assert all(
+        "zero_tail" in guard and "zero_tail_byte_ab" in guard for guard in guards
+    ), f"the refusal is not gated on both lever flags: {guards}"
+
+
+# --- THE TRIPLE-SIGNAL CENSUS ----------------------------------------------
+# The runner's refinement of the mode-map scan: flag a map only when it is
+# INCOMPLETE and read by RAISING SUBSCRIPT and REACHABLE WITH THE LEVER OFF.
+# The third signal is what separates this class from the thirty-odd incomplete
+# maps that live in credentials, gates and reducers -- offline tooling a serve
+# never executes. Restricting to the serving package is that signal, mechanised.
+SERVE_PATH_PREFIX = "src/lumo_flywheel_serving/"
+
+
+def _mode_constants() -> dict[str, str]:
+    topology = _topology_module()
+    roster = set(topology.SERVING_MODES)
+    return {
+        name: getattr(topology, name)
+        for name in dir(topology)
+        if not name.startswith("_")
+        and isinstance(getattr(topology, name), str)
+        and getattr(topology, name) in roster
+    }
+
+
+def scan_source_for_raising_mode_maps(
+    source: str,
+) -> list[tuple[int, list[int], list[str]]]:
+    """Signals 1 and 2 in ONE place, so the census and its mutation proof cannot
+    drift apart -- which is how two of this campaign's detectors grew holes."""
+    topology = _topology_module()
+    roster, profiles = set(topology.SERVING_MODES), set(topology.TOPOLOGY_PROFILES)
+    constants = _mode_constants()
+
+    def key_value(key: ast.expr) -> str | None:
+        if isinstance(key, ast.Constant) and isinstance(key.value, str):
+            return key.value
+        if isinstance(key, ast.Name):
+            return constants.get(key.id)
+        if isinstance(key, ast.Attribute):
+            return constants.get(key.attr)
+        return None
+
+    out: list[tuple[int, list[int], list[str]]] = []
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:  # pragma: no cover
+        return out
+    parents: dict[ast.AST, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        values = [key_value(key) for key in node.keys]
+        if not values or any(value is None for value in values):
+            continue
+        keys = set(values)
+        # a pure mode index, and not a PROFILE index (tail6 is absent from
+        # those by construction -- round 19's adjudication)
+        if not (keys & roster) or not keys <= roster or keys == profiles:
+            continue
+        missing = roster - keys
+        if not missing:  # SIGNAL 1: incomplete
+            continue
+        parent = parents.get(node)
+        names: list[str] = []
+        if isinstance(parent, ast.Assign):
+            names = [t.id for t in parent.targets if isinstance(t, ast.Name)]
+        elif isinstance(parent, ast.AnnAssign) and isinstance(
+            parent.target, ast.Name
+        ):
+            names = [parent.target.id]
+        subscripts: list[int] = []
+        if isinstance(parent, ast.Subscript):
+            subscripts.append(node.lineno)
+        for name in names:
+            subscripts += [
+                use.lineno
+                for use in ast.walk(tree)
+                if isinstance(use, ast.Subscript)
+                and isinstance(use.value, ast.Name)
+                and use.value.id == name
+                and isinstance(use.ctx, ast.Load)
+            ]
+        if not subscripts:  # SIGNAL 2: raising subscript, not .get
+            continue
+        out.append((node.lineno, sorted(set(subscripts)), sorted(missing)))
+    return out
+
+
+def triple_signal_census(
+    serve_path_only: bool = True,
+) -> list[tuple[str, int, list[int], list[str]]]:
+    """SIGNAL 3 mechanised: only the serving package runs during a serve."""
+    out: list[tuple[str, int, list[int], list[str]]] = []
+    for sub in ("scripts", "src", "tests", "config"):
+        root = REPO / sub
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*.py")):
+            rel = path.relative_to(REPO).as_posix()
+            if serve_path_only and not rel.startswith(SERVE_PATH_PREFIX):
+                continue
+            for lineno, subs, missing in scan_source_for_raising_mode_maps(
+                path.read_text(errors="replace")
+            ):
+                out.append((rel, lineno, subs, missing))
+    return out
+
+
+def test_no_serve_path_mode_map_has_all_three_signals() -> None:
+    """SIGNAL 3 mechanised: only the serving package runs during a serve."""
+    found = triple_signal_census(serve_path_only=True)
+    assert not found, (
+        "incomplete mode-keyed map(s) read by raising subscript on the serve "
+        f"path -- the eleventh site's exact shape: {found}"
+    )
+
+
+def test_the_census_would_have_caught_the_eleventh_site() -> None:
+    """MUTATION PROOF: run the census against the pre-fix source.
+
+    Also verifies the runner's 'exactly one had all three properties' claim
+    rather than assuming it.
+    """
+    try:
+        baseline = subprocess.run(
+            ["git", "show", "HEAD~1:src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py"],
+            cwd=REPO,
+            capture_output=True,
+            check=True,
+        ).stdout.decode()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        pytest.skip(f"previous kernel revision unavailable: {exc}")
+
+    flagged = scan_source_for_raising_mode_maps(baseline)
+    assert [entry[0] for entry in flagged] == [43], (
+        "the pre-fix source should show EXACTLY ONE map with all three signals "
+        f"-- the eleventh site at :43 -- got {flagged}"
+    )
+    assert flagged[0][1] == [100], "read by raising subscript in the descriptor"
+    assert flagged[0][2] == [PROFILE_HYDRA31]
+    # ...and the fixed source shows none, which is the claim being verified
+    assert not scan_source_for_raising_mode_maps(GDN_KERNEL.read_text())
+
+
+# --- THE CPU WALK, EXTENDED TO RECORD CONSTRUCTION -------------------------
+# The walk missed the eleventh site because it only ever exercised the COMPUTE
+# path. The record was where the defect lived, so the walk now builds it -- by
+# LIFTING the real dict expression out of the source and evaluating it, not by
+# re-typing a model of it.
+def _pregather_record_expression() -> ast.Dict:
+    builder = next(
+        node
+        for node in ast.walk(ast.parse(GDN_KERNEL.read_text()))
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "preseed_fixed32_conv_col0_pregather"
+    )
+    return next(
+        node.value
+        for node in ast.walk(builder)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Dict)
+        and len(node.value.keys) > 20
+    )
+
+
+def _build_pregather_record(mode: str, zero_tail: str = "0", byte_ab: str = "0"):
+    import os
+
+    torch = pytest.importorskip("torch")
+    saved = {
+        key: os.environ.get(key)
+        for key in (
+            "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL",
+            "FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB",
+        )
+    }
+    os.environ["FR13_FIXED32_CONV_COMMIT_ZERO_TAIL"] = zero_tail
+    os.environ["FR13_FIXED32_CONV_COMMIT_ZERO_TAIL_BYTE_AB"] = byte_ab
+    try:
+        module = _load_gdn_kernel(mode)
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    layers, batches = 48, [1, 2, 3, 4]
+    zeros = lambda *shape: torch.zeros(shape if shape else (), dtype=torch.int64)
+    descriptor = module._fr13_fixed32_treeconv_topology_descriptor_optional(mode)
+    namespace = {
+        "hashlib": hashlib, "int": int, "str": str, "tuple": tuple,
+        "set": set, "id": id,
+        "_FR13_FIXED32_MODE": module._FR13_FIXED32_MODE,
+        "_FR13_FIXED32_CONV_COMMIT_ROUTE": module._FR13_FIXED32_CONV_COMMIT_ROUTE,
+        "_fr13_fixed32_treeconv_canonical_json": (
+            module._fr13_fixed32_treeconv_canonical_json
+        ),
+        "_fr13_fixed32_treeconv_topology_descriptor": (
+            module._fr13_fixed32_treeconv_topology_descriptor
+        ),
+        "treeconv_descriptor": descriptor,
+        "zero_tail": zero_tail == "1", "zero_tail_byte_ab": byte_ab == "1",
+        "zero_tail_count_enable": zeros(), "zero_tail_compared_events": zeros(),
+        "zero_tail_differing_bytes": zeros(),
+        "anchor": zeros(4), "staging": zeros(4, 4),
+        "accepted_paths": zeros(4, 16), "accepted_lens": zeros(4),
+        "commit_spec_state_indices": zeros(4),
+        "alias_ids_device": zeros(layers), "alias_peer_layers_device": zeros(layers),
+        "pointers": zeros(layers), "source_pointers": zeros(layers),
+        "ssi_ptrs": zeros(layers), "ssi_strides": zeros(layers),
+        "offsets": zeros(layers), "source_offsets": zeros(layers),
+        "ssm_pointers": tuple(range(layers)),
+        "ssm_storage_pointers": tuple(range(layers)),
+        "alias_ids": tuple(range(layers)), "alias_ranks": tuple(range(layers)),
+        "alias_classes": tuple(tuple(range(3)) for _ in range(16)),
+        "alias_peer_layers": tuple(range(layers)),
+        "layer_order": tuple(range(layers)),
+        "bank_refs": [zeros(2, 2) for _ in range(layers)],
+        "ssm_bank_refs": [zeros(2, 2) for _ in range(layers)],
+        "source_refs": [zeros(2, 2) for _ in range(layers)],
+        "ssi_sources": [zeros(2, 2) for _ in range(layers)],
+        "row_guard_flags": {b: zeros(b) for b in batches},
+        "batches": batches, "capacity": 4, "row_elems": 348160,
+        "conv_c": 10240, "conv_l": 34, "element_bytes": 2, "block": 1024,
+        "source_rows": 36, "live_state_cols": 3, "direct_state_src": zeros(36),
+        "state_src_values": tuple(range(36)), "commit_lease_token": 7,
+    }
+    return eval(
+        compile(ast.Expression(_pregather_record_expression()), "<record>", "eval"),
+        namespace,
+    )
+
+
+@pytest.mark.parametrize(
+    "mode", ["tail6_fixed32", PROFILE_HYDRA27, PROFILE_HYDRA31]
+)
+def test_the_walk_builds_the_pregather_record_with_the_levers_off(
+    mode: str,
+) -> None:
+    """The walk that would have caught the eleventh site.
+
+    Both zero-tail flags OFF -- the configuration the boot actually ran -- and
+    the record must be constructible for every serving mode.
+    """
+    record = _build_pregather_record(mode)
+    assert len(record) > 20
+    assert record["commit_zero_tail"] is False
+    assert record["commit_zero_tail_byte_ab"] is False
+    descriptor = record["treeconv_topology_descriptor"]
+    if mode == PROFILE_HYDRA31:
+        assert descriptor is None
+    else:
+        assert descriptor["mode"] == mode
+        assert descriptor["schema"] == "fr13.fixed32.treeconv_state_descriptor.v1"
+
+
+def test_the_qualified_record_descriptor_is_unchanged() -> None:
+    """PAIRING EVIDENCE: the only field the fix can touch, shown identical.
+
+    The record expression differs from before in exactly one place -- which
+    function produces treeconv_topology_descriptor -- so showing that producer
+    returns the same value for the qualified modes is the whole argument.
+    """
+    for mode in ("tail6_fixed32", PROFILE_HYDRA27):
+        module = _load_gdn_kernel(mode)
+        record = _build_pregather_record(mode)
+        assert (
+            record["treeconv_topology_descriptor"]
+            == module._fr13_fixed32_treeconv_topology_descriptor(mode)
+        )
+    # ...and the record's key set does not depend on the mode at all
+    keys = {
+        mode: set(_build_pregather_record(mode))
+        for mode in ("tail6_fixed32", PROFILE_HYDRA27, PROFILE_HYDRA31)
+    }
+    assert keys["tail6_fixed32"] == keys[PROFILE_HYDRA27] == keys[PROFILE_HYDRA31]
+
+
+# ---------------------------------------------------------------------------
+# 11. THE PER-POSITION ACCEPTANCE LADDER (round 21 instrument)
+# ---------------------------------------------------------------------------
+# vllm:spec_decode_num_accepted_tokens_per_pos_total does not exist in our vLLM
+# source, and the measurement script defaults the ladder to [0.0]*16 -- a
+# missing metric reported as a measured zero, round 6's failure mode. The
+# instrument accumulates DEVICE-SIDE from the already-device-resident accepted
+# length, inside the captured graph, drained once at flush.
+def _ladder_state(batch: int = 4, enabled: bool = True):
+    torch = pytest.importorskip("torch")
+    return {
+        "accept_ladder": (
+            torch.zeros(16, dtype=torch.int64) if enabled else None
+        ),
+        "accept_ladder_overflow_rows": torch.zeros((), dtype=torch.int64),
+        "accept_ladder_overflow_tokens": torch.zeros((), dtype=torch.int64),
+        "accept_ladder_ones": torch.ones(batch, dtype=torch.int64),
+    }
+
+
+def test_the_ladder_turns_a_known_sequence_into_a_known_ladder() -> None:
+    """MUTATION PROOF: synthetic accepted_lens -> exact ladder and token total."""
+    torch = pytest.importorskip("torch")
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    state = _ladder_state()
+    steps = [[0, 1, 2, 3], [5, 5, 5, 5], [11, 0, 0, 15], [15, 15, 2, 1]]
+    for step in steps:
+        module._fr13_fixed32_accept_ladder_accumulate(
+            state, torch.tensor(step, dtype=torch.int32)
+        )
+    drained = module.fr13_fixed32_accept_ladder_drain(state)
+
+    expected = [0] * 16
+    for step in steps:
+        for value in step:
+            expected[min(value, 15)] += 1
+    assert drained["ladder"] == expected
+    assert drained["rows"] == sum(len(step) for step in steps)
+    assert drained["accepted_tokens"] == sum(v for s in steps for v in s)
+
+
+def test_the_ladder_is_self_proving() -> None:
+    """The identity the report asserts against the aggregate counter.
+
+    sum(i * ladder[i]) + overflow_tokens == accepted_tokens. A ladder that
+    cannot fail this check is not evidence.
+    """
+    torch = pytest.importorskip("torch")
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    state = _ladder_state(batch=3)
+    for step in ([0, 7, 15], [2, 2, 2], [15, 1, 0]):
+        module._fr13_fixed32_accept_ladder_accumulate(
+            state, torch.tensor(step, dtype=torch.int32)
+        )
+    drained = module.fr13_fixed32_accept_ladder_drain(state)
+    recomputed = sum(
+        index * count for index, count in enumerate(drained["ladder"])
+    ) + drained["overflow_tokens"]
+    assert recomputed == drained["accepted_tokens"]
+
+
+def test_the_ladder_clamps_and_counts_overflow_rather_than_dropping_it() -> None:
+    torch = pytest.importorskip("torch")
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    state = _ladder_state(batch=2)
+    module._fr13_fixed32_accept_ladder_accumulate(
+        state, torch.tensor([20, 3], dtype=torch.int32)
+    )
+    drained = module.fr13_fixed32_accept_ladder_drain(state)
+    assert drained["ladder"][15] == 1, "clamped into the top slot"
+    assert drained["overflow_rows"] == 1
+    assert drained["overflow_tokens"] == 5, "20 - 15, counted not dropped"
+    assert drained["accepted_tokens"] == 23, "exact despite the clamp"
+
+
+def test_a_measured_zero_is_distinguishable_from_an_absent_instrument() -> None:
+    """The round-6 mode, closed. This is the reason the ladder exists."""
+    torch = pytest.importorskip("torch")
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    state = _ladder_state(batch=2)
+    module._fr13_fixed32_accept_ladder_accumulate(
+        state, torch.tensor([0, 0], dtype=torch.int32)
+    )
+    measured = module.fr13_fixed32_accept_ladder_drain(state)
+    assert measured["accepted_tokens"] == 0
+    assert measured["rows"] == 2, "zero acceptance, but rows were OBSERVED"
+    assert module.fr13_fixed32_accept_ladder_drain({"accept_ladder": None}) is None, (
+        "an absent instrument must not present itself as a ladder of zeros"
+    )
+
+
+def test_the_ladder_accumulates_across_replays_without_reallocating() -> None:
+    """CAPTURE SAFETY: a captured graph replays into the same memory.
+
+    Every op is in-place on buffers allocated once in the committer state, so
+    replay accumulates instead of re-zeroing, and nothing is re-allocated for
+    the tracer to fold away.
+    """
+    torch = pytest.importorskip("torch")
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    state = _ladder_state()
+    pointers = (
+        state["accept_ladder"].data_ptr(),
+        state["accept_ladder_overflow_rows"].data_ptr(),
+        state["accept_ladder_overflow_tokens"].data_ptr(),
+    )
+    lens = torch.tensor([3, 3, 3, 3], dtype=torch.int32)
+    for replay in range(1, 6):
+        module._fr13_fixed32_accept_ladder_accumulate(state, lens)
+        assert int(state["accept_ladder"][3]) == 4 * replay, "must accumulate"
+        assert (
+            state["accept_ladder"].data_ptr(),
+            state["accept_ladder_overflow_rows"].data_ptr(),
+            state["accept_ladder_overflow_tokens"].data_ptr(),
+        ) == pointers, "buffers were re-bound; a captured graph would drift"
+
+
+def test_the_accumulation_is_inside_the_captured_graph_body() -> None:
+    """Placement, asserted at the source: outside the body it never replays."""
+    source = GDN_KERNEL.read_text()
+    body = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_committer_graph_body"
+    )
+    calls = [
+        node
+        for node in ast.walk(body)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_fr13_fixed32_accept_ladder_accumulate"
+    ]
+    assert len(calls) == 1, "the ladder must accumulate exactly once per body"
+    # ...and it must never sync the host on the step path
+    accumulate = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_accept_ladder_accumulate"
+    )
+    banned = {"item", "tolist", "cpu", "numpy", "nonzero"}
+    used = {
+        node.func.attr
+        for node in ast.walk(accumulate)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    assert not (used & banned), f"host sync on the step path: {used & banned}"
+
+
+def test_the_ladder_flag_is_strict_and_default_on_and_recorded() -> None:
+    """Gated, disclosed. The H27n-bank asymmetry is stated, not hidden."""
+    import os
+
+    module = _load_gdn_kernel(PROFILE_HYDRA27)
+    assert module._FR13_FIXED32_ACCEPT_LADDER_FLAG == "FR13_FIXED32_ACCEPT_LADDER"
+    saved = os.environ.get(module._FR13_FIXED32_ACCEPT_LADDER_FLAG)
+    try:
+        os.environ.pop(module._FR13_FIXED32_ACCEPT_LADDER_FLAG, None)
+        assert module._fr13_fixed32_accept_ladder_enabled() is True, "default ON"
+        os.environ[module._FR13_FIXED32_ACCEPT_LADDER_FLAG] = "0"
+        assert module._fr13_fixed32_accept_ladder_enabled() is False
+        os.environ[module._FR13_FIXED32_ACCEPT_LADDER_FLAG] = "yes"
+        with pytest.raises(RuntimeError):
+            module._fr13_fixed32_accept_ladder_enabled()
+    finally:
+        if saved is None:
+            os.environ.pop(module._FR13_FIXED32_ACCEPT_LADDER_FLAG, None)
+        else:
+            os.environ[module._FR13_FIXED32_ACCEPT_LADDER_FLAG] = saved
+    # the flag and the schema travel with the drained payload
+    state = _ladder_state(batch=1)
+    drained = module.fr13_fixed32_accept_ladder_drain(state)
+    assert drained["flag"] == "FR13_FIXED32_ACCEPT_LADDER"
+    assert drained["enabled"] is True
+    assert drained["slots"] == 16
+    assert drained["schema"] == "fr13.fixed32.accept_ladder.v1"

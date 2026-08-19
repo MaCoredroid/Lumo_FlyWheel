@@ -20,6 +20,64 @@ _FR13_FIXED32_COMMITTER_LAYER_BATCH_REAL_EVENT = (
 # accepted_lens value counts accepted drafts only; the committer adds the root
 # internally, while columns 12..15 are storage padding and are unreachable.
 _FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH = 11
+# --- PER-POSITION ACCEPTANCE LADDER (round 21 instrument) -------------------
+# vllm:spec_decode_num_accepted_tokens_per_pos_total DOES NOT EXIST in our vLLM
+# source, and measure_spec_per_position.py defaults the ladder to [0.0]*16 --
+# a missing metric reported as a measured zero, which is the round-6 failure
+# mode exactly. The census depth fields are static geometry, not measurement,
+# and a host-side logger would perturb step_wall (the committed path does ZERO
+# host readbacks over 6,308 sampled steps).
+#
+# So the ladder is accumulated DEVICE-SIDE from the accepted length that is
+# already device-resident, inside the captured graph, and drained once at
+# flush. 16 slots cover accepted lengths 0..15; the committer's path capacity
+# is 16, so a longer length is clamped into slot 15 AND its excess is counted
+# separately rather than dropped -- nothing silently disappears.
+_FR13_FIXED32_ACCEPT_LADDER_SLOTS = 16
+_FR13_FIXED32_ACCEPT_LADDER_FLAG = "FR13_FIXED32_ACCEPT_LADDER"
+
+
+def _fr13_fixed32_accept_ladder_enabled() -> bool:
+    """Default-ON, strict. A typo must never read as "instrument absent"."""
+    raw = os.environ.get(_FR13_FIXED32_ACCEPT_LADDER_FLAG, "1")
+    if raw not in ("0", "1"):
+        raise RuntimeError(
+            f"{_FR13_FIXED32_ACCEPT_LADDER_FLAG} must be exactly 0 or 1, got "
+            f"{raw!r}"
+        )
+    return raw == "1"
+
+
+def fr13_fixed32_accept_ladder_drain(state) -> dict[str, object] | None:
+    """Read the ladder to the host ONCE. Never call this on the step path.
+
+    Returns None when the instrument is disabled -- distinguishable from a
+    ladder of zeros, which is what makes "acceptance was zero" different from
+    "the metric was absent". That distinction is the whole point.
+    """
+    ladder = state.get("accept_ladder") if hasattr(state, "get") else None
+    if ladder is None:
+        return None
+    counts = [int(value) for value in ladder.tolist()]
+    overflow_rows = int(state["accept_ladder_overflow_rows"].item())
+    overflow_tokens = int(state["accept_ladder_overflow_tokens"].item())
+    rows = sum(counts) + 0  # overflow rows are already counted in slot 15
+    tokens = sum(index * count for index, count in enumerate(counts))
+    tokens += overflow_tokens
+    return {
+        "schema": "fr13.fixed32.accept_ladder.v1",
+        "enabled": True,
+        "flag": _FR13_FIXED32_ACCEPT_LADDER_FLAG,
+        "slots": _FR13_FIXED32_ACCEPT_LADDER_SLOTS,
+        "ladder": counts,
+        "rows": rows,
+        # SELF-PROVING: this must equal the delta of the aggregate accepted
+        # token counter we already trust. A ladder that cannot fail that check
+        # is not evidence.
+        "accepted_tokens": tokens,
+        "overflow_rows": overflow_rows,
+        "overflow_tokens": overflow_tokens,
+    }
 _FR13_FIXED32_COMMITTER_ACCEPTED_LENGTH_FULL_MASK = (
     1 << (_FR13_FIXED32_COMMITTER_MAX_ACCEPTED_LENGTH + 1)
 ) - 1
@@ -95,11 +153,41 @@ _FR13_FIXED32_TREECONV_STATE_SRC_SHA256 = hashlib.sha256(
 ).hexdigest()
 
 
+def _fr13_fixed32_treeconv_topology_descriptor_optional(
+    mode: str,
+) -> dict[str, object] | None:
+    """The tree-conv descriptor, or None when the mode has no tree-conv identity.
+
+    Round 20, the eleventh site, and it was a PLACEMENT bug rather than a scope
+    bug. The round-18 adjudication stands verbatim -- the zero-tail
+    specialization is byte-qualified on hydra27 and hydra31 must re-qualify it
+    -- but the refusal was wired to a MAP SUBSCRIPT inside an unconditional
+    record build, so with both lever flags OFF a hydra31 boot died at 4m50s
+    inside the captured FX graph while constructing the record that reports the
+    lever is off. Refusing to run a lever nobody armed is not a refusal, it is
+    a crash.
+    """
+    identity = _FR13_FIXED32_TREECONV_MODE_IDENTITY.get(mode)
+    if identity is None:
+        return None
+    logical_topology, valid_mask = identity
+    return _fr13_fixed32_treeconv_descriptor_body(mode, logical_topology, valid_mask)
+
+
 def _fr13_fixed32_treeconv_topology_descriptor(mode: str) -> dict[str, object]:
-    try:
-        logical_topology, valid_mask = _FR13_FIXED32_TREECONV_MODE_IDENTITY[mode]
-    except KeyError as error:
-        raise RuntimeError(f"unsupported fixed32 tree-conv mode {mode!r}") from error
+    """The descriptor, refusing an unqualified mode. Unchanged for callers that
+    only run when the lever is armed."""
+    descriptor = _fr13_fixed32_treeconv_topology_descriptor_optional(mode)
+    if descriptor is None:
+        raise RuntimeError(f"unsupported fixed32 tree-conv mode {mode!r}")
+    return descriptor
+
+
+def _fr13_fixed32_treeconv_descriptor_body(
+    mode: str,
+    logical_topology: str,
+    valid_mask: int,
+) -> dict[str, object]:
     return {
         "schema": "fr13.fixed32.treeconv_state_descriptor.v1",
         "mode": mode,
@@ -7805,6 +7893,22 @@ def preseed_fixed32_conv_col0_pregather(
         raise RuntimeError(
             "FR13 fixed32 conv zero-tail production and byte A/B are exclusive"
         )
+    # THE ELEVENTH SITE'S FIX IS HERE, not in the adjudication. The descriptor
+    # is read WITHOUT raising so the record can always be built, and the
+    # refusal is gated on the lever actually being armed -- the same shape the
+    # single-launch map at the top of this module already uses (.get, then
+    # raise only if ordered_launch). For tail6 and hydra27 the descriptor is
+    # present either way, so their record is unchanged by identity.
+    treeconv_descriptor = _fr13_fixed32_treeconv_topology_descriptor_optional(
+        _FR13_FIXED32_MODE
+    )
+    if (zero_tail or zero_tail_byte_ab) and treeconv_descriptor is None:
+        raise RuntimeError(
+            "unsupported fixed32 tree-conv mode "
+            f"{_FR13_FIXED32_MODE!r}: the conv zero-tail specialization is "
+            "byte-qualified on hydra27's physical tree and must be re-qualified "
+            "before it can arm on another"
+        )
     live_state_cols = 3
     if zero_tail or zero_tail_byte_ab:
         state_src_rows = tuple(
@@ -8039,9 +8143,7 @@ def preseed_fixed32_conv_col0_pregather(
         "state_src_digest": hashlib.sha256(
             _fr13_fixed32_treeconv_canonical_json(state_src_values)
         ).hexdigest(),
-        "treeconv_topology_descriptor": (
-            _fr13_fixed32_treeconv_topology_descriptor(_FR13_FIXED32_MODE)
-        ),
+        "treeconv_topology_descriptor": treeconv_descriptor,
         "treeconv_zero_tail_count_enable": zero_tail_count_enable,
         "treeconv_zero_tail_compared_events": zero_tail_compared_events,
         "treeconv_zero_tail_differing_bytes": zero_tail_differing_bytes,
@@ -14242,6 +14344,37 @@ def _fr13_fixed32_committer_native_layer_batch(
     )
 
 
+def _fr13_fixed32_accept_ladder_accumulate(state, accepted_lens) -> None:
+    """Scatter the step's accepted lengths into the persistent ladder.
+
+    CAPTURE SAFETY is the whole design:
+      * every tensor here is allocated once in the committer state, so the
+        captured graph records writes into fixed memory and each replay
+        accumulates instead of re-zeroing;
+      * every op is IN-PLACE on those tensors -- no new allocation, nothing for
+        the tracer to fold away, no output the caller could forget to keep;
+      * there is no .item(), no host copy, no control flow on tensor values, so
+        the step path keeps its zero host readbacks and the graph stays
+        capturable.
+
+    Overflow is clamped into the top slot AND its excess accumulated
+    separately, so accepted_tokens stays exact rather than truncating.
+    """
+    ladder = state.get("accept_ladder")
+    if ladder is None:
+        return
+    lens = accepted_lens.to(torch.long)
+    ones = state["accept_ladder_ones"]
+    if ones.shape[0] != lens.shape[0]:
+        ones = ones[: lens.shape[0]]
+    top = _FR13_FIXED32_ACCEPT_LADDER_SLOTS - 1
+    capped = lens.clamp(min=0, max=top)
+    ladder.scatter_add_(0, capped, ones)
+    excess = (lens - top).clamp(min=0)
+    state["accept_ladder_overflow_rows"].add_((lens > top).sum())
+    state["accept_ladder_overflow_tokens"].add_(excess.sum())
+
+
 def _fr13_fixed32_committer_graph_body(
     *,
     state,
@@ -14292,6 +14425,7 @@ def _fr13_fixed32_committer_graph_body(
         if state.get("direct_metadata", False)
         else state["accepted_lens"]
     )
+    _fr13_fixed32_accept_ladder_accumulate(state, graph_accepted_lens)
     if not use_layer_batch:
         # Preserve the exact native-reference preprocessing graph.
         state["abuf"].fill_(-1e4)
@@ -14775,6 +14909,28 @@ def preseed_fixed32_committer_graph(
         ),
         "path_offsets": torch.arange(16, device=device),
         "batch_offsets": torch.arange(batch, device=device),
+        # Allocated ONCE and mutated in place, so a captured graph replays into
+        # the same memory instead of re-zeroing or re-allocating per replay.
+        # None when disabled: a missing instrument must not look like zeros.
+        "accept_ladder": (
+            torch.zeros(
+                _FR13_FIXED32_ACCEPT_LADDER_SLOTS,
+                dtype=torch.int64,
+                device=device,
+            )
+            if _fr13_fixed32_accept_ladder_enabled()
+            else None
+        ),
+        "accept_ladder_overflow_rows": torch.zeros(
+            (), dtype=torch.int64, device=device
+        ),
+        "accept_ladder_overflow_tokens": torch.zeros(
+            (), dtype=torch.int64, device=device
+        ),
+        "accept_ladder_ones": torch.ones(
+            batch, dtype=torch.int64, device=device
+        ),
+        "accept_ladder_flag": _fr13_fixed32_accept_ladder_enabled(),
         "kbuf": torch.zeros(
             48, total, num_kh, dim_k, device=device, dtype=dtype
         ),
