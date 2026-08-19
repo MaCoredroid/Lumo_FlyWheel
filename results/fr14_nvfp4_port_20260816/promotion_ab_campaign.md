@@ -2119,3 +2119,97 @@ cheap detector is not another boot: it is a test that asserts **the bash pin-arm
 resolver and its Python twin return the same arm for every member of
 `QROW32_B1_TIER_B_ARMS`** — executable on CPU, no GPU, and it would have caught 2.1,
 17 and 23.
+
+---
+---
+
+# ROUND 10 (2026-08-19 03:00Z–03:31Z) — sites 22 and 23 confirmed fixed; ARM S refused at a 24th, in the third resolver
+
+**Engagement observation: none.** ARM S refused before any forward ran — but it got
+**further than any previous attempt**: past every launcher check, into the container,
+through the Arctic prelaunch install, and died at the fixed32 **contract** check.
+GPU cost this round: ~1 minute.
+
+| phase | outcome |
+|---|---|
+| **1** Tier-B credential | **PASS**, 9/9, bound to `b9a343d8d` |
+| **2** gqa_pair gate | **PASS rc=0** |
+| **3** ARM S | **REFUSED — 24th site** |
+
+## R10.1 What is now genuinely fixed
+
+* **Site 22 (credential path)** — the staged `_CREDENTIAL_HOST` + `_SHA256` contract
+  works: the launcher accepted the host path, staged it, and derived the container
+  path itself. No refusal.
+* **Site 23 (pin-arm resolver)** — the total resolver works. Verified in source: the
+  `""` key is abolished and "no selector named" is spelled **`"nosplit"`** explicitly,
+  with the stated reason that `""` "was also what a resolver that failed to look
+  produced, and the two must not be the same value." Mutual exclusion is enforced too.
+
+Both refusals from round 9 are gone, and the run reached the deepest point of the
+campaign.
+
+## R10.2 The 24th site — a third resolver, still speaking the retired pun
+
+```
+FAIL fixed32 contract: container FA2 identity mismatch:
+{'path': '/tmp/fr13_fork_fa2.so', 'size': 300123792,
+ 'sha256': '28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857'}
+```
+
+**The mounted binary is correct** — that size and sha *are* split-K. What disagrees is
+`fr13_fixed32_contract.py::_expected_runtime_fa2_identity`, which resolves the arm at
+`:3686-3687` from **`LIVE_AB_ARM`** and **`PRODUCTION_ARM`** only. It never reads
+`FR13_FA2_QROW32_B1_TIER_B_ARM` — confirmed by inspection (`reads TIER_B_ARM -> False`).
+
+I executed it on CPU with both spellings rather than infer the consequence:
+
+| env | `_expected_runtime_fa2_identity` returns |
+|---|---|
+| **new** spelling (`TIER_B_ARM=gqa_pair_splitk`) | **stock** FA2 — size `299183936`, sha `f51e23c5…` |
+| retired pun (`LIVE_AB_ARM=gqa_pair_splitk`) | reaches the tier-B branch (raises only for the missing `_SO_SHA256` pin my probe omitted) |
+| **split-K truth** | size `300123792`, sha `28570f83…` |
+
+So under the new spelling the function **silently answers "stock"** and the contract
+refuses the correctly-mounted split-K binary.
+
+**This function was already fixed for tier-B — for the *old* spelling.** Lane 4's §13
+table lists it as B3, "every member of `QROW32_B1_TIER_B_ARMS` mapped onto split-K's
+pins", and its own comment at `:3710` still reads *"Tier-B arms are LIVE-only"* — the
+pun's premise. The spelling migration (passes 76 and 79) reached the bash resolver and
+the in-container qualification map and **stranded this one**.
+
+That is the precise shape of this round's defect, and it is a new variant: not a
+resolver that never knew about tier-B, but a resolver that **knew about it under a name
+that has since been retired**. Site 23 was "the resolver, not the table". Site 24 is
+**"the other resolver, and the rename didn't reach it."**
+
+## R10.3 The pattern, stated once more with the count
+
+| # | resolver | how it answered wrongly | round |
+|---|---|---|---|
+| 2.1 | launcher in-container qualification map | `.get(arm, split2)` default | 1 |
+| 17 | patcher `_fr13_fa2_qrow32_b1_identity` | bare fallback → split2 | 5 |
+| 23 | that map's **arm resolution** | unread `TIER_B_ARM` → `""` → split2 | 9 |
+| **24** | **contract `_expected_runtime_fa2_identity`** | **unread `TIER_B_ARM` → stock** | **10** |
+
+Four resolvers, one question ("which binary should this arm have?"), four different
+wrong answers. The detector I proposed after round 9 — *assert the bash pin-arm
+resolver and its Python twin agree for every member of `QROW32_B1_TIER_B_ARMS`* —
+would have caught 23 but **not** 24, because 24 lives in a third place with its own
+env-reading. The stronger form, and the one worth building: **one test that feeds the
+canonical tier-B env to every arm→identity resolver in the tree and asserts they all
+return split-K's pins.** There are now four known; enumerating them is a grep for
+`FR13_FA2_QROW32_B1_(LIVE_AB|PRODUCTION)_ARM` reads.
+
+## R10.4 Status
+
+**Mark's split-K eyeball is NOT discharged. Served split-K tokens after ten rounds:
+zero.**
+
+The encouraging half, stated plainly because it is real: the route is converging
+monotonically. Round 7 died in the launcher, round 8 before the container script
+existed, round 9 in the launcher's qualification map, round 10 **inside the container
+after a successful prelaunch**. Each round the refusal moves later, and every refusal
+so far has been fail-closed — no run has served the incumbent while claiming the
+candidate since the observation-not-configuration doctrine landed.

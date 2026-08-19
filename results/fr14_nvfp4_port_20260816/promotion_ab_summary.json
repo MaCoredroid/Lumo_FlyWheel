@@ -73,6 +73,67 @@
   "suffix_pass_gate": "REFUSE for now \u2014 integration fails closed at an 11th, GPU-only site"
  },
  "relaxed_any_guard": false,
+ "round10": {
+  "confirmed_fixed": {
+   "site_22_credential_path": "the staged _CREDENTIAL_HOST + _SHA256 contract works; launcher accepted the host path, staged it, derived the container path",
+   "site_23_pin_arm_resolver": "total resolver works; \"\" key abolished, no-selector spelled \"nosplit\", mutual exclusion enforced"
+  },
+  "convergence": "round 7 died in the launcher, round 8 before the container script existed, round 9 in the launcher qualification map, round 10 INSIDE the container after a successful Arctic prelaunch \u2014 the refusal moves later every round and every one has been fail-closed",
+  "engagement_observation": "NONE \u2014 refused before any forward, but reached the deepest point of the campaign",
+  "eyeball_discharged": false,
+  "gpu_cost": "~1 minute",
+  "head": "b9a343d8d44555a472a75efa97f46e24fbb11d22",
+  "phase1_tierb": {
+   "bound_to": "b9a343d8d",
+   "bounds": "9/9",
+   "outcome": "PASS"
+  },
+  "phase2_gate": {
+   "outcome": "PASS",
+   "rc": 0
+  },
+  "recommended_detector": "ONE test that feeds the canonical tier-B env to EVERY arm->identity resolver in the tree and asserts they all return split-K pins. The round-9 bash/python twin test would have caught 23 but NOT 24. Enumerate by grepping for FR13_FA2_QROW32_B1_(LIVE_AB|PRODUCTION)_ARM reads.",
+  "resolver_ledger": [
+   {
+    "n": "2.1",
+    "resolver": "launcher in-container qualification map",
+    "round": 1,
+    "wrong_answer": ".get(arm, split2) default"
+   },
+   {
+    "n": 17,
+    "resolver": "patcher _fr13_fa2_qrow32_b1_identity",
+    "round": 5,
+    "wrong_answer": "bare fallback to split2"
+   },
+   {
+    "n": 23,
+    "resolver": "that map's arm resolution",
+    "round": 9,
+    "wrong_answer": "unread TIER_B_ARM -> \"\" -> split2"
+   },
+   {
+    "n": 24,
+    "resolver": "contract _expected_runtime_fa2_identity",
+    "round": 10,
+    "wrong_answer": "unread TIER_B_ARM -> stock"
+   }
+  ],
+  "served_splitk_tokens_to_date": 0,
+  "site_24": {
+   "class": "arm->identity resolver disagreement, 4th instance",
+   "executed_on_cpu": {
+    "new_spelling_TIER_B_ARM": "returns STOCK fa2 \u2014 size 299183936 sha f51e23c5",
+    "retired_pun_LIVE_AB_ARM": "reaches the tier-B branch",
+    "splitk_truth": "size 300123792 sha 28570f83"
+   },
+   "mounted_binary": "CORRECT \u2014 size 300123792 sha 28570f83 (split-K)",
+   "refusal": "FAIL fixed32 contract: container FA2 identity mismatch",
+   "site": "scripts/fr13_fixed32_contract.py::_expected_runtime_fa2_identity :3686-3687 resolves the arm from LIVE_AB_ARM and PRODUCTION_ARM only; never reads TIER_B_ARM (verified False)",
+   "variant": "NOT a resolver that never knew tier-B \u2014 a resolver that knew it under a name since RETIRED. Its own comment at :3710 still reads \"Tier-B arms are LIVE-only\", the pun premise. The pass-76/79 spelling migration reached the bash resolver and the in-container map and stranded this one."
+  },
+  "window_utc": "2026-08-19T03:00Z..03:31Z"
+ },
  "round2": {
   "arms": {
    "C'": {
