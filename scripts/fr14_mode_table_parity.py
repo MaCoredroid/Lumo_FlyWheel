@@ -575,6 +575,48 @@ def scan_mint_hashes_its_own_gate():
             )
     return bad
 
+
+# ===========================================================================
+# SITE 18: COMMIT-BINDING SCOPE.
+#
+# Pass 101 made a tier-B credential's source_commit RECORDED, not BOUND: a
+# credential attests numerics, and a commit that touches no kernel input
+# cannot change them. That rule then had to be applied in three places -- the
+# sidecar's field lists, the launcher's selector gate, the patcher's
+# credential check -- and each one was found stale in turn, by a boot.
+#
+# Any comparison of a B1 source commit against HEAD must therefore be
+# TIER-SCOPED. This finds the ones that are not. It is the launcher half; the
+# patcher half is a single comparator behind one shared predicate, pinned by
+# test_no_container_side_reader_compares_a_credential_commit_to_the_serve.
+# ===========================================================================
+
+_HEAD_COMPARISON = re.compile(
+    r'"\$(?:\{)?FR13_FA2_QROW32_B1_SOURCE_COMMIT(?:\})?"\s*==\s*"\$\((?:git rev-parse HEAD)\)"'
+)
+_COMMIT_SCOPE_OPENER = "_fr13_b1_commit_bound == 1"
+
+
+def scan_commit_binding_scope():
+    """B1 commit-vs-HEAD comparisons that are not tier-scoped."""
+    bad = []
+    for rel in LAUNCHER_FAMILIES:
+        lines = (REPO / rel).read_text().split("\n")
+        for i, line in enumerate(lines):
+            if line.lstrip().startswith("#") or not _HEAD_COMPARISON.search(line):
+                continue
+            # the scoping `if` must open within the preceding few lines, and
+            # nothing may close it in between
+            window = lines[max(i - 6, 0):i]
+            if any(_COMMIT_SCOPE_OPENER in earlier for earlier in window):
+                continue
+            bad.append(
+                f"{Path(rel).name}:{i + 1} compares the B1 source commit "
+                "against HEAD without a tier scope; pass 101 retired that "
+                "binding for tier-B credentials"
+            )
+    return bad
+
 # Topology names whose VALUE differs between profiles. Comparing one of these
 # unconditionally is the round-14 defect, whatever the mode table says.
 PROFILE_VARYING = frozenset({
@@ -735,6 +777,11 @@ def sweep():
     for problem in scan_mint_hashes_its_own_gate():
         rows.append(
             {"kind": "mint-hashes-its-own-gate", "file": "<launcher families>",
+             "detail": problem}
+        )
+    for problem in scan_commit_binding_scope():
+        rows.append(
+            {"kind": "commit-binding-scope", "file": "<launcher families>",
              "detail": problem}
         )
     return rows

@@ -1502,3 +1502,59 @@ was written for. Caught only because a mutation test asserted the count was 2
 and got 1. **A projection that narrows when the code is reformatted is worse
 than none, because nothing announces the loss.** Both spellings are matched
 now, and the count assertion is what keeps that honest.
+
+## 26. Site 18 — the third statement of a rule that was retired twice
+
+`_fr13_fa2_qrow32_b1_tier_b_credential` required the credential's sealed
+`identity.source_commit` to equal the serve's commit. The credential is a
+tracked artifact, so: **seal at HEAD → commit it → HEAD moves → every serve
+refuses.** No ordering satisfies it.
+
+This is site 17's disease one layer down. Pass 101 moved `source_commit` out of
+the sidecar's `TIERB_BINDING_FIELDS` into `TIERB_RECORDED_FIELDS`; pass 108
+scoped the launcher's selector gate to match; **this container-side check was
+the third statement of the same rule and got neither update.**
+
+The cure for a rule stated in three places is not a third correction. There is
+now one tier-scoped predicate in the patcher —
+`_fr13_fa2_qrow32_b1_commit_binding(tier)` → `"bound"` | `"recorded"` — and it
+refuses an unknown tier rather than defaulting, so a fourth route inherits the
+scope instead of picking one of the two rules by accident.
+
+### Recorded is not ignored
+
+For tier B the check now requires the sealed commit to be present, well-formed
+40-hex, and — the part a field comparison cannot give — **the value the rest of
+the credential was sealed with.** That is established by recomputing the
+canonical payload digest and comparing it to `credential_sha256`: change the
+commit and the digest changes, so a credential cannot carry a commit its own
+bounds and identity block never saw. The commit is then carried into the serve
+record as `credential_source_commit` alongside `commit_binding: "recorded"` —
+provenance stated as provenance rather than smuggled in as a match.
+
+Byte-gated arms are untouched: tier A's credential *is* a byte identity earned
+at a commit, so it still compares.
+
+### The census, classified per pass-101 scope
+
+| comparator | scope | verdict |
+|---|---|---|
+| sidecar `TIERB_RECORDED_FIELDS` | seal time | correct since pass 101 |
+| launcher `== $(git rev-parse HEAD)` ×3 | inside `_fr13_b1_commit_bound == 1` | correct since pass 108 |
+| launcher `=~ ^[0-9a-f]{40}$` ×3 | tier-B branch | correct since pass 108 |
+| launcher gqa_pair serviceability probe (`== $_fr13_b1_promo_head`) | tier-A route | correct |
+| patcher `("source_commit", source_commit)` | **was unscoped** | **site 18 — now behind the predicate** |
+| every other patcher touch (`:5616`, `:6499`, `:7112`, `:7315`, `:7411`, B4 equivalents) | writers / well-formedness | not comparators |
+
+One stale comparator, and the rest of the class is closed — which is what the
+census was for. `scan_commit_binding_scope()` now fails any B1 commit-vs-HEAD
+comparison that is not tier-scoped, mutation-proved by restoring the pre-108
+launcher.
+
+### The rejected alternative, for the record
+
+Untracked staging — the launcher's gqa_pair "WHY UNTRACKED" house pattern —
+would have made `==HEAD` satisfiable. Ruled against: `==HEAD` for tier B was
+already retired at pass 101, and **once binding is recorded-not-bound a tracked
+credential no longer self-invalidates.** Making a retired rule satisfiable is
+not the same as applying the ruling, and the evidence belongs in `results/`.

@@ -6163,7 +6163,46 @@ _FR13_FA2_QROW32_B1_TIER_B_ENGAGEMENT = {"calls": 0, "layers": set(),
                                          "graph_ids": set()}
 
 
-def _fr13_fa2_qrow32_b1_tier_b_credential(arm, identity):
+
+# ---------------------------------------- pass 101's scope, stated ONCE here
+#
+# SITE 18. A tier-B credential attests NUMERICS. It must bind everything that
+# can change what the kernel computes -- binary, source closure, SASS digests,
+# patcher -- and it must NOT bind a commit, because a commit that touches none
+# of those cannot change the numerics. Pass 101 moved source_commit out of the
+# sidecar's TIERB_BINDING_FIELDS and into TIERB_RECORDED_FIELDS; pass 108
+# scoped the launcher's selector gate to match.
+#
+# This container-side check was a THIRD statement of the same rule and never
+# got either update, so the credential is sealed at the commit it was earned
+# at, becomes tracked, HEAD moves, and the serve refuses -- seal, commit,
+# invalid, with no satisfiable ordering.
+#
+# The lesson is site 17's, one layer down: the cure for a rule stated in three
+# places is not a third correction. Both readers below consult this, so the
+# scope has exactly one home in this file and a fourth reader inherits it.
+#
+# NOT the same as the sidecar's constant: this decides how a commit is
+# TREATED at serve time; TIERB_RECORDED_FIELDS decides what a credential must
+# CARRY at seal time. They agree, and they are checked to agree by
+# tests/test_fr14_fa2_tierb_qualification.py.
+_FR13_FA2_QROW32_B1_COMMIT_BINDING = {"A": "bound", "B": "recorded"}
+
+
+def _fr13_fa2_qrow32_b1_commit_binding(tier):
+    """"bound" (compare it) or "recorded" (require it, do not compare it)."""
+    binding = _FR13_FA2_QROW32_B1_COMMIT_BINDING.get(tier)
+    if binding is None:
+        raise RuntimeError(
+            "FR13 qrow32 B1 has no commit-binding rule for tier "
+            f"{tier!r}; every tier must name its own, because a default here "
+            "would silently pick one of the two rules for a route nobody "
+            "considered"
+        )
+    return binding
+
+
+def _fr13_fa2_qrow32_b1_tier_b_credential(arm, identity, tier="B"):
     """Load and check the Tier-B credential authorising THIS arm to serve.
 
     Container-side, so it validates by DIGEST and by BINDING rather than by
@@ -6203,16 +6242,50 @@ def _fr13_fa2_qrow32_b1_tier_b_credential(arm, identity):
     if not isinstance(bound, dict):
         raise RuntimeError("FR13 qrow32 B1 tier-b credential is unbound")
     config = _FR13_FA2_QROW32_B1_ARMS[arm]
-    for field, expected in (
+    binding = _fr13_fa2_qrow32_b1_commit_binding(tier)
+    checks = [
         ("arm", arm),
         ("so_sha256", candidate_digest),
-        ("source_commit", source_commit),
         ("patch_source_sha256", patch_source_digest),
-    ):
+    ]
+    if binding == "bound":
+        checks.append(("source_commit", source_commit))
+    for field, expected in checks:
         if bound.get(field) != expected:
             raise RuntimeError(
                 f"FR13 qrow32 B1 tier-b credential {field} does not bind this "
                 "serve"
+            )
+    sealed_commit = bound.get("source_commit")
+    if binding == "recorded":
+        # RECORDED, which is not the same as ignored. It must be present,
+        # well-formed, and -- the part a field comparison cannot give -- the
+        # value the rest of the credential was SEALED with. Recomputing the
+        # canonical payload digest establishes that: change the commit and the
+        # digest changes, so a credential cannot carry a commit its own bounds
+        # and identity block never saw.
+        if not isinstance(sealed_commit, str) or len(sealed_commit) != 40 or any(
+            char not in "0123456789abcdef" for char in sealed_commit
+        ):
+            raise RuntimeError(
+                "FR13 qrow32 B1 tier-b credential records no well-formed "
+                f"source commit: {sealed_commit!r}"
+            )
+        body = {
+            key: value
+            for key, value in payload.items()
+            if key != "credential_sha256"
+        }
+        canonical = _json.dumps(
+            body, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+        ).encode("ascii")
+        if _hashlib.sha256(canonical).hexdigest() != payload.get(
+            "credential_sha256"
+        ):
+            raise RuntimeError(
+                "FR13 qrow32 B1 tier-b credential is not self-consistent: its "
+                "recorded source commit is not the one its bounds and identity "
+                "block were sealed with"
             )
     selector = payload.get("selector")
     if not isinstance(selector, dict) or (
@@ -6250,6 +6323,11 @@ def _fr13_fa2_qrow32_b1_tier_b_credential(arm, identity):
         "credential_sha256": expected_digest,
         "bounds_sha256": bound.get("bounds_sha256"),
         "path": path,
+        # The commit the credential was EARNED at, carried into the serve
+        # record as provenance. It is deliberately not the serve's HEAD and
+        # deliberately not compared to it: recorded, not bound.
+        "credential_source_commit": sealed_commit,
+        "commit_binding": binding,
     }
     _FR13_FA2_QROW32_B1_TIER_B_STATE[arm] = record
     return record
@@ -7239,7 +7317,9 @@ def _fr13_fa2_qrow32_b1_production_begin(
     if tier == "B":
         # The Tier-B credential is what authorises this arm's OUTPUT to reach
         # the model. It is checked before the first served token, not after.
-        tier_b_credential = _fr13_fa2_qrow32_b1_tier_b_credential(arm, identity)
+        tier_b_credential = _fr13_fa2_qrow32_b1_tier_b_credential(
+            arm, identity, tier
+        )
         pass_digest = None
     else:
         pass_digest = _fr13_fa2_qrow32_b1_digest(

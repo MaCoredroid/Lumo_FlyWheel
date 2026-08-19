@@ -3468,3 +3468,144 @@ def test_the_staged_credential_is_sealed_against_this_patcher():
         f"{sealed[:16]}... but the tree carries {_patcher_digest()[:16]}...; "
         "the promoted default will refuse every boot until it is re-sealed"
     )
+
+
+# ===========================================================================
+# SITE 18 -- the container's stale restatement of the retired ==HEAD rule.
+#
+# _fr13_fa2_qrow32_b1_tier_b_credential required the credential's sealed
+# identity.source_commit to equal the serve's commit, so: seal the credential
+# at HEAD, commit it (it is a tracked artifact), HEAD moves, every serve
+# refuses. No ordering satisfies it.
+#
+# This is site 17's disease at the credential rule. Pass 101 made tier-B
+# source_commit RECORDED-not-BOUND in the sidecar; pass 108 scoped the
+# launcher's selector gate to match; this container-side check was the third
+# statement of the rule and got neither update. The cure for a rule stated in
+# three places is not a third correction, so both readers now consult one
+# tier-scoped predicate.
+# ===========================================================================
+
+
+def test_the_commit_binding_rule_has_exactly_one_home():
+    """A fourth reader must inherit the scope, not restate it."""
+    namespace = _selectors()
+    binding = namespace["_fr13_fa2_qrow32_b1_commit_binding"]
+    assert binding("A") == "bound"
+    assert binding("B") == "recorded"
+    with pytest.raises(RuntimeError, match="no commit-binding rule for tier"):
+        binding("C")
+    # ... and the patcher's scope agrees with the sidecar's, which is the
+    # agreement site 18 was the absence of.
+    sidecar = _sidecar()
+    assert "source_commit" in sidecar.TIERB_RECORDED_FIELDS
+    assert "source_commit" not in sidecar.TIERB_BINDING_FIELDS
+
+
+def test_tier_b_serves_on_a_credential_sealed_at_an_ancestor_commit(
+    monkeypatch, tmp_path
+):
+    """SITE 18 proper. This is every real boot: the credential is tracked."""
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    ancestor = "b" * 40
+    path, payload = _credential(tmp_path, **{"identity.source_commit": ancestor})
+    assert payload["identity"]["source_commit"] != FAKE_COMMIT
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    with _tier_b_env(monkeypatch, path):
+        begin(layer=_Layer(), **_served_operands())
+    state = namespace["_FR13_FA2_QROW32_B1_TIER_B_STATE"][SPLITK_ARM]
+    assert state["credential_source_commit"] == ancestor, (
+        "the serve record must carry the commit the credential was EARNED at"
+    )
+    assert state["commit_binding"] == "recorded"
+
+
+def test_tier_b_refuses_a_credential_that_is_not_self_consistent(
+    monkeypatch, tmp_path
+):
+    """Recorded is not ignored.
+
+    A field comparison cannot tell whether the recorded commit is the one the
+    bounds and identity block were sealed with. Recomputing the canonical
+    payload digest can: change the commit and the digest changes.
+    """
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    # seal normally, then rewrite the commit WITHOUT re-sealing
+    path, payload = _credential(tmp_path)
+    payload["identity"]["source_commit"] = "c" * 40
+    path.write_text(
+        json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n",
+        encoding="ascii",
+    )
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    with _tier_b_env(monkeypatch, path):
+        with pytest.raises(RuntimeError, match="not self-consistent"):
+            begin(layer=_Layer(), **_served_operands())
+
+
+@pytest.mark.parametrize("commit", ["", "not-a-commit", "AB" * 20, "a" * 39])
+def test_tier_b_refuses_a_malformed_recorded_commit(
+    monkeypatch, tmp_path, commit
+):
+    """Present and well-formed is still required."""
+    _install_fake_vllm(monkeypatch)
+    namespace = _fresh_selectors()
+    path, _payload = _credential(tmp_path, **{"identity.source_commit": commit})
+    begin = namespace["_fr13_fa2_qrow32_b1_production_begin"]
+    # The ENV commit stays valid on purpose: _tier_b_env copies it out of the
+    # credential, and a malformed one there is caught earlier by the identity
+    # digest check -- a different, also-correct refusal. What is under test is
+    # the credential's OWN recorded value.
+    with _tier_b_env(
+        monkeypatch, path, FR13_FA2_QROW32_B1_SOURCE_COMMIT=FAKE_COMMIT
+    ):
+        with pytest.raises(RuntimeError, match="no well-formed source commit"):
+            begin(layer=_Layer(), **_served_operands())
+
+
+def test_a_byte_gated_arm_still_binds_its_commit(monkeypatch, tmp_path):
+    """Nothing was dropped from the byte-exact route.
+
+    Tier A's credential IS a byte identity earned at a commit, so its commit
+    is still compared. Driven through the shared predicate so this asserts the
+    scoping, not a second copy of it.
+    """
+    namespace = _fresh_selectors()
+    check = namespace["_fr13_fa2_qrow32_b1_tier_b_credential"]
+    namespace["_FR13_FA2_QROW32_B1_TIER_B_STATE"].clear()
+    path, _payload = _credential(tmp_path, **{"identity.source_commit": "d" * 40})
+    monkeypatch.setenv("FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL", str(path))
+    monkeypatch.setenv(
+        "FR13_FA2_QROW32_B1_TIER_B_CREDENTIAL_SHA256",
+        __import__("hashlib").sha256(path.read_bytes()).hexdigest(),
+    )
+    identity = (SPLITK_SO_SHA256, FAKE_COMMIT, FAKE_PATCH_SHA)
+    # tier B: the ancestor commit is fine
+    assert check(SPLITK_ARM, identity, "B")["credential_source_commit"] == "d" * 40
+    namespace["_FR13_FA2_QROW32_B1_TIER_B_STATE"].clear()
+    # tier A: the same credential is refused, because A binds the commit
+    with pytest.raises(RuntimeError, match="source_commit does not bind"):
+        check(SPLITK_ARM, identity, "A")
+
+
+def test_no_container_side_reader_compares_a_credential_commit_to_the_serve():
+    """The census, as a test: one comparator, and it is tier-scoped.
+
+    Site 18 was found by a boot, not by a reading, because the comparison
+    looked identical to the four legitimate ones beside it. This pins that
+    there is exactly one place where a credential's commit is compared at all,
+    and that it sits behind the shared predicate.
+    """
+    source = PATCHER.read_text()
+    body = source[source.index("def _fr13_fa2_qrow32_b1_tier_b_credential("):]
+    body = body[:body.index("\ndef ")]
+    assert body.count('("source_commit", source_commit)') == 1, (
+        "the credential's commit is compared in more than one place again"
+    )
+    guard = body[:body.index('("source_commit", source_commit)')]
+    assert 'if binding == "bound":' in guard, (
+        "the commit comparison is not behind the tier-scoped predicate"
+    )
+    assert "_fr13_fa2_qrow32_b1_commit_binding(tier)" in body

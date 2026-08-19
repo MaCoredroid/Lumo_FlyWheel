@@ -818,3 +818,35 @@ def test_the_adjudicated_exception_is_exact_and_reasoned():
     reason = source[source.index("_MINT_HASH_ADJUDICATED") - 1200:
                     source.index("_MINT_HASH_ADJUDICATED")]
     assert "verify-tier-b" in reason and "recorded, not repaired" in reason
+
+
+# ===========================================================================
+# SITE 18: commit-binding scope.
+# ===========================================================================
+
+
+def test_commit_binding_scope_is_clean_at_head():
+    assert parity.scan_commit_binding_scope() == []
+
+
+def test_unscoping_the_head_comparison_fires_the_scan(monkeypatch):
+    """The pre-pass-108 launcher, restored."""
+    def mutate(text):
+        anchor = "  if (( _fr13_b1_commit_bound == 1 )); then\n"
+        assert text.count(anchor) == 1
+        return text.replace(anchor, "  if true; then\n", 1)
+
+    _scan_with_mutated_production(monkeypatch, mutate)
+    bad = parity.scan_commit_binding_scope()
+    assert bad and "without a tier scope" in bad[0], bad
+
+
+def test_the_scan_sees_every_family():
+    """All three carry the scoped comparison, so all three are covered."""
+    for rel in parity.LAUNCHER_FAMILIES:
+        text = (REPO / rel).read_text()
+        assert parity._HEAD_COMPARISON.search(text), (
+            f"{Path(rel).name} has no B1 commit-vs-HEAD comparison at all -- "
+            "the byte-gated route must still bind its commit"
+        )
+        assert parity._COMMIT_SCOPE_OPENER in text
