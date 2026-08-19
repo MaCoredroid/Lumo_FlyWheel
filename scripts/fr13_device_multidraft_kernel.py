@@ -1665,8 +1665,23 @@ _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 # resolves at the three arm points; no sampler arithmetic moved, and with the
 # flag clear the resolution is identical to the prior expression.
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "491874e3ebbc53b83ce28a8cae505025fde36e56564da049ab0d582eaa4e7d5c"
+    "6ffe57287e768bfee5e2e72f10de0dfea6fb3e6c0fa50f32b6c099c63fa916a2"
 )
+# Per-mode source-row schedule digests. The observable binding compares the
+# schedule actually constructed at boot against these, so a mode that is handed
+# another profile's schedule refuses instead of serving. Filled by the contract
+# tests, which recompute every one of them from fr13_fixed32_topology.
+_FR13_FIXED32_TAW_SCHEDULE_DIGESTS: dict[str, str] = {
+    "tail6_fixed32": (
+        "d57b4d6099095a61c3efb342bf0be6615e1a0cb8d06336b889398dac556dc543"
+    ),
+    "hydra27_fixed32": (
+        "ebb50fed5f102287907af20094a7e55b40eef3b561503b1edf92dee1a43928b1"
+    ),
+    "hydra31_fixed32": (
+        "3f7877c851a5554dec184325b46a0859d79e04113290482bb8df0eccaa7e3ec9"
+    ),
+}
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
 _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
@@ -1675,6 +1690,7 @@ _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_expected_active",
     "_fr13_fixed32_parse_int",
     "_fr13_fixed32_taw_topology_binding",
+    "_fr13_fixed32_bind_schedule_to_profile",
     "_fr13_fixed32_taw_native_arm_sources",
     "_fr13_fixed32_taw_validate_pass_record",
     "_fr13_fixed32_taw_native_production_pass",
@@ -1975,6 +1991,86 @@ def _fr13_fixed32_taw_topology_binding(topology) -> dict[str, Any]:
             "FR13 fixed32 all-parent source-row or depth schedule drifted"
         )
 
+    # ---- PER-MODE SOURCE-ROW SCHEDULE (round 20) --------------------------
+    # The union above exists because ONE static allocation served every mode,
+    # and that coupling is the defect. It is now keyed by mode.
+    #
+    # READ THIS BEFORE "SIMPLIFYING" IT TO ONE SCHEDULE PER MODE'S OWN TREE:
+    # 13/17 is the union of tail6 and hydra27, and it is NOT either mode's own
+    # schedule. hydra27 alone is 11 self / 17 target and tail6 alone is 11/13 --
+    # the two extra self rows are nodes 6 and 7, which only tail6 contributes.
+    # The qualified modes therefore keep the QUALIFIED-SCOPE schedule, byte for
+    # byte, because that is what their byte-AB pass measured and what the
+    # production commit route allocates today. Deriving hydra27's own 11 rows
+    # here would silently shrink a production tensor by two rows per request.
+    #
+    # A mode outside that scope has no such history, so it derives its own.
+    schedule_by_mode: dict[str, dict[str, list[int]]] = {}
+    for schedule_mode in sorted(topology.VALID_BY_MODE):
+        if schedule_mode in modes:
+            schedule_by_mode[schedule_mode] = {
+                "self_source_nodes": list(self_source_nodes),
+                "target_source_nodes": list(target_source_nodes),
+                "self_uniform_levels": list(self_uniform_levels),
+                "target_parent_slots": list(target_parent_slots),
+                "target_uniform_levels": list(target_uniform_levels),
+                "scope": list(modes),
+            }
+            continue
+        mode_children = topology.active_child_lists(schedule_mode)
+        mode_active = tuple(
+            node
+            for node, enabled in enumerate(topology.valid_for_mode(schedule_mode))
+            if enabled
+        )
+        mode_self = tuple(
+            sorted(node for node in mode_active if node not in mode_children)
+        )
+        mode_target = tuple(
+            sorted({kids[0] for kids in mode_children.values()})
+        )
+        mode_parent = topology.draft_parent_for_mode(schedule_mode)
+        mode_depths: list[int] = []
+        for node, parent in enumerate(mode_parent):
+            if parent < 0:
+                mode_depths.append(0)
+                continue
+            if parent >= node:
+                raise RuntimeError(
+                    "FR13 fixed32 all-parent fusion requires topological parents"
+                )
+            mode_depths.append(mode_depths[parent] + 1)
+        mode_self_levels = tuple(mode_depths[node] + 1 for node in mode_self)
+        mode_target_slots = tuple(
+            int(mode_parent[source_node]) + 1 for source_node in mode_target
+        )
+        mode_target_levels = tuple(
+            0 if slot == 0 else mode_depths[slot - 1] + 1
+            for slot in mode_target_slots
+        )
+        mode_walk_cap = int(
+            topology.profile(topology.TREE_PROFILE_BY_MODE[schedule_mode])[
+                "walk_cap"
+            ]
+        )
+        if (
+            len(set(mode_target_slots)) != len(mode_target_slots)
+            or max(mode_self_levels + mode_target_levels) >= mode_walk_cap
+        ):
+            raise RuntimeError(
+                "FR13 fixed32 all-parent schedule drifted for "
+                f"{schedule_mode}: self={len(mode_self)} "
+                f"target={len(mode_target)} cap={mode_walk_cap}"
+            )
+        schedule_by_mode[schedule_mode] = {
+            "self_source_nodes": list(mode_self),
+            "target_source_nodes": list(mode_target),
+            "self_uniform_levels": list(mode_self_levels),
+            "target_parent_slots": list(mode_target_slots),
+            "target_uniform_levels": list(mode_target_levels),
+            "scope": [schedule_mode],
+        }
+
     topology_payload = {
         "fixed_choices": [list(path) for path in topology.FIXED32_CHOICES],
         "draft_parent": list(topology.DRAFT_PARENT),
@@ -1999,6 +2095,9 @@ def _fr13_fixed32_taw_topology_binding(topology) -> dict[str, Any]:
         "physical_parent_sha256": str(topology.PHYSICAL_PARENT_SHA256),
         "tree_ancestry_sha256": str(topology.TREE_ANCESTRY_SHA256),
         "topology_sha256": topology_sha256,
+        "all_parent_schedule_by_mode": schedule_by_mode,
+        # The qualified scope's schedule stays the top-level answer so every
+        # existing consumer is untouched by identity, not by resemblance.
         "all_parent_self_source_nodes": list(self_source_nodes),
         "all_parent_target_source_nodes": list(target_source_nodes),
         "all_parent_self_uniform_levels": list(self_uniform_levels),
@@ -3231,6 +3330,62 @@ def fr13_fixed32_taw_cache_key(
     )
 
 
+def _fr13_fixed32_bind_schedule_to_profile(topology, mode, schedule) -> str:
+    """THE OBSERVABLE BINDING for the source-row schedule.
+
+    The same discipline the drafter tree got in round 17, one level deeper. A
+    schedule is a list of node ids; two profiles can produce lists of the same
+    LENGTH that address different rows, and every shape check downstream would
+    pass. So the schedule actually constructed here is reduced to a digest and
+    compared against the digest its profile pins independently -- the ancestry
+    of the tree it claims to schedule.
+    """
+    profile_name = topology.TREE_PROFILE_BY_MODE.get(mode)
+    if profile_name is None:
+        raise RuntimeError(
+            f"FR13 fixed32 mode {mode!r} has no tree profile; known modes are "
+            f"{sorted(topology.TREE_PROFILE_BY_MODE)}"
+        )
+    # Every active node must be accounted for: either it is a leaf and so a
+    # SELF source row, or it has active children and so appears as a parent in
+    # the child lists. A node in neither is a node nothing schedules.
+    children = topology.active_child_lists(mode)
+    covered = set(schedule["self_source_nodes"]) | set(children)
+    active = {
+        node
+        for node, enabled in enumerate(topology.valid_for_mode(mode))
+        if enabled
+    }
+    if not active <= covered:
+        raise RuntimeError(
+            f"FR13 fixed32 schedule for {mode} leaves active nodes unscheduled: "
+            f"{sorted(active - covered)}"
+        )
+    payload = {
+        "mode": mode,
+        "profile": profile_name,
+        "ancestry_sha256": str(
+            topology.profile(profile_name)["tree_ancestry_sha256"]
+        ),
+        "self_source_nodes": list(schedule["self_source_nodes"]),
+        "target_source_nodes": list(schedule["target_source_nodes"]),
+        "target_parent_slots": list(schedule["target_parent_slots"]),
+    }
+    digest = hashlib.sha256(
+        json.dumps(
+            payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+        ).encode("ascii")
+    ).hexdigest()
+    expected = _FR13_FIXED32_TAW_SCHEDULE_DIGESTS.get(mode)
+    if expected is not None and digest != expected:
+        raise RuntimeError(
+            "FR13 fixed32 all-parent schedule is not the served profile's: "
+            f"mode={mode} profile={profile_name} digest={digest} "
+            f"expected={expected}"
+        )
+    return digest
+
+
 def fr13_fixed32_taw_preseed(
     device,
     *,
@@ -3287,34 +3442,33 @@ def fr13_fixed32_taw_preseed(
         dtype=torch.long,
         device=normalized_device,
     )
+    # The drafter's parents are the SERVED mode's, not hydra27's. For tail6 and
+    # hydra27 draft_parent_for_mode returns DRAFT_PARENT itself, so this is
+    # unchanged by identity.
     parent_base = torch.tensor(
-        topology.DRAFT_PARENT,
+        topology.draft_parent_for_mode(mode),
         dtype=torch.long,
         device=normalized_device,
     )
     active_children = topology.active_child_lists(mode)
     topology_binding = _fr13_fixed32_taw_topology_binding(topology)
-    self_source_nodes = tuple(
-        topology_binding["all_parent_self_source_nodes"]
-    )
-    target_source_nodes = tuple(
-        topology_binding["all_parent_target_source_nodes"]
-    )
+    mode_schedule = topology_binding["all_parent_schedule_by_mode"].get(mode)
+    if mode_schedule is None:
+        raise RuntimeError(
+            f"FR13 fixed32 all-parent schedule has no entry for mode {mode!r}"
+        )
+    _fr13_fixed32_bind_schedule_to_profile(topology, mode, mode_schedule)
+    self_source_nodes = tuple(mode_schedule["self_source_nodes"])
+    target_source_nodes = tuple(mode_schedule["target_source_nodes"])
     self_slot_by_node = [0] * int(topology.PHYSICAL_DRAFTS)
     for slot, node in enumerate(self_source_nodes):
         self_slot_by_node[node] = slot
     target_source_slot = {
         source_node: slot for slot, source_node in enumerate(target_source_nodes)
     }
-    self_uniform_levels = tuple(
-        topology_binding["all_parent_self_uniform_levels"]
-    )
-    target_parent_slots = tuple(
-        topology_binding["all_parent_target_parent_slots"]
-    )
-    target_uniform_levels = tuple(
-        topology_binding["all_parent_target_uniform_levels"]
-    )
+    self_uniform_levels = tuple(mode_schedule["self_uniform_levels"])
+    target_parent_slots = tuple(mode_schedule["target_parent_slots"])
+    target_uniform_levels = tuple(mode_schedule["target_uniform_levels"])
     target_slot_by_parent = [0] * int(topology.PHYSICAL_ROWS)
     for parent, children in active_children.items():
         target_slot_by_parent[parent + 1] = target_source_slot[children[0]]

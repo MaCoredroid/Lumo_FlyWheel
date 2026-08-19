@@ -38,6 +38,7 @@ import ast
 import hashlib
 import importlib.util
 import inspect
+import json
 import re
 import subprocess
 import sys
@@ -1792,50 +1793,149 @@ def test_the_real_preseed_still_runs_on_cpu_for_every_qualified_mode(
     )
 
 
-def test_the_preseed_runs_for_hydra31_up_to_the_levers_qualified_scope() -> None:
-    """Round 19's ruling closed the authority gap. What remains is not one.
+def test_the_preseed_completes_end_to_end_for_every_serving_mode() -> None:
+    """Round 20's ruling: the source-row schedule is keyed by mode, so hydra31
+    preseeds end to end. No declared gaps.
 
-    hydra31 now resolves its route, its mask, its valid vector and its active
-    count from the authority, and the preseed runs until it reaches the TAW
-    all-parent SOURCE-ROW SCHEDULE -- which is unioned over exactly the two
-    modes the lever was byte-qualified on (13 self / 17 target rows, pinned and
-    tensor-shaping). hydra31's own union is 11/21 and the union of all three is
-    14/22, so widening it changes hydra27's tensor shapes and slot indices:
-    a numerical re-qualification of the commit route, not a validator edit and
-    not a re-attestation. Asserting exactly where it stops is what keeps that a
-    scheduled decision instead of a rediscovery.
+    The union only existed because ONE static allocation served every mode.
+    Note what it was NOT: 13/17 is the union of tail6 and hydra27 and is not
+    either mode's own schedule -- hydra27 alone is 11/17, tail6 alone is 11/13,
+    and the two extra self rows are nodes 6 and 7 that only tail6 contributes.
+    So the qualified modes keep the QUALIFIED-SCOPE schedule byte for byte
+    (what their byte-AB pass measured and what production allocates), and only
+    a mode outside that scope derives its own.
     """
     pytest.importorskip("torch")
     kernel = _multidraft_kernel()
     topology = _topology_module()
 
-    # the authority now answers for hydra31 at every index the preseed consults
-    assert PROFILE_HYDRA31 in topology.VALID_MASK_BY_MODE
-    assert PROFILE_HYDRA31 in topology.VALID_BY_MODE
-    assert topology.VALID_MASK_BY_MODE[PROFILE_HYDRA31] == topology.HYDRA31_VALID_MASK
-    assert kernel._fr13_fixed32_expected_active(topology, PROFILE_HYDRA31) == 31
+    expected_rows = {
+        "tail6_fixed32": (13, 17),
+        PROFILE_HYDRA27: (13, 17),
+        PROFILE_HYDRA31: (11, 21),
+    }
+    for mode in topology.SERVING_MODES:
+        keys = kernel.fr13_fixed32_taw_preseed("cpu", mode=mode)
+        assert len(keys) == 4, f"{mode}: preseed covers B=1..4"
+        entry = kernel._FR13_FIXED32_TAW_CACHE[keys[0]]
+        rows = (
+            int(entry["native_self_rows_per_request"]),
+            int(entry["native_target_rows_per_request"]),
+        )
+        assert rows == expected_rows[mode], f"{mode}: rows {rows}"
 
-    def union(modes):
+
+def test_the_qualified_scope_schedule_is_not_either_modes_own() -> None:
+    """The subtlety that makes 'just key it per mode' a production change.
+
+    Recorded as a test because the next reader will otherwise 'simplify' the
+    qualified branch and silently shrink a production tensor by two rows.
+    """
+    topology = _topology_module()
+
+    def schedule(modes):
         selves, targets = set(), set()
         for mode in modes:
             children = topology.active_child_lists(mode)
-            active = tuple(
+            active = [
                 node
                 for node, enabled in enumerate(topology.valid_for_mode(mode))
                 if enabled
-            )
+            ]
             selves.update(node for node in active if node not in children)
             targets.update(kids[0] for kids in children.values())
         return len(selves), len(targets)
 
-    assert union(("tail6_fixed32", PROFILE_HYDRA27)) == (13, 17), (
-        "the lever's qualified scope moved -- that is a re-qualification"
-    )
-    assert union((PROFILE_HYDRA31,)) == (11, 21)
-    assert union(("tail6_fixed32", PROFILE_HYDRA27, PROFILE_HYDRA31)) == (14, 22)
+    assert schedule(("tail6_fixed32", PROFILE_HYDRA27)) == (13, 17)
+    assert schedule((PROFILE_HYDRA27,)) == (11, 17)
+    assert schedule(("tail6_fixed32",)) == (11, 13)
+    assert schedule((PROFILE_HYDRA31,)) == (11, 21)
 
-    with pytest.raises(KeyError):
-        kernel.fr13_fixed32_taw_preseed("cpu", mode=PROFILE_HYDRA31)
+
+def test_the_schedule_binding_refuses_another_profiles_schedule() -> None:
+    """MUTATION PROOF: a schedule is a list of node ids, and two profiles can
+    produce lists of the same LENGTH that address different rows. Shape checks
+    cannot see that, so the binding is to the profile's pinned digest.
+    """
+    pytest.importorskip("torch")
+    kernel = _multidraft_kernel()
+    topology = _topology_module()
+    binding = kernel._fr13_fixed32_taw_topology_binding(topology)
+    schedules = binding["all_parent_schedule_by_mode"]
+
+    # each mode's own schedule binds
+    for mode in topology.SERVING_MODES:
+        kernel._fr13_fixed32_bind_schedule_to_profile(
+            topology, mode, schedules[mode]
+        )
+
+    # hydra31's schedule under hydra27's mode, and the reverse, must refuse.
+    # Which guard catches it first depends on the pair -- coverage or digest --
+    # and both are refusals; what matters is that neither combination serves.
+    with pytest.raises(RuntimeError):
+        kernel._fr13_fixed32_bind_schedule_to_profile(
+            topology, PROFILE_HYDRA27, schedules[PROFILE_HYDRA31]
+        )
+    with pytest.raises(RuntimeError):
+        kernel._fr13_fixed32_bind_schedule_to_profile(
+            topology, PROFILE_HYDRA31, schedules[PROFILE_HYDRA27]
+        )
+    with pytest.raises(RuntimeError):
+        kernel._fr13_fixed32_bind_schedule_to_profile(
+            topology, "nope_fixed32", schedules[PROFILE_HYDRA27]
+        )
+
+    # a schedule that leaves an active node unscheduled refuses at coverage
+    maimed = dict(schedules[PROFILE_HYDRA31])
+    maimed["self_source_nodes"] = list(maimed["self_source_nodes"])[:-1]
+    with pytest.raises(RuntimeError) as gap:
+        kernel._fr13_fixed32_bind_schedule_to_profile(
+            topology, PROFILE_HYDRA31, maimed
+        )
+    assert "unscheduled" in str(gap.value)
+
+    # ...and the DIGEST alone catches a schedule of the right length, covering
+    # every active node, that addresses the wrong rows. This is the case no
+    # shape or coverage check can see, and the reason the binding exists.
+    swapped = dict(schedules[PROFILE_HYDRA27])
+    targets = list(swapped["target_source_nodes"])
+    targets[0], targets[-1] = targets[-1], targets[0]
+    swapped["target_source_nodes"] = targets
+    assert len(targets) == len(schedules[PROFILE_HYDRA27]["target_source_nodes"])
+    with pytest.raises(RuntimeError) as wrong_rows:
+        kernel._fr13_fixed32_bind_schedule_to_profile(
+            topology, PROFILE_HYDRA27, swapped
+        )
+    assert "not the served profile" in str(wrong_rows.value)
+
+
+def test_the_qualified_modes_share_one_schedule_object_by_scope() -> None:
+    """Bit-identity, asserted at the source rather than only measured."""
+    pytest.importorskip("torch")
+    kernel = _multidraft_kernel()
+    topology = _topology_module()
+    binding = kernel._fr13_fixed32_taw_topology_binding(topology)
+    schedules = binding["all_parent_schedule_by_mode"]
+
+    qualified = ["tail6_fixed32", PROFILE_HYDRA27]
+    for mode in qualified:
+        assert schedules[mode]["scope"] == qualified
+        for key in (
+            "self_source_nodes",
+            "target_source_nodes",
+            "self_uniform_levels",
+            "target_parent_slots",
+            "target_uniform_levels",
+        ):
+            assert schedules[mode][key] == binding[f"all_parent_{key}"], (
+                f"{mode}.{key} diverged from the qualified-scope schedule"
+            )
+    assert schedules[PROFILE_HYDRA31]["scope"] == [PROFILE_HYDRA31]
+    # ...and the top-level keys, which every other consumer reads, are the
+    # qualified scope's, unchanged.
+    assert len(binding["all_parent_self_source_nodes"]) == 13
+    assert len(binding["all_parent_target_source_nodes"]) == 17
+    assert binding["topology_sha256"] == TAW_TOPOLOGY_DIGEST
 
 
 def test_hydra27_topology_values_are_byte_identical_to_the_baseline() -> None:
@@ -1893,9 +1993,13 @@ def test_hydra27_topology_values_are_byte_identical_to_the_baseline() -> None:
 # re-attest the source-closure digest through the established machinery. Two of
 # the 47 digested functions changed, both BOOT-TIME VALIDATORS, and the
 # evidence below is what the pairing rests on.
-TAW_SOURCE_DIGEST = "491874e3ebbc53b83ce28a8cae505025fde36e56564da049ab0d582eaa4e7d5c"
+TAW_SOURCE_DIGEST = "6ffe57287e768bfee5e2e72f10de0dfea6fb3e6c0fa50f32b6c099c63fa916a2"
+# Every digest this pin has ever carried. A mirror holding ANY of them is a
+# mirror that was missed, so the sweep checks all of them rather than only the
+# immediately previous one.
 TAW_SOURCE_DIGEST_SUPERSEDED = (
-    "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d"
+    "68b289aee5773edf1134f184c37551a90ec8543430d768a05066bc1341473c6d",
+    "491874e3ebbc53b83ce28a8cae505025fde36e56564da049ab0d582eaa4e7d5c",
 )
 # The lever's qualified scope and the payload it digests. Neither moved, which
 # is why no tensor shape or slot index on the hydra27 path could move.
@@ -1920,7 +2024,9 @@ def _digest_mirror_files() -> list[Path]:
                 text = path.read_text()
             except (OSError, UnicodeDecodeError):  # pragma: no cover
                 continue
-            if TAW_SOURCE_DIGEST in text or TAW_SOURCE_DIGEST_SUPERSEDED in text:
+            if TAW_SOURCE_DIGEST in text or any(
+                old in text for old in TAW_SOURCE_DIGEST_SUPERSEDED
+            ):
                 out.append(path)
     return out
 
@@ -1936,11 +2042,11 @@ def test_every_taw_digest_mirror_carries_the_re_attested_value() -> None:
         f"the sweep found only {len(mirrors)} mirrors; it used to find 14"
     )
     stale = {
-        path.relative_to(REPO).as_posix(): path.read_text().count(
-            TAW_SOURCE_DIGEST_SUPERSEDED
-        )
+        path.relative_to(REPO).as_posix(): [
+            old for old in TAW_SOURCE_DIGEST_SUPERSEDED if old in path.read_text()
+        ]
         for path in mirrors
-        if TAW_SOURCE_DIGEST_SUPERSEDED in path.read_text()
+        if any(old in path.read_text() for old in TAW_SOURCE_DIGEST_SUPERSEDED)
         and path.name != Path(__file__).name
     }
     assert not stale, f"these mirrors still carry the superseded digest: {stale}"
@@ -1952,11 +2058,19 @@ def test_the_kernel_and_the_census_agree_on_the_digest() -> None:
     census_path = SCRIPTS / "fr13_fixed32_work_census.py"
     assert kernel._FR13_FIXED32_TAW_SOURCE_SHA256 == TAW_SOURCE_DIGEST
     assert TAW_SOURCE_DIGEST in census_path.read_text()
-    assert TAW_SOURCE_DIGEST_SUPERSEDED not in census_path.read_text()
+    assert not any(
+        old in census_path.read_text() for old in TAW_SOURCE_DIGEST_SUPERSEDED
+    )
 
 
-def test_the_re_attestation_changed_exactly_two_of_the_47_functions() -> None:
-    """Blast radius, measured rather than asserted."""
+def test_the_re_attestation_blast_radius_is_the_three_validators() -> None:
+    """Blast radius, measured rather than asserted.
+
+    Round 20's ruling added a third: _fr13_fixed32_bind_schedule_to_profile,
+    the schedule's observable binding, which is placed UNDER the source closure
+    on purpose -- a validator that decides whether a serve is allowed belongs
+    inside the attestation like the math does.
+    """
     kernel = _multidraft_kernel()
     try:
         baseline = subprocess.run(
@@ -1969,7 +2083,7 @@ def test_the_re_attestation_changed_exactly_two_of_the_47_functions() -> None:
         pytest.skip(f"previous kernel revision unavailable: {exc}")
 
     names = set(kernel._FR13_FIXED32_TAW_SOURCE_FUNCTIONS)
-    assert len(names) == 47
+    assert len(names) == 48
 
     def sources(text: str) -> dict[str, str]:
         found: dict[str, str] = {}
@@ -1986,9 +2100,14 @@ def test_the_re_attestation_changed_exactly_two_of_the_47_functions() -> None:
     )
     changed = sorted(n for n in names if old.get(n) != new.get(n))
     assert changed == [
-        "_fr13_fixed32_expected_active",
+        "_fr13_fixed32_bind_schedule_to_profile",
+        "_fr13_fixed32_taw_preseed",
         "_fr13_fixed32_taw_topology_binding",
-    ], f"the re-attestation touched more than the two validators: {changed}"
+    ] or changed == [
+        "_fr13_fixed32_bind_schedule_to_profile",
+        "_fr13_fixed32_taw_topology_binding",
+        "fr13_fixed32_taw_preseed",
+    ], f"the re-attestation touched more than the schedule work: {changed}"
 
 
 def test_neither_changed_validator_can_move_a_counter_or_a_served_byte() -> None:
@@ -2036,3 +2155,57 @@ def test_neither_changed_validator_can_move_a_counter_or_a_served_byte() -> None
     with pytest.raises(RuntimeError) as refusal:
         kernel._fr13_fixed32_taw_topology_binding(_Missing())
     assert "missing" in str(refusal.value)
+
+
+def test_the_pinned_schedule_digests_are_recomputed_not_trusted() -> None:
+    """The pins the observable binding compares against, derived here again.
+
+    A digest table that is only ever compared against itself pins nothing. Each
+    entry is recomputed from fr13_fixed32_topology and the kernel's own binding,
+    so a hand-edited pin fails rather than blessing whatever it was edited to.
+    """
+    pytest.importorskip("torch")
+    kernel = _multidraft_kernel()
+    topology = _topology_module()
+    binding = kernel._fr13_fixed32_taw_topology_binding(topology)
+    schedules = binding["all_parent_schedule_by_mode"]
+
+    pinned = kernel._FR13_FIXED32_TAW_SCHEDULE_DIGESTS
+    assert set(pinned) == set(topology.SERVING_MODES), (
+        "the schedule digest table must carry the whole serving roster"
+    )
+    for mode in topology.SERVING_MODES:
+        recomputed = hashlib.sha256(
+            json.dumps(
+                {
+                    "mode": mode,
+                    "profile": topology.TREE_PROFILE_BY_MODE[mode],
+                    "ancestry_sha256": str(
+                        topology.profile(topology.TREE_PROFILE_BY_MODE[mode])[
+                            "tree_ancestry_sha256"
+                        ]
+                    ),
+                    "self_source_nodes": list(schedules[mode]["self_source_nodes"]),
+                    "target_source_nodes": list(
+                        schedules[mode]["target_source_nodes"]
+                    ),
+                    "target_parent_slots": list(
+                        schedules[mode]["target_parent_slots"]
+                    ),
+                },
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("ascii")
+        ).hexdigest()
+        assert pinned[mode] == recomputed, f"{mode}: pinned digest is stale"
+
+    # the two profiles produce genuinely different schedules
+    assert pinned[PROFILE_HYDRA27] != pinned[PROFILE_HYDRA31]
+    # ...and tail6 differs from hydra27 only in the mode/ancestry it binds to,
+    # which is exactly why the digest carries the mode and not just the rows.
+    assert pinned["tail6_fixed32"] != pinned[PROFILE_HYDRA27]
+    assert (
+        schedules["tail6_fixed32"]["self_source_nodes"]
+        == schedules[PROFILE_HYDRA27]["self_source_nodes"]
+    )
