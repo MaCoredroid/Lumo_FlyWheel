@@ -850,3 +850,99 @@ def test_the_scan_sees_every_family():
             "the byte-gated route must still bind its commit"
         )
         assert parity._COMMIT_SCOPE_OPENER in text
+
+
+# ===========================================================================
+# SITE 19: the three workload tables, tied.
+#
+# Sites 12, 17, 18 and 19 are one disease -- a concept stated N times and
+# updated N-1 times. Site 19 is its purest form: exact16_minus_13236 landed in
+# the launcher and patcher tables and was structurally inexpressible in
+# fr13_floor_gate.EVIDENCE_SETS, which is keyed by task COUNT rather than by
+# workload, so fifteen had nowhere to go.
+# ===========================================================================
+
+
+def test_the_three_workload_tables_agree():
+    assert parity.scan_workload_table_agreement() == []
+
+
+def test_the_evidence_set_is_derived_from_its_parent():
+    """Derived, not listed -- and asserted to have stayed derived."""
+    import json
+
+    sys.path.insert(0, str(REPO / "scripts"))
+    import fr13_floor_gate
+
+    fifteen = fr13_floor_gate.EVIDENCE_SETS[15]
+    sixteen = fr13_floor_gate.EVIDENCE_SETS[16]
+    assert set(sixteen["task_ids"]) - set(fifteen["task_ids"]) == {
+        "astropy__astropy-13236"
+    }
+    assert fifteen["task_ids"] == tuple(
+        t for t in sixteen["task_ids"] if t != "astropy__astropy-13236"
+    ), "the fifteen reordered their parent; a QC resumed out of order is a "\
+       "different measurement"
+    # ... and the table agrees with the file it names
+    body = json.loads((REPO / fifteen["relative_path"]).read_text())
+    assert tuple(body["instance_ids"]) == fifteen["task_ids"]
+    import hashlib
+
+    assert hashlib.sha256(
+        (REPO / fifteen["relative_path"]).read_bytes()
+    ).hexdigest() == fifteen["sha256"]
+
+
+def test_removing_the_evidence_set_key_fires_the_tie(monkeypatch):
+    """The mutation proof site 19 asks for.
+
+    Drop the 15-key with the other two tables intact -- exactly the state the
+    runner met -- and the tie must say which table is behind.
+    """
+    sys.path.insert(0, str(REPO / "scripts"))
+    import fr13_floor_gate
+
+    reduced = {
+        count: row
+        for count, row in fr13_floor_gate.EVIDENCE_SETS.items()
+        if count != 15
+    }
+    monkeypatch.setattr(fr13_floor_gate, "EVIDENCE_SETS", reduced)
+    bad = parity.scan_workload_table_agreement()
+    assert bad, "the tie did not notice a workload missing from EVIDENCE_SETS"
+    assert any("exact16_minus_13236" in b for b in bad), bad
+    assert any("EVIDENCE_SETS does not know" in b for b in bad), bad
+    # every launcher family reports it, not just the first
+    assert len({b.split(":")[0] for b in bad}) == len(parity.LAUNCHER_FAMILIES)
+
+
+def test_a_workload_missing_from_the_patcher_fires_the_tie(monkeypatch):
+    """The other direction: two tables know it, the container half does not."""
+    real = parity.patcher_workload_table
+
+    def reduced(text):
+        table = real(text)
+        table.pop("exact16_minus_13236")
+        return table
+
+    monkeypatch.setattr(parity, "patcher_workload_table", reduced)
+    bad = parity.scan_workload_table_agreement()
+    assert bad and any("but the patcher names" in b for b in bad), bad
+
+
+def test_a_synthetic_workload_stays_out_of_the_evidence_sets():
+    """random1024_calibration has no subset, so it must not be filed as one.
+
+    EVIDENCE_SETS binds evidence FILES. A synthetic prompt shape that acquired
+    an entry there would be a subset identity for a run with no subset -- the
+    pins-as-fiction move, arriving through the third table instead of the
+    first.
+    """
+    launcher = parity.launcher_workload_table(
+        (REPO / parity.LAUNCHER_FAMILIES[0]).read_text()
+    )
+    assert launcher["random1024_calibration"]["relative_path"] == ""
+    assert launcher["random1024_calibration"]["task_ids"] == ()
+    evidence = parity.evidence_sets_table()
+    assert all(entry["task_ids"] for entry in evidence.values())
+    assert 0 not in {entry["task_count"] for entry in evidence.values()}

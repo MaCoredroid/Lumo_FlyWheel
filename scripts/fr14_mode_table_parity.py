@@ -622,6 +622,161 @@ def scan_commit_binding_scope():
             )
     return bad
 
+
+# ===========================================================================
+# SITE 19: THE THREE WORKLOAD TABLES.
+#
+# The workload-identity concept lives in three places, and it has to:
+#
+#   1. the LAUNCHER's `_fr13_b1_tierb_workload_pins` case  -- bash, host-side,
+#      running before docker, so it cannot import anything;
+#   2. the PATCHER's _FR13_FA2_QROW32_B1_TIER_B_WORKLOADS -- Python, but
+#      executing inside the pinned image against a patched vLLM tree, where
+#      the campaign deliberately duplicates tables rather than acquiring
+#      imports (see _FR13_FA2_QROW32_B1_TIER_B_ARMS);
+#   3. fr13_floor_gate.EVIDENCE_SETS                       -- Python, host-side.
+#
+# Sites 12, 17, 18 and 19 are one disease: a concept stated N times and
+# updated N-1 times. Site 19 is its purest form -- exact16_minus_13236 landed
+# in tables 1 and 2 and was structurally inexpressible in table 3, which is
+# keyed by task COUNT rather than by workload.
+#
+# DERIVE OR TIE. Derivation was considered and rejected honestly: no single
+# authority is reachable at the moment all three need the answer. Table 1 is
+# bash before docker; table 3 runs on the host with the repo importable; table
+# 2 runs in a container whose whole design is to depend on nothing it did not
+# bring. (Where a value COULD be sourced rather than copied, it now is -- site
+# 16 mints the patcher digest from the credential instead of re-deriving it.)
+#
+# So they are TIED. This joins the three on the one identity they all carry --
+# the SUBSET FILE -- and requires them to agree on its digest and its task
+# ids. A new workload that reaches two tables fails here until it reaches the
+# third, which is the failure mode of all four sites, made loud.
+# ===========================================================================
+
+_LAUNCHER_WORKLOAD_ARM = re.compile(r"^    ([A-Za-z0-9_]+)\)\s*$")
+_LAUNCHER_WORKLOAD_FIELD = re.compile(
+    r'^\s*(_fr13_tierb_task_ids|_fr13_tierb_subset_sha256|_fr13_tierb_subset_file)'
+    r'="([^"]*)"\s*$'
+)
+
+
+def launcher_workload_table(text):
+    """The launcher's keyed case, read out of the bash itself."""
+    start = text.index("_fr13_b1_tierb_workload_pins() {")
+    end = text.index("\n}\n", start)
+    table, current = {}, None
+    for line in text[start:end].split("\n"):
+        arm = _LAUNCHER_WORKLOAD_ARM.match(line)
+        if arm:
+            current = arm.group(1)
+            table[current] = {}
+            continue
+        field = _LAUNCHER_WORKLOAD_FIELD.match(line)
+        if field and current:
+            table[current][field.group(1)] = field.group(2)
+    return {
+        name: {
+            "task_ids": tuple(
+                task for task in fields.get("_fr13_tierb_task_ids", "").split(",")
+                if task
+            ),
+            "sha256": fields.get("_fr13_tierb_subset_sha256", ""),
+            "relative_path": fields.get("_fr13_tierb_subset_file", ""),
+        }
+        for name, fields in table.items()
+        if fields
+    }
+
+
+def patcher_workload_table(text):
+    """_FR13_FA2_QROW32_B1_TIER_B_WORKLOADS, without importing the patcher."""
+    start = text.index("_FR13_FA2_QROW32_B1_TIER_B_WORKLOADS = {")
+    end = text.index("\n}\n", start) + 2
+    namespace = {}
+    exec(compile(text[start:end], "<workloads>", "exec"), namespace)
+    return {
+        name: {"task_ids": tuple(t for t in ids.split(",") if t), "sha256": sha}
+        for name, (ids, sha) in namespace[
+            "_FR13_FA2_QROW32_B1_TIER_B_WORKLOADS"
+        ].items()
+    }
+
+
+def evidence_sets_table():
+    """fr13_floor_gate.EVIDENCE_SETS, re-keyed by subset file."""
+    import fr13_floor_gate  # noqa: E402
+
+    return {
+        row["relative_path"]: {
+            "task_ids": tuple(row["task_ids"]),
+            "sha256": row["sha256"],
+            "task_count": count,
+        }
+        for count, row in fr13_floor_gate.EVIDENCE_SETS.items()
+    }
+
+
+def scan_workload_table_agreement():
+    """The three workload tables, joined on the subset file they name."""
+    bad = []
+    patcher = patcher_workload_table(
+        (REPO / "scripts/fr13_patch_fa2_tree_bias.py").read_text()
+    )
+    evidence = evidence_sets_table()
+    for rel in LAUNCHER_FAMILIES:
+        launcher = launcher_workload_table((REPO / rel).read_text())
+        name = Path(rel).name
+        if set(launcher) != set(patcher):
+            bad.append(
+                f"{name}: launcher names {sorted(launcher)} but the patcher "
+                f"names {sorted(patcher)}"
+            )
+        for workload, row in launcher.items():
+            mirror = patcher.get(workload)
+            if mirror is None:
+                continue
+            if mirror["task_ids"] != row["task_ids"] or (
+                mirror["sha256"] != row["sha256"]
+            ):
+                bad.append(
+                    f"{name}: {workload} differs between the launcher and the "
+                    "patcher workload tables"
+                )
+            subset = row["relative_path"]
+            if not subset:
+                # a synthetic shape carries no subset; it must NOT appear in
+                # EVIDENCE_SETS, which exists to bind evidence files
+                if any(
+                    entry["task_ids"] == row["task_ids"]
+                    for entry in evidence.values()
+                ):
+                    bad.append(
+                        f"{name}: {workload} carries no subset but matches an "
+                        "evidence set"
+                    )
+                continue
+            seen = evidence.get(subset)
+            if seen is None:
+                bad.append(
+                    f"{name}: {workload} names {subset}, which "
+                    "fr13_floor_gate.EVIDENCE_SETS does not know -- the gate "
+                    "cannot express this workload"
+                )
+                continue
+            if seen["sha256"] != row["sha256"]:
+                bad.append(f"{name}: {workload} subset digest differs from "
+                           "EVIDENCE_SETS")
+            if seen["task_ids"] != row["task_ids"]:
+                bad.append(f"{name}: {workload} task ids differ from "
+                           "EVIDENCE_SETS")
+            if seen["task_count"] != len(row["task_ids"]):
+                bad.append(
+                    f"{name}: {workload} has {len(row['task_ids'])} tasks but "
+                    f"EVIDENCE_SETS files it under {seen['task_count']}"
+                )
+    return bad
+
 # Topology names whose VALUE differs between profiles. Comparing one of these
 # unconditionally is the round-14 defect, whatever the mode table says.
 PROFILE_VARYING = frozenset({
@@ -787,6 +942,11 @@ def sweep():
     for problem in scan_commit_binding_scope():
         rows.append(
             {"kind": "commit-binding-scope", "file": "<launcher families>",
+             "detail": problem}
+        )
+    for problem in scan_workload_table_agreement():
+        rows.append(
+            {"kind": "workload-table-agreement", "file": "<three tables>",
              "detail": problem}
         )
     return rows

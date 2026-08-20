@@ -136,6 +136,22 @@ EVIDENCE_SETS = {
         "sha256": ("0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"),
         "task_ids": CANONICAL_TASK_IDS[:4],
     },
+    # SITE 19. Keyed by TASK COUNT, so a fifteen-task evidence set was
+    # structurally inexpressible here even after it landed in the launcher and
+    # patcher workload tables -- the exact16 QC resume had nowhere to declare
+    # itself and the gate refused it.
+    #
+    # DERIVED, not listed: astropy__astropy-13236 is CANONICAL_TASK_IDS[2], and
+    # slicing around it keeps this set in lockstep with its parent. A
+    # hand-written fifteen drifts the first time either is touched, and a QC
+    # resumed out of order is a different measurement.
+    15: {
+        "relative_path": (
+            "config/fr13_fixed32/subset_b4_sixteen_minus_13236.json"
+        ),
+        "sha256": ("24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a"),
+        "task_ids": CANONICAL_TASK_IDS[:2] + CANONICAL_TASK_IDS[3:],
+    },
     16: {
         "relative_path": "config/fr13_fixed32/subset_b4_sixteen.json",
         "sha256": ("47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c"),
