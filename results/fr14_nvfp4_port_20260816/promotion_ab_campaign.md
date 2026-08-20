@@ -4254,3 +4254,70 @@ verdicts are the union of tonight's banked 13236 verdict and a clean 15-task run
 
 QC resume BLOCKED on the workload entry; ladder exactness BLOCKED on the token-definition
 question. Both are one small lane edit each. Nothing fired. `containers=0`, GPU idle.
+
+# QC RESUME, ATTEMPT 1 (2026-08-19 23:51Z) — SITE 19, one second in, pre-container
+
+## BOOT VERDICT: REFUSED by a FOURTH statement of the canonical-set rule
+
+The seal held and I verified it rather than assuming: patcher `dd424b05…` equals the
+credential's sealed digest exactly, coupling test green, tree clean, memory floor cleared
+(`MemFree=105.6GiB >= 102.8GiB` — the new gate reporting itself). The workload
+declaration and all fifteen ids passed through. Then, **one second in, before any
+container**:
+
+```
+scripts/fr13_floor_gate.py:1912 validate_canonical_subset
+GateError: config/fr13_fixed32/subset_b4_sixteen_minus_13236.json:
+  fixed32 subset SHA-256 is not canonical exact4/exact16; got 24a8cf7c…
+FAIL: fixed32 canonical task-set binding
+```
+
+## SITE 19 — the same shape as 12, 17 and 18: a rule stated in N places, N-1 updated
+
+`exact16_minus_13236` landed in the launcher, the patcher, both leg3 forks and the mode
+table. It did not reach `scripts/fr13_floor_gate.py`:
+
+```python
+EVIDENCE_SETS = {
+     4: {"relative_path": ".../subset_b4_four.json",    "sha256": "0e37b713…", "task_ids": CANONICAL_TASK_IDS[:4]},
+    16: {"relative_path": ".../subset_b4_sixteen.json", "sha256": "47b0a3c9…", "task_ids": CANONICAL_TASK_IDS},
+}
+```
+
+It is **keyed by task_count**, so a fifteen-task set is not merely unlisted — it is
+structurally inexpressible until a key exists. The error message names the constraint
+honestly ("not canonical exact4/exact16"), which is how it was diagnosable in one read.
+
+## THE FIX IS ONE KEY, AND I CHECKED THAT IT REALLY IS ONE
+
+I traced every in-path consumer rather than assuming the first one was the only one:
+
+* the serve variant calls `validate_fixed32_run_subset` at **three** sites (`:712/721`,
+  `:1008/1022`, `:1386`);
+* `run_swe_bench_q36_a.py` — the in-container runner — calls `validate_canonical_subset`
+  (`:3332`) and `validate_fixed32_run_subset` (`:10320`);
+* and decisively, it **imports both from `fr13_floor_gate` and hardcodes neither sha**
+  (grep count: 0).
+
+So `EVIDENCE_SETS` is the single source for all five in-path checks. One key covers them:
+
+```python
+15: {
+    "relative_path": "config/fr13_fixed32/subset_b4_sixteen_minus_13236.json",
+    "sha256": "24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a",
+    "task_ids": tuple(t for t in CANONICAL_TASK_IDS if t != "astropy__astropy-13236"),
+},
+```
+
+SCOPE NOTE, stated because the raw census misleads: grepping the two canonical shas finds
+20+ files, but nearly all are other campaigns' gates and reducers (b4 exact16 QC, floor
+gate reducers, nsys profiles) and are NOT in this boot's path. Widening those would be the
+"fix everything that greps" move; the in-path set is the five call sites above, all fed by
+one dict.
+
+## STATUS
+
+No container was created, so there is nothing to preserve. No retry, per standing orders.
+`containers=0`, GPU idle, seal `dd424b05…` intact and still matching the patcher — **no
+re-seal 5 will be needed** for this fix if it touches only `fr13_floor_gate.py`, which is
+not the patcher. Nineteen sites.
