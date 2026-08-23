@@ -777,6 +777,98 @@ def scan_workload_table_agreement():
                 )
     return bad
 
+
+# ===========================================================================
+# SITE 20: LITERAL COUNT DISJUNCTIONS IN BASH GUARDS.
+#
+# The three-table tie (site 19) compares TABLES. Site 20 was not in a table:
+# it was a guard literal --
+#
+#     [[ "${_fixed32_subset_binding[0]}" == "4" || ... == "16" ]]
+#
+# -- five hundred lines downstream of the Python step that had just validated
+# fifteen against EVIDENCE_SETS. The authority blessed the count; a
+# restatement of its old contents rejected it. Fifth statement of the rule,
+# invisible to a table comparison.
+#
+# So this is a sibling projection, over SHAPE rather than contents: a bash
+# guard that decides a task/evidence count by comparing it against literal
+# numbers. Adding "15" to such a guard would have been statement 5.5; the fix
+# is for the authority to print its own allowed set and for bash to check
+# membership, which is what the two call sites now do.
+#
+# Keyed on the disjunction shape, not on the specific numbers, per the
+# reformatting-decay lesson: a projection pinned to "4" and "16" would go
+# blind the moment someone wrote 8 or 32.
+# ===========================================================================
+
+COUNT_GUARD_SITES = (
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/fr13_b4_campaign_driver.sh",
+)
+# The shape is a VARIABLE compared to two or more bare integer literals inside
+# one `[[ ... ]]`. Deliberately NOT keyed on the variable's name: site 20's was
+# `${_fixed32_subset_binding[0]}`, which contains no "count" at all, and a
+# projection that only found count-ish names would have missed the very site it
+# was written for. (It did, in its first draft.)
+_INT_COMPARISON = re.compile(r'"(\$\{?[^"]+?\}?)"\s*==\s*"([0-9]+)"')
+
+
+# Adjudicated: closed enumerations with no authority behind them, which is the
+# whole difference. Site 20 was a restatement of a LIST SOMETHING ELSE OWNS --
+# EVIDENCE_SETS had just blessed fifteen and the guard rejected it. These two
+# own their own values: nothing computes them, nothing can extend them, and
+# there is no table for the guard to fall behind. Asserted exactly by
+# tests/test_fr14_mode_table_parity.py so the set cannot grow quietly.
+_COUNT_GUARD_ADJUDICATED = frozenset({
+    "$FR13_B4_TASK_REFILL",   # a boolean, 0|1
+    "$SWE_CONCURRENCY",       # the campaign's own runtime shape, 1|4
+})
+
+
+def _bracket_guards(lines):
+    """Every `[[ ... ]]` guard, with continuations joined, and its line."""
+    joined, start = None, None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if joined is None:
+            if "[[" not in stripped:
+                continue
+            joined, start = stripped, i + 1
+        else:
+            joined += " " + stripped
+        if joined.rstrip().endswith("\\"):
+            joined = joined.rstrip()[:-1]
+            continue
+        yield start, joined
+        joined, start = None, None
+
+
+def scan_literal_count_guards():
+    """Bash guards that decide a value by comparing it to literal integers."""
+    bad = []
+    for rel in COUNT_GUARD_SITES:
+        path = REPO / rel
+        if not path.exists():
+            continue
+        for lineno, guard in _bracket_guards(path.read_text().split("\n")):
+            seen = {}
+            for name, literal in _INT_COMPARISON.findall(guard):
+                seen.setdefault(name, set()).add(literal)
+            for name, literals in seen.items():
+                if len(literals) < 2 or name in _COUNT_GUARD_ADJUDICATED:
+                    continue
+                bad.append(
+                    f"{Path(rel).name}:{lineno} decides {name} by literal "
+                    f"disjunction {sorted(literals)}; the authority that "
+                    "validated it should print its own allowed values and "
+                    "bash should check membership"
+                )
+    return bad
+
+
 # Topology names whose VALUE differs between profiles. Comparing one of these
 # unconditionally is the round-14 defect, whatever the mode table says.
 PROFILE_VARYING = frozenset({
@@ -947,6 +1039,11 @@ def sweep():
     for problem in scan_workload_table_agreement():
         rows.append(
             {"kind": "workload-table-agreement", "file": "<three tables>",
+             "detail": problem}
+        )
+    for problem in scan_literal_count_guards():
+        rows.append(
+            {"kind": "literal-count-guard", "file": "<count guard sites>",
              "detail": problem}
         )
     return rows

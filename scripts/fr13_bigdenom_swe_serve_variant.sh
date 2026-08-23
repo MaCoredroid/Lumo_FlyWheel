@@ -709,7 +709,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "scripts")
-from fr13_floor_gate import validate_fixed32_run_subset
+from fr13_floor_gate import EVIDENCE_SETS, validate_fixed32_run_subset
 
 
 subset_path = Path(sys.argv[1]).resolve()
@@ -747,18 +747,30 @@ if diagnostic:
     temporary.replace(output_path)
 print(binding["task_count"])
 print(",".join(binding["task_ids"]))
+# SITE 20. The allowed counts are PRINTED by the step that already holds the
+# authority, so the bash guard below can check membership instead of restating
+# a list. The old guard was `count == 4 || count == 16`, five hundred lines
+# from EVIDENCE_SETS, and it rejected the fifteen-task resume set the very
+# validator above had just blessed. Adding "15" to it would have been the
+# sixth statement of the same rule.
+print(",".join(str(count) for count in sorted(EVIDENCE_SETS)))
 PY
   )
-  (( $? == 0 && ${#_fixed32_subset_binding[@]} == 2 )) \
+  (( $? == 0 && ${#_fixed32_subset_binding[@]} == 3 )) \
     || { echo "FAIL: fixed32 canonical task-set binding"; exit 2; }
   if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
     [[ "${_fixed32_subset_binding[0]}" == "1" \
        && "${_fixed32_subset_binding[1]}" == "$_fr13_b1_diagnostic_task_id" ]] \
       || { echo "FAIL: fixed32 B1 diagnostic task count is invalid"; exit 2; }
   else
-    [[ "${_fixed32_subset_binding[0]}" == "4" \
-       || "${_fixed32_subset_binding[0]}" == "16" ]] \
-      || { echo "FAIL: fixed32 canonical task count is invalid"; exit 2; }
+    # Membership in the authority's OWN list (third line of the binding),
+    # never a literal disjunction. Still fail-closed, and it cannot go stale:
+    # a new evidence set is admitted here the moment EVIDENCE_SETS knows it.
+    [[ "${_fixed32_subset_binding[0]}" =~ ^[0-9]+$ \
+       && ",${_fixed32_subset_binding[2]}," == *",${_fixed32_subset_binding[0]},"* ]] \
+      || { echo "FAIL: fixed32 canonical task count is invalid" \
+                "(${_fixed32_subset_binding[0]} not in" \
+                "${_fixed32_subset_binding[2]})"; exit 2; }
   fi
   FR13_FIXED32_INGRESS_TASK_IDS=${_fixed32_subset_binding[1]}
   export FR13_FIXED32_INGRESS_TASK_IDS

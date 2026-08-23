@@ -946,3 +946,83 @@ def test_a_synthetic_workload_stays_out_of_the_evidence_sets():
     evidence = parity.evidence_sets_table()
     assert all(entry["task_ids"] for entry in evidence.values())
     assert 0 not in {entry["task_count"] for entry in evidence.values()}
+
+
+# ===========================================================================
+# SITE 20: literal count disjunctions in bash guards.
+#
+# The three-table tie compares TABLES; site 20 was a guard literal five
+# hundred lines downstream of the authority that had just validated fifteen.
+# Fifth statement of the rule, invisible to a table comparison.
+# ===========================================================================
+
+
+def test_literal_count_guards_are_clean_at_head():
+    assert parity.scan_literal_count_guards() == []
+
+
+def test_the_count_guard_adjudication_is_exact_and_reasoned():
+    """Closed enumerations are fine; restatements of someone else's list are not."""
+    assert parity._COUNT_GUARD_ADJUDICATED == frozenset(
+        {"$FR13_B4_TASK_REFILL", "$SWE_CONCURRENCY"}
+    )
+    source = (REPO / "scripts" / "fr14_mode_table_parity.py").read_text()
+    reason = source[source.index("_COUNT_GUARD_ADJUDICATED = frozenset") - 700:
+                    source.index("_COUNT_GUARD_ADJUDICATED = frozenset")]
+    assert "no authority behind them" in reason
+
+
+@pytest.mark.parametrize(
+    "rel,old,new",
+    [
+        (
+            "scripts/fr13_bigdenom_swe_serve_variant.sh",
+            '    [[ "${_fixed32_subset_binding[0]}" =~ ^[0-9]+$ \\\n'
+            '       && ",${_fixed32_subset_binding[2]}," == '
+            '*",${_fixed32_subset_binding[0]},"* ]] \\',
+            '    [[ "${_fixed32_subset_binding[0]}" == "4" \\\n'
+            '       || "${_fixed32_subset_binding[0]}" == "16" ]] \\',
+        ),
+        (
+            "scripts/fr13_b4_campaign_driver.sh",
+            '  [[ "$FIXED32_TASK_COUNT" =~ ^[0-9]+$ \\\n'
+            '     && ",${FIXED32_ALLOWED_TASK_COUNTS}," == '
+            '*",${FIXED32_TASK_COUNT},"* ]] \\',
+            '  [[ "$FIXED32_TASK_COUNT" == "4" || '
+            '"$FIXED32_TASK_COUNT" == "16" ]] \\',
+        ),
+    ],
+    ids=["serve-variant", "b4-driver"],
+)
+def test_restoring_the_literal_disjunction_fires_the_scan(
+    monkeypatch, rel, old, new
+):
+    """Both call sites, put back the way the 00:11Z fire found them."""
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "scripts").mkdir()
+    for site in parity.COUNT_GUARD_SITES:
+        text = (REPO / site).read_text()
+        if site == rel:
+            assert text.count(old) == 1, f"{site}: the guard moved"
+            text = text.replace(old, new, 1)
+        (tmp / site).write_text(text)
+    monkeypatch.setattr(parity, "REPO", tmp)
+    bad = parity.scan_literal_count_guards()
+    assert bad and any(Path(rel).name in b for b in bad), bad
+    assert any("literal disjunction" in b for b in bad)
+
+
+def test_the_projection_is_keyed_on_shape_not_on_the_name():
+    """Site 20's variable contains no "count" at all.
+
+    The first draft of this projection matched count-ish NAMES and therefore
+    missed ${_fixed32_subset_binding[0]} -- the very site it was written for.
+    """
+    guards = list(
+        parity._bracket_guards(
+            ['[[ "${_some_array[0]}" == "4" \\', '   || "${_some_array[0]}" == "16" ]]']
+        )
+    )
+    assert guards, "continuations are not being joined"
+    seen = parity._INT_COMPARISON.findall(guards[0][1])
+    assert {literal for _name, literal in seen} == {"4", "16"}

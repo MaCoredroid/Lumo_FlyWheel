@@ -112,19 +112,27 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "scripts")
-from fr13_floor_gate import validate_canonical_subset
+from fr13_floor_gate import EVIDENCE_SETS, validate_canonical_subset
 
 
 binding = validate_canonical_subset(Path(sys.argv[1]))
+# SITE 20's sibling, same shape and same treatment: the authority prints its
+# own allowed counts so the guard below checks membership rather than
+# restating a list that has already gone stale once.
 print(binding["task_count"])
+print(",".join(str(count) for count in sorted(EVIDENCE_SETS)))
 PY
   ); then
-    echo "FAIL: fixed32 requires the canonical real SWE-Verified 4- or 16-task subset" >&2
+    echo "FAIL: fixed32 requires a canonical real SWE-Verified subset (see fr13_floor_gate.EVIDENCE_SETS)" >&2
     exit 2
   fi
-  [[ "$FIXED32_TASK_COUNT" == "4" || "$FIXED32_TASK_COUNT" == "16" ]] \
+  FIXED32_ALLOWED_TASK_COUNTS=${FIXED32_TASK_COUNT#*$'\n'}
+  FIXED32_TASK_COUNT=${FIXED32_TASK_COUNT%%$'\n'*}
+  [[ "$FIXED32_TASK_COUNT" =~ ^[0-9]+$ \
+     && ",${FIXED32_ALLOWED_TASK_COUNTS}," == *",${FIXED32_TASK_COUNT},"* ]] \
     || {
-      echo "FAIL: fixed32 canonical task count is invalid" >&2
+      echo "FAIL: fixed32 canonical task count is invalid" \
+           "($FIXED32_TASK_COUNT not in $FIXED32_ALLOWED_TASK_COUNTS)" >&2
       exit 2
     }
   .venv/bin/python scripts/fr13_runtime_manifest.py \
