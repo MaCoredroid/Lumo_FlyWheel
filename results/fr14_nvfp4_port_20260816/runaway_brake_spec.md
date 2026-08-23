@@ -38,6 +38,26 @@ damage it was meant to bound.
 | **24,000 (recommended)** | **0 (0.0%)** | **0 (0.00%)** |
 | 30,000 | 0 | 0 |
 
+Finer curve below the recommendation, since Mark may want tighter:
+
+| budget | healthy arms clipped | healthy blocks clipped |
+|---:|---:|---:|
+| 2,000 | 74 (74.0%) | 246 (8.86%) |
+| 4,000 *(official)* | 39 (39.0%) | 96 (3.46%) |
+| 6,000 | 26 (26.0%) | 43 (1.55%) |
+| 8,000 | 18 (18.0%) | 25 (0.90%) |
+| 10,000 | 12 (12.0%) | 16 (0.58%) |
+| 12,000 | 6 (6.0%) | 8 (0.29%) |
+| 14,000 | 4 (4.0%) | 5 (0.18%) |
+| 16,000 | 2 (2.0%) | 2 (0.07%) |
+| 20,000 | 1 (1.0%) | 1 (0.04%) |
+| 22,398 *(healthy max)* | **0** | **0** |
+| 24,000 *(recommended)* | **0** | **0** |
+
+The knee is sharp: everything above ~12,000 costs at most a handful of arms,
+and 22,398 is where the cost reaches zero. Anything below ~10,000 is a
+behaviour change on a tenth or more of the corpus.
+
 **Recommendation: 24,000.** It is 1,602 above the healthy maximum (+7.2% headroom)
 and 6,731 below the smallest degenerate block (−21.9% margin). It is the smallest
 round number that cuts nothing healthy in the entire banked corpus.
@@ -52,97 +72,100 @@ tasks, not a safety net.** It should be measured, not assumed.
 
 ---
 
-## 2. IMPLEMENTABILITY — WHERE IT CAN LAND
+## 2. THE MECHANISM ALREADY EXISTS — I MISSED IT
 
-Assessed lowest-layer-first, as asked. Evidence from the pinned vLLM source and
-our own tree.
+**Correction, and it is the substance of this revision.** `LUMO_PROXY_THINK_BUDGET`
+has existed since FR13 `439c43567`, built for the char-8 degeneration era. It
+implements the two-phase design I proposed, and implements it better than I
+specified. My §2 survey searched the *pinned vLLM tree* for a budget and the
+proxy for `"seed"`, and never grepped our own proxy for `think`. That is the
+error: I surveyed the vendor for a mechanism the house had already built.
 
-### (a) vLLM native budget — NOT AVAILABLE
+What exists, at `inference_proxy.py:3951` (`_parse_think_budget`), `:4030`
+(`_think_build_cutoff_prefill`), `:5074-5130` (the call site):
 
-Our pinned build has **no** thinking-budget mechanism. Searched for
-`thinking_budget`, `max_thinking`, `reasoning_budget`, `thinking_tokens`:
-the only hits are `reasoning_effort`, and it exists **only** for Mistral
-tokenizers (`tokenizers/mistral.py`) and the Harmony/gpt-oss responses path
-(`entrypoints/openai/parser/harmony_utils.py`). Neither is reachable from our
-Qwen3 chat-completions route.
+- cap call A at N tokens, remembering the original budget for call B's answer;
+- on a thinking dead-end, force the close via a `continue_final_message`
+  re-issue;
+- default OFF, byte-identical legacy path when unset;
+- `LUMO_PROXY_THINK_CUTOFF` overrides the cutoff text.
 
-`SamplingParams` has no budget field. Adding one is a vLLM patch — i.e. a new
-injected-blob surface and a re-attestation, which is precisely what we avoid
-unless it buys something the higher layers cannot.
+Its docstring also answers my layer survey directly and supersedes it: **native
+`thinking_token_budget` is voided by MTP**, and `enable_thinking` /
+`reasoning_effort` **are not forwarded by the Responses API**. The proxy cap is
+the house mechanism by prior design, not a fallback.
 
-### (b) Reasoning-parser hook — PRESENT BUT WRONG LAYER
+### (a) COVERAGE — one open question, and it decides whether anything is built
 
-`reasoning/qwen3_reasoning_parser.py` exists and exposes `is_reasoning_end(input_ids)`
-and `is_reasoning_end_streaming(...)`. But it is consulted from
-`v1/structured_output/__init__.py` — it exists so guided decoding knows when the
-grammar starts applying. It is **not** a decode-time budget hook, and wiring one
-there would mean running structured output we do not otherwise run.
+The cap is inside `if self.path == "/v1/responses":` (`:5078`). The proxy also
+serves `/v1/chat/completions` (`:5142`), and **nothing in that branch arms the
+cap**. Both facts are pinned by
+`tests/test_fr14_think_budget_cap.py::test_the_cap_is_wired_only_into_the_responses_path`.
 
-Useful fact from that parser: for Qwen3.5 the chat template puts `<think>` in the
-**prompt**, so only `</think>` is ever generated. Forcing a close is therefore a
-**single-token** intervention.
+**I could not determine from banked artifacts which route the SWE client uses,
+and I am not going to guess.** What I checked and what it gave:
 
-### (c) Per-request stop — AVAILABLE, and the basis of the recommendation
+- `fixed32_proxy_ingress_preflight.json` records both routes — but it is an
+  *auth* preflight that probes both by design, not live traffic.
+- The 80 `/v1/chat/completions` hits in `docker_*.log` are vLLM's **startup
+  route-registration banner**, not requests.
+- `fr13_bigdenom_swe_serve_variant.sh:2608` points at `/v1/chat/completions`,
+  but that is the `PROBE_ONLY` de-confounder path, not the agent; the agent gets
+  `--agent-endpoint .../v1` (`:2663`) and picks its own route.
+- Circumstantial for Responses: `LUMO_PROXY_NONSTREAM_BYPASS=1` **is armed** in
+  the banked exact16 arm, and it only has effect inside the `/v1/responses`
+  branch — arming a no-op would be odd. The capture path and
+  `_think_extract_reasoning` are Responses-shaped (`parsed["output"]`).
 
-`SamplingParams.stop` and `SamplingParams.stop_token_ids` are supported per
-request. This gives a **two-phase close** that needs no engine change:
+**Cheap verifications, either settles it in minutes:** (i) one line of proxy
+access logging, or (ii) arm `LUMO_PROXY_THINK_BUDGET` at a deliberately tiny
+value on a throwaway arm and see whether the cap fires. **If the client is on
+chat/completions, extending the cap to that branch is the only build this brake
+needs.** If it is on Responses, there is nothing to build at all — only a value
+to choose.
 
-1. Issue the turn with `max_tokens` unchanged and a budget counter.
-2. When thinking reaches the budget, stop the generation.
-3. Re-issue with the assistant prefix continued and `</think>` appended, so the
-   model resumes in answer mode.
+### (b) THE INJECTION, RE-VERIFIED ON CURRENT CODE — and I had it wrong
 
-**Zero perturbation below budget**: phase 2 never happens on a healthy turn, and
-phase 1 is byte-identical to today's request — the counter is host-side
-bookkeeping over tokens we already receive.
+Exercised on CPU against the present proxy (15 tests, `test_fr14_think_budget_cap.py`):
+budget parsing, over-budget detection, prefill shape, under-budget no-op.
 
-**Never fail-open**: if the budget cannot be derived, or the close cannot be
-issued, the correct behaviour is to fail the turn loudly, not to continue
-unbounded. That is a hard requirement, and it is what distinguishes this from
-the vacuous-gate class.
+**The correction matters.** My first spec proposed appending `</think>`. The
+existing implementation deliberately does the opposite: it prefills an **open**
+`<think>` + call-A's reasoning + a terse cutoff, and lets the **model generate
+the close**. The docstring records why, verified on qwen3.6-27b: the qwen3
+reasoning parser only watches *generated* tokens, so a **prefilled** `</think>`
+mislabels the entire continuation as reasoning and **the tool call is lost**.
+My proposal would have silently broken tool calling — the exact failure mode the
+brake exists to prevent. The existing design is correct and mine was not.
 
-### (d) Proxy-side streaming intervention — POSSIBLE, with one correction
+It also records that the cutoff must be **terse**: the verbose Qwen official
+framing lets the model keep thinking.
 
-I initially read `inference_proxy.py:1032-1040` as forbidding stream
-intervention. It does not: it forbids **dumping** raw requests/streams to disk
-(`LUMO_PROXY_PAIR_DUMP_DIR` / `REQUEST_DUMP_DIR` / `SSE_DUMP_DIR`), an evidence
-and privacy control. Counting thinking tokens in flight is not capture.
+The interaction claim stands unchanged and is now doubly safe: the close
+arrives via a re-issue, so the engine sees a normal prefill, and the fixed32
+route has no token-id special-casing either way.
 
-The proxy is nevertheless the **more invasive** of the two host-side options: it
-would have to become stateful per request and would sit on the measured path.
-The harness/client layer is preferable.
+### (c) ONE HAZARD TO FIX BEFORE ARMING
 
-### (e) Harness-side (qwen-code client) — PREFERRED
+`_parse_think_budget` returns `None` for anything it cannot parse. So
+`LUMO_PROXY_THINK_BUDGET="24,000"` — a comma, a stray space, a typo — **silently
+disarms the brake** rather than refusing. That is the vacuous-gate shape this
+campaign keeps paying for: the safety net turns itself off and nothing says so.
+Harmless while unused; it should be strict-parse-or-refuse before the cap is
+ever armed in anger. Pinned by
+`test_malformed_budget_values_currently_disarm` so a fix reads as a deliberate
+change.
 
-The client already owns turn construction and already sees the thinking blocks
-(that is where I measured them). It is off the measured serving path entirely,
-so it perturbs `step_wall` by construction — nothing added to the step loop.
+### (d) PRECEDENT THAT IT RUNS
 
-**Recommendation: (e) as the first line, using (c)'s `stop` support, with (d) as
-the fallback if the client cannot be changed.**
+The cap has been armed once, at **500 tokens**, in
+`fr13_replica_selfnoise_run.sh`. That is evidence the mechanism *executes* —
+not a value recommendation. 500 would clip the overwhelming majority of healthy
+thinking in this corpus (74% of arms are clipped even at 2,000).
 
 ---
 
-## 3. FAILURE-INTERACTION — VERIFIED
-
-The ask: a forced think-close must not confuse the committer or the suffix
-machinery.
-
-**Verified clean.** I searched the fixed32 device path for any token-id
-special-casing (`eos`, special tokens, `token_id ==` comparisons) outside the
-ordinary draft/bonus/output tensors: **there is none**. The committer commits
-accepted draft ids; the Arctic suffix cache is keyed on committed token ids and
-is content-agnostic (`fr14_suffix_pass_gate.py` operates on committed-token
-n-grams, not on token identity). A `</think>` is an ordinary id to both.
-
-Under the two-phase design the point is moot anyway: the close arrives as part
-of the **next request's prompt**, not as an injection into a live decode. The
-engine sees a normal prefill. This is the main reason to prefer two-phase over
-an in-engine forced token.
-
----
-
-## 4. LINES OF DEFENCE
+## 3. LINES OF DEFENCE
 
 **First line — thinking budget (this spec).** Native model capability, bounded by
 data, zero perturbation below budget. Catches **both** classes: it is keyed on
@@ -166,7 +189,7 @@ step-path mechanism in this campaign has cost a re-attestation.
 
 ---
 
-## 5. philox-B — THE RE-QUALIFICATION BUNDLE
+## 4. philox-B — THE RE-QUALIFICATION BUNDLE
 
 Per the ruling, folded in here rather than asked separately.
 
@@ -190,34 +213,36 @@ self-labelling `rng_route`, never QC or promotion evidence.
 
 ---
 
-## 6. OVERHEAD BOUNDS
+## 5. OVERHEAD BOUNDS
 
 | line | when idle | when firing |
 |---|---|---|
-| thinking budget (harness) | **exactly zero** — off the serving path; a token counter over blocks the client already parses | one extra request per capped turn |
-| thinking budget (proxy fallback) | one integer increment per streamed chunk, host-side, off the device path | one extra request per capped turn |
+| think cap (existing, `/v1/responses`) | **exactly zero** — `_parse_think_budget()` returns None and the whole cap block is skipped; byte-identical legacy path | one extra upstream call per capped turn |
+| think cap extended to chat/completions (only if §2a says so) | same — one env read per request | same |
 | c5 gate | zero — reads banked artifacts post hoc | zero |
 | ladder windowed c5 | zero — reuses sidecars already drained at flush | zero |
-| third-line in-serve brake (if ever built) | ~3 device ops/step on a ≤4-element tensor, ≈15 µs against a 196.4 ms step = 0.008% | proposer switch |
+| third-line in-serve brake (**not recommended**) | ~3 device ops/step on a ≤4-element tensor, ≈15 µs vs a 196.4 ms step = 0.008% | proposer switch |
+
+The first line costs nothing on a healthy turn by construction: the cap only
+does work after call A reports `incomplete_details.reason == "max_output_tokens"`,
+which a healthy turn never does.
 
 ---
 
-## 7. WHAT I NEED RULED
+## 6. WHAT I NEED RULED
 
-1. **Budget value.** I recommend **24,000** (0/100 healthy arms cut). The official
-   4,000 cuts 39% of healthy arms — if that is wanted anyway, it is a behaviour
-   change to be measured, not a safety net to be assumed.
-2. **Layer.** Harness/client (preferred) vs proxy (fallback).
-3. **Fail-closed confirmation.** On inability to derive or enforce the budget,
-   fail the turn loudly. I want that stated, because the tempting alternative —
-   continue unbounded — is the vacuous gate.
-4. **philox-B bundling** with the approved change, one re-qualification window.
-5. Whether to build the third line at all. My recommendation: **no**, if (1)-(2)
-   land.
+1. **Whether to arm at all.** The cap exists and is OFF. Arming is a behaviour
+   change on the serving path and is Mark's call.
+2. **Budget value.** I recommend **24,000** (0/100 healthy arms clipped). The
+   official 4,000 clips 39%. The curve in §1 is there if a tighter number is
+   wanted with eyes open.
+3. **Coverage.** Settle which route the SWE client uses (§2a). If
+   chat/completions, extending the cap to that branch is the only build.
+4. **Strict parsing before arming** (§2c) — so a typo cannot disarm the brake.
+5. **philox-B bundling** with whatever is approved, one re-qualification window.
+6. Whether to build the third line at all. My recommendation: **no**.
 
----
-
-## 8. HONEST LIMITS
+## 7. HONEST LIMITS
 
 - **n=5 degenerations.** The separation gap is large and clean, but five is five.
   24,000 is chosen to cut nothing healthy rather than to sit at a midpoint,
