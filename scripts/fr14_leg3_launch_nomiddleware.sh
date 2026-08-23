@@ -2261,8 +2261,11 @@ if [[ -n "$FR13_FA2_QROW32_B4_TIMING_ARM" \
   # that pool.  What differs is only how often a finishing task is replaced
   # instead of letting the served width decay.
   #
-  # So this predicate admits exactly the two byte-pinned campaign evidence sets
-  # (fr13_floor_gate.EVIDENCE_SETS 4 and 16) and NOTHING else: an unpinned task
+  # So this predicate admits exactly the byte-pinned campaign evidence sets --
+  # whichever ones fr13_floor_gate.EVIDENCE_SETS defines -- and NOTHING else.
+  # (It used to say "4 and 16" here. Naming the contents of an authority in a
+  # comment teaches the next reader the wrong rule the moment the authority
+  # grows a key, which is site 21.)  An unpinned task
   # list would let an arm serve traffic whose shape was never qualified, which
   # is the precise failure this check exists to prevent.  The pair must match a
   # set ENTIRELY -- ids AND digest -- so an exact4 digest cannot be paired with a
@@ -5076,8 +5079,21 @@ PY
        && "${_fixed32_task_ids[0]}" == "$_fr13_b1_diagnostic_task_id" ]] \
       || { echo "fixed32 B1 diagnostic ingress task ID is not pinned" >&2; exit 2; }
   else
-    [[ ${#_fixed32_task_ids[@]} == 4 || ${#_fixed32_task_ids[@]} == 16 ]] \
-      || { echo "fixed32 ingress task list must contain exactly 4 or 16 IDs" >&2; exit 2; }
+    # SITE 21. This read `== 4 || == 16` -- a literal disjunction 2,700 lines
+    # from the tier-B workload table that had already accepted
+    # exact16_minus_13236 BY NAME. Accepted by name, refused by count, in one
+    # file. Same cure as site 20: the authority prints its own allowed counts
+    # and bash checks membership, so a new evidence set is admitted here the
+    # moment fr13_floor_gate.EVIDENCE_SETS knows it.
+    _fixed32_allowed_task_counts=$(python3 -c 'import sys
+sys.path.insert(0, "scripts")
+from fr13_floor_gate import EVIDENCE_SETS
+print(",".join(str(count) for count in sorted(EVIDENCE_SETS)))') \
+      || { echo "fixed32 cannot read the canonical evidence-set counts" >&2; exit 2; }
+    [[ ",${_fixed32_allowed_task_counts}," == *",${#_fixed32_task_ids[@]},"* ]] \
+      || { echo "fixed32 ingress task list must contain one of the canonical" \
+                "evidence-set sizes ($_fixed32_allowed_task_counts); got" \
+                "${#_fixed32_task_ids[@]}" >&2; exit 2; }
   fi
   for _fixed32_task_id in "${_fixed32_task_ids[@]}"; do
     [[ "$_fixed32_task_id" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+$ ]] \
@@ -5086,7 +5102,8 @@ PY
   [[ "$(printf '%s\n' "${_fixed32_task_ids[@]}" | sort -u | wc -l)" \
      == "${#_fixed32_task_ids[@]}" ]] \
     || { echo "fixed32 ingress task IDs must be unique" >&2; exit 2; }
-  unset _fixed32_task_id _fixed32_task_ids _fr13_b1_diagnostic_task_id
+  unset _fixed32_task_id _fixed32_task_ids _fr13_b1_diagnostic_task_id \
+        _fixed32_allowed_task_counts
   [[ "${FR13_FIXED32_ENGINE_PID_FILE:-/logs/fr13_fixed32_engine_pid}" == \
      "/logs/fr13_fixed32_engine_pid" ]] \
     || { echo "fixed32 EngineCore PID path override is forbidden" >&2; exit 2; }

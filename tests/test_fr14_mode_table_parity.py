@@ -961,15 +961,25 @@ def test_literal_count_guards_are_clean_at_head():
     assert parity.scan_literal_count_guards() == []
 
 
-def test_the_count_guard_adjudication_is_exact_and_reasoned():
-    """Closed enumerations are fine; restatements of someone else's list are not."""
-    assert parity._COUNT_GUARD_ADJUDICATED == frozenset(
-        {"$FR13_B4_TASK_REFILL", "$SWE_CONCURRENCY"}
-    )
-    source = (REPO / "scripts" / "fr14_mode_table_parity.py").read_text()
-    reason = source[source.index("_COUNT_GUARD_ADJUDICATED = frozenset") - 700:
-                    source.index("_COUNT_GUARD_ADJUDICATED = frozenset")]
-    assert "no authority behind them" in reason
+def test_the_count_guard_subject_is_the_authority_validated_one():
+    """Not every integer disjunction -- only counts an authority blessed.
+
+    Widening this scan to the launcher families reported 54 guards and none of
+    them were this class: MAX_NUM_SEQS 1|4, booleans, GDN BV sizes. Those own
+    their values; nothing computes them and no table can outgrow them.
+    Adjudicating 54 entries would be a detector switched off one line at a
+    time, so the SUBJECT is narrowed instead -- to the three spellings bash
+    offers for a count of an authority-validated artifact.
+    """
+    match = parity._COUNTED_SUBJECT.search
+    assert match("${#_fixed32_task_ids[@]}")      # site 21
+    assert match("${_fixed32_subset_binding[0]}")  # site 20
+    assert match("$FIXED32_TASK_COUNT")            # site 20's sibling
+    for owned in ("$MAX_NUM_SEQS", "$FR13_DRAFT_HEAD_FP8", "$SWE_CONCURRENCY",
+                  "$_fr13_gdn_path_bv_candidate", "${FR13_FIXED32_B1_DIAGNOSTIC:-0}"):
+        assert not match(owned), owned
+    # ... and a file with no authority in scope is not scanned at all
+    assert parity._AUTHORITY_MODULE == "fr13_floor_gate"
 
 
 @pytest.mark.parametrize(
@@ -1012,17 +1022,71 @@ def test_restoring_the_literal_disjunction_fires_the_scan(
     assert any("literal disjunction" in b for b in bad)
 
 
-def test_the_projection_is_keyed_on_shape_not_on_the_name():
-    """Site 20's variable contains no "count" at all.
+def test_the_projection_reads_both_bash_spellings_of_a_count():
+    """Site 20 was a quoted array field; site 21 was an unquoted LENGTH.
 
-    The first draft of this projection matched count-ish NAMES and therefore
-    missed ${_fixed32_subset_binding[0]} -- the very site it was written for.
+    Two drafts, two misses. The first matched count-ish NAMES and missed
+    ${_fixed32_subset_binding[0]}. The second matched only QUOTED subjects and
+    missed ${#_fixed32_task_ids[@]} -- the same `#` whose absence from the
+    runner's census grep produced a zero-hit it was right not to believe. A
+    projection for "compares a count to literals" that cannot see the
+    canonical way bash spells a count was never going to find anything.
     """
-    guards = list(
-        parity._bracket_guards(
-            ['[[ "${_some_array[0]}" == "4" \\', '   || "${_some_array[0]}" == "16" ]]']
-        )
+    for line, subject in (
+        ('[[ "${_some_array[0]}" == "4" || "${_some_array[0]}" == "16" ]]',
+         "${_some_array[0]}"),
+        ('[[ ${#_fixed32_task_ids[@]} == 4 || ${#_fixed32_task_ids[@]} == 16 ]]',
+         "${#_fixed32_task_ids[@]}"),
+    ):
+        found = parity._INT_COMPARISON.findall(line)
+        seen = {}
+        for quoted, length, literal in found:
+            seen.setdefault(quoted or length, set()).add(literal)
+        assert seen.get(subject) == {"4", "16"}, (subject, seen)
+    # and continuations are joined, which is how the real site is spelled
+    guards = list(parity._bracket_guards(
+        ["    [[ ${#_fixed32_task_ids[@]} == 4 \\",
+         "       || ${#_fixed32_task_ids[@]} == 16 ]]"]
+    ))
+    assert guards and "16" in guards[0][1]
+
+
+@pytest.mark.parametrize("rel", parity.LAUNCHER_FAMILIES, ids=lambda r: Path(r).name)
+def test_restoring_the_ingress_disjunction_fires_the_scan(monkeypatch, rel):
+    """Site 21, one launcher at a time, on the real line.
+
+    The subject is ${#_fixed32_task_ids[@]} -- an array LENGTH, unquoted --
+    which is what made this invisible to the previous draft and to the
+    runner's census grep.
+    """
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "scripts").mkdir()
+    for site in parity.COUNT_GUARD_SITES:
+        text = (REPO / site).read_text()
+        if site == rel:
+            start = text.index("    _fixed32_allowed_task_counts=$(python3 -c")
+            tail = '"${#_fixed32_task_ids[@]}" >&2; exit 2; }\n'
+            end = text.index(tail, start) + len(tail)
+            text = text[:start] + (
+                "    [[ ${#_fixed32_task_ids[@]} == 4 "
+                "|| ${#_fixed32_task_ids[@]} == 16 ]] \\\n"
+                '      || { echo "bad" >&2; exit 2; }\n'
+            ) + text[end:]
+        (tmp / site).write_text(text)
+    monkeypatch.setattr(parity, "REPO", tmp)
+    bad = parity.scan_literal_count_guards()
+    assert bad and any("${#_fixed32_task_ids[@]}" in b for b in bad), bad
+    assert all(Path(rel).name in b for b in bad), bad
+
+
+@pytest.mark.parametrize("rel", parity.LAUNCHER_FAMILIES, ids=lambda r: Path(r).name)
+def test_the_ingress_guard_derives_and_the_prose_names_the_authority(rel):
+    """No new literal, and no comment teaching the old key set."""
+    text = (REPO / rel).read_text()
+    assert "must contain exactly 4 or 16 IDs" not in text
+    assert "EVIDENCE_SETS 4 and 16" not in text, (
+        "a comment naming the authority's CONTENTS teaches the next reader "
+        "the wrong rule the moment the authority grows a key"
     )
-    assert guards, "continuations are not being joined"
-    seen = parity._INT_COMPARISON.findall(guards[0][1])
-    assert {literal for _name, literal in seen} == {"4", "16"}
+    assert 'from fr13_floor_gate import EVIDENCE_SETS' in text
+    assert '",${_fixed32_allowed_task_counts}," == *",${#_fixed32_task_ids[@]},"*' in text

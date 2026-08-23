@@ -802,7 +802,9 @@ def scan_workload_table_agreement():
 # blind the moment someone wrote 8 or 32.
 # ===========================================================================
 
-COUNT_GUARD_SITES = (
+# Both roots. Site 21 was in the launcher family, which the site-20 roster did
+# not cover -- a projection is only as wide as the files it is pointed at.
+COUNT_GUARD_SITES = LAUNCHER_FAMILIES + (
     "scripts/fr13_bigdenom_swe_serve_variant.sh",
     "scripts/fr13_b4_campaign_driver.sh",
 )
@@ -811,19 +813,45 @@ COUNT_GUARD_SITES = (
 # `${_fixed32_subset_binding[0]}`, which contains no "count" at all, and a
 # projection that only found count-ish names would have missed the very site it
 # was written for. (It did, in its first draft.)
-_INT_COMPARISON = re.compile(r'"(\$\{?[^"]+?\}?)"\s*==\s*"([0-9]+)"')
+# TWO subject spellings, and the second is not optional.
+#
+# SITE 21 hid behind `${#_fixed32_task_ids[@]}` -- an array-LENGTH expression,
+# unquoted, so neither the quoted-variable pattern above nor the runner's own
+# census grep saw it (that grep's character class excluded `#`, and returned a
+# zero-hit it was right not to believe). A projection for "compares a COUNT to
+# literals" that cannot see the canonical way bash spells a count was never
+# going to find anything.
+_INT_COMPARISON = re.compile(
+    r'(?:"(\$\{?[^"]+?\}?)"|(\$\{#[A-Za-z_][A-Za-z0-9_]*\[[@*]\]\}))'
+    r'\s*==\s*"?([0-9]+)"?'
+)
 
 
-# Adjudicated: closed enumerations with no authority behind them, which is the
-# whole difference. Site 20 was a restatement of a LIST SOMETHING ELSE OWNS --
-# EVIDENCE_SETS had just blessed fifteen and the guard rejected it. These two
-# own their own values: nothing computes them, nothing can extend them, and
-# there is no table for the guard to fall behind. Asserted exactly by
-# tests/test_fr14_mode_table_parity.py so the set cannot grow quietly.
-_COUNT_GUARD_ADJUDICATED = frozenset({
-    "$FR13_B4_TASK_REFILL",   # a boolean, 0|1
-    "$SWE_CONCURRENCY",       # the campaign's own runtime shape, 1|4
-})
+# WHICH SUBJECTS THIS IS ABOUT, and why it is not "every integer disjunction".
+#
+# Widening the scan to the launcher families reported 54 guards, and NONE of
+# them were this class: MAX_NUM_SEQS 1|4, booleans 0|1, GDN BV 16|32|64|128.
+# Those own their values -- nothing computes them, no table can outgrow them,
+# there is nothing for the guard to fall behind. Adjudicating 54 entries would
+# be a detector switched off one line at a time.
+#
+# The class is narrower and sharper: a guard comparing a COUNT OF AN
+# AUTHORITY-VALIDATED ARTIFACT against literals. Sites 20 and 21 are both
+# exactly that, in the three spellings bash offers --
+#
+#     ${#_fixed32_task_ids[@]}        (array length; site 21)
+#     ${_fixed32_subset_binding[0]}   (a field of the binding; site 20)
+#     $FIXED32_TASK_COUNT             (the binding, named; site 20's sibling)
+#
+# -- and the file must have the authority in scope at all, which is what
+# `references fr13_floor_gate` establishes. That is the difference between a
+# closed enumeration and a restatement of a list something else owns.
+_AUTHORITY_MODULE = "fr13_floor_gate"
+_COUNTED_SUBJECT = re.compile(
+    r"^\$\{#[A-Za-z_]\w*\[[@*]\]\}$"          # array length
+    r"|subset_binding"                             # a field of the binding
+    r"|(?i:task_count)"                            # the binding, named
+)
 
 
 def _bracket_guards(lines):
@@ -853,12 +881,15 @@ def scan_literal_count_guards():
         path = REPO / rel
         if not path.exists():
             continue
-        for lineno, guard in _bracket_guards(path.read_text().split("\n")):
+        text = path.read_text()
+        if _AUTHORITY_MODULE not in text:
+            continue  # no authority in scope; nothing here can go stale
+        for lineno, guard in _bracket_guards(text.split("\n")):
             seen = {}
-            for name, literal in _INT_COMPARISON.findall(guard):
-                seen.setdefault(name, set()).add(literal)
+            for quoted, length, literal in _INT_COMPARISON.findall(guard):
+                seen.setdefault(quoted or length, set()).add(literal)
             for name, literals in seen.items():
-                if len(literals) < 2 or name in _COUNT_GUARD_ADJUDICATED:
+                if len(literals) < 2 or not _COUNTED_SUBJECT.search(name):
                     continue
                 bad.append(
                     f"{Path(rel).name}:{lineno} decides {name} by literal "
