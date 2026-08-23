@@ -221,6 +221,14 @@ echo "[promoab] FA2 B1 arm: $FA2_B1_ARM_NOTE"
 echo "[promoab] FA2 .so:    $FA2_SO_FOR_ARM"
 
 mkdir -p "$RUNROOT_ABS"
+# SITE 24 INTERIM PROTOCOL. The 24k-ceiling landing edited this vehicle 14 minutes into
+# a live drain; bash re-reads a script by BYTE OFFSET, so the shell resumed at a stale
+# offset into rewritten bytes and ran fragment text. The QC died at 3/15 and nothing
+# said why until the corpse was read. Snapshot the execution closure at boot so a
+# mid-drain landing can ALARM at minute fifteen instead of surfacing at hour four.
+.venv/bin/python results/fr14_nvfp4_port_20260816/promotion_ab_closure_watch.py \
+  snapshot "$RUNROOT_ABS/closure.json" >/dev/null 2>&1 \
+  || echo "[promoab] WARNING: closure snapshot failed; mid-drain drift will not be detectable" >&2
 
 # ---- route pins + K0 identity ----------------------------------------------
 # TAG is referenced by the sequence file's run_variant lines; it must exist even

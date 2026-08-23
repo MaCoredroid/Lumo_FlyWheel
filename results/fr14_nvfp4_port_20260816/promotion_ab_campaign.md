@@ -4667,3 +4667,84 @@ print-and-parse bridge the bash sites used.
 
 Container preserved by the vehicle, its 212-line log banked, then removed to free the
 94 GiB. `containers=0`, `MemFree=106.0GiB`.
+
+# QC ATTEMPT 9 — SITE 24 (coordinator collision). THREE TASKS EXTRACTED.
+
+The serve finally cleared all gates and drained three tasks before a mid-drain edit to
+the vehicle derailed it. Cause is on the ledger as a coordinator collision, not a site in
+the code: `d390ed5e7` edited `fr13_bigdenom_swe_serve_variant.sh` at 19:50, **14 minutes
+after my 19:36 boot**, and bash re-reads a script by BYTE OFFSET — when the orchestrator
+returned after 13398 the shell resumed at a stale offset into rewritten bytes and executed
+fragment text (`cho`, the tail of an `echo`).
+
+## THE THREE TASKS
+
+    task    verdict            patch    elapsed_s   c5      corridor   turns  tools  tailrep  malformed
+    12907   resolved            504B      670.9    0.5366     IN         74     27    0.067       0
+    13033   failed             1450B     2249.7    0.6159     IN         77     29    0.475       0
+    13398   failed (derived)      0B     ~8400     0.5627     IN        417    147    0.260       0
+
+Verdicts for 12907 and 13033 are the orchestrator's own, read from
+`runner_metadata.json.eval_report.verdict` — the same field its summary builder uses.
+
+**13398's verdict is DERIVED, not measured**, and I am labelling it that way. Its
+post-bracket exists (the generation completed) but `runner_metadata.json` and the eval
+never ran — the orchestrator died at exactly that return. An absent patch cannot resolve
+the hidden tests, so `failed` is certain; the evaluator was never asked. Its both-era
+precedent holds: H27n scored 13398 `failed` with a 547B patch at the 9000 s cap; here it
+produced 0B.
+
+## c5: ALL THREE IN CORRIDOR — no degeneration in this run
+
+    12907  d4=1092   d5=586    c5=0.5366
+    13033  d4=4387   d5=2702   c5=0.6159
+    13398  d4=14631  d5=8233   c5=0.5627
+
+For comparison the one known degeneration sat at **0.3499**, and healthy 12907 across
+three separate runs sits at 0.5366 / 0.5736 / 0.5537 — a natural spread of ~0.037, far
+inside the corridor and far above the degenerate value.
+
+## THE 13033 SECOND LOOK — the >20k request is NOT a runaway
+
+13033 owns the single >20k generation in the whole serve. Read directly from its trace:
+
+    row 37: output_tokens=20180  stop_reason=tool_use  blocks=['tool_use','tool_use']
+
+It stopped **because it emitted tool calls**, and its content is two tool_use blocks — a
+large but productive turn. Set against the known degeneration, which was one `thinking`
+block of 33,313 tokens with `stop_reason=None` and **zero** tool calls, this is the
+opposite shape. 13398's largest single turn is likewise 12,283 tokens ending in
+`tool_use`.
+
+The live `finished_reason="length"` flag I saw mid-drain is therefore accounted for: the
+>20k bucket count never moved during 13398 (52→52 below 20k boundary, one above, constant
+from 13033 onward), so the length-capped request finished at **≤20k** — a bounded
+truncation, not a 32k runaway.
+
+## 13398 IS THE INTERESTING ONE, and it is not degenerate
+
+417 turns, 147 tool calls, 48,848 words, tailrep 0.260, zero malformed, c5 in corridor —
+and no patch. It worked hard and produced nothing. That is empty-fail, its both-era
+character, not degeneration: every degeneration signature is absent and the tool cadence
+is the inverse of a runaway.
+
+## VEHICLE HEALTH AT HEAD — the committed content was always fine
+
+    bash -n                      OK
+    parses to EOF                yes, ends "exit $SWERC"
+    fragment scan (bare cho/ho)  0 hits
+    tree                         clean at 636712e90
+
+The corruption existed only in the running process's byte-offset read. Nothing to repair.
+
+## INTERIM PROTOCOL LANDED — the closure watch
+
+`promotion_ab_closure_watch.py`, wired into the arm runner: it snapshots the boot's
+execution closure (six bash files — the byte-offset hazard — plus nine python files and
+HEAD) into the runroot at boot, and `check` compares live state on every watch tick.
+Any bash-file drift is reported as **CRITICAL (bash byte-offset hazard)** with the verdict
+"a site-24 repeat in progress". Tested both directions: clean → `ALARM: false`, rc 0;
+doctored bash entry → rc 1 with the critical classification.
+
+I cannot stop a lane from landing. This makes the collision announce itself at minute
+fifteen instead of surfacing at hour four.
