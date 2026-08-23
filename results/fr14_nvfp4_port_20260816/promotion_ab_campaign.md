@@ -4608,3 +4608,62 @@ Now sourced, with the `run_variant` stub the arm scripts use. The eighth attempt
 every previous gate and stopped at `BSIZE` (also exported by the arm scripts before the
 floor sequence); that is added.
 
+
+# PROBE ABORTED (ruled) + QC RESUME → SITE 23 (2026-08-23 19:17Z)
+
+## The bdca0bd50 probe: aborted as ruled, and it NEVER SERVED
+
+All eight runroots carry `FORENSIC_PROBE_ABORTED.txt`. The honest accounting matters
+here: **`per_task=0` in every one of them.** The probe never served a task, so there is
+**no task-1 output and no c5 sample** to contribute to the base rate. I am not banking a
+sample that does not exist.
+
+Ten attempts, each refused pre-serve while I reconstructed Sr12's environment. The root
+cause was not any individual pin: **the probe never sourced
+`scripts/fr13_canonical_env.sh`**, which exports the whole FR13_* route family and which
+every arm script sources — including `promotion_ab_arm_s_tierb.sh:78-81`, the file I had
+been reading for Sr12's configuration. I rebuilt an environment variable-by-variable from
+a container dump instead of sourcing the file that defines it. Two further gaps followed
+from the same habit: the K0 vocab identity had to be exported BEFORE sourcing (the floor
+sequence derives the weight-byte floor from it, so setting it after gave the K64 floor
+`25254282384` against the required `25430574256`), and the worktree lacked the untracked
+fused-topk `.so`.
+
+Cost: ten ~5-minute boots, no GPU-day, no model run to completion. Moot now, but the
+lesson is cheap and general — **reconstruct an environment from its source, not from its
+shadow.**
+
+## QC RESUME — site 22 is fixed, and the next statement is in PYTHON
+
+The offload proxy passed for the first time (`OFFLOAD_PROXY_OK`, `proxy OK (OFFLOADED to
+alienware:8023)`). Then:
+
+```
+FAIL: fixed32 engine ingress auth preflight
+fixed32 engine task set does not match its formal/diagnostic run class
+```
+
+`scripts/fr13_bigdenom_swe_serve_variant.sh:867`, inside the embedded Python of the
+engine-ingress auth preflight:
+
+```python
+len(task_ids) not in ((1,) if diagnostic else (4, 16))
+```
+
+**A Python tuple literal — the eighth statement of the canonical-set rule, and the fourth
+encoding** (python dict, bash literal, regex quantifier, python tuple).
+
+It is in the SAME FILE site 20 converted. Site 20 fixed the *bash* count check; this is a
+*python* check in an embedded block, and the comment site 20 left at `:752` even says so:
+"The old guard was `count == 4 || count == 16`, five hundred lines" away. The conversion
+stopped at the language boundary.
+
+Census of the variant: exactly one live instance remains (`:867`); `:752` is the fixed
+guard's own comment.
+
+Fix is the same predicate treatment — derive admissible counts from `EVIDENCE_SETS` — but
+in Python, where `sorted(EVIDENCE_SETS)` is directly available rather than needing the
+print-and-parse bridge the bash sites used.
+
+Container preserved by the vehicle, its 212-line log banked, then removed to free the
+94 GiB. `containers=0`, `MemFree=106.0GiB`.
