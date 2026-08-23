@@ -32,6 +32,24 @@ from pathlib import Path
 C5_CORRIDOR_LOW = 0.40
 C5_CORRIDOR_HIGH = 0.70
 
+#: MINIMUM DENOMINATOR for a corridor verdict (E-A audit, pass 162).
+#:
+#: c5 is a ratio of counts, so its sampling error is ~sqrt(p(1-p)/n) at the
+#: denominator n = delta accepted[pos=4]. On trivially short tasks n is small
+#: enough that a perfectly healthy arm can read below the corridor by chance:
+#: E-A found two CLEAN arms with 8-11 requests reading 0.3627 and 0.3876.
+#:
+#: Derived, not picked. At p = the healthy median 0.5425:
+#:     n=100 -> SE 0.0497, 3-sigma band [0.394, 0.692]  CROSSES the 0.40 floor
+#:     n=150 -> SE 0.0406, 3-sigma band [0.421, 0.665]  clear
+#: 150 is the smallest round n at which a median-healthy arm cannot reach the
+#: low bound at 3 sigma. The port's 100 exclusive-bracket arms have a minimum
+#: denominator of 215, so every one of them keeps its verdict with 43% margin.
+#:
+#: Below this the gate reports NO-SIGNAL, never a corridor verdict. delta_pos4
+#: is emitted in every payload so a consumer can re-threshold without re-running.
+C5_MIN_DENOMINATOR = 150
+
 #: The seam. Position 5 is where the MTP heads hand off to the Arctic tail.
 C5_NUMERATOR_POSITION = 5
 C5_DENOMINATOR_POSITION = 4
@@ -89,18 +107,27 @@ def classify(c5: float) -> str:
 
 
 def _c5(delta4: float, delta5: float, *, label: str) -> dict[str, object]:
-    if delta4 <= 0:
-        # Not a verdict: a window with no position-4 acceptance carries no
-        # seam information at all, and saying "0.0" would invent one.
+    def _no_signal(reason: str) -> dict[str, object]:
         return {
             "schema": SCHEMA,
             "label": label,
             "c5": None,
-            "verdict": "no-signal",
+            "verdict": f"no-signal:{reason}",
             "delta_pos4": delta4,
             "delta_pos5": delta5,
+            "min_denominator": C5_MIN_DENOMINATOR,
             "corridor": [C5_CORRIDOR_LOW, C5_CORRIDOR_HIGH],
         }
+
+    if delta4 <= 0:
+        # Not a verdict: a window with no position-4 acceptance carries no
+        # seam information at all, and saying "0.0" would invent one.
+        return _no_signal("no-denominator")
+    if delta4 < C5_MIN_DENOMINATOR:
+        # The E-A case: a real ratio, but on too few samples to distinguish
+        # from the healthy median. Reporting a corridor verdict here would
+        # flag short healthy tasks as degeneration shapes.
+        return _no_signal("insufficient-denominator")
     value = delta5 / delta4
     return {
         "schema": SCHEMA,
@@ -109,6 +136,7 @@ def _c5(delta4: float, delta5: float, *, label: str) -> dict[str, object]:
         "verdict": classify(value),
         "delta_pos4": delta4,
         "delta_pos5": delta5,
+        "min_denominator": C5_MIN_DENOMINATOR,
         "corridor": [C5_CORRIDOR_LOW, C5_CORRIDOR_HIGH],
     }
 

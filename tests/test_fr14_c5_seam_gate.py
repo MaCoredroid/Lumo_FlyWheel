@@ -190,7 +190,7 @@ def test_an_empty_window_reports_no_signal_not_zero() -> None:
     flat = [0] * 16
     result = gate.c5_from_ladders(flat, flat, label="empty")
     assert result["c5"] is None
-    assert result["verdict"] == "no-signal"
+    assert result["verdict"] == "no-signal:no-denominator"
     assert result["verdict"] != gate.classify(0.0)
 
 
@@ -204,3 +204,107 @@ def test_classification_boundaries_are_inclusive_of_the_corridor() -> None:
 def test_a_scrape_without_the_counter_is_an_error_not_a_verdict() -> None:
     with pytest.raises(gate.C5Error):
         gate.parse_per_position("# nothing useful here\n")
+
+
+# --- E-A's audit (pass 162): the tiny-denominator artifact ------------------
+# c5 is a ratio of counts. On trivially short tasks the denominator is small
+# enough that a perfectly healthy arm reads below the corridor by chance: E-A
+# found two CLEAN arms with 8-11 requests reading 0.3627 and 0.3876. The gate
+# now refuses to give a corridor verdict below a derived minimum.
+def test_the_minimum_denominator_is_derived_not_picked() -> None:
+    """150 is where a median-healthy arm stops reaching the floor at 3 sigma."""
+    import math
+
+    median = 0.5425
+    se = lambda n: math.sqrt(median * (1 - median) / n)
+    assert median - 3 * se(100) < gate.C5_CORRIDOR_LOW, "at n=100 chance reaches the floor"
+    assert median - 3 * se(gate.C5_MIN_DENOMINATOR) > gate.C5_CORRIDOR_LOW, (
+        "at the threshold it must not"
+    )
+    assert gate.C5_MIN_DENOMINATOR == 150
+
+
+def test_every_port_arm_keeps_its_verdict_under_the_threshold() -> None:
+    """The threshold must not cost the calibration population its signal."""
+    rows = _corpus_or_skip()
+    usable = [row for _run, row in rows if row["c5"] is not None]
+    assert len(usable) >= 95, f"the threshold silenced arms: {len(usable)}"
+    smallest = min(row["delta_pos4"] for row in usable)
+    assert smallest >= gate.C5_MIN_DENOMINATOR, (
+        f"an arm below the threshold kept a verdict: d4={smallest}"
+    )
+    assert smallest == 215, (
+        "the port's minimum denominator moved; re-check the threshold margin"
+    )
+
+
+@pytest.mark.parametrize("c5_value", [0.3627, 0.3876])
+def test_the_EA_artifact_readings_go_no_signal_on_a_short_arm(c5_value: float) -> None:
+    """MUTATION PROOF: E-A's two below-corridor readings, on a short arm.
+
+    Reconstructed at their reported ratios with a denominator typical of an
+    8-11 request task. Both would have been flagged DEGENERATION-SHAPE before;
+    both are now no-signal.
+    """
+    short_denominator = 60
+    assert short_denominator < gate.C5_MIN_DENOMINATOR
+    result = gate._c5(
+        short_denominator, round(short_denominator * c5_value), label="short-clean"
+    )
+    assert result["c5"] is None
+    assert result["verdict"] == "no-signal:insufficient-denominator"
+    assert result["delta_pos4"] == short_denominator, "the evidence is still emitted"
+    assert result["min_denominator"] == gate.C5_MIN_DENOMINATOR
+
+
+@pytest.mark.parametrize("c5_value", [0.3627, 0.3876])
+def test_the_same_ratio_on_a_full_length_task_keeps_its_verdict(
+    c5_value: float,
+) -> None:
+    """The threshold acts on the DENOMINATOR, not on the value.
+
+    Same ratio, a full-length task's denominator: still flagged. Otherwise the
+    hardening would be a way to silence real detections.
+    """
+    long_denominator = 600
+    result = gate._c5(
+        long_denominator, round(long_denominator * c5_value), label="long-degenerate"
+    )
+    assert result["c5"] is not None
+    assert result["verdict"].startswith("DEGENERATION-SHAPE:low")
+
+
+def test_the_real_degenerations_survive_the_threshold() -> None:
+    """The four task-aggregate detections must not be silenced by hardening."""
+    rows = _corpus_or_skip()
+    flagged = [
+        row
+        for _run, row in rows
+        if row["c5"] is not None and row["verdict"] != "in-corridor"
+    ]
+    assert len(flagged) == 4, f"hardening changed the detections: {len(flagged)}"
+    for row in flagged:
+        assert row["delta_pos4"] >= gate.C5_MIN_DENOMINATOR
+
+
+def test_the_corridor_is_UNCHANGED_on_exclusive_bracket_data() -> None:
+    """E-A asked whether [0.40, 0.70] moves. On the port's 100 exclusive arms it
+    does not: healthy span [0.4517, 0.6688], the same numbers the corridor was
+    pre-registered from. Recorded as an assertion so a future re-derivation is
+    a deliberate, versioned re-registration.
+
+    NOT a full answer: the 229 exclusive PRE-PORT arms are not in this tree, so
+    the bounds may still move on the wider population. Reported, not retuned.
+    """
+    rows = _corpus_or_skip()
+    healthy = [
+        row
+        for run, row in rows
+        if row["c5"] is not None
+        and (run, row["label"]) not in KNOWN_DEGENERATIONS
+    ]
+    values = sorted(row["c5"] for row in healthy)
+    assert 0.451 <= values[0] <= 0.452, f"healthy floor moved: {values[0]}"
+    assert 0.668 <= values[-1] <= 0.669, f"healthy ceiling moved: {values[-1]}"
+    assert values[0] > gate.C5_CORRIDOR_LOW
+    assert values[-1] < gate.C5_CORRIDOR_HIGH
