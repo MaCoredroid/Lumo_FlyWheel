@@ -140,8 +140,21 @@ def test_b1_diagnostic_is_guarded_across_runtime_ingress() -> None:
     assert '"timing_eligible": False' in serve
     assert "fixed32 B1 diagnostic requires MAX_NUM_SEQS=1" in launcher
     assert "fixed32 B1 diagnostic ingress task ID is not pinned" in launcher
-    assert "fixed32 B1 diagnostic offload task ID is not pinned" in offload
-    assert "fixed32 B1 diagnostic proxy-control task ID is not pinned" in offload
+    # SITE 22 shared the proxy's two copies of this guard into one helper, so
+    # the refusal is now parameterised by call site. Asserting the SHAPE plus
+    # both call sites is stronger than asserting two literals: two literals can
+    # drift apart, which is the duplication that produced site 22 in the first
+    # place. What must remain true is that every proxy ingress reaches the
+    # diagnostic branch and names itself when it refuses.
+    assert (
+        'FAIL: fixed32 B1 diagnostic $label task ID is not pinned' in offload
+    ), "the proxy's B1 diagnostic pin is gone"
+    assert '"$FIXED32_TASK_IDS" == "$FIXED32_DIAGNOSTIC_TASK_ID"' in offload
+    assert "_fixed32_require_canonical_task_ids offload" in offload
+    assert "_fixed32_require_canonical_task_ids proxy-control" in offload
+    assert offload.count("_fixed32_require_canonical_task_ids ") == 2, (
+        "a proxy ingress stopped going through the shared diagnostic guard"
+    )
     for source in (serve, launcher, offload, runner):
         assert "FR13_B1_DIAGNOSTIC_TASK_PROFILE" in source
     for source in (serve, launcher, offload):

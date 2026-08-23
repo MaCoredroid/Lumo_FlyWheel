@@ -28,6 +28,52 @@ REMOTE_PAIR_DUMPS="$REMOTE_ROOT/pair_dumps"
 REMOTE_REQ_DUMPS="$REMOTE_ROOT/request_dumps"
 REMOTE_FIXED32_SECRET="$REMOTE_ROOT/fixed32_ingress_secret"
 REMOTE_FIXED32_LEDGER="$REMOTE_ROOT/fixed32_proxy_ingress.jsonl"
+
+# ---------------------------------------------------------------- SITE 22
+# These two checks used to be ONE regex per shape, with the count expressed as
+# a repetition quantifier -- `{3}` for four ids, `{15}` for sixteen. The
+# literals 4 and 16 never appeared, so every count-scan in this campaign was
+# blind to them by construction, and this file is a fourth root no sweep
+# covered. exact16_minus_13236 was accepted by name upstream and would have
+# been refused here for having fifteen.
+#
+# DECOMPOSED. The regex now validates FORMAT only -- what an id looks like,
+# one or more of them -- and the COUNT is checked separately against the
+# authority's admissible set. A count rule hidden inside a quantifier is a
+# rule no reader and no scanner can see.
+_fixed32_admissible_task_counts() {
+  python3 -c 'import sys
+sys.path.insert(0, sys.argv[1])
+from fr13_floor_gate import EVIDENCE_SETS
+print(",".join(str(count) for count in sorted(EVIDENCE_SETS)))' "$REPO_ROOT/scripts"
+}
+
+# $1 = label used in refusals. Fail-closed throughout: an unreadable authority
+# refuses rather than falling back to a literal.
+_fixed32_require_canonical_task_ids() {
+  local label=$1 _count _allowed
+  [[ "$FIXED32_TASK_IDS" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+)*$ ]] \
+    || { echo "FAIL: fixed32 $label task IDs are malformed"; exit 5; }
+  if [[ "$FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
+    # The single-task diagnostic mode is expressed through its DECLARED mode,
+    # not through a count. The 13236 attribution study rides this branch.
+    # The wording is preserved verbatim from the two call sites this helper
+    # replaced: tests/test_fr13_fixed32_b1_diagnostic.py guards these strings
+    # across every ingress, and a refactor that renames a refusal silently
+    # removes the guard that was watching it.
+    [[ "$FIXED32_TASK_IDS" == "$FIXED32_DIAGNOSTIC_TASK_ID" ]] \
+      || { echo "FAIL: fixed32 B1 diagnostic $label task ID is not pinned"; exit 5; }
+    return 0
+  fi
+  _count=$(awk -F, '{print NF}' <<< "$FIXED32_TASK_IDS")
+  _allowed=$(_fixed32_admissible_task_counts) \
+    || { echo "FAIL: fixed32 $label cannot read the canonical evidence-set counts"; exit 5; }
+  [[ -n "$_allowed" ]] \
+    || { echo "FAIL: fixed32 $label read an empty canonical evidence-set list"; exit 5; }
+  [[ ",$_allowed," == *",$_count,"* ]] \
+    || { echo "FAIL: fixed32 $label task count $_count is not one of the" \
+              "canonical evidence-set sizes ($_allowed)"; exit 5; }
+}
 # alienware-local proxy port. 8022 is OCCUPIED on alienware by an unrelated
 # root-owned host service (the lumo-alpha-dev --network=host container env), so
 # the offload proxy listens on 8023 there. This is alienware-LOCAL: the GB10
@@ -147,14 +193,7 @@ if (
 PY
       (( $? == 0 )) \
         || { echo "FAIL: fixed32 offload secret JSON contract is invalid"; exit 5; }
-      if [[ "$FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
-        [[ "$FIXED32_TASK_IDS" == "$FIXED32_DIAGNOSTIC_TASK_ID" ]] \
-          || { echo "FAIL: fixed32 B1 diagnostic offload task ID is not pinned"; exit 5; }
-      else
-        [[ "$FIXED32_TASK_IDS" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+){3}$ \
-           || "$FIXED32_TASK_IDS" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+){15}$ ]] \
-          || { echo "FAIL: fixed32 offload task IDs are not an exact 4/16 list"; exit 5; }
-      fi
+      _fixed32_require_canonical_task_ids offload
       REMOTE_FIXED32_SECRET_ARMED=1
       cleanup_remote_fixed32_secret_on_failure() {
         _fixed32_rc=$?
@@ -333,14 +372,7 @@ PY
     FIXED32_TASK_IDS=${FR13_FIXED32_INGRESS_TASK_IDS:-}
     [[ -n "$FIXED32_TASK_IDS" ]] \
       || { echo "FAIL: fixed32 proxy control requires canonical task IDs"; exit 5; }
-    if [[ "$FIXED32_B1_DIAGNOSTIC" == "1" ]]; then
-      [[ "$FIXED32_TASK_IDS" == "$FIXED32_DIAGNOSTIC_TASK_ID" ]] \
-        || { echo "FAIL: fixed32 B1 diagnostic proxy-control task ID is not pinned"; exit 5; }
-    else
-      [[ "$FIXED32_TASK_IDS" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+){3}$ \
-         || "$FIXED32_TASK_IDS" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+){15}$ ]] \
-        || { echo "FAIL: fixed32 proxy control task IDs are malformed"; exit 5; }
-    fi
+    _fixed32_require_canonical_task_ids proxy-control
     [[ "$PROXY_PORT" =~ ^[0-9]+$ ]] \
       || { echo "FAIL: fixed32 proxy control port is malformed"; exit 5; }
     ssh "${SSH_OPTS[@]}" "$HOST" \

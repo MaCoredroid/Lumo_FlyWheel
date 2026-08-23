@@ -804,9 +804,13 @@ def scan_workload_table_agreement():
 
 # Both roots. Site 21 was in the launcher family, which the site-20 roster did
 # not cover -- a projection is only as wide as the files it is pointed at.
+# SITE 22: the roster became a derivation. COUNT_GUARD_SITES was a hand-kept
+# list, which is why site 22 lived in a root it never named. The roots are
+# kept only as the closure's ENTRY POINTS; the universe is what they reach.
 COUNT_GUARD_SITES = LAUNCHER_FAMILIES + (
     "scripts/fr13_bigdenom_swe_serve_variant.sh",
     "scripts/fr13_b4_campaign_driver.sh",
+    "scripts/swe_x86_helpers/offload_codex_proxy.sh",
 )
 # The shape is a VARIABLE compared to two or more bare integer literals inside
 # one `[[ ... ]]`. Deliberately NOT keyed on the variable's name: site 20's was
@@ -874,10 +878,10 @@ def _bracket_guards(lines):
         joined, start = None, None
 
 
-def scan_literal_count_guards():
+def scan_literal_count_guards(paths=None):
     """Bash guards that decide a value by comparing it to literal integers."""
     bad = []
-    for rel in COUNT_GUARD_SITES:
+    for rel in (serve_execution_closure() if paths is None else paths):
         path = REPO / rel
         if not path.exists():
             continue
@@ -899,6 +903,107 @@ def scan_literal_count_guards():
                 )
     return bad
 
+
+
+# ===========================================================================
+# SITE 22: THE SERVE EXECUTION CLOSURE, and the quantifier projection.
+#
+# Two failures at once. The count rule was written as a REGEX REPETITION
+# QUANTIFIER -- `{3}` for four ids, `{15}` for sixteen -- so the literals 4 and
+# 16 never appeared and every count-scan was blind to it by construction. And
+# it lived in scripts/swe_x86_helpers/, a fourth root no sweep covered.
+#
+# The second failure is the worse one. Site 21 reported the class "closed by
+# predicate"; that was retracted, correctly, because a predicate is only closed
+# over the universe it is run on, and the universe had never been enumerated --
+# it was a hand-kept roster of files somebody had happened to think of.
+#
+# So the universe is DERIVED: the transitive closure of what a serve actually
+# executes, starting from the launcher families and following source/bash/
+# python invocations down. Every scan below runs over that closure, so a new
+# helper joins the sweep by being executed, not by being remembered.
+# ===========================================================================
+
+CLOSURE_ROOTS = LAUNCHER_FAMILIES + (
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/fr13_b4_campaign_driver.sh",
+)
+# WHAT COUNTS AS AN EDGE. The first draft matched invocation SYNTAX -- `bash
+# X`, `source X`, `python3 X` -- and missed two shapes immediately:
+#
+#   OFFLOAD_HELPER=scripts/swe_x86_helpers/offload_codex_proxy.sh   (run later
+#                                                                    via "$VAR")
+#   source "$SCRIPT_DIR/fr13_required_tree_flags.sh"                (resolved
+#                                                                    relative)
+#
+# and offload_codex_proxy.sh is site 22 itself, so the closure would have
+# excluded the file it was built to find. Edges are therefore any repo file a
+# script NAMES, resolved against the repo root and against the naming file's
+# own directory. That over-approximates -- a file merely mentioned in a
+# comment-free line joins the universe -- and over-approximating is the safe
+# direction for a universe definition: a scan that runs on too much reports
+# something a human can dismiss, a scan that runs on too little reports
+# nothing and is believed.
+_NAMED_FILE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:sh|py)")
+
+
+def serve_execution_closure(roots=CLOSURE_ROOTS):
+    """Every repo file a serve can reach, transitively, from the roots down.
+
+    Returns a sorted list. This is the universe definition; a scan that does
+    not run over it is closed only over whatever its author remembered.
+    """
+    seen, queue = set(), list(roots)
+    while queue:
+        rel = queue.pop()
+        if rel in seen:
+            continue
+        path = REPO / rel
+        if not path.exists():
+            continue
+        seen.add(rel)
+        here = Path(rel).parent
+        for line in path.read_text(errors="replace").split("\n"):
+            if line.lstrip().startswith("#"):
+                continue
+            for named in _NAMED_FILE.findall(line):
+                for candidate in (named, str(here / Path(named).name)):
+                    candidate = str(Path(candidate))
+                    if candidate in seen:
+                        continue
+                    if (REPO / candidate).is_file():
+                        queue.append(candidate)
+    return sorted(seen)
+
+
+# A count rule hidden inside a regex: `{N}` immediately after a group that
+# looks like an id pattern. Keyed on the quantifier's ADJACENCY to an id-shaped
+# group rather than on any particular id shape, so a different id alphabet
+# still matches.
+_QUANTIFIER_COUNT = re.compile(r"\)\{(\d+)\}")
+_ID_SHAPED = re.compile(r"\[A-Za-z0-9[^\]]*\]\+__")
+
+
+def scan_regex_quantifier_counts(paths=None):
+    """Count rules expressed as regex repetition, where no scan can see them."""
+    bad = []
+    for rel in (serve_execution_closure() if paths is None else paths):
+        path = REPO / rel
+        if not path.exists():
+            continue
+        for lineno, line in enumerate(path.read_text(errors="replace").split("\n"), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            counts = _QUANTIFIER_COUNT.findall(line)
+            if not counts or not _ID_SHAPED.search(line):
+                continue
+            bad.append(
+                f"{rel}:{lineno} expresses a task-count rule as a regex "
+                f"repetition quantifier {{{','.join(counts)}}}; the count "
+                "never appears as a literal, so no count scan can see it -- "
+                "validate FORMAT in the regex and the COUNT separately"
+            )
+    return bad
 
 # Topology names whose VALUE differs between profiles. Comparing one of these
 # unconditionally is the round-14 defect, whatever the mode table says.
@@ -1074,7 +1179,12 @@ def sweep():
         )
     for problem in scan_literal_count_guards():
         rows.append(
-            {"kind": "literal-count-guard", "file": "<count guard sites>",
+            {"kind": "literal-count-guard", "file": "<serve closure>",
+             "detail": problem}
+        )
+    for problem in scan_regex_quantifier_counts():
+        rows.append(
+            {"kind": "regex-quantifier-count", "file": "<serve closure>",
              "detail": problem}
         )
     return rows

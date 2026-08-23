@@ -1015,9 +1015,10 @@ def test_restoring_the_literal_disjunction_fires_the_scan(
         if site == rel:
             assert text.count(old) == 1, f"{site}: the guard moved"
             text = text.replace(old, new, 1)
+        (tmp / site).parent.mkdir(parents=True, exist_ok=True)
         (tmp / site).write_text(text)
     monkeypatch.setattr(parity, "REPO", tmp)
-    bad = parity.scan_literal_count_guards()
+    bad = parity.scan_literal_count_guards(parity.COUNT_GUARD_SITES)
     assert bad and any(Path(rel).name in b for b in bad), bad
     assert any("literal disjunction" in b for b in bad)
 
@@ -1072,9 +1073,10 @@ def test_restoring_the_ingress_disjunction_fires_the_scan(monkeypatch, rel):
                 "|| ${#_fixed32_task_ids[@]} == 16 ]] \\\n"
                 '      || { echo "bad" >&2; exit 2; }\n'
             ) + text[end:]
+        (tmp / site).parent.mkdir(parents=True, exist_ok=True)
         (tmp / site).write_text(text)
     monkeypatch.setattr(parity, "REPO", tmp)
-    bad = parity.scan_literal_count_guards()
+    bad = parity.scan_literal_count_guards(parity.COUNT_GUARD_SITES)
     assert bad and any("${#_fixed32_task_ids[@]}" in b for b in bad), bad
     assert all(Path(rel).name in b for b in bad), bad
 
@@ -1090,3 +1092,99 @@ def test_the_ingress_guard_derives_and_the_prose_names_the_authority(rel):
     )
     assert 'from fr13_floor_gate import EVIDENCE_SETS' in text
     assert '",${_fixed32_allowed_task_counts}," == *",${#_fixed32_task_ids[@]},"*' in text
+
+
+# ===========================================================================
+# SITE 22: the serve execution closure, and the quantifier projection.
+#
+# The count rule was a REGEX REPETITION QUANTIFIER -- {3} for four ids, {15}
+# for sixteen -- so the literals never appeared and every count scan was blind
+# by construction; and it lived in a fourth root no sweep covered. Site 21's
+# "closed by predicate" was retracted for exactly that: a predicate is closed
+# only over the universe it runs on, and the universe was a hand-kept roster.
+# ===========================================================================
+
+QUANTIFIER_REGEX = (
+    '        [[ "$FIXED32_TASK_IDS" =~ '
+    "^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+){3}$ \\\\\n"
+    '           || "$FIXED32_TASK_IDS" =~ '
+    "^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+){15}$ ]] \\\\\n"
+    '          || { echo "FAIL: bad"; exit 5; }\n'
+)
+
+
+def test_the_closure_contains_the_file_site_22_lived_in():
+    """The universe must include the root that hid the defect.
+
+    The first draft matched invocation SYNTAX and missed
+    OFFLOAD_HELPER=scripts/swe_x86_helpers/offload_codex_proxy.sh -- a path
+    stored in a variable and run later -- so the closure excluded the very
+    file it was built to find.
+    """
+    closure = parity.serve_execution_closure()
+    assert "scripts/swe_x86_helpers/offload_codex_proxy.sh" in closure
+    assert "scripts/fr13_required_tree_flags.sh" in closure, (
+        "a source-with-SCRIPT_DIR edge is not being resolved"
+    )
+    for root in parity.CLOSURE_ROOTS:
+        assert root in closure
+    assert len(closure) > 100, len(closure)
+
+
+def test_the_closure_is_a_fixed_point():
+    """Running it from its own output must add nothing."""
+    closure = parity.serve_execution_closure()
+    assert parity.serve_execution_closure(tuple(closure)) == closure
+
+
+def test_both_count_scans_are_clean_across_the_whole_closure():
+    assert parity.scan_literal_count_guards() == []
+    assert parity.scan_regex_quantifier_counts() == []
+
+
+def test_restoring_the_quantifier_fires_the_new_scan(tmp_path):
+    """Mutation proof: the rule back inside the regex, where nothing sees it."""
+    probe = tmp_path / "scripts"
+    probe.mkdir()
+    (probe / "proxy.sh").write_text(QUANTIFIER_REGEX)
+    import fr14_mode_table_parity as parity_mod
+
+    original = parity_mod.REPO
+    try:
+        parity_mod.REPO = tmp_path
+        bad = parity_mod.scan_regex_quantifier_counts(["scripts/proxy.sh"])
+    finally:
+        parity_mod.REPO = original
+    assert bad and all("repetition quantifier" in b for b in bad), bad
+    # one finding per line: the four-id rule and the sixteen-id rule
+    assert {"{3}", "{15}"} <= {q for b in bad for q in ("{3}", "{15}") if q in b}, bad
+
+
+def test_the_quantifier_scan_ignores_regexes_that_are_not_counting_ids():
+    """A {64} on a hex digest is not a task-count rule."""
+    import fr14_mode_table_parity as parity_mod
+
+    original = parity_mod.REPO
+    try:
+        parity_mod.REPO = REPO
+        # a {64} on a hex digest has no group-closing paren before it and no
+        # id-shaped alternation, so neither half of the projection matches
+        hexish = "re.fullmatch(r'[0-9a-f]{64}', payload['task_hmac_key_hex'])"
+        assert not parity_mod._QUANTIFIER_COUNT.search(hexish)
+        assert not parity_mod._ID_SHAPED.search(hexish)
+    finally:
+        parity_mod.REPO = original
+
+
+def test_the_proxy_validates_format_and_count_separately():
+    """The decomposition, asserted where it lives."""
+    text = (REPO / "scripts/swe_x86_helpers/offload_codex_proxy.sh").read_text()
+    assert "){3}$" not in text and "){15}$" not in text
+    assert "not an exact 4/16 list" not in text
+    assert "_fixed32_require_canonical_task_ids" in text
+    assert "from fr13_floor_gate import EVIDENCE_SETS" in text
+    # format regex is now unbounded (`*`), count is a separate membership test
+    assert "(,[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+)*$" in text
+    assert '",$_allowed," == *",$_count,"*' in text
+    # and the diagnostic mode is still expressible, by DECLARED mode
+    assert '"$FIXED32_TASK_IDS" == "$FIXED32_DIAGNOSTIC_TASK_ID"' in text
