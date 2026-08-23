@@ -4321,3 +4321,67 @@ No container was created, so there is nothing to preserve. No retry, per standin
 `containers=0`, GPU idle, seal `dd424b05…` intact and still matching the patcher — **no
 re-seal 5 will be needed** for this fix if it touches only `fr13_floor_gate.py`, which is
 not the patcher. Nineteen sites.
+
+# QC RESUME, ATTEMPT 3 (2026-08-23 17:26Z) — SITE 21: the launcher accepts fifteen by NAME, then refuses it by COUNT
+
+## BOOT VERDICT: REFUSED at 6s, pre-container. Sites 19 and 20 both cleared.
+
+State verified on disk before firing rather than assumed: credential intact at
+`8534f49e…`, its sealed digest `dd424b05…` **equal to the patcher on disk** (so the seal
+stands and no re-seal was needed), chain length 5, coupling test green, tree clean,
+`MemFree=105.8GiB >= 102.8GiB`.
+
+Sites 19 and 20 are genuinely closed — `EVIDENCE_SETS` keys are now `[4, 15, 16]`, the
+variant asks the authority for its keys instead of matching a bash literal, and the
+subset validated: `fixed32 SWE-Verified subset OK: tasks=15`. The boot got **six seconds**,
+past both 1-second gates. Then:
+
+```
+[fr13] B1 tier-b serve workload=exact16_minus_13236 subset=config/.../subset_b4_sixteen_minus_13236.json
+fixed32 ingress task list must contain exactly 4 or 16 IDs
+FAIL: launcher rc=2
+```
+
+## THE SHAPE, AND IT IS THE SHARPEST YET
+
+**The launcher accepted the fifteen-task workload by NAME and then refused it by COUNT,
+2,700 lines apart in the same file.** It printed `workload=exact16_minus_13236` — the
+tier-B workload layer knows the set exists — and then the ingress validator, which knows
+only a literal, threw it out:
+
+```bash
+# fr13_launch_forked_fa2_tree_server.sh:5265
+[[ ${#_fixed32_task_ids[@]} == 4 || ${#_fixed32_task_ids[@]} == 16 ]] \
+  || { echo "fixed32 ingress task list must contain exactly 4 or 16 IDs" >&2; exit 2; }
+```
+
+This is site 20's shape exactly — a bash literal disjunction on the task count — in the
+launcher rather than the variant. Site 20's fix converted the variant and did not reach
+here.
+
+## THE FIX HAS A WORKING TEMPLATE ALREADY IN THE TREE
+
+Census of count-literals across the launcher family and the variant:
+
+    fr13_launch_forked_fa2_tree_server.sh:5265    literal {4,16}
+    fr14_leg3_launch_nomiddleware.sh:5079         literal {4,16}
+    fr14_armb_leg3_launch_nomiddleware.sh:5086    literal {4,16}
+    fr13_bigdenom_swe_serve_variant.sh            NONE — already converted by site 20
+
+Exactly three, one per launcher file, and the variant is clean. So this is the site-20
+treatment applied to the launcher family, and the pattern to lift is already written and
+proven in the variant: print `sorted(EVIDENCE_SETS)` from the authority and test
+membership.
+
+One prose statement will also go stale: `:2428` reads "(fr13_floor_gate.EVIDENCE_SETS 4
+and 16) and NOTHING else". Worth updating with the code, since a comment that names the
+old key set is how the next reader re-learns the wrong rule.
+
+## STATUS
+
+No container was created — nothing to preserve. No retry, per standing orders. Twenty-one
+sites. `containers=0`, GPU idle, seal `dd424b05…` intact and still matching the patcher,
+so **no re-seal 5** if the fix touches only the launcher family.
+
+Six statements of one rule have now been found in sequence (12, 17, 18, 19, 20, 21); five
+of them were located after a boot rather than before one.
