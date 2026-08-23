@@ -4449,3 +4449,53 @@ study's GPU arms. Say the word and it goes.
 Twenty-two sites. Seven statements of the canonical-set rule (12, 17, 18, 19, 20, 21, 22),
 now across four roots and three encodings (python dict, bash literal, regex quantifier).
 Fifteen-task drain stays staged. No tasks were consumed.
+
+# ARM 0 DESIGN (2026-08-23) — two corrections before any GPU is spent
+
+Cqc15 torn down as ruled; 94 GiB reclaimed, `MemFree=106.0GiB` (floor 102.8), `gpu_procs=0`.
+
+## CORRECTION 1 — the diagnostic route CANNOT express attempt-6's config
+
+The spec allowed for `b1_diagnostic` as the single-task route. It is not usable here:
+**both** the promoted-default block and the tier-B serve block require
+`FR13_FIXED32_B1_DIAGNOSTIC == 0` (four sites: `:1279`, `:1307`, `:1409`, `:1713`, plus
+the promoted-default guard). Setting `DIAGNOSTIC=1` **disarms split-K entirely** — the
+probe would measure the incumbent while the artifact said promoted stack, which is the
+round-6 error class exactly.
+
+## CORRECTION 2 — round 12 is NOT the comparator it has been taken for
+
+I said its config was fully recoverable. It is, and recovering it shows it is a
+different animal from attempt 6:
+
+| | round 12 | attempt 6 |
+|---|---|---|
+| arm variable | `FR13_FA2_QROW32_B1_LIVE_AB_ARM=gqa_pair_splitk` | promoted default, **unnamed** |
+| route | live-A/B (shadow/compare) | **tier-B production serve** |
+| `B1_DIAGNOSTIC` | **1** | **0** |
+| tasks served | **ONE — `astropy12907`** | 16 declared, 3 run |
+| identity pins | exact4 pins while serving one task | exact16, honestly declared |
+
+**Round 12 never ran 13236 at all**, and its engagement record carries exact4 task_ids
+and subset sha while serving a single task — the pins-as-fiction that pass 122 later
+abolished. So "the round-12-config arm" cannot be staged as specified: wrong route, wrong
+mode, and it never touched the task under study. Staging it as a comparator would have
+produced a confident three-way comparison of three different things.
+
+## ARM 0 AS BUILT — exact4 x2 on the attempt-6 route
+
+The smallest CANONICAL set containing 13236 on the tier-B production route is `exact4`.
+So arm 0 is exact4 twice, everything else byte-identical to attempt 6 (promoted default
+unnamed, pointer suppressed, topk promoted, hydra27, K0 full_vocab).
+
+* zero new sites — `exact4` is already in every table;
+* no fiction — the declared workload IS the served set;
+* **it does not need site 22's fix**: the offload regex accepts `{3}` = four ids;
+* strictly more evidence than the single-task version — determinism is also measured on
+  12907 (resolved) and 13033 (failed), the two tasks that behaved;
+* cost is small: attempt 6 reached the end of 13236 in ~39 min, and if 13236 degenerates
+  the campaign terminates there again, so ~40 min per replicate.
+
+Readout is `promotion_ab_arm0_compare.py`: per task, sha256 of `qwen_trace.jsonl` and
+`patch.diff`; on a divergent trace it reports the FIRST DIFFERING RECORD INDEX so the
+divergence point is named rather than asserted. Exit 0 only if every task is identical.
