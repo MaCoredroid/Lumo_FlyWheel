@@ -41,9 +41,27 @@ export LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=${LUMO_PROXY_AUTO_CONTINUE_MAX_RETRI
 # Cap max_output_tokens to bound the qwen tool-call runaway (flavor-2 endless-reasoning
 # grinds to 80000 tok ~= 83min). 16384 is ABOVE the observed legit-tool-call max (10710
 # tok; legit p99.9=8592) so it truncates ZERO legit turns, cutting a runaway to ~17min.
-# FR13: 16384 was the Instruct/non-thinking number; Qwen3.6 THINKING wants 32768 general
-# (81920 complex coding) per the model card -- raise for thinking headroom (still bounds runaway).
-export LUMO_PROXY_MAX_OUTPUT_TOKENS=${LUMO_PROXY_MAX_OUTPUT_TOKENS:-32768}
+# CEILING SHRUNK TO 24000 (Mark's ruling, corpus-grounded). The previous 32768
+# came from the Qwen3.6 model card, not from our workload, and it is exactly the
+# ceiling all five banked degenerations ran into -- the bound existed but was too
+# high to prevent the damage it was meant to bound.
+#
+# 24000 comes from a census of every thinking block in all 105 banked
+# qwen_trace.jsonl task-arms, tokenized with the served model's own tokenizer:
+#   healthy per-arm MAX TOTAL output per turn (thinking+text+tool args), n=105:
+#     median 3,350   p90 10,316   p95 12,658   p99 18,653   MAX 22,398
+#   degenerate arms: 30,731 / 32,768 / 32,768 / 32,768 / 32,768
+# 24,000 clips ZERO healthy arms (0/105) and sits 6,731 below the smallest
+# degenerate turn. Healthy answers are small -- the healthy total max equals the
+# healthy thinking max -- so a total cap costs nothing a thinking cap would not.
+#
+# NOT LUMO_PROXY_THINK_BUDGET: that cap is wired only into /v1/responses, and the
+# qwen-code SWE client rides /v1/chat/completions (11,918 chat vs 110 responses
+# across 55 banked runroots; the 110 are 2 rejected auth probes per runroot).
+# Arming THINK_BUDGET would have been a no-op. Extending it to chat would also
+# require non-stream bypass on the agent's live streaming path, perturbing every
+# healthy request's time-to-first-token -- see results/.../runaway_brake_spec.md.
+export LUMO_PROXY_MAX_OUTPUT_TOKENS=${LUMO_PROXY_MAX_OUTPUT_TOKENS:-24000}
 export LUMO_PROXY_NONSTREAM_BYPASS=1
 # FR13 thinking cap (LUMO_PROXY_THINK_BUDGET=N): per-turn </think>-injection cap, forwarded from
 # the offload helper. Empty/unset -> OFF -> byte-identical legacy path (the locked pipeline runs OFF).

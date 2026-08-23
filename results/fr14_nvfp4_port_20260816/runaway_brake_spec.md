@@ -95,7 +95,43 @@ Its docstring also answers my layer survey directly and supersedes it: **native
 `reasoning_effort` **are not forwarded by the Responses API**. The proxy cap is
 the house mechanism by prior design, not a fallback.
 
-### (a) COVERAGE — one open question, and it decides whether anything is built
+### (a) COVERAGE — RESOLVED, and it moved which knob does the job
+
+**The SWE client rides `/v1/chat/completions`.** The proxy ingress ledger
+(`logs/fr13_fixed32_proxy_ingress.jsonl`) records a `route` per request:
+**11,918 `chat` vs 110 `responses` across 55 banked runroots** — and the
+`responses` count is exactly 2 per runroot, both `request_rejected` /
+`preflight` auth probes (`missing_bearer`, `malformed_bearer`). Zero real
+generation traffic on `/v1/responses`. The proxy's own comment at the chat
+branch calls it "the qwen-code path".
+
+**So `LUMO_PROXY_THINK_BUDGET` cannot reach our serves. Arming it would have
+been a placebo.**
+
+Extending it to chat is not the cheap build it looked like either: a captured
+client body shows `stream: true` with `max_tokens: 32768`. The two-phase cap
+needs the complete call-A response, so covering chat means switching the
+agent's live streaming path to non-stream bypass and synthesising SSE back —
+a change to **every healthy request's** time-to-first-token. That violates
+zero-perturbation-when-not-firing, which is the property the whole brake rests
+on.
+
+**What was armed instead — and it is the same ceiling, on the right path.**
+`LUMO_PROXY_MAX_OUTPUT_TOKENS` is applied in
+`normalize_chat_completions_request_payload` (the client's path), only ever
+lowers `max_tokens`, and was **already defaulted to 32768** — exactly the
+ceiling all five degenerations ran into. The landing lowers it to **24,000**
+and pins it in the launcher.
+
+The semantic difference, stated plainly: this caps thinking+answer **total**,
+where `THINK_BUDGET` would cap thinking alone and force an answer. It costs
+nothing on healthy turns because **healthy answers are small** — the healthy max
+total per turn (22,398) is the *same number* as the healthy max thinking block,
+so a total cap clips exactly what a thinking cap would (0/105 arms). A
+degenerate turn is truncated rather than force-closed. If force-close semantics
+are specifically wanted, that needs the chat-path build and its streaming cost.
+
+### (a-old) THE ORIGINAL COVERAGE QUESTION
 
 The cap is inside `if self.path == "/v1/responses":` (`:5078`). The proxy also
 serves `/v1/chat/completions` (`:5142`), and **nothing in that branch arms the

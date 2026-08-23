@@ -2691,6 +2691,11 @@ else
     sleep 1
   done
   grep -q "LUMO_PROXY_FORCE_TEMPERATURE=${DEPLOY_FORCE_TEMP:-0.6}" "$ARMDIR/proxy_env.txt" || { echo "FAIL: proxy temp pin missing (expected ${DEPLOY_FORCE_TEMP:-0.6})"; exit 5; }
+  # EXACT PIN, house style: the output ceiling is a serving-behaviour parameter
+  # now chosen from our own corpus (24000 clips 0/105 healthy arms; every banked
+  # degeneration ran into the old 32768). A drifted value must refuse rather than
+  # serve an unbounded-by-accident arm.
+  grep -q "LUMO_PROXY_MAX_OUTPUT_TOKENS=${DEPLOY_MAX_OUTPUT_TOKENS:-24000}" "$ARMDIR/proxy_env.txt" || { echo "FAIL: proxy output-ceiling pin missing (expected ${DEPLOY_MAX_OUTPUT_TOKENS:-24000}); got: $(grep LUMO_PROXY_MAX_OUTPUT_TOKENS "$ARMDIR/proxy_env.txt" 2>/dev/null || echo ABSENT)"; exit 5; }
   if [[ -z "$FIXED32_MODE" ]]; then
     grep -q "LUMO_PROXY_PAIR_DUMP_DIR=" "$ARMDIR/proxy_env.txt" \
       || { echo "FAIL: proxy pair-dump pin missing"; exit 5; }
