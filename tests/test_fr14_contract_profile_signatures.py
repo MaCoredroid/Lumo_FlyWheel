@@ -3535,3 +3535,106 @@ def test_the_absent_payload_still_says_absent_under_v2() -> None:
     finally:
         module._FR13_FIXED32_COMMITTER.clear()
         module._FR13_FIXED32_COMMITTER.update(saved)
+
+
+# ---------------------------------------------------------------------------
+# 14. PER-REQUEST SEEDING -- THE GAP, PINNED (workstream task 1)
+# ---------------------------------------------------------------------------
+# The ask was to inject seed = stable_hash(task, attempt, turn) at the proxy so
+# every task replays exactly. It cannot be shipped on the promoted fixed32
+# route, and the reason is not that the seed would be ignored -- it is that the
+# route REFUSES the map the seed produces:
+#
+#   vLLM DOES support per-request seeds. SamplingParams.seed -> request.generator
+#   -> InputBatch.generators -> SamplingMetadata.generators, and our patcher
+#   forwards them verbatim (`generators=getattr(sampling_metadata,
+#   "generators", None)`).
+#
+#   The fixed32 commit hands that map to _fr13_fixed32_fill_uniforms, which
+#   raises "FR13 fixed32 forbids per-request generator maps; the fixed route
+#   requires one bulk device RNG call" the moment it is non-empty.
+#
+# So injecting a seed does not silently do nothing -- it makes every fixed32
+# step raise. That is worse than a placebo and it is why this landing is the
+# gap rather than the knob.
+#
+# What DOES hold: --seed 0 is pinned in the pid1 argv contract and the bulk
+# generator seeds from torch.initial_seed(), lazily, ONCE PER PROCESS. So the
+# stream is deterministic but each request's draws depend on its POSITION in
+# that stream -- on batch composition and every request that came before. The
+# bulk generator's own docstring says it: "the unseeded bulk draw was never
+# reproducible, so this is distribution-equal". Per-task determinism is not
+# missing by oversight; it is absent by construction, one function away from a
+# guard that says so.
+PROXY = SERVING / "inference_proxy.py"
+
+
+def test_the_fixed32_route_refuses_per_request_generators() -> None:
+    """The gap, executed rather than described.
+
+    If this ever starts passing a non-empty map, the route has gained
+    per-request seeding and the proxy-side injection becomes shippable -- which
+    is exactly when this test should fail and be rewritten.
+    """
+    torch = pytest.importorskip("torch")
+    kernel = _multidraft_kernel()
+    entry = {"uniforms": torch.zeros(1, 12, 3, dtype=torch.float32)}
+
+    # today's route: no map, one bulk draw
+    _out, route = kernel._fr13_fixed32_fill_uniforms(entry, generators=None)
+    assert route == "bulk_device_generator"
+    _out, route = kernel._fr13_fixed32_fill_uniforms(entry, generators={})
+    assert route == "bulk_device_generator", "an empty map must stay the bulk route"
+
+    generator = torch.Generator()
+    generator.manual_seed(1234)
+    with pytest.raises(RuntimeError) as refusal:
+        kernel._fr13_fixed32_fill_uniforms(entry, generators={0: generator})
+    assert "forbids per-request generator maps" in str(refusal.value), (
+        "the refusal that makes proxy-side seeding unshippable has moved; "
+        "re-assess whether per-request seeding is now possible"
+    )
+
+
+def test_the_proxy_injects_no_seed_and_must_not_until_the_route_accepts_one(
+) -> None:
+    """No placebo knob. A seed accepted and then refused downstream is worse
+    than no seed at all."""
+    source = PROXY.read_text()
+    assert '"seed"' not in source and "'seed'" not in source, (
+        "the proxy now injects a seed -- the fixed32 route refuses the "
+        "generator map that produces, so every step would raise"
+    )
+    # the forcing sites the ask named are still where they were
+    assert "LUMO_PROXY_FORCE_TEMPERATURE" in source
+    assert "LUMO_PROXY_FORCE_TOP_P" in source
+    assert "LUMO_PROXY_FORCE_TOP_K" in source
+
+
+def test_the_patcher_still_forwards_vllms_generator_map() -> None:
+    """The link that makes the refusal reachable, pinned.
+
+    If the patcher stopped forwarding the map, seeds would become silently
+    ignored -- the placebo case -- and this test is what would notice.
+    """
+    source = PATCHER.read_text()
+    assert 'generators=getattr(sampling_metadata, "generators", None)' in source
+
+
+def test_the_only_determinism_that_holds_is_process_level() -> None:
+    """--seed is pinned and the bulk generator derives from it, once."""
+    import fr13_fixed32_contract as contract
+
+    argv = contract.expected_pid1_argv(1)
+    assert "--seed" in argv, "the engine seed pin is the one determinism we have"
+    assert argv[argv.index("--seed") + 1] == "0"
+
+    source = MULTIDRAFT.read_text()
+    bulk = source[source.index("def _fr13_bulk_gen(") :]
+    bulk = bulk[: bulk.index("\ndef ", 1)]
+    assert "torch.initial_seed()" in bulk, "the bulk stream derives from the pin"
+    assert "_FR13_BULK_GEN is None" in bulk, "seeded once per process, not per request"
+    # ...and the module says out loud that this is not reproducibility
+    assert "never reproducible" in " ".join(bulk.split()), (
+        "the bulk generator no longer disclaims reproducibility"
+    )
