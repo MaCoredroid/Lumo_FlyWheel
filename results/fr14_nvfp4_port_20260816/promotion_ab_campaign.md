@@ -4385,3 +4385,67 @@ so **no re-seal 5** if the fix touches only the launcher family.
 
 Six statements of one rule have now been found in sequence (12, 17, 18, 19, 20, 21); five
 of them were located after a boot rather than before one.
+
+# QC RESUME, ATTEMPT 4 (2026-08-23 17:38Z) — SITE 22, in a FOURTH root, encoded as regex quantifiers
+
+## HOLD STATUS: satisfied trivially — ZERO tasks ran, nothing in flight
+
+The arm completed and exited before any task started. `per_task` is EMPTY, no arm
+process is alive. There is nothing to stop and no active task to finish.
+
+## It got further than any previous attempt
+
+Site 21 cleared. The engine came fully up: **graph capture finished in 42 s (1.56 GiB)**,
+health OK on `100.103.10.122:9950`. Then, at 5m21s:
+
+```
+FAIL: offload proxy start
+FAIL: fixed32 offload task IDs are not an exact 4/16 list
+serve rc=5
+```
+
+## SITE 22 — and it explains why six sweeps missed it
+
+`scripts/swe_x86_helpers/offload_codex_proxy.sh:154-156`:
+
+```bash
+[[ "$FIXED32_TASK_IDS" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,...){3}$ \
+   || "$FIXED32_TASK_IDS" =~ ^[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+(,...){15}$ ]] \
+  || { echo "FAIL: fixed32 offload task IDs are not an exact 4/16 list"; exit 5; }
+```
+
+**The counts are REGEX REPETITION QUANTIFIERS, not numbers.** `{3}` means four ids and
+`{15}` means sixteen. The literals `4` and `16` never appear, so every scan for count
+literals — including my own `== 4` / `-eq 16` census, which found exactly three sites and
+was correct for the spelling it searched — could not match this by construction.
+
+It is also in a **fourth root**: `scripts/swe_x86_helpers/`, which no sweep covered
+(previous roots were `scripts/` top level, `src/`, and the launcher family).
+
+`exit 5` is what produced the new `serve rc=5`.
+
+Census of that root: this is the ONLY instance in it.
+
+The fifteen-task set needs `{14}`. The right fix is the same predicate treatment as sites
+20 and 21 — derive the admissible counts from the authority rather than restating them —
+but note this site cannot use the bash membership template directly, because the rule is
+expressed inside a regex rather than as a comparison.
+
+## GPU IS NOT FREE — a container is deliberately preserved and holding 94 GiB
+
+```
+fixed32 exact container preserved after engine-ledger materialization failure:
+  0de28939ef4628c9e56659f424ad3345feaa77e06032fda97bf79bee89cf0f30
+fr13-bigdenom-hydra27_fixed32_promoab_Cqc15   Up 10 minutes
+Mem: total 117  used 94  free 21
+```
+
+This one was preserved BY THE VEHICLE ON PURPOSE, not orphaned by a teardown bug, so I am
+not removing it without a word — but it holds ~94 GiB and will block the attribution
+study's GPU arms. Say the word and it goes.
+
+## STATUS
+
+Twenty-two sites. Seven statements of the canonical-set rule (12, 17, 18, 19, 20, 21, 22),
+now across four roots and three encodings (python dict, bash literal, regex quantifier).
+Fifteen-task drain stays staged. No tasks were consumed.
