@@ -4548,3 +4548,63 @@ file that produced the site-22 refusal. So the distinction stands but the conclu
 flips: arm 0 does not need site 22's FIX (exact4's four ids already match the `{3}`
 regex), but it does need site 22's EDIT TO LAND, because that file is in path and is
 being written right now. No GPU was consumed.
+
+# c5 VALIDATED ON BANKED DATA (2026-08-23) — and a correction to something I told you
+
+## FIRST: the per-position metric DOES exist. I said it did not.
+
+At round-21 prep I reported that `vllm:spec_decode_num_accepted_tokens_per_pos_total`
+"does not exist in our vLLM" and that any scraper would return an all-zero ladder. That
+was wrong. Every per-task bracket carries it — **66 `per_pos` lines per file**. My grep
+was of a vLLM **source checkout on disk**, which is not the tree the container runs; the
+served image emits the metric. I read the wrong artifact and generalised from it, which
+is the same family as the two withdrawals above.
+
+Consequence: c5 is computable **from data already banked**, at zero GPU cost.
+
+## c5 REPRODUCES THE KNOWN OUTCOMES, 7 for 7
+
+c5 = Δaccepted[pos5] / Δaccepted[pos4] over each task's metrics_pre/post bracket.
+Healthy corridor [0.40, 0.70].
+
+    ATTEMPT 6 (promoted stack, current code — 13236 DEGENERATED)
+      12907   resolved     c5 = 0.5736   in corridor
+      13033   failed       c5 = 0.6395   in corridor
+      13236   DEGENERATE   c5 = 0.3499   BELOW          <-- flagged
+    Sr12 (bdca0bd50, known good — all four functioned)
+      12907   resolved     c5 = 0.5537   in corridor
+      13033   failed       c5 = 0.6395   in corridor
+      13236   failed(819B) c5 = 0.6140   in corridor
+      13398   failed       c5 = 0.5413   in corridor
+
+Three things worth naming:
+
+1. **It flags exactly the one degenerate case and nothing else** — 7/7 correct here.
+2. **It separates the SAME TASK across the two runs**: 13236 sits at 0.614 (healthy) at
+   bdca0bd50 and 0.350 (below) on the promoted stack. The corridor does what the aggregate
+   accept could not — attempt 6's accept was 4.447, mid-band, while it was degenerating.
+3. 13033's c5 is **identical to four decimals (0.6395) across both runs**, which is a
+   stability signal for the instrument itself, not just for the task.
+
+Also: attempt-6's 13236 had Δpos4 = 3121 against Sr12's 456 — nearly seven times the
+position-4 acceptances, consistent with a runaway that kept generating.
+
+Tooling banked as `promotion_ab_c5.py`.
+
+## PROBE STATUS — eight boot attempts, and the root cause was one missing `source`
+
+The bdca0bd50 probe has not yet served. Each refusal named only its own variable, so I
+reconstructed Sr12's environment one boot at a time: missing `.venv` in the worktree,
+then the vocabulary profile, then the graph flags, then the walk cap, then the work
+census, then `FR13_DM_DEPTHSYNC`.
+
+The actual cause was none of those individually: **my probe never sourced
+`scripts/fr13_canonical_env.sh`**, which exports the whole FR13_* route family and which
+every arm script in this campaign sources — including `promotion_ab_arm_s_tierb.sh:78-81`,
+the very file I had been reading for Sr12's configuration. I rebuilt an environment
+variable-by-variable from a container dump instead of sourcing the file that defines it.
+
+Now sourced, with the `run_variant` stub the arm scripts use. The eighth attempt got past
+every previous gate and stopped at `BSIZE` (also exported by the arm scripts before the
+floor sequence); that is added.
+
