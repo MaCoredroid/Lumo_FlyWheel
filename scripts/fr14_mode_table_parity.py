@@ -1005,6 +1005,91 @@ def scan_regex_quantifier_counts(paths=None):
             )
     return bad
 
+
+# ===========================================================================
+# SITE 23: EMBEDDED PYTHON, where the bash projections cannot see.
+#
+# The count rule's EIGHTH statement and FOURTH encoding:
+#
+#     len(task_ids) not in ((1,) if diagnostic else (4, 16))
+#
+# inside a `<<'PY'` heredoc, in the SAME FILE whose bash check was converted at
+# site 20. The conversion stopped at the language boundary, and so did every
+# scanner: they all read shell.
+#
+# So the shell files in the closure are opened up -- heredoc bodies extracted
+# and scanned as Python. The encoding is enumerated rather than the instance:
+# a tuple, a set, a list, or a chain of `len(x) == N` comparisons all say the
+# same thing, and all four are matched.
+# ===========================================================================
+
+_HEREDOC_OPEN = re.compile(r"<<-?\s*[\"']?([A-Za-z_]\w*)[\"']?\s*$")
+
+# WHAT THIS IS ABOUT, narrowed the way site 21 taught.
+#
+# Scanning every `len(x) != N` in the closure's heredocs reported 14 sites, and
+# 12 were closed shapes that own their values -- len(layers) != 48,
+# len(graph_signature) != 64, len(rows) != 1. Those cannot go stale; nothing
+# computes them.
+#
+# The class is a count whose admissible values DEPEND ON THE RUN CLASS -- the
+# `(1,) if diagnostic else (...)` shape. That is the rule the authority owns,
+# and both live instances wear it. Keyed on the rule's own shape rather than on
+# any variable name, and a line that already consults the authority is not a
+# finding: converting it is the fix, not a new offence.
+_PY_RUN_CLASS_COUNT = re.compile(
+    r"len\s*\([^()]*\)\s*(?:not\s+in|in)\s*\(\s*\([^)]*\)\s*if\s+\w+\s+else\s+([^)]*)\)"
+)
+_AUTHORITY_NAMES = ("ADMISSIBLE_TASK_COUNTS", "admissible_task_counts",
+                    "EVIDENCE_SETS")
+
+
+def extract_embedded_python(text):
+    """(first_body_line, body) for every heredoc that looks like Python."""
+    lines = text.split("\n")
+    blocks, i = [], 0
+    while i < len(lines):
+        opener = _HEREDOC_OPEN.search(lines[i])
+        if not opener:
+            i += 1
+            continue
+        terminator = opener.group(1)
+        start = i + 1
+        end = start
+        while end < len(lines) and lines[end].strip() != terminator:
+            end += 1
+        body = "\n".join(lines[start:end])
+        if re.search(r"^\s*(?:import|from)\s+\w", body, re.M):
+            blocks.append((start + 1, body))
+        i = end + 1
+    return blocks
+
+
+def scan_embedded_python_count_literals(paths=None):
+    """Run-class-dependent count rules written as literals inside heredocs."""
+    bad = []
+    for rel in (serve_execution_closure() if paths is None else paths):
+        path = REPO / rel
+        if not path.exists() or path.suffix != ".sh":
+            continue
+        for offset, body in extract_embedded_python(path.read_text(errors="replace")):
+            for lineno, line in enumerate(body.split("\n"), offset):
+                if line.lstrip().startswith("#"):
+                    continue
+                match = _PY_RUN_CLASS_COUNT.search(line)
+                if not match:
+                    continue
+                if any(name in match.group(1) for name in _AUTHORITY_NAMES):
+                    continue  # already consults the authority
+                bad.append(
+                    f"{rel}:{lineno} embedded python decides a run-class "
+                    f"dependent task count from the literal {match.group(1).strip()} "
+                    "-- where the shell projections cannot see it; import or "
+                    "receive the authority and check membership in it"
+                )
+    return bad
+
+
 # Topology names whose VALUE differs between profiles. Comparing one of these
 # unconditionally is the round-14 defect, whatever the mode table says.
 PROFILE_VARYING = frozenset({
@@ -1185,6 +1270,11 @@ def sweep():
     for problem in scan_regex_quantifier_counts():
         rows.append(
             {"kind": "regex-quantifier-count", "file": "<serve closure>",
+             "detail": problem}
+        )
+    for problem in scan_embedded_python_count_literals():
+        rows.append(
+            {"kind": "embedded-python-count", "file": "<serve closure>",
              "detail": problem}
         )
     return rows

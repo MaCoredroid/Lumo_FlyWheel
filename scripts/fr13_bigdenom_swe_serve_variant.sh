@@ -810,6 +810,23 @@ from pathlib import Path
 
 import requests
 
+# SITE 23. This block used to decide the admissible task counts with a literal
+# tuple -- `(1,) if diagnostic else (4, 16)` -- the EIGHTH statement of that
+# rule and its FOURTH encoding, in the same file whose bash check was converted
+# at site 20. The conversion stopped at the language boundary.
+#
+# Fail-closed on the import: a preflight that cannot read the authority must
+# refuse, not fall back to a literal, because falling back is what a literal
+# tuple already was.
+sys.path.insert(0, "scripts")
+try:
+    from fr13_floor_gate import EVIDENCE_SETS
+except Exception as error:  # noqa: BLE001 - any import failure is fatal here
+    raise SystemExit(
+        f"fixed32 engine ingress cannot read the canonical evidence sets: {error}"
+    )
+ADMISSIBLE_TASK_COUNTS = tuple(sorted(EVIDENCE_SETS))
+
 
 def reject_duplicate_keys(pairs):
     payload = {}
@@ -864,7 +881,7 @@ if (
 ):
     raise SystemExit("fixed32 engine secret contract mismatch")
 if (
-    len(task_ids) not in ((1,) if diagnostic else (4, 16))
+    len(task_ids) not in ((1,) if diagnostic else ADMISSIBLE_TASK_COUNTS)
     or len(set(task_ids)) != len(task_ids)
     or (diagnostic and task_ids != diagnostic_task_ids[diagnostic_profile])
     or (not diagnostic and diagnostic_profile != "astropy12907")

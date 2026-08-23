@@ -373,13 +373,22 @@ PY
     [[ -n "$FIXED32_TASK_IDS" ]] \
       || { echo "FAIL: fixed32 proxy control requires canonical task IDs"; exit 5; }
     _fixed32_require_canonical_task_ids proxy-control
+    # SITE 23, second instance. The block below runs on the REMOTE host under
+    # its own venv and cannot import fr13_floor_gate, so the admissible counts
+    # are minted HERE from the authority and passed across with the rest of the
+    # run class. Never a literal on either side of the ssh.
+    _FIXED32_ADMISSIBLE_COUNTS=$(_fixed32_admissible_task_counts) \
+      || { echo "FAIL: fixed32 proxy control cannot read the canonical evidence-set counts"; exit 5; }
+    [[ "$_FIXED32_ADMISSIBLE_COUNTS" =~ ^[0-9]+(,[0-9]+)*$ ]] \
+      || { echo "FAIL: fixed32 proxy control minted a malformed evidence-set list"; exit 5; }
     [[ "$PROXY_PORT" =~ ^[0-9]+$ ]] \
       || { echo "FAIL: fixed32 proxy control port is malformed"; exit 5; }
     ssh "${SSH_OPTS[@]}" "$HOST" \
-      "$REMOTE_VENV - $PROXY_PORT $ACTION $REMOTE_FIXED32_SECRET $FIXED32_TASK_IDS $FIXED32_B1_DIAGNOSTIC $B1_DIAGNOSTIC_TASK_PROFILE" <<'PY'
+      "$REMOTE_VENV - $PROXY_PORT $ACTION $REMOTE_FIXED32_SECRET $FIXED32_TASK_IDS $FIXED32_B1_DIAGNOSTIC $B1_DIAGNOSTIC_TASK_PROFILE $_FIXED32_ADMISSIBLE_COUNTS" <<'PY'
 import hashlib
 import json
 import os
+import re
 import secrets
 import stat
 import sys
@@ -406,6 +415,12 @@ secret_path = os.path.expanduser(sys.argv[3])
 task_ids = sys.argv[4].split(",")
 diagnostic_text = sys.argv[5]
 diagnostic_profile = sys.argv[6]
+# Minted by the caller from fr13_floor_gate.EVIDENCE_SETS; this host has no
+# repo to read it from, so an absent or malformed list is fatal rather than
+# replaced by a default -- a default here would be the literal tuple again.
+if len(sys.argv) < 8 or not re.fullmatch(r"[0-9]+(,[0-9]+)*", sys.argv[7]):
+    raise SystemExit("remote fixed32 admissible task counts are missing or malformed")
+admissible_task_counts = tuple(int(part) for part in sys.argv[7].split(","))
 if diagnostic_text not in {"0", "1"}:
     raise SystemExit("remote fixed32 B1 diagnostic selector is invalid")
 diagnostic = diagnostic_text == "1"
@@ -431,7 +446,7 @@ if (
 ):
     raise SystemExit("remote fixed32 secret contract mismatch")
 if (
-    len(task_ids) not in ((1,) if diagnostic else (4, 16))
+    len(task_ids) not in ((1,) if diagnostic else admissible_task_counts)
     or len(set(task_ids)) != len(task_ids)
     or (diagnostic and task_ids != diagnostic_task_ids[diagnostic_profile])
     or (not diagnostic and diagnostic_profile != "astropy12907")

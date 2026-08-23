@@ -1188,3 +1188,95 @@ def test_the_proxy_validates_format_and_count_separately():
     assert '",$_allowed," == *",$_count,"*' in text
     # and the diagnostic mode is still expressible, by DECLARED mode
     assert '"$FIXED32_TASK_IDS" == "$FIXED32_DIAGNOSTIC_TASK_ID"' in text
+
+
+# ===========================================================================
+# SITE 23: embedded python, where the shell projections cannot see.
+#
+# The count rule's eighth statement and FOURTH encoding, inside a `<<'PY'`
+# heredoc in the same file whose bash check was converted at site 20 -- the
+# conversion stopped at the language boundary, and so did every scanner.
+# ===========================================================================
+
+PRE_FIX_TUPLE = "    len(task_ids) not in ((1,) if diagnostic else (4, 16))"
+
+
+def test_embedded_python_count_scan_is_clean_across_the_closure():
+    assert parity.scan_embedded_python_count_literals() == []
+
+
+def test_the_heredoc_extractor_finds_the_blocks_at_all():
+    """A scan that extracts nothing is clean for the wrong reason."""
+    shells = [f for f in parity.serve_execution_closure() if f.endswith(".sh")]
+    blocks = sum(
+        len(parity.extract_embedded_python((REPO / f).read_text(errors="replace")))
+        for f in shells
+    )
+    assert len(shells) > 40, len(shells)
+    assert blocks > 50, blocks
+
+
+def test_restoring_the_literal_tuple_fires_the_heredoc_scan(tmp_path):
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "probe.sh").write_text(
+        "python3 - <<'PY'\nimport sys\nif (\n" + PRE_FIX_TUPLE + "\n):\n"
+        "    raise SystemExit('x')\nPY\n"
+    )
+    original = parity.REPO
+    try:
+        parity.REPO = tmp_path
+        bad = parity.scan_embedded_python_count_literals(["scripts/probe.sh"])
+    finally:
+        parity.REPO = original
+    assert bad and "run-class" in bad[0], bad
+    assert "4, 16" in bad[0], bad
+
+
+def test_the_projection_exempts_a_line_that_consults_the_authority():
+    """Converting a site is the fix, not a new offence."""
+    converted = PRE_FIX_TUPLE.replace("(4, 16)", "ADMISSIBLE_TASK_COUNTS")
+    match = parity._PY_RUN_CLASS_COUNT.search(converted)
+    assert match, "the shape must still be recognised"
+    assert any(n in match.group(1) for n in parity._AUTHORITY_NAMES)
+
+
+@pytest.mark.parametrize(
+    "closed",
+    ["    if len(layers) != 48:", "    if len(graph_signature) != 64:",
+     "    if len(rows) != 1:", "    if len(health_tasks) != 4:"],
+)
+def test_the_projection_ignores_closed_shapes(closed):
+    """12 of the 14 raw hits were shapes that own their values.
+
+    Layer counts, digest lengths and singleton reads cannot go stale -- nothing
+    computes them. Reporting them would be a detector nobody reads.
+    """
+    assert not parity._PY_RUN_CLASS_COUNT.search(closed)
+
+
+def test_both_live_instances_are_converted():
+    """The census said one. Verifying found two."""
+    variant = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
+    proxy = (REPO / "scripts/swe_x86_helpers/offload_codex_proxy.sh").read_text()
+    assert "else (4, 16))" not in variant and "else (4, 16))" not in proxy
+    # local block imports the authority; remote block receives it
+    assert "from fr13_floor_gate import EVIDENCE_SETS" in variant
+    assert "ADMISSIBLE_TASK_COUNTS = tuple(sorted(EVIDENCE_SETS))" in variant
+    assert "_FIXED32_ADMISSIBLE_COUNTS=$(_fixed32_admissible_task_counts)" in proxy
+    assert "admissible_task_counts = tuple(" in proxy
+    # ... and both are fail-closed rather than defaulting
+    assert "cannot read the canonical evidence sets" in variant
+    assert "admissible task counts are missing or malformed" in proxy
+    # the diagnostic single-task branch survives in both, counted in CODE
+    # (the conversion comments quote the pre-fix line, which is the point of
+    # them -- and is exactly the sort of self-match that has fooled two
+    # detectors in this campaign already)
+    def code_hits(text):
+        return sum(
+            1 for line in text.split("\n")
+            if "(1,) if diagnostic else" in line
+            and not line.lstrip().startswith("#")
+        )
+
+    assert code_hits(variant) == 1
+    assert code_hits(proxy) == 1
