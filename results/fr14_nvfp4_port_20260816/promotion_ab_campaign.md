@@ -4499,3 +4499,52 @@ unnamed, pointer suppressed, topk promoted, hydra27, K0 full_vocab).
 Readout is `promotion_ab_arm0_compare.py`: per task, sha256 of `qwen_trace.jsonl` and
 `patch.diff`; on a divergent trace it reports the FIRST DIFFERING RECORD INDEX so the
 divergence point is named rather than asserted. Exit 0 only if every task is identical.
+
+# WITHDRAWAL — "CORRECTION 2" ABOVE IS WRONG. The bank was right; I misread it.
+
+I claimed round 12 ran the live-A/B route in DIAGNOSTIC mode on one task (12907) and
+"never ran 13236". **Every part of that is false**, and the runroot says so plainly:
+
+    output/fr14_promoab_Sr12_20260819T043506Z/arm_meta.txt
+      arm=hydra27_fixed32_promoab_Sr12
+      source_commit=bdca0bd50cbf5643205c87e4e3e2fe668895c364
+      subset=config/fr13_fixed32/subset_b4_four.json     <- FOUR tasks
+    .../arm_env.txt
+      FR13_FA2_QROW32_B1_TIER_B_ARM=gqa_pair_splitk      <- tier-B serve, NOT live-A/B
+      FR13_FIXED32_B1_DIAGNOSTIC=0                       <- NOT diagnostic mode
+    .../per_task/  -> 12907, 13033, 13236, 13398          <- all four present
+    .../per_task/astropy__astropy-13236/patch.diff  819 bytes  <- 13236 FUNCTIONED
+
+WHAT I ACTUALLY READ: `results/fr14_nvfp4_port_20260816/promotion_ab_arm_s_tierb.sh` —
+a SCRIPT from the round-7/8 era whose lines 36/37/94/123 are
+`subset_b1_diagnostic_one.json`, `astropy12907`, `FR13_FIXED32_B1_DIAGNOSTIC=1`,
+`FR13_FA2_QROW32_B1_LIVE_AB_ARM=gqa_pair_splitk`. I read a script and reported it as the
+runroot's configuration. **There is no mislabeled runroot; the bank is correct.**
+
+AND I COMPOUNDED IT, which is the worse half. I then opened Sr12's engagement record,
+saw `task_ids = [the four exact4 ids]` — which was simply TRUE, it served four — and
+explained it away as "identity pins while serving one task" so it would fit the script I
+had already read. Contradicting evidence arrived and I bent it to the premise instead of
+letting it overturn the premise.
+
+This is the third error of one family in this campaign: round 6 (configuration reported
+as observation), the `source_commit: None` nesting misread, and this. The common shape is
+reading one artifact and asserting it about another. The distinguishing feature here is
+that the disconfirming evidence was in my hands and I talked past it.
+
+CONSEQUENCE FOR THE STUDY, corrected: round 12 IS a valid comparator — same tier-B route,
+same DIAGNOSTIC=0, same exact4 set, and its 13236 produced an 819-byte patch where
+attempt 6's produced nothing. With the runtime flags identical between Sr12 and attempt 6,
+the introducing change is CODE in `bdca0bd50..78a29d339`, as ruled.
+
+ARM 0 IS UNAFFECTED and stays exactly as built (exact4 x2 on the attempt-6 config) — it
+never depended on the round-12 claim.
+
+## ARM 0 REPLICATE A DID NOT RUN — my own gate refused it
+
+`tracked worktree must be clean`. Lane 4 is mid-edit on site 22, and
+`scripts/swe_x86_helpers/offload_codex_proxy.sh` is squarely in arm 0's path — it is the
+file that produced the site-22 refusal. So the distinction stands but the conclusion
+flips: arm 0 does not need site 22's FIX (exact4's four ids already match the `{3}`
+regex), but it does need site 22's EDIT TO LAND, because that file is in path and is
+being written right now. No GPU was consumed.
