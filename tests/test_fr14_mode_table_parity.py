@@ -1905,3 +1905,43 @@ def test_the_checkpoint_identity_discriminates_two_checkpoints():
     if not legacy or not port:
         pytest.skip("checkpoints not present on this host")
     assert legacy != port
+
+
+def test_the_ten_task_remainder_is_derived_in_parent_order():
+    """The third subset through the machinery, same pin as the first two."""
+    sys.path.insert(0, str(REPO / "scripts"))
+    import fr13_floor_gate
+
+    ten = fr13_floor_gate.EVIDENCE_SETS[10]
+    sixteen = fr13_floor_gate.EVIDENCE_SETS[16]
+    verdicted = set(sixteen["task_ids"][:6])
+    assert set(sixteen["task_ids"]) - set(ten["task_ids"]) == verdicted
+    assert ten["task_ids"] == tuple(
+        t for t in sixteen["task_ids"] if t not in verdicted
+    ), "the ten reordered their parent; a QC resumed out of order is a "\
+       "different measurement"
+    assert ten["task_ids"] == sixteen["task_ids"][6:], (
+        "the remainder is no longer a contiguous slice of its parent, which "
+        "is what makes 'derived' checkable rather than merely claimed"
+    )
+    body = json.loads((REPO / ten["relative_path"]).read_text())
+    assert tuple(body["instance_ids"]) == ten["task_ids"]
+    assert __import__("hashlib").sha256(
+        (REPO / ten["relative_path"]).read_bytes()
+    ).hexdigest() == ten["sha256"]
+
+
+def test_the_proxy_authority_list_picked_up_the_new_count_without_an_edit():
+    """The offload proxy derives its admissible counts; verified, not assumed."""
+    sys.path.insert(0, str(REPO / "scripts"))
+    import fr13_floor_gate
+
+    assert 10 in fr13_floor_gate.EVIDENCE_SETS
+    proxy = (REPO / "scripts/swe_x86_helpers/offload_codex_proxy.sh").read_text()
+    assert "from fr13_floor_gate import EVIDENCE_SETS" in proxy
+    assert "sorted(EVIDENCE_SETS)" in proxy
+    # no count list is restated in the proxy: it is read, every time, and the
+    # remote half receives what the local half read
+    assert "admissible_task_counts = tuple(" in proxy
+    for stale in ("4,16", "4, 16", "(4, 16)"):
+        assert stale not in proxy, f"the proxy restates a count list: {stale}"

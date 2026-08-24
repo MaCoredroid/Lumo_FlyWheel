@@ -124,7 +124,7 @@ FAMILY_PARITY_MARKERS = (
     # not on the pins -- the pins are what the rows differ BY.
     '_fr13_b1_tierb_workload_pins "$FR13_FA2_QROW32_B1_TIERB_WORKLOAD" || exit 2',
     "FR13_FA2_QROW32_B1_TIERB_WORKLOAD=${FR13_FA2_QROW32_B1_TIERB_WORKLOAD:-exact4}",
-    "_FR13_B1_TIERB_WORKLOADS=\"exact4 exact16 exact16_minus_13236 exact16_qc_remainder_12 random1024_calibration\"",
+    "_FR13_B1_TIERB_WORKLOADS=\"exact4 exact16 exact16_minus_13236 exact16_qc_remainder_10 exact16_qc_remainder_12 random1024_calibration\"",
     "config/fr13_fixed32/subset_b4_sixteen.json",
     "config/fr13_fixed32/subset_b4_four.json",
     # The exact16 resume set: fifteen tasks, its own name and its own file,
@@ -133,6 +133,8 @@ FAMILY_PARITY_MARKERS = (
     "config/fr13_fixed32/subset_b4_sixteen_minus_13236.json",
     "exact16_minus_13236",
     "config/fr13_fixed32/subset_b4_sixteen_qc_remainder_12.json",
+    "config/fr13_fixed32/subset_b4_sixteen_qc_remainder_10.json",
+    "exact16_qc_remainder_10",
     "exact16_qc_remainder_12",
     # The tier-B spelling and its refusing alias. The alias is the load-bearing
     # half: it is what lets a banked vehicle keep the legacy name while making

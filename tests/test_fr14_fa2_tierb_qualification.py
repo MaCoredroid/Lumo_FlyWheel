@@ -2784,6 +2784,10 @@ WORKLOADS = {
     "exact16_minus_13236": (
         15, "24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a"
     ),
+    # The third resume set: exact16 minus the six tasks the QC verdicted.
+    "exact16_qc_remainder_10": (
+        10, "716503a46a991e3b187e14777f96f074c1a3359d9f8b7928f4453a6b9da1ee9b"
+    ),
     # The second resume set: exact16 minus the four tasks the QC verdicted.
     "exact16_qc_remainder_12": (
         12, "ac54bcc4df1311147616affd71a3722d0c0fda89216b7ac6473a4ab3eab4c424"
@@ -2794,6 +2798,7 @@ WORKLOAD_SUBSETS = {
     "exact4": "subset_b4_four.json",
     "exact16": "subset_b4_sixteen.json",
     "exact16_minus_13236": "subset_b4_sixteen_minus_13236.json",
+    "exact16_qc_remainder_10": "subset_b4_sixteen_qc_remainder_10.json",
     "exact16_qc_remainder_12": "subset_b4_sixteen_qc_remainder_12.json",
 }
 

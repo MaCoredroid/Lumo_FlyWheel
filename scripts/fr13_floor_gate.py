@@ -136,6 +136,16 @@ EVIDENCE_SETS = {
         "sha256": ("0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"),
         "task_ids": CANONICAL_TASK_IDS[:4],
     },
+    # The QC remainder after six verdicts. Derived by slicing in parent order
+    # so it stays in lockstep -- a QC resumed out of order is a different
+    # measurement.
+    10: {
+        "relative_path": (
+            "config/fr13_fixed32/subset_b4_sixteen_qc_remainder_10.json"
+        ),
+        "sha256": ("716503a46a991e3b187e14777f96f074c1a3359d9f8b7928f4453a6b9da1ee9b"),
+        "task_ids": CANONICAL_TASK_IDS[6:],
+    },
     # The QC remainder: exact16 minus the four verdicted tasks. Derived by
     # slicing around them so it stays in lockstep with its parent -- a QC
     # resumed out of order is a different measurement.
