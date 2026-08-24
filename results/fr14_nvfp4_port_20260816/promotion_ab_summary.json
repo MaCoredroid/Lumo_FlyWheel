@@ -900,13 +900,25 @@
  },
  "round21_qc_twelve_Cqc12": {
   "budget_enforcement_finding": {
+   "CORRECTED_mechanism": "host-side wall deadline on the SSH subprocess: max(timeout_s,30)+120; the 120s is a DESIGNED teardown buffer",
    "actual_mechanism": "wallclock deadline enforced at the next inter-request boundary",
+   "cbe_retired": "codex-bench-eval-swe is the EVAL harness invoked by _run_eval on a finished patch; not in the agent kill path \u2014 retires pass 188's idle-based suspicion at its source",
    "corroboration": "site 26: 'the kill landed between requests (last event a tool result)'",
+   "effective_deadline_s": 9120,
    "guarantee": "wall <= budget + one turn (worst case ~15 min at a 24k turn)",
+   "guarantee_CORRECTED": "wall <= budget + 120 s (NOT budget + one turn)",
    "hypothesis_tested": "pass 188: cap delivered to idle-based mechanism",
    "observed_lag_s": 110,
    "remote_wall_fix": "DEFERRED \u2014 188 landed a hypothesis, 189 landed accounting only",
-   "verdict": "DISCONFIRMED \u2014 agent was never idle (uninterrupted drafter fire advance) yet the kill landed"
+   "source": "lane 4, tests/test_fr14_capped_kill_path.py",
+   "verdict": "DISCONFIRMED \u2014 agent was never idle (uninterrupted drafter fire advance) yet the kill landed",
+   "verdict_on_my_earlier_claim": "WITHDRAWN \u2014 I attributed the residual to turn-boundary lag; it is the declared +120s buffer. Kill was on time to within the 5s poll, not 110s late."
+  },
+  "capped_terminal_class": {
+   "Cqc12_13579_s": 9125,
+   "Cqc15_13398_s": 9124,
+   "agree_within_s": 1,
+   "members": 2
   },
   "cross_instrument_proofs": {
    "c5_vs_ladder": "rows>=6 933 == metric d5 933 exact; rows>=5 1575 vs d4 1574 (0.06% skew)",
@@ -988,7 +1000,8 @@
     "malformed": 0,
     "needle_error_vs_final": 0.0041,
     "normal_requests": 79,
-    "overshoot_s": 165,
+    "overshoot_note": "vs the effective 9120s deadline; within the 5s poll",
+    "overshoot_s": 5,
     "patch_bytes": 0,
     "patch_sha8": "e3b0c442",
     "tailrep": 0.085,
@@ -996,7 +1009,8 @@
     "tools": 83,
     "ttr": 0.171,
     "turns": 237,
-    "wall_s": 9165
+    "wall_s": 9125,
+    "wall_s_note": "corrected: I had 9165 from my monitor's detection tick; 9125 is lane 4's pre-bracket-to-trace-fetch measure"
    }
   },
   "workload": "exact16_qc_remainder_12"

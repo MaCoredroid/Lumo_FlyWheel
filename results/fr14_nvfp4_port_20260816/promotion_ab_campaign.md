@@ -5376,3 +5376,36 @@ Re-firing the existing 12-key instead would re-serve 13453 and 13579 from the to
 order is pinned by design ("a QC resumed out of order is a different measurement"). That costs
 ~2.8 h of GPU to recover two verdicts already banked, though it would incidentally buy a second
 sample of each for the stability question. **Flagged for lane 4; not fired.**
+
+## CORRECTION TO THE ABOVE — the 110 s is a DESIGNED BUFFER, not turn-boundary lag
+
+Lane 4's site-26 sibling (`tests/test_fr14_capped_kill_path.py`, in progress at the time of
+writing) reaches the same refutation of the idle-based hypothesis from the same runroots, and
+locates the mechanism more precisely than I did. I attributed the overshoot to a wallclock
+deadline *checked at the next inter-request boundary*. That is wrong as a cause.
+
+The real expression is **host-side, on the SSH subprocess: `max(timeout_s, 30) + 120`** — a
+true wall deadline with an explicit **120 s teardown buffer**. So the effective deadline was
+9000 + 120 = 9120 s, i.e. 05:06:30Z, and the kill I observed at ~05:06:2x is not 110 s late at
+all — it is **on time to within the 5 s poll**. On expiry the harness sets `timed_out` and
+docker-kills the remote container.
+
+My arithmetic was right and my conclusion (enforced, not vacuous, not idle-based) was right;
+my *explanation* of the residual was invented rather than measured. The distinction matters,
+because "turn-boundary granular" implies an unbounded-ish overshoot of up to one full turn
+(~15 min), while the truth is a fixed, declared 120 s. **The honest guarantee is
+`wall <= budget + 120 s`, not `budget + one turn`.** The looser statement above is withdrawn.
+
+Two further corrections from the same source:
+
+* **My wall figure of 9165 s is slightly overstated.** I timed the close from my monitor's
+  file-detection tick (05:07:15Z) rather than the artifact. Bracket close was ~05:06:26Z, so
+  wall ≈ 9116 s; lane 4's authoritative pre-bracket-to-trace-fetch measure is **9125 s**. The
+  152-minute figure is unaffected and both runroots agree on it.
+* **`codex-bench-eval-swe` is not in the agent's kill path at all** — it is the EVAL harness
+  invoked by `_run_eval` on a finished patch. Its header describes stream-idle and turn-limit
+  semantics, which is what seeded the idle-based suspicion in pass 188. That suspicion is now
+  retired at its source: the right file was read, but it was the wrong file for the question.
+
+Cqc15's 13398 is the second capped terminal (9124 s), so the class has two members and they
+agree to within a second.
