@@ -36,8 +36,49 @@ EPID=$(docker exec "$C" bash -lc 'pgrep -f "EngineCore|VLLM::EngineCore" | head 
 # installed tree carries zero of our sentinels. This is the load-bearing check: it proves
 # absence in the ENGINE'S OWN IMPORT TREE, not merely absence of a command line.
 VLLM_DIR=$(docker exec "$C" python3 -c 'import vllm,os;print(os.path.dirname(vllm.__file__))' 2>/dev/null)
-SENTINEL_HITS=$(docker exec "$C" bash -lc "grep -rl '_fr13_\|_fr10_\|FR13_FIXED32\|lumo_flywheel' '$VLLM_DIR' 2>/dev/null | wc -l" 2>/dev/null)
-SENTINEL_FILES=$(docker exec "$C" bash -lc "grep -rl '_fr13_\|_fr10_\|FR13_FIXED32\|lumo_flywheel' '$VLLM_DIR' 2>/dev/null | head -8" 2>/dev/null | tr '\n' ';')
+
+# THE ONE DECLARED EXCEPTION (Option A, pass 209). This route applies
+# fr14_patch_nvfp4_lmhead.py and NOTHING else, because stock vLLM cannot load this
+# port's checkpoint at all: its lm_head is quantized and Qwen3_5ForCausalLM declares
+# only lm_head.weight. Purity here therefore means NO SIDE CODE ON THE DECODE PATH,
+# not "no side code", and the exception is enumerated rather than waved through.
+#
+# THE PATTERN IS BROADENED, NOT NARROWED. It previously matched only
+# _fr13_|_fr10_|FR13_FIXED32|lumo_flywheel -- which the lm_head shim does not use. Its
+# markers are all _fr14_/FR14_, so the OLD check would have passed a tree carrying this
+# shim without noticing, and would equally have missed any future FR14 patcher. Adding
+# the FR14 family makes the check strictly stronger; the exception below then subtracts
+# exactly the blob we have declared, and any other hit still fails.
+SENTINEL_RE='_fr13_\|_fr10_\|_fr14_\|FR13_FIXED32\|FR14_\|lumo_flywheel'
+# Exactly the tokens fr14_patch_nvfp4_lmhead.py injects, and exactly the four files it
+# edits. Enumerated from the shim's own source, not guessed.
+SHIM_TOKENS='FR14_LMHEAD_QUANT_ROUTE|FR14_LMHEAD_QUANT_ROUTE_REQUIRED|FR14_LMHEAD_QUANT_ROUTE_PERMISSIVE|FR14_LMHEAD_NVFP4|FR14_SCALAR_SCALE_RESHAPE|FR14_REQUIRE_NVFP4_LMHEAD|_fr14_qm|_fr14_algo'
+SHIM_FILES='model_executor/models/qwen3_5.py model_executor/models/qwen3_5_mtp.py model_executor/layers/quantization/modelopt.py model_executor/layers/vocab_parallel_embedding.py'
+
+SENTINEL_ALL=$(docker exec "$C" bash -lc "grep -rl '$SENTINEL_RE' '$VLLM_DIR' 2>/dev/null" 2>/dev/null)
+SENTINEL_HITS=$(printf '%s\n' "$SENTINEL_ALL" | grep -c . 2>/dev/null || echo 0)
+SENTINEL_FILES=$(printf '%s\n' "$SENTINEL_ALL" | head -8 | tr '\n' ';')
+
+# A file is an ACCEPTED exception only if it is one of the shim's four targets AND every
+# sentinel token in it belongs to the shim. A shim-target file carrying a _fr13_ blob is
+# still a violation -- the exception is scoped to the blob, not to the filename.
+SENTINEL_VIOLATIONS=""
+for f in $SENTINEL_ALL; do
+  [[ -z "$f" ]] && continue
+  _is_target=0
+  for t in $SHIM_FILES; do [[ "$f" == *"$t" ]] && _is_target=1; done
+  if [[ "$_is_target" == 1 ]]; then
+    _foreign=$(docker exec "$C" bash -lc "grep -o '$SENTINEL_RE' '$f' 2>/dev/null | grep -Ev '$SHIM_TOKENS' | sort -u | head -5" 2>/dev/null | tr '\n' ',')
+    [[ -z "${_foreign//,/}" ]] && continue        # only shim tokens -> declared exception
+    SENTINEL_VIOLATIONS+="$f[foreign:${_foreign}];"
+  else
+    SENTINEL_VIOLATIONS+="$f;"
+  fi
+done
+SENTINEL_VIOLATION_N=$(printf '%s' "$SENTINEL_VIOLATIONS" | tr ';' '\n' | grep -c . 2>/dev/null || echo 0)
+_SHIM_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/scripts/fr14_patch_nvfp4_lmhead.py"
+SHIM_SHA=$(sha256sum "$_SHIM_SRC" 2>/dev/null | cut -d' ' -f1)
+[[ -n "$SHIM_SHA" ]] || SHIM_SHA="UNREADABLE:$_SHIM_SRC"
 PATCHER_IN_LOG=0
 if [[ -n "$BOOTLOG" && -f "$BOOTLOG" ]]; then
   PATCHER_IN_LOG=$(grep -cE "fr10_phase4_patch_vllm_tree_gdn|fr13_patch_fa2_tree_bias|in-container patcher" "$BOOTLOG" 2>/dev/null)
@@ -88,20 +129,31 @@ PY" 2>/dev/null)
 python3 - "$OUT" "$EPID" "$SENTINEL_HITS" "$SENTINEL_FILES" "$PATCHER_IN_LOG" \
   "$ENG_OURSIDE_FDS" "$ENG_OURSIDE_MAPS" "$WORKSPACE_MOUNTED" "$WORKSPACE_PYCACHE" \
   "$FA2_IN_MAPS" "$BACKEND_LINE" "$ALL_SO" "$VLLM_VER" "$VLLM_RECORD_OK" "$VLLM_DIR" \
-  "$STOCK_FA" "$LAYOUT" <<'PY'
+  "$STOCK_FA" "$LAYOUT" "$SENTINEL_VIOLATION_N" "$SENTINEL_VIOLATIONS" "$SHIM_SHA" <<'PY'
 import json,sys
-(out,epid,sent,sentf,patlog,fds,maps,wsmnt,wspyc,fa2,backend,allso,ver,rec,vdir,stockfa,layout)=sys.argv[1:18]
+(out,epid,sent,sentf,patlog,fds,maps,wsmnt,wspyc,fa2,backend,allso,ver,rec,vdir,stockfa,layout,
+ violn,violf,shimsha)=sys.argv[1:21]
 def i(x):
     try: return int(x)
     except Exception: return None
 checks={}
-checks["1_patcher_absent"]={
+checks["1_no_undeclared_side_code"]={
  "vllm_dir":vdir,
- "our_sentinels_in_installed_vllm":i(sent),
+ "DECLARED_EXCEPTION":{
+   "what":"NVFP4 lm_head loader shim (fr14_patch_nvfp4_lmhead.py) -- WEIGHT LOADING ONLY",
+   "shim_sha256":shimsha,
+   "why_permitted":"stock vLLM cannot load this port's checkpoint at all: the checkpoint's lm_head is quantized (lm_head.input_scale/.weight_scale/.weight_scale_2) and Qwen3_5ForCausalLM declares only lm_head.weight. Ruled Option A, pass 209.",
+   "why_it_does_not_contaminate":"its four gaps are constructor wiring, quant-method dispatch, key remapping and a numel-preserving reshape -- none touches the decode path, attention, the drafter or speculative decoding",
+   "scoped_to_blob_not_filename":"a shim-target file carrying any NON-shim sentinel is still a violation",
+   "tokens_excepted":["FR14_LMHEAD_QUANT_ROUTE","FR14_LMHEAD_QUANT_ROUTE_REQUIRED","FR14_LMHEAD_QUANT_ROUTE_PERMISSIVE","FR14_LMHEAD_NVFP4","FR14_SCALAR_SCALE_RESHAPE","FR14_REQUIRE_NVFP4_LMHEAD","_fr14_qm","_fr14_algo"],
+   "files_excepted":["model_executor/models/qwen3_5.py","model_executor/models/qwen3_5_mtp.py","model_executor/layers/quantization/modelopt.py","model_executor/layers/vocab_parallel_embedding.py"]},
+ "sentinel_files_total":i(sent),
  "sentinel_files":[f for f in sentf.split(";") if f],
+ "UNDECLARED_violations":i(violn),
+ "violating_files":[f for f in violf.split(";") if f],
  "patcher_invocations_in_boot_log":i(patlog),
- "PASS": i(sent)==0 and i(patlog)==0,
- "why":"the patchers inject NAMED blobs into the installed vllm; zero sentinels proves absence in the engine's own import tree, not merely absence of a command line"}
+ "PASS": i(violn)==0 and i(patlog)==0,
+ "why":"the patchers inject NAMED blobs into the installed vllm, so scanning the engine's own import tree proves absence there rather than merely absence of a command line. The sentinel pattern was BROADENED for this route to include the _fr14_/FR14_ family -- the previous pattern (_fr13_/_fr10_/FR13_FIXED32/lumo_flywheel) did not match the lm_head shim's own markers and would have passed a tree carrying it. Broadening then excepting exactly the declared blob is strictly stronger than the old check, not weaker."}
 checks["2_import_census"]={
  "engine_pid":epid,
  "ourside_open_fds":i(fds),"ourside_mappings":i(maps),
@@ -129,7 +181,8 @@ apparatus={
 res=[c.get("PASS") for c in checks.values() if c.get("PASS") is not None]
 doc={"schema":"fr14.mtp5.purity.v1","checks":checks,"shared_apparatus":apparatus,
      "ALL_PASS":all(res) if res else None,
-     "VERDICT":("engine purity OBSERVED: no our-side code in the engine"
+     "VERDICT":("engine purity: no side code on the decode path; ONE DECLARED EXCEPTION: "
+                "NVFP4 lm_head loader shim (weight loading only), sha " + (shimsha or "?")[:16]
                 if res and all(res) else
                 "PURITY NOT ESTABLISHED -- see failing checks; do not report this arm as 'plain native'")}
 open(out,"w").write(json.dumps(doc,indent=1,sort_keys=True)+"\n")

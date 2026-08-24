@@ -175,9 +175,34 @@ if available_gib < 80 or swap_used_kib != 0:
     )
 PY
 
+# ---- THE ONE ADMISSIBLE IN-CONTAINER SHIM, OPT-IN AND DEFAULT OFF ----------
+# Stock vLLM CANNOT LOAD a checkpoint whose lm_head is quantized: the checkpoint
+# carries lm_head.input_scale/.weight_scale/.weight_scale_2 while
+# Qwen3_5ForCausalLM declares only lm_head.weight, and the engine dies during
+# model load with "There is no module or parameter named 'lm_head.input_scale'".
+# That is not a tuning gap, it is a hard refusal, and it made the MTP-5
+# drafter-neutrality probe's two requirements -- "the plain native kernel" and
+# "the port's own weights" -- jointly unsatisfiable (ruled Option A, pass 209).
+#
+# fr14_patch_nvfp4_lmhead.py is a WEIGHT-LOADING shim only: constructor wiring,
+# quant-method dispatch, key remapping, and a numel-preserving reshape. It does
+# not touch the decode path, attention, the drafter, or speculative decoding, so
+# it cannot bias a drafter-neutrality result.
+#
+# DEFAULT OFF so the native route stays genuinely plain for every other caller;
+# a caller that needs it asks for it by name, and the decision is taken on the
+# HOST and interpolated as text rather than evaluated inside the container shell,
+# which keeps the quoting honest.
+if [[ "${FR13_NATIVE_NVFP4_LMHEAD_SHIM:-0}" == "1" ]]; then
+  _NATIVE_SHIM_CMD='echo "[launch] applying DECLARED EXCEPTION: NVFP4 lm_head loader shim (weight loading only)" >&2
+python3 /workspace/scripts/fr14_patch_nvfp4_lmhead.py'
+else
+  _NATIVE_SHIM_CMD='# no in-container shim (FR13_NATIVE_NVFP4_LMHEAD_SHIM unset)'
+fi
+
 # ---- docker run skeleton (identical to the forked launcher, stripped) ----
-# NO -v $FORKED_FA2_SO, NO TREE_ATTN, NO APC flags, NO FR13_* tree/APC env,
-# NO in-container patcher. Only the minimal stock-serve env.
+# NO -v $FORKED_FA2_SO, NO TREE_ATTN, NO APC flags, NO FR13_* tree/APC env.
+# The ONLY in-container code is the opt-in lm_head loader shim above.
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   --memory="$DOCKER_MEM_CAP" --memory-swap="$DOCKER_MEM_CAP" \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
@@ -193,6 +218,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -lc "set -euo pipefail
 # NATIVE path: NO forked-fa2 .so copy, NO fr10_phase4 patcher, NO fa2-tree-bias
 # patch. Stock vLLM loads the model's native MTP head from the qwen3_5_mtp method.
+$_NATIVE_SHIM_CMD
 exec vllm serve $SERVED_MODEL_PATH --served-model-name $SERVED_MODEL_NAME \
   --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
   --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' --seed '${SEED:-0}' \

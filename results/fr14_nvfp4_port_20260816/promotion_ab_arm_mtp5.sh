@@ -139,6 +139,11 @@ mkdir -p "$RUNROOT_ABS"
   printf 'task=%s\nreplicate=%s\nsubset=%s\n' "$MTP5_TASK" "$MTP5_REP" "$SUBSET"
   printf 'tier_b_arm=NONE (native launcher never reaches the FA2 selector)\n'
   printf 'split_k=NOT PRESENT (not merely disarmed)\ncredential=NOT REQUIRED (no re-seal for this arm)\n'
+  printf 'DECLARED_EXCEPTION=NVFP4 lm_head loader shim (fr14_patch_nvfp4_lmhead.py), WEIGHT LOADING ONLY -- ruled Option A, pass 209\n'
+  printf 'declared_exception_shim_sha256=%s\n' "$(sha256sum scripts/fr14_patch_nvfp4_lmhead.py | cut -d" " -f1)"
+  printf 'declared_exception_why=stock vLLM cannot load this checkpoint at all: its lm_head is quantized (input_scale/weight_scale/weight_scale_2) and Qwen3_5ForCausalLM declares only lm_head.weight. Replicate A died on exactly this at 12:08:49Z.\n'
+  printf 'declared_exception_scope=constructor wiring, quant-method dispatch, key remapping, numel-preserving reshape. Touches NO decode path, attention, drafter or speculative decoding -- so it cannot bias a drafter-neutrality result.\n'
+  printf 'purity_meaning=NO SIDE CODE ON THE DECODE PATH (not "no side code"). The attestor enumerates the shim tokens and excepts exactly those; any other sentinel still fails, including a non-shim blob inside a shim-target file.\n'
   printf 'c5_applicable=NO -- c5 is a SEAM conditional and a chain drafter has no seam\n'
   printf 'c5_note=do NOT quote a c5 for this arm. On the merged tree drafter c5 flagged exactly one of the canonical sixteen (13236 at 0.3499, all others 0.5182-0.6395); that instrument does not transfer to a chain drafter and its absence here is by construction, not an omission.\n'
   printf 'served_model_path=%s\nserved_model_name=%s\ncheckpoint_identity=%s\n' \
@@ -219,6 +224,7 @@ env RUNROOT="$RUNROOT_ABS" \
   FR13_PROXY_RAW_DUMPS=off \
   SERVED_MODEL_PATH="$MTP5_MODEL_PATH" \
   SERVED_MODEL_NAME="$MTP5_MODEL_NAME" \
+  FR13_NATIVE_NVFP4_LMHEAD_SHIM=1 \
   TMPDIR=/home/mark/shared/tmp-scratch \
   bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" nativemtp5 "$SUBSET" \
   > "$RUNROOT_ABS/$ARM.runlog" 2>&1
