@@ -74,6 +74,19 @@ echo "[mtp5] preflight OK: MemFree=${_free}GiB"
 # at 7s on ModuleNotFoundError: lumo_flywheel_serving.model_server. Supplying the
 # correct path here is what the siblings do; the launcher's omission is reported.
 export PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}"
+# REPO, and this is the SAME hazard in a third form -- serious enough to state plainly.
+# The NATIVE launchers hardcode a FOREIGN checkout as their default:
+#   fr10_launch_speed_server.sh:4      REPO=${REPO:-/home/mark/shared/lumoFlyWheel}
+#   fr13_launch_native_mtp_server.sh   REPO=${REPO:-/home/mark/shared/lumoFlyWheel}
+# while their fixed32-family siblings derive it from their own location:
+#   fr13_launch_forked_fa2_tree_server.sh  REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}
+#   fr14_leg3_launch_nomiddleware.sh       REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}
+# So a native arm launched from THIS port silently mounts ANOTHER repo at /workspace.
+# Replicate A died on it: the chat template exists here at
+# docker/chat_templates/qwen3-openai-codex.jinja but not in that checkout. REPO is a
+# documented caller override, so setting it is correct use, not a workaround -- but a
+# native arm that nobody overrode would have run FOREIGN CODE without saying so.
+export REPO
 export BSIZE=1 CONC=1 WALL=9000
 export FR13_CAMPAIGN_TASK_BUDGET_S=9000
 source scripts/fr13_canonical_env.sh
