@@ -65,6 +65,15 @@ awk '/^MemFree:/{exit ($2/1048576 < 102.8)}' /proc/meminfo \
 echo "[mtp5] preflight OK: MemFree=${_free}GiB"
 
 # ---- campaign env, SOURCED not reconstructed --------------------------------
+# PYTHONPATH, and this is a finding rather than a convenience.
+# The shared .venv's editable install points at /home/mark/shared/lumoFlyWheel/src
+# -- a DIFFERENT checkout, which has no model_server.py -- so an unqualified
+# `import lumo_flywheel_serving` from this repo resolves to FOREIGN CODE. Every
+# sibling script sets PYTHONPATH="$PWD/src" inline for exactly this reason; the
+# native launcher (fr10_launch_speed_server.sh:186) does not, and replicate A died
+# at 7s on ModuleNotFoundError: lumo_flywheel_serving.model_server. Supplying the
+# correct path here is what the siblings do; the launcher's omission is reported.
+export PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}"
 export BSIZE=1 CONC=1 WALL=9000
 export FR13_CAMPAIGN_TASK_BUDGET_S=9000
 source scripts/fr13_canonical_env.sh
