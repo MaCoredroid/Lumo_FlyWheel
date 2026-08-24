@@ -42,10 +42,26 @@ set -euo pipefail
 # template) before anyone looked at the mount. The fixed32-family launchers
 # have always derived from SCRIPT_DIR; this now matches them exactly,
 # caller-override included.
+_FR13_SERVED_MODEL_EXPLICIT=${SERVED_MODEL_PATH:+1}${SERVED_MODEL_NAME:+1}
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 _FR13_REPO_EXPLICIT=${REPO:+1}
 REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}
 REPO=$(cd "$REPO" && pwd)
+# THE SERVED CHECKPOINT, parameterized -- the shape the forked launcher has
+# always had (SERVED_MODEL_PATH / SERVED_MODEL_NAME at :602-603). These were
+# EXEC-LINE LITERALS here, so a native arm could not be pointed at other
+# weights without editing the launcher, and nothing it produced said which
+# weights it had served. Defaults preserve the legacy 3.6 pair exactly.
+#
+# Override with SERVED_MODEL_PATH / SERVED_MODEL_NAME. They are NOT FR13_*/
+# LUMO_*/VLLM_* on purpose: those prefixes are auto-forwarded into the
+# container by the env sweeper, and this pair is host-side plumbing that
+# decides the serve line, not engine config.
+SERVED_MODEL_PATH=${SERVED_MODEL_PATH:-/models/qwen3.6-27b-fp8}
+SERVED_MODEL_NAME=${SERVED_MODEL_NAME:-qwen3.6-27b}
+readonly SERVED_MODEL_PATH SERVED_MODEL_NAME
+[[ -d "$SERVED_MODEL_PATH" && ! -L "$SERVED_MODEL_PATH" ]] \
+  || { echo "served checkpoint directory is missing or symlinked: $SERVED_MODEL_PATH" >&2; exit 2; }
 IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"}
 CONTAINER=${CONTAINER:-fr13-native-mtp}
 PORT=${PORT:-9950}
@@ -83,6 +99,23 @@ LOG_DIR=${LOG_DIR:-"${FR13_RUN_DIR:-$REPO/output/fr13_native_mtp/live}/logs"}
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
+
+# WHICH WEIGHTS THIS ARM SERVED. A native arm must always be able to say so:
+# the path, the name it answers to, and an identity for the checkpoint dir
+# itself, because two directories can carry the same name and different bytes.
+# The identity is the sorted (name,size,mtime) digest of the top-level
+# safetensors -- cheap, and enough to tell two checkpoints apart without
+# hashing 22 GB at every boot.
+_fr13_model_identity=$(
+  find "$SERVED_MODEL_PATH" -maxdepth 1 -name '*.safetensors' -printf '%f %s\n' 2>/dev/null \
+    | sort | sha256sum | cut -d' ' -f1
+)
+echo "[launch] serving $SERVED_MODEL_PATH as '$SERVED_MODEL_NAME'" \
+     "(checkpoint identity ${_fr13_model_identity:0:16})" >&2
+printf '{"schema":"fr13.served_model.v1","path":"%s","name":"%s","checkpoint_identity":"%s","overridden":"%s","launcher":"%s"}\n' \
+  "$SERVED_MODEL_PATH" "$SERVED_MODEL_NAME" "$_fr13_model_identity" \
+  "$( [[ -n "${_FR13_SERVED_MODEL_EXPLICIT:-}" ]] && echo true || echo false )" "fr13_launch_native_mtp_server.sh" \
+  > "$LOG_DIR/served_model.json"
 
 # REPO IDENTITY, recorded so a foreign mount can never again be silent. The
 # resolved path AND the HEAD of that path when it is a git tree: two different
@@ -160,7 +193,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -lc "set -euo pipefail
 # NATIVE path: NO forked-fa2 .so copy, NO fr10_phase4 patcher, NO fa2-tree-bias
 # patch. Stock vLLM loads the model's native MTP head from the qwen3_5_mtp method.
-exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
+exec vllm serve $SERVED_MODEL_PATH --served-model-name $SERVED_MODEL_NAME \
   --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
   --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' --seed '${SEED:-0}' \
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \

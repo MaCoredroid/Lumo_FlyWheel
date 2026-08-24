@@ -1680,8 +1680,12 @@ def test_no_serve_flag_enables_the_tokenize_route_on_either_stack():
     for text in (forked, native):
         assert "--chat-template" in text and "--enable-auto-tool-choice" in text
         assert "--api-server" not in text and "--disable-frontend" not in text
-    assert "--served-model-name qwen3.6-27b" in native
+    # both launchers now hold the served name as a VARIABLE; the native pair's
+    # default is still the legacy 3.6 name, which is what the probe's hardcoded
+    # 3.8 name disagrees with
+    assert "--served-model-name $SERVED_MODEL_NAME" in native
     assert "--served-model-name $SERVED_MODEL_NAME" in forked
+    assert "SERVED_MODEL_NAME=${SERVED_MODEL_NAME:-qwen3.6-27b}" in native
     variant = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
     assert variant.count("--model qwen3.8-27b-nvfp4-radixark") == 2, (
         "the served model name is restated in the variant; if this count "
@@ -1814,3 +1818,90 @@ def test_the_ledger_is_a_record_and_cannot_refuse():
     assert "exit " not in ledger and "FAIL:" not in ledger, (
         "the identity ledger acquired a gate; it must only record"
     )
+
+
+# ===========================================================================
+# The served checkpoint: the family's fifth member.
+#
+# Both native launchers pinned /models/qwen3.6-27b-fp8 and
+# --served-model-name qwen3.6-27b as EXEC-LINE LITERALS, while the forked
+# launcher has held them as variables since the port. A native arm therefore
+# could not be pointed at other weights without editing the launcher, and
+# nothing it produced said which weights it had served.
+# ===========================================================================
+
+
+@pytest.mark.parametrize("rel", NATIVE_LAUNCHERS, ids=lambda r: Path(r).name)
+def test_native_launchers_parameterize_the_served_checkpoint(rel):
+    text = (REPO / rel).read_text()
+    code = "\n".join(
+        line for line in text.split("\n") if not line.lstrip().startswith("#")
+    )
+    assert "vllm serve /models/qwen3.6-27b-fp8" not in code, (
+        "the served checkpoint is still an exec-line literal"
+    )
+    assert "--served-model-name qwen3.6-27b " not in code
+    assert "SERVED_MODEL_PATH=${SERVED_MODEL_PATH:-/models/qwen3.6-27b-fp8}" in text
+    assert "SERVED_MODEL_NAME=${SERVED_MODEL_NAME:-qwen3.6-27b}" in text
+    assert "readonly SERVED_MODEL_PATH SERVED_MODEL_NAME" in text
+    assert "vllm serve $SERVED_MODEL_PATH --served-model-name $SERVED_MODEL_NAME" in code
+    # a native arm must always say WHICH weights it served
+    assert '"schema":"fr13.served_model.v1"' in text
+    assert "checkpoint_identity" in text
+
+
+@pytest.mark.parametrize(
+    "env,expect_name,expect_overridden",
+    [
+        ({}, "qwen3.6-27b", "false"),
+        ({"SERVED_MODEL_PATH": "/models/qwen3.8-27b-nvfp4-radixark",
+          "SERVED_MODEL_NAME": "qwen3.8-27b-nvfp4-radixark"},
+         "qwen3.8-27b-nvfp4-radixark", "true"),
+    ],
+    ids=["legacy-default", "port-override"],
+)
+def test_the_served_model_provenance(tmp_path, env, expect_name, expect_overridden):
+    """Default is the legacy pair unchanged; an override is recorded as one."""
+    import subprocess
+
+    text = (REPO / "scripts/fr13_launch_native_mtp_server.sh").read_text()
+    decl = text[
+        text.index("# THE SERVED CHECKPOINT, parameterized"):
+        text.index("\nIMAGE=${IMAGE:-")
+    ]
+    prov = text[
+        text.index("_fr13_model_identity=$("):
+        text.index('> "$LOG_DIR/served_model.json"')
+        + len('> "$LOG_DIR/served_model.json"')
+    ]
+    script = (
+        "set -uo pipefail\n"
+        + "".join(f'{k}="{v}"\n' for k, v in env.items())
+        + "_FR13_SERVED_MODEL_EXPLICIT=${SERVED_MODEL_PATH:+1}${SERVED_MODEL_NAME:+1}\n"
+        + decl + f"\nLOG_DIR={tmp_path}\n" + prov
+    )
+    out = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    body = json.loads((tmp_path / "served_model.json").read_text())
+    assert body["name"] == expect_name
+    assert body["overridden"] == expect_overridden
+    assert re.fullmatch(r"[0-9a-f]{64}", body["checkpoint_identity"])
+
+
+def test_the_checkpoint_identity_discriminates_two_checkpoints():
+    """The name alone does not: two dirs can share a name and differ in bytes."""
+    import subprocess
+
+    def identity(path):
+        return subprocess.run(
+            ["bash", "-c",
+             f"find {path} -maxdepth 1 -name '*.safetensors' -printf '%f %s\\n' "
+             "2>/dev/null | sort | sha256sum | cut -d' ' -f1"],
+            capture_output=True, text=True,
+        ).stdout.strip()
+
+    legacy = identity("/models/qwen3.6-27b-fp8")
+    port = identity("/models/qwen3.8-27b-nvfp4-radixark")
+    if not legacy or not port:
+        pytest.skip("checkpoints not present on this host")
+    assert legacy != port
