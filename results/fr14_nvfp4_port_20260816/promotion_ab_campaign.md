@@ -4748,3 +4748,70 @@ doctored bash entry → rc 1 with the critical classification.
 
 I cannot stop a lane from landing. This makes the collision announce itself at minute
 fifteen instead of surfacing at hour four.
+
+# DRAFTER-NEUTRALITY PROBE — arm spec prepped (CPU, QC untouched)
+
+Mark's question: 13236's thinking runaway appeared under our MERGED drafter; was it
+absent under plain MTP-5? This arm removes the drafter machinery and holds everything
+else, splitting "our machinery is implicated" from "3.8-particular behaviour".
+
+## ROUTE — a kind the vehicle already defines, not a hand-built env
+
+`KIND=nativemtp5` (variant `:415`): *"STOCK vLLM native MTP-5 (qwen3_5_mtp,
+num_speculative_tokens=5, NO tree)... no forked-fa2, no tree_attn, no APC, **no
+in-container patcher**"*. That is exactly the `SPEC_CONFIG`/`FR10_DECODE_MODE_DEFAULT`
+combination the spec named, already expressed as a first-class kind.
+
+I am using the kind rather than assembling the env by hand **because the bdca0bd50 probe
+burned ten boots proving that reconstructing an environment from its shadow instead of
+its source produces a serve that is not the one you meant.**
+
+**`nativemtp5` over `nativemtp5_exseed`**: `_exseed` reaches the same decode path but runs
+`LAUNCHER=forked` to get the in-container patcher. For this question the patcher is part
+of what is under suspicion, so the arm that removes it entirely is the stronger test.
+
+## WHAT THE ARM DOES NOT CARRY — correct, not a gap
+
+`LAUNCHER=native` never reaches the FA2 selector, so **no tier-B arm, no split-K, no
+credential**, and **no re-seal is needed for this arm**. The note that "split-K
+auto-disarms under DIAGNOSTIC=1" is true but understates it: on the native launcher
+split-K is not in the picture at all. Provenance records the stack actually run.
+
+## c5 IS NOT APPLICABLE, and the artifact says why
+
+c5 is a **seam** conditional — `accept[pos5]/accept[pos4]` across the tree's seam. A
+chain drafter has no seam; its per-position curve decays smoothly, so the ratio measures
+nothing. Degeneration is read instead from the trace screens (ttr, top-12-gram,
+max-block, tool cadence) plus the 24k ceiling's length events. The ceiling is armed by
+default and asserted by the vehicle at `:2746`
+(`LUMO_PROXY_MAX_OUTPUT_TOKENS=${DEPLOY_MAX_OUTPUT_TOKENS:-24000}`).
+
+## ARM STATUS — half fires today, half is blocked
+
+    13236 x2   READY   profile astropy13236 exists (subset_b1_diagnostic_astropy13236.json)
+    14369 x2   BLOCKED no B1 diagnostic profile exists
+
+`B1_DIAGNOSTIC_PROFILES` holds exactly two entries — `astropy12907` and `astropy13236`.
+A 14369 arm needs a new profile plus a 1-id subset file, and the profile is consumed by
+**six files** (`fr13_floor_gate.py` 3 refs, the serve variant 15, the launcher 9, the
+offload proxy 11, and both leg3 forks 9 each). That is the canonical-set family again, so
+it wants one keyed addition rather than six literals. The arm script refuses 14369 by name
+with a message pointing here, rather than silently substituting a task.
+
+Script: `promotion_ab_arm_mtp5.sh`. Gates, canonical-env sourcing, closure snapshot and
+the 24k ceiling are all wired; it fires the moment the QC drains.
+
+## HONEST FRAMING, pre-registered before any result
+
+13236 degenerated in **1 of 3** merged-drafter runs, so this is a stochastic event and
+n=2 per cell is **directional, not conclusive**. Posterior updates each outcome supports:
+
+* **both MTP-5 reps clean** — weakly favours "our drafter machinery is implicated", but
+  2 clean draws are unsurprising even at the merged rate (p(both clean) ~ 0.44 at 1/3),
+  so it is suggestive at best and must not be reported as exoneration of 3.8.
+* **either MTP-5 rep degenerates** — strong evidence AGAINST the machinery hypothesis and
+  for 3.8-particular behaviour, because one positive under the plain drafter refutes
+  "only our drafter does this" outright. Asymmetric: this outcome is far more decisive
+  than its complement.
+* **both degenerate** — the phenomenon is checkpoint-level, and the promotion question
+  dissolves as a drafter question.
