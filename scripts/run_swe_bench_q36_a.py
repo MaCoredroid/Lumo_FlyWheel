@@ -7190,6 +7190,129 @@ _REMOTE_HF_HOME = "~/.cache/huggingface"
 _EVAL_NET_LOG = DEFAULT_OUT_ROOT / "swe_eval_offload_network.log"
 
 
+# --------------------------------------------------------------------------- #
+# THE EVALUATOR'S IDENTITY                                                      #
+# --------------------------------------------------------------------------- #
+# THE FOURTH SHADOW. Three earlier passes found evidence produced by a module
+# resolved from a DIFFERENT checkout than the one under test. The evaluator was
+# the fourth place it could happen and nothing recorded which binary ran.
+#
+# What is actually on this host, measured 2026-08-24:
+#
+#   shutil.which("codex-bench-eval-swe")      -> None (not on PATH)
+#   <repo>/.venv                              -> SYMLINK to the OLD checkout's
+#                                                /home/mark/shared/lumoFlyWheel/.venv
+#   <repo>/.venv/bin/codex-bench-eval-swe     -> a console script whose shebang
+#                                                hardcodes that old venv's python
+#                                                and which imports
+#                                                lumo_flywheel_serving.codex_bench_eval_swe
+#                                                -- a module that exists ONLY in
+#                                                THIS worktree's src/. That
+#                                                interpreter raises
+#                                                ModuleNotFoundError.
+#
+# So the local fallback is not merely a shadow, it is a BROKEN shadow, and it is
+# reached unconditionally whenever PATH lacks the entry point. It has never
+# fired because the fixed32 campaign always passes --eval-host, which routes to
+# the remote x86 worker instead. That is luck, not design, so the identity of
+# whatever evaluator does run is recorded from here on, and an out-of-repo local
+# evaluator is refused outright on a fixed32 arm rather than silently trusted.
+_EVAL_WORKER_IDENTITY_CACHE: dict[str, dict[str, Any]] = {}
+
+
+def _file_identity(path: Path) -> dict[str, Any]:
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        return {"path": str(path), "readable": False, "error": str(error)}
+    return {
+        "path": str(path),
+        "realpath": str(path.resolve()),
+        "readable": True,
+        "bytes": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }
+
+
+def _local_evaluator_identity() -> dict[str, Any]:
+    """Name the local evaluator this host would actually execute."""
+    which_path = shutil.which("codex-bench-eval-swe")
+    fallback = REPO_ROOT / ".venv" / "bin" / "codex-bench-eval-swe"
+    resolved = Path(which_path) if which_path is not None else fallback
+    identity: dict[str, Any] = {
+        "mode": "local_console_script",
+        "which": which_path,
+        "resolved_via": "PATH" if which_path is not None else "repo_venv_fallback",
+        "repo_root": str(REPO_ROOT),
+        "venv_link_target": (
+            str((REPO_ROOT / ".venv").resolve())
+            if (REPO_ROOT / ".venv").exists()
+            else None
+        ),
+        **_file_identity(resolved),
+    }
+    interpreter: str | None = None
+    try:
+        first_line = resolved.read_bytes().split(b"\n", 1)[0].decode("utf-8", "replace")
+        if first_line.startswith("#!"):
+            interpreter = first_line[2:].strip()
+    except OSError:
+        interpreter = None
+    identity["interpreter"] = interpreter
+    try:
+        real = resolved.resolve()
+        identity["inside_repo"] = real.is_relative_to(REPO_ROOT.resolve())
+    except (OSError, ValueError):
+        identity["inside_repo"] = False
+    if interpreter is not None:
+        try:
+            identity["interpreter_inside_repo"] = Path(
+                interpreter.split()[0]
+            ).resolve().is_relative_to(REPO_ROOT.resolve())
+        except (OSError, ValueError, IndexError):
+            identity["interpreter_inside_repo"] = False
+    else:
+        identity["interpreter_inside_repo"] = None
+    return identity
+
+
+def _remote_evaluator_identity(host: str) -> dict[str, Any]:
+    """Name the remote worker, measured once per host and then cached."""
+    cached = _EVAL_WORKER_IDENTITY_CACHE.get(host)
+    if cached is not None:
+        return dict(cached)
+    identity: dict[str, Any] = {
+        "mode": "remote_x86_worker",
+        "host": host,
+        "base": _REMOTE_BASE,
+        "worker": _REMOTE_WORKER,
+        "interpreter": _REMOTE_VENV_PY,
+    }
+    probe = _net_retry(
+        [
+            "ssh",
+            *_EVAL_SSH_OPTS,
+            host,
+            f"sha256sum {_REMOTE_WORKER} 2>/dev/null | cut -d' ' -f1; "
+            f"stat -c %s {_REMOTE_WORKER} 2>/dev/null; "
+            f"readlink -f {_REMOTE_VENV_PY} 2>/dev/null",
+        ],
+        what=f"eval_worker_identity:{host}",
+        timeout=60,
+        max_attempts=2,
+    )
+    lines = (probe.stdout or "").splitlines()
+    identity["worker_sha256"] = lines[0].strip() if len(lines) > 0 else None
+    identity["worker_bytes"] = (
+        int(lines[1].strip())
+        if len(lines) > 1 and lines[1].strip().isdigit()
+        else None
+    )
+    identity["interpreter_realpath"] = lines[2].strip() if len(lines) > 2 else None
+    _EVAL_WORKER_IDENTITY_CACHE[host] = dict(identity)
+    return identity
+
+
 def _eval_net_log(msg: str) -> None:
     try:
         _EVAL_NET_LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -7266,7 +7389,8 @@ def _run_eval_remote(
     _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"rm -rf {remote_dir}"],
                what=f"cleanup:{instance_id}", timeout=30, max_attempts=2)
     return {"exit_code": ev.returncode, "elapsed_s": round(time.monotonic() - started, 3),
-            "offloaded": True, "eval_host": host}
+            "offloaded": True, "eval_host": host,
+            "evaluator": _remote_evaluator_identity(host)}
 
 
 # ---- FR13 CODEX-OFFLOAD: run the codex-runner Docker on alienware -----------
@@ -8888,6 +9012,7 @@ def _run_eval(
     model_name: str,
     timeout_s: int,
     eval_log_path: Path,
+    fixed32: bool = False,
 ) -> dict[str, Any]:
     if EVAL_HOST:
         return _run_eval_remote(
@@ -8895,9 +9020,24 @@ def _run_eval(
             output_dir=output_dir, dataset_name=dataset_name, model_name=model_name,
             timeout_s=timeout_s, eval_log_path=eval_log_path,
         )
-    cbe_exe = shutil.which("codex-bench-eval-swe")
-    if cbe_exe is None:
-        cbe_exe = str(REPO_ROOT / ".venv" / "bin" / "codex-bench-eval-swe")
+    evaluator = _local_evaluator_identity()
+    cbe_exe = evaluator["path"]
+    if fixed32 and not (
+        evaluator["inside_repo"] and evaluator.get("interpreter_inside_repo")
+    ):
+        # THE FOURTH SHADOW, refused. A verdict scored by another checkout's
+        # evaluator is not evidence about this one, and the resolution that gets
+        # us there is silent -- PATH miss -> repo .venv -> a symlink to the old
+        # tree. Name every part of it rather than run it.
+        raise Fixed32BoundaryError(
+            "fixed32 local evaluator resolves outside the repository: "
+            f"resolved_via={evaluator['resolved_via']} "
+            f"path={evaluator['path']} realpath={evaluator.get('realpath')} "
+            f"interpreter={evaluator['interpreter']} "
+            f"venv_link_target={evaluator['venv_link_target']} "
+            f"(inside_repo={evaluator['inside_repo']}, "
+            f"interpreter_inside_repo={evaluator.get('interpreter_inside_repo')})"
+        )
     cmd = [
         cbe_exe,
         "--instance-id", instance_id,
@@ -8915,6 +9055,7 @@ def _run_eval(
     return {
         "exit_code": proc.returncode,
         "elapsed_s": round(elapsed, 3),
+        "evaluator": evaluator,
     }
 
 
@@ -9392,6 +9533,7 @@ def _process_one(
             model_name=model_name,
             timeout_s=eval_timeout_s,
             eval_log_path=eval_log,
+            fixed32=fixed32_bracket is not None,
         )
         summary["eval"] = eval_meta
 
