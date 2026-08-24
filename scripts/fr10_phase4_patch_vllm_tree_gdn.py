@@ -5533,11 +5533,33 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
         live_structural_signature = __import__("hashlib").sha256(
             structural_canonical.encode("ascii")
         ).hexdigest()
-        if live_structural_signature != forward_graph_structural_signature(
-            batch, kernel_shape=registry_shape
-        ):
+        _audited_structural_signature = forward_graph_structural_signature(
+            batch,
+            kernel_shape=registry_shape,
+            mode=_FR13_FIXED32_GDN_MODE or None,
+        )
+        if live_structural_signature != _audited_structural_signature:
+            # THE MOST ONE-SIDED REFUSAL IN THE CAMPAIGN: it named neither hash
+            # nor a single field, so a corpse could not say WHAT differed. Both
+            # digests, and the structural fields that fed each, or it testifies
+            # to nothing.
             raise RuntimeError(
-                "FR13 fixed32 live forward structural signature drift"
+                "FR13 fixed32 live forward structural signature drift for mode "
+                + repr(_FR13_FIXED32_GDN_MODE)
+                + " batch "
+                + repr(batch)
+                + " kernel_shape "
+                + repr(registry_shape)
+                + ": observed "
+                + repr(live_structural_signature)
+                + " against audited "
+                + repr(_audited_structural_signature)
+                + "; structure "
+                + (
+                    _fr13_fixed32_drift_detail(structural, expected)
+                    or "identical -- the signature inputs differ outside the "
+                    "compared structure"
+                )
             )
         manifests[batch] = {
             "conv": conv,
@@ -6210,8 +6232,12 @@ def _fr13_fixed32_observed_graph_replay(
         runtime_sys.path.insert(0, "/workspace/scripts")
     from fr13_fixed32_work_census import forward_graph_structural_signature
 
+    # THE SECOND CALL SITE, and the one that would have killed boot ten: it
+    # also hashed hydra27's manifest for every profile. Found by enumerating
+    # every call into the authority that omits the mode, not by another boot.
     census_graph_signature = forward_graph_structural_signature(
-        int(event["batch_size"])
+        int(event["batch_size"]),
+        mode=_FR13_FIXED32_GDN_MODE or None,
     )
     if (
         _FR13_FIXED32_BATCH_GDN_GRAPH_BYTE_AB

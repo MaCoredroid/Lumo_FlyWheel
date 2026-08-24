@@ -1626,3 +1626,256 @@ def test_the_drift_formatter_recurses_into_nested_sections() -> None:
     assert "critical_path: observed 16 against audited 12" in message
     assert "physical_parent_sha256: observed '101c' against audited '7abd'" in message
     assert message.startswith("gdn{")
+
+
+# --------------------------------------------------------------------------- #
+# BOOT NINE: the composite signature, and closing the flush path wholesale     #
+# --------------------------------------------------------------------------- #
+# Boot nine reached health at 307s, acked generation zero, PASSED the structure
+# audit the previous landing fixed, and died ~50 lines later:
+#
+#     RuntimeError('FR13 fixed32 live forward structural signature drift')
+#
+# THE MOST ONE-SIDED REFUSAL IN THE CAMPAIGN. No observed, no audited, not even
+# the two hashes. The corpse cannot say what differed -- I went looking for the
+# stored signature to CPU-verify against and there is none, because the guard
+# recorded nothing. A guard that testifies nothing is worse than no guard: it
+# stops the run AND withholds the reason.
+#
+# THE CAUSE: forward_graph_structural_signature had no `mode` parameter at all,
+# so it hashed hydra27's manifest for every profile. Not a stale literal -- a
+# MISSING ARGUMENT. That is a fourth tripwire, and it is the sharpest one yet
+# for this class: enumerate every call INTO the authority that omits the mode
+# the authority accepts. It found both call sites at once, including the one in
+# _fr13_fixed32_observed_graph_replay that would have killed boot ten.
+FLUSH_PATH_AUTHORITY_CALLS = {
+    "forward_graph_structural_manifest": "accepts mode; both call sites pass it",
+    "forward_graph_structural_signature": (
+        "accepts mode as of this landing; both call sites pass it"
+    ),
+}
+
+
+def test_the_signature_function_takes_the_served_mode() -> None:
+    """MUTATION PROOF for boot nine's cause."""
+    import inspect
+
+    import fr13_fixed32_work_census as census
+
+    assert "mode" in inspect.signature(
+        census.forward_graph_structural_signature
+    ).parameters
+    hydra31 = census.forward_graph_structural_signature(1, mode="hydra31_fixed32")
+    era = census.forward_graph_structural_signature(1)
+    assert hydra31 != era, "the profiles must genuinely differ"
+    for mode in ("hydra27_fixed32", "tail6_fixed32"):
+        assert census.forward_graph_structural_signature(1, mode=mode) == era
+
+
+def test_the_signature_is_the_hash_of_the_manifest_and_nothing_else() -> None:
+    """THE CLOSED LOOP that replaces a CPU-vs-corpse comparison.
+
+    The corpse stored no signature, so there is nothing to compare against
+    directly. But the manifest is the signature's ONLY input, and that manifest
+    was verified field-by-field against boot EIGHT's corpse -- which did print
+    both sides. So verifying sha256(manifest) == signature() closes the loop.
+    """
+    import hashlib
+    import json
+
+    import fr13_fixed32_work_census as census
+
+    manifest = census.forward_graph_structural_manifest(1, mode="hydra31_fixed32")
+    # the values boot eight observed live, carried into what gets hashed
+    assert manifest["gdn"]["padded_slots_per_scan"] == 126
+    assert manifest["gdn"]["critical_path"] == 16
+    assert manifest["gdn"]["max_path_lengths"] == [5, 11]
+    assert manifest["tree_attention"]["physical_parent_sha256"].startswith(
+        "101c590e58"
+    )
+    digest = hashlib.sha256(
+        json.dumps(
+            manifest, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+        ).encode("ascii")
+    ).hexdigest()
+    assert digest == census.forward_graph_structural_signature(
+        1, mode="hydra31_fixed32"
+    )
+
+
+def test_every_signature_the_flush_path_can_ask_for_resolves() -> None:
+    """WHOLESALE, not one boot at a time: all 32 combinations."""
+    import fr13_fixed32_work_census as census
+
+    topology = _topology()
+    modes = list(topology.SERVING_MODES) + [None]
+    shapes = (census.UNFUSED_KERNEL_SHAPE, census.FUSED_KERNEL_SHAPE)
+    seen = 0
+    for mode in modes:
+        for shape in shapes:
+            for batch in (1, 2, 3, 4):
+                digest = census.forward_graph_structural_signature(
+                    batch, kernel_shape=shape, mode=mode
+                )
+                assert len(digest) == 64
+                seen += 1
+    assert seen == 32
+
+
+def test_the_pinned_signature_table_is_per_mode_and_still_binds() -> None:
+    import fr13_fixed32_work_census as census
+
+    by_mode = census.FORWARD_GRAPH_STRUCTURAL_SIGNATURES_BY_MODE
+    assert set(by_mode) == set(_topology().SERVING_MODES)
+    # tail6 and hydra27 share the era table BY REFERENCE, not a retyped copy
+    assert by_mode["tail6_fixed32"] is by_mode["hydra27_fixed32"]
+    assert by_mode["tail6_fixed32"] is census.FORWARD_GRAPH_STRUCTURAL_SIGNATURES
+    assert (
+        by_mode["hydra31_fixed32"]
+        is census.FORWARD_GRAPH_STRUCTURAL_SIGNATURES_HYDRA31
+    )
+    # every hydra31 entry is RECOMPUTED here, not trusted
+    import hashlib
+    import json
+
+    for shape, rows in census.FORWARD_GRAPH_STRUCTURAL_SIGNATURES_HYDRA31.items():
+        for batch, pinned in rows.items():
+            manifest = census.forward_graph_structural_manifest(
+                batch, kernel_shape=shape, mode="hydra31_fixed32"
+            )
+            assert (
+                hashlib.sha256(
+                    json.dumps(
+                        manifest,
+                        ensure_ascii=True,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    ).encode("ascii")
+                ).hexdigest()
+                == pinned
+            ), (shape, batch)
+    # NOT ACCEPT-ANY: a wrong pin still refuses, and names both digests.
+    saved = census.FORWARD_GRAPH_STRUCTURAL_SIGNATURES_HYDRA31[
+        census.UNFUSED_KERNEL_SHAPE
+    ][1]
+    census.FORWARD_GRAPH_STRUCTURAL_SIGNATURES_HYDRA31[
+        census.UNFUSED_KERNEL_SHAPE
+    ][1] = "0" * 64
+    try:
+        with pytest.raises(census.CensusError) as refusal:
+            census.forward_graph_structural_signature(1, mode="hydra31_fixed32")
+    finally:
+        census.FORWARD_GRAPH_STRUCTURAL_SIGNATURES_HYDRA31[
+            census.UNFUSED_KERNEL_SHAPE
+        ][1] = saved
+    message = str(refusal.value)
+    assert "drifted from its pinned signature" in message
+    assert "mode='hydra31_fixed32'" in message
+    assert "computed=" in message and "pinned=" in message
+
+
+def test_the_signature_refusal_now_testifies() -> None:
+    """Both hashes AND the structural fields that fed each."""
+    blob = _planted_blob()
+    assert (
+        '"FR13 fixed32 live forward structural signature drift"' not in blob
+    ), "the bare-string refusal survived"
+    assert "live forward structural signature drift for mode " in blob
+    assert "+ repr(live_structural_signature)" in blob
+    assert "+ repr(_audited_structural_signature)" in blob
+    assert "_fr13_fixed32_drift_detail(structural, expected)" in blob
+
+
+def test_no_authority_call_on_the_flush_path_omits_the_mode() -> None:
+    """THE FOURTH TRIPWIRE, as a standing check.
+
+    Every call from the planted blob into a work_census function that ACCEPTS a
+    mode must pass one. This is what found boot ten's guard before boot ten.
+    """
+    import inspect
+
+    import fr13_fixed32_work_census as census
+
+    blob = _planted_blob()
+    tree = ast.parse(blob)
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == (
+            "fr13_fixed32_work_census"
+        ):
+            imported |= {alias.name for alias in node.names}
+    assert imported, "the blob no longer imports the census authority"
+    offenders = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id not in imported:
+            continue
+        target = getattr(census, node.func.id, None)
+        if target is None:
+            continue
+        try:
+            accepts = "mode" in inspect.signature(target).parameters
+        except (TypeError, ValueError):
+            continue
+        if accepts and "mode" not in {kw.arg for kw in node.keywords}:
+            offenders.append((node.lineno, node.func.id))
+    assert not offenders, (
+        "authority calls on the flush path that omit the served mode: "
+        + repr(offenders)
+    )
+    for name in imported:
+        assert name in FLUSH_PATH_AUTHORITY_CALLS, name
+
+
+def test_the_downstream_flush_path_carries_no_other_stale_expectation() -> None:
+    """ORDER: close that section wholesale, not one boot at a time.
+
+    All three value/digest tripwires over every guard downstream of the audits,
+    from the forward-graph registry to the end of the blob. The single value
+    hit is the conv state dimension already classified as coincidence, and
+    there is no pinned digest literal at all.
+    """
+    import re as _re
+
+    blob = _planted_blob()
+    tree = ast.parse(blob)
+    owner: dict[int, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+                owner.setdefault(line, node.name)
+    start = next(
+        node.lineno
+        for node in ast.parse(blob).body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_fr13_fixed32_forward_graph_registry"
+    )
+    high_signal = {12, 7, 82, 6, 8, 11, 13, 17, 27, 36, 24, 126}
+    value_hits: dict[str, list[int]] = {}
+    digest_hits: dict[str, list[int]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If) or node.lineno < start:
+            continue
+        if not any(isinstance(c, ast.Raise) for c in ast.walk(node)):
+            continue
+        scope = owner.get(node.lineno, "<module>")
+        values = sorted(
+            c.value
+            for c in ast.walk(node.test)
+            if isinstance(c, ast.Constant)
+            and isinstance(c.value, int)
+            and not isinstance(c.value, bool)
+            and c.value in high_signal
+        )
+        if values:
+            value_hits.setdefault(scope, []).extend(values)
+        if any(
+            isinstance(c, ast.Constant)
+            and isinstance(c.value, str)
+            and _re.fullmatch(r"[0-9a-f]{64}", c.value or "")
+            for c in ast.walk(node.test)
+        ):
+            digest_hits.setdefault(scope, []).append(node.lineno)
+    assert set(value_hits) <= {"_fr13_fixed32_observed_commit"}, value_hits
+    assert not digest_hits, digest_hits

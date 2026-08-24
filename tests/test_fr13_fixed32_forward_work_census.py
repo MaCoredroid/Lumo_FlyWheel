@@ -472,8 +472,8 @@ def test_signature_rejects_a_manifest_edit(
     """
     original = census.forward_graph_structural_manifest
 
-    def tampered(batch_size, *, kernel_shape=census.UNFUSED_KERNEL_SHAPE):
-        manifest = dict(original(batch_size, kernel_shape=kernel_shape))
+    def tampered(batch_size, *, kernel_shape=census.UNFUSED_KERNEL_SHAPE, mode=None):
+        manifest = dict(original(batch_size, kernel_shape=kernel_shape, mode=mode))
         manifest["batch_size"] = manifest["batch_size"] + 100
         return manifest
 
@@ -481,6 +481,12 @@ def test_signature_rejects_a_manifest_edit(
     for shape in census.KERNEL_SHAPES:
         with pytest.raises(census.CensusError, match="drifted from its pinned"):
             census.forward_graph_structural_signature(1, kernel_shape=shape)
+        # the pin binds for every served profile, not only the era default
+        for mode in census.FORWARD_GRAPH_STRUCTURAL_SIGNATURES_BY_MODE:
+            with pytest.raises(census.CensusError, match="drifted from its pinned"):
+                census.forward_graph_structural_signature(
+                    1, kernel_shape=shape, mode=mode
+                )
 
 
 def test_unknown_kernel_shape_is_rejected() -> None:

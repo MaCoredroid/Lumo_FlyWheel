@@ -1071,6 +1071,16 @@ SFWD_CONV_POSTPREP_ROUTE = "fused_conv_postprep_single_kernel"
 # one. These are written-down constants, never derived from what a runtime
 # was observed to do: a runtime that disagrees with its arm's reference is a
 # failure, not a new reference.
+# THE AUDITED-DIGEST KIND, one level up from the component digest: a COMPOSITE
+# signature over the whole structural manifest. Boot nine reached health, passed
+# the structure audit this landing's predecessor fixed, and died ~50 lines later
+# here -- because the signature function had no `mode` at all, so it hashed
+# hydra27's manifest for every profile.
+#
+# hydra27 and tail6 keep their eight digests BYTE-IDENTICAL (the table below is
+# their era and every banked reader expects exactly these); hydra31's eight are
+# recomputed from the same manifest authority and pinned beside them. Per-mode
+# and still binding: a wrong structure refuses, it is not accepted.
 FORWARD_GRAPH_STRUCTURAL_SIGNATURES = {
     UNFUSED_KERNEL_SHAPE: {
         1: "2373bfbd2ac6ab7a6fd67af5570385f2aea2a16a1e80b804bdf12e092f319423",
@@ -1084,6 +1094,30 @@ FORWARD_GRAPH_STRUCTURAL_SIGNATURES = {
         3: "8d0c4bc4e81ea41831a45c4c069ee0e2ab67a585379f1347d8918a6b399d011d",
         4: "f8a2ca1fc246a3058430a653b1fd27796622e21bdf80db5b93a2d19e831ed547",
     },
+}
+#: hydra31's own eight, recomputed from the manifest authority. Filled by
+#: tests/test_fr14_gdn_schedule_contract_parity.py, which rebuilds every entry
+#: rather than trusting the number written here.
+FORWARD_GRAPH_STRUCTURAL_SIGNATURES_HYDRA31 = {
+    UNFUSED_KERNEL_SHAPE: {
+        1: "219d438f8beb8fcace3c514bd6b5c1c68ca8260e0ac597eab424c601542c92e0",
+        2: "f39441c200bc5dd717fe0983c9485e40d6cd23b4832989b15b30f0e6dc91280d",
+        3: "bfca291f72c043ca279bef29b51df512b1f6adabbe015e311d881c2a2af00fd7",
+        4: "f2b192dac1dfeb9bf495fc402961213c05be15430673bd3943de0e0b5235c2ae",
+    },
+    FUSED_KERNEL_SHAPE: {
+        1: "3d7e3fa4af41d206c64c687a8d073f7de9877bb9dc5afd0d1e93d33c67e9a21a",
+        2: "3c80d80f9feca2576f9a9b79ee1058e0243d39e3b1f111fdbb6a89018f285c78",
+        3: "9fd6ed1f5bc9f4bdfc5f99d01b0183f05f0e40fb72fe443934d270d867d9f19b",
+        4: "a1a970628150f8b76f7baf3cdda04e81c10a1a69a29a2ecd42e09f0335eb785f",
+    },
+}
+#: Mode -> pinned signature table. tail6 and hydra27 share the era table BY
+#: REFERENCE, not by a retyped copy.
+FORWARD_GRAPH_STRUCTURAL_SIGNATURES_BY_MODE = {
+    TAIL_MODE: FORWARD_GRAPH_STRUCTURAL_SIGNATURES,
+    HYDRA_MODE: FORWARD_GRAPH_STRUCTURAL_SIGNATURES,
+    HYDRA31_MODE: FORWARD_GRAPH_STRUCTURAL_SIGNATURES_HYDRA31,
 }
 
 
@@ -1275,17 +1309,25 @@ def forward_graph_structural_manifest(
 
 
 def forward_graph_structural_signature(
-    batch_size: int, *, kernel_shape: str = UNFUSED_KERNEL_SHAPE
+    batch_size: int,
+    *,
+    kernel_shape: str = UNFUSED_KERNEL_SHAPE,
+    mode: str | None = None,
 ) -> str:
-    """Hash the canonical structural facts for one arm's kernel shape.
+    """Hash the canonical structural facts for one arm's kernel shape and mode.
 
     The result is checked against the pinned table: the canonical references
     are written down, so an accidental edit to a manifest fails here rather
     than silently reclassifying an arm.
+
+    IT HAD NO ``mode`` AT ALL, which is how boot nine died: it hashed hydra27's
+    manifest for every profile, so a correct hydra31 structure could never
+    match. ``mode=None`` is hydra27's era exactly, so existing callers are
+    behaviour-identical.
     """
     _validated_kernel_shape(kernel_shape)
     manifest = forward_graph_structural_manifest(
-        batch_size, kernel_shape=kernel_shape
+        batch_size, kernel_shape=kernel_shape, mode=mode
     )
     canonical = json.dumps(
         manifest,
@@ -1294,12 +1336,17 @@ def forward_graph_structural_signature(
         sort_keys=True,
     )
     digest = hashlib.sha256(canonical.encode("ascii")).hexdigest()
-    pinned = FORWARD_GRAPH_STRUCTURAL_SIGNATURES[kernel_shape].get(batch_size)
+    _table = (
+        FORWARD_GRAPH_STRUCTURAL_SIGNATURES
+        if mode is None
+        else FORWARD_GRAPH_STRUCTURAL_SIGNATURES_BY_MODE[mode]
+    )
+    pinned = _table[kernel_shape].get(batch_size)
     if pinned is not None and digest != pinned:
         raise CensusError(
             "forward graph structural manifest drifted from its pinned "
-            f"signature: kernel_shape={kernel_shape} batch_size={batch_size} "
-            f"computed={digest} pinned={pinned}"
+            f"signature: mode={mode!r} kernel_shape={kernel_shape} "
+            f"batch_size={batch_size} computed={digest} pinned={pinned}"
         )
     return digest
 
