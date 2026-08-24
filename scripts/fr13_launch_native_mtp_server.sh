@@ -33,7 +33,19 @@ set -euo pipefail
 # identical harness (fr13_bigdenom_swe_serve_variant.sh).
 # ============================================================================
 
-REPO=${REPO:-/home/mark/shared/lumoFlyWheel}
+# REPO IS DERIVED, NOT HARDCODED. This read
+# `REPO=${REPO:-/home/mark/shared/lumoFlyWheel}` -- a path to a DIFFERENT
+# CHECKOUT. Launched from any other tree without an explicit override it
+# mounted that foreign repo at /workspace and silently ran its code whenever
+# it happened to carry the file being asked for; it burned two pre-boot
+# refusals on the MTP-5 probe (a missing model_server, a missing chat
+# template) before anyone looked at the mount. The fixed32-family launchers
+# have always derived from SCRIPT_DIR; this now matches them exactly,
+# caller-override included.
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+_FR13_REPO_EXPLICIT=${REPO:+1}
+REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}
+REPO=$(cd "$REPO" && pwd)
 IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"}
 CONTAINER=${CONTAINER:-fr13-native-mtp}
 PORT=${PORT:-9950}
@@ -71,6 +83,20 @@ LOG_DIR=${LOG_DIR:-"${FR13_RUN_DIR:-$REPO/output/fr13_native_mtp/live}/logs"}
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
+
+# REPO IDENTITY, recorded so a foreign mount can never again be silent. The
+# resolved path AND the HEAD of that path when it is a git tree: two different
+# checkouts of the same project have the same basename and differ only here.
+_fr13_repo_head=$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo "")
+_fr13_repo_origin=$( [[ -n "$_FR13_REPO_EXPLICIT" ]] && echo caller-override || echo derived-from-script-dir )
+if [[ -n "$_FR13_REPO_EXPLICIT" ]]; then
+  echo "[launch] REPO OVERRIDDEN BY CALLER: $REPO (head ${_fr13_repo_head:-<not a git tree>})" >&2
+else
+  echo "[launch] repo=$REPO (head ${_fr13_repo_head:-<not a git tree>}, derived from script dir)" >&2
+fi
+printf '{"schema":"fr13.repo_identity.v1","repo":"%s","head":"%s","origin":"%s","script_dir":"%s","launcher":"%s"}\n' \
+  "$REPO" "$_fr13_repo_head" "$_fr13_repo_origin" "$SCRIPT_DIR" "fr13_launch_native_mtp_server.sh" \
+  > "$LOG_DIR/repo_identity.json"
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
 set -a
@@ -80,6 +106,16 @@ fi
 set +a
 
 # ---- host-memory recovery + hard pre-boot assert (same as forked launcher) ----
+# WHERE THE STALE EDITABLE INSTALL BIT. The shared .venv carries
+# __editable__.lumo_flywheel_serving-0.1.0.pth pointing at
+# /home/mark/shared/lumoFlyWheel/src -- the OLD checkout. Nothing in the serve
+# closure depends on that resolution: every in-path import PREPENDS the right
+# src, host-side here and container-side via -e PYTHONPATH=/workspace/src, and
+# a prepended path wins over a .pth. But this line read "$REPO/src" while REPO
+# was hardcoded to that same old checkout, so the two defects were the same
+# defect twice and this import really did come from the foreign tree. Deriving
+# REPO above closes the host-side half; the venv is environment, not repo, and
+# is deliberately left alone.
 PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
 from lumo_flywheel_serving.model_server import recover_host_memory
 

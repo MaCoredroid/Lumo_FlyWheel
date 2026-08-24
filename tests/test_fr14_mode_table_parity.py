@@ -1529,3 +1529,72 @@ def test_the_cutlass_lane_is_adjudicated_not_converted():
             assert "requires an N5120 B1 candidate" in text or (
                 "pinned to an N5120 candidate" in text
             )
+
+
+# ===========================================================================
+# The native launchers' repo identity.
+#
+# Both hardcoded REPO=${REPO:-/home/mark/shared/lumoFlyWheel} -- a path to a
+# DIFFERENT CHECKOUT -- while every fixed32-family launcher derives from
+# SCRIPT_DIR. Launched from this port without an override they mounted the
+# foreign repo at /workspace and ran its code whenever it happened to carry
+# the file being asked for.
+# ===========================================================================
+
+NATIVE_LAUNCHERS = (
+    "scripts/fr13_launch_native_mtp_server.sh",
+    "scripts/fr10_launch_speed_server.sh",
+)
+
+
+@pytest.mark.parametrize("rel", NATIVE_LAUNCHERS, ids=lambda r: Path(r).name)
+def test_native_launchers_derive_repo_like_their_siblings(rel):
+    text = (REPO / rel).read_text()
+    # comment-aware: the fix's own comment quotes the pre-fix line, and a
+    # detector fooled by prose describing the thing it hunts has now happened
+    # four times in this campaign
+    code = "\n".join(
+        line for line in text.split("\n") if not line.lstrip().startswith("#")
+    )
+    assert "REPO=${REPO:-/home/mark/shared/lumoFlyWheel}" not in code
+    assert 'SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)' in text
+    assert 'REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}' in text
+    assert 'REPO=$(cd "$REPO" && pwd)' in text
+    # the siblings allow a caller override; so do these, but loudly
+    assert "_FR13_REPO_EXPLICIT=${REPO:+1}" in text
+    assert "REPO OVERRIDDEN BY CALLER" in text
+    assert '"schema":"fr13.repo_identity.v1"' in text
+    assert 'git -C "$REPO" rev-parse HEAD' in text, (
+        "the resolved path alone does not distinguish two checkouts of the "
+        "same project; the HEAD of that path does"
+    )
+
+
+@pytest.mark.parametrize("rel", NATIVE_LAUNCHERS, ids=lambda r: Path(r).name)
+def test_no_launcher_hardcodes_a_foreign_checkout(rel):
+    """The class, not the instance: no absolute path to another checkout."""
+    for lineno, line in enumerate((REPO / rel).read_text().split("\n"), 1):
+        if line.lstrip().startswith("#"):
+            continue
+        assert "/home/mark/shared/lumoFlyWheel/" not in line, (
+            f"{Path(rel).name}:{lineno} names a foreign checkout: {line.strip()}"
+        )
+
+
+def test_nothing_in_the_closure_relies_on_the_stale_editable_install():
+    """Classified, and the finding is that it is not a site -- with one caveat.
+
+    The shared .venv's editable install points at the old checkout's src. Every
+    in-path import PREPENDS the correct src (host-side `$REPO/src` or `$PWD/src`,
+    container-side `-e PYTHONPATH=/workspace/src`), and a prepended path wins
+    over a .pth, so nothing depends on that resolution. The caveat is why this
+    landing exists: `$REPO/src` pointed at the old checkout too while REPO was
+    hardcoded, so the two defects were the same defect twice.
+    """
+    for rel in NATIVE_LAUNCHERS:
+        text = (REPO / rel).read_text()
+        assert 'PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}"' in text
+        assert "-e PYTHONPATH=/workspace/src" in text
+        assert "WHERE THE STALE EDITABLE INSTALL BIT" in text
+    variant = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
+    assert 'PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"' in variant
