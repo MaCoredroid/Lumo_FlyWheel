@@ -65,7 +65,10 @@ case "$PROMOAB_SUBSET" in
   # exact16 while serving fifteen is the pins-as-fiction move pass 122 prevents.
   # So the remainder is its own canonical set with its own declared workload.
   exact16_minus_13236) SUBSET=config/fr13_fixed32/subset_b4_sixteen_minus_13236.json ;;
-  *) echo "PROMOAB_SUBSET must be exact4, exact16 or exact16_minus_13236" >&2; exit 2 ;;
+  # THE SECOND RESUME SET: sixteen minus the FOUR the QC has now verdicted
+  # (12907 resolved, 13033 failed, 13236 degenerate-regression, 13398 empty-fail).
+  exact16_qc_remainder_12) SUBSET=config/fr13_fixed32/subset_b4_sixteen_qc_remainder_12.json ;;
+  *) echo "PROMOAB_SUBSET must be exact4, exact16, exact16_minus_13236 or exact16_qc_remainder_12" >&2; exit 2 ;;
 esac
 [[ -f "$SUBSET" && ! -L "$SUBSET" ]] || { echo "subset missing: $SUBSET" >&2; exit 2; }
 SUBSET_SHA256=$(sha256sum "$SUBSET" | cut -d' ' -f1)
@@ -73,6 +76,7 @@ case "$PROMOAB_SUBSET:$SUBSET_SHA256" in
   exact4:0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5) ;;
   exact16:47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c) ;;
   exact16_minus_13236:24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a) ;;
+  exact16_qc_remainder_12:ac54bcc4df1311147616affd71a3722d0c0fda89216b7ac6473a4ab3eab4c424) ;;
   *) echo "subset $PROMOAB_SUBSET digest drifted: $SUBSET_SHA256" >&2; exit 2 ;;
 esac
 MANDATORY_WEIGHT_BYTES=25430574256
