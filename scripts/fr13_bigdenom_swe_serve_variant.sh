@@ -1382,16 +1382,53 @@ _fixed32_record_container_cleanup_failure() {
   esac
 }
 
+# ---- EVIDENCE BEFORE JUDGMENT (site 27) ------------------------------------
+# The container-log capture used to sit behind TWO attestation gates: the
+# teardown branch it lives in is only reached when the incarnation attestation
+# passes, and _fixed32_remove_attested_container re-attested again before
+# running `docker logs`. So a boot whose container could not be attested
+# produced no log at all -- and site 27's diagnosis survived only because that
+# same skip ALSO left the corpse behind, so 398 lines could be salvaged by
+# hand afterwards. Had teardown removed the container while still skipping the
+# capture, the death would have been unreadable.
+#
+# CAPTURE IS EVIDENCE; ATTESTATION IS JUDGMENT. Evidence is taken first and
+# unconditionally, and the judgment then runs on what was captured. Note the
+# shape of the thing being fixed: the attestation is DESIGNED to fail when the
+# container is in an unproven state, which is exactly the state a dying boot
+# leaves it in -- so gating capture on it withheld the logs precisely when they
+# were most needed.
+#
+# MONOTONIC on purpose: a failed or empty capture never overwrites a good
+# earlier one, so calling this repeatedly can only improve the evidence. That
+# matters because the removal path captures again just before `docker rm`, and
+# by then the container may be gone.
+_fixed32_capture_container_log() {
+  local container_ref=$1 log_output=$2 tmp
+  [[ -n "$container_ref" ]] || return 1
+  tmp="$log_output.capture.$$"
+  if docker logs "$container_ref" > "$tmp" 2>&1 && [[ -s "$tmp" ]]; then
+    mv -f -- "$tmp" "$log_output"
+    return 0
+  fi
+  rm -f -- "$tmp"
+  return 1
+}
+
 _fixed32_remove_attested_container() {
   local container_ref=$1
   local log_output=$2
   FIXED32_CONTAINER_CLEANUP_OUTCOME="removal_unproven"
+  # Evidence first, unconditionally: the re-attestation below decides whether
+  # the container may be REMOVED, which is a judgment about the container, not
+  # a licence to read it.
+  _fixed32_capture_container_log "$container_ref" "$log_output" || true
   if ! _fixed32_container_incarnation_matches "$container_ref"; then
-    echo "fixed32 container logs/removal skipped without exact incarnation re-attestation" >&2
+    echo "fixed32 container removal skipped without exact incarnation re-attestation" >&2
     _fixed32_classify_container_state "$container_ref"
     return 1
   fi
-  docker logs "$container_ref" > "$log_output" 2>&1 || true
+  _fixed32_capture_container_log "$container_ref" "$log_output" || true
   if ! _fixed32_container_incarnation_matches "$container_ref"; then
     echo "fixed32 container removal skipped after incarnation drift" >&2
     _fixed32_classify_container_state "$container_ref"
@@ -1736,6 +1773,11 @@ teardown(){
     if [[ -z "$CONTAINER_RUNTIME_REF" ]]; then
       _promote_fixed32_container_from_cidfile >/dev/null 2>&1 || true
     fi
+    # BEFORE the gate that can skip every container operation below. This is
+    # the whole of the site-27 fix: whatever the attestation decides, the log
+    # is already on disk.
+    _fixed32_capture_container_log "$CONTAINER_RUNTIME_REF" \
+      "$ARMDIR/docker_full.log" || true
     if ! _fixed32_container_identity_matches "$CONTAINER_RUNTIME_REF" \
         || ! _fixed32_container_incarnation_matches "$CONTAINER_RUNTIME_REF"; then
       fixed32_container_attested=0
@@ -1823,7 +1865,8 @@ teardown(){
         "engine-ledger materialization failure"
     fi
   elif [[ -n "$CONTAINER_RUNTIME_REF" ]]; then
-    docker logs "$CONTAINER_RUNTIME_REF" > "$ARMDIR/docker_full.log" 2>&1 || true
+    _fixed32_capture_container_log "$CONTAINER_RUNTIME_REF" \
+      "$ARMDIR/docker_full.log" || true
     docker rm -f "$CONTAINER_RUNTIME_REF" >/dev/null 2>&1 || true
   fi
   [[ -n "$FIXED32_INGRESS_SECRET_FILE" ]] \

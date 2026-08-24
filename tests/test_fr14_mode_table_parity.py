@@ -1945,3 +1945,148 @@ def test_the_proxy_authority_list_picked_up_the_new_count_without_an_edit():
     assert "admissible_task_counts = tuple(" in proxy
     for stale in ("4,16", "4, 16", "(4, 16)"):
         assert stale not in proxy, f"the proxy restates a count list: {stale}"
+
+
+# ===========================================================================
+# SITE 27: evidence before judgment.
+#
+# The container-log capture sat behind TWO attestation gates -- the teardown
+# branch it lives in is only reached when the incarnation attestation passes,
+# and the removal helper re-attested again before running `docker logs`. A
+# boot whose container could not be attested therefore produced no log, and
+# site 27's diagnosis survived only because that same skip ALSO left the
+# corpse behind for a hand-run `docker logs` to salvage.
+# ===========================================================================
+
+VARIANT = "scripts/fr13_bigdenom_swe_serve_variant.sh"
+
+
+def _variant_text():
+    return (REPO / VARIANT).read_text()
+
+
+def test_capture_precedes_the_teardown_attestation_gate():
+    text = _variant_text()
+    capture = text.index('_fixed32_capture_container_log "$CONTAINER_RUNTIME_REF"')
+    gate = text.index('if ! _fixed32_container_identity_matches "$CONTAINER_RUNTIME_REF"')
+    assert capture < gate, (
+        "the container-log capture is behind the gate that can skip every "
+        "container operation -- which is the site-27 defect exactly"
+    )
+
+
+def test_capture_precedes_the_removal_helper_reattestation():
+    text = _variant_text()
+    body = text[text.index("_fixed32_remove_attested_container() {"):]
+    body = body[:body.index("\n}\n")]
+    first_capture = body.index("_fixed32_capture_container_log")
+    reattest = body.index("if ! _fixed32_container_incarnation_matches")
+    assert first_capture < reattest, (
+        "the removal helper still judges before it reads"
+    )
+    # the re-attestation still gates REMOVAL, which is the judgment it is for
+    assert "docker rm -f" in body
+    assert body.index("docker rm -f") > reattest
+
+
+def test_no_raw_docker_logs_capture_remains_in_the_teardown_path():
+    """One statement of the rule -- for CAPTURES, which is the concern.
+
+    `docker logs ... | tail -40` in the health wait is a boot-failure MESSAGE,
+    not an artifact, and is deliberately left alone: those paths exit, which
+    fires the EXIT trap, which now captures the full log unconditionally. What
+    must not exist twice is a capture that WRITES the artifact, because the
+    ordering rule would then be stated in two places.
+    """
+    text = _variant_text()
+    for lineno, line in enumerate(text.split("\n"), 1):
+        if line.lstrip().startswith("#") or "docker logs" not in line:
+            continue
+        if "_fixed32_capture_container_log" in line or "$tmp" in line:
+            continue
+        # Keyed on a redirect into an ARTIFACT, not on ">" -- `2>&1` contains
+        # one, and matching it made this fire on the health-wait diagnostic.
+        # That is the sixth time in this campaign a check has been fooled by
+        # text that merely looks like what it hunts, and the second that was
+        # mine.
+        # Keyed on the ARTIFACT whose ordering was the defect. Not on ">":
+        # `2>&1` contains one, and matching that made this fire on the
+        # health-wait diagnostic. Not on any artifact either:
+        # boot_log_snapshot.txt is a separate mid-run capture for the CUDA
+        # needle, taken while the container is provably healthy, and is not a
+        # second statement of the teardown rule. Sixth time in this campaign a
+        # check has been fooled by text resembling what it hunts; second that
+        # was mine.
+        assert "docker_full.log" not in line, (
+            f"{VARIANT}:{lineno} writes docker_full.log outside the helper, "
+            f"so the ordering rule is stated twice: {line.strip()}"
+        )
+
+
+@pytest.mark.parametrize(
+    "attest_ok,logs_ok,expect_lines",
+    [(False, True, 3), (True, True, 3), (False, False, 0)],
+    ids=["attestation-fails", "clean-teardown", "container-gone"],
+)
+def test_the_log_survives_a_failed_attestation(
+    tmp_path, attest_ok, logs_ok, expect_lines
+):
+    """The mutation proof: judgment fails, evidence still exists."""
+    import subprocess
+
+    text = _variant_text()
+    helper = text[
+        text.index("_fixed32_capture_container_log() {"):
+        text.index("\n}\n", text.index("_fixed32_capture_container_log() {")) + 3
+    ]
+    gate = text[
+        text.index("    # BEFORE the gate that can skip every container operation below."):
+        text.index('    elif [[ "$_fixed32_eager_kernel_diagnostic" == "1" ]]; then')
+    ]
+    fake_docker = (
+        'docker(){ if [[ "$1" == "logs" ]]; then '
+        + ('printf "L1\\nL2\\nL3\\n"; return 0; ' if logs_ok else "return 1; ")
+        + "fi; return 0; }\n"
+    )
+    matchers = (
+        f"_fixed32_container_identity_matches(){{ return {0 if attest_ok else 1}; }}\n"
+        f"_fixed32_container_incarnation_matches(){{ return {0 if attest_ok else 1}; }}\n"
+    )
+    script = (
+        "set -uo pipefail\n" + fake_docker + matchers
+        + f"ARMDIR={tmp_path}\nCONTAINER_RUNTIME_REF={'a' * 64}\n"
+        + "FIXED32_MODE=hydra27_fixed32\n"
+        + helper + gate.replace("    ", "  ")
+    )
+    subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    log = tmp_path / "docker_full.log"
+    lines = len(log.read_text().splitlines()) if log.exists() else 0
+    assert lines == expect_lines
+
+
+def test_the_capture_is_monotonic(tmp_path):
+    """A failed later capture must never destroy a good earlier one.
+
+    The removal path captures again just before `docker rm`, and by then the
+    container may be gone -- a plain redirect would truncate the evidence the
+    early capture had already secured.
+    """
+    import subprocess
+
+    text = _variant_text()
+    helper = text[
+        text.index("_fixed32_capture_container_log() {"):
+        text.index("\n}\n", text.index("_fixed32_capture_container_log() {")) + 3
+    ]
+    out = tmp_path / "docker_full.log"
+    script = (
+        "set -uo pipefail\n"
+        'docker(){ if [[ -n "$FAIL_LOGS" ]]; then return 1; fi; printf "GOOD\\n"; }\n'
+        + helper
+        + f'FAIL_LOGS=""\n_fixed32_capture_container_log {"a" * 64} {out}\n'
+        + f'FAIL_LOGS=1\n_fixed32_capture_container_log {"a" * 64} {out}\n'
+    )
+    subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert out.read_text().strip() == "GOOD"
+    leftovers = [p.name for p in tmp_path.iterdir() if ".capture." in p.name]
+    assert not leftovers, f"temp captures left behind: {leftovers}"

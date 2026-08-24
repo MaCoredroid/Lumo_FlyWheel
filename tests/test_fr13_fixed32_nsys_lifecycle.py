@@ -2431,6 +2431,9 @@ exit 99
                 _shell_function(VARIANT, "_fixed32_container_identity_matches"),
                 _shell_function(VARIANT, "_fixed32_container_incarnation_matches"),
                 _shell_function(VARIANT, "_fixed32_classify_container_state"),
+                # site 27: the removal helper now takes evidence before it
+                # judges, so the harness needs the capture helper too
+                _shell_function(VARIANT, "_fixed32_capture_container_log"),
                 _shell_function(VARIANT, "_fixed32_remove_attested_container"),
                 "CONTAINER=$ORIGINAL_NAME",
                 "FIXED32_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT",
@@ -2467,6 +2470,8 @@ exit 99
     assert completed.returncode == 0, completed.stderr
     calls = docker_calls.read_text(encoding="utf-8").splitlines()
     assert calls == [
+        # site 27: evidence first, before any attestation that could skip it
+        f"logs {CONTAINER_ID}",
         (
             "inspect --format {{.Id}} {{.Name}} {{.State.Status}} "
             "{{.State.Running}} {{.State.Paused}} {{.State.StartedAt}} "
@@ -2480,8 +2485,11 @@ exit 99
             f"{CONTAINER_ID}"
         ),
     ]
+    # site 27: it used to read "logs/removal". The capture now happens BEFORE
+    # this refusal, so only removal is skipped -- the message had to stop
+    # claiming otherwise, and the log below must EXIST despite the refusal.
     assert (
-        "logs/removal skipped without exact incarnation re-attestation"
+        "container removal skipped without exact incarnation re-attestation"
         in completed.stderr
     )
 
@@ -2491,11 +2499,18 @@ exit 99
     (
         (
             "restart_before_logs",
-            "logs/removal skipped without exact incarnation re-attestation",
+            "container removal skipped without exact incarnation re-attestation",
         ),
         (
+            # SITE 27 moved which check catches this. The drift is injected
+            # after the `logs` call; with the capture now happening FIRST, the
+            # first re-attestation is the one that runs after it and so it is
+            # the one that sees the drift. The second check still exists and
+            # still guards removal -- what changed is that a drift can no
+            # longer slip past an earlier gate that used to run before the
+            # capture. Removal is refused either way, which is the property.
             "started_at_after_logs",
-            "container removal skipped after incarnation drift",
+            "container removal skipped without exact incarnation re-attestation",
         ),
     ),
 )
@@ -2550,6 +2565,9 @@ exit 1
                 "set -uo pipefail",
                 _shell_function(VARIANT, "_fixed32_container_incarnation_matches"),
                 _shell_function(VARIANT, "_fixed32_classify_container_state"),
+                # site 27: the removal helper now takes evidence before it
+                # judges, so the harness needs the capture helper too
+                _shell_function(VARIANT, "_fixed32_capture_container_log"),
                 _shell_function(VARIANT, "_fixed32_remove_attested_container"),
                 "CONTAINER=$CONTAINER_NAME",
                 "FIXED32_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT",
@@ -2588,13 +2606,23 @@ exit 1
     assert completed.returncode == 0, completed.stderr
     calls = docker_calls.read_text(encoding="utf-8").splitlines()
     assert not any(call.startswith("rm ") for call in calls)
-    if drift_mode == "restart_before_logs":
-        assert len(calls) == 2
-        assert not after_logs.exists()
-    else:
-        assert len(calls) == 4
-        assert calls[1] == f"logs {CONTAINER_ID}"
-        assert after_logs.exists()
+    # SITE 27. This used to assert that restart_before_logs produced NO log --
+    # the defect, written down as an expectation: an incarnation that drifted
+    # before the capture meant no evidence at all, and a death in that state
+    # was unreadable. Capture now happens FIRST and unconditionally, so both
+    # drift modes keep their log; what the drift still prevents is REMOVAL,
+    # which is the judgment the attestation is actually for.
+    assert calls[0] == f"logs {CONTAINER_ID}", (
+        "the capture is no longer the first thing teardown does"
+    )
+    assert len(calls) == 3
+    assert after_logs.exists(), (
+        "evidence must survive an incarnation drift in either direction"
+    )
+    # (Non-emptiness is not asserted here: this harness's fake docker emits
+    # nothing, so it would test the fake rather than the code. That the helper
+    # refuses to install an empty capture over a good one is proved by
+    # test_the_capture_is_monotonic, whose fake does emit.)
     assert expected_error in completed.stderr
 
 
@@ -2686,6 +2714,9 @@ exit 96
                     VARIANT,
                     "_fixed32_record_container_cleanup_failure",
                 ),
+                # site 27: the removal helper now takes evidence before it
+                # judges, so the harness needs the capture helper too
+                _shell_function(VARIANT, "_fixed32_capture_container_log"),
                 _shell_function(VARIANT, "_fixed32_remove_attested_container"),
                 "CONTAINER=$CONTAINER_NAME",
                 "FIXED32_CONTAINER_STARTED_AT=$CONTAINER_STARTED_AT",
