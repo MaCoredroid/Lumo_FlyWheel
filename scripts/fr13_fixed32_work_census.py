@@ -210,8 +210,24 @@ TAW_EXACT_COMMIT_PROGRAMS_PER_REQUEST = WALK_CAP
 TAW_ALL_PARENT_SELF_ROWS_PER_REQUEST = 13
 TAW_ALL_PARENT_TARGET_ROWS_PER_REQUEST = 17
 TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
+# SITE 27. The audited payload carries the geometry and the reference route's
+# tensor-call census, and both are walk-proportional -- so this was never one
+# number, it was hydra27's number in a slot with no room for a second profile.
+# hydra27 and tail6 share a digest because they share a walk depth.
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
+    "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab"
+)
+TAW_SOURCE_CONTRACT_SHA256_BY_WALK: dict[int, str] = {
+    12: TAW_SOURCE_CONTRACT_SHA256,
+    16: "fd262662637d36f6e8efe534bb674f676061aaa172d4e82b1f9ce111a743e2eb",
+}
+# ERA-SCOPED, and the reason is banked evidence. Every runroot recorded before
+# the site-27 re-attestation carries the prior digest, and this validator runs
+# over old runroots. A prior era is ACCEPTED here and nowhere else: the gates
+# that launch new arms pin the current digest, so a fresh run cannot quietly
+# claim a retired source.
+TAW_SOURCE_CONTRACT_SHA256_PRIOR_ERAS: tuple[str, ...] = (
+    "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0",
 )
 TAW_CFWD_LOGIT_DIRECT_SOURCE_SCHEMA = (
     "fr13.fixed32.cfwd_logit_direct.integration_source.v2"
@@ -2096,21 +2112,33 @@ def validate_event(raw: object, *, source: str) -> ValidatedEvent:
         if taw_route == TAW_CFWD_LOGIT_DIRECT_PRODUCTION_ROUTE
         else TAW_SOURCE_CONTRACT_SCHEMA
     )
-    expected_source_sha256 = (
-        TAW_CFWD_LOGIT_DIRECT_SOURCE_SHA256
-        if taw_route == TAW_CFWD_LOGIT_DIRECT_PRODUCTION_ROUTE
-        else TAW_SOURCE_CONTRACT_SHA256
-    )
+    # SITE 27: the audited digest belongs to the SERVED walk depth, and a
+    # runroot banked before the re-attestation belongs to a declared prior era.
+    # Naming both in the refusal is the point -- the round-22 boot failure cost
+    # a recovered 398-line log because its message named one side only.
+    if taw_route == TAW_CFWD_LOGIT_DIRECT_PRODUCTION_ROUTE:
+        accepted_source_sha256 = (TAW_CFWD_LOGIT_DIRECT_SOURCE_SHA256,)
+    else:
+        current = TAW_SOURCE_CONTRACT_SHA256_BY_WALK.get(_walk)
+        if current is None:
+            raise CensusError(
+                f"{source}.taw.source_contract_sha256: no audited TAW source "
+                f"digest for walk {_walk}; audited depths are "
+                f"{sorted(TAW_SOURCE_CONTRACT_SHA256_BY_WALK)}"
+            )
+        accepted_source_sha256 = (current,) + TAW_SOURCE_CONTRACT_SHA256_PRIOR_ERAS
+    expected_source_sha256 = accepted_source_sha256[0]
     _expect(
         taw_source_schema,
         expected_source_schema,
         f"{source}.taw.source_contract_schema",
     )
-    _expect(
-        taw_source_sha256,
-        expected_source_sha256,
-        f"{source}.taw.source_contract_sha256",
-    )
+    if taw_source_sha256 not in accepted_source_sha256:
+        raise CensusError(
+            f"{source}.taw.source_contract_sha256: {taw_source_sha256} is not "
+            f"the audited digest at walk {_walk} ({expected_source_sha256}) "
+            f"nor a declared prior era {list(accepted_source_sha256[1:])}"
+        )
     raw_tensor_calls = _mapping(
         taw["tensor_call_census"],
         f"{source}.taw.tensor_call_census",
@@ -3980,7 +4008,10 @@ def _reference_taw(batch_size: int, walk: int = WALK_CAP) -> dict[str, Any]:
         ),
         "floating_sampling_reimplementation": False,
         "source_contract_schema": TAW_SOURCE_CONTRACT_SCHEMA,
-        "source_contract_sha256": TAW_SOURCE_CONTRACT_SHA256,
+        # SITE 27: the reference event describes the SERVED depth, digest
+        # included -- a hydra31 reference carrying hydra27's digest would be the
+        # instrument asserting the wrong source for the run it describes.
+        "source_contract_sha256": TAW_SOURCE_CONTRACT_SHA256_BY_WALK[walk],
         "tensor_call_census": taw_tensor_call_census(walk),
         "count_route": TAW_COUNT_ROUTE,
         "rng_route": TAW_RNG_ROUTE,

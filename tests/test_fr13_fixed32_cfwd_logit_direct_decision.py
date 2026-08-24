@@ -675,7 +675,7 @@ def test_served_integer_walk_reads_physical_slots_without_topology_maps() -> Non
     base_source = BASE_PATH.read_text(encoding="utf-8")
     taw_kernel_contract = base_source[
         base_source.index("_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (") :
-        base_source.index("_FR13_FIXED32_TAW_GEOMETRY = {")
+        base_source.index("_FR13_FIXED32_TAW_GEOMETRY_PROFILE_INVARIANT = {")
     ]
     assert "_fr13_fixed32_taw_packed_physical_slot_commit_kernel" not in (
         taw_kernel_contract
@@ -704,7 +704,7 @@ def test_cfwd_integration_source_contract_is_separate_and_fail_closed(
         ),
     }
     assert device._FR13_FIXED32_TAW_SOURCE_SHA256 == (
-        "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
+        "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab"
     )
     assert device._FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS == (
         "_fr13_fixed32_taw_exact_commit_kernel",
@@ -752,7 +752,7 @@ def test_packed_cfwd_keeps_taw_b1_b4_source_identity_exact() -> None:
             "fr13-fixed32-taw-all-parent-v7"
         )
         assert contract["source_contract_sha256"] == (
-            "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
+            "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab"
         )
 
 

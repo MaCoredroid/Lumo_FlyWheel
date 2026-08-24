@@ -56,7 +56,7 @@ def test_wrapper_preserves_certified_commit_and_reuses_its_uniform_buffer() -> N
     assert "fr13_fixed32_cfwd_logit_direct_commit" not in source_functions
     kernel_functions = source[
         source.index("_FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (") :
-        source.index("_FR13_FIXED32_TAW_GEOMETRY = {")
+        source.index("_FR13_FIXED32_TAW_GEOMETRY_PROFILE_INVARIANT = {")
     ]
     assert "_fr13_fixed32_taw_physical_slot_commit_kernel" not in kernel_functions
 
@@ -221,7 +221,7 @@ def test_final_flush_emits_only_zero_mismatch_real_task_record(
         module._FR13_CFWD_LOGIT_DIRECT_INTEGRATION_SOURCE_SHA256
     )
     assert record["incumbent_source_sha256"] == (
-        "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
+        "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab"
     )
     assert record["counted_graph_replays"] == 2
     assert record["decision_values_compared"] == 162

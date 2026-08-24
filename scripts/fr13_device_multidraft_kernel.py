@@ -1664,8 +1664,28 @@ _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 # The ONLY source change under this re-attestation is how `native_precompute`
 # resolves at the three arm points; no sampler arithmetic moved, and with the
 # flag clear the resolution is identical to the prior expression.
+#
+# RE-ATTESTED 2026-08-24 by SITE 27. Prior value
+# d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0, which every
+# banked artifact before this date carries and which the work census still
+# accepts as a declared prior era.
+#
+# WHY IT COULD NOT BE AVOIDED. The defect is a walk-derived number written down
+# in three attested functions -- the geometry expectation and the by-route
+# census inside _fr13_fixed32_taw_source_contract, the reference-route census in
+# _fr13_fixed32_taw_tensor_call_census, and the published slot counts in
+# _fr13_fixed32_publish_work. All three are inside the audited closure, so there
+# is no edit that fixes hydra31's boot and leaves the digest alone. No sampler
+# arithmetic moved: at walk 12 every derived value equals the literal it
+# replaced, which the pins census proves field by field.
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
+    "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab"
+)
+# The digest every artifact banked before the site-27 re-attestation carries.
+# Kept as a NAMED PRIOR ERA, not deleted: the work census validates old runroots
+# and they must keep validating.
+_FR13_FIXED32_TAW_SOURCE_SHA256_PRIOR_ERAS: tuple[str, ...] = (
+    "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0",
 )
 # Per-mode source-row schedule digests. The observable binding compares the
 # schedule actually constructed at boot against these, so a mode that is handed
@@ -1680,6 +1700,26 @@ _FR13_FIXED32_TAW_SCHEDULE_DIGESTS: dict[str, str] = {
     ),
     "hydra31_fixed32": (
         "3f7877c851a5554dec184325b46a0859d79e04113290482bb8df0eccaa7e3ec9"
+    ),
+}
+# SITE 27: PER-MODE SOURCE DIGESTS, same shape and same machinery as the
+# schedule digests above.
+#
+# The audited payload carries the geometry and the default route's tensor-call
+# census, and BOTH are walk-proportional -- so the digest was never one number,
+# it was hydra27's number in a slot that had no room for a second profile. The
+# scalar above keeps its name and its value: fourteen places outside this module
+# mirror it, every one of them a hydra27/tail6-era gate or credential, and the
+# tail6/hydra27 entries below are that same object rather than a retyped copy.
+#
+# hydra31's entry is RECOMPUTED, not invented: tests/test_fr14_taw_walk_pins.py
+# rebuilds every entry from the module's own canonical payload, exactly as the
+# schedule digests are rebuilt from fr13_fixed32_topology.
+_FR13_FIXED32_TAW_SOURCE_DIGESTS: dict[str, str] = {
+    "tail6_fixed32": _FR13_FIXED32_TAW_SOURCE_SHA256,
+    "hydra27_fixed32": _FR13_FIXED32_TAW_SOURCE_SHA256,
+    "hydra31_fixed32": (
+        "fd262662637d36f6e8efe534bb674f676061aaa172d4e82b1f9ce111a743e2eb"
     ),
 }
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
@@ -1741,33 +1781,109 @@ _FR13_FIXED32_TAW_KERNEL_SOURCE_FUNCTIONS = (
     "_fr13_fixed32_taw_exact_commit_kernel",
     "_fr13_fixed32_taw_all_parent_commit_kernel",
 )
-_FR13_FIXED32_TAW_GEOMETRY = {
+# --- SITE 27: the pins that carry a walk-derived number ----------------------
+# SITE 13 fixed every READ of the walk cap. It did not fix the STATEMENTS of it.
+# A pin is a read too -- a slower one, made once when someone wrote the number
+# down -- and hydra31 met them one at a time: the geometry pin refused round 22
+# at boot with 16 against 12, and the tensor-call census sat one assertion
+# behind it with the same 12.
+#
+# The rule this file now follows, so there is no fourth statement:
+#
+#   DERIVE      any pinned number that is a function of the walk depth. The
+#               derivation is the same one the execution path uses, so the two
+#               cannot disagree; the arithmetic below reproduces the previous
+#               literals EXACTLY at walk 12, which is the proof it is the same
+#               table and not a new one.
+#
+#   PIN, WITH   a number that is genuinely profile-invariant (the five geometry
+#   THE REASON  fields below are flat module constants in the topology, not
+#               per-profile entries), or one measured on a route whose own
+#               selector refuses every other profile. Those keep their literal
+#               and say why next to it.
+#
+# Where the RUNTIME cap's teeth live: _fr13_fixed32_runtime_contract compares
+# the env-declared FR13_FIXED32_TAW_WALK_CAP against the authority and refuses
+# naming both numbers. Deriving here moves no teeth, it removes a statement that
+# was wrong for one of the two profiles and had no value that was right for both.
+
+# PINNED, PROFILE-INVARIANT. hydra27 and hydra31 share all five: physical
+# drafts 31, rows 32, sampler fan-out 3, publish capacity 32, and the commit
+# path capacity 16 -- which BOUNDS the walk (topology refuses a walk deeper than
+# it, for either profile) rather than deriving from it. Comparing the topology's
+# flat constants against these literals is what still has teeth in the geometry
+# check, and it is unchanged.
+_FR13_FIXED32_TAW_GEOMETRY_PROFILE_INVARIANT = {
     "physical_drafts": 31,
     "physical_rows": 32,
-    "walk_cap": 12,
     "fanout": 3,
     "output_capacity": 32,
     "accepted_path_capacity": 16,
 }
-_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS = {
-    "walk_levels": 12,
-    "full_vocab_row_gathers": 24,
-    "full_vocab_fp32_casts": 24,
-    "full_vocab_softmax_calls": 24,
-    "full_vocab_normalizations": 36,
-    "full_vocab_cdf_calls": 24,
-    "source_cdf_calls": 12,
-    "qmix_zero_fills": 12,
-    "qmix_scatter_add_calls": 12,
-    "residual_subtract_calls": 12,
-    "residual_clamp_calls": 12,
-    "residual_where_calls": 24,
-    "output_scatter_calls": 0,
-    "path_scatter_calls": 0,
-    "exact_commit_launches": 12,
-    "exact_commit_programs_per_request": 12,
-    "floating_sampling_reimplementation": False,
-}
+
+
+def _fr13_fixed32_taw_geometry(walk_cap: int) -> dict[str, int]:
+    """The audited TAW geometry at a given walk depth."""
+    return {
+        **_FR13_FIXED32_TAW_GEOMETRY_PROFILE_INVARIANT,
+        "walk_cap": int(walk_cap),
+    }
+
+
+def _fr13_fixed32_taw_walk_tensor_call_census(walk: int) -> dict[str, Any]:
+    """The TAW call table is walk-proportional; derive it, do not retype it.
+
+    Identical arithmetic to fr13_fixed32_work_census.taw_tensor_call_census,
+    which has derived this table from the served walk since site 13 -- the
+    validator was already honest while the publisher's pin was not. At walk 12
+    every value below is the literal this replaced.
+    """
+    walk = int(walk)
+    return {
+        "walk_levels": walk,
+        "full_vocab_row_gathers": 2 * walk,
+        "full_vocab_fp32_casts": 2 * walk,
+        "full_vocab_softmax_calls": 2 * walk,
+        "full_vocab_normalizations": 3 * walk,
+        "full_vocab_cdf_calls": 2 * walk,
+        "source_cdf_calls": walk,
+        "qmix_zero_fills": walk,
+        "qmix_scatter_add_calls": walk,
+        "residual_subtract_calls": walk,
+        "residual_clamp_calls": walk,
+        "residual_where_calls": 2 * walk,
+        # NOT walk-derived: the exact commit writes its output and path rows
+        # from the kernel, so these stay zero at every depth.
+        "output_scatter_calls": 0,
+        "path_scatter_calls": 0,
+        "exact_commit_launches": walk,
+        "exact_commit_programs_per_request": walk,
+        "floating_sampling_reimplementation": False,
+    }
+
+
+# THE HYDRA27-ERA VALUES, kept under their original names because they are what
+# the hydra27/tail6-gated PASS record and the credential-bound CFWD logit-direct
+# source digest read, and those must stay byte-identical. They are no longer
+# TYPED, they are derived at hydra27's depth, and the source contract asserts
+# both against the topology authority's own hydra27 entry so the era pin cannot
+# drift away from the profile it claims to describe.
+_FR13_FIXED32_TAW_HYDRA27_WALK_CAP = 12
+_FR13_FIXED32_TAW_GEOMETRY = _fr13_fixed32_taw_geometry(
+    _FR13_FIXED32_TAW_HYDRA27_WALK_CAP
+)
+_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS = _fr13_fixed32_taw_walk_tensor_call_census(
+    _FR13_FIXED32_TAW_HYDRA27_WALK_CAP
+)
+# PINNED, WITH THE REASON: the native precompute and production routes are not
+# walk-proportional -- they are MEASURED shapes of a different execution, which
+# is why 54 row gathers sit against 13 walk levels rather than 26. Nothing here
+# may be derived, and nothing here needs to be: both selectors refuse any mode
+# but tail6/hydra27 by their own guard (_fr13_fixed32_taw_native_selector
+# requires an exact fixed32 mode; _fr13_fixed32_taw_validate_pass_record refuses
+# a PASS record from any other mode), so these tables are structurally
+# unreachable at any depth but 12. fr13_fixed32_work_census pins the identical
+# numbers absolutely for the same reason, so the two cannot drift apart.
 _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS = {
     **_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
     "walk_levels": 13,
@@ -3128,7 +3244,12 @@ def _fr13_fixed32_taw_tensor_call_census(
         # census, because later passes reason from the census.
         census = _FR13_FIXED32_TAW_SOFTMAX_CACHE_TENSOR_CALL_CENSUS
     else:
-        census = _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
+        # SITE 27: the reference route walks the served depth, so its census is
+        # derived at that depth. Every other branch above is a route whose own
+        # selector refuses any profile but hydra27/tail6, so those stay pinned.
+        census = _fr13_fixed32_taw_walk_tensor_call_census(
+            _fr13_fixed32_walk_cap(_fr13_fixed32_topology())
+        )
     return dict(census)
 
 
@@ -3151,13 +3272,16 @@ def _fr13_fixed32_taw_source_contract(
         functions.append((name, function))
         codes.append((name, code))
 
+    expected_digest = _fr13_fixed32_taw_source_digest(topology)
     if _FR13_FIXED32_TAW_SOURCE_CACHE is not None:
         if _FR13_FIXED32_TAW_SOURCE_CODES != tuple(codes):
             raise RuntimeError("FR13 fixed32 TAW source objects changed after binding")
         digest = _FR13_FIXED32_TAW_SOURCE_CACHE["source_contract_sha256"]
-        if digest != _FR13_FIXED32_TAW_SOURCE_SHA256:
+        if digest != expected_digest:
             raise RuntimeError(
-                "FR13 fixed32 TAW pinned source digest changed after binding"
+                "FR13 fixed32 TAW pinned source digest changed after binding: "
+                f"cached {digest} against {expected_digest} for the served walk "
+                f"{_fr13_fixed32_walk_cap(topology)}"
             )
         return {
             **_FR13_FIXED32_TAW_SOURCE_CACHE,
@@ -3166,19 +3290,48 @@ def _fr13_fixed32_taw_source_contract(
             ),
         }
 
+    # SITE 27, THE ERA PIN'S OWN CHECK. The hydra27-era constants are still
+    # literals under their original names because a credential-bound digest and
+    # the hydra27-gated PASS records read them. They must not be allowed to
+    # drift away from the profile they claim to describe, so they are asserted
+    # against the topology authority's hydra27 entry -- once, here, on the
+    # binding path that every fixed32 boot runs.
+    hydra27_walk = int(topology.walk_cap_for_mode(topology.PROFILE_HYDRA27))
+    if (
+        _FR13_FIXED32_TAW_GEOMETRY
+        != _fr13_fixed32_taw_geometry(hydra27_walk)
+        or _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS
+        != _fr13_fixed32_taw_walk_tensor_call_census(hydra27_walk)
+    ):
+        raise RuntimeError(
+            "FR13 fixed32 TAW hydra27-era pins disagree with the topology "
+            f"authority: authority walk {hydra27_walk}, pinned geometry "
+            f"{_FR13_FIXED32_TAW_GEOMETRY['walk_cap']}, pinned census "
+            f"{_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS['walk_levels']}"
+        )
+
     geometry = {
         "physical_drafts": int(topology.PHYSICAL_DRAFTS),
         "physical_rows": int(topology.PHYSICAL_ROWS),
         # SITE 13's silent sibling: this field is PROVENANCE. Left as the
         # module scalar it would record walk_cap=12 for a run executing 16.
+        # SITE 27: and the PIN it was compared against was that same module
+        # scalar written down, so an honest 16 met a stale 12 and round 22 died
+        # at boot. The expectation below now derives at the served depth; the
+        # five profile-invariant fields it carries are still literals, so this
+        # comparison keeps its teeth against a topology that moves.
         "walk_cap": _fr13_fixed32_walk_cap(topology),
         "fanout": int(topology.SAMPLER_MAX_FANOUT),
         "output_capacity": int(topology.OUTPUT_PUBLISH_CAPACITY),
         "accepted_path_capacity": int(topology.ACCEPTED_PATH_CAPACITY),
     }
-    if geometry != _FR13_FIXED32_TAW_GEOMETRY:
+    expected_geometry = _fr13_fixed32_taw_geometry(geometry["walk_cap"])
+    if geometry != expected_geometry:
         raise RuntimeError(
-            "FR13 fixed32 TAW source geometry drift: " + repr(geometry)
+            "FR13 fixed32 TAW source geometry drift: "
+            + repr(geometry)
+            + " against "
+            + repr(expected_geometry)
         )
 
     normalized_sources = {}
@@ -3236,7 +3389,13 @@ def _fr13_fixed32_taw_source_contract(
             "geometry": geometry,
             "topology_binding": _fr13_fixed32_taw_topology_binding(topology),
             "tensor_call_census_by_route": {
-                "default": _FR13_FIXED32_TAW_TENSOR_CALL_CENSUS,
+                # SITE 27: the default (reference) route IS walk-proportional,
+                # so the audited table is the served depth's, not hydra27's.
+                # This is what makes the digest below profile-specific, and why
+                # it is now looked up per mode instead of being one number.
+                "default": _fr13_fixed32_taw_walk_tensor_call_census(
+                    geometry["walk_cap"]
+                ),
                 "native_precompute": (
                     _FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS
                 ),
@@ -3250,10 +3409,11 @@ def _fr13_fixed32_taw_source_contract(
         sort_keys=True,
     )
     digest = hashlib.sha256(canonical.encode("ascii")).hexdigest()
-    if digest != _FR13_FIXED32_TAW_SOURCE_SHA256:
+    if digest != expected_digest:
         raise RuntimeError(
             "FR13 fixed32 TAW source digest drift: "
-            f"{digest} != {_FR13_FIXED32_TAW_SOURCE_SHA256}"
+            f"{digest} != {expected_digest} at served walk "
+            f"{geometry['walk_cap']}"
         )
     contract = {
         "source_contract_schema": _FR13_FIXED32_TAW_SOURCE_SCHEMA,
@@ -3290,6 +3450,27 @@ def _fr13_fixed32_walk_cap(topology, mode: str | None = None) -> int:
     if not mode:
         return int(topology.WALK_CAP)
     return int(topology.walk_cap_for_mode(mode))
+
+
+def _fr13_fixed32_taw_source_digest(topology, mode: str | None = None) -> str:
+    """The audited source digest for the SERVED mode.
+
+    SITE 27. The audited payload contains walk-proportional fields, so there is
+    one digest per walk depth and the mode chooses it. An unset mode is the
+    non-fixed32 route, which has always audited at hydra27's depth; a mode that
+    is set but unknown refuses, for the same reason the walk cap does.
+    """
+    if mode is None:
+        mode = os.environ.get("FR13_FIXED32_MODE", "").strip()
+    if not mode:
+        return _FR13_FIXED32_TAW_SOURCE_SHA256
+    try:
+        return _FR13_FIXED32_TAW_SOURCE_DIGESTS[mode]
+    except KeyError:
+        raise RuntimeError(
+            f"FR13 fixed32 TAW source digest is unknown for mode {mode!r}; "
+            f"audited modes are {sorted(_FR13_FIXED32_TAW_SOURCE_DIGESTS)}"
+        ) from None
 
 
 def _fr13_fixed32_runtime_contract(mode: str) -> tuple[Any, int]:
@@ -6119,7 +6300,15 @@ def _fr13_fixed32_publish_work(
         ],
         "buffer_capacity": int(topology.OUTPUT_PUBLISH_CAPACITY),
         "loop_iterations": int(loop_iterations),
-        "uniform_slots": int(topology.TAW_UNIFORM_SLOTS) * batch_size,
+        # SITE 27, THE PINS FAMILY. topology.TAW_UNIFORM_SLOTS and its two
+        # siblings are WALK_CAP*3, *2 and *1 computed off the topology's FLAT
+        # hydra27 scalar -- the same module scalar site 13 found. The uniform
+        # tensor is already ALLOCATED at the served depth, and the census
+        # validator already EXPECTS walk*3*batch, so publishing 36 for a 16-deep
+        # walk would have been the next refusal, one rung behind the geometry.
+        # Derive from the served cap, which is what the allocation and the
+        # validator both use.
+        "uniform_slots": published_walk_cap * 3 * batch_size,
         "child_lanes": (
             target_rows * int(topology.SAMPLER_MAX_FANOUT) * batch_size
         ),
@@ -6131,12 +6320,13 @@ def _fr13_fixed32_publish_work(
         "qmix_rows": target_rows * batch_size,
         "residual_rows": target_rows * batch_size,
         "row_scatter_slots": (
-            int(topology.TAW_ROW_SCATTER_SLOTS)
+            published_walk_cap
+            * 2
             * batch_size
             * product_write_multiplier
         ),
         "path_scatter_slots": (
-            int(topology.TAW_PATH_SCATTER_SLOTS)
+            published_walk_cap
             * batch_size
             * product_write_multiplier
         ),
@@ -6154,11 +6344,16 @@ def _fr13_fixed32_publish_work(
         or source_contract["source_contract_schema"]
         != _FR13_FIXED32_TAW_SOURCE_SCHEMA
         or source_contract["source_contract_sha256"]
-        != _FR13_FIXED32_TAW_SOURCE_SHA256
+        != _fr13_fixed32_taw_source_digest(topology, mode)
         or source_contract["tensor_call_census"]
         != _fr13_fixed32_taw_tensor_call_census(batch_size=batch_size)
     ):
-        raise RuntimeError("FR13 fixed32 TAW source contract drift at publish")
+        raise RuntimeError(
+            "FR13 fixed32 TAW source contract drift at publish: "
+            f"{source_contract.get('source_contract_sha256')!r} against "
+            f"{_fr13_fixed32_taw_source_digest(topology, mode)!r} for mode "
+            f"{mode!r}"
+        )
     overlap = (
         set(taw).intersection(source_contract)
         | set(taw).intersection(layout_contract)

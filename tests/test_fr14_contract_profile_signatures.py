@@ -2030,7 +2030,7 @@ def test_hydra27_topology_values_are_byte_identical_to_the_baseline() -> None:
 # re-attest the source-closure digest through the established machinery. Two of
 # the 47 digested functions changed, both BOOT-TIME VALIDATORS, and the
 # evidence below is what the pairing rests on.
-TAW_SOURCE_DIGEST = "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0"
+TAW_SOURCE_DIGEST = "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab"
 # Every digest this pin has ever carried. A mirror holding ANY of them is a
 # mirror that was missed, so the sweep checks all of them rather than only the
 # immediately previous one.
@@ -2143,6 +2143,13 @@ def test_the_re_attestation_blast_radius_is_the_three_validators() -> None:
     # Site 13 converted every walk-cap reader on the execution path, so the
     # changed set is larger than the schedule work's three. What must never
     # happen is a digested function changing that is not on this list.
+    #
+    # SITE 27 added _fr13_fixed32_taw_tensor_call_census, and the measured blast
+    # radius of that re-attestation is EXACTLY the three functions its own
+    # comment names: the geometry expectation and the by-route census live in
+    # _fr13_fixed32_taw_source_contract, the reference-route census in
+    # _fr13_fixed32_taw_tensor_call_census, and the published slot counts in
+    # _fr13_fixed32_publish_work. Nothing else in the audited closure moved.
     assert set(changed) <= {
         "_fr13_fixed32_bind_schedule_to_profile",
         "_fr13_fixed32_publish_work",
@@ -2150,6 +2157,7 @@ def test_the_re_attestation_blast_radius_is_the_three_validators() -> None:
         "_fr13_fixed32_taw_execute_exact_cuda",
         "_fr13_fixed32_taw_execute_torch",
         "_fr13_fixed32_taw_source_contract",
+        "_fr13_fixed32_taw_tensor_call_census",
         "_fr13_fixed32_taw_topology_binding",
         "_fr13_fixed32_topology",
         "fr13_fixed32_taw_commit",
