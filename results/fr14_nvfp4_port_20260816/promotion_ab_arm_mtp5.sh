@@ -92,8 +92,13 @@ mkdir -p "$RUNROOT_ABS"
 echo "===== $ARM (drafter-neutrality probe) $(date -u +%FT%TZ) ====="
 env RUNROOT="$RUNROOT_ABS" \
   OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S=9000 \
-  FR13_FIXED32_B1_DIAGNOSTIC=1 \
-  FR13_B1_DIAGNOSTIC_TASK_PROFILE="$MTP5_TASK" \
+  # NO FR13_FIXED32_B1_DIAGNOSTIC HERE, and this is not an omission.
+  # The diagnostic route is a FIXED32 concept. The variant sets FIXED32_MODE only
+  # for the fixed32 kinds (:519/:534), so on LAUNCHER=native it stays empty, the
+  # --fixed32-* runner args are never passed (:2824), fixed32_enabled is False, and
+  # run_swe_bench_q36_a.py:9981 hard-errors: 'FR13_FIXED32_B1_DIAGNOSTIC=1 requires
+  # fixed32 runtime binding'. Single-task selection here comes from the SUBSET
+  # alone. Verified by reading the gate rather than by burning a boot on it.
   FR10_METRICS=0 \
   TMPDIR=/home/mark/shared/tmp-scratch \
   bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" nativemtp5 "$SUBSET" \
