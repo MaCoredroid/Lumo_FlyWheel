@@ -1,0 +1,92 @@
+{
+  "instance_id": "astropy__astropy-13033",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-08-24T18:48:00Z",
+  "repo": "astropy/astropy",
+  "base_commit": "298ccb478e6bf092953bca67a3d29dc6c35f6752",
+  "agent": {
+    "elapsed_s": 1617.769,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-qwen-astropy__astropy-13033-7353d6b87d086c97",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
+    "patch_down_rc": 0,
+    "agent_env": "instance_image",
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13033:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64",
+    "fr14_network_boundary": {
+      "net": "fr14-agent-isolated",
+      "bridge": "fr14agent0",
+      "gateway": "172.31.99.1",
+      "proxy_port": "8023",
+      "rules": "9",
+      "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+    },
+    "campaign_budget_s": null,
+    "budget_capped": false
+  },
+  "codex": {
+    "elapsed_s": 1617.769,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-qwen-astropy__astropy-13033-7353d6b87d086c97",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
+    "patch_down_rc": 0,
+    "agent_env": "instance_image",
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13033:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64",
+    "fr14_network_boundary": {
+      "net": "fr14-agent-isolated",
+      "bridge": "fr14agent0",
+      "gateway": "172.31.99.1",
+      "proxy_port": "8023",
+      "rules": "9",
+      "fingerprint": "e3cc51795829dca6a7ac83a86e7a8e52f4937b469882bbfb2e70c356c6f1b5e4"
+    },
+    "campaign_budget_s": null,
+    "budget_capped": false
+  },
+  "vllm_request_metrics_bytes": 0,
+  "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
+  "patch_bytes": 912,
+  "eval": {
+    "exit_code": 1,
+    "elapsed_s": 52.559,
+    "offloaded": true,
+    "eval_host": "alienware",
+    "evaluator": {
+      "mode": "remote_x86_worker",
+      "host": "alienware",
+      "base": "~/swe_eval_offload",
+      "worker": "~/swe_eval_offload/swe_eval_x86_worker.py",
+      "interpreter": "~/swe_eval_offload/venv/bin/python",
+      "worker_sha256": "4a06bbe937af3c04c3897564d7bc27cdad8d8abc8c13fd156650e203e30994da",
+      "worker_bytes": 8046,
+      "interpreter_realpath": "/usr/bin/python3.12"
+    }
+  },
+  "eval_report": {
+    "track": "swe_bench",
+    "instance_id": "astropy__astropy-13033",
+    "model_id": "qwen3.8-27b-nvfp4-radixark::sglang-eagle3-1-4::qwen-code-0.19.4::fr14-sglang16",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
+    "verdict": "failed",
+    "passed": false,
+    "failure_mode": "tests_failed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 50.865,
+    "error": null,
+    "arch": "x86_64",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
+    "run_id": "x86eval-out-1787598899",
+    "namespace": "swebench",
+    "cache_level": "env"
+  },
+  "ended_at": "2026-08-24T19:15:51Z"
+}
