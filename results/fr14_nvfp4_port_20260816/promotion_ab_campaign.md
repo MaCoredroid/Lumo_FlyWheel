@@ -5532,3 +5532,62 @@ VACUOUS fires 9 times (every boot probe and aborted run), 120 clean. Honest limi
 and written into the docstring: one positive example. A degeneration that kept narrating, or
 called tools while looping, passes all three terms. It is a floor, and c5 remains the
 independent second opinion because it keys on the seam rather than the prose.
+
+# MTP-5 PROBE, REPLICATE A — DIED AT BOOT. THE PROBE'S TWO REQUIREMENTS ARE JOINTLY UNSATISFIABLE
+
+Runroot `output/fr14_mtp5_astropy13236_a_20260824T120604Z`, 12:06:06Z -> 12:08:49Z,
+**serve_rc=2**, 2m43s, no task dir, no trace, no patch. Zero containers after.
+
+## Everything the last four blockers were about is now CORRECT
+
+    served_model.json   path=/models/qwen3.8-27b-nvfp4-radixark
+                        checkpoint_identity=5ec8e240...   overridden=true
+    purity attestation  ALL_PASS (patcher absent / import census / attention backend / vllm-at-rest)
+    warmup skip         ran=false, "caller-requested-for-comparability"
+
+The model pin landed, the right weights were served for the first time in this probe's life,
+and the engine still refused.
+
+## ROOT CAUSE, confirmed three independent ways
+
+    ValueError: There is no module or parameter named 'lm_head.input_scale' in
+    Qwen3_5ForCausalLM. The available parameters belonging to lm_head are: {'lm_head.weight'}
+
+1. The checkpoint really carries it: its index lists `lm_head.input_scale`, `.weight`,
+   `.weight_scale`, `.weight_scale_2`.
+2. It is MIXED_PRECISION -- NVFP4 body plus FP8 projections; the engine logs BOTH "Detected
+   ModelOpt fp8 checkpoint" and "Detected ModelOpt NVFP4 checkpoint", quantization=modelopt_mixed.
+3. **We already have a patch for precisely this failure**: `scripts/fr14_patch_nvfp4_lmhead.py`,
+   whose docstring names this error's sibling verbatim and documents FOUR gaps that must all
+   close before a quantized head will load -- ParallelLMHead built with no quant_config (so no
+   scheme of any kind can reach the head), ModelOpt having no ParallelLMHead branch at all,
+   a key/prefix remapping miss on the bare string "lm_head", and a 0-dim vs [1] shape assert.
+
+## THE FINDING
+
+Mark's spec is "the plain native kernel, without any of our side code". **This port's
+checkpoint cannot be loaded at all without one piece of our side code.** The purity
+requirement and the right-weights requirement contradict each other on this checkpoint --
+the same shape as site 18 and site 26: two rules, each correct alone, jointly impossible.
+
+Structural, not a flake. **Replicate B was NOT fired**: it fails at the same line, and a second
+boot to re-derive a known refusal spends GPU to learn nothing. Preserve, report, no retry.
+
+## WHY IT IS PROBABLY SALVAGEABLE -- for Mark to rule, not me
+
+`fr14_patch_nvfp4_lmhead.py` is a weight-loading shim and nothing else. All four gaps are about
+making a quantized head loadable: constructor wiring, quant-method dispatch, key remapping, and
+a numel-preserving reshape. **None touches the decode path, attention, the drafter, or
+speculative decoding.** So it cannot contaminate the drafter-neutrality question: the probe
+would still run with no merged drafter, no tree, no split-K and no fused top-k, which is the
+entire point of it.
+
+    OPTION A (recommended shape) -- re-run with ONLY that patch, and have the purity attestor
+      declare the ONE named exception explicitly instead of asserting "patcher absent". Purity
+      becomes "no side code on the DECODE path", which is the property the probe actually
+      needs, stated precisely rather than approximately.
+    OPTION B -- serve a checkpoint stock vLLM can load. Rejected on the same grounds the
+      3.6-fp8 refire was rejected: it answers a question about different weights.
+    OPTION C -- declare the drafter-neutrality probe unrunnable on this port.
+
+Evidence, classification, dispatch shape. Not choosing.
