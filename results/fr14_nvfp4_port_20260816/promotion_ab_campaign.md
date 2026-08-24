@@ -5032,3 +5032,81 @@ Takes a KIND and prints the pretask route surface it will exercise, before any G
 
 It also prints the comparability note, so the divergence is visible at spec time. This is
 the check that would have killed the seven-minute death on the desk.
+
+# MTP-5 REPLICATE A, REFIRE 3 — skip verified, purity verified, then a FOURTH pre-task gate
+
+Runroot from the log: `output/fr14_mtp5_astropy13236_a_20260824T013447Z`. `serve rc=5`.
+
+## WHAT NOW WORKS — verified, not assumed
+
+* **Warmup skip, with the right reason.** The runlog carries
+  `[warmup] probe SKIPPED: caller-requested-for-comparability` — exactly the disposition
+  asked for. Note the JSON itself is **not** recoverable: `ARMDIR="$RUNROOT/$ARM"` is
+  removed on this failure path, so the arm's own artifacts go with it. The runlog line is
+  the surviving evidence, and it is unambiguous.
+* **Engine purity, again, on this boot.** `ALL_PASS` on all four checks with the by-path
+  matcher: sentinels 0, patcher invocations 0, our-side fds 0, our-side maps 0, our `.so`
+  mapped 0, 1233 wheel files against RECORD with 0 mismatching.
+* **The engine reached readiness**: `Graph capturing finished in 2 secs, took 0.06 GiB`,
+  `container env OK (native MTP: qwen3_5_mtp, no tree env; KIND=nativemtp5)`, and the
+  offload link preflighted OK. This is the furthest the probe has ever got.
+
+## THE FOURTH GATE
+
+```
+[offload] alienware -> GB10 vLLM 100.103.10.122:9950/health OK
+FAIL: offload proxy start
+FAIL: remote proxy pair-dump pin missing (class 9)
+```
+
+`scripts/swe_x86_helpers/offload_codex_proxy.sh` starts the remote proxy in one of two
+shapes, keyed on `FIXED32_SECRET_LOCAL` (`:310`):
+
+```bash
+if [ -n "${FIXED32_SECRET_LOCAL:+1}" ]; then
+   unset LUMO_PROXY_PAIR_DUMP_DIR LUMO_PROXY_REQUEST_DUMP_DIR
+   export LUMO_PROXY_FIXED32_DISABLE_RAW_DUMPS=1
+else
+   export LUMO_PROXY_PAIR_DUMP_DIR=$REMOTE_PAIR_DUMPS
+   export LUMO_PROXY_REQUEST_DUMP_DIR=$REMOTE_REQ_DUMPS
+fi
+```
+
+and then asserts whichever shape it chose (`:359` / `:369`). `FIXED32_RAW_DUMPS_DISABLED`
+is set to 1 only inside the branch gated at `:167` on
+`[[ -n "$FIXED32_SECRET_LOCAL" || -n "$FIXED32_TASK_IDS" ]]`.
+
+A native arm sets neither, so it takes the **legacy** branch: raw dumps stay enabled, the
+remote dump dirs are created, and the pair-dump pin is then required. The pin assertion
+failed, so the started proxy did not carry it. The temp pin **passed** on the same
+captured file, so the capture itself was fine — this is a genuine shape mismatch, not an
+empty-file artefact.
+
+## THE PATTERN, NOW FOUR FOR FOUR
+
+Every pre-task refusal on this probe has one root: **the native route is a legacy path
+that the fixed32 work has diverged from, while the vehicle's shared preamble has quietly
+come to assume fixed32.**
+
+    1  PYTHONPATH   native launcher imports lumo_flywheel_serving with no PYTHONPATH;
+                    the shared venv resolves it to a FOREIGN checkout
+    2  REPO         both native launchers default REPO to a foreign checkout; both
+                    fixed32-family launchers derive it from SCRIPT_DIR
+    3  /tokenize    warmup probe runs ONLY when FIXED32_MODE is empty -- fixed32 arms
+                    skip it; the native arm alone pays for it
+    4  pair-dump    proxy's raw-dump shape keyed on fixed32 identity; native takes the
+                    legacy branch and is then held to a pin the launch did not set
+
+None of these is about MTP-5 or about drafters. They are all the same latent divergence,
+surfaced because this is the first native arm run from this port in a long time.
+
+## THE CAUTION I WILL NOT TAKE
+
+`FIXED32_RAW_DUMPS_DISABLED=1` is reachable caller-side by setting `FIXED32_TASK_IDS`.
+That would silence this gate — and it would make a **native** arm assert **fixed32
+identity** it does not have. That is the pins-as-fiction move under a different name, so
+it is not on the table. The honest fix is lane-side: either the proxy's raw-dump shape
+becomes selectable independently of fixed32 identity, or the native launch path exports
+the dump dirs the legacy branch then demands.
+
+Purity attestation stands per boot and is unaffected.
