@@ -4815,3 +4815,84 @@ n=2 per cell is **directional, not conclusive**. Posterior updates each outcome 
   than its complement.
 * **both degenerate** — the phenomenon is checkpoint-level, and the promotion question
   dissolves as a drafter question.
+
+# SITE 25 (2026-08-24 00:19Z) — the 24k ceiling, stated twice, updated once
+
+## (1) THE AUDIT IS NOT THE DEFECT, and it does not run per-task
+
+The orchestrator **aborted on task 1** and the terminal audit then correctly reported the
+truth. Sequence from the runlog:
+
+```
+swe orchestrator rc=1 wall=428s
+  run_swe_bench_q36_a.py:9237 _process_one -> :4332 _fixed32_real_task_provenance
+  Fixed32BoundaryError: ... max-token algebra does not reconcile
+{ "swe_orchestrator_rc": 1, "swe_window_wall_s": 428, "tasks": [] }
+ARM_DONE ... swerc=1
+[teardown] kill proxy + attest/remove run container
+  fr13_floor_gate.py:4193 build_fixed32_chat_traffic_audit -> :2249 task_directories
+  GateError: task directories are not the exact canonical completed set
+```
+
+`build_fixed32_chat_traffic_audit` is called **from teardown**, once. It found 1 directory
+against a canonical 12 — which is exactly right, because the campaign had already died.
+**floor_gate is not site 25's owner and needs no change.**
+
+## (2) THE REAL DEFECT — `fr13_fixed32_contract.py:1404`
+
+```python
+expected_max_tokens_sum = (
+    normal_request_count * QWEN_VISIBLE_MAX_OUTPUT_TOKENS      # = 32_768  (line 51)
+    + total_compactions * QWEN_COMPACTION_MAX_OUTPUT_TOKENS    # = 20_000  (line 52)
+)
+```
+
+The arithmetic names itself exactly:
+
+    27 x 24000 = 648000   observed max_tokens_sum
+    27 x 32768 = 884736   validator expectation
+    shortfall  = -236736  reported verbatim
+
+**The request count reconciled perfectly** (`trace normal=27` against `engine
+completed=27`). Only the *token algebra* failed, because the deployed ceiling is now
+`${DEPLOY_MAX_OUTPUT_TOKENS:-24000}` (variant `:2763`) while the contract still expects
+32768. This was predictable from my own provenance note: **this was the first serve
+carrying the 24k ceiling**, and it broke on exactly that.
+
+Same family as the canonical-set chain, one constant over: the **output ceiling stated in
+two places, updated in one**. There are further statements to sweep with it —
+`run_swe_bench_q36_a.py:747-749` and `:2522` still export
+`QWEN_CODE_MAX_OUTPUT_TOKENS=32768`, and the contract's own comments at `:55`, `:1118`,
+`:1493`, `:1713` narrate the 32768/20000 algebra.
+
+FIX SHAPE: derive `QWEN_VISIBLE_MAX_OUTPUT_TOKENS` from the deployed ceiling rather than
+restating it — the same predicate treatment sites 19-23 got. Owner is the contract
+(lane 4's domain), not floor_gate.
+
+CREDIT WHERE IT IS DUE: the comment above that clause says the FR14 bring-up burned a full
+diagnosis pass because the message once said only "does not reconcile", so the numbers
+were added. **They worked.** This was one read, not a pass.
+
+## (3) 13453 IS SALVAGEABLE — a 13th verdict is recoverable
+
+The agent **succeeded**; only the harvest was lost.
+
+    trace summary   subtype=success  is_error=False  num_turns=27  output_tokens=7927
+    per_task/patch.diff              ABSENT (never harvested)
+    workspace/patch.diff             481 BYTES, PRESENT
+    runner_metadata / eval           absent (the abort preceded them)
+
+The workspace patch is a plausible real fix — one file, `astropy/io/ascii/html.py`,
+adding `self.data.cols = cols` and `self.data._set_col_formats()`, which is the shape of
+the known 13453 defect (the HTML writer dropping column formats).
+
+13453 is also emphatically **not degenerate**: 27 turns, 7,927 output tokens, clean exit.
+If the offloaded evaluator can score a supplied patch offline, that is a real verdict
+recovered without GPU.
+
+## (4) SLOT ECONOMICS — taking the gap for the MTP-5 pair
+
+The fix is constant-plumbing inside a **safety-critical provenance validator**, across at
+least the contract plus two reserve statements in the runner. That is not a one-liner, and
+I would rather it be done properly than fast. The drafter-neutrality probe needs nothing
+from the QC and is ready, so the gap goes to **13236 x2**.
