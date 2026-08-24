@@ -5675,3 +5675,74 @@ Every healthy arm in this probe out-generated the only real degeneration in the 
 by more than 2x. Any detector keyed on volume alone would have flagged all four and cleared the
 one that mattered. The conjunction (visible-collapse AND tools==0 AND thinking-large) held on
 all four: visible chars 3608-5237, tools 35-83.
+
+# ROUND 22 — H31i REFUSED AT BOOT. SITE 27: THE WALK-CAP PIN STILL SAYS 12.
+
+Runroot `output/fr14_promoab_CH31i_20260824T165748Z`, boot 16:57:50Z at HEAD 692cbd6c6,
+**serve_rc=2**, dead at ~5 min, no task started. Container torn down after recovery; zero after.
+
+## THE PAIRING WAS SET UP CORRECTLY FIRST
+
+H27n ran `PREP_BAKE=0`, `FUSED_DRAFT_TOPK=0`, INCUMBENT qrow16 FA2. H31i matched all three so
+that TOPOLOGY was the only variable -- confirmed in its boot log (`FA2 B1 arm: INCUMBENT
+qrow16`, stock `_vllm_fa2_C.abi3.so`). Firing on today's promoted stack instead would have
+measured topology plus two promoted levers at once.
+
+It also avoided the death that killed the two previous H31 attempts (Ch31i, Ch31k, both
+serve_rc=2): `FR13_HOST_TAIL_PREP_BAKE=1 requires fixed32 to be armed but FR13_FIXED32_MODE is
+'hydra31_fixed32'`. My arm defaults PREP_BAKE=1, so firing as-configured would have reproduced
+it exactly. Set to 0, which is also what the control ran.
+
+## SITE 27 -- ONE FIELD, TWO STATEMENTS, ONE UPDATED
+
+    RuntimeError: FR13 fixed32 TAW source geometry drift:
+      {'physical_drafts': 31, 'physical_rows': 32, 'walk_cap': 16,
+       'fanout': 3, 'output_capacity': 32, 'accepted_path_capacity': 16}
+
+    scripts/fr13_device_multidraft_kernel.py:3180  _fr13_fixed32_taw_source_contract
+      <- :3443 fr13_fixed32_taw_preseed  <- gdn_linear_attn.py:14170 _forward_core
+
+The contract compares the RUNTIME geometry against the pinned `_FR13_FIXED32_TAW_GEOMETRY`
+(:1744). Every field matches except one:
+
+    field                    runtime (hydra31/tail10)   pinned :1744
+    physical_drafts                  31                      31   OK
+    physical_rows                    32                      32   OK
+    fanout                            3                       3   OK
+    output_capacity                  32                      32   OK
+    accepted_path_capacity           16                      16   OK
+    walk_cap                         16                      12   <-- DRIFT
+
+`FR13_FIXED32_TAW_WALK_CAP=16` is in the arm's own xflag line -- tail10 requires it. The pin
+still carries hydra27's 12.
+
+## AND THE CODE SAYS SO, TWO LINES ABOVE THE FAILURE
+
+    # SITE 13's silent sibling: this field is PROVENANCE. Left as the
+    # module scalar it would record walk_cap=12 for a run executing 16.
+    "walk_cap": _fr13_fixed32_walk_cap(topology),
+
+The READ side was fixed -- walk_cap is now derived from the topology, so provenance is honest.
+The pinned constant it is compared against was not. The fix that made the field truthful
+converted a silent provenance error into a hard boot refusal, which is the better failure mode,
+but the second statement was never carried across. **This is the campaign's recurring defect
+family exactly: a rule stated in N places, N-1 updated** -- and it is the same walk-cap quantity
+site 13 already touched once.
+
+A THIRD statement sits immediately below at :1752, `_FR13_FIXED32_TAW_TENSOR_CALL_CENSUS`
+with `walk_levels: 12` (and a sibling entry at :1773 with 13). Whoever repairs the pin should
+check whether the census needs 16 too, or the boot will refuse again one assertion later.
+
+## DISPATCH
+
+Not mine to fix: `fr13_device_multidraft_kernel.py` is a closure file and lane 4's. Preserve,
+report, NO RETRY -- a re-fire refuses at the same line.
+
+RECOVERY NOTE worth keeping: the runlog captured only a ~40-line docker tail, and the EngineCore
+root cause had scrolled past it. No `docker_full.log` was written because teardown reported
+`fixed32 teardown skipped container operations: immutable incarnation attestation failed`. That
+same skip left the EXITED CONTAINER IN PLACE, which is how the log was recovered at all --
+`docker logs` on the corpse, 398 lines, preserved as `RECOVERED_container_full.log`. The
+diagnosis survived by luck, not design: had teardown succeeded in removing the container while
+still skipping log capture, this death would have been undiagnosable. The death path needs its
+capture to happen BEFORE any attestation gate that can skip it.
