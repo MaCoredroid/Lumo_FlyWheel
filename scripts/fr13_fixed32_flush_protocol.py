@@ -54,7 +54,41 @@ SELF_TEST_SCHEMA: Final = "fr13-fixed32-flush-self-test-v1"
 READY_ACTION: Final = "ready"
 READY_NONCE: Final = "0" * 64
 FLUSH_ACTIONS: Final = frozenset({"snapshot", "final"})
-FIXED32_MODES: Final = frozenset({"tail6_fixed32", "hydra27_fixed32"})
+# THE FOURTH KIND: A MEMBERSHIP ROSTER. Boot seven reached HEALTH -- the first
+# hydra31 boot ever, all nine engine-side pins dead -- and then died HERE,
+# host-side, on a list of who is allowed. It killed the generation-zero ready
+# ack AND the terminal flush, so a stale roster blocks serve and teardown alike.
+#
+# A roster is not a value, a contract or an aggregate; it is the MEMBERSHIP
+# version of the same defect, and it takes the same cure: admissibility DERIVES
+# from the authority's registered profiles instead of being written down.
+#
+# THERE IS NO PER-MODE BEHAVIOUR BEHIND THIS ONE. `mode` is an opaque label in
+# this module: echoed into records and compared for equality, never branched on.
+# So the roster was pure admissibility with no capability behind it -- a stale
+# enum, not an unimplemented mode. Had there been per-mode behaviour, the honest
+# shape would have been a declared capability check naming what is missing.
+#
+# THE FALLBACK EXISTS FOR A REASON. This module is deliberately stdlib-only so
+# it can run anywhere a flush has to be driven from. When the topology is
+# importable it is the authority; when it is not, the mirror below is used and
+# tests/test_fr14_mode_roster_derives.py is what keeps the two identical.
+_FIXED32_MODES_MIRROR: Final = frozenset(
+    {"tail6_fixed32", "hydra27_fixed32", "hydra31_fixed32"}
+)
+
+
+def _fixed32_registered_modes() -> frozenset:
+    """Every serving mode the topology authority registers."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from fr13_fixed32_topology import SERVING_MODES  # noqa: PLC0415
+    except Exception:  # noqa: BLE001 - stdlib-only fallback is the design
+        return _FIXED32_MODES_MIRROR
+    return frozenset(str(mode) for mode in SERVING_MODES)
+
+
+FIXED32_MODES: Final = _fixed32_registered_modes()
 
 REQUEST_KEYS: Final = frozenset(
     {

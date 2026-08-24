@@ -34,6 +34,8 @@ def _census_runtime() -> dict[str, object]:
     wanted = {
         "_fr13_fixed32_validate_forward_work",
         "_fr13_fixed32_observed_sfwd_conv_postprep",
+        # the shared two-sided drift formatter the refusals now call
+        "_fr13_fixed32_drift_detail",
     }
     definitions = [
         node
@@ -1251,6 +1253,7 @@ def _observed_take_runtime(*, fused: bool):
         "_fr13_fixed32_kernel_shape",
         "_fr13_fixed32_observed_conv_work",
         "_fr13_fixed32_validate_forward_work",
+        "_fr13_fixed32_drift_detail",
     }
     definitions = [
         node

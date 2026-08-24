@@ -7570,6 +7570,18 @@ def validate_work_census_v5_report(
     *,
     required_batch: int,
 ) -> dict[str, Any]:
+    # NOT A ROSTER -- a PAIR SHAPE, and the difference is load-bearing. This
+    # reads like a list of admissible modes, but line ~7697 unpacks it as
+    # `tail_mode, hydra_mode = expected_modes` and every exact_keys below
+    # demands exactly these two keys in the report. The v5 report IS the
+    # tail-vs-hydra A/B pair; widening this tuple raises ValueError before it
+    # refuses anything.
+    #
+    # So a hydra31 campaign needs a REPORT SHAPE decision, not a wider roster:
+    # either hydra31 takes the `hydra` slot of the pair, or the report grows a
+    # third slot. fr13_fixed32_work_census already knows hydra31 everywhere
+    # else (MODE_SEMANTICS, _SHAPE_PROFILE_BY_MODE), so the pair shape is the
+    # only thing in its way. Recorded for the eyeball rather than widened here.
     expected_modes = ("tail6_fixed32", "hydra27_fixed32")
     expected_batches = tuple(SUPPORTED_BATCH_SIZES)
     expected_batch_keys = {str(batch) for batch in expected_batches}

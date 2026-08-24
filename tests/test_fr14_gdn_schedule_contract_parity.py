@@ -1232,3 +1232,196 @@ def test_the_unqualified_arctic_fields_are_flagged_not_invented() -> None:
     assert "NOT AUTHORITY-BACKED" in blob
     assert '"rescue_path_columns": 10,' in blob
     assert "direct Arctic/fill work drift for mode " in blob
+
+
+# --------------------------------------------------------------------------- #
+# THE ONE-SIDED-REFUSAL SWEEP                                                  #
+# --------------------------------------------------------------------------- #
+# A one-sided refusal has been the marker for a stale pin three times now
+# (pins 7, 9 and -- in this sweep -- 10 and 11). The sweep treats every refusal
+# in a planted blob as a suspect until its values are shown to derive or be
+# invariant.
+#
+# WHAT IT FOUND, before any boot reached them:
+#
+#   PIN TEN   `int(taw_loop_iterations) != 12` -- a BARE SCALAR comparison, so
+#             there is no container literal for a value census to look inside.
+#             Every scan built so far walks past it. It is the walk cap.
+#   PIN ELEVEN `!= (8 if mtp_forward_calls == 2 else 6)` -- the same Arctic
+#             main-tail lengths as pin nine, in a second function.
+#
+# WHAT IT CLEARED: four guards whose conditions carry a high-signal value that
+# turns out to be invariant -- 17 is 16 tree layers plus the drafter, 34 and 36
+# are conv state dimensions off PHYSICAL_DRAFTS, and the FA2 24 is a head
+# width. Classified so nobody re-investigates them.
+SWEPT_COINCIDENCES = {
+    "_fr13_fixed32_target_kv_layer_names": (
+        "17 == TREE_ATTENTION_LAYERS + 1 drafter layer, both invariant"
+    ),
+    "_fr13_fixed32_conv_runtime_contract": (
+        "34/36 are conv state dimensions derived from PHYSICAL_DRAFTS=31"
+    ),
+    "_fr13_fixed32_observed_commit": (
+        "same conv state dimensions, same invariant source"
+    ),
+    "_fr13_fa2_qrow32_live_ab_padded_call": (
+        "24 is the FA2 head width in an (rows, 24, 256) output extent"
+    ),
+}
+
+
+def _blob_function(name: str) -> str:
+    blob = _planted_blob()
+    lines = blob.split("\n")
+    for node in ast.parse(blob).body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return "\n".join(lines[node.lineno - 1 : node.end_lineno])
+    raise AssertionError(f"{name} is not in the planted blob")
+
+
+def test_pin_ten_the_bare_scalar_walk_cap_derives() -> None:
+    """A scalar comparison has no container for a value census to look inside."""
+    blob = _planted_blob()
+    assert "int(taw_loop_iterations) != 12" not in blob
+    assert (
+        'int(taw_loop_iterations)\n        != _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["critical"]'
+        in blob
+    )
+    for mode, critical in (
+        ("hydra27_fixed32", 12),
+        ("tail6_fixed32", 12),
+        ("hydra31_fixed32", 16),
+    ):
+        assert _blob_schedule_table(mode)["_FR13_FIXED32_GDN_SCHEDULE_EXPECTED"][
+            "critical"
+        ] == critical
+
+
+def test_pin_eleven_the_second_arctic_interlock_derives() -> None:
+    """The same 8/6 as pin nine, in a different function."""
+    blob = _planted_blob()
+    assert '!= (8 if int(proposal["mtp_forward_calls"]) == 2 else 6)' not in blob
+    body = _blob_function("_fr13_fixed32_drafter_proposal_end")
+    assert '_FR13_FIXED32_ARCTIC_TAIL_EXPECTED["gated_main_tail_length"]' in body
+    assert '_FR13_FIXED32_ARCTIC_TAIL_EXPECTED["main_tail_length"]' in body
+    topology = _topology()
+    hydra31 = topology.PROFILES[topology.TREE_PROFILE_BY_MODE["hydra31_fixed32"]]
+    assert (int(hydra31["main_tail_length"]), int(hydra31["gated_main_tail_length"])) == (
+        10,
+        12,
+    )
+
+
+def test_the_drift_helper_labels_both_sides_and_only_the_differences() -> None:
+    """A tuple of two dicts is not two-sided if the reader cannot tell which."""
+    namespace: dict = {}
+    exec(_blob_function("_fr13_fixed32_drift_detail"), namespace)  # noqa: S102
+    detail = namespace["_fr13_fixed32_drift_detail"]
+    # dicts: only the differing key, both sides labelled
+    message = detail({"a": 1, "b": 2}, {"a": 1, "b": 9})
+    assert message == "b: observed 2 against audited 9"
+    # a forty-field dict with one difference must not print forty fields
+    wide = {f"f{index}": index for index in range(40)}
+    assert detail(wide, {**wide, "f7": 99}) == "f7: observed 7 against audited 99"
+    # sequences report the position
+    assert detail((5, 11), (5, 7)) == "[1]: observed 11 against audited 7"
+    # scalars still name both sides
+    assert detail("LAZY", "FULL") == "observed 'LAZY' against audited 'FULL'"
+
+
+def test_the_converted_refusals_use_the_helper() -> None:
+    blob = _planted_blob()
+    # one definition plus the converted call sites
+    assert blob.count("_fr13_fixed32_drift_detail(") >= 8
+    for retired in (
+        '"FR13 fixed32 cudagraph preseed mode is invalid: " + repr(mode)',
+        "+ repr((sfwd_preseed, sfwd_expected))",
+        "+ repr((structural, expected))",
+        "+ repr(sorted(manifests))",
+        '+ repr((manifest.get("kernel_shape"), registry_shape))',
+        '+ repr((manifest.get("kernel_shape"), replay_shape))',
+        '+ repr((event["kernel_shape"], take_shape))',
+    ):
+        assert retired not in blob, retired
+
+
+def test_no_guard_condition_still_carries_a_stale_mode_varying_value() -> None:
+    """THE SWEEP'S STANDING CHECK.
+
+    Every guard in the planted blob whose CONDITION holds a high-signal
+    mode-varying value must be a classified coincidence. A new one fails here
+    instead of at a boot.
+    """
+    high_signal = {
+        12: "walk cap",
+        7: "gdn max_lengths[1]",
+        82: "gdn padded slots",
+        6: "arctic main tail",
+        8: "arctic gated main tail",
+        11: "max physical depth",
+        13: "self rows",
+        27: "active drafts",
+        36: "walk * 3",
+        24: "walk * 2",
+    }
+    blob = _planted_blob()
+    tree = ast.parse(blob)
+    owner: dict[int, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+                owner.setdefault(line, node.name)
+    offenders: dict[str, list[int]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        if not any(isinstance(child, ast.Raise) for child in ast.walk(node)):
+            continue
+        found = sorted(
+            child.value
+            for child in ast.walk(node.test)
+            if isinstance(child, ast.Constant)
+            and isinstance(child.value, int)
+            and not isinstance(child.value, bool)
+            and child.value in high_signal
+        )
+        if not found:
+            continue
+        scope = owner.get(node.lineno, "<module>")
+        if scope in SWEPT_COINCIDENCES:
+            continue
+        offenders.setdefault(scope, []).extend(found)
+    assert not offenders, (
+        "guard conditions carrying unclassified mode-varying values: "
+        + repr(offenders)
+    )
+
+
+def test_the_sweep_records_what_it_could_not_mechanically_convert() -> None:
+    """HONEST LIMIT. Boolean-chain guards have no differing-entries to compute.
+
+    Sixty-three refusals in the planted blobs are guarded by a chain of
+    heterogeneous `or` clauses -- twenty conditions over different objects, not
+    a comparison of two structures. There is no pair of dicts to diff; naming
+    WHICH clause failed is a per-guard refactor, not a mechanical one. They are
+    counted here rather than quietly left out of the sweep's claim.
+    """
+    blob = _planted_blob()
+    tree = ast.parse(blob)
+    simple = chains = 0
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        raises = [
+            child
+            for child in ast.walk(node)
+            if isinstance(child, ast.Raise) and child.exc is not None
+        ]
+        if not raises or "repr" not in ast.dump(raises[0]):
+            continue
+        if isinstance(node.test, ast.Compare):
+            simple += 1
+        elif isinstance(node.test, ast.BoolOp):
+            chains += 1
+    assert chains > simple, "the chain class is the larger one; say so"
+    assert chains >= 40

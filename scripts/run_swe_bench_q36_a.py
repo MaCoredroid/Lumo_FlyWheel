@@ -10116,9 +10116,13 @@ def main(argv: list[str] | None = None) -> int:
                              "--codex-endpoint is a deprecated alias.")
     parser.add_argument("--fixed32-container")
     parser.add_argument("--fixed32-producer-pid", type=int)
+    # A MEMBERSHIP ROSTER on the campaign driver's own CLI. argparse would
+    # reject --fixed32-mode hydra31_fixed32 before a single line of the run
+    # executed, so this list decides which profiles can be driven at all. It
+    # derives from the topology's registered serving modes.
     parser.add_argument(
         "--fixed32-mode",
-        choices=("tail6_fixed32", "hydra27_fixed32"),
+        choices=fixed32_contract.FIXED32_MODES,
     )
     parser.add_argument("--fixed32-flush-request", type=Path)
     parser.add_argument("--fixed32-flush-ack", type=Path)

@@ -1261,7 +1261,14 @@ MODE_ALLOWLIST_BASELINE = {
     "scripts/fr13_device_multidraft_kernel.py": 5,
     "scripts/fr13_fa2_qrow32_gate.py": 2,
     "scripts/fr13_fa2_qrow32_gqa_pair_gate.py": 4,
-    "scripts/fr13_fixed32_flush_protocol.py": 1,
+    # ROSTER LANDING: both of these went to ZERO because their mode allowlists
+    # stopped being hardcoded lists and now derive from
+    # fr13_fixed32_contract.FIXED32_MODES, the roster authority whose own
+    # comment already told consumers to do exactly that. A count that SHRANK
+    # because a hardcoded roster was replaced by a derivation is the direction
+    # this lint wants; it is pinned at 0 so deleting the guard entirely would
+    # still fail.
+    "scripts/fr13_fixed32_flush_protocol.py": 0,
     "scripts/fr13_fixed32_nsys_reduce.py": 1,
     "scripts/fr13_fixed32_semantics_test.py": 2,
     # Round 19: was 2 (VALID_BY_MODE + VALID_MASK_BY_MODE), then 1, now 0 --
@@ -1273,7 +1280,7 @@ MODE_ALLOWLIST_BASELINE = {
     "scripts/fr13_gdn_single_launch_production_credential.py": 1,
     "scripts/fr13_taw_b1_credential.py": 2,
     "scripts/fr13_treeconv_zero_tail_credential.py": 1,
-    "scripts/run_swe_bench_q36_a.py": 1,
+    "scripts/run_swe_bench_q36_a.py": 0,
     "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": 7,
     "src/lumo_flywheel_serving/fr13_fixed32_commit_slot_scatter.py": 1,
     "src/lumo_flywheel_serving/fr13_gdn_gqa_group3.py": 1,

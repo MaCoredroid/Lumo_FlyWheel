@@ -1223,6 +1223,46 @@ if _FR13_FIXED32_GDN_MODE not in _FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE:
 _FR13_FIXED32_GDN_SCHEDULE_EXPECTED = _FR13_FIXED32_GDN_SCHEDULE_BY_PROFILE[
     _FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE[_FR13_FIXED32_GDN_MODE]
 ]
+def _fr13_fixed32_drift_detail(observed, expected):
+    """Name what DIFFERS, both sides, labelled which is which.
+
+    Three refusals in this blob have now cost a boot each to read: two dumped a
+    whole ~40-field dict, one printed the observed value and left the
+    expectation to be found in the source. A tuple of two dicts is not
+    two-sided if the reader cannot tell which is which.
+    """
+    if isinstance(observed, dict) and isinstance(expected, dict):
+        names = sorted(
+            name
+            for name in set(observed) | set(expected)
+            if observed.get(name) != expected.get(name)
+        )
+        return "; ".join(
+            str(name)
+            + ": observed "
+            + repr(observed.get(name))
+            + " against audited "
+            + repr(expected.get(name))
+            for name in names
+        )
+    if (
+        isinstance(observed, (tuple, list))
+        and isinstance(expected, (tuple, list))
+        and len(observed) == len(expected)
+    ):
+        return "; ".join(
+            "["
+            + str(index)
+            + "]: observed "
+            + repr(seen)
+            + " against audited "
+            + repr(want)
+            for index, (seen, want) in enumerate(zip(observed, expected))
+            if seen != want
+        )
+    return "observed " + repr(observed) + " against audited " + repr(expected)
+
+
 _FR13_FIXED32_ARCTIC_TAIL_EXPECTED = _FR13_FIXED32_ARCTIC_TAIL_BY_PROFILE[
     _FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE[_FR13_FIXED32_GDN_MODE]
 ]
@@ -2390,7 +2430,8 @@ def _fr13_fixed32_final_full_preseed_postcheck_required(runtime_mode):
         return False
     if mode != "FULL":
         raise RuntimeError(
-            "FR13 fixed32 cudagraph preseed mode is invalid: " + repr(mode)
+            "FR13 fixed32 cudagraph preseed mode is invalid: "
+            + _fr13_fixed32_drift_detail(mode, "FULL")
         )
     if _FR13_FIXED32_PROFILE_MEMORY_SCOPE is True:
         # Throwaway memory-profile graphs must not publish persistent cache
@@ -2962,7 +3003,7 @@ def _fr13_fixed32_assert_final_full_preseed_ready(num_reqs):
         if sfwd_preseed != sfwd_expected:
             raise RuntimeError(
                 "FR13 SFWD conv/post-prep graph output preseed is incomplete: "
-                + repr((sfwd_preseed, sfwd_expected))
+                + _fr13_fixed32_drift_detail(sfwd_preseed, sfwd_expected)
             )
     warm_vocab = int(boot_warm.get("vocab_size", 0))
     pregather_state = getattr(
@@ -5300,7 +5341,9 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
         if manifest.get("kernel_shape") != registry_shape:
             raise RuntimeError(
                 "FR13 fixed32 forward manifest kernel shape drifted: "
-                + repr((manifest.get("kernel_shape"), registry_shape))
+                + _fr13_fixed32_drift_detail(
+                    manifest.get("kernel_shape"), registry_shape
+                )
             )
         batch = int(manifest.get("batch_size", -1))
         if (
@@ -5458,7 +5501,7 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
         if structural != expected:
             raise RuntimeError(
                 "FR13 fixed32 live forward structure drift: "
-                + repr((structural, expected))
+                + _fr13_fixed32_drift_detail(structural, expected)
             )
         structural_canonical = __import__("json").dumps(
             structural,
@@ -5485,7 +5528,9 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
     if sorted(manifests) != list(range(1, capacity + 1)):
         raise RuntimeError(
             "FR13 fixed32 live forward registry is not contiguous: "
-            + repr(sorted(manifests))
+            + _fr13_fixed32_drift_detail(
+                sorted(manifests), list(range(1, capacity + 1))
+            )
         )
     def _fr13_f32_registry_row(batch):
         entry = manifests[batch]
@@ -6044,7 +6089,9 @@ def _fr13_fixed32_observed_graph_replay(
     if manifest.get("kernel_shape") != replay_shape:
         raise RuntimeError(
             "FR13 fixed32 replay manifest kernel shape drifted: "
-            + repr((manifest.get("kernel_shape"), replay_shape))
+            + _fr13_fixed32_drift_detail(
+                manifest.get("kernel_shape"), replay_shape
+            )
         )
     if not isinstance(sfwd_section if replay_fused else conv, dict):
         raise RuntimeError("FR13 fixed32 replay conv manifest is missing")
@@ -7325,10 +7372,17 @@ def _fr13_fixed32_drafter_proposal_end(
         or not isinstance(proposal["arctic"], dict)
         or not isinstance(proposal["publish"], dict)
         # THE well-formedness interlock: a 2-forward step MUST have handed off
-        # to an 8-token Arctic chain, and a 4-forward step MUST NOT have. Either
+        # to a GATED Arctic chain, and a 4-forward step MUST NOT have. Either
         # mismatch is a malformed tree, so it is fatal here, before the verifier.
+        #
+        # PIN ELEVEN, the same 8/6 as pin nine in a second function. The chain
+        # lengths are hydra27's; the authority states 12/10 for hydra31.
         or int(proposal["arctic"].get("main_tail_columns", -1))
-        != (8 if int(proposal["mtp_forward_calls"]) == 2 else 6)
+        != (
+            _FR13_FIXED32_ARCTIC_TAIL_EXPECTED["gated_main_tail_length"]
+            if int(proposal["mtp_forward_calls"]) == 2
+            else _FR13_FIXED32_ARCTIC_TAIL_EXPECTED["main_tail_length"]
+        )
     ):
         raise RuntimeError(
             "FR13 fixed32 completed drafter proposal work drift: "
@@ -8201,7 +8255,11 @@ def _fr13_fixed32_observed_publish_pack(
         or int(post_output_copy_calls) != 2
         or int(post_path_pack_copy_calls) != 2
         or int(post_rowmap_copy_calls) != 2
-        or int(taw_loop_iterations) != 12
+        # PIN TEN. A BARE SCALAR comparison, which is why every container-literal
+        # scan walked past it: there is no dict here to hold two values. It is
+        # the walk cap, 12 at hydra27/tail6 and 16 at hydra31.
+        or int(taw_loop_iterations)
+        != _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["critical"]
         or event["preforward_pack"]
         != {"zero_calls": 2, "copy_calls": 2}
         or any(
@@ -8287,7 +8345,7 @@ def _fr13_fixed32_observed_take(mode, batch_size, forward_step_index):
     if event["kernel_shape"] != take_shape:
         raise RuntimeError(
             "FR13 fixed32 event kernel shape drifted: "
-            + repr((event["kernel_shape"], take_shape))
+            + _fr13_fixed32_drift_detail(event["kernel_shape"], take_shape)
         )
     # One resolver owns the shape-to-section mapping for every reader, so the
     # seal and the record builder cannot drift apart. It raises its own
