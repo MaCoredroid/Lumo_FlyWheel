@@ -5591,3 +5591,87 @@ entire point of it.
     OPTION C -- declare the drafter-neutrality probe unrunnable on this port.
 
 Evidence, classification, dispatch shape. Not choosing.
+
+# THE MTP-5 DRAFTER-NEUTRALITY PROBE — COMPLETE. FOUR ARMS, ZERO DEGENERATIONS.
+
+All four arms served the port's own NVFP4 weights on the plain chain drafter, each
+`serve_rc=0`, each purity `ALL_PASS`, container count zero after every arm.
+
+    arm         wall     turns tools  patch / model edit              eval       degenerate
+    13236 A    29.8m      104    35   819 B  fb1bea86                resolved   NO
+    13236 B    84.2m      242    83   819 B  fb1bea86                resolved   NO
+    14369 A    46.2m      101    36   cds.py 1110 B  a0d528ed        failed     NO
+    14369 B    44.0m      101    35   cds.py 1274 B  b4c41e8e        failed     NO
+
+## THE PREMISE IS ATTESTED, NOT ASSUMED
+
+Identical on every arm, from the engine's own config rather than the launcher's intent:
+
+    speculative_config=SpeculativeConfig(method='mtp', num_spec_tokens=5)
+    method 'qwen3_5_mtp'   architecture Qwen3_5MTP   attention_backend 'FLASH_ATTN'
+
+Five tokens, NO tree, FLASH_ATTN -- against the merged drafter's 31 tokens with an explicit
+speculative_token_tree on TREE_ATTN. Purity per arm: no side code on the decode path, one
+declared exception (the NVFP4 lm_head loader shim, sha 0a673b5ad0b76467, weight loading only),
+at-rest 1233 files checked with mismatches confined to the shim's four targets.
+
+## THE VERDICT FOR MARK'S n=2: BOTH-CLEAN, WHICH IS THE WEAK OUTCOME -- AND NOW QUANTIFIED
+
+Plain MTP-5 did not reproduce the thinking runaway. But it was never likely to, and the
+pre-registration said so. I measured the null instead of asserting it: across the
+merged-drafter bank, **13236 has 20 traces and exactly 1 degenerates -- a 5.0% base rate**.
+
+    P(a clean run | merged drafter)      = 95.0%
+    P(two clean replicates | merged)     = 90.2%
+
+So two clean 13236 replicates are the ~90%-likely outcome EVEN IF the merged-drafter
+machinery is entirely responsible for the runaway. The result is consistent with the
+machinery hypothesis and barely raises its likelihood. The informative direction -- a
+degenerate chain-drafter run, which would have REFUTED the hypothesis outright -- never fired.
+
+What the probe does deliver, and it is worth having: **the runaway is not trivially
+reproducible without the merged drafter.** Four arms, 548 turns and ~189 GPU-minutes produced
+no ceiling event, no runaway, and no conjunction-rule firing.
+
+## THE 13236 OUTCOME IS STRONGER THAN "CLEAN"
+
+Both replicates produced a BYTE-IDENTICAL 819 B patch at sha fb1bea86 -- and that sha is the
+modal non-empty 13236 patch in the merged-drafter bank, matching 4 of 19 banked runs including
+two b1_stock ones. Six runs across BOTH drafter architectures converge on the same 819 bytes.
+
+Honest caveat: these runs sample at temperature 0.6, so byte-identity is not guaranteed by
+speculative-decoding correctness. What the convergence shows is that 13236 has a strong
+attractor solution and the chain drafter lands in it exactly as the merged drafter does. That
+is an outcome-side neutrality datum, not a proof of lossless drafting.
+
+## 14369 CANNOT CARRY AN INFERENCE, AND THE PROBE ITSELF PROVED WHY
+
+14369 failed on both MTP-5 arms while the merged-drafter comparator resolved. That looks like
+a drafter effect and is not:
+
+    merged drafter (Cqc10)  cds.py 1318 B  +9 -13  sha 6f077265  RESOLVED
+    MTP-5 replicate A       cds.py 1110 B  +13 -2  sha a0d528ed  failed
+    MTP-5 replicate B       cds.py 1274 B  +15 -1  sha b4c41e8e  failed
+
+THREE RUNS, THREE DISTINCT EDITS. The two MTP-5 replicates share drafter, weights, config and
+prompt -- and still disagree with each other. Edit-difference therefore carries no drafter
+signal on this task, and neither does the resolve/fail split: 14369 has n=1 on the merged side,
+so there is no measured run-to-run variation to compare against. Fixing that needs more
+MERGED-drafter 14369 samples, not more MTP-5 arms.
+
+Note also that resolve rate was never the probe's question. The pre-registered signal is
+DEGENERATION. A failed-but-healthy run is not that signature -- the QC's own resolve rate was
+6/10 -- so these two failures are uninformative about the machinery hypothesis in either
+direction.
+
+## AND A THIRD CONFIRMATION THAT GENERATION VOLUME ALONE IS NOT A DETECTOR
+
+    13236 B  thinking 152,278 chars  -- healthy, resolved, 83 tools
+    14369 A  thinking  97,010 chars  -- healthy
+    14369 B  thinking  80,750 chars  -- healthy
+    the KNOWN degeneration            70,755 chars
+
+Every healthy arm in this probe out-generated the only real degeneration in the bank, 13236 B
+by more than 2x. Any detector keyed on volume alone would have flagged all four and cleared the
+one that mattered. The conjunction (visible-collapse AND tools==0 AND thinking-large) held on
+all four: visible chars 3608-5237, tools 35-83.

@@ -112,6 +112,94 @@
   "status": "blocked pending the one-line fork conversion; refire on landing, same shim + TAG setup, binding at whatever HEAD it finds",
   "window_utc": "2026-08-19T19:19Z..19:41Z"
  },
+ "mtp5_drafter_neutrality_probe": {
+  "13236_convergence": {
+   "both_replicates_byte_identical": true,
+   "bytes": 819,
+   "caveat": "temperature 0.6 sampling -- byte-identity is NOT guaranteed by spec-decode correctness; this shows a strong attractor solution, not lossless drafting",
+   "matches_merged_drafter_runs": 4,
+   "note": "fb1bea86 is the modal NON-EMPTY 13236 patch in the merged-drafter bank; six runs across BOTH drafter architectures converge on the same 819 bytes",
+   "of": 19,
+   "sha16": "fb1bea863f67dabf"
+  },
+  "14369_cannot_carry_an_inference": {
+   "fix_requires": "more MERGED-drafter 14369 samples, not more MTP-5 arms",
+   "resolve_rate_is_not_the_question": "the pre-registered signal is DEGENERATION; the QC's own resolve rate was 6/10, so a failed-but-healthy run is uninformative",
+   "three_runs_three_distinct_edits": {
+    "merged_Cqc10": "1318 B +9 -13 6f077265 RESOLVED",
+    "mtp5_a": "1110 B +13 -2 a0d528ed failed",
+    "mtp5_b": "1274 B +15 -1 b4c41e8e failed"
+   },
+   "why": "the two MTP-5 replicates share drafter, weights, config and prompt and STILL disagree, so edit-difference carries no drafter signal; and 14369 has n=1 on the merged side, so there is no measured variation to compare against"
+  },
+  "arms": {
+   "13236_a": {
+    "degenerate": false,
+    "eval": "resolved",
+    "patch_bytes": 819,
+    "patch_sha16": "fb1bea863f67dabf",
+    "serve_rc": 0,
+    "thinking_chars": 59244,
+    "tools": 35,
+    "turns": 104,
+    "wall_min": 29.8
+   },
+   "13236_b": {
+    "degenerate": false,
+    "eval": "resolved",
+    "patch_bytes": 819,
+    "patch_sha16": "fb1bea863f67dabf",
+    "serve_rc": 0,
+    "thinking_chars": 152278,
+    "tools": 83,
+    "turns": 242,
+    "wall_min": 84.2
+   },
+   "14369_a": {
+    "degenerate": false,
+    "eval": "failed",
+    "model_edit_bytes": 1110,
+    "model_edit_sha16": "a0d528ed910362b7",
+    "serve_rc": 0,
+    "thinking_chars": 97010,
+    "tools": 36,
+    "turns": 101,
+    "wall_min": 46.2
+   },
+   "14369_b": {
+    "degenerate": false,
+    "eval": "failed",
+    "model_edit_bytes": 1274,
+    "model_edit_sha16": "b4c41e8e97ffe66f",
+    "serve_rc": 0,
+    "thinking_chars": 80750,
+    "tools": 35,
+    "turns": 101,
+    "wall_min": 44.0
+   }
+  },
+  "c5": "n/a BY CONSTRUCTION on every arm -- a chain drafter has no seam",
+  "n2_verdict": {
+   "null_measured_not_asserted": "13236 has 20 merged-drafter traces, exactly 1 degenerate -> 5.0% base rate",
+   "outcome": "BOTH-CLEAN = the WEAK outcome, as pre-registered",
+   "p_clean_given_merged": 0.95,
+   "p_two_clean_given_merged": 0.902,
+   "reading": "consistent with the machinery hypothesis, barely raises its likelihood; the informative direction (a degenerate chain-drafter run, which would REFUTE it) never fired",
+   "what_it_does_deliver": "the runaway is NOT trivially reproducible without the merged drafter -- 4 arms, 548 turns, ~189 GPU-min, zero ceiling events and zero conjunction firings"
+  },
+  "premise_attested_from_engine_config": "SpeculativeConfig(method='mtp', num_spec_tokens=5), qwen3_5_mtp, Qwen3_5MTP, FLASH_ATTN -- 5 tokens NO tree, vs the merged drafter's 31 tokens with a speculative_token_tree on TREE_ATTN",
+  "promotes_anything": false,
+  "purity": "ALL_PASS on every arm: no side code on the decode path, ONE declared exception (NVFP4 lm_head loader shim sha 0a673b5ad0b76467, weight loading only); at-rest 1233 checked, mismatches confined to the shim's 4 targets",
+  "status": "COMPLETE -- four arms, zero degenerations",
+  "volume_is_not_a_detector_third_confirmation": {
+   "13236_b": 152278,
+   "14369_a": 97010,
+   "14369_b": 80750,
+   "known_degeneration": 70755,
+   "note": "every healthy arm out-generated the only real degeneration in the bank, 13236 B by >2x; a volume-only detector would flag all four and clear the one that mattered"
+  },
+  "weights": "/models/qwen3.8-27b-nvfp4-radixark, checkpoint_identity 5ec8e240 (3.6-fp8 is d0538237)"
+ },
  "promotes_anything": false,
  "recommendations": {
   "fused_draft_topk": "MORE EVIDENCE \u2014 needs one paired dfwd-span serve, top-k 0 vs 1",
