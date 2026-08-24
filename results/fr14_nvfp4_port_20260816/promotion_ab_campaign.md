@@ -5110,3 +5110,59 @@ becomes selectable independently of fixed32 identity, or the native launch path 
 the dump dirs the legacy branch then demands.
 
 Purity attestation stands per boot and is unaffected.
+
+# MTP-5 REPLICATE A, REFIRE 4 — NO FIFTH GATE, but the result is VACUOUS and is NOT banked
+
+Runroot: `output/fr14_mtp5_astropy13236_a_20260824T015818Z`. `swerc=0`.
+
+## The sweep worked. The probe got all the way through.
+
+    healthy after 402s
+    container env OK (native MTP: qwen3_5_mtp, no tree env; KIND=nativemtp5)
+    [warmup] probe SKIPPED: caller-requested-for-comparability
+    graph capture 2s / 0.07 GiB
+    pair dumps captured: 0                      <- FR13_PROXY_RAW_DUMPS=off took effect
+    ARM_DONE ... kind=nativemtp5 swerc=0
+
+No fifth gate. The author's claim held, and engine purity re-attested `ALL_PASS` on this
+boot (all four checks, by-path matcher).
+
+## AND THE RESULT IS WORTHLESS — which is the finding
+
+```
+swe_orchestrator_rc=0  wall_s=5
+astropy__astropy-13236 -> failed (2.157s, 0B, timed_out=False)
+```
+
+**2.157 seconds and zero bytes.** 13236 takes roughly twenty minutes when it runs; the
+merged-drafter degeneration burned 20.6 minutes and 33,313 tokens. A two-second "failed"
+means the agent never generated. `swerc=0` makes this look like a clean completion, which
+is precisely what makes it dangerous: banked as-is it would read "MTP-5 replicate A:
+13236 failed, no degeneration" — a sentence that is false in every part that matters.
+
+**This is not a data point and it is not entering the n=2 tally.** A vacuous pass is worse
+than a refusal, because a refusal announces itself.
+
+## WHY I CANNOT SAY MORE — an artifact-retention gap in MY arm
+
+The diagnosis needs `qwen_stderr.log` / `qwen_stdout.log`, and they are gone:
+`ARMDIR="$RUNROOT/$ARM"` did not survive teardown, so the entire per-task tree went with
+it. Nothing matching the task exists anywhere on disk. The fixed32 QC arms' runroots DO
+retain `per_task/` — mine did not, so this is a gap on my side, not the vehicle's.
+
+**`pretask_identity.json` was also NOT in the runroot**, contrary to the sweep's
+"surviving teardown via runroot copies" claim. I checked the runroot and the whole tree:
+absent. Either the copy does not fire on the `swerc=0` path, or it lands in the ARMDIR
+that is then removed. Reporting it as unverified rather than assuming it worked.
+
+## WHAT THE NEXT ATTEMPT NEEDS
+
+1. **Artifact retention before teardown** — the arm must copy `$RUNROOT/$ARM` (or at least
+   `swe_out/.../per_task/`, `qwen_std*.log`, `runner_metadata.json`) into a location the
+   teardown does not touch. Without it, any failure inside the agent is undiagnosable and
+   any success is unverifiable.
+2. **A liveness floor on the verdict** — a task that returns in seconds with a zero-byte
+   patch should be refused as vacuous by my own reducer rather than recorded as `failed`.
+   The eyeball and c5 both need generations to exist; neither fires on an empty run.
+
+Until both are in place, further MTP-5 arms would produce results I could not defend.
