@@ -16,7 +16,14 @@
 set -uo pipefail
 C=${1:?container}; RUNROOT=${2:?runroot}; BOOTLOG=${3:-}
 OUT="$RUNROOT/MTP5_PURITY.json"
-FA2_SONAMES='_vllm_fa2_C.abi3.so|_vllm_fa2_qrow32|gqa_pair_splitk'
+# DISCRIMINATE BY PATH, NOT BASENAME -- corrected after the first live attestation.
+# Our forked build carries the SAME basename as vLLM's own stock extension
+# (_vllm_fa2_C.abi3.so), so a basename match flags the STOCK WHEEL and reports a false
+# 'purity not established'. Stock lives inside the wheel at
+# dist-packages/vllm/vllm_flash_attn/; ours is mounted from /workspace or carries a
+# name only our builds use (qrow32/gqa_pair_splitk).
+OUR_SO_RE='/workspace/[^ ]*[.]so|gqa_pair_splitk|_vllm_fa2_qrow32'
+STOCK_SO_DIR='dist-packages/vllm/vllm_flash_attn/'
 
 j() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
 
@@ -46,7 +53,9 @@ WORKSPACE_MOUNTED=$(docker exec "$C" bash -lc '[ -d /workspace ] && echo 1 || ec
 WORKSPACE_PYCACHE=$(docker exec "$C" bash -lc 'find /workspace/src /workspace/scripts -name "__pycache__" -newermt "-6 hours" 2>/dev/null | wc -l' 2>/dev/null)
 
 # ---- (3) ATTENTION BACKEND + our .so NOT mapped -----------------------------
-FA2_IN_MAPS=$(docker exec "$C" bash -lc "grep -cE '$FA2_SONAMES' /proc/$EPID/maps 2>/dev/null" 2>/dev/null)
+FA2_IN_MAPS=$(docker exec "$C" bash -lc "grep -cE '$OUR_SO_RE' /proc/$EPID/maps 2>/dev/null" 2>/dev/null)
+STOCK_FA=$(docker exec "$C" bash -lc "grep -c '$STOCK_SO_DIR' /proc/$EPID/maps 2>/dev/null" 2>/dev/null)
+LAYOUT=$(docker exec "$C" bash -lc '[ -d /workspace/scripts ] && echo forked_layout_workspace_mounted || echo native_layout_no_repo_mount' 2>/dev/null)
 BACKEND_LINE=""
 if [[ -n "$BOOTLOG" && -f "$BOOTLOG" ]]; then
   BACKEND_LINE=$(grep -oE "Using [A-Za-z0-9_]+ backend|attention backend[^\"]{0,60}|BACKEND=[A-Za-z0-9_]+" "$BOOTLOG" 2>/dev/null | head -3 | tr '\n' ';')
@@ -78,9 +87,10 @@ PY" 2>/dev/null)
 
 python3 - "$OUT" "$EPID" "$SENTINEL_HITS" "$SENTINEL_FILES" "$PATCHER_IN_LOG" \
   "$ENG_OURSIDE_FDS" "$ENG_OURSIDE_MAPS" "$WORKSPACE_MOUNTED" "$WORKSPACE_PYCACHE" \
-  "$FA2_IN_MAPS" "$BACKEND_LINE" "$ALL_SO" "$VLLM_VER" "$VLLM_RECORD_OK" "$VLLM_DIR" <<'PY'
+  "$FA2_IN_MAPS" "$BACKEND_LINE" "$ALL_SO" "$VLLM_VER" "$VLLM_RECORD_OK" "$VLLM_DIR" \
+  "$STOCK_FA" "$LAYOUT" <<'PY'
 import json,sys
-(out,epid,sent,sentf,patlog,fds,maps,wsmnt,wspyc,fa2,backend,allso,ver,rec,vdir)=sys.argv[1:16]
+(out,epid,sent,sentf,patlog,fds,maps,wsmnt,wspyc,fa2,backend,allso,ver,rec,vdir,stockfa,layout)=sys.argv[1:18]
 def i(x):
     try: return int(x)
     except Exception: return None
@@ -99,11 +109,13 @@ checks["2_import_census"]={
  "PASS": i(fds)==0 and i(maps)==0,
  "scope":"cross-process sys.modules is not readable; this censuses the ENGINE's own open files and mappings plus __pycache__ freshness, which is the strongest available evidence"}
 checks["3_attention_backend"]={
+ "container_layout_detected":layout,
+ "stock_wheel_flash_attn_mapped":i(stockfa),
  "our_fa2_so_mapped_in_engine":i(fa2),
  "attention_so_mapped":[s for s in allso.split(";") if s],
  "backend_lines_from_boot_log":[b for b in backend.split(";") if b],
  "PASS": i(fa2)==0,
- "why":"our forked _vllm_fa2 .so must not appear in /proc/<engine>/maps"}
+ "why":"our forked .so must not appear in /proc/<engine>/maps. Matched BY PATH: stock wheel extensions under dist-packages/vllm/vllm_flash_attn/ share our basename and are EXPECTED on a plain native run -- counting them was a false positive in the first attestation."}
 checked,bad=(rec.split(":")+["",""])[:2] if ":" in rec else ("","")
 checks["4_vllm_at_rest"]={
  "vllm_version":ver,"dist_info_RECORD_check":rec,

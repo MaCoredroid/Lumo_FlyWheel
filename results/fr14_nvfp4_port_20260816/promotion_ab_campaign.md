@@ -4896,3 +4896,77 @@ The fix is constant-plumbing inside a **safety-critical provenance validator**, 
 least the contract plus two reserve statements in the runner. That is not a one-liner, and
 I would rather it be done properly than fast. The drafter-neutrality probe needs nothing
 from the QC and is ready, so the gap goes to **13236 x2**.
+
+# MTP-5 REPLICATE A — SERVING, and engine purity is OBSERVED
+
+Runroot (from the log, not the launch): `output/fr14_mtp5_astropy13236_a_20260824T010807Z`
+
+## Three refusals before it booted, and two were real findings about THIS repo
+
+1. **`tracked worktree must be clean`** — my own gate, a lane mid-edit. Not a site.
+2. **`ModuleNotFoundError: lumo_flywheel_serving.model_server`.** `model_server.py`
+   exists here, but the shared `.venv`'s editable install points at
+   `/home/mark/shared/lumoFlyWheel/src` — a **different checkout that lacks it**. Every
+   sibling script sets `PYTHONPATH="$PWD/src"` inline; the native launcher does not.
+3. **Missing chat template.** The template exists here; the mount did not point here:
+
+       fr10_launch_speed_server.sh:4     REPO=${REPO:-/home/mark/shared/lumoFlyWheel}   FOREIGN
+       fr13_launch_native_mtp_server.sh  REPO=${REPO:-/home/mark/shared/lumoFlyWheel}   FOREIGN
+       fr13_launch_forked_fa2_tree_server.sh  REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}  self
+       fr14_leg3_launch_nomiddleware.sh       REPO=${REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}  self
+
+   **Both native launchers default to a foreign checkout; both fixed32-family launchers
+   derive from their own location.** A native arm launched from this port mounts ANOTHER
+   REPO at `/workspace` unless the caller overrides `REPO` — it would run foreign code
+   and templates *without saying so*. That is the more dangerous of the two, because it
+   is silent whenever the foreign checkout happens to have the file.
+
+Both fixed caller-side using documented overrides, and both reported rather than papered
+over. Recommend the native launchers derive `REPO` from `SCRIPT_DIR` like their siblings.
+
+## PURITY: the first attestation's failure was MY instrument, not the engine
+
+The first live attestation returned `ALL_PASS: false` on check 3. **That was a false
+positive of my own making**, and the artifact is retained as
+`MTP5_PURITY.first_attestation_false_positive.json`.
+
+It was *not* an instrument-cannot-locate failure: the attestor found everything —
+`vllm_dir=/usr/local/lib/python3.12/dist-packages/vllm`, `engine_pid=170`, sentinels a
+real `0`, and 1233 wheel files verified. The bug was that I matched our forked `.so` **by
+basename**, and our fork carries the *same basename* as vLLM's own stock extension. The
+check was counting the wheel's own `vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so`. Corrected
+to discriminate **by path**; re-attested against the live container mid-serve (all checks
+read-only, and the state they attest — installed tree, mapped `.so` — is stable through
+the serve).
+
+    VERDICT: engine purity OBSERVED: no our-side code in the engine
+    1 patcher absent  sentinels=0  patcher_invocations_in_boot_log=0
+    2 import census   engine_pid=170  ourside_fds=0  ourside_maps=0
+    3 attention       our_so=0   stock wheel flash-attn mapped=8
+                      mapped: _vllm_fa2_C.abi3.so, _vllm_fa3_C.abi3.so  (BOTH the wheel's own)
+    4 vllm at rest    1233 files checked against dist-info RECORD, 0 mismatching
+                      vllm 0.19.2rc1.dev134+gfe9c3d6c5
+
+Two disclosures the artifact keeps rather than hides:
+
+* `workspace_mounted=1` and `recent_workspace_pycache=2` — `/workspace` IS mounted
+  (because I set `REPO`), and something wrote `__pycache__` there. But the **engine** has
+  zero our-side fds and zero our-side mappings, so nothing from it entered the engine;
+  the pycache is host/launcher-side.
+* Shared apparatus, present and outside the engine: the host-side offload proxy and the
+  24k output ceiling. "No our-side code in the engine" must not be read as "no our-side
+  code anywhere".
+
+## QC RESUME SET — the 12-set stands, and here is why
+
+Checked before deciding: 13453's offline eval **has not run** — its `eval/` directory is
+empty and `runner_metadata.json` is absent. So the recoverable-verdict path is not
+already banked.
+
+I am **not** pursuing it, and the reason is arithmetic. Switching to an eleven-set needs a
+new derived subset plus a workload key across the whole statement family — which cost
+**eight conversions** last time (pass 172) — to save roughly ten minutes of GPU on one
+task. The 12-set is already minted, digest-pinned and validated end to end.
+
+**Path taken: the 12-set stands; 13453 re-serves; its first verdict is recorded as
+superseded-by-reserve in the artifact.** No lane flag needed.
