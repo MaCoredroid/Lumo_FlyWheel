@@ -7200,8 +7200,15 @@ _EVAL_NET_LOG = DEFAULT_OUT_ROOT / "swe_eval_offload_network.log"
 # What is actually on this host, measured 2026-08-24:
 #
 #   shutil.which("codex-bench-eval-swe")      -> None (not on PATH)
-#   <repo>/.venv                              -> SYMLINK to the OLD checkout's
-#                                                /home/mark/shared/lumoFlyWheel/.venv
+#   <repo>/.venv                              -> SYMLINK pointing OUT of this
+#                                                worktree, at the .venv of the
+#                                                checkout this port was branched
+#                                                from. Resolve it with `readlink`
+#                                                when you need it: naming that tree
+#                                                here would plant exactly the kind
+#                                                of absolute literal this file
+#                                                forbids, and it would go stale the
+#                                                moment the symlink is repointed.
 #   <repo>/.venv/bin/codex-bench-eval-swe     -> a console script whose shebang
 #                                                hardcodes that old venv's python
 #                                                and which imports
