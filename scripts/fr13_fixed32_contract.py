@@ -48,11 +48,59 @@ RUNTIME_SCHEMA = "fr13-fixed32-runtime-attestation-v1"
 CANONICAL_FORMAT = "utf8-json-sort-keys-compact-v1"
 RUNTIME_ATTESTATION_MODE = 0o644
 
+# SUPERSEDED as an algebra input by FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS below.
+# Retained because other modules import it and because it names the ceiling the
+# banked pre-2026-08-24 corpus was served at. Nothing in this module's
+# reconciliation reads it any more -- asserted by the contract tests.
 QWEN_VISIBLE_MAX_OUTPUT_TOKENS = 32_768
 QWEN_COMPACTION_MAX_OUTPUT_TOKENS = 20_000
+
+# SITE 25. The visible ceiling is DEPLOYED by the serve vehicle
+# (LUMO_PROXY_MAX_OUTPUT_TOKENS, pinned in fr13_bigdenom_swe_serve_variant.sh),
+# and it CHANGED: 32768 through 2026-08-23, 24000 from d390ed5e7 onward. The
+# constant above stated it a second time, so the first serve carrying the new
+# ceiling died on a contract still expecting the old one -- request counts
+# reconciled perfectly and only the algebra failed.
+#
+# The fix is NOT a second literal. This contract also runs over BANKED runroots
+# from the 32768 era, so it cannot hardcode either number. Instead the algebra
+# SOLVES for the ceiling the run actually served and requires the answer to be
+# one this campaign has deployed. Adding a ceiling is one edit here, and the
+# launcher's exact pin is what decides which one a NEW serve may use -- two
+# controls, each doing its own job, neither restating the other's.
+#
+# Ordered newest first; the newest entry is what a new serve must pin.
+FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS: tuple[int, ...] = (24_000, 32_768)
+
+# THE COMPACTION CONSTANT IS NOT THE SAME HAZARD, and the audit says why:
+# QWEN_COMPACTION_MAX_OUTPUT_TOKENS is not deployed by us at all. It is an
+# observed property of qwen-code 0.19.4's internal compaction call, so there is
+# no second place it could drift from -- unlike the visible ceiling, which we
+# deploy and therefore stated twice.
+#
+# It does couple to the algebra in one way that matters. Compactions are counted
+# from the `max_tokens_le_20000` histogram bucket, which only separates them
+# from normal requests while the visible ceiling stays ABOVE that bucket edge. A
+# ceiling at or below 20000 would drop normal requests into the compaction
+# bucket and the split would be silently wrong rather than loudly broken.
+#
+# This is not hypothetical: the tradeoff curve published with the 24000 ruling
+# offered 12000 and 16000 as tighter options, and either would have landed here.
+# The guard makes that a refusal at import instead of a mis-count at gate time.
+if any(
+    ceiling <= QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+    for ceiling in FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS
+):  # pragma: no cover - import-time contract
+    raise ContractError(
+        "fixed32 deployed max-output ceilings must exceed the compaction cap "
+        f"{QWEN_COMPACTION_MAX_OUTPUT_TOKENS}; the le_20000 histogram bucket "
+        "is what separates compactions from normal requests, and a ceiling at "
+        "or below it makes that split silently wrong: "
+        f"{list(FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS)}"
+    )
 # qwen-code's ``web_fetch`` is not a retrieval tool: after it fetches the URL
 # it runs a ``runSideQuery`` model call (purpose "web-fetch", maxAttempts 1,
-# the main model, the ordinary 32768 max_tokens) to extract the answer from the
+# the main model, the ordinary DEPLOYED max_tokens ceiling) to extract the answer
 # fetched bytes, and returns only that call's text. The side query never enters
 # the agent's chat history, so it emits no trace assistant record -- but vLLM
 # serves, bills and histograms it and our own ingress ledger records it. These
@@ -1115,7 +1163,7 @@ def _fixed32_qwen_metric_labels(
 #
 #   stop    the model emitted its stop condition.  The overwhelming majority.
 #
-#   length  the model reached its max_tokens cap (32768 visible / 20000
+#   length  the model reached its max_tokens cap (the deployed visible ceiling / 20000
 #           compaction) and its response was truncated.  LEGAL AND ACCOUNTED,
 #           not tolerated: the engine served the request to completion, the
 #           decode work is fully counted in generation_tokens and in the step
@@ -1407,28 +1455,64 @@ def _fixed32_qwen_compaction_metric_evidence(
         )
 
     total_compactions = deltas["max_tokens_le_20000"]
+    # ERA-SCOPED. Solve for the ceiling this run served rather than asserting
+    # one, then require it to be a ceiling the campaign has deployed. Banked
+    # 32768-era runroots and new 24000-era ones both reconcile; a ceiling
+    # nobody deployed refuses.
+    served_max_output_tokens: int | None = None
+    compaction_component = total_compactions * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+    for candidate in FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS:
+        if (
+            deltas["max_tokens_sum"]
+            == normal_request_count * candidate + compaction_component
+        ):
+            served_max_output_tokens = candidate
+            break
     expected_max_tokens_sum = (
-        normal_request_count * QWEN_VISIBLE_MAX_OUTPUT_TOKENS
-        + total_compactions * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+        normal_request_count
+        * (
+            served_max_output_tokens
+            if served_max_output_tokens is not None
+            else FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS[0]
+        )
+        + compaction_component
     )
     if (
         total_compactions < successful_compaction_count
         or normal_request_count + total_compactions != completed
-        or deltas["max_tokens_sum"] != expected_max_tokens_sum
+        or served_max_output_tokens is None
     ):
-        # Name every measured number. The FR14 bring-up burned a full
-        # diagnosis pass on this clause because it said only "does not
-        # reconcile" -- the numbers below would have said "the trace is one
-        # 32768 request short" in one line.
+        # Name every measured number, and now also name the ceilings. The FR14
+        # bring-up burned a full diagnosis pass on this clause because it said
+        # only "does not reconcile"; site 25 burned another because it named
+        # one ceiling while the serve deployed a different one.
+        implied = (
+            (deltas["max_tokens_sum"] - compaction_component)
+            / normal_request_count
+            if normal_request_count
+            else float("nan")
+        )
+        # Per-candidate shortfalls, so "the trace is one 32768 request short"
+        # stays a one-line read. That diagnostic saved a full pass once; the
+        # era table must not cost it.
+        shortfalls = ", ".join(
+            f"{candidate}: "
+            f"{deltas['max_tokens_sum'] - (normal_request_count * candidate + compaction_component)}"
+            for candidate in FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS
+        )
         raise ContractError(
-            "fixed32 qwen 32768/20000 max-token algebra does not reconcile: "
+            "fixed32 qwen max-token algebra does not reconcile at any deployed "
+            f"ceiling {list(FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS)} "
+            f"(compaction {QWEN_COMPACTION_MAX_OUTPUT_TOKENS}): "
             f"trace normal={normal_request_count} + "
             f"le_20000_compactions={total_compactions} against engine "
             f"completed={completed} (trace-visible successful compactions "
             f"{successful_compaction_count}); max_tokens_sum="
             f"{deltas['max_tokens_sum']} against expected "
             f"{expected_max_tokens_sum}, a shortfall of "
-            f"{deltas['max_tokens_sum'] - expected_max_tokens_sum}"
+            f"{deltas['max_tokens_sum'] - expected_max_tokens_sum}; shortfall "
+            f"per deployed ceiling {{{shortfalls}}}; the sum implies a "
+            f"per-request ceiling of {implied:.4f}"
         )
 
     result_usage = result.get("usage")
@@ -1490,7 +1574,7 @@ def _fixed32_qwen_compaction_metric_evidence(
     # A compaction inside a delegated (sub-agent) conversation can never show
     # up as a top-level input-token drop, so demand trace-visible or synthetic
     # evidence only for compactions beyond the unobservable boundaries the
-    # trace actually contains. The exact 32768/20000 algebra above already
+    # trace actually contains. The exact deployed-ceiling/20000 algebra above already
     # pins every engine request.
     if (
         failed_compactions > 0
@@ -1507,9 +1591,10 @@ def _fixed32_qwen_compaction_metric_evidence(
         "metrics_pre_sha256": hashlib.sha256(metrics_pre).hexdigest(),
         "metrics_post_sha256": hashlib.sha256(metrics_post).hexdigest(),
         "completed_engine_requests": completed,
-        "normal_visible_max_output_tokens": (
-            QWEN_VISIBLE_MAX_OUTPUT_TOKENS
-        ),
+        # THE CEILING THIS RUN ACTUALLY SERVED, solved from its own metrics --
+        # not the module constant, which would have recorded 32768 for a run
+        # served at 24000 and made the artifact lie about its own era.
+        "normal_visible_max_output_tokens": served_max_output_tokens,
         "compaction_max_output_tokens": (
             QWEN_COMPACTION_MAX_OUTPUT_TOKENS
         ),
@@ -1710,10 +1795,10 @@ def _fixed32_qwen_hidden_web_fetch_requests(
     ``_fixed32_qwen_hidden_agent_terminal_requests`` knows the sub-agent's
     final turn. Neither knows the third hidden class: a TOOL that calls the
     model. qwen-code 0.19.4's ``web_fetch`` fetches the URL and then issues a
-    ``runSideQuery`` completion at the ordinary 32768 max_tokens to extract the
+    ``runSideQuery`` completion at the ordinary deployed max_tokens ceiling to extract the
     answer from the fetched bytes, returning only that call's text as the tool
     result. FR13's 236 banked 3.6 traces never once called the tool, so the
-    32768/20000 algebra never had to account for it. The first 3.8 arm called
+    deployed-ceiling/20000 algebra never had to account for it. The first 3.8 arm called
     it on its second task (astropy__astropy-13033) and the validator did what
     it is built to do: 17 trace-visible requests against 18 engine requests, so
     it failed closed on traffic it could not see.
@@ -2727,7 +2812,7 @@ def validate_fixed32_trace_model_requests(
         ),
     )
     request_records.extend(hidden_requests)
-    # Tool-internal model calls. These are ORDINARY 32768-max_tokens requests,
+    # Tool-internal model calls. These are ORDINARY visible-ceiling requests,
     # not compactions, so they join request_records before the compaction split
     # below and land in normal_request_count where the algebra expects them.
     hidden_web_fetch_requests = _fixed32_qwen_hidden_web_fetch_requests(
@@ -3241,25 +3326,46 @@ def validate_fixed32_qwen_campaign_metrics(
     # sum identity to the token is refused.
     capped_compaction = deltas["max_tokens_le_20000"] - total_compactions
     capped_visible = capped_requests - capped_compaction
+    # SITE 25, campaign scope: same era-scoping as the per-task algebra. Solve
+    # for the ceiling this campaign served instead of restating one, so banked
+    # 32768-era campaigns and new 24000-era ones both reconcile.
+    visible_units = normal_total + capped_visible
+    compaction_units = total_compactions + capped_compaction
+    campaign_max_output_tokens: int | None = None
+    if capped_compaction >= 0 and capped_visible >= 0:
+        for candidate in FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS:
+            if deltas["max_tokens_sum"] == (
+                visible_units * candidate
+                + compaction_units * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+            ):
+                campaign_max_output_tokens = candidate
+                break
     if (
         capped_compaction < 0
         or capped_visible < 0
         or normal_total + total_compactions != completed_total
-        or deltas["max_tokens_sum"]
-        != (
-            (normal_total + capped_visible) * QWEN_VISIBLE_MAX_OUTPUT_TOKENS
-            + (total_compactions + capped_compaction)
-            * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
-        )
+        or campaign_max_output_tokens is None
     ):
+        implied = (
+            (
+                deltas["max_tokens_sum"]
+                - compaction_units * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+            )
+            / visible_units
+            if visible_units
+            else float("nan")
+        )
         raise ContractError(
-            "fixed32 qwen campaign 32768/20000 max-token algebra does not "
-            f"reconcile: normal={normal_total} compactions={total_compactions} "
+            "fixed32 qwen campaign max-token algebra does not reconcile at any "
+            f"deployed ceiling {list(FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS)} "
+            f"(compaction {QWEN_COMPACTION_MAX_OUTPUT_TOKENS}): "
+            f"normal={normal_total} compactions={total_compactions} "
             f"completed={completed_total} capped={capped_requests} "
             f"le_20000={deltas['max_tokens_le_20000']} "
             f"sum={deltas['max_tokens_sum']} "
             f"(capped split visible={capped_visible} "
-            f"compaction={capped_compaction})"
+            f"compaction={capped_compaction}); the sum implies a per-request "
+            f"ceiling of {implied:.4f}"
         )
     # ---------------------------------------------------------------- #
     # Which meter closes the token identity                             #
@@ -3307,7 +3413,8 @@ def validate_fixed32_qwen_campaign_metrics(
         "task_count": len(task_rows),
         "task_ids": [row["instance_id"] for row in task_rows],
         "completed_engine_requests": completed_total,
-        "normal_visible_max_output_tokens": QWEN_VISIBLE_MAX_OUTPUT_TOKENS,
+        # The ceiling this CAMPAIGN served, solved from its own meters.
+        "normal_visible_max_output_tokens": campaign_max_output_tokens,
         "compaction_max_output_tokens": QWEN_COMPACTION_MAX_OUTPUT_TOKENS,
         "normal_requests": normal_total,
         "successful_compaction_requests": successful_compaction_total,

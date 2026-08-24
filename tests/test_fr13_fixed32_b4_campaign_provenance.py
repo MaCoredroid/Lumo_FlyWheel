@@ -564,8 +564,8 @@ def test_b4_campaign_failed_only_compactions_use_global_algebra() -> None:
 @pytest.mark.parametrize(
     ("tamper", "message"),
     (
-        ("compaction_bucket", "32768/20000"),
-        ("max_tokens_sum", "32768/20000"),
+        ("compaction_bucket", "max-token algebra does not reconcile"),
+        ("max_tokens_sum", "max-token algebra does not reconcile"),
         ("task_auth_count", "completion metrics"),
         ("hidden_input", "hidden compaction token usage"),
         ("hidden_output", "hidden compaction token usage"),

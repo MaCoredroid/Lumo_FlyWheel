@@ -949,8 +949,8 @@ def test_top_level_trace_has_no_unobservable_boundaries() -> None:
 @pytest.mark.parametrize(
     ("overrides", "expected_completed", "message"),
     (
-        ({"max_tokens_sum": 485_985}, 16, "32768/20000"),
-        ({"max_tokens_le_20000": 2}, 16, "32768/20000"),
+        ({"max_tokens_sum": 485_985}, 16, "max-token algebra does not reconcile"),
+        ({"max_tokens_le_20000": 2}, 16, "max-token algebra does not reconcile"),
         ({"max_tokens_le_10000": 1}, 16, "unpinned low"),
         ({"max_tokens_count": 15}, 16, "completion metrics"),
         ({"request_success_stop": 15}, 16, "completion metrics"),
@@ -1081,7 +1081,9 @@ def test_qwen_ordinary_request_mismatch_cannot_be_reclassified() -> None:
         generation_tokens=14,
     )
 
-    with pytest.raises(contract.ContractError, match="32768/20000"):
+    with pytest.raises(
+        contract.ContractError, match="max-token algebra does not reconcile"
+    ):
         contract.validate_fixed32_trace_model_requests(
             events,
             expected_session_id=contract.fixed32_trace_session_id(TASK_A),
@@ -1105,7 +1107,9 @@ def test_qwen_nonpinned_hidden_request_algebra_fails_closed() -> None:
         },
     )
 
-    with pytest.raises(contract.ContractError, match="32768/20000"):
+    with pytest.raises(
+        contract.ContractError, match="max-token algebra does not reconcile"
+    ):
         contract.validate_fixed32_trace_model_requests(
             events,
             expected_session_id=contract.fixed32_trace_session_id(TASK_A),
@@ -4343,11 +4347,15 @@ def test_qwen_web_fetch_stays_fail_closed_on_unaccountable_traffic() -> None:
             metrics_post=metrics_post,
         )
     message = str(extra_error.value)
-    assert "32768/20000 max-token algebra does not reconcile" in message
+    assert "max-token algebra does not reconcile" in message
     # The clause now names its numbers instead of making the next run guess.
     assert f"trace normal={_ENGINE_COMPLETED_13033}" in message
     assert f"completed={_ENGINE_COMPLETED_13033 + 1}" in message
-    assert "shortfall of 32768" in message
+    # The "one 32768 request short" read survives the era table -- it is now
+    # named per deployed ceiling, so the reader sees WHICH era it would have
+    # reconciled under if one request were accounted for.
+    assert "shortfall per deployed ceiling" in message
+    assert "32768: 32768" in message
 
 
 # --------------------------------------------------------------------------

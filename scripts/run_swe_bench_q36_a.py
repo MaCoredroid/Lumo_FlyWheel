@@ -744,8 +744,20 @@ QWEN_CODE_TEMPLATE = (
     # R1 context-budget fix (FR13_CONTEXT_COMPRESSION_DESIGN, verified in-image v0.19.4):
     # qwen-code reserves max(ESCALATED_MAX_TOKENS=64000, outputTokenLimit=65536) output tokens
     # unless overridden -> contextLimit = 131072-65536 = 65536 -> hard limit 48875.2. The proxy
-    # caps real output at LUMO_PROXY_MAX_OUTPUT_TOKENS=32768, so reserve exactly that:
+    # caps real output at LUMO_PROXY_MAX_OUTPUT_TOKENS, so reserve exactly that:
     # contextLimit=98304 -> hard limit 75304 (+54%). Uniform across all arms (eval-fair).
+    #
+    # SITE 25, DELIBERATELY NOT LOWERED TO 24000. This is a SEPARATE KNOB from the
+    # proxy ceiling: it sets qwen-code's output RESERVATION, and therefore its
+    # contextLimit (131072 - reservation). The ceiling moved to 24000
+    # (d390ed5e7); matching it here would raise contextLimit to 107072 and give
+    # the agent ~7k MORE context than every banked arm ran with. That is a
+    # behaviour change to the agent's planning budget, not a bookkeeping fix, and
+    # it would break the eval-fairness this line was written to guarantee.
+    # It is also NOT needed for reconciliation: the contract reads vLLM's
+    # POST-proxy max_tokens, which is 24000 either way. Over-reserving costs the
+    # agent context it could have had; that is a trade to make deliberately, on
+    # its own evidence, not as a side effect of a ceiling change.
     "-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 "
     # FR13 §59 belt: raise qwen-code's stream-idle abort (built-in default 120000ms)
     # so a transient mid-stream upstream flake (GB10 emit/transport wedge) is not
@@ -2519,6 +2531,8 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
         f"--network={_fr14_agent_network()} -u 0:0 "
         f"-e OPENAI_API_KEY -e OPENAI_BASE_URL={endpoint} "
         f"-e OPENAI_MODEL={model} -e QWEN_MODEL={model} -e HOME=/tmp "
+        # See the reservation note above: separate knob from the proxy ceiling,
+        # held at 32768 for eval-fairness with the banked corpus.
         f"-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 "
         f"-e QWEN_STREAM_IDLE_TIMEOUT_MS=600000 "
         f"-e PATH={_INSTANCE_CONTAINER_PATH} "
