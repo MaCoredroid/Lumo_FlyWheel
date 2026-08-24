@@ -415,3 +415,202 @@ def test_hydra27_still_resolves_to_exactly_the_tree_it_always_did() -> None:
     ]
     # tail6 and hydra27 share the era list BY REFERENCE, not a retyped copy
     assert by_mode["tail6_fixed32"] is by_mode["hydra27_fixed32"]
+
+
+# --------------------------------------------------------------------------- #
+# BOOT ELEVEN: a flagged unknown, measured and then derived                    #
+# --------------------------------------------------------------------------- #
+# The Arctic-tail landing refused to invent a hydra31 rescue-column count: the
+# authority stated none, so the site kept hydra27's shape behind a comment and
+# a two-sided refusal. Boot eleven reached it and the refusal did its job:
+#
+#   FR13 fixed32 direct Arctic/fill work drift for mode 'hydra31_fixed32':
+#     merge_fill_columns: observed 16 against audited 20;
+#     merge_fill_rows:    observed 16 against audited 20;
+#     rescue_path_columns: observed 6 against audited 10
+#
+# THE DERIVATION WAS ALREADY IN THE AUTHORITY, UNNAMED. rescue columns are the
+# sum of the profile's branch-chain lengths -- hydra27 ((1,4),(2,6)) = 10,
+# tail10 ((1,4),(2,2)) = 6 -- and those four shortened columns are exactly the
+# ones tail10 respends as spine. So the engine's 6 is the CORRECT geometry, not
+# a misconfiguration, and it is now stated per mode rather than copied.
+#
+# WHAT IS CONSERVED: main tail + rescue columns is 16 under BOTH profiles
+# (6 + 10 and 10 + 6), gated 18 under both. The stale `main + 10` tracked the
+# main tail and held the rescue constant, which is precisely how it produced 20
+# where the engine produced 16.
+CORPSE_ARCTIC_OBSERVED = {
+    "rescue_path_columns": 6,
+    "merge_fill_columns": 16,
+    "merge_fill_rows": 16,
+}
+
+
+def test_the_rescue_rule_is_stated_in_the_authority_and_derived() -> None:
+    topology = _topology()
+    assert topology.rescue_path_columns_for_mode("hydra27_fixed32") == 10
+    assert topology.rescue_path_columns_for_mode("tail6_fixed32") == 10
+    assert topology.rescue_path_columns_for_mode("hydra31_fixed32") == 6
+    # DERIVED, not typed: it is the sum of the profile's branch-chain lengths
+    for profile in topology.TOPOLOGY_PROFILES:
+        chains = topology.PROFILES[profile]["physical_branch_chains"]
+        assert topology.rescue_path_columns_for_profile(profile) == sum(
+            int(length) for _rank, length in chains
+        )
+    # and the conserved quantity, which is why merge-fill reads 16 on both
+    for mode in topology.SERVING_MODES:
+        assert topology.merge_fill_columns_for_mode(mode) == 16
+        assert topology.merge_fill_columns_for_mode(mode, gated=True) == 18
+
+
+def _arctic_expected(mode: str, *, gated: bool = False, batch: int = 1) -> dict:
+    """Run the planted Arctic audit's expectation build, verbatim."""
+    import os as _os
+
+    blob = None
+    for _name, text in planted_blobs(PATCHER):
+        if "_FR13_FIXED32_ARCTIC_TAIL_BY_PROFILE" in text:
+            blob = text
+            break
+    assert blob is not None
+    lines = blob.split("\n")
+    tree = ast.parse(blob)
+    preamble = []
+    for node in tree.body:
+        names = [t.id for t in getattr(node, "targets", []) if isinstance(t, ast.Name)]
+        if any(
+            n.startswith("_FR13_FIXED32_ARCTIC_TAIL")
+            or n.startswith("_FR13_FIXED32_GDN_SCHEDULE")
+            or n
+            in ("_FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE", "_FR13_FIXED32_GDN_MODE")
+            for n in names
+        ) or (
+            isinstance(node, ast.If) and "_FR13_FIXED32_GDN_MODE" in ast.dump(node)
+        ):
+            preamble.append("\n".join(lines[node.lineno - 1 : node.end_lineno]))
+    fn = next(
+        n
+        for n in tree.body
+        if isinstance(n, ast.FunctionDef)
+        and n.name == "_fr13_fixed32_drafter_observed_arctic"
+    )
+    gate = next(
+        n
+        for n in ast.walk(fn)
+        if isinstance(n, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "_fr14_gated" for t in n.targets)
+    )
+    expected = next(
+        n
+        for n in ast.walk(fn)
+        if isinstance(n, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "expected" for t in n.targets)
+    )
+    segment = textwrap.dedent(
+        "\n".join(lines[gate.lineno - 1 : expected.end_lineno])
+    )
+    saved = _os.environ.get("FR13_FIXED32_MODE")
+    _os.environ["FR13_FIXED32_MODE"] = mode
+    namespace = {"batch": batch, "work": {"gated": gated}}
+    try:
+        exec("\n".join(preamble), namespace)  # noqa: S102 - our own planted source
+        exec(segment, namespace)  # noqa: S102
+    finally:
+        if saved is None:
+            _os.environ.pop("FR13_FIXED32_MODE", None)
+        else:
+            _os.environ["FR13_FIXED32_MODE"] = saved
+    return namespace["expected"]
+
+
+def test_the_arctic_audit_reproduces_the_corpse_under_hydra31() -> None:
+    """ORDER 3: CPU-reproduce == the corpse's observed dict."""
+    expected = _arctic_expected("hydra31_fixed32")
+    got = {name: expected[name] for name in CORPSE_ARCTIC_OBSERVED}
+    assert got == CORPSE_ARCTIC_OBSERVED, got
+    # rescue carry slots stay zero for hydra31, which is the finding that made
+    # the 6 credible before the corpse confirmed it
+    assert expected["rescue_carry_slots"] == 0
+
+
+def test_the_legacy_modes_are_byte_identical_through_the_arctic_audit() -> None:
+    era = _arctic_expected("hydra27_fixed32")
+    assert _arctic_expected("tail6_fixed32") == era
+    assert era["rescue_path_columns"] == 10
+    assert era["merge_fill_columns"] == 16
+    assert era["merge_fill_rows"] == 16
+    assert era["main_tail_columns"] == 6
+    # gated keeps its own conserved width on both profiles
+    assert _arctic_expected("hydra27_fixed32", gated=True)["merge_fill_columns"] == 18
+    assert _arctic_expected("hydra31_fixed32", gated=True)["merge_fill_columns"] == 18
+
+
+def test_no_hardcoded_rescue_shape_survives_in_the_audit() -> None:
+    blob = None
+    for _name, text in planted_blobs(PATCHER):
+        if "_FR13_FIXED32_ARCTIC_TAIL_BY_PROFILE" in text:
+            blob = text
+            break
+    assert blob is not None
+    assert '"rescue_path_columns": 10,\n' not in blob.replace(
+        '        # branch-chain lengths, ((1, 4), (2, 6)) -> 10.\n        "rescue_path_columns": 10,\n',
+        "",
+    )
+    assert "_fr14_main + 10" not in blob
+    assert '"merge_fill_columns": _fr14_main + _fr14_rescue_columns,' in blob
+    assert "NOT AUTHORITY-BACKED" not in blob, "the flag should be gone, not stale"
+
+
+#: Every remaining "flagged with a comment" site in the serve closure, and the
+#: lever each one gates. ALL of them are default-off candidates that refuse
+#: hydra31 by declaration; NONE is an unresolved geometry on the always-on
+#: path. Boot eleven's rescue columns were the last of that kind.
+REMAINING_FLAGGED_LEVERS = {
+    "src/lumo_flywheel_serving/fr13_host_tail_prep.py": "FR13_HOST_TAIL_PREP_BAKE",
+    "src/lumo_flywheel_serving/fr13_sfwd_conv_postprep_fusion.py": (
+        "FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION"
+    ),
+    "src/lumo_flywheel_serving/fr13_sfwd_prior_reuse_descriptorless.py": (
+        "FR13_FIXED32_SFWD_PRIOR_REUSE"
+    ),
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": (
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION"
+    ),
+}
+
+
+def test_every_remaining_flag_is_on_a_default_off_lever() -> None:
+    """THE RESIDUAL WALL COUNT, answered so it is checkable.
+
+    A flag that gates an ARMED lever is a wall boot twelve would hit; a flag on
+    a lever that is off is not. The hydra31 arm's own container env is the
+    evidence: every lever named here reads 0 or is absent, and the only armed
+    flag in that arm is FR13_ENABLE_APC.
+    """
+    for rel, flag in REMAINING_FLAGGED_LEVERS.items():
+        assert (REPO / rel).is_file(), rel
+        assert flag.startswith("FR13_"), flag
+    env_files = sorted(
+        (REPO / "output").glob("fr14_promoab_CH31iA_*/**/container_env.txt")
+    )
+    if not env_files:
+        pytest.skip("boot eleven's container env is not on disk")
+    env = env_files[0].read_text(errors="replace")
+    # THE CLAIM IS PER-LEVER, not "nothing is armed": plenty of unrelated FR13
+    # flags are on in any arm (APC, device-multidraft wiring). What matters is
+    # that every lever carrying an unresolved hydra31 flag reads 0 or is absent.
+    settings = dict(
+        line.split("=", 1)
+        for line in env.split("\n")
+        if "=" in line and line.startswith("FR13_")
+    )
+    for rel, flag in REMAINING_FLAGGED_LEVERS.items():
+        value = settings.get(flag)
+        assert value in (None, "0"), f"{rel}: {flag}={value!r} is ARMED"
+    # and the tree-shape levers specifically are all off
+    for flag in (
+        "FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION",
+        "FR13_FIXED32_GDN_GQA_GROUP3_PRODUCTION",
+        "FR13_HOST_TAIL_PREP_BAKE",
+    ):
+        assert settings.get(flag) in (None, "0"), (flag, settings.get(flag))

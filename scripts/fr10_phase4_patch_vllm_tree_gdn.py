@@ -1195,6 +1195,9 @@ _FR13_FIXED32_ARCTIC_TAIL_BY_PROFILE = {
         "arctic_requested_tokens": 12,
         "gated_arctic_requested_tokens": 14,
         "rescue_carry_slots": 4,
+        # MEASURED by boot eleven, then derived: sum of the profile's
+        # branch-chain lengths, ((1, 4), (2, 6)) -> 10.
+        "rescue_path_columns": 10,
     },
     "hydra31_fixed32": {
         "main_tail_length": 10,
@@ -1202,6 +1205,10 @@ _FR13_FIXED32_ARCTIC_TAIL_BY_PROFILE = {
         "arctic_requested_tokens": 16,
         "gated_arctic_requested_tokens": 18,
         "rescue_carry_slots": 0,
+        # tail10 shortens rank 2 from 6 to 2 -- exactly the four columns it
+        # respends as spine -- so ((1, 4), (2, 2)) -> 6. This is the number the
+        # engine served in boot eleven's corpse.
+        "rescue_path_columns": 6,
     },
 }
 _FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE = {
@@ -7274,6 +7281,9 @@ def _fr13_fixed32_drafter_observed_arctic(work):
         if _fr14_gated
         else _FR13_FIXED32_ARCTIC_TAIL_EXPECTED["arctic_requested_tokens"]
     )
+    _fr14_rescue_columns = _FR13_FIXED32_ARCTIC_TAIL_EXPECTED[
+        "rescue_path_columns"
+    ]
     expected = {
         "batch_size": batch,
         "main_lookup_calls": batch,
@@ -7288,16 +7298,17 @@ def _fr13_fixed32_drafter_observed_arctic(work):
         "arctic_lookup_calls": 3 * batch,
         "arctic_requested_tokens": _fr14_requested * batch,
         "main_tail_columns": _fr14_main,
-        # NOT AUTHORITY-BACKED, and deliberately left alone. The topology states
-        # no rescue COLUMN count, and hydra31 carries zero rescue carry slots,
-        # so a 10-column rescue path and the `+ 10` below are hydra27 shapes
-        # that nobody has qualified for tail10. Inventing numbers here would put
-        # unqualified values inside a contract; if boot seven stops here the
-        # two-sided message now names the field and the eyeball decides.
-        "rescue_path_columns": 10,
+        # RESOLVED by boot eleven, which reached this guard and reported the
+        # engine's own geometry: rescue 6, merge-fill 16. The authority now
+        # states the rule (sum of branch-chain lengths) and this reads it.
+        "rescue_path_columns": _fr14_rescue_columns,
         "merge_fill_calls": 1,
-        "merge_fill_columns": _fr14_main + 10,
-        "merge_fill_rows": (_fr14_main + 10) * batch,
+        # main tail + rescue columns. The stale form held the rescue at
+        # hydra27's 10 while tracking the main tail, which is exactly how it
+        # produced 20 where the engine produced 16: main + rescue is CONSERVED
+        # at 16 across both profiles (6 + 10 and 10 + 6).
+        "merge_fill_columns": _fr14_main + _fr14_rescue_columns,
+        "merge_fill_rows": (_fr14_main + _fr14_rescue_columns) * batch,
     }
     if proposal["arctic"] is not None or actual != expected:
         _arctic_drift = sorted(

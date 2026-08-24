@@ -1226,12 +1226,24 @@ def test_the_arctic_mirror_matches_the_topology_authority() -> None:
         assert entry["rescue_carry_slots"] == int(profile["rescue_carry_slots"])
 
 
-def test_the_unqualified_arctic_fields_are_flagged_not_invented() -> None:
-    """The authority states no rescue COLUMN count, so nothing was made up."""
+def test_the_flagged_arctic_unknown_was_resolved_by_measurement() -> None:
+    """SUPERSEDED BY BOOT ELEVEN, and kept as the record of the transition.
+
+    This asserted the flag was PRESENT: the authority stated no rescue column
+    count, so the site kept hydra27's shape behind a comment rather than invent
+    a hydra31 number. Boot eleven reached the guard, the two-sided refusal
+    reported the engine's own 6/16/16, and the rule now lives in the topology.
+    The flag must therefore be GONE -- a resolved unknown that still carries
+    its "unqualified" comment is worse than one that never had it.
+    """
     blob = _planted_blob()
-    assert "NOT AUTHORITY-BACKED" in blob
-    assert '"rescue_path_columns": 10,' in blob
+    assert "NOT AUTHORITY-BACKED" not in blob
+    assert "_fr14_main + 10" not in blob
+    assert '"rescue_path_columns": _fr14_rescue_columns,' in blob
     assert "direct Arctic/fill work drift for mode " in blob
+    topology = _topology()
+    assert topology.rescue_path_columns_for_mode("hydra31_fixed32") == 6
+    assert topology.rescue_path_columns_for_mode("hydra27_fixed32") == 10
 
 
 # --------------------------------------------------------------------------- #

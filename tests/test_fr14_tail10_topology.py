@@ -240,7 +240,12 @@ def _banked_or_skip():
         pytest.skip("banked census not present")
     with p.open() as fh:
         ev = json.loads(fh.readline())
-    # isolate lane 3's in-flight TAW pin re-attestation, which is not this lane's
+    # isolate lane 3's in-flight TAW pin re-attestation, which is not this lane's.
+    # THE DIGEST IS PER-WALK since the site-28 re-attestation: an event morphed
+    # to hydra31 is validated at walk 16 and must carry walk 16's digest, not
+    # the walk-12 era constant. Left keyed on the era constant, this fixture
+    # asserted a hydra27 digest on a hydra31 event and the validator was right
+    # to refuse it.
     ev["taw"]["source_contract_sha256"] = census.TAW_SOURCE_CONTRACT_SHA256
     return ev
 
@@ -248,6 +253,12 @@ def _banked_or_skip():
 def _morph(ev, mode):
     p = topo.profile(mode)
     b = ev["batch_size"]
+    # the morph changes the served walk, so it changes which audited digest
+    # applies; carrying the source event's one would test the wrong era.
+    _walk = int(topo.walk_cap_for_mode(mode))
+    _digest = census.TAW_SOURCE_CONTRACT_SHA256_BY_WALK.get(_walk)
+    if _digest is not None:
+        ev["taw"]["source_contract_sha256"] = _digest
     rescue = sum(l for _r, l in p["physical_branch_chains"])
     e = json.loads(json.dumps(ev))
     e["mode"] = mode

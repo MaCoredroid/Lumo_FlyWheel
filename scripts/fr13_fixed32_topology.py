@@ -1127,6 +1127,49 @@ WALK_CAP_BY_MODE: dict[Mode, int] = {
 }
 
 
+def rescue_path_columns_for_profile(profile: Mode) -> int:
+    """Columns the rescue chains occupy in the 31-column pack, per profile.
+
+    MEASURED, THEN STATED. This rule was a flagged unknown from the Arctic-tail
+    landing: the audit hardcoded hydra27's 10 and the authority stated no rescue
+    COLUMN count at all, so rather than invent a hydra31 number the site was
+    left with its hydra27 shape and a comment saying so. Boot eleven
+    (CH31iA, 2026-08-24) reached that guard and its two-sided refusal reported
+    the engine's own served geometry:
+
+        rescue_path_columns: observed 6 against audited 10
+        merge_fill_columns:  observed 16 against audited 20
+
+    The derivation was already here, unnamed: the rescue columns are the sum of
+    the profile's branch-chain lengths. hydra27's ((1, 4), (2, 6)) gives 10;
+    tail10 shortens rank 2 from 6 to 2 -- those four columns are exactly the
+    ones it respends as spine -- so ((1, 4), (2, 2)) gives 6, which is what the
+    engine served. Not a misconfiguration: the correct hydra31 geometry.
+
+    WHAT IS CONSERVED, and why merge-fill reads 16 on both: main tail + rescue
+    columns is 16 for hydra27 (6 + 10) and 16 for hydra31 (10 + 6), and the
+    gated pair is 18 for both. The audit's stale ``main + 10`` tracked the main
+    tail correctly and held the rescue constant, which is precisely how it
+    produced 20 where the engine produced 16.
+    """
+    chains = PROFILES[profile]["physical_branch_chains"]
+    return sum(int(length) for _rank, length in chains)
+
+
+def rescue_path_columns_for_mode(mode: Mode) -> int:
+    """The served mode's rescue column count."""
+    return rescue_path_columns_for_profile(TREE_PROFILE_BY_MODE[mode])
+
+
+def merge_fill_columns_for_mode(mode: Mode, *, gated: bool = False) -> int:
+    """Main Arctic tail plus rescue columns -- the merge-fill width."""
+    profile = PROFILES[TREE_PROFILE_BY_MODE[mode]]
+    main = int(
+        profile["gated_main_tail_length"] if gated else profile["main_tail_length"]
+    )
+    return main + rescue_path_columns_for_mode(mode)
+
+
 def walk_cap_for_mode(mode: Mode) -> int:
     """The SERVED mode's TAW walk cap. Refuses an unknown mode.
 
