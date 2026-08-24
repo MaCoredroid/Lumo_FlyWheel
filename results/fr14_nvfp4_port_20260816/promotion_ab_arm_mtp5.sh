@@ -131,6 +131,25 @@ mkdir -p "$RUNROOT_ABS"
 ) &
 _PURITY_PID=$!
 
+# ARTIFACT RETENTION. ARMDIR="$RUNROOT/$ARM" does NOT survive teardown -- replicate A
+# returned a 2-second vacuous "failed" and every per-task artifact that could have
+# explained it went with the arm dir. Mirror the tree to teardown-safe ground while
+# the arm is alive, so an agent-side failure is diagnosable and a success verifiable.
+# pretask_identity.json is copied on EVERY tick, so it survives the clean (swerc=0)
+# path too -- its absence there was one of the two unverifieds last round.
+(
+  _keep="$RUNROOT_ABS/_retained"; mkdir -p "$_keep"
+  for _i in $(seq 1 4000); do
+    if [[ -d "$RUNROOT_ABS/$ARM" ]]; then
+      cp -a "$RUNROOT_ABS/$ARM/." "$_keep/" 2>/dev/null || true
+    fi
+    [[ -z "$(docker ps -q)" ]] && sleep 3 && \
+      { [[ -d "$RUNROOT_ABS/$ARM" ]] && cp -a "$RUNROOT_ABS/$ARM/." "$_keep/" 2>/dev/null; exit 0; }
+    sleep 10
+  done
+) &
+_RETAIN_PID=$!
+
 echo "===== $ARM (drafter-neutrality probe) $(date -u +%FT%TZ) ====="
 env RUNROOT="$RUNROOT_ABS" \
   OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S=9000 \
