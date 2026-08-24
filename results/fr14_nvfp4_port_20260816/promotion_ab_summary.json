@@ -898,6 +898,109 @@
   "tally": "thirteen sites",
   "window_utc": "2026-08-19T19:59Z..20:09Z"
  },
+ "round21_qc_twelve_Cqc12": {
+  "budget_enforcement_finding": {
+   "actual_mechanism": "wallclock deadline enforced at the next inter-request boundary",
+   "corroboration": "site 26: 'the kill landed between requests (last event a tool result)'",
+   "guarantee": "wall <= budget + one turn (worst case ~15 min at a 24k turn)",
+   "hypothesis_tested": "pass 188: cap delivered to idle-based mechanism",
+   "observed_lag_s": 110,
+   "remote_wall_fix": "DEFERRED \u2014 188 landed a hypothesis, 189 landed accounting only",
+   "verdict": "DISCONFIRMED \u2014 agent was never idle (uninterrupted drafter fire advance) yet the kill landed"
+  },
+  "cross_instrument_proofs": {
+   "c5_vs_ladder": "rows>=6 933 == metric d5 933 exact; rows>=5 1575 vs d4 1574 (0.06% skew)",
+   "drain_at_scrape_alignment": "snap2(post-13453) == snap3(pre-13579) in every slot; zero leakage",
+   "ladder_rows_vs_engine_counter": "3670 == pure_decode_forward_steps == complete_work_census_events == end_forward_step (exact)"
+  },
+  "desk_item_patch_stability": {
+   "conditional_on_nonempty": {
+    "12907": "49/50 = 98.0%",
+    "13033": "2/18 = 11.1%",
+    "13236": "4/15 = 26.7%",
+    "13398": "4/11 = 36.4%",
+    "13453": "1/2 (n=2)"
+   },
+   "headline": "12907 is the determinism OUTLIER, not the rule; 11-36% elsewhere",
+   "method_correction": "workspace/patch.diff vs per_task/patch.diff are mutually exclusive (96/23/0); merging required",
+   "philox_b_relevance": "cuts against using 12907 as the determinism witness"
+  },
+  "desk_item_tighter_bound": {
+   "compaction_tax": "~40 of the first 68 minutes",
+   "confirmed_by": "requested-max_tokens histogram separates classes exactly (<=20000 vs <=50000)",
+   "identity": "QWEN_COMPACTION_MAX_OUTPUT_TOKENS = 20000 (fr13_fixed32_contract.py:56)",
+   "is_a_site": false,
+   "triple_reconciliation": "3+44 requested == 46 stop + 1 length == 9+6+9+9+5+3+3+3 generated == 47",
+   "why_not": "not deployed by us; no second place to drift from (contract audit :75-79)"
+  },
+  "fired_utc": "2026-08-24T02:13:01Z",
+  "head_at_boot": "60099f0f3",
+  "outcome": "DIED AT 2/12 on site 26 (budget-capped terminal had no legal class); both served verdicts stand",
+  "promotes_anything": false,
+  "resume_blocked": {
+   "alternative": "re-fire the 12-key entire (~2.8 h GPU re-serving two banked verdicts; order is pinned by design)",
+   "can_express_from_here": false,
+   "dispatch": "lane 4",
+   "evidence": [
+    "no resume machinery: zero hits for completed_set|partial_progress|resume_from|already_served|skip_completed",
+    "site 26 touched only fr13_fixed32_contract.py, run_swe_bench_q36_a.py, +1 test",
+    "a 10-key is the eight-statement family plus a SIXTH patcher re-seal"
+   ],
+   "remaining": 10
+  },
+  "runroot": "output/fr14_promoab_Cqc12_20260824T021301Z",
+  "site26_landed": "9a62c223d",
+  "subset_sha256": "ac54bcc4df1311147616affd71a3722d0c0fda89216b7ac6473a4ab3eab4c424",
+  "tasks": {
+   "astropy__astropy-13453": {
+    "c5": 0.5928,
+    "c5_delta_pos4": 1574,
+    "c5_delta_pos5": 933,
+    "degeneration": false,
+    "eightgram": 7,
+    "in_corridor": true,
+    "ladder_accepted_delta": 16168,
+    "ladder_mean_accept": 4.4054,
+    "ladder_rows_delta": 3670,
+    "liveness": "admissible",
+    "malformed": 0,
+    "patch_bytes": 1047,
+    "patch_sha8": "a4309d2f",
+    "residual_negative_slots": 0,
+    "tailrep": 0.219,
+    "terminal": "natural",
+    "tools": 50,
+    "ttr": 0.273,
+    "turns": 128,
+    "wall_s": 890
+   },
+   "astropy__astropy-13579": {
+    "budget_s": 9000,
+    "c5": 0.5316,
+    "c5_delta_pos4": 15501,
+    "c5_delta_pos5": 8241,
+    "classification": "empty-fail (13398 class), NOT degenerate",
+    "compactions": 6,
+    "degeneration": false,
+    "eightgram": 19,
+    "in_corridor": true,
+    "inflight_needle_c5_at_69min": 0.5357,
+    "malformed": 0,
+    "needle_error_vs_final": 0.0041,
+    "normal_requests": 79,
+    "overshoot_s": 165,
+    "patch_bytes": 0,
+    "patch_sha8": "e3b0c442",
+    "tailrep": 0.085,
+    "terminal": "BUDGET-CAPPED",
+    "tools": 83,
+    "ttr": 0.171,
+    "turns": 237,
+    "wall_s": 9165
+   }
+  },
+  "workload": "exact16_qc_remainder_12"
+ },
  "round3": {
   "arm_g_prime": {
    "boot": "2026-08-18T15:32:11Z",

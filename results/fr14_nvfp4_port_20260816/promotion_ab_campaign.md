@@ -5233,3 +5233,146 @@ They are needed regardless of which weights the probe eventually serves:
 
 Had the floor existed one round earlier it would have refused that result automatically
 instead of my having to catch it by eye.
+
+# ROUND 21 — THE QC'S TWELVE (Cqc12): TWO VERDICTS, THEN SITE 26
+
+Runroot `output/fr14_promoab_Cqc12_20260824T021301Z`, fired 02:13:01Z on the promoted
+split-K default. The arm died at **2 of 12** — not from anything the serve did, but because
+a budget-capped terminal had no legal classification (site 26, landed at 9a62c223d).
+Both served tasks reconcile and both verdicts stand.
+
+## TASK 1 — 13453: clean, and it proved three instruments against each other
+
+wall 14.8 min (02:18:21→02:33:11Z), patch **1047 B** @a4309d2f, **c5 = 0.5928 IN**.
+Eyeball `turns=128 ttr=0.273 maxline=25 8gram=7 tailrep=0.219 tools=50 malformed=0` — no
+degeneration signature. Liveness: admissible.
+
+Ladder v2 ADMISSIBLE, self-proof PASS, delta rows +3670 / accepted +16168, mean 4.4054,
+**residual non-negative at every boundary**. Three proofs fell out of it:
+
+1. **Rows vs an independent engine counter, exact.** Ladder rows delta = 3670; the task
+   boundary JSON independently reports `pure_decode_forward_steps` = `complete_work_census_events`
+   = `end_forward_step` = 3670. No double-count or drop under graph replay.
+2. **c5 cross-validated against the ladder — separate instruments.** `pos_i` counts rows
+   accepting ≥ i+1. From the ladder delta: rows ≥6 = 933 vs metric d5 = **933 exact**;
+   rows ≥5 = 1575 vs metric d4 = 1574, off by one in 1575 (**0.06%**), which is scrape-vs-
+   snapshot skew consistent with the 0–1 s drain alignment. c5 is not an artifact of the
+   per-pos counter alone.
+3. **Drain-at-scrape alignment proven live.** snap2 (post-13453) and snap3 (pre-13579) are
+   equal in every slot — zero delta. No work leaks between brackets; attribution is exact.
+
+**Ladder-shape note.** Slots 12–15 are empty; slot 11 carries a 437-row spike. The top of
+THIS ladder is 11, not 15 — hydra27's structural maximum, not the ≥15 clamp. Anyone reading
+the ladder as a distribution needs that or they will read a cliff where there is a ceiling.
+
+## TASK 2 — 13579: healthy-long, empty-fail, budget-capped
+
+wall **9165 s ≈ 152.8 min**, patch **0 B**, **c5 = 0.5316 IN** on a d4=15501 denominator.
+Eyeball `turns=237 46024w ttr=0.171 maxline=75 8gram=19 tailrep=0.085 tools=83 malformed=0`.
+
+**Not degenerate — an empty-fail, same class as 13398.** 83 tool calls across 237 turns is
+sustained real work. `tailrep=0.085` is LOWER than 13453's 0.219: degeneration drives tail
+repetition UP, and the banked 13236 degeneration was one turn with zero tools. The lower
+`ttr=0.171` is the mechanical consequence of a 46k-word trace, not a signal.
+
+Bracket closed clean: post `ok`, all pending counters zero, forward interval 3670→47696 with
+`expected_complete_events` 44026 reconciling exactly.
+
+### The in-flight needle held
+
+Called healthy-long at 69 minutes on a since-task-start bracket (**c5 = 0.5357**, d4=6817).
+Final over the whole task: **c5 = 0.5316**. Off by 0.004. The read-only needle is a
+trustworthy mid-flight instrument, and the coordinator's 10 s window (0.332) was correctly
+rejected as no-signal — at pos4 rate 0.412/s that window holds ~4 events.
+
+## THE BUDGET IS ENFORCED — and the "idle-based" hypothesis is DISCONFIRMED
+
+Pass 188 hypothesised the cap was delivered to a mechanism with idle-based semantics, which
+would mean a continuously-busy agent is never killed. **13579 falsifies that.** The needle
+showed the drafter's fire counter advancing without a gap for the whole run — the agent was
+never idle — and the kill still landed:
+
+    budget deadline  02:34:30Z + 9000 s = 05:04:30Z
+    last generation  05:06:16Z  (Running: 1)
+    engine idle      05:06:26Z  (Running: 0)
+    finalize         POST /fr13/fixed32/ingress/finalize -> 409 Conflict
+
+A pure idle timer could not have fired here. The observed behaviour is a **wallclock deadline
+enforced at the next inter-request boundary**: lag = deadline→next boundary = **~110 s**.
+Site 26 independently confirms the mechanism — "the kill landed between requests (last event
+a tool result), which is why the engine aborted nothing."
+
+So the knob is neither vacuous nor unarmed. It is **turn-boundary-granular**, and the honest
+statement of its guarantee is: *wall ≤ budget + one turn*, worst case ~15 min for a 24k turn.
+The remote-wall fix is DEFERRED (188 landed a hypothesis, 189 landed accounting), so that
+overshoot stands until a sibling lands — but it is bounded, not open-ended.
+
+## DESK ITEM — the bound tighter than the ceiling, identified
+
+The `length` finish below the armed 24000 is a **context compaction**:
+`QWEN_COMPACTION_MAX_OUTPUT_TOKENS = 20_000` (`fr13_fixed32_contract.py:56`). Confirmed on
+the metric, not inferred — compactions REQUEST 20000, normal requests REQUEST 24000, so the
+requested-max_tokens histogram separates them exactly. At the 69-minute mark:
+
+    requested <=20000: +3   (compactions)      <=50000: +44  (normal)
+    TRIPLE RECONCILIATION, three histograms on 47:
+      3+44 (requested) = 46 stop + 1 length (finish) = 9+6+9+9+5+3+3+3 (generated)
+
+**The compaction tax is the story of this task.** Three compactions by 69 minutes, six by the
+end; each emits a 10–20k summary at ~26 tok/s, and the three retire-free stretches in the
+cadence series line up with them — roughly 40 of the first 68 minutes spent compacting rather
+than working. Site 26's own algebra closes on the same facts: 79*24000 + 6*20000 = 2016000.
+
+Not a site: the contract's audit (:75-79) explains the asymmetry — we do not deploy the
+compaction cap, so it has no second place to drift from. The import guard (:90-100) requires
+deployed ceilings to EXCEED 20000, because the `le_20000` bucket is what separates the
+classes. Worth remembering that **the tradeoff curve published with the 24000 ruling offered
+12000 and 16000, either of which would have broken that split silently.**
+
+## DESK ITEM — patch stability across the bank, and a method correction
+
+A first scan missed 23 runs: on interrupted runs the patch sits at `workspace/patch.diff`,
+not `per_task/patch.diff`. The two are **mutually exclusive across the whole bank (96 / 23 /
+0 with both)** — same artifact, different stage — so merging them is correct.
+
+Stability CONDITIONAL ON PRODUCING A PATCH (empties are a separate mode; mixing them into a
+determinism statistic would be a category error):
+
+    task     runs  empty  non-empty  distinct  modal share
+    12907     61     11       50         2     49/50 = 98.0%
+    13398     16      5       11         8      4/11 = 36.4%
+    13236     19      4       15        11      4/15 = 26.7%
+    13033     21      3       18        17      2/18 = 11.1%
+    13453      2      0        2         2       1/2  (n=2, weak)
+
+**12907 IS THE OUTLIER, NOT THE RULE.** It returns byte-identical 49 times in 50; every other
+task sits at 11–36%. Any argument running from "12907 reproduces byte-identically" to "the
+system is reproducible" is unsupported by the other four, which say the agent TRAJECTORY is
+strongly non-deterministic and that patch identity is a property of the task, not the system.
+For the philox-B case that cuts directly against using 12907 as the determinism witness.
+
+13453's instability is now evidenced, not asserted. I checked the aborted run completed before
+comparing: both boundaries closed with clean flush-acks (`status ok`, pending zero, forward
+steps reconciled 1524==1524 and 3670==3670), so its task phase finished and site 25 fired later
+at the terminal audit. OLD 7.1 min / 109 rows / 481 B @fc200e0a; NEW 14.8 min / 180 rows /
+1047 B @a4309d2f.
+
+Also visible: the empty patch is the modal outcome for 13033 and 13398, and **13236's two most
+recent runs both produced 0 B** — the degeneration signature recurring.
+
+## THE RESUME IS BLOCKED ON LANE 4 — checked before firing, not at boot
+
+The remaining TEN cannot be expressed from here. Verified on disk:
+
+* **No resume machinery exists.** `completed_set|partial_progress|resume_from|already_served|
+  skip_completed` returns ZERO hits across `scripts/` and `tests/`.
+* **Site 26 did not add any.** It touched exactly three files — `fr13_fixed32_contract.py`,
+  `run_swe_bench_q36_a.py`, and a new test. No subset config, no launcher, no patcher.
+* **A 10-key is the eight-statement family again**, plus a SIXTH patcher re-seal: the key
+  lives in the subset JSON, the patcher's sealed `_FR13_FA2_QROW32_B1_TIER_B_WORKLOADS`, three
+  launcher bash tables, `fr14_mode_table_parity.py`, the qualification test, and my arm.
+
+Re-firing the existing 12-key instead would re-serve 13453 and 13579 from the top — the subset
+order is pinned by design ("a QC resumed out of order is a different measurement"). That costs
+~2.8 h of GPU to recover two verdicts already banked, though it would incidentally buy a second
+sample of each for the stability question. **Flagged for lane 4; not fired.**
