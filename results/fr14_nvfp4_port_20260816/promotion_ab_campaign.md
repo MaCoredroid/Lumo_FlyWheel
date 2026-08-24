@@ -5409,3 +5409,82 @@ Two further corrections from the same source:
 
 Cqc15's 13398 is the second capped terminal (9124 s), so the class has two members and they
 agree to within a second.
+
+# ROUND 21 CONCLUDED — Cqc10: THE FINAL TEN DRAIN CLEAN, AND THE SIXTEEN-LINE SCORECARD
+
+Runroot `output/fr14_promoab_Cqc10_20260824T074813Z`, fired 07:48:14Z, **serve_rc=0**, ended
+11:04:21Z. Ten of ten brackets closed, zero containers after, zero budget-capped tasks. The
+contrast with Cqc12 (serve_rc=13, dead at 2/12) is the whole point: site 26 landed, and the
+class that killed the last campaign did not recur.
+
+## THE TEN
+
+    task     wall  patch      c5    d4  turns tools  visCh visTtr malf  verdict
+    13977   24.7m   1141  0.5744  2378    92    33   3217  0.627    0  failed
+    14096   23.1m   1321  0.5831  2557    74    29   3228  0.551    0  resolved
+    14182    7.3m    745  0.5812   819   104    35   2244  0.608    0  failed
+    14309    1.8m    574  0.6169   201    20     6   1364  0.727    0  resolved
+    14365    6.9m    617  0.5182   687    53    17   2250  0.665    0  failed
+    14369   27.8m  12307  0.5863  2676   104    36   3898  0.572    0  resolved
+    14508   41.4m   1124  0.5793  4668    77    32   4386  0.570    0  resolved
+    14539   18.7m    662  0.5533  1811    98    37   2292  0.592    0  resolved
+    14598   25.9m    808  0.5288  2220   104    35   3082  0.574    0  failed
+    14995    4.7m    645  0.5928   587    32    11   2274  0.567    0  resolved
+
+    n=10, 182.2 min of task time, mean 18.2 min. RESOLVED 6/10.
+    Every patch non-empty. Every c5 IN corridor. Malformed tool calls: 0 across all ten.
+
+LADDER, ALL 20 BOUNDARIES: zero negative residuals. And every task's ladder row-delta equals
+its own forward-step span AND expected_complete_events -- 10/10 reconcile EXACTLY (6634, 6513,
+1797, 405, 1817, 7440, 11700, 5012, 6861, 1154). Every between-task boundary is exactly zero,
+so drain-at-scrape alignment held for all ten with no leakage anywhere.
+
+## THE SIXTEEN-LINE SCORECARD
+
+     #  task    run    verdict    patchB      c5  corridor  note
+     1  12907   Cqc16  resolved      504  0.5736  IN
+     2  13033   Cqc16  failed       1092  0.6395  IN
+     3  13236   Cqc16  --              0  0.3499  OUT <<   DEGENERATED
+     4  13398   Cqc15  --              0  0.5627  IN       empty-fail, no eval
+     5  13453   Cqc12  resolved     1047  0.5928  IN
+     6  13579   Cqc12  --              0  0.5316  IN       empty-fail; BUDGET-CAPPED 9125 s
+     7  13977   Cqc10  failed       1141  0.5744  IN
+     8  14096   Cqc10  resolved     1321  0.5831  IN
+     9  14182   Cqc10  failed        745  0.5812  IN
+    10  14309   Cqc10  resolved      574  0.6169  IN
+    11  14365   Cqc10  failed        617  0.5182  IN
+    12  14369   Cqc10  resolved    12307  0.5863  IN       1318 B fix + 10989 B generated table
+    13  14508   Cqc10  resolved     1124  0.5793  IN
+    14  14539   Cqc10  resolved      662  0.5533  IN
+    15  14598   Cqc10  failed        808  0.5288  IN
+    16  14995   Cqc10  resolved      645  0.5928  IN
+
+    RESOLVED 8/16 = 50.0%. Three lines carry no eval verdict: 13236 degenerated, 13398 and
+    13579 produced empty patches (13579 additionally capped).
+
+## WHAT c5 DID ACROSS THE CANONICAL SIXTEEN
+
+c5 is measurable on ALL sixteen, and it flags EXACTLY ONE: 13236 at 0.3499, the degeneration.
+The other fifteen span 0.5182-0.6395, entirely inside [0.40, 0.70]. One flag, and it is the
+right one -- on the full canonical set, not a hand-picked subset.
+
+Note what it does NOT do, which is the honest half: it does not predict resolved-vs-failed.
+13033 failed at 0.6395 (the HIGHEST in the table) and 14598 failed at 0.5288 while 14995
+resolved at the same 0.5928 as 13453. c5 is a seam-health instrument, not a capability one --
+exactly as pre-registered. It separates "the decode went wrong" from "the model got the answer
+wrong", and those are different questions.
+
+## A CORRECTION TO MY OWN RUNNING REPORTS
+
+I had been carrying 13453 as "failed-with-patch" in the scorecard lines of several reports.
+Its eval_report says verdict=resolved, passed=True, tests_passed. I never checked it -- I
+inferred "failed" from the patch existing without a resolved flag I had actually read. Sourced
+now, and the scorecard above is built from eval_report.json for every line rather than from my
+own prior summaries. The banked verdicts were re-sourced the same way, which also corrected
+13398's provenance: it was verdicted from Cqc15, not Cqc16 (attempt 6 served only three).
+
+While re-sourcing I also nearly reported "0/10 resolved" for this run, because my extractor
+looked for a boolean key named `resolved` and these reports use `verdict`/`passed`. The
+campaign_summary said resolved_rate 0.6 and the disagreement is what caught it. A reducer that
+returns None on an unrecognised schema and a caller that treats None as False is the same
+fail-open shape this campaign keeps finding; it is now read from `verdict` directly.

@@ -65,6 +65,12 @@
   "gdn_linear_attn.py:3201 captured_graph_id binding is not segment-aware"
  ],
  "commits_between_boot_and_drain": 0,
+ "corrections_this_round": {
+  "13398_provenance": "verdicted from Cqc15, not Cqc16 (attempt 6 served only three tasks)",
+  "13453_verdict": "WITHDRAWN 'failed-with-patch' -> eval_report says resolved/tests_passed. I had inferred it, never read it.",
+  "degeneration_rule": "validated over 125 banked traces: zero false positives; separated from vacuity by thinking volume 70755 vs next-highest 204 (347x)",
+  "resolved_extraction": "my extractor looked for a bool key 'resolved'; these reports use verdict/passed. It returned None for all ten and would have read as 0/10. campaign_summary's resolved_rate 0.6 caught the disagreement."
+ },
  "head": "4a59ca2b46ec76a9f8c0690a954e03c737d2970b",
  "ladder_harness_sealed_pre_run": {
   "covers_conditions": "2 (self-proof) and 4 (mutation/zero-case) enforced by the harness, not by judgement at reporting time; condition 1 (capture-safety) is covered by the same self-proof, since dropped or double-counted accumulation under graph replay would diverge the 16-slot sum from the aggregate delta",
@@ -898,6 +904,150 @@
   "tally": "thirteen sites",
   "window_utc": "2026-08-19T19:59Z..20:09Z"
  },
+ "round21_final_ten_Cqc10": {
+  "brackets_closed": "10/10",
+  "budget_capped_tasks": 0,
+  "contrast_with_Cqc12": "Cqc12 serve_rc=13 dead at 2/12 on the budget-capped terminal class; site 26 landed and the class did not recur",
+  "ended_utc": "2026-08-24T11:04:21Z",
+  "fired_utc": "2026-08-24T07:48:14Z",
+  "ladder": {
+   "between_task_deltas": "all exactly zero -- no leakage",
+   "boundaries": 20,
+   "negative_residuals": 0,
+   "rows_delta_vs_engine_counter": "10/10 EXACT (6634,6513,1797,405,1817,7440,11700,5012,6861,1154)"
+  },
+  "mean_task_min": 18.2,
+  "resolved": "6/10",
+  "resolved_rate": 0.6,
+  "runroot": "output/fr14_promoab_Cqc10_20260824T074813Z",
+  "serve_rc": 0,
+  "source_commit": "e7af6b595",
+  "subset_sha256": "716503a46a991e3b187e14777f96f074c1a3359d9f8b7928f4453a6b9da1ee9b",
+  "tasks": {
+   "astropy__astropy-13977": {
+    "c5": 0.5744,
+    "c5_delta_pos4": 2378,
+    "c5_in_corridor": true,
+    "degeneration": false,
+    "malformed": 0,
+    "patch_bytes": 1141,
+    "tools": 33,
+    "turns": 92,
+    "verdict": "failed",
+    "wall_min": 24.7
+   },
+   "astropy__astropy-14096": {
+    "c5": 0.5831,
+    "c5_delta_pos4": 2557,
+    "c5_in_corridor": true,
+    "degeneration": false,
+    "malformed": 0,
+    "patch_bytes": 1321,
+    "tools": 29,
+    "turns": 74,
+    "verdict": "resolved",
+    "wall_min": 23.1
+   },
+   "astropy__astropy-14182": {
+    "c5": 0.5812,
+    "c5_delta_pos4": 819,
+    "c5_in_corridor": true,
+    "degeneration": false,
+    "malformed": 0,
+    "patch_bytes": 745,
+    "tools": 35,
+    "turns": 104,
+    "verdict": "failed",
+    "wall_min": 7.3
+   },
+   "astropy__astropy-14309": {
+    "c5": 0.6169,
+    "c5_delta_pos4": 201,
+    "c5_in_corridor": true,
+    "degeneration": false,
+    "malformed": 0,
+    "patch_bytes": 574,
+    "tools": 6,
+    "turns": 20,
+    "verdict": "resolved",
+    "wall_min": 1.8
+   },
+   "astropy__astropy-14365": {
+    "c5": 0.5182,
+    "c5_delta_pos4": 687,
+    "c5_in_corridor": true,
+    "degeneration": false,
+    "malformed": 0,
+    "patch_bytes": 617,
+    "tools": 17,
+    "turns": 53,
+    "verdict": "failed",
+    "wall_min": 6.9
+   },
+   "astropy__astropy-14369": {
+    "c5": 0.5863,
+    "c5_delta_pos4": 2676,
+    "c5_in_corridor": true,
+    "degeneration": false,
+    "malformed": 0,
+    "patch_bytes": 12307,
+    "tools": 36,
+    "turns": 104,
+    "verdict": "resolved",
+    "wall_min": 27.8
+   },
+   "astropy__astropy-14508": {
+    "c5": 0.5793,
+    "c5_delta_pos4": 4668,
+    "c5_in_corridor": true,
+    "degeneration": false,
+    "malformed": 0,
+    "patch_bytes": 1124,
+    "tools": 32,
+    "turns": 77,
+    "verdict": "resolved",
+    "wall_min": 41.4
+   },
+   "astropy__astropy-14539": {
+    "c5": 0.5533,
+    "c5_delta_pos4": 1811,
+    "c5_in_corridor": true,
+    "degeneration": false,
+    "malformed": 0,
+    "patch_bytes": 662,
+    "tools": 37,
+    "turns": 98,
+    "verdict": "resolved",
+    "wall_min": 18.7
+   },
+   "astropy__astropy-14598": {
+    "c5": 0.5288,
+    "c5_delta_pos4": 2220,
+    "c5_in_corridor": true,
+    "degeneration": false,
+    "malformed": 0,
+    "patch_bytes": 808,
+    "tools": 35,
+    "turns": 104,
+    "verdict": "failed",
+    "wall_min": 25.9
+   },
+   "astropy__astropy-14995": {
+    "c5": 0.5928,
+    "c5_delta_pos4": 587,
+    "c5_in_corridor": true,
+    "degeneration": false,
+    "malformed": 0,
+    "patch_bytes": 645,
+    "tools": 11,
+    "turns": 32,
+    "verdict": "resolved",
+    "wall_min": 4.7
+   }
+  },
+  "total_task_min": 182.2,
+  "workload": "exact16_qc_remainder_10"
+ },
  "round21_qc_twelve_Cqc12": {
   "budget_enforcement_finding": {
    "CORRECTED_mechanism": "host-side wall deadline on the SSH subprocess: max(timeout_s,30)+120; the 120s is a DESIGNED teardown buffer",
@@ -1623,6 +1773,149 @@
   "window_utc": "2026-08-19T02:26Z..02:57Z"
  },
  "schema": "fr14.promotion_ab.campaign_summary.v1",
+ "scorecard_sixteen": {
+  "c5_does_not_predict_capability": "13033 FAILED at 0.6395 (highest in table); 14995 RESOLVED at 0.5928, same as 13453. c5 is a seam instrument, not a capability one -- as pre-registered.",
+  "c5_flags": "EXACTLY ONE of sixteen -- 13236 at 0.3499 OUT; the other fifteen span 0.5182-0.6395, all IN [0.40,0.70]",
+  "no_eval_verdict": [
+   "13236 (degenerated)",
+   "13398 (empty patch)",
+   "13579 (empty patch + budget-capped)"
+  ],
+  "resolved": "8/16 = 50.0%",
+  "rows": [
+   {
+    "c5": 0.5736,
+    "n": 1,
+    "patch": 504,
+    "run": "Cqc16",
+    "task": "12907",
+    "verdict": "resolved"
+   },
+   {
+    "c5": 0.6395,
+    "n": 2,
+    "patch": 1092,
+    "run": "Cqc16",
+    "task": "13033",
+    "verdict": "failed"
+   },
+   {
+    "c5": 0.3499,
+    "n": 3,
+    "note": "DEGENERATED",
+    "patch": 0,
+    "run": "Cqc16",
+    "task": "13236",
+    "verdict": null
+   },
+   {
+    "c5": 0.5627,
+    "n": 4,
+    "patch": 0,
+    "run": "Cqc15",
+    "task": "13398",
+    "verdict": null
+   },
+   {
+    "c5": 0.5928,
+    "n": 5,
+    "patch": 1047,
+    "run": "Cqc12",
+    "task": "13453",
+    "verdict": "resolved"
+   },
+   {
+    "c5": 0.5316,
+    "n": 6,
+    "note": "BUDGET-CAPPED 9125 s",
+    "patch": 0,
+    "run": "Cqc12",
+    "task": "13579",
+    "verdict": null
+   },
+   {
+    "c5": 0.5744,
+    "n": 7,
+    "patch": 1141,
+    "run": "Cqc10",
+    "task": "13977",
+    "verdict": "failed"
+   },
+   {
+    "c5": 0.5831,
+    "n": 8,
+    "patch": 1321,
+    "run": "Cqc10",
+    "task": "14096",
+    "verdict": "resolved"
+   },
+   {
+    "c5": 0.5812,
+    "n": 9,
+    "patch": 745,
+    "run": "Cqc10",
+    "task": "14182",
+    "verdict": "failed"
+   },
+   {
+    "c5": 0.6169,
+    "n": 10,
+    "patch": 574,
+    "run": "Cqc10",
+    "task": "14309",
+    "verdict": "resolved"
+   },
+   {
+    "c5": 0.5182,
+    "n": 11,
+    "patch": 617,
+    "run": "Cqc10",
+    "task": "14365",
+    "verdict": "failed"
+   },
+   {
+    "c5": 0.5863,
+    "n": 12,
+    "note": "1318 B fix + 10989 B generated table",
+    "patch": 12307,
+    "run": "Cqc10",
+    "task": "14369",
+    "verdict": "resolved"
+   },
+   {
+    "c5": 0.5793,
+    "n": 13,
+    "patch": 1124,
+    "run": "Cqc10",
+    "task": "14508",
+    "verdict": "resolved"
+   },
+   {
+    "c5": 0.5533,
+    "n": 14,
+    "patch": 662,
+    "run": "Cqc10",
+    "task": "14539",
+    "verdict": "resolved"
+   },
+   {
+    "c5": 0.5288,
+    "n": 15,
+    "patch": 808,
+    "run": "Cqc10",
+    "task": "14598",
+    "verdict": "failed"
+   },
+   {
+    "c5": 0.5928,
+    "n": 16,
+    "patch": 645,
+    "run": "Cqc10",
+    "task": "14995",
+    "verdict": "resolved"
+   }
+  ]
+ },
  "step0_regate": {
   "cause": "fr13_fixed32_work_census.py:157 TAW_SOURCE_CONTRACT_SHA256 stale at 484babd7 vs emitter 68b289ae",
   "outcome": "REFUSED",
