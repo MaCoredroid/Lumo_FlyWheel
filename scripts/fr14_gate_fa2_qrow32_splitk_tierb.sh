@@ -28,7 +28,10 @@ case "${FR14_GATE_SPLITK_TIERB:-0}" in
 esac
 
 IMAGE='vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776'
-SPLITK_SO=${SPLITK_SO:-/home/mark/fr14_splitk_build_20260818/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so}
+# Same resolution rule as the launchers': location is derived, identity is
+# pinned separately (this runner verifies the sha before it measures).
+SPLITK_BUILD_ROOT=${FR13_SPLITK_BUILD_ROOT:-${HOME:-}/fr14_splitk_build_20260818}
+SPLITK_SO=${SPLITK_SO:-$SPLITK_BUILD_ROOT/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so}
 BOUNDS="$REPO/results/fr14_nvfp4_port_20260816/fr14_splitk_tierb_bounds.json"
 PROBE="$REPO/results/fr14_nvfp4_port_20260816/fr14_splitk_fa2_probe.py"
 REDUCER="$REPO/scripts/fr14_reduce_splitk_tierb_credential.py"

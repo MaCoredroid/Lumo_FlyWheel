@@ -857,7 +857,27 @@ FR13_FA2_QROW32_B1_TIER_B_ARM=${FR13_FA2_QROW32_B1_TIER_B_ARM:-}
 # re-committed every time the credential is re-earned, and a literal that must
 # change on a schedule is a literal that goes stale.
 _FR13_SPLITK_DEFAULT_ARM=gqa_pair_splitk
-_FR13_SPLITK_DEFAULT_SO=${_FR13_SPLITK_DEFAULT_SO:-/home/mark/fr14_splitk_build_20260818/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so}
+# THE PATH IS A RESOLUTION RULE, NOT A LITERAL. This was the last functional
+# absolute-home path in the runtime shell chain, and the reason
+# test_fixed32_runtime_shell_chain_derives_the_active_worktree is red.
+#
+# What makes this artifact the right one has never been its path: the sha256
+# and size below are pinned and checked against the staged file three lines
+# into the arming branch, and the tier-B credential binds them as well. So the
+# path is pure LOCATION -- derivable, overridable, provenance-neutral -- while
+# the IDENTITY is carried separately and is unchanged by this.
+#
+# Fail-closed WITHOUT a new gate: if the rule resolves to nothing (HOME unset,
+# no override) the staged-binary check already refuses with "staged binary
+# missing or not the pinned kernel". Adding a second refusal here would be a
+# gate restating another, which this campaign has spent sites 17-23 undoing.
+#
+# The binary lives OUTSIDE the repo because it is 300 MB. Whether it should
+# instead live in a repo-tracked build-artifacts dir is Mark's call, parked
+# with this landing -- the sha/size pinning makes such a move
+# provenance-neutral and would change only this one rule.
+_FR13_SPLITK_BUILD_ROOT=${FR13_SPLITK_BUILD_ROOT:-${HOME:-}/fr14_splitk_build_20260818}
+_FR13_SPLITK_DEFAULT_SO=${_FR13_SPLITK_DEFAULT_SO:-$_FR13_SPLITK_BUILD_ROOT/_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so}
 _FR13_SPLITK_DEFAULT_SO_SHA256=28570f835ea72c99d03aab9fb03c494388bbb9c264ee4dc96eec047f50d7f857
 _FR13_SPLITK_DEFAULT_SO_SIZE=300123792
 _FR13_SPLITK_DEFAULT_FA2_HEAD=29210221863736a08f71a866459e368ad1ac4a95
@@ -2545,9 +2565,11 @@ if [[ -n "$FR13_FA2_QROW32_B1_TIER_B_ARM" ]]; then
   # THE CREDENTIAL PATH, SETTLED BY MEASUREMENT (2026-08-19). The host check
   # below and the in-container verify-tier-b consume the same file from two
   # different filesystems. Measured with the launcher's own mounts: the repo is
-  # mounted at /workspace, so a host path like
-  # /home/mark/shared/<repo>/results/... is NOT visible inside the container --
-  # /home exists there but is the image's own, and the file is absent. One
+  # mounted at /workspace, so a host path under the operator's home -- say
+  # <home>/shared/<repo>/results/... -- is NOT visible inside the container:
+  # that directory exists there but is the image's own, and the file is
+  # absent. (Named as the RULE rather than as one operator's path, for the
+  # same reason the .so default above stopped being a literal.) One
   # variable therefore cannot serve both, which is why the campaign already has
   # the _HOST/container pattern; this adopts it.
   #

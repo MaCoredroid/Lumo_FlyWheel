@@ -38,7 +38,9 @@ ATTESTATION = (
     / "results/fr14_nvfp4_port_20260816/fr14_splitk_fa2_build_attestation.json"
 )
 STAGED_SO = Path(
-    "/home/mark/fr14_splitk_build_20260818/"
+    # The path is a resolution rule now, not a literal: what identifies the
+    # artifact is the sha/size below, which are unchanged. Pin the RULE.
+    "${FR13_SPLITK_BUILD_ROOT:-${HOME:-}/fr14_splitk_build_20260818}"
     "_vllm_fa2_qrow32_gqa_pair_splitk_b1_sm121a.abi3.so"
 )
 
