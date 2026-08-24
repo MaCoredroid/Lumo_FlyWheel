@@ -35,6 +35,7 @@ This module closes discovery as a LIST instead of boot-by-boot:
 from __future__ import annotations
 
 import ast
+import os
 import hashlib
 import importlib.util
 import inspect
@@ -744,6 +745,23 @@ PATCHER = SCRIPTS / "fr10_phase4_patch_vllm_tree_gdn.py"
 # held byte-identical and a second change fails.
 PATCHER_BASELINE_BLOB = "5f10dbcef47ef4a54d19263ef23e2a5317b7836d"
 LADDER_WIRING_MARKER = "fr13_fixed32_accept_ladder_snapshot as accept_ladder_snapshot"
+# DECLARED CHANGE, round 22 / sixth member of the walk-derived-pin class: the
+# planted GDN schedule contract stopped being a hydra27 literal. There is no
+# fix that leaves hydra27's planted BYTES identical -- the pin is inside the
+# planted text and it has to stop being one -- so this is a re-attestation
+# event, declared here rather than slipped through. What must still hold, and
+# is asserted below, is that hydra27 RESOLVES to exactly the retired values.
+GDN_SCHEDULE_WIRING_MARKER = "_FR13_FIXED32_GDN_SCHEDULE_BY_PROFILE"
+RETIRED_GDN_HYDRA27_CONTRACT = {
+    "path_counts": (1, 11),
+    "max_lengths": (5, 7),
+    "launches": 2,
+    "programs": 12,
+    "padded_slots": 82,
+    "critical": 12,
+    "export_or_mask": 16915,
+}
+
 
 
 def _load_patcher(mode: str, source: str | None = None) -> types.ModuleType:
@@ -1080,6 +1098,35 @@ def _emitted_surface(module: types.ModuleType, source: str) -> dict[str, object]
     return surface
 
 
+
+def _gdn_expected_for(blob: str, mode: str) -> dict:
+    """Resolve the planted GDN schedule table under a served mode."""
+    tree = ast.parse(blob)
+    lines = blob.split("\n")
+    kept = []
+    for node in tree.body:
+        names = [
+            t.id for t in getattr(node, "targets", []) if isinstance(t, ast.Name)
+        ]
+        if any(n.startswith("_FR13_FIXED32_GDN_SCHEDULE") for n in names) or (
+            "_FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE" in names
+            or "_FR13_FIXED32_GDN_MODE" in names
+            or (isinstance(node, ast.If) and "_FR13_FIXED32_GDN_MODE" in ast.dump(node))
+        ):
+            kept.append("\n".join(lines[node.lineno - 1 : node.end_lineno]))
+    saved = os.environ.get("FR13_FIXED32_MODE")
+    os.environ["FR13_FIXED32_MODE"] = mode
+    namespace: dict = {}
+    try:
+        exec("\n".join(kept), namespace)  # noqa: S102 - our own planted source
+    finally:
+        if saved is None:
+            os.environ.pop("FR13_FIXED32_MODE", None)
+        else:
+            os.environ["FR13_FIXED32_MODE"] = saved
+    return dict(namespace["_FR13_FIXED32_GDN_SCHEDULE_EXPECTED"])
+
+
 @pytest.mark.parametrize("mode", ["", "tail6_fixed32", PROFILE_HYDRA27])
 def test_hydra27_patcher_output_is_byte_identical_to_the_baseline(mode: str) -> None:
     """Required for the banked runs: the parameterisation moves nothing on hydra27.
@@ -1097,12 +1144,24 @@ def test_hydra27_patcher_output_is_byte_identical_to_the_baseline(mode: str) -> 
         for key in set(old) & set(new)
         if old[key] != new[key]
     }
+    declared = "const:_FR13_FIXED32_OBSERVED_RUNTIME_SOURCE"
+    if declared in drift:
+        was, now = drift.pop(declared)
+        assert GDN_SCHEDULE_WIRING_MARKER not in was
+        assert GDN_SCHEDULE_WIRING_MARKER in now, (
+            "the planted runtime blob changed and it is NOT the declared GDN "
+            "schedule wiring -- that is a silent edit to every banked run"
+        )
+        assert _gdn_expected_for(now, mode or "hydra27_fixed32") == (
+            RETIRED_GDN_HYDRA27_CONTRACT
+        ), "hydra27 no longer resolves to the retired GDN contract"
     assert not drift, f"hydra27 patcher output CHANGED: {sorted(drift)}"
     # One blob is declared changed: the flush boundary now drains the ladder.
     # Everything else must still be present unchanged.
     changed_blobs = {k for k in set(old) ^ set(new) if k.startswith("blob:")}
-    assert len(changed_blobs) <= 2, (
-        f"more than the declared ladder wiring changed: {sorted(changed_blobs)}"
+    assert len(changed_blobs) <= 4, (
+        "more than the two declared blobs (ladder wiring, GDN schedule) "
+        f"changed: {sorted(changed_blobs)}"
     )
 
     removed = sorted(set(old) - set(new))
@@ -1111,7 +1170,7 @@ def test_hydra27_patcher_output_is_byte_identical_to_the_baseline(mode: str) -> 
     assert all(key.startswith("blob:") for key in removed), (
         f"a non-blob binding left the patcher surface: {removed}"
     )
-    assert len(removed) <= 1, f"more than the declared blob changed: {removed}"
+    assert len(removed) <= 2, f"more than the declared blobs changed: {removed}"
     assert len(old) > 100, f"the surface ledger collapsed to {len(old)} entries"
     module = _load_patcher(mode, new_source)
     baseline = _load_patcher(mode, source)
@@ -1149,17 +1208,20 @@ def test_every_injected_blob_is_unchanged_for_hydra27() -> None:
     added = [new[d] for d in set(new) - set(old)]
     # EXACTLY ONE declared change: the flush blob that now drains the ladder.
     # Anything else is a silent edit and must fail.
-    assert len(removed) <= 1 and len(added) <= 1, (
-        f"{len(removed)} blob(s) changed; only the ladder wiring is declared"
+    assert len(removed) <= 2 and len(added) <= 2, (
+        f"{len(removed)} blob(s) changed; only the ladder wiring and the GDN "
+        "schedule table are declared"
     )
-    if added:
-        assert LADDER_WIRING_MARKER in added[0], (
+    declared_markers = (LADDER_WIRING_MARKER, GDN_SCHEDULE_WIRING_MARKER)
+    for blob in added:
+        assert any(marker in blob for marker in declared_markers), (
             "an injected source blob changed and it is NOT the declared ladder "
             "wiring -- that is a RE-ATTESTATION EVENT for every banked hydra27 "
             "run, not a silent edit"
         )
-        assert LADDER_WIRING_MARKER not in removed[0], (
-            "the declared change should be the ADDITION of the wiring"
+    for blob in removed:
+        assert not any(marker in blob for marker in declared_markers), (
+            "the declared changes should be ADDITIONS of the wiring"
         )
 
 

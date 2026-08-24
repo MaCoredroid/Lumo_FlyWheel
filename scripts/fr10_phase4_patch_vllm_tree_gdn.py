@@ -1140,6 +1140,69 @@ _FR13_FIXED32_TARGET_TREE_LAYERS = frozenset(
     "language_model.model.layers.%d.self_attn.attn" % layer
     for layer in range(3, 64, 4)
 )
+# THE WALK-DERIVED-PIN CLASS, sixth member, and the first one found outside
+# fr13_device_multidraft_kernel.py. Round 22's fourth boot died here:
+#
+#   RuntimeError: FR13 fixed32 GDN schedule work drift:
+#     {'path_counts': (1, 11), 'max_lengths': (5, 11), 'launches': 2,
+#      'programs': 12, 'padded_slots': 126, 'critical': 16,
+#      'export_or_mask': 16915}
+#
+# Three of the seven fields vary by profile and were all pinned at hydra27's:
+# max_lengths[1] is the tail spine depth (7 against tail10's 11), padded_slots
+# is sum(paths * length) so 1*5 + 11*7 = 82 against 1*5 + 11*11 = 126, and
+# critical is the walk cap, 12 against 16. MEASURED against the topology
+# authority and against the corpse, which observed exactly (5, 11) / 126 / 16.
+# The other four -- path_counts, launches, programs, export_or_mask -- are
+# equal under both profiles and are carried per profile anyway, so a third
+# profile cannot inherit a value nobody checked.
+#
+# WHY A MIRROR AND NOT A DERIVATION. This whole region is the string
+# _FR13_FIXED32_OBSERVED_RUNTIME_SOURCE, planted verbatim into the container's
+# gdn_linear_attn.py, so it CANNOT import fr13_fixed32_topology or the serving
+# package. fr10_gdn_tree_kernel._FR13_FIXED32_SCHEDULE_BY_PROFILE has been
+# profile-keyed since round 18 and carries these exact seven fields; this table
+# is its mirror, and tests/test_fr14_gdn_schedule_contract_parity.py is what
+# keeps the two from drifting.
+_FR13_FIXED32_GDN_SCHEDULE_BY_PROFILE = {
+    "hydra27_fixed32": {
+        "path_counts": (1, 11),
+        "max_lengths": (5, 7),
+        "launches": 2,
+        "programs": 12,
+        "padded_slots": 82,
+        "critical": 12,
+        "export_or_mask": 16915,
+    },
+    "hydra31_fixed32": {
+        "path_counts": (1, 11),
+        "max_lengths": (5, 11),
+        "launches": 2,
+        "programs": 12,
+        "padded_slots": 126,
+        "critical": 16,
+        "export_or_mask": 16915,
+    },
+}
+_FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE = {
+    # An unset mode is the non-fixed32 route, which has always been hydra27's.
+    "": "hydra27_fixed32",
+    "tail6_fixed32": "hydra27_fixed32",
+    "hydra27_fixed32": "hydra27_fixed32",
+    "hydra31_fixed32": "hydra31_fixed32",
+}
+_FR13_FIXED32_GDN_MODE = (
+    __import__("os").environ.get("FR13_FIXED32_MODE", "").strip()
+)
+if _FR13_FIXED32_GDN_MODE not in _FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE:
+    # Guessing a schedule depth is how the silent sites get fed.
+    raise RuntimeError(
+        "FR13 fixed32 GDN schedule has no profile for mode "
+        + repr(_FR13_FIXED32_GDN_MODE)
+    )
+_FR13_FIXED32_GDN_SCHEDULE_EXPECTED = _FR13_FIXED32_GDN_SCHEDULE_BY_PROFILE[
+    _FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE[_FR13_FIXED32_GDN_MODE]
+]
 
 
 def _fr13_draft_head_m32_live_register(
@@ -3952,19 +4015,28 @@ def _fr13_fixed32_observed_gdn(
         "critical": int(contract.get("critical", -1)),
         "export_or_mask": int(contract.get("export_or_mask", -1)),
     }
-    expected_contract = {
-        "path_counts": (1, 11),
-        "max_lengths": (5, 7),
-        "launches": 2,
-        "programs": 12,
-        "padded_slots": 82,
-        "critical": 12,
-        "export_or_mask": 16915,
-    }
+    expected_contract = dict(_FR13_FIXED32_GDN_SCHEDULE_EXPECTED)
     if normalized_contract != expected_contract:
+        # TWO-SIDED, and only the fields that differ. The one-sided form cost
+        # round 22 a whole boot to diagnose: it printed the observed dict and
+        # left the expectation to be read out of the patcher's source.
+        _drifted = sorted(
+            _name
+            for _name in expected_contract
+            if normalized_contract.get(_name) != expected_contract[_name]
+        )
         raise RuntimeError(
-            "FR13 fixed32 GDN schedule work drift: "
-            + repr(normalized_contract)
+            "FR13 fixed32 GDN schedule work drift for mode "
+            + repr(_FR13_FIXED32_GDN_MODE)
+            + ": "
+            + "; ".join(
+                _name
+                + ": observed "
+                + repr(normalized_contract.get(_name))
+                + " against audited "
+                + repr(expected_contract[_name])
+                for _name in _drifted
+            )
         )
     if {
         "schedule": runtime_state.get("schedule"),

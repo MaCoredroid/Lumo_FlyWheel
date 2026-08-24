@@ -17225,10 +17225,21 @@ def launch_tree_gdn_prepared(
                 "state_export_writes": 0,
                 "state_parent_reads": 0,
                 "prescaled_path_base": bool(_prescaled_path_base),
-                "logical_launches": 2,
-                "logical_programs": 12,
-                "logical_padded_slots": 82,
-                "logical_critical_path": 12,
+                # THE WALK-DERIVED-PIN CLASS. These describe the LOGICAL
+                # schedule this single physical launch replaces, so under
+                # hydra31 they are 126 padded slots and a critical path of 16,
+                # not hydra27's 82 and 12. The profile-keyed authority is forty
+                # lines up in this same file; a stamp that states another
+                # profile's schedule is a provenance lie whether or not a guard
+                # reads it today.
+                "logical_launches": _FR13_FIXED32_SCHEDULE_EXPECTED["launches"],
+                "logical_programs": _FR13_FIXED32_SCHEDULE_EXPECTED["programs"],
+                "logical_padded_slots": (
+                    _FR13_FIXED32_SCHEDULE_EXPECTED["padded_slots"]
+                ),
+                "logical_critical_path": (
+                    _FR13_FIXED32_SCHEDULE_EXPECTED["critical"]
+                ),
             }
             if not st["engaged_announced"]:
                 st["engaged_announced"] = True
@@ -18357,10 +18368,22 @@ def launch_tree_gdn_prepared_fixed32_batch(
                 "state_export_writes": 0,
                 "state_parent_reads": 0,
                 "prescaled_path_base": bool(prescaled_path_base),
-                "logical_launches": 2 * batch,
-                "logical_programs": 12 * batch,
-                "logical_padded_slots": 82 * batch,
-                "logical_critical_path": 12,
+                # Same class, same authority: per request, times the batch.
+                # The critical path is a DEPTH, not a count, so it does not
+                # scale with the batch -- which is why it was the one field
+                # that read the same in both stamps and hid among them.
+                "logical_launches": (
+                    _FR13_FIXED32_SCHEDULE_EXPECTED["launches"] * batch
+                ),
+                "logical_programs": (
+                    _FR13_FIXED32_SCHEDULE_EXPECTED["programs"] * batch
+                ),
+                "logical_padded_slots": (
+                    _FR13_FIXED32_SCHEDULE_EXPECTED["padded_slots"] * batch
+                ),
+                "logical_critical_path": (
+                    _FR13_FIXED32_SCHEDULE_EXPECTED["critical"]
+                ),
             }
             return
         for level_index, (
