@@ -752,6 +752,14 @@ LADDER_WIRING_MARKER = "fr13_fixed32_accept_ladder_snapshot as accept_ladder_sna
 # event, declared here rather than slipped through. What must still hold, and
 # is asserted below, is that hydra27 RESOLVES to exactly the retired values.
 GDN_SCHEDULE_WIRING_MARKER = "_FR13_FIXED32_GDN_SCHEDULE_BY_PROFILE"
+# DECLARED CHANGE, boot ten: the MTP-trace propose guard compared the served
+# tree against ONE hardcoded list (hydra27's), so a correct hydra31 tree read
+# as a mode/topology mismatch on the first real request. It now carries a tree
+# per profile. hydra27's planted bytes necessarily move -- the list it compares
+# against stopped being the only one -- so this is declared, and what must
+# still hold is that hydra27 RESOLVES to exactly the tree it always did.
+PROPOSE_TREE_WIRING_MARKER = "_fr13_fixed32_choices_by_mode"
+
 RETIRED_GDN_HYDRA27_CONTRACT = {
     "path_counts": (1, 11),
     "max_lengths": (5, 7),
@@ -1159,9 +1167,9 @@ def test_hydra27_patcher_output_is_byte_identical_to_the_baseline(mode: str) -> 
     # One blob is declared changed: the flush boundary now drains the ladder.
     # Everything else must still be present unchanged.
     changed_blobs = {k for k in set(old) ^ set(new) if k.startswith("blob:")}
-    assert len(changed_blobs) <= 4, (
-        "more than the two declared blobs (ladder wiring, GDN schedule) "
-        f"changed: {sorted(changed_blobs)}"
+    assert len(changed_blobs) <= 6, (
+        "more than the three declared blobs (ladder wiring, GDN schedule, "
+        f"propose tree) changed: {sorted(changed_blobs)}"
     )
 
     removed = sorted(set(old) - set(new))
@@ -1170,7 +1178,7 @@ def test_hydra27_patcher_output_is_byte_identical_to_the_baseline(mode: str) -> 
     assert all(key.startswith("blob:") for key in removed), (
         f"a non-blob binding left the patcher surface: {removed}"
     )
-    assert len(removed) <= 2, f"more than the declared blobs changed: {removed}"
+    assert len(removed) <= 3, f"more than the declared blobs changed: {removed}"
     assert len(old) > 100, f"the surface ledger collapsed to {len(old)} entries"
     module = _load_patcher(mode, new_source)
     baseline = _load_patcher(mode, source)
@@ -1208,11 +1216,15 @@ def test_every_injected_blob_is_unchanged_for_hydra27() -> None:
     added = [new[d] for d in set(new) - set(old)]
     # EXACTLY ONE declared change: the flush blob that now drains the ladder.
     # Anything else is a silent edit and must fail.
-    assert len(removed) <= 2 and len(added) <= 2, (
-        f"{len(removed)} blob(s) changed; only the ladder wiring and the GDN "
-        "schedule table are declared"
+    assert len(removed) <= 3 and len(added) <= 3, (
+        f"{len(removed)} blob(s) changed; only the ladder wiring, the GDN "
+        "schedule table and the propose tree are declared"
     )
-    declared_markers = (LADDER_WIRING_MARKER, GDN_SCHEDULE_WIRING_MARKER)
+    declared_markers = (
+        LADDER_WIRING_MARKER,
+        GDN_SCHEDULE_WIRING_MARKER,
+        PROPOSE_TREE_WIRING_MARKER,
+    )
     for blob in added:
         assert any(marker in blob for marker in declared_markers), (
             "an injected source blob changed and it is NOT the declared ladder "

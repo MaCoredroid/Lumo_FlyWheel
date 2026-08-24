@@ -26672,21 +26672,111 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             (2, 0), (2, 0, 0), (2, 0, 0, 0), (2, 0, 0, 0, 0),
             (2, 0, 0, 0, 0, 0), (2, 0, 0, 0, 0, 0, 0),
         ]
+        # THE TREE THIS MODE SERVES. The list above is hydra27's; tail10
+        # respends the four slots hydra27 disarms, so ids >= 17 carry different
+        # paths and the two lists are NOT equal. A single list here meant the
+        # exact-shape predicate could only ever recognise one profile, and a
+        # correct hydra31 tree read as a mode/topology mismatch on the first
+        # real request. Mirrored because this blob is planted text that cannot
+        # import; kept honest by tests/test_fr14_gdn_schedule_contract_parity.
+        _fr13_tail10_choices = [
+            (0,), (1,), (2,),
+            (0, 0), (0, 1), (0, 2), (1, 0), (2, 0),
+            (0, 0, 0), (0, 0, 1), (0, 0, 2), (1, 0, 0), (2, 0, 0),
+            (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 2), (1, 0, 0, 0),
+            (0, 0, 0, 0, 0), (0, 0, 0, 0, 1), (0, 0, 0, 0, 2),
+            (1, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        ]
+        _fr13_fixed32_choices_by_mode = {
+            "": _fr13_fixed32_choices,
+            "tail6_fixed32": _fr13_fixed32_choices,
+            "hydra27_fixed32": _fr13_fixed32_choices,
+            "hydra31_fixed32": _fr13_tail10_choices,
+        }
+        _fr13_fixed32_expected_choices = _fr13_fixed32_choices_by_mode.get(
+            _FR13_FIXED32_MODE
+        )
+        if _FR13_FIXED32_MODE and _fr13_fixed32_expected_choices is None:
+            raise RuntimeError(
+                "FR13 fixed32 propose guard has no tree for mode "
+                + repr(_FR13_FIXED32_MODE)
+                + "; known modes are "
+                + repr(sorted(_fr13_fixed32_choices_by_mode))
+            )
         _fr10_tree_choices_current = [
             tuple(_x) for _x in getattr(self, "tree_choices", [])
         ]
+        _fr13_decode_ok = _fr10_active_decode_mode == "tree_mtp"
+        _fr13_spec_ok = int(self.num_speculative_tokens) == 31
+        _fr13_tree_ok = (
+            _fr10_tree_choices_current == _fr13_fixed32_expected_choices
+        )
         _fr13_is_fixed32 = (
             bool(_FR13_FIXED32_MODE)
-            and _fr10_active_decode_mode == "tree_mtp"
-            and int(self.num_speculative_tokens) == 31
-            and _fr10_tree_choices_current == _fr13_fixed32_choices
+            and _fr13_decode_ok
+            and _fr13_spec_ok
+            and _fr13_tree_ok
         )
         if bool(_FR13_FIXED32_MODE) != _fr13_is_fixed32:
+            # WHICH PREDICATE FAILED, and both trees. The old message said
+            # exact_shape=False and nodes=31 -- a correct node count and a bare
+            # False -- which named the symptom and hid every cause.
+            _fr13_first_diff = next(
+                (
+                    _i
+                    for _i in range(
+                        max(
+                            len(_fr10_tree_choices_current),
+                            len(_fr13_fixed32_expected_choices or ()),
+                        )
+                    )
+                    if _fr10_tree_choices_current[_i : _i + 1]
+                    != (_fr13_fixed32_expected_choices or [])[_i : _i + 1]
+                ),
+                None,
+            )
             raise RuntimeError(
                 "FR13 fixed32 mode/topology mismatch: mode="
                 + repr(_FR13_FIXED32_MODE)
-                + " exact_shape=" + str(_fr13_is_fixed32)
+                + " decode_mode_ok=" + str(_fr13_decode_ok)
+                + " (" + repr(_fr10_active_decode_mode) + ")"
+                + " spec_tokens_ok=" + str(_fr13_spec_ok)
+                + " (observed " + str(int(self.num_speculative_tokens))
+                + " against audited 31)"
+                + " tree_ok=" + str(_fr13_tree_ok)
                 + " nodes=" + str(len(_fr10_tree_choices_current))
+                + " against audited "
+                + str(len(_fr13_fixed32_expected_choices or ()))
+                + (
+                    ""
+                    if _fr13_first_diff is None
+                    else (
+                        "; first differing path ["
+                        + str(_fr13_first_diff)
+                        + "]: observed "
+                        + repr(
+                            _fr10_tree_choices_current[
+                                _fr13_first_diff : _fr13_first_diff + 1
+                            ]
+                        )
+                        + " against audited "
+                        + repr(
+                            (_fr13_fixed32_expected_choices or [])[
+                                _fr13_first_diff : _fr13_first_diff + 1
+                            ]
+                        )
+                    )
+                )
             )
         _fr13_hydra23_armed = os.path.exists("/logs/fr13_hydra23.arm")
         _fr13_is_hydra23 = (
