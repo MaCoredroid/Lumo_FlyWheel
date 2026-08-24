@@ -1665,6 +1665,15 @@ _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 # resolves at the three arm points; no sampler arithmetic moved, and with the
 # flag clear the resolution is identical to the prior expression.
 #
+# RE-ATTESTED 2026-08-24 by SITE 28, one landing after site 27, for the same
+# reason one rung deeper: the cached and published tensor layouts pinned the
+# uniform tensor's walk dimension, its outer stride, and three all-parent
+# schedule widths as IN-FUNCTION LITERALS inside _fr13_fixed32_layout_contract,
+# which is in the audited closure. Prior value
+# 0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab (site 27,
+# same day), which no banked artifact carries: the only serve booted under it
+# died at site 28 before writing a census event.
+#
 # RE-ATTESTED 2026-08-24 by SITE 27. Prior value
 # d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0, which every
 # banked artifact before this date carries and which the work census still
@@ -1679,13 +1688,19 @@ _FR13_FIXED32_TAW_SOURCE_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 # arithmetic moved: at walk 12 every derived value equals the literal it
 # replaced, which the pins census proves field by field.
 _FR13_FIXED32_TAW_SOURCE_SHA256 = (
-    "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab"
+    "80595b6be9cb9cb8e1449fb3325e1b510e5c00186fa194b05bf16beaaa376687"
 )
 # The digest every artifact banked before the site-27 re-attestation carries.
 # Kept as a NAMED PRIOR ERA, not deleted: the work census validates old runroots
 # and they must keep validating.
 _FR13_FIXED32_TAW_SOURCE_SHA256_PRIOR_ERAS: tuple[str, ...] = (
+    # pre-site-27: every runroot banked before 2026-08-24 carries this
     "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0",
+    # site 27's walk-12 and walk-16 digests. Declared even though no artifact
+    # carries them, because "no artifact carries it" is a fact about today's
+    # bank and this list is read by tomorrow's.
+    "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab",
+    "fd262662637d36f6e8efe534bb674f676061aaa172d4e82b1f9ce111a743e2eb",
 )
 # Per-mode source-row schedule digests. The observable binding compares the
 # schedule actually constructed at boot against these, so a mode that is handed
@@ -1719,9 +1734,13 @@ _FR13_FIXED32_TAW_SOURCE_DIGESTS: dict[str, str] = {
     "tail6_fixed32": _FR13_FIXED32_TAW_SOURCE_SHA256,
     "hydra27_fixed32": _FR13_FIXED32_TAW_SOURCE_SHA256,
     "hydra31_fixed32": (
-        "fd262662637d36f6e8efe534bb674f676061aaa172d4e82b1f9ce111a743e2eb"
+        "094c1bfe805a45ff84cc5f97f2b22557beb590d91fa8a8c266cb10f6c7063158"
     ),
 }
+# SITE 28: per-mode all-parent schedule widths, memoised. The layout contract
+# runs on the step path and the binding it reads digests the whole tree, so the
+# authority is asked once per mode and never again.
+_FR13_FIXED32_LAYOUT_SCHEDULE_WIDTHS: dict[str, dict[str, int]] = {}
 _FR13_FIXED32_TAW_SOURCE_CACHE: dict[str, Any] | None = None
 _FR13_FIXED32_TAW_SOURCE_CODES: tuple[tuple[str, Any], ...] | None = None
 _FR13_FIXED32_TAW_SOURCE_FUNCTIONS = (
@@ -4674,6 +4693,38 @@ def _fr13_fixed32_layout_contract(
     batch = int(entry["batch_size"])
     physical_drafts = int(topology.PHYSICAL_DRAFTS)
     vocab = int(target_logits.shape[1])
+    # SITE 28. Four of these twenty-four layouts are walk-derived, and they were
+    # IN-FUNCTION LITERALS in a function that already takes the topology and
+    # derives physical_drafts two lines above. The uniform tensor's dim 1 IS the
+    # walk cap and its outer stride is three times it; the three all-parent
+    # widths are the served mode's own source-row schedule, which is 13/17/17 at
+    # hydra27 and 11/21/21 at hydra31 -- NOT walk arithmetic, which is exactly
+    # why they are read from the schedule rather than computed from a formula.
+    #
+    # The widths are memoised per mode because this runs on the step path and
+    # the binding digests the whole tree; the lookup happens once per mode per
+    # process and never again.
+    mode = str(entry["mode"])
+    walk_cap = _fr13_fixed32_walk_cap(topology, mode)
+    widths = _FR13_FIXED32_LAYOUT_SCHEDULE_WIDTHS.get(mode)
+    if widths is None:
+        schedule = _fr13_fixed32_taw_topology_binding(topology)[
+            "all_parent_schedule_by_mode"
+        ].get(mode)
+        if schedule is None:
+            raise RuntimeError(
+                "FR13 fixed32 layout contract has no all-parent schedule for "
+                f"mode {mode!r}"
+            )
+        widths = {
+            key: len(schedule[key])
+            for key in (
+                "self_uniform_levels",
+                "target_parent_slots",
+                "target_uniform_levels",
+            )
+        }
+        _FR13_FIXED32_LAYOUT_SCHEDULE_WIDTHS[mode] = widths
     expected_cache_layouts = {
         "draft_counts": ([batch], "torch.int32", [1]),
         "child_table": ([batch, 32, 3], "torch.int64", [96, 3, 1]),
@@ -4687,10 +4738,18 @@ def _fr13_fixed32_layout_contract(
         "exact_alive": ([batch], "torch.bool", [1]),
         "native_self_slot_by_node": ([31], "torch.int64", [1]),
         "native_target_slot_by_parent": ([32], "torch.int64", [1]),
-        "all_parent_self_uniform_levels": ([13], "torch.int64", [1]),
-        "all_parent_target_parent_slots": ([17], "torch.int64", [1]),
-        "all_parent_target_uniform_levels": ([17], "torch.int64", [1]),
-        "uniforms": ([batch, 12, 3], "torch.float32", [36, 3, 1]),
+        "all_parent_self_uniform_levels": (
+            [widths["self_uniform_levels"]], "torch.int64", [1]
+        ),
+        "all_parent_target_parent_slots": (
+            [widths["target_parent_slots"]], "torch.int64", [1]
+        ),
+        "all_parent_target_uniform_levels": (
+            [widths["target_uniform_levels"]], "torch.int64", [1]
+        ),
+        "uniforms": (
+            [batch, walk_cap, 3], "torch.float32", [walk_cap * 3, 3, 1]
+        ),
         "draft_tokens": ([batch, 31], "torch.int64", [31, 1]),
         "bonus_tokens": ([batch], "torch.int64", [1]),
         "output_tokens": ([batch, 32], "torch.int64", [32, 1]),
@@ -4713,9 +4772,24 @@ def _fr13_fixed32_layout_contract(
                 f"FR13 fixed32 cached tensor is noncontiguous: {name}"
             )
     if actual_cache_layouts != expected_cache_layouts:
+        # TWO-SIDED, and only the entries that actually differ. The round-22
+        # boot failures each cost a recovered log because the refusal printed
+        # the runtime side and left the expectation to be read out of the
+        # source; dumping all twenty-four layouts is the same problem wearing
+        # more text.
+        differing = sorted(
+            name
+            for name in expected_cache_layouts
+            if actual_cache_layouts.get(name) != expected_cache_layouts[name]
+        )
+        detail = "; ".join(
+            f"{name}: served {actual_cache_layouts.get(name)!r} against "
+            f"audited {expected_cache_layouts[name]!r}"
+            for name in differing
+        )
         raise RuntimeError(
-            "FR13 fixed32 cached tensor layout drift: "
-            + repr((actual_cache_layouts, expected_cache_layouts))
+            f"FR13 fixed32 cached tensor layout drift for mode {mode!r} at walk "
+            f"{walk_cap} (schedule widths {widths}): {detail}"
         )
 
     live = {
@@ -4765,16 +4839,23 @@ def _fr13_fixed32_layout_contract(
             "contiguous": True,
         },
         "uniform": {
-            "shape": [batch, 12, 3],
+            "shape": [batch, walk_cap, 3],
             "dtype": "torch.float32",
-            "stride": [36, 3, 1],
+            "stride": [walk_cap * 3, 3, 1],
             "contiguous": True,
         },
     }
     if live != expected_live:
         raise RuntimeError(
-            "FR13 fixed32 published tensor layout drift: "
-            + repr((live, expected_live))
+            "FR13 fixed32 published tensor layout drift for mode "
+            + repr(mode)
+            + f" at walk {walk_cap}: "
+            + "; ".join(
+                f"{name}: served {live.get(name)!r} against audited "
+                f"{expected_live[name]!r}"
+                for name in sorted(expected_live)
+                if live.get(name) != expected_live[name]
+            )
         )
     if rng_route not in (
         "bulk_device_generator",

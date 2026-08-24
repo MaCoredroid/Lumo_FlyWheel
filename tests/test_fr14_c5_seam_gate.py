@@ -9,6 +9,8 @@ only where the doc says it needs within-task resolution.
 from __future__ import annotations
 
 import glob
+import shutil
+import tempfile
 import sys
 from pathlib import Path
 
@@ -41,19 +43,23 @@ KNOWN_DEGENERATIONS = {
 }
 
 
-def _corpus() -> list[tuple[str, dict]]:
-    rows: list[tuple[str, dict]] = []
-    for runroot in sorted(glob.glob(str(REPO / "output" / "fr14_*"))):
-        for row in gate.sweep_runroot(Path(runroot)):
-            rows.append((Path(runroot).name, row))
-    return rows
-
-
-def _corpus_or_skip() -> list[tuple[str, dict]]:
-    rows = _corpus()
+# THE CALIBRATION SET AND THE BANK ARE DIFFERENT POPULATIONS, and conflating
+# them was half of this instrument's own defect. Everything that DERIVES a
+# corridor statistic reads the pinned set; everything that CHECKS an arm against
+# the corridor reads the whole bank. A new arm can therefore be flagged but can
+# never move the thing it is being flagged against.
+def _calibration() -> list[tuple[str, dict]]:
+    rows = gate.calibration_corpus(REPO / "output")
     if len(rows) < 50:
-        pytest.skip(f"banked corpus unavailable ({len(rows)} arms)")
+        pytest.skip(f"pinned calibration corpus unavailable ({len(rows)} arms)")
     return rows
+
+
+def _all_arms(*, include_inapplicable: bool = False) -> list[tuple[str, dict]]:
+    """Every FR14 arm on disk, applicability-aware."""
+    return gate.sweep_output_root(
+        REPO / "output", include_inapplicable=include_inapplicable
+    )
 
 
 def test_the_corridor_is_the_pre_registered_one() -> None:
@@ -64,8 +70,9 @@ def test_the_corridor_is_the_pre_registered_one() -> None:
     assert gate.C5_DENOMINATOR_POSITION == 4
 
 
-def test_the_sweep_reproduces_the_hundred_arm_corpus() -> None:
-    rows = _corpus_or_skip()
+def test_the_sweep_reproduces_the_pinned_calibration_corpus() -> None:
+    rows = _calibration()
+    assert len(rows) == gate.C5_CALIBRATION_ROWS
     usable = [row for _run, row in rows if row["c5"] is not None]
     assert len(usable) >= 95, f"only {len(usable)} usable task-arms"
     values = sorted(row["c5"] for row in usable)
@@ -78,7 +85,7 @@ def test_the_sweep_reproduces_the_hundred_arm_corpus() -> None:
 def test_every_flag_is_a_known_degeneration_and_no_healthy_arm_flags() -> None:
     """Zero false positives on 95 healthy arms -- the property that makes this
     worth emitting at all."""
-    rows = _corpus_or_skip()
+    rows = _calibration()
     flagged = {
         (run, row["label"]): row
         for run, row in rows
@@ -99,7 +106,7 @@ def test_the_fifth_degeneration_hides_at_task_aggregate_resolution() -> None:
     13033/Ch27 reads 0.6855 -- inside [0.40, 0.70] by 0.0145. The gate does NOT
     catch it per-task, which is exactly why the windowed variant exists.
     """
-    rows = _corpus_or_skip()
+    rows = _calibration()
     match = [
         row
         for run, row in rows
@@ -226,7 +233,7 @@ def test_the_minimum_denominator_is_derived_not_picked() -> None:
 
 def test_every_port_arm_keeps_its_verdict_under_the_threshold() -> None:
     """The threshold must not cost the calibration population its signal."""
-    rows = _corpus_or_skip()
+    rows = _calibration()
     usable = [row for _run, row in rows if row["c5"] is not None]
     assert len(usable) >= 95, f"the threshold silenced arms: {len(usable)}"
     smallest = min(row["delta_pos4"] for row in usable)
@@ -276,7 +283,7 @@ def test_the_same_ratio_on_a_full_length_task_keeps_its_verdict(
 
 def test_the_real_degenerations_survive_the_threshold() -> None:
     """The four task-aggregate detections must not be silenced by hardening."""
-    rows = _corpus_or_skip()
+    rows = _calibration()
     flagged = [
         row
         for _run, row in rows
@@ -296,7 +303,7 @@ def test_the_corridor_is_UNCHANGED_on_exclusive_bracket_data() -> None:
     NOT a full answer: the 229 exclusive PRE-PORT arms are not in this tree, so
     the bounds may still move on the wider population. Reported, not retuned.
     """
-    rows = _corpus_or_skip()
+    rows = _calibration()
     healthy = [
         row
         for run, row in rows
@@ -308,3 +315,206 @@ def test_the_corridor_is_UNCHANGED_on_exclusive_bracket_data() -> None:
     assert 0.668 <= values[-1] <= 0.669, f"healthy ceiling moved: {values[-1]}"
     assert values[0] > gate.C5_CORRIDOR_LOW
     assert values[-1] < gate.C5_CORRIDOR_HIGH
+
+
+# --------------------------------------------------------------------------- #
+# APPLICABILITY: a drafter with no seam has no c5, not a low one               #
+# --------------------------------------------------------------------------- #
+# THE DEFECT THIS CLOSES. The sweep globbed every fr14_* arm and computed the
+# seam conditional over all of them, including four MTP-5 chain-drafter arms
+# where position 5 does not exist. delta_pos5 is structurally 0 there, so each
+# read c5 = 0.0000 -- four manufactured floors below every real degeneration in
+# the bank, ranking the healthiest arms as its worst. A statistic calibrated on
+# one topology and applied blindly to another reads the healthy case as the
+# pathological one.
+def _write_runroot(root: Path, *, boot: str | None, probe: str | None = None) -> Path:
+    """A runroot with one bracketed task and whatever evidence is named."""
+    arm = root / "arm"
+    task = arm / "swe_out" / "verified" / "per_task" / "astropy__astropy-13236"
+    task.mkdir(parents=True, exist_ok=True)
+    def scrape(pos4: int, pos5: int) -> str:
+        rows = [
+            'vllm:spec_decode_num_accepted_tokens_per_pos_total'
+            f'{{engine="0",position="{index}"}} {value}'
+            for index, value in ((4, pos4), (5, pos5))
+        ]
+        return "\n".join(rows) + "\n"
+    (task / "vllm_metrics_pre.txt").write_text(scrape(0, 0), encoding="utf-8")
+    (task / "vllm_metrics_post.txt").write_text(scrape(1000, 550), encoding="utf-8")
+    if boot is not None:
+        (arm / "boot_log_snapshot.txt").write_text(boot, encoding="utf-8")
+    if probe is not None:
+        (root / "MTP5_PROBE.txt").write_text(probe, encoding="utf-8")
+    return root
+
+
+def test_a_chain_drafter_arm_contributes_nothing_and_flags_nothing(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """MUTATION PROOF. num_spec_tokens=5 -> positions 0..4 -> no seam.
+
+    The arm is present, bracketed, and perfectly healthy. It must contribute NO
+    row at all -- not a zero, which is what made it look like the worst
+    degeneration in the corpus.
+    """
+    root = _write_runroot(
+        Path(tempfile.mkdtemp(prefix="c5-chain-")),
+        boot="EngineArgs(... num_spec_tokens=5, method='mtp' ...)\n",
+    )
+    try:
+        applicability = gate.seam_applicability(root)
+        assert applicability["applicable"] is False
+        assert "no-seam:num_spec_tokens=5" in applicability["reason"]
+        assert gate.sweep_runroot(root) == []
+        declared = gate.sweep_runroot(root, include_inapplicable=True)
+        assert len(declared) == 1
+        assert declared[0]["c5"] is None
+        assert declared[0]["verdict"].startswith("not-applicable:")
+        assert declared[0]["seam_applicable"] is False
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_the_arms_own_declaration_outranks_the_inference() -> None:
+    """The MTP-5 probes stamp c5_applicable=NO. A declaration is evidence."""
+    root = Path(tempfile.mkdtemp(prefix="c5-declared-"))
+    try:
+        _write_runroot(
+            root,
+            boot="num_spec_tokens=31\n",
+            probe="c5_applicable=NO -- c5 is a SEAM conditional and a chain "
+            "drafter has no seam\n",
+        )
+        applicability = gate.seam_applicability(root)
+        assert applicability["applicable"] is False
+        assert applicability["reason"] == "declared:c5_applicable=NO"
+        assert gate.sweep_runroot(root) == []
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_a_tree_drafter_arm_outside_the_corridor_still_flags() -> None:
+    """MUTATION PROOF, the other direction: the exclusion must not silence."""
+    root = Path(tempfile.mkdtemp(prefix="c5-tree-"))
+    try:
+        arm = root / "arm"
+        task = arm / "per_task" / "astropy__astropy-13236"
+        task.mkdir(parents=True)
+        def scrape(pos4: int, pos5: int) -> str:
+            return (
+                'vllm:spec_decode_num_accepted_tokens_per_pos_total'
+                f'{{engine="0",position="4"}} {pos4}\n'
+                'vllm:spec_decode_num_accepted_tokens_per_pos_total'
+                f'{{engine="0",position="5"}} {pos5}\n'
+            )
+        (task / "vllm_metrics_pre.txt").write_text(scrape(0, 0), encoding="utf-8")
+        # 900/1000 = 0.90, well above the corridor: a cache-driving loop shape.
+        (task / "vllm_metrics_post.txt").write_text(
+            scrape(1000, 900), encoding="utf-8"
+        )
+        (arm / "boot_log_snapshot.txt").write_text(
+            "num_spec_tokens=31\n", encoding="utf-8"
+        )
+        applicability = gate.seam_applicability(root)
+        assert applicability["applicable"] is True
+        rows = gate.sweep_runroot(root)
+        assert len(rows) == 1
+        assert rows[0]["c5"] == pytest.approx(0.90)
+        assert rows[0]["verdict"].startswith("DEGENERATION-SHAPE:high")
+        assert rows[0]["seam_applicable"] is True
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_an_arm_whose_drafter_cannot_be_identified_contributes_nothing() -> None:
+    """UNDETERMINED IS NOT APPLICABLE. Admitting it silently is how this began."""
+    root = Path(tempfile.mkdtemp(prefix="c5-unknown-"))
+    try:
+        _write_runroot(root, boot=None)
+        applicability = gate.seam_applicability(root)
+        assert applicability["applicable"] is False
+        assert applicability["reason"].startswith("undetermined:")
+        assert gate.sweep_runroot(root) == []
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_two_drafter_widths_in_one_runroot_is_ambiguous_not_averaged() -> None:
+    root = Path(tempfile.mkdtemp(prefix="c5-ambiguous-"))
+    try:
+        _write_runroot(root, boot="num_spec_tokens=31\nnum_spec_tokens=5\n")
+        applicability = gate.seam_applicability(root)
+        assert applicability["applicable"] is False
+        assert "ambiguous:multiple-drafter-widths=[5, 31]" in applicability["reason"]
+        assert gate.sweep_runroot(root) == []
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_the_banked_chain_arms_are_excluded_from_the_live_bank() -> None:
+    """The four real MTP-5 arms, on disk, contribute nothing to any sweep."""
+    excluded = [
+        (run, row)
+        for run, row in _all_arms(include_inapplicable=True)
+        if row["c5"] is None and row["verdict"].startswith("not-applicable:")
+    ]
+    assert len(excluded) == 4, f"expected the four MTP-5 arms, got {excluded}"
+    assert all("mtp5" in run for run, _row in excluded)
+    # ...and not one of them appears in an ordinary sweep
+    assert all(row["c5"] is not None for _run, row in _all_arms())
+    # nor does any arm anywhere read the manufactured 0.0
+    assert all(row["c5"] != 0.0 for _run, row in _all_arms())
+
+
+# --------------------------------------------------------------------------- #
+# THE CALIBRATION SET IS PINNED, SO ABSORPTION IS LOUD                         #
+# --------------------------------------------------------------------------- #
+def test_the_calibration_digest_is_pinned() -> None:
+    """MUTATION PROOF. A corridor that drifts with every run is not
+    pre-registered.
+
+    Cqc10's ten legitimate rows shifted aggregates that predate them simply by
+    existing. The calibration set is now an enumerated, digest-pinned
+    population: an arm entering it, or one of its values moving, changes this
+    digest and fails here rather than silently re-deriving the corridor.
+    """
+    rows = _calibration()
+    assert len(rows) == gate.C5_CALIBRATION_ROWS == 99
+    assert gate.calibration_digest(rows) == gate.C5_CALIBRATION_SHA256
+    assert len(gate.C5_CALIBRATION_RUNROOTS) == 47
+    assert len(set(gate.C5_CALIBRATION_RUNROOTS)) == 47
+
+
+def test_new_arms_are_checked_against_the_corridor_not_absorbed_into_it() -> None:
+    """The bank is strictly larger than the calibration set, and stays outside."""
+    pinned = set(gate.C5_CALIBRATION_RUNROOTS)
+    live = {run for run, _row in _all_arms()}
+    assert len(live - pinned) >= 1, "no post-registration arms on disk to check"
+    # the arms that post-date the pre-registration are absent from it
+    for late in ("fr14_promoab_Cqc10_20260824T074813Z",):
+        assert late in live, f"{late} is not being checked at all"
+        assert late not in pinned, f"{late} was absorbed into the calibration set"
+    # and adding them does not move a single calibration number
+    assert gate.calibration_digest(_calibration()) == gate.C5_CALIBRATION_SHA256
+
+
+def test_absorbing_an_arm_into_the_calibration_set_is_loud(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proof the digest can actually fail -- a pin that cannot is not a pin."""
+    monkeypatch.setattr(
+        gate,
+        "C5_CALIBRATION_RUNROOTS",
+        gate.C5_CALIBRATION_RUNROOTS + ("fr14_promoab_Cqc10_20260824T074813Z",),
+    )
+    widened = gate.calibration_corpus(REPO / "output")
+    assert len(widened) > gate.C5_CALIBRATION_ROWS
+    assert gate.calibration_digest(widened) != gate.C5_CALIBRATION_SHA256
+
+
+def test_the_pinned_set_carries_every_known_degeneration() -> None:
+    """The corridor's evidence must still contain what it was derived to catch."""
+    rows = _calibration()
+    present = {(run, row["label"]) for run, row in rows}
+    for key in KNOWN_DEGENERATIONS:
+        assert key in present, f"the calibration set lost {key}"

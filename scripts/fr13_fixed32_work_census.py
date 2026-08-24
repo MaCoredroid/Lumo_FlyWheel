@@ -215,11 +215,11 @@ TAW_SOURCE_CONTRACT_SCHEMA = "fr13-fixed32-taw-all-parent-v7"
 # number, it was hydra27's number in a slot with no room for a second profile.
 # hydra27 and tail6 share a digest because they share a walk depth.
 TAW_SOURCE_CONTRACT_SHA256 = (
-    "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab"
+    "80595b6be9cb9cb8e1449fb3325e1b510e5c00186fa194b05bf16beaaa376687"
 )
 TAW_SOURCE_CONTRACT_SHA256_BY_WALK: dict[int, str] = {
     12: TAW_SOURCE_CONTRACT_SHA256,
-    16: "fd262662637d36f6e8efe534bb674f676061aaa172d4e82b1f9ce111a743e2eb",
+    16: "094c1bfe805a45ff84cc5f97f2b22557beb590d91fa8a8c266cb10f6c7063158",
 }
 # ERA-SCOPED, and the reason is banked evidence. Every runroot recorded before
 # the site-27 re-attestation carries the prior digest, and this validator runs
@@ -228,6 +228,8 @@ TAW_SOURCE_CONTRACT_SHA256_BY_WALK: dict[int, str] = {
 # claim a retired source.
 TAW_SOURCE_CONTRACT_SHA256_PRIOR_ERAS: tuple[str, ...] = (
     "d9f85b6804f916bb991818b51f1be56cfad10d07def4e6d7d7f557cb5fc1dde0",
+    "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab",
+    "fd262662637d36f6e8efe534bb674f676061aaa172d4e82b1f9ce111a743e2eb",
 )
 TAW_CFWD_LOGIT_DIRECT_SOURCE_SCHEMA = (
     "fr13.fixed32.cfwd_logit_direct.integration_source.v2"

@@ -2030,7 +2030,7 @@ def test_hydra27_topology_values_are_byte_identical_to_the_baseline() -> None:
 # re-attest the source-closure digest through the established machinery. Two of
 # the 47 digested functions changed, both BOOT-TIME VALIDATORS, and the
 # evidence below is what the pairing rests on.
-TAW_SOURCE_DIGEST = "0f0db0378d656466144e585231be63720f822ce642d433a7f30fe638d0668dab"
+TAW_SOURCE_DIGEST = "80595b6be9cb9cb8e1449fb3325e1b510e5c00186fa194b05bf16beaaa376687"
 # Every digest this pin has ever carried. A mirror holding ANY of them is a
 # mirror that was missed, so the sweep checks all of them rather than only the
 # immediately previous one.
@@ -2150,8 +2150,14 @@ def test_the_re_attestation_blast_radius_is_the_three_validators() -> None:
     # _fr13_fixed32_taw_source_contract, the reference-route census in
     # _fr13_fixed32_taw_tensor_call_census, and the published slot counts in
     # _fr13_fixed32_publish_work. Nothing else in the audited closure moved.
+    # SITE 28's measured radius is exactly ONE function --
+    # _fr13_fixed32_layout_contract -- because the four walk-derived layout
+    # numbers were literals inside it and nothing else in the closure states a
+    # shape. A one-function re-attestation is what a correctly scoped fix looks
+    # like.
     assert set(changed) <= {
         "_fr13_fixed32_bind_schedule_to_profile",
+        "_fr13_fixed32_layout_contract",
         "_fr13_fixed32_publish_work",
         "_fr13_fixed32_runtime_contract",
         "_fr13_fixed32_taw_execute_exact_cuda",

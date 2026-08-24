@@ -33,6 +33,7 @@ test_a_wrong_runtime_cap_still_refuses_naming_both_values.
 
 from __future__ import annotations
 
+import ast
 import importlib
 import importlib.util
 import os
@@ -199,6 +200,47 @@ PINS_FAMILY: dict[str, tuple[str, str]] = {
     "kernel.self_check.uniform_stride_36": (
         "pin",
         "same loop, same reason: 36 is walk 12 * fan-out 3 for those modes.",
+    ),
+    # ---- SITE 28: found by the extended detector, not by the name census ----
+    "kernel._fr13_fixed32_layout_contract.uniform_shape": (
+        "derive",
+        "the uniform tensor's dim 1 IS the walk cap and its outer stride is "
+        "three times it; both the cached and the published layout pinned 12 "
+        "and 36 inside a function that already takes the topology.",
+    ),
+    "kernel._fr13_fixed32_layout_contract.all_parent_widths": (
+        "derive",
+        "the three all-parent widths are the SERVED MODE'S OWN source-row "
+        "schedule -- 13/17/17 at hydra27 and 11/21/21 at hydra31 -- so they "
+        "are read from the schedule, never computed from a walk formula.",
+    ),
+    "kernel._fr13_fixed32_publish_work.candidate_rows": (
+        "pin",
+        "candidate_target_rows=17 / candidate_self_rows=13 are read only in "
+        "the native-precompute branches, whose selector refuses any mode but "
+        "tail6/hydra27 -- the same gate as the route censuses.",
+    ),
+    "kernel._fr13_fixed32_taw_topology_binding.qualified_scope": (
+        "pin",
+        "the 13-self/17-target union is the LEVER'S QUALIFIED SCOPE, pinned "
+        "against a byte-qualified candidate at round 19; widening it is a "
+        "re-qualification, not a fix.",
+    ),
+    "kernel._fr13_fixed32_topology.authority_shape_assertions": (
+        "pin",
+        "WALK_CAP==12 and WALK_CAP_BY_MODE['hydra27_fixed32']==12 are site-13's "
+        "deliberate hydra27-identity assertions on the authority itself, and "
+        "COMMIT_PATH_CAP==16 is profile-invariant.",
+    ),
+    "kernel.cfwd_logit_direct.candidate_rows": (
+        "pin",
+        "17/13 inside the credential-bound CFWD compare, publisher and final "
+        "flush; their bytes are a candidate credential measured on hydra27.",
+    ),
+    "kernel.self_check.tree_shape_literals": (
+        "pin",
+        "the accept/bonus/mode-switch self-tests build fixtures for the two "
+        "12-walk modes their own loops iterate.",
     ),
 }
 
@@ -644,3 +686,234 @@ def test_the_census_round_trips_at_every_modes_walk_depth() -> None:
 def test_the_re_attestation_is_recorded_where_the_digest_lives() -> None:
     assert "RE-ATTESTED 2026-08-24 by SITE 27" in KERNEL_SOURCE
     assert "WHY IT COULD NOT BE AVOIDED" in KERNEL_SOURCE
+
+
+# --------------------------------------------------------------------------- #
+# SITE 28's META-ITEM: the census's REACH must equal its INTENT               #
+# --------------------------------------------------------------------------- #
+# WHY THE PASS-220 CENSUS MISSED SITE 28. Every one of its twenty-one entries is
+# a NAME -- a module-level constant, a topology scalar, a work-census constant --
+# plus one narrow detector for `topology.TAW_*_SLOTS` attribute reads. Site 28's
+# four statements are none of those: they are anonymous integer literals inside a
+# dict built at call time in _fr13_fixed32_layout_contract, a function that takes
+# `topology` and derives physical_drafts two lines above them. A name census
+# cannot see an expression, and the attribute detector could not see them either
+# because they read no attribute at all. The census enumerated the wrong KIND of
+# thing, and its coverage claim was therefore about names, not about numbers.
+#
+# THE EXTENDED METHOD, and why it is not a magic-number grep. Grepping for 12
+# would drown -- 12 is a loop bound, an index, a test fixture. The discriminator
+# is not "is this number suspicious" but "does this number equal a quantity that
+# DIFFERS BETWEEN PROFILES". Quantities identical under every mode (31 drafts,
+# 32 rows, fan-out 3, commit path 16) are safe by construction and are not
+# candidates at all. So the candidate set is DERIVED from the topology at test
+# time by evaluating the mode-varying quantities under every serving mode, and
+# any literal equal to one of those values must belong to a classified member of
+# PINS_FAMILY. That is a derivation cross-check; it cannot be satisfied by
+# tuning a threshold, and it moves automatically when a profile is added.
+def _mode_varying_values() -> tuple[set[int], set[int]]:
+    """(unambiguous, ambiguous) mode-varying quantity values.
+
+    A value that also equals a PROFILE-INVARIANT quantity is ambiguous: a
+    literal 32 may be the row count rather than a hydra31 walk*2. Those are
+    reported separately rather than asserted on, which is the coincidence
+    lesson -- a detector that cannot tell the two apart must say so instead of
+    guessing.
+    """
+    kernel = _load_kernel(PROFILE_HYDRA27)
+    topology = kernel._fr13_fixed32_topology()
+    binding = kernel._fr13_fixed32_taw_topology_binding(topology)
+    varying: dict[str, list[int]] = {}
+    for mode in topology.SERVING_MODES:
+        schedule = binding["all_parent_schedule_by_mode"][mode]
+        walk = int(topology.walk_cap_for_mode(mode))
+        profile = topology.PROFILES[topology.TREE_PROFILE_BY_MODE[mode]]
+        for name, value in (
+            ("walk_cap", walk),
+            ("walk*2", 2 * walk),
+            ("walk*3", 3 * walk),
+            ("walk+1", walk + 1),
+            ("max_physical_depth", int(profile["max_physical_depth"])),
+            ("active_drafts", int(profile["active_drafts"])),
+            ("self_uniform_levels", len(schedule["self_uniform_levels"])),
+            ("target_parent_slots", len(schedule["target_parent_slots"])),
+            ("target_uniform_levels", len(schedule["target_uniform_levels"])),
+            ("self_source_nodes", len(schedule["self_source_nodes"])),
+            ("target_source_nodes", len(schedule["target_source_nodes"])),
+        ):
+            varying.setdefault(name, []).append(value)
+    values: set[int] = set()
+    for name, per_mode in varying.items():
+        if len(set(per_mode)) > 1:
+            values |= set(per_mode)
+    invariant = {
+        int(topology.PHYSICAL_DRAFTS),
+        int(topology.PHYSICAL_ROWS),
+        int(topology.SAMPLER_MAX_FANOUT),
+        int(topology.COMMIT_PATH_CAP),
+        int(topology.OUTPUT_PUBLISH_CAPACITY),
+        int(topology.GDN_LAYERS),
+        int(topology.MODEL_LAYERS),
+        int(topology.TREE_ATTENTION_LAYERS),
+    }
+    return values - invariant, values & invariant
+
+
+#: enclosing scope -> the PINS_FAMILY entry that classifies it.
+MODE_VARYING_LITERAL_SCOPES: dict[str, str] = {
+    "<module-level>": "kernel._FR13_FIXED32_TAW_NATIVE_PRECOMPUTE_TENSOR_CALL_CENSUS",
+    "_fr13_fixed32_topology": (
+        "kernel._fr13_fixed32_topology.authority_shape_assertions"
+    ),
+    "_fr13_fixed32_taw_topology_binding": (
+        "kernel._fr13_fixed32_taw_topology_binding.qualified_scope"
+    ),
+    "_fr13_fixed32_publish_work": (
+        "kernel._fr13_fixed32_publish_work.candidate_rows"
+    ),
+    "_fr13_cfwd_logit_direct_compare": "kernel.cfwd_logit_direct.candidate_rows",
+    "_fr13_cfwd_logit_direct_publish_work": (
+        "kernel.cfwd_logit_direct.candidate_rows"
+    ),
+    "fr13_fixed32_cfwd_logit_direct_live_finalize": (
+        "kernel.cfwd_logit_direct.candidate_rows"
+    ),
+    "_fr13_fixed32_test_accept_leaf_depth_pad": (
+        "kernel.self_check.tree_shape_literals"
+    ),
+    "_fr13_fixed32_test_bonus_core": "kernel.self_check.tree_shape_literals",
+    "_fr13_fixed32_test_mode_switch_batches": (
+        "kernel.self_check.tree_shape_literals"
+    ),
+    "_fr13_fixed32_test_fail_loud": "kernel.self_check.tree_shape_literals",
+    "_fr13_fixed32_test_adversarial_contract": (
+        "kernel.self_check.tree_shape_literals"
+    ),
+}
+
+
+def _literal_scopes(source: str, values: set[int]) -> dict[str, list[int]]:
+    tree = ast.parse(source)
+    owner: dict[int, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+                owner.setdefault(line, node.name)
+    found: dict[str, list[int]] = {}
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, int)
+            and not isinstance(node.value, bool)
+            and node.value in values
+        ):
+            found.setdefault(owner.get(node.lineno, "<module-level>"), []).append(
+                node.lineno
+            )
+    return found
+
+
+def test_the_candidate_set_is_derived_from_the_topology_not_typed() -> None:
+    """The detector's own input must move when a profile does."""
+    unambiguous, ambiguous = _mode_varying_values()
+    # hydra31's walk and the widths it implies must be in it...
+    for value in (11, 12, 13, 15, 16, 17, 21, 24, 36, 48):
+        assert value in (unambiguous | ambiguous), value
+    # ...and the profile-invariant quantities must NOT be asserted on
+    assert 31 in ambiguous and 32 in ambiguous
+    assert 31 not in unambiguous and 32 not in unambiguous
+
+
+def test_every_mode_varying_literal_lives_in_a_classified_scope() -> None:
+    """SITE 28's CLOSURE, file-wide. Any unclassified hit fails here.
+
+    This is the census reaching what the name census could not: an integer
+    literal anywhere in the kernel whose value equals a quantity that differs
+    between profiles must sit in a scope PINS_FAMILY classifies.
+    """
+    unambiguous, _ambiguous = _mode_varying_values()
+    scopes = _literal_scopes(KERNEL_SOURCE, unambiguous)
+    unclassified = {
+        scope: lines
+        for scope, lines in scopes.items()
+        if scope not in MODE_VARYING_LITERAL_SCOPES
+    }
+    assert not unclassified, (
+        "mode-varying literals in unclassified scopes: "
+        + repr({k: v[:6] for k, v in sorted(unclassified.items())})
+    )
+    for scope, family_key in MODE_VARYING_LITERAL_SCOPES.items():
+        assert family_key in PINS_FAMILY, f"{scope} names a missing family entry"
+
+
+def test_the_layout_contract_no_longer_states_a_walk_derived_number() -> None:
+    """MUTATION PROOF for site 28: the site is CLOSED, not merely explained."""
+    unambiguous, _ambiguous = _mode_varying_values()
+    scopes = _literal_scopes(KERNEL_SOURCE, unambiguous)
+    assert "_fr13_fixed32_layout_contract" not in scopes, (
+        "the layout contract still carries mode-varying literals at lines "
+        + repr(scopes.get("_fr13_fixed32_layout_contract"))
+    )
+    # and it derives them from the topology parameter it already takes
+    body = KERNEL_SOURCE[
+        KERNEL_SOURCE.index("def _fr13_fixed32_layout_contract(") :
+    ]
+    body = body[: body.index("\ndef ")]
+    assert "walk_cap = _fr13_fixed32_walk_cap(topology, mode)" in body
+    assert '[batch, walk_cap, 3]' in body
+    assert "[walk_cap * 3, 3, 1]" in body
+    for width in (
+        "self_uniform_levels",
+        "target_parent_slots",
+        "target_uniform_levels",
+    ):
+        assert f'widths["{width}"]' in body, width
+
+
+@pytest.mark.parametrize(
+    ("mode", "walk", "widths"),
+    [
+        (PROFILE_HYDRA27, 12, (13, 17, 17)),
+        (MODE_TAIL6, 12, (13, 17, 17)),
+        (PROFILE_HYDRA31, 16, (11, 21, 21)),
+    ],
+)
+def test_the_layout_expectation_is_the_served_modes_own(
+    mode: str, walk: int, widths: tuple[int, int, int]
+) -> None:
+    """hydra31 expects 16-shapes; hydra27 is field-identical to the literals.
+
+    The all-parent widths are NOT walk arithmetic -- 13/17/17 against a walk of
+    12, 11/21/21 against a walk of 16 -- which is why they are read from the
+    served mode's schedule instead of computed.
+    """
+    kernel = _load_kernel(mode)
+    topology = kernel._fr13_fixed32_topology()
+    assert kernel._fr13_fixed32_walk_cap(topology, mode) == walk
+    schedule = kernel._fr13_fixed32_taw_topology_binding(topology)[
+        "all_parent_schedule_by_mode"
+    ][mode]
+    measured = (
+        len(schedule["self_uniform_levels"]),
+        len(schedule["target_parent_slots"]),
+        len(schedule["target_uniform_levels"]),
+    )
+    assert measured == widths
+    # the two profiles must genuinely differ, or this proves nothing
+    if mode == PROFILE_HYDRA31:
+        assert measured != (13, 17, 17) and walk != 12
+
+
+def test_the_layout_refusal_names_both_sides() -> None:
+    """The pass-220 two-sided rule applies here: the old one printed runtime."""
+    assert "cached tensor layout drift for mode " in KERNEL_SOURCE
+    assert "published tensor layout drift for mode " in KERNEL_SOURCE
+    assert "served {actual_cache_layouts.get(name)!r} against " in KERNEL_SOURCE
+    assert "audited {expected_cache_layouts[name]!r}" in KERNEL_SOURCE
+
+
+def test_the_schedule_width_memo_keeps_the_step_path_free() -> None:
+    """The binding digests the whole tree; it may be asked once per mode."""
+    kernel = _load_kernel(PROFILE_HYDRA27)
+    assert isinstance(kernel._FR13_FIXED32_LAYOUT_SCHEDULE_WIDTHS, dict)
+    assert "_FR13_FIXED32_LAYOUT_SCHEDULE_WIDTHS.get(mode)" in KERNEL_SOURCE
