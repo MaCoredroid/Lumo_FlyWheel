@@ -93,9 +93,15 @@ attention path with no lossless contract and no recurrent-model story, evaluated
 throughput regime where trees pay worst. This proposal is (a) opt-in and targeted at the
 low-batch regime, (b) integrated into the native kernel realization rather than a parallel
 backend, (c) primarily a *state-management* contribution — the part that did not exist in
-the removed code at all. The recent adaptive-verification work establishes precedent that
-non-uniform, dynamically shaped verification is acceptable; a token tree is one more
-shape, with the state discipline to make it correct.
+the removed code at all. Our re-entry point is deliberately a **mask primitive with no
+producer** plus shared state interfaces — pieces that stand alone — not a resurrected
+backend. Three things already in `main` answer the objections that sank trees before:
+the adaptive-verification budgeter's own docstring states the monotone-survival rule that
+generalizes from chains to connected subtrees; DFlash2's speculator already walks a
+score lattice and re-linearizes into the unmodified rejection sampler (the
+propose-tree/verify-losslessly pattern, merged); and device-decided non-uniform
+verification width is the shipped contract on two backend families (#52157, #52795),
+with hybrid MTP spec decode un-skipped on MRV2 in #51410.
 
 ## Proposed change (phased)
 
@@ -103,8 +109,11 @@ shape, with the state discipline to make it correct.
 Extend the recurrent spec-decode state context with: per-node parent indexing for
 branch-local scans; a declared carry-slot budget; an accepted-path replay hook. All
 default to today's chain semantics (a chain is a tree with fan-out 1). Pure interface +
-tests. Target: the V2 model-runner state context, in coordination with the authors of the
-current GDN/MTP kernel work.
+tests. The recurrent spec-state commit (`MambaSpecDecodeGPUContext`,
+`vllm/v1/worker/mamba_utils.py`) is **substrate-shared** — imported by both the V1
+model runner and Model Runner V2 — so phase 0 lands in shared code and benefits both
+runners regardless of substrate; coordinated with the authors of the current GDN/MTP
+kernel and recurrent spec-state work.
 
 **Phase 1 — tree visibility inside the native attention kernel.**
 Express the tree mask as a bias in the model's own attention kernel path (FA4 `mask_mod`
@@ -152,9 +161,12 @@ spec-state work.
 - **Complexity budget:** the state interfaces are the *small* part (phase 0 is
   interface-only); the walk/commit is where LOC lives, and it arrives last, behind
   demonstrated value.
-- **V1 vs Model Runner V2:** we target V2 for state work (that is where recurrent
-  spec-state lives) and ask for guidance on the drafter-composition surface, which
-  currently spans both.
+- **V1 vs Model Runner V2:** DECIDED — Model Runner V2 for phases 2–3 (its
+  rejection kernel already carries a mode axis, and block verification already does
+  cross-position residual-mass bookkeeping — the hardest correctness component of a
+  lossless tree walk). Phases 0–1 are substrate-neutral by construction: their
+  insertion points are files both runners import. See DESIGN_ANNEX.md §A for the
+  full memo.
 
 ## Evidence & provenance
 
