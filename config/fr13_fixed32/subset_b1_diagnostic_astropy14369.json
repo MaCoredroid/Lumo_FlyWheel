@@ -1,0 +1,11 @@
+{
+ "dataset_name": "princeton-nlp/SWE-bench_Verified",
+ "split": "test",
+ "tier": "fr13_fixed32_b1_diagnostic_astropy14369",
+ "source_subset": "config/fr13_fixed32/subset_b4_sixteen.json twelfth canonical task",
+ "generated_at": "2026-08-24T00:00:00Z",
+ "note": "Alternate one-real-task B1 kernel diagnostic only; ineligible for floor, timing, or acceptance reduction",
+ "instance_ids": [
+  "astropy__astropy-14369"
+ ]
+}

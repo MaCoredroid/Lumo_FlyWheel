@@ -591,8 +591,14 @@ def test_live_gate_uses_real_swe_b1_and_serves_reference() -> None:
     text = LIVE_RUNNER.read_text(encoding="utf-8")
 
     assert "FR13_GATE_DRAFT_HEAD_M32=${FR13_GATE_DRAFT_HEAD_M32:-0}" in text
-    assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in text
-    assert "astropy__astropy-12907" in text
+    # The subset path moved into fr13_floor_gate.B1_DIAGNOSTIC_PROFILES
+    # when astropy14369 was added: the gate read it as a literal, which
+    # made a one-key addition an eight-file edit. Reading the authority
+    # is the stronger property -- a gate that carries the path cannot
+    # learn a new profile.
+    assert "B1_DIAGNOSTIC_PROFILES" in text
+    assert "B1_DIAGNOSTIC_SUBSET" in text
+    assert "B1_DIAGNOSTIC_TASK_ID" in text
     assert 'FR13_DRAFT_HEAD_M32_LIVE_AB="$RUNTIME_DRAFT_HEAD_M32"' in text
     assert "RUNTIME_DRAFT_HEAD_M32=0" in text
     assert "fr13_draft_head_m32_pass.py validate-live" in text

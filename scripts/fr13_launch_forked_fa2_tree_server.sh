@@ -4386,11 +4386,21 @@ if [[ -n "${FR13_FIXED32_MODE:-}" ]]; then
     0|1) ;;
     *) echo "FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1" >&2; exit 2 ;;
   esac
-  case "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" in
-    astropy12907) _fr13_b1_diagnostic_task_id=astropy__astropy-12907 ;;
-    astropy13236) _fr13_b1_diagnostic_task_id=astropy__astropy-13236 ;;
-    *) echo "FR13_B1_DIAGNOSTIC_TASK_PROFILE is unsupported" >&2; exit 2 ;;
-  esac
+  # The diagnostic profile -> task id map is the AUTHORITY's
+  # (fr13_floor_gate.B1_DIAGNOSTIC_PROFILES), not this file's. It used to be
+  # restated here as a literal `case`, which made adding a profile a six-file
+  # edit and made this a fresh instance of the N-statements disease that sites
+  # 12 and 17-23 have been closing. Fail-closed: an unreadable authority or an
+  # unknown profile refuses.
+  _fr13_b1_diagnostic_task_id=$(python3 -c 'import sys
+sys.path.insert(0, sys.argv[2])
+from fr13_floor_gate import B1_DIAGNOSTIC_PROFILES
+profile = sys.argv[1]
+if profile not in B1_DIAGNOSTIC_PROFILES:
+    raise SystemExit(1)
+print(B1_DIAGNOSTIC_PROFILES[profile]["task_ids"][0])' \
+    "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" "scripts") \
+    || { echo "FR13_B1_DIAGNOSTIC_TASK_PROFILE is unsupported" >&2; exit 2; }
   if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" != "1" \
         && "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" != "astropy12907" ]]; then
     echo "alternate B1 task profile requires diagnostic mode" >&2

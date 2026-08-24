@@ -20,22 +20,28 @@ QROW16_LIVE_PASS_SHA256=36940fd43d11399529d1bfe7e11baa9961907193267f3bb43d410573
   || { echo "FORKED_FA2_SO must be an absolute path" >&2; exit 2; }
 
 B1_DIAGNOSTIC_TASK_PROFILE=${FR13_B1_DIAGNOSTIC_TASK_PROFILE:-astropy12907}
-case "$B1_DIAGNOSTIC_TASK_PROFILE" in
-  astropy12907)
-    B1_DIAGNOSTIC_TASK_ID=astropy__astropy-12907
-    B1_DIAGNOSTIC_SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json
-    B1_DIAGNOSTIC_SUBSET_SHA256=cc0264dbeab51847000bea7d14e9ada1d3a7c0d49182d423554c15e88417fefb
-    ;;
-  astropy13236)
-    B1_DIAGNOSTIC_TASK_ID=astropy__astropy-13236
-    B1_DIAGNOSTIC_SUBSET=config/fr13_fixed32/subset_b1_diagnostic_astropy13236.json
-    B1_DIAGNOSTIC_SUBSET_SHA256=f02687afcad677dab1960d0a4650786bd586e8493c2553a5010f66a0294c5c09
-    ;;
-  *)
-    echo "FR13_B1_DIAGNOSTIC_TASK_PROFILE must be astropy12907 or astropy13236" >&2
-    exit 2
-    ;;
-esac
+# The AUTHORITY's rows, read rather than restated. This block carried a full
+# copy of fr13_floor_gate.B1_DIAGNOSTIC_PROFILES -- task id, subset path AND
+# subset digest, per profile -- which is the worst form of the N-statements
+# disease: three fields that must all stay in step with a table in another
+# file. Its refusal even enumerated the two profiles it knew, so adding a
+# third meant editing a message as well.
+read -r B1_DIAGNOSTIC_TASK_ID B1_DIAGNOSTIC_SUBSET B1_DIAGNOSTIC_SUBSET_SHA256 \
+  < <(python3 -c 'import sys
+sys.path.insert(0, sys.argv[2])
+from fr13_floor_gate import B1_DIAGNOSTIC_PROFILES
+profile = sys.argv[1]
+if profile not in B1_DIAGNOSTIC_PROFILES:
+    raise SystemExit(1)
+row = B1_DIAGNOSTIC_PROFILES[profile]
+print(row[sys.argv[3]][0], row[sys.argv[4]], row[sys.argv[5]])' \
+    "$B1_DIAGNOSTIC_TASK_PROFILE" scripts task_ids relative_path sha256) \
+  || true
+[[ -n "${B1_DIAGNOSTIC_TASK_ID:-}" && -n "${B1_DIAGNOSTIC_SUBSET:-}" \
+   && "${B1_DIAGNOSTIC_SUBSET_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] \
+  || { echo "FR13_B1_DIAGNOSTIC_TASK_PROFILE is not a known diagnostic profile" \
+            "(see fr13_floor_gate.B1_DIAGNOSTIC_PROFILES): $B1_DIAGNOSTIC_TASK_PROFILE" >&2
+       exit 2; }
 export FR13_B1_DIAGNOSTIC_TASK_PROFILE="$B1_DIAGNOSTIC_TASK_PROFILE"
 
 FR13_GATE_QROW16=${FR13_GATE_QROW16:-0}

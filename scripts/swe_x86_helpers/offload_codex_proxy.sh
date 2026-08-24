@@ -90,11 +90,31 @@ case "$FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
 esac
-case "$B1_DIAGNOSTIC_TASK_PROFILE" in
-  astropy12907) FIXED32_DIAGNOSTIC_TASK_ID=astropy__astropy-12907 ;;
-  astropy13236) FIXED32_DIAGNOSTIC_TASK_ID=astropy__astropy-13236 ;;
-  *) echo "FAIL: FR13_B1_DIAGNOSTIC_TASK_PROFILE is unsupported"; exit 2 ;;
-esac
+# The diagnostic profile -> task id map belongs to the AUTHORITY
+# (fr13_floor_gate.B1_DIAGNOSTIC_PROFILES). It was restated here as a literal
+# `case`, which is what made adding one profile a six-file edit.
+FIXED32_DIAGNOSTIC_TASK_ID=$(python3 -c 'import sys
+sys.path.insert(0, sys.argv[2])
+from fr13_floor_gate import B1_DIAGNOSTIC_PROFILES
+profile = sys.argv[1]
+if profile not in B1_DIAGNOSTIC_PROFILES:
+    raise SystemExit(1)
+print(B1_DIAGNOSTIC_PROFILES[profile]["task_ids"][0])' \
+  "$B1_DIAGNOSTIC_TASK_PROFILE" "$REPO_ROOT/scripts") \
+  || { echo "FAIL: FR13_B1_DIAGNOSTIC_TASK_PROFILE is unsupported"; exit 2; }
+# Minted for the REMOTE block, which has no repo to read the authority from.
+_FIXED32_DIAGNOSTIC_MAP=$(python3 -c 'import sys
+sys.path.insert(0, sys.argv[1])
+from fr13_floor_gate import B1_DIAGNOSTIC_PROFILES
+# The field name arrives as argv rather than as a quoted literal: this whole
+# program is inside a single-quoted bash string, where a backslash-escaped
+# double quote is passed through verbatim and reaches Python as a syntax error.
+field = sys.argv[2]
+print(",".join(
+    name + ":" + row[field][0]
+    for name, row in sorted(B1_DIAGNOSTIC_PROFILES.items())
+))' "$REPO_ROOT/scripts" task_ids) \
+  || { echo "FAIL: cannot mint the diagnostic profile map"; exit 2; }
 if [[ "$FIXED32_B1_DIAGNOSTIC" != "1" \
       && "$B1_DIAGNOSTIC_TASK_PROFILE" != "astropy12907" ]]; then
   echo "FAIL: alternate B1 task profile requires diagnostic mode"
@@ -384,7 +404,7 @@ PY
     [[ "$PROXY_PORT" =~ ^[0-9]+$ ]] \
       || { echo "FAIL: fixed32 proxy control port is malformed"; exit 5; }
     ssh "${SSH_OPTS[@]}" "$HOST" \
-      "$REMOTE_VENV - $PROXY_PORT $ACTION $REMOTE_FIXED32_SECRET $FIXED32_TASK_IDS $FIXED32_B1_DIAGNOSTIC $B1_DIAGNOSTIC_TASK_PROFILE $_FIXED32_ADMISSIBLE_COUNTS" <<'PY'
+      "$REMOTE_VENV - $PROXY_PORT $ACTION $REMOTE_FIXED32_SECRET $FIXED32_TASK_IDS $FIXED32_B1_DIAGNOSTIC $B1_DIAGNOSTIC_TASK_PROFILE $_FIXED32_ADMISSIBLE_COUNTS $_FIXED32_DIAGNOSTIC_MAP" <<'PY'
 import hashlib
 import json
 import os
@@ -424,9 +444,17 @@ admissible_task_counts = tuple(int(part) for part in sys.argv[7].split(","))
 if diagnostic_text not in {"0", "1"}:
     raise SystemExit("remote fixed32 B1 diagnostic selector is invalid")
 diagnostic = diagnostic_text == "1"
+# Minted by the caller from fr13_floor_gate.B1_DIAGNOSTIC_PROFILES; this host
+# has no repo to read it from, so an absent or malformed map is fatal rather
+# than replaced by a literal -- a literal here is what site 25 was.
+if len(sys.argv) < 9 or not re.fullmatch(
+    r"[A-Za-z0-9_]+:[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+"
+    r"(,[A-Za-z0-9_]+:[A-Za-z0-9_.-]+__[A-Za-z0-9_.-]+)*", sys.argv[8]
+):
+    raise SystemExit("remote fixed32 diagnostic profile map is missing or malformed")
 diagnostic_task_ids = {
-    "astropy12907": ["astropy__astropy-12907"],
-    "astropy13236": ["astropy__astropy-13236"],
+    pair.split(":", 1)[0]: [pair.split(":", 1)[1]]
+    for pair in sys.argv[8].split(",")
 }
 if diagnostic_profile not in diagnostic_task_ids:
     raise SystemExit("remote fixed32 B1 diagnostic task profile is invalid")

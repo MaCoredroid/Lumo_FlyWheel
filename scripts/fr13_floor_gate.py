@@ -185,6 +185,19 @@ B1_DIAGNOSTIC_PROFILES = {
         ),
         "task_ids": (CANONICAL_TASK_IDS[2],),
     },
+    # Mark's MTP-5 probe (2026-08-24). Same three fields as its siblings --
+    # the profiles carry NO per-task knobs (no timeouts, no overrides), so
+    # there was nothing conservative to copy; the shape is path + digest +
+    # the single task id, and this is the twelfth canonical task.
+    "astropy14369": {
+        "relative_path": (
+            "config/fr13_fixed32/subset_b1_diagnostic_astropy14369.json"
+        ),
+        "sha256": (
+            "c6242c7ba63c861c16a1ba824c63045444f5c4db0157a837baeb03f962934ea3"
+        ),
+        "task_ids": (CANONICAL_TASK_IDS[11],),
+    },
 }
 B1_DIAGNOSTIC_SUBSET = B1_DIAGNOSTIC_PROFILES["astropy12907"]
 

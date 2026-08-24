@@ -102,11 +102,21 @@ case "$FR13_FIXED32_B1_DIAGNOSTIC" in
   0|1) ;;
   *) echo "FAIL: FR13_FIXED32_B1_DIAGNOSTIC must be exactly 0 or 1"; exit 2 ;;
 esac
-case "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" in
-  astropy12907) _fr13_b1_diagnostic_task_id=astropy__astropy-12907 ;;
-  astropy13236) _fr13_b1_diagnostic_task_id=astropy__astropy-13236 ;;
-  *) echo "FAIL: FR13_B1_DIAGNOSTIC_TASK_PROFILE is unsupported"; exit 2 ;;
-esac
+# The diagnostic profile -> task id map is the AUTHORITY's
+# (fr13_floor_gate.B1_DIAGNOSTIC_PROFILES), not this file's. It used to be
+# restated here as a literal `case`, which made adding a profile a six-file
+# edit and made this a fresh instance of the N-statements disease that sites
+# 12 and 17-23 have been closing. Fail-closed: an unreadable authority or an
+# unknown profile refuses.
+_fr13_b1_diagnostic_task_id=$(python3 -c 'import sys
+sys.path.insert(0, sys.argv[2])
+from fr13_floor_gate import B1_DIAGNOSTIC_PROFILES
+profile = sys.argv[1]
+if profile not in B1_DIAGNOSTIC_PROFILES:
+  raise SystemExit(1)
+print(B1_DIAGNOSTIC_PROFILES[profile]["task_ids"][0])' \
+  "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" "scripts") \
+  || { echo "FR13_B1_DIAGNOSTIC_TASK_PROFILE is unsupported" >&2; exit 2; }
 if [[ "$FR13_FIXED32_B1_DIAGNOSTIC" != "1" \
       && "$FR13_B1_DIAGNOSTIC_TASK_PROFILE" != "astropy12907" ]]; then
   echo "FAIL: alternate B1 task profile requires diagnostic mode"
@@ -899,9 +909,16 @@ diagnostic_profile = sys.argv[7]
 if diagnostic_text not in {"0", "1"}:
     raise SystemExit("fixed32 B1 diagnostic selector is invalid")
 diagnostic = diagnostic_text == "1"
+# The authority, imported rather than restated -- this block already inserts
+# scripts/ on sys.path for EVIDENCE_SETS (site 23).
+try:
+    from fr13_floor_gate import B1_DIAGNOSTIC_PROFILES
+except Exception as error:  # noqa: BLE001 - any import failure is fatal here
+    raise SystemExit(
+        f"fixed32 engine ingress cannot read the diagnostic profiles: {error}"
+    )
 diagnostic_task_ids = {
-    "astropy12907": ["astropy__astropy-12907"],
-    "astropy13236": ["astropy__astropy-13236"],
+    name: list(row["task_ids"]) for name, row in B1_DIAGNOSTIC_PROFILES.items()
 }
 if diagnostic_profile not in diagnostic_task_ids:
     raise SystemExit("fixed32 B1 diagnostic task profile is invalid")

@@ -157,8 +157,13 @@ def test_b1_diagnostic_is_guarded_across_runtime_ingress() -> None:
     )
     for source in (serve, launcher, offload, runner):
         assert "FR13_B1_DIAGNOSTIC_TASK_PROFILE" in source
+    # The profile -> task-id map moved to fr13_floor_gate.B1_DIAGNOSTIC_PROFILES
+    # when astropy14369 was added, because eight consumers restating it made a
+    # one-key addition an eight-file edit. What must remain true is that every
+    # ingress READS the authority -- which is stronger than carrying a literal,
+    # and is what lets a new profile reach all of them at once.
     for source in (serve, launcher, offload):
-        assert "astropy13236" in source
+        assert "B1_DIAGNOSTIC_PROFILES" in source
     assert "fixed32 B1 diagnostic requires concurrency and serving batch exactly 1" in runner
     assert "fixed32 TAW native campaign arm requires exact B4 concurrency" in runner
     assert "--fixed32-taw-real-event-arm" in serve
@@ -174,12 +179,15 @@ def test_common_b1_and_cutlass_reducer_pin_alternate_task_and_stay_ineligible() 
     serve = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
 
     for source in (common, cutlass):
-        assert "astropy__astropy-13236" in source
         assert "FR13_B1_DIAGNOSTIC_TASK_PROFILE" in source
-    assert (
-        "f02687afcad677dab1960d0a4650786bd586e8493c2553a5010f66a0294c5c09"
-        in common
-    )
+    # The common B1 kernel gate used to carry the alternate task's id, subset
+    # path AND digest -- three fields in step with a table in another file. It
+    # reads the authority now; the CUTLASS lane still names the task because
+    # its constraint is lane policy (13236 requires an N5120 candidate), not a
+    # restatement of the map.
+    assert "B1_DIAGNOSTIC_PROFILES" in common
+    assert "astropy__astropy-13236" in cutlass
+    assert "row[sys.argv[5]]" in common or "sha256" in common
     assert "isolated to the N5120 CUTLASS byte gate" in common
     assert '"timing_eligible": False' in cutlass
     assert '"floor_acceptance_eligible": False' in cutlass

@@ -576,8 +576,14 @@ def test_real_b1_runner_uses_canonical_task_and_only_gates_not_tunes() -> None:
     assert "FR13_GATE_DRAFT_HEAD_FP8_STATIC_IO=1 requires" in runner
     assert "FR13_GATE_DRAFT_HEAD_FP8 must be the only enabled kernel candidate" in runner
     assert "FR13_B1_WORKLOAD_PROFILE" in runner
-    assert "config/fr13_fixed32/subset_b1_diagnostic_one.json" in runner
-    assert "astropy__astropy-12907" in runner
+    # The subset path moved into fr13_floor_gate.B1_DIAGNOSTIC_PROFILES
+    # when astropy14369 was added: the gate read it as a literal, which
+    # made a one-key addition an eight-file edit. Reading the authority
+    # is the stronger property -- a gate that carries the path cannot
+    # learn a new profile.
+    assert "B1_DIAGNOSTIC_PROFILES" in runner
+    assert "B1_DIAGNOSTIC_SUBSET" in runner
+    assert "B1_DIAGNOSTIC_TASK_ID" in runner
     assert "FR13_DRAFT_HEAD_FP8_ENGAGEMENT_JSON=/logs/fr13_draft_head_fp8.engagement.json" in runner
     assert "DRAFT_HEAD_FP8_ARM=$ARM" in runner
     assert 'FR13_DRAFT_HEAD_FP8_ARM="$DRAFT_HEAD_FP8_ARM"' in runner

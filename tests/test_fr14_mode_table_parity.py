@@ -1413,3 +1413,119 @@ def test_the_qc_remainder_subset_is_derived_from_its_parent():
     assert __import__("hashlib").sha256(
         (REPO / twelve["relative_path"]).read_bytes()
     ).hexdigest() == twelve["sha256"]
+
+
+# ===========================================================================
+# The B1 diagnostic profiles, as a KEYED addition.
+#
+# Adding astropy14369 for Mark's MTP-5 probe should have been one key in
+# fr13_floor_gate.B1_DIAGNOSTIC_PROFILES. It was not: EIGHT consumers restated
+# the profile -> task-id map as literals, and one of them
+# (fr13_run_b1_kernel_live_gate.sh) restated all THREE fields -- task id,
+# subset path and subset digest -- plus a refusal message that enumerated the
+# profiles it knew. Every one of those is a fresh instance of the
+# N-statements disease sites 12 and 17-24 have been closing.
+# ===========================================================================
+
+PROFILE_CONSUMERS = (
+    "scripts/fr13_launch_forked_fa2_tree_server.sh",
+    "scripts/fr14_armb_leg3_launch_nomiddleware.sh",
+    "scripts/fr14_leg3_launch_nomiddleware.sh",
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/swe_x86_helpers/offload_codex_proxy.sh",
+    "scripts/fr13_run_b1_kernel_live_gate.sh",
+)
+
+
+def _profiles():
+    sys.path.insert(0, str(REPO / "scripts"))
+    import fr13_floor_gate
+
+    return fr13_floor_gate.B1_DIAGNOSTIC_PROFILES
+
+
+def test_the_new_diagnostic_profile_is_one_keyed_addition():
+    profiles = _profiles()
+    assert set(profiles) == {"astropy12907", "astropy13236", "astropy14369"}
+    row = profiles["astropy14369"]
+    # same three fields as its siblings; the profiles carry no per-task knobs
+    assert set(row) == set(profiles["astropy13236"]) == {
+        "relative_path", "sha256", "task_ids"
+    }
+    assert row["task_ids"] == ("astropy__astropy-14369",)
+    body = json.loads((REPO / row["relative_path"]).read_text())
+    assert tuple(body["instance_ids"]) == row["task_ids"]
+    assert __import__("hashlib").sha256(
+        (REPO / row["relative_path"]).read_bytes()
+    ).hexdigest() == row["sha256"]
+
+
+@pytest.mark.parametrize("rel", PROFILE_CONSUMERS, ids=lambda r: Path(r).name)
+def test_no_consumer_restates_the_profile_map(rel):
+    """A consumer that carries the map cannot learn a new profile."""
+    text = (REPO / rel).read_text()
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        assert not re.match(
+            r'^"?astropy\d+"?\)?:?\s*.*astropy__astropy-\d+', stripped
+        ), f"{Path(rel).name}: still restates the profile map -- {stripped}"
+    assert "B1_DIAGNOSTIC_PROFILES" in text, (
+        f"{Path(rel).name} consumes the profile but never reads the authority"
+    )
+
+
+@pytest.mark.parametrize("profile", ["astropy12907", "astropy13236", "astropy14369"])
+def test_every_profile_resolves_through_the_shared_lookup(profile):
+    """The derive used by four bash consumers, driven for real."""
+    import subprocess
+
+    program = (
+        "import sys\n"
+        "sys.path.insert(0, sys.argv[2])\n"
+        "from fr13_floor_gate import B1_DIAGNOSTIC_PROFILES\n"
+        "profile = sys.argv[1]\n"
+        "if profile not in B1_DIAGNOSTIC_PROFILES:\n"
+        "    raise SystemExit(1)\n"
+        'print(B1_DIAGNOSTIC_PROFILES[profile]["task_ids"][0])\n'
+    )
+    out = subprocess.run(
+        ["python3", "-c", program, profile, "scripts"],
+        cwd=str(REPO), capture_output=True, text=True,
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == _profiles()[profile]["task_ids"][0]
+    bad = subprocess.run(
+        ["python3", "-c", program, "astropy99999", "scripts"],
+        cwd=str(REPO), capture_output=True, text=True,
+    )
+    assert bad.returncode != 0, "an unknown profile must still refuse"
+
+
+def test_the_remote_proxy_receives_the_map_rather_than_carrying_it():
+    """The remote host has no repo, so the map is minted and passed."""
+    proxy = (REPO / "scripts/swe_x86_helpers/offload_codex_proxy.sh").read_text()
+    assert "_FIXED32_DIAGNOSTIC_MAP=$(python3 -c" in proxy
+    assert "$_FIXED32_DIAGNOSTIC_MAP\" <<'PY'" in proxy
+    assert "diagnostic profile map is missing or malformed" in proxy
+    # the field name travels as argv: a backslash-escaped quote inside the
+    # single-quoted bash program reaches Python verbatim and is a syntax error
+    assert 'row[field][0]' in proxy
+
+
+def test_the_cutlass_lane_is_adjudicated_not_converted():
+    """Two remaining literal cases are a DIFFERENT variable and a policy.
+
+    FR13_FIXED32_CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE attaches lane-specific
+    candidate admissibility to profile names (13236 requires an N5120
+    candidate). That is policy about a profile, not a restatement of the
+    profile -> task-id map, and the MTP-5 route does not traverse it.
+    """
+    for rel in ("scripts/fr13_launch_forked_fa2_tree_server.sh",
+                "scripts/fr13_run_b1_cutlass_streamk_live_gate.sh"):
+        text = (REPO / rel).read_text()
+        if "CUTLASS_WAVE_DIAGNOSTIC_TASK_PROFILE" in text:
+            assert "requires an N5120 B1 candidate" in text or (
+                "pinned to an N5120 candidate" in text
+            )
