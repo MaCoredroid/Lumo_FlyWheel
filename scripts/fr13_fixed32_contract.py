@@ -1139,6 +1139,37 @@ def _fixed32_qwen_hidden_failed_compaction_request_id(
     )
 
 
+def _fixed32_qwen_capped_failed_compaction_request_id(
+    *,
+    terminal_event_id: str,
+    trace_event_ids_sha256: str,
+    metric_evidence_sha256: str,
+    ordinal: int,
+) -> str:
+    """Identity for a failed compaction on a BUDGET-CAPPED trace.
+
+    Same construction as the result-anchored identity, anchored to the last
+    event the kill left behind instead of to a result record that does not
+    exist. The distinct prefix keeps the two namespaces separable by eye and
+    leaves every banked result-anchored identity hashing to what it always did.
+    """
+    payload = json.dumps(
+        {
+            "metric_evidence_sha256": metric_evidence_sha256,
+            "ordinal": ordinal,
+            "terminal_event_id": terminal_event_id,
+            "trace_event_ids_sha256": trace_event_ids_sha256,
+        },
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return (
+        "qwen-capped-failed-compaction-sha256:"
+        f"{hashlib.sha256(payload).hexdigest()}"
+    )
+
+
 def _fixed32_qwen_metric_labels(
     *,
     finished_reason: str | None = None,
@@ -1419,7 +1450,7 @@ def _fixed32_qwen_metric_snapshot(
 def _fixed32_qwen_compaction_metric_evidence(
     *,
     events: list[dict[str, Any]],
-    result: dict[str, Any],
+    result: dict[str, Any] | None,
     normal_request_count: int,
     successful_compaction_count: int,
     synthetic_compaction_failure_terminal: bool,
@@ -1427,13 +1458,34 @@ def _fixed32_qwen_compaction_metric_evidence(
     expected_completed_logical_model_requests: int,
     metrics_pre: bytes,
     metrics_post: bytes,
+    capped_requests: int = 0,
 ) -> tuple[dict[str, Any], int]:
+    """Prove one task's request ledger against its own metric bracket.
+
+    ``result`` is ``None`` on a BUDGET-CAPPED terminal, where the kill precluded
+    it. Everything the result was used for that the brackets already measure --
+    the aggregate token totals -- is taken from the brackets instead, which is
+    the same quantity minus the agent's self-report of it. ``capped_requests``
+    is the abort the cap produced, 0 or 1, and defaults to 0, which is the
+    pre-cap algebra exactly.
+    """
     if (
         type(expected_completed_logical_model_requests) is not int
         or expected_completed_logical_model_requests <= 0
     ):
         raise ContractError(
             "fixed32 qwen expected completed request count is invalid"
+        )
+    if isinstance(capped_requests, bool) or type(capped_requests) is not int:
+        raise ContractError(
+            f"fixed32 qwen task capped request count must be an int, "
+            f"got {capped_requests!r}"
+        )
+    if capped_requests < 0 or (capped_requests and result is not None):
+        raise ContractError(
+            "fixed32 qwen task capped request count is invalid for this "
+            f"terminal: capped_requests={capped_requests} with "
+            f"result={'present' if result is not None else 'absent'}"
         )
     before = _fixed32_qwen_metric_snapshot(metrics_pre, label="pre")
     after = _fixed32_qwen_metric_snapshot(metrics_post, label="post")
@@ -1447,29 +1499,51 @@ def _fixed32_qwen_compaction_metric_evidence(
 
     completed = expected_completed_logical_model_requests
     completion_classes = _fixed32_qwen_completion_classes(
-        deltas, completed=completed, scope="task"
+        deltas, completed=completed, scope="task", capped_requests=capped_requests
     )
     if deltas["max_tokens_le_10000"] != 0:
         raise ContractError(
             "fixed32 qwen max-token histogram has an unpinned low request"
         )
 
-    total_compactions = deltas["max_tokens_le_20000"]
+    # A budget-capped abort never reached the agent, but vLLM still admitted it
+    # at one of the two pinned ceilings and still histogrammed it -- so the
+    # le_20000 bucket over-counts the COMPLETED compactions by exactly those
+    # capped requests that happened to be compactions. Solve the split rather
+    # than assume it (the campaign-union clause does the same). At
+    # capped_requests=0 both capped terms are pinned to zero by the
+    # nonnegativity below, and this is the pre-cap algebra to the digit.
+    total_compactions = completed - normal_request_count
+    capped_compaction = deltas["max_tokens_le_20000"] - total_compactions
+    capped_visible = capped_requests - capped_compaction
+    capped_split_solved = capped_compaction >= 0 and capped_visible >= 0
+    if capped_split_solved:
+        visible_units = normal_request_count + capped_visible
+        compaction_units = total_compactions + capped_compaction
+    else:
+        # The split is impossible, so the run has already failed. Report the
+        # units the meters actually measured rather than the ones an
+        # unsatisfiable split implies -- a diagnostic that invents a clean
+        # shortfall out of a broken split is a message-lie, and the next
+        # reader pays for it.
+        visible_units = normal_request_count
+        compaction_units = deltas["max_tokens_le_20000"]
     # ERA-SCOPED. Solve for the ceiling this run served rather than asserting
     # one, then require it to be a ceiling the campaign has deployed. Banked
     # 32768-era runroots and new 24000-era ones both reconcile; a ceiling
     # nobody deployed refuses.
     served_max_output_tokens: int | None = None
-    compaction_component = total_compactions * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
-    for candidate in FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS:
-        if (
-            deltas["max_tokens_sum"]
-            == normal_request_count * candidate + compaction_component
-        ):
-            served_max_output_tokens = candidate
-            break
+    compaction_component = compaction_units * QWEN_COMPACTION_MAX_OUTPUT_TOKENS
+    if capped_split_solved:
+        for candidate in FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS:
+            if (
+                deltas["max_tokens_sum"]
+                == visible_units * candidate + compaction_component
+            ):
+                served_max_output_tokens = candidate
+                break
     expected_max_tokens_sum = (
-        normal_request_count
+        visible_units
         * (
             served_max_output_tokens
             if served_max_output_tokens is not None
@@ -1479,7 +1553,7 @@ def _fixed32_qwen_compaction_metric_evidence(
     )
     if (
         total_compactions < successful_compaction_count
-        or normal_request_count + total_compactions != completed
+        or not capped_split_solved
         or served_max_output_tokens is None
     ):
         # Name every measured number, and now also name the ceilings. The FR14
@@ -1488,8 +1562,8 @@ def _fixed32_qwen_compaction_metric_evidence(
         # one ceiling while the serve deployed a different one.
         implied = (
             (deltas["max_tokens_sum"] - compaction_component)
-            / normal_request_count
-            if normal_request_count
+            / visible_units
+            if visible_units
             else float("nan")
         )
         # Per-candidate shortfalls, so "the trace is one 32768 request short"
@@ -1497,7 +1571,7 @@ def _fixed32_qwen_compaction_metric_evidence(
         # era table must not cost it.
         shortfalls = ", ".join(
             f"{candidate}: "
-            f"{deltas['max_tokens_sum'] - (normal_request_count * candidate + compaction_component)}"
+            f"{deltas['max_tokens_sum'] - (visible_units * candidate + compaction_component)}"
             for candidate in FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS
         )
         raise ContractError(
@@ -1505,9 +1579,12 @@ def _fixed32_qwen_compaction_metric_evidence(
             f"ceiling {list(FIXED32_DEPLOYED_MAX_OUTPUT_TOKENS)} "
             f"(compaction {QWEN_COMPACTION_MAX_OUTPUT_TOKENS}): "
             f"trace normal={normal_request_count} + "
-            f"le_20000_compactions={total_compactions} against engine "
+            f"completed_compactions={total_compactions} against engine "
             f"completed={completed} (trace-visible successful compactions "
-            f"{successful_compaction_count}); max_tokens_sum="
+            f"{successful_compaction_count}); le_20000 bucket="
+            f"{deltas['max_tokens_le_20000']} with capped={capped_requests} "
+            f"(capped split visible={capped_visible} "
+            f"compaction={capped_compaction}); max_tokens_sum="
             f"{deltas['max_tokens_sum']} against expected "
             f"{expected_max_tokens_sum}, a shortfall of "
             f"{deltas['max_tokens_sum'] - expected_max_tokens_sum}; shortfall "
@@ -1515,25 +1592,34 @@ def _fixed32_qwen_compaction_metric_evidence(
             f"per-request ceiling of {implied:.4f}"
         )
 
-    result_usage = result.get("usage")
-    if not isinstance(result_usage, dict):
-        raise ContractError("fixed32 qwen result usage is missing")
-    aggregate_input = result_usage.get("input_tokens")
-    aggregate_output = result_usage.get("output_tokens")
-    aggregate_total = result_usage.get("total_tokens")
-    if (
-        type(aggregate_input) is not int
-        or aggregate_input < 0
-        or type(aggregate_output) is not int
-        or aggregate_output < 0
-        or type(aggregate_total) is not int
-        or aggregate_total != aggregate_input + aggregate_output
-        or aggregate_input != deltas["prompt_tokens"]
-        or aggregate_output != deltas["generation_tokens"]
-    ):
-        raise ContractError(
-            "fixed32 qwen aggregate and vLLM token usage do not reconcile"
-        )
+    # THE AGGREGATE, AND WHO SAYS SO. On an ordinary terminal the agent's own
+    # result.usage must equal the engine's bracket -- two meters, one number. A
+    # capped terminal has no result to ask, so the bracket stands alone for the
+    # aggregate; every OTHER use of it below (the hidden-token split) keeps its
+    # teeth, because the visible side still comes from the trace.
+    if result is None:
+        aggregate_input = deltas["prompt_tokens"]
+        aggregate_output = deltas["generation_tokens"]
+    else:
+        result_usage = result.get("usage")
+        if not isinstance(result_usage, dict):
+            raise ContractError("fixed32 qwen result usage is missing")
+        aggregate_input = result_usage.get("input_tokens")
+        aggregate_output = result_usage.get("output_tokens")
+        aggregate_total = result_usage.get("total_tokens")
+        if (
+            type(aggregate_input) is not int
+            or aggregate_input < 0
+            or type(aggregate_output) is not int
+            or aggregate_output < 0
+            or type(aggregate_total) is not int
+            or aggregate_total != aggregate_input + aggregate_output
+            or aggregate_input != deltas["prompt_tokens"]
+            or aggregate_output != deltas["generation_tokens"]
+        ):
+            raise ContractError(
+                "fixed32 qwen aggregate and vLLM token usage do not reconcile"
+            )
 
     visible_input = 0
     visible_output = 0
@@ -2432,10 +2518,50 @@ def validate_fixed32_trace_model_requests(
     expected_completed_logical_model_requests: int | None = None,
     metrics_pre: bytes | None = None,
     metrics_post: bytes | None = None,
+    budget_capped_terminal: bool = False,
 ) -> dict[str, Any]:
-    """Reconcile legacy terminals or pinned Qwen assistant response groups."""
+    """Reconcile legacy terminals or pinned Qwen assistant response groups.
+
+    THE BUDGET-CAPPED TERMINAL CLASS (``budget_capped_terminal``). A campaign
+    budget cap kills the agent where it stands, so qwen-code never writes its
+    final ``result`` record -- and every result-derived check below (turn count,
+    aggregate usage, session binding, permission denials) has no record to read.
+    Until 2026-08-24 that made the compaction-evidence requirement and the
+    budget cap JOINTLY UNSATISFIABLE: the cap is a declared, corroborated, legal
+    terminal, and the validator demanded an artifact the kill precludes. The
+    campaign died at 2/12 on astropy__astropy-13579 with no legal terminal
+    available to it.
+
+    The fix is not to drop the evidence, it is to SCOPE it to the completed
+    portion. A capped trace is truncated, never falsified: the requests it did
+    complete are all in it, and the engine's own metric bracket counts them
+    independently. So on the capped path the count comes from the brackets and
+    the trace, cross-checked against each other and against the proxy's
+    per-task-key ledger -- three instruments, no self-report:
+
+      * every visible top-level response group is a completed normal request,
+        and the metric bracket's ``max_tokens`` algebra must imply exactly that
+        many normal requests at a deployed ceiling;
+      * the kill's own signature must match the engine's abort counter -- an
+        unterminated trailing response group means the kill landed mid-response
+        and the engine must report exactly one abort, and a trace whose last
+        group terminated cleanly must report none;
+      * the session identity, which the missing result would have carried, is
+        instead required of every event in the trace.
+
+    ``budget_capped_terminal`` is a DECLARATION by the caller, made only after
+    the runner record corroborates the cap end to end (armed, binding, the
+    wallclock kill fired, and the measured wall reached the budget). It relaxes
+    nothing when the trace does carry a result: a run that finished and was then
+    cut in teardown still validates as an ordinary Qwen result.
+    """
     if not events or any(not isinstance(event, dict) for event in events):
         raise ContractError("fixed32 trace events must be nonempty objects")
+    if not isinstance(budget_capped_terminal, bool):
+        raise ContractError(
+            "fixed32 budget-capped terminal declaration must be a bool, got "
+            f"{budget_capped_terminal!r}"
+        )
     metric_arguments = (
         expected_completed_logical_model_requests,
         metrics_pre,
@@ -2469,11 +2595,24 @@ def validate_fixed32_trace_model_requests(
             )
         terminal_records.append((index, event, message, response_id))
 
-    if not result_records:
-        if metrics_pre is not None:
+    capped_terminal = False
+    if not result_records and metrics_pre is not None:
+        # THE ONE INCOMPLETE TERMINAL THAT IS LEGAL. Without the declaration
+        # this stays exactly the refusal it was: a trace with metric evidence
+        # and no result is a run that died for a reason nobody declared.
+        if not budget_capped_terminal:
             raise ContractError(
                 "fixed32 compaction metric evidence requires a Qwen result"
             )
+        if not isinstance(expected_session_id, str) or not expected_session_id:
+            raise ContractError(
+                "fixed32 budget-capped terminal evidence requires the task "
+                "session identity, because the result record that would have "
+                "carried it does not exist"
+            )
+        capped_terminal = True
+
+    if not result_records and not capped_terminal:
         response_ids = [record[3] for record in terminal_records]
         if not response_ids or len(response_ids) != len(set(response_ids)):
             raise ContractError(
@@ -2488,87 +2627,104 @@ def validate_fixed32_trace_model_requests(
             "engine_id_joinable": True,
         }
 
-    if (
-        len(result_records) > 2
-        or result_records[-1][0] != len(events) - 1
-    ):
-        raise ContractError(
-            "fixed32 qwen trace requires one final result and at most one "
-            "nested error boundary"
-        )
-    result = result_records[-1][1]
-    num_turns = result.get("num_turns")
-    if (
-        result.get("subtype") != "success"
-        or result.get("is_error") is not False
-        or type(num_turns) is not int
-        or num_turns <= 0
-    ):
-        raise ContractError("fixed32 qwen result terminal state is invalid")
-    for key in ("uuid", "session_id"):
-        if not isinstance(result.get(key), str) or not result[key]:
-            raise ContractError(f"fixed32 qwen result {key} is invalid")
-    for key in ("duration_ms", "duration_api_ms"):
-        value = result.get(key)
-        if type(value) is not int or value < 0:
-            raise ContractError(f"fixed32 qwen result {key} is invalid")
-    if not isinstance(result.get("usage"), dict):
-        raise ContractError("fixed32 qwen result evidence is incomplete")
-    # PERMISSION DENIALS ARE NORMAL, and under the no-net agent settings they
-    # are EXPECTED: qwen-code enforces the web_fetch deny rule against
-    # equivalent shell commands, so a `curl https://...` comes back
-    # "denied by permission rules" and lands here. Observed 2026-08-17 in
-    # fr14_b1_stock_20260817T031507Z astropy__astropy-13236.
-    #
-    # A denial costs the request ledger NOTHING: the assistant's tool_use is
-    # already counted in its own group, the denial is delivered as an ordinary
-    # paired tool_result, and no model request is hidden behind it -- unlike
-    # web_fetch, the denied tool never runs and never calls the model. So the
-    # count is unaffected and the old `!= []` was refusing evidence it did not
-    # need to refuse.
-    #
-    # Still fail-closed on SHAPE: each entry must name the tool it denied and
-    # the tool_use it belongs to, and that tool_use must be one this trace
-    # actually contains -- a denial referring to an unknown call would mean the
-    # trace is not a complete record of its own session.
-    denials = result.get("permission_denials")
-    if not isinstance(denials, list):
-        raise ContractError("fixed32 qwen result permission denials are invalid")
-    denied_tool_use_ids: list[str] = []
-    for denial in denials:
+    if capped_terminal:
+        # The kill precludes the result record, so the identity it would
+        # have carried is demanded of the trace itself: one session on
+        # every event, and that session is the task's own.
+        session_ids = {event.get("session_id") for event in events}
+        if session_ids != {expected_session_id}:
+            raise ContractError(
+                "fixed32 budget-capped terminal session does not bind to "
+                "the task"
+            )
+        result = None
+        num_turns = None
+        denied_tool_use_ids = []
+        result_session_id = expected_session_id
+        nested_error_index = None
+        nested_error_parent_tool_use_id = None
+    else:
         if (
-            not isinstance(denial, dict)
-            or not isinstance(denial.get("tool_name"), str)
-            or not denial["tool_name"]
-            or not isinstance(denial.get("tool_use_id"), str)
-            or not denial["tool_use_id"]
+            len(result_records) > 2
+            or result_records[-1][0] != len(events) - 1
         ):
             raise ContractError(
-                "fixed32 qwen result permission denial record is invalid"
+                "fixed32 qwen trace requires one final result and at most one "
+                "nested error boundary"
             )
-        denied_tool_use_ids.append(denial["tool_use_id"])
+        result = result_records[-1][1]
+        num_turns = result.get("num_turns")
+        if (
+            result.get("subtype") != "success"
+            or result.get("is_error") is not False
+            or type(num_turns) is not int
+            or num_turns <= 0
+        ):
+            raise ContractError("fixed32 qwen result terminal state is invalid")
+        for key in ("uuid", "session_id"):
+            if not isinstance(result.get(key), str) or not result[key]:
+                raise ContractError(f"fixed32 qwen result {key} is invalid")
+        for key in ("duration_ms", "duration_api_ms"):
+            value = result.get(key)
+            if type(value) is not int or value < 0:
+                raise ContractError(f"fixed32 qwen result {key} is invalid")
+        if not isinstance(result.get("usage"), dict):
+            raise ContractError("fixed32 qwen result evidence is incomplete")
+        # PERMISSION DENIALS ARE NORMAL, and under the no-net agent settings they
+        # are EXPECTED: qwen-code enforces the web_fetch deny rule against
+        # equivalent shell commands, so a `curl https://...` comes back
+        # "denied by permission rules" and lands here. Observed 2026-08-17 in
+        # fr14_b1_stock_20260817T031507Z astropy__astropy-13236.
+        #
+        # A denial costs the request ledger NOTHING: the assistant's tool_use is
+        # already counted in its own group, the denial is delivered as an ordinary
+        # paired tool_result, and no model request is hidden behind it -- unlike
+        # web_fetch, the denied tool never runs and never calls the model. So the
+        # count is unaffected and the old `!= []` was refusing evidence it did not
+        # need to refuse.
+        #
+        # Still fail-closed on SHAPE: each entry must name the tool it denied and
+        # the tool_use it belongs to, and that tool_use must be one this trace
+        # actually contains -- a denial referring to an unknown call would mean the
+        # trace is not a complete record of its own session.
+        denials = result.get("permission_denials")
+        if not isinstance(denials, list):
+            raise ContractError("fixed32 qwen result permission denials are invalid")
+        denied_tool_use_ids: list[str] = []
+        for denial in denials:
+            if (
+                not isinstance(denial, dict)
+                or not isinstance(denial.get("tool_name"), str)
+                or not denial["tool_name"]
+                or not isinstance(denial.get("tool_use_id"), str)
+                or not denial["tool_use_id"]
+            ):
+                raise ContractError(
+                    "fixed32 qwen result permission denial record is invalid"
+                )
+            denied_tool_use_ids.append(denial["tool_use_id"])
 
-    result_session_id = result["session_id"]
-    if (
-        expected_session_id is not None
-        and result_session_id != expected_session_id
-    ):
-        raise ContractError(
-            "fixed32 qwen result session does not bind to the task"
-        )
-
-    nested_error_index: int | None = None
-    nested_error_parent_tool_use_id: str | None = None
-    if len(result_records) == 2:
-        nested_error_index = result_records[0][0]
-        nested_error_parent_tool_use_id = (
-            _validate_fixed32_qwen_nested_error_boundary(
-                events,
-                result_index=nested_error_index,
-                session_id=result_session_id,
-                final_result_uuid=result["uuid"],
+        result_session_id = result["session_id"]
+        if (
+            expected_session_id is not None
+            and result_session_id != expected_session_id
+        ):
+            raise ContractError(
+                "fixed32 qwen result session does not bind to the task"
             )
-        )
+
+        nested_error_index: int | None = None
+        nested_error_parent_tool_use_id: str | None = None
+        if len(result_records) == 2:
+            nested_error_index = result_records[0][0]
+            nested_error_parent_tool_use_id = (
+                _validate_fixed32_qwen_nested_error_boundary(
+                    events,
+                    result_index=nested_error_index,
+                    session_id=result_session_id,
+                    final_result_uuid=result["uuid"],
+                )
+            )
 
     qwen_event_ids = [event.get("uuid") for event in events]
     if (
@@ -2585,7 +2741,10 @@ def validate_fixed32_trace_model_requests(
     ] = []
     tool_use_records: dict[str, dict[str, Any]] = {}
     previous_was_assistant = False
-    for event_index, event in enumerate(events[:-1]):
+    # The ordinary walk stops before the final result record. A capped trace has
+    # no result to stop before, so every event it does contain is walked.
+    walk_events = events if capped_terminal else events[:-1]
+    for event_index, event in enumerate(walk_events):
         event_type = event.get("type")
         if event_type not in {"system", "user", "assistant", "result"}:
             raise ContractError(
@@ -2689,7 +2848,12 @@ def validate_fixed32_trace_model_requests(
             assistant_groups.append([record])
         previous_was_assistant = True
 
-    if not assistant_groups or events[-2].get("type") != "assistant":
+    if capped_terminal:
+        if not assistant_groups:
+            raise ContractError(
+                "fixed32 qwen budget-capped trace has no assistant response group"
+            )
+    elif not assistant_groups or events[-2].get("type") != "assistant":
         raise ContractError(
             "fixed32 qwen trace has no final assistant response group"
         )
@@ -2699,6 +2863,14 @@ def validate_fixed32_trace_model_requests(
     ] = []
     request_records: list[tuple[int, str]] = []
     synthetic_compaction_failure_terminal = False
+    # THE KILL'S OWN SIGNATURE. A budget cap that lands mid-response leaves the
+    # last response group unterminated; that request was aborted, never
+    # completed, so it is not counted here and the engine must report exactly
+    # one abort for it below. A capped trace whose last group DID terminate was
+    # cut between requests and the engine must report none. Either way the
+    # trace's shape and the engine's abort counter are checked against each
+    # other -- neither is taken on its own word.
+    capped_partial_group = False
     for group_index, group in enumerate(assistant_groups):
         parent_ids = {record[0].get("parent_tool_use_id") for record in group}
         if len(parent_ids) != 1:
@@ -2724,7 +2896,20 @@ def validate_fixed32_trace_model_requests(
                 nonempty_text_count += 1
 
         is_final_group = group_index == len(assistant_groups) - 1
-        if is_final_group:
+        if capped_terminal:
+            if terminal_count == 0:
+                if not is_final_group:
+                    raise ContractError(
+                        "fixed32 qwen budget-capped assistant response group is "
+                        "incomplete before the terminal group"
+                    )
+                if group[-1][3] != len(events) - 1:
+                    raise ContractError(
+                        "fixed32 qwen budget-capped trace continues past an "
+                        "unterminated response group"
+                    )
+                capped_partial_group = True
+        elif is_final_group:
             # A final group is canonical when it closes on exactly one
             # nonempty text record. Qwen may instead close on a
             # reasoning-only turn, whose records carry ``thinking`` blocks
@@ -2774,7 +2959,10 @@ def validate_fixed32_trace_model_requests(
                 "fixed32 qwen non-final assistant response group is incomplete"
             )
 
-        if not synthetic_compaction_failure_terminal:
+        aborted_by_the_cap = (
+            capped_terminal and is_final_group and capped_partial_group
+        )
+        if not synthetic_compaction_failure_terminal and not aborted_by_the_cap:
             request_records.append(
                 (
                     group[0][3],
@@ -2797,7 +2985,11 @@ def validate_fixed32_trace_model_requests(
                 "tool use"
             )
 
-    if len(top_level_groups) != num_turns:
+    # The turn count is the agent's own self-report, and a capped trace has
+    # none. Its substitute is stronger, not weaker: the engine's max_tokens
+    # algebra below must imply exactly as many normal requests as this walk
+    # found response groups, and that meter is on the serving side.
+    if not capped_terminal and len(top_level_groups) != num_turns:
         raise ContractError(
             "fixed32 qwen result turn count and top-level response groups "
             "do not reconcile"
@@ -2852,6 +3044,7 @@ def validate_fixed32_trace_model_requests(
             ),
             metrics_pre=metrics_pre,
             metrics_post=metrics_post,
+            capped_requests=1 if capped_partial_group else 0,
         )
         existing_request_count = len(request_records)
         if (
@@ -2876,10 +3069,23 @@ def validate_fixed32_trace_model_requests(
                 separators=(",", ":"),
             ).encode("utf-8")
         ).hexdigest()
+        # A capped trace has no result record to anchor a synthetic identity to,
+        # so it anchors to its own last event. That is a DIFFERENT namespace
+        # (``qwen-capped-...``) on purpose: reusing the result-anchored one
+        # would mint an ID whose name claims a record the trace does not have,
+        # and banked result-anchored identities must keep hashing to exactly
+        # what they hashed to before.
         failed_compaction_requests = [
             (
                 len(events) - 1,
-                _fixed32_qwen_hidden_failed_compaction_request_id(
+                _fixed32_qwen_capped_failed_compaction_request_id(
+                    terminal_event_id=qwen_event_ids[-1],
+                    trace_event_ids_sha256=event_ids_sha256,
+                    metric_evidence_sha256=evidence_sha256,
+                    ordinal=ordinal,
+                )
+                if capped_terminal
+                else _fixed32_qwen_hidden_failed_compaction_request_id(
                     result_event_id=result["uuid"],
                     trace_event_ids_sha256=event_ids_sha256,
                     metric_evidence_sha256=evidence_sha256,
@@ -2896,7 +3102,17 @@ def validate_fixed32_trace_model_requests(
             "fixed32 qwen response group identities are duplicated"
         )
     return {
-        "trace_format": "qwen_result",
+        # NAME THE TERMINAL. A capped record must never be readable as an
+        # ordinary completed run: it says what it is, whether the kill landed
+        # mid-response, and how many logical requests that cost.
+        "trace_format": (
+            "qwen_budget_capped_terminal" if capped_terminal else "qwen_result"
+        ),
+        "budget_capped_terminal": capped_terminal,
+        "budget_capped_partial_response_group": capped_partial_group,
+        "budget_capped_aborted_logical_requests": (
+            1 if capped_partial_group else 0
+        ),
         "completed_logical_model_requests": len(response_ids),
         "model_request_ids": response_ids,
         "hidden_terminal_model_requests": len(hidden_requests),

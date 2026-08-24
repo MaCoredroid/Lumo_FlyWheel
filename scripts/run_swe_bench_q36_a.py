@@ -4340,6 +4340,13 @@ def _fixed32_real_task_provenance(
                 ),
                 metrics_pre=metrics_pre_raw,
                 metrics_post=metrics_post_raw,
+                # SITE 26. The cap is the one incomplete terminal this campaign
+                # declares legal, and it is declared here ONLY after the block
+                # above corroborated it end to end -- armed, binding, the
+                # runner's wallclock kill fired, and the measured wall reached
+                # the budget. Without this the validator demands a Qwen result
+                # the kill precludes and no capped task has a legal terminal.
+                budget_capped_terminal=budget_capped_corroborated,
             )
         )
     except fixed32_contract.ContractError as exc:
@@ -4443,10 +4450,22 @@ def _fixed32_real_task_provenance(
         hashlib.sha256(response_id.encode("utf-8")).hexdigest()
         for response_id in qwen_model_request_ids
     )
+    # THE THIRD METER ON THE CAP. The trace's shape says whether the kill landed
+    # mid-response and the vLLM bracket says whether the engine aborted a
+    # request; the proxy's own per-task-key ledger is asked the same question
+    # here and must give the same answer. An uncapped task keeps the flat zero
+    # it has always had -- a stray abort there still means the engine did not
+    # serve what was asked.
+    expected_aborted_logical_requests = (
+        trace_requests.get("budget_capped_aborted_logical_requests", 0)
+        if budget_capped_corroborated
+        else 0
+    )
     if (
         task_auth_deltas["completed_logical_model_requests"]
         != len(qwen_model_request_ids)
-        or task_auth_deltas["aborted_logical_requests"] != 0
+        or task_auth_deltas["aborted_logical_requests"]
+        != expected_aborted_logical_requests
         or task_auth_deltas["failed_attempts"] != 0
         or task_auth_deltas["accepted_attempts"]
         != (
@@ -4458,7 +4477,15 @@ def _fixed32_real_task_provenance(
     ):
         raise Fixed32BoundaryError(
             f"fixed32 real-task provenance {instance_id}: "
-            "trace and task-auth request counts do not reconcile"
+            "trace and task-auth request counts do not reconcile: task-auth "
+            f"completed={task_auth_deltas['completed_logical_model_requests']} "
+            f"against trace {len(qwen_model_request_ids)}; task-auth "
+            f"aborted={task_auth_deltas['aborted_logical_requests']} against "
+            f"expected {expected_aborted_logical_requests} "
+            f"(budget_capped={budget_capped_corroborated}); attempts "
+            f"accepted={task_auth_deltas['accepted_attempts']} "
+            f"completed={task_auth_deltas['completed_attempts']} "
+            f"failed={task_auth_deltas['failed_attempts']}"
         )
 
     usage_max_by_field: dict[str, int] = {}
@@ -4524,6 +4551,25 @@ def _fixed32_real_task_provenance(
         "synthetic_compaction_failure_terminal": trace_requests.get(
             "synthetic_compaction_failure_terminal",
             False,
+        ),
+        # SITE 26: THE RECORD NAMES ITS OWN TERMINAL. A capped task's evidence
+        # must never read as an ordinary completed run -- it says the cap was
+        # what stopped it, what the cap was, how long it actually ran, whether
+        # the kill landed mid-response, and what that cost the request ledger.
+        "budget_capped_terminal": bool(budget_capped_corroborated),
+        "campaign_budget_s": (
+            float(budget_s) if budget_capped_corroborated else None
+        ),
+        "budget_capped_elapsed_s": (
+            float(elapsed_s) if budget_capped_corroborated else None
+        ),
+        "budget_capped_partial_response_group": trace_requests.get(
+            "budget_capped_partial_response_group",
+            False,
+        ),
+        "budget_capped_aborted_logical_requests": trace_requests.get(
+            "budget_capped_aborted_logical_requests",
+            0,
         ),
         "qwen_metric_scope": (
             "campaign" if campaign_artifact is not None else "task"
