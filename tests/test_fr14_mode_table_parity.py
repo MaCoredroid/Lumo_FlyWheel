@@ -1636,10 +1636,16 @@ def test_the_skip_disposition_is_recorded(tmp_path, env, expect_ran, expect_reas
         text.index("_fr13_warmup_probe_skip_reason=\nif [[ -n"):
         text.index('if [[ -z "$_fr13_warmup_probe_skip_reason" ]]; then')
     ]
+    # the block now records through the shared disposition helper, which
+    # writes to the runroot as well so the record survives an arm teardown
+    helper = text[
+        text.index("_fr13_record_disposition() {"):
+        text.index("\n}\n", text.index("_fr13_record_disposition() {")) + 3
+    ]
     script = (
-        f"set -uo pipefail\nARMDIR={tmp_path}\n"
+        f"set -uo pipefail\nARMDIR={tmp_path}\nRUNROOT={tmp_path}\nARM=probe\n"
         + "".join(f'{k}="{v}"\n' for k, v in env.items())
-        + block
+        + helper + block
     )
     subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True)
     disposition = json.loads(
@@ -1683,3 +1689,128 @@ def test_no_serve_flag_enables_the_tokenize_route_on_either_stack():
     )
     probe = (REPO / "scripts/fr10_quick_decode_tps_probe.py").read_text()
     assert '"/tokenize"' in probe and "model=args.model" in probe
+
+
+# ===========================================================================
+# The native route's pre-task path: identity-keyed branches, swept.
+#
+# Four pre-task deaths on the native route shared one root -- the shared
+# preamble came to assume fixed32 identity, and each divergence was found by a
+# boot rather than by a reading.
+# ===========================================================================
+
+
+def test_the_raw_dump_shape_is_selectable_independently_of_identity():
+    """The fourth gate. A native arm must not have to claim fixed32 identity.
+
+    The dump shape was derived solely from whether a fixed32 secret was
+    present, so the only way for a native arm to get the fixed32 shape was to
+    assert fixed32 identity -- pins-as-fiction, refused, and the refusal
+    ratified. FR13_PROXY_RAW_DUMPS=auto|on|off decides it explicitly, and auto
+    reproduces the old behaviour exactly.
+    """
+    proxy = (REPO / "scripts/swe_x86_helpers/offload_codex_proxy.sh").read_text()
+    assert "FR13_PROXY_RAW_DUMPS=${FR13_PROXY_RAW_DUMPS:-auto}" in proxy
+    assert 'FAIL: FR13_PROXY_RAW_DUMPS must be auto, on, or off' in proxy
+    assert '"schema":"fr13.proxy_raw_dumps.v1"' in proxy
+    # the ssh block tests the RESOLVED decision, not the identity
+    assert '[ \\"$FIXED32_RAW_DUMPS_DISABLED\\" = \\"1\\" ]' in proxy
+    # ... and the secret checks stay keyed on the SECRET, split from the dumps
+    secret_block = proxy[proxy.index('if [ -n \\"${FIXED32_SECRET_LOCAL:+1}\\" ]'):]
+    secret_block = secret_block[:secret_block.index("fi; \\")]
+    assert "REMOTE_FIXED32_SECRET" in secret_block
+    assert "LUMO_PROXY_PAIR_DUMP_DIR" not in secret_block, (
+        "the dump shape is coupled back to the secret"
+    )
+
+
+@pytest.mark.parametrize(
+    "mode,secret,expect_disabled,expect_origin",
+    [
+        ("auto", "", "0", "identity-derived"),
+        ("auto", "/tmp/s", "1", "identity-derived"),
+        ("on", "/tmp/s", "0", "explicit-on"),
+        ("off", "", "1", "explicit-off"),
+    ],
+)
+def test_the_raw_dump_mode_resolution(mode, secret, expect_disabled, expect_origin):
+    """auto is byte-unchanged; off gives a native arm the fixed32 shape."""
+    import subprocess
+
+    script = (
+        f'set -uo pipefail\nFR13_PROXY_RAW_DUMPS={mode}\n'
+        f'FIXED32_SECRET_LOCAL="{secret}"\nFIXED32_RAW_DUMPS_DISABLED=0\n'
+        '[[ -n "$FIXED32_SECRET_LOCAL" ]] && FIXED32_RAW_DUMPS_DISABLED=1\n'
+        "_fr13_raw_dumps_origin=identity-derived\n"
+        'case "$FR13_PROXY_RAW_DUMPS" in\n'
+        "  off) FIXED32_RAW_DUMPS_DISABLED=1; _fr13_raw_dumps_origin=explicit-off ;;\n"
+        "  on)  FIXED32_RAW_DUMPS_DISABLED=0; _fr13_raw_dumps_origin=explicit-on ;;\n"
+        "esac\n"
+        'echo "$FIXED32_RAW_DUMPS_DISABLED $_fr13_raw_dumps_origin"\n'
+    )
+    out = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    disabled, origin = out.stdout.split()
+    assert disabled == expect_disabled and origin == expect_origin
+
+
+@pytest.mark.parametrize(
+    "env,identity,prefix_cache",
+    [
+        ({"ARM": "mtp5", "KIND": "nativemtp5_exseed", "LAUNCHER": "native",
+          "FIXED32_MODE": "", "NATIVE_DECODE": "1"},
+         "legacy-or-native", "runs"),
+        ({"ARM": "qc12", "KIND": "hydra27", "LAUNCHER": "locked",
+          "FIXED32_MODE": "hydra27_fixed32", "NATIVE_DECODE": "0"},
+         "fixed32", "skipped-fresh-container"),
+    ],
+    ids=["native", "fixed32"],
+)
+def test_the_pretask_identity_ledger_survives_arm_teardown(
+    tmp_path, env, identity, prefix_cache
+):
+    """A pre-task death removes ARMDIR, taking the record of what was skipped.
+
+    The artifacts that explain a pre-task death were the ones a pre-task death
+    destroyed. Dispositions now also go to the RUNROOT, which is the arm dir's
+    parent and outlives a teardown scoped to the arm.
+    """
+    import shutil
+    import subprocess
+
+    text = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
+    helper = text[
+        text.index("_fr13_record_disposition() {"):
+        text.index("\n}\n", text.index("_fr13_record_disposition() {")) + 3
+    ]
+    ledger = text[
+        text.index("_fr13_record_disposition pretask_identity.json"):
+        text.index("# ---- warmup probe (legacy arms only")
+    ]
+    armdir = tmp_path / env["ARM"]
+    armdir.mkdir()
+    script = (
+        f"set -uo pipefail\nRUNROOT={tmp_path}\nARMDIR={armdir}\n"
+        + "".join(f'{k}="{v}"\n' for k, v in env.items())
+        + helper + ledger
+    )
+    subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True)
+    assert (armdir / "pretask_identity.json").exists()
+    shutil.rmtree(armdir)  # the pre-task teardown
+    survivor = tmp_path / f"{env['ARM']}.pretask_identity.json"
+    assert survivor.exists(), "the disposition did not survive the teardown"
+    body = json.loads(survivor.read_text())
+    assert body["identity_class"] == identity
+    assert body["prefix_cache_reset"] == prefix_cache
+    assert body["schema"] == "fr13.pretask_identity.v1"
+
+
+def test_the_ledger_is_a_record_and_cannot_refuse():
+    """It exists so a fifth divergence appears in an artifact, not a night."""
+    text = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
+    ledger = text[
+        text.index("_fr13_record_disposition pretask_identity.json"):
+        text.index("# ---- warmup probe (legacy arms only")
+    ]
+    assert "exit " not in ledger and "FAIL:" not in ledger, (
+        "the identity ledger acquired a gate; it must only record"
+    )

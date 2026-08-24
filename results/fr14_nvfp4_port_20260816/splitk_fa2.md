@@ -1558,3 +1558,79 @@ would have made `==HEAD` satisfiable. Ruled against: `==HEAD` for tier B was
 already retired at pass 101, and **once binding is recorded-not-bound a tracked
 credential no longer self-invalidates.** Making a retired rule satisfiable is
 not the same as applying the ruling, and the evidence belongs in `results/`.
+
+## 27. The native route's pre-task path — one sweep instead of a fifth boot
+
+Four pre-task deaths on the native route shared one root: the shared preamble
+came to assume fixed32 identity, and each divergence was found by a boot rather
+than by a reading. The fifth gate found by a sweep costs nothing; found by a
+boot it costs the night.
+
+### The sweep
+
+182 fixed32-keyed branch lines in the serve variant's pre-task region (lines
+1–3060, the SWE-runner invocation being the boundary), plus the offload proxy
+and the native launcher. Classified:
+
+| class | count | what they are |
+|---|---|---|
+| **(b) fine as-is** | ~170 | `if LEVER == 1` validations for levers a native arm never sets. They are unreachable on the native route, not merely harmless on it. |
+| **(b) identity gates that skip correctly** | `-n "$FIXED32_MODE"` blocks | container-identity checks, ingress secret staging, census/flush protocol — fixed32-only by construction. |
+| **(c) native runs, now recorded** | prefix-cache reset, proxy dump dirs and their pin check, the warmup probe | these execute *on* the native route (`-z "$FIXED32_MODE"`). They were correct but silent about being identity-keyed. |
+| **(a) needed a fix** | the raw-dump shape | below. |
+
+The class-(a) count is one because the other three of the four deaths were
+already fixed in earlier landings (the warmup probe's missing skip, the
+launcher's foreign-repo mount, the probe's model pin). This sweep's job was to
+prove there is not a fifth, and to leave behind a record so the question does
+not have to be re-asked by boot.
+
+### The class-(a) fix: raw dumps stop being a consequence of identity
+
+`offload_codex_proxy.sh` derived the raw-dump shape solely from whether a
+fixed32 secret was present, so the only way for a native arm to get the fixed32
+shape was to **assert fixed32 identity** — pins-as-fiction, refused by the
+runner, and the refusal ratified.
+
+`FR13_PROXY_RAW_DUMPS=auto|on|off` decides it explicitly:
+
+```
+mode=auto  secret=no  -> disabled=0 (identity-derived)     <- unchanged
+mode=auto  secret=yes -> disabled=1 (identity-derived)     <- unchanged
+mode=on    secret=yes -> disabled=0 (explicit-on)
+mode=off   secret=no  -> disabled=1 (explicit-off)         <- what the probe needed
+```
+
+`auto` is byte-identical to the old behaviour for every existing arm. The ssh
+block now tests the **resolved decision** rather than re-deriving one from an
+identity that may not be this arm's, and the secret checks were **split out** so
+they stay keyed on the secret — the two concerns were entangled in one branch,
+which is why one could not move without the other.
+
+### Evidence survival: the artifacts a pre-task death destroys
+
+`ARMDIR` is removed when an arm dies before the task boundary, taking every
+pre-task artifact with it — including the record of what the arm chose to skip.
+That is exactly backwards: **the artifacts that explain a pre-task death are the
+ones a pre-task death destroys.**
+
+**Chosen (recorded, as the call was mine): write dispositions to the RUNROOT as
+well as the arm dir.** The runroot is the arm dir's parent, so it outlives a
+teardown scoped to the arm, and the arm-dir copy is kept because that is where a
+surviving arm's reader looks first. Preserving the arm dir instead was the
+alternative; it was not chosen because it changes teardown behaviour for every
+arm in order to fix an evidence problem, and **evidence is cheaper to move than
+lifecycle is to change.**
+
+### The pre-task identity ledger
+
+`pretask_identity.json` records every identity-keyed decision the preamble
+makes — arm, kind, launcher, fixed32 mode, native-decode, identity class,
+warmup-skip request, raw-dump mode, offload-agent, prefix-cache reset, dump
+expectations — **before any of them can kill the arm**.
+
+It is a record, not a gate: it asserts nothing and cannot refuse, and a test
+enforces that (`exit` and `FAIL:` are forbidden inside it). Its whole job is
+that *"what did this arm decide about its own identity?"* has an answer that
+survives the arm. A fifth divergence now shows up in an artifact instead of in a
+night.

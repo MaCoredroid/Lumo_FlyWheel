@@ -158,7 +158,26 @@ case "$CMD" in
     FORCE_TEMP="${DEPLOY_FORCE_TEMP:-0.6}"
     FIXED32_SECRET_LOCAL=${FR13_FIXED32_INGRESS_SECRET_FILE:-}
     FIXED32_TASK_IDS=${FR13_FIXED32_INGRESS_TASK_IDS:-}
+    # RAW-DUMP MODE IS SELECTABLE, and no longer a consequence of identity.
+    #
+    # This was derived solely from whether a fixed32 secret was present, so the
+    # only way for a NATIVE arm to get the fixed32 dump shape was to assert
+    # fixed32 identity -- pins-as-fiction, refused, and the refusal ratified.
+    # An arm can now say what it wants:
+    #
+    #   auto (default)  exactly the old behaviour: dumps off iff a fixed32
+    #                   secret is present. Byte-unchanged for every existing arm.
+    #   off             no raw dumps, without claiming a fixed32 identity.
+    #   on              raw dumps, even alongside a fixed32 secret.
+    #
+    # Resolved ONCE here and recorded, so the ssh block below tests a decision
+    # rather than re-deriving one from an identity that may not be this arm's.
     FIXED32_RAW_DUMPS_DISABLED=0
+    FR13_PROXY_RAW_DUMPS=${FR13_PROXY_RAW_DUMPS:-auto}
+    case "$FR13_PROXY_RAW_DUMPS" in
+      auto|on|off) ;;
+      *) echo "FAIL: FR13_PROXY_RAW_DUMPS must be auto, on, or off"; exit 2 ;;
+    esac
     if [[ "$FIXED32_B1_DIAGNOSTIC" == "1" \
        && ( -z "$FIXED32_SECRET_LOCAL" || -z "$FIXED32_TASK_IDS" ) ]]; then
       echo "FAIL: fixed32 B1 diagnostic offload requires secret file and pinned task ID"
@@ -289,6 +308,21 @@ PY
         "rm -f $REMOTE_FIXED32_SECRET $REMOTE_FIXED32_LEDGER" \
         >/dev/null 2>&1 || true
     fi
+    # The explicit mode overrides the identity-derived default, and the
+    # resolution is recorded either way.
+    _fr13_raw_dumps_origin=identity-derived
+    case "$FR13_PROXY_RAW_DUMPS" in
+      off) FIXED32_RAW_DUMPS_DISABLED=1; _fr13_raw_dumps_origin=explicit-off ;;
+      on)  FIXED32_RAW_DUMPS_DISABLED=0; _fr13_raw_dumps_origin=explicit-on ;;
+    esac
+    echo "[offload] raw dumps disabled=$FIXED32_RAW_DUMPS_DISABLED" \
+         "(mode=$FR13_PROXY_RAW_DUMPS, $_fr13_raw_dumps_origin," \
+         "fixed32_secret=${FIXED32_SECRET_LOCAL:+present}${FIXED32_SECRET_LOCAL:-absent})"
+    printf '{"schema":"fr13.proxy_raw_dumps.v1","mode":"%s","origin":"%s","disabled":%s,"fixed32_secret":"%s"}\n' \
+      "$FR13_PROXY_RAW_DUMPS" "$_fr13_raw_dumps_origin" \
+      "$( (( FIXED32_RAW_DUMPS_DISABLED == 1 )) && echo true || echo false )" \
+      "${FIXED32_SECRET_LOCAL:+present}${FIXED32_SECRET_LOCAL:-absent}" \
+      > "$ARMDIR/proxy_raw_dumps.json"
     # Legacy runs retain their served-stream captures. Formal fixed32 uses the
     # authenticated ingress/census ledgers instead and must not pay for or retain
     # full request/response dumps.
@@ -307,17 +341,19 @@ PY
     #   export LUMO_PROXY_SSE_CAPTURE_DIR="$REMOTE_ROOT/sse_capture" # per-chunk-timestamped chat-path capture jsonl
     #   export LUMO_PROXY_SSE_HEARTBEAT_S=15                         # empty-delta heartbeat on upstream idle (chat only)
     ssh "${SSH_OPTS[@]}" "$HOST" "\
-      if [ -n \"${FIXED32_SECRET_LOCAL:+1}\" ]; then \
+      if [ \"$FIXED32_RAW_DUMPS_DISABLED\" = \"1\" ]; then \
         unset LUMO_PROXY_PAIR_DUMP_DIR LUMO_PROXY_REQUEST_DUMP_DIR; \
         export LUMO_PROXY_FIXED32_DISABLE_RAW_DUMPS=1; \
-        test -f $REMOTE_FIXED32_SECRET \
-        && test ! -L $REMOTE_FIXED32_SECRET \
-        && test \"\$(stat -c '%a' $REMOTE_FIXED32_SECRET)\" = 600 \
-        || exit 72; \
       else \
         unset LUMO_PROXY_FIXED32_DISABLE_RAW_DUMPS; \
         export LUMO_PROXY_PAIR_DUMP_DIR=$REMOTE_PAIR_DUMPS; \
         export LUMO_PROXY_REQUEST_DUMP_DIR=$REMOTE_REQ_DUMPS; \
+      fi; \
+      if [ -n \"${FIXED32_SECRET_LOCAL:+1}\" ]; then \
+        test -f $REMOTE_FIXED32_SECRET \
+        && test ! -L $REMOTE_FIXED32_SECRET \
+        && test \"\$(stat -c '%a' $REMOTE_FIXED32_SECRET)\" = 600 \
+        || exit 72; \
       fi; \
       LUMO_PROXY_OFFLOAD_REPO=$REMOTE_REPO \
       LUMO_PROXY_OFFLOAD_VENV=$REMOTE_VENV \

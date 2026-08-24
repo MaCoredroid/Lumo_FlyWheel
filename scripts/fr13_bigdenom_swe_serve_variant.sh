@@ -248,6 +248,25 @@ fi
 
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 ARMDIR="$RUNROOT/$ARM"
+
+# ---- disposition records that SURVIVE a pre-task failure --------------------
+# ARMDIR is removed when an arm dies before the task boundary, taking every
+# pre-task artifact with it -- including the record of what this arm chose to
+# skip. That is exactly backwards: the artifacts that explain a pre-task death
+# are the ones a pre-task death destroys.
+#
+# CHOSEN (recorded, per the ruling that it is my call): write to the RUNROOT as
+# well as the arm dir. The runroot is the arm dir's PARENT, so it outlives any
+# teardown scoped to the arm, and the copy in the arm dir is kept because that
+# is where a surviving arm's reader looks first. Preserving the arm dir instead
+# was the alternative; it was not chosen because it changes teardown behaviour
+# for every arm to fix an evidence problem, and evidence is cheaper to move
+# than lifecycle is to change.
+_fr13_record_disposition() {
+  local name=$1 body=$2
+  printf '%s\n' "$body" > "$ARMDIR/$name" 2>/dev/null || true
+  printf '%s\n' "$body" > "$RUNROOT/${ARM}.$name" 2>/dev/null || true
+}
 ARMDIR_ABS=$(realpath -m "$ARMDIR")
 [[ -f "$SUBSET" ]] || SUBSET="output/fr13_b1_gold_swe/$SUBSET"
 [[ -f "$SUBSET" ]] || { echo "FAIL: subset not found: $SUBSET"; exit 2; }
@@ -2508,6 +2527,33 @@ case "$KIND" in
       && echo "[needle] OPT-A patch present in boot log" || echo "[needle] OPT-A patch line not in boot log (override engages at forward time on GB10+small-M)";;
 esac
 
+
+# ---- the pre-task identity ledger ------------------------------------------
+# FOUR pre-task deaths on the native route shared one root: the shared preamble
+# came to assume fixed32 identity, and each divergence was found by a boot
+# rather than by a reading. This records every identity-keyed decision the
+# preamble makes, BEFORE any of them can kill the arm, so a fifth divergence
+# shows up in an artifact instead of in a night.
+#
+# It is a record, not a gate: it asserts nothing and cannot refuse. Its whole
+# job is that "what did this arm decide about its own identity?" has an answer
+# that survives the arm.
+_fr13_record_disposition pretask_identity.json "$(
+  printf '{"schema":"fr13.pretask_identity.v1","arm":"%s","kind":"%s","launcher":"%s"' \
+    "$ARM" "$KIND" "$LAUNCHER"
+  printf ',"fixed32_mode":"%s","native_decode":"%s"' \
+    "$FIXED32_MODE" "${NATIVE_DECODE:-0}"
+  printf ',"identity_class":"%s"' \
+    "$( [[ -n "$FIXED32_MODE" ]] && echo fixed32 || echo legacy-or-native )"
+  printf ',"warmup_probe_requested_skip":"%s"' "${SKIP_WARMUP_PROBE:-0}"
+  printf ',"proxy_raw_dumps_mode":"%s"' "${FR13_PROXY_RAW_DUMPS:-auto}"
+  printf ',"offload_agent":"%s"' "${OFFLOAD_AGENT:-0}"
+  printf ',"prefix_cache_reset":"%s"' \
+    "$( [[ -z "$FIXED32_MODE" ]] && echo runs || echo skipped-fresh-container )"
+  printf ',"proxy_pair_dumps":"%s"' \
+    "$( [[ -z "$FIXED32_MODE" ]] && echo expected || echo not-expected )"
+  printf '}'
+)"
 # ---- warmup probe (legacy arms only; fixed32 permits canonical SWE traffic only) ----
 # SKIP_WARMUP_PROBE. The probe is fatal-on-failure and had no caller-side skip,
 # so an arm that must NOT run it had no way to say so. The MTP-5 probe skips it
@@ -2525,10 +2571,11 @@ if [[ -n "$FIXED32_MODE" ]]; then
 elif [[ "${SKIP_WARMUP_PROBE:-0}" == "1" ]]; then
   _fr13_warmup_probe_skip_reason=caller-requested-for-comparability
 fi
-printf '{"schema":"fr13.warmup_probe.v1","ran":%s,"skip_reason":"%s","skip_requested":"%s","fixed32_mode":"%s"}\n' \
-  "$( [[ -z "$_fr13_warmup_probe_skip_reason" ]] && echo true || echo false )" \
-  "$_fr13_warmup_probe_skip_reason" "${SKIP_WARMUP_PROBE:-0}" "$FIXED32_MODE" \
-  > "$ARMDIR/warmup_probe_disposition.json"
+_fr13_record_disposition warmup_probe_disposition.json "$(
+  printf '{"schema":"fr13.warmup_probe.v1","ran":%s,"skip_reason":"%s","skip_requested":"%s","fixed32_mode":"%s"}' \
+    "$( [[ -z "$_fr13_warmup_probe_skip_reason" ]] && echo true || echo false )" \
+    "$_fr13_warmup_probe_skip_reason" "${SKIP_WARMUP_PROBE:-0}" "$FIXED32_MODE"
+)"
 [[ -z "$_fr13_warmup_probe_skip_reason" ]] \
   || echo "[warmup] probe SKIPPED: $_fr13_warmup_probe_skip_reason" >&2
 if [[ -z "$_fr13_warmup_probe_skip_reason" ]]; then
