@@ -1237,14 +1237,30 @@ def _fr13_fixed32_drift_detail(observed, expected):
             for name in set(observed) | set(expected)
             if observed.get(name) != expected.get(name)
         )
-        return "; ".join(
-            str(name)
-            + ": observed "
-            + repr(observed.get(name))
-            + " against audited "
-            + repr(expected.get(name))
-            for name in names
-        )
+        parts = []
+        for name in names:
+            seen = observed.get(name)
+            want = expected.get(name)
+            # RECURSE. A nested dict printed whole is the boot-six complaint
+            # again one level down: the generation-1 flush audit differed in
+            # three gdn fields and printed the entire gdn section for both
+            # sides.
+            if isinstance(seen, dict) and isinstance(want, dict):
+                parts.append(
+                    str(name)
+                    + "{"
+                    + _fr13_fixed32_drift_detail(seen, want)
+                    + "}"
+                )
+            else:
+                parts.append(
+                    str(name)
+                    + ": observed "
+                    + repr(seen)
+                    + " against audited "
+                    + repr(want)
+                )
+        return "; ".join(parts)
     if (
         isinstance(observed, (tuple, list))
         and isinstance(expected, (tuple, list))
@@ -5495,8 +5511,13 @@ def _fr13_fixed32_forward_graph_registry(measured_by_batch=None):
                 ),
             }}),
         }
+        # THE SERVED MODE, not the era default. This audit is on the live
+        # generation-1 flush path, so it is the table every serve is measured
+        # against; without the mode it states hydra27's for every profile.
         expected = forward_graph_structural_manifest(
-            batch, kernel_shape=registry_shape
+            batch,
+            kernel_shape=registry_shape,
+            mode=_FR13_FIXED32_GDN_MODE or None,
         )
         if structural != expected:
             raise RuntimeError(

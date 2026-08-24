@@ -1097,9 +1097,24 @@ def _validated_kernel_shape(kernel_shape: str) -> str:
 
 
 def forward_graph_structural_manifest(
-    batch_size: int, *, kernel_shape: str = UNFUSED_KERNEL_SHAPE
+    batch_size: int,
+    *,
+    kernel_shape: str = UNFUSED_KERNEL_SHAPE,
+    mode: str | None = None,
 ) -> dict[str, Any]:
-    """Return the mode-independent final-FULL graph contract for one B.
+    """Return the final-FULL graph contract for one B, at the SERVED profile.
+
+    IT WAS "MODE-INDEPENDENT" AND SAID SO, and that docstring was the defect's
+    cover. This is the table the live generation-1 flush audit compares against,
+    so it is on the execution path of every serve; it read the module-level
+    hydra27 defaults, and a hydra31 boot reached HEALTH and then died here with
+    padded_slots_per_scan 126 against 82, critical_path 16 against 12, and a
+    physical-parent digest of 101c590e58 against hydra27's 7abd25e383. The live
+    structure was RIGHT in every one of those; the audit was stale.
+
+    ``mode=None`` keeps hydra27's era exactly, so every existing caller is
+    behaviour-identical; a served mode derives from shape_profile(), the same
+    per-profile accessor reference_event has used since site 13.
 
     ``kernel_shape`` selects which canonical reference applies. The workload
     identity -- descriptor geometry, tree attention, GDN -- is shared and
@@ -1109,6 +1124,32 @@ def forward_graph_structural_manifest(
     per layer.
     """
     _validated_kernel_shape(kernel_shape)
+    # THE FIFTH KIND is in here too: physical_parent_sha256 is an AUDITED
+    # DIGEST, and a pinned sha256 never equals a mode-varying integer, so no
+    # value census could ever have seen it. It is per-profile in the authority
+    # and is read from there.
+    _shape = shape_profile(mode) if mode is not None else None
+    _gdn_launches = (
+        int(_shape["gdn_launches"]) if _shape else GDN_LAUNCHES_PER_SCAN
+    )
+    _gdn_programs = (
+        int(_shape["gdn_path_programs"]) if _shape else GDN_PATH_PROGRAMS_PER_SCAN
+    )
+    _gdn_padded = (
+        int(_shape["gdn_padded_slots"]) if _shape else GDN_PADDED_SLOTS_PER_SCAN
+    )
+    _gdn_critical = int(_shape["walk_cap"]) if _shape else GDN_CRITICAL_PATH
+    _gdn_grid_z = (
+        list(_shape["gdn_level_path_counts"]) if _shape else list(GDN_GRID_Z)
+    )
+    _gdn_max_lengths = (
+        list(_shape["gdn_level_max_lengths"])
+        if _shape
+        else list(GDN_MAX_PATH_LENGTHS)
+    )
+    _parent_sha = (
+        str(_shape["physical_parent_sha256"]) if _shape else PHYSICAL_PARENT_SHA256
+    )
     if (
         isinstance(batch_size, bool)
         or not isinstance(batch_size, int)
@@ -1132,18 +1173,18 @@ def forward_graph_structural_manifest(
                 "calls_per_event": TREE_CALLS_PER_EVENT,
                 "q_rows_per_call": TREE_ROWS_PER_REQUEST * batch_size,
                 "bias_shape": list(TREE_BIAS_SHAPE),
-                "physical_parent_sha256": PHYSICAL_PARENT_SHA256,
+                "physical_parent_sha256": _parent_sha,
             },
             "gdn": {
                 "layers": GDN_LAYERS,
                 "scan_calls": GDN_SCAN_CALLS_PER_REQUEST * batch_size,
-                "launches_per_scan": GDN_LAUNCHES_PER_SCAN,
-                "path_programs_per_scan": GDN_PATH_PROGRAMS_PER_SCAN,
-                "padded_slots_per_scan": GDN_PADDED_SLOTS_PER_SCAN,
+                "launches_per_scan": _gdn_launches,
+                "path_programs_per_scan": _gdn_programs,
+                "padded_slots_per_scan": _gdn_padded,
                 "nodes_per_scan": GDN_NODES_PER_SCAN,
-                "critical_path": GDN_CRITICAL_PATH,
-                "grid_z": list(GDN_GRID_Z),
-                "max_path_lengths": list(GDN_MAX_PATH_LENGTHS),
+                "critical_path": _gdn_critical,
+                "grid_z": list(_gdn_grid_z),
+                "max_path_lengths": list(_gdn_max_lengths),
                 "export_or_mask": GDN_EXPORT_OR_MASK,
             },
             "sfwd_conv_postprep": {
@@ -1188,18 +1229,18 @@ def forward_graph_structural_manifest(
             "calls_per_event": TREE_CALLS_PER_EVENT,
             "q_rows_per_call": TREE_ROWS_PER_REQUEST * batch_size,
             "bias_shape": list(TREE_BIAS_SHAPE),
-            "physical_parent_sha256": PHYSICAL_PARENT_SHA256,
+            "physical_parent_sha256": _parent_sha,
         },
         "gdn": {
             "layers": GDN_LAYERS,
             "scan_calls": GDN_SCAN_CALLS_PER_REQUEST * batch_size,
-            "launches_per_scan": GDN_LAUNCHES_PER_SCAN,
-            "path_programs_per_scan": GDN_PATH_PROGRAMS_PER_SCAN,
-            "padded_slots_per_scan": GDN_PADDED_SLOTS_PER_SCAN,
+            "launches_per_scan": _gdn_launches,
+            "path_programs_per_scan": _gdn_programs,
+            "padded_slots_per_scan": _gdn_padded,
             "nodes_per_scan": GDN_NODES_PER_SCAN,
-            "critical_path": GDN_CRITICAL_PATH,
-            "grid_z": list(GDN_GRID_Z),
-            "max_path_lengths": list(GDN_MAX_PATH_LENGTHS),
+            "critical_path": _gdn_critical,
+            "grid_z": list(_gdn_grid_z),
+            "max_path_lengths": list(_gdn_max_lengths),
             "export_or_mask": GDN_EXPORT_OR_MASK,
         },
         "conv_pregather": {

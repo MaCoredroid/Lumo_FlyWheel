@@ -1425,3 +1425,204 @@ def test_the_sweep_records_what_it_could_not_mechanically_convert() -> None:
             chains += 1
     assert chains > simple, "the chain class is the larger one; say so"
     assert chains >= 40
+
+
+# --------------------------------------------------------------------------- #
+# THE FIFTH KIND: an AUDITED DIGEST -- and the N-statements enumeration        #
+# --------------------------------------------------------------------------- #
+# Boot eight reached HEALTH at 317s, acked generation zero, and died at the
+# generation-1 flush audit:
+#
+#   gdn: padded_slots_per_scan 126/82, critical_path 16/12, max_path_lengths
+#        (5,11)/(5,7)
+#   tree_attention: physical_parent_sha256 101c590e58.../7abd25e383...
+#
+# THE LIVE STRUCTURE WAS RIGHT IN EVERY FIELD. The audit was stale.
+#
+# A PINNED sha256 NEVER EQUALS A MODE-VARYING INTEGER, so no candidate-value
+# census -- base, product-closed, or otherwise -- could ever have seen the
+# digest half. That is the fifth kind, and it is why the enumeration below is
+# keyed on FIELD NAMES rather than values.
+#
+# THE ENUMERATION, as ordered: co-occurrence of the table's own field names
+# through real code AND planted blobs across the serve closure found SEVEN
+# statements. Only ONE was stale:
+#
+#   fr13_fixed32_work_census.forward_graph_structural_manifest  (2 dict
+#       literals, the fused and unfused branches of one function) -- STALE.
+#       It read the module-level hydra27 defaults and its docstring called
+#       itself "mode-independent", which is what kept it invisible.
+#   fr13_fixed32_work_census.validate_event      -- normalizer, builds from
+#       MEASURED values (gdn_padded_slots // scan_calls).
+#   fr13_fixed32_work_census.reference_event     -- already per-mode since
+#       site 13 (_event_shape, _event_walk, _event_parent_sha).
+#   blob _fr13_fixed32_capture_end               -- observer, from work[...].
+#   blob _fr13_fixed32_observed_take             -- observer, from event[...].
+#   blob _fr13_fixed32_forward_graph_registry    -- observer, from gdn.get().
+#
+# So: seven statements, three observers in blobs, two derivations, one stale
+# function with two branches.
+GDN_TABLE_FIELDS = frozenset(
+    {
+        "padded_slots_per_scan",
+        "path_programs_per_scan",
+        "launches_per_scan",
+        "nodes_per_scan",
+        "critical_path",
+        "grid_z",
+        "max_path_lengths",
+        "export_or_mask",
+    }
+)
+
+#: statement site -> classification. A new statement fails the lint below.
+GDN_TABLE_STATEMENTS = {
+    "fr13_fixed32_work_census.forward_graph_structural_manifest": (
+        "derive: the live flush audit's table, now keyed on the served mode"
+    ),
+    "fr13_fixed32_work_census.validate_event": (
+        "normalizer: every field divided out of MEASURED totals"
+    ),
+    "fr13_fixed32_work_census.reference_event": (
+        "derive: per-mode since site 13 via shape_profile()"
+    ),
+    "blob._fr13_fixed32_capture_end": "observer: built from work[...] at capture",
+    "blob._fr13_fixed32_observed_take": "observer: built from event[...] at take",
+    "blob._fr13_fixed32_forward_graph_registry": (
+        "observer: built from the live gdn payload"
+    ),
+}
+
+
+def _gdn_table_statements() -> dict[str, list[int]]:
+    """Every dict literal in the closure stating >=3 of the table's fields."""
+    import fr14_mode_table_parity as parity
+
+    found: dict[str, list[int]] = {}
+
+    def scan(text: str, tag: str) -> None:
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            return
+        owner: dict[int, str] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+                    owner.setdefault(line, node.name)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                keys = {
+                    key.value
+                    for key in node.keys
+                    if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                }
+                if len(keys & GDN_TABLE_FIELDS) >= 3:
+                    scope = owner.get(node.lineno, "<module>")
+                    found.setdefault(f"{tag}.{scope}", []).append(node.lineno)
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and len(node.value) > 20_000
+            ):
+                try:
+                    ast.parse(node.value)
+                except SyntaxError:
+                    continue
+                scan(node.value, "blob")
+
+    for rel in parity.serve_execution_closure():
+        if not rel.endswith(".py"):
+            continue
+        path = REPO / rel
+        if not path.is_file():
+            continue
+        scan(path.read_text(errors="replace"), Path(rel).stem)
+    return found
+
+
+def test_every_statement_of_the_gdn_table_is_enumerated_and_classified() -> None:
+    """A fourth copy cannot exist unlinted."""
+    statements = _gdn_table_statements()
+    unclassified = sorted(set(statements) - set(GDN_TABLE_STATEMENTS))
+    assert not unclassified, (
+        "unclassified statements of the GDN schedule table: " + repr(unclassified)
+    )
+    # the enumeration must not silently collapse
+    assert len(statements) >= 6, statements
+
+
+def test_the_stale_statement_now_follows_the_served_mode() -> None:
+    """MUTATION PROOF for boot eight, against the corpse's own numbers."""
+    import fr13_fixed32_work_census as census
+
+    hydra31 = census.forward_graph_structural_manifest(1, mode="hydra31_fixed32")
+    assert hydra31["gdn"]["padded_slots_per_scan"] == 126
+    assert hydra31["gdn"]["critical_path"] == 16
+    assert hydra31["gdn"]["max_path_lengths"] == [5, 11]
+    assert hydra31["tree_attention"]["physical_parent_sha256"].startswith(
+        "101c590e58"
+    )
+    # ...and hydra27, tail6 and the unset default are byte-identical
+    era = census.forward_graph_structural_manifest(1)
+    for mode in ("hydra27_fixed32", "tail6_fixed32"):
+        assert census.forward_graph_structural_manifest(1, mode=mode) == era
+    assert era["gdn"]["padded_slots_per_scan"] == 82
+    assert era["gdn"]["critical_path"] == 12
+    assert era["tree_attention"]["physical_parent_sha256"].startswith("7abd25e383")
+
+
+def test_the_audited_digest_binds_per_mode_and_is_not_accept_any() -> None:
+    """THE FIFTH KIND. Per-mode, from the authority, still binding."""
+    import fr13_fixed32_work_census as census
+
+    topology = _topology()
+    for mode in topology.SERVING_MODES:
+        profile = topology.PROFILES[topology.TREE_PROFILE_BY_MODE[mode]]
+        manifest = census.forward_graph_structural_manifest(1, mode=mode)
+        assert manifest["tree_attention"]["physical_parent_sha256"] == str(
+            profile["physical_parent_sha256"]
+        )
+    # the two profiles genuinely differ, or this proves nothing
+    assert census.forward_graph_structural_manifest(1, mode="hydra31_fixed32")[
+        "tree_attention"
+    ]["physical_parent_sha256"] != census.forward_graph_structural_manifest(
+        1, mode="hydra27_fixed32"
+    )["tree_attention"]["physical_parent_sha256"]
+    # and it is a real 64-hex digest, not a wildcard
+    for mode in topology.SERVING_MODES:
+        digest = census.forward_graph_structural_manifest(1, mode=mode)[
+            "tree_attention"
+        ]["physical_parent_sha256"]
+        assert len(digest) == 64 and all(c in "0123456789abcdef" for c in digest)
+
+
+def test_the_flush_audit_passes_the_served_mode() -> None:
+    blob = _planted_blob()
+    assert "mode=_FR13_FIXED32_GDN_MODE or None," in blob
+    assert (
+        "expected = forward_graph_structural_manifest(\n            batch, kernel_shape=registry_shape\n        )"
+        not in blob
+    )
+
+
+def test_the_drift_formatter_recurses_into_nested_sections() -> None:
+    """Boot eight's message printed whole gdn/tree_attention sections."""
+    namespace: dict = {}
+    exec(_blob_function("_fr13_fixed32_drift_detail"), namespace)  # noqa: S102
+    detail = namespace["_fr13_fixed32_drift_detail"]
+    observed = {
+        "gdn": {"layers": 48, "padded_slots_per_scan": 126, "critical_path": 16},
+        "tree_attention": {"layers": 16, "physical_parent_sha256": "101c"},
+    }
+    audited = {
+        "gdn": {"layers": 48, "padded_slots_per_scan": 82, "critical_path": 12},
+        "tree_attention": {"layers": 16, "physical_parent_sha256": "7abd"},
+    }
+    message = detail(observed, audited)
+    # only the differing leaves, and the invariant ones stay out of it
+    assert "layers" not in message
+    assert "padded_slots_per_scan: observed 126 against audited 82" in message
+    assert "critical_path: observed 16 against audited 12" in message
+    assert "physical_parent_sha256: observed '101c' against audited '7abd'" in message
+    assert message.startswith("gdn{")
