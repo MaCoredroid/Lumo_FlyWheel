@@ -2509,7 +2509,29 @@ case "$KIND" in
 esac
 
 # ---- warmup probe (legacy arms only; fixed32 permits canonical SWE traffic only) ----
-if [[ -z "$FIXED32_MODE" ]]; then
+# SKIP_WARMUP_PROBE. The probe is fatal-on-failure and had no caller-side skip,
+# so an arm that must NOT run it had no way to say so. The MTP-5 probe skips it
+# FOR COMPARABILITY: the QC arms it is compared against never run this probe,
+# so running it only on the probe arm is a divergence between the two halves of
+# the comparison -- not a workaround for its failure.
+#
+# Default 0 preserves the legacy arms' behaviour exactly. The skip is RECORDED
+# rather than silent: an arm that ran a different amount of traffic than its
+# comparison arm has to say so in its own provenance, or the difference lands
+# in the numbers with nothing to attribute it to.
+_fr13_warmup_probe_skip_reason=
+if [[ -n "$FIXED32_MODE" ]]; then
+  _fr13_warmup_probe_skip_reason=fixed32-mode-permits-canonical-swe-traffic-only
+elif [[ "${SKIP_WARMUP_PROBE:-0}" == "1" ]]; then
+  _fr13_warmup_probe_skip_reason=caller-requested-for-comparability
+fi
+printf '{"schema":"fr13.warmup_probe.v1","ran":%s,"skip_reason":"%s","skip_requested":"%s","fixed32_mode":"%s"}\n' \
+  "$( [[ -z "$_fr13_warmup_probe_skip_reason" ]] && echo true || echo false )" \
+  "$_fr13_warmup_probe_skip_reason" "${SKIP_WARMUP_PROBE:-0}" "$FIXED32_MODE" \
+  > "$ARMDIR/warmup_probe_disposition.json"
+[[ -z "$_fr13_warmup_probe_skip_reason" ]] \
+  || echo "[warmup] probe SKIPPED: $_fr13_warmup_probe_skip_reason" >&2
+if [[ -z "$_fr13_warmup_probe_skip_reason" ]]; then
   curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_before_warmup.txt"
   WARMUP_TEMPERATURE=0.0
   .venv/bin/python scripts/fr10_quick_decode_tps_probe.py \

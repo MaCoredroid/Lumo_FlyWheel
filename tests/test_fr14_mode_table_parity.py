@@ -1598,3 +1598,88 @@ def test_nothing_in_the_closure_relies_on_the_stale_editable_install():
         assert "WHERE THE STALE EDITABLE INSTALL BIT" in text
     variant = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
     assert 'PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"' in variant
+
+
+# ===========================================================================
+# The warmup probe's caller-side skip, and why the native arms 404 /tokenize.
+# ===========================================================================
+
+
+def test_the_warmup_probe_has_a_recorded_caller_side_skip():
+    text = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
+    assert '"${SKIP_WARMUP_PROBE:-0}" == "1"' in text
+    assert '"schema":"fr13.warmup_probe.v1"' in text
+    # default preserves the legacy arms exactly
+    assert "SKIP_WARMUP_PROBE:-0" in text
+    # the skip is recorded, not silent: an arm that ran different traffic from
+    # its comparison arm must say so in its own provenance
+    assert "warmup_probe_disposition.json" in text
+    assert "probe SKIPPED" in text
+
+
+@pytest.mark.parametrize(
+    "env,expect_ran,expect_reason",
+    [
+        ({"FIXED32_MODE": ""}, "true", ""),
+        ({"FIXED32_MODE": "", "SKIP_WARMUP_PROBE": "1"}, "false",
+         "caller-requested-for-comparability"),
+        ({"FIXED32_MODE": "hydra27_fixed32"}, "false",
+         "fixed32-mode-permits-canonical-swe-traffic-only"),
+    ],
+    ids=["legacy-runs", "caller-skips", "fixed32-skips"],
+)
+def test_the_skip_disposition_is_recorded(tmp_path, env, expect_ran, expect_reason):
+    import subprocess
+
+    text = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
+    block = text[
+        text.index("_fr13_warmup_probe_skip_reason=\nif [[ -n"):
+        text.index('if [[ -z "$_fr13_warmup_probe_skip_reason" ]]; then')
+    ]
+    script = (
+        f"set -uo pipefail\nARMDIR={tmp_path}\n"
+        + "".join(f'{k}="{v}"\n' for k, v in env.items())
+        + block
+    )
+    subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True)
+    disposition = json.loads(
+        (tmp_path / "warmup_probe_disposition.json").read_text()
+    )
+    assert str(disposition["ran"]).lower() == expect_ran
+    assert disposition["skip_reason"] == expect_reason
+
+
+def test_no_serve_flag_enables_the_tokenize_route_on_either_stack():
+    """Why the native arms 404 /tokenize -- classified from the launcher args.
+
+    Neither launcher passes any route-enabling flag, and both run the same
+    pinned image, so /tokenize exists identically on both stacks. The 404 is
+    the PROBE naming a model the native server does not serve: the variant
+    hardcodes `--model qwen3.8-27b-nvfp4-radixark` (the FORKED stack's
+    --served-model-name) while the native launcher serves
+    `--served-model-name qwen3.6-27b`, and fr10_quick_decode_tps_probe.py
+    passes that name in its /tokenize body. vLLM's OpenAI server answers an
+    unknown model with 404, which reads in a log as "404 /tokenize".
+
+    So the native launcher's route support is NOT broken; the probe's model
+    pin is, for every native arm. Recorded here rather than fixed because the
+    durable fix is to derive the served name from the launcher instead of
+    restating it -- SERVED_MODEL_NAME is documented in the launcher as "the
+    single point of truth for the serve line" and this variant restates it
+    twice, which is the same authority-versus-restatement pattern as sites
+    17-25.
+    """
+    forked = (REPO / "scripts/fr13_launch_forked_fa2_tree_server.sh").read_text()
+    native = (REPO / "scripts/fr13_launch_native_mtp_server.sh").read_text()
+    for text in (forked, native):
+        assert "--chat-template" in text and "--enable-auto-tool-choice" in text
+        assert "--api-server" not in text and "--disable-frontend" not in text
+    assert "--served-model-name qwen3.6-27b" in native
+    assert "--served-model-name $SERVED_MODEL_NAME" in forked
+    variant = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
+    assert variant.count("--model qwen3.8-27b-nvfp4-radixark") == 2, (
+        "the served model name is restated in the variant; if this count "
+        "changes, re-check whether it was derived or merely moved"
+    )
+    probe = (REPO / "scripts/fr10_quick_decode_tps_probe.py").read_text()
+    assert '"/tokenize"' in probe and "model=args.model" in probe
