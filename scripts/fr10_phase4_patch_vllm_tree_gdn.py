@@ -4038,7 +4038,13 @@ def _fr13_fixed32_observed_gdn(
                 for _name in _drifted
             )
         )
-    if {
+    # SEVENTH member of the walk-derived-pin class, one statement after the
+    # sixth. `critical` is the walk cap -- 12 at hydra27/tail6, 16 at hydra31 --
+    # and it is the ONLY mode-varying field here: n_levels is the launch count
+    # (2 under both profiles) and parent/emask/export rows are PHYSICAL_ROWS,
+    # which no profile moves. It derives from the same planted table the
+    # schedule contract above uses.
+    _observed_state = {
         "schedule": runtime_state.get("schedule"),
         "route_armed": runtime_state.get("route_armed"),
         "n_levels": int(runtime_state.get("n_levels", -1)),
@@ -4046,18 +4052,39 @@ def _fr13_fixed32_observed_gdn(
         "parent_nodes": int(runtime_state.get("parent_nodes", -1)),
         "emask_rows": int(runtime_state.get("emask_rows", -1)),
         "export_rows": int(runtime_state.get("export_rows", -1)),
-    } != {
+    }
+    _expected_state = {
         "schedule": "fixed32",
         "route_armed": True,
-        "n_levels": 2,
-        "critical": 12,
+        "n_levels": _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["launches"],
+        "critical": _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["critical"],
         "parent_nodes": 32,
         "emask_rows": 32,
         "export_rows": 32,
-    }:
+    }
+    if _observed_state != _expected_state:
+        # TWO-SIDED, differing fields only. The one-sided form dumped the whole
+        # runtime_state, which is how a stale `critical` came to be read as a
+        # single-launch route that never armed: the None fields it printed are
+        # not in this comparison at all, and are the ordinary state of a
+        # default-off lever.
+        _state_drift = sorted(
+            _name
+            for _name in _expected_state
+            if _observed_state[_name] != _expected_state[_name]
+        )
         raise RuntimeError(
-            "FR13 fixed32 GDN runtime schedule state drift: "
-            + repr(runtime_state)
+            "FR13 fixed32 GDN runtime schedule state drift for mode "
+            + repr(_FR13_FIXED32_GDN_MODE)
+            + ": "
+            + "; ".join(
+                _name
+                + ": observed "
+                + repr(_observed_state[_name])
+                + " against audited "
+                + repr(_expected_state[_name])
+                for _name in _state_drift
+            )
         )
     parent_digest = contract.get("parent_sha256")
     ancestry_digest = contract.get("ancestry_sha256")

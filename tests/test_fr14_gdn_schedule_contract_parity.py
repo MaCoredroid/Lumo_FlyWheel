@@ -557,3 +557,374 @@ def test_the_ambiguous_values_are_reported_not_asserted() -> None:
     # the GDN quantities this landing turns on must be in the asserted half
     for value in (7, 11, 12, 82, 126):
         assert value in unambiguous, value
+
+
+# --------------------------------------------------------------------------- #
+# THE METHOD REVIEW, due after the sixth distinct refusal                      #
+# --------------------------------------------------------------------------- #
+# BOOT FIVE died one statement after boot four, on the SEVENTH member of the
+# value class -- and my own census had dropped it. The rule was "a container
+# holding TWO OR MORE distinct mode-varying values", chosen so that node-id
+# tables would not drown the report. The guard that killed boot five holds
+# exactly ONE:
+#
+#     {"schedule": "fixed32", "route_armed": True, "n_levels": 2,
+#      "critical": 12, "parent_nodes": 32, "emask_rows": 32, "export_rows": 32}
+#
+# 12 is the walk cap; 32 is PHYSICAL_ROWS, which is profile-invariant and so is
+# not a candidate at all; 2 and True are not candidates. One distinct value,
+# below my threshold, silently dropped. THAT is the recall hole, and it is a
+# more precise finding than "the census cannot see predicates": a contract
+# carrying a single mode-varying number among invariants is the commonest
+# shape a guard takes.
+#
+# THE FIX IS A UNION, NOT A LOWER THRESHOLD. Rule A (two or more distinct
+# values, any context) keeps catching tables. Rule B (ONE value, but in a
+# CONTRACT CONTEXT -- an operand of a comparison, or assigned to a
+# contract-shaped name) catches guards. Neither subsumes the other and the
+# union is what the class actually looks like. Rule B adds 32 scopes; every one
+# is classified below.
+CLOSURE_CENSUS_BY_FILE: dict[str, str] = {
+    "scripts/fr13_bm8_pass_sidecar.py": (
+        "pin: BM8 pass sidecar, a hydra27-era byte-qualified credential"
+    ),
+    "scripts/fr13_cutlass_b4_pass.py": (
+        "pin: CUTLASS B4 pass record, a hydra27-era banked credential"
+    ),
+    "scripts/fr13_depth_acceptance.py": (
+        "pin: the depth reducer names TAIL6/HYDRA27 active drafts explicitly "
+        "and refuses anything else; it is a hydra27-scoped tool by declaration"
+    ),
+    "scripts/fr13_dfwd_k64_fp8_selector.py": (
+        "pin: FP8 selector smoke, a default-off lever qualified on hydra27"
+    ),
+    "scripts/fr13_dfwd_k64_m1_r64_u8_gate.py": (
+        "pin: banked DFWD gate over hydra27-era evidence"
+    ),
+    "scripts/fr13_dfwd_unified_bm8_gate.py": (
+        "pin: unified BM8 gate over hydra27-era evidence"
+    ),
+    "scripts/fr13_draft_head_fp8_sm121_smoke.py": (
+        "pin: FP8 draft-head smoke, a hydra27-era default-off lever"
+    ),
+    "scripts/fr13_fa2_qrow32_gqa_pair_gate.py": (
+        "pin: FA2 qrow32 pair gate, a hydra27-era banked credential"
+    ),
+    "scripts/fr13_fixed32_semantics_test.py": (
+        "pin: the semantics tests state hydra27's compact reference on purpose"
+    ),
+    "scripts/fr13_qrow16_pass_sidecar.py": (
+        "pin: qrow16 pass sidecar, a hydra27-era byte-qualified credential"
+    ),
+    "scripts/fr13_taw_b1_credential.py": (
+        "pin: the B1 TAW credential is hydra27-era by construction"
+    ),
+    "tests/test_fr13_gdn_single_launch_campaign_gate.py": (
+        "pin: the single-launch campaign gate is hydra27-qualified; see "
+        "SINGLE_LAUNCH_ADJUDICATION below"
+    ),
+    "scripts/fr13_patch_fa2_tree_bias.py": (
+        "pin: planted FA2 qrow32 helpers, hydra27-qualified geometry"
+    ),
+    "scripts/fr13_device_multidraft_kernel.py": (
+        "pin: site-13 and site-27 classified this file scope by scope; the "
+        "module-level hits are the era pins those landings declared"
+    ),
+    "scripts/fr13_fixed32_work_census.py": (
+        "pin: hydra27 defaults with no execution-path reader (site 27)"
+    ),
+    "src/lumo_flywheel_serving/fr13_gdn_gqa_group3.py": (
+        "pin: GQA-group3 candidate, default-off and hydra27-qualified"
+    ),
+    "tests/test_fr13_fixed32_gdn_gqa_group3.py": (
+        "pin: the test states hydra27's descriptors on purpose"
+    ),
+    "tests/test_fr14_contract_profile_signatures.py": (
+        "pin: the site-13/27 suite's own fixtures, several of which state both "
+        "profiles side by side because that is what they prove"
+    ),
+    "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py": (
+        "mixed: the authority table, the two derived stamps, and the "
+        "single-launch family recorded in SINGLE_LAUNCH_ADJUDICATION"
+    ),
+    "scripts/fr10_phase4_patch_vllm_tree_gdn.py": (
+        "mixed: the planted GDN schedule table (derive) and hydra27-qualified "
+        "planted helpers (pin), classified per scope in CLOSURE_CENSUS"
+    ),
+}
+
+#: ORDER 1's ANSWER, recorded rather than acted on. Case (b): the single-launch
+#: candidate is qualified for hydra27's schedule ALONE, and the evidence is
+#: three constants it validates against.
+SINGLE_LAUNCH_ADJUDICATION = {
+    "_FR13_FIXED32_EXPORT_NODES": (
+        "(0, 1, 4, 9, 14) -- hydra27 root-spine NODE IDS. tail10 respends the "
+        "four slots hydra27 disarms, so ids >= 17 carry different paths and "
+        "this tuple does not describe hydra31's spine."
+    ),
+    "_FR13_FIXED32_GDN_DEPTH_FIRST_GROUPS": (
+        "the interleave order is keyed on those same node ids."
+    ),
+    "_fr13_fixed32_gdn_prescaled_path_descriptor": (
+        "refuses unless max_path_len == 7, which is hydra27's branch depth; "
+        "hydra31's is 11."
+    ),
+}
+
+
+def test_single_launch_was_not_what_killed_boot_five() -> None:
+    """PREMISE CHECK. The refusal named a stale literal, not an arming failure.
+
+    The guard compares SEVEN fields and none of them is the single-launch
+    contract; `fixed32_single_launch_contract: None` and `executed_gdn: None`
+    appear in the corpse only because the one-sided message dumped the whole
+    runtime_state. The lever is default-off -- the healthy hydra27 QC arms carry
+    FR13_FIXED32_GDN_SINGLE_LAUNCH_PRODUCTION=0 -- so None is its ordinary
+    state on every profile.
+    """
+    blob = _planted_blob()
+    marker = "FR13 fixed32 GDN runtime schedule state drift"
+    guard = blob[blob.index("_observed_state = {") : blob.index(marker)]
+    assert "single_launch" not in guard
+    compared = sorted(
+        name
+        for name in (
+            "schedule",
+            "route_armed",
+            "n_levels",
+            "critical",
+            "parent_nodes",
+            "emask_rows",
+            "export_rows",
+        )
+        if f'"{name}": ' in guard and "runtime_state.get" in guard
+    )
+    assert len(compared) == 7, compared
+
+
+def test_the_seventh_pin_derives_and_hydra27_is_unchanged() -> None:
+    """MUTATION PROOF for boot five's actual cause."""
+    blob = _planted_blob()
+    guard = blob[
+        blob.index("_expected_state = {") : blob.index(
+            "FR13 fixed32 GDN runtime schedule state drift"
+        )
+    ]
+    # the literal 12 is gone from the GUARD; the era table above it still
+    # carries hydra27's 12, which is exactly where it belongs
+    assert '"critical": 12,' not in guard
+    assert '"critical": 12,' in blob, "the hydra27 era entry vanished"
+    assert (
+        '"critical": _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["critical"],' in guard
+    )
+    assert (
+        '"n_levels": _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["launches"],' in guard
+    )
+    # the invariant fields keep their literals, which is where the teeth are
+    for literal in ('"parent_nodes": 32,', '"emask_rows": 32,', '"export_rows": 32,'):
+        assert literal in guard, literal
+    for mode, critical in (
+        ("hydra27_fixed32", 12),
+        ("tail6_fixed32", 12),
+        ("", 12),
+        ("hydra31_fixed32", 16),
+    ):
+        assert _blob_schedule_table(mode)["_FR13_FIXED32_GDN_SCHEDULE_EXPECTED"][
+            "critical"
+        ] == critical
+
+
+def test_the_runtime_state_refusal_is_two_sided() -> None:
+    blob = _planted_blob()
+    assert "GDN runtime schedule state drift for mode " in blob
+    assert "for _name in _state_drift" in blob
+    assert '"FR13 fixed32 GDN runtime schedule state drift: "' not in blob
+
+
+def _scan_union(text: str, values: set[int]) -> set[str]:
+    """Rule A (>=2 distinct values) UNION Rule B (one value, contract context).
+
+    Rule B is what boot five needed and what the old census lacked.
+    """
+    import re as _re
+
+    contract_name = _re.compile(
+        r"expected|contract|pinned|census|descriptor|schedule|geometry|manifest"
+        r"|audited",
+        _re.I,
+    )
+    scopes: set[str] = set()
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return scopes
+    parent: dict = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parent[child] = node
+    owner: dict[int, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+                owner.setdefault(line, node.name)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Dict, ast.Tuple, ast.List)):
+            found = {
+                child.value
+                for child in ast.walk(node)
+                if isinstance(child, ast.Constant)
+                and isinstance(child.value, int)
+                and not isinstance(child.value, bool)
+                and child.value in values
+            }
+            if not found:
+                continue
+            context = None
+            current = node
+            for _ in range(6):
+                above = parent.get(current)
+                if above is None:
+                    break
+                if isinstance(above, ast.Assign):
+                    for target in above.targets:
+                        if isinstance(target, ast.Name) and contract_name.search(
+                            target.id
+                        ):
+                            context = target.id
+                    break
+                if isinstance(above, ast.Compare):
+                    context = "<compare>"
+                    break
+                current = above
+            if len(found) >= 2 or context is not None:
+                scopes.add(owner.get(node.lineno, "<module>"))
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and len(node.value) > 20_000
+        ):
+            scopes |= {"BLOB:" + name for name in _scan_union(node.value, values)}
+    return scopes
+
+
+def test_rule_b_would_have_caught_the_seventh_pin() -> None:
+    """The recall fix, proven against the source that actually died.
+
+    Reconstructs boot five's guard verbatim and shows the OLD rule drops it
+    while the union catches it. A method review that cannot demonstrate the
+    miss is just a promise.
+    """
+    dead = (
+        "_expected_state = {\n"
+        '    "schedule": "fixed32",\n'
+        '    "route_armed": True,\n'
+        '    "n_levels": 2,\n'
+        '    "critical": 12,\n'
+        '    "parent_nodes": 32,\n'
+        '    "emask_rows": 32,\n'
+        '    "export_rows": 32,\n'
+        "}\n"
+        "if observed != _expected_state:\n"
+        "    raise RuntimeError('drift')\n"
+    )
+    unambiguous, _ambiguous = _candidate_values()
+    assert _scan(dead, unambiguous) == set(), "the OLD rule should miss this"
+    assert _scan_union(dead, unambiguous) == {"<module>"}, (
+        "the union rule must catch a guard carrying ONE mode-varying value"
+    )
+
+
+def test_the_union_census_classifies_every_hit_in_the_closure() -> None:
+    import fr14_mode_table_parity as parity
+
+    unambiguous, _ambiguous = _candidate_values()
+    unclassified: dict[str, list[str]] = {}
+    for rel in parity.serve_execution_closure():
+        if not rel.endswith(".py"):
+            continue
+        path = REPO / rel
+        if not path.is_file():
+            continue
+        scopes = _scan_union(path.read_text(errors="replace"), unambiguous)
+        if not scopes:
+            continue
+        if rel in CLOSURE_CENSUS_BY_FILE:
+            continue
+        known = CLOSURE_CENSUS.get(rel, {})
+        missing = sorted(scope for scope in scopes if scope not in known)
+        if missing:
+            unclassified[rel] = missing
+    assert not unclassified, (
+        "unclassified mode-varying literals under the UNION rule: "
+        + repr(unclassified)
+    )
+
+
+def test_every_file_level_classification_carries_a_reason() -> None:
+    for rel, reason in CLOSURE_CENSUS_BY_FILE.items():
+        assert reason.split(":", 1)[0] in {"derive", "pin", "authority", "coincide", "mixed"}
+        assert len(reason) > 30, rel
+        assert (REPO / rel).is_file(), rel
+
+
+def test_the_single_launch_family_is_adjudicated_not_relaxed() -> None:
+    """ORDER 1, case (b), recorded for Mark rather than decided silently.
+
+    The single-launch candidate validates against hydra27's spine node ids and
+    its branch depth. hydra31 would need its OWN qualification to arm it. It is
+    default-off and the hydra31 arm exports no single-launch variables at all,
+    so hydra31 already serves without it -- that is the declared status quo,
+    not a gap this landing papers over.
+    """
+    kernel = GDN_KERNEL_SOURCE
+    assert "_FR13_FIXED32_EXPORT_NODES = (0, 1, 4, 9, 14)" in kernel
+    assert "max_path_len != 7" in kernel
+    for name, reason in SINGLE_LAUNCH_ADJUDICATION.items():
+        assert len(reason) > 40, name
+    # and the validator was NOT relaxed to accept a None
+    blob = _planted_blob()
+    assert "single_launch" not in blob[
+        blob.index("_observed_state = {") : blob.index(
+            "FR13 fixed32 GDN runtime schedule state drift"
+        )
+    ]
+
+
+def test_profile_conditioned_predicates_are_enumerated() -> None:
+    """ORDER 2's other half: predicates, not just values.
+
+    Enumerate every branch in the closure whose condition mentions a mode, a
+    profile or a schedule digest. This is a REPORT, not a refusal: the point is
+    that the next boot-five is visible here before it is visible in a corpse.
+    """
+    import fr14_mode_table_parity as parity
+    import re as _re
+
+    keyed = _re.compile(
+        r"(FR13_FIXED32_MODE|_MODE\b|TREE_PROFILE|_BY_MODE|_BY_PROFILE"
+        r"|levels_sha256|coverage_sha256|ancestry_sha256)"
+    )
+    found: dict[str, int] = {}
+    for rel in parity.serve_execution_closure():
+        if not rel.endswith(".py"):
+            continue
+        path = REPO / rel
+        if not path.is_file():
+            continue
+        try:
+            tree = ast.parse(path.read_text(errors="replace"))
+        except SyntaxError:
+            continue
+        count = 0
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.If, ast.IfExp)) and keyed.search(
+                ast.dump(node.test)
+            ):
+                count += 1
+        if count:
+            found[rel] = count
+    # The enumeration must be non-trivial and must include the files where
+    # profile conditioning actually lives.
+    assert sum(found.values()) >= 20, found
+    assert "scripts/fr13_device_multidraft_kernel.py" in found
+    assert "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py" in found
