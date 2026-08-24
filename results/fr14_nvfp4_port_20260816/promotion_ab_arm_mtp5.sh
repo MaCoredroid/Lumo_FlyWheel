@@ -89,6 +89,26 @@ mkdir -p "$RUNROOT_ABS"
   printf 'boot_head=%s\nstarted=%s\n' "$(git rev-parse HEAD)" "$(date -u +%FT%TZ)"
 } > "$RUNROOT_ABS/MTP5_PROBE.txt"
 
+# PURITY ATTESTOR. Mark: "the plain native kernel, without any of our side code."
+# The arm CHOOSES nativemtp5; this OBSERVES that the choice took effect, from inside
+# the live container, and writes MTP5_PURITY.json into the runroot. It must run while
+# the engine is up, so it waits for the container rather than running after the serve.
+(
+  for _i in $(seq 1 180); do
+    _c=$(docker ps --format "{{.Names}}" | head -1)
+    if [[ -n "$_c" ]]; then
+      sleep 90   # let the engine finish loading before censusing its maps
+      bash results/fr14_nvfp4_port_20260816/promotion_ab_mtp5_purity.sh \
+        "$_c" "$RUNROOT_ABS" "$RUNROOT_ABS/$ARM.runlog" \
+        > "$RUNROOT_ABS/purity_attestor.log" 2>&1
+      exit 0
+    fi
+    sleep 5
+  done
+  echo "purity attestor: container never appeared" > "$RUNROOT_ABS/purity_attestor.log"
+) &
+_PURITY_PID=$!
+
 echo "===== $ARM (drafter-neutrality probe) $(date -u +%FT%TZ) ====="
 env RUNROOT="$RUNROOT_ABS" \
   OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S=9000 \
