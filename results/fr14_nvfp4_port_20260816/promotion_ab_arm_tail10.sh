@@ -99,6 +99,13 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
 RUNROOT=output/fr14_promoab_${ARM_KIND}${PROMOAB_ARM_SUFFIX:-}_$TS
 RUNROOT_ABS=$(realpath -m "$RUNROOT")
 [[ ! -e "$RUNROOT_ABS" ]] || { echo "RUNROOT must be new" >&2; exit 2; }
+# THE DEFAULT MUST BE ASSIGNED BEFORE ITS FIRST USE, not merely somewhere in the
+# file. This pair used to sit ~140 lines below, next to the topology block it
+# belongs to conceptually -- but ARM is built here, so under `set -u` a caller who
+# relied on the documented default got an unbound-variable abort instead of
+# hydra27_fixed32. The default only ever worked for callers who did not need it.
+PROMOAB_KIND=${PROMOAB_KIND:-hydra27_fixed32}
+case "$PROMOAB_KIND" in hydra27_fixed32|hydra31_fixed32) ;; *) echo "PROMOAB_KIND must be hydra27_fixed32 or hydra31_fixed32" >&2; exit 2 ;; esac
 ARM="${PROMOAB_KIND}_promoab_${ARM_KIND}${PROMOAB_ARM_SUFFIX:-}"
 
 SOURCE_COMMIT=$(git rev-parse HEAD)
@@ -243,8 +250,7 @@ mkdir -p "$RUNROOT_ABS"
 # ---- route pins + K0 identity ----------------------------------------------
 # TAG is referenced by the sequence file's run_variant lines; it must exist even
 # though run_variant is stubbed out here (set -u).
-PROMOAB_KIND=${PROMOAB_KIND:-hydra27_fixed32}
-case "$PROMOAB_KIND" in hydra27_fixed32|hydra31_fixed32) ;; *) echo "PROMOAB_KIND must be hydra27_fixed32 or hydra31_fixed32" >&2; exit 2 ;; esac
+# PROMOAB_KIND is defaulted and validated ABOVE, before ARM is built from it.
 export TAG="promoab${ARM_KIND}"
 export BSIZE=1 CONC=1 WALL=9000
 export FR13_CAMPAIGN_TASK_BUDGET_S=9000
