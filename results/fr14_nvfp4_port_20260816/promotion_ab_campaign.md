@@ -5166,3 +5166,70 @@ that is then removed. Reporting it as unverified rather than assuming it worked.
    The eyeball and c5 both need generations to exist; neither fires on an empty run.
 
 Until both are in place, further MTP-5 arms would produce results I could not defend.
+
+# THE 2-SECOND FAILURE: hypothesis CONFIRMED — and it is worse than a name mismatch
+
+Checked before refiring, as directed. It is the served-model-name family, and the check
+surfaced something larger underneath it.
+
+    fr13_launch_native_mtp_server.sh:163   (the launcher KIND=nativemtp5 actually uses)
+      vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b
+    fr10_launch_speed_server.sh:383
+      vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b
+    fr13_launch_forked_fa2_tree_server.sh:602-603
+      SERVED_MODEL_PATH=/models/qwen3.8-27b-nvfp4-radixark
+      SERVED_MODEL_NAME=qwen3.8-27b-nvfp4-radixark
+
+    harness client (variant :2585, :2742)   --model qwen3.8-27b-nvfp4-radixark
+
+**The name mismatch is real and explains the two seconds exactly**: the client requests
+`qwen3.8-27b-nvfp4-radixark`, the native server serves `qwen3.6-27b`, the request is an
+unknown model, and the agent exits with nothing.
+
+## BUT THE NAME IS THE SMALLER HALF
+
+Both native launchers are pinned to **`/models/qwen3.6-27b-fp8`** — a **different
+generation and a different quantization** from the probe's required
+`qwen3.8-27b-nvfp4-radixark`. And unlike the forked launcher, which holds both as
+variables, the native pins are **literals in the exec line with no override**.
+
+So the caller-side name fix is not merely unavailable — **it would be wrong if it were
+available**. Matching the name would point the client at a 3.6-FP8 server, produce a
+green run, and answer a different question. Mark's spec is "the plain native kernel,
+without any of our side code" on the **same weights**; this route cannot serve those
+weights at all.
+
+Given Mark explicitly tabled the Aug-14 3.6 exhibit against the fixed-on-3.6 premise, a
+3.6-FP8 result labelled as the 3.8 drafter-neutrality answer is close to the worst
+outcome this probe could produce. **Not refiring.**
+
+## THE FAMILY, NOW FIVE
+
+Every native-route defect has been the same shape — a default or literal that points
+somewhere other than this port, while the fixed32 sibling holds it as a variable:
+
+    1  PYTHONPATH   unqualified import -> foreign checkout
+    2  REPO         hardcoded foreign checkout (both native launchers)
+    3  /tokenize    warmup probe legacy-only; fixed32 arms skip it
+    4  pair-dump    raw-dump shape keyed on fixed32 identity
+    5  MODEL PIN    hardcoded 3.6-FP8 + served name (both native launchers)
+
+Fix shape for 5 is the one the forked launcher already demonstrates: parameterise
+`SERVED_MODEL_PATH`/`SERVED_MODEL_NAME` and let the caller supply this port's weights.
+That is lane work; the count-pinned derive-from-authority item covers the durable version.
+
+## THE TWO APPROVED FIXES ARE LANDED ANYWAY
+
+They are needed regardless of which weights the probe eventually serves:
+
+* **Retention** — the arm mirrors `$RUNROOT/$ARM` to `$RUNROOT/_retained` while alive and
+  once more after the container goes, so `pretask_identity.json` survives the clean
+  `swerc=0` path and an agent-side failure is diagnosable next time.
+* **Liveness floor** — `promotion_ab_liveness_floor.py` returns `VACUOUS_NOT_RUN` for a
+  task under 60 s with an empty patch. Floor taken from the banked distribution, not
+  taste: every real 13236 run served >5 min (20.6 min for the degeneration, 5436 s for
+  H27n), and 13453's fast clean run was ~10 min. Exercised on replicate A's own runlog:
+  `VACUOUS_NOT_RUN`, `admissible=[]`, rc 1.
+
+Had the floor existed one round earlier it would have refused that result automatically
+instead of my having to catch it by eye.
