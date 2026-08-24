@@ -41,10 +41,44 @@ MTP5_REP=${MTP5_REP:?set MTP5_REP to a replicate label}
 case "$MTP5_TASK" in
   astropy13236) SUBSET=config/fr13_fixed32/subset_b1_diagnostic_astropy13236.json ;;
   astropy12907) SUBSET=config/fr13_fixed32/subset_b1_diagnostic_one.json ;;
-  *) echo "no B1 diagnostic profile for $MTP5_TASK -- see the spec: 14369 needs one minted first" >&2
+  # THE TRIGGER TASK. Minted at 0577cb4b1; the QC has since produced one clean
+  # merged-drafter sample of 14369 (Cqc10, resolved, c5 0.5863) to compare against.
+  astropy14369) SUBSET=config/fr13_fixed32/subset_b1_diagnostic_astropy14369.json ;;
+  *) echo "no B1 diagnostic profile for $MTP5_TASK" >&2
      exit 2 ;;
 esac
 [[ -f "$SUBSET" && ! -L "$SUBSET" ]] || { echo "subset missing: $SUBSET" >&2; exit 2; }
+
+# THE MODEL PIN, now a parameter rather than a literal (lane 4, 5a0cf9698/39b7afcb3).
+# The native launchers used to hardcode /models/qwen3.6-27b-fp8; serving THAT under a
+# 3.8 label would have been the worst artifact this probe could produce, which is why
+# the earlier refire was refused rather than run. These names are deliberately the
+# launcher's own plain spellings (NOT FR13_*), read off its landing at :56-61.
+MTP5_MODEL_PATH=${MTP5_MODEL_PATH:-/models/qwen3.8-27b-nvfp4-radixark}
+MTP5_MODEL_NAME=${MTP5_MODEL_NAME:-qwen3.8-27b-nvfp4-radixark}
+[[ -d "$MTP5_MODEL_PATH" && ! -L "$MTP5_MODEL_PATH" ]] \
+  || { echo "served checkpoint missing or symlinked: $MTP5_MODEL_PATH" >&2; exit 2; }
+
+# CHECKPOINT IDENTITY, asserted here so the arm refuses BEFORE the GPU rather than
+# discovering the wrong weights in provenance afterwards. Same construction the
+# launcher uses (:110-112): sorted "name size" over top-level safetensors.
+#
+# WHAT THIS DIGEST DOES AND DOES NOT PROVE, measured rather than assumed:
+#   /models/qwen3.8-27b-nvfp4-radixark            -> 5ec8e24087f2e395
+#   /models/qwen3.8-27b-nvfp4-radixark-asshipped  -> 5ec8e24087f2e395   (SAME)
+#   /models/qwen3.6-27b-fp8                       -> d053823784d5db6f
+# It cleanly separates the 3.8 NVFP4 weights from the 3.6 FP8 ones, which is the
+# confusion that blocked this probe. It does NOT separate the two radixark dirs --
+# but that is correct here, not a gap: their safetensors are the SAME INODES
+# (hardlinked, verified), so the weights genuinely are identical bytes and the dirs
+# differ only in non-safetensors files the digest does not cover.
+MTP5_EXPECT_CKPT=${MTP5_EXPECT_CKPT:-5ec8e24087f2e395}
+_ckpt_id=$(find "$MTP5_MODEL_PATH" -maxdepth 1 -name '*.safetensors' -printf '%f %s\n' \
+             2>/dev/null | sort | sha256sum | cut -d' ' -f1)
+[[ "${_ckpt_id:0:16}" == "$MTP5_EXPECT_CKPT" ]] \
+  || { echo "CHECKPOINT IDENTITY MISMATCH: $MTP5_MODEL_PATH -> ${_ckpt_id:0:16}, expected $MTP5_EXPECT_CKPT" >&2
+       exit 2; }
+echo "[mtp5] checkpoint identity ${_ckpt_id:0:16} OK -- serving $MTP5_MODEL_PATH as '$MTP5_MODEL_NAME'"
 
 ARM="nativemtp5_probe_${MTP5_TASK}_${MTP5_REP}"
 TS=$(date -u +%Y%m%dT%H%M%SZ)
@@ -106,7 +140,13 @@ mkdir -p "$RUNROOT_ABS"
   printf 'tier_b_arm=NONE (native launcher never reaches the FA2 selector)\n'
   printf 'split_k=NOT PRESENT (not merely disarmed)\ncredential=NOT REQUIRED (no re-seal for this arm)\n'
   printf 'c5_applicable=NO -- c5 is a SEAM conditional and a chain drafter has no seam\n'
-  printf 'degeneration_instruments=trace screens (ttr, top-12-gram, max-block, tool cadence) + 24k ceiling length events\n'
+  printf 'c5_note=do NOT quote a c5 for this arm. On the merged tree drafter c5 flagged exactly one of the canonical sixteen (13236 at 0.3499, all others 0.5182-0.6395); that instrument does not transfer to a chain drafter and its absence here is by construction, not an omission.\n'
+  printf 'served_model_path=%s\nserved_model_name=%s\ncheckpoint_identity=%s\n' \
+    "$MTP5_MODEL_PATH" "$MTP5_MODEL_NAME" "${_ckpt_id:0:16}"
+  printf 'checkpoint_note=5ec8e240 separates the 3.8 NVFP4 weights from 3.6-fp8 (d0538237). It does NOT separate radixark from radixark-asshipped: their safetensors are the same inodes, so the weights are identical bytes and only non-safetensors files differ.\n'
+  printf 'degeneration_instruments=trace screens (ttr, top-12-gram, max-block, tool cadence) + 24k ceiling length events + conjunction rule (visible-collapse AND tools==0 AND thinking-large)\n'
+  printf 'conjunction_rule_validation=130 banked traces: 1 degeneration (Cqc16/13236), 9 vacuous, 120 clean; ONE positive example, so it is a floor not a proof\n'
+  printf 'n2_framing=PRE-REGISTERED: either replicate degenerating strongly REFUTES the machinery hypothesis; both clean is WEAK evidence for it\n'
   printf 'output_ceiling=%s\n' "${DEPLOY_MAX_OUTPUT_TOKENS:-24000}"
   printf 'boot_head=%s\nstarted=%s\n' "$(git rev-parse HEAD)" "$(date -u +%FT%TZ)"
 } > "$RUNROOT_ABS/MTP5_PROBE.txt"
@@ -151,18 +191,34 @@ _PURITY_PID=$!
 _RETAIN_PID=$!
 
 echo "===== $ARM (drafter-neutrality probe) $(date -u +%FT%TZ) ====="
+
+# NO FR13_FIXED32_B1_DIAGNOSTIC BELOW, and this is not an omission.
+# The diagnostic route is a FIXED32 concept. The variant sets FIXED32_MODE only
+# for the fixed32 kinds (:519/:534), so on LAUNCHER=native it stays empty, the
+# --fixed32-* runner args are never passed (:2824), fixed32_enabled is False, and
+# run_swe_bench_q36_a.py:9981 hard-errors: 'FR13_FIXED32_B1_DIAGNOSTIC=1 requires
+# fixed32 runtime binding'. Single-task selection here comes from the SUBSET
+# alone. Verified by reading the gate rather than by burning a boot on it.
+#
+# THIS COMMENT LIVES ABOVE THE COMMAND, NOT INSIDE IT, and that is load-bearing.
+# It used to sit between two backslash-continued lines of the `env` invocation. A
+# comment does NOT continue a continuation: bash ended the command at the `#`, so
+# `env RUNROOT=... OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1
+# AGENT_WALL_S=9000` ran with NO COMMAND -- it printed the environment and exited 0 --
+# and the serve then ran as a SEPARATE command with those five variables UNSET.
+# OFFLOAD_AGENT=1 unset would have routed the agent off the offload proxy that every
+# other arm uses, and RUNROOT unset would have scattered the artifacts, while the arm
+# reported success. Reproduced in isolation before fixing. It never fired only because
+# this probe has never reached a boot: the model pin, then DIAGNOSTIC, then /tokenize,
+# then the wrong weights each refused first. Exactly the silent-no-op this script's own
+# PROMOAB_EXTRA_ENV comment warns about, sitting in the script that warns about it.
 env RUNROOT="$RUNROOT_ABS" \
   OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 AGENT_WALL_S=9000 \
-  # NO FR13_FIXED32_B1_DIAGNOSTIC HERE, and this is not an omission.
-  # The diagnostic route is a FIXED32 concept. The variant sets FIXED32_MODE only
-  # for the fixed32 kinds (:519/:534), so on LAUNCHER=native it stays empty, the
-  # --fixed32-* runner args are never passed (:2824), fixed32_enabled is False, and
-  # run_swe_bench_q36_a.py:9981 hard-errors: 'FR13_FIXED32_B1_DIAGNOSTIC=1 requires
-  # fixed32 runtime binding'. Single-task selection here comes from the SUBSET
-  # alone. Verified by reading the gate rather than by burning a boot on it.
   FR10_METRICS=0 \
   SKIP_WARMUP_PROBE=1 \
   FR13_PROXY_RAW_DUMPS=off \
+  SERVED_MODEL_PATH="$MTP5_MODEL_PATH" \
+  SERVED_MODEL_NAME="$MTP5_MODEL_NAME" \
   TMPDIR=/home/mark/shared/tmp-scratch \
   bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" nativemtp5 "$SUBSET" \
   > "$RUNROOT_ABS/$ARM.runlog" 2>&1
