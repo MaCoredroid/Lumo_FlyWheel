@@ -68,7 +68,12 @@ case "$PROMOAB_SUBSET" in
   # THE SECOND RESUME SET: sixteen minus the FOUR the QC has now verdicted
   # (12907 resolved, 13033 failed, 13236 degenerate-regression, 13398 empty-fail).
   exact16_qc_remainder_12) SUBSET=config/fr13_fixed32/subset_b4_sixteen_qc_remainder_12.json ;;
-  *) echo "PROMOAB_SUBSET must be exact4, exact16, exact16_minus_13236 or exact16_qc_remainder_12" >&2; exit 2 ;;
+  # THE THIRD RESUME SET: sixteen minus the SIX the QC has now verdicted (the four
+  # above plus 13453 failed-with-patch and 13579 empty-fail-budget-capped). The six
+  # are the parent's first six, so the remainder is a CONTIGUOUS slice -- which is
+  # what makes "derived" checkable rather than merely claimed.
+  exact16_qc_remainder_10) SUBSET=config/fr13_fixed32/subset_b4_sixteen_qc_remainder_10.json ;;
+  *) echo "PROMOAB_SUBSET must be exact4, exact16, exact16_minus_13236, exact16_qc_remainder_12 or exact16_qc_remainder_10" >&2; exit 2 ;;
 esac
 [[ -f "$SUBSET" && ! -L "$SUBSET" ]] || { echo "subset missing: $SUBSET" >&2; exit 2; }
 SUBSET_SHA256=$(sha256sum "$SUBSET" | cut -d' ' -f1)
@@ -77,6 +82,7 @@ case "$PROMOAB_SUBSET:$SUBSET_SHA256" in
   exact16:47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c) ;;
   exact16_minus_13236:24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a) ;;
   exact16_qc_remainder_12:ac54bcc4df1311147616affd71a3722d0c0fda89216b7ac6473a4ab3eab4c424) ;;
+  exact16_qc_remainder_10:716503a46a991e3b187e14777f96f074c1a3359d9f8b7928f4453a6b9da1ee9b) ;;
   *) echo "subset $PROMOAB_SUBSET digest drifted: $SUBSET_SHA256" >&2; exit 2 ;;
 esac
 MANDATORY_WEIGHT_BYTES=25430574256
