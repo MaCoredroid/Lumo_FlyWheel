@@ -5746,3 +5746,52 @@ same skip left the EXITED CONTAINER IN PLACE, which is how the log was recovered
 diagnosis survived by luck, not design: had teardown succeeded in removing the container while
 still skipping log capture, this death would have been undiagnosable. The death path needs its
 capture to happen BEFORE any attestation gate that can skip it.
+
+# ROUND 22 REFIRE — SITE 28. THE SAME WALK-DERIVED DEFECT, A FIFTH TIME, IN A DIFFERENT FUNCTION.
+
+Runroot `output/fr14_promoab_CH31i2_20260824T173805Z`, boot 17:38:10Z at HEAD 609b50f3e,
+**serve_rc=2**, dead ~5 min, no task started. Site 27 is genuinely fixed -- the geometry
+contract passed this time and the boot got FURTHER, into the layout contract, before refusing:
+
+    RuntimeError: FR13 fixed32 cached tensor layout drift
+    scripts/fr13_device_multidraft_kernel.py:4715, in _fr13_fixed32_layout_contract (:4660)
+
+Capture-before-attestation worked: `docker_full.log` was written this time, so no corpse-forensics
+were needed.
+
+## FOUR FIELDS DISAGREE, AND ALL FOUR ARE WALK-DERIVED
+
+Of 24 tensors in `expected_cache_layouts`, twenty match exactly. The four that drift:
+
+    field                                runtime (walk 16)      expected literal (walk 12)
+    uniforms                        [b,16,3] stride [48,3,1]   [b,12,3] stride [36,3,1]
+    all_parent_self_uniform_levels          [11]                        [13]
+    all_parent_target_parent_slots          [21]                        [17]
+    all_parent_target_uniform_levels        [21]                        [17]
+
+`uniforms` dimension 1 IS THE WALK CAP -- 12 against 16 -- and its stride follows arithmetically
+(12*3=36 vs 16*3=48). The three `all_parent_*` arrays are the uniform-level partition, which
+also moves with walk depth. Everything NOT walk-derived is already correct for hydra31: `batch`
+is properly parameterised, and the 31/32 node counts match.
+
+## THE FIX SHAPE IS SITE 27'S, AND THE FUNCTION ALREADY DOES IT ONCE
+
+    def _fr13_fixed32_layout_contract(topology, ...):
+        physical_drafts = int(topology.PHYSICAL_DRAFTS)
+
+`topology` IS IN SCOPE and is already used to derive one field. The four walk-dependent
+dimensions were written as literals beside it. This is exactly pass 220's ruling -- "a pin is a
+read too" -- applied to a function that pass 220 did not reach.
+
+Counting the family: site 13 touched walk_cap once; site 27 closed four statements; this is a
+fifth, in a different function of the same file. The pattern is not "a missed line", it is that
+**every walk-derived quantity written as a literal is a latent hydra31 refusal**, and they are
+being found one boot at a time. A census of walk-derived literals across this file would close
+the class in one pass instead of five.
+
+## DISPATCH
+
+Preserve, report, NO RETRY -- a third fire refuses at the same line. `fr13_device_multidraft_kernel.py`
+is a closure file and lane 4's. Round 22's four headlines remain unmeasured; the tail10 verdict
+serve has now been blocked at the boot by three distinct causes in sequence
+(PREP_BAKE-under-hydra31, site 27's geometry pin, site 28's layout pin).
