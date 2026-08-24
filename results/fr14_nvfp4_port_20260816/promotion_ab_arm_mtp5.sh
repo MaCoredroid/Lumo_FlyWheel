@@ -142,6 +142,7 @@ env RUNROOT="$RUNROOT_ABS" \
   # fixed32 runtime binding'. Single-task selection here comes from the SUBSET
   # alone. Verified by reading the gate rather than by burning a boot on it.
   FR10_METRICS=0 \
+  SKIP_WARMUP_PROBE=1 \
   TMPDIR=/home/mark/shared/tmp-scratch \
   bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" nativemtp5 "$SUBSET" \
   > "$RUNROOT_ABS/$ARM.runlog" 2>&1
