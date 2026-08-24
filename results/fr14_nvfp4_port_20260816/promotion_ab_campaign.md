@@ -4970,3 +4970,65 @@ task. The 12-set is already minted, digest-pinned and validated end to end.
 
 **Path taken: the 12-set stands; 13453 re-serves; its first verdict is recorded as
 superseded-by-reserve in the artifact.** No lane flag needed.
+
+# MTP-5 REPLICATE A — /tokenize 404 DIAGNOSED. It is neither hypothesis.
+
+Runroot `output/fr14_mtp5_astropy13236_a_20260824T010807Z`. Boot clean, purity
+`ALL_PASS`, prefix-cache reset OK, then `POST /tokenize -> 404`, teardown, zero tasks.
+
+## THE CAUSE: a pretask route the QC arms never touch
+
+Not the proxy, and not a missing `vllm serve` flag on the native launcher.
+`fr13_bigdenom_swe_serve_variant.sh:2512`:
+
+```bash
+# ---- warmup probe (legacy arms only; fixed32 permits canonical SWE traffic only) ----
+if [[ -z "$FIXED32_MODE" ]]; then
+  curl .../metrics > metrics_before_warmup.txt
+  .venv/bin/python scripts/fr10_quick_decode_tps_probe.py ...
+```
+
+That probe calls `/tokenize` (`fr10_quick_decode_tps_probe.py:131`). It runs **only when
+`FIXED32_MODE` is empty** — so **every fixed32/QC arm skips it**, and only legacy/native
+arms run it. The metrics→tokenize→metrics sandwich in the log is exactly this block.
+
+So the asymmetry is the reverse of the one suspected: the QC arms are not *gaining*
+`/tokenize` from the proxy — the native arm is *running an extra pretask probe* that its
+comparison arms never execute.
+
+## NO CALLER-SIDE SKIP EXISTS — verified, not assumed
+
+    variant:      if (( RC != 0 )); then ... exit 4     -- probe failure is fatal
+    probe:378     if args.prompt_limit <= 0: raise ValueError("--prompt-limit must be positive")
+
+`WARMUP_PROMPT_LIMIT=0` therefore *causes* the failure rather than avoiding it. The gate
+is `[[ -z "$FIXED32_MODE" ]]` and nothing else, so the environment cannot no-op it.
+
+## THE HONEST FIX, and it improves the science rather than compromising it
+
+A one-line skip in the variant's warmup gate, e.g.
+`if [[ -z "$FIXED32_MODE" && "${SKIP_WARMUP_PROBE:-0}" != "1" ]]`.
+
+Justification is not convenience: **the QC arms this probe is compared against do not run
+the warmup probe at all.** Running it on the MTP-5 arm is an arm-spec *divergence* from
+the comparison arms; skipping it makes the two more alike. The probe is a legacy warmup
+convenience and contributes nothing to the drafter-neutrality question.
+
+I did not edit the tracked variant. Lane one-liner requested.
+
+Still open and worth a separate look: **why the native engine 404s `/tokenize` at all.** If
+it is genuinely absent on this stack, the warmup probe is broken for *every* native arm,
+not just mine — a standing defect that has simply not been exercised lately. I could not
+settle it offline: the on-disk `vllm-source` is a different checkout (the same shadowing
+theme as the PYTHONPATH and REPO findings), so it does not answer what the container runs.
+
+## DESK GUARD ADDED — `promotion_ab_pretask_dryrun.sh`
+
+Takes a KIND and prints the pretask route surface it will exercise, before any GPU:
+
+    nativemtp5        -> /reset_prefix_cache, /metrics, /tokenize, /v1/completions
+                         + ROUTE-SURFACE RISK naming the fatal RC!=0 and the absent skip
+    hydra27_fixed32   -> /reset_prefix_cache, /metrics   (no warmup probe)
+
+It also prints the comparability note, so the divergence is visible at spec time. This is
+the check that would have killed the seven-minute death on the desk.
