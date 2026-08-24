@@ -56,26 +56,63 @@ SHIM_TOKENS='FR14_LMHEAD_QUANT_ROUTE|FR14_LMHEAD_QUANT_ROUTE_REQUIRED|FR14_LMHEA
 SHIM_FILES='model_executor/models/qwen3_5.py model_executor/models/qwen3_5_mtp.py model_executor/layers/quantization/modelopt.py model_executor/layers/vocab_parallel_embedding.py'
 
 SENTINEL_ALL=$(docker exec "$C" bash -lc "grep -rl '$SENTINEL_RE' '$VLLM_DIR' 2>/dev/null" 2>/dev/null)
-SENTINEL_HITS=$(printf '%s\n' "$SENTINEL_ALL" | grep -c . 2>/dev/null || echo 0)
+SENTINEL_HITS=$(printf "%s\n" "$SENTINEL_ALL" | awk "NF{c++}END{print c+0}")
 SENTINEL_FILES=$(printf '%s\n' "$SENTINEL_ALL" | head -8 | tr '\n' ';')
 
 # A file is an ACCEPTED exception only if it is one of the shim's four targets AND every
 # sentinel token in it belongs to the shim. A shim-target file carrying a _fr13_ blob is
 # still a violation -- the exception is scoped to the blob, not to the filename.
+#
+# TOKEN EXTRACTION MUST GRAB WHOLE IDENTIFIERS, NOT THE MATCHED ALTERNATIVE. The first
+# version of this loop ran `grep -o "$SENTINEL_RE"`, which returns the alternative that
+# matched -- literally "FR14_" and "_fr14_" -- and then tested those truncated strings
+# against the full allowlist names. Nothing ever matched, so the shim's own tokens were
+# reported as foreign and a correctly-patched tree failed its own declared exception.
+# Caught on the first live attestation. Now: extract the complete identifier and compare
+# whole-token, exact.
+#
+# A __pycache__/*.pyc is bytecode compiled FROM one of these sources and carries the same
+# strings; it is not independent evidence, so it is mapped back to its source module and
+# judged by that source's verdict rather than counted separately.
+_IDENT_RE='(_fr1[034]_[A-Za-z0-9_]*|FR1[034]_[A-Za-z0-9_]*|lumo_flywheel[A-Za-z0-9_]*)'
 SENTINEL_VIOLATIONS=""
 for f in $SENTINEL_ALL; do
   [[ -z "$f" ]] && continue
+  _src="$f"
+  case "$f" in
+    */__pycache__/*.pyc)
+      _base=$(basename "$f"); _base="${_base%%.*}"
+      _src="$(dirname "$(dirname "$f")")/${_base}.py" ;;
+  esac
   _is_target=0
-  for t in $SHIM_FILES; do [[ "$f" == *"$t" ]] && _is_target=1; done
+  for t in $SHIM_FILES; do [[ "$_src" == *"$t" ]] && _is_target=1; done
+  # BYTECODE INHERITS ITS SOURCE'S VERDICT AND IS NOT TOKEN-SCANNED. A .pyc is compiled
+  # from a .py that is already judged on its own, so it carries no independent evidence --
+  # and running an identifier regex over BINARY is unsound: `[A-Za-z0-9_]*` runs past the
+  # real token into whatever adjacent bytes happen to be alphanumeric, which is exactly
+  # what produced the spurious "foreign" tokens _fr14_qmrW, _fr14_qmrv and _fr14_algos on
+  # the first corrected run. Judge the source; let the bytecode follow it.
+  if [[ "$f" != "$_src" ]]; then
+    [[ "$_is_target" == 1 ]] && continue
+    SENTINEL_VIOLATIONS+="$f[bytecode-of-untargeted-source:$_src];"
+    continue
+  fi
   if [[ "$_is_target" == 1 ]]; then
-    _foreign=$(docker exec "$C" bash -lc "grep -o '$SENTINEL_RE' '$f' 2>/dev/null | grep -Ev '$SHIM_TOKENS' | sort -u | head -5" 2>/dev/null | tr '\n' ',')
+    _foreign=$(docker exec "$C" bash -lc "grep -aoE '$_IDENT_RE' '$f' 2>/dev/null | sort -u | grep -Exv '$SHIM_TOKENS' | head -5" 2>/dev/null | tr '\n' ',')
     [[ -z "${_foreign//,/}" ]] && continue        # only shim tokens -> declared exception
     SENTINEL_VIOLATIONS+="$f[foreign:${_foreign}];"
   else
     SENTINEL_VIOLATIONS+="$f;"
   fi
 done
-SENTINEL_VIOLATION_N=$(printf '%s' "$SENTINEL_VIOLATIONS" | tr ';' '\n' | grep -c . 2>/dev/null || echo 0)
+# `grep -c .` PRINTS 0 AND EXITS 1 on no match, so `$(grep -c . || echo 0)` yields the
+# two-line string "0\n0", which parses as neither 0 nor an int -- the JSON then recorded
+# UNDECLARED_violations: null and the check FAILED with an empty violations list. Counting
+# in the shell instead removes the trap entirely.
+SENTINEL_VIOLATION_N=0
+if [[ -n "${SENTINEL_VIOLATIONS//;/}" ]]; then
+  SENTINEL_VIOLATION_N=$(awk -v s="$SENTINEL_VIOLATIONS" 'BEGIN{n=split(s,a,";"); c=0; for(i=1;i<=n;i++) if(length(a[i])>0) c++; print c}')
+fi
 _SHIM_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/scripts/fr14_patch_nvfp4_lmhead.py"
 SHIM_SHA=$(sha256sum "$_SHIM_SRC" 2>/dev/null | cut -d' ' -f1)
 [[ -n "$SHIM_SHA" ]] || SHIM_SHA="UNREADABLE:$_SHIM_SRC"
@@ -114,7 +151,7 @@ import hashlib,base64,csv,os,sys
 d='$VLLM_DIST'
 rec=os.path.join(d,'RECORD') if d else ''
 if not rec or not os.path.isfile(rec): print('NO_RECORD'); sys.exit()
-bad=0; checked=0
+bad=0; checked=0; badnames=[]
 for row in csv.reader(open(rec)):
     if len(row)<2 or not row[1].startswith('sha256='): continue
     p=row[0]
@@ -122,8 +159,9 @@ for row in csv.reader(open(rec)):
     if not os.path.isfile(p): continue
     h=base64.urlsafe_b64encode(hashlib.sha256(open(p,'rb').read()).digest()).rstrip(b'=').decode()
     checked+=1
-    if h!=row[1].split('=',1)[1]: bad+=1
-print(f'{checked}:{bad}')
+    if h!=row[1].split('=',1)[1]:
+        bad+=1; badnames.append(p)
+print(f'{checked}:{bad}:' + ','.join(badnames[:12]))
 PY" 2>/dev/null)
 
 python3 - "$OUT" "$EPID" "$SENTINEL_HITS" "$SENTINEL_FILES" "$PATCHER_IN_LOG" \
@@ -168,11 +206,27 @@ checks["3_attention_backend"]={
  "backend_lines_from_boot_log":[b for b in backend.split(";") if b],
  "PASS": i(fa2)==0,
  "why":"our forked .so must not appear in /proc/<engine>/maps. Matched BY PATH: stock wheel extensions under dist-packages/vllm/vllm_flash_attn/ share our basename and are EXPECTED on a plain native run -- counting them was a false positive in the first attestation."}
-checked,bad=(rec.split(":")+["",""])[:2] if ":" in rec else ("","")
+_recparts=(rec.split(":")+["","",""])[:3] if ":" in rec else ("","","")
+checked,bad,badnames=_recparts
+# THE SHIM EDITS AT-REST FILES BY DESIGN, so this check cannot simply demand zero
+# mismatches on this route -- it would fail for the one reason we have declared. Nor
+# should it be relaxed to "ignore mismatches": that would blind it to a real one. It is
+# therefore made SPECIFIC -- mismatching paths are enumerated and each must be one of the
+# shim's four targets. Any other modified file still fails, and the count is kept
+# alongside the classification so a reader can see both.
+_SHIM_TARGETS=("model_executor/models/qwen3_5.py","model_executor/models/qwen3_5_mtp.py",
+               "model_executor/layers/quantization/modelopt.py",
+               "model_executor/layers/vocab_parallel_embedding.py")
+_bad=[b for b in badnames.split(",") if b]
+_undeclared=[b for b in _bad if not any(b.endswith(t) for t in _SHIM_TARGETS)]
 checks["4_vllm_at_rest"]={
  "vllm_version":ver,"dist_info_RECORD_check":rec,
  "files_checked":i(checked),"files_mismatching":i(bad),
- "PASS": (i(bad)==0) if i(bad) is not None else None,
+ "mismatching_paths":_bad,
+ "mismatches_explained_by_declared_shim":[b for b in _bad if b not in _undeclared],
+ "UNDECLARED_mismatches":_undeclared,
+ "PASS": (len(_undeclared)==0) if i(bad) is not None else None,
+ "note":"the declared lm_head shim modifies four installed files by design, so a mismatch in exactly those is EXPECTED on this route and is classified rather than ignored. A mismatch anywhere else still fails.",
  "SCOPE_LIMIT":"a byte-diff against pristine UPSTREAM is NOT performed: upstream is not present in the container. What IS checked is the wheel's own dist-info RECORD hashes for the executed paths (spec_decode/attention/model_executor) -- that detects any at-rest modification of those files since install, which is the actionable half. A baked-in diff that predates the wheel build would NOT be caught by this and is named here rather than glossed."}
 apparatus={
  "host_side_offload_proxy":"PRESENT and shared by every arm -- the agent harness runs through it; outside the engine",
