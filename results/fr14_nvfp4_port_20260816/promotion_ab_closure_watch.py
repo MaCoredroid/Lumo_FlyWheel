@@ -90,19 +90,32 @@ def check(snap_path: Path) -> int:
                 sev = "CRITICAL (bash byte-offset hazard)" if kind == "bash" else "provenance"
                 alarms.append((rel, (was or {}).get("sha256", "absent")[:12],
                                (is_ or {}).get("sha256", "absent")[:12], sev))
-    out = {"schema": "fr14.closure_watch.check.v1",
+    # SEVERITY SPLIT, added after the watch's FIRST live firing. HEAD moved for a
+    # docs-only ledger commit while every closure file stayed byte-identical, and the
+    # verdict read "treat the drain as compromised". That is a false alarm, and a watch
+    # that cries wolf on every ledger commit is a watch nobody reads -- the same
+    # detector decay this campaign keeps finding. A HEAD move with an unchanged closure
+    # is a PROVENANCE NOTE; only a changed FILE is the site-24 hazard.
+    file_alarms = [a for a in alarms if a[0] != "HEAD"]
+    head_moved = any(a[0] == "HEAD" for a in alarms)
+    out = {"schema": "fr14.closure_watch.check.v2",
            "snapshot_head": snap["head"][:12], "live_head": now["head"][:12],
+           "head_moved": head_moved,
            "alarms": [{"path": a[0], "at_boot": a[1], "now": a[2], "severity": a[3]}
                       for a in alarms],
-           "ALARM": bool(alarms)}
-    if alarms:
-        out["VERDICT"] = ("EXECUTION CLOSURE MOVED MID-DRAIN. Any bash entry is a site-24 "
-                          "repeat in progress: the running shell will resume at a stale "
-                          "byte offset. Report and treat the drain as compromised.")
+           "ALARM": bool(file_alarms)}
+    if file_alarms:
+        out["VERDICT"] = ("EXECUTION CLOSURE FILE CHANGED MID-DRAIN. Any bash entry is a "
+                          "site-24 repeat in progress: the running shell will resume at a "
+                          "stale byte offset. Report and treat the drain as compromised.")
+    elif head_moved:
+        out["VERDICT"] = ("HEAD moved but EVERY closure file is byte-identical -- the "
+                          "executed code did not change. Provenance note only: the boot "
+                          "binds its snapshot head, not live HEAD. Not a site-24 hazard.")
     else:
         out["VERDICT"] = "closure frozen; drain provenance intact"
     print(json.dumps(out, indent=1))
-    return 1 if alarms else 0
+    return 1 if file_alarms else 0
 
 
 def main(argv: list[str]) -> int:
