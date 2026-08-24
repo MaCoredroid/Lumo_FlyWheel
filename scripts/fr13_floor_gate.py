@@ -136,6 +136,16 @@ EVIDENCE_SETS = {
         "sha256": ("0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"),
         "task_ids": CANONICAL_TASK_IDS[:4],
     },
+    # The QC remainder: exact16 minus the four verdicted tasks. Derived by
+    # slicing around them so it stays in lockstep with its parent -- a QC
+    # resumed out of order is a different measurement.
+    12: {
+        "relative_path": (
+            "config/fr13_fixed32/subset_b4_sixteen_qc_remainder_12.json"
+        ),
+        "sha256": ("ac54bcc4df1311147616affd71a3722d0c0fda89216b7ac6473a4ab3eab4c424"),
+        "task_ids": CANONICAL_TASK_IDS[4:],
+    },
     # SITE 19. Keyed by TASK COUNT, so a fifteen-task evidence set was
     # structurally inexpressible here even after it landed in the launcher and
     # patcher workload tables -- the exact16 QC resume had nowhere to declare

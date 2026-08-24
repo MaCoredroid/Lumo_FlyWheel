@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import json
 import re
 import tempfile
 from pathlib import Path
@@ -1280,3 +1281,135 @@ def test_both_live_instances_are_converted():
 
     assert code_hits(variant) == 1
     assert code_hits(proxy) == 1
+
+
+# ===========================================================================
+# SITE 24: boot-time snapshots.
+#
+# bash reads a script by BYTE OFFSET as it executes, so editing a
+# long-running script in place misaligns the stream of the process already
+# running it. A campaign died 3.5 hours after boot executing "cho", the tail
+# of an echo, because a correct edit landed 14 minutes in. `bash -n` cannot
+# see this: the file it checks is valid; the RUNNING one is a different file.
+# ===========================================================================
+
+# Scripts that stay executing for the life of a campaign. Determined by
+# reading what they do after they launch, not by guessing:
+#
+#   fr13_bigdenom_swe_serve_variant.sh  runs the launcher, then run_swe_bench
+#                                       for hours -- this is the one that died
+#   gpu_oom_guard.sh                    `while :;` + sleep, setsid'd at launch,
+#                                       polls for the whole campaign
+#
+# NOT resident, and this corrects the standing hypothesis: the launcher does
+# NOT exec the container and wait. It uses `docker run -d` (detached), arms the
+# guard with setsid/disown, echoes and returns -- the serve variant collects
+# its rc on the next line. It is minutes, not hours, and it is out of the set.
+RESIDENT_SCRIPTS = (
+    "scripts/fr13_bigdenom_swe_serve_variant.sh",
+    "scripts/gpu_oom_guard.sh",
+)
+
+
+@pytest.mark.parametrize("rel", RESIDENT_SCRIPTS, ids=lambda r: Path(r).name)
+def test_every_resident_script_snapshots_itself_at_boot(rel):
+    text = (REPO / rel).read_text()
+    assert 'if [[ -z "${FR13_SNAPSHOT_SHA256:-}" ]]; then' in text
+    assert 'exec bash "$_fr13_snap_copy" "$@"' in text
+    # the snapshot's identity is the boot's identity: verified, not assumed
+    assert '== "$_fr13_snap_sha" ]]' in text
+    assert "boot snapshot digest mismatch" in text
+    # sibling resolution must survive the exec
+    assert (
+        'SCRIPT_DIR=${FR13_SNAPSHOT_SCRIPT_DIR:-'
+        '$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}' in text
+    ), f"{Path(rel).name}: SCRIPT_DIR would resolve into the snapshot dir"
+    # and the preamble must precede the body it protects
+    assert text.index("FR13_SNAPSHOT_SHA256") < 4000, (
+        "the snapshot must be taken before bash reads any of the long body"
+    )
+
+
+def test_the_launcher_is_correctly_excluded_from_the_resident_set():
+    """Evidence for the exclusion, so it is not re-litigated by guess."""
+    launcher = (REPO / "scripts/fr13_launch_forked_fa2_tree_server.sh").read_text()
+    assert "docker run -d --pull=never" in launcher, (
+        "the launcher no longer detaches; if it now waits on the container it "
+        "has become resident and needs the snapshot preamble"
+    )
+    assert "docker wait" not in launcher and "docker attach" not in launcher
+    variant = (REPO / "scripts/fr13_bigdenom_swe_serve_variant.sh").read_text()
+    assert "scripts/fr13_launch_forked_fa2_tree_server.sh >" in variant
+    assert "FR13_SNAPSHOT_SHA256" not in launcher
+
+
+def test_editing_the_source_mid_run_does_not_disturb_the_running_copy(tmp_path):
+    """The mutation proof: clobber the tracked file while it executes."""
+    import subprocess
+    import textwrap
+
+    src = REPO / "scripts/gpu_oom_guard.sh"
+    text = src.read_text()
+    preamble = text[
+        text.index("# ------------------------------------------------------------------ SITE 24"):
+        text.index("\nfi\n", text.index('exec bash "$_fr13_snap_copy"')) + 4
+    ]
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    victim = scripts / "victim.sh"
+    victim.write_text(
+        "#!/usr/bin/env bash\nset -uo pipefail\n" + preamble + textwrap.dedent(
+            """
+            echo "PHASE1 sha=${FR13_SNAPSHOT_SHA256}"
+            sleep 2
+            echo "PHASE2 the pre-edit code ran"
+            """
+        )
+    )
+    before = __import__("hashlib").sha256(victim.read_bytes()).hexdigest()
+    run = subprocess.Popen(
+        ["bash", "scripts/victim.sh"], cwd=tmp_path,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        env={**__import__("os").environ,
+             "FR13_SNAPSHOT_ROOT": str(tmp_path / "run")},
+    )
+    __import__("time").sleep(1.0)
+    victim.write_text("#!/usr/bin/env bash\n" + "# CLOBBERED\n" * 400
+                      + 'echo "WRONG-CODE-RAN"\n')
+    out, _ = run.communicate(timeout=60)
+    assert run.returncode == 0, out
+    assert "PHASE2 the pre-edit code ran" in out, out
+    assert "WRONG-CODE-RAN" not in out, out
+    assert f"PHASE1 sha={before}" in out, out
+
+    snapshots = sorted((tmp_path / "run" / "fr13_snapshots").glob("victim@*.sh"))
+    assert len(snapshots) == 1
+    assert __import__("hashlib").sha256(
+        snapshots[0].read_bytes()
+    ).hexdigest() == before, "the executed copy is not the source-at-boot"
+    provenance = json.loads(
+        (snapshots[0].parent / (snapshots[0].name[:-3] + ".provenance.json")).read_text()
+    )
+    assert provenance["source_sha256"] == before
+    assert provenance["schema"] == "fr13.boot_snapshot.v1"
+
+
+def test_the_qc_remainder_subset_is_derived_from_its_parent():
+    sys.path.insert(0, str(REPO / "scripts"))
+    import fr13_floor_gate
+
+    twelve = fr13_floor_gate.EVIDENCE_SETS[12]
+    sixteen = fr13_floor_gate.EVIDENCE_SETS[16]
+    verdicted = {
+        "astropy__astropy-12907", "astropy__astropy-13033",
+        "astropy__astropy-13236", "astropy__astropy-13398",
+    }
+    assert set(sixteen["task_ids"]) - set(twelve["task_ids"]) == verdicted
+    assert twelve["task_ids"] == tuple(
+        t for t in sixteen["task_ids"] if t not in verdicted
+    ), "the remainder reordered its parent"
+    body = json.loads((REPO / twelve["relative_path"]).read_text())
+    assert tuple(body["instance_ids"]) == twelve["task_ids"]
+    assert __import__("hashlib").sha256(
+        (REPO / twelve["relative_path"]).read_bytes()
+    ).hexdigest() == twelve["sha256"]

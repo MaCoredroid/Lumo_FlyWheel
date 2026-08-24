@@ -921,7 +921,7 @@ _FR13_B1_POINTER_IMPORTED=()
 #
 # Each subset row is bound to the file it names, so this table cannot drift
 # from config/ the way the floor table drifted from the ledger (site 14).
-_FR13_B1_TIERB_WORKLOADS="exact4 exact16 exact16_minus_13236 random1024_calibration"
+_FR13_B1_TIERB_WORKLOADS="exact4 exact16 exact16_minus_13236 exact16_qc_remainder_12 random1024_calibration"
 FR13_FA2_QROW32_B1_TIERB_WORKLOAD=${FR13_FA2_QROW32_B1_TIERB_WORKLOAD:-exact4}
 _fr13_b1_tierb_workload_pins() {
   local workload=$1
@@ -930,6 +930,15 @@ _fr13_b1_tierb_workload_pins() {
       _fr13_tierb_task_ids="astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13236,astropy__astropy-13398"
       _fr13_tierb_subset_sha256="0e37b7137115332372ef76ba7c8db0db4a46ebad5db777c5b999bf797ae853f5"
       _fr13_tierb_subset_file="config/fr13_fixed32/subset_b4_four.json"
+      ;;
+    exact16_qc_remainder_12)
+      # THE SECOND RESUME SET. The exact16 QC has verdicted four tasks
+      # (12907, 13033, 13398 served; 13236 degenerated), and --skip-existing is
+      # forbidden by design, so the twelve that remain are declared as
+      # themselves rather than as exact16.
+      _fr13_tierb_task_ids="astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995"
+      _fr13_tierb_subset_sha256="ac54bcc4df1311147616affd71a3722d0c0fda89216b7ac6473a4ab3eab4c424"
+      _fr13_tierb_subset_file="config/fr13_fixed32/subset_b4_sixteen_qc_remainder_12.json"
       ;;
     exact16_minus_13236)
       # THE RESUME SET. The exact16 QC served 3 of 16 -- two parities plus

@@ -6094,6 +6094,12 @@ _FR13_FA2_QROW32_B1_TIER_B_WORKLOADS = {
         "astropy__astropy-12907,astropy__astropy-13033,astropy__astropy-13398,astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995",
         "24a8cf7c27646b13b76ebafa5a54d79bd5433f01ba34e55503227fdcc96e729a",
     ),
+    # The SECOND resume set: exact16 minus the four tasks the QC has already
+    # verdicted (see the launcher table for the full reasoning).
+    "exact16_qc_remainder_12": (
+        "astropy__astropy-13453,astropy__astropy-13579,astropy__astropy-13977,astropy__astropy-14096,astropy__astropy-14182,astropy__astropy-14309,astropy__astropy-14365,astropy__astropy-14369,astropy__astropy-14508,astropy__astropy-14539,astropy__astropy-14598,astropy__astropy-14995",
+        "ac54bcc4df1311147616affd71a3722d0c0fda89216b7ac6473a4ab3eab4c424",
+    ),
     "random1024_calibration": ("", ""),
 }
 _FR13_FA2_QROW32_B1_TIER_B_DEFAULT_WORKLOAD = "exact4"

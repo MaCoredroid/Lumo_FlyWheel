@@ -1,0 +1,22 @@
+{
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "split": "test",
+  "tier": "fr14_b1_exact16_qc_remainder_12",
+  "source_subset": "subset_b4_sixteen.json minus the four tasks the exact16 QC has already verdicted: astropy__astropy-12907, -13033 and -13398 (served) and -13236 (degenerated, verdicted separately). --skip-existing is forbidden by design, so the twelve that remain are declared as themselves. Declaring exact16 while serving twelve is the pins-as-fiction move the tier-B workload table exists to prevent.",
+  "generated_at": "2026-08-20T00:00:00Z",
+  "note": "SECOND RESUME SET. Identical to subset_b4_sixteen in order and content except that the four verdicted tasks are absent; their verdicts are carried separately.",
+  "instance_ids": [
+    "astropy__astropy-13453",
+    "astropy__astropy-13579",
+    "astropy__astropy-13977",
+    "astropy__astropy-14096",
+    "astropy__astropy-14182",
+    "astropy__astropy-14309",
+    "astropy__astropy-14365",
+    "astropy__astropy-14369",
+    "astropy__astropy-14508",
+    "astropy__astropy-14539",
+    "astropy__astropy-14598",
+    "astropy__astropy-14995"
+  ]
+}
