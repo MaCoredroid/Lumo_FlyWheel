@@ -21,13 +21,16 @@
 set -uo pipefail
 REPO=/home/mark/shared/lumoFlyWheel-nvfp4-port-20260816
 cd "$REPO"
-OUT=/home/mark/shared/tmp-scratch/fr14_sglang16
+# Resume runs override OUT/SUBSET/EXPECT_SHA (declared resume-set discipline:
+# every serve declares the exact set it serves; a resume set is its own set).
+OUT=${OUT:-/home/mark/shared/tmp-scratch/fr14_sglang16}
 mkdir -p "$OUT/swe_out"
 GB10_IP=100.103.10.122
-SUBSET=config/fr13_fixed32/subset_b4_sixteen.json
-EXPECT_SHA=47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c
+SUBSET=${SUBSET:-config/fr13_fixed32/subset_b4_sixteen.json}
+EXPECT_SHA=${EXPECT_SHA:-47b0a3c9be49e2cb5f7e7217ae03c267a05359f269f3e3b038942f57d7dc0b5c}
 [[ "$(sha256sum "$SUBSET" | cut -d' ' -f1)" == "$EXPECT_SHA" ]] \
-  || { echo "FAIL: exact16 subset digest drifted"; exit 2; }
+  || { echo "FAIL: subset digest drifted vs declared: $SUBSET"; exit 2; }
+echo "[sglang16] subset=$SUBSET sha=$(sha256sum "$SUBSET" | cut -c1-8) tasks=$(python3 -c "import json;print(len(json.load(open('$SUBSET'))['instance_ids']))")"
 
 echo "=== [sglang16] boot engine $(date -u +%FT%TZ) ==="
 OUT="$OUT" bash results/fr14_nvfp4_port_20260816/ablation_a_step2_sglang_boot.sh
