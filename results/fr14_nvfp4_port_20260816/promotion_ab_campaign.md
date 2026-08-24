@@ -5488,3 +5488,47 @@ looked for a boolean key named `resolved` and these reports use `verdict`/`passe
 campaign_summary said resolved_rate 0.6 and the disagreement is what caught it. A reducer that
 returns None on an unrecognised schema and a caller that treats None as False is the same
 fail-open shape this campaign keeps finding; it is now read from `verdict` directly.
+
+## THE TWO INSTRUMENT FIXES (follow-up to the round-21 landing)
+
+Both were found BY this drain, and both are the same shape: an instrument alarming on any
+difference rather than the difference that can hurt the run.
+
+**Closure watch — severity.** It called a live, healthy drain "compromised" because a lane
+edited `fr13_launch_forked_fa2_tree_server.sh`. That was true about the bytes and wrong about
+the consequence: site 24 classified that script NON-RESIDENT, it had exited 14 minutes before
+the edit landed, and the resident script was demonstrably running from its snapshot (source
+sha, snapshot filename digest and snapshot content sha all `f06391f11f6a`). A changed bash
+file is now CRITICAL only when `_live_executors()` finds a live process executing that path;
+otherwise `changed-after-use`, still recorded, `ALARM` false.
+
+`_live_executors` reads `/proc` and matches WHOLE ARGV TOKENS. Both choices are scar tissue:
+`pgrep` matches its own command line (that happened while diagnosing this very firing), and
+substring matching reproduces the bug through another door -- any `bash -c '<text mentioning
+the path>'` carries it inside one argv token, so the observer's own shell reports as an
+executor. **My first version had exactly that bug and its own mutation proof caught it.**
+Proof now runs four ways: live executor DETECTED, after-exit CLEAR, real launcher with no
+drain CLEAR, and a shell merely MENTIONING the path CLEAR.
+
+**Eyeball — which series leads.** The headline led with `signatures_all`, which mixes model
+output with TOOL OUTPUT. Against the one known degeneration that series is not merely noisy,
+it is INVERTED: 13236 scores all-ttr 0.729, the highest in the bank, because a degenerate
+trace pulls in almost no tool text to dilute it, while healthy tasks sit at 0.17-0.35. Nor
+does all-tailrep separate: degenerate 0.538 vs healthy 14096 at 0.570. Two healthy tasks were
+investigated as suspected degenerations on those numbers during this drain.
+
+The headline now leads with the visible series plus tools, thinking volume and a conjunction
+flag; the all-text line is retained below, where it correctly reads as "how much transcript
+this task pulled in".
+
+**AND THE CONJUNCTION IS LOAD-BEARING, which the fix itself demonstrated.** 13977 -- healthy,
+resolved-adjacent, 33 tool calls -- carries 89,393 thinking chars, MORE than the degeneration's
+70,755. So thinking volume ALONE would flag healthy tasks. It separates only WITHIN the
+ambiguous set (visible<=200 and tools==0), where the degeneration's 70,755 stands against a
+next-highest of 204. Any single statistic here is wrong; the conjunction is the instrument.
+
+Validated over all 130 banked traces: DEGENERATION SUSPECTED fires **once** (Cqc16/13236),
+VACUOUS fires 9 times (every boot probe and aborted run), 120 clean. Honest limit unchanged
+and written into the docstring: one positive example. A degeneration that kept narrating, or
+called tools while looping, passes all three terms. It is a floor, and c5 remains the
+independent second opinion because it keys on the seam rather than the prose.

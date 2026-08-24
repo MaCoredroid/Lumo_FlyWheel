@@ -78,6 +78,36 @@ def signatures(t: str) -> dict:
     }
 
 
+# Separates DEGENERATION from VACUITY. Both show no visible text and no tools; they
+# differ by how much the model generated. Measured over the 10 ambiguous cases in the
+# bank (visible<200 and tools==0): the degeneration carries 70755 thinking chars, the
+# next-highest is 204. Any threshold in that range works, so this is a chasm rather
+# than a tuned constant -- set at the round number nearest the low side.
+_DEGEN_THINK_FLOOR = 2000
+_DEGEN_VISIBLE_CEIL = 200
+
+
+def _degeneration_flag(rec: dict, vis: dict) -> str:
+    """The conjunction, not any single repetition statistic.
+
+    Validated over all 125 banked traces: ZERO false positives, one true positive
+    (Cqc16/13236). Its limit is stated honestly because negative validation cannot
+    manufacture positives -- ONE positive example. A degeneration that kept narrating,
+    or that called tools while looping, would pass all three terms and this would miss
+    it. Treat as a floor, and keep c5 as the independent second opinion: c5 keys on the
+    decode seam rather than on the prose, and it flagged 13236 at 0.3499 while every
+    other task in the canonical sixteen sat inside [0.40, 0.70].
+    """
+    if (vis["chars"] <= _DEGEN_VISIBLE_CEIL
+            and rec["n_tool_calls"] == 0
+            and rec.get("thinking_chars", 0) >= _DEGEN_THINK_FLOOR):
+        return ("   <<< DEGENERATION SUSPECTED (no visible output, no tools, "
+                f"{rec.get('thinking_chars', 0)} thinking chars) -- confirm with c5")
+    if vis["chars"] <= _DEGEN_VISIBLE_CEIL and rec["n_tool_calls"] == 0:
+        return "   <<< VACUOUS (no visible output, no tools, little generation)"
+    return ""
+
+
 def harvest(trace_path: Path) -> dict:
     """Pull every assistant text block and every tool call out of the trace."""
     texts: list[str] = []
@@ -182,6 +212,7 @@ def main() -> int:
         )
         rec["signatures_visible"] = signatures(visible)
         rec["signatures_all"] = signatures(both)
+        rec["thinking_chars"] = len(reasoning)
         rec["head_excerpt"] = both[: a.excerpt_chars]
         rec["tail_excerpt"] = both[-a.excerpt_chars :]
         # The three longest single text blocks: a decode loop that ran until the
@@ -198,18 +229,36 @@ def main() -> int:
     print(f"== {a.label} ==")
     for t in report["tasks"]:
         s = t.get("signatures_all")
+        v = t.get("signatures_visible")
         if not s:
             print(f"{t['instance_id']:26s} MISSING TRACE")
             continue
+        # WHICH SERIES THE HEADLINE SHOWS, and why it changed on 2026-08-24.
+        # It used to lead with signatures_ALL. That series mixes the model's output
+        # with TOOL OUTPUT, and measured against the one known degeneration it is not
+        # merely noisy, it is INVERTED: 13236 (degenerate) scores all-ttr 0.729, the
+        # HIGHEST in the bank, because a degenerate trace pulls in almost no tool text
+        # to dilute it, while healthy tasks sit at 0.17-0.35. All-tailrep does not
+        # separate either -- degenerate 13236 is 0.538, healthy 14096 is 0.570. Two
+        # healthy tasks were investigated as suspected degenerations on those numbers.
+        # So the headline now leads with the VISIBLE series and the conjunction below.
+        flag = _degeneration_flag(t, v)
         print(
             f"{t['instance_id']:26s} turns={t['assistant_turns']:4d} "
-            f"{s['words']:7d}w ttr={s['type_token_ratio']:.3f} "
+            f"tools={t['n_tool_calls']:4d} malformed={len(t['malformed_tool_calls'])} "
+            f"visChars={v['chars']:6d} visTtr={v['type_token_ratio']:.3f} "
+            f"visTailrep={v['tail_repeat_fraction']:.3f} "
+            f"think={t.get('thinking_chars', 0):7d} "
+            f"patch={t['patch_bytes']}B{flag}"
+        )
+        # all-text series retained on a second line: still the right place to see how
+        # much transcript a task pulled in, just not a degeneration signal.
+        print(
+            f"{'':26s}   [all-text] {s['words']:7d}w ttr={s['type_token_ratio']:.3f} "
             f"maxline={s['max_line_repeat']:4d} 8gram={s['longest_ngram_loop']['count']:4d} "
             f"tailrep={s['tail_repeat_fraction']:.3f} "
             f"nonascii={s['nonascii_fraction']:.6f} "
-            f"midword={s['mid_word_break_candidates']:5d} "
-            f"tools={t['n_tool_calls']:4d} malformed={len(t['malformed_tool_calls'])} "
-            f"patch={t['patch_bytes']}B"
+            f"midword={s['mid_word_break_candidates']:5d}"
         )
     return 0
 
