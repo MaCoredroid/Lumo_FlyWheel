@@ -44,6 +44,7 @@ def _census_runtime() -> dict[str, object]:
     namespace: dict[str, object] = {
         "_FR13_FIXED32_TARGET_TREE_LAYERS": TREE_LAYERS,
         "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION": False,
+        **_fr13_planted_schedule_tables(runtime),
     }
     exec(
         compile(
@@ -53,6 +54,41 @@ def _census_runtime() -> dict[str, object]:
     )
     return namespace
 
+
+
+def _fr13_planted_schedule_tables(runtime: str) -> dict:
+    """Resolve the blob's own per-profile tables for the CURRENT mode.
+
+    The GDN schedule and Arctic tail expectations stopped being literals when
+    the walk-derived-pin class reached this guard; lifting the real tables keeps
+    this suite exercising the authority rather than a copy of hydra27's numbers.
+    """
+    lines = runtime.split("\n")
+    kept = []
+    for node in ast.parse(runtime).body:
+        names = [
+            t.id for t in getattr(node, "targets", []) if isinstance(t, ast.Name)
+        ]
+        if any(
+            n.startswith("_FR13_FIXED32_GDN_SCHEDULE")
+            or n.startswith("_FR13_FIXED32_ARCTIC_TAIL")
+            or n == "_FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE"
+            or n == "_FR13_FIXED32_GDN_MODE"
+            for n in names
+        ) or (
+            isinstance(node, ast.If) and "_FR13_FIXED32_GDN_MODE" in ast.dump(node)
+        ):
+            kept.append("\n".join(lines[node.lineno - 1 : node.end_lineno]))
+    resolved: dict = {}
+    exec("\n".join(kept), resolved)  # noqa: S102 - our own planted source
+    return {
+        name: resolved[name]
+        for name in (
+            "_FR13_FIXED32_GDN_SCHEDULE_EXPECTED",
+            "_FR13_FIXED32_ARCTIC_TAIL_EXPECTED",
+            "_FR13_FIXED32_GDN_MODE",
+        )
+    }
 
 def _work(*, fused: bool, batch: int = 1) -> dict[str, object]:
     """The census a real B1 FULL capture publishes.
@@ -1227,6 +1263,7 @@ def _observed_take_runtime(*, fused: bool):
         "_FR13_FIXED32_SFWD_CONV_POSTPREP_FUSION": fused,
         "_FR13_FIXED32_MODE": "hydra27_fixed32",
         "_FR13_FIXED32_OBSERVED_CURRENT": None,
+        **_fr13_planted_schedule_tables(runtime),
     }
     exec(
         compile(

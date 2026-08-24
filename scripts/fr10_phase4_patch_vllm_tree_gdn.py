@@ -1184,6 +1184,26 @@ _FR13_FIXED32_GDN_SCHEDULE_BY_PROFILE = {
         "export_or_mask": 16915,
     },
 }
+# NINTH member, found by the census BEFORE boot seven rather than by boot seven.
+# _fr14_main was `8 if gated else 6` -- hydra27's Arctic main-tail lengths. The
+# authority states 10/12 for hydra31, and rescue_carry_slots 4 against 0. Same
+# mirror, same lint.
+_FR13_FIXED32_ARCTIC_TAIL_BY_PROFILE = {
+    "hydra27_fixed32": {
+        "main_tail_length": 6,
+        "gated_main_tail_length": 8,
+        "arctic_requested_tokens": 12,
+        "gated_arctic_requested_tokens": 14,
+        "rescue_carry_slots": 4,
+    },
+    "hydra31_fixed32": {
+        "main_tail_length": 10,
+        "gated_main_tail_length": 12,
+        "arctic_requested_tokens": 16,
+        "gated_arctic_requested_tokens": 18,
+        "rescue_carry_slots": 0,
+    },
+}
 _FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE = {
     # An unset mode is the non-fixed32 route, which has always been hydra27's.
     "": "hydra27_fixed32",
@@ -1201,6 +1221,9 @@ if _FR13_FIXED32_GDN_MODE not in _FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE:
         + repr(_FR13_FIXED32_GDN_MODE)
     )
 _FR13_FIXED32_GDN_SCHEDULE_EXPECTED = _FR13_FIXED32_GDN_SCHEDULE_BY_PROFILE[
+    _FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE[_FR13_FIXED32_GDN_MODE]
+]
+_FR13_FIXED32_ARCTIC_TAIL_EXPECTED = _FR13_FIXED32_ARCTIC_TAIL_BY_PROFILE[
     _FR13_FIXED32_GDN_TREE_PROFILE_BY_MODE[_FR13_FIXED32_GDN_MODE]
 ]
 
@@ -5172,25 +5195,60 @@ def _fr13_fixed32_validate_forward_work(work, label):
         "tree_layer_set": _FR13_FIXED32_TARGET_TREE_LAYERS,
         "tree_q_rows": 16 * batch * 32,
         "tree_bias_shape": (32, 32),
+        # EIGHTH member of the class, and a THIRD KIND: an AGGREGATE. These are
+        # per-layer schedule quantities times the GDN layer count, so the pin
+        # was a PRODUCT -- 48 * 82 = 3936 -- and a product equals none of the
+        # per-mode quantities a value census hunts for. hydra31 computes
+        # 48 * 126 = 6048. Every GDN field below is now derived from the same
+        # planted schedule authority the contracts read, invariant ones
+        # included, so a ninth profile cannot inherit a stale aggregate from
+        # any of them.
         "gdn_calls": expected_gdn_calls,
         "gdn_pairs": expected_gdn_calls,
         "gdn_layers": 48,
-        "gdn_launches": expected_gdn_calls * 2,
-        "gdn_path_programs": expected_gdn_calls * 12,
-        "gdn_padded_slots": expected_gdn_calls * 82,
+        "gdn_launches": (
+            expected_gdn_calls * _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["launches"]
+        ),
+        "gdn_path_programs": (
+            expected_gdn_calls * _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["programs"]
+        ),
+        "gdn_padded_slots": (
+            expected_gdn_calls
+            * _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["padded_slots"]
+        ),
         "gdn_nodes": expected_gdn_calls * 32,
-        "gdn_critical_path": 12,
-        "gdn_grid_z": (1, 11),
-        "gdn_max_path_lengths": (5, 7),
-        "gdn_export_or_mask": 16915,
+        "gdn_critical_path": _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["critical"],
+        "gdn_grid_z": _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["path_counts"],
+        "gdn_max_path_lengths": (
+            _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["max_lengths"]
+        ),
+        "gdn_export_or_mask": (
+            _FR13_FIXED32_GDN_SCHEDULE_EXPECTED["export_or_mask"]
+        ),
         **conv_expected,
     }
     if actual != expected:
+        # TWO-SIDED, differing entries only. The whole-dict form buried three
+        # differing fields in about eighty and cost a boot to read.
+        _work_drift = sorted(
+            _name
+            for _name in set(actual) | set(expected)
+            if actual.get(_name) != expected.get(_name)
+        )
         raise RuntimeError(
             "FR13 fixed32 "
             + str(label)
-            + " forward work is incomplete: "
-            + repr((actual, expected))
+            + " forward work is incomplete for mode "
+            + repr(_FR13_FIXED32_GDN_MODE)
+            + ": "
+            + "; ".join(
+                _name
+                + ": observed "
+                + repr(actual.get(_name))
+                + " against audited "
+                + repr(expected.get(_name))
+                for _name in _work_drift
+            )
         )
 
 
@@ -7111,7 +7169,17 @@ def _fr13_fixed32_drafter_observed_arctic(work):
     # chain's length moves, and proposal_end cross-checks it against the pass
     # count so an 8 can never appear on a step that ran four forwards.
     _fr14_gated = bool(work.get("gated", False))
-    _fr14_main = 8 if _fr14_gated else 6
+    # NINTH PIN. 8/6 are hydra27's; the authority states 12/10 for hydra31.
+    _fr14_main = (
+        _FR13_FIXED32_ARCTIC_TAIL_EXPECTED["gated_main_tail_length"]
+        if _fr14_gated
+        else _FR13_FIXED32_ARCTIC_TAIL_EXPECTED["main_tail_length"]
+    )
+    _fr14_requested = (
+        _FR13_FIXED32_ARCTIC_TAIL_EXPECTED["gated_arctic_requested_tokens"]
+        if _fr14_gated
+        else _FR13_FIXED32_ARCTIC_TAIL_EXPECTED["arctic_requested_tokens"]
+    )
     expected = {
         "batch_size": batch,
         "main_lookup_calls": batch,
@@ -7120,19 +7188,42 @@ def _fr13_fixed32_drafter_observed_arctic(work):
         "rank1_lookup_tokens": 4 * batch,
         "rank2_lookup_calls": batch,
         "rank2_lookup_tokens": 2 * batch,
-        "rescue_carry_slots": 4 * batch,
+        "rescue_carry_slots": (
+            _FR13_FIXED32_ARCTIC_TAIL_EXPECTED["rescue_carry_slots"] * batch
+        ),
         "arctic_lookup_calls": 3 * batch,
-        "arctic_requested_tokens": (_fr14_main + 6) * batch,
+        "arctic_requested_tokens": _fr14_requested * batch,
         "main_tail_columns": _fr14_main,
+        # NOT AUTHORITY-BACKED, and deliberately left alone. The topology states
+        # no rescue COLUMN count, and hydra31 carries zero rescue carry slots,
+        # so a 10-column rescue path and the `+ 10` below are hydra27 shapes
+        # that nobody has qualified for tail10. Inventing numbers here would put
+        # unqualified values inside a contract; if boot seven stops here the
+        # two-sided message now names the field and the eyeball decides.
         "rescue_path_columns": 10,
         "merge_fill_calls": 1,
         "merge_fill_columns": _fr14_main + 10,
         "merge_fill_rows": (_fr14_main + 10) * batch,
     }
     if proposal["arctic"] is not None or actual != expected:
+        _arctic_drift = sorted(
+            _name
+            for _name in set(actual) | set(expected)
+            if actual.get(_name) != expected.get(_name)
+        )
         raise RuntimeError(
-            "FR13 fixed32 direct Arctic/fill work drift: "
-            + repr((actual, expected))
+            "FR13 fixed32 direct Arctic/fill work drift for mode "
+            + repr(_FR13_FIXED32_GDN_MODE)
+            + ": "
+            + "; ".join(
+                _name
+                + ": observed "
+                + repr(actual.get(_name))
+                + " against audited "
+                + repr(expected.get(_name))
+                for _name in _arctic_drift
+            )
+            + ("; arctic proposal already published" if proposal["arctic"] is not None else "")
         )
     proposal["arctic"] = actual
 

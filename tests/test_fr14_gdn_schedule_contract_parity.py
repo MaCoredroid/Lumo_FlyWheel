@@ -928,3 +928,307 @@ def test_profile_conditioned_predicates_are_enumerated() -> None:
     assert sum(found.values()) >= 20, found
     assert "scripts/fr13_device_multidraft_kernel.py" in found
     assert "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py" in found
+
+
+# --------------------------------------------------------------------------- #
+# BOOT SIX: the third kind -- an AGGREGATE                                     #
+# --------------------------------------------------------------------------- #
+# The captured-forward-work table pinned gdn_padded_slots as 48 * 82 = 3936,
+# a PRODUCT of a mode-varying per-layer quantity and an invariant layer count.
+# hydra31 computes 48 * 126 = 6048. A census hunting literals EQUAL to a
+# mode-varying quantity is structurally blind to a product: 3936 equals none of
+# them.
+#
+# Two smaller lessons from the same corpse:
+#   * the message is ASSEMBLED ("FR13 fixed32 " + label + " forward work is
+#     incomplete"), so grepping the text a human reads finds nothing;
+#   * it printed both ~38-field dicts whole, burying three differing fields.
+#
+# THE GENERATOR NOW CLOSES OVER PRODUCTS, with a DECLARED factor set:
+FACTOR_CLOSURE = (1, 2, 3, 4, 16, 32, 48, 64)
+# 48 GDN layers, 16 tree-attention layers, 32 physical rows, 64 model layers,
+# fan-out 3, and batch sizes 1..4 -- every multiplier the aggregates in this
+# repo are built from. WHAT IT DOES NOT CLOSE OVER, stated so the next boot is
+# not a surprise: sums of two different mode-varying quantities, quotients,
+# products with a factor outside this set, and anything computed at runtime
+# from a value the scan cannot see. The closure is a tripwire that now covers
+# one more kind, not a proof of coverage.
+#
+# COST, measured: the candidate set grows from 11 values to 90, raw literal
+# occurrences in the closure from 660 to 1404, and the classified scope count
+# from 55 to 94. Each kind the generator learns roughly doubles its noise.
+
+
+def _candidate_values_closed() -> tuple[set[int], set[int]]:
+    """Candidate values, closed over products with FACTOR_CLOSURE."""
+    base, ambiguous = _candidate_values()
+    topology = _topology()
+    invariant = {
+        int(topology.PHYSICAL_DRAFTS),
+        int(topology.PHYSICAL_ROWS),
+        int(topology.SAMPLER_MAX_FANOUT),
+        int(topology.COMMIT_PATH_CAP),
+        int(topology.OUTPUT_PUBLISH_CAPACITY),
+        int(topology.GDN_LAYERS),
+        int(topology.MODEL_LAYERS),
+        int(topology.TREE_ATTENTION_LAYERS),
+    }
+    seeds = base | ambiguous
+    closed = {seed * factor for seed in seeds for factor in FACTOR_CLOSURE}
+    return closed - invariant, (closed & invariant) | ambiguous
+
+
+#: The scopes the product closure newly admits. Mostly coincidence -- which is
+#: the point of recording them: a classified coincidence costs one reading, an
+#: unclassified one costs a boot.
+CLOSURE_CENSUS_PRODUCTS: dict[str, str] = {
+    "scripts/fr13_dfwd_k64_m4_r64_u8_gate.py": (
+        "pin: banked M4 DFWD gate over hydra27-era evidence"
+    ),
+    "scripts/fr13_floor_gate.py": (
+        "pin: floor-gate fixtures and the mounted-runtime proof, hydra27-era"
+    ),
+    "results/fr14_nvfp4_port_20260816/fr14_fused_draft_topk_probe.py": (
+        "coincide: probe case names, not a served contract"
+    ),
+    "scripts/fr13_build_dfwd_k64_top3.py": "coincide: build-time shapes for a K64 tool",
+    "scripts/fr13_cutlass_wave_binary.py": (
+        "pin: CUTLASS static resource credential, hydra27-era"
+    ),
+    "scripts/fr13_derive_qwen_agent_bundle_cap256.py": (
+        "coincide: agent bundle cap arithmetic, unrelated to the tree"
+    ),
+    "scripts/fr13_draft_head_fp8_gate.py": "pin: FP8 draft-head gate, hydra27-era",
+    "scripts/fr13_fa2_qrow32_gate.py": "pin: FA2 qrow32 gate, hydra27-era credential",
+    "scripts/fr13_fp8_quant_regcache_pass.py": (
+        "pin: FP8 regcache pass record, hydra27-era credential"
+    ),
+    "scripts/fr13_host_tail_cost_probe.py": (
+        "coincide: host-tail cost probe sizes, a timing tool"
+    ),
+    "scripts/fr13_treeconv_zero_tail_credential.py": (
+        "pin: treeconv zero-tail credential, hydra27-era and credential-bound"
+    ),
+    "scripts/run_swe_bench_q36_a.py": (
+        "coincide: the SWE runner's own shapes; it serves no fixed32 contract"
+    ),
+    "src/lumo_flywheel_serving/parity_fixture.py": (
+        "coincide: parity fixture token lengths, a test corpus"
+    ),
+    "src/lumo_flywheel_serving/auto_research.py": (
+        "coincide: autotune action spaces and candidate plans"
+    ),
+}
+
+
+def test_the_product_closure_catches_boot_six() -> None:
+    """The recall fix for the third kind, proven on the value that died.
+
+    3936 is 48 * 82 and equals no per-mode quantity; it must be a candidate
+    under the closure and must NOT be one under the base generator.
+    """
+    base, _ambiguous = _candidate_values()
+    closed, _closed_ambiguous = _candidate_values_closed()
+    assert 3936 not in base, "the base generator should be blind to the product"
+    assert 6048 not in base
+    assert 3936 in closed, "the closure must admit 48 * 82"
+    assert 6048 in closed, "the closure must admit 48 * 126"
+    # and the closure must still exclude the profile-invariant products
+    topology = _topology()
+    assert int(topology.GDN_LAYERS) not in closed
+
+
+def test_the_aggregate_table_derives_every_gdn_field() -> None:
+    """MUTATION PROOF for boot six: no GDN aggregate is a literal any more."""
+    blob = _planted_blob()
+    work = blob[
+        blob.index('"gdn_calls": expected_gdn_calls,') : blob.index(
+            "forward work is incomplete"
+        )
+    ]
+    for retired in (
+        "expected_gdn_calls * 2,",
+        "expected_gdn_calls * 12,",
+        "expected_gdn_calls * 82,",
+        '"gdn_critical_path": 12,',
+        '"gdn_grid_z": (1, 11),',
+        '"gdn_max_path_lengths": (5, 7),',
+        '"gdn_export_or_mask": 16915,',
+    ):
+        assert retired not in work, retired
+    for derived in ("launches", "programs", "padded_slots", "critical",
+                    "path_counts", "max_lengths", "export_or_mask"):
+        assert f'_FR13_FIXED32_GDN_SCHEDULE_EXPECTED["{derived}"]' in work, derived
+    # gdn_nodes stays a literal 32: PHYSICAL_ROWS, which no profile moves
+    assert '"gdn_nodes": expected_gdn_calls * 32,' in work
+
+
+def test_the_forward_work_refusal_is_two_sided() -> None:
+    blob = _planted_blob()
+    assert "forward work is incomplete for mode " in blob
+    assert "for _name in _work_drift" in blob
+    work = blob[
+        blob.index('"gdn_calls": expected_gdn_calls,') : blob.index(
+            "forward work is incomplete"
+        ) + 400
+    ]
+    assert "repr((actual, expected))" not in work
+
+
+#: The corpse's observed dict, verbatim from
+#: output/fr14_promoab_CH31i5_20260824T192343Z. All 38 fields.
+CORPSE_GDN_OBSERVED = {
+    "gdn_calls": 48,
+    "gdn_pairs": 48,
+    "gdn_layers": 48,
+    "gdn_launches": 96,
+    "gdn_path_programs": 576,
+    "gdn_padded_slots": 6048,
+    "gdn_nodes": 1536,
+    "gdn_critical_path": 16,
+    "gdn_grid_z": (1, 11),
+    "gdn_max_path_lengths": (5, 11),
+    "gdn_export_or_mask": 16915,
+}
+
+
+def test_hydra31_reproduces_the_corpse_expectation_field_for_field() -> None:
+    """ORDER 4: boot seven cannot die at THIS guard.
+
+    The eleven GDN fields are the only ones this landing touches; the corpse
+    proves the other twenty-seven already matched (observed == expected on
+    every one of them). Reproducing these eleven from the fixed source closes
+    the whole 38-field table.
+    """
+    schedule = _blob_schedule_table("hydra31_fixed32")[
+        "_FR13_FIXED32_GDN_SCHEDULE_EXPECTED"
+    ]
+    calls = CORPSE_GDN_OBSERVED["gdn_calls"]
+    derived = {
+        "gdn_calls": calls,
+        "gdn_pairs": calls,
+        "gdn_layers": 48,
+        "gdn_launches": calls * schedule["launches"],
+        "gdn_path_programs": calls * schedule["programs"],
+        "gdn_padded_slots": calls * schedule["padded_slots"],
+        "gdn_nodes": calls * 32,
+        "gdn_critical_path": schedule["critical"],
+        "gdn_grid_z": schedule["path_counts"],
+        "gdn_max_path_lengths": schedule["max_lengths"],
+        "gdn_export_or_mask": schedule["export_or_mask"],
+    }
+    assert derived == CORPSE_GDN_OBSERVED, {
+        name: (derived[name], CORPSE_GDN_OBSERVED[name])
+        for name in derived
+        if derived[name] != CORPSE_GDN_OBSERVED[name]
+    }
+    # the aggregate really is the product, not a coincidence
+    assert derived["gdn_padded_slots"] == 48 * 126 == 6048
+
+
+def test_hydra27_aggregates_are_unchanged_by_the_derivation() -> None:
+    schedule = _blob_schedule_table("hydra27_fixed32")[
+        "_FR13_FIXED32_GDN_SCHEDULE_EXPECTED"
+    ]
+    calls = 48
+    assert calls * schedule["padded_slots"] == 3936
+    assert calls * schedule["launches"] == 96
+    assert calls * schedule["programs"] == 576
+    assert schedule["critical"] == 12
+    assert schedule["max_lengths"] == (5, 7)
+    assert schedule["path_counts"] == (1, 11)
+    assert schedule["export_or_mask"] == 16915
+
+
+def test_the_closed_census_classifies_every_hit() -> None:
+    """The union rule over the PRODUCT-CLOSED candidate set."""
+    import fr14_mode_table_parity as parity
+
+    closed, _ambiguous = _candidate_values_closed()
+    unclassified: dict[str, list[str]] = {}
+    for rel in parity.serve_execution_closure():
+        if not rel.endswith(".py"):
+            continue
+        path = REPO / rel
+        if not path.is_file():
+            continue
+        if rel in CLOSURE_CENSUS_BY_FILE or rel in CLOSURE_CENSUS_PRODUCTS:
+            continue
+        scopes = _scan_union(path.read_text(errors="replace"), closed)
+        if not scopes:
+            continue
+        known = CLOSURE_CENSUS.get(rel, {})
+        missing = sorted(scope for scope in scopes if scope not in known)
+        if missing:
+            unclassified[rel] = missing
+    assert not unclassified, (
+        "unclassified under the product-closed census: " + repr(unclassified)
+    )
+
+
+def test_every_product_classification_carries_a_reason() -> None:
+    for rel, reason in CLOSURE_CENSUS_PRODUCTS.items():
+        assert reason.split(":", 1)[0] in {"derive", "pin", "authority", "coincide", "mixed"}
+        assert len(reason) > 25, rel
+        assert (REPO / rel).is_file(), rel
+
+
+def test_the_ninth_pin_was_found_before_boot_seven() -> None:
+    """The census as a TRIPWIRE, working as intended for once.
+
+    _fr14_main was `8 if gated else 6` -- hydra27's Arctic main-tail lengths --
+    against an authority that states 10/12 for hydra31 and rescue_carry_slots
+    4 against 0. Found by reading a guard the two-sided rule led me to, before
+    a boot died on it.
+    """
+    topology = _topology()
+    for mode, main, gated, rescue in (
+        ("hydra27_fixed32", 6, 8, 4),
+        ("tail6_fixed32", 6, 8, 4),
+        ("hydra31_fixed32", 10, 12, 0),
+    ):
+        profile = topology.PROFILES[topology.TREE_PROFILE_BY_MODE[mode]]
+        assert int(profile["main_tail_length"]) == main
+        assert int(profile["gated_main_tail_length"]) == gated
+        assert int(profile["rescue_carry_slots"]) == rescue
+    blob = _planted_blob()
+    assert "_fr14_main = 8 if _fr14_gated else 6" not in blob
+    assert '_FR13_FIXED32_ARCTIC_TAIL_EXPECTED["gated_main_tail_length"]' in blob
+    assert '_FR13_FIXED32_ARCTIC_TAIL_EXPECTED["rescue_carry_slots"]' in blob
+
+
+def test_the_arctic_mirror_matches_the_topology_authority() -> None:
+    """Same lint as the GDN mirror: the blob cannot import, so it is compared."""
+    topology = _topology()
+    blob = _planted_blob()
+    tree = ast.parse(blob)
+    table = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name)
+            and t.id == "_FR13_FIXED32_ARCTIC_TAIL_BY_PROFILE"
+            for t in node.targets
+        ):
+            table = ast.literal_eval(node.value)
+    assert table is not None, "the Arctic mirror is gone"
+    for profile_name, entry in table.items():
+        profile = topology.PROFILES[profile_name]
+        assert entry["main_tail_length"] == int(profile["main_tail_length"])
+        assert entry["gated_main_tail_length"] == int(
+            profile["gated_main_tail_length"]
+        )
+        assert entry["arctic_requested_tokens"] == int(
+            profile["arctic_requested_tokens"]
+        )
+        assert entry["gated_arctic_requested_tokens"] == int(
+            profile["gated_arctic_requested_tokens"]
+        )
+        assert entry["rescue_carry_slots"] == int(profile["rescue_carry_slots"])
+
+
+def test_the_unqualified_arctic_fields_are_flagged_not_invented() -> None:
+    """The authority states no rescue COLUMN count, so nothing was made up."""
+    blob = _planted_blob()
+    assert "NOT AUTHORITY-BACKED" in blob
+    assert '"rescue_path_columns": 10,' in blob
+    assert "direct Arctic/fill work drift for mode " in blob
