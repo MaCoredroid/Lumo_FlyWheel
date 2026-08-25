@@ -1,18 +1,20 @@
-# NVIDIA contact — draft for Mark to send BEFORE filing the RFC
+# NVIDIA contact — draft for Mark, sent SAME DAY as the RFC filing
 
+> **Sequence (revised per Mark's challenge):** file the RFC first — the public
+> filing is the priority stamp — then post this within the hour, linking it.
+> Contact-first would hand a front-run window for no observed risk (their
+> shipped work is chain-only).
 > **Where:** a comment on PR #51674 (the fused post-conv MTP decode for
-> Qwen3-GDN) is the natural venue — public, low-pressure, on-topic. Slack DM
-> only if a reply invites it.
-> **Why first:** they are actively shipping into the exact surface our phase 0
-> touches (#51674, #52539, #51855). Contacting before filing converts a
-> collision risk into co-review, and the RFC can then CC them as people we're
-> already talking to rather than strangers.
+> Qwen3-GDN) — public, low-pressure, on-topic. Slack DM only if a reply
+> invites it.
 
 ---
 
 Hi — I've been following this work closely (this PR, the head-ratio
 parameterization in #52539, and the RecoverSSM slot-demand hook in #51855);
-we're building in the same area and I'd rather coordinate than collide.
+we're building in the same area and I'd rather coordinate than collide. We
+just filed an RFC for token-tree speculative decoding on hybrid models
+(vllm-project/vllm#____) and I wanted to flag it to you directly.
 
 We run Qwen-GDN hybrids in low-batch agentic serving and have an out-of-tree
 implementation of **token-tree** speculative decoding for hybrid models —
