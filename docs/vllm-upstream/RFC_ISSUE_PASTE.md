@@ -1,156 +1,140 @@
-# Paste-ready RFC issue for vllm-project/vllm
+# Paste-ready RFC issue for vllm-project/vllm — v3 (Phase-0-only, post-audit, post-#54080)
 
-> **How to use:** New issue → "RFC" template. Title and body below. After filing,
-> post the Slack message (bottom of this file) in #contributors.
-> The full design annex stays in our repo; the issue carries the load-bearing
-> content inline so reviewers never need an external link.
+> **v3 restructure:** cut to the Phase-0 substrate ask; positioned as shared
+> infrastructure under #54080 (TreeWY) and #47572 (ReplaySSM) rather than a
+> competing program. Full evidence table incl. the throughput number. Sequence:
+> Mark posts the #54080 comment FIRST (COMMENT_54080_DRAFT.md), ideally gets a
+> reply, then files this. CC list is live handles. ~900 words.
 
 ---
 
 ## Title
 
-[RFC]: Lossless token-tree speculative decoding for hybrid (attention + linear-recurrent) models
+[RFC]: Tree-capable recurrent spec-state interfaces for hybrid models (shared substrate for TreeWY / ReplaySSM)
 
-## Motivation
+## Motivation.
 
-Agentic serving is dominated by low-batch, latency-bound decode: few concurrent
-requests, long generations, tool-call round-trips. In this regime the
-verification-cost argument that removed tree attention (#42121) inverts: verify
-slots are cheap (the step is weight-bound; padded verify rows ride tiles that
-are already paid for) and acceptance dominates. Measured on identical silicon
-(single GB10, same checkpoint family, same agent harness): a 31-node tree over
-an MTP head + suffix cache commits **5.66 tokens/step** where a chain EAGLE
-3/1/4 commits **3.36** — +68% acceptance a chain structurally cannot reach.
-Tree-served and chain-served runs resolve the same SWE-bench tasks (verdict
-parity): the tree changes speed, not answers.
+Tree speculative decoding for hybrid (attention + linear-recurrent) models is
+now an active area: #54080 (TreeWY) proposes tree decoding for GDN models via
+WY/UT reconstruction-on-commit; #47572/#47576 (ReplaySSM) establishes
+replay-instead-of-snapshot as the state primitive for chain spec decode;
+#52959 proposes internal state checkpoints on `MambaSpec` for align mode;
+#52817 covers last-block replay with spec decode and APC on hybrid SSMs. All
+four need the same three things from the recurrent spec-state layer, and none
+of them currently has a home for them.
 
-Hybrid models (interleaved attention + linear-recurrent layers, e.g. the
-Qwen3-Next/GDN family) are where trees will matter next and where every
-implementation will get stuck, because the hard problems are structural. We
-hit and solved them over a months-long ledgered campaign on a 27B hybrid:
+This RFC proposes those three interfaces — nothing else. It contributes the
+*recurrent-state correctness discipline* the tree threads will need, not
+another tree kernel.
 
-- **Branch-local recurrent scans with per-node parent-state selection** — a
-  recurrent layer's state at tree node *n* must descend from *n*'s parent, not
-  the physically previous row. Getting it wrong does not crash; it corrupts
-  *near-neighbor* content (our worst bug produced ~40% identifier corruption
-  while passing every numerical closeness gate, because a sibling draft's state
-  is a plausible neighbor of the correct one).
-- **Re-linearization of every state a positional read touches** on commit.
-  Attention KV does not need this (positions are explicit); recurrent state
-  does (position is implicit in scan order).
-- **Keep-vs-replay** — a branched accept cannot pre-export every node's carries
-  (~13.7 GB/step of state traffic at 27B) and the accepted leaf is unknown
-  until after the rejection walk; the commit is a replay through the recurrent
-  layers, a cost to engineer around, not wish away.
-- **One bf16 ULP breaks superset guarantees** — masked branch keys contribute
-  exactly zero to the softmax and still changed accepted tokens (0.087
-  tok/event) because the reduction order differed with physical column count.
-  Same-kernel-realization verification is a correctness requirement, not a
-  style preference. Byte-exact intermediate state does not imply byte-exact
-  output; contracts must bind at the output level.
+We have been running tree speculative decoding for GDN hybrids out-of-tree
+(27B Qwen hybrid, NVFP4, single GB10, agentic workloads) and hit the failure
+modes these interfaces prevent:
 
-Three things already in `main` answer the objections that sank trees before:
+- **Branch-local parent selection.** A recurrent layer's state at tree node
+  *n* must descend from *n*'s parent, not the physically previous row. The
+  failure is not a crash: it substitutes a *sibling draft's* state — a
+  plausible near-neighbor — and in our worst case corrupted ~40% of
+  identifiers in generated code while passing every numerical closeness gate.
+  Only output-level and task-level contracts caught it.
+- **Carry accounting.** A branched accept cannot pre-export every node's
+  state (for our 27B config that is ~13.7 GB/step of traffic), and the
+  accepted leaf is unknown until after the rejection walk. #51855 already
+  made per-algorithm slot demand a declared quantity for RecoverSSM; trees
+  need the same declaration generalized (a node-count and a branch-depth are
+  different carry geometries).
+- **Replay on commit.** After accepting a path, every state a later read can
+  touch must be rewritten as if the path had been decoded natively. Attention
+  KV does not need this (positions are explicit); recurrent state does
+  (position is implicit in scan order). ReplaySSM and TreeWY both already
+  implement variants of this — the hook standardizes where it runs.
 
-1. The adaptive-verification budgeter's own docstring states the
-   monotone-survival rule ("Survival only decreases along a request, so a
-   global top-k always admits continuously along steps") — path survival is
-   monotone along a root→node path, so the identical rule over
-   `[request, node]` admits a **connected subtree**. Runtime tree-shape
-   selection is a ~10-line generalization of shipped, profiled code.
-2. `DFlash2Speculator` already walks a transition-score lattice and
-   re-linearizes into the **unmodified** rejection sampler — the
-   propose-tree/verify-losslessly pattern is merged; we generalize it.
-3. Device-decided, non-uniform verification width is the shipped contract on
-   two backend families (#52157, #52795), and hybrid MTP spec decode was
-   un-skipped on Model Runner V2 in #51410.
+Measured context (all first-party, batch 1, real agent tasks — SWE-bench
+subsets; baseline caveat stated honestly): our fixed-shape 32-node tree
+commits **5.66 tokens/step at 196 ms** vs a tuned chain-EAGLE baseline at
+**3.36 tokens/step at 115 ms** — decode throughput 28.8 vs 29.2 tok/s.
+The baseline is sglang's EAGLE recipe on the same GPU and checkpoint family;
+a same-stack vLLM control is owed and planned. The relevant point for this
+RFC is not the throughput (parity, not a win, at width 31 — consistent with
+#54080's finding that capture, not acceptance, is the bottleneck) but that
+fixed shape held CUDA-graph capture through a branching verify step, and
+that the correctness failures above are what the interfaces exist to prevent.
 
-## Proposed Change
+## Proposed Change.
 
-Four phases, each independently useful, each a separate reviewable PR series.
-Nothing resurrects the deleted tree-attention backend: verification runs
-through the model's own attention kernel realization with the tree expressed
-as a visibility mask, and the recurrent-state discipline is the contribution
-the removed code never had.
+Three interfaces on the recurrent spec-state layer
+(`MambaSpecDecodeGPUContext`, `vllm/v1/worker/mamba_utils.py` — imported by
+both the V1 model runner and Model Runner V2, so this lands once in shared
+code), each a provable no-op for today's chain path (a chain is a tree with
+fan-out 1; parent index = predecessor):
 
-**Phase 0 — tree-capable recurrent spec-state interfaces (no behavior
-change).** The recurrent spec-state commit (`MambaSpecDecodeGPUContext`,
-`vllm/v1/worker/mamba_utils.py`) is substrate-shared — imported by both the V1
-model runner and Model Runner V2 — so these land in shared code: per-node
-parent indexing for branch-local scans; a declared carry-slot budget;
-an accepted-path replay hook. All default to today's chain semantics (a chain
-is a tree with fan-out 1). Interface + tests only.
+1. **Per-node parent indexing** for branch-local scans: the scan consumes an
+   explicit parent table instead of assuming physical adjacency. Chain
+   default: `parent[i] = i - 1`.
+2. **Declared carry budget** on `MambaSpec`, generalizing the RecoverSSM
+   precedent (#51855): an algorithm declares its temporal-slot and
+   branch-depth demand instead of implying it. Chain default: today's
+   `num_speculative_tokens` accounting, unchanged.
+3. **Accepted-path replay hook**: one named point where
+   reconstruct-or-replay-on-commit runs. ReplaySSM's and TreeWY's mechanisms
+   both slot in; chains keep the current commit unchanged.
 
-**Phase 1 — tree visibility inside the native attention kernel.** A tree mask
-via FA4 `mask_mod` (`causal=False`, self-contained), with a FLEX_ATTENTION twin
-for non-FA4 platforms, and an equivalence gate asserting tree-with-fanout-1 ==
-causal, bit-level. Explicitly not a new backend.
+Interface + tests only; no tree kernels, no attention masks, no proposer or
+scheduler changes. Draft PR: **[link at filing — the branch is ready]**.
+We also offer, as contributed CPU tests, the adversarial regression fixtures
+from our campaign (reduction-order reassociation, sibling-state corruption,
+tie-break determinism) — implementation-agnostic, they apply to TreeWY and
+ReplaySSM alike. Losslessness contracts are output-level; byte-exactness
+claims are scoped to fan-out 1, where they are provable against native
+decode.
 
-**Phase 2 — tree proposer composition.** A model drafter (MTP/EAGLE-family)
-and a cache drafter (ngram/suffix) fill different tree regions; first landing
-re-linearizes into the unmodified rejection sampler (the merged DFlash2
-pattern), touching zero attention masks and zero kernels.
+Maintenance surface: three interfaces with chain-default tests in one shared
+file, no new subsystem, no new backend — the named consumers (#54080,
+#47572, #52959, #52817) are the parties who would exercise and co-own them.
 
-**Phase 3 — tree rejection walk + lossless commit.** The rejection kernel
-gains a `TREE_VERIFICATION` mode as a peer of the existing
-`USE_BLOCK_VERIFICATION` `tl.constexpr` axis (whose cross-position
-residual-mass bookkeeping is the closest existing relative of a lossless tree
-walk); the re-linearizing commit; output-level lossless contract tests
-(greedy: byte-exact vs native; sampled: distributional gates).
+**Non-goals:** no tree attention backend (the #42121 removal stands; any
+future tree mask belongs inside native kernel realizations, out of scope
+here); no changes to chain spec-decode behavior; no new drafting algorithms.
 
-Substrate: phases 0–1 are substrate-neutral by construction (shared files).
-Phases 2–3 target Model Runner V2.
+## Open questions.
 
-## Feasibility
+1. **Carry-budget shape:** a struct (`temporal_slots`, `conv_tokens`,
+   `max_branch_depth` — the honest model of two carry geometries) or a
+   single integer (one-line change, over-allocates conv columns for trees)?
+2. **Process:** would the spec-decode and hybrid-model owners prefer this to
+   proceed as a standalone interface PR series, or folded under #54080's
+   thread as its substrate piece? We are equally happy either way.
 
-Working out-of-tree implementation: 27B hybrid (Qwen3.8) at NVFP4 on a single
-GB10, ~196 ms steps at 5.66 committed tokens/step under real agent load, with
-the equivalence contract enforced at boot and per generation. We will
-contribute CPU-runnable tests for every contract above, plus the adversarial
-regression fixtures (reduction reassociation, sibling-state corruption,
-tie-break determinism). We expect to coordinate with the authors of the
-current Qwen-GDN MTP kernel and recurrent spec-state work, and would welcome
-them as co-reviewers.
+## Feedback Period.
 
-## Open questions for this thread
+Two weeks for direction. The draft PR is open now for concreteness.
 
-1. **RNG node identity.** The Gumbel stream keys on absolute `pos`; tree
-   siblings at one depth would share draws. Re-key on `(request, node_index)`,
-   a path hash, or `(pos, sibling_ordinal)`? Must match bit-for-bit between
-   drafter and verifier and preserve today's chain behavior exactly.
-2. **Should tree width ride `AdaptiveVerificationManager`** (widen its method
-   gate; get the shipped budgeter for ~10 lines) **or be a peer mechanism?**
-3. **Carry budget: struct or scalar?** `SpecCarryBudget(temporal_slots,
-   conv_tokens, max_branch_depth)` models the two carry geometries honestly;
-   a single integer over-allocates conv columns. Which shape do maintainers
-   want on `MambaSpec`?
-4. **Non-FA4 portability.** Is a FLEX_ATTENTION twin acceptable as the
-   non-FA4 path, or should the tree mask go into the FA2 kernel (a
-   vllm-flash-attn-repo change on its own cadence)?
-5. **Re-entry sequencing.** Three independently useful PRs (a small
-   fused-recurrent bugfix, the state interfaces, the mask primitive) that each
-   stand alone — or the whole path behind one flag with an end-to-end
-   acceptance benchmark first? We prefer the former and will follow the
-   maintainers' call.
+## CC List.
 
-## Feedback Period
+@sneha5gsm (#54080 TreeWY) @Johnny-Liou (#47572 ReplaySSM, GDN kernels)
+@ZJY0516 (#52959) @roikoren755 (#52817) @benchislett (speculators)
+@LucasWilkinson (spec-decode attention, #42121/#52795)
 
-Two weeks for direction; phase-0 draft PR available on request sooner.
+## Any Other Things.
 
-## CC
+Risks: the main risk of *not* standardizing is each tree/replay effort
+hand-rolling parent selection and commit semantics — the corruption class
+above is silent and survives numerical gates. Risk of this proposal:
+interface churn if TreeWY's design moves; mitigated by the no-op-for-chains
+contract and by co-owning the shape with the CC'd authors.
 
-Area owners for spec decode and hybrid/mamba models; authors of the recent
-Qwen-GDN MTP kernel and recurrent spec-state work; adaptive-verification
-authors. (Fill handles at filing time from the PRs cited above.)
+AI assistance was used in preparing this RFC and the draft PR; the submitter
+has reviewed every line and all measurements are from our own serving
+campaign, methodology available on request.
 
 ---
 
 ## Slack post for #contributors (after filing)
 
-> Just filed [RFC #____]: lossless token-tree speculative decoding for hybrid
-> (attention + linear-recurrent) models. TL;DR: trees double chain acceptance
-> in low-batch agent serving, and the hard part on hybrids is recurrent-state
-> discipline (branch-local scans, re-linearization on commit) — which we've
-> built and measured out-of-tree on a 27B GDN hybrid, and want to contribute
-> in phases (state interfaces first, all substrate-shared, no behavior
-> change). Five concrete open questions in the issue — feedback very welcome,
-> especially from the GDN/MTP kernel and adaptive-verification folks.
+> Filed [RFC #____]: tree-capable recurrent spec-state interfaces for hybrid
+> models — a small, no-behavior-change substrate piece under the active tree
+> threads (#54080 TreeWY, #47572 ReplaySSM): per-node parent indexing,
+> declared carry budgets, and a replay-on-commit hook, each a no-op for
+> chains, with a draft PR open and adversarial correctness fixtures offered
+> as contributed tests. Two bounded open questions in the issue. Feedback
+> very welcome.
