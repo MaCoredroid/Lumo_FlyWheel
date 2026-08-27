@@ -28,8 +28,9 @@ This RFC proposes those three interfaces — nothing else. It contributes the
 another tree kernel.
 
 We have been running tree speculative decoding for GDN hybrids out-of-tree
-(27B Qwen hybrid, NVFP4, single GB10, agentic workloads) and hit the failure
-modes these interfaces prevent:
+(27B Qwen hybrid, NVFP4, single GB10, agentic workloads — publicly documented
+in [our engineering volumes](https://macoredroid.github.io/Lumo_FlyWheel/))
+and hit the failure modes these interfaces prevent:
 
 - **Branch-local parent selection.** A recurrent layer's state at tree node
   *n* must descend from *n*'s parent, not the physically previous row. The
@@ -124,8 +125,15 @@ interface churn if TreeWY's design moves; mitigated by the no-op-for-chains
 contract and by co-owning the shape with the CC'd authors.
 
 AI assistance was used in preparing this RFC and the draft PR; the submitter
-has reviewed every line and all measurements are from our own serving
-campaign, methodology available on request.
+has reviewed every line. All measurements are from our own serving campaign,
+documented publicly in our engineering volumes
+([index](https://macoredroid.github.io/Lumo_FlyWheel/) — see in particular
+[gdn-tree-scan](https://macoredroid.github.io/Lumo_FlyWheel/gdn-tree-scan.html),
+[keep-or-replay](https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html),
+[stateless-tree](https://macoredroid.github.io/Lumo_FlyWheel/stateless-tree.html),
+and the negative-results volume
+[numbers-that-didnt-survive](https://macoredroid.github.io/Lumo_FlyWheel/numbers-that-didnt-survive.html));
+code at [MaCoredroid/Lumo_FlyWheel](https://github.com/MaCoredroid/Lumo_FlyWheel).
 
 ---
 

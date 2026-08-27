@@ -47,6 +47,17 @@ We have adversarial regression fixtures for all three classes (reduction
 reassociation, sibling-state corruption, tie-break determinism) that we'd
 like to contribute upstream — they're implementation-agnostic.
 
+The campaign is written up publicly in our engineering volumes
+([index](https://macoredroid.github.io/Lumo_FlyWheel/)); most relevant here:
+[the branch-local GDN tree scan](https://macoredroid.github.io/Lumo_FlyWheel/gdn-tree-scan.html)
+(parent selection and the near-neighbor corruption class),
+[keep-or-replay](https://macoredroid.github.io/Lumo_FlyWheel/keep-or-replay.html)
+(the commit-cost accounting your reconstruction approach also confronts),
+[the stateless tree lifecycle](https://macoredroid.github.io/Lumo_FlyWheel/stateless-tree.html),
+and [numbers that didn't survive](https://macoredroid.github.io/Lumo_FlyWheel/numbers-that-didnt-survive.html)
+(our negative results, including the reduction-order one). Code lives in the
+same repo ([MaCoredroid/Lumo_FlyWheel](https://github.com/MaCoredroid/Lumo_FlyWheel)).
+
 We were preparing an RFC for the shared substrate this work needs —
 per-node parent indexing, a declared carry budget, and a replay hook on
 `MambaSpecDecodeGPUContext`, each a no-op for chains, complementary to
